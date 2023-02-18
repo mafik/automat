@@ -12,8 +12,8 @@ import tempfile
 import hashlib
 import fs_utils
 
-HASH_DIR = f'/run/user/{os.geteuid()}/{fs_utils.project_name}/hashes/'
-fs_utils.ensure_dir(HASH_DIR)
+HASH_DIR = fs_utils.project_tmp_dir / 'hashes'
+HASH_DIR.mkdir(parents=True, exist_ok=True)
 
 def Popen(*args, **kwargs):
     '''Wrapper around subprocess.Popen which captures STDERR into a temporary file.'''
@@ -46,7 +46,7 @@ class Step:
         return self.build()
     
     def record_input_hashes(self):
-        hash_path = Path(HASH_DIR + self.name)
+        hash_path = HASH_DIR / self.name
         text = '\n'.join(f'{inp} {hexdigest(inp)}' for inp in self.inputs)
         hash_path.write_text(text)
     
@@ -75,7 +75,7 @@ class Step:
             return []
 
         # Check 3: If possible - check whether the contents have changed.
-        hash_path = Path(HASH_DIR + self.name)
+        hash_path = HASH_DIR / self.name
         if not hash_path.exists():
             return updated_inputs
         recorded_hashes = defaultdict(str)

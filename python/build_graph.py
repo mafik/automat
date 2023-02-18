@@ -19,7 +19,8 @@ LDFLAGS = '-flto -lpthread -lz -lssl -lcrypto -lfmt'.split()
 # libc++ cannot be linked with gtest so we use libstdc++ instead.
 CXXFLAGS += ['-stdlib=libstdc++']
 
-# For some reason clang doesn't find headers for libstdc++ so we include them here explicitly.
+# As of 2023-02 the compiler is a development version of clang++-17, installed from https://apt.llvm.org/.
+# Once C++20 modules stabilize it should be ok to switch to default compiler.
 
 CLANG_VERSION = '17'
 CXX = os.environ['CXX'] = f'clang++-{CLANG_VERSION}'
@@ -39,9 +40,12 @@ recipe = make.Recipe()
 # Recipes for object files
 ###############################
 
-PCM_DIR = f'/run/user/{os.geteuid()}/{fs_utils.project_name}/pcm/'
-OBJ_DIR = f'/run/user/{os.geteuid()}/{fs_utils.project_name}/obj/'
-CXXFLAGS += ['-fprebuilt-module-path=' + PCM_DIR]
+PCM_DIR = fs_utils.project_tmp_dir / 'pcm'
+OBJ_DIR = fs_utils.project_tmp_dir / 'obj'
+CXXFLAGS += ['-fprebuilt-module-path=' + str(PCM_DIR)]
+
+PCM_DIR.mkdir(parents=True, exist_ok=True)
+OBJ_DIR.mkdir(parents=True, exist_ok=True)
 
 def cxxfilt(line):
     cxx_identifier_re = "(_Z[a-zA-Z0-9_]+)"
@@ -58,7 +62,7 @@ def cxxfilt(line):
     line = line.replace('std::basic_string_view<char, std::char_traits<char>>', 'string_view')
     line = line.replace('automaton::', '')
     line = line.replace('/usr/bin/ld: ', '')
-    line = line.replace(OBJ_DIR, '')
+    line = line.replace(str(OBJ_DIR), '')
     # remove module names
     while match := re.search('@[a-zA-Z0-9_]+', line):
         line = line.replace(match.group(0), '')
@@ -68,16 +72,14 @@ def cxxfilt(line):
     line = re.sub(r'(.*:)?\(\.text(.+)?\+0x[0-9a-f]+\):', ' ', line)
     return line
 
-fs_utils.ensure_dir(PCM_DIR)
-fs_utils.ensure_dir(OBJ_DIR)
-
 def redirect_path(path):
+    name = Path(path).name
     if path.endswith('.o'):
-        return OBJ_DIR + Path(path).name
+        return str(OBJ_DIR / name)
     elif cc.types[path] in ('precompiled module', 'system header unit', 'user header unit'):
-        return PCM_DIR + Path(path).name
+        return str(PCM_DIR / name)
     elif cc.types[path] in ('test', 'main'):
-        return Path(path).name
+        return name
     else:
         return path
 
@@ -86,12 +88,13 @@ graph = dict()
 for path, deps in cc.graph.items():
     graph[redirect_path(path)] = [redirect_path(d) for d in deps]
 
-# Workarounds for half-assed support of modules in clang.
+# Workarounds for poor support of C++20 modules in clang.
 # Without those dependencies clang will imagine ODR violations and fail to link.
 # Feel free to remove if it doesn't break the build.
 graph[redirect_path('gtest/gtest.h.pcm')].append(redirect_path('compare.pcm'))
 graph[redirect_path('fmt/format.h.pcm')].append(redirect_path('memory.pcm'))
 graph[redirect_path('gtest/gtest.h.pcm')].append(redirect_path('memory.pcm'))
+graph[redirect_path('gmock/gmock.h.pcm')].append(redirect_path('memory.pcm'))
 graph[redirect_path('gmock/gmock-more-matchers.h.pcm')].append(redirect_path('memory.pcm'))
 graph[redirect_path('regex.pcm')].append(redirect_path('memory.pcm'))
 
@@ -102,7 +105,8 @@ for path, t in cc.types.items():
     if t in ('user header unit', 'system header unit'):
         header_units[real_path] = str(Path(path).with_suffix('')) # remove .pcm extension
 
-no_unknown_targets = True
+tests = []
+
 for path, deps in graph.items():
     t = types[path]
     args = [CXX] + CXXFLAGS
@@ -143,17 +147,23 @@ for path, deps in graph.items():
         recipe.add_step(builder, outputs=[path], inputs=deps, name=f'link {path}', stderr_prettifier=cxxfilt)
         runner = functools.partial(Popen, [f'./{path}', '--gtest_color=yes'])
         recipe.add_step(runner, outputs=[], inputs=[path], name=path)
+        tests.append(path)
     elif t == 'main':
         args += deps + ['-o', path] + LDFLAGS
         builder = functools.partial(Popen, args)
         recipe.add_step(builder, outputs=[path], inputs=deps, name=f'link {path}', stderr_prettifier=cxxfilt)
     else:
-        no_unknown_targets = False
         print(f"File '{path}' has unknown type '{types[path]}'. Dependencies:")
         for dep in deps:
             print(f'    {dep}')
+        assert False
 
-assert no_unknown_targets
+if tests:
+    # run all tests sequentially
+    def run_tests():
+        for test in tests:
+            run([f'./{test}'], check=True)
+    recipe.add_step(run_tests, outputs=[], inputs=tests, name='tests')
 
 ##########################
 # Recipe for Clang language server
@@ -165,7 +175,7 @@ def compile_commands():
         print('[{', file=f)
         print(f'  "directory": "{ fs_utils.project_root }",', file=f)
         print(f'  "file": "src/base.cc",', file=f)
-        print(f'  "output": "{OBJ_DIR}base_cc.o",', file=f)
+        print(f'  "output": "{OBJ_DIR / "base_cc.o"}",', file=f)
         print(f'  "arguments": [', file=f)
         args = [CXX] + CXXFLAGS
         for path, t in types.items():
@@ -189,7 +199,6 @@ recipe.add_step(serve, [], ['main'], keep_alive = True)
 
 if False:
     for step in recipe.steps:
-        #if 'display' not in step.name: continue
         print('Step', step.name)
         print('  Inputs:')
         for inp in sorted(str(x) for x in step.inputs):

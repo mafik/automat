@@ -1,0 +1,6 @@
+{
+  "python.analysis.extraPaths": [
+    "./python"
+  ],
+  "clangd.path": "/usr/bin/clangd-17"
+}

@@ -162,7 +162,7 @@ if tests:
     # run all tests sequentially
     def run_tests():
         for test in tests:
-            run([f'./{test}'], check=True)
+            run([f'./{test}', '--gtest_color=yes'], check=True)
     recipe.add_step(run_tests, outputs=[], inputs=tests, name='tests')
 
 ##########################

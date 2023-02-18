@@ -169,13 +169,13 @@ struct Timer : Object {
   }
   string GetText() const override {
     using namespace std::chrono_literals;
-    TimePoint now = fake_time ? fake_time->now : Clock::now();
+    TimePoint now = GetNow();
     Duration elapsed = now - start;
     return fmt::format("{:.3f}", elapsed.count());
   }
   void Run(Handle &self) override {
     using namespace std::chrono_literals;
-    TimePoint now = fake_time ? fake_time->now : Clock::now();
+    TimePoint now = GetNow();
     if (now - last_tick >= 1ms) {
       last_tick = now;
       self.ScheduleUpdate();
@@ -183,14 +183,17 @@ struct Timer : Object {
     ScheduleNextRun(self);
   }
   void Reset(Handle &self) {
-    if (fake_time) {
-      start = fake_time->now;
-    } else {
-      start = Clock::now();
-    }
+    start = GetNow();
     last_tick = start;
     self.ScheduleUpdate();
     ScheduleNextRun(self);
+  }
+  TimePoint GetNow() const {
+    if (fake_time) {
+      return fake_time->now;
+    } else {
+      return Clock::now();
+    }
   }
 };
 

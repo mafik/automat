@@ -1,0 +1,159 @@
+module log;
+
+import "fmt/format.h";
+import <memory>;
+import <utility>;
+import <execinfo.h>;
+import <cstdio>;
+import <cstdlib>;
+import <string>;
+import <source_location>;
+import math;
+import term;
+
+void print_trace(void) {
+  char **strings;
+  int i, size;
+  enum Constexpr { MAX_SIZE = 1024 };
+  void *array[MAX_SIZE];
+  size = backtrace(array, MAX_SIZE);
+  strings = backtrace_symbols(array, size);
+  for (i = 0; i < size; i++)
+    printf("%s\n", strings[i]);
+  puts("");
+  free(strings);
+}
+
+static int indent = 0;
+
+void LOG_Indent(int n) { indent += n; }
+
+void LOG_Unindent(int n) { indent -= n; }
+
+struct Logger::Impl {
+  std::string buffer;
+  LogLevel log_level;
+  std::source_location location;
+
+  Impl(LogLevel log_level_arg, const std::source_location location_arg)
+      : log_level(log_level_arg), location(location_arg) {
+#if not defined(__EMSCRIPTEN__)
+    // print time
+    time_t timestamp = time(nullptr);
+    char *t = asctime(localtime(&timestamp));
+    char *h = t + 11;
+    h[2] = 0;
+    char *m = t + 14;
+    m[2] = 0;
+    char *s = t + 17;
+    s[2] = 0;
+
+    struct timespec ts;
+    timespec_get(&ts, TIME_UTC);
+    int64_t millis = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+
+    auto dark = term::Gray(12);
+    auto darker = term::Gray(8);
+    auto darkest = term::Gray(4);
+
+    buffer += dark(h) + darkest(":") + dark(m) + darkest(":") + dark(s) +
+              darkest(".") + darker(fmt::format("{:03}", millis % 1000)) + " ";
+#endif // not defined(__EMSCRIPTEN__)
+    for (int i = 0; i < indent; ++i) {
+      buffer += " ";
+    }
+  }
+};
+
+Logger::Logger(LogLevel log_level, const std::source_location location)
+    : impl(new Logger::Impl(log_level, location)) {}
+
+Logger::~Logger() {
+  std::string output = impl->buffer;
+
+  if (impl->log_level == LOG_LEVEL_ERROR ||
+      impl->log_level == LOG_LEVEL_FATAL) {
+    output +=
+        fmt::format(" ({} in {}:{})", impl->location.function_name(), impl->location.file_name(), impl->location.line());
+  }
+
+#if defined(__EMSCRIPTEN__)
+  if (impl->log_level == LOG_LEVEL_ERROR) {
+    EM_ASM({ console.warn(UTF8ToString($0)); }, output.c_str());
+  } else if (impl->log_level == LOG_LEVEL_FATAL) {
+    EM_ASM({ console.error(UTF8ToString($0)); }, output.c_str());
+  } else {
+    EM_ASM({ console.log(UTF8ToString($0)); }, output.c_str());
+  }
+#else
+  printf("%s\n", output.c_str());
+#endif
+
+  if (impl->log_level == LOG_LEVEL_FATAL) {
+#if not defined(__EMSCRIPTEN__)
+    print_trace();
+#endif // not defined(__EMSCRIPTEN__)
+    abort();
+  }
+  delete impl;
+}
+
+const Logger &operator<<(const Logger &logger, int i) {
+  logger.impl->buffer += std::to_string(i);
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, unsigned i) {
+  logger.impl->buffer += std::to_string(i);
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, unsigned long i) {
+  logger.impl->buffer += std::to_string(i);
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, unsigned long long i) {
+  logger.impl->buffer += std::to_string(i);
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, float f) {
+  logger.impl->buffer += std::to_string(f);
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, double d) {
+  logger.impl->buffer += std::to_string(d);
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, std::string_view s) {
+  logger.impl->buffer += s;
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, const unsigned char *s) {
+  logger.impl->buffer += (const char *)s;
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, vec2 v) {
+  logger.impl->buffer += "vec2( ";
+  logger.impl->buffer += std::to_string(v.X);
+  logger.impl->buffer += ", ";
+  logger.impl->buffer += std::to_string(v.Y);
+  logger.impl->buffer += " )";
+  return logger;
+}
+
+const Logger &operator<<(const Logger &logger, vec3 v) {
+  logger.impl->buffer += "vec3( ";
+  logger.impl->buffer += std::to_string(v.X);
+  logger.impl->buffer += ", ";
+  logger.impl->buffer += std::to_string(v.Y);
+  logger.impl->buffer += ", ";
+  logger.impl->buffer += std::to_string(v.Z);
+  logger.impl->buffer += " )";
+  return logger;
+}

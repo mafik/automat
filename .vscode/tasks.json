@@ -1,0 +1,51 @@
+{
+  // See https://go.microsoft.com/fwlink/?LinkId=733558
+  // for the documentation about the tasks.json format
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "link seven_gui_test",
+      "type": "shell",
+      "command": "./run.py 'link seven_gui_test' --debug",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "link complex_test",
+      "type": "shell",
+      "command": "./run.py 'link complex_test' --debug",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "link library_test",
+      "type": "shell",
+      "command": "./run.py 'link library_test' --debug",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "link list_test",
+      "type": "shell",
+      "command": "./run.py 'link list_test' --debug",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "Build Debug",
+      "dependsOn": [
+        "link seven_gui_test",
+        "link complex_test",
+        "link library_test",
+        "link list_test"
+      ],
+      "problemMatcher": [
+        "$gcc"
+      ]
+    }
+  ]
+}

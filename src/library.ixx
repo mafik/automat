@@ -36,6 +36,7 @@ struct Integer : Object {
     i = std::stoi(string(text));
   }
 };
+const Integer Integer::proto;
 
 struct Number : Object {
   double value;
@@ -50,6 +51,7 @@ struct Number : Object {
     value = std::stod(string(text));
   }
 };
+const Number Number::proto;
 
 struct Increment : Object {
   static const Increment proto;
@@ -67,6 +69,7 @@ struct Increment : Object {
     integer.location->ScheduleUpdate();
   }
 };
+const Increment Increment::proto;
 Argument Increment::target_arg =
     Argument("target").RequireInstanceOf<Integer>();
 
@@ -85,6 +88,7 @@ struct Delete : Object {
     target.location->Take();
   }
 };
+const Delete Delete::proto;
 Argument Delete::target_arg = Argument("target", true);
 
 struct Set : Object {
@@ -105,6 +109,7 @@ struct Set : Object {
     target.location->Put(std::move(clone));
   }
 };
+const Set Set::proto;
 Argument Set::value_arg = Argument("value");
 Argument Set::target_arg = Argument("target", true);
 
@@ -155,6 +160,7 @@ struct Date : Object {
     return std::partial_ordering::unordered;
   }
 };
+const Date Date::proto(2022, 1, 1);
 
 using Clock = std::chrono::high_resolution_clock;
 using Duration = std::chrono::duration<double>;
@@ -230,6 +236,7 @@ struct Timer : Object {
     }
   }
 };
+const Timer Timer::proto;
 
 struct TimerReset : Object {
   static const TimerReset proto;
@@ -246,6 +253,7 @@ struct TimerReset : Object {
     timer.typed->Reset(*timer.location);
   }
 };
+const TimerReset TimerReset::proto;
 Argument TimerReset::timer_arg = Argument("timer").RequireInstanceOf<Timer>();
 
 struct EqualityTest : LiveObject {
@@ -281,6 +289,7 @@ struct EqualityTest : LiveObject {
     }
   }
 };
+const EqualityTest EqualityTest::proto;
 LiveArgument EqualityTest::target_arg = LiveArgument("target");
 
 struct LessThanTest : LiveObject {
@@ -311,6 +320,7 @@ struct LessThanTest : LiveObject {
     }
   }
 };
+const LessThanTest LessThanTest::proto;
 LiveArgument LessThanTest::less_arg = LiveArgument("less");
 LiveArgument LessThanTest::than_arg = LiveArgument("than");
 
@@ -347,6 +357,7 @@ struct StartsWithTest : LiveObject {
     }
   }
 };
+const StartsWithTest StartsWithTest::proto;
 LiveArgument StartsWithTest::starts_arg = LiveArgument("starts");
 LiveArgument StartsWithTest::with_arg = LiveArgument("with");
 
@@ -376,6 +387,7 @@ struct AllTest : LiveObject {
     }
   }
 };
+const AllTest AllTest::proto;
 LiveArgument AllTest::test_arg = LiveArgument("test");
 
 struct Switch : LiveObject {
@@ -418,6 +430,7 @@ struct Switch : LiveObject {
     }
   }
 };
+const Switch Switch::proto;
 LiveArgument Switch::target_arg = LiveArgument("target");
 
 struct ErrorReporter : LiveObject {
@@ -449,6 +462,7 @@ struct ErrorReporter : LiveObject {
     self.ReportError(error_text);
   }
 };
+const ErrorReporter ErrorReporter::proto;
 LiveArgument ErrorReporter::test_arg = LiveArgument("test");
 LiveArgument ErrorReporter::message_arg = LiveArgument("message", true);
 
@@ -472,6 +486,7 @@ struct HealthTest : Object {
     self.ScheduleUpdate();
   }
 };
+const HealthTest HealthTest::proto;
 
 struct AbstractList {
   virtual Error *GetAtIndex(int index, Object *&obj) = 0;
@@ -514,6 +529,7 @@ struct Append : Object {
     }
   }
 };
+const Append Append::proto;
 Argument Append::to_arg = Argument("to").RequireInstanceOf<AbstractList>();
 Argument Append::what_arg = Argument("what");
 
@@ -569,6 +585,7 @@ struct List : Object, AbstractList {
     return nullptr;
   }
 };
+const List List::proto;
 
 struct Iterator {
   virtual Object *GetCurrent() const = 0;
@@ -703,6 +720,7 @@ struct Filter : LiveObject, Iterator, AbstractList {
     return nullptr;
   }
 };
+const Filter Filter::proto;
 LiveArgument Filter::list_arg("list");
 LiveArgument Filter::element_arg("element");
 LiveArgument Filter::test_arg("test");
@@ -734,6 +752,7 @@ struct CurrentElement : Pointer {
     return nullptr;
   }
 };
+const CurrentElement CurrentElement::proto;
 LiveArgument CurrentElement::of_arg("of");
 
 inline void Filter::Updated(Handle &self, Handle &updated) {
@@ -765,6 +784,7 @@ struct Complex : Object {
     return std::unique_ptr<Object>(c);
   }
 };
+const Complex Complex::proto;
 
 struct ComplexField : Pointer {
   static const ComplexField proto;
@@ -824,6 +844,7 @@ private:
     return std::make_pair(complex.typed, label_text);
   }
 };
+const ComplexField ComplexField::proto;
 LiveArgument ComplexField::complex_arg("complex");
 LiveArgument ComplexField::label_arg("label");
 
@@ -919,6 +940,7 @@ struct Text : LiveObject {
     }
   }
 };
+const Text Text::proto;
 LiveArgument Text::target_arg("target", true);
 
 struct Button : Object {
@@ -948,6 +970,7 @@ struct Button : Object {
     }
   }
 };
+const Button Button::proto;
 Argument Button::enabled_arg("enabled", true);
 Argument Button::click_arg("click", true);
 
@@ -986,6 +1009,7 @@ struct ComboBox : LiveObject {
     }
   }
 };
+const ComboBox ComboBox::proto;
 LiveArgument ComboBox::options_arg("option", true);
 
 struct Slider : LiveObject {
@@ -1031,6 +1055,7 @@ struct Slider : LiveObject {
     value = new_value;
   }
 };
+const Slider Slider::proto;
 LiveArgument Slider::min_arg("min", true);
 LiveArgument Slider::max_arg("max", true);
 
@@ -1043,6 +1068,7 @@ struct ProgressBar : Number {
     return bar;
   }
 };
+const ProgressBar ProgressBar::proto;
 
 struct Alert : Object {
   static const Alert proto;
@@ -1060,6 +1086,7 @@ struct Alert : Object {
     }
   }
 };
+const Alert Alert::proto;
 Argument Alert::message_arg("message");
 
 struct ListView : Pointer {
@@ -1132,6 +1159,7 @@ struct ListView : Pointer {
     return obj;
   }
 };
+const ListView ListView::proto;
 LiveArgument ListView::list_arg("list");
 
 ////////////////
@@ -1174,6 +1202,7 @@ struct Blackboard : Object {
     statement = algebra::ParseStatement(text);
   }
 };
+const Blackboard Blackboard::proto;
 
 /////////////
 // Misc
@@ -1262,40 +1291,6 @@ struct BlackboardUpdater : Object {
     }
   }
 };
-
-/////////////////
-// Prototypes
-/////////////////
-
-const Integer Integer::proto;
-const Number Number::proto;
-const Increment Increment::proto;
-const Delete Delete::proto;
-const Set Set::proto;
-const Date Date::proto(2022, 1, 1);
-const Timer Timer::proto;
-const TimerReset TimerReset::proto;
-const EqualityTest EqualityTest::proto;
-const LessThanTest LessThanTest::proto;
-const StartsWithTest StartsWithTest::proto;
-const AllTest AllTest::proto;
-const Switch Switch::proto;
-const ErrorReporter ErrorReporter::proto;
-const HealthTest HealthTest::proto;
-const Text Text::proto;
-const Button Button::proto;
-const ComboBox ComboBox::proto;
-const Slider Slider::proto;
-const ProgressBar ProgressBar::proto;
-const Alert Alert::proto;
-const ListView ListView::proto;
-const Blackboard Blackboard::proto;
 const BlackboardUpdater BlackboardUpdater::proto;
-const Append Append::proto;
-const List List::proto;
-const Filter Filter::proto;
-const CurrentElement CurrentElement::proto;
-const Complex Complex::proto;
-const ComplexField ComplexField::proto;
 
 } // namespace automaton

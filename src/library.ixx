@@ -28,7 +28,9 @@ struct Integer : Object {
   Integer(int32_t i = 0) : i(i) {}
   static const Integer proto;
   string_view Name() const override { return "Integer"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Integer>(i); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Integer>(i);
+  }
   string GetText() const override { return std::to_string(i); }
   void SetText(Handle &error_context, string_view text) override {
     i = std::stoi(string(text));
@@ -40,7 +42,9 @@ struct Number : Object {
   Number(double x = 0) : value(x) {}
   static const Number proto;
   string_view Name() const override { return "Number"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Number>(value); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Number>(value);
+  }
   string GetText() const override { return std::to_string(value); }
   void SetText(Handle &error_context, string_view text) override {
     value = std::stod(string(text));
@@ -49,34 +53,60 @@ struct Number : Object {
 
 struct Increment : Object {
   static const Increment proto;
+  static Argument target_arg;
   string_view Name() const override { return "Increment"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Increment>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Increment>();
+  }
   void Run(Handle &h) override {
-    if (auto target = h.Find("target")) {
-      if (auto i = dynamic_cast<Integer *>(target->object.get())) {
-        i->i++;
-        target->ScheduleUpdate();
-      }
+    auto integer = target_arg.GetTyped<Integer>(h);
+    if (!integer.ok) {
+      return;
     }
+    integer.typed->i++;
+    integer.location->ScheduleUpdate();
   }
 };
+Argument Increment::target_arg =
+    Argument("target").RequireInstanceOf<Integer>();
 
 struct Delete : Object {
   static const Delete proto;
+  static Argument target_arg;
   string_view Name() const override { return "Delete"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Delete>(); }
-  void Run(Handle &self) override { self.Find("target")->Take(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Delete>();
+  }
+  void Run(Handle &self) override {
+    auto target = target_arg.GetLocation(self);
+    if (!target.ok) {
+      return;
+    }
+    target.location->Take();
+  }
 };
+Argument Delete::target_arg = Argument("target", true);
 
 struct Set : Object {
   static const Set proto;
+  static Argument value_arg;
+  static Argument target_arg;
   string_view Name() const override { return "Set"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Set>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Set>();
+  }
   void Run(Handle &self) override {
-    auto clone = self.Find("value")->Follow()->Clone();
-    self.Find("target")->Put(std::move(clone));
+    auto value = value_arg.GetObject(self);
+    auto target = target_arg.GetLocation(self);
+    if (!value.ok || !target.ok) {
+      return;
+    }
+    auto clone = value.object->Clone();
+    target.location->Put(std::move(clone));
   }
 };
+Argument Set::value_arg = Argument("value");
+Argument Set::target_arg = Argument("target", true);
 
 struct Date : Object {
   static const Date proto;
@@ -85,7 +115,9 @@ struct Date : Object {
   int day;
   Date(int year, int month, int day) : year(year), month(month), day(day) {}
   string_view Name() const override { return "Date"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Date>(year, month, day); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Date>(year, month, day);
+  }
   string GetText() const override {
     return fmt::format("{:04d}-{:02d}-{:02d}", year, month, day);
   }
@@ -97,12 +129,14 @@ struct Date : Object {
       month = std::stoi(match[2]);
       day = std::stoi(match[3]);
     } else {
-      error_context.ReportError("Invalid date format. The Date object expects dates in "
-                      "the format YYYY-MM-DD. The provided date was: " +
-                      string(text) + ".");
+      error_context.ReportError(
+          "Invalid date format. The Date object expects dates in "
+          "the format YYYY-MM-DD. The provided date was: " +
+          string(text) + ".");
     }
   }
-  std::partial_ordering operator<=>(const Object &other) const noexcept override {
+  std::partial_ordering
+  operator<=>(const Object &other) const noexcept override {
     if (auto other_date = dynamic_cast<const Date *>(&other)) {
       if (year < other_date->year)
         return std::partial_ordering::less;
@@ -199,42 +233,43 @@ struct Timer : Object {
 
 struct TimerReset : Object {
   static const TimerReset proto;
+  static Argument timer_arg;
   string_view Name() const override { return "TimerReset"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<TimerReset>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<TimerReset>();
+  }
   void Run(Handle &self) override {
-    if (auto timer = self.Find("timer")) {
-      if (auto timer_object = timer->As<Timer>()) {
-        timer_object->Reset(*timer);
-      }
+    auto timer = timer_arg.GetTyped<Timer>(self);
+    if (!timer.ok) {
+      return;
     }
+    timer.typed->Reset(*timer.location);
   }
 };
+Argument TimerReset::timer_arg = Argument("timer").RequireInstanceOf<Timer>();
 
-struct EqualityTest : Object {
+struct EqualityTest : LiveObject {
   static const EqualityTest proto;
+  static LiveArgument target_arg;
   bool state = true;
   EqualityTest() {}
   string_view Name() const override { return "Equality Test"; }
   std::unique_ptr<Object> Clone() const override {
     auto other = std::make_unique<EqualityTest>();
-    other->state = state;
+    other->state = true;
     return other;
   }
+  void Args(std::function<void(LiveArgument &)> cb) override { cb(target_arg); }
   string GetText() const override { return state ? "true" : "false"; }
-  void ConnectionAdded(Handle &self, string_view label,
-                                    Connection &connection) override {
-    if (label != "target")
-      return;
-    self.ObserveUpdates(connection.to);
-    self.ScheduleLocalUpdate(connection.to);
-  }
   void Updated(Handle &self, Handle &updated) override {
+    Object *updated_object = updated.Follow();
     bool new_state = true;
     self.FindAll("target", [&](Handle &target) -> void * {
       if (&target == &updated) {
         return nullptr;
       }
-      if ((target <=> updated) != 0) {
+      Object *target_object = target.Follow();
+      if ((*target_object <=> *updated_object) != 0) {
         new_state = false;
         return &target; // return non-null to break out of FindAll
       }
@@ -246,42 +281,43 @@ struct EqualityTest : Object {
     }
   }
 };
+LiveArgument EqualityTest::target_arg = LiveArgument("target");
 
-struct LessThanTest : Object {
+struct LessThanTest : LiveObject {
   static const LessThanTest proto;
+  static LiveArgument less_arg;
+  static LiveArgument than_arg;
   bool state = true;
   LessThanTest() {}
   string_view Name() const override { return "Less Than Test"; }
   std::unique_ptr<Object> Clone() const override {
-    auto other = std::make_unique<LessThanTest>();
-    other->state = state;
-    return other;
+    return std::make_unique<LessThanTest>();
   }
   string GetText() const override { return state ? "true" : "false"; }
-  void ConnectionAdded(Handle &self, string_view label,
-                                    Connection &connection) override {
-    if (label == "less" || label == "than") {
-      self.ObserveUpdates(connection.to);
-      self.ScheduleLocalUpdate(connection.to);
-    }
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    cb(less_arg);
+    cb(than_arg);
   }
   void Updated(Handle &self, Handle &updated) override {
-    Handle *less = self.Find("less");
-    if (less == nullptr)
+    auto less = less_arg.GetObject(self);
+    auto than = than_arg.GetObject(self);
+    if (!less.ok || !than.ok) {
       return;
-    Handle *than = self.Find("than");
-    if (than == nullptr)
-      return;
-    bool new_state = *less->object < *than->object;
+    }
+    bool new_state = *less.object < *than.object;
     if (state != new_state) {
       state = new_state;
       self.ScheduleUpdate();
     }
   }
 };
+LiveArgument LessThanTest::less_arg = LiveArgument("less");
+LiveArgument LessThanTest::than_arg = LiveArgument("than");
 
-struct StartsWithTest : Object {
+struct StartsWithTest : LiveObject {
   static const StartsWithTest proto;
+  static LiveArgument starts_arg;
+  static LiveArgument with_arg;
   bool state = true;
   StartsWithTest() {}
   string_view Name() const override { return "Starts With Test"; }
@@ -291,52 +327,40 @@ struct StartsWithTest : Object {
     return other;
   }
   string GetText() const override { return state ? "true" : "false"; }
-  void ConnectionAdded(Handle &self, string_view label,
-                                    Connection &connection) override {
-    if (label == "starts" || label == "with") {
-      self.ObserveUpdates(connection.to);
-      self.ScheduleLocalUpdate(connection.to);
-    }
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    cb(starts_arg);
+    cb(with_arg);
   }
   void Updated(Handle &self, Handle &updated) override {
-    Handle *starts = self.Find("starts");
-    if (starts == nullptr)
+    auto starts = starts_arg.GetObject(self);
+    auto with = with_arg.GetObject(self);
+    if (!starts.ok || !with.ok) {
       return;
-    Handle *with = self.Find("with");
-    if (with == nullptr)
-      return;
-    Object *starts_obj = starts->Follow();
-    if (starts_obj == nullptr)
-      return;
-    Object *with_obj = with->Follow();
-    if (with_obj == nullptr)
-      return;
-    bool new_state = starts_obj->GetText().starts_with(with_obj->GetText());
+    } else {
+      self.ClearError();
+    }
+    bool new_state =
+        starts.object->GetText().starts_with(with.object->GetText());
     if (state != new_state) {
       state = new_state;
       self.ScheduleUpdate();
     }
   }
 };
+LiveArgument StartsWithTest::starts_arg = LiveArgument("starts");
+LiveArgument StartsWithTest::with_arg = LiveArgument("with");
 
-struct AllTest : Object {
+struct AllTest : LiveObject {
   static const AllTest proto;
+  static LiveArgument test_arg;
   bool state = true;
   AllTest() {}
   string_view Name() const override { return "All Test"; }
   std::unique_ptr<Object> Clone() const override {
-    auto other = std::make_unique<AllTest>();
-    other->state = state;
-    return other;
+    return std::make_unique<AllTest>();
   }
   string GetText() const override { return state ? "true" : "false"; }
-  void ConnectionAdded(Handle &self, string_view label,
-                                Connection &connection) override {
-    if (label != "test")
-      return;
-    self.ObserveUpdates(connection.to);
-    self.ScheduleLocalUpdate(connection.to);
-  }
+  void Args(std::function<void(LiveArgument &)> cb) override { cb(test_arg); }
   void Updated(Handle &self, Handle &updated) override {
     bool new_state = true;
     self.FindAll("test", [&](Handle &test) -> void * {
@@ -352,57 +376,89 @@ struct AllTest : Object {
     }
   }
 };
+LiveArgument AllTest::test_arg = LiveArgument("test");
 
-struct Switch : Object {
+struct Switch : LiveObject {
   static const Switch proto;
-  Handle *self = nullptr;
+  static LiveArgument target_arg;
+  LiveArgument case_arg = LiveArgument("case");
   string_view Name() const override { return "Switch"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Switch>(); }
-  void Rehandle(Handle *parent) override { self = parent; }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Switch>();
+  }
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    cb(target_arg);
+    cb(case_arg);
+  }
   string GetText() const override {
-    if (auto target = self->Find("target")) {
-      auto value = target->GetText();
-      if (auto case_ = self->Find(value)) {
-        return case_->GetText();
-      }
-      self->ReportError("Switch object has no case for value: " + value + ".");
-    } else {
-      self->ReportError("Switch object has no target.");
+    auto case_ = case_arg.GetObject(*self);
+    if (!case_.ok) {
+      return "";
     }
-    return "";
+    return case_.object->GetText();
+  }
+  void Updated(Handle &self, Handle &updated) override {
+    // When "target" changes the name of the case argument changes.
+    auto target = target_arg.GetObject(self);
+    if (!target.ok) {
+      return;
+    }
+    if (&updated == target.location) {  // target changed
+      case_arg.Rename(self, target.object->GetText());
+      self.ScheduleUpdate();
+      return;
+    }
+    auto case_ = case_arg.GetLocation(self);
+    if (!case_.ok) {
+      return;
+    }
+    if (&updated == case_.location) {  // case changed
+      self.ScheduleUpdate();
+      return;
+    }
   }
 };
+LiveArgument Switch::target_arg = LiveArgument("target");
 
-struct ErrorReporter : Object {
+struct ErrorReporter : LiveObject {
   static const ErrorReporter proto;
+  static LiveArgument test_arg;
+  static LiveArgument message_arg;
   string_view Name() const override { return "Error Reporter"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<ErrorReporter>(); }
-  void ConnectionAdded(Handle &self, string_view label,
-                                      Connection &connection) override {
-    if (label == "message" || label == "test" || label == "target") {
-      self.ObserveUpdates(connection.to);
-      self.ScheduleLocalUpdate(connection.to);
-    }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<ErrorReporter>();
+  }
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    cb(test_arg);
+    cb(message_arg);
   }
   void Updated(Handle &self, Handle &updated) override {
     self.ClearError();
-    if (auto test = self.Find("test")) {
-      if (test->GetText() == "true") {
-        if (auto message = self.Find("message")) {
-          self.ReportError(message->GetText());
-        } else {
-          self.ReportError("Error reported by Error Reporter object.");
-        }
-      }
+    auto test = test_arg.GetObject(self);
+    if (!test.ok || test.object->GetText() != "true") {
+      return;
     }
+    auto message = message_arg.GetObject(self);
+    if (!message.ok) {
+      return;
+    }
+    std::string error_text = "Error reported by ErrorReporter";
+    if (message.object) {
+      error_text = message.object->GetText();
+    }
+    self.ReportError(error_text);
   }
 };
+LiveArgument ErrorReporter::test_arg = LiveArgument("test");
+LiveArgument ErrorReporter::message_arg = LiveArgument("message", true);
 
 struct HealthTest : Object {
   static const HealthTest proto;
   bool state = true;
   HealthTest() {}
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<HealthTest>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<HealthTest>();
+  }
   void Rehandle(Handle *self) override {
     if (self->parent) {
       self->ObserveErrors(*self->parent);
@@ -418,36 +474,48 @@ struct HealthTest : Object {
 };
 
 struct AbstractList {
-  virtual Error* GetAtIndex(int index, Object*& obj) = 0;
-  virtual Error* PutAtIndex(int index, bool overwrite, std::unique_ptr<Object> obj) = 0;
-  virtual Error* TakeAtIndex(int index, bool leave_null, std::unique_ptr<Object>& obj) = 0;
-  virtual Error* GetSize(int& size) = 0;
+  virtual Error *GetAtIndex(int index, Object *&obj) = 0;
+  virtual Error *PutAtIndex(int index, bool overwrite,
+                            std::unique_ptr<Object> obj) = 0;
+  virtual Error *TakeAtIndex(int index, bool leave_null,
+                             std::unique_ptr<Object> &obj) = 0;
+  virtual Error *GetSize(int &size) = 0;
 };
 
 struct Append : Object {
   static const Append proto;
+  static Argument to_arg;
+  static Argument what_arg;
   string_view Name() const override { return "Append"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Append>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Append>();
+  }
   void Run(Handle &self) override {
-    if (auto list = self.Find("to")) {
-      if (auto list_object = list->As<AbstractList>()) {
-        int size = 0;
-        if (auto error = list_object->GetSize(size)) {
-          self.error.reset(error);
-          return;
-        }
-        if (auto what = self.Find("what")) {
-          if (auto obj = what->Take()) {
-            if (auto error = list_object->PutAtIndex(size, false, obj->Clone())) {
-              self.error.reset(error);
-              return;
-            }
-          }
-        }
+    auto to = to_arg.GetTyped<AbstractList>(self);
+    if (!to.ok) {
+      return;
+    }
+    auto list_object = to.typed;
+    int size = 0;
+    if (auto error = list_object->GetSize(size)) {
+      self.error.reset(error);
+      return;
+    }
+    auto what = what_arg.GetLocation(self);
+    if (!what.ok) {
+      return;
+    }
+    if (auto obj = what.location->Take()) {
+      if (auto error =
+              list_object->PutAtIndex(size, false, obj->Clone())) {
+        self.error.reset(error);
+        return;
       }
     }
   }
 };
+Argument Append::to_arg = Argument("to").RequireInstanceOf<AbstractList>();
+Argument Append::what_arg = Argument("what");
 
 struct List : Object, AbstractList {
   static const List proto;
@@ -462,15 +530,17 @@ struct List : Object, AbstractList {
     return list;
   }
   void Rehandle(Handle *self) override { this->self = self; }
-  Error* GetAtIndex(int index, Object*& obj) override {
+  Error *GetAtIndex(int index, Object *&obj) override {
     if (index < 0 || index >= objects.size()) {
       return self->ReportError("Index out of bounds.");
     }
     obj = objects[index].get();
     return nullptr;
   }
-  Error* PutAtIndex(int index, bool overwrite, std::unique_ptr<Object> obj) override {
-    if (index < 0 || (overwrite ? index >= objects.size() : index > objects.size())) {
+  Error *PutAtIndex(int index, bool overwrite,
+                    std::unique_ptr<Object> obj) override {
+    if (index < 0 ||
+        (overwrite ? index >= objects.size() : index > objects.size())) {
       // TODO: save the object in the error - it shouldn't be destroyed!
       return self->ReportError("Index out of bounds.");
     }
@@ -482,7 +552,8 @@ struct List : Object, AbstractList {
     self->ScheduleUpdate();
     return nullptr;
   }
-  Error* TakeAtIndex(int index, bool keep_null, std::unique_ptr<Object>& obj) override {
+  Error *TakeAtIndex(int index, bool keep_null,
+                     std::unique_ptr<Object> &obj) override {
     if (index < 0 || index >= objects.size()) {
       return self->ReportError("Index out of bounds.");
     }
@@ -493,26 +564,25 @@ struct List : Object, AbstractList {
     self->ScheduleUpdate();
     return nullptr;
   }
-  Error* GetSize(int& size) override {
+  Error *GetSize(int &size) override {
     size = objects.size();
     return nullptr;
   }
 };
 
 struct Iterator {
-  virtual Object* GetCurrent() const = 0;
+  virtual Object *GetCurrent() const = 0;
 };
 
-struct Filter : Object, Iterator, AbstractList {
-  enum class Phase {
-    kSequential,
-    kDone
-  };
+struct Filter : LiveObject, Iterator, AbstractList {
+  enum class Phase { kSequential, kDone };
   static const Filter proto;
-  Handle *self = nullptr;
+  static LiveArgument list_arg;
+  static LiveArgument element_arg;
+  static LiveArgument test_arg;
   Phase phase = Phase::kDone;
   int index = 0;
-  vector<Object*> objects;
+  vector<Object *> objects;
   vector<int> indices;
   string_view Name() const override { return "Filter"; }
   std::unique_ptr<Object> Clone() const override {
@@ -521,39 +591,20 @@ struct Filter : Object, Iterator, AbstractList {
     filter->index = 0;
     return filter;
   }
-  void Rehandle(Handle *self) override { this->self = self; }
-  void ConnectionAdded(Handle &self, string_view label,
-                        Connection &connection) override {
-    if (label != "list" && label != "element" && label != "test") {
-      return;
-    }
-    if (label == "list") {
-      self.ObserveUpdates(connection.to);
-    }
-    auto list = self.Find("list");
-    if (list == nullptr) {
-      return;
-    }
-    auto element = self.Find("element");
-    if (element == nullptr) {
-      return;
-    }
-    auto test = self.Find("test");
-    if (test == nullptr) {
-      return;
-    }
-    StartFiltering();
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    cb(list_arg);
+    cb(element_arg);
+    cb(test_arg);
   }
   void Run(Handle &self) override {
     if (phase == Phase::kSequential) {
       // Check the value of test, possibly copying element from list to output.
       // Then increment index and schedule another iteration.
-      auto test = self.Find("test");
-      if (test == nullptr) {
-        self.ReportError("Tried to Run this Filter but `test` is not connected anywhere.");
+      auto test = test_arg.GetObject(self);
+      if (!test.ok) {
         return;
       }
-      if (test->GetText() == "true") {
+      if (test.object->GetText() == "true") {
         if (auto obj = GetCurrent()) {
           objects.emplace_back(obj);
           indices.emplace_back(index);
@@ -562,7 +613,8 @@ struct Filter : Object, Iterator, AbstractList {
       ++index;
       BeginNextIteration(self);
     } else {
-      self.ReportError("Tried to Run this Filter but filtering is already completed.");
+      self.ReportError(
+          "Tried to Run this Filter but filtering is already completed.");
     }
   }
   void StartFiltering() {
@@ -573,55 +625,70 @@ struct Filter : Object, Iterator, AbstractList {
   }
   void BeginNextIteration(Handle &self) {
     int list_size = 0;
-    self.Find("list")->As<AbstractList>()->GetSize(list_size);
+    auto list = list_arg.GetTyped<AbstractList>(self);
+    if (!list.ok) {
+      return;
+    }
+    list.typed->GetSize(list_size);
     if (index < list_size) {
       ThenGuard then(std::make_unique<RunTask>(&self));
-      self.Find("element")->ScheduleUpdate();
+      auto element = element_arg.GetLocation(self);
+      if (!element.ok) {
+        return;
+      }
+      element.location->ScheduleUpdate();
     } else {
       phase = Phase::kDone;
     }
   }
   // Iterator interface
-  Object* GetCurrent() const override {
-    auto list = self->Find("list")->As<AbstractList>();
+  Object *GetCurrent() const override {
+    auto list = list_arg.GetTyped<AbstractList>(*self);
+    if (!list.ok) {
+      return nullptr;
+    }
     int size = 0;
-    if (list->GetSize(size)) {
+    if (list.typed->GetSize(size)) {
       return nullptr;
     }
     if (index >= size) {
       return nullptr;
     }
-    Object* obj = nullptr;
-    if (list->GetAtIndex(index, obj)) {
+    Object *obj = nullptr;
+    if (list.typed->GetAtIndex(index, obj)) {
       return nullptr;
     }
     return obj;
   }
-  void Updated(Handle &self, Handle &updated) override {
-    // TODO: Cancel the outstanding RunTask
-    StartFiltering();
-  }
+  void Updated(Handle &self, Handle &updated) override;
   // AbstractList interface
-  Error* GetAtIndex(int index, Object*& obj) override {
+  Error *GetAtIndex(int index, Object *&obj) override {
     if (index < 0 || index >= objects.size()) {
       return self->ReportError("Index out of bounds.");
     }
     obj = objects[index];
     return nullptr;
   }
-  Error* PutAtIndex(int index, bool overwrite, std::unique_ptr<Object> obj) override {
-    // Filter doesn't own the objects it contains, so it must pass them to its parent list.
-    // In order to insert them at the right position in the parent list, it must also know the mapping between filtered & unfiltered indices.
-    // This is not yet implemented.
-    // NOTE: object dropped here!
+  Error *PutAtIndex(int index, bool overwrite,
+                    std::unique_ptr<Object> obj) override {
+    // Filter doesn't own the objects it contains, so it must pass them to its
+    // parent list. In order to insert them at the right position in the parent
+    // list, it must also know the mapping between filtered & unfiltered
+    // indices. This is not yet implemented. NOTE: object dropped here!
     return self->ReportError("Not implemented yet.");
   }
-  Error* TakeAtIndex(int index, bool leave_null, std::unique_ptr<Object>& obj) override {
+  Error *TakeAtIndex(int index, bool leave_null,
+                     std::unique_ptr<Object> &obj) override {
     if (index < 0 || index >= objects.size()) {
       return self->ReportError("Index out of bounds.");
     }
     int orig_index = indices[index];
-    if (Error* err = self->Find("list")->As<AbstractList>()->TakeAtIndex(orig_index, leave_null, obj)) {
+    auto list = list_arg.GetTyped<AbstractList>(*self);
+    if (!list.ok) {
+      return self->GetError();
+    }
+    if (Error *err = list.typed->TakeAtIndex(
+            orig_index, leave_null, obj)) {
       return err;
     }
     objects.erase(objects.begin() + index);
@@ -631,53 +698,63 @@ struct Filter : Object, Iterator, AbstractList {
     }
     return nullptr;
   }
-  Error* GetSize(int& size) override {
+  Error *GetSize(int &size) override {
     size = objects.size();
     return nullptr;
   }
 };
+LiveArgument Filter::list_arg("list");
+LiveArgument Filter::element_arg("element");
+LiveArgument Filter::test_arg("test");
 
 struct CurrentElement : Pointer {
   static const CurrentElement proto;
+  static LiveArgument of_arg;
   string_view Name() const override { return "Current Element"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<CurrentElement>(); }
-  Object* Next(Handle& error_context) const override {
-    if (auto it = GetIterator(*self)) {
-      return it->GetCurrent();
-    }
-    return nullptr;
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<CurrentElement>();
   }
-  void PutNext(Handle& error_context, std::unique_ptr<Object> obj) override {
-    self->ReportError("Tried to put an object to Current Element but it's not possible.");
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    cb(of_arg);
   }
-  std::unique_ptr<Object> TakeNext(Handle& error_context) override {
-    self->ReportError("Tried to take an object from Current Element but it's not possible.");
-    return nullptr;
-  }
- private:
-  static Iterator* GetIterator(Handle& self) {
-    auto of = self.Find("of");
-    if (of == nullptr) {
-      self.ReportError("Tried to get the next element but `of` is not connected anywhere.");
+  Object *Next(Handle &error_context) const override {
+    auto of = of_arg.GetTyped<Iterator>(*self);
+    if (!of.ok) {
       return nullptr;
     }
-    auto it = of->As<Iterator>();
-    if (it == nullptr) {
-      self.ReportError("Tried to get the next element but `of` is not an Iterator.");
-      return nullptr;
-    }
-    return it;
+    return of.typed->GetCurrent();
+  }
+  void PutNext(Handle &error_context, std::unique_ptr<Object> obj) override {
+    self->ReportError(
+        "Tried to put an object to Current Element but it's not possible.");
+  }
+  std::unique_ptr<Object> TakeNext(Handle &error_context) override {
+    self->ReportError(
+        "Tried to take an object from Current Element but it's not possible.");
+    return nullptr;
   }
 };
+LiveArgument CurrentElement::of_arg("of");
+
+inline void Filter::Updated(Handle &self, Handle &updated) {
+  auto list = list_arg.GetTyped<AbstractList>(self);
+  auto element = element_arg.GetTyped<CurrentElement>(self);
+  auto test = test_arg.GetObject(self);
+  if (!list.ok || !element.ok || !test.ok) {
+    return;
+  }
+  // TODO: Cancel the outstanding RunTask
+  bool filtering_completed = phase == Phase::kDone;
+  if (filtering_completed) {
+    StartFiltering();
+  }
+}
 
 // Object with subobjects.
 //
 // The structure contains named fields and is self-descriptive.
 struct Complex : Object {
   static const Complex proto;
-  Handle *self;
-  Complex() : self(nullptr) {}
-
   std::unordered_map<std::string, unique_ptr<Object>> objects;
   string_view Name() const override { return "Complex"; }
   std::unique_ptr<Object> Clone() const override {
@@ -687,13 +764,20 @@ struct Complex : Object {
     }
     return std::unique_ptr<Object>(c);
   }
-  void Rehandle(Handle *new_self) override { self = new_self; }
 };
 
 struct ComplexField : Pointer {
   static const ComplexField proto;
+  static LiveArgument complex_arg;
+  static LiveArgument label_arg;
   string_view Name() const override { return "Complex Field"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<ComplexField>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<ComplexField>();
+  }
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    cb(complex_arg);
+    cb(label_arg);
+  }
   Object *Next(Handle &unused_error_context) const override {
     auto [complex, label] = FollowComplex(*self);
     if (complex == nullptr) {
@@ -722,51 +806,39 @@ struct ComplexField : Pointer {
     complex->objects.erase(it);
     return obj;
   }
-  void ConnectionAdded(Handle &self, string_view label,
-                        Connection &connection) override {
-    // TODO: also monitor "label"
-    if (label == "complex") {
-      self.ObserveUpdates(connection.to);
-    }
-  }
   void Updated(Handle &self, Handle &updated) override {
     // Complex was updated - so let's propagate the update.
     self.ScheduleUpdate();
   }
 
- private:
-  // Return Complex pointed by this object. If not possible report error and return nullptr.
-  static std::pair<Complex*, std::string> FollowComplex(Handle &self) {
-    if (auto label = self.Find("label")) {
-      std::string label_text = label->GetText();
-      if (auto complex = self.Find("complex")) {
-        if (auto complex_obj = complex->As<Complex>()) {
-          return std::make_pair(complex_obj, label_text);
-        } else {
-          self.ReportError("The \"complex\" connection should point to a Complex object.");
-          return std::make_pair(nullptr, "");
-        }
-      } else {
-        self.ReportError("I need a \"complex\" connection.");
-        return std::make_pair(nullptr, "");
-      }
-    } else {
-      self.ReportError("I need a \"label\" connection.");
+private:
+  // Return Complex pointed by this object. If not possible report error and
+  // return nullptr.
+  static std::pair<Complex *, std::string> FollowComplex(Handle &self) {
+    auto label = label_arg.GetObject(self);
+    auto complex = complex_arg.GetTyped<Complex>(self);
+    if (!label.ok || !complex.ok) {
       return std::make_pair(nullptr, "");
     }
+    std::string label_text = label.object->GetText();
+    return std::make_pair(complex.typed, label_text);
   }
 };
+LiveArgument ComplexField::complex_arg("complex");
+LiveArgument ComplexField::label_arg("label");
 
 //////////////
 // Widgets
 //////////////
 
-template <class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+template <class... Ts> struct overloaded : Ts... {
+  using Ts::operator()...;
+};
 template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
-struct Text : Object {
+struct Text : LiveObject {
   struct RefChunk {
-    string label;
+    LiveArgument arg;
   };
   using Chunk = std::variant<string, RefChunk>;
   vector<Chunk> chunks;
@@ -780,11 +852,11 @@ struct Text : Object {
     for (auto i = begin; i != end; ++i) {
       std::match_results<string_view::const_iterator> match = *i;
       if (match.position() - parsed_to > 0) {
-        string text_chunk(
-            text.substr(parsed_to, match.position() - parsed_to));
+        string text_chunk(text.substr(parsed_to, match.position() - parsed_to));
         chunks.emplace_back(text_chunk);
       }
-      chunks.push_back(RefChunk{match[1].str()});
+      LiveArgument arg(match[1].str());
+      chunks.push_back(RefChunk{arg});
       parsed_to = match.position() + match.length();
     }
     if (parsed_to < text.size()) {
@@ -794,28 +866,34 @@ struct Text : Object {
     return chunks;
   }
   static const Text proto;
-  Handle *self = nullptr;
+  static LiveArgument target_arg;
   string_view Name() const override { return "Text Editor"; }
   std::unique_ptr<Object> Clone() const override {
     auto other = std::make_unique<Text>();
     other->chunks = chunks;
     return other;
   }
-  void Rehandle(Handle *self) override {
-    this->self = self;
+  void Args(std::function<void (LiveArgument &)> cb) override {
+    cb(target_arg);
+    for (Chunk &chunk : chunks) {
+      if (auto ref = std::get_if<RefChunk>(&chunk)) {
+        cb(ref->arg);
+      }
+    }
   }
   string GetText() const override {
     string buffer;
     for (const std::variant<string, RefChunk> &chunk : chunks) {
       std::visit(overloaded{[&](const string &text) { buffer += text; },
                             [&](const RefChunk &ref) {
-                              if (auto target = self->Find(ref.label)) {
-                                buffer += target->GetText();
+                              auto arg = ref.arg.GetObject(*self);
+                              if (arg.ok) {
+                                buffer += arg.object->GetText();
                               } else {
-                                buffer += fmt::format("{{{}:}}", ref.label);
+                                buffer += fmt::format("{{{}:}}", ref.arg.name);
                               }
                             }},
-                chunk);
+                 chunk);
     }
     return buffer;
   }
@@ -827,27 +905,27 @@ struct Text : Object {
     chunks = Parse(new_text);
     // chunks.emplace_back(string(new_text));
     if (self) {
-      if (auto target = self->Find("target")) {
-        target->SetText(new_text);
+      auto target = target_arg.GetLocation(*self);
+      if (target.location) {
+        target.location->SetText(new_text);
       }
     }
   }
-  void ConnectionAdded(Handle &self, string_view label,
-                            Connection &connection) override {
-    if (label != "target")
-      return;
-    self.ObserveUpdates(connection.to);
-    self.ScheduleLocalUpdate(connection.to);
-  }
   void Run(Handle &self) override {}
   void Updated(Handle &self, Handle &updated) override {
-    SetText(self, updated.GetText());
+    auto target = target_arg.GetLocation(self);
+    if (target.location == &updated) {
+      SetText(self, updated.GetText());
+    }
   }
 };
+LiveArgument Text::target_arg("target", true);
 
 struct Button : Object {
   string label;
   static const Button proto;
+  static Argument enabled_arg;
+  static Argument click_arg;
   string_view Name() const override { return "Button"; }
   std::unique_ptr<Object> Clone() const override {
     auto other = std::make_unique<Button>();
@@ -859,24 +937,32 @@ struct Button : Object {
     label = new_label;
   }
   void Run(Handle &h) override {
-    if (auto enabled = h.Find("enabled")) {
-      if (enabled->GetText() == "false") {
-        h.ReportError("Button is disabled.");
-        return;
-      }
+    auto enabled = enabled_arg.GetObject(h);
+    if (enabled.object && enabled.object->GetText() == "false") {
+      h.ReportError("Button is disabled.");
+      return;
     }
-    if (auto next = h.Find("click")) {
-      next->ScheduleRun();
+    auto click = click_arg.GetLocation(h);
+    if (click.location) {
+      click.location->ScheduleRun();
     }
   }
 };
+Argument Button::enabled_arg("enabled", true);
+Argument Button::click_arg("click", true);
 
-struct ComboBox : Object {
+struct ComboBox : LiveObject {
   static const ComboBox proto;
+  static LiveArgument options_arg;
   Handle *self = nullptr;
   Handle *selected = nullptr;
   string_view Name() const override { return "Combo Box"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<ComboBox>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<ComboBox>();
+  }
+  void Args(std::function<void (LiveArgument &)> cb) override {
+    cb(options_arg);
+  }
   void Rehandle(Handle *self) override { this->self = self; }
   string GetText() const override { return selected->GetText(); }
   void SetText(Handle &error_context, string_view new_text) override {
@@ -892,48 +978,61 @@ struct ComboBox : Object {
     }
   }
   void ConnectionAdded(Handle &self, string_view label,
-                                Connection &connection) override {
+                       Connection &connection) override {
+    LiveObject::ConnectionAdded(self, label, connection);
     if (selected == nullptr && label == "option") {
-      selected = self.Find("option");
+      auto option = options_arg.GetLocation(self);
+      selected = option.location;
     }
   }
 };
+LiveArgument ComboBox::options_arg("option", true);
 
-struct Slider : Number {
+struct Slider : LiveObject {
   static const Slider proto;
-  double min = 0;
-  double max = 1;
+  static LiveArgument min_arg;
+  static LiveArgument max_arg;
+  double value = 0;
   string_view Name() const override { return "Slider"; }
   std::unique_ptr<Object> Clone() const override {
     auto s = std::make_unique<Slider>();
-    s->min = min;
-    s->max = max;
     s->value = value;
     return s;
   }
-  void Rehandle(Handle *self) override {
-    if (auto min = self->Find("min")) {
-      self->ObserveUpdates(*min);
-    }
-    if (auto max = self->Find("max")) {
-      self->ObserveUpdates(*max);
-    }
+  void Args(std::function<void (LiveArgument &)> cb) override {
+    cb(min_arg);
+    cb(max_arg);
   }
   void Updated(Handle &self, Handle &updated) override {
-    if (auto min = self.Find("min")) {
-      if (&updated == min) {
-        this->min = min->GetNumber();
-        value = std::max(value, this->min);
-      }
+    auto min = min_arg.GetLocation(self);
+    if (min.location && &updated == min.location) {
+      double min_val = min.location->GetNumber();
+      value = std::max(value, min_val);
     }
-    if (auto max = self.Find("max")) {
-      if (&updated == max) {
-        this->max = max->GetNumber();
-        value = std::min(value, this->max);
-      }
+    auto max = max_arg.GetLocation(self);
+    if (max.location && &updated == max.location) {
+      double max_val = max.location->GetNumber();
+      value = std::min(value, max_val);
     }
   }
+  string GetText() const override { return std::to_string(value); }
+  void SetText(Handle &error_context, string_view new_text) override {
+    double new_value = std::stod(string(new_text));
+    auto min = min_arg.GetLocation(*self);
+    if (min.location) {
+      double min_val = min.location->GetNumber();
+      new_value = std::max(new_value, min_val);
+    }
+    auto max = max_arg.GetLocation(*self);
+    if (max.location) {
+      double max_val = max.location->GetNumber();
+      new_value = std::min(new_value, max_val);
+    }
+    value = new_value;
+  }
 };
+LiveArgument Slider::min_arg("min", true);
+LiveArgument Slider::max_arg("max", true);
 
 struct ProgressBar : Number {
   static const ProgressBar proto;
@@ -947,85 +1046,93 @@ struct ProgressBar : Number {
 
 struct Alert : Object {
   static const Alert proto;
+  static Argument message_arg;
   vector<string> alerts_for_tests;
   string_view Name() const override { return "Alert"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Alert>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Alert>();
+  }
   void Run(Handle &self) override {
-    if (auto message = self.Find("message")) {
-      string text = message->GetText();
+    auto message = message_arg.GetObject(self);
+    if (message.ok) {
+      string text = message.object->GetText();
       alerts_for_tests.push_back(text);
     }
   }
 };
+Argument Alert::message_arg("message");
 
 struct ListView : Pointer {
   static const ListView proto;
-  Handle* self = nullptr;
+  static LiveArgument list_arg;
   int index = -1;
   string_view Name() const override { return "List View"; }
   std::unique_ptr<Object> Clone() const override {
     std::unique_ptr<Object> clone = std::make_unique<ListView>();
-    dynamic_cast<ListView&>(*clone).index = index;
+    dynamic_cast<ListView &>(*clone).index = index;
     return clone;
   }
-  void Rehandle(Handle *self) override { this->self = self; }
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    cb(list_arg);
+  }
   void Select(int new_index) {
     if (new_index != index) {
       index = new_index;
       self->ScheduleUpdate();
     }
   }
-  Object* Next(Handle& error_context) const override {
-    if (index < 0) return nullptr;
-    auto list_arg = self->Find("list");
-    if (list_arg == nullptr) {
-      error_context.ReportError("ListView has no \"list\" target.");
-      LOG() << "ListView has no \"list\" target.";
+  Object *Next(Handle &error_context) const override {
+    if (index < 0)
       return nullptr;
-    }
-    auto list = list_arg->As<AbstractList>();
-    if (list == nullptr) {
-      auto error_msg = fmt::format("ListView \"list\" target is not an AbstractList but a {}.",
-                                   list_arg->HumanReadableName());
-      error_context.ReportError(error_msg);
-      LOG() << error_msg;
+    auto list = list_arg.GetTyped<AbstractList>(error_context);
+    if (!list.ok) {
       return nullptr;
     }
     int size = 0;
-    if (auto err = list->GetSize(size)) {
+    if (auto err = list.typed->GetSize(size)) {
       return nullptr;
     }
-    if (index >= size) return nullptr;
-    Object* obj = nullptr;
-    if (auto err = list->GetAtIndex(index, obj)) {
+    if (index >= size)
+      return nullptr;
+    Object *obj = nullptr;
+    if (auto err = list.typed->GetAtIndex(index, obj)) {
       return nullptr;
     }
     return obj;
   }
-  void PutNext(Handle& error_context, std::unique_ptr<Object> obj) override {
-    auto list = self->Find("list")->As<AbstractList>();
+  void PutNext(Handle &error_context, std::unique_ptr<Object> obj) override {
+    auto list = list_arg.GetTyped<AbstractList>(error_context);
+    if (!list.ok) {
+      return;
+    }
     int size = 0;
-    list->GetSize(size);
+    list.typed->GetSize(size);
     if (index < 0) {
-      list->PutAtIndex(0, false, std::move(obj));
+      list.typed->PutAtIndex(0, false, std::move(obj));
     } else if (index >= size) {
-      list->PutAtIndex(size, false, std::move(obj));
+      list.typed->PutAtIndex(size, false, std::move(obj));
       ++index;
     } else {
-      list->PutAtIndex(index, false, std::move(obj));
+      list.typed->PutAtIndex(index, false, std::move(obj));
     }
   }
-  std::unique_ptr<Object> TakeNext(Handle& error_context) override {
-    auto list = self->Find("list")->As<AbstractList>();
+  std::unique_ptr<Object> TakeNext(Handle &error_context) override {
+    auto list = list_arg.GetTyped<AbstractList>(error_context);
+    if (!list.ok) {
+      return nullptr;
+    }
     int size = 0;
-    list->GetSize(size);
-    if (index < 0 || index >= size) return nullptr;
+    list.typed->GetSize(size);
+    if (index < 0 || index >= size)
+      return nullptr;
     std::unique_ptr<Object> obj;
-    list->TakeAtIndex(index, false, obj);
-    if (index >= size) --index;
+    list.typed->TakeAtIndex(index, false, obj);
+    if (index >= size)
+      --index;
     return obj;
   }
 };
+LiveArgument ListView::list_arg("list");
 
 ////////////////
 // Algebra
@@ -1076,7 +1183,9 @@ struct BlackboardUpdater : Object {
   static const BlackboardUpdater proto;
   std::unordered_map<string, unique_ptr<algebra::Expression>> formulas;
 
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<BlackboardUpdater>(); }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<BlackboardUpdater>();
+  }
   void Rehandle(Handle *self) override {
     // 1. Find nearby blackboards & register as an observer.
     // 2. Extract variables from math statements.
@@ -1087,8 +1196,7 @@ struct BlackboardUpdater : Object {
                 blackboard->statement.get())) {
           // fmt::print("Found equation: {}\n", equation->GetText());
           treemath::Tree tree(*equation);
-          vector<algebra::Variable *> variables =
-              ExtractVariables(equation);
+          vector<algebra::Variable *> variables = ExtractVariables(equation);
           std::unordered_set<algebra::Variable *> independent_variables;
           // 3. Derive formulas for each of the variables.
           for (algebra::Variable *variable : variables) {

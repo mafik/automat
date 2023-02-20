@@ -12,6 +12,32 @@ import error;
 
 namespace automaton {
 
+Object *Handle::Follow() {
+  if (Pointer *ptr = object->AsPointer()) {
+    return ptr->Follow(*this);
+  }
+  return object.get();
+}
+
+void Handle::Put(unique_ptr<Object> obj) {
+  if (object == nullptr) {
+    object = std::move(obj);
+    return;
+  }
+  if (Pointer *ptr = object->AsPointer()) {
+    ptr->Put(*this, std::move(obj));
+  } else {
+    object = std::move(obj);
+  }
+}
+
+unique_ptr<Object> Handle::Take() {
+  if (Pointer *ptr = object->AsPointer()) {
+    return ptr->Take(*this);
+  }
+  return std::move(object);
+}
+
 Handle &Machine::CreateEmpty(const string &name) {
   auto [it, already_present] = handles.emplace(new Handle(self));
   Handle *h = it->get();

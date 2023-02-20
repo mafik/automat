@@ -30,7 +30,7 @@ TEST_F(ListTest, Filter) {
   Handle& element = machine.Create<CurrentElement>();
   test.ConnectTo(element, "less");
   element.ConnectTo(filter, "of");
-  filter.ConnectTo(element, "element");
+  filter.ConnectTo(element, "element")->to_direct = true;
   RunLoop();
   EXPECT_EQ(5, filter.As<Filter>()->objects.size());
 }

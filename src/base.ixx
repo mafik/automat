@@ -83,47 +83,6 @@ struct Object {
   }
 };
 
-struct Pointer : Object {
-  Handle *self = nullptr;
-  virtual Object *Next(Handle &error_context) const = 0;
-  virtual void PutNext(Handle &error_context, std::unique_ptr<Object> obj) = 0;
-  virtual std::unique_ptr<Object> TakeNext(Handle &error_context) = 0;
-
-  std::pair<Pointer &, Object *> FollowPointers(Handle &error_context) const {
-    const Pointer *ptr = this;
-    Object *next = Next(error_context);
-    while (next != nullptr) {
-      if (Pointer *next_ptr = next->AsPointer()) {
-        ptr = next_ptr;
-        next = next_ptr->Next(error_context);
-      } else {
-        break;
-      }
-    }
-    return {*const_cast<Pointer *>(ptr), next};
-  }
-  Object *Follow(Handle &error_context) const {
-    return FollowPointers(error_context).second;
-  }
-  void Put(Handle &error_context, std::unique_ptr<Object> obj) {
-    FollowPointers(error_context).first.PutNext(error_context, std::move(obj));
-  }
-  std::unique_ptr<Object> Take(Handle &error_context) {
-    return FollowPointers(error_context).first.TakeNext(error_context);
-  }
-
-  Pointer *AsPointer() override { return this; }
-  void Rehandle(Handle *self) override { this->self = self; }
-  string GetText() const override {
-    if (auto *obj = Follow(*self)) {
-      return obj->GetText();
-    } else {
-      return "null";
-    }
-  }
-  void SetText(Handle &error_context, string_view text) override;
-};
-
 template <typename T> struct ptr_hash {
   using is_transparent = void;
 
@@ -268,31 +227,11 @@ struct Handle {
     return this;
   }
 
-  Object *Follow() {
-    if (Pointer *ptr = object->AsPointer()) {
-      return ptr->Follow(*this);
-    }
-    return object.get();
-  }
+  Object *Follow();
 
-  void Put(unique_ptr<Object> obj) {
-    if (object == nullptr) {
-      object = std::move(obj);
-      return;
-    }
-    if (Pointer *ptr = object->AsPointer()) {
-      ptr->Put(*this, std::move(obj));
-    } else {
-      object = std::move(obj);
-    }
-  }
+  void Put(unique_ptr<Object> obj);
 
-  unique_ptr<Object> Take() {
-    if (Pointer *ptr = object->AsPointer()) {
-      return ptr->Take(*this);
-    }
-    return std::move(object);
-  }
+  unique_ptr<Object> Take();
 
   // Find a related object.
   //
@@ -311,6 +250,27 @@ struct Handle {
       }
       return nullptr;
     }));
+  }
+
+  // Find a related object.
+  //
+  // Each Container can alter they way that object properties are looked up.
+  // This function holds the container-specific look up overrides.
+  std::pair<Handle*, bool> Find2(string_view label) {
+    auto frame_it = outgoing.find(label);
+    // explicit connection
+    if (frame_it != outgoing.end()) {
+      auto c = frame_it->second;
+      return std::make_pair(&c->to, c->to_direct);
+    }
+    // otherwise, search for other handles in this machine
+    Handle* near = reinterpret_cast<Handle *>(Nearby([&](Handle &other) -> void * {
+      if (other.name == label) {
+        return &other;
+      }
+      return nullptr;
+    }));
+    return std::make_pair(near, false);
   }
 
   void *FindAll(string_view label, function<void *(Handle &)> callback) {
@@ -343,11 +303,12 @@ struct Handle {
   //
   // This function should also notify the object with the `ConnectionAdded`
   // call.
-  void ConnectTo(Handle &other, string_view label) {
+  Connection* ConnectTo(Handle &other, string_view label) {
     Connection *c = new Connection(*this, other, false, false);
     outgoing.emplace(label, c);
     other.incoming.emplace(label, c);
     object->ConnectionAdded(*this, label, *c);
+    return c;
   }
 
   // Immediately execute this object's Updated function.
@@ -374,6 +335,11 @@ struct Handle {
     observing_updates.insert(&other);
   }
 
+  void StopObservingUpdates(Handle &other) {
+    other.update_observers.erase(this);
+    observing_updates.erase(&other);
+  }
+
   void ObserveErrors(Handle &other) {
     other.error_observers.insert(this);
     observing_errors.insert(&other);
@@ -394,7 +360,9 @@ struct Handle {
     }
     return follow->GetText();
   }
-  double GetNumber() { return std::stod(GetText()); }
+  double GetNumber() {
+    return std::stod(GetText());
+  }
 
   // Immediately execute this object's Run function.
   void Run() { object->Run(*this); }
@@ -489,10 +457,207 @@ struct Handle {
       return fmt::format("{0} \"{1}\"", object->Name(), name);
     }
   }
+};
 
-  std::partial_ordering operator<=>(const Handle &other) const noexcept {
-    return *object <=> *other.object;
+struct Argument {
+  std::string name;
+  bool optional;
+  std::vector<
+      std::function<void(Handle *location, Object *object, std::string &error)>>
+      requirements;
+
+  Argument(string_view name, bool optional = false)
+      : name(name), optional(optional) {}
+
+  template <typename T> Argument &RequireInstanceOf() {
+    requirements.emplace_back(
+        [this](Handle *location, Object *object, std::string &error) {
+          if (dynamic_cast<T *>(object) == nullptr) {
+            error = fmt::format("The {} argument must be an instance of {}.",
+                                name, typeid(T).name());
+          }
+        });
+    return *this;
   }
+
+  void CheckRequirements(Handle &here, Handle *location, Object *object,
+                         std::string &error) {
+    for (auto &requirement : requirements) {
+      requirement(location, object, error);
+      if (!error.empty()) {
+        return;
+      }
+    }
+  }
+
+  struct LocationResult {
+    bool ok = true;
+    bool direct = false;
+    Handle *location = nullptr;
+  };
+
+  LocationResult GetLocation(
+      Handle &here,
+      std::source_location source_location = std::source_location::current()) const {
+    LocationResult result;
+    auto found = here.Find2(name);
+    result.location = found.first;
+    result.direct = found.second;
+    if (result.location == nullptr && !optional) {
+      here.ReportError(fmt::format("The {} argument is not connected.", name),
+                        source_location);
+      result.ok = false;
+    }
+    return result;
+  }
+
+  struct ObjectResult : LocationResult {
+    Object *object = nullptr;
+    ObjectResult(LocationResult location_result)
+        : LocationResult(location_result) {}
+  };
+
+  ObjectResult GetObject(Handle &here, std::source_location source_location =
+                                           std::source_location::current()) const {
+    ObjectResult result(GetLocation(here, source_location));
+    if (result.location) {
+      if (result.direct) {
+        result.object = result.location->object.get();
+      } else {
+        result.object = result.location->Follow();
+      }
+      if (result.object == nullptr && !optional) {
+        here.ReportError(fmt::format("The {} argument is empty.", name),
+                          source_location);
+        result.ok = false;
+      }
+    }
+    return result;
+  }
+
+  template <typename T> struct TypedResult : ObjectResult {
+    T *typed = nullptr;
+    TypedResult(ObjectResult object_result) : ObjectResult(object_result) {}
+  };
+
+  template <typename T>
+  TypedResult<T> GetTyped(Handle &here, std::source_location source_location =
+                                            std::source_location::current()) {
+    TypedResult<T> result(GetObject(here, source_location));
+    if (result.ok) {
+      result.typed = dynamic_cast<T *>(result.object);
+      if (result.typed == nullptr) {
+        here.ReportError(
+            fmt::format("The {} argument is not an instance of {}.", name,
+                        typeid(T).name()),
+            source_location);
+        result.ok = false;
+      }
+    }
+    return result;
+  }
+};
+
+struct LiveArgument : Argument {
+  LiveArgument(string_view name, bool optional = false) : Argument(name, optional) {}
+  template <typename T> LiveArgument &RequireInstanceOf() {
+    Argument::RequireInstanceOf<T>();
+    return *this;
+  }
+  void Rehandle(Handle *old_self, Handle *new_self) {
+    if (old_self) {
+      auto old_connections = old_self->outgoing.equal_range(name);
+      for (auto it = old_connections.first; it != old_connections.second;
+           ++it) {
+        auto &connection = it->second;
+        old_self->StopObservingUpdates(connection->to);
+      }
+    }
+    if (new_self) {
+      auto new_connections = new_self->outgoing.equal_range(name);
+      for (auto it = new_connections.first; it != new_connections.second;
+           ++it) {
+        auto &connection = it->second;
+        new_self->ObserveUpdates(connection->to);
+      }
+    }
+  }
+  void ConnectionAdded(Handle &self, string_view label,
+                       Connection &connection) {
+    if (label == name) {
+      self.ObserveUpdates(connection.to);
+      self.ScheduleLocalUpdate(connection.to);
+    }
+  }
+  void Rename(Handle &self, string_view new_name) {
+    auto old_connections = self.outgoing.equal_range(name);
+    for (auto it = old_connections.first; it != old_connections.second; ++it) {
+      auto &connection = it->second;
+      self.StopObservingUpdates(connection->to);
+    }
+    auto new_connections = self.outgoing.equal_range(new_name);
+    for (auto it = new_connections.first; it != new_connections.second; ++it) {
+      auto &connection = it->second;
+      self.ObserveUpdates(connection->to);
+    }
+    name = new_name;
+  }
+};
+
+struct LiveObject : Object {
+  Handle *self = nullptr;
+  virtual void Args(std::function<void(LiveArgument &)> cb) = 0;
+  void Rehandle(Handle *new_self) override {
+    Args([old_self = self, new_self](LiveArgument &arg) {
+      arg.Rehandle(old_self, new_self);
+    });
+    self = new_self;
+  }
+  void ConnectionAdded(Handle &self, string_view label,
+                       Connection &connection) override {
+    Args([&self, &label, &connection](LiveArgument &arg) {
+      arg.ConnectionAdded(self, label, connection);
+    });
+  }
+};
+
+struct Pointer : LiveObject {
+  virtual Object *Next(Handle &error_context) const = 0;
+  virtual void PutNext(Handle &error_context, std::unique_ptr<Object> obj) = 0;
+  virtual std::unique_ptr<Object> TakeNext(Handle &error_context) = 0;
+
+  std::pair<Pointer &, Object *> FollowPointers(Handle &error_context) const {
+    const Pointer *ptr = this;
+    Object *next = Next(error_context);
+    while (next != nullptr) {
+      if (Pointer *next_ptr = next->AsPointer()) {
+        ptr = next_ptr;
+        next = next_ptr->Next(error_context);
+      } else {
+        break;
+      }
+    }
+    return {*const_cast<Pointer *>(ptr), next};
+  }
+  Object *Follow(Handle &error_context) const {
+    return FollowPointers(error_context).second;
+  }
+  void Put(Handle &error_context, std::unique_ptr<Object> obj) {
+    FollowPointers(error_context).first.PutNext(error_context, std::move(obj));
+  }
+  std::unique_ptr<Object> Take(Handle &error_context) {
+    return FollowPointers(error_context).first.TakeNext(error_context);
+  }
+
+  Pointer *AsPointer() override { return this; }
+  string GetText() const override {
+    if (auto *obj = Follow(*self)) {
+      return obj->GetText();
+    } else {
+      return "null";
+    }
+  }
+  void SetText(Handle &error_context, string_view text) override;
 };
 
 bool log_executed_tasks = false;

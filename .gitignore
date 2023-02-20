@@ -1,3 +1,4 @@
 *_test
 *.py[cod]
 compile_commands.json
+.cache

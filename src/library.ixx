@@ -960,7 +960,6 @@ struct Button : Object {
   string label;
   static const Button proto;
   static Argument enabled_arg;
-  static Argument click_arg;
   string_view Name() const override { return "Button"; }
   std::unique_ptr<Object> Clone() const override {
     auto other = std::make_unique<Button>();
@@ -977,15 +976,10 @@ struct Button : Object {
       h.ReportError("Button is disabled.");
       return;
     }
-    auto click = click_arg.GetLocation(h);
-    if (click.location) {
-      click.location->ScheduleRun();
-    }
   }
 };
 const Button Button::proto;
 Argument Button::enabled_arg("enabled", Argument::kOptional);
-Argument Button::click_arg("click", Argument::kOptional);
 
 struct ComboBox : LiveObject {
   static const ComboBox proto;

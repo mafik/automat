@@ -24,7 +24,7 @@ TEST(CounterTest, Count) {
   Handle &txt = counter.Create<Text>("Count");
   txt.ConnectTo(i, "target");
   Handle &btn = counter.Create<Button>("Increment");
-  btn.ConnectTo(inc, "click");
+  btn.ConnectTo(inc, "then");
 
   counter.AddToFrontPanel(txt);
   counter.AddToFrontPanel(btn);
@@ -41,7 +41,7 @@ TEST(CounterTest, Count) {
 
   EXPECT_EQ(counter["Count"]->GetText(), "0");
 
-  counter["Increment"]->Run();
+  counter["Increment"]->ScheduleRun();
   RunLoop();
 
   EXPECT_EQ(counter["Count"]->GetText(), "1");
@@ -187,7 +187,7 @@ struct FlightBookerTest {
     //                                     \-{one-way flight}-> Formatter
     //                                      \-{return flight}-> Formatter
     alert = &booker.Create<Alert>();
-    b->ConnectTo(*alert, "click");
+    b->ConnectTo(*alert, "then");
     switch_ = &booker.Create<Switch>();
     alert->ConnectTo(*switch_, "message");
     switch_->ConnectTo(*c, "target");
@@ -303,7 +303,7 @@ TEST(TimerTest, DurationChange) {
   Handle &timer_reset = m.Create<TimerReset>();
   timer_reset.ConnectTo(timer, "timer");
   Handle &reset_button = m.Create<Button>("reset");
-  reset_button.ConnectTo(timer_reset, "click");
+  reset_button.ConnectTo(timer_reset, "then");
 
   Handle &progress_bar = m.Create<ProgressBar>("progress");
 
@@ -419,7 +419,7 @@ struct CrudTest : public TestBase {
     list_view.ConnectTo(filter, "list");
 
     deleter.ConnectTo(list_view, "target");
-    button_delete.ConnectTo(deleter, "click");
+    button_delete.ConnectTo(deleter, "then");
 
     first_name_selected_field.ConnectTo(list_view, "complex");
     first_name_selected_field.ConnectTo(first_name_label, "label");
@@ -430,8 +430,8 @@ struct CrudTest : public TestBase {
     set_first_name.ConnectTo(first_name_complex_field, "value");
     set_last_name.ConnectTo(last_name_selected_field, "target");
     set_last_name.ConnectTo(last_name_complex_field, "value");
-    button_update.ConnectTo(set_first_name, "click");
-    button_update.ConnectTo(set_last_name, "click");
+    button_update.ConnectTo(set_first_name, "then");
+    button_update.ConnectTo(set_last_name, "then");
 
     first_name_complex_field.ConnectTo(complex, "complex");
     first_name_complex_field.ConnectTo(first_name_label, "label");
@@ -440,7 +440,7 @@ struct CrudTest : public TestBase {
     first_name_complex_field.Put(Create<Text>());
     last_name_complex_field.Put(Create<Text>());
 
-    button_create.ConnectTo(set_complex, "click");
+    button_create.ConnectTo(set_complex, "then");
     set_complex.ConnectTo(complex, "value");
     set_complex.ConnectTo(append_target, "target");
     set_complex.ConnectTo(append, "then");
@@ -530,7 +530,8 @@ TEST_F(CrudTest, Update) {
   list_view.ThisAs<ListView>()->Select(0);
   EXPECT_EQ(last_name_selected_field.GetText(), "Bar");
 
-  // After typing a new last name in the temp object, the seleceted last name is still the same.
+  // After typing a new last name in the temp object, the seleceted last name is
+  // still the same.
   last_name_complex_field.SetText("Baz");
   EXPECT_EQ(last_name_selected_field.GetText(), "Bar");
 

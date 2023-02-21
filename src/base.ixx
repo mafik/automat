@@ -759,8 +759,10 @@ struct RunTask : Task {
   void Execute() override {
     PreExecute();
     target->Run();
-    if (auto then = target->Find("then")) {
-      then->ScheduleRun();
+    if (!target->HasError()) {
+      if (auto then = target->Find("then")) {
+        then->ScheduleRun();
+      }
     }
     PostExecute();
   }

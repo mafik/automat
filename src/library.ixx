@@ -275,16 +275,12 @@ struct EqualityTest : LiveObject {
   void Updated(Handle &self, Handle &updated) override {
     Object *updated_object = updated.Follow();
     bool new_state = true;
-    self.FindAll("target", [&](Handle &target) -> void * {
-      if (&target == &updated) {
-        return nullptr;
-      }
-      Object *target_object = target.Follow();
-      if ((*target_object <=> *updated_object) != 0) {
+    target_arg.LoopObjects<bool>(self, [&](Object &target_object) {
+      if ((target_object <=> *updated_object) != 0) {
         new_state = false;
-        return &target; // return non-null to break out of FindAll
+        return true; // return non-null to break out of LoopObjects
       }
-      return nullptr;
+      return false;
     });
     if (state != new_state) {
       state = new_state;
@@ -381,14 +377,13 @@ struct AllTest : LiveObject {
   string GetText() const override { return state ? "true" : "false"; }
   void Args(std::function<void(LiveArgument &)> cb) override { cb(test_arg); }
   void Updated(Handle &self, Handle &updated) override {
-    bool new_state = true;
-    self.FindAll("test", [&](Handle &test) -> void * {
-      if (test.GetText() != "true") {
-        new_state = false;
-        return &test; // return non-null to break out of FindAll
+    bool found_non_true = test_arg.LoopObjects<bool>(self, [](Object &o) {
+      if (o.GetText() != "true") {
+        return true; // this breaks the loop
       }
-      return nullptr;
+      return false;
     });
+    bool new_state = !found_non_true;
     if (state != new_state) {
       state = new_state;
       self.ScheduleUpdate();
@@ -1007,14 +1002,14 @@ struct ComboBox : LiveObject {
   void Rehandle(Handle *self) override { this->self = self; }
   string GetText() const override { return selected->GetText(); }
   void SetText(Handle &error_context, string_view new_text) override {
-    auto ret = self->FindAll("option", [&](Handle &option) -> void * {
-      if (option.GetText() == new_text) {
-        selected = &option;
-        return &option;
-      }
-      return nullptr;
-    });
-    if (ret == nullptr) {
+    selected = options_arg.LoopLocations<Handle *>(
+        *self, [&](Handle &option) -> Handle * {
+          if (option.GetText() == new_text) {
+            return &option;
+          }
+          return nullptr;
+        });
+    if (selected == nullptr) {
       error_context.ReportError(fmt::format("No option named {}", new_text));
     }
   }

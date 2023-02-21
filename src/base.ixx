@@ -274,16 +274,6 @@ struct Handle {
     return std::make_pair(near, false);
   }
 
-  void *FindAll(string_view label, function<void *(Handle &)> callback) {
-    auto [begin, end] = outgoing.equal_range(label);
-    for (auto it = begin; it != end; ++it) {
-      if (auto ret = callback(it->second->to)) {
-        return ret;
-      }
-    }
-    return nullptr;
-  }
-
   // Iterate over all nearby objects (including this object).
   //
   // Return non-null from the callback to stop the search.
@@ -465,15 +455,22 @@ struct Argument {
     kRequiresObject,
     kRequiresConcreteType,
   };
+  // Used for annotating arguments so that (future) UI can show them differently.
+  enum Quantity {
+    kSingle,
+    kMultiple,
+  };
 
   std::string name;
   Precondition precondition;
+  Quantity quantity;
   std::vector<
       std::function<void(Handle *location, Object *object, std::string &error)>>
       requirements;
 
-  Argument(string_view name, Precondition precondition)
-      : name(name), precondition(precondition) {}
+  Argument(string_view name, Precondition precondition,
+           Quantity quantity = kSingle)
+      : name(name), precondition(precondition), quantity(quantity) {}
 
   template <typename T> Argument &RequireInstanceOf() {
     requirements.emplace_back(
@@ -562,6 +559,32 @@ struct Argument {
       }
     }
     return result;
+  }
+
+  // The Loop ends when `callback` returns a value that is convertible to
+  // `true`.
+  template <typename T>
+  T LoopLocations(Handle &here, function<T(Handle &)> callback) {
+    auto [begin, end] = here.outgoing.equal_range(name);
+    for (auto it = begin; it != end; ++it) {
+      if (auto ret = callback(it->second->to)) {
+        return ret;
+      }
+    }
+    return T();
+  }
+
+  // The Loop ends when `callback` returns a value that is convertible to
+  // `true`.
+  template <typename T>
+  T LoopObjects(Handle &here, function<T(Object &)> callback) {
+    return LoopLocations<T>(here, [&](Handle &h) {
+      if (Object *o = h.Follow()) {
+        return callback(*o);
+      } else {
+        return T();
+      }
+    });
   }
 };
 

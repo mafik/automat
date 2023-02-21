@@ -256,7 +256,7 @@ struct Handle {
   //
   // Each Container can alter they way that object properties are looked up.
   // This function holds the container-specific look up overrides.
-  std::pair<Handle*, bool> Find2(string_view label) {
+  std::pair<Handle *, bool> Find2(string_view label) {
     auto frame_it = outgoing.find(label);
     // explicit connection
     if (frame_it != outgoing.end()) {
@@ -264,12 +264,13 @@ struct Handle {
       return std::make_pair(&c->to, c->to_direct);
     }
     // otherwise, search for other handles in this machine
-    Handle* near = reinterpret_cast<Handle *>(Nearby([&](Handle &other) -> void * {
-      if (other.name == label) {
-        return &other;
-      }
-      return nullptr;
-    }));
+    Handle *near =
+        reinterpret_cast<Handle *>(Nearby([&](Handle &other) -> void * {
+          if (other.name == label) {
+            return &other;
+          }
+          return nullptr;
+        }));
     return std::make_pair(near, false);
   }
 
@@ -303,7 +304,7 @@ struct Handle {
   //
   // This function should also notify the object with the `ConnectionAdded`
   // call.
-  Connection* ConnectTo(Handle &other, string_view label) {
+  Connection *ConnectTo(Handle &other, string_view label) {
     Connection *c = new Connection(*this, other, false, false);
     outgoing.emplace(label, c);
     other.incoming.emplace(label, c);
@@ -360,9 +361,7 @@ struct Handle {
     }
     return follow->GetText();
   }
-  double GetNumber() {
-    return std::stod(GetText());
-  }
+  double GetNumber() { return std::stod(GetText()); }
 
   // Immediately execute this object's Run function.
   void Run() { object->Run(*this); }
@@ -460,14 +459,21 @@ struct Handle {
 };
 
 struct Argument {
+  enum Precondition {
+    kOptional,
+    kRequiresLocation,
+    kRequiresObject,
+    kRequiresConcreteType,
+  };
+
   std::string name;
-  bool optional;
+  Precondition precondition;
   std::vector<
       std::function<void(Handle *location, Object *object, std::string &error)>>
       requirements;
 
-  Argument(string_view name, bool optional = false)
-      : name(name), optional(optional) {}
+  Argument(string_view name, Precondition precondition)
+      : name(name), precondition(precondition) {}
 
   template <typename T> Argument &RequireInstanceOf() {
     requirements.emplace_back(
@@ -496,16 +502,16 @@ struct Argument {
     Handle *location = nullptr;
   };
 
-  LocationResult GetLocation(
-      Handle &here,
-      std::source_location source_location = std::source_location::current()) const {
+  LocationResult GetLocation(Handle &here,
+                             std::source_location source_location =
+                                 std::source_location::current()) const {
     LocationResult result;
     auto found = here.Find2(name);
     result.location = found.first;
     result.direct = found.second;
-    if (result.location == nullptr && !optional) {
+    if (result.location == nullptr && precondition >= kRequiresLocation) {
       here.ReportError(fmt::format("The {} argument is not connected.", name),
-                        source_location);
+                       source_location);
       result.ok = false;
     }
     return result;
@@ -517,8 +523,9 @@ struct Argument {
         : LocationResult(location_result) {}
   };
 
-  ObjectResult GetObject(Handle &here, std::source_location source_location =
-                                           std::source_location::current()) const {
+  ObjectResult GetObject(Handle &here,
+                         std::source_location source_location =
+                             std::source_location::current()) const {
     ObjectResult result(GetLocation(here, source_location));
     if (result.location) {
       if (result.direct) {
@@ -526,9 +533,9 @@ struct Argument {
       } else {
         result.object = result.location->Follow();
       }
-      if (result.object == nullptr && !optional) {
+      if (result.object == nullptr && precondition >= kRequiresObject) {
         here.ReportError(fmt::format("The {} argument is empty.", name),
-                          source_location);
+                         source_location);
         result.ok = false;
       }
     }
@@ -544,9 +551,9 @@ struct Argument {
   TypedResult<T> GetTyped(Handle &here, std::source_location source_location =
                                             std::source_location::current()) {
     TypedResult<T> result(GetObject(here, source_location));
-    if (result.ok) {
+    if (result.object) {
       result.typed = dynamic_cast<T *>(result.object);
-      if (result.typed == nullptr) {
+      if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
         here.ReportError(
             fmt::format("The {} argument is not an instance of {}.", name,
                         typeid(T).name()),
@@ -559,7 +566,9 @@ struct Argument {
 };
 
 struct LiveArgument : Argument {
-  LiveArgument(string_view name, bool optional = false) : Argument(name, optional) {}
+  LiveArgument(string_view name, Precondition precondition)
+      : Argument(name, precondition) {}
+
   template <typename T> LiveArgument &RequireInstanceOf() {
     Argument::RequireInstanceOf<T>();
     return *this;

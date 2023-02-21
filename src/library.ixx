@@ -71,7 +71,8 @@ struct Increment : Object {
 };
 const Increment Increment::proto;
 Argument Increment::target_arg =
-    Argument("target").RequireInstanceOf<Integer>();
+    Argument("target", Argument::kRequiresConcreteType)
+        .RequireInstanceOf<Integer>();
 
 struct Delete : Object {
   static const Delete proto;
@@ -89,7 +90,7 @@ struct Delete : Object {
   }
 };
 const Delete Delete::proto;
-Argument Delete::target_arg = Argument("target", true);
+Argument Delete::target_arg = Argument("target", Argument::kRequiresLocation);
 
 struct Set : Object {
   static const Set proto;
@@ -110,8 +111,8 @@ struct Set : Object {
   }
 };
 const Set Set::proto;
-Argument Set::value_arg = Argument("value");
-Argument Set::target_arg = Argument("target", true);
+Argument Set::value_arg = Argument("value", Argument::kRequiresObject);
+Argument Set::target_arg = Argument("target", Argument::kRequiresLocation);
 
 struct Date : Object {
   static const Date proto;
@@ -254,7 +255,9 @@ struct TimerReset : Object {
   }
 };
 const TimerReset TimerReset::proto;
-Argument TimerReset::timer_arg = Argument("timer").RequireInstanceOf<Timer>();
+Argument TimerReset::timer_arg =
+    Argument("timer", Argument::kRequiresConcreteType)
+        .RequireInstanceOf<Timer>();
 
 struct EqualityTest : LiveObject {
   static const EqualityTest proto;
@@ -290,7 +293,8 @@ struct EqualityTest : LiveObject {
   }
 };
 const EqualityTest EqualityTest::proto;
-LiveArgument EqualityTest::target_arg = LiveArgument("target");
+LiveArgument EqualityTest::target_arg =
+    LiveArgument("target", Argument::kRequiresObject);
 
 struct LessThanTest : LiveObject {
   static const LessThanTest proto;
@@ -321,8 +325,10 @@ struct LessThanTest : LiveObject {
   }
 };
 const LessThanTest LessThanTest::proto;
-LiveArgument LessThanTest::less_arg = LiveArgument("less");
-LiveArgument LessThanTest::than_arg = LiveArgument("than");
+LiveArgument LessThanTest::less_arg =
+    LiveArgument("less", Argument::kRequiresObject);
+LiveArgument LessThanTest::than_arg =
+    LiveArgument("than", Argument::kRequiresObject);
 
 struct StartsWithTest : LiveObject {
   static const StartsWithTest proto;
@@ -358,8 +364,10 @@ struct StartsWithTest : LiveObject {
   }
 };
 const StartsWithTest StartsWithTest::proto;
-LiveArgument StartsWithTest::starts_arg = LiveArgument("starts");
-LiveArgument StartsWithTest::with_arg = LiveArgument("with");
+LiveArgument StartsWithTest::starts_arg =
+    LiveArgument("starts", Argument::kRequiresObject);
+LiveArgument StartsWithTest::with_arg =
+    LiveArgument("with", Argument::kRequiresObject);
 
 struct AllTest : LiveObject {
   static const AllTest proto;
@@ -388,12 +396,13 @@ struct AllTest : LiveObject {
   }
 };
 const AllTest AllTest::proto;
-LiveArgument AllTest::test_arg = LiveArgument("test");
+LiveArgument AllTest::test_arg =
+    LiveArgument("test", Argument::kRequiresObject);
 
 struct Switch : LiveObject {
   static const Switch proto;
   static LiveArgument target_arg;
-  LiveArgument case_arg = LiveArgument("case");
+  LiveArgument case_arg = LiveArgument("case", Argument::kRequiresObject);
   string_view Name() const override { return "Switch"; }
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Switch>();
@@ -415,7 +424,7 @@ struct Switch : LiveObject {
     if (!target.ok) {
       return;
     }
-    if (&updated == target.location) {  // target changed
+    if (&updated == target.location) { // target changed
       case_arg.Rename(self, target.object->GetText());
       self.ScheduleUpdate();
       return;
@@ -424,14 +433,15 @@ struct Switch : LiveObject {
     if (!case_.ok) {
       return;
     }
-    if (&updated == case_.location) {  // case changed
+    if (&updated == case_.location) { // case changed
       self.ScheduleUpdate();
       return;
     }
   }
 };
 const Switch Switch::proto;
-LiveArgument Switch::target_arg = LiveArgument("target");
+LiveArgument Switch::target_arg =
+    LiveArgument("target", Argument::kRequiresObject);
 
 struct ErrorReporter : LiveObject {
   static const ErrorReporter proto;
@@ -463,8 +473,10 @@ struct ErrorReporter : LiveObject {
   }
 };
 const ErrorReporter ErrorReporter::proto;
-LiveArgument ErrorReporter::test_arg = LiveArgument("test");
-LiveArgument ErrorReporter::message_arg = LiveArgument("message", true);
+LiveArgument ErrorReporter::test_arg =
+    LiveArgument("test", Argument::kRequiresObject);
+LiveArgument ErrorReporter::message_arg =
+    LiveArgument("message", Argument::kOptional);
 
 struct HealthTest : Object {
   static const HealthTest proto;
@@ -521,8 +533,7 @@ struct Append : Object {
       return;
     }
     if (auto obj = what.location->Take()) {
-      if (auto error =
-              list_object->PutAtIndex(size, false, obj->Clone())) {
+      if (auto error = list_object->PutAtIndex(size, false, obj->Clone())) {
         self.error.reset(error);
         return;
       }
@@ -530,8 +541,9 @@ struct Append : Object {
   }
 };
 const Append Append::proto;
-Argument Append::to_arg = Argument("to").RequireInstanceOf<AbstractList>();
-Argument Append::what_arg = Argument("what");
+Argument Append::to_arg = Argument("to", Argument::kRequiresConcreteType)
+                              .RequireInstanceOf<AbstractList>();
+Argument Append::what_arg = Argument("what", Argument::kRequiresObject);
 
 struct List : Object, AbstractList {
   static const List proto;
@@ -591,6 +603,7 @@ struct Iterator {
   virtual Object *GetCurrent() const = 0;
 };
 
+struct CurrentElement;
 struct Filter : LiveObject, Iterator, AbstractList {
   enum class Phase { kSequential, kDone };
   static const Filter proto;
@@ -704,8 +717,7 @@ struct Filter : LiveObject, Iterator, AbstractList {
     if (!list.ok) {
       return self->GetError();
     }
-    if (Error *err = list.typed->TakeAtIndex(
-            orig_index, leave_null, obj)) {
+    if (Error *err = list.typed->TakeAtIndex(orig_index, leave_null, obj)) {
       return err;
     }
     objects.erase(objects.begin() + index);
@@ -721,9 +733,13 @@ struct Filter : LiveObject, Iterator, AbstractList {
   }
 };
 const Filter Filter::proto;
-LiveArgument Filter::list_arg("list");
-LiveArgument Filter::element_arg("element");
-LiveArgument Filter::test_arg("test");
+LiveArgument Filter::list_arg =
+    LiveArgument("list", Argument::kRequiresConcreteType)
+        .RequireInstanceOf<AbstractList>();
+LiveArgument Filter::element_arg =
+    LiveArgument("element", Argument::kRequiresConcreteType)
+        .RequireInstanceOf<CurrentElement>();
+LiveArgument Filter::test_arg("test", Argument::kRequiresObject);
 
 struct CurrentElement : Pointer {
   static const CurrentElement proto;
@@ -732,9 +748,7 @@ struct CurrentElement : Pointer {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<CurrentElement>();
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
-    cb(of_arg);
-  }
+  void Args(std::function<void(LiveArgument &)> cb) override { cb(of_arg); }
   Object *Next(Handle &error_context) const override {
     auto of = of_arg.GetTyped<Iterator>(*self);
     if (!of.ok) {
@@ -753,7 +767,9 @@ struct CurrentElement : Pointer {
   }
 };
 const CurrentElement CurrentElement::proto;
-LiveArgument CurrentElement::of_arg("of");
+LiveArgument CurrentElement::of_arg =
+    LiveArgument("of", Argument::kRequiresConcreteType)
+        .RequireInstanceOf<Iterator>();
 
 inline void Filter::Updated(Handle &self, Handle &updated) {
   auto list = list_arg.GetTyped<AbstractList>(self);
@@ -845,8 +861,10 @@ private:
   }
 };
 const ComplexField ComplexField::proto;
-LiveArgument ComplexField::complex_arg("complex");
-LiveArgument ComplexField::label_arg("label");
+LiveArgument ComplexField::complex_arg =
+    LiveArgument("complex", Argument::kRequiresConcreteType)
+        .RequireInstanceOf<Complex>();
+LiveArgument ComplexField::label_arg("label", Argument::kRequiresObject);
 
 //////////////
 // Widgets
@@ -876,7 +894,7 @@ struct Text : LiveObject {
         string text_chunk(text.substr(parsed_to, match.position() - parsed_to));
         chunks.emplace_back(text_chunk);
       }
-      LiveArgument arg(match[1].str());
+      LiveArgument arg(match[1].str(), Argument::kOptional);
       chunks.push_back(RefChunk{arg});
       parsed_to = match.position() + match.length();
     }
@@ -894,7 +912,7 @@ struct Text : LiveObject {
     other->chunks = chunks;
     return other;
   }
-  void Args(std::function<void (LiveArgument &)> cb) override {
+  void Args(std::function<void(LiveArgument &)> cb) override {
     cb(target_arg);
     for (Chunk &chunk : chunks) {
       if (auto ref = std::get_if<RefChunk>(&chunk)) {
@@ -941,7 +959,7 @@ struct Text : LiveObject {
   }
 };
 const Text Text::proto;
-LiveArgument Text::target_arg("target", true);
+LiveArgument Text::target_arg("target", Argument::kOptional);
 
 struct Button : Object {
   string label;
@@ -971,8 +989,8 @@ struct Button : Object {
   }
 };
 const Button Button::proto;
-Argument Button::enabled_arg("enabled", true);
-Argument Button::click_arg("click", true);
+Argument Button::enabled_arg("enabled", Argument::kOptional);
+Argument Button::click_arg("click", Argument::kOptional);
 
 struct ComboBox : LiveObject {
   static const ComboBox proto;
@@ -983,7 +1001,7 @@ struct ComboBox : LiveObject {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<ComboBox>();
   }
-  void Args(std::function<void (LiveArgument &)> cb) override {
+  void Args(std::function<void(LiveArgument &)> cb) override {
     cb(options_arg);
   }
   void Rehandle(Handle *self) override { this->self = self; }
@@ -1010,7 +1028,7 @@ struct ComboBox : LiveObject {
   }
 };
 const ComboBox ComboBox::proto;
-LiveArgument ComboBox::options_arg("option", true);
+LiveArgument ComboBox::options_arg("option", Argument::kOptional);
 
 struct Slider : LiveObject {
   static const Slider proto;
@@ -1023,7 +1041,7 @@ struct Slider : LiveObject {
     s->value = value;
     return s;
   }
-  void Args(std::function<void (LiveArgument &)> cb) override {
+  void Args(std::function<void(LiveArgument &)> cb) override {
     cb(min_arg);
     cb(max_arg);
   }
@@ -1056,8 +1074,8 @@ struct Slider : LiveObject {
   }
 };
 const Slider Slider::proto;
-LiveArgument Slider::min_arg("min", true);
-LiveArgument Slider::max_arg("max", true);
+LiveArgument Slider::min_arg("min", Argument::kOptional);
+LiveArgument Slider::max_arg("max", Argument::kOptional);
 
 struct ProgressBar : Number {
   static const ProgressBar proto;
@@ -1087,7 +1105,7 @@ struct Alert : Object {
   }
 };
 const Alert Alert::proto;
-Argument Alert::message_arg("message");
+Argument Alert::message_arg("message", Argument::kRequiresObject);
 
 struct ListView : Pointer {
   static const ListView proto;
@@ -1099,9 +1117,7 @@ struct ListView : Pointer {
     dynamic_cast<ListView &>(*clone).index = index;
     return clone;
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
-    cb(list_arg);
-  }
+  void Args(std::function<void(LiveArgument &)> cb) override { cb(list_arg); }
   void Select(int new_index) {
     if (new_index != index) {
       index = new_index;
@@ -1160,7 +1176,9 @@ struct ListView : Pointer {
   }
 };
 const ListView ListView::proto;
-LiveArgument ListView::list_arg("list");
+LiveArgument ListView::list_arg =
+    LiveArgument("list", Argument::kRequiresConcreteType)
+        .RequireInstanceOf<AbstractList>();
 
 ////////////////
 // Algebra

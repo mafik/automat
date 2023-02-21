@@ -6,9 +6,9 @@ import library;
 using namespace automaton;
 
 struct ComplexTest : TestBase {
-  Handle &label = machine.Create<Text>();
-  Handle &complex = machine.Create<Complex>();
-  Handle &field = machine.Create<ComplexField>();
+  Location &label = machine.Create<Text>();
+  Location &complex = machine.Create<Complex>();
+  Location &field = machine.Create<ComplexField>();
 
   ComplexTest() {
     label.SetText("X");
@@ -20,7 +20,8 @@ struct ComplexTest : TestBase {
 
 TEST_F(ComplexTest, FollowField) {
   ASSERT_EQ(complex.As<Complex>()->objects.size(), 1);
-  EXPECT_EQ(complex.As<Complex>()->objects.begin()->second.get(), field.Follow());
+  EXPECT_EQ(complex.As<Complex>()->objects.begin()->second.get(),
+            field.Follow());
 }
 
 TEST_F(ComplexTest, TakeField) {
@@ -34,7 +35,7 @@ TEST_F(ComplexTest, TakeField) {
 TEST_F(ComplexTest, CloneWithField) {
   field.Follow()->SetText(field, "Hello, world!");
 
-  Handle &clone = machine.Create(*complex.object, "Clone");
+  Location &clone = machine.Create(*complex.object, "Clone");
   EXPECT_NE(&complex, &clone);
   auto &[clone_label, clone_member] = *clone.As<Complex>()->objects.begin();
   EXPECT_NE(field.Follow(), clone_member.get());

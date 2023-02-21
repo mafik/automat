@@ -12,11 +12,12 @@ import error;
 
 namespace automaton {
 
-Connection *Handle::ConnectTo(Handle &other, string_view label) {
+Connection *Location::ConnectTo(Location &other, string_view label) {
   bool to_direct = false;
-  if (LiveObject* live_object = ThisAs<LiveObject>()) {
-    live_object->Args([&](LiveArgument& arg) {
-      if (arg.name == label && arg.precondition >= Argument::kRequiresConcreteType) {
+  if (LiveObject *live_object = ThisAs<LiveObject>()) {
+    live_object->Args([&](LiveArgument &arg) {
+      if (arg.name == label &&
+          arg.precondition >= Argument::kRequiresConcreteType) {
         std::string error;
         arg.CheckRequirements(*this, &other, other.object.get(), error);
         if (error.empty()) {
@@ -32,14 +33,14 @@ Connection *Handle::ConnectTo(Handle &other, string_view label) {
   return c;
 }
 
-Object *Handle::Follow() {
+Object *Location::Follow() {
   if (Pointer *ptr = object->AsPointer()) {
     return ptr->Follow(*this);
   }
   return object.get();
 }
 
-void Handle::Put(unique_ptr<Object> obj) {
+void Location::Put(unique_ptr<Object> obj) {
   if (object == nullptr) {
     object = std::move(obj);
     return;
@@ -51,21 +52,21 @@ void Handle::Put(unique_ptr<Object> obj) {
   }
 }
 
-unique_ptr<Object> Handle::Take() {
+unique_ptr<Object> Location::Take() {
   if (Pointer *ptr = object->AsPointer()) {
     return ptr->Take(*this);
   }
   return std::move(object);
 }
 
-Handle &Machine::CreateEmpty(const string &name) {
-  auto [it, already_present] = handles.emplace(new Handle(self));
-  Handle *h = it->get();
+Location &Machine::CreateEmpty(const string &name) {
+  auto [it, already_present] = locations.emplace(new Location(here));
+  Location *h = it->get();
   h->name = name;
   return *h;
 }
 
-Handle &Machine::Create(const Object &proto, const std::string &name) {
+Location &Machine::Create(const Object &proto, const std::string &name) {
   auto &h = CreateEmpty(name);
   h.Create(proto);
   return h;
@@ -75,28 +76,28 @@ std::string_view Machine::Name() const { return name; }
 
 std::unique_ptr<Object> Machine::Clone() const {
   Machine *m = new Machine();
-  for (auto &my_it : handles) {
+  for (auto &my_it : locations) {
     auto &other_h = m->CreateEmpty(my_it->name);
     other_h.Create(*my_it->object);
   }
   return std::unique_ptr<Object>(m);
 }
 
-void Machine::Rehandle(Handle *new_self) {
-  self = new_self;
-  for (auto &it : handles) {
-    it->parent = self;
+void Machine::Relocate(Location *new_self) {
+  here = new_self;
+  for (auto &it : locations) {
+    it->parent = here;
   }
 }
 
-void Machine::Errored(Handle &self, Handle &errored) {
+void Machine::Errored(Location &here, Location &errored) {
   // If the error hasn't been cleared by other Errored calls, then propagate it
   // to the parent.
   if (errored.HasError()) {
-    if (auto parent = self.ParentAs<Machine>()) {
-      parent->ReportChildError(self);
+    if (auto parent = here.ParentAs<Machine>()) {
+      parent->ReportChildError(here);
     } else {
-      Error* error = errored.GetError();
+      Error *error = errored.GetError();
       ERROR(error->location) << error->text;
     }
   }
@@ -106,7 +107,7 @@ std::string Machine::LoggableString() const {
   return fmt::format("Machine({})", name);
 }
 
-Handle *Machine::Front(const std::string &name) {
+Location *Machine::Front(const std::string &name) {
   for (int i = 0; i < front.size(); ++i) {
     if (front[i]->name == name) {
       return front[i];
@@ -115,49 +116,49 @@ Handle *Machine::Front(const std::string &name) {
   return nullptr;
 }
 
-void Machine::AddToFrontPanel(Handle &h) {
+void Machine::AddToFrontPanel(Location &h) {
   if (std::find(front.begin(), front.end(), &h) == front.end()) {
     front.push_back(&h);
   } else {
     ERROR() << "Attempted to add already present " << h << " to " << *this
-          << " front panel";
+            << " front panel";
   }
 }
 
-void Machine::ReportChildError(Handle &child) {
+void Machine::ReportChildError(Location &child) {
   children_with_errors.push_back(&child);
-  for (Handle *observer : self->error_observers) {
+  for (Location *observer : here->error_observers) {
     observer->ScheduleErrored(child);
   }
-  self->ScheduleErrored(child);
+  here->ScheduleErrored(child);
 }
 
-void Machine::ClearChildError(Handle &child) {
+void Machine::ClearChildError(Location &child) {
   if (auto it = std::find(children_with_errors.begin(),
                           children_with_errors.end(), &child);
       it != children_with_errors.end()) {
     children_with_errors.erase(it);
-    if (!self->HasError()) {
-      if (auto parent = self->ParentAs<Machine>()) {
-        parent->ClearChildError(*self);
+    if (!here->HasError()) {
+      if (auto parent = here->ParentAs<Machine>()) {
+        parent->ClearChildError(*here);
       }
     }
   }
 }
 
 void Machine::Diagnostics(
-    std::function<void(Handle *, Error &)> error_callback) {
-  for (auto &handle : handles) {
-    if (handle->error) {
-      error_callback(handle.get(), *handle->error);
+    std::function<void(Location *, Error &)> error_callback) {
+  for (auto &location : locations) {
+    if (location->error) {
+      error_callback(location.get(), *location->error);
     }
-    if (auto submachine = dynamic_cast<Machine *>(handle->object.get())) {
+    if (auto submachine = dynamic_cast<Machine *>(location->object.get())) {
       submachine->Diagnostics(error_callback);
     }
   }
 }
 
-void Pointer::SetText(Handle &error_context, string_view text) {
+void Pointer::SetText(Location &error_context, string_view text) {
   if (auto *obj = Follow(error_context)) {
     obj->SetText(error_context, text);
   } else {

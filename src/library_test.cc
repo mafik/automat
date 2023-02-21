@@ -6,10 +6,10 @@ import library;
 using namespace automaton;
 
 struct StartsWithTestTest : TestBase {
-  Handle& starts = machine.Create<Text>("starts");
-  Handle& with = machine.Create<Text>("with");
+  Location &starts = machine.Create<Text>("starts");
+  Location &with = machine.Create<Text>("with");
 
-  Handle& test = machine.Create<StartsWithTest>();
+  Location &test = machine.Create<StartsWithTest>();
   StartsWithTestTest() {
     test.ConnectTo(starts, "starts");
     test.ConnectTo(with, "with");

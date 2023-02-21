@@ -32,7 +32,7 @@ struct Integer : Object {
     return std::make_unique<Integer>(i);
   }
   string GetText() const override { return std::to_string(i); }
-  void SetText(Handle &error_context, string_view text) override {
+  void SetText(Location &error_context, string_view text) override {
     i = std::stoi(string(text));
   }
 };
@@ -47,7 +47,7 @@ struct Number : Object {
     return std::make_unique<Number>(value);
   }
   string GetText() const override { return std::to_string(value); }
-  void SetText(Handle &error_context, string_view text) override {
+  void SetText(Location &error_context, string_view text) override {
     value = std::stod(string(text));
   }
 };
@@ -60,7 +60,7 @@ struct Increment : Object {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Increment>();
   }
-  void Run(Handle &h) override {
+  void Run(Location &h) override {
     auto integer = target_arg.GetTyped<Integer>(h);
     if (!integer.ok) {
       return;
@@ -81,8 +81,8 @@ struct Delete : Object {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Delete>();
   }
-  void Run(Handle &self) override {
-    auto target = target_arg.GetLocation(self);
+  void Run(Location &here) override {
+    auto target = target_arg.GetLocation(here);
     if (!target.ok) {
       return;
     }
@@ -100,9 +100,9 @@ struct Set : Object {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Set>();
   }
-  void Run(Handle &self) override {
-    auto value = value_arg.GetObject(self);
-    auto target = target_arg.GetLocation(self);
+  void Run(Location &here) override {
+    auto value = value_arg.GetObject(here);
+    auto target = target_arg.GetLocation(here);
     if (!value.ok || !target.ok) {
       return;
     }
@@ -127,7 +127,7 @@ struct Date : Object {
   string GetText() const override {
     return fmt::format("{:04d}-{:02d}-{:02d}", year, month, day);
   }
-  void SetText(Handle &error_context, string_view text) override {
+  void SetText(Location &error_context, string_view text) override {
     std::regex re(R"((\d{4})-(\d{2})-(\d{2}))");
     std::match_results<string_view::const_iterator> match;
     if (std::regex_match(text.begin(), text.end(), match, re)) {
@@ -169,18 +169,18 @@ using TimePoint = std::chrono::time_point<Clock, Duration>;
 
 struct FakeTime {
   TimePoint now;
-  std::multimap<TimePoint, Handle *> schedule;
+  std::multimap<TimePoint, Location *> schedule;
 
   void SetNow(TimePoint time) {
     this->now = time;
     while (!schedule.empty() && schedule.begin()->first <= now) {
-      auto [time, handle] = *schedule.begin();
+      auto [time, location] = *schedule.begin();
       schedule.erase(schedule.begin());
-      handle->ScheduleRun();
+      location->ScheduleRun();
     }
   }
-  void RunAfter(Duration duration, Handle &handle) {
-    schedule.emplace(now + duration, &handle);
+  void RunAfter(Duration duration, Location &location) {
+    schedule.emplace(now + duration, &location);
   }
 };
 
@@ -200,10 +200,10 @@ struct Timer : Object {
     other->start = start;
     return std::unique_ptr<Object>(other);
   }
-  void ScheduleNextRun(Handle &self) {
+  void ScheduleNextRun(Location &here) {
     using namespace std::chrono_literals;
     if (fake_time) {
-      fake_time->RunAfter(1ms, self);
+      fake_time->RunAfter(1ms, here);
     } else {
       // TODO: Use std::this_thread::sleep_for
     }
@@ -214,20 +214,20 @@ struct Timer : Object {
     Duration elapsed = now - start;
     return fmt::format("{:.3f}", elapsed.count());
   }
-  void Run(Handle &self) override {
+  void Run(Location &here) override {
     using namespace std::chrono_literals;
     TimePoint now = GetNow();
     if (now - last_tick >= 1ms) {
       last_tick = now;
-      self.ScheduleUpdate();
+      here.ScheduleUpdate();
     }
-    ScheduleNextRun(self);
+    ScheduleNextRun(here);
   }
-  void Reset(Handle &self) {
+  void Reset(Location &here) {
     start = GetNow();
     last_tick = start;
-    self.ScheduleUpdate();
-    ScheduleNextRun(self);
+    here.ScheduleUpdate();
+    ScheduleNextRun(here);
   }
   TimePoint GetNow() const {
     if (fake_time) {
@@ -246,8 +246,8 @@ struct TimerReset : Object {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<TimerReset>();
   }
-  void Run(Handle &self) override {
-    auto timer = timer_arg.GetTyped<Timer>(self);
+  void Run(Location &here) override {
+    auto timer = timer_arg.GetTyped<Timer>(here);
     if (!timer.ok) {
       return;
     }
@@ -272,10 +272,10 @@ struct EqualityTest : LiveObject {
   }
   void Args(std::function<void(LiveArgument &)> cb) override { cb(target_arg); }
   string GetText() const override { return state ? "true" : "false"; }
-  void Updated(Handle &self, Handle &updated) override {
+  void Updated(Location &here, Location &updated) override {
     Object *updated_object = updated.Follow();
     bool new_state = true;
-    target_arg.LoopObjects<bool>(self, [&](Object &target_object) {
+    target_arg.LoopObjects<bool>(here, [&](Object &target_object) {
       if ((target_object <=> *updated_object) != 0) {
         new_state = false;
         return true; // return non-null to break out of LoopObjects
@@ -284,7 +284,7 @@ struct EqualityTest : LiveObject {
     });
     if (state != new_state) {
       state = new_state;
-      self.ScheduleUpdate();
+      here.ScheduleUpdate();
     }
   }
 };
@@ -307,16 +307,16 @@ struct LessThanTest : LiveObject {
     cb(less_arg);
     cb(than_arg);
   }
-  void Updated(Handle &self, Handle &updated) override {
-    auto less = less_arg.GetObject(self);
-    auto than = than_arg.GetObject(self);
+  void Updated(Location &here, Location &updated) override {
+    auto less = less_arg.GetObject(here);
+    auto than = than_arg.GetObject(here);
     if (!less.ok || !than.ok) {
       return;
     }
     bool new_state = *less.object < *than.object;
     if (state != new_state) {
       state = new_state;
-      self.ScheduleUpdate();
+      here.ScheduleUpdate();
     }
   }
 };
@@ -343,19 +343,19 @@ struct StartsWithTest : LiveObject {
     cb(starts_arg);
     cb(with_arg);
   }
-  void Updated(Handle &self, Handle &updated) override {
-    auto starts = starts_arg.GetObject(self);
-    auto with = with_arg.GetObject(self);
+  void Updated(Location &here, Location &updated) override {
+    auto starts = starts_arg.GetObject(here);
+    auto with = with_arg.GetObject(here);
     if (!starts.ok || !with.ok) {
       return;
     } else {
-      self.ClearError();
+      here.ClearError();
     }
     bool new_state =
         starts.object->GetText().starts_with(with.object->GetText());
     if (state != new_state) {
       state = new_state;
-      self.ScheduleUpdate();
+      here.ScheduleUpdate();
     }
   }
 };
@@ -376,8 +376,8 @@ struct AllTest : LiveObject {
   }
   string GetText() const override { return state ? "true" : "false"; }
   void Args(std::function<void(LiveArgument &)> cb) override { cb(test_arg); }
-  void Updated(Handle &self, Handle &updated) override {
-    bool found_non_true = test_arg.LoopObjects<bool>(self, [](Object &o) {
+  void Updated(Location &here, Location &updated) override {
+    bool found_non_true = test_arg.LoopObjects<bool>(here, [](Object &o) {
       if (o.GetText() != "true") {
         return true; // this breaks the loop
       }
@@ -386,7 +386,7 @@ struct AllTest : LiveObject {
     bool new_state = !found_non_true;
     if (state != new_state) {
       state = new_state;
-      self.ScheduleUpdate();
+      here.ScheduleUpdate();
     }
   }
 };
@@ -407,29 +407,29 @@ struct Switch : LiveObject {
     cb(case_arg);
   }
   string GetText() const override {
-    auto case_ = case_arg.GetObject(*self);
+    auto case_ = case_arg.GetObject(*here);
     if (!case_.ok) {
       return "";
     }
     return case_.object->GetText();
   }
-  void Updated(Handle &self, Handle &updated) override {
+  void Updated(Location &here, Location &updated) override {
     // When "target" changes the name of the case argument changes.
-    auto target = target_arg.GetObject(self);
+    auto target = target_arg.GetObject(here);
     if (!target.ok) {
       return;
     }
     if (&updated == target.location) { // target changed
-      case_arg.Rename(self, target.object->GetText());
-      self.ScheduleUpdate();
+      case_arg.Rename(here, target.object->GetText());
+      here.ScheduleUpdate();
       return;
     }
-    auto case_ = case_arg.GetLocation(self);
+    auto case_ = case_arg.GetLocation(here);
     if (!case_.ok) {
       return;
     }
     if (&updated == case_.location) { // case changed
-      self.ScheduleUpdate();
+      here.ScheduleUpdate();
       return;
     }
   }
@@ -450,13 +450,13 @@ struct ErrorReporter : LiveObject {
     cb(test_arg);
     cb(message_arg);
   }
-  void Updated(Handle &self, Handle &updated) override {
-    self.ClearError();
-    auto test = test_arg.GetObject(self);
+  void Updated(Location &here, Location &updated) override {
+    here.ClearError();
+    auto test = test_arg.GetObject(here);
     if (!test.ok || test.object->GetText() != "true") {
       return;
     }
-    auto message = message_arg.GetObject(self);
+    auto message = message_arg.GetObject(here);
     if (!message.ok) {
       return;
     }
@@ -464,7 +464,7 @@ struct ErrorReporter : LiveObject {
     if (message.object) {
       error_text = message.object->GetText();
     }
-    self.ReportError(error_text);
+    here.ReportError(error_text);
   }
 };
 const ErrorReporter ErrorReporter::proto;
@@ -480,17 +480,17 @@ struct HealthTest : Object {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<HealthTest>();
   }
-  void Rehandle(Handle *self) override {
-    if (self->parent) {
-      self->ObserveErrors(*self->parent);
-      state = !self->parent->HasError();
+  void Relocate(Location *here) override {
+    if (here->parent) {
+      here->ObserveErrors(*here->parent);
+      state = !here->parent->HasError();
     }
   }
   string_view Name() const override { return "Health Test"; }
   string GetText() const override { return state ? "true" : "false"; }
-  void Errored(Handle &self, Handle &errored) override {
+  void Errored(Location &here, Location &errored) override {
     state = false;
-    self.ScheduleUpdate();
+    here.ScheduleUpdate();
   }
 };
 const HealthTest HealthTest::proto;
@@ -512,24 +512,24 @@ struct Append : Object {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Append>();
   }
-  void Run(Handle &self) override {
-    auto to = to_arg.GetTyped<AbstractList>(self);
+  void Run(Location &here) override {
+    auto to = to_arg.GetTyped<AbstractList>(here);
     if (!to.ok) {
       return;
     }
     auto list_object = to.typed;
     int size = 0;
     if (auto error = list_object->GetSize(size)) {
-      self.error.reset(error);
+      here.error.reset(error);
       return;
     }
-    auto what = what_arg.GetLocation(self);
+    auto what = what_arg.GetLocation(here);
     if (!what.ok) {
       return;
     }
     if (auto obj = what.location->Take()) {
       if (auto error = list_object->PutAtIndex(size, false, obj->Clone())) {
-        self.error.reset(error);
+        here.error.reset(error);
         return;
       }
     }
@@ -542,7 +542,7 @@ Argument Append::what_arg = Argument("what", Argument::kRequiresObject);
 
 struct List : Object, AbstractList {
   static const List proto;
-  Handle *self = nullptr;
+  Location *here = nullptr;
   vector<unique_ptr<Object>> objects;
   string_view Name() const override { return "List"; }
   std::unique_ptr<Object> Clone() const override {
@@ -552,10 +552,10 @@ struct List : Object, AbstractList {
     }
     return list;
   }
-  void Rehandle(Handle *self) override { this->self = self; }
+  void Relocate(Location *here) override { this->here = here; }
   Error *GetAtIndex(int index, Object *&obj) override {
     if (index < 0 || index >= objects.size()) {
-      return self->ReportError("Index out of bounds.");
+      return here->ReportError("Index out of bounds.");
     }
     obj = objects[index].get();
     return nullptr;
@@ -565,26 +565,26 @@ struct List : Object, AbstractList {
     if (index < 0 ||
         (overwrite ? index >= objects.size() : index > objects.size())) {
       // TODO: save the object in the error - it shouldn't be destroyed!
-      return self->ReportError("Index out of bounds.");
+      return here->ReportError("Index out of bounds.");
     }
     if (overwrite) {
       objects[index] = std::move(obj);
     } else {
       objects.insert(objects.begin() + index, std::move(obj));
     }
-    self->ScheduleUpdate();
+    here->ScheduleUpdate();
     return nullptr;
   }
   Error *TakeAtIndex(int index, bool keep_null,
                      std::unique_ptr<Object> &obj) override {
     if (index < 0 || index >= objects.size()) {
-      return self->ReportError("Index out of bounds.");
+      return here->ReportError("Index out of bounds.");
     }
     obj = std::move(objects[index]);
     if (!keep_null) {
       objects.erase(objects.begin() + index);
     }
-    self->ScheduleUpdate();
+    here->ScheduleUpdate();
     return nullptr;
   }
   Error *GetSize(int &size) override {
@@ -621,11 +621,11 @@ struct Filter : LiveObject, Iterator, AbstractList {
     cb(element_arg);
     cb(test_arg);
   }
-  void Run(Handle &self) override {
+  void Run(Location &here) override {
     if (phase == Phase::kSequential) {
       // Check the value of test, possibly copying element from list to output.
       // Then increment index and schedule another iteration.
-      auto test = test_arg.GetObject(self);
+      auto test = test_arg.GetObject(here);
       if (!test.ok) {
         return;
       }
@@ -636,9 +636,9 @@ struct Filter : LiveObject, Iterator, AbstractList {
         }
       }
       ++index;
-      BeginNextIteration(self);
+      BeginNextIteration(here);
     } else {
-      self.ReportError(
+      here.ReportError(
           "Tried to Run this Filter but filtering is already completed.");
     }
   }
@@ -646,18 +646,18 @@ struct Filter : LiveObject, Iterator, AbstractList {
     objects.clear();
     phase = Phase::kSequential;
     index = 0;
-    BeginNextIteration(*self);
+    BeginNextIteration(*here);
   }
-  void BeginNextIteration(Handle &self) {
+  void BeginNextIteration(Location &here) {
     int list_size = 0;
-    auto list = list_arg.GetTyped<AbstractList>(self);
+    auto list = list_arg.GetTyped<AbstractList>(here);
     if (!list.ok) {
       return;
     }
     list.typed->GetSize(list_size);
     if (index < list_size) {
-      ThenGuard then(std::make_unique<RunTask>(&self));
-      auto element = element_arg.GetLocation(self);
+      ThenGuard then(std::make_unique<RunTask>(&here));
+      auto element = element_arg.GetLocation(here);
       if (!element.ok) {
         return;
       }
@@ -668,7 +668,7 @@ struct Filter : LiveObject, Iterator, AbstractList {
   }
   // Iterator interface
   Object *GetCurrent() const override {
-    auto list = list_arg.GetTyped<AbstractList>(*self);
+    auto list = list_arg.GetTyped<AbstractList>(*here);
     if (!list.ok) {
       return nullptr;
     }
@@ -685,11 +685,11 @@ struct Filter : LiveObject, Iterator, AbstractList {
     }
     return obj;
   }
-  void Updated(Handle &self, Handle &updated) override;
+  void Updated(Location &here, Location &updated) override;
   // AbstractList interface
   Error *GetAtIndex(int index, Object *&obj) override {
     if (index < 0 || index >= objects.size()) {
-      return self->ReportError("Index out of bounds.");
+      return here->ReportError("Index out of bounds.");
     }
     obj = objects[index];
     return nullptr;
@@ -700,17 +700,17 @@ struct Filter : LiveObject, Iterator, AbstractList {
     // parent list. In order to insert them at the right position in the parent
     // list, it must also know the mapping between filtered & unfiltered
     // indices. This is not yet implemented. NOTE: object dropped here!
-    return self->ReportError("Not implemented yet.");
+    return here->ReportError("Not implemented yet.");
   }
   Error *TakeAtIndex(int index, bool leave_null,
                      std::unique_ptr<Object> &obj) override {
     if (index < 0 || index >= objects.size()) {
-      return self->ReportError("Index out of bounds.");
+      return here->ReportError("Index out of bounds.");
     }
     int orig_index = indices[index];
-    auto list = list_arg.GetTyped<AbstractList>(*self);
+    auto list = list_arg.GetTyped<AbstractList>(*here);
     if (!list.ok) {
-      return self->GetError();
+      return here->GetError();
     }
     if (Error *err = list.typed->TakeAtIndex(orig_index, leave_null, obj)) {
       return err;
@@ -744,19 +744,19 @@ struct CurrentElement : Pointer {
     return std::make_unique<CurrentElement>();
   }
   void Args(std::function<void(LiveArgument &)> cb) override { cb(of_arg); }
-  Object *Next(Handle &error_context) const override {
-    auto of = of_arg.GetTyped<Iterator>(*self);
+  Object *Next(Location &error_context) const override {
+    auto of = of_arg.GetTyped<Iterator>(*here);
     if (!of.ok) {
       return nullptr;
     }
     return of.typed->GetCurrent();
   }
-  void PutNext(Handle &error_context, std::unique_ptr<Object> obj) override {
-    self->ReportError(
+  void PutNext(Location &error_context, std::unique_ptr<Object> obj) override {
+    here->ReportError(
         "Tried to put an object to Current Element but it's not possible.");
   }
-  std::unique_ptr<Object> TakeNext(Handle &error_context) override {
-    self->ReportError(
+  std::unique_ptr<Object> TakeNext(Location &error_context) override {
+    here->ReportError(
         "Tried to take an object from Current Element but it's not possible.");
     return nullptr;
   }
@@ -766,10 +766,10 @@ LiveArgument CurrentElement::of_arg =
     LiveArgument("of", Argument::kRequiresConcreteType)
         .RequireInstanceOf<Iterator>();
 
-inline void Filter::Updated(Handle &self, Handle &updated) {
-  auto list = list_arg.GetTyped<AbstractList>(self);
-  auto element = element_arg.GetTyped<CurrentElement>(self);
-  auto test = test_arg.GetObject(self);
+inline void Filter::Updated(Location &here, Location &updated) {
+  auto list = list_arg.GetTyped<AbstractList>(here);
+  auto element = element_arg.GetTyped<CurrentElement>(here);
+  auto test = test_arg.GetObject(here);
   if (!list.ok || !element.ok || !test.ok) {
     return;
   }
@@ -782,7 +782,7 @@ inline void Filter::Updated(Handle &self, Handle &updated) {
 
 // Object with subobjects.
 //
-// The structure contains named fields and is self-descriptive.
+// The structure contains named fields and is here-descriptive.
 struct Complex : Object {
   static const Complex proto;
   std::unordered_map<std::string, unique_ptr<Object>> objects;
@@ -809,8 +809,8 @@ struct ComplexField : Pointer {
     cb(complex_arg);
     cb(label_arg);
   }
-  Object *Next(Handle &unused_error_context) const override {
-    auto [complex, label] = FollowComplex(*self);
+  Object *Next(Location &unused_error_context) const override {
+    auto [complex, label] = FollowComplex(*here);
     if (complex == nullptr) {
       return nullptr;
     }
@@ -820,15 +820,15 @@ struct ComplexField : Pointer {
     }
     return it->second.get();
   }
-  void PutNext(Handle &error_context, std::unique_ptr<Object> obj) override {
-    auto [complex, label] = FollowComplex(*self);
+  void PutNext(Location &error_context, std::unique_ptr<Object> obj) override {
+    auto [complex, label] = FollowComplex(*here);
     if (complex == nullptr) {
       return;
     }
     complex->objects[label] = std::move(obj);
   }
-  std::unique_ptr<Object> TakeNext(Handle &error_context) override {
-    auto [complex, label] = FollowComplex(*self);
+  std::unique_ptr<Object> TakeNext(Location &error_context) override {
+    auto [complex, label] = FollowComplex(*here);
     auto it = complex->objects.find(label);
     if (it == complex->objects.end()) {
       return nullptr;
@@ -837,17 +837,17 @@ struct ComplexField : Pointer {
     complex->objects.erase(it);
     return obj;
   }
-  void Updated(Handle &self, Handle &updated) override {
+  void Updated(Location &here, Location &updated) override {
     // Complex was updated - so let's propagate the update.
-    self.ScheduleUpdate();
+    here.ScheduleUpdate();
   }
 
 private:
   // Return Complex pointed by this object. If not possible report error and
   // return nullptr.
-  static std::pair<Complex *, std::string> FollowComplex(Handle &self) {
-    auto label = label_arg.GetObject(self);
-    auto complex = complex_arg.GetTyped<Complex>(self);
+  static std::pair<Complex *, std::string> FollowComplex(Location &here) {
+    auto label = label_arg.GetObject(here);
+    auto complex = complex_arg.GetTyped<Complex>(here);
     if (!label.ok || !complex.ok) {
       return std::make_pair(nullptr, "");
     }
@@ -920,7 +920,7 @@ struct Text : LiveObject {
     for (const std::variant<string, RefChunk> &chunk : chunks) {
       std::visit(overloaded{[&](const string &text) { buffer += text; },
                             [&](const RefChunk &ref) {
-                              auto arg = ref.arg.GetObject(*self);
+                              auto arg = ref.arg.GetObject(*here);
                               if (arg.ok) {
                                 buffer += arg.object->GetText();
                               } else {
@@ -931,25 +931,25 @@ struct Text : LiveObject {
     }
     return buffer;
   }
-  void SetText(Handle &error_context, string_view new_text) override {
+  void SetText(Location &error_context, string_view new_text) override {
     string old_text = GetText();
     if (old_text == new_text)
       return;
     chunks.clear();
     chunks = Parse(new_text);
     // chunks.emplace_back(string(new_text));
-    if (self) {
-      auto target = target_arg.GetLocation(*self);
+    if (here) {
+      auto target = target_arg.GetLocation(*here);
       if (target.location) {
         target.location->SetText(new_text);
       }
     }
   }
-  void Run(Handle &self) override {}
-  void Updated(Handle &self, Handle &updated) override {
-    auto target = target_arg.GetLocation(self);
+  void Run(Location &here) override {}
+  void Updated(Location &here, Location &updated) override {
+    auto target = target_arg.GetLocation(here);
     if (target.location == &updated) {
-      SetText(self, updated.GetText());
+      SetText(here, updated.GetText());
     }
   }
 };
@@ -967,10 +967,10 @@ struct Button : Object {
     return other;
   }
   string GetText() const override { return label; }
-  void SetText(Handle &error_context, string_view new_label) override {
+  void SetText(Location &error_context, string_view new_label) override {
     label = new_label;
   }
-  void Run(Handle &h) override {
+  void Run(Location &h) override {
     auto enabled = enabled_arg.GetObject(h);
     if (enabled.object && enabled.object->GetText() == "false") {
       h.ReportError("Button is disabled.");
@@ -984,8 +984,8 @@ Argument Button::enabled_arg("enabled", Argument::kOptional);
 struct ComboBox : LiveObject {
   static const ComboBox proto;
   static LiveArgument options_arg;
-  Handle *self = nullptr;
-  Handle *selected = nullptr;
+  Location *here = nullptr;
+  Location *selected = nullptr;
   string_view Name() const override { return "Combo Box"; }
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<ComboBox>();
@@ -993,11 +993,11 @@ struct ComboBox : LiveObject {
   void Args(std::function<void(LiveArgument &)> cb) override {
     cb(options_arg);
   }
-  void Rehandle(Handle *self) override { this->self = self; }
+  void Relocate(Location *here) override { this->here = here; }
   string GetText() const override { return selected->GetText(); }
-  void SetText(Handle &error_context, string_view new_text) override {
-    selected = options_arg.LoopLocations<Handle *>(
-        *self, [&](Handle &option) -> Handle * {
+  void SetText(Location &error_context, string_view new_text) override {
+    selected = options_arg.LoopLocations<Location *>(
+        *here, [&](Location &option) -> Location * {
           if (option.GetText() == new_text) {
             return &option;
           }
@@ -1007,11 +1007,11 @@ struct ComboBox : LiveObject {
       error_context.ReportError(fmt::format("No option named {}", new_text));
     }
   }
-  void ConnectionAdded(Handle &self, string_view label,
+  void ConnectionAdded(Location &here, string_view label,
                        Connection &connection) override {
-    LiveObject::ConnectionAdded(self, label, connection);
+    LiveObject::ConnectionAdded(here, label, connection);
     if (selected == nullptr && label == "option") {
-      auto option = options_arg.GetLocation(self);
+      auto option = options_arg.GetLocation(here);
       selected = option.location;
     }
   }
@@ -1034,27 +1034,27 @@ struct Slider : LiveObject {
     cb(min_arg);
     cb(max_arg);
   }
-  void Updated(Handle &self, Handle &updated) override {
-    auto min = min_arg.GetLocation(self);
+  void Updated(Location &here, Location &updated) override {
+    auto min = min_arg.GetLocation(here);
     if (min.location && &updated == min.location) {
       double min_val = min.location->GetNumber();
       value = std::max(value, min_val);
     }
-    auto max = max_arg.GetLocation(self);
+    auto max = max_arg.GetLocation(here);
     if (max.location && &updated == max.location) {
       double max_val = max.location->GetNumber();
       value = std::min(value, max_val);
     }
   }
   string GetText() const override { return std::to_string(value); }
-  void SetText(Handle &error_context, string_view new_text) override {
+  void SetText(Location &error_context, string_view new_text) override {
     double new_value = std::stod(string(new_text));
-    auto min = min_arg.GetLocation(*self);
+    auto min = min_arg.GetLocation(*here);
     if (min.location) {
       double min_val = min.location->GetNumber();
       new_value = std::max(new_value, min_val);
     }
-    auto max = max_arg.GetLocation(*self);
+    auto max = max_arg.GetLocation(*here);
     if (max.location) {
       double max_val = max.location->GetNumber();
       new_value = std::min(new_value, max_val);
@@ -1085,8 +1085,8 @@ struct Alert : Object {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Alert>();
   }
-  void Run(Handle &self) override {
-    auto message = message_arg.GetObject(self);
+  void Run(Location &here) override {
+    auto message = message_arg.GetObject(here);
     if (message.ok) {
       string text = message.object->GetText();
       alerts_for_tests.push_back(text);
@@ -1110,10 +1110,10 @@ struct ListView : Pointer {
   void Select(int new_index) {
     if (new_index != index) {
       index = new_index;
-      self->ScheduleUpdate();
+      here->ScheduleUpdate();
     }
   }
-  Object *Next(Handle &error_context) const override {
+  Object *Next(Location &error_context) const override {
     if (index < 0)
       return nullptr;
     auto list = list_arg.GetTyped<AbstractList>(error_context);
@@ -1132,7 +1132,7 @@ struct ListView : Pointer {
     }
     return obj;
   }
-  void PutNext(Handle &error_context, std::unique_ptr<Object> obj) override {
+  void PutNext(Location &error_context, std::unique_ptr<Object> obj) override {
     auto list = list_arg.GetTyped<AbstractList>(error_context);
     if (!list.ok) {
       return;
@@ -1148,7 +1148,7 @@ struct ListView : Pointer {
       list.typed->PutAtIndex(index, false, std::move(obj));
     }
   }
-  std::unique_ptr<Object> TakeNext(Handle &error_context) override {
+  std::unique_ptr<Object> TakeNext(Location &error_context) override {
     auto list = list_arg.GetTyped<AbstractList>(error_context);
     if (!list.ok) {
       return nullptr;
@@ -1175,15 +1175,16 @@ LiveArgument ListView::list_arg =
 
 // Interface for algebra callbacks.
 struct AlgebraContext : algebra::Context {
-  Handle *handle;
-  AlgebraContext(Handle *handle) : handle(handle) {}
+  Location *location;
+  AlgebraContext(Location *location) : location(location) {}
   double RetrieveVariable(string_view variable) override {
-    auto target = Argument(variable, Argument::kRequiresObject).GetObject(*handle);
+    auto target =
+        Argument(variable, Argument::kRequiresObject).GetObject(*location);
     if (target.object) {
       string s = target.object->GetText();
       return std::stod(s);
     } else {
-      handle->ReportMissing(variable);
+      location->ReportMissing(variable);
       return NAN;
     }
   }
@@ -1206,7 +1207,7 @@ struct Blackboard : Object {
     }
     return statement->GetText();
   }
-  void SetText(Handle &error_context, string_view text) override {
+  void SetText(Location &error_context, string_view text) override {
     statement = algebra::ParseStatement(text);
   }
 };
@@ -1229,12 +1230,12 @@ struct BlackboardUpdater : LiveObject {
       cb(arg.second);
     }
   }
-  void Rehandle(Handle *self) override {
+  void Relocate(Location *here) override {
     // 1. Find nearby blackboards & register as an observer.
     // 2. Extract variables from math statements.
-    self->Nearby([&](Handle &other) -> void * {
+    here->Nearby([&](Location &other) -> void * {
       if (Blackboard *blackboard = other.As<Blackboard>()) {
-        self->ObserveUpdates(other);
+        here->ObserveUpdates(other);
         if (algebra::Equation *equation = dynamic_cast<algebra::Equation *>(
                 blackboard->statement.get())) {
           // fmt::print("Found equation: {}\n", equation->GetText());
@@ -1258,20 +1259,22 @@ struct BlackboardUpdater : LiveObject {
           }
           // 4. Observe all of the independent variables.
           for (algebra::Variable *variable : independent_variables) {
-            independent_variable_args.emplace(variable->name, LiveArgument(variable->name, Argument::kRequiresObject));
+            independent_variable_args.emplace(
+                variable->name,
+                LiveArgument(variable->name, Argument::kRequiresObject));
           }
         }
       }
       return nullptr;
     });
-    LiveObject::Rehandle(self);
+    LiveObject::Relocate(here);
   }
   string_view Name() const override { return "Blackboard Updater"; }
-  void Run(Handle &self) override {}
-  void Updated(Handle &self, Handle &updated) override {
-    // LOG << "MathEngine::Updated(" << self.HumanReadableName() << ", " <<
+  void Run(Location &here) override {}
+  void Updated(Location &here, Location &updated) override {
+    // LOG << "MathEngine::Updated(" << here.HumanReadableName() << ", " <<
     // updated.HumanReadableName() << ")";
-    NoSchedulingGuard guard(self);
+    NoSchedulingGuard guard(here);
     if (double num = updated.GetNumber(); !std::isnan(num)) {
       // The list of variables that have changed in response could be
       // precomputed.
@@ -1280,15 +1283,17 @@ struct BlackboardUpdater : LiveObject {
             algebra::ExtractVariables(expr.get());
         for (algebra::Variable *independent_var : independent_variables) {
           if (independent_var->name == updated.name) {
-            AlgebraContext context{&self};
+            AlgebraContext context{&here};
             auto arg_it = independent_variable_args.find(name);
             if (arg_it == independent_variable_args.end()) {
-              self.ReportError("Couldn't find LiveArgument for a variable. This shouldn't happen.");
+              here.ReportError("Couldn't find LiveArgument for a variable. "
+                               "This shouldn't happen.");
               continue;
             }
-            auto target = arg_it->second.GetObject(self);
+            auto target = arg_it->second.GetObject(here);
             if (target.object) {
-              if (target.location->incoming.find("const") != target.location->incoming.end()) {
+              if (target.location->incoming.find("const") !=
+                  target.location->incoming.end()) {
                 // LOG << "  would write to " << *target
                 //     << " but it's marked as const.";
 

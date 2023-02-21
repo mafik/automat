@@ -15,15 +15,15 @@ using namespace testing;
 
 TEST(CounterTest, Count) {
   EnableBacktraceOnSIGSEGV();
-  Handle root(nullptr);
+  Location root(nullptr);
   Machine &counter = *root.Create<Machine>();
 
-  Handle &i = counter.Create<Integer>();
-  Handle &inc = counter.Create<Increment>();
+  Location &i = counter.Create<Integer>();
+  Location &inc = counter.Create<Increment>();
   inc.ConnectTo(i, "target");
-  Handle &txt = counter.Create<Text>("Count");
+  Location &txt = counter.Create<Text>("Count");
   txt.ConnectTo(i, "target");
-  Handle &btn = counter.Create<Button>("Increment");
+  Location &btn = counter.Create<Button>("Increment");
   btn.ConnectTo(inc, "then");
 
   counter.AddToFrontPanel(txt);
@@ -49,13 +49,14 @@ TEST(CounterTest, Count) {
 
 void ExpectHealthy(Machine &m) {
   std::vector<std::string> errors;
-  m.Diagnostics([&](Handle *h, Error &e) { errors.push_back(e.text); });
+  m.Diagnostics([&](Location *h, Error &e) { errors.push_back(e.text); });
   EXPECT_THAT(errors, IsEmpty());
 }
 
 void ExpectErrors(Machine &m, std::vector<std::string> errors) {
   std::vector<std::string> actual_errors;
-  m.Diagnostics([&](Handle *h, Error &e) { actual_errors.push_back(e.text); });
+  m.Diagnostics(
+      [&](Location *h, Error &e) { actual_errors.push_back(e.text); });
   EXPECT_THAT(actual_errors, UnorderedElementsAreArray(errors));
 }
 
@@ -71,22 +72,22 @@ void ClearErrors(Machine &m) {
 
 TEST(TemperatureConverterTest, Conversion) {
   EnableBacktraceOnSIGSEGV();
-  Handle root(nullptr);
+  Location root(nullptr);
   Machine &converter = *root.Create<Machine>();
 
-  Handle &c_txt = converter.Create<Text>("Celsius");
-  Handle &f_txt = converter.Create<Text>("Fahrenheit");
+  Location &c_txt = converter.Create<Text>("Celsius");
+  Location &f_txt = converter.Create<Text>("Fahrenheit");
 
   converter.AddToFrontPanel(c_txt);
   converter.AddToFrontPanel(f_txt);
 
-  Handle &c = converter.Create<Integer>("C");
-  Handle &f = converter.Create<Integer>("F");
+  Location &c = converter.Create<Integer>("C");
+  Location &f = converter.Create<Integer>("F");
 
   c_txt.ConnectTo(c, "target");
   f_txt.ConnectTo(f, "target");
 
-  Handle &blackboard = converter.Create<Blackboard>();
+  Location &blackboard = converter.Create<Blackboard>();
   blackboard.SetText("F = C * 9 / 5 + 32");
 
   converter.Create<BlackboardUpdater>();
@@ -103,31 +104,31 @@ TEST(TemperatureConverterTest, Conversion) {
 }
 
 struct FlightBookerTest {
-  Handle root;
+  Location root;
   Machine &booker;
 
-  Handle *c;  // ComboBox C
-  Handle *t1; // Text T1
-  Handle *t2; // Text T2
-  Handle *b;  // Button B
+  Location *c;  // ComboBox C
+  Location *t1; // Text T1
+  Location *t2; // Text T2
+  Location *b;  // Button B
 
-  Handle *one_way;       // Text "one-way flight"
-  Handle *return_flight; // Text "return flight"
+  Location *one_way;       // Text "one-way flight"
+  Location *return_flight; // Text "return flight"
 
-  Handle *t1_date; // Date
-  Handle *t2_date; // Date
+  Location *t1_date; // Date
+  Location *t2_date; // Date
 
-  Handle *t2_enabled;     // EqualityTest
-  Handle *t2_before_t1;   // LessThanTest
-  Handle *all_test;       // AllTest
-  Handle *health_test;    // HealthTest
-  Handle *error_message;  // Text "Return flight date must be..."
-  Handle *error_reporter; // ErrorReporter
+  Location *t2_enabled;     // EqualityTest
+  Location *t2_before_t1;   // LessThanTest
+  Location *all_test;       // AllTest
+  Location *health_test;    // HealthTest
+  Location *error_message;  // Text "Return flight date must be..."
+  Location *error_reporter; // ErrorReporter
 
-  Handle *alert;
-  Handle *switch_;
-  Handle *one_way_message;
-  Handle *return_flight_message;
+  Location *alert;
+  Location *switch_;
+  Location *one_way_message;
+  Location *return_flight_message;
 
   FlightBookerTest() : root(nullptr), booker(*root.Create<Machine>()) {
     c = &booker.Create<ComboBox>("C");
@@ -284,30 +285,30 @@ TEST(FlightBookerTest, BadDateFormat) {
 TEST(TimerTest, DurationChange) {
   EnableBacktraceOnSIGSEGV();
   using namespace std::chrono_literals;
-  Handle root(nullptr);
+  Location root(nullptr);
   Machine &m = *root.Create<Machine>();
 
-  Handle &min = m.Create<Number>("min");
+  Location &min = m.Create<Number>("min");
   min.SetNumber(5);
-  Handle &max = m.Create<Number>("max");
+  Location &max = m.Create<Number>("max");
   max.SetNumber(15);
 
-  Handle &duration = m.Create<Slider>("duration");
+  Location &duration = m.Create<Slider>("duration");
   duration.SetNumber(10);
 
-  Handle &timer = m.Create<Timer>("T");
+  Location &timer = m.Create<Timer>("T");
   FakeTime fake_time;
   fake_time.SetNow(TimePoint(0s));
   timer.As<Timer>()->fake_time = &fake_time;
 
-  Handle &timer_reset = m.Create<TimerReset>();
+  Location &timer_reset = m.Create<TimerReset>();
   timer_reset.ConnectTo(timer, "timer");
-  Handle &reset_button = m.Create<Button>("reset");
+  Location &reset_button = m.Create<Button>("reset");
   reset_button.ConnectTo(timer_reset, "then");
 
-  Handle &progress_bar = m.Create<ProgressBar>("progress");
+  Location &progress_bar = m.Create<ProgressBar>("progress");
 
-  Handle &blackboard = m.Create<Blackboard>();
+  Location &blackboard = m.Create<Blackboard>();
   blackboard.SetText("progress = T / duration");
   blackboard.ConnectTo(timer, "const");
   blackboard.ConnectTo(duration, "const");
@@ -363,40 +364,40 @@ TEST(TimerTest, DurationChange) {
 // overhead).
 
 struct CrudTest : public TestBase {
-  Handle &list = machine.Create<List>("list");
+  Location &list = machine.Create<List>("list");
 
-  Handle &first_name_label = machine.Create<Text>("First name label");
-  Handle &last_name_label = machine.Create<Text>("Last name label");
+  Location &first_name_label = machine.Create<Text>("First name label");
+  Location &last_name_label = machine.Create<Text>("Last name label");
 
-  Handle &text_prefix = machine.Create<Text>("Prefix");
-  Handle &starts_with_test = machine.Create<StartsWithTest>();
-  Handle &field_for_test = machine.Create<ComplexField>("Field for test");
-  Handle &element = machine.Create<CurrentElement>();
-  Handle &filter = machine.Create<Filter>();
+  Location &text_prefix = machine.Create<Text>("Prefix");
+  Location &starts_with_test = machine.Create<StartsWithTest>();
+  Location &field_for_test = machine.Create<ComplexField>("Field for test");
+  Location &element = machine.Create<CurrentElement>();
+  Location &filter = machine.Create<Filter>();
 
-  Handle &list_view = machine.Create<ListView>();
-  Handle &deleter = machine.Create<Delete>();
-  Handle &button_delete = machine.Create<Button>();
+  Location &list_view = machine.Create<ListView>();
+  Location &deleter = machine.Create<Delete>();
+  Location &button_delete = machine.Create<Button>();
 
-  Handle &first_name_selected_field =
+  Location &first_name_selected_field =
       machine.Create<ComplexField>("First name selected");
-  Handle &last_name_selected_field =
+  Location &last_name_selected_field =
       machine.Create<ComplexField>("Last name selected");
 
-  Handle &set_first_name = machine.Create<Set>("Set first name");
-  Handle &set_last_name = machine.Create<Set>("Set last name");
-  Handle &button_update = machine.Create<Button>("Update");
+  Location &set_first_name = machine.Create<Set>("Set first name");
+  Location &set_last_name = machine.Create<Set>("Set last name");
+  Location &button_update = machine.Create<Button>("Update");
 
-  Handle &first_name_complex_field =
+  Location &first_name_complex_field =
       machine.Create<ComplexField>("First name complex");
-  Handle &last_name_complex_field =
+  Location &last_name_complex_field =
       machine.Create<ComplexField>("Last name complex");
-  Handle &complex = machine.Create<Complex>();
+  Location &complex = machine.Create<Complex>();
 
-  Handle &set_complex = machine.Create<Set>("Set complex");
-  Handle &button_create = machine.Create<Button>("Create");
-  Handle &append_target = machine.CreateEmpty();
-  Handle &append = machine.Create<Append>();
+  Location &set_complex = machine.Create<Set>("Set complex");
+  Location &button_create = machine.Create<Button>("Create");
+  Location &append_target = machine.CreateEmpty();
+  Location &append = machine.Create<Append>();
 
   CrudTest() {
     EnableBacktraceOnSIGSEGV();

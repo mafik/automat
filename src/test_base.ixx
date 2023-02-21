@@ -7,7 +7,7 @@ import base;
 export namespace automaton {
 
 struct TestBase : ::testing::Test {
-  Handle root;
+  Location root;
   Machine &machine;
 
   TestBase() : root(nullptr), machine(*root.Create<Machine>()) {

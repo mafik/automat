@@ -292,15 +292,13 @@ struct Handle {
   // This function should register a connection from this handle to the `other`
   // so that subsequent calls to `Find` will return `other`.
   //
+  // The function tries to be clever and marks the connection as `to_direct` if
+  // the current object defines an argument with the same type as the `other`
+  // object.
+  //
   // This function should also notify the object with the `ConnectionAdded`
   // call.
-  Connection *ConnectTo(Handle &other, string_view label) {
-    Connection *c = new Connection(*this, other, false, false);
-    outgoing.emplace(label, c);
-    other.incoming.emplace(label, c);
-    object->ConnectionAdded(*this, label, *c);
-    return c;
-  }
+  Connection *ConnectTo(Handle &other, string_view label);
 
   // Immediately execute this object's Updated function.
   void Updated(Handle &updated) { object->Updated(*this, updated); }
@@ -455,7 +453,8 @@ struct Argument {
     kRequiresObject,
     kRequiresConcreteType,
   };
-  // Used for annotating arguments so that (future) UI can show them differently.
+  // Used for annotating arguments so that (future) UI can show them
+  // differently.
   enum Quantity {
     kSingle,
     kMultiple,
@@ -474,7 +473,7 @@ struct Argument {
 
   template <typename T> Argument &RequireInstanceOf() {
     requirements.emplace_back(
-        [this](Handle *location, Object *object, std::string &error) {
+        [name = name](Handle *location, Object *object, std::string &error) {
           if (dynamic_cast<T *>(object) == nullptr) {
             error = fmt::format("The {} argument must be an instance of {}.",
                                 name, typeid(T).name());

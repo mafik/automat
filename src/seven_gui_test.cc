@@ -406,7 +406,7 @@ struct CrudTest : public TestBase {
 
     filter.ConnectTo(list, "list");
     filter.ConnectTo(starts_with_test, "test");
-    filter.ConnectTo(element, "element")->to_direct = true;
+    filter.ConnectTo(element, "element");
     filter.ObserveUpdates(text_prefix);
 
     element.ConnectTo(filter, "of");

@@ -12,6 +12,26 @@ import error;
 
 namespace automaton {
 
+Connection *Handle::ConnectTo(Handle &other, string_view label) {
+  bool to_direct = false;
+  if (LiveObject* live_object = ThisAs<LiveObject>()) {
+    live_object->Args([&](LiveArgument& arg) {
+      if (arg.name == label && arg.precondition >= Argument::kRequiresConcreteType) {
+        std::string error;
+        arg.CheckRequirements(*this, &other, other.object.get(), error);
+        if (error.empty()) {
+          to_direct = true;
+        }
+      }
+    });
+  }
+  Connection *c = new Connection(*this, other, false, to_direct);
+  outgoing.emplace(label, c);
+  other.incoming.emplace(label, c);
+  object->ConnectionAdded(*this, label, *c);
+  return c;
+}
+
 Object *Handle::Follow() {
   if (Pointer *ptr = object->AsPointer()) {
     return ptr->Follow(*this);

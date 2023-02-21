@@ -1178,8 +1178,9 @@ struct AlgebraContext : algebra::Context {
   Handle *handle;
   AlgebraContext(Handle *handle) : handle(handle) {}
   double RetrieveVariable(string_view variable) override {
-    if (auto target = handle->Find(variable)) {
-      string s = target->GetText();
+    auto target = Argument(variable, Argument::kRequiresObject).GetObject(*handle);
+    if (target.object) {
+      string s = target.object->GetText();
       return std::stod(s);
     } else {
       handle->ReportMissing(variable);
@@ -1215,12 +1216,18 @@ const Blackboard Blackboard::proto;
 // Misc
 /////////////
 
-struct BlackboardUpdater : Object {
+struct BlackboardUpdater : LiveObject {
   static const BlackboardUpdater proto;
   std::unordered_map<string, unique_ptr<algebra::Expression>> formulas;
+  std::map<string, LiveArgument> independent_variable_args;
 
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<BlackboardUpdater>();
+  }
+  void Args(std::function<void(LiveArgument &)> cb) override {
+    for (auto &arg : independent_variable_args) {
+      cb(arg.second);
+    }
   }
   void Rehandle(Handle *self) override {
     // 1. Find nearby blackboards & register as an observer.
@@ -1251,14 +1258,13 @@ struct BlackboardUpdater : Object {
           }
           // 4. Observe all of the independent variables.
           for (algebra::Variable *variable : independent_variables) {
-            if (Handle *handle = self->Find(variable->name)) {
-              self->ObserveUpdates(*handle);
-            }
+            independent_variable_args.emplace(variable->name, LiveArgument(variable->name, Argument::kRequiresObject));
           }
         }
       }
       return nullptr;
     });
+    LiveObject::Rehandle(self);
   }
   string_view Name() const override { return "Blackboard Updater"; }
   void Run(Handle &self) override {}
@@ -1275,8 +1281,14 @@ struct BlackboardUpdater : Object {
         for (algebra::Variable *independent_var : independent_variables) {
           if (independent_var->name == updated.name) {
             AlgebraContext context{&self};
-            if (auto *target = self.Find(name)) {
-              if (target->incoming.find("const") != target->incoming.end()) {
+            auto arg_it = independent_variable_args.find(name);
+            if (arg_it == independent_variable_args.end()) {
+              self.ReportError("Couldn't find LiveArgument for a variable. This shouldn't happen.");
+              continue;
+            }
+            auto target = arg_it->second.GetObject(self);
+            if (target.object) {
+              if (target.location->incoming.find("const") != target.location->incoming.end()) {
                 // LOG << "  would write to " << *target
                 //     << " but it's marked as const.";
 
@@ -1288,7 +1300,7 @@ struct BlackboardUpdater : Object {
                 } else {
                   // LOG << "  writing to " << target->HumanReadableName()
                   //     << " <- " << new_value;
-                  target->SetNumber(new_value);
+                  target.location->SetNumber(new_value);
                 }
               }
             }

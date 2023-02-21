@@ -595,43 +595,61 @@ struct LiveArgument : Argument {
     Argument::RequireInstanceOf<T>();
     return *this;
   }
+  void Detach(Handle &here) {
+    auto connections = here.outgoing.equal_range(name);
+    for (auto it = connections.first; it != connections.second;
+          ++it) {
+      auto &connection = it->second;
+      here.StopObservingUpdates(connection->to);
+    }
+    // If there were no connections, try to find nearby objects instead.
+    if (connections.first == here.outgoing.end()) {
+      here.Nearby([&](Handle &other) {
+        if (other.name == name) {
+          here.StopObservingUpdates(other);
+        }
+        return nullptr;
+      });
+    }
+  }
+  void Attach(Handle &here) {
+    auto connections = here.outgoing.equal_range(name);
+    for (auto it = connections.first; it != connections.second;
+          ++it) {
+      auto &connection = it->second;
+      here.ObserveUpdates(connection->to);
+    }
+    // If there were no connections, try to find nearby objects instead.
+    if (connections.first == here.outgoing.end()) {
+      here.Nearby([&](Handle &other) {
+        if (other.name == name) {
+          here.ObserveUpdates(other);
+        }
+        return nullptr;
+      });
+    }
+  }
   void Rehandle(Handle *old_self, Handle *new_self) {
     if (old_self) {
-      auto old_connections = old_self->outgoing.equal_range(name);
-      for (auto it = old_connections.first; it != old_connections.second;
-           ++it) {
-        auto &connection = it->second;
-        old_self->StopObservingUpdates(connection->to);
-      }
+      Detach(*old_self);
     }
     if (new_self) {
-      auto new_connections = new_self->outgoing.equal_range(name);
-      for (auto it = new_connections.first; it != new_connections.second;
-           ++it) {
-        auto &connection = it->second;
-        new_self->ObserveUpdates(connection->to);
-      }
+      Attach(*new_self);
     }
   }
   void ConnectionAdded(Handle &self, string_view label,
                        Connection &connection) {
+    // TODO: handle the case where `self` is observing nearby objects (without connections) and a connection is added.
+    // TODO: handle ConnectionRemoved
     if (label == name) {
       self.ObserveUpdates(connection.to);
       self.ScheduleLocalUpdate(connection.to);
     }
   }
   void Rename(Handle &self, string_view new_name) {
-    auto old_connections = self.outgoing.equal_range(name);
-    for (auto it = old_connections.first; it != old_connections.second; ++it) {
-      auto &connection = it->second;
-      self.StopObservingUpdates(connection->to);
-    }
-    auto new_connections = self.outgoing.equal_range(new_name);
-    for (auto it = new_connections.first; it != new_connections.second; ++it) {
-      auto &connection = it->second;
-      self.ObserveUpdates(connection->to);
-    }
+    Detach(self);
     name = new_name;
+    Attach(self);
   }
 };
 

@@ -233,47 +233,6 @@ struct Handle {
 
   unique_ptr<Object> Take();
 
-  // Find a related object.
-  //
-  // Each Container can alter they way that object properties are looked up.
-  // This function holds the container-specific look up overrides.
-  Handle *Find(string_view label) {
-    auto frame_it = outgoing.find(label);
-    // explicit connection
-    if (frame_it != outgoing.end()) {
-      return &frame_it->second->to;
-    }
-    // otherwise, search for other handles in this machine
-    return reinterpret_cast<Handle *>(Nearby([&](Handle &other) -> void * {
-      if (other.name == label) {
-        return &other;
-      }
-      return nullptr;
-    }));
-  }
-
-  // Find a related object.
-  //
-  // Each Container can alter they way that object properties are looked up.
-  // This function holds the container-specific look up overrides.
-  std::pair<Handle *, bool> Find2(string_view label) {
-    auto frame_it = outgoing.find(label);
-    // explicit connection
-    if (frame_it != outgoing.end()) {
-      auto c = frame_it->second;
-      return std::make_pair(&c->to, c->to_direct);
-    }
-    // otherwise, search for other handles in this machine
-    Handle *near =
-        reinterpret_cast<Handle *>(Nearby([&](Handle &other) -> void * {
-          if (other.name == label) {
-            return &other;
-          }
-          return nullptr;
-        }));
-    return std::make_pair(near, false);
-  }
-
   // Iterate over all nearby objects (including this object).
   //
   // Return non-null from the callback to stop the search.
@@ -502,9 +461,20 @@ struct Argument {
                              std::source_location source_location =
                                  std::source_location::current()) const {
     LocationResult result;
-    auto found = here.Find2(name);
-    result.location = found.first;
-    result.direct = found.second;
+    auto conn_it = here.outgoing.find(name);
+    if (conn_it != here.outgoing.end()) { // explicit connection
+      auto c = conn_it->second;
+      result.location = &c->to;
+      result.direct = c->to_direct;
+    } else { // otherwise, search for other handles in this machine
+      result.location =
+          reinterpret_cast<Handle *>(here.Nearby([&](Handle &other) -> void * {
+            if (other.name == name) {
+              return &other;
+            }
+            return nullptr;
+          }));
+    }
     if (result.location == nullptr && precondition >= kRequiresLocation) {
       here.ReportError(fmt::format("The {} argument is not connected.", name),
                        source_location);
@@ -586,6 +556,7 @@ struct Argument {
     });
   }
 };
+Argument then_arg("then", Argument::kOptional);
 
 struct LiveArgument : Argument {
   LiveArgument(string_view name, Precondition precondition)
@@ -597,8 +568,7 @@ struct LiveArgument : Argument {
   }
   void Detach(Handle &here) {
     auto connections = here.outgoing.equal_range(name);
-    for (auto it = connections.first; it != connections.second;
-          ++it) {
+    for (auto it = connections.first; it != connections.second; ++it) {
       auto &connection = it->second;
       here.StopObservingUpdates(connection->to);
     }
@@ -614,8 +584,7 @@ struct LiveArgument : Argument {
   }
   void Attach(Handle &here) {
     auto connections = here.outgoing.equal_range(name);
-    for (auto it = connections.first; it != connections.second;
-          ++it) {
+    for (auto it = connections.first; it != connections.second; ++it) {
       auto &connection = it->second;
       here.ObserveUpdates(connection->to);
     }
@@ -639,7 +608,8 @@ struct LiveArgument : Argument {
   }
   void ConnectionAdded(Handle &self, string_view label,
                        Connection &connection) {
-    // TODO: handle the case where `self` is observing nearby objects (without connections) and a connection is added.
+    // TODO: handle the case where `self` is observing nearby objects (without
+    // connections) and a connection is added.
     // TODO: handle ConnectionRemoved
     if (label == name) {
       self.ObserveUpdates(connection.to);
@@ -778,8 +748,9 @@ struct RunTask : Task {
     PreExecute();
     target->Run();
     if (!target->HasError()) {
-      if (auto then = target->Find("then")) {
-        then->ScheduleRun();
+      auto then = then_arg.GetLocation(*target);
+      if (then.location) {
+        then.location->ScheduleRun();
       }
     }
     PostExecute();

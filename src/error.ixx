@@ -32,6 +32,18 @@ held in the Error instance and can be accessed by the user.
 In the UI the errors are visualized as spiders sitting on the error locations.
 Source of the error is indicated by a spider web. Saved objects are cocoons.
 
+When an error is added to an object it causes a notification to be sent to all
+`error_observers` of the object. The observers may fix the error or notify the
+user somehow. The parent Machine is an implicit error observer and propagates
+the error upwards. Top-level Machines print their errors to the console.
+
+TODO: notify error_observers in ReportError
+TODO: Object::Errored should propagate the error to the parent Machine
+TODO: keep track of the source of the error
+TODO: maintain cocoon objects
+TODO: add a new pointer type for "parent Machine" (use it in HealthTest)
+TODO: new "Error Eater" object - deletes any errors as soon as they're reported
+
 */
 
 struct Error {

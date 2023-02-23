@@ -97,7 +97,7 @@ void Machine::Errored(Location &here, Location &errored) {
       parent->ReportChildError(here);
     } else {
       Error *error = errored.GetError();
-      ERROR(error->location) << error->text;
+      ERROR(error->source_location) << error->text;
     }
   }
 }

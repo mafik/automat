@@ -37,7 +37,6 @@ When an error is added to an object it causes a notification to be sent to all
 user somehow. The parent Machine is an implicit error observer and propagates
 the error upwards. Top-level Machines print their errors to the console.
 
-TODO: notify error_observers in ReportError
 TODO: Object::Errored should propagate the error to the parent Machine
 TODO: keep track of the source of the error
 TODO: maintain cocoon objects

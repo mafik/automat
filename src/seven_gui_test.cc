@@ -273,6 +273,7 @@ TEST(FlightBookerTest, BadDateFormat) {
 
   // Change T1 to "2014-04-04-".
   x.t1->SetText("2014-04-04-");
+  RunLoop();
   x.b->ScheduleRun();
   RunLoop();
   ExpectErrors(x.booker,

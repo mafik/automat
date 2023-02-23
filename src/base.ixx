@@ -76,7 +76,7 @@ struct Object {
                                Connection &connection) {}
   virtual void Run(Location &here) {}
   virtual void Updated(Location &here, Location &updated) { Run(here); }
-  virtual void Errored(Location &here, Location &errored) {}
+  virtual void Errored(Location &here, Location &errored);
   virtual std::partial_ordering
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
@@ -370,9 +370,10 @@ struct Location {
               std::source_location location = std::source_location::current()) {
     if (error == nullptr) {
       error.reset(new Error(message, location));
-      if (auto machine = ParentAs<Machine>()) {
-        machine->ReportChildError(*this);
+      for (auto observer : error_observers) {
+        observer->ScheduleErrored(*this);
       }
+      ScheduleErrored(*this);
     }
     return error.get();
   }
@@ -404,6 +405,14 @@ struct Location {
     }
   }
 };
+
+inline void Object::Errored(Location &here, Location &errored) {
+  if (&here == &errored && errored.error) {
+    if (auto machine = here.ParentAs<Machine>()) {
+      machine->ReportChildError(errored);
+    }
+  }
+}
 
 struct Argument {
   enum Precondition {

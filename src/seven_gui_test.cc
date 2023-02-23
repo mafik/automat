@@ -7,7 +7,6 @@ import backtrace;
 import base;
 import library;
 import test_base;
-import error;
 import log;
 
 using namespace automaton;

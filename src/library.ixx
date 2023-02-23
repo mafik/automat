@@ -18,7 +18,6 @@ import <source_location>;
 import algebra;
 import base;
 import treemath;
-import error;
 import log;
 
 export namespace automaton {
@@ -464,7 +463,7 @@ struct ErrorReporter : LiveObject {
     if (message.object) {
       error_text = message.object->GetText();
     }
-    here.ReportError(error_text);
+    auto err = here.ReportError(error_text);
   }
 };
 const ErrorReporter ErrorReporter::proto;

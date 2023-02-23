@@ -8,7 +8,6 @@ import <unordered_set>;
 import <source_location>;
 import "fmt/format.h";
 import log;
-import error;
 
 namespace automaton {
 

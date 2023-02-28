@@ -136,6 +136,26 @@ inline std::ostream &operator<<(std::ostream &os, const Error &e) {
   return os << e.text;
 }
 
+struct string_equal {
+  using is_transparent = std::true_type;
+
+  bool operator()(string_view l, string_view r) const noexcept {
+    return l == r;
+  }
+};
+
+struct string_hash {
+  using is_transparent = std::true_type;
+
+  auto operator()(string_view str) const noexcept {
+    return hash<string_view>()(str);
+  }
+};
+
+template <typename Value>
+using string_multimap =
+    unordered_multimap<string, Value, string_hash, string_equal>;
+
 template <typename T> struct ptr_hash {
   using is_transparent = void;
 
@@ -159,76 +179,6 @@ private:
 template <typename T> std::unique_ptr<Object> Create() {
   return T::proto.Clone();
 }
-
-// 2D Canvas holding objects & a spaghetti of connections.
-struct Machine : Object {
-  static const Machine proto;
-  Machine() = default;
-  Location *here = nullptr;
-  string name = "";
-  unordered_set<unique_ptr<Location>> locations;
-  vector<Location *> front;
-  vector<Location *> children_with_errors;
-
-  Location &CreateEmpty(const string &name = "");
-  Location &Create(const Object &prototype, const string &name = "");
-
-  // Create an instance of T and return its location.
-  //
-  // The new instance is created from a prototype instance in `T::proto`.
-  template <typename T> Location &Create(const string &name = "") {
-    return Create(T::proto, name);
-  }
-
-  string_view Name() const override;
-  std::unique_ptr<Object> Clone() const override;
-  void Relocate(Location *parent) override;
-  void Errored(Location &here, Location &errored) override;
-  string LoggableString() const;
-  Location *Front(const string &name);
-
-  Location *operator[](const string &name) {
-    auto h = Front(name);
-    if (h == nullptr) {
-      ERROR() << "Component \"" << name << "\" of " << this->name
-              << " is null!";
-    }
-    return h;
-  }
-
-  void AddToFrontPanel(Location &h);
-
-  // Report all errors that occured within this machine.
-  //
-  // This function will return all errors held by locations of this machine &
-  // recurse into submachines.
-  void Diagnostics(function<void(Location *, Error &)> error_callback);
-
-  void ReportChildError(Location &child);
-  void ClearChildError(Location &child);
-};
-
-struct string_equal {
-  using is_transparent = std::true_type;
-
-  bool operator()(string_view l, string_view r) const noexcept {
-    return l == r;
-  }
-};
-
-struct string_hash {
-  using is_transparent = std::true_type;
-
-  auto operator()(string_view str) const noexcept {
-    return hash<string_view>()(str);
-  }
-};
-
-template <typename Value>
-using string_multimap =
-    unordered_multimap<string, Value, string_hash, string_equal>;
-
-struct Task;
 
 // Each Container holds its inner objects in Locations.
 //
@@ -289,17 +239,7 @@ struct Location {
   // Iterate over all nearby objects (including this object).
   //
   // Return non-null from the callback to stop the search.
-  void *Nearby(function<void *(Location &)> callback) {
-    if (auto parent_machine = ParentAs<Machine>()) {
-      // TODO: sort by distance
-      for (auto &other : parent_machine->locations) {
-        if (auto ret = callback(*other)) {
-          return ret;
-        }
-      }
-    }
-    return nullptr;
-  }
+  void *Nearby(function<void *(Location &)> callback);
 
   // This function should register a connection from this location to the
   // `other` so that subsequent calls to `Find` will return `other`.
@@ -400,24 +340,9 @@ struct Location {
   // First error caught by this Location.
   unique_ptr<Error> error;
 
-  bool HasError() {
-    if (error != nullptr)
-      return true;
-    if (auto machine = As<Machine>()) {
-      if (!machine->children_with_errors.empty())
-        return true;
-    }
-    return false;
-  }
-  Error *GetError() {
-    if (error != nullptr)
-      return error.get();
-    if (auto machine = As<Machine>()) {
-      if (!machine->children_with_errors.empty())
-        return (*machine->children_with_errors.begin())->GetError();
-    }
-    return nullptr;
-  }
+  bool HasError();
+  Error *GetError();
+  void ClearError();
   Error *
   ReportError(string_view message,
               std::source_location location = std::source_location::current()) {
@@ -430,15 +355,6 @@ struct Location {
       ScheduleErrored(*this);
     }
     return error.get();
-  }
-  void ClearError() {
-    if (error == nullptr) {
-      return;
-    }
-    error.reset();
-    if (auto machine = ParentAs<Machine>()) {
-      machine->ClearChildError(*this);
-    }
   }
 
   // Shorthand function for reporting that a required property couldn't be
@@ -459,14 +375,6 @@ struct Location {
     }
   }
 };
-
-inline void Object::Errored(Location &here, Location &errored) {
-  if (&here == &errored && errored.error) {
-    if (auto machine = here.ParentAs<Machine>()) {
-      machine->ReportChildError(errored);
-    }
-  }
-}
 
 struct Argument {
   enum Precondition {
@@ -570,6 +478,16 @@ struct Argument {
     }
     return result;
   }
+
+  struct FinalLocationResult : ObjectResult {
+    Location *final_location = nullptr;
+    FinalLocationResult(ObjectResult object_result)
+        : ObjectResult(object_result) {}
+  };
+
+  FinalLocationResult
+  GetFinalLocation(Location &here, std::source_location source_location =
+                                       std::source_location::current()) const;
 
   template <typename T> struct TypedResult : ObjectResult {
     T *typed = nullptr;
@@ -703,6 +621,117 @@ struct LiveObject : Object {
   }
 };
 
+// 2D Canvas holding objects & a spaghetti of connections.
+struct Machine : LiveObject {
+  static const Machine proto;
+  Machine() = default;
+  string name = "";
+  unordered_set<unique_ptr<Location>> locations;
+  vector<Location *> front;
+  vector<Location *> children_with_errors;
+
+  Location &CreateEmpty(const string &name = "");
+  Location &Create(const Object &prototype, const string &name = "");
+
+  // Create an instance of T and return its location.
+  //
+  // The new instance is created from a prototype instance in `T::proto`.
+  template <typename T> Location &Create(const string &name = "") {
+    return Create(T::proto, name);
+  }
+
+  string_view Name() const override;
+  std::unique_ptr<Object> Clone() const override;
+  void Args(std::function<void(LiveArgument &)> cb) override {}
+  void Relocate(Location *parent) override {
+    for (auto &it : locations) {
+      it->parent = here;
+    }
+    LiveObject::Relocate(parent);
+  }
+  void Errored(Location &here, Location &errored) override;
+  string LoggableString() const;
+  Location *Front(const string &name);
+
+  Location *operator[](const string &name) {
+    auto h = Front(name);
+    if (h == nullptr) {
+      ERROR() << "Component \"" << name << "\" of " << this->name
+              << " is null!";
+    }
+    return h;
+  }
+
+  void AddToFrontPanel(Location &h);
+
+  // Report all errors that occured within this machine.
+  //
+  // This function will return all errors held by locations of this machine &
+  // recurse into submachines.
+  void Diagnostics(function<void(Location *, Error &)> error_callback);
+
+  void ReportChildError(Location &child);
+  void ClearChildError(Location &child);
+};
+
+inline void Object::Errored(Location &here, Location &errored) {
+  if (&here == &errored && errored.error) {
+    if (auto machine = here.ParentAs<Machine>()) {
+      machine->ReportChildError(errored);
+    }
+  }
+}
+
+void *Location::Nearby(function<void *(Location &)> callback) {
+  if (auto parent_machine = ParentAs<Machine>()) {
+    // TODO: sort by distance
+    for (auto &other : parent_machine->locations) {
+      if (auto ret = callback(*other)) {
+        return ret;
+      }
+    }
+  }
+  return nullptr;
+}
+
+bool Location::HasError() {
+  if (error != nullptr)
+    return true;
+  if (auto machine = As<Machine>()) {
+    if (!machine->children_with_errors.empty())
+      return true;
+  }
+  return false;
+}
+Error *Location::GetError() {
+  if (error != nullptr)
+    return error.get();
+  if (auto machine = As<Machine>()) {
+    if (!machine->children_with_errors.empty())
+      return (*machine->children_with_errors.begin())->GetError();
+  }
+  return nullptr;
+}
+void Location::ClearError() {
+  if (error == nullptr) {
+    return;
+  }
+  error.reset();
+  if (auto machine = ParentAs<Machine>()) {
+    machine->ClearChildError(*this);
+  }
+}
+
+Argument::FinalLocationResult
+Argument::GetFinalLocation(Location &here,
+                           std::source_location source_location) const {
+  FinalLocationResult result(GetObject(here, source_location));
+  if (auto live_object = dynamic_cast<LiveObject *>(result.object)) {
+    result.final_location = live_object->here;
+  }
+  return result;
+}
+
 struct Pointer : LiveObject {
   virtual Object *Next(Location &error_context) const = 0;
   virtual void PutNext(Location &error_context,
@@ -746,6 +775,8 @@ struct Pointer : LiveObject {
 bool log_executed_tasks = false;
 
 void TaskLogging(bool enable) { log_executed_tasks = enable; }
+
+struct Task;
 
 std::deque<unique_ptr<Task>> queue;
 std::unordered_set<Location *> no_scheduling;

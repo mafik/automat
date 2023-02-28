@@ -82,13 +82,6 @@ std::unique_ptr<Object> Machine::Clone() const {
   return std::unique_ptr<Object>(m);
 }
 
-void Machine::Relocate(Location *new_self) {
-  here = new_self;
-  for (auto &it : locations) {
-    it->parent = here;
-  }
-}
-
 void Machine::Errored(Location &here, Location &errored) {
   // If the error hasn't been cleared by other Errored calls, then propagate it
   // to the parent.

@@ -120,6 +120,7 @@ struct FlightBookerTest {
   Location *t2_enabled;     // EqualityTest
   Location *t2_before_t1;   // LessThanTest
   Location *all_test;       // AllTest
+  Location *parent;         // Parent
   Location *health_test;    // HealthTest
   Location *error_message;  // Text "Return flight date must be..."
   Location *error_reporter; // ErrorReporter
@@ -156,7 +157,9 @@ struct FlightBookerTest {
     t2->ConnectTo(*t2_enabled, "enabled");
 
     // When there is an error, B is disabled.
+    parent = &booker.Create<Parent>();
     health_test = &booker.Create<HealthTest>();
+    health_test->ConnectTo(*parent, "target");
     b->ConnectTo(*health_test, "enabled");
 
     // Report an error when C’s value is “return flight” & T2’s date is strictly

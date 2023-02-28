@@ -472,17 +472,61 @@ LiveArgument ErrorReporter::test_arg =
 LiveArgument ErrorReporter::message_arg =
     LiveArgument("message", Argument::kOptional);
 
+struct Parent : Pointer {
+  static const Parent proto;
+  string_view Name() const override { return "Parent"; }
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<Parent>();
+  }
+  void Args(std::function<void(LiveArgument &)> cb) override {}
+  Object *Next(Location &error_context) const override {
+    if (here && here->parent) {
+      return here->parent->object.get();
+    }
+    return nullptr;
+  }
+  void PutNext(Location &error_context, std::unique_ptr<Object> obj) override {
+    if (here && here->parent) {
+      here->parent->Put(std::move(obj));
+    } else {
+      auto err = error_context.ReportError("No parent to put to");
+      err->saved_object = std::move(obj);
+    }
+  }
+  std::unique_ptr<Object> TakeNext(Location &error_context) override {
+    if (here && here->parent) {
+      return here->parent->Take();
+    }
+    auto err = error_context.ReportError("No parent to take from");
+    return nullptr;
+  }
+};
+const Parent Parent::proto;
+
 struct HealthTest : Object {
   static const HealthTest proto;
+  static Argument target_arg;
   bool state = true;
   HealthTest() {}
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<HealthTest>();
   }
+  void UpdateState(Location *here) {
+    auto target = target_arg.GetFinalLocation(*here);
+    if (target.final_location) {
+      here->ObserveErrors(*target.final_location);
+      state = !target.final_location->HasError();
+    } else {
+      state = true;
+    }
+  }
   void Relocate(Location *here) override {
-    if (here->parent) {
-      here->ObserveErrors(*here->parent);
-      state = !here->parent->HasError();
+    UpdateState(here);
+  }
+  void ConnectionAdded(Location &here, string_view label,
+                       Connection &connection) override {
+    if (label == "target") {
+      UpdateState(&here);
     }
   }
   string_view Name() const override { return "Health Test"; }
@@ -493,6 +537,7 @@ struct HealthTest : Object {
   }
 };
 const HealthTest HealthTest::proto;
+Argument HealthTest::target_arg = Argument("target", Argument::kOptional);
 
 struct AbstractList {
   virtual Error *GetAtIndex(int index, Object *&obj) = 0;

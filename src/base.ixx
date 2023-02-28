@@ -230,10 +230,16 @@ struct Location {
     return this;
   }
 
+  // Pointer-like interface. This forwards the calls to the relevant Pointer
+  // functions (if Pointer object is present). Otherwise operates directly on
+  // this location.
+  //
+  // They are defined later because they need the Pointer class to be defined.
+  //
+  // TODO: rethink this API so that Pointer-related functions don't pollute the
+  // Location interface.
   Object *Follow();
-
   void Put(unique_ptr<Object> obj);
-
   unique_ptr<Object> Take();
 
   // Iterate over all nearby objects (including this object).
@@ -630,8 +636,18 @@ struct Machine : LiveObject {
   vector<Location *> front;
   vector<Location *> children_with_errors;
 
-  Location &CreateEmpty(const string &name = "");
-  Location &Create(const Object &prototype, const string &name = "");
+  Location &CreateEmpty(const string &name = "") {
+    auto [it, already_present] = locations.emplace(new Location(here));
+    Location *h = it->get();
+    h->name = name;
+    return *h;
+  }
+
+  Location &Create(const Object &prototype, const string &name = "") {
+    auto &h = CreateEmpty(name);
+    h.Create(prototype);
+    return h;
+  }
 
   // Create an instance of T and return its location.
   //
@@ -640,8 +656,15 @@ struct Machine : LiveObject {
     return Create(T::proto, name);
   }
 
-  string_view Name() const override;
-  std::unique_ptr<Object> Clone() const override;
+  string_view Name() const override { return name; }
+  std::unique_ptr<Object> Clone() const override {
+    Machine *m = new Machine();
+    for (auto &my_it : locations) {
+      auto &other_h = m->CreateEmpty(my_it->name);
+      other_h.Create(*my_it->object);
+    }
+    return std::unique_ptr<Object>(m);
+  }
   void Args(std::function<void(LiveArgument &)> cb) override {}
   void Relocate(Location *parent) override {
     for (auto &it : locations) {
@@ -649,9 +672,29 @@ struct Machine : LiveObject {
     }
     LiveObject::Relocate(parent);
   }
-  void Errored(Location &here, Location &errored) override;
-  string LoggableString() const;
-  Location *Front(const string &name);
+  void Errored(Location &here, Location &errored) override {
+    // If the error hasn't been cleared by other Errored calls, then propagate
+    // it to the parent.
+    if (errored.HasError()) {
+      if (auto parent = here.ParentAs<Machine>()) {
+        parent->ReportChildError(here);
+      } else {
+        Error *error = errored.GetError();
+        ERROR(error->source_location) << error->text;
+      }
+    }
+  }
+
+  string LoggableString() const { return fmt::format("Machine({})", name); }
+
+  Location *Front(const string &name) {
+    for (int i = 0; i < front.size(); ++i) {
+      if (front[i]->name == name) {
+        return front[i];
+      }
+    }
+    return nullptr;
+  }
 
   Location *operator[](const string &name) {
     auto h = Front(name);
@@ -662,16 +705,50 @@ struct Machine : LiveObject {
     return h;
   }
 
-  void AddToFrontPanel(Location &h);
+  void AddToFrontPanel(Location &h) {
+    if (std::find(front.begin(), front.end(), &h) == front.end()) {
+      front.push_back(&h);
+    } else {
+      ERROR() << "Attempted to add already present " << h << " to " << *this
+              << " front panel";
+    }
+  }
 
   // Report all errors that occured within this machine.
   //
   // This function will return all errors held by locations of this machine &
   // recurse into submachines.
-  void Diagnostics(function<void(Location *, Error &)> error_callback);
+  void Diagnostics(function<void(Location *, Error &)> error_callback) {
+    for (auto &location : locations) {
+      if (location->error) {
+        error_callback(location.get(), *location->error);
+      }
+      if (auto submachine = dynamic_cast<Machine *>(location->object.get())) {
+        submachine->Diagnostics(error_callback);
+      }
+    }
+  }
 
-  void ReportChildError(Location &child);
-  void ClearChildError(Location &child);
+  void ReportChildError(Location &child) {
+    children_with_errors.push_back(&child);
+    for (Location *observer : here->error_observers) {
+      observer->ScheduleErrored(child);
+    }
+    here->ScheduleErrored(child);
+  }
+
+  void ClearChildError(Location &child) {
+    if (auto it = std::find(children_with_errors.begin(),
+                            children_with_errors.end(), &child);
+        it != children_with_errors.end()) {
+      children_with_errors.erase(it);
+      if (!here->HasError()) {
+        if (auto parent = here->ParentAs<Machine>()) {
+          parent->ClearChildError(*here);
+        }
+      }
+    }
+  }
 };
 
 inline void Object::Errored(Location &here, Location &errored) {
@@ -769,8 +846,61 @@ struct Pointer : LiveObject {
       return "null";
     }
   }
-  void SetText(Location &error_context, string_view text) override;
+  void SetText(Location &error_context, string_view text) override {
+    if (auto *obj = Follow(error_context)) {
+      obj->SetText(error_context, text);
+    } else {
+      error_context.ReportError("Can't set text on null pointer");
+    }
+  }
 };
+
+Object *Location::Follow() {
+  if (Pointer *ptr = object->AsPointer()) {
+    return ptr->Follow(*this);
+  }
+  return object.get();
+}
+
+void Location::Put(unique_ptr<Object> obj) {
+  if (object == nullptr) {
+    object = std::move(obj);
+    return;
+  }
+  if (Pointer *ptr = object->AsPointer()) {
+    ptr->Put(*this, std::move(obj));
+  } else {
+    object = std::move(obj);
+  }
+}
+
+unique_ptr<Object> Location::Take() {
+  if (Pointer *ptr = object->AsPointer()) {
+    return ptr->Take(*this);
+  }
+  return std::move(object);
+}
+
+Connection *Location::ConnectTo(Location &other, string_view label) {
+  bool to_direct = false;
+  if (LiveObject *live_object = ThisAs<LiveObject>()) {
+    live_object->Args([&](LiveArgument &arg) {
+      if (arg.name == label &&
+          arg.precondition >= Argument::kRequiresConcreteType) {
+        std::string error;
+        arg.CheckRequirements(*this, &other, other.object.get(), error);
+        if (error.empty()) {
+          to_direct = true;
+        }
+      }
+    });
+  }
+  Connection *c = new Connection(*this, other, false, to_direct);
+  outgoing.emplace(label, c);
+  other.incoming.emplace(label, c);
+  object->ConnectionAdded(*this, label, *c);
+  return c;
+}
 
 bool log_executed_tasks = false;
 

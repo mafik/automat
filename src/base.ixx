@@ -230,6 +230,7 @@ struct Location {
     return this;
   }
 
+  ////////////////////////////
   // Pointer-like interface. This forwards the calls to the relevant Pointer
   // functions (if Pointer object is present). Otherwise operates directly on
   // this location.
@@ -238,9 +239,36 @@ struct Location {
   //
   // TODO: rethink this API so that Pointer-related functions don't pollute the
   // Location interface.
+  ////////////////////////////
+
   Object *Follow();
   void Put(unique_ptr<Object> obj);
   unique_ptr<Object> Take();
+
+  ////////////////////////////
+  // Task queue interface.
+  //
+  // These functions are defined later because they need Task classes to be
+  // defined.
+  //
+  // TODO: rethink this API so that Task-related functions don't pollute the
+  // Location interface.
+  ////////////////////////////
+
+  // Schedule this object's Updated function to be executed with the `updated`
+  // argument.
+  void ScheduleLocalUpdate(Location &updated);
+
+  // Add this object to the task queue. Once it's turn comes, its `Run` method
+  // will be executed.
+  void ScheduleRun();
+
+  // Execute this object's Errored function using the task queue.
+  void ScheduleErrored(Location &errored);
+
+  ////////////////////////////
+  // Misc
+  ////////////////////////////
 
   // Iterate over all nearby objects (including this object).
   //
@@ -260,10 +288,6 @@ struct Location {
 
   // Immediately execute this object's Updated function.
   void Updated(Location &updated) { object->Updated(*this, updated); }
-
-  // Schedule this object's Updated function to be executed with the `updated`
-  // argument.
-  void ScheduleLocalUpdate(Location &updated);
 
   // Call this function when the value of the object has changed.
   //
@@ -312,15 +336,8 @@ struct Location {
   // Immediately execute this object's Run function.
   void Run() { object->Run(*this); }
 
-  // Add this object to the task queue. Once it's turn comes, its `Run` method
-  // will be executed.
-  void ScheduleRun();
-
   // Immediately execute this object's Errored function.
   void Errored(Location &errored) { object->Errored(*this, errored); }
-
-  // Execute this object's Errored function using the task queue.
-  void ScheduleErrored(Location &errored);
 
   Location *Rename(string_view new_name) {
     name = new_name;
@@ -343,12 +360,22 @@ struct Location {
   }
   void SetNumber(double number) { SetText(fmt::format("{}", number)); }
 
+  ////////////////////////////
+  // Error reporting
+  ////////////////////////////
+
   // First error caught by this Location.
   unique_ptr<Error> error;
 
+  // These functions are defined later because they use the Machine class which
+  // needs to be defined first.
+  //
+  // TODO: rethink this API so that Machine-related functions don't pollute the
+  // Location interface.
   bool HasError();
   Error *GetError();
   void ClearError();
+
   Error *
   ReportError(string_view message,
               std::source_location location = std::source_location::current()) {

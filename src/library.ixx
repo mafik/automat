@@ -520,9 +520,7 @@ struct HealthTest : Object {
       state = true;
     }
   }
-  void Relocate(Location *here) override {
-    UpdateState(here);
-  }
+  void Relocate(Location *here) override { UpdateState(here); }
   void ConnectionAdded(Location &here, string_view label,
                        Connection &connection) override {
     if (label == "target") {
@@ -538,6 +536,37 @@ struct HealthTest : Object {
 };
 const HealthTest HealthTest::proto;
 Argument HealthTest::target_arg = Argument("target", Argument::kOptional);
+
+struct ErrorCleaner : Object {
+  static const ErrorCleaner proto;
+  static Argument target_arg;
+  ErrorCleaner() {}
+  std::unique_ptr<Object> Clone() const override {
+    return std::make_unique<ErrorCleaner>();
+  }
+  void ObserveErrors(Location *here) {
+    if (!here) {
+      return;
+    }
+    auto target = target_arg.GetFinalLocation(*here);
+    if (target.final_location) {
+      here->ObserveErrors(*target.final_location);
+    }
+  }
+  void Relocate(Location *here) override { ObserveErrors(here); }
+  void ConnectionAdded(Location &here, string_view label,
+                       Connection &connection) override {
+    if (label == "target") {
+      ObserveErrors(&here);
+    }
+  }
+  string_view Name() const override { return "Error Cleaner"; }
+  void Errored(Location &here, Location &errored) override {
+    errored.ClearError();
+  }
+};
+const ErrorCleaner ErrorCleaner::proto;
+Argument ErrorCleaner::target_arg = Argument("target", Argument::kOptional);
 
 struct AbstractList {
   virtual Error *GetAtIndex(int index, Object *&obj) = 0;
@@ -891,12 +920,16 @@ private:
   // return nullptr.
   static std::pair<Complex *, std::string> FollowComplex(Location &here) {
     auto label = label_arg.GetObject(here);
-    auto complex = complex_arg.GetTyped<Complex>(here);
-    if (!label.ok || !complex.ok) {
-      return std::make_pair(nullptr, "");
+    std::string label_text = "";
+    Complex *return_complex = nullptr;
+    if (label.object) {
+      label_text = label.object->GetText();
+      auto complex = complex_arg.GetTyped<Complex>(here);
+      if (complex.typed) {
+        return_complex = complex.typed;
+      }
     }
-    std::string label_text = label.object->GetText();
-    return std::make_pair(complex.typed, label_text);
+    return std::make_pair(return_complex, label_text);
   }
 };
 const ComplexField ComplexField::proto;

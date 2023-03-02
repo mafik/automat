@@ -374,7 +374,9 @@ struct CrudTest : public TestBase {
 
   Location &text_prefix = machine.Create<Text>("Prefix");
   Location &starts_with_test = machine.Create<StartsWithTest>();
+  Location &starts_with_error_cleaner = machine.Create<ErrorCleaner>();
   Location &field_for_test = machine.Create<ComplexField>("Field for test");
+  Location &field_for_test_error_cleaner = machine.Create<ErrorCleaner>();
   Location &element = machine.Create<CurrentElement>();
   Location &filter = machine.Create<Filter>();
 
@@ -415,8 +417,10 @@ struct CrudTest : public TestBase {
 
     element.ConnectTo(filter, "of");
 
+    field_for_test_error_cleaner.ConnectTo(field_for_test, "target");
     field_for_test.ConnectTo(element, "complex");
     field_for_test.ConnectTo(last_name_label, "label");
+    starts_with_error_cleaner.ConnectTo(starts_with_test, "target");
     starts_with_test.ConnectTo(field_for_test, "starts");
     starts_with_test.ConnectTo(text_prefix, "with");
 

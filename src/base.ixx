@@ -473,7 +473,8 @@ struct Argument {
           }));
     }
     if (result.location == nullptr && precondition >= kRequiresLocation) {
-      here.ReportError(fmt::format("The {} argument is not connected.", name),
+      here.ReportError(fmt::format("The {} argument of {} is not connected.",
+                                   name, here.LoggableString()),
                        source_location);
       result.ok = false;
     }
@@ -497,7 +498,8 @@ struct Argument {
         result.object = result.location->Follow();
       }
       if (result.object == nullptr && precondition >= kRequiresObject) {
-        here.ReportError(fmt::format("The {} argument is empty.", name),
+        here.ReportError(fmt::format("The {} argument of {} is empty.", name,
+                                     here.LoggableString()),
                          source_location);
         result.ok = false;
       }

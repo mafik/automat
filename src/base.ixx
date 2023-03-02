@@ -77,7 +77,7 @@ struct Object {
                                Connection &connection) {}
   virtual void Run(Location &here) {}
   virtual void Updated(Location &here, Location &updated) { Run(here); }
-  virtual void Errored(Location &here, Location &errored);
+  virtual void Errored(Location &here, Location &errored) {}
   virtual std::partial_ordering
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
@@ -116,7 +116,6 @@ When an error is added to an object it causes a notification to be sent to all
 user somehow. The parent Machine is an implicit error observer and propagates
 the error upwards. Top-level Machines print their errors to the console.
 
-TODO: add a new pointer type for "parent Machine" (use it in HealthTest)
 TODO: new "Error Eater" object - deletes any errors as soon as they're reported
 
 */
@@ -385,7 +384,9 @@ struct Location {
       for (auto observer : error_observers) {
         observer->ScheduleErrored(*this);
       }
-      ScheduleErrored(*this);
+      if (parent) {
+        parent->ScheduleErrored(*this);
+      }
     }
     return error.get();
   }
@@ -699,18 +700,6 @@ struct Machine : LiveObject {
     }
     LiveObject::Relocate(parent);
   }
-  void Errored(Location &here, Location &errored) override {
-    // If the error hasn't been cleared by other Errored calls, then propagate
-    // it to the parent.
-    if (errored.HasError()) {
-      if (auto parent = here.ParentAs<Machine>()) {
-        parent->ReportChildError(here);
-      } else {
-        Error *error = errored.GetError();
-        ERROR(error->source_location) << error->text;
-      }
-    }
-  }
 
   string LoggableString() const { return fmt::format("Machine({})", name); }
 
@@ -756,12 +745,22 @@ struct Machine : LiveObject {
     }
   }
 
-  void ReportChildError(Location &child) {
-    children_with_errors.push_back(&child);
-    for (Location *observer : here->error_observers) {
-      observer->ScheduleErrored(child);
+  void Errored(Location &here, Location &errored) override {
+    // If the error hasn't been cleared by other Errored calls, then propagate
+    // it to the parent.
+    if (errored.HasError()) {
+      children_with_errors.push_back(&errored);
+      for (Location *observer : here.error_observers) {
+        observer->ScheduleErrored(errored);
+      }
+
+      if (here.parent) {
+        here.parent->ScheduleErrored(here);
+      } else {
+        Error *error = errored.GetError();
+        ERROR(error->source_location) << error->text;
+      }
     }
-    here->ScheduleErrored(child);
   }
 
   void ClearChildError(Location &child) {
@@ -777,14 +776,6 @@ struct Machine : LiveObject {
     }
   }
 };
-
-inline void Object::Errored(Location &here, Location &errored) {
-  if (&here == &errored && errored.error) {
-    if (auto machine = here.ParentAs<Machine>()) {
-      machine->ReportChildError(errored);
-    }
-  }
-}
 
 void *Location::Nearby(function<void *(Location &)> callback) {
   if (auto parent_machine = ParentAs<Machine>()) {

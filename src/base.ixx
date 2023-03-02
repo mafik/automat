@@ -315,14 +315,6 @@ struct Location {
     observing_errors.insert(&other);
   }
 
-  string LoggableString() const {
-    if (name.empty()) {
-      return std::string(object->Name());
-    } else {
-      return fmt::format("{} \"{}\"", object->Name(), name);
-    }
-  }
-
   string GetText() {
     auto *follow = Follow();
     if (follow == nullptr) {
@@ -401,9 +393,9 @@ struct Location {
     ReportError(error_message);
   }
 
-  string HumanReadableName() const {
-    if (name == "") {
-      return string(object->Name());
+  string LoggableString() const {
+    if (name.empty()) {
+      return std::string(object->Name());
     } else {
       return fmt::format("{0} \"{1}\"", object->Name(), name);
     }
@@ -1070,10 +1062,6 @@ struct NoSchedulingGuard {
 };
 
 void RunLoop();
-
-std::ostream &operator<<(std::ostream &os, const Location &e) {
-  return os << e.HumanReadableName();
-}
 
 // End of header
 

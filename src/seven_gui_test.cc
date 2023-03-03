@@ -388,6 +388,7 @@ struct CrudTest : public TestBase {
       machine.Create<ComplexField>("First name selected");
   Location &last_name_selected_field =
       machine.Create<ComplexField>("Last name selected");
+  Location &last_name_selected_error_cleaner = machine.Create<ErrorCleaner>();
 
   Location &set_first_name = machine.Create<Set>("Set first name");
   Location &set_last_name = machine.Create<Set>("Set last name");
@@ -417,9 +418,11 @@ struct CrudTest : public TestBase {
 
     element.ConnectTo(filter, "of");
 
+    // Silence the error message about missing "complex" argument.
     field_for_test_error_cleaner.ConnectTo(field_for_test, "target", Connection::PointerPolicy::kTerminateHere);
     field_for_test.ConnectTo(element, "complex");
     field_for_test.ConnectTo(last_name_label, "label");
+    // Silence the error message about missing argument.
     starts_with_error_cleaner.ConnectTo(starts_with_test, "target");
     starts_with_test.ConnectTo(field_for_test, "starts");
     starts_with_test.ConnectTo(text_prefix, "with");
@@ -433,6 +436,8 @@ struct CrudTest : public TestBase {
     first_name_selected_field.ConnectTo(first_name_label, "label");
     last_name_selected_field.ConnectTo(list_view, "complex");
     last_name_selected_field.ConnectTo(last_name_label, "label");
+    // Silence the error message about missing "complex" argument.
+    last_name_selected_error_cleaner.ConnectTo(last_name_selected_field, "target", Connection::PointerPolicy::kTerminateHere);
 
     set_first_name.ConnectTo(first_name_selected_field, "target");
     set_first_name.ConnectTo(first_name_complex_field, "value");

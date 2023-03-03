@@ -32,14 +32,14 @@ struct Location;
 struct Machine;
 
 struct Connection {
-  enum class PointerPolicy {
+  enum PointerBehavior {
     kFollowPointers,
     kTerminateHere
   };
   Location &from, &to;
-  PointerPolicy pointer_policy;
-  Connection(Location &from, Location &to, PointerPolicy pointer_policy)
-      : from(from), to(to), pointer_policy(pointer_policy) {}
+  PointerBehavior pointer_behavior;
+  Connection(Location &from, Location &to, PointerBehavior pointer_behavior)
+      : from(from), to(to), pointer_behavior(pointer_behavior) {}
 };
 
 struct Pointer;
@@ -285,7 +285,7 @@ struct Location {
   //
   // This function should also notify the object with the `ConnectionAdded`
   // call.
-  Connection *ConnectTo(Location &other, string_view label, Connection::PointerPolicy pointer_policy = Connection::PointerPolicy::kFollowPointers);
+  Connection *ConnectTo(Location &other, string_view label, Connection::PointerBehavior pointer_behavior = Connection::kFollowPointers);
 
   // Immediately execute this object's Updated function.
   void Updated(Location &updated) { object->Updated(*this, updated); }
@@ -470,7 +470,7 @@ struct Argument {
     if (conn_it != here.outgoing.end()) { // explicit connection
       auto c = conn_it->second;
       result.location = &c->to;
-      result.direct = c->pointer_policy == Connection::PointerPolicy::kTerminateHere;
+      result.direct = c->pointer_behavior == Connection::kTerminateHere;
     } else { // otherwise, search for other locations in this machine
       result.location = reinterpret_cast<Location *>(
           here.Nearby([&](Location &other) -> void * {
@@ -902,7 +902,7 @@ unique_ptr<Object> Location::Take() {
   return std::move(object);
 }
 
-Connection *Location::ConnectTo(Location &other, string_view label, Connection::PointerPolicy pointer_policy) {
+Connection *Location::ConnectTo(Location &other, string_view label, Connection::PointerBehavior pointer_behavior) {
   if (LiveObject *live_object = ThisAs<LiveObject>()) {
     live_object->Args([&](LiveArgument &arg) {
       if (arg.name == label &&
@@ -910,12 +910,12 @@ Connection *Location::ConnectTo(Location &other, string_view label, Connection::
         std::string error;
         arg.CheckRequirements(*this, &other, other.object.get(), error);
         if (error.empty()) {
-          pointer_policy = Connection::PointerPolicy::kTerminateHere;
+          pointer_behavior = Connection::kTerminateHere;
         }
       }
     });
   }
-  Connection *c = new Connection(*this, other, pointer_policy);
+  Connection *c = new Connection(*this, other, pointer_behavior);
   outgoing.emplace(label, c);
   other.incoming.emplace(label, c);
   object->ConnectionAdded(*this, label, *c);

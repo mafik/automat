@@ -458,7 +458,7 @@ struct Argument {
 
   struct LocationResult {
     bool ok = true;
-    bool direct = false;
+    bool follow_pointers = true;
     Location *location = nullptr;
   };
 
@@ -470,7 +470,7 @@ struct Argument {
     if (conn_it != here.outgoing.end()) { // explicit connection
       auto c = conn_it->second;
       result.location = &c->to;
-      result.direct = c->pointer_behavior == Connection::kTerminateHere;
+      result.follow_pointers = c->pointer_behavior == Connection::kFollowPointers;
     } else { // otherwise, search for other locations in this machine
       result.location = reinterpret_cast<Location *>(
           here.Nearby([&](Location &other) -> void * {
@@ -500,10 +500,10 @@ struct Argument {
                              std::source_location::current()) const {
     ObjectResult result(GetLocation(here, source_location));
     if (result.location) {
-      if (result.direct) {
-        result.object = result.location->object.get();
-      } else {
+      if (result.follow_pointers) {
         result.object = result.location->Follow();
+      } else {
+        result.object = result.location->object.get();
       }
       if (result.object == nullptr && precondition >= kRequiresObject) {
         here.ReportError(fmt::format("The {} argument of {} is empty.", name,

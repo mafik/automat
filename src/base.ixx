@@ -32,12 +32,14 @@ struct Location;
 struct Machine;
 
 struct Connection {
+  enum class PointerPolicy {
+    kFollowPointers,
+    kTerminateHere
+  };
   Location &from, &to;
-  // Connections typically follow objects that point somewhere. This can be
-  // prevented using the `from_direct` & `to_direct` flags.
-  bool from_direct, to_direct;
-  Connection(Location &from, Location &to, bool from_direct, bool to_direct)
-      : from(from), to(to), from_direct(from_direct), to_direct(to_direct) {}
+  PointerPolicy pointer_policy;
+  Connection(Location &from, Location &to, PointerPolicy pointer_policy)
+      : from(from), to(to), pointer_policy(pointer_policy) {}
 };
 
 struct Pointer;
@@ -283,7 +285,7 @@ struct Location {
   //
   // This function should also notify the object with the `ConnectionAdded`
   // call.
-  Connection *ConnectTo(Location &other, string_view label);
+  Connection *ConnectTo(Location &other, string_view label, Connection::PointerPolicy pointer_policy = Connection::PointerPolicy::kFollowPointers);
 
   // Immediately execute this object's Updated function.
   void Updated(Location &updated) { object->Updated(*this, updated); }
@@ -328,7 +330,9 @@ struct Location {
   void Run() { object->Run(*this); }
 
   // Immediately execute this object's Errored function.
-  void Errored(Location &errored) { object->Errored(*this, errored); }
+  void Errored(Location &errored) {
+    object->Errored(*this, errored);
+  }
 
   Location *Rename(string_view new_name) {
     name = new_name;
@@ -395,7 +399,11 @@ struct Location {
 
   string LoggableString() const {
     if (name.empty()) {
-      return std::string(object->Name());
+      if (object->Name().empty()) {
+        return typeid(*object).name();
+      } else {
+        return std::string(object->Name());
+      }
     } else {
       return fmt::format("{0} \"{1}\"", object->Name(), name);
     }
@@ -462,7 +470,7 @@ struct Argument {
     if (conn_it != here.outgoing.end()) { // explicit connection
       auto c = conn_it->second;
       result.location = &c->to;
-      result.direct = c->to_direct;
+      result.direct = c->pointer_policy == Connection::PointerPolicy::kTerminateHere;
     } else { // otherwise, search for other locations in this machine
       result.location = reinterpret_cast<Location *>(
           here.Nearby([&](Location &other) -> void * {
@@ -770,6 +778,7 @@ struct Machine : LiveObject {
     }
   }
 };
+const Machine Machine::proto;
 
 void *Location::Nearby(function<void *(Location &)> callback) {
   if (auto parent_machine = ParentAs<Machine>()) {
@@ -786,7 +795,7 @@ void *Location::Nearby(function<void *(Location &)> callback) {
 bool Location::HasError() {
   if (error != nullptr)
     return true;
-  if (auto machine = As<Machine>()) {
+  if (auto machine = ThisAs<Machine>()) {
     if (!machine->children_with_errors.empty())
       return true;
   }
@@ -795,7 +804,7 @@ bool Location::HasError() {
 Error *Location::GetError() {
   if (error != nullptr)
     return error.get();
-  if (auto machine = As<Machine>()) {
+  if (auto machine = ThisAs<Machine>()) {
     if (!machine->children_with_errors.empty())
       return (*machine->children_with_errors.begin())->GetError();
   }
@@ -893,8 +902,7 @@ unique_ptr<Object> Location::Take() {
   return std::move(object);
 }
 
-Connection *Location::ConnectTo(Location &other, string_view label) {
-  bool to_direct = false;
+Connection *Location::ConnectTo(Location &other, string_view label, Connection::PointerPolicy pointer_policy) {
   if (LiveObject *live_object = ThisAs<LiveObject>()) {
     live_object->Args([&](LiveArgument &arg) {
       if (arg.name == label &&
@@ -902,21 +910,24 @@ Connection *Location::ConnectTo(Location &other, string_view label) {
         std::string error;
         arg.CheckRequirements(*this, &other, other.object.get(), error);
         if (error.empty()) {
-          to_direct = true;
+          pointer_policy = Connection::PointerPolicy::kTerminateHere;
         }
       }
     });
   }
-  Connection *c = new Connection(*this, other, false, to_direct);
+  Connection *c = new Connection(*this, other, pointer_policy);
   outgoing.emplace(label, c);
   other.incoming.emplace(label, c);
   object->ConnectionAdded(*this, label, *c);
   return c;
 }
 
-bool log_executed_tasks = false;
+int log_executed_tasks = 0;
 
-void TaskLogging(bool enable) { log_executed_tasks = enable; }
+struct TaskLogging {
+  TaskLogging() { ++log_executed_tasks; }
+  ~TaskLogging() { --log_executed_tasks; }
+};
 
 struct Task;
 
@@ -1063,10 +1074,6 @@ struct NoSchedulingGuard {
   ~NoSchedulingGuard() { no_scheduling.erase(&location); }
 };
 
-void RunLoop();
-
-// End of header
-
 // Types of objects that sholud work nicely with data updates:
 //
 // - stateful functions (e.g. X + Y => Z)      Solution: function adds itself to
@@ -1089,20 +1096,20 @@ void Location::ScheduleErrored(Location &errored) {
   (new ErroredTask(this, &errored))->Schedule();
 }
 
-void RunLoop() {
+void RunLoop(const int max_iterations = -1) {
   if (log_executed_tasks) {
     LOG() << "RunLoop(" << queue.size() << " tasks)";
     LOG_Indent();
   }
-  while (!queue.empty()) {
+  int iterations = 0;
+  while (!queue.empty() && (max_iterations < 0 || iterations < max_iterations)) {
     queue.front()->Execute();
     queue.pop_front();
+    ++iterations;
   }
   if (log_executed_tasks) {
     LOG_Unindent();
   }
 }
-
-const Machine Machine::proto;
 
 } // namespace automaton

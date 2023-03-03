@@ -417,7 +417,7 @@ struct CrudTest : public TestBase {
 
     element.ConnectTo(filter, "of");
 
-    field_for_test_error_cleaner.ConnectTo(field_for_test, "target");
+    field_for_test_error_cleaner.ConnectTo(field_for_test, "target", Connection::PointerPolicy::kTerminateHere);
     field_for_test.ConnectTo(element, "complex");
     field_for_test.ConnectTo(last_name_label, "label");
     starts_with_error_cleaner.ConnectTo(starts_with_test, "target");

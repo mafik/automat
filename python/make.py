@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from collections import defaultdict
+from sys import platform
 import time
 import multiprocessing
 import os
@@ -15,10 +16,11 @@ import fs_utils
 HASH_DIR = fs_utils.project_tmp_dir / 'hashes'
 HASH_DIR.mkdir(parents=True, exist_ok=True)
 
-def Popen(*args, **kwargs):
+def Popen(args, **kwargs):
     '''Wrapper around subprocess.Popen which captures STDERR into a temporary file.'''
     f = tempfile.TemporaryFile()
-    p = subprocess.Popen(stderr=f, *args, **kwargs)
+    str_args = [str(x) for x in args]
+    p = subprocess.Popen(str_args, stderr=f, **kwargs)
     p.stderr = f
     return p
 
@@ -30,8 +32,8 @@ def hexdigest(path):
 class Step:
     def __init__(self, name, outputs, inputs, build, id, keep_alive, stderr_prettifier):
         self.name = name
-        self.outputs = set(outputs)
-        self.inputs = set(inputs)
+        self.outputs = set(str(x) for x in outputs)
+        self.inputs = set(str(x) for x in inputs)
         self.build = build # function that executes this step
         self.builder = None # Popen instance while this step is being built
         self.id = id
@@ -177,7 +179,7 @@ class Recipe:
                     if b.blocker_count == 0:
                         ready_steps.append(b)
 
-        def wait_for_pid():
+        def check_for_pid():
             for pid, step in self.pid_to_step.items():
                 status = step.builder.poll()
                 if status != None:
@@ -185,7 +187,17 @@ class Recipe:
             status = watcher.poll()
             if status != None:
                 return watcher.pid, status
-            return os.wait()
+            return 0, 0
+
+        def wait_for_pid():
+            if platform == 'win32':
+                while True:
+                    pid, status = check_for_pid()
+                    if pid:
+                        return pid, status
+                    time.sleep(0.01)
+            else:
+                return os.wait()
 
         while ready_steps or self.pid_to_step:
             if len(ready_steps) == 0 or len(self.pid_to_step) >= desired_parallelism:
@@ -225,6 +237,10 @@ class Recipe:
                     print(f'Recipe for {next.name} finished with an error.')
                     self.interrupt()
                     return False
+                except FileNotFoundError as err:
+                    print(f'Recipe for {next.name} couldn\'t find file {err}')
+                    self.interrupt()
+                    return False
         print(
             f'Build took {time.time() - start_time:.3f} seconds ({len(self.steps)} steps)')
         return True
@@ -233,8 +249,9 @@ class Recipe:
         start_time = time.time()
         deadline = start_time + 3
         active = [step.builder for step in self.steps if step.builder]
-        for task in active:
-            task.send_signal(signal.SIGINT)
+        if platform != 'win32':
+            for task in active:
+                task.send_signal(signal.SIGINT)
         for task in active:
             time_left = deadline - time.time()
             if time_left > 0:

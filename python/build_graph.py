@@ -14,7 +14,6 @@ import json
 from make import Popen
 from subprocess import run
 from pathlib import Path
-from sys import platform
 from dataclasses import dataclass
 
 CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -fuse-ld=lld -DAUTOMATON -Ivendor'.split()

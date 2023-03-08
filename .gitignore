@@ -2,3 +2,4 @@
 *.py[cod]
 compile_commands.json
 .cache
+*.pdb

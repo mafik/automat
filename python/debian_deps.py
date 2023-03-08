@@ -2,6 +2,7 @@
 
 import os
 from subprocess import run
+from sys import platform
 
 path_to_package = {
     "/usr/include/zlib.h": "zlib1g-dev",
@@ -13,6 +14,8 @@ path_to_package = {
 }
 
 def check_and_install():
+  if platform != 'linux':
+    return
   missing_packages = set()
   for path, package in path_to_package.items():
     if not os.path.exists(path):

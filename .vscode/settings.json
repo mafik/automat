@@ -2,5 +2,6 @@
   "python.analysis.extraPaths": [
     "./python"
   ],
-  "clangd.path": "/usr/bin/clangd-17"
+  "clangd.path": "/usr/bin/clangd-17",
+  "cmake.configureOnOpen": false
 }

@@ -46,7 +46,44 @@ for path_abs in srcs:
         types[str(path_bin)] = 'main'
         depends(path_bin, on=path_o)
 
-    for line in open(path_abs).readlines():
+    if_stack = [True]
+    defines = set(['_WIN32']) # TODO: move defines into this file
+    line_number = 0
+
+    for line in open(path_abs, encoding='utf-8').readlines():
+        line_number += 1
+
+        # Minimal preprocessor. This allows us to skip platform-specific imports.
+
+        match = re.match('^#if defined\(([a-zA-Z0-9_]+)\)', line)
+        if match:
+            if_stack.append(match.group(1) in defines)
+            continue
+
+        match = re.match('^#if !defined\(([a-zA-Z0-9_]+)\)', line)
+        if match:
+            if_stack.append(match.group(1) not in defines)
+            continue
+
+        match = re.match('^#elif defined\(([a-zA-Z0-9_]+)\)', line)
+        if match:
+            if_stack[-1] = match.group(1) in defines
+            continue
+        
+        match = re.match('^#else', line)
+        if match:
+            if_stack[-1] = not if_stack[-1]
+            continue
+
+        match = re.match('^#endif', line)
+        if match:
+            if_stack.pop()
+
+        if not if_stack[-1]:
+            continue
+
+        # Actual import scanning starts here
+
         match = re.match('^import ([a-zA-Z0-9_]+);', line)
         if match: # Import module
             dep = path.with_name(match.group(1) + '.pcm')

@@ -16,9 +16,11 @@ from subprocess import run
 from pathlib import Path
 from dataclasses import dataclass
 
-CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -fuse-ld=lld -DAUTOMATON -Ivendor'.split()
-LDFLAGS = []
+CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -DAUTOMATON -Ivendor'.split()
+LDFLAGS = ['-fuse-ld=lld']
 
+if args.verbose:
+    CXXFLAGS.append('-v')
 
 # This is needed as of Clang 16 and may be removed once Clang defines it by default
 CXXFLAGS.append('-D__cpp_consteval')

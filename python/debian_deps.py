@@ -8,7 +8,6 @@ path_to_package = {
     "/usr/include/zlib.h": "zlib1g-dev",
     "/usr/include/openssl/ssl.h": "libssl-dev",
     "/usr/bin/inotifywait": "inotify-tools",
-    "/usr/include/fmt/format.h": "libfmt-dev",
     "/usr/include/gtest/gtest.h": "libgtest-dev",
     "/usr/include/gmock": "libgmock-dev"
 }

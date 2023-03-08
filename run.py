@@ -10,6 +10,7 @@ import build_graph
 import debian_deps
 import args
 import importlib
+from sys import platform
 
 debian_deps.check_and_install()
 
@@ -24,7 +25,15 @@ if __name__ == '__main__':
         recipe = build_graph.recipe
         recipe.set_target(args.target)
 
-        watcher = subprocess.Popen(['inotifywait', '-qe', 'CLOSE_WRITE', 'src/'])
+        if platform == 'linux':
+            watcher = subprocess.Popen(['inotifywait', '-qe', 'CLOSE_WRITE', 'src/'])
+        elif platform == 'win32':
+            # this uses inotify-win
+            # TODO: include it somehow in the build scripts
+            watcher = subprocess.Popen(['inotifywait', '-qe', 'create,modify,delete,move', 'src/'])
+        else:
+            raise Exception(f'Unknown platfrorm: "{platform}". Expected either "linux" or "win32". Automaton is not supported on this platform yet!')
+
         if recipe.execute(watcher):
             if active_recipe:
                 active_recipe.interrupt()

@@ -1,10 +1,10 @@
-export module term;
+#pragma once
 
-import <format>;
-import <memory>;
-import <algorithm>;
-import <cstdio>;
-import <string>;
+#include <format>
+#include <memory>
+#include <algorithm>
+#include <cstdio>
+#include <string>
 
 // See: https://en.wikipedia.org/wiki/ANSI_escape_code
 
@@ -81,9 +81,9 @@ int ColorIndex256(int r, int g, int b) {
   return 16 + b + g * 6 + r * 36;
 }
 
-std::string CodeFg256(int index) { return fmt::format("\033[38;5;{}m", index); }
+std::string CodeFg256(int index) { return std::format("\033[38;5;{}m", index); }
 
-export struct Fg256 {
+struct Fg256 {
   int index;
   Fg256(int index_arg) : index(index_arg) {}
   std::string operator()(std::string val) {
@@ -91,7 +91,7 @@ export struct Fg256 {
   }
 };
 
-export Fg256 Gray(int shade) { return Fg256(GrayIndex256(shade)); }
+Fg256 Gray(int shade) { return Fg256(GrayIndex256(shade)); }
 
 std::string Italic(std::string arg) {
   return std::string(TERM_CODE_ITALIC) + arg + TERM_CODE_RESET_ITALIC;

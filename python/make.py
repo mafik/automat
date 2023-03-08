@@ -8,7 +8,7 @@ import multiprocessing
 import os
 import subprocess
 import signal
-import sys
+import shutil
 import tempfile
 import hashlib
 import fs_utils
@@ -112,8 +112,12 @@ class Recipe:
         for p in self.generated:
             p = Path(p)
             if p.exists():
-                print(f'  > unlink {p}')
-                p.unlink()
+                if p.is_file():
+                    print(f'  > unlink {p}')
+                    p.unlink()
+                else:
+                    print(f'  > rmtree {p}')
+                    shutil.rmtree(p)
     
     def is_dirty(self):
         '''Returns True if the recipe needs to be built.'''

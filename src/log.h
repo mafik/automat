@@ -1,9 +1,9 @@
-export module log;
+#pragma once
 
-import <memory>;
-import <source_location>;
-import <string_view>;
-import math;
+#include <memory>
+#include <source_location>
+#include <string_view>
+#include "math.h"
 
 // Functions for logging human-readable messages.
 //
@@ -34,52 +34,52 @@ import math;
 
 enum LogLevel { LOG_LEVEL_INFO, LOG_LEVEL_ERROR, LOG_LEVEL_FATAL };
 
-export struct Logger {
+struct Logger {
   Logger(LogLevel, const std::source_location location = std::source_location::current());
   ~Logger();
   struct Impl;
   Impl *impl;
 };
 
-export struct LOG : public Logger {
+struct LOG : public Logger {
   LOG(const std::source_location location = std::source_location::current())
       : Logger(LOG_LEVEL_INFO, location) {}
 };
 
-export struct ERROR : public Logger {
+struct ERROR : public Logger {
   ERROR(const std::source_location location = std::source_location::current())
       : Logger(LOG_LEVEL_ERROR, location) {}
 };
 
-export struct FATAL : public Logger {
+struct FATAL : public Logger {
   FATAL(const std::source_location location = std::source_location::current())
       : Logger(LOG_LEVEL_FATAL, location) {}
 };
 
-export const Logger &operator<<(const Logger &, int);
-export const Logger &operator<<(const Logger &, unsigned);
-export const Logger &operator<<(const Logger &, unsigned long);
-export const Logger &operator<<(const Logger &, unsigned long long);
-export const Logger &operator<<(const Logger &, float);
-export const Logger &operator<<(const Logger &, double);
-export const Logger &operator<<(const Logger &, std::string_view);
-export const Logger &operator<<(const Logger &, const unsigned char *);
+const Logger &operator<<(const Logger &, int);
+const Logger &operator<<(const Logger &, unsigned);
+const Logger &operator<<(const Logger &, unsigned long);
+const Logger &operator<<(const Logger &, unsigned long long);
+const Logger &operator<<(const Logger &, float);
+const Logger &operator<<(const Logger &, double);
+const Logger &operator<<(const Logger &, std::string_view);
+const Logger &operator<<(const Logger &, const unsigned char *);
 
 // Support for logging vec's from math.hh
-export const Logger &operator<<(const Logger &, vec2);
-export const Logger &operator<<(const Logger &, vec3);
+const Logger &operator<<(const Logger &, vec2);
+const Logger &operator<<(const Logger &, vec3);
 
 template <typename T>
 concept loggable = requires(T &v) {
   { v.LoggableString() } -> std::convertible_to<std::string_view>;
 };
 
-export const Logger &operator<<(const Logger &logger, loggable auto &t) {
+const Logger &operator<<(const Logger &logger, loggable auto &t) {
   return logger << t.LoggableString();
 }
 
-export void LOG_Indent(int n = 2);
+void LOG_Indent(int n = 2);
 
-export void LOG_Unindent(int n = 2);
+void LOG_Unindent(int n = 2);
 
 // End of header

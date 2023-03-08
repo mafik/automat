@@ -1,26 +1,26 @@
-export module library;
+#pragma once
 
-import <format>;
-import <memory>;
-import <regex>;
-import <chrono>;
-import <math.h>;
-import <cstdio>;
-import <string_view>;
-import <variant>;
-import <cstdint>;
-import <map>;
-import <string>;
-import <unordered_map>;
-import <unordered_set>;
-import <vector>;
-import <source_location>;
-import algebra;
-import base;
-import treemath;
-import log;
+#include <format>
+#include <memory>
+#include <regex>
+#include <chrono>
+#include <math.h>
+#include <cstdio>
+#include <string_view>
+#include <variant>
+#include <cstdint>
+#include <map>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <source_location>
+#include "algebra.h"
+#include "base.h"
+#include "treemath.h"
+#include "log.h"
 
-export namespace automaton {
+namespace automaton {
 
 struct Integer : Object {
   int32_t i;
@@ -124,7 +124,7 @@ struct Date : Object {
     return std::make_unique<Date>(year, month, day);
   }
   string GetText() const override {
-    return fmt::format("{:04d}-{:02d}-{:02d}", year, month, day);
+    return std::format("{:04d}-{:02d}-{:02d}", year, month, day);
   }
   void SetText(Location &error_context, string_view text) override {
     std::regex re(R"((\d{4})-(\d{2})-(\d{2}))");
@@ -211,7 +211,7 @@ struct Timer : Object {
     using namespace std::chrono_literals;
     TimePoint now = GetNow();
     Duration elapsed = now - start;
-    return fmt::format("{:.3f}", elapsed.count());
+    return std::format("{:.3f}", elapsed.count());
   }
   void Run(Location &here) override {
     using namespace std::chrono_literals;
@@ -1001,7 +1001,7 @@ struct Text : LiveObject {
                               if (arg.ok) {
                                 buffer += arg.object->GetText();
                               } else {
-                                buffer += fmt::format("{{{}:}}", ref.arg.name);
+                                buffer += std::format("{{{}:}}", ref.arg.name);
                               }
                             }},
                  chunk);
@@ -1081,7 +1081,7 @@ struct ComboBox : LiveObject {
           return nullptr;
         });
     if (selected == nullptr) {
-      error_context.ReportError(fmt::format("No option named {}", new_text));
+      error_context.ReportError(std::format("No option named {}", new_text));
     }
   }
   void ConnectionAdded(Location &here, string_view label,

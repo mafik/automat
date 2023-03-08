@@ -1,6 +1,6 @@
-export module time;
+#pragma once
 
-import <chrono>;
+#include <chrono>
 
 namespace automaton {
 

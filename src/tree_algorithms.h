@@ -1,9 +1,9 @@
-export module tree_algorithms;
+#pragma once
 
-import <functional>;
-import <vector>;
+#include <functional>
+#include <vector>
 
-export namespace automaton {
+namespace automaton {
 
 template<class C>
 void WalkDFS(C* root, std::function<void(C*)> callback) {

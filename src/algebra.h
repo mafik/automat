@@ -1,18 +1,18 @@
-export module algebra;
+#pragma once
 
-import <format>;
-import <memory>;
-import <cctype>;
-import <functional>;
-import <string>;
-import <string_view>;
-import <vector>;
-import tree_algorithms;
-import log;
+#include <format>
+#include <memory>
+#include <cctype>
+#include <functional>
+#include <string>
+#include <string_view>
+#include <vector>
+#include "tree_algorithms.h"
+#include "log.h"
 
 using namespace automaton;
 
-export namespace algebra {
+namespace algebra {
 
 struct Context {
   virtual double RetrieveVariable(std::string_view) = 0;
@@ -43,7 +43,7 @@ struct Equation : Statement {
   }
 
   std::string GetText() const override {
-    return fmt::format("{} = {}", lhs->GetText(), rhs->GetText());
+    return std::format("{} = {}", lhs->GetText(), rhs->GetText());
   }
 
   void Children(std::function<void(Statement*)> callback) const override {
@@ -194,8 +194,9 @@ std::unique_ptr<Expression> ParseConstant(std::string_view& text) {
   // Normally this would be dangerous but all parsed strings are
   // 0-terminated.
   double value = strtod(start, &end);
-  if (end > start && end <= text.end()) {
-    text.remove_prefix(end - start);
+  int l = end - start;
+  if (l > 0 && l <= text.size()) {
+    text.remove_prefix(l);
     auto c = new Constant();
     c->value = value;
     return std::unique_ptr<Expression>(c);

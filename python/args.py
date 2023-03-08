@@ -12,6 +12,7 @@ parser.add_argument('--fresh', action='store_true')
 parser.add_argument('--release', action='store_true')
 parser.add_argument('--debug', action='store_true')
 parser.add_argument('--live', action='store_true')
+parser.add_argument('--verbose', action='store_true')
 parser.add_argument('target')
 args = parser.parse_args()
 

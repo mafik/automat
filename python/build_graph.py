@@ -9,17 +9,20 @@ import os
 import functools
 import re
 import shutil
+import json
 
 from make import Popen
 from subprocess import run
 from pathlib import Path
 from sys import platform
+from dataclasses import dataclass
 
-CXXFLAGS = '-std=c++2b -Wno-c99-designator -DAUTOMATON -Ivendor -fcolor-diagnostics'.split()
-LDFLAGS = '-flto -lpthread -lz -lssl -lcrypto -lfmt'.split()
+CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -fuse-ld=lld -DAUTOMATON -Ivendor'.split()
+LDFLAGS = []
 
-# As of 2023-02 the compiler is a development version of clang++-17, installed from https://apt.llvm.org/.
-# Once C++20 modules stabilize it should be ok to switch to default compiler.
+
+# This is needed as of Clang 16 and may be removed once Clang defines it by default
+CXXFLAGS.append('-D__cpp_consteval')
 
 def is_tool(name):
     return shutil.which(name) is not None
@@ -37,7 +40,7 @@ if args.release:
     CXXFLAGS += ['-O3', '-DNDEBUG']
 
 if args.debug:
-    CXXFLAGS += ['-O0', '-g3', '-fretain-comments-from-system-headers']
+    CXXFLAGS += ['-O0', '-g', '-D_DEBUG']
     LDFLAGS += ['-rdynamic']
 
 recipe = make.Recipe()
@@ -72,16 +75,13 @@ recipe.generated.add(GOOGLETEST_OUT)
 
 CXXFLAGS += ['-I' + str(GOOGLETEST_SRC / 'googlemock' / 'include')]
 CXXFLAGS += ['-I' + str(GOOGLETEST_SRC / 'googletest' / 'include')]
+LDFLAGS += ['-L' + str(GOOGLETEST_OUT / 'lib')]
 
 ###############################
 # Recipes for object files
 ###############################
 
-PCM_DIR = fs_utils.project_tmp_dir / 'pcm'
 OBJ_DIR = fs_utils.project_tmp_dir / 'obj'
-CXXFLAGS += ['-fprebuilt-module-path=' + str(PCM_DIR)]
-
-PCM_DIR.mkdir(parents=True, exist_ok=True)
 OBJ_DIR.mkdir(parents=True, exist_ok=True)
 
 def cxxfilt(line):
@@ -111,10 +111,8 @@ def cxxfilt(line):
 
 def redirect_path(path):
     name = Path(path).name
-    if path.endswith('.o'):
+    if cc.types[path] == 'object file':
         return str(OBJ_DIR / name)
-    elif cc.types[path] in ('precompiled module', 'system header unit', 'user header unit'):
-        return str(PCM_DIR / name)
     elif cc.types[path] in ('test', 'main'):
         return name
     else:
@@ -125,59 +123,40 @@ graph = dict()
 for path, deps in cc.graph.items():
     graph[redirect_path(path)] = [redirect_path(d) for d in deps]
 
-header_units = dict()
 for path, t in cc.types.items():
-    real_path = redirect_path(path)
-    types[real_path] = t
-    if t in ('user header unit', 'system header unit'):
-        header_units[real_path] = str(Path(path).with_suffix('')) # remove .pcm extension
+    types[redirect_path(path)] = t
 
-tests = []
+@dataclass
+class CompilationEntry:
+    file: str
+    output: str
+    arguments: list
+
+compilation_db = []
 
 for path, deps in graph.items():
     t = types[path]
-    args = [CXX] + CXXFLAGS
-    if t in ('module interface', 'module implementation', 'test source', 'main source'):
+    pargs = [CXX] + CXXFLAGS
+    if t in ('header', 'translation unit'):
         pass
-    elif t == 'precompiled module':
-        recipe.generated.add(path)
-        ixx = [d for d in deps if d.endswith('.ixx')][0]
-        assert ixx
-        args += ['-fmodule-file=' + d for d in deps if d.endswith('.pcm')]
-        args += ['-x', 'c++-module', ixx, '--precompile', '-o', path]
-        builder = functools.partial(Popen, args)
-        recipe.add_step(builder, outputs=[path], inputs=deps, name=Path(path).name)
-    elif t == 'system header unit':
-        recipe.generated.add(path)
-        args += ['-fmodule-file=' + d for d in deps if d.endswith('.pcm')]
-        args += ['-xc++-system-header', header_units[path], '--precompile', '-o', path]
-        builder = functools.partial(Popen, args)
-        recipe.add_step(builder, outputs=[path], inputs=deps, name=Path(path).name)
-    elif t == 'user header unit':
-        recipe.generated.add(path)
-        args += ['-fmodule-file=' + d for d in deps if d.endswith('.pcm')]
-        args += ['-xc++-user-header', header_units[path], '--precompile', '-o', path]
-        builder = functools.partial(Popen, args)
-        recipe.add_step(builder, outputs=[path], inputs=deps, name=Path(path).name)
     elif t == 'object file':
         recipe.generated.add(path)
-        # replace last _ with . to get the original file name
-        orig_name = re.sub(r'_(?=[^_]+$)', '.', Path(path).stem)
-        args += [d for d in deps if d.endswith(orig_name)]
-        args += ['-fmodule-file=' + d for d in deps if d.endswith('.pcm') and not d.endswith(orig_name)]
-        args += ['-c', '-o', path]
-        builder = functools.partial(Popen, args)
+        source_files = [d for d in deps if types[d] == 'translation unit']
+        assert(len(source_files) == 1)
+        pargs += source_files
+        pargs += ['-c', '-o', path]
+        builder = functools.partial(Popen, pargs)
         recipe.add_step(builder, outputs=[path], inputs=deps, name=Path(path).name)
+        compilation_db.append(CompilationEntry(source_files[0], path, pargs))
     elif t == 'test':
-        args += ['-DGTEST_HAS_PTHREAD=1'] + deps + ['-o', path] + LDFLAGS + ['-lgtest_main', '-lgtest', '-lgmock']
-        builder = functools.partial(Popen, args)
-        recipe.add_step(builder, outputs=[path], inputs=deps, name=f'link {path}', stderr_prettifier=cxxfilt)
+        pargs += deps + ['-o', path] + LDFLAGS + ['-lgtest_main', '-lgtest', '-lgmock']
+        builder = functools.partial(Popen, pargs)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [GMOCK_LIB, GTEST_LIB, GTEST_MAIN_LIB], name=f'link {path}', stderr_prettifier=cxxfilt)
         runner = functools.partial(Popen, [f'./{path}', '--gtest_color=yes'])
         recipe.add_step(runner, outputs=[], inputs=[path], name=path)
-        tests.append(path)
     elif t == 'main':
-        args += deps + ['-o', path] + LDFLAGS
-        builder = functools.partial(Popen, args)
+        pargs += deps + ['-o', path] + LDFLAGS
+        builder = functools.partial(Popen, pargs)
         recipe.add_step(builder, outputs=[path], inputs=deps, name=f'link {path}', stderr_prettifier=cxxfilt)
     else:
         print(f"File '{path}' has unknown type '{types[path]}'. Dependencies:")
@@ -185,6 +164,7 @@ for path, deps in graph.items():
             print(f'    {dep}')
         assert False
 
+tests = [p for p, t in types.items() if t == 'test']
 if tests:
     # run all tests sequentially
     def run_tests():
@@ -198,20 +178,18 @@ if tests:
 
 def compile_commands():
     print('Generating compile_commands.json...')
+    jsons = []
+    for entry in compilation_db:
+        arguments = ',\n    '.join(json.dumps(arg) for arg in entry.arguments)
+        json_entry  = f'''{{
+  "directory": { json.dumps(str(fs_utils.project_root)) },
+  "file": { json.dumps(entry.file) },
+  "output": { json.dumps(entry.output) },
+  "arguments": [{arguments}]
+}}'''
+        jsons.append(json_entry)
     with open('compile_commands.json', 'w') as f:
-        print('[{', file=f)
-        print(f'  "directory": "{ fs_utils.project_root }",', file=f)
-        print(f'  "file": "src/base.cc",', file=f)
-        print(f'  "output": "{OBJ_DIR / "base_cc.o"}",', file=f)
-        print(f'  "arguments": [', file=f)
-        args = [CXX] + CXXFLAGS
-        for path, t in types.items():
-            if t in ('system header unit', 'user header unit'):
-                args += ['-fmodule-file=' + path]
-        joined_args = ',\n    '.join(f'"{arg}"' for arg in args)
-        print(f'    {joined_args}', file=f)
-        print(f'  ]', file=f)
-        print('}]', file=f)
+        print('[' + ', '.join(jsons) + ']', file=f)
 
 recipe.add_step(compile_commands, ['compile_commands.json'], [])
 
@@ -224,9 +202,10 @@ def serve():
 
 recipe.add_step(serve, [], ['main'], keep_alive = True)
 
-if False:
+if args.verbose:
+    print('Build graph')
     for step in recipe.steps:
-        print('Step', step.name)
+        print(' Step', step.name)
         print('  Inputs:')
         for inp in sorted(str(x) for x in step.inputs):
             print('    ', inp)

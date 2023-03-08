@@ -3,9 +3,10 @@
 import fs_utils
 import collections
 import re
+import args
 
 srcs = []
-for ext in ['.cc', '.ixx']:
+for ext in ['.cc', '.h']:
     srcs.extend(fs_utils.project_root.glob(f'src/**/*{ext}'))
 
 graph = collections.defaultdict(set)
@@ -17,34 +18,16 @@ def depends(what, on):
 for path_abs in srcs:
     parent = path_abs.parent
     path = path_abs.relative_to(fs_utils.project_root)
-    path_pcm = path.with_suffix('.pcm')
     path_bin = path.with_suffix('')
 
     if path.suffix == '.cc':
-        path_o = path.with_name(path.stem + '_cc.o')
-        types[str(path)] = 'UNKNOWN' # should be overwritten based on module declaration
+        path_o = path.with_name(path.stem + '.o')
+        types[str(path)] = 'translation unit'
         types[str(path_o)] = 'object file'
         depends(path_o, on=path)
-        target = path_o
-    elif path.suffix == '.ixx':
-        path_o = path.with_name(path.stem + '_pcm.o')
-        types[str(path_o)] = 'object file'
-        types[str(path_pcm)] = 'precompiled module'
-        # Module interfaces produce .pcm files
-        depends(path_pcm, on=path)
-        # PCM files produce .o files
-        depends(path_o, on=path_pcm)
-        target = path_pcm
-
-    if path.name.endswith('_test.cc'):
-        types[str(path)] = 'test source'
-        types[str(path_bin)] = 'test'
-        depends(path_bin, on=path_o)
-
-    if path.stem.startswith('main'):
-        types[str(path)] = 'main source'
-        types[str(path_bin)] = 'main'
-        depends(path_bin, on=path_o)
+    elif path.suffix == '.h':
+        path_o = None
+        types[str(path)] = 'header'
 
     if_stack = [True]
     defines = set(['_WIN32']) # TODO: move defines into this file
@@ -82,53 +65,60 @@ for path_abs in srcs:
         if not if_stack[-1]:
             continue
 
-        # Actual import scanning starts here
-
-        match = re.match('^import ([a-zA-Z0-9_]+);', line)
-        if match: # Import module
-            dep = path.with_name(match.group(1) + '.pcm')
-            depends(target, on=dep)
+        # Actual scanning starts here
         
-        match = re.match('^import <([a-zA-Z0-9_/\.-]+)>;', line)
-        if match: # Import system header unit
-            dep = match.group(1) + '.pcm'
-            types[dep] = 'system header unit'
-            depends(target, on=dep)
-        
-        match = re.match('^import \"([a-zA-Z0-9_/\.-]+)\";', line)
-        if match: # Import user header unit
-            dep = match.group(1) + '.pcm'
-            types[dep] = 'user header unit'
-            depends(target, on=dep)
-
-        match = re.match('^module ([a-zA-Z0-9_]+);', line)
+        match = re.match('^#include \"([a-zA-Z0-9_/\.-]+)\"', line)
         if match:
-            types[str(path)] = 'module implementation'
-            assert path.name == match.group(1) + '.cc', 'All modules should be implemented in <module_name>.cc files'
-            # Module implemenations need their PCM (precompiled module) file
-            depends(path_o, on=path_pcm)
+            dep = path.with_name(match.group(1))
+            types[str(dep)] = 'header'
+            depends(path, on=dep)
 
-        match = re.match('^export module ([a-zA-Z0-9_]+);', line)
-        if match: # Module interface
-            types[str(path)] = 'module interface'
-            assert path.name == match.group(1) + '.ixx', 'All modules interfaces should be in <module_name>.ixx files'
+        match = re.match('^int main\(', line)
+        if match:
+            types[str(path_bin)] = 'main'
+            depends(path_bin, on=path_o)
 
-for path, t in types.items():
-    if t not in ('test', 'main'):
-        continue
+        match = re.match('^TEST(_F)?\\(', line)
+        if match:
+            types[str(path_bin)] = 'test'
+            depends(path_bin, on=path_o)
+
+binaries = [p for p, t in types.items() if t in ('test', 'main')]
+
+# Link object files for each header included in binaries.
+for path in binaries:
     deps = list(graph[path])
     visited = set()
     while len(deps) > 0:
-        dep, deps = deps[0], deps[1:]
+        dep = deps.pop()
         if dep in visited:
             continue
         visited.add(dep)
-        if types[dep] == 'precompiled module':
-            module_pcm_o = dep.replace('.pcm', '_pcm.o')
-            module_cc_o = dep.replace('.pcm', '_cc.o')
-            depends(path, on=module_pcm_o)
-            deps.append(module_pcm_o)
-            if module_cc_o in graph:
-                depends(path, on=module_cc_o)
-                deps.append(module_cc_o)
+        if types[dep] == 'header':
+            object_file = dep.replace('.h', '.o')
+            if object_file in graph:
+                depends(path, on=object_file)
+                deps.append(object_file)
         deps.extend(graph[dep])
+
+objects = [p for p, t in types.items() if t == 'object file']
+
+# Rebuild objects whenever any of the included header changes.
+for path in objects:
+    deps = list(graph[path])
+    visited = set()
+    while len(deps) > 0:
+        dep = deps.pop()
+        if dep in visited:
+            continue
+        visited.add(dep)
+        if types[dep] == 'header':
+            depends(path, on=dep)
+        deps.extend(graph[dep])
+
+if args.verbose:
+    print('C++ dependency graph')
+    for path in sorted(types.keys()):
+        print(f' "{path}" : {types[path]}')
+        for dep in sorted(graph[path]):
+            print(f'  - "{dep}" : {types[dep]}')

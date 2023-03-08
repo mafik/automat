@@ -1,21 +1,21 @@
-export module base;
+#pragma once
 
-import <format>;
-import <memory>;
-import <algorithm>;
-import <deque>;
-import <string>;
-import <cassert>;
-import <compare>;
-import <functional>;
-import <string_view>;
-import <unordered_map>;
-import <unordered_set>;
-import <source_location>;
-import <vector>;
-import log;
+#include <format>
+#include <memory>
+#include <algorithm>
+#include <deque>
+#include <string>
+#include <cassert>
+#include <compare>
+#include <functional>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
+#include <source_location>
+#include <vector>
+#include "log.h"
 
-export namespace automaton {
+namespace automaton {
 
 using std::function;
 using std::hash;
@@ -68,7 +68,7 @@ struct Object {
   virtual string GetText() const { return ""; }
   virtual void SetText(Location &error_context, string_view text) {}
   // virtual void SetText(Location &error_context, string_view text) {
-  //   auto error_message = fmt::format("{} doesn't support text input.",
+  //   auto error_message = std::format("{} doesn't support text input.",
   //   Name()); error_context.ReportError(error_message);
   // }
 
@@ -353,7 +353,7 @@ struct Location {
     Follow()->SetText(*this, text);
     ScheduleUpdate();
   }
-  void SetNumber(double number) { SetText(fmt::format("{}", number)); }
+  void SetNumber(double number) { SetText(std::format("{}", number)); }
 
   ////////////////////////////
   // Error reporting
@@ -390,7 +390,7 @@ struct Location {
   // Shorthand function for reporting that a required property couldn't be
   // found.
   void ReportMissing(string_view property) {
-    auto error_message = fmt::format(
+    auto error_message = std::format(
         "Couldn't find \"{}\". You can create a connection or rename "
         "one of the nearby objects to fix this.",
         property);
@@ -400,12 +400,13 @@ struct Location {
   string LoggableString() const {
     if (name.empty()) {
       if (object->Name().empty()) {
-        return typeid(*object).name();
+        auto& o = *object;
+        return typeid(o).name();
       } else {
         return std::string(object->Name());
       }
     } else {
-      return fmt::format("{0} \"{1}\"", object->Name(), name);
+      return std::format("{0} \"{1}\"", object->Name(), name);
     }
   }
 };
@@ -439,7 +440,7 @@ struct Argument {
     requirements.emplace_back(
         [name = name](Location *location, Object *object, std::string &error) {
           if (dynamic_cast<T *>(object) == nullptr) {
-            error = fmt::format("The {} argument must be an instance of {}.",
+            error = std::format("The {} argument must be an instance of {}.",
                                 name, typeid(T).name());
           }
         });
@@ -481,7 +482,7 @@ struct Argument {
           }));
     }
     if (result.location == nullptr && precondition >= kRequiresLocation) {
-      here.ReportError(fmt::format("The {} argument of {} is not connected.",
+      here.ReportError(std::format("The {} argument of {} is not connected.",
                                    name, here.LoggableString()),
                        source_location);
       result.ok = false;
@@ -506,7 +507,7 @@ struct Argument {
         result.object = result.location->object.get();
       }
       if (result.object == nullptr && precondition >= kRequiresObject) {
-        here.ReportError(fmt::format("The {} argument of {} is empty.", name,
+        here.ReportError(std::format("The {} argument of {} is empty.", name,
                                      here.LoggableString()),
                          source_location);
         result.ok = false;
@@ -538,7 +539,7 @@ struct Argument {
       result.typed = dynamic_cast<T *>(result.object);
       if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
         here.ReportError(
-            fmt::format("The {} argument is not an instance of {}.", name,
+            std::format("The {} argument is not an instance of {}.", name,
                         typeid(T).name()),
             source_location);
         result.ok = false;
@@ -703,7 +704,7 @@ struct Machine : LiveObject {
     LiveObject::Relocate(parent);
   }
 
-  string LoggableString() const { return fmt::format("Machine({})", name); }
+  string LoggableString() const { return std::format("Machine({})", name); }
 
   Location *Front(const string &name) {
     for (int i = 0; i < front.size(); ++i) {
@@ -972,7 +973,7 @@ struct Task {
     if (global_then) {
       assert(global_then == &waiting_task);
       global_then = nullptr;
-      if (waiting_task.unique()) {
+      if (waiting_task.use_count() == 1) {
         // std::shared_ptr doesn't permit moving data out of it so we have to
         // make a copy of the task for scheduling.
         waiting_task->Clone()->Schedule();
@@ -990,7 +991,7 @@ struct Task {
 struct RunTask : Task {
   RunTask(Location *target) : Task(target) {}
   std::string Format() override {
-    return fmt::format("RunTask({})", target->LoggableString());
+    return std::format("RunTask({})", target->LoggableString());
   }
   void Execute() override {
     PreExecute();
@@ -1015,7 +1016,7 @@ struct UpdateTask : Task {
   UpdateTask(Location *target, Location *updated)
       : Task(target), updated(updated) {}
   std::string Format() override {
-    return fmt::format("UpdateTask({}, {})", target->LoggableString(),
+    return std::format("UpdateTask({}, {})", target->LoggableString(),
                        updated->LoggableString());
   }
   void Execute() override {
@@ -1035,7 +1036,7 @@ struct ErroredTask : Task {
   ErroredTask(Location *target, Location *errored)
       : Task(target), errored(errored) {}
   std::string Format() override {
-    return fmt::format("ErroredTask({}, {})", target->LoggableString(),
+    return std::format("ErroredTask({}, {})", target->LoggableString(),
                        errored->LoggableString());
   }
   void Execute() override {
@@ -1060,7 +1061,7 @@ struct ThenGuard {
   ~ThenGuard() {
     assert(global_then == &then);
     global_then = old_global_then;
-    if (then.unique()) {
+    if (then.use_count() == 1) {
       then->Clone()->Schedule();
     }
   }

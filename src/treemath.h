@@ -1,9 +1,9 @@
-export module treemath;
+#pragma once
 
-import <vector>;
-import <unordered_set>;
-import <memory>;
-import algebra;
+#include <vector>
+#include <unordered_set>
+#include <memory>
+#include "algebra.h"
 
 // Treemath is a library for manipulating algebraic expressions that exploits
 // their tree-like structure.
@@ -14,7 +14,7 @@ import algebra;
 // Non-leaf nodes can usually be cut in many ways, which produce different
 // variations of the same basic equality (for example "x - y = z + v" for the
 // Sum node & "x / y = z * v" for the Product node).
-export namespace treemath {
+namespace treemath {
 
 struct Node {
   virtual ~Node() = default;

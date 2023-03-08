@@ -1,10 +1,10 @@
-export module test_base;
+#pragma once
 
-import <gtest/gtest.h>;
-import backtrace;
-import base;
+#include <gtest/gtest.h>
+#include "backtrace.h"
+#include "base.h"
 
-export namespace automaton {
+namespace automaton {
 
 struct TestBase : ::testing::Test {
   Location root = Location(nullptr);

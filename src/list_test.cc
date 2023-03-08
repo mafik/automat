@@ -1,8 +1,8 @@
-import <gtest/gtest.h>;
-import <memory>;
-import test_base;
-import base;
-import library;
+#include <gtest/gtest.h>
+#include <memory>
+#include "test_base.h"
+#include "base.h"
+#include "library.h"
 
 using namespace automaton;
 

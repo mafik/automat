@@ -1,6 +1,6 @@
 export module base;
 
-import "fmt/format.h";
+import <format>;
 import <memory>;
 import <algorithm>;
 import <deque>;

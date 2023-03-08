@@ -1,6 +1,6 @@
 export module term;
 
-import "fmt/format.h";
+import <format>;
 import <memory>;
 import <algorithm>;
 import <cstdio>;

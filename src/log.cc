@@ -1,28 +1,14 @@
 module log;
 
-import "fmt/format.h";
+import <format>;
 import <memory>;
 import <utility>;
-import <execinfo.h>;
 import <cstdio>;
 import <cstdlib>;
 import <string>;
 import <source_location>;
 import math;
 import term;
-
-void print_trace(void) {
-  char **strings;
-  int i, size;
-  enum Constexpr { MAX_SIZE = 1024 };
-  void *array[MAX_SIZE];
-  size = backtrace(array, MAX_SIZE);
-  strings = backtrace_symbols(array, size);
-  for (i = 0; i < size; i++)
-    printf("%s\n", strings[i]);
-  puts("");
-  free(strings);
-}
 
 static int indent = 0;
 
@@ -37,7 +23,7 @@ struct Logger::Impl {
 
   Impl(LogLevel log_level_arg, const std::source_location location_arg)
       : log_level(log_level_arg), location(location_arg) {
-#if not defined(__EMSCRIPTEN__)
+#if !defined(__EMSCRIPTEN__)
     // print time
     time_t timestamp = time(nullptr);
     char *t = asctime(localtime(&timestamp));
@@ -90,9 +76,6 @@ Logger::~Logger() {
 #endif
 
   if (impl->log_level == LOG_LEVEL_FATAL) {
-#if not defined(__EMSCRIPTEN__)
-    print_trace();
-#endif // not defined(__EMSCRIPTEN__)
     abort();
   }
   delete impl;

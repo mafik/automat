@@ -1,6 +1,6 @@
 export module library;
 
-import "fmt/format.h";
+import <format>;
 import <memory>;
 import <regex>;
 import <chrono>;

@@ -1,7 +1,10 @@
 export module backtrace;
 
-import "fmt/format.h";
+import <format>;
 import <memory>;
+
+#if defined(__linux__)
+
 import <sys/wait.h>;
 import <sys/prctl.h>;
 
@@ -11,7 +14,7 @@ import <sys/prctl.h>;
  * TODO: use the stack trace printing code in log.cc
  */
 
-static void print_trace() {
+export void PrintBacktrace() {
     char pid_buf[30];
     sprintf(pid_buf, "%d", getpid());
     char name_buf[512];
@@ -27,7 +30,7 @@ static void print_trace() {
     }
 }
 
-static void signal_segv(int signum, siginfo_t *info, void *ptr) {
+static void signal_segv_unix(int signum, siginfo_t *info, void *ptr) {
   static const char *si_codes[3] = {"", "SEGV_MAPERR", "SEGV_ACCERR"};
 
   fmt::print(R"(Segmentation Fault!
@@ -38,7 +41,7 @@ static void signal_segv(int signum, siginfo_t *info, void *ptr) {
 GDB Stack trace:
 )", signum, info->si_errno, info->si_code, si_codes[info->si_code], info->si_addr);
 
-  print_trace();
+  PrintBacktrace();
 
   _exit(-1);
 }
@@ -46,8 +49,29 @@ GDB Stack trace:
 export void EnableBacktraceOnSIGSEGV() {
   struct sigaction action;
   memset(&action, 0, sizeof(action));
-  action.sa_sigaction = signal_segv;
+  action.sa_sigaction = signal_segv_unix;
   action.sa_flags = SA_SIGINFO;
   if (sigaction(SIGSEGV, &action, NULL) < 0)
     perror("sigaction");
 }
+
+#elif defined(_WIN32)
+
+export void PrintBacktrace() {
+  fmt::print("Backtrace not implemented.\n");
+}
+
+static int signal_segv_win32(int signum, int) {
+  fmt::print("Segmentation Fault!\n");
+
+  PrintBacktrace();
+
+  _exit(-1);
+}
+
+export void EnableBacktraceOnSIGSEGV() {
+  if (sigaction(SIGSEGV, &action, NULL) < 0)
+    perror("sigaction");
+}
+
+#endif

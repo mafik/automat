@@ -1,6 +1,6 @@
 export module algebra;
 
-import "fmt/format.h";
+import <format>;
 import <memory>;
 import <cctype>;
 import <functional>;

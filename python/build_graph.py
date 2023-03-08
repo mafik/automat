@@ -8,24 +8,30 @@ import fs_utils
 import os
 import functools
 import re
+import shutil
 
 from make import Popen
 from subprocess import run
 from pathlib import Path
+from sys import platform
 
 CXXFLAGS = '-std=c++2b -Wno-c99-designator -DAUTOMATON -Ivendor -fcolor-diagnostics'.split()
 LDFLAGS = '-flto -lpthread -lz -lssl -lcrypto -lfmt'.split()
 
-# libc++ cannot be linked with gtest so we use libstdc++ instead.
-CXXFLAGS += ['-stdlib=libstdc++']
-
 # As of 2023-02 the compiler is a development version of clang++-17, installed from https://apt.llvm.org/.
 # Once C++20 modules stabilize it should be ok to switch to default compiler.
 
-CLANG_VERSION = '17'
-CXX = os.environ['CXX'] = f'clang++-{CLANG_VERSION}'
-CC = os.environ['CC'] = f'clang-{CLANG_VERSION}'
-CXXFILT = f'llvm-cxxfilt-{CLANG_VERSION}'
+def is_tool(name):
+    return shutil.which(name) is not None
+
+if is_tool('clang++') and is_tool('clang') and is_tool('llvm-cxxfilt'):
+    CXX = os.environ['CXX'] = f'clang++'
+    CC = os.environ['CC'] = f'clang'
+    CXXFILT = f'llvm-cxxfilt'
+else:
+    raise 'Couldn\'t find `clang`, `clang++` or `llvm-cxxfilt` on the system PATH. Make sure to install LLVM & add it to the system PATH variable!'
+
+# TODO: when on Win32 - make sure that cmake, ninja, gdb are on the PATH
 
 if args.release:
     CXXFLAGS += ['-O3', '-DNDEBUG']
@@ -36,7 +42,38 @@ if args.debug:
 
 recipe = make.Recipe()
 
-##################################
+
+###############################
+# Recipes for vendored dependencies
+###############################
+
+# GoogleTest
+
+GOOGLETEST_SRC = fs_utils.project_root / 'vendor' / 'googletest-1.13.0'
+GOOGLETEST_OUT = fs_utils.project_tmp_dir / 'googletest'
+
+GMOCK_LIB = GOOGLETEST_OUT / 'lib' / 'gmock.lib'
+GTEST_LIB = GOOGLETEST_OUT / 'lib' / 'gtest.lib'
+GTEST_MAIN_LIB = GOOGLETEST_OUT / 'lib' / 'gtest_main.lib'
+
+recipe.add_step(
+    functools.partial(Popen, ['cmake', '-G', 'Ninja', f'-DCMAKE_C_COMPILER={CC}', f'-DCMAKE_CXX_COMPILER={CXX}', '-S', GOOGLETEST_SRC, '-B', GOOGLETEST_OUT]),
+    outputs=[GOOGLETEST_OUT / 'build.ninja'],
+    inputs=[GOOGLETEST_SRC / 'CMakeLists.txt'],
+    name='Configure GoogleTest')
+
+recipe.add_step(
+    functools.partial(Popen, ['ninja', '-C', str(GOOGLETEST_OUT)]),
+    outputs=[GMOCK_LIB, GTEST_LIB, GTEST_MAIN_LIB],
+    inputs=[GOOGLETEST_OUT / 'build.ninja'],
+    name='Build GoogleTest')
+
+recipe.generated.add(GOOGLETEST_OUT)
+
+CXXFLAGS += ['-I' + str(GOOGLETEST_SRC / 'googlemock' / 'include')]
+CXXFLAGS += ['-I' + str(GOOGLETEST_SRC / 'googletest' / 'include')]
+
+###############################
 # Recipes for object files
 ###############################
 
@@ -87,16 +124,6 @@ types = dict()
 graph = dict()
 for path, deps in cc.graph.items():
     graph[redirect_path(path)] = [redirect_path(d) for d in deps]
-
-# Workarounds for poor support of C++20 modules in clang.
-# Without those dependencies clang will imagine ODR violations and fail to link.
-# Feel free to remove if it doesn't break the build.
-graph[redirect_path('gtest/gtest.h.pcm')].append(redirect_path('compare.pcm'))
-graph[redirect_path('fmt/format.h.pcm')].append(redirect_path('memory.pcm'))
-graph[redirect_path('gtest/gtest.h.pcm')].append(redirect_path('memory.pcm'))
-graph[redirect_path('gmock/gmock.h.pcm')].append(redirect_path('memory.pcm'))
-graph[redirect_path('gmock/gmock-more-matchers.h.pcm')].append(redirect_path('memory.pcm'))
-graph[redirect_path('regex.pcm')].append(redirect_path('memory.pcm'))
 
 header_units = dict()
 for path, t in cc.types.items():

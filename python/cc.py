@@ -5,6 +5,8 @@ import collections
 import re
 import args
 
+from sys import platform
+
 srcs = []
 for ext in ['.cc', '.h']:
     srcs.extend(fs_utils.project_root.glob(f'src/**/*{ext}'))
@@ -12,13 +14,15 @@ for ext in ['.cc', '.h']:
 graph = collections.defaultdict(set)
 types = dict()
 
+binary_extension = '.exe' if platform == 'win32' else ''
+
 def depends(what, on):
     graph[str(what)].add(str(on))
 
 for path_abs in srcs:
     parent = path_abs.parent
     path = path_abs.relative_to(fs_utils.project_root)
-    path_bin = path.with_suffix('')
+    path_bin = path.with_suffix(binary_extension)
 
     if path.suffix == '.cc':
         path_o = path.with_name(path.stem + '.o')

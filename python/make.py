@@ -30,14 +30,13 @@ def hexdigest(path):
     return hashlib.md5(contents).hexdigest()
 
 class Step:
-    def __init__(self, name, outputs, inputs, build, id, keep_alive, stderr_prettifier):
+    def __init__(self, name, outputs, inputs, build, id, stderr_prettifier):
         self.name = name
         self.outputs = set(str(x) for x in outputs)
         self.inputs = set(str(x) for x in inputs)
         self.build = build # function that executes this step
         self.builder = None # Popen instance while this step is being built
         self.id = id
-        self.keep_alive = keep_alive
         self.stderr_prettifier = stderr_prettifier
         self.extra_args = []
     
@@ -124,10 +123,10 @@ class Recipe:
         '''Returns True if the recipe needs to be built.'''
         return any(s.is_dirty() for s in self.steps)
     
-    def add_step(self, build_func, outputs, inputs, name=None, keep_alive=False, stderr_prettifier=lambda x: x):
+    def add_step(self, build_func, outputs, inputs, name=None, stderr_prettifier=lambda x: x):
         if not name:
             name = build_func.__name__
-        self.steps.append(Step(name, outputs, inputs, build_func, len(self.steps), keep_alive, stderr_prettifier))
+        self.steps.append(Step(name, outputs, inputs, build_func, len(self.steps), stderr_prettifier))
 
     # prunes the list of steps and only leaves the steps that are required for some target
     def set_target(self, target):

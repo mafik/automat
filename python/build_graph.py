@@ -15,6 +15,7 @@ from make import Popen
 from subprocess import run
 from pathlib import Path
 from dataclasses import dataclass
+from sys import platform
 
 def is_tool(name):
     return shutil.which(name) is not None
@@ -39,7 +40,6 @@ if args.release:
 
 if args.debug:
     CXXFLAGS += ['-O0', '-g']
-    LDFLAGS += ['-rdynamic']
 
 CXXFLAGS += ['-D' + d for d in cc.defines]
 
@@ -75,6 +75,18 @@ recipe.generated.add(GOOGLETEST_OUT)
 CXXFLAGS += ['-I' + str(GOOGLETEST_SRC / 'googlemock' / 'include')]
 CXXFLAGS += ['-I' + str(GOOGLETEST_SRC / 'googletest' / 'include')]
 LDFLAGS += ['-L' + str(GOOGLETEST_OUT / 'lib')]
+
+# Skia
+
+if platform == 'win32':
+    # TODO: steps for building Skia
+    CXXFLAGS += ['-IC:\\Users\\maf\\skia']
+    CXXFLAGS += ['-IC:\\Users\\maf\\skia\\include\\third_party\\vulkan']
+    LDFLAGS += ['-LC:\\Users\\maf\\skia\\out\\Release']
+    LDFLAGS += ['-lskia']
+
+    # TODO: allow translation modules to request libraries
+    LDFLAGS += ['-luser32', '-lopengl32']
 
 ###############################
 # Recipes for object files
@@ -148,15 +160,19 @@ for path, deps in graph.items():
         recipe.add_step(builder, outputs=[path], inputs=deps, name=Path(path).name)
         compilation_db.append(CompilationEntry(source_files[0], path, pargs))
     elif t == 'test':
+        recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS + ['-lgtest_main', '-lgtest', '-lgmock']
         builder = functools.partial(Popen, pargs)
         recipe.add_step(builder, outputs=[path], inputs=deps + [GMOCK_LIB, GTEST_LIB, GTEST_MAIN_LIB], name=f'link {path}', stderr_prettifier=cxxfilt)
         runner = functools.partial(Popen, [f'./{path}', '--gtest_color=yes'])
         recipe.add_step(runner, outputs=[], inputs=[path], name=path)
     elif t == 'main':
+        recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS
         builder = functools.partial(Popen, pargs)
         recipe.add_step(builder, outputs=[path], inputs=deps, name=f'link {path}', stderr_prettifier=cxxfilt)
+        runner = functools.partial(Popen, [f'./{path}'])
+        recipe.add_step(runner, outputs=[], inputs=[path], name=path)
     else:
         print(f"File '{path}' has unknown type '{types[path]}'. Dependencies:")
         for dep in deps:
@@ -166,16 +182,16 @@ for path, deps in graph.items():
 tests = [p for p, t in types.items() if t == 'test']
 if tests:
     # run all tests sequentially
-    def run_tests():
+    def run_tests(extra_args):
         for test in tests:
-            run([f'./{test}', '--gtest_color=yes'], check=True)
+            run([f'./{test}', '--gtest_color=yes'] + extra_args, check=True)
     recipe.add_step(run_tests, outputs=[], inputs=tests, name='tests')
 
 ##########################
 # Recipe for Clang language server
 ##########################
 
-def compile_commands():
+def compile_commands(unused_extra_args):
     print('Generating compile_commands.json...')
     jsons = []
     for entry in compilation_db:
@@ -191,15 +207,6 @@ def compile_commands():
         print('[' + ', '.join(jsons) + ']', file=f)
 
 recipe.add_step(compile_commands, ['compile_commands.json'], [])
-
-##########################
-# Recipe for server
-#########################
-
-def serve():
-    return Popen(['./main'])
-
-recipe.add_step(serve, [], ['main'], keep_alive = True)
 
 if args.verbose:
     print('Build graph')

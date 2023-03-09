@@ -4,6 +4,16 @@ import fs_utils
 import collections
 import re
 import args
+from sys import platform
+
+defines = set()
+defines.add(fs_utils.project_name.upper())
+if platform == 'win32':
+    defines.add('_WIN32')
+if args.release:
+    defines.add('NDEBUG')
+if args.debug:
+    defines.add('_DEBUG')
 
 from sys import platform
 
@@ -34,7 +44,7 @@ for path_abs in srcs:
         types[str(path)] = 'header'
 
     if_stack = [True]
-    defines = set(['_WIN32']) # TODO: move defines into this file
+    current_defines = defines.copy()
     line_number = 0
 
     for line in open(path_abs, encoding='utf-8').readlines():
@@ -44,17 +54,17 @@ for path_abs in srcs:
 
         match = re.match('^#if defined\(([a-zA-Z0-9_]+)\)', line)
         if match:
-            if_stack.append(match.group(1) in defines)
+            if_stack.append(match.group(1) in current_defines)
             continue
 
         match = re.match('^#if !defined\(([a-zA-Z0-9_]+)\)', line)
         if match:
-            if_stack.append(match.group(1) not in defines)
+            if_stack.append(match.group(1) not in current_defines)
             continue
 
         match = re.match('^#elif defined\(([a-zA-Z0-9_]+)\)', line)
         if match:
-            if_stack[-1] = match.group(1) in defines
+            if_stack[-1] = match.group(1) in current_defines
             continue
         
         match = re.match('^#else', line)

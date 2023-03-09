@@ -16,15 +16,6 @@ from subprocess import run
 from pathlib import Path
 from dataclasses import dataclass
 
-CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -DAUTOMATON -Ivendor'.split()
-LDFLAGS = ['-fuse-ld=lld']
-
-if args.verbose:
-    CXXFLAGS.append('-v')
-
-# This is needed as of Clang 16 and may be removed once Clang defines it by default
-CXXFLAGS.append('-D__cpp_consteval')
-
 def is_tool(name):
     return shutil.which(name) is not None
 
@@ -37,15 +28,22 @@ else:
 
 # TODO: when on Win32 - make sure that cmake, ninja, gdb are on the PATH
 
+CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -Ivendor'.split()
+LDFLAGS = ['-fuse-ld=lld']
+
+if args.verbose:
+    CXXFLAGS.append('-v')
+
 if args.release:
-    CXXFLAGS += ['-O3', '-DNDEBUG']
+    CXXFLAGS += ['-O3']
 
 if args.debug:
-    CXXFLAGS += ['-O0', '-g', '-D_DEBUG']
+    CXXFLAGS += ['-O0', '-g']
     LDFLAGS += ['-rdynamic']
 
-recipe = make.Recipe()
+CXXFLAGS += ['-D' + d for d in cc.defines]
 
+recipe = make.Recipe()
 
 ###############################
 # Recipes for vendored dependencies

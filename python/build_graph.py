@@ -191,7 +191,7 @@ if tests:
 # Recipe for Clang language server
 ##########################
 
-def compile_commands(unused_extra_args):
+def compile_commands(extra_args):
     print('Generating compile_commands.json...')
     jsons = []
     for entry in compilation_db:

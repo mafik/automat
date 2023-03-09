@@ -3,3 +3,4 @@
 compile_commands.json
 .cache
 *.pdb
+.gdb_history

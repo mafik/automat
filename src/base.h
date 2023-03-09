@@ -998,10 +998,10 @@ struct RunTask : Task {
     PreExecute();
     target->Run();
     if (!target->HasError()) {
-      auto then = then_arg.GetLocation(*target);
-      if (then.location) {
-        then.location->ScheduleRun();
-      }
+      then_arg.LoopLocations<bool>(*target, [](Location &then) {
+        then.ScheduleRun();
+        return false;
+      });
     }
     PostExecute();
   }

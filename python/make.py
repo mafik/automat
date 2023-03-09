@@ -16,10 +16,10 @@ import fs_utils
 HASH_DIR = fs_utils.project_tmp_dir / 'hashes'
 HASH_DIR.mkdir(parents=True, exist_ok=True)
 
-def Popen(args, **kwargs):
+def Popen(args, extra_args=[], **kwargs):
     '''Wrapper around subprocess.Popen which captures STDERR into a temporary file.'''
     f = tempfile.TemporaryFile()
-    str_args = [str(x) for x in args]
+    str_args = [str(x) for x in args + extra_args]
     p = subprocess.Popen(str_args, stderr=f, **kwargs)
     p.stderr = f
     return p
@@ -39,13 +39,14 @@ class Step:
         self.id = id
         self.keep_alive = keep_alive
         self.stderr_prettifier = stderr_prettifier
+        self.extra_args = []
     
     def __repr__(self):
         return f'{self.name}'
 
     def build_and_log(self, reasons):
         print('Building', self.name) # , '(because', *reasons, 'changed)')
-        return self.build()
+        return self.build(extra_args=self.extra_args)
     
     def record_input_hashes(self):
         hash_path = HASH_DIR / self.name

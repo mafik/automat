@@ -1,13 +1,13 @@
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <gmock/gmock-more-matchers.h>
-#include <chrono>
-#include <source_location>
 #include "backtrace.h"
 #include "base.h"
 #include "library.h"
-#include "test_base.h"
 #include "log.h"
+#include "test_base.h"
+#include <chrono>
+#include <gmock/gmock-more-matchers.h>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <source_location>
 
 using namespace automaton;
 using namespace testing;
@@ -419,7 +419,8 @@ struct CrudTest : public TestBase {
     element.ConnectTo(filter, "of");
 
     // Silence the error message about missing "complex" argument.
-    field_for_test_error_cleaner.ConnectTo(field_for_test, "target", Connection::kTerminateHere);
+    field_for_test_error_cleaner.ConnectTo(field_for_test, "target",
+                                           Connection::kTerminateHere);
     field_for_test.ConnectTo(element, "complex");
     field_for_test.ConnectTo(last_name_label, "label");
     // Silence the error message about missing argument.
@@ -437,7 +438,8 @@ struct CrudTest : public TestBase {
     last_name_selected_field.ConnectTo(list_view, "complex");
     last_name_selected_field.ConnectTo(last_name_label, "label");
     // Silence the error message about missing "complex" argument.
-    last_name_selected_error_cleaner.ConnectTo(last_name_selected_field, "target", Connection::kTerminateHere);
+    last_name_selected_error_cleaner.ConnectTo(
+        last_name_selected_field, "target", Connection::kTerminateHere);
 
     set_first_name.ConnectTo(first_name_selected_field, "target");
     set_first_name.ConnectTo(first_name_complex_field, "value");

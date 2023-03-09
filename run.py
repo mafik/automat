@@ -26,19 +26,21 @@ if __name__ == '__main__':
         recipe.set_target(args.target)
 
         if platform == 'linux':
-            watcher = subprocess.Popen(['inotifywait', '-qe', 'CLOSE_WRITE', 'src/'])
+            events = 'CLOSE_WRITE'
         elif platform == 'win32':
-            # this uses inotify-win
-            # TODO: include it somehow in the build scripts
-            watcher = subprocess.Popen(['inotifywait', '-qe', 'create,modify,delete,move', 'src/'])
+            events = 'create,modify,delete,move'
         else:
             raise Exception(f'Unknown platfrorm: "{platform}". Expected either "linux" or "win32". Automaton is not supported on this platform yet!')
+
+        # TODO: include inotify-win in the build scripts for Windows
+        watcher = subprocess.Popen(['inotifywait', '-qe', events, 'src/'], stdout=subprocess.DEVNULL)
 
         if recipe.execute(watcher):
             if active_recipe:
                 active_recipe.interrupt()
             active_recipe = recipe
         if not args.live:
+            watcher.kill()
             break
         try:
             print('Watching src/ for changes...')

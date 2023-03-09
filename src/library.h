@@ -1,24 +1,25 @@
 #pragma once
 
-#include <format>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <map>
+#include <math.h>
 #include <memory>
 #include <regex>
-#include <chrono>
-#include <math.h>
-#include <cstdio>
-#include <string_view>
-#include <variant>
-#include <cstdint>
-#include <map>
+#include <source_location>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
-#include <source_location>
+
 #include "algebra.h"
 #include "base.h"
-#include "treemath.h"
+#include "format.h"
 #include "log.h"
+#include "treemath.h"
 
 namespace automaton {
 
@@ -124,7 +125,7 @@ struct Date : Object {
     return std::make_unique<Date>(year, month, day);
   }
   string GetText() const override {
-    return std::format("{:04d}-{:02d}-{:02d}", year, month, day);
+    return f("%04d-%02d-%02d", year, month, day);
   }
   void SetText(Location &error_context, string_view text) override {
     std::regex re(R"((\d{4})-(\d{2})-(\d{2}))");
@@ -211,7 +212,7 @@ struct Timer : Object {
     using namespace std::chrono_literals;
     TimePoint now = GetNow();
     Duration elapsed = now - start;
-    return std::format("{:.3f}", elapsed.count());
+    return f("%.3lf", elapsed.count());
   }
   void Run(Location &here) override {
     using namespace std::chrono_literals;
@@ -1001,7 +1002,7 @@ struct Text : LiveObject {
                               if (arg.ok) {
                                 buffer += arg.object->GetText();
                               } else {
-                                buffer += std::format("{{{}:}}", ref.arg.name);
+                                buffer += f("{%s}", ref.arg.name.c_str());
                               }
                             }},
                  chunk);
@@ -1081,7 +1082,8 @@ struct ComboBox : LiveObject {
           return nullptr;
         });
     if (selected == nullptr) {
-      error_context.ReportError(std::format("No option named {}", new_text));
+      error_context.ReportError(
+          f("No option named %*s", new_text.size(), new_text.data()));
     }
   }
   void ConnectionAdded(Location &here, string_view label,

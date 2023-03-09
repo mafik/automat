@@ -1,18 +1,19 @@
 #pragma once
 
-#include <format>
-#include <memory>
 #include <algorithm>
-#include <deque>
-#include <string>
 #include <cassert>
 #include <compare>
+#include <deque>
 #include <functional>
+#include <memory>
+#include <source_location>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
-#include <source_location>
 #include <vector>
+
+#include "format.h"
 #include "log.h"
 
 namespace automaton {
@@ -32,10 +33,7 @@ struct Location;
 struct Machine;
 
 struct Connection {
-  enum PointerBehavior {
-    kFollowPointers,
-    kTerminateHere
-  };
+  enum PointerBehavior { kFollowPointers, kTerminateHere };
   Location &from, &to;
   PointerBehavior pointer_behavior;
   Connection(Location &from, Location &to, PointerBehavior pointer_behavior)
@@ -285,7 +283,9 @@ struct Location {
   //
   // This function should also notify the object with the `ConnectionAdded`
   // call.
-  Connection *ConnectTo(Location &other, string_view label, Connection::PointerBehavior pointer_behavior = Connection::kFollowPointers);
+  Connection *ConnectTo(Location &other, string_view label,
+                        Connection::PointerBehavior pointer_behavior =
+                            Connection::kFollowPointers);
 
   // Immediately execute this object's Updated function.
   void Updated(Location &updated) { object->Updated(*this, updated); }
@@ -330,9 +330,7 @@ struct Location {
   void Run() { object->Run(*this); }
 
   // Immediately execute this object's Errored function.
-  void Errored(Location &errored) {
-    object->Errored(*this, errored);
-  }
+  void Errored(Location &errored) { object->Errored(*this, errored); }
 
   Location *Rename(string_view new_name) {
     name = new_name;
@@ -353,7 +351,7 @@ struct Location {
     Follow()->SetText(*this, text);
     ScheduleUpdate();
   }
-  void SetNumber(double number) { SetText(std::format("{}", number)); }
+  void SetNumber(double number) { SetText(f("%lf", number)); }
 
   ////////////////////////////
   // Error reporting
@@ -390,23 +388,25 @@ struct Location {
   // Shorthand function for reporting that a required property couldn't be
   // found.
   void ReportMissing(string_view property) {
-    auto error_message = std::format(
-        "Couldn't find \"{}\". You can create a connection or rename "
-        "one of the nearby objects to fix this.",
-        property);
+    auto error_message =
+        f("Couldn't find \"%*s\". You can create a connection or rename "
+          "one of the nearby objects to fix this.",
+          property.size(), property.data());
     ReportError(error_message);
   }
 
   string LoggableString() const {
+    string_view object_name = object->Name();
     if (name.empty()) {
-      if (object->Name().empty()) {
-        auto& o = *object;
+      if (object_name.empty()) {
+        auto &o = *object;
         return typeid(o).name();
       } else {
-        return std::string(object->Name());
+        return std::string(object_name);
       }
     } else {
-      return std::format("{0} \"{1}\"", object->Name(), name);
+      return f("%*s \"%s\"", object_name.size(), object_name.data(),
+               name.c_str());
     }
   }
 };
@@ -440,8 +440,8 @@ struct Argument {
     requirements.emplace_back(
         [name = name](Location *location, Object *object, std::string &error) {
           if (dynamic_cast<T *>(object) == nullptr) {
-            error = std::format("The {} argument must be an instance of {}.",
-                                name, typeid(T).name());
+            error = f("The %s argument must be an instance of %s.",
+                      name.c_str(), typeid(T).name());
           }
         });
     return *this;
@@ -471,7 +471,8 @@ struct Argument {
     if (conn_it != here.outgoing.end()) { // explicit connection
       auto c = conn_it->second;
       result.location = &c->to;
-      result.follow_pointers = c->pointer_behavior == Connection::kFollowPointers;
+      result.follow_pointers =
+          c->pointer_behavior == Connection::kFollowPointers;
     } else { // otherwise, search for other locations in this machine
       result.location = reinterpret_cast<Location *>(
           here.Nearby([&](Location &other) -> void * {
@@ -482,8 +483,8 @@ struct Argument {
           }));
     }
     if (result.location == nullptr && precondition >= kRequiresLocation) {
-      here.ReportError(std::format("The {} argument of {} is not connected.",
-                                   name, here.LoggableString()),
+      here.ReportError(f("The %s argument of %s is not connected.",
+                         name.c_str(), here.LoggableString().c_str()),
                        source_location);
       result.ok = false;
     }
@@ -507,8 +508,8 @@ struct Argument {
         result.object = result.location->object.get();
       }
       if (result.object == nullptr && precondition >= kRequiresObject) {
-        here.ReportError(std::format("The {} argument of {} is empty.", name,
-                                     here.LoggableString()),
+        here.ReportError(f("The %s argument of %s is empty.", name.c_str(),
+                           here.LoggableString().c_str()),
                          source_location);
         result.ok = false;
       }
@@ -538,10 +539,9 @@ struct Argument {
     if (result.object) {
       result.typed = dynamic_cast<T *>(result.object);
       if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
-        here.ReportError(
-            std::format("The {} argument is not an instance of {}.", name,
-                        typeid(T).name()),
-            source_location);
+        here.ReportError(f("The %s argument is not an instance of %s.",
+                           name.c_str(), typeid(T).name()),
+                         source_location);
         result.ok = false;
       }
     }
@@ -704,7 +704,7 @@ struct Machine : LiveObject {
     LiveObject::Relocate(parent);
   }
 
-  string LoggableString() const { return std::format("Machine({})", name); }
+  string LoggableString() const { return f("Machine(%s)", name.c_str()); }
 
   Location *Front(const string &name) {
     for (int i = 0; i < front.size(); ++i) {
@@ -903,7 +903,8 @@ unique_ptr<Object> Location::Take() {
   return std::move(object);
 }
 
-Connection *Location::ConnectTo(Location &other, string_view label, Connection::PointerBehavior pointer_behavior) {
+Connection *Location::ConnectTo(Location &other, string_view label,
+                                Connection::PointerBehavior pointer_behavior) {
   if (LiveObject *live_object = ThisAs<LiveObject>()) {
     live_object->Args([&](LiveArgument &arg) {
       if (arg.name == label &&
@@ -991,7 +992,7 @@ struct Task {
 struct RunTask : Task {
   RunTask(Location *target) : Task(target) {}
   std::string Format() override {
-    return std::format("RunTask({})", target->LoggableString());
+    return f("RunTask(%s)", target->LoggableString().c_str());
   }
   void Execute() override {
     PreExecute();
@@ -1016,8 +1017,8 @@ struct UpdateTask : Task {
   UpdateTask(Location *target, Location *updated)
       : Task(target), updated(updated) {}
   std::string Format() override {
-    return std::format("UpdateTask({}, {})", target->LoggableString(),
-                       updated->LoggableString());
+    return f("UpdateTask(%s, %s)", target->LoggableString().c_str(),
+             updated->LoggableString().c_str());
   }
   void Execute() override {
     PreExecute();
@@ -1036,8 +1037,8 @@ struct ErroredTask : Task {
   ErroredTask(Location *target, Location *errored)
       : Task(target), errored(errored) {}
   std::string Format() override {
-    return std::format("ErroredTask({}, {})", target->LoggableString(),
-                       errored->LoggableString());
+    return f("ErroredTask(%s, %s)", target->LoggableString().c_str(),
+             errored->LoggableString().c_str());
   }
   void Execute() override {
     PreExecute();
@@ -1103,7 +1104,8 @@ void RunLoop(const int max_iterations = -1) {
     LOG_Indent();
   }
   int iterations = 0;
-  while (!queue.empty() && (max_iterations < 0 || iterations < max_iterations)) {
+  while (!queue.empty() &&
+         (max_iterations < 0 || iterations < max_iterations)) {
     queue.front()->Execute();
     queue.pop_front();
     ++iterations;

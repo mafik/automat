@@ -1,14 +1,15 @@
 #pragma once
 
-#include <format>
 #include <memory>
 #include <cctype>
 #include <functional>
 #include <string>
 #include <string_view>
 #include <vector>
-#include "tree_algorithms.h"
+
+#include "format.h"
 #include "log.h"
+#include "tree_algorithms.h"
 
 using namespace automaton;
 
@@ -43,7 +44,7 @@ struct Equation : Statement {
   }
 
   std::string GetText() const override {
-    return std::format("{} = {}", lhs->GetText(), rhs->GetText());
+    return f("%s = %s", lhs->GetText().c_str(), rhs->GetText().c_str());
   }
 
   void Children(std::function<void(Statement*)> callback) const override {

@@ -1,12 +1,13 @@
-#include <format>
-#include <memory>
-#include <utility>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <string>
+#include <utility>
+
+#include "format.h"
+#include "log.h"
 #include "math.h"
 #include "term.h"
-#include "log.h"
 
 static int indent = 0;
 
@@ -41,7 +42,7 @@ struct Logger::Impl {
     auto darkest = term::Gray(4);
 
     buffer += dark(h) + darkest(":") + dark(m) + darkest(":") + dark(s) +
-              darkest(".") + darker(std::format("{:03}", millis % 1000)) + " ";
+              darkest(".") + darker(f("%03d", millis % 1000)) + " ";
 #endif // not defined(__EMSCRIPTEN__)
     for (int i = 0; i < indent; ++i) {
       buffer += " ";
@@ -57,8 +58,8 @@ Logger::~Logger() {
 
   if (impl->log_level == LOG_LEVEL_ERROR ||
       impl->log_level == LOG_LEVEL_FATAL) {
-    output +=
-        std::format(" ({} in {}:{})", impl->location.function_name(), impl->location.file_name(), impl->location.line());
+    output += f(" (%s in %s:%d)", impl->location.function_name(),
+                impl->location.file_name(), impl->location.line());
   }
 
 #if defined(__EMSCRIPTEN__)

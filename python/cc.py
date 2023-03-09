@@ -4,18 +4,21 @@ import fs_utils
 import collections
 import re
 import args
+import clang
 from sys import platform
 
 defines = set()
 defines.add(fs_utils.project_name.upper())
 if platform == 'win32':
-    defines.add('_WIN32')
+    defines.add('NOMINMAX')
+    defines.add('UNICODE')
 if args.release:
     defines.add('NDEBUG')
 if args.debug:
     defines.add('_DEBUG')
 
-from sys import platform
+defines.add('SK_GANESH')
+defines.add('SK_VULKAN')
 
 srcs = []
 for ext in ['.cc', '.h']:
@@ -44,7 +47,7 @@ for path_abs in srcs:
         types[str(path)] = 'header'
 
     if_stack = [True]
-    current_defines = defines.copy()
+    current_defines = defines.copy() | clang.default_defines
     line_number = 0
 
     for line in open(path_abs, encoding='utf-8').readlines():
@@ -52,29 +55,24 @@ for path_abs in srcs:
 
         # Minimal preprocessor. This allows us to skip platform-specific imports.
 
-        match = re.match('^#if defined\(([a-zA-Z0-9_]+)\)', line)
+        # This regular experession captures most of #if defined/#ifdef variants in one go.
+        # ?: at the beginning of a group means that it's non-capturing
+        # ?P<...> ate the beginning of a group assigns it a name
+        match = re.match('^#(?P<el>el(?P<else>se)?)?(?P<end>end)?if(?P<neg1>n)?(?:def)? (?P<neg2>!)?(?:defined)?(?:\()?(?P<id>[a-zA-Z0-9_]+)(?:\))?', line)
         if match:
-            if_stack.append(match.group(1) in current_defines)
-            continue
+            test = match.group('id') in current_defines
+            if match.group('neg1') or match.group('neg2'):
+                test = not test
+            if match.group('else'):
+                test = not if_stack[-1]
 
-        match = re.match('^#if !defined\(([a-zA-Z0-9_]+)\)', line)
-        if match:
-            if_stack.append(match.group(1) not in current_defines)
+            if match.group('end'): #endif
+                if_stack.pop()
+            elif match.group('el'): #elif
+                if_stack[-1] = test
+            else: #if
+                if_stack.append(test)
             continue
-
-        match = re.match('^#elif defined\(([a-zA-Z0-9_]+)\)', line)
-        if match:
-            if_stack[-1] = match.group(1) in current_defines
-            continue
-        
-        match = re.match('^#else', line)
-        if match:
-            if_stack[-1] = not if_stack[-1]
-            continue
-
-        match = re.match('^#endif', line)
-        if match:
-            if_stack.pop()
 
         if not if_stack[-1]:
             continue

@@ -129,7 +129,10 @@ if platform == 'win32':
     # TODO: steps for building Skia
     CXXFLAGS += ['-IC:\\Users\\maf\\skia']
     CXXFLAGS += ['-IC:\\Users\\maf\\skia\\include\\third_party\\vulkan']
-    LDFLAGS += ['-LC:\\Users\\maf\\skia\\out\\Release']
+    if args.debug:
+        LDFLAGS += ['-LC:\\Users\\maf\\skia\\out\\Debug']
+    else:
+        LDFLAGS += ['-LC:\\Users\\maf\\skia\\out\\Release']
     LDFLAGS += ['-lskia']
 
     # TODO: allow translation modules to request libraries

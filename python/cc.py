@@ -12,10 +12,18 @@ defines.add(fs_utils.project_name.upper())
 if platform == 'win32':
     defines.add('NOMINMAX')
     defines.add('UNICODE')
-if args.release:
-    defines.add('NDEBUG')
+    # <windows.h> has a side effect of defining ERROR macro.
+    # Adding NOGDI prevents it from happening.
+    defines.add('NOGDI')
+    # MSVCRT <source_location> needs __cpp_consteval.
+    # As of Clang 16 it's not defined by default.
+    # If future Clangs add it, the manual definition can be removed.
+    defines.add('__cpp_consteval')
+
 if args.debug:
     defines.add('_DEBUG')
+else:
+    defines.add('NDEBUG')
 
 defines.add('SK_GANESH')
 defines.add('SK_VULKAN')

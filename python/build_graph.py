@@ -49,6 +49,8 @@ recipe = make.Recipe()
 # Recipes for vendored dependencies
 ###############################
 
+cmake_args = ['cmake', '-G', 'Ninja', f'-DCMAKE_C_COMPILER={CC}', f'-DCMAKE_CXX_COMPILER={CXX}']
+
 # GoogleTest
 
 GOOGLETEST_SRC = fs_utils.project_root / 'vendor' / 'googletest-1.13.0'
@@ -59,7 +61,7 @@ GTEST_LIB = GOOGLETEST_OUT / 'lib' / 'gtest.lib'
 GTEST_MAIN_LIB = GOOGLETEST_OUT / 'lib' / 'gtest_main.lib'
 
 recipe.add_step(
-    functools.partial(Popen, ['cmake', '-G', 'Ninja', f'-DCMAKE_C_COMPILER={CC}', f'-DCMAKE_CXX_COMPILER={CXX}', '-S', GOOGLETEST_SRC, '-B', GOOGLETEST_OUT]),
+    functools.partial(Popen, cmake_args + ['-S', GOOGLETEST_SRC, '-B', GOOGLETEST_OUT]),
     outputs=[GOOGLETEST_OUT / 'build.ninja'],
     inputs=[GOOGLETEST_SRC / 'CMakeLists.txt'],
     name='Configure GoogleTest')
@@ -72,9 +74,38 @@ recipe.add_step(
 
 recipe.generated.add(GOOGLETEST_OUT)
 
-CXXFLAGS += ['-I' + str(GOOGLETEST_SRC / 'googlemock' / 'include')]
-CXXFLAGS += ['-I' + str(GOOGLETEST_SRC / 'googletest' / 'include')]
-LDFLAGS += ['-L' + str(GOOGLETEST_OUT / 'lib')]
+CXXFLAGS += ['-I', GOOGLETEST_SRC / 'googlemock' / 'include']
+CXXFLAGS += ['-I', GOOGLETEST_SRC / 'googletest' / 'include']
+LDFLAGS += ['-L', GOOGLETEST_OUT / 'lib']
+
+# vk-bootstrap
+
+VK_BOOTSTRAP_ROOT = fs_utils.project_tmp_dir / 'vk-bootstrap'
+VK_BOOTSTRAP_BUILD = VK_BOOTSTRAP_ROOT / 'build'
+
+VK_BOOTSTRAP_LIB = VK_BOOTSTRAP_BUILD / 'vk-bootstrap.lib'
+
+recipe.add_step(
+    functools.partial(Popen, ['git', 'clone', 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
+    outputs = [VK_BOOTSTRAP_ROOT / 'CMakeLists.txt'],
+    inputs = [],
+    name='Fetch vk-bootstrap')
+
+recipe.add_step(
+    functools.partial(Popen, cmake_args + ['-S', VK_BOOTSTRAP_ROOT, '-B', VK_BOOTSTRAP_BUILD]),
+    outputs = [VK_BOOTSTRAP_BUILD / 'build.ninja'],
+    inputs = [VK_BOOTSTRAP_ROOT / 'CMakeLists.txt'],
+    name='Configure vk-bootstrap')
+
+recipe.add_step(
+    functools.partial(Popen, ['ninja', '-C', str(VK_BOOTSTRAP_BUILD)]),
+    outputs=[VK_BOOTSTRAP_LIB],
+    inputs=[VK_BOOTSTRAP_BUILD / 'build.ninja'],
+    name='Build vk-bootstrap')
+
+CXXFLAGS += ['-I', VK_BOOTSTRAP_ROOT / 'src']
+LDFLAGS += ['-L', VK_BOOTSTRAP_BUILD]
+LDFLAGS += ['-lvk-bootstrap']
 
 # Skia
 
@@ -195,7 +226,7 @@ def compile_commands(extra_args):
     print('Generating compile_commands.json...')
     jsons = []
     for entry in compilation_db:
-        arguments = ',\n    '.join(json.dumps(arg) for arg in entry.arguments)
+        arguments = ',\n    '.join(json.dumps(str(arg)) for arg in entry.arguments)
         json_entry  = f'''{{
   "directory": { json.dumps(str(fs_utils.project_root)) },
   "file": { json.dumps(entry.file) },

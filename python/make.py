@@ -26,7 +26,13 @@ def Popen(args, extra_args=[], **kwargs):
 
 def hexdigest(path):
     path = Path(path)
-    contents = path.read_bytes() if path.exists() else b''
+    if path.exists():
+        if path.is_dir():
+            contents = path.stat().st_mtime_ns.to_bytes(8, 'big')
+        else:
+            contents = path.read_bytes()
+    else:
+        contents = b''
     return hashlib.md5(contents).hexdigest()
 
 class Step:

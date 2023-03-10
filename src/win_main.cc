@@ -1,7 +1,11 @@
 #include "win_main.h"
 
 #include "VkTestUtils.h"
+#include "backtrace.h"
+#include "log.h"
 
+
+#include <VkBootstrap.h>
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkFont.h>
@@ -20,6 +24,8 @@
 #include <fcntl.h>
 #include <io.h>
 #include <tchar.h>
+
+vkb::Instance vkb_instance;
 
 sk_sp<GrDirectContext> fContext;
 sk_sp<const skgpu::VulkanInterface> fInterface;
@@ -89,7 +95,6 @@ PFN_vkGetDeviceQueue fGetDeviceQueue = nullptr;
 
 GrVkBackendContext backendContext;
 skgpu::VulkanExtensions extensions;
-VkPhysicalDeviceFeatures2 features;
 
 void destroyBuffers() {
   if (fBackbuffers) {
@@ -583,6 +588,8 @@ static wchar_t kWindowTitle[] = L"Automaton";
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     PWSTR pCmdLine, int nCmdShow) {
+  EnableBacktraceOnSIGSEGV();
+  SetConsoleOutputCP(CP_UTF8); // utf-8
   SkGraphics::Init();
   WNDCLASSEX wcex = {.cbSize = sizeof(WNDCLASSEX),
                      .style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
@@ -598,8 +605,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                      .hIconSm = LoadIcon(hInstance, (LPCTSTR)IDI_WINLOGO)};
 
   if (!RegisterClassEx(&wcex)) {
-    MessageBox(nullptr, L"Call to RegisterClassEx failed!", kWindowTitle, 0);
-    return 1;
+    FATAL() << "Call to RegisterClassEx failed!";
   }
 
   HWND hWnd =
@@ -607,41 +613,45 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                      WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800,
                      600, nullptr, nullptr, hInstance, nullptr);
   if (!hWnd) {
-    MessageBox(nullptr, L"Call to CreateWindowEx failed!", kWindowTitle, 0);
-    return 1;
-  }
-  // RegisterTouchWindow(hWnd, 0);
-
-  PFN_vkGetInstanceProcAddr instProc;
-  if (!sk_gpu_test::LoadVkLibraryAndGetProcAddrFuncs(&instProc)) {
-    return 1;
+    FATAL() << "Call to CreateWindowEx failed!";
   }
 
-  auto createVkSurface = [hWnd, instProc](VkInstance instance) -> VkSurfaceKHR {
-    static PFN_vkCreateWin32SurfaceKHR createWin32SurfaceKHR = nullptr;
-    if (!createWin32SurfaceKHR) {
-      createWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)instProc(
-          instance, "vkCreateWin32SurfaceKHR");
-    }
-    HINSTANCE hinstance = GetModuleHandle(0);
-    VkSurfaceKHR surface;
+  vkb::InstanceBuilder instance_builder;
+  auto instance_builder_return =
+      instance_builder.set_minimum_instance_version(1, 1, 0).build();
+  if (!instance_builder_return) {
+    FATAL() << "Failed to create Vulkan instance. Error: "
+            << instance_builder_return.error().message();
+  }
+  vkb_instance = instance_builder_return.value();
+  fInstance = vkb_instance.instance;
 
-    VkWin32SurfaceCreateInfoKHR surfaceCreateInfo;
-    memset(&surfaceCreateInfo, 0, sizeof(VkWin32SurfaceCreateInfoKHR));
-    surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    surfaceCreateInfo.pNext = nullptr;
-    surfaceCreateInfo.flags = 0;
-    surfaceCreateInfo.hinstance = hinstance;
-    surfaceCreateInfo.hwnd = hWnd;
+  PFN_vkGetInstanceProcAddr instProc = vkb_instance.fp_vkGetInstanceProcAddr;
 
-    VkResult res =
-        createWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
-    if (VK_SUCCESS != res) {
-      return VK_NULL_HANDLE;
-    }
+  static PFN_vkCreateWin32SurfaceKHR createWin32SurfaceKHR = nullptr;
+  if (!createWin32SurfaceKHR) {
+    createWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)instProc(
+        fInstance, "vkCreateWin32SurfaceKHR");
+  }
 
-    return surface;
-  };
+  VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+      .pNext = nullptr,
+      .flags = 0,
+      .hinstance = hInstance,
+      .hwnd = hWnd};
+
+  VkResult res =
+      createWin32SurfaceKHR(fInstance, &surfaceCreateInfo, nullptr, &fSurface);
+  if (VK_SUCCESS != res) {
+    vkb::destroy_instance(vkb_instance);
+    FATAL() << "Failure in createWin32SurfaceKHR.";
+  }
+
+  if (VK_NULL_HANDLE == fSurface) {
+    vkb::destroy_instance(vkb_instance);
+    FATAL() << "No surface after createWin32SurfaceKHR";
+  }
 
   auto canPresent = [instProc](VkInstance instance, VkPhysicalDevice physDev,
                                uint32_t queueFamilyIndex) {
@@ -658,31 +668,73 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     return (VK_FALSE != check);
   };
 
-  if (!sk_gpu_test::CreateVkBackendContext(
-          instProc, &backendContext, &extensions, &features, &fDebugCallback,
-          &fPresentQueueIndex, canPresent)) {
-    sk_gpu_test::FreeVulkanFeaturesStructs(&features);
-    return 2;
-  }
+  backendContext.fInstance = fInstance;
 
-  if (!extensions.hasExtension(VK_KHR_SURFACE_EXTENSION_NAME, 25) ||
-      !extensions.hasExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME, 68)) {
-    sk_gpu_test::FreeVulkanFeaturesStructs(&features);
-    return 3;
+  vkb::PhysicalDeviceSelector phys_device_selector(vkb_instance);
+  auto physical_device_selector_return =
+      phys_device_selector.set_surface(fSurface)
+          .add_required_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
+          .add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
+          .prefer_gpu_device_type()
+          .select();
+  if (!physical_device_selector_return) {
+    vkb::destroy_surface(vkb_instance, fSurface);
+    FATAL() << "Failed to select Vulkan PhysicalDevice. Error: "
+            << physical_device_selector_return.error().message();
   }
+  auto phys_device = physical_device_selector_return.value();
 
-  fInstance = backendContext.fInstance;
-  fPhysicalDevice = backendContext.fPhysicalDevice;
-  fDevice = backendContext.fDevice;
-  fGraphicsQueueIndex = backendContext.fGraphicsQueueIndex;
-  fGraphicsQueue = backendContext.fQueue;
+  fPhysicalDevice = backendContext.fPhysicalDevice =
+      phys_device.physical_device;
+
+  vkb::DeviceBuilder device_builder{phys_device};
+  auto dev_ret = device_builder.build();
+  if (!dev_ret) {
+    vkb::destroy_surface(vkb_instance, fSurface);
+    FATAL() << "Failed to select Vulkan Device. Error: "
+            << dev_ret.error().message();
+  }
+  vkb::Device vkb_device = dev_ret.value();
+
+  fDevice = backendContext.fDevice = vkb_device.device;
+
+  backendContext.fGetProc = [](const char *proc_name, VkInstance instance,
+                               VkDevice device) {
+    if (device != VK_NULL_HANDLE) {
+      return vkb_instance.fp_vkGetDeviceProcAddr(device, proc_name);
+    }
+    return vkb_instance.fp_vkGetInstanceProcAddr(instance, proc_name);
+  };
+
+  auto queue_ret = vkb_device.get_queue(vkb::QueueType::graphics);
+  if (!queue_ret) {
+    vkb::destroy_device(vkb_device);
+    vkb::destroy_surface(vkb_instance, fSurface);
+    FATAL() << "Failed to get Vulkan Graphics Queue. Error: "
+            << queue_ret.error().message();
+  }
+  fGraphicsQueue = backendContext.fQueue = queue_ret.value();
+
+  auto queue_index_ret = vkb_device.get_queue_index(vkb::QueueType::graphics);
+  if (!queue_index_ret) {
+    vkb::destroy_device(vkb_device);
+    vkb::destroy_surface(vkb_instance, fSurface);
+    FATAL() << "Failed to get Vulkan Graphics Queue Index. Error: "
+            << queue_index_ret.error().message();
+  }
+  fGraphicsQueueIndex = backendContext.fGraphicsQueueIndex =
+      queue_index_ret.value();
+
+  // TODO: set all fields of backendContext - same as CreateVkBackendContext
+  // backendContext.fMaxAPIVersion = phys_device.
 
   PFN_vkGetPhysicalDeviceProperties localGetPhysicalDeviceProperties =
       reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(
           backendContext.fGetProc("vkGetPhysicalDeviceProperties",
                                   backendContext.fInstance, VK_NULL_HANDLE));
   if (!localGetPhysicalDeviceProperties) {
-    sk_gpu_test::FreeVulkanFeaturesStructs(&features);
+    vkb::destroy_device(vkb_device);
+    vkb::destroy_surface(vkb_instance, fSurface);
     return 4;
   }
   VkPhysicalDeviceProperties physDeviceProperties;
@@ -723,31 +775,21 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   fContext = GrDirectContext::MakeVulkan(backendContext, fGrContextOptions);
 
-  fSurface = createVkSurface(fInstance);
-  if (VK_NULL_HANDLE == fSurface) {
-    destroyContext();
-    sk_gpu_test::FreeVulkanFeaturesStructs(&features);
-    return 5;
-  }
-
   VkBool32 supported;
-  VkResult res = fGetPhysicalDeviceSurfaceSupportKHR(
-      fPhysicalDevice, fPresentQueueIndex, fSurface, &supported);
+  res = fGetPhysicalDeviceSurfaceSupportKHR(fPhysicalDevice, fPresentQueueIndex,
+                                            fSurface, &supported);
   if (VK_SUCCESS != res) {
     destroyContext();
-    sk_gpu_test::FreeVulkanFeaturesStructs(&features);
     return 6;
   }
 
   if (!createSwapchain(-1, -1)) {
     destroyContext();
-    sk_gpu_test::FreeVulkanFeaturesStructs(&features);
     return 7;
   }
 
   // create presentQueue
   fGetDeviceQueue(fDevice, fPresentQueueIndex, 0, &fPresentQueue);
-  sk_gpu_test::FreeVulkanFeaturesStructs(&features);
 
   ShowWindow(hWnd, nCmdShow);
   UpdateWindow(hWnd);
@@ -762,5 +804,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DispatchMessage(&msg);
   }
 
+  vkb::destroy_instance(vkb_instance);
   return (int)msg.wParam;
 }

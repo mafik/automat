@@ -102,6 +102,8 @@ class Step:
         updated_inputs = self.dirty_inputs()
         if len(updated_inputs) > 0:
             return self.build_and_log(updated_inputs)
+        if len(self.outputs) == 0:
+            return self.build_and_log([])
 
 
 class Recipe:

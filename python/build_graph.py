@@ -49,7 +49,23 @@ recipe = make.Recipe()
 # Recipes for vendored dependencies
 ###############################
 
-cmake_args = ['cmake', '-G', 'Ninja', f'-DCMAKE_C_COMPILER={CC}', f'-DCMAKE_CXX_COMPILER={CXX}']
+
+if args.release and args.debug:
+    CMAKE_BUILD_TYPE = 'RelWithDebInfo'
+elif args.release:
+    CMAKE_BUILD_TYPE = 'Release'
+elif args.debug:
+    CMAKE_BUILD_TYPE = 'Debug'
+else:
+    CMAKE_BUILD_TYPE = 'MinSizeRel'
+
+cmake_args = ['cmake', '-G', 'Ninja', f'-D{CMAKE_BUILD_TYPE=}', f'-DCMAKE_C_COMPILER={CC}', f'-DCMAKE_CXX_COMPILER={CXX}']
+
+# CMake needs this policy to be enabled to respect `CMAKE_MSVC_RUNTIME_LIBRARY`
+# https://cmake.org/cmake/help/latest/policy/CMP0091.html
+# When vk-bootstrap sets minimum CMake version >= 3.15, the policy define can be removed.
+CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreadedDebug' if args.debug else 'MultiThreaded'
+cmake_args += ['-DCMAKE_POLICY_DEFAULT_CMP0091=NEW', f'-D{CMAKE_MSVC_RUNTIME_LIBRARY=}']
 
 # GoogleTest
 
@@ -81,13 +97,17 @@ LDFLAGS += ['-L', GOOGLETEST_OUT / 'lib']
 # vk-bootstrap
 
 VK_BOOTSTRAP_ROOT = fs_utils.project_tmp_dir / 'vk-bootstrap'
-VK_BOOTSTRAP_BUILD = VK_BOOTSTRAP_ROOT / 'build'
-
+VK_BOOTSTRAP_BUILD = VK_BOOTSTRAP_ROOT / 'build' / CMAKE_BUILD_TYPE
+VK_BOOTSTRAP_INCLUDE = VK_BOOTSTRAP_ROOT / 'src'
 VK_BOOTSTRAP_LIB = VK_BOOTSTRAP_BUILD / 'vk-bootstrap.lib'
+
+CXXFLAGS += ['-I', VK_BOOTSTRAP_INCLUDE]
+LDFLAGS += ['-L', VK_BOOTSTRAP_BUILD]
+LDFLAGS += ['-lvk-bootstrap']
 
 recipe.add_step(
     functools.partial(Popen, ['git', 'clone', 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
-    outputs = [VK_BOOTSTRAP_ROOT / 'CMakeLists.txt'],
+    outputs = [VK_BOOTSTRAP_ROOT / 'CMakeLists.txt', VK_BOOTSTRAP_INCLUDE],
     inputs = [],
     name='Fetch vk-bootstrap')
 
@@ -102,10 +122,6 @@ recipe.add_step(
     outputs=[VK_BOOTSTRAP_LIB],
     inputs=[VK_BOOTSTRAP_BUILD / 'build.ninja'],
     name='Build vk-bootstrap')
-
-CXXFLAGS += ['-I', VK_BOOTSTRAP_ROOT / 'src']
-LDFLAGS += ['-L', VK_BOOTSTRAP_BUILD]
-LDFLAGS += ['-lvk-bootstrap']
 
 # Skia
 
@@ -188,7 +204,7 @@ for path, deps in graph.items():
         pargs += source_files
         pargs += ['-c', '-o', path]
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps, name=Path(path).name)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_INCLUDE], name=Path(path).name)
         compilation_db.append(CompilationEntry(source_files[0], path, pargs))
     elif t == 'test':
         recipe.generated.add(path)
@@ -201,7 +217,7 @@ for path, deps in graph.items():
         recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps, name=f'link {path}', stderr_prettifier=cxxfilt)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_LIB], name=f'link {path}', stderr_prettifier=cxxfilt)
         runner = functools.partial(Popen, [f'./{path}'])
         recipe.add_step(runner, outputs=[], inputs=[path], name=path)
     else:

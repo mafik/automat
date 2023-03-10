@@ -1,4 +1,4 @@
 #pragma once
 
-void PrintBacktrace();
+bool PrintBacktrace();
 void EnableBacktraceOnSIGSEGV();

@@ -10,7 +10,6 @@
 #include <sys/prctl.h>
 #include <sys/wait.h>
 
-
 /**
  * Based on public domain code by Jaco Kroon.
  *
@@ -63,15 +62,47 @@ void EnableBacktraceOnSIGSEGV() {
 
 #elif defined(_WIN32)
 
-void PrintBacktrace() {
-  printf("Backtrace not implemented.\n");
-  // win32 GDB can be downloaded from https://github.com/ssbssa/gdb/releases
+#include <Windows.h>
+
+bool PrintBacktrace() {
+  int pid = GetCurrentProcessId();
+  wchar_t file_name[MAX_PATH];
+  GetModuleFileName(NULL, file_name, MAX_PATH);
+  wchar_t args[512];
+  swprintf(args, sizeof(args),
+           L"gdb --batch -n -iex \"set print thread-events off\" -ex \"info "
+           L"threads\" -ex \"thread 1\" -ex bt \"%s\" %d",
+           file_name, pid);
+  STARTUPINFO si = {};
+  PROCESS_INFORMATION pi = {};
+  if (!CreateProcess(nullptr, args, nullptr, nullptr, 0, 0, nullptr, nullptr,
+                     &si, &pi)) {
+    char buf[256];
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                   NULL, GetLastError(),
+                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), buf,
+                   (sizeof(buf) / sizeof(wchar_t)), NULL);
+    printf("  CreateProcess failed with error code %lu: %s", GetLastError(),
+           buf);
+    return false;
+  }
+  WaitForSingleObject(pi.hProcess, INFINITE);
+  unsigned long exitCode;
+  GetExitCodeProcess(pi.hProcess, &exitCode);
+  CloseHandle(pi.hProcess);
+  CloseHandle(pi.hThread);
+  return exitCode == 0;
 }
 
 static void signal_segv_win32(int signum) {
-  printf("Segmentation Fault!\n");
+  printf("Program accessed invalid memory and will shut down.\n");
+  printf("Attempting to get stack trace to help in fixing this problem...\n");
 
-  PrintBacktrace();
+  if (!PrintBacktrace()) {
+    printf("Most likely the GDB debugger was not found.\n  It can be "
+           "downloaded from https://github.com/ssbssa/gdb/releases.\n  It "
+           "should also be added to system PATH variable.");
+  }
 
   _exit(-1);
 }

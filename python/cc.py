@@ -19,14 +19,25 @@ if platform == 'win32':
     # As of Clang 16 it's not defined by default.
     # If future Clangs add it, the manual definition can be removed.
     defines.add('__cpp_consteval')
-
-if args.debug:
-    defines.add('_DEBUG')
-else:
-    defines.add('NDEBUG')
+    # Silence some MSCRT-specific deprecation warnings.
+    defines.add('_CRT_SECURE_NO_WARNINGS')
+    # No clue what it precisely does but many projects use it.
+    defines.add('WIN32_LEAN_AND_MEAN')
 
 defines.add('SK_GANESH')
 defines.add('SK_VULKAN')
+defines.add('SK_USE_VMA')
+
+if args.debug:
+    defines.add('_DEBUG')
+    defines.add('SK_DEBUG')
+    # This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.
+    # For more interesting defines, check out:
+    # https://github.com/google/skia/blob/main/include/config/SkUserConfig.h
+    defines.add('SK_TRIVIAL_ABI=[[clang::trivial_abi]]')
+else:
+    defines.add('NDEBUG')
+
 
 srcs = []
 for ext in ['.cc', '.h']:
@@ -66,7 +77,8 @@ for path_abs in srcs:
         # This regular experession captures most of #if defined/#ifdef variants in one go.
         # ?: at the beginning of a group means that it's non-capturing
         # ?P<...> ate the beginning of a group assigns it a name
-        match = re.match('^#(?P<el>el(?P<else>se)?)?(?P<end>end)?if(?P<neg1>n)?(?:def)? (?P<neg2>!)?(?:defined)?(?:\()?(?P<id>[a-zA-Z0-9_]+)(?:\))?', line)
+        match = re.match(
+            '^#(?P<el>el(?P<else>se)?)?(?P<end>end)?if(?P<neg1>n)?(?:def)? (?P<neg2>!)?(?:defined)?(?:\()?(?P<id>[a-zA-Z0-9_]+)(?:\))?', line)
         if match:
             test = match.group('id') in current_defines
             if match.group('neg1') or match.group('neg2'):
@@ -74,11 +86,11 @@ for path_abs in srcs:
             if match.group('else'):
                 test = not if_stack[-1]
 
-            if match.group('end'): #endif
+            if match.group('end'):  # endif
                 if_stack.pop()
-            elif match.group('el'): #elif
+            elif match.group('el'):  # elif
                 if_stack[-1] = test
-            else: #if
+            else:  # if
                 if_stack.append(test)
             continue
 
@@ -86,7 +98,7 @@ for path_abs in srcs:
             continue
 
         # Actual scanning starts here
-        
+
         match = re.match('^#include \"([a-zA-Z0-9_/\.-]+)\"', line)
         if match:
             dep = path.with_name(match.group(1))

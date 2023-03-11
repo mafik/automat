@@ -1,9 +1,9 @@
 #include "win_main.h"
 
-#include "VkTestUtils.h"
 #include "backtrace.h"
 #include "log.h"
 
+#include <tools/gpu/vk/GrVulkanDefines.h>
 
 #include <VkBootstrap.h>
 #include <include/core/SkCanvas.h>
@@ -25,33 +25,338 @@
 #include <io.h>
 #include <tchar.h>
 
-vkb::Instance vkb_instance;
+LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-sk_sp<GrDirectContext> fContext;
-sk_sp<const skgpu::VulkanInterface> fInterface;
+namespace automaton {
+
+static const wchar_t kWindowClass[] = L"Automaton";
+static const wchar_t kWindowTitle[] = L"Automaton";
+
+HINSTANCE GetInstance() {
+  static HINSTANCE instance = GetModuleHandle(nullptr);
+  return instance;
+}
+
+WNDCLASSEX &GetWindowClass() {
+  static WNDCLASSEX wcex = []() {
+    WNDCLASSEX wcex = {.cbSize = sizeof(WNDCLASSEX),
+                       .style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
+                       .lpfnWndProc = WndProc,
+                       .cbClsExtra = 0,
+                       .cbWndExtra = 0,
+                       .hInstance = GetInstance(),
+                       .hIcon = LoadIcon(GetInstance(), (LPCTSTR)IDI_WINLOGO),
+                       .hCursor = LoadCursor(nullptr, IDC_ARROW),
+                       .hbrBackground = (HBRUSH)(COLOR_WINDOW + 1),
+                       .lpszMenuName = nullptr,
+                       .lpszClassName = kWindowClass,
+                       .hIconSm =
+                           LoadIcon(GetInstance(), (LPCTSTR)IDI_WINLOGO)};
+    return wcex;
+  }();
+  return wcex;
+}
+
+HWND CreateAutomatonWindow() {
+  return CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowClass, kWindowTitle,
+                        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800,
+                        600, nullptr, nullptr, GetInstance(), nullptr);
+}
+
+struct VulkanInstance : vkb::Instance {
+  void Init() {
+    if (instance != VK_NULL_HANDLE) {
+      Destroy();
+    }
+    vkb::InstanceBuilder builder;
+    builder.set_minimum_instance_version(instance_version);
+    builder.require_api_version(api_version);
+    for (auto &ext : extensions) {
+      builder.enable_extension(ext);
+    }
+    auto result = builder.build();
+    if (!result) {
+      error = result.error().message();
+    } else {
+      (*(vkb::Instance *)this) = result.value();
+    }
+  }
+
+  void Destroy() {
+    vkb::destroy_instance(*this);
+    debug_messenger = VK_NULL_HANDLE;
+    instance = VK_NULL_HANDLE;
+    error = "";
+  }
+
+  PFN_vkVoidFunction GetProcAddr(const char *proc_name) {
+    return fp_vkGetInstanceProcAddr(instance, proc_name);
+  }
+
+  uint32_t instance_version = VK_MAKE_VERSION(1, 1, 0);
+  uint32_t api_version = VK_API_VERSION_1_1;
+  std::string error = "";
+  std::vector<const char *> extensions = {"VK_KHR_win32_surface"};
+};
+
+VulkanInstance vulkan_instance;
+
+PFN_vkVoidFunction VulkanGetProc(const char *proc_name, VkInstance instance,
+                                 VkDevice device) {
+  if (device != VK_NULL_HANDLE) {
+    return vulkan_instance.fp_vkGetDeviceProcAddr(device, proc_name);
+  }
+  return vulkan_instance.fp_vkGetInstanceProcAddr(instance, proc_name);
+};
+
+struct VulkanSurface {
+  void Init(HWND hWnd) {
+    if (surface != VK_NULL_HANDLE) {
+      error = "VulkanSurface already initialized.";
+      return;
+    }
+    PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR =
+        (PFN_vkCreateWin32SurfaceKHR)vulkan_instance.GetProcAddr(
+            "vkCreateWin32SurfaceKHR");
+
+    VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {
+        .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+        .pNext = nullptr,
+        .flags = 0,
+        .hinstance = GetInstance(),
+        .hwnd = hWnd};
+
+    VkResult res = vkCreateWin32SurfaceKHR(vulkan_instance, &surfaceCreateInfo,
+                                           nullptr, &surface);
+    if (VK_SUCCESS != res) {
+      error = "Failure in createWin32SurfaceKHR.";
+      return;
+    }
+
+    if (VK_NULL_HANDLE == surface) {
+      error = "No surface after createWin32SurfaceKHR";
+      return;
+    }
+  }
+
+  void Destroy() {
+    vkb::destroy_surface(vulkan_instance, surface);
+    surface = VK_NULL_HANDLE;
+    error = "";
+  }
+
+  operator VkSurfaceKHR() { return surface; }
+
+  VkSurfaceKHR surface;
+  std::string error = "";
+};
+
+VulkanSurface vulkan_surface;
+
+struct VulkanPhysicalDevice : vkb::PhysicalDevice {
+  void Init() {
+    if (physical_device != VK_NULL_HANDLE) {
+      error = "VulkanPhysicalDevice already initialized.";
+      return;
+    }
+    auto result =
+        vkb::PhysicalDeviceSelector(vulkan_instance)
+            .set_surface(vulkan_surface)
+            .add_required_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
+            .add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
+            .prefer_gpu_device_type()
+            .select();
+    if (!result) {
+      error = result.error().message();
+      return;
+    }
+    *(vkb::PhysicalDevice *)this = result.value();
+    extensions_str = get_extensions();
+    for (auto &ext : extensions_str) {
+      extensions.push_back(ext.c_str());
+    }
+  }
+
+  void Destroy() {
+    physical_device = VK_NULL_HANDLE;
+    extensions_str.clear();
+    extensions.clear();
+    error = "";
+  }
+
+  std::vector<std::string> extensions_str;
+  std::vector<const char *> extensions;
+  std::string error = "";
+};
+
+VulkanPhysicalDevice vulkan_physical_device;
+
+struct VulkanDevice : vkb::Device {
+  void Init() {
+    extensions.init(VulkanGetProc, vulkan_instance, vulkan_physical_device,
+                    vulkan_instance.extensions.size(),
+                    vulkan_instance.extensions.data(),
+                    vulkan_physical_device.extensions.size(),
+                    vulkan_physical_device.extensions.data());
+
+    int api_version = vulkan_physical_device.properties.apiVersion;
+    SkASSERT(api_version >= VK_MAKE_VERSION(1, 1, 0) ||
+             extensions.hasExtension(
+                 VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, 1));
+
+    features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features.pNext = nullptr;
+
+    // Setup all extension feature structs we may want to use.
+    void **tailPNext = &features.pNext;
+
+    VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT *blend = nullptr;
+    if (extensions.hasExtension(VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME,
+                                2)) {
+      blend =
+          (VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT *)sk_malloc_throw(
+              sizeof(VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT));
+      blend->sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BLEND_OPERATION_ADVANCED_FEATURES_EXT;
+      blend->pNext = nullptr;
+      *tailPNext = blend;
+      tailPNext = &blend->pNext;
+    }
+
+    VkPhysicalDeviceSamplerYcbcrConversionFeatures *ycbcrFeature = nullptr;
+    if (api_version >= VK_MAKE_VERSION(1, 1, 0) ||
+        extensions.hasExtension(VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
+                                1)) {
+      ycbcrFeature =
+          (VkPhysicalDeviceSamplerYcbcrConversionFeatures *)sk_malloc_throw(
+              sizeof(VkPhysicalDeviceSamplerYcbcrConversionFeatures));
+      ycbcrFeature->sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
+      ycbcrFeature->pNext = nullptr;
+      ycbcrFeature->samplerYcbcrConversion = VK_TRUE;
+      *tailPNext = ycbcrFeature;
+      tailPNext = &ycbcrFeature->pNext;
+    }
+
+    PFN_vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceFeatures2 =
+        (PFN_vkGetPhysicalDeviceFeatures2)vulkan_instance.GetProcAddr(
+            api_version >= VK_MAKE_VERSION(1, 1, 0)
+                ? "vkGetPhysicalDeviceFeatures2"
+                : "vkGetPhysicalDeviceFeatures2KHR");
+    vkGetPhysicalDeviceFeatures2(vulkan_physical_device, &features);
+
+    // this looks like it would slow things down,
+    // and we can't depend on it on all platforms
+    features.features.robustBufferAccess = VK_FALSE;
+
+    vkb::DeviceBuilder device_builder(vulkan_physical_device);
+
+    // If we set the pNext of the VkDeviceCreateInfo to our
+    // VkPhysicalDeviceFeatures2 struct, the device creation will use that
+    // instead of the ppEnabledFeatures.
+    device_builder.add_pNext(&features);
+    auto dev_ret = device_builder.build();
+    if (!dev_ret) {
+      error = dev_ret.error().message();
+      return;
+    }
+    *(vkb::Device *)this = dev_ret.value();
+
+    auto gq_result = get_queue(vkb::QueueType::graphics);
+    if (!gq_result) {
+      error = gq_result.error().message();
+      return;
+    }
+    graphics_queue = gq_result.value();
+
+    auto gqi_result = get_queue_index(vkb::QueueType::graphics);
+    if (!gqi_result) {
+      error = gqi_result.error().message();
+      return;
+    }
+    graphics_queue_index = gqi_result.value();
+
+    auto pq_result = get_queue(vkb::QueueType::present);
+    if (!pq_result) {
+      error = pq_result.error().message();
+      return;
+    }
+    present_queue = pq_result.value();
+
+    auto pqi_result = get_queue_index(vkb::QueueType::present);
+    if (!pqi_result) {
+      error = pqi_result.error().message();
+      return;
+    }
+    present_queue_index = pqi_result.value();
+  }
+
+  void Destroy() {
+    if (device != VK_NULL_HANDLE) {
+      vkb::destroy_device(*this);
+    }
+    device = VK_NULL_HANDLE;
+    extensions = {};
+    features = {};
+    error = "";
+  }
+
+  uint32_t graphics_queue_index;
+  VkQueue graphics_queue;
+  uint32_t present_queue_index;
+  VkQueue present_queue;
+  skgpu::VulkanExtensions extensions;
+  VkPhysicalDeviceFeatures2 features = {};
+  std::string error = "";
+};
+
+VulkanDevice vulkan_device;
+
+sk_sp<const skgpu::VulkanInterface> skia_vulkan_interface;
+
+void InitSkiaVulkanInterface() {
+  skia_vulkan_interface.reset(new skgpu::VulkanInterface(
+      VulkanGetProc, vulkan_instance, vulkan_device,
+      vulkan_instance.instance_version,
+      vulkan_physical_device.properties.apiVersion, &vulkan_device.extensions));
+}
+
+sk_sp<GrDirectContext> gr_context;
+
+void InitGrContext() {
+  GrVkBackendContext grVkBackendContext = {
+      .fInstance = vulkan_instance,
+      .fPhysicalDevice = vulkan_physical_device,
+      .fDevice = vulkan_device,
+      .fQueue = vulkan_device.graphics_queue,
+      .fGraphicsQueueIndex = vulkan_device.graphics_queue_index,
+      .fMaxAPIVersion = vulkan_instance.api_version,
+      .fVkExtensions = &vulkan_device.extensions,
+      .fDeviceFeatures2 = &vulkan_device.features,
+      .fGetProc = VulkanGetProc,
+  };
+  
+  GrContextOptions grContextOptions = GrContextOptions();
+
+  gr_context = GrDirectContext::MakeVulkan(grVkBackendContext, grContextOptions);
+}
+
+} // namespace automaton
+
+using namespace automaton;
+
 int fWidth;
 int fHeight;
 double fRotationAngle = 0;
 
 int fMSAASampleCount = 1;
 bool fDisableVsync = false;
-sk_sp<SkColorSpace> fColorSpace = nullptr;
 SkSurfaceProps fSurfaceProps(0, kRGB_H_SkPixelGeometry);
 
 int fSampleCount = 1;
 int fStencilBits = 0;
 
-VkInstance fInstance = VK_NULL_HANDLE;
-VkPhysicalDevice fPhysicalDevice = VK_NULL_HANDLE;
-VkDevice fDevice = VK_NULL_HANDLE;
-VkDebugReportCallbackEXT fDebugCallback = VK_NULL_HANDLE;
-
-VkSurfaceKHR fSurface;
 VkSwapchainKHR fSwapchain;
-uint32_t fGraphicsQueueIndex;
-VkQueue fGraphicsQueue;
-uint32_t fPresentQueueIndex;
-VkQueue fPresentQueue;
 
 uint32_t fImageCount;
 VkImage *fImages; // images in the swapchain
@@ -68,11 +373,6 @@ struct BackbufferInfo {
 BackbufferInfo *fBackbuffers;
 uint32_t fCurrentBackbufferIndex;
 
-GrContextOptions fGrContextOptions;
-
-PFN_vkDestroySurfaceKHR fDestroySurfaceKHR = nullptr;
-PFN_vkGetPhysicalDeviceSurfaceSupportKHR fGetPhysicalDeviceSurfaceSupportKHR =
-    nullptr;
 PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR
     fGetPhysicalDeviceSurfaceCapabilitiesKHR = nullptr;
 PFN_vkGetPhysicalDeviceSurfaceFormatsKHR fGetPhysicalDeviceSurfaceFormatsKHR =
@@ -86,23 +386,18 @@ PFN_vkGetSwapchainImagesKHR fGetSwapchainImagesKHR = nullptr;
 PFN_vkAcquireNextImageKHR fAcquireNextImageKHR = nullptr;
 PFN_vkQueuePresentKHR fQueuePresentKHR = nullptr;
 
-PFN_vkDestroyInstance fDestroyInstance = nullptr;
 PFN_vkDeviceWaitIdle fDeviceWaitIdle = nullptr;
-PFN_vkDestroyDebugReportCallbackEXT fDestroyDebugReportCallbackEXT = nullptr;
 PFN_vkQueueWaitIdle fQueueWaitIdle = nullptr;
 PFN_vkDestroyDevice fDestroyDevice = nullptr;
 PFN_vkGetDeviceQueue fGetDeviceQueue = nullptr;
-
-GrVkBackendContext backendContext;
-skgpu::VulkanExtensions extensions;
 
 void destroyBuffers() {
   if (fBackbuffers) {
     for (uint32_t i = 0; i < fImageCount + 1; ++i) {
       fBackbuffers[i].fImageIndex = -1;
-      GR_VK_CALL(
-          fInterface,
-          DestroySemaphore(fDevice, fBackbuffers[i].fRenderSemaphore, nullptr));
+      GR_VK_CALL(skia_vulkan_interface,
+                 DestroySemaphore(vulkan_device,
+                                  fBackbuffers[i].fRenderSemaphore, nullptr));
     }
   }
 
@@ -119,56 +414,40 @@ void destroyBuffers() {
 }
 
 void destroyContext() {
-  if (VK_NULL_HANDLE != fDevice) {
-    fQueueWaitIdle(fPresentQueue);
-    fDeviceWaitIdle(fDevice);
+  if (VK_NULL_HANDLE != vulkan_device) {
+    fQueueWaitIdle(vulkan_device.present_queue);
+    fDeviceWaitIdle(vulkan_device);
 
     destroyBuffers();
 
     if (VK_NULL_HANDLE != fSwapchain) {
-      fDestroySwapchainKHR(fDevice, fSwapchain, nullptr);
+      fDestroySwapchainKHR(vulkan_device, fSwapchain, nullptr);
       fSwapchain = VK_NULL_HANDLE;
     }
 
-    if (VK_NULL_HANDLE != fSurface) {
-      fDestroySurfaceKHR(fInstance, fSurface, nullptr);
-      fSurface = VK_NULL_HANDLE;
-    }
+    vulkan_surface.Destroy();
   }
 
-  SkASSERT(fContext->unique());
-  fContext.reset();
-  fInterface.reset();
+  SkASSERT(gr_context->unique());
+  gr_context.reset();
+  skia_vulkan_interface.reset();
 
-  if (VK_NULL_HANDLE != fDevice) {
-    fDestroyDevice(fDevice, nullptr);
-    fDevice = VK_NULL_HANDLE;
-  }
+  vulkan_device.Destroy();
 
-#if defined(SK_ENABLE_VK_LAYERS)
-  if (fDebugCallback != VK_NULL_HANDLE) {
-    fDestroyDebugReportCallbackEXT(fInstance, fDebugCallback, nullptr);
-  }
-#endif
-
-  fPhysicalDevice = VK_NULL_HANDLE;
-
-  if (VK_NULL_HANDLE != fInstance) {
-    fDestroyInstance(fInstance, nullptr);
-    fInstance = VK_NULL_HANDLE;
-  }
+  vulkan_physical_device.Destroy();
+  vulkan_instance.Destroy();
 }
 
 bool createBuffers(VkFormat format, VkImageUsageFlags usageFlags,
                    SkColorType colorType, VkSharingMode sharingMode) {
-  fGetSwapchainImagesKHR(fDevice, fSwapchain, &fImageCount, nullptr);
+  fGetSwapchainImagesKHR(vulkan_device, fSwapchain, &fImageCount, nullptr);
   SkASSERT(fImageCount);
   fImages = new VkImage[fImageCount];
-  fGetSwapchainImagesKHR(fDevice, fSwapchain, &fImageCount, fImages);
+  fGetSwapchainImagesKHR(vulkan_device, fSwapchain, &fImageCount, fImages);
 
   // set up initial image layouts and create surfaces
   fImageLayouts = new VkImageLayout[fImageCount];
-  fSurfaces = new sk_sp<SkSurface>[fImageCount];
+  fSurfaces = new sk_sp<SkSurface>[fImageCount]();
   for (uint32_t i = 0; i < fImageCount; ++i) {
     fImageLayouts[i] = VK_IMAGE_LAYOUT_UNDEFINED;
 
@@ -180,22 +459,24 @@ bool createBuffers(VkFormat format, VkImageUsageFlags usageFlags,
     info.fFormat = format;
     info.fImageUsageFlags = usageFlags;
     info.fLevelCount = 1;
-    info.fCurrentQueueFamily = fPresentQueueIndex;
+    info.fCurrentQueueFamily = vulkan_device.present_queue_index;
     info.fSharingMode = sharingMode;
+
+    sk_sp<SkColorSpace> colorSpace = SkColorSpace::MakeSRGB();
 
     if (usageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) {
       GrBackendTexture backendTexture(fWidth, fHeight, info);
       fSurfaces[i] = SkSurface::MakeFromBackendTexture(
-          fContext.get(), backendTexture, kTopLeft_GrSurfaceOrigin,
-          fMSAASampleCount, colorType, fColorSpace, &fSurfaceProps);
+          gr_context.get(), backendTexture, kTopLeft_GrSurfaceOrigin,
+          fMSAASampleCount, colorType, colorSpace, &fSurfaceProps);
     } else {
       if (fMSAASampleCount > 1) {
         return false;
       }
       GrBackendRenderTarget backendRT(fWidth, fHeight, fSampleCount, info);
       fSurfaces[i] = SkSurface::MakeFromBackendRenderTarget(
-          fContext.get(), backendRT, kTopLeft_GrSurfaceOrigin, colorType,
-          fColorSpace, &fSurfaceProps);
+          gr_context.get(), backendRT, kTopLeft_GrSurfaceOrigin, colorType,
+          colorSpace, &fSurfaceProps);
     }
     if (!fSurfaces[i]) {
       return false;
@@ -215,9 +496,10 @@ bool createBuffers(VkFormat format, VkImageUsageFlags usageFlags,
   fBackbuffers = new BackbufferInfo[fImageCount + 1];
   for (uint32_t i = 0; i < fImageCount + 1; ++i) {
     fBackbuffers[i].fImageIndex = -1;
-    SkDEBUGCODE(VkResult result =) GR_VK_CALL(
-        fInterface, CreateSemaphore(fDevice, &semaphoreInfo, nullptr,
-                                    &fBackbuffers[i].fRenderSemaphore));
+    SkDEBUGCODE(VkResult result =)
+        GR_VK_CALL(skia_vulkan_interface,
+                   CreateSemaphore(vulkan_device, &semaphoreInfo, nullptr,
+                                   &fBackbuffers[i].fRenderSemaphore));
     SkASSERT(result == VK_SUCCESS);
   }
   fCurrentBackbufferIndex = fImageCount;
@@ -227,32 +509,35 @@ bool createBuffers(VkFormat format, VkImageUsageFlags usageFlags,
 bool createSwapchain(int width, int height) {
   // check for capabilities
   VkSurfaceCapabilitiesKHR caps;
-  if (fGetPhysicalDeviceSurfaceCapabilitiesKHR(fPhysicalDevice, fSurface,
-                                               &caps)) {
+  if (fGetPhysicalDeviceSurfaceCapabilitiesKHR(vulkan_physical_device,
+                                               vulkan_surface, &caps)) {
     return false;
   }
 
   uint32_t surfaceFormatCount;
-  if (fGetPhysicalDeviceSurfaceFormatsKHR(fPhysicalDevice, fSurface,
-                                          &surfaceFormatCount, nullptr)) {
+  if (fGetPhysicalDeviceSurfaceFormatsKHR(vulkan_physical_device,
+                                          vulkan_surface, &surfaceFormatCount,
+                                          nullptr)) {
     return false;
   }
 
   VkSurfaceFormatKHR surfaceFormats[surfaceFormatCount];
-  if (fGetPhysicalDeviceSurfaceFormatsKHR(
-          fPhysicalDevice, fSurface, &surfaceFormatCount, surfaceFormats)) {
+  if (fGetPhysicalDeviceSurfaceFormatsKHR(vulkan_physical_device,
+                                          vulkan_surface, &surfaceFormatCount,
+                                          surfaceFormats)) {
     return false;
   }
 
   uint32_t presentModeCount;
-  if (fGetPhysicalDeviceSurfacePresentModesKHR(fPhysicalDevice, fSurface,
-                                               &presentModeCount, nullptr)) {
+  if (fGetPhysicalDeviceSurfacePresentModesKHR(
+          vulkan_physical_device, vulkan_surface, &presentModeCount, nullptr)) {
     return false;
   }
 
   VkPresentModeKHR presentModes[presentModeCount];
   if (fGetPhysicalDeviceSurfacePresentModesKHR(
-          fPhysicalDevice, fSurface, &presentModeCount, presentModes)) {
+          vulkan_physical_device, vulkan_surface, &presentModeCount,
+          presentModes)) {
     return false;
   }
 
@@ -354,7 +639,7 @@ bool createSwapchain(int width, int height) {
   VkSwapchainCreateInfoKHR swapchainCreateInfo;
   memset(&swapchainCreateInfo, 0, sizeof(VkSwapchainCreateInfoKHR));
   swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-  swapchainCreateInfo.surface = fSurface;
+  swapchainCreateInfo.surface = vulkan_surface;
   swapchainCreateInfo.minImageCount = imageCount;
   swapchainCreateInfo.imageFormat = surfaceFormat;
   swapchainCreateInfo.imageColorSpace = colorSpace;
@@ -362,8 +647,9 @@ bool createSwapchain(int width, int height) {
   swapchainCreateInfo.imageArrayLayers = 1;
   swapchainCreateInfo.imageUsage = usageFlags;
 
-  uint32_t queueFamilies[] = {fGraphicsQueueIndex, fPresentQueueIndex};
-  if (fGraphicsQueueIndex != fPresentQueueIndex) {
+  uint32_t queueFamilies[] = {vulkan_device.graphics_queue_index,
+                              vulkan_device.present_queue_index};
+  if (vulkan_device.graphics_queue_index != vulkan_device.present_queue_index) {
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
     swapchainCreateInfo.queueFamilyIndexCount = 2;
     swapchainCreateInfo.pQueueFamilyIndices = queueFamilies;
@@ -378,27 +664,29 @@ bool createSwapchain(int width, int height) {
   swapchainCreateInfo.presentMode = mode;
   swapchainCreateInfo.clipped = true;
   swapchainCreateInfo.oldSwapchain = fSwapchain;
-  if (fCreateSwapchainKHR(fDevice, &swapchainCreateInfo, nullptr,
+  if (fCreateSwapchainKHR(vulkan_device, &swapchainCreateInfo, nullptr,
                           &fSwapchain)) {
     return false;
   }
 
   // destroy the old swapchain
   if (swapchainCreateInfo.oldSwapchain != VK_NULL_HANDLE) {
-    fDeviceWaitIdle(fDevice);
+    fDeviceWaitIdle(vulkan_device);
 
     destroyBuffers();
 
-    fDestroySwapchainKHR(fDevice, swapchainCreateInfo.oldSwapchain, nullptr);
+    fDestroySwapchainKHR(vulkan_device, swapchainCreateInfo.oldSwapchain,
+                         nullptr);
   }
 
   if (!createBuffers(swapchainCreateInfo.imageFormat, usageFlags, colorType,
                      swapchainCreateInfo.imageSharingMode)) {
-    fDeviceWaitIdle(fDevice);
+    fDeviceWaitIdle(vulkan_device);
 
     destroyBuffers();
 
-    fDestroySwapchainKHR(fDevice, swapchainCreateInfo.oldSwapchain, nullptr);
+    fDestroySwapchainKHR(vulkan_device, swapchainCreateInfo.oldSwapchain,
+                         nullptr);
   }
 
   return true;
@@ -433,35 +721,38 @@ sk_sp<SkSurface> getBackbufferSurface() {
   semaphoreInfo.pNext = nullptr;
   semaphoreInfo.flags = 0;
   VkSemaphore semaphore;
-  SkDEBUGCODE(VkResult result =)
-      GR_VK_CALL(fInterface,
-                 CreateSemaphore(fDevice, &semaphoreInfo, nullptr, &semaphore));
+  SkDEBUGCODE(VkResult result =) GR_VK_CALL(
+      skia_vulkan_interface,
+      CreateSemaphore(vulkan_device, &semaphoreInfo, nullptr, &semaphore));
   SkASSERT(result == VK_SUCCESS);
 
   // acquire the image
   VkResult res =
-      fAcquireNextImageKHR(fDevice, fSwapchain, UINT64_MAX, semaphore,
+      fAcquireNextImageKHR(vulkan_device, fSwapchain, UINT64_MAX, semaphore,
                            VK_NULL_HANDLE, &backbuffer->fImageIndex);
   if (VK_ERROR_SURFACE_LOST_KHR == res) {
     // need to figure out how to create a new vkSurface without the
     // platformData* maybe use attach somehow? but need a Window
-    GR_VK_CALL(fInterface, DestroySemaphore(fDevice, semaphore, nullptr));
+    GR_VK_CALL(skia_vulkan_interface,
+               DestroySemaphore(vulkan_device, semaphore, nullptr));
     return nullptr;
   }
   if (VK_ERROR_OUT_OF_DATE_KHR == res) {
     // tear swapchain down and try again
     if (!createSwapchain(-1, -1)) {
-      GR_VK_CALL(fInterface, DestroySemaphore(fDevice, semaphore, nullptr));
+      GR_VK_CALL(skia_vulkan_interface,
+                 DestroySemaphore(vulkan_device, semaphore, nullptr));
       return nullptr;
     }
     backbuffer = getAvailableBackbuffer();
 
     // acquire the image
-    res = fAcquireNextImageKHR(fDevice, fSwapchain, UINT64_MAX, semaphore,
+    res = fAcquireNextImageKHR(vulkan_device, fSwapchain, UINT64_MAX, semaphore,
                                VK_NULL_HANDLE, &backbuffer->fImageIndex);
 
     if (VK_SUCCESS != res) {
-      GR_VK_CALL(fInterface, DestroySemaphore(fDevice, semaphore, nullptr));
+      GR_VK_CALL(skia_vulkan_interface,
+                 DestroySemaphore(vulkan_device, semaphore, nullptr));
       return nullptr;
     }
   }
@@ -488,7 +779,7 @@ void swapBuffers() {
   info.fNumSemaphores = 1;
   info.fSignalSemaphores = &beSemaphore;
   skgpu::MutableTextureState presentState(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                                          fPresentQueueIndex);
+                                          vulkan_device.present_queue_index);
   surface->flush(info, &presentState);
   surface->recordingContext()->asDirectContext()->submit();
 
@@ -504,7 +795,7 @@ void swapBuffers() {
       nullptr                             // pResults
   };
 
-  fQueuePresentKHR(fPresentQueue, &presentInfo);
+  fQueuePresentKHR(vulkan_device.present_queue, &presentInfo);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -583,180 +874,49 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
-static wchar_t szWindowClass[] = L"Automaton";
-static wchar_t kWindowTitle[] = L"Automaton";
-
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     PWSTR pCmdLine, int nCmdShow) {
   EnableBacktraceOnSIGSEGV();
   SetConsoleOutputCP(CP_UTF8); // utf-8
   SkGraphics::Init();
-  WNDCLASSEX wcex = {.cbSize = sizeof(WNDCLASSEX),
-                     .style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
-                     .lpfnWndProc = WndProc,
-                     .cbClsExtra = 0,
-                     .cbWndExtra = 0,
-                     .hInstance = hInstance,
-                     .hIcon = LoadIcon(hInstance, (LPCTSTR)IDI_WINLOGO),
-                     .hCursor = LoadCursor(nullptr, IDC_ARROW),
-                     .hbrBackground = (HBRUSH)(COLOR_WINDOW + 1),
-                     .lpszMenuName = nullptr,
-                     .lpszClassName = szWindowClass,
-                     .hIconSm = LoadIcon(hInstance, (LPCTSTR)IDI_WINLOGO)};
 
-  if (!RegisterClassEx(&wcex)) {
-    FATAL() << "Call to RegisterClassEx failed!";
+  if (!RegisterClassEx(&GetWindowClass())) {
+    FATAL() << "Failed to register window class.";
   }
 
-  HWND hWnd =
-      CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, szWindowClass, L"Automaton",
-                     WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800,
-                     600, nullptr, nullptr, hInstance, nullptr);
+  HWND hWnd = CreateAutomatonWindow();
   if (!hWnd) {
-    FATAL() << "Call to CreateWindowEx failed!";
+    FATAL() << "Failed to create main window.";
   }
 
-  vkb::InstanceBuilder instance_builder;
-  auto instance_builder_return =
-      instance_builder.set_minimum_instance_version(1, 1, 0).build();
-  if (!instance_builder_return) {
-    FATAL() << "Failed to create Vulkan instance. Error: "
-            << instance_builder_return.error().message();
-  }
-  vkb_instance = instance_builder_return.value();
-  fInstance = vkb_instance.instance;
-
-  PFN_vkGetInstanceProcAddr instProc = vkb_instance.fp_vkGetInstanceProcAddr;
-
-  static PFN_vkCreateWin32SurfaceKHR createWin32SurfaceKHR = nullptr;
-  if (!createWin32SurfaceKHR) {
-    createWin32SurfaceKHR = (PFN_vkCreateWin32SurfaceKHR)instProc(
-        fInstance, "vkCreateWin32SurfaceKHR");
+  vulkan_instance.Init();
+  if (!vulkan_instance.error.empty()) {
+    FATAL() << "Failed to create Vulkan instance: " << vulkan_instance.error;
   }
 
-  VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-      .pNext = nullptr,
-      .flags = 0,
-      .hinstance = hInstance,
-      .hwnd = hWnd};
-
-  VkResult res =
-      createWin32SurfaceKHR(fInstance, &surfaceCreateInfo, nullptr, &fSurface);
-  if (VK_SUCCESS != res) {
-    vkb::destroy_instance(vkb_instance);
-    FATAL() << "Failure in createWin32SurfaceKHR.";
+  vulkan_surface.Init(hWnd);
+  if (!vulkan_surface.error.empty()) {
+    FATAL() << "Failed to create Vulkan surface: " << vulkan_surface.error;
   }
 
-  if (VK_NULL_HANDLE == fSurface) {
-    vkb::destroy_instance(vkb_instance);
-    FATAL() << "No surface after createWin32SurfaceKHR";
+  vulkan_physical_device.Init();
+  if (!vulkan_physical_device.error.empty()) {
+    FATAL() << "Failed to create Vulkan physical device: "
+            << vulkan_physical_device.error;
   }
 
-  auto canPresent = [instProc](VkInstance instance, VkPhysicalDevice physDev,
-                               uint32_t queueFamilyIndex) {
-    static PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR
-        getPhysicalDeviceWin32PresentationSupportKHR = nullptr;
-    if (!getPhysicalDeviceWin32PresentationSupportKHR) {
-      getPhysicalDeviceWin32PresentationSupportKHR =
-          (PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR)instProc(
-              instance, "vkGetPhysicalDeviceWin32PresentationSupportKHR");
-    }
-
-    VkBool32 check =
-        getPhysicalDeviceWin32PresentationSupportKHR(physDev, queueFamilyIndex);
-    return (VK_FALSE != check);
-  };
-
-  backendContext.fInstance = fInstance;
-
-  vkb::PhysicalDeviceSelector phys_device_selector(vkb_instance);
-  auto physical_device_selector_return =
-      phys_device_selector.set_surface(fSurface)
-          .add_required_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
-          .add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
-          .prefer_gpu_device_type()
-          .select();
-  if (!physical_device_selector_return) {
-    vkb::destroy_surface(vkb_instance, fSurface);
-    FATAL() << "Failed to select Vulkan PhysicalDevice. Error: "
-            << physical_device_selector_return.error().message();
+  vulkan_device.Init();
+  if (!vulkan_device.error.empty()) {
+    FATAL() << "Failed to create Vulkan device: " << vulkan_device.error;
   }
-  auto phys_device = physical_device_selector_return.value();
 
-  fPhysicalDevice = backendContext.fPhysicalDevice =
-      phys_device.physical_device;
+  InitSkiaVulkanInterface();
+  InitGrContext();
 
-  vkb::DeviceBuilder device_builder{phys_device};
-  auto dev_ret = device_builder.build();
-  if (!dev_ret) {
-    vkb::destroy_surface(vkb_instance, fSurface);
-    FATAL() << "Failed to select Vulkan Device. Error: "
-            << dev_ret.error().message();
-  }
-  vkb::Device vkb_device = dev_ret.value();
-
-  fDevice = backendContext.fDevice = vkb_device.device;
-
-  backendContext.fGetProc = [](const char *proc_name, VkInstance instance,
-                               VkDevice device) {
-    if (device != VK_NULL_HANDLE) {
-      return vkb_instance.fp_vkGetDeviceProcAddr(device, proc_name);
-    }
-    return vkb_instance.fp_vkGetInstanceProcAddr(instance, proc_name);
-  };
-
-  auto queue_ret = vkb_device.get_queue(vkb::QueueType::graphics);
-  if (!queue_ret) {
-    vkb::destroy_device(vkb_device);
-    vkb::destroy_surface(vkb_instance, fSurface);
-    FATAL() << "Failed to get Vulkan Graphics Queue. Error: "
-            << queue_ret.error().message();
-  }
-  fGraphicsQueue = backendContext.fQueue = queue_ret.value();
-
-  auto queue_index_ret = vkb_device.get_queue_index(vkb::QueueType::graphics);
-  if (!queue_index_ret) {
-    vkb::destroy_device(vkb_device);
-    vkb::destroy_surface(vkb_instance, fSurface);
-    FATAL() << "Failed to get Vulkan Graphics Queue Index. Error: "
-            << queue_index_ret.error().message();
-  }
-  fGraphicsQueueIndex = backendContext.fGraphicsQueueIndex =
-      queue_index_ret.value();
-
-  // TODO: set all fields of backendContext - same as CreateVkBackendContext
-  // backendContext.fMaxAPIVersion = phys_device.
-
-  PFN_vkGetPhysicalDeviceProperties localGetPhysicalDeviceProperties =
-      reinterpret_cast<PFN_vkGetPhysicalDeviceProperties>(
-          backendContext.fGetProc("vkGetPhysicalDeviceProperties",
-                                  backendContext.fInstance, VK_NULL_HANDLE));
-  if (!localGetPhysicalDeviceProperties) {
-    vkb::destroy_device(vkb_device);
-    vkb::destroy_surface(vkb_instance, fSurface);
-    return 4;
-  }
-  VkPhysicalDeviceProperties physDeviceProperties;
-  localGetPhysicalDeviceProperties(backendContext.fPhysicalDevice,
-                                   &physDeviceProperties);
-  uint32_t physDevVersion = physDeviceProperties.apiVersion;
-
-  fInterface.reset(new skgpu::VulkanInterface(
-      backendContext.fGetProc, fInstance, fDevice,
-      backendContext.fInstanceVersion, physDevVersion, &extensions));
-
-#define GET_PROC(F)                                                            \
-  f##F = (PFN_vk##F)backendContext.fGetProc("vk" #F, fInstance, VK_NULL_HANDLE)
+#define GET_PROC(F) f##F = (PFN_vk##F)vulkan_instance.GetProcAddr("vk" #F)
 #define GET_DEV_PROC(F)                                                        \
-  f##F = (PFN_vk##F)backendContext.fGetProc("vk" #F, VK_NULL_HANDLE, fDevice)
+  f##F = (PFN_vk##F)VulkanGetProc("vk" #F, VK_NULL_HANDLE, vulkan_device)
 
-  GET_PROC(DestroyInstance);
-  if (fDebugCallback != VK_NULL_HANDLE) {
-    GET_PROC(DestroyDebugReportCallbackEXT);
-  }
-  GET_PROC(DestroySurfaceKHR);
-  GET_PROC(GetPhysicalDeviceSurfaceSupportKHR);
   GET_PROC(GetPhysicalDeviceSurfaceCapabilitiesKHR);
   GET_PROC(GetPhysicalDeviceSurfaceFormatsKHR);
   GET_PROC(GetPhysicalDeviceSurfacePresentModesKHR);
@@ -773,23 +933,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 #undef GET_PROC
 #undef GET_DEV_PROC
 
-  fContext = GrDirectContext::MakeVulkan(backendContext, fGrContextOptions);
-
-  VkBool32 supported;
-  res = fGetPhysicalDeviceSurfaceSupportKHR(fPhysicalDevice, fPresentQueueIndex,
-                                            fSurface, &supported);
-  if (VK_SUCCESS != res) {
-    destroyContext();
-    return 6;
-  }
-
   if (!createSwapchain(-1, -1)) {
     destroyContext();
     return 7;
   }
-
-  // create presentQueue
-  fGetDeviceQueue(fDevice, fPresentQueueIndex, 0, &fPresentQueue);
 
   ShowWindow(hWnd, nCmdShow);
   UpdateWindow(hWnd);
@@ -804,6 +951,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DispatchMessage(&msg);
   }
 
-  vkb::destroy_instance(vkb_instance);
+  destroyContext();
   return (int)msg.wParam;
 }

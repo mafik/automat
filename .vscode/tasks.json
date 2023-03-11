@@ -36,12 +36,21 @@
       }
     },
     {
+      "label": "link automaton",
+      "type": "shell",
+      "command": "./run.py 'link automaton' --debug",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
       "label": "Build Debug",
       "dependsOn": [
         "link seven_gui_test",
         "link complex_test",
         "link library_test",
-        "link list_test"
+        "link list_test",
+        "link automaton"
       ],
       "problemMatcher": [
         "$gcc"

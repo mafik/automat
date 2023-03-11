@@ -210,19 +210,21 @@ for path, deps in graph.items():
         recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_INCLUDE], name=Path(path).name)
         compilation_db.append(CompilationEntry(source_files[0], path, pargs))
     elif t == 'test':
+        binary_name = Path(path).stem
         recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS + ['-lgtest_main', '-lgtest', '-lgmock']
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps + [GMOCK_LIB, GTEST_LIB, GTEST_MAIN_LIB], name=f'link {path}', stderr_prettifier=cxxfilt)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [GMOCK_LIB, GTEST_LIB, GTEST_MAIN_LIB], name=f'link {binary_name}', stderr_prettifier=cxxfilt)
         runner = functools.partial(Popen, [f'./{path}', '--gtest_color=yes'])
-        recipe.add_step(runner, outputs=[], inputs=[path], name=path)
+        recipe.add_step(runner, outputs=[], inputs=[path], name=binary_name)
     elif t == 'main':
+        binary_name = Path(path).stem
         recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_LIB], name=f'link {path}', stderr_prettifier=cxxfilt)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_LIB], name=f'link {binary_name}', stderr_prettifier=cxxfilt)
         runner = functools.partial(Popen, [f'./{path}'])
-        recipe.add_step(runner, outputs=[], inputs=[path], name=path)
+        recipe.add_step(runner, outputs=[], inputs=[path], name=binary_name)
     else:
         print(f"File '{path}' has unknown type '{types[path]}'. Dependencies:")
         for dep in deps:

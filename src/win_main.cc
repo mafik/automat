@@ -63,6 +63,28 @@ HWND CreateAutomatonWindow() {
                         600, nullptr, nullptr, GetInstance(), nullptr);
 }
 
+// Initialized in VulkanInstance::Init
+PFN_vkGetInstanceProcAddr GetInstanceProcAddr;
+PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
+
+// Initialized in InitVulkanFunctions
+PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR
+    GetPhysicalDeviceSurfaceCapabilitiesKHR;
+PFN_vkGetPhysicalDeviceSurfaceFormatsKHR GetPhysicalDeviceSurfaceFormatsKHR;
+PFN_vkGetPhysicalDeviceSurfacePresentModesKHR
+    GetPhysicalDeviceSurfacePresentModesKHR;
+
+PFN_vkCreateSwapchainKHR CreateSwapchainKHR;
+PFN_vkDestroySwapchainKHR DestroySwapchainKHR;
+PFN_vkGetSwapchainImagesKHR GetSwapchainImagesKHR;
+PFN_vkAcquireNextImageKHR AcquireNextImageKHR;
+PFN_vkQueuePresentKHR QueuePresentKHR;
+
+PFN_vkDeviceWaitIdle DeviceWaitIdle;
+PFN_vkQueueWaitIdle QueueWaitIdle;
+PFN_vkDestroyDevice DestroyDevice;
+PFN_vkGetDeviceQueue GetDeviceQueue;
+
 struct VulkanInstance : vkb::Instance {
   void Init() {
     if (instance != VK_NULL_HANDLE) {
@@ -80,6 +102,8 @@ struct VulkanInstance : vkb::Instance {
     } else {
       (*(vkb::Instance *)this) = result.value();
     }
+    GetInstanceProcAddr = fp_vkGetInstanceProcAddr;
+    GetDeviceProcAddr = fp_vkGetDeviceProcAddr;
   }
 
   void Destroy() {
@@ -89,8 +113,8 @@ struct VulkanInstance : vkb::Instance {
     error = "";
   }
 
-  PFN_vkVoidFunction GetProcAddr(const char *proc_name) {
-    return fp_vkGetInstanceProcAddr(instance, proc_name);
+  PFN_vkVoidFunction GetProc(const char *proc_name) {
+    return GetInstanceProcAddr(instance, proc_name);
   }
 
   uint32_t instance_version = VK_MAKE_VERSION(1, 1, 0);
@@ -116,7 +140,7 @@ struct VulkanSurface {
       return;
     }
     PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR =
-        (PFN_vkCreateWin32SurfaceKHR)vulkan_instance.GetProcAddr(
+        (PFN_vkCreateWin32SurfaceKHR)vulkan_instance.GetProc(
             "vkCreateWin32SurfaceKHR");
 
     VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {
@@ -239,7 +263,7 @@ struct VulkanDevice : vkb::Device {
     }
 
     PFN_vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceFeatures2 =
-        (PFN_vkGetPhysicalDeviceFeatures2)vulkan_instance.GetProcAddr(
+        (PFN_vkGetPhysicalDeviceFeatures2)vulkan_instance.GetProc(
             api_version >= VK_MAKE_VERSION(1, 1, 0)
                 ? "vkGetPhysicalDeviceFeatures2"
                 : "vkGetPhysicalDeviceFeatures2KHR");
@@ -301,6 +325,10 @@ struct VulkanDevice : vkb::Device {
     error = "";
   }
 
+  PFN_vkVoidFunction GetProc(const char *proc_name) {
+    return GetDeviceProcAddr(device, proc_name);
+  }
+
   uint32_t graphics_queue_index;
   VkQueue graphics_queue;
   uint32_t present_queue_index;
@@ -335,10 +363,32 @@ void InitGrContext() {
       .fDeviceFeatures2 = &vulkan_device.features,
       .fGetProc = VulkanGetProc,
   };
-  
+
   GrContextOptions grContextOptions = GrContextOptions();
 
-  gr_context = GrDirectContext::MakeVulkan(grVkBackendContext, grContextOptions);
+  gr_context =
+      GrDirectContext::MakeVulkan(grVkBackendContext, grContextOptions);
+}
+
+void InitVulkanFunctions() {
+#define INSTANCE_PROC(P) P = (PFN_vk##P)vulkan_instance.GetProc("vk" #P)
+#define DEVICE_PROC(P) P = (PFN_vk##P)vulkan_device.GetProc("vk" #P)
+
+  INSTANCE_PROC(GetPhysicalDeviceSurfaceCapabilitiesKHR);
+  INSTANCE_PROC(GetPhysicalDeviceSurfaceFormatsKHR);
+  INSTANCE_PROC(GetPhysicalDeviceSurfacePresentModesKHR);
+  DEVICE_PROC(DeviceWaitIdle);
+  DEVICE_PROC(QueueWaitIdle);
+  DEVICE_PROC(DestroyDevice);
+  DEVICE_PROC(CreateSwapchainKHR);
+  DEVICE_PROC(DestroySwapchainKHR);
+  DEVICE_PROC(GetSwapchainImagesKHR);
+  DEVICE_PROC(AcquireNextImageKHR);
+  DEVICE_PROC(QueuePresentKHR);
+  DEVICE_PROC(GetDeviceQueue);
+
+#undef INSTANCE_PROC
+#undef DEVICE_PROC
 }
 
 } // namespace automaton
@@ -350,7 +400,7 @@ int fHeight;
 double fRotationAngle = 0;
 
 int fMSAASampleCount = 1;
-bool fDisableVsync = false;
+bool fDisableVsync = true;
 SkSurfaceProps fSurfaceProps(0, kRGB_H_SkPixelGeometry);
 
 int fSampleCount = 1;
@@ -372,24 +422,6 @@ struct BackbufferInfo {
 
 BackbufferInfo *fBackbuffers;
 uint32_t fCurrentBackbufferIndex;
-
-PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR
-    fGetPhysicalDeviceSurfaceCapabilitiesKHR = nullptr;
-PFN_vkGetPhysicalDeviceSurfaceFormatsKHR fGetPhysicalDeviceSurfaceFormatsKHR =
-    nullptr;
-PFN_vkGetPhysicalDeviceSurfacePresentModesKHR
-    fGetPhysicalDeviceSurfacePresentModesKHR = nullptr;
-
-PFN_vkCreateSwapchainKHR fCreateSwapchainKHR = nullptr;
-PFN_vkDestroySwapchainKHR fDestroySwapchainKHR = nullptr;
-PFN_vkGetSwapchainImagesKHR fGetSwapchainImagesKHR = nullptr;
-PFN_vkAcquireNextImageKHR fAcquireNextImageKHR = nullptr;
-PFN_vkQueuePresentKHR fQueuePresentKHR = nullptr;
-
-PFN_vkDeviceWaitIdle fDeviceWaitIdle = nullptr;
-PFN_vkQueueWaitIdle fQueueWaitIdle = nullptr;
-PFN_vkDestroyDevice fDestroyDevice = nullptr;
-PFN_vkGetDeviceQueue fGetDeviceQueue = nullptr;
 
 void destroyBuffers() {
   if (fBackbuffers) {
@@ -415,13 +447,13 @@ void destroyBuffers() {
 
 void destroyContext() {
   if (VK_NULL_HANDLE != vulkan_device) {
-    fQueueWaitIdle(vulkan_device.present_queue);
-    fDeviceWaitIdle(vulkan_device);
+    QueueWaitIdle(vulkan_device.present_queue);
+    DeviceWaitIdle(vulkan_device);
 
     destroyBuffers();
 
     if (VK_NULL_HANDLE != fSwapchain) {
-      fDestroySwapchainKHR(vulkan_device, fSwapchain, nullptr);
+      DestroySwapchainKHR(vulkan_device, fSwapchain, nullptr);
       fSwapchain = VK_NULL_HANDLE;
     }
 
@@ -440,10 +472,10 @@ void destroyContext() {
 
 bool createBuffers(VkFormat format, VkImageUsageFlags usageFlags,
                    SkColorType colorType, VkSharingMode sharingMode) {
-  fGetSwapchainImagesKHR(vulkan_device, fSwapchain, &fImageCount, nullptr);
+  GetSwapchainImagesKHR(vulkan_device, fSwapchain, &fImageCount, nullptr);
   SkASSERT(fImageCount);
   fImages = new VkImage[fImageCount];
-  fGetSwapchainImagesKHR(vulkan_device, fSwapchain, &fImageCount, fImages);
+  GetSwapchainImagesKHR(vulkan_device, fSwapchain, &fImageCount, fImages);
 
   // set up initial image layouts and create surfaces
   fImageLayouts = new VkImageLayout[fImageCount];
@@ -509,35 +541,33 @@ bool createBuffers(VkFormat format, VkImageUsageFlags usageFlags,
 bool createSwapchain(int width, int height) {
   // check for capabilities
   VkSurfaceCapabilitiesKHR caps;
-  if (fGetPhysicalDeviceSurfaceCapabilitiesKHR(vulkan_physical_device,
-                                               vulkan_surface, &caps)) {
+  if (GetPhysicalDeviceSurfaceCapabilitiesKHR(vulkan_physical_device,
+                                              vulkan_surface, &caps)) {
     return false;
   }
 
   uint32_t surfaceFormatCount;
-  if (fGetPhysicalDeviceSurfaceFormatsKHR(vulkan_physical_device,
-                                          vulkan_surface, &surfaceFormatCount,
-                                          nullptr)) {
+  if (GetPhysicalDeviceSurfaceFormatsKHR(vulkan_physical_device, vulkan_surface,
+                                         &surfaceFormatCount, nullptr)) {
     return false;
   }
 
   VkSurfaceFormatKHR surfaceFormats[surfaceFormatCount];
-  if (fGetPhysicalDeviceSurfaceFormatsKHR(vulkan_physical_device,
-                                          vulkan_surface, &surfaceFormatCount,
-                                          surfaceFormats)) {
+  if (GetPhysicalDeviceSurfaceFormatsKHR(vulkan_physical_device, vulkan_surface,
+                                         &surfaceFormatCount, surfaceFormats)) {
     return false;
   }
 
   uint32_t presentModeCount;
-  if (fGetPhysicalDeviceSurfacePresentModesKHR(
+  if (GetPhysicalDeviceSurfacePresentModesKHR(
           vulkan_physical_device, vulkan_surface, &presentModeCount, nullptr)) {
     return false;
   }
 
   VkPresentModeKHR presentModes[presentModeCount];
-  if (fGetPhysicalDeviceSurfacePresentModesKHR(
-          vulkan_physical_device, vulkan_surface, &presentModeCount,
-          presentModes)) {
+  if (GetPhysicalDeviceSurfacePresentModesKHR(vulkan_physical_device,
+                                              vulkan_surface, &presentModeCount,
+                                              presentModes)) {
     return false;
   }
 
@@ -664,29 +694,29 @@ bool createSwapchain(int width, int height) {
   swapchainCreateInfo.presentMode = mode;
   swapchainCreateInfo.clipped = true;
   swapchainCreateInfo.oldSwapchain = fSwapchain;
-  if (fCreateSwapchainKHR(vulkan_device, &swapchainCreateInfo, nullptr,
-                          &fSwapchain)) {
+  if (CreateSwapchainKHR(vulkan_device, &swapchainCreateInfo, nullptr,
+                         &fSwapchain)) {
     return false;
   }
 
   // destroy the old swapchain
   if (swapchainCreateInfo.oldSwapchain != VK_NULL_HANDLE) {
-    fDeviceWaitIdle(vulkan_device);
+    DeviceWaitIdle(vulkan_device);
 
     destroyBuffers();
 
-    fDestroySwapchainKHR(vulkan_device, swapchainCreateInfo.oldSwapchain,
-                         nullptr);
+    DestroySwapchainKHR(vulkan_device, swapchainCreateInfo.oldSwapchain,
+                        nullptr);
   }
 
   if (!createBuffers(swapchainCreateInfo.imageFormat, usageFlags, colorType,
                      swapchainCreateInfo.imageSharingMode)) {
-    fDeviceWaitIdle(vulkan_device);
+    DeviceWaitIdle(vulkan_device);
 
     destroyBuffers();
 
-    fDestroySwapchainKHR(vulkan_device, swapchainCreateInfo.oldSwapchain,
-                         nullptr);
+    DestroySwapchainKHR(vulkan_device, swapchainCreateInfo.oldSwapchain,
+                        nullptr);
   }
 
   return true;
@@ -728,8 +758,8 @@ sk_sp<SkSurface> getBackbufferSurface() {
 
   // acquire the image
   VkResult res =
-      fAcquireNextImageKHR(vulkan_device, fSwapchain, UINT64_MAX, semaphore,
-                           VK_NULL_HANDLE, &backbuffer->fImageIndex);
+      AcquireNextImageKHR(vulkan_device, fSwapchain, UINT64_MAX, semaphore,
+                          VK_NULL_HANDLE, &backbuffer->fImageIndex);
   if (VK_ERROR_SURFACE_LOST_KHR == res) {
     // need to figure out how to create a new vkSurface without the
     // platformData* maybe use attach somehow? but need a Window
@@ -747,8 +777,8 @@ sk_sp<SkSurface> getBackbufferSurface() {
     backbuffer = getAvailableBackbuffer();
 
     // acquire the image
-    res = fAcquireNextImageKHR(vulkan_device, fSwapchain, UINT64_MAX, semaphore,
-                               VK_NULL_HANDLE, &backbuffer->fImageIndex);
+    res = AcquireNextImageKHR(vulkan_device, fSwapchain, UINT64_MAX, semaphore,
+                              VK_NULL_HANDLE, &backbuffer->fImageIndex);
 
     if (VK_SUCCESS != res) {
       GR_VK_CALL(skia_vulkan_interface,
@@ -795,7 +825,7 @@ void swapBuffers() {
       nullptr                             // pResults
   };
 
-  fQueuePresentKHR(vulkan_device.present_queue, &presentInfo);
+  QueuePresentKHR(vulkan_device.present_queue, &presentInfo);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -912,26 +942,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   InitSkiaVulkanInterface();
   InitGrContext();
-
-#define GET_PROC(F) f##F = (PFN_vk##F)vulkan_instance.GetProcAddr("vk" #F)
-#define GET_DEV_PROC(F)                                                        \
-  f##F = (PFN_vk##F)VulkanGetProc("vk" #F, VK_NULL_HANDLE, vulkan_device)
-
-  GET_PROC(GetPhysicalDeviceSurfaceCapabilitiesKHR);
-  GET_PROC(GetPhysicalDeviceSurfaceFormatsKHR);
-  GET_PROC(GetPhysicalDeviceSurfacePresentModesKHR);
-  GET_DEV_PROC(DeviceWaitIdle);
-  GET_DEV_PROC(QueueWaitIdle);
-  GET_DEV_PROC(DestroyDevice);
-  GET_DEV_PROC(CreateSwapchainKHR);
-  GET_DEV_PROC(DestroySwapchainKHR);
-  GET_DEV_PROC(GetSwapchainImagesKHR);
-  GET_DEV_PROC(AcquireNextImageKHR);
-  GET_DEV_PROC(QueuePresentKHR);
-  GET_DEV_PROC(GetDeviceQueue);
-
-#undef GET_PROC
-#undef GET_DEV_PROC
+  InitVulkanFunctions();
 
   if (!createSwapchain(-1, -1)) {
     destroyContext();

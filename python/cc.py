@@ -23,6 +23,7 @@ if platform == 'win32':
     defines.add('_CRT_SECURE_NO_WARNINGS')
     # No clue what it precisely does but many projects use it.
     defines.add('WIN32_LEAN_AND_MEAN')
+    defines.add('VK_USE_PLATFORM_WIN32_KHR')
 
 defines.add('SK_GANESH')
 defines.add('SK_VULKAN')

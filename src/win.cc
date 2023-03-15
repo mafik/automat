@@ -36,5 +36,7 @@ HWND CreateAutomatonWindow() {
 }
 
 HWND main_window;
+int window_width;
+int window_height;
 
 } // namespace automaton

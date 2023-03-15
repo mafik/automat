@@ -81,8 +81,8 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
 
   if (state == kPostLoading) {
     canvas.save();
-    base_twist_v += 0.0005;
-    base_twist_v *= 1.002;
+    base_twist_v += 0.0005 * dt.count();
+    base_twist_v *= exp(dt.count() * 5);
     base_twist += base_twist_v;
     Twist(canvas, base_twist);
     clip_path.transform(canvas.getTotalMatrix());
@@ -93,12 +93,18 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
     canvas.drawRect(rect, paint);
   }
 
-  unfold += (1 - unfold) * 0.015;
+  unfold += (1 - unfold) * (1 - exp(-dt.count() * 2));
 
-  if (state >= kLoading) {
-    first_twist_v += (0.02 - first_twist_v) * 0.01;
+  float outer_rect_side = rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
+  float window_diag =
+      sqrt(window_width * window_width + window_height * window_height);
+  if (outer_rect_side > window_diag) {
+    if (state == kPreLoading) {
+      state = kLoading;
+    }
+    first_twist_v += (2 - first_twist_v) * (1 - exp(-dt.count()));
   }
-  first_twist += first_twist_v;
+  first_twist += first_twist_v * dt.count();
   if (first_twist > 1) {
     first_twist -= 1;
   }
@@ -108,25 +114,22 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
     canvas.drawRect(rect, paint);
   }
 
-  float window_diag =
-      sqrt(window_width * window_width + window_height * window_height);
 
   for (int i = 0; i < 25; ++i) {
     canvas.save();
-    float scale = Twist(canvas, i);
+    float twist_scale = Twist(canvas, i);
     if (i > base_twist) {
       canvas.drawRect(rect, paint);
     }
     canvas.restore();
-    if (rect_side * scale * base_scale > window_diag) {
-      if (state == kPostLoading && base_twist > i) {
-        state = kDone;
-      }
-      if (state == kPreLoading) {
-        state = kLoading;
-      }
+    float rect_side_scaled = rect_side * base_scale * twist_scale;
+    if (rect_side_scaled > window_diag) {
       break;
     }
+  }
+  
+  if (state == kPostLoading && base_twist > 25) {
+    state = kDone;
   }
 
   canvas.restore();

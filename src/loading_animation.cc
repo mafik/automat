@@ -1,7 +1,7 @@
 #include "loading_animation.h"
 
 #include "log.h"
-#include "win.h"
+#include "win_main.h"
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>

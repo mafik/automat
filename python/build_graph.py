@@ -136,7 +136,7 @@ if platform == 'win32':
     LDFLAGS += ['-lskia']
 
     # TODO: allow translation modules to request libraries
-    LDFLAGS += ['-luser32', '-lopengl32']
+    LDFLAGS += ['-luser32', '-lopengl32', '-lgdi32']
 
 ###############################
 # Recipes for object files

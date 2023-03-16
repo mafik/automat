@@ -15,6 +15,7 @@
 
 #include "format.h"
 #include "log.h"
+#include "channel.h"
 
 namespace automaton {
 
@@ -926,9 +927,9 @@ Connection *Location::ConnectTo(Location &other, string_view label,
 
 int log_executed_tasks = 0;
 
-struct TaskLogging {
-  TaskLogging() { ++log_executed_tasks; }
-  ~TaskLogging() { --log_executed_tasks; }
+struct LogTasksGuard {
+  LogTasksGuard() { ++log_executed_tasks; }
+  ~LogTasksGuard() { --log_executed_tasks; }
 };
 
 struct Task;
@@ -1112,6 +1113,18 @@ void RunLoop(const int max_iterations = -1) {
   }
   if (log_executed_tasks) {
     LOG_Unindent();
+  }
+}
+
+channel events;
+
+void RunThread() {
+  while (true) {
+    RunLoop();
+    std::unique_ptr<Task> task = events.recv<Task>();
+    if (task) {
+      task.release()->Schedule();
+    }
   }
 }
 

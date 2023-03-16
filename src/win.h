@@ -13,8 +13,4 @@ HINSTANCE GetInstance();
 WNDCLASSEX &GetWindowClass();
 HWND CreateAutomatonWindow();
 
-extern HWND main_window;
-extern int window_width;
-extern int window_height;
-
 } // namespace automaton

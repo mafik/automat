@@ -12,15 +12,13 @@
 #include "vk.h"
 #include "win.h"
 
-#include <atomic>
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkGraphics.h>
 #include <include/effects/SkRuntimeEffect.h>
 
+#include <bitset>
 #include <chrono>
-#include <windef.h>
-#include <winuser.h>
 
 namespace automaton {
 
@@ -118,7 +116,7 @@ struct Win32Client : Object {
   static const Win32Client proto;
   channel canvas_in;
   channel canvas_out;
-  bool pressed_scancodes[256] = {};
+  std::bitset<256> pressed_scancodes;
   Timer t;
 
   string_view Name() const override { return "Win32Client"; }
@@ -129,16 +127,16 @@ struct Win32Client : Object {
     SkCanvas *canvas = (SkCanvas *)canvas_in.recv();
     t.Tick();
 
-    if (pressed_scancodes[kScanCodeW]) {
+    if (pressed_scancodes.test(kScanCodeW)) {
       camera_position.Y += 0.1 * t.d;
     }
-    if (pressed_scancodes[kScanCodeS]) {
+    if (pressed_scancodes.test(kScanCodeS)) {
       camera_position.Y -= 0.1 * t.d;
     }
-    if (pressed_scancodes[kScanCodeA]) {
+    if (pressed_scancodes.test(kScanCodeA)) {
       camera_position.X -= 0.1 * t.d;
     }
-    if (pressed_scancodes[kScanCodeD]) {
+    if (pressed_scancodes.test(kScanCodeD)) {
       camera_position.X += 0.1 * t.d;
     }
 
@@ -282,14 +280,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     uint8_t key = (uint8_t)wParam;             // layout-dependent key code
     uint8_t scan_code = (lParam >> 16) & 0xFF; // identifies the physical key
     RunOnAutomatonThread(
-        [scan_code]() { win32_client.pressed_scancodes[scan_code] = true; });
+        [scan_code]() { win32_client.pressed_scancodes.set(scan_code); });
     break;
   }
   case WM_KEYUP: {
     uint8_t key = (uint8_t)wParam;
     uint8_t scan_code = (lParam >> 16) & 0xFF;
     RunOnAutomatonThread(
-        [scan_code]() { win32_client.pressed_scancodes[scan_code] = false; });
+        [scan_code]() { win32_client.pressed_scancodes.reset(scan_code); });
     break;
   }
   case WM_CHAR: {

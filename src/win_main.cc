@@ -32,21 +32,31 @@ int window_height;
 vec2 camera_position;
 constexpr float m_per_inch = 0.0254f;
 
-// Placeholder values for screen size. They should be updated when window is resized.
+// Placeholder values for screen size. They should be updated when window is
+// resized.
 int screen_width_px = 1920;
 int screen_height_px = 1080;
-float screen_width_m = (float)screen_width_px / USER_DEFAULT_SCREEN_DPI  * m_per_inch;
-float screen_height_m = (float)screen_height_px / USER_DEFAULT_SCREEN_DPI * m_per_inch;
-float px_per_m = (float)screen_width_px / (float)screen_width_m;
-float true_dpi = px_per_m * m_per_inch;
+float screen_width_m =
+    (float)screen_width_px / USER_DEFAULT_SCREEN_DPI * m_per_inch;
+float screen_height_m =
+    (float)screen_height_px / USER_DEFAULT_SCREEN_DPI * m_per_inch;
+float zoom = 1.0;
 
-SkRect GetCameraRect() {
-  return SkRect::MakeXYWH(camera_position.X - window_width / px_per_m / 2,
-                          camera_position.Y - window_height / px_per_m / 2,
-                          window_width / px_per_m, window_height / px_per_m);
+float PxPerM() {
+  return screen_width_px / screen_width_m * zoom;
 }
 
-SkPaint& GetBackgroundPaint() {
+float TrueDPI() {
+  return PxPerM() * m_per_inch;
+}
+
+SkRect GetCameraRect() {
+  return SkRect::MakeXYWH(camera_position.X - window_width / PxPerM() / 2,
+                          camera_position.Y - window_height / PxPerM() / 2,
+                          window_width / PxPerM(), window_height / PxPerM());
+}
+
+SkPaint &GetBackgroundPaint() {
   static SkRuntimeShaderBuilder builder = []() {
     const char *sksl = R"(
       uniform float px_per_m;
@@ -73,11 +83,10 @@ SkPaint& GetBackgroundPaint() {
       FATAL() << err.c_str();
     }
     SkRuntimeShaderBuilder builder(effect);
-    builder.uniform("px_per_m") = px_per_m;
     return builder;
   }();
   static SkPaint paint;
-  builder.uniform("px_per_m") = px_per_m;
+  builder.uniform("px_per_m") = PxPerM();
   paint.setShader(builder.makeShader());
   return paint;
 }
@@ -85,21 +94,58 @@ SkPaint& GetBackgroundPaint() {
 SkColor background_color = SkColorSetRGB(0x0f, 0x0f, 0x0e);
 SkColor tick_color = SkColorSetRGB(0x00, 0x53, 0xce);
 
+constexpr uint8_t kScanCodeW = 0x11;
+constexpr uint8_t kScanCodeA = 0x1e;
+constexpr uint8_t kScanCodeS = 0x1f;
+constexpr uint8_t kScanCodeD = 0x20;
+
+struct Timer {
+  using T = double;
+  using duration = std::chrono::duration<T>;
+  using clock = std::chrono::system_clock;
+  using time_point = std::chrono::time_point<clock, duration>;
+  time_point now = clock::now();
+  time_point last = now;
+  T d = 0; // delta from last frame
+  void Tick() {
+    now = clock::now();
+    d = (now - last).count();
+    last = now;
+  }
+};
+
 struct Win32Client : Object {
   static const Win32Client proto;
   channel canvas_in;
   channel canvas_out;
+  bool pressed_scancodes[256] = {};
+  Timer t;
+
   string_view Name() const override { return "Win32Client"; }
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Win32Client>();
   }
   void Run(Location &here) override {
     SkCanvas *canvas = (SkCanvas *)canvas_in.recv();
+    t.Tick();
 
-    canvas->clear(background_color);
+    if (pressed_scancodes[kScanCodeW]) {
+      camera_position.Y += 0.1 * t.d;
+    }
+    if (pressed_scancodes[kScanCodeS]) {
+      camera_position.Y -= 0.1 * t.d;
+    }
+    if (pressed_scancodes[kScanCodeA]) {
+      camera_position.X -= 0.1 * t.d;
+    }
+    if (pressed_scancodes[kScanCodeD]) {
+      camera_position.X += 0.1 * t.d;
+    }
+
     canvas->save();
     canvas->translate(window_width / 2., window_height / 2.);
-    canvas->scale(px_per_m, px_per_m);
+    canvas->scale(PxPerM(), -PxPerM());
+    canvas->translate(-camera_position.X, -camera_position.Y);
 
     canvas->drawPaint(GetBackgroundPaint());
 
@@ -202,6 +248,11 @@ void PaintLoadingAnimation(SkCanvas &canvas) {
   }
 }
 
+void RunOnAutomatonThread(std::function<void()> f) {
+  events.send(std::make_unique<FunctionTask>(&win32_client_location,
+                                             [f](Location &l) { f(); }));
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
   case WM_SIZE:
@@ -218,44 +269,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_DPICHANGED: {
     main_window_dpi = HIWORD(wParam);
-    RECT* const size_hint = (RECT*)lParam;
-    SetWindowPos(hWnd,
-        NULL,
-        size_hint->left,
-        size_hint->top,
-        size_hint->right - size_hint->left,
-        size_hint->bottom - size_hint->top,
-        SWP_NOZORDER | SWP_NOACTIVATE);
+    RECT *const size_hint = (RECT *)lParam;
+    SetWindowPos(hWnd, NULL, size_hint->left, size_hint->top,
+                 size_hint->right - size_hint->left,
+                 size_hint->bottom - size_hint->top,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
     break;
   }
   case WM_MBUTTONDOWN:
     break;
   case WM_KEYDOWN: {
-    uint64_t key = (uint64_t)wParam;
-    int repeat_count = (int)lParam & 0xFFFF;
-    int scan_code = (int)(lParam >> 16) & 0xFF;
-    int extended = (int)(lParam >> 24) & 0x01;
-    int context = (int)(lParam >> 29) & 0x01;
-    int previous_state = (int)(lParam >> 30) & 0x01;
-    int transition_state = (int)(lParam >> 31) & 0x01;
-    LOG() << "WM_KEYDOWN key: " << f("0x%02X", key) << " repeat_count: " << repeat_count
-          << " scan_code: " << f("0x%02X", scan_code) << " extended: " << extended
-          << " context: " << context << " previous_state: " << previous_state
-          << " transition_state: " << transition_state;
+    uint8_t key = (uint8_t)wParam;             // layout-dependent key code
+    uint8_t scan_code = (lParam >> 16) & 0xFF; // identifies the physical key
+    RunOnAutomatonThread(
+        [scan_code]() { win32_client.pressed_scancodes[scan_code] = true; });
+    break;
+  }
+  case WM_KEYUP: {
+    uint8_t key = (uint8_t)wParam;
+    uint8_t scan_code = (lParam >> 16) & 0xFF;
+    RunOnAutomatonThread(
+        [scan_code]() { win32_client.pressed_scancodes[scan_code] = false; });
     break;
   }
   case WM_CHAR: {
-    uint64_t key = (uint64_t)wParam;
-    int repeat_count = (int)lParam & 0xFFFF;
-    int scan_code = (int)(lParam >> 16) & 0xFF;
-    int extended = (int)(lParam >> 24) & 0x01;
-    int context = (int)(lParam >> 29) & 0x01;
-    int previous_state = (int)(lParam >> 30) & 0x01;
-    int transition_state = (int)(lParam >> 31) & 0x01;
-    LOG() << "WM_CHAR key: " << f("0x%02X", key) << " repeat_count: " << repeat_count
-          << " scan_code: " << f("0x%02X", scan_code) << " extended: " << extended
-          << " context: " << context << " previous_state: " << previous_state
-          << " transition_state: " << transition_state;
+    uint8_t utf8_char = (uint8_t)wParam;
+    uint8_t scan_code = (lParam >> 16) & 0xFF;
     break;
   }
   case WM_DESTROY:
@@ -268,8 +307,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                    LPSTR pCmdLine, int nCmdShow) {
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
+                   int nCmdShow) {
   EnableBacktraceOnSIGSEGV();
   // Switch to UTF-8
   setlocale(LC_CTYPE, ".utf8");
@@ -294,8 +333,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
   screen_width_px = GetDeviceCaps(hdc, HORZRES);
   screen_height_px = GetDeviceCaps(hdc, VERTRES);
   ReleaseDC(main_window, hdc);
-  px_per_m = (float)screen_width_px / (float)screen_width_m;
-  true_dpi = px_per_m * m_per_inch;
 
   if (auto err = vk::Init(); !err.empty()) {
     FATAL() << "Failed to initialize Vulkan: " << err;

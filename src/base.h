@@ -1033,6 +1033,25 @@ struct UpdateTask : Task {
   }
 };
 
+struct FunctionTask : Task {
+  std::function<void(Location&)> function;
+  FunctionTask(Location *target, std::function<void(Location&)> function)
+      : Task(target), function(function) {}
+  std::string Format() override {
+    return f("FunctionTask(%s)", target->LoggableString().c_str());
+  }
+  void Execute() override {
+    PreExecute();
+    function(*target);
+    PostExecute();
+  }
+  Task *Clone() override {
+    auto t = new FunctionTask(target, function);
+    t->waiting_task = waiting_task;
+    return t;
+  }
+};
+
 struct ErroredTask : Task {
   Location *errored;
   ErroredTask(Location *target, Location *errored)

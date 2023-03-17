@@ -51,13 +51,14 @@ struct AnimatedApproach {
   float speed = 15;
   float cap_min;
   float cap;
-  AnimatedApproach(float initial, float cap_min = 0.01) : value(initial), target(initial), cap_min(cap_min), cap(cap_min) {}
+  AnimatedApproach(float initial, float cap_min = 0.01)
+      : value(initial), target(initial), cap_min(cap_min), cap(cap_min) {}
   void Tick(float dt) {
     float delta = (target - value) * (1 - exp(-dt * speed));
     float delta_abs = fabs(delta);
     if (delta_abs > cap * dt) {
       value += cap * dt * (delta > 0 ? 1 : -1);
-      cap = std::min(delta_abs / dt, 2*cap);
+      cap = std::min(delta_abs / dt, 2 * cap);
     } else {
       value += delta;
       cap = std::max(delta_abs / dt, cap_min);
@@ -74,13 +75,9 @@ AnimatedApproach zoom(1.0, 0.01);
 AnimatedApproach camera_x(0.0, 0.005);
 AnimatedApproach camera_y(0.0, 0.005);
 
-float PxPerM() {
-  return screen_width_px / screen_width_m * zoom;
-}
+float PxPerM() { return screen_width_px / screen_width_m * zoom; }
 
-float TrueDPI() {
-  return PxPerM() * m_per_inch;
-}
+float TrueDPI() { return PxPerM() * m_per_inch; }
 
 SkRect GetCameraRect() {
   return SkRect::MakeXYWH(camera_x - window_width / PxPerM() / 2,
@@ -132,15 +129,16 @@ constexpr uint8_t kScanCodeS = 0x1f;
 constexpr uint8_t kScanCodeD = 0x20;
 
 vec2 ScreenToCanvas(vec2 screen) {
-  screen -= Vec2(window_x + window_width/2., window_y + window_height/2.);
-  screen *= Vec2(1 / PxPerM(), -1/PxPerM());
+  screen -= Vec2(window_x + window_width / 2., window_y + window_height / 2.);
+  screen *= Vec2(1 / PxPerM(), -1 / PxPerM());
   return screen + Vec2(camera_x, camera_y);
 }
 
 vec2 CanvasToScreen(vec2 canvas) {
   canvas -= Vec2(camera_x, camera_y);
   canvas *= Vec2(PxPerM(), -PxPerM());
-  return canvas + Vec2(window_x + window_width/2., window_y + window_height/2.);
+  return canvas +
+         Vec2(window_x + window_width / 2., window_y + window_height / 2.);
 }
 
 struct Win32Client : Object {
@@ -307,6 +305,21 @@ void RunOnAutomatonThread(std::function<void()> f) {
                                              [f](Location &l) { f(); }));
 }
 
+bool tracking_mouse_leave = false;
+
+void TrackMouseLeave() {
+  if (tracking_mouse_leave) {
+    return;
+  }
+  tracking_mouse_leave = true;
+  TRACKMOUSEEVENT track_mouse_event = {
+      .cbSize = sizeof(TRACKMOUSEEVENT),
+      .dwFlags = TME_LEAVE,
+      .hwndTrack = main_window,
+  };
+  TrackMouseEvent(&track_mouse_event);
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
   case WM_SIZE:
@@ -337,6 +350,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_MBUTTONDOWN:
     mbutton_down = Timer::clock::now();
+    TrackMouseLeave();
     break;
   case WM_MBUTTONUP: {
     auto now = Timer::clock::now();
@@ -346,6 +360,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       camera_y.target = canvas_pos.Y;
       zoom.target = 1;
     }
+    mbutton_down = Timer::time_point();
     break;
   }
   case WM_KEYDOWN: {
@@ -368,15 +383,27 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   case WM_MOUSEMOVE: {
     int16_t x = lParam & 0xFFFF;
     int16_t y = (lParam >> 16) & 0xFFFF;
+    vec2 old_mouse_pos = mouse_position;
     mouse_position.X = x + window_x;
     mouse_position.Y = y + window_y;
+    if (mbutton_down > Timer::time_point()) {
+      mbutton_down = Timer::clock::now() - std::chrono::milliseconds(200);
+      vec2 delta =
+          ScreenToCanvas(mouse_position) - ScreenToCanvas(old_mouse_pos);
+      camera_x.Shift(-delta.X);
+      camera_y.Shift(-delta.Y);
+    }
     break;
   }
+  case WM_MOUSELEAVE:
+    tracking_mouse_leave = false;
+    mbutton_down = Timer::time_point();
+    break;
   case WM_MOUSEWHEEL: {
     int16_t delta = GET_WHEEL_DELTA_WPARAM(wParam);
     int16_t x = lParam & 0xFFFF;
     int16_t y = (lParam >> 16) & 0xFFFF;
-    float factor = exp(delta/240.0);
+    float factor = exp(delta / 240.0);
     zoom.target *= factor;
     // For small changes we skip the animation to increase responsiveness.
     if (abs(delta) < 120) {
@@ -432,7 +459,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
   ShowWindow(main_window, nCmdShow);
   UpdateWindow(main_window);
-
   RECT rect;
   GetClientRect(main_window, &rect);
   window_x = rect.left;

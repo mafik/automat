@@ -9,6 +9,7 @@
 #include "base.h"
 #include "loading_animation.h"
 #include "log.h"
+#include "time.h"
 #include "vk.h"
 #include "win.h"
 
@@ -18,16 +19,16 @@
 #include <include/effects/SkRuntimeEffect.h>
 
 #include <bitset>
-#include <chrono>
 
 namespace automaton {
 
 HWND main_window;
 int main_window_dpi = USER_DEFAULT_SCREEN_DPI;
+int window_x;
+int window_y;
 int window_width;
 int window_height;
 
-vec2 camera_position;
 constexpr float m_per_inch = 0.0254f;
 
 // Placeholder values for screen size. They should be updated when window is
@@ -38,7 +39,30 @@ float screen_width_m =
     (float)screen_width_px / USER_DEFAULT_SCREEN_DPI * m_per_inch;
 float screen_height_m =
     (float)screen_height_px / USER_DEFAULT_SCREEN_DPI * m_per_inch;
-float zoom = 1.0;
+
+std::bitset<256> pressed_scancodes;
+vec2 mouse_position;
+
+Timer::time_point mbutton_down;
+
+struct AnimatedApproach {
+  float value = 0;
+  float target = 0;
+  float speed = 15;
+  AnimatedApproach(float initial) : value(initial), target(initial) {}
+  void Tick(float dt) {
+    value += (target - value) * (1 - exp(-dt * speed));
+  }
+  void Shift(float delta) {
+    value += delta;
+    target += delta;
+  }
+  float Remaining() const { return target - value; }
+  operator float() const { return value; }
+};
+AnimatedApproach zoom = 1.0;
+AnimatedApproach camera_x = 0.0;
+AnimatedApproach camera_y = 0.0;
 
 float PxPerM() {
   return screen_width_px / screen_width_m * zoom;
@@ -49,8 +73,8 @@ float TrueDPI() {
 }
 
 SkRect GetCameraRect() {
-  return SkRect::MakeXYWH(camera_position.X - window_width / PxPerM() / 2,
-                          camera_position.Y - window_height / PxPerM() / 2,
+  return SkRect::MakeXYWH(camera_x - window_width / PxPerM() / 2,
+                          camera_y - window_height / PxPerM() / 2,
                           window_width / PxPerM(), window_height / PxPerM());
 }
 
@@ -97,26 +121,22 @@ constexpr uint8_t kScanCodeA = 0x1e;
 constexpr uint8_t kScanCodeS = 0x1f;
 constexpr uint8_t kScanCodeD = 0x20;
 
-struct Timer {
-  using T = double;
-  using duration = std::chrono::duration<T>;
-  using clock = std::chrono::system_clock;
-  using time_point = std::chrono::time_point<clock, duration>;
-  time_point now = clock::now();
-  time_point last = now;
-  T d = 0; // delta from last frame
-  void Tick() {
-    now = clock::now();
-    d = (now - last).count();
-    last = now;
-  }
-};
+vec2 ScreenToCanvas(vec2 screen) {
+  screen -= Vec2(window_x + window_width/2., window_y + window_height/2.);
+  screen *= Vec2(1 / PxPerM(), -1/PxPerM());
+  return screen + Vec2(camera_x, camera_y);
+}
+
+vec2 CanvasToScreen(vec2 canvas) {
+  canvas -= Vec2(camera_x, camera_y);
+  canvas *= Vec2(PxPerM(), -PxPerM());
+  return canvas + Vec2(window_x + window_width/2., window_y + window_height/2.);
+}
 
 struct Win32Client : Object {
   static const Win32Client proto;
   channel canvas_in;
   channel canvas_out;
-  std::bitset<256> pressed_scancodes;
   Timer t;
 
   string_view Name() const override { return "Win32Client"; }
@@ -127,23 +147,49 @@ struct Win32Client : Object {
     SkCanvas *canvas = (SkCanvas *)canvas_in.recv();
     t.Tick();
 
+    float rx = camera_x.Remaining();
+    float ry = camera_y.Remaining();
+    float r = sqrt(rx * rx + ry * ry);
+    float rpx = PxPerM() * r;
+    bool stabilize_mouse = rpx < 1;
+
+    if (stabilize_mouse) {
+      vec2 focus_pre = ScreenToCanvas(mouse_position);
+      zoom.Tick(t.d);
+      vec2 focus_post = ScreenToCanvas(mouse_position);
+      vec2 focus_delta = focus_post - focus_pre;
+      camera_x.Shift(-focus_delta.X);
+      camera_y.Shift(-focus_delta.Y);
+    } else {
+      vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
+      vec2 target_screen = CanvasToScreen(focus_pre);
+      zoom.Tick(t.d);
+      vec2 focus_post = ScreenToCanvas(target_screen);
+      vec2 focus_delta = focus_post - focus_pre;
+      camera_x.value -= focus_delta.X;
+      camera_y.value -= focus_delta.Y;
+    }
+
+    camera_x.Tick(t.d);
+    camera_y.Tick(t.d);
+
     if (pressed_scancodes.test(kScanCodeW)) {
-      camera_position.Y += 0.1 * t.d;
+      camera_y.Shift(0.1 * t.d);
     }
     if (pressed_scancodes.test(kScanCodeS)) {
-      camera_position.Y -= 0.1 * t.d;
+      camera_y.Shift(-0.1 * t.d);
     }
     if (pressed_scancodes.test(kScanCodeA)) {
-      camera_position.X -= 0.1 * t.d;
+      camera_x.Shift(-0.1 * t.d);
     }
     if (pressed_scancodes.test(kScanCodeD)) {
-      camera_position.X += 0.1 * t.d;
+      camera_x.Shift(0.1 * t.d);
     }
 
     canvas->save();
     canvas->translate(window_width / 2., window_height / 2.);
     canvas->scale(PxPerM(), -PxPerM());
-    canvas->translate(-camera_position.X, -camera_position.Y);
+    canvas->translate(-camera_x, -camera_y);
 
     canvas->drawPaint(GetBackgroundPaint());
 
@@ -256,6 +302,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   case WM_SIZE:
     OnResize(LOWORD(lParam), HIWORD(lParam));
     break;
+  case WM_MOVE: {
+    window_x = LOWORD(lParam);
+    window_y = HIWORD(lParam);
+    break;
+  }
   case WM_PAINT: {
     PAINTSTRUCT ps;
     BeginPaint(hWnd, &ps);
@@ -275,24 +326,57 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
   }
   case WM_MBUTTONDOWN:
+    mbutton_down = Timer::clock::now();
     break;
+  case WM_MBUTTONUP: {
+    auto now = Timer::clock::now();
+    if (now - mbutton_down < std::chrono::milliseconds(200)) {
+      vec2 canvas_pos = ScreenToCanvas(mouse_position);
+      camera_x.target = canvas_pos.X;
+      camera_y.target = canvas_pos.Y;
+      zoom.target = 1;
+    }
+    break;
+  }
   case WM_KEYDOWN: {
     uint8_t key = (uint8_t)wParam;             // layout-dependent key code
     uint8_t scan_code = (lParam >> 16) & 0xFF; // identifies the physical key
-    RunOnAutomatonThread(
-        [scan_code]() { win32_client.pressed_scancodes.set(scan_code); });
+    pressed_scancodes.set(scan_code);
     break;
   }
   case WM_KEYUP: {
     uint8_t key = (uint8_t)wParam;
     uint8_t scan_code = (lParam >> 16) & 0xFF;
-    RunOnAutomatonThread(
-        [scan_code]() { win32_client.pressed_scancodes.reset(scan_code); });
+    pressed_scancodes.reset(scan_code);
     break;
   }
   case WM_CHAR: {
     uint8_t utf8_char = (uint8_t)wParam;
     uint8_t scan_code = (lParam >> 16) & 0xFF;
+    break;
+  }
+  case WM_MOUSEMOVE: {
+    int16_t x = lParam & 0xFFFF;
+    int16_t y = (lParam >> 16) & 0xFFFF;
+    mouse_position.X = x + window_x;
+    mouse_position.Y = y + window_y;
+    break;
+  }
+  case WM_MOUSEWHEEL: {
+    int16_t delta = GET_WHEEL_DELTA_WPARAM(wParam);
+    int16_t x = lParam & 0xFFFF;
+    int16_t y = (lParam >> 16) & 0xFFFF;
+    float factor = exp(delta/240.0);
+    zoom.target *= factor;
+    // For small changes we skip the animation to increase responsiveness.
+    if (abs(delta) < 120) {
+      vec2 mouse_pre = ScreenToCanvas(mouse_position);
+      zoom.value *= factor;
+      vec2 mouse_post = ScreenToCanvas(mouse_position);
+      vec2 mouse_delta = mouse_post - mouse_pre;
+      camera_x.Shift(-mouse_delta.X);
+      camera_y.Shift(-mouse_delta.Y);
+    }
     break;
   }
   case WM_DESTROY:
@@ -341,6 +425,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
   RECT rect;
   GetClientRect(main_window, &rect);
+  window_x = rect.left;
+  window_y = rect.top;
   OnResize(rect.right - rect.left, rect.bottom - rect.top);
 
   std::thread(RunThread).detach();

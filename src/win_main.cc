@@ -77,11 +77,6 @@ SkPaint& GetBackgroundPaint() {
     return builder;
   }();
   static SkPaint paint;
-  static auto start = std::chrono::system_clock::now();
-  auto now = std::chrono::system_clock::now();
-  auto elapsed =
-      std::chrono::duration_cast<std::chrono::milliseconds>(now - start)
-          .count();
   builder.uniform("px_per_m") = px_per_m;
   paint.setShader(builder.makeShader());
   return paint;

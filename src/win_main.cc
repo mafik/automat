@@ -124,8 +124,7 @@ void OnResize(int w, int h) {
   window_width = w;
   window_height = h;
   if (auto err = vk::Resize(w, h); !err.empty()) {
-    std::wstring werr(err.begin(), err.end());
-    MessageBox(nullptr, werr.c_str(), L"ALERT", 0);
+    MessageBox(nullptr, err.c_str(), "ALERT", 0);
   }
 }
 
@@ -231,6 +230,34 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_MBUTTONDOWN:
     break;
+  case WM_KEYDOWN: {
+    uint64_t key = (uint64_t)wParam;
+    int repeat_count = (int)lParam & 0xFFFF;
+    int scan_code = (int)(lParam >> 16) & 0xFF;
+    int extended = (int)(lParam >> 24) & 0x01;
+    int context = (int)(lParam >> 29) & 0x01;
+    int previous_state = (int)(lParam >> 30) & 0x01;
+    int transition_state = (int)(lParam >> 31) & 0x01;
+    LOG() << "WM_KEYDOWN key: " << f("0x%02X", key) << " repeat_count: " << repeat_count
+          << " scan_code: " << f("0x%02X", scan_code) << " extended: " << extended
+          << " context: " << context << " previous_state: " << previous_state
+          << " transition_state: " << transition_state;
+    break;
+  }
+  case WM_CHAR: {
+    uint64_t key = (uint64_t)wParam;
+    int repeat_count = (int)lParam & 0xFFFF;
+    int scan_code = (int)(lParam >> 16) & 0xFF;
+    int extended = (int)(lParam >> 24) & 0x01;
+    int context = (int)(lParam >> 29) & 0x01;
+    int previous_state = (int)(lParam >> 30) & 0x01;
+    int transition_state = (int)(lParam >> 31) & 0x01;
+    LOG() << "WM_CHAR key: " << f("0x%02X", key) << " repeat_count: " << repeat_count
+          << " scan_code: " << f("0x%02X", scan_code) << " extended: " << extended
+          << " context: " << context << " previous_state: " << previous_state
+          << " transition_state: " << transition_state;
+    break;
+  }
   case WM_DESTROY:
     PostQuitMessage(0);
     break;
@@ -241,10 +268,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                    PWSTR pCmdLine, int nCmdShow) {
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                    LPSTR pCmdLine, int nCmdShow) {
   EnableBacktraceOnSIGSEGV();
-  SetConsoleOutputCP(CP_UTF8); // utf-8
+  // Switch to UTF-8
+  setlocale(LC_CTYPE, ".utf8");
+  SetConsoleCP(CP_UTF8);
+  SetConsoleOutputCP(CP_UTF8);
+
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   SkGraphics::Init();
 

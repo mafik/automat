@@ -66,12 +66,12 @@ void EnableBacktraceOnSIGSEGV() {
 
 bool PrintBacktrace() {
   int pid = GetCurrentProcessId();
-  wchar_t file_name[MAX_PATH];
+  char file_name[MAX_PATH];
   GetModuleFileName(NULL, file_name, MAX_PATH);
-  wchar_t args[512];
-  swprintf(args, sizeof(args),
-           L"gdb --batch -n -iex \"set print thread-events off\" -ex \"info "
-           L"threads\" -ex \"thread 1\" -ex bt \"%s\" %d",
+  char args[512];
+  snprintf(args, sizeof(args),
+           "gdb --batch -n -iex \"set print thread-events off\" -ex \"info "
+           "threads\" -ex \"thread 1\" -ex bt \"%s\" %d",
            file_name, pid);
   STARTUPINFO si = {};
   PROCESS_INFORMATION pi = {};

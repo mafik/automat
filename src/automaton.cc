@@ -3,7 +3,7 @@
 #include "win_main.h"
 
 int main() {
-  return wWinMain(GetModuleHandle(NULL), NULL, GetCommandLine(), SW_SHOW);
+  return WinMain(GetModuleHandle(NULL), NULL, GetCommandLine(), SW_SHOW);
 }
 
 #endif

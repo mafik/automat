@@ -11,7 +11,9 @@ defines = set()
 defines.add(fs_utils.project_name.upper())
 if platform == 'win32':
     defines.add('NOMINMAX')
-    defines.add('UNICODE')
+    # Prefer UTF-8 over UTF-16. This means no "UNICODE" define.
+    # https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page
+    # DO NOT ADD: defines.add('UNICODE')
     # <windows.h> has a side effect of defining ERROR macro.
     # Adding NOGDI prevents it from happening.
     defines.add('NOGDI')

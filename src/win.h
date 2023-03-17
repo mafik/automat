@@ -6,8 +6,8 @@
 
 namespace automaton {
 
-static const wchar_t kWindowClass[] = L"Automaton";
-static const wchar_t kWindowTitle[] = L"Automaton";
+static const char kWindowClass[] = "Automaton";
+static const char kWindowTitle[] = "Automaton";
 
 HINSTANCE GetInstance();
 WNDCLASSEX &GetWindowClass();

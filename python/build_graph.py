@@ -145,6 +145,17 @@ if platform == 'win32':
 OBJ_DIR = fs_utils.project_tmp_dir / 'obj'
 OBJ_DIR.mkdir(parents=True, exist_ok=True)
 
+if platform == 'win32':
+    MANIFEST_RC = fs_utils.project_root / 'src' / 'manifest.rc'
+    MANIFEST_RES = OBJ_DIR / 'manifest.res'
+    recipe.add_step(
+        functools.partial(Popen, ['llvm-rc', MANIFEST_RC, '/FO', MANIFEST_RES]),
+        outputs=[MANIFEST_RES],
+        inputs=[MANIFEST_RC],
+        name='Build manifest.res')
+    recipe.generated.add(MANIFEST_RES)
+    LDFLAGS += [MANIFEST_RES]
+
 def cxxfilt(line):
     cxx_identifier_re = "(_Z[a-zA-Z0-9_]+)"
     while match := re.search(cxx_identifier_re, line):
@@ -214,7 +225,7 @@ for path, deps in graph.items():
         recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS + ['-lgtest_main', '-lgtest', '-lgmock']
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps + [GMOCK_LIB, GTEST_LIB, GTEST_MAIN_LIB], name=f'link {binary_name}', stderr_prettifier=cxxfilt)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [GMOCK_LIB, GTEST_LIB, GTEST_MAIN_LIB, MANIFEST_RES], name=f'link {binary_name}', stderr_prettifier=cxxfilt)
         runner = functools.partial(Popen, [f'./{path}', '--gtest_color=yes'])
         recipe.add_step(runner, outputs=[], inputs=[path], name=binary_name)
     elif t == 'main':
@@ -222,7 +233,11 @@ for path, deps in graph.items():
         recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_LIB], name=f'link {binary_name}', stderr_prettifier=cxxfilt)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [MANIFEST_RES, VK_BOOTSTRAP_LIB], name=f'link {binary_name}', stderr_prettifier=cxxfilt)
+        # if platform == 'win32':
+        #     MT = 'C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.19041.0\\x64\\mt.exe'
+        #     mt_runner = functools.partial(Popen, [MT, '-manifest', 'src\win32.manifest', '-outputresource:{path}'])
+        #     recipe.add_step(mt_runner, outputs=[path], inputs=[path, 'src/win32.manifest'], name=f'mt {binary_name}')
         runner = functools.partial(Popen, [f'./{path}'])
         recipe.add_step(runner, outputs=[], inputs=[path], name=binary_name)
     else:

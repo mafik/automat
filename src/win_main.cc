@@ -93,15 +93,16 @@ SkPaint &GetBackgroundPaint() {
       float4 bg = float4(0.05, 0.05, 0.00, 1);
       float4 fg = float4(0.0, 0.32, 0.8, 1);
 
-      float grid(vec2 coord_m, float dots_per_m, float r) {
+      float grid(vec2 coord_m, float dots_per_m, float r_px) {
+        float r = r_px / px_per_m;
         vec2 grid_coord = fract(coord_m * dots_per_m + 0.5) - 0.5;
-        return smoothstep(r, r - 1/px_per_m, length(grid_coord) / dots_per_m);
+        return smoothstep(r, r - 1/px_per_m, length(grid_coord) / dots_per_m) * smoothstep(1./(2*r), 1./(32*r), dots_per_m);
       }
 
       half4 main(vec2 fragcoord) {
-        float dm_grid = grid(fragcoord, 10, 3/px_per_m);
-        float cm_grid = grid(fragcoord, 100, 3/px_per_m) * 0.5;
-        float mm_grid = grid(fragcoord, 1000, 2/px_per_m) * 0.25;
+        float dm_grid = grid(fragcoord, 10, 3);
+        float cm_grid = grid(fragcoord, 100, 3) * 0.6;
+        float mm_grid = grid(fragcoord, 1000, 2) * 0.4;
         float d = max(max(mm_grid, cm_grid), dm_grid);
         return mix(bg, fg, d);
       }
@@ -403,7 +404,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     int16_t delta = GET_WHEEL_DELTA_WPARAM(wParam);
     int16_t x = lParam & 0xFFFF;
     int16_t y = (lParam >> 16) & 0xFFFF;
-    float factor = exp(delta / 240.0);
+    float factor = exp(delta / 480.0);
     zoom.target *= factor;
     // For small changes we skip the animation to increase responsiveness.
     if (abs(delta) < 120) {

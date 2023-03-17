@@ -49,9 +49,19 @@ struct AnimatedApproach {
   float value = 0;
   float target = 0;
   float speed = 15;
-  AnimatedApproach(float initial) : value(initial), target(initial) {}
+  float cap_min;
+  float cap;
+  AnimatedApproach(float initial, float cap_min = 0.01) : value(initial), target(initial), cap_min(cap_min), cap(cap_min) {}
   void Tick(float dt) {
-    value += (target - value) * (1 - exp(-dt * speed));
+    float delta = (target - value) * (1 - exp(-dt * speed));
+    float delta_abs = fabs(delta);
+    if (delta_abs > cap * dt) {
+      value += cap * dt * (delta > 0 ? 1 : -1);
+      cap = std::min(delta_abs / dt, 2*cap);
+    } else {
+      value += delta;
+      cap = std::max(delta_abs / dt, cap_min);
+    }
   }
   void Shift(float delta) {
     value += delta;
@@ -60,9 +70,9 @@ struct AnimatedApproach {
   float Remaining() const { return target - value; }
   operator float() const { return value; }
 };
-AnimatedApproach zoom = 1.0;
-AnimatedApproach camera_x = 0.0;
-AnimatedApproach camera_y = 0.0;
+AnimatedApproach zoom(1.0, 0.01);
+AnimatedApproach camera_x(0.0, 0.005);
+AnimatedApproach camera_y(0.0, 0.005);
 
 float PxPerM() {
   return screen_width_px / screen_width_m * zoom;

@@ -17,6 +17,9 @@
 #include "log.h"
 #include "channel.h"
 
+#include <include/core/SkCanvas.h>
+#include <include/core/SkPathBuilder.h>
+
 namespace automaton {
 
 using std::function;
@@ -83,6 +86,8 @@ struct Object {
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
   }
+  virtual void Draw(const Location &here, SkCanvas &canvas);
+  virtual void Shape(const Location &here, SkPathBuilder &path_builder) const;
 };
 
 /*
@@ -198,6 +203,8 @@ struct Location {
   // Name of this Location.
   string name;
 
+  vec2 position = {0, 0};
+
   // Connections of this Location.
   // Connection is owned by both incoming & outgoing locations.
   string_multimap<Connection *> outgoing;
@@ -209,7 +216,7 @@ struct Location {
   unordered_set<Location *> error_observers;
   unordered_set<Location *> observing_errors;
 
-  Location(Location *parent) : parent(parent) {}
+  Location(Location *parent = nullptr) : parent(parent) {}
 
   Object *Create(const Object &prototype) {
     object = prototype.Clone();
@@ -575,7 +582,8 @@ struct Argument {
     });
   }
 };
-Argument then_arg("then", Argument::kOptional);
+
+extern Argument then_arg;
 
 struct LiveArgument : Argument {
   LiveArgument(string_view name, Precondition precondition)
@@ -779,58 +787,9 @@ struct Machine : LiveObject {
       }
     }
   }
+
+  void DrawContents(SkCanvas& canvas);
 };
-const Machine Machine::proto;
-
-void *Location::Nearby(function<void *(Location &)> callback) {
-  if (auto parent_machine = ParentAs<Machine>()) {
-    // TODO: sort by distance
-    for (auto &other : parent_machine->locations) {
-      if (auto ret = callback(*other)) {
-        return ret;
-      }
-    }
-  }
-  return nullptr;
-}
-
-bool Location::HasError() {
-  if (error != nullptr)
-    return true;
-  if (auto machine = ThisAs<Machine>()) {
-    if (!machine->children_with_errors.empty())
-      return true;
-  }
-  return false;
-}
-Error *Location::GetError() {
-  if (error != nullptr)
-    return error.get();
-  if (auto machine = ThisAs<Machine>()) {
-    if (!machine->children_with_errors.empty())
-      return (*machine->children_with_errors.begin())->GetError();
-  }
-  return nullptr;
-}
-void Location::ClearError() {
-  if (error == nullptr) {
-    return;
-  }
-  error.reset();
-  if (auto machine = ParentAs<Machine>()) {
-    machine->ClearChildError(*this);
-  }
-}
-
-Argument::FinalLocationResult
-Argument::GetFinalLocation(Location &here,
-                           std::source_location source_location) const {
-  FinalLocationResult result(GetObject(here, source_location));
-  if (auto live_object = dynamic_cast<LiveObject *>(result.object)) {
-    result.final_location = live_object->here;
-  }
-  return result;
-}
 
 struct Pointer : LiveObject {
   virtual Object *Next(Location &error_context) const = 0;
@@ -878,69 +837,20 @@ struct Pointer : LiveObject {
   }
 };
 
-Object *Location::Follow() {
-  if (Pointer *ptr = object->AsPointer()) {
-    return ptr->Follow(*this);
-  }
-  return object.get();
-}
-
-void Location::Put(unique_ptr<Object> obj) {
-  if (object == nullptr) {
-    object = std::move(obj);
-    return;
-  }
-  if (Pointer *ptr = object->AsPointer()) {
-    ptr->Put(*this, std::move(obj));
-  } else {
-    object = std::move(obj);
-  }
-}
-
-unique_ptr<Object> Location::Take() {
-  if (Pointer *ptr = object->AsPointer()) {
-    return ptr->Take(*this);
-  }
-  return std::move(object);
-}
-
-Connection *Location::ConnectTo(Location &other, string_view label,
-                                Connection::PointerBehavior pointer_behavior) {
-  if (LiveObject *live_object = ThisAs<LiveObject>()) {
-    live_object->Args([&](LiveArgument &arg) {
-      if (arg.name == label &&
-          arg.precondition >= Argument::kRequiresConcreteType) {
-        std::string error;
-        arg.CheckRequirements(*this, &other, other.object.get(), error);
-        if (error.empty()) {
-          pointer_behavior = Connection::kTerminateHere;
-        }
-      }
-    });
-  }
-  Connection *c = new Connection(*this, other, pointer_behavior);
-  outgoing.emplace(label, c);
-  other.incoming.emplace(label, c);
-  object->ConnectionAdded(*this, label, *c);
-  return c;
-}
-
-int log_executed_tasks = 0;
+extern int log_executed_tasks;
 
 struct LogTasksGuard {
-  LogTasksGuard() { ++log_executed_tasks; }
-  ~LogTasksGuard() { --log_executed_tasks; }
+  LogTasksGuard();
+  ~LogTasksGuard();
 };
 
 struct Task;
 
-std::deque<unique_ptr<Task>> queue;
-std::unordered_set<Location *> no_scheduling;
-std::shared_ptr<Task> *global_then = nullptr;
+extern std::deque<unique_ptr<Task>> queue;
+extern std::unordered_set<Location *> no_scheduling;
+extern std::shared_ptr<Task> *global_then;
 
-bool NoScheduling(Location *location) {
-  return no_scheduling.find(location) != no_scheduling.end();
-}
+bool NoScheduling(Location *location);
 
 struct Task {
   Location *target;
@@ -1108,43 +1018,10 @@ struct NoSchedulingGuard {
 //
 // Complexity: O(connections + observers)
 
-void Location::ScheduleRun() { (new RunTask(this))->Schedule(); }
+void RunLoop(const int max_iterations = -1);
 
-void Location::ScheduleLocalUpdate(Location &updated) {
-  (new UpdateTask(this, &updated))->Schedule();
-}
+extern channel events;
 
-void Location::ScheduleErrored(Location &errored) {
-  (new ErroredTask(this, &errored))->Schedule();
-}
-
-void RunLoop(const int max_iterations = -1) {
-  if (log_executed_tasks) {
-    LOG() << "RunLoop(" << queue.size() << " tasks)";
-    LOG_Indent();
-  }
-  int iterations = 0;
-  while (!queue.empty() &&
-         (max_iterations < 0 || iterations < max_iterations)) {
-    queue.front()->Execute();
-    queue.pop_front();
-    ++iterations;
-  }
-  if (log_executed_tasks) {
-    LOG_Unindent();
-  }
-}
-
-channel events;
-
-void RunThread() {
-  while (true) {
-    RunLoop();
-    std::unique_ptr<Task> task = events.recv<Task>();
-    if (task) {
-      task.release()->Schedule();
-    }
-  }
-}
+void RunThread();
 
 } // namespace automaton

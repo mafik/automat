@@ -43,7 +43,7 @@ float screen_height_m =
 std::bitset<256> pressed_scancodes;
 vec2 mouse_position;
 
-Timer::time_point mbutton_down;
+time::point mbutton_down;
 
 struct AnimatedApproach {
   float value = 0;
@@ -75,14 +75,14 @@ AnimatedApproach zoom(1.0, 0.01);
 AnimatedApproach camera_x(0.0, 0.005);
 AnimatedApproach camera_y(0.0, 0.005);
 
-float PxPerM() { return screen_width_px / screen_width_m * zoom; }
+float PxPerMeter() { return screen_width_px / screen_width_m * zoom; }
 
-float TrueDPI() { return PxPerM() * m_per_inch; }
+float TrueDPI() { return PxPerMeter() * m_per_inch; }
 
 SkRect GetCameraRect() {
-  return SkRect::MakeXYWH(camera_x - window_width / PxPerM() / 2,
-                          camera_y - window_height / PxPerM() / 2,
-                          window_width / PxPerM(), window_height / PxPerM());
+  return SkRect::MakeXYWH(camera_x - window_width / PxPerMeter() / 2,
+                          camera_y - window_height / PxPerMeter() / 2,
+                          window_width / PxPerMeter(), window_height / PxPerMeter());
 }
 
 SkPaint &GetBackgroundPaint() {
@@ -116,7 +116,7 @@ SkPaint &GetBackgroundPaint() {
     return builder;
   }();
   static SkPaint paint;
-  builder.uniform("px_per_m") = PxPerM();
+  builder.uniform("px_per_m") = PxPerMeter();
   paint.setShader(builder.makeShader());
   return paint;
 }
@@ -131,35 +131,38 @@ constexpr uint8_t kScanCodeD = 0x20;
 
 vec2 ScreenToCanvas(vec2 screen) {
   screen -= Vec2(window_x + window_width / 2., window_y + window_height / 2.);
-  screen *= Vec2(1 / PxPerM(), -1 / PxPerM());
+  screen *= Vec2(1 / PxPerMeter(), -1 / PxPerMeter());
   return screen + Vec2(camera_x, camera_y);
 }
 
 vec2 CanvasToScreen(vec2 canvas) {
   canvas -= Vec2(camera_x, camera_y);
-  canvas *= Vec2(PxPerM(), -PxPerM());
+  canvas *= Vec2(PxPerMeter(), -PxPerMeter());
   return canvas +
          Vec2(window_x + window_width / 2., window_y + window_height / 2.);
 }
+
+Location root_location;
+Machine* root_machine;
 
 struct Win32Client : Object {
   static const Win32Client proto;
   channel canvas_in;
   channel canvas_out;
-  Timer t;
+  time::Timer t;
 
   string_view Name() const override { return "Win32Client"; }
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Win32Client>();
   }
   void Run(Location &here) override {
-    SkCanvas *canvas = (SkCanvas *)canvas_in.recv();
+    SkCanvas &canvas = *(SkCanvas *)canvas_in.recv();
     t.Tick();
 
     float rx = camera_x.Remaining();
     float ry = camera_y.Remaining();
     float r = sqrt(rx * rx + ry * ry);
-    float rpx = PxPerM() * r;
+    float rpx = PxPerMeter() * r;
     bool stabilize_mouse = rpx < 1;
 
     if (stabilize_mouse) {
@@ -195,29 +198,46 @@ struct Win32Client : Object {
       camera_x.Shift(0.1 * t.d);
     }
 
-    canvas->save();
-    canvas->translate(window_width / 2., window_height / 2.);
-    canvas->scale(PxPerM(), -PxPerM());
-    canvas->translate(-camera_x, -camera_y);
+    canvas.save();
+    canvas.translate(window_width / 2., window_height / 2.);
+    canvas.scale(PxPerMeter(), -PxPerMeter());
+    canvas.translate(-camera_x, -camera_y);
 
-    canvas->drawPaint(GetBackgroundPaint());
+    canvas.drawPaint(GetBackgroundPaint());
 
-    canvas->restore();
+    root_machine->DrawContents(canvas);
 
-    canvas_out.send_force(canvas);
+    // Draw prototypes
+    canvas.save();
+    canvas.restore();
+
+    canvas.restore();
+
+    canvas_out.send_force(&canvas);
   }
 };
 const Win32Client Win32Client::proto;
 
-Location root_location = Location(nullptr);
-Machine &root_machine = *root_location.Create<Machine>();
-Location &win32_client_location = root_machine.Create<Win32Client>();
-Win32Client &win32_client = *win32_client_location.ThisAs<Win32Client>();
+Location *win32_client_location;
+Win32Client *win32_client;
 bool automaton_running = false;
 
 } // namespace automaton
 
 using namespace automaton;
+
+
+void InitAutomaton() {
+  
+  root_location = Location(nullptr);
+  root_machine = root_location.Create<Machine>();
+  win32_client_location = &root_machine->Create<Win32Client>();
+  win32_client = win32_client_location->ThisAs<Win32Client>();
+
+  std::thread(RunThread).detach();
+  automaton_running = true;
+  anim.LoadingCompleted();
+}
 
 void OnResize(int w, int h) {
   window_width = w;
@@ -284,12 +304,12 @@ void Dream(SkCanvas &canvas) {
 }
 
 void PaintAutomaton(SkCanvas &canvas) {
-  win32_client.canvas_in.send_force(&canvas);
-  events.send(std::make_unique<RunTask>(&win32_client_location));
+  win32_client->canvas_in.send_force(&canvas);
+  events.send(std::make_unique<RunTask>(win32_client_location));
   // We're waiting for the canvas to be sent back - it means that drawing has
   // completed. We can drop the received canvas because it's the same as the one
   // we sent.
-  win32_client.canvas_out.recv();
+  win32_client->canvas_out.recv();
 }
 
 void PaintLoadingAnimation(SkCanvas &canvas) {
@@ -302,7 +322,7 @@ void PaintLoadingAnimation(SkCanvas &canvas) {
 }
 
 void RunOnAutomatonThread(std::function<void()> f) {
-  events.send(std::make_unique<FunctionTask>(&win32_client_location,
+  events.send(std::make_unique<FunctionTask>(win32_client_location,
                                              [f](Location &l) { f(); }));
 }
 
@@ -350,18 +370,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
   }
   case WM_MBUTTONDOWN:
-    mbutton_down = Timer::clock::now();
+    mbutton_down = time::clock::now();
     TrackMouseLeave();
     break;
   case WM_MBUTTONUP: {
-    auto now = Timer::clock::now();
+    auto now = time::now();
     if (now - mbutton_down < std::chrono::milliseconds(200)) {
       vec2 canvas_pos = ScreenToCanvas(mouse_position);
       camera_x.target = canvas_pos.X;
       camera_y.target = canvas_pos.Y;
       zoom.target = 1;
     }
-    mbutton_down = Timer::time_point();
+    mbutton_down = time::kEpoch;
     break;
   }
   case WM_KEYDOWN: {
@@ -387,8 +407,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     vec2 old_mouse_pos = mouse_position;
     mouse_position.X = x + window_x;
     mouse_position.Y = y + window_y;
-    if (mbutton_down > Timer::time_point()) {
-      mbutton_down = Timer::clock::now() - std::chrono::milliseconds(200);
+    if (mbutton_down > time::kEpoch) {
+      mbutton_down = time::now() - std::chrono::milliseconds(200);
       vec2 delta =
           ScreenToCanvas(mouse_position) - ScreenToCanvas(old_mouse_pos);
       camera_x.Shift(-delta.X);
@@ -398,7 +418,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_MOUSELEAVE:
     tracking_mouse_leave = false;
-    mbutton_down = Timer::time_point();
+    mbutton_down = time::kEpoch;
     break;
   case WM_MOUSEWHEEL: {
     int16_t delta = GET_WHEEL_DELTA_WPARAM(wParam);
@@ -466,10 +486,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   window_y = rect.top;
   OnResize(rect.right - rect.left, rect.bottom - rect.top);
 
-  std::thread(RunThread).detach();
-  automaton_running = true;
+  InitAutomaton();
 
-  anim.LoadingCompleted();
   MSG msg = {};
   while (WM_QUIT != msg.message) {
     if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {

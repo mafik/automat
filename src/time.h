@@ -4,21 +4,30 @@
 
 namespace automaton {
 
+namespace time {
+
+using T = double;
+using duration = std::chrono::duration<T>;
+using clock = std::chrono::system_clock;
+using point = std::chrono::time_point<clock, duration>;
+
+constexpr point kEpoch = {};
+
+inline point now() { return clock::now(); }
+
 struct Timer {
-  using T = double;
-  using duration = std::chrono::duration<T>;
-  using clock = std::chrono::system_clock;
-  using time_point = std::chrono::time_point<clock, duration>;
-  time_point now = clock::now();
-  time_point last = now;
+  point now = time::now();
+  point last = now;
   T d = 0; // delta from last frame
   void Tick() {
-    now = clock::now();
+    now = time::now();
     d = (now - last).count();
     last = now;
   }
 };
 
 extern Timer timer;
+
+} // namespace time
 
 } // namespace automaton

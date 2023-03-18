@@ -2,6 +2,10 @@
 
 namespace automaton {
 
-Timer timer;
+namespace time {
+
+Timer timer = {};
+
+} // namespace time
 
 } // namespace automaton

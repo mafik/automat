@@ -5,6 +5,7 @@
 
 #include "win_main.h"
 
+#include "action.h"
 #include "backtrace.h"
 #include "library.h"
 #include "loading_animation.h"
@@ -19,6 +20,7 @@
 #include <include/effects/SkRuntimeEffect.h>
 
 #include <bitset>
+#include <memory>
 
 namespace automaton {
 
@@ -151,6 +153,28 @@ vec2 CanvasToScreen(vec2 canvas) {
 Location root_location;
 Machine *root_machine;
 
+struct DragAction : Action {
+  std::unique_ptr<Object> object;
+  vec2 contact_point;
+  vec2 current_position;
+  void Begin(vec2 position) override {
+    current_position = position;
+  }
+  void Update(vec2 position) override {
+    current_position = position;
+  }
+  void End() override {}
+  void Draw(SkCanvas& canvas) override {
+    canvas.save();
+    vec2 pos = current_position - contact_point;
+    canvas.translate(pos.X, pos.Y);
+    object->Draw(nullptr, canvas);
+    canvas.restore();
+  }
+};
+
+std::unique_ptr<Action> mouse_action;
+
 struct Win32Client : Object {
   static const Win32Client proto;
   channel canvas_in;
@@ -266,29 +290,6 @@ struct Win32Client : Object {
 
     canvas.restore();
 
-    // Draw prototype icons
-    canvas.save();
-
-    canvas.scale(DisplayPxPerMeter(), -DisplayPxPerMeter());
-    float max_w = window_width / DisplayPxPerMeter();
-    vec2 cursor = Vec2(0, 0);
-
-    auto prototypes = Prototypes();
-    // TODO: draw icons rather than actual objects
-    for (const Object *proto : prototypes) {
-      canvas.save();
-      SkPathBuilder path_builder;
-      proto->Shape(nullptr, path_builder);
-      SkRect bounds = path_builder.computeBounds();
-      canvas.translate(cursor.X + 0.001 - bounds.left(),
-                       cursor.Y - 0.001 - bounds.bottom());
-      proto->Draw(nullptr, canvas);
-      canvas.restore();
-      cursor.X += bounds.width() + 0.001;
-    }
-
-    canvas.restore();
-
     canvas_out.send_force(&canvas);
   }
 };
@@ -379,12 +380,53 @@ void Dream(SkCanvas &canvas) {
 }
 
 void PaintAutomaton(SkCanvas &canvas) {
+  // We're "releasing" the whole memory of win32 thread (and "grabbing" it in Automaton thread) so it doesn't really matter that we're sending the canvas.
+  // TODO: use a better abstraction for this (condition_variable maybe)
   win32_client->canvas_in.send_force(&canvas);
   events.send(std::make_unique<RunTask>(win32_client_location));
   // We're waiting for the canvas to be sent back - it means that drawing has
   // completed. We can drop the received canvas because it's the same as the one
   // we sent.
   win32_client->canvas_out.recv();
+  
+  // Draw prototype shelf
+  canvas.save();
+
+  canvas.scale(DisplayPxPerMeter(), -DisplayPxPerMeter());
+  float max_w = window_width / DisplayPxPerMeter();
+  vec2 cursor = Vec2(0, 0);
+
+  auto prototypes = Prototypes();
+  // TODO: draw icons rather than actual objects
+  for (const Object *proto : prototypes) {
+    canvas.save();
+    SkPathBuilder path_builder;
+    proto->Shape(nullptr, path_builder);
+    SkPath shape = path_builder.detach();
+    SkRect bounds = shape.getBounds();
+    if (cursor.X + bounds.width() + 0.001 > max_w) {
+      cursor.X = 0;
+      cursor.Y -= bounds.height() + 0.001;
+    }
+    canvas.translate(cursor.X + 0.001 - bounds.left(),
+                      cursor.Y - 0.001 - bounds.bottom());
+    SkM44 local_to_device = canvas.getLocalToDevice();
+    SkM44 device_to_local;
+    local_to_device.invert(&device_to_local);
+    SkV4 local_mouse = device_to_local.map(mouse_position.X - window_x, mouse_position.Y - window_y, 0, 1);
+    if (shape.contains(local_mouse.x, local_mouse.y)) {
+      SkPaint paint;
+      paint.setColor(SK_ColorRED);
+      paint.setStyle(SkPaint::kStroke_Style);
+      paint.setStrokeWidth(0.001);
+      canvas.drawPath(shape, paint);
+    }
+    proto->Draw(nullptr, canvas);
+    canvas.restore();
+    cursor.X += bounds.width() + 0.001;
+  }
+
+  canvas.restore();
 }
 
 void PaintLoadingAnimation(SkCanvas &canvas) {
@@ -482,6 +524,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     uint8_t scan_code = (lParam >> 16) & 0xFF;
     break;
   }
+  case WM_LBUTTONDOWN: {
+
+    break;
+  }
   case WM_MOUSEMOVE: {
     int16_t x = lParam & 0xFFFF;
     int16_t y = (lParam >> 16) & 0xFFFF;
@@ -493,6 +539,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
           ScreenToCanvas(mouse_position) - ScreenToCanvas(old_mouse_pos);
       camera_x.Shift(-delta.X);
       camera_y.Shift(-delta.Y);
+    }
+    if (mouse_action) {
+      mouse_action->Update(mouse_position);
     }
     break;
   }

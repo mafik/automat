@@ -44,6 +44,7 @@ std::bitset<256> pressed_scancodes;
 vec2 mouse_position;
 
 time::point mbutton_down;
+vec2 mbutton_down_position;
 
 struct AnimatedApproach {
   float value = 0;
@@ -78,8 +79,8 @@ AnimatedApproach camera_y(0.0, 0.005);
 // Ensures that the 1x1m canvas is at least 1mm on screen.
 constexpr float kMinZoom = 0.001f;
 
-float TruePxPerMeter() { return screen_width_px / screen_width_m; }
-float PxPerMeter() { return TruePxPerMeter() * zoom; }
+float DisplayPxPerMeter() { return screen_width_px / screen_width_m; }
+float PxPerMeter() { return DisplayPxPerMeter() * zoom; }
 
 float TrueDPI() { return PxPerMeter() * m_per_inch; }
 
@@ -210,7 +211,7 @@ struct Win32Client : Object {
     // doesn't get lost)
     {
       // Leave 1mm of margin so that the user can still see the edge of the work area
-      int one_mm_px = 0.001 * TruePxPerMeter();
+      int one_mm_px = 0.001 * DisplayPxPerMeter();
       vec2 top_left_px = Vec2(window_x + one_mm_px, window_y + one_mm_px);
       vec2 bottom_right_px = top_left_px + Vec2(window_width - one_mm_px*2, window_height - one_mm_px * 2);
       vec2 top_left = ScreenToCanvas(top_left_px);
@@ -395,6 +396,7 @@ void TrackMouseLeave() {
 }
 
 constexpr time::duration kClickTimeout = std::chrono::milliseconds(300);
+constexpr float kClickRadius = 0.002f; // 2mm
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
@@ -426,17 +428,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_MBUTTONDOWN:
     mbutton_down = time::clock::now();
+    mbutton_down_position = mouse_position;
     TrackMouseLeave();
     break;
   case WM_MBUTTONUP: {
-    auto now = time::now();
-    if (now - mbutton_down < kClickTimeout) {
+    time::duration down_duration = time::now() - mbutton_down;
+    vec2 delta_px = mouse_position - mbutton_down_position;
+    float delta_m = Length(delta_px) / DisplayPxPerMeter();
+    if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
       vec2 canvas_pos = ScreenToCanvas(mouse_position);
       camera_x.target = canvas_pos.X;
       camera_y.target = canvas_pos.Y;
       zoom.target = 1;
     }
-    mbutton_down = time::kEpoch;
+    mbutton_down = time::kTimePointZero;
     break;
   }
   case WM_KEYDOWN: {
@@ -462,8 +467,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     vec2 old_mouse_pos = mouse_position;
     mouse_position.X = x + window_x;
     mouse_position.Y = y + window_y;
-    if (mbutton_down > time::kEpoch) {
-      mbutton_down = time::now() - kClickTimeout;
+    if (mbutton_down > time::kTimePointZero) {
       vec2 delta =
           ScreenToCanvas(mouse_position) - ScreenToCanvas(old_mouse_pos);
       camera_x.Shift(-delta.X);
@@ -473,7 +477,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_MOUSELEAVE:
     tracking_mouse_leave = false;
-    mbutton_down = time::kEpoch;
+    mbutton_down = time::kTimePointZero;
     break;
   case WM_MOUSEWHEEL: {
     int16_t delta = GET_WHEEL_DELTA_WPARAM(wParam);

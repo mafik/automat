@@ -78,7 +78,8 @@ AnimatedApproach camera_y(0.0, 0.005);
 // Ensures that the 1x1m canvas is at least 1mm on screen.
 constexpr float kMinZoom = 0.001f;
 
-float PxPerMeter() { return screen_width_px / screen_width_m * zoom; }
+float TruePxPerMeter() { return screen_width_px / screen_width_m; }
+float PxPerMeter() { return TruePxPerMeter() * zoom; }
 
 float TrueDPI() { return PxPerMeter() * m_per_inch; }
 
@@ -203,6 +204,34 @@ struct Win32Client : Object {
       camera_x.Shift(0.1 * t.d);
     }
 
+    SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
+
+    // Make sure that work area doesn't leave the window bounds (so the user
+    // doesn't get lost)
+    {
+      // Leave 1mm of margin so that the user can still see the edge of the work area
+      int one_mm_px = 0.001 * TruePxPerMeter();
+      vec2 top_left_px = Vec2(window_x + one_mm_px, window_y + one_mm_px);
+      vec2 bottom_right_px = top_left_px + Vec2(window_width - one_mm_px*2, window_height - one_mm_px * 2);
+      vec2 top_left = ScreenToCanvas(top_left_px);
+      vec2 bottom_right = ScreenToCanvas(bottom_right_px);
+      SkRect window_bounds = SkRect::MakeLTRB(top_left.X, top_left.Y,
+                                              bottom_right.X, bottom_right.Y);
+      if (work_area.left() > window_bounds.right()) {
+        camera_x.Shift(work_area.left() - window_bounds.right());
+      }
+      if (work_area.right() < window_bounds.left()) {
+        camera_x.Shift(work_area.right() - window_bounds.left());
+      }
+      // The y axis is flipped so `work_area.bottom()` is actually its top
+      if (work_area.bottom() < window_bounds.bottom()) {
+        camera_y.Shift(work_area.bottom() - window_bounds.bottom());
+      }
+      if (work_area.top() > window_bounds.top()) {
+        camera_y.Shift(work_area.top() - window_bounds.top());
+      }
+    }
+
     canvas.save();
     canvas.translate(window_width / 2., window_height / 2.);
     canvas.scale(PxPerMeter(), -PxPerMeter());
@@ -210,7 +239,6 @@ struct Win32Client : Object {
 
     // Draw background
     canvas.clear(background_color);
-    SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
     canvas.drawRect(work_area, GetBackgroundPaint());
     SkPaint border_paint;
     border_paint.setColor(tick_color);

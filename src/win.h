@@ -13,4 +13,8 @@ HINSTANCE GetInstance();
 WNDCLASSEX &GetWindowClass();
 HWND CreateAutomatonWindow();
 
+enum Cursor { kCursorUnknown, kCursorArrow, kCursorHand };
+
+void SetCursor(Cursor cursor);
+
 } // namespace automaton

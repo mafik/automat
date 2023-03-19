@@ -157,14 +157,10 @@ struct DragAction : Action {
   std::unique_ptr<Object> object;
   vec2 contact_point;
   vec2 current_position;
-  void Begin(vec2 position) override {
-    current_position = position;
-  }
-  void Update(vec2 position) override {
-    current_position = position;
-  }
+  void Begin(vec2 position) override { current_position = position; }
+  void Update(vec2 position) override { current_position = position; }
   void End() override {}
-  void Draw(SkCanvas& canvas) override {
+  void Draw(SkCanvas &canvas) override {
     canvas.save();
     vec2 pos = current_position - contact_point;
     canvas.translate(pos.X, pos.Y);
@@ -173,7 +169,17 @@ struct DragAction : Action {
   }
 };
 
+Cursor current_cursor = kCursorUnknown;
 std::unique_ptr<Action> mouse_action;
+const Object *prototype_under_mouse = nullptr;
+
+void UpdateCursor() {
+  Cursor wanted = prototype_under_mouse ? kCursorHand : kCursorArrow;
+  if (current_cursor != wanted) {
+    current_cursor = wanted;
+    SetCursor(current_cursor);
+  }
+}
 
 struct Win32Client : Object {
   static const Win32Client proto;
@@ -380,7 +386,9 @@ void Dream(SkCanvas &canvas) {
 }
 
 void PaintAutomaton(SkCanvas &canvas) {
-  // We're "releasing" the whole memory of win32 thread (and "grabbing" it in Automaton thread) so it doesn't really matter that we're sending the canvas.
+  // We're "releasing" the whole memory of win32 thread (and "grabbing" it in
+  // Automaton thread) so it doesn't really matter that we're sending the
+  // canvas.
   // TODO: use a better abstraction for this (condition_variable maybe)
   win32_client->canvas_in.send_force(&canvas);
   events.send(std::make_unique<RunTask>(win32_client_location));
@@ -388,7 +396,7 @@ void PaintAutomaton(SkCanvas &canvas) {
   // completed. We can drop the received canvas because it's the same as the one
   // we sent.
   win32_client->canvas_out.recv();
-  
+
   // Draw prototype shelf
   canvas.save();
 
@@ -398,6 +406,8 @@ void PaintAutomaton(SkCanvas &canvas) {
 
   auto prototypes = Prototypes();
   // TODO: draw icons rather than actual objects
+  auto old_prototype_under_mouse = prototype_under_mouse;
+  prototype_under_mouse = nullptr;
   for (const Object *proto : prototypes) {
     canvas.save();
     SkPathBuilder path_builder;
@@ -409,12 +419,14 @@ void PaintAutomaton(SkCanvas &canvas) {
       cursor.Y -= bounds.height() + 0.001;
     }
     canvas.translate(cursor.X + 0.001 - bounds.left(),
-                      cursor.Y - 0.001 - bounds.bottom());
+                     cursor.Y - 0.001 - bounds.bottom());
     SkM44 local_to_device = canvas.getLocalToDevice();
     SkM44 device_to_local;
     local_to_device.invert(&device_to_local);
-    SkV4 local_mouse = device_to_local.map(mouse_position.X - window_x, mouse_position.Y - window_y, 0, 1);
+    SkV4 local_mouse = device_to_local.map(mouse_position.X - window_x,
+                                           mouse_position.Y - window_y, 0, 1);
     if (shape.contains(local_mouse.x, local_mouse.y)) {
+      prototype_under_mouse = proto;
       SkPaint paint;
       paint.setColor(SK_ColorRED);
       paint.setStyle(SkPaint::kStroke_Style);
@@ -471,6 +483,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     window_y = HIWORD(lParam);
     break;
   }
+  case WM_SETCURSOR:
+    // Intercept this message to prevent Windows from changing the cursor back
+    // to an arrow.
+    if (LOWORD(lParam) == HTCLIENT) {
+      UpdateCursor();
+      return TRUE;
+    } else {
+      current_cursor = kCursorUnknown;
+      return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+    break;
   case WM_PAINT: {
     PAINTSTRUCT ps;
     BeginPaint(hWnd, &ps);

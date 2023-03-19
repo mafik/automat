@@ -54,6 +54,10 @@ Logger::Logger(LogLevel log_level, const std::source_location location)
     : impl(new Logger::Impl(log_level, location)) {}
 
 Logger::~Logger() {
+  if (impl->log_level == LOG_LEVEL_DISCARD) {
+    delete impl;
+    return;
+  }
   std::string output = impl->buffer;
 
   if (impl->log_level == LOG_LEVEL_ERROR ||

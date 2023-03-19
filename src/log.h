@@ -1,9 +1,10 @@
 #pragma once
 
+#include "math.h"
+#include "time.h"
 #include <memory>
 #include <source_location>
 #include <string_view>
-#include "math.h"
 
 // Functions for logging human-readable messages.
 //
@@ -32,10 +33,16 @@
 // There is no need to add a new line character at the end of the logged message
 // - it's added there automatically.
 
-enum LogLevel { LOG_LEVEL_INFO, LOG_LEVEL_ERROR, LOG_LEVEL_FATAL };
+enum LogLevel {
+  LOG_LEVEL_DISCARD,
+  LOG_LEVEL_INFO,
+  LOG_LEVEL_ERROR,
+  LOG_LEVEL_FATAL
+};
 
 struct Logger {
-  Logger(LogLevel, const std::source_location location = std::source_location::current());
+  Logger(LogLevel,
+         const std::source_location location = std::source_location::current());
   ~Logger();
   struct Impl;
   Impl *impl;
@@ -81,5 +88,11 @@ const Logger &operator<<(const Logger &logger, loggable auto &t) {
 void LOG_Indent(int n = 2);
 
 void LOG_Unindent(int n = 2);
+
+#define LOG_EVERY_N_SEC(n)                                                     \
+  static time::point last_log_time;                                            \
+  (time::now() - last_log_time > time::duration(n)                             \
+       ? (last_log_time = time::now(), Logger(LOG_LEVEL_INFO))                 \
+       : Logger(LOG_LEVEL_DISCARD))
 
 // End of header

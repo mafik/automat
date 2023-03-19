@@ -356,6 +356,8 @@ void TrackMouseLeave() {
   TrackMouseEvent(&track_mouse_event);
 }
 
+constexpr time::duration kClickTimeout = std::chrono::milliseconds(300);
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
   case WM_SIZE:
@@ -390,7 +392,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
   case WM_MBUTTONUP: {
     auto now = time::now();
-    if (now - mbutton_down < std::chrono::milliseconds(300)) {
+    if (now - mbutton_down < kClickTimeout) {
       vec2 canvas_pos = ScreenToCanvas(mouse_position);
       camera_x.target = canvas_pos.X;
       camera_y.target = canvas_pos.Y;
@@ -423,7 +425,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     mouse_position.X = x + window_x;
     mouse_position.Y = y + window_y;
     if (mbutton_down > time::kEpoch) {
-      mbutton_down = time::now() - std::chrono::milliseconds(200);
+      mbutton_down = time::now() - kClickTimeout;
       vec2 delta =
           ScreenToCanvas(mouse_position) - ScreenToCanvas(old_mouse_pos);
       camera_x.Shift(-delta.X);

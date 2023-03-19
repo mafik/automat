@@ -390,7 +390,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
   case WM_MBUTTONUP: {
     auto now = time::now();
-    if (now - mbutton_down < std::chrono::milliseconds(200)) {
+    if (now - mbutton_down < std::chrono::milliseconds(300)) {
       vec2 canvas_pos = ScreenToCanvas(mouse_position);
       camera_x.target = canvas_pos.X;
       camera_y.target = canvas_pos.Y;

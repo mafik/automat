@@ -82,7 +82,8 @@ float TrueDPI() { return PxPerMeter() * m_per_inch; }
 SkRect GetCameraRect() {
   return SkRect::MakeXYWH(camera_x - window_width / PxPerMeter() / 2,
                           camera_y - window_height / PxPerMeter() / 2,
-                          window_width / PxPerMeter(), window_height / PxPerMeter());
+                          window_width / PxPerMeter(),
+                          window_height / PxPerMeter());
 }
 
 SkPaint &GetBackgroundPaint() {
@@ -143,7 +144,7 @@ vec2 CanvasToScreen(vec2 canvas) {
 }
 
 Location root_location;
-Machine* root_machine;
+Machine *root_machine;
 
 struct Win32Client : Object {
   static const Win32Client proto;
@@ -161,6 +162,7 @@ struct Win32Client : Object {
 
     float rx = camera_x.Remaining();
     float ry = camera_y.Remaining();
+    float rz = zoom.Remaining();
     float r = sqrt(rx * rx + ry * ry);
     float rpx = PxPerMeter() * r;
     bool stabilize_mouse = rpx < 1;
@@ -205,6 +207,20 @@ struct Win32Client : Object {
 
     canvas.drawPaint(GetBackgroundPaint());
 
+    // Draw target window size when zooming in with middle mouse button
+    if (zoom.target == 1 && rz > 0.001) {
+      SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
+      target_paint.setStyle(SkPaint::kStroke_Style);
+      target_paint.setStrokeWidth(0.001); // 1mm
+      float pixel_per_meter_no_zoom = screen_width_px / screen_width_m;
+      float target_width = window_width / pixel_per_meter_no_zoom;
+      float target_height = window_height / pixel_per_meter_no_zoom;
+      SkRect target_rect = SkRect::MakeXYWH(camera_x.target - target_width / 2,
+                                            camera_y.target - target_height / 2,
+                                            target_width, target_height);
+      canvas.drawRect(target_rect, target_paint);
+    }
+
     root_machine->DrawContents(canvas);
 
     // Draw prototypes
@@ -226,9 +242,8 @@ bool automaton_running = false;
 
 using namespace automaton;
 
-
 void InitAutomaton() {
-  
+
   root_location = Location(nullptr);
   root_machine = root_location.Create<Machine>();
   win32_client_location = &root_machine->Create<Win32Client>();

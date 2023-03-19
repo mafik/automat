@@ -86,9 +86,12 @@ struct Object {
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  virtual void Draw(const Location &here, SkCanvas &canvas);
-  virtual void Shape(const Location &here, SkPathBuilder &path_builder) const;
+  virtual void Draw(const Location *here, SkCanvas &canvas) const;
+  virtual void Shape(const Location *here, SkPathBuilder &path_builder) const;
 };
+
+std::vector<const Object*>& Prototypes();
+void RegisterPrototype(const Object& prototype);
 
 /*
 

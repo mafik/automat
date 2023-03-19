@@ -23,6 +23,12 @@
 
 namespace automaton {
 
+#define DEFINE_PROTO(type)                                                     \
+  const type type::proto;                                                      \
+  __attribute__((constructor)) void Register##type() {                         \
+    RegisterPrototype(type::proto);                                            \
+  }
+
 struct Integer : Object {
   int32_t i;
   Integer(int32_t i = 0) : i(i) {}
@@ -36,7 +42,7 @@ struct Integer : Object {
     i = std::stoi(string(text));
   }
 };
-const Integer Integer::proto;
+DEFINE_PROTO(Integer);
 
 struct Number : Object {
   double value;
@@ -51,7 +57,7 @@ struct Number : Object {
     value = std::stod(string(text));
   }
 };
-const Number Number::proto;
+DEFINE_PROTO(Number);
 
 struct Increment : Object {
   static const Increment proto;
@@ -69,7 +75,7 @@ struct Increment : Object {
     integer.location->ScheduleUpdate();
   }
 };
-const Increment Increment::proto;
+DEFINE_PROTO(Increment);
 Argument Increment::target_arg =
     Argument("target", Argument::kRequiresConcreteType)
         .RequireInstanceOf<Integer>();
@@ -89,7 +95,7 @@ struct Delete : Object {
     target.location->Take();
   }
 };
-const Delete Delete::proto;
+DEFINE_PROTO(Delete);
 Argument Delete::target_arg = Argument("target", Argument::kRequiresLocation);
 
 struct Set : Object {
@@ -110,7 +116,7 @@ struct Set : Object {
     target.location->Put(std::move(clone));
   }
 };
-const Set Set::proto;
+DEFINE_PROTO(Set);
 Argument Set::value_arg = Argument("value", Argument::kRequiresObject);
 Argument Set::target_arg = Argument("target", Argument::kRequiresLocation);
 
@@ -119,7 +125,7 @@ struct Date : Object {
   int year;
   int month;
   int day;
-  Date(int year, int month, int day) : year(year), month(month), day(day) {}
+  Date(int year = 0, int month = 0, int day = 0) : year(year), month(month), day(day) {}
   string_view Name() const override { return "Date"; }
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Date>(year, month, day);
@@ -161,7 +167,7 @@ struct Date : Object {
     return std::partial_ordering::unordered;
   }
 };
-const Date Date::proto(2022, 1, 1);
+DEFINE_PROTO(Date);
 
 using Clock = std::chrono::high_resolution_clock;
 using Duration = std::chrono::duration<double>;
@@ -237,7 +243,7 @@ struct Timer : Object {
     }
   }
 };
-const Timer Timer::proto;
+DEFINE_PROTO(Timer);
 
 struct TimerReset : Object {
   static const TimerReset proto;
@@ -254,7 +260,7 @@ struct TimerReset : Object {
     timer.typed->Reset(*timer.location);
   }
 };
-const TimerReset TimerReset::proto;
+DEFINE_PROTO(TimerReset);
 Argument TimerReset::timer_arg =
     Argument("timer", Argument::kRequiresConcreteType)
         .RequireInstanceOf<Timer>();
@@ -288,7 +294,7 @@ struct EqualityTest : LiveObject {
     }
   }
 };
-const EqualityTest EqualityTest::proto;
+DEFINE_PROTO(EqualityTest);
 LiveArgument EqualityTest::target_arg =
     LiveArgument("target", Argument::kRequiresObject);
 
@@ -320,7 +326,7 @@ struct LessThanTest : LiveObject {
     }
   }
 };
-const LessThanTest LessThanTest::proto;
+DEFINE_PROTO(LessThanTest);
 LiveArgument LessThanTest::less_arg =
     LiveArgument("less", Argument::kRequiresObject);
 LiveArgument LessThanTest::than_arg =
@@ -359,7 +365,7 @@ struct StartsWithTest : LiveObject {
     }
   }
 };
-const StartsWithTest StartsWithTest::proto;
+DEFINE_PROTO(StartsWithTest);
 LiveArgument StartsWithTest::starts_arg =
     LiveArgument("starts", Argument::kRequiresObject);
 LiveArgument StartsWithTest::with_arg =
@@ -390,7 +396,7 @@ struct AllTest : LiveObject {
     }
   }
 };
-const AllTest AllTest::proto;
+DEFINE_PROTO(AllTest);
 LiveArgument AllTest::test_arg =
     LiveArgument("test", Argument::kRequiresObject);
 
@@ -434,7 +440,7 @@ struct Switch : LiveObject {
     }
   }
 };
-const Switch Switch::proto;
+DEFINE_PROTO(Switch);
 LiveArgument Switch::target_arg =
     LiveArgument("target", Argument::kRequiresObject);
 
@@ -467,7 +473,7 @@ struct ErrorReporter : LiveObject {
     auto err = here.ReportError(error_text);
   }
 };
-const ErrorReporter ErrorReporter::proto;
+DEFINE_PROTO(ErrorReporter);
 LiveArgument ErrorReporter::test_arg =
     LiveArgument("test", Argument::kRequiresObject);
 LiveArgument ErrorReporter::message_arg =
@@ -502,7 +508,7 @@ struct Parent : Pointer {
     return nullptr;
   }
 };
-const Parent Parent::proto;
+DEFINE_PROTO(Parent);
 
 struct HealthTest : Object {
   static const HealthTest proto;
@@ -535,7 +541,7 @@ struct HealthTest : Object {
     here.ScheduleUpdate();
   }
 };
-const HealthTest HealthTest::proto;
+DEFINE_PROTO(HealthTest);
 Argument HealthTest::target_arg = Argument("target", Argument::kOptional);
 
 struct ErrorCleaner : Object {
@@ -566,7 +572,7 @@ struct ErrorCleaner : Object {
     errored.ClearError();
   }
 };
-const ErrorCleaner ErrorCleaner::proto;
+DEFINE_PROTO(ErrorCleaner);
 Argument ErrorCleaner::target_arg = Argument("target", Argument::kOptional);
 
 struct AbstractList {
@@ -609,7 +615,7 @@ struct Append : Object {
     }
   }
 };
-const Append Append::proto;
+DEFINE_PROTO(Append);
 Argument Append::to_arg = Argument("to", Argument::kRequiresConcreteType)
                               .RequireInstanceOf<AbstractList>();
 Argument Append::what_arg = Argument("what", Argument::kRequiresObject);
@@ -666,7 +672,7 @@ struct List : Object, AbstractList {
     return nullptr;
   }
 };
-const List List::proto;
+DEFINE_PROTO(List);
 
 struct Iterator {
   virtual Object *GetCurrent() const = 0;
@@ -801,7 +807,7 @@ struct Filter : LiveObject, Iterator, AbstractList {
     return nullptr;
   }
 };
-const Filter Filter::proto;
+DEFINE_PROTO(Filter);
 LiveArgument Filter::list_arg =
     LiveArgument("list", Argument::kRequiresConcreteType)
         .RequireInstanceOf<AbstractList>();
@@ -835,7 +841,7 @@ struct CurrentElement : Pointer {
     return nullptr;
   }
 };
-const CurrentElement CurrentElement::proto;
+DEFINE_PROTO(CurrentElement);
 LiveArgument CurrentElement::of_arg =
     LiveArgument("of", Argument::kRequiresConcreteType)
         .RequireInstanceOf<Iterator>();
@@ -869,7 +875,7 @@ struct Complex : Object {
     return std::unique_ptr<Object>(c);
   }
 };
-const Complex Complex::proto;
+DEFINE_PROTO(Complex);
 
 struct ComplexField : Pointer {
   static const ComplexField proto;
@@ -933,7 +939,7 @@ private:
     return std::make_pair(return_complex, label_text);
   }
 };
-const ComplexField ComplexField::proto;
+DEFINE_PROTO(ComplexField);
 LiveArgument ComplexField::complex_arg =
     LiveArgument("complex", Argument::kRequiresConcreteType)
         .RequireInstanceOf<Complex>();
@@ -1031,7 +1037,7 @@ struct Text : LiveObject {
     }
   }
 };
-const Text Text::proto;
+DEFINE_PROTO(Text);
 LiveArgument Text::target_arg("target", Argument::kOptional);
 
 struct Button : Object {
@@ -1056,7 +1062,7 @@ struct Button : Object {
     }
   }
 };
-const Button Button::proto;
+DEFINE_PROTO(Button);
 Argument Button::enabled_arg("enabled", Argument::kOptional);
 
 struct ComboBox : LiveObject {
@@ -1095,7 +1101,7 @@ struct ComboBox : LiveObject {
     }
   }
 };
-const ComboBox ComboBox::proto;
+DEFINE_PROTO(ComboBox);
 LiveArgument ComboBox::options_arg("option", Argument::kOptional);
 
 struct Slider : LiveObject {
@@ -1141,7 +1147,7 @@ struct Slider : LiveObject {
     value = new_value;
   }
 };
-const Slider Slider::proto;
+DEFINE_PROTO(Slider);
 LiveArgument Slider::min_arg("min", Argument::kOptional);
 LiveArgument Slider::max_arg("max", Argument::kOptional);
 
@@ -1154,7 +1160,7 @@ struct ProgressBar : Number {
     return bar;
   }
 };
-const ProgressBar ProgressBar::proto;
+DEFINE_PROTO(ProgressBar);
 
 struct Alert : Object {
   static const Alert proto;
@@ -1172,7 +1178,7 @@ struct Alert : Object {
     }
   }
 };
-const Alert Alert::proto;
+DEFINE_PROTO(Alert);
 Argument Alert::message_arg("message", Argument::kRequiresObject);
 
 struct ListView : Pointer {
@@ -1243,7 +1249,7 @@ struct ListView : Pointer {
     return obj;
   }
 };
-const ListView ListView::proto;
+DEFINE_PROTO(ListView);
 LiveArgument ListView::list_arg =
     LiveArgument("list", Argument::kRequiresConcreteType)
         .RequireInstanceOf<AbstractList>();
@@ -1290,7 +1296,7 @@ struct Blackboard : Object {
     statement = algebra::ParseStatement(text);
   }
 };
-const Blackboard Blackboard::proto;
+DEFINE_PROTO(Blackboard);
 
 /////////////
 // Misc
@@ -1394,6 +1400,8 @@ struct BlackboardUpdater : LiveObject {
     }
   }
 };
-const BlackboardUpdater BlackboardUpdater::proto;
+DEFINE_PROTO(BlackboardUpdater);
+
+#undef DEFINE_PROTO
 
 } // namespace automaton

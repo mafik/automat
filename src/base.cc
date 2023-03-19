@@ -13,6 +13,15 @@
 
 namespace automaton {
 
+std::vector<const Object*>& Prototypes() {
+  static std::vector<const Object*> prototypes;
+  return prototypes;
+}
+
+void RegisterPrototype(const Object& prototype) {
+  Prototypes().push_back(&prototype);
+}
+
 SkColor SkColorFromHex(const char *hex) {
   int r, g, b;
   sscanf(hex, "#%02x%02x%02x", &r, &g, &b);
@@ -60,7 +69,7 @@ Font &GetFont() {
   return *font;
 }
 
-void Object::Draw(const Location &here, SkCanvas &canvas) {
+void Object::Draw(const Location *here, SkCanvas &canvas) const {
   SkPathBuilder path_builder;
   Shape(here, path_builder);
   SkPath path = path_builder.detach();
@@ -104,7 +113,7 @@ void Object::Draw(const Location &here, SkCanvas &canvas) {
   canvas.restore();
 }
 
-void Object::Shape(const Location &here, SkPathBuilder &path_builder) const {
+void Object::Shape(const Location *here, SkPathBuilder &path_builder) const {
   constexpr float kNameMargin = 0.001;
   float width_name = GetFont().MeasureText(Name()) + 2 * kNameMargin;
   float width_rounded = ceil(width_name * 1000) / 1000;
@@ -121,7 +130,7 @@ void Machine::DrawContents(SkCanvas &canvas) {
   for (auto &loc : locations) {
     canvas.save();
     canvas.translate(loc->position.X, loc->position.Y);
-    loc->object->Draw(*loc, canvas);
+    loc->object->Draw(loc.get(), canvas);
     canvas.restore();
   }
 }

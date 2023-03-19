@@ -6,7 +6,7 @@
 #include "win_main.h"
 
 #include "backtrace.h"
-#include "base.h"
+#include "library.h"
 #include "loading_animation.h"
 #include "log.h"
 #include "time.h"
@@ -210,10 +210,12 @@ struct Win32Client : Object {
     // Make sure that work area doesn't leave the window bounds (so the user
     // doesn't get lost)
     {
-      // Leave 1mm of margin so that the user can still see the edge of the work area
+      // Leave 1mm of margin so that the user can still see the edge of the work
+      // area
       int one_mm_px = 0.001 * DisplayPxPerMeter();
       vec2 top_left_px = Vec2(window_x + one_mm_px, window_y + one_mm_px);
-      vec2 bottom_right_px = top_left_px + Vec2(window_width - one_mm_px*2, window_height - one_mm_px * 2);
+      vec2 bottom_right_px = top_left_px + Vec2(window_width - one_mm_px * 2,
+                                                window_height - one_mm_px * 2);
       vec2 top_left = ScreenToCanvas(top_left_px);
       vec2 bottom_right = ScreenToCanvas(bottom_right_px);
       SkRect window_bounds = SkRect::MakeLTRB(top_left.X, top_left.Y,
@@ -262,9 +264,28 @@ struct Win32Client : Object {
 
     root_machine->DrawContents(canvas);
 
-    // Draw prototypes
-    canvas.save();
     canvas.restore();
+
+    // Draw prototype icons
+    canvas.save();
+
+    canvas.scale(DisplayPxPerMeter(), -DisplayPxPerMeter());
+    float max_w = window_width / DisplayPxPerMeter();
+    vec2 cursor = Vec2(0, 0);
+
+    auto prototypes = Prototypes();
+    // TODO: draw icons rather than actual objects
+    for (const Object *proto : prototypes) {
+      canvas.save();
+      SkPathBuilder path_builder;
+      proto->Shape(nullptr, path_builder);
+      SkRect bounds = path_builder.computeBounds();
+      canvas.translate(cursor.X + 0.001 - bounds.left(),
+                       cursor.Y - 0.001 - bounds.bottom());
+      proto->Draw(nullptr, canvas);
+      canvas.restore();
+      cursor.X += bounds.width() + 0.001;
+    }
 
     canvas.restore();
 

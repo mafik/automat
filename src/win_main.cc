@@ -150,19 +150,69 @@ vec2 CanvasToScreen(vec2 canvas) {
          Vec2(window_x + window_width / 2., window_y + window_height / 2.);
 }
 
+struct Win32Client;
+
 Location root_location;
 Machine *root_machine;
+
+Location *win32_client_location;
+Win32Client *win32_client;
+bool automaton_running = false;
+
+time::Timer t; // updated every frame
+
+void RunOnAutomatonThread(std::function<void()> f) {
+  events.send(std::make_unique<FunctionTask>(win32_client_location,
+                                             [f](Location &l) { f(); }));
+}
+
+vec2 RoundToMilimeters(vec2 v) {
+  return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
+}
 
 struct DragAction : Action {
   std::unique_ptr<Object> object;
   vec2 contact_point;
   vec2 current_position;
-  void Begin(vec2 position) override { current_position = position; }
-  void Update(vec2 position) override { current_position = position; }
-  void End() override {}
+  AnimatedApproach round_x;
+  AnimatedApproach round_y;
+  DragAction() : round_x(0), round_y(0) {
+    round_y.speed = round_x.speed = 50;
+  }
+  void Begin(vec2 position) override {
+    current_position = position;
+    auto original = position - contact_point;
+    auto rounded = RoundToMilimeters(original);
+    round_x.target = rounded.X - original.X;
+    round_y.target = rounded.Y - original.Y;
+  }
+  void Update(vec2 position) override {
+    auto old_pos = current_position - contact_point;
+    auto old_round = RoundToMilimeters(old_pos);
+    current_position = position;
+    auto new_pos = current_position - contact_point;
+    auto new_round = RoundToMilimeters(new_pos);
+    if (old_round.X == new_round.X) {
+      round_x.value -= new_pos.X - old_pos.X;
+    }
+    if (old_round.Y == new_round.Y) {
+      round_y.value -= new_pos.Y - old_pos.Y;
+    }
+    round_x.target = new_round.X - new_pos.X;
+    round_y.target = new_round.Y - new_pos.Y;
+  }
+  void End() override {
+    RunOnAutomatonThread([this]() {
+      Location& loc = root_machine->CreateEmpty();
+      loc.position = RoundToMilimeters(current_position - contact_point);
+      loc.InsertHere(std::move(object));
+    });
+  }
   void Draw(SkCanvas &canvas) override {
+    round_x.Tick(t.d);
+    round_y.Tick(t.d);
     canvas.save();
-    vec2 pos = current_position - contact_point;
+    auto pos = current_position - contact_point + Vec2(round_x, round_y);
     canvas.translate(pos.X, pos.Y);
     object->Draw(nullptr, canvas);
     canvas.restore();
@@ -172,6 +222,7 @@ struct DragAction : Action {
 Cursor current_cursor = kCursorUnknown;
 std::unique_ptr<Action> mouse_action;
 const Object *prototype_under_mouse = nullptr;
+vec2 prototype_under_mouse_contact_point;
 
 void UpdateCursor() {
   Cursor wanted = prototype_under_mouse ? kCursorHand : kCursorArrow;
@@ -185,7 +236,6 @@ struct Win32Client : Object {
   static const Win32Client proto;
   channel canvas_in;
   channel canvas_out;
-  time::Timer t;
 
   string_view Name() const override { return "Win32Client"; }
   std::unique_ptr<Object> Clone() const override {
@@ -193,7 +243,6 @@ struct Win32Client : Object {
   }
   void Run(Location &here) override {
     SkCanvas &canvas = *(SkCanvas *)canvas_in.recv();
-    t.Tick();
 
     float rx = camera_x.Remaining();
     float ry = camera_y.Remaining();
@@ -294,6 +343,10 @@ struct Win32Client : Object {
 
     root_machine->DrawContents(canvas);
 
+    if (mouse_action) {
+      mouse_action->Draw(canvas);
+    }
+
     canvas.restore();
 
     canvas_out.send_force(&canvas);
@@ -301,16 +354,12 @@ struct Win32Client : Object {
 };
 const Win32Client Win32Client::proto;
 
-Location *win32_client_location;
-Win32Client *win32_client;
-bool automaton_running = false;
 
 } // namespace automaton
 
 using namespace automaton;
 
 void InitAutomaton() {
-
   root_location = Location(nullptr);
   root_machine = root_location.Create<Machine>();
   win32_client_location = &root_machine->Create<Win32Client>();
@@ -386,6 +435,7 @@ void Dream(SkCanvas &canvas) {
 }
 
 void PaintAutomaton(SkCanvas &canvas) {
+  t.Tick();
   // We're "releasing" the whole memory of win32 thread (and "grabbing" it in
   // Automaton thread) so it doesn't really matter that we're sending the
   // canvas.
@@ -427,6 +477,7 @@ void PaintAutomaton(SkCanvas &canvas) {
                                            mouse_position.Y - window_y, 0, 1);
     if (shape.contains(local_mouse.x, local_mouse.y)) {
       prototype_under_mouse = proto;
+      prototype_under_mouse_contact_point = Vec2(local_mouse.x, local_mouse.y);
       SkPaint paint;
       paint.setColor(SK_ColorRED);
       paint.setStyle(SkPaint::kStroke_Style);
@@ -448,11 +499,6 @@ void PaintLoadingAnimation(SkCanvas &canvas) {
   } else {
     Paint(canvas);
   }
-}
-
-void RunOnAutomatonThread(std::function<void()> f) {
-  events.send(std::make_unique<FunctionTask>(win32_client_location,
-                                             [f](Location &l) { f(); }));
 }
 
 bool tracking_mouse_leave = false;
@@ -548,7 +594,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
   }
   case WM_LBUTTONDOWN: {
-
+    if (prototype_under_mouse) {
+      auto drag_action = std::make_unique<DragAction>();
+      drag_action->object = prototype_under_mouse->Clone();
+      drag_action->contact_point = prototype_under_mouse_contact_point;
+      mouse_action = std::move(drag_action);
+      mouse_action->Begin(ScreenToCanvas(mouse_position));
+    }
+    break;
+  }
+  case WM_LBUTTONUP: {
+    if (mouse_action) {
+      mouse_action->End();
+      mouse_action.reset();
+    }
     break;
   }
   case WM_MOUSEMOVE: {
@@ -564,7 +623,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       camera_y.Shift(-delta.Y);
     }
     if (mouse_action) {
-      mouse_action->Update(mouse_position);
+      mouse_action->Update(ScreenToCanvas(mouse_position));
     }
     break;
   }

@@ -221,6 +221,11 @@ struct Location {
 
   Location(Location *parent = nullptr) : parent(parent) {}
 
+  std::unique_ptr<Object> InsertHere(unique_ptr<Object>&& object) {
+    this->object.swap(object);
+    return object;
+  }
+
   Object *Create(const Object &prototype) {
     object = prototype.Clone();
     object->Relocate(this);

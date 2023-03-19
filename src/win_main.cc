@@ -205,7 +205,14 @@ struct Win32Client : Object {
     canvas.scale(PxPerMeter(), -PxPerMeter());
     canvas.translate(-camera_x, -camera_y);
 
-    canvas.drawPaint(GetBackgroundPaint());
+    // Draw background
+    canvas.clear(background_color);
+    SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
+    canvas.drawRect(work_area, GetBackgroundPaint());
+    SkPaint border_paint;
+    border_paint.setColor(tick_color);
+    border_paint.setStyle(SkPaint::kStroke_Style);
+    canvas.drawRect(work_area, border_paint);
 
     // Draw target window size when zooming in with middle mouse button
     if (zoom.target == 1 && rz > 0.001) {

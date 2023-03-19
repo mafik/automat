@@ -75,6 +75,9 @@ AnimatedApproach zoom(1.0, 0.01);
 AnimatedApproach camera_x(0.0, 0.005);
 AnimatedApproach camera_y(0.0, 0.005);
 
+// Ensures that the 1x1m canvas is at least 1mm on screen.
+constexpr float kMinZoom = 0.001f;
+
 float PxPerMeter() { return screen_width_px / screen_width_m * zoom; }
 
 float TrueDPI() { return PxPerMeter() * m_per_inch; }
@@ -459,6 +462,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       camera_x.Shift(-mouse_delta.X);
       camera_y.Shift(-mouse_delta.Y);
     }
+    zoom.target = std::max(kMinZoom, zoom.target);
     break;
   }
   case WM_DESTROY:

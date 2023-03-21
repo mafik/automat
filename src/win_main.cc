@@ -10,6 +10,7 @@
 #include "library.h"
 #include "loading_animation.h"
 #include "log.h"
+#include "root.h"
 #include "time.h"
 #include "vk.h"
 #include "win.h"
@@ -153,9 +154,6 @@ vec2 CanvasToScreen(vec2 canvas) {
 }
 
 struct Win32Client;
-
-Location root_location;
-Machine *root_machine;
 
 Location *win32_client_location;
 Win32Client *win32_client;
@@ -362,8 +360,7 @@ const Win32Client Win32Client::proto;
 using namespace automaton;
 
 void InitAutomaton() {
-  root_location = Location(nullptr);
-  root_machine = root_location.Create<Machine>();
+  InitRoot();
   win32_client_location = &root_machine->Create<Win32Client>();
   win32_client = win32_client_location->ThisAs<Win32Client>();
 

@@ -10,6 +10,7 @@
 #include <include/core/SkPathEffect.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
+#include <unordered_map>
 
 namespace automaton {
 
@@ -70,9 +71,7 @@ Font &GetFont() {
 }
 
 void Object::Draw(const Location *here, SkCanvas &canvas) const {
-  SkPathBuilder path_builder;
-  Shape(here, path_builder);
-  SkPath path = path_builder.detach();
+  SkPath path = Shape();
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, 0.01}};
@@ -113,15 +112,26 @@ void Object::Draw(const Location *here, SkCanvas &canvas) const {
   canvas.restore();
 }
 
-void Object::Shape(const Location *here, SkPathBuilder &path_builder) const {
-  constexpr float kNameMargin = 0.001;
-  float width_name = GetFont().MeasureText(Name()) + 2 * kNameMargin;
-  float width_rounded = ceil(width_name * 1000) / 1000;
-  constexpr float kMinWidth = 0.008;
-  float final_width = std::max(width_rounded, kMinWidth);
-  SkRect rect = SkRect::MakeXYWH(0, 0, final_width, 0.008);
-  SkRRect rrect = SkRRect::MakeRectXY(rect, 0.001, 0.001);
-  path_builder.addRRect(rrect);
+SkPath Object::Shape() const {
+  static std::unordered_map<string_view, SkPath> basic_shapes;
+  auto it = basic_shapes.find(Name());
+  if (it == basic_shapes.end()) {
+    constexpr float kNameMargin = 0.001;
+    float width_name = GetFont().MeasureText(Name()) + 2 * kNameMargin;
+    float width_rounded = ceil(width_name * 1000) / 1000;
+    constexpr float kMinWidth = 0.008;
+    float final_width = std::max(width_rounded, kMinWidth);
+    SkRect rect = SkRect::MakeXYWH(0, 0, final_width, 0.008);
+    SkRRect rrect = SkRRect::MakeRectXY(rect, 0.001, 0.001);
+    it = basic_shapes.emplace(std::make_pair(Name(), SkPath::RRect(rrect))).first;
+  }
+  return it->second;
+}
+
+void Location::Draw(SkCanvas &canvas) {
+  if (object) {
+    object->Draw(this, canvas);
+  }
 }
 
 void Machine::DrawContents(SkCanvas &canvas) {
@@ -130,7 +140,7 @@ void Machine::DrawContents(SkCanvas &canvas) {
   for (auto &loc : locations) {
     canvas.save();
     canvas.translate(loc->position.X, loc->position.Y);
-    loc->object->Draw(loc.get(), canvas);
+    loc->Draw(canvas);
     canvas.restore();
   }
 }

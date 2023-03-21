@@ -18,7 +18,7 @@
 #include "channel.h"
 
 #include <include/core/SkCanvas.h>
-#include <include/core/SkPathBuilder.h>
+#include <include/core/SkPath.h>
 
 namespace automaton {
 
@@ -87,7 +87,7 @@ struct Object {
     return GetText() <=> other.GetText();
   }
   virtual void Draw(const Location *here, SkCanvas &canvas) const;
-  virtual void Shape(const Location *here, SkPathBuilder &path_builder) const;
+  virtual SkPath Shape() const;
 };
 
 std::vector<const Object*>& Prototypes();
@@ -368,6 +368,8 @@ struct Location {
     ScheduleUpdate();
   }
   void SetNumber(double number) { SetText(f("%lf", number)); }
+
+  void Draw(SkCanvas& canvas);
 
   ////////////////////////////
   // Error reporting

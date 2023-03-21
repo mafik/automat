@@ -31,16 +31,16 @@ int window_y;
 int window_width;
 int window_height;
 
-constexpr float m_per_inch = 0.0254f;
+constexpr float kMetersPerInch = 0.0254f;
 
 // Placeholder values for screen size. They should be updated when window is
 // resized.
 int screen_width_px = 1920;
 int screen_height_px = 1080;
 float screen_width_m =
-    (float)screen_width_px / USER_DEFAULT_SCREEN_DPI * m_per_inch;
+    (float)screen_width_px / USER_DEFAULT_SCREEN_DPI * kMetersPerInch;
 float screen_height_m =
-    (float)screen_height_px / USER_DEFAULT_SCREEN_DPI * m_per_inch;
+    (float)screen_height_px / USER_DEFAULT_SCREEN_DPI * kMetersPerInch;
 
 std::bitset<256> pressed_scancodes;
 vec2 mouse_position;
@@ -84,8 +84,6 @@ constexpr float kMinZoom = 0.001f;
 float DisplayPxPerMeter() { return screen_width_px / screen_width_m; }
 float PxPerMeter() { return DisplayPxPerMeter() * zoom; }
 
-float TrueDPI() { return PxPerMeter() * m_per_inch; }
-
 SkRect GetCameraRect() {
   return SkRect::MakeXYWH(camera_x - window_width / PxPerMeter() / 2,
                           camera_y - window_height / PxPerMeter() / 2,
@@ -98,13 +96,17 @@ SkPaint &GetBackgroundPaint() {
     const char *sksl = R"(
       uniform float px_per_m;
 
-      float4 bg = float4(0.05, 0.05, 0.00, 1);
-      float4 fg = float4(0.0, 0.32, 0.8, 1);
+      // Dark theme
+      //float4 bg = float4(0.05, 0.05, 0.00, 1);
+      //float4 fg = float4(0.0, 0.32, 0.8, 1);
+
+      float4 bg = float4(0.9, 0.9, 0.9, 1);
+      float4 fg = float4(0.5, 0.5, 0.5, 1);
 
       float grid(vec2 coord_m, float dots_per_m, float r_px) {
         float r = r_px / px_per_m;
         vec2 grid_coord = fract(coord_m * dots_per_m + 0.5) - 0.5;
-        return smoothstep(r, r - 1/px_per_m, length(grid_coord) / dots_per_m) * smoothstep(1./(2*r), 1./(32*r), dots_per_m);
+        return smoothstep(r, r - 1/px_per_m, length(grid_coord) / dots_per_m) * smoothstep(1./(3*r), 1./(32*r), dots_per_m);
       }
 
       half4 main(vec2 fragcoord) {
@@ -460,9 +462,7 @@ void PaintAutomaton(SkCanvas &canvas) {
   prototype_under_mouse = nullptr;
   for (const Object *proto : prototypes) {
     canvas.save();
-    SkPathBuilder path_builder;
-    proto->Shape(nullptr, path_builder);
-    SkPath shape = path_builder.detach();
+    SkPath shape = proto->Shape();
     SkRect bounds = shape.getBounds();
     if (cursor.X + bounds.width() + 0.001 > max_w) {
       cursor.X = 0;

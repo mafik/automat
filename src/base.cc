@@ -14,12 +14,12 @@
 
 namespace automaton {
 
-std::vector<const Object*>& Prototypes() {
-  static std::vector<const Object*> prototypes;
+std::vector<const Object *> &Prototypes() {
+  static std::vector<const Object *> prototypes;
   return prototypes;
 }
 
-void RegisterPrototype(const Object& prototype) {
+void RegisterPrototype(const Object &prototype) {
   Prototypes().push_back(&prototype);
 }
 
@@ -32,6 +32,7 @@ SkColor SkColorFromHex(const char *hex) {
 struct Font {
   SkFont sk_font;
   float font_scale;
+  float line_thickness;
 
   static std::unique_ptr<Font> Make(float letter_size_mm) {
     constexpr float kMilimetersPerInch = 25.4;
@@ -46,7 +47,8 @@ struct Font {
     sk_font.getMetrics(&metrics);
     // The `fCapHeight` is the height of the capital letters.
     float font_scale = 0.001 * letter_size_mm / metrics.fCapHeight;
-    return std::make_unique<Font>(sk_font, font_scale);
+    float line_thickness = metrics.fUnderlineThickness * font_scale;
+    return std::make_unique<Font>(sk_font, font_scale, line_thickness);
   }
 
   void DrawText(SkCanvas &canvas, string_view text, SkPaint &paint) {
@@ -64,11 +66,15 @@ struct Font {
 };
 
 constexpr float kLetterSizeMM = 2;
+constexpr float kLetterSize = kLetterSizeMM / 1000;
 
 Font &GetFont() {
   static std::unique_ptr<Font> font = Font::Make(kLetterSizeMM);
   return *font;
 }
+
+constexpr float kBorderWidth = 0.00025;
+constexpr float kFrameCornerRadius = 0.001;
 
 void Object::Draw(const Location *here, SkCanvas &canvas) const {
   SkPath path = Shape();
@@ -123,14 +129,85 @@ SkPath Object::Shape() const {
     float final_width = std::max(width_rounded, kMinWidth);
     SkRect rect = SkRect::MakeXYWH(0, 0, final_width, 0.008);
     SkRRect rrect = SkRRect::MakeRectXY(rect, 0.001, 0.001);
-    it = basic_shapes.emplace(std::make_pair(Name(), SkPath::RRect(rrect))).first;
+    it = basic_shapes.emplace(std::make_pair(Name(), SkPath::RRect(rrect)))
+             .first;
   }
   return it->second;
 }
 
+SkColor SkColorBrighten(SkColor color) {
+  float hsv[3];
+  SkColorToHSV(color, hsv);
+  hsv[2] = std::min(hsv[2] * 1.1f, 1.f);
+  return SkHSVToColor(hsv);
+}
+
+SkColor SkColorDarken(SkColor color) {
+  float hsv[3];
+  SkColorToHSV(color, hsv);
+  hsv[2] = std::max(hsv[2] * 0.9f, 0.f);
+  return SkHSVToColor(hsv);
+}
+
+constexpr float kTextMargin = 0.001;
+constexpr float kTextFieldHeight = 0.008; // 8mm
+constexpr float kTextFieldMinWidth = kTextFieldHeight;
+
+void DrawTextField(SkCanvas& canvas, string_view text) {
+  Font& font = GetFont();
+  float width = font.MeasureText(text);
+  float width_margin = width + 2 * kTextMargin;
+  float width_rounded = ceil(width_margin * 1000) / 1000;
+  float final_width = std::max(width_rounded, kTextFieldMinWidth);
+  SkRect rect = SkRect::MakeXYWH(0, 0, final_width, 0.008);
+  SkPaint text_bg;
+  text_bg.setColor(SK_ColorWHITE);
+  text_bg.setAlphaf(0.5);
+  canvas.drawRect(rect, text_bg);
+  canvas.translate(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
+  SkPaint underline;
+  underline.setColor(SK_ColorBLACK);
+  underline.setAlphaf(0.5);
+  SkRect underline_rect = SkRect::MakeXYWH(0, -font.line_thickness, final_width - 2 * kTextMargin, - font.line_thickness);
+  canvas.drawRect(underline_rect, underline);
+  SkPaint text_fg;
+  text_fg.setColor(SK_ColorBLACK);
+  font.DrawText(canvas, text, text_fg);
+}
+
 void Location::Draw(SkCanvas &canvas) {
   if (object) {
+    SkPath shape = object->Shape();
+    SkRect bounds = shape.getBounds();
+    bounds.outset(0.001, 0.001);
+    bounds.inset(kBorderWidth/2, kBorderWidth/2);
+
+    bounds.fBottom += kTextFieldHeight + 0.001;
+
+    SkPaint frame_bg;
+    SkColor frame_bg_colors[2] = {SkColorFromHex("#cccccc"),
+                                  SkColorFromHex("#aaaaaa")};
+    SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
+    sk_sp<SkShader> frame_bg_shader = SkGradientShader::MakeLinear(
+        gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
+    frame_bg.setShader(frame_bg_shader);
+    canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_bg);
+
+    SkPaint frame_border;
+    SkColor frame_border_colors[2] = {SkColorBrighten(frame_bg_colors[0]),
+                                      SkColorDarken(frame_bg_colors[1])};
+    sk_sp<SkShader> frame_border_shader = SkGradientShader::MakeLinear(
+        gradient_pts, frame_border_colors, nullptr, 2, SkTileMode::kClamp);
+    frame_border.setShader(frame_border_shader);
+    frame_border.setStyle(SkPaint::kStroke_Style);
+    frame_border.setStrokeWidth(0.00025);
+    canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
+
     object->Draw(this, canvas);
+
+    canvas.translate(bounds.left() + 0.001, bounds.bottom() - kTextFieldHeight - 0.001);
+
+    DrawTextField(canvas, object->Name());
   }
 }
 

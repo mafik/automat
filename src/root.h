@@ -8,5 +8,6 @@ extern Location root_location;
 extern Machine* root_machine;
 
 void InitRoot();
+void RunOnAutomatonThread(std::function<void()>);
 
 }

@@ -33,7 +33,7 @@ enum Key {
 };
 
 struct Window final {
-  Window(std::string_view initial_state = "");
+  Window(vec2 size, std::string_view initial_state = "");
   ~Window();
   void Resize(vec2 size);
   void Draw(SkCanvas &);

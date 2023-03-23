@@ -7,6 +7,7 @@
 
 #include "action.h"
 #include "backtrace.h"
+#include "gui.h"
 #include "library.h"
 #include "loading_animation.h"
 #include "log.h"
@@ -84,6 +85,7 @@ constexpr float kMinZoom = 0.001f;
 
 float DisplayPxPerMeter() { return screen_width_px / screen_width_m; }
 float PxPerMeter() { return DisplayPxPerMeter() * zoom; }
+vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter(); }
 
 SkRect GetCameraRect() {
   return SkRect::MakeXYWH(camera_x - window_width / PxPerMeter() / 2,
@@ -160,11 +162,6 @@ Win32Client *win32_client;
 bool automaton_running = false;
 
 time::Timer t; // updated every frame
-
-void RunOnAutomatonThread(std::function<void()> f) {
-  events.send(std::make_unique<FunctionTask>(win32_client_location,
-                                             [f](Location &l) { f(); }));
-}
 
 vec2 RoundToMilimeters(vec2 v) {
   return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
@@ -359,20 +356,19 @@ const Win32Client Win32Client::proto;
 
 using namespace automaton;
 
+std::unique_ptr<gui::Window> window;
+
 void InitAutomaton() {
   InitRoot();
   win32_client_location = &root_machine->Create<Win32Client>();
   win32_client = win32_client_location->ThisAs<Win32Client>();
 
-  std::thread(RunThread).detach();
   automaton_running = true;
   anim.LoadingCompleted();
 }
 
-void OnResize(int w, int h) {
-  window_width = w;
-  window_height = h;
-  if (auto err = vk::Resize(w, h); !err.empty()) {
+void ResizeVulkan() {
+  if (auto err = vk::Resize(window_width, window_height); !err.empty()) {
     MessageBox(nullptr, err.c_str(), "ALERT", 0);
   }
 }
@@ -519,7 +515,12 @@ constexpr float kClickRadius = 0.002f; // 2mm
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   switch (uMsg) {
   case WM_SIZE:
-    OnResize(LOWORD(lParam), HIWORD(lParam));
+    window_width = LOWORD(lParam);
+    window_height = HIWORD(lParam);
+    ResizeVulkan();
+    if (window) {
+      window->Resize(WindowSize());
+    }
     break;
   case WM_MOVE: {
     window_x = LOWORD(lParam);
@@ -663,6 +664,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   setlocale(LC_CTYPE, ".utf8");
   SetConsoleCP(CP_UTF8);
   SetConsoleOutputCP(CP_UTF8);
+  
+  InitAutomaton();
 
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   SkGraphics::Init();
@@ -693,9 +696,11 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   GetClientRect(main_window, &rect);
   window_x = rect.left;
   window_y = rect.top;
-  OnResize(rect.right - rect.left, rect.bottom - rect.top);
+  window_width = rect.right - rect.left;
+  window_height = rect.bottom - rect.top;
+  window.reset(new gui::Window(WindowSize()));
+  ResizeVulkan();
 
-  InitAutomaton();
 
   MSG msg = {};
   while (WM_QUIT != msg.message) {

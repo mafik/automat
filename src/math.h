@@ -13,6 +13,8 @@ using vec4 = hmm_vec4;
 using mat4 = hmm_mat4;
 using quat = hmm_quaternion;
 
+constexpr float kMetersPerInch = 0.0254f;
+
 // Project vector p onto vector dir.
 template <typename T> float VectorProjection(T dir, T p) {
   float dir2 = Dot(dir, dir);

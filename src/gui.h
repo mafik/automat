@@ -20,22 +20,22 @@ namespace automaton::gui {
 
 struct Pointer;
 
-enum Key {
-  kKeyUnknown,
+enum Key { kKeyUnknown, kKeyW, kKeyA, kKeyS, kKeyD, kKeyCount };
+
+enum Button {
+  kButtonUnknown,
   kMouseLeft,
   kMouseMiddle,
   kMouseRight,
-  kKeyW,
-  kKeyA,
-  kKeyS,
-  kKeyD,
-  kKeyCount
+  kButtonCount
 };
 
 struct Window final {
-  Window(vec2 size, std::string_view initial_state = "");
+  Window(vec2 size, float pixels_per_meter,
+         std::string_view initial_state = "");
   ~Window();
   void Resize(vec2 size);
+  void DisplayPixelDensity(float pixels_per_meter);
   void Draw(SkCanvas &);
   void KeyDown(Key);
   void KeyUp(Key);
@@ -45,17 +45,21 @@ struct Window final {
 private:
   struct Impl;
   std::unique_ptr<Impl> impl;
+  friend struct Pointer;
 };
 
 struct Pointer final {
   ~Pointer();
   void Move(vec2 position);
-  void KeyDown(Key);
-  void KeyUp(Key);
+  void Wheel(float delta);
+  void ButtonDown(Button);
+  void ButtonUp(Button);
 
 private:
+  Pointer(Window &, vec2 position);
   struct Impl;
   std::unique_ptr<Impl> impl;
+  friend struct Window;
 };
 
 // API for Objects

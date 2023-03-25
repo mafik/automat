@@ -3,7 +3,6 @@
 #include <bitset>
 #include <vector>
 
-
 #include <include/effects/SkRuntimeEffect.h>
 
 #include "animated.h"
@@ -22,6 +21,21 @@ constexpr float kClickRadius = 0.002f; // 2mm
 SkColor background_color = SkColorSetRGB(0x0f, 0x0f, 0x0e);
 SkColor tick_color = SkColorSetRGB(0x00, 0x53, 0xce);
 
+struct Pointer::Impl {
+  Window::Impl &window;
+  vec2 window_position;
+
+  vec2 button_down_position[kButtonCount];
+  time::point button_down_time[kButtonCount];
+
+  Impl(Window::Impl &window, vec2 position);
+  ~Impl();
+  void Move(vec2 position);
+  void Wheel(float delta);
+  void ButtonDown(Button btn);
+  void ButtonUp(Button btn);
+};
+
 struct Window::Impl {
   vec2 position = Vec2(0, 0); // center of the window
   vec2 size;
@@ -37,7 +51,7 @@ struct Window::Impl {
   const Object *prototype_under_mouse = nullptr;
   vec2 prototype_under_mouse_contact_point;
 
-  std::vector<Pointer *> pointers;
+  std::vector<Pointer::Impl *> pointers;
 
   std::bitset<kKeyCount> pressed_keys;
 
@@ -101,15 +115,260 @@ struct Window::Impl {
   vec2 CanvasToWindow(vec2 canvas) {
     return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2;
   }
+
+  void Resize(vec2 size) { this->size = size; }
+  void DisplayPixelDensity(float pixels_per_meter) {
+    this->display_pixels_per_meter = pixels_per_meter;
+  }
+  void Draw(SkCanvas &canvas) {
+    t.Tick();
+    std::mutex mutex;
+    std::condition_variable automaton_thread_done;
+    std::unique_lock<std::mutex> lock(mutex);
+    RunOnAutomatonThread([&] {
+      float rx = camera_x.Remaining();
+      float ry = camera_y.Remaining();
+      float rz = zoom.Remaining();
+      float r = sqrt(rx * rx + ry * ry);
+      float rpx = PxPerMeter() * r;
+      bool stabilize_mouse = rpx < 1;
+
+      if (stabilize_mouse) {
+        if (pointers.size() > 0) {
+          Pointer::Impl *first_pointer = *pointers.begin();
+          vec2 mouse_position = first_pointer->window_position;
+          vec2 focus_pre = WindowToCanvas(mouse_position);
+          zoom.Tick(t.d);
+          vec2 focus_post = WindowToCanvas(mouse_position);
+          vec2 focus_delta = focus_post - focus_pre;
+          camera_x.Shift(-focus_delta.X);
+          camera_y.Shift(-focus_delta.Y);
+        }
+      } else { // stabilize camera target
+        vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
+        vec2 target_screen = CanvasToWindow(focus_pre);
+        zoom.Tick(t.d);
+        vec2 focus_post = WindowToCanvas(target_screen);
+        vec2 focus_delta = focus_post - focus_pre;
+        camera_x.value -= focus_delta.X;
+        camera_y.value -= focus_delta.Y;
+      }
+
+      camera_x.Tick(t.d);
+      camera_y.Tick(t.d);
+
+      if (pressed_keys.test(kKeyW)) {
+        camera_y.Shift(0.1 * t.d);
+      }
+      if (pressed_keys.test(kKeyS)) {
+        camera_y.Shift(-0.1 * t.d);
+      }
+      if (pressed_keys.test(kKeyA)) {
+        camera_x.Shift(-0.1 * t.d);
+      }
+      if (pressed_keys.test(kKeyD)) {
+        camera_x.Shift(0.1 * t.d);
+      }
+
+      SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
+
+      // Make sure that work area doesn't leave the window bounds (so the user
+      // doesn't get lost)
+      {
+        // Leave 1mm of margin so that the user can still see the edge of the
+        // work area
+        vec2 bottom_left = WindowToCanvas(Vec2(0.001, 0.001));
+        vec2 top_right = WindowToCanvas(size - Vec2(0.001, 0.001));
+        SkRect window_bounds = SkRect::MakeLTRB(bottom_left.X, top_right.Y,
+                                                top_right.X, bottom_left.Y);
+        if (work_area.left() > window_bounds.right()) {
+          camera_x.Shift(work_area.left() - window_bounds.right());
+        }
+        if (work_area.right() < window_bounds.left()) {
+          camera_x.Shift(work_area.right() - window_bounds.left());
+        }
+        // The y axis is flipped so `work_area.bottom()` is actually its top
+        if (work_area.bottom() < window_bounds.bottom()) {
+          camera_y.Shift(work_area.bottom() - window_bounds.bottom());
+        }
+        if (work_area.top() > window_bounds.top()) {
+          camera_y.Shift(work_area.top() - window_bounds.top());
+        }
+      }
+
+      canvas.save();
+      canvas.translate(size.Width / 2., size.Height / 2.);
+      canvas.scale(zoom, zoom);
+      canvas.translate(-camera_x, -camera_y);
+
+      // Draw background
+      canvas.clear(background_color);
+      canvas.drawRect(work_area, GetBackgroundPaint());
+      SkPaint border_paint;
+      border_paint.setColor(tick_color);
+      border_paint.setStyle(SkPaint::kStroke_Style);
+      canvas.drawRect(work_area, border_paint);
+
+      // Draw target window size when zooming in with middle mouse button
+      if (zoom.target == 1 && rz > 0.001) {
+        SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
+        target_paint.setStyle(SkPaint::kStroke_Style);
+        target_paint.setStrokeWidth(0.001); // 1mm
+        float target_width = size.Width;
+        float target_height = size.Height;
+        SkRect target_rect = SkRect::MakeXYWH(
+            camera_x.target - target_width / 2,
+            camera_y.target - target_height / 2, target_width, target_height);
+        canvas.drawRect(target_rect, target_paint);
+      }
+
+      root_machine->DrawContents(canvas);
+
+      if (mouse_action) {
+        mouse_action->Draw(canvas, animation_state);
+      }
+
+      canvas.restore();
+
+      { // wake the UI thread
+        std::unique_lock<std::mutex> lock(mutex);
+        automaton_thread_done.notify_all();
+      }
+    });
+
+    automaton_thread_done.wait(lock);
+
+    // Draw prototype shelf
+    canvas.save();
+
+    float max_w = size.Width;
+    vec2 cursor = Vec2(0, 0);
+
+    auto prototypes = Prototypes();
+    // TODO: draw icons rather than actual objects
+    auto old_prototype_under_mouse = prototype_under_mouse;
+    prototype_under_mouse = nullptr;
+    for (const Object *proto : prototypes) {
+      canvas.save();
+      SkPath shape = proto->Shape();
+      SkRect bounds = shape.getBounds();
+      if (cursor.X + bounds.width() + 0.001 > max_w) {
+        cursor.X = 0;
+        cursor.Y -= bounds.height() + 0.001;
+      }
+      canvas.translate(cursor.X + 0.001 - bounds.left(),
+                       cursor.Y - 0.001 - bounds.bottom());
+      /*
+      SkV4 local_mouse = device_to_local.map(mouse_position.X - window_x,
+                                             mouse_position.Y - window_y, 0, 1);
+      if (shape.contains(local_mouse.x, local_mouse.y)) {
+        prototype_under_mouse = proto;
+        prototype_under_mouse_contact_point = Vec2(local_mouse.x,
+      local_mouse.y); SkPaint paint; paint.setColor(SK_ColorRED);
+        paint.setStyle(SkPaint::kStroke_Style);
+        paint.setStrokeWidth(0.001);
+        canvas.drawPath(shape, paint);
+      }
+      */
+      proto->Draw(nullptr, canvas);
+      canvas.restore();
+      cursor.X += bounds.width() + 0.001;
+    }
+
+    canvas.restore();
+  }
+  void KeyDown(Key key) {
+    if (key == kKeyUnknown || key >= kKeyCount)
+      return;
+    pressed_keys.set(key);
+  }
+  void KeyUp(Key key) {
+    if (key == kKeyUnknown || key >= kKeyCount)
+      return;
+    pressed_keys.reset(key);
+  }
+  std::unique_ptr<Pointer> MakePointer(vec2 position);
+  std::string_view GetState();
 };
 
-struct Pointer::Impl {
-  Window &window;
-  vec2 window_position;
-
-  vec2 button_down_position[kButtonCount];
-  time::point button_down_time[kButtonCount];
-};
+Pointer::Impl::Impl(Window::Impl &window, vec2 position)
+    : window(window), window_position(position), button_down_position(),
+      button_down_time() {
+  window.pointers.push_back(this);
+}
+Pointer::Impl::~Impl() {
+  auto it = std::find(window.pointers.begin(), window.pointers.end(), this);
+  if (it != window.pointers.end()) {
+    window.pointers.erase(it);
+  }
+}
+void Pointer::Impl::Move(vec2 position) {
+  vec2 old_mouse_pos = window_position;
+  window_position = position;
+  if (button_down_time[kMouseMiddle] > time::kZero) {
+    vec2 delta =
+        window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
+    window.camera_x.Shift(-delta.X);
+    window.camera_y.Shift(-delta.Y);
+  }
+  if (window.mouse_action) {
+    window.mouse_action->Update(window.WindowToCanvas(position));
+  }
+}
+void Pointer::Impl::Wheel(float delta) {
+  float factor = exp(delta / 4);
+  window.zoom.target *= factor;
+  // For small changes we skip the animation to increase responsiveness.
+  if (fabs(delta) < 1.0) {
+    vec2 mouse_pre = window.WindowToCanvas(window_position);
+    window.zoom.value *= factor;
+    vec2 mouse_post = window.WindowToCanvas(window_position);
+    vec2 mouse_delta = mouse_post - mouse_pre;
+    window.camera_x.Shift(-mouse_delta.X);
+    window.camera_y.Shift(-mouse_delta.Y);
+  }
+  window.zoom.target = std::max(kMinZoom, window.zoom.target);
+}
+void Pointer::Impl::ButtonDown(Button btn) {
+  if (btn == kButtonUnknown || btn >= kButtonCount)
+    return;
+  button_down_position[btn] = window_position;
+  button_down_time[btn] = time::now();
+  if (btn == kMouseLeft) {
+    /*
+    if (prototype_under_mouse) {
+      auto drag_action = std::make_unique<DragAction>();
+      drag_action->object = prototype_under_mouse->Clone();
+      drag_action->contact_point = prototype_under_mouse_contact_point;
+      mouse_action = std::move(drag_action);
+      mouse_action->Begin(ScreenToCanvas(mouse_position));
+    }
+    */
+  }
+}
+void Pointer::Impl::ButtonUp(Button btn) {
+  if (btn == kButtonUnknown || btn >= kButtonCount)
+    return;
+  if (btn == kMouseLeft) {
+    if (window.mouse_action) {
+      window.mouse_action->End();
+      window.mouse_action.reset();
+    }
+  }
+  if (btn == kMouseMiddle) {
+    time::duration down_duration = time::now() - button_down_time[kMouseMiddle];
+    vec2 delta = window_position - button_down_position[kMouseMiddle];
+    float delta_m = Length(delta);
+    if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
+      vec2 canvas_pos = window.WindowToCanvas(window_position);
+      window.camera_x.target = canvas_pos.X;
+      window.camera_y.target = canvas_pos.Y;
+      window.zoom.target = 1;
+    }
+  }
+  button_down_position[btn] = Vec2(0, 0);
+  button_down_time[btn] = time::kZero;
+}
 
 vec2 RoundToMilimeters(vec2 v) {
   return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
@@ -183,273 +442,21 @@ Window::Window(vec2 size, float pixels_per_meter,
 Window::~Window() {
   windows.erase(std::find(windows.begin(), windows.end(), this));
 }
-void Window::Resize(vec2 size) { impl->size = size; }
+void Window::Resize(vec2 size) { impl->Resize(size); }
 void Window::DisplayPixelDensity(float pixels_per_meter) {
-  impl->display_pixels_per_meter = pixels_per_meter;
+  impl->DisplayPixelDensity(pixels_per_meter);
 }
-void Window::Draw(SkCanvas &canvas) {
-  impl->t.Tick();
-  std::mutex mutex;
-  std::condition_variable automaton_thread_done;
-  std::unique_lock<std::mutex> lock(mutex);
-  RunOnAutomatonThread([&] {
-    float rx = impl->camera_x.Remaining();
-    float ry = impl->camera_y.Remaining();
-    float rz = impl->zoom.Remaining();
-    float r = sqrt(rx * rx + ry * ry);
-    float rpx = impl->PxPerMeter() * r;
-    bool stabilize_mouse = rpx < 1;
-
-    if (stabilize_mouse) {
-      if (impl->pointers.size() > 0) {
-        Pointer *first_pointer = *impl->pointers.begin();
-        vec2 mouse_position = first_pointer->impl->window_position;
-        vec2 focus_pre = impl->WindowToCanvas(mouse_position);
-        impl->zoom.Tick(impl->t.d);
-        vec2 focus_post = impl->WindowToCanvas(mouse_position);
-        vec2 focus_delta = focus_post - focus_pre;
-        impl->camera_x.Shift(-focus_delta.X);
-        impl->camera_y.Shift(-focus_delta.Y);
-      }
-    } else { // stabilize camera target
-      vec2 focus_pre = Vec2(impl->camera_x.target, impl->camera_y.target);
-      vec2 target_screen = impl->CanvasToWindow(focus_pre);
-      impl->zoom.Tick(impl->t.d);
-      vec2 focus_post = impl->WindowToCanvas(target_screen);
-      vec2 focus_delta = focus_post - focus_pre;
-      impl->camera_x.value -= focus_delta.X;
-      impl->camera_y.value -= focus_delta.Y;
-    }
-
-    impl->camera_x.Tick(impl->t.d);
-    impl->camera_y.Tick(impl->t.d);
-
-    if (impl->pressed_keys.test(kKeyW)) {
-      impl->camera_y.Shift(0.1 * impl->t.d);
-    }
-    if (impl->pressed_keys.test(kKeyS)) {
-      impl->camera_y.Shift(-0.1 * impl->t.d);
-    }
-    if (impl->pressed_keys.test(kKeyA)) {
-      impl->camera_x.Shift(-0.1 * impl->t.d);
-    }
-    if (impl->pressed_keys.test(kKeyD)) {
-      impl->camera_x.Shift(0.1 * impl->t.d);
-    }
-
-    SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
-
-    // Make sure that work area doesn't leave the window bounds (so the user
-    // doesn't get lost)
-    {
-      // Leave 1mm of margin so that the user can still see the edge of the work
-      // area
-      vec2 bottom_left = impl->WindowToCanvas(Vec2(0.001, 0.001));
-      vec2 top_right = impl->WindowToCanvas(impl->size - Vec2(0.001, 0.001));
-      SkRect window_bounds = SkRect::MakeLTRB(bottom_left.X, top_right.Y,
-                                              top_right.X, bottom_left.Y);
-      if (work_area.left() > window_bounds.right()) {
-        impl->camera_x.Shift(work_area.left() - window_bounds.right());
-      }
-      if (work_area.right() < window_bounds.left()) {
-        impl->camera_x.Shift(work_area.right() - window_bounds.left());
-      }
-      // The y axis is flipped so `work_area.bottom()` is actually its top
-      if (work_area.bottom() < window_bounds.bottom()) {
-        impl->camera_y.Shift(work_area.bottom() - window_bounds.bottom());
-      }
-      if (work_area.top() > window_bounds.top()) {
-        impl->camera_y.Shift(work_area.top() - window_bounds.top());
-      }
-    }
-
-    canvas.save();
-    canvas.translate(impl->size.Width / 2., impl->size.Height / 2.);
-    canvas.scale(impl->zoom, impl->zoom);
-    canvas.translate(-impl->camera_x, -impl->camera_y);
-
-    // Draw background
-    canvas.clear(background_color);
-    canvas.drawRect(work_area, impl->GetBackgroundPaint());
-    SkPaint border_paint;
-    border_paint.setColor(tick_color);
-    border_paint.setStyle(SkPaint::kStroke_Style);
-    canvas.drawRect(work_area, border_paint);
-
-    // Draw target window size when zooming in with middle mouse button
-    if (impl->zoom.target == 1 && rz > 0.001) {
-      SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
-      target_paint.setStyle(SkPaint::kStroke_Style);
-      target_paint.setStrokeWidth(0.001); // 1mm
-      float target_width = impl->size.Width;
-      float target_height = impl->size.Height;
-      SkRect target_rect =
-          SkRect::MakeXYWH(impl->camera_x.target - target_width / 2,
-                           impl->camera_y.target - target_height / 2,
-                           target_width, target_height);
-      canvas.drawRect(target_rect, target_paint);
-    }
-
-    root_machine->DrawContents(canvas);
-
-    if (impl->mouse_action) {
-      impl->mouse_action->Draw(canvas, impl->animation_state);
-    }
-
-    canvas.restore();
-
-    { // wake the UI thread
-      std::unique_lock<std::mutex> lock(mutex);
-      automaton_thread_done.notify_all();
-    }
-  });
-
-  automaton_thread_done.wait(lock);
-
-  // Draw prototype shelf
-  canvas.save();
-
-  float max_w = impl->size.Width;
-  vec2 cursor = Vec2(0, 0);
-
-  auto prototypes = Prototypes();
-  // TODO: draw icons rather than actual objects
-  auto old_prototype_under_mouse = impl->prototype_under_mouse;
-  impl->prototype_under_mouse = nullptr;
-  for (const Object *proto : prototypes) {
-    canvas.save();
-    SkPath shape = proto->Shape();
-    SkRect bounds = shape.getBounds();
-    if (cursor.X + bounds.width() + 0.001 > max_w) {
-      cursor.X = 0;
-      cursor.Y -= bounds.height() + 0.001;
-    }
-    canvas.translate(cursor.X + 0.001 - bounds.left(),
-                     cursor.Y - 0.001 - bounds.bottom());
-    /*
-    SkV4 local_mouse = device_to_local.map(mouse_position.X - window_x,
-                                           mouse_position.Y - window_y, 0, 1);
-    if (shape.contains(local_mouse.x, local_mouse.y)) {
-      prototype_under_mouse = proto;
-      prototype_under_mouse_contact_point = Vec2(local_mouse.x, local_mouse.y);
-      SkPaint paint;
-      paint.setColor(SK_ColorRED);
-      paint.setStyle(SkPaint::kStroke_Style);
-      paint.setStrokeWidth(0.001);
-      canvas.drawPath(shape, paint);
-    }
-    */
-    proto->Draw(nullptr, canvas);
-    canvas.restore();
-    cursor.X += bounds.width() + 0.001;
-  }
-
-  canvas.restore();
-}
-void Window::KeyDown(Key key) {
-  if (key == kKeyUnknown || key >= kKeyCount)
-    return;
-  impl->pressed_keys.set(key);
-}
-void Window::KeyUp(Key key) {
-  if (key == kKeyUnknown || key >= kKeyCount)
-    return;
-  impl->pressed_keys.reset(key);
-}
-
-std::unique_ptr<Pointer> Window::MakePointer(vec2 position) {
-  return std::unique_ptr<Pointer>(new Pointer(*this, position));
-}
-
+void Window::Draw(SkCanvas &canvas) { impl->Draw(canvas); }
+void Window::KeyDown(Key key) { impl->KeyDown(key); }
+void Window::KeyUp(Key key) { impl->KeyUp(key); }
 std::string_view Window::GetState() { return {}; }
 
 Pointer::Pointer(Window &window, vec2 position)
-    : impl(std::make_unique<Pointer::Impl>(window, position)) {
-  window.impl->pointers.push_back(this);
-}
-
-Pointer::~Pointer() {
-  auto it = std::find(impl->window.impl->pointers.begin(),
-                      impl->window.impl->pointers.end(), this);
-  if (it != impl->window.impl->pointers.end()) {
-    impl->window.impl->pointers.erase(it);
-  }
-}
-
-void Pointer::Move(vec2 position) {
-  vec2 old_mouse_pos = impl->window_position;
-  impl->window_position = position;
-  if (impl->button_down_time[kMouseMiddle] > time::kTimePointZero) {
-    vec2 delta = impl->window.impl->WindowToCanvas(position) -
-                 impl->window.impl->WindowToCanvas(old_mouse_pos);
-    impl->window.impl->camera_x.Shift(-delta.X);
-    impl->window.impl->camera_y.Shift(-delta.Y);
-  }
-  if (impl->window.impl->mouse_action) {
-    impl->window.impl->mouse_action->Update(
-        impl->window.impl->WindowToCanvas(position));
-  }
-}
-
-void Pointer::Wheel(float delta) {
-  float factor = exp(delta / 4);
-  impl->window.impl->zoom.target *= factor;
-  // For small changes we skip the animation to increase responsiveness.
-  if (fabs(delta) < 1.0) {
-    vec2 mouse_pre = impl->window.impl->WindowToCanvas(impl->window_position);
-    impl->window.impl->zoom.value *= factor;
-    vec2 mouse_post = impl->window.impl->WindowToCanvas(impl->window_position);
-    vec2 mouse_delta = mouse_post - mouse_pre;
-    impl->window.impl->camera_x.Shift(-mouse_delta.X);
-    impl->window.impl->camera_y.Shift(-mouse_delta.Y);
-  }
-  impl->window.impl->zoom.target =
-      std::max(kMinZoom, impl->window.impl->zoom.target);
-}
-
-void Pointer::ButtonDown(Button btn) {
-  if (btn == kButtonUnknown || btn >= kButtonCount)
-    return;
-  impl->button_down_position[btn] = impl->window_position;
-  impl->button_down_time[btn] = time::now();
-  if (btn == kMouseLeft) {
-    /*
-    if (prototype_under_mouse) {
-      auto drag_action = std::make_unique<DragAction>();
-      drag_action->object = prototype_under_mouse->Clone();
-      drag_action->contact_point = prototype_under_mouse_contact_point;
-      mouse_action = std::move(drag_action);
-      mouse_action->Begin(ScreenToCanvas(mouse_position));
-    }
-    */
-  }
-}
-
-void Pointer::ButtonUp(Button btn) {
-  if (btn == kButtonUnknown || btn >= kButtonCount)
-    return;
-  if (btn == kMouseLeft) {
-    if (impl->window.impl->mouse_action) {
-      impl->window.impl->mouse_action->End();
-      impl->window.impl->mouse_action.reset();
-    }
-  }
-  if (btn == kMouseMiddle) {
-    time::duration down_duration =
-        time::now() - impl->button_down_time[kMouseMiddle];
-    vec2 delta =
-        impl->window_position - impl->button_down_position[kMouseMiddle];
-    float delta_m = Length(delta);
-    if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
-      vec2 canvas_pos =
-          impl->window.impl->WindowToCanvas(impl->window_position);
-      impl->window.impl->camera_x.target = canvas_pos.X;
-      impl->window.impl->camera_y.target = canvas_pos.Y;
-      impl->window.impl->zoom.target = 1;
-    }
-  }
-  impl->button_down_position[btn] = Vec2(0, 0);
-  impl->button_down_time[btn] = time::kTimePointZero;
-}
+    : impl(std::make_unique<Pointer::Impl>(*window.impl, position)) {}
+Pointer::~Pointer() {}
+void Pointer::Move(vec2 position) { impl->Move(position); }
+void Pointer::Wheel(float delta) { impl->Wheel(delta); }
+void Pointer::ButtonDown(Button btn) { impl->ButtonDown(btn); }
+void Pointer::ButtonUp(Button btn) { impl->ButtonUp(btn); }
 
 } // namespace automaton::gui

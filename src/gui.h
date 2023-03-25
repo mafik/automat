@@ -39,7 +39,6 @@ struct Window final {
   void Draw(SkCanvas &);
   void KeyDown(Key);
   void KeyUp(Key);
-  std::unique_ptr<Pointer> MakePointer(vec2 position);
   std::string_view GetState();
 
 private:
@@ -49,6 +48,7 @@ private:
 };
 
 struct Pointer final {
+  Pointer(Window &, vec2 position);
   ~Pointer();
   void Move(vec2 position);
   void Wheel(float delta);
@@ -56,7 +56,6 @@ struct Pointer final {
   void ButtonUp(Button);
 
 private:
-  Pointer(Window &, vec2 position);
   struct Impl;
   std::unique_ptr<Impl> impl;
   friend struct Window;

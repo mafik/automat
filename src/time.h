@@ -11,7 +11,7 @@ using duration = std::chrono::duration<T>;
 using clock = std::chrono::system_clock;
 using point = std::chrono::time_point<clock, duration>;
 
-constexpr point kTimePointZero = {};
+constexpr point kZero = {};
 
 inline point now() { return clock::now(); }
 

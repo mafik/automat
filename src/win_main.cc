@@ -94,7 +94,7 @@ std::unique_ptr<gui::Pointer> mouse;
 
 gui::Pointer &GetMouse() {
   if (!mouse) {
-    mouse = window->MakePointer(ScreenToWindow(mouse_position));
+    mouse = std::make_unique<gui::Pointer>(*window, ScreenToWindow(mouse_position));
   }
   return *mouse;
 }

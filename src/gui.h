@@ -5,6 +5,7 @@
 
 #include "action.h"
 #include "math.h"
+#include "dual_ptr.h"
 
 // GUI allows multiple windows to interact with multiple Automaton objects. GUI
 // takes care of drawing things in the right order & correctly routing the
@@ -65,13 +66,11 @@ private:
 
 // Base class for widgets.
 struct Widget {
-  Widget();
-  virtual ~Widget();
-  // `hover` is a value between 0 and 1. 0 means that no pointers are hovering
-  // over this widget. 1 means that at least one pointer is hovering.
-  // Intermediate values are used to animate the transition.
-  virtual void Draw(SkCanvas &, float hover, float focus) = 0;
-  virtual vec2 GetPosition() = 0;
+  Widget() {}
+  virtual ~Widget() {}
+  virtual void OnHover(bool hover, dual_ptr_holder& animation_state) {}
+  virtual void OnFocus(bool focus, dual_ptr_holder& animation_state) {}
+  virtual void Draw(SkCanvas &, dual_ptr_holder& animation_state) = 0;
   virtual SkPath GetShape() = 0;
   virtual std::unique_ptr<Action> KeyDown(Key) { return nullptr; }
   // Return true if the widget should be highlighted as keyboard focusable.

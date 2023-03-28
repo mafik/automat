@@ -18,8 +18,8 @@ constexpr float kMinZoom = 0.001f;
 constexpr time::duration kClickTimeout = std::chrono::milliseconds(300);
 constexpr float kClickRadius = 0.002f; // 2mm
 
-SkColor background_color = SkColorSetRGB(0x0f, 0x0f, 0x0e);
-SkColor tick_color = SkColorSetRGB(0x00, 0x53, 0xce);
+SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
+SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
 
 struct Pointer::Impl {
   Window::Impl &window;
@@ -34,6 +34,19 @@ struct Pointer::Impl {
   void Wheel(float delta);
   void ButtonDown(Button btn);
   void ButtonUp(Button btn);
+};
+
+struct PrototypeButton : Widget {
+  const Object *proto;
+  PrototypeButton(const Object* proto) : proto(proto) {}
+  void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) override {
+    // TODO: remove Location arg from Object::Draw
+    // TODO: pass animation_state to objects
+    proto->Draw(nullptr, canvas);
+  }
+  SkPath GetShape() override {
+    return proto->Shape();
+  }
 };
 
 struct Window::Impl {
@@ -57,8 +70,15 @@ struct Window::Impl {
 
   dual_ptr_holder animation_state;
 
+  std::vector<PrototypeButton> prototype_buttons;
+
   Impl(vec2 size, float display_pixels_per_meter)
-      : size(size), display_pixels_per_meter(display_pixels_per_meter) {}
+      : size(size), display_pixels_per_meter(display_pixels_per_meter) {
+    prototype_buttons.reserve(Prototypes().size());
+    for (auto& proto : Prototypes()) {
+      prototype_buttons.emplace_back(proto);
+    }
+  }
 
   float PxPerMeter() { return display_pixels_per_meter * zoom; }
 
@@ -244,20 +264,19 @@ struct Window::Impl {
     float max_w = size.Width;
     vec2 cursor = Vec2(0, 0);
 
-    auto prototypes = Prototypes();
-    // TODO: draw icons rather than actual objects
     auto old_prototype_under_mouse = prototype_under_mouse;
     prototype_under_mouse = nullptr;
-    for (const Object *proto : prototypes) {
+    for (PrototypeButton& btn : prototype_buttons) {
       canvas.save();
-      SkPath shape = proto->Shape();
+      SkPath shape = btn.GetShape();
       SkRect bounds = shape.getBounds();
       if (cursor.X + bounds.width() + 0.001 > max_w) {
         cursor.X = 0;
-        cursor.Y -= bounds.height() + 0.001;
+        cursor.Y += bounds.height() + 0.001;
       }
-      canvas.translate(cursor.X + 0.001 - bounds.left(),
-                       cursor.Y - 0.001 - bounds.bottom());
+      vec2 position = cursor + Vec2(0.001, 0.001) - Vec2(bounds.left(), bounds.top());
+
+      canvas.translate(position.X, position.Y);
       /*
       SkV4 local_mouse = device_to_local.map(mouse_position.X - window_x,
                                              mouse_position.Y - window_y, 0, 1);
@@ -270,7 +289,7 @@ struct Window::Impl {
         canvas.drawPath(shape, paint);
       }
       */
-      proto->Draw(nullptr, canvas);
+      btn.Draw(canvas, animation_state);
       canvas.restore();
       cursor.X += bounds.width() + 0.001;
     }

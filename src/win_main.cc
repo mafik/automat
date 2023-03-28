@@ -11,6 +11,7 @@
 #include "root.h"
 #include "vk.h"
 #include "win.h"
+#include "library.h"
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>

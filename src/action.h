@@ -8,6 +8,7 @@
 namespace automaton {
 
 struct Action {
+  virtual ~Action() = default;
   virtual void Begin(vec2 position) = 0;
   virtual void Update(vec2 position) = 0;
   virtual void End() = 0;

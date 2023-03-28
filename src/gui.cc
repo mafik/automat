@@ -23,10 +23,12 @@ SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
 
 struct Pointer::Impl {
   Window::Impl &window;
-  vec2 window_position;
+  vec2 pointer_position;
 
   vec2 button_down_position[kButtonCount];
   time::point button_down_time[kButtonCount];
+
+  std::unique_ptr<Action> action;
 
   Impl(Window::Impl &window, vec2 position);
   ~Impl();
@@ -34,6 +36,11 @@ struct Pointer::Impl {
   void Wheel(float delta);
   void ButtonDown(Button btn);
   void ButtonUp(Button btn);
+  void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
+    if (action) {
+      action->Draw(canvas, animation_state);
+    }
+  }
 };
 
 struct PrototypeButton : Widget {
@@ -60,10 +67,6 @@ struct Window::Impl {
   AnimatedApproach camera_x = AnimatedApproach(0.0, 0.005);
   AnimatedApproach camera_y = AnimatedApproach(0.0, 0.005);
 
-  std::unique_ptr<Action> mouse_action;
-  const Object *prototype_under_mouse = nullptr;
-  vec2 prototype_under_mouse_contact_point;
-
   std::vector<Pointer::Impl *> pointers;
 
   std::bitset<kKeyCount> pressed_keys;
@@ -86,8 +89,6 @@ struct Window::Impl {
   void ArrangePrototypeButtons() {
     float max_w = size.Width;
     vec2 cursor = Vec2(0, 0);
-    auto old_prototype_under_mouse = prototype_under_mouse;
-    prototype_under_mouse = nullptr;
     for (int i = 0; i < prototype_buttons.size(); i++) {
       auto &btn = prototype_buttons[i];
       vec2 &pos = prototype_button_positions[i];
@@ -181,7 +182,7 @@ struct Window::Impl {
       if (stabilize_mouse) {
         if (pointers.size() > 0) {
           Pointer::Impl *first_pointer = *pointers.begin();
-          vec2 mouse_position = first_pointer->window_position;
+          vec2 mouse_position = first_pointer->pointer_position;
           vec2 focus_pre = WindowToCanvas(mouse_position);
           zoom.Tick(t.d);
           vec2 focus_post = WindowToCanvas(mouse_position);
@@ -269,8 +270,8 @@ struct Window::Impl {
 
       root_machine->DrawContents(canvas);
 
-      if (mouse_action) {
-        mouse_action->Draw(canvas, animation_state);
+      for (auto &pointer : pointers) {
+        pointer->Draw(canvas, animation_state);
       }
 
       canvas.restore();
@@ -284,28 +285,11 @@ struct Window::Impl {
     automaton_thread_done.wait(lock);
 
     // Draw prototype shelf
-
-    auto old_prototype_under_mouse = prototype_under_mouse;
-    prototype_under_mouse = nullptr;
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      PrototypeButton &btn = prototype_buttons[i];
       vec2 &position = prototype_button_positions[i];
-
       canvas.save();
       canvas.translate(position.X, position.Y);
-      /*
-      SkV4 local_mouse = device_to_local.map(mouse_position.X - window_x,
-                                             mouse_position.Y - window_y, 0, 1);
-      if (shape.contains(local_mouse.x, local_mouse.y)) {
-        prototype_under_mouse = proto;
-        prototype_under_mouse_contact_point = Vec2(local_mouse.x,
-      local_mouse.y); SkPaint paint; paint.setColor(SK_ColorRED);
-        paint.setStyle(SkPaint::kStroke_Style);
-        paint.setStrokeWidth(0.001);
-        canvas.drawPath(shape, paint);
-      }
-      */
-      btn.Draw(canvas, animation_state);
+      prototype_buttons[i].Draw(canvas, animation_state);
       canvas.restore();
     }
   }
@@ -322,85 +306,6 @@ struct Window::Impl {
   std::unique_ptr<Pointer> MakePointer(vec2 position);
   std::string_view GetState();
 };
-
-Pointer::Impl::Impl(Window::Impl &window, vec2 position)
-    : window(window), window_position(position), button_down_position(),
-      button_down_time() {
-  window.pointers.push_back(this);
-}
-Pointer::Impl::~Impl() {
-  auto it = std::find(window.pointers.begin(), window.pointers.end(), this);
-  if (it != window.pointers.end()) {
-    window.pointers.erase(it);
-  }
-}
-void Pointer::Impl::Move(vec2 position) {
-  vec2 old_mouse_pos = window_position;
-  window_position = position;
-  if (button_down_time[kMouseMiddle] > time::kZero) {
-    vec2 delta =
-        window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
-    window.camera_x.Shift(-delta.X);
-    window.camera_y.Shift(-delta.Y);
-  }
-  if (window.mouse_action) {
-    window.mouse_action->Update(window.WindowToCanvas(position));
-  }
-}
-void Pointer::Impl::Wheel(float delta) {
-  float factor = exp(delta / 4);
-  window.zoom.target *= factor;
-  // For small changes we skip the animation to increase responsiveness.
-  if (fabs(delta) < 1.0) {
-    vec2 mouse_pre = window.WindowToCanvas(window_position);
-    window.zoom.value *= factor;
-    vec2 mouse_post = window.WindowToCanvas(window_position);
-    vec2 mouse_delta = mouse_post - mouse_pre;
-    window.camera_x.Shift(-mouse_delta.X);
-    window.camera_y.Shift(-mouse_delta.Y);
-  }
-  window.zoom.target = std::max(kMinZoom, window.zoom.target);
-}
-void Pointer::Impl::ButtonDown(Button btn) {
-  if (btn == kButtonUnknown || btn >= kButtonCount)
-    return;
-  button_down_position[btn] = window_position;
-  button_down_time[btn] = time::now();
-  if (btn == kMouseLeft) {
-    /*
-    if (prototype_under_mouse) {
-      auto drag_action = std::make_unique<DragAction>();
-      drag_action->object = prototype_under_mouse->Clone();
-      drag_action->contact_point = prototype_under_mouse_contact_point;
-      mouse_action = std::move(drag_action);
-      mouse_action->Begin(ScreenToCanvas(mouse_position));
-    }
-    */
-  }
-}
-void Pointer::Impl::ButtonUp(Button btn) {
-  if (btn == kButtonUnknown || btn >= kButtonCount)
-    return;
-  if (btn == kMouseLeft) {
-    if (window.mouse_action) {
-      window.mouse_action->End();
-      window.mouse_action.reset();
-    }
-  }
-  if (btn == kMouseMiddle) {
-    time::duration down_duration = time::now() - button_down_time[kMouseMiddle];
-    vec2 delta = window_position - button_down_position[kMouseMiddle];
-    float delta_m = Length(delta);
-    if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
-      vec2 canvas_pos = window.WindowToCanvas(window_position);
-      window.camera_x.target = canvas_pos.X;
-      window.camera_y.target = canvas_pos.Y;
-      window.zoom.target = 1;
-    }
-  }
-  button_down_position[btn] = Vec2(0, 0);
-  button_down_time[btn] = time::kZero;
-}
 
 vec2 RoundToMilimeters(vec2 v) {
   return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
@@ -437,10 +342,10 @@ struct DragAction : Action {
     }
   }
   void End() override {
-    RunOnAutomatonThread([this]() {
+    RunOnAutomatonThread([pos = current_position - contact_point, obj = object.release()]() mutable {
       Location &loc = root_machine->CreateEmpty();
-      loc.position = RoundToMilimeters(current_position - contact_point);
-      loc.InsertHere(std::move(object));
+      loc.position = RoundToMilimeters(pos);
+      loc.InsertHere(std::unique_ptr<Object>(obj));
     });
   }
   void Draw(SkCanvas &canvas, dual_ptr_holder &animation_state) override {
@@ -463,6 +368,93 @@ struct DragAction : Action {
     canvas.restore();
   }
 };
+
+Pointer::Impl::Impl(Window::Impl &window, vec2 position)
+    : window(window), pointer_position(position), button_down_position(),
+      button_down_time() {
+  window.pointers.push_back(this);
+}
+Pointer::Impl::~Impl() {
+  auto it = std::find(window.pointers.begin(), window.pointers.end(), this);
+  if (it != window.pointers.end()) {
+    window.pointers.erase(it);
+  }
+}
+void Pointer::Impl::Move(vec2 position) {
+  vec2 old_mouse_pos = pointer_position;
+  pointer_position = position;
+  if (button_down_time[kMouseMiddle] > time::kZero) {
+    vec2 delta =
+        window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
+    window.camera_x.Shift(-delta.X);
+    window.camera_y.Shift(-delta.Y);
+  }
+  if (action) {
+    action->Update(window.WindowToCanvas(position));
+  }
+}
+void Pointer::Impl::Wheel(float delta) {
+  float factor = exp(delta / 4);
+  window.zoom.target *= factor;
+  // For small changes we skip the animation to increase responsiveness.
+  if (fabs(delta) < 1.0) {
+    vec2 mouse_pre = window.WindowToCanvas(pointer_position);
+    window.zoom.value *= factor;
+    vec2 mouse_post = window.WindowToCanvas(pointer_position);
+    vec2 mouse_delta = mouse_post - mouse_pre;
+    window.camera_x.Shift(-mouse_delta.X);
+    window.camera_y.Shift(-mouse_delta.Y);
+  }
+  window.zoom.target = std::max(kMinZoom, window.zoom.target);
+}
+void Pointer::Impl::ButtonDown(Button btn) {
+  if (btn == kButtonUnknown || btn >= kButtonCount)
+    return;
+  button_down_position[btn] = pointer_position;
+  button_down_time[btn] = time::now();
+  if (btn == kMouseLeft) {
+    PrototypeButton *btn_under_mouse = nullptr;
+    vec2 contact_point;
+    for (int i = 0; i < window.prototype_buttons.size(); i++) {
+      PrototypeButton &btn = window.prototype_buttons[i];
+      contact_point = pointer_position - window.prototype_button_positions[i];
+      if (btn.GetShape().contains(contact_point.X, contact_point.Y)) {
+        btn_under_mouse = &btn;
+        break;
+      }
+    }
+    if (btn_under_mouse) {
+      auto drag_action = std::make_unique<DragAction>();
+      drag_action->object = btn_under_mouse->proto->Clone();
+      drag_action->contact_point = contact_point;
+      action = std::move(drag_action);
+      action->Begin(window.WindowToCanvas(pointer_position));
+    }
+  }
+}
+void Pointer::Impl::ButtonUp(Button btn) {
+  if (btn == kButtonUnknown || btn >= kButtonCount)
+    return;
+  if (btn == kMouseLeft) {
+    if (action) {
+      action->End();
+      action.reset();
+    }
+  }
+  if (btn == kMouseMiddle) {
+    time::duration down_duration = time::now() - button_down_time[kMouseMiddle];
+    vec2 delta = pointer_position - button_down_position[kMouseMiddle];
+    float delta_m = Length(delta);
+    if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
+      vec2 canvas_pos = window.WindowToCanvas(pointer_position);
+      window.camera_x.target = canvas_pos.X;
+      window.camera_y.target = canvas_pos.Y;
+      window.zoom.target = 1;
+    }
+  }
+  button_down_position[btn] = Vec2(0, 0);
+  button_down_time[btn] = time::kZero;
+}
 
 std::vector<Window *> windows = {};
 

@@ -71,12 +71,34 @@ struct Window::Impl {
   dual_ptr_holder animation_state;
 
   std::vector<PrototypeButton> prototype_buttons;
+  std::vector<vec2> prototype_button_positions;
 
   Impl(vec2 size, float display_pixels_per_meter)
       : size(size), display_pixels_per_meter(display_pixels_per_meter) {
     prototype_buttons.reserve(Prototypes().size());
     for (auto& proto : Prototypes()) {
       prototype_buttons.emplace_back(proto);
+      prototype_button_positions.emplace_back(Vec2(0, 0));
+    }
+    ArrangePrototypeButtons();
+  }
+
+  void ArrangePrototypeButtons() {
+    float max_w = size.Width;
+    vec2 cursor = Vec2(0, 0);
+    auto old_prototype_under_mouse = prototype_under_mouse;
+    prototype_under_mouse = nullptr;
+    for (int i = 0; i < prototype_buttons.size(); i++) {
+      auto &btn = prototype_buttons[i];
+      vec2 &pos = prototype_button_positions[i];
+      SkPath shape = btn.GetShape();
+      SkRect bounds = shape.getBounds();
+      if (cursor.X + bounds.width() + 0.001 > max_w) {
+        cursor.X = 0;
+        cursor.Y += bounds.height() + 0.001;
+      }
+      pos = cursor + Vec2(0.001, 0.001) - Vec2(bounds.left(), bounds.top());
+      cursor.X += bounds.width() + 0.001;
     }
   }
 
@@ -136,7 +158,10 @@ struct Window::Impl {
     return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2;
   }
 
-  void Resize(vec2 size) { this->size = size; }
+  void Resize(vec2 size) {
+    this->size = size;
+    ArrangePrototypeButtons();
+  }
   void DisplayPixelDensity(float pixels_per_meter) {
     this->display_pixels_per_meter = pixels_per_meter;
   }
@@ -259,23 +284,14 @@ struct Window::Impl {
     automaton_thread_done.wait(lock);
 
     // Draw prototype shelf
-    canvas.save();
-
-    float max_w = size.Width;
-    vec2 cursor = Vec2(0, 0);
 
     auto old_prototype_under_mouse = prototype_under_mouse;
     prototype_under_mouse = nullptr;
-    for (PrototypeButton& btn : prototype_buttons) {
-      canvas.save();
-      SkPath shape = btn.GetShape();
-      SkRect bounds = shape.getBounds();
-      if (cursor.X + bounds.width() + 0.001 > max_w) {
-        cursor.X = 0;
-        cursor.Y += bounds.height() + 0.001;
-      }
-      vec2 position = cursor + Vec2(0.001, 0.001) - Vec2(bounds.left(), bounds.top());
+    for (int i = 0; i < prototype_buttons.size(); i++) {
+      PrototypeButton &btn = prototype_buttons[i];
+      vec2 &position = prototype_button_positions[i];
 
+      canvas.save();
       canvas.translate(position.X, position.Y);
       /*
       SkV4 local_mouse = device_to_local.map(mouse_position.X - window_x,
@@ -291,10 +307,7 @@ struct Window::Impl {
       */
       btn.Draw(canvas, animation_state);
       canvas.restore();
-      cursor.X += bounds.width() + 0.001;
     }
-
-    canvas.restore();
   }
   void KeyDown(Key key) {
     if (key == kKeyUnknown || key >= kKeyCount)

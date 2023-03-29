@@ -2,13 +2,11 @@
 
 '''Run Automaton.'''
 
-import sys
-sys.path.append('python')
 import subprocess
-import cc
-import build_graph
-import debian_deps
-import args
+from python_modules import cc
+from python_modules import build_graph
+from python_modules import debian_deps
+from python_modules import args
 import importlib
 from sys import platform
 

@@ -11,10 +11,11 @@ import signal
 import shutil
 import tempfile
 import hashlib
-import fs_utils
+from . import fs_utils
 
 HASH_DIR = fs_utils.project_tmp_dir / 'hashes'
 HASH_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def Popen(args, extra_args=[], **kwargs):
     '''Wrapper around subprocess.Popen which captures STDERR into a temporary file.'''
@@ -23,6 +24,7 @@ def Popen(args, extra_args=[], **kwargs):
     p = subprocess.Popen(str_args, stderr=f, **kwargs)
     p.stderr = f
     return p
+
 
 def hexdigest(path):
     path = Path(path)
@@ -35,29 +37,30 @@ def hexdigest(path):
         contents = b''
     return hashlib.md5(contents).hexdigest()
 
+
 class Step:
     def __init__(self, name, outputs, inputs, build, id, stderr_prettifier):
         self.name = name
         self.outputs = set(str(x) for x in outputs)
         self.inputs = set(str(x) for x in inputs)
-        self.build = build # function that executes this step
-        self.builder = None # Popen instance while this step is being built
+        self.build = build  # function that executes this step
+        self.builder = None  # Popen instance while this step is being built
         self.id = id
         self.stderr_prettifier = stderr_prettifier
         self.extra_args = []
-    
+
     def __repr__(self):
         return f'{self.name}'
 
     def build_and_log(self, reasons):
-        print('Building', self.name) # , '(because', *reasons, 'changed)')
+        print('Building', self.name)  # , '(because', *reasons, 'changed)')
         return self.build(extra_args=self.extra_args)
-    
+
     def record_input_hashes(self):
         hash_path = HASH_DIR / self.name
         text = '\n'.join(f'{inp} {hexdigest(inp)}' for inp in self.inputs)
         hash_path.write_text(text)
-    
+
     def dirty_inputs(self):
         # Check 1: If the output doesn't exist, report that all inputs have changed.
         for out in self.outputs:
@@ -78,7 +81,7 @@ class Step:
             if not p.exists():
                 continue
             updated_inputs.append(inp)
-        
+
         if len(updated_inputs) == 0:
             return []
 
@@ -90,7 +93,8 @@ class Step:
         for line in hash_path.open().readlines():
             inp, hsh = line.split()
             recorded_hashes[inp] = hsh
-        changed_inputs = [inp for inp in updated_inputs if hexdigest(inp) != recorded_hashes[inp]]
+        changed_inputs = [inp for inp in updated_inputs if hexdigest(
+            inp) != recorded_hashes[inp]]
         return changed_inputs
 
     def is_dirty(self):
@@ -126,15 +130,16 @@ class Recipe:
                 else:
                     print(f'  > rmtree {p}')
                     shutil.rmtree(p)
-    
+
     def is_dirty(self):
         '''Returns True if the recipe needs to be built.'''
         return any(s.is_dirty() for s in self.steps)
-    
+
     def add_step(self, build_func, outputs, inputs, name=None, stderr_prettifier=lambda x: x):
         if not name:
             name = build_func.__name__
-        self.steps.append(Step(name, outputs, inputs, build_func, len(self.steps), stderr_prettifier))
+        self.steps.append(Step(name, outputs, inputs, build_func,
+                          len(self.steps), stderr_prettifier))
 
     # prunes the list of steps and only leaves the steps that are required for some target
     def set_target(self, target):
@@ -150,10 +155,11 @@ class Recipe:
             from difflib import get_close_matches
             close = get_close_matches(target, [s.name for s in self.steps])
             close = ', '.join(close)
-            raise Exception(f'{target} is not a valid target. Close matches: {close}.')
+            raise Exception(
+                f'{target} is not a valid target. Close matches: {close}.')
 
         new_steps = set()
-        q = [ target_step ]
+        q = [target_step]
         while q:
             step = q.pop()
             new_steps.add(step)
@@ -162,9 +168,10 @@ class Recipe:
                     dep = out_index[input]
                     q.append(dep)
                 elif not Path(input).exists():
-                    raise Exception(f'Step "{step.name}" requires `{input}` but it doesn\'t exist and there is no recipe to build it.')
+                    raise Exception(
+                        f'Step "{step.name}" requires `{input}` but it doesn\'t exist and there is no recipe to build it.')
         new_steps = list(new_steps)
-        new_steps.sort(key = self.steps.index)
+        new_steps.sort(key=self.steps.index)
 
         self.steps = new_steps
 
@@ -225,7 +232,8 @@ class Recipe:
                 if status:
                     print(f'Recipe for {step.name} finished with an error:\n')
                     if hasattr(step.builder, 'args'):
-                        orig_command = ' > \033[90m' + ' '.join(step.builder.args) + '\033[0m\n'
+                        orig_command = ' > \033[90m' + \
+                            ' '.join(step.builder.args) + '\033[0m\n'
                         print(orig_command)
                     step.builder.stderr.seek(0)
                     stderr = step.builder.stderr.read().decode('utf-8')

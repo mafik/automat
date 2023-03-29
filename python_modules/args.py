@@ -4,7 +4,6 @@
 
 import __main__
 import argparse
-import os
 
 parser = argparse.ArgumentParser(
     description=__main__.__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -14,8 +13,9 @@ parser.add_argument('--debug', action='store_true')
 parser.add_argument('--live', action='store_true')
 parser.add_argument('--verbose', action='store_true')
 parser.add_argument('target')
-parser.add_argument('-x', action='append', help='argument passed to the target', dest='extra_args', default=[])
+parser.add_argument('-x', action='append',
+                    help='argument passed to the target', dest='extra_args', default=[])
 args = parser.parse_args()
 
 for k, v in args.__dict__.items():
-  globals()[k] = v
+    globals()[k] = v

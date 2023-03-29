@@ -1,21 +1,22 @@
 '''Contains the graph of recipes to build Automaton.'''
 
 from asyncio import subprocess
-import args
-import cc
-import make
-import fs_utils
+from . import args
+from . import cc
+from . import make
+from . import fs_utils
 import os
 import functools
 import re
 import shutil
 import json
 
-from make import Popen
+from .make import Popen
 from subprocess import run
 from pathlib import Path
 from dataclasses import dataclass
 from sys import platform
+
 
 def is_tool(name):
     return shutil.which(name) is not None
@@ -27,10 +28,17 @@ if is_tool('clang++') and is_tool('clang') and is_tool('llvm-cxxfilt'):
 else:
     raise 'Couldn\'t find `clang`, `clang++` or `llvm-cxxfilt` on the system PATH. Make sure to install LLVM & add it to the system PATH variable!'
 
+def libname(name):
+    if platform == 'win32':
+        return name + '.lib'
+    else:
+        return 'lib' + name + '.a'
+
 # TODO: when on Win32 - make sure that cmake, ninja, gdb are on the PATH
 
 CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -Ivendor'.split()
 LDFLAGS = ['-fuse-ld=lld']
+BIN_DEPS = []
 
 if args.verbose:
     CXXFLAGS.append('-v')
@@ -59,13 +67,15 @@ elif args.debug:
 else:
     CMAKE_BUILD_TYPE = 'MinSizeRel'
 
-cmake_args = ['cmake', '-G', 'Ninja', f'-D{CMAKE_BUILD_TYPE=}', f'-DCMAKE_C_COMPILER={CC}', f'-DCMAKE_CXX_COMPILER={CXX}']
+cmake_args = ['cmake', '-G', 'Ninja', f'-D{CMAKE_BUILD_TYPE=}',
+              f'-DCMAKE_C_COMPILER={CC}', f'-DCMAKE_CXX_COMPILER={CXX}']
 
 # CMake needs this policy to be enabled to respect `CMAKE_MSVC_RUNTIME_LIBRARY`
 # https://cmake.org/cmake/help/latest/policy/CMP0091.html
 # When vk-bootstrap sets minimum CMake version >= 3.15, the policy define can be removed.
 CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreadedDebug' if args.debug else 'MultiThreaded'
-cmake_args += ['-DCMAKE_POLICY_DEFAULT_CMP0091=NEW', f'-D{CMAKE_MSVC_RUNTIME_LIBRARY=}']
+cmake_args += ['-DCMAKE_POLICY_DEFAULT_CMP0091=NEW',
+               f'-D{CMAKE_MSVC_RUNTIME_LIBRARY=}']
 
 # GoogleTest
 
@@ -77,7 +87,8 @@ GTEST_LIB = GOOGLETEST_OUT / 'lib' / 'gtest.lib'
 GTEST_MAIN_LIB = GOOGLETEST_OUT / 'lib' / 'gtest_main.lib'
 
 recipe.add_step(
-    functools.partial(Popen, cmake_args + ['-S', GOOGLETEST_SRC, '-B', GOOGLETEST_OUT]),
+    functools.partial(Popen, cmake_args +
+                      ['-S', GOOGLETEST_SRC, '-B', GOOGLETEST_OUT]),
     outputs=[GOOGLETEST_OUT / 'build.ninja'],
     inputs=[GOOGLETEST_SRC / 'CMakeLists.txt'],
     name='Configure GoogleTest')
@@ -99,22 +110,24 @@ LDFLAGS += ['-L', GOOGLETEST_OUT / 'lib']
 VK_BOOTSTRAP_ROOT = fs_utils.project_tmp_dir / 'vk-bootstrap'
 VK_BOOTSTRAP_BUILD = VK_BOOTSTRAP_ROOT / 'build' / CMAKE_BUILD_TYPE
 VK_BOOTSTRAP_INCLUDE = VK_BOOTSTRAP_ROOT / 'src'
-VK_BOOTSTRAP_LIB = VK_BOOTSTRAP_BUILD / 'vk-bootstrap.lib'
+VK_BOOTSTRAP_LIB = VK_BOOTSTRAP_BUILD / libname('vk-bootstrap')
 
 CXXFLAGS += ['-I', VK_BOOTSTRAP_INCLUDE]
 LDFLAGS += ['-L', VK_BOOTSTRAP_BUILD]
 LDFLAGS += ['-lvk-bootstrap']
 
 recipe.add_step(
-    functools.partial(Popen, ['git', 'clone', 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
-    outputs = [VK_BOOTSTRAP_ROOT / 'CMakeLists.txt', VK_BOOTSTRAP_INCLUDE],
-    inputs = [],
+    functools.partial(Popen, [
+                      'git', 'clone', 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
+    outputs=[VK_BOOTSTRAP_ROOT / 'CMakeLists.txt', VK_BOOTSTRAP_INCLUDE],
+    inputs=[],
     name='Fetch vk-bootstrap')
 
 recipe.add_step(
-    functools.partial(Popen, cmake_args + ['-S', VK_BOOTSTRAP_ROOT, '-B', VK_BOOTSTRAP_BUILD]),
-    outputs = [VK_BOOTSTRAP_BUILD / 'build.ninja'],
-    inputs = [VK_BOOTSTRAP_ROOT / 'CMakeLists.txt'],
+    functools.partial(Popen, cmake_args +
+                      ['-S', VK_BOOTSTRAP_ROOT, '-B', VK_BOOTSTRAP_BUILD]),
+    outputs=[VK_BOOTSTRAP_BUILD / 'build.ninja'],
+    inputs=[VK_BOOTSTRAP_ROOT / 'CMakeLists.txt'],
     name='Configure vk-bootstrap')
 
 recipe.add_step(
@@ -149,26 +162,32 @@ if platform == 'win32':
     MANIFEST_RC = fs_utils.project_root / 'src' / 'manifest.rc'
     MANIFEST_RES = OBJ_DIR / 'manifest.res'
     recipe.add_step(
-        functools.partial(Popen, ['llvm-rc', MANIFEST_RC, '/FO', MANIFEST_RES]),
+        functools.partial(
+            Popen, ['llvm-rc', MANIFEST_RC, '/FO', MANIFEST_RES]),
         outputs=[MANIFEST_RES],
         inputs=[MANIFEST_RC],
         name='Build manifest.res')
     recipe.generated.add(MANIFEST_RES)
     LDFLAGS += [MANIFEST_RES]
+    BIN_DEPS += [MANIFEST_RES]
+
 
 def cxxfilt(line):
     cxx_identifier_re = "(_Z[a-zA-Z0-9_]+)"
     while match := re.search(cxx_identifier_re, line):
         cxx_identifier = match.group(1)
         try:
-            demangled = run([CXXFILT, cxx_identifier], stdout=subprocess.PIPE, check=True).stdout.decode('utf-8').strip()
+            demangled = run([CXXFILT, cxx_identifier], stdout=subprocess.PIPE,
+                            check=True).stdout.decode('utf-8').strip()
             # add ANSI bold escape sequence
             demangled = f'\033[90m{demangled}\033[0m'
             line = line.replace(cxx_identifier, demangled)
         except:
             break
-    line = line.replace('std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>', 'string')
-    line = line.replace('std::basic_string_view<char, std::char_traits<char>>', 'string_view')
+    line = line.replace(
+        'std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>', 'string')
+    line = line.replace(
+        'std::basic_string_view<char, std::char_traits<char>>', 'string_view')
     line = line.replace('automaton::', '')
     line = line.replace('/usr/bin/ld: ', '')
     line = line.replace(str(OBJ_DIR), '')
@@ -181,6 +200,7 @@ def cxxfilt(line):
     line = re.sub(r'(.*:)?\(\.text(.+)?\+0x[0-9a-f]+\):', ' ', line)
     return line
 
+
 def redirect_path(path):
     name = Path(path).name
     if cc.types[path] == 'object file':
@@ -190,6 +210,7 @@ def redirect_path(path):
     else:
         return path
 
+
 types = dict()
 graph = dict()
 for path, deps in cc.graph.items():
@@ -198,11 +219,13 @@ for path, deps in cc.graph.items():
 for path, t in cc.types.items():
     types[redirect_path(path)] = t
 
+
 @dataclass
 class CompilationEntry:
     file: str
     output: str
     arguments: list
+
 
 compilation_db = []
 
@@ -214,18 +237,21 @@ for path, deps in graph.items():
     elif t == 'object file':
         recipe.generated.add(path)
         source_files = [d for d in deps if types[d] == 'translation unit']
-        assert(len(source_files) == 1)
+        assert (len(source_files) == 1)
         pargs += source_files
         pargs += ['-c', '-o', path]
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_INCLUDE], name=Path(path).name)
+        recipe.add_step(builder, outputs=[
+                        path], inputs=deps + [VK_BOOTSTRAP_INCLUDE], name=Path(path).name)
         compilation_db.append(CompilationEntry(source_files[0], path, pargs))
     elif t == 'test':
         binary_name = Path(path).stem
         recipe.generated.add(path)
-        pargs += deps + ['-o', path] + LDFLAGS + ['-lgtest_main', '-lgtest', '-lgmock']
+        pargs += deps + ['-o', path] + LDFLAGS + \
+            ['-lgtest_main', '-lgtest', '-lgmock']
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps + [GMOCK_LIB, GTEST_LIB, GTEST_MAIN_LIB, MANIFEST_RES], name=f'link {binary_name}', stderr_prettifier=cxxfilt)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [GMOCK_LIB, GTEST_LIB,
+                        GTEST_MAIN_LIB] + BIN_DEPS, name=f'link {binary_name}', stderr_prettifier=cxxfilt)
         runner = functools.partial(Popen, [f'./{path}', '--gtest_color=yes'])
         recipe.add_step(runner, outputs=[], inputs=[path], name=binary_name)
     elif t == 'main':
@@ -233,7 +259,7 @@ for path, deps in graph.items():
         recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps + [MANIFEST_RES, VK_BOOTSTRAP_LIB], name=f'link {binary_name}', stderr_prettifier=cxxfilt)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_LIB] + BIN_DEPS, name=f'link {binary_name}', stderr_prettifier=cxxfilt)
         # if platform == 'win32':
         #     MT = 'C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.19041.0\\x64\\mt.exe'
         #     mt_runner = functools.partial(Popen, [MT, '-manifest', 'src\win32.manifest', '-outputresource:{path}'])
@@ -258,12 +284,14 @@ if tests:
 # Recipe for Clang language server
 ##########################
 
+
 def compile_commands(extra_args):
     print('Generating compile_commands.json...')
     jsons = []
     for entry in compilation_db:
-        arguments = ',\n    '.join(json.dumps(str(arg)) for arg in entry.arguments)
-        json_entry  = f'''{{
+        arguments = ',\n    '.join(json.dumps(str(arg))
+                                   for arg in entry.arguments)
+        json_entry = f'''{{
   "directory": { json.dumps(str(fs_utils.project_root)) },
   "file": { json.dumps(entry.file) },
   "output": { json.dumps(entry.output) },
@@ -272,6 +300,7 @@ def compile_commands(extra_args):
         jsons.append(json_entry)
     with open('compile_commands.json', 'w') as f:
         print('[' + ', '.join(jsons) + ']', file=f)
+
 
 recipe.add_step(compile_commands, ['compile_commands.json'], [])
 

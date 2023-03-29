@@ -1,10 +1,10 @@
 '''Module which keeps track of all C++ sources.'''
 
-import fs_utils
+from . import fs_utils
 import collections
 import re
-import args
-import clang
+from . import args
+from . import clang
 from sys import platform
 
 defines = set()
@@ -51,8 +51,10 @@ types = dict()
 
 binary_extension = '.exe' if platform == 'win32' else ''
 
+
 def depends(what, on):
     graph[str(what)].add(str(on))
+
 
 for path_abs in srcs:
     parent = path_abs.parent

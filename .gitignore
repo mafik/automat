@@ -4,4 +4,5 @@ compile_commands.json
 .cache
 *.pdb
 *.exe
+automaton
 .gdb_history

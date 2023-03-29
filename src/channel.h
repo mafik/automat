@@ -1,5 +1,7 @@
 #pragma once
 
+// atomic is sometimes defined in <atomic> and sometimes in <memory>
+#include <atomic>
 #include <memory>
 #include <cassert>
 

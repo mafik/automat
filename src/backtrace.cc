@@ -16,7 +16,7 @@
  * TODO: use the stack trace printing code in log.cc
  */
 
-void PrintBacktrace() {
+bool PrintBacktrace() {
   char pid_buf[30];
   sprintf(pid_buf, "%d", getpid());
   char name_buf[512];
@@ -31,6 +31,7 @@ void PrintBacktrace() {
   } else {
     waitpid(child_pid, NULL, 0);
   }
+  return true;
 }
 
 static void signal_segv_unix(int signum, siginfo_t *info, void *ptr) {

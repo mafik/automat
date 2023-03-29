@@ -150,6 +150,10 @@ if platform == 'win32':
 
     # TODO: allow translation modules to request libraries
     LDFLAGS += ['-luser32', '-lopengl32', '-lgdi32']
+elif platform == 'linux':
+    CXXFLAGS += ['-I/home/maf/Pulpit/skia/']
+    LDFLAGS += ['-L/home/maf/Pulpit/skia/out/Static']
+    LDFLAGS += ['-lskia', '-lfontconfig', '-lfreetype', '-lGL']
 
 ###############################
 # Recipes for object files

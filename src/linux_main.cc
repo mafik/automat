@@ -1,5 +1,6 @@
 #include "linux_main.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -20,6 +21,8 @@
 
 #pragma comment(lib, "xcb")
 #pragma comment(lib, "xcb-xinput")
+
+// See http://who-t.blogspot.com/search/label/xi2 for XInput2 documentation.
 
 using namespace automaton;
 
@@ -253,7 +256,9 @@ void ScanDevices() {
           std::string increment =
               std::to_string(fp3232_to_double(scroll_class->increment));
           if (scroll_class->scroll_type == XCB_INPUT_SCROLL_TYPE_VERTICAL) {
-            vertical_scroll.emplace(deviceid, scroll_class->number, fp3232_to_double(scroll_class->increment), 0.0);
+            vertical_scroll.emplace(deviceid, scroll_class->number,
+                                    fp3232_to_double(scroll_class->increment),
+                                    0.0);
           }
           break;
         }
@@ -447,9 +452,10 @@ void RenderLoop() {
                   if (it_class->type == XCB_INPUT_DEVICE_CLASS_TYPE_VALUATOR) {
                     xcb_input_valuator_class_t *valuator_class =
                         (xcb_input_valuator_class_t *)it_class;
-                    if (valuator_class->number == vertical_scroll->valuator_number) {
-                      vertical_scroll->last_value = fp3232_to_double(valuator_class->value);
-                      LOG() << "Updating scroll value to " << vertical_scroll->last_value;
+                    if (valuator_class->number ==
+                        vertical_scroll->valuator_number) {
+                      vertical_scroll->last_value =
+                          fp3232_to_double(valuator_class->value);
                     }
                   }
                   xcb_input_device_class_next(&it);
@@ -513,6 +519,10 @@ void RenderLoop() {
                       double new_value = fp3232_to_double(axisvalues[i_axis]);
                       double delta = new_value - vertical_scroll->last_value;
                       vertical_scroll->last_value = new_value;
+                      if (abs(delta) > 1000000) {
+                        // http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
+                        delta = (delta > 0 ? 1 : -1) * vertical_scroll->increment;
+                      }
                       GetMouse().Wheel(-delta / vertical_scroll->increment);
                     }
                     ++i_axis;
@@ -528,6 +538,14 @@ void RenderLoop() {
             break;
           }
           case XCB_INPUT_ENTER: {
+            if (vertical_scroll) {
+              // See
+              // http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
+              // Instead of ignoring the first update, we're refreshing the
+              // last_scroll. It's a bit more expensive than the GTK approach,
+              // but gives better UX.
+              ScanDevices();
+            }
             xcb_input_enter_event_t *ev = (xcb_input_enter_event_t *)event;
             mouse_position_on_screen.X = fp1616_to_float(ev->root_x);
             mouse_position_on_screen.Y = fp1616_to_float(ev->root_y);

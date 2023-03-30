@@ -152,6 +152,7 @@ if platform == 'win32':
     LDFLAGS += ['-luser32', '-lopengl32', '-lgdi32']
 elif platform == 'linux':
     CXXFLAGS += ['-I/home/maf/Pulpit/skia/']
+    CXXFLAGS += ['-I/home/maf/Pulpit/skia/include/third_party/vulkan']
     LDFLAGS += ['-L/home/maf/Pulpit/skia/out/Static']
     LDFLAGS += ['-lskia', '-lfontconfig', '-lfreetype', '-lGL']
 

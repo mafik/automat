@@ -1,10 +1,14 @@
 #include "vk.h"
 
+#if defined(_WIN32)
 #include "win.h"
 #include "win_main.h"
+#elif defined(__linux__)
+#include "linux_main.h"
+#endif
 
 #include <VkBootstrap.h>
-#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan.h>
 
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkColorType.h>
@@ -49,7 +53,13 @@ struct Instance : vkb::Instance {
   uint32_t instance_version = VK_MAKE_VERSION(1, 1, 0);
   uint32_t api_version = VK_API_VERSION_1_1;
   std::string error = "";
-  std::vector<const char *> extensions = {"VK_KHR_win32_surface"};
+  std::vector<const char *> extensions = {
+#if defined(_WIN32)
+  "VK_KHR_win32_surface"
+#elif defined(__linux__)
+  "VK_KHR_xcb_surface"
+#endif
+  };
 } instance;
 
 struct Surface {
@@ -154,6 +164,9 @@ void Surface::Init() {
     error = "vk::Surface already initialized.";
     return;
   }
+
+#if defined(_WIN32)
+
   PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR =
       (PFN_vkCreateWin32SurfaceKHR)instance.GetProc("vkCreateWin32SurfaceKHR");
 
@@ -167,14 +180,40 @@ void Surface::Init() {
   VkResult res =
       vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
   if (VK_SUCCESS != res) {
-    error = "Failure in createWin32SurfaceKHR.";
+    error = "Failure in vkCreateWin32SurfaceKHR.";
     return;
   }
 
   if (VK_NULL_HANDLE == surface) {
-    error = "No surface after createWin32SurfaceKHR";
+    error = "No surface after vkCreateWin32SurfaceKHR";
     return;
   }
+
+#elif defined(__linux__)
+
+  PFN_vkCreateXcbSurfaceKHR vkCreateXcbSurfaceKHR =
+      (PFN_vkCreateXcbSurfaceKHR)instance.GetProc("vkCreateXcbSurfaceKHR");
+
+  VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+      .pNext = nullptr,
+      .flags = 0,
+      .connection = connection,
+      .window = window};
+
+  VkResult res =
+      vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
+  if (VK_SUCCESS != res) {
+    error = "Failure in vkCreateXcbSurfaceKHR.";
+    return;
+  }
+
+  if (VK_NULL_HANDLE == surface) {
+    error = "No surface after vkCreateXcbSurfaceKHR";
+    return;
+  }
+
+#endif
 }
 void Surface::Destroy() {
   vkb::destroy_surface(instance, surface);

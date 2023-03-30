@@ -1,5 +1,7 @@
 #include "root.h"
 
+#include <thread>
+
 namespace automaton {
   
 Location root_location;

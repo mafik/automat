@@ -199,7 +199,7 @@ void Surface::Init() {
       .pNext = nullptr,
       .flags = 0,
       .connection = connection,
-      .window = window};
+      .window = xcb_window};
 
   VkResult res =
       vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);

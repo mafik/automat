@@ -1,6 +1,7 @@
 #include "gui.h"
 
 #include <bitset>
+#include <condition_variable>
 #include <vector>
 
 #include <include/effects/SkRuntimeEffect.h>

@@ -85,12 +85,14 @@ using WidgetVisitorFunc = std::function<VisitResult(Widget &, vec2)>;
 struct Widget {
   Widget() {}
   virtual ~Widget() {}
-  virtual void OnHover(bool hover, AnimationState &animation_state) {}
-  virtual void OnFocus(bool focus, AnimationState &animation_state) {}
-  virtual void Draw(SkCanvas &, AnimationState &animation_state) const = 0;
+  virtual void OnHover(bool hover, animation::State &animation_state) {}
+  virtual void OnFocus(bool focus, animation::State &animation_state) {}
+  virtual void Draw(SkCanvas &, animation::State &animation_state) const = 0;
   virtual SkPath Shape() const = 0;
   virtual std::unique_ptr<Action> KeyDownAction(Key) { return nullptr; }
-  virtual std::unique_ptr<Action> ButtonDownAction(Button, vec2 contact_point) { return nullptr; }
+  virtual std::unique_ptr<Action> ButtonDownAction(Button, vec2 contact_point) {
+    return nullptr;
+  }
   // Return true if the widget should be highlighted as keyboard focusable.
   virtual bool CanFocusKeyboard() { return false; }
   // Return true if the widget should be highlighted as draggable.

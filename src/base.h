@@ -16,11 +16,11 @@
 #include <include/core/SkCanvas.h>
 #include <include/core/SkPath.h>
 
-#include "format.h"
-#include "text_field.h"
-#include "log.h"
 #include "channel.h"
 #include "dual_ptr.h"
+#include "format.h"
+#include "log.h"
+#include "text_field.h"
 
 namespace automaton {
 
@@ -88,12 +88,13 @@ struct Object : gui::Widget {
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  void Draw(SkCanvas &canvas, gui::AnimationState& animation_state) const override;
+  void Draw(SkCanvas &canvas,
+            gui::animation::State &animation_state) const override;
   SkPath Shape() const override;
 };
 
-std::vector<const Object*>& Prototypes();
-void RegisterPrototype(const Object& prototype);
+std::vector<const Object *> &Prototypes();
+void RegisterPrototype(const Object &prototype);
 
 /*
 
@@ -222,9 +223,10 @@ struct Location : gui::Widget {
   unordered_set<Location *> error_observers;
   unordered_set<Location *> observing_errors;
 
-  Location(Location *parent = nullptr) : parent(parent), name_text_field(&name, 0.03) {}
+  Location(Location *parent = nullptr)
+      : parent(parent), name_text_field(&name, 0.03) {}
 
-  std::unique_ptr<Object> InsertHere(unique_ptr<Object>&& object) {
+  std::unique_ptr<Object> InsertHere(unique_ptr<Object> &&object) {
     this->object.swap(object);
     return object;
   }
@@ -372,7 +374,8 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number) { SetText(f("%lf", number)); }
 
-  void Draw(SkCanvas& canvas, gui::AnimationState& animation_state) const override;
+  void Draw(SkCanvas &canvas,
+            gui::animation::State &animation_state) const override;
   SkPath Shape() const override;
   gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override;
 
@@ -725,7 +728,8 @@ struct Machine : LiveObject {
     static SkPath empty_path;
     return empty_path;
   }
-  gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
+  gui::VisitResult
+  VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
     for (auto &it : locations) {
       auto result = visitor(*it, it->position);
       if (result == gui::VisitResult::kStop) {
@@ -817,7 +821,7 @@ struct Machine : LiveObject {
     }
   }
 
-  void DrawContents(SkCanvas& canvas, gui::AnimationState& animation_state);
+  void DrawContents(SkCanvas &canvas, gui::animation::State &animation_state);
 };
 
 struct Pointer : LiveObject {
@@ -973,8 +977,8 @@ struct UpdateTask : Task {
 };
 
 struct FunctionTask : Task {
-  std::function<void(Location&)> function;
-  FunctionTask(Location *target, std::function<void(Location&)> function)
+  std::function<void(Location &)> function;
+  FunctionTask(Location *target, std::function<void(Location &)> function)
       : Task(target), function(function) {}
   std::string Format() override {
     return f("FunctionTask(%s)", target->LoggableString().c_str());

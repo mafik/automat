@@ -36,7 +36,7 @@ constexpr float kBorderWidth = 0.00025;
 constexpr float kFrameCornerRadius = 0.001;
 
 void Object::Draw(SkCanvas &canvas,
-                  gui::AnimationState &animation_state) const {
+                  gui::animation::State &animation_state) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -126,7 +126,6 @@ SkPath Location::Shape() const {
   return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
 }
 
-
 gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   if (object) {
     auto result = visitor(*object, Vec2(0, 0));
@@ -136,14 +135,14 @@ gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   }
   SkPath my_shape = Shape();
   SkRect bounds = my_shape.getBounds();
-  vec2 name_text_field_pos = Vec2(bounds.left() + 0.001,
-                                  bounds.bottom() - gui::kTextFieldHeight - 0.001);
+  vec2 name_text_field_pos = Vec2(
+      bounds.left() + 0.001, bounds.bottom() - gui::kTextFieldHeight - 0.001);
   auto result = visitor(name_text_field, name_text_field_pos);
   return result;
 }
 
 void Location::Draw(SkCanvas &canvas,
-                    gui::AnimationState &animation_state) const {
+                    gui::animation::State &animation_state) const {
   if (object) {
     SkPath my_shape = Shape();
     SkRect bounds = my_shape.getBounds();
@@ -200,7 +199,7 @@ void Location::Draw(SkCanvas &canvas,
 }
 
 void Machine::DrawContents(SkCanvas &canvas,
-                           gui::AnimationState &animation_state) {
+                           gui::animation::State &animation_state) {
   SkRect clip = canvas.getLocalClipBounds();
 
   for (auto &loc : locations) {

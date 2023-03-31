@@ -30,7 +30,7 @@ struct Pointer::Impl {
   time::point button_down_time[kButtonCount];
 
   std::unique_ptr<Action> action;
-  Widget* hovered_widget = nullptr;
+  Widget *hovered_widget = nullptr;
   vec2 hovered_widget_position;
 
   Impl(Window::Impl &window, vec2 position);
@@ -39,7 +39,7 @@ struct Pointer::Impl {
   void Wheel(float delta);
   void ButtonDown(Button btn);
   void ButtonUp(Button btn);
-  void Draw(SkCanvas &canvas, AnimationState &animation_state) {
+  void Draw(SkCanvas &canvas, animation::State &animation_state) {
     if (action) {
       action->Draw(canvas, animation_state);
     }
@@ -50,8 +50,8 @@ vec2 RoundToMilimeters(vec2 v) {
   return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
 }
 
-struct AnimatedRound : AnimatedApproach {
-  AnimatedRound() : AnimatedApproach(0) { speed = 50; }
+struct AnimatedRound : animation::Approach {
+  AnimatedRound() : animation::Approach(0) { speed = 50; }
 };
 
 struct DragAction : Action {
@@ -88,7 +88,7 @@ struct DragAction : Action {
       loc.InsertHere(std::unique_ptr<Object>(obj));
     });
   }
-  void Draw(SkCanvas &canvas, AnimationState &animation_state) override {
+  void Draw(SkCanvas &canvas, animation::State &animation_state) override {
     auto original = current_position - contact_point;
     auto rounded = RoundToMilimeters(original);
 
@@ -112,11 +112,13 @@ struct DragAction : Action {
 struct PrototypeButton : Widget {
   const Object *proto;
   PrototypeButton(const Object *proto) : proto(proto) {}
-  void Draw(SkCanvas &canvas, AnimationState &animation_state) const override {
+  void Draw(SkCanvas &canvas,
+            animation::State &animation_state) const override {
     proto->Draw(canvas, animation_state);
   }
   SkPath Shape() const override { return proto->Shape(); }
-  std::unique_ptr<Action> ButtonDownAction(Button btn, vec2 contact_point) override {
+  std::unique_ptr<Action> ButtonDownAction(Button btn,
+                                           vec2 contact_point) override {
     if (btn != kMouseLeft) {
       return nullptr;
     }
@@ -133,15 +135,15 @@ struct Window::Impl : Widget {
   float display_pixels_per_meter =
       96 / kMetersPerInch; // default value assumes 96 DPI
 
-  AnimatedApproach zoom = AnimatedApproach(1.0, 0.01);
-  AnimatedApproach camera_x = AnimatedApproach(0.0, 0.005);
-  AnimatedApproach camera_y = AnimatedApproach(0.0, 0.005);
+  animation::Approach zoom = animation::Approach(1.0, 0.01);
+  animation::Approach camera_x = animation::Approach(0.0, 0.005);
+  animation::Approach camera_y = animation::Approach(0.0, 0.005);
 
   std::vector<Pointer::Impl *> pointers;
 
   std::bitset<kKeyCount> pressed_keys;
 
-  AnimationState animation_state;
+  animation::State animation_state;
 
   std::vector<PrototypeButton> prototype_buttons;
   std::vector<vec2> prototype_button_positions;
@@ -237,10 +239,9 @@ struct Window::Impl : Widget {
     this->display_pixels_per_meter = pixels_per_meter;
   }
   SkPath Shape() const override {
-    return SkPath::Rect(SkRect::MakeXYWH(0, 0,
-                                         size.Width, size.Height));
+    return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.Width, size.Height));
   }
-  void Draw(SkCanvas &, AnimationState &animation_state) const override {
+  void Draw(SkCanvas &, animation::State &animation_state) const override {
     FATAL() << "Window::Impl::Draw() should never be called";
   }
   void Draw(SkCanvas &canvas) {
@@ -362,7 +363,8 @@ struct Window::Impl : Widget {
   }
   VisitResult VisitImmediateChildren(WidgetVisitor &visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      auto result = visitor(prototype_buttons[i], prototype_button_positions[i]);
+      auto result =
+          visitor(prototype_buttons[i], prototype_button_positions[i]);
       if (result != VisitResult::kContinue)
         return result;
     }
@@ -415,11 +417,12 @@ void Pointer::Impl::Move(vec2 position) {
   } else {
     Widget *old_hovered_widget = hovered_widget;
     hovered_widget = nullptr;
-    window.VisitAtPoint(pointer_position, [&](Widget &widget, vec2 widget_position) {
-      hovered_widget = &widget;
-      hovered_widget_position = widget_position;
-      return VisitResult::kStop;
-    });
+    window.VisitAtPoint(pointer_position,
+                        [&](Widget &widget, vec2 widget_position) {
+                          hovered_widget = &widget;
+                          hovered_widget_position = widget_position;
+                          return VisitResult::kStop;
+                        });
     if (old_hovered_widget != hovered_widget) {
       if (old_hovered_widget) {
         old_hovered_widget->OnHover(false, window.animation_state);
@@ -451,7 +454,8 @@ void Pointer::Impl::ButtonDown(Button btn) {
   button_down_time[btn] = time::now();
 
   if (action == nullptr && hovered_widget) {
-    action = hovered_widget->ButtonDownAction(btn, pointer_position - hovered_widget_position);
+    action = hovered_widget->ButtonDownAction(btn, pointer_position -
+                                                       hovered_widget_position);
     if (action) {
       action->Begin(window.WindowToCanvas(pointer_position));
     }
@@ -547,7 +551,8 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
 
     VisitResult operator()(Widget &widget, vec2 offset) override {
       auto shape = widget.Shape();
-      if (shape.isEmpty() || shape.contains(point.X - offset.X, point.Y - offset.Y)) {
+      if (shape.isEmpty() ||
+          shape.contains(point.X - offset.X, point.Y - offset.Y)) {
         if (orig_visitor(widget, offset) == VisitResult::kStop)
           return VisitResult::kStop;
       }
@@ -556,7 +561,7 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
   };
 
   PointVisitor point_visitor(point, visitor);
-  
+
   VisitAll(point_visitor);
 }
 

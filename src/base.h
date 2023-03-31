@@ -13,13 +13,14 @@
 #include <unordered_set>
 #include <vector>
 
+#include <include/core/SkCanvas.h>
+#include <include/core/SkPath.h>
+
 #include "format.h"
+#include "text_field.h"
 #include "log.h"
 #include "channel.h"
 #include "dual_ptr.h"
-
-#include <include/core/SkCanvas.h>
-#include <include/core/SkPath.h>
 
 namespace automaton {
 
@@ -206,6 +207,7 @@ struct Location {
 
   // Name of this Location.
   string name;
+  gui::TextField name_text_field;
 
   vec2 position = {0, 0};
 
@@ -220,7 +222,7 @@ struct Location {
   unordered_set<Location *> error_observers;
   unordered_set<Location *> observing_errors;
 
-  Location(Location *parent = nullptr) : parent(parent) {}
+  Location(Location *parent = nullptr) : parent(parent), name_text_field(&name, 0.03) {}
 
   std::unique_ptr<Object> InsertHere(unique_ptr<Object>&& object) {
     this->object.swap(object);

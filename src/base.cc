@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include "font.h"
+#include "text_field.h"
 
 namespace automaton {
 
@@ -96,51 +97,29 @@ SkPath Object::Shape() const {
 SkColor SkColorBrighten(SkColor color) {
   float hsv[3];
   SkColorToHSV(color, hsv);
-  hsv[2] = std::min(hsv[2] * 1.1f, 1.f);
+  hsv[2] = std::min(hsv[2] * 1.08f, 1.f);
   return SkHSVToColor(hsv);
 }
 
 SkColor SkColorDarken(SkColor color) {
   float hsv[3];
   SkColorToHSV(color, hsv);
-  hsv[2] = std::max(hsv[2] * 0.9f, 0.f);
+  hsv[2] = std::max(hsv[2] * 0.92f, 0.f);
   return SkHSVToColor(hsv);
-}
-
-constexpr float kTextMargin = 0.001;
-constexpr float kTextFieldHeight = 0.008; // 8mm
-constexpr float kTextFieldMinWidth = kTextFieldHeight;
-
-void DrawTextField(SkCanvas& canvas, string_view text) {
-  gui::Font& font = gui::GetFont();
-  float width = font.MeasureText(text);
-  float width_margin = width + 2 * kTextMargin;
-  float width_rounded = ceil(width_margin * 1000) / 1000;
-  float final_width = std::max(width_rounded, kTextFieldMinWidth);
-  SkRect rect = SkRect::MakeXYWH(0, 0, final_width, 0.008);
-  SkPaint text_bg;
-  text_bg.setColor(SK_ColorWHITE);
-  text_bg.setAlphaf(0.5);
-  canvas.drawRect(rect, text_bg);
-  canvas.translate(kTextMargin, (kTextFieldHeight - gui::kLetterSize) / 2);
-  SkPaint underline;
-  underline.setColor(SK_ColorBLACK);
-  underline.setAlphaf(0.5);
-  SkRect underline_rect = SkRect::MakeXYWH(0, -font.line_thickness, final_width - 2 * kTextMargin, - font.line_thickness);
-  canvas.drawRect(underline_rect, underline);
-  SkPaint text_fg;
-  text_fg.setColor(SK_ColorBLACK);
-  font.DrawText(canvas, text, text_fg);
 }
 
 void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
   if (object) {
-    SkPath shape = object->Shape();
-    SkRect bounds = shape.getBounds();
-    bounds.outset(0.001, 0.001);
-    bounds.inset(kBorderWidth/2, kBorderWidth/2);
+    SkPath object_shape = object->Shape();
+    SkRect object_bounds = object_shape.getBounds();
+    float outset = 0.001 - kBorderWidth/2;
+    SkRect bounds = object_bounds.makeOutset(outset, outset);
 
-    bounds.fBottom += kTextFieldHeight + 0.001;
+    if (bounds.width() < name_text_field.width + 2 * 0.001) {
+      bounds.fRight = bounds.fLeft + name_text_field.width + 2 * 0.001;
+    }
+
+    bounds.fBottom += gui::kTextFieldHeight + 0.001;
 
     SkPaint frame_bg;
     SkColor frame_bg_colors[2] = {SkColorFromHex("#cccccc"),
@@ -161,11 +140,35 @@ void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
     frame_border.setStrokeWidth(0.00025);
     canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
 
+    auto DrawInset = [&](SkPath shape) {
+      const SkRect& bounds = shape.getBounds();
+      SkPaint paint;
+      SkColor colors[2] = {SkColorBrighten(frame_bg_colors[0]),
+                           SkColorDarken(frame_bg_colors[1])};
+      SkPoint points[2] = {{0, bounds.top()}, {0, bounds.bottom()}};
+      sk_sp<SkShader> shader = SkGradientShader::MakeLinear(
+          points, colors, nullptr, 2, SkTileMode::kClamp);
+      paint.setShader(shader);
+      paint.setStyle(SkPaint::kStroke_Style);
+      paint.setStrokeWidth(0.0005);
+      canvas.drawPath(shape, paint);
+    };
+
+    // Draw inset around object
+    DrawInset(object_shape);
+
+    // Draw object
     object->Draw(canvas, animation_state);
 
-    canvas.translate(bounds.left() + 0.001, bounds.bottom() - kTextFieldHeight - 0.001);
 
-    DrawTextField(canvas, object->Name());
+    canvas.translate(bounds.left() + 0.001, bounds.bottom() - gui::kTextFieldHeight - 0.001);
+
+    // Draw inset around name_text_field
+    SkPath name_text_shape = name_text_field.GetShape();
+    DrawInset(name_text_shape);
+
+    // Draw the name_text_field
+    name_text_field.Draw(canvas, animation_state);
   }
 }
 

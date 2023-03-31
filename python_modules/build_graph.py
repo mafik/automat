@@ -289,7 +289,6 @@ if tests:
 # Recipe for Clang language server
 ##########################
 
-
 def compile_commands(extra_args):
     print('Generating compile_commands.json...')
     jsons = []
@@ -306,8 +305,16 @@ def compile_commands(extra_args):
     with open('compile_commands.json', 'w') as f:
         print('[' + ', '.join(jsons) + ']', file=f)
 
-
 recipe.add_step(compile_commands, ['compile_commands.json'], [])
+
+##########################
+# Recipe for deploying to server
+##########################
+
+def deploy(extra_args):
+    return Popen(['rsync', '-av', '--delete', '--no-owner', '--no-group', 'www/', 'home:/var/www/html/automat/'])
+
+recipe.add_step(deploy, [], ['www/'])
 
 if args.verbose:
     print('Build graph')

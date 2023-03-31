@@ -4,6 +4,7 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkFont.h>
 #include <include/core/SkFontMetrics.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkPathBuilder.h>
@@ -128,16 +129,16 @@ SkPath Location::Shape() const {
 
 gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   if (object) {
-    auto result = visitor(*object, Vec2(0, 0));
+    auto result = visitor(*object, SkMatrix::I());
     if (result != gui::VisitResult::kContinue) {
       return result;
     }
   }
   SkPath my_shape = Shape();
   SkRect bounds = my_shape.getBounds();
-  vec2 name_text_field_pos = Vec2(
-      bounds.left() + 0.001, bounds.bottom() - gui::kTextFieldHeight - 0.001);
-  auto result = visitor(name_text_field, name_text_field_pos);
+  SkMatrix name_text_field_transform = SkMatrix::Translate(
+      -bounds.left() - 0.001, -bounds.bottom() + gui::kTextFieldHeight + 0.001);
+  auto result = visitor(name_text_field, name_text_field_transform);
   return result;
 }
 

@@ -731,7 +731,9 @@ struct Machine : LiveObject {
   gui::VisitResult
   VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
     for (auto &it : locations) {
-      auto result = visitor(*it, it->position);
+      SkMatrix transform =
+          SkMatrix::Translate(-it->position.X, -it->position.Y);
+      auto result = visitor(*it, transform);
       if (result == gui::VisitResult::kStop) {
         return result;
       }

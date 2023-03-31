@@ -31,7 +31,7 @@ struct Pointer::Impl {
 
   std::unique_ptr<Action> action;
   Widget *hovered_widget = nullptr;
-  vec2 hovered_widget_position;
+  SkMatrix hovered_widget_transform;
 
   Impl(Window::Impl &window, vec2 position);
   ~Impl();
@@ -224,6 +224,14 @@ struct Window::Impl : Widget {
     return (window - size / 2) / zoom + Vec2(camera_x, camera_y);
   }
 
+  SkMatrix WindowToCanvas() {
+    SkMatrix m;
+    m.setTranslate(-size.Width / 2, -size.Height / 2);
+    m.postScale(1 / zoom, 1 / zoom);
+    m.postTranslate(camera_x, camera_y);
+    return m;
+  }
+
   vec2 CanvasToWindow(vec2 canvas) {
     return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2;
   }
@@ -360,15 +368,16 @@ struct Window::Impl : Widget {
   }
   VisitResult VisitImmediateChildren(WidgetVisitor &visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      auto result =
-          visitor(prototype_buttons[i], prototype_button_positions[i]);
+      SkMatrix matrix = SkMatrix::Translate(-prototype_button_positions[i].X,
+                                            -prototype_button_positions[i].Y);
+      auto result = visitor(prototype_buttons[i], matrix);
       if (result != VisitResult::kContinue)
         return result;
     }
     VisitResult result = VisitResult::kContinue;
     RunOnAutomatonThreadSynchronous([&]() {
-      // TODO: fix scaling
-      result = visitor(*root_machine, CanvasToWindow(Vec2(0, 0)));
+      SkMatrix matrix = WindowToCanvas();
+      result = visitor(*root_machine, matrix);
     });
     return result;
   }
@@ -415,9 +424,9 @@ void Pointer::Impl::Move(vec2 position) {
     Widget *old_hovered_widget = hovered_widget;
     hovered_widget = nullptr;
     window.VisitAtPoint(pointer_position,
-                        [&](Widget &widget, vec2 widget_position) {
+                        [&](Widget &widget, const SkMatrix &transform) {
                           hovered_widget = &widget;
-                          hovered_widget_position = widget_position;
+                          hovered_widget_transform = transform;
                           return VisitResult::kStop;
                         });
     if (old_hovered_widget != hovered_widget) {
@@ -451,8 +460,11 @@ void Pointer::Impl::ButtonDown(Button btn) {
   button_down_time[btn] = time::now();
 
   if (action == nullptr && hovered_widget) {
-    action = hovered_widget->ButtonDownAction(btn, pointer_position -
-                                                       hovered_widget_position);
+    SkPoint local_pointer_position_sk =
+        hovered_widget_transform.mapXY(pointer_position.X, pointer_position.Y);
+    vec2 local_pointer_position{local_pointer_position_sk.fX,
+                                local_pointer_position_sk.fY};
+    action = hovered_widget->ButtonDownAction(btn, local_pointer_position);
     if (action) {
       action->Begin(window.WindowToCanvas(pointer_position));
     }
@@ -513,28 +525,31 @@ void Widget::VisitAll(WidgetVisitor &visitor) {
 
   struct RecursiveVisitor : WidgetVisitor {
     WidgetVisitor &orig_visitor;
-    vec2 offset_accumulator = Vec2(0, 0);
+    SkMatrix transform_accumulator;
 
     RecursiveVisitor(WidgetVisitor &orig_visitor)
-        : orig_visitor(orig_visitor) {}
+        : orig_visitor(orig_visitor), transform_accumulator() {}
 
-    VisitResult operator()(Widget &widget, vec2 offset) override {
-      offset_accumulator += offset;
+    VisitResult operator()(Widget &widget, const SkMatrix &transform) override {
+
+      SkMatrix backup = transform_accumulator;
+      transform_accumulator.postConcat(transform);
 
       if (widget.VisitImmediateChildren(*this) == VisitResult::kStop)
         return VisitResult::kStop;
 
-      if (orig_visitor(widget, offset_accumulator) == VisitResult::kStop)
+      if (orig_visitor(widget, transform_accumulator) == VisitResult::kStop)
         return VisitResult::kStop;
 
-      offset_accumulator -= offset;
+      transform_accumulator = backup;
 
       return VisitResult::kContinue;
     }
   };
 
   RecursiveVisitor recursive_visitor(visitor);
-  recursive_visitor(*this, Vec2(0, 0));
+
+  recursive_visitor(*this, SkMatrix::I());
 }
 
 void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
@@ -546,11 +561,11 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
     PointVisitor(vec2 point, WidgetVisitor &orig_visitor)
         : point(point), orig_visitor(orig_visitor) {}
 
-    VisitResult operator()(Widget &widget, vec2 offset) override {
+    VisitResult operator()(Widget &widget, const SkMatrix &transform) override {
       auto shape = widget.Shape();
-      if (shape.isEmpty() ||
-          shape.contains(point.X - offset.X, point.Y - offset.Y)) {
-        if (orig_visitor(widget, offset) == VisitResult::kStop)
+      SkPoint mapped_point = transform.mapXY(point.X, point.Y);
+      if (shape.isEmpty() || shape.contains(mapped_point.fX, mapped_point.fY)) {
+        if (orig_visitor(widget, transform) == VisitResult::kStop)
           return VisitResult::kStop;
       }
       return VisitResult::kContinue;
@@ -564,8 +579,8 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
 
 struct FunctionWidgetVisitor : WidgetVisitor {
   FunctionWidgetVisitor(WidgetVisitorFunc visitor) : func(visitor) {}
-  VisitResult operator()(Widget &widget, vec2 offset) override {
-    return func(widget, offset);
+  VisitResult operator()(Widget &widget, const SkMatrix &transform) override {
+    return func(widget, transform);
   }
   WidgetVisitorFunc func;
 };

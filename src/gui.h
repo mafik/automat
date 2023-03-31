@@ -3,6 +3,7 @@
 #include <functional>
 
 #include <include/core/SkCanvas.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 
 #include "action.h"
@@ -76,10 +77,11 @@ enum class VisitResult { kContinue, kStop };
 
 struct WidgetVisitor {
   virtual ~WidgetVisitor() {}
-  virtual VisitResult operator()(Widget &, vec2 offset) = 0;
+  virtual VisitResult operator()(Widget &, const SkMatrix &transform) = 0;
 };
 
-using WidgetVisitorFunc = std::function<VisitResult(Widget &, vec2)>;
+using WidgetVisitorFunc =
+    std::function<VisitResult(Widget &, const SkMatrix &)>;
 
 // Base class for widgets.
 struct Widget {

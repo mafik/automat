@@ -48,9 +48,8 @@ struct PrototypeButton : Widget {
   const Object *proto;
   PrototypeButton(const Object* proto) : proto(proto) {}
   void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) override {
-    // TODO: remove Location arg from Object::Draw
     // TODO: pass animation_state to objects
-    proto->Draw(nullptr, canvas);
+    proto->Draw(canvas);
   }
   SkPath GetShape() override {
     return proto->Shape();
@@ -365,7 +364,7 @@ struct DragAction : Action {
     canvas.save();
     auto pos = current_position - contact_point + Vec2(rx, ry);
     canvas.translate(pos.X, pos.Y);
-    object->Draw(nullptr, canvas);
+    object->Draw(canvas);
     canvas.restore();
   }
 };

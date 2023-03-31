@@ -76,7 +76,7 @@ Font &GetFont() {
 constexpr float kBorderWidth = 0.00025;
 constexpr float kFrameCornerRadius = 0.001;
 
-void Object::Draw(const Location *here, SkCanvas &canvas) const {
+void Object::Draw(SkCanvas &canvas) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -203,7 +203,7 @@ void Location::Draw(SkCanvas &canvas) {
     frame_border.setStrokeWidth(0.00025);
     canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
 
-    object->Draw(this, canvas);
+    object->Draw(canvas);
 
     canvas.translate(bounds.left() + 0.001, bounds.bottom() - kTextFieldHeight - 0.001);
 

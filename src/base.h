@@ -86,7 +86,7 @@ struct Object {
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  virtual void Draw(const Location *here, SkCanvas &canvas) const;
+  virtual void Draw(SkCanvas &canvas) const;
   virtual SkPath Shape() const;
 };
 

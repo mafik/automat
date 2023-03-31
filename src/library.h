@@ -1298,10 +1298,6 @@ struct Blackboard : Object {
 };
 DEFINE_PROTO(Blackboard);
 
-/////////////
-// Misc
-/////////////
-
 struct BlackboardUpdater : LiveObject {
   static const BlackboardUpdater proto;
   std::unordered_map<string, unique_ptr<algebra::Expression>> formulas;
@@ -1401,6 +1397,10 @@ struct BlackboardUpdater : LiveObject {
   }
 };
 DEFINE_PROTO(BlackboardUpdater);
+
+/////////////
+// Misc
+/////////////
 
 #undef DEFINE_PROTO
 

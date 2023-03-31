@@ -164,7 +164,7 @@ void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
     canvas.translate(bounds.left() + 0.001, bounds.bottom() - gui::kTextFieldHeight - 0.001);
 
     // Draw inset around name_text_field
-    SkPath name_text_shape = name_text_field.GetShape();
+    SkPath name_text_shape = name_text_field.Shape();
     DrawInset(name_text_shape);
 
     // Draw the name_text_field

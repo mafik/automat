@@ -51,7 +51,7 @@ struct Pointer;
 // Objects are interactive pieces of data & behavior.
 //
 // Instances of this class provide custom logic & appearance.
-struct Object {
+struct Object : gui::Widget {
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".
@@ -88,8 +88,8 @@ struct Object {
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  virtual void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const;
-  virtual SkPath Shape() const;
+  void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const override;
+  SkPath Shape() const override;
 };
 
 std::vector<const Object*>& Prototypes();

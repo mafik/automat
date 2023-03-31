@@ -14,14 +14,14 @@ void TextField::OnFocus(bool focus, dual_ptr_holder& animation_state) {
   has_focus = focus;
 }
 
-void TextField::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {  
+void TextField::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const {  
   Font& font = GetFont();
   SkRect rect = SkRect::MakeXYWH(0, 0, width, kTextFieldHeight);
   SkColor c_inactive_bg = SkColorSetRGB(0xe0, 0xe0, 0xe0);
   SkColor c_fg = SK_ColorBLACK;
   SkPaint paint_bg;
   paint_bg.setColor(c_inactive_bg);
-  canvas.drawPath(GetShape(), paint_bg);
+  canvas.drawPath(Shape(), paint_bg);
   canvas.translate(kTextMargin, (kTextFieldHeight - gui::kLetterSize) / 2);
   SkPaint underline;
   underline.setColor(c_fg);
@@ -34,7 +34,7 @@ void TextField::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
   }
 }
 
-SkPath TextField::GetShape() {
+SkPath TextField::Shape() const {
   SkRect bounds = SkRect::MakeXYWH(0, 0, width, kTextFieldHeight);
   return SkPath::RRect(bounds, kTextMargin, kTextMargin);
 }

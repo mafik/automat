@@ -70,8 +70,8 @@ struct Widget {
   virtual ~Widget() {}
   virtual void OnHover(bool hover, dual_ptr_holder& animation_state) {}
   virtual void OnFocus(bool focus, dual_ptr_holder& animation_state) {}
-  virtual void Draw(SkCanvas &, dual_ptr_holder& animation_state) = 0;
-  virtual SkPath GetShape() = 0;
+  virtual void Draw(SkCanvas &, dual_ptr_holder& animation_state) const = 0;
+  virtual SkPath Shape() const = 0;
   virtual std::unique_ptr<Action> KeyDown(Key) { return nullptr; }
   // Return true if the widget should be highlighted as keyboard focusable.
   virtual bool CanFocusKeyboard() { return false; }

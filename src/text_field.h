@@ -17,8 +17,8 @@ struct TextField : Widget {
   TextField(std::string *text, float width) : text(text), width(width) {}
   void OnHover(bool hover, dual_ptr_holder& animation_state) override;
   void OnFocus(bool focus, dual_ptr_holder& animation_state) override;
-  void Draw(SkCanvas &, dual_ptr_holder& animation_state) override;
-  SkPath GetShape() override;
+  void Draw(SkCanvas &, dual_ptr_holder& animation_state) const override;
+  SkPath Shape() const override;
   std::unique_ptr<Action> KeyDown(Key) override;
   bool CanFocusKeyboard() override { return true; }
 };

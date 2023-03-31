@@ -47,10 +47,10 @@ struct Pointer::Impl {
 struct PrototypeButton : Widget {
   const Object *proto;
   PrototypeButton(const Object* proto) : proto(proto) {}
-  void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) override {
+  void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const override {
     proto->Draw(canvas, animation_state);
   }
-  SkPath GetShape() override {
+  SkPath Shape() const override {
     return proto->Shape();
   }
 };
@@ -91,7 +91,7 @@ struct Window::Impl {
     for (int i = 0; i < prototype_buttons.size(); i++) {
       auto &btn = prototype_buttons[i];
       vec2 &pos = prototype_button_positions[i];
-      SkPath shape = btn.GetShape();
+      SkPath shape = btn.Shape();
       SkRect bounds = shape.getBounds();
       if (cursor.X + bounds.width() + 0.001 > max_w) {
         cursor.X = 0;
@@ -417,7 +417,7 @@ void Pointer::Impl::ButtonDown(Button btn) {
     for (int i = 0; i < window.prototype_buttons.size(); i++) {
       PrototypeButton &btn = window.prototype_buttons[i];
       contact_point = pointer_position - window.prototype_button_positions[i];
-      if (btn.GetShape().contains(contact_point.X, contact_point.Y)) {
+      if (btn.Shape().contains(contact_point.X, contact_point.Y)) {
         btn_under_mouse = &btn;
         break;
       }

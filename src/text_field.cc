@@ -39,7 +39,7 @@ SkPath TextField::Shape() const {
   return SkPath::RRect(bounds, kTextMargin, kTextMargin);
 }
 
-std::unique_ptr<Action> TextField::KeyDown(Key) {
+std::unique_ptr<Action> TextField::KeyDownAction(Key) {
   
 }
 

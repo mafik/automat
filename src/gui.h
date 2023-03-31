@@ -1,11 +1,13 @@
 #pragma once
 
+#include <functional>
+
 #include <include/core/SkCanvas.h>
 #include <include/core/SkPath.h>
 
 #include "action.h"
-#include "math.h"
 #include "dual_ptr.h"
+#include "math.h"
 
 // GUI allows multiple windows to interact with multiple Automaton objects. GUI
 // takes care of drawing things in the right order & correctly routing the
@@ -64,19 +66,44 @@ private:
 
 // API for Objects
 
+struct Widget;
+
+enum class VisitResult { kContinue, kStop };
+
+struct WidgetVisitor {
+  virtual ~WidgetVisitor() {}
+  virtual VisitResult operator()(Widget &, vec2 offset) = 0;
+};
+
+using WidgetVisitorFunc = std::function<VisitResult(Widget &, vec2)>;
+
 // Base class for widgets.
 struct Widget {
   Widget() {}
   virtual ~Widget() {}
-  virtual void OnHover(bool hover, dual_ptr_holder& animation_state) {}
-  virtual void OnFocus(bool focus, dual_ptr_holder& animation_state) {}
-  virtual void Draw(SkCanvas &, dual_ptr_holder& animation_state) const = 0;
+  virtual void OnHover(bool hover, dual_ptr_holder &animation_state) {}
+  virtual void OnFocus(bool focus, dual_ptr_holder &animation_state) {}
+  virtual void Draw(SkCanvas &, dual_ptr_holder &animation_state) const = 0;
   virtual SkPath Shape() const = 0;
-  virtual std::unique_ptr<Action> KeyDown(Key) { return nullptr; }
+  virtual std::unique_ptr<Action> KeyDownAction(Key) { return nullptr; }
+  virtual std::unique_ptr<Action> ButtonDownAction(Button, vec2 contact_point) { return nullptr; }
   // Return true if the widget should be highlighted as keyboard focusable.
   virtual bool CanFocusKeyboard() { return false; }
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
+  // Iterate over direct child widgets in front-to-back order.
+  virtual VisitResult VisitChildren(WidgetVisitor &visitor) {
+    return VisitResult::kContinue;
+  }
 };
+
+void WalkWidgets(Widget &root, WidgetVisitor &visitor,
+                 vec2 root_position = Vec2(0, 0));
+void WalkWidgets(Widget &root, WidgetVisitorFunc visitor,
+                 vec2 root_position = Vec2(0, 0));
+void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitor &visitor,
+                        vec2 root_position = Vec2(0, 0));
+void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitorFunc visitor,
+                        vec2 root_position = Vec2(0, 0));
 
 } // namespace automaton::gui

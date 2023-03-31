@@ -19,7 +19,7 @@ struct TextField : Widget {
   void OnFocus(bool focus, dual_ptr_holder& animation_state) override;
   void Draw(SkCanvas &, dual_ptr_holder& animation_state) const override;
   SkPath Shape() const override;
-  std::unique_ptr<Action> KeyDown(Key) override;
+  std::unique_ptr<Action> KeyDownAction(Key) override;
   bool CanFocusKeyboard() override { return true; }
 };
 

@@ -30,6 +30,8 @@ struct Pointer::Impl {
   time::point button_down_time[kButtonCount];
 
   std::unique_ptr<Action> action;
+  Widget* hovered_widget = nullptr;
+  vec2 hovered_widget_position;
 
   Impl(Window::Impl &window, vec2 position);
   ~Impl();
@@ -37,25 +39,95 @@ struct Pointer::Impl {
   void Wheel(float delta);
   void ButtonDown(Button btn);
   void ButtonUp(Button btn);
-  void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
+  void Draw(SkCanvas &canvas, dual_ptr_holder &animation_state) {
     if (action) {
       action->Draw(canvas, animation_state);
     }
   }
 };
 
-struct PrototypeButton : Widget {
-  const Object *proto;
-  PrototypeButton(const Object* proto) : proto(proto) {}
-  void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const override {
-    proto->Draw(canvas, animation_state);
+vec2 RoundToMilimeters(vec2 v) {
+  return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
+}
+
+struct AnimatedRound : AnimatedApproach {
+  AnimatedRound() : AnimatedApproach(0) { speed = 50; }
+};
+
+struct DragAction : Action {
+  std::unique_ptr<Object> object;
+  vec2 contact_point;
+  vec2 current_position;
+  dual_ptr<AnimatedRound> round_x;
+  dual_ptr<AnimatedRound> round_y;
+  dual_ptr<time::Timer> timer;
+
+  void Begin(vec2 position) override { current_position = position; }
+  void Update(vec2 position) override {
+    auto old_pos = current_position - contact_point;
+    auto old_round = RoundToMilimeters(old_pos);
+    current_position = position;
+    auto new_pos = current_position - contact_point;
+    auto new_round = RoundToMilimeters(new_pos);
+    if (old_round.X == new_round.X) {
+      for (AnimatedRound &rx : round_x) {
+        rx.value -= new_pos.X - old_pos.X;
+      }
+    }
+    if (old_round.Y == new_round.Y) {
+      for (AnimatedRound &ry : round_y) {
+        ry.value -= new_pos.Y - old_pos.Y;
+      }
+    }
   }
-  SkPath Shape() const override {
-    return proto->Shape();
+  void End() override {
+    RunOnAutomatonThread([pos = current_position - contact_point,
+                          obj = object.release()]() mutable {
+      Location &loc = root_machine->CreateEmpty();
+      loc.position = RoundToMilimeters(pos);
+      loc.InsertHere(std::unique_ptr<Object>(obj));
+    });
+  }
+  void Draw(SkCanvas &canvas, dual_ptr_holder &animation_state) override {
+    auto original = current_position - contact_point;
+    auto rounded = RoundToMilimeters(original);
+
+    auto &t = timer[animation_state];
+    auto &rx = round_x[animation_state];
+    auto &ry = round_y[animation_state];
+    rx.target = rounded.X - original.X;
+    ry.target = rounded.Y - original.Y;
+    t.Tick();
+    rx.Tick(t.d);
+    ry.Tick(t.d);
+
+    canvas.save();
+    auto pos = current_position - contact_point + Vec2(rx, ry);
+    canvas.translate(pos.X, pos.Y);
+    object->Draw(canvas, animation_state);
+    canvas.restore();
   }
 };
 
-struct Window::Impl {
+struct PrototypeButton : Widget {
+  const Object *proto;
+  PrototypeButton(const Object *proto) : proto(proto) {}
+  void Draw(SkCanvas &canvas, dual_ptr_holder &animation_state) const override {
+    proto->Draw(canvas, animation_state);
+  }
+  SkPath Shape() const override { return proto->Shape(); }
+  std::unique_ptr<Action> ButtonDownAction(Button btn, vec2 contact_point) override {
+    if (btn != kMouseLeft) {
+      return nullptr;
+    }
+    auto drag_action = std::make_unique<DragAction>();
+    drag_action->object = proto->Clone();
+    drag_action->contact_point = contact_point;
+    return drag_action;
+  }
+};
+
+struct Window::Impl : Widget {
   vec2 position = Vec2(0, 0); // center of the window
   vec2 size;
   time::Timer t;
@@ -78,7 +150,7 @@ struct Window::Impl {
   Impl(vec2 size, float display_pixels_per_meter)
       : size(size), display_pixels_per_meter(display_pixels_per_meter) {
     prototype_buttons.reserve(Prototypes().size());
-    for (auto& proto : Prototypes()) {
+    for (auto &proto : Prototypes()) {
       prototype_buttons.emplace_back(proto);
       prototype_button_positions.emplace_back(Vec2(0, 0));
     }
@@ -164,6 +236,13 @@ struct Window::Impl {
   }
   void DisplayPixelDensity(float pixels_per_meter) {
     this->display_pixels_per_meter = pixels_per_meter;
+  }
+  SkPath Shape() const override {
+    return SkPath::Rect(SkRect::MakeXYWH(0, 0,
+                                         size.Width, size.Height));
+  }
+  void Draw(SkCanvas &, dual_ptr_holder &animation_state) const override {
+    FATAL() << "Window::Impl::Draw() should never be called";
   }
   void Draw(SkCanvas &canvas) {
     t.Tick();
@@ -292,6 +371,14 @@ struct Window::Impl {
       canvas.restore();
     }
   }
+  VisitResult VisitChildren(WidgetVisitor &visitor) override {
+    for (int i = 0; i < prototype_buttons.size(); i++) {
+      auto result = visitor(prototype_buttons[i], prototype_button_positions[i]);
+      if (result != VisitResult::kContinue)
+        return result;
+    }
+    return VisitResult::kContinue;
+  }
   void KeyDown(Key key) {
     if (key == kKeyUnknown || key >= kKeyCount)
       return;
@@ -306,74 +393,15 @@ struct Window::Impl {
   std::string_view GetState();
 };
 
-vec2 RoundToMilimeters(vec2 v) {
-  return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
-}
-
-struct AnimatedRound : AnimatedApproach {
-  AnimatedRound() : AnimatedApproach(0) { speed = 50; }
-};
-
-struct DragAction : Action {
-  std::unique_ptr<Object> object;
-  vec2 contact_point;
-  vec2 current_position;
-  dual_ptr<AnimatedRound> round_x;
-  dual_ptr<AnimatedRound> round_y;
-  dual_ptr<time::Timer> timer;
-
-  void Begin(vec2 position) override { current_position = position; }
-  void Update(vec2 position) override {
-    auto old_pos = current_position - contact_point;
-    auto old_round = RoundToMilimeters(old_pos);
-    current_position = position;
-    auto new_pos = current_position - contact_point;
-    auto new_round = RoundToMilimeters(new_pos);
-    if (old_round.X == new_round.X) {
-      for (AnimatedRound &rx : round_x) {
-        rx.value -= new_pos.X - old_pos.X;
-      }
-    }
-    if (old_round.Y == new_round.Y) {
-      for (AnimatedRound &ry : round_y) {
-        ry.value -= new_pos.Y - old_pos.Y;
-      }
-    }
-  }
-  void End() override {
-    RunOnAutomatonThread([pos = current_position - contact_point, obj = object.release()]() mutable {
-      Location &loc = root_machine->CreateEmpty();
-      loc.position = RoundToMilimeters(pos);
-      loc.InsertHere(std::unique_ptr<Object>(obj));
-    });
-  }
-  void Draw(SkCanvas &canvas, dual_ptr_holder &animation_state) override {
-    auto original = current_position - contact_point;
-    auto rounded = RoundToMilimeters(original);
-
-    auto &t = timer[animation_state];
-    auto &rx = round_x[animation_state];
-    auto &ry = round_y[animation_state];
-    rx.target = rounded.X - original.X;
-    ry.target = rounded.Y - original.Y;
-    t.Tick();
-    rx.Tick(t.d);
-    ry.Tick(t.d);
-
-    canvas.save();
-    auto pos = current_position - contact_point + Vec2(rx, ry);
-    canvas.translate(pos.X, pos.Y);
-    object->Draw(canvas, animation_state);
-    canvas.restore();
-  }
-};
-
 Pointer::Impl::Impl(Window::Impl &window, vec2 position)
     : window(window), pointer_position(position), button_down_position(),
       button_down_time() {
   window.pointers.push_back(this);
 }
 Pointer::Impl::~Impl() {
+  if (hovered_widget) {
+    hovered_widget->OnHover(false, window.animation_state);
+  }
   auto it = std::find(window.pointers.begin(), window.pointers.end(), this);
   if (it != window.pointers.end()) {
     window.pointers.erase(it);
@@ -390,6 +418,22 @@ void Pointer::Impl::Move(vec2 position) {
   }
   if (action) {
     action->Update(window.WindowToCanvas(position));
+  } else {
+    Widget *old_hovered_widget = hovered_widget;
+    hovered_widget = nullptr;
+    WalkWidgetsAtPoint(window, pointer_position, [&](Widget &widget, vec2 widget_position) {
+      hovered_widget = &widget;
+      hovered_widget_position = widget_position;
+      return VisitResult::kStop;
+    });
+    if (old_hovered_widget != hovered_widget) {
+      if (old_hovered_widget) {
+        old_hovered_widget->OnHover(false, window.animation_state);
+      }
+      if (hovered_widget) {
+        hovered_widget->OnHover(true, window.animation_state);
+      }
+    }
   }
 }
 void Pointer::Impl::Wheel(float delta) {
@@ -411,22 +455,10 @@ void Pointer::Impl::ButtonDown(Button btn) {
     return;
   button_down_position[btn] = pointer_position;
   button_down_time[btn] = time::now();
-  if (btn == kMouseLeft) {
-    PrototypeButton *btn_under_mouse = nullptr;
-    vec2 contact_point;
-    for (int i = 0; i < window.prototype_buttons.size(); i++) {
-      PrototypeButton &btn = window.prototype_buttons[i];
-      contact_point = pointer_position - window.prototype_button_positions[i];
-      if (btn.Shape().contains(contact_point.X, contact_point.Y)) {
-        btn_under_mouse = &btn;
-        break;
-      }
-    }
-    if (btn_under_mouse) {
-      auto drag_action = std::make_unique<DragAction>();
-      drag_action->object = btn_under_mouse->proto->Clone();
-      drag_action->contact_point = contact_point;
-      action = std::move(drag_action);
+
+  if (action == nullptr && hovered_widget) {
+    action = hovered_widget->ButtonDownAction(btn, pointer_position - hovered_widget_position);
+    if (action) {
       action->Begin(window.WindowToCanvas(pointer_position));
     }
   }
@@ -481,5 +513,74 @@ void Pointer::Move(vec2 position) { impl->Move(position); }
 void Pointer::Wheel(float delta) { impl->Wheel(delta); }
 void Pointer::ButtonDown(Button btn) { impl->ButtonDown(btn); }
 void Pointer::ButtonUp(Button btn) { impl->ButtonUp(btn); }
+
+void WalkWidgets(Widget &root, WidgetVisitor &visitor, vec2 offset) {
+
+  struct RecursiveVisitor : WidgetVisitor {
+    WidgetVisitor &orig_visitor;
+    vec2 offset_accumulator = Vec2(0, 0);
+
+    RecursiveVisitor(WidgetVisitor &orig_visitor)
+        : orig_visitor(orig_visitor) {}
+
+    VisitResult operator()(Widget &widget, vec2 offset) override {
+      offset_accumulator += offset;
+
+      if (widget.VisitChildren(*this) == VisitResult::kStop)
+        return VisitResult::kStop;
+
+      if (orig_visitor(widget, offset_accumulator) == VisitResult::kStop)
+        return VisitResult::kStop;
+
+      offset_accumulator -= offset;
+
+      return VisitResult::kContinue;
+    }
+  };
+
+  RecursiveVisitor recursive_visitor(visitor);
+  recursive_visitor(root, offset);
+}
+
+void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitor &visitor, vec2 offset) {
+
+  struct PointVisitor : WidgetVisitor {
+    vec2 point;
+    WidgetVisitor &orig_visitor;
+
+    PointVisitor(vec2 point, WidgetVisitor &orig_visitor)
+        : point(point), orig_visitor(orig_visitor) {}
+
+    VisitResult operator()(Widget &widget, vec2 offset) override {
+      if (widget.Shape().contains(point.X - offset.X, point.Y - offset.Y)) {
+        if (orig_visitor(widget, offset) == VisitResult::kStop)
+          return VisitResult::kStop;
+      }
+      return VisitResult::kContinue;
+    }
+  };
+
+  PointVisitor point_visitor(point, visitor);
+  
+  WalkWidgets(root, point_visitor, offset);
+}
+
+struct FunctionWidgetVisitor : WidgetVisitor {
+  FunctionWidgetVisitor(WidgetVisitorFunc visitor) : func(visitor) {}
+  VisitResult operator()(Widget &widget, vec2 offset) override {
+    return func(widget, offset);
+  }
+  WidgetVisitorFunc func;
+};
+
+void WalkWidgets(Widget &root, WidgetVisitorFunc visitor, vec2 root_position) {
+  FunctionWidgetVisitor function_visitor(visitor);
+  WalkWidgets(root, function_visitor, root_position);
+}
+
+void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitorFunc visitor, vec2 root_position) {
+  FunctionWidgetVisitor function_visitor(visitor);
+  WalkWidgetsAtPoint(root, point, function_visitor, root_position);
+}
 
 } // namespace automaton::gui

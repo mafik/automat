@@ -16,6 +16,7 @@
 #include "format.h"
 #include "log.h"
 #include "channel.h"
+#include "dual_ptr.h"
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkPath.h>
@@ -86,7 +87,7 @@ struct Object {
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  virtual void Draw(SkCanvas &canvas) const;
+  virtual void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const;
   virtual SkPath Shape() const;
 };
 
@@ -369,7 +370,7 @@ struct Location {
   }
   void SetNumber(double number) { SetText(f("%lf", number)); }
 
-  void Draw(SkCanvas& canvas);
+  void Draw(SkCanvas& canvas, dual_ptr_holder& animation_state);
 
   ////////////////////////////
   // Error reporting
@@ -798,7 +799,7 @@ struct Machine : LiveObject {
     }
   }
 
-  void DrawContents(SkCanvas& canvas);
+  void DrawContents(SkCanvas& canvas, dual_ptr_holder& animation_state);
 };
 
 struct Pointer : LiveObject {

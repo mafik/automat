@@ -76,7 +76,7 @@ Font &GetFont() {
 constexpr float kBorderWidth = 0.00025;
 constexpr float kFrameCornerRadius = 0.001;
 
-void Object::Draw(SkCanvas &canvas) const {
+void Object::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -175,7 +175,7 @@ void DrawTextField(SkCanvas& canvas, string_view text) {
   font.DrawText(canvas, text, text_fg);
 }
 
-void Location::Draw(SkCanvas &canvas) {
+void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
   if (object) {
     SkPath shape = object->Shape();
     SkRect bounds = shape.getBounds();
@@ -203,7 +203,7 @@ void Location::Draw(SkCanvas &canvas) {
     frame_border.setStrokeWidth(0.00025);
     canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
 
-    object->Draw(canvas);
+    object->Draw(canvas, animation_state);
 
     canvas.translate(bounds.left() + 0.001, bounds.bottom() - kTextFieldHeight - 0.001);
 
@@ -211,13 +211,13 @@ void Location::Draw(SkCanvas &canvas) {
   }
 }
 
-void Machine::DrawContents(SkCanvas &canvas) {
+void Machine::DrawContents(SkCanvas &canvas, dual_ptr_holder& animation_state) {
   SkRect clip = canvas.getLocalClipBounds();
 
   for (auto &loc : locations) {
     canvas.save();
     canvas.translate(loc->position.X, loc->position.Y);
-    loc->Draw(canvas);
+    loc->Draw(canvas, animation_state);
     canvas.restore();
   }
 }

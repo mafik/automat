@@ -48,8 +48,7 @@ struct PrototypeButton : Widget {
   const Object *proto;
   PrototypeButton(const Object* proto) : proto(proto) {}
   void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) override {
-    // TODO: pass animation_state to objects
-    proto->Draw(canvas);
+    proto->Draw(canvas, animation_state);
   }
   SkPath GetShape() override {
     return proto->Shape();
@@ -268,7 +267,7 @@ struct Window::Impl {
         canvas.drawRect(target_rect, target_paint);
       }
 
-      root_machine->DrawContents(canvas);
+      root_machine->DrawContents(canvas, animation_state);
 
       for (auto &pointer : pointers) {
         pointer->Draw(canvas, animation_state);
@@ -364,7 +363,7 @@ struct DragAction : Action {
     canvas.save();
     auto pos = current_position - contact_point + Vec2(rx, ry);
     canvas.translate(pos.X, pos.Y);
-    object->Draw(canvas);
+    object->Draw(canvas, animation_state);
     canvas.restore();
   }
 };

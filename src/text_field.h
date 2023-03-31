@@ -1,6 +1,6 @@
 #pragma once
 
-#include "animated.h"
+#include "animation.h"
 #include "gui.h"
 
 namespace automaton::gui {

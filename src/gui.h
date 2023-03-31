@@ -6,7 +6,7 @@
 #include <include/core/SkPath.h>
 
 #include "action.h"
-#include "animated.h"
+#include "animation.h"
 #include "dual_ptr.h"
 #include "math.h"
 #include "time.h"

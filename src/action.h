@@ -1,6 +1,6 @@
 #pragma once
 
-#include "animated.h"
+#include "animation.h"
 #include "math.h"
 #include "dual_ptr.h"
 

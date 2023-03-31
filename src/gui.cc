@@ -6,7 +6,7 @@
 
 #include <include/effects/SkRuntimeEffect.h>
 
-#include "animated.h"
+#include "animation.h"
 #include "root.h"
 #include "time.h"
 

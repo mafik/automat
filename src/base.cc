@@ -12,6 +12,8 @@
 #include <include/effects/SkGradientShader.h>
 #include <unordered_map>
 
+#include "font.h"
+
 namespace automaton {
 
 std::vector<const Object *> &Prototypes() {
@@ -27,50 +29,6 @@ SkColor SkColorFromHex(const char *hex) {
   int r, g, b;
   sscanf(hex, "#%02x%02x%02x", &r, &g, &b);
   return SkColorSetRGB(r, g, b);
-}
-
-struct Font {
-  SkFont sk_font;
-  float font_scale;
-  float line_thickness;
-
-  static std::unique_ptr<Font> Make(float letter_size_mm) {
-    constexpr float kMilimetersPerInch = 25.4;
-    constexpr float kPointsPerInch = 72;
-    // We want text to be `letter_size_mm` tall (by cap size).
-    float letter_size_pt = letter_size_mm / kMilimetersPerInch * kPointsPerInch;
-    float font_size_guess =
-        letter_size_pt / 0.7f; // this was determined empirically
-    // Create the font using the approximate size.
-    SkFont sk_font(nullptr, font_size_guess, 1.f, 0.f);
-    SkFontMetrics metrics;
-    sk_font.getMetrics(&metrics);
-    // The `fCapHeight` is the height of the capital letters.
-    float font_scale = 0.001 * letter_size_mm / metrics.fCapHeight;
-    float line_thickness = metrics.fUnderlineThickness * font_scale;
-    return std::make_unique<Font>(sk_font, font_scale, line_thickness);
-  }
-
-  void DrawText(SkCanvas &canvas, string_view text, SkPaint &paint) {
-    canvas.scale(font_scale, -font_scale);
-    canvas.drawSimpleText(text.data(), text.size(), SkTextEncoding::kUTF8, 0, 0,
-                          sk_font, paint);
-    canvas.scale(1 / font_scale, -1 / font_scale);
-  }
-
-  float MeasureText(string_view text) {
-    return sk_font.measureText(text.data(), text.size(),
-                               SkTextEncoding::kUTF8) *
-           font_scale;
-  }
-};
-
-constexpr float kLetterSizeMM = 2;
-constexpr float kLetterSize = kLetterSizeMM / 1000;
-
-Font &GetFont() {
-  static std::unique_ptr<Font> font = Font::Make(kLetterSizeMM);
-  return *font;
 }
 
 constexpr float kBorderWidth = 0.00025;
@@ -112,9 +70,9 @@ void Object::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const {
   SkRect path_bounds = path.getBounds();
 
   canvas.save();
-  canvas.translate(path_bounds.width() / 2 - GetFont().MeasureText(Name()) / 2,
-                   path_bounds.height() / 2 - kLetterSizeMM / 2 / 1000);
-  GetFont().DrawText(canvas, Name(), text_paint);
+  canvas.translate(path_bounds.width() / 2 - gui::GetFont().MeasureText(Name()) / 2,
+                   path_bounds.height() / 2 - gui::kLetterSizeMM / 2 / 1000);
+  gui::GetFont().DrawText(canvas, Name(), text_paint);
   canvas.restore();
 }
 
@@ -123,7 +81,7 @@ SkPath Object::Shape() const {
   auto it = basic_shapes.find(Name());
   if (it == basic_shapes.end()) {
     constexpr float kNameMargin = 0.001;
-    float width_name = GetFont().MeasureText(Name()) + 2 * kNameMargin;
+    float width_name = gui::GetFont().MeasureText(Name()) + 2 * kNameMargin;
     float width_rounded = ceil(width_name * 1000) / 1000;
     constexpr float kMinWidth = 0.008;
     float final_width = std::max(width_rounded, kMinWidth);
@@ -154,7 +112,7 @@ constexpr float kTextFieldHeight = 0.008; // 8mm
 constexpr float kTextFieldMinWidth = kTextFieldHeight;
 
 void DrawTextField(SkCanvas& canvas, string_view text) {
-  Font& font = GetFont();
+  gui::Font& font = gui::GetFont();
   float width = font.MeasureText(text);
   float width_margin = width + 2 * kTextMargin;
   float width_rounded = ceil(width_margin * 1000) / 1000;
@@ -164,7 +122,7 @@ void DrawTextField(SkCanvas& canvas, string_view text) {
   text_bg.setColor(SK_ColorWHITE);
   text_bg.setAlphaf(0.5);
   canvas.drawRect(rect, text_bg);
-  canvas.translate(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
+  canvas.translate(kTextMargin, (kTextFieldHeight - gui::kLetterSize) / 2);
   SkPaint underline;
   underline.setColor(SK_ColorBLACK);
   underline.setAlphaf(0.5);

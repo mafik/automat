@@ -18,7 +18,7 @@ void TextField::OnFocus(bool focus, animation::State &animation_state) {
 void TextField::Draw(SkCanvas &canvas,
                      animation::State &animation_state) const {
   auto &hover = hover_animation[animation_state];
-  hover.Tick(animation_state.timer.d);
+  hover.Tick(animation_state);
 
   Font &font = GetFont();
   SkPath shape = Shape();

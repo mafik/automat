@@ -20,13 +20,11 @@ struct Timer {
   point last = now;
   T d = 0; // delta from last frame
   void Tick() {
+    last = now;
     now = time::now();
     d = (now - last).count();
-    last = now;
   }
 };
-
-extern Timer timer;
 
 } // namespace time
 

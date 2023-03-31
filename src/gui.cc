@@ -60,7 +60,6 @@ struct DragAction : Action {
   vec2 current_position;
   dual_ptr<AnimatedRound> round_x;
   dual_ptr<AnimatedRound> round_y;
-  dual_ptr<time::Timer> timer;
 
   void Begin(vec2 position) override { current_position = position; }
   void Update(vec2 position) override {
@@ -92,14 +91,12 @@ struct DragAction : Action {
     auto original = current_position - contact_point;
     auto rounded = RoundToMilimeters(original);
 
-    auto &t = timer[animation_state];
     auto &rx = round_x[animation_state];
     auto &ry = round_y[animation_state];
     rx.target = rounded.X - original.X;
     ry.target = rounded.Y - original.Y;
-    t.Tick();
-    rx.Tick(t.d);
-    ry.Tick(t.d);
+    rx.Tick(animation_state);
+    ry.Tick(animation_state);
 
     canvas.save();
     auto pos = current_position - contact_point + Vec2(rx, ry);
@@ -259,7 +256,7 @@ struct Window::Impl : Widget {
           Pointer::Impl *first_pointer = *pointers.begin();
           vec2 mouse_position = first_pointer->pointer_position;
           vec2 focus_pre = WindowToCanvas(mouse_position);
-          zoom.Tick(animation_state.timer.d);
+          zoom.Tick(animation_state);
           vec2 focus_post = WindowToCanvas(mouse_position);
           vec2 focus_delta = focus_post - focus_pre;
           camera_x.Shift(-focus_delta.X);
@@ -268,15 +265,15 @@ struct Window::Impl : Widget {
       } else { // stabilize camera target
         vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
         vec2 target_screen = CanvasToWindow(focus_pre);
-        zoom.Tick(animation_state.timer.d);
+        zoom.Tick(animation_state);
         vec2 focus_post = WindowToCanvas(target_screen);
         vec2 focus_delta = focus_post - focus_pre;
         camera_x.value -= focus_delta.X;
         camera_y.value -= focus_delta.Y;
       }
 
-      camera_x.Tick(animation_state.timer.d);
-      camera_y.Tick(animation_state.timer.d);
+      camera_x.Tick(animation_state);
+      camera_y.Tick(animation_state);
 
       if (pressed_keys.test(kKeyW)) {
         camera_y.Shift(0.1 * animation_state.timer.d);

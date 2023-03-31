@@ -18,4 +18,17 @@ void RunOnAutomatonThread(std::function<void()> f) {
                                              [f](Location &l) { f(); }));
 }
 
+void RunOnAutomatonThreadSynchronous(std::function<void()> f) {
+  std::mutex mutex;
+  std::condition_variable automaton_thread_done;
+  std::unique_lock<std::mutex> lock(mutex);
+  RunOnAutomatonThread([&]() {
+    f();
+    // wake the UI thread
+    std::unique_lock<std::mutex> lock(mutex);
+    automaton_thread_done.notify_all();
+  });
+  automaton_thread_done.wait(lock);
+}
+
 }

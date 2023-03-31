@@ -1,5 +1,6 @@
 #pragma once
 
+#include "animated.h"
 #include "math.h"
 #include "dual_ptr.h"
 
@@ -12,7 +13,7 @@ struct Action {
   virtual void Begin(vec2 position) = 0;
   virtual void Update(vec2 position) = 0;
   virtual void End() = 0;
-  virtual void Draw(SkCanvas& canvas, dual_ptr_holder& animation_state) = 0;
+  virtual void Draw(SkCanvas& canvas, AnimationState& animation_state) = 0;
 };
 
 } // namespace automaton

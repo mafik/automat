@@ -3,25 +3,36 @@
 #include <include/core/SkColor.h>
 
 #include "font.h"
+#include "log.h"
 
 namespace automaton::gui {
 
-void TextField::OnHover(bool hover, dual_ptr_holder& animation_state) {
-  has_hover[animation_state] = hover;
+void TextField::OnHover(bool hover, AnimationState& animation_state) {
+  hover_animation[animation_state].target = hover ? 1 : 0;
 }
 
-void TextField::OnFocus(bool focus, dual_ptr_holder& animation_state) {
+void TextField::OnFocus(bool focus, AnimationState& animation_state) {
   has_focus = focus;
 }
 
-void TextField::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const {  
+void TextField::Draw(SkCanvas &canvas, AnimationState& animation_state) const {
+  auto& hover = hover_animation[animation_state];
+  hover.Tick(animation_state.timer.d);
+
   Font& font = GetFont();
-  SkRect rect = SkRect::MakeXYWH(0, 0, width, kTextFieldHeight);
+  SkPath shape = Shape();
   SkColor c_inactive_bg = SkColorSetRGB(0xe0, 0xe0, 0xe0);
   SkColor c_fg = SK_ColorBLACK;
   SkPaint paint_bg;
   paint_bg.setColor(c_inactive_bg);
-  canvas.drawPath(Shape(), paint_bg);
+  canvas.drawPath(shape, paint_bg);
+  if (hover.value > 0.0001) {
+    SkPaint hover_outline;
+    hover_outline.setColor(SkColorSetRGB(0xff, 0x00, 0x00));
+    hover_outline.setStyle(SkPaint::kStroke_Style);
+    hover_outline.setStrokeWidth(hover.value * 0.0005);
+    canvas.drawPath(shape, hover_outline);
+  }
   canvas.translate(kTextMargin, (kTextFieldHeight - gui::kLetterSize) / 2);
   SkPaint underline;
   underline.setColor(c_fg);
@@ -40,7 +51,7 @@ SkPath TextField::Shape() const {
 }
 
 std::unique_ptr<Action> TextField::KeyDownAction(Key) {
-  
+  return nullptr;
 }
 
 }

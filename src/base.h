@@ -88,7 +88,7 @@ struct Object : gui::Widget {
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  void Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const override;
+  void Draw(SkCanvas &canvas, gui::AnimationState& animation_state) const override;
   SkPath Shape() const override;
 };
 
@@ -200,7 +200,7 @@ template <typename T> std::unique_ptr<Object> Create() {
 //
 // Implementations of this interface would typically extend it with
 // container-specific functions.
-struct Location {
+struct Location : gui::Widget {
   Location *parent;
 
   unique_ptr<Object> object;
@@ -372,7 +372,9 @@ struct Location {
   }
   void SetNumber(double number) { SetText(f("%lf", number)); }
 
-  void Draw(SkCanvas& canvas, dual_ptr_holder& animation_state);
+  void Draw(SkCanvas& canvas, gui::AnimationState& animation_state) const override;
+  SkPath Shape() const override;
+  gui::VisitResult VisitChildren(gui::WidgetVisitor &visitor) override;
 
   ////////////////////////////
   // Error reporting
@@ -718,6 +720,20 @@ struct Machine : LiveObject {
     }
     return std::unique_ptr<Object>(m);
   }
+
+  SkPath Shape() const override {
+    static SkPath empty_path;
+    return empty_path;
+  }
+  gui::VisitResult VisitChildren(gui::WidgetVisitor &visitor) override {
+    for (auto &it : locations) {
+      auto result = visitor(*it, it->position);
+      if (result == gui::VisitResult::kStop) {
+        return result;
+      }
+    }
+    return gui::VisitResult::kContinue;
+  }
   void Args(std::function<void(LiveArgument &)> cb) override {}
   void Relocate(Location *parent) override {
     for (auto &it : locations) {
@@ -801,7 +817,7 @@ struct Machine : LiveObject {
     }
   }
 
-  void DrawContents(SkCanvas& canvas, dual_ptr_holder& animation_state);
+  void DrawContents(SkCanvas& canvas, gui::AnimationState& animation_state);
 };
 
 struct Pointer : LiveObject {

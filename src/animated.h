@@ -2,7 +2,16 @@
 
 #include <cmath>
 
+#include "dual_ptr.h"
+#include "time.h"
+
 namespace automaton {
+
+struct AnimationState {
+  dual_ptr_holder holder;
+  operator dual_ptr_holder &() { return holder; }
+  time::Timer timer;
+};
   
 struct AnimatedApproach {
   float value = 0;
@@ -10,7 +19,7 @@ struct AnimatedApproach {
   float speed = 15;
   float cap_min;
   float cap;
-  AnimatedApproach(float initial, float cap_min = 0.01)
+  AnimatedApproach(float initial = 0, float cap_min = 0.01)
       : value(initial), target(initial), cap_min(cap_min), cap(cap_min) {}
   void Tick(float dt) {
     float delta = (target - value) * (1 - exp(-dt * speed));

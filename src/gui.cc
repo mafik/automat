@@ -39,7 +39,7 @@ struct Pointer::Impl {
   void Wheel(float delta);
   void ButtonDown(Button btn);
   void ButtonUp(Button btn);
-  void Draw(SkCanvas &canvas, dual_ptr_holder &animation_state) {
+  void Draw(SkCanvas &canvas, AnimationState &animation_state) {
     if (action) {
       action->Draw(canvas, animation_state);
     }
@@ -88,7 +88,7 @@ struct DragAction : Action {
       loc.InsertHere(std::unique_ptr<Object>(obj));
     });
   }
-  void Draw(SkCanvas &canvas, dual_ptr_holder &animation_state) override {
+  void Draw(SkCanvas &canvas, AnimationState &animation_state) override {
     auto original = current_position - contact_point;
     auto rounded = RoundToMilimeters(original);
 
@@ -112,7 +112,7 @@ struct DragAction : Action {
 struct PrototypeButton : Widget {
   const Object *proto;
   PrototypeButton(const Object *proto) : proto(proto) {}
-  void Draw(SkCanvas &canvas, dual_ptr_holder &animation_state) const override {
+  void Draw(SkCanvas &canvas, AnimationState &animation_state) const override {
     proto->Draw(canvas, animation_state);
   }
   SkPath Shape() const override { return proto->Shape(); }
@@ -130,7 +130,6 @@ struct PrototypeButton : Widget {
 struct Window::Impl : Widget {
   vec2 position = Vec2(0, 0); // center of the window
   vec2 size;
-  time::Timer t;
   float display_pixels_per_meter =
       96 / kMetersPerInch; // default value assumes 96 DPI
 
@@ -142,7 +141,7 @@ struct Window::Impl : Widget {
 
   std::bitset<kKeyCount> pressed_keys;
 
-  dual_ptr_holder animation_state;
+  AnimationState animation_state;
 
   std::vector<PrototypeButton> prototype_buttons;
   std::vector<vec2> prototype_button_positions;
@@ -241,15 +240,12 @@ struct Window::Impl : Widget {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0,
                                          size.Width, size.Height));
   }
-  void Draw(SkCanvas &, dual_ptr_holder &animation_state) const override {
+  void Draw(SkCanvas &, AnimationState &animation_state) const override {
     FATAL() << "Window::Impl::Draw() should never be called";
   }
   void Draw(SkCanvas &canvas) {
-    t.Tick();
-    std::mutex mutex;
-    std::condition_variable automaton_thread_done;
-    std::unique_lock<std::mutex> lock(mutex);
-    RunOnAutomatonThread([&] {
+    animation_state.timer.Tick();
+    RunOnAutomatonThreadSynchronous([&] {
       float rx = camera_x.Remaining();
       float ry = camera_y.Remaining();
       float rz = zoom.Remaining();
@@ -262,7 +258,7 @@ struct Window::Impl : Widget {
           Pointer::Impl *first_pointer = *pointers.begin();
           vec2 mouse_position = first_pointer->pointer_position;
           vec2 focus_pre = WindowToCanvas(mouse_position);
-          zoom.Tick(t.d);
+          zoom.Tick(animation_state.timer.d);
           vec2 focus_post = WindowToCanvas(mouse_position);
           vec2 focus_delta = focus_post - focus_pre;
           camera_x.Shift(-focus_delta.X);
@@ -271,27 +267,27 @@ struct Window::Impl : Widget {
       } else { // stabilize camera target
         vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
         vec2 target_screen = CanvasToWindow(focus_pre);
-        zoom.Tick(t.d);
+        zoom.Tick(animation_state.timer.d);
         vec2 focus_post = WindowToCanvas(target_screen);
         vec2 focus_delta = focus_post - focus_pre;
         camera_x.value -= focus_delta.X;
         camera_y.value -= focus_delta.Y;
       }
 
-      camera_x.Tick(t.d);
-      camera_y.Tick(t.d);
+      camera_x.Tick(animation_state.timer.d);
+      camera_y.Tick(animation_state.timer.d);
 
       if (pressed_keys.test(kKeyW)) {
-        camera_y.Shift(0.1 * t.d);
+        camera_y.Shift(0.1 * animation_state.timer.d);
       }
       if (pressed_keys.test(kKeyS)) {
-        camera_y.Shift(-0.1 * t.d);
+        camera_y.Shift(-0.1 * animation_state.timer.d);
       }
       if (pressed_keys.test(kKeyA)) {
-        camera_x.Shift(-0.1 * t.d);
+        camera_x.Shift(-0.1 * animation_state.timer.d);
       }
       if (pressed_keys.test(kKeyD)) {
-        camera_x.Shift(0.1 * t.d);
+        camera_x.Shift(0.1 * animation_state.timer.d);
       }
 
       SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
@@ -353,14 +349,7 @@ struct Window::Impl : Widget {
       }
 
       canvas.restore();
-
-      { // wake the UI thread
-        std::unique_lock<std::mutex> lock(mutex);
-        automaton_thread_done.notify_all();
-      }
     });
-
-    automaton_thread_done.wait(lock);
 
     // Draw prototype shelf
     for (int i = 0; i < prototype_buttons.size(); i++) {
@@ -377,7 +366,12 @@ struct Window::Impl : Widget {
       if (result != VisitResult::kContinue)
         return result;
     }
-    return VisitResult::kContinue;
+    VisitResult result = VisitResult::kContinue;
+    RunOnAutomatonThreadSynchronous([&]() {
+      // TODO: fix scaling
+      result = visitor(*root_machine, CanvasToWindow(Vec2(0, 0)));
+    });
+    return result;
   }
   void KeyDown(Key key) {
     if (key == kKeyUnknown || key >= kKeyCount)
@@ -552,7 +546,8 @@ void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitor &visitor, vec2 o
         : point(point), orig_visitor(orig_visitor) {}
 
     VisitResult operator()(Widget &widget, vec2 offset) override {
-      if (widget.Shape().contains(point.X - offset.X, point.Y - offset.Y)) {
+      auto shape = widget.Shape();
+      if (shape.isEmpty() || shape.contains(point.X - offset.X, point.Y - offset.Y)) {
         if (orig_visitor(widget, offset) == VisitResult::kStop)
           return VisitResult::kStop;
       }

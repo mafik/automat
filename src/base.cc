@@ -35,7 +35,8 @@ SkColor SkColorFromHex(const char *hex) {
 constexpr float kBorderWidth = 0.00025;
 constexpr float kFrameCornerRadius = 0.001;
 
-void Object::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const {
+void Object::Draw(SkCanvas &canvas,
+                  gui::AnimationState &animation_state) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -71,7 +72,8 @@ void Object::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) const {
   SkRect path_bounds = path.getBounds();
 
   canvas.save();
-  canvas.translate(path_bounds.width() / 2 - gui::GetFont().MeasureText(Name()) / 2,
+  canvas.translate(path_bounds.width() / 2 -
+                       gui::GetFont().MeasureText(Name()) / 2,
                    path_bounds.height() / 2 - gui::kLetterSizeMM / 2 / 1000);
   gui::GetFont().DrawText(canvas, Name(), text_paint);
   canvas.restore();
@@ -108,19 +110,43 @@ SkColor SkColorDarken(SkColor color) {
   return SkHSVToColor(hsv);
 }
 
-void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
+SkPath Location::Shape() const {
+  SkRect object_bounds;
   if (object) {
-    SkPath object_shape = object->Shape();
-    SkRect object_bounds = object_shape.getBounds();
-    float outset = 0.001 - kBorderWidth/2;
-    SkRect bounds = object_bounds.makeOutset(outset, outset);
+    object_bounds = object->Shape().getBounds();
+  } else {
+    object_bounds = SkRect::MakeEmpty();
+  }
+  float outset = 0.001 - kBorderWidth / 2;
+  SkRect bounds = object_bounds.makeOutset(outset, outset);
+  if (bounds.width() < name_text_field.width + 2 * 0.001) {
+    bounds.fRight = bounds.fLeft + name_text_field.width + 2 * 0.001;
+  }
+  bounds.fBottom += gui::kTextFieldHeight + 0.001;
+  return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
+}
 
-    if (bounds.width() < name_text_field.width + 2 * 0.001) {
-      bounds.fRight = bounds.fLeft + name_text_field.width + 2 * 0.001;
+
+gui::VisitResult Location::VisitChildren(gui::WidgetVisitor &visitor) {
+  if (object) {
+    auto result = visitor(*object, Vec2(0, 0));
+    if (result != gui::VisitResult::kContinue) {
+      return result;
     }
+  }
+  SkPath my_shape = Shape();
+  SkRect bounds = my_shape.getBounds();
+  vec2 name_text_field_pos = Vec2(bounds.left() + 0.001,
+                                  bounds.bottom() - gui::kTextFieldHeight - 0.001);
+  auto result = visitor(name_text_field, name_text_field_pos);
+  return result;
+}
 
-    bounds.fBottom += gui::kTextFieldHeight + 0.001;
-
+void Location::Draw(SkCanvas &canvas,
+                    gui::AnimationState &animation_state) const {
+  if (object) {
+    SkPath my_shape = Shape();
+    SkRect bounds = my_shape.getBounds();
     SkPaint frame_bg;
     SkColor frame_bg_colors[2] = {SkColorFromHex("#cccccc"),
                                   SkColorFromHex("#aaaaaa")};
@@ -128,7 +154,7 @@ void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
     sk_sp<SkShader> frame_bg_shader = SkGradientShader::MakeLinear(
         gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
     frame_bg.setShader(frame_bg_shader);
-    canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_bg);
+    canvas.drawPath(my_shape, frame_bg);
 
     SkPaint frame_border;
     SkColor frame_border_colors[2] = {SkColorBrighten(frame_bg_colors[0]),
@@ -138,10 +164,11 @@ void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
     frame_border.setShader(frame_border_shader);
     frame_border.setStyle(SkPaint::kStroke_Style);
     frame_border.setStrokeWidth(0.00025);
-    canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
+    canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius,
+                         frame_border);
 
     auto DrawInset = [&](SkPath shape) {
-      const SkRect& bounds = shape.getBounds();
+      const SkRect &bounds = shape.getBounds();
       SkPaint paint;
       SkColor colors[2] = {SkColorBrighten(frame_bg_colors[0]),
                            SkColorDarken(frame_bg_colors[1])};
@@ -155,13 +182,13 @@ void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
     };
 
     // Draw inset around object
-    DrawInset(object_shape);
+    DrawInset(object->Shape());
 
     // Draw object
     object->Draw(canvas, animation_state);
 
-
-    canvas.translate(bounds.left() + 0.001, bounds.bottom() - gui::kTextFieldHeight - 0.001);
+    canvas.translate(bounds.left() + 0.001,
+                     bounds.bottom() - gui::kTextFieldHeight - 0.001);
 
     // Draw inset around name_text_field
     SkPath name_text_shape = name_text_field.Shape();
@@ -172,7 +199,8 @@ void Location::Draw(SkCanvas &canvas, dual_ptr_holder& animation_state) {
   }
 }
 
-void Machine::DrawContents(SkCanvas &canvas, dual_ptr_holder& animation_state) {
+void Machine::DrawContents(SkCanvas &canvas,
+                           gui::AnimationState &animation_state) {
   SkRect clip = canvas.getLocalClipBounds();
 
   for (auto &loc : locations) {

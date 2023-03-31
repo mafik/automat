@@ -9,5 +9,6 @@ extern Machine* root_machine;
 
 void InitRoot();
 void RunOnAutomatonThread(std::function<void()>);
+void RunOnAutomatonThreadSynchronous(std::function<void()>);
 
 }

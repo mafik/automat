@@ -127,7 +127,7 @@ SkPath Location::Shape() const {
 }
 
 
-gui::VisitResult Location::VisitChildren(gui::WidgetVisitor &visitor) {
+gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   if (object) {
     auto result = visitor(*object, Vec2(0, 0));
     if (result != gui::VisitResult::kContinue) {

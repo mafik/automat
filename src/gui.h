@@ -96,19 +96,13 @@ struct Widget {
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
   // Iterate over direct child widgets in front-to-back order.
-  virtual VisitResult VisitChildren(WidgetVisitor &visitor) {
+  virtual VisitResult VisitImmediateChildren(WidgetVisitor &visitor) {
     return VisitResult::kContinue;
   }
+  void VisitAll(WidgetVisitor &visitor);
+  void VisitAll(WidgetVisitorFunc visitor);
+  void VisitAtPoint(vec2 point, WidgetVisitor &visitor);
+  void VisitAtPoint(vec2 point, WidgetVisitorFunc visitor);
 };
-
-// TODO: move those functions into the Widget class
-void WalkWidgets(Widget &root, WidgetVisitor &visitor,
-                 vec2 root_position = Vec2(0, 0));
-void WalkWidgets(Widget &root, WidgetVisitorFunc visitor,
-                 vec2 root_position = Vec2(0, 0));
-void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitor &visitor,
-                        vec2 root_position = Vec2(0, 0));
-void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitorFunc visitor,
-                        vec2 root_position = Vec2(0, 0));
 
 } // namespace automaton::gui

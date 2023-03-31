@@ -360,7 +360,7 @@ struct Window::Impl : Widget {
       canvas.restore();
     }
   }
-  VisitResult VisitChildren(WidgetVisitor &visitor) override {
+  VisitResult VisitImmediateChildren(WidgetVisitor &visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
       auto result = visitor(prototype_buttons[i], prototype_button_positions[i]);
       if (result != VisitResult::kContinue)
@@ -415,7 +415,7 @@ void Pointer::Impl::Move(vec2 position) {
   } else {
     Widget *old_hovered_widget = hovered_widget;
     hovered_widget = nullptr;
-    WalkWidgetsAtPoint(window, pointer_position, [&](Widget &widget, vec2 widget_position) {
+    window.VisitAtPoint(pointer_position, [&](Widget &widget, vec2 widget_position) {
       hovered_widget = &widget;
       hovered_widget_position = widget_position;
       return VisitResult::kStop;
@@ -508,7 +508,7 @@ void Pointer::Wheel(float delta) { impl->Wheel(delta); }
 void Pointer::ButtonDown(Button btn) { impl->ButtonDown(btn); }
 void Pointer::ButtonUp(Button btn) { impl->ButtonUp(btn); }
 
-void WalkWidgets(Widget &root, WidgetVisitor &visitor, vec2 offset) {
+void Widget::VisitAll(WidgetVisitor &visitor) {
 
   struct RecursiveVisitor : WidgetVisitor {
     WidgetVisitor &orig_visitor;
@@ -520,7 +520,7 @@ void WalkWidgets(Widget &root, WidgetVisitor &visitor, vec2 offset) {
     VisitResult operator()(Widget &widget, vec2 offset) override {
       offset_accumulator += offset;
 
-      if (widget.VisitChildren(*this) == VisitResult::kStop)
+      if (widget.VisitImmediateChildren(*this) == VisitResult::kStop)
         return VisitResult::kStop;
 
       if (orig_visitor(widget, offset_accumulator) == VisitResult::kStop)
@@ -533,10 +533,10 @@ void WalkWidgets(Widget &root, WidgetVisitor &visitor, vec2 offset) {
   };
 
   RecursiveVisitor recursive_visitor(visitor);
-  recursive_visitor(root, offset);
+  recursive_visitor(*this, Vec2(0, 0));
 }
 
-void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitor &visitor, vec2 offset) {
+void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
 
   struct PointVisitor : WidgetVisitor {
     vec2 point;
@@ -557,7 +557,7 @@ void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitor &visitor, vec2 o
 
   PointVisitor point_visitor(point, visitor);
   
-  WalkWidgets(root, point_visitor, offset);
+  VisitAll(point_visitor);
 }
 
 struct FunctionWidgetVisitor : WidgetVisitor {
@@ -568,14 +568,14 @@ struct FunctionWidgetVisitor : WidgetVisitor {
   WidgetVisitorFunc func;
 };
 
-void WalkWidgets(Widget &root, WidgetVisitorFunc visitor, vec2 root_position) {
+void Widget::VisitAll(WidgetVisitorFunc visitor) {
   FunctionWidgetVisitor function_visitor(visitor);
-  WalkWidgets(root, function_visitor, root_position);
+  VisitAll(function_visitor);
 }
 
-void WalkWidgetsAtPoint(Widget &root, vec2 point, WidgetVisitorFunc visitor, vec2 root_position) {
+void Widget::VisitAtPoint(vec2 point, WidgetVisitorFunc visitor) {
   FunctionWidgetVisitor function_visitor(visitor);
-  WalkWidgetsAtPoint(root, point, function_visitor, root_position);
+  VisitAtPoint(point, function_visitor);
 }
 
 } // namespace automaton::gui

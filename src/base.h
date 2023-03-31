@@ -374,7 +374,7 @@ struct Location : gui::Widget {
 
   void Draw(SkCanvas& canvas, gui::AnimationState& animation_state) const override;
   SkPath Shape() const override;
-  gui::VisitResult VisitChildren(gui::WidgetVisitor &visitor) override;
+  gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override;
 
   ////////////////////////////
   // Error reporting
@@ -725,7 +725,7 @@ struct Machine : LiveObject {
     static SkPath empty_path;
     return empty_path;
   }
-  gui::VisitResult VisitChildren(gui::WidgetVisitor &visitor) override {
+  gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
     for (auto &it : locations) {
       auto result = visitor(*it, it->position);
       if (result == gui::VisitResult::kStop) {

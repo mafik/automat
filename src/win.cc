@@ -35,16 +35,4 @@ HWND CreateAutomatonWindow() {
                         1080, nullptr, nullptr, GetInstance(), nullptr);
 }
 
-void SetCursor(Cursor cursor) {
-  switch (cursor) {
-  case kCursorUnknown: // fallthrough
-  case kCursorArrow:
-    SetCursor(LoadCursor(nullptr, IDC_ARROW));
-    break;
-  case kCursorHand:
-    SetCursor(LoadCursor(nullptr, IDC_HAND));
-    break;
-  }
-}
-
 } // namespace automaton

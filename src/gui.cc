@@ -26,6 +26,7 @@ struct Pointer::Impl {
   Window::Impl &window;
   Pointer &facade;
   vec2 pointer_position;
+  IconType icon = kIconArrow;
 
   vec2 button_down_position[kButtonCount];
   time::point button_down_time[kButtonCount];
@@ -521,6 +522,7 @@ void Pointer::Move(vec2 position) { impl->Move(position); }
 void Pointer::Wheel(float delta) { impl->Wheel(delta); }
 void Pointer::ButtonDown(Button btn) { impl->ButtonDown(btn); }
 void Pointer::ButtonUp(Button btn) { impl->ButtonUp(btn); }
+Pointer::IconType Pointer::Icon() const { return impl->icon; };
 
 void Widget::VisitAll(WidgetVisitor &visitor) {
 

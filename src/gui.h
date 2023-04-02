@@ -63,6 +63,10 @@ struct Pointer final {
   void ButtonDown(Button);
   void ButtonUp(Button);
 
+  enum IconType { kIconArrow, kIconHand, kIconIBeam };
+
+  IconType Icon() const;
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl;

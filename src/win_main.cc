@@ -12,7 +12,6 @@
 #include "vk.h"
 #include "win.h"
 
-
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>
 
@@ -77,19 +76,6 @@ vec2 ScreenToWindow(vec2 screen) {
   return window;
 }
 
-/* TODO: figure out an API for custom cursors
-
-Cursor current_cursor = kCursorUnknown;
-
-void UpdateCursor() {
-  Cursor wanted = prototype_under_mouse ? kCursorHand : kCursorArrow;
-  if (current_cursor != wanted) {
-    current_cursor = wanted;
-    SetCursor(current_cursor);
-  }
-}
-*/
-
 std::unique_ptr<gui::Window> window;
 std::unique_ptr<gui::Pointer> mouse;
 
@@ -138,19 +124,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     client_y = HIWORD(lParam);
     break;
   }
-  /*
   case WM_SETCURSOR:
     // Intercept this message to prevent Windows from changing the cursor back
     // to an arrow.
     if (LOWORD(lParam) == HTCLIENT) {
-      UpdateCursor();
+      switch (GetMouse().Icon()) {
+      case gui::Pointer::kIconArrow:
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
+        break;
+      case gui::Pointer::kIconHand:
+        SetCursor(LoadCursor(nullptr, IDC_HAND));
+        break;
+      case gui::Pointer::kIconIBeam:
+        SetCursor(LoadCursor(nullptr, IDC_IBEAM));
+        break;
+      }
       return TRUE;
-    } else {
-      current_cursor = kCursorUnknown;
-      return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
-    break;
-  */
+    return DefWindowProc(hWnd, uMsg, wParam, lParam);
   case WM_PAINT: {
     PAINTSTRUCT ps;
     BeginPaint(hWnd, &ps);

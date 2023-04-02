@@ -37,11 +37,11 @@ struct product_holder {
 // };
 //
 // class Course {
-//   product_holder cross_holder;
+//   product_holder holder;
 // };
 //
 // This code is sufficient to store grades for each student in each course.
-// A grade can be accessed with: `grades[cross_holder]`. When either Student
+// A grade can be accessed with: `grades[course.holder]`. When either Student
 // of Grade is destroyed, their corresponding grades are also destroyed.
 template <typename T> struct product_ptr : product_ptr_base {
   std::unordered_map<product_holder *, T> holders;

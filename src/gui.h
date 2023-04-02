@@ -12,7 +12,6 @@
 #include "product_ptr.h"
 #include "time.h"
 
-
 // GUI allows multiple windows to interact with multiple Automaton objects. GUI
 // takes care of drawing things in the right order & correctly routing the
 // input.
@@ -88,7 +87,8 @@ using WidgetVisitorFunc =
 struct Widget {
   Widget() {}
   virtual ~Widget() {}
-  virtual void OnHover(bool hover, animation::State &animation_state) {}
+  virtual void PointerOver(Pointer &, animation::State &) {}
+  virtual void PointerLeave(Pointer &, animation::State &) {}
   virtual void OnFocus(bool focus, animation::State &animation_state) {}
   virtual void Draw(SkCanvas &, animation::State &animation_state) const = 0;
   virtual SkPath Shape() const = 0;

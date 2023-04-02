@@ -7,8 +7,12 @@
 
 namespace automaton::gui {
 
-void TextField::OnHover(bool hover, animation::State &animation_state) {
-  hover_animation[animation_state].target = hover ? 1 : 0;
+void TextField::PointerOver(Pointer &, animation::State &state) {
+  hover_ptr[state].Increment();
+}
+
+void TextField::PointerLeave(Pointer &, animation::State &state) {
+  hover_ptr[state].Decrement();
 }
 
 void TextField::OnFocus(bool focus, animation::State &animation_state) {
@@ -17,7 +21,7 @@ void TextField::OnFocus(bool focus, animation::State &animation_state) {
 
 void TextField::Draw(SkCanvas &canvas,
                      animation::State &animation_state) const {
-  auto &hover = hover_animation[animation_state];
+  auto &hover = hover_ptr[animation_state].animation;
   hover.Tick(animation_state);
 
   Font &font = GetFont();

@@ -13,10 +13,25 @@ struct TextField : Widget {
   std::string *text;
   float width;
   bool has_focus;
-  mutable product_ptr<animation::Approach> hover_animation;
+  struct HoverState {
+    int hovering_pointers = 0;
+    animation::Approach animation;
+    void Increment() {
+      hovering_pointers++;
+      animation.target = 1;
+    }
+    void Decrement() {
+      hovering_pointers--;
+      if (hovering_pointers == 0) {
+        animation.target = 0;
+      }
+    }
+  };
+  mutable product_ptr<HoverState> hover_ptr;
 
   TextField(std::string *text, float width) : text(text), width(width) {}
-  void OnHover(bool hover, animation::State &animation_state) override;
+  void PointerOver(Pointer &, animation::State &) override;
+  void PointerLeave(Pointer &, animation::State &) override;
   void OnFocus(bool focus, animation::State &animation_state) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;
   SkPath Shape() const override;

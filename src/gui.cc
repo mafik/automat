@@ -24,6 +24,7 @@ SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
 
 struct Pointer::Impl {
   Window::Impl &window;
+  Pointer &facade;
   vec2 pointer_position;
 
   vec2 button_down_position[kButtonCount];
@@ -33,7 +34,7 @@ struct Pointer::Impl {
   Widget *hovered_widget = nullptr;
   SkMatrix hovered_widget_transform;
 
-  Impl(Window::Impl &window, vec2 position);
+  Impl(Window::Impl &window, Pointer &facade, vec2 position);
   ~Impl();
   void Move(vec2 position);
   void Wheel(float delta);
@@ -395,14 +396,14 @@ struct Window::Impl : Widget {
   std::string_view GetState();
 };
 
-Pointer::Impl::Impl(Window::Impl &window, vec2 position)
-    : window(window), pointer_position(position), button_down_position(),
-      button_down_time() {
+Pointer::Impl::Impl(Window::Impl &window, Pointer &facade, vec2 position)
+    : window(window), facade(facade), pointer_position(position),
+      button_down_position(), button_down_time() {
   window.pointers.push_back(this);
 }
 Pointer::Impl::~Impl() {
   if (hovered_widget) {
-    hovered_widget->OnHover(false, window.animation_state);
+    hovered_widget->PointerLeave(facade, window.animation_state);
   }
   auto it = std::find(window.pointers.begin(), window.pointers.end(), this);
   if (it != window.pointers.end()) {
@@ -431,10 +432,10 @@ void Pointer::Impl::Move(vec2 position) {
                         });
     if (old_hovered_widget != hovered_widget) {
       if (old_hovered_widget) {
-        old_hovered_widget->OnHover(false, window.animation_state);
+        old_hovered_widget->PointerLeave(facade, window.animation_state);
       }
       if (hovered_widget) {
-        hovered_widget->OnHover(true, window.animation_state);
+        hovered_widget->PointerOver(facade, window.animation_state);
       }
     }
   }
@@ -514,7 +515,7 @@ void Window::KeyUp(Key key) { impl->KeyUp(key); }
 std::string_view Window::GetState() { return {}; }
 
 Pointer::Pointer(Window &window, vec2 position)
-    : impl(std::make_unique<Pointer::Impl>(*window.impl, position)) {}
+    : impl(std::make_unique<Pointer::Impl>(*window.impl, *this, position)) {}
 Pointer::~Pointer() {}
 void Pointer::Move(vec2 position) { impl->Move(position); }
 void Pointer::Wheel(float delta) { impl->Wheel(delta); }

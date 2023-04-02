@@ -7,11 +7,12 @@
 
 #include "backtrace.h"
 #include "gui.h"
+#include "library.h"
 #include "loading_animation.h"
 #include "root.h"
 #include "vk.h"
 #include "win.h"
-#include "library.h"
+
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>
@@ -95,7 +96,14 @@ std::unique_ptr<gui::Pointer> mouse;
 
 gui::Pointer &GetMouse() {
   if (!mouse) {
-    mouse = std::make_unique<gui::Pointer>(*window, ScreenToWindow(mouse_position));
+    mouse =
+        std::make_unique<gui::Pointer>(*window, ScreenToWindow(mouse_position));
+    TRACKMOUSEEVENT track_mouse_event = {
+        .cbSize = sizeof(TRACKMOUSEEVENT),
+        .dwFlags = TME_LEAVE,
+        .hwndTrack = main_window,
+    };
+    TrackMouseEvent(&track_mouse_event);
   }
   return *mouse;
 }
@@ -104,21 +112,6 @@ void ResizeVulkan() {
   if (auto err = vk::Resize(window_width, window_height); !err.empty()) {
     MessageBox(nullptr, err.c_str(), "ALERT", 0);
   }
-}
-
-bool tracking_mouse_leave = false;
-
-void TrackMouseLeave() {
-  if (tracking_mouse_leave) {
-    return;
-  }
-  tracking_mouse_leave = true;
-  TRACKMOUSEEVENT track_mouse_event = {
-      .cbSize = sizeof(TRACKMOUSEEVENT),
-      .dwFlags = TME_LEAVE,
-      .hwndTrack = main_window,
-  };
-  TrackMouseEvent(&track_mouse_event);
 }
 
 void Paint(SkCanvas &canvas) {
@@ -204,7 +197,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_LBUTTONDOWN: {
     GetMouse().ButtonDown(gui::kMouseLeft);
-    TrackMouseLeave();
     break;
   }
   case WM_LBUTTONUP: {
@@ -213,7 +205,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_MBUTTONDOWN: {
     GetMouse().ButtonDown(gui::kMouseMiddle);
-    TrackMouseLeave();
     break;
   }
   case WM_MBUTTONUP: {
@@ -229,7 +220,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
   }
   case WM_MOUSELEAVE:
-    tracking_mouse_leave = false;
     mouse.reset();
     break;
   case WM_MOUSEWHEEL: {

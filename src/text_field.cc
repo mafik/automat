@@ -7,11 +7,13 @@
 
 namespace automaton::gui {
 
-void TextField::PointerOver(Pointer &, animation::State &state) {
+void TextField::PointerOver(Pointer &pointer, animation::State &state) {
+  pointer.PushIcon(Pointer::kIconIBeam);
   hover_ptr[state].Increment();
 }
 
-void TextField::PointerLeave(Pointer &, animation::State &state) {
+void TextField::PointerLeave(Pointer &pointer, animation::State &state) {
+  pointer.PopIcon();
   hover_ptr[state].Decrement();
 }
 

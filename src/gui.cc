@@ -26,7 +26,7 @@ struct Pointer::Impl {
   Window::Impl &window;
   Pointer &facade;
   vec2 pointer_position;
-  IconType icon = kIconArrow;
+  std::vector<IconType> icons;
 
   vec2 button_down_position[kButtonCount];
   time::point button_down_time[kButtonCount];
@@ -46,6 +46,14 @@ struct Pointer::Impl {
       action->Draw(canvas, animation_state);
     }
   }
+  IconType Icon() const {
+    if (icons.empty()) {
+      return kIconArrow;
+    }
+    return icons.back();
+  }
+  void PushIcon(IconType new_icon) { icons.push_back(new_icon); }
+  void PopIcon() { icons.pop_back(); }
 };
 
 vec2 RoundToMilimeters(vec2 v) {
@@ -116,6 +124,15 @@ struct PrototypeButton : Widget {
     proto->Draw(canvas, animation_state);
   }
   SkPath Shape() const override { return proto->Shape(); }
+
+  void PointerOver(Pointer &pointer, animation::State &state) override {
+    pointer.PushIcon(Pointer::kIconHand);
+  }
+
+  void PointerLeave(Pointer &pointer, animation::State &state) override {
+    pointer.PopIcon();
+  }
+
   std::unique_ptr<Action> ButtonDownAction(Button btn,
                                            vec2 contact_point) override {
     if (btn != kMouseLeft) {
@@ -522,7 +539,9 @@ void Pointer::Move(vec2 position) { impl->Move(position); }
 void Pointer::Wheel(float delta) { impl->Wheel(delta); }
 void Pointer::ButtonDown(Button btn) { impl->ButtonDown(btn); }
 void Pointer::ButtonUp(Button btn) { impl->ButtonUp(btn); }
-Pointer::IconType Pointer::Icon() const { return impl->icon; };
+Pointer::IconType Pointer::Icon() const { return impl->Icon(); }
+void Pointer::PushIcon(IconType icon) { impl->PushIcon(icon); }
+void Pointer::PopIcon() { impl->PopIcon(); }
 
 void Widget::VisitAll(WidgetVisitor &visitor) {
 

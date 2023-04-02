@@ -66,6 +66,8 @@ struct Pointer final {
   enum IconType { kIconArrow, kIconHand, kIconIBeam };
 
   IconType Icon() const;
+  void PushIcon(IconType);
+  void PopIcon();
 
 private:
   struct Impl;

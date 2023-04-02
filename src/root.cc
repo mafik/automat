@@ -1,5 +1,6 @@
 #include "root.h"
 
+#include <condition_variable>
 #include <thread>
 
 namespace automaton {

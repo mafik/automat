@@ -1,7 +1,6 @@
 #undef NOGDI
 #include <windows.h>
 #undef ERROR
-#define NOGDI
 
 #include "win_main.h"
 

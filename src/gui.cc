@@ -58,8 +58,8 @@ struct DragAction : Action {
   std::unique_ptr<Object> object;
   vec2 contact_point;
   vec2 current_position;
-  dual_ptr<AnimatedRound> round_x;
-  dual_ptr<AnimatedRound> round_y;
+  product_ptr<AnimatedRound> round_x;
+  product_ptr<AnimatedRound> round_y;
 
   void Begin(vec2 position) override { current_position = position; }
   void Update(vec2 position) override {

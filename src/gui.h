@@ -8,9 +8,10 @@
 
 #include "action.h"
 #include "animation.h"
-#include "dual_ptr.h"
 #include "math.h"
+#include "product_ptr.h"
 #include "time.h"
+
 
 // GUI allows multiple windows to interact with multiple Automaton objects. GUI
 // takes care of drawing things in the right order & correctly routing the

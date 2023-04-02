@@ -1,9 +1,8 @@
 #pragma once
 
 #include "animation.h"
-#include "dual_ptr.h"
 #include "math.h"
-
+#include "product_ptr.h"
 
 #include <include/core/SkCanvas.h>
 

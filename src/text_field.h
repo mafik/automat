@@ -13,7 +13,7 @@ struct TextField : Widget {
   std::string *text;
   float width;
   bool has_focus;
-  mutable dual_ptr<animation::Approach> hover_animation;
+  mutable product_ptr<animation::Approach> hover_animation;
 
   TextField(std::string *text, float width) : text(text), width(width) {}
   void OnHover(bool hover, animation::State &animation_state) override;

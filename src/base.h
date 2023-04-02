@@ -17,7 +17,6 @@
 #include <include/core/SkPath.h>
 
 #include "channel.h"
-#include "dual_ptr.h"
 #include "format.h"
 #include "log.h"
 #include "text_field.h"

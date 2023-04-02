@@ -2,14 +2,14 @@
 
 #include <cmath>
 
-#include "dual_ptr.h"
+#include "product_ptr.h"
 #include "time.h"
 
 namespace automaton::animation {
 
 struct State {
-  dual_ptr_holder holder;
-  operator dual_ptr_holder &() { return holder; }
+  product_holder holder;
+  operator product_holder &() { return holder; }
   time::Timer timer;
   operator time::Timer &() { return timer; }
 };
@@ -23,11 +23,13 @@ struct Approach {
   time::point last_tick;
 
   Approach(float initial = 0, float cap_min = 0.01)
-      : value(initial), target(initial), cap_min(cap_min), cap(cap_min), last_tick(time::now()) {}
-  void Tick(time::Timer& timer) {
+      : value(initial), target(initial), cap_min(cap_min), cap(cap_min),
+        last_tick(time::now()) {}
+  void Tick(time::Timer &timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
-    if (dt <= 0) return;
+    if (dt <= 0)
+      return;
     float delta = (target - value) * (1 - exp(-dt * speed));
     float delta_abs = fabs(delta);
     if (delta_abs > cap * dt) {

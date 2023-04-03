@@ -1,12 +1,13 @@
 #pragma once
 
 #include <bitset>
+#include <unordered_map>
 
 #include <include/effects/SkRuntimeEffect.h>
 
 #include "base.h"
-#include "widget.h"
 #include "root.h"
+#include "widget.h"
 
 namespace automaton::gui {
 
@@ -52,6 +53,7 @@ struct WindowImpl : Widget {
   animation::Approach camera_y = animation::Approach(0.0, 0.005);
 
   std::vector<PointerImpl *> pointers;
+  std::vector<KeyboardImpl *> keyboards;
 
   std::bitset<kKeyCount> pressed_keys;
 

@@ -8,7 +8,7 @@
 
 #include "action.h"
 #include "animation.h"
-#include "key.h"
+#include "keyboard.h"
 #include "pointer.h"
 
 namespace automaton::gui {

@@ -4,9 +4,10 @@
 
 namespace automaton::gui {
 
+struct Keyboard;
+struct PointerImpl;
 struct Widget;
 struct Window;
-struct PointerImpl;
 
 enum Button {
   kButtonUnknown,
@@ -31,6 +32,8 @@ struct Pointer final {
   void PopIcon();
 
   vec2 PositionWithin(Widget &) const;
+
+  Keyboard *Keyboard();
 
 private:
   std::unique_ptr<PointerImpl> impl;

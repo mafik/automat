@@ -2,11 +2,12 @@
 
 #include <include/core/SkCanvas.h>
 
-#include "key.h"
+#include "keyboard.h"
 #include "math.h"
 
 namespace automaton::gui {
 
+struct Keyboard;
 struct Pointer;
 struct WindowImpl;
 
@@ -23,6 +24,7 @@ struct Window final {
 
 private:
   std::unique_ptr<WindowImpl> impl;
+  friend struct Keyboard;
   friend struct Pointer;
 };
 

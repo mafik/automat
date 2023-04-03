@@ -5,14 +5,13 @@
 #include "win_main.h"
 
 #include "backtrace.h"
-#include "widget.h"
 #include "library.h"
 #include "loading_animation.h"
 #include "root.h"
 #include "vk.h"
+#include "widget.h"
 #include "win.h"
 #include "window.h"
-
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>
@@ -80,6 +79,7 @@ vec2 ScreenToWindow(vec2 screen) {
 
 std::unique_ptr<gui::Window> window;
 std::unique_ptr<gui::Pointer> mouse;
+std::unique_ptr<gui::Keyboard> keyboard;
 
 gui::Pointer &GetMouse() {
   if (!mouse) {
@@ -274,6 +274,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   window_width = rect.right - rect.left;
   window_height = rect.bottom - rect.top;
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
+  keyboard = std::make_unique<gui::Keyboard>(*window);
   ResizeVulkan();
 
   MSG msg = {};

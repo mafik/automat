@@ -1,8 +1,8 @@
 #include "pointer_impl.h"
 
+#include "keyboard_impl.h"
 #include "root.h"
 #include "window_impl.h"
-
 
 namespace automaton::gui {
 
@@ -112,6 +112,17 @@ vec2 PointerImpl::PositionWithin(Widget &widget) const {
   SkMatrix transform = root_machine->TransformToChild(&widget);
   vec2 canvas_pos = window.WindowToCanvas(pointer_position);
   return Vec2(transform.mapXY(canvas_pos.X, canvas_pos.Y));
+}
+
+Keyboard *PointerImpl::Keyboard() {
+  if (keyboard == nullptr) {
+    keyboard = window.keyboards.front();
+  }
+  if (keyboard) {
+    return &keyboard->facade;
+  } else {
+    return nullptr;
+  }
 }
 
 } // namespace automaton::gui

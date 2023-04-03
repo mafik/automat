@@ -7,7 +7,6 @@
 #include "time.h"
 #include "widget.h"
 
-
 namespace automaton::gui {
 
 struct Window;
@@ -25,6 +24,8 @@ struct PointerImpl {
   std::unique_ptr<Action> action;
   Widget *hovered_widget = nullptr;
   SkMatrix hovered_widget_transform;
+
+  KeyboardImpl *keyboard = nullptr;
 
   PointerImpl(WindowImpl &window, Pointer &facade, vec2 position);
   ~PointerImpl();
@@ -46,6 +47,7 @@ struct PointerImpl {
   void PushIcon(Pointer::IconType new_icon) { icons.push_back(new_icon); }
   void PopIcon() { icons.pop_back(); }
   vec2 PositionWithin(Widget &) const;
+  Keyboard *Keyboard();
 };
 
 } // namespace automaton::gui

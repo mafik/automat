@@ -22,11 +22,13 @@ struct DragAction : Action {
   product_ptr<AnimatedRound> round_x;
   product_ptr<AnimatedRound> round_y;
 
-  void Begin(vec2 position) override { current_position = position; }
-  void Update(vec2 position) override {
+  void Begin(Pointer &pointer) override {
+    current_position = pointer.PositionWithin(*root_machine);
+  }
+  void Update(Pointer &pointer) override {
     auto old_pos = current_position - contact_point;
     auto old_round = RoundToMilimeters(old_pos);
-    current_position = position;
+    current_position = pointer.PositionWithin(*root_machine);
     auto new_pos = current_position - contact_point;
     auto new_round = RoundToMilimeters(new_pos);
     if (old_round.X == new_round.X) {

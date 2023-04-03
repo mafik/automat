@@ -2,16 +2,19 @@
 
 #include "animation.h"
 #include "math.h"
-#include "product_ptr.h"
 
 #include <include/core/SkCanvas.h>
 
 namespace automaton {
 
+namespace gui {
+struct Pointer;
+}
+
 struct Action {
   virtual ~Action() = default;
-  virtual void Begin(vec2 position) = 0;
-  virtual void Update(vec2 position) = 0;
+  virtual void Begin(gui::Pointer &) = 0;
+  virtual void Update(gui::Pointer &) = 0;
   virtual void End() = 0;
   virtual void Draw(SkCanvas &canvas, animation::State &animation_state) = 0;
 };

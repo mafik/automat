@@ -1,6 +1,8 @@
 #include "pointer_impl.h"
 
+#include "root.h"
 #include "window_impl.h"
+
 
 namespace automaton::gui {
 
@@ -28,7 +30,7 @@ void PointerImpl::Move(vec2 position) {
     window.camera_y.Shift(-delta.Y);
   }
   if (action) {
-    action->Update(window.WindowToCanvas(position));
+    action->Update(facade);
   } else {
     Widget *old_hovered_widget = hovered_widget;
     hovered_widget = nullptr;
@@ -76,7 +78,7 @@ void PointerImpl::ButtonDown(Button btn) {
     action =
         hovered_widget->ButtonDownAction(facade, btn, local_pointer_position);
     if (action) {
-      action->Begin(window.WindowToCanvas(pointer_position));
+      action->Begin(facade);
     }
   }
 }
@@ -102,6 +104,14 @@ void PointerImpl::ButtonUp(Button btn) {
   }
   button_down_position[btn] = Vec2(0, 0);
   button_down_time[btn] = time::kZero;
+}
+
+inline vec2 Vec2(SkPoint p) { return vec2{p.fX, p.fY}; }
+
+vec2 PointerImpl::PositionWithin(Widget &widget) const {
+  SkMatrix transform = root_machine->TransformToChild(&widget);
+  vec2 canvas_pos = window.WindowToCanvas(pointer_position);
+  return Vec2(transform.mapXY(canvas_pos.X, canvas_pos.Y));
 }
 
 } // namespace automaton::gui

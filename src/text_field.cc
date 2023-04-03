@@ -70,9 +70,8 @@ struct TextSelectAction : Action {
 
   TextSelectAction(TextField *text_field) : text_field(text_field) {}
 
-  void Begin(vec2 position) override {
-    SkMatrix transform = root_machine->TransformToChild(text_field);
-    SkPoint local = transform.mapXY(position.X, position.Y);
+  void Begin(Pointer &pointer) override {
+    vec2 local = pointer.PositionWithin(*text_field);
 
     const char *c_str = text_field->text->c_str();
     size_t byte_length = text_field->text->size();
@@ -93,7 +92,7 @@ struct TextSelectAction : Action {
 
     // TODO: Convert the index into caret position & set it in the caret.
   }
-  void Update(vec2 position) override {}
+  void Update(Pointer &pointer) override {}
   void End() override {}
   void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
 };

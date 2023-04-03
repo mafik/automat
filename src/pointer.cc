@@ -15,5 +15,8 @@ void Pointer::ButtonUp(Button btn) { impl->ButtonUp(btn); }
 Pointer::IconType Pointer::Icon() const { return impl->Icon(); }
 void Pointer::PushIcon(IconType icon) { impl->PushIcon(icon); }
 void Pointer::PopIcon() { impl->PopIcon(); }
+vec2 Pointer::PositionWithin(Widget &widget) const {
+  return impl->PositionWithin(widget);
+}
 
 } // namespace automaton::gui

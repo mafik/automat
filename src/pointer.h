@@ -4,6 +4,7 @@
 
 namespace automaton::gui {
 
+struct Widget;
 struct Window;
 struct PointerImpl;
 
@@ -28,6 +29,8 @@ struct Pointer final {
   IconType Icon() const;
   void PushIcon(IconType);
   void PopIcon();
+
+  vec2 PositionWithin(Widget &) const;
 
 private:
   std::unique_ptr<PointerImpl> impl;

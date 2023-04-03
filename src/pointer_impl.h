@@ -3,9 +3,10 @@
 #include <vector>
 
 #include "action.h"
-#include "widget.h"
 #include "pointer.h"
 #include "time.h"
+#include "widget.h"
+
 
 namespace automaton::gui {
 
@@ -44,6 +45,7 @@ struct PointerImpl {
   }
   void PushIcon(Pointer::IconType new_icon) { icons.push_back(new_icon); }
   void PopIcon() { icons.pop_back(); }
+  vec2 PositionWithin(Widget &) const;
 };
 
 } // namespace automaton::gui

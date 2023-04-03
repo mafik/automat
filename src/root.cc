@@ -4,13 +4,15 @@
 #include <thread>
 
 namespace automaton {
-  
+
 Location root_location;
-Machine* root_machine;
+Machine *root_machine;
 
 void InitRoot() {
   root_location = Location(nullptr);
+  root_location.name = "Root location";
   root_machine = root_location.Create<Machine>();
+  root_machine->name = "Root machine";
   std::thread(RunThread).detach();
 }
 
@@ -32,4 +34,4 @@ void RunOnAutomatonThreadSynchronous(std::function<void()> f) {
   automaton_thread_done.wait(lock);
 }
 
-}
+} // namespace automaton

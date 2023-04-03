@@ -1,7 +1,7 @@
 #pragma once
 
 #include "animation.h"
-#include "gui.h"
+#include "widget.h"
 
 namespace automaton::gui {
 
@@ -10,6 +10,7 @@ constexpr float kTextFieldHeight = 0.008; // 8mm
 constexpr float kTextFieldMinWidth = kTextFieldHeight;
 
 struct TextField : Widget {
+  Widget *parent_widget;
   std::string *text;
   float width;
   bool has_focus;
@@ -29,13 +30,17 @@ struct TextField : Widget {
   };
   mutable product_ptr<HoverState> hover_ptr;
 
-  TextField(std::string *text, float width) : text(text), width(width) {}
+  TextField(Widget *parent_widget, std::string *text, float width)
+      : parent_widget(parent_widget), text(text), width(width) {}
+  Widget *ParentWidget() override;
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;
   void OnFocus(bool focus, animation::State &animation_state) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;
   SkPath Shape() const override;
   std::unique_ptr<Action> KeyDownAction(Key) override;
+  std::unique_ptr<Action> ButtonDownAction(Pointer &, Button,
+                                           vec2 contact_point) override;
   bool CanFocusKeyboard() override { return true; }
 };
 

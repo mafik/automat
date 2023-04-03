@@ -36,8 +36,7 @@ SkColor SkColorFromHex(const char *hex) {
 constexpr float kBorderWidth = 0.00025;
 constexpr float kFrameCornerRadius = 0.001;
 
-void Object::Draw(SkCanvas &canvas,
-                  gui::animation::State &animation_state) const {
+void Object::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -142,8 +141,7 @@ gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   return result;
 }
 
-void Location::Draw(SkCanvas &canvas,
-                    gui::animation::State &animation_state) const {
+void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   if (object) {
     SkPath my_shape = Shape();
     SkRect bounds = my_shape.getBounds();
@@ -200,7 +198,7 @@ void Location::Draw(SkCanvas &canvas,
 }
 
 void Machine::DrawContents(SkCanvas &canvas,
-                           gui::animation::State &animation_state) {
+                           animation::State &animation_state) {
   SkRect clip = canvas.getLocalClipBounds();
 
   for (auto &loc : locations) {

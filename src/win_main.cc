@@ -5,12 +5,14 @@
 #include "win_main.h"
 
 #include "backtrace.h"
-#include "gui.h"
+#include "widget.h"
 #include "library.h"
 #include "loading_animation.h"
 #include "root.h"
 #include "vk.h"
 #include "win.h"
+#include "window.h"
+
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>

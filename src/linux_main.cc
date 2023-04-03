@@ -13,7 +13,7 @@
 #include <xcb/xproto.h>
 
 #include "format.h"
-#include "gui.h"
+#include "widget.h"
 #include "library.h"
 #include "log.h"
 #include "root.h"

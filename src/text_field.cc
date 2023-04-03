@@ -1,11 +1,16 @@
 #include "text_field.h"
 
 #include <include/core/SkColor.h>
+#include <include/core/SkFontTypes.h>
+#include <include/core/SkMatrix.h>
 
 #include "font.h"
 #include "log.h"
+#include "root.h"
 
 namespace automaton::gui {
+
+Widget *TextField::ParentWidget() { return parent_widget; }
 
 void TextField::PointerOver(Pointer &pointer, animation::State &state) {
   pointer.PushIcon(Pointer::kIconIBeam);
@@ -59,5 +64,46 @@ SkPath TextField::Shape() const {
 }
 
 std::unique_ptr<Action> TextField::KeyDownAction(Key) { return nullptr; }
+
+struct TextSelectAction : Action {
+  TextField *text_field;
+
+  TextSelectAction(TextField *text_field) : text_field(text_field) {}
+
+  void Begin(vec2 position) override {
+    SkMatrix transform = root_machine->TransformToChild(text_field);
+    SkPoint local = transform.mapXY(position.X, position.Y);
+
+    const char *c_str = text_field->text->c_str();
+    size_t byte_length = text_field->text->size();
+    Font &font = GetFont();
+    int glyph_count =
+        font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
+    SkGlyphID glyphs[glyph_count];
+    font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs,
+                              glyph_count);
+
+    SkScalar widths[glyph_count];
+    SkRect bounds[glyph_count];
+    font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
+
+    int index = 0;
+    // TODO: Find the index in the glyph array closest to the position.
+    // TODO: Request a new text caret from the pointer.
+
+    // TODO: Convert the index into caret position & set it in the caret.
+  }
+  void Update(vec2 position) override {}
+  void End() override {}
+  void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
+};
+
+std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
+                                                    vec2 contact_point) {
+  if (btn == Button::kMouseLeft) {
+    return std::make_unique<TextSelectAction>(this);
+  }
+  return nullptr;
+}
 
 } // namespace automaton::gui

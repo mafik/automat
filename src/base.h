@@ -16,6 +16,7 @@
 #include <include/core/SkCanvas.h>
 #include <include/core/SkPath.h>
 
+#include "animation.h"
 #include "channel.h"
 #include "format.h"
 #include "log.h"
@@ -52,10 +53,6 @@ struct Pointer;
 // Instances of this class provide custom logic & appearance.
 struct Object : gui::Widget {
 
-  // The name for objects of this type. English proper noun, UTF-8, capitalized.
-  // For example: "Text Editor".
-  virtual string_view Name() const = 0;
-
   // Create a copy of this object.
   //
   // Subclasses of Object should have a static `proto` field, holding their own
@@ -87,8 +84,7 @@ struct Object : gui::Widget {
   operator<=>(const Object &other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  void Draw(SkCanvas &canvas,
-            gui::animation::State &animation_state) const override;
+  void Draw(SkCanvas &canvas, animation::State &animation_state) const override;
   SkPath Shape() const override;
 };
 
@@ -223,7 +219,16 @@ struct Location : gui::Widget {
   unordered_set<Location *> observing_errors;
 
   Location(Location *parent = nullptr)
-      : parent(parent), name_text_field(&name, 0.03) {}
+      : parent(parent), name_text_field(this, &name, 0.03) {}
+
+  Widget *ParentWidget() override {
+    if (parent == nullptr) {
+      return nullptr;
+    }
+    return parent->object.get();
+  }
+
+  std::string_view Name() const override { return name; }
 
   std::unique_ptr<Object> InsertHere(unique_ptr<Object> &&object) {
     this->object.swap(object);
@@ -373,8 +378,7 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number) { SetText(f("%lf", number)); }
 
-  void Draw(SkCanvas &canvas,
-            gui::animation::State &animation_state) const override;
+  void Draw(SkCanvas &canvas, animation::State &animation_state) const override;
   SkPath Shape() const override;
   gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override;
 
@@ -670,6 +674,8 @@ struct LiveArgument : Argument {
 struct LiveObject : Object {
   Location *here = nullptr;
   virtual void Args(std::function<void(LiveArgument &)> cb) = 0;
+
+  Widget *ParentWidget() override { return here; }
   void Relocate(Location *new_self) override {
     Args([old_self = here, new_self](LiveArgument &arg) {
       arg.Relocate(old_self, new_self);
@@ -822,7 +828,7 @@ struct Machine : LiveObject {
     }
   }
 
-  void DrawContents(SkCanvas &canvas, gui::animation::State &animation_state);
+  void DrawContents(SkCanvas &canvas, animation::State &animation_state);
 };
 
 struct Pointer : LiveObject {

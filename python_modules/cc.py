@@ -106,11 +106,18 @@ for path_abs in srcs:
 
         # Actual scanning starts here
 
-        match = re.match('^#include \"([a-zA-Z0-9_/\.-]+)\"', line)
-        if match:
-            dep = path.with_name(match.group(1))
-            types[str(dep)] = 'header'
-            depends(path, on=dep)
+        try:
+            match = re.match('^#include \"([a-zA-Z0-9_/\.-]+)\"', line)
+            if match:
+                dep = path.with_name(match.group(1))
+                types[str(dep)] = 'header'
+                depends(path, on=dep)
+        except ValueError as e:
+            new_message = f'''Error parsing {path}:{line_number} The line is:
+{line.strip()}
+Maybe clang-format inserted include surrounded with "" instead of <>?'''
+            raise RuntimeError(new_message) from e
+                  
 
         match = re.match('^int main\(', line)
         if match:

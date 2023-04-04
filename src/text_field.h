@@ -29,6 +29,7 @@ struct TextField : Widget {
     }
   };
   mutable product_ptr<HoverState> hover_ptr;
+  std::vector<std::unique_ptr<Caret>> carets;
 
   TextField(Widget *parent_widget, std::string *text, float width)
       : parent_widget(parent_widget), text(text), width(width) {}

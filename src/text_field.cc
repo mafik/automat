@@ -90,7 +90,6 @@ struct TextSelectAction : Action {
 
     int index = 0;
 
-    // TODO: Draw the caret!
     // TODO: Find the index in the glyph array closest to the position.
     // TODO: Convert the index into caret position & set it in the caret.
 
@@ -109,7 +108,7 @@ struct TextSelectAction : Action {
     caret->PlaceIBeam(caret_pos_root);
   }
   void Update(Pointer &pointer) override {}
-  void End() override {}
+  void End() override { text_field->carets.emplace_back(std::move(caret)); }
   void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
 };
 

@@ -1,5 +1,7 @@
 #include "keyboard_impl.h"
 
+#include "font.h"
+
 namespace automaton::gui {
 
 CaretImpl::CaretImpl(KeyboardImpl &keyboard) : keyboard(keyboard) {
@@ -12,15 +14,22 @@ CaretImpl::~CaretImpl() {
   }
 }
 void CaretImpl::PlaceIBeam(vec2 canvas_position) {
-  shape = SkPath::Rect(
-      SkRect::MakeXYWH(canvas_position.X, canvas_position.Y, 0.001f, 0.002f));
+  float caret_width = kLetterSize / 8;
+  shape = SkPath::Rect(SkRect::MakeXYWH(canvas_position.X - caret_width / 2,
+                                        canvas_position.Y, caret_width,
+                                        kLetterSize));
 }
 
 void CaretImpl::Draw(SkCanvas &canvas,
                      animation::State &animation_state) const {
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
-  canvas.drawPath(shape, paint);
+  double now = animation_state.timer.now.time_since_epoch().count();
+  double seconds, subseconds;
+  subseconds = modf(now, &seconds);
+  if (subseconds > 0.5) {
+    canvas.drawPath(shape, paint);
+  }
 }
 
 KeyboardImpl::KeyboardImpl(WindowImpl &window, Keyboard &facade)

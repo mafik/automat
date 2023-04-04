@@ -33,7 +33,7 @@ struct Pointer final {
 
   vec2 PositionWithin(Widget &) const;
 
-  Keyboard *Keyboard();
+  Keyboard &Keyboard();
 
 private:
   std::unique_ptr<PointerImpl> impl;

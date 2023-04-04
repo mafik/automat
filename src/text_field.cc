@@ -3,6 +3,7 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkFontTypes.h>
 #include <include/core/SkMatrix.h>
+#include <memory>
 
 #include "font.h"
 #include "log.h"
@@ -45,7 +46,7 @@ void TextField::Draw(SkCanvas &canvas,
     hover_outline.setStrokeWidth(hover.value * 0.0005);
     canvas.drawPath(shape, hover_outline);
   }
-  canvas.translate(kTextMargin, (kTextFieldHeight - gui::kLetterSize) / 2);
+  canvas.translate(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
   SkPaint underline;
   underline.setColor(c_fg);
   SkRect underline_rect = SkRect::MakeXYWH(
@@ -67,6 +68,7 @@ std::unique_ptr<Action> TextField::KeyDownAction(Key) { return nullptr; }
 
 struct TextSelectAction : Action {
   TextField *text_field;
+  std::unique_ptr<Caret> caret;
 
   TextSelectAction(TextField *text_field) : text_field(text_field) {}
 
@@ -87,10 +89,24 @@ struct TextSelectAction : Action {
     font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
 
     int index = 0;
-    // TODO: Find the index in the glyph array closest to the position.
-    // TODO: Request a new text caret from the pointer.
 
+    // TODO: Draw the caret!
+    // TODO: Find the index in the glyph array closest to the position.
     // TODO: Convert the index into caret position & set it in the caret.
+
+    caret = std::make_unique<Caret>(pointer.Keyboard());
+    vec2 caret_pos = Vec2(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
+
+    SkMatrix root_to_text = root_machine->TransformToChild(text_field);
+    SkMatrix text_to_root;
+
+    if (!root_to_text.invert(&text_to_root)) {
+      EVERY_N_SEC(60) { ERROR() << "Failed to invert matrix"; }
+    }
+
+    vec2 caret_pos_root = Vec2(text_to_root.mapXY(caret_pos.X, caret_pos.Y));
+
+    caret->PlaceIBeam(caret_pos_root);
   }
   void Update(Pointer &pointer) override {}
   void End() override {}

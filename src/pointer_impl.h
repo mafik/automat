@@ -47,7 +47,7 @@ struct PointerImpl {
   void PushIcon(Pointer::IconType new_icon) { icons.push_back(new_icon); }
   void PopIcon() { icons.pop_back(); }
   vec2 PositionWithin(Widget &) const;
-  Keyboard *Keyboard();
+  Keyboard &Keyboard();
 };
 
 } // namespace automaton::gui

@@ -89,6 +89,13 @@ void LOG_Indent(int n = 2);
 
 void LOG_Unindent(int n = 2);
 
+#define EVERY_N_SEC(n)                                                         \
+  static time::point last_log_time;                                            \
+  if (time::now() - last_log_time > time::duration(n)                          \
+          ? (last_log_time = time::now(), true)                                \
+          : false)
+
+// TODO: remove
 #define LOG_EVERY_N_SEC(n)                                                     \
   static time::point last_log_time;                                            \
   (time::now() - last_log_time > time::duration(n)                             \

@@ -106,23 +106,18 @@ void PointerImpl::ButtonUp(Button btn) {
   button_down_time[btn] = time::kZero;
 }
 
-inline vec2 Vec2(SkPoint p) { return vec2{p.fX, p.fY}; }
-
 vec2 PointerImpl::PositionWithin(Widget &widget) const {
   SkMatrix transform = root_machine->TransformToChild(&widget);
   vec2 canvas_pos = window.WindowToCanvas(pointer_position);
   return Vec2(transform.mapXY(canvas_pos.X, canvas_pos.Y));
 }
 
-Keyboard *PointerImpl::Keyboard() {
+Keyboard &PointerImpl::Keyboard() {
   if (keyboard == nullptr) {
+    assert(!window.keyboards.empty());
     keyboard = window.keyboards.front();
   }
-  if (keyboard) {
-    return &keyboard->facade;
-  } else {
-    return nullptr;
-  }
+  return keyboard->facade;
 }
 
 } // namespace automaton::gui

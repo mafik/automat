@@ -1,7 +1,6 @@
 #pragma once
 
 #include <bitset>
-#include <unordered_map>
 
 #include <include/effects/SkRuntimeEffect.h>
 
@@ -62,15 +61,9 @@ struct WindowImpl : Widget {
   std::vector<PrototypeButton> prototype_buttons;
   std::vector<vec2> prototype_button_positions;
 
-  WindowImpl(vec2 size, float display_pixels_per_meter)
-      : size(size), display_pixels_per_meter(display_pixels_per_meter) {
-    prototype_buttons.reserve(Prototypes().size());
-    for (auto &proto : Prototypes()) {
-      prototype_buttons.emplace_back(this, proto);
-      prototype_button_positions.emplace_back(Vec2(0, 0));
-    }
-    ArrangePrototypeButtons();
-  }
+  WindowImpl(vec2 size, float display_pixels_per_meter);
+
+  ~WindowImpl();
 
   void ArrangePrototypeButtons() {
     float max_w = size.Width;

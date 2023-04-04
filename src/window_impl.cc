@@ -1,5 +1,6 @@
 #include "window_impl.h"
 
+#include "keyboard_impl.h"
 #include "pointer_impl.h"
 
 namespace automaton::gui {
@@ -78,6 +79,28 @@ std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &, Button btn,
   drag_action->object = proto->Clone();
   drag_action->contact_point = contact_point;
   return drag_action;
+}
+
+namespace {
+std::vector<WindowImpl *> windows;
+} // namespace
+
+WindowImpl::WindowImpl(vec2 size, float display_pixels_per_meter)
+    : size(size), display_pixels_per_meter(display_pixels_per_meter) {
+  prototype_buttons.reserve(Prototypes().size());
+  for (auto &proto : Prototypes()) {
+    prototype_buttons.emplace_back(this, proto);
+    prototype_button_positions.emplace_back(Vec2(0, 0));
+  }
+  ArrangePrototypeButtons();
+  windows.push_back(this);
+}
+
+WindowImpl::~WindowImpl() {
+  auto it = std::find(windows.begin(), windows.end(), this);
+  if (it != windows.end()) {
+    windows.erase(it);
+  }
 }
 
 void WindowImpl::Draw(SkCanvas &canvas) {
@@ -185,6 +208,12 @@ void WindowImpl::Draw(SkCanvas &canvas) {
       pointer->Draw(canvas, animation_state);
     }
 
+    for (auto &each_window : windows) {
+      for (auto &each_keyboard : each_window->keyboards) {
+        each_keyboard->Draw(canvas, animation_state);
+      }
+    }
+
     canvas.restore();
   });
 
@@ -197,4 +226,5 @@ void WindowImpl::Draw(SkCanvas &canvas) {
     canvas.restore();
   }
 }
+
 } // namespace automaton::gui

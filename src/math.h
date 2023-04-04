@@ -1,11 +1,14 @@
 #pragma once
 
-#define HMM_PREFIX
-#include <HandmadeMath.h>
 #include <algorithm>
+#include <iomanip>
 #include <limits>
 #include <ostream>
-#include <iomanip>
+
+#define HMM_PREFIX
+#include <HandmadeMath.h>
+
+#include <include/core/SkPoint.h>
 
 using vec2 = hmm_vec2;
 using vec3 = hmm_vec3;
@@ -52,3 +55,5 @@ std::ostream &operator<<(std::ostream &s, const vec3 &v);
 float Saturate(float x);
 
 mat4 InvertMatrix(mat4 x);
+
+inline vec2 Vec2(SkPoint p) { return vec2{p.fX, p.fY}; }

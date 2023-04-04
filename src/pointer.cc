@@ -18,6 +18,6 @@ void Pointer::PopIcon() { impl->PopIcon(); }
 vec2 Pointer::PositionWithin(Widget &widget) const {
   return impl->PositionWithin(widget);
 }
-Keyboard *Pointer::Keyboard() { return impl->Keyboard(); }
+Keyboard &Pointer::Keyboard() { return impl->Keyboard(); }
 
 } // namespace automaton::gui

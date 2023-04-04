@@ -6,14 +6,28 @@
 
 namespace automaton::gui {
 
-Caret::Caret(Keyboard &keyboard)
-    : impl(std::make_unique<CaretImpl>(*keyboard.impl)) {}
-
-Caret::~Caret() {}
+Caret::Caret(CaretImpl &impl) : impl(impl) {}
 
 void Caret::PlaceIBeam(vec2 canvas_position) {
-  impl->PlaceIBeam(canvas_position);
+  impl.PlaceIBeam(canvas_position);
 }
+
+CaretOwner::~CaretOwner() {
+  for (auto caret : carets) {
+    caret->owner = nullptr;
+  }
+}
+  
+Caret& CaretOwner::RequestCaret(Keyboard &keyboard) {
+  keyboard.impl->carets.emplace_back(std::make_unique<CaretImpl>(*keyboard.impl));
+  auto& caret = *keyboard.impl->carets.back();
+  caret.owner = this;
+  carets.emplace_back(&caret);
+  return caret.facade;
+}
+
+void CaretOwner::KeyDown(Key) {}
+void CaretOwner::KeyUp(Key) {}
 
 Keyboard::Keyboard(Window &window)
     : impl(std::make_unique<KeyboardImpl>(*window.impl, *this)) {}

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "keyboard.h"
 #include "product_ptr.h"
 #include "window_impl.h"
 
@@ -12,6 +13,8 @@ struct CaretAnimationState {
 };
 
 struct CaretImpl {
+  Caret facade;
+  CaretOwner* owner;
   SkPath shape;
   product_ptr<CaretAnimationState> animation_state;
   KeyboardImpl &keyboard;
@@ -24,8 +27,8 @@ struct CaretImpl {
 struct KeyboardImpl {
   WindowImpl &window;
   Keyboard &facade;
-  std::vector<CaretImpl *> carets;
-  std::bitset<kKeyCount> pressed_keys;
+  std::vector<std::unique_ptr<CaretImpl>> carets;
+  std::bitset<static_cast<size_t>(AnsiKey::Count)> pressed_keys;
   KeyboardImpl(WindowImpl &window, Keyboard &facade);
   ~KeyboardImpl();
   void Draw(SkCanvas &, animation::State &animation_state) const;

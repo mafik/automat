@@ -10,19 +10,141 @@
 namespace automaton::gui {
 
 struct CaretImpl;
+struct CaretOwner;
 struct Keyboard;
 struct KeyboardImpl;
 struct Window;
 
-enum Key { kKeyUnknown, kKeyW, kKeyA, kKeyS, kKeyD, kKeyCount };
+enum class AnsiKey : uint8_t {
+  Unknown,
+  Escape,
+  F1,
+  F2,
+  F3,
+  F4,
+  F5,
+  F6,
+  F7,
+  F8,
+  F9,
+  F10,
+  F11,
+  F12,
+  PrintScreen,
+  ScrollLock,
+  Pause,
+  Insert,
+  Delete,
+  Home,
+  End,
+  PageUp,
+  PageDown,
+  Up,
+  Down,
+  Left,
+  Right,
+  NumLock,
+  NumpadDivide,
+  NumpadMultiply,
+  NumpadMinus,
+  NumpadPlus,
+  NumpadEnter,
+  NumpadPeriod,
+  Numpad0,
+  Numpad1,
+  Numpad2,
+  Numpad3,
+  Numpad4,
+  Numpad5,
+  Numpad6,
+  Numpad7,
+  Numpad8,
+  Numpad9,
+  Grave,
+  Digit1,
+  Digit2,
+  Digit3,
+  Digit4,
+  Digit5,
+  Digit6,
+  Digit7,
+  Digit8,
+  Digit9,
+  Digit0,
+  Minus,
+  Equals,
+  Backspace,
+  Tab,
+  Q,
+  W,
+  E,
+  R,
+  T,
+  Y,
+  U,
+  I,
+  O,
+  P,
+  BracketLeft,
+  BracketRight,
+  Backslash,
+  CapsLock,
+  A,
+  S,
+  D,
+  F,
+  G,
+  H,
+  J,
+  K,
+  L,
+  Semicolon,
+  Apostrophe,
+  Enter,
+  ShiftLeft,
+  Z,
+  X,
+  C,
+  V,
+  B,
+  N,
+  M,
+  Comma,
+  Period,
+  Slash,
+  ShiftRight,
+  ControlLeft,
+  SuperLeft,
+  AltLeft,
+  Space,
+  AltRight,
+  SuperRight,
+  Application,
+  ControlRight,
+  Count
+};
+
+struct Key {
+  AnsiKey physical;
+  AnsiKey logical;
+  std::string text;
+};
 
 struct Caret final {
-  Caret(Keyboard &);
-  ~Caret();
+  Caret(CaretImpl &impl);
   void PlaceIBeam(vec2 canvas_position);
 
 private:
-  std::unique_ptr<CaretImpl> impl;
+  CaretImpl &impl;
+};
+
+struct CaretOwner {
+  std::vector<CaretImpl *> carets;
+  virtual ~CaretOwner();
+
+  Caret &RequestCaret(Keyboard &);
+  virtual void KeyDown(Key);
+  virtual void KeyUp(Key);
 };
 
 struct Keyboard final {
@@ -34,7 +156,7 @@ struct Keyboard final {
 
 private:
   std::unique_ptr<KeyboardImpl> impl;
-  friend Caret;
+  friend CaretOwner;
   friend Window;
 };
 

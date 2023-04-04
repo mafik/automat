@@ -11,10 +11,12 @@
 #include "vk.h"
 #include "widget.h"
 #include "win.h"
+#include "win_key.h"
 #include "window.h"
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>
+#include <src/base/SkUTF.h>
 
 #include <memory>
 
@@ -45,21 +47,6 @@ vec2 mouse_position;
 float DisplayPxPerMeter() { return screen_width_px / screen_width_m; }
 vec2 WindowSize() {
   return Vec2(window_width, window_height) / DisplayPxPerMeter();
-}
-
-gui::Key ScanCodeToKey(uint8_t scan_code) {
-  switch (scan_code) {
-  case 0x11:
-    return gui::kKeyW;
-  case 0x1e:
-    return gui::kKeyA;
-  case 0x1f:
-    return gui::kKeyS;
-  case 0x20:
-    return gui::kKeyD;
-  default:
-    return gui::kKeyUnknown;
-  }
 }
 
 // Coordinate spaces:
@@ -111,7 +98,27 @@ void Paint(SkCanvas &canvas) {
   canvas.restore();
 }
 
+uint32_t ScanCode(LPARAM lParam) {
+  uint32_t scancode = (lParam >> 16) & 0xff;
+  bool extended = (lParam >> 24) & 0x1;
+  if (extended) {
+    if (scancode != 0x45) {
+      scancode |= 0xE000;
+    }
+  } else {
+    if (scancode == 0x45) {
+      scancode = 0xE11D45;
+    } else if (scancode == 0x54) {
+      scancode = 0xE037;
+    }
+  }
+  return scancode;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+  static unsigned char key_state[256] = {};
+  static char utf8_buffer[4] = {};
+  static int utf8_i = 0;
   switch (uMsg) {
   case WM_SIZE:
     window_width = LOWORD(lParam);
@@ -167,24 +174,80 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     break;
   }
   case WM_KEYDOWN: {
-    uint8_t key = (uint8_t)wParam;             // layout-dependent key code
-    uint8_t scan_code = (lParam >> 16) & 0xFF; // identifies the physical key
+    auto scan_code = ScanCode(lParam);     // identifies the physical key
+    uint8_t virtual_key = (uint8_t)wParam; // layout-dependent key code
+    key_state[virtual_key] = 0x80;
+
+    gui::Key key;
+    key.physical = ScanCodeToKey(scan_code);
+    key.logical = VirtualKeyToKey(virtual_key);
+
+    char key_name[256];
+    GetKeyNameText(lParam, key_name, sizeof(key_name));
+
+    std::array<wchar_t, 16> utf16_buffer;
+    int utf16_len = ToUnicode(virtual_key, scan_code, key_state,
+                              utf16_buffer.data(), utf16_buffer.size(), 0);
+    if (utf16_len) {
+      std::array<char, 32> utf8_buffer = {};
+      int utf8_len =
+          SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
+                             (uint16_t *)utf16_buffer.data(), utf16_len);
+      LOG() << "UTF8 chars: " << utf8_buffer.data();
+      key.text = std::string(utf8_buffer.data(), utf8_len);
+    }
+
     if (keyboard) {
-      keyboard->KeyDown(ScanCodeToKey(scan_code));
+      keyboard->KeyDown(key);
     }
     break;
   }
   case WM_KEYUP: {
-    uint8_t key = (uint8_t)wParam;
-    uint8_t scan_code = (lParam >> 16) & 0xFF;
+    auto scan_code = ScanCode(lParam); // identifies the physical key
+    uint8_t virtual_key = (uint8_t)wParam;
+    key_state[virtual_key] = 0;
+
+    gui::Key key;
+    key.physical = ScanCodeToKey(scan_code);
+    key.logical = VirtualKeyToKey(virtual_key);
+
     if (keyboard) {
-      keyboard->KeyUp(ScanCodeToKey(scan_code));
+      keyboard->KeyUp(key);
     }
     break;
   }
   case WM_CHAR: {
     uint8_t utf8_char = (uint8_t)wParam;
-    uint8_t scan_code = (lParam >> 16) & 0xFF;
+    uint32_t scan_code = ScanCode(lParam);
+    utf8_buffer[utf8_i++] = utf8_char;
+    bool utf8_complete = false;
+    if ((utf8_buffer[0] & 0x80) == 0) {
+      // 1-byte UTF-8 character
+      utf8_complete = true;
+    } else if ((utf8_buffer[0] & 0xE0) == 0xC0) {
+      // 2-byte UTF-8 character
+      utf8_complete = (utf8_i == 2);
+    } else if ((utf8_buffer[0] & 0xF0) == 0xE0) {
+      // 3-byte UTF-8 character
+      utf8_complete = (utf8_i == 3);
+    } else if ((utf8_buffer[0] & 0xF8) == 0xF0) {
+      // 4-byte UTF-8 character
+      utf8_complete = (utf8_i == 4);
+    } else {
+      // Invalid UTF-8 character
+      ERROR() << "Invalid UTF-8 start byte: 0x" << f("%x", utf8_char) << " ("
+              << utf8_char << "), scancode=0x" << f("%x", scan_code);
+      utf8_i = 0;
+    }
+    if (utf8_complete) {
+      if (keyboard) {
+        gui::Key key;
+        key.physical = ScanCodeToKey(scan_code);
+        key.logical = gui::AnsiKey::Unknown;
+        key.text = std::string(utf8_buffer, utf8_i);
+      }
+      utf8_i = 0;
+    }
     break;
   }
   case WM_LBUTTONDOWN: {
@@ -280,7 +343,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   MSG msg = {};
   while (WM_QUIT != msg.message) {
     if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-      TranslateMessage(&msg);
+      // For some reason TranslateMessage generates CP-1250 characters instead
+      // of UTF-8. TranslateMessage(&msg);
       DispatchMessage(&msg);
     } else {
       // When idle, request a repaint.

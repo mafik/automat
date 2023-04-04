@@ -68,7 +68,6 @@ std::unique_ptr<Action> TextField::KeyDownAction(Key) { return nullptr; }
 
 struct TextSelectAction : Action {
   TextField *text_field;
-  std::unique_ptr<Caret> caret;
 
   TextSelectAction(TextField *text_field) : text_field(text_field) {}
 
@@ -93,7 +92,7 @@ struct TextSelectAction : Action {
     // TODO: Find the index in the glyph array closest to the position.
     // TODO: Convert the index into caret position & set it in the caret.
 
-    caret = std::make_unique<Caret>(pointer.Keyboard());
+    Caret& caret = text_field->RequestCaret(pointer.Keyboard());
     vec2 caret_pos = Vec2(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
 
     SkMatrix root_to_text = root_machine->TransformToChild(text_field);
@@ -105,10 +104,10 @@ struct TextSelectAction : Action {
 
     vec2 caret_pos_root = Vec2(text_to_root.mapXY(caret_pos.X, caret_pos.Y));
 
-    caret->PlaceIBeam(caret_pos_root);
+    caret.PlaceIBeam(caret_pos_root);
   }
   void Update(Pointer &pointer) override {}
-  void End() override { text_field->carets.emplace_back(std::move(caret)); }
+  void End() override {}
   void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
 };
 
@@ -118,6 +117,14 @@ std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
     return std::make_unique<TextSelectAction>(this);
   }
   return nullptr;
+}
+
+void TextField::KeyDown(Key) {
+  
+}
+
+void TextField::KeyUp(Key) {
+  
 }
 
 } // namespace automaton::gui

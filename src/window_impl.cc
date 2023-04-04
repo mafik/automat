@@ -139,16 +139,16 @@ void WindowImpl::Draw(SkCanvas &canvas) {
 
     for (KeyboardImpl *keyboard : keyboards) {
       if (keyboard->carets.empty()) {
-        if (keyboard->pressed_keys.test(kKeyW)) {
+        if (keyboard->pressed_keys.test((size_t)AnsiKey::W)) {
           camera_y.Shift(0.1 * animation_state.timer.d);
         }
-        if (keyboard->pressed_keys.test(kKeyS)) {
+        if (keyboard->pressed_keys.test((size_t)AnsiKey::S)) {
           camera_y.Shift(-0.1 * animation_state.timer.d);
         }
-        if (keyboard->pressed_keys.test(kKeyA)) {
+        if (keyboard->pressed_keys.test((size_t)AnsiKey::A)) {
           camera_x.Shift(-0.1 * animation_state.timer.d);
         }
-        if (keyboard->pressed_keys.test(kKeyD)) {
+        if (keyboard->pressed_keys.test((size_t)AnsiKey::D)) {
           camera_x.Shift(0.1 * animation_state.timer.d);
         }
       }

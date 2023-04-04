@@ -4,15 +4,12 @@
 
 namespace automaton::gui {
 
-CaretImpl::CaretImpl(KeyboardImpl &keyboard) : keyboard(keyboard) {
-  keyboard.carets.emplace_back(this);
+CaretImpl::CaretImpl(KeyboardImpl &keyboard) : facade(*this), keyboard(keyboard) {
 }
+
 CaretImpl::~CaretImpl() {
-  auto it = std::find(keyboard.carets.begin(), keyboard.carets.end(), this);
-  if (it != keyboard.carets.end()) {
-    keyboard.carets.erase(it);
-  }
 }
+
 void CaretImpl::PlaceIBeam(vec2 canvas_position) {
   float caret_width = kLetterSize / 8;
   shape = SkPath::Rect(SkRect::MakeXYWH(canvas_position.X - caret_width / 2,
@@ -52,15 +49,25 @@ void KeyboardImpl::Draw(SkCanvas &canvas,
 }
 
 void KeyboardImpl::KeyDown(Key key) {
-  if (key == kKeyUnknown || key >= kKeyCount)
-    return;
-  pressed_keys.set(key);
+  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+    pressed_keys.set((size_t)key.physical);
+  }
+  for (auto& caret : carets) {
+    if (caret->owner) {
+      caret->owner->KeyDown(key);
+    }
+  }
 }
 
 void KeyboardImpl::KeyUp(Key key) {
-  if (key == kKeyUnknown || key >= kKeyCount)
-    return;
-  pressed_keys.reset(key);
+  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+    pressed_keys.reset((size_t)key.physical);
+  }
+  for (auto& caret : carets) {
+    if (caret->owner) {
+      caret->owner->KeyUp(key);
+    }
+  }
 }
 
 } // namespace automaton::gui

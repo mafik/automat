@@ -54,8 +54,6 @@ struct WindowImpl : Widget {
   std::vector<PointerImpl *> pointers;
   std::vector<KeyboardImpl *> keyboards;
 
-  std::bitset<kKeyCount> pressed_keys;
-
   animation::State animation_state;
 
   std::vector<PrototypeButton> prototype_buttons;
@@ -174,16 +172,6 @@ struct WindowImpl : Widget {
       result = visitor(*root_machine, matrix);
     });
     return result;
-  }
-  void KeyDown(Key key) {
-    if (key == kKeyUnknown || key >= kKeyCount)
-      return;
-    pressed_keys.set(key);
-  }
-  void KeyUp(Key key) {
-    if (key == kKeyUnknown || key >= kKeyCount)
-      return;
-    pressed_keys.reset(key);
   }
   std::unique_ptr<Pointer> MakePointer(vec2 position);
   std::string_view GetState();

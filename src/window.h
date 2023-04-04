@@ -18,8 +18,6 @@ struct Window final {
   void Resize(vec2 size);
   void DisplayPixelDensity(float pixels_per_meter);
   void Draw(SkCanvas &);
-  void KeyDown(Key);
-  void KeyUp(Key);
   std::string_view GetState();
 
 private:

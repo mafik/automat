@@ -25,9 +25,12 @@ struct KeyboardImpl {
   WindowImpl &window;
   Keyboard &facade;
   std::vector<CaretImpl *> carets;
+  std::bitset<kKeyCount> pressed_keys;
   KeyboardImpl(WindowImpl &window, Keyboard &facade);
   ~KeyboardImpl();
   void Draw(SkCanvas &, animation::State &animation_state) const;
+  void KeyDown(Key);
+  void KeyUp(Key);
 };
 
 } // namespace automaton::gui

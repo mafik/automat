@@ -24,4 +24,7 @@ void Keyboard::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   impl->Draw(canvas, animation_state);
 }
 
+void Keyboard::KeyDown(Key key) { impl->KeyDown(key); }
+void Keyboard::KeyUp(Key key) { impl->KeyUp(key); }
+
 } // namespace automaton::gui

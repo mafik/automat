@@ -137,17 +137,21 @@ void WindowImpl::Draw(SkCanvas &canvas) {
     camera_x.Tick(animation_state);
     camera_y.Tick(animation_state);
 
-    if (pressed_keys.test(kKeyW)) {
-      camera_y.Shift(0.1 * animation_state.timer.d);
-    }
-    if (pressed_keys.test(kKeyS)) {
-      camera_y.Shift(-0.1 * animation_state.timer.d);
-    }
-    if (pressed_keys.test(kKeyA)) {
-      camera_x.Shift(-0.1 * animation_state.timer.d);
-    }
-    if (pressed_keys.test(kKeyD)) {
-      camera_x.Shift(0.1 * animation_state.timer.d);
+    for (KeyboardImpl *keyboard : keyboards) {
+      if (keyboard->carets.empty()) {
+        if (keyboard->pressed_keys.test(kKeyW)) {
+          camera_y.Shift(0.1 * animation_state.timer.d);
+        }
+        if (keyboard->pressed_keys.test(kKeyS)) {
+          camera_y.Shift(-0.1 * animation_state.timer.d);
+        }
+        if (keyboard->pressed_keys.test(kKeyA)) {
+          camera_x.Shift(-0.1 * animation_state.timer.d);
+        }
+        if (keyboard->pressed_keys.test(kKeyD)) {
+          camera_x.Shift(0.1 * animation_state.timer.d);
+        }
+      }
     }
 
     SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);

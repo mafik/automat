@@ -29,6 +29,8 @@ struct Keyboard final {
   Keyboard(Window &);
   ~Keyboard();
   void Draw(SkCanvas &, animation::State &animation_state) const;
+  void KeyDown(Key);
+  void KeyUp(Key);
 
 private:
   std::unique_ptr<KeyboardImpl> impl;

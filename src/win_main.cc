@@ -169,16 +169,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   case WM_KEYDOWN: {
     uint8_t key = (uint8_t)wParam;             // layout-dependent key code
     uint8_t scan_code = (lParam >> 16) & 0xFF; // identifies the physical key
-    if (window) {
-      window->KeyDown(ScanCodeToKey(scan_code));
+    if (keyboard) {
+      keyboard->KeyDown(ScanCodeToKey(scan_code));
     }
     break;
   }
   case WM_KEYUP: {
     uint8_t key = (uint8_t)wParam;
     uint8_t scan_code = (lParam >> 16) & 0xFF;
-    if (window) {
-      window->KeyUp(ScanCodeToKey(scan_code));
+    if (keyboard) {
+      keyboard->KeyUp(ScanCodeToKey(scan_code));
     }
     break;
   }

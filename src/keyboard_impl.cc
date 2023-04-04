@@ -51,4 +51,16 @@ void KeyboardImpl::Draw(SkCanvas &canvas,
   }
 }
 
+void KeyboardImpl::KeyDown(Key key) {
+  if (key == kKeyUnknown || key >= kKeyCount)
+    return;
+  pressed_keys.set(key);
+}
+
+void KeyboardImpl::KeyUp(Key key) {
+  if (key == kKeyUnknown || key >= kKeyCount)
+    return;
+  pressed_keys.reset(key);
+}
+
 } // namespace automaton::gui

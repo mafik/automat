@@ -15,8 +15,6 @@ void Window::DisplayPixelDensity(float pixels_per_meter) {
   impl->DisplayPixelDensity(pixels_per_meter);
 }
 void Window::Draw(SkCanvas &canvas) { impl->Draw(canvas); }
-void Window::KeyDown(Key key) { impl->KeyDown(key); }
-void Window::KeyUp(Key key) { impl->KeyUp(key); }
 std::string_view Window::GetState() { return {}; }
 
 } // namespace automaton::gui

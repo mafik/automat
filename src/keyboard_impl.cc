@@ -4,11 +4,10 @@
 
 namespace automaton::gui {
 
-CaretImpl::CaretImpl(KeyboardImpl &keyboard) : facade(*this), keyboard(keyboard) {
-}
+CaretImpl::CaretImpl(KeyboardImpl &keyboard)
+    : facade(*this), keyboard(keyboard) {}
 
-CaretImpl::~CaretImpl() {
-}
+CaretImpl::~CaretImpl() {}
 
 void CaretImpl::PlaceIBeam(vec2 canvas_position) {
   float caret_width = kLetterSize / 8;
@@ -52,9 +51,9 @@ void KeyboardImpl::KeyDown(Key key) {
   if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
     pressed_keys.set((size_t)key.physical);
   }
-  for (auto& caret : carets) {
+  for (auto &caret : carets) {
     if (caret->owner) {
-      caret->owner->KeyDown(key);
+      caret->owner->KeyDown(caret->facade, key);
     }
   }
 }
@@ -63,9 +62,9 @@ void KeyboardImpl::KeyUp(Key key) {
   if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
     pressed_keys.reset((size_t)key.physical);
   }
-  for (auto& caret : carets) {
+  for (auto &caret : carets) {
     if (caret->owner) {
-      caret->owner->KeyUp(key);
+      caret->owner->KeyUp(caret->facade, key);
     }
   }
 }

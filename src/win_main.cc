@@ -193,7 +193,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       int utf8_len =
           SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
                              (uint16_t *)utf16_buffer.data(), utf16_len);
-      LOG() << "UTF8 chars: " << utf8_buffer.data();
       key.text = std::string(utf8_buffer.data(), utf8_len);
     }
 
@@ -245,6 +244,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         key.physical = ScanCodeToKey(scan_code);
         key.logical = gui::AnsiKey::Unknown;
         key.text = std::string(utf8_buffer, utf8_i);
+        keyboard->KeyDown(key);
+        keyboard->KeyUp(key);
       }
       utf8_i = 0;
     }

@@ -9,11 +9,17 @@ constexpr float kTextMargin = 0.001;
 constexpr float kTextFieldHeight = 0.008; // 8mm
 constexpr float kTextFieldMinWidth = kTextFieldHeight;
 
+struct CaretPosition {
+  int index;
+};
+
 struct TextField : Widget, CaretOwner {
   Widget *parent_widget;
   std::string *text;
   float width;
   bool has_focus;
+
+  std::unordered_map<Caret *, CaretPosition> caret_positions;
   struct HoverState {
     int hovering_pointers = 0;
     animation::Approach animation;
@@ -42,8 +48,8 @@ struct TextField : Widget, CaretOwner {
   std::unique_ptr<Action> ButtonDownAction(Pointer &, Button,
                                            vec2 contact_point) override;
   bool CanFocusKeyboard() override { return true; }
-  void KeyDown(Key) override;
-  void KeyUp(Key) override;
+  void KeyDown(Caret &, Key) override;
+  void KeyUp(Caret &, Key) override;
 };
 
 } // namespace automaton::gui

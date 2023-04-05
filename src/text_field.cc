@@ -92,8 +92,9 @@ struct TextSelectAction : Action {
     // TODO: Find the index in the glyph array closest to the position.
     // TODO: Convert the index into caret position & set it in the caret.
 
-    Caret& caret = text_field->RequestCaret(pointer.Keyboard());
+    Caret &caret = text_field->RequestCaret(pointer.Keyboard());
     vec2 caret_pos = Vec2(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
+    text_field->caret_positions[&caret] = {.index = index};
 
     SkMatrix root_to_text = root_machine->TransformToChild(text_field);
     SkMatrix text_to_root;
@@ -119,12 +120,16 @@ std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
   return nullptr;
 }
 
-void TextField::KeyDown(Key) {
-  
+void TextField::KeyDown(Caret &caret, Key k) {
+  *text += k.text;
+  caret_positions[&caret].index += k.text.size();
+  std::string text_hex = "";
+  for (char c : k.text) {
+    text_hex += f(" %02x", (uint8_t)c);
+  }
+  LOG() << "Key down: " << k.text << " (" << text_hex << ")";
 }
 
-void TextField::KeyUp(Key) {
-  
-}
+void TextField::KeyUp(Caret &, Key) {}
 
 } // namespace automaton::gui

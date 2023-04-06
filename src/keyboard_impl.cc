@@ -53,8 +53,13 @@ void KeyboardImpl::KeyDown(Key key) {
   if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
     pressed_keys.set((size_t)key.physical);
   }
-  for (auto &caret : carets) {
-    if (caret->owner) {
+  if (key.physical == AnsiKey::Escape) {
+    for (auto &caret : carets) {
+      caret->owner->ReleaseCaret(caret->facade);
+    }
+    carets.clear();
+  } else {
+    for (auto &caret : carets) {
       caret->owner->KeyDown(caret->facade, key);
     }
   }

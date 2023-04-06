@@ -23,9 +23,10 @@ struct CaretImpl {
 };
 
 struct CaretAnimation {
-  animation::DeltaFraction delta_fraction = animation::DeltaFraction(50.0f);
+  animation::DeltaFraction delta_fraction;
   SkPath shape;
   time::point last_blink;
+  CaretAnimation(const KeyboardImpl &);
 };
 
 struct KeyboardAnimation {
@@ -35,6 +36,7 @@ struct KeyboardAnimation {
 struct KeyboardImpl {
   WindowImpl &window;
   Keyboard &facade;
+  PointerImpl *pointer = nullptr;
   std::set<std::unique_ptr<CaretImpl>> carets;
   std::bitset<static_cast<size_t>(AnsiKey::Count)> pressed_keys;
   mutable product_ptr<KeyboardAnimation> anim;

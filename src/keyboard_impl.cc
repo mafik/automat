@@ -1,6 +1,7 @@
 #include "keyboard_impl.h"
 
 #include "font.h"
+#include "pointer_impl.h"
 
 namespace automaton::gui {
 
@@ -61,6 +62,16 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
   }
 }
 
+CaretAnimation::CaretAnimation(const KeyboardImpl &keyboard)
+    : delta_fraction(50),
+      shape(SkPath::Rect(SkRect::MakeXYWH(0, 0, kLetterSize / 8, kLetterSize))),
+      last_blink(time::now()) {
+  if (keyboard.pointer) {
+    vec2 pos = keyboard.pointer->PositionWithin(*root_machine);
+    shape.offset(pos.X, pos.Y);
+  }
+}
+
 void KeyboardImpl::Draw(SkCanvas &canvas,
                         animation::State &animation_state) const {
   // Iterate through each Caret & CaretAnimation, and draw them.
@@ -80,9 +91,10 @@ void KeyboardImpl::Draw(SkCanvas &canvas,
       }
     } else if (anim_it->first > caret_it->get()) {
       // Caret was added.
-      auto new_it =
-          anim_carets.emplace(std::make_pair(caret_it->get(), CaretAnimation()))
-              .first;
+      auto new_it = anim_carets
+                        .emplace(std::make_pair<CaretImpl *, CaretAnimation>(
+                            caret_it->get(), *this))
+                        .first;
       DrawCaret(canvas, new_it->second, caret_it->get(), animation_state);
       ++caret_it;
     } else {
@@ -102,9 +114,10 @@ void KeyboardImpl::Draw(SkCanvas &canvas,
   }
   while (caret_it != carets.end()) {
     // Caret at end was added.
-    auto new_it =
-        anim_carets.emplace(std::make_pair(caret_it->get(), CaretAnimation()))
-            .first;
+    auto new_it = anim_carets
+                      .emplace(std::make_pair<CaretImpl *, CaretAnimation>(
+                          caret_it->get(), *this))
+                      .first;
     DrawCaret(canvas, new_it->second, caret_it->get(), animation_state);
     ++caret_it;
   }

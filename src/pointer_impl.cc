@@ -116,6 +116,7 @@ Keyboard &PointerImpl::Keyboard() {
   if (keyboard == nullptr) {
     assert(!window.keyboards.empty());
     keyboard = window.keyboards.front();
+    keyboard->pointer = this;
   }
   return keyboard->facade;
 }

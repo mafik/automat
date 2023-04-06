@@ -10,10 +10,10 @@ CaretImpl::CaretImpl(KeyboardImpl &keyboard)
 CaretImpl::~CaretImpl() {}
 
 void CaretImpl::PlaceIBeam(vec2 canvas_position) {
-  float caret_width = kLetterSize / 8;
-  shape = SkPath::Rect(SkRect::MakeXYWH(canvas_position.X - caret_width / 2,
-                                        canvas_position.Y, caret_width,
-                                        kLetterSize));
+  float width = GetFont().line_thickness;
+  float height = kLetterSize;
+  shape = SkPath::Rect(SkRect::MakeXYWH(canvas_position.X - width / 2,
+                                        canvas_position.Y, width, height));
   last_blink = time::now();
 }
 
@@ -21,6 +21,7 @@ void CaretImpl::Draw(SkCanvas &canvas,
                      animation::State &animation_state) const {
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
+  paint.setAntiAlias(true);
   double now = (animation_state.timer.now - last_blink).count();
   double seconds, subseconds;
   subseconds = modf(now, &seconds);

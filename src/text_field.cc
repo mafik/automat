@@ -129,7 +129,7 @@ void TextField::Draw(SkCanvas &canvas,
   text_fg.setColor(c_fg);
   if (text) {
     font.DrawText(canvas, *text, text_fg);
-    DrawDebugTextOutlines(canvas, text);
+    // DrawDebugTextOutlines(canvas, text);
   }
 }
 

@@ -4,6 +4,7 @@
 #include <include/core/SkFontTypes.h>
 #include <include/core/SkMatrix.h>
 #include <memory>
+#include <numeric>
 
 #include "font.h"
 #include "log.h"
@@ -47,13 +48,64 @@ void DrawDebugTextOutlines(SkCanvas &canvas, std::string *text) {
   SkPaint outline;
   outline.setStyle(SkPaint::kStroke_Style);
   outline.setColor(SkColorSetRGB(0xff, 0x00, 0x00));
+  SkPaint line;
+  line.setStyle(SkPaint::kStroke_Style);
+  line.setColor(SkColorSetRGB(0x00, 0x80, 0x00));
   for (int i = 0; i < glyph_count; ++i) {
     auto &b = bounds[i];
     canvas.drawRect(b, outline);
+    canvas.drawLine(0, 0, widths[i], 0, line);
+    canvas.drawCircle(0, 0, 0.5, line);
     canvas.translate(widths[i], 0);
   }
   canvas.scale(1 / font.font_scale, -1 / font.font_scale);
   canvas.restore();
+}
+
+int GetCaretIndexFromPosition(const std::string &text, float x) {
+  Font &font = GetFont();
+  x /= font.font_scale;
+  const char *c_str = text.c_str();
+  size_t byte_length = text.size();
+  int glyph_count =
+      font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
+  SkGlyphID glyphs[glyph_count];
+  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs,
+                            glyph_count);
+
+  SkScalar widths[glyph_count];
+  SkRect bounds[glyph_count];
+  font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
+
+  float x_accum = 0;
+  for (int i = 0; i < glyph_count; ++i) {
+    if (x < x_accum + widths[i] / 2) {
+      return i;
+    }
+    x_accum += widths[i];
+  }
+  return glyph_count;
+}
+
+float CaretPositionFromIndex(const std::string &text, int index) {
+  Font &font = GetFont();
+  const char *c_str = text.c_str();
+  size_t byte_length = text.size();
+  int glyph_count =
+      font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
+  SkGlyphID glyphs[glyph_count];
+  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs,
+                            glyph_count);
+
+  SkScalar widths[glyph_count];
+  SkRect bounds[glyph_count];
+  font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
+
+  float x_accum = 0;
+  for (int i = 0; i < index; ++i) {
+    x_accum += widths[i];
+  }
+  return x_accum * font.font_scale;
 }
 
 void TextField::Draw(SkCanvas &canvas,
@@ -103,27 +155,10 @@ struct TextSelectAction : Action {
 
   void Begin(Pointer &pointer) override {
     vec2 local = pointer.PositionWithin(*text_field);
-
-    const char *c_str = text_field->text->c_str();
-    size_t byte_length = text_field->text->size();
-    Font &font = GetFont();
-    int glyph_count =
-        font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
-    SkGlyphID glyphs[glyph_count];
-    font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs,
-                              glyph_count);
-
-    SkScalar widths[glyph_count];
-    SkRect bounds[glyph_count];
-    font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
-
-    int index = 0;
-
-    // TODO: Find the index in the glyph array closest to the position.
-    // TODO: Convert the index into caret position & set it in the caret.
+    int index = GetCaretIndexFromPosition(*text_field->text, local.X - kTextMargin);
 
     Caret &caret = text_field->RequestCaret(pointer.Keyboard());
-    vec2 caret_pos = Vec2(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
+    vec2 caret_pos = Vec2(kTextMargin + CaretPositionFromIndex(*text_field->text, index), (kTextFieldHeight - kLetterSize) / 2);
     text_field->caret_positions[&caret] = {.index = index};
 
     SkMatrix root_to_text = root_machine->TransformToChild(text_field);
@@ -153,7 +188,11 @@ std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
 void TextField::ReleaseCaret(Caret &caret) { caret_positions.erase(&caret); }
 
 void TextField::KeyDown(Caret &caret, Key k) {
+  // TODO: remove unused OnFocus code
+  // TODO: decide on index as either byte or glyph index
+  // TODO: insert new text at index rather than the end
   // TODO: skip non-printable characters
+  // TODO: move caret after entering text
   *text += k.text;
   caret_positions[&caret].index += k.text.size();
   std::string text_hex = "";

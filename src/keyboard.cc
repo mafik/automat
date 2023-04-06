@@ -19,9 +19,16 @@ CaretOwner::~CaretOwner() {
 }
 
 Caret &CaretOwner::RequestCaret(Keyboard &keyboard) {
-  keyboard.impl->carets.emplace_back(
-      std::make_unique<CaretImpl>(*keyboard.impl));
+  if (keyboard.impl->carets.empty()) {
+    keyboard.impl->carets.emplace_back(
+        std::make_unique<CaretImpl>(*keyboard.impl));
+  }
   auto &caret = *keyboard.impl->carets.back();
+  if (caret.owner) {
+    caret.owner->ReleaseCaret(caret.facade);
+    caret.owner->carets.erase(std::find(caret.owner->carets.begin(),
+                                        caret.owner->carets.end(), &caret));
+  }
   caret.owner = this;
   carets.emplace_back(&caret);
   return caret.facade;

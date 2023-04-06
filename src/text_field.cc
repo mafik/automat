@@ -150,6 +150,8 @@ std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
   return nullptr;
 }
 
+void TextField::ReleaseCaret(Caret &caret) { caret_positions.erase(&caret); }
+
 void TextField::KeyDown(Caret &caret, Key k) {
   // TODO: skip non-printable characters
   *text += k.text;

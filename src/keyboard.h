@@ -143,6 +143,7 @@ struct CaretOwner {
   virtual ~CaretOwner();
 
   Caret &RequestCaret(Keyboard &);
+  virtual void ReleaseCaret(Caret &) = 0;
 
   virtual void KeyDown(Caret &, Key);
   virtual void KeyUp(Caret &, Key);

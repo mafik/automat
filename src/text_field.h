@@ -48,6 +48,7 @@ struct TextField : Widget, CaretOwner {
   std::unique_ptr<Action> ButtonDownAction(Pointer &, Button,
                                            vec2 contact_point) override;
   bool CanFocusKeyboard() override { return true; }
+  void ReleaseCaret(Caret &) override;
   void KeyDown(Caret &, Key) override;
   void KeyUp(Caret &, Key) override;
 };

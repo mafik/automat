@@ -203,7 +203,40 @@ std::string FilterControlCharacters(const std::string &text) {
   return clean;
 }
 
+bool IsUtf8Continuation(uint8_t byte) {
+  return (byte & 0b1100'0000) == 0b1000'0000;
+}
+
 void TextField::KeyDown(Caret &caret, Key k) {
+  // TODO: cursor navigation with home & end keys
+  // TODO: backspace can be used to delete last character
+  // TODO: delete can be used to delete next character
+  if (k.physical == AnsiKey::Left) {
+    int& i_ref = caret_positions[&caret].index;
+    if (i_ref > 0) {
+      i_ref--;
+      uint8_t c = (*text)[i_ref];
+      while (IsUtf8Continuation(c)) {
+        i_ref--;
+        c = (*text)[i_ref];
+      }
+      UpdateCaret(*this, caret);
+    }
+    return;
+  }
+  if (k.physical == AnsiKey::Right) {
+    int& i_ref = caret_positions[&caret].index;
+    if (i_ref < text->size()) {
+      i_ref++;
+      uint8_t c = (*text)[i_ref];
+      while (IsUtf8Continuation(c)) {
+        i_ref++;
+        c = (*text)[i_ref];
+      }
+      UpdateCaret(*this, caret);
+    }
+    return;
+  }
   std::string clean = FilterControlCharacters(k.text);
   if (!clean.empty()) {
     text->insert(caret_positions[&caret].index, clean);

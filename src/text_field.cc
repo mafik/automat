@@ -208,8 +208,22 @@ bool IsUtf8Continuation(uint8_t byte) {
 }
 
 void TextField::KeyDown(Caret &caret, Key k) {
-  // TODO: backspace can be used to delete last character
   // TODO: delete can be used to delete next character
+  if (k.physical == AnsiKey::Backspace) {
+    int& i_ref = caret_positions[&caret].index;
+    int end = i_ref;
+    if (i_ref > 0) {
+      i_ref--;
+      uint8_t c = (*text)[i_ref];
+      while (IsUtf8Continuation(c)) {
+        i_ref--;
+        c = (*text)[i_ref];
+      }
+      text->erase(i_ref, end - i_ref);
+      UpdateCaret(*this, caret);
+    }
+    return;
+  }
   if (k.physical == AnsiKey::Left) {
     int& i_ref = caret_positions[&caret].index;
     if (i_ref > 0) {

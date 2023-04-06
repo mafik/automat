@@ -14,6 +14,21 @@ struct State {
   operator time::Timer &() { return timer; }
 };
 
+struct DeltaFraction {
+  float speed = 15;
+  time::point last_tick;
+
+  DeltaFraction(float speed = 15) : speed(speed), last_tick(time::now()) {}
+
+  float Tick(time::Timer &timer) {
+    float dt = (timer.now - last_tick).count();
+    last_tick = timer.now;
+    if (dt <= 0)
+      return 0;
+    return 1 - exp(-dt * speed);
+  }
+};
+
 struct Approach {
   float value = 0;
   float target = 0;

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <map>
+#include <set>
+
 #include "keyboard.h"
 #include "product_ptr.h"
 #include "window_impl.h"
@@ -8,28 +11,33 @@ namespace automaton::gui {
 
 struct KeyboardImpl;
 
-struct CaretAnimationState {
-  SkPath shape;
-};
-
 struct CaretImpl {
   Caret facade;
-  CaretOwner *owner;
+  CaretOwner *owner = nullptr;
   SkPath shape;
   time::point last_blink;
-  product_ptr<CaretAnimationState> animation_state;
   KeyboardImpl &keyboard;
   CaretImpl(KeyboardImpl &keyboard);
   ~CaretImpl();
   void PlaceIBeam(vec2 canvas_position);
-  void Draw(SkCanvas &, animation::State &animation_state) const;
+};
+
+struct CaretAnimation {
+  animation::DeltaFraction delta_fraction = animation::DeltaFraction(50.0f);
+  SkPath shape;
+  time::point last_blink;
+};
+
+struct KeyboardAnimation {
+  std::map<CaretImpl *, CaretAnimation> carets = {};
 };
 
 struct KeyboardImpl {
   WindowImpl &window;
   Keyboard &facade;
-  std::vector<std::unique_ptr<CaretImpl>> carets;
+  std::set<std::unique_ptr<CaretImpl>> carets;
   std::bitset<static_cast<size_t>(AnsiKey::Count)> pressed_keys;
+  mutable product_ptr<KeyboardAnimation> anim;
   KeyboardImpl(WindowImpl &window, Keyboard &facade);
   ~KeyboardImpl();
   void Draw(SkCanvas &, animation::State &animation_state) const;

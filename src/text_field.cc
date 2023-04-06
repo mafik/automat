@@ -208,7 +208,6 @@ bool IsUtf8Continuation(uint8_t byte) {
 }
 
 void TextField::KeyDown(Caret &caret, Key k) {
-  // TODO: cursor navigation with home & end keys
   // TODO: backspace can be used to delete last character
   // TODO: delete can be used to delete next character
   if (k.physical == AnsiKey::Left) {
@@ -235,6 +234,16 @@ void TextField::KeyDown(Caret &caret, Key k) {
       }
       UpdateCaret(*this, caret);
     }
+    return;
+  }
+  if (k.physical == AnsiKey::Home) {
+    caret_positions[&caret].index = 0;
+    UpdateCaret(*this, caret);
+    return;
+  }
+  if (k.physical == AnsiKey::End) {
+    caret_positions[&caret].index = text->size();
+    UpdateCaret(*this, caret);
     return;
   }
   std::string clean = FilterControlCharacters(k.text);

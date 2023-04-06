@@ -160,20 +160,32 @@ void UpdateCaret(TextField &text_field, Caret &caret) {
 
 struct TextSelectAction : Action {
   TextField &text_field;
+  Caret *caret = nullptr;
 
   TextSelectAction(TextField &text_field) : text_field(text_field) {}
 
-  void Begin(Pointer &pointer) override {
+  void UpdateCaretFromPointer(Pointer &pointer) {
+    auto it = text_field.caret_positions.find(caret);
+    // The caret might have been released.
+    if (it == text_field.caret_positions.end()) {
+      return;
+    }
     vec2 local = pointer.PositionWithin(text_field);
     int index =
         GetCaretIndexFromPosition(*text_field.text, local.X - kTextMargin);
-
-    Caret &caret = text_field.RequestCaret(pointer.Keyboard());
-    text_field.caret_positions[&caret] = {.index = index};
-
-    UpdateCaret(text_field, caret);
+    if (index != it->second.index) {
+      it->second.index = index;
+    }
+    UpdateCaret(text_field, *caret);
   }
-  void Update(Pointer &pointer) override {}
+
+  void Begin(Pointer &pointer) override {
+    caret = &text_field.RequestCaret(pointer.Keyboard());
+    text_field.caret_positions[caret] = {.index = 0};
+
+    UpdateCaretFromPointer(pointer);
+  }
+  void Update(Pointer &pointer) override { UpdateCaretFromPointer(pointer); }
   void End() override {}
   void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
 };
@@ -208,7 +220,8 @@ bool IsUtf8Continuation(uint8_t byte) {
 }
 
 void TextField::KeyDown(Caret &caret, Key k) {
-  if (k.physical == AnsiKey::Delete) {
+  switch (k.physical) {
+  case AnsiKey::Delete: {
     int begin = caret_positions[&caret].index;
     int end = begin;
     if (end < text->size()) {
@@ -219,9 +232,9 @@ void TextField::KeyDown(Caret &caret, Key k) {
       text->erase(begin, end - begin);
       // No need to update caret after delete.
     }
-    return;
+    break;
   }
-  if (k.physical == AnsiKey::Backspace) {
+  case AnsiKey::Backspace: {
     int &i_ref = caret_positions[&caret].index;
     int end = i_ref;
     if (i_ref > 0) {
@@ -234,9 +247,9 @@ void TextField::KeyDown(Caret &caret, Key k) {
       text->erase(i_ref, end - i_ref);
       UpdateCaret(*this, caret);
     }
-    return;
+    break;
   }
-  if (k.physical == AnsiKey::Left) {
+  case AnsiKey::Left: {
     int &i_ref = caret_positions[&caret].index;
     if (i_ref > 0) {
       i_ref--;
@@ -247,9 +260,9 @@ void TextField::KeyDown(Caret &caret, Key k) {
       }
       UpdateCaret(*this, caret);
     }
-    return;
+    break;
   }
-  if (k.physical == AnsiKey::Right) {
+  case AnsiKey::Right: {
     int &i_ref = caret_positions[&caret].index;
     if (i_ref < text->size()) {
       i_ref++;
@@ -260,27 +273,30 @@ void TextField::KeyDown(Caret &caret, Key k) {
       }
       UpdateCaret(*this, caret);
     }
-    return;
+    break;
   }
-  if (k.physical == AnsiKey::Home) {
+  case AnsiKey::Home: {
     caret_positions[&caret].index = 0;
     UpdateCaret(*this, caret);
-    return;
+    break;
   }
-  if (k.physical == AnsiKey::End) {
+  case AnsiKey::End: {
     caret_positions[&caret].index = text->size();
     UpdateCaret(*this, caret);
-    return;
+    break;
   }
-  std::string clean = FilterControlCharacters(k.text);
-  if (!clean.empty()) {
-    text->insert(caret_positions[&caret].index, clean);
-    caret_positions[&caret].index += clean.size();
-    UpdateCaret(*this, caret);
-    std::string text_hex = "";
-    for (char c : clean) {
-      text_hex += f(" %02x", (uint8_t)c);
+  default: {
+    std::string clean = FilterControlCharacters(k.text);
+    if (!clean.empty()) {
+      text->insert(caret_positions[&caret].index, clean);
+      caret_positions[&caret].index += clean.size();
+      UpdateCaret(*this, caret);
+      std::string text_hex = "";
+      for (char c : clean) {
+        text_hex += f(" %02x", (uint8_t)c);
+      }
     }
+  }
   }
 }
 

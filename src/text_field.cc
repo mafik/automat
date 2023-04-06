@@ -24,10 +24,6 @@ void TextField::PointerLeave(Pointer &pointer, animation::State &state) {
   hover_ptr[state].Decrement();
 }
 
-void TextField::OnFocus(bool focus, animation::State &animation_state) {
-  has_focus = focus;
-}
-
 void DrawDebugTextOutlines(SkCanvas &canvas, std::string *text) {
   const char *c_str = text->c_str();
   size_t byte_length = text->size();
@@ -155,10 +151,13 @@ struct TextSelectAction : Action {
 
   void Begin(Pointer &pointer) override {
     vec2 local = pointer.PositionWithin(*text_field);
-    int index = GetCaretIndexFromPosition(*text_field->text, local.X - kTextMargin);
+    int index =
+        GetCaretIndexFromPosition(*text_field->text, local.X - kTextMargin);
 
     Caret &caret = text_field->RequestCaret(pointer.Keyboard());
-    vec2 caret_pos = Vec2(kTextMargin + CaretPositionFromIndex(*text_field->text, index), (kTextFieldHeight - kLetterSize) / 2);
+    vec2 caret_pos =
+        Vec2(kTextMargin + CaretPositionFromIndex(*text_field->text, index),
+             (kTextFieldHeight - kLetterSize) / 2);
     text_field->caret_positions[&caret] = {.index = index};
 
     SkMatrix root_to_text = root_machine->TransformToChild(text_field);
@@ -188,7 +187,6 @@ std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
 void TextField::ReleaseCaret(Caret &caret) { caret_positions.erase(&caret); }
 
 void TextField::KeyDown(Caret &caret, Key k) {
-  // TODO: remove unused OnFocus code
   // TODO: decide on index as either byte or glyph index
   // TODO: insert new text at index rather than the end
   // TODO: skip non-printable characters

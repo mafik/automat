@@ -40,7 +40,6 @@ struct Widget {
 
   virtual void PointerOver(Pointer &, animation::State &) {}
   virtual void PointerLeave(Pointer &, animation::State &) {}
-  virtual void OnFocus(bool focus, animation::State &animation_state) {}
   virtual void Draw(SkCanvas &, animation::State &animation_state) const = 0;
   virtual SkPath Shape() const = 0;
   virtual std::unique_ptr<Action> KeyDownAction(Key) { return nullptr; }
@@ -48,8 +47,6 @@ struct Widget {
                                                    vec2 contact_point) {
     return nullptr;
   }
-  // Return true if the widget should be highlighted as keyboard focusable.
-  virtual bool CanFocusKeyboard() { return false; }
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
   // Iterate over direct child widgets in front-to-back order.

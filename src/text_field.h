@@ -17,7 +17,6 @@ struct TextField : Widget, CaretOwner {
   Widget *parent_widget;
   std::string *text;
   float width;
-  bool has_focus;
 
   std::unordered_map<Caret *, CaretPosition> caret_positions;
   struct HoverState {
@@ -41,13 +40,11 @@ struct TextField : Widget, CaretOwner {
   Widget *ParentWidget() override;
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;
-  void OnFocus(bool focus, animation::State &animation_state) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;
   SkPath Shape() const override;
   std::unique_ptr<Action> KeyDownAction(Key) override;
   std::unique_ptr<Action> ButtonDownAction(Pointer &, Button,
                                            vec2 contact_point) override;
-  bool CanFocusKeyboard() override { return true; }
   void ReleaseCaret(Caret &) override;
   void KeyDown(Caret &, Key) override;
   void KeyUp(Caret &, Key) override;

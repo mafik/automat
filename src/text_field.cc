@@ -175,14 +175,15 @@ struct TextSelectAction : Action {
         GetCaretIndexFromPosition(*text_field.text, local.X - kTextMargin);
     if (index != it->second.index) {
       it->second.index = index;
+      UpdateCaret(text_field, *caret);
     }
-    UpdateCaret(text_field, *caret);
   }
 
   void Begin(Pointer &pointer) override {
     caret = &text_field.RequestCaret(pointer.Keyboard());
-    text_field.caret_positions[caret] = {.index = 0};
-
+    // Invalid index will be updated on the first call to
+    // UpdateCaretFromPointer.
+    text_field.caret_positions[caret] = {.index = -1};
     UpdateCaretFromPointer(pointer);
   }
   void Update(Pointer &pointer) override { UpdateCaretFromPointer(pointer); }

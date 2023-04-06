@@ -14,8 +14,9 @@ struct CaretAnimationState {
 
 struct CaretImpl {
   Caret facade;
-  CaretOwner* owner;
+  CaretOwner *owner;
   SkPath shape;
+  time::point last_blink;
   product_ptr<CaretAnimationState> animation_state;
   KeyboardImpl &keyboard;
   CaretImpl(KeyboardImpl &keyboard);

@@ -27,6 +27,35 @@ void TextField::OnFocus(bool focus, animation::State &animation_state) {
   has_focus = focus;
 }
 
+void DrawDebugTextOutlines(SkCanvas &canvas, std::string *text) {
+  const char *c_str = text->c_str();
+  size_t byte_length = text->size();
+  Font &font = GetFont();
+  int glyph_count =
+      font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
+  SkGlyphID glyphs[glyph_count];
+  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs,
+                            glyph_count);
+
+  SkScalar widths[glyph_count];
+  SkRect bounds[glyph_count];
+  font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
+
+  // Draw glyph outlines for debugging
+  canvas.save();
+  canvas.scale(font.font_scale, -font.font_scale);
+  SkPaint outline;
+  outline.setStyle(SkPaint::kStroke_Style);
+  outline.setColor(SkColorSetRGB(0xff, 0x00, 0x00));
+  for (int i = 0; i < glyph_count; ++i) {
+    auto &b = bounds[i];
+    canvas.drawRect(b, outline);
+    canvas.translate(widths[i], 0);
+  }
+  canvas.scale(1 / font.font_scale, -1 / font.font_scale);
+  canvas.restore();
+}
+
 void TextField::Draw(SkCanvas &canvas,
                      animation::State &animation_state) const {
   auto &hover = hover_ptr[animation_state].animation;
@@ -56,6 +85,7 @@ void TextField::Draw(SkCanvas &canvas,
   text_fg.setColor(c_fg);
   if (text) {
     font.DrawText(canvas, *text, text_fg);
+    DrawDebugTextOutlines(canvas, text);
   }
 }
 
@@ -121,6 +151,7 @@ std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
 }
 
 void TextField::KeyDown(Caret &caret, Key k) {
+  // TODO: skip non-printable characters
   *text += k.text;
   caret_positions[&caret].index += k.text.size();
   std::string text_hex = "";

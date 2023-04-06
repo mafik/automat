@@ -188,16 +188,32 @@ std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
 
 void TextField::ReleaseCaret(Caret &caret) { caret_positions.erase(&caret); }
 
-void TextField::KeyDown(Caret &caret, Key k) {
-  // TODO: skip non-printable characters
-  text->insert(caret_positions[&caret].index, k.text);
-  caret_positions[&caret].index += k.text.size();
-  UpdateCaret(*this, caret);
-  std::string text_hex = "";
-  for (char c : k.text) {
-    text_hex += f(" %02x", (uint8_t)c);
+std::string FilterControlCharacters(const std::string &text) {
+  std::string clean = "";
+  const char *ptr = text.c_str();
+  const char *end = ptr + text.size();
+  while (ptr < end) {
+    const char *start = ptr;
+    SkUnichar uni = SkUTF::NextUTF8(&ptr, end);
+    if (uni < 0x20) {
+      continue;
+    }
+    clean.append(start, ptr);
   }
-  LOG() << "Key down: " << k.text << " (" << text_hex << ")";
+  return clean;
+}
+
+void TextField::KeyDown(Caret &caret, Key k) {
+  std::string clean = FilterControlCharacters(k.text);
+  if (!clean.empty()) {
+    text->insert(caret_positions[&caret].index, clean);
+    caret_positions[&caret].index += clean.size();
+    UpdateCaret(*this, caret);
+    std::string text_hex = "";
+    for (char c : clean) {
+      text_hex += f(" %02x", (uint8_t)c);
+    }
+  }
 }
 
 void TextField::KeyUp(Caret &, Key) {}

@@ -10,7 +10,7 @@ constexpr float kTextFieldHeight = 0.008; // 8mm
 constexpr float kTextFieldMinWidth = kTextFieldHeight;
 
 struct CaretPosition {
-  int index;
+  int index; // byte offset within UTF-8 string
 };
 
 struct TextField : Widget, CaretOwner {

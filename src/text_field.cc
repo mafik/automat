@@ -1,10 +1,12 @@
 #include "text_field.h"
 
+#include <memory>
+#include <numeric>
+
 #include <include/core/SkColor.h>
 #include <include/core/SkFontTypes.h>
 #include <include/core/SkMatrix.h>
-#include <memory>
-#include <numeric>
+#include <src/base/SkUTF.h>
 
 #include "font.h"
 #include "log.h"
@@ -61,47 +63,41 @@ void DrawDebugTextOutlines(SkCanvas &canvas, std::string *text) {
 int GetCaretIndexFromPosition(const std::string &text, float x) {
   Font &font = GetFont();
   x /= font.font_scale;
-  const char *c_str = text.c_str();
   size_t byte_length = text.size();
-  int glyph_count =
-      font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
-  SkGlyphID glyphs[glyph_count];
-  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs,
-                            glyph_count);
-
+  SkGlyphID glyphs[byte_length]; // We can't gave more glyphs than bytes.
+  int glyph_count = font.sk_font.textToGlyphs(
+      text.data(), byte_length, SkTextEncoding::kUTF8, glyphs, byte_length);
+  SkScalar xpos[glyph_count];
   SkScalar widths[glyph_count];
-  SkRect bounds[glyph_count];
-  font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
+  font.sk_font.getXPos(glyphs, glyph_count, xpos);
+  font.sk_font.getWidths(glyphs, glyph_count, widths);
 
-  float x_accum = 0;
-  for (int i = 0; i < glyph_count; ++i) {
-    if (x < x_accum + widths[i] / 2) {
-      return i;
+  const char *ptr = text.c_str();
+  const char *end = ptr + byte_length;
+  for (int i_glyph = 0; i_glyph < glyph_count; ++i_glyph) {
+    if (x < xpos[i_glyph] + widths[i_glyph] / 2) {
+      return ptr - text.c_str();
     }
-    x_accum += widths[i];
+    SkUTF::NextUTF8(&ptr, end);
   }
-  return glyph_count;
+  return byte_length;
 }
 
 float CaretPositionFromIndex(const std::string &text, int index) {
-  Font &font = GetFont();
-  const char *c_str = text.c_str();
-  size_t byte_length = text.size();
-  int glyph_count =
-      font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
-  SkGlyphID glyphs[glyph_count];
-  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs,
-                            glyph_count);
-
-  SkScalar widths[glyph_count];
-  SkRect bounds[glyph_count];
-  font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
-
-  float x_accum = 0;
-  for (int i = 0; i < index; ++i) {
-    x_accum += widths[i];
+  if (index == 0) {
+    return 0;
   }
-  return x_accum * font.font_scale;
+  Font &font = GetFont();
+  size_t byte_length =
+      index; // We're only interested in the first `index` bytes.
+  SkGlyphID glyphs[byte_length]; // We can't gave more glyphs than bytes.
+  int glyph_count = font.sk_font.textToGlyphs(
+      text.data(), byte_length, SkTextEncoding::kUTF8, glyphs, byte_length);
+  SkScalar xpos[glyph_count];
+  SkScalar widths[glyph_count];
+  font.sk_font.getXPos(glyphs, glyph_count, xpos);
+  font.sk_font.getWidths(glyphs, glyph_count, widths);
+  return (xpos[glyph_count - 1] + widths[glyph_count - 1]) * font.font_scale;
 }
 
 void TextField::Draw(SkCanvas &canvas,
@@ -144,32 +140,38 @@ SkPath TextField::Shape() const {
 
 std::unique_ptr<Action> TextField::KeyDownAction(Key) { return nullptr; }
 
-struct TextSelectAction : Action {
-  TextField *text_field;
+void UpdateCaret(TextField &text_field, Caret &caret) {
+  int index = text_field.caret_positions[&caret].index;
+  vec2 caret_pos =
+      Vec2(kTextMargin + CaretPositionFromIndex(*text_field.text, index),
+           (kTextFieldHeight - kLetterSize) / 2);
 
-  TextSelectAction(TextField *text_field) : text_field(text_field) {}
+  SkMatrix root_to_text = root_machine->TransformToChild(&text_field);
+  SkMatrix text_to_root;
+
+  if (!root_to_text.invert(&text_to_root)) {
+    EVERY_N_SEC(60) { ERROR() << "Failed to invert matrix"; }
+  }
+
+  vec2 caret_pos_root = Vec2(text_to_root.mapXY(caret_pos.X, caret_pos.Y));
+
+  caret.PlaceIBeam(caret_pos_root);
+}
+
+struct TextSelectAction : Action {
+  TextField &text_field;
+
+  TextSelectAction(TextField &text_field) : text_field(text_field) {}
 
   void Begin(Pointer &pointer) override {
-    vec2 local = pointer.PositionWithin(*text_field);
+    vec2 local = pointer.PositionWithin(text_field);
     int index =
-        GetCaretIndexFromPosition(*text_field->text, local.X - kTextMargin);
+        GetCaretIndexFromPosition(*text_field.text, local.X - kTextMargin);
 
-    Caret &caret = text_field->RequestCaret(pointer.Keyboard());
-    vec2 caret_pos =
-        Vec2(kTextMargin + CaretPositionFromIndex(*text_field->text, index),
-             (kTextFieldHeight - kLetterSize) / 2);
-    text_field->caret_positions[&caret] = {.index = index};
+    Caret &caret = text_field.RequestCaret(pointer.Keyboard());
+    text_field.caret_positions[&caret] = {.index = index};
 
-    SkMatrix root_to_text = root_machine->TransformToChild(text_field);
-    SkMatrix text_to_root;
-
-    if (!root_to_text.invert(&text_to_root)) {
-      EVERY_N_SEC(60) { ERROR() << "Failed to invert matrix"; }
-    }
-
-    vec2 caret_pos_root = Vec2(text_to_root.mapXY(caret_pos.X, caret_pos.Y));
-
-    caret.PlaceIBeam(caret_pos_root);
+    UpdateCaret(text_field, caret);
   }
   void Update(Pointer &pointer) override {}
   void End() override {}
@@ -179,7 +181,7 @@ struct TextSelectAction : Action {
 std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
                                                     vec2 contact_point) {
   if (btn == Button::kMouseLeft) {
-    return std::make_unique<TextSelectAction>(this);
+    return std::make_unique<TextSelectAction>(*this);
   }
   return nullptr;
 }
@@ -187,12 +189,10 @@ std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
 void TextField::ReleaseCaret(Caret &caret) { caret_positions.erase(&caret); }
 
 void TextField::KeyDown(Caret &caret, Key k) {
-  // TODO: decide on index as either byte or glyph index
-  // TODO: insert new text at index rather than the end
   // TODO: skip non-printable characters
-  // TODO: move caret after entering text
-  *text += k.text;
+  text->insert(caret_positions[&caret].index, k.text);
   caret_positions[&caret].index += k.text.size();
+  UpdateCaret(*this, caret);
   std::string text_hex = "";
   for (char c : k.text) {
     text_hex += f(" %02x", (uint8_t)c);

@@ -10,6 +10,18 @@ CaretImpl::CaretImpl(KeyboardImpl &keyboard)
 
 CaretImpl::~CaretImpl() {}
 
+static SkPath PointerIBeam(const KeyboardImpl &keyboard) {
+  if (keyboard.pointer) {
+    vec2 pos = keyboard.pointer->PositionWithin(*root_machine);
+    float width = 2 / keyboard.window.PxPerMeter();
+    float height = 32 / keyboard.window.PxPerMeter();
+    return SkPath::Rect(
+        SkRect::MakeXYWH(pos.X - width / 2, pos.Y - height / 2, width, height));
+  } else {
+    return SkPath();
+  }
+}
+
 void CaretImpl::PlaceIBeam(vec2 canvas_position) {
   float width = GetFont().line_thickness;
   float height = kLetterSize;
@@ -35,6 +47,7 @@ enum class CaretAnimAction { Keep, Delete };
 static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
                                  CaretImpl *caret,
                                  animation::State &animation_state) {
+  bool keep = true;
   if (caret) {
     anim.last_blink = caret->last_blink;
     if (anim.shape.isInterpolatable(caret->shape)) {
@@ -44,6 +57,21 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
       anim.shape = out;
     } else {
       anim.shape = caret->shape;
+    }
+  } else {
+    anim.last_blink = animation_state.timer.now;
+    if (anim.keyboard.pointer) {
+      SkPath grave = PointerIBeam(anim.keyboard);
+      SkPath out;
+      float weight = 1 - anim.delta_fraction.Tick(animation_state);
+      anim.shape.interpolate(grave, weight, &out);
+      anim.shape = out;
+      float dist =
+          (grave.getBounds().center() - anim.shape.getBounds().center())
+              .length();
+      if (dist < 0.0001) {
+        keep = false;
+      }
     }
   }
   SkPaint paint;
@@ -56,21 +84,15 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
     canvas.drawPath(anim.shape, paint);
   }
   if (caret == nullptr) {
-    return CaretAnimAction::Delete;
+    return keep ? CaretAnimAction::Keep : CaretAnimAction::Delete;
   } else {
     return CaretAnimAction::Keep;
   }
 }
 
 CaretAnimation::CaretAnimation(const KeyboardImpl &keyboard)
-    : delta_fraction(50),
-      shape(SkPath::Rect(SkRect::MakeXYWH(0, 0, kLetterSize / 8, kLetterSize))),
-      last_blink(time::now()) {
-  if (keyboard.pointer) {
-    vec2 pos = keyboard.pointer->PositionWithin(*root_machine);
-    shape.offset(pos.X, pos.Y);
-  }
-}
+    : keyboard(keyboard), delta_fraction(50), shape(PointerIBeam(keyboard)),
+      last_blink(time::now()) {}
 
 void KeyboardImpl::Draw(SkCanvas &canvas,
                         animation::State &animation_state) const {

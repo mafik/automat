@@ -23,6 +23,7 @@ struct CaretImpl {
 };
 
 struct CaretAnimation {
+  const KeyboardImpl &keyboard;
   animation::DeltaFraction delta_fraction;
   SkPath shape;
   time::point last_blink;

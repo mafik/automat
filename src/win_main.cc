@@ -205,6 +205,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     auto scan_code = ScanCode(lParam); // identifies the physical key
     uint8_t virtual_key = (uint8_t)wParam;
     key_state[virtual_key] = 0;
+    // Right Alt sends WM_KEYDOWN for Control & Alt, but WM_KEYUP for Alt only.
+    // This is a workaround for that.
+    if (virtual_key == 0x12) {
+      key_state[0x11] = 0;
+    }
 
     gui::Key key;
     key.physical = ScanCodeToKey(scan_code);

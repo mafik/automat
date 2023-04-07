@@ -32,6 +32,7 @@ elif platform == 'linux':
 defines.add('SK_GANESH')
 defines.add('SK_VULKAN')
 defines.add('SK_USE_VMA')
+defines.add('SK_SHAPER_HARFBUZZ_AVAILABLE')
 
 if args.debug:
     defines.add('_DEBUG')

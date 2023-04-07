@@ -2,6 +2,7 @@
 
 #include <modules/skshaper/include/SkShaper.h>
 #include <modules/skunicode/include/SkUnicode.h>
+#include <src/base/SkUTF.h>
 
 #include "log.h"
 
@@ -33,24 +34,12 @@ std::unique_ptr<Font> Font::Make(float letter_size_mm) {
   return std::make_unique<Font>(sk_font, font_scale, line_thickness);
 }
 
-class LineRunHandler : public SkShaper::RunHandler {
-public:
-  LineRunHandler(const char *utf8Text, SkPoint offset)
-      : utf8_text(utf8Text), offset(offset) {}
+struct LineRunHandler : public SkShaper::RunHandler {
+  LineRunHandler(std::string_view utf8_text) : utf8_text(utf8_text), offset() {}
   sk_sp<SkTextBlob> makeBlob() { return builder.make(); }
 
-  void beginLine() override {
-    ascent = 0;
-    descent = 0;
-    leading = 0;
-  }
-  void runInfo(const RunInfo &info) override {
-    SkFontMetrics metrics;
-    info.fFont.getMetrics(&metrics);
-    ascent = std::min(ascent, metrics.fAscent);
-    descent = std::max(descent, metrics.fDescent);
-    leading = std::max(leading, metrics.fLeading);
-  }
+  void beginLine() override {}
+  void runInfo(const RunInfo &info) override {}
   void commitRunInfo() override {}
   Buffer runBuffer(const RunInfo &info) override {
     int glyphCount =
@@ -58,24 +47,19 @@ public:
     int utf8RangeSize =
         SkTFitsIn<int>(info.utf8Range.size()) ? info.utf8Range.size() : INT_MAX;
 
-    const auto &runBuffer =
-        builder.allocRunTextPos(info.fFont, glyphCount, utf8RangeSize);
-    if (runBuffer.utf8text && utf8_text) {
-      memcpy(runBuffer.utf8text, utf8_text + info.utf8Range.begin(),
+    run_buffer =
+        &builder.allocRunTextPos(info.fFont, glyphCount, utf8RangeSize);
+    if (run_buffer->utf8text && !utf8_text.empty()) {
+      memcpy(run_buffer->utf8text, utf8_text.data() + info.utf8Range.begin(),
              utf8RangeSize);
     }
-    clusters = runBuffer.clusters;
-    glyph_count = glyphCount;
-    cluster_offset = info.utf8Range.begin();
 
-    return {runBuffer.glyphs, // buffer that will be filled with glyph IDs
-            runBuffer.points(), nullptr, runBuffer.clusters, offset};
+    return {run_buffer->glyphs, // buffer that will be filled with glyph IDs
+            run_buffer->points(), nullptr, run_buffer->clusters, offset};
   }
   void commitRunBuffer(const RunInfo &info) override {
-    SkASSERT(0 <= cluster_offset);
-    for (int i = 0; i < glyph_count; ++i) {
-      SkASSERT(clusters[i] >= (unsigned)cluster_offset);
-      clusters[i] -= cluster_offset;
+    for (int i = 0; i < info.glyphCount; ++i) {
+      run_buffer->clusters[i] -= info.utf8Range.begin();
     }
     offset += info.fAdvance;
   }
@@ -85,21 +69,53 @@ public:
   // Scaled text units have flipped Y axis and are significantly larger than
   // meters.
 
-  char const *const utf8_text;
+  std::string_view utf8_text;
   SkPoint offset; // Position where the letters will be placed (baseline).
   SkTextBlobBuilder builder;
 
-  SkScalar ascent;  // That this is (usually) negative. The highest point above
-                    // the baseline.
-  SkScalar descent; // The lowest point below the baseline.
-  SkScalar leading; // The suggested distance between lines (the bottom of the
-                    // descent and the top of the ascent).
+  // Temporary used between `runBuffer` and `commitRunBuffer`.
+  // glyphs[i] begins at utf8_text[clusters[i] + cluster_offset]
+  const SkTextBlobBuilder::RunBuffer *run_buffer;
+};
 
-  // Temporaries used between `runBuffer` and `commitRunBuffer`.
-  int glyph_count;
-  uint32_t *clusters;
-  int cluster_offset;
-  // clusters[glyph] + cluster_offset is a position in the utf8_text.
+struct MeasureLineRunHandler : public LineRunHandler {
+  // Arrays indexed by glyph index.
+  std::vector<float> positions;
+  std::vector<int> utf8_indices;
+
+  MeasureLineRunHandler(std::string_view utf8_text)
+      : LineRunHandler(utf8_text) {}
+
+  void commitRunBuffer(const RunInfo &info) override {
+    for (int i = 0; i < info.glyphCount; ++i) {
+      positions.push_back(run_buffer->points()[i].x() + offset.x());
+      utf8_indices.push_back(run_buffer->clusters[i]);
+    }
+    LineRunHandler::commitRunBuffer(info);
+  }
+  void commitLine() override {
+    positions.push_back(offset.x());
+    if (utf8_indices.empty()) {
+      utf8_indices.push_back(0);
+    } else {
+      const char *ptr = utf8_text.data() + utf8_indices.back();
+      const char *end = utf8_text.data() + utf8_text.size();
+      SkUTF::NextUTF8(&ptr, end);
+      int idx = ptr - utf8_text.data();
+      utf8_indices.push_back(idx);
+    }
+    LineRunHandler::commitLine();
+  }
+
+  int IndexFromPosition(float x) {
+    for (int i = 1; i < positions.size(); ++i) {
+      float center = (positions[i - 1] + positions[i]) / 2;
+      if (x < center) {
+        return utf8_indices[i - 1];
+      }
+    }
+    return utf8_indices.back();
+  }
 };
 
 SkShaper &GetShaper() {
@@ -108,10 +124,28 @@ SkShaper &GetShaper() {
   return *shaper;
 }
 
+float Font::PositionFromIndex(std::string_view text, int index) {
+  if (index == 0) {
+    return 0;
+  }
+  SkShaper &shaper = GetShaper();
+  LineRunHandler run_handler(text);
+  shaper.shape(text.data(), index, sk_font, true, 0, &run_handler);
+  return run_handler.offset.x() * font_scale;
+}
+
+int Font::IndexFromPosition(std::string_view text, float x) {
+  x /= font_scale;
+  SkShaper &shaper = GetShaper();
+  MeasureLineRunHandler run_handler(text);
+  shaper.shape(text.data(), text.size(), sk_font, true, 0, &run_handler);
+  return run_handler.IndexFromPosition(x);
+}
+
 void Font::DrawText(SkCanvas &canvas, std::string_view text, SkPaint &paint) {
   canvas.scale(font_scale, -font_scale);
   SkShaper &shaper = GetShaper();
-  LineRunHandler run_handler(text.data(), SkPoint());
+  LineRunHandler run_handler(text);
   shaper.shape(text.data(), text.size(), sk_font, true, 0, &run_handler);
 
   sk_sp<SkTextBlob> text_blob = run_handler.makeBlob();
@@ -121,8 +155,7 @@ void Font::DrawText(SkCanvas &canvas, std::string_view text, SkPaint &paint) {
 }
 
 float Font::MeasureText(std::string_view text) {
-  return sk_font.measureText(text.data(), text.size(), SkTextEncoding::kUTF8) *
-         font_scale;
+  return PositionFromIndex(text, text.size());
 }
 
 Font &GetFont() {

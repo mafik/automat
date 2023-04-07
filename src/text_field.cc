@@ -60,46 +60,6 @@ void DrawDebugTextOutlines(SkCanvas &canvas, std::string *text) {
   canvas.restore();
 }
 
-int GetCaretIndexFromPosition(const std::string &text, float x) {
-  Font &font = GetFont();
-  x /= font.font_scale;
-  size_t byte_length = text.size();
-  SkGlyphID glyphs[byte_length]; // We can't gave more glyphs than bytes.
-  int glyph_count = font.sk_font.textToGlyphs(
-      text.data(), byte_length, SkTextEncoding::kUTF8, glyphs, byte_length);
-  SkScalar xpos[glyph_count];
-  SkScalar widths[glyph_count];
-  font.sk_font.getXPos(glyphs, glyph_count, xpos);
-  font.sk_font.getWidths(glyphs, glyph_count, widths);
-
-  const char *ptr = text.c_str();
-  const char *end = ptr + byte_length;
-  for (int i_glyph = 0; i_glyph < glyph_count; ++i_glyph) {
-    if (x < xpos[i_glyph] + widths[i_glyph] / 2) {
-      return ptr - text.c_str();
-    }
-    SkUTF::NextUTF8(&ptr, end);
-  }
-  return byte_length;
-}
-
-float CaretPositionFromIndex(const std::string &text, int index) {
-  if (index == 0) {
-    return 0;
-  }
-  Font &font = GetFont();
-  size_t byte_length =
-      index; // We're only interested in the first `index` bytes.
-  SkGlyphID glyphs[byte_length]; // We can't gave more glyphs than bytes.
-  int glyph_count = font.sk_font.textToGlyphs(
-      text.data(), byte_length, SkTextEncoding::kUTF8, glyphs, byte_length);
-  SkScalar xpos[glyph_count];
-  SkScalar widths[glyph_count];
-  font.sk_font.getXPos(glyphs, glyph_count, xpos);
-  font.sk_font.getWidths(glyphs, glyph_count, widths);
-  return (xpos[glyph_count - 1] + widths[glyph_count - 1]) * font.font_scale;
-}
-
 void TextField::Draw(SkCanvas &canvas,
                      animation::State &animation_state) const {
   auto &hover = hover_ptr[animation_state].animation;
@@ -143,7 +103,7 @@ std::unique_ptr<Action> TextField::KeyDownAction(Key) { return nullptr; }
 void UpdateCaret(TextField &text_field, Caret &caret) {
   int index = text_field.caret_positions[&caret].index;
   vec2 caret_pos =
-      Vec2(kTextMargin + CaretPositionFromIndex(*text_field.text, index),
+      Vec2(kTextMargin + GetFont().PositionFromIndex(*text_field.text, index),
            (kTextFieldHeight - kLetterSize) / 2);
 
   SkMatrix root_to_text = root_machine->TransformToChild(&text_field);
@@ -172,7 +132,7 @@ struct TextSelectAction : Action {
     }
     vec2 local = pointer.PositionWithin(text_field);
     int index =
-        GetCaretIndexFromPosition(*text_field.text, local.X - kTextMargin);
+        GetFont().IndexFromPosition(*text_field.text, local.X - kTextMargin);
     if (index != it->second.index) {
       it->second.index = index;
       UpdateCaret(text_field, *caret);

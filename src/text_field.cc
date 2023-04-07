@@ -176,20 +176,12 @@ std::string FilterControlCharacters(const std::string &text) {
   return clean;
 }
 
-bool IsUtf8Continuation(uint8_t byte) {
-  return (byte & 0b1100'0000) == 0b1000'0000;
-}
-
 void TextField::KeyDown(Caret &caret, Key k) {
   switch (k.physical) {
   case AnsiKey::Delete: {
     int begin = caret_positions[&caret].index;
-    int end = begin;
-    if (end < text->size()) {
-      end++;
-      while (end < text->size() && IsUtf8Continuation((*text)[end])) {
-        end++;
-      }
+    int end = GetFont().NextIndex(*text, begin);
+    if (end != begin) {
       text->erase(begin, end - begin);
       // No need to update caret after delete.
     }
@@ -199,12 +191,7 @@ void TextField::KeyDown(Caret &caret, Key k) {
     int &i_ref = caret_positions[&caret].index;
     int end = i_ref;
     if (i_ref > 0) {
-      i_ref--;
-      uint8_t c = (*text)[i_ref];
-      while (IsUtf8Continuation(c)) {
-        i_ref--;
-        c = (*text)[i_ref];
-      }
+      i_ref = GetFont().PrevIndex(*text, i_ref);
       text->erase(i_ref, end - i_ref);
       UpdateCaret(*this, caret);
     }
@@ -213,12 +200,7 @@ void TextField::KeyDown(Caret &caret, Key k) {
   case AnsiKey::Left: {
     int &i_ref = caret_positions[&caret].index;
     if (i_ref > 0) {
-      i_ref--;
-      uint8_t c = (*text)[i_ref];
-      while (IsUtf8Continuation(c)) {
-        i_ref--;
-        c = (*text)[i_ref];
-      }
+      i_ref = GetFont().PrevIndex(*text, i_ref);
       UpdateCaret(*this, caret);
     }
     break;
@@ -226,12 +208,7 @@ void TextField::KeyDown(Caret &caret, Key k) {
   case AnsiKey::Right: {
     int &i_ref = caret_positions[&caret].index;
     if (i_ref < text->size()) {
-      i_ref++;
-      uint8_t c = (*text)[i_ref];
-      while (IsUtf8Continuation(c)) {
-        i_ref++;
-        c = (*text)[i_ref];
-      }
+      i_ref = GetFont().NextIndex(*text, i_ref);
       UpdateCaret(*this, caret);
     }
     break;

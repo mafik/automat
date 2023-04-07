@@ -22,6 +22,8 @@ struct Font {
   float MeasureText(std::string_view text);
   float PositionFromIndex(std::string_view text, int index);
   int IndexFromPosition(std::string_view text, float x);
+  int PrevIndex(std::string_view text, int index);
+  int NextIndex(std::string_view text, int index);
 };
 
 Font &GetFont();

@@ -124,6 +124,33 @@ SkShaper &GetShaper() {
   return *shaper;
 }
 
+int Font::PrevIndex(std::string_view text, int index) {
+  if (index == 0) {
+    return 0;
+  }
+  SkShaper &shaper = GetShaper();
+  MeasureLineRunHandler run_handler(text);
+  shaper.shape(text.data(), index, sk_font, true, 0, &run_handler);
+  if (run_handler.utf8_indices.size() > 1) {
+    return run_handler.utf8_indices[run_handler.utf8_indices.size() - 2];
+  }
+  return run_handler.utf8_indices.back();
+}
+
+int Font::NextIndex(std::string_view text, int index) {
+  if (index + 1 >= text.size()) {
+    return text.size();
+  }
+  SkShaper &shaper = GetShaper();
+  text = text.substr(index);
+  MeasureLineRunHandler run_handler(text);
+  shaper.shape(text.data(), text.size(), sk_font, true, 0, &run_handler);
+  if (run_handler.utf8_indices.size() > 1) {
+    return index + run_handler.utf8_indices[1];
+  }
+  return index + run_handler.utf8_indices[0];
+}
+
 float Font::PositionFromIndex(std::string_view text, int index) {
   if (index == 0) {
     return 0;

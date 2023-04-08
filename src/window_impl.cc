@@ -70,7 +70,7 @@ struct DragAction : Action {
   }
 };
 
-std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &, Button btn,
+std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &, PointerButton btn,
                                                           vec2 contact_point) {
   if (btn != kMouseLeft) {
     return nullptr;

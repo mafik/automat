@@ -9,7 +9,7 @@ struct PointerImpl;
 struct Widget;
 struct Window;
 
-enum Button {
+enum PointerButton {
   kButtonUnknown,
   kMouseLeft,
   kMouseMiddle,
@@ -22,8 +22,8 @@ struct Pointer final {
   ~Pointer();
   void Move(vec2 position);
   void Wheel(float delta);
-  void ButtonDown(Button);
-  void ButtonUp(Button);
+  void ButtonDown(PointerButton);
+  void ButtonUp(PointerButton);
 
   enum IconType { kIconArrow, kIconHand, kIconIBeam };
 

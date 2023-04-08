@@ -37,7 +37,7 @@ struct PrototypeButton : Widget {
     pointer.PopIcon();
   }
 
-  std::unique_ptr<Action> ButtonDownAction(Pointer &, Button btn,
+  std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton btn,
                                            vec2 contact_point) override;
 };
 

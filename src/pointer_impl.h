@@ -31,8 +31,8 @@ struct PointerImpl {
   ~PointerImpl();
   void Move(vec2 position);
   void Wheel(float delta);
-  void ButtonDown(Button btn);
-  void ButtonUp(Button btn);
+  void ButtonDown(PointerButton btn);
+  void ButtonUp(PointerButton btn);
   void Draw(SkCanvas &canvas, animation::State &animation_state) {
     if (action) {
       action->Draw(canvas, animation_state);

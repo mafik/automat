@@ -42,8 +42,7 @@ struct Widget {
   virtual void PointerLeave(Pointer &, animation::State &) {}
   virtual void Draw(SkCanvas &, animation::State &animation_state) const = 0;
   virtual SkPath Shape() const = 0;
-  virtual std::unique_ptr<Action> KeyDownAction(Key) { return nullptr; }
-  virtual std::unique_ptr<Action> ButtonDownAction(Pointer &, Button,
+  virtual std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton,
                                                    vec2 contact_point) {
     return nullptr;
   }

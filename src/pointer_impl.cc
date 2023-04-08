@@ -70,7 +70,7 @@ void PointerImpl::Wheel(float delta) {
   }
   window.zoom.target = std::max(kMinZoom, window.zoom.target);
 }
-void PointerImpl::ButtonDown(Button btn) {
+void PointerImpl::ButtonDown(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount)
     return;
   button_down_position[btn] = pointer_position;
@@ -88,7 +88,7 @@ void PointerImpl::ButtonDown(Button btn) {
     }
   }
 }
-void PointerImpl::ButtonUp(Button btn) {
+void PointerImpl::ButtonUp(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount)
     return;
   if (btn == kMouseLeft) {

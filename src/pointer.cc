@@ -10,8 +10,8 @@ Pointer::Pointer(Window &window, vec2 position)
 Pointer::~Pointer() {}
 void Pointer::Move(vec2 position) { impl->Move(position); }
 void Pointer::Wheel(float delta) { impl->Wheel(delta); }
-void Pointer::ButtonDown(Button btn) { impl->ButtonDown(btn); }
-void Pointer::ButtonUp(Button btn) { impl->ButtonUp(btn); }
+void Pointer::ButtonDown(PointerButton btn) { impl->ButtonDown(btn); }
+void Pointer::ButtonUp(PointerButton btn) { impl->ButtonUp(btn); }
 Pointer::IconType Pointer::Icon() const { return impl->Icon(); }
 void Pointer::PushIcon(IconType icon) { impl->PushIcon(icon); }
 void Pointer::PopIcon() { impl->PopIcon(); }

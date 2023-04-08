@@ -98,8 +98,6 @@ SkPath TextField::Shape() const {
   return SkPath::RRect(bounds, kTextMargin, kTextMargin);
 }
 
-std::unique_ptr<Action> TextField::KeyDownAction(Key) { return nullptr; }
-
 void UpdateCaret(TextField &text_field, Caret &caret) {
   int index = text_field.caret_positions[&caret].index;
   vec2 caret_pos =
@@ -151,9 +149,9 @@ struct TextSelectAction : Action {
   void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
 };
 
-std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, Button btn,
+std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, PointerButton btn,
                                                     vec2 contact_point) {
-  if (btn == Button::kMouseLeft) {
+  if (btn == PointerButton::kMouseLeft) {
     return std::make_unique<TextSelectAction>(*this);
   }
   return nullptr;

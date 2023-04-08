@@ -88,6 +88,9 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
       anim.fade_out.target = 1;
       anim.fade_out.Tick(animation_state);
       paint.setAlphaf(1 - anim.fade_out.value);
+      if (paint.getAlphaf() < 0.01) {
+        return CaretAnimAction::Delete;
+      }
       anim.shape.offset(0, animation_state.timer.d * kLetterSize);
       canvas.drawPath(anim.shape, paint);
     }

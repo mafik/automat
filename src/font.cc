@@ -9,7 +9,6 @@
 // TODO: load icudtl.dat from C:\Windows\Globalization\ICU\icudtl.dat
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")
-#pragma comment(lib, "icu")
 #pragma comment(lib, "Advapi32")
 
 namespace automaton::gui {

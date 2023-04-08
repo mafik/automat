@@ -140,12 +140,17 @@ recipe.add_step(
 
 if platform == 'win32':
     # TODO: steps for building Skia
-    CXXFLAGS += ['-IC:\\Users\\maf\\skia']
-    CXXFLAGS += ['-IC:\\Users\\maf\\skia\\include\\third_party\\vulkan']
+    # Note that Skia built for Automat is modified to search for icudtl.dat in
+    # C:\Windows\Globalization\ICU\
     if args.debug:
-        LDFLAGS += ['-LC:\\Users\\maf\\skia\\out\\Debug']
+        SKIA_VARIANT = 'Debug'
     else:
-        LDFLAGS += ['-LC:\\Users\\maf\\skia\\out\\Release']
+        SKIA_VARIANT = 'Release'
+    SKIA_ROOT = Path('C:\\Users\\maf\\skia')
+    SKIA_LIB = SKIA_ROOT / 'out' / SKIA_VARIANT
+    CXXFLAGS += ['-I', SKIA_ROOT]
+    CXXFLAGS += ['-I', SKIA_ROOT / 'include' / 'third_party' / 'vulkan']
+    LDFLAGS += ['-L', SKIA_LIB]
     LDFLAGS += ['-lskia']
 
     # TODO: allow translation modules to request libraries

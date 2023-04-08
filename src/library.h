@@ -18,16 +18,13 @@
 #include "algebra.h"
 #include "base.h"
 #include "format.h"
+#include "library_increment.h"
+#include "library_macros.h"
+#include "library_number.h"
 #include "log.h"
 #include "treemath.h"
 
 namespace automaton {
-
-#define DEFINE_PROTO(type)                                                     \
-  const type type::proto;                                                      \
-  __attribute__((constructor)) void Register##type() {                         \
-    RegisterPrototype(type::proto);                                            \
-  }
 
 struct Integer : Object {
   int32_t i;
@@ -43,42 +40,6 @@ struct Integer : Object {
   }
 };
 DEFINE_PROTO(Integer);
-
-struct Number : Object {
-  double value;
-  Number(double x = 0) : value(x) {}
-  static const Number proto;
-  string_view Name() const override { return "Number"; }
-  std::unique_ptr<Object> Clone() const override {
-    return std::make_unique<Number>(value);
-  }
-  string GetText() const override { return std::to_string(value); }
-  void SetText(Location &error_context, string_view text) override {
-    value = std::stod(string(text));
-  }
-};
-DEFINE_PROTO(Number);
-
-struct Increment : Object {
-  static const Increment proto;
-  static Argument target_arg;
-  string_view Name() const override { return "Increment"; }
-  std::unique_ptr<Object> Clone() const override {
-    return std::make_unique<Increment>();
-  }
-  void Run(Location &h) override {
-    auto integer = target_arg.GetTyped<Integer>(h);
-    if (!integer.ok) {
-      return;
-    }
-    integer.typed->i++;
-    integer.location->ScheduleUpdate();
-  }
-};
-DEFINE_PROTO(Increment);
-Argument Increment::target_arg =
-    Argument("target", Argument::kRequiresConcreteType)
-        .RequireInstanceOf<Integer>();
 
 struct Delete : Object {
   static const Delete proto;
@@ -125,7 +86,8 @@ struct Date : Object {
   int year;
   int month;
   int day;
-  Date(int year = 0, int month = 0, int day = 0) : year(year), month(month), day(day) {}
+  Date(int year = 0, int month = 0, int day = 0)
+      : year(year), month(month), day(day) {}
   string_view Name() const override { return "Date"; }
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Date>(year, month, day);
@@ -1151,7 +1113,7 @@ DEFINE_PROTO(Slider);
 LiveArgument Slider::min_arg("min", Argument::kOptional);
 LiveArgument Slider::max_arg("max", Argument::kOptional);
 
-struct ProgressBar : Number {
+struct ProgressBar : library::Number {
   static const ProgressBar proto;
   string_view Name() const override { return "Progress Bar"; }
   std::unique_ptr<Object> Clone() const override {

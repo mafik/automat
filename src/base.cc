@@ -13,6 +13,7 @@
 #include <include/effects/SkGradientShader.h>
 #include <unordered_map>
 
+#include "color.h"
 #include "font.h"
 #include "text_field.h"
 
@@ -25,12 +26,6 @@ std::vector<const Object *> &Prototypes() {
 
 void RegisterPrototype(const Object &prototype) {
   Prototypes().push_back(&prototype);
-}
-
-SkColor SkColorFromHex(const char *hex) {
-  int r, g, b;
-  sscanf(hex, "#%02x%02x%02x", &r, &g, &b);
-  return SkColorSetRGB(r, g, b);
 }
 
 constexpr float kBorderWidth = 0.00025;

@@ -47,8 +47,13 @@ enum class CaretAnimAction { Keep, Delete };
 static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
                                  CaretImpl *caret,
                                  animation::State &animation_state) {
-  bool keep = true;
+
+  SkPaint paint;
+  paint.setColor(SK_ColorBLACK);
+  paint.setAntiAlias(true);
+
   if (caret) {
+    // Animate caret blinking.
     anim.last_blink = caret->last_blink;
     if (anim.shape.isInterpolatable(caret->shape)) {
       SkPath out;
@@ -58,8 +63,14 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
     } else {
       anim.shape = caret->shape;
     }
+    double now = (animation_state.timer.now - anim.last_blink).count();
+    double seconds, subseconds;
+    subseconds = modf(now, &seconds);
+    if (subseconds < 0.5) {
+      canvas.drawPath(anim.shape, paint);
+    }
   } else {
-    anim.last_blink = animation_state.timer.now;
+    // Animate disappearance of caret.
     if (anim.keyboard.pointer) {
       SkPath grave = PointerIBeam(anim.keyboard);
       SkPath out;
@@ -70,24 +81,18 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
           (grave.getBounds().center() - anim.shape.getBounds().center())
               .length();
       if (dist < 0.0001) {
-        keep = false;
+        return CaretAnimAction::Delete;
       }
+      canvas.drawPath(anim.shape, paint);
+    } else {
+      anim.fade_out.target = 1;
+      anim.fade_out.Tick(animation_state);
+      paint.setAlphaf(1 - anim.fade_out.value);
+      anim.shape.offset(0, animation_state.timer.d * kLetterSize);
+      canvas.drawPath(anim.shape, paint);
     }
   }
-  SkPaint paint;
-  paint.setColor(SK_ColorBLACK);
-  paint.setAntiAlias(true);
-  double now = (animation_state.timer.now - anim.last_blink).count();
-  double seconds, subseconds;
-  subseconds = modf(now, &seconds);
-  if (subseconds < 0.5) {
-    canvas.drawPath(anim.shape, paint);
-  }
-  if (caret == nullptr) {
-    return keep ? CaretAnimAction::Keep : CaretAnimAction::Delete;
-  } else {
-    return CaretAnimAction::Keep;
-  }
+  return CaretAnimAction::Keep;
 }
 
 CaretAnimation::CaretAnimation(const KeyboardImpl &keyboard)

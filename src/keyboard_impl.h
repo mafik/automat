@@ -27,6 +27,7 @@ struct CaretAnimation {
   animation::DeltaFraction delta_fraction;
   SkPath shape;
   time::point last_blink;
+  animation::Approach fade_out;
   CaretAnimation(const KeyboardImpl &);
 };
 

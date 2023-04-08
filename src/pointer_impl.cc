@@ -10,10 +10,16 @@ PointerImpl::PointerImpl(WindowImpl &window, Pointer &facade, vec2 position)
     : window(window), facade(facade), pointer_position(position),
       button_down_position(), button_down_time() {
   window.pointers.push_back(this);
+  assert(!window.keyboards.empty());
+  keyboard = window.keyboards.front();
+  keyboard->pointer = this;
 }
 PointerImpl::~PointerImpl() {
   if (hovered_widget) {
     hovered_widget->PointerLeave(facade, window.animation_state);
+  }
+  if (keyboard) {
+    keyboard->pointer = nullptr;
   }
   auto it = std::find(window.pointers.begin(), window.pointers.end(), this);
   if (it != window.pointers.end()) {
@@ -113,11 +119,6 @@ vec2 PointerImpl::PositionWithin(Widget &widget) const {
 }
 
 Keyboard &PointerImpl::Keyboard() {
-  if (keyboard == nullptr) {
-    assert(!window.keyboards.empty());
-    keyboard = window.keyboards.front();
-    keyboard->pointer = this;
-  }
   return keyboard->facade;
 }
 

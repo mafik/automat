@@ -15,11 +15,13 @@
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkPath.h>
+#include <modules/skottie/include/Skottie.h>
 
 #include "animation.h"
 #include "channel.h"
 #include "format.h"
 #include "gui_button.h"
+#include "icons.h"
 #include "log.h"
 #include "text_field.h"
 
@@ -222,7 +224,8 @@ struct Location : gui::Widget {
 
   Location(Location *parent = nullptr)
       : parent(parent), name_text_field(this, &name, 0.03),
-        run_button(this, "GO") {}
+        run_button(this, skottie::Animation::Make(icons::kDrums.data(),
+                                                  icons::kDrums.size())) {}
 
   Widget *ParentWidget() override {
     if (parent == nullptr) {

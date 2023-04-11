@@ -1,15 +1,21 @@
 #pragma once
 
+#include <modules/skottie/include/Skottie.h>
+
+#include "animation.h"
+#include "product_ptr.h"
 #include "widget.h"
+
 
 namespace automaton::gui {
 
 struct Button : Widget {
   Widget *parent_widget;
-  std::string label;
+  sk_sp<skottie::Animation> picture;
+  mutable product_ptr<animation::Approach> inset_shadow_sigma;
+  mutable product_ptr<animation::Approach> inset_shadow_inset;
 
-  Button(Widget *parent_widget, std::string label)
-      : parent_widget(parent_widget), label(label) {}
+  Button(Widget *parent_widget, sk_sp<skottie::Animation> picture);
   Widget *ParentWidget() override;
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;

@@ -36,7 +36,7 @@ void Object::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, 0.01}};
-  SkColor colors[2] = {SkColorFromHex("#0f5f4d"), SkColorFromHex("#468257")};
+  SkColor colors[2] = {color::FromHex(0x0f5f4d), color::FromHex(0x468257)};
   sk_sp<SkShader> gradient =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
   paint.setShader(gradient);
@@ -53,8 +53,8 @@ void Object::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     path = SkPath::RRect(rrect);
   }
 
-  SkColor border_colors[2] = {SkColorFromHex("#1c5d3e"),
-                              SkColorFromHex("#76a87a")};
+  SkColor border_colors[2] = {color::FromHex(0x1c5d3e),
+                              color::FromHex(0x76a87a)};
   sk_sp<SkShader> border_gradient = SkGradientShader::MakeLinear(
       pts, border_colors, nullptr, 2, SkTileMode::kClamp);
   border_paint.setShader(border_gradient);
@@ -127,8 +127,8 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     SkPath my_shape = Shape();
     SkRect bounds = my_shape.getBounds();
     SkPaint frame_bg;
-    SkColor frame_bg_colors[2] = {SkColorFromHex("#cccccc"),
-                                  SkColorFromHex("#aaaaaa")};
+    SkColor frame_bg_colors[2] = {color::FromHex(0xcccccc),
+                                  color::FromHex(0xaaaaaa)};
     SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
     sk_sp<SkShader> frame_bg_shader = SkGradientShader::MakeLinear(
         gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
@@ -136,8 +136,8 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     canvas.drawPath(my_shape, frame_bg);
 
     SkPaint frame_border;
-    SkColor frame_border_colors[2] = {SkColorBrighten(frame_bg_colors[0]),
-                                      SkColorDarken(frame_bg_colors[1])};
+    SkColor frame_border_colors[2] = {color::Brighten(frame_bg_colors[0]),
+                                      color::Darken(frame_bg_colors[1])};
     sk_sp<SkShader> frame_border_shader = SkGradientShader::MakeLinear(
         gradient_pts, frame_border_colors, nullptr, 2, SkTileMode::kClamp);
     frame_border.setShader(frame_border_shader);
@@ -149,8 +149,8 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     auto DrawInset = [&](SkPath shape) {
       const SkRect &bounds = shape.getBounds();
       SkPaint paint;
-      SkColor colors[2] = {SkColorBrighten(frame_bg_colors[0]),
-                           SkColorDarken(frame_bg_colors[1])};
+      SkColor colors[2] = {color::Brighten(frame_bg_colors[0]),
+                           color::Darken(frame_bg_colors[1])};
       SkPoint points[2] = {{0, bounds.top()}, {0, bounds.bottom()}};
       sk_sp<SkShader> shader = SkGradientShader::MakeLinear(
           points, colors, nullptr, 2, SkTileMode::kClamp);

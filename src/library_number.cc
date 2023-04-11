@@ -3,9 +3,10 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
-#include "library_macros.h"
 #include "color.h"
 #include "font.h"
+#include "library_macros.h"
+
 
 namespace automaton::library {
 
@@ -35,7 +36,7 @@ void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, 0.01}};
-  SkColor colors[2] = {SkColorFromHex("#0f5f4d"), SkColorFromHex("#468257")};
+  SkColor colors[2] = {color::FromHex(0x0f5f4d), color::FromHex(0x468257)};
   sk_sp<SkShader> gradient =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
   paint.setShader(gradient);
@@ -52,8 +53,8 @@ void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     path = SkPath::RRect(rrect);
   }
 
-  SkColor border_colors[2] = {SkColorFromHex("#1c5d3e"),
-                              SkColorFromHex("#76a87a")};
+  SkColor border_colors[2] = {color::FromHex(0x1c5d3e),
+                              color::FromHex(0x76a87a)};
   sk_sp<SkShader> border_gradient = SkGradientShader::MakeLinear(
       pts, border_colors, nullptr, 2, SkTileMode::kClamp);
   border_paint.setShader(border_gradient);
@@ -76,8 +77,8 @@ void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 }
 
 SkPath Number::Shape() const {
-  static SkPath path = SkPath::RRect(SkRRect::MakeRectXY(
-      SkRect::MakeXYWH(0, 0, 0.008, 0.008), 0.001, 0.001));
+  static SkPath path = SkPath::RRect(
+      SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, 0.008, 0.008), 0.001, 0.001));
   return path;
 }
 

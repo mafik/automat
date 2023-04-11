@@ -10,6 +10,8 @@ struct Increment : Object {
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   void Run(Location &h) override;
+  void Draw(SkCanvas &canvas, animation::State &animation_state) const override;
+  SkPath Shape() const override;
 };
 
 } // namespace automaton::library

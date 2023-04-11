@@ -40,7 +40,7 @@ struct Widget {
 
   virtual void PointerOver(Pointer &, animation::State &) {}
   virtual void PointerLeave(Pointer &, animation::State &) {}
-  virtual void Draw(SkCanvas &, animation::State &animation_state) const = 0;
+  virtual void Draw(SkCanvas &, animation::State &) const = 0;
   virtual SkPath Shape() const = 0;
   virtual std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton,
                                                    vec2 contact_point) {
@@ -63,6 +63,8 @@ struct Widget {
 
   // The child doesn't have to be an immediate child.
   SkMatrix TransformToChild(Widget *child);
+
+  void DrawChildren(SkCanvas &, animation::State &) const;
 };
 
 } // namespace automaton::gui

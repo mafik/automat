@@ -19,6 +19,7 @@
 #include "animation.h"
 #include "channel.h"
 #include "format.h"
+#include "gui_button.h"
 #include "log.h"
 #include "text_field.h"
 
@@ -204,6 +205,7 @@ struct Location : gui::Widget {
   // Name of this Location.
   string name;
   gui::TextField name_text_field;
+  gui::Button run_button;
 
   vec2 position = {0, 0};
 
@@ -219,7 +221,8 @@ struct Location : gui::Widget {
   unordered_set<Location *> observing_errors;
 
   Location(Location *parent = nullptr)
-      : parent(parent), name_text_field(this, &name, 0.03) {}
+      : parent(parent), name_text_field(this, &name, 0.03),
+        run_button(this, "GO") {}
 
   Widget *ParentWidget() override {
     if (parent == nullptr) {

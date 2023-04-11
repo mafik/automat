@@ -104,6 +104,9 @@ SkPath Location::Shape() const {
     bounds.fRight = bounds.fLeft + name_text_field.width + 2 * 0.001;
   }
   bounds.fBottom += gui::kTextFieldHeight + 0.001;
+  // expand the bounds to include the run button
+  SkPath run_button_shape = run_button.Shape();
+  bounds.fTop -= run_button_shape.getBounds().height() + 0.001;
   return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
 }
 
@@ -115,67 +118,67 @@ gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
     }
   }
   SkPath my_shape = Shape();
-  SkRect bounds = my_shape.getBounds();
-  SkMatrix name_text_field_transform = SkMatrix::Translate(
-      -bounds.left() - 0.001, -bounds.bottom() + gui::kTextFieldHeight + 0.001);
+  SkRect my_bounds = my_shape.getBounds();
+  SkMatrix name_text_field_transform =
+      SkMatrix::Translate(-my_bounds.left() - 0.001,
+                          -my_bounds.bottom() + gui::kTextFieldHeight + 0.001);
   auto result = visitor(name_text_field, name_text_field_transform);
+  if (result != gui::VisitResult::kContinue) {
+    return result;
+  }
+  SkPath run_button_shape = run_button.Shape();
+  SkRect run_bounds = run_button_shape.getBounds();
+  SkMatrix run_button_transform =
+      SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
+                          -(my_bounds.top() - run_bounds.fTop) - 0.001);
+  result = visitor(run_button, run_button_transform);
   return result;
 }
 
 void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
+  SkPath my_shape = Shape();
+  SkRect bounds = my_shape.getBounds();
+  SkPaint frame_bg;
+  SkColor frame_bg_colors[2] = {color::FromHex(0xcccccc),
+                                color::FromHex(0xaaaaaa)};
+  SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
+  sk_sp<SkShader> frame_bg_shader = SkGradientShader::MakeLinear(
+      gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
+  frame_bg.setShader(frame_bg_shader);
+  canvas.drawPath(my_shape, frame_bg);
+
+  SkPaint frame_border;
+  SkColor frame_border_colors[2] = {color::Brighten(frame_bg_colors[0]),
+                                    color::Darken(frame_bg_colors[1])};
+  sk_sp<SkShader> frame_border_shader = SkGradientShader::MakeLinear(
+      gradient_pts, frame_border_colors, nullptr, 2, SkTileMode::kClamp);
+  frame_border.setShader(frame_border_shader);
+  frame_border.setStyle(SkPaint::kStroke_Style);
+  frame_border.setStrokeWidth(0.00025);
+  canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius,
+                       frame_border);
+
+  auto DrawInset = [&](SkPath shape) {
+    const SkRect &bounds = shape.getBounds();
+    SkPaint paint;
+    SkColor colors[2] = {color::Brighten(frame_bg_colors[0]),
+                         color::Darken(frame_bg_colors[1])};
+    SkPoint points[2] = {{0, bounds.top()}, {0, bounds.bottom()}};
+    sk_sp<SkShader> shader = SkGradientShader::MakeLinear(
+        points, colors, nullptr, 2, SkTileMode::kClamp);
+    paint.setShader(shader);
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setStrokeWidth(0.0005);
+    canvas.drawPath(shape, paint);
+  };
+
+  // TODO: draw inset around every child
   if (object) {
-    SkPath my_shape = Shape();
-    SkRect bounds = my_shape.getBounds();
-    SkPaint frame_bg;
-    SkColor frame_bg_colors[2] = {color::FromHex(0xcccccc),
-                                  color::FromHex(0xaaaaaa)};
-    SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
-    sk_sp<SkShader> frame_bg_shader = SkGradientShader::MakeLinear(
-        gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
-    frame_bg.setShader(frame_bg_shader);
-    canvas.drawPath(my_shape, frame_bg);
-
-    SkPaint frame_border;
-    SkColor frame_border_colors[2] = {color::Brighten(frame_bg_colors[0]),
-                                      color::Darken(frame_bg_colors[1])};
-    sk_sp<SkShader> frame_border_shader = SkGradientShader::MakeLinear(
-        gradient_pts, frame_border_colors, nullptr, 2, SkTileMode::kClamp);
-    frame_border.setShader(frame_border_shader);
-    frame_border.setStyle(SkPaint::kStroke_Style);
-    frame_border.setStrokeWidth(0.00025);
-    canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius,
-                         frame_border);
-
-    auto DrawInset = [&](SkPath shape) {
-      const SkRect &bounds = shape.getBounds();
-      SkPaint paint;
-      SkColor colors[2] = {color::Brighten(frame_bg_colors[0]),
-                           color::Darken(frame_bg_colors[1])};
-      SkPoint points[2] = {{0, bounds.top()}, {0, bounds.bottom()}};
-      sk_sp<SkShader> shader = SkGradientShader::MakeLinear(
-          points, colors, nullptr, 2, SkTileMode::kClamp);
-      paint.setShader(shader);
-      paint.setStyle(SkPaint::kStroke_Style);
-      paint.setStrokeWidth(0.0005);
-      canvas.drawPath(shape, paint);
-    };
-
     // Draw inset around object
     DrawInset(object->Shape());
-
-    // Draw object
-    object->Draw(canvas, animation_state);
-
-    canvas.translate(bounds.left() + 0.001,
-                     bounds.bottom() - gui::kTextFieldHeight - 0.001);
-
-    // Draw inset around name_text_field
-    SkPath name_text_shape = name_text_field.Shape();
-    DrawInset(name_text_shape);
-
-    // Draw the name_text_field
-    name_text_field.Draw(canvas, animation_state);
   }
+
+  DrawChildren(canvas, animation_state);
 }
 
 void Machine::DrawContents(SkCanvas &canvas,

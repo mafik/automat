@@ -7,7 +7,6 @@
 #include <include/core/SkMatrix.h>
 #include <include/effects/SkRuntimeEffect.h>
 
-
 #include "animation.h"
 #include "root.h"
 #include "time.h"
@@ -118,6 +117,21 @@ SkMatrix Widget::TransformToChild(Widget *child) {
     return SkMatrix::I();
   }
   return transform;
+}
+
+void Widget::DrawChildren(SkCanvas &canvas,
+                          animation::State &animation_state) const {
+  FunctionWidgetVisitor visitor([&](Widget &widget, const SkMatrix &transform) {
+    canvas.save();
+    SkMatrix inverse;
+    if (transform.invert(&inverse)) {
+      canvas.concat(inverse);
+    }
+    widget.Draw(canvas, animation_state);
+    canvas.restore();
+    return VisitResult::kContinue;
+  });
+  const_cast<Widget *>(this)->VisitImmediateChildren(visitor);
 }
 
 } // namespace automaton::gui

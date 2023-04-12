@@ -21,7 +21,7 @@
 #include "channel.h"
 #include "format.h"
 #include "gui_button.h"
-#include "icons.h"
+#include "generated/assets.h"
 #include "log.h"
 #include "text_field.h"
 
@@ -224,8 +224,8 @@ struct Location : gui::Widget {
 
   Location(Location *parent = nullptr)
       : parent(parent), name_text_field(this, &name, 0.03),
-        run_button(this, skottie::Animation::Make(icons::kDrums.data(),
-                                                  icons::kDrums.size())) {}
+        run_button(this, skottie::Animation::Make(assets::drums_json,
+                                                  assets::drums_json_size)) {}
 
   Widget *ParentWidget() override {
     if (parent == nullptr) {

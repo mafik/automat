@@ -46,119 +46,150 @@ else:
     defines.add('NDEBUG')
 
 
-srcs = []
-for ext in ['.cc', '.h']:
-    srcs.extend(fs_utils.project_root.glob(f'src/**/*{ext}'))
-
 graph = collections.defaultdict(set)
 types = dict()
 
+
+def reset():
+    graph.clear()
+    types.clear()
+
+
 binary_extension = '.exe' if platform == 'win32' else ''
+
+
+def add_translation_unit(path):
+    path = Path(path)
+    path_o = path.with_name(path.stem + '.o')
+    types[str(path)] = 'translation unit'
+    types[str(path_o)] = 'object file'
+    depends(path_o, on=path)
+
+
+def add_object(path):
+    types[str(path)] = 'object file'
+    graph[str(path)]
+
+
+def add_header(path):
+    types[str(path)] = 'header'
+
+# path extension doesn't matter - can be .cc, .h, or even none at all
+
+
+def add_bin(path, typ='main'):
+    path = Path(path)
+    path_bin = path.with_suffix(binary_extension)
+    path_o = path.with_name(path.stem + '.o')
+    types[str(path_bin)] = typ
+    depends(path_bin, on=path_o)
 
 
 def depends(what, on):
     graph[str(what)].add(str(on))
 
 
-for path_abs in srcs:
-    parent = path_abs.parent
-    path = path_abs.relative_to(fs_utils.project_root)
-    path_bin = path.with_suffix(binary_extension)
+def scan(dir):
+    srcs = []
+    for ext in ['.cc', '.h']:
+        srcs.extend(dir.glob(f'**/*{ext}'))
 
-    if path.suffix == '.cc':
-        path_o = path.with_name(path.stem + '.o')
-        types[str(path)] = 'translation unit'
-        types[str(path_o)] = 'object file'
-        depends(path_o, on=path)
-    elif path.suffix == '.h':
-        path_o = None
-        types[str(path)] = 'header'
+    for path_abs in srcs:
+        path = path_abs.relative_to(fs_utils.project_root)
 
-    if_stack = [True]
-    current_defines = defines.copy() | clang.default_defines
-    line_number = 0
+        if path.suffix == '.cc':
+            add_translation_unit(path)
+        elif path.suffix == '.h':
+            add_header(path)
 
-    for line in open(path_abs, encoding='utf-8').readlines():
-        line_number += 1
+        if_stack = [True]
+        current_defines = defines.copy() | clang.default_defines
+        line_number = 0
 
-        # Minimal preprocessor. This allows us to skip platform-specific imports.
+        for line in open(path_abs, encoding='utf-8').readlines():
+            line_number += 1
 
-        # This regular experession captures most of #if defined/#ifdef variants in one go.
-        # ?: at the beginning of a group means that it's non-capturing
-        # ?P<...> ate the beginning of a group assigns it a name
-        match = re.match(
-            '^#(?P<el>el(?P<else>se)?)?(?P<end>end)?if(?P<neg1>n)?(?:def)? (?P<neg2>!)?(?:defined)?(?:\()?(?P<id>[a-zA-Z0-9_]+)(?:\))?', line)
-        if match:
-            test = match.group('id') in current_defines
-            if match.group('neg1') or match.group('neg2'):
-                test = not test
-            if match.group('else'):
-                test = not if_stack[-1]
+            # Minimal preprocessor. This allows us to skip platform-specific imports.
 
-            if match.group('end'):  # endif
-                if_stack.pop()
-            elif match.group('el'):  # elif
-                if_stack[-1] = test
-            else:  # if
-                if_stack.append(test)
-            continue
+            # This regular experession captures most of #if defined/#ifdef variants in one go.
+            # ?: at the beginning of a group means that it's non-capturing
+            # ?P<...> ate the beginning of a group assigns it a name
+            match = re.match(
+                '^#(?P<el>el(?P<else>se)?)?(?P<end>end)?if(?P<neg1>n)?(?:def)? (?P<neg2>!)?(?:defined)?(?:\()?(?P<id>[a-zA-Z0-9_]+)(?:\))?', line)
+            if match:
+                test = match.group('id') in current_defines
+                if match.group('neg1') or match.group('neg2'):
+                    test = not test
+                if match.group('else'):
+                    test = not if_stack[-1]
 
-        if not if_stack[-1]:
-            continue
+                if match.group('end'):  # endif
+                    if_stack.pop()
+                elif match.group('el'):  # elif
+                    if_stack[-1] = test
+                else:  # if
+                    if_stack.append(test)
+                continue
 
-        # Actual scanning starts here
+            if not if_stack[-1]:
+                continue
 
-        match = re.match('^#include \"([a-zA-Z0-9_/\.-]+\.h)\"', line)
-        if match:
-            dep = path.parent / Path(match.group(1))
-            types[str(dep)] = 'header'
-            depends(path, on=dep)
-                  
+            # Actual scanning starts here
 
-        match = re.match('^int main\(', line)
-        if match:
-            types[str(path_bin)] = 'main'
-            depends(path_bin, on=path_o)
+            match = re.match('^#include \"([a-zA-Z0-9_/\.-]+\.h)\"', line)
+            if match:
+                include = Path(match.group(1))
+                dep = path.parent / include  # try relative to current source file
+                if not dep.exists():
+                    dep = include  # try relative to project root
+                types[str(dep)] = 'header'
+                depends(path, on=dep)
 
-        match = re.match('^TEST(_F)?\\(', line)
-        if match:
-            types[str(path_bin)] = 'test'
-            depends(path_bin, on=path_o)
+            match = re.match('^int main\(', line)
+            if match:
+                add_bin(path, 'main')
 
-binaries = [p for p, t in types.items() if t in ('test', 'main')]
+            match = re.match('^TEST(_F)?\\(', line)
+            if match:
+                add_bin(path, 'test')
 
-# Link object files for each header included in binaries.
-for path in binaries:
-    deps = list(graph[path])
-    visited = set()
-    while len(deps) > 0:
-        dep = deps.pop()
-        if dep in visited:
-            continue
-        visited.add(dep)
-        if types[dep] == 'header':
-            object_file = dep.replace('.h', '.o')
-            if object_file in graph:
-                depends(path, on=object_file)
-                deps.append(object_file)
-        deps.extend(graph[dep])
 
-objects = [p for p, t in types.items() if t == 'object file']
+def propagate_deps():
+    binaries = [p for p, t in types.items() if t in ('test', 'main')]
 
-# Rebuild objects whenever any of the included header changes.
-for path in objects:
-    deps = list(graph[path])
-    visited = set()
-    while len(deps) > 0:
-        dep = deps.pop()
-        if dep in visited:
-            continue
-        visited.add(dep)
-        if types[dep] == 'header':
-            depends(path, on=dep)
-        deps.extend(graph[dep])
+    # Link object files for each header included in binaries.
+    for path in binaries:
+        deps = list(graph[path])
+        visited = set()
+        while len(deps) > 0:
+            dep = deps.pop()
+            if dep in visited:
+                continue
+            visited.add(dep)
+            if types[dep] == 'header':
+                object_file = dep.replace('.h', '.o')
+                if object_file in graph:
+                    depends(path, on=object_file)
+                    deps.append(object_file)
+            deps.extend(graph[dep])
 
-if args.verbose:
+    objects = [p for p, t in types.items() if t == 'object file']
+
+    # Rebuild objects whenever any of the included header changes.
+    for path in objects:
+        deps = list(graph[path])
+        visited = set()
+        while len(deps) > 0:
+            dep = deps.pop()
+            if dep in visited:
+                continue
+            visited.add(dep)
+            if types[dep] == 'header':
+                depends(path, on=dep)
+            deps.extend(graph[dep])
+
+
+def print_debug():
     print('C++ dependency graph')
     for path in sorted(types.keys()):
         print(f' "{path}" : {types[path]}')

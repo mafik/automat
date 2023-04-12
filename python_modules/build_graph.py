@@ -37,6 +37,7 @@ def libname(name):
 # TODO: when on Win32 - make sure that cmake, ninja, gdb are on the PATH
 
 CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -Ivendor'.split()
+CXXFLAGS += ['-I', str(fs_utils.project_tmp_dir)]
 LDFLAGS = ['-fuse-ld=lld']
 BIN_DEPS = []
 
@@ -151,7 +152,6 @@ if platform == 'win32':
     CXXFLAGS += ['-I', SKIA_ROOT]
     CXXFLAGS += ['-I', SKIA_ROOT / 'include' / 'third_party' / 'vulkan']
     LDFLAGS += ['-L', SKIA_LIB]
-    LDFLAGS += ['-lskia']
 
     # TODO: allow translation modules to request libraries
     LDFLAGS += ['-luser32', '-lopengl32', '-lgdi32']
@@ -159,14 +159,110 @@ elif platform == 'linux':
     CXXFLAGS += ['-I/home/maf/Pulpit/skia/']
     CXXFLAGS += ['-I/home/maf/Pulpit/skia/include/third_party/vulkan']
     LDFLAGS += ['-L/home/maf/Pulpit/skia/out/Static']
-    LDFLAGS += ['-lskia', '-lfontconfig', '-lfreetype', '-lGL']
+    LDFLAGS += ['-lfontconfig', '-lfreetype', '-lGL']
+LDFLAGS += ['-lskia', '-lskottie', '-lsksg']
+
+OBJ_DIR = fs_utils.project_tmp_dir / 'obj'
+OBJ_DIR.mkdir(parents=True, exist_ok=True)
+
+###############################
+# Recipes for embedded assets
+###############################
+
+cc.reset()
+cc.scan(fs_utils.project_root / 'src')
+
+ASSETS_DIR = fs_utils.project_root / 'assets'
+GENERATED_DIR = fs_utils.project_tmp_dir / 'generated'
+GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+
+asset_srcs = list(ASSETS_DIR.glob('*'))
+asset_objs = []
+
+assets_h = GENERATED_DIR / 'assets.h'
+assets_cc = assets_h.with_suffix('.cc')
+
+def generate_asset_header(asset, header, extra_args):
+    with header.open('w') as f:
+        print('#pragma once\n', file=f)
+        print('extern "C" {', file=f)
+        size = asset.stat().st_size
+        rel_path = str(asset.relative_to(ASSETS_DIR))
+        rel_path = re.sub(r'[^a-zA-Z0-9]', '_', rel_path)
+        print(f'extern char _binary_{rel_path}_start[{size}];', file=f)
+        #print(f'extern char *_binary_{rel_path}_end;', file=f)
+        #print(f'extern size_t _binary_{rel_path}_size;', file=f)
+        print('} // extern "C"', file=f)
+
+
+cc.add_header('generated/assets.h')
+cc.add_translation_unit('generated/assets.cc')
+cc.depends('generated/assets.cc', 'generated/assets.h')
+
+for asset in asset_srcs:
+    obj = OBJ_DIR / asset.with_suffix('.o').name
+    header_abs = assets_h.with_stem(asset.stem)
+    asset_objs.append(obj)
+    recipe.add_step(
+        functools.partial(Popen, ['llvm-objcopy', '-I', 'binary', '-O', 'elf64-x86-64', asset.relative_to(ASSETS_DIR), obj], cwd=ASSETS_DIR),
+        outputs=[str(obj)],
+        inputs=[str(asset)],
+        name=obj.name)
+    recipe.generated.add(str(obj))
+    recipe.add_step(
+        functools.partial(generate_asset_header, asset, header_abs),
+        outputs=[str(header_abs)],
+        inputs=[str(asset)],
+        name=header_abs.name)
+    recipe.generated.add(str(header_abs))
+
+    header_rel = str(header_abs.relative_to(fs_utils.project_tmp_dir))
+    cc.add_header(header_rel)
+    cc.add_object(Path(header_rel).with_suffix('.o'))
+    cc.depends('generated/assets.cc', header_rel)
+
+def generate_assets(extra_args):
+    with assets_h.open('w') as f:
+        print('#pragma once\n\n#include <cstddef>', file=f)
+        print('\nnamespace automaton::assets {\n', file=f)
+        for asset in asset_srcs:
+            size = asset.stat().st_size
+            rel_path = str(asset.relative_to(ASSETS_DIR))
+            rel_path = re.sub(r'[^a-zA-Z0-9]', '_', rel_path)
+            print(f'extern char* {rel_path};', file=f)
+            print(f'constexpr size_t {rel_path}_size = {size};', file=f)
+
+        print('\n} // namespace automaton::assets\n', file=f)
+
+    with assets_cc.open('w') as f:
+        print('#include "assets.h"\n', file=f)
+        for asset in asset_srcs:
+            header = assets_h.with_stem(asset.stem)
+            print(f'#include "{header.name}"', file=f)
+        print('\nnamespace automaton::assets {\n', file=f)
+        for asset in asset_srcs:
+            rel_path = str(asset.relative_to(ASSETS_DIR))
+            rel_path = re.sub(r'[^a-zA-Z0-9]', '_', rel_path)
+            print(f'char *{rel_path} = _binary_{rel_path}_start;', file=f)
+        print('\n} // namespace automaton::assets', file=f)
+
+recipe.add_step(
+    generate_assets,
+    outputs=[str(assets_h), str(assets_cc)],
+    inputs=[str(x) for x in asset_srcs],
+    name='assets')
+
+recipe.generated.add(assets_h)
+recipe.generated.add(assets_cc)
+
+cc.propagate_deps()
+
+if args.verbose:
+    cc.print_debug()
 
 ###############################
 # Recipes for object files
 ###############################
-
-OBJ_DIR = fs_utils.project_tmp_dir / 'obj'
-OBJ_DIR.mkdir(parents=True, exist_ok=True)
 
 if platform == 'win32':
     MANIFEST_RC = fs_utils.project_root / 'src' / 'manifest.rc'
@@ -217,6 +313,8 @@ def redirect_path(path):
         return str(OBJ_DIR / name)
     elif cc.types[path] in ('test', 'main'):
         return name
+    elif path.startswith('generated'):
+        return str(fs_utils.project_tmp_dir / path)
     else:
         return path
 
@@ -240,6 +338,8 @@ class CompilationEntry:
 compilation_db = []
 
 for path, deps in graph.items():
+    if path in recipe.generated:
+        continue # skip files generated by other recipes
     t = types[path]
     pargs = [CXX] + CXXFLAGS
     if t in ('header', 'translation unit'):
@@ -247,7 +347,7 @@ for path, deps in graph.items():
     elif t == 'object file':
         recipe.generated.add(path)
         source_files = [d for d in deps if types[d] == 'translation unit']
-        assert (len(source_files) == 1)
+        assert len(source_files) == 1, f'{path} has {len(source_files)} source files'
         pargs += source_files
         pargs += ['-c', '-o', path]
         builder = functools.partial(Popen, pargs)

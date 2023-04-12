@@ -124,7 +124,7 @@ class Recipe:
         for p in self.generated:
             p = Path(p)
             if p.exists():
-                if p.is_file():
+                if p.is_file() or p.is_symlink():
                     print(f'  > unlink {p}')
                     p.unlink()
                 else:
@@ -227,6 +227,7 @@ class Recipe:
                 pid, status = wait_for_pid()
                 if pid == watcher.pid:
                     self.interrupt()
+                    print('Sources have been modified. Interrupting the build process...')
                     return False
                 step = self.pid_to_step[pid]
                 if status:

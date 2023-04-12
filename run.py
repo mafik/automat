@@ -3,7 +3,6 @@
 '''Run Automaton.'''
 
 import subprocess
-from python_modules import cc
 from python_modules import build_graph
 from python_modules import debian_deps
 from python_modules import args
@@ -47,5 +46,4 @@ if __name__ == '__main__':
         except KeyboardInterrupt:
             watcher.kill()
             break
-        importlib.reload(cc)
         importlib.reload(build_graph)

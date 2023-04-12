@@ -6,10 +6,11 @@
 
 #include "log.h"
 
-// TODO: load icudtl.dat from C:\Windows\Globalization\ICU\icudtl.dat
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")
+#ifdef _WIN32
 #pragma comment(lib, "Advapi32")
+#endif
 
 namespace automaton::gui {
 

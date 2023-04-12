@@ -34,7 +34,7 @@ struct Widget {
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".
   virtual std::string_view Name() const {
-    const type_info &info = typeid(*this);
+    const std::type_info &info = typeid(*this);
     return info.name();
   }
 

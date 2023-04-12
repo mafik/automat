@@ -13,7 +13,9 @@
 #include <xcb/xproto.h>
 
 #include "format.h"
+#include "keyboard.h"
 #include "widget.h"
+#include "window.h"
 #include "library.h"
 #include "log.h"
 #include "root.h"
@@ -49,6 +51,7 @@ std::optional<VerticalScroll> vertical_scroll;
 
 std::unique_ptr<gui::Window> window;
 std::unique_ptr<gui::Pointer> mouse;
+std::unique_ptr<gui::Keyboard> keyboard;
 
 float DisplayPxPerMeter() {
   return 1000.0f * screen->width_in_pixels / screen->width_in_millimeters;
@@ -185,22 +188,23 @@ enum class KeyCode {
   Menu = 117,
 };
 
-gui::Key X11KeyCodeToKey(KeyCode key_code) {
+gui::AnsiKey X11KeyCodeToKey(KeyCode key_code) {
+  using enum gui::AnsiKey;
   switch (key_code) {
   case KeyCode::W:
-    return gui::kKeyW;
+    return W;
   case KeyCode::A:
-    return gui::kKeyA;
+    return A;
   case KeyCode::S:
-    return gui::kKeyS;
+    return S;
   case KeyCode::D:
-    return gui::kKeyD;
+    return D;
   default:
-    return gui::kKeyUnknown;
+    return Unknown;
   }
 }
 
-gui::Button EventDetailToButton(uint32_t detail) {
+gui::PointerButton EventDetailToButton(uint32_t detail) {
   switch (detail) {
   case 1:
     return gui::kMouseLeft;
@@ -470,13 +474,23 @@ void RenderLoop() {
           case XCB_INPUT_KEY_PRESS: {
             xcb_input_key_press_event_t *ev =
                 (xcb_input_key_press_event_t *)event;
-            window->KeyDown(X11KeyCodeToKey((KeyCode)ev->detail));
+            gui::Key key = {
+              .physical = X11KeyCodeToKey((KeyCode)ev->detail),
+              .logical = X11KeyCodeToKey((KeyCode)ev->detail),
+              .text = ""
+            };
+            keyboard->KeyDown(key);
             break;
           }
           case XCB_INPUT_KEY_RELEASE: {
             xcb_input_key_release_event_t *ev =
                 (xcb_input_key_release_event_t *)event;
-            window->KeyUp(X11KeyCodeToKey((KeyCode)ev->detail));
+            gui::Key key = {
+              .physical = X11KeyCodeToKey((KeyCode)ev->detail),
+              .logical = X11KeyCodeToKey((KeyCode)ev->detail),
+              .text = ""
+            };
+            keyboard->KeyUp(key);
             break;
           }
           case XCB_INPUT_BUTTON_PRESS: {
@@ -609,6 +623,7 @@ int LinuxMain(int argc, char *argv[]) {
   }
 
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
+  keyboard = std::make_unique<gui::Keyboard>(*window);
 
   RenderLoop();
 

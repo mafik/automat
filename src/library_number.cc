@@ -1,5 +1,7 @@
 #include "library_number.h"
 
+#include <charconv>
+
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 

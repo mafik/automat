@@ -1,10 +1,13 @@
 #include "font.h"
 
+#include <include/core/SkData.h>
 #include <modules/skshaper/include/SkShaper.h>
 #include <modules/skunicode/include/SkUnicode.h>
 #include <src/base/SkUTF.h>
 
+#include "generated/NotoSans[wght].h"
 #include "log.h"
+
 
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")
@@ -23,11 +26,14 @@ std::unique_ptr<Font> Font::Make(float letter_size_mm) {
       letter_size_pt / 0.7f; // this was determined empirically
   // Create the font using the approximate size.
   // TODO: embed & use Noto Color Emoji
-  auto typeface =
-      SkTypeface::MakeFromName("Segoe UI Emoji", SkFontStyle::Normal());
+  auto data = SkData::MakeWithoutCopy(_binary_NotoSans_wght__ttf_start,
+                                      sizeof(_binary_NotoSans_wght__ttf_start));
+  auto typeface = SkTypeface::MakeFromData(data);
   SkFont sk_font(typeface, font_size_guess, 1.f, 0.f);
   SkFontMetrics metrics;
   sk_font.getMetrics(&metrics);
+  sk_font.setBaselineSnap(false);
+  sk_font.setSubpixel(true);
   // The `fCapHeight` is the height of the capital letters.
   float font_scale = 0.001 * letter_size_mm / metrics.fCapHeight;
   float line_thickness = metrics.fUnderlineThickness * font_scale;

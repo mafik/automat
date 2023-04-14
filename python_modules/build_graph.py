@@ -21,12 +21,14 @@ from sys import platform
 def is_tool(name):
     return shutil.which(name) is not None
 
+
 if is_tool('clang++') and is_tool('clang') and is_tool('llvm-cxxfilt'):
     CXX = os.environ['CXX'] = f'clang++'
     CC = os.environ['CC'] = f'clang'
     CXXFILT = f'llvm-cxxfilt'
 else:
     raise 'Couldn\'t find `clang`, `clang++` or `llvm-cxxfilt` on the system PATH. Make sure to install LLVM & add it to the system PATH variable!'
+
 
 def libname(name):
     if platform == 'win32':
@@ -35,6 +37,7 @@ def libname(name):
         return 'lib' + name + '.a'
 
 # TODO: when on Win32 - make sure that cmake, ninja, gdb are on the PATH
+
 
 CXXFLAGS = '-std=c++2b -fcolor-diagnostics -flto -Ivendor'.split()
 CXXFLAGS += ['-I', str(fs_utils.project_tmp_dir)]
@@ -177,83 +180,72 @@ GENERATED_DIR = fs_utils.project_tmp_dir / 'generated'
 GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
 asset_srcs = list(ASSETS_DIR.glob('*'))
-asset_objs = []
 
 assets_h = GENERATED_DIR / 'assets.h'
-assets_cc = assets_h.with_suffix('.cc')
 
-def generate_asset_header(asset, header, extra_args):
+
+def generate_asset_sources(asset, header, source, extra_args):
+    size = asset.stat().st_size
+    slug = str(asset.relative_to(ASSETS_DIR))
+    slug = re.sub(r'[^a-zA-Z0-9]', '_', slug)
     with header.open('w') as f:
-        print('#pragma once\n', file=f)
-        print('extern "C" {', file=f)
-        size = asset.stat().st_size
-        rel_path = str(asset.relative_to(ASSETS_DIR))
-        rel_path = re.sub(r'[^a-zA-Z0-9]', '_', rel_path)
-        print(f'extern char _binary_{rel_path}_start[{size}];', file=f)
-        #print(f'extern char *_binary_{rel_path}_end;', file=f)
-        #print(f'extern size_t _binary_{rel_path}_size;', file=f)
-        print('} // extern "C"', file=f)
+        print(f'''#pragma once
+#include <cstddef>
+namespace automaton::assets {{
+constexpr size_t {slug}_size = {size};
+extern const char *{slug};
+}} // namespace automaton::assets''', file=f)
+    with source.open('w') as f:
+        print(f'#include "{header.name}"', file=f)
+        print('namespace automaton::assets {', file=f)
+        print(f'const char *{slug} =', file=f)
+        buf = asset.read_bytes()
+        bytes_per_line = 200
+        chunks = [buf[i:i+bytes_per_line]
+                  for i in range(0, len(buf), bytes_per_line)]
+        for chunk in chunks:
+            print(cc.c_string_from_bytes(chunk), file=f)
+        print(';', file=f)
+        print('} // namespace automaton::assets', file=f)
 
 
 cc.add_header('generated/assets.h')
-cc.add_translation_unit('generated/assets.cc')
-cc.depends('generated/assets.cc', 'generated/assets.h')
 
 for asset in asset_srcs:
-    obj = OBJ_DIR / asset.with_suffix('.o').name
-    header_abs = assets_h.with_stem(asset.stem)
-    asset_objs.append(obj)
+    obj = OBJ_DIR / (asset.name + '.o')
+    header_abs = GENERATED_DIR / (asset.name + '.h')
+    source_abs = GENERATED_DIR / (asset.name + '.cc')
     recipe.add_step(
-        functools.partial(Popen, ['llvm-objcopy', '-I', 'binary', '-O', 'elf64-x86-64', asset.relative_to(ASSETS_DIR), obj], cwd=ASSETS_DIR),
-        outputs=[str(obj)],
-        inputs=[str(asset)],
-        name=obj.name)
-    recipe.generated.add(str(obj))
-    recipe.add_step(
-        functools.partial(generate_asset_header, asset, header_abs),
-        outputs=[str(header_abs)],
+        functools.partial(generate_asset_sources, asset,
+                          header_abs, source_abs),
+        outputs=[str(header_abs), str(source_abs)],
         inputs=[str(asset)],
         name=header_abs.name)
     recipe.generated.add(str(header_abs))
+    recipe.generated.add(str(source_abs))
 
     header_rel = str(header_abs.relative_to(fs_utils.project_tmp_dir))
+    source_rel = str(source_abs.relative_to(fs_utils.project_tmp_dir))
     cc.add_header(header_rel)
-    cc.add_object(Path(header_rel).with_suffix('.o'))
-    cc.depends('generated/assets.cc', header_rel)
+    cc.add_translation_unit(source_rel)
+    cc.depends(Path('generated/assets.h'), header_rel)
+
 
 def generate_assets(extra_args):
     with assets_h.open('w') as f:
-        print('#pragma once\n\n#include <cstddef>', file=f)
-        print('\nnamespace automaton::assets {\n', file=f)
+        print('#pragma once\n', file=f)
         for asset in asset_srcs:
-            size = asset.stat().st_size
-            rel_path = str(asset.relative_to(ASSETS_DIR))
-            rel_path = re.sub(r'[^a-zA-Z0-9]', '_', rel_path)
-            print(f'extern char* {rel_path};', file=f)
-            print(f'constexpr size_t {rel_path}_size = {size};', file=f)
-
-        print('\n} // namespace automaton::assets\n', file=f)
-
-    with assets_cc.open('w') as f:
-        print('#include "assets.h"\n', file=f)
-        for asset in asset_srcs:
-            header = assets_h.with_stem(asset.stem)
+            header = assets_h.with_stem(asset.name)
             print(f'#include "{header.name}"', file=f)
-        print('\nnamespace automaton::assets {\n', file=f)
-        for asset in asset_srcs:
-            rel_path = str(asset.relative_to(ASSETS_DIR))
-            rel_path = re.sub(r'[^a-zA-Z0-9]', '_', rel_path)
-            print(f'char *{rel_path} = _binary_{rel_path}_start;', file=f)
-        print('\n} // namespace automaton::assets', file=f)
+
 
 recipe.add_step(
     generate_assets,
-    outputs=[str(assets_h), str(assets_cc)],
+    outputs=[str(assets_h)],
     inputs=[str(x) for x in asset_srcs],
     name='assets')
 
 recipe.generated.add(assets_h)
-recipe.generated.add(assets_cc)
 
 cc.propagate_deps()
 
@@ -308,7 +300,9 @@ def cxxfilt(line):
 
 
 def redirect_path(path):
-    name = Path(path).name
+    path = Path(path)  # because backslashes on Windows
+    name = path.name
+    path = str(path)
     if cc.types[path] == 'object file':
         return str(OBJ_DIR / name)
     elif cc.types[path] in ('test', 'main'):
@@ -339,7 +333,7 @@ compilation_db = []
 
 for path, deps in graph.items():
     if path in recipe.generated:
-        continue # skip files generated by other recipes
+        continue  # skip files generated by other recipes
     t = types[path]
     pargs = [CXX] + CXXFLAGS
     if t in ('header', 'translation unit'):
@@ -347,7 +341,8 @@ for path, deps in graph.items():
     elif t == 'object file':
         recipe.generated.add(path)
         source_files = [d for d in deps if types[d] == 'translation unit']
-        assert len(source_files) == 1, f'{path} has {len(source_files)} source files'
+        assert len(
+            source_files) == 1, f'{path} has {len(source_files)} source files'
         pargs += source_files
         pargs += ['-c', '-o', path]
         builder = functools.partial(Popen, pargs)
@@ -369,7 +364,8 @@ for path, deps in graph.items():
         recipe.generated.add(path)
         pargs += deps + ['-o', path] + LDFLAGS
         builder = functools.partial(Popen, pargs)
-        recipe.add_step(builder, outputs=[path], inputs=deps + [VK_BOOTSTRAP_LIB] + BIN_DEPS, name=f'link {binary_name}', stderr_prettifier=cxxfilt)
+        recipe.add_step(builder, outputs=[path], inputs=deps + [
+                        VK_BOOTSTRAP_LIB] + BIN_DEPS, name=f'link {binary_name}', stderr_prettifier=cxxfilt)
         # if platform == 'win32':
         #     MT = 'C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.19041.0\\x64\\mt.exe'
         #     mt_runner = functools.partial(Popen, [MT, '-manifest', 'src\win32.manifest', '-outputresource:{path}'])
@@ -394,6 +390,7 @@ if tests:
 # Recipe for Clang language server
 ##########################
 
+
 def compile_commands(extra_args):
     print('Generating compile_commands.json...')
     jsons = []
@@ -410,14 +407,17 @@ def compile_commands(extra_args):
     with open('compile_commands.json', 'w') as f:
         print('[' + ', '.join(jsons) + ']', file=f)
 
+
 recipe.add_step(compile_commands, ['compile_commands.json'], [])
 
 ##########################
 # Recipe for deploying to server
 ##########################
 
+
 def deploy(extra_args):
     return Popen(['rsync', '-av', '--delete', '--no-owner', '--no-group', 'www/', 'home:/var/www/html/automat/'])
+
 
 recipe.add_step(deploy, [], ['www/'])
 

@@ -2,7 +2,9 @@
 
 from . import fs_utils
 import collections
+import itertools
 import re
+import string
 from . import args
 from . import clang
 from sys import platform
@@ -59,7 +61,7 @@ binary_extension = '.exe' if platform == 'win32' else ''
 
 
 def add_translation_unit(path):
-    path = Path(path)
+    path = Path(path)  # because backslashes on Windows
     path_o = path.with_name(path.stem + '.o')
     types[str(path)] = 'translation unit'
     types[str(path_o)] = 'object file'
@@ -67,11 +69,13 @@ def add_translation_unit(path):
 
 
 def add_object(path):
+    path = Path(path)
     types[str(path)] = 'object file'
     graph[str(path)]
 
 
 def add_header(path):
+    path = Path(path)
     types[str(path)] = 'header'
 
 # path extension doesn't matter - can be .cc, .h, or even none at all
@@ -195,3 +199,32 @@ def print_debug():
         print(f' "{path}" : {types[path]}')
         for dep in sorted(graph[path]):
             print(f'  - "{dep}" : {types[dep]}')
+
+
+byte_to_c_string_table = {c: chr(c) for c in range(32, 127)}
+byte_to_c_string_table[0x00] = '\\0'
+byte_to_c_string_table[0x22] = '\\"'
+byte_to_c_string_table[0x5c] = '\\\\'
+byte_to_c_string_table[0x07] = '\\a'
+byte_to_c_string_table[0x08] = '\\b'
+byte_to_c_string_table[0x0c] = '\\f'
+byte_to_c_string_table[0x0a] = '\\n'
+byte_to_c_string_table[0x0d] = '\\r'
+byte_to_c_string_table[0x09] = '\\t'
+byte_to_c_string_table[0x0b] = '\\v'
+
+digit_bytes = set(ord(c) for c in string.digits)
+
+
+def byte_to_c_string(b, next_b=None):
+    if b in byte_to_c_string_table:
+        return byte_to_c_string_table[b]
+    elif next_b in digit_bytes:
+        return '\\' + format(b, '03o')
+    else:
+        return '\\' + format(b, 'o')
+
+
+def c_string_from_bytes(bytes):
+    # x is a dummy byte
+    return '"' + ''.join(byte_to_c_string(b, next_b) for b, next_b in itertools.pairwise(bytes + b'x')) + '"'

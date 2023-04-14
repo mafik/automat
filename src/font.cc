@@ -5,9 +5,8 @@
 #include <modules/skunicode/include/SkUnicode.h>
 #include <src/base/SkUTF.h>
 
-#include "generated/NotoSans[wght].h"
+#include "generated/assets.h"
 #include "log.h"
-
 
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")
@@ -26,8 +25,8 @@ std::unique_ptr<Font> Font::Make(float letter_size_mm) {
       letter_size_pt / 0.7f; // this was determined empirically
   // Create the font using the approximate size.
   // TODO: embed & use Noto Color Emoji
-  auto data = SkData::MakeWithoutCopy(_binary_NotoSans_wght__ttf_start,
-                                      sizeof(_binary_NotoSans_wght__ttf_start));
+  auto data = SkData::MakeWithoutCopy(assets::NotoSans_wght__ttf,
+                                      assets::NotoSans_wght__ttf_size);
   auto typeface = SkTypeface::MakeFromData(data);
   SkFont sk_font(typeface, font_size_guess, 1.f, 0.f);
   SkFontMetrics metrics;

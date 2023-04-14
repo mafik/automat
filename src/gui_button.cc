@@ -115,16 +115,14 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 
   {
     SkAutoCanvasRestore auto_canvas_restore(&canvas, true);
-    SkSize size = picture->size();
-    float scaleX = oval.width() / size.width();
-    float scaleY = oval.height() / size.height();
-    float scale = std::min(scaleX, scaleY);
+    constexpr float kLottiePxToMeters = 0.0254f / 96.0f;
+    SkSize size = picture->size(); // pixels on a 96 DPI screen
+    float scale = kLottiePxToMeters;
     size.fHeight *= scale;
     size.fWidth *= scale;
     canvas.translate((kWidth - size.width()) / 2,
                      kHeight - (kHeight - size.height()) / 2);
     canvas.scale(scale, -scale);
-    // std::swap(oval.fTop, oval.fBottom);
     picture->render(&canvas);
   }
 }

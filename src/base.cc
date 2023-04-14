@@ -15,6 +15,7 @@
 
 #include "color.h"
 #include "font.h"
+#include "generated/assets.h"
 #include "text_field.h"
 
 namespace automaton {
@@ -210,6 +211,11 @@ Argument::GetFinalLocation(Location &here,
   }
   return result;
 }
+
+Location::Location(Location *parent)
+    : parent(parent), name_text_field(this, &name, 0.03),
+      run_button(this, skottie::Animation::Make(assets::play_json,
+                                                assets::play_json_size)) {}
 
 void *Location::Nearby(function<void *(Location &)> callback) {
   if (auto parent_machine = ParentAs<Machine>()) {

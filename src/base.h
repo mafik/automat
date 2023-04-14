@@ -20,7 +20,6 @@
 #include "animation.h"
 #include "channel.h"
 #include "format.h"
-#include "generated/assets.h"
 #include "gui_button.h"
 #include "log.h"
 #include "text_field.h"
@@ -222,10 +221,7 @@ struct Location : gui::Widget {
   unordered_set<Location *> error_observers;
   unordered_set<Location *> observing_errors;
 
-  Location(Location *parent = nullptr)
-      : parent(parent), name_text_field(this, &name, 0.03),
-        run_button(this, skottie::Animation::Make(assets::drums_json,
-                                                  assets::drums_json_size)) {}
+  Location(Location *parent = nullptr);
 
   Widget *ParentWidget() override {
     if (parent == nullptr) {

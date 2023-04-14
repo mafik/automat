@@ -104,13 +104,7 @@ void UpdateCaret(TextField &text_field, Caret &caret) {
       Vec2(kTextMargin + GetFont().PositionFromIndex(*text_field.text, index),
            (kTextFieldHeight - kLetterSize) / 2);
 
-  SkMatrix root_to_text = root_machine->TransformToChild(&text_field);
-  SkMatrix text_to_root;
-
-  if (!root_to_text.invert(&text_to_root)) {
-    EVERY_N_SEC(60) { ERROR() << "Failed to invert matrix"; }
-  }
-
+  SkMatrix text_to_root = root_machine->TransformFromChild(&text_field);
   vec2 caret_pos_root = Vec2(text_to_root.mapXY(caret_pos.X, caret_pos.Y));
 
   caret.PlaceIBeam(caret_pos_root);
@@ -149,8 +143,8 @@ struct TextSelectAction : Action {
   void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
 };
 
-std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &, PointerButton btn,
-                                                    vec2 contact_point) {
+std::unique_ptr<Action>
+TextField::ButtonDownAction(Pointer &, PointerButton btn, vec2 contact_point) {
   if (btn == PointerButton::kMouseLeft) {
     return std::make_unique<TextSelectAction>(*this);
   }

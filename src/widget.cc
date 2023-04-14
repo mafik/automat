@@ -19,23 +19,29 @@ void Widget::VisitAll(WidgetVisitor &visitor) {
 
   struct RecursiveVisitor : WidgetVisitor {
     WidgetVisitor &orig_visitor;
-    SkMatrix transform_accumulator;
+    SkMatrix transform_down_accumulator;
+    SkMatrix transform_up_accumulator;
 
     RecursiveVisitor(WidgetVisitor &orig_visitor)
-        : orig_visitor(orig_visitor), transform_accumulator() {}
+        : orig_visitor(orig_visitor), transform_down_accumulator() {}
 
-    VisitResult operator()(Widget &widget, const SkMatrix &transform) override {
+    VisitResult operator()(Widget &widget, const SkMatrix &transform_down,
+                           const SkMatrix &transform_up) override {
 
-      SkMatrix backup = transform_accumulator;
-      transform_accumulator.postConcat(transform);
+      SkMatrix backup_down = transform_down_accumulator;
+      SkMatrix backup_up = transform_up_accumulator;
+      transform_down_accumulator.postConcat(transform_down);
+      transform_up_accumulator.postConcat(transform_up);
 
       if (widget.VisitImmediateChildren(*this) == VisitResult::kStop)
         return VisitResult::kStop;
 
-      if (orig_visitor(widget, transform_accumulator) == VisitResult::kStop)
+      if (orig_visitor(widget, transform_down_accumulator,
+                       transform_up_accumulator) == VisitResult::kStop)
         return VisitResult::kStop;
 
-      transform_accumulator = backup;
+      transform_down_accumulator = backup_down;
+      transform_up_accumulator = backup_up;
 
       return VisitResult::kContinue;
     }
@@ -43,7 +49,7 @@ void Widget::VisitAll(WidgetVisitor &visitor) {
 
   RecursiveVisitor recursive_visitor(visitor);
 
-  recursive_visitor(*this, SkMatrix::I());
+  recursive_visitor(*this, SkMatrix::I(), SkMatrix::I());
 }
 
 void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
@@ -55,11 +61,13 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
     PointVisitor(vec2 point, WidgetVisitor &orig_visitor)
         : point(point), orig_visitor(orig_visitor) {}
 
-    VisitResult operator()(Widget &widget, const SkMatrix &transform) override {
+    VisitResult operator()(Widget &widget, const SkMatrix &transform_down,
+                           const SkMatrix &transform_up) override {
       auto shape = widget.Shape();
-      SkPoint mapped_point = transform.mapXY(point.X, point.Y);
+      SkPoint mapped_point = transform_down.mapXY(point.X, point.Y);
       if (shape.isEmpty() || shape.contains(mapped_point.fX, mapped_point.fY)) {
-        if (orig_visitor(widget, transform) == VisitResult::kStop)
+        if (orig_visitor(widget, transform_down, transform_up) ==
+            VisitResult::kStop)
           return VisitResult::kStop;
       }
       return VisitResult::kContinue;
@@ -73,8 +81,9 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
 
 struct FunctionWidgetVisitor : WidgetVisitor {
   FunctionWidgetVisitor(WidgetVisitorFunc visitor) : func(visitor) {}
-  VisitResult operator()(Widget &widget, const SkMatrix &transform) override {
-    return func(widget, transform);
+  VisitResult operator()(Widget &widget, const SkMatrix &transform_down,
+                         const SkMatrix &transform_up) override {
+    return func(widget, transform_down, transform_up);
   }
   WidgetVisitorFunc func;
 };
@@ -92,14 +101,32 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitorFunc visitor) {
 SkMatrix Widget::TransformFromParent() {
   SkMatrix ret = SkMatrix::I();
   if (Widget *parent = ParentWidget()) {
-    FunctionWidgetVisitor visitor(
-        [&](Widget &widget, const SkMatrix &transform) {
-          if (&widget == this) {
-            ret = transform;
-            return VisitResult::kStop;
-          }
-          return VisitResult::kContinue;
-        });
+    FunctionWidgetVisitor visitor([&](Widget &widget,
+                                      const SkMatrix &transform_down,
+                                      const SkMatrix &transform_up) {
+      if (&widget == this) {
+        ret = transform_down;
+        return VisitResult::kStop;
+      }
+      return VisitResult::kContinue;
+    });
+    parent->VisitImmediateChildren(visitor);
+  }
+  return ret;
+}
+
+SkMatrix Widget::TransformToParent() {
+  SkMatrix ret = SkMatrix::I();
+  if (Widget *parent = ParentWidget()) {
+    FunctionWidgetVisitor visitor([&](Widget &widget,
+                                      const SkMatrix &transform_down,
+                                      const SkMatrix &transform_up) {
+      if (&widget == this) {
+        ret = transform_up;
+        return VisitResult::kStop;
+      }
+      return VisitResult::kContinue;
+    });
     parent->VisitImmediateChildren(visitor);
   }
   return ret;
@@ -119,14 +146,25 @@ SkMatrix Widget::TransformToChild(Widget *child) {
   return transform;
 }
 
+SkMatrix Widget::TransformFromChild(Widget *child) {
+  SkMatrix transform;
+  while (child && child != this) {
+    transform.preConcat(child->TransformToParent());
+    child = child->ParentWidget();
+  }
+  if (child != this) {
+    return SkMatrix::I();
+  }
+  return transform;
+}
+
 void Widget::DrawChildren(SkCanvas &canvas,
                           animation::State &animation_state) const {
-  FunctionWidgetVisitor visitor([&](Widget &widget, const SkMatrix &transform) {
+  FunctionWidgetVisitor visitor([&](Widget &widget,
+                                    const SkMatrix &transform_down,
+                                    const SkMatrix &transform_up) {
     canvas.save();
-    SkMatrix inverse;
-    if (transform.invert(&inverse)) {
-      canvas.concat(inverse);
-    }
+    canvas.concat(transform_up);
     widget.Draw(canvas, animation_state);
     canvas.restore();
     return VisitResult::kContinue;

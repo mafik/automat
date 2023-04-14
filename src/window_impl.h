@@ -140,6 +140,14 @@ struct WindowImpl : Widget {
     return m;
   }
 
+  SkMatrix CanvasToWindow() {
+    SkMatrix m;
+    m.setTranslate(-camera_x, -camera_y);
+    m.postScale(zoom, zoom);
+    m.postTranslate(size.Width / 2, size.Height / 2);
+    return m;
+  }
+
   vec2 CanvasToWindow(vec2 canvas) {
     return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2;
   }
@@ -160,16 +168,19 @@ struct WindowImpl : Widget {
   void Draw(SkCanvas &canvas);
   VisitResult VisitImmediateChildren(WidgetVisitor &visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      SkMatrix matrix = SkMatrix::Translate(-prototype_button_positions[i].X,
-                                            -prototype_button_positions[i].Y);
-      auto result = visitor(prototype_buttons[i], matrix);
+      SkMatrix transform_down = SkMatrix::Translate(
+          -prototype_button_positions[i].X, -prototype_button_positions[i].Y);
+      SkMatrix transform_up = SkMatrix::Translate(
+          prototype_button_positions[i].X, prototype_button_positions[i].Y);
+      auto result = visitor(prototype_buttons[i], transform_down, transform_up);
       if (result != VisitResult::kContinue)
         return result;
     }
     VisitResult result = VisitResult::kContinue;
     RunOnAutomatonThreadSynchronous([&]() {
-      SkMatrix matrix = WindowToCanvas();
-      result = visitor(*root_machine, matrix);
+      SkMatrix transform_down = WindowToCanvas();
+      SkMatrix transform_up = CanvasToWindow();
+      result = visitor(*root_machine, transform_down, transform_up);
     });
     return result;
   }

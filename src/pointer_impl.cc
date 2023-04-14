@@ -41,9 +41,10 @@ void PointerImpl::Move(vec2 position) {
     Widget *old_hovered_widget = hovered_widget;
     hovered_widget = nullptr;
     window.VisitAtPoint(pointer_position,
-                        [&](Widget &widget, const SkMatrix &transform) {
+                        [&](Widget &widget, const SkMatrix &transform_down,
+                            const SkMatrix &transform_up) {
                           hovered_widget = &widget;
-                          hovered_widget_transform = transform;
+                          hovered_widget_transform = transform_down;
                           return VisitResult::kStop;
                         });
     if (old_hovered_widget != hovered_widget) {
@@ -118,8 +119,6 @@ vec2 PointerImpl::PositionWithin(Widget &widget) const {
   return Vec2(transform.mapXY(canvas_pos.X, canvas_pos.Y));
 }
 
-Keyboard &PointerImpl::Keyboard() {
-  return keyboard->facade;
-}
+Keyboard &PointerImpl::Keyboard() { return keyboard->facade; }
 
 } // namespace automaton::gui

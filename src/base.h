@@ -20,8 +20,8 @@
 #include "animation.h"
 #include "channel.h"
 #include "format.h"
-#include "gui_button.h"
 #include "generated/assets.h"
+#include "gui_button.h"
 #include "log.h"
 #include "text_field.h"
 
@@ -742,9 +742,11 @@ struct Machine : LiveObject {
   gui::VisitResult
   VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
     for (auto &it : locations) {
-      SkMatrix transform =
+      SkMatrix transform_down =
           SkMatrix::Translate(-it->position.X, -it->position.Y);
-      auto result = visitor(*it, transform);
+      SkMatrix transform_up =
+          SkMatrix::Translate(it->position.X, it->position.Y);
+      auto result = visitor(*it, transform_down, transform_up);
       if (result == gui::VisitResult::kStop) {
         return result;
       }

@@ -112,26 +112,34 @@ SkPath Location::Shape() const {
 
 gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   if (object) {
-    auto result = visitor(*object, SkMatrix::I());
+    auto result = visitor(*object, SkMatrix::I(), SkMatrix::I());
     if (result != gui::VisitResult::kContinue) {
       return result;
     }
   }
   SkPath my_shape = Shape();
   SkRect my_bounds = my_shape.getBounds();
-  SkMatrix name_text_field_transform =
+  SkMatrix name_text_field_transform_down =
       SkMatrix::Translate(-my_bounds.left() - 0.001,
                           -my_bounds.bottom() + gui::kTextFieldHeight + 0.001);
-  auto result = visitor(name_text_field, name_text_field_transform);
+  SkMatrix name_text_field_transform_up =
+      SkMatrix::Translate(my_bounds.left() + 0.001,
+                          my_bounds.bottom() - gui::kTextFieldHeight - 0.001);
+  auto result = visitor(name_text_field, name_text_field_transform_down,
+                        name_text_field_transform_up);
   if (result != gui::VisitResult::kContinue) {
     return result;
   }
   SkPath run_button_shape = run_button.Shape();
   SkRect run_bounds = run_button_shape.getBounds();
-  SkMatrix run_button_transform =
+  SkMatrix run_button_transform_down =
       SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
                           -(my_bounds.top() - run_bounds.fTop) - 0.001);
-  result = visitor(run_button, run_button_transform);
+  SkMatrix run_button_transform_up =
+      SkMatrix::Translate(my_bounds.centerX() - run_bounds.centerX(),
+                          my_bounds.top() - run_bounds.fTop + 0.001);
+  result =
+      visitor(run_button, run_button_transform_down, run_button_transform_up);
   return result;
 }
 

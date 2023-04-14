@@ -19,11 +19,12 @@ enum class VisitResult { kContinue, kStop };
 
 struct WidgetVisitor {
   virtual ~WidgetVisitor() {}
-  virtual VisitResult operator()(Widget &, const SkMatrix &transform) = 0;
+  virtual VisitResult operator()(Widget &, const SkMatrix &transform_down,
+                                 const SkMatrix &transform_up) = 0;
 };
 
 using WidgetVisitorFunc =
-    std::function<VisitResult(Widget &, const SkMatrix &)>;
+    std::function<VisitResult(Widget &, const SkMatrix &, const SkMatrix &)>;
 
 // Base class for widgets.
 struct Widget {
@@ -60,9 +61,11 @@ struct Widget {
   // Transform matrix is controlled by the Widget's parent.
   // This function asks the parent for the transform of this Widget.
   SkMatrix TransformFromParent();
+  SkMatrix TransformToParent();
 
   // The child doesn't have to be an immediate child.
   SkMatrix TransformToChild(Widget *child);
+  SkMatrix TransformFromChild(Widget *child);
 
   void DrawChildren(SkCanvas &, animation::State &) const;
 };

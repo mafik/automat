@@ -6,14 +6,14 @@
 #include "product_ptr.h"
 #include "widget.h"
 
-
 namespace automaton::gui {
 
 struct Button : Widget {
   Widget *parent_widget;
   sk_sp<skottie::Animation> picture;
-  mutable product_ptr<animation::Approach> inset_shadow_sigma;
+  mutable product_ptr<animation::Approach> inset_shadow_press;
   mutable product_ptr<animation::Approach> inset_shadow_inset;
+  int press_action_count = 0;
 
   Button(Widget *parent_widget, sk_sp<skottie::Animation> picture);
   Widget *ParentWidget() override;
@@ -23,6 +23,7 @@ struct Button : Widget {
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton,
                                            vec2 contact_point) override;
+  virtual void Activate() = 0;
 };
 
 } // namespace automaton::gui

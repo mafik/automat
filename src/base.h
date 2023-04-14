@@ -20,8 +20,8 @@
 #include "animation.h"
 #include "channel.h"
 #include "format.h"
-#include "gui_button.h"
 #include "log.h"
+#include "run_button.h"
 #include "text_field.h"
 
 namespace automaton {
@@ -206,7 +206,7 @@ struct Location : gui::Widget {
   // Name of this Location.
   string name;
   gui::TextField name_text_field;
-  gui::Button run_button;
+  gui::RunButton run_button;
 
   vec2 position = {0, 0};
 

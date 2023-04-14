@@ -1,6 +1,7 @@
 #include "gui_button.h"
 
 #include <include/core/SkBlurTypes.h>
+#include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
@@ -12,7 +13,9 @@ namespace automaton::gui {
 Widget *Button::ParentWidget() { return parent_widget; }
 
 void Button::PointerOver(Pointer &pointer, animation::State &animation_state) {
-  inset_shadow_inset[animation_state].target = 1;
+  auto &inset = inset_shadow_inset[animation_state];
+  inset.target = 1;
+  inset.speed = 5;
   pointer.PushIcon(Pointer::kIconHand);
 }
 
@@ -26,12 +29,26 @@ namespace {
 constexpr float kHeight = 0.008f;
 constexpr float kWidth = kHeight;
 constexpr float kRadius = kHeight / 2;
-constexpr float kShadowSigma = kRadius / 10;
+constexpr float kShadowSigma = kRadius / 8;
 
 SkPaint GetBackgroundPaint() {
   SkPaint paint;
   SkPoint pts[3] = {{0, 0}, {0, 0.8f * kHeight}, {0, kHeight}};
-  SkColor colors[3] = {0xffd8d9db, 0xffffffff, 0xfffdfdfd};
+  SkColor base_color = 0xffdbd2cc;
+  SkScalar hsv[3];
+  SkColorToHSV(base_color, hsv);
+
+  SkScalar bottom_hsv[3];
+  memcpy(bottom_hsv, hsv, sizeof(hsv));
+  bottom_hsv[2] *= 0.8f;
+  SkColor bottom_color = SkHSVToColor(bottom_hsv);
+
+  SkScalar top_hsv[3];
+  memcpy(top_hsv, hsv, sizeof(hsv));
+  top_hsv[2] *= 0.95f;
+  SkColor top_color = SkHSVToColor(top_hsv);
+
+  SkColor colors[3] = {bottom_color, base_color, top_color};
   sk_sp<SkShader> gradient =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 3, SkTileMode::kClamp);
   paint.setShader(gradient);
@@ -50,7 +67,7 @@ SkPaint GetBorderPaint() {
 SkPaint &GetShadowPaint() {
   static SkPaint paint = []() -> SkPaint {
     SkPaint paint;
-    paint.setColor(0x40000000);
+    // paint.setColor(0x40000000);
     paint.setMaskFilter(
         SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
     return paint;
@@ -76,10 +93,12 @@ void DrawBlur(SkCanvas &canvas, SkColor color, float outset, float r, float y) {
 } // namespace
 
 void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
-  auto &sigma = inset_shadow_sigma[animation_state];
-  auto &inset = inset_shadow_inset[animation_state];
-  sigma.Tick(animation_state);
-  inset.Tick(animation_state);
+  auto &press = inset_shadow_press[animation_state];
+  auto &hover = inset_shadow_inset[animation_state];
+  press.Tick(animation_state);
+  hover.Tick(animation_state);
+
+  float depth = std::max(press.value, hover.value / 2);
 
   double time = animation_state.timer.now.time_since_epoch().count();
   picture->seekFrameTime(fmod(time, picture->duration()), nullptr);
@@ -99,18 +118,20 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   DrawBlur(canvas, 0xA0FFFFFF, 0.00015f, 0.00020, -0.00020);
 
   canvas.drawOval(oval, GetBackgroundPaint());
-  // canvas.save();
   {
     SkAutoCanvasRestore auto_canvas_restore(&canvas, true);
     canvas.clipRRect(SkRRect::MakeOval(oval));
     auto shadow_oval =
-        oval.makeInset(kShadowSigma * inset, kShadowSigma * inset);
+        oval.makeInset(kShadowSigma * 2 * depth, kShadowSigma * 2 * depth);
     auto shape = SkPath::Oval(shadow_oval);
     shape.toggleInverseFillType();
-    canvas.drawPath(shape, GetShadowPaint());
+    SkPaint paint = GetShadowPaint();
+    paint.setMaskFilter(SkMaskFilter::MakeBlur(
+        kNormal_SkBlurStyle, kShadowSigma * (1 + depth), true));
+    paint.setAlpha(0x60 + depth * 0x40);
+    canvas.drawPath(shape, paint);
     shape.toggleInverseFillType();
   }
-  // canvas.restore();
   canvas.drawOval(oval, GetBorderPaint());
 
   {
@@ -121,7 +142,7 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     size.fHeight *= scale;
     size.fWidth *= scale;
     canvas.translate((kWidth - size.width()) / 2,
-                     kHeight - (kHeight - size.height()) / 2);
+                     (kHeight + size.height()) / 2);
     canvas.scale(scale, -scale);
     picture->render(&canvas);
   }
@@ -132,8 +153,40 @@ SkPath Button::Shape() const {
   return path;
 }
 
-std::unique_ptr<Action> Button::ButtonDownAction(Pointer &, PointerButton,
+struct ButtonAction : public Action {
+  Button &button;
+  ButtonAction(Button &button) : button(button) {}
+
+  void Begin(gui::Pointer &pointer) override {
+    button.Activate();
+    button.press_action_count++;
+    for (auto &shadow : button.inset_shadow_press) {
+      shadow.target = 1;
+      shadow.speed = 15;
+    }
+  }
+
+  void Update(gui::Pointer &) override {}
+
+  void End() override {
+    button.press_action_count--;
+    if (button.press_action_count == 0) {
+      for (auto &shadow : button.inset_shadow_press) {
+        shadow.target = 0;
+        shadow.speed = 5;
+      }
+    }
+  }
+
+  void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
+};
+
+std::unique_ptr<Action> Button::ButtonDownAction(Pointer &pointer,
+                                                 PointerButton pointer_button,
                                                  vec2 contact_point) {
+  if (pointer_button == PointerButton::kMouseLeft) {
+    return std::make_unique<ButtonAction>(*this);
+  }
   return nullptr;
 }
 

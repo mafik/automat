@@ -191,13 +191,16 @@ def generate_asset_sources(asset, header, source, extra_args):
     with header.open('w') as f:
         print(f'''#pragma once
 #include <cstddef>
+#include <string_view>
 namespace automaton::assets {{
 constexpr size_t {slug}_size = {size};
 extern const char *{slug};
+extern const std::string_view {slug}_view;
 }} // namespace automaton::assets''', file=f)
     with source.open('w') as f:
         print(f'#include "{header.name}"', file=f)
         print('namespace automaton::assets {', file=f)
+        print(f'const std::string_view {slug}_view = std::string_view({slug}, {size});', file=f)
         print(f'const char *{slug} =', file=f)
         buf = asset.read_bytes()
         bytes_per_line = 200

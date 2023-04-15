@@ -1,7 +1,5 @@
 #pragma once
 
-#include <modules/skottie/include/Skottie.h>
-
 #include "animation.h"
 #include "product_ptr.h"
 #include "widget.h"
@@ -10,12 +8,12 @@ namespace automaton::gui {
 
 struct Button : Widget {
   Widget *parent_widget;
-  sk_sp<skottie::Animation> picture;
+  std::unique_ptr<Widget> child;
   mutable product_ptr<animation::Approach> inset_shadow_press;
   mutable product_ptr<animation::Approach> inset_shadow_inset;
   int press_action_count = 0;
 
-  Button(Widget *parent_widget, sk_sp<skottie::Animation> picture);
+  Button(Widget *parent_widget, std::unique_ptr<Widget> &&child);
   Widget *ParentWidget() override;
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;

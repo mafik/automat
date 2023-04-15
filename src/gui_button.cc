@@ -34,7 +34,8 @@ constexpr float kShadowSigma = kRadius / 8;
 SkPaint GetBackgroundPaint() {
   SkPaint paint;
   SkPoint pts[3] = {{0, 0}, {0, 0.8f * kHeight}, {0, kHeight}};
-  SkColor base_color = 0xffdbd2cc;
+  SkColor base_color = 0xfff7f1ed;
+  base_color = 0xffebac3f;
   SkScalar hsv[3];
   SkColorToHSV(base_color, hsv);
 
@@ -76,7 +77,7 @@ SkPaint &GetShadowPaint() {
 }
 
 const SkRect &ButtonOval() {
-  static SkRect oval = SkRect::MakeWH(kHeight, kHeight);
+  static SkRect oval = SkRect::MakeLTRB(0, 0, kWidth, kHeight);
   return oval;
 }
 
@@ -88,6 +89,7 @@ void DrawBlur(SkCanvas &canvas, SkColor color, float outset, float r, float y) {
   auto oval = ButtonOval().makeOutset(outset, outset);
   canvas.translate(0, y);
   canvas.drawOval(oval, paint);
+  canvas.translate(0, -y);
 }
 
 } // namespace
@@ -99,9 +101,6 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   hover.Tick(animation_state);
 
   float depth = std::max(press.value, hover.value / 2);
-
-  double time = animation_state.timer.now.time_since_epoch().count();
-  picture->seekFrameTime(fmod(time, picture->duration()), nullptr);
 
   auto oval = ButtonOval();
 
@@ -134,18 +133,9 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   }
   canvas.drawOval(oval, GetBorderPaint());
 
-  {
-    SkAutoCanvasRestore auto_canvas_restore(&canvas, true);
-    constexpr float kLottiePxToMeters = 0.0254f / 96.0f;
-    SkSize size = picture->size(); // pixels on a 96 DPI screen
-    float scale = kLottiePxToMeters;
-    size.fHeight *= scale;
-    size.fWidth *= scale;
-    canvas.translate((kWidth - size.width()) / 2,
-                     (kHeight + size.height()) / 2);
-    canvas.scale(scale, -scale);
-    picture->render(&canvas);
-  }
+  canvas.translate(kWidth / 2, kHeight / 2);
+  child->Draw(canvas, animation_state);
+  canvas.translate(-kWidth / 2, -kHeight / 2);
 }
 
 SkPath Button::Shape() const {
@@ -190,7 +180,7 @@ std::unique_ptr<Action> Button::ButtonDownAction(Pointer &pointer,
   return nullptr;
 }
 
-Button::Button(Widget *parent_widget, sk_sp<skottie::Animation> picture)
-    : parent_widget(parent_widget), picture(picture) {}
+Button::Button(Widget *parent_widget, std::unique_ptr<Widget> &&child)
+    : parent_widget(parent_widget), child(std::move(child)) {}
 
 } // namespace automaton::gui

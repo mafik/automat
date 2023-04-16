@@ -6,8 +6,8 @@
 
 namespace automaton::gui {
 
-constexpr char kPlayShape[] = "m-4.5-7.8c-.65 1.7-.53 14 0 16 1.8-.48 12-6.3 "
-                              "14-7.8-1.3-1.4-12-7.5-14-7.8z";
+constexpr char kPlayShape[] =
+    "M-5-8C-5.8-6-5.7 6-5 8-3 7.7 7.5 1.5 9 0 7.5-1.5-3-7.7-5-8Z";
 
 RunButton::RunButton(Location *parent)
     : Button(parent, MakeShapeWidget(kPlayShape, 0xa0ffffff)) {}

@@ -29,52 +29,8 @@ namespace {
 constexpr float kHeight = 0.008f;
 constexpr float kWidth = kHeight;
 constexpr float kRadius = kHeight / 2;
-constexpr float kShadowSigma = kRadius / 8;
-
-SkPaint GetBackgroundPaint() {
-  SkPaint paint;
-  SkPoint pts[3] = {{0, 0}, {0, 0.8f * kHeight}, {0, kHeight}};
-  SkColor base_color = 0xfff7f1ed;
-  base_color = 0xffebac3f;
-  SkScalar hsv[3];
-  SkColorToHSV(base_color, hsv);
-
-  SkScalar bottom_hsv[3];
-  memcpy(bottom_hsv, hsv, sizeof(hsv));
-  bottom_hsv[2] *= 0.8f;
-  SkColor bottom_color = SkHSVToColor(bottom_hsv);
-
-  SkScalar top_hsv[3];
-  memcpy(top_hsv, hsv, sizeof(hsv));
-  top_hsv[2] *= 0.95f;
-  SkColor top_color = SkHSVToColor(top_hsv);
-
-  SkColor colors[3] = {bottom_color, base_color, top_color};
-  sk_sp<SkShader> gradient =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 3, SkTileMode::kClamp);
-  paint.setShader(gradient);
-  return paint;
-}
-
-SkPaint GetBorderPaint() {
-  SkPaint paint;
-  paint.setColor(color::FromHex(0x8f9092));
-  paint.setStyle(SkPaint::kStroke_Style);
-  paint.setAntiAlias(true);
-  paint.setStrokeWidth(0.00025f);
-  return paint;
-}
-
-SkPaint &GetShadowPaint() {
-  static SkPaint paint = []() -> SkPaint {
-    SkPaint paint;
-    // paint.setColor(0x40000000);
-    paint.setMaskFilter(
-        SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
-    return paint;
-  }();
-  return paint;
-}
+constexpr float kShadowSigma = kRadius / 10;
+constexpr float kBorderWidth = kRadius / 10;
 
 const SkRect &ButtonOval() {
   static SkRect oval = SkRect::MakeLTRB(0, 0, kWidth, kHeight);
@@ -100,42 +56,50 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   press.Tick(animation_state);
   hover.Tick(animation_state);
 
-  float depth = std::max(press.value, hover.value / 2);
+  auto oval = ButtonOval().makeInset(kBorderWidth / 2, kBorderWidth / 2);
+  constexpr SkColor color = 0xffd69d00;
+  constexpr SkColor white = 0xffffffff;
 
-  auto oval = ButtonOval();
+  float bg_adjust = hover * 10;
 
-  // Draw highlight above
-  DrawBlur(canvas, 0x80FFFFFF, 0, kShadowSigma, kShadowSigma);
+  auto DrawBase = [&](SkColor bg, SkColor fg) {
+    // Shadow
+    SkPaint shadow_paint;
+    shadow_paint.setColor(
+        color::SetAlpha(color::AdjustLightness(bg, -40), 1.0f));
+    shadow_paint.setMaskFilter(
+        SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
+    canvas.drawOval(oval.makeOffset(0, -kShadowSigma), shadow_paint);
 
-  // Draw shadow above
-  DrawBlur(canvas, 0x40000000, 0, kShadowSigma / 2, kShadowSigma / 2);
+    SkPaint paint;
+    SkPoint pts[2] = {{0, kHeight}, {0, 0}};
+    SkColor colors[2] = {color::AdjustLightness(bg, bg_adjust),       // top
+                         color::AdjustLightness(bg, bg_adjust - 10)}; // bottom
+    sk_sp<SkShader> gradient = SkGradientShader::MakeLinear(
+        pts, colors, nullptr, 2, SkTileMode::kClamp);
+    paint.setShader(gradient);
+    canvas.drawOval(oval, paint);
 
-  // Draw shadow below
-  DrawBlur(canvas, 0x20000000, 0, kShadowSigma * 2, -kShadowSigma * 2);
+    SkPaint border;
+    SkColor border_colors[2] = {color::AdjustLightness(bg, bg_adjust + 10),
+                                color::AdjustLightness(bg, bg_adjust - 20)};
+    sk_sp<SkShader> border_gradient = SkGradientShader::MakeLinear(
+        pts, border_colors, nullptr, 2, SkTileMode::kClamp);
+    border.setShader(border_gradient);
+    border.setStyle(SkPaint::kStroke_Style);
+    border.setAntiAlias(true);
+    border.setStrokeWidth(kBorderWidth);
+    canvas.drawOval(oval, border);
 
-  // Draw highlight below
-  DrawBlur(canvas, 0xA0FFFFFF, 0.00015f, 0.00020, -0.00020);
+    SkPaint fg_paint;
+    fg_paint.setColor(fg);
+    fg_paint.setAntiAlias(true);
+    canvas.translate(kWidth / 2, kHeight / 2);
+    child->DrawColored(canvas, animation_state, fg_paint);
+    canvas.translate(-kWidth / 2, -kHeight / 2);
+  };
 
-  canvas.drawOval(oval, GetBackgroundPaint());
-  {
-    SkAutoCanvasRestore auto_canvas_restore(&canvas, true);
-    canvas.clipRRect(SkRRect::MakeOval(oval));
-    auto shadow_oval =
-        oval.makeInset(kShadowSigma * 2 * depth, kShadowSigma * 2 * depth);
-    auto shape = SkPath::Oval(shadow_oval);
-    shape.toggleInverseFillType();
-    SkPaint paint = GetShadowPaint();
-    paint.setMaskFilter(SkMaskFilter::MakeBlur(
-        kNormal_SkBlurStyle, kShadowSigma * (1 + depth), true));
-    paint.setAlpha(0x60 + depth * 0x40);
-    canvas.drawPath(shape, paint);
-    shape.toggleInverseFillType();
-  }
-  canvas.drawOval(oval, GetBorderPaint());
-
-  canvas.translate(kWidth / 2, kHeight / 2);
-  child->Draw(canvas, animation_state);
-  canvas.translate(-kWidth / 2, -kHeight / 2);
+  DrawBase(white, color);
 }
 
 SkPath Button::Shape() const {

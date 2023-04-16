@@ -42,6 +42,11 @@ struct Widget {
   virtual void PointerOver(Pointer &, animation::State &) {}
   virtual void PointerLeave(Pointer &, animation::State &) {}
   virtual void Draw(SkCanvas &, animation::State &) const = 0;
+  virtual void DrawColored(SkCanvas &canvas, animation::State &state,
+                           const SkPaint &) const {
+    // Default implementation just calls Draw().
+    Draw(canvas, state);
+  }
   virtual SkPath Shape() const = 0;
   virtual std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton,
                                                    vec2 contact_point) {

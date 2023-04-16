@@ -14,6 +14,8 @@ struct ShapeWidget : Widget {
   ShapeWidget(SkPath path, SkPaint paint);
   SkPath Shape() const override;
   void Draw(SkCanvas &, animation::State &) const override;
+  void DrawColored(SkCanvas &, animation::State &,
+                   const SkPaint &) const override;
 };
 
 std::unique_ptr<Widget> MakeShapeWidget(const char *svg_path,

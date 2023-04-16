@@ -36,15 +36,15 @@ namespace {
 constexpr float kMargin = 0.001;
 constexpr float kHeight = 0.008;
 
-constexpr SkColor kFontColor = color::FromHex(0x03290d);
+constexpr SkColor kFontColor = 0xff03290d;
 
-constexpr SkColor kBackgroundColor = color::FromHex(0x9be0ad);
-constexpr SkColor kBackgroundTopColor = color::Brighten(kBackgroundColor);
-constexpr SkColor kBackgroundBottomColor = color::Darken(kBackgroundColor);
+constexpr SkColor kBackgroundColor = 0xff9be0ad;
+SkColor kBackgroundTopColor = color::AdjustLightness(kBackgroundColor, 5);
+SkColor kBackgroundBottomColor = color::AdjustLightness(kBackgroundColor, -5);
 
 constexpr float kBorderWidth = 0.001 / 4;
-constexpr SkColor kBorderTopColor = color::Brighten(kBackgroundTopColor);
-constexpr SkColor kBorderBottomColor = color::Darken(kBackgroundBottomColor);
+SkColor kBorderTopColor = color::AdjustLightness(kBackgroundTopColor, 5);
+SkColor kBorderBottomColor = color::AdjustLightness(kBackgroundBottomColor, -5);
 
 SkRRect GetShape() {
   static SkRRect shape = []() -> SkRRect {
@@ -57,7 +57,7 @@ SkRRect GetShape() {
   return shape;
 }
 
-SkColor GetBackgroundColor() { return color::FromHex(0x9be0ad); }
+SkColor GetBackgroundColor() { return 0xff9be0ad; }
 
 SkPaint GetBackgroundPaint() {
   SkColor color = GetBackgroundColor();

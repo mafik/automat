@@ -9,7 +9,6 @@
 #include "font.h"
 #include "library_macros.h"
 
-
 namespace automaton::library {
 
 DEFINE_PROTO(Number);
@@ -38,7 +37,7 @@ void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, 0.01}};
-  SkColor colors[2] = {color::FromHex(0x0f5f4d), color::FromHex(0x468257)};
+  SkColor colors[2] = {0xff0f5f4d, 0xff468257};
   sk_sp<SkShader> gradient =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
   paint.setShader(gradient);
@@ -55,8 +54,7 @@ void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     path = SkPath::RRect(rrect);
   }
 
-  SkColor border_colors[2] = {color::FromHex(0x1c5d3e),
-                              color::FromHex(0x76a87a)};
+  SkColor border_colors[2] = {0xff1c5d3e, 0xff76a87a};
   sk_sp<SkShader> border_gradient = SkGradientShader::MakeLinear(
       pts, border_colors, nullptr, 2, SkTileMode::kClamp);
   border_paint.setShader(border_gradient);

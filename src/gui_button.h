@@ -11,9 +11,9 @@ struct Button : Widget {
   std::unique_ptr<Widget> child;
   mutable product_ptr<animation::Approach> press_ptr;
   mutable product_ptr<animation::Approach> hover_ptr;
-  mutable product_ptr<animation::Approach> toggle_ptr;
+  mutable product_ptr<animation::Approach> filling_ptr;
   int press_action_count = 0;
-  bool toggled_on = false;
+  bool filled = false;
 
   Button(Widget *parent_widget, std::unique_ptr<Widget> &&child);
   Widget *ParentWidget() override;
@@ -24,7 +24,7 @@ struct Button : Widget {
   std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton,
                                            vec2 contact_point) override;
   virtual void Activate() = 0;
-  void Toggle();
+  void ToggleFill();
 };
 
 } // namespace automaton::gui

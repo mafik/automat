@@ -12,6 +12,6 @@ constexpr char kPlayShape[] =
 RunButton::RunButton(Location *parent)
     : Button(parent, MakeShapeWidget(kPlayShape, 0xffffffff)) {}
 
-void RunButton::Activate() { Toggle(); }
+void RunButton::Activate() { ToggleFill(); }
 
 } // namespace automaton::gui

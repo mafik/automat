@@ -57,12 +57,12 @@ void DrawBlur(SkCanvas &canvas, SkColor color, float outset, float r, float y) {
 void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   auto &press = press_ptr[animation_state];
   auto &hover = hover_ptr[animation_state];
-  auto &toggle = toggle_ptr[animation_state];
-  toggle.speed = 5;
-  toggle.target = toggled_on ? 1 : 0;
+  auto &filling = filling_ptr[animation_state];
+  filling.speed = 5;
+  filling.target = filled ? 1 : 0;
   press.Tick(animation_state);
   hover.Tick(animation_state);
-  toggle.Tick(animation_state);
+  filling.Tick(animation_state);
 
   auto oval = ButtonOval().makeInset(kBorderWidth / 2, kBorderWidth / 2);
   constexpr SkColor color = 0xffd69d00;
@@ -113,19 +113,19 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     canvas.translate(-kWidth / 2, -kHeight / 2 - press_shift_y);
   };
 
-  if (toggle >= 0.99) {
+  if (filling >= 0.99) {
     DrawBase(color, white);
-  } else if (toggle <= 0.01) {
+  } else if (filling <= 0.01) {
     DrawBase(white, color);
   } else {
-    float baseline = pressed_outer_oval.fTop * (1 - toggle) +
-                     pressed_outer_oval.fBottom * toggle;
+    float baseline = pressed_outer_oval.fTop * (1 - filling) +
+                     pressed_outer_oval.fBottom * filling;
     constexpr int n_points = 6;
     vec2 points[n_points];
     static time::point base = animation_state.timer.now;
     float timeS = (animation_state.timer.now - base).count();
     constexpr float waving_x = kRadius / n_points / 2;
-    float waving_y = waving_x * toggle * (1 - toggle) * 8;
+    float waving_y = waving_x * filling * (1 - filling) * 8;
     for (int i = 0; i < n_points; ++i) {
       float frac = i / float(n_points - 1);
       float a = (frac * 3 + timeS * 1) * 2 * M_PI;
@@ -202,6 +202,6 @@ std::unique_ptr<Action> Button::ButtonDownAction(Pointer &pointer,
 Button::Button(Widget *parent_widget, std::unique_ptr<Widget> &&child)
     : parent_widget(parent_widget), child(std::move(child)) {}
 
-void Button::Toggle() { toggled_on = !toggled_on; }
+void Button::ToggleFill() { filled = !filled; }
 
 } // namespace automaton::gui

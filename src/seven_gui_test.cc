@@ -10,6 +10,7 @@
 #include <source_location>
 
 using namespace automaton;
+using namespace automaton::library;
 using namespace testing;
 
 TEST(CounterTest, Count) {
@@ -17,7 +18,7 @@ TEST(CounterTest, Count) {
   Location root(nullptr);
   Machine &counter = *root.Create<Machine>();
 
-  Location &i = counter.Create<Integer>();
+  Location &i = counter.Create<Number>();
   Location &inc = counter.Create<Increment>();
   inc.ConnectTo(i, "target");
   Location &txt = counter.Create<Text>("Count");

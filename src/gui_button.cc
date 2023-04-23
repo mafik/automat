@@ -72,17 +72,18 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   float press_shift_y = press * -kShadowSigma;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
   auto pressed_outer_oval = pressed_oval.makeOutset(
-      kBorderWidth / 2 + kShadowSigma * 2, kBorderWidth / 2 + kShadowSigma * 2);
+      kBorderWidth / 2 + kShadowSigma * 0, kBorderWidth / 2 + kShadowSigma * 0);
 
-  auto DrawBase = [&](SkColor bg, SkColor fg) {
+  auto DrawShadow = [&](SkColor color) {
     // Shadow
     SkPaint shadow_paint;
-    shadow_paint.setColor(
-        color::SetAlpha(color::AdjustLightness(bg, -40), 1.0f));
+    shadow_paint.setColor(color::AdjustLightness(color, -40));
     shadow_paint.setMaskFilter(
         SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
     canvas.drawOval(oval.makeOffset(0, -kShadowSigma), shadow_paint);
+  };
 
+  auto DrawBase = [&](SkColor bg, SkColor fg) {
     SkPaint paint;
     SkPoint pts[2] = {{0, kHeight}, {0, 0}};
     SkColor colors[2] = {
@@ -113,11 +114,14 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     canvas.translate(-kWidth / 2, -kHeight / 2 - press_shift_y);
   };
 
-  if (filling >= 0.99) {
+  if (filling >= 0.999) {
+    DrawShadow(color);
     DrawBase(color, white);
-  } else if (filling <= 0.01) {
+  } else if (filling <= 0.001) {
+    DrawShadow(white);
     DrawBase(white, color);
   } else {
+    DrawShadow(color::MixColors(white, color, filling));
     float baseline = pressed_outer_oval.fTop * (1 - filling) +
                      pressed_outer_oval.fBottom * filling;
     constexpr int n_points = 6;

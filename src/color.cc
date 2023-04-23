@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 
+#include "log.h"
 #include "math.h"
 
 namespace automaton::color {
@@ -199,16 +200,24 @@ static constexpr vec3 XYZToRGB(float x, float y, float z) {
   return Vec3(r, g, b);
 }
 
-static constexpr vec3 HSLuvToRGB(float h, float s, float l) {
-  vec3 lch = HSLuvToLCH(h, s, l);
-  vec3 luv = LCHToLUV(lch.X, lch.Y, lch.Z);
-  vec3 xyz = LUVToXYZ(luv.X, luv.Y, luv.Z);
+static constexpr vec3 LUVToRGB(float l, float u, float v) {
+  vec3 xyz = LUVToXYZ(l, u, v);
   return XYZToRGB(xyz.X, xyz.Y, xyz.Z);
 }
 
-static constexpr vec3 RGBToHSLuv(float r, float g, float b) {
+static constexpr vec3 HSLuvToRGB(float h, float s, float l) {
+  vec3 lch = HSLuvToLCH(h, s, l);
+  vec3 luv = LCHToLUV(lch.X, lch.Y, lch.Z);
+  return LUVToRGB(luv.X, luv.Y, luv.Z);
+}
+
+static constexpr vec3 RGBToLUV(float r, float g, float b) {
   vec3 xyz = RGBToXYZ(r, g, b);
-  vec3 luv = XYZToLUV(xyz.X, xyz.Y, xyz.Z);
+  return XYZToLUV(xyz.X, xyz.Y, xyz.Z);
+}
+
+static constexpr vec3 RGBToHSLuv(float r, float g, float b) {
+  vec3 luv = RGBToLUV(r, g, b);
   vec3 lch = LUVToLCH(luv.X, luv.Y, luv.Z);
   return LCHToHSLuv(lch.X, lch.Y, lch.Z);
 }
@@ -232,6 +241,32 @@ SkColor AdjustLightness(SkColor color, float adjust_percent) {
   vec3 rgb = HSLuvToRGB(hsluv.Elements[0], hsluv.Elements[1], l);
   return SkColorSetARGB(SkColorGetA(color), rgb.R * 255, rgb.G * 255,
                         rgb.B * 255);
+}
+
+SkColor MixColors(SkColor zero, SkColor one, float ratio) {
+  vec3 zero_luv =
+      RGBToHSLuv(SkColorGetR(zero) / 255.0, SkColorGetG(zero) / 255.0,
+                 SkColorGetB(zero) / 255.0);
+  vec3 one_luv = RGBToHSLuv(SkColorGetR(one) / 255.0, SkColorGetG(one) / 255.0,
+                            SkColorGetB(one) / 255.0);
+  if (fabs(zero_luv.X - one_luv.X) > 0.5f) {
+    // Linear interpolation would circle around the color wheel.
+    // Instead, we'll use the shortest path.
+    // Decrease the larger value by 1.
+    (zero_luv.X > one_luv.X ? zero_luv.X : one_luv.X) -= 1.0f;
+    // Warning: this wasn't tested.
+  }
+  vec3 mixed_luv = zero_luv * (1.0f - ratio) + one_luv * ratio;
+  if (mixed_luv.X < 0.0f) {
+    // This should trigger only when using shortest path interpolation.
+    mixed_luv.X += 1.0f;
+  }
+  vec3 mixed_rgb = HSLuvToRGB(mixed_luv.X, mixed_luv.Y, mixed_luv.Z);
+  float alpha = SkColorGetA(zero) * (1.0f - ratio) + SkColorGetA(one) * ratio;
+  // LOG() << "0=" << zero_luv << " 1=" << one_luv << " " << ratio << "=" <<
+  // mixed_luv;
+  return SkColorSetARGB(alpha, mixed_rgb.R * 255, mixed_rgb.G * 255,
+                        mixed_rgb.B * 255);
 }
 
 } // namespace automaton::color

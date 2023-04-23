@@ -59,6 +59,8 @@ struct WindowImpl : Widget {
   std::vector<PrototypeButton> prototype_buttons;
   std::vector<vec2> prototype_button_positions;
 
+  std::deque<float> fps_history;
+
   WindowImpl(vec2 size, float display_pixels_per_meter);
 
   ~WindowImpl();

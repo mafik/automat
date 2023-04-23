@@ -1,5 +1,6 @@
 #include "window_impl.h"
 
+#include "font.h"
 #include "keyboard_impl.h"
 #include "pointer_impl.h"
 
@@ -70,7 +71,8 @@ struct DragAction : Action {
   }
 };
 
-std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &, PointerButton btn,
+std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &,
+                                                          PointerButton btn,
                                                           vec2 contact_point) {
   if (btn != kMouseLeft) {
     return nullptr;
@@ -229,6 +231,24 @@ void WindowImpl::Draw(SkCanvas &canvas) {
     prototype_buttons[i].Draw(canvas, animation_state);
     canvas.restore();
   }
+
+  // Draw fps counter
+  float fps = 1.0f / animation_state.timer.d;
+  fps_history.push_back(fps);
+  while (fps_history.size() > 100) {
+    fps_history.pop_front();
+  }
+  std::vector<float> fps_sorted(fps_history.begin(), fps_history.end());
+  std::sort(fps_sorted.begin(), fps_sorted.end());
+  float median_fps = fps_sorted[fps_sorted.size() / 2];
+  std::string fps_str = f("FPS min: %3.0f @50%%: %3.0f max: %3.0f",
+                          fps_sorted.front(), median_fps, fps_sorted.back());
+  SkPaint fps_paint;
+  auto &font = GetFont();
+  canvas.save();
+  canvas.translate(0.001, size.Y - 0.001 - gui::kLetterSize);
+  font.DrawText(canvas, fps_str, fps_paint);
+  canvas.restore();
 }
 
 } // namespace automaton::gui

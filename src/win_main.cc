@@ -4,6 +4,16 @@
 
 #include "win_main.h"
 
+#include <atomic>
+#include <memory>
+#include <thread>
+
+#include <timeapi.h>
+
+#include <include/core/SkCanvas.h>
+#include <include/core/SkGraphics.h>
+#include <src/base/SkUTF.h>
+
 #include "backtrace.h"
 #include "library.h"
 #include "loading_animation.h"
@@ -13,12 +23,6 @@
 #include "win.h"
 #include "win_key.h"
 #include "window.h"
-
-#include <include/core/SkCanvas.h>
-#include <include/core/SkGraphics.h>
-#include <src/base/SkUTF.h>
-
-#include <memory>
 
 using namespace automaton;
 
@@ -37,6 +41,7 @@ int window_height;
 // resized.
 int screen_width_px = 1920;
 int screen_height_px = 1080;
+int screen_refresh_rate = 60;
 float screen_width_m =
     (float)screen_width_px / USER_DEFAULT_SCREEN_DPI * kMetersPerInch;
 float screen_height_m =
@@ -115,6 +120,46 @@ uint32_t ScanCode(LPARAM lParam) {
   return scancode;
 }
 
+std::atomic_bool rendering = true;
+constexpr bool kPowersave = true;
+
+#pragma comment(lib, "winmm.lib") // needed for timeBeginPeriod
+
+void RenderThread() {
+  // This makes std::this_thread::sleep_until() more accurate.
+  timeBeginPeriod(1);
+  time::duration frame_duration = time::duration(1.0) / screen_refresh_rate;
+  time::point t0 = time::now();
+  time::point next_frame = t0;
+
+  while (rendering) { // TODO: synchronize this
+    if (kPowersave) {
+      time::point now = time::now();
+      if (next_frame < now) {
+        int frame_count = ceil((now - next_frame) / frame_duration);
+        next_frame += frame_count * frame_duration;
+        if (frame_count > 1) {
+          LOG() << "Skipping " << (frame_count - 1) << " frames";
+        }
+      } else {
+        // This normally sleeps until T + ~10ms.
+        // With timeBeginPeriod(1) it's T + ~1ms.
+        // TODO: try condition_variable instead
+        std::this_thread::sleep_until(next_frame);
+        next_frame += frame_duration;
+      }
+    }
+    SkCanvas *canvas = vk::GetBackbufferCanvas();
+    if (anim) {
+      anim.OnPaint(*canvas, Paint);
+    } else {
+      Paint(*canvas);
+    }
+    vk::Present();
+  }
+  timeEndPeriod(1);
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static unsigned char key_state[256] = {};
   static char utf8_buffer[4] = {};
@@ -152,13 +197,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     }
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
   case WM_PAINT: {
-    SkCanvas *canvas = vk::GetBackbufferCanvas();
-    if (anim) {
-      anim.OnPaint(*canvas, Paint);
-    } else {
-      Paint(*canvas);
-    }
-    vk::Present();
+    ValidateRect(hWnd, nullptr);
     break;
   }
   case WM_DPICHANGED: {
@@ -325,6 +364,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   screen_height_m = GetDeviceCaps(hdc, VERTSIZE) / 1000.0f;
   screen_width_px = GetDeviceCaps(hdc, HORZRES);
   screen_height_px = GetDeviceCaps(hdc, VERTRES);
+  screen_refresh_rate = GetDeviceCaps(hdc, VREFRESH);
   ReleaseDC(main_window, hdc);
 
   if (auto err = vk::Init(); !err.empty()) {
@@ -343,21 +383,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   keyboard = std::make_unique<gui::Keyboard>(*window);
   ResizeVulkan();
 
-  MSG msg = {};
-  while (WM_QUIT != msg.message) {
-    if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+  std::thread render_thread(RenderThread);
+
+  while (true) {
+    MSG msg = {};
+    switch (GetMessage(&msg, nullptr, 0, 0)) {
+    case -1: // error
+      ERROR() << "GetMessage failed: " << GetLastError();
+    case 0: // fallthrough to WM_QUIT
+      rendering = false;
+      render_thread.join();
+      vk::Destroy();
+      window.reset(); // delete it manually because destruction from the fini
+                      // section happens after global destructors (specifically
+                      // the `windows` list).
+      return (int)msg.wParam;
+    default:
       // For some reason TranslateMessage generates CP-1250 characters instead
       // of UTF-8. TranslateMessage(&msg);
       DispatchMessage(&msg);
-    } else {
-      // When idle, request a repaint.
-      InvalidateRect(main_window, nullptr, false);
     }
   }
-
-  vk::Destroy();
-  window.reset(); // delete it manually because destruction from the fini
-                  // section happens after global destructors (specifically the
-                  // `windows` list).
-  return (int)msg.wParam;
+  __builtin_unreachable();
 }

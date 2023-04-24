@@ -55,9 +55,9 @@ struct Instance : vkb::Instance {
   std::string error = "";
   std::vector<const char *> extensions = {
 #if defined(_WIN32)
-  "VK_KHR_win32_surface"
+    "VK_KHR_win32_surface"
 #elif defined(__linux__)
-  "VK_KHR_xcb_surface"
+    "VK_KHR_xcb_surface"
 #endif
   };
 } instance;
@@ -110,7 +110,7 @@ struct Swapchain {
                      VkSharingMode sharingMode);
   bool Create(int widthHint, int heightHint);
   BackbufferInfo *GetAvailableBackbuffer();
-  SkCanvas* GetBackbufferCanvas();
+  SkCanvas *GetBackbufferCanvas();
   void SwapBuffers();
   void WaitAndDestroy();
   operator VkSwapchainKHR() { return swapchain; }
@@ -471,6 +471,7 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count,
   current_backbuffer_index = image_count;
   return true;
 }
+
 bool Swapchain::Create(int widthHint, int heightHint) {
   // check for capabilities
   VkSurfaceCapabilitiesKHR caps;
@@ -526,7 +527,7 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   int width = (int)extent.width;
   int height = (int)extent.height;
 
-  uint32_t imageCount = caps.minImageCount + 2;
+  uint32_t imageCount = caps.minImageCount;
   if (caps.maxImageCount > 0 && imageCount > caps.maxImageCount) {
     // Application must settle for fewer images than desired:
     imageCount = caps.maxImageCount;
@@ -650,6 +651,7 @@ bool Swapchain::Create(int widthHint, int heightHint) {
 
   return true;
 }
+
 Swapchain::BackbufferInfo *Swapchain::GetAvailableBackbuffer() {
   SkASSERT(backbuffers);
 
@@ -661,7 +663,8 @@ Swapchain::BackbufferInfo *Swapchain::GetAvailableBackbuffer() {
   BackbufferInfo *backbuffer = backbuffers + current_backbuffer_index;
   return backbuffer;
 }
-SkCanvas* Swapchain::GetBackbufferCanvas() {
+
+SkCanvas *Swapchain::GetBackbufferCanvas() {
   BackbufferInfo *backbuffer = GetAvailableBackbuffer();
   SkASSERT(backbuffer);
 
@@ -710,11 +713,10 @@ SkCanvas* Swapchain::GetBackbufferCanvas() {
 
   return surface->getCanvas();
 }
+
 void Swapchain::SwapBuffers() {
   BackbufferInfo &backbuffer = backbuffers[current_backbuffer_index];
   SkSurface *surface = surfaces[backbuffer.image_index].get();
-
-  surface->flushAndSubmit();
 
   GrBackendSemaphore beSemaphore;
   beSemaphore.initVulkan(backbuffer.render_semaphore);
@@ -795,12 +797,8 @@ std::string Resize(int width_hint, int height_hint) {
   return "";
 }
 
-SkCanvas* GetBackbufferCanvas() {
-  return swapchain.GetBackbufferCanvas();
-}
+SkCanvas *GetBackbufferCanvas() { return swapchain.GetBackbufferCanvas(); }
 
-void Present() {
-  swapchain.SwapBuffers();
-}
+void Present() { swapchain.SwapBuffers(); }
 
 } // namespace automaton::vk

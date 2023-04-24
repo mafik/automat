@@ -152,8 +152,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     }
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
   case WM_PAINT: {
-    PAINTSTRUCT ps;
-    BeginPaint(hWnd, &ps);
     SkCanvas *canvas = vk::GetBackbufferCanvas();
     if (anim) {
       anim.OnPaint(*canvas, Paint);
@@ -161,7 +159,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       Paint(*canvas);
     }
     vk::Present();
-    EndPaint(hWnd, &ps);
     break;
   }
   case WM_DPICHANGED: {

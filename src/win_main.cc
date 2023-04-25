@@ -120,44 +120,55 @@ uint32_t ScanCode(LPARAM lParam) {
   return scancode;
 }
 
-std::atomic_bool rendering = true;
+std::jthread render_thread;
+time::point next_frame;
 constexpr bool kPowersave = true;
 
 #pragma comment(lib, "winmm.lib") // needed for timeBeginPeriod
 
-void RenderThread() {
-  // This makes std::this_thread::sleep_until() more accurate.
-  timeBeginPeriod(1);
-  time::duration frame_duration = time::duration(1.0) / screen_refresh_rate;
-  time::point t0 = time::now();
-  time::point next_frame = t0;
-
-  while (rendering) { // TODO: synchronize this
-    if (kPowersave) {
-      time::point now = time::now();
-      if (next_frame < now) {
-        int frame_count = ceil((now - next_frame) / frame_duration);
-        next_frame += frame_count * frame_duration;
-        if (frame_count > 1) {
-          LOG() << "Skipping " << (frame_count - 1) << " frames";
-        }
-      } else {
-        // This normally sleeps until T + ~10ms.
-        // With timeBeginPeriod(1) it's T + ~1ms.
-        // TODO: try condition_variable instead
-        std::this_thread::sleep_until(next_frame);
-        next_frame += frame_duration;
+void VulkanPaint() {
+  if (kPowersave) {
+    time::point now = time::now();
+    if (next_frame <= now) {
+      double frame_count =
+          ceil((now - next_frame).count() * screen_refresh_rate);
+      next_frame += time::duration(frame_count / screen_refresh_rate);
+      if (frame_count > 1) {
+        LOG() << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
       }
-    }
-    SkCanvas *canvas = vk::GetBackbufferCanvas();
-    if (anim) {
-      anim.OnPaint(*canvas, Paint);
     } else {
-      Paint(*canvas);
+      // This normally sleeps until T + ~10ms.
+      // With timeBeginPeriod(1) it's T + ~1ms.
+      // TODO: try condition_variable instead
+      std::this_thread::sleep_until(next_frame);
+      next_frame += time::duration(1.0 / screen_refresh_rate);
     }
-    vk::Present();
   }
-  timeEndPeriod(1);
+  SkCanvas *canvas = vk::GetBackbufferCanvas();
+  if (anim) {
+    anim.OnPaint(*canvas, Paint);
+  } else {
+    Paint(*canvas);
+  }
+  vk::Present();
+}
+
+void RenderThread(std::stop_token stop_token) {
+  while (!stop_token.stop_requested()) {
+    VulkanPaint();
+  }
+}
+
+void RenderingStop() {
+  if (render_thread.joinable()) {
+    render_thread.request_stop();
+    render_thread.join();
+  }
+}
+
+void RenderingStart() {
+  RenderingStop();
+  render_thread = std::jthread(RenderThread);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -165,20 +176,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static char utf8_buffer[4] = {};
   static int utf8_i = 0;
   switch (uMsg) {
-  case WM_SIZE:
+  case WM_SIZE: {
+    bool restart_rendering = render_thread.joinable();
+    if (restart_rendering) {
+      RenderingStop();
+    }
     window_width = LOWORD(lParam);
     window_height = HIWORD(lParam);
     ResizeVulkan();
     if (window) {
       window->Resize(WindowSize());
     }
+    VulkanPaint(); // for smoother resizing
+    if (restart_rendering) {
+      RenderingStart();
+    }
     break;
+  }
   case WM_MOVE: {
     client_x = LOWORD(lParam);
     client_y = HIWORD(lParam);
     break;
   }
-  case WM_SETCURSOR:
+  case WM_SETCURSOR: {
     // Intercept this message to prevent Windows from changing the cursor back
     // to an arrow.
     if (LOWORD(lParam) == HTCLIENT) {
@@ -196,6 +216,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       return TRUE;
     }
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
+  }
   case WM_PAINT: {
     ValidateRect(hWnd, nullptr);
     break;
@@ -316,9 +337,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     GetMouse().Move(ScreenToWindow(mouse_position));
     break;
   }
-  case WM_MOUSELEAVE:
+  case WM_MOUSELEAVE: {
     mouse.reset();
     break;
+  }
   case WM_MOUSEWHEEL: {
     int16_t x = lParam & 0xFFFF;
     int16_t y = (lParam >> 16) & 0xFFFF;
@@ -326,12 +348,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     GetMouse().Wheel(delta / 120.0);
     break;
   }
-  case WM_DESTROY:
+  case WM_DESTROY: {
     PostQuitMessage(0);
     break;
+  }
   default:
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
-    break;
   }
   return 0;
 }
@@ -343,6 +365,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   setlocale(LC_CTYPE, ".utf8");
   SetConsoleCP(CP_UTF8);
   SetConsoleOutputCP(CP_UTF8);
+  // This makes std::this_thread::sleep_until() more accurate.
+  timeBeginPeriod(1);
 
   InitRoot();
   anim.LoadingCompleted();
@@ -371,6 +395,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     FATAL() << "Failed to initialize Vulkan: " << err;
   }
 
+  next_frame = time::now();
   ShowWindow(main_window, nCmdShow);
   UpdateWindow(main_window);
   RECT rect;
@@ -382,8 +407,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
   keyboard = std::make_unique<gui::Keyboard>(*window);
   ResizeVulkan();
-
-  std::thread render_thread(RenderThread);
+  RenderingStart();
 
   while (true) {
     MSG msg = {};
@@ -391,8 +415,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     case -1: // error
       ERROR() << "GetMessage failed: " << GetLastError();
     case 0: // fallthrough to WM_QUIT
-      rendering = false;
-      render_thread.join();
+      RenderingStop();
       vk::Destroy();
       window.reset(); // delete it manually because destruction from the fini
                       // section happens after global destructors (specifically

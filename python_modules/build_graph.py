@@ -346,6 +346,10 @@ for path, deps in graph.items():
         source_files = [d for d in deps if types[d] == 'translation unit']
         assert len(
             source_files) == 1, f'{path} has {len(source_files)} source files'
+        if list(source_files)[0].endswith('.c') and pargs[0] == CXX:
+            pargs[0] = CC
+            # remove -std=c++2b from pargs
+            pargs = [x for x in pargs if x != '-std=c++2b']
         pargs += source_files
         pargs += ['-c', '-o', path]
         builder = functools.partial(Popen, pargs)

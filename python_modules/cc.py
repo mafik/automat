@@ -29,6 +29,9 @@ if platform == 'win32':
     # No clue what it precisely does but many projects use it.
     defines.add('WIN32_LEAN_AND_MEAN')
     defines.add('VK_USE_PLATFORM_WIN32_KHR')
+    # Set Windows version to Windows 10.
+    defines.add('_WIN32_WINNT=0x0A00')
+    defines.add('WINVER=0x0A00')
 elif platform == 'linux':
     defines.add('VK_USE_PLATFORM_XCB_KHR')
 
@@ -95,13 +98,13 @@ def depends(what, on):
 
 def scan(dir):
     srcs = []
-    for ext in ['.cc', '.h']:
+    for ext in ['.cc', '.h', '.c']:
         srcs.extend(dir.glob(f'**/*{ext}'))
 
     for path_abs in srcs:
         path = path_abs.relative_to(fs_utils.project_root)
 
-        if path.suffix == '.cc':
+        if path.suffix == '.cc' or path.suffix == '.c':
             add_translation_unit(path)
         elif path.suffix == '.h':
             add_header(path)

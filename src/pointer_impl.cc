@@ -34,6 +34,7 @@ void PointerImpl::Move(vec2 position) {
         window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
     window.camera_x.Shift(-delta.X);
     window.camera_y.Shift(-delta.Y);
+    window.inertia = false;
   }
   if (action) {
     action->Update(facade);
@@ -107,6 +108,7 @@ void PointerImpl::ButtonUp(PointerButton btn) {
       window.camera_x.target = canvas_pos.X;
       window.camera_y.target = canvas_pos.Y;
       window.zoom.target = 1;
+      window.inertia = false;
     }
   }
   button_down_position[btn] = Vec2(0, 0);

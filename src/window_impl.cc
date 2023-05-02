@@ -3,6 +3,7 @@
 #include "font.h"
 #include "keyboard_impl.h"
 #include "pointer_impl.h"
+#include "touchpad.h"
 
 namespace automaton::gui {
 
@@ -108,6 +109,62 @@ WindowImpl::~WindowImpl() {
 void WindowImpl::Draw(SkCanvas &canvas) {
   animation_state.timer.Tick();
   RunOnAutomatonThreadSynchronous([&] {
+    // Record camera movement timeline. This is used to create inertia effect.
+    camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
+    timeline.emplace_back(animation_state.timer.now);
+    while (timeline.front() < animation_state.timer.now - time::duration(0.2)) {
+      camera_timeline.pop_front();
+      timeline.pop_front();
+    }
+
+    bool panning_now = false;
+    vec2 total_pan = Vec2(0, 0);
+    float total_zoom = 1;
+    {
+      std::lock_guard<std::mutex> lock(touchpad::touchpads_mutex);
+      for (touchpad::TouchPad *touchpad : touchpad::touchpads) {
+        total_pan += touchpad->pan;
+        touchpad->pan = Vec2(0, 0);
+        total_zoom *= touchpad->zoom;
+        touchpad->zoom = 1;
+        panning_now |= touchpad->panning;
+      }
+    }
+    if (total_pan != Vec2(0, 0)) {
+      camera_x.Shift(total_pan.X / zoom);
+      camera_y.Shift(total_pan.Y / zoom);
+    }
+    if (total_zoom != 1) {
+      Zoom(total_zoom);
+    }
+    if (panning_now) {
+      inertia = false;
+    }
+    if (panning_during_last_frame && !panning_now) {
+      // Panning just stopped - apply inertia effect
+      inertia = true;
+    }
+    panning_during_last_frame = panning_now;
+
+    if (inertia) {
+      if (timeline.size() > 1) {
+        auto dt = (timeline.back() - timeline.front()).count();
+        auto dx = camera_timeline.back().X - camera_timeline.front().X;
+        auto dy = camera_timeline.back().Y - camera_timeline.front().Y;
+        auto dz = camera_timeline.back().Z / camera_timeline.front().Z;
+        camera_x.Shift(dx / dt * animation_state.timer.d * 0.8);
+        camera_y.Shift(dy / dt * animation_state.timer.d * 0.8);
+        float z = pow(dz, animation_state.timer.d / dt * 0.8);
+        zoom.target *= z;
+        zoom.value *= z;
+        float lz = logf(z);
+        float dpx = sqrtf(dx * dx + dy * dy + lz * lz) * PxPerMeter();
+        if (dpx < 1) {
+          inertia = false;
+        }
+      }
+    }
+
     float rx = camera_x.Remaining();
     float ry = camera_y.Remaining();
     float rz = zoom.Remaining();
@@ -143,15 +200,19 @@ void WindowImpl::Draw(SkCanvas &canvas) {
       if (keyboard->carets.empty()) {
         if (keyboard->pressed_keys.test((size_t)AnsiKey::W)) {
           camera_y.Shift(0.1 * animation_state.timer.d);
+          inertia = false;
         }
         if (keyboard->pressed_keys.test((size_t)AnsiKey::S)) {
           camera_y.Shift(-0.1 * animation_state.timer.d);
+          inertia = false;
         }
         if (keyboard->pressed_keys.test((size_t)AnsiKey::A)) {
           camera_x.Shift(-0.1 * animation_state.timer.d);
+          inertia = false;
         }
         if (keyboard->pressed_keys.test((size_t)AnsiKey::D)) {
           camera_x.Shift(0.1 * animation_state.timer.d);
+          inertia = false;
         }
       }
     }
@@ -221,7 +282,7 @@ void WindowImpl::Draw(SkCanvas &canvas) {
     }
 
     canvas.restore();
-  });
+  }); // RunOnAutomatonThreadSynchronous
 
   // Draw prototype shelf
   for (int i = 0; i < prototype_buttons.size(); i++) {
@@ -249,6 +310,23 @@ void WindowImpl::Draw(SkCanvas &canvas) {
   canvas.translate(0.001, size.Y - 0.001 - gui::kLetterSize);
   font.DrawText(canvas, fps_str, fps_paint);
   canvas.restore();
+}
+
+void WindowImpl::Zoom(float delta) {
+  if (pointers.size() > 0) {
+    PointerImpl *first_pointer = *pointers.begin();
+    vec2 mouse_position = first_pointer->pointer_position;
+    vec2 focus_pre = WindowToCanvas(mouse_position);
+    zoom.target *= delta;
+    zoom.value *= delta;
+    vec2 focus_post = WindowToCanvas(mouse_position);
+    vec2 focus_delta = focus_post - focus_pre;
+    camera_x.Shift(-focus_delta.X);
+    camera_y.Shift(-focus_delta.Y);
+  } else {
+    zoom.target *= delta;
+    zoom.value *= delta;
+  }
 }
 
 } // namespace automaton::gui

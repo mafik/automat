@@ -54,6 +54,11 @@ std::ostream &operator<<(std::ostream &s, const vec3 &v);
 
 float Saturate(float x);
 
+// A smooth ReLU function.
+inline float SoftPlus(float x, float beta = 1) {
+  return logf(1 + expf(beta * x)) / beta;
+}
+
 mat4 InvertMatrix(mat4 x);
 
 inline vec2 Vec2(SkPoint p) { return vec2{p.fX, p.fY}; }

@@ -50,6 +50,10 @@ struct WindowImpl : Widget {
   animation::Approach zoom = animation::Approach(1.0, 0.01);
   animation::Approach camera_x = animation::Approach(0.0, 0.005);
   animation::Approach camera_y = animation::Approach(0.0, 0.005);
+  bool panning_during_last_frame = false;
+  bool inertia = false;
+  std::deque<vec3> camera_timeline;
+  std::deque<time::point> timeline;
 
   std::vector<PointerImpl *> pointers;
   std::vector<KeyboardImpl *> keyboards;
@@ -168,6 +172,7 @@ struct WindowImpl : Widget {
     FATAL() << "WindowImpl::Draw() should never be called";
   }
   void Draw(SkCanvas &canvas);
+  void Zoom(float delta);
   VisitResult VisitImmediateChildren(WidgetVisitor &visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
       SkMatrix transform_down = SkMatrix::Translate(

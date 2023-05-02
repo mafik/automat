@@ -1,3 +1,4 @@
+#include <mutex>
 #undef NOGDI
 #include <windows.h>
 #undef ERROR
@@ -9,6 +10,7 @@
 #include <thread>
 
 #include <timeapi.h>
+#include <winuser.h>
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>
@@ -18,6 +20,7 @@
 #include "library.h"
 #include "loading_animation.h"
 #include "root.h"
+#include "touchpad.h"
 #include "vk.h"
 #include "widget.h"
 #include "win.h"
@@ -94,12 +97,13 @@ void ResizeVulkan() {
 }
 
 void Paint(SkCanvas &canvas) {
+  if (!window) {
+    return;
+  }
   canvas.save();
   canvas.translate(0, window_height);
   canvas.scale(DisplayPxPerMeter(), -DisplayPxPerMeter());
-  if (window) {
-    window->Draw(canvas);
-  }
+  window->Draw(canvas);
   canvas.restore();
 }
 
@@ -129,6 +133,9 @@ constexpr bool kPowersave = true;
 void VulkanPaint() {
   if (kPowersave) {
     time::point now = time::now();
+    // TODO: Adjust next_frame to minimize input latency
+    // VK_EXT_present_timing
+    // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
     if (next_frame <= now) {
       double frame_count =
           ceil((now - next_frame).count() * screen_refresh_rate);
@@ -175,6 +182,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static unsigned char key_state[256] = {};
   static char utf8_buffer[4] = {};
   static int utf8_i = 0;
+  if (std::optional<LRESULT> result =
+          touchpad::ProcessEvent(uMsg, wParam, lParam)) {
+    return *result;
+  }
   switch (uMsg) {
   case WM_SIZE: {
     bool restart_rendering = render_thread.joinable();
@@ -345,7 +356,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     int16_t x = lParam & 0xFFFF;
     int16_t y = (lParam >> 16) & 0xFFFF;
     int16_t delta = GET_WHEEL_DELTA_WPARAM(wParam);
-    GetMouse().Wheel(delta / 120.0);
+    int16_t keys = GET_KEYSTATE_WPARAM(wParam);
+    if (!touchpad::ShouldIgnoreScrollEvents()) {
+      GetMouse().Wheel(delta / 120.0);
+    }
+    break;
+  }
+  case WM_VSCROLL: {
+    LOG() << "WM_VSCROLL";
+    break;
+  }
+  case WM_HSCROLL: {
+    LOG() << "WM_HSCROLL";
+    break;
+  }
+  case WM_GESTURE: {
+    LOG() << "WM_GESTURE";
     break;
   }
   case WM_DESTROY: {
@@ -382,6 +408,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   if (!main_window) {
     FATAL() << "Failed to create main window.";
   }
+  touchpad::Init();
+
   main_window_dpi = GetDpiForWindow(main_window);
   HDC hdc = GetDC(main_window);
   screen_width_m = GetDeviceCaps(hdc, HORZSIZE) / 1000.0f;
@@ -400,8 +428,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   UpdateWindow(main_window);
   RECT rect;
   GetClientRect(main_window, &rect);
-  client_x = rect.left;
-  client_y = rect.top;
   window_width = rect.right - rect.left;
   window_height = rect.bottom - rect.top;
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));

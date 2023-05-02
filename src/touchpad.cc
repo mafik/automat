@@ -201,10 +201,7 @@ struct TouchPadImpl {
                   << UsageToString(accessor.usage_page, accessor.usage);
           }
         });
-
     // TODO: Handle WM_INPUT_DEVICE_CHANGE events.
-    // TODO: Reset TouchPad state on focus change.
-    // TODO: Implement pan inertia.
   }
 
   int contact_count = 0;
@@ -364,6 +361,20 @@ std::string GetRawInputDeviceName(HANDLE device) {
 
 std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
   switch (msg) {
+  case WM_ACTIVATE: {
+    uint16_t active = LOWORD(wParam);
+    uint16_t minimized = HIWORD(wParam);
+    if (!active) {
+      std::lock_guard<std::mutex> lock(touchpads_mutex);
+      for (auto &impl : touchpad_impls) {
+        impl.contact_count = 0;
+        impl.contact_i = 0;
+        impl.touchpad.touches.clear();
+        impl.ScanComplete();
+      }
+    }
+    return 0;
+  }
   case WM_INPUT: {
     HRAWINPUT hRawInput = (HRAWINPUT)lParam;
     UINT size = 0;

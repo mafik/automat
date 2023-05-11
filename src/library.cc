@@ -104,9 +104,6 @@ LiveArgument Slider::max_arg("max", Argument::kOptional);
 
 DEFINE_PROTO(ProgressBar);
 
-DEFINE_PROTO(Alert);
-Argument Alert::message_arg("message", Argument::kRequiresObject);
-
 DEFINE_PROTO(ListView);
 LiveArgument ListView::list_arg =
     LiveArgument("list", Argument::kRequiresConcreteType)

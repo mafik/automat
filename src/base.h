@@ -18,6 +18,7 @@
 #include <modules/skottie/include/Skottie.h>
 
 #include "animation.h"
+#include "argument.h"
 #include "channel.h"
 #include "connection.h"
 #include "format.h"
@@ -26,7 +27,6 @@
 #include "run_button.h"
 #include "tasks.h"
 #include "text_field.h"
-#include "argument.h"
 
 namespace automaton {
 
@@ -46,19 +46,22 @@ struct Machine;
 
 struct LiveObject : Object {
   Location *here = nullptr;
-  virtual void Args(std::function<void(LiveArgument &)> cb) = 0;
 
   Widget *ParentWidget() override { return here; }
   void Relocate(Location *new_self) override {
-    Args([old_self = here, new_self](LiveArgument &arg) {
-      arg.Relocate(old_self, new_self);
+    Args([old_self = here, new_self](Argument &arg) {
+      if (auto live_arg = dynamic_cast<LiveArgument *>(&arg)) {
+        live_arg->Relocate(old_self, new_self);
+      }
     });
     here = new_self;
   }
   void ConnectionAdded(Location &here, string_view label,
                        Connection &connection) override {
-    Args([&here, &label, &connection](LiveArgument &arg) {
-      arg.ConnectionAdded(here, label, connection);
+    Args([&here, &label, &connection](Argument &arg) {
+      if (auto live_arg = dynamic_cast<LiveArgument *>(&arg)) {
+        live_arg->ConnectionAdded(here, label, connection);
+      }
     });
   }
 };
@@ -120,7 +123,7 @@ struct Machine : LiveObject {
     }
     return gui::VisitResult::kContinue;
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {}
+  void Args(std::function<void(Argument &)> cb) override {}
   void Relocate(Location *parent) override {
     for (auto &it : locations) {
       it->parent = here;

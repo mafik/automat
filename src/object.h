@@ -10,6 +10,7 @@ namespace automaton {
 struct Connection;
 struct Location;
 struct Pointer;
+struct Argument;
 
 // Objects are interactive pieces of data & behavior.
 //
@@ -38,6 +39,7 @@ struct Object : gui::Widget {
   // Pointer-like objects can be followed.
   virtual Pointer *AsPointer() { return nullptr; }
 
+  virtual void Args(std::function<void(Argument &)> cb) {}
   virtual void ConnectionAdded(Location &here, std::string_view label,
                                Connection &connection) {}
   virtual void Run(Location &here) {}

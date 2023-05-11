@@ -33,6 +33,8 @@ struct Argument {
            Quantity quantity = kSingle)
       : name(name), precondition(precondition), quantity(quantity) {}
 
+  virtual ~Argument() = default;
+
   template <typename T> Argument &RequireInstanceOf() {
     requirements.emplace_back(
         [name = name](Location *location, Object *object, std::string &error) {
@@ -129,6 +131,20 @@ struct Argument {
         return T();
       }
     });
+  }
+
+  std::string DebugString() const {
+    std::string ret = name;
+    if (precondition == kOptional) {
+      ret += " (optional)";
+    } else if (precondition == kRequiresLocation) {
+      ret += " (requires location)";
+    } else if (precondition == kRequiresObject) {
+      ret += " (requires object)";
+    } else if (precondition == kRequiresConcreteType) {
+      ret += " (requires concrete type)";
+    }
+    return ret;
   }
 };
 

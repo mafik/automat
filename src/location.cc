@@ -84,18 +84,16 @@ unique_ptr<Object> Location::Take() {
 
 Connection *Location::ConnectTo(Location &other, string_view label,
                                 Connection::PointerBehavior pointer_behavior) {
-  if (LiveObject *live_object = ThisAs<LiveObject>()) {
-    live_object->Args([&](LiveArgument &arg) {
-      if (arg.name == label &&
-          arg.precondition >= Argument::kRequiresConcreteType) {
-        std::string error;
-        arg.CheckRequirements(*this, &other, other.object.get(), error);
-        if (error.empty()) {
-          pointer_behavior = Connection::kTerminateHere;
-        }
+  object->Args([&](Argument &arg) {
+    if (arg.name == label &&
+        arg.precondition >= Argument::kRequiresConcreteType) {
+      std::string error;
+      arg.CheckRequirements(*this, &other, other.object.get(), error);
+      if (error.empty()) {
+        pointer_behavior = Connection::kTerminateHere;
       }
-    });
-  }
+    }
+  });
   Connection *c = new Connection(*this, other, pointer_behavior);
   outgoing.emplace(label, c);
   other.incoming.emplace(label, c);
@@ -214,6 +212,8 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   float n_lines = 1;
   float offset_y = bounds.top();
   float offset_x = bounds.left();
+  float line_height = gui::kLetterSize * 1.5;
+  auto &font = gui::GetFont();
 
   if (error) {
     constexpr float b = 0.00025;
@@ -225,11 +225,23 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     canvas.drawPath(my_shape, error_paint);
     offset_x -= b;
     offset_y -= 3 * b;
-    auto &font = gui::GetFont();
     error_paint.setStyle(SkPaint::kFill_Style);
-    canvas.translate(offset_x, offset_y - n_lines * gui::kLetterSize);
+    canvas.translate(offset_x, offset_y - n_lines * line_height);
     font.DrawText(canvas, error->text, error_paint);
-    canvas.translate(-offset_x, -offset_y + n_lines * gui::kLetterSize);
+    canvas.translate(-offset_x, -offset_y + n_lines * line_height);
+    n_lines += 1;
+  }
+
+  if (object) {
+    SkPaint arg_paint;
+    arg_paint.setColor(SK_ColorBLACK);
+    arg_paint.setAntiAlias(true);
+    object->Args([&](Argument &arg) {
+      canvas.translate(offset_x, offset_y - n_lines * line_height);
+      font.DrawText(canvas, arg.DebugString(), arg_paint);
+      canvas.translate(-offset_x, -offset_y + n_lines * line_height);
+      n_lines += 1;
+    });
   }
 }
 

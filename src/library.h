@@ -226,7 +226,7 @@ struct EqualityTest : LiveObject {
     other->state = true;
     return other;
   }
-  void Args(std::function<void(LiveArgument &)> cb) override { cb(target_arg); }
+  void Args(std::function<void(Argument &)> cb) override { cb(target_arg); }
   string GetText() const override { return state ? "true" : "false"; }
   void Updated(Location &here, Location &updated) override {
     Object *updated_object = updated.Follow();
@@ -256,7 +256,7 @@ struct LessThanTest : LiveObject {
     return std::make_unique<LessThanTest>();
   }
   string GetText() const override { return state ? "true" : "false"; }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     cb(less_arg);
     cb(than_arg);
   }
@@ -287,7 +287,7 @@ struct StartsWithTest : LiveObject {
     return other;
   }
   string GetText() const override { return state ? "true" : "false"; }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     cb(starts_arg);
     cb(with_arg);
   }
@@ -318,7 +318,7 @@ struct AllTest : LiveObject {
     return std::make_unique<AllTest>();
   }
   string GetText() const override { return state ? "true" : "false"; }
-  void Args(std::function<void(LiveArgument &)> cb) override { cb(test_arg); }
+  void Args(std::function<void(Argument &)> cb) override { cb(test_arg); }
   void Updated(Location &here, Location &updated) override {
     bool found_non_true = test_arg.LoopObjects<bool>(here, [](Object &o) {
       if (o.GetText() != "true") {
@@ -342,7 +342,7 @@ struct Switch : LiveObject {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Switch>();
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     cb(target_arg);
     cb(case_arg);
   }
@@ -383,7 +383,7 @@ struct ErrorReporter : LiveObject {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<ErrorReporter>();
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     cb(test_arg);
     cb(message_arg);
   }
@@ -411,7 +411,7 @@ struct Parent : Pointer {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Parent>();
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {}
+  void Args(std::function<void(Argument &)> cb) override {}
   Object *Next(Location &error_context) const override {
     if (here && here->parent) {
       return here->parent->object.get();
@@ -612,7 +612,7 @@ struct Filter : LiveObject, Iterator, AbstractList {
     filter->index = 0;
     return filter;
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     cb(list_arg);
     cb(element_arg);
     cb(test_arg);
@@ -731,7 +731,7 @@ struct CurrentElement : Pointer {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<CurrentElement>();
   }
-  void Args(std::function<void(LiveArgument &)> cb) override { cb(of_arg); }
+  void Args(std::function<void(Argument &)> cb) override { cb(of_arg); }
   Object *Next(Location &error_context) const override {
     auto of = of_arg.GetTyped<Iterator>(*here);
     if (!of.ok) {
@@ -788,7 +788,7 @@ struct ComplexField : Pointer {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<ComplexField>();
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     cb(complex_arg);
     cb(label_arg);
   }
@@ -889,7 +889,7 @@ struct Text : LiveObject {
     other->chunks = chunks;
     return other;
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     cb(target_arg);
     for (Chunk &chunk : chunks) {
       if (auto ref = std::get_if<RefChunk>(&chunk)) {
@@ -968,9 +968,7 @@ struct ComboBox : LiveObject {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<ComboBox>();
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
-    cb(options_arg);
-  }
+  void Args(std::function<void(Argument &)> cb) override { cb(options_arg); }
   void Relocate(Location *here) override { this->here = here; }
   string GetText() const override { return selected->GetText(); }
   void SetText(Location &error_context, string_view new_text) override {
@@ -1007,7 +1005,7 @@ struct Slider : LiveObject {
     s->value = value;
     return s;
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     cb(min_arg);
     cb(max_arg);
   }
@@ -1060,7 +1058,7 @@ struct ListView : Pointer {
     dynamic_cast<ListView &>(*clone).index = index;
     return clone;
   }
-  void Args(std::function<void(LiveArgument &)> cb) override { cb(list_arg); }
+  void Args(std::function<void(Argument &)> cb) override { cb(list_arg); }
   void Select(int new_index) {
     if (new_index != index) {
       index = new_index;
@@ -1170,7 +1168,7 @@ struct BlackboardUpdater : LiveObject {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<BlackboardUpdater>();
   }
-  void Args(std::function<void(LiveArgument &)> cb) override {
+  void Args(std::function<void(Argument &)> cb) override {
     for (auto &arg : independent_variable_args) {
       cb(arg.second);
     }

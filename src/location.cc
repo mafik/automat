@@ -2,6 +2,7 @@
 
 #include <include/effects/SkGradientShader.h>
 
+#include "base.h"
 #include "color.h"
 #include "font.h"
 #include "format.h"
@@ -10,6 +11,107 @@
 namespace automaton {
 
 constexpr float kFrameCornerRadius = 0.001;
+
+Location::Location(Location *parent)
+    : parent(parent), name_text_field(this, &name, 0.03), run_button(this),
+      run_task(this) {}
+
+void *Location::Nearby(std::function<void *(Location &)> callback) {
+  if (auto parent_machine = ParentAs<Machine>()) {
+    // TODO: sort by distance
+    for (auto &other : parent_machine->locations) {
+      if (auto ret = callback(*other)) {
+        return ret;
+      }
+    }
+  }
+  return nullptr;
+}
+
+bool Location::HasError() {
+  if (error != nullptr)
+    return true;
+  if (auto machine = ThisAs<Machine>()) {
+    if (!machine->children_with_errors.empty())
+      return true;
+  }
+  return false;
+}
+Error *Location::GetError() {
+  if (error != nullptr)
+    return error.get();
+  if (auto machine = ThisAs<Machine>()) {
+    if (!machine->children_with_errors.empty())
+      return (*machine->children_with_errors.begin())->GetError();
+  }
+  return nullptr;
+}
+void Location::ClearError() {
+  if (error == nullptr) {
+    return;
+  }
+  error.reset();
+  if (auto machine = ParentAs<Machine>()) {
+    machine->ClearChildError(*this);
+  }
+}
+
+Object *Location::Follow() {
+  if (Pointer *ptr = object->AsPointer()) {
+    return ptr->Follow(*this);
+  }
+  return object.get();
+}
+
+void Location::Put(unique_ptr<Object> obj) {
+  if (object == nullptr) {
+    object = std::move(obj);
+    return;
+  }
+  if (Pointer *ptr = object->AsPointer()) {
+    ptr->Put(*this, std::move(obj));
+  } else {
+    object = std::move(obj);
+  }
+}
+
+unique_ptr<Object> Location::Take() {
+  if (Pointer *ptr = object->AsPointer()) {
+    return ptr->Take(*this);
+  }
+  return std::move(object);
+}
+
+Connection *Location::ConnectTo(Location &other, string_view label,
+                                Connection::PointerBehavior pointer_behavior) {
+  if (LiveObject *live_object = ThisAs<LiveObject>()) {
+    live_object->Args([&](LiveArgument &arg) {
+      if (arg.name == label &&
+          arg.precondition >= Argument::kRequiresConcreteType) {
+        std::string error;
+        arg.CheckRequirements(*this, &other, other.object.get(), error);
+        if (error.empty()) {
+          pointer_behavior = Connection::kTerminateHere;
+        }
+      }
+    });
+  }
+  Connection *c = new Connection(*this, other, pointer_behavior);
+  outgoing.emplace(label, c);
+  other.incoming.emplace(label, c);
+  object->ConnectionAdded(*this, label, *c);
+  return c;
+}
+
+void Location::ScheduleRun() { run_task.Schedule(); }
+
+void Location::ScheduleLocalUpdate(Location &updated) {
+  (new UpdateTask(this, &updated))->Schedule();
+}
+
+void Location::ScheduleErrored(Location &errored) {
+  (new ErroredTask(this, &errored))->Schedule();
+}
 
 SkPath Location::Shape() const {
   SkRect object_bounds;
@@ -108,19 +210,26 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 
   DrawChildren(canvas, animation_state);
 
+  // Draw debug text log below the Location
+  float n_lines = 1;
+  float offset_y = bounds.top();
+  float offset_x = bounds.left();
+
   if (error) {
-    constexpr float m = 0.00025;
+    constexpr float b = 0.00025;
     SkPaint error_paint;
     error_paint.setColor(SK_ColorRED);
     error_paint.setStyle(SkPaint::kStroke_Style);
-    error_paint.setStrokeWidth(2 * m);
+    error_paint.setStrokeWidth(2 * b);
     error_paint.setAntiAlias(true);
     canvas.drawPath(my_shape, error_paint);
+    offset_x -= b;
+    offset_y -= 3 * b;
     auto &font = gui::GetFont();
     error_paint.setStyle(SkPaint::kFill_Style);
-    canvas.translate(bounds.left() - m,
-                     bounds.top() - gui::kLetterSize - 3 * m);
+    canvas.translate(offset_x, offset_y - n_lines * gui::kLetterSize);
     font.DrawText(canvas, error->text, error_paint);
+    canvas.translate(-offset_x, -offset_y + n_lines * gui::kLetterSize);
   }
 }
 

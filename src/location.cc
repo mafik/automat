@@ -3,9 +3,9 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "color.h"
+#include "font.h"
 #include "format.h"
 #include "gui_constants.h"
-
 
 namespace automaton {
 
@@ -107,6 +107,21 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   }
 
   DrawChildren(canvas, animation_state);
+
+  if (error) {
+    constexpr float m = 0.00025;
+    SkPaint error_paint;
+    error_paint.setColor(SK_ColorRED);
+    error_paint.setStyle(SkPaint::kStroke_Style);
+    error_paint.setStrokeWidth(2 * m);
+    error_paint.setAntiAlias(true);
+    canvas.drawPath(my_shape, error_paint);
+    auto &font = gui::GetFont();
+    error_paint.setStyle(SkPaint::kFill_Style);
+    canvas.translate(bounds.left() - m,
+                     bounds.top() - gui::kLetterSize - 3 * m);
+    font.DrawText(canvas, error->text, error_paint);
+  }
 }
 
 void Location::SetNumber(double number) { SetText(f("%lf", number)); }

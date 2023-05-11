@@ -11,6 +11,7 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "color.h"
+#include "gui_constants.h"
 
 namespace automaton::gui {
 
@@ -30,11 +31,10 @@ void Button::PointerLeave(Pointer &pointer, animation::State &animation_state) {
 
 namespace {
 
-constexpr float kHeight = 0.008f;
+constexpr float kHeight = kMinimalTouchableSize;
 constexpr float kWidth = kHeight;
 constexpr float kRadius = kHeight / 2;
 constexpr float kShadowSigma = kRadius / 10;
-constexpr float kBorderWidth = kRadius / 10;
 
 const SkRect &ButtonOval() {
   static SkRect oval = SkRect::MakeLTRB(0, 0, kWidth, kHeight);

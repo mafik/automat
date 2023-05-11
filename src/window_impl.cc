@@ -3,6 +3,7 @@
 #include "font.h"
 #include "keyboard_impl.h"
 #include "pointer_impl.h"
+#include "prototypes.h"
 #include "touchpad.h"
 
 namespace automaton::gui {

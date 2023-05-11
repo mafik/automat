@@ -7,6 +7,7 @@
 #include "font.h"
 #include "library_macros.h"
 #include "library_number.h"
+#include "gui_constants.h"
 
 namespace automaton::library {
 
@@ -33,7 +34,6 @@ void Increment::Run(Location &h) {
 
 namespace {
 
-constexpr float kMargin = 0.001;
 constexpr float kHeight = 0.008;
 
 constexpr SkColor kFontColor = 0xff03290d;
@@ -42,7 +42,6 @@ constexpr SkColor kBackgroundColor = 0xff9be0ad;
 SkColor kBackgroundTopColor = color::AdjustLightness(kBackgroundColor, 5);
 SkColor kBackgroundBottomColor = color::AdjustLightness(kBackgroundColor, -5);
 
-constexpr float kBorderWidth = 0.001 / 4;
 SkColor kBorderTopColor = color::AdjustLightness(kBackgroundTopColor, 5);
 SkColor kBorderBottomColor = color::AdjustLightness(kBackgroundBottomColor, -5);
 

@@ -61,7 +61,7 @@ void ExpectErrors(Machine &m, std::vector<std::string> errors) {
 }
 
 void ExpectAlerts(Alert &a, std::vector<std::string> alerts) {
-  EXPECT_THAT(a.alerts_for_tests, UnorderedElementsAreArray(alerts));
+  EXPECT_THAT(*a.test_interceptor, UnorderedElementsAreArray(alerts));
 }
 
 void ClearErrors(Machine &m) {
@@ -191,6 +191,7 @@ struct FlightBookerTest {
     //                                     \-{one-way flight}-> Formatter
     //                                      \-{return flight}-> Formatter
     alert = &booker.Create<Alert>();
+    GetAlert().test_interceptor.reset(new std::vector<std::string>());
     b->ConnectTo(*alert, "then");
     switch_ = &booker.Create<Switch>();
     alert->ConnectTo(*switch_, "message");

@@ -11,6 +11,7 @@
 #include <include/core/SkPathEffect.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
+#include <set>
 #include <unordered_map>
 
 #include "color.h"
@@ -211,7 +212,8 @@ Argument::GetFinalLocation(Location &here,
 }
 
 Location::Location(Location *parent)
-    : parent(parent), name_text_field(this, &name, 0.03), run_button(this) {}
+    : parent(parent), name_text_field(this, &name, 0.03), run_button(this),
+      run_task(this) {}
 
 void *Location::Nearby(function<void *(Location &)> callback) {
   if (auto parent_machine = ParentAs<Machine>()) {
@@ -300,7 +302,7 @@ Connection *Location::ConnectTo(Location &other, string_view label,
   return c;
 }
 
-void Location::ScheduleRun() { (new RunTask(this))->Schedule(); }
+void Location::ScheduleRun() { run_task.Schedule(); }
 
 void Location::ScheduleLocalUpdate(Location &updated) {
   (new UpdateTask(this, &updated))->Schedule();
@@ -318,21 +320,33 @@ int log_executed_tasks = 0;
 LogTasksGuard::LogTasksGuard() { ++log_executed_tasks; }
 LogTasksGuard::~LogTasksGuard() { --log_executed_tasks; }
 
-std::deque<unique_ptr<Task>> queue;
+std::deque<Task *> queue;
 std::unordered_set<Location *> no_scheduling;
-std::shared_ptr<Task> *global_then = nullptr;
+std::vector<Task *> global_successors;
 
 channel events;
+
+struct AutodeleteTaskWrapper : Task {
+  std::unique_ptr<Task> wrapped;
+  AutodeleteTaskWrapper(std::unique_ptr<Task> &&task)
+      : Task(task->target), wrapped(std::move(task)) {}
+  void Execute() override {
+    wrapped->Execute();
+    delete this;
+  }
+};
 
 void RunThread() {
   while (true) {
     RunLoop();
     std::unique_ptr<Task> task = events.recv<Task>();
     if (task) {
-      task.release()->Schedule();
+      auto *wrapper = new AutodeleteTaskWrapper(std::move(task));
+      wrapper->Schedule(); // Will delete itself after executing.
     }
   }
 }
+
 void RunLoop(const int max_iterations) {
   if (log_executed_tasks) {
     LOG() << "RunLoop(" << queue.size() << " tasks)";
@@ -341,7 +355,9 @@ void RunLoop(const int max_iterations) {
   int iterations = 0;
   while (!queue.empty() &&
          (max_iterations < 0 || iterations < max_iterations)) {
-    queue.front()->Execute();
+    Task *task = queue.front();
+    task->Execute();
+    task->scheduled = false;
     queue.pop_front();
     ++iterations;
   }

@@ -14,13 +14,14 @@
 
 #include "format.h"
 #include "keyboard.h"
-#include "widget.h"
-#include "window.h"
 #include "library.h"
 #include "log.h"
 #include "root.h"
 #include "vk.h"
+#include "widget.h"
+#include "window.h"
 
+#pragma comment(lib, "vk-bootstrap")
 #pragma comment(lib, "xcb")
 #pragma comment(lib, "xcb-xinput")
 
@@ -474,22 +475,18 @@ void RenderLoop() {
           case XCB_INPUT_KEY_PRESS: {
             xcb_input_key_press_event_t *ev =
                 (xcb_input_key_press_event_t *)event;
-            gui::Key key = {
-              .physical = X11KeyCodeToKey((KeyCode)ev->detail),
-              .logical = X11KeyCodeToKey((KeyCode)ev->detail),
-              .text = ""
-            };
+            gui::Key key = {.physical = X11KeyCodeToKey((KeyCode)ev->detail),
+                            .logical = X11KeyCodeToKey((KeyCode)ev->detail),
+                            .text = ""};
             keyboard->KeyDown(key);
             break;
           }
           case XCB_INPUT_KEY_RELEASE: {
             xcb_input_key_release_event_t *ev =
                 (xcb_input_key_release_event_t *)event;
-            gui::Key key = {
-              .physical = X11KeyCodeToKey((KeyCode)ev->detail),
-              .logical = X11KeyCodeToKey((KeyCode)ev->detail),
-              .text = ""
-            };
+            gui::Key key = {.physical = X11KeyCodeToKey((KeyCode)ev->detail),
+                            .logical = X11KeyCodeToKey((KeyCode)ev->detail),
+                            .text = ""};
             keyboard->KeyUp(key);
             break;
           }
@@ -535,7 +532,8 @@ void RenderLoop() {
                       vertical_scroll->last_value = new_value;
                       if (abs(delta) > 1000000) {
                         // http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
-                        delta = (delta > 0 ? 1 : -1) * vertical_scroll->increment;
+                        delta =
+                            (delta > 0 ? 1 : -1) * vertical_scroll->increment;
                       }
                       GetMouse().Wheel(-delta / vertical_scroll->increment);
                     }

@@ -118,7 +118,7 @@ VK_BOOTSTRAP_LIB = VK_BOOTSTRAP_BUILD / libname('vk-bootstrap')
 
 CXXFLAGS += ['-I', VK_BOOTSTRAP_INCLUDE]
 LDFLAGS += ['-L', VK_BOOTSTRAP_BUILD]
-LDFLAGS += ['-lvk-bootstrap']
+BIN_DEPS += [VK_BOOTSTRAP_LIB]
 
 recipe.add_step(
     functools.partial(Popen, [

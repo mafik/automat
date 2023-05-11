@@ -129,6 +129,7 @@ time::point next_frame;
 constexpr bool kPowersave = true;
 
 #pragma comment(lib, "winmm.lib") // needed for timeBeginPeriod
+#pragma comment(lib, "vk-bootstrap")
 
 void VulkanPaint() {
   if (kPowersave) {

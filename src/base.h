@@ -22,6 +22,7 @@
 #include "format.h"
 #include "log.h"
 #include "run_button.h"
+#include "tasks.h"
 #include "text_field.h"
 
 namespace automaton {
@@ -220,6 +221,8 @@ struct Location : gui::Widget {
 
   unordered_set<Location *> error_observers;
   unordered_set<Location *> observing_errors;
+
+  RunTask run_task;
 
   Location(Location *parent = nullptr);
 
@@ -890,154 +893,28 @@ struct LogTasksGuard {
 
 struct Task;
 
-extern std::deque<unique_ptr<Task>> queue;
+extern std::deque<Task *> queue;
 extern std::unordered_set<Location *> no_scheduling;
-extern std::shared_ptr<Task> *global_then;
+extern vector<Task *> global_successors;
 
 bool NoScheduling(Location *location);
 
-struct Task {
-  Location *target;
-  std::shared_ptr<Task> waiting_task;
-  Task(Location *target) : target(target) {
-    if (global_then) {
-      waiting_task = *global_then;
-    }
-  }
-  virtual ~Task() {}
-  // Add this task to the task queue. This function takes ownership of the task.
-  void Schedule() {
-    if (NoScheduling(target)) {
-      delete this;
-      return;
-    }
-    if (log_executed_tasks) {
-      LOG() << "Scheduling " << Format();
-    }
-    queue.emplace_back(this);
-  }
-  void PreExecute() {
-    if (log_executed_tasks) {
-      LOG() << Format();
-      LOG_Indent();
-    }
-    if (waiting_task) {
-      global_then = &waiting_task;
-    }
-  }
-  void PostExecute() {
-    if (global_then) {
-      assert(global_then == &waiting_task);
-      global_then = nullptr;
-      if (waiting_task.use_count() == 1) {
-        // std::shared_ptr doesn't permit moving data out of it so we have to
-        // make a copy of the task for scheduling.
-        waiting_task->Clone()->Schedule();
-      }
-    }
-    if (log_executed_tasks) {
-      LOG_Unindent();
-    }
-  }
-  virtual std::string Format() { return "Task()"; }
-  virtual void Execute() = 0;
-  virtual Task *Clone() = 0;
-};
-
-struct RunTask : Task {
-  RunTask(Location *target) : Task(target) {}
-  std::string Format() override {
-    return f("RunTask(%s)", target->LoggableString().c_str());
-  }
-  void Execute() override {
-    PreExecute();
-    target->Run();
-    if (!target->HasError()) {
-      then_arg.LoopLocations<bool>(*target, [](Location &then) {
-        then.ScheduleRun();
-        return false;
-      });
-    }
-    PostExecute();
-  }
-  Task *Clone() override {
-    auto t = new RunTask(target);
-    t->waiting_task = waiting_task;
-    return t;
-  }
-};
-
-struct UpdateTask : Task {
-  Location *updated;
-  UpdateTask(Location *target, Location *updated)
-      : Task(target), updated(updated) {}
-  std::string Format() override {
-    return f("UpdateTask(%s, %s)", target->LoggableString().c_str(),
-             updated->LoggableString().c_str());
-  }
-  void Execute() override {
-    PreExecute();
-    target->Updated(*updated);
-    PostExecute();
-  }
-  Task *Clone() override {
-    auto t = new UpdateTask(target, updated);
-    t->waiting_task = waiting_task;
-    return t;
-  }
-};
-
-struct FunctionTask : Task {
-  std::function<void(Location &)> function;
-  FunctionTask(Location *target, std::function<void(Location &)> function)
-      : Task(target), function(function) {}
-  std::string Format() override {
-    return f("FunctionTask(%s)", target->LoggableString().c_str());
-  }
-  void Execute() override {
-    PreExecute();
-    function(*target);
-    PostExecute();
-  }
-  Task *Clone() override {
-    auto t = new FunctionTask(target, function);
-    t->waiting_task = waiting_task;
-    return t;
-  }
-};
-
-struct ErroredTask : Task {
-  Location *errored;
-  ErroredTask(Location *target, Location *errored)
-      : Task(target), errored(errored) {}
-  std::string Format() override {
-    return f("ErroredTask(%s, %s)", target->LoggableString().c_str(),
-             errored->LoggableString().c_str());
-  }
-  void Execute() override {
-    PreExecute();
-    target->Errored(*errored);
-    PostExecute();
-  }
-  Task *Clone() override {
-    auto t = new ErroredTask(target, errored);
-    t->waiting_task = waiting_task;
-    return t;
-  }
-};
-
 struct ThenGuard {
-  std::shared_ptr<Task> then;
-  std::shared_ptr<Task> *old_global_then;
-  ThenGuard(std::unique_ptr<Task> &&then) : then(std::move(then)) {
-    old_global_then = global_then;
-    global_then = &this->then;
+  std::vector<Task *> successors;
+  std::vector<Task *> old_global_successors;
+  ThenGuard(std::vector<Task *> &&successors)
+      : successors(std::move(successors)) {
+    old_global_successors = global_successors;
+    global_successors = this->successors;
   }
   ~ThenGuard() {
-    assert(global_then == &then);
-    global_then = old_global_then;
-    if (then.use_count() == 1) {
-      then->Clone()->Schedule();
+    assert(global_successors == successors);
+    global_successors = old_global_successors;
+    for (Task *successor : successors) {
+      auto &pred = successor->predecessors;
+      if (pred.empty()) {
+        successor->Schedule();
+      }
     }
   }
 };

@@ -19,7 +19,6 @@
 #include "base.h"
 #include "format.h"
 #include "library_increment.h"
-#include "library_macros.h"
 #include "library_number.h"
 #include "log.h"
 #include "treemath.h"
@@ -39,7 +38,6 @@ struct Integer : Object {
     i = std::stoi(string(text));
   }
 };
-DEFINE_PROTO(Integer);
 
 struct Delete : Object {
   static const Delete proto;
@@ -56,8 +54,6 @@ struct Delete : Object {
     target.location->Take();
   }
 };
-DEFINE_PROTO(Delete);
-Argument Delete::target_arg = Argument("target", Argument::kRequiresLocation);
 
 struct Set : Object {
   static const Set proto;
@@ -77,9 +73,6 @@ struct Set : Object {
     target.location->Put(std::move(clone));
   }
 };
-DEFINE_PROTO(Set);
-Argument Set::value_arg = Argument("value", Argument::kRequiresObject);
-Argument Set::target_arg = Argument("target", Argument::kRequiresLocation);
 
 struct Date : Object {
   static const Date proto;
@@ -129,7 +122,6 @@ struct Date : Object {
     return std::partial_ordering::unordered;
   }
 };
-DEFINE_PROTO(Date);
 
 using Clock = std::chrono::high_resolution_clock;
 using Duration = std::chrono::duration<double>;
@@ -205,7 +197,6 @@ struct Timer : Object {
     }
   }
 };
-DEFINE_PROTO(Timer);
 
 struct TimerReset : Object {
   static const TimerReset proto;
@@ -222,10 +213,6 @@ struct TimerReset : Object {
     timer.typed->Reset(*timer.location);
   }
 };
-DEFINE_PROTO(TimerReset);
-Argument TimerReset::timer_arg =
-    Argument("timer", Argument::kRequiresConcreteType)
-        .RequireInstanceOf<Timer>();
 
 struct EqualityTest : LiveObject {
   static const EqualityTest proto;
@@ -256,9 +243,6 @@ struct EqualityTest : LiveObject {
     }
   }
 };
-DEFINE_PROTO(EqualityTest);
-LiveArgument EqualityTest::target_arg =
-    LiveArgument("target", Argument::kRequiresObject);
 
 struct LessThanTest : LiveObject {
   static const LessThanTest proto;
@@ -288,11 +272,6 @@ struct LessThanTest : LiveObject {
     }
   }
 };
-DEFINE_PROTO(LessThanTest);
-LiveArgument LessThanTest::less_arg =
-    LiveArgument("less", Argument::kRequiresObject);
-LiveArgument LessThanTest::than_arg =
-    LiveArgument("than", Argument::kRequiresObject);
 
 struct StartsWithTest : LiveObject {
   static const StartsWithTest proto;
@@ -327,11 +306,6 @@ struct StartsWithTest : LiveObject {
     }
   }
 };
-DEFINE_PROTO(StartsWithTest);
-LiveArgument StartsWithTest::starts_arg =
-    LiveArgument("starts", Argument::kRequiresObject);
-LiveArgument StartsWithTest::with_arg =
-    LiveArgument("with", Argument::kRequiresObject);
 
 struct AllTest : LiveObject {
   static const AllTest proto;
@@ -358,9 +332,6 @@ struct AllTest : LiveObject {
     }
   }
 };
-DEFINE_PROTO(AllTest);
-LiveArgument AllTest::test_arg =
-    LiveArgument("test", Argument::kRequiresObject);
 
 struct Switch : LiveObject {
   static const Switch proto;
@@ -402,9 +373,6 @@ struct Switch : LiveObject {
     }
   }
 };
-DEFINE_PROTO(Switch);
-LiveArgument Switch::target_arg =
-    LiveArgument("target", Argument::kRequiresObject);
 
 struct ErrorReporter : LiveObject {
   static const ErrorReporter proto;
@@ -435,11 +403,6 @@ struct ErrorReporter : LiveObject {
     auto err = here.ReportError(error_text);
   }
 };
-DEFINE_PROTO(ErrorReporter);
-LiveArgument ErrorReporter::test_arg =
-    LiveArgument("test", Argument::kRequiresObject);
-LiveArgument ErrorReporter::message_arg =
-    LiveArgument("message", Argument::kOptional);
 
 struct Parent : Pointer {
   static const Parent proto;
@@ -470,7 +433,6 @@ struct Parent : Pointer {
     return nullptr;
   }
 };
-DEFINE_PROTO(Parent);
 
 struct HealthTest : Object {
   static const HealthTest proto;
@@ -503,8 +465,6 @@ struct HealthTest : Object {
     here.ScheduleUpdate();
   }
 };
-DEFINE_PROTO(HealthTest);
-Argument HealthTest::target_arg = Argument("target", Argument::kOptional);
 
 struct ErrorCleaner : Object {
   static const ErrorCleaner proto;
@@ -534,8 +494,6 @@ struct ErrorCleaner : Object {
     errored.ClearError();
   }
 };
-DEFINE_PROTO(ErrorCleaner);
-Argument ErrorCleaner::target_arg = Argument("target", Argument::kOptional);
 
 struct AbstractList {
   virtual Error *GetAtIndex(int index, Object *&obj) = 0;
@@ -577,10 +535,6 @@ struct Append : Object {
     }
   }
 };
-DEFINE_PROTO(Append);
-Argument Append::to_arg = Argument("to", Argument::kRequiresConcreteType)
-                              .RequireInstanceOf<AbstractList>();
-Argument Append::what_arg = Argument("what", Argument::kRequiresObject);
 
 struct List : Object, AbstractList {
   static const List proto;
@@ -634,7 +588,6 @@ struct List : Object, AbstractList {
     return nullptr;
   }
 };
-DEFINE_PROTO(List);
 
 struct Iterator {
   virtual Object *GetCurrent() const = 0;
@@ -698,7 +651,7 @@ struct Filter : LiveObject, Iterator, AbstractList {
     }
     list.typed->GetSize(list_size);
     if (index < list_size) {
-      ThenGuard then(std::make_unique<RunTask>(&here));
+      ThenGuard then({&here.run_task});
       auto element = element_arg.GetLocation(here);
       if (!element.ok) {
         return;
@@ -769,14 +722,6 @@ struct Filter : LiveObject, Iterator, AbstractList {
     return nullptr;
   }
 };
-DEFINE_PROTO(Filter);
-LiveArgument Filter::list_arg =
-    LiveArgument("list", Argument::kRequiresConcreteType)
-        .RequireInstanceOf<AbstractList>();
-LiveArgument Filter::element_arg =
-    LiveArgument("element", Argument::kRequiresConcreteType)
-        .RequireInstanceOf<CurrentElement>();
-LiveArgument Filter::test_arg("test", Argument::kRequiresObject);
 
 struct CurrentElement : Pointer {
   static const CurrentElement proto;
@@ -803,10 +748,6 @@ struct CurrentElement : Pointer {
     return nullptr;
   }
 };
-DEFINE_PROTO(CurrentElement);
-LiveArgument CurrentElement::of_arg =
-    LiveArgument("of", Argument::kRequiresConcreteType)
-        .RequireInstanceOf<Iterator>();
 
 inline void Filter::Updated(Location &here, Location &updated) {
   auto list = list_arg.GetTyped<AbstractList>(here);
@@ -837,7 +778,6 @@ struct Complex : Object {
     return std::unique_ptr<Object>(c);
   }
 };
-DEFINE_PROTO(Complex);
 
 struct ComplexField : Pointer {
   static const ComplexField proto;
@@ -901,11 +841,6 @@ private:
     return std::make_pair(return_complex, label_text);
   }
 };
-DEFINE_PROTO(ComplexField);
-LiveArgument ComplexField::complex_arg =
-    LiveArgument("complex", Argument::kRequiresConcreteType)
-        .RequireInstanceOf<Complex>();
-LiveArgument ComplexField::label_arg("label", Argument::kRequiresObject);
 
 //////////////
 // Widgets
@@ -999,8 +934,6 @@ struct Text : LiveObject {
     }
   }
 };
-DEFINE_PROTO(Text);
-LiveArgument Text::target_arg("target", Argument::kOptional);
 
 struct Button : Object {
   string label;
@@ -1024,8 +957,6 @@ struct Button : Object {
     }
   }
 };
-DEFINE_PROTO(Button);
-Argument Button::enabled_arg("enabled", Argument::kOptional);
 
 struct ComboBox : LiveObject {
   static const ComboBox proto;
@@ -1063,8 +994,6 @@ struct ComboBox : LiveObject {
     }
   }
 };
-DEFINE_PROTO(ComboBox);
-LiveArgument ComboBox::options_arg("option", Argument::kOptional);
 
 struct Slider : LiveObject {
   static const Slider proto;
@@ -1109,9 +1038,6 @@ struct Slider : LiveObject {
     value = new_value;
   }
 };
-DEFINE_PROTO(Slider);
-LiveArgument Slider::min_arg("min", Argument::kOptional);
-LiveArgument Slider::max_arg("max", Argument::kOptional);
 
 struct ProgressBar : library::Number {
   static const ProgressBar proto;
@@ -1122,7 +1048,6 @@ struct ProgressBar : library::Number {
     return bar;
   }
 };
-DEFINE_PROTO(ProgressBar);
 
 struct Alert : Object {
   static const Alert proto;
@@ -1140,8 +1065,6 @@ struct Alert : Object {
     }
   }
 };
-DEFINE_PROTO(Alert);
-Argument Alert::message_arg("message", Argument::kRequiresObject);
 
 struct ListView : Pointer {
   static const ListView proto;
@@ -1211,10 +1134,6 @@ struct ListView : Pointer {
     return obj;
   }
 };
-DEFINE_PROTO(ListView);
-LiveArgument ListView::list_arg =
-    LiveArgument("list", Argument::kRequiresConcreteType)
-        .RequireInstanceOf<AbstractList>();
 
 ////////////////
 // Algebra
@@ -1258,7 +1177,6 @@ struct Blackboard : Object {
     statement = algebra::ParseStatement(text);
   }
 };
-DEFINE_PROTO(Blackboard);
 
 struct BlackboardUpdater : LiveObject {
   static const BlackboardUpdater proto;
@@ -1358,7 +1276,6 @@ struct BlackboardUpdater : LiveObject {
     }
   }
 };
-DEFINE_PROTO(BlackboardUpdater);
 
 /////////////
 // Misc

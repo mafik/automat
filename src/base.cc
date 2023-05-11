@@ -32,16 +32,6 @@ void Machine::DrawContents(SkCanvas &canvas,
   }
 }
 
-Argument::FinalLocationResult
-Argument::GetFinalLocation(Location &here,
-                           std::source_location source_location) const {
-  FinalLocationResult result(GetObject(here, source_location));
-  if (auto live_object = dynamic_cast<LiveObject *>(result.object)) {
-    result.final_location = live_object->here;
-  }
-  return result;
-}
-
 Location::Location(Location *parent)
     : parent(parent), name_text_field(this, &name, 0.03), run_button(this),
       run_task(this) {}
@@ -143,7 +133,6 @@ void Location::ScheduleErrored(Location &errored) {
   (new ErroredTask(this, &errored))->Schedule();
 }
 
-Argument then_arg("then", Argument::kOptional);
 const Machine Machine::proto;
 
 int log_executed_tasks = 0;

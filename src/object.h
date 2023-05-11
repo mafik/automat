@@ -51,4 +51,8 @@ struct Object : gui::Widget {
   SkPath Shape() const override;
 };
 
+template <typename T> std::unique_ptr<Object> Create() {
+  return T::proto.Clone();
+}
+
 } // namespace automaton

@@ -59,7 +59,7 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   auto &hover = hover_ptr[animation_state];
   auto &filling = filling_ptr[animation_state];
   filling.speed = 5;
-  filling.target = filled ? 1 : 0;
+  filling.target = Filled() ? 1 : 0;
   press.Tick(animation_state);
   hover.Tick(animation_state);
   filling.Tick(animation_state);
@@ -205,7 +205,5 @@ std::unique_ptr<Action> Button::ButtonDownAction(Pointer &pointer,
 
 Button::Button(Widget *parent_widget, std::unique_ptr<Widget> &&child)
     : parent_widget(parent_widget), child(std::move(child)) {}
-
-void Button::ToggleFill() { filled = !filled; }
 
 } // namespace automaton::gui

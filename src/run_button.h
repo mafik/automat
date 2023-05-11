@@ -11,8 +11,10 @@ struct Location;
 namespace automaton::gui {
 
 struct RunButton : Button {
+  Location *location;
   RunButton(Location *parent);
   void Activate() override;
+  bool Filled() const override;
 };
 
 } // namespace automaton::gui

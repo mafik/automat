@@ -187,9 +187,9 @@ void RunLoop(const int max_iterations) {
   while (!queue.empty() &&
          (max_iterations < 0 || iterations < max_iterations)) {
     Task *task = queue.front();
-    task->Execute();
-    task->scheduled = false;
     queue.pop_front();
+    task->scheduled = false;
+    task->Execute();
     ++iterations;
   }
   if (log_executed_tasks) {

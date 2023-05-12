@@ -193,8 +193,7 @@ struct ButtonAction : public Action {
 };
 
 std::unique_ptr<Action> Button::ButtonDownAction(Pointer &pointer,
-                                                 PointerButton pointer_button,
-                                                 vec2 contact_point) {
+                                                 PointerButton pointer_button) {
   if (pointer_button == PointerButton::kMouseLeft) {
     return std::make_unique<ButtonAction>(*this);
   }

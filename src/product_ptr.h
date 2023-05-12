@@ -25,6 +25,10 @@ struct product_holder {
   }
 };
 
+template <typename T> struct construct_functor {
+  T operator()() { return T(); }
+};
+
 // Product pointers allow objects to be owned by a Cartesian product of two
 // classes of objects.
 //
@@ -44,7 +48,8 @@ struct product_holder {
 // This code is sufficient to store grades for each student in each course.
 // A grade can be accessed with: `grades[course.holder]`. When either Student
 // of Grade is destroyed, their corresponding grades are also destroyed.
-template <typename T> struct product_ptr : product_ptr_base {
+template <typename T, typename C = construct_functor<T>>
+struct product_ptr : product_ptr_base {
   std::unordered_map<product_holder *, T> holders;
 
   ~product_ptr() {
@@ -70,7 +75,8 @@ template <typename T> struct product_ptr : product_ptr_base {
   T &operator[](product_holder &holder) {
     auto it = holders.find(&holder);
     if (it == holders.end()) {
-      it = holders.emplace(&holder, T()).first;
+      C c;
+      it = holders.emplace(&holder, c()).first;
       holder.ptrs.insert(this);
     }
     return it->second;

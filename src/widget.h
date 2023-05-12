@@ -48,8 +48,7 @@ struct Widget {
     Draw(canvas, state);
   }
   virtual SkPath Shape() const = 0;
-  virtual std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton,
-                                                   vec2 contact_point) {
+  virtual std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) {
     return nullptr;
   }
   // Return true if the widget should be highlighted as draggable.

@@ -143,8 +143,8 @@ struct TextSelectAction : Action {
   void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
 };
 
-std::unique_ptr<Action>
-TextField::ButtonDownAction(Pointer &, PointerButton btn, vec2 contact_point) {
+std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &,
+                                                    PointerButton btn) {
   if (btn == PointerButton::kMouseLeft) {
     return std::make_unique<TextSelectAction>(*this);
   }

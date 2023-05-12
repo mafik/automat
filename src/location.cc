@@ -4,6 +4,7 @@
 
 #include "base.h"
 #include "color.h"
+#include "drag_action.h"
 #include "font.h"
 #include "format.h"
 #include "gui_constants.h"
@@ -37,6 +38,7 @@ bool Location::HasError() {
   }
   return false;
 }
+
 Error *Location::GetError() {
   if (error != nullptr)
     return error.get();
@@ -46,6 +48,7 @@ Error *Location::GetError() {
   }
   return nullptr;
 }
+
 void Location::ClearError() {
   if (error == nullptr) {
     return;
@@ -164,6 +167,11 @@ gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
 }
 
 void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
+  if (drag_action) {
+    canvas.save();
+    canvas.translate(drag_action->round_x[animation_state],
+                     drag_action->round_y[animation_state]);
+  }
   SkPath my_shape = Shape();
   SkRect bounds = my_shape.getBounds();
   SkPaint frame_bg;
@@ -243,9 +251,23 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
       n_lines += 1;
     });
   }
+  if (drag_action) {
+    canvas.restore();
+  }
+}
+
+std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer &p,
+                                                   gui::PointerButton btn) {
+  if (btn == gui::PointerButton::kMouseLeft) {
+    auto a = std::make_unique<DragLocationAction>(this);
+    a->contact_point = p.PositionWithin(*this);
+    return a;
+  }
+  return nullptr;
 }
 
 void Location::SetNumber(double number) { SetText(f("%lf", number)); }
+
 std::string Location::LoggableString() const {
   std::string_view object_name = object->Name();
   if (name.empty()) {
@@ -260,6 +282,7 @@ std::string Location::LoggableString() const {
              name.c_str());
   }
 }
+
 void Location::ReportMissing(std::string_view property) {
   auto error_message =
       f("Couldn't find \"%*s\". You can create a connection or rename "

@@ -20,8 +20,7 @@ struct Button : Widget {
   void PointerLeave(Pointer &, animation::State &) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;
   SkPath Shape() const override;
-  std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton,
-                                           vec2 contact_point) override;
+  std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) override;
   virtual void Activate() = 0;
   virtual bool Filled() const = 0;
 };

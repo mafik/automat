@@ -29,6 +29,7 @@ void DragActionBase::Update(gui::Pointer &pointer) {
       ry.value -= new_pos.Y - old_pos.Y;
     }
   }
+  DragUpdate(new_pos);
 }
 
 void DragActionBase::End() {
@@ -36,24 +37,12 @@ void DragActionBase::End() {
   DragEnd(pos);
 }
 
-void DragObjectAction::DragEnd(vec2 pos) {
-  Location &loc = root_machine->CreateEmpty();
-  loc.position = pos;
-  loc.InsertHere(std::move(object));
-}
-
 void DragActionBase::Draw(SkCanvas &canvas, animation::State &animation_state) {
   auto original = current_position - contact_point;
   auto rounded = RoundToMilimeters(original);
 
-  static std::function<animation::Approach()> round_init = []() {
-    animation::Approach ret(0);
-    ret.speed = 50;
-    return ret;
-  };
-
-  auto &rx = round_x.GetOrCreate(animation_state, round_init);
-  auto &ry = round_y.GetOrCreate(animation_state, round_init);
+  auto &rx = round_x[animation_state];
+  auto &ry = round_y[animation_state];
   rx.target = rounded.X - original.X;
   ry.target = rounded.Y - original.Y;
   rx.Tick(animation_state);
@@ -66,9 +55,38 @@ void DragActionBase::Draw(SkCanvas &canvas, animation::State &animation_state) {
   canvas.restore();
 }
 
+void DragObjectAction::DragUpdate(vec2 pos) {
+  // Nothing to do here.
+}
+
+void DragObjectAction::DragEnd(vec2 pos) {
+  Location &loc = root_machine->CreateEmpty();
+  loc.position = pos;
+  loc.InsertHere(std::move(object));
+}
+
 void DragObjectAction::DragDraw(SkCanvas &canvas,
                                 animation::State &animation_state) {
   object->Draw(canvas, animation_state);
+}
+
+DragLocationAction::DragLocationAction(Location *location)
+    : location(location) {
+  location->drag_action = this;
+}
+
+DragLocationAction::~DragLocationAction() {
+  assert(location->drag_action == this);
+  location->drag_action = nullptr;
+}
+
+void DragLocationAction::DragUpdate(vec2 pos) { location->position = pos; }
+
+void DragLocationAction::DragEnd(vec2 pos) { location->position = pos; }
+
+void DragLocationAction::DragDraw(SkCanvas &canvas,
+                                  animation::State &animation_state) {
+  // Location is drawn by its parent Machine so nothing to do here.
 }
 
 } // namespace automaton

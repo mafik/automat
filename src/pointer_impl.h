@@ -23,7 +23,6 @@ struct PointerImpl {
 
   std::unique_ptr<Action> action;
   Widget *hovered_widget = nullptr;
-  SkMatrix hovered_widget_transform;
 
   KeyboardImpl *keyboard = nullptr;
 

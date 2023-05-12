@@ -12,8 +12,9 @@
 #include "text_field.h"
 #include "widget.h"
 
-
 namespace automaton {
+
+struct DragLocationAction;
 
 // Each Container holds its inner objects in Locations.
 //
@@ -35,6 +36,7 @@ struct Location : gui::Widget {
   gui::TextField name_text_field;
   gui::RunButton run_button;
 
+  DragLocationAction *drag_action = nullptr;
   vec2 position = {0, 0};
 
   // Connections of this Location.
@@ -210,6 +212,8 @@ struct Location : gui::Widget {
   void SetNumber(double number);
 
   void Draw(SkCanvas &canvas, animation::State &animation_state) const override;
+  std::unique_ptr<Action> ButtonDownAction(gui::Pointer &,
+                                           gui::PointerButton) override;
   SkPath Shape() const override;
   gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override;
 

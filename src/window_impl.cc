@@ -12,15 +12,14 @@ namespace automaton::gui {
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 static SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
 
-std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &,
-                                                          PointerButton btn,
-                                                          vec2 contact_point) {
+std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &pointer,
+                                                          PointerButton btn) {
   if (btn != kMouseLeft) {
     return nullptr;
   }
   auto drag_action = std::make_unique<DragObjectAction>();
   drag_action->object = proto->Clone();
-  drag_action->contact_point = contact_point;
+  drag_action->contact_point = pointer.PositionWithin(*this);
   return drag_action;
 }
 

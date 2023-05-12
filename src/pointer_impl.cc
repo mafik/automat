@@ -45,7 +45,6 @@ void PointerImpl::Move(vec2 position) {
                         [&](Widget &widget, const SkMatrix &transform_down,
                             const SkMatrix &transform_up) {
                           hovered_widget = &widget;
-                          hovered_widget_transform = transform_down;
                           return VisitResult::kStop;
                         });
     if (old_hovered_widget != hovered_widget) {
@@ -79,12 +78,7 @@ void PointerImpl::ButtonDown(PointerButton btn) {
   button_down_time[btn] = time::now();
 
   if (action == nullptr && hovered_widget) {
-    SkPoint local_pointer_position_sk =
-        hovered_widget_transform.mapXY(pointer_position.X, pointer_position.Y);
-    vec2 local_pointer_position{local_pointer_position_sk.fX,
-                                local_pointer_position_sk.fY};
-    action =
-        hovered_widget->ButtonDownAction(facade, btn, local_pointer_position);
+    action = hovered_widget->ButtonDownAction(facade, btn);
     if (action) {
       action->Begin(facade);
     }
@@ -116,9 +110,26 @@ void PointerImpl::ButtonUp(PointerButton btn) {
 }
 
 vec2 PointerImpl::PositionWithin(Widget &widget) const {
-  SkMatrix transform = root_machine->TransformToChild(&widget);
-  vec2 canvas_pos = window.WindowToCanvas(pointer_position);
-  return Vec2(transform.mapXY(canvas_pos.X, canvas_pos.Y));
+  SkMatrix transform_from_root;
+  Widget *it = &widget;
+  while (true) {
+    transform_from_root.preConcat(it->TransformFromParent());
+    Widget *next = it->ParentWidget();
+    if (next) {
+      it = next;
+    } else {
+      break;
+    }
+  }
+  Widget *root = it;
+  vec2 position_within_root;
+  if (root == &window) {
+    position_within_root = pointer_position;
+  } else {
+    position_within_root = window.WindowToCanvas(pointer_position);
+  }
+  return Vec2(transform_from_root.mapXY(position_within_root.X,
+                                        position_within_root.Y));
 }
 
 Keyboard &PointerImpl::Keyboard() { return keyboard->facade; }

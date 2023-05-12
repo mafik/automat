@@ -35,6 +35,7 @@ constexpr float kHeight = kMinimalTouchableSize;
 constexpr float kWidth = kHeight;
 constexpr float kRadius = kHeight / 2;
 constexpr float kShadowSigma = kRadius / 10;
+constexpr float kPressOffset = kRadius / 20;
 
 const SkRect &ButtonOval() {
   static SkRect oval = SkRect::MakeLTRB(0, 0, kWidth, kHeight);
@@ -60,7 +61,6 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   auto &filling = filling_ptr[animation_state];
   filling.speed = 5;
   filling.target = Filled() ? 1 : 0;
-  press.Tick(animation_state);
   hover.Tick(animation_state);
   filling.Tick(animation_state);
 
@@ -69,7 +69,7 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   constexpr SkColor white = 0xffffffff;
 
   float lightness_adjust = hover * 10;
-  float press_shift_y = press * -kShadowSigma;
+  float press_shift_y = press * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
   auto pressed_outer_oval = pressed_oval.makeOutset(
       kBorderWidth / 2 + kShadowSigma * 0, kBorderWidth / 2 + kShadowSigma * 0);
@@ -80,7 +80,7 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     shadow_paint.setColor(color::AdjustLightness(color, -40));
     shadow_paint.setMaskFilter(
         SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
-    canvas.drawOval(oval.makeOffset(0, -kShadowSigma), shadow_paint);
+    canvas.drawOval(oval.makeOffset(0, -kPressOffset), shadow_paint);
   };
 
   auto DrawBase = [&](SkColor bg, SkColor fg) {
@@ -173,9 +173,8 @@ struct ButtonAction : public Action {
   void Begin(gui::Pointer &pointer) override {
     button.Activate();
     button.press_action_count++;
-    for (auto &shadow : button.press_ptr) {
-      shadow.target = 1;
-      shadow.speed = 60;
+    for (auto &press : button.press_ptr) {
+      press = 1;
     }
   }
 
@@ -184,9 +183,8 @@ struct ButtonAction : public Action {
   void End() override {
     button.press_action_count--;
     if (button.press_action_count == 0) {
-      for (auto &shadow : button.press_ptr) {
-        shadow.target = 0;
-        shadow.speed = 5;
+      for (auto &press : button.press_ptr) {
+        press = 0;
       }
     }
   }

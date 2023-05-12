@@ -9,7 +9,7 @@ namespace automaton::gui {
 struct Button : Widget {
   Widget *parent_widget;
   std::unique_ptr<Widget> child;
-  mutable product_ptr<animation::Approach> press_ptr;
+  mutable product_ptr<float> press_ptr;
   mutable product_ptr<animation::Approach> hover_ptr;
   mutable product_ptr<animation::Approach> filling_ptr;
   int press_action_count = 0;

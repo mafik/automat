@@ -1,5 +1,6 @@
 #include "window_impl.h"
 
+#include "drag_action.h"
 #include "font.h"
 #include "keyboard_impl.h"
 #include "pointer_impl.h"
@@ -11,75 +12,13 @@ namespace automaton::gui {
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 static SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
 
-vec2 RoundToMilimeters(vec2 v) {
-  return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
-}
-
-struct AnimatedRound : animation::Approach {
-  AnimatedRound() : animation::Approach(0) { speed = 50; }
-};
-
-struct DragAction : Action {
-  std::unique_ptr<Object> object;
-  vec2 contact_point;
-  vec2 current_position;
-  product_ptr<AnimatedRound> round_x;
-  product_ptr<AnimatedRound> round_y;
-
-  void Begin(Pointer &pointer) override {
-    current_position = pointer.PositionWithin(*root_machine);
-  }
-  void Update(Pointer &pointer) override {
-    auto old_pos = current_position - contact_point;
-    auto old_round = RoundToMilimeters(old_pos);
-    current_position = pointer.PositionWithin(*root_machine);
-    auto new_pos = current_position - contact_point;
-    auto new_round = RoundToMilimeters(new_pos);
-    if (old_round.X == new_round.X) {
-      for (AnimatedRound &rx : round_x) {
-        rx.value -= new_pos.X - old_pos.X;
-      }
-    }
-    if (old_round.Y == new_round.Y) {
-      for (AnimatedRound &ry : round_y) {
-        ry.value -= new_pos.Y - old_pos.Y;
-      }
-    }
-  }
-  void End() override {
-    RunOnAutomatonThread([pos = current_position - contact_point,
-                          obj = object.release()]() mutable {
-      Location &loc = root_machine->CreateEmpty();
-      loc.position = RoundToMilimeters(pos);
-      loc.InsertHere(std::unique_ptr<Object>(obj));
-    });
-  }
-  void Draw(SkCanvas &canvas, animation::State &animation_state) override {
-    auto original = current_position - contact_point;
-    auto rounded = RoundToMilimeters(original);
-
-    auto &rx = round_x[animation_state];
-    auto &ry = round_y[animation_state];
-    rx.target = rounded.X - original.X;
-    ry.target = rounded.Y - original.Y;
-    rx.Tick(animation_state);
-    ry.Tick(animation_state);
-
-    canvas.save();
-    auto pos = current_position - contact_point + Vec2(rx, ry);
-    canvas.translate(pos.X, pos.Y);
-    object->Draw(canvas, animation_state);
-    canvas.restore();
-  }
-};
-
 std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &,
                                                           PointerButton btn,
                                                           vec2 contact_point) {
   if (btn != kMouseLeft) {
     return nullptr;
   }
-  auto drag_action = std::make_unique<DragAction>();
+  auto drag_action = std::make_unique<DragObjectAction>();
   drag_action->object = proto->Clone();
   drag_action->contact_point = contact_point;
   return drag_action;

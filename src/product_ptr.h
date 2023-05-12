@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -70,6 +71,15 @@ template <typename T> struct product_ptr : product_ptr_base {
     auto it = holders.find(&holder);
     if (it == holders.end()) {
       it = holders.emplace(&holder, T()).first;
+      holder.ptrs.insert(this);
+    }
+    return it->second;
+  }
+
+  T &GetOrCreate(product_holder &holder, std::function<T()> &create) {
+    auto it = holders.find(&holder);
+    if (it == holders.end()) {
+      it = holders.emplace(&holder, create()).first;
       holder.ptrs.insert(this);
     }
     return it->second;

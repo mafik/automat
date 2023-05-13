@@ -196,7 +196,7 @@ void QueryDisplayCaps() {
       float diag = sqrt(screen_height_m * screen_height_m +
                         screen_width_m * screen_width_m) /
                    0.0254f;
-      LOG() << "Display: " << f("%.1f", diag) << "' "
+      LOG() << "Display: " << f("%.1f", diag) << "″ "
             << int(screen_width_m * 1000) << "x" << int(screen_height_m * 1000)
             << "mm (" << screen_width_px << "x" << screen_height_px << "px) "
             << screen_refresh_rate << "Hz";

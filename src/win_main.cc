@@ -141,7 +141,8 @@ void VulkanPaint() {
       double frame_count =
           ceil((now - next_frame).count() * screen_refresh_rate);
       next_frame += time::duration(frame_count / screen_refresh_rate);
-      if (frame_count > 1) {
+      constexpr bool kLogSkippedFrames = false;
+      if (kLogSkippedFrames && frame_count > 1) {
         LOG() << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
       }
     } else {

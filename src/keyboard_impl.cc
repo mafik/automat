@@ -154,30 +154,34 @@ void KeyboardImpl::Draw(SkCanvas &canvas,
 }
 
 void KeyboardImpl::KeyDown(Key key) {
-  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-    pressed_keys.set((size_t)key.physical);
-  }
-  if (key.physical == AnsiKey::Escape) {
-    for (auto &caret : carets) {
-      caret->owner->ReleaseCaret(caret->facade);
+  RunOnAutomatonThread([=]() {
+    if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+      pressed_keys.set((size_t)key.physical);
     }
-    carets.clear();
-  } else {
-    for (auto &caret : carets) {
-      caret->owner->KeyDown(caret->facade, key);
+    if (key.physical == AnsiKey::Escape) {
+      for (auto &caret : carets) {
+        caret->owner->ReleaseCaret(caret->facade);
+      }
+      carets.clear();
+    } else {
+      for (auto &caret : carets) {
+        caret->owner->KeyDown(caret->facade, key);
+      }
     }
-  }
+  });
 }
 
 void KeyboardImpl::KeyUp(Key key) {
-  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-    pressed_keys.reset((size_t)key.physical);
-  }
-  for (auto &caret : carets) {
-    if (caret->owner) {
-      caret->owner->KeyUp(caret->facade, key);
+  RunOnAutomatonThread([=]() {
+    if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+      pressed_keys.reset((size_t)key.physical);
     }
-  }
+    for (auto &caret : carets) {
+      if (caret->owner) {
+        caret->owner->KeyUp(caret->facade, key);
+      }
+    }
+  });
 }
 
 } // namespace automaton::gui

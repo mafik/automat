@@ -74,39 +74,44 @@ void PointerImpl::Wheel(float delta) {
 void PointerImpl::ButtonDown(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount)
     return;
-  button_down_position[btn] = pointer_position;
-  button_down_time[btn] = time::now();
+  RunOnAutomatonThread([=]() {
+    button_down_position[btn] = pointer_position;
+    button_down_time[btn] = time::now();
 
-  if (action == nullptr && hovered_widget) {
-    action = hovered_widget->ButtonDownAction(facade, btn);
-    if (action) {
-      action->Begin(facade);
+    if (action == nullptr && hovered_widget) {
+      action = hovered_widget->ButtonDownAction(facade, btn);
+      if (action) {
+        action->Begin(facade);
+      }
     }
-  }
+  });
 }
 void PointerImpl::ButtonUp(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount)
     return;
-  if (btn == kMouseLeft) {
-    if (action) {
-      action->End();
-      action.reset();
+  RunOnAutomatonThread([=]() {
+    if (btn == kMouseLeft) {
+      if (action) {
+        action->End();
+        action.reset();
+      }
     }
-  }
-  if (btn == kMouseMiddle) {
-    time::duration down_duration = time::now() - button_down_time[kMouseMiddle];
-    vec2 delta = pointer_position - button_down_position[kMouseMiddle];
-    float delta_m = Length(delta);
-    if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
-      vec2 canvas_pos = window.WindowToCanvas(pointer_position);
-      window.camera_x.target = canvas_pos.X;
-      window.camera_y.target = canvas_pos.Y;
-      window.zoom.target = 1;
-      window.inertia = false;
+    if (btn == kMouseMiddle) {
+      time::duration down_duration =
+          time::now() - button_down_time[kMouseMiddle];
+      vec2 delta = pointer_position - button_down_position[kMouseMiddle];
+      float delta_m = Length(delta);
+      if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
+        vec2 canvas_pos = window.WindowToCanvas(pointer_position);
+        window.camera_x.target = canvas_pos.X;
+        window.camera_y.target = canvas_pos.Y;
+        window.zoom.target = 1;
+        window.inertia = false;
+      }
     }
-  }
-  button_down_position[btn] = Vec2(0, 0);
-  button_down_time[btn] = time::kZero;
+    button_down_position[btn] = Vec2(0, 0);
+    button_down_time[btn] = time::kZero;
+  });
 }
 
 vec2 PointerImpl::PositionWithin(Widget &widget) const {

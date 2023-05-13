@@ -124,7 +124,7 @@ struct MeasureLineRunHandler : public LineRunHandler {
 };
 
 SkShaper &GetShaper() {
-  static std::unique_ptr<SkShaper> shaper =
+  thread_local std::unique_ptr<SkShaper> shaper =
       SkShaper::MakeShapeDontWrapOrReorder(SkUnicode::MakeIcuBasedUnicode());
   return *shaper;
 }

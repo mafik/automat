@@ -179,6 +179,44 @@ void RenderingStart() {
   render_thread = std::jthread(RenderThread);
 }
 
+void QueryDisplayCaps() {
+  main_window_dpi = GetDpiForWindow(main_window);
+  auto get_device_caps = [](HDC hdc) {
+    screen_width_m = GetDeviceCaps(hdc, HORZSIZE) / 1000.0f;
+    screen_height_m = GetDeviceCaps(hdc, VERTSIZE) / 1000.0f;
+    screen_width_px = GetDeviceCaps(hdc, HORZRES);
+    screen_height_px = GetDeviceCaps(hdc, VERTRES);
+    screen_refresh_rate = GetDeviceCaps(hdc, VREFRESH);
+    if (window) {
+      window->DisplayPixelDensity(DisplayPxPerMeter());
+    }
+    constexpr bool kLogScreenCaps = true;
+    if constexpr (kLogScreenCaps) {
+      float diag = sqrt(screen_height_m * screen_height_m +
+                        screen_width_m * screen_width_m) /
+                   0.0254f;
+      LOG() << "Display: " << f("%.1f", diag) << "' "
+            << int(screen_width_m * 1000) << "x" << int(screen_height_m * 1000)
+            << "mm (" << screen_width_px << "x" << screen_height_px << "px) "
+            << screen_refresh_rate << "Hz";
+    }
+  };
+  HMONITOR monitor = MonitorFromWindow(main_window, MONITOR_DEFAULTTONEAREST);
+  MONITORINFOEX monitor_info = {};
+  monitor_info.cbSize = sizeof(monitor_info);
+  if (GetMonitorInfo(monitor, &monitor_info)) {
+    HDC ic = CreateIC(nullptr, monitor_info.szDevice, nullptr, nullptr);
+    if (ic) {
+      get_device_caps(ic);
+      DeleteDC(ic);
+      return;
+    }
+  }
+  HDC hdc = GetDC(main_window);
+  get_device_caps(hdc);
+  ReleaseDC(main_window, hdc);
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static unsigned char key_state[256] = {};
   static char utf8_buffer[4] = {};
@@ -235,6 +273,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   }
   case WM_DPICHANGED: {
     main_window_dpi = HIWORD(wParam);
+    QueryDisplayCaps();
     RECT *const size_hint = (RECT *)lParam;
     SetWindowPos(hWnd, NULL, size_hint->left, size_hint->top,
                  size_hint->right - size_hint->left,
@@ -411,14 +450,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   }
   touchpad::Init();
 
-  main_window_dpi = GetDpiForWindow(main_window);
-  HDC hdc = GetDC(main_window);
-  screen_width_m = GetDeviceCaps(hdc, HORZSIZE) / 1000.0f;
-  screen_height_m = GetDeviceCaps(hdc, VERTSIZE) / 1000.0f;
-  screen_width_px = GetDeviceCaps(hdc, HORZRES);
-  screen_height_px = GetDeviceCaps(hdc, VERTRES);
-  screen_refresh_rate = GetDeviceCaps(hdc, VREFRESH);
-  ReleaseDC(main_window, hdc);
+  QueryDisplayCaps();
 
   if (auto err = vk::Init(); !err.empty()) {
     FATAL() << "Failed to initialize Vulkan: " << err;

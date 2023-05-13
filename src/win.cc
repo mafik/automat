@@ -31,8 +31,8 @@ WNDCLASSEX &GetWindowClass() {
 
 HWND CreateAutomatonWindow() {
   return CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowClass, kWindowTitle,
-                        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 1920,
-                        1080, nullptr, nullptr, GetInstance(), nullptr);
+                        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800,
+                        600, nullptr, nullptr, GetInstance(), nullptr);
 }
 
 } // namespace automaton

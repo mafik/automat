@@ -16,7 +16,7 @@ struct DragActionBase : Action {
   struct ApproachMaker {
     animation::Approach operator()() {
       animation::Approach ret(0);
-      ret.speed = 50;
+      ret.speed = 100;
       return ret;
     }
   };

@@ -113,9 +113,9 @@ struct WindowImpl : Widget {
         }
 
         half4 main(vec2 fragcoord) {
-          float dm_grid = grid(fragcoord, 10, 3);
-          float cm_grid = grid(fragcoord, 100, 3) * 0.6;
-          float mm_grid = grid(fragcoord, 1000, 2) * 0.4;
+          float dm_grid = grid(fragcoord, 10, 2);
+          float cm_grid = grid(fragcoord, 100, 2) * 0.8;
+          float mm_grid = grid(fragcoord, 1000, 1) * 0.8;
           float d = max(max(mm_grid, cm_grid), dm_grid);
           return mix(bg, fg, d);
         }

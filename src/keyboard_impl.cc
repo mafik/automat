@@ -12,11 +12,25 @@ CaretImpl::~CaretImpl() {}
 
 static SkPath PointerIBeam(const KeyboardImpl &keyboard) {
   if (keyboard.pointer) {
+    float px = 1 / keyboard.window.PxPerMeter();
     vec2 pos = keyboard.pointer->PositionWithin(*root_machine);
-    float width = 2 / keyboard.window.PxPerMeter();
-    float height = 32 / keyboard.window.PxPerMeter();
-    return SkPath::Rect(
-        SkRect::MakeXYWH(pos.X - width / 2, pos.Y - height / 2, width, height));
+    SkRect bounds = SkRect::MakeXYWH(pos.X, pos.Y, 0, 0);
+    switch (keyboard.pointer->Icon()) {
+    case Pointer::IconType::kIconArrow:
+      bounds.fRight += 2 * px;
+      bounds.fTop -= 16 * px;
+      break;
+    case Pointer::IconType::kIconIBeam:
+      bounds.fRight += px;
+      bounds.fTop -= 9 * px;
+      bounds.fBottom += 8 * px;
+      break;
+    default:
+      bounds.fRight += 2 * px;
+      bounds.fTop -= 2 * px;
+      break;
+    }
+    return SkPath::Rect(bounds);
   } else {
     return SkPath();
   }

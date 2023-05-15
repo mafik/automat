@@ -2,6 +2,7 @@
 
 #include "pointer.h"
 #include "root.h"
+#include <algorithm>
 
 namespace automaton {
 
@@ -19,14 +20,17 @@ void DragActionBase::Update(gui::Pointer &pointer) {
   current_position = pointer.PositionWithin(*root_machine);
   auto new_pos = current_position - contact_point;
   auto new_round = RoundToMilimeters(new_pos);
-  if (old_round.X == new_round.X) {
+  vec2 d = new_pos - old_pos;
+  if (old_round.X == new_round.X && abs(d.X) < 0.0005f) {
     for (auto &rx : round_x) {
-      rx.value -= new_pos.X - old_pos.X;
+      rx.value -= d.X;
+      rx.value = std::clamp(rx.value, -0.0005f, 0.0005f);
     }
   }
-  if (old_round.Y == new_round.Y) {
+  if (old_round.Y == new_round.Y && abs(d.Y) < 0.0005f) {
     for (auto &ry : round_y) {
-      ry.value -= new_pos.Y - old_pos.Y;
+      ry.value -= d.Y;
+      ry.value = std::clamp(ry.value, -0.0005f, 0.0005f);
     }
   }
   DragUpdate(new_pos);

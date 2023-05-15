@@ -30,6 +30,39 @@ void Machine::DrawContents(SkCanvas &canvas,
     loc->Draw(canvas, animation_state);
     canvas.restore();
   }
+
+  // Add ConnectionWidgets for all arguments defined by the objects.
+  for (auto &loc : locations) {
+    if (loc->object) {
+      loc->object->Args([&](Argument &arg) {
+        // Check if this argument already has a widget.
+        bool has_widget = false;
+        for (auto &widget : connection_widgets) {
+          if (widget->from != loc.get()) {
+            continue;
+          }
+          if (widget->label != arg.name) {
+            continue;
+          }
+          has_widget = true;
+        }
+        if (has_widget) {
+          return;
+        }
+        // Create a new widget.
+        LOG() << "Creating a ConnectionWidget for argument " << arg.name;
+        connection_widgets.emplace_back(
+            new gui::ConnectionWidget(loc.get(), arg.name));
+      });
+    }
+  }
+
+  // Draw ConnectionWidgets.
+  for (auto &widget : connection_widgets) {
+    canvas.save();
+    widget->Draw(canvas, animation_state);
+    canvas.restore();
+  }
 }
 
 const Machine Machine::proto;

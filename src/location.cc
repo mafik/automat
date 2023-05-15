@@ -240,17 +240,6 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     n_lines += 1;
   }
 
-  if (object) {
-    SkPaint arg_paint;
-    arg_paint.setColor(SK_ColorBLACK);
-    arg_paint.setAntiAlias(true);
-    object->Args([&](Argument &arg) {
-      canvas.translate(offset_x, offset_y - n_lines * line_height);
-      font.DrawText(canvas, arg.DebugString(), arg_paint);
-      canvas.translate(-offset_x, -offset_y + n_lines * line_height);
-      n_lines += 1;
-    });
-  }
   if (drag_action) {
     canvas.restore();
   }

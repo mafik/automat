@@ -22,6 +22,7 @@
 #include "channel.h"
 #include "connection.h"
 #include "format.h"
+#include "gui_connection_widget.h"
 #include "location.h"
 #include "log.h"
 #include "run_button.h"
@@ -74,6 +75,8 @@ struct Machine : LiveObject {
   unordered_set<unique_ptr<Location>> locations;
   vector<Location *> front;
   vector<Location *> children_with_errors;
+
+  vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
   Location &CreateEmpty(const string &name = "") {
     auto [it, already_present] = locations.emplace(new Location(here));

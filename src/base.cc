@@ -20,18 +20,17 @@
 
 namespace automaton {
 
-void Machine::DrawContents(SkCanvas &canvas,
-                           animation::State &animation_state) {
-  SkRect clip = canvas.getLocalClipBounds();
-
+Location *Machine::LocationAtPoint(vec2 point) {
   for (auto &loc : locations) {
-    canvas.save();
-    canvas.translate(loc->position.X, loc->position.Y);
-    loc->Draw(canvas, animation_state);
-    canvas.restore();
+    vec2 local_point = point - loc->position;
+    if (loc->Shape().contains(local_point.X, local_point.Y)) {
+      return loc.get();
+    }
   }
+  return nullptr;
+}
 
-  // Add ConnectionWidgets for all arguments defined by the objects.
+void Machine::UpdateConnectionWidgets() {
   for (auto &loc : locations) {
     if (loc->object) {
       loc->object->Args([&](Argument &arg) {
@@ -56,6 +55,20 @@ void Machine::DrawContents(SkCanvas &canvas,
       });
     }
   }
+}
+
+void Machine::DrawContents(SkCanvas &canvas,
+                           animation::State &animation_state) {
+  SkRect clip = canvas.getLocalClipBounds();
+
+  for (auto &loc : locations) {
+    canvas.save();
+    canvas.translate(loc->position.X, loc->position.Y);
+    loc->Draw(canvas, animation_state);
+    canvas.restore();
+  }
+
+  UpdateConnectionWidgets();
 
   // Draw ConnectionWidgets.
   for (auto &widget : connection_widgets) {

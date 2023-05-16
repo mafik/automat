@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <include/core/SkCanvas.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 #include <modules/skottie/include/Skottie.h>
 
@@ -98,6 +99,8 @@ struct Machine : LiveObject {
     return Create(T::proto, name);
   }
 
+  Location *LocationAtPoint(vec2);
+
   string_view Name() const override { return name; }
   std::unique_ptr<Object> Clone() const override {
     Machine *m = new Machine();
@@ -112,6 +115,10 @@ struct Machine : LiveObject {
     static SkPath empty_path;
     return empty_path;
   }
+
+  // Add ConnectionWidgets for all arguments defined by the objects.
+  void UpdateConnectionWidgets();
+
   gui::VisitResult
   VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
     for (auto &it : locations) {
@@ -120,6 +127,15 @@ struct Machine : LiveObject {
       SkMatrix transform_up =
           SkMatrix::Translate(it->position.X, it->position.Y);
       auto result = visitor(*it, transform_down, transform_up);
+      if (result == gui::VisitResult::kStop) {
+        return result;
+      }
+    }
+
+    UpdateConnectionWidgets();
+
+    for (auto &widget : connection_widgets) {
+      auto result = visitor(*widget, SkMatrix::I(), SkMatrix::I());
       if (result == gui::VisitResult::kStop) {
         return result;
       }

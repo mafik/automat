@@ -105,10 +105,7 @@ void UpdateCaret(TextField &text_field, Caret &caret) {
       Vec2(kTextMargin + GetFont().PositionFromIndex(*text_field.text, index),
            (kTextFieldHeight - kLetterSize) / 2);
 
-  SkMatrix text_to_root = root_machine->TransformFromChild(&text_field);
-  vec2 caret_pos_root = Vec2(text_to_root.mapXY(caret_pos.X, caret_pos.Y));
-
-  caret.PlaceIBeam(caret_pos_root);
+  caret.PlaceIBeam(caret_pos);
 }
 
 struct TextSelectAction : Action {

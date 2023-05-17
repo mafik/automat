@@ -8,9 +8,7 @@ namespace automaton::gui {
 
 Caret::Caret(CaretImpl &impl) : impl(impl) {}
 
-void Caret::PlaceIBeam(vec2 canvas_position) {
-  impl.PlaceIBeam(canvas_position);
-}
+void Caret::PlaceIBeam(vec2 position) { impl.PlaceIBeam(position); }
 
 CaretOwner::~CaretOwner() {
   for (auto caret : carets) {

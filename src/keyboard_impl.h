@@ -19,7 +19,8 @@ struct CaretImpl {
   KeyboardImpl &keyboard;
   CaretImpl(KeyboardImpl &keyboard);
   ~CaretImpl();
-  void PlaceIBeam(vec2 canvas_position);
+  void PlaceIBeam(vec2 position);
+  SkPath MakeRootShape() const;
 };
 
 struct CaretAnimation {

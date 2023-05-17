@@ -15,6 +15,7 @@ struct CaretOwner;
 struct Keyboard;
 struct KeyboardImpl;
 struct Window;
+struct Widget;
 
 enum class AnsiKey : uint8_t {
   Unknown,
@@ -133,7 +134,7 @@ struct Key {
 
 struct Caret final {
   Caret(CaretImpl &impl);
-  void PlaceIBeam(vec2 canvas_position);
+  void PlaceIBeam(vec2 position);
 
 private:
   CaretImpl &impl;
@@ -145,6 +146,7 @@ struct CaretOwner {
 
   Caret &RequestCaret(Keyboard &);
   virtual void ReleaseCaret(Caret &) = 0;
+  virtual Widget *CaretWidget() = 0;
 
   virtual void KeyDown(Caret &, Key);
   virtual void KeyUp(Caret &, Key);

@@ -36,12 +36,18 @@ static SkPath PointerIBeam(const KeyboardImpl &keyboard) {
   }
 }
 
-void CaretImpl::PlaceIBeam(vec2 canvas_position) {
+void CaretImpl::PlaceIBeam(vec2 position) {
   float width = GetFont().line_thickness;
   float height = kLetterSize;
-  shape = SkPath::Rect(SkRect::MakeXYWH(canvas_position.X - width / 2,
-                                        canvas_position.Y, width, height));
+  shape = SkPath::Rect(
+      SkRect::MakeXYWH(position.X - width / 2, position.Y, width, height));
   last_blink = time::now();
+}
+
+SkPath CaretImpl::MakeRootShape() const {
+  SkMatrix text_to_root =
+      root_machine->TransformFromChild(owner->CaretWidget());
+  return shape.makeTransform(text_to_root);
 }
 
 KeyboardImpl::KeyboardImpl(WindowImpl &window, Keyboard &facade)
@@ -67,15 +73,16 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
   paint.setAntiAlias(true);
 
   if (caret) {
+    SkPath root_shape = caret->MakeRootShape();
     // Animate caret blinking.
     anim.last_blink = caret->last_blink;
-    if (anim.shape.isInterpolatable(caret->shape)) {
+    if (anim.shape.isInterpolatable(root_shape)) {
       SkPath out;
       float weight = 1 - anim.delta_fraction.Tick(animation_state);
-      anim.shape.interpolate(caret->shape, weight, &out);
+      anim.shape.interpolate(root_shape, weight, &out);
       anim.shape = out;
     } else {
-      anim.shape = caret->shape;
+      anim.shape = root_shape;
     }
     double now = (animation_state.timer.now - anim.last_blink).count();
     double seconds, subseconds;

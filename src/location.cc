@@ -166,12 +166,16 @@ gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   return result;
 }
 
-void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
+vec2 Location::AnimatedPosition(animation::State &animation_state) const {
+  vec2 ret = position;
   if (drag_action) {
-    canvas.save();
-    canvas.translate(drag_action->round_x[animation_state],
-                     drag_action->round_y[animation_state]);
+    ret.X += drag_action->round_x[animation_state];
+    ret.Y += drag_action->round_y[animation_state];
   }
+  return ret;
+}
+
+void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   SkPath my_shape = Shape();
   SkRect bounds = my_shape.getBounds();
   SkPaint frame_bg;
@@ -238,10 +242,6 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     font.DrawText(canvas, error->text, error_paint);
     canvas.translate(-offset_x, -offset_y + n_lines * line_height);
     n_lines += 1;
-  }
-
-  if (drag_action) {
-    canvas.restore();
   }
 }
 

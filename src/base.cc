@@ -63,7 +63,8 @@ void Machine::DrawContents(SkCanvas &canvas,
 
   for (auto &loc : locations) {
     canvas.save();
-    canvas.translate(loc->position.X, loc->position.Y);
+    vec2 pos = loc->AnimatedPosition(animation_state);
+    canvas.translate(pos.X, pos.Y);
     loc->Draw(canvas, animation_state);
     canvas.restore();
   }

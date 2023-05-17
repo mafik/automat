@@ -211,6 +211,7 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number);
 
+  vec2 AnimatedPosition(animation::State &animation_state) const;
   void Draw(SkCanvas &canvas, animation::State &animation_state) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer &,
                                            gui::PointerButton) override;

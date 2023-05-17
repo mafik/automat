@@ -57,28 +57,6 @@ void Machine::UpdateConnectionWidgets() {
   }
 }
 
-void Machine::DrawContents(SkCanvas &canvas,
-                           animation::State &animation_state) {
-  SkRect clip = canvas.getLocalClipBounds();
-
-  for (auto &loc : locations) {
-    canvas.save();
-    vec2 pos = loc->AnimatedPosition(animation_state);
-    canvas.translate(pos.X, pos.Y);
-    loc->Draw(canvas, animation_state);
-    canvas.restore();
-  }
-
-  UpdateConnectionWidgets();
-
-  // Draw ConnectionWidgets.
-  for (auto &widget : connection_widgets) {
-    canvas.save();
-    widget->Draw(canvas, animation_state);
-    canvas.restore();
-  }
-}
-
 const Machine Machine::proto;
 
 int log_executed_tasks = 0;

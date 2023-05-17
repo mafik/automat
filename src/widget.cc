@@ -80,12 +80,16 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitor &visitor) {
 }
 
 struct FunctionWidgetVisitor : WidgetVisitor {
-  FunctionWidgetVisitor(WidgetVisitorFunc visitor) : func(visitor) {}
+  WidgetVisitorFunc func;
+  animation::State *state;
+  FunctionWidgetVisitor(WidgetVisitorFunc visitor,
+                        animation::State *state = nullptr)
+      : func(visitor), state(state) {}
   VisitResult operator()(Widget &widget, const SkMatrix &transform_down,
                          const SkMatrix &transform_up) override {
     return func(widget, transform_down, transform_up);
   }
-  WidgetVisitorFunc func;
+  animation::State *AnimationState() override { return state; }
 };
 
 void Widget::VisitAll(WidgetVisitorFunc visitor) {
@@ -160,15 +164,16 @@ SkMatrix Widget::TransformFromChild(Widget *child) {
 
 void Widget::DrawChildren(SkCanvas &canvas,
                           animation::State &animation_state) const {
-  FunctionWidgetVisitor visitor([&](Widget &widget,
-                                    const SkMatrix &transform_down,
-                                    const SkMatrix &transform_up) {
-    canvas.save();
-    canvas.concat(transform_up);
-    widget.Draw(canvas, animation_state);
-    canvas.restore();
-    return VisitResult::kContinue;
-  });
+  FunctionWidgetVisitor visitor(
+      [&](Widget &widget, const SkMatrix &transform_down,
+          const SkMatrix &transform_up) {
+        canvas.save();
+        canvas.concat(transform_up);
+        widget.Draw(canvas, animation_state);
+        canvas.restore();
+        return VisitResult::kContinue;
+      },
+      &animation_state);
   const_cast<Widget *>(this)->VisitImmediateChildren(visitor);
 }
 

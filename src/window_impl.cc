@@ -208,7 +208,7 @@ void WindowImpl::Draw(SkCanvas &canvas) {
       canvas.drawRect(target_rect, target_paint);
     }
 
-    root_machine->DrawContents(canvas, animation_state);
+    root_machine->DrawChildren(canvas, animation_state);
 
     for (auto &pointer : pointers) {
       pointer->Draw(canvas, animation_state);

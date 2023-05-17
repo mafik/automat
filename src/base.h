@@ -121,11 +121,11 @@ struct Machine : LiveObject {
 
   gui::VisitResult
   VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
+    animation::State *state = visitor.AnimationState();
     for (auto &it : locations) {
-      SkMatrix transform_down =
-          SkMatrix::Translate(-it->position.X, -it->position.Y);
-      SkMatrix transform_up =
-          SkMatrix::Translate(it->position.X, it->position.Y);
+      vec2 pos = state ? it->AnimatedPosition(*state) : it->position;
+      SkMatrix transform_down = SkMatrix::Translate(-pos.X, -pos.Y);
+      SkMatrix transform_up = SkMatrix::Translate(pos.X, pos.Y);
       auto result = visitor(*it, transform_down, transform_up);
       if (result == gui::VisitResult::kStop) {
         return result;
@@ -224,8 +224,6 @@ struct Machine : LiveObject {
       }
     }
   }
-
-  void DrawContents(SkCanvas &canvas, animation::State &animation_state);
 };
 
 struct Pointer : LiveObject {

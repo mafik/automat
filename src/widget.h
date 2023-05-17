@@ -21,6 +21,7 @@ struct WidgetVisitor {
   virtual ~WidgetVisitor() {}
   virtual VisitResult operator()(Widget &, const SkMatrix &transform_down,
                                  const SkMatrix &transform_up) = 0;
+  virtual animation::State *AnimationState() { return nullptr; }
 };
 
 using WidgetVisitorFunc =

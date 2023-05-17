@@ -14,6 +14,14 @@ void DragActionBase::Begin(gui::Pointer &pointer) {
   current_position = pointer.PositionWithin(*root_machine);
 }
 
+vec2 DragActionBase::TargetPosition() const {
+  return current_position - contact_point;
+}
+
+vec2 DragActionBase::TargetPositionRounded() const {
+  return RoundToMilimeters(TargetPosition());
+}
+
 void DragActionBase::Update(gui::Pointer &pointer) {
   auto old_pos = current_position - contact_point;
   auto old_round = RoundToMilimeters(old_pos);
@@ -21,25 +29,22 @@ void DragActionBase::Update(gui::Pointer &pointer) {
   auto new_pos = current_position - contact_point;
   auto new_round = RoundToMilimeters(new_pos);
   vec2 d = new_pos - old_pos;
-  if (old_round.X == new_round.X && abs(d.X) < 0.0005f) {
+  if (old_round.X != new_round.X && abs(d.X) < 0.0005f) {
     for (auto &rx : round_x) {
-      rx.value -= d.X;
-      rx.value = std::clamp(rx.value, -0.0005f, 0.0005f);
+      rx.value += old_round.X - new_round.X;
+      rx.value = std::clamp(rx.value, -0.001f, 0.001f);
     }
   }
-  if (old_round.Y == new_round.Y && abs(d.Y) < 0.0005f) {
+  if (old_round.Y != new_round.Y && abs(d.Y) < 0.0005f) {
     for (auto &ry : round_y) {
-      ry.value -= d.Y;
-      ry.value = std::clamp(ry.value, -0.0005f, 0.0005f);
+      ry.value += old_round.Y - new_round.Y;
+      ry.value = std::clamp(ry.value, -0.001f, 0.001f);
     }
   }
-  DragUpdate(new_pos);
+  DragUpdate();
 }
 
-void DragActionBase::End() {
-  vec2 pos = RoundToMilimeters(current_position - contact_point);
-  DragEnd(pos);
-}
+void DragActionBase::End() { DragEnd(); }
 
 void DragActionBase::Draw(SkCanvas &canvas, animation::State &animation_state) {
   auto original = current_position - contact_point;
@@ -47,25 +52,22 @@ void DragActionBase::Draw(SkCanvas &canvas, animation::State &animation_state) {
 
   auto &rx = round_x[animation_state];
   auto &ry = round_y[animation_state];
-  rx.target = rounded.X - original.X;
-  ry.target = rounded.Y - original.Y;
   rx.Tick(animation_state);
   ry.Tick(animation_state);
 
-  canvas.save();
-  auto pos = current_position - contact_point + Vec2(rx, ry);
+  auto pos = rounded + Vec2(rx, ry);
   canvas.translate(pos.X, pos.Y);
   DragDraw(canvas, animation_state);
-  canvas.restore();
+  canvas.translate(-pos.X, -pos.Y);
 }
 
-void DragObjectAction::DragUpdate(vec2 pos) {
+void DragObjectAction::DragUpdate() {
   // Nothing to do here.
 }
 
-void DragObjectAction::DragEnd(vec2 pos) {
+void DragObjectAction::DragEnd() {
   Location &loc = root_machine->CreateEmpty();
-  loc.position = pos;
+  loc.position = TargetPositionRounded();
   loc.InsertHere(std::move(object));
 }
 
@@ -84,9 +86,13 @@ DragLocationAction::~DragLocationAction() {
   location->drag_action = nullptr;
 }
 
-void DragLocationAction::DragUpdate(vec2 pos) { location->position = pos; }
+void DragLocationAction::DragUpdate() {
+  location->position = TargetPositionRounded();
+}
 
-void DragLocationAction::DragEnd(vec2 pos) { location->position = pos; }
+void DragLocationAction::DragEnd() {
+  location->position = TargetPositionRounded();
+}
 
 void DragLocationAction::DragDraw(SkCanvas &canvas,
                                   animation::State &animation_state) {

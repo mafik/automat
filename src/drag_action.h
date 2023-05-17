@@ -13,6 +13,9 @@ struct DragActionBase : Action {
   vec2 contact_point;
   vec2 current_position;
 
+  vec2 TargetPosition() const;
+  vec2 TargetPositionRounded() const;
+
   struct ApproachMaker {
     animation::Approach operator()() {
       animation::Approach ret(0);
@@ -27,16 +30,16 @@ struct DragActionBase : Action {
   void Update(gui::Pointer &pointer) override;
   void End() override;
   void Draw(SkCanvas &canvas, animation::State &animation_state) override;
-  virtual void DragUpdate(vec2 pos) = 0;
-  virtual void DragEnd(vec2 pos) = 0;
+  virtual void DragUpdate() = 0;
+  virtual void DragEnd() = 0;
   virtual void DragDraw(SkCanvas &canvas,
                         animation::State &animation_state) = 0;
 };
 
 struct DragObjectAction : DragActionBase {
   std::unique_ptr<Object> object;
-  void DragUpdate(vec2 pos) override;
-  void DragEnd(vec2 pos) override;
+  void DragUpdate() override;
+  void DragEnd() override;
   void DragDraw(SkCanvas &canvas, animation::State &animation_state) override;
 };
 
@@ -44,8 +47,8 @@ struct DragLocationAction : DragActionBase {
   Location *location;
   DragLocationAction(Location *location);
   ~DragLocationAction() override;
-  void DragUpdate(vec2 pos) override;
-  void DragEnd(vec2 pos) override;
+  void DragUpdate() override;
+  void DragEnd() override;
   void DragDraw(SkCanvas &canvas, animation::State &animation_state) override;
 };
 

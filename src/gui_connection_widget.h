@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gui_button.h"
 #include "gui_constants.h"
 #include "location.h"
 #include "widget.h"
@@ -19,15 +20,15 @@ struct DragConnectionAction : Action {
   void Draw(SkCanvas &canvas, animation::State &animation_state) override;
 };
 
-struct ConnectionWidget : Widget {
-  constexpr static float kRadius = kMinimalTouchableSize / 2;
+struct ConnectionWidget : Button {
   Location *from;
   std::string label;
   DragConnectionAction *drag_action = nullptr;
 
   ConnectionWidget(Location *from, std::string_view label);
   Widget *ParentWidget() override;
-  SkPath Shape() const override;
+  
+  vec2 Position() const override;
   void Draw(SkCanvas &, animation::State &) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) override;
 

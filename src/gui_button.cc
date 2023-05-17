@@ -31,29 +31,20 @@ void Button::PointerLeave(Pointer &pointer, animation::State &animation_state) {
 
 namespace {
 
-constexpr float kHeight = kMinimalTouchableSize;
-constexpr float kWidth = kHeight;
-constexpr float kRadius = kHeight / 2;
+constexpr float kRadius = kMinimalTouchableSize / 2;
 constexpr float kShadowSigma = kRadius / 10;
 constexpr float kPressOffset = kRadius / 20;
 
-const SkRect &ButtonOval() {
-  static SkRect oval = SkRect::MakeLTRB(0, 0, kWidth, kHeight);
-  return oval;
-}
-
-void DrawBlur(SkCanvas &canvas, SkColor color, float outset, float r, float y) {
-  SkAutoCanvasRestore auto_canvas_restore(&canvas, true);
-  SkPaint paint;
-  paint.setColor(color);
-  paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, r, true));
-  auto oval = ButtonOval().makeOutset(outset, outset);
-  canvas.translate(0, y);
-  canvas.drawOval(oval, paint);
-  canvas.translate(0, -y);
-}
-
 } // namespace
+
+SkRRect Button::RRect() const {
+  vec2 p = Position();
+  SkRect child_bounds = child->Shape().getBounds();
+  float w = std::max(kMinimalTouchableSize, child_bounds.width() + 2 * kMargin);
+  float h = std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
+  return SkRRect::MakeRectXY(SkRect::MakeXYWH(p.X, p.Y, w, h),
+                             kRadius, kRadius);
+}
 
 void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   auto &press = press_ptr[animation_state];
@@ -64,15 +55,17 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   hover.Tick(animation_state);
   filling.Tick(animation_state);
 
-  auto oval = ButtonOval().makeInset(kBorderWidth / 2, kBorderWidth / 2);
+  auto oval = RRect();
+  oval.inset(kBorderWidth / 2, kBorderWidth / 2);
   constexpr SkColor color = 0xffd69d00;
   constexpr SkColor white = 0xffffffff;
 
   float lightness_adjust = hover * 10;
   float press_shift_y = press * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
-  auto pressed_outer_oval = pressed_oval.makeOutset(
-      kBorderWidth / 2 + kShadowSigma * 0, kBorderWidth / 2 + kShadowSigma * 0);
+  SkRRect pressed_outer_oval;
+  pressed_oval.outset(kBorderWidth / 2 + kShadowSigma * 0,
+                      kBorderWidth / 2 + kShadowSigma * 0, &pressed_outer_oval);
 
   auto DrawShadow = [&](SkColor color) {
     // Shadow
@@ -80,19 +73,19 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     shadow_paint.setColor(color::AdjustLightness(color, -40));
     shadow_paint.setMaskFilter(
         SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
-    canvas.drawOval(oval.makeOffset(0, -kPressOffset), shadow_paint);
+    canvas.drawRRect(oval.makeOffset(0, -kPressOffset), shadow_paint);
   };
 
   auto DrawBase = [&](SkColor bg, SkColor fg) {
     SkPaint paint;
-    SkPoint pts[2] = {{0, kHeight}, {0, 0}};
+    SkPoint pts[2] = {{0, oval.rect().bottom()}, {0, oval.rect().top()}};
     SkColor colors[2] = {
         color::AdjustLightness(bg, lightness_adjust),       // top
         color::AdjustLightness(bg, lightness_adjust - 10)}; // bottom
     sk_sp<SkShader> gradient = SkGradientShader::MakeLinear(
         pts, colors, nullptr, 2, SkTileMode::kClamp);
     paint.setShader(gradient);
-    canvas.drawOval(pressed_oval, paint);
+    canvas.drawRRect(pressed_oval, paint);
 
     SkPaint border;
     SkColor border_colors[2] = {
@@ -104,14 +97,14 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     border.setStyle(SkPaint::kStroke_Style);
     border.setAntiAlias(true);
     border.setStrokeWidth(kBorderWidth);
-    canvas.drawOval(pressed_oval, border);
+    canvas.drawRRect(pressed_oval, border);
 
     SkPaint fg_paint;
     fg_paint.setColor(fg);
     fg_paint.setAntiAlias(true);
-    canvas.translate(kWidth / 2, kHeight / 2 + press_shift_y);
+    canvas.translate(pressed_oval.rect().centerX(), pressed_oval.rect().centerY());
     child->DrawColored(canvas, animation_state, fg_paint);
-    canvas.translate(-kWidth / 2, -kHeight / 2 - press_shift_y);
+    canvas.translate(-pressed_oval.rect().centerX(), -pressed_oval.rect().centerY());
   };
 
   if (filling >= 0.999) {
@@ -122,8 +115,8 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     DrawBase(white, color);
   } else {
     DrawShadow(color::MixColors(white, color, filling));
-    float baseline = pressed_outer_oval.fTop * (1 - filling) +
-                     pressed_outer_oval.fBottom * filling;
+    float baseline = pressed_outer_oval.rect().fTop * (1 - filling) +
+                     pressed_outer_oval.rect().fBottom * filling;
     constexpr int n_points = 6;
     vec2 points[n_points];
     static time::point base = animation_state.timer.now;
@@ -133,12 +126,13 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     for (int i = 0; i < n_points; ++i) {
       float frac = i / float(n_points - 1);
       float a = (frac * 3 + timeS * 1) * 2 * M_PI;
-      points[i].X = frac * pressed_outer_oval.fRight +
-                    (1 - frac) * pressed_outer_oval.fLeft + cos(a) * waving_x;
+      points[i].X = frac * pressed_outer_oval.rect().fRight +
+                    (1 - frac) * pressed_outer_oval.rect().fLeft +
+                    cos(a) * waving_x;
       points[i].Y = baseline + sin(a) * waving_y;
     }
-    points[0].X = pressed_outer_oval.fLeft;
-    points[n_points - 1].X = pressed_outer_oval.fRight;
+    points[0].X = pressed_outer_oval.rect().fLeft;
+    points[n_points - 1].X = pressed_outer_oval.rect().fRight;
     constexpr float wave_width = 2 * waving_x;
     SkPath waves_clip;
     waves_clip.moveTo(points[0].X, points[0].Y);
@@ -147,8 +141,10 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
                          points[i + 1].X - wave_width, points[i + 1].Y,
                          points[i + 1].X, points[i + 1].Y);
     }
-    waves_clip.lineTo(pressed_outer_oval.fRight, pressed_outer_oval.fTop);
-    waves_clip.lineTo(pressed_outer_oval.fLeft, pressed_outer_oval.fTop);
+    waves_clip.lineTo(pressed_outer_oval.rect().fRight,
+                      pressed_outer_oval.rect().fTop);
+    waves_clip.lineTo(pressed_outer_oval.rect().fLeft,
+                      pressed_outer_oval.rect().fTop);
 
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kDifference, true);
@@ -161,10 +157,7 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   }
 }
 
-SkPath Button::Shape() const {
-  static SkPath path = SkPath::Oval(ButtonOval());
-  return path;
-}
+SkPath Button::Shape() const { return SkPath::RRect(RRect()); }
 
 struct ButtonAction : public Action {
   Button &button;

@@ -11,38 +11,59 @@
 
 namespace automaton::gui {
 
+struct ConnectionLabelWidget : Widget {
+  ConnectionWidget *parent;
+  std::string label;
+  ConnectionLabelWidget(ConnectionWidget* parent, std::string_view label) : parent(parent), label(label) {
+    this->label = "👆" + this->label + " ";
+  }
+  float Width() const {
+    return GetFont().MeasureText(label);
+  }
+  float Height() const {
+    return kLetterSize;
+  }
+  SkPath Shape() const override {
+    float w = Width();
+    float h = Height();
+    return SkPath::Rect(SkRect::MakeWH(w, h));
+  }
+  void Draw(SkCanvas &canvas, animation::State &state) const override {
+    SkPaint paint;
+    DrawColored(canvas, state, paint);
+  }
+
+  void DrawColored(SkCanvas &canvas, animation::State &state, const SkPaint &paint) const override {
+    auto &font = GetFont();
+    canvas.translate(-Width()/2, -Height()/2);
+    font.DrawText(canvas, label, paint);
+    canvas.translate(Width()/2, Height()/2);
+  }
+};
+
 ConnectionWidget::ConnectionWidget(Location *from, std::string_view label)
-    : from(from), label(label) {}
+    : Button(from->ParentWidget(), std::make_unique<ConnectionLabelWidget>(this, label)), from(from), label(label) {}
 
 Widget *ConnectionWidget::ParentWidget() {
   // This sholud return the Machine which holds the `from` Location.
   return from->ParentWidget();
 }
 
-SkPath ConnectionWidget::Shape() const {
-  SkPath path;
-  vec2 center = Center();
-  path.addCircle(center.X, center.Y, kRadius);
-  return path;
+vec2 ConnectionWidget::Position() const {
+  SkRect from_bounds = from->Shape().getBounds();
+  return Vec2(from->position.X + from_bounds.left(),
+              from->position.Y + from_bounds.top() - kMargin - kMinimalTouchableSize);
 }
 
 void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {
+  Button::Draw(canvas, state);
   SkPaint paint;
   paint.setAntiAlias(true);
-  paint.setColor(SK_ColorRED);
   SkPath path = Shape();
-  canvas.drawPath(path, paint);
-  auto &font = GetFont();
-
   SkRect bounds = path.getBounds();
-  vec2 text_pos =
-      Vec2(bounds.right() + kMargin, bounds.centerY() - kLetterSize / 2);
-  canvas.translate(text_pos.X, text_pos.Y);
-  font.DrawText(canvas, label, paint);
-  canvas.translate(-text_pos.X, -text_pos.Y);
 
-  auto it = from->outgoing.find(label);
-  if (it != from->outgoing.end()) {
+  auto [a, b] = from->outgoing.equal_range(label);
+  for (auto it = a; it != b; ++it) {
     Connection &c = *it->second;
     Location &to = c.to;
     SkPoint to_center = to.Shape().getBounds().center();
@@ -62,9 +83,8 @@ std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer &,
 }
 
 vec2 ConnectionWidget::Center() const {
-  SkRect from_bounds = from->Shape().getBounds();
-  return Vec2(from->position.X + from_bounds.left() + kRadius,
-              from->position.Y + from_bounds.top() - kMargin - kRadius);
+  SkRect b = Shape().getBounds();
+  return Vec2(b.centerX(), b.centerY());
 }
 
 DragConnectionAction::DragConnectionAction(ConnectionWidget *widget)

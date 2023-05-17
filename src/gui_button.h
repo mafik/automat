@@ -19,10 +19,12 @@ struct Button : Widget {
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;
+  SkRRect RRect() const;
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) override;
-  virtual void Activate() = 0;
-  virtual bool Filled() const = 0;
+  virtual vec2 Position() const { return Vec2(0, 0); }
+  virtual void Activate() {}
+  virtual bool Filled() const { return false; }
 };
 
 } // namespace automaton::gui

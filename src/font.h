@@ -8,7 +8,7 @@
 
 namespace automaton::gui {
 
-constexpr float kLetterSizeMM = 2;
+constexpr float kLetterSizeMM = 3;
 constexpr float kLetterSize = kLetterSizeMM / 1000;
 
 struct Font {
@@ -20,7 +20,7 @@ struct Font {
 
   // TODO: If this causes performance issues, cache text shaping / SkTextBlob
   // results somehow
-  void DrawText(SkCanvas &canvas, std::string_view text, SkPaint &paint);
+  void DrawText(SkCanvas &canvas, std::string_view text, const SkPaint &paint);
   float MeasureText(std::string_view text);
   float PositionFromIndex(std::string_view text, int index);
   int IndexFromPosition(std::string_view text, float x);

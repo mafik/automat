@@ -174,7 +174,7 @@ int Font::IndexFromPosition(std::string_view text, float x) {
   return run_handler.IndexFromPosition(x);
 }
 
-void Font::DrawText(SkCanvas &canvas, std::string_view text, SkPaint &paint) {
+void Font::DrawText(SkCanvas &canvas, std::string_view text, const SkPaint &paint) {
   canvas.scale(font_scale, -font_scale);
   SkShaper &shaper = GetShaper();
   LineRunHandler run_handler(text);

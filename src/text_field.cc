@@ -82,6 +82,7 @@ void TextField::Draw(SkCanvas &canvas,
   canvas.translate(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
   SkPaint underline;
   underline.setColor(c_fg);
+  underline.setAntiAlias(true);
   SkRect underline_rect = SkRect::MakeXYWH(
       0, -font.line_thickness, width - 2 * kTextMargin, -font.line_thickness);
   canvas.drawRect(underline_rect, underline);

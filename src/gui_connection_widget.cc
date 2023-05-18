@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include <include/core/SkColor.h>
+#include <include/core/SkRRect.h>
 
 #include "base.h"
 #include "font.h"
@@ -53,16 +54,59 @@ void DrawConnection(SkCanvas &canvas, const SkPath &from_path,
   paint.setStyle(SkPaint::kStroke_Style);
   paint.setStrokeWidth(0.0005);
   paint.setColor(SK_ColorBLACK);
-  SkPoint from_center = from_path.getBounds().center();
-  SkPoint to_center = to_path.getBounds().center();
-  canvas.drawLine(from_center.x(), from_center.y(), to_center.x(),
-                  to_center.y(), paint);
+  SkRRect from_rrect, to_rrect;
+  bool from_is_rrect = from_path.isRRect(&from_rrect);
+  bool to_is_rrect = to_path.isRRect(&to_rrect);
+
+  // Find an area where the start of a connection can freely move.
+  SkRect from_inner;
+  if (from_is_rrect) {
+    SkVector radii = from_rrect.getSimpleRadii();
+    from_inner = from_rrect.rect().makeInset(radii.x(), radii.y());
+  } else {
+    SkPoint from_center = from_path.getBounds().center();
+    from_inner = SkRect::MakeXYWH(from_center.x(), from_center.y(), 0, 0);
+  }
+  // Find an area where the end of a connection can freely move.
+  SkRect to_inner;
+  if (to_is_rrect) {
+    SkVector radii = to_rrect.getSimpleRadii();
+    to_inner = to_rrect.rect().makeInset(radii.x(), radii.y());
+  } else {
+    SkPoint to_center = to_path.getBounds().center();
+    to_inner = SkRect::MakeXYWH(to_center.x(), to_center.y(), 0, 0);
+  }
+
+  SkPoint from, to;
+  // Set the vertical positions of the connection endpoints.
+  float left = std::max(from_inner.left(), to_inner.left());
+  float right = std::min(from_inner.right(), to_inner.right());
+  if (left <= right) {
+    from.fX = to.fX = (left + right) / 2;
+  } else if (from_inner.right() < to_inner.left()) {
+    from.fX = from_inner.right();
+    to.fX = to_inner.left();
+  } else {
+    from.fX = from_inner.left();
+    to.fX = to_inner.right();
+  }
+  // Set the horizontal positions of the connection endpoints.
+  float top = std::max(from_inner.top(), to_inner.top());
+  float bottom = std::min(from_inner.bottom(), to_inner.bottom());
+  if (top <= bottom) {
+    from.fY = to.fY = (top + bottom) / 2;
+  } else if (from_inner.bottom() < to_inner.top()) {
+    from.fY = from_inner.bottom();
+    to.fY = to_inner.top();
+  } else {
+    from.fY = from_inner.top();
+    to.fY = to_inner.bottom();
+  }
+  // Draw the connection.
+  canvas.drawLine(from.x(), from.y(), to.x(), to.y(), paint);
 }
 
 void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {
-  Button::Draw(canvas, state);
-  SkPaint paint;
-  paint.setAntiAlias(true);
   SkPath my_shape = Shape();
 
   auto [a, b] = from->outgoing.equal_range(label);
@@ -75,6 +119,7 @@ void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {
     to_shape.transform(m);
     DrawConnection(canvas, my_shape, to_shape);
   }
+  Button::Draw(canvas, state);
 }
 
 std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer &,

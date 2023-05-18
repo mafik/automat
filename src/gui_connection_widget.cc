@@ -1,6 +1,7 @@
 #include "gui_connection_widget.h"
 
 #include <cassert>
+#include <numbers>
 
 #include <include/core/SkColor.h>
 #include <include/core/SkRRect.h>
@@ -9,6 +10,7 @@
 #include "font.h"
 #include "gui_constants.h"
 #include "log.h"
+#include "svg.h"
 
 namespace automaton::gui {
 
@@ -47,13 +49,23 @@ ConnectionWidget::ConnectionWidget(Location *from, std::string_view label)
 
 Widget *ConnectionWidget::ParentWidget() const { return from; }
 
+constexpr char kArrowShapeSVG[] =
+    "M-13-8c-3 0-3 16 0 16 3-1 10-5 13-8-3-3-10-7-13-8z";
+
+const SkPath kArrowShape = PathFromSVG(kArrowShapeSVG);
+
 void DrawConnection(SkCanvas &canvas, const SkPath &from_path,
                     const SkPath &to_path) {
-  SkPaint paint;
-  paint.setAntiAlias(true);
-  paint.setStyle(SkPaint::kStroke_Style);
-  paint.setStrokeWidth(0.0005);
-  paint.setColor(SK_ColorBLACK);
+  SkColor color = 0xff6e4521;
+  SkPaint line_paint;
+  line_paint.setAntiAlias(true);
+  line_paint.setStyle(SkPaint::kStroke_Style);
+  line_paint.setStrokeWidth(0.0005);
+  line_paint.setColor(color);
+  SkPaint arrow_paint;
+  arrow_paint.setAntiAlias(true);
+  arrow_paint.setStyle(SkPaint::kFill_Style);
+  arrow_paint.setColor(color);
   SkRRect from_rrect, to_rrect;
   bool from_is_rrect = from_path.isRRect(&from_rrect);
   bool to_is_rrect = to_path.isRRect(&to_rrect);
@@ -102,8 +114,28 @@ void DrawConnection(SkCanvas &canvas, const SkPath &from_path,
     from.fY = from_inner.top();
     to.fY = to_inner.bottom();
   }
+  // Find polar coordinates of the connection.
+  SkVector delta = to - from;
+  float degrees = 180 * std::atan2(delta.y(), delta.x()) / std::numbers::pi;
+  float end = delta.length();
+  float start = 0;
+  if (from_is_rrect) {
+    start = std::min(start + from_rrect.getSimpleRadii().fX, end);
+  }
+  if (to_is_rrect) {
+    end = std::max(start, end - to_rrect.getSimpleRadii().fX);
+  }
+  float line_end = std::max(start, end + kArrowShape.getBounds().centerX());
   // Draw the connection.
-  canvas.drawLine(from.x(), from.y(), to.x(), to.y(), paint);
+  canvas.save();
+  canvas.translate(from.x(), from.y());
+  canvas.rotate(degrees);
+  if (start < line_end) {
+    canvas.drawLine(start, 0, line_end, 0, line_paint);
+  }
+  canvas.translate(end, 0);
+  canvas.drawPath(kArrowShape, arrow_paint);
+  canvas.restore();
 }
 
 void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {

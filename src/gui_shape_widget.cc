@@ -1,8 +1,6 @@
 #include "gui_shape_widget.h"
 
-#include <include/utils/SkParsePath.h>
-
-#include "log.h"
+#include "svg.h"
 
 namespace automaton::gui {
 
@@ -23,12 +21,7 @@ void ShapeWidget::DrawColored(SkCanvas &canvas, animation::State &,
 
 std::unique_ptr<Widget> MakeShapeWidget(const char *svg_path,
                                         SkColor fill_color) {
-  SkPath path;
-  if (!SkParsePath::FromSVGString(svg_path, &path)) {
-    LOG() << "Failed to parse SVG path: " << svg_path;
-  }
-  constexpr float kScale = 0.0254f / 96;
-  path = path.makeScale(kScale, kScale);
+  SkPath path = PathFromSVG(svg_path);
   SkPaint paint;
   paint.setAntiAlias(true);
   paint.setColor(fill_color);

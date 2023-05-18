@@ -46,14 +46,15 @@ ConnectionWidget::ConnectionWidget(Location *from, std::string_view label)
 
 Widget *ConnectionWidget::ParentWidget() const { return from; }
 
-void DrawConnection(SkCanvas &canvas, const SkPath &from, const SkPath &to) {
+void DrawConnection(SkCanvas &canvas, const SkPath &from_path,
+                    const SkPath &to_path) {
   SkPaint paint;
   paint.setAntiAlias(true);
   paint.setStyle(SkPaint::kStroke_Style);
-  paint.setStrokeWidth(0.001);
+  paint.setStrokeWidth(0.0005);
   paint.setColor(SK_ColorBLACK);
-  SkPoint from_center = from.getBounds().center();
-  SkPoint to_center = to.getBounds().center();
+  SkPoint from_center = from_path.getBounds().center();
+  SkPoint to_center = to_path.getBounds().center();
   canvas.drawLine(from_center.x(), from_center.y(), to_center.x(),
                   to_center.y(), paint);
 }
@@ -69,10 +70,9 @@ void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {
     Connection &c = *it->second;
     Location &to = c.to;
     SkPath to_shape = to.Shape();
-    to_shape.offset(to.position.X, to.position.Y);
-    // TODO: fix jumping somehow
-    SkMatrix my_transform = from->ParentWidget()->TransformToChild(this);
-    to_shape.transform(my_transform);
+    SkMatrix m = to.ParentWidget()->TransformFromChild(&to, &state);
+    m.postConcat(from->ParentWidget()->TransformToChild(this, &state));
+    to_shape.transform(m);
     DrawConnection(canvas, my_shape, to_shape);
   }
 }
@@ -121,8 +121,8 @@ void DragConnectionAction::End() {
 void DragConnectionAction::Draw(SkCanvas &canvas,
                                 animation::State &animation_state) {
   SkPath from_path = widget->Shape();
-  SkMatrix from_transform =
-      widget->from->ParentWidget()->TransformFromChild(widget);
+  SkMatrix from_transform = widget->from->ParentWidget()->TransformFromChild(
+      widget, &animation_state);
   from_path.transform(from_transform);
   SkPath to_path = SkPath();
   to_path.moveTo(current_position.X, current_position.Y);

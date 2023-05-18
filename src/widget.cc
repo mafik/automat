@@ -102,18 +102,19 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitorFunc visitor) {
   VisitAtPoint(point, function_visitor);
 }
 
-SkMatrix Widget::TransformFromParent() const {
+SkMatrix Widget::TransformFromParent(animation::State *state) const {
   if (Widget *parent = ParentWidget()) {
     SkMatrix ret;
-    FunctionWidgetVisitor visitor([&](Widget &widget,
-                                      const SkMatrix &transform_down,
-                                      const SkMatrix &transform_up) {
-      if (&widget == this) {
-        ret = transform_down;
-        return VisitResult::kStop;
-      }
-      return VisitResult::kContinue;
-    });
+    FunctionWidgetVisitor visitor(
+        [&](Widget &widget, const SkMatrix &transform_down,
+            const SkMatrix &transform_up) {
+          if (&widget == this) {
+            ret = transform_down;
+            return VisitResult::kStop;
+          }
+          return VisitResult::kContinue;
+        },
+        state);
     auto result = parent->VisitImmediateChildren(visitor);
     if (result == VisitResult::kStop) {
       return ret;
@@ -130,18 +131,19 @@ SkMatrix Widget::TransformFromParent() const {
   }
 }
 
-SkMatrix Widget::TransformToParent() const {
+SkMatrix Widget::TransformToParent(animation::State *state) const {
   SkMatrix ret = SkMatrix::I();
   if (Widget *parent = ParentWidget()) {
-    FunctionWidgetVisitor visitor([&](Widget &widget,
-                                      const SkMatrix &transform_down,
-                                      const SkMatrix &transform_up) {
-      if (&widget == this) {
-        ret = transform_up;
-        return VisitResult::kStop;
-      }
-      return VisitResult::kContinue;
-    });
+    FunctionWidgetVisitor visitor(
+        [&](Widget &widget, const SkMatrix &transform_down,
+            const SkMatrix &transform_up) {
+          if (&widget == this) {
+            ret = transform_up;
+            return VisitResult::kStop;
+          }
+          return VisitResult::kContinue;
+        },
+        state);
     parent->VisitImmediateChildren(visitor);
   }
   return ret;
@@ -149,10 +151,11 @@ SkMatrix Widget::TransformToParent() const {
 
 static vec2 Vec2(SkPoint p) { return vec2{p.fX, p.fY}; }
 
-SkMatrix Widget::TransformToChild(const Widget *child) const {
+SkMatrix Widget::TransformToChild(const Widget *child,
+                                  animation::State *state) const {
   SkMatrix transform;
   while (child && child != this) {
-    transform.preConcat(child->TransformFromParent());
+    transform.preConcat(child->TransformFromParent(state));
     child = child->ParentWidget();
   }
   if (child != this) {
@@ -184,10 +187,11 @@ SkMatrix Widget::TransformToChild(const Widget *child) const {
   return transform;
 }
 
-SkMatrix Widget::TransformFromChild(const Widget *child) const {
+SkMatrix Widget::TransformFromChild(const Widget *child,
+                                    animation::State *state) const {
   SkMatrix transform;
   while (child && child != this) {
-    transform.preConcat(child->TransformToParent());
+    transform.preConcat(child->TransformToParent(state));
     child = child->ParentWidget();
   }
   if (child != this) {

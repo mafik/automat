@@ -65,12 +65,14 @@ struct Widget {
 
   // Transform matrix is controlled by the Widget's parent.
   // This function asks the parent for the transform of this Widget.
-  SkMatrix TransformFromParent() const;
-  SkMatrix TransformToParent() const;
+  SkMatrix TransformFromParent(animation::State *state = nullptr) const;
+  SkMatrix TransformToParent(animation::State *state = nullptr) const;
 
   // The child doesn't have to be an immediate child.
-  SkMatrix TransformToChild(const Widget *child) const;
-  SkMatrix TransformFromChild(const Widget *child) const;
+  SkMatrix TransformToChild(const Widget *child,
+                            animation::State *state = nullptr) const;
+  SkMatrix TransformFromChild(const Widget *child,
+                              animation::State *state = nullptr) const;
 
   void DrawChildren(SkCanvas &, animation::State &) const;
 };

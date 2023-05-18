@@ -33,8 +33,6 @@ struct ConnectionWidget : Button {
 
   void Draw(SkCanvas &, animation::State &) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) override;
-
-  vec2 Center() const;
 };
 
 } // namespace automaton::gui

@@ -162,11 +162,6 @@ std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer &,
   return std::make_unique<DragConnectionAction>(this);
 }
 
-vec2 ConnectionWidget::Center() const {
-  SkRect b = Shape().getBounds();
-  return Vec2(b.centerX(), b.centerY());
-}
-
 DragConnectionAction::DragConnectionAction(ConnectionWidget *widget)
     : widget(widget) {
   assert(widget->drag_action == nullptr);

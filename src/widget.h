@@ -31,7 +31,7 @@ using WidgetVisitorFunc =
 struct Widget {
   Widget() {}
   virtual ~Widget() {}
-  virtual Widget *ParentWidget() { return nullptr; }
+  virtual Widget *ParentWidget() const { return nullptr; }
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".
@@ -65,12 +65,12 @@ struct Widget {
 
   // Transform matrix is controlled by the Widget's parent.
   // This function asks the parent for the transform of this Widget.
-  SkMatrix TransformFromParent();
-  SkMatrix TransformToParent();
+  SkMatrix TransformFromParent() const;
+  SkMatrix TransformToParent() const;
 
   // The child doesn't have to be an immediate child.
-  SkMatrix TransformToChild(Widget *child);
-  SkMatrix TransformFromChild(Widget *child);
+  SkMatrix TransformToChild(const Widget *child) const;
+  SkMatrix TransformFromChild(const Widget *child) const;
 
   void DrawChildren(SkCanvas &, animation::State &) const;
 };

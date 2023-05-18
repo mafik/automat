@@ -102,9 +102,9 @@ void Widget::VisitAtPoint(vec2 point, WidgetVisitorFunc visitor) {
   VisitAtPoint(point, function_visitor);
 }
 
-SkMatrix Widget::TransformFromParent() {
-  SkMatrix ret = SkMatrix::I();
+SkMatrix Widget::TransformFromParent() const {
   if (Widget *parent = ParentWidget()) {
+    SkMatrix ret;
     FunctionWidgetVisitor visitor([&](Widget &widget,
                                       const SkMatrix &transform_down,
                                       const SkMatrix &transform_up) {
@@ -114,12 +114,23 @@ SkMatrix Widget::TransformFromParent() {
       }
       return VisitResult::kContinue;
     });
-    parent->VisitImmediateChildren(visitor);
+    auto result = parent->VisitImmediateChildren(visitor);
+    if (result == VisitResult::kStop) {
+      return ret;
+    } else {
+      EVERY_N_SEC(10) {
+        ERROR() << "Widget::TransformFromParent() failed because "
+                << parent->Name() << " (the parent of " << Name()
+                << ") didn't return it in its list of children.";
+      }
+      return SkMatrix::I();
+    }
+  } else {
+    return SkMatrix::I();
   }
-  return ret;
 }
 
-SkMatrix Widget::TransformToParent() {
+SkMatrix Widget::TransformToParent() const {
   SkMatrix ret = SkMatrix::I();
   if (Widget *parent = ParentWidget()) {
     FunctionWidgetVisitor visitor([&](Widget &widget,
@@ -138,19 +149,42 @@ SkMatrix Widget::TransformToParent() {
 
 static vec2 Vec2(SkPoint p) { return vec2{p.fX, p.fY}; }
 
-SkMatrix Widget::TransformToChild(Widget *child) {
+SkMatrix Widget::TransformToChild(const Widget *child) const {
   SkMatrix transform;
   while (child && child != this) {
     transform.preConcat(child->TransformFromParent());
     child = child->ParentWidget();
   }
   if (child != this) {
+    EVERY_N_SEC(10) {
+      std::string parents = "";
+      for (const Widget *it = child->ParentWidget(); it;
+           it = it->ParentWidget()) {
+        parents += it->Name();
+        parents += " → ";
+      }
+      std::string children = "";
+      FunctionWidgetVisitor visitor([&](Widget &widget,
+                                        const SkMatrix &transform_down,
+                                        const SkMatrix &transform_up) {
+        if (!children.empty()) {
+          children += ", ";
+        }
+        children += widget.Name();
+        return VisitResult::kContinue;
+      });
+      const_cast<Widget *>(this)->VisitImmediateChildren(visitor);
+      ERROR() << "Widget::TransformToChild() failed because " << child->Name()
+              << " is not a child of " << Name() << ". Parents of "
+              << child->Name() << " are: " << parents << ". Children of "
+              << Name() << " are: " << children << ".";
+    }
     return SkMatrix::I();
   }
   return transform;
 }
 
-SkMatrix Widget::TransformFromChild(Widget *child) {
+SkMatrix Widget::TransformFromChild(const Widget *child) const {
   SkMatrix transform;
   while (child && child != this) {
     transform.preConcat(child->TransformToParent());

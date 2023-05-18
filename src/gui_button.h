@@ -15,7 +15,7 @@ struct Button : Widget {
   int press_action_count = 0;
 
   Button(Widget *parent_widget, std::unique_ptr<Widget> &&child);
-  Widget *ParentWidget() override;
+  Widget *ParentWidget() const override;
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;

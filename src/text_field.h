@@ -37,7 +37,7 @@ struct TextField : Widget, CaretOwner {
 
   TextField(Widget *parent_widget, std::string *text, float width)
       : parent_widget(parent_widget), text(text), width(width) {}
-  Widget *ParentWidget() override;
+  Widget *ParentWidget() const override;
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;

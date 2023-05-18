@@ -22,7 +22,7 @@ struct PrototypeButton : Widget {
   const Object *proto;
   PrototypeButton(Widget *parent, const Object *proto)
       : parent_widget(parent), proto(proto) {}
-  Widget *ParentWidget() override { return parent_widget; }
+  Widget *ParentWidget() const override { return parent_widget; }
   void Draw(SkCanvas &canvas,
             animation::State &animation_state) const override {
     proto->Draw(canvas, animation_state);

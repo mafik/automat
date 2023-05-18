@@ -56,7 +56,7 @@ struct Location : gui::Widget {
 
   Location(Location *parent = nullptr);
 
-  Widget *ParentWidget() override {
+  Widget *ParentWidget() const override {
     if (parent == nullptr) {
       return nullptr;
     }

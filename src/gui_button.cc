@@ -15,7 +15,7 @@
 
 namespace automaton::gui {
 
-Widget *Button::ParentWidget() { return parent_widget; }
+Widget *Button::ParentWidget() const { return parent_widget; }
 
 void Button::PointerOver(Pointer &pointer, animation::State &animation_state) {
   auto &hover = hover_ptr[animation_state];

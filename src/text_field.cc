@@ -14,7 +14,7 @@
 
 namespace automaton::gui {
 
-Widget *TextField::ParentWidget() { return parent_widget; }
+Widget *TextField::ParentWidget() const { return parent_widget; }
 
 void TextField::PointerOver(Pointer &pointer, animation::State &state) {
   pointer.PushIcon(Pointer::kIconIBeam);

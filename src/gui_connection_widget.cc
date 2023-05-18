@@ -44,27 +44,36 @@ ConnectionWidget::ConnectionWidget(Location *from, std::string_view label)
              std::make_unique<ConnectionLabelWidget>(this, label)),
       from(from), label(label) {}
 
-Widget *ConnectionWidget::ParentWidget() {
-  // This sholud return the Machine which holds the `from` Location.
-  return from->ParentWidget();
+Widget *ConnectionWidget::ParentWidget() const { return from; }
+
+void DrawConnection(SkCanvas &canvas, const SkPath &from, const SkPath &to) {
+  SkPaint paint;
+  paint.setAntiAlias(true);
+  paint.setStyle(SkPaint::kStroke_Style);
+  paint.setStrokeWidth(0.001);
+  paint.setColor(SK_ColorBLACK);
+  SkPoint from_center = from.getBounds().center();
+  SkPoint to_center = to.getBounds().center();
+  canvas.drawLine(from_center.x(), from_center.y(), to_center.x(),
+                  to_center.y(), paint);
 }
 
 void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {
   Button::Draw(canvas, state);
   SkPaint paint;
   paint.setAntiAlias(true);
-  SkPath path = Shape();
-  SkRect bounds = path.getBounds();
+  SkPath my_shape = Shape();
 
   auto [a, b] = from->outgoing.equal_range(label);
   for (auto it = a; it != b; ++it) {
     Connection &c = *it->second;
     Location &to = c.to;
-    SkPoint to_center = to.Shape().getBounds().center();
-    to_center.offset(to.position.X, to.position.Y);
-    paint.setStyle(SkPaint::kStroke_Style);
-    canvas.drawLine(bounds.centerX(), bounds.centerY(), to_center.x(),
-                    to_center.y(), paint);
+    SkPath to_shape = to.Shape();
+    to_shape.offset(to.position.X, to.position.Y);
+    // TODO: fix jumping somehow
+    SkMatrix my_transform = from->ParentWidget()->TransformToChild(this);
+    to_shape.transform(my_transform);
+    DrawConnection(canvas, my_shape, to_shape);
   }
 }
 
@@ -93,11 +102,11 @@ DragConnectionAction::~DragConnectionAction() {
 }
 
 void DragConnectionAction::Begin(gui::Pointer &pointer) {
-  current_position = pointer.PositionWithin(*widget);
+  current_position = pointer.PositionWithin(*widget->from->ParentWidget());
 }
 
 void DragConnectionAction::Update(gui::Pointer &pointer) {
-  current_position = pointer.PositionWithin(*widget);
+  current_position = pointer.PositionWithin(*widget->from->ParentWidget());
 }
 
 void DragConnectionAction::End() {
@@ -111,10 +120,13 @@ void DragConnectionAction::End() {
 
 void DragConnectionAction::Draw(SkCanvas &canvas,
                                 animation::State &animation_state) {
-  vec2 from = widget->Center();
-  SkPaint paint;
-  canvas.drawLine(from.X, from.Y, current_position.X, current_position.Y,
-                  paint);
+  SkPath from_path = widget->Shape();
+  SkMatrix from_transform =
+      widget->from->ParentWidget()->TransformFromChild(widget);
+  from_path.transform(from_transform);
+  SkPath to_path = SkPath();
+  to_path.moveTo(current_position.X, current_position.Y);
+  DrawConnection(canvas, from_path, to_path);
 }
 
 } // namespace automaton::gui

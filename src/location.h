@@ -5,6 +5,7 @@
 
 #include "connection.h"
 #include "error.h"
+#include "gui_connection_widget.h"
 #include "object.h"
 #include "run_button.h"
 #include "string_multimap.h"
@@ -35,6 +36,7 @@ struct Location : gui::Widget {
   std::string name;
   gui::TextField name_text_field;
   gui::RunButton run_button;
+  std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
   DragLocationAction *drag_action = nullptr;
   vec2 position = {0, 0};
@@ -217,6 +219,9 @@ struct Location : gui::Widget {
                                            gui::PointerButton) override;
   SkPath Shape() const override;
   gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override;
+
+  // Add ConnectionWidgets for all arguments defined by the objects.
+  void UpdateConnectionWidgets();
 
   ////////////////////////////
   // Error reporting

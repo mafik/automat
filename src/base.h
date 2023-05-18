@@ -23,7 +23,6 @@
 #include "channel.h"
 #include "connection.h"
 #include "format.h"
-#include "gui_connection_widget.h"
 #include "location.h"
 #include "log.h"
 #include "run_button.h"
@@ -77,8 +76,6 @@ struct Machine : LiveObject {
   vector<Location *> front;
   vector<Location *> children_with_errors;
 
-  vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
-
   Location &CreateEmpty(const string &name = "") {
     auto [it, already_present] = locations.emplace(new Location(here));
     Location *h = it->get();
@@ -116,9 +113,6 @@ struct Machine : LiveObject {
     return empty_path;
   }
 
-  // Add ConnectionWidgets for all arguments defined by the objects.
-  void UpdateConnectionWidgets();
-
   gui::VisitResult
   VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
     animation::State *state = visitor.AnimationState();
@@ -132,14 +126,6 @@ struct Machine : LiveObject {
       }
     }
 
-    UpdateConnectionWidgets();
-
-    for (auto &widget : connection_widgets) {
-      auto result = visitor(*widget, SkMatrix::I(), SkMatrix::I());
-      if (result == gui::VisitResult::kStop) {
-        return result;
-      }
-    }
     return gui::VisitResult::kContinue;
   }
   void Args(std::function<void(Argument &)> cb) override {}

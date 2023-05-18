@@ -19,6 +19,7 @@ struct Button : Widget {
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;
+  float Height() const;
   SkRRect RRect() const;
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) override;

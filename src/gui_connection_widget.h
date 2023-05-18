@@ -2,8 +2,11 @@
 
 #include "gui_button.h"
 #include "gui_constants.h"
-#include "location.h"
 #include "widget.h"
+
+namespace automaton {
+struct Location;
+} // namespace automaton
 
 namespace automaton::gui {
 
@@ -27,8 +30,7 @@ struct ConnectionWidget : Button {
 
   ConnectionWidget(Location *from, std::string_view label);
   Widget *ParentWidget() override;
-  
-  vec2 Position() const override;
+
   void Draw(SkCanvas &, animation::State &) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) override;
 

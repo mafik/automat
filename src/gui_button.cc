@@ -37,13 +37,19 @@ constexpr float kPressOffset = kRadius / 20;
 
 } // namespace
 
+float Button::Height() const {
+  SkRect child_bounds = child->Shape().getBounds();
+  return std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
+}
+
 SkRRect Button::RRect() const {
   vec2 p = Position();
   SkRect child_bounds = child->Shape().getBounds();
   float w = std::max(kMinimalTouchableSize, child_bounds.width() + 2 * kMargin);
-  float h = std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
-  return SkRRect::MakeRectXY(SkRect::MakeXYWH(p.X, p.Y, w, h),
-                             kRadius, kRadius);
+  float h =
+      std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
+  return SkRRect::MakeRectXY(SkRect::MakeXYWH(p.X, p.Y, w, h), kRadius,
+                             kRadius);
 }
 
 void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
@@ -102,9 +108,11 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
     SkPaint fg_paint;
     fg_paint.setColor(fg);
     fg_paint.setAntiAlias(true);
-    canvas.translate(pressed_oval.rect().centerX(), pressed_oval.rect().centerY());
+    canvas.translate(pressed_oval.rect().centerX(),
+                     pressed_oval.rect().centerY());
     child->DrawColored(canvas, animation_state, fg_paint);
-    canvas.translate(-pressed_oval.rect().centerX(), -pressed_oval.rect().centerY());
+    canvas.translate(-pressed_oval.rect().centerX(),
+                     -pressed_oval.rect().centerY());
   };
 
   if (filling >= 0.999) {

@@ -163,7 +163,49 @@ gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
                           my_bounds.top() - run_bounds.fTop + 0.001);
   result =
       visitor(run_button, run_button_transform_down, run_button_transform_up);
+  if (result != gui::VisitResult::kContinue) {
+    return result;
+  }
+
+  UpdateConnectionWidgets();
+
+  vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
+  for (auto &widget : connection_widgets) {
+    pos.Y -= widget->Height();
+    SkMatrix transform_down = SkMatrix::Translate(-pos.X, -pos.Y);
+    SkMatrix transform_up = SkMatrix::Translate(pos.X, pos.Y);
+    auto result = visitor(*widget, transform_down, transform_up);
+    if (result == gui::VisitResult::kStop) {
+      return result;
+    }
+    pos.Y -= kMargin;
+  }
   return result;
+}
+
+void Location::UpdateConnectionWidgets() {
+  if (object) {
+    object->Args([&](Argument &arg) {
+      // Check if this argument already has a widget.
+      bool has_widget = false;
+      for (auto &widget : connection_widgets) {
+        if (widget->from != this) {
+          continue;
+        }
+        if (widget->label != arg.name) {
+          continue;
+        }
+        has_widget = true;
+      }
+      if (has_widget) {
+        return;
+      }
+      // Create a new widget.
+      LOG() << "Creating a ConnectionWidget for argument " << arg.name;
+      connection_widgets.emplace_back(
+          new gui::ConnectionWidget(this, arg.name));
+    });
+  }
 }
 
 vec2 Location::AnimatedPosition(animation::State &animation_state) const {

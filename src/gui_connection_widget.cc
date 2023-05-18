@@ -14,15 +14,12 @@ namespace automaton::gui {
 struct ConnectionLabelWidget : Widget {
   ConnectionWidget *parent;
   std::string label;
-  ConnectionLabelWidget(ConnectionWidget* parent, std::string_view label) : parent(parent), label(label) {
+  ConnectionLabelWidget(ConnectionWidget *parent, std::string_view label)
+      : parent(parent), label(label) {
     this->label = "👆" + this->label + " ";
   }
-  float Width() const {
-    return GetFont().MeasureText(label);
-  }
-  float Height() const {
-    return kLetterSize;
-  }
+  float Width() const { return GetFont().MeasureText(label); }
+  float Height() const { return kLetterSize; }
   SkPath Shape() const override {
     float w = Width();
     float h = Height();
@@ -33,26 +30,23 @@ struct ConnectionLabelWidget : Widget {
     DrawColored(canvas, state, paint);
   }
 
-  void DrawColored(SkCanvas &canvas, animation::State &state, const SkPaint &paint) const override {
+  void DrawColored(SkCanvas &canvas, animation::State &state,
+                   const SkPaint &paint) const override {
     auto &font = GetFont();
-    canvas.translate(-Width()/2, -Height()/2);
+    canvas.translate(-Width() / 2, -Height() / 2);
     font.DrawText(canvas, label, paint);
-    canvas.translate(Width()/2, Height()/2);
+    canvas.translate(Width() / 2, Height() / 2);
   }
 };
 
 ConnectionWidget::ConnectionWidget(Location *from, std::string_view label)
-    : Button(from->ParentWidget(), std::make_unique<ConnectionLabelWidget>(this, label)), from(from), label(label) {}
+    : Button(from->ParentWidget(),
+             std::make_unique<ConnectionLabelWidget>(this, label)),
+      from(from), label(label) {}
 
 Widget *ConnectionWidget::ParentWidget() {
   // This sholud return the Machine which holds the `from` Location.
   return from->ParentWidget();
-}
-
-vec2 ConnectionWidget::Position() const {
-  SkRect from_bounds = from->Shape().getBounds();
-  return Vec2(from->position.X + from_bounds.left(),
-              from->position.Y + from_bounds.top() - kMargin - kMinimalTouchableSize);
 }
 
 void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {

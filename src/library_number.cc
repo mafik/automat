@@ -66,8 +66,40 @@ Number::Number(double x)
                        NumberButton(this, make_unique<Text>("8")),
                        NumberButton(this, make_unique<Text>("9"))},
       dot(this, make_unique<Text>(".")),
-      backspace(this, make_unique<Text>("<")),
-      text_field(this, &text, kWidth - 2 * kMargin - 2 * kBorderWidth) {}
+      backspace(this, make_unique<Text>("<")), text("0"),
+      text_field(this, &text, kWidth - 2 * kMargin - 2 * kBorderWidth) {
+  for (int i = 0; i < 10; ++i) {
+    digits[i].activate = [this, i] {
+      if (text.empty() || text == "0") {
+        text = std::to_string(i);
+      } else {
+        text += std::to_string(i);
+      }
+      value = std::stod(text);
+    };
+  }
+  dot.activate = [this] {
+    if (text.empty()) {
+      text = "0";
+    } else if (auto it = text.find('.'); it != std::string::npos) {
+      text.erase(it, 1);
+    }
+    text += ".";
+    while (text.size() > 1 && text[0] == '0' && text[1] != '.') {
+      text.erase(0, 1);
+    }
+    value = std::stod(text);
+  };
+  backspace.activate = [this] {
+    if (!text.empty()) {
+      text.pop_back();
+    }
+    if (text.empty()) {
+      text = "0";
+    }
+    value = std::stod(text);
+  };
+}
 
 string_view Number::Name() const { return "Number"; }
 
@@ -84,6 +116,7 @@ string Number::GetText() const {
 
 void Number::SetText(Location &error_context, string_view text) {
   value = std::stod(string(text));
+  this->text = text;
 }
 
 static const SkRRect kNumberRRect = [] {

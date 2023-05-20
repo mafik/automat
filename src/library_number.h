@@ -16,7 +16,7 @@ struct Number : Object {
   NumberButton digits[10];
   NumberButton dot;
   NumberButton backspace;
-  std::string text = "";
+  std::string text;
   gui::TextField text_field;
   Number(double x = 0);
   static const Number proto;

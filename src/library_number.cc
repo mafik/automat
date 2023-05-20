@@ -35,24 +35,38 @@ static constexpr float kCornerRadius =
     kMinimalTouchableSize / 2 + kMargin + kBorderWidth;
 
 using gui::AlignCenter;
-using gui::Button;
 using gui::Text;
 using std::make_unique;
 
+NumberButton::NumberButton(Widget *parent, std::unique_ptr<Widget> &&child)
+    : Button(parent, make_unique<AlignCenter>(std::move(child))) {}
+
+void NumberButton::Draw(SkCanvas &canvas,
+                        animation::State &animation_state) const {
+  DrawButton(canvas, animation_state, 0xffc8c4b7);
+}
+
+void NumberButton::Activate() {
+  if (activate) {
+    activate();
+  } else {
+    LOG() << "NumberButton::Activate() called without callback";
+  }
+}
+
 Number::Number(double x)
-    : value(x),
-      digits{Button(this, make_unique<AlignCenter>(make_unique<Text>("0"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("1"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("2"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("3"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("4"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("5"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("6"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("7"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("8"))),
-             Button(this, make_unique<AlignCenter>(make_unique<Text>("9")))},
-      dot(this, make_unique<AlignCenter>(make_unique<Text>("."))),
-      backspace(this, make_unique<AlignCenter>(make_unique<Text>("<"))),
+    : value(x), digits{NumberButton(this, make_unique<Text>("0")),
+                       NumberButton(this, make_unique<Text>("1")),
+                       NumberButton(this, make_unique<Text>("2")),
+                       NumberButton(this, make_unique<Text>("3")),
+                       NumberButton(this, make_unique<Text>("4")),
+                       NumberButton(this, make_unique<Text>("5")),
+                       NumberButton(this, make_unique<Text>("6")),
+                       NumberButton(this, make_unique<Text>("7")),
+                       NumberButton(this, make_unique<Text>("8")),
+                       NumberButton(this, make_unique<Text>("9"))},
+      dot(this, make_unique<Text>(".")),
+      backspace(this, make_unique<Text>("<")),
       text_field(this, &text, kWidth - 2 * kMargin - 2 * kBorderWidth) {}
 
 string_view Number::Name() const { return "Number"; }

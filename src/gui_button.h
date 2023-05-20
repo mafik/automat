@@ -24,6 +24,12 @@ struct Button : ReparentableWidget {
   virtual vec2 Position() const { return Vec2(0, 0); }
   virtual void Activate() {}
   virtual bool Filled() const { return false; }
+
+  void DrawButtonShadow(SkCanvas &canvas, SkColor bg) const;
+  void DrawButtonFace(SkCanvas &canvas, animation::State &animation_state,
+                      SkColor bg, SkColor fg) const;
+  void DrawButton(SkCanvas &canvas, animation::State &animation_state,
+                  SkColor bg) const;
 };
 
 } // namespace automaton::gui

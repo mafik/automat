@@ -4,11 +4,18 @@
 
 namespace automaton::library {
 
+struct NumberButton : gui::Button {
+  std::function<void()> activate;
+  NumberButton(Widget *parent, std::unique_ptr<Widget> &&child);
+  void Draw(SkCanvas &, animation::State &animation_state) const override;
+  void Activate() override;
+};
+
 struct Number : Object {
   double value;
-  gui::Button digits[10];
-  gui::Button dot;
-  gui::Button backspace;
+  NumberButton digits[10];
+  NumberButton dot;
+  NumberButton backspace;
   std::string text = "";
   gui::TextField text_field;
   Number(double x = 0);

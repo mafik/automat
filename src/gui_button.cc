@@ -50,6 +50,68 @@ SkRRect Button::RRect() const {
                              kRadius);
 }
 
+void Button::DrawButtonShadow(SkCanvas &canvas, SkColor bg) const {
+  auto oval = RRect();
+  oval.inset(kBorderWidth / 2, kBorderWidth / 2);
+  oval.offset(0, -kPressOffset);
+  SkPaint shadow_paint;
+  shadow_paint.setColor(color::AdjustLightness(bg, -40));
+  shadow_paint.setMaskFilter(
+      SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
+  canvas.drawRRect(oval, shadow_paint);
+}
+
+void Button::DrawButtonFace(SkCanvas &canvas, animation::State &animation_state,
+                            SkColor bg, SkColor fg) const {
+  auto &press = press_ptr[animation_state];
+  auto &hover = hover_ptr[animation_state];
+  auto &filling = filling_ptr[animation_state];
+
+  auto oval = RRect();
+  oval.inset(kBorderWidth / 2, kBorderWidth / 2);
+  float press_shift_y = press * -kPressOffset;
+  auto pressed_oval = oval.makeOffset(0, press_shift_y);
+  float lightness_adjust = hover * 10;
+
+  SkPaint paint;
+  SkPoint pts[2] = {{0, oval.rect().bottom()}, {0, oval.rect().top()}};
+  SkColor colors[2] = {
+      color::AdjustLightness(bg, lightness_adjust),       // top
+      color::AdjustLightness(bg, lightness_adjust - 10)}; // bottom
+  sk_sp<SkShader> gradient =
+      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  paint.setShader(gradient);
+  canvas.drawRRect(pressed_oval, paint);
+
+  SkPaint border;
+  SkColor border_colors[2] = {
+      color::AdjustLightness(bg, lightness_adjust + 10),
+      color::AdjustLightness(bg, lightness_adjust - 20)};
+  sk_sp<SkShader> border_gradient = SkGradientShader::MakeLinear(
+      pts, border_colors, nullptr, 2, SkTileMode::kClamp);
+  border.setShader(border_gradient);
+  border.setStyle(SkPaint::kStroke_Style);
+  border.setAntiAlias(true);
+  border.setStrokeWidth(kBorderWidth);
+  canvas.drawRRect(pressed_oval, border);
+
+  SkPaint fg_paint;
+  fg_paint.setColor(fg);
+  fg_paint.setAntiAlias(true);
+  canvas.translate(pressed_oval.rect().centerX(),
+                   pressed_oval.rect().centerY());
+  child->DrawColored(canvas, animation_state, fg_paint);
+  canvas.translate(-pressed_oval.rect().centerX(),
+                   -pressed_oval.rect().centerY());
+}
+
+void Button::DrawButton(SkCanvas &canvas, animation::State &animation_state,
+                        SkColor bg) const {
+  DrawButtonShadow(canvas, bg);
+  DrawButtonFace(canvas, animation_state, bg, 0xff000000);
+}
+
+// TODO: move the filling animation into a separate subclass
 void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   auto &press = press_ptr[animation_state];
   auto &hover = hover_ptr[animation_state];
@@ -71,56 +133,14 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   pressed_oval.outset(kBorderWidth / 2 + kShadowSigma * 0,
                       kBorderWidth / 2 + kShadowSigma * 0, &pressed_outer_oval);
 
-  auto DrawShadow = [&](SkColor color) {
-    // Shadow
-    SkPaint shadow_paint;
-    shadow_paint.setColor(color::AdjustLightness(color, -40));
-    shadow_paint.setMaskFilter(
-        SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
-    canvas.drawRRect(oval.makeOffset(0, -kPressOffset), shadow_paint);
-  };
-
-  auto DrawBase = [&](SkColor bg, SkColor fg) {
-    SkPaint paint;
-    SkPoint pts[2] = {{0, oval.rect().bottom()}, {0, oval.rect().top()}};
-    SkColor colors[2] = {
-        color::AdjustLightness(bg, lightness_adjust),       // top
-        color::AdjustLightness(bg, lightness_adjust - 10)}; // bottom
-    sk_sp<SkShader> gradient = SkGradientShader::MakeLinear(
-        pts, colors, nullptr, 2, SkTileMode::kClamp);
-    paint.setShader(gradient);
-    canvas.drawRRect(pressed_oval, paint);
-
-    SkPaint border;
-    SkColor border_colors[2] = {
-        color::AdjustLightness(bg, lightness_adjust + 10),
-        color::AdjustLightness(bg, lightness_adjust - 20)};
-    sk_sp<SkShader> border_gradient = SkGradientShader::MakeLinear(
-        pts, border_colors, nullptr, 2, SkTileMode::kClamp);
-    border.setShader(border_gradient);
-    border.setStyle(SkPaint::kStroke_Style);
-    border.setAntiAlias(true);
-    border.setStrokeWidth(kBorderWidth);
-    canvas.drawRRect(pressed_oval, border);
-
-    SkPaint fg_paint;
-    fg_paint.setColor(fg);
-    fg_paint.setAntiAlias(true);
-    canvas.translate(pressed_oval.rect().centerX(),
-                     pressed_oval.rect().centerY());
-    child->DrawColored(canvas, animation_state, fg_paint);
-    canvas.translate(-pressed_oval.rect().centerX(),
-                     -pressed_oval.rect().centerY());
-  };
-
   if (filling >= 0.999) {
-    DrawShadow(color);
-    DrawBase(color, white);
+    DrawButtonShadow(canvas, color);
+    DrawButtonFace(canvas, animation_state, color, white);
   } else if (filling <= 0.001) {
-    DrawShadow(white);
-    DrawBase(white, color);
+    DrawButtonShadow(canvas, white);
+    DrawButtonFace(canvas, animation_state, white, color);
   } else {
-    DrawShadow(color::MixColors(white, color, filling));
+    DrawButtonShadow(canvas, color::MixColors(white, color, filling));
     float baseline = pressed_outer_oval.rect().fTop * (1 - filling) +
                      pressed_outer_oval.rect().fBottom * filling;
     constexpr int n_points = 6;
@@ -154,11 +174,11 @@ void Button::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kDifference, true);
-    DrawBase(white, color);
+    DrawButtonFace(canvas, animation_state, white, color);
     canvas.restore();
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kIntersect, true);
-    DrawBase(color, white);
+    DrawButtonFace(canvas, animation_state, color, white);
     canvas.restore();
   }
 }

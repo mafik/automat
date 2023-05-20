@@ -96,7 +96,7 @@ void TextField::Draw(SkCanvas &canvas,
 
 SkPath TextField::Shape() const {
   SkRect bounds = SkRect::MakeXYWH(0, 0, width, kTextFieldHeight);
-  return SkPath::RRect(bounds, kTextMargin, kTextMargin);
+  return SkPath::RRect(bounds, kTextCornerRadius, kTextCornerRadius);
 }
 
 void UpdateCaret(TextField &text_field, Caret &caret) {

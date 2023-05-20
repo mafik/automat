@@ -1,12 +1,15 @@
 #pragma once
 
 #include "animation.h"
+#include "gui_constants.h"
 #include "widget.h"
+
 
 namespace automaton::gui {
 
 constexpr float kTextMargin = 0.001;
-constexpr float kTextFieldHeight = 0.008; // 8mm
+constexpr float kTextCornerRadius = kTextMargin;
+constexpr float kTextFieldHeight = kMinimalTouchableSize;
 constexpr float kTextFieldMinWidth = kTextFieldHeight;
 
 struct CaretPosition {

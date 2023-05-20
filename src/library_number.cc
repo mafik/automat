@@ -7,13 +7,45 @@
 
 #include "color.h"
 #include "font.h"
+#include "gui_text.h"
 #include "library_macros.h"
 
 namespace automaton::library {
 
 DEFINE_PROTO(Number);
 
-Number::Number(double x) : value(x) {}
+static constexpr float kTextHeight = std::max(
+    gui::kLetterSize + 2 * kMargin + 2 * kBorderWidth, kMinimalTouchableSize);
+static constexpr float kButtonHeight = kMinimalTouchableSize;
+static constexpr float kButtonRows = 4;
+static constexpr float kRows = kButtonRows + 1;
+static constexpr float kHeight = 2 * kBorderWidth + kTextHeight +
+                                 kButtonRows * kButtonHeight +
+                                 (kRows + 1) * kMargin;
+
+static constexpr float kButtonWidth = kMinimalTouchableSize;
+static constexpr float kButtonColumns = 3;
+static constexpr float kWidth = 2 * kBorderWidth +
+                                kButtonColumns * kButtonWidth +
+                                (kButtonColumns + 1) * kMargin;
+
+static constexpr float kCornerRadius =
+    kMinimalTouchableSize / 2 + kMargin + kBorderWidth;
+
+Number::Number(double x)
+    : value(x), digits{gui::Button(this, std::make_unique<gui::Text>("0")),
+                       gui::Button(this, std::make_unique<gui::Text>("1")),
+                       gui::Button(this, std::make_unique<gui::Text>("2")),
+                       gui::Button(this, std::make_unique<gui::Text>("3")),
+                       gui::Button(this, std::make_unique<gui::Text>("4")),
+                       gui::Button(this, std::make_unique<gui::Text>("5")),
+                       gui::Button(this, std::make_unique<gui::Text>("6")),
+                       gui::Button(this, std::make_unique<gui::Text>("7")),
+                       gui::Button(this, std::make_unique<gui::Text>("8")),
+                       gui::Button(this, std::make_unique<gui::Text>("9"))},
+      dot(this, std::make_unique<gui::Text>(".")),
+      backspace(this, std::make_unique<gui::Text>("<")),
+      text_field(this, &text, kWidth - 2 * kMargin - 2 * kBorderWidth) {}
 
 string_view Number::Name() const { return "Number"; }
 
@@ -36,50 +68,60 @@ void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   SkPath path = Shape();
 
   SkPaint paint;
-  SkPoint pts[2] = {{0, 0}, {0, 0.01}};
+  SkPoint pts[2] = {{0, 0}, {0, kHeight}};
   SkColor colors[2] = {0xff0f5f4d, 0xff468257};
   sk_sp<SkShader> gradient =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
   paint.setShader(gradient);
   canvas.drawPath(path, paint);
 
-  SkPaint border_paint;
-  border_paint.setStroke(true);
-  border_paint.setStrokeWidth(0.00025);
-
-  SkRRect rrect;
-  if (path.isRRect(&rrect)) {
-    float inset = border_paint.getStrokeWidth() / 2;
-    rrect.inset(inset, inset);
-    path = SkPath::RRect(rrect);
-  }
-
-  SkColor border_colors[2] = {0xff1c5d3e, 0xff76a87a};
-  sk_sp<SkShader> border_gradient = SkGradientShader::MakeLinear(
-      pts, border_colors, nullptr, 2, SkTileMode::kClamp);
-  border_paint.setShader(border_gradient);
-
-  canvas.drawPath(path, border_paint);
-
-  SkPaint text_paint;
-  text_paint.setColor(SK_ColorWHITE);
-
-  SkRect path_bounds = path.getBounds();
-
-  string text = GetText();
-
-  canvas.save();
-  canvas.translate(path_bounds.width() / 2 -
-                       gui::GetFont().MeasureText(text) / 2,
-                   path_bounds.height() / 2 - gui::kLetterSizeMM / 2 / 1000);
-  gui::GetFont().DrawText(canvas, text, text_paint);
-  canvas.restore();
+  DrawChildren(canvas, animation_state);
 }
 
 SkPath Number::Shape() const {
-  static SkPath path = SkPath::RRect(
-      SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, 0.008, 0.008), 0.001, 0.001));
+  SkRRect rrect;
+  constexpr float kUpperRadius =
+      gui::kTextCornerRadius + kMargin + kBorderWidth;
+  SkVector radii[4] = {{kCornerRadius, kCornerRadius},
+                       {kCornerRadius, kCornerRadius},
+                       {kUpperRadius, kUpperRadius},
+                       {kUpperRadius, kUpperRadius}};
+  rrect.setRectRadii(SkRect::MakeXYWH(0, 0, kWidth, kHeight), radii);
+  static SkPath path = SkPath::RRect(rrect);
   return path;
+}
+
+gui::VisitResult Number::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
+  auto visit = [&](Widget &w, int row, int col) {
+    float x = kBorderWidth + kMargin + col * (kButtonWidth + kMargin);
+    float y = kBorderWidth + kMargin + row * (kButtonHeight + kMargin);
+    SkMatrix down = SkMatrix::Translate(-x, -y);
+    SkMatrix up = SkMatrix::Translate(x, y);
+    auto result = visitor(w, down, up);
+    if (result != gui::VisitResult::kContinue)
+      return result;
+    return result;
+  };
+  if (auto result = visit(digits[0], 0, 0);
+      result != gui::VisitResult::kContinue)
+    return result;
+  if (auto result = visit(dot, 0, 1); result != gui::VisitResult::kContinue)
+    return result;
+  if (auto result = visit(backspace, 0, 2);
+      result != gui::VisitResult::kContinue)
+    return result;
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      int digit = 3 * row + col + 1;
+      if (auto result = visit(digits[digit], row + 1, col);
+          result != gui::VisitResult::kContinue)
+        return result;
+    }
+  }
+  if (auto result = visit(text_field, 4, 0);
+      result != gui::VisitResult::kContinue)
+    return result;
+  return gui::VisitResult::kContinue;
 }
 
 } // namespace automaton::library

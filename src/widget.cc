@@ -215,4 +215,8 @@ void Widget::DrawChildren(SkCanvas &canvas,
   const_cast<Widget *>(this)->VisitImmediateChildren(visitor);
 }
 
+ReparentableWidget::ReparentableWidget(Widget *parent) : parent(parent) {}
+
+Widget *ReparentableWidget::ParentWidget() const { return parent; }
+
 } // namespace automaton::gui

@@ -77,4 +77,10 @@ struct Widget {
   void DrawChildren(SkCanvas &, animation::State &) const;
 };
 
+struct ReparentableWidget : Widget {
+  Widget *parent;
+  ReparentableWidget(Widget *parent = nullptr);
+  Widget *ParentWidget() const override;
+};
+
 } // namespace automaton::gui

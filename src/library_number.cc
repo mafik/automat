@@ -64,21 +64,7 @@ void Number::SetText(Location &error_context, string_view text) {
   value = std::stod(string(text));
 }
 
-void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
-  SkPath path = Shape();
-
-  SkPaint paint;
-  SkPoint pts[2] = {{0, 0}, {0, kHeight}};
-  SkColor colors[2] = {0xff483e37, 0xff6c5d53};
-  sk_sp<SkShader> gradient =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
-  paint.setShader(gradient);
-  canvas.drawPath(path, paint);
-
-  DrawChildren(canvas, animation_state);
-}
-
-SkPath Number::Shape() const {
+static const SkRRect kNumberRRect = [] {
   SkRRect rrect;
   constexpr float kUpperRadius =
       gui::kTextCornerRadius + kMargin + kBorderWidth;
@@ -87,9 +73,47 @@ SkPath Number::Shape() const {
                        {kUpperRadius, kUpperRadius},
                        {kUpperRadius, kUpperRadius}};
   rrect.setRectRadii(SkRect::MakeXYWH(0, 0, kWidth, kHeight), radii);
-  static SkPath path = SkPath::RRect(rrect);
-  return path;
+  return rrect;
+}();
+
+static const SkRRect kNumberRRectInner = [] {
+  SkRRect rrect;
+  kNumberRRect.inset(kBorderWidth / 2, kBorderWidth / 2, &rrect);
+  return rrect;
+}();
+
+static const SkPath kNumberShape = SkPath::RRect(kNumberRRect);
+
+static const SkPaint kNumberBackgroundPaint = []() {
+  SkPaint paint;
+  SkPoint pts[2] = {{0, 0}, {0, kHeight}};
+  SkColor colors[2] = {0xff483e37, 0xff6c5d53};
+  sk_sp<SkShader> gradient =
+      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  paint.setShader(gradient);
+  return paint;
+}();
+
+static const SkPaint kNumberBorderPaint = []() {
+  SkPaint paint_border;
+  SkPoint pts[2] = {{0, 0}, {0, kHeight}};
+  SkColor colors_border[2] = {0xff241f1c, 0xffac9d93};
+  sk_sp<SkShader> gradient_border = SkGradientShader::MakeLinear(
+      pts, colors_border, nullptr, 2, SkTileMode::kClamp);
+  paint_border.setShader(gradient_border);
+  paint_border.setAntiAlias(true);
+  paint_border.setStyle(SkPaint::kStroke_Style);
+  paint_border.setStrokeWidth(kBorderWidth);
+  return paint_border;
+}();
+
+void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
+  canvas.drawRRect(kNumberRRectInner, kNumberBackgroundPaint);
+  canvas.drawRRect(kNumberRRectInner, kNumberBorderPaint);
+  DrawChildren(canvas, animation_state);
 }
+
+SkPath Number::Shape() const { return kNumberShape; }
 
 gui::VisitResult Number::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   auto visit = [&](Widget &w, int row, int col) {

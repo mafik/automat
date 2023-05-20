@@ -4,9 +4,11 @@
 
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
+#include <memory>
 
 #include "color.h"
 #include "font.h"
+#include "gui_align.h"
 #include "gui_text.h"
 #include "library_macros.h"
 
@@ -32,19 +34,25 @@ static constexpr float kWidth = 2 * kBorderWidth +
 static constexpr float kCornerRadius =
     kMinimalTouchableSize / 2 + kMargin + kBorderWidth;
 
+using gui::AlignCenter;
+using gui::Button;
+using gui::Text;
+using std::make_unique;
+
 Number::Number(double x)
-    : value(x), digits{gui::Button(this, std::make_unique<gui::Text>("0")),
-                       gui::Button(this, std::make_unique<gui::Text>("1")),
-                       gui::Button(this, std::make_unique<gui::Text>("2")),
-                       gui::Button(this, std::make_unique<gui::Text>("3")),
-                       gui::Button(this, std::make_unique<gui::Text>("4")),
-                       gui::Button(this, std::make_unique<gui::Text>("5")),
-                       gui::Button(this, std::make_unique<gui::Text>("6")),
-                       gui::Button(this, std::make_unique<gui::Text>("7")),
-                       gui::Button(this, std::make_unique<gui::Text>("8")),
-                       gui::Button(this, std::make_unique<gui::Text>("9"))},
-      dot(this, std::make_unique<gui::Text>(".")),
-      backspace(this, std::make_unique<gui::Text>("<")),
+    : value(x),
+      digits{Button(this, make_unique<AlignCenter>(make_unique<Text>("0"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("1"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("2"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("3"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("4"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("5"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("6"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("7"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("8"))),
+             Button(this, make_unique<AlignCenter>(make_unique<Text>("9")))},
+      dot(this, make_unique<AlignCenter>(make_unique<Text>("."))),
+      backspace(this, make_unique<AlignCenter>(make_unique<Text>("<"))),
       text_field(this, &text, kWidth - 2 * kMargin - 2 * kBorderWidth) {}
 
 string_view Number::Name() const { return "Number"; }

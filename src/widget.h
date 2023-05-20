@@ -81,6 +81,7 @@ struct ReparentableWidget : Widget {
   Widget *parent;
   ReparentableWidget(Widget *parent = nullptr);
   Widget *ParentWidget() const override;
+  static void TryReparent(Widget *child, Widget *parent);
 };
 
 } // namespace automaton::gui

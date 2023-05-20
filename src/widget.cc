@@ -219,4 +219,10 @@ ReparentableWidget::ReparentableWidget(Widget *parent) : parent(parent) {}
 
 Widget *ReparentableWidget::ParentWidget() const { return parent; }
 
+void ReparentableWidget::TryReparent(Widget *child, Widget *parent) {
+  if (auto reparentable_child = dynamic_cast<ReparentableWidget *>(child)) {
+    reparentable_child->parent = parent;
+  }
+}
+
 } // namespace automaton::gui

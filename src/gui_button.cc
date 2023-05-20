@@ -15,8 +15,6 @@
 
 namespace automaton::gui {
 
-Widget *Button::ParentWidget() const { return parent_widget; }
-
 void Button::PointerOver(Pointer &pointer, animation::State &animation_state) {
   auto &hover = hover_ptr[animation_state];
   hover.target = 1;
@@ -201,7 +199,9 @@ std::unique_ptr<Action> Button::ButtonDownAction(Pointer &pointer,
   return nullptr;
 }
 
-Button::Button(Widget *parent_widget, std::unique_ptr<Widget> &&child)
-    : parent_widget(parent_widget), child(std::move(child)) {}
+Button::Button(Widget *parent, std::unique_ptr<Widget> &&child)
+    : ReparentableWidget(parent), child(std::move(child)) {
+  ReparentableWidget::TryReparent(this->child.get(), this);
+}
 
 } // namespace automaton::gui

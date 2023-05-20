@@ -6,16 +6,14 @@
 
 namespace automaton::gui {
 
-struct Button : Widget {
-  Widget *parent_widget;
+struct Button : ReparentableWidget {
   std::unique_ptr<Widget> child;
   mutable product_ptr<float> press_ptr;
   mutable product_ptr<animation::Approach> hover_ptr;
   mutable product_ptr<animation::Approach> filling_ptr;
   int press_action_count = 0;
 
-  Button(Widget *parent_widget, std::unique_ptr<Widget> &&child);
-  Widget *ParentWidget() const override;
+  Button(Widget *parent, std::unique_ptr<Widget> &&child);
   void PointerOver(Pointer &, animation::State &) override;
   void PointerLeave(Pointer &, animation::State &) override;
   void Draw(SkCanvas &, animation::State &animation_state) const override;

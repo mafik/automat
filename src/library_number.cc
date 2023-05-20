@@ -16,23 +16,36 @@ namespace automaton::library {
 
 DEFINE_PROTO(Number);
 
-static constexpr float kTextHeight = std::max(
-    gui::kLetterSize + 2 * kMargin + 2 * kBorderWidth, kMinimalTouchableSize);
+// TODO: Number can be dragged by the background
+// TODO: better icon for the backspace button
+// TODO: LCD color for the text field
+// TODO: Fix cursor location
+// TODO: Adjust number text to right
+// TODO: Remove underline from text display
+// TODO: Buttons get highlighted immediately on mouse over
+// TODO: When precision touchpad is pressed down, initial touch point is
+// "forgotten" for the purpose of dragging
+// TODO: "Iconified" drawing of widgets
+
+static constexpr float kNumberMargin = kMargin;
+static constexpr float kTextHeight =
+    std::max(gui::kLetterSize + 2 * kNumberMargin + 2 * kBorderWidth,
+             kMinimalTouchableSize);
 static constexpr float kButtonHeight = kMinimalTouchableSize;
 static constexpr float kButtonRows = 4;
 static constexpr float kRows = kButtonRows + 1;
 static constexpr float kHeight = 2 * kBorderWidth + kTextHeight +
                                  kButtonRows * kButtonHeight +
-                                 (kRows + 1) * kMargin;
+                                 (kRows + 1) * kNumberMargin;
 
 static constexpr float kButtonWidth = kMinimalTouchableSize;
 static constexpr float kButtonColumns = 3;
 static constexpr float kWidth = 2 * kBorderWidth +
                                 kButtonColumns * kButtonWidth +
-                                (kButtonColumns + 1) * kMargin;
+                                (kButtonColumns + 1) * kNumberMargin;
 
 static constexpr float kCornerRadius =
-    kMinimalTouchableSize / 2 + kMargin + kBorderWidth;
+    kMinimalTouchableSize / 2 + kNumberMargin + kBorderWidth;
 
 using gui::AlignCenter;
 using gui::Text;
@@ -67,7 +80,7 @@ Number::Number(double x)
                        NumberButton(this, make_unique<Text>("9"))},
       dot(this, make_unique<Text>(".")),
       backspace(this, make_unique<Text>("<")), text("0"),
-      text_field(this, &text, kWidth - 2 * kMargin - 2 * kBorderWidth) {
+      text_field(this, &text, kWidth - 2 * kNumberMargin - 2 * kBorderWidth) {
   for (int i = 0; i < 10; ++i) {
     digits[i].activate = [this, i] {
       if (text.empty() || text == "0") {
@@ -122,7 +135,7 @@ void Number::SetText(Location &error_context, string_view text) {
 static const SkRRect kNumberRRect = [] {
   SkRRect rrect;
   constexpr float kUpperRadius =
-      gui::kTextCornerRadius + kMargin + kBorderWidth;
+      gui::kTextCornerRadius + kNumberMargin + kBorderWidth;
   SkVector radii[4] = {{kCornerRadius, kCornerRadius},
                        {kCornerRadius, kCornerRadius},
                        {kUpperRadius, kUpperRadius},
@@ -172,8 +185,10 @@ SkPath Number::Shape() const { return kNumberShape; }
 
 gui::VisitResult Number::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
   auto visit = [&](Widget &w, int row, int col) {
-    float x = kBorderWidth + kMargin + col * (kButtonWidth + kMargin);
-    float y = kBorderWidth + kMargin + row * (kButtonHeight + kMargin);
+    float x =
+        kBorderWidth + kNumberMargin + col * (kButtonWidth + kNumberMargin);
+    float y =
+        kBorderWidth + kNumberMargin + row * (kButtonHeight + kNumberMargin);
     SkMatrix down = SkMatrix::Translate(-x, -y);
     SkMatrix up = SkMatrix::Translate(x, y);
     auto result = visitor(w, down, up);

@@ -1046,6 +1046,11 @@ struct ProgressBar : library::Number {
     bar->value = value;
     return bar;
   }
+  void Draw(SkCanvas &canvas,
+            animation::State &animation_state) const override {
+    Object::Draw(canvas, animation_state);
+  }
+  SkPath Shape() const override { return Object::Shape(); }
 };
 
 struct ListView : Pointer {

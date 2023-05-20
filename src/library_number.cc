@@ -69,7 +69,7 @@ void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, kHeight}};
-  SkColor colors[2] = {0xff0f5f4d, 0xff468257};
+  SkColor colors[2] = {0xff483e37, 0xff6c5d53};
   sk_sp<SkShader> gradient =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
   paint.setShader(gradient);

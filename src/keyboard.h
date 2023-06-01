@@ -8,7 +8,7 @@
 #include "animation.h"
 #include "math.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct CaretImpl;
 struct CaretOwner;
@@ -165,4 +165,4 @@ private:
   friend Window;
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

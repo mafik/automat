@@ -9,7 +9,7 @@
 #include "format.h"
 #include "gui_constants.h"
 
-namespace automaton {
+namespace automat {
 
 constexpr float kFrameCornerRadius = 0.001;
 
@@ -322,4 +322,4 @@ void Location::ReportMissing(std::string_view property) {
   ReportError(error_message);
 }
 
-} // namespace automaton
+} // namespace automat

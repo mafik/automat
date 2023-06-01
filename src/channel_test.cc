@@ -5,7 +5,7 @@
 
 #include "channel.h"
 
-using namespace automaton;
+using namespace automat;
 
 TEST(ChannelTest, SendForce) {
   channel c;
@@ -16,9 +16,7 @@ TEST(ChannelTest, SendForce) {
 TEST(ChannelTest, ManySenders) {
   channel c;
   for (int i = 0; i < 100; ++i) {
-    std::thread([&c, i] {
-      c.send(std::make_unique<int>(i));
-    }).detach();
+    std::thread([&c, i] { c.send(std::make_unique<int>(i)); }).detach();
   }
   std::vector<int> received;
   while (received.size() < 100) {

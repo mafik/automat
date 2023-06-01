@@ -6,7 +6,7 @@
 
 #include "location.h"
 
-namespace automaton {
+namespace automat {
 
 struct Argument {
   enum Precondition {
@@ -215,4 +215,4 @@ struct LiveArgument : Argument {
   }
 };
 
-} // namespace automaton
+} // namespace automat

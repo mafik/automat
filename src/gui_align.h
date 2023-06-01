@@ -2,7 +2,7 @@
 
 #include "widget.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct AlignCenter : ReparentableWidget {
   std::unique_ptr<Widget> child;
@@ -15,4 +15,4 @@ struct AlignCenter : ReparentableWidget {
 
 std::unique_ptr<Widget> MakeAlignCenter(std::unique_ptr<Widget> &&child);
 
-} // namespace automaton::gui
+} // namespace automat::gui

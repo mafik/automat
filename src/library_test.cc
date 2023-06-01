@@ -1,9 +1,9 @@
-#include <gtest/gtest.h>
-#include "test_base.h"
 #include "base.h"
 #include "library.h"
+#include "test_base.h"
+#include <gtest/gtest.h>
 
-using namespace automaton;
+using namespace automat;
 
 struct StartsWithTestTest : TestBase {
   Location &starts = machine.Create<Text>("starts");

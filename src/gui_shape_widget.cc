@@ -2,7 +2,7 @@
 
 #include "svg.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 ShapeWidget::ShapeWidget(SkPath path, SkPaint paint)
     : path(path), paint(paint) {}
@@ -28,4 +28,4 @@ std::unique_ptr<Widget> MakeShapeWidget(const char *svg_path,
   return std::make_unique<ShapeWidget>(path, paint);
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

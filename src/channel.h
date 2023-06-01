@@ -5,7 +5,7 @@
 #include <memory>
 #include <cassert>
 
-namespace automaton {
+namespace automat {
 
 // A channel allows one thread to send a value (by pointer) to another thread.
 //
@@ -72,4 +72,4 @@ struct channel {
   }
 };
 
-} // namespace automaton
+} // namespace automat

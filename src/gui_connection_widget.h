@@ -4,11 +4,11 @@
 #include "gui_constants.h"
 #include "widget.h"
 
-namespace automaton {
+namespace automat {
 struct Location;
-} // namespace automaton
+} // namespace automat
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct ConnectionWidget;
 
@@ -35,4 +35,4 @@ struct ConnectionWidget : Button {
   std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) override;
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

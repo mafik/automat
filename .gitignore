@@ -5,5 +5,5 @@ compile_commands.json
 *.pdb
 *.exe
 *.lib
-automaton
+automat
 .gdb_history

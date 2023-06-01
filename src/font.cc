@@ -14,7 +14,7 @@
 #pragma comment(lib, "Advapi32")
 #endif
 
-namespace automaton::gui {
+namespace automat::gui {
 
 std::unique_ptr<Font> Font::Make(float letter_size_mm) {
   constexpr float kMilimetersPerInch = 25.4;
@@ -174,7 +174,8 @@ int Font::IndexFromPosition(std::string_view text, float x) {
   return run_handler.IndexFromPosition(x);
 }
 
-void Font::DrawText(SkCanvas &canvas, std::string_view text, const SkPaint &paint) {
+void Font::DrawText(SkCanvas &canvas, std::string_view text,
+                    const SkPaint &paint) {
   canvas.scale(font_scale, -font_scale);
   SkShaper &shaper = GetShaper();
   LineRunHandler run_handler(text);
@@ -195,4 +196,4 @@ Font &GetFont() {
   return *font;
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

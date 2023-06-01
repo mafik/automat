@@ -5,7 +5,7 @@
 
 #include "math.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct Keyboard;
 struct PointerImpl;
@@ -47,4 +47,4 @@ private:
   friend struct Window;
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

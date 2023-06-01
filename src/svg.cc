@@ -4,7 +4,7 @@
 
 #include "log.h"
 
-namespace automaton {
+namespace automat {
 
 SkPath PathFromSVG(const char svg[]) {
   SkPath path;
@@ -17,4 +17,4 @@ SkPath PathFromSVG(const char svg[]) {
   return path;
 }
 
-} // namespace automaton
+} // namespace automat

@@ -4,8 +4,8 @@
 
 #include "log.h"
 
-namespace automaton {
+namespace automat {
 
 const Logger &operator<<(const Logger &, SkMatrix &);
 
-} // namespace automaton
+} // namespace automat

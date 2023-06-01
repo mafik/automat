@@ -9,7 +9,7 @@
 #include <include/effects/SkRuntimeEffect.h>
 #include <src/core/SkRuntimeEffectPriv.h>
 
-namespace automaton {
+namespace automat {
 
 HypnoRect anim;
 
@@ -95,7 +95,8 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
 
   unfold += (1 - unfold) * (1 - exp(-dt.count() * 2));
 
-  float outer_rect_side = rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
+  float outer_rect_side =
+      rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
   float window_diag =
       sqrt(window_width * window_width + window_height * window_height);
   if (outer_rect_side > window_diag) {
@@ -114,7 +115,6 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
     canvas.drawRect(rect, paint);
   }
 
-
   for (int i = 0; i < 25; ++i) {
     canvas.save();
     float twist_scale = Twist(canvas, i);
@@ -127,7 +127,7 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
       break;
     }
   }
-  
+
   if (state == kPostLoading && base_twist > 25) {
     state = kDone;
   }
@@ -140,4 +140,4 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
 
 void HypnoRect::PostPaint(SkCanvas &canvas) { canvas.restore(); }
 
-} // namespace automaton
+} // namespace automat

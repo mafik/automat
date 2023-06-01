@@ -8,7 +8,7 @@
 
 #include "math.h"
 
-namespace automaton::touchpad {
+namespace automat::touchpad {
 
 struct Touch {
   uint32_t id;
@@ -58,4 +58,4 @@ void Init();
 std::optional<int64_t> ProcessEvent(uint32_t msg, uint64_t wParam, int64_t lParam);
 #endif // _WIN32
 
-} // namespace automaton::touchpad
+} // namespace automat::touchpad

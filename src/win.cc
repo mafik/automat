@@ -2,7 +2,7 @@
 
 #include "win_main.h"
 
-namespace automaton {
+namespace automat {
 
 HINSTANCE GetInstance() {
   static HINSTANCE instance = GetModuleHandle(nullptr);
@@ -29,10 +29,10 @@ WNDCLASSEX &GetWindowClass() {
   return wcex;
 }
 
-HWND CreateAutomatonWindow() {
+HWND CreateAutomatWindow() {
   return CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowClass, kWindowTitle,
                         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800,
                         600, nullptr, nullptr, GetInstance(), nullptr);
 }
 
-} // namespace automaton
+} // namespace automat

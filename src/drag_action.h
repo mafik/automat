@@ -4,7 +4,7 @@
 
 #include "action.h"
 
-namespace automaton {
+namespace automat {
 
 struct Object;
 struct Location;
@@ -52,4 +52,4 @@ struct DragLocationAction : DragActionBase {
   void DragDraw(SkCanvas &canvas, animation::State &animation_state) override;
 };
 
-} // namespace automaton
+} // namespace automat

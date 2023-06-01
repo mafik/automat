@@ -36,9 +36,9 @@
       }
     },
     {
-      "label": "link automaton",
+      "label": "link automat",
       "type": "shell",
-      "command": "./run.py 'link automaton' --debug",
+      "command": "./run.py 'link automat' --debug",
       "presentation": {
         "reveal": "silent"
       }
@@ -50,7 +50,7 @@
         "link complex_test",
         "link library_test",
         "link list_test",
-        "link automaton"
+        "link automat"
       ],
       "problemMatcher": [
         "$gcc"

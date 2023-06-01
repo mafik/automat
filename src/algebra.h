@@ -11,7 +11,7 @@
 #include "log.h"
 #include "tree_algorithms.h"
 
-using namespace automaton;
+using namespace automat;
 
 namespace algebra {
 

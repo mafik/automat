@@ -3,7 +3,7 @@
 #include "base.h"
 #include "object.h"
 
-namespace automaton {
+namespace automat {
 
 struct Alert : Object {
   static const Alert proto;
@@ -17,4 +17,4 @@ struct Alert : Object {
   void Run(Location &here) override;
 };
 
-} // namespace automaton
+} // namespace automat

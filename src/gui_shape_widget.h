@@ -5,7 +5,7 @@
 
 #include "widget.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct ShapeWidget : Widget {
   SkPath path;
@@ -21,4 +21,4 @@ struct ShapeWidget : Widget {
 std::unique_ptr<Widget> MakeShapeWidget(const char *svg_path,
                                         SkColor fill_color);
 
-} // namespace automaton::gui
+} // namespace automat::gui

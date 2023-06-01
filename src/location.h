@@ -13,7 +13,7 @@
 #include "text_field.h"
 #include "widget.h"
 
-namespace automaton {
+namespace automat {
 
 struct DragLocationAction;
 
@@ -262,4 +262,4 @@ struct Location : gui::Widget {
   std::string LoggableString() const;
 };
 
-} // namespace automaton
+} // namespace automat

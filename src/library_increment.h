@@ -2,7 +2,7 @@
 
 #include "base.h"
 
-namespace automaton::library {
+namespace automat::library {
 
 struct Increment : Object {
   static const Increment proto;
@@ -15,4 +15,4 @@ struct Increment : Object {
   SkPath Shape() const override;
 };
 
-} // namespace automaton::library
+} // namespace automat::library

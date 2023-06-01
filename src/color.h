@@ -2,7 +2,7 @@
 
 #include <include/core/SkColor.h>
 
-namespace automaton::color {
+namespace automat::color {
 
 // Nice article about color spaces: https://ciechanow.ski/color-spaces/
 
@@ -14,4 +14,4 @@ SkColor AdjustLightness(SkColor color, float adjust_percent);
 
 SkColor MixColors(SkColor zero, SkColor one, float ratio);
 
-} // namespace automaton::color
+} // namespace automat::color

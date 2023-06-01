@@ -7,7 +7,7 @@
 #include <chrono>
 #include <functional>
 
-namespace automaton {
+namespace automat {
 
 struct LoadingAnimation {
   using duration = std::chrono::duration<double>;
@@ -76,4 +76,4 @@ struct HypnoRect : public LoadingAnimation {
 
 extern HypnoRect anim;
 
-} // namespace automaton
+} // namespace automat

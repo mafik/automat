@@ -27,7 +27,7 @@
 
 // See http://who-t.blogspot.com/search/label/xi2 for XInput2 documentation.
 
-using namespace automaton;
+using namespace automat;
 
 xcb_connection_t *connection;
 xcb_window_t xcb_window;

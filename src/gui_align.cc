@@ -2,7 +2,7 @@
 
 #include <include/core/SkMatrix.h>
 
-namespace automaton::gui {
+namespace automat::gui {
 
 AlignCenter::AlignCenter(std::unique_ptr<Widget> &&child)
     : child(std::move(child)) {
@@ -26,4 +26,4 @@ VisitResult AlignCenter::VisitImmediateChildren(WidgetVisitor &visitor) {
   return VisitResult::kContinue;
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

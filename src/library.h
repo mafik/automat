@@ -24,7 +24,7 @@
 #include "log.h"
 #include "treemath.h"
 
-namespace automaton {
+namespace automat {
 
 struct Integer : Object {
   int32_t i;
@@ -1270,4 +1270,4 @@ struct BlackboardUpdater : LiveObject {
 
 #undef DEFINE_PROTO
 
-} // namespace automaton
+} // namespace automat

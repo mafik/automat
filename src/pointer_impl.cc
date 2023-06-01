@@ -4,7 +4,7 @@
 #include "root.h"
 #include "window_impl.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 PointerImpl::PointerImpl(WindowImpl &window, Pointer &facade, vec2 position)
     : window(window), facade(facade), pointer_position(position),
@@ -99,7 +99,7 @@ void PointerImpl::Wheel(float delta) {
 void PointerImpl::ButtonDown(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount)
     return;
-  RunOnAutomatonThread([=]() {
+  RunOnAutomatThread([=]() {
     button_down_position[btn] = pointer_position;
     button_down_time[btn] = time::now();
 
@@ -114,7 +114,7 @@ void PointerImpl::ButtonDown(PointerButton btn) {
 void PointerImpl::ButtonUp(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount)
     return;
-  RunOnAutomatonThread([=]() {
+  RunOnAutomatThread([=]() {
     if (btn == kMouseLeft) {
       if (action) {
         action->End();
@@ -157,4 +157,4 @@ vec2 PointerImpl::PositionWithinRootMachine() const {
 
 Keyboard &PointerImpl::Keyboard() { return keyboard->facade; }
 
-} // namespace automaton::gui
+} // namespace automat::gui

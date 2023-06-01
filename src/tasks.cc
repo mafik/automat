@@ -2,7 +2,7 @@
 
 #include "base.h"
 
-namespace automaton {
+namespace automat {
 
 Task::Task(Location *target)
     : target(target), predecessors(), successors(global_successors) {
@@ -104,4 +104,4 @@ void ErroredTask::Execute() {
   delete this;
 }
 
-} // namespace automaton
+} // namespace automat

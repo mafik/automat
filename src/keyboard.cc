@@ -4,7 +4,7 @@
 #include "window.h"
 #include "window_impl.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 Caret::Caret(CaretImpl &impl) : impl(impl) {}
 
@@ -50,4 +50,4 @@ void Keyboard::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 void Keyboard::KeyDown(Key key) { impl->KeyDown(key); }
 void Keyboard::KeyUp(Key key) { impl->KeyUp(key); }
 
-} // namespace automaton::gui
+} // namespace automat::gui

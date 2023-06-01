@@ -11,9 +11,9 @@
 #include "root.h"
 #include "time.h"
 
-using namespace automaton;
+using namespace automat;
 
-namespace automaton::gui {
+namespace automat::gui {
 
 void Widget::VisitAll(WidgetVisitor &visitor) {
 
@@ -288,4 +288,4 @@ SkMatrix TransformUp(const Path &path, animation::State *state) {
   return ret;
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

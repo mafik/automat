@@ -2,7 +2,7 @@
 
 #include "format.h"
 
-namespace automaton {
+namespace automat {
 
 const Logger &operator<<(const Logger &logger, SkMatrix &m) {
   std::string out = "";
@@ -20,4 +20,4 @@ const Logger &operator<<(const Logger &logger, SkMatrix &m) {
   return logger;
 }
 
-} // namespace automaton
+} // namespace automat

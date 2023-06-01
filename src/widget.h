@@ -11,7 +11,7 @@
 #include "keyboard.h"
 #include "pointer.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct Widget;
 
@@ -92,4 +92,4 @@ struct ReparentableWidget : Widget {
   static void TryReparent(Widget *child, Widget *parent);
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

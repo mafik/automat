@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <functional>
 
-namespace automaton::hid {
+namespace automat::hid {
 
 enum UsagePage : uint16_t {
   UsagePage_Undefined = 0x00,
@@ -69,4 +69,4 @@ void ParseReportDescriptor(
     const uint8_t *report_descriptor, size_t report_descriptor_bytes,
     std::function<void(uint8_t report_id, Accessor &accessor)> callback);
 
-} // namespace automaton::hid
+} // namespace automat::hid

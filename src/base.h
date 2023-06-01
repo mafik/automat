@@ -29,7 +29,7 @@
 #include "tasks.h"
 #include "text_field.h"
 
-namespace automaton {
+namespace automat {
 
 using std::function;
 using std::hash;
@@ -319,4 +319,4 @@ extern channel events;
 
 void RunThread();
 
-} // namespace automaton
+} // namespace automat

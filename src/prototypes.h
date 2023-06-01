@@ -2,11 +2,11 @@
 
 #include <vector>
 
-namespace automaton {
+namespace automat {
 
 struct Object;
 
 std::vector<const Object *> &Prototypes();
 void RegisterPrototype(const Object &prototype);
 
-} // namespace automaton
+} // namespace automat

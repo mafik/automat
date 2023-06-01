@@ -6,7 +6,7 @@
 #include <include/core/SkFont.h>
 #include <include/core/SkFontMetrics.h>
 
-namespace automaton::gui {
+namespace automat::gui {
 
 constexpr float kLetterSizeMM = 3;
 constexpr float kLetterSize = kLetterSizeMM / 1000;
@@ -32,4 +32,4 @@ struct Font {
 
 Font &GetFont();
 
-} // namespace automaton::gui
+} // namespace automat::gui

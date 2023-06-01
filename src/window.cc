@@ -4,7 +4,7 @@
 
 #include "window_impl.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 Window::Window(vec2 size, float pixels_per_meter,
                std::string_view initial_state)
@@ -17,4 +17,4 @@ void Window::DisplayPixelDensity(float pixels_per_meter) {
 void Window::Draw(SkCanvas &canvas) { impl->Draw(canvas); }
 std::string_view Window::GetState() { return {}; }
 
-} // namespace automaton::gui
+} // namespace automat::gui

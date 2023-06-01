@@ -5,7 +5,7 @@
 
 #include "font.h"
 
-namespace automaton {
+namespace automat {
 
 void Object::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   SkPath path = Shape();
@@ -66,4 +66,4 @@ SkPath Object::Shape() const {
   return it->second;
 }
 
-} // namespace automaton
+} // namespace automat

@@ -4,13 +4,13 @@
 
 #include <Windows.h>
 
-namespace automaton {
+namespace automat {
 
-static const char kWindowClass[] = "Automaton";
-static const char kWindowTitle[] = "Automaton";
+static const char kWindowClass[] = "Automat";
+static const char kWindowTitle[] = "Automat";
 
 HINSTANCE GetInstance();
 WNDCLASSEX &GetWindowClass();
-HWND CreateAutomatonWindow();
+HWND CreateAutomatWindow();
 
-} // namespace automaton
+} // namespace automat

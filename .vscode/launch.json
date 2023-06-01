@@ -5,13 +5,13 @@
       "name": "(Windows) Launch",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/automaton.exe",
+      "program": "${workspaceFolder}/automat.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
       "environment": [],
       "console": "externalTerminal",
-      "preLaunchTask": "link automaton"
+      "preLaunchTask": "link automat"
     }
   ]
 }

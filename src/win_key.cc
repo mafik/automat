@@ -5,7 +5,7 @@
 #include "format.h"
 #include "log.h"
 
-using automaton::gui::AnsiKey;
+using automat::gui::AnsiKey;
 
 // Source:
 // https://handmade.network/forums/t/2011-keyboard_inputs_-_scancodes,_raw_input,_text_input,_key_names

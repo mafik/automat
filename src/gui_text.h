@@ -2,7 +2,7 @@
 
 #include "widget.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct Text : Widget {
   std::string text;
@@ -11,4 +11,4 @@ struct Text : Widget {
   void Draw(SkCanvas &, animation::State &) const override;
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

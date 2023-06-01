@@ -5,11 +5,11 @@
 
 #include "color.h"
 #include "font.h"
+#include "gui_constants.h"
 #include "library_macros.h"
 #include "library_number.h"
-#include "gui_constants.h"
 
-namespace automaton::library {
+namespace automat::library {
 
 DEFINE_PROTO(Increment);
 
@@ -105,4 +105,4 @@ void Increment::Draw(SkCanvas &canvas,
 
 SkPath Increment::Shape() const { return SkPath::RRect(GetShape()); }
 
-} // namespace automaton::library
+} // namespace automat::library

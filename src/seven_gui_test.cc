@@ -9,8 +9,8 @@
 #include <gtest/gtest.h>
 #include <source_location>
 
-using namespace automaton;
-using namespace automaton::library;
+using namespace automat;
+using namespace automat::library;
 using namespace testing;
 
 TEST(CounterTest, Count) {

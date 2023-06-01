@@ -3,7 +3,7 @@
 #include "pointer_impl.h"
 #include "window.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 Pointer::Pointer(Window &window, vec2 position)
     : impl(std::make_unique<PointerImpl>(*window.impl, *this, position)) {}
@@ -24,4 +24,4 @@ vec2 Pointer::PositionWithinRootMachine() const {
 }
 Keyboard &Pointer::Keyboard() { return impl->Keyboard(); }
 
-} // namespace automaton::gui
+} // namespace automat::gui

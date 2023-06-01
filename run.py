@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-'''Run Automaton.'''
+'''Run Automat.'''
 
 import subprocess
 from python_modules import build_graph
@@ -28,7 +28,7 @@ if __name__ == '__main__':
         elif platform == 'win32':
             events = 'create,modify,delete,move'
         else:
-            raise Exception(f'Unknown platfrorm: "{platform}". Expected either "linux" or "win32". Automaton is not supported on this platform yet!')
+            raise Exception(f'Unknown platfrorm: "{platform}". Expected either "linux" or "win32". Automat is not supported on this platform yet!')
 
         # TODO: include inotify-win in the build scripts for Windows
         watcher = subprocess.Popen(['inotifywait', '-qe', events, 'src/'], stdout=subprocess.DEVNULL)

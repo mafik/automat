@@ -2,7 +2,7 @@
 
 #include <chrono>
 
-namespace automaton {
+namespace automat {
 
 namespace time {
 
@@ -28,4 +28,4 @@ struct Timer {
 
 } // namespace time
 
-} // namespace automaton
+} // namespace automat

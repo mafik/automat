@@ -12,7 +12,7 @@
 #include "log.h"
 #include "root.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 Widget *TextField::ParentWidget() const { return parent_widget; }
 
@@ -230,4 +230,4 @@ void TextField::KeyDown(Caret &caret, Key k) {
 
 void TextField::KeyUp(Caret &, Key) {}
 
-} // namespace automaton::gui
+} // namespace automat::gui

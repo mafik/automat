@@ -27,12 +27,12 @@
 #include "win_key.h"
 #include "window.h"
 
-using namespace automaton;
+using namespace automat;
 
 HWND main_window;
 
 // This is based on the scaling configured by the user in Windows settings.
-// It's not used anywhere by Automaton.
+// It's not used anywhere by Automat.
 int main_window_dpi = USER_DEFAULT_SCREEN_DPI;
 
 int client_x;
@@ -62,7 +62,7 @@ vec2 WindowSize() {
 // screen, Y axis goes down)
 // - Window (used for win_main.cc <=> gui.cc communication, origin in the bottom
 // left corner of the window, Y axis goes up)
-// - Canvas (used for gui.cc <=> Automaton communication, origin in the center
+// - Canvas (used for gui.cc <=> Automat communication, origin in the center
 // of the window, Y axis goes up)
 
 vec2 ScreenToWindow(vec2 screen) {
@@ -445,7 +445,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     FATAL() << "Failed to register window class.";
   }
 
-  main_window = CreateAutomatonWindow();
+  main_window = CreateAutomatWindow();
   if (!main_window) {
     FATAL() << "Failed to create main window.";
   }

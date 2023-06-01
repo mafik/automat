@@ -8,7 +8,7 @@
 #include "root.h"
 #include "widget.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct PointerImpl;
 
@@ -184,7 +184,7 @@ struct WindowImpl : Widget {
         return result;
     }
     VisitResult result = VisitResult::kContinue;
-    RunOnAutomatonThreadSynchronous([&]() {
+    RunOnAutomatThreadSynchronous([&]() {
       SkMatrix transform_down = WindowToCanvas();
       SkMatrix transform_up = CanvasToWindow();
       result = visitor(*root_machine, transform_down, transform_up);
@@ -195,4 +195,4 @@ struct WindowImpl : Widget {
   std::string_view GetState();
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

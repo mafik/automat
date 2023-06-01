@@ -3,7 +3,7 @@
 #include "font.h"
 #include "pointer_impl.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 CaretImpl::CaretImpl(KeyboardImpl &keyboard)
     : facade(*this), keyboard(keyboard) {}
@@ -175,7 +175,7 @@ void KeyboardImpl::Draw(SkCanvas &canvas,
 }
 
 void KeyboardImpl::KeyDown(Key key) {
-  RunOnAutomatonThread([=]() {
+  RunOnAutomatThread([=]() {
     if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
       pressed_keys.set((size_t)key.physical);
     }
@@ -193,7 +193,7 @@ void KeyboardImpl::KeyDown(Key key) {
 }
 
 void KeyboardImpl::KeyUp(Key key) {
-  RunOnAutomatonThread([=]() {
+  RunOnAutomatThread([=]() {
     if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
       pressed_keys.reset((size_t)key.physical);
     }
@@ -205,4 +205,4 @@ void KeyboardImpl::KeyUp(Key key) {
   });
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

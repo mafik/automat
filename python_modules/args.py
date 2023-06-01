@@ -1,6 +1,6 @@
 '''Module with all of the command line flags used by the build script.'''
 
-# TODO: allow different python modules to add their own args - instead of a centralized location. This should allow for better Hyperdeck / Automaton reusability.
+# TODO: allow different python modules to add their own args - instead of a centralized location. This should allow for better Hyperdeck / Automat reusability.
 
 import __main__
 import argparse

@@ -7,7 +7,7 @@
 #include "time.h"
 #include "widget.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct Window;
 struct WindowImpl;
@@ -50,4 +50,4 @@ struct PointerImpl {
   Keyboard &Keyboard();
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

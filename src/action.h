@@ -5,7 +5,7 @@
 
 #include <include/core/SkCanvas.h>
 
-namespace automaton {
+namespace automat {
 
 namespace gui {
 struct Pointer;
@@ -19,4 +19,4 @@ struct Action {
   virtual void Draw(SkCanvas &canvas, animation::State &animation_state) = 0;
 };
 
-} // namespace automaton
+} // namespace automat

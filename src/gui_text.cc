@@ -2,7 +2,7 @@
 
 #include "font.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 Text::Text(std::string_view text) : text(text){};
 
@@ -16,4 +16,4 @@ void Text::Draw(SkCanvas &canvas, animation::State &) const {
   GetFont().DrawText(canvas, text, paint);
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

@@ -7,7 +7,7 @@
 #include <windows.h>
 #endif
 
-namespace automaton {
+namespace automat {
 
 DEFINE_PROTO(Alert);
 Argument Alert::message_arg("message", Argument::kRequiresObject);
@@ -32,4 +32,4 @@ void Alert::Run(Location &here) {
   }
 }
 
-} // namespace automaton
+} // namespace automat

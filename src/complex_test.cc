@@ -1,9 +1,10 @@
 #include <gtest/gtest.h>
-#include "test_base.h"
+
 #include "base.h"
 #include "library.h"
+#include "test_base.h"
 
-using namespace automaton;
+using namespace automat;
 
 struct ComplexTest : TestBase {
   Location &label = machine.Create<Text>();

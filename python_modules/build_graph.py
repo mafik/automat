@@ -1,4 +1,4 @@
-'''Contains the graph of recipes to build Automaton.'''
+'''Contains the graph of recipes to build Automat.'''
 
 from asyncio import subprocess
 from . import args
@@ -192,14 +192,14 @@ def generate_asset_sources(asset, header, source, extra_args):
         print(f'''#pragma once
 #include <cstddef>
 #include <string_view>
-namespace automaton::assets {{
+namespace automat::assets {{
 constexpr size_t {slug}_size = {size};
 extern const char *{slug};
 extern const std::string_view {slug}_view;
-}} // namespace automaton::assets''', file=f)
+}} // namespace automat::assets''', file=f)
     with source.open('w') as f:
         print(f'#include "{header.name}"', file=f)
-        print('namespace automaton::assets {', file=f)
+        print('namespace automat::assets {', file=f)
         print(f'const std::string_view {slug}_view = std::string_view({slug}, {size});', file=f)
         print(f'const char *{slug} =', file=f)
         buf = asset.read_bytes()
@@ -209,7 +209,7 @@ extern const std::string_view {slug}_view;
         for chunk in chunks:
             print(cc.c_string_from_bytes(chunk), file=f)
         print(';', file=f)
-        print('} // namespace automaton::assets', file=f)
+        print('} // namespace automat::assets', file=f)
 
 
 cc.add_header('generated/assets.h')
@@ -289,7 +289,7 @@ def cxxfilt(line):
         'std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char>>', 'string')
     line = line.replace(
         'std::basic_string_view<char, std::char_traits<char>>', 'string_view')
-    line = line.replace('automaton::', '')
+    line = line.replace('automat::', '')
     line = line.replace('/usr/bin/ld: ', '')
     line = line.replace(str(OBJ_DIR), '')
     # remove module names

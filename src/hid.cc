@@ -6,7 +6,7 @@
 #include "format.h"
 #include "log.h"
 
-namespace automaton::hid {
+namespace automat::hid {
 
 const char *UsagePageToString(UsagePage usage_page) {
   switch ((uint16_t)usage_page) {
@@ -834,4 +834,4 @@ void ParseReportDescriptor(
   }
 }
 
-} // namespace automaton::hid
+} // namespace automat::hid

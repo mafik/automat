@@ -3,7 +3,7 @@
 #include <functional>
 #include <vector>
 
-namespace automaton {
+namespace automat {
 
 template<class C>
 void WalkDFS(C* root, std::function<void(C*)> callback) {

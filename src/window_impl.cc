@@ -7,7 +7,7 @@
 #include "prototypes.h"
 #include "touchpad.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 static SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
@@ -47,7 +47,7 @@ WindowImpl::~WindowImpl() {
 
 void WindowImpl::Draw(SkCanvas &canvas) {
   animation_state.timer.Tick();
-  RunOnAutomatonThreadSynchronous([&] {
+  RunOnAutomatThreadSynchronous([&] {
     // Record camera movement timeline. This is used to create inertia effect.
     camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
     timeline.emplace_back(animation_state.timer.now);
@@ -221,7 +221,7 @@ void WindowImpl::Draw(SkCanvas &canvas) {
     }
 
     canvas.restore();
-  }); // RunOnAutomatonThreadSynchronous
+  }); // RunOnAutomatThreadSynchronous
 
   // Draw prototype shelf
   for (int i = 0; i < prototype_buttons.size(); i++) {
@@ -268,4 +268,4 @@ void WindowImpl::Zoom(float delta) {
   }
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

@@ -2,7 +2,7 @@
 
 #include "base.h"
 
-namespace automaton::library {
+namespace automat::library {
 
 struct NumberButton : gui::Button {
   std::function<void()> activate;
@@ -31,4 +31,4 @@ struct Number : Object {
                                            gui::PointerButton) override;
 };
 
-} // namespace automaton::library
+} // namespace automat::library

@@ -1,6 +1,6 @@
 #include "prototypes.h"
 
-namespace automaton {
+namespace automat {
 
 std::vector<const Object *> &Prototypes() {
   static std::vector<const Object *> prototypes;
@@ -11,4 +11,4 @@ void RegisterPrototype(const Object &prototype) {
   Prototypes().push_back(&prototype);
 }
 
-} // namespace automaton
+} // namespace automat

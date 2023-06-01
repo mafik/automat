@@ -3,22 +3,22 @@
 #include <condition_variable>
 #include <thread>
 
-namespace automaton {
+namespace automat {
 
 Location root_location;
 Machine *root_machine;
-std::thread automaton_thread;
+std::thread automat_thread;
 
 void InitRoot() {
   root_location = Location(nullptr);
   root_location.name = "Root location";
   root_machine = root_location.Create<Machine>();
   root_machine->name = "Root machine";
-  automaton_thread = std::thread(RunThread);
+  automat_thread = std::thread(RunThread);
 }
 
-void RunOnAutomatonThread(std::function<void()> f) {
-  if (std::this_thread::get_id() == automaton_thread.get_id()) {
+void RunOnAutomatThread(std::function<void()> f) {
+  if (std::this_thread::get_id() == automat_thread.get_id()) {
     f();
     return;
   }
@@ -26,21 +26,21 @@ void RunOnAutomatonThread(std::function<void()> f) {
                                              [f](Location &l) { f(); }));
 }
 
-void RunOnAutomatonThreadSynchronous(std::function<void()> f) {
-  if (std::this_thread::get_id() == automaton_thread.get_id()) {
+void RunOnAutomatThreadSynchronous(std::function<void()> f) {
+  if (std::this_thread::get_id() == automat_thread.get_id()) {
     f();
     return;
   }
   std::mutex mutex;
-  std::condition_variable automaton_thread_done;
+  std::condition_variable automat_thread_done;
   std::unique_lock<std::mutex> lock(mutex);
-  RunOnAutomatonThread([&]() {
+  RunOnAutomatThread([&]() {
     f();
     // wake the UI thread
     std::unique_lock<std::mutex> lock(mutex);
-    automaton_thread_done.notify_all();
+    automat_thread_done.notify_all();
   });
-  automaton_thread_done.wait(lock);
+  automat_thread_done.wait(lock);
 }
 
-} // namespace automaton
+} // namespace automat

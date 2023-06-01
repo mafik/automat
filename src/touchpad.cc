@@ -24,7 +24,7 @@
 // This restriction doesn't apply to HID Report Descriptor.
 // https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/hid-architecture
 
-namespace automaton::touchpad {
+namespace automat::touchpad {
 
 std::string UTF16ToUTF8(const wchar_t *utf16) {
   size_t utf16_len = wcslen(utf16);
@@ -441,4 +441,4 @@ std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
   } // switch (msg)
 }
 
-} // namespace automaton::touchpad
+} // namespace automat::touchpad

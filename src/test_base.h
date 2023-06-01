@@ -4,7 +4,7 @@
 #include "backtrace.h"
 #include "base.h"
 
-namespace automaton {
+namespace automat {
 
 struct TestBase : ::testing::Test {
   Location root = Location(nullptr);
@@ -16,4 +16,4 @@ struct TestBase : ::testing::Test {
   }
 };
 
-} // namespace automaton
+} // namespace automat

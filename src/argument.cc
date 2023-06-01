@@ -2,7 +2,7 @@
 
 #include "base.h"
 
-namespace automaton {
+namespace automat {
 
 Argument then_arg("then", Argument::kOptional);
 
@@ -62,4 +62,4 @@ Argument::GetObject(Location &here,
   }
   return result;
 }
-} // namespace automaton
+} // namespace automat

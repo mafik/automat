@@ -14,7 +14,7 @@
 #include "library_macros.h"
 #include "widget.h"
 
-namespace automaton::library {
+namespace automat::library {
 
 DEFINE_PROTO(Number);
 
@@ -242,4 +242,4 @@ std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer &pointer,
   return action;
 }
 
-} // namespace automaton::library
+} // namespace automat::library

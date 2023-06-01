@@ -5,7 +5,7 @@
 #include "widget.h"
 
 
-namespace automaton::gui {
+namespace automat::gui {
 
 constexpr float kTextMargin = 0.001;
 constexpr float kTextCornerRadius = kTextMargin;
@@ -52,4 +52,4 @@ struct TextField : Widget, CaretOwner {
   void KeyUp(Caret &, Key) override;
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

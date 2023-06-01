@@ -19,7 +19,7 @@
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <src/gpu/ganesh/vk/GrVkUtil.h>
 
-namespace automaton::vk {
+namespace automat::vk {
 
 // Initialized in Instance::Init
 PFN_vkGetInstanceProcAddr GetInstanceProcAddr;
@@ -801,4 +801,4 @@ SkCanvas *GetBackbufferCanvas() { return swapchain.GetBackbufferCanvas(); }
 
 void Present() { swapchain.SwapBuffers(); }
 
-} // namespace automaton::vk
+} // namespace automat::vk

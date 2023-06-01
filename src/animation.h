@@ -5,7 +5,7 @@
 #include "product_ptr.h"
 #include "time.h"
 
-namespace automaton::animation {
+namespace automat::animation {
 
 struct State {
   product_holder holder;
@@ -63,4 +63,4 @@ struct Approach {
   operator float() const { return value; }
 };
 
-} // namespace automaton::animation
+} // namespace automat::animation

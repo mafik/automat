@@ -2,13 +2,13 @@
 
 #include "gui_button.h"
 
-namespace automaton {
+namespace automat {
 
 struct Location;
 
-} // namespace automaton
+} // namespace automat
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct RunButton : Button {
   Location *location;
@@ -17,4 +17,4 @@ struct RunButton : Button {
   bool Filled() const override;
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

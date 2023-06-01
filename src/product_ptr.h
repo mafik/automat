@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace automaton {
+namespace automat {
 
 struct product_holder;
 
@@ -96,4 +96,4 @@ struct product_ptr : product_ptr_base {
   }
 };
 
-} // namespace automaton
+} // namespace automat

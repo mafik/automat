@@ -18,7 +18,7 @@
 #include "font.h"
 #include "text_field.h"
 
-namespace automaton {
+namespace automat {
 
 Location *Machine::LocationAtPoint(vec2 point) {
   for (auto &loc : locations) {
@@ -85,4 +85,4 @@ void RunLoop(const int max_iterations) {
 bool NoScheduling(Location *location) {
   return no_scheduling.find(location) != no_scheduling.end();
 }
-} // namespace automaton
+} // namespace automat

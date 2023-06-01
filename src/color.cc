@@ -6,7 +6,7 @@
 #include "log.h"
 #include "math.h"
 
-namespace automaton::color {
+namespace automat::color {
 
 namespace {
 
@@ -269,4 +269,4 @@ SkColor MixColors(SkColor zero, SkColor one, float ratio) {
                         mixed_rgb.B * 255);
 }
 
-} // namespace automaton::color
+} // namespace automat::color

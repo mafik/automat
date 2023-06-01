@@ -8,7 +8,7 @@
 #include <string_view>
 #include <unordered_map>
 
-namespace automaton {
+namespace automat {
 
 struct string_equal {
   using is_transparent = std::true_type;
@@ -58,4 +58,4 @@ template <typename T> struct ptr_hash {
 };
 */
 
-} // namespace automaton
+} // namespace automat

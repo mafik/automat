@@ -1,6 +1,6 @@
 #pragma once
 
-namespace automaton {
+namespace automat {
 
 struct Location;
 
@@ -12,4 +12,4 @@ struct Connection {
       : from(from), to(to), pointer_behavior(pointer_behavior) {}
 };
 
-} // namespace automaton
+} // namespace automat

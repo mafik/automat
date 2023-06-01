@@ -13,7 +13,7 @@
 #include "color.h"
 #include "gui_constants.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 void Button::PointerOver(Pointer &pointer, animation::State &animation_state) {
   auto &hover = hover_ptr[animation_state];
@@ -224,4 +224,4 @@ Button::Button(Widget *parent, std::unique_ptr<Widget> &&child)
   ReparentableWidget::TryReparent(this->child.get(), this);
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

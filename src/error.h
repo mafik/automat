@@ -5,7 +5,7 @@
 #include <string>
 
 
-namespace automaton {
+namespace automat {
 
 struct Location;
 struct Object;
@@ -56,4 +56,4 @@ inline std::ostream &operator<<(std::ostream &os, const Error &e) {
   return os << e.text;
 }
 
-} // namespace automaton
+} // namespace automat

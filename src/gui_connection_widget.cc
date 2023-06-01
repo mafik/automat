@@ -12,7 +12,7 @@
 #include "log.h"
 #include "svg.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct ConnectionLabelWidget : Widget {
   ConnectionWidget *parent;
@@ -201,4 +201,4 @@ void DragConnectionAction::Draw(SkCanvas &canvas,
   DrawConnection(canvas, from_path, to_path);
 }
 
-} // namespace automaton::gui
+} // namespace automat::gui

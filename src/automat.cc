@@ -10,8 +10,6 @@ int main() {
 
 #include "linux_main.h"
 
-int main(int argc, char *argv[]) {
-  return LinuxMain(argc, argv);
-}
+int main(int argc, char *argv[]) { return LinuxMain(argc, argv); }
 
 #endif

@@ -1,10 +1,10 @@
-#include <gtest/gtest.h>
-#include <memory>
-#include "test_base.h"
 #include "base.h"
 #include "library.h"
+#include "test_base.h"
+#include <gtest/gtest.h>
+#include <memory>
 
-using namespace automaton;
+using namespace automat;
 
 struct ListTest : TestBase {
   Location &list = machine.Create<List>();

@@ -2,7 +2,7 @@
 
 #include "library_macros.h"
 
-namespace automaton {
+namespace automat {
 
 DEFINE_PROTO(Integer);
 
@@ -113,4 +113,4 @@ DEFINE_PROTO(Blackboard);
 
 DEFINE_PROTO(BlackboardUpdater);
 
-} // namespace automaton
+} // namespace automat

@@ -4,7 +4,7 @@
 #include "product_ptr.h"
 #include "widget.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct Button : ReparentableWidget {
   std::unique_ptr<Widget> child;
@@ -32,4 +32,4 @@ struct Button : ReparentableWidget {
                   SkColor bg) const;
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

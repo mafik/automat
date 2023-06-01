@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace automaton {
+namespace automat {
 
 struct Location;
 
@@ -53,4 +53,4 @@ struct ErroredTask : Task {
   void Execute() override;
 };
 
-} // namespace automaton
+} // namespace automat

@@ -7,7 +7,7 @@
 #include "product_ptr.h"
 #include "window_impl.h"
 
-namespace automaton::gui {
+namespace automat::gui {
 
 struct KeyboardImpl;
 
@@ -50,4 +50,4 @@ struct KeyboardImpl {
   void KeyUp(Key);
 };
 
-} // namespace automaton::gui
+} // namespace automat::gui

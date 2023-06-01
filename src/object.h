@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 
-namespace automaton {
+namespace automat {
 
 struct Connection;
 struct Location;
@@ -57,4 +57,4 @@ template <typename T> std::unique_ptr<Object> Create() {
   return T::proto.Clone();
 }
 
-} // namespace automaton
+} // namespace automat

@@ -4,7 +4,7 @@
 #include "root.h"
 #include <algorithm>
 
-namespace automaton {
+namespace automat {
 
 static vec2 RoundToMilimeters(vec2 v) {
   return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
@@ -99,4 +99,4 @@ void DragLocationAction::DragDraw(SkCanvas &canvas,
   // Location is drawn by its parent Machine so nothing to do here.
 }
 
-} // namespace automaton
+} // namespace automat

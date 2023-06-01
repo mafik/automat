@@ -7,16 +7,17 @@
 #include <memory>
 
 #include "color.h"
+#include "drag_action.h"
 #include "font.h"
 #include "gui_align.h"
 #include "gui_text.h"
 #include "library_macros.h"
+#include "widget.h"
 
 namespace automaton::library {
 
 DEFINE_PROTO(Number);
 
-// TODO: Number can be dragged by the background
 // TODO: better icon for the backspace button
 // TODO: LCD color for the text field
 // TODO: Fix cursor location
@@ -218,6 +219,27 @@ gui::VisitResult Number::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
       result != gui::VisitResult::kContinue)
     return result;
   return gui::VisitResult::kContinue;
+}
+
+std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer &pointer,
+                                                 gui::PointerButton btn) {
+  if (btn != gui::PointerButton::kMouseLeft) {
+    return nullptr;
+  }
+  auto &path = pointer.Path();
+  if (path.size() < 2) {
+    return nullptr;
+  }
+  auto *parent = path[path.size() - 2];
+  Location *location = dynamic_cast<Location *>(parent);
+  if (!location) {
+    return nullptr;
+  }
+  std::unique_ptr<DragLocationAction> action =
+      std::make_unique<DragLocationAction>(location);
+  action->contact_point = pointer.PositionWithin(*this);
+  LOG() << "Action contact point is " << action->contact_point;
+  return action;
 }
 
 } // namespace automaton::library

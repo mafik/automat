@@ -22,7 +22,7 @@ struct PointerImpl {
   time::point button_down_time[kButtonCount];
 
   std::unique_ptr<Action> action;
-  Widget *hovered_widget = nullptr;
+  Path path;
 
   KeyboardImpl *keyboard = nullptr;
 
@@ -46,6 +46,7 @@ struct PointerImpl {
   void PushIcon(Pointer::IconType new_icon) { icons.push_back(new_icon); }
   void PopIcon() { icons.pop_back(); }
   vec2 PositionWithin(Widget &) const;
+  vec2 PositionWithinRootMachine() const;
   Keyboard &Keyboard();
 };
 

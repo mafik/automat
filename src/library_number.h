@@ -27,6 +27,8 @@ struct Number : Object {
   void Draw(SkCanvas &canvas, animation::State &animation_state) const override;
   SkPath Shape() const override;
   gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override;
+  std::unique_ptr<Action> ButtonDownAction(gui::Pointer &,
+                                           gui::PointerButton) override;
 };
 
 } // namespace automaton::library

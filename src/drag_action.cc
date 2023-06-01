@@ -11,7 +11,7 @@ static vec2 RoundToMilimeters(vec2 v) {
 }
 
 void DragActionBase::Begin(gui::Pointer &pointer) {
-  current_position = pointer.PositionWithin(*root_machine);
+  current_position = pointer.PositionWithinRootMachine();
 }
 
 vec2 DragActionBase::TargetPosition() const {
@@ -25,7 +25,7 @@ vec2 DragActionBase::TargetPositionRounded() const {
 void DragActionBase::Update(gui::Pointer &pointer) {
   auto old_pos = current_position - contact_point;
   auto old_round = RoundToMilimeters(old_pos);
-  current_position = pointer.PositionWithin(*root_machine);
+  current_position = pointer.PositionWithinRootMachine();
   auto new_pos = current_position - contact_point;
   auto new_round = RoundToMilimeters(new_pos);
   vec2 d = new_pos - old_pos;

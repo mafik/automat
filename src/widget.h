@@ -15,6 +15,8 @@ namespace automaton::gui {
 
 struct Widget;
 
+using Path = std::vector<Widget *>;
+
 enum class VisitResult { kContinue, kStop };
 
 struct WidgetVisitor {
@@ -23,6 +25,10 @@ struct WidgetVisitor {
                                  const SkMatrix &transform_up) = 0;
   virtual animation::State *AnimationState() { return nullptr; }
 };
+
+void VisitPath(const Path &path, WidgetVisitor &visitor);
+SkMatrix TransformDown(const Path &path, animation::State *state = nullptr);
+SkMatrix TransformUp(const Path &path, animation::State *state = nullptr);
 
 using WidgetVisitorFunc =
     std::function<VisitResult(Widget &, const SkMatrix &, const SkMatrix &)>;
@@ -63,11 +69,13 @@ struct Widget {
   void VisitAtPoint(vec2 point, WidgetVisitor &visitor);
   void VisitAtPoint(vec2 point, WidgetVisitorFunc visitor);
 
+  // TODO: remove those
   // Transform matrix is controlled by the Widget's parent.
   // This function asks the parent for the transform of this Widget.
   SkMatrix TransformFromParent(animation::State *state = nullptr) const;
   SkMatrix TransformToParent(animation::State *state = nullptr) const;
 
+  // TODO: remove those
   // The child doesn't have to be an immediate child.
   SkMatrix TransformToChild(const Widget *child,
                             animation::State *state = nullptr) const;

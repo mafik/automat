@@ -15,8 +15,12 @@ void Pointer::ButtonUp(PointerButton btn) { impl->ButtonUp(btn); }
 Pointer::IconType Pointer::Icon() const { return impl->Icon(); }
 void Pointer::PushIcon(IconType icon) { impl->PushIcon(icon); }
 void Pointer::PopIcon() { impl->PopIcon(); }
+const Path &Pointer::Path() const { return impl->path; }
 vec2 Pointer::PositionWithin(Widget &widget) const {
   return impl->PositionWithin(widget);
+}
+vec2 Pointer::PositionWithinRootMachine() const {
+  return impl->PositionWithinRootMachine();
 }
 Keyboard &Pointer::Keyboard() { return impl->Keyboard(); }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
 #include "math.h"
 
@@ -10,6 +11,8 @@ struct Keyboard;
 struct PointerImpl;
 struct Widget;
 struct Window;
+
+using Path = std::vector<Widget *>;
 
 enum PointerButton {
   kButtonUnknown,
@@ -33,7 +36,9 @@ struct Pointer final {
   void PushIcon(IconType);
   void PopIcon();
 
+  const Path &Path() const;
   vec2 PositionWithin(Widget &) const;
+  vec2 PositionWithinRootMachine() const;
 
   Keyboard &Keyboard();
 

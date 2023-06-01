@@ -33,8 +33,10 @@ void Widget::VisitAll(WidgetVisitor &visitor) {
       transform_down_accumulator.postConcat(transform_down);
       transform_up_accumulator.postConcat(transform_up);
 
-      if (widget.VisitImmediateChildren(*this) == VisitResult::kStop)
+      auto result = widget.VisitImmediateChildren(*this);
+      if (result == VisitResult::kStop) {
         return VisitResult::kStop;
+      }
 
       if (orig_visitor(widget, transform_down_accumulator,
                        transform_up_accumulator) == VisitResult::kStop)
@@ -223,6 +225,67 @@ void ReparentableWidget::TryReparent(Widget *child, Widget *parent) {
   if (auto reparentable_child = dynamic_cast<ReparentableWidget *>(child)) {
     reparentable_child->parent = parent;
   }
+}
+
+void VisitPath(const Path &path, WidgetVisitor &visitor) {
+  if (path.empty()) {
+    return;
+  }
+  if (visitor(*path[0], SkMatrix::I(), SkMatrix::I()) == VisitResult::kStop) {
+    return;
+  }
+  for (int i = 1; i < path.size(); ++i) {
+    Widget *parent = path[i - 1];
+    Widget *expected_child = path[i];
+
+    std::optional<VisitResult> result;
+    FunctionWidgetVisitor selective_visitor(
+        [&](Widget &child, const SkMatrix &transform_down,
+            const SkMatrix &transform_up) {
+          if (&child == expected_child) {
+            result = visitor(child, transform_down, transform_up);
+            return VisitResult::kStop;
+          }
+          return VisitResult::kContinue;
+        },
+        visitor.AnimationState());
+
+    parent->VisitImmediateChildren(selective_visitor);
+
+    if (!result.has_value()) {
+      result = visitor(*expected_child, SkMatrix::I(), SkMatrix::I());
+    }
+
+    if (*result == VisitResult::kStop) {
+      return;
+    }
+  }
+}
+
+SkMatrix TransformDown(const Path &path, animation::State *state) {
+  SkMatrix ret = SkMatrix::I();
+  FunctionWidgetVisitor visitor(
+      [&](Widget &widget, const SkMatrix &transform_down,
+          const SkMatrix &transform_up) {
+        ret.postConcat(transform_down);
+        return VisitResult::kContinue;
+      },
+      state);
+  VisitPath(path, visitor);
+  return ret;
+}
+
+SkMatrix TransformUp(const Path &path, animation::State *state) {
+  SkMatrix ret = SkMatrix::I();
+  FunctionWidgetVisitor visitor(
+      [&](Widget &widget, const SkMatrix &transform_down,
+          const SkMatrix &transform_up) {
+        ret.postConcat(transform_up);
+        return VisitResult::kContinue;
+      },
+      state);
+  VisitPath(path, visitor);
+  return ret;
 }
 
 } // namespace automaton::gui

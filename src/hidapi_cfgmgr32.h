@@ -32,9 +32,11 @@
 /* This part of the header mimics cfgmgr32.h,
     but only what is used by HIDAPI */
 
-#include <devpropdef.h>
+// clang-format off
 #include <initguid.h>
+#include <devpropdef.h>
 #include <propkeydef.h>
+// clang-format on
 
 typedef DWORD RETURN_TYPE;
 typedef RETURN_TYPE CONFIGRET;

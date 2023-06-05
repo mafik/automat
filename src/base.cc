@@ -56,7 +56,7 @@ struct AutodeleteTaskWrapper : Task {
 };
 
 void RunThread() {
-  SetThreadName("Automaton Loop");
+  SetThreadName("Automat Loop");
   while (true) {
     RunLoop();
     std::unique_ptr<Task> task = events.recv<Task>();

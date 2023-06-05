@@ -2,5 +2,6 @@
   "python.analysis.extraPaths": [
     "./python"
   ],
-  "cmake.configureOnOpen": false
+  "cmake.configureOnOpen": false,
+  "editor.formatOnSave": true
 }

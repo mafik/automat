@@ -18,6 +18,7 @@
 #include "color.h"
 #include "font.h"
 #include "text_field.h"
+#include "thread_name.h"
 
 namespace automat {
 
@@ -55,6 +56,7 @@ struct AutodeleteTaskWrapper : Task {
 };
 
 void RunThread() {
+  SetThreadName("Automaton Loop");
   while (true) {
     RunLoop();
     std::unique_ptr<Task> task = events.recv<Task>();

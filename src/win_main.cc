@@ -17,6 +17,7 @@
 #include "library.h"
 #include "loading_animation.h"
 #include "root.h"
+#include "thread_name.h"
 #include "touchpad.h"
 #include "vk.h"
 #include "widget.h"
@@ -154,6 +155,7 @@ void VulkanPaint() {
 }
 
 void RenderThread(std::stop_token stop_token) {
+  SetThreadName("Render Thread");
   while (!stop_token.stop_requested()) {
     VulkanPaint();
   }
@@ -412,6 +414,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
   EnableBacktraceOnSIGSEGV();
+  SetThreadName("WinMain");
+
   // Switch to UTF-8
   setlocale(LC_CTYPE, ".utf8");
   SetConsoleCP(CP_UTF8);

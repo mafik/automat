@@ -13,9 +13,7 @@ namespace automat {
 struct string_equal {
   using is_transparent = std::true_type;
 
-  bool operator()(std::string_view l, std::string_view r) const noexcept {
-    return l == r;
-  }
+  bool operator()(std::string_view l, std::string_view r) const noexcept { return l == r; }
 };
 
 struct string_hash {
@@ -27,8 +25,7 @@ struct string_hash {
 };
 
 template <typename Value>
-using string_multimap =
-    std::unordered_multimap<std::string, Value, string_hash, string_equal>;
+using string_multimap = std::unordered_multimap<std::string, Value, string_hash, string_equal>;
 
 // Multimap functors, similar to string_equal & string_hash, but which allow
 // interchangeable use of raw pointers and std::unique_ptr.
@@ -58,4 +55,4 @@ template <typename T> struct ptr_hash {
 };
 */
 
-} // namespace automat
+}  // namespace automat

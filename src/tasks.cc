@@ -4,9 +4,8 @@
 
 namespace automat {
 
-Task::Task(Location *target)
-    : target(target), predecessors(), successors(global_successors) {
-  for (Task *successor : successors) {
+Task::Task(Location* target) : target(target), predecessors(), successors(global_successors) {
+  for (Task* successor : successors) {
     successor->predecessors.push_back(this);
   }
 }
@@ -37,8 +36,8 @@ void Task::PostExecute() {
   if (!global_successors.empty()) {
     assert(global_successors == successors);
     global_successors.clear();
-    for (Task *successor : successors) {
-      auto &pred = successor->predecessors;
+    for (Task* successor : successors) {
+      auto& pred = successor->predecessors;
       auto it = std::find(pred.begin(), pred.end(), this);
       assert(it != pred.end());
       pred.erase(it);
@@ -54,15 +53,13 @@ void Task::PostExecute() {
 
 std::string Task::Format() { return "Task()"; }
 
-std::string RunTask::Format() {
-  return f("RunTask(%s)", target->LoggableString().c_str());
-}
+std::string RunTask::Format() { return f("RunTask(%s)", target->LoggableString().c_str()); }
 
 void RunTask::Execute() {
   PreExecute();
   target->Run();
   if (!target->HasError()) {
-    then_arg.LoopLocations<bool>(*target, [](Location &then) {
+    then_arg.LoopLocations<bool>(*target, [](Location& then) {
       then.ScheduleRun();
       return false;
     });
@@ -104,4 +101,4 @@ void ErroredTask::Execute() {
   delete this;
 }
 
-} // namespace automat
+}  // namespace automat

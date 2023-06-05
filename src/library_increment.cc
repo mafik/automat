@@ -14,16 +14,13 @@ namespace automat::library {
 DEFINE_PROTO(Increment);
 
 Argument Increment::target_arg =
-    Argument("target", Argument::kRequiresConcreteType)
-        .RequireInstanceOf<Number>();
+    Argument("target", Argument::kRequiresConcreteType).RequireInstanceOf<Number>();
 
 string_view Increment::Name() const { return "Increment"; }
 
-std::unique_ptr<Object> Increment::Clone() const {
-  return std::make_unique<Increment>();
-}
+std::unique_ptr<Object> Increment::Clone() const { return std::make_unique<Increment>(); }
 
-void Increment::Run(Location &h) {
+void Increment::Run(Location& h) {
   auto integer = target_arg.GetTyped<Number>(h);
   if (!integer.ok) {
     return;
@@ -47,7 +44,7 @@ SkColor kBorderBottomColor = color::AdjustLightness(kBackgroundBottomColor, -5);
 
 SkRRect GetShape() {
   static SkRRect shape = []() -> SkRRect {
-    auto &font = gui::GetFont();
+    auto& font = gui::GetFont();
     float text_width = font.MeasureText("x+1");
     float width = text_width + 2 * kMargin;
     float rad = kHeight / 2;
@@ -83,17 +80,16 @@ SkPaint GetBorderPaint() {
   return paint;
 }
 
-void DrawBackground(SkCanvas &canvas) {
+void DrawBackground(SkCanvas& canvas) {
   auto shape = GetShape();
   shape.inset(kBorderWidth / 2, kBorderWidth / 2);
   canvas.drawRRect(shape, GetBackgroundPaint());
   canvas.drawRRect(shape, GetBorderPaint());
 }
 
-} // namespace
+}  // namespace
 
-void Increment::Draw(SkCanvas &canvas,
-                     animation::State &animation_state) const {
+void Increment::Draw(SkCanvas& canvas, animation::State& animation_state) const {
   DrawBackground(canvas);
   SkPaint paint;
   paint.setColor(kFontColor);
@@ -105,4 +101,4 @@ void Increment::Draw(SkCanvas &canvas,
 
 SkPath Increment::Shape() const { return SkPath::RRect(GetShape()); }
 
-} // namespace automat::library
+}  // namespace automat::library

@@ -17,17 +17,17 @@ namespace automat {
 //
 // This channel implementation assumes a single consumer.
 struct channel {
-  std::atomic<void *> atomic{nullptr};
+  std::atomic<void*> atomic{nullptr};
 
   // May block.
-  void send(void *ptr) {
+  void send(void* ptr) {
     assert(ptr != nullptr);
-    void *expected = nullptr;
+    void* expected = nullptr;
     // We're using the "strong" version because in the next step we wait on the
     // expected value. If that value would be `nullptr` (which might happen in
     // the compare_exchange_weak) then we might block forever!
-    while (!atomic.compare_exchange_strong(
-        expected, ptr, std::memory_order_release, std::memory_order_relaxed)) {
+    while (!atomic.compare_exchange_strong(expected, ptr, std::memory_order_release,
+                                           std::memory_order_relaxed)) {
       atomic.wait(expected, std::memory_order_relaxed);
       expected = nullptr;
     }
@@ -40,15 +40,15 @@ struct channel {
   }
 
   // Will never block.
-  void send_force(void *ptr) {
+  void send_force(void* ptr) {
     assert(ptr != nullptr);
     atomic.store(ptr, std::memory_order_release);
     atomic.notify_all();
   }
 
   // May block.
-  void *recv() {
-    void *ptr = atomic.exchange(nullptr, std::memory_order_acquire);
+  void* recv() {
+    void* ptr = atomic.exchange(nullptr, std::memory_order_acquire);
     while (ptr == nullptr) {
       atomic.wait(nullptr, std::memory_order_relaxed);
       ptr = atomic.exchange(nullptr, std::memory_order_acquire);
@@ -57,17 +57,20 @@ struct channel {
     return ptr;
   }
 
-  template <typename T> void send(std::unique_ptr<T> ptr) {
+  template <typename T>
+  void send(std::unique_ptr<T> ptr) {
     send(ptr.release());
   }
 
-  template <typename T> void send_force(std::unique_ptr<T> ptr) {
+  template <typename T>
+  void send_force(std::unique_ptr<T> ptr) {
     send_force(ptr.release());
   }
 
-  template <typename T> std::unique_ptr<T> recv() {
-    return std::unique_ptr<T>(static_cast<T *>(recv()));
+  template <typename T>
+  std::unique_ptr<T> recv() {
+    return std::unique_ptr<T>(static_cast<T*>(recv()));
   }
 };
 
-} // namespace automat
+}  // namespace automat

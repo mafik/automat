@@ -93,24 +93,22 @@ typedef enum rd_item_node_type_ {
 } rd_node_type;
 
 struct rd_main_item_node {
-  int FirstBit; /* Position of first bit in report (counting from 0) */
-  int LastBit;  /* Position of last bit in report (counting from 0) */
-  rd_node_type
-      TypeOfNode; /* Information if caps index refers to the array of button
-                     caps, value caps, or if the node is just a padding element
-                     to fill unused bit positions. The node can also be a
-                     collection node without any bits in the report. */
-  int CapsIndex;  /* Index in the array of caps */
-  int CollectionIndex; /* Index in the array of link collections */
-  rd_main_items
-      MainItemType; /* Input, Output, Feature, Collection or Collection End */
+  int FirstBit;               /* Position of first bit in report (counting from 0) */
+  int LastBit;                /* Position of last bit in report (counting from 0) */
+  rd_node_type TypeOfNode;    /* Information if caps index refers to the array of button
+                                 caps, value caps, or if the node is just a padding element
+                                 to fill unused bit positions. The node can also be a
+                                 collection node without any bits in the report. */
+  int CapsIndex;              /* Index in the array of caps */
+  int CollectionIndex;        /* Index in the array of link collections */
+  rd_main_items MainItemType; /* Input, Output, Feature, Collection or Collection End */
   unsigned char ReportID;
-  struct rd_main_item_node *next;
+  struct rd_main_item_node* next;
 };
 
 typedef struct hid_pp_caps_info_ {
   USHORT FirstCap;
-  USHORT NumberOfCaps; // Includes empty caps after LastCap
+  USHORT NumberOfCaps;  // Includes empty caps after LastCap
   USHORT LastCap;
   USHORT ReportByteLength;
 } hid_pp_caps_info, *phid_pp_caps_info;
@@ -139,7 +137,7 @@ typedef struct hid_pp_cap_ {
   USAGE UsagePage;
   UCHAR ReportID;
   UCHAR BitPosition;
-  USHORT ReportSize; // WIN32 term for this is BitSize
+  USHORT ReportSize;  // WIN32 term for this is BitSize
   USHORT ReportCount;
   USHORT BytePosition;
   USHORT BitCount;
@@ -156,15 +154,15 @@ typedef struct hid_pp_cap_ {
   BOOLEAN IsButtonCap : 1;
   BOOLEAN IsAbsolute : 1;
   BOOLEAN IsRange : 1;
-  BOOLEAN IsAlias : 1; // IsAlias is set to TRUE in the first n-1 capability
-                       // structures added to the capability array. IsAlias set
-                       // to FALSE in the nth capability structure.
+  BOOLEAN IsAlias : 1;  // IsAlias is set to TRUE in the first n-1 capability
+                        // structures added to the capability array. IsAlias set
+                        // to FALSE in the nth capability structure.
   BOOLEAN IsStringRange : 1;
   BOOLEAN IsDesignatorRange : 1;
   // End of 8 Flags in one byte
   BOOLEAN Reserved1[3];
 
-  hidp_unknown_token UnknownTokens[4]; // 4 x 8 Byte
+  hidp_unknown_token UnknownTokens[4];  // 4 x 8 Byte
 
   union {
     struct {

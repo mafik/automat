@@ -6,15 +6,15 @@ namespace automat {
 
 struct Location;
 
-} // namespace automat
+}  // namespace automat
 
 namespace automat::gui {
 
 struct RunButton : Button {
-  Location *location;
-  RunButton(Location *parent);
+  Location* location;
+  RunButton(Location* parent);
   void Activate() override;
   bool Filled() const override;
 };
 
-} // namespace automat::gui
+}  // namespace automat::gui

@@ -13,14 +13,13 @@ namespace automat {
 
 constexpr float kFrameCornerRadius = 0.001;
 
-Location::Location(Location *parent)
-    : parent(parent), name_text_field(this, &name, 0.03), run_button(this),
-      run_task(this) {}
+Location::Location(Location* parent)
+    : parent(parent), name_text_field(this, &name, 0.03), run_button(this), run_task(this) {}
 
-void *Location::Nearby(std::function<void *(Location &)> callback) {
+void* Location::Nearby(std::function<void*(Location&)> callback) {
   if (auto parent_machine = ParentAs<Machine>()) {
     // TODO: sort by distance
-    for (auto &other : parent_machine->locations) {
+    for (auto& other : parent_machine->locations) {
       if (auto ret = callback(*other)) {
         return ret;
       }
@@ -30,18 +29,15 @@ void *Location::Nearby(std::function<void *(Location &)> callback) {
 }
 
 bool Location::HasError() {
-  if (error != nullptr)
-    return true;
+  if (error != nullptr) return true;
   if (auto machine = ThisAs<Machine>()) {
-    if (!machine->children_with_errors.empty())
-      return true;
+    if (!machine->children_with_errors.empty()) return true;
   }
   return false;
 }
 
-Error *Location::GetError() {
-  if (error != nullptr)
-    return error.get();
+Error* Location::GetError() {
+  if (error != nullptr) return error.get();
   if (auto machine = ThisAs<Machine>()) {
     if (!machine->children_with_errors.empty())
       return (*machine->children_with_errors.begin())->GetError();
@@ -59,8 +55,8 @@ void Location::ClearError() {
   }
 }
 
-Object *Location::Follow() {
-  if (Pointer *ptr = object->AsPointer()) {
+Object* Location::Follow() {
+  if (Pointer* ptr = object->AsPointer()) {
     return ptr->Follow(*this);
   }
   return object.get();
@@ -71,7 +67,7 @@ void Location::Put(unique_ptr<Object> obj) {
     object = std::move(obj);
     return;
   }
-  if (Pointer *ptr = object->AsPointer()) {
+  if (Pointer* ptr = object->AsPointer()) {
     ptr->Put(*this, std::move(obj));
   } else {
     object = std::move(obj);
@@ -79,17 +75,16 @@ void Location::Put(unique_ptr<Object> obj) {
 }
 
 unique_ptr<Object> Location::Take() {
-  if (Pointer *ptr = object->AsPointer()) {
+  if (Pointer* ptr = object->AsPointer()) {
     return ptr->Take(*this);
   }
   return std::move(object);
 }
 
-Connection *Location::ConnectTo(Location &other, string_view label,
+Connection* Location::ConnectTo(Location& other, string_view label,
                                 Connection::PointerBehavior pointer_behavior) {
-  object->Args([&](Argument &arg) {
-    if (arg.name == label &&
-        arg.precondition >= Argument::kRequiresConcreteType) {
+  object->Args([&](Argument& arg) {
+    if (arg.name == label && arg.precondition >= Argument::kRequiresConcreteType) {
       std::string error;
       arg.CheckRequirements(*this, &other, other.object.get(), error);
       if (error.empty()) {
@@ -97,7 +92,7 @@ Connection *Location::ConnectTo(Location &other, string_view label,
       }
     }
   });
-  Connection *c = new Connection(*this, other, pointer_behavior);
+  Connection* c = new Connection(*this, other, pointer_behavior);
   outgoing.emplace(label, c);
   other.incoming.emplace(label, c);
   object->ConnectionAdded(*this, label, *c);
@@ -106,13 +101,11 @@ Connection *Location::ConnectTo(Location &other, string_view label,
 
 void Location::ScheduleRun() { run_task.Schedule(); }
 
-void Location::ScheduleLocalUpdate(Location &updated) {
+void Location::ScheduleLocalUpdate(Location& updated) {
   (new UpdateTask(this, &updated))->Schedule();
 }
 
-void Location::ScheduleErrored(Location &errored) {
-  (new ErroredTask(this, &errored))->Schedule();
-}
+void Location::ScheduleErrored(Location& errored) { (new ErroredTask(this, &errored))->Schedule(); }
 
 SkPath Location::Shape() const {
   SkRect object_bounds;
@@ -133,7 +126,7 @@ SkPath Location::Shape() const {
   return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
 }
 
-gui::VisitResult Location::VisitChildren(gui::Visitor &visitor) {
+gui::VisitResult Location::VisitChildren(gui::Visitor& visitor) {
   if (object && visitor(*object) == gui::VisitResult::kStop) {
     return gui::VisitResult::kStop;
   }
@@ -144,7 +137,7 @@ gui::VisitResult Location::VisitChildren(gui::Visitor &visitor) {
     return gui::VisitResult::kStop;
   }
   UpdateConnectionWidgets();
-  for (auto &widget : connection_widgets) {
+  for (auto& widget : connection_widgets) {
     if (visitor(*widget) == gui::VisitResult::kStop) {
       return gui::VisitResult::kStop;
     }
@@ -152,14 +145,12 @@ gui::VisitResult Location::VisitChildren(gui::Visitor &visitor) {
   return gui::VisitResult::kContinue;
 }
 
-SkMatrix Location::TransformToChild(const Widget *child,
-                                    animation::State *state) const {
+SkMatrix Location::TransformToChild(const Widget* child, animation::State* state) const {
   SkPath my_shape = Shape();
   SkRect my_bounds = my_shape.getBounds();
   if (child == &name_text_field) {
     return SkMatrix::Translate(-my_bounds.left() - 0.001,
-                               -my_bounds.bottom() + gui::kTextFieldHeight +
-                                   0.001);
+                               -my_bounds.bottom() + gui::kTextFieldHeight + 0.001);
   }
   if (child == &run_button) {
     SkPath run_button_shape = run_button.Shape();
@@ -168,7 +159,7 @@ SkMatrix Location::TransformToChild(const Widget *child,
                                -(my_bounds.top() - run_bounds.fTop) - 0.001);
   }
   vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
-  for (auto &widget : connection_widgets) {
+  for (auto& widget : connection_widgets) {
     pos.Y -= widget->Height();
     if (widget.get() == child) {
       return SkMatrix::Translate(-pos.X, -pos.Y);
@@ -180,10 +171,10 @@ SkMatrix Location::TransformToChild(const Widget *child,
 
 void Location::UpdateConnectionWidgets() {
   if (object) {
-    object->Args([&](Argument &arg) {
+    object->Args([&](Argument& arg) {
       // Check if this argument already has a widget.
       bool has_widget = false;
-      for (auto &widget : connection_widgets) {
+      for (auto& widget : connection_widgets) {
         if (widget->from != this) {
           continue;
         }
@@ -197,13 +188,12 @@ void Location::UpdateConnectionWidgets() {
       }
       // Create a new widget.
       LOG() << "Creating a ConnectionWidget for argument " << arg.name;
-      connection_widgets.emplace_back(
-          new gui::ConnectionWidget(this, arg.name));
+      connection_widgets.emplace_back(new gui::ConnectionWidget(this, arg.name));
     });
   }
 }
 
-vec2 Location::AnimatedPosition(animation::State &animation_state) const {
+vec2 Location::AnimatedPosition(animation::State& animation_state) const {
   vec2 ret = position;
   if (drag_action) {
     ret.X += drag_action->round_x[animation_state];
@@ -212,37 +202,35 @@ vec2 Location::AnimatedPosition(animation::State &animation_state) const {
   return ret;
 }
 
-void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
+void Location::Draw(SkCanvas& canvas, animation::State& animation_state) const {
   SkPath my_shape = Shape();
   SkRect bounds = my_shape.getBounds();
   SkPaint frame_bg;
   SkColor frame_bg_colors[2] = {0xffcccccc, 0xffaaaaaa};
   SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
-  sk_sp<SkShader> frame_bg_shader = SkGradientShader::MakeLinear(
-      gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
+  sk_sp<SkShader> frame_bg_shader =
+      SkGradientShader::MakeLinear(gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
   frame_bg.setShader(frame_bg_shader);
   canvas.drawPath(my_shape, frame_bg);
 
   SkPaint frame_border;
-  SkColor frame_border_colors[2] = {
-      color::AdjustLightness(frame_bg_colors[0], 5),
-      color::AdjustLightness(frame_bg_colors[1], -5)};
+  SkColor frame_border_colors[2] = {color::AdjustLightness(frame_bg_colors[0], 5),
+                                    color::AdjustLightness(frame_bg_colors[1], -5)};
   sk_sp<SkShader> frame_border_shader = SkGradientShader::MakeLinear(
       gradient_pts, frame_border_colors, nullptr, 2, SkTileMode::kClamp);
   frame_border.setShader(frame_border_shader);
   frame_border.setStyle(SkPaint::kStroke_Style);
   frame_border.setStrokeWidth(0.00025);
-  canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius,
-                       frame_border);
+  canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
 
   auto DrawInset = [&](SkPath shape) {
-    const SkRect &bounds = shape.getBounds();
+    const SkRect& bounds = shape.getBounds();
     SkPaint paint;
     SkColor colors[2] = {color::AdjustLightness(frame_bg_colors[0], 5),
                          color::AdjustLightness(frame_bg_colors[1], -5)};
     SkPoint points[2] = {{0, bounds.top()}, {0, bounds.bottom()}};
-    sk_sp<SkShader> shader = SkGradientShader::MakeLinear(
-        points, colors, nullptr, 2, SkTileMode::kClamp);
+    sk_sp<SkShader> shader =
+        SkGradientShader::MakeLinear(points, colors, nullptr, 2, SkTileMode::kClamp);
     paint.setShader(shader);
     paint.setStyle(SkPaint::kStroke_Style);
     paint.setStrokeWidth(0.0005);
@@ -262,7 +250,7 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   float offset_y = bounds.top();
   float offset_x = bounds.left();
   float line_height = gui::kLetterSize * 1.5;
-  auto &font = gui::GetFont();
+  auto& font = gui::GetFont();
 
   if (error) {
     constexpr float b = 0.00025;
@@ -282,8 +270,7 @@ void Location::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   }
 }
 
-std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer &p,
-                                                   gui::PointerButton btn) {
+std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
   if (btn == gui::PointerButton::kMouseLeft) {
     auto a = std::make_unique<DragLocationAction>(this);
     a->contact_point = p.PositionWithin(*this);
@@ -298,14 +285,13 @@ std::string Location::LoggableString() const {
   std::string_view object_name = object->Name();
   if (name.empty()) {
     if (object_name.empty()) {
-      auto &o = *object;
+      auto& o = *object;
       return typeid(o).name();
     } else {
       return std::string(object_name);
     }
   } else {
-    return f("%*s \"%s\"", object_name.size(), object_name.data(),
-             name.c_str());
+    return f("%*s \"%s\"", object_name.size(), object_name.data(), name.c_str());
   }
 }
 
@@ -317,4 +303,4 @@ void Location::ReportMissing(std::string_view property) {
   ReportError(error_message);
 }
 
-} // namespace automat
+}  // namespace automat

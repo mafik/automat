@@ -1,9 +1,9 @@
-#include <algorithm>
-#include <thread>
+#include "channel.h"
 
 #include <gtest/gtest.h>
 
-#include "channel.h"
+#include <algorithm>
+#include <thread>
 
 using namespace automat;
 

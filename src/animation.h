@@ -9,9 +9,9 @@ namespace automat::animation {
 
 struct State {
   product_holder holder;
-  operator product_holder &() { return holder; }
+  operator product_holder&() { return holder; }
   time::Timer timer;
-  operator time::Timer &() { return timer; }
+  operator time::Timer&() { return timer; }
 };
 
 struct DeltaFraction {
@@ -20,11 +20,10 @@ struct DeltaFraction {
 
   DeltaFraction(float speed = 15) : speed(speed), last_tick(time::now()) {}
 
-  float Tick(time::Timer &timer) {
+  float Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
-    if (dt <= 0)
-      return 0;
+    if (dt <= 0) return 0;
     return 1 - exp(-dt * speed);
   }
 };
@@ -38,13 +37,11 @@ struct Approach {
   time::point last_tick;
 
   Approach(float initial = 0, float cap_min = 0.01)
-      : value(initial), target(initial), cap_min(cap_min), cap(cap_min),
-        last_tick(time::now()) {}
-  void Tick(time::Timer &timer) {
+      : value(initial), target(initial), cap_min(cap_min), cap(cap_min), last_tick(time::now()) {}
+  void Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
-    if (dt <= 0)
-      return;
+    if (dt <= 0) return;
     float delta = (target - value) * (1 - exp(-dt * speed));
     float delta_abs = fabs(delta);
     if (delta_abs > cap * dt) {
@@ -63,4 +60,4 @@ struct Approach {
   operator float() const { return value; }
 };
 
-} // namespace automat::animation
+}  // namespace automat::animation

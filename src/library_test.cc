@@ -1,15 +1,17 @@
-#include "base.h"
 #include "library.h"
-#include "test_base.h"
+
 #include <gtest/gtest.h>
+
+#include "base.h"
+#include "test_base.h"
 
 using namespace automat;
 
 struct StartsWithTestTest : TestBase {
-  Location &starts = machine.Create<Text>("starts");
-  Location &with = machine.Create<Text>("with");
+  Location& starts = machine.Create<Text>("starts");
+  Location& with = machine.Create<Text>("with");
 
-  Location &test = machine.Create<StartsWithTest>();
+  Location& test = machine.Create<StartsWithTest>();
   StartsWithTestTest() {
     test.ConnectTo(starts, "starts");
     test.ConnectTo(with, "with");

@@ -14,4 +14,4 @@ SkColor AdjustLightness(SkColor color, float adjust_percent);
 
 SkColor MixColors(SkColor zero, SkColor one, float ratio);
 
-} // namespace automat::color
+}  // namespace automat::color

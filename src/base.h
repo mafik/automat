@@ -1,5 +1,10 @@
 #pragma once
 
+#include <include/core/SkCanvas.h>
+#include <include/core/SkMatrix.h>
+#include <include/core/SkPath.h>
+#include <modules/skottie/include/Skottie.h>
+
 #include <algorithm>
 #include <cassert>
 #include <compare>
@@ -12,11 +17,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-#include <include/core/SkCanvas.h>
-#include <include/core/SkMatrix.h>
-#include <include/core/SkPath.h>
-#include <modules/skottie/include/Skottie.h>
 
 #include "animation.h"
 #include "argument.h"
@@ -46,21 +46,20 @@ struct Location;
 struct Machine;
 
 struct LiveObject : Object {
-  Location *here = nullptr;
+  Location* here = nullptr;
 
-  Widget *ParentWidget() const override { return here; }
-  void Relocate(Location *new_self) override {
-    Args([old_self = here, new_self](Argument &arg) {
-      if (auto live_arg = dynamic_cast<LiveArgument *>(&arg)) {
+  Widget* ParentWidget() const override { return here; }
+  void Relocate(Location* new_self) override {
+    Args([old_self = here, new_self](Argument& arg) {
+      if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {
         live_arg->Relocate(old_self, new_self);
       }
     });
     here = new_self;
   }
-  void ConnectionAdded(Location &here, string_view label,
-                       Connection &connection) override {
-    Args([&here, &label, &connection](Argument &arg) {
-      if (auto live_arg = dynamic_cast<LiveArgument *>(&arg)) {
+  void ConnectionAdded(Location& here, string_view label, Connection& connection) override {
+    Args([&here, &label, &connection](Argument& arg) {
+      if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {
         live_arg->ConnectionAdded(here, label, connection);
       }
     });
@@ -73,18 +72,18 @@ struct Machine : LiveObject {
   Machine() = default;
   string name = "";
   unordered_set<unique_ptr<Location>> locations;
-  vector<Location *> front;
-  vector<Location *> children_with_errors;
+  vector<Location*> front;
+  vector<Location*> children_with_errors;
 
-  Location &CreateEmpty(const string &name = "") {
+  Location& CreateEmpty(const string& name = "") {
     auto [it, already_present] = locations.emplace(new Location(here));
-    Location *h = it->get();
+    Location* h = it->get();
     h->name = name;
     return *h;
   }
 
-  Location &Create(const Object &prototype, const string &name = "") {
-    auto &h = CreateEmpty(name);
+  Location& Create(const Object& prototype, const string& name = "") {
+    auto& h = CreateEmpty(name);
     h.Create(prototype);
     return h;
   }
@@ -92,17 +91,18 @@ struct Machine : LiveObject {
   // Create an instance of T and return its location.
   //
   // The new instance is created from a prototype instance in `T::proto`.
-  template <typename T> Location &Create(const string &name = "") {
+  template <typename T>
+  Location& Create(const string& name = "") {
     return Create(T::proto, name);
   }
 
-  Location *LocationAtPoint(vec2);
+  Location* LocationAtPoint(vec2);
 
   string_view Name() const override { return name; }
   std::unique_ptr<Object> Clone() const override {
-    Machine *m = new Machine();
-    for (auto &my_it : locations) {
-      auto &other_h = m->CreateEmpty(my_it->name);
+    Machine* m = new Machine();
+    for (auto& my_it : locations) {
+      auto& other_h = m->CreateEmpty(my_it->name);
       other_h.Create(*my_it->object);
     }
     return std::unique_ptr<Object>(m);
@@ -113,26 +113,25 @@ struct Machine : LiveObject {
     return empty_path;
   }
 
-  gui::VisitResult VisitChildren(gui::Visitor &visitor) override {
-    for (auto &it : locations) {
+  gui::VisitResult VisitChildren(gui::Visitor& visitor) override {
+    for (auto& it : locations) {
       if (visitor(*it) == gui::VisitResult::kStop) {
         return gui::VisitResult::kStop;
       }
     }
     return gui::VisitResult::kContinue;
   }
-  SkMatrix TransformToChild(const Widget *child,
-                            animation::State *state = nullptr) const override {
-    const Location *l = dynamic_cast<const Location *>(child);
+  SkMatrix TransformToChild(const Widget* child, animation::State* state = nullptr) const override {
+    const Location* l = dynamic_cast<const Location*>(child);
     if (l == nullptr) {
       return SkMatrix::I();
     }
     vec2 pos = state ? l->AnimatedPosition(*state) : l->position;
     return SkMatrix::Translate(-pos.X, -pos.Y);
   }
-  void Args(std::function<void(Argument &)> cb) override {}
-  void Relocate(Location *parent) override {
-    for (auto &it : locations) {
+  void Args(std::function<void(Argument&)> cb) override {}
+  void Relocate(Location* parent) override {
+    for (auto& it : locations) {
       it->parent = here;
     }
     LiveObject::Relocate(parent);
@@ -140,7 +139,7 @@ struct Machine : LiveObject {
 
   string LoggableString() const { return f("Machine(%s)", name.c_str()); }
 
-  Location *Front(const string &name) {
+  Location* Front(const string& name) {
     for (int i = 0; i < front.size(); ++i) {
       if (front[i]->name == name) {
         return front[i];
@@ -149,21 +148,19 @@ struct Machine : LiveObject {
     return nullptr;
   }
 
-  Location *operator[](const string &name) {
+  Location* operator[](const string& name) {
     auto h = Front(name);
     if (h == nullptr) {
-      ERROR() << "Component \"" << name << "\" of " << this->name
-              << " is null!";
+      ERROR() << "Component \"" << name << "\" of " << this->name << " is null!";
     }
     return h;
   }
 
-  void AddToFrontPanel(Location &h) {
+  void AddToFrontPanel(Location& h) {
     if (std::find(front.begin(), front.end(), &h) == front.end()) {
       front.push_back(&h);
     } else {
-      ERROR() << "Attempted to add already present " << h << " to " << *this
-              << " front panel";
+      ERROR() << "Attempted to add already present " << h << " to " << *this << " front panel";
     }
   }
 
@@ -171,38 +168,37 @@ struct Machine : LiveObject {
   //
   // This function will return all errors held by locations of this machine &
   // recurse into submachines.
-  void Diagnostics(function<void(Location *, Error &)> error_callback) {
-    for (auto &location : locations) {
+  void Diagnostics(function<void(Location*, Error&)> error_callback) {
+    for (auto& location : locations) {
       if (location->error) {
         error_callback(location.get(), *location->error);
       }
-      if (auto submachine = dynamic_cast<Machine *>(location->object.get())) {
+      if (auto submachine = dynamic_cast<Machine*>(location->object.get())) {
         submachine->Diagnostics(error_callback);
       }
     }
   }
 
-  void Errored(Location &here, Location &errored) override {
+  void Errored(Location& here, Location& errored) override {
     // If the error hasn't been cleared by other Errored calls, then propagate
     // it to the parent.
     if (errored.HasError()) {
       children_with_errors.push_back(&errored);
-      for (Location *observer : here.error_observers) {
+      for (Location* observer : here.error_observers) {
         observer->ScheduleErrored(errored);
       }
 
       if (here.parent) {
         here.parent->ScheduleErrored(here);
       } else {
-        Error *error = errored.GetError();
+        Error* error = errored.GetError();
         ERROR(error->source_location) << error->text;
       }
     }
   }
 
-  void ClearChildError(Location &child) {
-    if (auto it = std::find(children_with_errors.begin(),
-                            children_with_errors.end(), &child);
+  void ClearChildError(Location& child) {
+    if (auto it = std::find(children_with_errors.begin(), children_with_errors.end(), &child);
         it != children_with_errors.end()) {
       children_with_errors.erase(it);
       if (!here->HasError()) {
@@ -215,44 +211,41 @@ struct Machine : LiveObject {
 };
 
 struct Pointer : LiveObject {
-  virtual Object *Next(Location &error_context) const = 0;
-  virtual void PutNext(Location &error_context,
-                       std::unique_ptr<Object> obj) = 0;
-  virtual std::unique_ptr<Object> TakeNext(Location &error_context) = 0;
+  virtual Object* Next(Location& error_context) const = 0;
+  virtual void PutNext(Location& error_context, std::unique_ptr<Object> obj) = 0;
+  virtual std::unique_ptr<Object> TakeNext(Location& error_context) = 0;
 
-  std::pair<Pointer &, Object *> FollowPointers(Location &error_context) const {
-    const Pointer *ptr = this;
-    Object *next = Next(error_context);
+  std::pair<Pointer&, Object*> FollowPointers(Location& error_context) const {
+    const Pointer* ptr = this;
+    Object* next = Next(error_context);
     while (next != nullptr) {
-      if (Pointer *next_ptr = next->AsPointer()) {
+      if (Pointer* next_ptr = next->AsPointer()) {
         ptr = next_ptr;
         next = next_ptr->Next(error_context);
       } else {
         break;
       }
     }
-    return {*const_cast<Pointer *>(ptr), next};
+    return {*const_cast<Pointer*>(ptr), next};
   }
-  Object *Follow(Location &error_context) const {
-    return FollowPointers(error_context).second;
-  }
-  void Put(Location &error_context, std::unique_ptr<Object> obj) {
+  Object* Follow(Location& error_context) const { return FollowPointers(error_context).second; }
+  void Put(Location& error_context, std::unique_ptr<Object> obj) {
     FollowPointers(error_context).first.PutNext(error_context, std::move(obj));
   }
-  std::unique_ptr<Object> Take(Location &error_context) {
+  std::unique_ptr<Object> Take(Location& error_context) {
     return FollowPointers(error_context).first.TakeNext(error_context);
   }
 
-  Pointer *AsPointer() override { return this; }
+  Pointer* AsPointer() override { return this; }
   string GetText() const override {
-    if (auto *obj = Follow(*here)) {
+    if (auto* obj = Follow(*here)) {
       return obj->GetText();
     } else {
       return "null";
     }
   }
-  void SetText(Location &error_context, string_view text) override {
-    if (auto *obj = Follow(error_context)) {
+  void SetText(Location& error_context, string_view text) override {
+    if (auto* obj = Follow(error_context)) {
       obj->SetText(error_context, text);
     } else {
       error_context.ReportError("Can't set text on null pointer");
@@ -269,25 +262,24 @@ struct LogTasksGuard {
 
 struct Task;
 
-extern std::deque<Task *> queue;
-extern std::unordered_set<Location *> no_scheduling;
-extern vector<Task *> global_successors;
+extern std::deque<Task*> queue;
+extern std::unordered_set<Location*> no_scheduling;
+extern vector<Task*> global_successors;
 
-bool NoScheduling(Location *location);
+bool NoScheduling(Location* location);
 
 struct ThenGuard {
-  std::vector<Task *> successors;
-  std::vector<Task *> old_global_successors;
-  ThenGuard(std::vector<Task *> &&successors)
-      : successors(std::move(successors)) {
+  std::vector<Task*> successors;
+  std::vector<Task*> old_global_successors;
+  ThenGuard(std::vector<Task*>&& successors) : successors(std::move(successors)) {
     old_global_successors = global_successors;
     global_successors = this->successors;
   }
   ~ThenGuard() {
     assert(global_successors == successors);
     global_successors = old_global_successors;
-    for (Task *successor : successors) {
-      auto &pred = successor->predecessors;
+    for (Task* successor : successors) {
+      auto& pred = successor->predecessors;
       if (pred.empty()) {
         successor->Schedule();
       }
@@ -296,10 +288,8 @@ struct ThenGuard {
 };
 
 struct NoSchedulingGuard {
-  Location &location;
-  NoSchedulingGuard(Location &location) : location(location) {
-    no_scheduling.insert(&location);
-  }
+  Location& location;
+  NoSchedulingGuard(Location& location) : location(location) { no_scheduling.insert(&location); }
   ~NoSchedulingGuard() { no_scheduling.erase(&location); }
 };
 
@@ -321,4 +311,4 @@ extern channel events;
 
 void RunThread();
 
-} // namespace automat
+}  // namespace automat

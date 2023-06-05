@@ -9,4 +9,4 @@ namespace automat {
 // Scaling assumes 96 DPI and converts coordinates meters.
 SkPath PathFromSVG(const char svg[]);
 
-} // namespace automat
+}  // namespace automat

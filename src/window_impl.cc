@@ -12,8 +12,7 @@ namespace automat::gui {
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 static SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
 
-std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &pointer,
-                                                          PointerButton btn) {
+std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer& pointer, PointerButton btn) {
   if (btn != kMouseLeft) {
     return nullptr;
   }
@@ -24,13 +23,13 @@ std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer &pointer,
 }
 
 namespace {
-std::vector<WindowImpl *> windows;
-} // namespace
+std::vector<WindowImpl*> windows;
+}  // namespace
 
 WindowImpl::WindowImpl(vec2 size, float display_pixels_per_meter)
     : size(size), display_pixels_per_meter(display_pixels_per_meter) {
   prototype_buttons.reserve(Prototypes().size());
-  for (auto &proto : Prototypes()) {
+  for (auto& proto : Prototypes()) {
     prototype_buttons.emplace_back(this, proto);
     prototype_button_positions.emplace_back(Vec2(0, 0));
   }
@@ -45,7 +44,7 @@ WindowImpl::~WindowImpl() {
   }
 }
 
-void WindowImpl::Draw(SkCanvas &canvas) {
+void WindowImpl::Draw(SkCanvas& canvas) {
   animation_state.timer.Tick();
   RunOnAutomatThreadSynchronous([&] {
     // Record camera movement timeline. This is used to create inertia effect.
@@ -61,7 +60,7 @@ void WindowImpl::Draw(SkCanvas &canvas) {
     float total_zoom = 1;
     {
       std::lock_guard<std::mutex> lock(touchpad::touchpads_mutex);
-      for (touchpad::TouchPad *touchpad : touchpad::touchpads) {
+      for (touchpad::TouchPad* touchpad : touchpad::touchpads) {
         total_pan += touchpad->pan;
         touchpad->pan = Vec2(0, 0);
         total_zoom *= touchpad->zoom;
@@ -113,7 +112,7 @@ void WindowImpl::Draw(SkCanvas &canvas) {
 
     if (stabilize_mouse) {
       if (pointers.size() > 0) {
-        PointerImpl *first_pointer = *pointers.begin();
+        PointerImpl* first_pointer = *pointers.begin();
         vec2 mouse_position = first_pointer->pointer_position;
         vec2 focus_pre = WindowToCanvas(mouse_position);
         zoom.Tick(animation_state);
@@ -122,7 +121,7 @@ void WindowImpl::Draw(SkCanvas &canvas) {
         camera_x.Shift(-focus_delta.X);
         camera_y.Shift(-focus_delta.Y);
       }
-    } else { // stabilize camera target
+    } else {  // stabilize camera target
       vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
       vec2 target_screen = CanvasToWindow(focus_pre);
       zoom.Tick(animation_state);
@@ -135,7 +134,7 @@ void WindowImpl::Draw(SkCanvas &canvas) {
     camera_x.Tick(animation_state);
     camera_y.Tick(animation_state);
 
-    for (KeyboardImpl *keyboard : keyboards) {
+    for (KeyboardImpl* keyboard : keyboards) {
       if (keyboard->carets.empty()) {
         if (keyboard->pressed_keys.test((size_t)AnsiKey::W)) {
           camera_y.Shift(0.1 * animation_state.timer.d);
@@ -165,8 +164,8 @@ void WindowImpl::Draw(SkCanvas &canvas) {
       // work area
       vec2 bottom_left = WindowToCanvas(Vec2(0.001, 0.001));
       vec2 top_right = WindowToCanvas(size - Vec2(0.001, 0.001));
-      SkRect window_bounds = SkRect::MakeLTRB(bottom_left.X, top_right.Y,
-                                              top_right.X, bottom_left.Y);
+      SkRect window_bounds =
+          SkRect::MakeLTRB(bottom_left.X, top_right.Y, top_right.X, bottom_left.Y);
       if (work_area.left() > window_bounds.right()) {
         camera_x.Shift(work_area.left() - window_bounds.right());
       }
@@ -199,33 +198,33 @@ void WindowImpl::Draw(SkCanvas &canvas) {
     if (zoom.target == 1 && rz > 0.001) {
       SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
       target_paint.setStyle(SkPaint::kStroke_Style);
-      target_paint.setStrokeWidth(0.001); // 1mm
+      target_paint.setStrokeWidth(0.001);  // 1mm
       float target_width = size.Width;
       float target_height = size.Height;
-      SkRect target_rect = SkRect::MakeXYWH(camera_x.target - target_width / 2,
-                                            camera_y.target - target_height / 2,
-                                            target_width, target_height);
+      SkRect target_rect =
+          SkRect::MakeXYWH(camera_x.target - target_width / 2, camera_y.target - target_height / 2,
+                           target_width, target_height);
       canvas.drawRect(target_rect, target_paint);
     }
 
     root_machine->DrawChildren(canvas, animation_state);
 
-    for (auto &pointer : pointers) {
+    for (auto& pointer : pointers) {
       pointer->Draw(canvas, animation_state);
     }
 
-    for (auto &each_window : windows) {
-      for (auto &each_keyboard : each_window->keyboards) {
+    for (auto& each_window : windows) {
+      for (auto& each_keyboard : each_window->keyboards) {
         each_keyboard->Draw(canvas, animation_state);
       }
     }
 
     canvas.restore();
-  }); // RunOnAutomatThreadSynchronous
+  });  // RunOnAutomatThreadSynchronous
 
   // Draw prototype shelf
   for (int i = 0; i < prototype_buttons.size(); i++) {
-    vec2 &position = prototype_button_positions[i];
+    vec2& position = prototype_button_positions[i];
     canvas.save();
     canvas.translate(position.X, position.Y);
     prototype_buttons[i].Draw(canvas, animation_state);
@@ -241,10 +240,10 @@ void WindowImpl::Draw(SkCanvas &canvas) {
   std::vector<float> fps_sorted(fps_history.begin(), fps_history.end());
   std::sort(fps_sorted.begin(), fps_sorted.end());
   float median_fps = fps_sorted[fps_sorted.size() / 2];
-  std::string fps_str = f("FPS min: %3.0f @50%%: %3.0f max: %3.0f",
-                          fps_sorted.front(), median_fps, fps_sorted.back());
+  std::string fps_str = f("FPS min: %3.0f @50%%: %3.0f max: %3.0f", fps_sorted.front(), median_fps,
+                          fps_sorted.back());
   SkPaint fps_paint;
-  auto &font = GetFont();
+  auto& font = GetFont();
   canvas.save();
   canvas.translate(0.001, size.Y - 0.001 - gui::kLetterSize);
   font.DrawText(canvas, fps_str, fps_paint);
@@ -253,7 +252,7 @@ void WindowImpl::Draw(SkCanvas &canvas) {
 
 void WindowImpl::Zoom(float delta) {
   if (pointers.size() > 0) {
-    PointerImpl *first_pointer = *pointers.begin();
+    PointerImpl* first_pointer = *pointers.begin();
     vec2 mouse_position = first_pointer->pointer_position;
     vec2 focus_pre = WindowToCanvas(mouse_position);
     zoom.target *= delta;
@@ -268,4 +267,4 @@ void WindowImpl::Zoom(float delta) {
   }
 }
 
-} // namespace automat::gui
+}  // namespace automat::gui

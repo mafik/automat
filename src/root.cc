@@ -6,7 +6,7 @@
 namespace automat {
 
 Location root_location;
-Machine *root_machine;
+Machine* root_machine;
 std::thread automat_thread;
 
 void InitRoot() {
@@ -22,8 +22,7 @@ void RunOnAutomatThread(std::function<void()> f) {
     f();
     return;
   }
-  events.send(std::make_unique<FunctionTask>(&root_location,
-                                             [f](Location &l) { f(); }));
+  events.send(std::make_unique<FunctionTask>(&root_location, [f](Location& l) { f(); }));
 }
 
 void RunOnAutomatThreadSynchronous(std::function<void()> f) {
@@ -43,4 +42,4 @@ void RunOnAutomatThreadSynchronous(std::function<void()> f) {
   automat_thread_done.wait(lock);
 }
 
-} // namespace automat
+}  // namespace automat

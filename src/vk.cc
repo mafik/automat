@@ -8,8 +8,6 @@
 #endif
 
 #include <VkBootstrap.h>
-#include <vulkan/vulkan.h>
-
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkColorType.h>
 #include <include/core/SkSurface.h>
@@ -18,6 +16,7 @@
 #include <include/gpu/vk/GrVkBackendContext.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <src/gpu/ganesh/vk/GrVkUtil.h>
+#include <vulkan/vulkan.h>
 
 namespace automat::vk {
 
@@ -26,11 +25,9 @@ PFN_vkGetInstanceProcAddr GetInstanceProcAddr;
 PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
 
 // Initialized in InitFunctions
-PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR
-    GetPhysicalDeviceSurfaceCapabilitiesKHR;
+PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR GetPhysicalDeviceSurfaceCapabilitiesKHR;
 PFN_vkGetPhysicalDeviceSurfaceFormatsKHR GetPhysicalDeviceSurfaceFormatsKHR;
-PFN_vkGetPhysicalDeviceSurfacePresentModesKHR
-    GetPhysicalDeviceSurfacePresentModesKHR;
+PFN_vkGetPhysicalDeviceSurfacePresentModesKHR GetPhysicalDeviceSurfacePresentModesKHR;
 
 PFN_vkCreateSwapchainKHR CreateSwapchainKHR;
 PFN_vkDestroySwapchainKHR DestroySwapchainKHR;
@@ -46,14 +43,14 @@ PFN_vkDestroySemaphore DestroySemaphore;
 struct Instance : vkb::Instance {
   void Init();
   void Destroy();
-  PFN_vkVoidFunction GetProc(const char *proc_name) {
+  PFN_vkVoidFunction GetProc(const char* proc_name) {
     return GetInstanceProcAddr(instance, proc_name);
   }
 
   uint32_t instance_version = VK_MAKE_VERSION(1, 1, 0);
   uint32_t api_version = VK_API_VERSION_1_1;
   std::string error = "";
-  std::vector<const char *> extensions = {
+  std::vector<const char*> extensions = {
 #if defined(_WIN32)
     "VK_KHR_win32_surface"
 #elif defined(__linux__)
@@ -76,16 +73,14 @@ struct PhysicalDevice : vkb::PhysicalDevice {
   void Destroy();
 
   std::vector<std::string> extensions_str;
-  std::vector<const char *> extensions;
+  std::vector<const char*> extensions;
   std::string error = "";
 } physical_device;
 
 struct Device : vkb::Device {
   void Init();
   void Destroy();
-  PFN_vkVoidFunction GetProc(const char *proc_name) {
-    return GetDeviceProcAddr(device, proc_name);
-  }
+  PFN_vkVoidFunction GetProc(const char* proc_name) { return GetDeviceProcAddr(device, proc_name); }
 
   uint32_t graphics_queue_index;
   VkQueue graphics_queue;
@@ -100,8 +95,8 @@ sk_sp<GrDirectContext> gr_context;
 
 struct Swapchain {
   struct BackbufferInfo {
-    uint32_t image_index;         // image this is associated with
-    VkSemaphore render_semaphore; // we wait on this for rendering to be done
+    uint32_t image_index;          // image this is associated with
+    VkSemaphore render_semaphore;  // we wait on this for rendering to be done
   };
 
   void DestroyBuffers();
@@ -109,21 +104,21 @@ struct Swapchain {
                      VkImageUsageFlags usageFlags, SkColorType colorType,
                      VkSharingMode sharingMode);
   bool Create(int widthHint, int heightHint);
-  BackbufferInfo *GetAvailableBackbuffer();
-  SkCanvas *GetBackbufferCanvas();
+  BackbufferInfo* GetAvailableBackbuffer();
+  SkCanvas* GetBackbufferCanvas();
   void SwapBuffers();
   void WaitAndDestroy();
   operator VkSwapchainKHR() { return swapchain; }
 
   VkSwapchainKHR swapchain;
   uint32_t image_count;
-  VkImage *images; // images in the swapchain
-  sk_sp<SkSurface> *surfaces;
+  VkImage* images;  // images in the swapchain
+  sk_sp<SkSurface>* surfaces;
 
   // Note that there are (image_count + 1) backbuffers. We create one additional
   // backbuffer structure, because we want to give the command buffers they
   // contain a chance to finish before we cycle back.
-  BackbufferInfo *backbuffers;
+  BackbufferInfo* backbuffers;
   uint32_t current_backbuffer_index;
 } swapchain;
 
@@ -134,14 +129,14 @@ void Instance::Init() {
   vkb::InstanceBuilder builder;
   builder.set_minimum_instance_version(instance_version);
   builder.require_api_version(api_version);
-  for (auto &ext : extensions) {
+  for (auto& ext : extensions) {
     builder.enable_extension(ext);
   }
   auto result = builder.build();
   if (!result) {
     error = result.error().message();
   } else {
-    (*(vkb::Instance *)this) = result.value();
+    (*(vkb::Instance*)this) = result.value();
   }
   GetInstanceProcAddr = fp_vkGetInstanceProcAddr;
   GetDeviceProcAddr = fp_vkGetDeviceProcAddr;
@@ -152,8 +147,7 @@ void Instance::Destroy() {
   instance = VK_NULL_HANDLE;
   error = "";
 }
-PFN_vkVoidFunction GetProc(const char *proc_name, VkInstance vk_instance,
-                           VkDevice device) {
+PFN_vkVoidFunction GetProc(const char* proc_name, VkInstance vk_instance, VkDevice device) {
   if (device != VK_NULL_HANDLE) {
     return GetDeviceProcAddr(device, proc_name);
   }
@@ -177,8 +171,7 @@ void Surface::Init() {
       .hinstance = GetInstance(),
       .hwnd = main_window};
 
-  VkResult res =
-      vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
+  VkResult res = vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
   if (VK_SUCCESS != res) {
     error = "Failure in vkCreateWin32SurfaceKHR.";
     return;
@@ -201,8 +194,7 @@ void Surface::Init() {
       .connection = connection,
       .window = xcb_window};
 
-  VkResult res =
-      vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
+  VkResult res = vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
   if (VK_SUCCESS != res) {
     error = "Failure in vkCreateXcbSurfaceKHR.";
     return;
@@ -225,20 +217,19 @@ void PhysicalDevice::Init() {
     error = "vk::PhysicalDevice already initialized.";
     return;
   }
-  auto result =
-      vkb::PhysicalDeviceSelector(instance)
-          .set_surface(vk::surface)
-          .add_required_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
-          .add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
-          .prefer_gpu_device_type()
-          .select();
+  auto result = vkb::PhysicalDeviceSelector(instance)
+                    .set_surface(vk::surface)
+                    .add_required_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
+                    .add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
+                    .prefer_gpu_device_type()
+                    .select();
   if (!result) {
     error = result.error().message();
     return;
   }
-  *(vkb::PhysicalDevice *)this = result.value();
+  *(vkb::PhysicalDevice*)this = result.value();
   extensions_str = get_extensions();
-  for (auto &ext : extensions_str) {
+  for (auto& ext : extensions_str) {
     extensions.push_back(ext.c_str());
   }
 }
@@ -249,44 +240,36 @@ void PhysicalDevice::Destroy() {
   error = "";
 }
 void Device::Init() {
-  extensions.init(vk::GetProc, instance, vk::physical_device,
-                  instance.extensions.size(), instance.extensions.data(),
-                  vk::physical_device.extensions.size(),
+  extensions.init(vk::GetProc, instance, vk::physical_device, instance.extensions.size(),
+                  instance.extensions.data(), vk::physical_device.extensions.size(),
                   vk::physical_device.extensions.data());
 
   int api_version = vk::physical_device.properties.apiVersion;
   SkASSERT(api_version >= VK_MAKE_VERSION(1, 1, 0) ||
-           extensions.hasExtension(
-               VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, 1));
+           extensions.hasExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, 1));
 
   features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
   features.pNext = nullptr;
 
   // Setup all extension feature structs we may want to use.
-  void **tailPNext = &features.pNext;
+  void** tailPNext = &features.pNext;
 
-  VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT *blend = nullptr;
-  if (extensions.hasExtension(VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME,
-                              2)) {
-    blend =
-        (VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT *)sk_malloc_throw(
-            sizeof(VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT));
-    blend->sType =
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BLEND_OPERATION_ADVANCED_FEATURES_EXT;
+  VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT* blend = nullptr;
+  if (extensions.hasExtension(VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME, 2)) {
+    blend = (VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT*)sk_malloc_throw(
+        sizeof(VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT));
+    blend->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BLEND_OPERATION_ADVANCED_FEATURES_EXT;
     blend->pNext = nullptr;
     *tailPNext = blend;
     tailPNext = &blend->pNext;
   }
 
-  VkPhysicalDeviceSamplerYcbcrConversionFeatures *ycbcrFeature = nullptr;
+  VkPhysicalDeviceSamplerYcbcrConversionFeatures* ycbcrFeature = nullptr;
   if (api_version >= VK_MAKE_VERSION(1, 1, 0) ||
-      extensions.hasExtension(VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME,
-                              1)) {
-    ycbcrFeature =
-        (VkPhysicalDeviceSamplerYcbcrConversionFeatures *)sk_malloc_throw(
-            sizeof(VkPhysicalDeviceSamplerYcbcrConversionFeatures));
-    ycbcrFeature->sType =
-        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
+      extensions.hasExtension(VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME, 1)) {
+    ycbcrFeature = (VkPhysicalDeviceSamplerYcbcrConversionFeatures*)sk_malloc_throw(
+        sizeof(VkPhysicalDeviceSamplerYcbcrConversionFeatures));
+    ycbcrFeature->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
     ycbcrFeature->pNext = nullptr;
     ycbcrFeature->samplerYcbcrConversion = VK_TRUE;
     *tailPNext = ycbcrFeature;
@@ -294,10 +277,9 @@ void Device::Init() {
   }
 
   PFN_vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceFeatures2 =
-      (PFN_vkGetPhysicalDeviceFeatures2)instance.GetProc(
-          api_version >= VK_MAKE_VERSION(1, 1, 0)
-              ? "vkGetPhysicalDeviceFeatures2"
-              : "vkGetPhysicalDeviceFeatures2KHR");
+      (PFN_vkGetPhysicalDeviceFeatures2)instance.GetProc(api_version >= VK_MAKE_VERSION(1, 1, 0)
+                                                             ? "vkGetPhysicalDeviceFeatures2"
+                                                             : "vkGetPhysicalDeviceFeatures2KHR");
   vkGetPhysicalDeviceFeatures2(vk::physical_device, &features);
 
   // this looks like it would slow things down,
@@ -315,7 +297,7 @@ void Device::Init() {
     error = dev_ret.error().message();
     return;
   }
-  *(vkb::Device *)this = dev_ret.value();
+  *(vkb::Device*)this = dev_ret.value();
 
   auto gq_result = get_queue(vkb::QueueType::graphics);
   if (!gq_result) {
@@ -409,9 +391,8 @@ void Swapchain::DestroyBuffers() {
   delete[] images;
   images = nullptr;
 }
-bool Swapchain::CreateBuffers(int width, int height, int sample_count,
-                              VkFormat format, VkImageUsageFlags usageFlags,
-                              SkColorType colorType,
+bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat format,
+                              VkImageUsageFlags usageFlags, SkColorType colorType,
                               VkSharingMode sharingMode) {
   GetSwapchainImagesKHR(device, swapchain, &image_count, nullptr);
   SkASSERT(image_count);
@@ -424,7 +405,6 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count,
   static sk_sp<SkColorSpace> color_space = SkColorSpace::MakeSRGB();
 
   for (uint32_t i = 0; i < image_count; ++i) {
-
     GrVkImageInfo info = {.fImage = images[i],
                           .fAlloc = skgpu::VulkanAlloc(),
                           .fImageTiling = VK_IMAGE_TILING_OPTIMAL,
@@ -437,17 +417,17 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count,
 
     if (usageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) {
       GrBackendTexture backendTexture(width, height, info);
-      surfaces[i] = SkSurface::MakeFromBackendTexture(
-          gr_context.get(), backendTexture, kTopLeft_GrSurfaceOrigin,
-          cfg_MSAASampleCount, colorType, color_space, &surface_props);
+      surfaces[i] = SkSurface::MakeFromBackendTexture(gr_context.get(), backendTexture,
+                                                      kTopLeft_GrSurfaceOrigin, cfg_MSAASampleCount,
+                                                      colorType, color_space, &surface_props);
     } else {
       if (cfg_MSAASampleCount > 1) {
         return false;
       }
       GrBackendRenderTarget backendRT(width, height, sample_count, info);
-      surfaces[i] = SkSurface::MakeFromBackendRenderTarget(
-          gr_context.get(), backendRT, kTopLeft_GrSurfaceOrigin, colorType,
-          color_space, &surface_props);
+      surfaces[i] = SkSurface::MakeFromBackendRenderTarget(gr_context.get(), backendRT,
+                                                           kTopLeft_GrSurfaceOrigin, colorType,
+                                                           color_space, &surface_props);
     }
     if (!surfaces[i]) {
       return false;
@@ -464,8 +444,8 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count,
   backbuffers = new BackbufferInfo[image_count + 1];
   for (uint32_t i = 0; i < image_count + 1; ++i) {
     backbuffers[i].image_index = -1;
-    SkDEBUGCODE(VkResult result =) CreateSemaphore(
-        device, &semaphoreInfo, nullptr, &backbuffers[i].render_semaphore);
+    SkDEBUGCODE(VkResult result =)
+        CreateSemaphore(device, &semaphoreInfo, nullptr, &backbuffers[i].render_semaphore);
     SkASSERT(result == VK_SUCCESS);
   }
   current_backbuffer_index = image_count;
@@ -475,32 +455,30 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count,
 bool Swapchain::Create(int widthHint, int heightHint) {
   // check for capabilities
   VkSurfaceCapabilitiesKHR caps;
-  if (GetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface,
-                                              &caps)) {
+  if (GetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &caps)) {
     return false;
   }
 
   uint32_t surfaceFormatCount;
-  if (GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface,
-                                         &surfaceFormatCount, nullptr)) {
+  if (GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount, nullptr)) {
     return false;
   }
 
   VkSurfaceFormatKHR surfaceFormats[surfaceFormatCount];
-  if (GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface,
-                                         &surfaceFormatCount, surfaceFormats)) {
+  if (GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount,
+                                         surfaceFormats)) {
     return false;
   }
 
   uint32_t presentModeCount;
-  if (GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface,
-                                              &presentModeCount, nullptr)) {
+  if (GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount,
+                                              nullptr)) {
     return false;
   }
 
   VkPresentModeKHR presentModes[presentModeCount];
-  if (GetPhysicalDeviceSurfacePresentModesKHR(
-          physical_device, surface, &presentModeCount, presentModes)) {
+  if (GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount,
+                                              presentModes)) {
     return false;
   }
 
@@ -534,8 +512,7 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   }
 
   VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-                                 VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+                                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
   SkASSERT((caps.supportedUsageFlags & usageFlags) == usageFlags);
   if (caps.supportedUsageFlags & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT) {
     usageFlags |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
@@ -544,8 +521,8 @@ bool Swapchain::Create(int widthHint, int heightHint) {
     usageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
   }
   SkASSERT(caps.supportedTransforms & caps.currentTransform);
-  SkASSERT(caps.supportedCompositeAlpha & (VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR |
-                                           VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR));
+  SkASSERT(caps.supportedCompositeAlpha &
+           (VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR));
   VkCompositeAlphaFlagBitsKHR composite_alpha =
       (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)
           ? VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
@@ -570,15 +547,15 @@ bool Swapchain::Create(int widthHint, int heightHint) {
 
   SkColorType colorType;
   switch (surfaceFormat) {
-  case VK_FORMAT_R8G8B8A8_UNORM: // fall through
-  case VK_FORMAT_R8G8B8A8_SRGB:
-    colorType = kRGBA_8888_SkColorType;
-    break;
-  case VK_FORMAT_B8G8R8A8_UNORM: // fall through
-    colorType = kBGRA_8888_SkColorType;
-    break;
-  default:
-    return false;
+    case VK_FORMAT_R8G8B8A8_UNORM:  // fall through
+    case VK_FORMAT_R8G8B8A8_SRGB:
+      colorType = kRGBA_8888_SkColorType;
+      break;
+    case VK_FORMAT_B8G8R8A8_UNORM:  // fall through
+      colorType = kBGRA_8888_SkColorType;
+      break;
+    default:
+      return false;
   }
 
   // If mailbox mode is available, use it, as it is the lowest-latency non-
@@ -609,8 +586,7 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   swapchainCreateInfo.imageArrayLayers = 1;
   swapchainCreateInfo.imageUsage = usageFlags;
 
-  uint32_t queueFamilies[] = {device.graphics_queue_index,
-                              device.present_queue_index};
+  uint32_t queueFamilies[] = {device.graphics_queue_index, device.present_queue_index};
   if (device.graphics_queue_index != device.present_queue_index) {
     swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
     swapchainCreateInfo.queueFamilyIndexCount = 2;
@@ -639,9 +615,8 @@ bool Swapchain::Create(int widthHint, int heightHint) {
     DestroySwapchainKHR(device, swapchainCreateInfo.oldSwapchain, nullptr);
   }
 
-  if (!CreateBuffers(width, height, sample_count,
-                     swapchainCreateInfo.imageFormat, usageFlags, colorType,
-                     swapchainCreateInfo.imageSharingMode)) {
+  if (!CreateBuffers(width, height, sample_count, swapchainCreateInfo.imageFormat, usageFlags,
+                     colorType, swapchainCreateInfo.imageSharingMode)) {
     DeviceWaitIdle(device);
 
     DestroyBuffers();
@@ -652,7 +627,7 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   return true;
 }
 
-Swapchain::BackbufferInfo *Swapchain::GetAvailableBackbuffer() {
+Swapchain::BackbufferInfo* Swapchain::GetAvailableBackbuffer() {
   SkASSERT(backbuffers);
 
   ++current_backbuffer_index;
@@ -660,12 +635,12 @@ Swapchain::BackbufferInfo *Swapchain::GetAvailableBackbuffer() {
     current_backbuffer_index = 0;
   }
 
-  BackbufferInfo *backbuffer = backbuffers + current_backbuffer_index;
+  BackbufferInfo* backbuffer = backbuffers + current_backbuffer_index;
   return backbuffer;
 }
 
-SkCanvas *Swapchain::GetBackbufferCanvas() {
-  BackbufferInfo *backbuffer = GetAvailableBackbuffer();
+SkCanvas* Swapchain::GetBackbufferCanvas() {
+  BackbufferInfo* backbuffer = GetAvailableBackbuffer();
   SkASSERT(backbuffer);
 
   // semaphores should be in unsignaled state
@@ -675,12 +650,11 @@ SkCanvas *Swapchain::GetBackbufferCanvas() {
   semaphoreInfo.pNext = nullptr;
   semaphoreInfo.flags = 0;
   VkSemaphore semaphore;
-  SkDEBUGCODE(VkResult result =)
-      CreateSemaphore(device, &semaphoreInfo, nullptr, &semaphore);
+  SkDEBUGCODE(VkResult result =) CreateSemaphore(device, &semaphoreInfo, nullptr, &semaphore);
   SkASSERT(result == VK_SUCCESS);
 
-  VkResult res = AcquireNextImageKHR(device, swapchain, UINT64_MAX, semaphore,
-                                     VK_NULL_HANDLE, &backbuffer->image_index);
+  VkResult res = AcquireNextImageKHR(device, swapchain, UINT64_MAX, semaphore, VK_NULL_HANDLE,
+                                     &backbuffer->image_index);
   if (VK_ERROR_SURFACE_LOST_KHR == res) {
     // need to figure out how to create a new vkSurface without the
     // platformData* maybe use attach somehow? but need a Window
@@ -695,8 +669,8 @@ SkCanvas *Swapchain::GetBackbufferCanvas() {
     }
     backbuffer = GetAvailableBackbuffer();
 
-    res = AcquireNextImageKHR(device, swapchain, UINT64_MAX, semaphore,
-                              VK_NULL_HANDLE, &backbuffer->image_index);
+    res = AcquireNextImageKHR(device, swapchain, UINT64_MAX, semaphore, VK_NULL_HANDLE,
+                              &backbuffer->image_index);
 
     if (VK_SUCCESS != res) {
       DestroySemaphore(device, semaphore, nullptr);
@@ -704,7 +678,7 @@ SkCanvas *Swapchain::GetBackbufferCanvas() {
     }
   }
 
-  SkSurface *surface = surfaces[backbuffer->image_index].get();
+  SkSurface* surface = surfaces[backbuffer->image_index].get();
 
   GrBackendSemaphore beSemaphore;
   beSemaphore.initVulkan(semaphore);
@@ -715,8 +689,8 @@ SkCanvas *Swapchain::GetBackbufferCanvas() {
 }
 
 void Swapchain::SwapBuffers() {
-  BackbufferInfo &backbuffer = backbuffers[current_backbuffer_index];
-  SkSurface *surface = surfaces[backbuffer.image_index].get();
+  BackbufferInfo& backbuffer = backbuffers[current_backbuffer_index];
+  SkSurface* surface = surfaces[backbuffer.image_index].get();
 
   GrBackendSemaphore beSemaphore;
   beSemaphore.initVulkan(backbuffer.render_semaphore);
@@ -797,8 +771,8 @@ std::string Resize(int width_hint, int height_hint) {
   return "";
 }
 
-SkCanvas *GetBackbufferCanvas() { return swapchain.GetBackbufferCanvas(); }
+SkCanvas* GetBackbufferCanvas() { return swapchain.GetBackbufferCanvas(); }
 
 void Present() { swapchain.SwapBuffers(); }
 
-} // namespace automat::vk
+}  // namespace automat::vk

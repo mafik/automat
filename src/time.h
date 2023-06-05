@@ -18,7 +18,7 @@ inline point now() { return clock::now(); }
 struct Timer {
   point now = time::now();
   point last = now;
-  T d = 0; // delta from last frame
+  T d = 0;  // delta from last frame
   void Tick() {
     last = now;
     now = time::now();
@@ -26,6 +26,6 @@ struct Timer {
   }
 };
 
-} // namespace time
+}  // namespace time
 
-} // namespace automat
+}  // namespace automat

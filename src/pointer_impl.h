@@ -13,8 +13,8 @@ struct Window;
 struct WindowImpl;
 
 struct PointerImpl {
-  WindowImpl &window;
-  Pointer &facade;
+  WindowImpl& window;
+  Pointer& facade;
   vec2 pointer_position;
   std::vector<Pointer::IconType> icons;
 
@@ -24,15 +24,15 @@ struct PointerImpl {
   std::unique_ptr<Action> action;
   Path path;
 
-  KeyboardImpl *keyboard = nullptr;
+  KeyboardImpl* keyboard = nullptr;
 
-  PointerImpl(WindowImpl &window, Pointer &facade, vec2 position);
+  PointerImpl(WindowImpl& window, Pointer& facade, vec2 position);
   ~PointerImpl();
   void Move(vec2 position);
   void Wheel(float delta);
   void ButtonDown(PointerButton btn);
   void ButtonUp(PointerButton btn);
-  void Draw(SkCanvas &canvas, animation::State &animation_state) {
+  void Draw(SkCanvas& canvas, animation::State& animation_state) {
     if (action) {
       action->Draw(canvas, animation_state);
     }
@@ -45,9 +45,9 @@ struct PointerImpl {
   }
   void PushIcon(Pointer::IconType new_icon) { icons.push_back(new_icon); }
   void PopIcon() { icons.pop_back(); }
-  vec2 PositionWithin(Widget &) const;
+  vec2 PositionWithin(Widget&) const;
   vec2 PositionWithinRootMachine() const;
-  Keyboard &Keyboard();
+  Keyboard& Keyboard();
 };
 
-} // namespace automat::gui
+}  // namespace automat::gui

@@ -1,15 +1,19 @@
 #include "pointer_impl.h"
 
+#include <algorithm>
+
 #include "keyboard_impl.h"
 #include "root.h"
 #include "window_impl.h"
-#include <algorithm>
 
 namespace automat::gui {
 
-PointerImpl::PointerImpl(WindowImpl &window, Pointer &facade, vec2 position)
-    : window(window), facade(facade), pointer_position(position),
-      button_down_position(), button_down_time() {
+PointerImpl::PointerImpl(WindowImpl& window, Pointer& facade, vec2 position)
+    : window(window),
+      facade(facade),
+      pointer_position(position),
+      button_down_position(),
+      button_down_time() {
   window.pointers.push_back(this);
   assert(!window.keyboards.empty());
   keyboard = window.keyboards.front();
@@ -31,8 +35,7 @@ void PointerImpl::Move(vec2 position) {
   vec2 old_mouse_pos = pointer_position;
   pointer_position = position;
   if (button_down_time[kMouseMiddle] > time::kZero) {
-    vec2 delta =
-        window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
+    vec2 delta = window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
     window.camera_x.Shift(-delta.X);
     window.camera_y.Shift(-delta.Y);
     window.inertia = false;
@@ -40,17 +43,16 @@ void PointerImpl::Move(vec2 position) {
   if (action) {
     action->Update(facade);
   } else {
-    Widget *old_hovered_widget = path.empty() ? nullptr : path.back();
+    Widget* old_hovered_widget = path.empty() ? nullptr : path.back();
 
     path.clear();
     SkPoint point = SkPoint::Make(pointer_position.X, pointer_position.Y);
 
-    Visitor dfs = [&](Widget &child) {
+    Visitor dfs = [&](Widget& child) {
       SkPoint transformed;
       if (!path.empty()) {
-        transformed = path.back()
-                          ->TransformToChild(&child, &window.animation_state)
-                          .mapPoint(point);
+        transformed =
+            path.back()->TransformToChild(&child, &window.animation_state).mapPoint(point);
       } else {
         transformed = point;
       }
@@ -67,7 +69,7 @@ void PointerImpl::Move(vec2 position) {
 
     dfs(window);
 
-    Widget *hovered_widget = path.empty() ? nullptr : path.back();
+    Widget* hovered_widget = path.empty() ? nullptr : path.back();
     if (old_hovered_widget != hovered_widget) {
       if (old_hovered_widget) {
         old_hovered_widget->PointerLeave(facade, window.animation_state);
@@ -93,8 +95,7 @@ void PointerImpl::Wheel(float delta) {
   window.zoom.target = std::max(kMinZoom, window.zoom.target);
 }
 void PointerImpl::ButtonDown(PointerButton btn) {
-  if (btn == kButtonUnknown || btn >= kButtonCount)
-    return;
+  if (btn == kButtonUnknown || btn >= kButtonCount) return;
   RunOnAutomatThread([=]() {
     button_down_position[btn] = pointer_position;
     button_down_time[btn] = time::now();
@@ -108,8 +109,7 @@ void PointerImpl::ButtonDown(PointerButton btn) {
   });
 }
 void PointerImpl::ButtonUp(PointerButton btn) {
-  if (btn == kButtonUnknown || btn >= kButtonCount)
-    return;
+  if (btn == kButtonUnknown || btn >= kButtonCount) return;
   RunOnAutomatThread([=]() {
     if (btn == kMouseLeft) {
       if (action) {
@@ -118,8 +118,7 @@ void PointerImpl::ButtonUp(PointerButton btn) {
       }
     }
     if (btn == kMouseMiddle) {
-      time::duration down_duration =
-          time::now() - button_down_time[kMouseMiddle];
+      time::duration down_duration = time::now() - button_down_time[kMouseMiddle];
       vec2 delta = pointer_position - button_down_position[kMouseMiddle];
       float delta_m = Length(delta);
       if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
@@ -135,7 +134,7 @@ void PointerImpl::ButtonUp(PointerButton btn) {
   });
 }
 
-vec2 PointerImpl::PositionWithin(Widget &widget) const {
+vec2 PointerImpl::PositionWithin(Widget& widget) const {
   auto it = std::find(path.begin(), path.end(), &widget);
   auto end = it == path.end() ? path.end() : it + 1;
   Path sub_path(path.begin(), end);
@@ -151,6 +150,6 @@ vec2 PointerImpl::PositionWithinRootMachine() const {
   return Vec2(transform_down.mapXY(pointer_position.X, pointer_position.Y));
 }
 
-Keyboard &PointerImpl::Keyboard() { return keyboard->facade; }
+Keyboard& PointerImpl::Keyboard() { return keyboard->facade; }
 
-} // namespace automat::gui
+}  // namespace automat::gui

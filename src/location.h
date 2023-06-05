@@ -28,7 +28,7 @@ struct DragLocationAction;
 // Implementations of this interface would typically extend it with
 // container-specific functions.
 struct Location : gui::Widget {
-  Location *parent;
+  Location* parent;
 
   std::unique_ptr<Object> object;
 
@@ -38,25 +38,25 @@ struct Location : gui::Widget {
   gui::RunButton run_button;
   std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
-  DragLocationAction *drag_action = nullptr;
+  DragLocationAction* drag_action = nullptr;
   vec2 position = {0, 0};
 
   // Connections of this Location.
   // Connection is owned by both incoming & outgoing locations.
-  string_multimap<Connection *> outgoing;
-  string_multimap<Connection *> incoming;
+  string_multimap<Connection*> outgoing;
+  string_multimap<Connection*> incoming;
 
-  std::unordered_set<Location *> update_observers;
-  std::unordered_set<Location *> observing_updates;
+  std::unordered_set<Location*> update_observers;
+  std::unordered_set<Location*> observing_updates;
 
-  std::unordered_set<Location *> error_observers;
-  std::unordered_set<Location *> observing_errors;
+  std::unordered_set<Location*> error_observers;
+  std::unordered_set<Location*> observing_errors;
 
   RunTask run_task;
 
-  Location(Location *parent = nullptr);
+  Location(Location* parent = nullptr);
 
-  Widget *ParentWidget() const override {
+  Widget* ParentWidget() const override {
     if (parent == nullptr) {
       return nullptr;
     }
@@ -65,26 +65,27 @@ struct Location : gui::Widget {
 
   std::string_view Name() const override { return name; }
 
-  std::unique_ptr<Object> InsertHere(std::unique_ptr<Object> &&object) {
+  std::unique_ptr<Object> InsertHere(std::unique_ptr<Object>&& object) {
     this->object.swap(object);
     return object;
   }
 
-  Object *Create(const Object &prototype) {
+  Object* Create(const Object& prototype) {
     object = prototype.Clone();
     object->Relocate(this);
     return object.get();
   }
 
-  template <typename T> T *Create() {
-    return dynamic_cast<T *>(Create(T::proto));
+  template <typename T>
+  T* Create() {
+    return dynamic_cast<T*>(Create(T::proto));
   }
 
   // Remove the objects held by this location.
   //
   // Some containers may not allow empty locations so this function may also
   // delete the location. Check the return value.
-  Location *Clear() {
+  Location* Clear() {
     object.reset();
     return this;
   }
@@ -100,7 +101,7 @@ struct Location : gui::Widget {
   // Location interface.
   ////////////////////////////
 
-  Object *Follow();
+  Object* Follow();
   void Put(std::unique_ptr<Object> obj);
   std::unique_ptr<Object> Take();
 
@@ -116,14 +117,14 @@ struct Location : gui::Widget {
 
   // Schedule this object's Updated function to be executed with the `updated`
   // argument.
-  void ScheduleLocalUpdate(Location &updated);
+  void ScheduleLocalUpdate(Location& updated);
 
   // Add this object to the task queue. Once it's turn comes, its `Run` method
   // will be executed.
   void ScheduleRun();
 
   // Execute this object's Errored function using the task queue.
-  void ScheduleErrored(Location &errored);
+  void ScheduleErrored(Location& errored);
 
   ////////////////////////////
   // Misc
@@ -132,7 +133,7 @@ struct Location : gui::Widget {
   // Iterate over all nearby objects (including this object).
   //
   // Return non-null from the callback to stop the search.
-  void *Nearby(std::function<void *(Location &)> callback);
+  void* Nearby(std::function<void*(Location&)> callback);
 
   // This function should register a connection from this location to the
   // `other` so that subsequent calls to `Find` will return `other`.
@@ -143,12 +144,11 @@ struct Location : gui::Widget {
   //
   // This function should also notify the object with the `ConnectionAdded`
   // call.
-  Connection *ConnectTo(Location &other, std::string_view label,
-                        Connection::PointerBehavior pointer_behavior =
-                            Connection::kFollowPointers);
+  Connection* ConnectTo(Location& other, std::string_view label,
+                        Connection::PointerBehavior pointer_behavior = Connection::kFollowPointers);
 
   // Immediately execute this object's Updated function.
-  void Updated(Location &updated) { object->Updated(*this, updated); }
+  void Updated(Location& updated) { object->Updated(*this, updated); }
 
   // Call this function when the value of the object has changed.
   //
@@ -162,23 +162,23 @@ struct Location : gui::Widget {
     }
   }
 
-  void ObserveUpdates(Location &other) {
+  void ObserveUpdates(Location& other) {
     other.update_observers.insert(this);
     observing_updates.insert(&other);
   }
 
-  void StopObservingUpdates(Location &other) {
+  void StopObservingUpdates(Location& other) {
     other.update_observers.erase(this);
     observing_updates.erase(&other);
   }
 
-  void ObserveErrors(Location &other) {
+  void ObserveErrors(Location& other) {
     other.error_observers.insert(this);
     observing_errors.insert(&other);
   }
 
   std::string GetText() {
-    auto *follow = Follow();
+    auto* follow = Follow();
     if (follow == nullptr) {
       return "";
     }
@@ -190,17 +190,24 @@ struct Location : gui::Widget {
   void Run() { object->Run(*this); }
 
   // Immediately execute this object's Errored function.
-  void Errored(Location &errored) { object->Errored(*this, errored); }
+  void Errored(Location& errored) { object->Errored(*this, errored); }
 
-  Location *Rename(std::string_view new_name) {
+  Location* Rename(std::string_view new_name) {
     name = new_name;
     return this;
   }
 
-  template <typename T> T *ThisAs() { return dynamic_cast<T *>(object.get()); }
-  template <typename T> T *As() { return dynamic_cast<T *>(Follow()); }
-  template <typename T> T *ParentAs() const {
-    return parent ? dynamic_cast<T *>(parent->object.get()) : nullptr;
+  template <typename T>
+  T* ThisAs() {
+    return dynamic_cast<T*>(object.get());
+  }
+  template <typename T>
+  T* As() {
+    return dynamic_cast<T*>(Follow());
+  }
+  template <typename T>
+  T* ParentAs() const {
+    return parent ? dynamic_cast<T*>(parent->object.get()) : nullptr;
   }
 
   void SetText(std::string_view text) {
@@ -213,14 +220,12 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number);
 
-  vec2 AnimatedPosition(animation::State &animation_state) const;
-  void Draw(SkCanvas &canvas, animation::State &animation_state) const override;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer &,
-                                           gui::PointerButton) override;
+  vec2 AnimatedPosition(animation::State& animation_state) const;
+  void Draw(SkCanvas& canvas, animation::State& animation_state) const override;
+  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;
-  gui::VisitResult VisitChildren(gui::Visitor &visitor) override;
-  SkMatrix TransformToChild(const Widget *child,
-                            animation::State *state = nullptr) const override;
+  gui::VisitResult VisitChildren(gui::Visitor& visitor) override;
+  SkMatrix TransformToChild(const Widget* child, animation::State* state = nullptr) const override;
 
   // Add ConnectionWidgets for all arguments defined by the objects.
   void UpdateConnectionWidgets();
@@ -238,12 +243,11 @@ struct Location : gui::Widget {
   // TODO: rethink this API so that Machine-related functions don't pollute the
   // Location interface.
   bool HasError();
-  Error *GetError();
+  Error* GetError();
   void ClearError();
 
-  Error *
-  ReportError(std::string_view message,
-              std::source_location location = std::source_location::current()) {
+  Error* ReportError(std::string_view message,
+                     std::source_location location = std::source_location::current()) {
     if (error == nullptr) {
       error.reset(new Error(message, location));
       error->source = this;
@@ -264,4 +268,4 @@ struct Location : gui::Widget {
   std::string LoggableString() const;
 };
 
-} // namespace automat
+}  // namespace automat

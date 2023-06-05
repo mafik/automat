@@ -4,25 +4,21 @@
 
 namespace automat::gui {
 
-AlignCenter::AlignCenter(std::unique_ptr<Widget> &&child)
-    : child(std::move(child)) {
+AlignCenter::AlignCenter(std::unique_ptr<Widget>&& child) : child(std::move(child)) {
   ReparentableWidget::TryReparent(this->child.get(), this);
 }
 
-void AlignCenter::Draw(SkCanvas &c, animation::State &s) const {
-  DrawChildren(c, s);
-}
+void AlignCenter::Draw(SkCanvas& c, animation::State& s) const { DrawChildren(c, s); }
 
 SkPath AlignCenter::Shape() const { return SkPath(); }
 
-VisitResult AlignCenter::VisitChildren(Visitor &visitor) {
+VisitResult AlignCenter::VisitChildren(Visitor& visitor) {
   if (child) {
     return visitor(*child);
   }
   return VisitResult::kContinue;
 }
-SkMatrix AlignCenter::TransformToChild(const Widget *child_arg,
-                                       animation::State *state) const {
+SkMatrix AlignCenter::TransformToChild(const Widget* child_arg, animation::State* state) const {
   if (child_arg != this->child.get()) {
     return SkMatrix::I();
   }
@@ -31,4 +27,4 @@ SkMatrix AlignCenter::TransformToChild(const Widget *child_arg,
   return SkMatrix::Translate(c);
 }
 
-} // namespace automat::gui
+}  // namespace automat::gui

@@ -3,8 +3,9 @@
 #include "library_macros.h"
 
 #ifdef _WIN32
-#include "win_main.h"
 #include <windows.h>
+
+#include "win_main.h"
 #endif
 
 namespace automat {
@@ -16,11 +17,11 @@ Argument Alert::message_arg("message", Argument::kRequiresObject);
 static void ShowAlert(string_view message) {
   MessageBox(main_window, message.data(), "Alert", MB_OK);
 }
-#else // not Windows
+#else  // not Windows
 static void ShowAlert(string_view message) { LOG() << text; }
 #endif
 
-void Alert::Run(Location &here) {
+void Alert::Run(Location& here) {
   auto message = message_arg.GetObject(here);
   if (message.ok) {
     string text = message.object->GetText();
@@ -32,4 +33,4 @@ void Alert::Run(Location &here) {
   }
 }
 
-} // namespace automat
+}  // namespace automat

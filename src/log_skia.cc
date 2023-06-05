@@ -4,7 +4,7 @@
 
 namespace automat {
 
-const Logger &operator<<(const Logger &logger, SkMatrix &m) {
+const Logger& operator<<(const Logger& logger, SkMatrix& m) {
   std::string out = "";
   for (int i = 0; i < 3; ++i) {
     out += "\n";
@@ -20,4 +20,4 @@ const Logger &operator<<(const Logger &logger, SkMatrix &m) {
   return logger;
 }
 
-} // namespace automat
+}  // namespace automat

@@ -6,8 +6,8 @@ namespace automat::library {
 
 struct NumberButton : gui::Button {
   std::function<void()> activate;
-  NumberButton(Widget *parent, std::unique_ptr<Widget> &&child);
-  void Draw(SkCanvas &, animation::State &animation_state) const override;
+  NumberButton(Widget* parent, std::unique_ptr<Widget>&& child);
+  void Draw(SkCanvas&, animation::State& animation_state) const override;
   void Activate() override;
 };
 
@@ -23,14 +23,12 @@ struct Number : Object {
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   string GetText() const override;
-  void SetText(Location &error_context, string_view text) override;
-  void Draw(SkCanvas &canvas, animation::State &animation_state) const override;
+  void SetText(Location& error_context, string_view text) override;
+  void Draw(SkCanvas& canvas, animation::State& animation_state) const override;
   SkPath Shape() const override;
-  gui::VisitResult VisitChildren(gui::Visitor &visitor) override;
-  SkMatrix TransformToChild(const Widget *child,
-                            animation::State *state = nullptr) const override;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer &,
-                                           gui::PointerButton) override;
+  gui::VisitResult VisitChildren(gui::Visitor& visitor) override;
+  SkMatrix TransformToChild(const Widget* child, animation::State* state = nullptr) const override;
+  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
 };
 
-} // namespace automat::library
+}  // namespace automat::library

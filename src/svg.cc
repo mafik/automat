@@ -17,4 +17,4 @@ SkPath PathFromSVG(const char svg[]) {
   return path;
 }
 
-} // namespace automat
+}  // namespace automat

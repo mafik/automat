@@ -1,10 +1,10 @@
 #pragma once
 
-#include <string_view>
-
 #include <include/core/SkCanvas.h>
 #include <include/core/SkFont.h>
 #include <include/core/SkFontMetrics.h>
+
+#include <string_view>
 
 namespace automat::gui {
 
@@ -20,7 +20,7 @@ struct Font {
 
   // TODO: If this causes performance issues, cache text shaping / SkTextBlob
   // results somehow
-  void DrawText(SkCanvas &canvas, std::string_view text, const SkPaint &paint);
+  void DrawText(SkCanvas& canvas, std::string_view text, const SkPaint& paint);
   float MeasureText(std::string_view text);
   float PositionFromIndex(std::string_view text, int index);
   int IndexFromPosition(std::string_view text, float x);
@@ -30,6 +30,6 @@ struct Font {
   int NextIndex(std::string_view text, int index);
 };
 
-Font &GetFont();
+Font& GetFont();
 
-} // namespace automat::gui
+}  // namespace automat::gui

@@ -5,30 +5,29 @@
 
 namespace automat::gui {
 
-CaretImpl::CaretImpl(KeyboardImpl &keyboard)
-    : facade(*this), keyboard(keyboard) {}
+CaretImpl::CaretImpl(KeyboardImpl& keyboard) : facade(*this), keyboard(keyboard) {}
 
 CaretImpl::~CaretImpl() {}
 
-static SkPath PointerIBeam(const KeyboardImpl &keyboard) {
+static SkPath PointerIBeam(const KeyboardImpl& keyboard) {
   if (keyboard.pointer) {
     float px = 1 / keyboard.window.PxPerMeter();
     vec2 pos = keyboard.pointer->PositionWithin(*root_machine);
     SkRect bounds = SkRect::MakeXYWH(pos.X, pos.Y, 0, 0);
     switch (keyboard.pointer->Icon()) {
-    case Pointer::IconType::kIconArrow:
-      bounds.fRight += 2 * px;
-      bounds.fTop -= 16 * px;
-      break;
-    case Pointer::IconType::kIconIBeam:
-      bounds.fRight += px;
-      bounds.fTop -= 9 * px;
-      bounds.fBottom += 8 * px;
-      break;
-    default:
-      bounds.fRight += 2 * px;
-      bounds.fTop -= 2 * px;
-      break;
+      case Pointer::IconType::kIconArrow:
+        bounds.fRight += 2 * px;
+        bounds.fTop -= 16 * px;
+        break;
+      case Pointer::IconType::kIconIBeam:
+        bounds.fRight += px;
+        bounds.fTop -= 9 * px;
+        bounds.fBottom += 8 * px;
+        break;
+      default:
+        bounds.fRight += 2 * px;
+        bounds.fTop -= 2 * px;
+        break;
     }
     return SkPath::Rect(bounds);
   } else {
@@ -39,8 +38,7 @@ static SkPath PointerIBeam(const KeyboardImpl &keyboard) {
 void CaretImpl::PlaceIBeam(vec2 position) {
   float width = GetFont().line_thickness;
   float height = kLetterSize;
-  shape = SkPath::Rect(
-      SkRect::MakeXYWH(position.X - width / 2, position.Y, width, height));
+  shape = SkPath::Rect(SkRect::MakeXYWH(position.X - width / 2, position.Y, width, height));
   last_blink = time::now();
 }
 
@@ -49,9 +47,7 @@ SkPath CaretImpl::MakeRootShape() const {
   widget_path.push_back(owner->CaretWidget());
   while (widget_path.back() != root_machine) {
     if (widget_path.back() == nullptr) {
-      EVERY_N_SEC(10) {
-        ERROR() << "Caret widget is not a descendant of root machine.";
-      }
+      EVERY_N_SEC(10) { ERROR() << "Caret widget is not a descendant of root machine."; }
       widget_path.pop_back();
       break;
     }
@@ -62,8 +58,7 @@ SkPath CaretImpl::MakeRootShape() const {
   return shape.makeTransform(text_to_root);
 }
 
-KeyboardImpl::KeyboardImpl(WindowImpl &window, Keyboard &facade)
-    : window(window), facade(facade) {
+KeyboardImpl::KeyboardImpl(WindowImpl& window, Keyboard& facade) : window(window), facade(facade) {
   window.keyboards.emplace_back(this);
 }
 
@@ -76,10 +71,8 @@ KeyboardImpl::~KeyboardImpl() {
 
 enum class CaretAnimAction { Keep, Delete };
 
-static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
-                                 CaretImpl *caret,
-                                 animation::State &animation_state) {
-
+static CaretAnimAction DrawCaret(SkCanvas& canvas, CaretAnimation& anim, CaretImpl* caret,
+                                 animation::State& animation_state) {
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
   paint.setAntiAlias(true);
@@ -110,9 +103,7 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
       float weight = 1 - anim.delta_fraction.Tick(animation_state);
       anim.shape.interpolate(grave, weight, &out);
       anim.shape = out;
-      float dist =
-          (grave.getBounds().center() - anim.shape.getBounds().center())
-              .length();
+      float dist = (grave.getBounds().center() - anim.shape.getBounds().center()).length();
       if (dist < 0.0001) {
         return CaretAnimAction::Delete;
       }
@@ -131,16 +122,17 @@ static CaretAnimAction DrawCaret(SkCanvas &canvas, CaretAnimation &anim,
   return CaretAnimAction::Keep;
 }
 
-CaretAnimation::CaretAnimation(const KeyboardImpl &keyboard)
-    : keyboard(keyboard), delta_fraction(50), shape(PointerIBeam(keyboard)),
+CaretAnimation::CaretAnimation(const KeyboardImpl& keyboard)
+    : keyboard(keyboard),
+      delta_fraction(50),
+      shape(PointerIBeam(keyboard)),
       last_blink(time::now()) {}
 
-void KeyboardImpl::Draw(SkCanvas &canvas,
-                        animation::State &animation_state) const {
+void KeyboardImpl::Draw(SkCanvas& canvas, animation::State& animation_state) const {
   // Iterate through each Caret & CaretAnimation, and draw them.
   // After a Caret has been removed, its CaretAnimation is kept around for some
   // time to animate it out.
-  auto &anim_carets = anim[animation_state].carets;
+  auto& anim_carets = anim[animation_state].carets;
   auto anim_it = anim_carets.begin();
   auto caret_it = carets.begin();
   while (anim_it != anim_carets.end() && caret_it != carets.end()) {
@@ -154,10 +146,9 @@ void KeyboardImpl::Draw(SkCanvas &canvas,
       }
     } else if (anim_it->first > caret_it->get()) {
       // Caret was added.
-      auto new_it = anim_carets
-                        .emplace(std::make_pair<CaretImpl *, CaretAnimation>(
-                            caret_it->get(), *this))
-                        .first;
+      auto new_it =
+          anim_carets.emplace(std::make_pair<CaretImpl*, CaretAnimation>(caret_it->get(), *this))
+              .first;
       DrawCaret(canvas, new_it->second, caret_it->get(), animation_state);
       ++caret_it;
     } else {
@@ -177,10 +168,9 @@ void KeyboardImpl::Draw(SkCanvas &canvas,
   }
   while (caret_it != carets.end()) {
     // Caret at end was added.
-    auto new_it = anim_carets
-                      .emplace(std::make_pair<CaretImpl *, CaretAnimation>(
-                          caret_it->get(), *this))
-                      .first;
+    auto new_it =
+        anim_carets.emplace(std::make_pair<CaretImpl*, CaretAnimation>(caret_it->get(), *this))
+            .first;
     DrawCaret(canvas, new_it->second, caret_it->get(), animation_state);
     ++caret_it;
   }
@@ -192,12 +182,12 @@ void KeyboardImpl::KeyDown(Key key) {
       pressed_keys.set((size_t)key.physical);
     }
     if (key.physical == AnsiKey::Escape) {
-      for (auto &caret : carets) {
+      for (auto& caret : carets) {
         caret->owner->ReleaseCaret(caret->facade);
       }
       carets.clear();
     } else {
-      for (auto &caret : carets) {
+      for (auto& caret : carets) {
         caret->owner->KeyDown(caret->facade, key);
       }
     }
@@ -209,7 +199,7 @@ void KeyboardImpl::KeyUp(Key key) {
     if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
       pressed_keys.reset((size_t)key.physical);
     }
-    for (auto &caret : carets) {
+    for (auto& caret : carets) {
       if (caret->owner) {
         caret->owner->KeyUp(caret->facade, key);
       }
@@ -217,4 +207,4 @@ void KeyboardImpl::KeyUp(Key key) {
   });
 }
 
-} // namespace automat::gui
+}  // namespace automat::gui

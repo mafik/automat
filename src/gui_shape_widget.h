@@ -13,12 +13,10 @@ struct ShapeWidget : Widget {
 
   ShapeWidget(SkPath path, SkPaint paint);
   SkPath Shape() const override;
-  void Draw(SkCanvas &, animation::State &) const override;
-  void DrawColored(SkCanvas &, animation::State &,
-                   const SkPaint &) const override;
+  void Draw(SkCanvas&, animation::State&) const override;
+  void DrawColored(SkCanvas&, animation::State&, const SkPaint&) const override;
 };
 
-std::unique_ptr<Widget> MakeShapeWidget(const char *svg_path,
-                                        SkColor fill_color);
+std::unique_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color);
 
-} // namespace automat::gui
+}  // namespace automat::gui

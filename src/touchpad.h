@@ -1,10 +1,11 @@
-#include <mutex>
 #include <stdint.h>
+
+#include <mutex>
 #include <vector>
 
 #if defined(_WIN32)
 #include <optional>
-#endif // _WIN32
+#endif  // _WIN32
 
 #include "math.h"
 
@@ -50,13 +51,12 @@ struct TouchPad {
 bool ShouldIgnoreScrollEvents();
 
 extern std::mutex touchpads_mutex;
-extern std::vector<TouchPad *> touchpads;
+extern std::vector<TouchPad*> touchpads;
 
 void Init();
 
 #if defined(_WIN32)
-std::optional<int64_t> ProcessEvent(uint32_t msg, uint64_t wParam,
-                                    int64_t lParam);
-#endif // _WIN32
+std::optional<int64_t> ProcessEvent(uint32_t msg, uint64_t wParam, int64_t lParam);
+#endif  // _WIN32
 
-} // namespace automat::touchpad
+}  // namespace automat::touchpad

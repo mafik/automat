@@ -1,13 +1,15 @@
+#include <gmock/gmock-more-matchers.h>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
+#include <chrono>
+#include <source_location>
+
 #include "backtrace.h"
 #include "base.h"
 #include "library.h"
 #include "log.h"
 #include "test_base.h"
-#include <chrono>
-#include <gmock/gmock-more-matchers.h>
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
-#include <source_location>
 
 using namespace automat;
 using namespace automat::library;
@@ -16,14 +18,14 @@ using namespace testing;
 TEST(CounterTest, Count) {
   EnableBacktraceOnSIGSEGV();
   Location root(nullptr);
-  Machine &counter = *root.Create<Machine>();
+  Machine& counter = *root.Create<Machine>();
 
-  Location &i = counter.Create<Number>();
-  Location &inc = counter.Create<Increment>();
+  Location& i = counter.Create<Number>();
+  Location& inc = counter.Create<Increment>();
   inc.ConnectTo(i, "target");
-  Location &txt = counter.Create<Text>("Count");
+  Location& txt = counter.Create<Text>("Count");
   txt.ConnectTo(i, "target");
-  Location &btn = counter.Create<Button>("Increment");
+  Location& btn = counter.Create<Button>("Increment");
   btn.ConnectTo(inc, "then");
 
   counter.AddToFrontPanel(txt);
@@ -47,24 +49,23 @@ TEST(CounterTest, Count) {
   EXPECT_EQ(counter["Count"]->GetText(), "1");
 }
 
-void ExpectHealthy(Machine &m) {
+void ExpectHealthy(Machine& m) {
   std::vector<std::string> errors;
-  m.Diagnostics([&](Location *h, Error &e) { errors.push_back(e.text); });
+  m.Diagnostics([&](Location* h, Error& e) { errors.push_back(e.text); });
   EXPECT_THAT(errors, IsEmpty());
 }
 
-void ExpectErrors(Machine &m, std::vector<std::string> errors) {
+void ExpectErrors(Machine& m, std::vector<std::string> errors) {
   std::vector<std::string> actual_errors;
-  m.Diagnostics(
-      [&](Location *h, Error &e) { actual_errors.push_back(e.text); });
+  m.Diagnostics([&](Location* h, Error& e) { actual_errors.push_back(e.text); });
   EXPECT_THAT(actual_errors, UnorderedElementsAreArray(errors));
 }
 
-void ExpectAlerts(Alert &a, std::vector<std::string> alerts) {
+void ExpectAlerts(Alert& a, std::vector<std::string> alerts) {
   EXPECT_THAT(*a.test_interceptor, UnorderedElementsAreArray(alerts));
 }
 
-void ClearErrors(Machine &m) {
+void ClearErrors(Machine& m) {
   for (auto c : m.children_with_errors) {
     c->ClearError();
   }
@@ -73,21 +74,21 @@ void ClearErrors(Machine &m) {
 TEST(TemperatureConverterTest, Conversion) {
   EnableBacktraceOnSIGSEGV();
   Location root(nullptr);
-  Machine &converter = *root.Create<Machine>();
+  Machine& converter = *root.Create<Machine>();
 
-  Location &c_txt = converter.Create<Text>("Celsius");
-  Location &f_txt = converter.Create<Text>("Fahrenheit");
+  Location& c_txt = converter.Create<Text>("Celsius");
+  Location& f_txt = converter.Create<Text>("Fahrenheit");
 
   converter.AddToFrontPanel(c_txt);
   converter.AddToFrontPanel(f_txt);
 
-  Location &c = converter.Create<Integer>("C");
-  Location &f = converter.Create<Integer>("F");
+  Location& c = converter.Create<Integer>("C");
+  Location& f = converter.Create<Integer>("F");
 
   c_txt.ConnectTo(c, "target");
   f_txt.ConnectTo(f, "target");
 
-  Location &blackboard = converter.Create<Blackboard>();
+  Location& blackboard = converter.Create<Blackboard>();
   blackboard.SetText("F = C * 9 / 5 + 32");
 
   converter.Create<BlackboardUpdater>();
@@ -105,31 +106,31 @@ TEST(TemperatureConverterTest, Conversion) {
 
 struct FlightBookerTest {
   Location root;
-  Machine &booker;
+  Machine& booker;
 
-  Location *c;  // ComboBox C
-  Location *t1; // Text T1
-  Location *t2; // Text T2
-  Location *b;  // Button B
+  Location* c;   // ComboBox C
+  Location* t1;  // Text T1
+  Location* t2;  // Text T2
+  Location* b;   // Button B
 
-  Location *one_way;       // Text "one-way flight"
-  Location *return_flight; // Text "return flight"
+  Location* one_way;        // Text "one-way flight"
+  Location* return_flight;  // Text "return flight"
 
-  Location *t1_date; // Date
-  Location *t2_date; // Date
+  Location* t1_date;  // Date
+  Location* t2_date;  // Date
 
-  Location *t2_enabled;     // EqualityTest
-  Location *t2_before_t1;   // LessThanTest
-  Location *all_test;       // AllTest
-  Location *parent;         // Parent
-  Location *health_test;    // HealthTest
-  Location *error_message;  // Text "Return flight date must be..."
-  Location *error_reporter; // ErrorReporter
+  Location* t2_enabled;      // EqualityTest
+  Location* t2_before_t1;    // LessThanTest
+  Location* all_test;        // AllTest
+  Location* parent;          // Parent
+  Location* health_test;     // HealthTest
+  Location* error_message;   // Text "Return flight date must be..."
+  Location* error_reporter;  // ErrorReporter
 
-  Location *alert;
-  Location *switch_;
-  Location *one_way_message;
-  Location *return_flight_message;
+  Location* alert;
+  Location* switch_;
+  Location* one_way_message;
+  Location* return_flight_message;
 
   FlightBookerTest() : root(nullptr), booker(*root.Create<Machine>()) {
     c = &booker.Create<ComboBox>("C");
@@ -200,8 +201,7 @@ struct FlightBookerTest {
     one_way_message->SetText("You have booked a one-way flight on {T1}.");
     switch_->ConnectTo(*one_way_message, one_way->GetText());
     return_flight_message = &booker.Create<Text>();
-    return_flight_message->SetText(
-        "You have booked a return flight on {T1} and {T2}.");
+    return_flight_message->SetText("You have booked a return flight on {T1} and {T2}.");
     switch_->ConnectTo(*return_flight_message, return_flight->GetText());
 
     // Initially, C has the value “one-way flight” and T1 as well as T2 have the
@@ -214,7 +214,7 @@ struct FlightBookerTest {
     ExpectHealthy(booker);
   }
 
-  Alert &GetAlert() { return *alert->As<Alert>(); }
+  Alert& GetAlert() { return *alert->As<Alert>(); }
 };
 
 TEST(FlightBookerTest, DefaultValues) {
@@ -226,8 +226,7 @@ TEST(FlightBookerTest, DefaultValues) {
   x.b->ScheduleRun();
   RunLoop();
   ExpectHealthy(x.booker);
-  ExpectAlerts(x.GetAlert(),
-               {"You have booked a one-way flight on 2014-04-04."});
+  ExpectAlerts(x.GetAlert(), {"You have booked a one-way flight on 2014-04-04."});
 }
 
 TEST(FlightBookerTest, ReturnFlight) {
@@ -239,9 +238,7 @@ TEST(FlightBookerTest, ReturnFlight) {
   x.b->ScheduleRun();
   RunLoop();
   ExpectHealthy(x.booker);
-  ExpectAlerts(
-      x.GetAlert(),
-      {"You have booked a return flight on 2014-04-04 and 2014-04-05."});
+  ExpectAlerts(x.GetAlert(), {"You have booked a return flight on 2014-04-04 and 2014-04-05."});
 }
 
 TEST(FlightBookerTest, TimeTravelError) {
@@ -253,8 +250,8 @@ TEST(FlightBookerTest, TimeTravelError) {
   RunLoop();
   x.b->ScheduleRun();
   RunLoop();
-  ExpectErrors(x.booker, {"Return flight date must be after departure date.",
-                          "Button is disabled."});
+  ExpectErrors(x.booker,
+               {"Return flight date must be after departure date.", "Button is disabled."});
   ExpectAlerts(x.GetAlert(), {});
 }
 
@@ -267,8 +264,7 @@ TEST(FlightBookerTest, OneWayTimeTravelOk) {
   x.b->ScheduleRun();
   RunLoop();
   ExpectHealthy(x.booker);
-  ExpectAlerts(x.GetAlert(),
-               {"You have booked a one-way flight on 2014-04-04."});
+  ExpectAlerts(x.GetAlert(), {"You have booked a one-way flight on 2014-04-04."});
 }
 
 TEST(FlightBookerTest, BadDateFormat) {
@@ -280,10 +276,9 @@ TEST(FlightBookerTest, BadDateFormat) {
   RunLoop();
   x.b->ScheduleRun();
   RunLoop();
-  ExpectErrors(x.booker,
-               {"Invalid date format. The Date object expects dates in the "
-                "format YYYY-MM-DD. The provided date was: 2014-04-04-.",
-                "Button is disabled."});
+  ExpectErrors(x.booker, {"Invalid date format. The Date object expects dates in the "
+                          "format YYYY-MM-DD. The provided date was: 2014-04-04-.",
+                          "Button is disabled."});
   ExpectAlerts(x.GetAlert(), {});
 }
 
@@ -291,29 +286,29 @@ TEST(TimerTest, DurationChange) {
   EnableBacktraceOnSIGSEGV();
   using namespace std::chrono_literals;
   Location root(nullptr);
-  Machine &m = *root.Create<Machine>();
+  Machine& m = *root.Create<Machine>();
 
-  Location &min = m.Create<Number>("min");
+  Location& min = m.Create<Number>("min");
   min.SetNumber(5);
-  Location &max = m.Create<Number>("max");
+  Location& max = m.Create<Number>("max");
   max.SetNumber(15);
 
-  Location &duration = m.Create<Slider>("duration");
+  Location& duration = m.Create<Slider>("duration");
   duration.SetNumber(10);
 
-  Location &timer = m.Create<Timer>("T");
+  Location& timer = m.Create<Timer>("T");
   FakeTime fake_time;
   fake_time.SetNow(TimePoint(0s));
   timer.As<Timer>()->fake_time = &fake_time;
 
-  Location &timer_reset = m.Create<TimerReset>();
+  Location& timer_reset = m.Create<TimerReset>();
   timer_reset.ConnectTo(timer, "timer");
-  Location &reset_button = m.Create<Button>("reset");
+  Location& reset_button = m.Create<Button>("reset");
   reset_button.ConnectTo(timer_reset, "then");
 
-  Location &progress_bar = m.Create<ProgressBar>("progress");
+  Location& progress_bar = m.Create<ProgressBar>("progress");
 
-  Location &blackboard = m.Create<Blackboard>();
+  Location& blackboard = m.Create<Blackboard>();
   blackboard.SetText("progress = T / duration");
   blackboard.ConnectTo(timer, "const");
   blackboard.ConnectTo(duration, "const");
@@ -325,13 +320,11 @@ TEST(TimerTest, DurationChange) {
 
   fake_time.SetNow(TimePoint(5s));
   RunLoop();
-  EXPECT_EQ(0.5, progress_bar.GetNumber())
-      << "Progress after 5 seconds is wrong";
+  EXPECT_EQ(0.5, progress_bar.GetNumber()) << "Progress after 5 seconds is wrong";
 
   duration.SetNumber(5);
   RunLoop();
-  EXPECT_EQ(1, progress_bar.GetNumber())
-      << "Progress after reducing duration is wrong";
+  EXPECT_EQ(1, progress_bar.GetNumber()) << "Progress after reducing duration is wrong";
 
   ExpectHealthy(m);
 }
@@ -369,43 +362,39 @@ TEST(TimerTest, DurationChange) {
 // overhead).
 
 struct CrudTest : public TestBase {
-  Location &list = machine.Create<List>("list");
+  Location& list = machine.Create<List>("list");
 
-  Location &first_name_label = machine.Create<Text>("First name label");
-  Location &last_name_label = machine.Create<Text>("Last name label");
+  Location& first_name_label = machine.Create<Text>("First name label");
+  Location& last_name_label = machine.Create<Text>("Last name label");
 
-  Location &text_prefix = machine.Create<Text>("Prefix");
-  Location &starts_with_test = machine.Create<StartsWithTest>();
-  Location &starts_with_error_cleaner = machine.Create<ErrorCleaner>();
-  Location &field_for_test = machine.Create<ComplexField>("Field for test");
-  Location &field_for_test_error_cleaner = machine.Create<ErrorCleaner>();
-  Location &element = machine.Create<CurrentElement>();
-  Location &filter = machine.Create<Filter>();
+  Location& text_prefix = machine.Create<Text>("Prefix");
+  Location& starts_with_test = machine.Create<StartsWithTest>();
+  Location& starts_with_error_cleaner = machine.Create<ErrorCleaner>();
+  Location& field_for_test = machine.Create<ComplexField>("Field for test");
+  Location& field_for_test_error_cleaner = machine.Create<ErrorCleaner>();
+  Location& element = machine.Create<CurrentElement>();
+  Location& filter = machine.Create<Filter>();
 
-  Location &list_view = machine.Create<ListView>();
-  Location &deleter = machine.Create<Delete>();
-  Location &button_delete = machine.Create<Button>();
+  Location& list_view = machine.Create<ListView>();
+  Location& deleter = machine.Create<Delete>();
+  Location& button_delete = machine.Create<Button>();
 
-  Location &first_name_selected_field =
-      machine.Create<ComplexField>("First name selected");
-  Location &last_name_selected_field =
-      machine.Create<ComplexField>("Last name selected");
-  Location &last_name_selected_error_cleaner = machine.Create<ErrorCleaner>();
+  Location& first_name_selected_field = machine.Create<ComplexField>("First name selected");
+  Location& last_name_selected_field = machine.Create<ComplexField>("Last name selected");
+  Location& last_name_selected_error_cleaner = machine.Create<ErrorCleaner>();
 
-  Location &set_first_name = machine.Create<Set>("Set first name");
-  Location &set_last_name = machine.Create<Set>("Set last name");
-  Location &button_update = machine.Create<Button>("Update");
+  Location& set_first_name = machine.Create<Set>("Set first name");
+  Location& set_last_name = machine.Create<Set>("Set last name");
+  Location& button_update = machine.Create<Button>("Update");
 
-  Location &first_name_complex_field =
-      machine.Create<ComplexField>("First name complex");
-  Location &last_name_complex_field =
-      machine.Create<ComplexField>("Last name complex");
-  Location &complex = machine.Create<Complex>();
+  Location& first_name_complex_field = machine.Create<ComplexField>("First name complex");
+  Location& last_name_complex_field = machine.Create<ComplexField>("Last name complex");
+  Location& complex = machine.Create<Complex>();
 
-  Location &set_complex = machine.Create<Set>("Set complex");
-  Location &button_create = machine.Create<Button>("Create");
-  Location &append_target = machine.CreateEmpty();
-  Location &append = machine.Create<Append>();
+  Location& set_complex = machine.Create<Set>("Set complex");
+  Location& button_create = machine.Create<Button>("Create");
+  Location& append_target = machine.CreateEmpty();
+  Location& append = machine.Create<Append>();
 
   CrudTest() {
     EnableBacktraceOnSIGSEGV();
@@ -421,8 +410,7 @@ struct CrudTest : public TestBase {
     element.ConnectTo(filter, "of");
 
     // Silence the error message about missing "complex" argument.
-    field_for_test_error_cleaner.ConnectTo(field_for_test, "target",
-                                           Connection::kTerminateHere);
+    field_for_test_error_cleaner.ConnectTo(field_for_test, "target", Connection::kTerminateHere);
     field_for_test.ConnectTo(element, "complex");
     field_for_test.ConnectTo(last_name_label, "label");
     // Silence the error message about missing argument.
@@ -440,8 +428,8 @@ struct CrudTest : public TestBase {
     last_name_selected_field.ConnectTo(list_view, "complex");
     last_name_selected_field.ConnectTo(last_name_label, "label");
     // Silence the error message about missing "complex" argument.
-    last_name_selected_error_cleaner.ConnectTo(
-        last_name_selected_field, "target", Connection::kTerminateHere);
+    last_name_selected_error_cleaner.ConnectTo(last_name_selected_field, "target",
+                                               Connection::kTerminateHere);
 
     set_first_name.ConnectTo(first_name_selected_field, "target");
     set_first_name.ConnectTo(first_name_complex_field, "value");
@@ -471,13 +459,13 @@ struct CrudTest : public TestBase {
   std::vector<std::pair<std::string, std::string>> FilterContents() {
     auto objects = filter.As<Filter>()->objects;
     std::vector<std::pair<std::string, std::string>> result;
-    for (Object *o : objects) {
-      Complex *c = dynamic_cast<Complex *>(o);
+    for (Object* o : objects) {
+      Complex* c = dynamic_cast<Complex*>(o);
       if (c == nullptr) {
         continue;
       }
-      Object *first_name_object = c->objects["First Name"].get();
-      Object *last_name_object = c->objects["Last Name"].get();
+      Object* first_name_object = c->objects["First Name"].get();
+      Object* last_name_object = c->objects["Last Name"].get();
       if (first_name_object == nullptr || last_name_object == nullptr) {
         continue;
       }
@@ -488,7 +476,7 @@ struct CrudTest : public TestBase {
     return result;
   }
 
-  void AddEntry(const std::string &first_name, const std::string &last_name) {
+  void AddEntry(const std::string& first_name, const std::string& last_name) {
     first_name_complex_field.SetText(first_name);
     last_name_complex_field.SetText(last_name);
     button_create.ScheduleRun();
@@ -497,14 +485,12 @@ struct CrudTest : public TestBase {
 };
 
 TEST_F(CrudTest, Filter) {
-
   // Add two entries & verify that they appear in the filtered list.
 
   AddEntry("John", "Doe");
   AddEntry("Marek", "Rogalski");
 
-  EXPECT_THAT(FilterContents(),
-              ElementsAre(Pair("John", "Doe"), Pair("Marek", "Rogalski")));
+  EXPECT_THAT(FilterContents(), ElementsAre(Pair("John", "Doe"), Pair("Marek", "Rogalski")));
 
   // Change filter prefix & verify that only one entry remains in the filtered
   // list.
@@ -522,11 +508,10 @@ TEST_F(CrudTest, Delete) {
   // Add two entries & verify that they appear in the filtered list.
   AddEntry("John", "Doe");
   AddEntry("Marek", "Rogalski");
-  EXPECT_THAT(FilterContents(),
-              ElementsAre(Pair("John", "Doe"), Pair("Marek", "Rogalski")));
+  EXPECT_THAT(FilterContents(), ElementsAre(Pair("John", "Doe"), Pair("Marek", "Rogalski")));
 
   // Select the first entry (just like a user would do in a GUI).
-  ListView *lv = list_view.ThisAs<ListView>();
+  ListView* lv = list_view.ThisAs<ListView>();
   ASSERT_NE(lv, nullptr);
   lv->Select(0);
 

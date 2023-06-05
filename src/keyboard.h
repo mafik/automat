@@ -1,9 +1,9 @@
 #pragma once
 
+#include <include/core/SkCanvas.h>
+
 #include <memory>
 #include <vector>
-
-#include <include/core/SkCanvas.h>
 
 #include "animation.h"
 #include "math.h"
@@ -133,36 +133,36 @@ struct Key {
 };
 
 struct Caret final {
-  Caret(CaretImpl &impl);
+  Caret(CaretImpl& impl);
   void PlaceIBeam(vec2 position);
 
-private:
-  CaretImpl &impl;
+ private:
+  CaretImpl& impl;
 };
 
 struct CaretOwner {
-  std::vector<CaretImpl *> carets;
+  std::vector<CaretImpl*> carets;
   virtual ~CaretOwner();
 
-  Caret &RequestCaret(Keyboard &);
-  virtual void ReleaseCaret(Caret &) = 0;
-  virtual Widget *CaretWidget() = 0;
+  Caret& RequestCaret(Keyboard&);
+  virtual void ReleaseCaret(Caret&) = 0;
+  virtual Widget* CaretWidget() = 0;
 
-  virtual void KeyDown(Caret &, Key);
-  virtual void KeyUp(Caret &, Key);
+  virtual void KeyDown(Caret&, Key);
+  virtual void KeyUp(Caret&, Key);
 };
 
 struct Keyboard final {
-  Keyboard(Window &);
+  Keyboard(Window&);
   ~Keyboard();
-  void Draw(SkCanvas &, animation::State &animation_state) const;
+  void Draw(SkCanvas&, animation::State& animation_state) const;
   void KeyDown(Key);
   void KeyUp(Key);
 
-private:
+ private:
   std::unique_ptr<KeyboardImpl> impl;
   friend CaretOwner;
   friend Window;
 };
 
-} // namespace automat::gui
+}  // namespace automat::gui

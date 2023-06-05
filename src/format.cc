@@ -1,9 +1,10 @@
 #include "format.h"
 
-#include <cstdio>
 #include <stdarg.h>
 
-std::string f(const char *fmt, ...) {
+#include <cstdio>
+
+std::string f(const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
   va_list args2;

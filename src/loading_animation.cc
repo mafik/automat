@@ -1,20 +1,19 @@
 #include "loading_animation.h"
 
-#include "log.h"
-#include "win_main.h"
-
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkPath.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <src/core/SkRuntimeEffectPriv.h>
 
+#include "log.h"
+#include "win_main.h"
+
 namespace automat {
 
 HypnoRect anim;
 
-void LoadingAnimation::OnPaint(SkCanvas &canvas,
-                               std::function<void(SkCanvas &)> paint) {
+void LoadingAnimation::OnPaint(SkCanvas& canvas, std::function<void(SkCanvas&)> paint) {
   last = now;
   now = std::chrono::system_clock::now();
   t = now - start;
@@ -25,13 +24,11 @@ void LoadingAnimation::OnPaint(SkCanvas &canvas,
 }
 
 SkColor SkColorFromLittleEndian(uint32_t little_endian_rgb) {
-  return SkColorSetRGB((little_endian_rgb >> 16) & 0xff,
-                       (little_endian_rgb >> 8) & 0xff,
+  return SkColorSetRGB((little_endian_rgb >> 16) & 0xff, (little_endian_rgb >> 8) & 0xff,
                        (little_endian_rgb >> 0) & 0xff);
 }
 
 HypnoRect::HypnoRect() {
-
   paint.setColor(SK_ColorBLACK);
   paint.setStroke(true);
   paint.setAntiAlias(true);
@@ -47,14 +44,14 @@ HypnoRect::HypnoRect() {
   shader_builder->uniform("bottom_color") = SkColor4f::FromColor(kBottomColor);
 }
 
-float HypnoRect::Twist(SkCanvas &canvas, float factor) {
+float HypnoRect::Twist(SkCanvas& canvas, float factor) {
   float scale = pow(kScalePerTwist, unfold * factor);
   canvas.rotate(kDegreesPerTwist * unfold * factor);
   canvas.scale(scale, scale);
   return scale;
 }
 
-void HypnoRect::PrePaint(SkCanvas &canvas) {
+void HypnoRect::PrePaint(SkCanvas& canvas) {
   if (state == kDone) {
     return;
   }
@@ -95,10 +92,8 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
 
   unfold += (1 - unfold) * (1 - exp(-dt.count() * 2));
 
-  float outer_rect_side =
-      rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
-  float window_diag =
-      sqrt(window_width * window_width + window_height * window_height);
+  float outer_rect_side = rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
+  float window_diag = sqrt(window_width * window_width + window_height * window_height);
   if (outer_rect_side > window_diag) {
     if (state == kPreLoading) {
       state = kLoading;
@@ -138,6 +133,6 @@ void HypnoRect::PrePaint(SkCanvas &canvas) {
   canvas.clipPath(clip_path);
 }
 
-void HypnoRect::PostPaint(SkCanvas &canvas) { canvas.restore(); }
+void HypnoRect::PostPaint(SkCanvas& canvas) { canvas.restore(); }
 
-} // namespace automat
+}  // namespace automat

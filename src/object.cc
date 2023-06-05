@@ -7,7 +7,7 @@
 
 namespace automat {
 
-void Object::Draw(SkCanvas &canvas, animation::State &animation_state) const {
+void Object::Draw(SkCanvas& canvas, animation::State& animation_state) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -30,8 +30,8 @@ void Object::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   }
 
   SkColor border_colors[2] = {0xff1c5d3e, 0xff76a87a};
-  sk_sp<SkShader> border_gradient = SkGradientShader::MakeLinear(
-      pts, border_colors, nullptr, 2, SkTileMode::kClamp);
+  sk_sp<SkShader> border_gradient =
+      SkGradientShader::MakeLinear(pts, border_colors, nullptr, 2, SkTileMode::kClamp);
   border_paint.setShader(border_gradient);
 
   canvas.drawPath(path, border_paint);
@@ -42,8 +42,7 @@ void Object::Draw(SkCanvas &canvas, animation::State &animation_state) const {
   SkRect path_bounds = path.getBounds();
 
   canvas.save();
-  canvas.translate(path_bounds.width() / 2 -
-                       gui::GetFont().MeasureText(Name()) / 2,
+  canvas.translate(path_bounds.width() / 2 - gui::GetFont().MeasureText(Name()) / 2,
                    path_bounds.height() / 2 - gui::kLetterSizeMM / 2 / 1000);
   gui::GetFont().DrawText(canvas, Name(), text_paint);
   canvas.restore();
@@ -60,10 +59,9 @@ SkPath Object::Shape() const {
     float final_width = std::max(width_rounded, kMinWidth);
     SkRect rect = SkRect::MakeXYWH(0, 0, final_width, 0.008);
     SkRRect rrect = SkRRect::MakeRectXY(rect, 0.001, 0.001);
-    it = basic_shapes.emplace(std::make_pair(Name(), SkPath::RRect(rrect)))
-             .first;
+    it = basic_shapes.emplace(std::make_pair(Name(), SkPath::RRect(rrect))).first;
   }
   return it->second;
 }
 
-} // namespace automat
+}  // namespace automat

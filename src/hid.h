@@ -10,7 +10,7 @@ enum UsagePage : uint16_t {
   UsagePage_Digitizer = 0x0D
 };
 
-const char *UsagePageToString(UsagePage usage_page);
+const char* UsagePageToString(UsagePage usage_page);
 
 enum Usage : uint16_t {
   Usage_Undefined = 0x00,
@@ -28,7 +28,7 @@ enum Usage : uint16_t {
   Usage_Digitizer_ScanTime = 0x56,
 };
 
-const char *UsageToString(UsagePage usage_page, Usage usage);
+const char* UsageToString(UsagePage usage_page, Usage usage);
 
 enum class Unit : uint32_t {
   None = 0x00,
@@ -47,26 +47,25 @@ struct Accessor {
   double physical_minimum;
   double physical_maximum;
 
-  Accessor(UsagePage usage_page, Usage usage, uint32_t bit_offset,
-           uint32_t bit_width, uint32_t hid_logical_minimum,
-           uint32_t hid_logical_maximum, uint32_t hid_physical_minimum,
-           uint32_t hid_physical_maximum, int8_t hid_exponent, Unit unit);
+  Accessor(UsagePage usage_page, Usage usage, uint32_t bit_offset, uint32_t bit_width,
+           uint32_t hid_logical_minimum, uint32_t hid_logical_maximum,
+           uint32_t hid_physical_minimum, uint32_t hid_physical_maximum, int8_t hid_exponent,
+           Unit unit);
 
-  template <class T> T Read(const uint8_t *report, size_t report_bytes) const;
+  template <class T>
+  T Read(const uint8_t* report, size_t report_bytes) const;
 };
 
 template <>
-bool Accessor::Read<bool>(const uint8_t *report, size_t report_bytes) const;
+bool Accessor::Read<bool>(const uint8_t* report, size_t report_bytes) const;
 
 template <>
-uint32_t Accessor::Read<uint32_t>(const uint8_t *report,
-                                  size_t report_bytes) const;
+uint32_t Accessor::Read<uint32_t>(const uint8_t* report, size_t report_bytes) const;
 
 template <>
-double Accessor::Read<double>(const uint8_t *report, size_t report_bytes) const;
+double Accessor::Read<double>(const uint8_t* report, size_t report_bytes) const;
 
-void ParseReportDescriptor(
-    const uint8_t *report_descriptor, size_t report_descriptor_bytes,
-    std::function<void(uint8_t report_id, Accessor &accessor)> callback);
+void ParseReportDescriptor(const uint8_t* report_descriptor, size_t report_descriptor_bytes,
+                           std::function<void(uint8_t report_id, Accessor& accessor)> callback);
 
-} // namespace automat::hid
+}  // namespace automat::hid

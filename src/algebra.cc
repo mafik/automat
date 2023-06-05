@@ -2,7 +2,7 @@
 
 namespace algebra {
 
-bool ParseToken(std::string token, std::string_view &text) {
+bool ParseToken(std::string token, std::string_view& text) {
   std::string_view initial_text = text;
   while (text.starts_with(" ")) {
     text.remove_prefix(1);
@@ -15,13 +15,13 @@ bool ParseToken(std::string token, std::string_view &text) {
   return false;
 }
 
-std::unique_ptr<Expression> ParseConstant(std::string_view &text) {
+std::unique_ptr<Expression> ParseConstant(std::string_view& text) {
   std::string_view initial_text = text;
   while (text.starts_with(" ")) {
     text.remove_prefix(1);
   }
-  const char *start = &text[0];
-  char *end;
+  const char* start = &text[0];
+  char* end;
   // Note: `strtod` will cross the end of (non-0-terminated) string_view.
   // Normally this would be dangerous but all parsed strings are
   // 0-terminated.
@@ -36,7 +36,7 @@ std::unique_ptr<Expression> ParseConstant(std::string_view &text) {
   text = initial_text;
   return nullptr;
 }
-std::unique_ptr<Expression> ParseVariable(std::string_view &text) {
+std::unique_ptr<Expression> ParseVariable(std::string_view& text) {
   std::string_view initial_text = text;
   while (text.starts_with(" ")) {
     text.remove_prefix(1);
@@ -53,9 +53,9 @@ std::unique_ptr<Expression> ParseVariable(std::string_view &text) {
   return nullptr;
 }
 
-std::unique_ptr<Expression> ParseExpression(std::string_view &text);
+std::unique_ptr<Expression> ParseExpression(std::string_view& text);
 
-std::unique_ptr<Expression> ParseValue(std::string_view &text) {
+std::unique_ptr<Expression> ParseValue(std::string_view& text) {
   std::string_view initial_text = text;
   if (auto number = ParseConstant(text)) {
     return number;
@@ -73,9 +73,9 @@ std::unique_ptr<Expression> ParseValue(std::string_view &text) {
   text = initial_text;
   return nullptr;
 }
-std::unique_ptr<Expression> ParseProduct(std::string_view &text) {
+std::unique_ptr<Expression> ParseProduct(std::string_view& text) {
   std::string_view initial_text = text;
-  Product *product = new Product();
+  Product* product = new Product();
   bool first = true;
   while (true) {
     bool mul = ParseToken("*", text);
@@ -104,9 +104,9 @@ std::unique_ptr<Expression> ParseProduct(std::string_view &text) {
     first = false;
   }
 }
-std::unique_ptr<Expression> ParseSum(std::string_view &text) {
+std::unique_ptr<Expression> ParseSum(std::string_view& text) {
   std::string_view initial_text = text;
-  Sum *sum = new Sum();
+  Sum* sum = new Sum();
   bool first = true;
   while (true) {
     bool plus = ParseToken("+", text);
@@ -130,14 +130,14 @@ std::unique_ptr<Expression> ParseSum(std::string_view &text) {
     first = false;
   }
 }
-std::unique_ptr<Expression> ParseExpression(std::string_view &text) {
+std::unique_ptr<Expression> ParseExpression(std::string_view& text) {
   std::string_view initial_text = text;
   if (auto sum = ParseSum(text)) {
     return sum;
   }
   return nullptr;
 }
-std::unique_ptr<Equation> ParseEquation(std::string_view &text) {
+std::unique_ptr<Equation> ParseEquation(std::string_view& text) {
   std::string_view initial_text = text;
   if (auto left = ParseExpression(text)) {
     if (ParseToken("=", text)) {
@@ -149,7 +149,7 @@ std::unique_ptr<Equation> ParseEquation(std::string_view &text) {
   text = initial_text;
   return nullptr;
 }
-std::unique_ptr<Statement> ParseStatement(std::string_view &text) {
+std::unique_ptr<Statement> ParseStatement(std::string_view& text) {
   std::string_view initial_text = text;
   if (auto eq = ParseEquation(text)) {
     return std::unique_ptr<Statement>(std::move(eq));
@@ -161,15 +161,13 @@ std::unique_ptr<Statement> ParseStatement(std::string_view &text) {
   text = initial_text;
   return nullptr;
 }
-std::vector<algebra::Variable *>
-ExtractVariables(algebra::Statement *statement) {
-  std::vector<algebra::Variable *> variables;
-  WalkDFS<algebra::Statement>(statement, [&](algebra::Statement *statement) {
-    if (algebra::Variable *variable =
-            dynamic_cast<algebra::Variable *>(statement)) {
+std::vector<algebra::Variable*> ExtractVariables(algebra::Statement* statement) {
+  std::vector<algebra::Variable*> variables;
+  WalkDFS<algebra::Statement>(statement, [&](algebra::Statement* statement) {
+    if (algebra::Variable* variable = dynamic_cast<algebra::Variable*>(statement)) {
       variables.push_back(variable);
     }
   });
   return variables;
 }
-} // namespace algebra
+}  // namespace algebra

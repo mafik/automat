@@ -10,14 +10,14 @@ struct product_holder;
 
 struct product_ptr_base {
   virtual ~product_ptr_base() = default;
-  virtual void HolderDestroyed(product_holder &) = 0;
+  virtual void HolderDestroyed(product_holder&) = 0;
 };
 
 // An object that can be used as a key for accessing objects held by
 // `product_ptr`. When it's destroyed, the data stored in product_ptrs, which
 // is indexed by this product_holder, is also destroyed.
 struct product_holder {
-  std::unordered_set<product_ptr_base *> ptrs;
+  std::unordered_set<product_ptr_base*> ptrs;
   ~product_holder() {
     for (auto ptr : ptrs) {
       ptr->HolderDestroyed(*this);
@@ -25,7 +25,8 @@ struct product_holder {
   }
 };
 
-template <typename T> struct construct_functor {
+template <typename T>
+struct construct_functor {
   T operator()() { return T(); }
 };
 
@@ -50,29 +51,29 @@ template <typename T> struct construct_functor {
 // of Grade is destroyed, their corresponding grades are also destroyed.
 template <typename T, typename C = construct_functor<T>>
 struct product_ptr : product_ptr_base {
-  std::unordered_map<product_holder *, T> holders;
+  std::unordered_map<product_holder*, T> holders;
 
   ~product_ptr() {
-    for (auto &it : holders) {
+    for (auto& it : holders) {
       it.first->ptrs.erase(this);
     }
   }
 
   struct iterator {
-    typename std::unordered_map<product_holder *, T>::iterator it;
-    T &operator*() { return it->second; }
-    iterator &operator++() {
+    typename std::unordered_map<product_holder*, T>::iterator it;
+    T& operator*() { return it->second; }
+    iterator& operator++() {
       ++it;
       return *this;
     }
-    bool operator!=(const iterator &other) { return it != other.it; }
+    bool operator!=(const iterator& other) { return it != other.it; }
   };
 
   iterator begin() { return iterator(holders.begin()); }
 
   iterator end() { return iterator(holders.end()); }
 
-  T &operator[](product_holder &holder) {
+  T& operator[](product_holder& holder) {
     auto it = holders.find(&holder);
     if (it == holders.end()) {
       C c;
@@ -82,7 +83,7 @@ struct product_ptr : product_ptr_base {
     return it->second;
   }
 
-  T &GetOrCreate(product_holder &holder, std::function<T()> &create) {
+  T& GetOrCreate(product_holder& holder, std::function<T()>& create) {
     auto it = holders.find(&holder);
     if (it == holders.end()) {
       it = holders.emplace(&holder, create()).first;
@@ -91,9 +92,7 @@ struct product_ptr : product_ptr_base {
     return it->second;
   }
 
-  void HolderDestroyed(product_holder &holder) override {
-    holders.erase(&holder);
-  }
+  void HolderDestroyed(product_holder& holder) override { holders.erase(&holder); }
 };
 
-} // namespace automat
+}  // namespace automat

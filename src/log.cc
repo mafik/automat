@@ -1,3 +1,5 @@
+#include "log.h"
+
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -5,7 +7,6 @@
 #include <utility>
 
 #include "format.h"
-#include "log.h"
 #include "math.h"
 #include "term.h"
 
@@ -25,12 +26,12 @@ struct Logger::Impl {
 #if !defined(__EMSCRIPTEN__)
     // print time
     time_t timestamp = time(nullptr);
-    char *t = asctime(localtime(&timestamp));
-    char *h = t + 11;
+    char* t = asctime(localtime(&timestamp));
+    char* h = t + 11;
     h[2] = 0;
-    char *m = t + 14;
+    char* m = t + 14;
     m[2] = 0;
-    char *s = t + 17;
+    char* s = t + 17;
     s[2] = 0;
 
     struct timespec ts;
@@ -41,9 +42,9 @@ struct Logger::Impl {
     auto darker = term::Gray(8);
     auto darkest = term::Gray(4);
 
-    buffer += dark(h) + darkest(":") + dark(m) + darkest(":") + dark(s) +
-              darkest(".") + darker(f("%03d", millis % 1000)) + " ";
-#endif // not defined(__EMSCRIPTEN__)
+    buffer += dark(h) + darkest(":") + dark(m) + darkest(":") + dark(s) + darkest(".") +
+              darker(f("%03d", millis % 1000)) + " ";
+#endif  // not defined(__EMSCRIPTEN__)
     for (int i = 0; i < indent; ++i) {
       buffer += " ";
     }
@@ -60,10 +61,9 @@ Logger::~Logger() {
   }
   std::string output = impl->buffer;
 
-  if (impl->log_level == LOG_LEVEL_ERROR ||
-      impl->log_level == LOG_LEVEL_FATAL) {
-    output += f(" (%s in %s:%d)", impl->location.function_name(),
-                impl->location.file_name(), impl->location.line());
+  if (impl->log_level == LOG_LEVEL_ERROR || impl->log_level == LOG_LEVEL_FATAL) {
+    output += f(" (%s in %s:%d)", impl->location.function_name(), impl->location.file_name(),
+                impl->location.line());
   }
 
 #if defined(__EMSCRIPTEN__)
@@ -84,47 +84,47 @@ Logger::~Logger() {
   delete impl;
 }
 
-const Logger &operator<<(const Logger &logger, int i) {
+const Logger& operator<<(const Logger& logger, int i) {
   logger.impl->buffer += std::to_string(i);
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, unsigned i) {
+const Logger& operator<<(const Logger& logger, unsigned i) {
   logger.impl->buffer += std::to_string(i);
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, unsigned long i) {
+const Logger& operator<<(const Logger& logger, unsigned long i) {
   logger.impl->buffer += std::to_string(i);
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, unsigned long long i) {
+const Logger& operator<<(const Logger& logger, unsigned long long i) {
   logger.impl->buffer += std::to_string(i);
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, float f) {
+const Logger& operator<<(const Logger& logger, float f) {
   logger.impl->buffer += std::to_string(f);
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, double d) {
+const Logger& operator<<(const Logger& logger, double d) {
   logger.impl->buffer += std::to_string(d);
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, std::string_view s) {
+const Logger& operator<<(const Logger& logger, std::string_view s) {
   logger.impl->buffer += s;
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, const unsigned char *s) {
-  logger.impl->buffer += (const char *)s;
+const Logger& operator<<(const Logger& logger, const unsigned char* s) {
+  logger.impl->buffer += (const char*)s;
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, vec2 v) {
+const Logger& operator<<(const Logger& logger, vec2 v) {
   logger.impl->buffer += "vec2( ";
   logger.impl->buffer += std::to_string(v.X);
   logger.impl->buffer += ", ";
@@ -133,7 +133,7 @@ const Logger &operator<<(const Logger &logger, vec2 v) {
   return logger;
 }
 
-const Logger &operator<<(const Logger &logger, vec3 v) {
+const Logger& operator<<(const Logger& logger, vec3 v) {
   logger.impl->buffer += "vec3( ";
   logger.impl->buffer += std::to_string(v.X);
   logger.impl->buffer += ", ";

@@ -26,30 +26,29 @@ struct DragActionBase : Action {
 
   product_ptr<animation::Approach, ApproachMaker> round_x;
   product_ptr<animation::Approach, ApproachMaker> round_y;
-  void Begin(gui::Pointer &pointer) override;
-  void Update(gui::Pointer &pointer) override;
+  void Begin(gui::Pointer& pointer) override;
+  void Update(gui::Pointer& pointer) override;
   void End() override;
-  void Draw(SkCanvas &canvas, animation::State &animation_state) override;
+  void Draw(SkCanvas& canvas, animation::State& animation_state) override;
   virtual void DragUpdate() = 0;
   virtual void DragEnd() = 0;
-  virtual void DragDraw(SkCanvas &canvas,
-                        animation::State &animation_state) = 0;
+  virtual void DragDraw(SkCanvas& canvas, animation::State& animation_state) = 0;
 };
 
 struct DragObjectAction : DragActionBase {
   std::unique_ptr<Object> object;
   void DragUpdate() override;
   void DragEnd() override;
-  void DragDraw(SkCanvas &canvas, animation::State &animation_state) override;
+  void DragDraw(SkCanvas& canvas, animation::State& animation_state) override;
 };
 
 struct DragLocationAction : DragActionBase {
-  Location *location;
-  DragLocationAction(Location *location);
+  Location* location;
+  DragLocationAction(Location* location);
   ~DragLocationAction() override;
   void DragUpdate() override;
   void DragEnd() override;
-  void DragDraw(SkCanvas &canvas, animation::State &animation_state) override;
+  void DragDraw(SkCanvas& canvas, animation::State& animation_state) override;
 };
 
-} // namespace automat
+}  // namespace automat

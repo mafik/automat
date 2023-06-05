@@ -12,18 +12,12 @@ struct PointerImpl;
 struct Widget;
 struct Window;
 
-using Path = std::vector<Widget *>;
+using Path = std::vector<Widget*>;
 
-enum PointerButton {
-  kButtonUnknown,
-  kMouseLeft,
-  kMouseMiddle,
-  kMouseRight,
-  kButtonCount
-};
+enum PointerButton { kButtonUnknown, kMouseLeft, kMouseMiddle, kMouseRight, kButtonCount };
 
 struct Pointer final {
-  Pointer(Window &, vec2 position);
+  Pointer(Window&, vec2 position);
   ~Pointer();
   void Move(vec2 position);
   void Wheel(float delta);
@@ -36,15 +30,15 @@ struct Pointer final {
   void PushIcon(IconType);
   void PopIcon();
 
-  const Path &Path() const;
-  vec2 PositionWithin(Widget &) const;
+  const Path& Path() const;
+  vec2 PositionWithin(Widget&) const;
   vec2 PositionWithinRootMachine() const;
 
-  Keyboard &Keyboard();
+  Keyboard& Keyboard();
 
-private:
+ private:
   std::unique_ptr<PointerImpl> impl;
   friend struct Window;
 };
 
-} // namespace automat::gui
+}  // namespace automat::gui

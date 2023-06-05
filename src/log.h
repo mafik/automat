@@ -1,10 +1,11 @@
 #pragma once
 
-#include "math.h"
-#include "time.h"
 #include <memory>
 #include <source_location>
 #include <string_view>
+
+#include "math.h"
+#include "time.h"
 
 // Functions for logging human-readable messages.
 //
@@ -33,19 +34,13 @@
 // There is no need to add a new line character at the end of the logged message
 // - it's added there automatically.
 
-enum LogLevel {
-  LOG_LEVEL_DISCARD,
-  LOG_LEVEL_INFO,
-  LOG_LEVEL_ERROR,
-  LOG_LEVEL_FATAL
-};
+enum LogLevel { LOG_LEVEL_DISCARD, LOG_LEVEL_INFO, LOG_LEVEL_ERROR, LOG_LEVEL_FATAL };
 
 struct Logger {
-  Logger(LogLevel,
-         const std::source_location location = std::source_location::current());
+  Logger(LogLevel, const std::source_location location = std::source_location::current());
   ~Logger();
   struct Impl;
-  Impl *impl;
+  Impl* impl;
 };
 
 struct LOG : public Logger {
@@ -63,25 +58,25 @@ struct FATAL : public Logger {
       : Logger(LOG_LEVEL_FATAL, location) {}
 };
 
-const Logger &operator<<(const Logger &, int);
-const Logger &operator<<(const Logger &, unsigned);
-const Logger &operator<<(const Logger &, unsigned long);
-const Logger &operator<<(const Logger &, unsigned long long);
-const Logger &operator<<(const Logger &, float);
-const Logger &operator<<(const Logger &, double);
-const Logger &operator<<(const Logger &, std::string_view);
-const Logger &operator<<(const Logger &, const unsigned char *);
+const Logger& operator<<(const Logger&, int);
+const Logger& operator<<(const Logger&, unsigned);
+const Logger& operator<<(const Logger&, unsigned long);
+const Logger& operator<<(const Logger&, unsigned long long);
+const Logger& operator<<(const Logger&, float);
+const Logger& operator<<(const Logger&, double);
+const Logger& operator<<(const Logger&, std::string_view);
+const Logger& operator<<(const Logger&, const unsigned char*);
 
 // Support for logging vec's from math.hh
-const Logger &operator<<(const Logger &, vec2);
-const Logger &operator<<(const Logger &, vec3);
+const Logger& operator<<(const Logger&, vec2);
+const Logger& operator<<(const Logger&, vec3);
 
 template <typename T>
-concept loggable = requires(T &v) {
+concept loggable = requires(T& v) {
   { v.LoggableString() } -> std::convertible_to<std::string_view>;
 };
 
-const Logger &operator<<(const Logger &logger, loggable auto &t) {
+const Logger& operator<<(const Logger& logger, loggable auto& t) {
   return logger << t.LoggableString();
 }
 
@@ -89,17 +84,15 @@ void LOG_Indent(int n = 2);
 
 void LOG_Unindent(int n = 2);
 
-#define EVERY_N_SEC(n)                                                         \
-  static time::point last_log_time;                                            \
-  if (time::now() - last_log_time > time::duration(n)                          \
-          ? (last_log_time = time::now(), true)                                \
-          : false)
+#define EVERY_N_SEC(n)              \
+  static time::point last_log_time; \
+  if (time::now() - last_log_time > time::duration(n) ? (last_log_time = time::now(), true) : false)
 
 // TODO: remove
-#define LOG_EVERY_N_SEC(n)                                                     \
-  static time::point last_log_time;                                            \
-  (time::now() - last_log_time > time::duration(n)                             \
-       ? (last_log_time = time::now(), Logger(LOG_LEVEL_INFO))                 \
+#define LOG_EVERY_N_SEC(n)                                     \
+  static time::point last_log_time;                            \
+  (time::now() - last_log_time > time::duration(n)             \
+       ? (last_log_time = time::now(), Logger(LOG_LEVEL_INFO)) \
        : Logger(LOG_LEVEL_DISCARD))
 
 // End of header

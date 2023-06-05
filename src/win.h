@@ -10,7 +10,7 @@ static const char kWindowClass[] = "Automat";
 static const char kWindowTitle[] = "Automat";
 
 HINSTANCE GetInstance();
-WNDCLASSEX &GetWindowClass();
+WNDCLASSEX& GetWindowClass();
 HWND CreateAutomatWindow();
 
-} // namespace automat
+}  // namespace automat

@@ -1,8 +1,8 @@
 #pragma once
 
-#include <bitset>
-
 #include <include/effects/SkRuntimeEffect.h>
+
+#include <bitset>
 
 #include "base.h"
 #include "root.h"
@@ -15,37 +15,31 @@ struct PointerImpl;
 // Ensures that the 1x1m canvas is at least 1mm on screen.
 constexpr float kMinZoom = 0.001f;
 constexpr time::duration kClickTimeout = std::chrono::milliseconds(300);
-constexpr float kClickRadius = 0.002f; // 2mm
+constexpr float kClickRadius = 0.002f;  // 2mm
 
 struct PrototypeButton : Widget {
-  Widget *parent_widget;
-  const Object *proto;
-  PrototypeButton(Widget *parent, const Object *proto)
-      : parent_widget(parent), proto(proto) {}
-  Widget *ParentWidget() const override { return parent_widget; }
-  void Draw(SkCanvas &canvas,
-            animation::State &animation_state) const override {
+  Widget* parent_widget;
+  const Object* proto;
+  PrototypeButton(Widget* parent, const Object* proto) : parent_widget(parent), proto(proto) {}
+  Widget* ParentWidget() const override { return parent_widget; }
+  void Draw(SkCanvas& canvas, animation::State& animation_state) const override {
     proto->Draw(canvas, animation_state);
   }
   SkPath Shape() const override { return proto->Shape(); }
 
-  void PointerOver(Pointer &pointer, animation::State &state) override {
+  void PointerOver(Pointer& pointer, animation::State& state) override {
     pointer.PushIcon(Pointer::kIconHand);
   }
 
-  void PointerLeave(Pointer &pointer, animation::State &state) override {
-    pointer.PopIcon();
-  }
+  void PointerLeave(Pointer& pointer, animation::State& state) override { pointer.PopIcon(); }
 
-  std::unique_ptr<Action> ButtonDownAction(Pointer &,
-                                           PointerButton btn) override;
+  std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton btn) override;
 };
 
 struct WindowImpl : Widget {
-  vec2 position = Vec2(0, 0); // center of the window
+  vec2 position = Vec2(0, 0);  // center of the window
   vec2 size;
-  float display_pixels_per_meter =
-      96 / kMetersPerInch; // default value assumes 96 DPI
+  float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
 
   animation::Approach zoom = animation::Approach(1.0, 0.01);
   animation::Approach camera_x = animation::Approach(0.0, 0.005);
@@ -55,8 +49,8 @@ struct WindowImpl : Widget {
   std::deque<vec3> camera_timeline;
   std::deque<time::point> timeline;
 
-  std::vector<PointerImpl *> pointers;
-  std::vector<KeyboardImpl *> keyboards;
+  std::vector<PointerImpl*> pointers;
+  std::vector<KeyboardImpl*> keyboards;
 
   animation::State animation_state;
 
@@ -73,8 +67,8 @@ struct WindowImpl : Widget {
     float max_w = size.Width;
     vec2 cursor = Vec2(0, 0);
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      auto &btn = prototype_buttons[i];
-      vec2 &pos = prototype_button_positions[i];
+      auto& btn = prototype_buttons[i];
+      vec2& pos = prototype_button_positions[i];
       SkPath shape = btn.Shape();
       SkRect bounds = shape.getBounds();
       if (cursor.X + bounds.width() + 0.001 > max_w) {
@@ -89,14 +83,13 @@ struct WindowImpl : Widget {
   float PxPerMeter() { return display_pixels_per_meter * zoom; }
 
   SkRect GetCameraRect() {
-    return SkRect::MakeXYWH(camera_x - size.Width / 2,
-                            camera_y - size.Height / 2, size.Width,
+    return SkRect::MakeXYWH(camera_x - size.Width / 2, camera_y - size.Height / 2, size.Width,
                             size.Height);
   }
 
-  SkPaint &GetBackgroundPaint() {
+  SkPaint& GetBackgroundPaint() {
     static SkRuntimeShaderBuilder builder = []() {
-      const char *sksl = R"(
+      const char* sksl = R"(
         uniform float px_per_m;
 
         // Dark theme
@@ -154,9 +147,7 @@ struct WindowImpl : Widget {
     return m;
   }
 
-  vec2 CanvasToWindow(vec2 canvas) {
-    return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2;
-  }
+  vec2 CanvasToWindow(vec2 canvas) { return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2; }
 
   void Resize(vec2 size) {
     this->size = size;
@@ -168,22 +159,20 @@ struct WindowImpl : Widget {
   SkPath Shape() const override {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.Width, size.Height));
   }
-  void Draw(SkCanvas &, animation::State &animation_state) const override {
+  void Draw(SkCanvas&, animation::State& animation_state) const override {
     FATAL() << "WindowImpl::Draw() should never be called";
   }
-  void Draw(SkCanvas &canvas);
+  void Draw(SkCanvas& canvas);
   void Zoom(float delta);
-  VisitResult VisitChildren(Visitor &visitor) override {
+  VisitResult VisitChildren(Visitor& visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      if (visitor(prototype_buttons[i]) == VisitResult::kStop)
-        return VisitResult::kStop;
+      if (visitor(prototype_buttons[i]) == VisitResult::kStop) return VisitResult::kStop;
     }
     VisitResult result = VisitResult::kContinue;
     RunOnAutomatThreadSynchronous([&]() { result = visitor(*root_machine); });
     return result;
   }
-  SkMatrix TransformToChild(const Widget *child,
-                            animation::State *state = nullptr) const override {
+  SkMatrix TransformToChild(const Widget* child, animation::State* state = nullptr) const override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
       if (child == &prototype_buttons[i]) {
         return SkMatrix::Translate(-prototype_button_positions[i].X,
@@ -199,4 +188,4 @@ struct WindowImpl : Widget {
   std::string_view GetState();
 };
 
-} // namespace automat::gui
+}  // namespace automat::gui

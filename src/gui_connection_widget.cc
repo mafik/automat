@@ -1,10 +1,10 @@
 #include "gui_connection_widget.h"
 
-#include <cassert>
-#include <numbers>
-
 #include <include/core/SkColor.h>
 #include <include/core/SkRRect.h>
+
+#include <cassert>
+#include <numbers>
 
 #include "base.h"
 #include "font.h"
@@ -15,9 +15,9 @@
 namespace automat::gui {
 
 struct ConnectionLabelWidget : Widget {
-  ConnectionWidget *parent;
+  ConnectionWidget* parent;
   std::string label;
-  ConnectionLabelWidget(ConnectionWidget *parent, std::string_view label)
+  ConnectionLabelWidget(ConnectionWidget* parent, std::string_view label)
       : parent(parent), label(label) {
     this->label = "👆" + this->label + " ";
   }
@@ -28,34 +28,31 @@ struct ConnectionLabelWidget : Widget {
     float h = Height();
     return SkPath::Rect(SkRect::MakeWH(w, h));
   }
-  void Draw(SkCanvas &canvas, animation::State &state) const override {
+  void Draw(SkCanvas& canvas, animation::State& state) const override {
     SkPaint paint;
     DrawColored(canvas, state, paint);
   }
 
-  void DrawColored(SkCanvas &canvas, animation::State &state,
-                   const SkPaint &paint) const override {
-    auto &font = GetFont();
+  void DrawColored(SkCanvas& canvas, animation::State& state, const SkPaint& paint) const override {
+    auto& font = GetFont();
     canvas.translate(-Width() / 2, -Height() / 2);
     font.DrawText(canvas, label, paint);
     canvas.translate(Width() / 2, Height() / 2);
   }
 };
 
-ConnectionWidget::ConnectionWidget(Location *from, std::string_view label)
-    : Button(from->ParentWidget(),
-             std::make_unique<ConnectionLabelWidget>(this, label)),
-      from(from), label(label) {}
+ConnectionWidget::ConnectionWidget(Location* from, std::string_view label)
+    : Button(from->ParentWidget(), std::make_unique<ConnectionLabelWidget>(this, label)),
+      from(from),
+      label(label) {}
 
-Widget *ConnectionWidget::ParentWidget() const { return from; }
+Widget* ConnectionWidget::ParentWidget() const { return from; }
 
-constexpr char kArrowShapeSVG[] =
-    "M-13-8c-3 0-3 16 0 16 3-1 10-5 13-8-3-3-10-7-13-8z";
+constexpr char kArrowShapeSVG[] = "M-13-8c-3 0-3 16 0 16 3-1 10-5 13-8-3-3-10-7-13-8z";
 
 const SkPath kArrowShape = PathFromSVG(kArrowShapeSVG);
 
-void DrawConnection(SkCanvas &canvas, const SkPath &from_path,
-                    const SkPath &to_path) {
+void DrawConnection(SkCanvas& canvas, const SkPath& from_path, const SkPath& to_path) {
   SkColor color = 0xff6e4521;
   SkPaint line_paint;
   line_paint.setAntiAlias(true);
@@ -138,17 +135,16 @@ void DrawConnection(SkCanvas &canvas, const SkPath &from_path,
   canvas.restore();
 }
 
-void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {
+void ConnectionWidget::Draw(SkCanvas& canvas, animation::State& state) const {
   SkPath my_shape = Shape();
 
-  Widget *parent = from->ParentWidget();
-  SkMatrix parent_to_local =
-      TransformDown(Path{parent, from, (Widget *)this}, &state);
+  Widget* parent = from->ParentWidget();
+  SkMatrix parent_to_local = TransformDown(Path{parent, from, (Widget*)this}, &state);
 
   auto [a, b] = from->outgoing.equal_range(label);
   for (auto it = a; it != b; ++it) {
-    Connection &c = *it->second;
-    Location &to = c.to;
+    Connection& c = *it->second;
+    Location& to = c.to;
     SkPath to_shape = to.Shape();
 
     SkMatrix m = TransformUp(Path{parent, &to}, &state);
@@ -159,16 +155,14 @@ void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {
   Button::Draw(canvas, state);
 }
 
-std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer &,
-                                                           PointerButton) {
+std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButton) {
   if (drag_action != nullptr) {
     return nullptr;
   }
   return std::make_unique<DragConnectionAction>(this);
 }
 
-DragConnectionAction::DragConnectionAction(ConnectionWidget *widget)
-    : widget(widget) {
+DragConnectionAction::DragConnectionAction(ConnectionWidget* widget) : widget(widget) {
   assert(widget->drag_action == nullptr);
   widget->drag_action = this;
 }
@@ -178,33 +172,31 @@ DragConnectionAction::~DragConnectionAction() {
   widget->drag_action = nullptr;
 }
 
-void DragConnectionAction::Begin(gui::Pointer &pointer) {
+void DragConnectionAction::Begin(gui::Pointer& pointer) {
   current_position = pointer.PositionWithin(*widget->from->ParentWidget());
 }
 
-void DragConnectionAction::Update(gui::Pointer &pointer) {
+void DragConnectionAction::Update(gui::Pointer& pointer) {
   current_position = pointer.PositionWithin(*widget->from->ParentWidget());
 }
 
 void DragConnectionAction::End() {
-  Location *from = widget->from;
-  Machine *m = from->ParentAs<Machine>();
-  Location *to = m->LocationAtPoint(current_position);
+  Location* from = widget->from;
+  Machine* m = from->ParentAs<Machine>();
+  Location* to = m->LocationAtPoint(current_position);
   if (to != nullptr) {
     from->ConnectTo(*to, widget->label);
   }
 }
 
-void DragConnectionAction::Draw(SkCanvas &canvas,
-                                animation::State &animation_state) {
+void DragConnectionAction::Draw(SkCanvas& canvas, animation::State& animation_state) {
   SkPath from_path = widget->Shape();
   SkMatrix from_transform =
-      TransformUp(Path{widget->from->ParentWidget(), widget->from, widget},
-                  &animation_state);
+      TransformUp(Path{widget->from->ParentWidget(), widget->from, widget}, &animation_state);
   from_path.transform(from_transform);
   SkPath to_path = SkPath();
   to_path.moveTo(current_position.X, current_position.Y);
   DrawConnection(canvas, from_path, to_path);
 }
 
-} // namespace automat::gui
+}  // namespace automat::gui

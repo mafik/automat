@@ -1,12 +1,12 @@
 #include "text_field.h"
 
-#include <memory>
-#include <numeric>
-
 #include <include/core/SkColor.h>
 #include <include/core/SkFontTypes.h>
 #include <include/core/SkMatrix.h>
 #include <src/base/SkUTF.h>
+
+#include <memory>
+#include <numeric>
 
 #include "font.h"
 #include "log.h"
@@ -14,27 +14,25 @@
 
 namespace automat::gui {
 
-Widget *TextField::ParentWidget() const { return parent_widget; }
+Widget* TextField::ParentWidget() const { return parent_widget; }
 
-void TextField::PointerOver(Pointer &pointer, animation::State &state) {
+void TextField::PointerOver(Pointer& pointer, animation::State& state) {
   pointer.PushIcon(Pointer::kIconIBeam);
   hover_ptr[state].Increment();
 }
 
-void TextField::PointerLeave(Pointer &pointer, animation::State &state) {
+void TextField::PointerLeave(Pointer& pointer, animation::State& state) {
   pointer.PopIcon();
   hover_ptr[state].Decrement();
 }
 
-void DrawDebugTextOutlines(SkCanvas &canvas, std::string *text) {
-  const char *c_str = text->c_str();
+void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
+  const char* c_str = text->c_str();
   size_t byte_length = text->size();
-  Font &font = GetFont();
-  int glyph_count =
-      font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
+  Font& font = GetFont();
+  int glyph_count = font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
   SkGlyphID glyphs[glyph_count];
-  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs,
-                            glyph_count);
+  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs, glyph_count);
 
   SkScalar widths[glyph_count];
   SkRect bounds[glyph_count];
@@ -50,7 +48,7 @@ void DrawDebugTextOutlines(SkCanvas &canvas, std::string *text) {
   line.setStyle(SkPaint::kStroke_Style);
   line.setColor(SkColorSetRGB(0x00, 0x80, 0x00));
   for (int i = 0; i < glyph_count; ++i) {
-    auto &b = bounds[i];
+    auto& b = bounds[i];
     canvas.drawRect(b, outline);
     canvas.drawLine(0, 0, widths[i], 0, line);
     canvas.drawCircle(0, 0, 0.5, line);
@@ -60,12 +58,11 @@ void DrawDebugTextOutlines(SkCanvas &canvas, std::string *text) {
   canvas.restore();
 }
 
-void TextField::Draw(SkCanvas &canvas,
-                     animation::State &animation_state) const {
-  auto &hover = hover_ptr[animation_state].animation;
+void TextField::Draw(SkCanvas& canvas, animation::State& animation_state) const {
+  auto& hover = hover_ptr[animation_state].animation;
   hover.Tick(animation_state);
 
-  Font &font = GetFont();
+  Font& font = GetFont();
   SkPath shape = Shape();
   SkColor c_inactive_bg = SkColorSetRGB(0xe0, 0xe0, 0xe0);
   SkColor c_fg = SK_ColorBLACK;
@@ -83,8 +80,8 @@ void TextField::Draw(SkCanvas &canvas,
   SkPaint underline;
   underline.setColor(c_fg);
   underline.setAntiAlias(true);
-  SkRect underline_rect = SkRect::MakeXYWH(
-      0, -font.line_thickness, width - 2 * kTextMargin, -font.line_thickness);
+  SkRect underline_rect =
+      SkRect::MakeXYWH(0, -font.line_thickness, width - 2 * kTextMargin, -font.line_thickness);
   canvas.drawRect(underline_rect, underline);
   SkPaint text_fg;
   text_fg.setColor(c_fg);
@@ -99,64 +96,61 @@ SkPath TextField::Shape() const {
   return SkPath::RRect(bounds, kTextCornerRadius, kTextCornerRadius);
 }
 
-void UpdateCaret(TextField &text_field, Caret &caret) {
+void UpdateCaret(TextField& text_field, Caret& caret) {
   int index = text_field.caret_positions[&caret].index;
-  vec2 caret_pos =
-      Vec2(kTextMargin + GetFont().PositionFromIndex(*text_field.text, index),
-           (kTextFieldHeight - kLetterSize) / 2);
+  vec2 caret_pos = Vec2(kTextMargin + GetFont().PositionFromIndex(*text_field.text, index),
+                        (kTextFieldHeight - kLetterSize) / 2);
 
   caret.PlaceIBeam(caret_pos);
 }
 
 struct TextSelectAction : Action {
-  TextField &text_field;
-  Caret *caret = nullptr;
+  TextField& text_field;
+  Caret* caret = nullptr;
 
-  TextSelectAction(TextField &text_field) : text_field(text_field) {}
+  TextSelectAction(TextField& text_field) : text_field(text_field) {}
 
-  void UpdateCaretFromPointer(Pointer &pointer) {
+  void UpdateCaretFromPointer(Pointer& pointer) {
     auto it = text_field.caret_positions.find(caret);
     // The caret might have been released.
     if (it == text_field.caret_positions.end()) {
       return;
     }
     vec2 local = pointer.PositionWithin(text_field);
-    int index =
-        GetFont().IndexFromPosition(*text_field.text, local.X - kTextMargin);
+    int index = GetFont().IndexFromPosition(*text_field.text, local.X - kTextMargin);
     if (index != it->second.index) {
       it->second.index = index;
       UpdateCaret(text_field, *caret);
     }
   }
 
-  void Begin(Pointer &pointer) override {
+  void Begin(Pointer& pointer) override {
     caret = &text_field.RequestCaret(pointer.Keyboard());
     // Invalid index will be updated on the first call to
     // UpdateCaretFromPointer.
     text_field.caret_positions[caret] = {.index = -1};
     UpdateCaretFromPointer(pointer);
   }
-  void Update(Pointer &pointer) override { UpdateCaretFromPointer(pointer); }
+  void Update(Pointer& pointer) override { UpdateCaretFromPointer(pointer); }
   void End() override {}
-  void Draw(SkCanvas &canvas, animation::State &animation_state) override {}
+  void Draw(SkCanvas& canvas, animation::State& animation_state) override {}
 };
 
-std::unique_ptr<Action> TextField::ButtonDownAction(Pointer &,
-                                                    PointerButton btn) {
+std::unique_ptr<Action> TextField::ButtonDownAction(Pointer&, PointerButton btn) {
   if (btn == PointerButton::kMouseLeft) {
     return std::make_unique<TextSelectAction>(*this);
   }
   return nullptr;
 }
 
-void TextField::ReleaseCaret(Caret &caret) { caret_positions.erase(&caret); }
+void TextField::ReleaseCaret(Caret& caret) { caret_positions.erase(&caret); }
 
-std::string FilterControlCharacters(const std::string &text) {
+std::string FilterControlCharacters(const std::string& text) {
   std::string clean = "";
-  const char *ptr = text.c_str();
-  const char *end = ptr + text.size();
+  const char* ptr = text.c_str();
+  const char* end = ptr + text.size();
   while (ptr < end) {
-    const char *start = ptr;
+    const char* start = ptr;
     SkUnichar uni = SkUTF::NextUTF8(&ptr, end);
     if (uni < 0x20) {
       continue;
@@ -166,68 +160,68 @@ std::string FilterControlCharacters(const std::string &text) {
   return clean;
 }
 
-void TextField::KeyDown(Caret &caret, Key k) {
+void TextField::KeyDown(Caret& caret, Key k) {
   switch (k.physical) {
-  case AnsiKey::Delete: {
-    int begin = caret_positions[&caret].index;
-    int end = GetFont().NextIndex(*text, begin);
-    if (end != begin) {
-      text->erase(begin, end - begin);
-      // No need to update caret after delete.
+    case AnsiKey::Delete: {
+      int begin = caret_positions[&caret].index;
+      int end = GetFont().NextIndex(*text, begin);
+      if (end != begin) {
+        text->erase(begin, end - begin);
+        // No need to update caret after delete.
+      }
+      break;
     }
-    break;
-  }
-  case AnsiKey::Backspace: {
-    int &i_ref = caret_positions[&caret].index;
-    int end = i_ref;
-    if (i_ref > 0) {
-      i_ref = GetFont().PrevIndex(*text, i_ref);
-      text->erase(i_ref, end - i_ref);
-      UpdateCaret(*this, caret);
+    case AnsiKey::Backspace: {
+      int& i_ref = caret_positions[&caret].index;
+      int end = i_ref;
+      if (i_ref > 0) {
+        i_ref = GetFont().PrevIndex(*text, i_ref);
+        text->erase(i_ref, end - i_ref);
+        UpdateCaret(*this, caret);
+      }
+      break;
     }
-    break;
-  }
-  case AnsiKey::Left: {
-    int &i_ref = caret_positions[&caret].index;
-    if (i_ref > 0) {
-      i_ref = GetFont().PrevIndex(*text, i_ref);
-      UpdateCaret(*this, caret);
+    case AnsiKey::Left: {
+      int& i_ref = caret_positions[&caret].index;
+      if (i_ref > 0) {
+        i_ref = GetFont().PrevIndex(*text, i_ref);
+        UpdateCaret(*this, caret);
+      }
+      break;
     }
-    break;
-  }
-  case AnsiKey::Right: {
-    int &i_ref = caret_positions[&caret].index;
-    if (i_ref < text->size()) {
-      i_ref = GetFont().NextIndex(*text, i_ref);
-      UpdateCaret(*this, caret);
+    case AnsiKey::Right: {
+      int& i_ref = caret_positions[&caret].index;
+      if (i_ref < text->size()) {
+        i_ref = GetFont().NextIndex(*text, i_ref);
+        UpdateCaret(*this, caret);
+      }
+      break;
     }
-    break;
-  }
-  case AnsiKey::Home: {
-    caret_positions[&caret].index = 0;
-    UpdateCaret(*this, caret);
-    break;
-  }
-  case AnsiKey::End: {
-    caret_positions[&caret].index = text->size();
-    UpdateCaret(*this, caret);
-    break;
-  }
-  default: {
-    std::string clean = FilterControlCharacters(k.text);
-    if (!clean.empty()) {
-      text->insert(caret_positions[&caret].index, clean);
-      caret_positions[&caret].index += clean.size();
+    case AnsiKey::Home: {
+      caret_positions[&caret].index = 0;
       UpdateCaret(*this, caret);
-      std::string text_hex = "";
-      for (char c : clean) {
-        text_hex += f(" %02x", (uint8_t)c);
+      break;
+    }
+    case AnsiKey::End: {
+      caret_positions[&caret].index = text->size();
+      UpdateCaret(*this, caret);
+      break;
+    }
+    default: {
+      std::string clean = FilterControlCharacters(k.text);
+      if (!clean.empty()) {
+        text->insert(caret_positions[&caret].index, clean);
+        caret_positions[&caret].index += clean.size();
+        UpdateCaret(*this, caret);
+        std::string text_hex = "";
+        for (char c : clean) {
+          text_hex += f(" %02x", (uint8_t)c);
+        }
       }
     }
   }
-  }
 }
 
-void TextField::KeyUp(Caret &, Key) {}
+void TextField::KeyUp(Caret&, Key) {}
 
-} // namespace automat::gui
+}  // namespace automat::gui

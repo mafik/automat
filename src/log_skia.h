@@ -6,6 +6,6 @@
 
 namespace automat {
 
-const Logger &operator<<(const Logger &, SkMatrix &);
+const Logger& operator<<(const Logger&, SkMatrix&);
 
-} // namespace automat
+}  // namespace automat

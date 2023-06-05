@@ -1,8 +1,7 @@
 #include "math.h"
 
-std::ostream &operator<<(std::ostream &s, const vec3 &v) {
-  s << std::setprecision(9) << "Vec3(" << v.X << ", " << v.Y << ", " << v.Z
-    << ")";
+std::ostream& operator<<(std::ostream& s, const vec3& v) {
+  s << std::setprecision(9) << "Vec3(" << v.X << ", " << v.Y << ", " << v.Z << ")";
   return s;
 }
 

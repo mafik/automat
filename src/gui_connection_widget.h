@@ -6,33 +6,33 @@
 
 namespace automat {
 struct Location;
-} // namespace automat
+}  // namespace automat
 
 namespace automat::gui {
 
 struct ConnectionWidget;
 
 struct DragConnectionAction : Action {
-  ConnectionWidget *widget;
+  ConnectionWidget* widget;
   vec2 current_position;
-  DragConnectionAction(ConnectionWidget *widget);
+  DragConnectionAction(ConnectionWidget* widget);
   ~DragConnectionAction() override;
-  void Begin(gui::Pointer &pointer) override;
-  void Update(gui::Pointer &pointer) override;
+  void Begin(gui::Pointer& pointer) override;
+  void Update(gui::Pointer& pointer) override;
   void End() override;
-  void Draw(SkCanvas &canvas, animation::State &animation_state) override;
+  void Draw(SkCanvas& canvas, animation::State& animation_state) override;
 };
 
 struct ConnectionWidget : Button {
-  Location *from;
+  Location* from;
   std::string label;
-  DragConnectionAction *drag_action = nullptr;
+  DragConnectionAction* drag_action = nullptr;
 
-  ConnectionWidget(Location *from, std::string_view label);
-  Widget *ParentWidget() const override;
+  ConnectionWidget(Location* from, std::string_view label);
+  Widget* ParentWidget() const override;
 
-  void Draw(SkCanvas &, animation::State &) const override;
-  std::unique_ptr<Action> ButtonDownAction(Pointer &, PointerButton) override;
+  void Draw(SkCanvas&, animation::State&) const override;
+  std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
 };
 
-} // namespace automat::gui
+}  // namespace automat::gui

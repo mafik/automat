@@ -1,4 +1,5 @@
 #include "format.h"
+
 #include <gtest/gtest.h>
 
 TEST(FormatTest, BasicTest) {

@@ -26,9 +26,8 @@
 #ifndef HIDAPI_WINAPI_H__
 #define HIDAPI_WINAPI_H__
 
-#include <stdint.h>
-
 #include <guiddef.h>
+#include <stdint.h>
 
 #include "hidapi.h"
 
@@ -52,8 +51,7 @@ extern "C" {
         @returns
                 This function returns 0 on success and -1 on error.
 */
-int HID_API_EXPORT_CALL hid_winapi_get_container_id(hid_device *dev,
-                                                    GUID *container_id);
+int HID_API_EXPORT_CALL hid_winapi_get_container_id(hid_device* dev, GUID* container_id);
 
 /**
  * @brief Reconstructs a HID Report Descriptor from a Win32 HIDP_PREPARSED_DATA
@@ -71,8 +69,9 @@ int HID_API_EXPORT_CALL hid_winapi_get_container_id(hid_device *dev,
  * @return Returns size of reconstructed report descriptor if successful, -1 for
  * error.
  */
-int HID_API_EXPORT_CALL hid_winapi_descriptor_reconstruct_pp_data(
-    void *hidp_preparsed_data, unsigned char *buf, size_t buf_size);
+int HID_API_EXPORT_CALL hid_winapi_descriptor_reconstruct_pp_data(void* hidp_preparsed_data,
+                                                                  unsigned char* buf,
+                                                                  size_t buf_size);
 
 #ifdef __cplusplus
 }

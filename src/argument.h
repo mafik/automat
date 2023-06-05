@@ -25,30 +25,27 @@ struct Argument {
   std::string name;
   Precondition precondition;
   Quantity quantity;
-  std::vector<std::function<void(Location *location, Object *object,
-                                 std::string &error)>>
+  std::vector<std::function<void(Location* location, Object* object, std::string& error)>>
       requirements;
 
-  Argument(std::string_view name, Precondition precondition,
-           Quantity quantity = kSingle)
+  Argument(std::string_view name, Precondition precondition, Quantity quantity = kSingle)
       : name(name), precondition(precondition), quantity(quantity) {}
 
   virtual ~Argument() = default;
 
-  template <typename T> Argument &RequireInstanceOf() {
+  template <typename T>
+  Argument& RequireInstanceOf() {
     requirements.emplace_back(
-        [name = name](Location *location, Object *object, std::string &error) {
-          if (dynamic_cast<T *>(object) == nullptr) {
-            error = f("The %s argument must be an instance of %s.",
-                      name.c_str(), typeid(T).name());
+        [name = name](Location* location, Object* object, std::string& error) {
+          if (dynamic_cast<T*>(object) == nullptr) {
+            error = f("The %s argument must be an instance of %s.", name.c_str(), typeid(T).name());
           }
         });
     return *this;
   }
 
-  void CheckRequirements(Location &here, Location *location, Object *object,
-                         std::string &error) {
-    for (auto &requirement : requirements) {
+  void CheckRequirements(Location& here, Location* location, Object* object, std::string& error) {
+    for (auto& requirement : requirements) {
       requirement(location, object, error);
       if (!error.empty()) {
         return;
@@ -59,48 +56,44 @@ struct Argument {
   struct LocationResult {
     bool ok = true;
     bool follow_pointers = true;
-    Location *location = nullptr;
+    Location* location = nullptr;
   };
 
-  LocationResult GetLocation(Location &here,
-                             std::source_location source_location =
-                                 std::source_location::current()) const;
+  LocationResult GetLocation(
+      Location& here, std::source_location source_location = std::source_location::current()) const;
 
   struct ObjectResult : LocationResult {
-    Object *object = nullptr;
-    ObjectResult(LocationResult location_result)
-        : LocationResult(location_result) {}
+    Object* object = nullptr;
+    ObjectResult(LocationResult location_result) : LocationResult(location_result) {}
   };
 
-  ObjectResult GetObject(Location &here,
-                         std::source_location source_location =
-                             std::source_location::current()) const;
+  ObjectResult GetObject(
+      Location& here, std::source_location source_location = std::source_location::current()) const;
 
   struct FinalLocationResult : ObjectResult {
-    Location *final_location = nullptr;
-    FinalLocationResult(ObjectResult object_result)
-        : ObjectResult(object_result) {}
+    Location* final_location = nullptr;
+    FinalLocationResult(ObjectResult object_result) : ObjectResult(object_result) {}
   };
 
-  FinalLocationResult
-  GetFinalLocation(Location &here, std::source_location source_location =
-                                       std::source_location::current()) const;
+  FinalLocationResult GetFinalLocation(
+      Location& here, std::source_location source_location = std::source_location::current()) const;
 
-  template <typename T> struct TypedResult : ObjectResult {
-    T *typed = nullptr;
+  template <typename T>
+  struct TypedResult : ObjectResult {
+    T* typed = nullptr;
     TypedResult(ObjectResult object_result) : ObjectResult(object_result) {}
   };
 
   template <typename T>
-  TypedResult<T> GetTyped(Location &here, std::source_location source_location =
-                                              std::source_location::current()) {
+  TypedResult<T> GetTyped(Location& here,
+                          std::source_location source_location = std::source_location::current()) {
     TypedResult<T> result(GetObject(here, source_location));
     if (result.object) {
-      result.typed = dynamic_cast<T *>(result.object);
+      result.typed = dynamic_cast<T*>(result.object);
       if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
-        here.ReportError(f("The %s argument is not an instance of %s.",
-                           name.c_str(), typeid(T).name()),
-                         source_location);
+        here.ReportError(
+            f("The %s argument is not an instance of %s.", name.c_str(), typeid(T).name()),
+            source_location);
         result.ok = false;
       }
     }
@@ -110,7 +103,7 @@ struct Argument {
   // The Loop ends when `callback` returns a value that is convertible to
   // `true`.
   template <typename T>
-  T LoopLocations(Location &here, std::function<T(Location &)> callback) {
+  T LoopLocations(Location& here, std::function<T(Location&)> callback) {
     auto [begin, end] = here.outgoing.equal_range(name);
     for (auto it = begin; it != end; ++it) {
       if (auto ret = callback(it->second->to)) {
@@ -123,9 +116,9 @@ struct Argument {
   // The Loop ends when `callback` returns a value that is convertible to
   // `true`.
   template <typename T>
-  T LoopObjects(Location &here, std::function<T(Object &)> callback) {
-    return LoopLocations<T>(here, [&](Location &h) {
-      if (Object *o = h.Follow()) {
+  T LoopObjects(Location& here, std::function<T(Object&)> callback) {
+    return LoopLocations<T>(here, [&](Location& h) {
+      if (Object* o = h.Follow()) {
         return callback(*o);
       } else {
         return T();
@@ -151,22 +144,22 @@ struct Argument {
 extern Argument then_arg;
 
 struct LiveArgument : Argument {
-  LiveArgument(std::string_view name, Precondition precondition)
-      : Argument(name, precondition) {}
+  LiveArgument(std::string_view name, Precondition precondition) : Argument(name, precondition) {}
 
-  template <typename T> LiveArgument &RequireInstanceOf() {
+  template <typename T>
+  LiveArgument& RequireInstanceOf() {
     Argument::RequireInstanceOf<T>();
     return *this;
   }
-  void Detach(Location &here) {
+  void Detach(Location& here) {
     auto connections = here.outgoing.equal_range(name);
     for (auto it = connections.first; it != connections.second; ++it) {
-      auto &connection = it->second;
+      auto& connection = it->second;
       here.StopObservingUpdates(connection->to);
     }
     // If there were no connections, try to find nearby objects instead.
     if (connections.first == here.outgoing.end()) {
-      here.Nearby([&](Location &other) {
+      here.Nearby([&](Location& other) {
         if (other.name == name) {
           here.StopObservingUpdates(other);
         }
@@ -174,15 +167,15 @@ struct LiveArgument : Argument {
       });
     }
   }
-  void Attach(Location &here) {
+  void Attach(Location& here) {
     auto connections = here.outgoing.equal_range(name);
     for (auto it = connections.first; it != connections.second; ++it) {
-      auto &connection = it->second;
+      auto& connection = it->second;
       here.ObserveUpdates(connection->to);
     }
     // If there were no connections, try to find nearby objects instead.
     if (connections.first == here.outgoing.end()) {
-      here.Nearby([&](Location &other) {
+      here.Nearby([&](Location& other) {
         if (other.name == name) {
           here.ObserveUpdates(other);
         }
@@ -190,7 +183,7 @@ struct LiveArgument : Argument {
       });
     }
   }
-  void Relocate(Location *old_self, Location *new_self) {
+  void Relocate(Location* old_self, Location* new_self) {
     if (old_self) {
       Detach(*old_self);
     }
@@ -198,8 +191,7 @@ struct LiveArgument : Argument {
       Attach(*new_self);
     }
   }
-  void ConnectionAdded(Location &here, std::string_view label,
-                       Connection &connection) {
+  void ConnectionAdded(Location& here, std::string_view label, Connection& connection) {
     // TODO: handle the case where `here` is observing nearby objects (without
     // connections) and a connection is added.
     // TODO: handle ConnectionRemoved
@@ -208,11 +200,11 @@ struct LiveArgument : Argument {
       here.ScheduleLocalUpdate(connection.to);
     }
   }
-  void Rename(Location &here, std::string_view new_name) {
+  void Rename(Location& here, std::string_view new_name) {
     Detach(here);
     name = new_name;
     Attach(here);
   }
 };
 
-} // namespace automat
+}  // namespace automat

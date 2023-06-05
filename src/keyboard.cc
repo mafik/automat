@@ -6,7 +6,7 @@
 
 namespace automat::gui {
 
-Caret::Caret(CaretImpl &impl) : impl(impl) {}
+Caret::Caret(CaretImpl& impl) : impl(impl) {}
 
 void Caret::PlaceIBeam(vec2 position) { impl.PlaceIBeam(position); }
 
@@ -16,38 +16,37 @@ CaretOwner::~CaretOwner() {
   }
 }
 
-Caret &CaretOwner::RequestCaret(Keyboard &keyboard) {
-  auto &kb = *keyboard.impl;
+Caret& CaretOwner::RequestCaret(Keyboard& keyboard) {
+  auto& kb = *keyboard.impl;
   std::set<std::unique_ptr<CaretImpl>>::iterator it;
   if (kb.carets.empty()) {
     it = kb.carets.emplace(std::make_unique<CaretImpl>(kb)).first;
   } else {
     it = kb.carets.begin();
   }
-  CaretImpl &caret = **it;
+  CaretImpl& caret = **it;
   if (caret.owner) {
     caret.owner->ReleaseCaret(caret.facade);
-    caret.owner->carets.erase(std::find(caret.owner->carets.begin(),
-                                        caret.owner->carets.end(), &caret));
+    caret.owner->carets.erase(
+        std::find(caret.owner->carets.begin(), caret.owner->carets.end(), &caret));
   }
   caret.owner = this;
   carets.emplace_back(&caret);
   return caret.facade;
 }
 
-void CaretOwner::KeyDown(Caret &caret, Key) {}
-void CaretOwner::KeyUp(Caret &caret, Key) {}
+void CaretOwner::KeyDown(Caret& caret, Key) {}
+void CaretOwner::KeyUp(Caret& caret, Key) {}
 
-Keyboard::Keyboard(Window &window)
-    : impl(std::make_unique<KeyboardImpl>(*window.impl, *this)) {}
+Keyboard::Keyboard(Window& window) : impl(std::make_unique<KeyboardImpl>(*window.impl, *this)) {}
 
 Keyboard::~Keyboard() {}
 
-void Keyboard::Draw(SkCanvas &canvas, animation::State &animation_state) const {
+void Keyboard::Draw(SkCanvas& canvas, animation::State& animation_state) const {
   impl->Draw(canvas, animation_state);
 }
 
 void Keyboard::KeyDown(Key key) { impl->KeyDown(key); }
 void Keyboard::KeyUp(Key key) { impl->KeyUp(key); }
 
-} // namespace automat::gui
+}  // namespace automat::gui

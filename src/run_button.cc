@@ -7,12 +7,10 @@
 
 namespace automat::gui {
 
-constexpr char kPlayShape[] =
-    "M-5-8C-5.8-6-5.7 6-5 8-3 7.7 7.5 1.5 9 0 7.5-1.5-3-7.7-5-8Z";
+constexpr char kPlayShape[] = "M-5-8C-5.8-6-5.7 6-5 8-3 7.7 7.5 1.5 9 0 7.5-1.5-3-7.7-5-8Z";
 
-RunButton::RunButton(Location *parent)
-    : Button(parent, MakeShapeWidget(kPlayShape, 0xffffffff)),
-      location(parent) {}
+RunButton::RunButton(Location* parent)
+    : Button(parent, MakeShapeWidget(kPlayShape, 0xffffffff)), location(parent) {}
 
 void RunButton::Activate() {
   if (Filled()) {
@@ -29,4 +27,4 @@ void RunButton::Activate() {
 
 bool RunButton::Filled() const { return location->run_task.scheduled; }
 
-} // namespace automat::gui
+}  // namespace automat::gui

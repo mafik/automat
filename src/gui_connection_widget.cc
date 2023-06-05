@@ -141,13 +141,18 @@ void DrawConnection(SkCanvas &canvas, const SkPath &from_path,
 void ConnectionWidget::Draw(SkCanvas &canvas, animation::State &state) const {
   SkPath my_shape = Shape();
 
+  Widget *parent = from->ParentWidget();
+  SkMatrix parent_to_local =
+      TransformDown(Path{parent, from, (Widget *)this}, &state);
+
   auto [a, b] = from->outgoing.equal_range(label);
   for (auto it = a; it != b; ++it) {
     Connection &c = *it->second;
     Location &to = c.to;
     SkPath to_shape = to.Shape();
-    SkMatrix m = to.ParentWidget()->TransformFromChild(&to, &state);
-    m.postConcat(from->ParentWidget()->TransformToChild(this, &state));
+
+    SkMatrix m = TransformUp(Path{parent, &to}, &state);
+    m.postConcat(parent_to_local);
     to_shape.transform(m);
     DrawConnection(canvas, my_shape, to_shape);
   }
@@ -193,8 +198,9 @@ void DragConnectionAction::End() {
 void DragConnectionAction::Draw(SkCanvas &canvas,
                                 animation::State &animation_state) {
   SkPath from_path = widget->Shape();
-  SkMatrix from_transform = widget->from->ParentWidget()->TransformFromChild(
-      widget, &animation_state);
+  SkMatrix from_transform =
+      TransformUp(Path{widget->from->ParentWidget(), widget->from, widget},
+                  &animation_state);
   from_path.transform(from_transform);
   SkPath to_path = SkPath();
   to_path.moveTo(current_position.X, current_position.Y);

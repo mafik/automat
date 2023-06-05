@@ -33,27 +33,42 @@ typedef USHORT USAGE;
 
 #include "hidapi_hidpi.h"
 
-typedef struct _HIDD_ATTRIBUTES{
-	ULONG Size;
-	USHORT VendorID;
-	USHORT ProductID;
-	USHORT VersionNumber;
+typedef struct _HIDD_ATTRIBUTES {
+  ULONG Size;
+  USHORT VendorID;
+  USHORT ProductID;
+  USHORT VersionNumber;
 } HIDD_ATTRIBUTES, *PHIDD_ATTRIBUTES;
 
-typedef struct _HIDP_PREPARSED_DATA * PHIDP_PREPARSED_DATA;
+typedef struct _HIDP_PREPARSED_DATA *PHIDP_PREPARSED_DATA;
 
-typedef void (__stdcall *HidD_GetHidGuid_)(LPGUID hid_guid);
-typedef BOOLEAN (__stdcall *HidD_GetAttributes_)(HANDLE device, PHIDD_ATTRIBUTES attrib);
-typedef BOOLEAN (__stdcall *HidD_GetSerialNumberString_)(HANDLE device, PVOID buffer, ULONG buffer_len);
-typedef BOOLEAN (__stdcall *HidD_GetManufacturerString_)(HANDLE handle, PVOID buffer, ULONG buffer_len);
-typedef BOOLEAN (__stdcall *HidD_GetProductString_)(HANDLE handle, PVOID buffer, ULONG buffer_len);
-typedef BOOLEAN (__stdcall *HidD_SetFeature_)(HANDLE handle, PVOID data, ULONG length);
-typedef BOOLEAN (__stdcall *HidD_GetFeature_)(HANDLE handle, PVOID data, ULONG length);
-typedef BOOLEAN (__stdcall *HidD_GetInputReport_)(HANDLE handle, PVOID data, ULONG length);
-typedef BOOLEAN (__stdcall *HidD_GetIndexedString_)(HANDLE handle, ULONG string_index, PVOID buffer, ULONG buffer_len);
-typedef BOOLEAN (__stdcall *HidD_GetPreparsedData_)(HANDLE handle, PHIDP_PREPARSED_DATA *preparsed_data);
-typedef BOOLEAN (__stdcall *HidD_FreePreparsedData_)(PHIDP_PREPARSED_DATA preparsed_data);
-typedef BOOLEAN (__stdcall *HidD_SetNumInputBuffers_)(HANDLE handle, ULONG number_buffers);
+typedef void(__stdcall *HidD_GetHidGuid_)(LPGUID hid_guid);
+typedef BOOLEAN(__stdcall *HidD_GetAttributes_)(HANDLE device,
+                                                PHIDD_ATTRIBUTES attrib);
+typedef BOOLEAN(__stdcall *HidD_GetSerialNumberString_)(HANDLE device,
+                                                        PVOID buffer,
+                                                        ULONG buffer_len);
+typedef BOOLEAN(__stdcall *HidD_GetManufacturerString_)(HANDLE handle,
+                                                        PVOID buffer,
+                                                        ULONG buffer_len);
+typedef BOOLEAN(__stdcall *HidD_GetProductString_)(HANDLE handle, PVOID buffer,
+                                                   ULONG buffer_len);
+typedef BOOLEAN(__stdcall *HidD_SetFeature_)(HANDLE handle, PVOID data,
+                                             ULONG length);
+typedef BOOLEAN(__stdcall *HidD_GetFeature_)(HANDLE handle, PVOID data,
+                                             ULONG length);
+typedef BOOLEAN(__stdcall *HidD_GetInputReport_)(HANDLE handle, PVOID data,
+                                                 ULONG length);
+typedef BOOLEAN(__stdcall *HidD_GetIndexedString_)(HANDLE handle,
+                                                   ULONG string_index,
+                                                   PVOID buffer,
+                                                   ULONG buffer_len);
+typedef BOOLEAN(__stdcall *HidD_GetPreparsedData_)(
+    HANDLE handle, PHIDP_PREPARSED_DATA *preparsed_data);
+typedef BOOLEAN(__stdcall *HidD_FreePreparsedData_)(
+    PHIDP_PREPARSED_DATA preparsed_data);
+typedef BOOLEAN(__stdcall *HidD_SetNumInputBuffers_)(HANDLE handle,
+                                                     ULONG number_buffers);
 
 #endif
 

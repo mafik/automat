@@ -134,11 +134,11 @@ struct WindowImpl : Widget {
     return paint;
   }
 
-  vec2 WindowToCanvas(vec2 window) {
+  vec2 WindowToCanvas(vec2 window) const {
     return (window - size / 2) / zoom + Vec2(camera_x, camera_y);
   }
 
-  SkMatrix WindowToCanvas() {
+  SkMatrix WindowToCanvas() const {
     SkMatrix m;
     m.setTranslate(-size.Width / 2, -size.Height / 2);
     m.postScale(1 / zoom, 1 / zoom);
@@ -146,7 +146,7 @@ struct WindowImpl : Widget {
     return m;
   }
 
-  SkMatrix CanvasToWindow() {
+  SkMatrix CanvasToWindow() const {
     SkMatrix m;
     m.setTranslate(-camera_x, -camera_y);
     m.postScale(zoom, zoom);
@@ -173,23 +173,27 @@ struct WindowImpl : Widget {
   }
   void Draw(SkCanvas &canvas);
   void Zoom(float delta);
-  VisitResult VisitImmediateChildren(WidgetVisitor &visitor) override {
+  VisitResult VisitChildren(Visitor &visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      SkMatrix transform_down = SkMatrix::Translate(
-          -prototype_button_positions[i].X, -prototype_button_positions[i].Y);
-      SkMatrix transform_up = SkMatrix::Translate(
-          prototype_button_positions[i].X, prototype_button_positions[i].Y);
-      auto result = visitor(prototype_buttons[i], transform_down, transform_up);
-      if (result != VisitResult::kContinue)
-        return result;
+      if (visitor(prototype_buttons[i]) == VisitResult::kStop)
+        return VisitResult::kStop;
     }
     VisitResult result = VisitResult::kContinue;
-    RunOnAutomatThreadSynchronous([&]() {
-      SkMatrix transform_down = WindowToCanvas();
-      SkMatrix transform_up = CanvasToWindow();
-      result = visitor(*root_machine, transform_down, transform_up);
-    });
+    RunOnAutomatThreadSynchronous([&]() { result = visitor(*root_machine); });
     return result;
+  }
+  SkMatrix TransformToChild(const Widget *child,
+                            animation::State *state = nullptr) const override {
+    for (int i = 0; i < prototype_buttons.size(); i++) {
+      if (child == &prototype_buttons[i]) {
+        return SkMatrix::Translate(-prototype_button_positions[i].X,
+                                   -prototype_button_positions[i].Y);
+      }
+    }
+    if (child == root_machine) {
+      return WindowToCanvas();
+    }
+    return SkMatrix::I();
   }
   std::unique_ptr<Pointer> MakePointer(vec2 position);
   std::string_view GetState();

@@ -4,7 +4,6 @@
 #include "gui_constants.h"
 #include "widget.h"
 
-
 namespace automat::gui {
 
 constexpr float kTextMargin = 0.001;

@@ -2,8 +2,8 @@
 
 // atomic is sometimes defined in <atomic> and sometimes in <memory>
 #include <atomic>
-#include <memory>
 #include <cassert>
+#include <memory>
 
 namespace automat {
 
@@ -31,10 +31,11 @@ struct channel {
       atomic.wait(expected, std::memory_order_relaxed);
       expected = nullptr;
     }
-    // Consumer may be waiting so notify it. Side-effect of this is that other produces
-    // will also be notified but it shouldn't matter.
+    // Consumer may be waiting so notify it. Side-effect of this is that other
+    // produces will also be notified but it shouldn't matter.
     // TODO: maybe create a separate condition_variable for the consumer?
-    // TODO: maybe allow for passing stop_token to recv()? (see condition_variable_any::wait)
+    // TODO: maybe allow for passing stop_token to recv()? (see
+    // condition_variable_any::wait)
     atomic.notify_all();
   }
 
@@ -56,19 +57,16 @@ struct channel {
     return ptr;
   }
 
-  template<typename T>
-  void send(std::unique_ptr<T> ptr) {
+  template <typename T> void send(std::unique_ptr<T> ptr) {
     send(ptr.release());
   }
 
-  template<typename T>
-  void send_force(std::unique_ptr<T> ptr) {
+  template <typename T> void send_force(std::unique_ptr<T> ptr) {
     send_force(ptr.release());
   }
 
-  template<typename T>
-  std::unique_ptr<T> recv() {
-    return std::unique_ptr<T>(static_cast<T*>(recv()));
+  template <typename T> std::unique_ptr<T> recv() {
+    return std::unique_ptr<T>(static_cast<T *>(recv()));
   }
 };
 

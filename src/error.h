@@ -4,7 +4,6 @@
 #include <source_location>
 #include <string>
 
-
 namespace automat {
 
 struct Location;

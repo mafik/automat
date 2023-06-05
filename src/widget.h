@@ -19,19 +19,10 @@ using Path = std::vector<Widget *>;
 
 enum class VisitResult { kContinue, kStop };
 
-struct WidgetVisitor {
-  virtual ~WidgetVisitor() {}
-  virtual VisitResult operator()(Widget &, const SkMatrix &transform_down,
-                                 const SkMatrix &transform_up) = 0;
-  virtual animation::State *AnimationState() { return nullptr; }
-};
+using Visitor = std::function<VisitResult(Widget &)>;
 
-void VisitPath(const Path &path, WidgetVisitor &visitor);
 SkMatrix TransformDown(const Path &path, animation::State *state = nullptr);
 SkMatrix TransformUp(const Path &path, animation::State *state = nullptr);
-
-using WidgetVisitorFunc =
-    std::function<VisitResult(Widget &, const SkMatrix &, const SkMatrix &)>;
 
 // Base class for widgets.
 struct Widget {
@@ -61,26 +52,21 @@ struct Widget {
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
   // Iterate over direct child widgets in front-to-back order.
-  virtual VisitResult VisitImmediateChildren(WidgetVisitor &visitor) {
+  virtual VisitResult VisitChildren(Visitor &visitor) {
     return VisitResult::kContinue;
   }
-  void VisitAll(WidgetVisitor &visitor);
-  void VisitAll(WidgetVisitorFunc visitor);
-  void VisitAtPoint(vec2 point, WidgetVisitor &visitor);
-  void VisitAtPoint(vec2 point, WidgetVisitorFunc visitor);
 
-  // TODO: remove those
-  // Transform matrix is controlled by the Widget's parent.
-  // This function asks the parent for the transform of this Widget.
-  SkMatrix TransformFromParent(animation::State *state = nullptr) const;
-  SkMatrix TransformToParent(animation::State *state = nullptr) const;
-
-  // TODO: remove those
-  // The child doesn't have to be an immediate child.
-  SkMatrix TransformToChild(const Widget *child,
-                            animation::State *state = nullptr) const;
-  SkMatrix TransformFromChild(const Widget *child,
-                              animation::State *state = nullptr) const;
+  virtual SkMatrix TransformToChild(const Widget *child,
+                                    animation::State *state = nullptr) const {
+    return SkMatrix::I();
+  }
+  virtual SkMatrix TransformFromChild(const Widget *child,
+                                      animation::State *state = nullptr) const {
+    auto m = TransformToChild(child, state);
+    SkMatrix ret = SkMatrix::I();
+    bool ignore_failures = m.invert(&ret);
+    return ret;
+  }
 
   void DrawChildren(SkCanvas &, animation::State &) const;
 };

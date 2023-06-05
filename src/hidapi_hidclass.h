@@ -29,7 +29,8 @@
 /* This part of the header mimics hidclass.h,
     but only what is used by HIDAPI */
 
-#define HID_OUT_CTL_CODE(id) CTL_CODE(FILE_DEVICE_KEYBOARD, (id), METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
+#define HID_OUT_CTL_CODE(id)                                                   \
+  CTL_CODE(FILE_DEVICE_KEYBOARD, (id), METHOD_OUT_DIRECT, FILE_ANY_ACCESS)
 #define IOCTL_HID_GET_FEATURE HID_OUT_CTL_CODE(100)
 #define IOCTL_HID_GET_INPUT_REPORT HID_OUT_CTL_CODE(104)
 

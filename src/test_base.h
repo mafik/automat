@@ -1,8 +1,8 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include "backtrace.h"
 #include "base.h"
+#include <gtest/gtest.h>
 
 namespace automat {
 

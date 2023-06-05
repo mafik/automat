@@ -55,7 +55,8 @@ extern std::vector<TouchPad *> touchpads;
 void Init();
 
 #if defined(_WIN32)
-std::optional<int64_t> ProcessEvent(uint32_t msg, uint64_t wParam, int64_t lParam);
+std::optional<int64_t> ProcessEvent(uint32_t msg, uint64_t wParam,
+                                    int64_t lParam);
 #endif // _WIN32
 
 } // namespace automat::touchpad

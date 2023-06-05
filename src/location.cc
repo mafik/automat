@@ -133,54 +133,49 @@ SkPath Location::Shape() const {
   return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
 }
 
-gui::VisitResult Location::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
-  if (object) {
-    auto result = visitor(*object, SkMatrix::I(), SkMatrix::I());
-    if (result != gui::VisitResult::kContinue) {
-      return result;
+gui::VisitResult Location::VisitChildren(gui::Visitor &visitor) {
+  if (object && visitor(*object) == gui::VisitResult::kStop) {
+    return gui::VisitResult::kStop;
+  }
+  if (visitor(name_text_field) == gui::VisitResult::kStop) {
+    return gui::VisitResult::kStop;
+  }
+  if (visitor(run_button) == gui::VisitResult::kStop) {
+    return gui::VisitResult::kStop;
+  }
+  UpdateConnectionWidgets();
+  for (auto &widget : connection_widgets) {
+    if (visitor(*widget) == gui::VisitResult::kStop) {
+      return gui::VisitResult::kStop;
     }
   }
+  return gui::VisitResult::kContinue;
+}
+
+SkMatrix Location::TransformToChild(const Widget *child,
+                                    animation::State *state) const {
   SkPath my_shape = Shape();
   SkRect my_bounds = my_shape.getBounds();
-  SkMatrix name_text_field_transform_down =
-      SkMatrix::Translate(-my_bounds.left() - 0.001,
-                          -my_bounds.bottom() + gui::kTextFieldHeight + 0.001);
-  SkMatrix name_text_field_transform_up =
-      SkMatrix::Translate(my_bounds.left() + 0.001,
-                          my_bounds.bottom() - gui::kTextFieldHeight - 0.001);
-  auto result = visitor(name_text_field, name_text_field_transform_down,
-                        name_text_field_transform_up);
-  if (result != gui::VisitResult::kContinue) {
-    return result;
+  if (child == &name_text_field) {
+    return SkMatrix::Translate(-my_bounds.left() - 0.001,
+                               -my_bounds.bottom() + gui::kTextFieldHeight +
+                                   0.001);
   }
-  SkPath run_button_shape = run_button.Shape();
-  SkRect run_bounds = run_button_shape.getBounds();
-  SkMatrix run_button_transform_down =
-      SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
-                          -(my_bounds.top() - run_bounds.fTop) - 0.001);
-  SkMatrix run_button_transform_up =
-      SkMatrix::Translate(my_bounds.centerX() - run_bounds.centerX(),
-                          my_bounds.top() - run_bounds.fTop + 0.001);
-  result =
-      visitor(run_button, run_button_transform_down, run_button_transform_up);
-  if (result != gui::VisitResult::kContinue) {
-    return result;
+  if (child == &run_button) {
+    SkPath run_button_shape = run_button.Shape();
+    SkRect run_bounds = run_button_shape.getBounds();
+    return SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
+                               -(my_bounds.top() - run_bounds.fTop) - 0.001);
   }
-
-  UpdateConnectionWidgets();
-
   vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
   for (auto &widget : connection_widgets) {
     pos.Y -= widget->Height();
-    SkMatrix transform_down = SkMatrix::Translate(-pos.X, -pos.Y);
-    SkMatrix transform_up = SkMatrix::Translate(pos.X, pos.Y);
-    auto result = visitor(*widget, transform_down, transform_up);
-    if (result == gui::VisitResult::kStop) {
-      return result;
+    if (widget.get() == child) {
+      return SkMatrix::Translate(-pos.X, -pos.Y);
     }
     pos.Y -= kMargin;
   }
-  return result;
+  return SkMatrix::I();
 }
 
 void Location::UpdateConnectionWidgets() {

@@ -14,7 +14,7 @@ void Destroy();
 
 std::string Resize(int width_hint, int height_hint);
 
-SkCanvas* GetBackbufferCanvas();
+SkCanvas *GetBackbufferCanvas();
 void Present();
 
 } // namespace automat::vk

@@ -2,6 +2,7 @@
 
 #include <charconv>
 
+#include <include/core/SkMatrix.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 #include <memory>
@@ -186,39 +187,52 @@ void Number::Draw(SkCanvas &canvas, animation::State &animation_state) const {
 
 SkPath Number::Shape() const { return kNumberShape; }
 
-gui::VisitResult Number::VisitImmediateChildren(gui::WidgetVisitor &visitor) {
-  auto visit = [&](Widget &w, int row, int col) {
+gui::VisitResult Number::VisitChildren(gui::Visitor &visitor) {
+  if (auto r = visitor(digits[0]); r != gui::VisitResult::kContinue)
+    return r;
+  if (auto r = visitor(dot); r != gui::VisitResult::kContinue)
+    return r;
+  if (auto r = visitor(backspace); r != gui::VisitResult::kContinue)
+    return r;
+  for (int i = 0; i < 10; ++i) {
+    if (auto r = visitor(digits[i]); r != gui::VisitResult::kContinue)
+      return r;
+  }
+  if (auto r = visitor(text_field); r != gui::VisitResult::kContinue)
+    return r;
+  return gui::VisitResult::kContinue;
+}
+
+SkMatrix Number::TransformToChild(const Widget *child,
+                                  animation::State *state) const {
+  auto cell = [](int row, int col) {
     float x = kBorderWidth + kNumberOuterMargin +
               col * (kButtonWidth + kNumberInnerMargin);
     float y = kBorderWidth + kNumberOuterMargin +
               row * (kButtonHeight + kNumberInnerMargin);
-    SkMatrix down = SkMatrix::Translate(-x, -y);
-    SkMatrix up = SkMatrix::Translate(x, y);
-    auto result = visitor(w, down, up);
-    if (result != gui::VisitResult::kContinue)
-      return result;
-    return result;
+    return SkMatrix::Translate(-x, -y);
   };
-  if (auto result = visit(digits[0], 0, 0);
-      result != gui::VisitResult::kContinue)
-    return result;
-  if (auto result = visit(dot, 0, 1); result != gui::VisitResult::kContinue)
-    return result;
-  if (auto result = visit(backspace, 0, 2);
-      result != gui::VisitResult::kContinue)
-    return result;
+  if (child == &text_field) {
+    return cell(4, 0);
+  }
+  if (child == &digits[0]) {
+    return cell(0, 0);
+  }
+  if (child == &dot) {
+    return cell(0, 1);
+  }
+  if (child == &backspace) {
+    return cell(0, 2);
+  }
   for (int row = 0; row < 3; ++row) {
     for (int col = 0; col < 3; ++col) {
       int digit = 3 * row + col + 1;
-      if (auto result = visit(digits[digit], row + 1, col);
-          result != gui::VisitResult::kContinue)
-        return result;
+      if (child == &digits[digit]) {
+        return cell(row + 1, col);
+      }
     }
   }
-  if (auto result = visit(text_field, 4, 0);
-      result != gui::VisitResult::kContinue)
-    return result;
-  return gui::VisitResult::kContinue;
+  return SkMatrix::I();
 }
 
 std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer &pointer,

@@ -3,6 +3,7 @@
 #include "keyboard_impl.h"
 #include "root.h"
 #include "window_impl.h"
+#include <algorithm>
 
 namespace automat::gui {
 
@@ -41,35 +42,30 @@ void PointerImpl::Move(vec2 position) {
   } else {
     Widget *old_hovered_widget = path.empty() ? nullptr : path.back();
 
-    struct PointVisitor : WidgetVisitor {
-      PointerImpl &pointer_impl;
-      SkPoint point;
-      PointVisitor(PointerImpl &pointer_impl, SkPoint point)
-          : pointer_impl(pointer_impl), point(point) {
-        pointer_impl.path.clear();
-        pointer_impl.path.push_back(&pointer_impl.window);
-        pointer_impl.window.VisitImmediateChildren(*this);
+    path.clear();
+    SkPoint point = SkPoint::Make(pointer_position.X, pointer_position.Y);
+
+    Visitor dfs = [&](Widget &child) {
+      SkPoint transformed;
+      if (!path.empty()) {
+        transformed = path.back()
+                          ->TransformToChild(&child, &window.animation_state)
+                          .mapPoint(point);
+      } else {
+        transformed = point;
       }
-      VisitResult operator()(Widget &widget, const SkMatrix &transform_down,
-                             const SkMatrix &transform_up) override {
-        auto shape = widget.Shape();
-        SkPoint mapped_point = transform_down.mapPoint(point);
-        if (shape.isEmpty() ||
-            shape.contains(mapped_point.fX, mapped_point.fY)) {
-          pointer_impl.path.push_back(&widget);
-          point = mapped_point;
-          widget.VisitImmediateChildren(*this);
-          return VisitResult::kStop;
-        }
-        return VisitResult::kContinue;
+
+      auto shape = child.Shape();
+      if (shape.isEmpty() || shape.contains(transformed.fX, transformed.fY)) {
+        path.push_back(&child);
+        point = transformed;
+        child.VisitChildren(dfs);
+        return VisitResult::kStop;
       }
-      animation::State *AnimationState() override {
-        return &pointer_impl.window.animation_state;
-      }
+      return VisitResult::kContinue;
     };
 
-    PointVisitor visitor(*this,
-                         SkPoint::Make(pointer_position.X, pointer_position.Y));
+    dfs(window);
 
     Widget *hovered_widget = path.empty() ? nullptr : path.back();
     if (old_hovered_widget != hovered_widget) {

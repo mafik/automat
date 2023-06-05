@@ -218,7 +218,9 @@ struct Location : gui::Widget {
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer &,
                                            gui::PointerButton) override;
   SkPath Shape() const override;
-  gui::VisitResult VisitImmediateChildren(gui::WidgetVisitor &visitor) override;
+  gui::VisitResult VisitChildren(gui::Visitor &visitor) override;
+  SkMatrix TransformToChild(const Widget *child,
+                            animation::State *state = nullptr) const override;
 
   // Add ConnectionWidgets for all arguments defined by the objects.
   void UpdateConnectionWidgets();

@@ -15,15 +15,20 @@ void AlignCenter::Draw(SkCanvas &c, animation::State &s) const {
 
 SkPath AlignCenter::Shape() const { return SkPath(); }
 
-VisitResult AlignCenter::VisitImmediateChildren(WidgetVisitor &visitor) {
+VisitResult AlignCenter::VisitChildren(Visitor &visitor) {
   if (child) {
-    SkRect bounds = child->Shape().getBounds();
-    SkPoint c = bounds.center();
-    SkMatrix down = SkMatrix::Translate(c);
-    SkMatrix up = SkMatrix::Translate(-c);
-    return visitor(*child, down, up);
+    return visitor(*child);
   }
   return VisitResult::kContinue;
+}
+SkMatrix AlignCenter::TransformToChild(const Widget *child_arg,
+                                       animation::State *state) const {
+  if (child_arg != this->child.get()) {
+    return SkMatrix::I();
+  }
+  SkRect bounds = child->Shape().getBounds();
+  SkPoint c = bounds.center();
+  return SkMatrix::Translate(c);
 }
 
 } // namespace automat::gui

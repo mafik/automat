@@ -113,20 +113,22 @@ struct Machine : LiveObject {
     return empty_path;
   }
 
-  gui::VisitResult
-  VisitImmediateChildren(gui::WidgetVisitor &visitor) override {
-    animation::State *state = visitor.AnimationState();
+  gui::VisitResult VisitChildren(gui::Visitor &visitor) override {
     for (auto &it : locations) {
-      vec2 pos = state ? it->AnimatedPosition(*state) : it->position;
-      SkMatrix transform_down = SkMatrix::Translate(-pos.X, -pos.Y);
-      SkMatrix transform_up = SkMatrix::Translate(pos.X, pos.Y);
-      auto result = visitor(*it, transform_down, transform_up);
-      if (result == gui::VisitResult::kStop) {
-        return result;
+      if (visitor(*it) == gui::VisitResult::kStop) {
+        return gui::VisitResult::kStop;
       }
     }
-
     return gui::VisitResult::kContinue;
+  }
+  SkMatrix TransformToChild(const Widget *child,
+                            animation::State *state = nullptr) const override {
+    const Location *l = dynamic_cast<const Location *>(child);
+    if (l == nullptr) {
+      return SkMatrix::I();
+    }
+    vec2 pos = state ? l->AnimatedPosition(*state) : l->position;
+    return SkMatrix::Translate(-pos.X, -pos.Y);
   }
   void Args(std::function<void(Argument &)> cb) override {}
   void Relocate(Location *parent) override {

@@ -17,10 +17,9 @@ namespace automat::gui {
 
 void Widget::DrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& animation_state = ctx.animation_state;
   Visitor visitor = [&](Widget& widget) {
     canvas.save();
-    SkMatrix transform_up = this->TransformFromChild(&widget, &animation_state);
+    SkMatrix transform_up = this->TransformFromChild(&widget, &ctx.animation_context);
     canvas.concat(transform_up);
     ctx.path.push_back(&widget);
     widget.Draw(ctx);
@@ -31,22 +30,22 @@ void Widget::DrawChildren(DrawContext& ctx) const {
   const_cast<Widget*>(this)->VisitChildren(visitor);
 }
 
-SkMatrix TransformDown(const Path& path, animation::State* state) {
+SkMatrix TransformDown(const Path& path, animation::Context* actx) {
   SkMatrix ret = SkMatrix::I();
   for (int i = 1; i < path.size(); ++i) {
     Widget& parent = *path[i - 1];
     Widget& child = *path[i];
-    ret.postConcat(parent.TransformToChild(&child, state));
+    ret.postConcat(parent.TransformToChild(&child, actx));
   }
   return ret;
 }
 
-SkMatrix TransformUp(const Path& path, animation::State* state) {
+SkMatrix TransformUp(const Path& path, animation::Context* actx) {
   SkMatrix ret = SkMatrix::I();
   for (int i = 1; i < path.size(); ++i) {
     Widget& parent = *path[i - 1];
     Widget& child = *path[i];
-    ret.postConcat(parent.TransformFromChild(&child, state));
+    ret.postConcat(parent.TransformFromChild(&child, actx));
   }
   return ret;
 }

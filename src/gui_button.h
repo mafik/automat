@@ -14,8 +14,8 @@ struct Button : Widget {
   int press_action_count = 0;
 
   Button(std::unique_ptr<Widget>&& child);
-  void PointerOver(Pointer&, animation::State&) override;
-  void PointerLeave(Pointer&, animation::State&) override;
+  void PointerOver(Pointer&, animation::Context&) override;
+  void PointerLeave(Pointer&, animation::Context&) override;
   void Draw(DrawContext&) const override;
   float Height() const;
   SkRRect RRect() const;

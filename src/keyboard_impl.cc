@@ -64,7 +64,7 @@ enum class CaretAnimAction { Keep, Delete };
 
 static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, CaretImpl* caret) {
   SkCanvas& canvas = ctx.canvas;
-  animation::State& animation_state = ctx.animation_state;
+  animation::Context& actx = ctx.animation_context;
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
   paint.setAntiAlias(true);
@@ -75,13 +75,13 @@ static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, CaretIm
     anim.last_blink = caret->last_blink;
     if (anim.shape.isInterpolatable(root_shape)) {
       SkPath out;
-      float weight = 1 - anim.delta_fraction.Tick(animation_state);
+      float weight = 1 - anim.delta_fraction.Tick(actx);
       anim.shape.interpolate(root_shape, weight, &out);
       anim.shape = out;
     } else {
       anim.shape = root_shape;
     }
-    double now = (animation_state.timer.now - anim.last_blink).count();
+    double now = (actx.timer.now - anim.last_blink).count();
     double seconds, subseconds;
     subseconds = modf(now, &seconds);
     if (subseconds < 0.5) {
@@ -92,7 +92,7 @@ static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, CaretIm
     if (anim.keyboard.pointer) {
       SkPath grave = PointerIBeam(anim.keyboard);
       SkPath out;
-      float weight = 1 - anim.delta_fraction.Tick(animation_state);
+      float weight = 1 - anim.delta_fraction.Tick(actx);
       anim.shape.interpolate(grave, weight, &out);
       anim.shape = out;
       float dist = (grave.getBounds().center() - anim.shape.getBounds().center()).length();
@@ -102,12 +102,12 @@ static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, CaretIm
       canvas.drawPath(anim.shape, paint);
     } else {
       anim.fade_out.target = 1;
-      anim.fade_out.Tick(animation_state);
+      anim.fade_out.Tick(actx);
       paint.setAlphaf(1 - anim.fade_out.value);
       if (paint.getAlphaf() < 0.01) {
         return CaretAnimAction::Delete;
       }
-      anim.shape.offset(0, animation_state.timer.d * kLetterSize);
+      anim.shape.offset(0, actx.timer.d * kLetterSize);
       canvas.drawPath(anim.shape, paint);
     }
   }
@@ -122,11 +122,11 @@ CaretAnimation::CaretAnimation(const KeyboardImpl& keyboard)
 
 void KeyboardImpl::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
-  animation::State& animation_state = ctx.animation_state;
+  animation::Context& actx = ctx.animation_context;
   // Iterate through each Caret & CaretAnimation, and draw them.
   // After a Caret has been removed, its CaretAnimation is kept around for some
   // time to animate it out.
-  auto& anim_carets = anim[animation_state].carets;
+  auto& anim_carets = anim[actx].carets;
   auto anim_it = anim_carets.begin();
   auto caret_it = carets.begin();
   while (anim_it != anim_carets.end() && caret_it != carets.end()) {

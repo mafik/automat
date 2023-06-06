@@ -14,14 +14,14 @@
 
 namespace automat::gui {
 
-void TextField::PointerOver(Pointer& pointer, animation::State& state) {
+void TextField::PointerOver(Pointer& pointer, animation::Context& actx) {
   pointer.PushIcon(Pointer::kIconIBeam);
-  hover_ptr[state].Increment();
+  hover_ptr[actx].Increment();
 }
 
-void TextField::PointerLeave(Pointer& pointer, animation::State& state) {
+void TextField::PointerLeave(Pointer& pointer, animation::Context& actx) {
   pointer.PopIcon();
-  hover_ptr[state].Decrement();
+  hover_ptr[actx].Decrement();
 }
 
 void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
@@ -58,9 +58,9 @@ void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
 
 void TextField::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& animation_state = ctx.animation_state;
-  auto& hover = hover_ptr[animation_state].animation;
-  hover.Tick(animation_state);
+  auto& actx = ctx.animation_context;
+  auto& hover = hover_ptr[actx].animation;
+  hover.Tick(actx);
 
   Font& font = GetFont();
   SkPath shape = Shape();

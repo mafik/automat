@@ -15,15 +15,15 @@
 
 namespace automat::gui {
 
-void Button::PointerOver(Pointer& pointer, animation::State& animation_state) {
-  auto& hover = hover_ptr[animation_state];
+void Button::PointerOver(Pointer& pointer, animation::Context& actx) {
+  auto& hover = hover_ptr[actx];
   hover.target = 1;
   hover.speed = 5;
   pointer.PushIcon(Pointer::kIconHand);
 }
 
-void Button::PointerLeave(Pointer& pointer, animation::State& animation_state) {
-  hover_ptr[animation_state].target = 0;
+void Button::PointerLeave(Pointer& pointer, animation::Context& actx) {
+  hover_ptr[actx].target = 0;
   pointer.PopIcon();
 }
 
@@ -60,10 +60,10 @@ void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
 
 void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   auto& canvas = ctx.canvas;
-  auto& animation_state = ctx.animation_state;
-  auto& press = press_ptr[animation_state];
-  auto& hover = hover_ptr[animation_state];
-  auto& filling = filling_ptr[animation_state];
+  auto& actx = ctx.animation_context;
+  auto& press = press_ptr[actx];
+  auto& hover = hover_ptr[actx];
+  auto& filling = filling_ptr[actx];
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -107,14 +107,14 @@ void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
 // TODO: move the filling animation into a separate subclass
 void Button::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& animation_state = ctx.animation_state;
-  auto& press = press_ptr[animation_state];
-  auto& hover = hover_ptr[animation_state];
-  auto& filling = filling_ptr[animation_state];
+  auto& actx = ctx.animation_context;
+  auto& press = press_ptr[actx];
+  auto& hover = hover_ptr[actx];
+  auto& filling = filling_ptr[actx];
   filling.speed = 5;
   filling.target = Filled() ? 1 : 0;
-  hover.Tick(animation_state);
-  filling.Tick(animation_state);
+  hover.Tick(actx);
+  filling.Tick(actx);
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -140,8 +140,8 @@ void Button::Draw(DrawContext& ctx) const {
                      pressed_outer_oval.rect().fBottom * filling;
     constexpr int n_points = 6;
     vec2 points[n_points];
-    static time::point base = animation_state.timer.now;
-    float timeS = (animation_state.timer.now - base).count();
+    static time::point base = actx.timer.now;
+    float timeS = (actx.timer.now - base).count();
     constexpr float waving_x = kRadius / n_points / 2;
     float waving_y = waving_x * filling * (1 - filling) * 8;
     for (int i = 0; i < n_points; ++i) {

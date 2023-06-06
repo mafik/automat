@@ -21,15 +21,15 @@ enum class VisitResult { kContinue, kStop };
 
 using Visitor = std::function<VisitResult(Widget&)>;
 
-SkMatrix TransformDown(const Path& path, animation::State* state = nullptr);
-SkMatrix TransformUp(const Path& path, animation::State* state = nullptr);
+SkMatrix TransformDown(const Path& path, animation::Context* = nullptr);
+SkMatrix TransformUp(const Path& path, animation::Context* = nullptr);
 
 struct DrawContext {
   SkCanvas& canvas;
-  animation::State& animation_state;
+  animation::Context& animation_context;
   Path path;
-  DrawContext(SkCanvas& canvas, animation::State& animation_state)
-      : canvas(canvas), animation_state(animation_state), path() {}
+  DrawContext(SkCanvas& canvas, animation::Context& actx)
+      : canvas(canvas), animation_context(actx), path() {}
 };
 
 // Base class for widgets.
@@ -44,8 +44,8 @@ struct Widget {
     return info.name();
   }
 
-  virtual void PointerOver(Pointer&, animation::State&) {}
-  virtual void PointerLeave(Pointer&, animation::State&) {}
+  virtual void PointerOver(Pointer&, animation::Context&) {}
+  virtual void PointerLeave(Pointer&, animation::Context&) {}
   virtual void Draw(DrawContext&) const = 0;
   virtual void DrawColored(DrawContext& ctx, const SkPaint&) const {
     // Default implementation just calls Draw().
@@ -58,11 +58,12 @@ struct Widget {
   // Iterate over direct child widgets in front-to-back order.
   virtual VisitResult VisitChildren(Visitor& visitor) { return VisitResult::kContinue; }
 
-  virtual SkMatrix TransformToChild(const Widget* child, animation::State* state = nullptr) const {
+  virtual SkMatrix TransformToChild(const Widget* child,
+                                    animation::Context* state = nullptr) const {
     return SkMatrix::I();
   }
   virtual SkMatrix TransformFromChild(const Widget* child,
-                                      animation::State* state = nullptr) const {
+                                      animation::Context* state = nullptr) const {
     auto m = TransformToChild(child, state);
     SkMatrix ret = SkMatrix::I();
     bool ignore_failures = m.invert(&ret);

@@ -37,8 +37,8 @@ struct TextField : Widget, CaretOwner {
   mutable product_ptr<HoverState> hover_ptr;
 
   TextField(std::string* text, float width) : text(text), width(width) {}
-  void PointerOver(Pointer&, animation::State&) override;
-  void PointerLeave(Pointer&, animation::State&) override;
+  void PointerOver(Pointer&, animation::Context&) override;
+  void PointerLeave(Pointer&, animation::Context&) override;
   void Draw(DrawContext&) const override;
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;

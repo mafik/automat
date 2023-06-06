@@ -186,7 +186,7 @@ gui::VisitResult Number::VisitChildren(gui::Visitor& visitor) {
   return gui::VisitResult::kContinue;
 }
 
-SkMatrix Number::TransformToChild(const Widget* child, animation::State* state) const {
+SkMatrix Number::TransformToChild(const Widget* child, animation::Context*) const {
   auto cell = [](int row, int col) {
     float x = kBorderWidth + kNumberOuterMargin + col * (kButtonWidth + kNumberInnerMargin);
     float y = kBorderWidth + kNumberOuterMargin + row * (kButtonHeight + kNumberInnerMargin);

@@ -23,11 +23,11 @@ struct PrototypeButton : Widget {
   void Draw(DrawContext& ctx) const override { proto->Draw(ctx); }
   SkPath Shape() const override { return proto->Shape(); }
 
-  void PointerOver(Pointer& pointer, animation::State& state) override {
+  void PointerOver(Pointer& pointer, animation::Context&) override {
     pointer.PushIcon(Pointer::kIconHand);
   }
 
-  void PointerLeave(Pointer& pointer, animation::State& state) override { pointer.PopIcon(); }
+  void PointerLeave(Pointer& pointer, animation::Context&) override { pointer.PopIcon(); }
 
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton btn) override;
 };
@@ -48,7 +48,7 @@ struct WindowImpl : Widget {
   std::vector<PointerImpl*> pointers;
   std::vector<KeyboardImpl*> keyboards;
 
-  animation::State animation_state;
+  animation::Context actx;
 
   std::vector<PrototypeButton> prototype_buttons;
   std::vector<vec2> prototype_button_positions;
@@ -168,7 +168,7 @@ struct WindowImpl : Widget {
     RunOnAutomatThreadSynchronous([&]() { result = visitor(*root_machine); });
     return result;
   }
-  SkMatrix TransformToChild(const Widget* child, animation::State* state = nullptr) const override {
+  SkMatrix TransformToChild(const Widget* child, animation::Context*) const override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
       if (child == &prototype_buttons[i]) {
         return SkMatrix::Translate(-prototype_button_positions[i].X,

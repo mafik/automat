@@ -45,14 +45,14 @@ void DragActionBase::End() { DragEnd(); }
 
 void DragActionBase::DrawAction(gui::DrawContext& ctx) {
   auto& canvas = ctx.canvas;
-  auto& animation_state = ctx.animation_state;
+  auto& actx = ctx.animation_context;
   auto original = current_position - contact_point;
   auto rounded = RoundToMilimeters(original);
 
-  auto& rx = round_x[animation_state];
-  auto& ry = round_y[animation_state];
-  rx.Tick(animation_state);
-  ry.Tick(animation_state);
+  auto& rx = round_x[actx];
+  auto& ry = round_y[actx];
+  rx.Tick(actx);
+  ry.Tick(actx);
 
   auto pos = rounded + Vec2(rx, ry);
   canvas.translate(pos.X, pos.Y);

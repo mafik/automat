@@ -145,7 +145,7 @@ gui::VisitResult Location::VisitChildren(gui::Visitor& visitor) {
   return gui::VisitResult::kContinue;
 }
 
-SkMatrix Location::TransformToChild(const Widget* child, animation::State* state) const {
+SkMatrix Location::TransformToChild(const Widget* child, animation::Context*) const {
   SkPath my_shape = Shape();
   SkRect my_bounds = my_shape.getBounds();
   if (child == &name_text_field) {
@@ -193,18 +193,17 @@ void Location::UpdateConnectionWidgets() {
   }
 }
 
-vec2 Location::AnimatedPosition(animation::State& animation_state) const {
+vec2 Location::AnimatedPosition(animation::Context& actx) const {
   vec2 ret = position;
   if (drag_action) {
-    ret.X += drag_action->round_x[animation_state];
-    ret.Y += drag_action->round_y[animation_state];
+    ret.X += drag_action->round_x[actx];
+    ret.Y += drag_action->round_y[actx];
   }
   return ret;
 }
 
 void Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& animation_state = ctx.animation_state;
   SkPath my_shape = Shape();
   SkRect bounds = my_shape.getBounds();
   SkPaint frame_bg;

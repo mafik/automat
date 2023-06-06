@@ -16,7 +16,7 @@ VisitResult AlignCenter::VisitChildren(Visitor& visitor) {
   }
   return VisitResult::kContinue;
 }
-SkMatrix AlignCenter::TransformToChild(const Widget* child_arg, animation::State* state) const {
+SkMatrix AlignCenter::TransformToChild(const Widget* child_arg, animation::Context*) const {
   if (child_arg != this->child.get()) {
     return SkMatrix::I();
   }

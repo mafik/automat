@@ -21,7 +21,7 @@ PointerImpl::PointerImpl(WindowImpl& window, Pointer& facade, vec2 position)
 }
 PointerImpl::~PointerImpl() {
   if (!path.empty()) {
-    path.back()->PointerLeave(facade, window.animation_state);
+    path.back()->PointerLeave(facade, window.actx);
   }
   if (keyboard) {
     keyboard->pointer = nullptr;
@@ -51,8 +51,7 @@ void PointerImpl::Move(vec2 position) {
     Visitor dfs = [&](Widget& child) {
       SkPoint transformed;
       if (!path.empty()) {
-        transformed =
-            path.back()->TransformToChild(&child, &window.animation_state).mapPoint(point);
+        transformed = path.back()->TransformToChild(&child, &window.actx).mapPoint(point);
       } else {
         transformed = point;
       }
@@ -72,10 +71,10 @@ void PointerImpl::Move(vec2 position) {
     Widget* hovered_widget = path.empty() ? nullptr : path.back();
     if (old_hovered_widget != hovered_widget) {
       if (old_hovered_widget) {
-        old_hovered_widget->PointerLeave(facade, window.animation_state);
+        old_hovered_widget->PointerLeave(facade, window.actx);
       }
       if (hovered_widget) {
-        hovered_widget->PointerOver(facade, window.animation_state);
+        hovered_widget->PointerOver(facade, window.actx);
       }
     }
   }

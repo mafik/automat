@@ -9,7 +9,6 @@ namespace automat {
 
 void Object::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& animation_state = ctx.animation_state;
   SkPath path = Shape();
 
   SkPaint paint;

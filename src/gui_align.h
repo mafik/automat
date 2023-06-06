@@ -11,7 +11,7 @@ struct AlignCenter : Widget {
   void Draw(DrawContext&) const override;
   SkPath Shape() const override;
   VisitResult VisitChildren(Visitor& visitor) override;
-  SkMatrix TransformToChild(const Widget* child, animation::State* state = nullptr) const override;
+  SkMatrix TransformToChild(const Widget* child, animation::Context*) const override;
 };
 
 std::unique_ptr<Widget> MakeAlignCenter(std::unique_ptr<Widget>&& child);

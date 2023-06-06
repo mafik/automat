@@ -134,7 +134,7 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
 
 void ConnectionWidget::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& state = ctx.animation_state;
+  auto& actx = ctx.animation_context;
   SkPath my_shape = Shape();
 
   if (ctx.path.size() >= 2) {
@@ -142,14 +142,14 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     Widget* parent_location = ctx.path[ctx.path.size() - 1];
     Widget* parent_machine = ctx.path[ctx.path.size() - 2];
     SkMatrix parent_to_local =
-        TransformDown(Path{parent_machine, parent_location, (Widget*)this}, &state);
+        TransformDown(Path{parent_machine, parent_location, (Widget*)this}, &actx);
     auto [a, b] = from->outgoing.equal_range(label);
     for (auto it = a; it != b; ++it) {
       Connection& c = *it->second;
       Location& to = c.to;
       SkPath to_shape = to.Shape();
 
-      SkMatrix m = TransformUp(Path{parent_machine, &to}, &state);
+      SkMatrix m = TransformUp(Path{parent_machine, &to}, &actx);
       m.postConcat(parent_to_local);
       to_shape.transform(m);
       DrawConnection(canvas, my_shape, to_shape);
@@ -211,7 +211,7 @@ void DragConnectionAction::DrawAction(DrawContext& ctx) {
     if (Location* parent_location = widget->from) {
       if (Machine* parent_machine = parent_location->ParentAs<Machine>()) {
         SkMatrix from_transform =
-            TransformUp({parent_machine, parent_location, widget}, &ctx.animation_state);
+            TransformUp({parent_machine, parent_location, widget}, &ctx.animation_context);
         from_shape.transform(from_transform);
       }
     }

@@ -62,8 +62,9 @@ KeyboardImpl::~KeyboardImpl() {
 
 enum class CaretAnimAction { Keep, Delete };
 
-static CaretAnimAction DrawCaret(SkCanvas& canvas, CaretAnimation& anim, CaretImpl* caret,
-                                 animation::State& animation_state) {
+static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, CaretImpl* caret) {
+  SkCanvas& canvas = ctx.canvas;
+  animation::State& animation_state = ctx.animation_state;
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
   paint.setAntiAlias(true);
@@ -119,7 +120,9 @@ CaretAnimation::CaretAnimation(const KeyboardImpl& keyboard)
       shape(PointerIBeam(keyboard)),
       last_blink(time::now()) {}
 
-void KeyboardImpl::Draw(SkCanvas& canvas, animation::State& animation_state) const {
+void KeyboardImpl::Draw(DrawContext& ctx) const {
+  SkCanvas& canvas = ctx.canvas;
+  animation::State& animation_state = ctx.animation_state;
   // Iterate through each Caret & CaretAnimation, and draw them.
   // After a Caret has been removed, its CaretAnimation is kept around for some
   // time to animate it out.
@@ -129,7 +132,7 @@ void KeyboardImpl::Draw(SkCanvas& canvas, animation::State& animation_state) con
   while (anim_it != anim_carets.end() && caret_it != carets.end()) {
     if (anim_it->first < caret_it->get()) {
       // Caret was removed.
-      auto a = DrawCaret(canvas, anim_it->second, nullptr, animation_state);
+      auto a = DrawCaret(ctx, anim_it->second, nullptr);
       if (a == CaretAnimAction::Delete) {
         anim_it = anim_carets.erase(anim_it);
       } else {
@@ -140,17 +143,17 @@ void KeyboardImpl::Draw(SkCanvas& canvas, animation::State& animation_state) con
       auto new_it =
           anim_carets.emplace(std::make_pair<CaretImpl*, CaretAnimation>(caret_it->get(), *this))
               .first;
-      DrawCaret(canvas, new_it->second, caret_it->get(), animation_state);
+      DrawCaret(ctx, new_it->second, caret_it->get());
       ++caret_it;
     } else {
-      DrawCaret(canvas, anim_it->second, caret_it->get(), animation_state);
+      DrawCaret(ctx, anim_it->second, caret_it->get());
       ++anim_it;
       ++caret_it;
     }
   }
   while (anim_it != anim_carets.end()) {
     // Caret at end was removed.
-    auto a = DrawCaret(canvas, anim_it->second, nullptr, animation_state);
+    auto a = DrawCaret(ctx, anim_it->second, nullptr);
     if (a == CaretAnimAction::Delete) {
       anim_it = anim_carets.erase(anim_it);
     } else {
@@ -162,7 +165,7 @@ void KeyboardImpl::Draw(SkCanvas& canvas, animation::State& animation_state) con
     auto new_it =
         anim_carets.emplace(std::make_pair<CaretImpl*, CaretAnimation>(caret_it->get(), *this))
             .first;
-    DrawCaret(canvas, new_it->second, caret_it->get(), animation_state);
+    DrawCaret(ctx, new_it->second, caret_it->get());
     ++caret_it;
   }
 }

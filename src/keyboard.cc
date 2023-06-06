@@ -44,9 +44,7 @@ Keyboard::Keyboard(Window& window) : impl(std::make_unique<KeyboardImpl>(*window
 
 Keyboard::~Keyboard() {}
 
-void Keyboard::Draw(SkCanvas& canvas, animation::State& animation_state) const {
-  impl->Draw(canvas, animation_state);
-}
+void Keyboard::Draw(DrawContext& ctx) const { impl->Draw(ctx); }
 
 void Keyboard::KeyDown(Key key) { impl->KeyDown(key); }
 void Keyboard::KeyUp(Key key) { impl->KeyUp(key); }

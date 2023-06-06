@@ -46,7 +46,7 @@ struct KeyboardImpl {
   mutable product_ptr<KeyboardAnimation> anim;
   KeyboardImpl(WindowImpl& window, Keyboard& facade);
   ~KeyboardImpl();
-  void Draw(SkCanvas&, animation::State& animation_state) const;
+  void Draw(DrawContext&) const;
   void KeyDown(Key);
   void KeyUp(Key);
 };

@@ -16,6 +16,7 @@ struct Keyboard;
 struct KeyboardImpl;
 struct Window;
 struct Widget;
+struct DrawContext;
 using Path = std::vector<Widget*>;
 
 enum class AnsiKey : uint8_t {
@@ -156,7 +157,7 @@ struct CaretOwner {
 struct Keyboard final {
   Keyboard(Window&);
   ~Keyboard();
-  void Draw(SkCanvas&, animation::State& animation_state) const;
+  void Draw(DrawContext&) const;
   void KeyDown(Key);
   void KeyUp(Key);
 

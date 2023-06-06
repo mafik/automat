@@ -216,7 +216,7 @@ void WindowImpl::Draw(SkCanvas& canvas) {
 
     for (auto& each_window : windows) {
       for (auto& each_keyboard : each_window->keyboards) {
-        each_keyboard->Draw(canvas, animation_state);
+        each_keyboard->Draw(draw_ctx);
       }
     }
 

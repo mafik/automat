@@ -14,7 +14,7 @@ namespace automat {
 constexpr float kFrameCornerRadius = 0.001;
 
 Location::Location(Location* parent)
-    : parent(parent), name_text_field(this, &name, 0.03), run_button(this), run_task(this) {}
+    : parent(parent), name_text_field(&name, 0.03), run_button(this), run_task(this) {}
 
 void* Location::Nearby(std::function<void*(Location&)> callback) {
   if (auto parent_machine = ParentAs<Machine>()) {
@@ -202,7 +202,9 @@ vec2 Location::AnimatedPosition(animation::State& animation_state) const {
   return ret;
 }
 
-void Location::Draw(SkCanvas& canvas, animation::State& animation_state) const {
+void Location::Draw(gui::DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+  auto& animation_state = ctx.animation_state;
   SkPath my_shape = Shape();
   SkRect bounds = my_shape.getBounds();
   SkPaint frame_bg;
@@ -243,7 +245,7 @@ void Location::Draw(SkCanvas& canvas, animation::State& animation_state) const {
     DrawInset(object->Shape());
   }
 
-  DrawChildren(canvas, animation_state);
+  DrawChildren(ctx);
 
   // Draw debug text log below the Location
   float n_lines = 1;

@@ -15,26 +15,18 @@ using namespace automat;
 
 namespace automat::gui {
 
-void Widget::DrawChildren(SkCanvas& canvas, animation::State& animation_state) const {
+void Widget::DrawChildren(DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+  auto& animation_state = ctx.animation_state;
   Visitor visitor = [&](Widget& widget) {
     canvas.save();
     SkMatrix transform_up = this->TransformFromChild(&widget, &animation_state);
     canvas.concat(transform_up);
-    widget.Draw(canvas, animation_state);
+    widget.Draw(ctx);
     canvas.restore();
     return VisitResult::kContinue;
   };
   const_cast<Widget*>(this)->VisitChildren(visitor);
-}
-
-ReparentableWidget::ReparentableWidget(Widget* parent) : parent(parent) {}
-
-Widget* ReparentableWidget::ParentWidget() const { return parent; }
-
-void ReparentableWidget::TryReparent(Widget* child, Widget* parent) {
-  if (auto reparentable_child = dynamic_cast<ReparentableWidget*>(child)) {
-    reparentable_child->parent = parent;
-  }
 }
 
 SkMatrix TransformDown(const Path& path, animation::State* state) {

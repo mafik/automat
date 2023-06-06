@@ -30,7 +30,7 @@ WindowImpl::WindowImpl(vec2 size, float display_pixels_per_meter)
     : size(size), display_pixels_per_meter(display_pixels_per_meter) {
   prototype_buttons.reserve(Prototypes().size());
   for (auto& proto : Prototypes()) {
-    prototype_buttons.emplace_back(this, proto);
+    prototype_buttons.emplace_back(proto);
     prototype_button_positions.emplace_back(Vec2(0, 0));
   }
   ArrangePrototypeButtons();
@@ -46,6 +46,7 @@ WindowImpl::~WindowImpl() {
 
 void WindowImpl::Draw(SkCanvas& canvas) {
   animation_state.timer.Tick();
+  gui::DrawContext draw_ctx(canvas, animation_state);
   RunOnAutomatThreadSynchronous([&] {
     // Record camera movement timeline. This is used to create inertia effect.
     camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
@@ -207,10 +208,10 @@ void WindowImpl::Draw(SkCanvas& canvas) {
       canvas.drawRect(target_rect, target_paint);
     }
 
-    root_machine->DrawChildren(canvas, animation_state);
+    root_machine->DrawChildren(draw_ctx);
 
     for (auto& pointer : pointers) {
-      pointer->Draw(canvas, animation_state);
+      pointer->Draw(draw_ctx);
     }
 
     for (auto& each_window : windows) {
@@ -227,7 +228,7 @@ void WindowImpl::Draw(SkCanvas& canvas) {
     vec2& position = prototype_button_positions[i];
     canvas.save();
     canvas.translate(position.X, position.Y);
-    prototype_buttons[i].Draw(canvas, animation_state);
+    prototype_buttons[i].Draw(draw_ctx);
     canvas.restore();
   }
 

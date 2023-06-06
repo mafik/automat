@@ -4,11 +4,11 @@
 
 namespace automat::gui {
 
-struct AlignCenter : ReparentableWidget {
+struct AlignCenter : Widget {
   std::unique_ptr<Widget> child;
 
   AlignCenter(std::unique_ptr<Widget>&& child);
-  void Draw(SkCanvas& c, animation::State& s) const override;
+  void Draw(DrawContext&) const override;
   SkPath Shape() const override;
   VisitResult VisitChildren(Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget* child, animation::State* state = nullptr) const override;

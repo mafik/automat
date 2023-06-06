@@ -18,13 +18,9 @@ constexpr time::duration kClickTimeout = std::chrono::milliseconds(300);
 constexpr float kClickRadius = 0.002f;  // 2mm
 
 struct PrototypeButton : Widget {
-  Widget* parent_widget;
   const Object* proto;
-  PrototypeButton(Widget* parent, const Object* proto) : parent_widget(parent), proto(proto) {}
-  Widget* ParentWidget() const override { return parent_widget; }
-  void Draw(SkCanvas& canvas, animation::State& animation_state) const override {
-    proto->Draw(canvas, animation_state);
-  }
+  PrototypeButton(const Object* proto) : proto(proto) {}
+  void Draw(DrawContext& ctx) const override { proto->Draw(ctx); }
   SkPath Shape() const override { return proto->Shape(); }
 
   void PointerOver(Pointer& pointer, animation::State& state) override {
@@ -159,7 +155,7 @@ struct WindowImpl : Widget {
   SkPath Shape() const override {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.Width, size.Height));
   }
-  void Draw(SkCanvas&, animation::State& animation_state) const override {
+  void Draw(gui::DrawContext&) const override {
     FATAL() << "WindowImpl::Draw() should never be called";
   }
   void Draw(SkCanvas& canvas);

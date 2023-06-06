@@ -4,11 +4,9 @@
 
 namespace automat::gui {
 
-AlignCenter::AlignCenter(std::unique_ptr<Widget>&& child) : child(std::move(child)) {
-  ReparentableWidget::TryReparent(this->child.get(), this);
-}
+AlignCenter::AlignCenter(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
 
-void AlignCenter::Draw(SkCanvas& c, animation::State& s) const { DrawChildren(c, s); }
+void AlignCenter::Draw(DrawContext& ctx) const { DrawChildren(ctx); }
 
 SkPath AlignCenter::Shape() const { return SkPath(); }
 

@@ -32,9 +32,9 @@ struct PointerImpl {
   void Wheel(float delta);
   void ButtonDown(PointerButton btn);
   void ButtonUp(PointerButton btn);
-  void Draw(SkCanvas& canvas, animation::State& animation_state) {
+  void Draw(DrawContext& ctx) {
     if (action) {
-      action->Draw(canvas, animation_state);
+      action->DrawAction(ctx);
     }
   }
   Pointer::IconType Icon() const {

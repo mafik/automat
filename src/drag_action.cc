@@ -43,7 +43,9 @@ void DragActionBase::Update(gui::Pointer& pointer) {
 
 void DragActionBase::End() { DragEnd(); }
 
-void DragActionBase::Draw(SkCanvas& canvas, animation::State& animation_state) {
+void DragActionBase::DrawAction(gui::DrawContext& ctx) {
+  auto& canvas = ctx.canvas;
+  auto& animation_state = ctx.animation_state;
   auto original = current_position - contact_point;
   auto rounded = RoundToMilimeters(original);
 
@@ -54,7 +56,7 @@ void DragActionBase::Draw(SkCanvas& canvas, animation::State& animation_state) {
 
   auto pos = rounded + Vec2(rx, ry);
   canvas.translate(pos.X, pos.Y);
-  DragDraw(canvas, animation_state);
+  DragDraw(ctx);
   canvas.translate(-pos.X, -pos.Y);
 }
 
@@ -68,9 +70,7 @@ void DragObjectAction::DragEnd() {
   loc.InsertHere(std::move(object));
 }
 
-void DragObjectAction::DragDraw(SkCanvas& canvas, animation::State& animation_state) {
-  object->Draw(canvas, animation_state);
-}
+void DragObjectAction::DragDraw(gui::DrawContext& ctx) { object->Draw(ctx); }
 
 DragLocationAction::DragLocationAction(Location* location) : location(location) {
   location->drag_action = this;
@@ -85,7 +85,7 @@ void DragLocationAction::DragUpdate() { location->position = TargetPositionRound
 
 void DragLocationAction::DragEnd() { location->position = TargetPositionRounded(); }
 
-void DragLocationAction::DragDraw(SkCanvas& canvas, animation::State& animation_state) {
+void DragLocationAction::DragDraw(gui::DrawContext&) {
   // Location is drawn by its parent Machine so nothing to do here.
 }
 

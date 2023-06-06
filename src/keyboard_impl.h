@@ -15,6 +15,7 @@ struct CaretImpl {
   Caret facade;
   CaretOwner* owner = nullptr;
   SkPath shape;
+  Path widget_path;
   time::point last_blink;
   KeyboardImpl& keyboard;
   CaretImpl(KeyboardImpl& keyboard);

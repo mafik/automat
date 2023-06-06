@@ -16,7 +16,6 @@ struct CaretPosition {
 };
 
 struct TextField : Widget, CaretOwner {
-  Widget* parent_widget;
   std::string* text;
   float width;
 
@@ -37,12 +36,10 @@ struct TextField : Widget, CaretOwner {
   };
   mutable product_ptr<HoverState> hover_ptr;
 
-  TextField(Widget* parent_widget, std::string* text, float width)
-      : parent_widget(parent_widget), text(text), width(width) {}
-  Widget* ParentWidget() const override;
+  TextField(std::string* text, float width) : text(text), width(width) {}
   void PointerOver(Pointer&, animation::State&) override;
   void PointerLeave(Pointer&, animation::State&) override;
-  void Draw(SkCanvas&, animation::State& animation_state) const override;
+  void Draw(DrawContext&) const override;
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
   void ReleaseCaret(Caret&) override;

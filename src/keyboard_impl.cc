@@ -43,18 +43,9 @@ void CaretImpl::PlaceIBeam(vec2 position) {
 }
 
 SkPath CaretImpl::MakeRootShape() const {
-  Path widget_path;
-  widget_path.push_back(owner->CaretWidget());
-  while (widget_path.back() != root_machine) {
-    if (widget_path.back() == nullptr) {
-      EVERY_N_SEC(10) { ERROR() << "Caret widget is not a descendant of root machine."; }
-      widget_path.pop_back();
-      break;
-    }
-    widget_path.push_back(widget_path.back()->ParentWidget());
-  }
-  reverse(widget_path.begin(), widget_path.end());
-  SkMatrix text_to_root = TransformUp(widget_path);
+  auto begin = find(widget_path.begin(), widget_path.end(), root_machine);
+  Path sub_path(begin, widget_path.end());
+  SkMatrix text_to_root = TransformUp(sub_path);
   return shape.makeTransform(text_to_root);
 }
 

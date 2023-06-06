@@ -56,13 +56,6 @@ struct Location : gui::Widget {
 
   Location(Location* parent = nullptr);
 
-  Widget* ParentWidget() const override {
-    if (parent == nullptr) {
-      return nullptr;
-    }
-    return parent->object.get();
-  }
-
   std::string_view Name() const override { return name; }
 
   std::unique_ptr<Object> InsertHere(std::unique_ptr<Object>&& object) {
@@ -221,7 +214,7 @@ struct Location : gui::Widget {
   void SetNumber(double number);
 
   vec2 AnimatedPosition(animation::State& animation_state) const;
-  void Draw(SkCanvas& canvas, animation::State& animation_state) const override;
+  void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;
   gui::VisitResult VisitChildren(gui::Visitor& visitor) override;

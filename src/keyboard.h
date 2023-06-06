@@ -16,6 +16,7 @@ struct Keyboard;
 struct KeyboardImpl;
 struct Window;
 struct Widget;
+using Path = std::vector<Widget*>;
 
 enum class AnsiKey : uint8_t {
   Unknown,
@@ -144,7 +145,7 @@ struct CaretOwner {
   std::vector<CaretImpl*> carets;
   virtual ~CaretOwner();
 
-  Caret& RequestCaret(Keyboard&);
+  Caret& RequestCaret(Keyboard&, const Path& widget_path, vec2 position);
   virtual void ReleaseCaret(Caret&) = 0;
   virtual Widget* CaretWidget() = 0;
 

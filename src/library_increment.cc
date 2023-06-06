@@ -89,7 +89,8 @@ void DrawBackground(SkCanvas& canvas) {
 
 }  // namespace
 
-void Increment::Draw(SkCanvas& canvas, animation::State& animation_state) const {
+void Increment::Draw(gui::DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
   DrawBackground(canvas);
   SkPaint paint;
   paint.setColor(kFontColor);

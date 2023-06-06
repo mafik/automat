@@ -986,9 +986,7 @@ struct ProgressBar : library::Number {
     bar->value = value;
     return bar;
   }
-  void Draw(SkCanvas& canvas, animation::State& animation_state) const override {
-    Object::Draw(canvas, animation_state);
-  }
+  void Draw(gui::DrawContext& ctx) const override { Object::Draw(ctx); }
   SkPath Shape() const override { return Object::Shape(); }
 };
 

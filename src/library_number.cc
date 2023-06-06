@@ -51,12 +51,10 @@ using gui::AlignCenter;
 using gui::Text;
 using std::make_unique;
 
-NumberButton::NumberButton(Widget* parent, std::unique_ptr<Widget>&& child)
-    : Button(parent, make_unique<AlignCenter>(std::move(child))) {}
+NumberButton::NumberButton(std::unique_ptr<Widget>&& child)
+    : Button(make_unique<AlignCenter>(std::move(child))) {}
 
-void NumberButton::Draw(SkCanvas& canvas, animation::State& animation_state) const {
-  DrawButton(canvas, animation_state, 0xffc8c4b7);
-}
+void NumberButton::Draw(gui::DrawContext& ctx) const { DrawButton(ctx, 0xffc8c4b7); }
 
 void NumberButton::Activate() {
   if (activate) {
@@ -68,16 +66,15 @@ void NumberButton::Activate() {
 
 Number::Number(double x)
     : value(x),
-      digits{
-          NumberButton(this, make_unique<Text>("0")), NumberButton(this, make_unique<Text>("1")),
-          NumberButton(this, make_unique<Text>("2")), NumberButton(this, make_unique<Text>("3")),
-          NumberButton(this, make_unique<Text>("4")), NumberButton(this, make_unique<Text>("5")),
-          NumberButton(this, make_unique<Text>("6")), NumberButton(this, make_unique<Text>("7")),
-          NumberButton(this, make_unique<Text>("8")), NumberButton(this, make_unique<Text>("9"))},
-      dot(this, make_unique<Text>(".")),
-      backspace(this, make_unique<Text>("<")),
+      digits{NumberButton(make_unique<Text>("0")), NumberButton(make_unique<Text>("1")),
+             NumberButton(make_unique<Text>("2")), NumberButton(make_unique<Text>("3")),
+             NumberButton(make_unique<Text>("4")), NumberButton(make_unique<Text>("5")),
+             NumberButton(make_unique<Text>("6")), NumberButton(make_unique<Text>("7")),
+             NumberButton(make_unique<Text>("8")), NumberButton(make_unique<Text>("9"))},
+      dot(make_unique<Text>(".")),
+      backspace(make_unique<Text>("<")),
       text("0"),
-      text_field(this, &text, kWidth - 2 * kNumberOuterMargin - 2 * kBorderWidth) {
+      text_field(&text, kWidth - 2 * kNumberOuterMargin - 2 * kBorderWidth) {
   for (int i = 0; i < 10; ++i) {
     digits[i].activate = [this, i] {
       if (text.empty() || text == "0") {
@@ -169,10 +166,11 @@ static const SkPaint kNumberBorderPaint = []() {
   return paint_border;
 }();
 
-void Number::Draw(SkCanvas& canvas, animation::State& animation_state) const {
+void Number::Draw(gui::DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
   canvas.drawRRect(kNumberRRectInner, kNumberBackgroundPaint);
   canvas.drawRRect(kNumberRRectInner, kNumberBorderPaint);
-  DrawChildren(canvas, animation_state);
+  DrawChildren(ctx);
 }
 
 SkPath Number::Shape() const { return kNumberShape; }

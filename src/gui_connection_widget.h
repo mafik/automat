@@ -20,7 +20,7 @@ struct DragConnectionAction : Action {
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
   void End() override;
-  void Draw(SkCanvas& canvas, animation::State& animation_state) override;
+  void DrawAction(DrawContext&) override;
 };
 
 struct ConnectionWidget : Button {
@@ -29,9 +29,8 @@ struct ConnectionWidget : Button {
   DragConnectionAction* drag_action = nullptr;
 
   ConnectionWidget(Location* from, std::string_view label);
-  Widget* ParentWidget() const override;
 
-  void Draw(SkCanvas&, animation::State&) const override;
+  void Draw(DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
 };
 

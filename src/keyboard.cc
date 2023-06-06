@@ -16,7 +16,7 @@ CaretOwner::~CaretOwner() {
   }
 }
 
-Caret& CaretOwner::RequestCaret(Keyboard& keyboard) {
+Caret& CaretOwner::RequestCaret(Keyboard& keyboard, const Path& widget_path, vec2 position) {
   auto& kb = *keyboard.impl;
   std::set<std::unique_ptr<CaretImpl>>::iterator it;
   if (kb.carets.empty()) {
@@ -31,6 +31,8 @@ Caret& CaretOwner::RequestCaret(Keyboard& keyboard) {
         std::find(caret.owner->carets.begin(), caret.owner->carets.end(), &caret));
   }
   caret.owner = this;
+  caret.widget_path = widget_path;
+  caret.PlaceIBeam(position);
   carets.emplace_back(&caret);
   return caret.facade;
 }

@@ -14,8 +14,6 @@
 
 namespace automat::gui {
 
-Widget* TextField::ParentWidget() const { return parent_widget; }
-
 void TextField::PointerOver(Pointer& pointer, animation::State& state) {
   pointer.PushIcon(Pointer::kIconIBeam);
   hover_ptr[state].Increment();
@@ -58,7 +56,9 @@ void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
   canvas.restore();
 }
 
-void TextField::Draw(SkCanvas& canvas, animation::State& animation_state) const {
+void TextField::Draw(DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+  auto& animation_state = ctx.animation_state;
   auto& hover = hover_ptr[animation_state].animation;
   hover.Tick(animation_state);
 
@@ -96,11 +96,14 @@ SkPath TextField::Shape() const {
   return SkPath::RRect(bounds, kTextCornerRadius, kTextCornerRadius);
 }
 
+static vec2 GetPositionFromIndex(std::string_view text, int index) {
+  return Vec2(kTextMargin + GetFont().PositionFromIndex(text, index),
+              (kTextFieldHeight - kLetterSize) / 2);
+}
+
 void UpdateCaret(TextField& text_field, Caret& caret) {
   int index = text_field.caret_positions[&caret].index;
-  vec2 caret_pos = Vec2(kTextMargin + GetFont().PositionFromIndex(*text_field.text, index),
-                        (kTextFieldHeight - kLetterSize) / 2);
-
+  vec2 caret_pos = GetPositionFromIndex(*text_field.text, index);
   caret.PlaceIBeam(caret_pos);
 }
 
@@ -110,14 +113,18 @@ struct TextSelectAction : Action {
 
   TextSelectAction(TextField& text_field) : text_field(text_field) {}
 
+  int GetIndexFromPointer(Pointer& pointer) {
+    vec2 local = pointer.PositionWithin(text_field);
+    return GetFont().IndexFromPosition(*text_field.text, local.X - kTextMargin);
+  }
+
   void UpdateCaretFromPointer(Pointer& pointer) {
     auto it = text_field.caret_positions.find(caret);
     // The caret might have been released.
     if (it == text_field.caret_positions.end()) {
       return;
     }
-    vec2 local = pointer.PositionWithin(text_field);
-    int index = GetFont().IndexFromPosition(*text_field.text, local.X - kTextMargin);
+    int index = GetIndexFromPointer(pointer);
     if (index != it->second.index) {
       it->second.index = index;
       UpdateCaret(text_field, *caret);
@@ -125,15 +132,14 @@ struct TextSelectAction : Action {
   }
 
   void Begin(Pointer& pointer) override {
-    caret = &text_field.RequestCaret(pointer.Keyboard());
-    // Invalid index will be updated on the first call to
-    // UpdateCaretFromPointer.
-    text_field.caret_positions[caret] = {.index = -1};
-    UpdateCaretFromPointer(pointer);
+    int index = GetIndexFromPointer(pointer);
+    vec2 pos = GetPositionFromIndex(*text_field.text, index);
+    caret = &text_field.RequestCaret(pointer.Keyboard(), pointer.Path(), pos);
+    text_field.caret_positions[caret] = {.index = index};
   }
   void Update(Pointer& pointer) override { UpdateCaretFromPointer(pointer); }
   void End() override {}
-  void Draw(SkCanvas& canvas, animation::State& animation_state) override {}
+  void DrawAction(DrawContext&) override {}
 };
 
 std::unique_ptr<Action> TextField::ButtonDownAction(Pointer&, PointerButton btn) {

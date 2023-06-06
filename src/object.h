@@ -46,7 +46,7 @@ struct Object : gui::Widget {
   virtual std::partial_ordering operator<=>(const Object& other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  void Draw(SkCanvas& canvas, animation::State& animation_state) const override;
+  void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
 };
 

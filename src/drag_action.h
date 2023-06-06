@@ -29,17 +29,17 @@ struct DragActionBase : Action {
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
   void End() override;
-  void Draw(SkCanvas& canvas, animation::State& animation_state) override;
+  void DrawAction(gui::DrawContext&) override;
   virtual void DragUpdate() = 0;
   virtual void DragEnd() = 0;
-  virtual void DragDraw(SkCanvas& canvas, animation::State& animation_state) = 0;
+  virtual void DragDraw(gui::DrawContext&) = 0;
 };
 
 struct DragObjectAction : DragActionBase {
   std::unique_ptr<Object> object;
   void DragUpdate() override;
   void DragEnd() override;
-  void DragDraw(SkCanvas& canvas, animation::State& animation_state) override;
+  void DragDraw(gui::DrawContext&) override;
 };
 
 struct DragLocationAction : DragActionBase {
@@ -48,7 +48,7 @@ struct DragLocationAction : DragActionBase {
   ~DragLocationAction() override;
   void DragUpdate() override;
   void DragEnd() override;
-  void DragDraw(SkCanvas& canvas, animation::State& animation_state) override;
+  void DragDraw(gui::DrawContext&) override;
 };
 
 }  // namespace automat

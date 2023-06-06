@@ -48,7 +48,6 @@ struct Machine;
 struct LiveObject : Object {
   Location* here = nullptr;
 
-  Widget* ParentWidget() const override { return here; }
   void Relocate(Location* new_self) override {
     Args([old_self = here, new_self](Argument& arg) {
       if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {

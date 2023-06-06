@@ -58,8 +58,9 @@ void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
   canvas.drawRRect(oval, shadow_paint);
 }
 
-void Button::DrawButtonFace(SkCanvas& canvas, animation::State& animation_state, SkColor bg,
-                            SkColor fg) const {
+void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
+  auto& canvas = ctx.canvas;
+  auto& animation_state = ctx.animation_state;
   auto& press = press_ptr[animation_state];
   auto& hover = hover_ptr[animation_state];
   auto& filling = filling_ptr[animation_state];
@@ -94,17 +95,19 @@ void Button::DrawButtonFace(SkCanvas& canvas, animation::State& animation_state,
   fg_paint.setColor(fg);
   fg_paint.setAntiAlias(true);
   canvas.translate(pressed_oval.rect().centerX(), pressed_oval.rect().centerY());
-  child->DrawColored(canvas, animation_state, fg_paint);
+  child->DrawColored(ctx, fg_paint);
   canvas.translate(-pressed_oval.rect().centerX(), -pressed_oval.rect().centerY());
 }
 
-void Button::DrawButton(SkCanvas& canvas, animation::State& animation_state, SkColor bg) const {
-  DrawButtonShadow(canvas, bg);
-  DrawButtonFace(canvas, animation_state, bg, 0xff000000);
+void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
+  DrawButtonShadow(ctx.canvas, bg);
+  DrawButtonFace(ctx, bg, 0xff000000);
 }
 
 // TODO: move the filling animation into a separate subclass
-void Button::Draw(SkCanvas& canvas, animation::State& animation_state) const {
+void Button::Draw(DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+  auto& animation_state = ctx.animation_state;
   auto& press = press_ptr[animation_state];
   auto& hover = hover_ptr[animation_state];
   auto& filling = filling_ptr[animation_state];
@@ -127,10 +130,10 @@ void Button::Draw(SkCanvas& canvas, animation::State& animation_state) const {
 
   if (filling >= 0.999) {
     DrawButtonShadow(canvas, color);
-    DrawButtonFace(canvas, animation_state, color, white);
+    DrawButtonFace(ctx, color, white);
   } else if (filling <= 0.001) {
     DrawButtonShadow(canvas, white);
-    DrawButtonFace(canvas, animation_state, white, color);
+    DrawButtonFace(ctx, white, color);
   } else {
     DrawButtonShadow(canvas, color::MixColors(white, color, filling));
     float baseline = pressed_outer_oval.rect().fTop * (1 - filling) +
@@ -162,11 +165,11 @@ void Button::Draw(SkCanvas& canvas, animation::State& animation_state) const {
 
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kDifference, true);
-    DrawButtonFace(canvas, animation_state, white, color);
+    DrawButtonFace(ctx, white, color);
     canvas.restore();
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kIntersect, true);
-    DrawButtonFace(canvas, animation_state, color, white);
+    DrawButtonFace(ctx, color, white);
     canvas.restore();
   }
 }
@@ -196,7 +199,7 @@ struct ButtonAction : public Action {
     }
   }
 
-  void Draw(SkCanvas& canvas, animation::State& animation_state) override {}
+  void DrawAction(DrawContext&) override {}
 };
 
 std::unique_ptr<Action> Button::ButtonDownAction(Pointer& pointer, PointerButton pointer_button) {
@@ -206,9 +209,6 @@ std::unique_ptr<Action> Button::ButtonDownAction(Pointer& pointer, PointerButton
   return nullptr;
 }
 
-Button::Button(Widget* parent, std::unique_ptr<Widget>&& child)
-    : ReparentableWidget(parent), child(std::move(child)) {
-  ReparentableWidget::TryReparent(this->child.get(), this);
-}
+Button::Button(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
 
 }  // namespace automat::gui

@@ -6,17 +6,17 @@
 
 namespace automat::gui {
 
-struct Button : ReparentableWidget {
+struct Button : Widget {
   std::unique_ptr<Widget> child;
   mutable product_ptr<float> press_ptr;
   mutable product_ptr<animation::Approach> hover_ptr;
   mutable product_ptr<animation::Approach> filling_ptr;
   int press_action_count = 0;
 
-  Button(Widget* parent, std::unique_ptr<Widget>&& child);
+  Button(std::unique_ptr<Widget>&& child);
   void PointerOver(Pointer&, animation::State&) override;
   void PointerLeave(Pointer&, animation::State&) override;
-  void Draw(SkCanvas&, animation::State& animation_state) const override;
+  void Draw(DrawContext&) const override;
   float Height() const;
   SkRRect RRect() const;
   SkPath Shape() const override;
@@ -26,9 +26,8 @@ struct Button : ReparentableWidget {
   virtual bool Filled() const { return false; }
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
-  void DrawButtonFace(SkCanvas& canvas, animation::State& animation_state, SkColor bg,
-                      SkColor fg) const;
-  void DrawButton(SkCanvas& canvas, animation::State& animation_state, SkColor bg) const;
+  void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg) const;
+  void DrawButton(DrawContext&, SkColor bg) const;
 };
 
 }  // namespace automat::gui

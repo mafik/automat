@@ -24,11 +24,18 @@ using Visitor = std::function<VisitResult(Widget&)>;
 SkMatrix TransformDown(const Path& path, animation::State* state = nullptr);
 SkMatrix TransformUp(const Path& path, animation::State* state = nullptr);
 
+struct DrawContext {
+  SkCanvas& canvas;
+  animation::State& animation_state;
+  Path path;
+  DrawContext(SkCanvas& canvas, animation::State& animation_state)
+      : canvas(canvas), animation_state(animation_state), path() {}
+};
+
 // Base class for widgets.
 struct Widget {
   Widget() {}
   virtual ~Widget() {}
-  virtual Widget* ParentWidget() const { return nullptr; }
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".
@@ -39,10 +46,10 @@ struct Widget {
 
   virtual void PointerOver(Pointer&, animation::State&) {}
   virtual void PointerLeave(Pointer&, animation::State&) {}
-  virtual void Draw(SkCanvas&, animation::State&) const = 0;
-  virtual void DrawColored(SkCanvas& canvas, animation::State& state, const SkPaint&) const {
+  virtual void Draw(DrawContext&) const = 0;
+  virtual void DrawColored(DrawContext& ctx, const SkPaint&) const {
     // Default implementation just calls Draw().
-    Draw(canvas, state);
+    Draw(ctx);
   }
   virtual SkPath Shape() const = 0;
   virtual std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) { return nullptr; }
@@ -62,14 +69,7 @@ struct Widget {
     return ret;
   }
 
-  void DrawChildren(SkCanvas&, animation::State&) const;
-};
-
-struct ReparentableWidget : Widget {
-  Widget* parent;
-  ReparentableWidget(Widget* parent = nullptr);
-  Widget* ParentWidget() const override;
-  static void TryReparent(Widget* child, Widget* parent);
+  void DrawChildren(DrawContext&) const;
 };
 
 }  // namespace automat::gui

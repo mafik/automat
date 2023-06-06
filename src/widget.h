@@ -61,12 +61,12 @@ struct Widget {
   void DrawChildren(DrawContext&) const;
 };
 
-struct FillMixin {
-  SkPaint fill;
-  virtual ~FillMixin() {}
+struct PaintMixin {
+  SkPaint paint;
+  virtual ~PaintMixin() {}
   static SkPaint* Get(Widget* widget) {
-    if (auto p = dynamic_cast<FillMixin*>(widget)) {
-      return &p->fill;
+    if (auto p = dynamic_cast<PaintMixin*>(widget)) {
+      return &p->paint;
     }
     return nullptr;
   }

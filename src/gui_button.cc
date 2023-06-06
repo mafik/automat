@@ -91,9 +91,9 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   border.setStrokeWidth(kBorderWidth);
   canvas.drawRRect(pressed_oval, border);
 
-  if (auto fill = FillMixin::Get(child.get())) {
-    fill->setColor(fg);
-    fill->setAntiAlias(true);
+  if (auto paint = PaintMixin::Get(child.get())) {
+    paint->setColor(fg);
+    paint->setAntiAlias(true);
   }
   canvas.translate(pressed_oval.rect().centerX(), pressed_oval.rect().centerY());
   child->Draw(ctx);

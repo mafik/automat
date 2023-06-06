@@ -7,7 +7,7 @@
 
 namespace automat::gui {
 
-struct ShapeWidget : Widget, FillMixin {
+struct ShapeWidget : Widget, PaintMixin {
   SkPath path;
 
   ShapeWidget(SkPath path);

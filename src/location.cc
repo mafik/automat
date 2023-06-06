@@ -145,14 +145,14 @@ gui::VisitResult Location::VisitChildren(gui::Visitor& visitor) {
   return gui::VisitResult::kContinue;
 }
 
-SkMatrix Location::TransformToChild(const Widget* child, animation::Context&) const {
+SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) const {
   SkPath my_shape = Shape();
   SkRect my_bounds = my_shape.getBounds();
-  if (child == &name_text_field) {
+  if (&child == &name_text_field) {
     return SkMatrix::Translate(-my_bounds.left() - 0.001,
                                -my_bounds.bottom() + gui::kTextFieldHeight + 0.001);
   }
-  if (child == &run_button) {
+  if (&child == &run_button) {
     SkPath run_button_shape = run_button.Shape();
     SkRect run_bounds = run_button_shape.getBounds();
     return SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
@@ -161,7 +161,7 @@ SkMatrix Location::TransformToChild(const Widget* child, animation::Context&) co
   vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
   for (auto& widget : connection_widgets) {
     pos.Y -= widget->Height();
-    if (widget.get() == child) {
+    if (widget.get() == &child) {
       return SkMatrix::Translate(-pos.X, -pos.Y);
     }
     pos.Y -= kMargin;

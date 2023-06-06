@@ -19,7 +19,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   Visitor visitor = [&](Widget& widget) {
     canvas.save();
-    const SkMatrix down = this->TransformToChild(&widget, ctx.animation_context);
+    const SkMatrix down = this->TransformToChild(widget, ctx.animation_context);
     SkMatrix up;
     if (down.invert(&up)) {
       canvas.concat(up);
@@ -38,7 +38,7 @@ SkMatrix TransformDown(const Path& path, animation::Context& actx) {
   for (int i = 1; i < path.size(); ++i) {
     Widget& parent = *path[i - 1];
     Widget& child = *path[i];
-    ret.postConcat(parent.TransformToChild(&child, actx));
+    ret.postConcat(parent.TransformToChild(child, actx));
   }
   return ret;
 }

@@ -120,8 +120,8 @@ struct Machine : LiveObject {
     }
     return gui::VisitResult::kContinue;
   }
-  SkMatrix TransformToChild(const Widget* child, animation::Context& actx) const override {
-    const Location* l = dynamic_cast<const Location*>(child);
+  SkMatrix TransformToChild(const Widget& child, animation::Context& actx) const override {
+    const Location* l = dynamic_cast<const Location*>(&child);
     if (l == nullptr) {
       return SkMatrix::I();
     }

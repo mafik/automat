@@ -58,7 +58,7 @@ struct Widget {
   // Iterate over direct child widgets in front-to-back order.
   virtual VisitResult VisitChildren(Visitor& visitor) { return VisitResult::kContinue; }
 
-  virtual SkMatrix TransformToChild(const Widget* child, animation::Context&) const {
+  virtual SkMatrix TransformToChild(const Widget& child, animation::Context&) const {
     return SkMatrix::I();
   }
 

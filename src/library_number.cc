@@ -186,28 +186,28 @@ gui::VisitResult Number::VisitChildren(gui::Visitor& visitor) {
   return gui::VisitResult::kContinue;
 }
 
-SkMatrix Number::TransformToChild(const Widget* child, animation::Context&) const {
+SkMatrix Number::TransformToChild(const Widget& child, animation::Context&) const {
   auto cell = [](int row, int col) {
     float x = kBorderWidth + kNumberOuterMargin + col * (kButtonWidth + kNumberInnerMargin);
     float y = kBorderWidth + kNumberOuterMargin + row * (kButtonHeight + kNumberInnerMargin);
     return SkMatrix::Translate(-x, -y);
   };
-  if (child == &text_field) {
+  if (&child == &text_field) {
     return cell(4, 0);
   }
-  if (child == &digits[0]) {
+  if (&child == &digits[0]) {
     return cell(0, 0);
   }
-  if (child == &dot) {
+  if (&child == &dot) {
     return cell(0, 1);
   }
-  if (child == &backspace) {
+  if (&child == &backspace) {
     return cell(0, 2);
   }
   for (int row = 0; row < 3; ++row) {
     for (int col = 0; col < 3; ++col) {
       int digit = 3 * row + col + 1;
-      if (child == &digits[digit]) {
+      if (&child == &digits[digit]) {
         return cell(row + 1, col);
       }
     }

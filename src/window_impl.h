@@ -168,14 +168,14 @@ struct WindowImpl : Widget {
     RunOnAutomatThreadSynchronous([&]() { result = visitor(*root_machine); });
     return result;
   }
-  SkMatrix TransformToChild(const Widget* child, animation::Context&) const override {
+  SkMatrix TransformToChild(const Widget& child, animation::Context&) const override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      if (child == &prototype_buttons[i]) {
+      if (&child == &prototype_buttons[i]) {
         return SkMatrix::Translate(-prototype_button_positions[i].X,
                                    -prototype_button_positions[i].Y);
       }
     }
-    if (child == root_machine) {
+    if (&child == root_machine) {
       return WindowToCanvas();
     }
     return SkMatrix::I();

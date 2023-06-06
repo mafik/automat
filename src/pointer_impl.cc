@@ -51,7 +51,7 @@ void PointerImpl::Move(vec2 position) {
     Visitor dfs = [&](Widget& child) {
       SkPoint transformed;
       if (!path.empty()) {
-        transformed = path.back()->TransformToChild(&child, window.actx).mapPoint(point);
+        transformed = path.back()->TransformToChild(child, window.actx).mapPoint(point);
       } else {
         transformed = point;
       }

@@ -51,7 +51,7 @@ void PointerImpl::Move(vec2 position) {
     Visitor dfs = [&](Widget& child) {
       SkPoint transformed;
       if (!path.empty()) {
-        transformed = path.back()->TransformToChild(&child, &window.actx).mapPoint(point);
+        transformed = path.back()->TransformToChild(&child, window.actx).mapPoint(point);
       } else {
         transformed = point;
       }
@@ -137,7 +137,7 @@ vec2 PointerImpl::PositionWithin(Widget& widget) const {
   auto it = std::find(path.begin(), path.end(), &widget);
   auto end = it == path.end() ? path.end() : it + 1;
   Path sub_path(path.begin(), end);
-  SkMatrix transform_down = TransformDown(sub_path);
+  SkMatrix transform_down = TransformDown(sub_path, window.actx);
   return Vec2(transform_down.mapXY(pointer_position.X, pointer_position.Y));
 }
 
@@ -145,7 +145,7 @@ vec2 PointerImpl::PositionWithinRootMachine() const {
   gui::Path root_machine_path;
   root_machine_path.push_back(path.front());
   root_machine_path.push_back(root_machine);
-  SkMatrix transform_down = TransformDown(root_machine_path);
+  SkMatrix transform_down = TransformDown(root_machine_path, window.actx);
   return Vec2(transform_down.mapXY(pointer_position.X, pointer_position.Y));
 }
 

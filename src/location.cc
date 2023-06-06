@@ -145,7 +145,7 @@ gui::VisitResult Location::VisitChildren(gui::Visitor& visitor) {
   return gui::VisitResult::kContinue;
 }
 
-SkMatrix Location::TransformToChild(const Widget* child, animation::Context*) const {
+SkMatrix Location::TransformToChild(const Widget* child, animation::Context&) const {
   SkPath my_shape = Shape();
   SkRect my_bounds = my_shape.getBounds();
   if (child == &name_text_field) {

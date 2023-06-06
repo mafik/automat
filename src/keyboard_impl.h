@@ -21,7 +21,7 @@ struct CaretImpl {
   CaretImpl(KeyboardImpl& keyboard);
   ~CaretImpl();
   void PlaceIBeam(vec2 position);
-  SkPath MakeRootShape() const;
+  SkPath MakeRootShape(animation::Context&) const;
 };
 
 struct CaretAnimation {

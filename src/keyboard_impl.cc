@@ -42,10 +42,10 @@ void CaretImpl::PlaceIBeam(vec2 position) {
   last_blink = time::now();
 }
 
-SkPath CaretImpl::MakeRootShape() const {
+SkPath CaretImpl::MakeRootShape(animation::Context& actx) const {
   auto begin = find(widget_path.begin(), widget_path.end(), root_machine);
   Path sub_path(begin, widget_path.end());
-  SkMatrix text_to_root = TransformUp(sub_path);
+  SkMatrix text_to_root = TransformUp(sub_path, actx);
   return shape.makeTransform(text_to_root);
 }
 
@@ -70,7 +70,7 @@ static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, CaretIm
   paint.setAntiAlias(true);
 
   if (caret) {
-    SkPath root_shape = caret->MakeRootShape();
+    SkPath root_shape = caret->MakeRootShape(actx);
     // Animate caret blinking.
     anim.last_blink = caret->last_blink;
     if (anim.shape.isInterpolatable(root_shape)) {

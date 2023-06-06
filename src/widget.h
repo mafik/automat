@@ -21,8 +21,8 @@ enum class VisitResult { kContinue, kStop };
 
 using Visitor = std::function<VisitResult(Widget&)>;
 
-SkMatrix TransformDown(const Path& path, animation::Context* = nullptr);
-SkMatrix TransformUp(const Path& path, animation::Context* = nullptr);
+SkMatrix TransformDown(const Path& path, animation::Context&);
+SkMatrix TransformUp(const Path& path, animation::Context&);
 
 struct DrawContext {
   SkCanvas& canvas;
@@ -58,13 +58,11 @@ struct Widget {
   // Iterate over direct child widgets in front-to-back order.
   virtual VisitResult VisitChildren(Visitor& visitor) { return VisitResult::kContinue; }
 
-  virtual SkMatrix TransformToChild(const Widget* child,
-                                    animation::Context* state = nullptr) const {
+  virtual SkMatrix TransformToChild(const Widget* child, animation::Context&) const {
     return SkMatrix::I();
   }
-  virtual SkMatrix TransformFromChild(const Widget* child,
-                                      animation::Context* state = nullptr) const {
-    auto m = TransformToChild(child, state);
+  virtual SkMatrix TransformFromChild(const Widget* child, animation::Context& actx) const {
+    auto m = TransformToChild(child, actx);
     SkMatrix ret = SkMatrix::I();
     bool ignore_failures = m.invert(&ret);
     return ret;

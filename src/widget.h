@@ -10,6 +10,7 @@
 #include "animation.h"
 #include "keyboard.h"
 #include "pointer.h"
+#include "stop.h"
 
 namespace automat::gui {
 
@@ -17,9 +18,7 @@ struct Widget;
 
 using Path = std::vector<Widget*>;
 
-enum class VisitResult { kContinue, kStop };
-
-using Visitor = std::function<VisitResult(Widget&)>;
+using Visitor = std::function<MaybeStop(Widget&)>;
 
 SkMatrix TransformDown(const Path& path, animation::Context&);
 SkMatrix TransformUp(const Path& path, animation::Context&);
@@ -52,7 +51,7 @@ struct Widget {
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
   // Iterate over direct child widgets in front-to-back order.
-  virtual VisitResult VisitChildren(Visitor& visitor) { return VisitResult::kContinue; }
+  virtual MaybeStop VisitChildren(Visitor& visitor) { return std::nullopt; }
 
   virtual SkMatrix TransformToChild(const Widget& child, animation::Context&) const {
     return SkMatrix::I();

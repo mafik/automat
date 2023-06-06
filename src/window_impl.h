@@ -160,11 +160,11 @@ struct WindowImpl : Widget {
   }
   void Draw(SkCanvas& canvas);
   void Zoom(float delta);
-  VisitResult VisitChildren(Visitor& visitor) override {
+  MaybeStop VisitChildren(Visitor& visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      if (visitor(prototype_buttons[i]) == VisitResult::kStop) return VisitResult::kStop;
+      if (auto stop = visitor(prototype_buttons[i])) return stop;
     }
-    VisitResult result = VisitResult::kContinue;
+    MaybeStop result = std::nullopt;
     RunOnAutomatThreadSynchronous([&]() { result = visitor(*root_machine); });
     return result;
   }

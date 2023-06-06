@@ -48,7 +48,7 @@ void PointerImpl::Move(vec2 position) {
     path.clear();
     SkPoint point = SkPoint::Make(pointer_position.X, pointer_position.Y);
 
-    Visitor dfs = [&](Widget& child) {
+    Visitor dfs = [&](Widget& child) -> MaybeStop {
       SkPoint transformed;
       if (!path.empty()) {
         transformed = path.back()->TransformToChild(child, window.actx).mapPoint(point);
@@ -61,9 +61,9 @@ void PointerImpl::Move(vec2 position) {
         path.push_back(&child);
         point = transformed;
         child.VisitChildren(dfs);
-        return VisitResult::kStop;
+        return Stop();
       }
-      return VisitResult::kContinue;
+      return std::nullopt;
     };
 
     dfs(window);

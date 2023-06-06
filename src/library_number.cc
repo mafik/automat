@@ -175,15 +175,15 @@ void Number::Draw(gui::DrawContext& ctx) const {
 
 SkPath Number::Shape() const { return kNumberShape; }
 
-gui::VisitResult Number::VisitChildren(gui::Visitor& visitor) {
-  if (auto r = visitor(digits[0]); r != gui::VisitResult::kContinue) return r;
-  if (auto r = visitor(dot); r != gui::VisitResult::kContinue) return r;
-  if (auto r = visitor(backspace); r != gui::VisitResult::kContinue) return r;
+MaybeStop Number::VisitChildren(gui::Visitor& visitor) {
+  if (auto stop = visitor(digits[0])) return stop;
+  if (auto stop = visitor(dot)) return stop;
+  if (auto stop = visitor(backspace)) return stop;
   for (int i = 0; i < 10; ++i) {
-    if (auto r = visitor(digits[i]); r != gui::VisitResult::kContinue) return r;
+    if (auto stop = visitor(digits[i])) return stop;
   }
-  if (auto r = visitor(text_field); r != gui::VisitResult::kContinue) return r;
-  return gui::VisitResult::kContinue;
+  if (auto stop = visitor(text_field)) return stop;
+  return std::nullopt;
 }
 
 SkMatrix Number::TransformToChild(const Widget& child, animation::Context&) const {

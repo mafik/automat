@@ -112,13 +112,13 @@ struct Machine : LiveObject {
     return empty_path;
   }
 
-  gui::VisitResult VisitChildren(gui::Visitor& visitor) override {
+  MaybeStop VisitChildren(gui::Visitor& visitor) override {
     for (auto& it : locations) {
-      if (visitor(*it) == gui::VisitResult::kStop) {
-        return gui::VisitResult::kStop;
+      if (auto stop = visitor(*it)) {
+        return stop;
       }
     }
-    return gui::VisitResult::kContinue;
+    return std::nullopt;
   }
   SkMatrix TransformToChild(const Widget& child, animation::Context& actx) const override {
     const Location* l = dynamic_cast<const Location*>(&child);

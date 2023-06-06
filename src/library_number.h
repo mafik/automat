@@ -26,7 +26,7 @@ struct Number : Object {
   void SetText(Location& error_context, string_view text) override;
   void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
-  gui::VisitResult VisitChildren(gui::Visitor& visitor) override;
+  MaybeStop VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
 };

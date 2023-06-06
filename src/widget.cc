@@ -5,6 +5,7 @@
 
 #include <bitset>
 #include <condition_variable>
+#include <optional>
 #include <vector>
 
 #include "animation.h"
@@ -28,7 +29,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
     widget.Draw(ctx);
     ctx.path.pop_back();
     canvas.restore();
-    return VisitResult::kContinue;
+    return std::nullopt;
   };
   const_cast<Widget*>(this)->VisitChildren(visitor);
 }

@@ -10,11 +10,11 @@ void AlignCenter::Draw(DrawContext& ctx) const { DrawChildren(ctx); }
 
 SkPath AlignCenter::Shape() const { return SkPath(); }
 
-VisitResult AlignCenter::VisitChildren(Visitor& visitor) {
+MaybeStop AlignCenter::VisitChildren(Visitor& visitor) {
   if (child) {
     return visitor(*child);
   }
-  return VisitResult::kContinue;
+  return std::nullopt;
 }
 SkMatrix AlignCenter::TransformToChild(const Widget& child_arg, animation::Context&) const {
   if (&child_arg != this->child.get()) {

@@ -126,23 +126,25 @@ SkPath Location::Shape() const {
   return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
 }
 
-gui::VisitResult Location::VisitChildren(gui::Visitor& visitor) {
-  if (object && visitor(*object) == gui::VisitResult::kStop) {
-    return gui::VisitResult::kStop;
+MaybeStop Location::VisitChildren(gui::Visitor& visitor) {
+  if (object) {
+    if (auto stop = visitor(*object)) {
+      return stop;
+    }
   }
-  if (visitor(name_text_field) == gui::VisitResult::kStop) {
-    return gui::VisitResult::kStop;
+  if (auto stop = visitor(name_text_field)) {
+    return stop;
   }
-  if (visitor(run_button) == gui::VisitResult::kStop) {
-    return gui::VisitResult::kStop;
+  if (auto stop = visitor(run_button)) {
+    return stop;
   }
   UpdateConnectionWidgets();
   for (auto& widget : connection_widgets) {
-    if (visitor(*widget) == gui::VisitResult::kStop) {
-      return gui::VisitResult::kStop;
+    if (auto stop = visitor(*widget)) {
+      return stop;
     }
   }
-  return gui::VisitResult::kContinue;
+  return std::nullopt;
 }
 
 SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) const {

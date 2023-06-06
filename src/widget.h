@@ -61,12 +61,6 @@ struct Widget {
   virtual SkMatrix TransformToChild(const Widget* child, animation::Context&) const {
     return SkMatrix::I();
   }
-  virtual SkMatrix TransformFromChild(const Widget* child, animation::Context& actx) const {
-    auto m = TransformToChild(child, actx);
-    SkMatrix ret = SkMatrix::I();
-    bool ignore_failures = m.invert(&ret);
-    return ret;
-  }
 
   void DrawChildren(DrawContext&) const;
 };

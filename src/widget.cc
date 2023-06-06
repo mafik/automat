@@ -19,8 +19,11 @@ void Widget::DrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   Visitor visitor = [&](Widget& widget) {
     canvas.save();
-    SkMatrix transform_up = this->TransformFromChild(&widget, ctx.animation_context);
-    canvas.concat(transform_up);
+    const SkMatrix down = this->TransformToChild(&widget, ctx.animation_context);
+    SkMatrix up;
+    if (down.invert(&up)) {
+      canvas.concat(up);
+    }
     ctx.path.push_back(&widget);
     widget.Draw(ctx);
     ctx.path.pop_back();
@@ -41,13 +44,13 @@ SkMatrix TransformDown(const Path& path, animation::Context& actx) {
 }
 
 SkMatrix TransformUp(const Path& path, animation::Context& actx) {
-  SkMatrix ret = SkMatrix::I();
-  for (int i = 1; i < path.size(); ++i) {
-    Widget& parent = *path[i - 1];
-    Widget& child = *path[i];
-    ret.postConcat(parent.TransformFromChild(&child, actx));
+  SkMatrix down = TransformDown(path, actx);
+  SkMatrix up;
+  if (down.invert(&up)) {
+    return up;
+  } else {
+    return SkMatrix::I();
   }
-  return ret;
 }
 
 }  // namespace automat::gui

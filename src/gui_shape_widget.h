@@ -7,14 +7,12 @@
 
 namespace automat::gui {
 
-struct ShapeWidget : Widget {
+struct ShapeWidget : Widget, FillMixin {
   SkPath path;
-  SkPaint paint;
 
-  ShapeWidget(SkPath path, SkPaint paint);
+  ShapeWidget(SkPath path);
   SkPath Shape() const override;
   void Draw(DrawContext&) const override;
-  void DrawColored(DrawContext&, const SkPaint&) const override;
 };
 
 std::unique_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color);

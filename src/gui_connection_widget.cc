@@ -30,10 +30,6 @@ struct ConnectionLabelWidget : Widget {
   }
   void Draw(DrawContext& ctx) const override {
     SkPaint paint;
-    DrawColored(ctx, paint);
-  }
-
-  void DrawColored(DrawContext& ctx, const SkPaint& paint) const override {
     auto& canvas = ctx.canvas;
     auto& font = GetFont();
     canvas.translate(-Width() / 2, -Height() / 2);

@@ -47,6 +47,8 @@ WindowImpl::~WindowImpl() {
 void WindowImpl::Draw(SkCanvas& canvas) {
   animation_state.timer.Tick();
   gui::DrawContext draw_ctx(canvas, animation_state);
+  draw_ctx.path.push_back(this);
+  draw_ctx.path.push_back(root_machine);
   RunOnAutomatThreadSynchronous([&] {
     // Record camera movement timeline. This is used to create inertia effect.
     camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
@@ -222,6 +224,8 @@ void WindowImpl::Draw(SkCanvas& canvas) {
 
     canvas.restore();
   });  // RunOnAutomatThreadSynchronous
+
+  draw_ctx.path.pop_back();  // pops root_machine
 
   // Draw prototype shelf
   for (int i = 0; i < prototype_buttons.size(); i++) {

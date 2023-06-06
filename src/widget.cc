@@ -22,7 +22,9 @@ void Widget::DrawChildren(DrawContext& ctx) const {
     canvas.save();
     SkMatrix transform_up = this->TransformFromChild(&widget, &animation_state);
     canvas.concat(transform_up);
+    ctx.path.push_back(&widget);
     widget.Draw(ctx);
+    ctx.path.pop_back();
     canvas.restore();
     return VisitResult::kContinue;
   };

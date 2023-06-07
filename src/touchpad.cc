@@ -10,6 +10,7 @@
 #include "hid.hh"
 #include "hidapi.h"
 #include "log.hh"
+#include "time.hh"
 #include "win_main.hh"
 
 // Description of HID protocol:
@@ -83,7 +84,7 @@ struct ReportAccessor {
     if (button1) {
       log_message += " button1=" + f("%d", button1->Read<bool>(report, report_bytes));
     }
-    LOG() << log_message;
+    LOG << log_message;
   }
 };
 
@@ -178,9 +179,9 @@ struct TouchPadImpl {
           if (target_field) {
             target_field->emplace(accessor);
           } else {
-            LOG() << "Unknown HID input. Usage Page: " << UsagePageToString(accessor.usage_page)
-                  << f(" (0x%04X)", accessor.usage_page)
-                  << " Usage: " << UsageToString(accessor.usage_page, accessor.usage);
+            LOG << "Unknown HID input. Usage Page: " << UsagePageToString(accessor.usage_page)
+                << f(" (0x%04X)", accessor.usage_page)
+                << " Usage: " << UsageToString(accessor.usage_page, accessor.usage);
           }
         });
     // TODO: Handle WM_INPUT_DEVICE_CHANGE events.
@@ -292,7 +293,7 @@ struct TouchPadImpl {
       }
       return;
     }
-    ERROR() << "Unknown report: " << HexDump(data, len);
+    ERROR << "Unknown report: " << HexDump(data, len);
   }
 };
 
@@ -307,7 +308,7 @@ void Init() {
 
   BOOL register_result = RegisterRawInputDevices(&rid, 1, sizeof(rid));
   if (!register_result) {
-    ERROR() << "Failed to register raw input device";
+    ERROR << "Failed to register raw input device";
   }
 }
 
@@ -319,15 +320,15 @@ std::string GetRawInputDeviceName(HANDLE device) {
   UINT device_name_chars = 0;
   UINT ret = GetRawInputDeviceInfoW(device, RIDI_DEVICENAME, NULL, &device_name_chars);
   if (ret) {
-    ERROR() << "Error when retrieving device name size. Error code: " << GetLastError();
+    ERROR << "Error when retrieving device name size. Error code: " << GetLastError();
     return "";
   }
   wchar_t device_name_utf16[device_name_chars];
   UINT device_name_copied =
       GetRawInputDeviceInfoW(device, RIDI_DEVICENAME, device_name_utf16, &device_name_chars);
   if (device_name_chars != device_name_copied) {
-    ERROR() << "Error when retrieving device name. Requested size=" << device_name_chars
-            << ", Copied size=" << device_name_copied << ". Error code: " << GetLastError();
+    ERROR << "Error when retrieving device name. Requested size=" << device_name_chars
+          << ", Copied size=" << device_name_copied << ". Error code: " << GetLastError();
     return "";
   }
   return UTF16ToUTF8(device_name_utf16);
@@ -354,7 +355,7 @@ std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
       UINT size = 0;
       UINT ret = GetRawInputData(hRawInput, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
       if (ret == (UINT)-1) {  // error when retrieving size of buffer
-        ERROR() << "Error when retrieving size of buffer. Error code: " << GetLastError();
+        ERROR << "Error when retrieving size of buffer. Error code: " << GetLastError();
         return DefWindowProc(main_window, msg, wParam, lParam);
       }
       alignas(8) uint8_t raw_input_buffer[size];
@@ -362,13 +363,12 @@ std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
       UINT size_copied =
           GetRawInputData(hRawInput, RID_INPUT, raw_input_buffer, &size, sizeof(RAWINPUTHEADER));
       if (size != size_copied) {  // error when retrieving buffer
-        ERROR() << "Error when retrieving buffer. Size=" << size
-                << " Error code: " << GetLastError();
+        ERROR << "Error when retrieving buffer. Size=" << size << " Error code: " << GetLastError();
         return DefWindowProc(main_window, msg, wParam, lParam);
       }
       // This shouldn't happen because we're only registered for HID devices
       if (raw_input->header.dwType != RIM_TYPEHID) {
-        ERROR() << "Unexpected RAWINPUTHEADER.dwType: " << raw_input->header.dwType;
+        ERROR << "Unexpected RAWINPUTHEADER.dwType: " << raw_input->header.dwType;
         return DefWindowProc(main_window, msg, wParam, lParam);
       }
       std::lock_guard<std::mutex> lock(touchpads_mutex);

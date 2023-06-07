@@ -60,7 +60,7 @@ void NumberButton::Activate() {
   if (activate) {
     activate();
   } else {
-    LOG() << "NumberButton::Activate() called without callback";
+    LOG << "NumberButton::Activate() called without callback";
   }
 }
 
@@ -230,7 +230,7 @@ std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer& pointer, gui::Poi
   }
   std::unique_ptr<DragLocationAction> action = std::make_unique<DragLocationAction>(location);
   action->contact_point = pointer.PositionWithin(*this);
-  LOG() << "Action contact point is " << action->contact_point;
+  LOG << "Action contact point is " << action->contact_point;
   return action;
 }
 

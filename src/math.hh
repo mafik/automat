@@ -3,9 +3,8 @@
 #include <include/core/SkPoint.h>
 
 #include <algorithm>
-#include <iomanip>
 #include <limits>
-#include <ostream>
+#include <string>
 
 constexpr float kMetersPerInch = 0.0254f;
 
@@ -39,6 +38,7 @@ union Vec2 {
   constexpr operator SkPoint() const { return sk; }
   constexpr bool operator==(const Vec2& rhs) const { return x == rhs.x && y == rhs.y; }
   constexpr bool operator!=(const Vec2& rhs) const { return !(*this == rhs); }
+  std::string LoggableString() const;
 };
 
 static_assert(sizeof(Vec2) == 8, "Vec2 is not 8 bytes");

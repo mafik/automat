@@ -1,11 +1,10 @@
 #pragma once
 
-#include <memory>
+#include <chrono>
+#include <functional>
 #include <source_location>
+#include <string>
 #include <string_view>
-
-#include "math.hh"
-#include "time.hh"
 
 // Functions for logging human-readable messages.
 //
@@ -15,18 +14,11 @@
 //   ERROR << "error message";
 //   FATAL << "stop the execution / print stack trace";
 //
-// Logging can also accept other types - integers & floats. When executed with
-// HYPERDECK_SERVER defined, it will also accept a Client instance:
-//
-//   LOG << client << "Client connected";
+// Logging can also accept other types - integers & floats.
 //
 // In this case a short client identifier (IP address + 4-digit hash) will be
 // printed before the massage. Each client will also get a random color to make
 // identification easier.
-//
-// When executed within Emscripten, logging causes the messages to appear in the
-// JavaScript console - as regular (black) messages (LOG), yellow warnings
-// (ERROR) & red errors (FATAL).
 //
 // Logged messages can have multiple lines - the extra lines are not indented or
 // treated in any special way.
@@ -34,49 +26,44 @@
 // There is no need to add a new line character at the end of the logged message
 // - it's added there automatically.
 
-enum LogLevel { LOG_LEVEL_DISCARD, LOG_LEVEL_INFO, LOG_LEVEL_ERROR, LOG_LEVEL_FATAL };
+enum class LogLevel { Ignore, Info, Error, Fatal };
 
-struct Logger {
-  Logger(LogLevel, const std::source_location location = std::source_location::current());
-  ~Logger();
-  struct Impl;
-  Impl* impl;
+// Appends the logged message when destroyed.
+struct LogEntry {
+  LogLevel log_level;
+  std::chrono::system_clock::time_point timestamp;
+  std::source_location location;
+  mutable std::string buffer;
+  mutable int errsv;  // saved errno (if any)
+
+  LogEntry(LogLevel, const std::source_location location = std::source_location::current());
+  ~LogEntry();
 };
 
-struct LOG : public Logger {
-  LOG(const std::source_location location = std::source_location::current())
-      : Logger(LOG_LEVEL_INFO, location) {}
-};
+using Logger = std::function<void(const LogEntry&)>;
 
-struct ERROR : public Logger {
-  ERROR(const std::source_location location = std::source_location::current())
-      : Logger(LOG_LEVEL_ERROR, location) {}
-};
+// The default logger prints to stdout.
+extern std::vector<Logger> loggers;
 
-struct FATAL : public Logger {
-  FATAL(const std::source_location location = std::source_location::current())
-      : Logger(LOG_LEVEL_FATAL, location) {}
-};
+#define LOG LogEntry(LogLevel::Info, std::source_location::current())
+#define ERROR LogEntry(LogLevel::Error, std::source_location::current())
+#define FATAL LogEntry(LogLevel::Fatal, std::source_location::current())
 
-const Logger& operator<<(const Logger&, int);
-const Logger& operator<<(const Logger&, unsigned);
-const Logger& operator<<(const Logger&, unsigned long);
-const Logger& operator<<(const Logger&, unsigned long long);
-const Logger& operator<<(const Logger&, float);
-const Logger& operator<<(const Logger&, double);
-const Logger& operator<<(const Logger&, std::string_view);
-const Logger& operator<<(const Logger&, const unsigned char*);
-
-// Support for logging vec's from math.hh
-const Logger& operator<<(const Logger&, Vec2);
-const Logger& operator<<(const Logger&, Vec3);
+const LogEntry& operator<<(const LogEntry&, int);
+const LogEntry& operator<<(const LogEntry&, unsigned);
+const LogEntry& operator<<(const LogEntry&, unsigned long);
+const LogEntry& operator<<(const LogEntry&, unsigned long long);
+const LogEntry& operator<<(const LogEntry&, float);
+const LogEntry& operator<<(const LogEntry&, double);
+const LogEntry& operator<<(const LogEntry&, std::string_view);
+const LogEntry& operator<<(const LogEntry&, const unsigned char*);
 
 template <typename T>
 concept loggable = requires(T& v) {
   { v.LoggableString() } -> std::convertible_to<std::string_view>;
 };
 
-const Logger& operator<<(const Logger& logger, loggable auto& t) {
+const LogEntry& operator<<(const LogEntry& logger, loggable auto& t) {
   return logger << t.LoggableString();
 }
 
@@ -87,12 +74,3 @@ void LOG_Unindent(int n = 2);
 #define EVERY_N_SEC(n)              \
   static time::point last_log_time; \
   if (time::now() - last_log_time > time::duration(n) ? (last_log_time = time::now(), true) : false)
-
-// TODO: remove
-#define LOG_EVERY_N_SEC(n)                                     \
-  static time::point last_log_time;                            \
-  (time::now() - last_log_time > time::duration(n)             \
-       ? (last_log_time = time::now(), Logger(LOG_LEVEL_INFO)) \
-       : Logger(LOG_LEVEL_DISCARD))
-
-// End of header

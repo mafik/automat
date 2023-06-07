@@ -189,7 +189,7 @@ void Location::UpdateConnectionWidgets() {
         return;
       }
       // Create a new widget.
-      LOG() << "Creating a ConnectionWidget for argument " << arg.name;
+      LOG << "Creating a ConnectionWidget for argument " << arg.name;
       connection_widgets.emplace_back(new gui::ConnectionWidget(this, arg.name));
     });
   }

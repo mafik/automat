@@ -7,6 +7,7 @@
 
 #include "generated/assets.hh"
 #include "log.hh"
+#include "math.hh"
 
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")

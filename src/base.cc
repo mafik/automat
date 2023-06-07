@@ -69,7 +69,7 @@ void RunThread() {
 
 void RunLoop(const int max_iterations) {
   if (log_executed_tasks) {
-    LOG() << "RunLoop(" << queue.size() << " tasks)";
+    LOG << "RunLoop(" << queue.size() << " tasks)";
     LOG_Indent();
   }
   int iterations = 0;

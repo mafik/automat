@@ -112,7 +112,7 @@ struct WindowImpl : Widget {
 
       auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl));
       if (!err.isEmpty()) {
-        FATAL() << err.c_str();
+        FATAL << err.c_str();
       }
       SkRuntimeShaderBuilder builder(effect);
       return builder;
@@ -156,7 +156,7 @@ struct WindowImpl : Widget {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
   void Draw(gui::DrawContext&) const override {
-    FATAL() << "WindowImpl::Draw() should never be called";
+    FATAL << "WindowImpl::Draw() should never be called";
   }
   void Draw(SkCanvas& canvas);
   void Zoom(float delta);

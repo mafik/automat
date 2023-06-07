@@ -40,7 +40,7 @@ struct TouchPad {
 //
 // INPUT_MESSAGE_SOURCE source;
 // if (GetCurrentInputMessageSource(&source) == TRUE) {
-//   LOG() << "WM_MOUSEWHEEL source deviceType: " << source.deviceType <<
+//   LOG << "WM_MOUSEWHEEL source deviceType: " << source.deviceType <<
 //   " originId: " << source.originId;
 // }
 //

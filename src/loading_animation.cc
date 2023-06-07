@@ -37,7 +37,7 @@ HypnoRect::HypnoRect() {
   SkRuntimeEffectPriv::AllowPrivateAccess(&options);
   auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl), options);
   if (!err.isEmpty()) {
-    LOG() << err.c_str();
+    LOG << err.c_str();
   }
   shader_builder.reset(new SkRuntimeShaderBuilder(effect));
   shader_builder->uniform("top_color") = SkColor4f::FromColor(kTopColor);

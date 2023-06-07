@@ -247,7 +247,7 @@ SkColor MixColors(SkColor zero, SkColor one, float ratio) {
   }
   Vec3 mixed_rgb = HSLuvToRGB(mixed_luv.x, mixed_luv.y, mixed_luv.z);
   float alpha = SkColorGetA(zero) * (1.0f - ratio) + SkColorGetA(one) * ratio;
-  // LOG() << "0=" << zero_luv << " 1=" << one_luv << " " << ratio << "=" <<
+  // LOG << "0=" << zero_luv << " 1=" << one_luv << " " << ratio << "=" <<
   // mixed_luv;
   return SkColorSetARGB(alpha, mixed_rgb.r * 255, mixed_rgb.g * 255, mixed_rgb.b * 255);
 }

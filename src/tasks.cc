@@ -15,7 +15,7 @@ void Task::Schedule() {
     return;
   }
   if (log_executed_tasks) {
-    LOG() << "Scheduling " << Format();
+    LOG << "Scheduling " << Format();
   }
   assert(!scheduled);
   scheduled = true;
@@ -24,7 +24,7 @@ void Task::Schedule() {
 
 void Task::PreExecute() {
   if (log_executed_tasks) {
-    LOG() << Format();
+    LOG << Format();
     LOG_Indent();
   }
   if (!successors.empty()) {

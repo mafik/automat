@@ -150,7 +150,7 @@ struct Machine : LiveObject {
   Location* operator[](const string& name) {
     auto h = Front(name);
     if (h == nullptr) {
-      ERROR() << "Component \"" << name << "\" of " << this->name << " is null!";
+      ERROR << "Component \"" << name << "\" of " << this->name << " is null!";
     }
     return h;
   }
@@ -159,7 +159,7 @@ struct Machine : LiveObject {
     if (std::find(front.begin(), front.end(), &h) == front.end()) {
       front.push_back(&h);
     } else {
-      ERROR() << "Attempted to add already present " << h << " to " << *this << " front panel";
+      ERROR << "Attempted to add already present " << h << " to " << *this << " front panel";
     }
   }
 
@@ -191,7 +191,7 @@ struct Machine : LiveObject {
         here.parent->ScheduleErrored(here);
       } else {
         Error* error = errored.GetError();
-        ERROR(error->source_location) << error->text;
+        LogEntry(LogLevel::Error, error->source_location) << error->text;
       }
     }
   }

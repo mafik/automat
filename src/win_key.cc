@@ -629,7 +629,7 @@ AnsiKey VirtualKeyToKey(uint8_t virtual_key) {
     case 0xff:
       return Unknown;
     default:
-      LOG() << "Unknown virtual key: 0x" << f("%x", virtual_key) << " (" << virtual_key << ")";
+      LOG << "Unknown virtual key: 0x" << f("%x", virtual_key) << " (" << virtual_key << ")";
   }
   return Unknown;
 }

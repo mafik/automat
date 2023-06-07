@@ -703,9 +703,9 @@ void ParseReportDescriptor(const uint8_t* report_descriptor, size_t report_descr
     }
     // Report error for long tags.
     if (bTag == 0b1111 && category == kItemCategoryReserved && bSize == 0b10) {
-      ERROR() << "Encountered a \"long tag\" when parsing HID report descriptor. "
-                 "This is not implemented yet. Full HID report descriptor:\n"
-              << HexDump(report_descriptor, report_descriptor_bytes);
+      ERROR << "Encountered a \"long tag\" when parsing HID report descriptor. "
+               "This is not implemented yet. Full HID report descriptor:\n"
+            << HexDump(report_descriptor, report_descriptor_bytes);
       return;
     }
     std::string opts = "";
@@ -717,7 +717,7 @@ void ParseReportDescriptor(const uint8_t* report_descriptor, size_t report_descr
             bit_offset += report_size * report_count;
           } else if (opts.contents == Contents::Data) {
             if (opts.encoding == Encoding::Array) {
-              ERROR() << "TODO: Array encoding is not (yet) supported.";
+              ERROR << "TODO: Array encoding is not (yet) supported.";
             } else if (opts.encoding == Encoding::Variable) {
               hid::Usage usage = hid::Usage_Undefined;
               for (int i = 0; i < report_count; ++i) {
@@ -805,9 +805,9 @@ void ParseReportDescriptor(const uint8_t* report_descriptor, size_t report_descr
         default:
           // Push & Pop are not implemented because I couldn't find any
           // reference devices that would use them.
-          ERROR() << "Unknown global tag: " << f("0x%02x", bTag)
-                  << ". See \"Global items\" in "
-                     "https://www.usb.org/sites/default/files/hid1_11.pdf";
+          ERROR << "Unknown global tag: " << f("0x%02x", bTag)
+                << ". See \"Global items\" in "
+                   "https://www.usb.org/sites/default/files/hid1_11.pdf";
       }
     } else if (category == kItemCategoryLocal) {
       switch (bTag) {
@@ -815,9 +815,9 @@ void ParseReportDescriptor(const uint8_t* report_descriptor, size_t report_descr
           usages.push_back((hid::Usage)data);
           break;
         default:
-          ERROR() << "Unknown local tag: " << f("0x02x", bTag)
-                  << ". See \"Local items\" in "
-                     "https://www.usb.org/sites/default/files/hid1_11.pdf";
+          ERROR << "Unknown local tag: " << f("0x02x", bTag)
+                << ". See \"Local items\" in "
+                   "https://www.usb.org/sites/default/files/hid1_11.pdf";
       }
     }
   }

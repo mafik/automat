@@ -395,7 +395,7 @@ void RenderLoop() {
             window_height = ev->height;
 
             if (auto err = vk::Resize(window_width, window_height); !err.empty()) {
-              ERROR() << err;
+              ERROR << err;
             }
             window->Resize(WindowSize());
           }
@@ -543,18 +543,18 @@ void RenderLoop() {
                 break;
               }
               default: {
-                LOG() << "Unknown XI event (event_type=" << ev->event_type << ")";
+                LOG << "Unknown XI event (event_type=" << ev->event_type << ")";
                 break;
               }
             }
           } else {
-            LOG() << "Unknown XCB_GE_GENERIC event (extension=" << ev->extension
-                  << ", event_type=" << ev->event_type << ")";
+            LOG << "Unknown XCB_GE_GENERIC event (extension=" << ev->extension
+                << ", event_type=" << ev->event_type << ")";
           }
           break;
         }
         default:
-          LOG() << "Unhandled event: " << event->response_type;
+          LOG << "Unhandled event: " << event->response_type;
           break;
       }
     } else {  // event == nullptr
@@ -572,11 +572,11 @@ int LinuxMain(int argc, char* argv[]) {
   InitRoot();
 
   if (auto err = CreateWindow(); !err.empty()) {
-    FATAL() << "Failed to create window: " << err;
+    FATAL << "Failed to create window: " << err;
   }
 
   if (auto err = vk::Init(); !err.empty()) {
-    FATAL() << "Failed to initialize Vulkan: " << err;
+    FATAL << "Failed to initialize Vulkan: " << err;
   }
 
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));

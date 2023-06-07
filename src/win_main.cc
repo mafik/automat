@@ -135,7 +135,7 @@ void VulkanPaint() {
       next_frame += time::duration(frame_count / screen_refresh_rate);
       constexpr bool kLogSkippedFrames = false;
       if (kLogSkippedFrames && frame_count > 1) {
-        LOG() << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
+        LOG << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
       }
     } else {
       // This normally sleeps until T + ~10ms.
@@ -188,9 +188,9 @@ void QueryDisplayCaps() {
     if constexpr (kLogScreenCaps) {
       float diag =
           sqrt(screen_height_m * screen_height_m + screen_width_m * screen_width_m) / 0.0254f;
-      LOG() << "Display: " << f("%.1f", diag) << "″ " << int(screen_width_m * 1000) << "x"
-            << int(screen_height_m * 1000) << "mm (" << screen_width_px << "x" << screen_height_px
-            << "px) " << screen_refresh_rate << "Hz";
+      LOG << "Display: " << f("%.1f", diag) << "″ " << int(screen_width_m * 1000) << "x"
+          << int(screen_height_m * 1000) << "mm (" << screen_width_px << "x" << screen_height_px
+          << "px) " << screen_refresh_rate << "Hz";
     }
   };
   HMONITOR monitor = MonitorFromWindow(main_window, MONITOR_DEFAULTTONEAREST);
@@ -335,8 +335,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         utf8_complete = (utf8_i == 4);
       } else {
         // Invalid UTF-8 character
-        ERROR() << "Invalid UTF-8 start byte: 0x" << f("%x", utf8_char) << " (" << utf8_char
-                << "), scancode=0x" << f("%x", scan_code);
+        ERROR << "Invalid UTF-8 start byte: 0x" << f("%x", utf8_char) << " (" << utf8_char
+              << "), scancode=0x" << f("%x", scan_code);
         utf8_i = 0;
       }
       if (utf8_complete) {
@@ -391,15 +391,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_VSCROLL: {
-      LOG() << "WM_VSCROLL";
+      LOG << "WM_VSCROLL";
       break;
     }
     case WM_HSCROLL: {
-      LOG() << "WM_HSCROLL";
+      LOG << "WM_HSCROLL";
       break;
     }
     case WM_GESTURE: {
-      LOG() << "WM_GESTURE";
+      LOG << "WM_GESTURE";
       break;
     }
     case WM_DESTROY: {
@@ -430,19 +430,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   SkGraphics::Init();
 
   if (!RegisterClassEx(&GetWindowClass())) {
-    FATAL() << "Failed to register window class.";
+    FATAL << "Failed to register window class.";
   }
 
   main_window = CreateAutomatWindow();
   if (!main_window) {
-    FATAL() << "Failed to create main window.";
+    FATAL << "Failed to create main window.";
   }
   touchpad::Init();
 
   QueryDisplayCaps();
 
   if (auto err = vk::Init(); !err.empty()) {
-    FATAL() << "Failed to initialize Vulkan: " << err;
+    FATAL << "Failed to initialize Vulkan: " << err;
   }
 
   next_frame = time::now();
@@ -461,7 +461,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     MSG msg = {};
     switch (GetMessage(&msg, nullptr, 0, 0)) {
       case -1:  // error
-        ERROR() << "GetMessage failed: " << GetLastError();
+        ERROR << "GetMessage failed: " << GetLastError();
       case 0:  // fallthrough to WM_QUIT
         RenderingStop();
         vk::Destroy();

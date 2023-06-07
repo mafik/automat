@@ -17,6 +17,7 @@ struct NumberTextField : gui::TextField {
   NumberTextField(Number&);
   SkRRect ShapeRRect() const override;
   const SkPaint& GetBackgroundPaint() const override;
+  void DrawBackground(gui::DrawContext&) const override;
   void DrawText(gui::DrawContext&) const override;
   Vec2 GetTextPos() const override;
 };

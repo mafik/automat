@@ -53,6 +53,7 @@ struct TextField : Widget, CaretOwner {
   Vec2 PositionFromIndex(int index) const;
 
   virtual Vec2 GetTextPos() const;
+  virtual void DrawBackground(DrawContext&) const;
   virtual void DrawText(DrawContext&) const;
 
   virtual SkRRect ShapeRRect() const;

@@ -21,7 +21,6 @@ namespace automat::library {
 DEFINE_PROTO(Number);
 
 // TODO: Update position of other cursors when text is appended by a button
-// TODO: Draw border around text field
 // TODO: Buttons get highlighted immediately on mouse over
 // TODO: When precision touchpad is pressed down, initial touch point is
 // "forgotten" for the purpose of dragging
@@ -31,9 +30,9 @@ DEFINE_PROTO(Number);
 static constexpr float kBetweenButtonsMargin = kMargin;
 
 // Margin used around the entire widget
-static constexpr float kAroundWidgetMargin = kMargin * 3;
+static constexpr float kAroundWidgetMargin = kMargin * 2;
 
-static constexpr float kBelowTextMargin = kMargin * 3;
+static constexpr float kBelowTextMargin = kMargin * 2;
 
 // Height of the text field
 static constexpr float kTextHeight = std::max(
@@ -81,7 +80,7 @@ SkRRect NumberTextField::ShapeRRect() const {
                              kTextHeight / 2);
 }
 
-static const SkPaint kNumberTextFieldBackgroundPaint = []() {
+static const SkPaint kNumberTextBackgroundPaint = []() {
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, kTextHeight}};
   SkColor colors[2] = {0xffbec8b7, 0xffdee3db};
@@ -91,8 +90,26 @@ static const SkPaint kNumberTextFieldBackgroundPaint = []() {
   return paint;
 }();
 
-const SkPaint& NumberTextField::GetBackgroundPaint() const {
-  return kNumberTextFieldBackgroundPaint;
+const SkPaint& NumberTextField::GetBackgroundPaint() const { return kNumberTextBackgroundPaint; }
+
+static const SkPaint kNumberTextBorderPaint = []() {
+  SkPaint paint;
+  SkPoint pts[2] = {{0, 0}, {0, kTextHeight}};
+  SkColor colors[2] = {0xff917c6f, 0xff483e37};
+  sk_sp<SkShader> shader =
+      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  paint.setShader(shader);
+  paint.setAntiAlias(true);
+  paint.setStyle(SkPaint::kStroke_Style);
+  paint.setStrokeWidth(kBorderWidth);
+  return paint;
+}();
+
+void NumberTextField::DrawBackground(gui::DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+  SkRRect rrect = ShapeRRect();
+  canvas.drawRRect(rrect, GetBackgroundPaint());
+  canvas.drawRRect(rrect, kNumberTextBorderPaint);
 }
 
 void NumberTextField::DrawText(gui::DrawContext& ctx) const {

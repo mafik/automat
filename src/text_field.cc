@@ -79,13 +79,19 @@ const SkPaint& TextField::GetTextPaint() const { return kDefaultTextPaint; }
 const SkPaint& TextField::GetBackgroundPaint() const { return kDefaultBackgroundPaint; }
 
 void TextField::Draw(DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
   auto& hover = hover_ptr[actx].animation;
   hover.Tick(actx);
+  DrawBackground(ctx);
+  DrawText(ctx);
+}
 
+void TextField::DrawBackground(DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
   SkRRect rrect = ShapeRRect();
   canvas.drawRRect(rrect, GetBackgroundPaint());
+  auto& actx = ctx.animation_context;
+  auto& hover = hover_ptr[actx].animation;
   if (hover.value > 0.0001) {
     SkPaint hover_outline;
     hover_outline.setColor(SkColorSetRGB(0xff, 0x00, 0x00));
@@ -93,7 +99,6 @@ void TextField::Draw(DrawContext& ctx) const {
     hover_outline.setStrokeWidth(hover.value * 0.0005);
     canvas.drawRRect(rrect, hover_outline);
   }
-  DrawText(ctx);
 }
 
 void TextField::DrawText(DrawContext& ctx) const {

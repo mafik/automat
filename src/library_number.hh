@@ -4,11 +4,18 @@
 
 namespace automat::library {
 
+struct Number;
+
 struct NumberButton : gui::Button {
   std::function<void()> activate;
   NumberButton(std::unique_ptr<Widget>&& child);
   void Draw(gui::DrawContext&) const override;
   void Activate() override;
+};
+
+struct NumberTextField : gui::TextField {
+  NumberTextField(Number&);
+  SkRRect ShapeRRect() const override;
 };
 
 struct Number : Object {
@@ -17,7 +24,7 @@ struct Number : Object {
   NumberButton dot;
   NumberButton backspace;
   std::string text;
-  gui::TextField text_field;
+  NumberTextField text_field;
   Number(double x = 0);
   static const Number proto;
   string_view Name() const override;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <include/core/SkRRect.h>
+
 #include "animation.hh"
 #include "gui_constants.hh"
 #include "widget.hh"
@@ -46,6 +48,9 @@ struct TextField : Widget, CaretOwner {
   Widget* CaretWidget() override { return this; }
   void KeyDown(Caret&, Key) override;
   void KeyUp(Caret&, Key) override;
+  virtual SkRRect ShapeRRect() const;
+  virtual SkPaint& GetTextPaint() const;
+  virtual SkPaint& GetBackgroundPaint() const;
 };
 
 }  // namespace automat::gui

@@ -20,9 +20,7 @@ namespace automat::library {
 
 DEFINE_PROTO(Number);
 
-// TODO: better icon for the backspace button
 // TODO: LCD color for the text field
-// TODO: Fix cursor location
 // TODO: Adjust number text to right
 // TODO: Remove underline from text display
 // TODO: Buttons get highlighted immediately on mouse over
@@ -68,6 +66,14 @@ void NumberButton::Activate() {
   }
 }
 
+NumberTextField::NumberTextField(Number& n)
+    : gui::TextField(&n.text, kWidth - 2 * kNumberOuterMargin - 2 * kBorderWidth) {}
+
+SkRRect NumberTextField::ShapeRRect() const {
+  return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, gui::kTextFieldHeight),
+                             gui::kTextFieldHeight / 2, gui::kTextFieldHeight / 2);
+}
+
 Number::Number(double x)
     : value(x),
       digits{NumberButton(make_unique<Text>("0")), NumberButton(make_unique<Text>("1")),
@@ -78,7 +84,7 @@ Number::Number(double x)
       dot(make_unique<Text>(".")),
       backspace(gui::MakeShapeWidget(kBackspaceShape, 0xff000000)),
       text("0"),
-      text_field(&text, kWidth - 2 * kNumberOuterMargin - 2 * kBorderWidth) {
+      text_field(*this) {
   for (int i = 0; i < 10; ++i) {
     digits[i].activate = [this, i] {
       if (text.empty() || text == "0") {
@@ -129,14 +135,7 @@ void Number::SetText(Location& error_context, string_view text) {
 }
 
 static const SkRRect kNumberRRect = [] {
-  SkRRect rrect;
-  constexpr float kUpperRadius = gui::kTextCornerRadius + kNumberOuterMargin + kBorderWidth;
-  SkVector radii[4] = {{kCornerRadius, kCornerRadius},
-                       {kCornerRadius, kCornerRadius},
-                       {kUpperRadius, kUpperRadius},
-                       {kUpperRadius, kUpperRadius}};
-  rrect.setRectRadii(SkRect::MakeXYWH(0, 0, kWidth, kHeight), radii);
-  return rrect;
+  return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, kWidth, kHeight), kCornerRadius, kCornerRadius);
 }();
 
 static const SkRRect kNumberRRectInner = [] {

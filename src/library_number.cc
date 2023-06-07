@@ -11,6 +11,7 @@
 #include "drag_action.hh"
 #include "font.hh"
 #include "gui_align.hh"
+#include "gui_shape_widget.hh"
 #include "gui_text.hh"
 #include "library_macros.hh"
 #include "widget.hh"
@@ -46,6 +47,9 @@ static constexpr float kWidth = 2 * kBorderWidth + kButtonColumns * kButtonWidth
 
 static constexpr float kCornerRadius =
     kMinimalTouchableSize / 2 + kNumberOuterMargin + kBorderWidth;
+static constexpr char kBackspaceShape[] =
+    "M-9 0-5.6 5.1A2 2 0 00-4 6H4A2 2 0 006 4V-4A2 2 0 004-6H-4A2 2 0 00-5.6-5.1ZM-3-4 0-1 3-4 4-3 "
+    "1 0 4 3 3 4 0 1-3 4-4 3-1 0-4-3Z";
 
 using gui::AlignCenter;
 using gui::Text;
@@ -72,7 +76,7 @@ Number::Number(double x)
              NumberButton(make_unique<Text>("6")), NumberButton(make_unique<Text>("7")),
              NumberButton(make_unique<Text>("8")), NumberButton(make_unique<Text>("9"))},
       dot(make_unique<Text>(".")),
-      backspace(make_unique<Text>("<")),
+      backspace(gui::MakeShapeWidget(kBackspaceShape, 0xff000000)),
       text("0"),
       text_field(&text, kWidth - 2 * kNumberOuterMargin - 2 * kBorderWidth) {
   for (int i = 0; i < 10; ++i) {

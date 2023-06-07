@@ -1,6 +1,6 @@
-#include "argument.h"
+#include "argument.hh"
 
-#include "base.h"
+#include "base.hh"
 
 namespace automat {
 

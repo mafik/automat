@@ -3,15 +3,15 @@
 #include <memory>
 #include <string>
 
-#include "connection.h"
-#include "error.h"
-#include "gui_connection_widget.h"
-#include "object.h"
-#include "run_button.h"
-#include "string_multimap.h"
-#include "tasks.h"
-#include "text_field.h"
-#include "widget.h"
+#include "connection.hh"
+#include "error.hh"
+#include "gui_connection_widget.hh"
+#include "object.hh"
+#include "run_button.hh"
+#include "string_multimap.hh"
+#include "tasks.hh"
+#include "text_field.hh"
+#include "widget.hh"
 
 namespace automat {
 

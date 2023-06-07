@@ -1,11 +1,11 @@
-#include "library_alert.h"
+#include "library_alert.hh"
 
-#include "library_macros.h"
+#include "library_macros.hh"
 
 #ifdef _WIN32
 #include <windows.h>
 
-#include "win_main.h"
+#include "win_main.hh"
 #endif
 
 namespace automat {

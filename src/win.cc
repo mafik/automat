@@ -1,6 +1,6 @@
-#include "win.h"
+#include "win.hh"
 
-#include "win_main.h"
+#include "win_main.hh"
 
 namespace automat {
 

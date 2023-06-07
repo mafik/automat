@@ -1,6 +1,6 @@
-#include "tasks.h"
+#include "tasks.hh"
 
-#include "base.h"
+#include "base.hh"
 
 namespace automat {
 

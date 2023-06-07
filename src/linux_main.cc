@@ -1,4 +1,4 @@
-#include "linux_main.h"
+#include "linux_main.hh"
 
 #include <include/core/SkGraphics.h>
 #include <xcb/xcb.h>
@@ -11,14 +11,14 @@
 #include <cstdlib>
 #include <cstring>
 
-#include "format.h"
-#include "keyboard.h"
-#include "library.h"
-#include "log.h"
-#include "root.h"
-#include "vk.h"
-#include "widget.h"
-#include "window.h"
+#include "format.hh"
+#include "keyboard.hh"
+#include "library.hh"
+#include "log.hh"
+#include "root.hh"
+#include "vk.hh"
+#include "widget.hh"
+#include "window.hh"
 
 #pragma comment(lib, "vk-bootstrap")
 #pragma comment(lib, "xcb")

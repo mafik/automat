@@ -1,11 +1,11 @@
-#include "window_impl.h"
+#include "window_impl.hh"
 
-#include "drag_action.h"
-#include "font.h"
-#include "keyboard_impl.h"
-#include "pointer_impl.h"
-#include "prototypes.h"
-#include "touchpad.h"
+#include "drag_action.hh"
+#include "font.hh"
+#include "keyboard_impl.hh"
+#include "pointer_impl.hh"
+#include "prototypes.hh"
+#include "touchpad.hh"
 
 namespace automat::gui {
 

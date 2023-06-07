@@ -5,8 +5,8 @@
 #include <memory>
 #include <vector>
 
-#include "animation.h"
-#include "math.h"
+#include "animation.hh"
+#include "math.hh"
 
 namespace automat::gui {
 

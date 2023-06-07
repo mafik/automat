@@ -1,6 +1,6 @@
-#include "log_skia.h"
+#include "log_skia.hh"
 
-#include "format.h"
+#include "format.hh"
 
 namespace automat {
 

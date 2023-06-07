@@ -1,4 +1,4 @@
-#include "thread_name.h"
+#include "thread_name.hh"
 
 // clang-format off
 #include <windows.h>

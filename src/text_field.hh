@@ -1,8 +1,8 @@
 #pragma once
 
-#include "animation.h"
-#include "gui_constants.h"
-#include "widget.h"
+#include "animation.hh"
+#include "gui_constants.hh"
+#include "widget.hh"
 
 namespace automat::gui {
 

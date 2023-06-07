@@ -2,8 +2,8 @@
 
 #include <cmath>
 
-#include "product_ptr.h"
-#include "time.h"
+#include "product_ptr.hh"
+#include "time.hh"
 
 namespace automat::animation {
 

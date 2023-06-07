@@ -1,9 +1,9 @@
-#include "win_key.h"
+#include "win_key.hh"
 
 #include <windows.h>
 
-#include "format.h"
-#include "log.h"
+#include "format.hh"
+#include "log.hh"
 
 using automat::gui::AnsiKey;
 

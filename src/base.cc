@@ -1,4 +1,4 @@
-#include "base.h"
+#include "base.hh"
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
@@ -15,10 +15,10 @@
 #include <set>
 #include <unordered_map>
 
-#include "color.h"
-#include "font.h"
-#include "text_field.h"
-#include "thread_name.h"
+#include "color.hh"
+#include "font.hh"
+#include "text_field.hh"
+#include "thread_name.hh"
 
 namespace automat {
 

@@ -1,6 +1,6 @@
-#include "gui_text.h"
+#include "gui_text.hh"
 
-#include "font.h"
+#include "font.hh"
 
 namespace automat::gui {
 

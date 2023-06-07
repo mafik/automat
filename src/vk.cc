@@ -1,10 +1,10 @@
-#include "vk.h"
+#include "vk.hh"
 
 #if defined(_WIN32)
-#include "win.h"
-#include "win_main.h"
+#include "win.hh"
+#include "win_main.hh"
 #elif defined(__linux__)
-#include "linux_main.h"
+#include "linux_main.hh"
 #endif
 
 #include <VkBootstrap.h>

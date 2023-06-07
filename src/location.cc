@@ -1,13 +1,13 @@
-#include "location.h"
+#include "location.hh"
 
 #include <include/effects/SkGradientShader.h>
 
-#include "base.h"
-#include "color.h"
-#include "drag_action.h"
-#include "font.h"
-#include "format.h"
-#include "gui_constants.h"
+#include "base.hh"
+#include "color.hh"
+#include "drag_action.hh"
+#include "font.hh"
+#include "format.hh"
+#include "gui_constants.hh"
 
 namespace automat {
 

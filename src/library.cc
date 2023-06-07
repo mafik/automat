@@ -1,6 +1,6 @@
-#include "library.h"
+#include "library.hh"
 
-#include "library_macros.h"
+#include "library_macros.hh"
 
 namespace automat {
 

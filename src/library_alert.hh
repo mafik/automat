@@ -1,7 +1,7 @@
 #pragma once
 
-#include "base.h"
-#include "object.h"
+#include "base.hh"
+#include "object.hh"
 
 namespace automat {
 

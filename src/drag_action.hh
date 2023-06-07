@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "action.h"
+#include "action.hh"
 
 namespace automat {
 

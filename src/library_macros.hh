@@ -1,6 +1,6 @@
 #pragma once
 
-#include "prototypes.h"
+#include "prototypes.hh"
 
 #define DEFINE_PROTO(type) \
   const type type::proto;  \

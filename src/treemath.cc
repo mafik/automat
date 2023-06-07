@@ -1,4 +1,4 @@
-#include "treemath.h"
+#include "treemath.hh"
 
 namespace treemath {
 

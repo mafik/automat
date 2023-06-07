@@ -4,8 +4,8 @@
 #include <source_location>
 #include <string_view>
 
-#include "math.h"
-#include "time.h"
+#include "math.hh"
+#include "time.hh"
 
 // Functions for logging human-readable messages.
 //

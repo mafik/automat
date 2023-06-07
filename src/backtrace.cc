@@ -1,4 +1,4 @@
-#include "backtrace.h"
+#include "backtrace.hh"
 
 #include <signal.h>
 

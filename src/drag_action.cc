@@ -1,9 +1,9 @@
-#include "drag_action.h"
+#include "drag_action.hh"
 
 #include <algorithm>
 
-#include "pointer.h"
-#include "root.h"
+#include "pointer.hh"
+#include "root.hh"
 
 namespace automat {
 

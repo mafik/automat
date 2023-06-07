@@ -13,18 +13,18 @@
 #include <memory>
 #include <thread>
 
-#include "backtrace.h"
-#include "library.h"
-#include "loading_animation.h"
-#include "root.h"
-#include "thread_name.h"
-#include "touchpad.h"
-#include "vk.h"
-#include "widget.h"
-#include "win.h"
-#include "win_key.h"
-#include "win_main.h"
-#include "window.h"
+#include "backtrace.hh"
+#include "library.hh"
+#include "loading_animation.hh"
+#include "root.hh"
+#include "thread_name.hh"
+#include "touchpad.hh"
+#include "vk.hh"
+#include "widget.hh"
+#include "win.hh"
+#include "win_key.hh"
+#include "win_main.hh"
+#include "window.hh"
 
 using namespace automat;
 

@@ -1,9 +1,9 @@
-#include "object.h"
+#include "object.hh"
 
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
-#include "font.h"
+#include "font.hh"
 
 namespace automat {
 

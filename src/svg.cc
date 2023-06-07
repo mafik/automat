@@ -1,8 +1,8 @@
-#include "svg.h"
+#include "svg.hh"
 
 #include <include/utils/SkParsePath.h>
 
-#include "log.h"
+#include "log.hh"
 
 namespace automat {
 

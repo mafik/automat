@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-#include "format.h"
+#include "format.hh"
 
 // See: https://en.wikipedia.org/wiki/ANSI_escape_code
 

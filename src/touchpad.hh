@@ -7,7 +7,7 @@
 #include <optional>
 #endif  // _WIN32
 
-#include "math.h"
+#include "math.hh"
 
 namespace automat::touchpad {
 

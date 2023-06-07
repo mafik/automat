@@ -1,5 +1,5 @@
 #define _USE_MATH_DEFINES
-#include "gui_button.h"
+#include "gui_button.hh"
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkClipOp.h>
@@ -10,8 +10,8 @@
 
 #include <cmath>
 
-#include "color.h"
-#include "gui_constants.h"
+#include "color.hh"
+#include "gui_constants.hh"
 
 namespace automat::gui {
 

@@ -1,10 +1,10 @@
-#include "color.h"
+#include "color.hh"
 
 #include <algorithm>
 #include <limits>
 
-#include "log.h"
-#include "math.h"
+#include "log.hh"
+#include "math.hh"
 
 namespace automat::color {
 

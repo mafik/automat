@@ -1,8 +1,8 @@
-#include "keyboard.h"
+#include "keyboard.hh"
 
-#include "keyboard_impl.h"
-#include "window.h"
-#include "window_impl.h"
+#include "keyboard_impl.hh"
+#include "window.hh"
+#include "window_impl.hh"
 
 namespace automat::gui {
 

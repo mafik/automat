@@ -1,6 +1,6 @@
 #pragma once
 
-#include "base.h"
+#include "base.hh"
 
 namespace automat {
 

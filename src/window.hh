@@ -2,8 +2,8 @@
 
 #include <include/core/SkCanvas.h>
 
-#include "keyboard.h"
-#include "math.h"
+#include "keyboard.hh"
+#include "math.hh"
 
 namespace automat::gui {
 

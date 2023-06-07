@@ -1,4 +1,4 @@
-#include "prototypes.h"
+#include "prototypes.hh"
 
 namespace automat {
 

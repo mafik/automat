@@ -1,10 +1,10 @@
-#include "pointer_impl.h"
+#include "pointer_impl.hh"
 
 #include <algorithm>
 
-#include "keyboard_impl.h"
-#include "root.h"
-#include "window_impl.h"
+#include "keyboard_impl.hh"
+#include "root.hh"
+#include "window_impl.hh"
 
 namespace automat::gui {
 

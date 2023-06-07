@@ -1,7 +1,7 @@
-#include "pointer.h"
+#include "pointer.hh"
 
-#include "pointer_impl.h"
-#include "window.h"
+#include "pointer_impl.hh"
+#include "window.hh"
 
 namespace automat::gui {
 

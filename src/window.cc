@@ -1,8 +1,8 @@
-#include "window.h"
+#include "window.hh"
 
 #include <memory>
 
-#include "window_impl.h"
+#include "window_impl.hh"
 
 namespace automat::gui {
 

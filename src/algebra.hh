@@ -7,9 +7,9 @@
 #include <string_view>
 #include <vector>
 
-#include "format.h"
-#include "log.h"
-#include "tree_algorithms.h"
+#include "format.hh"
+#include "log.hh"
+#include "tree_algorithms.hh"
 
 using namespace automat;
 

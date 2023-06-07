@@ -4,9 +4,9 @@
 
 #include <bitset>
 
-#include "base.h"
-#include "root.h"
-#include "widget.h"
+#include "base.hh"
+#include "root.hh"
+#include "widget.hh"
 
 namespace automat::gui {
 

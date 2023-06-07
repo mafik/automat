@@ -1,4 +1,4 @@
-#include "touchpad.h"
+#include "touchpad.hh"
 
 #include <src/base/SkUTF.h>
 #include <stdint.h>
@@ -6,11 +6,11 @@
 #include <deque>
 #include <vector>
 
-#include "format.h"
-#include "hid.h"
+#include "format.hh"
+#include "hid.hh"
 #include "hidapi.h"
-#include "log.h"
-#include "win_main.h"
+#include "log.hh"
+#include "win_main.hh"
 
 // Description of HID protocol:
 // https://www.usb.org/sites/default/files/hid1_11.pdf

@@ -2,8 +2,8 @@
 
 #include <include/core/SkCanvas.h>
 
-#include "animation.h"
-#include "math.h"
+#include "animation.hh"
+#include "math.hh"
 
 namespace automat {
 

@@ -3,9 +3,9 @@
 #include <map>
 #include <set>
 
-#include "keyboard.h"
-#include "product_ptr.h"
-#include "window_impl.h"
+#include "keyboard.hh"
+#include "product_ptr.hh"
+#include "window_impl.hh"
 
 namespace automat::gui {
 

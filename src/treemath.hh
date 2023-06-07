@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "algebra.h"
+#include "algebra.hh"
 
 // Treemath is a library for manipulating algebraic expressions that exploits
 // their tree-like structure.

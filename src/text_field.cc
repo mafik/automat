@@ -1,4 +1,4 @@
-#include "text_field.h"
+#include "text_field.hh"
 
 #include <include/core/SkColor.h>
 #include <include/core/SkFontTypes.h>
@@ -8,9 +8,9 @@
 #include <memory>
 #include <numeric>
 
-#include "font.h"
-#include "log.h"
-#include "root.h"
+#include "font.hh"
+#include "log.hh"
+#include "root.hh"
 
 namespace automat::gui {
 

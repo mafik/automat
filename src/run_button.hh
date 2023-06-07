@@ -1,6 +1,6 @@
 #pragma once
 
-#include "gui_button.h"
+#include "gui_button.hh"
 
 namespace automat {
 

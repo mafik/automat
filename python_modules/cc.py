@@ -98,7 +98,7 @@ def depends(what, on):
 
 def scan(dir):
     srcs = []
-    for ext in ['.cc', '.h', '.c']:
+    for ext in ['.cc', '.hh', '.h', '.c']:
         srcs.extend(dir.glob(f'**/*{ext}'))
 
     for path_abs in srcs:
@@ -106,7 +106,7 @@ def scan(dir):
 
         if path.suffix == '.cc' or path.suffix == '.c':
             add_translation_unit(path)
-        elif path.suffix == '.h':
+        elif path.suffix == '.h' or path.suffix == '.hh':
             add_header(path)
 
         if_stack = [True]
@@ -143,7 +143,7 @@ def scan(dir):
 
             # Actual scanning starts here
 
-            match = re.match('^#include \"([a-zA-Z0-9_/\.-]+\.h)\"', line)
+            match = re.match('^#include \"([a-zA-Z0-9_/\.-]+\.hh?)\"', line)
             if match:
                 include = Path(match.group(1))
                 dep = path.parent / include  # try relative to current source file
@@ -174,7 +174,7 @@ def propagate_deps():
                 continue
             visited.add(dep)
             if types[dep] == 'header':
-                object_file = dep.replace('.h', '.o')
+                object_file = dep.rsplit('.', 1)[0] + '.o'
                 if object_file in graph:
                     depends(path, on=object_file)
                     deps.append(object_file)

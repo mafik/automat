@@ -1,6 +1,6 @@
 #pragma once
 
-#include "widget.h"
+#include "widget.hh"
 
 namespace automat::gui {
 

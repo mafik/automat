@@ -1,10 +1,10 @@
-#include "hid.h"
+#include "hid.hh"
 
 #include <cmath>
 #include <deque>
 
-#include "format.h"
-#include "log.h"
+#include "format.hh"
+#include "log.hh"
 
 namespace automat::hid {
 

@@ -16,14 +16,14 @@
 #include <variant>
 #include <vector>
 
-#include "algebra.h"
-#include "base.h"
-#include "format.h"
-#include "library_alert.h"
-#include "library_increment.h"
-#include "library_number.h"
-#include "log.h"
-#include "treemath.h"
+#include "algebra.hh"
+#include "base.hh"
+#include "format.hh"
+#include "library_alert.hh"
+#include "library_increment.hh"
+#include "library_number.hh"
+#include "log.hh"
+#include "treemath.hh"
 
 namespace automat {
 

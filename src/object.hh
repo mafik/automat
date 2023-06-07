@@ -3,7 +3,7 @@
 #include <string>
 #include <string_view>
 
-#include "widget.h"
+#include "widget.hh"
 
 namespace automat {
 

@@ -1,4 +1,4 @@
-#include "gui_connection_widget.h"
+#include "gui_connection_widget.hh"
 
 #include <include/core/SkColor.h>
 #include <include/core/SkRRect.h>
@@ -6,11 +6,11 @@
 #include <cassert>
 #include <numbers>
 
-#include "base.h"
-#include "font.h"
-#include "gui_constants.h"
-#include "log.h"
-#include "svg.h"
+#include "base.hh"
+#include "font.hh"
+#include "gui_constants.hh"
+#include "log.hh"
+#include "svg.hh"
 
 namespace automat::gui {
 

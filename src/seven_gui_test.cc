@@ -5,11 +5,11 @@
 #include <chrono>
 #include <source_location>
 
-#include "backtrace.h"
-#include "base.h"
-#include "library.h"
-#include "log.h"
-#include "test_base.h"
+#include "backtrace.hh"
+#include "base.hh"
+#include "library.hh"
+#include "log.hh"
+#include "test_base.hh"
 
 using namespace automat;
 using namespace automat::library;

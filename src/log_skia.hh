@@ -2,7 +2,7 @@
 
 #include <include/core/SkMatrix.h>
 
-#include "log.h"
+#include "log.hh"
 
 namespace automat {
 

@@ -18,16 +18,16 @@
 #include <unordered_set>
 #include <vector>
 
-#include "animation.h"
-#include "argument.h"
-#include "channel.h"
-#include "connection.h"
-#include "format.h"
-#include "location.h"
-#include "log.h"
-#include "run_button.h"
-#include "tasks.h"
-#include "text_field.h"
+#include "animation.hh"
+#include "argument.hh"
+#include "channel.hh"
+#include "connection.hh"
+#include "format.hh"
+#include "location.hh"
+#include "log.hh"
+#include "run_button.hh"
+#include "tasks.hh"
+#include "text_field.hh"
 
 namespace automat {
 

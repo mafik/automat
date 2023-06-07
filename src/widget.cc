@@ -1,4 +1,4 @@
-#include "widget.h"
+#include "widget.hh"
 
 #include <include/core/SkMatrix.h>
 #include <include/effects/SkRuntimeEffect.h>
@@ -8,9 +8,9 @@
 #include <optional>
 #include <vector>
 
-#include "animation.h"
-#include "root.h"
-#include "time.h"
+#include "animation.hh"
+#include "root.hh"
+#include "time.hh"
 
 using namespace automat;
 

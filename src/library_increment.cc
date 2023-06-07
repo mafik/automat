@@ -1,13 +1,13 @@
-#include "library_increment.h"
+#include "library_increment.hh"
 
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
-#include "color.h"
-#include "font.h"
-#include "gui_constants.h"
-#include "library_macros.h"
-#include "library_number.h"
+#include "color.hh"
+#include "font.hh"
+#include "gui_constants.hh"
+#include "library_macros.hh"
+#include "library_number.hh"
 
 namespace automat::library {
 

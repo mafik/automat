@@ -1,8 +1,8 @@
 #pragma once
 
-#include "gui_button.h"
-#include "gui_constants.h"
-#include "widget.h"
+#include "gui_button.hh"
+#include "gui_constants.hh"
+#include "widget.hh"
 
 namespace automat {
 struct Location;

@@ -1,6 +1,6 @@
-#include "gui_shape_widget.h"
+#include "gui_shape_widget.hh"
 
-#include "svg.h"
+#include "svg.hh"
 
 namespace automat::gui {
 

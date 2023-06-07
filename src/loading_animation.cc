@@ -1,4 +1,4 @@
-#include "loading_animation.h"
+#include "loading_animation.hh"
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
@@ -6,8 +6,8 @@
 #include <include/effects/SkRuntimeEffect.h>
 #include <src/core/SkRuntimeEffectPriv.h>
 
-#include "log.h"
-#include "win_main.h"
+#include "log.hh"
+#include "win_main.hh"
 
 namespace automat {
 

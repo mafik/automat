@@ -2,8 +2,8 @@
 
 #include <gtest/gtest.h>
 
-#include "backtrace.h"
-#include "base.h"
+#include "backtrace.hh"
+#include "base.hh"
 
 namespace automat {
 

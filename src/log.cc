@@ -1,4 +1,4 @@
-#include "log.h"
+#include "log.hh"
 
 #include <cstdio>
 #include <cstdlib>
@@ -6,9 +6,9 @@
 #include <string>
 #include <utility>
 
-#include "format.h"
-#include "math.h"
-#include "term.h"
+#include "format.hh"
+#include "math.hh"
+#include "term.hh"
 
 static int indent = 0;
 

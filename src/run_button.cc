@@ -1,9 +1,9 @@
-#include "run_button.h"
+#include "run_button.hh"
 
-#include "base.h"
-#include "gui_shape_widget.h"
-#include "location.h"
-#include "log.h"
+#include "base.hh"
+#include "gui_shape_widget.hh"
+#include "location.hh"
+#include "log.hh"
 
 namespace automat::gui {
 

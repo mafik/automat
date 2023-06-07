@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "location.h"
+#include "location.hh"
 
 namespace automat {
 

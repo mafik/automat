@@ -1,4 +1,4 @@
-#include "algebra.h"
+#include "algebra.hh"
 
 namespace algebra {
 

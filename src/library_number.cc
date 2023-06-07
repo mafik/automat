@@ -1,4 +1,4 @@
-#include "library_number.h"
+#include "library_number.hh"
 
 #include <include/core/SkMatrix.h>
 #include <include/core/SkRRect.h>
@@ -7,13 +7,13 @@
 #include <charconv>
 #include <memory>
 
-#include "color.h"
-#include "drag_action.h"
-#include "font.h"
-#include "gui_align.h"
-#include "gui_text.h"
-#include "library_macros.h"
-#include "widget.h"
+#include "color.hh"
+#include "drag_action.hh"
+#include "font.hh"
+#include "gui_align.hh"
+#include "gui_text.hh"
+#include "library_macros.hh"
+#include "widget.hh"
 
 namespace automat::library {
 

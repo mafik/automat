@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "base.h"
-#include "library.h"
-#include "test_base.h"
+#include "base.hh"
+#include "library.hh"
+#include "test_base.hh"
 
 using namespace automat;
 

@@ -181,7 +181,7 @@ GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
 asset_srcs = list(ASSETS_DIR.glob('*'))
 
-assets_h = GENERATED_DIR / 'assets.h'
+assets_h = GENERATED_DIR / 'assets.hh'
 
 
 def generate_asset_sources(asset, header, source, extra_args):
@@ -200,7 +200,8 @@ extern const std::string_view {slug}_view;
     with source.open('w') as f:
         print(f'#include "{header.name}"', file=f)
         print('namespace automat::assets {', file=f)
-        print(f'const std::string_view {slug}_view = std::string_view({slug}, {size});', file=f)
+        print(
+            f'const std::string_view {slug}_view = std::string_view({slug}, {size});', file=f)
         print(f'const char *{slug} =', file=f)
         buf = asset.read_bytes()
         bytes_per_line = 200
@@ -212,11 +213,11 @@ extern const std::string_view {slug}_view;
         print('} // namespace automat::assets', file=f)
 
 
-cc.add_header('generated/assets.h')
+cc.add_header('generated/assets.hh')
 
 for asset in asset_srcs:
     obj = OBJ_DIR / (asset.name + '.o')
-    header_abs = GENERATED_DIR / (asset.name + '.h')
+    header_abs = GENERATED_DIR / (asset.name + '.hh')
     source_abs = GENERATED_DIR / (asset.name + '.cc')
     recipe.add_step(
         functools.partial(generate_asset_sources, asset,
@@ -231,7 +232,7 @@ for asset in asset_srcs:
     source_rel = str(source_abs.relative_to(fs_utils.project_tmp_dir))
     cc.add_header(header_rel)
     cc.add_translation_unit(source_rel)
-    cc.depends(Path('generated/assets.h'), header_rel)
+    cc.depends(Path('generated/assets.hh'), header_rel)
 
 
 def generate_assets(extra_args):

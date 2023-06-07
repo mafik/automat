@@ -1,7 +1,7 @@
-#include "keyboard_impl.h"
+#include "keyboard_impl.hh"
 
-#include "font.h"
-#include "pointer_impl.h"
+#include "font.hh"
+#include "pointer_impl.hh"
 
 namespace automat::gui {
 

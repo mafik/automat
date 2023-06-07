@@ -1,9 +1,9 @@
-#include "library.h"
+#include "library.hh"
 
 #include <gtest/gtest.h>
 
-#include "base.h"
-#include "test_base.h"
+#include "base.hh"
+#include "test_base.hh"
 
 using namespace automat;
 

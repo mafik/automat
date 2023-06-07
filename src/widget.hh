@@ -6,11 +6,11 @@
 
 #include <functional>
 
-#include "action.h"
-#include "animation.h"
-#include "keyboard.h"
-#include "pointer.h"
-#include "stop.h"
+#include "action.hh"
+#include "animation.hh"
+#include "keyboard.hh"
+#include "pointer.hh"
+#include "stop.hh"
 
 namespace automat::gui {
 

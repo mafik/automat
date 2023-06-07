@@ -1,12 +1,12 @@
-#include "font.h"
+#include "font.hh"
 
 #include <include/core/SkData.h>
 #include <modules/skshaper/include/SkShaper.h>
 #include <modules/skunicode/include/SkUnicode.h>
 #include <src/base/SkUTF.h>
 
-#include "generated/assets.h"
-#include "log.h"
+#include "generated/assets.hh"
+#include "log.hh"
 
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")

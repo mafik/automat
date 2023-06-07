@@ -3,7 +3,7 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
 
-#include "widget.h"
+#include "widget.hh"
 
 namespace automat::gui {
 

@@ -2,10 +2,10 @@
 
 #include <vector>
 
-#include "action.h"
-#include "pointer.h"
-#include "time.h"
-#include "widget.h"
+#include "action.hh"
+#include "pointer.hh"
+#include "time.hh"
+#include "widget.hh"
 
 namespace automat::gui {
 

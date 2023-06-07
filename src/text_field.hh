@@ -49,8 +49,8 @@ struct TextField : Widget, CaretOwner {
   void KeyDown(Caret&, Key) override;
   void KeyUp(Caret&, Key) override;
   virtual SkRRect ShapeRRect() const;
-  virtual SkPaint& GetTextPaint() const;
-  virtual SkPaint& GetBackgroundPaint() const;
+  virtual const SkPaint& GetTextPaint() const;
+  virtual const SkPaint& GetBackgroundPaint() const;
 };
 
 }  // namespace automat::gui

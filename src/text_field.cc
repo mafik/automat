@@ -75,8 +75,8 @@ static SkPaint kDefaultBackgroundPaint = []() {
   return paint;
 }();
 
-SkPaint& TextField::GetTextPaint() const { return kDefaultTextPaint; }
-SkPaint& TextField::GetBackgroundPaint() const { return kDefaultBackgroundPaint; }
+const SkPaint& TextField::GetTextPaint() const { return kDefaultTextPaint; }
+const SkPaint& TextField::GetBackgroundPaint() const { return kDefaultBackgroundPaint; }
 
 void TextField::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;

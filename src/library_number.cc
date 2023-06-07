@@ -20,9 +20,9 @@ namespace automat::library {
 
 DEFINE_PROTO(Number);
 
-// TODO: LCD color for the text field
 // TODO: Adjust number text to right
 // TODO: Remove underline from text display
+// TODO: Increase margin around numpad & text display
 // TODO: Buttons get highlighted immediately on mouse over
 // TODO: When precision touchpad is pressed down, initial touch point is
 // "forgotten" for the purpose of dragging
@@ -72,6 +72,20 @@ NumberTextField::NumberTextField(Number& n)
 SkRRect NumberTextField::ShapeRRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, gui::kTextFieldHeight),
                              gui::kTextFieldHeight / 2, gui::kTextFieldHeight / 2);
+}
+
+static const SkPaint kNumberTextFieldBackgroundPaint = []() {
+  SkPaint paint;
+  SkPoint pts[2] = {{0, 0}, {0, gui::kTextFieldHeight}};
+  SkColor colors[2] = {0xffbec8b7, 0xffdee3db};
+  sk_sp<SkShader> shader =
+      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  paint.setShader(shader);
+  return paint;
+}();
+
+const SkPaint& NumberTextField::GetBackgroundPaint() const {
+  return kNumberTextFieldBackgroundPaint;
 }
 
 Number::Number(double x)

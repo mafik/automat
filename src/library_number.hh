@@ -16,6 +16,7 @@ struct NumberButton : gui::Button {
 struct NumberTextField : gui::TextField {
   NumberTextField(Number&);
   SkRRect ShapeRRect() const override;
+  const SkPaint& GetBackgroundPaint() const override;
 };
 
 struct Number : Object {

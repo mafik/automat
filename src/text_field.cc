@@ -84,7 +84,6 @@ void TextField::Draw(DrawContext& ctx) const {
   auto& hover = hover_ptr[actx].animation;
   hover.Tick(actx);
 
-  Font& font = GetFont();
   SkRRect rrect = ShapeRRect();
   canvas.drawRRect(rrect, GetBackgroundPaint());
   if (hover.value > 0.0001) {
@@ -94,26 +93,38 @@ void TextField::Draw(DrawContext& ctx) const {
     hover_outline.setStrokeWidth(hover.value * 0.0005);
     canvas.drawRRect(rrect, hover_outline);
   }
-  canvas.translate(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
-  SkRect underline_rect =
-      SkRect::MakeXYWH(0, -font.line_thickness, width - 2 * kTextMargin, -font.line_thickness);
-  canvas.drawRect(underline_rect, GetTextPaint());
+  DrawText(ctx);
+}
+
+void TextField::DrawText(DrawContext& ctx) const {
+  Font& font = GetFont();
+  Vec2 text_pos = GetTextPos();
+  SkRect underline_rect = SkRect::MakeXYWH(text_pos.x, text_pos.y - font.line_thickness * 2,
+                                           width - 2 * kTextMargin, font.line_thickness);
+  ctx.canvas.drawRect(underline_rect, GetTextPaint());
+  ctx.canvas.translate(text_pos.x, text_pos.y);
   if (text) {
-    font.DrawText(canvas, *text, GetTextPaint());
+    font.DrawText(ctx.canvas, *text, GetTextPaint());
     // DrawDebugTextOutlines(canvas, text);
   }
 }
 
-SkPath TextField::Shape() const { return SkPath::RRect(ShapeRRect()); }
-
-static Vec2 GetPositionFromIndex(std::string_view text, int index) {
-  return Vec2(kTextMargin + GetFont().PositionFromIndex(text, index),
-              (kTextFieldHeight - kLetterSize) / 2);
+int TextField::IndexFromPosition(float local_x) const {
+  Vec2 text_pos = GetTextPos();
+  return GetFont().IndexFromPosition(*text, local_x - text_pos.x);
 }
+Vec2 TextField::PositionFromIndex(int index) const {
+  return GetTextPos() + Vec2(GetFont().PositionFromIndex(*text, index), 0);
+}
+Vec2 TextField::GetTextPos() const {
+  return Vec2(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
+}
+
+SkPath TextField::Shape() const { return SkPath::RRect(ShapeRRect()); }
 
 void UpdateCaret(TextField& text_field, Caret& caret) {
   int index = text_field.caret_positions[&caret].index;
-  Vec2 caret_pos = GetPositionFromIndex(*text_field.text, index);
+  Vec2 caret_pos = text_field.PositionFromIndex(index);
   caret.PlaceIBeam(caret_pos);
 }
 
@@ -123,9 +134,9 @@ struct TextSelectAction : Action {
 
   TextSelectAction(TextField& text_field) : text_field(text_field) {}
 
-  int GetIndexFromPointer(Pointer& pointer) {
+  int IndexFromPointer(Pointer& pointer) {
     Vec2 local = pointer.PositionWithin(text_field);
-    return GetFont().IndexFromPosition(*text_field.text, local.x - kTextMargin);
+    return text_field.IndexFromPosition(local.x);
   }
 
   void UpdateCaretFromPointer(Pointer& pointer) {
@@ -134,7 +145,7 @@ struct TextSelectAction : Action {
     if (it == text_field.caret_positions.end()) {
       return;
     }
-    int index = GetIndexFromPointer(pointer);
+    int index = IndexFromPointer(pointer);
     if (index != it->second.index) {
       it->second.index = index;
       UpdateCaret(text_field, *caret);
@@ -142,8 +153,8 @@ struct TextSelectAction : Action {
   }
 
   void Begin(Pointer& pointer) override {
-    int index = GetIndexFromPointer(pointer);
-    Vec2 pos = GetPositionFromIndex(*text_field.text, index);
+    int index = IndexFromPointer(pointer);
+    Vec2 pos = text_field.PositionFromIndex(index);
     caret = &text_field.RequestCaret(pointer.Keyboard(), pointer.Path(), pos);
     text_field.caret_positions[caret] = {.index = index};
   }

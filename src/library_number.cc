@@ -20,31 +20,38 @@ namespace automat::library {
 
 DEFINE_PROTO(Number);
 
-// TODO: Adjust number text to right
-// TODO: Remove underline from text display
-// TODO: Increase margin around numpad & text display
+// TODO: Update position of other cursors when text is appended by a button
+// TODO: Draw border around text field
 // TODO: Buttons get highlighted immediately on mouse over
 // TODO: When precision touchpad is pressed down, initial touch point is
 // "forgotten" for the purpose of dragging
 // TODO: "Iconified" drawing of widgets
 
-static constexpr float kNumberInnerMargin = kMargin;
-static constexpr float kNumberOuterMargin = kMargin;
-static constexpr float kTextHeight =
-    std::max(gui::kLetterSize + 2 * kNumberInnerMargin + 2 * kBorderWidth, kMinimalTouchableSize);
+// Margin used between rows and columns of buttons
+static constexpr float kBetweenButtonsMargin = kMargin;
+
+// Margin used around the entire widget
+static constexpr float kAroundWidgetMargin = kMargin * 3;
+
+static constexpr float kBelowTextMargin = kMargin * 3;
+
+// Height of the text field
+static constexpr float kTextHeight = std::max(
+    gui::kLetterSize + 2 * kBetweenButtonsMargin + 2 * kBorderWidth, kMinimalTouchableSize);
 static constexpr float kButtonHeight = kMinimalTouchableSize;
 static constexpr float kButtonRows = 4;
-static constexpr float kRows = kButtonRows + 1;
 static constexpr float kHeight = 2 * kBorderWidth + kTextHeight + kButtonRows * kButtonHeight +
-                                 (kRows - 1) * kNumberInnerMargin + 2 * kNumberOuterMargin;
+                                 (kButtonRows - 1) * kBetweenButtonsMargin + kBelowTextMargin +
+                                 2 * kAroundWidgetMargin;
 
 static constexpr float kButtonWidth = kMinimalTouchableSize;
 static constexpr float kButtonColumns = 3;
 static constexpr float kWidth = 2 * kBorderWidth + kButtonColumns * kButtonWidth +
-                                (kButtonColumns - 1) * kNumberInnerMargin + 2 * kNumberOuterMargin;
+                                (kButtonColumns - 1) * kBetweenButtonsMargin +
+                                2 * kAroundWidgetMargin;
 
 static constexpr float kCornerRadius =
-    kMinimalTouchableSize / 2 + kNumberOuterMargin + kBorderWidth;
+    kMinimalTouchableSize / 2 + kAroundWidgetMargin + kBorderWidth;
 static constexpr char kBackspaceShape[] =
     "M-9 0-5.6 5.1A2 2 0 00-4 6H4A2 2 0 006 4V-4A2 2 0 004-6H-4A2 2 0 00-5.6-5.1ZM-3-4 0-1 3-4 4-3 "
     "1 0 4 3 3 4 0 1-3 4-4 3-1 0-4-3Z";
@@ -67,16 +74,16 @@ void NumberButton::Activate() {
 }
 
 NumberTextField::NumberTextField(Number& n)
-    : gui::TextField(&n.text, kWidth - 2 * kNumberOuterMargin - 2 * kBorderWidth) {}
+    : gui::TextField(&n.text, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth) {}
 
 SkRRect NumberTextField::ShapeRRect() const {
-  return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, gui::kTextFieldHeight),
-                             gui::kTextFieldHeight / 2, gui::kTextFieldHeight / 2);
+  return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, kTextHeight), kTextHeight / 2,
+                             kTextHeight / 2);
 }
 
 static const SkPaint kNumberTextFieldBackgroundPaint = []() {
   SkPaint paint;
-  SkPoint pts[2] = {{0, 0}, {0, gui::kTextFieldHeight}};
+  SkPoint pts[2] = {{0, 0}, {0, kTextHeight}};
   SkColor colors[2] = {0xffbec8b7, 0xffdee3db};
   sk_sp<SkShader> shader =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
@@ -86,6 +93,21 @@ static const SkPaint kNumberTextFieldBackgroundPaint = []() {
 
 const SkPaint& NumberTextField::GetBackgroundPaint() const {
   return kNumberTextFieldBackgroundPaint;
+}
+
+void NumberTextField::DrawText(gui::DrawContext& ctx) const {
+  gui::Font& font = gui::GetFont();
+  Vec2 text_pos = GetTextPos();
+  ctx.canvas.translate(text_pos.x, text_pos.y);
+  font.DrawText(ctx.canvas, *text, GetTextPaint());
+}
+
+Vec2 NumberTextField::GetTextPos() const {
+  gui::Font& font = gui::GetFont();
+  // We use the same margin on all sides because it looks nicer with fully rounded corners.
+  float margin = (kTextHeight - gui::kLetterSize) / 2;
+  float text_width = font.MeasureText(*text);
+  return Vec2(width - text_width - margin, margin);
 }
 
 Number::Number(double x)
@@ -205,12 +227,13 @@ MaybeStop Number::VisitChildren(gui::Visitor& visitor) {
 
 SkMatrix Number::TransformToChild(const Widget& child, animation::Context&) const {
   auto cell = [](int row, int col) {
-    float x = kBorderWidth + kNumberOuterMargin + col * (kButtonWidth + kNumberInnerMargin);
-    float y = kBorderWidth + kNumberOuterMargin + row * (kButtonHeight + kNumberInnerMargin);
+    float x = kBorderWidth + kAroundWidgetMargin + col * (kButtonWidth + kBetweenButtonsMargin);
+    float y = kBorderWidth + kAroundWidgetMargin + row * (kButtonHeight + kBetweenButtonsMargin);
     return SkMatrix::Translate(-x, -y);
   };
   if (&child == &text_field) {
-    return cell(4, 0);
+    return SkMatrix::Translate(-kBorderWidth - kAroundWidgetMargin,
+                               -kHeight + kBorderWidth + kAroundWidgetMargin + kTextHeight);
   }
   if (&child == &digits[0]) {
     return cell(0, 0);

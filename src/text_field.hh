@@ -48,6 +48,13 @@ struct TextField : Widget, CaretOwner {
   Widget* CaretWidget() override { return this; }
   void KeyDown(Caret&, Key) override;
   void KeyUp(Caret&, Key) override;
+
+  int IndexFromPosition(float x) const;
+  Vec2 PositionFromIndex(int index) const;
+
+  virtual Vec2 GetTextPos() const;
+  virtual void DrawText(DrawContext&) const;
+
   virtual SkRRect ShapeRRect() const;
   virtual const SkPaint& GetTextPaint() const;
   virtual const SkPaint& GetBackgroundPaint() const;

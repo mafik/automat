@@ -14,7 +14,7 @@ static constexpr float kKappa = 903.29629629629629629630;
 static constexpr float kEpsilon = 0.00885645167903563082;
 static constexpr float kRefU = 0.19783000664283680764;
 static constexpr float kRefV = 0.46831999493879100370;
-static constexpr vec3 kRGB_M[3] = {
+static constexpr Vec3 kRGB_M[3] = {
     {3.24096994190452134377, -1.53738317757009345794, -0.49861076029300328366},
     {-0.96924363628087982613, 1.87596750150772066772, 0.04155505740717561247},
     {0.05563007969699360846, -0.20397695888897656435, 1.05697151424287856072}};
@@ -33,8 +33,8 @@ static constexpr float FromLinear(float c) {
     return 1.055 * pow(c, 1.0 / 2.4) - 0.055;
 }
 
-static constexpr vec3 RGBToXYZ(float r, float g, float b) {
-  vec3 rgbl = Vec3(ToLinear(r), ToLinear(g), ToLinear(b));
+static constexpr Vec3 RGBToXYZ(float r, float g, float b) {
+  Vec3 rgbl = Vec3(ToLinear(r), ToLinear(g), ToLinear(b));
   float x = Dot({0.41239079926595948129, 0.35758433938387796373, 0.18048078840183428751}, rgbl);
   float y = Dot({0.21263900587151035754, 0.71516867876775592746, 0.07219231536073371500}, rgbl);
   float z = Dot({0.01933081871559185069, 0.11919477979462598791, 0.95053215224966058086}, rgbl);
@@ -57,7 +57,7 @@ static constexpr float LToY(float l) {
   }
 }
 
-static constexpr vec3 XYZToLUV(float a, float b, float c) {
+static constexpr Vec3 XYZToLUV(float a, float b, float c) {
   float var_u = (4.0 * a) / (a + (15.0 * b) + (3.0 * c));
   float var_v = (9.0 * b) / (a + (15.0 * b) + (3.0 * c));
   float l = YToL(b);
@@ -69,7 +69,7 @@ static constexpr vec3 XYZToLUV(float a, float b, float c) {
   return Vec3(l, u, v);
 }
 
-static constexpr vec3 LUVToLCH(float l, float u, float v) {
+static constexpr Vec3 LUVToLCH(float l, float u, float v) {
   float h;
   float c = sqrtf(u * u + v * v);
   /* Grays: disambiguate hue */
@@ -95,9 +95,9 @@ static constexpr void GetBounds(float l, Bounds bounds[6]) {
   int t;
 
   for (channel = 0; channel < 3; channel++) {
-    float m1 = kRGB_M[channel].Elements[0];
-    float m2 = kRGB_M[channel].Elements[1];
-    float m3 = kRGB_M[channel].Elements[2];
+    float m1 = kRGB_M[channel].elements[0];
+    float m2 = kRGB_M[channel].elements[1];
+    float m3 = kRGB_M[channel].elements[2];
 
     for (t = 0; t < 2; t++) {
       float top1 = (284517.0 * m1 - 94839.0 * m3) * sub2;
@@ -129,7 +129,7 @@ static constexpr float MaxChromaForLH(float l, float h) {
   return min_len;
 }
 
-static constexpr vec3 LCHToHSLuv(float l, float c, float h) {
+static constexpr Vec3 LCHToHSLuv(float l, float c, float h) {
   float s;
 
   /* White and black: disambiguate saturation */
@@ -144,7 +144,7 @@ static constexpr vec3 LCHToHSLuv(float l, float c, float h) {
   return Vec3(h, s, l);
 }
 
-static constexpr vec3 HSLuvToLCH(float h, float s, float l) {
+static constexpr Vec3 HSLuvToLCH(float h, float s, float l) {
   float c;
 
   /* White and black: disambiguate chroma */
@@ -159,14 +159,14 @@ static constexpr vec3 HSLuvToLCH(float h, float s, float l) {
   return Vec3(l, c, h);
 }
 
-static constexpr vec3 LCHToLUV(float l, float c, float h) {
+static constexpr Vec3 LCHToLUV(float l, float c, float h) {
   float hrad = h * 0.01745329251994329577; /* (pi / 180.0) */
   float u = cos(hrad) * c;
   float v = sin(hrad) * c;
   return Vec3(l, u, v);
 }
 
-static constexpr vec3 LUVToXYZ(float l, float u, float v) {
+static constexpr Vec3 LUVToXYZ(float l, float u, float v) {
   if (l <= 0.00000001) {
     /* Black will create a divide-by-zero error. */
     return Vec3(0, 0, 0);
@@ -180,34 +180,34 @@ static constexpr vec3 LUVToXYZ(float l, float u, float v) {
   return Vec3(x, y, z);
 }
 
-static constexpr vec3 XYZToRGB(float x, float y, float z) {
-  vec3 in_out = Vec3(x, y, z);
+static constexpr Vec3 XYZToRGB(float x, float y, float z) {
+  Vec3 in_out = Vec3(x, y, z);
   float r = FromLinear(Dot(kRGB_M[0], in_out));
   float g = FromLinear(Dot(kRGB_M[1], in_out));
   float b = FromLinear(Dot(kRGB_M[2], in_out));
   return Vec3(r, g, b);
 }
 
-static constexpr vec3 LUVToRGB(float l, float u, float v) {
-  vec3 xyz = LUVToXYZ(l, u, v);
-  return XYZToRGB(xyz.X, xyz.Y, xyz.Z);
+static constexpr Vec3 LUVToRGB(float l, float u, float v) {
+  Vec3 xyz = LUVToXYZ(l, u, v);
+  return XYZToRGB(xyz.x, xyz.y, xyz.z);
 }
 
-static constexpr vec3 HSLuvToRGB(float h, float s, float l) {
-  vec3 lch = HSLuvToLCH(h, s, l);
-  vec3 luv = LCHToLUV(lch.X, lch.Y, lch.Z);
-  return LUVToRGB(luv.X, luv.Y, luv.Z);
+static constexpr Vec3 HSLuvToRGB(float h, float s, float l) {
+  Vec3 lch = HSLuvToLCH(h, s, l);
+  Vec3 luv = LCHToLUV(lch.x, lch.y, lch.z);
+  return LUVToRGB(luv.x, luv.y, luv.z);
 }
 
-static constexpr vec3 RGBToLUV(float r, float g, float b) {
-  vec3 xyz = RGBToXYZ(r, g, b);
-  return XYZToLUV(xyz.X, xyz.Y, xyz.Z);
+static constexpr Vec3 RGBToLUV(float r, float g, float b) {
+  Vec3 xyz = RGBToXYZ(r, g, b);
+  return XYZToLUV(xyz.x, xyz.y, xyz.z);
 }
 
-static constexpr vec3 RGBToHSLuv(float r, float g, float b) {
-  vec3 luv = RGBToLUV(r, g, b);
-  vec3 lch = LUVToLCH(luv.X, luv.Y, luv.Z);
-  return LCHToHSLuv(lch.X, lch.Y, lch.Z);
+static constexpr Vec3 RGBToHSLuv(float r, float g, float b) {
+  Vec3 luv = RGBToLUV(r, g, b);
+  Vec3 lch = LUVToLCH(luv.x, luv.y, luv.z);
+  return LCHToHSLuv(lch.x, lch.y, lch.z);
 }
 
 }  // namespace
@@ -221,35 +221,35 @@ SkColor SetAlpha(SkColor color, float alpha_01) {
 }
 
 SkColor AdjustLightness(SkColor color, float adjust_percent) {
-  vec3 hsluv = RGBToHSLuv(SkColorGetR(color) / 255.0, SkColorGetG(color) / 255.0,
+  Vec3 hsluv = RGBToHSLuv(SkColorGetR(color) / 255.0, SkColorGetG(color) / 255.0,
                           SkColorGetB(color) / 255.0);
-  float l = std::clamp(hsluv.Elements[2] + adjust_percent, 0.0f, 100.0f);
-  vec3 rgb = HSLuvToRGB(hsluv.Elements[0], hsluv.Elements[1], l);
-  return SkColorSetARGB(SkColorGetA(color), rgb.R * 255, rgb.G * 255, rgb.B * 255);
+  float l = std::clamp(hsluv.elements[2] + adjust_percent, 0.0f, 100.0f);
+  Vec3 rgb = HSLuvToRGB(hsluv.elements[0], hsluv.elements[1], l);
+  return SkColorSetARGB(SkColorGetA(color), rgb.r * 255, rgb.g * 255, rgb.b * 255);
 }
 
 SkColor MixColors(SkColor zero, SkColor one, float ratio) {
-  vec3 zero_luv =
+  Vec3 zero_luv =
       RGBToHSLuv(SkColorGetR(zero) / 255.0, SkColorGetG(zero) / 255.0, SkColorGetB(zero) / 255.0);
-  vec3 one_luv =
+  Vec3 one_luv =
       RGBToHSLuv(SkColorGetR(one) / 255.0, SkColorGetG(one) / 255.0, SkColorGetB(one) / 255.0);
-  if (fabs(zero_luv.X - one_luv.X) > 0.5f) {
+  if (fabs(zero_luv.x - one_luv.x) > 0.5f) {
     // Linear interpolation would circle around the color wheel.
     // Instead, we'll use the shortest path.
     // Decrease the larger value by 1.
-    (zero_luv.X > one_luv.X ? zero_luv.X : one_luv.X) -= 1.0f;
+    (zero_luv.x > one_luv.x ? zero_luv.x : one_luv.x) -= 1.0f;
     // Warning: this wasn't tested.
   }
-  vec3 mixed_luv = zero_luv * (1.0f - ratio) + one_luv * ratio;
-  if (mixed_luv.X < 0.0f) {
+  Vec3 mixed_luv = zero_luv * (1.0f - ratio) + one_luv * ratio;
+  if (mixed_luv.x < 0.0f) {
     // This should trigger only when using shortest path interpolation.
-    mixed_luv.X += 1.0f;
+    mixed_luv.x += 1.0f;
   }
-  vec3 mixed_rgb = HSLuvToRGB(mixed_luv.X, mixed_luv.Y, mixed_luv.Z);
+  Vec3 mixed_rgb = HSLuvToRGB(mixed_luv.x, mixed_luv.y, mixed_luv.z);
   float alpha = SkColorGetA(zero) * (1.0f - ratio) + SkColorGetA(one) * ratio;
   // LOG() << "0=" << zero_luv << " 1=" << one_luv << " " << ratio << "=" <<
   // mixed_luv;
-  return SkColorSetARGB(alpha, mixed_rgb.R * 255, mixed_rgb.G * 255, mixed_rgb.B * 255);
+  return SkColorSetARGB(alpha, mixed_rgb.r * 255, mixed_rgb.g * 255, mixed_rgb.b * 255);
 }
 
 }  // namespace automat::color

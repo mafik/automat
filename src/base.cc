@@ -22,10 +22,10 @@
 
 namespace automat {
 
-Location* Machine::LocationAtPoint(vec2 point) {
+Location* Machine::LocationAtPoint(Vec2 point) {
   for (auto& loc : locations) {
-    vec2 local_point = point - loc->position;
-    if (loc->Shape().contains(local_point.X, local_point.Y)) {
+    Vec2 local_point = point - loc->position;
+    if (loc->Shape().contains(local_point.x, local_point.y)) {
       return loc.get();
     }
   }

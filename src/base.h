@@ -95,7 +95,7 @@ struct Machine : LiveObject {
     return Create(T::proto, name);
   }
 
-  Location* LocationAtPoint(vec2);
+  Location* LocationAtPoint(Vec2);
 
   string_view Name() const override { return name; }
   std::unique_ptr<Object> Clone() const override {
@@ -125,8 +125,8 @@ struct Machine : LiveObject {
     if (l == nullptr) {
       return SkMatrix::I();
     }
-    vec2 pos = l->AnimatedPosition(actx);
-    return SkMatrix::Translate(-pos.X, -pos.Y);
+    Vec2 pos = l->AnimatedPosition(actx);
+    return SkMatrix::Translate(-pos.x, -pos.y);
   }
   void Args(std::function<void(Argument&)> cb) override {}
   void Relocate(Location* parent) override {

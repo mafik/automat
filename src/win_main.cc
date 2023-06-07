@@ -47,10 +47,10 @@ int screen_refresh_rate = 60;
 float screen_width_m = (float)screen_width_px / USER_DEFAULT_SCREEN_DPI * kMetersPerInch;
 float screen_height_m = (float)screen_height_px / USER_DEFAULT_SCREEN_DPI * kMetersPerInch;
 
-vec2 mouse_position;
+Vec2 mouse_position;
 
 float DisplayPxPerMeter() { return screen_width_px / screen_width_m; }
-vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter(); }
+Vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter(); }
 
 // Coordinate spaces:
 // - Screen (used by Windows & win_main.cc, origin in the top left corner of the
@@ -60,9 +60,9 @@ vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter
 // - Canvas (used for gui.cc <=> Automat communication, origin in the center
 // of the window, Y axis goes up)
 
-vec2 ScreenToWindow(vec2 screen) {
-  vec2 window = (screen - Vec2(client_x, client_y + window_height)) / DisplayPxPerMeter();
-  window.Y = -window.Y;
+Vec2 ScreenToWindow(Vec2 screen) {
+  Vec2 window = (screen - Vec2(client_x, client_y + window_height)) / DisplayPxPerMeter();
+  window.y = -window.y;
   return window;
 }
 
@@ -371,8 +371,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     case WM_MOUSEMOVE: {
       int16_t x = lParam & 0xFFFF;
       int16_t y = (lParam >> 16) & 0xFFFF;
-      mouse_position.X = x + client_x;
-      mouse_position.Y = y + client_y;
+      mouse_position.x = x + client_x;
+      mouse_position.y = y + client_y;
       GetMouse().Move(ScreenToWindow(mouse_position));
       break;
     }

@@ -66,8 +66,8 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
     SkVector radii = from_rrect.getSimpleRadii();
     from_inner = from_rrect.rect().makeInset(radii.x(), radii.y());
   } else {
-    SkPoint from_center = from_shape.getBounds().center();
-    from_inner = SkRect::MakeXYWH(from_center.x(), from_center.y(), 0, 0);
+    Vec2 from_center = from_shape.getBounds().center();
+    from_inner = SkRect::MakeXYWH(from_center.x, from_center.y, 0, 0);
   }
   // Find an area where the end of a connection can freely move.
   SkRect to_inner;
@@ -75,34 +75,34 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
     SkVector radii = to_rrect.getSimpleRadii();
     to_inner = to_rrect.rect().makeInset(radii.x(), radii.y());
   } else {
-    SkPoint to_center = to_shape.getBounds().center();
-    to_inner = SkRect::MakeXYWH(to_center.x(), to_center.y(), 0, 0);
+    Vec2 to_center = to_shape.getBounds().center();
+    to_inner = SkRect::MakeXYWH(to_center.x, to_center.y, 0, 0);
   }
 
-  SkPoint from, to;
+  Vec2 from, to;
   // Set the vertical positions of the connection endpoints.
   float left = std::max(from_inner.left(), to_inner.left());
   float right = std::min(from_inner.right(), to_inner.right());
   if (left <= right) {
-    from.fX = to.fX = (left + right) / 2;
+    from.x = to.x = (left + right) / 2;
   } else if (from_inner.right() < to_inner.left()) {
-    from.fX = from_inner.right();
-    to.fX = to_inner.left();
+    from.x = from_inner.right();
+    to.x = to_inner.left();
   } else {
-    from.fX = from_inner.left();
-    to.fX = to_inner.right();
+    from.x = from_inner.left();
+    to.x = to_inner.right();
   }
   // Set the horizontal positions of the connection endpoints.
   float top = std::max(from_inner.top(), to_inner.top());
   float bottom = std::min(from_inner.bottom(), to_inner.bottom());
   if (top <= bottom) {
-    from.fY = to.fY = (top + bottom) / 2;
+    from.y = to.y = (top + bottom) / 2;
   } else if (from_inner.bottom() < to_inner.top()) {
-    from.fY = from_inner.bottom();
-    to.fY = to_inner.top();
+    from.y = from_inner.bottom();
+    to.y = to_inner.top();
   } else {
-    from.fY = from_inner.top();
-    to.fY = to_inner.bottom();
+    from.y = from_inner.top();
+    to.y = to_inner.bottom();
   }
   // Find polar coordinates of the connection.
   SkVector delta = to - from;
@@ -118,7 +118,7 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
   float line_end = std::max(start, end + kArrowShape.getBounds().centerX());
   // Draw the connection.
   canvas.save();
-  canvas.translate(from.x(), from.y());
+  canvas.translate(from.x, from.y);
   canvas.rotate(degrees);
   if (start < line_end) {
     canvas.drawLine(start, 0, line_end, 0, line_paint);
@@ -213,7 +213,7 @@ void DragConnectionAction::DrawAction(DrawContext& ctx) {
     }
   }
   SkPath to_shape = SkPath();
-  to_shape.moveTo(current_position.X, current_position.Y);
+  to_shape.moveTo(current_position.x, current_position.y);
   DrawConnection(ctx.canvas, from_shape, to_shape);
 }
 

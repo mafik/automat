@@ -69,7 +69,7 @@ struct LineRunHandler : public SkShaper::RunHandler {
   // meters.
 
   std::string_view utf8_text;
-  SkPoint offset;  // Position where the letters will be placed (baseline).
+  Vec2 offset;  // Position where the letters will be placed (baseline).
   SkTextBlobBuilder builder;
 
   // Temporary used between `runBuffer` and `commitRunBuffer`.
@@ -86,13 +86,13 @@ struct MeasureLineRunHandler : public LineRunHandler {
 
   void commitRunBuffer(const RunInfo& info) override {
     for (int i = 0; i < info.glyphCount; ++i) {
-      positions.push_back(run_buffer->points()[i].x() + offset.x());
+      positions.push_back(run_buffer->points()[i].x() + offset.x);
       utf8_indices.push_back(run_buffer->clusters[i]);
     }
     LineRunHandler::commitRunBuffer(info);
   }
   void commitLine() override {
-    positions.push_back(offset.x());
+    positions.push_back(offset.x);
     if (utf8_indices.empty()) {
       utf8_indices.push_back(0);
     } else {
@@ -156,7 +156,7 @@ float Font::PositionFromIndex(std::string_view text, int index) {
   SkShaper& shaper = GetShaper();
   LineRunHandler run_handler(text);
   shaper.shape(text.data(), index, sk_font, true, 0, &run_handler);
-  return run_handler.offset.x() * font_scale;
+  return run_handler.offset.x * font_scale;
 }
 
 int Font::IndexFromPosition(std::string_view text, float x) {

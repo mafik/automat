@@ -205,11 +205,11 @@ struct TouchPadImpl {
       old_d = SoftPlus(old_d - kMinDistanceToZoom, 1000) + kMinDistanceToZoom;
       new_d = SoftPlus(new_d - kMinDistanceToZoom, 1000) + kMinDistanceToZoom;
       touchpad.zoom *= powf(new_d / old_d, 0.5f);
-      vec2 d0 = new_touches[0].pos - old_touches[0].pos;
-      vec2 d1 = new_touches[1].pos - old_touches[1].pos;
-      vec2 delta = LengthSquared(d0) < LengthSquared(d1) ? d0 : d1;
-      touchpad.pan.X -= delta.X;
-      touchpad.pan.Y += delta.Y;
+      Vec2 d0 = new_touches[0].pos - old_touches[0].pos;
+      Vec2 d1 = new_touches[1].pos - old_touches[1].pos;
+      Vec2 delta = LengthSquared(d0) < LengthSquared(d1) ? d0 : d1;
+      touchpad.pan.x -= delta.x;
+      touchpad.pan.y += delta.y;
     } else {
       touchpad.panning = false;
       UnlockCursor();
@@ -266,11 +266,11 @@ struct TouchPadImpl {
               touchpad.touches.emplace_back().id = touch_id;
             }
             if (report_accessor.x) {
-              touchpad.touches[touch_i].pos.X =
+              touchpad.touches[touch_i].pos.x =
                   report_accessor.x->Read<double>(report, report_bytes);
             }
             if (report_accessor.y) {
-              touchpad.touches[touch_i].pos.Y =
+              touchpad.touches[touch_i].pos.y =
                   report_accessor.y->Read<double>(report, report_bytes);
             }
           } else {

@@ -41,11 +41,11 @@ float Button::Height() const {
 }
 
 SkRRect Button::RRect() const {
-  vec2 p = Position();
+  Vec2 p = Position();
   SkRect child_bounds = child->Shape().getBounds();
   float w = std::max(kMinimalTouchableSize, child_bounds.width() + 2 * kMargin);
   float h = std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
-  return SkRRect::MakeRectXY(SkRect::MakeXYWH(p.X, p.Y, w, h), kRadius, kRadius);
+  return SkRRect::MakeRectXY(SkRect::MakeXYWH(p.x, p.y, w, h), kRadius, kRadius);
 }
 
 void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
@@ -140,7 +140,7 @@ void Button::Draw(DrawContext& ctx) const {
     float baseline = pressed_outer_oval.rect().fTop * (1 - filling) +
                      pressed_outer_oval.rect().fBottom * filling;
     constexpr int n_points = 6;
-    vec2 points[n_points];
+    Vec2 points[n_points];
     static time::point base = actx.timer.now;
     float timeS = (actx.timer.now - base).count();
     constexpr float waving_x = kRadius / n_points / 2;
@@ -148,18 +148,18 @@ void Button::Draw(DrawContext& ctx) const {
     for (int i = 0; i < n_points; ++i) {
       float frac = i / float(n_points - 1);
       float a = (frac * 3 + timeS * 1) * 2 * M_PI;
-      points[i].X = frac * pressed_outer_oval.rect().fRight +
+      points[i].x = frac * pressed_outer_oval.rect().fRight +
                     (1 - frac) * pressed_outer_oval.rect().fLeft + cos(a) * waving_x;
-      points[i].Y = baseline + sin(a) * waving_y;
+      points[i].y = baseline + sin(a) * waving_y;
     }
-    points[0].X = pressed_outer_oval.rect().fLeft;
-    points[n_points - 1].X = pressed_outer_oval.rect().fRight;
+    points[0].x = pressed_outer_oval.rect().fLeft;
+    points[n_points - 1].x = pressed_outer_oval.rect().fRight;
     constexpr float wave_width = 2 * waving_x;
     SkPath waves_clip;
-    waves_clip.moveTo(points[0].X, points[0].Y);
+    waves_clip.moveTo(points[0].x, points[0].y);
     for (int i = 0; i < n_points - 1; ++i) {
-      waves_clip.cubicTo(points[i].X + wave_width, points[i].Y, points[i + 1].X - wave_width,
-                         points[i + 1].Y, points[i + 1].X, points[i + 1].Y);
+      waves_clip.cubicTo(points[i].x + wave_width, points[i].y, points[i + 1].x - wave_width,
+                         points[i + 1].y, points[i + 1].x, points[i + 1].y);
     }
     waves_clip.lineTo(pressed_outer_oval.rect().fRight, pressed_outer_oval.rect().fTop);
     waves_clip.lineTo(pressed_outer_oval.rect().fLeft, pressed_outer_oval.rect().fTop);

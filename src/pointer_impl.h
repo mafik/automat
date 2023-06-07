@@ -15,10 +15,10 @@ struct WindowImpl;
 struct PointerImpl {
   WindowImpl& window;
   Pointer& facade;
-  vec2 pointer_position;
+  Vec2 pointer_position;
   std::vector<Pointer::IconType> icons;
 
-  vec2 button_down_position[kButtonCount];
+  Vec2 button_down_position[kButtonCount];
   time::point button_down_time[kButtonCount];
 
   std::unique_ptr<Action> action;
@@ -26,9 +26,9 @@ struct PointerImpl {
 
   KeyboardImpl* keyboard = nullptr;
 
-  PointerImpl(WindowImpl& window, Pointer& facade, vec2 position);
+  PointerImpl(WindowImpl& window, Pointer& facade, Vec2 position);
   ~PointerImpl();
-  void Move(vec2 position);
+  void Move(Vec2 position);
   void Wheel(float delta);
   void ButtonDown(PointerButton btn);
   void ButtonUp(PointerButton btn);
@@ -45,8 +45,8 @@ struct PointerImpl {
   }
   void PushIcon(Pointer::IconType new_icon) { icons.push_back(new_icon); }
   void PopIcon() { icons.pop_back(); }
-  vec2 PositionWithin(Widget&) const;
-  vec2 PositionWithinRootMachine() const;
+  Vec2 PositionWithin(Widget&) const;
+  Vec2 PositionWithinRootMachine() const;
   Keyboard& Keyboard();
 };
 

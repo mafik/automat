@@ -33,8 +33,8 @@ struct PrototypeButton : Widget {
 };
 
 struct WindowImpl : Widget {
-  vec2 position = Vec2(0, 0);  // center of the window
-  vec2 size;
+  Vec2 position = Vec2(0, 0);  // center of the window
+  Vec2 size;
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
 
   animation::Approach zoom = animation::Approach(1.0, 0.01);
@@ -42,7 +42,7 @@ struct WindowImpl : Widget {
   animation::Approach camera_y = animation::Approach(0.0, 0.005);
   bool panning_during_last_frame = false;
   bool inertia = false;
-  std::deque<vec3> camera_timeline;
+  std::deque<Vec3> camera_timeline;
   std::deque<time::point> timeline;
 
   std::vector<PointerImpl*> pointers;
@@ -51,36 +51,36 @@ struct WindowImpl : Widget {
   animation::Context actx;
 
   std::vector<PrototypeButton> prototype_buttons;
-  std::vector<vec2> prototype_button_positions;
+  std::vector<Vec2> prototype_button_positions;
 
   std::deque<float> fps_history;
 
-  WindowImpl(vec2 size, float display_pixels_per_meter);
+  WindowImpl(Vec2 size, float display_pixels_per_meter);
 
   ~WindowImpl();
 
   void ArrangePrototypeButtons() {
-    float max_w = size.Width;
-    vec2 cursor = Vec2(0, 0);
+    float max_w = size.width;
+    Vec2 cursor = Vec2(0, 0);
     for (int i = 0; i < prototype_buttons.size(); i++) {
       auto& btn = prototype_buttons[i];
-      vec2& pos = prototype_button_positions[i];
+      Vec2& pos = prototype_button_positions[i];
       SkPath shape = btn.Shape();
       SkRect bounds = shape.getBounds();
-      if (cursor.X + bounds.width() + 0.001 > max_w) {
-        cursor.X = 0;
-        cursor.Y += bounds.height() + 0.001;
+      if (cursor.x + bounds.width() + 0.001 > max_w) {
+        cursor.x = 0;
+        cursor.y += bounds.height() + 0.001;
       }
       pos = cursor + Vec2(0.001, 0.001) - Vec2(bounds.left(), bounds.top());
-      cursor.X += bounds.width() + 0.001;
+      cursor.x += bounds.width() + 0.001;
     }
   }
 
   float PxPerMeter() { return display_pixels_per_meter * zoom; }
 
   SkRect GetCameraRect() {
-    return SkRect::MakeXYWH(camera_x - size.Width / 2, camera_y - size.Height / 2, size.Width,
-                            size.Height);
+    return SkRect::MakeXYWH(camera_x - size.width / 2, camera_y - size.height / 2, size.width,
+                            size.height);
   }
 
   SkPaint& GetBackgroundPaint() {
@@ -123,13 +123,13 @@ struct WindowImpl : Widget {
     return paint;
   }
 
-  vec2 WindowToCanvas(vec2 window) const {
+  Vec2 WindowToCanvas(Vec2 window) const {
     return (window - size / 2) / zoom + Vec2(camera_x, camera_y);
   }
 
   SkMatrix WindowToCanvas() const {
     SkMatrix m;
-    m.setTranslate(-size.Width / 2, -size.Height / 2);
+    m.setTranslate(-size.width / 2, -size.height / 2);
     m.postScale(1 / zoom, 1 / zoom);
     m.postTranslate(camera_x, camera_y);
     return m;
@@ -139,13 +139,13 @@ struct WindowImpl : Widget {
     SkMatrix m;
     m.setTranslate(-camera_x, -camera_y);
     m.postScale(zoom, zoom);
-    m.postTranslate(size.Width / 2, size.Height / 2);
+    m.postTranslate(size.width / 2, size.height / 2);
     return m;
   }
 
-  vec2 CanvasToWindow(vec2 canvas) { return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2; }
+  Vec2 CanvasToWindow(Vec2 canvas) { return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2; }
 
-  void Resize(vec2 size) {
+  void Resize(Vec2 size) {
     this->size = size;
     ArrangePrototypeButtons();
   }
@@ -153,7 +153,7 @@ struct WindowImpl : Widget {
     this->display_pixels_per_meter = pixels_per_meter;
   }
   SkPath Shape() const override {
-    return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.Width, size.Height));
+    return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
   void Draw(gui::DrawContext&) const override {
     FATAL() << "WindowImpl::Draw() should never be called";
@@ -171,8 +171,8 @@ struct WindowImpl : Widget {
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
       if (&child == &prototype_buttons[i]) {
-        return SkMatrix::Translate(-prototype_button_positions[i].X,
-                                   -prototype_button_positions[i].Y);
+        return SkMatrix::Translate(-prototype_button_positions[i].x,
+                                   -prototype_button_positions[i].y);
       }
     }
     if (&child == root_machine) {
@@ -180,7 +180,7 @@ struct WindowImpl : Widget {
     }
     return SkMatrix::I();
   }
-  std::unique_ptr<Pointer> MakePointer(vec2 position);
+  std::unique_ptr<Pointer> MakePointer(Vec2 position);
   std::string_view GetState();
 };
 

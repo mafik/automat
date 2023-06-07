@@ -160,13 +160,13 @@ SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) co
     return SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
                                -(my_bounds.top() - run_bounds.fTop) - 0.001);
   }
-  vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
+  Vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
   for (auto& widget : connection_widgets) {
-    pos.Y -= widget->Height();
+    pos.y -= widget->Height();
     if (widget.get() == &child) {
-      return SkMatrix::Translate(-pos.X, -pos.Y);
+      return SkMatrix::Translate(-pos.x, -pos.y);
     }
-    pos.Y -= kMargin;
+    pos.y -= kMargin;
   }
   return SkMatrix::I();
 }
@@ -195,11 +195,11 @@ void Location::UpdateConnectionWidgets() {
   }
 }
 
-vec2 Location::AnimatedPosition(animation::Context& actx) const {
-  vec2 ret = position;
+Vec2 Location::AnimatedPosition(animation::Context& actx) const {
+  Vec2 ret = position;
   if (drag_action) {
-    ret.X += drag_action->round_x[actx];
-    ret.Y += drag_action->round_y[actx];
+    ret.x += drag_action->round_x[actx];
+    ret.y += drag_action->round_y[actx];
   }
   return ret;
 }

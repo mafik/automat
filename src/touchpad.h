@@ -13,7 +13,7 @@ namespace automat::touchpad {
 
 struct Touch {
   uint32_t id;
-  vec2 pos;
+  Vec2 pos;
 };
 
 struct TouchPad {
@@ -23,7 +23,7 @@ struct TouchPad {
   std::vector<Touch> touches;
 
   bool panning = false;
-  vec2 pan = Vec2(0, 0);
+  Vec2 pan = Vec2(0, 0);
   float zoom = 1;
 };
 

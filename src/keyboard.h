@@ -136,7 +136,7 @@ struct Key {
 
 struct Caret final {
   Caret(CaretImpl& impl);
-  void PlaceIBeam(vec2 position);
+  void PlaceIBeam(Vec2 position);
 
  private:
   CaretImpl& impl;
@@ -146,7 +146,7 @@ struct CaretOwner {
   std::vector<CaretImpl*> carets;
   virtual ~CaretOwner();
 
-  Caret& RequestCaret(Keyboard&, const Path& widget_path, vec2 position);
+  Caret& RequestCaret(Keyboard&, const Path& widget_path, Vec2 position);
   virtual void ReleaseCaret(Caret&) = 0;
   virtual Widget* CaretWidget() = 0;
 

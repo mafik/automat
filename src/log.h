@@ -68,8 +68,8 @@ const Logger& operator<<(const Logger&, std::string_view);
 const Logger& operator<<(const Logger&, const unsigned char*);
 
 // Support for logging vec's from math.hh
-const Logger& operator<<(const Logger&, vec2);
-const Logger& operator<<(const Logger&, vec3);
+const Logger& operator<<(const Logger&, Vec2);
+const Logger& operator<<(const Logger&, Vec3);
 
 template <typename T>
 concept loggable = requires(T& v) {

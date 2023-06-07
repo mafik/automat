@@ -21,7 +21,7 @@ SkMatrix AlignCenter::TransformToChild(const Widget& child_arg, animation::Conte
     return SkMatrix::I();
   }
   SkRect bounds = child->Shape().getBounds();
-  SkPoint c = bounds.center();
+  Vec2 c = bounds.center();
   return SkMatrix::Translate(c);
 }
 

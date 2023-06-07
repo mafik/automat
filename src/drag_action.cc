@@ -7,17 +7,17 @@
 
 namespace automat {
 
-static vec2 RoundToMilimeters(vec2 v) {
-  return Vec2(round(v.X * 1000) / 1000., round(v.Y * 1000) / 1000.);
+static Vec2 RoundToMilimeters(Vec2 v) {
+  return Vec2(round(v.x * 1000) / 1000., round(v.y * 1000) / 1000.);
 }
 
 void DragActionBase::Begin(gui::Pointer& pointer) {
   current_position = pointer.PositionWithinRootMachine();
 }
 
-vec2 DragActionBase::TargetPosition() const { return current_position - contact_point; }
+Vec2 DragActionBase::TargetPosition() const { return current_position - contact_point; }
 
-vec2 DragActionBase::TargetPositionRounded() const { return RoundToMilimeters(TargetPosition()); }
+Vec2 DragActionBase::TargetPositionRounded() const { return RoundToMilimeters(TargetPosition()); }
 
 void DragActionBase::Update(gui::Pointer& pointer) {
   auto old_pos = current_position - contact_point;
@@ -25,16 +25,16 @@ void DragActionBase::Update(gui::Pointer& pointer) {
   current_position = pointer.PositionWithinRootMachine();
   auto new_pos = current_position - contact_point;
   auto new_round = RoundToMilimeters(new_pos);
-  vec2 d = new_pos - old_pos;
-  if (old_round.X != new_round.X && abs(d.X) < 0.0005f) {
+  Vec2 d = new_pos - old_pos;
+  if (old_round.x != new_round.x && abs(d.x) < 0.0005f) {
     for (auto& rx : round_x) {
-      rx.value += old_round.X - new_round.X;
+      rx.value += old_round.x - new_round.x;
       rx.value = std::clamp(rx.value, -0.001f, 0.001f);
     }
   }
-  if (old_round.Y != new_round.Y && abs(d.Y) < 0.0005f) {
+  if (old_round.y != new_round.y && abs(d.y) < 0.0005f) {
     for (auto& ry : round_y) {
-      ry.value += old_round.Y - new_round.Y;
+      ry.value += old_round.y - new_round.y;
       ry.value = std::clamp(ry.value, -0.001f, 0.001f);
     }
   }
@@ -55,9 +55,9 @@ void DragActionBase::DrawAction(gui::DrawContext& ctx) {
   ry.Tick(actx);
 
   auto pos = rounded + Vec2(rx, ry);
-  canvas.translate(pos.X, pos.Y);
+  canvas.translate(pos.x, pos.y);
   DragDraw(ctx);
-  canvas.translate(-pos.X, -pos.Y);
+  canvas.translate(-pos.x, -pos.y);
 }
 
 void DragObjectAction::DragUpdate() {

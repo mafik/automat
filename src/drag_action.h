@@ -10,11 +10,11 @@ struct Object;
 struct Location;
 
 struct DragActionBase : Action {
-  vec2 contact_point;
-  vec2 current_position;
+  Vec2 contact_point;
+  Vec2 current_position;
 
-  vec2 TargetPosition() const;
-  vec2 TargetPositionRounded() const;
+  Vec2 TargetPosition() const;
+  Vec2 TargetPositionRounded() const;
 
   struct ApproachMaker {
     animation::Approach operator()() {

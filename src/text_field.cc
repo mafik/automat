@@ -96,14 +96,14 @@ SkPath TextField::Shape() const {
   return SkPath::RRect(bounds, kTextCornerRadius, kTextCornerRadius);
 }
 
-static vec2 GetPositionFromIndex(std::string_view text, int index) {
+static Vec2 GetPositionFromIndex(std::string_view text, int index) {
   return Vec2(kTextMargin + GetFont().PositionFromIndex(text, index),
               (kTextFieldHeight - kLetterSize) / 2);
 }
 
 void UpdateCaret(TextField& text_field, Caret& caret) {
   int index = text_field.caret_positions[&caret].index;
-  vec2 caret_pos = GetPositionFromIndex(*text_field.text, index);
+  Vec2 caret_pos = GetPositionFromIndex(*text_field.text, index);
   caret.PlaceIBeam(caret_pos);
 }
 
@@ -114,8 +114,8 @@ struct TextSelectAction : Action {
   TextSelectAction(TextField& text_field) : text_field(text_field) {}
 
   int GetIndexFromPointer(Pointer& pointer) {
-    vec2 local = pointer.PositionWithin(text_field);
-    return GetFont().IndexFromPosition(*text_field.text, local.X - kTextMargin);
+    Vec2 local = pointer.PositionWithin(text_field);
+    return GetFont().IndexFromPosition(*text_field.text, local.x - kTextMargin);
   }
 
   void UpdateCaretFromPointer(Pointer& pointer) {
@@ -133,7 +133,7 @@ struct TextSelectAction : Action {
 
   void Begin(Pointer& pointer) override {
     int index = GetIndexFromPointer(pointer);
-    vec2 pos = GetPositionFromIndex(*text_field.text, index);
+    Vec2 pos = GetPositionFromIndex(*text_field.text, index);
     caret = &text_field.RequestCaret(pointer.Keyboard(), pointer.Path(), pos);
     text_field.caret_positions[caret] = {.index = index};
   }

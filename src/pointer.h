@@ -17,9 +17,9 @@ using Path = std::vector<Widget*>;
 enum PointerButton { kButtonUnknown, kMouseLeft, kMouseMiddle, kMouseRight, kButtonCount };
 
 struct Pointer final {
-  Pointer(Window&, vec2 position);
+  Pointer(Window&, Vec2 position);
   ~Pointer();
-  void Move(vec2 position);
+  void Move(Vec2 position);
   void Wheel(float delta);
   void ButtonDown(PointerButton);
   void ButtonUp(PointerButton);
@@ -31,8 +31,8 @@ struct Pointer final {
   void PopIcon();
 
   const Path& Path() const;
-  vec2 PositionWithin(Widget&) const;
-  vec2 PositionWithinRootMachine() const;
+  Vec2 PositionWithin(Widget&) const;
+  Vec2 PositionWithinRootMachine() const;
 
   Keyboard& Keyboard();
 

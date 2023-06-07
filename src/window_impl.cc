@@ -26,7 +26,7 @@ namespace {
 std::vector<WindowImpl*> windows;
 }  // namespace
 
-WindowImpl::WindowImpl(vec2 size, float display_pixels_per_meter)
+WindowImpl::WindowImpl(Vec2 size, float display_pixels_per_meter)
     : size(size), display_pixels_per_meter(display_pixels_per_meter) {
   prototype_buttons.reserve(Prototypes().size());
   for (auto& proto : Prototypes()) {
@@ -59,7 +59,7 @@ void WindowImpl::Draw(SkCanvas& canvas) {
     }
 
     bool panning_now = false;
-    vec2 total_pan = Vec2(0, 0);
+    Vec2 total_pan = Vec2(0, 0);
     float total_zoom = 1;
     {
       std::lock_guard<std::mutex> lock(touchpad::touchpads_mutex);
@@ -72,8 +72,8 @@ void WindowImpl::Draw(SkCanvas& canvas) {
       }
     }
     if (total_pan != Vec2(0, 0)) {
-      camera_x.Shift(total_pan.X / zoom);
-      camera_y.Shift(total_pan.Y / zoom);
+      camera_x.Shift(total_pan.x / zoom);
+      camera_y.Shift(total_pan.y / zoom);
     }
     if (total_zoom != 1) {
       Zoom(total_zoom);
@@ -90,9 +90,9 @@ void WindowImpl::Draw(SkCanvas& canvas) {
     if (inertia) {
       if (timeline.size() > 1) {
         auto dt = (timeline.back() - timeline.front()).count();
-        auto dx = camera_timeline.back().X - camera_timeline.front().X;
-        auto dy = camera_timeline.back().Y - camera_timeline.front().Y;
-        auto dz = camera_timeline.back().Z / camera_timeline.front().Z;
+        auto dx = camera_timeline.back().x - camera_timeline.front().x;
+        auto dy = camera_timeline.back().y - camera_timeline.front().y;
+        auto dz = camera_timeline.back().z / camera_timeline.front().z;
         camera_x.Shift(dx / dt * actx.timer.d * 0.8);
         camera_y.Shift(dy / dt * actx.timer.d * 0.8);
         float z = pow(dz, actx.timer.d / dt * 0.8);
@@ -116,22 +116,22 @@ void WindowImpl::Draw(SkCanvas& canvas) {
     if (stabilize_mouse) {
       if (pointers.size() > 0) {
         PointerImpl* first_pointer = *pointers.begin();
-        vec2 mouse_position = first_pointer->pointer_position;
-        vec2 focus_pre = WindowToCanvas(mouse_position);
+        Vec2 mouse_position = first_pointer->pointer_position;
+        Vec2 focus_pre = WindowToCanvas(mouse_position);
         zoom.Tick(actx);
-        vec2 focus_post = WindowToCanvas(mouse_position);
-        vec2 focus_delta = focus_post - focus_pre;
-        camera_x.Shift(-focus_delta.X);
-        camera_y.Shift(-focus_delta.Y);
+        Vec2 focus_post = WindowToCanvas(mouse_position);
+        Vec2 focus_delta = focus_post - focus_pre;
+        camera_x.Shift(-focus_delta.x);
+        camera_y.Shift(-focus_delta.y);
       }
     } else {  // stabilize camera target
-      vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
-      vec2 target_screen = CanvasToWindow(focus_pre);
+      Vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
+      Vec2 target_screen = CanvasToWindow(focus_pre);
       zoom.Tick(actx);
-      vec2 focus_post = WindowToCanvas(target_screen);
-      vec2 focus_delta = focus_post - focus_pre;
-      camera_x.value -= focus_delta.X;
-      camera_y.value -= focus_delta.Y;
+      Vec2 focus_post = WindowToCanvas(target_screen);
+      Vec2 focus_delta = focus_post - focus_pre;
+      camera_x.value -= focus_delta.x;
+      camera_y.value -= focus_delta.y;
     }
 
     camera_x.Tick(actx);
@@ -165,10 +165,10 @@ void WindowImpl::Draw(SkCanvas& canvas) {
     {
       // Leave 1mm of margin so that the user can still see the edge of the
       // work area
-      vec2 bottom_left = WindowToCanvas(Vec2(0.001, 0.001));
-      vec2 top_right = WindowToCanvas(size - Vec2(0.001, 0.001));
+      Vec2 bottom_left = WindowToCanvas(Vec2(0.001, 0.001));
+      Vec2 top_right = WindowToCanvas(size - Vec2(0.001, 0.001));
       SkRect window_bounds =
-          SkRect::MakeLTRB(bottom_left.X, top_right.Y, top_right.X, bottom_left.Y);
+          SkRect::MakeLTRB(bottom_left.x, top_right.y, top_right.x, bottom_left.y);
       if (work_area.left() > window_bounds.right()) {
         camera_x.Shift(work_area.left() - window_bounds.right());
       }
@@ -185,7 +185,7 @@ void WindowImpl::Draw(SkCanvas& canvas) {
     }
 
     canvas.save();
-    canvas.translate(size.Width / 2., size.Height / 2.);
+    canvas.translate(size.width / 2., size.height / 2.);
     canvas.scale(zoom, zoom);
     canvas.translate(-camera_x, -camera_y);
 
@@ -202,8 +202,8 @@ void WindowImpl::Draw(SkCanvas& canvas) {
       SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
       target_paint.setStyle(SkPaint::kStroke_Style);
       target_paint.setStrokeWidth(0.001);  // 1mm
-      float target_width = size.Width;
-      float target_height = size.Height;
+      float target_width = size.width;
+      float target_height = size.height;
       SkRect target_rect =
           SkRect::MakeXYWH(camera_x.target - target_width / 2, camera_y.target - target_height / 2,
                            target_width, target_height);
@@ -229,9 +229,9 @@ void WindowImpl::Draw(SkCanvas& canvas) {
 
   // Draw prototype shelf
   for (int i = 0; i < prototype_buttons.size(); i++) {
-    vec2& position = prototype_button_positions[i];
+    Vec2& position = prototype_button_positions[i];
     canvas.save();
-    canvas.translate(position.X, position.Y);
+    canvas.translate(position.x, position.y);
     prototype_buttons[i].Draw(draw_ctx);
     canvas.restore();
   }
@@ -250,7 +250,7 @@ void WindowImpl::Draw(SkCanvas& canvas) {
   SkPaint fps_paint;
   auto& font = GetFont();
   canvas.save();
-  canvas.translate(0.001, size.Y - 0.001 - gui::kLetterSize);
+  canvas.translate(0.001, size.y - 0.001 - gui::kLetterSize);
   font.DrawText(canvas, fps_str, fps_paint);
   canvas.restore();
 }
@@ -258,14 +258,14 @@ void WindowImpl::Draw(SkCanvas& canvas) {
 void WindowImpl::Zoom(float delta) {
   if (pointers.size() > 0) {
     PointerImpl* first_pointer = *pointers.begin();
-    vec2 mouse_position = first_pointer->pointer_position;
-    vec2 focus_pre = WindowToCanvas(mouse_position);
+    Vec2 mouse_position = first_pointer->pointer_position;
+    Vec2 focus_pre = WindowToCanvas(mouse_position);
     zoom.target *= delta;
     zoom.value *= delta;
-    vec2 focus_post = WindowToCanvas(mouse_position);
-    vec2 focus_delta = focus_post - focus_pre;
-    camera_x.Shift(-focus_delta.X);
-    camera_y.Shift(-focus_delta.Y);
+    Vec2 focus_post = WindowToCanvas(mouse_position);
+    Vec2 focus_delta = focus_post - focus_pre;
+    camera_x.Shift(-focus_delta.x);
+    camera_y.Shift(-focus_delta.y);
   } else {
     zoom.target *= delta;
     zoom.value *= delta;

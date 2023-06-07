@@ -124,22 +124,22 @@ const Logger& operator<<(const Logger& logger, const unsigned char* s) {
   return logger;
 }
 
-const Logger& operator<<(const Logger& logger, vec2 v) {
-  logger.impl->buffer += "vec2( ";
-  logger.impl->buffer += std::to_string(v.X);
+const Logger& operator<<(const Logger& logger, Vec2 v) {
+  logger.impl->buffer += "Vec2( ";
+  logger.impl->buffer += std::to_string(v.x);
   logger.impl->buffer += ", ";
-  logger.impl->buffer += std::to_string(v.Y);
+  logger.impl->buffer += std::to_string(v.y);
   logger.impl->buffer += " )";
   return logger;
 }
 
-const Logger& operator<<(const Logger& logger, vec3 v) {
-  logger.impl->buffer += "vec3( ";
-  logger.impl->buffer += std::to_string(v.X);
+const Logger& operator<<(const Logger& logger, Vec3 v) {
+  logger.impl->buffer += "Vec3( ";
+  logger.impl->buffer += std::to_string(v.x);
   logger.impl->buffer += ", ";
-  logger.impl->buffer += std::to_string(v.Y);
+  logger.impl->buffer += std::to_string(v.y);
   logger.impl->buffer += ", ";
-  logger.impl->buffer += std::to_string(v.Z);
+  logger.impl->buffer += std::to_string(v.z);
   logger.impl->buffer += " )";
   return logger;
 }

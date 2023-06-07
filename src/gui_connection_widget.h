@@ -14,7 +14,7 @@ struct ConnectionWidget;
 
 struct DragConnectionAction : Action {
   ConnectionWidget* widget;
-  vec2 current_position;
+  Vec2 current_position;
   DragConnectionAction(ConnectionWidget* widget);
   ~DragConnectionAction() override;
   void Begin(gui::Pointer& pointer) override;

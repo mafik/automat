@@ -8,7 +8,7 @@ namespace automat::gui {
 
 Caret::Caret(CaretImpl& impl) : impl(impl) {}
 
-void Caret::PlaceIBeam(vec2 position) { impl.PlaceIBeam(position); }
+void Caret::PlaceIBeam(Vec2 position) { impl.PlaceIBeam(position); }
 
 CaretOwner::~CaretOwner() {
   for (auto caret : carets) {
@@ -16,7 +16,7 @@ CaretOwner::~CaretOwner() {
   }
 }
 
-Caret& CaretOwner::RequestCaret(Keyboard& keyboard, const Path& widget_path, vec2 position) {
+Caret& CaretOwner::RequestCaret(Keyboard& keyboard, const Path& widget_path, Vec2 position) {
   auto& kb = *keyboard.impl;
   std::set<std::unique_ptr<CaretImpl>>::iterator it;
   if (kb.carets.empty()) {

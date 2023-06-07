@@ -21,7 +21,7 @@ struct Button : Widget {
   SkRRect RRect() const;
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
-  virtual vec2 Position() const { return Vec2(0, 0); }
+  virtual Vec2 Position() const { return Vec2(0, 0); }
   virtual void Activate() {}
   virtual bool Filled() const { return false; }
 

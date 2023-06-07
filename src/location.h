@@ -39,7 +39,7 @@ struct Location : gui::Widget {
   std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
   DragLocationAction* drag_action = nullptr;
-  vec2 position = {0, 0};
+  Vec2 position = {0, 0};
 
   // Connections of this Location.
   // Connection is owned by both incoming & outgoing locations.
@@ -213,7 +213,7 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number);
 
-  vec2 AnimatedPosition(animation::Context&) const;
+  Vec2 AnimatedPosition(animation::Context&) const;
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;

@@ -12,8 +12,8 @@ CaretImpl::~CaretImpl() {}
 static SkPath PointerIBeam(const KeyboardImpl& keyboard) {
   if (keyboard.pointer) {
     float px = 1 / keyboard.window.PxPerMeter();
-    vec2 pos = keyboard.pointer->PositionWithin(*root_machine);
-    SkRect bounds = SkRect::MakeXYWH(pos.X, pos.Y, 0, 0);
+    Vec2 pos = keyboard.pointer->PositionWithin(*root_machine);
+    SkRect bounds = SkRect::MakeXYWH(pos.x, pos.y, 0, 0);
     switch (keyboard.pointer->Icon()) {
       case Pointer::IconType::kIconArrow:
         bounds.fRight += 2 * px;
@@ -35,10 +35,10 @@ static SkPath PointerIBeam(const KeyboardImpl& keyboard) {
   }
 }
 
-void CaretImpl::PlaceIBeam(vec2 position) {
+void CaretImpl::PlaceIBeam(Vec2 position) {
   float width = GetFont().line_thickness;
   float height = kLetterSize;
-  shape = SkPath::Rect(SkRect::MakeXYWH(position.X - width / 2, position.Y, width, height));
+  shape = SkPath::Rect(SkRect::MakeXYWH(position.x - width / 2, position.y, width, height));
   last_blink = time::now();
 }
 

@@ -37,8 +37,8 @@ int window_width = 1280;
 int window_height = 720;
 uint8_t xi_opcode;
 
-vec2 window_position_on_screen;
-vec2 mouse_position_on_screen;
+Vec2 window_position_on_screen;
+Vec2 mouse_position_on_screen;
 
 struct VerticalScroll {
   xcb_input_device_id_t device_id;
@@ -57,15 +57,15 @@ float DisplayPxPerMeter() {
   return 1000.0f * screen->width_in_pixels / screen->width_in_millimeters;
 }
 
-vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter(); }
+Vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter(); }
 
 // "Screen" coordinates are in pixels and their origin is in the upper left
 // corner. "Window" coordinates are in meters and their origin is in the bottom
 // left window corner.
 
-vec2 ScreenToWindow(vec2 screen) {
-  vec2 window = (screen - window_position_on_screen - Vec2(0, window_height)) / DisplayPxPerMeter();
-  window.Y = -window.Y;
+Vec2 ScreenToWindow(Vec2 screen) {
+  Vec2 window = (screen - window_position_on_screen - Vec2(0, window_height)) / DisplayPxPerMeter();
+  window.y = -window.y;
   return window;
 }
 
@@ -503,8 +503,8 @@ void RenderLoop() {
                     }
                   }
                 }
-                mouse_position_on_screen.X = fp1616_to_float(ev->root_x);
-                mouse_position_on_screen.Y = fp1616_to_float(ev->root_y);
+                mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
+                mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
                 GetMouse().Move(ScreenToWindow(mouse_position_on_screen));
                 break;
               }
@@ -518,8 +518,8 @@ void RenderLoop() {
                   ScanDevices();
                 }
                 xcb_input_enter_event_t* ev = (xcb_input_enter_event_t*)event;
-                mouse_position_on_screen.X = fp1616_to_float(ev->root_x);
-                mouse_position_on_screen.Y = fp1616_to_float(ev->root_y);
+                mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
+                mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
                 GetMouse().Move(ScreenToWindow(mouse_position_on_screen));
                 break;
               }

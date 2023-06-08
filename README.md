@@ -4,7 +4,7 @@ Control computers by combining interactive blocks.
 
 # Status
 
-Automat is active development. It's not ready for use yet.
+Automat is under active development. It's not ready for use yet.
 
 # TODOs
 

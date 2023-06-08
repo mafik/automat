@@ -20,12 +20,6 @@ namespace automat::library {
 
 DEFINE_PROTO(Number);
 
-// TODO: Update position of other cursors when text is appended by a button
-// TODO: Buttons get highlighted immediately on mouse over
-// TODO: When precision touchpad is pressed down, initial touch point is
-// "forgotten" for the purpose of dragging
-// TODO: "Iconified" drawing of widgets
-
 // Margin used between rows and columns of buttons
 static constexpr float kBetweenButtonsMargin = kMargin;
 

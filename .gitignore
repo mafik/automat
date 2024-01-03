@@ -37,6 +37,7 @@ __pycache__
 
 *.log
 *.pcap
+*.pdb
 
 build
 

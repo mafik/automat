@@ -1,6 +1,6 @@
 {
   "python.analysis.extraPaths": [
-    "./python"
+    "./run_py"
   ],
   "cmake.configureOnOpen": false,
   "editor.formatOnSave": true

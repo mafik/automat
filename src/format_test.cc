@@ -1,6 +1,8 @@
 #include "format.hh"
 
-#include <gtest/gtest.h>
+#include "gtest.hh"
+
+using namespace maf;
 
 TEST(FormatTest, BasicTest) {
   std::string result = f("Hello, %s!", "world");

@@ -53,7 +53,7 @@ void Task::PostExecute() {
 
 std::string Task::Format() { return "Task()"; }
 
-std::string RunTask::Format() { return f("RunTask(%s)", target->LoggableString().c_str()); }
+std::string RunTask::Format() { return f("RunTask(%s)", target->ToStr().c_str()); }
 
 void RunTask::Execute() {
   PreExecute();
@@ -68,8 +68,7 @@ void RunTask::Execute() {
 }
 
 std::string UpdateTask::Format() {
-  return f("UpdateTask(%s, %s)", target->LoggableString().c_str(),
-           updated->LoggableString().c_str());
+  return f("UpdateTask(%s, %s)", target->ToStr().c_str(), updated->ToStr().c_str());
 }
 
 void UpdateTask::Execute() {
@@ -79,9 +78,7 @@ void UpdateTask::Execute() {
   delete this;
 }
 
-std::string FunctionTask::Format() {
-  return f("FunctionTask(%s)", target->LoggableString().c_str());
-}
+std::string FunctionTask::Format() { return f("FunctionTask(%s)", target->ToStr().c_str()); }
 
 void FunctionTask::Execute() {
   PreExecute();
@@ -90,8 +87,7 @@ void FunctionTask::Execute() {
 }
 
 std::string ErroredTask::Format() {
-  return f("ErroredTask(%s, %s)", target->LoggableString().c_str(),
-           errored->LoggableString().c_str());
+  return f("ErroredTask(%s, %s)", target->ToStr().c_str(), errored->ToStr().c_str());
 }
 
 void ErroredTask::Execute() {

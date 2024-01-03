@@ -1,11 +1,12 @@
 #include "font.hh"
 
 #include <include/core/SkData.h>
+#include <include/core/SkFontMgr.h>
 #include <modules/skshaper/include/SkShaper.h>
 #include <modules/skunicode/include/SkUnicode.h>
 #include <src/base/SkUTF.h>
 
-#include "generated/assets.hh"
+#include "../build/generated/embedded.hh"
 #include "log.hh"
 #include "math.hh"
 
@@ -25,7 +26,8 @@ std::unique_ptr<Font> Font::Make(float letter_size_mm) {
   float font_size_guess = letter_size_pt / 0.7f;  // this was determined empirically
   // Create the font using the approximate size.
   // TODO: embed & use Noto Color Emoji
-  auto data = SkData::MakeWithoutCopy(assets::NotoSans_wght__ttf, assets::NotoSans_wght__ttf_size);
+  auto& ttf_content = maf::embedded::assets_NotoSans_wght__ttf.content;
+  auto data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
   auto typeface = SkTypeface::MakeFromData(data);
   SkFont sk_font(typeface, font_size_guess, 1.f, 0.f);
   SkFontMetrics metrics;
@@ -118,8 +120,8 @@ struct MeasureLineRunHandler : public LineRunHandler {
 };
 
 SkShaper& GetShaper() {
-  thread_local std::unique_ptr<SkShaper> shaper =
-      SkShaper::MakeShapeDontWrapOrReorder(SkUnicode::MakeIcuBasedUnicode());
+  thread_local std::unique_ptr<SkShaper> shaper = SkShaper::MakeShapeDontWrapOrReorder(
+      SkUnicode::MakeIcuBasedUnicode(), SkFontMgr::RefDefault());
   return *shaper;
 }
 

@@ -1,5 +1,14 @@
 #include "touchpad.hh"
 
+namespace automat::touchpad {
+
+std::mutex touchpads_mutex;
+std::vector<TouchPad*> touchpads;
+
+}  // namespace automat::touchpad
+
+#if defined(_WIN32)
+
 #include <src/base/SkUTF.h>
 #include <stdint.h>
 
@@ -10,6 +19,7 @@
 #include "hid.hh"
 #include "hidapi.h"
 #include "log.hh"
+#include "optional.hh"
 #include "time.hh"
 #include "win_main.hh"
 
@@ -45,13 +55,10 @@ std::string HexDump(uint8_t* ptr, size_t size) {
   return hex_dump;
 }
 
-std::mutex touchpads_mutex;
-std::vector<TouchPad*> touchpads;
-
 struct ReportAccessor {
   uint8_t report_id = 0;
-  std::optional<hid::Accessor> touch_valid, tip_switch, button1, contact_identifier, contact_count,
-      x, y, scan_time;
+  Optional<hid::Accessor> touch_valid, tip_switch, button1, contact_identifier, contact_count, x, y,
+      scan_time;
   void ProcessInput(uint8_t* report, size_t report_bytes) {
     std::string log_message = "Touchpad report " + f("0x%02X", report_id);
     bool is_touch_valid = true;
@@ -411,3 +418,5 @@ std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
 }
 
 }  // namespace automat::touchpad
+
+#endif  // _WIN32

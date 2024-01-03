@@ -38,7 +38,7 @@ union Vec2 {
   constexpr operator SkPoint() const { return sk; }
   constexpr bool operator==(const Vec2& rhs) const { return x == rhs.x && y == rhs.y; }
   constexpr bool operator!=(const Vec2& rhs) const { return !(*this == rhs); }
-  std::string LoggableString() const;
+  std::string ToStr() const;
 };
 
 static_assert(sizeof(Vec2) == 8, "Vec2 is not 8 bytes");

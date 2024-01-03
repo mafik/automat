@@ -218,8 +218,9 @@ const char kWindowName[] = "Automat";
 float fp1616_to_float(xcb_input_fp1616_t fp) { return fp / 65536.0f; }
 double fp3232_to_double(xcb_input_fp3232_t fp) { return fp.integral + fp.frac / 4294967296.0; }
 
-#define WRAP(f, ...) \
-  std::unique_ptr<f##_reply_t>(f##_reply(connection, f(connection, __VA_ARGS__), nullptr))
+#define WRAP(f, ...)                             \
+  std::unique_ptr<f##_reply_t, void (*)(void*)>( \
+      f##_reply(connection, f(connection, __VA_ARGS__), nullptr), free)
 
 void ScanDevices() {
   vertical_scroll.reset();
@@ -585,6 +586,8 @@ int LinuxMain(int argc, char* argv[]) {
   RenderLoop();
 
   vk::Destroy();
+
+  LOG << "Exiting.";
 
   return 0;
 }

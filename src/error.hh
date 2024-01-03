@@ -42,13 +42,14 @@ the error upwards. Top-level Machines print their errors to the console.
 */
 struct Error {
   std::string text;
-  Location* source = nullptr;
+  Location* source;
   std::unique_ptr<Object> saved_object;
   std::source_location source_location;
 
   Error(std::string_view text,
-        std::source_location source_location = std::source_location::current())
-      : text(text), source_location(source_location) {}
+        std::source_location source_location = std::source_location::current());
+
+  ~Error();
 };
 
 inline std::ostream& operator<<(std::ostream& os, const Error& e) { return os << e.text; }

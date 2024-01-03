@@ -1,9 +1,46 @@
-*_test
-*.py[cod]
-compile_commands.json
-.cache
-*.pdb
-*.exe
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
 *.lib
-automat
+
+# Executables
+*.exe
+*.out
+*.app
+
+__pycache__
+.cache
+*.pyc
+
+*.log
+*.pcap
+
+build
+
 .gdb_history
+
+tests/dhclient
+tests/dhclient.pid

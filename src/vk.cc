@@ -12,7 +12,12 @@
 #include <include/core/SkColorType.h>
 #include <include/core/SkSurface.h>
 #include <include/gpu/GrBackendSemaphore.h>
+#include <include/gpu/GrBackendSurface.h>
 #include <include/gpu/GrDirectContext.h>
+#include <include/gpu/MutableTextureState.h>
+#include <include/gpu/ganesh/SkSurfaceGanesh.h>
+#include <include/gpu/ganesh/vk/GrVkBackendSurface.h>
+#include <include/gpu/ganesh/vk/GrVkDirectContext.h>
 #include <include/gpu/vk/GrVkBackendContext.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <src/gpu/ganesh/vk/GrVkUtil.h>
@@ -52,9 +57,9 @@ struct Instance : vkb::Instance {
   std::string error = "";
   std::vector<const char*> extensions = {
 #if defined(_WIN32)
-    "VK_KHR_win32_surface"
+      "VK_KHR_win32_surface"
 #elif defined(__linux__)
-    "VK_KHR_xcb_surface"
+      "VK_KHR_xcb_surface"
 #endif
   };
 } instance;
@@ -351,7 +356,7 @@ void InitGrContext() {
 
   GrContextOptions options = GrContextOptions();
 
-  gr_context = GrDirectContext::MakeVulkan(backend, options);
+  gr_context = GrDirectContexts::MakeVulkan(backend, options);
 }
 void InitFunctions() {
 #define INSTANCE_PROC(P) P = (PFN_vk##P)instance.GetProc("vk" #P)
@@ -416,18 +421,18 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat 
                           .fSharingMode = sharingMode};
 
     if (usageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) {
-      GrBackendTexture backendTexture(width, height, info);
-      surfaces[i] = SkSurface::MakeFromBackendTexture(gr_context.get(), backendTexture,
-                                                      kTopLeft_GrSurfaceOrigin, cfg_MSAASampleCount,
-                                                      colorType, color_space, &surface_props);
+      GrBackendTexture backendTexture = GrBackendTextures::MakeVk(width, height, info);
+      surfaces[i] = SkSurfaces::WrapBackendTexture(gr_context.get(), backendTexture,
+                                                   kTopLeft_GrSurfaceOrigin, cfg_MSAASampleCount,
+                                                   colorType, color_space, &surface_props);
     } else {
       if (cfg_MSAASampleCount > 1) {
         return false;
       }
-      GrBackendRenderTarget backendRT(width, height, sample_count, info);
-      surfaces[i] = SkSurface::MakeFromBackendRenderTarget(gr_context.get(), backendRT,
-                                                           kTopLeft_GrSurfaceOrigin, colorType,
-                                                           color_space, &surface_props);
+      GrBackendRenderTarget backendRT = GrBackendRenderTargets::MakeVk(width, height, info);
+      surfaces[i] =
+          SkSurfaces::WrapBackendRenderTarget(gr_context.get(), backendRT, kTopLeft_GrSurfaceOrigin,
+                                              colorType, color_space, &surface_props);
     }
     if (!surfaces[i]) {
       return false;
@@ -698,8 +703,12 @@ void Swapchain::SwapBuffers() {
   GrFlushInfo info = {.fNumSemaphores = 1, .fSignalSemaphores = &beSemaphore};
   skgpu::MutableTextureState presentState(VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                                           device.present_queue_index);
-  surface->flush(info, &presentState);
-  surface->recordingContext()->asDirectContext()->submit();
+
+  gr_context->flush(surface, info, &presentState);
+  gr_context->submit();
+
+  // surface->flush(info, &presentState);
+  //  surface->recordingContext()->asDirectContext()->submit();
 
   const VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
                                         nullptr,

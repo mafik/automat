@@ -2,4 +2,6 @@
 
 #include "format.hh"
 
-std::string Vec2::LoggableString() const { return f("Vec2(%f, %f)", x, y); }
+using namespace maf;
+
+std::string Vec2::ToStr() const { return f("Vec2(%f, %f)", x, y); }

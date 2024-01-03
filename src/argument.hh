@@ -4,7 +4,10 @@
 #include <string>
 #include <vector>
 
+#include "format.hh"
 #include "location.hh"
+
+using namespace maf;
 
 namespace automat {
 

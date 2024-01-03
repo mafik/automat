@@ -136,7 +136,7 @@ struct Machine : LiveObject {
     LiveObject::Relocate(parent);
   }
 
-  string LoggableString() const { return f("Machine(%s)", name.c_str()); }
+  string ToStr() const { return f("Machine(%s)", name.c_str()); }
 
   Location* Front(const string& name) {
     for (int i = 0; i < front.size(); ++i) {

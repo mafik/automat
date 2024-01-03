@@ -258,7 +258,7 @@ struct Location : gui::Widget {
   // found.
   void ReportMissing(std::string_view property);
 
-  std::string LoggableString() const;
+  std::string ToStr() const;
 };
 
 }  // namespace automat

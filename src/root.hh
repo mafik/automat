@@ -1,5 +1,7 @@
 #pragma once
 
+#include <thread>
+
 #include "base.hh"
 
 namespace automat {

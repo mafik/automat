@@ -284,7 +284,7 @@ std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::Pointer
 
 void Location::SetNumber(double number) { SetText(f("%lf", number)); }
 
-std::string Location::LoggableString() const {
+std::string Location::ToStr() const {
   std::string_view object_name = object->Name();
   if (name.empty()) {
     if (object_name.empty()) {

@@ -75,11 +75,11 @@ SkRRect NumberTextField::ShapeRRect() const {
 }
 
 static const SkPaint kNumberTextBackgroundPaint = []() {
-  SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, kTextHeight}};
   SkColor colors[2] = {0xffbec8b7, 0xffdee3db};
   sk_sp<SkShader> shader =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  SkPaint paint;
   paint.setShader(shader);
   return paint;
 }();

@@ -18,7 +18,7 @@ static void ShowAlert(string_view message) {
   MessageBox(main_window, message.data(), "Alert", MB_OK);
 }
 #else  // not Windows
-static void ShowAlert(string_view message) { LOG << text; }
+static void ShowAlert(string_view message) { LOG << message; }
 #endif
 
 void Alert::Run(Location& here) {

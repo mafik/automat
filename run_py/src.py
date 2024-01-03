@@ -65,7 +65,7 @@ class File:
             # ?: at the beginning of a group means that it's non-capturing
             # ?P<...> ate the beginning of a group assigns it a name
             match = re.match(
-                r'^#(?P<el>el(?P<else>se)?)?(?P<end>end)?if(?P<neg1>n)?(?:def)? (?P<neg2>!)?(?:defined)?(?:\()?(?P<id>[a-zA-Z0-9_]+)(?:\))?', line)
+                r'^#(?P<el>el(?P<else>se)?)?(?P<end>end)?if(?P<neg1>n)?(?:def)? ?(?P<neg2>!)?(?:defined)?(?:\()?(?P<id>[a-zA-Z0-9_]+)?(?:\))?', line)
             if match:
                 test = match.group('id') in current_defines
                 if match.group('neg1') or match.group('neg2'):

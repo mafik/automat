@@ -21,7 +21,7 @@ libname = build.libname('vk-bootstrap')
 
 def hook_recipe(recipe):
   recipe.add_step(
-      partial(Popen, ['git', 'clone', 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
+      partial(Popen, ['git', 'clone', '--depth', '1', 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
       outputs=[VK_BOOTSTRAP_ROOT / 'CMakeLists.txt', VK_BOOTSTRAP_INCLUDE],
       inputs=[],
       desc = 'Downloading vk-bootstrap',

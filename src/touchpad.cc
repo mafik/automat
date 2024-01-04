@@ -1,5 +1,7 @@
 #include "touchpad.hh"
 
+using namespace maf;
+
 namespace automat::touchpad {
 
 std::mutex touchpads_mutex;
@@ -12,7 +14,6 @@ std::vector<TouchPad*> touchpads;
 #include <src/base/SkUTF.h>
 #include <stdint.h>
 
-#include <deque>
 #include <vector>
 
 #include "format.hh"

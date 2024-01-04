@@ -1,13 +1,20 @@
 #include "path.hh"
 
+#if defined(__linux__)
 #include <pwd.h>
 #include <unistd.h>
+#endif  // defined(__linux__)
+
+#if defined(_WIN32)
+#include <windows.h>
+#endif  // defined(_WIN32)
 
 #include "int.hh"
 #include "status.hh"
 
 namespace maf {
 
+#if defined(__linux__)
 Path Path::ExpandUser() const {
   StrView p = str;
   if (p.starts_with("~")) {
@@ -22,7 +29,7 @@ Path Path::ExpandUser() const {
       } else {
         username = p.substr(0, slash_pos);
       }
-      struct passwd *pw = getpwnam(username.c_str());
+      struct passwd* pw = getpwnam(username.c_str());
       return Str(pw->pw_dir) + Str(p.substr(slash_pos));
     }
   } else {
@@ -30,7 +37,7 @@ Path Path::ExpandUser() const {
   }
 }
 
-Path Path::ReadLink(Status &status) const {
+Path Path::ReadLink(Status& status) const {
   char link[PATH_MAX];
   SSize link_size = readlink(str.c_str(), link, sizeof(link));
   if (link_size < 0) {
@@ -39,8 +46,53 @@ Path Path::ReadLink(Status &status) const {
   }
   return Path(StrView(link, link_size));
 }
+#elif defined(_WIN32)
+Path Path::ExpandUser() const { return *this; }
 
-void Path::Unlink(Status &status, bool missing_ok) const {
+Path Path::ReadLink(Status& status) const {
+  HANDLE hPath = CreateFileA(str.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                             FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+  DWORD len = GetFinalPathNameByHandleA(hPath, nullptr, 0, FILE_NAME_OPENED);
+  Str real_path;
+  real_path.resize(len);
+  GetFinalPathNameByHandleA(hPath, real_path.data(), len, FILE_NAME_OPENED);
+  CloseHandle(hPath);
+  return Path(real_path);
+}
+
+Path Path::ExecutablePath() {
+  Str str;
+  str.resize(MAX_PATH);
+  HMODULE hModule = GetModuleHandleA(NULL);
+  DWORD len = GetModuleFileNameA(hModule, str.data(), str.size());
+  if (len > str.size()) {
+    str.resize(len);
+    len = GetModuleFileNameA(hModule, str.data(), str.size());
+  }
+  str.resize(len);
+  return Path(str);
+}
+#endif  // defined(_WIN32)
+
+Path Path::Parent() const {
+  auto slash_pos = str.rfind(kSeparator);
+  if (slash_pos == StrView::npos) {
+    return Path();
+  } else {
+    return Path(str.substr(0, slash_pos));
+  }
+}
+
+Path Path::operator/(StrView rhs) const {
+  Path ret(str);
+  if (!ret.str.ends_with(kSeparator)) {
+    ret.str.append(1, kSeparator);
+  }
+  ret.str.append(rhs);
+  return ret;
+}
+
+void Path::Unlink(Status& status, bool missing_ok) const {
   int ret = unlink(str.c_str());
   if (ret < 0) {
     if (errno == ENOENT and missing_ok) {
@@ -51,7 +103,7 @@ void Path::Unlink(Status &status, bool missing_ok) const {
   }
 }
 
-void Path::Rename(const Path &to, Status &status) const {
+void Path::Rename(const Path& to, Status& status) const {
   int ret = rename(str.c_str(), to.str.c_str());
   if (ret < 0) {
     AppendErrorMessage(status) = "rename(" + str + ", " + to.str + ") failed";
@@ -95,4 +147,4 @@ Path Path::WithStem(StrView stem) const {
   return Path(str.substr(0, stem_begin) + Str(stem) + str.substr(stem_end));
 }
 
-} // namespace maf
+}  // namespace maf

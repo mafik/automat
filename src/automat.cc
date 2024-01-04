@@ -1,5 +1,7 @@
 #pragma maf main
 
+#pragma comment(lib, "skia")
+
 #if defined(_WIN32)
 
 #include "win_main.hh"
@@ -14,7 +16,6 @@ int main() { return WinMain(GetModuleHandle(NULL), NULL, GetCommandLine(), SW_SH
 #pragma comment(lib, "webpdemux")
 #pragma comment(lib, "brotlicommon")
 #pragma comment(lib, "brotlidec")
-#pragma comment(lib, "skia")
 #pragma comment(lib, "skottie")
 #pragma comment(lib, "sksg")
 #pragma comment(lib, "jpeg")

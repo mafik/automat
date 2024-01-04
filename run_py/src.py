@@ -137,6 +137,9 @@ class File:
             if inc in self.transitive_includes:
                 continue
             self.transitive_includes.add(inc)
+            for sys in inc.system_includes:
+                if sys not in self.system_includes:
+                    self.system_includes.append(sys)
             self.main = self.main or inc.main  # propagate `main` flag from headers to sources
             include_queue.extend(inc.direct_includes)
 

@@ -5,7 +5,7 @@
       "name": "(Windows) Launch",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/automat.exe",
+      "program": "${workspaceFolder}/build/debug_automat.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",

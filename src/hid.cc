@@ -6,6 +6,8 @@
 #include "format.hh"
 #include "log.hh"
 
+using namespace maf;
+
 namespace automat::hid {
 
 const char* UsagePageToString(UsagePage usage_page) {
@@ -93,6 +95,8 @@ const char* UsagePageToString(UsagePage usage_page) {
   }
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wswitch"
 const char* UsageToString(UsagePage usage_page, Usage usage) {
   switch ((uint16_t)usage_page) {
     case 0x01:  // Generic Desktop Page
@@ -557,6 +561,7 @@ const char* UsageToString(UsagePage usage_page, Usage usage) {
       return "Consult https://usb.org/sites/default/files/hut1_4.pdf";
   }
 }
+#pragma clang diagnostic pop
 
 Accessor::Accessor(UsagePage usage_page, Usage usage, uint32_t bit_offset, uint32_t bit_width,
                    uint32_t hid_logical_minimum, uint32_t hid_logical_maximum,

@@ -71,7 +71,6 @@ def libname(name):
 
 binary_extension = '.exe' if platform == 'win32' else ''
 
-
 def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
 
     objs: dict[str, ObjectFile] = dict()
@@ -124,13 +123,10 @@ compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else 'cla
 
 default_compile_args = [
     '-static',
-    '-std=gnu++2b', '-fcolor-diagnostics', '-ffunction-sections',
+    '-std=gnu++2c', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-D_FORTIFY_SOURCE=2', '-Wformat',
-    '-Wformat-security', '-Werror=format-security', '-fno-plt', '-Wno-vla-extension',
+    '-Wformat-security', '-Werror=format-security', '-fno-plt', '-Wno-vla-extension', '-Wno-trigraphs'
 ]
-if 'CXXFLAGS' in os.environ:
-    default_compile_args += os.environ['CXXFLAGS'].split()
-
 release_compile_args = [
     '-O3',
     '-DNDEBUG',
@@ -139,17 +135,23 @@ release_compile_args = [
 ]
 debug_compile_args = ['-O0', '-g', '-D_DEBUG', '-fno-omit-frame-pointer']
 
-default_link_args = [
-    '-static',
-    '-fuse-ld=lld', '-Wl,--gc-sections', '-Wl,--build-id=none'
-]
+default_link_args = ['-static', '-fuse-ld=lld']
+release_link_args = ['-flto']
+debug_link_args = []
+
+if 'CXXFLAGS' in os.environ:
+    default_compile_args += os.environ['CXXFLAGS'].split()
 
 if 'LDFLAGS' in os.environ:
     for flag in os.environ['LDFLAGS'].split():
         default_link_args.append(f'-Wl,{flag}')
 
-release_link_args = ['-flto', '-Wl,--strip-all', '-Wl,-z,relro', '-Wl,-z,now']
-debug_link_args = []
+if platform == 'win32':
+    default_link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
+    debug_link_args += ['-Wl,/debug']
+else:
+    default_link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none']
+    release_link_args += ['-Wl,--strip-all', '-Wl,-z,relro', '-Wl,-z,now']
 
 if False:
     debug_compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
@@ -207,6 +209,10 @@ def recipe() -> make.Recipe:
             pargs += debug_compile_args
         elif obj.build_type == 'release':
             pargs += release_compile_args
+        if obj.source.path.name.endswith('.c'):
+            pargs[0] = compiler_c
+            pargs = [x for x in pargs if x != '-std=gnu++2c']
+
         pargs += obj.compile_args
         pargs += [str(obj.source.path)]
         pargs += ['-c', '-o', str(obj.path)]

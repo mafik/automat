@@ -1,7 +1,9 @@
-#include <mutex>
 #undef NOGDI
 #include <windows.h>
 #undef ERROR
+
+#pragma comment(lib, "user32.lib")
+#pragma comment(lib, "gdi32.lib")
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>
@@ -9,13 +11,13 @@
 #include <timeapi.h>
 #include <winuser.h>
 
-#include <atomic>
 #include <memory>
 #include <thread>
 
 #include "backtrace.hh"
 #include "library.hh"
 #include "loading_animation.hh"
+#include "path.hh"
 #include "root.hh"
 #include "thread_name.hh"
 #include "touchpad.hh"

@@ -12,6 +12,7 @@ import shutil
 import tempfile
 import hashlib
 import fs_utils
+import args as cmdline_args
 
 HASH_DIR = fs_utils.build_dir / 'hashes'
 HASH_DIR.mkdir(parents=True, exist_ok=True)
@@ -21,8 +22,11 @@ def Popen(args, **kwargs):
     '''Wrapper around subprocess.Popen which captures STDERR into a temporary file.'''
     f = tempfile.TemporaryFile()
     str_args = [str(x) for x in args]
+    if cmdline_args.args.verbose:
+        print(' $ \033[90m' + ' '.join(str_args) + '\033[0m')
     p = subprocess.Popen(str_args,
                          stdin=subprocess.DEVNULL,
+                         #stdout=f,
                          stderr=f,
                          **kwargs)
     p.stderr = f
@@ -260,10 +264,13 @@ class Recipe:
                         orig_command = ' > \033[90m' + \
                             ' '.join(step.builder.args) + '\033[0m\n'
                         print(orig_command)
-                    step.builder.stderr.seek(0)
-                    stderr = step.builder.stderr.read().decode('utf-8')
-                    for line in stderr.split('\n'):
-                        print('  ' + step.stderr_prettifier(line))
+                    if step.builder.stderr:
+                        step.builder.stderr.seek(0)
+                        stderr = step.builder.stderr.read().decode('utf-8')
+                        for line in stderr.split('\n'):
+                            print('  ' + step.stderr_prettifier(line))
+                    else:
+                        print('  (no stderr)')
                     self.interrupt()
                     return False
                 step.builder = None
@@ -301,6 +308,9 @@ class Recipe:
         for task in active:
             time_left = deadline - time.time()
             if time_left > 0:
-                task.wait(time_left)
+                try:
+                    task.wait(time_left)
+                except subprocess.TimeoutExpired:
+                    pass # wait for other tasks before killing
         for task in active:
             task.kill()

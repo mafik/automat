@@ -9,12 +9,15 @@
 #include "../build/generated/embedded.hh"
 #include "log.hh"
 #include "math.hh"
+#include "virtual_fs.hh"
 
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")
 #ifdef _WIN32
 #pragma comment(lib, "Advapi32")
 #endif
+
+using namespace maf;
 
 namespace automat::gui {
 
@@ -120,8 +123,15 @@ struct MeasureLineRunHandler : public LineRunHandler {
 };
 
 SkShaper& GetShaper() {
-  thread_local std::unique_ptr<SkShaper> shaper = SkShaper::MakeShapeDontWrapOrReorder(
-      SkUnicode::MakeIcuBasedUnicode(), SkFontMgr::RefDefault());
+  thread_local std::unique_ptr<SkShaper> shaper = []() {
+#if defined(_WIN32)
+    Status status;
+    fs::Copy(fs::real, "C:\\Windows\\Globalization\\ICU\\icudtl.dat", maf::fs::real,
+             Path::ExecutablePath().Parent() / "icudtl.dat", status);
+#endif  // defined(_WIN32)
+    return SkShaper::MakeShapeDontWrapOrReorder(SkUnicode::MakeIcuBasedUnicode(),
+                                                SkFontMgr::RefDefault());
+  }();
   return *shaper;
 }
 

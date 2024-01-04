@@ -17,6 +17,10 @@ def slug_from_path(path):
     return re.sub(r'[^a-zA-Z0-9]', '_', str(path))
 
 
+def escape_string(s):
+    return s.replace('\\', '\\\\').replace('"', '\\"')
+
+
 hh_path = fs_utils.generated_dir / 'embedded.hh'
 cc_path = fs_utils.generated_dir / 'embedded.cc'
 
@@ -52,9 +56,10 @@ namespace maf::embedded {{''',
               file=cc)
         for path in embedded_paths:
             slug = slug_from_path(path)
+            escaped_path = escape_string(str(path))
             print(f'''
 VFile {slug} = {{
-  .path = "{path}"s,
+  .path = "{escaped_path}"s,
   .content = ''',
                   file=cc,
                   end='')

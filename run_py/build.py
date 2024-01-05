@@ -157,6 +157,11 @@ if False:
     debug_compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
     debug_link_args += ['-fsanitize=address']
 
+# Ubuntu 20.04 has some troubles when statically linking to Vulkan
+if platform == 'linux':
+    default_compile_args = [x for x in default_compile_args if x != '-static']
+    default_link_args = [x for x in default_link_args if x != '-static']
+
 if 'g++' in compiler and 'clang' not in compiler:
     # GCC doesn't support -fcolor-diagnostics
     default_compile_args.remove('-fcolor-diagnostics')
@@ -170,7 +175,6 @@ if 'OPENWRT_BUILD' in os.environ:
 
 if args.verbose:
     default_compile_args.append('-v')
-
 
 @dataclass
 class CompilationEntry:

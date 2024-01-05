@@ -11,7 +11,7 @@ import make
 
 DEPOT_TOOLS_ROOT = fs_utils.build_dir / 'depot_tools'
 SKIA_ROOT = fs_utils.build_dir / 'skia'
-GN = (SKIA_ROOT / 'bin' / 'gn').with_suffix(build.binary_extension)
+GN = (SKIA_ROOT / 'bin' / 'gn').with_suffix(build.binary_extension).absolute()
 
 default_gn_args = 'skia_use_vulkan=true skia_use_vma=true'
 
@@ -79,7 +79,6 @@ def git_clone_skia():
   return make.Popen(['git', 'clone', '--depth', '1', 'https://skia.googlesource.com/skia.git', SKIA_ROOT])
 
 def skia_git_sync_with_deps():
-  os.environ['GIT_SYNC_DEPS_SHALLOW_CLONE'] = 'True'
   return make.Popen(['python', 'tools/git-sync-deps'], cwd=SKIA_ROOT)
 
 def skia_gn_gen(variant: BuildVariant):

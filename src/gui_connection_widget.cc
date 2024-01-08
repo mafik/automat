@@ -8,8 +8,6 @@
 
 #include "base.hh"
 #include "font.hh"
-#include "gui_constants.hh"
-#include "log.hh"
 #include "svg.hh"
 
 namespace automat::gui {

@@ -1,12 +1,18 @@
 #pragma once
 
 #include "base.hh"
+#include "pointer.hh"
 
 namespace automat::library {
 
-struct MouseLeftClick : Object {
-  MouseLeftClick();
-  static const MouseLeftClick proto;
+struct MouseClick : Object {
+  gui::PointerButton button;
+  bool down;
+  MouseClick(gui::PointerButton, bool down);
+  static const MouseClick lmb_down;
+  static const MouseClick lmb_up;
+  static const MouseClick rmb_down;
+  static const MouseClick rmb_up;
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;

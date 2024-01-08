@@ -133,10 +133,10 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   auto& actx = ctx.animation_context;
   SkPath my_shape = Shape();
 
-  if (ctx.path.size() >= 2) {
+  if (ctx.path.size() >= 3) {
     // Assume that `from` and `to` are sharing the same parent Machine.
-    Widget* parent_location = ctx.path[ctx.path.size() - 1];
-    Widget* parent_machine = ctx.path[ctx.path.size() - 2];
+    Widget* parent_location = ctx.path[ctx.path.size() - 2];
+    Widget* parent_machine = ctx.path[ctx.path.size() - 3];
     SkMatrix parent_to_local =
         TransformDown(Path{parent_machine, parent_location, (Widget*)this}, actx);
     auto [a, b] = from->outgoing.equal_range(label);
@@ -156,7 +156,6 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
 }
 
 std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButton) {
-  LOG << "Beginning connection drag";
   if (drag_action != nullptr) {
     return nullptr;
   }

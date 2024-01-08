@@ -4,7 +4,15 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "link automat",
+      "label": "debug_automat",
+      "type": "shell",
+      "command": "./run.py 'link debug_automat'",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
+      "label": "debug_automat.exe",
       "type": "shell",
       "command": "./run.py 'link debug_automat.exe'",
       "presentation": {

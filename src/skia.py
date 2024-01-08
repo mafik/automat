@@ -54,21 +54,20 @@ if platform == 'win32':
   default_gn_args += ' clang_win="C:\Program Files\LLVM"'
   default_gn_args += ' clang_win_version=17'
   variants['debug'].gn_args += ' extra_cflags=["/MTd"]'
+  # This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.
+  # For more interesting defines, check out:
+  # https://github.com/google/skia/blob/main/include/config/SkUserConfig.h
+  build.debug_compile_args += ['-DSK_TRIVIAL_ABI=[[clang::trivial_abi]]']
 elif platform == 'linux':
   build.default_compile_args += ['-DVK_USE_PLATFORM_XCB_KHR']
 
+build.default_compile_args += ['-I', SKIA_ROOT]
 build.default_compile_args += ['-DSK_GANESH']
 build.default_compile_args += ['-DSK_VULKAN']
 build.default_compile_args += ['-DSK_USE_VMA']
 build.default_compile_args += ['-DSK_SHAPER_HARFBUZZ_AVAILABLE']
 
 build.debug_compile_args += ['-DSK_DEBUG']
-# This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.
-# For more interesting defines, check out:
-# https://github.com/google/skia/blob/main/include/config/SkUserConfig.h
-build.debug_compile_args += ['-DSK_TRIVIAL_ABI=[[clang::trivial_abi]]']
-
-build.default_compile_args += ['-I', SKIA_ROOT]
 
 libname = build.libname('skia')
 

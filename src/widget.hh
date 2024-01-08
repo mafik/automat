@@ -8,9 +8,10 @@
 
 #include "action.hh"
 #include "animation.hh"
+#include "control_flow.hh"
 #include "keyboard.hh"
 #include "pointer.hh"
-#include "stop.hh"
+
 
 namespace automat::gui {
 
@@ -52,6 +53,8 @@ struct Widget {
   virtual bool CanDrag() { return false; }
   // Iterate over direct child widgets in front-to-back order.
   virtual MaybeStop VisitChildren(Visitor& visitor) { return std::nullopt; }
+  // Return true if the widget's children should be drawn outside of its bounds.
+  virtual bool ChildrenOutside() const { return false; }
 
   virtual SkMatrix TransformToChild(const Widget& child, animation::Context&) const {
     return SkMatrix::I();

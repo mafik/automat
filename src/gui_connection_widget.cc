@@ -19,7 +19,7 @@ struct ConnectionLabelWidget : Widget {
   std::string label;
   ConnectionLabelWidget(ConnectionWidget* parent, std::string_view label)
       : parent(parent), label(label) {
-    this->label = "👆" + this->label + " ";
+    this->label = "»" + this->label + " ";
   }
   float Width() const { return GetFont().MeasureText(label); }
   float Height() const { return kLetterSize; }
@@ -156,6 +156,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
 }
 
 std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButton) {
+  LOG << "Beginning connection drag";
   if (drag_action != nullptr) {
     return nullptr;
   }

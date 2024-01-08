@@ -34,7 +34,6 @@ struct Location : gui::Widget {
 
   // Name of this Location.
   std::string name;
-  gui::TextField name_text_field;
   gui::RunButton run_button;
   std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
@@ -218,6 +217,7 @@ struct Location : gui::Widget {
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;
   MaybeStop VisitChildren(gui::Visitor& visitor) override;
+  bool ChildrenOutside() const override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
 
   // Add ConnectionWidgets for all arguments defined by the objects.

@@ -13,8 +13,7 @@ namespace automat {
 
 constexpr float kFrameCornerRadius = 0.001;
 
-Location::Location(Location* parent)
-    : parent(parent), name_text_field(&name, 0.03), run_button(this), run_task(this) {}
+Location::Location(Location* parent) : parent(parent), run_button(this), run_task(this) {}
 
 void* Location::Nearby(std::function<void*(Location&)> callback) {
   if (auto parent_machine = ParentAs<Machine>()) {
@@ -116,10 +115,6 @@ SkPath Location::Shape() const {
   }
   float outset = 0.001 - kBorderWidth / 2;
   SkRect bounds = object_bounds.makeOutset(outset, outset);
-  if (bounds.width() < name_text_field.width + 2 * 0.001) {
-    bounds.fRight = bounds.fLeft + name_text_field.width + 2 * 0.001;
-  }
-  bounds.fBottom += gui::kTextFieldHeight + 0.001;
   // expand the bounds to include the run button
   SkPath run_button_shape = run_button.Shape();
   bounds.fTop -= run_button_shape.getBounds().height() + 0.001;
@@ -131,9 +126,6 @@ MaybeStop Location::VisitChildren(gui::Visitor& visitor) {
     if (auto stop = visitor(*object)) {
       return stop;
     }
-  }
-  if (auto stop = visitor(name_text_field)) {
-    return stop;
   }
   if (auto stop = visitor(run_button)) {
     return stop;
@@ -147,13 +139,11 @@ MaybeStop Location::VisitChildren(gui::Visitor& visitor) {
   return std::nullopt;
 }
 
+bool Location::ChildrenOutside() const { return true; }
+
 SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) const {
   SkPath my_shape = Shape();
   SkRect my_bounds = my_shape.getBounds();
-  if (&child == &name_text_field) {
-    return SkMatrix::Translate(-my_bounds.left() - 0.001,
-                               -my_bounds.bottom() + gui::kTextFieldHeight + 0.001);
-  }
   if (&child == &run_button) {
     SkPath run_button_shape = run_button.Shape();
     SkRect run_bounds = run_button_shape.getBounds();
@@ -226,26 +216,6 @@ void Location::Draw(gui::DrawContext& ctx) const {
   frame_border.setStrokeWidth(0.00025);
   canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
 
-  auto DrawInset = [&](SkPath shape) {
-    const SkRect& bounds = shape.getBounds();
-    SkPaint paint;
-    SkColor colors[2] = {color::AdjustLightness(frame_bg_colors[0], 5),
-                         color::AdjustLightness(frame_bg_colors[1], -5)};
-    SkPoint points[2] = {{0, bounds.top()}, {0, bounds.bottom()}};
-    sk_sp<SkShader> shader =
-        SkGradientShader::MakeLinear(points, colors, nullptr, 2, SkTileMode::kClamp);
-    paint.setShader(shader);
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setStrokeWidth(0.0005);
-    canvas.drawPath(shape, paint);
-  };
-
-  // TODO: draw inset around every child
-  if (object) {
-    // Draw inset around object
-    DrawInset(object->Shape());
-  }
-
   DrawChildren(ctx);
 
   // Draw debug text log below the Location
@@ -305,5 +275,4 @@ void Location::ReportMissing(std::string_view property) {
         property.size(), property.data());
   ReportError(error_message);
 }
-
 }  // namespace automat

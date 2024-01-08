@@ -48,21 +48,27 @@ void PointerImpl::Move(Vec2 position) {
     path.clear();
     Vec2 point = pointer_position;
 
-    Visitor dfs = [&](Widget& child) -> MaybeStop {
+    Visitor dfs = [&](Widget& w) -> MaybeStop {
       Vec2 transformed;
       if (!path.empty()) {
-        transformed = path.back()->TransformToChild(child, window.actx).mapPoint(point);
+        transformed = path.back()->TransformToChild(w, window.actx).mapPoint(point);
       } else {
         transformed = point;
       }
 
-      auto shape = child.Shape();
-      if (shape.isEmpty() || shape.contains(transformed.x, transformed.y)) {
-        path.push_back(&child);
-        point = transformed;
-        child.VisitChildren(dfs);
+      auto shape = w.Shape();
+      path.push_back(&w);
+      std::swap(point, transformed);
+      if (shape.isEmpty() || shape.contains(point.x, point.y)) {
+        w.VisitChildren(dfs);
         return Stop();
+      } else if (w.ChildrenOutside()) {
+        if (auto stop = w.VisitChildren(dfs)) {
+          return stop;
+        }
       }
+      std::swap(point, transformed);
+      path.pop_back();
       return std::nullopt;
     };
 

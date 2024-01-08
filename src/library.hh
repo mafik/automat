@@ -8,7 +8,6 @@
 #include <map>
 #include <memory>
 #include <regex>
-#include <source_location>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -19,10 +18,10 @@
 #include "algebra.hh"
 #include "base.hh"
 #include "format.hh"
-#include "library_alert.hh"
-#include "library_increment.hh"
+#include "library_alert.hh"        // IWYU pragma: keep
+#include "library_increment.hh"    // IWYU pragma: keep
+#include "library_mouse_click.hh"  // IWYU pragma: keep
 #include "library_number.hh"
-#include "log.hh"
 #include "treemath.hh"
 
 namespace automat {

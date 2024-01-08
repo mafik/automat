@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "animation.hh"
+#include "control_flow.hh"
 #include "root.hh"
 #include "time.hh"
 
@@ -29,7 +30,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
     widget.Draw(ctx);
     ctx.path.pop_back();
     canvas.restore();
-    return std::nullopt;
+    return ControlFlow::Continue;
   };
   const_cast<Widget*>(this)->VisitChildren(visitor);
 }

@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "color.hh"
+#include "control_flow.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "gui_align.hh"
@@ -225,15 +226,15 @@ void Number::Draw(gui::DrawContext& ctx) const {
 
 SkPath Number::Shape() const { return kNumberShape; }
 
-MaybeStop Number::VisitChildren(gui::Visitor& visitor) {
-  if (auto stop = visitor(digits[0])) return stop;
-  if (auto stop = visitor(dot)) return stop;
-  if (auto stop = visitor(backspace)) return stop;
+ControlFlow Number::VisitChildren(gui::Visitor& visitor) {
+  if (visitor(digits[0]) == ControlFlow::Stop) return ControlFlow::Stop;
+  if (visitor(dot) == ControlFlow::Stop) return ControlFlow::Stop;
+  if (visitor(backspace) == ControlFlow::Stop) return ControlFlow::Stop;
   for (int i = 0; i < 10; ++i) {
-    if (auto stop = visitor(digits[i])) return stop;
+    if (visitor(digits[i]) == ControlFlow::Stop) return ControlFlow::Stop;
   }
-  if (auto stop = visitor(text_field)) return stop;
-  return std::nullopt;
+  if (visitor(text_field) == ControlFlow::Stop) return ControlFlow::Stop;
+  return ControlFlow::Continue;
 }
 
 SkMatrix Number::TransformToChild(const Widget& child, animation::Context&) const {

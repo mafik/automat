@@ -4,6 +4,7 @@
 
 #include "base.hh"
 #include "color.hh"
+#include "control_flow.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "format.hh"
@@ -121,22 +122,22 @@ SkPath Location::Shape() const {
   return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
 }
 
-MaybeStop Location::VisitChildren(gui::Visitor& visitor) {
+ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
   if (object) {
-    if (auto stop = visitor(*object)) {
-      return stop;
+    if (visitor(*object) == ControlFlow::Stop) {
+      return ControlFlow::Stop;
     }
   }
-  if (auto stop = visitor(run_button)) {
-    return stop;
+  if (visitor(run_button) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
   }
   UpdateConnectionWidgets();
   for (auto& widget : connection_widgets) {
-    if (auto stop = visitor(*widget)) {
-      return stop;
+    if (visitor(*widget) == ControlFlow::Stop) {
+      return ControlFlow::Stop;
     }
   }
-  return std::nullopt;
+  return ControlFlow::Continue;
 }
 
 bool Location::ChildrenOutside() const { return true; }

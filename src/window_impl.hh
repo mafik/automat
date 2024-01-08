@@ -5,6 +5,7 @@
 #include <bitset>
 
 #include "base.hh"
+#include "control_flow.hh"
 #include "root.hh"
 #include "widget.hh"
 
@@ -160,11 +161,11 @@ struct WindowImpl : Widget {
   }
   void Draw(SkCanvas& canvas);
   void Zoom(float delta);
-  MaybeStop VisitChildren(Visitor& visitor) override {
+  ControlFlow VisitChildren(Visitor& visitor) override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      if (auto stop = visitor(prototype_buttons[i])) return stop;
+      if (visitor(prototype_buttons[i]) == ControlFlow::Stop) return ControlFlow::Stop;
     }
-    MaybeStop result = std::nullopt;
+    ControlFlow result = ControlFlow::Continue;
     RunOnAutomatThreadSynchronous([&]() { result = visitor(*root_machine); });
     return result;
   }

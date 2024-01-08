@@ -2,6 +2,9 @@
 
 #include <include/core/SkMatrix.h>
 
+#include "control_flow.hh"
+
+
 namespace automat::gui {
 
 AlignCenter::AlignCenter(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
@@ -10,11 +13,11 @@ void AlignCenter::Draw(DrawContext& ctx) const { DrawChildren(ctx); }
 
 SkPath AlignCenter::Shape() const { return SkPath(); }
 
-MaybeStop AlignCenter::VisitChildren(Visitor& visitor) {
+ControlFlow AlignCenter::VisitChildren(Visitor& visitor) {
   if (child) {
     return visitor(*child);
   }
-  return std::nullopt;
+  return ControlFlow::Continue;
 }
 SkMatrix AlignCenter::TransformToChild(const Widget& child_arg, animation::Context&) const {
   if (&child_arg != this->child.get()) {

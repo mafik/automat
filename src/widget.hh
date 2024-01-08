@@ -12,14 +12,13 @@
 #include "keyboard.hh"
 #include "pointer.hh"
 
-
 namespace automat::gui {
 
 struct Widget;
 
 using Path = std::vector<Widget*>;
 
-using Visitor = std::function<MaybeStop(Widget&)>;
+using Visitor = std::function<ControlFlow(Widget&)>;
 
 SkMatrix TransformDown(const Path& path, animation::Context&);
 SkMatrix TransformUp(const Path& path, animation::Context&);
@@ -52,7 +51,7 @@ struct Widget {
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
   // Iterate over direct child widgets in front-to-back order.
-  virtual MaybeStop VisitChildren(Visitor& visitor) { return std::nullopt; }
+  virtual ControlFlow VisitChildren(Visitor& visitor) { return ControlFlow::Continue; }
   // Return true if the widget's children should be drawn outside of its bounds.
   virtual bool ChildrenOutside() const { return false; }
 

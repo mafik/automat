@@ -1,11 +1,7 @@
 #pragma once
 
-#include <optional>
-
 namespace automat {
 
-struct Stop {};
-
-using MaybeStop = std::optional<Stop>;
+enum class ControlFlow : bool { Continue = false, Stop = true };
 
 }  // namespace automat

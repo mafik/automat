@@ -22,6 +22,7 @@
 #include "argument.hh"
 #include "channel.hh"
 #include "connection.hh"
+#include "control_flow.hh"
 #include "format.hh"
 #include "location.hh"
 #include "log.hh"
@@ -112,13 +113,13 @@ struct Machine : LiveObject {
     return empty_path;
   }
 
-  MaybeStop VisitChildren(gui::Visitor& visitor) override {
+  ControlFlow VisitChildren(gui::Visitor& visitor) override {
     for (auto& it : locations) {
-      if (auto stop = visitor(*it)) {
-        return stop;
+      if (visitor(*it) == ControlFlow::Stop) {
+        return ControlFlow::Stop;
       }
     }
-    return std::nullopt;
+    return ControlFlow::Continue;
   }
   SkMatrix TransformToChild(const Widget& child, animation::Context& actx) const override {
     const Location* l = dynamic_cast<const Location*>(&child);

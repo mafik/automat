@@ -59,6 +59,7 @@ struct Location : gui::Widget {
 
   std::unique_ptr<Object> InsertHere(std::unique_ptr<Object>&& object) {
     this->object.swap(object);
+    this->object->Relocate(this);
     return object;
   }
 

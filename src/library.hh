@@ -21,7 +21,8 @@
 #include "library_alert.hh"        // IWYU pragma: keep
 #include "library_increment.hh"    // IWYU pragma: keep
 #include "library_mouse_click.hh"  // IWYU pragma: keep
-#include "library_number.hh"
+#include "library_number.hh"       // IWYU pragma: keep
+#include "library_timer.hh"        // IWYU pragma: keep
 #include "treemath.hh"
 
 namespace automat {

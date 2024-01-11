@@ -287,6 +287,9 @@ struct ThenGuard {
   }
 };
 
+// Sometimes objects are updated automatically (for example by their LiveArguments). This class
+// allows such objects to block auto-scheduling and enable them to alter the values of their
+// arguments without triggering re-runs.
 struct NoSchedulingGuard {
   Location& location;
   NoSchedulingGuard(Location& location) : location(location) { no_scheduling.insert(&location); }

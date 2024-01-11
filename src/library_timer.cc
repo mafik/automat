@@ -3,6 +3,7 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPath.h>
 #include <include/core/SkPathBuilder.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
@@ -13,8 +14,8 @@
 #include <memory>
 #include <thread>
 
+#include "drag_action.hh"
 #include "font.hh"
-#include "include/core/SkPath.h"
 #include "library_macros.hh"
 #include "pointer.hh"
 #include "tasks.hh"
@@ -124,13 +125,13 @@ static SkPoint DurationHandlePos(const TimerDelay& timer) {
   return SkPoint::Make(c * r3, s * r3);
 }
 
-constexpr static float kStartPusherAxleWidth = 0.002;
-constexpr static float kStartPusherAxleLength = 0.002;
+constexpr static float kStartPusherAxleWidth = 0.003;
+constexpr static float kStartPusherAxleLength = 0.001;
 constexpr static SkRect kStartPusherAxleBox =
     SkRect::MakeXYWH(-kStartPusherAxleWidth / 2, kOuterRadius - 0.0003, kStartPusherAxleWidth,
                      kStartPusherAxleLength + 0.0006);
 static SkRRect kStartPusherAxle =
-    SkRRect::MakeRectXY(kStartPusherAxleBox, kStartPusherAxleWidth / 2, 0.0003);
+    SkRRect::MakeRectXY(kStartPusherAxleBox, kStartPusherAxleWidth / 2, 0.0002);
 
 constexpr static float kStartPusherWidth = 0.005;
 constexpr static float kStartPusherHeight = 0.004;
@@ -139,6 +140,50 @@ constexpr static SkRect kStartPusherBox =
                      kStartPusherWidth, kStartPusherHeight);
 static SkRRect kStartPusher =
     SkRRect::MakeRectXY(kStartPusherBox, kStartPusherWidth / 2, kStartPusherHeight / 12);
+
+constexpr static float kSmallAxleWidth = 0.002;
+constexpr static float kSmallAxleLength = 0.001;
+constexpr static SkRect kSmallAxleBox = SkRect::MakeXYWH(
+    -kSmallAxleWidth / 2, kOuterRadius - 0.0003, kSmallAxleWidth, kSmallAxleLength + 0.0006);
+static SkRRect kSmallAxle = SkRRect::MakeRectXY(kSmallAxleBox, kSmallAxleWidth / 2, 0.0002);
+
+constexpr static float kSmallPusherWidth = 0.004;
+constexpr static float kSmallPusherHeight = 0.002;
+constexpr static SkRect kSmallPusherBox = SkRect::MakeXYWH(
+    -kSmallPusherWidth / 2, kOuterRadius + kSmallAxleLength, kSmallPusherWidth, kSmallPusherHeight);
+static SkRRect kSmallPusher = SkRRect::MakeRectXY(kSmallPusherBox, 0.0002, 0.0002);
+
+static void DrawPusher(SkCanvas& canvas, const SkRRect& axle, const SkRRect& pusher,
+                       SkColor pusher_gradient[3]) {
+  SkPath pusher_axle_path = SkPath::RRect(axle);
+
+  SkPaint pusher_axle_paint;
+  pusher_axle_paint.setAntiAlias(true);
+  SkPoint axle_pts[2] = {{axle.rect().fLeft, 0}, {axle.rect().fRight, 0}};
+  SkColor axle_colors[] = {0xffb0b0b0, 0xff383739, 0xffa8a9ab, 0xff000000, 0xff4d4b4f};
+  float positions[] = {0, 0.1, 0.3, 0.6, 1};
+  pusher_axle_paint.setShader(
+      SkGradientShader::MakeLinear(axle_pts, axle_colors, positions, 5, SkTileMode::kClamp));
+
+  canvas.drawPath(pusher_axle_path, pusher_axle_paint);
+
+  SkPath pusher_path = SkPath::RRect(pusher);
+
+  SkPaint pusher_paint;
+  SkPoint btn_pts[2] = {{0, 0}, {0.0004, 0}};
+  SkColor btn_colors[] = {0xff707070, 0xff303030, 0xff000000};
+  float btn_positions[] = {0, 0.3, 1};
+  pusher_paint.setShader(
+      SkGradientShader::MakeLinear(btn_pts, btn_colors, btn_positions, 3, SkTileMode::kMirror));
+  pusher_paint.setAntiAlias(true);
+  canvas.drawPath(pusher_path, pusher_paint);
+
+  SkPoint btn_pts2[2] = {{pusher.rect().fLeft, 0}, {pusher.rect().fRight, 0}};
+
+  pusher_paint.setShader(
+      SkGradientShader::MakeLinear(btn_pts2, pusher_gradient, nullptr, 3, SkTileMode::kClamp));
+  canvas.drawPath(pusher_path, pusher_paint);
+}
 
 void TimerDelay::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
@@ -202,34 +247,16 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   DrawRing(canvas, r0, r1, 0xfff7f4f2, 0xff5e5f65, kRingInset);  // white case soft edge
 
   {  // Draw pusher
-    SkPath pusher_axle_path = SkPath::RRect(kStartPusherAxle);
-
-    SkPaint pusher_axle_paint;
-    pusher_axle_paint.setAntiAlias(true);
-    SkPoint axle_pts[2] = {{-0.001, 0}, {0.001, 0}};
-    SkColor axle_colors[] = {0xffb0b0b0, 0xff383739, 0xffa8a9ab, 0xff000000, 0xff4d4b4f};
-    float positions[] = {0, 0.1, 0.3, 0.6, 1};
-    pusher_axle_paint.setShader(
-        SkGradientShader::MakeLinear(axle_pts, axle_colors, positions, 5, SkTileMode::kClamp));
-
-    canvas.drawPath(pusher_axle_path, pusher_axle_paint);
-
-    SkPath pusher_path = SkPath::RRect(kStartPusher);
-
-    SkPaint pusher_paint;
-    SkPoint btn_pts[2] = {{0, 0}, {0.0004, 0}};
-    SkColor btn_colors[] = {0xff707070, 0xff303030, 0xff000000};
-    float btn_positions[] = {0, 0.3, 1};
-    pusher_paint.setShader(
-        SkGradientShader::MakeLinear(btn_pts, btn_colors, btn_positions, 3, SkTileMode::kMirror));
-    pusher_paint.setAntiAlias(true);
-    canvas.drawPath(pusher_path, pusher_paint);
-
-    SkPoint btn_pts2[2] = {{-0.0025, 0}, {0.0025, 0}};
-    SkColor btn_colors2[] = {0x20ffffff, 0x15000000, 0xA0000000};
-    pusher_paint.setShader(
-        SkGradientShader::MakeLinear(btn_pts2, btn_colors2, nullptr, 3, SkTileMode::kClamp));
-    canvas.drawPath(pusher_path, pusher_paint);
+    SkColor colors1[] = {0x20ffffff, 0x15000000, 0xA0000000};
+    DrawPusher(canvas, kStartPusherAxle, kStartPusher, colors1);
+    canvas.save();
+    canvas.rotate(45);
+    SkColor colors2[] = {0xD0000000, 0x40000000, 0xD0000000};
+    DrawPusher(canvas, kSmallAxle, kSmallPusher, colors2);
+    canvas.rotate(-90);
+    SkColor colors3[] = {0x40FFFFFF, 0x40000000, 0xFF000000};
+    DrawPusher(canvas, kSmallAxle, kSmallPusher, colors3);
+    canvas.restore();
   }
 
   DrawRing(canvas, r2, r3, 0xff878682, 0xff020302);  // black metal band outer edge
@@ -255,9 +282,6 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   duration_arrow.lineTo(0, 0);
   duration_arrow.lineTo(h / 3, -a / 2);
   duration_arrow.close();
-  // SkPaint duration_arrow_paint;
-  // duration_arrow_paint.setColor(0xffd93f2a);
-  // duration_arrow_paint.setAntiAlias(true);
 
   canvas.rotate(90 + duration_angle);
   canvas.drawPath(duration_arrow, duration_paint);
@@ -274,6 +298,12 @@ SkPath TimerDelay::Shape() const {
     path_builder.addOval(kOuterOval);
     path_builder.addRect(kStartPusherAxleBox);
     path_builder.addRRect(kStartPusher);
+    SkPath small_pusher = SkPath::RRect(kSmallPusher);
+    small_pusher.addRRect(kSmallAxle);
+    small_pusher.transform(SkMatrix::RotateDeg(45));
+    path_builder.addPath(small_pusher);
+    small_pusher.transform(SkMatrix::RotateDeg(-90));
+    path_builder.addPath(small_pusher);
     SkPath path = path_builder.detach();
     SkPath simple_path;
     if (Simplify(path, &simple_path)) {
@@ -284,6 +314,36 @@ SkPath TimerDelay::Shape() const {
   }();
   return shape;
 }
+
+static std::thread timer_thread;
+std::mutex mtx;
+std::condition_variable cv;
+
+std::multimap<TimePoint, std::unique_ptr<Task>> tasks;
+
+static void TimerFinished(Location* here) {
+  TimerDelay* timer = here->As<TimerDelay>();
+  if (timer == nullptr) {
+    return;
+  }
+  timer->state = TimerDelay::State::IDLE;
+  if (timer->here) {
+    timer->finished_arg.LoopLocations<bool>(*here, [](Location& then) {
+      then.ScheduleRun();
+      return false;
+    });
+  }
+}
+
+struct TimerFinishedTask : Task {
+  TimerFinishedTask(Location* target) : Task(target) {}
+  std::string Format() override { return "TimerFinishedTask"; }
+  void Execute() override {
+    PreExecute();
+    TimerFinished(target);
+    PostExecute();
+  }
+};
 
 struct DragDurationHandleAction : Action {
   TimerDelay& timer;
@@ -302,6 +362,26 @@ struct DragDurationHandleAction : Action {
     new_duration *= range_duration.count();
     new_duration = ceil(new_duration);
 
+    if (timer.state == TimerDelay::State::RUNNING) {
+      std::unique_lock<std::mutex> lck(mtx);
+      if (timer.state == TimerDelay::State::RUNNING) {
+        auto [a, b] = tasks.equal_range(timer.start_time + timer.duration);
+        for (auto it = a; it != b; ++it) {
+          if (it->second->target == timer.here) {
+            tasks.erase(it);
+            break;
+          }
+        }
+        auto new_end = timer.start_time + Duration(new_duration);
+        if (new_end <= Clock::now()) {
+          TimerFinished(timer.here);
+        } else {
+          tasks.emplace(new_end, new TimerFinishedTask(timer.here));
+        }
+        cv.notify_all();
+      }
+    }
+
     timer.duration = Duration(new_duration);
   }
   virtual void End() {}
@@ -316,26 +396,30 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
     if ((duration_handle_pos - pos.sk).length() < 0.003) {
       return std::make_unique<DragDurationHandleAction>(*this);
     }
-    SkRect test_rect = SkRect::MakeXYWH(pos.x - 0.0001, pos.y - 0.0001, 0.0002, 0.0002);
-    kStartPusher.getBounds().dump();
-    if (kStartPusher.contains(test_rect)) {
-      LOG << "Pusher pressed";
+    if (kStartPusherBox.contains(pos.x, pos.y)) {
       if (here) {
-        LOG << "Scheduling";
         here->ScheduleRun();
+        return nullptr;
       }
     }
+    auto left_rot = SkMatrix::RotateDeg(-45).mapPoint(pos.sk);
+    auto right_rot = SkMatrix::RotateDeg(45).mapPoint(pos.sk);
+    if (kSmallPusherBox.contains(left_rot.x(), left_rot.y())) {
+      LOG << "Clicked left pusher";
+      return nullptr;
+    }
+    if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
+      LOG << "Clicked right pusher";
+      return nullptr;
+    }
+    auto action = std::make_unique<DragLocationAction>(here);
+    action->contact_point = pos;
+    return action;
   }
   return nullptr;
 }
 
 void TimerDelay::Args(std::function<void(Argument&)> cb) { cb(finished_arg); }
-
-static std::thread timer_thread;
-std::mutex mtx;
-std::condition_variable cv;
-
-std::multimap<TimePoint, std::unique_ptr<Task>> tasks;
 
 static void TimerThread() {
   SetThreadName("Timer");
@@ -358,28 +442,6 @@ void __attribute__((constructor)) InitTimer() {
   timer_thread = std::thread(TimerThread);
   timer_thread.detach();
 }
-
-static void TimerFinished(Location& here) {
-  TimerDelay* timer = here.As<TimerDelay>();
-  if (timer == nullptr) {
-    return;
-  }
-  timer->state = TimerDelay::State::IDLE;
-  timer->finished_arg.LoopLocations<bool>(here, [](Location& then) {
-    then.ScheduleRun();
-    return false;
-  });
-}
-
-struct TimerFinishedTask : Task {
-  TimerFinishedTask(Location* target) : Task(target) {}
-  std::string Format() override { return "TimerFinishedTask"; }
-  void Execute() override {
-    PreExecute();
-    TimerFinished(*target);
-    PostExecute();
-  }
-};
 
 void TimerDelay::Run(Location& here) {
   if (state == State::IDLE) {

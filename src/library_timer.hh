@@ -37,10 +37,6 @@ struct TimerDelay : LiveObject {
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
-  void Relocate(Location* here) override {
-    LOG << "Relocating TimerDelay";
-    this->here = here;
-  }
   void Run(Location& here) override;
 };
 

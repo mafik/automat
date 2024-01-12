@@ -2,9 +2,11 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkMaskFilter.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkPathBuilder.h>
+#include <include/core/SkPathUtils.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
 
@@ -14,6 +16,7 @@
 #include <memory>
 #include <thread>
 
+#include "animation.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "library_macros.hh"
@@ -26,7 +29,17 @@ namespace automat::library {
 DEFINE_PROTO(TimerDelay);
 Argument TimerDelay::finished_arg = Argument("finished", Argument::kRequiresLocation);
 
-TimerDelay::TimerDelay() {}
+static constexpr float kHandAcceleration = 2000;
+
+TimerDelay::TimerDelay() {
+  hand_degrees.acceleration = kHandAcceleration;
+  hand_degrees.friction = 40;
+
+  range_dial.acceleration = 2000;
+  range_dial.friction = 80;
+
+  duration_handle_rotation.speed = 100;
+}
 
 string_view TimerDelay::Name() const { return "Delay"; }
 
@@ -37,14 +50,14 @@ static constexpr SkRect kOuterOval =
     SkRect::MakeXYWH(-kOuterRadius, -kOuterRadius, 2 * kOuterRadius, 2 * kOuterRadius);
 static constexpr float kSoftEdgeWidth = 0.0005;
 
-float r0 = kOuterRadius;
-float r1 = kOuterRadius - kSoftEdgeWidth;
-float r2 = r1 - 3 * kSoftEdgeWidth;
-float r3 = r2 - kSoftEdgeWidth;
-float r4 = r3 - kSoftEdgeWidth;  // outer edge of white watch face
-float r4_b = r4 * 0.9;
-float r5 = kSoftEdgeWidth * 3;
-float r6 = r5 - kSoftEdgeWidth;
+constexpr static float r0 = kOuterRadius;
+constexpr static float r1 = kOuterRadius - kSoftEdgeWidth;
+constexpr static float r2 = r1 - 3 * kSoftEdgeWidth;
+constexpr static float r3 = r2 - kSoftEdgeWidth;
+constexpr static float r4 = r3 - kSoftEdgeWidth;  // outer edge of white watch face
+constexpr static float r4_b = r4 * 0.9;
+constexpr static float r5 = kSoftEdgeWidth * 3;
+constexpr static float r6 = r5 - kSoftEdgeWidth;
 
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
@@ -94,35 +107,145 @@ static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor top
   }
 }
 
-static void DrawArrow(SkCanvas& canvas, float ratio) {
-  float arrow_width = 0.0004;
+// How long it takes for the timer dial to rotate once.
+static Duration RangeDuration(TimerDelay::Range range) {
+  switch (range) {
+    case TimerDelay::Range::Milliseconds:
+      return 1s;
+    case TimerDelay::Range::Seconds:
+      return 60s;
+    case TimerDelay::Range::Minutes:
+      return 60min;
+    case TimerDelay::Range::Hours:
+      return 12h;
+    case TimerDelay::Range::Days:
+      return 7 * 24h;
+    default:
+      return 1s;
+  }
+}
+
+static int TickCount(TimerDelay::Range range) {
+  switch (range) {
+    case TimerDelay::Range::Milliseconds:
+      return 1000;
+    case TimerDelay::Range::Seconds:
+      return 60;
+    case TimerDelay::Range::Minutes:
+      return 60;
+    case TimerDelay::Range::Hours:
+      return 12;
+    case TimerDelay::Range::Days:
+      return 7;
+    default:
+      return 100;
+  }
+}
+
+static int MajorTickCount(TimerDelay::Range range) {
+  switch (range) {
+    case TimerDelay::Range::Milliseconds:
+      return 10;
+    case TimerDelay::Range::Seconds:
+      return 12;
+    case TimerDelay::Range::Minutes:
+      return 12;
+    case TimerDelay::Range::Hours:
+      return 4;
+    case TimerDelay::Range::Days:
+      return 7;
+    default:
+      return 10;
+  }
+}
+
+static const char* RangeName(TimerDelay::Range range) {
+  switch (range) {
+    case TimerDelay::Range::Milliseconds:
+      return "milliseconds";
+    case TimerDelay::Range::Seconds:
+      return "seconds";
+    case TimerDelay::Range::Minutes:
+      return "minutes";
+    case TimerDelay::Range::Hours:
+      return "hours";
+    case TimerDelay::Range::Days:
+      return "days";
+    default:
+      return "???";
+  }
+}
+
+constexpr static float kHandWidth = 0.0004;
+constexpr static float kHandLength = r4 * 0.8;
+
+static void AdjustRotation(float& rotation, float target = 0) {
+  if (rotation - target + 180 >= 360) {
+    rotation -= floorf((rotation - target + 180) / 360) * 360;
+  } else if (rotation - target + 180 < 0) {
+    rotation += floorf((target - rotation + 180) / 360) * 360;
+  }
+}
+
+static float HandBaseDegrees(const TimerDelay& timer) {
+  if (timer.state == TimerDelay::State::Running) {
+    Duration elapsed = Clock::now() - timer.start_time;
+    return 90 - 360 * elapsed.count() / RangeDuration(timer.range).count();
+  } else {
+    return 90;
+  }
+}
+
+static SkPath HandPath(const TimerDelay& timer) {
+  float base_degrees = HandBaseDegrees(timer);
+  float end_degrees = timer.hand_degrees.value;
+  float degrees = end_degrees - base_degrees;
+  AdjustRotation(degrees);
+
+  if (fabs(degrees) < 1) {
+    SkPath path;
+    auto end_point = SkMatrix::RotateDeg(end_degrees).mapXY(kHandLength, 0);
+    path.lineTo(end_point);
+    return path;
+  }
+
+  float R = kHandLength / ((degrees / 360) * 2 * M_PI);
+
+  SkPath path;
+
+  auto end_point = SkMatrix::Translate(R, 0).postRotate(degrees).postTranslate(-R, 0).mapXY(0, 0);
+
+  path.rArcTo(R, R, 0, SkPath::kSmall_ArcSize,
+              degrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW, end_point.x(),
+              end_point.y());
+  return path;
+}
+
+const static SkPaint kHandPaint = []() {
+  SkPaint paint;
+  paint.setColor(0xffd93f2a);
+  paint.setAntiAlias(true);
+  paint.setStrokeWidth(kHandWidth);
+  paint.setStyle(SkPaint::kStroke_Style);
+  return paint;
+}();
+
+static void DrawHand(gui::DrawContext& ctx, const TimerDelay& timer) {
+  auto& canvas = ctx.canvas;
+
+  SkPath path = HandPath(timer);
+
   canvas.save();
   canvas.translate(0.001, -0.001);
-  canvas.rotate(-360 * ratio);
   SkPaint shadow_paint;
   shadow_paint.setColor(0xff46464d);
   shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0005f, true));
-  canvas.drawRect(SkRect::MakeXYWH(-arrow_width / 2, 0, arrow_width, r4 * 0.8),
-                  shadow_paint);  // red arrow
+  shadow_paint.setStyle(SkPaint::kStroke_Style);
+  shadow_paint.setStrokeWidth(kHandWidth);
+  canvas.drawPath(path, shadow_paint);
   canvas.restore();
 
-  SkPaint arrow_paint;
-  arrow_paint.setColor(0xffd93f2a);
-  arrow_paint.setAntiAlias(true);
-  canvas.save();
-  canvas.rotate(-360 * ratio);
-  canvas.drawRect(SkRect::MakeXYWH(-arrow_width / 2, 0, arrow_width, r4 * 0.8),
-                  arrow_paint);  // red arrow
-  canvas.restore();
-}
-
-auto range_duration = 60s;
-
-static SkPoint DurationHandlePos(const TimerDelay& timer) {
-  float duration_radians = M_PI / 2 - timer.duration.count() / range_duration.count() * 2 * M_PI;
-  float s = sin(duration_radians);
-  float c = cos(duration_radians);
-  return SkPoint::Make(c * r3, s * r3);
+  canvas.drawPath(path, kHandPaint);
 }
 
 constexpr static float kStartPusherAxleWidth = 0.003;
@@ -185,39 +308,42 @@ static void DrawPusher(SkCanvas& canvas, const SkRRect& axle, const SkRRect& pus
   canvas.drawPath(pusher_path, pusher_paint);
 }
 
-void TimerDelay::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+SkPaint kDurationPaint = []() {
+  SkPaint paint;
+  paint.setColor(0xff23a9f2);
+  paint.setAntiAlias(true);
+  return paint;
+}();
 
-  int range_max = 60;
-  int tick_count = 60;
-  int major_tick_count = tick_count / 5;
+static SkPoint DurationHandlePos(const TimerDelay& timer) {
+  float s = sin(timer.duration_handle_rotation);
+  float c = cos(timer.duration_handle_rotation);
+  return SkPoint::Make(c * r3, s * r3);
+}
 
-  DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
-
+static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, Duration duration) {
+  int range_max = TickCount(range);
+  int tick_count = TickCount(range);
+  int major_tick_count = MajorTickCount(range);
   // Draw duration
-  float duration_angle = -duration.count() / range_duration.count() * 360;
-  SkPaint duration_paint;
-  duration_paint.setColor(0xff23a9f2);
-  duration_paint.setAntiAlias(true);
+  float duration_angle = -duration.count() / RangeDuration(range).count() * 360;
+  if (duration_angle < -360) {
+    duration_angle = -360;
+  }
   canvas.drawArc(SkRect::MakeXYWH(-r4, -r4, r4 * 2, r4 * 2), 90, duration_angle, true,
-                 duration_paint);
-
-  DrawRing(canvas, r4, r4_b, 0x46000000, 0xe1ffffff, kRingInset);  // shadow over white watch face
-
-  canvas.save();
-  canvas.translate(0.001, -0.001);
-  DrawRing(canvas, r5, 0, 0xff46464d, 0xff46464d, kRingBlurred);  // black pin shadow
-  canvas.restore();
+                 kDurationPaint);
 
   // Draw ticks
   SkPaint tick_paint;
   tick_paint.setColor(0xff121215);
   tick_paint.setAntiAlias(true);
-  float major_tick_w = 0.0005;
+  float circumference = 2 * M_PI * r4;
+  float minor_tick_w = std::min<float>(circumference / tick_count / 2, 0.0003);
+  float major_tick_w = 2 * minor_tick_w;
   SkRect major_tick = SkRect::MakeXYWH(-major_tick_w / 2, r4 * 0.9, major_tick_w, r4 * 0.05);
-  float minor_tick_w = 0.0002;
   SkRect minor_tick = SkRect::MakeXYWH(-minor_tick_w / 2, r4 * 0.925, minor_tick_w, r4 * 0.025);
   static auto font = gui::Font::Make(2);
+  float text_r = r4 * 0.8;
   for (int i = 1; i <= major_tick_count; ++i) {
     float a = (float)i / major_tick_count;
     canvas.save();
@@ -226,7 +352,6 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
     canvas.restore();
     auto text = f("%d", i * range_max / major_tick_count);
     canvas.save();
-    float text_r = r4 * 0.8;
     float s = sin(a * M_PI * 2);
     float w = font->MeasureText(text);
     canvas.translate(s * (text_r - w / 4) - w / 2, cos(a * M_PI * 2) * text_r - 0.002 / 2);
@@ -243,28 +368,94 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
     canvas.restore();
   }
 
+  auto range_name = RangeName(range);
+  auto range_name_width = font->MeasureText(range_name);
+  canvas.save();
+  canvas.translate(-range_name_width / 2, text_r * 0.5 - 0.002 / 2);
+  font->DrawText(canvas, RangeName(range), SkPaint());
+  canvas.restore();
+}
+
+void TimerDelay::Draw(gui::DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+
+  start_pusher_depression.Tick(ctx.animation_context);
+  left_pusher_depression.Tick(ctx.animation_context);
+  right_pusher_depression.Tick(ctx.animation_context);
+
+  range_dial.target = (float)range;
+  int range_end = (int)Range::EndGuard;
+  animation::WrapModulo(range_dial, range_end);
+  range_dial.Tick(ctx.animation_context);
+
+  double circles;
+  duration_handle_rotation.target =
+      M_PI * 2.5 - modf(duration.count() / RangeDuration(range).count(), &circles) * 2 * M_PI;
+  duration_handle_rotation.target =
+      modf(duration_handle_rotation.target / (2 * M_PI), &circles) * 2 * M_PI;
+  animation::WrapModulo(duration_handle_rotation, 2 * M_PI);
+  duration_handle_rotation.Tick(ctx.animation_context);
+
+  if (state == TimerDelay::State::Running) {
+    auto base_degrees = HandBaseDegrees(*this);
+    hand_degrees.target = base_degrees;
+    hand_degrees.value = base_degrees;
+  } else {
+    hand_degrees.target = 90;
+  }
+  AdjustRotation(hand_degrees.value, hand_degrees.target);
+  hand_degrees.Tick(ctx.animation_context);
+
+  DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
+
+  canvas.save();
+  canvas.clipRRect(SkRRect::MakeOval(SkRect::MakeXYWH(-r4, -r4, r4 * 2, r4 * 2)), false);
+  float fract = range_dial - roundf(range_dial);
+  // canvas.rotate(-180 * (range_dial - roundf(range_dial)), 0, r4);
+  // canvas.translate(-r4 * 2 * fract, 0);
+  if (fabs(fract) > 0.01) {
+    SkMatrix m;
+    m.setPerspX(-20 * fract);
+    m.postScale(1 - fabs(fract), 1);
+    m.postTranslate(-r4 * 2 * fract, 0);
+    m.postRotate(-90 * (range_dial - roundf(range_dial)), 0, 0);
+    m.normalizePerspective();
+    canvas.concat(m);
+  }
+  DrawDial(canvas, (Range)(((int)roundf(range_dial) + range_end) % range_end), duration);
+  canvas.restore();
+
+  DrawRing(canvas, r4, r4_b, 0x46000000, 0xe1ffffff, kRingInset);  // shadow over white watch face
+
+  canvas.save();
+  canvas.translate(0.001, -0.001);
+  DrawRing(canvas, r5, 0, 0xff46464d, 0xff46464d, kRingBlurred);  // black pin shadow
+  canvas.restore();
+
   DrawRing(canvas, r0, r2, 0xfff6f6f0, 0xff6a6a71);              // white case
   DrawRing(canvas, r0, r1, 0xfff7f4f2, 0xff5e5f65, kRingInset);  // white case soft edge
 
   {  // Draw pusher
     SkColor colors1[] = {0x20ffffff, 0x15000000, 0xA0000000};
-    DrawPusher(canvas, kStartPusherAxle, kStartPusher, colors1);
+    auto start_pusher =
+        kStartPusher.makeOffset(0, -start_pusher_depression * kStartPusherAxleLength);
+    DrawPusher(canvas, kStartPusherAxle, start_pusher, colors1);
     canvas.save();
     canvas.rotate(45);
     SkColor colors2[] = {0xD0000000, 0x40000000, 0xD0000000};
-    DrawPusher(canvas, kSmallAxle, kSmallPusher, colors2);
+    auto left_pusher = kSmallPusher.makeOffset(0, -left_pusher_depression * kSmallAxleLength);
+    DrawPusher(canvas, kSmallAxle, left_pusher, colors2);
     canvas.rotate(-90);
     SkColor colors3[] = {0x40FFFFFF, 0x40000000, 0xFF000000};
-    DrawPusher(canvas, kSmallAxle, kSmallPusher, colors3);
+    auto right_pusher = kSmallPusher.makeOffset(0, -right_pusher_depression * kSmallAxleLength);
+    DrawPusher(canvas, kSmallAxle, right_pusher, colors3);
     canvas.restore();
   }
 
   DrawRing(canvas, r2, r3, 0xff878682, 0xff020302);  // black metal band outer edge
   DrawRing(canvas, r3, r4, 0xff080604, 0xffe2e2e1);  // black metal band inner edge
 
-  Duration elapsed = state == State::RUNNING ? Clock::now() - start_time : 0s;
-
-  DrawArrow(canvas, elapsed.count() / range_duration.count());
+  DrawHand(ctx, *this);
 
   DrawRing(canvas, r5, 0, 0xff25272e, 0xff0d0b0f);               // black pin fill
   DrawRing(canvas, r5, r6, 0xff7e7d7a, 0xff05070b, kRingInset);  // black pin soft outer edge
@@ -283,8 +474,8 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   duration_arrow.lineTo(h / 3, -a / 2);
   duration_arrow.close();
 
-  canvas.rotate(90 + duration_angle);
-  canvas.drawPath(duration_arrow, duration_paint);
+  canvas.rotate(duration_handle_rotation * 180 / M_PI);
+  canvas.drawPath(duration_arrow, kDurationPaint);
   canvas.restore();
 
   DrawRing(canvas, 0.003, 0.0026, 0x7dffffff, 0x10000000, kRingInset);
@@ -326,7 +517,7 @@ static void TimerFinished(Location* here) {
   if (timer == nullptr) {
     return;
   }
-  timer->state = TimerDelay::State::IDLE;
+  timer->state = TimerDelay::State::Idle;
   if (timer->here) {
     timer->finished_arg.LoopLocations<bool>(*here, [](Location& then) {
       then.ScheduleRun();
@@ -351,20 +542,30 @@ struct DragDurationHandleAction : Action {
   virtual void Begin(gui::Pointer& pointer) {}
   virtual void Update(gui::Pointer& pointer) {
     auto pos = pointer.PositionWithin(timer);
+    auto tick_count = TickCount(timer.range);
     float angle = atan2(pos.sk.y(), pos.sk.x());
 
+    // Rescale to [0, 1] with 0 & 1 at the top of the dial
     float new_duration = (1.25 - angle / (2 * M_PI));
     if (new_duration < 0) {
       new_duration += 1;
     } else if (new_duration > 1) {
       new_duration -= 1;
     }
-    new_duration *= range_duration.count();
-    new_duration = ceil(new_duration);
+    {  // Snap to nearest tick
+      new_duration *= tick_count;
+      new_duration -= 0.5;
+      if (new_duration <= 0) {
+        new_duration += tick_count;
+      }
+      new_duration = ceilf(new_duration);
+      new_duration /= tick_count;
+    }
+    new_duration *= RangeDuration(timer.range).count();
 
-    if (timer.state == TimerDelay::State::RUNNING) {
+    if (timer.state == TimerDelay::State::Running) {
       std::unique_lock<std::mutex> lck(mtx);
-      if (timer.state == TimerDelay::State::RUNNING) {
+      if (timer.state == TimerDelay::State::Running) {
         auto [a, b] = tasks.equal_range(timer.start_time + timer.duration);
         for (auto it = a; it != b; ++it) {
           if (it->second->target == timer.here) {
@@ -388,6 +589,19 @@ struct DragDurationHandleAction : Action {
   virtual void DrawAction(gui::DrawContext&) {}
 };
 
+struct DragHandAction : Action {
+  TimerDelay& timer;
+  DragHandAction(TimerDelay& timer) : timer(timer) {}
+  virtual void Begin(gui::Pointer& pointer) { timer.hand_degrees.acceleration = 0; }
+  virtual void Update(gui::Pointer& pointer) {
+    auto pos = pointer.PositionWithin(timer);
+    float angle = atan2(pos.sk.y(), pos.sk.x());
+    timer.hand_degrees.value = angle * 180 / M_PI;
+  }
+  virtual void End() { timer.hand_degrees.acceleration = kHandAcceleration; }
+  virtual void DrawAction(gui::DrawContext&) {}
+};
+
 std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
                                                      gui::PointerButton btn) {
   if (btn == gui::PointerButton::kMouseLeft) {
@@ -398,6 +612,7 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
     }
     if (kStartPusherBox.contains(pos.x, pos.y)) {
       if (here) {
+        start_pusher_depression.value = 1;
         here->ScheduleRun();
         return nullptr;
       }
@@ -405,13 +620,25 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
     auto left_rot = SkMatrix::RotateDeg(-45).mapPoint(pos.sk);
     auto right_rot = SkMatrix::RotateDeg(45).mapPoint(pos.sk);
     if (kSmallPusherBox.contains(left_rot.x(), left_rot.y())) {
-      LOG << "Clicked left pusher";
+      range = Range(((int)range + (int)Range::EndGuard - 1) % (int)Range::EndGuard);
+      left_pusher_depression.value = 1;
       return nullptr;
     }
     if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
-      LOG << "Clicked right pusher";
+      range = Range(((int)range + 1) % (int)Range::EndGuard);
+      right_pusher_depression.value = 1;
       return nullptr;
     }
+
+    if (state == State::Idle) {
+      SkPath hand_path = HandPath(*this);
+      SkPath hand_outline;
+      skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
+      if (hand_outline.contains(pos.x, pos.y)) {
+        return std::make_unique<DragHandAction>(*this);
+      }
+    }
+
     auto action = std::make_unique<DragLocationAction>(here);
     action->contact_point = pos;
     return action;
@@ -444,8 +671,8 @@ void __attribute__((constructor)) InitTimer() {
 }
 
 void TimerDelay::Run(Location& here) {
-  if (state == State::IDLE) {
-    state = State::RUNNING;
+  if (state == State::Idle) {
+    state = State::Running;
     start_time = Clock::now();
     {
       std::unique_lock<std::mutex> lck(mtx);

@@ -38,16 +38,22 @@ struct DeltaFraction {
   }
 };
 
-struct Approach {
+struct Base {
   float value = 0;
   float target = 0;
+};
+
+struct Approach : Base {
   float speed = 15;
   float cap_min;
   float cap;
   time::point last_tick;
 
   Approach(float initial = 0, float cap_min = 0.01)
-      : value(initial), target(initial), cap_min(cap_min), cap(cap_min), last_tick(time::now()) {}
+      : Base{.value = initial, .target = initial},
+        cap_min(cap_min),
+        cap(cap_min),
+        last_tick(time::now()) {}
   void Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
@@ -69,5 +75,25 @@ struct Approach {
   float Remaining() const { return target - value; }
   operator float() const { return value; }
 };
+
+struct Spring : Base {
+  float acceleration = 100;
+  float velocity = 0;
+  float friction = 10;
+  time::point last_tick;
+  Spring() : last_tick(time::now()) {}
+  void Tick(time::Timer& timer) {
+    float dt = (timer.now - last_tick).count();
+    last_tick = timer.now;
+    if (dt <= 0) return;
+    float delta = target - value;
+    velocity += delta * acceleration * dt;
+    velocity *= pow(0.5, dt * friction);
+    value += velocity * dt;
+  }
+  operator float() const { return value; }
+};
+
+void WrapModulo(Base& base, float range);
 
 }  // namespace automat::animation

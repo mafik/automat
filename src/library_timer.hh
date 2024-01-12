@@ -2,6 +2,7 @@
 
 #include <chrono>
 
+#include "animation.hh"
 #include "base.hh"
 
 namespace automat::library {
@@ -13,20 +14,26 @@ using TimePoint = std::chrono::time_point<Clock, Duration>;
 struct TimerDelay : LiveObject {
   Duration duration = 10s;
   TimePoint start_time;
-  enum class State : char { IDLE, RUNNING } state = State::IDLE;
+  mutable animation::Approach start_pusher_depression;
+  mutable animation::Approach left_pusher_depression;
+  mutable animation::Approach right_pusher_depression;
+  mutable animation::Spring hand_degrees;
+  mutable animation::Spring range_dial;
+  mutable animation::Approach duration_handle_rotation;
+  enum class State : char { Idle, Running } state = State::Idle;
   enum class OverrunPolicy : char {
-    IGNORE,
-    TOGGLE,
-    RESTART,
-    EXTEND
-  } overrun_policy = OverrunPolicy::TOGGLE;
-  // TODO: range switching
+    Ignore,
+    Toggle,
+    Restart,
+    Extend
+  } overrun_policy = OverrunPolicy::Toggle;
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
     Seconds,       // 0 - 60 s
     Minutes,       // 0 - 60 min
     Hours,         // 0 - 12 h
     Days,          // 0 - 7 d
+    EndGuard,
   } range = Range::Seconds;
   static const TimerDelay proto;
   static Argument finished_arg;

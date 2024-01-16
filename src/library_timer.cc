@@ -20,6 +20,7 @@
 #include "drag_action.hh"
 #include "font.hh"
 #include "library_macros.hh"
+#include "math.hh"
 #include "number_text_field.hh"
 #include "pointer.hh"
 #include "tasks.hh"
@@ -43,6 +44,12 @@ constexpr static float r4_b = r4 * 0.9;
 constexpr static float r5 = kSoftEdgeWidth * 3;
 constexpr static float r6 = r5 - kSoftEdgeWidth;
 constexpr static float kTextWidth = r4;
+
+static constexpr SkRect kDialOval =
+    SkRect::MakeXYWH(-r4, -r4, r4 * 2, r4 * 2);  // outer edge of dial
+constexpr static float kTickOuterRadius = r4 * 0.95;
+constexpr static float kTickMajorLength = r4 * 0.05;
+constexpr static float kTickMinorLength = r4 * 0.025;
 
 Argument TimerDelay::finished_arg = Argument("finished", Argument::kRequiresLocation);
 
@@ -195,7 +202,7 @@ std::unique_ptr<Object> TimerDelay::Clone() const { return std::make_unique<Time
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
   SkColor colors[2] = {color_a, color_b};
-  return SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  return SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kMirror);
 }
 
 enum DrawRingMode {
@@ -385,6 +392,21 @@ static SkPoint DurationHandlePos(const TimerDelay& timer) {
   return SkPoint::Make(c * r3, s * r3);
 }
 
+static SkPath DurationHandlePath(const TimerDelay& timer) {
+  static const SkPath path = []() {
+    SkPath path;
+    path.moveTo(kTickOuterRadius, 0);
+    float start_angle = atan2(0.001, r4) / M_PI * 180;
+    float handle_angle = 20;
+    path.arcTo(kDialOval, start_angle, handle_angle / 2 - start_angle, false);
+    path.arcTo(kOuterOval.makeOutset(0.0005, 0.0005), handle_angle / 2, -handle_angle, false);
+    path.arcTo(kDialOval, -handle_angle / 2, handle_angle / 2 - start_angle, false);
+    path.close();
+    return path;
+  }();
+  return path.makeTransform(SkMatrix::RotateRad(timer.duration_handle_rotation));
+}
+
 static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, Duration duration) {
   int range_max = TickCount(range);
   int tick_count = TickCount(range);
@@ -404,8 +426,10 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, Duration duratio
   float circumference = 2 * M_PI * r4;
   float minor_tick_w = std::min<float>(circumference / tick_count / 2, 0.0003);
   float major_tick_w = 2 * minor_tick_w;
-  SkRect major_tick = SkRect::MakeXYWH(-major_tick_w / 2, r4 * 0.9, major_tick_w, r4 * 0.05);
-  SkRect minor_tick = SkRect::MakeXYWH(-minor_tick_w / 2, r4 * 0.925, minor_tick_w, r4 * 0.025);
+  SkRect major_tick = SkRect::MakeXYWH(-major_tick_w / 2, kTickOuterRadius - kTickMajorLength,
+                                       major_tick_w, kTickMajorLength);
+  SkRect minor_tick = SkRect::MakeXYWH(-minor_tick_w / 2, kTickOuterRadius - kTickMinorLength,
+                                       minor_tick_w, kTickMinorLength);
   static auto font = gui::Font::Make(2);
   float text_r = r4 * 0.8;
   for (int i = 1; i <= major_tick_count; ++i) {
@@ -529,26 +553,28 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   DrawRing(canvas, r5, 0, 0xff25272e, 0xff0d0b0f);               // black pin fill
   DrawRing(canvas, r5, r6, 0xff7e7d7a, 0xff05070b, kRingInset);  // black pin soft outer edge
 
-  canvas.save();
-  SkPoint duration_pos = DurationHandlePos(*this);
-  canvas.translate(duration_pos.x(), duration_pos.y());
-  canvas.save();
-  DrawRing(canvas, 0.003, 0, 0xff25272e, 0xff0d0b0f);
-  SkPath duration_arrow;
-  float h = 0.0035;
-  float a = h * 2 / sqrt(3);
-  duration_arrow.moveTo(-h * 2 / 3, 0);
-  duration_arrow.lineTo(h / 3, a / 2);
-  duration_arrow.lineTo(0, 0);
-  duration_arrow.lineTo(h / 3, -a / 2);
-  duration_arrow.close();
+  auto duration_handle_matrix = SkMatrix::RotateRad(duration_handle_rotation);
+  SkPath duration_path_rotated = DurationHandlePath(*this);
 
-  canvas.rotate(duration_handle_rotation * 180 / M_PI);
-  canvas.drawPath(duration_arrow, kDurationPaint);
-  canvas.restore();
+  SkPaint duration_handle_paint;
+  SkPoint quad[4];
+  duration_path_rotated.getBounds().toQuad(quad);
+  quad[1] = ClampLength(quad[1], kTickOuterRadius, kOuterRadius);
+  quad[3] = ClampLength(quad[3], kTickOuterRadius, kOuterRadius);
+  duration_handle_paint.setShader(MakeGradient(duration_handle_matrix.mapXY(0, 0),
+                                               duration_handle_matrix.mapXY(0, 0.0005), 0xff404040,
+                                               0xff202020));
 
-  DrawRing(canvas, 0.003, 0.0026, 0x7dffffff, 0x10000000, kRingInset);
-  DrawRing(canvas, 0.0025, 0.0015, 0x50000000, 0x50ffffff, kRingBlurred);
+  SkPaint highlight_paint;
+  highlight_paint.setShader(MakeGradient(quad[3], quad[1], 0xff404040, 0xff202020));
+  highlight_paint.setStyle(SkPaint::kStroke_Style);
+  highlight_paint.setStrokeWidth(0.001);
+  highlight_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0002));
+
+  canvas.save();
+  canvas.clipPath(duration_path_rotated, true);
+  canvas.drawPaint(duration_handle_paint);
+  canvas.drawPath(duration_path_rotated, highlight_paint);
   canvas.restore();
 }
 
@@ -637,8 +663,8 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
                                                      gui::PointerButton btn) {
   if (btn == gui::PointerButton::kMouseLeft) {
     auto pos = pointer.PositionWithin(*this);
-    auto duration_handle_pos = DurationHandlePos(*this);
-    if ((duration_handle_pos - pos.sk).length() < 0.003) {
+    auto duration_handle_path = DurationHandlePath(*this);
+    if (duration_handle_path.contains(pos.x, pos.y)) {
       return std::make_unique<DragDurationHandleAction>(*this);
     }
     if (kStartPusherBox.contains(pos.x, pos.y)) {

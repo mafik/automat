@@ -121,3 +121,15 @@ inline float Saturate(float x) { return std::clamp(x, 0.f, 1.f); }
 
 // A smooth ReLU function.
 inline float SoftPlus(float x, float beta = 1) { return logf(1 + expf(beta * x)) / beta; }
+
+template <typename T>
+T ClampLength(T vec, float min, float max) {
+  float len2 = LengthSquared(vec);
+  if (len2 < min * min) {
+    return vec * (min / sqrtf(len2));
+  }
+  if (len2 > max * max) {
+    return vec * (max / sqrtf(len2));
+  }
+  return vec;
+}

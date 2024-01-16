@@ -9,6 +9,8 @@
 #include "library_macros.hh"
 #include "library_number.hh"
 
+using namespace automat::gui;
+
 namespace automat::library {
 
 DEFINE_PROTO(Increment);

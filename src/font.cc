@@ -7,7 +7,7 @@
 #include <src/base/SkUTF.h>
 
 #include "../build/generated/embedded.hh"
-#include "log.hh"
+#include "gui_constants.hh"
 #include "math.hh"
 #include "virtual_fs.hh"
 

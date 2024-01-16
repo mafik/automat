@@ -20,6 +20,7 @@
 #include "drag_action.hh"
 #include "font.hh"
 #include "library_macros.hh"
+#include "number_text_field.hh"
 #include "pointer.hh"
 #include "tasks.hh"
 #include "thread_name.hh"
@@ -27,23 +28,6 @@
 namespace automat::library {
 
 DEFINE_PROTO(TimerDelay);
-Argument TimerDelay::finished_arg = Argument("finished", Argument::kRequiresLocation);
-
-static constexpr float kHandAcceleration = 2000;
-
-TimerDelay::TimerDelay() {
-  hand_degrees.acceleration = kHandAcceleration;
-  hand_degrees.friction = 40;
-
-  range_dial.acceleration = 2000;
-  range_dial.friction = 80;
-
-  duration_handle_rotation.speed = 100;
-}
-
-string_view TimerDelay::Name() const { return "Delay"; }
-
-std::unique_ptr<Object> TimerDelay::Clone() const { return std::make_unique<TimerDelay>(*this); }
 
 static constexpr float kOuterRadius = 0.02;
 static constexpr SkRect kOuterOval =
@@ -58,54 +42,41 @@ constexpr static float r4 = r3 - kSoftEdgeWidth;  // outer edge of white watch f
 constexpr static float r4_b = r4 * 0.9;
 constexpr static float r5 = kSoftEdgeWidth * 3;
 constexpr static float r6 = r5 - kSoftEdgeWidth;
+constexpr static float kTextWidth = r4;
 
-static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
-  SkPoint pts[2] = {a, b};
-  SkColor colors[2] = {color_a, color_b};
-  return SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+Argument TimerDelay::finished_arg = Argument("finished", Argument::kRequiresLocation);
+
+static constexpr float kHandAcceleration = 2000;
+
+static std::thread timer_thread;
+std::mutex mtx;
+std::condition_variable cv;
+
+std::multimap<TimePoint, std::unique_ptr<Task>> tasks;
+
+static void TimerFinished(Location* here) {
+  TimerDelay* timer = here->As<TimerDelay>();
+  if (timer == nullptr) {
+    return;
+  }
+  timer->state = TimerDelay::State::Idle;
+  if (timer->here) {
+    timer->finished_arg.LoopLocations<bool>(*here, [](Location& then) {
+      then.ScheduleRun();
+      return false;
+    });
+  }
 }
 
-enum DrawRingMode {
-  kRingAliased,
-  kRingAntiAliased,
-  kRingBlurred,
-  kRingInset,
+struct TimerFinishedTask : Task {
+  TimerFinishedTask(Location* target) : Task(target) {}
+  std::string Format() override { return "TimerFinishedTask"; }
+  void Execute() override {
+    PreExecute();
+    TimerFinished(target);
+    PostExecute();
+  }
 };
-
-static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor top_left,
-                     SkColor bottom_right, DrawRingMode mode = kRingAntiAliased) {
-  SkPaint paint;
-  SkPoint top_left_pos = SkPoint::Make(-outer_r * M_SQRT2 / 2, outer_r * M_SQRT2 / 2);
-  SkPoint bottom_right_pos = SkPoint::Make(outer_r * M_SQRT2 / 2, -outer_r * M_SQRT2 / 2);
-  paint.setShader(MakeGradient(top_left_pos, bottom_right_pos, top_left, bottom_right));
-  if (mode == kRingAntiAliased) {
-    paint.setAntiAlias(true);
-  }
-  // paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0001f, true));
-  float radius;
-  if (mode == kRingBlurred) {
-    paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, (outer_r - inner_r) / 4));
-  }
-  if (mode == kRingInset) {
-    paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, (outer_r - inner_r) / 4));
-    canvas.save();
-    canvas.clipRRect(
-        SkRRect::MakeOval(SkRect::MakeXYWH(-outer_r, -outer_r, outer_r * 2, outer_r * 2)), true);
-    outer_r += (outer_r - inner_r);
-  }
-  if (inner_r > 0) {
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setStrokeWidth(outer_r - inner_r);
-    radius = (outer_r + inner_r) / 2;
-  } else {
-    paint.setStyle(SkPaint::kFill_Style);
-    radius = outer_r;
-  }
-  canvas.drawCircle(SkPoint::Make(0, 0), radius, paint);
-  if (mode == kRingInset) {
-    canvas.restore();
-  }
-}
 
 // How long it takes for the timer dial to rotate once.
 static Duration RangeDuration(TimerDelay::Range range) {
@@ -173,6 +144,99 @@ static const char* RangeName(TimerDelay::Range range) {
       return "days";
     default:
       return "???";
+  }
+}
+
+static void UpdateTextField(TimerDelay& timer) {
+  auto n = timer.duration.count() / RangeDuration(timer.range).count() * TickCount(timer.range);
+  timer.text_field.SetNumber(n);
+}
+
+static void SetDuration(TimerDelay& timer, Duration new_duration) {
+  if (timer.state == TimerDelay::State::Running) {
+    std::unique_lock<std::mutex> lck(mtx);
+    if (timer.state == TimerDelay::State::Running) {
+      auto [a, b] = tasks.equal_range(timer.start_time + timer.duration);
+      for (auto it = a; it != b; ++it) {
+        if (it->second->target == timer.here) {
+          tasks.erase(it);
+          break;
+        }
+      }
+      auto new_end = timer.start_time + Duration(new_duration);
+      if (new_end <= Clock::now()) {
+        TimerFinished(timer.here);
+      } else {
+        tasks.emplace(new_end, new TimerFinishedTask(timer.here));
+      }
+      cv.notify_all();
+    }
+  }
+
+  timer.duration = Duration(new_duration);
+  UpdateTextField(timer);
+}
+
+TimerDelay::TimerDelay() : text_field(kTextWidth) {
+  hand_degrees.acceleration = kHandAcceleration;
+  hand_degrees.friction = 40;
+
+  range_dial.acceleration = 2000;
+  range_dial.friction = 80;
+
+  duration_handle_rotation.speed = 100;
+  SetDuration(*this, 10s);
+}
+
+string_view TimerDelay::Name() const { return "Delay"; }
+
+std::unique_ptr<Object> TimerDelay::Clone() const { return std::make_unique<TimerDelay>(*this); }
+
+static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
+  SkPoint pts[2] = {a, b};
+  SkColor colors[2] = {color_a, color_b};
+  return SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+}
+
+enum DrawRingMode {
+  kRingAliased,
+  kRingAntiAliased,
+  kRingBlurred,
+  kRingInset,
+};
+
+static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor top_left,
+                     SkColor bottom_right, DrawRingMode mode = kRingAntiAliased) {
+  SkPaint paint;
+  SkPoint top_left_pos = SkPoint::Make(-outer_r * M_SQRT2 / 2, outer_r * M_SQRT2 / 2);
+  SkPoint bottom_right_pos = SkPoint::Make(outer_r * M_SQRT2 / 2, -outer_r * M_SQRT2 / 2);
+  paint.setShader(MakeGradient(top_left_pos, bottom_right_pos, top_left, bottom_right));
+  if (mode == kRingAntiAliased) {
+    paint.setAntiAlias(true);
+  }
+  // paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.0001f, true));
+  float radius;
+  if (mode == kRingBlurred) {
+    paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, (outer_r - inner_r) / 4));
+  }
+  if (mode == kRingInset) {
+    paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, (outer_r - inner_r) / 4));
+    canvas.save();
+    canvas.clipRRect(
+        SkRRect::MakeOval(SkRect::MakeXYWH(-outer_r, -outer_r, outer_r * 2, outer_r * 2)), true);
+    outer_r += (outer_r - inner_r);
+  }
+  if (inner_r > 0) {
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setStrokeWidth(outer_r - inner_r);
+    radius = (outer_r + inner_r) / 2;
+  } else {
+    paint.setStyle(SkPaint::kFill_Style);
+    radius = outer_r;
+  }
+  canvas.drawCircle(SkPoint::Make(0, 0), radius, paint);
+  if (mode == kRingInset) {
+    canvas.restore();
   }
 }
 
@@ -425,6 +489,11 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   DrawDial(canvas, (Range)(((int)roundf(range_dial) + range_end) % range_end), duration);
   canvas.restore();
 
+  canvas.save();
+  canvas.translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
+  text_field.Draw(ctx);
+  canvas.restore();
+
   DrawRing(canvas, r4, r4_b, 0x46000000, 0xe1ffffff, kRingInset);  // shadow over white watch face
 
   canvas.save();
@@ -483,6 +552,18 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   canvas.restore();
 }
 
+ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {
+  if (visitor(text_field) == ControlFlow::Stop) return ControlFlow::Stop;
+  return ControlFlow::Continue;
+}
+
+SkMatrix TimerDelay::TransformToChild(const Widget& child, animation::Context&) const {
+  if (&child == &text_field) {
+    return SkMatrix::Translate(kTextWidth / 2, gui::NumberTextField::kHeight);
+  }
+  return SkMatrix::I();
+}
+
 SkPath TimerDelay::Shape() const {
   static SkPath shape = []() {
     SkPathBuilder path_builder;
@@ -505,36 +586,6 @@ SkPath TimerDelay::Shape() const {
   }();
   return shape;
 }
-
-static std::thread timer_thread;
-std::mutex mtx;
-std::condition_variable cv;
-
-std::multimap<TimePoint, std::unique_ptr<Task>> tasks;
-
-static void TimerFinished(Location* here) {
-  TimerDelay* timer = here->As<TimerDelay>();
-  if (timer == nullptr) {
-    return;
-  }
-  timer->state = TimerDelay::State::Idle;
-  if (timer->here) {
-    timer->finished_arg.LoopLocations<bool>(*here, [](Location& then) {
-      then.ScheduleRun();
-      return false;
-    });
-  }
-}
-
-struct TimerFinishedTask : Task {
-  TimerFinishedTask(Location* target) : Task(target) {}
-  std::string Format() override { return "TimerFinishedTask"; }
-  void Execute() override {
-    PreExecute();
-    TimerFinished(target);
-    PostExecute();
-  }
-};
 
 struct DragDurationHandleAction : Action {
   TimerDelay& timer;
@@ -563,27 +614,7 @@ struct DragDurationHandleAction : Action {
     }
     new_duration *= RangeDuration(timer.range).count();
 
-    if (timer.state == TimerDelay::State::Running) {
-      std::unique_lock<std::mutex> lck(mtx);
-      if (timer.state == TimerDelay::State::Running) {
-        auto [a, b] = tasks.equal_range(timer.start_time + timer.duration);
-        for (auto it = a; it != b; ++it) {
-          if (it->second->target == timer.here) {
-            tasks.erase(it);
-            break;
-          }
-        }
-        auto new_end = timer.start_time + Duration(new_duration);
-        if (new_end <= Clock::now()) {
-          TimerFinished(timer.here);
-        } else {
-          tasks.emplace(new_end, new TimerFinishedTask(timer.here));
-        }
-        cv.notify_all();
-      }
-    }
-
-    timer.duration = Duration(new_duration);
+    SetDuration(timer, Duration(new_duration));
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -622,11 +653,13 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
     if (kSmallPusherBox.contains(left_rot.x(), left_rot.y())) {
       range = Range(((int)range + (int)Range::EndGuard - 1) % (int)Range::EndGuard);
       left_pusher_depression.value = 1;
+      UpdateTextField(*this);
       return nullptr;
     }
     if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
       range = Range(((int)range + 1) % (int)Range::EndGuard);
       right_pusher_depression.value = 1;
+      UpdateTextField(*this);
       return nullptr;
     }
 

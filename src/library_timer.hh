@@ -4,6 +4,7 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "number_text_field.hh"
 
 namespace automat::library {
 
@@ -20,6 +21,7 @@ struct TimerDelay : LiveObject {
   mutable animation::Spring hand_degrees;
   mutable animation::Spring range_dial;
   mutable animation::Approach duration_handle_rotation;
+  gui::NumberTextField text_field;
   enum class State : char { Idle, Running } state = State::Idle;
   enum class OverrunPolicy : char {
     Ignore,
@@ -45,6 +47,8 @@ struct TimerDelay : LiveObject {
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
   void Run(Location& here) override;
+  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
 };
 
 }  // namespace automat::library

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base.hh"
+#include "number_text_field.hh"
 
 namespace automat::library {
 
@@ -13,22 +14,12 @@ struct NumberButton : gui::Button {
   void Activate() override;
 };
 
-struct NumberTextField : gui::TextField {
-  NumberTextField(Number&);
-  SkRRect ShapeRRect() const override;
-  const SkPaint& GetBackgroundPaint() const override;
-  void DrawBackground(gui::DrawContext&) const override;
-  void DrawText(gui::DrawContext&) const override;
-  Vec2 GetTextPos() const override;
-};
-
 struct Number : Object {
   double value;
   NumberButton digits[10];
   NumberButton dot;
   NumberButton backspace;
-  std::string text;
-  NumberTextField text_field;
+  gui::NumberTextField text_field;
   Number(double x = 0);
   static const Number proto;
   string_view Name() const override;

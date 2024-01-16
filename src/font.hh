@@ -8,9 +8,6 @@
 
 namespace automat::gui {
 
-constexpr float kLetterSizeMM = 3;
-constexpr float kLetterSize = kLetterSizeMM / 1000;
-
 struct Font {
   SkFont sk_font;
   float font_scale;

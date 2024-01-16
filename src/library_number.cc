@@ -10,12 +10,14 @@
 #include "color.hh"
 #include "control_flow.hh"
 #include "drag_action.hh"
-#include "font.hh"
 #include "gui_align.hh"
+#include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "gui_text.hh"
 #include "library_macros.hh"
 #include "widget.hh"
+
+using namespace automat::gui;
 
 namespace automat::library {
 
@@ -67,61 +69,6 @@ void NumberButton::Activate() {
   }
 }
 
-NumberTextField::NumberTextField(Number& n)
-    : gui::TextField(&n.text, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth) {}
-
-SkRRect NumberTextField::ShapeRRect() const {
-  return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, kTextHeight), kTextHeight / 2,
-                             kTextHeight / 2);
-}
-
-static const SkPaint kNumberTextBackgroundPaint = []() {
-  SkPoint pts[2] = {{0, 0}, {0, kTextHeight}};
-  SkColor colors[2] = {0xffbec8b7, 0xffdee3db};
-  sk_sp<SkShader> shader =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
-  SkPaint paint;
-  paint.setShader(shader);
-  return paint;
-}();
-
-const SkPaint& NumberTextField::GetBackgroundPaint() const { return kNumberTextBackgroundPaint; }
-
-static const SkPaint kNumberTextBorderPaint = []() {
-  SkPaint paint;
-  SkPoint pts[2] = {{0, 0}, {0, kTextHeight}};
-  SkColor colors[2] = {0xff917c6f, 0xff483e37};
-  sk_sp<SkShader> shader =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
-  paint.setShader(shader);
-  paint.setAntiAlias(true);
-  paint.setStyle(SkPaint::kStroke_Style);
-  paint.setStrokeWidth(kBorderWidth);
-  return paint;
-}();
-
-void NumberTextField::DrawBackground(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
-  SkRRect rrect = ShapeRRect();
-  canvas.drawRRect(rrect, GetBackgroundPaint());
-  canvas.drawRRect(rrect, kNumberTextBorderPaint);
-}
-
-void NumberTextField::DrawText(gui::DrawContext& ctx) const {
-  gui::Font& font = gui::GetFont();
-  Vec2 text_pos = GetTextPos();
-  ctx.canvas.translate(text_pos.x, text_pos.y);
-  font.DrawText(ctx.canvas, *text, GetTextPaint());
-}
-
-Vec2 NumberTextField::GetTextPos() const {
-  gui::Font& font = gui::GetFont();
-  // We use the same margin on all sides because it looks nicer with fully rounded corners.
-  float margin = (kTextHeight - gui::kLetterSize) / 2;
-  float text_width = font.MeasureText(*text);
-  return Vec2(width - text_width - margin, margin);
-}
-
 Number::Number(double x)
     : value(x),
       digits{NumberButton(make_unique<Text>("0")), NumberButton(make_unique<Text>("1")),
@@ -131,38 +78,37 @@ Number::Number(double x)
              NumberButton(make_unique<Text>("8")), NumberButton(make_unique<Text>("9"))},
       dot(make_unique<Text>(".")),
       backspace(gui::MakeShapeWidget(kBackspaceShape, 0xff000000)),
-      text("0"),
-      text_field(*this) {
+      text_field(kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth) {
   for (int i = 0; i < 10; ++i) {
     digits[i].activate = [this, i] {
-      if (text.empty() || text == "0") {
-        text = std::to_string(i);
+      if (text_field.text.empty() || text_field.text == "0") {
+        text_field.text = std::to_string(i);
       } else {
-        text += std::to_string(i);
+        text_field.text += std::to_string(i);
       }
-      value = std::stod(text);
+      value = std::stod(text_field.text);
     };
   }
   dot.activate = [this] {
-    if (text.empty()) {
-      text = "0";
-    } else if (auto it = text.find('.'); it != std::string::npos) {
-      text.erase(it, 1);
+    if (text_field.text.empty()) {
+      text_field.text = "0";
+    } else if (auto it = text_field.text.find('.'); it != std::string::npos) {
+      text_field.text.erase(it, 1);
     }
-    text += ".";
-    while (text.size() > 1 && text[0] == '0' && text[1] != '.') {
-      text.erase(0, 1);
+    text_field.text += ".";
+    while (text_field.text.size() > 1 && text_field.text[0] == '0' && text_field.text[1] != '.') {
+      text_field.text.erase(0, 1);
     }
-    value = std::stod(text);
+    value = std::stod(text_field.text);
   };
   backspace.activate = [this] {
-    if (!text.empty()) {
-      text.pop_back();
+    if (!text_field.text.empty()) {
+      text_field.text.pop_back();
     }
-    if (text.empty()) {
-      text = "0";
+    if (text_field.text.empty()) {
+      text_field.text = "0";
     }
-    value = std::stod(text);
+    value = std::stod(text_field.text);
   };
 }
 
@@ -179,7 +125,7 @@ string Number::GetText() const {
 
 void Number::SetText(Location& error_context, string_view text) {
   value = std::stod(string(text));
-  this->text = text;
+  text_field.text = text;
 }
 
 static const SkRRect kNumberRRect = [] {

@@ -1,6 +1,7 @@
 #include "gui_text.hh"
 
 #include "font.hh"
+#include "gui_constants.hh"
 
 namespace automat::gui {
 

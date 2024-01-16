@@ -4,6 +4,7 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "font.hh"
+#include "gui_constants.hh"
 
 namespace automat {
 

@@ -18,6 +18,9 @@ struct CaretPosition {
 };
 
 struct TextField : Widget, CaretOwner {
+  static constexpr float kHeight =
+      std::max(kLetterSize + 2 * kMargin + 2 * kBorderWidth, kMinimalTouchableSize);
+
   std::string* text;
   float width;
 
@@ -53,6 +56,11 @@ struct TextField : Widget, CaretOwner {
   Vec2 PositionFromIndex(int index) const;
 
   virtual Vec2 GetTextPos() const;
+
+  // Internal method used to draw the background of the text field.
+  //
+  // Intended to be used internally by TextField::Draw. Subclasses may override this method to
+  // customize background appearance.
   virtual void DrawBackground(DrawContext&) const;
   virtual void DrawText(DrawContext&) const;
 

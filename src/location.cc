@@ -10,6 +10,8 @@
 #include "format.hh"
 #include "gui_constants.hh"
 
+using namespace automat::gui;
+
 namespace automat {
 
 constexpr float kFrameCornerRadius = 0.001;

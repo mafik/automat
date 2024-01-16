@@ -14,6 +14,7 @@
 #include "drag_action.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
+#include "svg.hh"
 #include "virtual_fs.hh"
 
 using namespace maf;
@@ -54,15 +55,11 @@ static sk_sp<SkImage>& MouseRMBMask() {
   return image;
 }
 
-static sk_sp<SkImage>& ArrowImage() {
-  static auto image = MakeImageFromAsset(embedded::assets_arrow_webp);
-  return image;
-}
+constexpr float kScale = 0.00005;
 
 static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
   auto base = MouseBaseImage();
   auto mask = button == gui::kMouseLeft ? MouseLMBMask() : MouseRMBMask();
-  auto arrow = ArrowImage();
   SkBitmap bitmap;
   SkSamplingOptions sampling;
   bitmap.allocN32Pixels(base->width(), base->height());
@@ -80,21 +77,18 @@ static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
     canvas.drawImage(base, 0, 0, sampling, &paint);
   }
   {  // Draw arrow
+    SkPath path = PathFromSVG(kArrowShape).makeScale(1 / kScale, 1 / kScale);
     SkPaint paint;
     paint.setBlendMode(SkBlendMode::kMultiply);
-    paint.setColorFilter(SkColorFilters::Blend(
-        down ? SkColorSetARGB(255, 255, 128, 128) : SkColorSetARGB(255, 118, 235, 235),
-        SkBlendMode::kSrcIn));
     paint.setAlphaf(0.9f);
-    canvas.translate(button == gui::kMouseLeft ? 35 : 235, 80);
+    canvas.translate(button == gui::kMouseLeft ? 85 : 285, 130);
     if (down) {
+      paint.setColor(SkColorSetARGB(255, 255, 128, 128));
     } else {
-      canvas.translate(arrow->width() / 2.f, arrow->height() / 2.f);
-      canvas.scale(1, down ? 1 : -1);
-      canvas.translate(-arrow->width() / 2.f, 0);
+      paint.setColor(SkColorSetARGB(255, 118, 235, 235));
+      canvas.scale(1, -1);
     }
-    canvas.scale(0.5, 0.5);
-    canvas.drawImage(arrow, 0, 0, sampling, &paint);
+    canvas.drawPath(path, paint);
   }
   bitmap.setImmutable();
   return SkImages::RasterFromBitmap(bitmap);
@@ -123,8 +117,6 @@ static sk_sp<SkImage>& CachedMouseImage(gui::PointerButton button, bool down) {
       return image;
   }
 }
-
-constexpr float kScale = 0.00005;
 
 MouseClick::MouseClick(gui::PointerButton button, bool down) : button(button), down(down) {}
 string_view MouseClick::Name() const {

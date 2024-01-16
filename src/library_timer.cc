@@ -52,6 +52,7 @@ constexpr static float kTickMajorLength = r4 * 0.05;
 constexpr static float kTickMinorLength = r4 * 0.025;
 
 Argument TimerDelay::finished_arg = Argument("finished", Argument::kRequiresLocation);
+Argument duration_arg = Argument("duration", Argument::kRequiresLocation);
 
 static constexpr float kHandAcceleration = 2000;
 
@@ -192,6 +193,7 @@ TimerDelay::TimerDelay() : text_field(kTextWidth) {
   range_dial.friction = 80;
 
   duration_handle_rotation.speed = 100;
+  text_field.argument_label = "duration";
   SetDuration(*this, 10s);
 }
 
@@ -583,6 +585,14 @@ ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
+SkPath TimerDelay::ArgShape(std::string_view label) const {
+  if (label == "duration") {
+    auto transform = SkMatrix::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
+    return text_field.Shape().makeTransform(transform);
+  }
+  return SkPath();
+}
+
 SkMatrix TimerDelay::TransformToChild(const Widget& child, animation::Context&) const {
   if (&child == &text_field) {
     return SkMatrix::Translate(kTextWidth / 2, gui::NumberTextField::kHeight);
@@ -705,7 +715,10 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
   return nullptr;
 }
 
-void TimerDelay::Args(std::function<void(Argument&)> cb) { cb(finished_arg); }
+void TimerDelay::Args(std::function<void(Argument&)> cb) {
+  cb(duration_arg);
+  cb(finished_arg);
+}
 
 static void TimerThread() {
   SetThreadName("Timer");

@@ -6,6 +6,7 @@
 
 namespace automat {
 struct Location;
+struct Argument;
 }  // namespace automat
 
 namespace automat::gui {
@@ -13,9 +14,10 @@ namespace automat::gui {
 struct ConnectionWidget;
 
 struct DragConnectionAction : Action {
-  ConnectionWidget* widget;
+  Location& from;
+  std::string label;
   Vec2 current_position;
-  DragConnectionAction(ConnectionWidget* widget);
+  DragConnectionAction(Location&, std::string label);
   ~DragConnectionAction() override;
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
@@ -26,7 +28,6 @@ struct DragConnectionAction : Action {
 struct ConnectionWidget : Button {
   Location* from;
   std::string label;
-  DragConnectionAction* drag_action = nullptr;
 
   ConnectionWidget(Location* from, std::string_view label);
 

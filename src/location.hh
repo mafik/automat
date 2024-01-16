@@ -217,6 +217,7 @@ struct Location : gui::Widget {
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;
+  SkPath ArgShape(std::string_view label);
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   bool ChildrenOutside() const override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;

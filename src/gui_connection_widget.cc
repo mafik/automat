@@ -154,21 +154,13 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
 }
 
 std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButton) {
-  if (drag_action != nullptr) {
-    return nullptr;
-  }
-  return std::make_unique<DragConnectionAction>(this);
+  return std::make_unique<DragConnectionAction>(*from, label);
 }
 
-DragConnectionAction::DragConnectionAction(ConnectionWidget* widget) : widget(widget) {
-  assert(widget->drag_action == nullptr);
-  widget->drag_action = this;
-}
+DragConnectionAction::DragConnectionAction(Location& from, std::string label)
+    : from(from), label(label) {}
 
-DragConnectionAction::~DragConnectionAction() {
-  assert(widget->drag_action == this);
-  widget->drag_action = nullptr;
-}
+DragConnectionAction::~DragConnectionAction() {}
 
 void DragConnectionAction::Begin(gui::Pointer& pointer) {
   const Path& path = pointer.Path();
@@ -191,24 +183,18 @@ void DragConnectionAction::Update(gui::Pointer& pointer) {
 }
 
 void DragConnectionAction::End() {
-  Location* from = widget->from;
-  Machine* m = from->ParentAs<Machine>();
+  Machine* m = from.ParentAs<Machine>();
   Location* to = m->LocationAtPoint(current_position);
   if (to != nullptr) {
-    from->ConnectTo(*to, widget->label);
+    from.ConnectTo(*to, label);
   }
 }
 
 void DragConnectionAction::DrawAction(DrawContext& ctx) {
-  SkPath from_shape = widget->Shape();
-  if (widget != nullptr) {
-    if (Location* parent_location = widget->from) {
-      if (Machine* parent_machine = parent_location->ParentAs<Machine>()) {
-        SkMatrix from_transform =
-            TransformUp({parent_machine, parent_location, widget}, ctx.animation_context);
-        from_shape.transform(from_transform);
-      }
-    }
+  SkPath from_shape = from.ArgShape(label);
+  if (Machine* parent_machine = from.ParentAs<Machine>()) {
+    SkMatrix from_transform = TransformUp({parent_machine, &from}, ctx.animation_context);
+    from_shape.transform(from_transform);
   }
   SkPath to_shape = SkPath();
   to_shape.moveTo(current_position.x, current_position.y);

@@ -7,8 +7,10 @@
 
 #include <memory>
 #include <numeric>
+#include <optional>
 
 #include "font.hh"
+#include "gui_connection_widget.hh"
 #include "log.hh"
 #include "root.hh"
 
@@ -137,12 +139,12 @@ struct TextSelectAction : Action {
   TextField& text_field;
   Caret* caret = nullptr;
 
-  TextSelectAction(TextField& text_field) : text_field(text_field) {}
+  // TextSelectionAction can be used to drag connections. In order to do this, make sure to set the
+  // `argument_label` of the TextField.
+  bool selecting_text = true;
+  std::optional<DragConnectionAction> drag;
 
-  int IndexFromPointer(Pointer& pointer) {
-    Vec2 local = pointer.PositionWithin(text_field);
-    return text_field.IndexFromPosition(local.x);
-  }
+  TextSelectAction(TextField& text_field) : text_field(text_field) {}
 
   void UpdateCaretFromPointer(Pointer& pointer) {
     auto it = text_field.caret_positions.find(caret);
@@ -150,22 +152,54 @@ struct TextSelectAction : Action {
     if (it == text_field.caret_positions.end()) {
       return;
     }
-    int index = IndexFromPointer(pointer);
-    if (index != it->second.index) {
-      it->second.index = index;
-      UpdateCaret(text_field, *caret);
+    Vec2 local = pointer.PositionWithin(text_field);
+    if (drag.has_value()) {
+      bool new_inside = text_field.Shape().contains(local.x, local.y);
+      if (new_inside != selecting_text) {
+        selecting_text = new_inside;
+      }
+    }
+
+    if (selecting_text) {
+      int index = text_field.IndexFromPosition(local.x);
+      if (index != it->second.index) {
+        it->second.index = index;
+        UpdateCaret(text_field, *caret);
+      }
+    } else {
+      drag->Update(pointer);
     }
   }
 
   void Begin(Pointer& pointer) override {
-    int index = IndexFromPointer(pointer);
+    if (text_field.argument_label.has_value()) {
+      auto pointer_path = pointer.Path();
+      for (int i = pointer_path.size() - 1; i >= 0; --i) {
+        if (auto location = dynamic_cast<Location*>(pointer_path[i])) {
+          drag.emplace(*location, *text_field.argument_label);
+          drag->Begin(pointer);
+          break;
+        }
+      }
+    }
+
+    Vec2 local = pointer.PositionWithin(text_field);
+    int index = text_field.IndexFromPosition(local.x);
     Vec2 pos = text_field.PositionFromIndex(index);
     caret = &text_field.RequestCaret(pointer.Keyboard(), pointer.Path(), pos);
     text_field.caret_positions[caret] = {.index = index};
   }
   void Update(Pointer& pointer) override { UpdateCaretFromPointer(pointer); }
-  void End() override {}
-  void DrawAction(DrawContext&) override {}
+  void End() override {
+    if (drag.has_value() && !selecting_text) {
+      drag->End();
+    }
+  }
+  void DrawAction(DrawContext& ctx) override {
+    if (drag.has_value() && !selecting_text) {
+      drag->DrawAction(ctx);
+    }
+  }
 };
 
 std::unique_ptr<Action> TextField::ButtonDownAction(Pointer&, PointerButton btn) {

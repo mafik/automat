@@ -124,6 +124,27 @@ SkPath Location::Shape() const {
   return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
 }
 
+SkPath Location::ArgShape(std::string_view label) {
+  if (object) {
+    auto object_arg_shape = object->ArgShape(label);
+    if (!object_arg_shape.isEmpty()) {
+      return object_arg_shape;
+    }
+  }
+  UpdateConnectionWidgets();
+  int i = 0;
+  for (auto& widget : connection_widgets) {
+    if (widget->label == label) {
+      SkPath my_shape = Shape();
+      SkRect my_bounds = my_shape.getBounds();
+      Vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - (widget->Height() + kMargin) * (i + 1));
+      return widget->Shape().makeTransform(SkMatrix::Translate(pos.x, pos.y));
+    }
+    ++i;
+  }
+  return SkPath();
+}
+
 ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
   if (object) {
     if (visitor(*object) == ControlFlow::Stop) {

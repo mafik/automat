@@ -40,6 +40,7 @@ struct TextField : Widget, CaretOwner {
     }
   };
   mutable product_ptr<HoverState> hover_ptr;
+  std::optional<std::string> argument_label;
 
   TextField(std::string* text, float width) : text(text), width(width) {}
   void PointerOver(Pointer&, animation::Context&) override;

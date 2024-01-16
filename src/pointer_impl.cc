@@ -157,4 +157,6 @@ Vec2 PointerImpl::PositionWithinRootMachine() const {
 
 Keyboard& PointerImpl::Keyboard() { return keyboard->facade; }
 
+animation::Context& PointerImpl::AnimationContext() const { return window.actx; }
+
 }  // namespace automat::gui

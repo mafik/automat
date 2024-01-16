@@ -48,7 +48,7 @@ struct Object : gui::Widget {
   }
   void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
-  virtual SkPath ArgShape(std::string_view label) const { return SkPath(); }
+  virtual SkPath ArgShape(Argument&) const { return SkPath(); }
 };
 
 template <typename T>

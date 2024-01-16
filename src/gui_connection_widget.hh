@@ -1,5 +1,6 @@
 #pragma once
 
+#include "animation.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "widget.hh"
@@ -15,9 +16,11 @@ struct ConnectionWidget;
 
 struct DragConnectionAction : Action {
   Location& from;
-  std::string label;
+  Argument& arg;
+  animation::Context* animation_context;
+
   Vec2 current_position;
-  DragConnectionAction(Location&, std::string label);
+  DragConnectionAction(Location&, Argument&);
   ~DragConnectionAction() override;
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
@@ -26,10 +29,10 @@ struct DragConnectionAction : Action {
 };
 
 struct ConnectionWidget : Button {
-  Location* from;
-  std::string label;
+  Location& from;
+  Argument& arg;
 
-  ConnectionWidget(Location* from, std::string_view label);
+  ConnectionWidget(Location&, Argument&);
 
   void Draw(DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;

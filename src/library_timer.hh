@@ -44,7 +44,7 @@ struct TimerDelay : LiveObject {
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
-  SkPath ArgShape(std::string_view label) const override;
+  SkPath ArgShape(Argument&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
   void Run(Location& here) override;

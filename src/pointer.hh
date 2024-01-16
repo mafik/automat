@@ -5,6 +5,10 @@
 
 #include "math.hh"
 
+namespace automat::animation {
+struct Context;
+}  // namespace automat::animation
+
 namespace automat::gui {
 
 struct Keyboard;
@@ -35,6 +39,8 @@ struct Pointer final {
   Vec2 PositionWithinRootMachine() const;
 
   Keyboard& Keyboard();
+
+  animation::Context& AnimationContext() const;
 
  private:
   std::unique_ptr<PointerImpl> impl;

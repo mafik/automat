@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "action.hh"
+#include "animation.hh"
 #include "pointer.hh"
 #include "time.hh"
 #include "widget.hh"
@@ -48,6 +49,7 @@ struct PointerImpl {
   Vec2 PositionWithin(Widget&) const;
   Vec2 PositionWithinRootMachine() const;
   Keyboard& Keyboard();
+  animation::Context& AnimationContext() const;
 };
 
 }  // namespace automat::gui

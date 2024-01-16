@@ -19,5 +19,5 @@ const Path& Pointer::Path() const { return impl->path; }
 Vec2 Pointer::PositionWithin(Widget& widget) const { return impl->PositionWithin(widget); }
 Vec2 Pointer::PositionWithinRootMachine() const { return impl->PositionWithinRootMachine(); }
 Keyboard& Pointer::Keyboard() { return impl->Keyboard(); }
-
+animation::Context& Pointer::AnimationContext() const { return impl->AnimationContext(); }
 }  // namespace automat::gui

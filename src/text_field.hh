@@ -6,6 +6,10 @@
 #include "gui_constants.hh"
 #include "widget.hh"
 
+namespace automat {
+struct Argument;
+}  // namespace automat
+
 namespace automat::gui {
 
 constexpr float kTextMargin = 0.001;
@@ -40,7 +44,7 @@ struct TextField : Widget, CaretOwner {
     }
   };
   mutable product_ptr<HoverState> hover_ptr;
-  std::optional<std::string> argument_label;
+  std::optional<Argument*> argument;
 
   TextField(std::string* text, float width) : text(text), width(width) {}
   void PointerOver(Pointer&, animation::Context&) override;

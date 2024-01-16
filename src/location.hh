@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 
+#include "animation.hh"
 #include "connection.hh"
 #include "error.hh"
 #include "gui_connection_widget.hh"
@@ -16,6 +17,8 @@
 namespace automat {
 
 struct DragLocationAction;
+
+void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);
 
 // Each Container holds its inner objects in Locations.
 //
@@ -35,7 +38,7 @@ struct Location : gui::Widget {
   // Name of this Location.
   std::string name;
   gui::RunButton run_button;
-  std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
+  mutable std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
   DragLocationAction* drag_action = nullptr;
   Vec2 position = {0, 0};
@@ -50,6 +53,8 @@ struct Location : gui::Widget {
 
   std::unordered_set<Location*> error_observers;
   std::unordered_set<Location*> observing_errors;
+
+  mutable product_ptr<animation::Approach> highlight_ptr;
 
   RunTask run_task;
 
@@ -217,13 +222,13 @@ struct Location : gui::Widget {
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;
-  SkPath ArgShape(std::string_view label);
+  SkPath ArgShape(Argument&) const;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   bool ChildrenOutside() const override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
 
   // Add ConnectionWidgets for all arguments defined by the objects.
-  void UpdateConnectionWidgets();
+  void UpdateConnectionWidgets() const;
 
   ////////////////////////////
   // Error reporting

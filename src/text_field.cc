@@ -140,7 +140,7 @@ struct TextSelectAction : Action {
   Caret* caret = nullptr;
 
   // TextSelectionAction can be used to drag connections. In order to do this, make sure to set the
-  // `argument_label` of the TextField.
+  // `argument` of the TextField.
   bool selecting_text = true;
   std::optional<DragConnectionAction> drag;
 
@@ -172,11 +172,11 @@ struct TextSelectAction : Action {
   }
 
   void Begin(Pointer& pointer) override {
-    if (text_field.argument_label.has_value()) {
+    if (text_field.argument.has_value()) {
       auto pointer_path = pointer.Path();
       for (int i = pointer_path.size() - 1; i >= 0; --i) {
         if (auto location = dynamic_cast<Location*>(pointer_path[i])) {
-          drag.emplace(*location, *text_field.argument_label);
+          drag.emplace(*location, **text_field.argument);
           drag->Begin(pointer);
           break;
         }

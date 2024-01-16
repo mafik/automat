@@ -182,7 +182,7 @@ struct ButtonAction : public Action {
   ButtonAction(Button& button) : button(button) {}
 
   void Begin(gui::Pointer& pointer) override {
-    button.Activate();
+    button.Activate(pointer);
     button.press_action_count++;
     for (auto& press : button.press_ptr) {
       press = 1;

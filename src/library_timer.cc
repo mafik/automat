@@ -52,7 +52,7 @@ constexpr static float kTickMajorLength = r4 * 0.05;
 constexpr static float kTickMinorLength = r4 * 0.025;
 
 Argument TimerDelay::finished_arg = Argument("finished", Argument::kRequiresLocation);
-Argument duration_arg = Argument("duration", Argument::kRequiresLocation);
+LiveArgument duration_arg = LiveArgument("duration", Argument::kRequiresLocation);
 
 static constexpr float kHandAcceleration = 2000;
 
@@ -655,6 +655,17 @@ struct DragDurationHandleAction : Action {
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
 };
+
+void TimerDelay::Updated(Location& here, Location& updated) {
+  auto result = duration_arg.GetObject(here);
+  if (!result.ok) {
+    return;
+  }
+  std::string duration_str = result.object->GetText();
+  double n = std::stod(duration_str);
+  Duration d = Duration(n * RangeDuration(range).count() / TickCount(range));
+  SetDuration(*this, d);
+}
 
 struct DragHandAction : Action {
   TimerDelay& timer;

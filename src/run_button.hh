@@ -13,7 +13,7 @@ namespace automat::gui {
 struct RunButton : Button {
   Location* location;
   RunButton(Location* parent);
-  void Activate() override;
+  void Activate(Pointer&) override;
   bool Filled() const override;
 };
 

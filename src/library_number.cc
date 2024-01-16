@@ -61,9 +61,11 @@ NumberButton::NumberButton(std::unique_ptr<Widget>&& child)
 
 void NumberButton::Draw(gui::DrawContext& ctx) const { DrawButton(ctx, 0xffc8c4b7); }
 
-void NumberButton::Activate() {
+void NumberButton::Activate(gui::Pointer& pointer) {
   if (activate) {
-    activate();
+    if (auto l = Closest<Location>(pointer.Path())) {
+      activate(*l);
+    }
   } else {
     LOG << "NumberButton::Activate() called without callback";
   }
@@ -80,16 +82,17 @@ Number::Number(double x)
       backspace(gui::MakeShapeWidget(kBackspaceShape, 0xff000000)),
       text_field(kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth) {
   for (int i = 0; i < 10; ++i) {
-    digits[i].activate = [this, i] {
+    digits[i].activate = [this, i](Location& l) {
       if (text_field.text.empty() || text_field.text == "0") {
         text_field.text = std::to_string(i);
       } else {
         text_field.text += std::to_string(i);
       }
       value = std::stod(text_field.text);
+      l.ScheduleUpdate();
     };
   }
-  dot.activate = [this] {
+  dot.activate = [this](Location& l) {
     if (text_field.text.empty()) {
       text_field.text = "0";
     } else if (auto it = text_field.text.find('.'); it != std::string::npos) {
@@ -100,8 +103,9 @@ Number::Number(double x)
       text_field.text.erase(0, 1);
     }
     value = std::stod(text_field.text);
+    l.ScheduleUpdate();
   };
-  backspace.activate = [this] {
+  backspace.activate = [this](Location& l) {
     if (!text_field.text.empty()) {
       text_field.text.pop_back();
     }
@@ -109,6 +113,7 @@ Number::Number(double x)
       text_field.text = "0";
     }
     value = std::stod(text_field.text);
+    l.ScheduleUpdate();
   };
 }
 

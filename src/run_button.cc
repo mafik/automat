@@ -3,6 +3,7 @@
 #include "base.hh"
 #include "gui_shape_widget.hh"
 #include "location.hh"
+#include "pointer.hh"
 #include "svg.hh"
 
 namespace automat::gui {
@@ -10,7 +11,7 @@ namespace automat::gui {
 RunButton::RunButton(Location* parent)
     : Button(MakeShapeWidget(kPlayShape, 0xffffffff)), location(parent) {}
 
-void RunButton::Activate() {
+void RunButton::Activate(Pointer&) {
   if (Filled()) {
     // TODO: Cancel.
   } else {

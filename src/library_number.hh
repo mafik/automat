@@ -8,10 +8,10 @@ namespace automat::library {
 struct Number;
 
 struct NumberButton : gui::Button {
-  std::function<void()> activate;
+  std::function<void(Location&)> activate;
   NumberButton(std::unique_ptr<Widget>&& child);
   void Draw(gui::DrawContext&) const override;
-  void Activate() override;
+  void Activate(gui::Pointer&) override;
 };
 
 struct Number : Object {

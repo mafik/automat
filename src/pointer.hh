@@ -18,6 +18,16 @@ struct Window;
 
 using Path = std::vector<Widget*>;
 
+template <typename T>
+T* Closest(const Path& path) {
+  for (int i = path.size() - 1; i >= 0; --i) {
+    if (auto* result = dynamic_cast<T*>(path[i])) {
+      return result;
+    }
+  }
+  return nullptr;
+}
+
 enum PointerButton { kButtonUnknown, kMouseLeft, kMouseMiddle, kMouseRight, kButtonCount };
 
 struct Pointer final {

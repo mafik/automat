@@ -22,7 +22,7 @@ struct Button : Widget {
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
   virtual Vec2 Position() const { return Vec2(0, 0); }
-  virtual void Activate() {}
+  virtual void Activate(gui::Pointer&) {}
   virtual bool Filled() const { return false; }
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;

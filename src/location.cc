@@ -7,6 +7,8 @@
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
 
+#include <numbers>
+
 #include "base.hh"
 #include "color.hh"
 #include "control_flow.hh"

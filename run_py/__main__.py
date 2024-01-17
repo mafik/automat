@@ -4,6 +4,7 @@
 
 import build
 import subprocess
+import debian_deps
 from args import args
 from sys import platform, exit
 
@@ -19,6 +20,8 @@ if args.verbose:
         print('  Outputs: ', step.outputs)
 
 if __name__ == '__main__':
+    debian_deps.check_and_install()
+    
     if args.fresh:
         print('Cleaning old build results:')
         recipe.clean()

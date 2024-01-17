@@ -9,7 +9,8 @@ path_to_package = {
     "/usr/include/openssl/ssl.h": "libssl-dev",
     "/usr/bin/inotifywait": "inotify-tools",
     "/usr/include/xcb/xinput.h": "libxcb-xinput-dev",
-    "/usr/include/gmock": "libgmock-dev"
+    "/usr/include/gmock": "libgmock-dev",
+    "/usr/include/xcb/xtest.h": "libxcb-xtest0-dev",
 }
 
 

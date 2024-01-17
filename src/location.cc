@@ -294,7 +294,7 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
   // Set the horizontal positions of the connection endpoints.
   float top = std::max(from_inner.top(), to_inner.top());
   float bottom = std::min(from_inner.bottom(), to_inner.bottom());
-  if (top <= bottom) {
+  if (bottom >= top) {
     from.y = to.y = (top + bottom) / 2;
   } else if (from_inner.bottom() < to_inner.top()) {
     from.y = from_inner.bottom();

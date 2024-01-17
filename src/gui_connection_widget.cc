@@ -52,7 +52,13 @@ std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButt
 
 DragConnectionAction::DragConnectionAction(Location& from, Argument& arg) : from(from), arg(arg) {}
 
-DragConnectionAction::~DragConnectionAction() {}
+DragConnectionAction::~DragConnectionAction() {
+  if (Machine* m = from.ParentAs<Machine>()) {
+    for (auto& l : m->locations) {
+      l->highlight_ptr[*animation_context].target = 0;
+    }
+  }
+}
 
 bool CanConnect(Location& from, Location& to, Argument& arg) {
   if (&from == &to) return false;
@@ -97,12 +103,6 @@ void DragConnectionAction::End() {
   Location* to = m->LocationAtPoint(current_position);
   if (to != nullptr && CanConnect(from, *to, arg)) {
     from.ConnectTo(*to, arg.name);
-  }
-
-  if (Machine* m = from.ParentAs<Machine>()) {
-    for (auto& l : m->locations) {
-      l->highlight_ptr[*animation_context].target = 0;
-    }
   }
 }
 

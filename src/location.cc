@@ -277,6 +277,8 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
     Vec2 to_center = to_shape.getBounds().center();
     to_inner = SkRect::MakeXYWH(to_center.x, to_center.y, 0, 0);
   }
+  to_inner.sort();
+  from_inner.sort();
 
   Vec2 from, to;
   // Set the vertical positions of the connection endpoints.

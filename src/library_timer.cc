@@ -17,6 +17,7 @@
 #include <thread>
 
 #include "animation.hh"
+#include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "library_macros.hh"
@@ -56,11 +57,11 @@ LiveArgument duration_arg = LiveArgument("duration", Argument::kRequiresLocation
 
 static constexpr float kHandAcceleration = 2000;
 
-static std::thread timer_thread;
-std::mutex mtx;
-std::condition_variable cv;
+static std::jthread timer_thread;
+static std::mutex mtx;
+static std::condition_variable cv;
 
-std::multimap<TimePoint, std::unique_ptr<Task>> tasks;
+static std::multimap<TimePoint, std::unique_ptr<Task>> tasks;
 
 static void TimerFinished(Location* here) {
   TimerDelay* timer = here->As<TimerDelay>();
@@ -181,8 +182,19 @@ static void SetDuration(TimerDelay& timer, Duration new_duration) {
     }
   }
 
-  timer.duration = Duration(new_duration);
+  timer.duration = new_duration;
   UpdateTextField(timer);
+}
+
+static void PropagateDurationOutwards(TimerDelay& timer) {
+  if (timer.here) {
+    NoSchedulingGuard guard(*timer.here);
+    auto duration_obj = duration_arg.GetLocation(*timer.here);
+    if (duration_obj.ok) {
+      duration_obj.location->SetNumber(timer.duration.count() * TickCount(timer.range) /
+                                       RangeDuration(timer.range).count());
+    }
+  }
 }
 
 TimerDelay::TimerDelay() : text_field(kTextWidth) {
@@ -630,10 +642,10 @@ struct DragDurationHandleAction : Action {
   virtual void Update(gui::Pointer& pointer) {
     auto pos = pointer.PositionWithin(timer);
     auto tick_count = TickCount(timer.range);
-    float angle = atan2(pos.sk.y(), pos.sk.x());
+    double angle = atan2(pos.sk.y(), pos.sk.x());
 
     // Rescale to [0, 1] with 0 & 1 at the top of the dial
-    float new_duration = (1.25 - angle / (2 * M_PI));
+    double new_duration = (1.25 - angle / (2 * M_PI));
     if (new_duration < 0) {
       new_duration += 1;
     } else if (new_duration > 1) {
@@ -651,6 +663,7 @@ struct DragDurationHandleAction : Action {
     new_duration *= RangeDuration(timer.range).count();
 
     SetDuration(timer, Duration(new_duration));
+    PropagateDurationOutwards(timer);
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -701,12 +714,14 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
       range = Range(((int)range + (int)Range::EndGuard - 1) % (int)Range::EndGuard);
       left_pusher_depression.value = 1;
       UpdateTextField(*this);
+      PropagateDurationOutwards(*this);
       return nullptr;
     }
     if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
       range = Range(((int)range + 1) % (int)Range::EndGuard);
       right_pusher_depression.value = 1;
       UpdateTextField(*this);
+      PropagateDurationOutwards(*this);
       return nullptr;
     }
 
@@ -733,15 +748,20 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
 
 static void TimerThread() {
   SetThreadName("Timer");
+  LOG << "Timer thread started";
   while (true) {
     std::unique_lock<std::mutex> lck(mtx);
     if (tasks.empty()) {
+      LOG << "Timer thread waiting";
       cv.wait(lck);
     } else {
+      LOG << "Timer thread waiting until " << tasks.begin()->first.time_since_epoch().count()
+          << " (" << tasks.size() << " tasks)";
       cv.wait_until(lck, tasks.begin()->first);
     }
     auto now = Clock::now();
     while (!tasks.empty() && tasks.begin()->first <= now) {
+      LOG << "Timer thread executing task " << tasks.begin()->second->Format();
       events.send(std::move(tasks.begin()->second));
       tasks.erase(tasks.begin());
     }
@@ -749,7 +769,7 @@ static void TimerThread() {
 }
 
 void __attribute__((constructor)) InitTimer() {
-  timer_thread = std::thread(TimerThread);
+  timer_thread = std::jthread(TimerThread);
   timer_thread.detach();
 }
 

@@ -147,6 +147,7 @@ if 'LDFLAGS' in os.environ:
         default_link_args.append(f'-Wl,{flag}')
 
 if platform == 'win32':
+    default_compile_args += ['-D_USE_MATH_DEFINES']
     default_link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
     debug_link_args += ['-Wl,/debug']
 else:

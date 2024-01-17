@@ -4,6 +4,12 @@
 #include <windows.h>
 #endif
 
+#if defined(__linux__)
+#include <xcb/xtest.h>
+
+#pragma comment(lib, "xcb-xtest")
+#endif
+
 #include <include/core/SkAlphaType.h>
 #include <include/core/SkBitmap.h>
 #include <include/core/SkBlendMode.h>
@@ -20,6 +26,10 @@
 #include "prototypes.hh"
 #include "svg.hh"
 #include "virtual_fs.hh"
+
+#if defined(__linux__)
+#include "linux_main.hh"
+#endif
 
 using namespace maf;
 
@@ -201,6 +211,12 @@ void MouseClick::Run(Location& location) {
       return;
   }
   SendInput(1, &input, sizeof(INPUT));
+#endif
+#if defined(__linux__)
+  U8 type = down ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE;
+  U8 detail = button == gui::PointerButton::kMouseLeft ? 1 : 3;
+  xcb_test_fake_input(connection, type, detail, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
+  xcb_flush(connection);
 #endif
 }
 

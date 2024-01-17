@@ -1,5 +1,9 @@
 #include "library_mouse_click.hh"
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 #include <include/core/SkAlphaType.h>
 #include <include/core/SkBitmap.h>
 #include <include/core/SkBlendMode.h>
@@ -175,5 +179,29 @@ std::unique_ptr<Action> MouseClick::ButtonDownAction(gui::Pointer& pointer,
 }
 
 void MouseClick::Args(std::function<void(Argument&)> cb) { cb(then_arg); }
+
+void MouseClick::Run(Location& location) {
+#if defined(_WIN32)
+  INPUT input;
+  input.type = INPUT_MOUSE;
+  input.mi.dx = 0;
+  input.mi.dy = 0;
+  input.mi.mouseData = 0;
+  input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE;
+  input.mi.time = 0;
+  input.mi.dwExtraInfo = 0;
+  switch (button) {
+    case gui::PointerButton::kMouseLeft:
+      input.mi.dwFlags |= down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
+      break;
+    case gui::PointerButton::kMouseRight:
+      input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
+      break;
+    default:
+      return;
+  }
+  SendInput(1, &input, sizeof(INPUT));
+#endif
+}
 
 }  // namespace automat::library

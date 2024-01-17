@@ -19,6 +19,7 @@ struct MouseClick : Object {
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
+  void Run(Location&) override;
 };
 
 }  // namespace automat::library

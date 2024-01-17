@@ -440,7 +440,7 @@ std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::Pointer
   return nullptr;
 }
 
-void Location::SetNumber(double number) { SetText(f("%lf", number)); }
+void Location::SetNumber(double number) { SetText(f("%g", number)); }
 
 std::string Location::ToStr() const {
   std::string_view object_name = object->Name();

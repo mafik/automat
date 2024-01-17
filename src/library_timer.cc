@@ -53,7 +53,7 @@ constexpr static float kTickMajorLength = r4 * 0.05;
 constexpr static float kTickMinorLength = r4 * 0.025;
 
 Argument TimerDelay::finished_arg = Argument("finished", Argument::kRequiresLocation);
-LiveArgument duration_arg = LiveArgument("duration", Argument::kRequiresLocation);
+LiveArgument duration_arg = LiveArgument("duration", Argument::kOptional);
 
 static constexpr float kHandAcceleration = 2000;
 
@@ -190,7 +190,7 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
   if (timer.here) {
     NoSchedulingGuard guard(*timer.here);
     auto duration_obj = duration_arg.GetLocation(*timer.here);
-    if (duration_obj.ok) {
+    if (duration_obj.ok && duration_obj.location) {
       duration_obj.location->SetNumber(timer.duration.count() * TickCount(timer.range) /
                                        RangeDuration(timer.range).count());
     }

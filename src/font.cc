@@ -6,10 +6,13 @@
 #include <modules/skunicode/include/SkUnicode.h>
 #include <src/base/SkUTF.h>
 
+#include <cmath>
+
 #include "../build/generated/embedded.hh"
 #include "gui_constants.hh"
 #include "math.hh"
 #include "virtual_fs.hh"
+
 
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")
@@ -21,7 +24,9 @@ using namespace maf;
 
 namespace automat::gui {
 
-std::unique_ptr<Font> Font::Make(float letter_size_mm) {
+constexpr static SkFourByteTag kFontWeightTag = SkSetFourByteTag('w', 'g', 'h', 't');
+
+std::unique_ptr<Font> Font::Make(float letter_size_mm, float weight) {
   constexpr float kMilimetersPerInch = 25.4;
   constexpr float kPointsPerInch = 72;
   // We want text to be `letter_size_mm` tall (by cap size).
@@ -32,6 +37,18 @@ std::unique_ptr<Font> Font::Make(float letter_size_mm) {
   auto& ttf_content = maf::embedded::assets_NotoSans_wght__ttf.content;
   auto data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
   auto typeface = SkTypeface::MakeFromData(data);
+  if (!std::isnan(weight)) {
+    SkFontArguments::VariationPosition::Coordinate coordinates[1];
+    coordinates[0].axis = kFontWeightTag;
+    coordinates[0].value = weight;
+    SkFontArguments::VariationPosition position{
+        .coordinates = coordinates,
+        .coordinateCount = 1,
+    };
+    SkFontArguments arguments;
+    arguments.setVariationDesignPosition(position);
+    typeface = typeface->makeClone(arguments);
+  }
   SkFont sk_font(typeface, font_size_guess, 1.f, 0.f);
   SkFontMetrics metrics;
   sk_font.getMetrics(&metrics);

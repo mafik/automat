@@ -10,6 +10,8 @@ constexpr char kNextShape[] =
     "0C5.5-1.5-5-7.7-7-8Z";
 constexpr char kArrowShape[] = "M0 10l8-8 0-5-6 6V-10H-2V3l-6-6v5Z";
 constexpr char kConnectionArrowShapeSVG[] = "M-13-8c-3 0-3 16 0 16 3-1 10-5 13-8-3-3-10-7-13-8z";
+constexpr char kPowerSVG[] =
+    "M-1-7V-4A1 1 0 001-4V-7A1 1 0 00-1-7ZM4-6A1 1 0 003-4 5 5 0 11-3-4 1 1 0 00-4-6 7 7 0 104-6";
 
 // Parse the given SVG path and return it as a properly scaled SkPath.
 //

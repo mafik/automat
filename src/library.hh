@@ -19,6 +19,7 @@
 #include "base.hh"
 #include "format.hh"
 #include "library_alert.hh"        // IWYU pragma: keep
+#include "library_hotkey.hh"       // IWYU pragma: keep
 #include "library_increment.hh"    // IWYU pragma: keep
 #include "library_mouse_click.hh"  // IWYU pragma: keep
 #include "library_number.hh"       // IWYU pragma: keep

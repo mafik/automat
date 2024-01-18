@@ -2,10 +2,13 @@
 
 namespace automat::gui {
 
-static constexpr float kMinimalTouchableSize = 0.008;
-static constexpr float kBorderWidth = 0.001 / 4 * 2;
-static constexpr float kMargin = 0.001;
-static constexpr float kLetterSizeMM = 3;
-static constexpr float kLetterSize = kLetterSizeMM / 1000;
+constexpr float operator""_mm(long double x) { return x / 1000; }
+constexpr float operator""_mm(unsigned long long x) { return x / 1000.f; }
+
+static constexpr float kMinimalTouchableSize = 8_mm;
+static constexpr float kBorderWidth = 1_mm / 2;
+static constexpr float kMargin = 1_mm;
+static constexpr float kLetterSize = 3_mm;
+static constexpr float kLetterSizeMM = kLetterSize * 1000;
 
 }  // namespace automat::gui

@@ -4,6 +4,7 @@
 #include <include/core/SkFont.h>
 #include <include/core/SkFontMetrics.h>
 
+#include <cmath>
 #include <string_view>
 
 namespace automat::gui {
@@ -13,7 +14,7 @@ struct Font {
   float font_scale;
   float line_thickness;
 
-  static std::unique_ptr<Font> Make(float letter_size_mm);
+  static std::unique_ptr<Font> Make(float letter_size_mm, float weight = NAN);
 
   // TODO: If this causes performance issues, cache text shaping / SkTextBlob
   // results somehow

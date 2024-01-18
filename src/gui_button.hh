@@ -12,8 +12,9 @@ struct Button : Widget {
   mutable product_ptr<animation::Approach> hover_ptr;
   mutable product_ptr<animation::Approach> filling_ptr;
   int press_action_count = 0;
+  SkColor color;
 
-  Button(std::unique_ptr<Widget>&& child);
+  Button(std::unique_ptr<Widget>&& child, SkColor color = 0xffd69d00);
   void PointerOver(Pointer&, animation::Context&) override;
   void PointerLeave(Pointer&, animation::Context&) override;
   void Draw(DrawContext&) const override;

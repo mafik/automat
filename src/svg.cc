@@ -12,7 +12,7 @@ SkPath PathFromSVG(const char svg[]) {
     LOG << "Failed to parse SVG path: " << svg;
   }
   constexpr float kScale = 0.0254f / 96;
-  path = path.makeScale(kScale, kScale);
+  path = path.makeScale(kScale, -kScale);
   path.updateBoundsCache();
   return path;
 }

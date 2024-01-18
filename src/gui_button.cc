@@ -119,7 +119,6 @@ void Button::Draw(DrawContext& ctx) const {
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
-  constexpr SkColor color = 0xffd69d00;
   constexpr SkColor white = 0xffffffff;
 
   float lightness_adjust = hover * 10;
@@ -210,6 +209,7 @@ std::unique_ptr<Action> Button::ButtonDownAction(Pointer& pointer, PointerButton
   return nullptr;
 }
 
-Button::Button(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
+Button::Button(std::unique_ptr<Widget>&& child, SkColor color)
+    : child(std::move(child)), color(color) {}
 
 }  // namespace automat::gui

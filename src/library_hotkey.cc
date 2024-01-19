@@ -3,8 +3,11 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMatrix.h>
+#include <include/core/SkShader.h>
 #include <include/effects/SkGradientShader.h>
+#include <include/effects/SkRuntimeEffect.h>
 
+#include <chrono>
 #include <memory>
 
 #include "color.hh"
@@ -208,6 +211,89 @@ bool PowerButton::Filled() const { return true; }
 
 static SkColor KeyColor(bool enabled) { return enabled ? kKeyEnabledColor : kKeyDisabledColor; }
 
+static SkPaint& GetFirePaint(const Rect& rect, float radius) {
+  static SkRuntimeShaderBuilder builder = []() {
+    const char* sksl = R"( // Fire shader
+vec2 hash(vec2 p) {
+	p = vec2( dot(p,vec2(127.1,311.7)),
+			 dot(p,vec2(269.5,183.3)) );
+	return -1.0 + 2.0*fract(sin(p)*43758.5453123);
+}
+
+float noise(in vec2 p) {
+	const float K1 = 0.366025404; // (sqrt(3)-1)/2;
+	const float K2 = 0.211324865; // (3-sqrt(3))/6;
+	vec2 i = floor( p + (p.x+p.y)*K1 );
+	vec2 a = p - i + (i.x+i.y)*K2;
+	vec2 o = (a.x>a.y) ? vec2(1.0,0.0) : vec2(0.0,1.0);
+	vec2 b = a - o + K2;
+	vec2 c = a - 1.0 + 2.0*K2;
+	vec3 h = max( 0.5-vec3(dot(a,a), dot(b,b), dot(c,c) ), 0.0 );
+	vec3 n = h*h*h*h*vec3( dot(a,hash(i+0.0)), dot(b,hash(i+o)), dot(c,hash(i+1.0)));
+	return dot( n, vec3(70.0) );
+}
+
+float fbm(vec2 uv) {
+	float f;
+	mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );
+	f  = 0.5000*noise( uv ); uv = m*uv;
+	f += 0.2500*noise( uv ); uv = m*uv;
+	f += 0.1250*noise( uv ); uv = m*uv;
+	f += 0.0625*noise( uv ); uv = m*uv;
+	f += 0.0625*noise( uv ); uv = m*uv;
+	f = 0.5 + 0.5*f;
+
+	return f;
+}
+
+uniform float iTime;
+uniform float iLeft;
+uniform float iRight;
+uniform float iTop;
+uniform float iBottom;
+uniform float iDetail;
+uniform float iSmokeDetail;
+uniform float iRadius;
+
+vec4 main(in vec2 fragCoord) {
+	vec2 uv = (fragCoord - vec2(iLeft, iBottom)) / vec2(iRight - iLeft, iTop - iBottom);
+	float n = fbm(iDetail * fragCoord - vec2(0,iTime));
+  //return vec4(n, n, n, 1.0);
+  vec2 d = max(vec2(0, 0), vec2(max(iLeft - fragCoord.x, fragCoord.x - iRight), max(iBottom - fragCoord.y, fragCoord.y - iTop))) / iRadius;
+  float l = length(d);
+  //return vec4(l, l, l, 1.0);
+	float c = 4 * (n * max(0.5, uv.y) - l);
+  c = clamp(c, 0, 1);
+  // return vec4(c, c, c, 1.0);
+	float c1 = n * c;
+  // return vec4(c1, c1, c1, 1.0);
+	return vec4(1.5*c1, 1.5*c1*c1*c1, c1*c1*c1*c1*c1*c1, 1) * c;
+})";
+
+    auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl));
+    if (!err.isEmpty()) {
+      FATAL << err.c_str();
+    }
+    SkRuntimeShaderBuilder builder(effect);
+    return builder;
+  }();
+
+  static auto start = std::chrono::steady_clock::now();
+  float delta = std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
+  builder.uniform("iTime") = delta * 3;
+  builder.uniform("iLeft") = rect.left;
+  builder.uniform("iRight") = rect.right;
+  builder.uniform("iTop") = rect.top;
+  builder.uniform("iBottom") = rect.bottom;
+  builder.uniform("iDetail") = 80.f;
+  builder.uniform("iSmokeDetail") = 100.f;
+  builder.uniform("iRadius") = radius;
+  static SkPaint paint;
+  paint.setShader(builder.makeShader());
+  paint.setBlendMode(SkBlendMode::kHardLight);
+  return paint;
+}
+
 HotKey::HotKey()
     : power_button(this),
       ctrl_button(MakeKeyLabelWidget("Ctrl"), KeyColor(ctrl), kCtrlKeyWidth),
@@ -304,6 +390,18 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   inner_paint.setStyle(SkPaint::kStrokeAndFill_Style);
   inner_paint.setStrokeWidth(0.5_mm);
   canvas.drawPath(inner_contour, inner_paint);
+
+  Rect inner_rect = {
+      .left = -kWidth / 2 + kFrameWidth,
+      .bottom = -kHeight / 2 + kFrameWidth,
+      .right = kWidth / 2 - kFrameWidth,
+      .top = kHeight / 2 - kFrameWidth,
+  };
+  float fire_radius = 10_mm;
+  auto fire_paint = GetFirePaint(inner_rect, fire_radius);
+  inner_rect.sk.outset(fire_radius, fire_radius * 1.5);
+
+  canvas.drawRect(inner_rect.sk, fire_paint);
 
   // Frame shadow
   SkPaint background_shadow_paint;

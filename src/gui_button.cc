@@ -1,5 +1,5 @@
-#include <cstdint>
-#define _USE_MATH_DEFINES
+#include "gui_button.hh"
+
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkClipOp.h>
 #include <include/core/SkColor.h>
@@ -10,7 +10,6 @@
 #include <cmath>
 
 #include "color.hh"
-#include "gui_button.hh"
 #include "gui_constants.hh"
 
 namespace automat::gui {
@@ -31,7 +30,6 @@ namespace {
 
 constexpr float kRadius = kMinimalTouchableSize / 2;
 constexpr float kShadowSigma = kRadius / 10;
-constexpr float kPressOffset = kRadius / 20;
 
 }  // namespace
 
@@ -105,25 +103,12 @@ void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
 }
 
 void Button::Draw(DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
-  auto& press = press_ptr[actx];
   auto& hover = hover_ptr[actx];
   hover.Tick(actx);
 
-  auto oval = RRect();
-  oval.inset(kBorderWidth / 2, kBorderWidth / 2);
-  constexpr SkColor white = "#FFFFFF"_color;
-
-  float lightness_adjust = hover * 10;
-  float press_shift_y = press * -kPressOffset;
-  auto pressed_oval = oval.makeOffset(0, press_shift_y);
-  SkRRect pressed_outer_oval;
-  pressed_oval.outset(kBorderWidth / 2 + kShadowSigma * 0, kBorderWidth / 2 + kShadowSigma * 0,
-                      &pressed_outer_oval);
-
-  DrawButtonShadow(canvas, white);
-  DrawButtonFace(ctx, white, color);
+  DrawButtonShadow(ctx.canvas, SK_ColorWHITE);
+  DrawButtonFace(ctx, SK_ColorWHITE, color);
 }
 
 void ToggleButton::Draw(DrawContext& ctx) const {

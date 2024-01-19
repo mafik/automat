@@ -1,9 +1,11 @@
 #pragma once
 
 #include <include/core/SkPoint.h>
+#include <include/core/SkRRect.h>
+#include <include/core/SkRect.h>
 
 #include <algorithm>
-#include <limits>
+#include <cmath>
 #include <string>
 
 constexpr float kMetersPerInch = 0.0254f;
@@ -133,3 +135,56 @@ T ClampLength(T vec, float min, float max) {
   }
   return vec;
 }
+
+// Helper for working in the Skia coordinate system. Swaps the coordinates on the Y axis.
+//
+// Skia uses a coordinate system where the Y axis points down.
+//
+// Automat uses a coordinate system where the Y axis points up.
+//
+// This utility class allows one to alias the SkRect and use the `top` & `bottom` fields to access
+// the proper SkRect fields (`fBottom` & `fTop` respectively).
+union Rect {
+  SkRect sk;
+  struct {
+    // Smaller x-axis bound.
+    float left = 0;
+    // Smaller y-axis bound.
+    float bottom = 0;
+    // Larger x-axis bound.
+    float right = 0;
+    // Larger y-axis bound.
+    float top = 0;
+  };
+
+  constexpr Vec2 Center() const { return sk.center(); }
+};
+
+union RRect {
+  SkRRect sk;
+  struct {
+    Rect rect;
+    Vec2 radii[4];  // LL, LR, UR, UL
+  };
+
+  // Left end of the upper line.
+  Vec2 LineEndUpperLeft() const { return {rect.left + radii[3].x, rect.top}; }
+  // Right end of the upper line.
+  Vec2 LineEndUpperRight() const { return {rect.right - radii[2].x, rect.top}; }
+  // Left end of the lower line.
+  Vec2 LineEndLowerLeft() const { return {rect.left + radii[0].x, rect.bottom}; }
+  // Right end of the lower line.
+  Vec2 LineEndLowerRight() const { return {rect.right - radii[1].x, rect.bottom}; }
+  // Upper end of the left line.
+  Vec2 LineEndLeftUpper() const { return {rect.left, rect.top - radii[3].y}; }
+  // Lower end of the left line.
+  Vec2 LineEndLeftLower() const { return {rect.left, rect.bottom + radii[0].y}; }
+  // Upper end of the right line.
+  Vec2 LineEndRightUpper() const { return {rect.right, rect.top - radii[2].y}; }
+  // Lower end of the right line.
+  Vec2 LineEndRightLower() const { return {rect.right, rect.bottom + radii[1].y}; }
+
+  constexpr Vec2 Center() const { return rect.Center(); }
+};
+
+inline float atan(Vec2 v) { return atan2f(v.y, v.x); }

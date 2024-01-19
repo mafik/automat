@@ -24,7 +24,7 @@ namespace automat {
 template <maf::TemplateStringArg S>
 consteval SkColor operator""_color() {
   static_assert(S.c_str[0] == '#', "Color must start with #");
-  static_assert(S.c_str[S.size() - 1] == '\0', "Color must start with #");
+  static_assert(S.c_str[S.size() - 1] == '\0', "Color must end with \\0");
 
   if constexpr (S.size() == 8) {  // RGB
     return SkColorSetARGB(0xff, maf::HexToU8(S.c_str + 1), maf::HexToU8(S.c_str + 3),

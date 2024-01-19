@@ -5,11 +5,14 @@
 #include <include/core/SkMatrix.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <memory>
+
 #include "color.hh"
 #include "font.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "library_macros.hh"
+#include "math.hh"
 #include "svg.hh"
 #include "text_field.hh"
 
@@ -38,11 +41,11 @@ static constexpr float kKeyFaceRadius = 1_mm;
 static constexpr float kKeyBaseRadius = kKeyFaceRadius;
 static constexpr float kKeyFaceHeight = kKeyHeight - kKeyTopSide - kKeyBottomSide;
 
-static constexpr float kRegularKeyWidth = kKeyHeight;
-static constexpr float kCtrlKeyWidth = kRegularKeyWidth * 1.5;
+static constexpr float kShortcutKeyWidth = kKeyHeight;
+static constexpr float kCtrlKeyWidth = kShortcutKeyWidth * 1.5;
 static constexpr float kSuperKeyWidth = kCtrlKeyWidth;
 static constexpr float kAltKeyWidth = kCtrlKeyWidth;
-static constexpr float kShiftKeyWidth = kRegularKeyWidth * 2.25;
+static constexpr float kShiftKeyWidth = kShortcutKeyWidth * 2.25;
 
 static constexpr float kKeySpacing = kMargin;
 
@@ -51,13 +54,17 @@ static constexpr float kFrameInnerRadius = kKeyBaseRadius + kKeySpacing;
 static constexpr float kFrameOuterRadius = kFrameInnerRadius + kFrameWidth;
 
 static constexpr float kTopRowWidth = kFrameWidth + kKeySpacing + kShiftKeyWidth + kKeySpacing +
-                                      kRegularKeyWidth + kKeySpacing + kFrameWidth;
+                                      kShortcutKeyWidth + kKeySpacing + kFrameWidth;
 static constexpr float kBottomRowWidth = kFrameWidth + kKeySpacing + kCtrlKeyWidth + kKeySpacing +
                                          kSuperKeyWidth + kKeySpacing + kAltKeyWidth + kKeySpacing +
                                          kFrameWidth;
 
 static constexpr float kWidth = std::max(kTopRowWidth, kBottomRowWidth);
 static constexpr float kHeight = kFrameWidth * 2 + kKeyHeight * 2 + kKeySpacing * 3;
+
+static constexpr SkColor kKeyEnabledColor = "#f3a75b"_color;
+static constexpr SkColor kKeyDisabledColor = "#f4efea"_color;
+
 static constexpr SkRect kShapeRect = SkRect::MakeXYWH(-kWidth / 2, -kHeight / 2, kWidth, kHeight);
 static const SkRRect kShapeRRect = [] {
   SkRRect ret;
@@ -72,27 +79,40 @@ static const SkRRect kShapeRRect = [] {
   return ret;
 }();
 
-PowerButton::PowerButton(Object* object)
-    : ToggleButton(MakeShapeWidget(kPowerSVG, SK_ColorWHITE), "#fa2305"_color), object(object) {}
+struct KeyLabelWidget : Widget {
+  Str label;
+  float width;
 
-void PowerButton::Activate(gui::Pointer&) {}
+  KeyLabelWidget(StrView label) : label(label) { width = KeyFont().MeasureText(label); }
+  SkPath Shape() const override { return SkPath::Rect(SkRect::MakeWH(width, kKeyLetterSize)); }
+  void Draw(DrawContext& ctx) const override {
+    SkPaint paint;
+    paint.setAntiAlias(true);
+    paint.setColor("#000000"_color);
+    ctx.canvas.translate(-width / 2, -kKeyLetterSize / 2);
+    KeyFont().DrawText(ctx.canvas, label, paint);
+    ctx.canvas.translate(width / 2, kKeyLetterSize / 2);
+  }
+};
 
-bool PowerButton::Filled() const { return true; }
-
-HotKey::HotKey() : power_button(this) {}
-string_view HotKey::Name() const { return "HotKey"; }
-std::unique_ptr<Object> HotKey::Clone() const {
-  auto ret = std::make_unique<HotKey>();
-  ret->key = key;
-  ret->ctrl = ctrl;
-  ret->alt = alt;
-  ret->shift = shift;
-  ret->windows = windows;
-  return ret;
+std::unique_ptr<Widget> MakeKeyLabelWidget(StrView label) {
+  return std::make_unique<KeyLabelWidget>(label);
 }
 
-static sk_sp<SkShader> MakeSweepShader(float rect_right, float rect_top, float rect_radius,
-                                       float center_offset_y, SkColor side_color, SkColor top_color,
+KeyButton::KeyButton(std::unique_ptr<Widget> child, SkColor color, float width)
+    : Button(std::move(child), color), width(width) {}
+
+void KeyButton::Activate(gui::Pointer& pointer) {
+  if (activate) {
+    activate(pointer);
+  }
+}
+
+SkRRect KeyButton::RRect() const {
+  return SkRRect::MakeRectXY(SkRect::MakeWH(width, kKeyHeight), kKeyBaseRadius, kKeyBaseRadius);
+}
+
+static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, SkColor top_color,
                                        SkColor top_corner_top, SkColor top_corner_side,
                                        SkColor bottom_corner_side, SkColor bottom_corner_bottom,
                                        SkColor bottom_color) {
@@ -111,39 +131,45 @@ static sk_sp<SkShader> MakeSweepShader(float rect_right, float rect_top, float r
       bottom_corner_side,    // top of the bottom-right corner
       side_color,            // right middle
   };
-  float pos[] = {
-      0,
-      (float)(atan2(-rect_top + rect_radius + center_offset_y, -rect_right) / (2 * M_PI) + 0.5),
-      (float)(atan2(-rect_top + center_offset_y, -(rect_right - rect_radius)) / (2 * M_PI) + 0.5),
-      0.25,
-      (float)(atan2(-rect_top + center_offset_y, rect_right - rect_radius) / (2 * M_PI) + 0.5),
-      (float)(atan2(-rect_top + rect_radius + center_offset_y, rect_right) / (2 * M_PI) + 0.5),
-      0.5,
-      (float)(atan2(rect_top - rect_radius + center_offset_y, rect_right) / (2 * M_PI) + 0.5),
-      (float)(atan2(rect_top + center_offset_y, rect_right - rect_radius) / (2 * M_PI) + 0.5),
-      0.75,
-      (float)(atan2(rect_top + center_offset_y, -(rect_right - rect_radius)) / (2 * M_PI) + 0.5),
-      (float)(atan2(rect_top - rect_radius + center_offset_y, -rect_right) / (2 * M_PI) + 0.5),
-      1};
-  return SkGradientShader::MakeSweep(0, center_offset_y, colors, pos, 13);
+  auto center = rrect.Center();
+  float pos[] = {0,
+                 (float)(atan(rrect.LineEndRightUpper() - center) / (2 * M_PI)),
+                 (float)(atan(rrect.LineEndUpperRight() - center) / (2 * M_PI)),
+                 0.25,
+                 (float)(atan(rrect.LineEndUpperLeft() - center) / (2 * M_PI)),
+                 (float)(atan(rrect.LineEndLeftUpper() - center) / (2 * M_PI)),
+                 0.5,
+                 (float)(atan(rrect.LineEndLeftLower() - center) / (2 * M_PI) + 1),
+                 (float)(atan(rrect.LineEndLowerLeft() - center) / (2 * M_PI) + 1),
+                 0.75,
+                 (float)(atan(rrect.LineEndLowerRight() - center) / (2 * M_PI) + 1),
+                 (float)(atan(rrect.LineEndRightLower() - center) / (2 * M_PI) + 1),
+                 1};
+  return SkGradientShader::MakeSweep(center.x, center.y, colors, pos, 13);
 }
 
-static void DrawKey(SkCanvas& canvas, bool enabled, float width, std::function<void()> cb) {
-  float correction = (kKeyFaceHeight - kKeyHeight) / 2 + kKeyTopSide;
-  canvas.translate(0, -correction);
-  SkRect key_base_box =
-      SkRect::MakeXYWH(-width / 2, -kKeyHeight / 2, width, kKeyHeight).makeOffset(0, correction);
-  SkRRect key_base = SkRRect::MakeRectXY(key_base_box, kKeyBaseRadius, kKeyBaseRadius);
-  SkRect key_face_box = SkRect::MakeXYWH(-width / 2 + kKeySide, -kKeyFaceHeight / 2,
-                                         width - 2 * kKeySide, kKeyFaceHeight);
-  SkRRect key_face = SkRRect::MakeRectXY(key_face_box, kKeyFaceRadius, kKeyFaceRadius);
+void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) const {
+  auto& canvas = ctx.canvas;
+  auto& actx = ctx.animation_context;
+  auto& press = press_ptr[actx];
+  auto& hover = hover_ptr[actx];
+  bool enabled = false;
 
-  SkColor base_color = enabled ? "#f3a75b"_color : "#f4efea"_color;
+  SkRRect key_base = RRect();
+  float press_shift_y = press * -kPressOffset;
+  key_base.offset(0, press_shift_y);
+
+  SkRRect key_face = SkRRect::MakeRectXY(
+      SkRect::MakeLTRB(key_base.rect().left() + kKeySide, key_base.rect().top() + kKeyBottomSide,
+                       key_base.rect().right() - kKeySide, key_base.rect().bottom() - kKeyTopSide),
+      kKeyFaceRadius, kKeyFaceRadius);
+
+  float lightness_adjust = hover * 10;
 
   SkPaint face_paint;
-  SkPoint face_pts[] = {{0, key_face_box.bottom()}, {0, key_face_box.top()}};
-  SkColor face_colors[] = {color::AdjustLightness(base_color, -10), base_color};
-  face_paint.setAntiAlias(true);
+  SkPoint face_pts[] = {{0, key_face.rect().bottom()}, {0, key_face.rect().top()}};
+  SkColor face_colors[] = {color::AdjustLightness(color, -10 + lightness_adjust),
+                           color::AdjustLightness(color, lightness_adjust)};
   face_paint.setShader(
       SkGradientShader::MakeLinear(face_pts, face_colors, nullptr, 2, SkTileMode::kClamp));
 
@@ -152,21 +178,73 @@ static void DrawKey(SkCanvas& canvas, bool enabled, float width, std::function<v
 
   canvas.drawRRect(key_face, face_paint);
 
-  SkColor top_color = color::AdjustLightness(base_color, 20);
-  SkColor side_color = color::AdjustLightness(base_color, -20);
-  SkColor side_color2 = color::AdjustLightness(base_color, -25);
-  SkColor bottom_color = color::AdjustLightness(base_color, -50);
+  SkColor top_color = color::AdjustLightness(color, 20 + lightness_adjust);
+  SkColor side_color = color::AdjustLightness(color, -20 + lightness_adjust);
+  SkColor side_color2 = color::AdjustLightness(color, -25 + lightness_adjust);
+  SkColor bottom_color = color::AdjustLightness(color, -50 + lightness_adjust);
 
   SkPaint side_paint;
   side_paint.setAntiAlias(true);
-  side_paint.setShader(MakeSweepShader(key_face_box.fRight, key_face_box.fBottom, kKeyFaceRadius,
-                                       1.5_mm, side_color, top_color, top_color, side_color,
-                                       side_color2, bottom_color, bottom_color));
+  side_paint.setShader(MakeSweepShader(*reinterpret_cast<union RRect*>(&key_face), side_color,
+                                       top_color, top_color, side_color, side_color2, bottom_color,
+                                       bottom_color));
   canvas.drawDRRect(key_base, key_face, side_paint);
-  canvas.translate(key_face_box.centerX(), key_face_box.centerY());
-  cb();
-  canvas.translate(-key_face_box.centerX(), -key_face_box.centerY());
-  canvas.translate(0, correction);
+
+  if (auto paint = PaintMixin::Get(child.get())) {
+    paint->setColor(fg);
+    paint->setAntiAlias(true);
+  }
+  canvas.translate(key_face.rect().centerX(), key_face.rect().centerY());
+  child->Draw(ctx);
+  canvas.translate(-key_face.rect().centerX(), -key_face.rect().centerY());
+}
+
+PowerButton::PowerButton(Object* object)
+    : ToggleButton(MakeShapeWidget(kPowerSVG, SK_ColorWHITE), "#fa2305"_color), object(object) {}
+
+void PowerButton::Activate(gui::Pointer&) {}
+
+bool PowerButton::Filled() const { return true; }
+
+static SkColor KeyColor(bool enabled) { return enabled ? kKeyEnabledColor : kKeyDisabledColor; }
+
+HotKey::HotKey()
+    : power_button(this),
+      ctrl_button(MakeKeyLabelWidget("Ctrl"), KeyColor(ctrl), kCtrlKeyWidth),
+      alt_button(MakeKeyLabelWidget("Alt"), KeyColor(alt), kAltKeyWidth),
+      shift_button(MakeKeyLabelWidget("Shift"), KeyColor(shift), kShiftKeyWidth),
+      windows_button(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth),
+      shortcut_button(MakeKeyLabelWidget("F5"), KeyColor(true), kShortcutKeyWidth) {
+  ctrl_button.activate = [this](gui::Pointer&) {
+    ctrl = !ctrl;
+    ctrl_button.color = KeyColor(ctrl);
+  };
+  alt_button.activate = [this](gui::Pointer&) {
+    alt = !alt;
+    alt_button.color = KeyColor(alt);
+  };
+  shift_button.activate = [this](gui::Pointer&) {
+    shift = !shift;
+    shift_button.color = KeyColor(shift);
+  };
+  windows_button.activate = [this](gui::Pointer&) {
+    windows = !windows;
+    windows_button.color = KeyColor(windows);
+  };
+  shortcut_button.activate = [this](gui::Pointer&) {
+    state = State::Recording;
+    shortcut_button.color = "#f3a75b"_color;
+  };
+}
+string_view HotKey::Name() const { return "HotKey"; }
+std::unique_ptr<Object> HotKey::Clone() const {
+  auto ret = std::make_unique<HotKey>();
+  ret->key = key;
+  ret->ctrl = ctrl;
+  ret->alt = alt;
+  ret->shift = shift;
+  ret->windows = windows;
+  return ret;
 }
 
 static void DrawCenteredText(SkCanvas& canvas, const char* text) {
@@ -251,7 +329,6 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   border_path.addPath(inner_contour);
   border_path.setFillType(SkPathFillType::kEvenOdd);
   canvas.drawPath(border_path, border_paint);
-  // canvas.drawDRRect(kShapeRRect, frame_inner2, border_paint);
 
   SkBlendMode shade_blend_mode = SkBlendMode::kHardLight;
   float shade_alpha = 0.5;
@@ -280,31 +357,6 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.clipPath(border_path, true);
   canvas.drawPath(inner_contour, shadow_paint);
   canvas.restore();
-  // canvas.drawDRRect(frame_inner, frame_inner2, shadow_paint);
-
-  // Draw keys
-  canvas.save();
-  // Ctrl
-  canvas.translate(-kWidth / 2 + kFrameWidth + kKeySpacing + kCtrlKeyWidth / 2,
-                   -kHeight / 2 + kFrameWidth + kKeySpacing + kKeyHeight / 2);
-  DrawKey(canvas, ctrl, kCtrlKeyWidth, [&]() { DrawCenteredText(canvas, "Ctrl"); });
-
-  // Super
-  canvas.translate(kCtrlKeyWidth / 2 + kKeySpacing + kSuperKeyWidth / 2, 0);
-  DrawKey(canvas, windows, kSuperKeyWidth, [&]() { DrawCenteredText(canvas, "Super"); });
-  // Alt
-  canvas.translate(kSuperKeyWidth / 2 + kKeySpacing + kAltKeyWidth / 2, 0);
-  DrawKey(canvas, alt, kAltKeyWidth, [&]() { DrawCenteredText(canvas, "Alt"); });
-  canvas.restore();
-  canvas.save();
-  // Shift
-  canvas.translate(-kWidth / 2 + kFrameWidth + kKeySpacing + kShiftKeyWidth / 2,
-                   kHeight / 2 - kFrameWidth - kKeySpacing - kKeyHeight / 2);
-  DrawKey(canvas, shift, kShiftKeyWidth, [&]() { DrawCenteredText(canvas, "Shift"); });
-  // Shortcut
-  canvas.translate(kShiftKeyWidth / 2 + kKeySpacing + kRegularKeyWidth / 2, 0);
-  DrawKey(canvas, true, kRegularKeyWidth, [&]() { DrawCenteredText(canvas, "F5"); });
-  canvas.restore();
 
   DrawChildren(ctx);
 }
@@ -320,6 +372,21 @@ ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
   if (visitor(power_button) == ControlFlow::Stop) {
     return ControlFlow::Stop;
   }
+  if (visitor(ctrl_button) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
+  }
+  if (visitor(alt_button) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
+  }
+  if (visitor(shift_button) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
+  }
+  if (visitor(windows_button) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
+  }
+  if (visitor(shortcut_button) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
+  }
   return ControlFlow::Continue;
 }
 
@@ -327,6 +394,27 @@ SkMatrix HotKey::TransformToChild(const Widget& child, animation::Context&) cons
   if (&child == &power_button) {
     return SkMatrix::Translate(-kWidth / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth,
                                -kHeight / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth);
+  }
+  if (&child == &ctrl_button) {
+    return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing,
+                               kHeight / 2 - kFrameWidth - kKeySpacing);
+  }
+  if (&child == &windows_button) {
+    return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing * 2 - kCtrlKeyWidth,
+                               kHeight / 2 - kFrameWidth - kKeySpacing);
+  }
+  if (&child == &alt_button) {
+    return SkMatrix::Translate(
+        kWidth / 2 - kFrameWidth - kKeySpacing * 3 - kCtrlKeyWidth - kSuperKeyWidth,
+        kHeight / 2 - kFrameWidth - kKeySpacing);
+  }
+  if (&child == &shift_button) {
+    return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing,
+                               kHeight / 2 - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
+  }
+  if (&child == &shortcut_button) {
+    return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing * 2 - kShiftKeyWidth,
+                               kHeight / 2 - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
   }
   return SkMatrix::I();
 }

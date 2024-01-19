@@ -45,3 +45,5 @@ build
 
 tests/dhclient
 tests/dhclient.pid
+
+source_images

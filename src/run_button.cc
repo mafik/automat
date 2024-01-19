@@ -9,7 +9,7 @@
 namespace automat::gui {
 
 RunButton::RunButton(Location* parent)
-    : Button(MakeShapeWidget(kPlayShape, 0xffffffff)), location(parent) {}
+    : ToggleButton(MakeShapeWidget(kPlayShape, 0xffffffff)), location(parent) {}
 
 void RunButton::Activate(Pointer&) {
   if (Filled()) {

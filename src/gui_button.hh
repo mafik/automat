@@ -10,7 +10,6 @@ struct Button : Widget {
   std::unique_ptr<Widget> child;
   mutable product_ptr<float> press_ptr;
   mutable product_ptr<animation::Approach> hover_ptr;
-  mutable product_ptr<animation::Approach> filling_ptr;
   int press_action_count = 0;
   SkColor color;
 
@@ -24,11 +23,19 @@ struct Button : Widget {
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
   virtual Vec2 Position() const { return Vec2(0, 0); }
   virtual void Activate(gui::Pointer&) {}
-  virtual bool Filled() const { return false; }
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg) const;
   void DrawButton(DrawContext&, SkColor bg) const;
+};
+
+struct ToggleButton : Button {
+  mutable product_ptr<animation::Approach> filling_ptr;
+
+  ToggleButton(std::unique_ptr<Widget>&& child, SkColor color = 0xffd69d00)
+      : Button(std::move(child), color) {}
+  void Draw(DrawContext&) const override;
+  virtual bool Filled() const { return false; }
 };
 
 }  // namespace automat::gui

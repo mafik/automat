@@ -63,7 +63,6 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   auto& actx = ctx.animation_context;
   auto& press = press_ptr[actx];
   auto& hover = hover_ptr[actx];
-  auto& filling = filling_ptr[actx];
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -105,8 +104,29 @@ void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
   DrawButtonFace(ctx, bg, 0xff000000);
 }
 
-// TODO: move the filling animation into a separate subclass
 void Button::Draw(DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+  auto& actx = ctx.animation_context;
+  auto& press = press_ptr[actx];
+  auto& hover = hover_ptr[actx];
+  hover.Tick(actx);
+
+  auto oval = RRect();
+  oval.inset(kBorderWidth / 2, kBorderWidth / 2);
+  constexpr SkColor white = 0xffffffff;
+
+  float lightness_adjust = hover * 10;
+  float press_shift_y = press * -kPressOffset;
+  auto pressed_oval = oval.makeOffset(0, press_shift_y);
+  SkRRect pressed_outer_oval;
+  pressed_oval.outset(kBorderWidth / 2 + kShadowSigma * 0, kBorderWidth / 2 + kShadowSigma * 0,
+                      &pressed_outer_oval);
+
+  DrawButtonShadow(canvas, white);
+  DrawButtonFace(ctx, white, color);
+}
+
+void ToggleButton::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
   auto& press = press_ptr[actx];

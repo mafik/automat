@@ -61,7 +61,7 @@ static constexpr float kHeight = kFrameWidth * 2 + kKeyHeight * 2 + kKeySpacing 
 static constexpr SkRect kShapeRect = SkRect::MakeXYWH(-kWidth / 2, -kHeight / 2, kWidth, kHeight);
 static const SkRRect kShapeRRect = [] {
   SkRRect ret;
-  float top_right_radius = kFrameWidth + kMinimalTouchableSize / 2;
+  float top_right_radius = kFrameWidth + kMinimalTouchableSize / 2 - kBorderWidth;
   SkVector radii[4] = {
       {kFrameOuterRadius, kFrameOuterRadius},
       {kFrameOuterRadius, kFrameOuterRadius},
@@ -73,7 +73,7 @@ static const SkRRect kShapeRRect = [] {
 }();
 
 PowerButton::PowerButton(Object* object)
-    : Button(MakeShapeWidget(kPowerSVG, 0xffffffff), 0xfffa2305), object(object) {}
+    : ToggleButton(MakeShapeWidget(kPowerSVG, 0xffffffff), 0xfffa2305), object(object) {}
 
 void PowerButton::Activate(gui::Pointer&) {}
 
@@ -128,7 +128,7 @@ static sk_sp<SkShader> MakeSweepShader(float rect_right, float rect_top, float r
   return SkGradientShader::MakeSweep(0, center_offset_y, colors, pos, 13);
 }
 
-static void DrawKey(SkCanvas& canvas, float width, std::function<void()> cb) {
+static void DrawKey(SkCanvas& canvas, bool enabled, float width, std::function<void()> cb) {
   float correction = (kKeyFaceHeight - kKeyHeight) / 2 + kKeyTopSide;
   canvas.translate(0, -correction);
   SkRect key_base_box =
@@ -138,7 +138,7 @@ static void DrawKey(SkCanvas& canvas, float width, std::function<void()> cb) {
                                          width - 2 * kKeySide, kKeyFaceHeight);
   SkRRect key_face = SkRRect::MakeRectXY(key_face_box, kKeyFaceRadius, kKeyFaceRadius);
 
-  SkColor base_color = 0xfff4efea;
+  SkColor base_color = enabled ? 0xfff3a75b : 0xfff4efea;
 
   SkPaint face_paint;
   SkPoint face_pts[] = {{0, key_face_box.bottom()}, {0, key_face_box.top()}};
@@ -287,23 +287,23 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   // Ctrl
   canvas.translate(-kWidth / 2 + kFrameWidth + kKeySpacing + kCtrlKeyWidth / 2,
                    -kHeight / 2 + kFrameWidth + kKeySpacing + kKeyHeight / 2);
-  DrawKey(canvas, kCtrlKeyWidth, [&]() { DrawCenteredText(canvas, "Ctrl"); });
+  DrawKey(canvas, ctrl, kCtrlKeyWidth, [&]() { DrawCenteredText(canvas, "Ctrl"); });
 
   // Super
   canvas.translate(kCtrlKeyWidth / 2 + kKeySpacing + kSuperKeyWidth / 2, 0);
-  DrawKey(canvas, kSuperKeyWidth, [&]() { DrawCenteredText(canvas, "Super"); });
+  DrawKey(canvas, windows, kSuperKeyWidth, [&]() { DrawCenteredText(canvas, "Super"); });
   // Alt
   canvas.translate(kSuperKeyWidth / 2 + kKeySpacing + kAltKeyWidth / 2, 0);
-  DrawKey(canvas, kAltKeyWidth, [&]() { DrawCenteredText(canvas, "Alt"); });
+  DrawKey(canvas, alt, kAltKeyWidth, [&]() { DrawCenteredText(canvas, "Alt"); });
   canvas.restore();
   canvas.save();
   // Shift
   canvas.translate(-kWidth / 2 + kFrameWidth + kKeySpacing + kShiftKeyWidth / 2,
                    kHeight / 2 - kFrameWidth - kKeySpacing - kKeyHeight / 2);
-  DrawKey(canvas, kShiftKeyWidth, [&]() { DrawCenteredText(canvas, "Shift"); });
+  DrawKey(canvas, shift, kShiftKeyWidth, [&]() { DrawCenteredText(canvas, "Shift"); });
   // Shortcut
   canvas.translate(kShiftKeyWidth / 2 + kKeySpacing + kRegularKeyWidth / 2, 0);
-  DrawKey(canvas, kRegularKeyWidth, [&]() { DrawCenteredText(canvas, "F5"); });
+  DrawKey(canvas, true, kRegularKeyWidth, [&]() { DrawCenteredText(canvas, "F5"); });
   canvas.restore();
 
   DrawChildren(ctx);

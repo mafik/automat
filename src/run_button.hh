@@ -10,7 +10,7 @@ struct Location;
 
 namespace automat::gui {
 
-struct RunButton : Button {
+struct RunButton : ToggleButton {
   Location* location;
   RunButton(Location* parent);
   void Activate(Pointer&) override;

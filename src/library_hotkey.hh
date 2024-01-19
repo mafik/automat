@@ -5,7 +5,7 @@
 
 namespace automat::library {
 
-struct PowerButton : gui::Button {
+struct PowerButton : gui::ToggleButton {
   Object* object;
   PowerButton(Object* object);
   void Activate(gui::Pointer&) override;

@@ -1,6 +1,5 @@
+#include <cstdint>
 #define _USE_MATH_DEFINES
-#include "gui_button.hh"
-
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkClipOp.h>
 #include <include/core/SkColor.h>
@@ -11,6 +10,7 @@
 #include <cmath>
 
 #include "color.hh"
+#include "gui_button.hh"
 #include "gui_constants.hh"
 
 namespace automat::gui {
@@ -113,7 +113,7 @@ void Button::Draw(DrawContext& ctx) const {
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
-  constexpr SkColor white = 0xffffffff;
+  constexpr SkColor white = "#FFFFFF"_color;
 
   float lightness_adjust = hover * 10;
   float press_shift_y = press * -kPressOffset;

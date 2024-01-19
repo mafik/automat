@@ -2,13 +2,13 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkMaskFilter.h>
+#include <include/core/SkMatrix.h>
 #include <include/effects/SkGradientShader.h>
 
 #include "color.hh"
 #include "font.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
-#include "include/core/SkMatrix.h"
 #include "library_macros.hh"
 #include "svg.hh"
 #include "text_field.hh"
@@ -73,7 +73,7 @@ static const SkRRect kShapeRRect = [] {
 }();
 
 PowerButton::PowerButton(Object* object)
-    : ToggleButton(MakeShapeWidget(kPowerSVG, 0xffffffff), 0xfffa2305), object(object) {}
+    : ToggleButton(MakeShapeWidget(kPowerSVG, SK_ColorWHITE), "#fa2305"_color), object(object) {}
 
 void PowerButton::Activate(gui::Pointer&) {}
 
@@ -138,7 +138,7 @@ static void DrawKey(SkCanvas& canvas, bool enabled, float width, std::function<v
                                          width - 2 * kKeySide, kKeyFaceHeight);
   SkRRect key_face = SkRRect::MakeRectXY(key_face_box, kKeyFaceRadius, kKeyFaceRadius);
 
-  SkColor base_color = enabled ? 0xfff3a75b : 0xfff4efea;
+  SkColor base_color = enabled ? "#f3a75b"_color : "#f4efea"_color;
 
   SkPaint face_paint;
   SkPoint face_pts[] = {{0, key_face_box.bottom()}, {0, key_face_box.top()}};
@@ -172,7 +172,7 @@ static void DrawKey(SkCanvas& canvas, bool enabled, float width, std::function<v
 static void DrawCenteredText(SkCanvas& canvas, const char* text) {
   SkPaint text_paint;
   text_paint.setAntiAlias(true);
-  text_paint.setColor(0xff000000);
+  text_paint.setColor("#000000"_color);
   static auto& font = KeyFont();
   float w = font.MeasureText(text);
   canvas.translate(-w / 2, -kKeyLetterSize / 2);
@@ -222,7 +222,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 
   // Draw background
   SkPaint inner_paint;
-  inner_paint.setColor(0xff000000);
+  inner_paint.setColor("#000000"_color);
   inner_paint.setStyle(SkPaint::kStrokeAndFill_Style);
   inner_paint.setStrokeWidth(0.5_mm);
   canvas.drawPath(inner_contour, inner_paint);
@@ -231,7 +231,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   SkPaint background_shadow_paint;
   background_shadow_paint.setMaskFilter(
       SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
-  background_shadow_paint.setColor(0xff333333);
+  background_shadow_paint.setColor("#333333"_color);
   canvas.drawPath(inner_contour, background_shadow_paint);
 
   // Draw frame
@@ -242,7 +242,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   SkPaint border_paint;
   border_paint.setAntiAlias(true);
   SkPoint border_pts[] = {{0, kShapeRect.bottom()}, {0, kShapeRect.top()}};
-  SkColor border_colors[] = {0xfff0f0f0, 0xffcccccc};
+  SkColor border_colors[] = {"#f0f0f0"_color, "#cccccc"_color};
   border_paint.setShader(
       SkGradientShader::MakeLinear(border_pts, border_colors, nullptr, 2, SkTileMode::kClamp));
 
@@ -256,7 +256,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   SkBlendMode shade_blend_mode = SkBlendMode::kHardLight;
   float shade_alpha = 0.5;
   SkPoint light_pts[] = {{0, kShapeRect.bottom()}, {0, kShapeRect.top()}};
-  SkColor light_colors[] = {0xfffdf8e0, 0xff111c22};
+  SkColor light_colors[] = {"#fdf8e0"_color, "#111c22"_color};
   SkPaint light_paint;
   light_paint.setAntiAlias(true);
   light_paint.setBlendMode(shade_blend_mode);
@@ -267,7 +267,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.drawDRRect(kShapeRRect, frame_outer, light_paint);
 
   SkPoint shadow_pts[] = {{0, kShapeRect.top() + kFrameOuterRadius}, {0, kShapeRect.top()}};
-  SkColor shadow_colors[] = {0xff111c22, 0xfffdf8e0};
+  SkColor shadow_colors[] = {"#111c22"_color, "#fdf8e0"_color};
   SkPaint shadow_paint;
   shadow_paint.setAntiAlias(true);
   shadow_paint.setBlendMode(shade_blend_mode);

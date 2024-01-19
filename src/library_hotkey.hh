@@ -40,6 +40,8 @@ struct HotKey : Object {
   void Run(Location&) override;
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
+
+  SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
 };
 
 }  // namespace automat::library

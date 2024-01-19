@@ -8,6 +8,7 @@
 #include "font.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
+#include "include/core/SkMatrix.h"
 #include "library_macros.hh"
 #include "svg.hh"
 #include "text_field.hh"
@@ -58,8 +59,18 @@ static constexpr float kBottomRowWidth = kFrameWidth + kKeySpacing + kCtrlKeyWid
 static constexpr float kWidth = std::max(kTopRowWidth, kBottomRowWidth);
 static constexpr float kHeight = kFrameWidth * 2 + kKeyHeight * 2 + kKeySpacing * 3;
 static constexpr SkRect kShapeRect = SkRect::MakeXYWH(-kWidth / 2, -kHeight / 2, kWidth, kHeight);
-static const SkRRect kShapeRRect =
-    SkRRect::MakeRectXY(kShapeRect, kFrameOuterRadius, kFrameOuterRadius);
+static const SkRRect kShapeRRect = [] {
+  SkRRect ret;
+  float top_right_radius = kFrameWidth + kMinimalTouchableSize / 2;
+  SkVector radii[4] = {
+      {kFrameOuterRadius, kFrameOuterRadius},
+      {kFrameOuterRadius, kFrameOuterRadius},
+      {top_right_radius, top_right_radius},
+      {kFrameOuterRadius, kFrameOuterRadius},
+  };
+  ret.setRectRadii(kShapeRect, radii);
+  return ret;
+}();
 
 PowerButton::PowerButton(Object* object)
     : Button(MakeShapeWidget(kPowerSVG, 0xffffffff), 0xfffa2305), object(object) {}
@@ -255,7 +266,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 
   canvas.drawDRRect(kShapeRRect, frame_outer, light_paint);
 
-  SkPoint shadow_pts[] = {{0, kShapeRect.bottom()}, {0, kShapeRect.top()}};
+  SkPoint shadow_pts[] = {{0, kShapeRect.top() + kFrameOuterRadius}, {0, kShapeRect.top()}};
   SkColor shadow_colors[] = {0xff111c22, 0xfffdf8e0};
   SkPaint shadow_paint;
   shadow_paint.setAntiAlias(true);
@@ -295,13 +306,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   DrawKey(canvas, kRegularKeyWidth, [&]() { DrawCenteredText(canvas, "F5"); });
   canvas.restore();
 
-  canvas.save();
-  canvas.translate(-kMinimalTouchableSize / 2, -kMinimalTouchableSize / 2);
-
-  canvas.translate(kWidth / 2 - kFrameWidth - kMinimalTouchableSize / 2 + kBorderWidth,
-                   kHeight / 2 - kFrameWidth - kMinimalTouchableSize / 2 + kBorderWidth);
   DrawChildren(ctx);
-  canvas.restore();
 }
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
@@ -316,6 +321,14 @@ ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
     return ControlFlow::Stop;
   }
   return ControlFlow::Continue;
+}
+
+SkMatrix HotKey::TransformToChild(const Widget& child, animation::Context&) const {
+  if (&child == &power_button) {
+    return SkMatrix::Translate(-kWidth / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth,
+                               -kHeight / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth);
+  }
+  return SkMatrix::I();
 }
 
 }  // namespace automat::library

@@ -47,3 +47,5 @@ tests/dhclient
 tests/dhclient.pid
 
 source_images
+
+compile_commands.json

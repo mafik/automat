@@ -4,6 +4,11 @@
 
 namespace automat {
 
+#if defined(NDEBUG)  // temporarily disable when in release mode
+#undef DEFINE_PROTO
+#define DEFINE_PROTO(name)
+#endif
+
 DEFINE_PROTO(Integer);
 
 DEFINE_PROTO(Delete);

@@ -10,7 +10,10 @@
 
 namespace automat {
 
+#if not defined(NDEBUG)  // temporarily disable when in release mode
 DEFINE_PROTO(Alert);
+#endif
+
 Argument Alert::message_arg("message", Argument::kRequiresObject);
 
 #ifdef _WIN32

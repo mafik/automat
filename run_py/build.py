@@ -284,4 +284,11 @@ def recipe() -> make.Recipe:
                shortcut='compile_commands.json')
     r.generated.add('compile_commands.json')
 
+    def deploy():
+        return make.Popen(['rsync', '-av', '--delete', '--exclude', 'builds', '--no-owner', '--no-group', 'www/', 'protectli:/var/www/automat.org/'])
+
+
+    r.add_step(deploy, [], ['www/'], desc='Uploading WWW contents to server')
+
+
     return r

@@ -90,6 +90,7 @@ static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
     paint.setBlendMode(SkBlendMode::kScreen);
     canvas.drawImage(base, 0, 0, sampling, &paint);
   }
+
   {  // Draw arrow
     SkPath path = PathFromSVG(kArrowShape).makeScale(1 / kScale, 1 / kScale);
     SkPaint paint;
@@ -98,9 +99,9 @@ static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
     canvas.translate(button == gui::kMouseLeft ? 85 : 285, 130);
     if (down) {
       paint.setColor(SkColorSetARGB(255, 255, 128, 128));
+      canvas.scale(1, -1);
     } else {
       paint.setColor(SkColorSetARGB(255, 118, 235, 235));
-      canvas.scale(1, -1);
     }
     canvas.drawPath(path, paint);
   }

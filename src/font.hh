@@ -14,7 +14,7 @@ struct Font {
   float font_scale;
   float line_thickness;
 
-  static std::unique_ptr<Font> Make(float letter_size_mm, float weight = NAN);
+  static std::unique_ptr<Font> Make(float letter_size_mm, float weight = 400);
 
   // TODO: If this causes performance issues, cache text shaping / SkTextBlob
   // results somehow

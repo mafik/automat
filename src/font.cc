@@ -2,6 +2,7 @@
 
 #include <include/core/SkData.h>
 #include <include/core/SkFontMgr.h>
+#include <include/ports/SkFontMgr_data.h>
 #include <modules/skshaper/include/SkShaper.h>
 #include <modules/skunicode/include/SkUnicode.h>
 #include <src/base/SkUTF.h>
@@ -10,6 +11,7 @@
 
 #include "../build/generated/embedded.hh"
 #include "gui_constants.hh"
+#include "log.hh"
 #include "math.hh"
 #include "virtual_fs.hh"
 
@@ -26,6 +28,15 @@ namespace automat::gui {
 
 constexpr static SkFourByteTag kFontWeightTag = SkSetFourByteTag('w', 'g', 'h', 't');
 
+static sk_sp<SkFontMgr> GetFontMgr() {
+  static sk_sp<SkFontMgr> font_mgr = []() {
+    auto& ttf_content = maf::embedded::assets_NotoSans_wght__ttf.content;
+    sk_sp<SkData> data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
+    return SkFontMgr_New_Custom_Data(SkSpan<sk_sp<SkData>>(&data, 1));
+  }();
+  return font_mgr;
+}
+
 std::unique_ptr<Font> Font::Make(float letter_size_mm, float weight) {
   constexpr float kMilimetersPerInch = 25.4;
   constexpr float kPointsPerInch = 72;
@@ -34,9 +45,13 @@ std::unique_ptr<Font> Font::Make(float letter_size_mm, float weight) {
   float font_size_guess = letter_size_pt / 0.7f;  // this was determined empirically
   // Create the font using the approximate size.
   // TODO: embed & use Noto Color Emoji
-  auto& ttf_content = maf::embedded::assets_NotoSans_wght__ttf.content;
-  auto data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
-  auto typeface = SkTypeface::MakeFromData(data);
+  sk_sp<SkFontMgr> font_mgr = GetFontMgr();
+  SkFontStyle style = SkFontStyle(static_cast<int>(weight), SkFontStyle::kNormal_Width,
+                                  SkFontStyle::kUpright_Slant);
+  auto typeface = font_mgr->matchFamilyStyle("Noto Sans", style);
+  if (!typeface) {
+    FATAL << "Could not find Noto Sans font.";
+  }
   if (!std::isnan(weight)) {
     SkFontArguments::VariationPosition::Coordinate coordinates[1];
     coordinates[0].axis = kFontWeightTag;

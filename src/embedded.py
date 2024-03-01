@@ -59,7 +59,7 @@ namespace maf::embedded {{''',
             escaped_path = escape_string(str(path))
             print(f'''
 VFile {slug} = {{
-  .path = "{escaped_path}"s,
+  .path = "{escaped_path}"sv,
   .content = ''',
                   file=cc,
                   end='')
@@ -70,7 +70,7 @@ VFile {slug} = {{
                 print('\n    ' + cc_embed.bytes_to_c_string(chunk),
                       file=cc,
                       end='')
-            print(f'''s,
+            print(f'''sv,
 }};''', file=cc)
         print('''std::unordered_map<StrView, VFile*> index = {''', file=cc)
         for path in embedded_paths:

@@ -39,7 +39,7 @@ Str EmbeddedFS::Read(const Path& path, Status& status) {
     status() += "Embedded file not found: " + Str(path);
     return "";
   } else {
-    return it->second->content;
+    return Str(it->second->content);
   }
 }
 
@@ -294,8 +294,7 @@ void Copy(VirtualFS& from_fs, const Path& from, VirtualFS& to_fs, const Path& to
     real.Copy(from, to, status, mode);
     return;
   }
-  Map(
-      from_fs, from, [&](StrView contents) { Write(to_fs, to, contents, status); }, status);
+  Map(from_fs, from, [&](StrView contents) { Write(to_fs, to, contents, status); }, status);
   return;
 }
 

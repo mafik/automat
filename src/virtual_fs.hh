@@ -83,8 +83,8 @@ void Copy(VirtualFS& from_fs, const Path& from, VirtualFS& to_fs, const Path& to
           Mode = RW_R__R__);
 
 struct VFile {
-  Str path;
-  Str content;
+  StrView path;
+  StrView content;
 };
 
 void CopyFile(const Path& from, const Path& to, Status&, Mode = RW_R__R__);

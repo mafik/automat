@@ -400,7 +400,17 @@ void RenderLoop() {
             }
             window->Resize(WindowSize());
           }
-          window_position_on_screen = Vec2(ev->x, ev->y);
+
+          // This event may be sent when the window is moved. However sometimes it holds the wrong
+          // coordinates. This happens for example on Ubuntu 22.04 - only events sent from the
+          // window manager are correct. Querying the position from geometry also returns the wrong
+          // position. The only way to get the correct on-screen position that was found to be
+          // reliable was to translate the point 0, 0 to root window coordinates.
+          xcb_translate_coordinates_reply_t* reply = xcb_translate_coordinates_reply(
+              connection, xcb_translate_coordinates(connection, xcb_window, screen->root, 0, 0),
+              nullptr);
+          window_position_on_screen.x = reply->dst_x;
+          window_position_on_screen.y = reply->dst_y;
           break;
         }
         case XCB_CLIENT_MESSAGE: {

@@ -6,18 +6,27 @@
 #include <include/core/SkShader.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
+#include <xcb/xcb.h>
+#include <xcb/xinput.h>
+#include <xcb/xproto.h>
 
 #include <chrono>
 #include <memory>
 
 #include "color.hh"
 #include "font.hh"
+#include "format.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "library_macros.hh"
 #include "math.hh"
 #include "svg.hh"
 #include "text_field.hh"
+#include "x11.hh"
+
+#if defined(__linux__)
+#include "linux_main.hh"
+#endif
 
 using namespace automat::gui;
 
@@ -202,12 +211,8 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) co
   canvas.translate(-key_face.rect().centerX(), -key_face.rect().centerY());
 }
 
-PowerButton::PowerButton(Object* object)
-    : ToggleButton(MakeShapeWidget(kPowerSVG, SK_ColorWHITE), "#fa2305"_color), object(object) {}
-
-void PowerButton::Activate(gui::Pointer&) {}
-
-bool PowerButton::Filled() const { return true; }
+PowerButton::PowerButton(OnOff* target)
+    : ToggleButton(MakeShapeWidget(kPowerSVG, SK_ColorWHITE), "#fa2305"_color), target(target) {}
 
 static SkColor KeyColor(bool enabled) { return enabled ? kKeyEnabledColor : kKeyDisabledColor; }
 
@@ -317,6 +322,7 @@ HotKey::HotKey()
     windows = !windows;
     windows_button.color = KeyColor(windows);
   };
+  ((KeyLabelWidget*)shortcut_button.child.get())->label = ToStr(key);
   shortcut_button.activate = [this](gui::Pointer&) {
     state = State::Recording;
     shortcut_button.color = "#f3a75b"_color;
@@ -515,6 +521,77 @@ SkMatrix HotKey::TransformToChild(const Widget& child, animation::Context&) cons
                                kHeight / 2 - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
   }
   return SkMatrix::I();
+}
+
+void HotKey::On() {
+  LOG << "Turning HotKey on";
+  // TODO display the correct key name
+  // TODO allow user to toggle the modifiers
+  // TODO allow the user to set the main hotkey
+
+  U16 modifiers = 0;
+  if (ctrl) {
+    modifiers |= XCB_MOD_MASK_CONTROL;
+  }
+  if (alt) {
+    modifiers |= XCB_MOD_MASK_1;
+  }
+  if (shift) {
+    modifiers |= XCB_MOD_MASK_SHIFT;
+  }
+  if (windows) {
+    modifiers |= XCB_MOD_MASK_4;
+  }
+  xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
+
+  for (bool caps_lock : {true, false}) {
+    for (bool num_lock : {true, false}) {
+      for (bool scroll_lock : {true, false}) {
+        for (bool level3shift : {true, false}) {
+          modifiers =
+              caps_lock ? (modifiers | XCB_MOD_MASK_LOCK) : (modifiers & ~XCB_MOD_MASK_LOCK);
+          modifiers = num_lock ? (modifiers | XCB_MOD_MASK_2) : (modifiers & ~XCB_MOD_MASK_2);
+          modifiers = scroll_lock ? (modifiers | XCB_MOD_MASK_5) : (modifiers & ~XCB_MOD_MASK_5);
+          modifiers = level3shift ? (modifiers | XCB_MOD_MASK_3) : (modifiers & ~XCB_MOD_MASK_3);
+          auto cookie = xcb_grab_key(connection, 0, screen->root, modifiers, keycode,
+                                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+          if (auto err = xcb_request_check(connection, cookie)) {
+            FATAL << "Failed to grab key: " << err->error_code;
+          }
+        }
+      }
+    }
+  }
+
+  system_event_hooks.push_back(this);
+}
+
+bool HotKey::Intercept(xcb_generic_event_t* event) {
+  if (event->response_type != XCB_KEY_PRESS && event->response_type != XCB_KEY_RELEASE) {
+    return false;
+  }
+  xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
+  xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
+  if (ev->detail != keycode) {
+    return false;
+  }
+  // TODO ignore repeated events
+  LOG << (event->response_type == XCB_KEY_PRESS ? "Hotkey press" : "Hotey release");
+  return true;
+}
+
+void HotKey::Off() {
+  LOG << "Turning HotKey off";
+  if (auto it = std::find(system_event_hooks.begin(), system_event_hooks.end(), this);
+      it != system_event_hooks.end()) {
+    system_event_hooks.erase(it);
+  }
+  xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
+
+  auto cookie = xcb_ungrab_key(connection, keycode, screen->root, XCB_MOD_MASK_ANY);
+  if (auto err = xcb_request_check(connection, cookie)) {
+    FATAL << "Failed to ungrab key: " << err->error_code;
+  }
 }
 
 }  // namespace automat::library

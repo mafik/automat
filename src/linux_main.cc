@@ -19,6 +19,7 @@
 #include "vk.hh"
 #include "widget.hh"
 #include "window.hh"
+#include "x11.hh"
 
 #pragma comment(lib, "vk-bootstrap")
 #pragma comment(lib, "xcb")
@@ -39,6 +40,8 @@ uint8_t xi_opcode;
 
 Vec2 window_position_on_screen;
 Vec2 mouse_position_on_screen;
+
+Vec<SystemEventHook*> system_event_hooks;
 
 struct VerticalScroll {
   xcb_input_device_id_t device_id;
@@ -74,130 +77,6 @@ gui::Pointer& GetMouse() {
     mouse = std::make_unique<gui::Pointer>(*window, ScreenToWindow(mouse_position_on_screen));
   }
   return *mouse;
-}
-
-enum class KeyCode {
-  Esc = 9,
-  Digit1 = 10,
-  Digit2 = 11,
-  Digit3 = 12,
-  Digit4 = 13,
-  Digit5 = 14,
-  Digit6 = 15,
-  Digit7 = 16,
-  Digit8 = 17,
-  Digit9 = 18,
-  Digit0 = 19,
-  Minus = 20,
-  Equals = 21,
-  Backspace = 22,
-  Tab = 23,
-  Q = 24,
-  W = 25,
-  E = 26,
-  R = 27,
-  T = 28,
-  Y = 29,
-  U = 30,
-  I = 31,
-  O = 32,
-  P = 33,
-  LeftBracket = 34,
-  RightBracket = 35,
-  Return = 36,
-  CtrlLeft = 37,
-  A = 38,
-  S = 39,
-  D = 40,
-  F = 41,
-  G = 42,
-  H = 43,
-  J = 44,
-  K = 45,
-  L = 46,
-  Semicolon = 47,
-  Apostrophe = 48,
-  Backtick = 49,
-  ShiftLeft = 50,
-  BackSlash = 51,
-  Z = 52,
-  X = 53,
-  C = 54,
-  V = 55,
-  B = 56,
-  N = 57,
-  M = 58,
-  Comma = 59,
-  Dot = 60,
-  Slash = 61,
-  ShiftRight = 62,
-  KpMultiply = 63,
-  AltLeft = 64,
-  Space = 65,
-  CapsLock = 66,
-  F1 = 67,
-  F2 = 68,
-  F3 = 69,
-  F4 = 70,
-  F5 = 71,
-  F6 = 72,
-  F7 = 73,
-  F8 = 74,
-  F9 = 75,
-  F10 = 76,
-  NumLock = 77,
-  ScrollLock = 78,
-  Kp7 = 79,
-  Kp8 = 80,
-  Kp9 = 81,
-  KpMinus = 82,
-  Kp4 = 83,
-  Kp5 = 84,
-  Kp6 = 85,
-  KpPlus = 86,
-  Kp1 = 87,
-  Kp2 = 88,
-  Kp3 = 89,
-  Kp0 = 90,
-  KpDot = 91,
-  International = 94,
-  F11 = 95,
-  F12 = 96,
-  Home = 97,
-  Up = 98,
-  PageUp = 99,
-  Left = 100,
-  Right = 102,
-  Down = 104,
-  End = 103,
-  PageDown = 105,
-  Insert = 106,
-  Delete = 107,
-  KpEnter = 108,
-  CtrlRight = 109,
-  Pause = 110,
-  PrintScrn = 111,
-  KpDivide = 112,
-  AltRight = 113,
-  SuperLeft = 115,
-  SuperRight = 116,
-  Menu = 117,
-};
-
-gui::AnsiKey X11KeyCodeToKey(KeyCode key_code) {
-  using enum gui::AnsiKey;
-  switch (key_code) {
-    case KeyCode::W:
-      return W;
-    case KeyCode::A:
-      return A;
-    case KeyCode::S:
-      return S;
-    case KeyCode::D:
-      return D;
-    default:
-      return Unknown;
-  }
 }
 
 gui::PointerButton EventDetailToButton(uint32_t detail) {
@@ -371,6 +250,12 @@ void RenderLoop() {
     event = xcb_poll_for_event(connection);
 
     if (event) {
+      for (auto hook : system_event_hooks) {
+        if (hook->Intercept(event)) {
+          goto intercepted;
+        }
+      }
+
       switch (event->response_type & ~0x80) {
         case XCB_EXPOSE: {
           xcb_expose_event_t* ev = (xcb_expose_event_t*)event;
@@ -451,16 +336,16 @@ void RenderLoop() {
               }
               case XCB_INPUT_KEY_PRESS: {
                 xcb_input_key_press_event_t* ev = (xcb_input_key_press_event_t*)event;
-                gui::Key key = {.physical = X11KeyCodeToKey((KeyCode)ev->detail),
-                                .logical = X11KeyCodeToKey((KeyCode)ev->detail),
+                gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
+                                .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
                                 .text = ""};
                 keyboard->KeyDown(key);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
                 xcb_input_key_release_event_t* ev = (xcb_input_key_release_event_t*)event;
-                gui::Key key = {.physical = X11KeyCodeToKey((KeyCode)ev->detail),
-                                .logical = X11KeyCodeToKey((KeyCode)ev->detail),
+                gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
+                                .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
                                 .text = ""};
                 keyboard->KeyUp(key);
                 break;
@@ -571,7 +456,7 @@ void RenderLoop() {
     } else {  // event == nullptr
       Paint();
     }
-
+  intercepted:
     free(event);
   }
 

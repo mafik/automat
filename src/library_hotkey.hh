@@ -5,13 +5,29 @@
 #include "base.hh"
 #include "keyboard.hh"
 
+#if defined(__linux__)
+#include "linux_main.hh"
+#endif
+
 namespace automat::library {
 
+struct OnOff {
+  bool on;
+  virtual ~OnOff() = default;
+
+  virtual void Toggle() {
+    on = !on;
+    on ? On() : Off();
+  }
+  virtual void On() {};
+  virtual void Off() {};
+};
+
 struct PowerButton : gui::ToggleButton {
-  Object* object;
-  PowerButton(Object* object);
-  void Activate(gui::Pointer&) override;
-  bool Filled() const override;
+  OnOff* target;
+  PowerButton(OnOff* target);
+  void Activate(gui::Pointer&) override { target->Toggle(); }
+  bool Filled() const override { return target->on; }
 };
 
 struct KeyButton : gui::Button {
@@ -23,7 +39,7 @@ struct KeyButton : gui::Button {
   void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg) const override;
 };
 
-struct HotKey : Object {
+struct HotKey : Object, OnOff, SystemEventHook {
   static const HotKey proto;
 
   gui::AnsiKey key = gui::AnsiKey::F11;
@@ -31,6 +47,7 @@ struct HotKey : Object {
   bool alt = false;
   bool shift = false;
   bool windows = false;
+  bool active = false;
 
   PowerButton power_button;
 
@@ -55,6 +72,10 @@ struct HotKey : Object {
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
   void Run(Location&) override;
+
+  void On() override;
+  void Off() override;
+  bool Intercept(xcb_generic_event_t*) override;
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
 

@@ -7,6 +7,7 @@
 
 #include "animation.hh"
 #include "math.hh"
+#include "str.hh"
 
 namespace automat::gui {
 
@@ -127,6 +128,8 @@ enum class AnsiKey : uint8_t {
   ControlRight,
   Count
 };
+
+maf::StrView ToStr(AnsiKey) noexcept;
 
 struct Key {
   AnsiKey physical;

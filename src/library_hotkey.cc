@@ -386,8 +386,13 @@ HotKey::HotKey()
   };
   ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key));
   shortcut_button.activate = [this](gui::Pointer&) {
-    GrabEverything(*this);
-    recording = true;
+    if (recording) {
+      recording = false;
+      UngrabEverything(*this);
+    } else {
+      GrabEverything(*this);
+      recording = true;
+    }
   };
 }
 string_view HotKey::Name() const { return "HotKey"; }

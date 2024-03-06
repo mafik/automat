@@ -7,14 +7,214 @@ using enum automat::gui::AnsiKey;
 
 AnsiKey X11KeyCodeToKey(KeyCode key_code) {
   switch (key_code) {
+    case KeyCode::Esc:
+      return Escape;
+    case KeyCode::F1:
+      return F1;
+    case KeyCode::F2:
+      return F2;
+    case KeyCode::F3:
+      return F3;
+    case KeyCode::F4:
+      return F4;
+    case KeyCode::F5:
+      return F5;
+    case KeyCode::F6:
+      return F6;
+    case KeyCode::F7:
+      return F7;
+    case KeyCode::F8:
+      return F8;
+    case KeyCode::F9:
+      return F9;
+    case KeyCode::F10:
+      return F10;
+    case KeyCode::F11:
+      return F11;
+    case KeyCode::F12:
+      return F12;
+    case KeyCode::PrintScrn:
+      return PrintScreen;
+    case KeyCode::ScrollLock:
+      return ScrollLock;
+    case KeyCode::Pause:
+      return Pause;
+    case KeyCode::Insert:
+      return Insert;
+    case KeyCode::Delete:
+      return Delete;
+    case KeyCode::Home:
+      return Home;
+    case KeyCode::End:
+      return End;
+    case KeyCode::PageUp:
+      return PageUp;
+    case KeyCode::PageDown:
+      return PageDown;
+    case KeyCode::Up:
+      return Up;
+    case KeyCode::Down:
+      return Down;
+    case KeyCode::Left:
+      return Left;
+    case KeyCode::Right:
+      return Right;
+    case KeyCode::NumLock:
+      return NumLock;
+    case KeyCode::KpDivide:
+      return NumpadDivide;
+    case KeyCode::KpMultiply:
+      return NumpadMultiply;
+    case KeyCode::KpMinus:
+      return NumpadMinus;
+    case KeyCode::KpPlus:
+      return NumpadPlus;
+    case KeyCode::KpEnter:
+      return NumpadEnter;
+    case KeyCode::KpDot:
+      return NumpadPeriod;
+    case KeyCode::Kp0:
+      return Numpad0;
+    case KeyCode::Kp1:
+      return Numpad1;
+    case KeyCode::Kp2:
+      return Numpad2;
+    case KeyCode::Kp3:
+      return Numpad3;
+    case KeyCode::Kp4:
+      return Numpad4;
+    case KeyCode::Kp5:
+      return Numpad5;
+    case KeyCode::Kp6:
+      return Numpad6;
+    case KeyCode::Kp7:
+      return Numpad7;
+    case KeyCode::Kp8:
+      return Numpad8;
+    case KeyCode::Kp9:
+      return Numpad9;
+    case KeyCode::Grave:
+      return Grave;
+    case KeyCode::Digit1:
+      return Digit1;
+    case KeyCode::Digit2:
+      return Digit2;
+    case KeyCode::Digit3:
+      return Digit3;
+    case KeyCode::Digit4:
+      return Digit4;
+    case KeyCode::Digit5:
+      return Digit5;
+    case KeyCode::Digit6:
+      return Digit6;
+    case KeyCode::Digit7:
+      return Digit7;
+    case KeyCode::Digit8:
+      return Digit8;
+    case KeyCode::Digit9:
+      return Digit9;
+    case KeyCode::Digit0:
+      return Digit0;
+    case KeyCode::Minus:
+      return Minus;
+    case KeyCode::Equals:
+      return Equals;
+    case KeyCode::Backspace:
+      return Backspace;
+    case KeyCode::Tab:
+      return Tab;
+    case KeyCode::Q:
+      return Q;
     case KeyCode::W:
       return W;
+    case KeyCode::E:
+      return E;
+    case KeyCode::R:
+      return R;
+    case KeyCode::T:
+      return T;
+    case KeyCode::Y:
+      return Y;
+    case KeyCode::U:
+      return U;
+    case KeyCode::I:
+      return I;
+    case KeyCode::O:
+      return O;
+    case KeyCode::P:
+      return P;
+    case KeyCode::LeftBracket:
+      return BracketLeft;
+    case KeyCode::RightBracket:
+      return BracketRight;
+    case KeyCode::BackSlash:
+      return Backslash;
+    case KeyCode::CapsLock:
+      return CapsLock;
     case KeyCode::A:
       return A;
     case KeyCode::S:
       return S;
     case KeyCode::D:
       return D;
+    case KeyCode::F:
+      return F;
+    case KeyCode::G:
+      return G;
+    case KeyCode::H:
+      return H;
+    case KeyCode::J:
+      return J;
+    case KeyCode::K:
+      return K;
+    case KeyCode::L:
+      return L;
+    case KeyCode::Semicolon:
+      return Semicolon;
+    case KeyCode::Apostrophe:
+      return Apostrophe;
+    case KeyCode::Return:
+      return Enter;
+    case KeyCode::ShiftLeft:
+      return ShiftLeft;
+    case KeyCode::Z:
+      return Z;
+    case KeyCode::X:
+      return X;
+    case KeyCode::C:
+      return C;
+    case KeyCode::V:
+      return V;
+    case KeyCode::B:
+      return B;
+    case KeyCode::N:
+      return N;
+    case KeyCode::M:
+      return M;
+    case KeyCode::Comma:
+      return Comma;
+    case KeyCode::Dot:
+      return Period;
+    case KeyCode::Slash:
+      return Slash;
+    case KeyCode::ShiftRight:
+      return ShiftRight;
+    case KeyCode::CtrlLeft:
+      return ControlLeft;
+    case KeyCode::SuperLeft:
+      return SuperLeft;
+    case KeyCode::AltLeft:
+      return AltLeft;
+    case KeyCode::Space:
+      return Space;
+    case KeyCode::AltRight:
+      return AltRight;
+    case KeyCode::SuperRight:
+      return SuperRight;
+    case KeyCode::Compose:
+      return Application;
+    case KeyCode::CtrlRight:
+      return ControlRight;
     default:
       return Unknown;
   }
@@ -112,7 +312,7 @@ KeyCode KeyToX11KeyCode(AnsiKey key) {
     case Numpad9:
       return KeyCode::Kp9;
     case Grave:
-      return KeyCode::Backtick;
+      return KeyCode::Grave;
     case Digit1:
       return KeyCode::Digit1;
     case Digit2:
@@ -230,7 +430,7 @@ KeyCode KeyToX11KeyCode(AnsiKey key) {
     case SuperRight:
       return KeyCode::SuperRight;
     case Application:
-      return KeyCode::Menu;
+      return KeyCode::Compose;
     case ControlRight:
       return KeyCode::CtrlRight;
   }

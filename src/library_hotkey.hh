@@ -55,14 +55,9 @@ struct HotKey : Object, OnOff, SystemEventHook {
   KeyButton alt_button;
   KeyButton shift_button;
   KeyButton windows_button;
-  KeyButton shortcut_button;
+  mutable KeyButton shortcut_button;
 
-  enum class State {
-    Recording,
-    Inactive,
-    Active,
-    Pressed,
-  } state = State::Inactive;
+  bool recording = false;
 
   HotKey();
   string_view Name() const override;

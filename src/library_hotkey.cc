@@ -308,6 +308,35 @@ vec4 main(in vec2 fragCoord) {
   return paint;
 }
 
+static void BeginIntercepting(HotKey& hotkey) { system_event_hooks.push_back(&hotkey); }
+
+static void StopIntercepting(HotKey& hotkey) {
+  if (auto it = std::find(system_event_hooks.begin(), system_event_hooks.end(), &hotkey);
+      it != system_event_hooks.end()) {
+    system_event_hooks.erase(it);
+  }
+}
+
+static void GrabEverything(HotKey& hotkey) {
+  for (auto keycode : x11::kKeyCodesArray) {
+    auto cookie =
+        xcb_grab_key_checked(connection, 0, screen->root, XCB_MOD_MASK_ANY, (xcb_keycode_t)keycode,
+                             XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+    if (auto err = xcb_request_check(connection, cookie)) {
+      LOG << "Failed to grab key: " << ToStr(x11::X11KeyCodeToKey(keycode)) << " (keycode "
+          << (int)keycode << "): " << err->error_code;
+    }
+  }
+  BeginIntercepting(hotkey);
+}
+
+static void UngrabEverything(HotKey& hotkey) {
+  auto cookie = xcb_ungrab_key_checked(connection, XCB_GRAB_ANY, screen->root, XCB_MOD_MASK_ANY);
+  if (auto err = xcb_request_check(connection, cookie)) {
+    FATAL << "Failed to ungrab key: " << err->error_code;
+  }
+}
+
 HotKey::HotKey()
     : power_button(this),
       ctrl_button(MakeKeyLabelWidget("Ctrl"), KeyColor(ctrl), kCtrlKeyWidth),
@@ -316,25 +345,49 @@ HotKey::HotKey()
       windows_button(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth),
       shortcut_button(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth) {
   ctrl_button.activate = [this](gui::Pointer&) {
+    if (on) {
+      Off();  // temporarily switch off to ungrab the old key combo
+    }
     ctrl = !ctrl;
+    if (on) {
+      On();
+    }
     ctrl_button.color = KeyColor(ctrl);
   };
   alt_button.activate = [this](gui::Pointer&) {
+    if (on) {
+      Off();  // temporarily switch off to ungrab the old key combo
+    }
     alt = !alt;
+    if (on) {
+      On();
+    }
     alt_button.color = KeyColor(alt);
   };
   shift_button.activate = [this](gui::Pointer&) {
+    if (on) {
+      Off();  // temporarily switch off to ungrab the old key combo
+    }
     shift = !shift;
+    if (on) {
+      On();
+    }
     shift_button.color = KeyColor(shift);
   };
   windows_button.activate = [this](gui::Pointer&) {
+    if (on) {
+      Off();  // temporarily switch off to ungrab the old key combo
+    }
     windows = !windows;
+    if (on) {
+      On();
+    }
     windows_button.color = KeyColor(windows);
   };
   ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key));
   shortcut_button.activate = [this](gui::Pointer&) {
-    state = State::Recording;
-    shortcut_button.color = "#f3a75b"_color;
+    GrabEverything(*this);
+    recording = true;
   };
 }
 string_view HotKey::Name() const { return "HotKey"; }
@@ -459,12 +512,13 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.drawPath(inner_contour, shadow_paint);
   canvas.restore();
 
-  DrawChildren(ctx);
+  if (recording) {
+    shortcut_button.color = "#f15555"_color;
+  } else {
+    shortcut_button.color = KeyColor(true);
+  }
 
-  SkPaint test_paint;
-  test_paint.setColor("#FF0000"_color);
-  test_paint.setStyle(SkPaint::kStroke_Style);
-  test_paint.setStrokeWidth(0.25_mm);
+  DrawChildren(ctx);
 }
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
@@ -526,9 +580,6 @@ SkMatrix HotKey::TransformToChild(const Widget& child, animation::Context&) cons
 }
 
 void HotKey::On() {
-  LOG << "Turning HotKey on";
-  // TODO display the correct key name
-  // TODO allow user to toggle the modifiers
   // TODO allow the user to set the main hotkey
 
   U16 modifiers = 0;
@@ -565,7 +616,7 @@ void HotKey::On() {
     }
   }
 
-  system_event_hooks.push_back(this);
+  BeginIntercepting(*this);
 }
 
 bool HotKey::Intercept(xcb_generic_event_t* event) {
@@ -573,6 +624,20 @@ bool HotKey::Intercept(xcb_generic_event_t* event) {
     return false;
   }
   xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
+  if (recording) {
+    if (event->response_type == XCB_KEY_PRESS) {
+      UngrabEverything(*this);
+      recording = false;
+      key = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail);
+      LOG << "Setting new hotkey. X11 returned " << ev->detail << " which is internally "
+          << (int)key << ": " << ToStr(key);
+      ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key));
+      if (on) {
+        On();
+      }
+    }
+    return true;
+  }
   xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
   if (ev->detail != keycode) {
     return false;
@@ -583,14 +648,10 @@ bool HotKey::Intercept(xcb_generic_event_t* event) {
 }
 
 void HotKey::Off() {
-  LOG << "Turning HotKey off";
-  if (auto it = std::find(system_event_hooks.begin(), system_event_hooks.end(), this);
-      it != system_event_hooks.end()) {
-    system_event_hooks.erase(it);
-  }
+  StopIntercepting(*this);
   xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
 
-  auto cookie = xcb_ungrab_key(connection, keycode, screen->root, XCB_MOD_MASK_ANY);
+  auto cookie = xcb_ungrab_key_checked(connection, keycode, screen->root, XCB_MOD_MASK_ANY);
   if (auto err = xcb_request_check(connection, cookie)) {
     FATAL << "Failed to ungrab key: " << err->error_code;
   }

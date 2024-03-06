@@ -450,7 +450,7 @@ void RenderLoop() {
           break;
         }
         default:
-          LOG << "Unhandled event: " << event->response_type;
+          LOG << "Unhandled event: " << dump_struct(*event);
           break;
       }
     } else {  // event == nullptr

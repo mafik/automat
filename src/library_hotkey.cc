@@ -11,8 +11,10 @@
 #include <xcb/xproto.h>
 
 #include <chrono>
+#include <cmath>
 #include <memory>
 
+#include "arcline.hh"
 #include "color.hh"
 #include "font.hh"
 #include "format.hh"
@@ -53,11 +55,11 @@ static constexpr float kKeyFaceRadius = 1_mm;
 static constexpr float kKeyBaseRadius = kKeyFaceRadius;
 static constexpr float kKeyFaceHeight = kKeyHeight - kKeyTopSide - kKeyBottomSide;
 
-static constexpr float kShortcutKeyWidth = kKeyHeight;
-static constexpr float kCtrlKeyWidth = kShortcutKeyWidth * 1.5;
+static constexpr float kBaseKeyWidth = kKeyHeight;
+static constexpr float kCtrlKeyWidth = kBaseKeyWidth * 1.5;
 static constexpr float kSuperKeyWidth = kCtrlKeyWidth;
 static constexpr float kAltKeyWidth = kCtrlKeyWidth;
-static constexpr float kShiftKeyWidth = kShortcutKeyWidth * 2.25;
+static constexpr float kShiftKeyWidth = kBaseKeyWidth * 2.25;
 
 static constexpr float kKeySpacing = kMargin;
 
@@ -65,11 +67,14 @@ static constexpr float kFrameWidth = kBorderWidth * 2 + kMargin;
 static constexpr float kFrameInnerRadius = kKeyBaseRadius + kKeySpacing;
 static constexpr float kFrameOuterRadius = kFrameInnerRadius + kFrameWidth;
 
-static constexpr float kTopRowWidth = kFrameWidth + kKeySpacing + kShiftKeyWidth + kKeySpacing +
-                                      kShortcutKeyWidth + kKeySpacing + kFrameWidth;
+static constexpr float kShortcutKeyWidth =
+    kCtrlKeyWidth + kSuperKeyWidth + kAltKeyWidth - kShiftKeyWidth - kMinimalTouchableSize;
+
 static constexpr float kBottomRowWidth = kFrameWidth + kKeySpacing + kCtrlKeyWidth + kKeySpacing +
                                          kSuperKeyWidth + kKeySpacing + kAltKeyWidth + kKeySpacing +
                                          kFrameWidth;
+static constexpr float kTopRowWidth = kFrameWidth + kKeySpacing + kShiftKeyWidth + kKeySpacing +
+                                      kShortcutKeyWidth + kKeySpacing + kFrameWidth;
 
 static constexpr float kWidth = std::max(kTopRowWidth, kBottomRowWidth);
 static constexpr float kHeight = kFrameWidth * 2 + kKeyHeight * 2 + kKeySpacing * 3;
@@ -95,7 +100,7 @@ struct KeyLabelWidget : Widget {
   Str label;
   float width;
 
-  KeyLabelWidget(StrView label) : label(label) { width = KeyFont().MeasureText(label); }
+  KeyLabelWidget(StrView label) { SetLabel(label); }
   SkPath Shape() const override { return SkPath::Rect(SkRect::MakeWH(width, kKeyLetterSize)); }
   void Draw(DrawContext& ctx) const override {
     SkPaint paint;
@@ -104,6 +109,10 @@ struct KeyLabelWidget : Widget {
     ctx.canvas.translate(-width / 2, -kKeyLetterSize / 2);
     KeyFont().DrawText(ctx.canvas, label, paint);
     ctx.canvas.translate(width / 2, kKeyLetterSize / 2);
+  }
+  void SetLabel(StrView label) {
+    this->label = label;
+    width = KeyFont().MeasureText(label);
   }
 };
 
@@ -305,7 +314,7 @@ HotKey::HotKey()
       alt_button(MakeKeyLabelWidget("Alt"), KeyColor(alt), kAltKeyWidth),
       shift_button(MakeKeyLabelWidget("Shift"), KeyColor(shift), kShiftKeyWidth),
       windows_button(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth),
-      shortcut_button(MakeKeyLabelWidget("F5"), KeyColor(true), kShortcutKeyWidth) {
+      shortcut_button(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth) {
   ctrl_button.activate = [this](gui::Pointer&) {
     ctrl = !ctrl;
     ctrl_button.color = KeyColor(ctrl);
@@ -322,7 +331,7 @@ HotKey::HotKey()
     windows = !windows;
     windows_button.color = KeyColor(windows);
   };
-  ((KeyLabelWidget*)shortcut_button.child.get())->label = ToStr(key);
+  ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key));
   shortcut_button.activate = [this](gui::Pointer&) {
     state = State::Recording;
     shortcut_button.color = "#f3a75b"_color;
@@ -360,35 +369,23 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   frame_outer.inset(kMargin, kMargin, &frame_inner);
   frame_inner.inset(kBorderWidth, kBorderWidth, &frame_inner2);
 
-  SkPath inner_contour;
-  inner_contour.moveTo(frame_inner2.rect().left() + kFrameInnerRadius,
-                       frame_inner2.rect().bottom());
-  inner_contour.arcTo(
-      {frame_inner2.rect().left(), frame_inner2.rect().bottom()},
-      {frame_inner2.rect().left(), frame_inner2.rect().bottom() - kFrameInnerRadius},
-      kFrameInnerRadius);
-  inner_contour.lineTo(frame_inner2.rect().left(), frame_inner2.rect().top() + kFrameInnerRadius);
-  inner_contour.arcTo({frame_inner2.rect().left(), frame_inner2.rect().top()},
-                      {frame_inner2.rect().left() + kFrameInnerRadius, frame_inner2.rect().top()},
-                      kFrameInnerRadius);
-  inner_contour.lineTo(frame_inner2.rect().right() - kFrameInnerRadius, frame_inner2.rect().top());
-  inner_contour.arcTo({frame_inner2.rect().right(), frame_inner2.rect().top()},
-                      {frame_inner2.rect().right(), frame_inner2.rect().top() + kFrameInnerRadius},
-                      kFrameInnerRadius);
-  float edge_start_y = frame_inner2.rect().top() + kKeySpacing + kKeyHeight - kKeyBaseRadius;
-  float edge_y = edge_start_y + kFrameInnerRadius;
-  inner_contour.lineTo(frame_inner2.rect().right(), edge_start_y);
-  inner_contour.arcTo({frame_inner2.rect().right(), edge_y},
-                      {frame_inner2.rect().right() - kFrameInnerRadius, edge_y}, kFrameInnerRadius);
-  float edge_x = frame_inner2.rect().right() - kMinimalTouchableSize - kKeySpacing;
-  float edge_start_x = edge_x + kMinimalTouchableSize / 2 + kKeySpacing;
-  float edge_r = kMinimalTouchableSize / 2 + kKeySpacing;
-  inner_contour.lineTo(edge_start_x, edge_y);
-  inner_contour.arcTo({edge_x, edge_y}, {edge_x, edge_y + edge_r}, edge_r);
-  float edge_r2 = frame_inner2.rect().bottom() - edge_y - edge_r;
-  inner_contour.arcTo({edge_x, frame_inner2.rect().bottom()},
-                      {edge_x - edge_r2, frame_inner2.rect().bottom()}, edge_r2);
-  inner_contour.close();
+  float start_x = frame_inner2.rect().right();
+  float start_y = frame_inner2.rect().top() + kFrameInnerRadius;
+  ArcLine inner_outline = ArcLine({start_x, start_y}, M_PI / 2);
+  inner_outline.MoveBy(kKeySpacing + kKeyHeight - kKeyBaseRadius - kFrameInnerRadius);
+  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.MoveBy(kMinimalTouchableSize / 2 - kFrameInnerRadius);
+  inner_outline.TurnBy(-M_PI / 2, kMinimalTouchableSize / 2 + kKeySpacing);
+  inner_outline.MoveBy(kMinimalTouchableSize / 2 - kFrameInnerRadius);
+  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.MoveBy(frame_inner2.width() - kFrameInnerRadius * 2 - kMinimalTouchableSize -
+                       kKeySpacing);
+  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.MoveBy(frame_inner2.height() - kFrameInnerRadius * 2);
+  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.MoveBy(frame_inner2.width() - kFrameInnerRadius * 2);
+  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  SkPath inner_contour = inner_outline.ToPath();
 
   // Draw background
   SkPaint inner_paint;
@@ -463,6 +460,11 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.restore();
 
   DrawChildren(ctx);
+
+  SkPaint test_paint;
+  test_paint.setColor("#FF0000"_color);
+  test_paint.setStyle(SkPaint::kStroke_Style);
+  test_paint.setStrokeWidth(0.25_mm);
 }
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }

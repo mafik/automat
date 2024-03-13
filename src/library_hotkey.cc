@@ -585,8 +585,6 @@ SkMatrix HotKey::TransformToChild(const Widget& child, animation::Context&) cons
 }
 
 void HotKey::On() {
-  // TODO allow the user to set the main hotkey
-
   U16 modifiers = 0;
   if (ctrl) {
     modifiers |= XCB_MOD_MASK_CONTROL;

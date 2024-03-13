@@ -15,7 +15,6 @@
 #include "math.hh"
 #include "virtual_fs.hh"
 
-
 #pragma comment(lib, "skshaper")
 #pragma comment(lib, "skunicode")
 #ifdef _WIN32
@@ -161,8 +160,7 @@ SkShaper& GetShaper() {
     fs::Copy(fs::real, "C:\\Windows\\Globalization\\ICU\\icudtl.dat", maf::fs::real,
              Path::ExecutablePath().Parent() / "icudtl.dat", status);
 #endif  // defined(_WIN32)
-    return SkShaper::MakeShapeDontWrapOrReorder(SkUnicode::MakeIcuBasedUnicode(),
-                                                SkFontMgr::RefDefault());
+    return SkShaper::MakeShapeDontWrapOrReorder(SkUnicode::MakeIcuBasedUnicode(), GetFontMgr());
   }();
   return *shaper;
 }

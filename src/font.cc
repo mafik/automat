@@ -1,11 +1,18 @@
 #include "font.hh"
 
 #include <include/core/SkData.h>
+#include <include/core/SkFontArguments.h>
 #include <include/core/SkFontMgr.h>
-#include <include/ports/SkFontMgr_data.h>
+#include <include/core/SkTypeface.h>
 #include <modules/skshaper/include/SkShaper.h>
 #include <modules/skunicode/include/SkUnicode.h>
 #include <src/base/SkUTF.h>
+
+#if defined(_WIN32)
+#include <include/ports/SkTypeface_win.h>
+#else
+#include <include/ports/SkFontMgr_empty.h>
+#endif
 
 #include <cmath>
 
@@ -29,11 +36,23 @@ constexpr static SkFourByteTag kFontWeightTag = SkSetFourByteTag('w', 'g', 'h', 
 
 static sk_sp<SkFontMgr> GetFontMgr() {
   static sk_sp<SkFontMgr> font_mgr = []() {
-    auto& ttf_content = maf::embedded::assets_NotoSans_wght__ttf.content;
-    sk_sp<SkData> data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
-    return SkFontMgr_New_Custom_Data(SkSpan<sk_sp<SkData>>(&data, 1));
+#if defined(_WIN32)
+    return SkFontMgr_New_DirectWrite();
+#else
+    return SkFontMgr_New_Custom_Empty();
+#endif
   }();
   return font_mgr;
+}
+
+static sk_sp<SkTypeface> GetFontBase() {
+  static sk_sp<SkTypeface> font_base = []() {
+    auto& ttf_content = maf::embedded::assets_NotoSans_wght__ttf.content;
+    sk_sp<SkData> data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
+    sk_sp<SkFontMgr> font_mgr = GetFontMgr();
+    return font_mgr->makeFromData(data);
+  }();
+  return font_base;
 }
 
 std::unique_ptr<Font> Font::Make(float letter_size_mm, float weight) {
@@ -44,10 +63,8 @@ std::unique_ptr<Font> Font::Make(float letter_size_mm, float weight) {
   float font_size_guess = letter_size_pt / 0.7f;  // this was determined empirically
   // Create the font using the approximate size.
   // TODO: embed & use Noto Color Emoji
-  sk_sp<SkFontMgr> font_mgr = GetFontMgr();
-  SkFontStyle style = SkFontStyle(static_cast<int>(weight), SkFontStyle::kNormal_Width,
-                                  SkFontStyle::kUpright_Slant);
-  auto typeface = font_mgr->matchFamilyStyle("Noto Sans", style);
+  auto typeface = GetFontBase();
+
   if (!typeface) {
     FATAL << "Could not find Noto Sans font.";
   }

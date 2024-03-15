@@ -403,6 +403,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       LOG << "WM_GESTURE";
       break;
     }
+    case WM_USER: {
+      std::function<void()>* f = (std::function<void()>*)lParam;
+      (*f)();
+      delete f;
+      break;
+    }
     case WM_DESTROY: {
       PostQuitMessage(0);
       break;
@@ -413,9 +419,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   return 0;
 }
 
+std::thread::id windows_thread_id;
+
+void RunOnWindowsThread(std::function<void()>&& f) {
+  if (std::this_thread::get_id() == windows_thread_id) {
+    f();
+    return;
+  }
+  PostMessage(main_window, WM_USER, 0, (LPARAM) new std::function<void()>(std::move(f)));
+}
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
   EnableBacktraceOnSIGSEGV();
   SetThreadName("WinMain");
+  windows_thread_id = std::this_thread::get_id();
 
   // Switch to UTF-8
   setlocale(LC_CTYPE, ".utf8");

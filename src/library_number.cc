@@ -63,7 +63,7 @@ void NumberButton::Draw(gui::DrawContext& ctx) const { DrawButton(ctx, 0xffc8c4b
 
 void NumberButton::Activate(gui::Pointer& pointer) {
   if (activate) {
-    if (auto l = Closest<Location>(pointer.Path())) {
+    if (auto l = Closest<Location>(pointer.path)) {
       activate(*l);
     }
   } else {
@@ -222,7 +222,7 @@ std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer& pointer, gui::Poi
   if (btn != gui::PointerButton::kMouseLeft) {
     return nullptr;
   }
-  auto& path = pointer.Path();
+  auto& path = pointer.path;
   if (path.size() < 2) {
     return nullptr;
   }

@@ -6,13 +6,14 @@
 #include <src/base/SkUTF.h>
 
 #include <memory>
-#include <numeric>
 #include <optional>
 
 #include "font.hh"
+#include "format.hh"
 #include "gui_connection_widget.hh"
-#include "log.hh"
-#include "root.hh"
+#include "location.hh"
+
+using namespace maf;
 
 namespace automat::gui {
 
@@ -173,7 +174,7 @@ struct TextSelectAction : Action {
 
   void Begin(Pointer& pointer) override {
     if (text_field.argument.has_value()) {
-      auto pointer_path = pointer.Path();
+      auto pointer_path = pointer.path;
       for (int i = pointer_path.size() - 1; i >= 0; --i) {
         if (auto location = dynamic_cast<Location*>(pointer_path[i])) {
           drag.emplace(*location, **text_field.argument);
@@ -186,7 +187,7 @@ struct TextSelectAction : Action {
     Vec2 local = pointer.PositionWithin(text_field);
     int index = text_field.IndexFromPosition(local.x);
     Vec2 pos = text_field.PositionFromIndex(index);
-    caret = &text_field.RequestCaret(pointer.Keyboard(), pointer.Path(), pos);
+    caret = &pointer.keyboard->RequestCaret(text_field, pointer.path, pos);
     text_field.caret_positions[caret] = {.index = index};
   }
   void Update(Pointer& pointer) override { UpdateCaretFromPointer(pointer); }

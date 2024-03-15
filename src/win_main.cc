@@ -70,7 +70,6 @@ Vec2 ScreenToWindow(Vec2 screen) {
 
 std::unique_ptr<gui::Window> window;
 std::unique_ptr<gui::Pointer> mouse;
-std::unique_ptr<gui::Keyboard> keyboard;
 
 gui::Pointer& GetMouse() {
   if (!mouse) {
@@ -294,8 +293,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         key.text = std::string(utf8_buffer.data(), utf8_len);
       }
 
-      if (keyboard) {
-        keyboard->KeyDown(key);
+      if (gui::keyboard) {
+        gui::keyboard->KeyDown(key);
       }
       break;
     }
@@ -313,8 +312,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       key.physical = ScanCodeToKey(scan_code);
       key.logical = VirtualKeyToKey(virtual_key);
 
-      if (keyboard) {
-        keyboard->KeyUp(key);
+      if (gui::keyboard) {
+        gui::keyboard->KeyUp(key);
       }
       break;
     }
@@ -342,13 +341,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         utf8_i = 0;
       }
       if (utf8_complete) {
-        if (keyboard) {
+        if (gui::keyboard) {
           gui::Key key;
           key.physical = ScanCodeToKey(scan_code);
           key.logical = gui::AnsiKey::Unknown;
           key.text = std::string(utf8_buffer, utf8_i);
-          keyboard->KeyDown(key);
-          keyboard->KeyUp(key);
+          gui::keyboard->KeyDown(key);
+          gui::keyboard->KeyUp(key);
         }
         utf8_i = 0;
       }
@@ -455,7 +454,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   window_width = rect.right - rect.left;
   window_height = rect.bottom - rect.top;
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
-  keyboard = std::make_unique<gui::Keyboard>(*window);
+  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
   ResizeVulkan();
   RenderingStart();
 

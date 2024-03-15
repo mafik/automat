@@ -175,7 +175,7 @@ std::unique_ptr<Action> MouseClick::ButtonDownAction(gui::Pointer& pointer,
   if (btn != gui::PointerButton::kMouseLeft) {
     return nullptr;
   }
-  auto& path = pointer.Path();
+  auto& path = pointer.path;
   if (path.size() < 2) {
     return nullptr;
   }

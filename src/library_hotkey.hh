@@ -5,10 +5,6 @@
 #include "base.hh"
 #include "keyboard.hh"
 
-#if defined(__linux__)
-#include "linux_main.hh"
-#endif
-
 namespace automat::library {
 
 struct OnOff {
@@ -19,8 +15,8 @@ struct OnOff {
     on = !on;
     on ? On() : Off();
   }
-  virtual void On() {};
-  virtual void Off() {};
+  virtual void On(){};
+  virtual void Off(){};
 };
 
 struct PowerButton : gui::ToggleButton {
@@ -39,7 +35,7 @@ struct KeyButton : gui::Button {
   void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg) const override;
 };
 
-struct HotKey : Object, OnOff, SystemEventHook {
+struct HotKey : Object, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   static const HotKey proto;
 
   gui::AnsiKey key = gui::AnsiKey::F11;
@@ -57,7 +53,8 @@ struct HotKey : Object, OnOff, SystemEventHook {
   KeyButton windows_button;
   mutable KeyButton shortcut_button;
 
-  bool recording = false;
+  gui::KeyboardGrab* recording = nullptr;
+  gui::KeyGrab* hotkey = nullptr;
 
   HotKey();
   string_view Name() const override;
@@ -70,7 +67,15 @@ struct HotKey : Object, OnOff, SystemEventHook {
 
   void On() override;
   void Off() override;
-  bool Intercept(xcb_generic_event_t*) override;
+
+  void ReleaseGrab(gui::KeyboardGrab&) override;
+  void ReleaseKeyGrab(gui::KeyGrab&) override;
+  Widget* GrabWidget() override { return this; }
+
+  void KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key) override;
+
+  void KeyGrabberKeyDown(gui::KeyGrab&, gui::Key) override;
+  void KeyGrabberKeyUp(gui::KeyGrab&, gui::Key) override;
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
 

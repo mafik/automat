@@ -54,7 +54,6 @@ std::optional<VerticalScroll> vertical_scroll;
 
 std::unique_ptr<gui::Window> window;
 std::unique_ptr<gui::Pointer> mouse;
-std::unique_ptr<gui::Keyboard> keyboard;
 
 float DisplayPxPerMeter() {
   return 1000.0f * screen->width_in_pixels / screen->width_in_millimeters;

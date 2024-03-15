@@ -68,7 +68,7 @@ bool CanConnect(Location& from, Location& to, Argument& arg) {
 }
 
 void DragConnectionAction::Begin(gui::Pointer& pointer) {
-  const Path& path = pointer.Path();
+  const Path& path = pointer.path;
   for (int i = path.size() - 1; i >= 0; --i) {
     if (auto m = dynamic_cast<Machine*>(path[i])) {
       current_position = pointer.PositionWithin(*m);
@@ -89,7 +89,7 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
 }
 
 void DragConnectionAction::Update(gui::Pointer& pointer) {
-  const Path& path = pointer.Path();
+  const Path& path = pointer.path;
   for (int i = path.size() - 1; i >= 0; --i) {
     if (auto m = dynamic_cast<Machine*>(path[i])) {
       current_position = pointer.PositionWithin(*m);

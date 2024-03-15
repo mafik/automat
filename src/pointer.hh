@@ -1,9 +1,10 @@
 #pragma once
 
-#include <memory>
 #include <vector>
 
+#include "action.hh"
 #include "math.hh"
+#include "time.hh"
 
 namespace automat::animation {
 struct Context;
@@ -15,6 +16,7 @@ struct Keyboard;
 struct PointerImpl;
 struct Widget;
 struct Window;
+struct DrawContext;
 
 using Path = std::vector<Widget*>;
 
@@ -38,23 +40,31 @@ struct Pointer final {
   void ButtonDown(PointerButton);
   void ButtonUp(PointerButton);
 
+  void Draw(DrawContext& ctx);
+
   enum IconType { kIconArrow, kIconHand, kIconIBeam };
 
   IconType Icon() const;
   void PushIcon(IconType);
   void PopIcon();
 
-  const Path& Path() const;
   Vec2 PositionWithin(Widget&) const;
   Vec2 PositionWithinRootMachine() const;
 
-  Keyboard& Keyboard();
-
   animation::Context& AnimationContext() const;
 
- private:
-  std::unique_ptr<PointerImpl> impl;
-  friend struct Window;
+  Window& window;
+  // The main keyboard associated with this pointer device. May be null!
+  Keyboard* keyboard;
+
+  Vec2 pointer_position;
+  std::vector<Pointer::IconType> icons;
+
+  Vec2 button_down_position[kButtonCount];
+  time::point button_down_time[kButtonCount];
+
+  std::unique_ptr<Action> action;
+  Path path;
 };
 
 }  // namespace automat::gui

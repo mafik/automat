@@ -6,9 +6,6 @@
 #include <include/core/SkShader.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
-#include <xcb/xcb.h>
-#include <xcb/xinput.h>
-#include <xcb/xproto.h>
 
 #include <chrono>
 #include <cmath>
@@ -17,17 +14,20 @@
 #include "arcline.hh"
 #include "color.hh"
 #include "font.hh"
-#include "format.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "library_macros.hh"
 #include "math.hh"
 #include "svg.hh"
 #include "text_field.hh"
-#include "x11.hh"
 
 #if defined(__linux__)
+#include <xcb/xcb.h>
+#include <xcb/xinput.h>
+#include <xcb/xproto.h>
+
 #include "linux_main.hh"
+#include "x11.hh"
 #endif
 
 using namespace automat::gui;
@@ -308,34 +308,26 @@ vec4 main(in vec2 fragCoord) {
   return paint;
 }
 
-static void BeginIntercepting(HotKey& hotkey) { system_event_hooks.push_back(&hotkey); }
+// static void GrabEverything(HotKey& hotkey) {
+//   for (auto keycode : x11::kKeyCodesArray) {
+//     auto cookie =
+//         xcb_grab_key_checked(connection, 0, screen->root, XCB_MOD_MASK_ANY,
+//         (xcb_keycode_t)keycode,
+//                              XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+//     if (auto err = xcb_request_check(connection, cookie)) {
+//       LOG << "Failed to grab key: " << ToStr(x11::X11KeyCodeToKey(keycode)) << " (keycode "
+//           << (int)keycode << "): " << err->error_code;
+//     }
+//   }
+//   BeginIntercepting(hotkey);
+// }
 
-static void StopIntercepting(HotKey& hotkey) {
-  if (auto it = std::find(system_event_hooks.begin(), system_event_hooks.end(), &hotkey);
-      it != system_event_hooks.end()) {
-    system_event_hooks.erase(it);
-  }
-}
-
-static void GrabEverything(HotKey& hotkey) {
-  for (auto keycode : x11::kKeyCodesArray) {
-    auto cookie =
-        xcb_grab_key_checked(connection, 0, screen->root, XCB_MOD_MASK_ANY, (xcb_keycode_t)keycode,
-                             XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
-    if (auto err = xcb_request_check(connection, cookie)) {
-      LOG << "Failed to grab key: " << ToStr(x11::X11KeyCodeToKey(keycode)) << " (keycode "
-          << (int)keycode << "): " << err->error_code;
-    }
-  }
-  BeginIntercepting(hotkey);
-}
-
-static void UngrabEverything(HotKey& hotkey) {
-  auto cookie = xcb_ungrab_key_checked(connection, XCB_GRAB_ANY, screen->root, XCB_MOD_MASK_ANY);
-  if (auto err = xcb_request_check(connection, cookie)) {
-    FATAL << "Failed to ungrab key: " << err->error_code;
-  }
-}
+// static void UngrabEverything(HotKey& hotkey) {
+//   auto cookie = xcb_ungrab_key_checked(connection, XCB_GRAB_ANY, screen->root, XCB_MOD_MASK_ANY);
+//   if (auto err = xcb_request_check(connection, cookie)) {
+//     FATAL << "Failed to ungrab key: " << err->error_code;
+//   }
+// }
 
 HotKey::HotKey()
     : power_button(this),
@@ -385,13 +377,11 @@ HotKey::HotKey()
     windows_button.color = KeyColor(windows);
   };
   ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key));
-  shortcut_button.activate = [this](gui::Pointer&) {
+  shortcut_button.activate = [this](gui::Pointer& pointer) {
     if (recording) {
-      recording = false;
-      UngrabEverything(*this);
+      recording->Release();
     } else {
-      GrabEverything(*this);
-      recording = true;
+      recording = &pointer.keyboard->RequestGrab(*this);
     }
   };
 }
@@ -585,79 +575,74 @@ SkMatrix HotKey::TransformToChild(const Widget& child, animation::Context&) cons
 }
 
 void HotKey::On() {
-  U16 modifiers = 0;
-  if (ctrl) {
-    modifiers |= XCB_MOD_MASK_CONTROL;
+  if (hotkey) {  // just a sanity check, we should never get On multiple times in a row
+    hotkey->Release();
   }
-  if (alt) {
-    modifiers |= XCB_MOD_MASK_1;
-  }
-  if (shift) {
-    modifiers |= XCB_MOD_MASK_SHIFT;
-  }
-  if (windows) {
-    modifiers |= XCB_MOD_MASK_4;
-  }
-  xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
+  hotkey = &gui::keyboard->RequestKeyGrab(*this, key, ctrl, alt, shift, windows);
+  // U16 modifiers = 0;
+  // if (ctrl) {
+  //   modifiers |= XCB_MOD_MASK_CONTROL;
+  // }
+  // if (alt) {
+  //   modifiers |= XCB_MOD_MASK_1;
+  // }
+  // if (shift) {
+  //   modifiers |= XCB_MOD_MASK_SHIFT;
+  // }
+  // if (windows) {
+  //   modifiers |= XCB_MOD_MASK_4;
+  // }
+  // xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
 
-  for (bool caps_lock : {true, false}) {
-    for (bool num_lock : {true, false}) {
-      for (bool scroll_lock : {true, false}) {
-        for (bool level3shift : {true, false}) {
-          modifiers =
-              caps_lock ? (modifiers | XCB_MOD_MASK_LOCK) : (modifiers & ~XCB_MOD_MASK_LOCK);
-          modifiers = num_lock ? (modifiers | XCB_MOD_MASK_2) : (modifiers & ~XCB_MOD_MASK_2);
-          modifiers = scroll_lock ? (modifiers | XCB_MOD_MASK_5) : (modifiers & ~XCB_MOD_MASK_5);
-          modifiers = level3shift ? (modifiers | XCB_MOD_MASK_3) : (modifiers & ~XCB_MOD_MASK_3);
-          auto cookie = xcb_grab_key(connection, 0, screen->root, modifiers, keycode,
-                                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
-          if (auto err = xcb_request_check(connection, cookie)) {
-            FATAL << "Failed to grab key: " << err->error_code;
-          }
-        }
-      }
-    }
-  }
-
-  BeginIntercepting(*this);
+  // for (bool caps_lock : {true, false}) {
+  //   for (bool num_lock : {true, false}) {
+  //     for (bool scroll_lock : {true, false}) {
+  //       for (bool level3shift : {true, false}) {
+  //         modifiers =
+  //             caps_lock ? (modifiers | XCB_MOD_MASK_LOCK) : (modifiers & ~XCB_MOD_MASK_LOCK);
+  //         modifiers = num_lock ? (modifiers | XCB_MOD_MASK_2) : (modifiers & ~XCB_MOD_MASK_2);
+  //         modifiers = scroll_lock ? (modifiers | XCB_MOD_MASK_5) : (modifiers & ~XCB_MOD_MASK_5);
+  //         modifiers = level3shift ? (modifiers | XCB_MOD_MASK_3) : (modifiers & ~XCB_MOD_MASK_3);
+  //         auto cookie = xcb_grab_key(connection, 0, screen->root, modifiers, keycode,
+  //                                    XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+  //         if (auto err = xcb_request_check(connection, cookie)) {
+  //           FATAL << "Failed to grab key: " << err->error_code;
+  //         }
+  //       }
+  //     }
+  //   }
+  // }
 }
 
-bool HotKey::Intercept(xcb_generic_event_t* event) {
-  if (event->response_type != XCB_KEY_PRESS && event->response_type != XCB_KEY_RELEASE) {
-    return false;
+void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
+  recording->Release();
+  LOG << "Setting new hotkey " << (int)key.physical << ": " << ToStr(key.physical);
+  ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key.physical));
+  if (on) {
+    On();
   }
-  xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
-  if (recording) {
-    if (event->response_type == XCB_KEY_PRESS) {
-      UngrabEverything(*this);
-      recording = false;
-      key = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail);
-      LOG << "Setting new hotkey. X11 returned " << ev->detail << " which is internally "
-          << (int)key << ": " << ToStr(key);
-      ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key));
-      if (on) {
-        On();
-      }
-    }
-    return true;
-  }
-  xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
-  if (ev->detail != keycode) {
-    return false;
-  }
-  // TODO ignore repeated events
-  LOG << (event->response_type == XCB_KEY_PRESS ? "Hotkey press" : "Hotey release");
-  return true;
 }
+
+void HotKey::KeyGrabberKeyDown(gui::KeyGrab&, gui::Key) { LOG << "Hotkey press"; }
+void HotKey::KeyGrabberKeyUp(gui::KeyGrab&, gui::Key) { LOG << "Hotkey release"; }
 
 void HotKey::Off() {
-  StopIntercepting(*this);
-  xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
-
-  auto cookie = xcb_ungrab_key_checked(connection, keycode, screen->root, XCB_MOD_MASK_ANY);
-  if (auto err = xcb_request_check(connection, cookie)) {
-    FATAL << "Failed to ungrab key: " << err->error_code;
+  // TODO: think about what happens if the recording starts or stops while the hotkey is active &
+  // vice versa
+  if (hotkey) {
+    hotkey->Release();
   }
+
+  // StopIntercepting(*this);
+  // xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
+
+  // auto cookie = xcb_ungrab_key_checked(connection, keycode, screen->root, XCB_MOD_MASK_ANY);
+  // if (auto err = xcb_request_check(connection, cookie)) {
+  //   FATAL << "Failed to ungrab key: " << err->error_code;
+  // }
 }
+
+void HotKey::ReleaseGrab(gui::KeyboardGrab&) { recording = nullptr; }
+void HotKey::ReleaseKeyGrab(gui::KeyGrab&) { hotkey = nullptr; }
 
 }  // namespace automat::library

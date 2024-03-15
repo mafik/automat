@@ -1,6 +1,7 @@
 #include "win_key.hh"
 
 #include <windows.h>
+#include <winuser.h>
 
 #include "format.hh"
 #include "log.hh"
@@ -633,4 +634,224 @@ AnsiKey VirtualKeyToKey(uint8_t virtual_key) {
       LOG << "Unknown virtual key: 0x" << f("%x", virtual_key) << " (" << virtual_key << ")";
   }
   return Unknown;
+}
+
+uint8_t KeyToVirtualKey(automat::gui::AnsiKey key) {
+  using enum AnsiKey;
+  switch (key) {
+    case Escape:
+      return VK_ESCAPE;
+    case F1:
+      return VK_F1;
+    case F2:
+      return VK_F2;
+    case F3:
+      return VK_F3;
+    case F4:
+      return VK_F4;
+    case F5:
+      return VK_F5;
+    case F6:
+      return VK_F6;
+    case F7:
+      return VK_F7;
+    case F8:
+      return VK_F8;
+    case F9:
+      return VK_F9;
+    case F10:
+      return VK_F10;
+    case F11:
+      return VK_F11;
+    case F12:
+      return VK_F12;
+    case PrintScreen:  // fallthrough
+      return VK_PRINT;
+      // return VK_SNAPSHOT; // what is that!?
+    case ScrollLock:
+      return VK_SCROLL;
+    case Pause:
+      return VK_PAUSE;
+    case Insert:
+      return VK_INSERT;
+    case Delete:
+      return VK_DELETE;
+    case Home:
+      return VK_HOME;
+    case End:
+      return VK_END;
+    case PageUp:
+      return VK_PRIOR;
+    case PageDown:
+      return VK_NEXT;
+    case Up:
+      return VK_UP;
+    case Down:
+      return VK_DOWN;
+    case Left:
+      return VK_LEFT;
+    case Right:
+      return VK_RIGHT;
+    case NumLock:
+      return VK_NUMLOCK;
+    case NumpadDivide:
+      return VK_DIVIDE;
+    case NumpadMultiply:
+      return VK_MULTIPLY;
+    case NumpadMinus:
+      return VK_SUBTRACT;
+    case NumpadPlus:
+      return VK_ADD;
+    // case VK_RETURN:
+    //   return NumpadEnter;
+    case NumpadPeriod:
+      return VK_DECIMAL;
+    case Numpad0:
+      return VK_NUMPAD0;
+    case Numpad1:
+      return VK_NUMPAD1;
+    case Numpad2:
+      return VK_NUMPAD2;
+    case Numpad3:
+      return VK_NUMPAD3;
+    case Numpad4:
+      return VK_NUMPAD4;
+    case Numpad5:
+      return VK_NUMPAD5;
+    case Numpad6:
+      return VK_NUMPAD6;
+    case Numpad7:
+      return VK_NUMPAD7;
+    case Numpad8:
+      return VK_NUMPAD8;
+    case Numpad9:
+      return VK_NUMPAD9;
+    case Grave:
+      return VK_OEM_3;
+    case Digit1:
+      return '1';
+    case Digit2:
+      return '2';
+    case Digit3:
+      return '3';
+    case Digit4:
+      return '4';
+    case Digit5:
+      return '5';
+    case Digit6:
+      return '6';
+    case Digit7:
+      return '7';
+    case Digit8:
+      return '8';
+    case Digit9:
+      return '9';
+    case Digit0:
+      return '0';
+    case Minus:
+      return VK_OEM_MINUS;
+    case Equals:
+      return VK_OEM_8;
+    case Backspace:
+      return VK_BACK;
+    case Tab:
+      return VK_TAB;
+    case Q:
+      return 'Q';
+    case W:
+      return 'W';
+    case E:
+      return 'E';
+    case R:
+      return 'R';
+    case T:
+      return 'T';
+    case Y:
+      return 'Y';
+    case U:
+      return 'U';
+    case I:
+      return 'I';
+    case O:
+      return 'O';
+    case P:
+      return 'P';
+    case BracketLeft:
+      return VK_OEM_4;
+    case BracketRight:
+      return VK_OEM_6;
+    case Backslash:
+      return VK_OEM_5;
+    case CapsLock:
+      return VK_CAPITAL;
+    case A:
+      return 'A';
+    case S:
+      return 'S';
+    case D:
+      return 'D';
+    case F:
+      return 'F';
+    case G:
+      return 'G';
+    case H:
+      return 'H';
+    case J:
+      return 'J';
+    case K:
+      return 'K';
+    case L:
+      return 'L';
+    case Semicolon:
+      return VK_OEM_1;
+    case Apostrophe:
+      return VK_OEM_7;
+    case Enter:
+      return VK_RETURN;
+    case ShiftLeft:
+      return VK_LSHIFT;
+    case Z:
+      return 'Z';
+    case X:
+      return 'X';
+    case C:
+      return 'C';
+    case V:
+      return 'V';
+    case B:
+      return 'B';
+    case N:
+      return 'N';
+    case M:
+      return 'M';
+    case Comma:
+      return VK_OEM_COMMA;
+    case Period:
+      return VK_OEM_PERIOD;
+    case Slash:
+      return VK_OEM_2;
+    case ShiftRight:
+      return VK_RSHIFT;
+    case ControlLeft:
+      return VK_LCONTROL;
+    case SuperLeft:
+      return VK_LWIN;
+    case AltLeft:
+      return VK_LMENU;
+    case Space:
+      return VK_SPACE;
+    case AltRight:
+      return VK_RMENU;
+    case SuperRight:
+      return VK_RWIN;
+    case Application:
+      return VK_APPS;
+    case ControlRight:
+      return VK_RCONTROL;
+    case Unknown:
+      return 0xff;
+    default:
+      LOG << "Unknown key: " << ToStr(key) << " (" << (int)key << ")";
+  }
+  return 0xff;
 }

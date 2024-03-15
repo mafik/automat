@@ -6,6 +6,14 @@
 #include "font.hh"
 #include "window.hh"
 
+#if defined(_WIN32)
+#include <Windows.h>
+
+#include "win.hh"
+#include "win_key.hh"
+#include "win_main.hh"
+#endif
+
 using namespace maf;
 
 namespace automat::gui {
@@ -71,10 +79,78 @@ KeyboardGrab& Keyboard::RequestGrab(KeyboardGrabber& grabber) {
 }
 
 KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctrl, bool alt,
-                                  bool shift, bool windows) {
+                                  bool shift, bool windows, maf::Fn<void(maf::Status&)> cb) {
   auto key_grab = std::make_unique<KeyGrab>(*this, key_grabber, key, ctrl, alt, shift, windows);
+#if defined(_WIN32)
+  // See https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey
+  static int id_counter = 0;
+  id_counter = (id_counter + 1) % 0xC000;
+  key_grab->id = id_counter;
+  U32 modifiers = MOD_NOREPEAT;
+  if (ctrl) {
+    modifiers |= MOD_CONTROL;
+  }
+  if (alt) {
+    modifiers |= MOD_ALT;
+  }
+  if (shift) {
+    modifiers |= MOD_SHIFT;
+  }
+  if (windows) {
+    modifiers |= MOD_WIN;
+  }
+  U8 vk = KeyToVirtualKey(key);
+  key_grab->cb = new KeyGrab::RegistrationCallback(key_grab.get(), std::move(cb));
+  RunOnWindowsThread([id = key_grab->id, modifiers, vk, cb = key_grab->cb]() {
+    bool success = RegisterHotKey(main_window, id, modifiers, vk);
+    if (!success) {
+      AppendErrorMessage(cb->status) = "Failed to register hotkey: " + GetLastErrorStr();
+    }
+    RunOnAutomatThread([cb]() {
+      if (cb->grab) {
+        cb->grab->cb = nullptr;
+        cb->fn(cb->status);
+      }
+      delete cb;
+    });
+  });
+#else
+  U16 modifiers = 0;
+  if (ctrl) {
+    modifiers |= XCB_MOD_MASK_CONTROL;
+  }
+  if (alt) {
+    modifiers |= XCB_MOD_MASK_1;
+  }
+  if (shift) {
+    modifiers |= XCB_MOD_MASK_SHIFT;
+  }
+  if (windows) {
+    modifiers |= XCB_MOD_MASK_4;
+  }
+  xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
+
+  for (bool caps_lock : {true, false}) {
+    for (bool num_lock : {true, false}) {
+      for (bool scroll_lock : {true, false}) {
+        for (bool level3shift : {true, false}) {
+          modifiers =
+              caps_lock ? (modifiers | XCB_MOD_MASK_LOCK) : (modifiers & ~XCB_MOD_MASK_LOCK);
+          modifiers = num_lock ? (modifiers | XCB_MOD_MASK_2) : (modifiers & ~XCB_MOD_MASK_2);
+          modifiers = scroll_lock ? (modifiers | XCB_MOD_MASK_5) : (modifiers & ~XCB_MOD_MASK_5);
+          modifiers = level3shift ? (modifiers | XCB_MOD_MASK_3) : (modifiers & ~XCB_MOD_MASK_3);
+          auto cookie = xcb_grab_key(connection, 0, screen->root, modifiers, keycode,
+                                     XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
+          if (auto err = xcb_request_check(connection, cookie)) {
+            FATAL << "Failed to grab key: " << err->error_code;
+          }
+        }
+      }
+    }
+  }
+#endif
   key_grabs.emplace_back(std::move(key_grab));
-  return *key_grabs.back();
+  return *key_grabs.back().get();
 }
 
 enum class CaretAnimAction { Keep, Delete };
@@ -484,7 +560,35 @@ Keyboard::~Keyboard() {
 
 void KeyboardGrab::Release() {
   grabber.ReleaseGrab(*this);
-  keyboard.grab.reset();
+  keyboard.grab.reset();  // KeyboardGrab deletes itself here!
 }
 
+void KeyGrab::Release() {
+#if defined(_WIN32)
+  if (cb) {
+    cb->grab = nullptr;
+    cb = nullptr;
+  }
+  RunOnWindowsThread([id = id]() {
+    bool success = UnregisterHotKey(main_window, id);
+    if (!success) {
+      ERROR << GetLastErrorStr();
+    }
+  });
+#else
+  xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
+
+  auto cookie = xcb_ungrab_key_checked(connection, keycode, screen->root, XCB_MOD_MASK_ANY);
+  if (auto err = xcb_request_check(connection, cookie)) {
+    FATAL << "Failed to ungrab key: " << err->error_code;
+  }
+#endif
+  grabber.ReleaseKeyGrab(*this);
+  for (auto it = keyboard.key_grabs.begin(); it != keyboard.key_grabs.end(); ++it) {
+    if (it->get() == this) {
+      keyboard.key_grabs.erase(it);  // KeyGrab deletes itself here!
+      break;
+    }
+  }
+}
 }  // namespace automat::gui

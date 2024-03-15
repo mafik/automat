@@ -10,7 +10,9 @@
 #include <vector>
 
 #include "animation.hh"
+#include "fn.hh"
 #include "math.hh"
+#include "status.hh"
 #include "str.hh"
 #include "time.hh"
 
@@ -216,10 +218,25 @@ struct KeyGrab {
   Keyboard& keyboard;
   KeyGrabber& grabber;
   AnsiKey key;  // physical
-  bool ctrl;
-  bool alt;
-  bool shift;
-  bool windows;
+  bool ctrl : 1;
+  bool alt : 1;
+  bool shift : 1;
+  bool windows : 1;
+#if defined(_WIN32)
+
+  int id;  // value from the `RegisterHotKey` Win32 API
+
+  // RegisterHotKey can only be called from the main windows thread.
+  // This structure allows us to safely call it and return its status code.
+  struct RegistrationCallback {
+    KeyGrab* grab;                   // if null, the grab is cancelled, only used on Automat thread
+    maf::Fn<void(maf::Status&)> fn;  // Windows thread schedules this on Automat thread
+    maf::Status status;              // set on Windows thread, read on Automat thread
+    RegistrationCallback(KeyGrab* grab, maf::Fn<void(maf::Status&)>&& fn) : grab(grab), fn(fn) {}
+  };
+
+  RegistrationCallback* cb = nullptr;  // only used on Automat thread
+#endif
   KeyGrab(Keyboard& keyboard, KeyGrabber& grabber, AnsiKey key, bool ctrl, bool alt, bool shift,
           bool windows)
       : keyboard(keyboard),
@@ -229,7 +246,7 @@ struct KeyGrab {
         alt(alt),
         shift(shift),
         windows(windows) {}
-  void Release() { grabber.ReleaseKeyGrab(*this); }
+  void Release();
 };
 
 struct CaretAnimation {
@@ -272,7 +289,11 @@ struct Keyboard final {
   KeyboardGrab& RequestGrab(KeyboardGrabber&);
 
   // Called by a KeyGrabber that wants to grab a key even when Automat is in the background.
-  KeyGrab& RequestKeyGrab(KeyGrabber&, AnsiKey key, bool ctrl, bool alt, bool shift, bool windows);
+  //
+  // Callback is called with a Status object that contains the result of the grab request. It may be
+  // called later, (after this function returns) depending on the OS load.
+  KeyGrab& RequestKeyGrab(KeyGrabber&, AnsiKey key, bool ctrl, bool alt, bool shift, bool windows,
+                          maf::Fn<void(maf::Status&)> cb);
 
   // Called by Automat drawing logic to draw the keyboard carets & other keyboard related visuals.
   void Draw(DrawContext&) const;

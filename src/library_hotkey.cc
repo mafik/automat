@@ -578,40 +578,12 @@ void HotKey::On() {
   if (hotkey) {  // just a sanity check, we should never get On multiple times in a row
     hotkey->Release();
   }
-  hotkey = &gui::keyboard->RequestKeyGrab(*this, key, ctrl, alt, shift, windows);
-  // U16 modifiers = 0;
-  // if (ctrl) {
-  //   modifiers |= XCB_MOD_MASK_CONTROL;
-  // }
-  // if (alt) {
-  //   modifiers |= XCB_MOD_MASK_1;
-  // }
-  // if (shift) {
-  //   modifiers |= XCB_MOD_MASK_SHIFT;
-  // }
-  // if (windows) {
-  //   modifiers |= XCB_MOD_MASK_4;
-  // }
-  // xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
-
-  // for (bool caps_lock : {true, false}) {
-  //   for (bool num_lock : {true, false}) {
-  //     for (bool scroll_lock : {true, false}) {
-  //       for (bool level3shift : {true, false}) {
-  //         modifiers =
-  //             caps_lock ? (modifiers | XCB_MOD_MASK_LOCK) : (modifiers & ~XCB_MOD_MASK_LOCK);
-  //         modifiers = num_lock ? (modifiers | XCB_MOD_MASK_2) : (modifiers & ~XCB_MOD_MASK_2);
-  //         modifiers = scroll_lock ? (modifiers | XCB_MOD_MASK_5) : (modifiers & ~XCB_MOD_MASK_5);
-  //         modifiers = level3shift ? (modifiers | XCB_MOD_MASK_3) : (modifiers & ~XCB_MOD_MASK_3);
-  //         auto cookie = xcb_grab_key(connection, 0, screen->root, modifiers, keycode,
-  //                                    XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
-  //         if (auto err = xcb_request_check(connection, cookie)) {
-  //           FATAL << "Failed to grab key: " << err->error_code;
-  //         }
-  //       }
-  //     }
-  //   }
-  // }
+  hotkey =
+      &gui::keyboard->RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [](Status& status) {
+        if (!OK(status)) {
+          ERROR << status;
+        }
+      });
 }
 
 void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
@@ -632,14 +604,6 @@ void HotKey::Off() {
   if (hotkey) {
     hotkey->Release();
   }
-
-  // StopIntercepting(*this);
-  // xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
-
-  // auto cookie = xcb_ungrab_key_checked(connection, keycode, screen->root, XCB_MOD_MASK_ANY);
-  // if (auto err = xcb_request_check(connection, cookie)) {
-  //   FATAL << "Failed to ungrab key: " << err->error_code;
-  // }
 }
 
 void HotKey::ReleaseGrab(gui::KeyboardGrab&) { recording = nullptr; }

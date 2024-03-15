@@ -34,4 +34,16 @@ HWND CreateAutomatWindow() {
                         nullptr);
 }
 
+maf::Str GetLastErrorStr() {
+  DWORD error = GetLastError();
+  if (error == 0) return "No error";
+  LPSTR messageBuffer = nullptr;
+  size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+                                   FORMAT_MESSAGE_IGNORE_INSERTS,
+                               nullptr, error, 0, (LPSTR)&messageBuffer, 0, nullptr);
+  maf::Str message(messageBuffer, size);
+  LocalFree(messageBuffer);
+  return message;
+}
+
 }  // namespace automat

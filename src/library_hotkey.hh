@@ -8,22 +8,25 @@
 namespace automat::library {
 
 struct OnOff {
-  bool on;
   virtual ~OnOff() = default;
 
-  virtual void Toggle() {
-    on = !on;
-    on ? On() : Off();
+  virtual bool IsOn() const = 0;
+  virtual void On() = 0;
+  virtual void Off() = 0;
+
+  void Toggle() {
+    if (IsOn())
+      Off();
+    else
+      On();
   }
-  virtual void On(){};
-  virtual void Off(){};
 };
 
 struct PowerButton : gui::ToggleButton {
   OnOff* target;
   PowerButton(OnOff* target);
   void Activate(gui::Pointer&) override { target->Toggle(); }
-  bool Filled() const override { return target->on; }
+  bool Filled() const override { return target->IsOn(); }
 };
 
 struct KeyButton : gui::Button {
@@ -53,7 +56,10 @@ struct HotKey : Object, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   KeyButton windows_button;
   mutable KeyButton shortcut_button;
 
-  gui::KeyboardGrab* recording = nullptr;
+  // This is used to select the main hotkey
+  gui::KeyboardGrab* hotkey_selector = nullptr;
+
+  // This is used to get hotkey events
   gui::KeyGrab* hotkey = nullptr;
 
   HotKey();
@@ -65,6 +71,7 @@ struct HotKey : Object, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   void Args(std::function<void(Argument&)> cb) override;
   void Run(Location&) override;
 
+  bool IsOn() const override;
   void On() override;
   void Off() override;
 
@@ -74,8 +81,8 @@ struct HotKey : Object, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
 
   void KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key) override;
 
-  void KeyGrabberKeyDown(gui::KeyGrab&, gui::Key) override;
-  void KeyGrabberKeyUp(gui::KeyGrab&, gui::Key) override;
+  void KeyGrabberKeyDown(gui::KeyGrab&) override;
+  void KeyGrabberKeyUp(gui::KeyGrab&) override;
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
 

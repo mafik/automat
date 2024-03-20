@@ -99,6 +99,8 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
   if (windows) {
     modifiers |= MOD_WIN;
   }
+  LOG << "Trying to grab key (AnsiKey) " << ToStr(key) << " (" << (int)key << ")";
+  // Find out what VK code is mapped on the given AnsiKey (scan code).
   U8 vk = KeyToVirtualKey(key);
   key_grab->cb = new KeyGrab::RegistrationCallback(key_grab.get(), std::move(cb));
   RunOnWindowsThread([id = key_grab->id, modifiers, vk, cb = key_grab->cb]() {
@@ -557,6 +559,25 @@ Keyboard::~Keyboard() {
     window.keyboards.erase(it);
   }
 }
+
+#if defined(_WIN32)
+
+void OnHotKeyDown(int id) {
+  bool handled = false;
+  for (auto& key_grab : keyboard->key_grabs) {
+    if (key_grab->id == id) {
+      key_grab->grabber.KeyGrabberKeyDown(*key_grab);
+      key_grab->grabber.KeyGrabberKeyUp(*key_grab);
+      handled = true;
+      break;
+    }
+  }
+  if (!handled) {
+    ERROR << "Hotkey " << id << " not found";
+  }
+}
+
+#endif
 
 void KeyboardGrab::Release() {
   grabber.ReleaseGrab(*this);

@@ -192,12 +192,22 @@ struct KeyboardGrabber {
   virtual void KeyboardGrabberKeyUp(KeyboardGrab&, Key) {}
 };
 
+#if defined(_WIN32)
+
+// This function should be called by the main windows thread, when a WM_HOTKEY message is received.
+void OnHotKeyDown(int id);
+
+#endif
+
 // Represents a keyboard grab. Can be used to manipulate it.
 struct KeyboardGrab final {
   Keyboard& keyboard;
   KeyboardGrabber& grabber;
   KeyboardGrab(Keyboard& keyboard, KeyboardGrabber& grabber)
       : keyboard(keyboard), grabber(grabber) {}
+
+  // This will also call `ReleaseGrab` of its KeyboardGrabber.
+  // This means that the pointers in the KeyboardGrabber will be invalid (nullptr) after this call!
   void Release();
 };
 
@@ -210,8 +220,8 @@ struct KeyGrabber {
   // given KeyGrab
   virtual void ReleaseKeyGrab(KeyGrab&) = 0;
 
-  virtual void KeyGrabberKeyDown(KeyGrab&, Key) {}
-  virtual void KeyGrabberKeyUp(KeyGrab&, Key) {}
+  virtual void KeyGrabberKeyDown(KeyGrab&) {}
+  virtual void KeyGrabberKeyUp(KeyGrab&) {}
 };
 
 struct KeyGrab {
@@ -246,6 +256,9 @@ struct KeyGrab {
         alt(alt),
         shift(shift),
         windows(windows) {}
+
+  // This will also call `ReleaseGrab` of its KeyGrabber.
+  // This means that the pointers in the KeyGrabber will be invalid (nullptr) after this call!
   void Release();
 };
 

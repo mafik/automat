@@ -337,6 +337,7 @@ HotKey::HotKey()
       windows_button(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth),
       shortcut_button(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth) {
   ctrl_button.activate = [this](gui::Pointer&) {
+    bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
     }
@@ -347,6 +348,7 @@ HotKey::HotKey()
     ctrl_button.color = KeyColor(ctrl);
   };
   alt_button.activate = [this](gui::Pointer&) {
+    bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
     }
@@ -357,6 +359,7 @@ HotKey::HotKey()
     alt_button.color = KeyColor(alt);
   };
   shift_button.activate = [this](gui::Pointer&) {
+    bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
     }
@@ -367,6 +370,7 @@ HotKey::HotKey()
     shift_button.color = KeyColor(shift);
   };
   windows_button.activate = [this](gui::Pointer&) {
+    bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
     }
@@ -378,10 +382,11 @@ HotKey::HotKey()
   };
   ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key));
   shortcut_button.activate = [this](gui::Pointer& pointer) {
-    if (recording) {
-      recording->Release();
+    if (hotkey_selector) {
+      // Cancel HotKey selection.
+      hotkey_selector->Release();  // This will also set itself to nullptr
     } else {
-      recording = &pointer.keyboard->RequestGrab(*this);
+      hotkey_selector = &pointer.keyboard->RequestGrab(*this);
     }
   };
 }
@@ -507,7 +512,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.drawPath(inner_contour, shadow_paint);
   canvas.restore();
 
-  if (recording) {
+  if (hotkey_selector) {
     shortcut_button.color = "#f15555"_color;
   } else {
     shortcut_button.color = KeyColor(true);
@@ -574,29 +579,40 @@ SkMatrix HotKey::TransformToChild(const Widget& child, animation::Context&) cons
   return SkMatrix::I();
 }
 
+bool HotKey::IsOn() const { return hotkey != nullptr; }
+
 void HotKey::On() {
   if (hotkey) {  // just a sanity check, we should never get On multiple times in a row
     hotkey->Release();
   }
   hotkey =
-      &gui::keyboard->RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [](Status& status) {
+      &gui::keyboard->RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [&](Status& status) {
         if (!OK(status)) {
+          if (hotkey) {
+            hotkey->Release();
+          }
           ERROR << status;
         }
       });
 }
 
+// This is called when the new HotKey is selected by the user
 void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
-  recording->Release();
-  LOG << "Setting new hotkey " << (int)key.physical << ": " << ToStr(key.physical);
+  bool on = IsOn();
+  if (on) {
+    Off();  // temporarily switch off to ungrab the old key combo
+  }
+  hotkey_selector->Release();
+  // Maybe also set the modifiers from the key event?
+  this->key = key.physical;
   ((KeyLabelWidget*)shortcut_button.child.get())->SetLabel(ToStr(key.physical));
   if (on) {
     On();
   }
 }
 
-void HotKey::KeyGrabberKeyDown(gui::KeyGrab&, gui::Key) { LOG << "Hotkey press"; }
-void HotKey::KeyGrabberKeyUp(gui::KeyGrab&, gui::Key) { LOG << "Hotkey release"; }
+void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) { LOG << "Hotkey press"; }
+void HotKey::KeyGrabberKeyUp(gui::KeyGrab&) { LOG << "Hotkey release"; }
 
 void HotKey::Off() {
   // TODO: think about what happens if the recording starts or stops while the hotkey is active &
@@ -606,7 +622,7 @@ void HotKey::Off() {
   }
 }
 
-void HotKey::ReleaseGrab(gui::KeyboardGrab&) { recording = nullptr; }
+void HotKey::ReleaseGrab(gui::KeyboardGrab&) { hotkey_selector = nullptr; }
 void HotKey::ReleaseKeyGrab(gui::KeyGrab&) { hotkey = nullptr; }
 
 }  // namespace automat::library

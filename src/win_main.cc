@@ -105,7 +105,9 @@ uint32_t ScanCode(LPARAM lParam) {
   uint32_t scancode = (lParam >> 16) & 0xff;
   bool extended = (lParam >> 24) & 0x1;
   if (extended) {
-    if (scancode != 0x45) {
+    if (scancode == 0x45) {  // Pause button
+      // scancode = 0xE11D45;
+    } else {
       scancode |= 0xE000;
     }
   } else {
@@ -351,6 +353,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         }
         utf8_i = 0;
       }
+      break;
+    }
+    case WM_HOTKEY: {
+      int id = wParam;  // discard the upper 32 bits
+      // lParam carries the modifiers (first 16 bits) and then the keycode
+      RunOnAutomatThread([id]() { automat::gui::OnHotKeyDown(id); });
       break;
     }
     case WM_LBUTTONDOWN: {

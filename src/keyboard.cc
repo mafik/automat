@@ -99,8 +99,6 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
   if (windows) {
     modifiers |= MOD_WIN;
   }
-  LOG << "Trying to grab key (AnsiKey) " << ToStr(key) << " (" << (int)key << ")";
-  // Find out what VK code is mapped on the given AnsiKey (scan code).
   U8 vk = KeyToVirtualKey(key);
   key_grab->cb = new KeyGrab::RegistrationCallback(key_grab.get(), std::move(cb));
   RunOnWindowsThread([id = key_grab->id, modifiers, vk, cb = key_grab->cb]() {

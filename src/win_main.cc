@@ -275,7 +275,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     }
     case WM_KEYDOWN: {
       auto scan_code = ScanCode(lParam);      // identifies the physical key
-      uint8_t virtual_key = (uint8_t)wParam;  // layout-dependent key code
+      uint8_t virtual_key = (uint8_t)wParam;            // layout-dependent key code
       key_state[virtual_key] = 0x80;
 
       gui::Key key;

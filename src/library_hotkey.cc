@@ -525,7 +525,7 @@ SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 std::unique_ptr<Action> HotKey::ButtonDownAction(gui::Pointer&, gui::PointerButton) {
   return nullptr;
 }
-void HotKey::Args(std::function<void(Argument&)> cb) {}
+void HotKey::Args(std::function<void(Argument&)> cb) { cb(then_arg); }
 void HotKey::Run(Location&) {}
 
 ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
@@ -611,8 +611,8 @@ void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
   }
 }
 
-void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) { LOG << "Hotkey press"; }
-void HotKey::KeyGrabberKeyUp(gui::KeyGrab&) { LOG << "Hotkey release"; }
+void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) { InvokeThenArg(here); }
+void HotKey::KeyGrabberKeyUp(gui::KeyGrab&) {}
 
 void HotKey::Off() {
   // TODO: think about what happens if the recording starts or stops while the hotkey is active &

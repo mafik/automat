@@ -38,7 +38,7 @@ struct KeyButton : gui::Button {
   void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg) const override;
 };
 
-struct HotKey : Object, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
+struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   static const HotKey proto;
 
   gui::AnsiKey key = gui::AnsiKey::F11;

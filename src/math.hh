@@ -160,7 +160,39 @@ union Rect {
     float top = 0;
   };
 
+  static constexpr float MinY(const SkRect& r) { return r.fTop; }
+  static constexpr float MaxY(const SkRect& r) { return r.fBottom; }
+  static constexpr float MinX(const SkRect& r) { return r.fLeft; }
+  static constexpr float MaxX(const SkRect& r) { return r.fRight; }
+  constexpr float MinY() const { return bottom; }
+  constexpr float MaxY() const { return top; }
+  constexpr float MinX() const { return left; }
+  constexpr float MaxX() const { return right; }
+
+  static constexpr float CenterY(const SkRect& r) { return (r.fTop + r.fBottom) / 2; }
+  static constexpr float CenterX(const SkRect& r) { return (r.fLeft + r.fRight) / 2; }
+  constexpr float CenterY() const { return (top + bottom) / 2; }
+  constexpr float CenterX() const { return (left + right) / 2; }
+
+  static constexpr Vec2 Center(const SkRect& r) { return r.center(); }
   constexpr Vec2 Center() const { return sk.center(); }
+
+  static constexpr Vec2 TopLeftCorner(const SkRect& r) { return {r.fLeft, r.fBottom}; }
+  static constexpr Vec2 TopCenter(const SkRect& r) { return {CenterX(r), r.fBottom}; }
+  static constexpr Vec2 TopRightCorner(const SkRect& r) { return {r.fRight, r.fBottom}; }
+  static constexpr Vec2 BottomLeftCorner(const SkRect& r) { return {r.fLeft, r.fTop}; }
+  static constexpr Vec2 BottomCenter(const SkRect& r) { return {CenterX(r), r.fTop}; }
+  static constexpr Vec2 BottomRightCorner(const SkRect& r) { return {r.fRight, r.fTop}; }
+  static constexpr Vec2 LeftCenter(const SkRect& r) { return {r.fLeft, CenterY(r)}; }
+  static constexpr Vec2 RightCenter(const SkRect& r) { return {r.fRight, CenterY(r)}; }
+  constexpr Vec2 TopLeftCorner() const { return {left, top}; }
+  constexpr Vec2 TopCenter() const { return {CenterX(), top}; }
+  constexpr Vec2 TopRightCorner() const { return {right, top}; }
+  constexpr Vec2 BottomLeftCorner() const { return {left, bottom}; }
+  constexpr Vec2 BottomCenter() const { return {CenterX(), bottom}; }
+  constexpr Vec2 BottomRightCorner() const { return {right, bottom}; }
+  constexpr Vec2 LeftCenter() const { return {left, CenterY()}; }
+  constexpr Vec2 RightCenter() const { return {right, CenterY()}; }
 };
 
 union RRect {

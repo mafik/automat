@@ -18,8 +18,6 @@ namespace automat {
 
 struct DragLocationAction;
 
-void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);
-
 // Each Container holds its inner objects in Locations.
 //
 // Location specifies location & relations of an object.

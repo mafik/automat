@@ -3,9 +3,8 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkRRect.h>
 
-#include <cassert>
-
 #include "base.hh"
+#include "connector_optical.hh"
 #include "font.hh"
 #include "location.hh"
 
@@ -14,17 +13,22 @@ namespace automat::gui {
 struct ConnectionLabelWidget : Widget {
   ConnectionWidget* parent;
   std::string label;
+
   ConnectionLabelWidget(ConnectionWidget* parent, std::string_view label)
       : parent(parent), label(label) {
     this->label = "»" + this->label + " ";
   }
+
   float Width() const { return GetFont().MeasureText(label); }
+
   float Height() const { return kLetterSize; }
+
   SkPath Shape() const override {
     float w = Width();
     float h = Height();
     return SkPath::Rect(SkRect::MakeWH(w, h));
   }
+
   void Draw(DrawContext& ctx) const override {
     SkPaint paint;
     auto& canvas = ctx.canvas;
@@ -114,7 +118,11 @@ void DragConnectionAction::DrawAction(DrawContext& ctx) {
   }
   SkPath to_shape = SkPath();
   to_shape.moveTo(current_position.x, current_position.y);
-  DrawConnection(ctx.canvas, from_shape, to_shape);
+
+  Vec2 from_point = Rect::BottomCenter(from_shape.getBounds());
+  Vec2 to_point = Rect::TopCenter(to_shape.getBounds());
+
+  DrawOpticalConnector(ctx, from_point, to_point);
 }
 
 }  // namespace automat::gui

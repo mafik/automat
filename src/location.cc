@@ -7,10 +7,9 @@
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
 
-#include <numbers>
-
 #include "base.hh"
 #include "color.hh"
+#include "connector_optical.hh"
 #include "control_flow.hh"
 #include "drag_action.hh"
 #include "font.hh"
@@ -244,91 +243,6 @@ SkPath Outset(const SkPath& path, float distance) {
 
 const SkPath kConnectionArrowShape = PathFromSVG(kConnectionArrowShapeSVG);
 
-void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape) {
-  SkColor color = 0xff6e4521;
-  SkPaint line_paint;
-  line_paint.setAntiAlias(true);
-  line_paint.setStyle(SkPaint::kStroke_Style);
-  line_paint.setStrokeWidth(0.0005);
-  line_paint.setColor(color);
-  SkPaint arrow_paint;
-  arrow_paint.setAntiAlias(true);
-  arrow_paint.setStyle(SkPaint::kFill_Style);
-  arrow_paint.setColor(color);
-  SkRRect from_rrect, to_rrect;
-  bool from_is_rrect = from_shape.isRRect(&from_rrect);
-  bool to_is_rrect = to_shape.isRRect(&to_rrect);
-
-  // Find an area where the start of a connection can freely move.
-  SkRect from_inner;
-  if (from_is_rrect) {
-    SkVector radii = from_rrect.getSimpleRadii();
-    from_inner = from_rrect.rect().makeInset(radii.x(), radii.y());
-  } else {
-    Vec2 from_center = from_shape.getBounds().center();
-    from_inner = SkRect::MakeXYWH(from_center.x, from_center.y, 0, 0);
-  }
-  // Find an area where the end of a connection can freely move.
-  SkRect to_inner;
-  if (to_is_rrect) {
-    SkVector radii = to_rrect.getSimpleRadii();
-    to_inner = to_rrect.rect().makeInset(radii.x(), radii.y());
-  } else {
-    Vec2 to_center = to_shape.getBounds().center();
-    to_inner = SkRect::MakeXYWH(to_center.x, to_center.y, 0, 0);
-  }
-  to_inner.sort();
-  from_inner.sort();
-
-  Vec2 from, to;
-  // Set the vertical positions of the connection endpoints.
-  float left = std::max(from_inner.left(), to_inner.left());
-  float right = std::min(from_inner.right(), to_inner.right());
-  if (left <= right) {
-    from.x = to.x = (left + right) / 2;
-  } else if (from_inner.right() < to_inner.left()) {
-    from.x = from_inner.right();
-    to.x = to_inner.left();
-  } else {
-    from.x = from_inner.left();
-    to.x = to_inner.right();
-  }
-  // Set the horizontal positions of the connection endpoints.
-  float top = std::max(from_inner.top(), to_inner.top());
-  float bottom = std::min(from_inner.bottom(), to_inner.bottom());
-  if (bottom >= top) {
-    from.y = to.y = (top + bottom) / 2;
-  } else if (from_inner.bottom() < to_inner.top()) {
-    from.y = from_inner.bottom();
-    to.y = to_inner.top();
-  } else {
-    from.y = from_inner.top();
-    to.y = to_inner.bottom();
-  }
-  // Find polar coordinates of the connection.
-  SkVector delta = to - from;
-  float degrees = 180 * std::atan2(delta.y(), delta.x()) / std::numbers::pi;
-  float end = delta.length();
-  float start = 0;
-  if (from_is_rrect) {
-    start = std::min(start + from_rrect.getSimpleRadii().fX, end);
-  }
-  if (to_is_rrect) {
-    end = std::max(start, end - to_rrect.getSimpleRadii().fX);
-  }
-  float line_end = std::max(start, end + kConnectionArrowShape.getBounds().centerX());
-  // Draw the connection.
-  canvas.save();
-  canvas.translate(from.x, from.y);
-  canvas.rotate(degrees);
-  if (start < line_end) {
-    canvas.drawLine(start, 0, line_end, 0, line_paint);
-  }
-  canvas.translate(end, 0);
-  canvas.drawPath(kConnectionArrowShape, arrow_paint);
-  canvas.restore();
-}
-
 void Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   SkPath my_shape = Shape();
@@ -405,7 +319,10 @@ void Location::Draw(gui::DrawContext& ctx) const {
         SkMatrix m = TransformUp(Path{parent_machine, &to}, ctx.animation_context);
         m.postConcat(parent_to_local);
         to_shape.transform(m);
-        DrawConnection(canvas, from_shape, to_shape);
+
+        Vec2 from_point = Rect::BottomCenter(from_shape.getBounds());
+        Vec2 to_point = Rect::TopCenter(to_shape.getBounds());
+        DrawOpticalConnector(ctx, from_point, to_point);
       }
     }
   }

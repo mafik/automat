@@ -65,7 +65,7 @@ ArcLine& ArcLine::Outset(float offset) {
   return *this;
 }
 
-SkPath ArcLine::ToPath() const {
+SkPath ArcLine::ToPath(bool close) const {
   SkPath path;
   path.moveTo(start.x, start.y);
   Vec2 p = start;
@@ -85,7 +85,9 @@ SkPath ArcLine::ToPath() const {
       path.arcTo(oval, dir * -90 + alpha0 * 180 / M_PI, sweep_angle * 180 / M_PI, false);
     }
   }
-  path.close();
+  if (close) {
+    path.close();
+  }
   return path;
 }
 

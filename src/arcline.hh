@@ -49,7 +49,7 @@ struct ArcLine {
 
   ArcLine& Outset(float offset);
 
-  SkPath ToPath() const;
+  SkPath ToPath(bool close = true) const;
 };
 
 }  // namespace maf

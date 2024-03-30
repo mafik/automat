@@ -7,17 +7,15 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
 #include "format.hh"
 #include "keyboard.hh"
-#include "library.hh"
+#include "library.hh"  // IWYU pragma: keep
 #include "log.hh"
 #include "root.hh"
 #include "vk.hh"
-#include "widget.hh"
 #include "window.hh"
 #include "x11.hh"
 
@@ -338,7 +336,7 @@ void RenderLoop() {
                 gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
                                 .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
                                 .text = ""};
-                keyboard->KeyDown(key);
+                gui::keyboard->KeyDown(key);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
@@ -346,7 +344,7 @@ void RenderLoop() {
                 gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
                                 .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
                                 .text = ""};
-                keyboard->KeyUp(key);
+                gui::keyboard->KeyUp(key);
                 break;
               }
               case XCB_INPUT_BUTTON_PRESS: {
@@ -475,7 +473,7 @@ int LinuxMain(int argc, char* argv[]) {
   }
 
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
-  keyboard = std::make_unique<gui::Keyboard>(*window);
+  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
 
   RenderLoop();
 

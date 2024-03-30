@@ -14,6 +14,13 @@
 #include "win_main.hh"
 #endif
 
+#if defined(__linux__)
+#include <xcb/xproto.h>
+
+#include "linux_main.hh"
+#include "x11.hh"
+#endif
+
 using namespace maf;
 
 namespace automat::gui {

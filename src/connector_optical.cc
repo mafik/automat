@@ -33,15 +33,15 @@ void DrawOpticalConnector(DrawContext& ctx, Vec2 start, Vec2 end) {
   ArcLine cable = ArcLine(start, M_PI * 1.5);
 
   float arc_x = delta.x;
-  if (abs(arc_x) < turn_radius) {
+  if (std::abs(arc_x) < turn_radius) {
     float r_minus_x = arc_x < 0 ? -turn_radius - arc_x : turn_radius - arc_x;
     float arc_y = sqrt(turn_radius * turn_radius - r_minus_x * r_minus_x);
 
-    float vertical_straight_distance = abs(delta.y) - arc_y;
+    float vertical_straight_distance = std::abs(delta.y) - arc_y;
     if (vertical_straight_distance > 0) {
       cable.MoveBy(vertical_straight_distance);
     }
-    float arc_angle = atan2(arc_x < 0 ? -arc_y : arc_y, abs(r_minus_x));
+    float arc_angle = atan2(arc_x < 0 ? -arc_y : arc_y, std::abs(r_minus_x));
     LOG << "r_minus_x=" << r_minus_x << " arc_y=" << arc_y << " angle=" << arc_angle;
     cable.TurnBy(arc_angle, turn_radius);
     cable.TurnBy(-arc_angle, turn_radius);
@@ -50,7 +50,7 @@ void DrawOpticalConnector(DrawContext& ctx, Vec2 start, Vec2 end) {
     }
   }
 
-  float horizontal_flat_distance = abs(delta.x);
+  float horizontal_flat_distance = std::abs(delta.x);
 
   auto cable_path = cable.ToPath(false);
 

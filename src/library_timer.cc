@@ -746,30 +746,39 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
   cb(finished_arg);
 }
 
-static void TimerThread() {
+static void TimerThread(std::stop_token automat_stop_token) {
   SetThreadName("Timer");
-  LOG << "Timer thread started";
+  bool stop = false;  // doesn't have to be atomic because it's protected by mtx
+  std::stop_callback on_automat_stop(automat_stop_token, [&] {
+    std::unique_lock<std::mutex> lck(mtx);
+    stop = true;
+    cv.notify_all();
+  });
+
   while (true) {
     std::unique_lock<std::mutex> lck(mtx);
     if (tasks.empty()) {
-      LOG << "Timer thread waiting";
+      // LOG << "Timer thread waiting";
       cv.wait(lck);
     } else {
-      LOG << "Timer thread waiting until " << tasks.begin()->first.time_since_epoch().count()
-          << " (" << tasks.size() << " tasks)";
+      // LOG << "Timer thread waiting until " << tasks.begin()->first.time_since_epoch().count()
+      //     << " (" << tasks.size() << " tasks)";
       cv.wait_until(lck, tasks.begin()->first);
+    }
+    if (stop) {
+      break;
     }
     auto now = Clock::now();
     while (!tasks.empty() && tasks.begin()->first <= now) {
-      LOG << "Timer thread executing task " << tasks.begin()->second->Format();
+      // LOG << "Timer thread executing task " << tasks.begin()->second->Format();
       events.send(std::move(tasks.begin()->second));
       tasks.erase(tasks.begin());
     }
   }
 }
 
-void __attribute__((constructor)) InitTimer() {
-  timer_thread = std::jthread(TimerThread);
+void StartTimerHelperThread(std::stop_token automat_stop_token) {
+  timer_thread = std::jthread(TimerThread, automat_stop_token);
   timer_thread.detach();
 }
 

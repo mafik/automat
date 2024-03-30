@@ -19,7 +19,7 @@ namespace automat {
 struct channel {
   std::atomic<void*> atomic{nullptr};
 
-  // May block.
+  // May block. `ptr` must not be `nullptr`.
   void send(void* ptr) {
     assert(ptr != nullptr);
     void* expected = nullptr;

@@ -269,6 +269,11 @@ void Keyboard::Draw(DrawContext& ctx) const {
 }
 
 void Keyboard::KeyDown(Key key) {
+  // Quit on Ctrl + Q
+  if (key.ctrl && key.physical == AnsiKey::Q) {
+    automat_thread.get_stop_source().request_stop();
+    return;
+  }
   RunOnAutomatThread([=, this]() {
     if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
       pressed_keys.set((size_t)key.physical);

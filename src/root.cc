@@ -7,14 +7,14 @@ namespace automat {
 
 Location root_location;
 Machine* root_machine;
-std::thread automat_thread;
+std::jthread automat_thread;
 
 void InitRoot() {
   root_location = Location(nullptr);
   root_location.name = "Root location";
   root_machine = root_location.Create<Machine>();
   root_machine->name = "Root machine";
-  automat_thread = std::thread(RunThread);
+  automat_thread = std::jthread(RunThread);
 }
 
 void RunOnAutomatThread(std::function<void()> f) {

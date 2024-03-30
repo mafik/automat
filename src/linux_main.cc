@@ -240,8 +240,10 @@ void Paint() {
 }
 
 void RenderLoop() {
-  bool running = true;
+  std::atomic_bool running = true;
   xcb_generic_event_t* event;
+
+  std::stop_callback on_automat_stop(automat_thread.get_stop_token(), [&] { running = false; });
 
   while (running) {
     event = xcb_poll_for_event(connection);
@@ -333,15 +335,25 @@ void RenderLoop() {
               }
               case XCB_INPUT_KEY_PRESS: {
                 xcb_input_key_press_event_t* ev = (xcb_input_key_press_event_t*)event;
-                gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
-                                .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
-                                .text = ""};
+                gui::Key key = {
+                    .ctrl = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_CONTROL),
+                    .alt = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_1),
+                    .shift = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_SHIFT),
+                    .windows = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_4),
+                    .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
+                    .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
+                    .text = "",
+                };
                 gui::keyboard->KeyDown(key);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
                 xcb_input_key_release_event_t* ev = (xcb_input_key_release_event_t*)event;
-                gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
+                gui::Key key = {.ctrl = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_CONTROL),
+                                .alt = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_1),
+                                .shift = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_SHIFT),
+                                .windows = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_4),
+                                .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
                                 .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
                                 .text = ""};
                 gui::keyboard->KeyUp(key);

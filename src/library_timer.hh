@@ -53,4 +53,8 @@ struct TimerDelay : LiveObject {
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
 };
 
+// Call this only once during startup. This starts a helper thread for timers. The thread will
+// run until the stop_token is set.
+void StartTimerHelperThread(std::stop_token);
+
 }  // namespace automat::library

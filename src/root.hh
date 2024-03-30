@@ -8,7 +8,7 @@ namespace automat {
 
 extern Location root_location;
 extern Machine* root_machine;
-extern std::thread automat_thread;
+extern std::jthread automat_thread;
 
 void InitRoot();
 void RunOnAutomatThread(std::function<void()>);

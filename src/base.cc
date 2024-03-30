@@ -12,12 +12,7 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
-#include <set>
-#include <unordered_map>
-
-#include "color.hh"
-#include "font.hh"
-#include "text_field.hh"
+#include "library_timer.hh"
 #include "thread_name.hh"
 
 namespace automat {
@@ -55,9 +50,20 @@ struct AutodeleteTaskWrapper : Task {
   }
 };
 
-void RunThread() {
+// Dummy task to wake up the Automat Thread to process the shutdown.
+struct ShutdownTask : Task {
+  ShutdownTask() : Task(nullptr) {}
+  std::string Format() override { return "Shutdown"; }
+  void Execute() override {}
+};
+
+void RunThread(std::stop_token stop_token) {
+  library::StartTimerHelperThread(stop_token);
+  std::stop_callback wakeup_for_shutdown(stop_token,
+                                         [] { events.send(std::make_unique<ShutdownTask>()); });
+
   SetThreadName("Automat Loop");
-  while (true) {
+  while (!stop_token.stop_requested()) {
     RunLoop();
     std::unique_ptr<Task> task = events.recv<Task>();
     if (task) {

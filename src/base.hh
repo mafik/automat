@@ -7,11 +7,11 @@
 
 #include <algorithm>
 #include <cassert>
-#include <compare>
 #include <deque>
 #include <functional>
 #include <memory>
 #include <source_location>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -312,6 +312,6 @@ void RunLoop(const int max_iterations = -1);
 
 extern channel events;
 
-void RunThread();
+void RunThread(std::stop_token);
 
 }  // namespace automat

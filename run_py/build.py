@@ -122,7 +122,7 @@ compiler = os.environ['CXX'] = os.environ['CXX'] if 'CXX' in os.environ else 'cl
 compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else 'clang'
 
 default_compile_args = [
-    '-static',
+    '-static', '-O1',
     '-std=gnu++2c', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-D_FORTIFY_SOURCE=2', '-Wformat',
     '-Wformat-security', '-Werror=format-security', '-fno-plt', '-Wno-vla-extension', '-Wno-trigraphs'

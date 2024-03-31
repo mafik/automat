@@ -41,21 +41,50 @@ void DrawOpticalConnector(DrawContext& ctx, Vec2 start, Vec2 end) {
   if (move_down < 0) {
     auto vertical_shift =
         ArcLine::TurnShift(end.x < start.x ? move_down * 2 : -move_down * 2, turn_radius);
-    cable.TurnBy(horizontal_shift.first_turn_angle, turn_radius);
 
     float move_side = (horizontal_shift.move_between_turns - vertical_shift.distance_forward) / 2;
     if (move_side < 0) {
-      cable_paint.setColor(SK_ColorRED);
+      // If there is not enough space to route the cable in the middle, we will route it around the
+      // objects.
+      float x = start.x;
+      float y = start.y;
+      float dir;
+      if (start.x > end.x) {
+        dir = 1;
+      } else {
+        dir = -1;
+      }
+      cable.TurnBy(dir * M_PI / 2, turn_radius);
+      x += turn_radius * dir;
+      y += turn_radius;
+      cable.TurnBy(dir * M_PI / 2, turn_radius);
+      x += turn_radius * dir;
+      y -= turn_radius;
+      float move_up = cable_end.y - y;
+      float move_down = -move_up;
+      if (move_up > 0) {
+        cable.MoveBy(move_up);
+      }
+      y = cable_end.y;
+      cable.TurnBy(dir * M_PI / 2, turn_radius);
+      x -= turn_radius * dir;
+      y -= turn_radius;
+      cable.MoveBy(dir * (x - cable_end.x) - turn_radius);
+      cable.TurnBy(dir * M_PI / 2, turn_radius);
+      if (move_down > 0) {
+        cable.MoveBy(move_down);
+      }
+    } else {
+      cable.TurnBy(horizontal_shift.first_turn_angle, turn_radius);
+      if (move_side > 0) {
+        cable.MoveBy(move_side);
+      }
+      vertical_shift.Apply(cable);
+      if (move_side > 0) {
+        cable.MoveBy(move_side);
+      }
+      cable.TurnBy(-horizontal_shift.first_turn_angle, turn_radius);
     }
-    if (move_side > 0) {
-      cable.MoveBy(move_side);
-    }
-    vertical_shift.Apply(cable);
-    if (move_side > 0) {
-      cable.MoveBy(move_side);
-    }
-
-    cable.TurnBy(-horizontal_shift.first_turn_angle, turn_radius);
   } else {
     if (move_down > 0) {
       cable.MoveBy(move_down);

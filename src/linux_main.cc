@@ -468,8 +468,6 @@ void RenderLoop() {
   intercepted:
     free(event);
   }
-
-  xcb_destroy_window(connection, xcb_window);
 }
 
 int LinuxMain(int argc, char* argv[]) {
@@ -490,6 +488,7 @@ int LinuxMain(int argc, char* argv[]) {
   RenderLoop();
 
   vk::Destroy();
+  xcb_destroy_window(connection, xcb_window);
 
   LOG << "Exiting.";
 

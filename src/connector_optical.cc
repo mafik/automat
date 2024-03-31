@@ -28,26 +28,47 @@ void DrawOpticalConnector(DrawContext& ctx, Vec2 start, Vec2 end) {
   float distance = Length(delta);
   float turn_radius = std::max<float>(distance / 4, 0.01);
 
+  SkPaint cable_paint;
+  cable_paint.setColor(SK_ColorBLACK);
+  cable_paint.setStrokeWidth(0.001);
+  cable_paint.setStyle(SkPaint::kStroke_Style);
+  cable_paint.setAntiAlias(true);
+
   ArcLine cable = ArcLine(start, M_PI * 1.5);
 
-  auto turn_shift = ArcLine::TurnShift(delta.x * 2, turn_radius);
-  float move_forward = -delta.y - turn_shift.distance_forward / 2;
-  if (move_forward > 0) {
-    cable.MoveBy(move_forward);
-  }
-  turn_shift.Apply(cable);
-  if (move_forward > 0) {
-    cable.MoveBy(move_forward);
+  auto horizontal_shift = ArcLine::TurnShift(delta.x * 2, turn_radius);
+  float move_down = -delta.y - horizontal_shift.distance_forward / 2;
+  if (move_down < 0) {
+    auto vertical_shift =
+        ArcLine::TurnShift(end.x < start.x ? move_down * 2 : -move_down * 2, turn_radius);
+    cable.TurnBy(horizontal_shift.first_turn_angle, turn_radius);
+
+    float move_side = (horizontal_shift.move_between_turns - vertical_shift.distance_forward) / 2;
+    if (move_side < 0) {
+      cable_paint.setColor(SK_ColorRED);
+    }
+    if (move_side > 0) {
+      cable.MoveBy(move_side);
+    }
+    vertical_shift.Apply(cable);
+    if (move_side > 0) {
+      cable.MoveBy(move_side);
+    }
+
+    cable.TurnBy(-horizontal_shift.first_turn_angle, turn_radius);
+  } else {
+    if (move_down > 0) {
+      cable.MoveBy(move_down);
+    }
+    horizontal_shift.Apply(cable);
+    if (move_down > 0) {
+      cable.MoveBy(move_down);
+    }
   }
 
   auto cable_path = cable.ToPath(false);
 
-  SkPaint paint;
-  paint.setColor(SK_ColorBLACK);
-  paint.setStrokeWidth(0.001);
-  paint.setStyle(SkPaint::kStroke_Style);
-
-  canvas.drawPath(cable_path, paint);
+  canvas.drawPath(cable_path, cable_paint);
 
   {  // Black metal casing
     SkPaint black_metal_paint;

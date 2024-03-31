@@ -50,6 +50,21 @@ struct ArcLine {
   ArcLine& Outset(float offset);
 
   SkPath ToPath(bool close = true) const;
+
+  // An operation that moves the ArcLine sideways without changing its direction.
+  // A sideways move is performed by two arcs and an optional move between them.
+  //
+  // Constructor of this class calculates the parameters of the operation.
+  // The operation can then be performed using the Apply method.
+  struct TurnShift {
+    const float turn_radius;
+    float first_turn_angle;
+    float move_between_turns;
+    float distance_forward;
+
+    TurnShift(float distance_sideways, float turn_radius);
+    void Apply(ArcLine& line) const;
+  };
 };
 
 }  // namespace maf

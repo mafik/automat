@@ -2,8 +2,6 @@
 
 #include <cmath>
 
-#include "log.hh"
-
 namespace maf {
 
 ArcLine::ArcLine(Vec2 start, float start_angle) : start(start), start_angle(start_angle) {}
@@ -89,6 +87,46 @@ SkPath ArcLine::ToPath(bool close) const {
     path.close();
   }
   return path;
+}
+
+ArcLine::TurnShift::TurnShift(float distance_sideways, float turn_radius)
+    : turn_radius(turn_radius) {
+  /*
+        .           \
+       /|           |
+      / |           \
+     /  |            } turn_radius
+    /   |           /
+   /____|           |
+   `-.__| } delta_x /
+   \_  _/
+     \/
+   delta_y
+
+  */
+  const float delta_x = distance_sideways / 2;
+  const float delta_x_abs = std::abs(delta_x);
+  if (delta_x_abs < turn_radius) {
+    float r_minus_x = turn_radius - delta_x_abs;
+    float delta_y = sqrt(turn_radius * turn_radius - r_minus_x * r_minus_x);
+    first_turn_angle = atan2(delta_y, r_minus_x);
+    move_between_turns = 0;
+    distance_forward = delta_y * 2;
+  } else {
+    first_turn_angle = M_PI / 2;
+    move_between_turns = (delta_x_abs - turn_radius) * 2;
+    distance_forward = turn_radius * 2;
+  }
+  if (delta_x < 0) {
+    first_turn_angle = -first_turn_angle;
+  }
+}
+void ArcLine::TurnShift::Apply(ArcLine& line) const {
+  line.TurnBy(first_turn_angle, turn_radius);
+  if (move_between_turns > 0) {
+    line.MoveBy(move_between_turns);
+  }
+  line.TurnBy(-first_turn_angle, turn_radius);
 }
 
 }  // namespace maf

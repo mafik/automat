@@ -139,7 +139,7 @@ function AnimationFrame(t) {
   if (mouse_down) {
     focus_points.push({ x: mouse.x, y: mouse.y });
   }
-  const step = 20;
+  const step = 40;
   {
     let it = {
       x: targets[0].x,
@@ -179,6 +179,10 @@ function AnimationFrame(t) {
     ctx.stroke();
   }
 
+  for (let c of chain) {
+    c.color = "#08f";
+  }
+
   // Zero forces
   for (let c of chain) {
     c.ax = 0;
@@ -196,41 +200,67 @@ function AnimationFrame(t) {
   }
 
   // Apply spring force pulling each chain link towards the control points of its neighbors
+  const angle_limit = Math.PI / 6;
+
   const stiffness = 1e3;
   ctx.fillStyle = "#f00";
   for (let i = 1; i < chain.length; i++) {
     let c = chain[i];
     let prev = chain[i - 1];
     if ('dir' in prev) {
-      let fx = (prev.x + Math.cos(prev.dir) * step - c.x) * stiffness;
-      let fy = (prev.y + Math.sin(prev.dir) * step - c.y) * stiffness;
-      c.ax += fx;
-      c.ay += fy;
-      prev.ax -= fx;
-      prev.ay -= fy;
-      ctx.beginPath();
-      ctx.arc(prev.x + Math.cos(prev.dir) * step, prev.y + Math.sin(prev.dir) * step, 1, 0, 2 * Math.PI);
-      ctx.fill();
+      let alpha = Math.atan2(c.y - prev.y, c.x - prev.x);
+      let diff = alpha - prev.dir;
+      if (diff > Math.PI) diff -= Math.PI * 2;
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) > angle_limit) {
+        c.color = 'red';
+        let dir = prev.dir + Math.sign(diff) * angle_limit;
+        let fx = (prev.x + Math.cos(dir) * step - c.x) * stiffness;
+        let fy = (prev.y + Math.sin(dir) * step - c.y) * stiffness;
+        c.ax += fx;
+        c.ay += fy;
+        prev.ax -= fx;
+        prev.ay -= fy;
+        ctx.beginPath();
+        ctx.arc(prev.x + Math.cos(dir) * step, prev.y + Math.sin(dir) * step, 1, 0, 2 * Math.PI);
+        ctx.fill();
+      }
     }
   }
-  for (let i = 0; i < chain.length; i++) {
+  for (let i = 0; i < chain.length - 1; i++) {
     let c = chain[i];
     let next;
+    let dist;
     if (i < chain.length - 1) {
       next = chain[i + 1];
+      dist = step;
     } else {
       next = dispenser;
+      if (focus_points.length > 0) {
+        dist = Math.hypot(dispenser.x - focus_points[focus_points.length - 1].x, dispenser.y - focus_points[focus_points.length - 1].y);
+      } else {
+        dist = 0;
+      }
     }
     if ('dir' in next) {
-      let fx = (next.x - Math.cos(next.dir) * step - c.x) * stiffness;
-      let fy = (next.y - Math.sin(next.dir) * step - c.y) * stiffness;
-      c.ax += fx;
-      c.ay += fy;
-      next.ax -= fx;
-      next.ay -= fy;
-      ctx.beginPath();
-      ctx.arc(next.x - Math.cos(next.dir) * step, next.y - Math.sin(next.dir) * step, 1, 0, 2 * Math.PI);
-      ctx.fill();
+      let alpha = Math.atan2(next.y - c.y, next.x - c.x);
+      let diff = alpha - next.dir;
+      if (diff > Math.PI) diff -= Math.PI * 2;
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) > angle_limit) {
+        c.color = 'red';
+        let dir = next.dir + Math.sign(diff) * angle_limit;
+        let fx = (next.x - Math.cos(dir) * dist - c.x) * stiffness;
+        let fy = (next.y - Math.sin(dir) * dist - c.y) * stiffness;
+        c.ax += fx;
+        c.ay += fy;
+        next.ax -= fx;
+        next.ay -= fy;
+        ctx.beginPath();
+        ctx.arc(next.x - Math.cos(dir) * dist, next.y - Math.sin(dir) * dist, 1, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+
     }
   }
 
@@ -266,6 +296,8 @@ function AnimationFrame(t) {
         last.x = c.x - dx / dist * step;
         last.y = c.y - dy / dist * step;
         dispenser.v = 0;
+      } else if ((chain.length < focus_points.length) && (dist > step * 0.8)) {
+        chain.push(new ChainLink());
       }
     }
     if (chain.length > focus_points.length && i == chain.length - 1) {
@@ -365,7 +397,6 @@ function AnimationFrame(t) {
     prev.y = new_prev_y;
   }
 
-
   // Find control points
   for (let i = 1; i < chain.length; i++) {
     let prev = chain[i - 1];
@@ -373,38 +404,28 @@ function AnimationFrame(t) {
     let next = i < chain.length - 1 ? chain[i + 1] : dispenser;
     let dx = next.x - prev.x;
     let dy = next.y - prev.y;
-    let dist = Math.hypot(dx, dy);
-    dx = dx / dist * step / 3;
-    dy = dy / dist * step / 3;
-    curr.cp1x = curr.x - dx;
-    curr.cp1y = curr.y - dy;
-    curr.cp2x = curr.x + dx;
-    curr.cp2y = curr.y + dy;
+    curr.dir = Math.atan2(dy, dx);
+    curr.cp1x = curr.x - Math.cos(curr.dir) * step / 3;
+    curr.cp1y = curr.y - Math.sin(curr.dir) * step / 3;
+    curr.cp2x = curr.x + Math.cos(curr.dir) * step / 3;
+    curr.cp2y = curr.y + Math.sin(curr.dir) * step / 3;
   }
   dispenser.cp1x = dispenser.x;
-  dispenser.cp1y = dispenser.y + step / 4;
+  dispenser.cp1y = dispenser.y + step / 3;
 
-  if (focus_points.length > 0) {
-    chain[0].cp2x = chain[0].x;
-    chain[0].cp2y = chain[0].y - step / 4;
+  if (focus_points.length == 0 && chain.length > 1) {
+    chain[0].dir = chain[1].dir;
   } else {
-    if (chain.length >= 2) {
-      chain[0].cp2x = chain[1].cp1x;
-      chain[0].cp2y = chain[1].cp1y;
-    } else {
-      chain[0].cp2x = chain[0].x;
-      chain[0].cp2y = chain[0].y - step / 4;
-    }
+    chain[0].dir = Math.PI * 3 / 2;
   }
-  for (let i = 0; i < chain.length; i++) {
-    let p = chain[i];
-    p.dir = Math.atan2(p.cp2y - p.y, p.cp2x - p.x);
-  }
+  chain[0].cp2x = chain[0].x + Math.cos(chain[0].dir) * step / 3;
+  chain[0].cp2y = chain[0].y + Math.sin(chain[0].dir) * step / 3;
 
   // Draw chain links
   ctx.fillStyle = "#08f";
   ctx.strokeStyle = "#888";
   for (let c of chain) {
+    ctx.fillStyle = c.color;
     ctx.beginPath();
     ctx.arc(c.x, c.y, 3, 0, 2 * Math.PI);
     ctx.fill();

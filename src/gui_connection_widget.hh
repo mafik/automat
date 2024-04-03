@@ -1,6 +1,7 @@
 #pragma once
 
 #include "animation.hh"
+#include "connection.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "widget.hh"
@@ -18,6 +19,7 @@ struct DragConnectionAction : Action {
   Location& from;
   Argument& arg;
   animation::Context* animation_context;
+  std::unique_ptr<ConnectionState> state;
 
   Vec2 current_position;
   DragConnectionAction(Location&, Argument&);

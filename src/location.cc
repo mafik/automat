@@ -320,9 +320,10 @@ void Location::Draw(gui::DrawContext& ctx) const {
         m.postConcat(parent_to_local);
         to_shape.transform(m);
 
+        if (c->state == nullptr) c->state.reset(new OpticalConnectorState());
         Vec2 from_point = Rect::BottomCenter(from_shape.getBounds());
         Vec2 to_point = Rect::TopCenter(to_shape.getBounds());
-        DrawOpticalConnector(ctx, from_point, to_point);
+        DrawOpticalConnector(ctx, *(OpticalConnectorState*)c->state.get(), from_point, to_point);
       }
     }
   }

@@ -5,36 +5,24 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "arcline.hh"
+#include "log.hh"
 #include "svg.hh"
 
 using namespace maf;
 
 namespace automat::gui {
 
-void DrawOpticalConnector(DrawContext& ctx, Vec2 start, Vec2 end) {
-  auto& canvas = ctx.canvas;
-  auto& actx = ctx.animation_context;
+constexpr float kCasingWidth = 0.008;
+constexpr float kCasingHeight = 0.008;
 
-  constexpr float kCasingWidth = 0.008;
-  constexpr float kCasingHeight = 0.008;
-
-  float casing_left = end.x - kCasingWidth / 2;
-  float casing_right = end.x + kCasingWidth / 2;
+ArcLine RouteCable(Vec2 start, Vec2 end) {
+  ArcLine cable = ArcLine(start, M_PI * 1.5);
   float casing_top = end.y + kCasingHeight;
-
   Vec2 cable_end = Vec2(end.x, casing_top);
   Vec2 cable_middle = (start + cable_end) / 2;
   Vec2 delta = cable_middle - start;
   float distance = Length(delta);
   float turn_radius = std::max<float>(distance / 4, 0.01);
-
-  SkPaint cable_paint;
-  cable_paint.setColor(SK_ColorBLACK);
-  cable_paint.setStrokeWidth(0.001);
-  cable_paint.setStyle(SkPaint::kStroke_Style);
-  cable_paint.setAntiAlias(true);
-
-  ArcLine cable = ArcLine(start, M_PI * 1.5);
 
   auto horizontal_shift = ArcLine::TurnShift(delta.x * 2, turn_radius);
   float move_down = -delta.y - horizontal_shift.distance_forward / 2;
@@ -94,10 +82,27 @@ void DrawOpticalConnector(DrawContext& ctx, Vec2 start, Vec2 end) {
       cable.MoveBy(move_down);
     }
   }
+  return cable;
+}
+
+void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 start, Vec2 end) {
+  auto& canvas = ctx.canvas;
+  auto& actx = ctx.animation_context;
+
+  float casing_left = end.x - kCasingWidth / 2;
+  float casing_right = end.x + kCasingWidth / 2;
+  float casing_top = end.y + kCasingHeight;
+
+  SkPaint cable_paint;
+  cable_paint.setColor(SK_ColorBLACK);
+  cable_paint.setAlphaf(.5);
+  cable_paint.setStrokeWidth(0.0005);
+  cable_paint.setStyle(SkPaint::kStroke_Style);
+  cable_paint.setAntiAlias(true);
+
+  ArcLine cable = RouteCable(start, end);
 
   auto cable_path = cable.ToPath(false);
-
-  canvas.drawPath(cable_path, cable_paint);
 
   {  // Black metal casing
     SkPaint black_metal_paint;
@@ -172,6 +177,35 @@ void DrawOpticalConnector(DrawContext& ctx, Vec2 start, Vec2 end) {
     icon_paint.setColor(0xff808080);
     icon_paint.setAntiAlias(true);
     canvas.drawPath(path, icon_paint);
+  }
+
+  canvas.drawPath(cable_path, cable_paint);
+
+  auto it = ArcLine::Iterator(cable);
+  float cable_length = it.AdvanceToEnd();
+
+  SkPaint cross_paint;
+  cross_paint.setColor(0xffff8800);
+  cross_paint.setAntiAlias(true);
+  cross_paint.setStrokeWidth(0.0005);
+  cross_paint.setStyle(SkPaint::kStroke_Style);
+
+  float desired_advance = 0.005;
+  while (true) {
+    Vec2 pos = it.Position();
+    constexpr float kCrossSize = 0.0005;
+    SkPath cross;
+    cross.moveTo(pos.x - kCrossSize, pos.y - kCrossSize);
+    cross.lineTo(pos.x + kCrossSize, pos.y + kCrossSize);
+    cross.moveTo(pos.x + kCrossSize, pos.y - kCrossSize);
+    cross.lineTo(pos.x - kCrossSize, pos.y + kCrossSize);
+    canvas.drawPath(cross, cross_paint);
+    float actual_advance = -it.Advance(-desired_advance);
+    if (desired_advance - actual_advance > 1e-5) {
+      pos = it.Position();
+      canvas.drawCircle(pos.x, pos.y, kCrossSize, cross_paint);
+      break;
+    }
   }
 }
 

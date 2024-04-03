@@ -54,7 +54,8 @@ std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButt
   return std::make_unique<DragConnectionAction>(from, arg);
 }
 
-DragConnectionAction::DragConnectionAction(Location& from, Argument& arg) : from(from), arg(arg) {}
+DragConnectionAction::DragConnectionAction(Location& from, Argument& arg)
+    : from(from), arg(arg), state(nullptr) {}
 
 DragConnectionAction::~DragConnectionAction() {
   if (Machine* m = from.ParentAs<Machine>()) {
@@ -122,7 +123,11 @@ void DragConnectionAction::DrawAction(DrawContext& ctx) {
   Vec2 from_point = Rect::BottomCenter(from_shape.getBounds());
   Vec2 to_point = Rect::TopCenter(to_shape.getBounds());
 
-  DrawOpticalConnector(ctx, from_point, to_point);
+  if (state == nullptr) {
+    state.reset(new OpticalConnectorState());
+  }
+
+  DrawOpticalConnector(ctx, *(OpticalConnectorState*)state.get(), from_point, to_point);
 }
 
 }  // namespace automat::gui

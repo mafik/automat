@@ -4,6 +4,8 @@
 #include <include/core/SkMaskFilter.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <cmath>
+
 #include "arcline.hh"
 #include "font.hh"
 #include "log.hh"
@@ -193,6 +195,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
 
   auto& dispenser = start;
   float dt = ctx.animation_context.timer.d;
+  dt = std::clamp<float>(dt, 0.001, 0.1);
   auto& chain = state.sections;
   using ChainLink = OpticalConnectorState::CableSegment;
   constexpr float kStep = 0.005;
@@ -255,7 +258,14 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   }
 
   for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
-    chain[i].acc += (anchors[i] - chain[i].pos) * 1e3;
+    Vec2 new_pos =
+        chain[i].pos + (anchors[i] - chain[i].pos) * expf(-dt * 6000.0f * i / anchors.size());
+    chain[i].vel += (new_pos - chain[i].pos) / dt;
+    chain[i].pos = new_pos;
+  }
+
+  for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
+    chain[i].acc += (anchors[i] - chain[i].pos) * 1e2;
   }
 
   canvas.drawCircle(start.x, start.y, kCrossSize, cross_paint);
@@ -351,7 +361,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   }
 
   for (int i = 1; i < chain.size(); i++) {
-    if (i == chain.size() - 1 && chain.size() == anchors.size()) {
+    if (i == chain.size() - 1 && chain.size() <= anchors.size()) {
       // This check prevents dispenser apparently shooting out more
       // cable than it should.
       continue;
@@ -389,6 +399,22 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
       canvas.restore();
     }
     // canvas.drawPath(p, chain_paint);
+  }
+
+  {  // Draw the chain as a bezier curve
+    SkPaint cable_paint;
+    cable_paint.setColor(0xff0088ff);
+    cable_paint.setAntiAlias(true);
+    cable_paint.setStrokeWidth(0.001);
+    cable_paint.setStyle(SkPaint::kStroke_Style);
+    SkPath p;
+    p.moveTo(chain[0].pos);
+    for (int i = 1; i < chain.size(); i++) {
+      Vec2 p1 = chain[i - 1].pos + Vec2::Polar(dir[i - 1], kStep / 3);
+      Vec2 p2 = chain[i].pos - Vec2::Polar(dir[i], kStep / 3);
+      p.cubicTo(p1, p2, chain[i].pos);
+    }
+    canvas.drawPath(p, cable_paint);
   }
 }
 

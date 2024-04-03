@@ -2,6 +2,7 @@
 
 #include <include/core/SkPath.h>
 
+#include "log.hh"
 #include "math.hh"
 #include "vec.hh"
 
@@ -50,6 +51,58 @@ struct ArcLine {
   ArcLine& Outset(float offset);
 
   SkPath ToPath(bool close = true) const;
+
+  struct Iterator {
+    const ArcLine& arcline;
+    U32 i;
+    float i_fract;  // A value between 0 and 1.
+
+    Vec2 segment_start_pos;
+    float segment_start_angle;
+
+    // Constructs a new iterator at the beginning of the ArcLine.
+    Iterator(const ArcLine& arcline)
+        : arcline(arcline),
+          i(0),
+          i_fract(0),
+          segment_start_pos(arcline.start),
+          segment_start_angle(arcline.start_angle) {}
+
+    // Return the current position of the iterator.
+    Vec2 Position() const {
+      if (arcline.types[i] == Type::Line) {
+        return segment_start_pos +
+               Vec2::Polar(segment_start_angle, arcline.segments[i].line.length * i_fract);
+      } else {
+        const auto& arc = arcline.segments[i].arc;
+        const float angle_to_center =
+            segment_start_angle + (arc.sweep_angle > 0 ? M_PI / 2 : -M_PI / 2);
+        const Vec2 center = segment_start_pos + Vec2::Polar(angle_to_center, arc.radius);
+        const float angle_to_p = M_PI + angle_to_center + arc.sweep_angle * i_fract;
+        return center + Vec2::Polar(angle_to_p, arc.radius);
+      }
+    }
+
+    // Return the current angle of the iterator. May fall outside of [-PI, PI] range.
+    float Angle() const {
+      if (arcline.types[i] == Type::Line) {
+        return segment_start_angle;
+      } else {
+        const auto& arc = arcline.segments[i].arc;
+        return segment_start_angle + arc.sweep_angle * i_fract;
+      }
+    }
+
+    // Move the iterator along the ArcLine by `length`.
+    // The length can be negative, in which case the iterator will move backwards.
+    // The iterator will stop at the end of the ArcLine.
+    // Returns the actual distance the iterator moved.
+    float Advance(float length);
+
+    // Move the iterator to the end of the ArcLine.
+    // Returns the actual distance the iterator moved.
+    float AdvanceToEnd();
+  };
 
   // An operation that moves the ArcLine sideways without changing its direction.
   // A sideways move is performed by two arcs and an optional move between them.

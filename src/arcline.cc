@@ -129,4 +129,88 @@ void ArcLine::TurnShift::Apply(ArcLine& line) const {
   line.TurnBy(-first_turn_angle, turn_radius);
 }
 
+float ArcLine::Iterator::Advance(float length) {
+  float distance = 0;
+  while (length != 0) {
+    const auto& segment = arcline.segments[i];
+    float segment_length = arcline.types[i] == Type::Line
+                               ? segment.line.length
+                               : fabsf(segment.arc.sweep_angle) * segment.arc.radius;
+    float remaining_segment_length = segment_length * (length > 0 ? 1 - i_fract : i_fract);
+    if (fabsf(length) < remaining_segment_length) {
+      i_fract += length / segment_length;
+      distance += length;
+      length = 0;
+      break;
+    }
+    if (length > 0) {
+      distance += remaining_segment_length;
+      length -= remaining_segment_length;
+      if (i == arcline.types.size() - 1) {
+        i_fract = 1;
+        break;
+      } else {
+        if (arcline.types[i] == Type::Line) {
+          segment_start_pos += Vec2::Polar(segment_start_angle, segment_length);
+        } else {
+          const auto& arc = segment.arc;
+          Turn(segment_start_pos, segment_start_angle, arc.sweep_angle, arc.radius);
+        }
+        ++i;
+        i_fract = 0;
+      }
+    } else {  // length < 0
+      distance -= remaining_segment_length;
+      length += remaining_segment_length;
+      if (i == 0) {
+        i_fract = 0;
+        segment_start_angle = arcline.start_angle;
+        segment_start_pos = arcline.start;
+        break;
+      } else {
+        i_fract = 1;
+        --i;
+        if (arcline.types[i] == Type::Line) {
+          segment_start_pos -= Vec2::Polar(segment_start_angle, arcline.segments[i].line.length);
+        } else {
+          const auto& arc = arcline.segments[i].arc;
+          segment_start_angle += M_PI;
+          Turn(segment_start_pos, segment_start_angle, -arc.sweep_angle, arc.radius);
+          segment_start_angle -= M_PI;
+        }
+      }
+    }
+  }
+  return distance;
+}
+
+float ArcLine::Iterator::AdvanceToEnd() {
+  float distance = 0;
+  if (i_fract > 0) {
+    if (arcline.types[i] == Type::Line) {
+      distance += arcline.segments[i].line.length * (1 - i_fract);
+    } else {
+      distance += fabsf(arcline.segments[i].arc.sweep_angle) * arcline.segments[i].arc.radius *
+                  (1 - i_fract);
+    }
+    i_fract = 0;
+    ++i;
+  }
+  for (; i < arcline.types.size() - 1; ++i) {
+    if (arcline.types[i] == Type::Line) {
+      segment_start_pos += Vec2::Polar(segment_start_angle, arcline.segments[i].line.length);
+      distance += arcline.segments[i].line.length;
+    } else {
+      float r = arcline.segments[i].arc.radius;
+      float sweep_angle = arcline.segments[i].arc.sweep_angle;
+      float dir = sweep_angle > 0 ? 1 : -1;
+      float alpha0 = segment_start_angle;
+      Vec2 center = segment_start_pos + Vec2::Polar(segment_start_angle + dir * M_PI / 2, r);
+      Turn(segment_start_pos, segment_start_angle, sweep_angle, r);
+      distance += fabsf(sweep_angle) * r;
+    }
+  }
+  i_fract = 1;
+  return distance;
+}
 }  // namespace maf

@@ -14,12 +14,16 @@ namespace automat::gui {
 struct OpticalConnectorState : ConnectionState {
   float dispenser_v;
 
-  struct CableSection {
+  struct CableSegment {
     Vec2 pos;
     Vec2 vel;
+    Vec2 acc;
   };
 
-  maf::Vec<CableSection> sections;
+  maf::Vec<CableSegment> sections;
+
+  OpticalConnectorState() : ConnectionState(), dispenser_v(0) {}
+  ~OpticalConnectorState() override = default;
   // TODO: when the cable simulation stabilizes, draw it as a simple ArcLine.
 };
 

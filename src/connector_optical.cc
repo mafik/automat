@@ -5,6 +5,7 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "arcline.hh"
+#include "font.hh"
 #include "log.hh"
 #include "svg.hh"
 
@@ -15,10 +16,8 @@ namespace automat::gui {
 constexpr float kCasingWidth = 0.008;
 constexpr float kCasingHeight = 0.008;
 
-ArcLine RouteCable(Vec2 start, Vec2 end) {
+ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
   ArcLine cable = ArcLine(start, M_PI * 1.5);
-  float casing_top = end.y + kCasingHeight;
-  Vec2 cable_end = Vec2(end.x, casing_top);
   Vec2 cable_middle = (start + cable_end) / 2;
   Vec2 delta = cable_middle - start;
   float distance = Length(delta);
@@ -28,7 +27,7 @@ ArcLine RouteCable(Vec2 start, Vec2 end) {
   float move_down = -delta.y - horizontal_shift.distance_forward / 2;
   if (move_down < 0) {
     auto vertical_shift =
-        ArcLine::TurnShift(end.x < start.x ? move_down * 2 : -move_down * 2, turn_radius);
+        ArcLine::TurnShift(cable_end.x < start.x ? move_down * 2 : -move_down * 2, turn_radius);
 
     float move_side = (horizontal_shift.move_between_turns - vertical_shift.distance_forward) / 2;
     if (move_side < 0) {
@@ -37,7 +36,7 @@ ArcLine RouteCable(Vec2 start, Vec2 end) {
       float x = start.x;
       float y = start.y;
       float dir;
-      if (start.x > end.x) {
+      if (start.x > cable_end.x) {
         dir = 1;
       } else {
         dir = -1;
@@ -93,14 +92,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   float casing_right = end.x + kCasingWidth / 2;
   float casing_top = end.y + kCasingHeight;
 
-  SkPaint cable_paint;
-  cable_paint.setColor(SK_ColorBLACK);
-  cable_paint.setAlphaf(.5);
-  cable_paint.setStrokeWidth(0.0005);
-  cable_paint.setStyle(SkPaint::kStroke_Style);
-  cable_paint.setAntiAlias(true);
-
-  ArcLine cable = RouteCable(start, end);
+  Vec2 cable_end = Vec2(end.x, casing_top);
+  ArcLine cable = RouteCable(start, cable_end);
 
   auto cable_path = cable.ToPath(false);
 
@@ -179,7 +172,15 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     canvas.drawPath(path, icon_paint);
   }
 
-  canvas.drawPath(cable_path, cable_paint);
+  {  // Draw the arcline
+    SkPaint arcline_paint;
+    arcline_paint.setColor(SK_ColorBLACK);
+    arcline_paint.setAlphaf(.5);
+    arcline_paint.setStrokeWidth(0.0005);
+    arcline_paint.setStyle(SkPaint::kStroke_Style);
+    arcline_paint.setAntiAlias(true);
+    canvas.drawPath(cable_path, arcline_paint);
+  }
 
   auto it = ArcLine::Iterator(cable);
   float cable_length = it.AdvanceToEnd();
@@ -190,22 +191,204 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   cross_paint.setStrokeWidth(0.0005);
   cross_paint.setStyle(SkPaint::kStroke_Style);
 
-  float desired_advance = 0.005;
-  while (true) {
-    Vec2 pos = it.Position();
-    constexpr float kCrossSize = 0.0005;
+  auto& dispenser = start;
+  float dt = ctx.animation_context.timer.d;
+  auto& chain = state.sections;
+  using ChainLink = OpticalConnectorState::CableSegment;
+  constexpr float kStep = 0.005;
+  constexpr float kCrossSize = 0.0005;
+  if (chain.empty()) {
+    chain.emplace_back();
+    chain.emplace_back();
+  }
+  chain.front().pos = cable_end;
+  chain.back().pos = start;
+
+  for (auto& link : chain) {
+    link.acc = Vec2(0, 0);
+  }
+
+  Vec<Vec2> anchors;
+  {  // Fill anchors
+    anchors.push_back(cable_end);
+    for (float cable_pos = kStep; cable_pos + kStep < cable_length; cable_pos += kStep) {
+      it.Advance(-kStep);
+      Vec2 anchor = it.Position();
+      anchors.push_back(anchor);
+    }
+    anchors.push_back(start);
+  }
+
+  for (auto& anchor : anchors) {  // Orange crosses
     SkPath cross;
-    cross.moveTo(pos.x - kCrossSize, pos.y - kCrossSize);
-    cross.lineTo(pos.x + kCrossSize, pos.y + kCrossSize);
-    cross.moveTo(pos.x + kCrossSize, pos.y - kCrossSize);
-    cross.lineTo(pos.x - kCrossSize, pos.y + kCrossSize);
+    cross.moveTo(anchor.x - kCrossSize, anchor.y - kCrossSize);
+    cross.lineTo(anchor.x + kCrossSize, anchor.y + kCrossSize);
+    cross.moveTo(anchor.x + kCrossSize, anchor.y - kCrossSize);
+    cross.lineTo(anchor.x - kCrossSize, anchor.y + kCrossSize);
     canvas.drawPath(cross, cross_paint);
-    float actual_advance = -it.Advance(-desired_advance);
-    if (desired_advance - actual_advance > 1e-5) {
-      pos = it.Position();
-      canvas.drawCircle(pos.x, pos.y, kCrossSize, cross_paint);
+  }
+
+  Vec<float> distances;
+  for (int i = 1; i < anchors.size(); i++) {  // Fill distances
+    distances.push_back(Length(anchors[i] - anchors[i - 1]));
+  }
+  if (chain.size() > anchors.size()) {
+    distances[distances.size() - 1] = kStep;
+  }
+  auto GetDesiredDist = [&](int i) -> float { return i < distances.size() ? distances[i] : kStep; };
+
+  while (chain.size() < anchors.size()) {
+    auto delta = chain[chain.size() - 2].pos - dispenser;
+    auto current_dist = Length(delta);
+    auto desired_dist = GetDesiredDist(chain.size() - 2);
+    if (current_dist > desired_dist + state.dispenser_v * dt * 2) {
+      chain.insert(chain.begin() + chain.size() - 1,
+                   ChainLink{
+                       .pos = chain[chain.size() - 2].pos - delta / current_dist * desired_dist,
+                       .vel = Vec2(0, 0),
+                       .acc = Vec2(0, 0),
+                   });
+      state.dispenser_v = 0;
+    } else {
       break;
     }
+  }
+
+  for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
+    chain[i].acc += (anchors[i] - chain[i].pos) * 1e3;
+  }
+
+  canvas.drawCircle(start.x, start.y, kCrossSize, cross_paint);
+
+  Vec<float> dir;
+  dir.resize(chain.size());
+  dir[0] = M_PI / 2;
+  for (int i = 1; i < chain.size() - 1; i++) {
+    auto& prev = chain[i - 1];
+    auto& next = chain[i + 1];
+    dir[i] = atan(next.pos - prev.pos);
+  }
+  dir[chain.size() - 1] = M_PI / 2;
+
+  SkPaint stiffness_paint;
+  stiffness_paint.setColor(0x80ff0000);
+  stiffness_paint.setAntiAlias(true);
+  stiffness_paint.setStyle(SkPaint::kFill_Style);
+  {  // Apply stiffness forces
+    const float angle_limit = M_PI / 8;
+    const float stiffness = 1e3;
+    for (int i = 1; i < chain.size(); i++) {
+      auto& c = chain[i];
+      auto& prev = chain[i - 1];
+      auto alpha = atan(c.pos - prev.pos);
+      auto diff = alpha - dir[i - 1];
+      if (diff > M_PI) diff -= M_PI * 2;
+      if (diff < -M_PI) diff += M_PI * 2;
+      if (fabsf(diff) > angle_limit) {
+        float length = GetDesiredDist(i - 1);
+        auto limit = dir[i - 1] + (diff >= 0 ? angle_limit : -angle_limit);
+        auto f = (prev.pos + Vec2::Polar(limit, length) - c.pos) * stiffness;
+        c.acc += f;
+        prev.acc -= f;
+
+        Rect rect;
+        rect.left = prev.pos.x - length;
+        rect.right = prev.pos.x + length;
+        rect.top = prev.pos.y + length;
+        rect.bottom = prev.pos.y - length;
+        float startAngle = limit / M_PI * 180;
+        float sweepAngle = diff > 0 ? diff - angle_limit : diff + angle_limit;
+        sweepAngle *= 180 / M_PI;
+
+        canvas.drawArc(rect.sk, startAngle, sweepAngle, true, stiffness_paint);
+      }
+    }
+    for (int i = 1; i < chain.size() - 1; i++) {
+      auto& c = chain[i];
+      auto& next = chain[i + 1];
+      auto alpha = atan(next.pos - c.pos);
+      auto diff = alpha - dir[i + 1];
+      if (diff > M_PI) diff -= M_PI * 2;
+      if (diff < -M_PI) diff += M_PI * 2;
+      if (fabsf(diff) > angle_limit) {
+        float length = GetDesiredDist(i);
+        auto limit = dir[i + 1] + (diff >= 0 ? angle_limit : -angle_limit);
+        auto f = (next.pos - Vec2::Polar(limit, length) - c.pos) * stiffness;
+        c.acc += f;
+        next.acc -= f;
+        Rect rect;
+        rect.left = next.pos.x - length;
+        rect.right = next.pos.x + length;
+        rect.top = next.pos.y + length;
+        rect.bottom = next.pos.y - length;
+        float startAngle = 180 + limit / M_PI * 180;
+        float sweepAngle = diff > 0 ? diff - angle_limit : diff + angle_limit;
+        sweepAngle *= 180 / M_PI;
+        canvas.drawArc(rect.sk, startAngle, sweepAngle, true, stiffness_paint);
+      }
+    }
+  }
+
+  for (int i = 1; i < chain.size() - 1; ++i) {
+    chain[i].vel += chain[i].acc * dt;
+  }
+
+  {                      // Friction
+    int friction_i = 1;  // Skip segment 0 (always attached to mouse)
+    // Segments that have anchors have higher friction
+    auto n_high_friction = std::min(chain.size() - 1, anchors.size());
+    for (; friction_i < n_high_friction; ++friction_i) {
+      chain[friction_i].vel *= expf(-40 * dt);
+    }
+    // Segments without anchors are more free to move
+    for (; friction_i < chain.size() - 1; ++friction_i) {
+      chain[friction_i].vel *= expf(-10 * dt);
+    }
+  }
+
+  for (int i = 1; i < chain.size() - 1; ++i) {
+    chain[i].pos += chain[i].vel * dt;
+  }
+
+  for (int i = 1; i < chain.size(); i++) {
+    if (i == chain.size() - 1 && chain.size() == anchors.size()) {
+      // This check prevents dispenser apparently shooting out more
+      // cable than it should.
+      continue;
+    }
+
+    auto& curr = chain[i];
+    auto& prev = chain[i - 1];
+    auto c = (curr.pos + prev.pos) / 2;
+    auto d = curr.pos - prev.pos;
+    auto dist = Length(d);
+    auto target_dist = GetDesiredDist(i - 1);
+    auto new_curr = c + d / dist * target_dist / 2;
+    auto new_prev = c - d / dist * target_dist / 2;
+    curr.vel += (new_curr - curr.pos) / dt;
+    prev.vel += (new_prev - prev.pos) / dt;
+    curr.pos = new_curr;
+    prev.pos = new_prev;
+  }
+
+  auto& font = GetFont();
+
+  {  // Draw the chain as a series of straight lines
+    SkPaint chain_paint;
+    chain_paint.setColor(0xff0088ff);
+    chain_paint.setAntiAlias(true);
+    chain_paint.setStrokeWidth(0.00025);
+    chain_paint.setStyle(SkPaint::kStroke_Style);
+    for (int i = 0; i < chain.size(); ++i) {
+      Vec2 line_offset = Vec2::Polar(dir[i], kStep / 4);
+      canvas.drawLine(chain[i].pos - line_offset, chain[i].pos + line_offset, chain_paint);
+      canvas.save();
+      Str i_str = ::ToStr(i);
+      canvas.translate(chain[i].pos.x, chain[i].pos.y);
+      font.DrawText(canvas, i_str, SkPaint());
+      canvas.restore();
+    }
+    // canvas.drawPath(p, chain_paint);
   }
 }
 

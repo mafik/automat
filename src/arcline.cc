@@ -210,6 +210,13 @@ float ArcLine::Iterator::AdvanceToEnd() {
       distance += fabsf(sweep_angle) * r;
     }
   }
+  if (i == arcline.types.size() - 1) {
+    if (arcline.types[i] == Type::Line) {
+      distance += arcline.segments[i].line.length;
+    } else {
+      distance += fabsf(arcline.segments[i].arc.sweep_angle) * arcline.segments[i].arc.radius;
+    }
+  }
   i_fract = 1;
   return distance;
 }

@@ -487,8 +487,12 @@ int LinuxMain(int argc, char* argv[]) {
 
   RenderLoop();
 
+  mouse.reset();
+
   vk::Destroy();
   xcb_destroy_window(connection, xcb_window);
+
+  window.reset();
 
   LOG << "Exiting.";
 

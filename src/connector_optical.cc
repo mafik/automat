@@ -9,6 +9,7 @@
 #include "arcline.hh"
 #include "font.hh"
 #include "log.hh"
+#include "math.hh"
 #include "svg.hh"
 
 using namespace maf;
@@ -235,8 +236,40 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   for (int i = 1; i < anchors.size(); i++) {  // Fill distances
     distances.push_back(Length(anchors[i] - anchors[i - 1]));
   }
+  while (distances.size() < chain.size() - 1) {
+    distances.push_back(kStep);
+  }
+  // Dispenser pulling the chain in
   if (chain.size() > anchors.size()) {
-    distances[distances.size() - 1] = kStep;
+    distances[chain.size() - 2] = Length(dispenser - chain[chain.size() - 2].pos);
+
+    state.dispenser_v += 5e-1 * dt;
+    state.dispenser_v *= expf(-1 * dt);  // Limit the maximum speed
+    float retract = state.dispenser_v * dt;
+    // Shorten the final link by pulling it towards the dispenser
+    Vec2 prev = dispenser;
+    float total_dist = 0;
+    int i = chain.size() - 2;
+    for (; i >= 0; --i) {
+      total_dist += distances[i];
+      if (total_dist > retract) {
+        break;
+      }
+    }
+    if (retract > total_dist) {
+      retract = total_dist;
+    }
+    for (int j = chain.size() - 2; j > i; --j) {
+      chain.EraseIndex(j);
+    }
+    float remaining = total_dist - retract;
+    // Move chain[i] to |remaining| distance from dispenser
+    distances[i] = remaining;
+    if (i - 1 >= 0) {
+      distances[i - 1] = Length(chain[i - 1].pos - chain[i].pos);
+    }
+  } else {
+    state.dispenser_v = 0;
   }
   auto GetDesiredDist = [&](int i) -> float { return i < distances.size() ? distances[i] : kStep; };
 
@@ -257,15 +290,19 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     }
   }
 
-  for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
-    Vec2 new_pos =
-        chain[i].pos + (anchors[i] - chain[i].pos) * expf(-dt * 6000.0f * i / anchors.size());
-    chain[i].vel += (new_pos - chain[i].pos) / dt;
-    chain[i].pos = new_pos;
+  if (true) {  // Move chain links towards anchors (more at the end of the cable)
+    for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
+      Vec2 new_pos =
+          chain[i].pos + (anchors[i] - chain[i].pos) * expf(-dt * 6000.0f * i / anchors.size());
+      chain[i].vel += (new_pos - chain[i].pos) / dt;
+      chain[i].pos = new_pos;
+    }
   }
 
-  for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
-    chain[i].acc += (anchors[i] - chain[i].pos) * 1e2;
+  if (true) {  // Apply forces towards anchors
+    for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
+      chain[i].acc += (anchors[i] - chain[i].pos) * 1e2;
+    }
   }
 
   canvas.drawCircle(start.x, start.y, kCrossSize, cross_paint);
@@ -284,7 +321,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   stiffness_paint.setColor(0x80ff0000);
   stiffness_paint.setAntiAlias(true);
   stiffness_paint.setStyle(SkPaint::kFill_Style);
-  {  // Apply stiffness forces
+  if (true) {  // Apply stiffness forces
     const float angle_limit = M_PI / 8;
     const float stiffness = 1e3;
     for (int i = 1; i < chain.size(); i++) {
@@ -348,11 +385,11 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     // Segments that have anchors have higher friction
     auto n_high_friction = std::min(chain.size() - 1, anchors.size());
     for (; friction_i < n_high_friction; ++friction_i) {
-      chain[friction_i].vel *= expf(-40 * dt);
+      chain[friction_i].vel *= expf(-20 * dt);
     }
     // Segments without anchors are more free to move
     for (; friction_i < chain.size() - 1; ++friction_i) {
-      chain[friction_i].vel *= expf(-10 * dt);
+      chain[friction_i].vel *= expf(-2 * dt);
     }
   }
 
@@ -360,7 +397,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     chain[i].pos += chain[i].vel * dt;
   }
 
-  for (int i = 1; i < chain.size(); i++) {
+  chain.front().pos = cable_end;
+  chain.back().pos = dispenser;
+  for (int i = 1; i < chain.size(); i++) {  // Cable length constraint
     if (i == chain.size() - 1 && chain.size() <= anchors.size()) {
       // This check prevents dispenser apparently shooting out more
       // cable than it should.
@@ -379,6 +418,13 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     prev.vel += (new_prev - prev.pos) / dt;
     curr.pos = new_curr;
     prev.pos = new_prev;
+  }
+  chain.front().pos = cable_end;
+  chain.back().pos = dispenser;
+  chain.front().vel = Vec2(0, 0);
+  chain.back().vel = Vec2(0, 0);
+  for (int i = 1; i < chain.size() - 1; i++) {
+    chain[i].vel = (chain[i - 1].vel * 0.3 + chain[i + 1].vel * 0.3 + chain[i].vel * 0.4);
   }
 
   auto& font = GetFont();
@@ -401,7 +447,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     // canvas.drawPath(p, chain_paint);
   }
 
-  {  // Draw the chain as a bezier curve
+  if (true) {  // Draw the chain as a bezier curve
     SkPaint cable_paint;
     cable_paint.setColor(0xff0088ff);
     cable_paint.setAntiAlias(true);

@@ -18,6 +18,9 @@ struct OpticalConnectorState : ConnectionState {
     Vec2 pos;
     Vec2 vel;
     Vec2 acc;
+
+    // Distance to the next element
+    float distance;
   };
 
   maf::Vec<CableSegment> sections;

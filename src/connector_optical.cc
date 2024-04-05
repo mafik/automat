@@ -18,6 +18,7 @@ namespace automat::gui {
 
 constexpr float kCasingWidth = 0.008;
 constexpr float kCasingHeight = 0.008;
+constexpr bool kDebugCable = false;
 
 ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
   ArcLine cable = ArcLine(start, M_PI * 1.5);
@@ -175,7 +176,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     canvas.drawPath(path, icon_paint);
   }
 
-  {  // Draw the arcline
+  if constexpr (kDebugCable) {  // Draw the arcline
     SkPaint arcline_paint;
     arcline_paint.setColor(SK_ColorBLACK);
     arcline_paint.setAlphaf(.5);
@@ -223,35 +224,39 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     anchors.push_back(start);
   }
 
-  for (auto& anchor : anchors) {  // Orange crosses
-    SkPath cross;
-    cross.moveTo(anchor.x - kCrossSize, anchor.y - kCrossSize);
-    cross.lineTo(anchor.x + kCrossSize, anchor.y + kCrossSize);
-    cross.moveTo(anchor.x + kCrossSize, anchor.y - kCrossSize);
-    cross.lineTo(anchor.x - kCrossSize, anchor.y + kCrossSize);
-    canvas.drawPath(cross, cross_paint);
+  if constexpr (kDebugCable) {  // Orange crosses
+    for (auto& anchor : anchors) {
+      SkPath cross;
+      cross.moveTo(anchor.x - kCrossSize, anchor.y - kCrossSize);
+      cross.lineTo(anchor.x + kCrossSize, anchor.y + kCrossSize);
+      cross.moveTo(anchor.x + kCrossSize, anchor.y - kCrossSize);
+      cross.lineTo(anchor.x - kCrossSize, anchor.y + kCrossSize);
+      canvas.drawPath(cross, cross_paint);
+    }
+    canvas.drawCircle(start.x, start.y, kCrossSize, cross_paint);
   }
 
-  Vec<float> distances;
-  for (int i = 1; i < anchors.size(); i++) {  // Fill distances
-    distances.push_back(Length(anchors[i] - anchors[i - 1]));
-  }
-  while (distances.size() < chain.size() - 1) {
-    distances.push_back(kStep);
+  for (int i = 1; i < anchors.size() && i < chain.size(); i++) {  // Fill distances
+    float distance_target = Length(anchors[i] - anchors[i - 1]);
+    chain[i - 1].distance = distance_target;
+    // Smooth variant (leaving this for later)
+    // chain[i-1].distance += (distance_target - chain[i-1].distance) * expf(-dt * 10);
   }
   // Dispenser pulling the chain in
   if (chain.size() > anchors.size()) {
-    distances[chain.size() - 2] = Length(dispenser - chain[chain.size() - 2].pos);
-
-    state.dispenser_v += 5e-1 * dt;
+    // chain[chain.size() - 2].distance = Length(dispenser - chain[chain.size() - 2].pos);
+    state.dispenser_v += 1e0 * dt;
     state.dispenser_v *= expf(-1 * dt);  // Limit the maximum speed
+    if constexpr (kDebugCable) {
+      canvas.drawLine(dispenser, dispenser + Vec2(0, state.dispenser_v / 10), cross_paint);
+    }
     float retract = state.dispenser_v * dt;
     // Shorten the final link by pulling it towards the dispenser
     Vec2 prev = dispenser;
     float total_dist = 0;
     int i = chain.size() - 2;
     for (; i >= 0; --i) {
-      total_dist += distances[i];
+      total_dist += chain[i].distance;
       if (total_dist > retract) {
         break;
       }
@@ -264,29 +269,30 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     }
     float remaining = total_dist - retract;
     // Move chain[i] to |remaining| distance from dispenser
-    distances[i] = remaining;
+    chain[i].distance = remaining;
     if (i - 1 >= 0) {
-      distances[i - 1] = Length(chain[i - 1].pos - chain[i].pos);
+      chain[i - 1].distance = Length(chain[i - 1].pos - chain[i].pos);
     }
   } else {
     state.dispenser_v = 0;
   }
-  auto GetDesiredDist = [&](int i) -> float { return i < distances.size() ? distances[i] : kStep; };
 
-  while (chain.size() < anchors.size()) {
+  {  // Add a new link if the last one is too far from the dispenser
     auto delta = chain[chain.size() - 2].pos - dispenser;
     auto current_dist = Length(delta);
-    auto desired_dist = GetDesiredDist(chain.size() - 2);
-    if (current_dist > desired_dist + state.dispenser_v * dt * 2) {
-      chain.insert(chain.begin() + chain.size() - 1,
-                   ChainLink{
-                       .pos = chain[chain.size() - 2].pos - delta / current_dist * desired_dist,
-                       .vel = Vec2(0, 0),
-                       .acc = Vec2(0, 0),
-                   });
-      state.dispenser_v = 0;
-    } else {
-      break;
+    auto desired_dist = chain[chain.size() - 2].distance;
+    float min_distance = chain.size() < anchors.size() ? kStep : 2 * kStep;
+    if (current_dist > min_distance &&
+        current_dist > desired_dist * 1.1 + state.dispenser_v * dt * 2) {
+      chain[chain.size() - 2].distance = kStep;
+      auto new_it =
+          chain.insert(chain.begin() + chain.size() - 1,
+                       ChainLink{
+                           .pos = chain[chain.size() - 2].pos - delta / current_dist * kStep,
+                           .vel = Vec2(0, 0),
+                           .acc = Vec2(0, 0),
+                           .distance = desired_dist - kStep,
+                       });
     }
   }
 
@@ -301,11 +307,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
 
   if (true) {  // Apply forces towards anchors
     for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
-      chain[i].acc += (anchors[i] - chain[i].pos) * 1e2;
+      chain[i].acc += (anchors[i] - chain[i].pos) * 3e2;
     }
   }
-
-  canvas.drawCircle(start.x, start.y, kCrossSize, cross_paint);
 
   Vec<float> dir;
   dir.resize(chain.size());
@@ -321,8 +325,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   stiffness_paint.setColor(0x80ff0000);
   stiffness_paint.setAntiAlias(true);
   stiffness_paint.setStyle(SkPaint::kFill_Style);
-  if (true) {  // Apply stiffness forces
-    const float angle_limit = M_PI / 8;
+  if (true) {                     // Apply stiffness forces
+    const float angle_limit = 0;  // M_PI / 8;
     const float stiffness = 1e3;
     for (int i = 1; i < chain.size(); i++) {
       auto& c = chain[i];
@@ -332,22 +336,23 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
       if (diff > M_PI) diff -= M_PI * 2;
       if (diff < -M_PI) diff += M_PI * 2;
       if (fabsf(diff) > angle_limit) {
-        float length = GetDesiredDist(i - 1);
         auto limit = dir[i - 1] + (diff >= 0 ? angle_limit : -angle_limit);
-        auto f = (prev.pos + Vec2::Polar(limit, length) - c.pos) * stiffness;
+        auto f = (prev.pos + Vec2::Polar(limit, prev.distance) - c.pos) * stiffness;
         c.acc += f;
         prev.acc -= f;
 
-        Rect rect;
-        rect.left = prev.pos.x - length;
-        rect.right = prev.pos.x + length;
-        rect.top = prev.pos.y + length;
-        rect.bottom = prev.pos.y - length;
-        float startAngle = limit / M_PI * 180;
-        float sweepAngle = diff > 0 ? diff - angle_limit : diff + angle_limit;
-        sweepAngle *= 180 / M_PI;
+        if constexpr (kDebugCable) {
+          Rect rect;
+          rect.left = prev.pos.x - prev.distance;
+          rect.right = prev.pos.x + prev.distance;
+          rect.top = prev.pos.y + prev.distance;
+          rect.bottom = prev.pos.y - prev.distance;
+          float startAngle = limit / M_PI * 180;
+          float sweepAngle = diff > 0 ? diff - angle_limit : diff + angle_limit;
+          sweepAngle *= 180 / M_PI;
 
-        canvas.drawArc(rect.sk, startAngle, sweepAngle, true, stiffness_paint);
+          canvas.drawArc(rect.sk, startAngle, sweepAngle, true, stiffness_paint);
+        }
       }
     }
     for (int i = 1; i < chain.size() - 1; i++) {
@@ -358,20 +363,21 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
       if (diff > M_PI) diff -= M_PI * 2;
       if (diff < -M_PI) diff += M_PI * 2;
       if (fabsf(diff) > angle_limit) {
-        float length = GetDesiredDist(i);
         auto limit = dir[i + 1] + (diff >= 0 ? angle_limit : -angle_limit);
-        auto f = (next.pos - Vec2::Polar(limit, length) - c.pos) * stiffness;
+        auto f = (next.pos - Vec2::Polar(limit, c.distance) - c.pos) * stiffness;
         c.acc += f;
         next.acc -= f;
-        Rect rect;
-        rect.left = next.pos.x - length;
-        rect.right = next.pos.x + length;
-        rect.top = next.pos.y + length;
-        rect.bottom = next.pos.y - length;
-        float startAngle = 180 + limit / M_PI * 180;
-        float sweepAngle = diff > 0 ? diff - angle_limit : diff + angle_limit;
-        sweepAngle *= 180 / M_PI;
-        canvas.drawArc(rect.sk, startAngle, sweepAngle, true, stiffness_paint);
+        if constexpr (kDebugCable) {
+          Rect rect;
+          rect.left = next.pos.x - c.distance;
+          rect.right = next.pos.x + c.distance;
+          rect.top = next.pos.y + c.distance;
+          rect.bottom = next.pos.y - c.distance;
+          float startAngle = 180 + limit / M_PI * 180;
+          float sweepAngle = diff > 0 ? diff - angle_limit : diff + angle_limit;
+          sweepAngle *= 180 / M_PI;
+          canvas.drawArc(rect.sk, startAngle, sweepAngle, true, stiffness_paint);
+        }
       }
     }
   }
@@ -397,39 +403,58 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     chain[i].pos += chain[i].vel * dt;
   }
 
-  chain.front().pos = cable_end;
-  chain.back().pos = dispenser;
-  for (int i = 1; i < chain.size(); i++) {  // Cable length constraint
-    if (i == chain.size() - 1 && chain.size() <= anchors.size()) {
-      // This check prevents dispenser apparently shooting out more
-      // cable than it should.
-      continue;
-    }
+  {  // Cable length constraint
+    chain.front().pos = cable_end;
+    chain.back().pos = dispenser;
+    for (int i = 1; i < chain.size(); i++) {  // Cable length constraint
+      if (i == chain.size() - 1 && chain.size() <= anchors.size()) {
+        // This check prevents dispenser apparently shooting out more
+        // cable than it should.
+        continue;
+      }
 
-    auto& curr = chain[i];
-    auto& prev = chain[i - 1];
-    auto c = (curr.pos + prev.pos) / 2;
-    auto d = curr.pos - prev.pos;
-    auto dist = Length(d);
-    auto target_dist = GetDesiredDist(i - 1);
-    auto new_curr = c + d / dist * target_dist / 2;
-    auto new_prev = c - d / dist * target_dist / 2;
-    curr.vel += (new_curr - curr.pos) / dt;
-    prev.vel += (new_prev - prev.pos) / dt;
-    curr.pos = new_curr;
-    prev.pos = new_prev;
-  }
-  chain.front().pos = cable_end;
-  chain.back().pos = dispenser;
-  chain.front().vel = Vec2(0, 0);
-  chain.back().vel = Vec2(0, 0);
-  for (int i = 1; i < chain.size() - 1; i++) {
-    chain[i].vel = (chain[i - 1].vel * 0.3 + chain[i + 1].vel * 0.3 + chain[i].vel * 0.4);
+      auto& curr = chain[i];
+      auto& prev = chain[i - 1];
+      auto c = (curr.pos + prev.pos) / 2;
+      auto d = curr.pos - prev.pos;
+      auto dist = Length(d);
+      auto target_dist = chain[i - 1].distance;
+      auto new_curr = c + d / dist * target_dist / 2;
+      auto new_prev = c - d / dist * target_dist / 2;
+      curr.vel += (new_curr - curr.pos) / dt;
+      prev.vel += (new_prev - prev.pos) / dt;
+      curr.pos = new_curr;
+      prev.pos = new_prev;
+    }
+    chain.front().pos = cable_end;
+    chain.back().pos = dispenser;
+    for (int i = chain.size() - 1; i >= 1; --i) {
+      if (i == chain.size() - 1 && chain.size() <= anchors.size()) {
+        // This check prevents dispenser apparently shooting out more
+        // cable than it should.
+        continue;
+      }
+
+      auto& curr = chain[i];
+      auto& prev = chain[i - 1];
+      auto c = (curr.pos + prev.pos) / 2;
+      auto d = curr.pos - prev.pos;
+      auto dist = Length(d);
+      auto target_dist = chain[i - 1].distance;
+      auto new_curr = c + d / dist * target_dist / 2;
+      auto new_prev = c - d / dist * target_dist / 2;
+      curr.vel += (new_curr - curr.pos) / dt;
+      prev.vel += (new_prev - prev.pos) / dt;
+      curr.pos = new_curr;
+      prev.pos = new_prev;
+    }
+    chain.front().pos = cable_end;
+    chain.back().pos = dispenser;
   }
 
   auto& font = GetFont();
 
-  {  // Draw the chain as a series of straight lines
+  if constexpr (kDebugCable) {  // Draw the chain as a series of straight lines
     SkPaint chain_paint;
     chain_paint.setColor(0xff0088ff);
     chain_paint.setAntiAlias(true);
@@ -449,9 +474,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
 
   if (true) {  // Draw the chain as a bezier curve
     SkPaint cable_paint;
-    cable_paint.setColor(0xff0088ff);
+    cable_paint.setColor(0xff222222);
     cable_paint.setAntiAlias(true);
-    cable_paint.setStrokeWidth(0.001);
+    cable_paint.setStrokeWidth(0.002);
     cable_paint.setStyle(SkPaint::kStroke_Style);
     SkPath p;
     p.moveTo(chain[0].pos);
@@ -462,6 +487,14 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     }
     canvas.drawPath(p, cable_paint);
   }
+
+  // TODO: Draw the cable plug below the object (it should be the main starting point for dragging
+  // the cable)
+  // TODO: Keep the cable on screen after its released
+  // TODO: Once the cable stabilizes, draw it as a simple ArcLine
+  // TODO: Add some noise to the cable texture
+  // TODO: Draw the cable texture (shader?)
+  // TODO: Blinking fiber at the end of the cable
 }
 
 /*

@@ -96,7 +96,7 @@ struct ArcLine {
     // Move the iterator along the ArcLine by `length`.
     // The length can be negative, in which case the iterator will move backwards.
     // The iterator will stop at the end of the ArcLine.
-    // Returns the actual distance the iterator moved.
+    // Returns the actual distance the iterator moved (always >= 0).
     float Advance(float length);
 
     // Move the iterator to the end of the ArcLine.

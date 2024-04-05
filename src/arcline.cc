@@ -137,14 +137,15 @@ float ArcLine::Iterator::Advance(float length) {
                                ? segment.line.length
                                : fabsf(segment.arc.sweep_angle) * segment.arc.radius;
     float remaining_segment_length = segment_length * (length > 0 ? 1 - i_fract : i_fract);
-    if (fabsf(length) < remaining_segment_length) {
+    float length_abs = fabsf(length);
+    if (length_abs < remaining_segment_length) {
       i_fract += length / segment_length;
-      distance += length;
+      distance += length_abs;
       length = 0;
       break;
     }
+    distance += remaining_segment_length;
     if (length > 0) {
-      distance += remaining_segment_length;
       length -= remaining_segment_length;
       if (i == arcline.types.size() - 1) {
         i_fract = 1;
@@ -160,7 +161,6 @@ float ArcLine::Iterator::Advance(float length) {
         i_fract = 0;
       }
     } else {  // length < 0
-      distance -= remaining_segment_length;
       length += remaining_segment_length;
       if (i == 0) {
         i_fract = 0;

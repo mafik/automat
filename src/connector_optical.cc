@@ -3,6 +3,7 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/effects/SkGradientShader.h>
+#include <include/effects/SkRuntimeEffect.h>
 
 #include <cmath>
 
@@ -86,6 +87,33 @@ ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
     }
   }
   return cable;
+}
+
+SkPaint& GetCablePaint() {
+  static SkPaint paint = []() {
+    SkPaint paint;
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setStrokeWidth(0.002);
+    paint.setAntiAlias(true);
+
+    const char* sksl = R"(
+    half4 main(vec2 fragcoord) {
+      float t = fragcoord.y * 0.5 + 0.5;
+      float z = sin(t * 3.14159);
+      float brightness = 0.1 + 0.1 * z;
+      return half4(brightness, brightness, brightness, 1);
+    }
+  )";
+    auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl));
+    if (!err.isEmpty()) {
+      LOG << err.c_str();
+    }
+    std::unique_ptr<SkRuntimeShaderBuilder> shader_builder;
+    shader_builder.reset(new SkRuntimeShaderBuilder(effect));
+    paint.setShader(shader_builder->makeShader());
+    return paint;
+  }();
+  return paint;
 }
 
 void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 start, Vec2 end) {
@@ -469,15 +497,10 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
       font.DrawText(canvas, i_str, SkPaint());
       canvas.restore();
     }
-    // canvas.drawPath(p, chain_paint);
   }
 
   if (true) {  // Draw the chain as a bezier curve
-    SkPaint cable_paint;
-    cable_paint.setColor(0xff222222);
-    cable_paint.setAntiAlias(true);
-    cable_paint.setStrokeWidth(0.002);
-    cable_paint.setStyle(SkPaint::kStroke_Style);
+    SkPaint& cable_paint = GetCablePaint();
     SkPath p;
     p.moveTo(chain[0].pos);
     for (int i = 1; i < chain.size(); i++) {
@@ -485,6 +508,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
       Vec2 p2 = chain[i].pos - Vec2::Polar(dir[i], kStep / 3);
       p.cubicTo(p1, p2, chain[i].pos);
     }
+    p.setIsVolatile(true);
     canvas.drawPath(p, cable_paint);
   }
 

@@ -90,6 +90,7 @@ static_assert(sizeof(Vec3) == 12, "Vec3 is not 12 bytes");
 constexpr float LengthSquared(Vec2 v) { return v.x * v.x + v.y * v.y; }
 inline float Length(Vec2 v) { return v.sk.length(); }
 
+constexpr float Dot(Vec2 a, Vec2 b) { return a.x * b.x + a.y * b.y; }
 constexpr float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 
 // Project vector p onto vector dir.

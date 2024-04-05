@@ -6,7 +6,7 @@
 
 namespace automat::vk {
 
-constexpr int cfg_MSAASampleCount = 1;  // TODO: figure out why only 1 works
+constexpr int cfg_MSAASampleCount = 4;
 constexpr bool cfg_DisableVsync = true;
 
 std::string Init();

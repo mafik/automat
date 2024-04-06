@@ -89,33 +89,6 @@ ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
   return cable;
 }
 
-SkPaint& GetCablePaint() {
-  static SkPaint paint = []() {
-    SkPaint paint;
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setStrokeWidth(0.002);
-    paint.setAntiAlias(true);
-
-    const char* sksl = R"(
-    half4 main(vec2 fragcoord) {
-      float t = fragcoord.y * 0.5 + 0.5;
-      float z = sin(t * 3.14159);
-      float brightness = 0.1 + 0.1 * z;
-      return half4(brightness, brightness, brightness, 1);
-    }
-  )";
-    auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl));
-    if (!err.isEmpty()) {
-      LOG << err.c_str();
-    }
-    std::unique_ptr<SkRuntimeShaderBuilder> shader_builder;
-    shader_builder.reset(new SkRuntimeShaderBuilder(effect));
-    paint.setShader(shader_builder->makeShader());
-    return paint;
-  }();
-  return paint;
-}
-
 void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 start, Vec2 end) {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
@@ -353,8 +326,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   stiffness_paint.setColor(0x80ff0000);
   stiffness_paint.setAntiAlias(true);
   stiffness_paint.setStyle(SkPaint::kFill_Style);
-  if (true) {                     // Apply stiffness forces
-    const float angle_limit = 0;  // M_PI / 8;
+  if (true) {  // Apply stiffness forces
+    const float angle_limit = M_PI / 8;
     const float stiffness = 1e3;
     for (int i = 1; i < chain.size(); i++) {
       auto& c = chain[i];
@@ -500,7 +473,13 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
   }
 
   if (true) {  // Draw the chain as a bezier curve
-    SkPaint& cable_paint = GetCablePaint();
+
+    SkPaint cable_paint;
+    cable_paint.setStyle(SkPaint::kStroke_Style);
+    cable_paint.setStrokeWidth(0.002);
+    cable_paint.setAntiAlias(true);
+    cable_paint.setColor(0xff111111);
+
     SkPath p;
     p.moveTo(chain[0].pos);
     for (int i = 1; i < chain.size(); i++) {
@@ -510,6 +489,14 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     }
     p.setIsVolatile(true);
     canvas.drawPath(p, cable_paint);
+    SkPaint cable_paint2;
+    cable_paint2.setStyle(SkPaint::kStroke_Style);
+    cable_paint2.setStrokeWidth(0.002);
+    cable_paint2.setAntiAlias(true);
+    cable_paint2.setColor(0xff444444);
+    cable_paint2.setMaskFilter(
+        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
+    canvas.drawPath(p, cable_paint2);
   }
 
   // TODO: Draw the cable plug below the object (it should be the main starting point for dragging

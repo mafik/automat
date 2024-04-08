@@ -3,6 +3,7 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
+#include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "gui_constants.hh"
@@ -81,4 +82,11 @@ std::unique_ptr<Action> Object::ButtonDownAction(gui::Pointer& p, gui::PointerBu
   }
   return nullptr;
 }
+
+void Object::Updated(Location& here, Location& updated) {
+  if (Runnable* runnable = dynamic_cast<Runnable*>(this)) {
+    runnable->Run(here);
+  }
+}
+
 }  // namespace automat

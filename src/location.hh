@@ -183,7 +183,7 @@ struct Location : gui::Widget {
   double GetNumber() { return std::stod(GetText()); }
 
   // Immediately execute this object's Run function.
-  void Run() { object->Run(*this); }
+  void Run();
 
   // Immediately execute this object's Errored function.
   void Errored(Location& errored) { object->Errored(*this, errored); }

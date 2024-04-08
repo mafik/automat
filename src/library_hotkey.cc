@@ -25,9 +25,6 @@
 #include <xcb/xcb.h>
 #include <xcb/xinput.h>
 #include <xcb/xproto.h>
-
-#include "linux_main.hh"
-#include "x11.hh"
 #endif
 
 using namespace automat::gui;
@@ -523,7 +520,6 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(then_arg); }
-void HotKey::Run(Location&) {}
 
 ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
   if (visitor(power_button) == ControlFlow::Stop) {

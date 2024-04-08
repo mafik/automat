@@ -38,8 +38,7 @@ struct Object : gui::Widget {
   virtual void Args(std::function<void(Argument&)> cb) {}
   virtual SkPath ArgShape(Argument&) const { return SkPath(); }
 
-  virtual void Run(Location& here) {}
-  virtual void Updated(Location& here, Location& updated) { Run(here); }
+  virtual void Updated(Location& here, Location& updated);
   virtual void Errored(Location& here, Location& errored) {}
 
   virtual std::partial_ordering operator<=>(const Object& other) const noexcept {

@@ -12,7 +12,7 @@ using Clock = std::chrono::steady_clock;
 using Duration = std::chrono::duration<double>;
 using TimePoint = std::chrono::time_point<Clock, Duration>;
 
-struct TimerDelay : LiveObject {
+struct TimerDelay : LiveObject, Runnable {
   Duration duration = 10s;
   TimePoint start_time;
   mutable animation::Approach start_pusher_depression;

@@ -5,7 +5,7 @@
 
 namespace automat {
 
-struct Alert : Object {
+struct Alert : Object, Runnable {
   static const Alert proto;
   static Argument message_arg;
   std::unique_ptr<vector<string>> test_interceptor;

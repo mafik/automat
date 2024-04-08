@@ -38,7 +38,7 @@ struct Integer : Object {
   void SetText(Location& error_context, string_view text) override { i = std::stoi(string(text)); }
 };
 
-struct Delete : Object {
+struct Delete : Object, Runnable {
   static const Delete proto;
   static Argument target_arg;
   string_view Name() const override { return "Delete"; }
@@ -52,7 +52,7 @@ struct Delete : Object {
   }
 };
 
-struct Set : Object {
+struct Set : Object, Runnable {
   static const Set proto;
   static Argument value_arg;
   static Argument target_arg;
@@ -134,7 +134,7 @@ struct FakeTime {
 // In addition to periodic timers we could also have two other types of timers:
 // 1. _Continuous_ timers - which reschedule their `Run` without any delay.
 // 2. _Lazy_ timers - which never `Run` but can be queried with `GetText`.
-struct Timer : Object {
+struct Timer : Object, Runnable {
   static const Timer proto;
   TimePoint start;
   TimePoint last_tick;
@@ -183,7 +183,7 @@ struct Timer : Object {
   }
 };
 
-struct TimerReset : Object {
+struct TimerReset : Object, Runnable {
   static const TimerReset proto;
   static Argument timer_arg;
   string_view Name() const override { return "TimerReset"; }
@@ -466,7 +466,7 @@ struct AbstractList {
   virtual Error* GetSize(int& size) = 0;
 };
 
-struct Append : Object {
+struct Append : Object, Runnable {
   static const Append proto;
   static Argument to_arg;
   static Argument what_arg;
@@ -551,7 +551,7 @@ struct Iterator {
 };
 
 struct CurrentElement;
-struct Filter : LiveObject, Iterator, AbstractList {
+struct Filter : LiveObject, Iterator, AbstractList, Runnable {
   enum class Phase { kSequential, kDone };
   static const Filter proto;
   static LiveArgument list_arg;
@@ -875,7 +875,6 @@ struct Text : LiveObject {
       }
     }
   }
-  void Run(Location& here) override {}
   void Updated(Location& here, Location& updated) override {
     auto target = target_arg.GetLocation(here);
     if (target.location == &updated) {
@@ -884,7 +883,7 @@ struct Text : LiveObject {
   }
 };
 
-struct Button : Object {
+struct Button : Object, Runnable {
   string label;
   static const Button proto;
   static Argument enabled_arg;
@@ -1147,7 +1146,6 @@ struct BlackboardUpdater : LiveObject {
     LiveObject::Relocate(here);
   }
   string_view Name() const override { return "Blackboard Updater"; }
-  void Run(Location& here) override {}
   void Updated(Location& here, Location& updated) override {
     // LOG << "MathEngine::Updated(" << here.HumanReadableName() << ", " <<
     // updated.HumanReadableName() << ")";

@@ -68,7 +68,6 @@ struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
-  void Run(Location&) override;
 
   bool IsOn() const override;
   void On() override;

@@ -46,6 +46,10 @@ struct Object;
 struct Location;
 struct Machine;
 
+struct Runnable {
+  virtual void Run(Location& here) = 0;
+};
+
 struct LiveObject : Object {
   Location* here = nullptr;
 

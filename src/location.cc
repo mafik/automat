@@ -246,6 +246,7 @@ const SkPath kConnectionArrowShape = PathFromSVG(kConnectionArrowShapeSVG);
 void Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   SkPath my_shape = Shape();
+  SkRect bounds = my_shape.getBounds();
 
   {  // Draw dashed highlight outline
     auto& highlight = highlight_ptr[ctx.animation_context];
@@ -274,24 +275,25 @@ void Location::Draw(gui::DrawContext& ctx) const {
     ctx.canvas.drawPath(outset_shape, dash_paint);
   }
 
-  SkRect bounds = my_shape.getBounds();
-  SkPaint frame_bg;
-  SkColor frame_bg_colors[2] = {0xffcccccc, 0xffaaaaaa};
-  SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
-  sk_sp<SkShader> frame_bg_shader =
-      SkGradientShader::MakeLinear(gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
-  frame_bg.setShader(frame_bg_shader);
-  canvas.drawPath(my_shape, frame_bg);
+  {  // Gray frame
+    SkPaint frame_bg;
+    SkColor frame_bg_colors[2] = {0xffcccccc, 0xffaaaaaa};
+    SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
+    sk_sp<SkShader> frame_bg_shader =
+        SkGradientShader::MakeLinear(gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
+    frame_bg.setShader(frame_bg_shader);
+    canvas.drawPath(my_shape, frame_bg);
 
-  SkPaint frame_border;
-  SkColor frame_border_colors[2] = {color::AdjustLightness(frame_bg_colors[0], 5),
-                                    color::AdjustLightness(frame_bg_colors[1], -5)};
-  sk_sp<SkShader> frame_border_shader = SkGradientShader::MakeLinear(
-      gradient_pts, frame_border_colors, nullptr, 2, SkTileMode::kClamp);
-  frame_border.setShader(frame_border_shader);
-  frame_border.setStyle(SkPaint::kStroke_Style);
-  frame_border.setStrokeWidth(0.00025);
-  canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
+    SkPaint frame_border;
+    SkColor frame_border_colors[2] = {color::AdjustLightness(frame_bg_colors[0], 5),
+                                      color::AdjustLightness(frame_bg_colors[1], -5)};
+    sk_sp<SkShader> frame_border_shader = SkGradientShader::MakeLinear(
+        gradient_pts, frame_border_colors, nullptr, 2, SkTileMode::kClamp);
+    frame_border.setShader(frame_border_shader);
+    frame_border.setStyle(SkPaint::kStroke_Style);
+    frame_border.setStrokeWidth(0.00025);
+    canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
+  }
 
   DrawChildren(ctx);
 
@@ -385,4 +387,11 @@ void Location::ReportMissing(std::string_view property) {
         property.size(), property.data());
   ReportError(error_message);
 }
+
+void Location::Run() {
+  if (Runnable* runnable = As<Runnable>()) {
+    runnable->Run(*this);
+  }
+}
+
 }  // namespace automat

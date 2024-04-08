@@ -4,7 +4,7 @@
 
 namespace automat::library {
 
-struct Increment : Object {
+struct Increment : Object, Runnable {
   static const Increment proto;
   static Argument target_arg;
   string_view Name() const override;

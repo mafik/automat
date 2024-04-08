@@ -47,7 +47,11 @@ struct Location;
 struct Machine;
 
 struct Runnable {
+  // Derived classes should override this method to implement their behavior.
   virtual void Run(Location& here) = 0;
+
+  // Wrapper around Run that takes care of autoscheduling the next argument.
+  virtual void RunAndScheduleNext(Location& here);
 };
 
 struct LiveObject : Object {

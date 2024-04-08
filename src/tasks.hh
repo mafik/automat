@@ -9,7 +9,7 @@ namespace automat {
 struct Location;
 
 // Schedules all of the Locations pointed by the "next" argument from the "source" Location.
-void InvokeNextArg(Location* source);
+void ScheduleNext(Location& source);
 
 struct Task {
   Location* target;

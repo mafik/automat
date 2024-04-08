@@ -604,7 +604,11 @@ void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
   }
 }
 
-void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) { InvokeNextArg(here); }
+void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) {
+  if (here) {
+    ScheduleNext(*here);
+  }
+}
 void HotKey::KeyGrabberKeyUp(gui::KeyGrab&) {}
 
 void HotKey::Off() {

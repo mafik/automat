@@ -13,6 +13,7 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "library_timer.hh"
+#include "tasks.hh"
 #include "thread_name.hh"
 
 namespace automat {
@@ -93,4 +94,12 @@ void RunLoop(const int max_iterations) {
 bool NoScheduling(Location* location) {
   return no_scheduling.find(location) != no_scheduling.end();
 }
+
+void Runnable::RunAndScheduleNext(Location& here) {
+  Run(here);
+  if (!here.HasError()) {
+    ScheduleNext(here);
+  }
+}
+
 }  // namespace automat

@@ -52,7 +52,6 @@ constexpr static float kTickOuterRadius = r4 * 0.95;
 constexpr static float kTickMajorLength = r4 * 0.05;
 constexpr static float kTickMinorLength = r4 * 0.025;
 
-Argument TimerDelay::finished_arg = Argument("finished", Argument::kRequiresLocation);
 LiveArgument duration_arg = LiveArgument("duration", Argument::kOptional);
 
 static constexpr float kHandAcceleration = 2000;
@@ -70,10 +69,7 @@ static void TimerFinished(Location* here) {
   }
   timer->state = TimerDelay::State::Idle;
   if (timer->here) {
-    timer->finished_arg.LoopLocations<bool>(*here, [](Location& next) {
-      next.ScheduleRun();
-      return false;
-    });
+    ScheduleNext(*timer->here);
   }
 }
 
@@ -743,7 +739,7 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
 
 void TimerDelay::Args(std::function<void(Argument&)> cb) {
   cb(duration_arg);
-  cb(finished_arg);
+  cb(next_arg);
 }
 
 static void TimerThread(std::stop_token automat_stop_token) {
@@ -792,6 +788,11 @@ void TimerDelay::Run(Location& here) {
       cv.notify_all();
     }
   }
+}
+
+void TimerDelay::RunAndScheduleNext(Location& here) {
+  Run(here);
+  // Don't schedule the `next` because the timer will do that when it finishes.
 }
 
 }  // namespace automat::library

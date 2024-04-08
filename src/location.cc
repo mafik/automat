@@ -390,7 +390,7 @@ void Location::ReportMissing(std::string_view property) {
 
 void Location::Run() {
   if (Runnable* runnable = As<Runnable>()) {
-    runnable->Run(*this);
+    runnable->RunAndScheduleNext(*this);
   }
 }
 

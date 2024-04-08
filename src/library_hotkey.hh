@@ -67,7 +67,6 @@ struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
   void Run(Location&) override;
 

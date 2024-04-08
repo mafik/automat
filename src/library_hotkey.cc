@@ -522,9 +522,6 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 }
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
-std::unique_ptr<Action> HotKey::ButtonDownAction(gui::Pointer&, gui::PointerButton) {
-  return nullptr;
-}
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(then_arg); }
 void HotKey::Run(Location&) {}
 

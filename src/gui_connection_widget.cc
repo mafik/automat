@@ -5,60 +5,59 @@
 
 #include "base.hh"
 #include "connector_optical.hh"
-#include "font.hh"
 #include "location.hh"
 
 namespace automat::gui {
 
-struct ConnectionLabelWidget : Widget {
-  ConnectionWidget* parent;
-  std::string label;
+ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {}
 
-  ConnectionLabelWidget(ConnectionWidget* parent, std::string_view label)
-      : parent(parent), label(label) {
-    this->label = "»" + this->label + " ";
-  }
-
-  float Width() const { return GetFont().MeasureText(label); }
-
-  float Height() const { return kLetterSize; }
-
-  SkPath Shape() const override {
-    float w = Width();
-    float h = Height();
-    return SkPath::Rect(SkRect::MakeWH(w, h));
-  }
-
-  void Draw(DrawContext& ctx) const override {
-    SkPaint paint;
-    auto& canvas = ctx.canvas;
-    auto& font = GetFont();
-    canvas.translate(-Width() / 2, -Height() / 2);
-    font.DrawText(canvas, label, paint);
-    canvas.translate(Width() / 2, Height() / 2);
-  }
-};
-
-ConnectionWidget::ConnectionWidget(Location& from, Argument& arg)
-    : Button(std::make_unique<ConnectionLabelWidget>(this, arg.name)), from(from), arg(arg) {}
+SkPath ConnectionWidget::Shape() const {
+  SkRect black_metal_rect =
+      SkRect::MakeLTRB(position.x - 0.004, position.y, position.x + 0.004, position.y + 0.008);
+  SkPath path = SkPath::Rect(black_metal_rect);
+  return path;
+}
 
 void ConnectionWidget::Draw(DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+  SkCanvas& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
-  SkPath my_shape = Shape();
 
-  Button::Draw(ctx);
+  SkPath from_shape = from.ArgShape(arg);
+  Vec2 from_point = Rect::BottomCenter(from_shape.getBounds());
+
+  Vec2 to_point;
+  if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
+    // Because the ConnectionWidget is a child of Location, we must transform the coordinates of its
+    // destination to local space.
+    Widget* parent_machine = ctx.path[ctx.path.size() - 2];
+    SkMatrix parent_to_local =
+        TransformDown(Path{parent_machine, (Widget*)this}, ctx.animation_context);
+
+    Connection* c = it->second;
+    Location& to = c->to;
+    SkPath to_shape;
+    if (to.object) {
+      to_shape = to.object->Shape();
+    }
+    SkMatrix m = TransformUp(Path{parent_machine, &to}, ctx.animation_context);
+    m.postConcat(parent_to_local);
+    to_shape.transform(m);
+    to_point = Rect::TopCenter(to_shape.getBounds());
+  } else {
+    to_point = position;
+  }
+
+  DrawOpticalConnector(ctx, state, from_point, to_point);
 }
 
 std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButton) {
-  return std::make_unique<DragConnectionAction>(from, arg);
+  return std::make_unique<DragConnectionAction>(*this);
 }
 
-DragConnectionAction::DragConnectionAction(Location& from, Argument& arg)
-    : from(from), arg(arg), state(nullptr) {}
+DragConnectionAction::DragConnectionAction(ConnectionWidget& widget) : widget(widget) {}
 
 DragConnectionAction::~DragConnectionAction() {
-  if (Machine* m = from.ParentAs<Machine>()) {
+  if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       l->highlight_ptr[*animation_context].target = 0;
     }
@@ -73,18 +72,12 @@ bool CanConnect(Location& from, Location& to, Argument& arg) {
 }
 
 void DragConnectionAction::Begin(gui::Pointer& pointer) {
-  const Path& path = pointer.path;
-  for (int i = path.size() - 1; i >= 0; --i) {
-    if (auto m = dynamic_cast<Machine*>(path[i])) {
-      current_position = pointer.PositionWithin(*m);
-      break;
-    }
-  }
+  grab_offset = pointer.PositionWithin(widget.from) - widget.position;
 
   animation_context = &pointer.AnimationContext();
-  if (Machine* m = from.ParentAs<Machine>()) {
+  if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      if (CanConnect(from, *l, arg)) {
+      if (CanConnect(widget.from, *l, widget.arg)) {
         l->highlight_ptr[*animation_context].target = 1;
       } else {
         l->highlight_ptr[*animation_context].target = 0;
@@ -94,40 +87,17 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
 }
 
 void DragConnectionAction::Update(gui::Pointer& pointer) {
-  const Path& path = pointer.path;
-  for (int i = path.size() - 1; i >= 0; --i) {
-    if (auto m = dynamic_cast<Machine*>(path[i])) {
-      current_position = pointer.PositionWithin(*m);
-      return;
-    }
-  }
+  Vec2 new_position = pointer.PositionWithin(widget.from);
+  widget.position = new_position - grab_offset;
 }
 
 void DragConnectionAction::End() {
-  Machine* m = from.ParentAs<Machine>();
-  Location* to = m->LocationAtPoint(current_position);
-  if (to != nullptr && CanConnect(from, *to, arg)) {
-    from.ConnectTo(*to, arg.name);
+
+  Machine* m = widget.from.ParentAs<Machine>();
+  Location* to = m->LocationAtPoint(widget.position + widget.from.position);
+  if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
+    widget.from.ConnectTo(*to, widget.arg.name);
   }
-}
-
-void DragConnectionAction::DrawAction(DrawContext& ctx) {
-  SkPath from_shape = from.ArgShape(arg);
-  if (Machine* parent_machine = from.ParentAs<Machine>()) {
-    SkMatrix from_transform = TransformUp({parent_machine, &from}, ctx.animation_context);
-    from_shape.transform(from_transform);
-  }
-  SkPath to_shape = SkPath();
-  to_shape.moveTo(current_position.x, current_position.y);
-
-  Vec2 from_point = Rect::BottomCenter(from_shape.getBounds());
-  Vec2 to_point = Rect::TopCenter(to_shape.getBounds());
-
-  if (state == nullptr) {
-    state.reset(new OpticalConnectorState());
-  }
-
-  DrawOpticalConnector(ctx, *(OpticalConnectorState*)state.get(), from_point, to_point);
 }
 
 }  // namespace automat::gui

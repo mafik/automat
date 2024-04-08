@@ -228,8 +228,6 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     anchor_tangents.push_back(M_PI / 2);
   }
 
-  LOG << "There are " << anchors.size() << " anchors and " << chain.size() << " chain links";
-
   if constexpr (kDebugCable) {  // Orange crosses
     for (int i = 0; i < anchors.size(); i++) {
       auto& anchor = anchors[i];
@@ -507,13 +505,6 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, Vec2 s
     canvas.drawPath(p, cable_paint2);
   }
 
-  // TODO: Draw the cable plug below the object (it should be the main starting point for dragging
-  // the cable)
-  // TODO: Keep the cable on screen after its released
-  // TODO: Once the cable stabilizes, draw it as a simple ArcLine
-  // TODO: Add some noise to the cable texture
-  // TODO: Draw the cable texture (shader?)
-  // TODO: Blinking fiber at the end of the cable
 }
 
 /*

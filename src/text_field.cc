@@ -177,11 +177,16 @@ struct TextSelectAction : Action {
       auto pointer_path = pointer.path;
       for (int i = pointer_path.size() - 1; i >= 0; --i) {
         if (auto location = dynamic_cast<Location*>(pointer_path[i])) {
-          drag.emplace(*location, **text_field.argument);
-          drag->Begin(pointer);
-          break;
+          for (auto& connection_widget : location->connection_widgets) {
+            if (&connection_widget->arg == text_field.argument) {
+              drag.emplace(*connection_widget);
+              drag->Begin(pointer);
+              goto outside;
+            }
+          }
         }
       }
+    outside:
     }
 
     Vec2 local = pointer.PositionWithin(text_field);

@@ -32,7 +32,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
     canvas.restore();
     return ControlFlow::Continue;
   };
-  const_cast<Widget*>(this)->VisitChildren(visitor);
+  const_cast<Widget*>(this)->VisitChildrenBackwards(visitor);
 }
 
 SkMatrix TransformDown(const Path& path, animation::Context& actx) {
@@ -53,6 +53,21 @@ SkMatrix TransformUp(const Path& path, animation::Context& actx) {
   } else {
     return SkMatrix::I();
   }
+}
+
+ControlFlow Widget::VisitChildrenBackwards(Visitor& visitor) {
+  std::vector<Widget*> children;
+  function<ControlFlow(Widget&)> stacker = [&](Widget& w) {
+    children.push_back(&w);
+    return ControlFlow::Continue;
+  };
+  VisitChildren(stacker);
+  for (auto it = children.rbegin(); it != children.rend(); ++it) {
+    if (visitor(**it) == ControlFlow::Stop) {
+      return ControlFlow::Stop;
+    }
+  }
+  return ControlFlow::Continue;
 }
 
 }  // namespace automat::gui

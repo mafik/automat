@@ -143,27 +143,20 @@ SkPath Location::ArgShape(Argument& arg) const {
     auto object_arg_shape = object->ArgShape(arg);
     if (!object_arg_shape.isEmpty()) {
       return object_arg_shape;
-    }
-  }
-  if constexpr (false) {
-    // Keeping this around because locations will eventually be toggleable between frame & no frame
-    // modes.
-    UpdateConnectionWidgets();
-    int i = 0;
-    for (auto& widget : connection_widgets) {
-      if (&widget->arg == &arg) {
-        SkPath my_shape = Shape();
-        SkRect my_bounds = my_shape.getBounds();
-        Vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - (widget->Height() + kMargin) * (i + 1));
-        return widget->Shape().makeTransform(SkMatrix::Translate(pos.x, pos.y));
-      }
-      ++i;
+    } else {
+      return object->Shape();
     }
   }
   return SkPath();
 }
 
 ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
+  UpdateConnectionWidgets();
+  for (auto& widget : connection_widgets) {
+    if (visitor(*widget) == ControlFlow::Stop) {
+      return ControlFlow::Stop;
+    }
+  }
   if (object) {
     if (visitor(*object) == ControlFlow::Stop) {
       return ControlFlow::Stop;
@@ -174,12 +167,6 @@ ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
     // modes.
     if (visitor(run_button) == ControlFlow::Stop) {
       return ControlFlow::Stop;
-    }
-    UpdateConnectionWidgets();
-    for (auto& widget : connection_widgets) {
-      if (visitor(*widget) == ControlFlow::Stop) {
-        return ControlFlow::Stop;
-      }
     }
   }
   return ControlFlow::Continue;
@@ -198,14 +185,6 @@ SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) co
       SkRect run_bounds = run_button_shape.getBounds();
       return SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
                                  -(my_bounds.top() - run_bounds.fTop) - 0.001);
-    }
-    Vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
-    for (auto& widget : connection_widgets) {
-      pos.y -= widget->Height();
-      if (widget.get() == &child) {
-        return SkMatrix::Translate(-pos.x, -pos.y);
-      }
-      pos.y -= kMargin;
     }
   }
   return SkMatrix::I();
@@ -324,42 +303,6 @@ void Location::Draw(gui::DrawContext& ctx) const {
   }
 
   DrawChildren(ctx);
-
-  {  // Draw connections
-
-    if (ctx.path.size() >= 2) {
-      Widget* parent_machine = ctx.path[ctx.path.size() - 2];
-      SkMatrix parent_to_local =
-          TransformDown(Path{parent_machine, (Widget*)this}, ctx.animation_context);
-      for (auto& [label, c] : outgoing) {
-        SkPath from_shape = my_shape;
-        if (object) {
-          object->Args([&](Argument& arg) {
-            if (arg.name == label) {
-              SkPath shape = ArgShape(arg);
-              if (!shape.isEmpty()) {
-                from_shape = shape;
-              }
-            }
-          });
-        }
-        Location& to = c->to;
-        SkPath to_shape;
-        if (to.object) {
-          to_shape = to.object->Shape();
-        }
-
-        SkMatrix m = TransformUp(Path{parent_machine, &to}, ctx.animation_context);
-        m.postConcat(parent_to_local);
-        to_shape.transform(m);
-
-        if (c->state == nullptr) c->state.reset(new OpticalConnectorState());
-        Vec2 from_point = Rect::BottomCenter(from_shape.getBounds());
-        Vec2 to_point = Rect::TopCenter(to_shape.getBounds());
-        DrawOpticalConnector(ctx, *(OpticalConnectorState*)c->state.get(), from_point, to_point);
-      }
-    }
-  }
 
   // Draw debug text log below the Location
   float n_lines = 1;

@@ -3,8 +3,10 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
+#include "drag_action.hh"
 #include "font.hh"
 #include "gui_constants.hh"
+#include "location.hh"
 
 namespace automat {
 
@@ -66,4 +68,17 @@ SkPath Object::Shape() const {
   return it->second;
 }
 
+std::unique_ptr<Action> Object::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
+  if (btn == gui::PointerButton::kMouseLeft) {
+    auto& path = p.path;
+    for (int i = path.size() - 1; i >= 0; --i) {
+      if (Location* location = dynamic_cast<Location*>(path[i])) {
+        auto a = std::make_unique<DragLocationAction>(location);
+        a->contact_point = p.PositionWithin(*location);
+        return a;
+      }
+    }
+  }
+  return nullptr;
+}
 }  // namespace automat

@@ -47,6 +47,7 @@ struct Object : gui::Widget {
   }
   void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
+  std::unique_ptr<Action> ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;
 };
 
 template <typename T>

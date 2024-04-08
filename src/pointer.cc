@@ -65,7 +65,7 @@ void Pointer::Move(Vec2 position) {
       auto shape = w.Shape();
       path.push_back(&w);
       std::swap(point, transformed);
-      if (shape.isEmpty() || shape.contains(point.x, point.y)) {
+      if (shape.contains(point.x, point.y)) {
         w.VisitChildren(dfs);
         return ControlFlow::Stop;
       } else if (w.ChildrenOutside()) {
@@ -89,6 +89,17 @@ void Pointer::Move(Vec2 position) {
         hovered_widget->PointerOver(*this, window.actx);
       }
     }
+
+    if constexpr (false) {  // enable for debugging
+      Str path_str;
+      for (Widget* w : path) {
+        if (!path_str.empty()) {
+          path_str += " -> ";
+        }
+        path_str += w->Name();
+      }
+      LOG << "Pointer path: " << path_str;
+    }
   }
 }
 void Pointer::Wheel(float delta) {
@@ -105,6 +116,7 @@ void Pointer::Wheel(float delta) {
   }
   window.zoom.target = std::max(kMinZoom, window.zoom.target);
 }
+
 void Pointer::ButtonDown(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount) return;
   RunOnAutomatThread([=]() {
@@ -119,6 +131,7 @@ void Pointer::ButtonDown(PointerButton btn) {
     }
   });
 }
+
 void Pointer::ButtonUp(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount) return;
   RunOnAutomatThread([=]() {

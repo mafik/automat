@@ -40,6 +40,8 @@ struct Window final : Widget {
   Window(Vec2 size, float pixels_per_meter, std::string_view initial_state = "");
   ~Window();
 
+  std::string_view Name() const override { return "Window"; }
+
   void ArrangePrototypeButtons() {
     float max_w = size.width;
     Vec2 cursor = Vec2(0, 0);

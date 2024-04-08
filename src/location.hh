@@ -58,7 +58,13 @@ struct Location : gui::Widget {
 
   Location(Location* parent = nullptr);
 
-  std::string_view Name() const override { return name; }
+  std::string_view Name() const override {
+    if (name.empty()) {
+      return "Location";
+    } else {
+      return name;
+    }
+  }
 
   std::unique_ptr<Object> InsertHere(std::unique_ptr<Object>&& object) {
     this->object.swap(object);

@@ -13,6 +13,7 @@ struct NumberTextField : gui::TextField {
   void DrawText(gui::DrawContext&) const override;
   Vec2 GetTextPos() const override;
   void SetNumber(double x);
+  string_view Name() const override { return "NumberTextField"; }
 };
 
 }  // namespace automat::gui

@@ -1,5 +1,6 @@
 #include "location.hh"
 
+#include <include/core/SkPath.h>
 #include <include/core/SkPathEffect.h>
 #include <include/core/SkPathMeasure.h>
 #include <include/core/SkPathUtils.h>
@@ -117,18 +118,24 @@ void Location::ScheduleLocalUpdate(Location& updated) {
 void Location::ScheduleErrored(Location& errored) { (new ErroredTask(this, &errored))->Schedule(); }
 
 SkPath Location::Shape() const {
-  SkRect object_bounds;
-  if (object) {
-    object_bounds = object->Shape().getBounds();
-  } else {
-    object_bounds = SkRect::MakeEmpty();
+  if constexpr (false) {  // Gray box shape
+    // Keeping this around because locations will eventually be toggleable between frame & no frame
+    // modes.
+    SkRect object_bounds;
+    if (object) {
+      object_bounds = object->Shape().getBounds();
+    } else {
+      object_bounds = SkRect::MakeEmpty();
+    }
+    float outset = 0.001 - kBorderWidth / 2;
+    SkRect bounds = object_bounds.makeOutset(outset, outset);
+    // expand the bounds to include the run button
+    SkPath run_button_shape = run_button.Shape();
+    bounds.fTop -= run_button_shape.getBounds().height() + 0.001;
+    return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
   }
-  float outset = 0.001 - kBorderWidth / 2;
-  SkRect bounds = object_bounds.makeOutset(outset, outset);
-  // expand the bounds to include the run button
-  SkPath run_button_shape = run_button.Shape();
-  bounds.fTop -= run_button_shape.getBounds().height() + 0.001;
-  return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
+  static SkPath empty_path = SkPath();
+  return empty_path;
 }
 
 SkPath Location::ArgShape(Argument& arg) const {
@@ -138,16 +145,20 @@ SkPath Location::ArgShape(Argument& arg) const {
       return object_arg_shape;
     }
   }
-  UpdateConnectionWidgets();
-  int i = 0;
-  for (auto& widget : connection_widgets) {
-    if (&widget->arg == &arg) {
-      SkPath my_shape = Shape();
-      SkRect my_bounds = my_shape.getBounds();
-      Vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - (widget->Height() + kMargin) * (i + 1));
-      return widget->Shape().makeTransform(SkMatrix::Translate(pos.x, pos.y));
+  if constexpr (false) {
+    // Keeping this around because locations will eventually be toggleable between frame & no frame
+    // modes.
+    UpdateConnectionWidgets();
+    int i = 0;
+    for (auto& widget : connection_widgets) {
+      if (&widget->arg == &arg) {
+        SkPath my_shape = Shape();
+        SkRect my_bounds = my_shape.getBounds();
+        Vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - (widget->Height() + kMargin) * (i + 1));
+        return widget->Shape().makeTransform(SkMatrix::Translate(pos.x, pos.y));
+      }
+      ++i;
     }
-    ++i;
   }
   return SkPath();
 }
@@ -158,13 +169,17 @@ ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
       return ControlFlow::Stop;
     }
   }
-  if (visitor(run_button) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  UpdateConnectionWidgets();
-  for (auto& widget : connection_widgets) {
-    if (visitor(*widget) == ControlFlow::Stop) {
+  if constexpr (false) {
+    // Keeping this around because locations will eventually be toggleable between frame & no frame
+    // modes.
+    if (visitor(run_button) == ControlFlow::Stop) {
       return ControlFlow::Stop;
+    }
+    UpdateConnectionWidgets();
+    for (auto& widget : connection_widgets) {
+      if (visitor(*widget) == ControlFlow::Stop) {
+        return ControlFlow::Stop;
+      }
     }
   }
   return ControlFlow::Continue;
@@ -173,21 +188,25 @@ ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
 bool Location::ChildrenOutside() const { return true; }
 
 SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) const {
-  SkPath my_shape = Shape();
-  SkRect my_bounds = my_shape.getBounds();
-  if (&child == &run_button) {
-    SkPath run_button_shape = run_button.Shape();
-    SkRect run_bounds = run_button_shape.getBounds();
-    return SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
-                               -(my_bounds.top() - run_bounds.fTop) - 0.001);
-  }
-  Vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
-  for (auto& widget : connection_widgets) {
-    pos.y -= widget->Height();
-    if (widget.get() == &child) {
-      return SkMatrix::Translate(-pos.x, -pos.y);
+  if constexpr (false) {
+    // Keeping this around because locations will eventually be toggleable between frame & no frame
+    // modes.
+    SkPath my_shape = Shape();
+    SkRect my_bounds = my_shape.getBounds();
+    if (&child == &run_button) {
+      SkPath run_button_shape = run_button.Shape();
+      SkRect run_bounds = run_button_shape.getBounds();
+      return SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
+                                 -(my_bounds.top() - run_bounds.fTop) - 0.001);
     }
-    pos.y -= kMargin;
+    Vec2 pos = Vec2(my_bounds.left(), my_bounds.top() - kMargin);
+    for (auto& widget : connection_widgets) {
+      pos.y -= widget->Height();
+      if (widget.get() == &child) {
+        return SkMatrix::Translate(-pos.x, -pos.y);
+      }
+      pos.y -= kMargin;
+    }
   }
   return SkMatrix::I();
 }
@@ -245,7 +264,16 @@ const SkPath kConnectionArrowShape = PathFromSVG(kConnectionArrowShapeSVG);
 
 void Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  SkPath my_shape = Shape();
+  SkPath my_shape;
+  if constexpr (true) {
+    if (object) {
+      my_shape = object->Shape();
+    } else {
+      my_shape = Shape();
+    }
+  } else {
+    my_shape = Shape();
+  }
   SkRect bounds = my_shape.getBounds();
 
   {  // Draw dashed highlight outline
@@ -275,7 +303,7 @@ void Location::Draw(gui::DrawContext& ctx) const {
     ctx.canvas.drawPath(outset_shape, dash_paint);
   }
 
-  {  // Gray frame
+  if constexpr (false) {  // Gray frame
     SkPaint frame_bg;
     SkColor frame_bg_colors[2] = {0xffcccccc, 0xffaaaaaa};
     SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
@@ -316,7 +344,10 @@ void Location::Draw(gui::DrawContext& ctx) const {
           });
         }
         Location& to = c->to;
-        SkPath to_shape = to.Shape();
+        SkPath to_shape;
+        if (to.object) {
+          to_shape = to.object->Shape();
+        }
 
         SkMatrix m = TransformUp(Path{parent_machine, &to}, ctx.animation_context);
         m.postConcat(parent_to_local);
@@ -356,10 +387,12 @@ void Location::Draw(gui::DrawContext& ctx) const {
 }
 
 std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
-  if (btn == gui::PointerButton::kMouseLeft) {
-    auto a = std::make_unique<DragLocationAction>(this);
-    a->contact_point = p.PositionWithin(*this);
-    return a;
+  if constexpr (false) {
+    if (btn == gui::PointerButton::kMouseLeft) {
+      auto a = std::make_unique<DragLocationAction>(this);
+      a->contact_point = p.PositionWithin(*this);
+      return a;
+    }
   }
   return nullptr;
 }

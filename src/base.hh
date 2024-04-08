@@ -117,7 +117,11 @@ struct Machine : LiveObject {
   }
 
   SkPath Shape() const override {
-    static SkPath empty_path;
+    static SkPath empty_path = []() {
+      SkPath path;
+      path.toggleInverseFillType();
+      return path;
+    }();
     return empty_path;
   }
 

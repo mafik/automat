@@ -21,7 +21,11 @@ namespace automat {
 Location* Machine::LocationAtPoint(Vec2 point) {
   for (auto& loc : locations) {
     Vec2 local_point = point - loc->position;
-    if (loc->Shape().contains(local_point.x, local_point.y)) {
+    SkPath shape;
+    if (loc->object) {
+      shape = loc->object->Shape();
+    }
+    if (shape.contains(local_point.x, local_point.y)) {
       return loc.get();
     }
   }

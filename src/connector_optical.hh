@@ -21,6 +21,9 @@ struct OpticalConnectorState : ConnectionState {
 
     // Distance to the next element
     float distance;
+
+    float next_dir_delta;         // 0 when the cable is straight
+    float prev_dir_delta = M_PI;  // M_PI when the cable is straight
   };
 
   maf::Vec<CableSegment> sections;

@@ -189,7 +189,7 @@ std::unique_ptr<Action> MouseClick::ButtonDownAction(gui::Pointer& pointer,
   return action;
 }
 
-void MouseClick::Args(std::function<void(Argument&)> cb) { cb(then_arg); }
+void MouseClick::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 void MouseClick::Run(Location& location) {
 #if defined(_WIN32)

@@ -144,7 +144,7 @@ struct Argument {
   }
 };
 
-extern Argument then_arg;
+extern Argument next_arg;
 
 struct LiveArgument : Argument {
   LiveArgument(std::string_view name, Precondition precondition) : Argument(name, precondition) {}

@@ -26,7 +26,7 @@ TEST(CounterTest, Count) {
   Location& txt = counter.Create<Text>("Count");
   txt.ConnectTo(i, "target");
   Location& btn = counter.Create<Button>("Increment");
-  btn.ConnectTo(inc, "then");
+  btn.ConnectTo(inc, "next");
 
   counter.AddToFrontPanel(txt);
   counter.AddToFrontPanel(btn);
@@ -188,12 +188,12 @@ struct FlightBookerTest {
 
     // When clicking B a message is displayed informing the user of his
     // selection (e.g. “You have booked a one-way flight on 04.04.2014.”). (B)
-    // -then-> (alert) -message-> (switch) -target-> (C)
+    // -next-> (alert) -message-> (switch) -target-> (C)
     //                                     \-{one-way flight}-> Formatter
     //                                      \-{return flight}-> Formatter
     alert = &booker.Create<Alert>();
     GetAlert().test_interceptor.reset(new std::vector<std::string>());
-    b->ConnectTo(*alert, "then");
+    b->ConnectTo(*alert, "next");
     switch_ = &booker.Create<Switch>();
     alert->ConnectTo(*switch_, "message");
     switch_->ConnectTo(*c, "target");
@@ -304,7 +304,7 @@ TEST(TimerTest, DurationChange) {
   Location& timer_reset = m.Create<TimerReset>();
   timer_reset.ConnectTo(timer, "timer");
   Location& reset_button = m.Create<Button>("reset");
-  reset_button.ConnectTo(timer_reset, "then");
+  reset_button.ConnectTo(timer_reset, "next");
 
   Location& progress_bar = m.Create<ProgressBar>("progress");
 
@@ -421,7 +421,7 @@ struct CrudTest : public TestBase {
     list_view.ConnectTo(filter, "list");
 
     deleter.ConnectTo(list_view, "target");
-    button_delete.ConnectTo(deleter, "then");
+    button_delete.ConnectTo(deleter, "next");
 
     first_name_selected_field.ConnectTo(list_view, "complex");
     first_name_selected_field.ConnectTo(first_name_label, "label");
@@ -435,8 +435,8 @@ struct CrudTest : public TestBase {
     set_first_name.ConnectTo(first_name_complex_field, "value");
     set_last_name.ConnectTo(last_name_selected_field, "target");
     set_last_name.ConnectTo(last_name_complex_field, "value");
-    button_update.ConnectTo(set_first_name, "then");
-    button_update.ConnectTo(set_last_name, "then");
+    button_update.ConnectTo(set_first_name, "next");
+    button_update.ConnectTo(set_last_name, "next");
 
     first_name_complex_field.ConnectTo(complex, "complex");
     first_name_complex_field.ConnectTo(first_name_label, "label");
@@ -445,10 +445,10 @@ struct CrudTest : public TestBase {
     first_name_complex_field.Put(Create<Text>());
     last_name_complex_field.Put(Create<Text>());
 
-    button_create.ConnectTo(set_complex, "then");
+    button_create.ConnectTo(set_complex, "next");
     set_complex.ConnectTo(complex, "value");
     set_complex.ConnectTo(append_target, "target");
-    set_complex.ConnectTo(append, "then");
+    set_complex.ConnectTo(append, "next");
 
     append.ConnectTo(append_target, "what");
     append.ConnectTo(list, "to");

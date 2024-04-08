@@ -55,9 +55,9 @@ std::string Task::Format() { return "Task()"; }
 
 std::string RunTask::Format() { return f("RunTask(%s)", target->ToStr().c_str()); }
 
-void InvokeThenArg(Location* then_source) {
-  then_arg.LoopLocations<bool>(*then_source, [](Location& then) {
-    then.ScheduleRun();
+void InvokeNextArg(Location* source) {
+  next_arg.LoopLocations<bool>(*source, [](Location& next) {
+    next.ScheduleRun();
     return false;
   });
 }
@@ -66,7 +66,7 @@ void RunTask::Execute() {
   PreExecute();
   target->Run();
   if (!target->HasError()) {
-    InvokeThenArg(target);
+    InvokeNextArg(target);
   }
   PostExecute();
 }

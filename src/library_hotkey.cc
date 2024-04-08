@@ -519,7 +519,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 }
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
-void HotKey::Args(std::function<void(Argument&)> cb) { cb(then_arg); }
+void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
   if (visitor(power_button) == ControlFlow::Stop) {
@@ -604,7 +604,7 @@ void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
   }
 }
 
-void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) { InvokeThenArg(here); }
+void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) { InvokeNextArg(here); }
 void HotKey::KeyGrabberKeyUp(gui::KeyGrab&) {}
 
 void HotKey::Off() {

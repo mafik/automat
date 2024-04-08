@@ -70,8 +70,8 @@ static void TimerFinished(Location* here) {
   }
   timer->state = TimerDelay::State::Idle;
   if (timer->here) {
-    timer->finished_arg.LoopLocations<bool>(*here, [](Location& then) {
-      then.ScheduleRun();
+    timer->finished_arg.LoopLocations<bool>(*here, [](Location& next) {
+      next.ScheduleRun();
       return false;
     });
   }

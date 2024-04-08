@@ -4,7 +4,7 @@
 
 namespace automat {
 
-Argument then_arg("then", Argument::kOptional);
+Argument next_arg("next", Argument::kOptional);
 
 Argument::FinalLocationResult Argument::GetFinalLocation(
     Location& here, std::source_location source_location) const {

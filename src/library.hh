@@ -607,7 +607,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
     }
     list.typed->GetSize(list_size);
     if (index < list_size) {
-      ThenGuard then({&here.run_task});
+      NextGuard next_guard({&here.run_task});
       auto element = element_arg.GetLocation(here);
       if (!element.ok) {
         return;

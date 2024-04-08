@@ -272,14 +272,14 @@ extern vector<Task*> global_successors;
 
 bool NoScheduling(Location* location);
 
-struct ThenGuard {
+struct NextGuard {
   std::vector<Task*> successors;
   std::vector<Task*> old_global_successors;
-  ThenGuard(std::vector<Task*>&& successors) : successors(std::move(successors)) {
+  NextGuard(std::vector<Task*>&& successors) : successors(std::move(successors)) {
     old_global_successors = global_successors;
     global_successors = this->successors;
   }
-  ~ThenGuard() {
+  ~NextGuard() {
     assert(global_successors == successors);
     global_successors = old_global_successors;
     for (Task* successor : successors) {

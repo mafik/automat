@@ -51,6 +51,8 @@ struct Runnable {
   virtual void Run(Location& here) = 0;
 
   // Wrapper around Run that takes care of autoscheduling the next argument.
+  //
+  // Override to implement custom scheduling behavior.
   virtual void RunAndScheduleNext(Location& here);
 };
 

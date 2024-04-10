@@ -104,11 +104,17 @@ struct Window final : Widget {
   }
   void Zoom(float delta);
   ControlFlow VisitChildren(Visitor& visitor) override {
+    Widget* arr[prototype_buttons.size()];
     for (int i = 0; i < prototype_buttons.size(); i++) {
-      if (visitor(prototype_buttons[i]) == ControlFlow::Stop) return ControlFlow::Stop;
+      arr[i] = &prototype_buttons[i];
     }
+    if (visitor(maf::SpanOfArr(arr, prototype_buttons.size())) == ControlFlow::Stop)
+      return ControlFlow::Stop;
     ControlFlow result = ControlFlow::Continue;
-    RunOnAutomatThreadSynchronous([&]() { result = visitor(*root_machine); });
+    RunOnAutomatThreadSynchronous([&]() {
+      Widget* root_machine_widget = root_machine;
+      result = visitor(maf::Span<Widget*>(&root_machine_widget, 1));
+    });
     return result;
   }
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override {

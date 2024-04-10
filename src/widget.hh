@@ -11,6 +11,7 @@
 #include "control_flow.hh"
 #include "keyboard.hh"
 #include "pointer.hh"
+#include "span.hh"
 
 namespace automat::gui {
 
@@ -18,7 +19,7 @@ struct Widget;
 
 using Path = std::vector<Widget*>;
 
-using Visitor = std::function<ControlFlow(Widget&)>;
+using Visitor = std::function<ControlFlow(maf::Span<Widget*>)>;
 
 SkMatrix TransformDown(const Path& path, animation::Context&);
 SkMatrix TransformUp(const Path& path, animation::Context&);
@@ -48,12 +49,15 @@ struct Widget {
   virtual void Draw(DrawContext&) const = 0;
   virtual SkPath Shape() const = 0;
   virtual std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) { return nullptr; }
+
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
-  // Iterate over direct child widgets in front-to-back order.
-  // TODO: pass a span with children instead of a single child!
+
+  // Used to visit the child widgets in a generic fashion.
+  // Widgets are stored in front-to-back order.
+  // The function stops once the visitor returns ControlFlow::Stop.
   virtual ControlFlow VisitChildren(Visitor& visitor) { return ControlFlow::Continue; }
-  virtual ControlFlow VisitChildrenBackwards(Visitor& visitor);
+
   // Return true if the widget's children should be drawn outside of its bounds.
   virtual bool ChildrenOutside() const { return false; }
 

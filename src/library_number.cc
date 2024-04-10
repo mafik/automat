@@ -7,7 +7,6 @@
 #include <charconv>
 #include <memory>
 
-#include "color.hh"
 #include "control_flow.hh"
 #include "drag_action.hh"
 #include "gui_align.hh"
@@ -178,13 +177,10 @@ void Number::Draw(gui::DrawContext& ctx) const {
 SkPath Number::Shape() const { return kNumberShape; }
 
 ControlFlow Number::VisitChildren(gui::Visitor& visitor) {
-  if (visitor(digits[0]) == ControlFlow::Stop) return ControlFlow::Stop;
-  if (visitor(dot) == ControlFlow::Stop) return ControlFlow::Stop;
-  if (visitor(backspace) == ControlFlow::Stop) return ControlFlow::Stop;
-  for (int i = 0; i < 10; ++i) {
-    if (visitor(digits[i]) == ControlFlow::Stop) return ControlFlow::Stop;
-  }
-  if (visitor(text_field) == ControlFlow::Stop) return ControlFlow::Stop;
+  Widget* arr[] = {&dot,       &backspace, &digits[0], &digits[1], &digits[2],
+                   &digits[3], &digits[4], &digits[5], &digits[6], &digits[7],
+                   &digits[8], &digits[9], &text_field};
+  if (visitor(arr) == ControlFlow::Stop) return ControlFlow::Stop;
   return ControlFlow::Continue;
 }
 

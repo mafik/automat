@@ -4,7 +4,6 @@
 
 #include "control_flow.hh"
 
-
 namespace automat::gui {
 
 AlignCenter::AlignCenter(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
@@ -15,7 +14,8 @@ SkPath AlignCenter::Shape() const { return SkPath(); }
 
 ControlFlow AlignCenter::VisitChildren(Visitor& visitor) {
   if (child) {
-    return visitor(*child);
+    Widget* arr[] = {this->child.get()};
+    return visitor(arr);
   }
   return ControlFlow::Continue;
 }

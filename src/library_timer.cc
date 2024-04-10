@@ -589,7 +589,8 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
 }
 
 ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {
-  if (visitor(text_field) == ControlFlow::Stop) return ControlFlow::Stop;
+  Widget* arr[] = {&text_field};
+  if (visitor(arr) == ControlFlow::Stop) return ControlFlow::Stop;
   return ControlFlow::Continue;
 }
 

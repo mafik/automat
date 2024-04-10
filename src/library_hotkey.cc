@@ -522,22 +522,9 @@ SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
-  if (visitor(power_button) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  if (visitor(ctrl_button) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  if (visitor(alt_button) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  if (visitor(shift_button) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  if (visitor(windows_button) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  if (visitor(shortcut_button) == ControlFlow::Stop) {
+  Widget* arr[] = {&power_button, &ctrl_button,    &alt_button,
+                   &shift_button, &windows_button, &shortcut_button};
+  if (visitor(arr) == ControlFlow::Stop) {
     return ControlFlow::Stop;
   }
   return ControlFlow::Continue;

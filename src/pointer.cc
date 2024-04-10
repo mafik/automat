@@ -54,31 +54,34 @@ void Pointer::Move(Vec2 position) {
     path.clear();
     Vec2 point = pointer_position;
 
-    Visitor dfs = [&](Widget& w) -> ControlFlow {
-      Vec2 transformed;
-      if (!path.empty()) {
-        transformed = path.back()->TransformToChild(w, window.actx).mapPoint(point);
-      } else {
-        transformed = point;
-      }
-
-      auto shape = w.Shape();
-      path.push_back(&w);
-      std::swap(point, transformed);
-      if (shape.contains(point.x, point.y)) {
-        w.VisitChildren(dfs);
-        return ControlFlow::Stop;
-      } else if (w.ChildrenOutside()) {
-        if (w.VisitChildren(dfs) == ControlFlow::Stop) {
-          return ControlFlow::Stop;
+    Visitor dfs = [&](Span<Widget*> widgets) -> ControlFlow {
+      for (auto w : widgets) {
+        Vec2 transformed;
+        if (!path.empty()) {
+          transformed = path.back()->TransformToChild(*w, window.actx).mapPoint(point);
+        } else {
+          transformed = point;
         }
+
+        auto shape = w->Shape();
+        path.push_back(w);
+        std::swap(point, transformed);
+        if (shape.contains(point.x, point.y)) {
+          w->VisitChildren(dfs);
+          return ControlFlow::Stop;
+        } else if (w->ChildrenOutside()) {
+          if (w->VisitChildren(dfs) == ControlFlow::Stop) {
+            return ControlFlow::Stop;
+          }
+        }
+        std::swap(point, transformed);
+        path.pop_back();
       }
-      std::swap(point, transformed);
-      path.pop_back();
       return ControlFlow::Continue;
     };
 
-    dfs(window);
+    Widget* window_arr[] = {&window};
+    dfs(window_arr);
 
     Widget* hovered_widget = path.empty() ? nullptr : path.back();
     if (old_hovered_widget != hovered_widget) {

@@ -128,10 +128,13 @@ struct Machine : LiveObject {
   }
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override {
+    Widget* arr[locations.size()];
+    int i = 0;
     for (auto& it : locations) {
-      if (visitor(*it) == ControlFlow::Stop) {
-        return ControlFlow::Stop;
-      }
+      arr[i++] = it.get();
+    }
+    if (visitor(maf::SpanOfArr(arr, locations.size())) == ControlFlow::Stop) {
+      return ControlFlow::Stop;
     }
     return ControlFlow::Continue;
   }

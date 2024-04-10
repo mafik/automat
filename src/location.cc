@@ -10,12 +10,12 @@
 
 #include "base.hh"
 #include "color.hh"
-#include "connector_optical.hh"
 #include "control_flow.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "format.hh"
 #include "gui_constants.hh"
+#include "span.hh"
 #include "svg.hh"
 
 using namespace automat::gui;
@@ -152,22 +152,24 @@ SkPath Location::ArgShape(Argument& arg) const {
 
 ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
   UpdateConnectionWidgets();
-  for (auto& widget : connection_widgets) {
-    if (visitor(*widget) == ControlFlow::Stop) {
-      return ControlFlow::Stop;
-    }
+  Size n = connection_widgets.size() + (object ? 1 : 0);
+  Widget* arr[n];
+  Size i = 0;
+  for (; i < connection_widgets.size(); ++i) {
+    arr[i] = connection_widgets[i].get();
   }
   if (object) {
-    if (visitor(*object) == ControlFlow::Stop) {
-      return ControlFlow::Stop;
-    }
+    arr[i] = object.get();
+  }
+  if (visitor(Span<Widget*>(arr, n)) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
   }
   if constexpr (false) {
     // Keeping this around because locations will eventually be toggleable between frame & no frame
     // modes.
-    if (visitor(run_button) == ControlFlow::Stop) {
-      return ControlFlow::Stop;
-    }
+    // if (visitor(run_button) == ControlFlow::Stop) {
+    //   return ControlFlow::Stop;
+    // }
   }
   return ControlFlow::Continue;
 }

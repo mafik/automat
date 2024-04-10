@@ -3,36 +3,35 @@
 #include <include/core/SkMatrix.h>
 #include <include/effects/SkRuntimeEffect.h>
 
-#include <bitset>
-#include <condition_variable>
-#include <optional>
-#include <vector>
+#include <ranges>
 
 #include "animation.hh"
 #include "control_flow.hh"
-#include "root.hh"
-#include "time.hh"
 
 using namespace automat;
+using namespace maf;
 
 namespace automat::gui {
 
 void Widget::DrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  Visitor visitor = [&](Widget& widget) {
-    canvas.save();
-    const SkMatrix down = this->TransformToChild(widget, ctx.animation_context);
-    SkMatrix up;
-    if (down.invert(&up)) {
-      canvas.concat(up);
+  Visitor visitor = [&](Span<Widget*> widgets) {
+    std::ranges::reverse_view rv{widgets};
+    for (Widget* widget : rv) {
+      canvas.save();
+      const SkMatrix down = this->TransformToChild(*widget, ctx.animation_context);
+      SkMatrix up;
+      if (down.invert(&up)) {
+        canvas.concat(up);
+      }
+      ctx.path.push_back(widget);
+      widget->Draw(ctx);
+      ctx.path.pop_back();
+      canvas.restore();
     }
-    ctx.path.push_back(&widget);
-    widget.Draw(ctx);
-    ctx.path.pop_back();
-    canvas.restore();
     return ControlFlow::Continue;
   };
-  const_cast<Widget*>(this)->VisitChildrenBackwards(visitor);
+  const_cast<Widget*>(this)->VisitChildren(visitor);
 }
 
 SkMatrix TransformDown(const Path& path, animation::Context& actx) {
@@ -53,21 +52,6 @@ SkMatrix TransformUp(const Path& path, animation::Context& actx) {
   } else {
     return SkMatrix::I();
   }
-}
-
-ControlFlow Widget::VisitChildrenBackwards(Visitor& visitor) {
-  std::vector<Widget*> children;
-  function<ControlFlow(Widget&)> stacker = [&](Widget& w) {
-    children.push_back(&w);
-    return ControlFlow::Continue;
-  };
-  VisitChildren(stacker);
-  for (auto it = children.rbegin(); it != children.rend(); ++it) {
-    if (visitor(**it) == ControlFlow::Stop) {
-      return ControlFlow::Stop;
-    }
-  }
-  return ControlFlow::Continue;
 }
 
 }  // namespace automat::gui

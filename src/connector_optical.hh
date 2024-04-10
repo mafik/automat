@@ -4,8 +4,9 @@
 //
 // This type of connector can transmit boolean & event signals.
 
-#include "connection.hh"
+#include "arcline.hh"
 #include "math.hh"
+#include "optional.hh"
 #include "vec.hh"
 #include "widget.hh"
 
@@ -14,10 +15,12 @@ namespace automat::gui {
 struct OpticalConnectorState {
   float dispenser_v;
 
-  struct CableSegment {
+  struct CableSection {
     Vec2 pos;
     Vec2 vel;
     Vec2 acc;
+
+    float dir;  // Direction of the cable at this point
 
     // Distance to the next element
     float distance;
@@ -26,12 +29,14 @@ struct OpticalConnectorState {
     float prev_dir_delta = M_PI;  // M_PI when the cable is straight
   };
 
-  maf::Vec<CableSegment> sections;
+  maf::Vec<CableSection> sections;
+  maf::Optional<maf::ArcLine> arcline;
 
   OpticalConnectorState() : dispenser_v(0) {}
-  // TODO: when the cable simulation stabilizes, draw it as a simple ArcLine.
 };
 
-void DrawOpticalConnector(DrawContext&, OpticalConnectorState&, Vec2 start, Vec2 end);
+void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2 start, maf::Optional<Vec2> end);
+
+void DrawOpticalConnector(DrawContext&, OpticalConnectorState&);
 
 }  // namespace automat::gui

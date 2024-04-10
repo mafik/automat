@@ -48,7 +48,9 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     to_point = position;
   }
 
-  DrawOpticalConnector(ctx, state, from_point, to_point);
+  float dt = ctx.animation_context.timer.d;
+  SimulateCablePhysics(dt, state, from_point, to_point);
+  DrawOpticalConnector(ctx, state);
 }
 
 std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButton) {

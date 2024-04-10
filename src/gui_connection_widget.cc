@@ -23,7 +23,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   auto& actx = ctx.animation_context;
 
   SkPath from_shape = from.ArgShape(arg);
-  Vec2 from_point = Rect::BottomCenter(from_shape.getBounds());
+  Vec2 from_point = Rect::BottomCenter(from_shape.getBounds()) + from.position;
 
   Vec2 to_point;
   if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
@@ -43,6 +43,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     m.postConcat(parent_to_local);
     to_shape.transform(m);
     to_point = Rect::TopCenter(to_shape.getBounds());
+    position = to_point;
   } else {
     to_point = position;
   }
@@ -72,6 +73,10 @@ bool CanConnect(Location& from, Location& to, Argument& arg) {
 }
 
 void DragConnectionAction::Begin(gui::Pointer& pointer) {
+  if (auto it = widget.from.outgoing.find(widget.arg.name); it != widget.from.outgoing.end()) {
+    delete it->second;
+  }
+
   grab_offset = pointer.PositionWithin(widget.from) - widget.position;
 
   animation_context = &pointer.AnimationContext();
@@ -92,9 +97,8 @@ void DragConnectionAction::Update(gui::Pointer& pointer) {
 }
 
 void DragConnectionAction::End() {
-
   Machine* m = widget.from.ParentAs<Machine>();
-  Location* to = m->LocationAtPoint(widget.position + widget.from.position);
+  Location* to = m->LocationAtPoint(widget.position);
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
     widget.from.ConnectTo(*to, widget.arg.name);
   }

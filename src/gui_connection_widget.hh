@@ -31,7 +31,7 @@ struct ConnectionWidget : Widget {
   Location& from;
   Argument& arg;
   mutable OpticalConnectorState state;
-  Vec2 position;  // position of the plug (bottom center)
+  mutable Vec2 position;  // position of the plug (bottom center)
 
   ConnectionWidget(Location&, Argument&);
 

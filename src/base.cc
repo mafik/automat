@@ -32,6 +32,32 @@ Location* Machine::LocationAtPoint(Vec2 point) {
   return nullptr;
 }
 
+void Machine::UpdateConnectionWidgets() const {
+  for (auto& loc : locations) {
+    if (loc->object) {
+      loc->object->Args([&](Argument& arg) {
+        // Check if this argument already has a widget.
+        bool has_widget = false;
+        for (auto& widget : connection_widgets) {
+          if (&widget->from != loc.get()) {
+            continue;
+          }
+          if (&widget->arg != &arg) {
+            continue;
+          }
+          has_widget = true;
+        }
+        if (has_widget) {
+          return;
+        }
+        // Create a new widget.
+        LOG << "Creating a ConnectionWidget for argument " << arg.name;
+        connection_widgets.emplace_back(new gui::ConnectionWidget(*loc, arg));
+      });
+    }
+  }
+}
+
 const Machine Machine::proto;
 
 int log_executed_tasks = 0;

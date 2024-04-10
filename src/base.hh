@@ -82,6 +82,7 @@ struct Machine : LiveObject {
   Machine() = default;
   string name = "";
   unordered_set<unique_ptr<Location>> locations;
+  mutable std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
   vector<Location*> front;
   vector<Location*> children_with_errors;
 
@@ -127,24 +128,34 @@ struct Machine : LiveObject {
     return empty_path;
   }
 
+  // Add ConnectionWidgets for all arguments defined by the objects.
+  void UpdateConnectionWidgets() const;
+
   ControlFlow VisitChildren(gui::Visitor& visitor) override {
-    Widget* arr[locations.size()];
+    UpdateConnectionWidgets();
     int i = 0;
+    Size n = locations.size() + connection_widgets.size();
+    Widget* arr[n];
+    for (auto& it : connection_widgets) {
+      arr[i++] = it.get();
+    }
     for (auto& it : locations) {
       arr[i++] = it.get();
     }
-    if (visitor(maf::SpanOfArr(arr, locations.size())) == ControlFlow::Stop) {
+    if (visitor(maf::SpanOfArr(arr, n)) == ControlFlow::Stop) {
       return ControlFlow::Stop;
     }
     return ControlFlow::Continue;
   }
   SkMatrix TransformToChild(const Widget& child, animation::Context& actx) const override {
-    const Location* l = dynamic_cast<const Location*>(&child);
-    if (l == nullptr) {
+    if (const Location* l = dynamic_cast<const Location*>(&child)) {
+      Vec2 pos = l->AnimatedPosition(actx);
+      return SkMatrix::Translate(-pos.x, -pos.y);
+    } else if (const gui::ConnectionWidget* w =
+                   dynamic_cast<const gui::ConnectionWidget*>(&child)) {
       return SkMatrix::I();
     }
-    Vec2 pos = l->AnimatedPosition(actx);
-    return SkMatrix::Translate(-pos.x, -pos.y);
+    return SkMatrix::I();
   }
   void Args(std::function<void(Argument&)> cb) override {}
   void Relocate(Location* parent) override {

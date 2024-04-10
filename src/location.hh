@@ -36,7 +36,6 @@ struct Location : gui::Widget {
   // Name of this Location.
   std::string name;
   gui::RunButton run_button;
-  mutable std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
   DragLocationAction* drag_action = nullptr;
   Vec2 position = {0, 0};
@@ -230,9 +229,6 @@ struct Location : gui::Widget {
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   bool ChildrenOutside() const override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
-
-  // Add ConnectionWidgets for all arguments defined by the objects.
-  void UpdateConnectionWidgets() const;
 
   ////////////////////////////
   // Error reporting

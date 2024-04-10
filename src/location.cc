@@ -151,18 +151,11 @@ SkPath Location::ArgShape(Argument& arg) const {
 }
 
 ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
-  UpdateConnectionWidgets();
-  Size n = connection_widgets.size() + (object ? 1 : 0);
-  Widget* arr[n];
-  Size i = 0;
-  for (; i < connection_widgets.size(); ++i) {
-    arr[i] = connection_widgets[i].get();
-  }
   if (object) {
-    arr[i] = object.get();
-  }
-  if (visitor(Span<Widget*>(arr, n)) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
+    Widget* arr[] = {object.get()};
+    if (visitor(arr) == ControlFlow::Stop) {
+      return ControlFlow::Stop;
+    }
   }
   if constexpr (false) {
     // Keeping this around because locations will eventually be toggleable between frame & no frame
@@ -190,30 +183,6 @@ SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) co
     }
   }
   return SkMatrix::I();
-}
-
-void Location::UpdateConnectionWidgets() const {
-  if (object) {
-    object->Args([&](Argument& arg) {
-      // Check if this argument already has a widget.
-      bool has_widget = false;
-      for (auto& widget : connection_widgets) {
-        if (&widget->from != this) {
-          continue;
-        }
-        if (&widget->arg != &arg) {
-          continue;
-        }
-        has_widget = true;
-      }
-      if (has_widget) {
-        return;
-      }
-      // Create a new widget.
-      LOG << "Creating a ConnectionWidget for argument " << arg.name;
-      connection_widgets.emplace_back(new gui::ConnectionWidget(const_cast<Location&>(*this), arg));
-    });
-  }
 }
 
 Vec2 Location::AnimatedPosition(animation::Context& actx) const {

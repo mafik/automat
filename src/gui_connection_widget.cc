@@ -65,6 +65,7 @@ std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButt
 DragConnectionAction::DragConnectionAction(ConnectionWidget& widget) : widget(widget) {}
 
 DragConnectionAction::~DragConnectionAction() {
+  widget.manual_position.reset();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       l->highlight_ptr[*animation_context].target = 0;
@@ -105,7 +106,6 @@ void DragConnectionAction::Update(gui::Pointer& pointer) {
 }
 
 void DragConnectionAction::End() {
-  widget.manual_position.reset();
   Machine* m = widget.from.ParentAs<Machine>();
   Location* to = m->LocationAtPoint(widget.state.PlugBottomCenter());
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {

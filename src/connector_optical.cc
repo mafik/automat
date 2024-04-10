@@ -120,11 +120,10 @@ static void PopulateAnchors(Vec<Vec2>& anchors, Vec<float>& anchor_tangents,
 static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size anchor_count) {
   bool pulling = anchor_count < state.sections.size();
   if (pulling) {
-    state.dispenser_v += 1e0 * dt;
+    state.dispenser_v += 5e-1 * dt;
     state.dispenser_v *= expf(-1 * dt);  // Limit the maximum speed
     float retract = state.dispenser_v * dt;
     // Shorten the final link by pulling it towards the dispenser
-    Vec2 prev = state.sections.back().pos;
     float total_dist = 0;
     int i = state.sections.size() - 2;
     for (; i >= 0; --i) {
@@ -133,7 +132,8 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
         break;
       }
     }
-    if (retract > total_dist) {
+    if ((i < 0) || (retract > total_dist)) {
+      i = 0;
       retract = total_dist;
     }
     for (int j = state.sections.size() - 2; j > i; --j) {
@@ -144,26 +144,25 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
     state.sections[i].distance = remaining;
   } else {
     state.dispenser_v = 0;
+    do {  // Add a new link if the last one is too far from the dispenser
+      auto delta = state.sections[state.sections.size() - 2].pos - state.sections.back().pos;
+      auto current_dist = Length(delta);
+      auto desired_dist = state.sections[state.sections.size() - 2].distance;
+      if (current_dist > kStep) {
+        state.sections[state.sections.size() - 2].distance = kStep;
+        auto new_it = state.sections.insert(
+            state.sections.begin() + state.sections.size() - 1,
+            OpticalConnectorState::CableSection{
+                .pos = state.sections[state.sections.size() - 2].pos - delta / current_dist * kStep,
+                .vel = Vec2(0, 0),
+                .acc = Vec2(0, 0),
+                .distance = current_dist - kStep,
+            });
+      } else {
+        break;
+      }
+    } while (state.sections.size() < anchor_count);
   }
-
-  do {  // Add a new link if the last one is too far from the dispenser
-    auto delta = state.sections[state.sections.size() - 2].pos - state.sections.back().pos;
-    auto current_dist = Length(delta);
-    auto desired_dist = state.sections[state.sections.size() - 2].distance;
-    if (current_dist > kStep) {
-      state.sections[state.sections.size() - 2].distance = kStep;
-      auto new_it = state.sections.insert(
-          state.sections.begin() + state.sections.size() - 1,
-          OpticalConnectorState::CableSection{
-              .pos = state.sections[state.sections.size() - 2].pos - delta / current_dist * kStep,
-              .vel = Vec2(0, 0),
-              .acc = Vec2(0, 0),
-              .distance = desired_dist - kStep,
-          });
-    } else {
-      break;
-    }
-  } while (state.sections.size() < anchor_count);
 
   return pulling;
 }
@@ -176,11 +175,6 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
 
   auto& dispenser = start;
   auto& chain = state.sections;
-  using ChainLink = OpticalConnectorState::CableSection;
-  if (chain.empty()) {
-    chain.emplace_back();
-    chain.emplace_back();
-  }
   if (cable_end) {
     chain.front().pos = *cable_end;
   }
@@ -200,24 +194,32 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     state.arcline.reset();
   }
 
-  // Dispenser pulling the chain in
+  // Dispenser pulling the chain in. The chain is pulled in when there are fewer anchors than cable
+  // segments.
   bool dispenser_active = SimulateDispenser(state, dt, anchors.size());
 
   float anchor_dir[anchors.size()];
-  anchor_dir[0] = M_PI / 2;
-  anchor_dir[anchors.size() - 1] = M_PI / 2;
-  int anchor_i[chain.size()];
+  if (anchors.size() > 0) {
+    anchor_dir[0] = M_PI / 2;
+    anchor_dir[anchors.size() - 1] = M_PI / 2;
+  }
 
+  int anchor_i[chain.size()];  // Index of the anchor that the chain link is attached to
+
+  // Match cable sections to anchors.
+  // Sometimes there is more sections than anchors and sometimes there are more anchors than
+  // sections. A cable section that doesn't have a matching anchor will be set to -1.
   for (int i = 0; i < chain.size(); ++i) {
     if (i == chain.size() - 1) {
-      anchor_i[i] = anchors.size() - 1;
-    } else if (i >= anchors.size() - 1) {
+      anchor_i[i] = anchors.size() - 1;  // This also handles the case when there are no anchors
+    } else if (i >= ((int)anchors.size()) - 1) {
       anchor_i[i] = -1;
     } else {
       anchor_i[i] = i;
     }
   }
 
+  // Copy over the alignment of the anchors to the chain links.
   for (int i = 0; i < chain.size(); ++i) {
     int ai = anchor_i[i];
     int prev_ai = i > 0 ? anchor_i[i - 1] : -1;
@@ -250,56 +252,71 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     }
   }
 
-  if (true) {  // Move chain links towards anchors (more at the end of the cable)
-    for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
-      Vec2 new_pos =
-          chain[i].pos + (anchors[i] - chain[i].pos) * expf(-dt * 6000.0f * i / anchors.size());
-      chain[i].vel += (new_pos - chain[i].pos) / dt;
-      chain[i].pos = new_pos;
+  // Move chain links towards anchors (more at the end of the cable)
+  for (int i = 0; i < chain.size(); i++) {
+    int ai = anchor_i[i];
+    if (ai == -1) {
+      continue;
     }
+    // LERP the cable section towards its anchor point. More at the end of the cable.
+    Vec2 new_pos =
+        chain[i].pos + (anchors[ai] - chain[i].pos) * expf(-dt * 6000.0f * i / anchors.size());
+    chain[i].vel += (new_pos - chain[i].pos) / dt;
+    chain[i].pos = new_pos;
+
+    // Also apply a force towards the anchor. This is unrelated to LERP-ing above.
+    chain[i].acc += (anchors[ai] - chain[i].pos) * 3e2;
   }
 
-  if (true) {  // Apply forces towards anchors
-    for (int i = 1; i < anchors.size() - 1 && i < chain.size() - 1; i++) {
-      chain[i].acc += (anchors[i] - chain[i].pos) * 3e2;
+  if (cable_end) {
+    chain[0].dir = M_PI / 2;
+  } else {
+    if (Length(chain[1].pos - chain[0].pos) > 1e-6) {
+      chain[0].dir = atan(chain[1].pos - chain[0].pos);
+    } else {
+      chain[0].dir = M_PI / 2;
     }
   }
-
-  chain[0].dir = M_PI / 2;
   for (int i = 1; i < chain.size() - 1; i++) {
     chain[i].dir = atan(chain[i + 1].pos - chain[i - 1].pos);
   }
   chain[chain.size() - 1].dir = M_PI / 2;
 
-  for (int i = 1; i < chain.size() - 1; ++i) {
+  for (int i = 0; i < chain.size() - 1; ++i) {
     chain[i].vel += chain[i].acc * dt;
   }
 
   {                      // Friction
-    int friction_i = 1;  // Skip segment 0 (always attached to mouse)
+    int friction_i = 0;  // Skip segment 0 (always attached to mouse)
     // Segments that have anchors have higher friction
-    auto n_high_friction = std::min(chain.size() - 1, anchors.size());
+    auto n_high_friction = std::min<int>(chain.size() - 1, anchors.size());
     for (; friction_i < n_high_friction; ++friction_i) {
       chain[friction_i].vel *= expf(-20 * dt);
     }
     // Segments without anchors are more free to move
-    for (; friction_i < chain.size() - 1; ++friction_i) {
+    for (; friction_i < chain.size(); ++friction_i) {
       chain[friction_i].vel *= expf(-2 * dt);
+    }
+    if (cable_end.has_value()) {
+      chain.front().vel = Vec2(0, 0);
+    } else {
+      chain.front().vel *= expf(-20 * dt);
     }
   }
 
-  for (int i = 1; i < chain.size() - 1; ++i) {
+  for (int i = 0; i < chain.size() - 1; ++i) {
     chain[i].pos += chain[i].vel * dt;
   }
 
-  if (true) {  // Cable straightness enforcer
+  if (true) {  // Inverse kinematics solver
+    bool distance_only = anchors.empty();
     for (int iter = 0; iter < 6; ++iter) {
       if (cable_end) {
         chain.front().pos = *cable_end;
       }
       chain.back().pos = dispenser;
 
-      ChainLink a0, cN;
+      OpticalConnectorState::CableSection a0, cN;
       a0.pos = chain[0].pos - Vec2::Polar(chain.front().dir, kStep);
       a0.distance = kStep;
       a0.next_dir_delta = 0;
@@ -328,6 +345,15 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
         Vec2 a_target = b.pos + Vec2::Polar(chain[i].dir + a_dir_offset, a.distance);
         Vec2 c_target = b.pos + Vec2::Polar(chain[i].dir + c_dir_offset, b.distance);
 
+        if (distance_only) {
+          Vec2 ab = a.pos - b.pos;
+          float l_ab = std::max<float>(1e-9, Length(ab));
+          a_target = b.pos + ab / l_ab * a.distance;
+          Vec2 bc = c.pos - b.pos;
+          float l_bc = std::max<float>(1e-9, Length(bc));
+          c_target = b.pos + bc / l_bc * b.distance;
+        }
+
         float alpha = 0.4;
         Vec2 a_new = a.pos + (a_target - a.pos) * alpha;
         Vec2 c_new = c.pos + (c_target - c.pos) * alpha;
@@ -355,102 +381,27 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
   }
 }
 
+Vec2 OpticalConnectorState::PlugTopCenter() const { return sections.front().pos; }
+
+Vec2 OpticalConnectorState::PlugBottomCenter() const {
+  return sections.front().pos - Vec2::Polar(sections.front().dir, kCasingHeight);
+}
+
 void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
 
-  Vec2 end = state.sections.front().pos - Vec2::Polar(state.sections.front().dir, kCasingHeight);
-
-  float casing_left = end.x - kCasingWidth / 2;
-  float casing_right = end.x + kCasingWidth / 2;
-  float casing_top = end.y + kCasingHeight;
-
-  Vec2 cable_end = Vec2(end.x, casing_top);
-
-  {  // Black metal casing
-    SkPaint black_metal_paint;
-    SkPoint pts[2] = {end + Vec2(-0.004, 0), end + Vec2(0.004, 0)};
-    SkColor colors[5] = {0xff626262, 0xff000000, 0xff181818, 0xff0d0d0d, 0xff5e5e5e};
-    float pos[5] = {0, 0.1, 0.5, 0.9, 1};
-    sk_sp<SkShader> gradient =
-        SkGradientShader::MakeLinear(pts, colors, pos, 5, SkTileMode::kClamp);
-    black_metal_paint.setShader(gradient);
-    SkRect black_metal_rect = SkRect::MakeLTRB(end.x - 0.004, end.y, end.x + 0.004, end.y + 0.008);
-    canvas.drawRect(black_metal_rect, black_metal_paint);
-  }
-
-  {  // Steel insert
-    SkRect steel_rect = SkRect::MakeLTRB(end.x - 0.003, end.y - 0.001, end.x + 0.003, end.y);
-
-    // Fill with black - this will only stay around borders
-    SkPaint black;
-    black.setColor(0xff000000);
-    canvas.drawRect(steel_rect, black);
-
-    // Fill with steel-like gradient
-    SkPaint steel_paint;
-    SkPoint pts[2] = {end + Vec2(-0.003, 0), end + Vec2(0.003, 0)};
-    SkColor colors[2] = {0xffe6e6e6, 0xff949494};
-    sk_sp<SkShader> gradient =
-        SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
-    steel_paint.setShader(gradient);
-    steel_paint.setMaskFilter(
-        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0001, true));
-    steel_paint.setColor(0xff000000);
-    canvas.drawRect(steel_rect, steel_paint);
-  }
-
-  {  // Rubber cable holder
-    constexpr float kRubberWidth = 0.002;
-    constexpr float kRubberHeight = 0.016;
-    constexpr float kLowerCpOffset = kRubberHeight * 0.3;
-    constexpr float kUpperCpOffset = kRubberHeight * 0.7;
-    constexpr float kTopCpOffset = kRubberWidth * 0.2;
-
-    float sleeve_left = end.x - kRubberWidth / 2;
-    float sleeve_right = end.x + kRubberWidth / 2;
-    float sleeve_top = casing_top + kRubberHeight;
-    SkPath rubber_path;
-    rubber_path.moveTo(casing_left, casing_top);
-    rubber_path.cubicTo(casing_left, casing_top + kLowerCpOffset, sleeve_left,
-                        sleeve_top - kUpperCpOffset, sleeve_left, sleeve_top);
-    rubber_path.cubicTo(sleeve_left, sleeve_top + kTopCpOffset, sleeve_right,
-                        sleeve_top + +kTopCpOffset, sleeve_right, sleeve_top);
-    rubber_path.cubicTo(sleeve_right, sleeve_top - kUpperCpOffset, casing_right,
-                        casing_top + kLowerCpOffset, casing_right, casing_top);
-    rubber_path.close();
-
-    SkPaint dark_flat;
-    dark_flat.setAntiAlias(true);
-    dark_flat.setColor(0xff151515);
-    canvas.drawPath(rubber_path, dark_flat);
-
-    SkPaint lighter_inside;
-    lighter_inside.setAntiAlias(false);
-    lighter_inside.setMaskFilter(
-        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0010, true));
-    lighter_inside.setColor(0xff2a2a2a);
-    canvas.drawPath(rubber_path, lighter_inside);
-  }
-
-  {  // Icon on the metal casing
-    SkPath path = PathFromSVG(kNextShape);
-    path.offset(end.x, end.y + 0.004);
-    SkPaint icon_paint;
-    icon_paint.setColor(0xff808080);
-    icon_paint.setAntiAlias(true);
-    canvas.drawPath(path, icon_paint);
-  }
-
   if constexpr (kDebugCable) {  // Draw the arcline
-    SkPath cable_path = state.arcline->ToPath(false);
-    SkPaint arcline_paint;
-    arcline_paint.setColor(SK_ColorBLACK);
-    arcline_paint.setAlphaf(.5);
-    arcline_paint.setStrokeWidth(0.0005);
-    arcline_paint.setStyle(SkPaint::kStroke_Style);
-    arcline_paint.setAntiAlias(true);
-    canvas.drawPath(cable_path, arcline_paint);
+    if (state.arcline) {
+      SkPath cable_path = state.arcline->ToPath(false);
+      SkPaint arcline_paint;
+      arcline_paint.setColor(SK_ColorBLACK);
+      arcline_paint.setAlphaf(.5);
+      arcline_paint.setStrokeWidth(0.0005);
+      arcline_paint.setStyle(SkPaint::kStroke_Style);
+      arcline_paint.setAntiAlias(true);
+      canvas.drawPath(cable_path, arcline_paint);
+    }
   }
 
   SkPaint cross_paint;
@@ -504,6 +455,93 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
         SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
     canvas.drawPath(p, cable_paint2);
   }
+
+  canvas.save();
+  Vec2 cable_end = state.PlugTopCenter();
+  canvas.translate(cable_end.x, cable_end.y);
+  canvas.rotate(state.sections.front().dir * 180 / M_PI - 90);
+  canvas.translate(0, -kCasingHeight);
+
+  float casing_left = -kCasingWidth / 2;
+  float casing_right = kCasingWidth / 2;
+  float casing_top = kCasingHeight;
+
+  {  // Black metal casing
+    SkPaint black_metal_paint;
+    SkPoint pts[2] = {Vec2(-0.004, 0), Vec2(0.004, 0)};
+    SkColor colors[5] = {0xff626262, 0xff000000, 0xff181818, 0xff0d0d0d, 0xff5e5e5e};
+    float pos[5] = {0, 0.1, 0.5, 0.9, 1};
+    sk_sp<SkShader> gradient =
+        SkGradientShader::MakeLinear(pts, colors, pos, 5, SkTileMode::kClamp);
+    black_metal_paint.setShader(gradient);
+    SkRect black_metal_rect = SkRect::MakeLTRB(-0.004, 0, +0.004, +0.008);
+    canvas.drawRect(black_metal_rect, black_metal_paint);
+  }
+
+  {  // Steel insert
+    SkRect steel_rect = SkRect::MakeLTRB(-0.003, -0.001, 0.003, 0);
+
+    // Fill with black - this will only stay around borders
+    SkPaint black;
+    black.setColor(0xff000000);
+    canvas.drawRect(steel_rect, black);
+
+    // Fill with steel-like gradient
+    SkPaint steel_paint;
+    SkPoint pts[2] = {Vec2(-0.003, 0), Vec2(0.003, 0)};
+    SkColor colors[2] = {0xffe6e6e6, 0xff949494};
+    sk_sp<SkShader> gradient =
+        SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+    steel_paint.setShader(gradient);
+    steel_paint.setMaskFilter(
+        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0001, true));
+    steel_paint.setColor(0xff000000);
+    canvas.drawRect(steel_rect, steel_paint);
+  }
+
+  {  // Rubber cable holder
+    constexpr float kRubberWidth = 0.002;
+    constexpr float kRubberHeight = 0.016;
+    constexpr float kLowerCpOffset = kRubberHeight * 0.3;
+    constexpr float kUpperCpOffset = kRubberHeight * 0.7;
+    constexpr float kTopCpOffset = kRubberWidth * 0.2;
+
+    float sleeve_left = -kRubberWidth / 2;
+    float sleeve_right = kRubberWidth / 2;
+    float sleeve_top = kCasingHeight + kRubberHeight;
+    SkPath rubber_path;
+    rubber_path.moveTo(casing_left, casing_top);
+    rubber_path.cubicTo(casing_left, casing_top + kLowerCpOffset, sleeve_left,
+                        sleeve_top - kUpperCpOffset, sleeve_left, sleeve_top);
+    rubber_path.cubicTo(sleeve_left, sleeve_top + kTopCpOffset, sleeve_right,
+                        sleeve_top + +kTopCpOffset, sleeve_right, sleeve_top);
+    rubber_path.cubicTo(sleeve_right, sleeve_top - kUpperCpOffset, casing_right,
+                        casing_top + kLowerCpOffset, casing_right, casing_top);
+    rubber_path.close();
+
+    SkPaint dark_flat;
+    dark_flat.setAntiAlias(true);
+    dark_flat.setColor(0xff151515);
+    canvas.drawPath(rubber_path, dark_flat);
+
+    SkPaint lighter_inside;
+    lighter_inside.setAntiAlias(false);
+    lighter_inside.setMaskFilter(
+        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0010, true));
+    lighter_inside.setColor(0xff2a2a2a);
+    canvas.drawPath(rubber_path, lighter_inside);
+  }
+
+  {  // Icon on the metal casing
+    SkPath path = PathFromSVG(kNextShape);
+    path.offset(0, 0.004);
+    SkPaint icon_paint;
+    icon_paint.setColor(0xff808080);
+    icon_paint.setAntiAlias(true);
+    canvas.drawPath(path, icon_paint);
+  }
+
+  canvas.restore();
 }
 
 /*
@@ -595,4 +633,22 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
 }
 */
 
+OpticalConnectorState::OpticalConnectorState(Vec2 start) : dispenser_v(0) {
+  sections.emplace_back(CableSection{
+      .pos = start,
+      .vel = Vec2(0, 0),
+      .acc = Vec2(0, 0),
+      .dir = M_PI / 2,
+      .distance = 0,
+      .next_dir_delta = 0,
+  });  // plug
+  sections.emplace_back(CableSection{
+      .pos = start,
+      .vel = Vec2(0, 0),
+      .acc = Vec2(0, 0),
+      .dir = M_PI / 2,
+      .distance = 0,
+      .next_dir_delta = 0,
+  });  // dispenser
+}
 }  // namespace automat::gui

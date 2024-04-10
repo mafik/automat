@@ -9,11 +9,18 @@
 
 namespace automat::gui {
 
-ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {}
+static Vec2 StartPosition(const ConnectionWidget& widget) {
+  SkPath from_shape = widget.from.ArgShape(widget.arg);
+  return Rect::BottomCenter(from_shape.getBounds()) + widget.from.position;
+}
+
+ConnectionWidget::ConnectionWidget(Location& from, Argument& arg)
+    : from(from), arg(arg), state(StartPosition(*this)) {}
 
 SkPath ConnectionWidget::Shape() const {
-  SkRect black_metal_rect =
-      SkRect::MakeLTRB(position.x - 0.004, position.y, position.x + 0.004, position.y + 0.008);
+  Vec2 bottom_center = state.PlugBottomCenter();
+  SkRect black_metal_rect = SkRect::MakeLTRB(bottom_center.x - 0.004, bottom_center.y,
+                                             bottom_center.x + 0.004, bottom_center.y + 0.008);
   SkPath path = SkPath::Rect(black_metal_rect);
   return path;
 }
@@ -22,10 +29,9 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
 
-  SkPath from_shape = from.ArgShape(arg);
-  Vec2 from_point = Rect::BottomCenter(from_shape.getBounds()) + from.position;
+  Vec2 from_point = StartPosition(*this);
 
-  Vec2 to_point;
+  Optional<Vec2> to_point;
   if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
     // Because the ConnectionWidget is a child of Location, we must transform the coordinates of its
     // destination to local space.
@@ -43,9 +49,8 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     m.postConcat(parent_to_local);
     to_shape.transform(m);
     to_point = Rect::TopCenter(to_shape.getBounds());
-    position = to_point;
   } else {
-    to_point = position;
+    to_point = manual_position;
   }
 
   float dt = ctx.animation_context.timer.d;
@@ -79,7 +84,8 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
     delete it->second;
   }
 
-  grab_offset = pointer.PositionWithin(widget.from) - widget.position;
+  grab_offset =
+      pointer.PositionWithin(*widget.from.ParentAs<Machine>()) - widget.state.PlugBottomCenter();
 
   animation_context = &pointer.AnimationContext();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
@@ -94,13 +100,14 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
 }
 
 void DragConnectionAction::Update(gui::Pointer& pointer) {
-  Vec2 new_position = pointer.PositionWithin(widget.from);
-  widget.position = new_position - grab_offset;
+  Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
+  widget.manual_position = new_position - grab_offset;
 }
 
 void DragConnectionAction::End() {
+  widget.manual_position.reset();
   Machine* m = widget.from.ParentAs<Machine>();
-  Location* to = m->LocationAtPoint(widget.position);
+  Location* to = m->LocationAtPoint(widget.state.PlugBottomCenter());
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
     widget.from.ConnectTo(*to, widget.arg.name);
   }

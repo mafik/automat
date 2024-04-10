@@ -32,7 +32,10 @@ struct OpticalConnectorState {
   maf::Vec<CableSection> sections;
   maf::Optional<maf::ArcLine> arcline;
 
-  OpticalConnectorState() : dispenser_v(0) {}
+  OpticalConnectorState(Vec2 start);
+
+  Vec2 PlugTopCenter() const;
+  Vec2 PlugBottomCenter() const;
 };
 
 void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2 start, maf::Optional<Vec2> end);

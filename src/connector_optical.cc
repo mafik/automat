@@ -168,10 +168,10 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
 }
 
 void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Optional<Vec2> end) {
-  Optional<Vec2> cable_end = end.transform([](Vec2 v) {
-    v.y += kCasingHeight;
-    return v;
-  });
+  Optional<Vec2> cable_end;
+  if (end) {
+    cable_end = Vec2(end->x, end->y + kCasingHeight);
+  }
 
   auto& dispenser = start;
   auto& chain = state.sections;

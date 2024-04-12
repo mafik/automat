@@ -458,9 +458,10 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
 
   canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
-  canvas.translate(cable_end.x, cable_end.y);
-  canvas.rotate(state.sections.front().dir * 180 / M_PI - 90);
-  canvas.translate(0, -kCasingHeight);
+  SkMatrix transform = SkMatrix::Translate(cable_end);
+  transform.preRotate(state.sections.front().dir * 180 / M_PI - 90);
+  transform.preTranslate(0, -kCasingHeight);
+  canvas.concat(transform);
 
   float casing_left = -kCasingWidth / 2;
   float casing_right = kCasingWidth / 2;
@@ -500,23 +501,54 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   }
 
   {  // Rubber cable holder
-    constexpr float kRubberWidth = 0.002;
-    constexpr float kRubberHeight = 0.016;
+    constexpr float kRubberWidth = 0.003;
+    constexpr float kRubberHeight = 0.015;
     constexpr float kLowerCpOffset = kRubberHeight * 0.3;
-    constexpr float kUpperCpOffset = kRubberHeight * 0.7;
+    constexpr float kUpperCpOffset = kRubberHeight * 0.6;
     constexpr float kTopCpOffset = kRubberWidth * 0.2;
 
-    float sleeve_left = -kRubberWidth / 2;
-    float sleeve_right = kRubberWidth / 2;
-    float sleeve_top = kCasingHeight + kRubberHeight;
+    Vec2 pts[6];
+    Vec2& left = pts[0];
+    Vec2& left_cp1 = pts[1];
+    Vec2& left_cp2 = pts[2];
+    Vec2& right = pts[3];
+    Vec2& right_cp1 = pts[4];
+    Vec2& right_cp2 = pts[5];
+    int sleeve_i = 3;
+    SkMatrix inverse;
+    if (sleeve_i < state.sections.size() && transform.invert(&inverse)) {
+      auto& p = state.sections[sleeve_i];
+      Vec2 side_offset = Vec2::Polar(p.dir + M_PI / 2, kRubberWidth / 2);
+      Vec2 upper_cp_offset = Vec2::Polar(p.dir + M_PI, kUpperCpOffset);
+      Vec2 top_cp_offset = Vec2::Polar(p.dir, kTopCpOffset);
+      left = p.pos + side_offset;
+      left_cp1 = left + upper_cp_offset;
+      left_cp2 = left + top_cp_offset;
+      right = p.pos - side_offset;
+      right_cp1 = right + top_cp_offset;
+      right_cp2 = right + upper_cp_offset;
+      inverse.mapPoints(&pts[0].sk, 6);
+    } else {
+      float sleeve_left = -kRubberWidth / 2;
+      float sleeve_right = kRubberWidth / 2;
+      float sleeve_top = kCasingHeight + kRubberHeight;
+      left = Vec2(sleeve_left, sleeve_top);
+      left_cp1 = Vec2(sleeve_left, sleeve_top - kUpperCpOffset);
+      left_cp2 = Vec2(sleeve_left, sleeve_top + kTopCpOffset);
+      right = Vec2(sleeve_right, sleeve_top);
+      right_cp1 = Vec2(sleeve_right, sleeve_top + kTopCpOffset);
+      right_cp2 = Vec2(sleeve_right, sleeve_top - kUpperCpOffset);
+    }
+    Vec2 bottom_left = Vec2(casing_left, casing_top);
+    Vec2 bottom_left_cp = bottom_left + Vec2(0, kLowerCpOffset);
+    Vec2 bottom_right = Vec2(casing_right, casing_top);
+    Vec2 bottom_right_cp = bottom_right + Vec2(0, kLowerCpOffset);
     SkPath rubber_path;
-    rubber_path.moveTo(casing_left, casing_top);
-    rubber_path.cubicTo(casing_left, casing_top + kLowerCpOffset, sleeve_left,
-                        sleeve_top - kUpperCpOffset, sleeve_left, sleeve_top);
-    rubber_path.cubicTo(sleeve_left, sleeve_top + kTopCpOffset, sleeve_right,
-                        sleeve_top + +kTopCpOffset, sleeve_right, sleeve_top);
-    rubber_path.cubicTo(sleeve_right, sleeve_top - kUpperCpOffset, casing_right,
-                        casing_top + kLowerCpOffset, casing_right, casing_top);
+    rubber_path.moveTo(bottom_left);                      // bottom left
+    rubber_path.cubicTo(bottom_left_cp, left_cp1, left);  // upper left
+    rubber_path.cubicTo(left_cp2, right_cp1, right);      // upper right
+    rubber_path.cubicTo(right_cp2, bottom_right_cp,
+                        bottom_right);  // bottom right
     rubber_path.close();
 
     SkPaint dark_flat;

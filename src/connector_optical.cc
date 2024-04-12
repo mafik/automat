@@ -259,8 +259,9 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       continue;
     }
     // LERP the cable section towards its anchor point. More at the end of the cable.
-    Vec2 new_pos =
-        chain[i].pos + (anchors[ai] - chain[i].pos) * expf(-dt * 6000.0f * i / anchors.size());
+    float time_factor = 1 - expf(-dt * 60.0f);                 // approach 1 as dt -> infinity
+    float offset_factor = std::max<float>(0, 1 - ai / 10.0f);  // 1 near the plug and falling to 0
+    Vec2 new_pos = chain[i].pos + (anchors[ai] - chain[i].pos) * time_factor * offset_factor;
     chain[i].vel += (new_pos - chain[i].pos) / dt;
     chain[i].pos = new_pos;
 

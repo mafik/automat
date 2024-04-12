@@ -22,9 +22,9 @@
 #include <include/gpu/vk/GrVkBackendContext.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
+#include <src/gpu/ganesh/GrDirectContextPriv.h>
 #include <src/gpu/ganesh/vk/GrVkUtil.h>
 #include <vulkan/vulkan.h>
-
 
 namespace automat::vk {
 
@@ -422,14 +422,13 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat 
                           .fLevelCount = 1,
                           .fCurrentQueueFamily = device.present_queue_index,
                           .fSharingMode = sharingMode};
-
     if (usageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) {
       GrBackendTexture backendTexture = GrBackendTextures::MakeVk(width, height, info);
-      surfaces[i] = SkSurfaces::WrapBackendTexture(gr_context.get(), backendTexture,
-                                                   kTopLeft_GrSurfaceOrigin, cfg_MSAASampleCount,
-                                                   colorType, color_space, &surface_props);
+      surfaces[i] =
+          SkSurfaces::WrapBackendTexture(gr_context.get(), backendTexture, kTopLeft_GrSurfaceOrigin,
+                                         sample_count, colorType, color_space, &surface_props);
     } else {
-      if (cfg_MSAASampleCount > 1) {
+      if (sample_count > 1) {
         return false;
       }
       GrBackendRenderTarget backendRT = GrBackendRenderTargets::MakeVk(width, height, info);
@@ -536,18 +535,34 @@ bool Swapchain::Create(int widthHint, int heightHint) {
           ? VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
           : VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
+  int sample_count = std::max(1, cfg_MSAASampleCount);
+
+  // Reduce sample count based on Skia capabilities.
+  const GrCaps* gr_caps = gr_context->priv().caps();
+  if (gr_caps) {
+    int max_supported_msaa = 1;
+    for (VkSurfaceFormatKHR& surface_format : surfaceFormats) {
+      VkFormat format = surface_format.format;
+      if (!GrVkFormatIsSupported(format)) continue;
+      auto gr_backend_format = GrBackendFormats::MakeVk(format);
+      int msaa = gr_caps->maxRenderTargetSampleCount(gr_backend_format);
+      max_supported_msaa = std::max(max_supported_msaa, msaa);
+    }
+    sample_count = std::min(sample_count, max_supported_msaa);
+  }
+
   // Pick our surface format.
   VkFormat surfaceFormat = VK_FORMAT_UNDEFINED;
   VkColorSpaceKHR colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
   for (uint32_t i = 0; i < surfaceFormatCount; ++i) {
-    VkFormat localFormat = surfaceFormats[i].format;
-    if (GrVkFormatIsSupported(localFormat)) {
-      surfaceFormat = localFormat;
-      colorSpace = surfaceFormats[i].colorSpace;
-      break;
-    }
+    VkFormat format = surfaceFormats[i].format;
+    if (!GrVkFormatIsSupported(format)) continue;
+    auto gr_backend_format = GrBackendFormats::MakeVk(format);
+    if (gr_caps && sample_count > gr_caps->maxRenderTargetSampleCount(gr_backend_format)) continue;
+    surfaceFormat = format;
+    colorSpace = surfaceFormats[i].colorSpace;
+    break;
   }
-  int sample_count = std::max(1, cfg_MSAASampleCount);
 
   if (VK_FORMAT_UNDEFINED == surfaceFormat) {
     return false;
@@ -617,19 +632,18 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   // destroy the old swapchain
   if (swapchainCreateInfo.oldSwapchain != VK_NULL_HANDLE) {
     DeviceWaitIdle(device);
-
     DestroyBuffers();
-
     DestroySwapchainKHR(device, swapchainCreateInfo.oldSwapchain, nullptr);
+    swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
   }
 
   if (!CreateBuffers(width, height, sample_count, swapchainCreateInfo.imageFormat, usageFlags,
                      colorType, swapchainCreateInfo.imageSharingMode)) {
     DeviceWaitIdle(device);
-
     DestroyBuffers();
-
-    DestroySwapchainKHR(device, swapchainCreateInfo.oldSwapchain, nullptr);
+    DestroySwapchainKHR(device, swapchain, nullptr);
+    swapchain = VK_NULL_HANDLE;
+    return false;
   }
 
   return true;

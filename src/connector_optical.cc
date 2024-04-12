@@ -431,30 +431,36 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     }
   }
 
-  if constexpr (!kDebugCable) {  // Draw the chain as a bezier curve
-    SkPaint cable_paint;
-    cable_paint.setStyle(SkPaint::kStroke_Style);
-    cable_paint.setStrokeWidth(0.002);
-    cable_paint.setAntiAlias(true);
-    cable_paint.setColor(0xff111111);
+  // Find the index of the last section that is part of the rubber sleeve
+  int rubber_sleeve_tail_i = std::min<int>(3, (int)state.sections.size() - 1);
+  bool rubber_touching_dispenser = rubber_sleeve_tail_i == state.sections.size() - 1;
 
-    SkPath p;
-    p.moveTo(chain[0].pos);
-    for (int i = 1; i < chain.size(); i++) {
-      Vec2 p1 = chain[i - 1].pos + Vec2::Polar(chain[i - 1].dir, kStep / 3);
-      Vec2 p2 = chain[i].pos - Vec2::Polar(chain[i].dir, kStep / 3);
-      p.cubicTo(p1, p2, chain[i].pos);
+  if constexpr (!kDebugCable) {  // Draw the chain as a bezier curve
+    if (!rubber_touching_dispenser) {
+      SkPaint cable_paint;
+      cable_paint.setStyle(SkPaint::kStroke_Style);
+      cable_paint.setStrokeWidth(0.002);
+      cable_paint.setAntiAlias(true);
+      cable_paint.setColor(0xff111111);
+
+      SkPath p;
+      p.moveTo(chain[0].pos);
+      for (int i = 1; i < chain.size(); i++) {
+        Vec2 p1 = chain[i - 1].pos + Vec2::Polar(chain[i - 1].dir, kStep / 3);
+        Vec2 p2 = chain[i].pos - Vec2::Polar(chain[i].dir, kStep / 3);
+        p.cubicTo(p1, p2, chain[i].pos);
+      }
+      p.setIsVolatile(true);
+      canvas.drawPath(p, cable_paint);
+      SkPaint cable_paint2;
+      cable_paint2.setStyle(SkPaint::kStroke_Style);
+      cable_paint2.setStrokeWidth(0.002);
+      cable_paint2.setAntiAlias(true);
+      cable_paint2.setColor(0xff444444);
+      cable_paint2.setMaskFilter(
+          SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
+      canvas.drawPath(p, cable_paint2);
     }
-    p.setIsVolatile(true);
-    canvas.drawPath(p, cable_paint);
-    SkPaint cable_paint2;
-    cable_paint2.setStyle(SkPaint::kStroke_Style);
-    cable_paint2.setStrokeWidth(0.002);
-    cable_paint2.setAntiAlias(true);
-    cable_paint2.setColor(0xff444444);
-    cable_paint2.setMaskFilter(
-        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
-    canvas.drawPath(p, cable_paint2);
   }
 
   canvas.save();
@@ -504,9 +510,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   {  // Rubber cable holder
     constexpr float kRubberWidth = 0.003;
     constexpr float kRubberHeight = 0.015;
-    constexpr float kLowerCpOffset = kRubberHeight * 0.3;
     constexpr float kUpperCpOffset = kRubberHeight * 0.5;
     constexpr float kTopCpOffset = kRubberWidth * 0.2;
+    float lower_cp_offset = kRubberHeight * 0.3;
 
     Vec2 pts[6];
     Vec2& left = pts[0];
@@ -515,12 +521,22 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     Vec2& right = pts[3];
     Vec2& right_cp1 = pts[4];
     Vec2& right_cp2 = pts[5];
-    int sleeve_i = 3;
     SkMatrix inverse;
-    if (sleeve_i < state.sections.size() && transform.invert(&inverse)) {
-      auto& p = state.sections[sleeve_i];
-      Vec2 side_offset = Vec2::Polar(p.dir + M_PI / 2, kRubberWidth / 2);
-      Vec2 upper_cp_offset = Vec2::Polar(p.dir + M_PI, kUpperCpOffset);
+    if (rubber_sleeve_tail_i >= 0 && transform.invert(&inverse)) {
+      auto& p = state.sections[rubber_sleeve_tail_i];
+      Vec2 local_sleeve_top = inverse.mapPoint(p.pos);
+      float sleeve_top_dist = Length(Vec2(0, casing_top) - local_sleeve_top);
+      // 1 when cable is fully retracted, 0 when the rubber part of the connector is fully exposed
+      float flatten_factor = std::clamp<float>(1 - 2 * sleeve_top_dist / kRubberHeight, 0, 1);
+      float flatten_factor_sin = sin(flatten_factor * M_PI / 2);
+
+      lower_cp_offset *= (1 - flatten_factor_sin);
+
+      float rubber_width = std::lerp(kRubberWidth, kCasingWidth, flatten_factor_sin);
+
+      Vec2 side_offset = Vec2::Polar(p.dir + M_PI / 2, rubber_width / 2);
+      Vec2 upper_cp_offset =
+          Vec2::Polar(p.dir + M_PI, kUpperCpOffset * powf(1 - flatten_factor_sin, 2));
       Vec2 top_cp_offset = Vec2::Polar(p.dir, kTopCpOffset);
       left = p.pos + side_offset;
       left_cp1 = left + upper_cp_offset;
@@ -541,9 +557,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       right_cp2 = Vec2(sleeve_right, sleeve_top - kUpperCpOffset);
     }
     Vec2 bottom_left = Vec2(casing_left, casing_top);
-    Vec2 bottom_left_cp = bottom_left + Vec2(0, kLowerCpOffset);
+    Vec2 bottom_left_cp = bottom_left + Vec2(0, lower_cp_offset);
     Vec2 bottom_right = Vec2(casing_right, casing_top);
-    Vec2 bottom_right_cp = bottom_right + Vec2(0, kLowerCpOffset);
+    Vec2 bottom_right_cp = bottom_right + Vec2(0, lower_cp_offset);
     SkPath rubber_path;
     rubber_path.moveTo(bottom_left);                      // bottom left
     rubber_path.cubicTo(bottom_left_cp, left_cp1, left);  // upper left

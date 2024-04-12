@@ -14,48 +14,81 @@ static Vec2 StartPosition(const ConnectionWidget& widget) {
   return Rect::BottomCenter(from_shape.getBounds()) + widget.from.position;
 }
 
-ConnectionWidget::ConnectionWidget(Location& from, Argument& arg)
-    : from(from), arg(arg), state(StartPosition(*this)) {}
+ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {
+  if (arg.name == "next") {
+    state.emplace(StartPosition(*this));
+  }
+}
 
 SkPath ConnectionWidget::Shape() const {
-  Vec2 bottom_center = state.PlugBottomCenter();
-  SkRect black_metal_rect = SkRect::MakeLTRB(bottom_center.x - 0.004, bottom_center.y,
-                                             bottom_center.x + 0.004, bottom_center.y + 0.008);
-  SkPath path = SkPath::Rect(black_metal_rect);
-  return path;
+  if (state) {
+    Vec2 bottom_center = state->PlugBottomCenter();
+    SkRect black_metal_rect = SkRect::MakeLTRB(bottom_center.x - 0.004, bottom_center.y,
+                                               bottom_center.x + 0.004, bottom_center.y + 0.008);
+    SkPath path = SkPath::Rect(black_metal_rect);
+    return path;
+  } else {
+    return SkPath();
+  }
 }
 
 void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
 
-  Vec2 from_point = StartPosition(*this);
+  if (state) {
+    Vec2 from_point = StartPosition(*this);
 
-  Optional<Vec2> to_point;
-  if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
-    // Because the ConnectionWidget is a child of Location, we must transform the coordinates of its
-    // destination to local space.
-    Widget* parent_machine = ctx.path[ctx.path.size() - 2];
-    SkMatrix parent_to_local =
-        TransformDown(Path{parent_machine, (Widget*)this}, ctx.animation_context);
+    Optional<Vec2> to_point;
+    if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
+      // Because the ConnectionWidget is a child of Location, we must transform the coordinates of
+      // its destination to local space.
+      Widget* parent_machine = ctx.path[ctx.path.size() - 2];
+      SkMatrix parent_to_local =
+          TransformDown(Path{parent_machine, (Widget*)this}, ctx.animation_context);
 
-    Connection* c = it->second;
-    Location& to = c->to;
-    SkPath to_shape;
-    if (to.object) {
-      to_shape = to.object->Shape();
+      Connection* c = it->second;
+      Location& to = c->to;
+      SkPath to_shape;
+      if (to.object) {
+        to_shape = to.object->Shape();
+      }
+      SkMatrix m = TransformUp(Path{parent_machine, &to}, ctx.animation_context);
+      m.postConcat(parent_to_local);
+      to_shape.transform(m);
+      to_point = Rect::TopCenter(to_shape.getBounds());
+    } else {
+      to_point = manual_position;
     }
-    SkMatrix m = TransformUp(Path{parent_machine, &to}, ctx.animation_context);
-    m.postConcat(parent_to_local);
-    to_shape.transform(m);
-    to_point = Rect::TopCenter(to_shape.getBounds());
-  } else {
-    to_point = manual_position;
-  }
 
-  float dt = ctx.animation_context.timer.d;
-  SimulateCablePhysics(dt, state, from_point, to_point);
-  DrawOpticalConnector(ctx, state);
+    float dt = ctx.animation_context.timer.d;
+    SimulateCablePhysics(dt, *state, from_point, to_point);
+    DrawOpticalConnector(ctx, *state);
+  } else {
+    SkPath from_shape = from.ArgShape(arg);
+    from_shape.offset(from.position.x, from.position.y);
+    SkPath to_shape;
+    if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
+      Connection* c = it->second;
+      Location* to_location = &c->to;
+      if (to_location) {
+        Object* to_object = to_location->object.get();
+        if (to_object) {
+          to_shape = to_object->Shape();
+          to_shape.offset(to_location->position.x, to_location->position.y);
+        }
+      }
+    }
+    if (to_shape.isEmpty()) {
+      if (manual_position) {
+        to_shape.moveTo(*manual_position);
+      } else {
+        return;
+      }
+    }
+
+    DrawArrow(canvas, from_shape, to_shape);
+  }
 }
 
 std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButton) {
@@ -85,8 +118,12 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
     delete it->second;
   }
 
-  grab_offset =
-      pointer.PositionWithin(*widget.from.ParentAs<Machine>()) - widget.state.PlugBottomCenter();
+  if (widget.state) {
+    grab_offset =
+        pointer.PositionWithin(*widget.from.ParentAs<Machine>()) - widget.state->PlugBottomCenter();
+  } else {
+    grab_offset = Vec2(0, 0);
+  }
 
   animation_context = &pointer.AnimationContext();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
@@ -107,7 +144,15 @@ void DragConnectionAction::Update(gui::Pointer& pointer) {
 
 void DragConnectionAction::End() {
   Machine* m = widget.from.ParentAs<Machine>();
-  Location* to = m->LocationAtPoint(widget.state.PlugBottomCenter());
+  Vec2 pos;
+  if (widget.state) {
+    pos = widget.state->PlugBottomCenter();
+  } else if (widget.manual_position) {
+    pos = *widget.manual_position;
+  } else {
+    return;
+  }
+  Location* to = m->LocationAtPoint(pos);
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
     widget.from.ConnectTo(*to, widget.arg.name);
   }

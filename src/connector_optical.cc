@@ -505,7 +505,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     constexpr float kRubberWidth = 0.003;
     constexpr float kRubberHeight = 0.015;
     constexpr float kLowerCpOffset = kRubberHeight * 0.3;
-    constexpr float kUpperCpOffset = kRubberHeight * 0.6;
+    constexpr float kUpperCpOffset = kRubberHeight * 0.5;
     constexpr float kTopCpOffset = kRubberWidth * 0.2;
 
     Vec2 pts[6];
@@ -577,10 +577,10 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   canvas.restore();
 }
 
-/*
 // This function has some nice code for drawing connections between rounded rectangles.
 // Keeping this for potential usage in the future
-void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape) {
+void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape) {
+  static const SkPath kConnectionArrowShape = PathFromSVG(kConnectionArrowShapeSVG);
   SkColor color = 0xff6e4521;
   SkPaint line_paint;
   line_paint.setAntiAlias(true);
@@ -642,9 +642,9 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
     to.y = to_inner.bottom();
   }
   // Find polar coordinates of the connection.
-  SkVector delta = to - from;
-  float degrees = 180 * std::atan2(delta.y(), delta.x()) / std::numbers::pi;
-  float end = delta.length();
+  Vec2 delta = to - from;
+  float degrees = atan(delta) * 180 / M_PI;
+  float end = Length(delta);
   float start = 0;
   if (from_is_rrect) {
     start = std::min(start + from_rrect.getSimpleRadii().fX, end);
@@ -664,7 +664,6 @@ void DrawConnection(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to
   canvas.drawPath(kConnectionArrowShape, arrow_paint);
   canvas.restore();
 }
-*/
 
 OpticalConnectorState::OpticalConnectorState(Vec2 start) : dispenser_v(0) {
   sections.emplace_back(CableSection{

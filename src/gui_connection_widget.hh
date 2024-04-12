@@ -30,7 +30,7 @@ struct DragConnectionAction : Action {
 struct ConnectionWidget : Widget {
   Location& from;
   Argument& arg;
-  mutable OpticalConnectorState state;
+  mutable maf::Optional<OpticalConnectorState> state;
   mutable maf::Optional<Vec2> manual_position;  // position of the plug (bottom center)
 
   ConnectionWidget(Location&, Argument&);
@@ -40,5 +40,7 @@ struct ConnectionWidget : Widget {
   void Draw(DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
 };
+
+void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);
 
 }  // namespace automat::gui

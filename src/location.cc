@@ -210,8 +210,6 @@ SkPath Outset(const SkPath& path, float distance) {
   }
 }
 
-const SkPath kConnectionArrowShape = PathFromSVG(kConnectionArrowShapeSVG);
-
 void Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   SkPath my_shape;

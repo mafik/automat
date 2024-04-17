@@ -168,15 +168,15 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
 }
 
 void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Optional<Vec2> end) {
-  if (state.stabilized && Length(start - state.stabilized_start) < 0.0001) {
-    if (end.has_value() == state.stabilized_end.has_value() &&
-        (!end.has_value() || Length(*end - *state.stabilized_end) < 0.0001)) {
-      return;
-    }
-  }
   Optional<Vec2> cable_end;
   if (end) {
     cable_end = Vec2(end->x, end->y + kCasingHeight);
+  }
+  if (state.stabilized && Length(start - state.stabilized_start) < 0.0001) {
+    if (cable_end.has_value() == state.stabilized_end.has_value() &&
+        (!cable_end.has_value() || Length(*cable_end - *state.stabilized_end) < 0.0001)) {
+      return;
+    }
   }
 
   auto& dispenser = start;
@@ -240,7 +240,9 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     chain[i].acc += (anchors[ai] - chain[i].pos) * 3e2;
   }
 
-  if (Length(chain[chain.size() - 1].pos - chain[chain.size() - 2].pos) > 1e-6) {
+  constexpr float kDistanceEpsilon = 1e-6;
+  if (Length(chain[chain.size() - 1].pos - chain[chain.size() - 2].pos) > kDistanceEpsilon &&
+      chain[chain.size() - 2].distance > kDistanceEpsilon) {
     chain[chain.size() - 1].dir = atan(chain[chain.size() - 1].pos - chain[chain.size() - 2].pos);
   } else {
     chain[chain.size() - 1].dir = M_PI / 2;
@@ -248,7 +250,8 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
   if (cable_end) {
     chain[0].dir = M_PI / 2;
   } else {
-    if (Length(chain[1].pos - chain[0].pos) > 1e-6) {
+    if (Length(chain[1].pos - chain[0].pos) > kDistanceEpsilon &&
+        chain[0].distance > kDistanceEpsilon) {
       chain[0].dir = atan(chain[1].pos - chain[0].pos);
     } else {
       chain[0].dir = M_PI / 2;
@@ -317,7 +320,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     if (cable_end) {
       state.stabilized_end = *cable_end;
     } else {
-      state.stabilized_end = chain.front().pos;
+      state.stabilized_end.reset();
     }
   }
 
@@ -511,9 +514,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
   SkMatrix transform = SkMatrix::Translate(cable_end);
-  if (not state.stabilized) {
-    transform.preRotate(state.sections.front().dir * 180 / M_PI - 90);
-  }
+  transform.preRotate(state.sections.front().dir * 180 / M_PI - 90);
   transform.preTranslate(0, -kCasingHeight);
   canvas.concat(transform);
 

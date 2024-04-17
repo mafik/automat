@@ -25,16 +25,17 @@ constexpr float kCableWidth = 0.002;
 
 ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
   ArcLine cable = ArcLine(start, M_PI * 1.5);
-  Vec2 cable_middle = (start + cable_end) / 2;
-  Vec2 delta = cable_middle - start;
+  Vec2 delta = cable_end - start;
   float distance = Length(delta);
-  float turn_radius = std::max<float>(distance / 4, 0.01);
+  float turn_radius = std::max<float>(distance / 8, 0.01);
 
-  auto horizontal_shift = ArcLine::TurnShift(delta.x * 2, turn_radius);
-  float move_down = -delta.y - horizontal_shift.distance_forward / 2;
+  auto horizontal_shift = ArcLine::TurnShift(delta.x, turn_radius);
+  float move_down = (-delta.y - horizontal_shift.distance_forward) / 2;
   if (move_down < 0) {
-    auto vertical_shift =
-        ArcLine::TurnShift(cable_end.x < start.x ? move_down * 2 : -move_down * 2, turn_radius);
+    // Increase the turn radius of the vertical move to allow ∞-type routing
+    float vertical_turn_radius = std::max(turn_radius, horizontal_shift.move_between_turns * 0.5f);
+    auto vertical_shift = ArcLine::TurnShift(cable_end.x < start.x ? move_down * 2 : -move_down * 2,
+                                             vertical_turn_radius);
 
     float move_side = (horizontal_shift.move_between_turns - vertical_shift.distance_forward) / 2;
     if (move_side < 0) {

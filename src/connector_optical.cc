@@ -147,7 +147,6 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
     do {  // Add a new link if the last one is too far from the dispenser
       auto delta = state.sections[state.sections.size() - 2].pos - state.sections.back().pos;
       auto current_dist = Length(delta);
-      auto desired_dist = state.sections[state.sections.size() - 2].distance;
       if (current_dist > kStep) {
         state.sections[state.sections.size() - 2].distance = kStep;
         auto new_it = state.sections.insert(
@@ -158,6 +157,15 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
                 .acc = Vec2(0, 0),
                 .distance = current_dist - kStep,
             });
+      } else if (state.sections.size() < anchor_count) {
+        auto new_it = state.sections.insert(state.sections.begin() + state.sections.size() - 1,
+                                            OpticalConnectorState::CableSection{
+                                                .pos = state.sections.back().pos,
+                                                .vel = Vec2(0, 0),
+                                                .acc = Vec2(0, 0),
+                                                .distance = 0,
+                                            });
+        break;
       } else {
         break;
       }

@@ -21,6 +21,7 @@ constexpr float kCasingHeight = 0.008;
 constexpr bool kDebugCable = false;
 constexpr float kStep = 0.005;
 constexpr float kCrossSize = 0.001;
+constexpr float kCableWidth = 0.002;
 
 ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
   ArcLine cable = ArcLine(start, M_PI * 1.5);
@@ -100,7 +101,7 @@ static void PopulateAnchors(Vec<Vec2>& anchors, Vec<float>& anchor_dir, const Ar
 
   anchors.push_back(tail);
   anchor_dir.push_back(M_PI / 2);
-  for (float cable_pos = kStep; cable_pos < cable_length; cable_pos += kStep) {
+  for (float cable_pos = kStep; cable_pos < cable_length - kCableWidth / 2; cable_pos += kStep) {
     it.Advance(-kStep);
     anchors.push_back(it.Position());
     float dir = NormalizeAngle(it.Angle() + M_PI);
@@ -147,24 +148,27 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
     do {  // Add a new link if the last one is too far from the dispenser
       auto delta = state.sections[state.sections.size() - 2].pos - state.sections.back().pos;
       auto current_dist = Length(delta);
-      if (current_dist > kStep) {
+      constexpr float kExtendThreshold = kStep + kCableWidth / 2;
+      if (current_dist > kExtendThreshold) {
         state.sections[state.sections.size() - 2].distance = kStep;
         auto new_it = state.sections.insert(
             state.sections.begin() + state.sections.size() - 1,
             OpticalConnectorState::CableSection{
-                .pos = state.sections[state.sections.size() - 2].pos - delta / current_dist * kStep,
+                .pos = state.sections[state.sections.size() - 2].pos - Vec2(0, kCableWidth / 2) -
+                       delta / current_dist * kStep,
                 .vel = Vec2(0, 0),
                 .acc = Vec2(0, 0),
                 .distance = current_dist - kStep,
             });
       } else if (state.sections.size() < anchor_count) {
-        auto new_it = state.sections.insert(state.sections.begin() + state.sections.size() - 1,
-                                            OpticalConnectorState::CableSection{
-                                                .pos = state.sections.back().pos,
-                                                .vel = Vec2(0, 0),
-                                                .acc = Vec2(0, 0),
-                                                .distance = 0,
-                                            });
+        auto new_it =
+            state.sections.insert(state.sections.begin() + state.sections.size() - 1,
+                                  OpticalConnectorState::CableSection{
+                                      .pos = state.sections.back().pos - Vec2(0, kCableWidth / 2),
+                                      .vel = Vec2(0, 0),
+                                      .acc = Vec2(0, 0),
+                                      .distance = kCableWidth / 2,
+                                  });
         break;
       } else {
         break;
@@ -289,7 +293,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     if (ai != -1) {
       float distance_mm = Length(anchors[ai] - chain[i].pos) * 1000;
       total_anchor_distance += distance_mm;
-      true_dir_offset = NormalizeAngle(true_anchor_dir[ai] - numerical_anchor_dir[ai]);
+      true_dir_offset = NormalizeAngle(true_anchor_dir[ai] - chain[i].dir);
       true_dir_offset = std::lerp(true_dir_offset, 0, std::min<float>(distance_mm, 1));
     } else {
       true_dir_offset = 0;
@@ -317,6 +321,8 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       }
     }
   }
+  chain.back().true_dir_offset = NormalizeAngle(M_PI / 2 - chain.back().dir);
+
   if (anchors.empty()) {
     state.stabilized = chain.size() == 2 && Length(chain[0].pos - chain[1].pos) < 0.0001;
   } else {
@@ -485,7 +491,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     if (!rubber_touching_dispenser) {
       SkPaint cable_paint;
       cable_paint.setStyle(SkPaint::kStroke_Style);
-      cable_paint.setStrokeWidth(0.002);
+      cable_paint.setStrokeWidth(kCableWidth);
       cable_paint.setAntiAlias(true);
       cable_paint.setColor(0xff111111);
 
@@ -499,10 +505,10 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
         for (int i = 1; i < state.sections.size(); i++) {
           Vec2 p1 = state.sections[i - 1].pos +
                     Vec2::Polar(state.sections[i - 1].dir + state.sections[i - 1].true_dir_offset,
-                                kStep / 3);
-          Vec2 p2 =
-              state.sections[i].pos -
-              Vec2::Polar(state.sections[i].dir + state.sections[i].true_dir_offset, kStep / 3);
+                                state.sections[i - 1].distance / 3);
+          Vec2 p2 = state.sections[i].pos -
+                    Vec2::Polar(state.sections[i].dir + state.sections[i].true_dir_offset,
+                                state.sections[i].distance / 3);
           p.cubicTo(p1, p2, state.sections[i].pos);
         }
       }

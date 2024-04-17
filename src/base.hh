@@ -149,7 +149,7 @@ struct Machine : LiveObject {
   }
   SkMatrix TransformToChild(const Widget& child, animation::Context& actx) const override {
     if (const Location* l = dynamic_cast<const Location*>(&child)) {
-      Vec2 pos = l->AnimatedPosition(actx);
+      Vec2 pos = l->AnimatedPosition(&actx);
       return SkMatrix::Translate(-pos.x, -pos.y);
     } else if (const gui::ConnectionWidget* w =
                    dynamic_cast<const gui::ConnectionWidget*>(&child)) {

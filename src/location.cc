@@ -185,11 +185,11 @@ SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) co
   return SkMatrix::I();
 }
 
-Vec2 Location::AnimatedPosition(animation::Context& actx) const {
+Vec2 Location::AnimatedPosition(animation::Context* actx) const {
   Vec2 ret = position;
-  if (drag_action) {
-    ret.x += drag_action->round_x[actx];
-    ret.y += drag_action->round_y[actx];
+  if (drag_action && actx) {
+    ret.x += drag_action->round_x[*actx];
+    ret.y += drag_action->round_y[*actx];
   }
   return ret;
 }

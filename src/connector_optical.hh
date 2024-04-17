@@ -35,6 +35,10 @@ struct OpticalConnectorState {
   maf::Vec<CableSection> sections;
   maf::Optional<maf::ArcLine> arcline;
 
+  bool stabilized = false;
+  Vec2 stabilized_start;
+  maf::Optional<Vec2> stabilized_end;
+
   OpticalConnectorState(Vec2 start);
 
   Vec2 PlugTopCenter() const;

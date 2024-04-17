@@ -9,14 +9,14 @@
 
 namespace automat::gui {
 
-static Vec2 StartPosition(const ConnectionWidget& widget) {
+static Vec2 StartPosition(animation::Context* actx, const ConnectionWidget& widget) {
   SkPath from_shape = widget.from.ArgShape(widget.arg);
-  return Rect::BottomCenter(from_shape.getBounds()) + widget.from.position;
+  return Rect::BottomCenter(from_shape.getBounds()) + widget.from.AnimatedPosition(actx);
 }
 
 ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {
   if (arg.name == "next") {
-    state.emplace(StartPosition(*this));
+    state.emplace(StartPosition(nullptr, *this));
   }
 }
 
@@ -37,7 +37,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   auto& actx = ctx.animation_context;
 
   if (state) {
-    Vec2 from_point = StartPosition(*this);
+    Vec2 from_point = StartPosition(&ctx.animation_context, *this);
 
     Optional<Vec2> to_point;
     if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {

@@ -103,7 +103,8 @@ static void PopulateAnchors(Vec<Vec2>& anchors, Vec<float>& anchor_dir, const Ar
   for (float cable_pos = kStep; cable_pos < cable_length; cable_pos += kStep) {
     it.Advance(-kStep);
     anchors.push_back(it.Position());
-    anchor_dir.push_back(it.Angle() + M_PI);
+    float dir = NormalizeAngle(it.Angle() + M_PI);
+    anchor_dir.push_back(dir);
   }
   anchors.push_back(dispenser);
   anchor_dir.push_back(M_PI / 2);
@@ -167,6 +168,12 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
 }
 
 void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Optional<Vec2> end) {
+  if (state.stabilized && Length(start - state.stabilized_start) < 0.0001) {
+    if (end.has_value() == state.stabilized_end.has_value() &&
+        (!end.has_value() || Length(*end - *state.stabilized_end) < 0.0001)) {
+      return;
+    }
+  }
   Optional<Vec2> cable_end;
   if (end) {
     cable_end = Vec2(end->x, end->y + kCasingHeight);
@@ -179,18 +186,20 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
   }
   chain.back().pos = start;
 
-  for (auto& link : chain) {
-    link.acc = Vec2(0, 0);
+  if (cable_end) {  // Create the arcline & pull the cable towards it
+    state.arcline = RouteCable(start, *cable_end);
+  } else {
+    state.arcline.reset();
   }
 
   Vec<Vec2> anchors;
   Vec<float> true_anchor_dir;
-
-  if (cable_end) {  // Create the arcline & pull the cable towards it
-    state.arcline = RouteCable(start, *cable_end);
+  if (state.arcline) {
     PopulateAnchors(anchors, true_anchor_dir, *state.arcline);
-  } else {
-    state.arcline.reset();
+  }
+
+  for (auto& link : chain) {
+    link.acc = Vec2(0, 0);
   }
 
   // Dispenser pulling the chain in. The chain is pulled in when there are fewer anchors than cable
@@ -214,23 +223,48 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     }
   }
 
+  // Move chain links towards anchors (more at the end of the cable)
+  for (int i = 0; i < chain.size(); i++) {
+    int ai = anchor_i[i];
+    if (ai == -1) {
+      continue;
+    }
+    // LERP the cable section towards its anchor point. More at the end of the cable.
+    float time_factor = 1 - expf(-dt * 60.0f);                 // approach 1 as dt -> infinity
+    float offset_factor = std::max<float>(0, 1 - ai / 10.0f);  // 1 near the plug and falling to 0
+    Vec2 new_pos = chain[i].pos + (anchors[ai] - chain[i].pos) * time_factor * offset_factor;
+    chain[i].vel += (new_pos - chain[i].pos) / dt;
+    chain[i].pos = new_pos;
+
+    // Also apply a force towards the anchor. This is unrelated to LERP-ing above.
+    chain[i].acc += (anchors[ai] - chain[i].pos) * 3e2;
+  }
+
+  if (Length(chain[chain.size() - 1].pos - chain[chain.size() - 2].pos) > 1e-6) {
+    chain[chain.size() - 1].dir = atan(chain[chain.size() - 1].pos - chain[chain.size() - 2].pos);
+  } else {
+    chain[chain.size() - 1].dir = M_PI / 2;
+  }
+  if (cable_end) {
+    chain[0].dir = M_PI / 2;
+  } else {
+    if (Length(chain[1].pos - chain[0].pos) > 1e-6) {
+      chain[0].dir = atan(chain[1].pos - chain[0].pos);
+    } else {
+      chain[0].dir = M_PI / 2;
+    }
+  }
+  for (int i = 1; i < chain.size() - 1; i++) {
+    chain[i].dir = atan(chain[i + 1].pos - chain[i - 1].pos);
+  }
+
   // Copy over the alignment of the anchors to the chain links.
+  float total_anchor_distance = 0;
   for (int i = 0; i < chain.size(); ++i) {
     int ai = anchor_i[i];
     int prev_ai = i > 0 ? anchor_i[i - 1] : -1;
     int next_ai = i < chain.size() - 1 ? anchor_i[i + 1] : -1;
 
-    float true_dir_offset;
-    if (ai != -1) {
-      float distance_mm = Length(anchors[ai] - chain[i].pos) * 1000;
-      true_dir_offset = true_anchor_dir[ai] - chain[i].dir;
-      if (true_dir_offset > M_PI) true_dir_offset -= 2 * M_PI;
-      if (true_dir_offset < -M_PI) true_dir_offset += 2 * M_PI;
-      true_dir_offset = std::lerp(true_dir_offset, 0, std::min<float>(distance_mm, 1));
-    } else {
-      true_dir_offset = 0;
-    }
-    chain[i].true_dir_offset = true_dir_offset;
     if (ai != -1 && prev_ai != -1 && next_ai != -1) {
       numerical_anchor_dir[ai] = atan(anchors[next_ai] - anchors[prev_ai]);
     } else if (ai != -1 && prev_ai != -1) {
@@ -240,6 +274,16 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     } else if (ai != -1) {
       numerical_anchor_dir[ai] = M_PI / 2;
     }
+    float true_dir_offset;
+    if (ai != -1) {
+      float distance_mm = Length(anchors[ai] - chain[i].pos) * 1000;
+      total_anchor_distance += distance_mm;
+      true_dir_offset = NormalizeAngle(true_anchor_dir[ai] - numerical_anchor_dir[ai]);
+      true_dir_offset = std::lerp(true_dir_offset, 0, std::min<float>(distance_mm, 1));
+    } else {
+      true_dir_offset = 0;
+    }
+    chain[i].true_dir_offset = true_dir_offset;
     if (ai != -1 && prev_ai != -1) {
       chain[i].prev_dir_delta = atan(anchors[prev_ai] - anchors[ai]) - numerical_anchor_dir[ai];
     } else {
@@ -262,37 +306,20 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       }
     }
   }
-
-  // Move chain links towards anchors (more at the end of the cable)
-  for (int i = 0; i < chain.size(); i++) {
-    int ai = anchor_i[i];
-    if (ai == -1) {
-      continue;
-    }
-    // LERP the cable section towards its anchor point. More at the end of the cable.
-    float time_factor = 1 - expf(-dt * 60.0f);                 // approach 1 as dt -> infinity
-    float offset_factor = std::max<float>(0, 1 - ai / 10.0f);  // 1 near the plug and falling to 0
-    Vec2 new_pos = chain[i].pos + (anchors[ai] - chain[i].pos) * time_factor * offset_factor;
-    chain[i].vel += (new_pos - chain[i].pos) / dt;
-    chain[i].pos = new_pos;
-
-    // Also apply a force towards the anchor. This is unrelated to LERP-ing above.
-    chain[i].acc += (anchors[ai] - chain[i].pos) * 3e2;
-  }
-
-  if (cable_end) {
-    chain[0].dir = M_PI / 2;
+  if (anchors.empty()) {
+    state.stabilized = chain.size() == 2 && Length(chain[0].pos - chain[1].pos) < 0.0001;
   } else {
-    if (Length(chain[1].pos - chain[0].pos) > 1e-6) {
-      chain[0].dir = atan(chain[1].pos - chain[0].pos);
+    float average_anchor_distance = total_anchor_distance / anchors.size();
+    state.stabilized = average_anchor_distance < 0.1 && chain.size() == anchors.size();
+  }
+  if (state.stabilized) {
+    state.stabilized_start = start;
+    if (cable_end) {
+      state.stabilized_end = *cable_end;
     } else {
-      chain[0].dir = M_PI / 2;
+      state.stabilized_end = chain.front().pos;
     }
   }
-  for (int i = 1; i < chain.size() - 1; i++) {
-    chain[i].dir = atan(chain[i + 1].pos - chain[i - 1].pos);
-  }
-  chain[chain.size() - 1].dir = M_PI / 2;
 
   for (int i = 0; i < chain.size() - 1; ++i) {
     chain[i].vel += chain[i].acc * dt;
@@ -327,14 +354,12 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
         chain.front().pos = *cable_end;
       }
       chain.back().pos = dispenser;
+      chain.back().distance = kStep;
 
       OpticalConnectorState::CableSection a0, cN;
       a0.pos = chain[0].pos - Vec2::Polar(chain.front().dir, kStep);
       a0.distance = kStep;
-      a0.next_dir_delta = 0;
-      chain.back().distance = kStep;
       cN.pos = chain.back().pos + Vec2::Polar(chain.back().dir, kStep);
-      cN.prev_dir_delta = M_PI;
 
       int start = 0;
       int end = chain.size();
@@ -416,16 +441,15 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     }
   }
 
-  SkPaint cross_paint;
-  cross_paint.setColor(0xffff8800);
-  cross_paint.setAntiAlias(true);
-  cross_paint.setStrokeWidth(0.0005);
-  cross_paint.setStyle(SkPaint::kStroke_Style);
+  if constexpr (kDebugCable) {  // Draw the cable sections as a series of straight lines
+    SkPaint cross_paint;
+    cross_paint.setColor(0xffff8800);
+    cross_paint.setAntiAlias(true);
+    cross_paint.setStrokeWidth(0.0005);
+    cross_paint.setStyle(SkPaint::kStroke_Style);
 
-  auto& font = GetFont();
-  auto& chain = state.sections;
-
-  if constexpr (kDebugCable) {  // Draw the chain as a series of straight lines
+    auto& font = GetFont();
+    auto& chain = state.sections;
     SkPaint chain_paint;
     chain_paint.setColor(0xff0088ff);
     chain_paint.setAntiAlias(true);
@@ -446,7 +470,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   int rubber_sleeve_tail_i = std::min<int>(3, (int)state.sections.size() - 1);
   bool rubber_touching_dispenser = rubber_sleeve_tail_i == state.sections.size() - 1;
 
-  if constexpr (!kDebugCable) {  // Draw the chain as a bezier curve
+  if constexpr (!kDebugCable) {  // Draw the cable as a bezier curve
     if (!rubber_touching_dispenser) {
       SkPaint cable_paint;
       cable_paint.setStyle(SkPaint::kStroke_Style);
@@ -455,12 +479,21 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       cable_paint.setColor(0xff111111);
 
       SkPath p;
-      p.moveTo(chain[0].pos);
-      for (int i = 1; i < chain.size(); i++) {
-        Vec2 p1 = chain[i - 1].pos +
-                  Vec2::Polar(chain[i - 1].dir + chain[i - 1].true_dir_offset, kStep / 3);
-        Vec2 p2 = chain[i].pos - Vec2::Polar(chain[i].dir + chain[i].true_dir_offset, kStep / 3);
-        p.cubicTo(p1, p2, chain[i].pos);
+      if (state.stabilized) {
+        if (state.arcline) {
+          p = state.arcline->ToPath(false);
+        }
+      } else {
+        p.moveTo(state.sections[0].pos);
+        for (int i = 1; i < state.sections.size(); i++) {
+          Vec2 p1 = state.sections[i - 1].pos +
+                    Vec2::Polar(state.sections[i - 1].dir + state.sections[i - 1].true_dir_offset,
+                                kStep / 3);
+          Vec2 p2 =
+              state.sections[i].pos -
+              Vec2::Polar(state.sections[i].dir + state.sections[i].true_dir_offset, kStep / 3);
+          p.cubicTo(p1, p2, state.sections[i].pos);
+        }
       }
       p.setIsVolatile(true);
       canvas.drawPath(p, cable_paint);
@@ -478,7 +511,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
   SkMatrix transform = SkMatrix::Translate(cable_end);
-  transform.preRotate(state.sections.front().dir * 180 / M_PI - 90);
+  if (not state.stabilized) {
+    transform.preRotate(state.sections.front().dir * 180 / M_PI - 90);
+  }
   transform.preTranslate(0, -kCasingHeight);
   canvas.concat(transform);
 

@@ -221,7 +221,7 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number);
 
-  Vec2 AnimatedPosition(animation::Context&) const;
+  Vec2 AnimatedPosition(animation::Context*) const;
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;

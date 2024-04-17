@@ -230,3 +230,9 @@ union RRect {
 };
 
 inline float atan(Vec2 v) { return atan2f(v.y, v.x); }
+
+inline float NormalizeAngle(float angle) {
+  while (angle < -M_PI) angle += 2 * M_PI;
+  while (angle >= M_PI) angle -= 2 * M_PI;
+  return angle;
+}

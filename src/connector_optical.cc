@@ -259,15 +259,11 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
   } else {
     chain[chain.size() - 1].dir = M_PI / 2;
   }
-  if (cable_end) {
-    chain[0].dir = M_PI / 2;
+  if (Length(chain[1].pos - chain[0].pos) > kDistanceEpsilon &&
+      chain[0].distance > kDistanceEpsilon) {
+    chain[0].dir = atan(chain[1].pos - chain[0].pos);
   } else {
-    if (Length(chain[1].pos - chain[0].pos) > kDistanceEpsilon &&
-        chain[0].distance > kDistanceEpsilon) {
-      chain[0].dir = atan(chain[1].pos - chain[0].pos);
-    } else {
-      chain[0].dir = M_PI / 2;
-    }
+    chain[0].dir = M_PI / 2;
   }
   for (int i = 1; i < chain.size() - 1; i++) {
     chain[i].dir = atan(chain[i + 1].pos - chain[i - 1].pos);
@@ -295,10 +291,10 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       total_anchor_distance += distance_mm;
       true_dir_offset = NormalizeAngle(true_anchor_dir[ai] - chain[i].dir);
       true_dir_offset = std::lerp(true_dir_offset, 0, std::min<float>(distance_mm, 1));
+      chain[i].true_dir_offset = true_dir_offset;
     } else {
-      true_dir_offset = 0;
+      chain[i].true_dir_offset *= expf(-dt * 10);
     }
-    chain[i].true_dir_offset = true_dir_offset;
     if (ai != -1 && prev_ai != -1) {
       chain[i].prev_dir_delta = atan(anchors[prev_ai] - anchors[ai]) - numerical_anchor_dir[ai];
     } else {
@@ -321,6 +317,9 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       }
     }
   }
+  if (cable_end) {
+    chain.front().true_dir_offset = NormalizeAngle(M_PI / 2 - chain.front().dir);
+  }
   chain.back().true_dir_offset = NormalizeAngle(M_PI / 2 - chain.back().dir);
 
   if (anchors.empty()) {
@@ -335,6 +334,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       state.stabilized_end = *cable_end;
     } else {
       state.stabilized_end.reset();
+      chain.front().true_dir_offset = 0;
     }
   }
 
@@ -355,8 +355,6 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     }
     if (cable_end.has_value()) {
       chain.front().vel = Vec2(0, 0);
-    } else {
-      chain.front().vel *= expf(-20 * dt);
     }
   }
 
@@ -373,22 +371,20 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       chain.back().pos = dispenser;
       chain.back().distance = kStep;
 
-      OpticalConnectorState::CableSection a0, cN;
-      a0.pos = chain[0].pos - Vec2::Polar(chain.front().dir, kStep);
-      a0.distance = kStep;
+      OpticalConnectorState::CableSection cN;
       cN.pos = chain.back().pos + Vec2::Polar(chain.back().dir, kStep);
 
-      int start = 0;
+      int start = 1;
       int end = chain.size();
       int inc = 1;
       if (iter % 2) {
         start = chain.size() - 1;
-        end = -1;
+        end = 0;
         inc = -1;
       }
 
       for (int i = start; i != end; i += inc) {
-        auto& a = i == 0 ? a0 : chain[i - 1];
+        auto& a = chain[i - 1];
         auto& b = chain[i];
         auto& c = i == chain.size() - 1 ? cN : chain[i + 1];
 
@@ -445,90 +441,54 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
 
-  if constexpr (kDebugCable) {  // Draw the arcline
-    if (state.arcline) {
-      SkPath cable_path = state.arcline->ToPath(false);
-      SkPaint arcline_paint;
-      arcline_paint.setColor(SK_ColorBLACK);
-      arcline_paint.setAlphaf(.5);
-      arcline_paint.setStrokeWidth(0.0005);
-      arcline_paint.setStyle(SkPaint::kStroke_Style);
-      arcline_paint.setAntiAlias(true);
-      canvas.drawPath(cable_path, arcline_paint);
-    }
-  }
-
-  if constexpr (kDebugCable) {  // Draw the cable sections as a series of straight lines
-    SkPaint cross_paint;
-    cross_paint.setColor(0xffff8800);
-    cross_paint.setAntiAlias(true);
-    cross_paint.setStrokeWidth(0.0005);
-    cross_paint.setStyle(SkPaint::kStroke_Style);
-
-    auto& font = GetFont();
-    auto& chain = state.sections;
-    SkPaint chain_paint;
-    chain_paint.setColor(0xff0088ff);
-    chain_paint.setAntiAlias(true);
-    chain_paint.setStrokeWidth(0.00025);
-    chain_paint.setStyle(SkPaint::kStroke_Style);
-    for (int i = 0; i < chain.size(); ++i) {
-      Vec2 line_offset = Vec2::Polar(chain[i].dir, kStep / 4);
-      canvas.drawLine(chain[i].pos - line_offset, chain[i].pos + line_offset, chain_paint);
-      canvas.save();
-      Str i_str = ::ToStr(i);
-      canvas.translate(chain[i].pos.x, chain[i].pos.y);
-      font.DrawText(canvas, i_str, SkPaint());
-      canvas.restore();
-    }
-  }
-
   // Find the index of the last section that is part of the rubber sleeve
   int rubber_sleeve_tail_i = std::min<int>(3, (int)state.sections.size() - 1);
   bool rubber_touching_dispenser = rubber_sleeve_tail_i == state.sections.size() - 1;
 
-  if constexpr (!kDebugCable) {  // Draw the cable as a bezier curve
-    if (!rubber_touching_dispenser) {
-      SkPaint cable_paint;
-      cable_paint.setStyle(SkPaint::kStroke_Style);
-      cable_paint.setStrokeWidth(kCableWidth);
-      cable_paint.setAntiAlias(true);
-      cable_paint.setColor(0xff111111);
+  // Draw the cable as a bezier curve
+  if (!rubber_touching_dispenser) {
+    SkPaint cable_paint;
+    cable_paint.setStyle(SkPaint::kStroke_Style);
+    cable_paint.setStrokeWidth(kCableWidth);
+    cable_paint.setAntiAlias(true);
+    cable_paint.setColor(0xff111111);
 
-      SkPath p;
-      if (state.stabilized) {
-        if (state.arcline) {
-          p = state.arcline->ToPath(false);
-        }
-      } else {
-        p.moveTo(state.sections[0].pos);
-        for (int i = 1; i < state.sections.size(); i++) {
-          Vec2 p1 = state.sections[i - 1].pos +
-                    Vec2::Polar(state.sections[i - 1].dir + state.sections[i - 1].true_dir_offset,
-                                state.sections[i - 1].distance / 3);
-          Vec2 p2 = state.sections[i].pos -
-                    Vec2::Polar(state.sections[i].dir + state.sections[i].true_dir_offset,
-                                state.sections[i].distance / 3);
-          p.cubicTo(p1, p2, state.sections[i].pos);
-        }
+    SkPath p;
+    if (state.stabilized) {
+      if (state.arcline) {
+        p = state.arcline->ToPath(false);
       }
-      p.setIsVolatile(true);
-      canvas.drawPath(p, cable_paint);
-      SkPaint cable_paint2;
-      cable_paint2.setStyle(SkPaint::kStroke_Style);
-      cable_paint2.setStrokeWidth(0.002);
-      cable_paint2.setAntiAlias(true);
-      cable_paint2.setColor(0xff444444);
-      cable_paint2.setMaskFilter(
-          SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
-      canvas.drawPath(p, cable_paint2);
+    } else {
+      p.moveTo(state.sections[0].pos);
+      for (int i = 1; i < state.sections.size(); i++) {
+        Vec2 p1 = state.sections[i - 1].pos +
+                  Vec2::Polar(state.sections[i - 1].dir + state.sections[i - 1].true_dir_offset,
+                              state.sections[i - 1].distance / 3);
+        Vec2 p2 = state.sections[i].pos -
+                  Vec2::Polar(state.sections[i].dir + state.sections[i].true_dir_offset,
+                              state.sections[i].distance / 3);
+        p.cubicTo(p1, p2, state.sections[i].pos);
+      }
     }
+    p.setIsVolatile(true);
+    canvas.drawPath(p, cable_paint);
+    SkPaint cable_paint2;
+    cable_paint2.setStyle(SkPaint::kStroke_Style);
+    cable_paint2.setStrokeWidth(0.002);
+    cable_paint2.setAntiAlias(true);
+    cable_paint2.setColor(0xff444444);
+    cable_paint2.setMaskFilter(
+        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
+    canvas.drawPath(p, cable_paint2);
   }
 
   canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
   SkMatrix transform = SkMatrix::Translate(cable_end);
-  transform.preRotate(state.sections.front().dir * 180 / M_PI - 90);
+  float connector_dir = state.arcline
+                            ? M_PI / 2
+                            : state.sections.front().dir + state.sections.front().true_dir_offset;
+  transform.preRotate(connector_dir * 180 / M_PI - 90);
   transform.preTranslate(0, -kCasingHeight);
   canvas.concat(transform);
 
@@ -653,6 +613,44 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   }
 
   canvas.restore();
+
+  if constexpr (kDebugCable) {  // Draw the arcline
+    if (state.arcline) {
+      SkPath cable_path = state.arcline->ToPath(false);
+      SkPaint arcline_paint;
+      arcline_paint.setColor(SK_ColorBLACK);
+      arcline_paint.setAlphaf(.5);
+      arcline_paint.setStrokeWidth(0.0005);
+      arcline_paint.setStyle(SkPaint::kStroke_Style);
+      arcline_paint.setAntiAlias(true);
+      canvas.drawPath(cable_path, arcline_paint);
+    }
+  }
+
+  if constexpr (kDebugCable) {  // Draw the cable sections as a series of straight lines
+    SkPaint cross_paint;
+    cross_paint.setColor(0xffff8800);
+    cross_paint.setAntiAlias(true);
+    cross_paint.setStrokeWidth(0.0005);
+    cross_paint.setStyle(SkPaint::kStroke_Style);
+
+    auto& font = GetFont();
+    auto& chain = state.sections;
+    SkPaint chain_paint;
+    chain_paint.setColor(0xff0088ff);
+    chain_paint.setAntiAlias(true);
+    chain_paint.setStrokeWidth(0.00025);
+    chain_paint.setStyle(SkPaint::kStroke_Style);
+    for (int i = 0; i < chain.size(); ++i) {
+      Vec2 line_offset = Vec2::Polar(chain[i].dir, kStep / 4);
+      canvas.drawLine(chain[i].pos - line_offset, chain[i].pos + line_offset, chain_paint);
+      canvas.save();
+      Str i_str = ::ToStr(i);
+      canvas.translate(chain[i].pos.x, chain[i].pos.y);
+      font.DrawText(canvas, i_str, SkPaint());
+      canvas.restore();
+    }
+  }
 }
 
 // This function has some nice code for drawing connections between rounded rectangles.

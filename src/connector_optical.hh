@@ -20,7 +20,10 @@ struct OpticalConnectorState {
     Vec2 vel;
     Vec2 acc;
 
-    float dir;  // Direction of the cable at this point
+    float dir;  // Direction of the cable at this point. This is calculated from the previous and
+                // next points.
+    float
+        true_dir_offset;  // Difference between the "true" dir (coming from the arcline) and `dir`.
 
     // Distance to the next element
     float distance;

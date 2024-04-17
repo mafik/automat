@@ -92,22 +92,21 @@ ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
 
 // This function walks along the given arcline (from the end to its start) and adds
 // an anchor every kStep distance. It populates the `anchors` and `anchor_tangents` vectors.
-static void PopulateAnchors(Vec<Vec2>& anchors, Vec<float>& anchor_tangents,
-                            const ArcLine& arcline) {
+static void PopulateAnchors(Vec<Vec2>& anchors, Vec<float>& anchor_dir, const ArcLine& arcline) {
   auto it = ArcLine::Iterator(arcline);
   Vec2 dispenser = it.Position();
   float cable_length = it.AdvanceToEnd();
   Vec2 tail = it.Position();
 
   anchors.push_back(tail);
-  anchor_tangents.push_back(M_PI / 2);
+  anchor_dir.push_back(M_PI / 2);
   for (float cable_pos = kStep; cable_pos < cable_length; cable_pos += kStep) {
     it.Advance(-kStep);
     anchors.push_back(it.Position());
-    anchor_tangents.push_back(it.Angle() + M_PI);
+    anchor_dir.push_back(it.Angle() + M_PI);
   }
   anchors.push_back(dispenser);
-  anchor_tangents.push_back(M_PI / 2);
+  anchor_dir.push_back(M_PI / 2);
 }
 
 // Simulate the dispenser pulling in the cable. This function may remove some of the cable segments
@@ -185,11 +184,11 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
   }
 
   Vec<Vec2> anchors;
-  Vec<float> anchor_tangents;
+  Vec<float> true_anchor_dir;
 
   if (cable_end) {  // Create the arcline & pull the cable towards it
     state.arcline = RouteCable(start, *cable_end);
-    PopulateAnchors(anchors, anchor_tangents, *state.arcline);
+    PopulateAnchors(anchors, true_anchor_dir, *state.arcline);
   } else {
     state.arcline.reset();
   }
@@ -198,11 +197,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
   // segments.
   bool dispenser_active = SimulateDispenser(state, dt, anchors.size());
 
-  float anchor_dir[anchors.size()];
-  if (anchors.size() > 0) {
-    anchor_dir[0] = M_PI / 2;
-    anchor_dir[anchors.size() - 1] = M_PI / 2;
-  }
+  float numerical_anchor_dir[anchors.size()];
 
   int anchor_i[chain.size()];  // Index of the anchor that the chain link is attached to
 
@@ -224,18 +219,34 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     int ai = anchor_i[i];
     int prev_ai = i > 0 ? anchor_i[i - 1] : -1;
     int next_ai = i < chain.size() - 1 ? anchor_i[i + 1] : -1;
+
+    float true_dir_offset;
+    if (ai != -1) {
+      float distance_mm = Length(anchors[ai] - chain[i].pos) * 1000;
+      true_dir_offset = true_anchor_dir[ai] - chain[i].dir;
+      if (true_dir_offset > M_PI) true_dir_offset -= 2 * M_PI;
+      if (true_dir_offset < -M_PI) true_dir_offset += 2 * M_PI;
+      true_dir_offset = std::lerp(true_dir_offset, 0, std::min<float>(distance_mm, 1));
+    } else {
+      true_dir_offset = 0;
+    }
+    chain[i].true_dir_offset = true_dir_offset;
     if (ai != -1 && prev_ai != -1 && next_ai != -1) {
-      anchor_dir[ai] = atan(anchors[next_ai] - anchors[prev_ai]);
+      numerical_anchor_dir[ai] = atan(anchors[next_ai] - anchors[prev_ai]);
+    } else if (ai != -1 && prev_ai != -1) {
+      numerical_anchor_dir[ai] = atan(anchors[ai] - anchors[prev_ai]);
+    } else if (ai != -1 && next_ai != -1) {
+      numerical_anchor_dir[ai] = atan(anchors[next_ai] - anchors[ai]);
     } else if (ai != -1) {
-      anchor_dir[ai] = M_PI / 2;
+      numerical_anchor_dir[ai] = M_PI / 2;
     }
     if (ai != -1 && prev_ai != -1) {
-      chain[i].prev_dir_delta = atan(anchors[prev_ai] - anchors[ai]) - anchor_dir[ai];
+      chain[i].prev_dir_delta = atan(anchors[prev_ai] - anchors[ai]) - numerical_anchor_dir[ai];
     } else {
       chain[i].prev_dir_delta = M_PI;
     }
     if (ai != -1 && next_ai != -1) {
-      chain[i].next_dir_delta = atan(anchors[next_ai] - anchors[ai]) - anchor_dir[ai];
+      chain[i].next_dir_delta = atan(anchors[next_ai] - anchors[ai]) - numerical_anchor_dir[ai];
     } else {
       chain[i].next_dir_delta = 0;
     }
@@ -446,8 +457,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       SkPath p;
       p.moveTo(chain[0].pos);
       for (int i = 1; i < chain.size(); i++) {
-        Vec2 p1 = chain[i - 1].pos + Vec2::Polar(chain[i - 1].dir, kStep / 3);
-        Vec2 p2 = chain[i].pos - Vec2::Polar(chain[i].dir, kStep / 3);
+        Vec2 p1 = chain[i - 1].pos +
+                  Vec2::Polar(chain[i - 1].dir + chain[i - 1].true_dir_offset, kStep / 3);
+        Vec2 p2 = chain[i].pos - Vec2::Polar(chain[i].dir + chain[i].true_dir_offset, kStep / 3);
         p.cubicTo(p1, p2, chain[i].pos);
       }
       p.setIsVolatile(true);
@@ -687,6 +699,7 @@ OpticalConnectorState::OpticalConnectorState(Vec2 start) : dispenser_v(0) {
       .vel = Vec2(0, 0),
       .acc = Vec2(0, 0),
       .dir = M_PI / 2,
+      .true_dir_offset = 0,
       .distance = 0,
       .next_dir_delta = 0,
   });  // plug
@@ -695,6 +708,7 @@ OpticalConnectorState::OpticalConnectorState(Vec2 start) : dispenser_v(0) {
       .vel = Vec2(0, 0),
       .acc = Vec2(0, 0),
       .dir = M_PI / 2,
+      .true_dir_offset = 0,
       .distance = 0,
       .next_dir_delta = 0,
   });  // dispenser

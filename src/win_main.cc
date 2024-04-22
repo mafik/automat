@@ -222,6 +222,13 @@ std::string StatePath() {
   return &temp_path[0];
 }
 
+bool IsMaximized(HWND hWnd) {
+  WINDOWPLACEMENT placement = {};
+  placement.length = sizeof(WINDOWPLACEMENT);
+  GetWindowPlacement(hWnd, &placement);
+  return placement.showCmd == SW_SHOWMAXIMIZED;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static unsigned char key_state[256] = {};
   static char utf8_buffer[4] = {};
@@ -428,15 +435,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_CLOSE: {
-      LOG << "Received WM_CLOSE";
       RunOnAutomatThreadSynchronous([]() {
         // Write window_state to a temp file
         auto state_path = StatePath();
         rapidjson::StringBuffer sb;
         rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
         writer.StartObject();
+        writer.Key("maximized");
+        writer.Bool(IsMaximized(main_window));
         writer.Key("window");
         window->SerializeState(writer);
+
         writer.EndObject();
         writer.Flush();
         std::string window_state = sb.GetString();
@@ -479,6 +488,16 @@ static void DeserializeState(Deserializer& d, Status& status) {
       if (!OK(status)) {
         AppendErrorMessage(status) += "Failed to deserialize window state";
         return;
+      }
+    } else if (key == "maximized") {
+      bool maximized = d.GetBool(status);
+      if (!OK(status)) {
+        AppendErrorMessage(status) += "Failed to deserialize maximized state";
+        return;
+      } else {
+        if (maximized) {
+          ShowWindow(main_window, SW_MAXIMIZE);
+        }
       }
     } else {
       AppendErrorMessage(status) += "Unexpected key: " + key;
@@ -534,6 +553,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   window_width = rect.right - rect.left;
   window_height = rect.bottom - rect.top;
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
+  window->RequestResize = [&](Vec2 new_size) {
+    SetWindowPos(main_window, nullptr, 0, 0, new_size.x * DisplayPxPerMeter(),
+                 new_size.y * DisplayPxPerMeter(), SWP_NOMOVE | SWP_NOZORDER);
+  };
 
   {
     auto state_path = StatePath();

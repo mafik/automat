@@ -9,6 +9,7 @@ namespace automat {
 struct Deserializer {
   Deserializer(rapidjson::StringStream&);
   double GetDouble(maf::Status&);
+  bool GetBool(maf::Status&);
 
   rapidjson::StringStream& stream;
   rapidjson::Reader reader;

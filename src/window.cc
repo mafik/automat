@@ -318,6 +318,10 @@ void Window::DisplayPixelDensity(float pixels_per_meter) {
 
 void Window::SerializeState(rapidjson::Writer<rapidjson::StringBuffer>& writer) const {
   writer.StartObject();
+  writer.String("width");
+  writer.Double(size.width);
+  writer.String("height");
+  writer.Double(size.height);
   writer.String("camera");
   writer.StartObject();
   writer.String("x");
@@ -331,8 +335,13 @@ void Window::SerializeState(rapidjson::Writer<rapidjson::StringBuffer>& writer) 
 }
 
 void Window::DeserializeState(Deserializer& d, Status& status) {
+  Vec2 new_size = size;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "camera") {
+    if (key == "width") {
+      new_size.width = d.GetDouble(status);
+    } else if (key == "height") {
+      new_size.height = d.GetDouble(status);
+    } else if (key == "camera") {
       for (auto& camera_key : ObjectView(d, status)) {
         if (camera_key == "x") {
           camera_x = d.GetDouble(status);
@@ -349,6 +358,9 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
       AppendErrorMessage(status) += f("Unexpected window key: \"%s\"", key.c_str());
       return;
     }
+  }
+  if (new_size != size && RequestResize) {
+    RequestResize(new_size);
   }
 }
 

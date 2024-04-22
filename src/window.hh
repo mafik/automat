@@ -93,6 +93,8 @@ struct Window final : Widget {
 
   Vec2 CanvasToWindow(Vec2 canvas) { return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2; }
 
+  std::function<void(Vec2 new_size)> RequestResize = nullptr;
+
   void Resize(Vec2 size) {
     this->size = size;
     ArrangePrototypeButtons();

@@ -141,6 +141,16 @@ double Deserializer::GetDouble(Status& status) {
   }
   return handler.value.d;
 }
+bool Deserializer::GetBool(Status& status) {
+  DeserializeHandler handler;
+  reader.IterativeParseNext<kParseNoFlags>(stream, handler);
+  if (handler.type != DeserializeHandler::kBooleanTokenType) {
+    AppendErrorMessage(status) += "Expected a boolean";
+    RecoverParser(reader, handler, stream);
+    return false;
+  }
+  return handler.value.b;
+}
 
 ObjectView::ObjectView(Deserializer& deserializer, maf::Status& status)
     : deserializer(deserializer) {

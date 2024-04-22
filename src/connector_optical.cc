@@ -1,7 +1,9 @@
 #include "connector_optical.hh"
 
 #include <include/core/SkBlurTypes.h>
+#include <include/core/SkCanvas.h>
 #include <include/core/SkMaskFilter.h>
+#include <include/core/SkMesh.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
 
@@ -498,15 +500,106 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   float casing_top = kCasingHeight;
 
   {  // Black metal casing
-    SkPaint black_metal_paint;
-    SkPoint pts[2] = {Vec2(-0.004, 0), Vec2(0.004, 0)};
-    SkColor colors[5] = {0xff626262, 0xff000000, 0xff181818, 0xff0d0d0d, 0xff5e5e5e};
-    float pos[5] = {0, 0.1, 0.5, 0.9, 1};
-    sk_sp<SkShader> gradient =
-        SkGradientShader::MakeLinear(pts, colors, pos, 5, SkTileMode::kClamp);
-    black_metal_paint.setShader(gradient);
-    SkRect black_metal_rect = SkRect::MakeLTRB(-0.004, 0, +0.004, +0.008);
-    canvas.drawRect(black_metal_rect, black_metal_paint);
+    // TODO: cache mesh!
+    SkMeshSpecification::Attribute attributes[2] = {
+        {
+            .type = SkMeshSpecification::Attribute::Type::kFloat2,
+            .offset = 0,
+            .name = SkString("position"),
+        },
+        {
+            .type = SkMeshSpecification::Attribute::Type::kFloat2,
+            .offset = 8,
+            .name = SkString("uv"),
+        }};
+    SkMeshSpecification::Varying varyings[3] = {
+        {
+            .type = SkMeshSpecification::Varying::Type::kFloat2,
+            .name = SkString("position"),
+        },
+        {
+            .type = SkMeshSpecification::Varying::Type::kFloat2,
+            .name = SkString("uv"),
+        },
+        {
+            .type = SkMeshSpecification::Varying::Type::kFloat,
+            .name = SkString("light"),
+        }};
+    auto vs = SkString(R"(
+      Varyings main(const Attributes attrs) {
+        Varyings v;
+        v.position = attrs.position;
+        v.uv = attrs.uv;
+        v.light = attrs.uv.y;
+        return v;
+      }
+    )");
+    auto fs = SkString(R"(
+      const float kCaseSideRadius = 0.12;
+      // NOTE: fix this once Skia supports array initializers here
+      const vec3 kCaseBorderDarkColor = vec3(5) / 255; // subtle dark contour
+      const vec3 kCaseBorderReflectionColor = vec3(0x36, 0x39, 0x3c) / 255; // canvas reflection
+      const vec3 kCaseSideDarkColor = vec3(0x14, 0x15, 0x16) / 255; // darker metal between reflections
+      const vec3 kCaseSideLightColor = vec3(0x2a, 0x2c, 0x2f) / 255; // side-light reflection
+      const vec3 kCaseFrontColor = vec3(0x15, 0x16, 0x1a) / 255; // front color
+      const float kBorderDarkWidth = 0.2;
+      const float kCaseSideDarkH = 0.4;
+      const float kCaseSideLightH = 0.8;
+      const float kCaseFrontH = 1;
+      const vec3 kTopLightColor = vec3(0x32, 0x34, 0x39) / 255 - kCaseFrontColor;
+      const float kBevelRadius = kBorderDarkWidth * kCaseSideRadius;
+
+      uniform float plug_width_pixels;
+
+      float2 main(const Varyings v, out float4 color) {
+        float2 h = sin(min((0.5 - abs(0.5 - v.uv)) / kCaseSideRadius, 1) * 3.14159265358979323846 / 2);
+        float bevel = 1 - length(1 - sin(min((0.5 - abs(0.5 - v.uv)) / kBevelRadius, 1) * 3.14159265358979323846 / 2));
+        if (h.x < kCaseSideDarkH) {
+          color.rgb = mix(kCaseBorderReflectionColor, kCaseSideDarkColor, (h.x - kBorderDarkWidth) / (kCaseSideDarkH - kBorderDarkWidth));
+        } else if (h.x < kCaseSideLightH) {
+          color.rgb = mix(kCaseSideDarkColor, kCaseSideLightColor, (h.x - kCaseSideDarkH) / (kCaseSideLightH - kCaseSideDarkH));
+        } else {
+          color.rgb = mix(kCaseSideLightColor, kCaseFrontColor, (h.x - kCaseSideLightH) / (kCaseFrontH - kCaseSideLightH));
+        }
+        if (bevel < 1) {
+          vec3 edge_color = kCaseBorderDarkColor;
+          if (v.uv.y > 0.5) {
+            edge_color = mix(edge_color, vec3(0.4), clamp((h.x - kCaseSideDarkH) / (kCaseFrontH - kCaseSideDarkH), 0, 1));
+          }
+          color.rgb = mix(edge_color, color.rgb, bevel);
+        }
+        color.rgb += kTopLightColor * v.light;
+        color.a = 1;
+        float radius_pixels = kBevelRadius * plug_width_pixels;
+        // Make the corners transparent
+        color.rgba *= clamp(bevel * max(radius_pixels / 2, 1), 0, 1);
+        return v.position;
+      }
+    )");
+
+    auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
+    if (!spec_result.error.isEmpty()) {
+      ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
+    } else {
+      SkRect bounds = SkRect::MakeLTRB(casing_left, casing_top, casing_right, 0);
+      Vec2 vertex_data[8] = {
+          Vec2(casing_left, 0),          Vec2(0, 0), Vec2(casing_right, 0),          Vec2(1, 0),
+          Vec2(casing_left, casing_top), Vec2(0, 1), Vec2(casing_right, casing_top), Vec2(1, 1),
+      };
+      float plug_width_pixels = canvas.getTotalMatrix().mapRadius(kCasingWidth);
+      auto uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
+      auto vertex_buffer = SkMeshes::MakeVertexBuffer(vertex_data, sizeof(vertex_data));
+      auto mesh_result =
+          SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer, 4, 0,
+                       uniforms, SkSpan<SkMesh::ChildPtr>(), bounds);
+      if (!mesh_result.error.isEmpty()) {
+        ERROR << "Error creating mesh: " << mesh_result.error.c_str();
+      } else {
+        SkPaint default_paint;
+        default_paint.setColor(0xffffffff);
+        canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
+      }
+    }
   }
 
   {  // Steel insert

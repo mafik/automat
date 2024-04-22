@@ -14,6 +14,9 @@ import hashlib
 import fs_utils
 import args as cmdline_args
 
+if platform == 'win32':
+    import windows
+
 HASH_DIR = fs_utils.build_dir / 'hashes'
 HASH_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -252,10 +255,10 @@ class Recipe:
                 )
                 pid, status = wait_for_pid()
                 if pid == watcher.pid:
-                    self.interrupt()
                     print(
                         'Sources have been modified. Interrupting the build process...'
                     )
+                    self.interrupt()
                     return False
                 step = self.pid_to_step[pid]
                 if status:
@@ -302,7 +305,12 @@ class Recipe:
         start_time = time.time()
         deadline = start_time + 3
         active = [step.builder for step in self.steps if step.builder]
-        if platform != 'win32':
+        if platform == 'win32':
+            # Plan:
+            # For each process, get its PID. Then find it's HWND and send a WM_CLOSE message.
+            for task in active:
+                windows.close_window(pid=task.pid)
+        else:
             for task in active:
                 task.send_signal(signal.SIGINT)
         for task in active:

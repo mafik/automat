@@ -4,9 +4,12 @@
 
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "shlwapi.lib")
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>
+#include <rapidjson/rapidjson.h>
+#include <shlwapi.h>
 #include <src/base/SkUTF.h>
 #include <timeapi.h>
 #include <winuser.h>
@@ -212,6 +215,13 @@ void QueryDisplayCaps() {
   ReleaseDC(main_window, hdc);
 }
 
+std::string StatePath() {
+  char temp_path[MAX_PATH + 1];
+  GetTempPath(MAX_PATH, temp_path);
+  PathAppend(temp_path, "automat_state.json");
+  return &temp_path[0];
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static unsigned char key_state[256] = {};
   static char utf8_buffer[4] = {};
@@ -275,7 +285,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     }
     case WM_KEYDOWN: {
       auto scan_code = ScanCode(lParam);      // identifies the physical key
-      uint8_t virtual_key = (uint8_t)wParam;            // layout-dependent key code
+      uint8_t virtual_key = (uint8_t)wParam;  // layout-dependent key code
       key_state[virtual_key] = 0x80;
 
       gui::Key key;
@@ -417,6 +427,31 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       delete f;
       break;
     }
+    case WM_CLOSE: {
+      LOG << "Received WM_CLOSE";
+      RunOnAutomatThreadSynchronous([]() {
+        // Write window_state to a temp file
+        auto state_path = StatePath();
+        rapidjson::StringBuffer sb;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+        writer.StartObject();
+        writer.Key("window");
+        window->SerializeState(writer);
+        writer.EndObject();
+        writer.Flush();
+        std::string window_state = sb.GetString();
+        HANDLE file =
+            CreateFile(state_path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+        if (file != INVALID_HANDLE_VALUE) {
+          DWORD bytes_written;
+          WriteFile(file, window_state.c_str(), window_state.size(), &bytes_written, nullptr);
+          CloseHandle(file);
+          LOG << "Saved window state to " << state_path;
+        }
+      });
+      DestroyWindow(hWnd);
+      break;
+    }
     case WM_DESTROY: {
       PostQuitMessage(0);
       break;
@@ -435,6 +470,26 @@ void RunOnWindowsThread(std::function<void()>&& f) {
     return;
   }
   PostMessage(main_window, WM_USER, 0, (LPARAM) new std::function<void()>(std::move(f)));
+}
+
+static void DeserializeState(Deserializer& d, Status& status) {
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "window") {
+      window->DeserializeState(d, status);
+      if (!OK(status)) {
+        AppendErrorMessage(status) += "Failed to deserialize window state";
+        return;
+      }
+    } else {
+      AppendErrorMessage(status) += "Unexpected key: " + key;
+      return;
+    }
+  }
+  bool fully_decoded = d.reader.IterativeParseComplete();
+  if (!fully_decoded) {
+    AppendErrorMessage(status) += "Extra data at the end of the JSON string";
+    return;
+  }
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
@@ -479,6 +534,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   window_width = rect.right - rect.left;
   window_height = rect.bottom - rect.top;
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
+
+  {
+    auto state_path = StatePath();
+    HANDLE file =
+        CreateFile(state_path.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (file != INVALID_HANDLE_VALUE) {
+      DWORD file_size = GetFileSize(file, nullptr);
+      auto json = std::string(file_size, '\0');
+      DWORD bytes_read;
+      ReadFile(file, json.data(), file_size, &bytes_read, nullptr);
+      CloseHandle(file);
+
+      rapidjson::StringStream stream(json.c_str());
+      Deserializer deserializer(stream);
+      Status status;
+      DeserializeState(deserializer, status);
+      if (!OK(status)) {
+        ERROR << "Failed to deserialize saved state: " << status;
+      }
+    }
+  }
   gui::keyboard = std::make_unique<gui::Keyboard>(*window);
   ResizeVulkan();
   RenderingStart();

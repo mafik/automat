@@ -1,8 +1,8 @@
 #include "window.hh"
 
-#include <memory>
-
 #include <include/effects/SkRuntimeEffect.h>
+
+#include <memory>
 
 #include "drag_action.hh"
 #include "font.hh"
@@ -15,7 +15,7 @@ namespace {
 std::vector<Window*> windows;
 }  // namespace
 
-Window::Window(Vec2 size, float pixels_per_meter, std::string_view initial_state)
+Window::Window(Vec2 size, float pixels_per_meter)
     : size(size), display_pixels_per_meter(pixels_per_meter) {
   prototype_buttons.reserve(Prototypes().size());
   for (auto& proto : Prototypes()) {
@@ -315,4 +315,41 @@ SkPaint& Window::GetBackgroundPaint() {
 void Window::DisplayPixelDensity(float pixels_per_meter) {
   display_pixels_per_meter = pixels_per_meter;
 }
+
+void Window::SerializeState(rapidjson::Writer<rapidjson::StringBuffer>& writer) const {
+  writer.StartObject();
+  writer.String("camera");
+  writer.StartObject();
+  writer.String("x");
+  writer.Double(camera_x);
+  writer.String("y");
+  writer.Double(camera_y);
+  writer.String("zoom");
+  writer.Double(zoom);
+  writer.EndObject();
+  writer.EndObject();
+}
+
+void Window::DeserializeState(Deserializer& d, Status& status) {
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "camera") {
+      for (auto& camera_key : ObjectView(d, status)) {
+        if (camera_key == "x") {
+          camera_x = d.GetDouble(status);
+        } else if (camera_key == "y") {
+          camera_y = d.GetDouble(status);
+        } else if (camera_key == "zoom") {
+          zoom = d.GetDouble(status);
+        } else {
+          AppendErrorMessage(status) += f("Unexpected camera key: \"%s\"", camera_key.c_str());
+          return;
+        }
+      }
+    } else {
+      AppendErrorMessage(status) += f("Unexpected window key: \"%s\"", key.c_str());
+      return;
+    }
+  }
+}
+
 }  // namespace automat::gui

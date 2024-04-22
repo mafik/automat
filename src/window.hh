@@ -1,10 +1,13 @@
 #pragma once
 
 #include <include/core/SkCanvas.h>
+#include <rapidjson/rapidjson.h>
+#include <rapidjson/writer.h>
 
 #include "animation.hh"
 #include "base.hh"
 #include "control_flow.hh"
+#include "deserializer.hh"
 #include "keyboard.hh"
 #include "math.hh"
 #include "root.hh"
@@ -37,7 +40,7 @@ struct Pointer;
 struct WindowImpl;
 
 struct Window final : Widget {
-  Window(Vec2 size, float pixels_per_meter, std::string_view initial_state = "");
+  Window(Vec2 size, float pixels_per_meter);
   ~Window();
 
   std::string_view Name() const override { return "Window"; }
@@ -130,6 +133,12 @@ struct Window final : Widget {
     return SkMatrix::I();
   }
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
+
+  // Called when closing Automat to persist state across restarts.
+  void SerializeState(rapidjson::Writer<rapidjson::StringBuffer>&) const;
+
+  // Restores state when Automat is restarted.
+  void DeserializeState(Deserializer&, Status&);
 
   Vec2 position = Vec2(0, 0);  // center of the window
   Vec2 size;

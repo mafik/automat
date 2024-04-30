@@ -23,9 +23,11 @@
 #include "channel.hh"
 #include "connection.hh"
 #include "control_flow.hh"
+#include "deserializer.hh"
 #include "format.hh"
 #include "location.hh"
 #include "log.hh"
+#include "prototypes.hh"
 #include "run_button.hh"
 #include "tasks.hh"
 #include "text_field.hh"
@@ -106,6 +108,10 @@ struct Machine : LiveObject {
   Location& Create(const string& name = "") {
     return Create(T::proto, name);
   }
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+
+  void DeserializeState(Location& l, Deserializer& d) override;
 
   Location* LocationAtPoint(Vec2);
 

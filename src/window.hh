@@ -1,8 +1,6 @@
 #pragma once
 
 #include <include/core/SkCanvas.h>
-#include <rapidjson/rapidjson.h>
-#include <rapidjson/writer.h>
 
 #include "animation.hh"
 #include "base.hh"
@@ -137,7 +135,7 @@ struct Window final : Widget {
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 
   // Called when closing Automat to persist state across restarts.
-  void SerializeState(rapidjson::Writer<rapidjson::StringBuffer>&) const;
+  void SerializeState(Serializer&) const;
 
   // Restores state when Automat is restarted.
   void DeserializeState(Deserializer&, Status&);

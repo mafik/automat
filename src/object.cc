@@ -89,4 +89,21 @@ void Object::Updated(Location& here, Location& updated) {
   }
 }
 
+void Object::SerializeState(Serializer& writer, const char* key) const {
+  auto value = GetText();
+  if (!value.empty()) {
+    writer.Key(key);
+    writer.String(value.data(), value.size());
+  }
+}
+
+void Object::DeserializeState(Location& l, Deserializer& d) {
+  maf::Status status;
+  auto value = d.GetString(status);
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+    return;
+  }
+  SetText(l, value);
+}
 }  // namespace automat

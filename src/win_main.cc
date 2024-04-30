@@ -8,6 +8,7 @@
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkGraphics.h>
+#include <rapidjson/prettywriter.h>
 #include <rapidjson/rapidjson.h>
 #include <shlwapi.h>
 #include <src/base/SkUTF.h>
@@ -439,12 +440,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         // Write window_state to a temp file
         auto state_path = StatePath();
         rapidjson::StringBuffer sb;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
+        rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);
+        writer.SetMaxDecimalPlaces(6);
         writer.StartObject();
+        writer.Key("version");
+        writer.Uint(1);
         writer.Key("maximized");
         writer.Bool(IsMaximized(main_window));
         writer.Key("window");
         window->SerializeState(writer);
+        root_machine->SerializeState(writer, "root");
 
         writer.EndObject();
         writer.Flush();
@@ -483,7 +488,16 @@ void RunOnWindowsThread(std::function<void()>&& f) {
 
 static void DeserializeState(Deserializer& d, Status& status) {
   for (auto& key : ObjectView(d, status)) {
-    if (key == "window") {
+    if (key == "version") {
+      int version = d.GetInt(status);
+      if (!OK(status)) {
+        AppendErrorMessage(status) += "Failed to deserialize version";
+        return;
+      } else if (version != 1) {
+        AppendErrorMessage(status) += "Unsupported version: " + std::to_string(version);
+        return;
+      }
+    } else if (key == "window") {
       window->DeserializeState(d, status);
       if (!OK(status)) {
         AppendErrorMessage(status) += "Failed to deserialize window state";
@@ -499,6 +513,8 @@ static void DeserializeState(Deserializer& d, Status& status) {
           ShowWindow(main_window, SW_MAXIMIZE);
         }
       }
+    } else if (key == "root") {
+      root_machine->DeserializeState(root_location, d);
     } else {
       AppendErrorMessage(status) += "Unexpected key: " + key;
       return;
@@ -506,7 +522,7 @@ static void DeserializeState(Deserializer& d, Status& status) {
   }
   bool fully_decoded = d.reader.IterativeParseComplete();
   if (!fully_decoded) {
-    AppendErrorMessage(status) += "Extra data at the end of the JSON string";
+    AppendErrorMessage(status) += "Extra data at the end of the JSON string, " + d.ErrorContext();
     return;
   }
 }

@@ -316,7 +316,7 @@ void Window::DisplayPixelDensity(float pixels_per_meter) {
   display_pixels_per_meter = pixels_per_meter;
 }
 
-void Window::SerializeState(rapidjson::Writer<rapidjson::StringBuffer>& writer) const {
+void Window::SerializeState(Serializer& writer) const {
   writer.StartObject();
   writer.String("width");
   writer.Double(size.width);

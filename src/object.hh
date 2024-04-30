@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 
+#include "deserializer.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -28,6 +29,11 @@ struct Object : gui::Widget {
 
   // Release the memory occupied by this object.
   virtual ~Object() = default;
+
+  virtual void SerializeState(Serializer& writer, const char* key = "value") const;
+
+  // Restores state when Automat is restarted.
+  virtual void DeserializeState(Location& l, Deserializer& d);
 
   virtual std::string GetText() const { return ""; }
   virtual void SetText(Location& error_context, std::string_view text) {}

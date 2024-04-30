@@ -10,11 +10,17 @@ Machine* root_machine;
 std::jthread automat_thread;
 
 void InitRoot() {
-  root_location = Location(nullptr);
   root_location.name = "Root location";
   root_machine = root_location.Create<Machine>();
   root_machine->name = "Root machine";
   automat_thread = std::jthread(RunThread);
+}
+
+void StopRoot() {
+  if (automat_thread.joinable()) {
+    automat_thread.request_stop();
+    automat_thread.join();
+  }
 }
 
 void RunOnAutomatThread(std::function<void()> f) {

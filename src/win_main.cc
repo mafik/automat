@@ -436,33 +436,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_CLOSE: {
-      RunOnAutomatThreadSynchronous([]() {
-        // Write window_state to a temp file
-        auto state_path = StatePath();
-        rapidjson::StringBuffer sb;
-        rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);
-        writer.SetMaxDecimalPlaces(6);
-        writer.StartObject();
-        writer.Key("version");
-        writer.Uint(1);
-        writer.Key("maximized");
-        writer.Bool(IsMaximized(main_window));
-        writer.Key("window");
-        window->SerializeState(writer);
-        root_machine->SerializeState(writer, "root");
+      RenderingStop();
+      StopRoot();
+      // Write window_state to a temp file
+      auto state_path = StatePath();
+      rapidjson::StringBuffer sb;
+      rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);
+      writer.SetMaxDecimalPlaces(6);
+      writer.StartObject();
+      writer.Key("version");
+      writer.Uint(1);
+      writer.Key("maximized");
+      writer.Bool(IsMaximized(main_window));
+      writer.Key("window");
+      window->SerializeState(writer);
+      root_machine->SerializeState(writer, "root");
 
-        writer.EndObject();
-        writer.Flush();
-        std::string window_state = sb.GetString();
-        HANDLE file =
-            CreateFile(state_path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-        if (file != INVALID_HANDLE_VALUE) {
-          DWORD bytes_written;
-          WriteFile(file, window_state.c_str(), window_state.size(), &bytes_written, nullptr);
-          CloseHandle(file);
-          LOG << "Saved window state to " << state_path;
-        }
-      });
+      writer.EndObject();
+      writer.Flush();
+      std::string window_state = sb.GetString();
+      HANDLE file =
+          CreateFile(state_path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+      if (file != INVALID_HANDLE_VALUE) {
+        DWORD bytes_written;
+        WriteFile(file, window_state.c_str(), window_state.size(), &bytes_written, nullptr);
+        CloseHandle(file);
+        LOG << "Saved window state to " << state_path;
+      }
       DestroyWindow(hWnd);
       break;
     }

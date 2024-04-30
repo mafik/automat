@@ -18,6 +18,11 @@ struct product_ptr_base {
 // is indexed by this product_holder, is also destroyed.
 struct product_holder {
   std::unordered_set<product_ptr_base*> ptrs;
+  product_holder() = default;
+  product_holder(const product_holder&) = delete;             // TODO: implement
+  product_holder& operator=(const product_holder&) = delete;  // TODO: implement
+  product_holder(product_holder&&) = delete;                  // TODO: implement
+
   ~product_holder() {
     for (auto ptr : ptrs) {
       ptr->HolderDestroyed(*this);
@@ -52,6 +57,18 @@ struct construct_functor {
 template <typename T, typename C = construct_functor<T>>
 struct product_ptr : product_ptr_base {
   std::unordered_map<product_holder*, T> holders;
+
+  product_ptr() = default;
+
+  product_ptr(const product_ptr& other) {
+    for (auto& it : other.holders) {
+      holders.emplace(it.first, it.second);
+      it.first->ptrs.insert(this);
+    }
+  }
+
+  product_ptr& operator=(const product_ptr&) = delete;  // TODO: implement
+  product_ptr(product_ptr&&) = delete;                  // TODO: implement
 
   ~product_ptr() {
     for (auto& it : holders) {

@@ -41,8 +41,6 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
 
     Optional<Vec2> to_point;
     if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
-      // Because the ConnectionWidget is a child of Location, we must transform the coordinates of
-      // its destination to local space.
       Widget* parent_machine = ctx.path[ctx.path.size() - 2];
       SkMatrix parent_to_local =
           TransformDown(Path{parent_machine, (Widget*)this}, ctx.animation_context);

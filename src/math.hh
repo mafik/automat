@@ -181,6 +181,12 @@ union Rect {
   constexpr float CenterY() const { return (top + bottom) / 2; }
   constexpr float CenterX() const { return (left + right) / 2; }
 
+  // Note that the Skia coordinate system has the Y axis pointing down!
+  static constexpr float Width(const SkRect& r) { return r.fRight - r.fLeft; }
+  static constexpr float Height(const SkRect& r) { return r.fBottom - r.fTop; }
+  constexpr float Width() const { return right - left; }
+  constexpr float Height() const { return top - bottom; }
+
   static constexpr Vec2 Center(const SkRect& r) { return r.center(); }
   constexpr Vec2 Center() const { return sk.center(); }
 

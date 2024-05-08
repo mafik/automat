@@ -2,6 +2,7 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkCanvas.h>
+#include <include/core/SkImage.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMesh.h>
 #include <include/effects/SkGradientShader.h>
@@ -9,9 +10,11 @@
 
 #include <cmath>
 
+#include "../build/generated/embedded.hh"
 #include "arcline.hh"
 #include "font.hh"
 #include "gui_constants.hh"
+#include "include/core/SkSamplingOptions.h"
 #include "math.hh"
 #include "svg.hh"
 
@@ -441,6 +444,194 @@ Vec2 OpticalConnectorState::PlugBottomCenter() const {
   return sections.front().pos - Vec2::Polar(sections.front().dir, kCasingHeight);
 }
 
+static SkPoint conic(SkPoint p0, SkPoint p1, SkPoint p2, float w, float t) {
+  float s = 1 - t;
+  return {((s * s * p0.x()) + (2 * s * t * w * p1.x()) + (t * t * p2.x())) /
+              ((s * s) + (w * 2 * s * t) + (t * t)),
+          ((s * s * p0.y()) + (2 * s * t * w * p1.y()) + (t * t * p2.y())) /
+              ((s * s) + (w * 2 * s * t) + (t * t))};
+}
+
+static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float t) {
+  float s = 1 - t;
+  float denominator = powf(-2 * (w - 1) * t * t + 2 * (w - 1) * t + 1, 2);
+  float w0 = -2 * s * (t * (w - 1) - w) / denominator;
+  float w1 = 2 * w * (2 * t - 1) / denominator;
+  float w2 = 2 * t * (-w * t + t - 1) / denominator;
+  return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
+}
+
+static sk_sp<SkImage> MakeImageFromAsset(fs::VFile& asset) {
+  auto& content = asset.content;
+  auto data = SkData::MakeWithoutCopy(content.data(), content.size());
+  auto image = SkImages::DeferredFromEncodedData(data, SkAlphaType::kUnpremul_SkAlphaType);
+  return image;
+}
+
+static sk_sp<SkImage>& CableWeave() {
+  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_webp);
+  return image;
+}
+
+void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
+  auto& canvas = ctx.canvas;
+  Rect clip = canvas.getLocalClipBounds();
+  const Rect& path_bounds = path.getBounds();
+  if (!clip.sk.intersects(path_bounds.sk)) {
+    return;
+  }
+  // TODO: adjust the tesselation density based on the zoom level
+
+  SkMeshSpecification::Attribute attributes[2] = {
+      {
+          .type = SkMeshSpecification::Attribute::Type::kFloat2,
+          .offset = 0,
+          .name = SkString("position"),
+      },
+      {
+          .type = SkMeshSpecification::Attribute::Type::kFloat2,
+          .offset = 8,
+          .name = SkString("uv"),
+      }};
+  SkMeshSpecification::Varying varyings[2] = {
+      {
+          .type = SkMeshSpecification::Varying::Type::kFloat2,
+          .name = SkString("position"),
+      },
+      {
+          .type = SkMeshSpecification::Varying::Type::kFloat2,
+          .name = SkString("uv"),
+      }};
+  auto vs = SkString(R"(
+      Varyings main(const Attributes attrs) {
+        Varyings v;
+        v.position = attrs.position;
+        v.uv = attrs.uv;
+        return v;
+      }
+    )");
+  auto fs = SkString(R"(
+      const float kCableWidth = 0.002;
+
+      uniform float plug_width_pixels;
+      uniform shader cable_weave;
+
+      float2 main(const Varyings v, out float4 color) {
+        float h = sqrt(1 - v.uv.x * v.uv.x );
+        float a = asin(v.uv.x) / 3.1415926535897932384626433832795 * 1.5;
+        vec2 pos = vec2(a, v.uv.y / kCableWidth) * 3;
+        color.rgba = cable_weave.eval(pos * 128).rgba;
+        color.rgb = color.rgb * 0.4 + 0.1;
+        color.rgb *= h;
+        return v.position;
+      }
+    )");
+  auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
+  if (!spec_result.error.isEmpty()) {
+    ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
+  } else {
+    Vec<Vec2> vertex_vector;
+    Size verb_count = path.countVerbs();
+    U8 verbs[verb_count];
+    path.getVerbs(verbs, verb_count);
+    int verb_i = 0;
+    int point_i = 0;
+    float length = 0;
+    Rect bounds = Rect(HUGE_VALF, HUGE_VALF, -HUGE_VALF, -HUGE_VALF);
+    SkPath::Iter iter(path, false);
+    SkPath::Verb verb;
+    do {
+      SkPoint points[4];
+      verb = iter.next(points);
+      if (SkPath::kConic_Verb == verb) {
+        float weight = iter.conicWeight();
+        float angle = acosf(weight) * 2 * 180 / M_PI;
+        int n_steps = ceil(angle / 5);
+        Vec2 last_point = points[0];
+        for (int step = 0; step <= n_steps; step++) {
+          float t = (float)step / n_steps;
+          Vec2 point = conic(points[0], points[1], points[2], weight, t);
+          Vec2 tangent = conic_tangent(points[0], points[1], points[2], weight, t);
+          Vec2 normal = Rotate90DegreesClockwise(tangent) * kCableWidth / 2 / Length(tangent);
+          length += Length(point - last_point);
+          last_point = point;
+          vertex_vector.push_back(point + normal);
+          bounds.ExpandToInclude(vertex_vector.back());
+          vertex_vector.push_back(Vec2(-1, length));
+          vertex_vector.push_back(point - normal);
+          bounds.ExpandToInclude(vertex_vector.back());
+          vertex_vector.push_back(Vec2(1, length));
+        }
+
+      } else if (SkPath::kMove_Verb == verb) {
+        // pass
+      } else if (SkPath::kLine_Verb == verb) {
+        Vec2 diff = points[1] - points[0];
+        float segment_length = Length(diff);
+        Vec2 normal = Rotate90DegreesClockwise(diff) * kCableWidth / 2 / segment_length;
+        vertex_vector.push_back(points[0] - normal);
+        bounds.ExpandToInclude(vertex_vector.back());
+        vertex_vector.push_back(Vec2(-1, length));
+        vertex_vector.push_back(points[0] + normal);
+        bounds.ExpandToInclude(vertex_vector.back());
+        vertex_vector.push_back(Vec2(1, length));
+
+        length += segment_length;
+
+        vertex_vector.push_back(points[1] - normal);
+        bounds.ExpandToInclude(vertex_vector.back());
+        vertex_vector.push_back(Vec2(-1, length));
+        vertex_vector.push_back(points[1] + normal);
+        bounds.ExpandToInclude(vertex_vector.back());
+        vertex_vector.push_back(Vec2(1, length));
+      } else if (SkPath::kCubic_Verb == verb) {
+        Vec2 p0 = points[0];
+        Vec2 p1 = points[1];
+        Vec2 p2 = points[2];
+        Vec2 p3 = points[3];
+        constexpr int n_steps = 8;
+        Vec2 last_point = p0;
+        for (int step = 0; step <= n_steps; step++) {
+          float t = (float)step / n_steps;
+          Vec2 point = p0 * powf(1 - t, 3) + p1 * 3 * powf(1 - t, 2) * t +
+                       p2 * 3 * (1 - t) * t * t + p3 * powf(t, 3);
+          Vec2 tangent = p0 * -3 * powf(1 - t, 2) + p1 * (3 * powf(1 - t, 2) - 6 * t * (1 - t)) +
+                         p2 * (6 * t * (1 - t) - 3 * t * t) + p3 * 3 * powf(t, 2);
+          Vec2 normal = Rotate90DegreesClockwise(tangent) * kCableWidth / 2 / Length(tangent);
+          length += Length(point - last_point);
+          last_point = point;
+          vertex_vector.push_back(point - normal);
+          bounds.ExpandToInclude(vertex_vector.back());
+          vertex_vector.push_back(Vec2(-1, length));
+          vertex_vector.push_back(point + normal);
+          bounds.ExpandToInclude(vertex_vector.back());
+          vertex_vector.push_back(Vec2(1, length));
+        }
+      }
+    } while (SkPath::kDone_Verb != verb);
+
+    float plug_width_pixels = canvas.getTotalMatrix().mapRadius(10);
+    auto uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
+    auto vertex_buffer =
+        SkMeshes::MakeVertexBuffer(vertex_vector.data(), vertex_vector.size() * sizeof(Vec2));
+    sk_sp<SkShader> cable_weave =
+        CableWeave()->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
+                                 SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+    SkMesh::ChildPtr children[] = {cable_weave};
+    auto mesh_result =
+        SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
+                     vertex_vector.size() / 2, 0, uniforms, {children, 1}, bounds);
+    if (!mesh_result.error.isEmpty()) {
+      ERROR << "Error creating mesh: " << mesh_result.error.c_str();
+    } else {
+      SkPaint default_paint;
+      default_paint.setColor(0xffffffff);
+      default_paint.setAntiAlias(true);
+      canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
+    }
+  }
+}
+
 void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
@@ -460,7 +651,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     SkPath p;
     if (state.stabilized) {
       if (state.arcline) {
-        p = state.arcline->ToPath(false);
+        SkPath p2 = state.arcline->ToPath(false);
+        p.reverseAddPath(p2);
       }
     } else {
       p.moveTo(state.sections[0].pos);
@@ -484,6 +676,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     cable_paint2.setMaskFilter(
         SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
     canvas.drawPath(p, cable_paint2);
+
+    DrawCable(ctx, state, p);
   }
 
   canvas.save();
@@ -496,35 +690,60 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   transform.preTranslate(0, -kCasingHeight);
   canvas.concat(transform);
 
-  float casing_left = -kCasingWidth / 2;
-  float casing_right = kCasingWidth / 2;
-  float casing_top = kCasingHeight;
+  constexpr float casing_left = -kCasingWidth / 2;
+  constexpr float casing_right = kCasingWidth / 2;
+  constexpr float casing_top = kCasingHeight;
+
+  struct MeshWithUniforms {
+    SkMesh mesh;
+    sk_sp<SkData> uniforms;
+
+    MeshWithUniforms(Size uniforms_size) { uniforms = SkData::MakeUninitialized(uniforms_size); }
+
+    virtual void UpdateUniforms(SkCanvas&) = 0;
+
+    void Draw(SkCanvas& canvas) {
+      UpdateUniforms(canvas);
+      SkPaint default_paint;
+      default_paint.setColor(0xffffffff);
+      canvas.drawMesh(mesh, nullptr, default_paint);
+    }
+  };
 
   {  // Steel insert
-    Rect steel_rect;
-    steel_rect.sk = SkRect::MakeLTRB(-3_mm, -1_mm, 3_mm, 1_mm);
+    static const Rect kSteelRect = Rect(-3_mm, -1_mm, 3_mm, 1_mm);
 
-    SkMeshSpecification::Attribute attributes[2] = {
-        {
-            .type = SkMeshSpecification::Attribute::Type::kFloat2,
-            .offset = 0,
-            .name = SkString("position"),
-        },
-        {
-            .type = SkMeshSpecification::Attribute::Type::kFloat2,
-            .offset = 8,
-            .name = SkString("uv"),
-        }};
-    SkMeshSpecification::Varying varyings[2] = {
-        {
-            .type = SkMeshSpecification::Varying::Type::kFloat2,
-            .name = SkString("position"),
-        },
-        {
-            .type = SkMeshSpecification::Varying::Type::kFloat2,
-            .name = SkString("uv"),
-        }};
-    auto vs = SkString(R"(
+    struct SteelInsert : MeshWithUniforms {
+      SteelInsert() : MeshWithUniforms(4) {}
+      void UpdateUniforms(SkCanvas& canvas) override {
+        float& plug_width_pixels = *(float*)uniforms->data();
+        plug_width_pixels = canvas.getTotalMatrix().mapRadius(kSteelRect.Width());
+      }
+    };
+
+    static Optional<SteelInsert> mesh = [&]() -> Optional<SteelInsert> {
+      SteelInsert result;
+      SkMeshSpecification::Attribute attributes[2] = {
+          {
+              .type = SkMeshSpecification::Attribute::Type::kFloat2,
+              .offset = 0,
+              .name = SkString("position"),
+          },
+          {
+              .type = SkMeshSpecification::Attribute::Type::kFloat2,
+              .offset = 8,
+              .name = SkString("uv"),
+          }};
+      SkMeshSpecification::Varying varyings[2] = {
+          {
+              .type = SkMeshSpecification::Varying::Type::kFloat2,
+              .name = SkString("position"),
+          },
+          {
+              .type = SkMeshSpecification::Varying::Type::kFloat2,
+              .name = SkString("uv"),
+          }};
+      auto vs = SkString(R"(
       Varyings main(const Attributes attrs) {
         Varyings v;
         v.position = attrs.position;
@@ -532,7 +751,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
         return v;
       }
     )");
-    auto fs = SkString(R"(
+      auto fs = SkString(R"(
       const float kCaseSideRadius = 0.08;
       // NOTE: fix this once Skia supports array initializers here
       const vec3 kCaseBorderDarkColor = vec3(0x38, 0x36, 0x33) / 255; // subtle dark contour
@@ -570,57 +789,70 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       }
     )");
 
-    auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
-    if (!spec_result.error.isEmpty()) {
-      ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-    } else {
-      Vec2 vertex_data[8] = {
-          steel_rect.BottomLeftCorner(), Vec2(0, 0), steel_rect.BottomRightCorner(), Vec2(1, 0),
-          steel_rect.TopLeftCorner(),    Vec2(0, 1), steel_rect.TopRightCorner(),    Vec2(1, 1),
-      };
-      float plug_width_pixels = canvas.getTotalMatrix().mapRadius(steel_rect.Width());
-      auto uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
-      auto vertex_buffer = SkMeshes::MakeVertexBuffer(vertex_data, sizeof(vertex_data));
-      auto mesh_result =
-          SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer, 4, 0,
-                       uniforms, SkSpan<SkMesh::ChildPtr>(), steel_rect.sk);
-      if (!mesh_result.error.isEmpty()) {
-        ERROR << "Error creating mesh: " << mesh_result.error.c_str();
+      auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
+      if (!spec_result.error.isEmpty()) {
+        ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
       } else {
-        SkPaint default_paint;
-        default_paint.setColor(0xffffffff);
-        canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
+        Vec2 vertex_data[8] = {
+            kSteelRect.BottomLeftCorner(), Vec2(0, 0), kSteelRect.BottomRightCorner(), Vec2(1, 0),
+            kSteelRect.TopLeftCorner(),    Vec2(0, 1), kSteelRect.TopRightCorner(),    Vec2(1, 1),
+        };
+        float plug_width_pixels = canvas.getTotalMatrix().mapRadius(kSteelRect.Width());
+        result.uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
+        auto vertex_buffer = SkMeshes::MakeVertexBuffer(vertex_data, sizeof(vertex_data));
+        auto mesh_result =
+            SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer, 4,
+                         0, result.uniforms, SkSpan<SkMesh::ChildPtr>(), kSteelRect.sk);
+        if (!mesh_result.error.isEmpty()) {
+          ERROR << "Error creating mesh: " << mesh_result.error.c_str();
+        } else {
+          result.mesh = std::move(mesh_result.mesh);
+          return result;
+        }
       }
+      return std::nullopt;
+    }();
+    if (mesh) {
+      mesh->Draw(canvas);
     }
   }
 
   {  // Black metal casing
-    // TODO: cache mesh!
-    SkMeshSpecification::Attribute attributes[2] = {
-        {
-            .type = SkMeshSpecification::Attribute::Type::kFloat2,
-            .offset = 0,
-            .name = SkString("position"),
-        },
-        {
-            .type = SkMeshSpecification::Attribute::Type::kFloat2,
-            .offset = 8,
-            .name = SkString("uv"),
-        }};
-    SkMeshSpecification::Varying varyings[3] = {
-        {
-            .type = SkMeshSpecification::Varying::Type::kFloat2,
-            .name = SkString("position"),
-        },
-        {
-            .type = SkMeshSpecification::Varying::Type::kFloat2,
-            .name = SkString("uv"),
-        },
-        {
-            .type = SkMeshSpecification::Varying::Type::kFloat,
-            .name = SkString("light"),
-        }};
-    auto vs = SkString(R"(
+    struct BlackCasing : MeshWithUniforms {
+      BlackCasing() : MeshWithUniforms(4) {}
+      void UpdateUniforms(SkCanvas& canvas) override {
+        float& plug_width_pixels = *(float*)uniforms->data();
+        plug_width_pixels = canvas.getTotalMatrix().mapRadius(kCasingWidth);
+      }
+    };
+
+    static Optional<BlackCasing> mesh = [&]() -> Optional<BlackCasing> {
+      BlackCasing result;
+      SkMeshSpecification::Attribute attributes[2] = {
+          {
+              .type = SkMeshSpecification::Attribute::Type::kFloat2,
+              .offset = 0,
+              .name = SkString("position"),
+          },
+          {
+              .type = SkMeshSpecification::Attribute::Type::kFloat2,
+              .offset = 8,
+              .name = SkString("uv"),
+          }};
+      SkMeshSpecification::Varying varyings[3] = {
+          {
+              .type = SkMeshSpecification::Varying::Type::kFloat2,
+              .name = SkString("position"),
+          },
+          {
+              .type = SkMeshSpecification::Varying::Type::kFloat2,
+              .name = SkString("uv"),
+          },
+          {
+              .type = SkMeshSpecification::Varying::Type::kFloat,
+              .name = SkString("light"),
+          }};
+      auto vs = SkString(R"(
       Varyings main(const Attributes attrs) {
         Varyings v;
         v.position = attrs.position;
@@ -629,7 +861,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
         return v;
       }
     )");
-    auto fs = SkString(R"(
+      auto fs = SkString(R"(
       const float kCaseSideRadius = 0.12;
       // NOTE: fix this once Skia supports array initializers here
       const vec3 kCaseBorderDarkColor = vec3(5) / 255; // subtle dark contour
@@ -672,28 +904,32 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       }
     )");
 
-    auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
-    if (!spec_result.error.isEmpty()) {
-      ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-    } else {
-      SkRect bounds = SkRect::MakeLTRB(casing_left, casing_top, casing_right, 0);
-      Vec2 vertex_data[8] = {
-          Vec2(casing_left, 0),          Vec2(0, 0), Vec2(casing_right, 0),          Vec2(1, 0),
-          Vec2(casing_left, casing_top), Vec2(0, 1), Vec2(casing_right, casing_top), Vec2(1, 1),
-      };
-      float plug_width_pixels = canvas.getTotalMatrix().mapRadius(kCasingWidth);
-      auto uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
-      auto vertex_buffer = SkMeshes::MakeVertexBuffer(vertex_data, sizeof(vertex_data));
-      auto mesh_result =
-          SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer, 4, 0,
-                       uniforms, SkSpan<SkMesh::ChildPtr>(), bounds);
-      if (!mesh_result.error.isEmpty()) {
-        ERROR << "Error creating mesh: " << mesh_result.error.c_str();
+      auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
+      if (!spec_result.error.isEmpty()) {
+        ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
       } else {
-        SkPaint default_paint;
-        default_paint.setColor(0xffffffff);
-        canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
+        SkRect bounds = SkRect::MakeLTRB(casing_left, casing_top, casing_right, 0);
+        Vec2 vertex_data[8] = {
+            Vec2(casing_left, 0),          Vec2(0, 0), Vec2(casing_right, 0),          Vec2(1, 0),
+            Vec2(casing_left, casing_top), Vec2(0, 1), Vec2(casing_right, casing_top), Vec2(1, 1),
+        };
+        float plug_width_pixels = 1;
+        result.uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
+        auto vertex_buffer = SkMeshes::MakeVertexBuffer(vertex_data, sizeof(vertex_data));
+        auto mesh_result =
+            SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer, 4,
+                         0, result.uniforms, SkSpan<SkMesh::ChildPtr>(), bounds);
+        if (!mesh_result.error.isEmpty()) {
+          ERROR << "Error creating mesh: " << mesh_result.error.c_str();
+        } else {
+          result.mesh = std::move(mesh_result.mesh);
+          return result;
+        }
       }
+      return std::nullopt;
+    }();
+    if (mesh) {
+      mesh->Draw(canvas);
     }
   }
 

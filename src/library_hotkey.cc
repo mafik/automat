@@ -444,11 +444,11 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   inner_paint.setStrokeWidth(0.5_mm);
   canvas.drawPath(inner_contour, inner_paint);
 
-  Rect inner_rect = {
-      .left = -kWidth / 2 + kFrameWidth,
-      .bottom = -kHeight / 2 + kFrameWidth,
-      .right = kWidth / 2 - kFrameWidth,
-      .top = kHeight / 2 - kFrameWidth,
+  Rect inner_rect = Rect{
+      -kWidth / 2 + kFrameWidth,
+      -kHeight / 2 + kFrameWidth,
+      kWidth / 2 - kFrameWidth,
+      kHeight / 2 - kFrameWidth,
   };
   float fire_radius = 10_mm;
   auto fire_paint = GetFirePaint(inner_rect, fire_radius);

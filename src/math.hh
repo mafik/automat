@@ -91,6 +91,14 @@ static_assert(sizeof(Vec3) == 12, "Vec3 is not 12 bytes");
 constexpr float LengthSquared(Vec2 v) { return v.x * v.x + v.y * v.y; }
 inline float Length(Vec2 v) { return v.sk.length(); }
 
+inline Vec2 Normalize(Vec2 v) {
+  float len = Length(v);
+  if (len == 0) return {0, 0};
+  return v / len;
+}
+
+inline Vec2 Rotate90DegreesClockwise(Vec2 v) { return {v.y, -v.x}; }
+
 constexpr float Dot(Vec2 a, Vec2 b) { return a.x * b.x + a.y * b.y; }
 constexpr float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
 
@@ -167,6 +175,13 @@ union Rect {
     float top = 0;
   };
 
+  constexpr Rect() = default;
+  constexpr Rect(SkRect r) : sk(r) {}
+  constexpr Rect(float left, float bottom, float right, float top)
+      : left(left), bottom(bottom), right(right), top(top) {}
+
+  operator SkRect&() { return sk; }
+
   static constexpr float MinY(const SkRect& r) { return r.fTop; }
   static constexpr float MaxY(const SkRect& r) { return r.fBottom; }
   static constexpr float MinX(const SkRect& r) { return r.fLeft; }
@@ -206,6 +221,13 @@ union Rect {
   constexpr Vec2 BottomRightCorner() const { return {right, bottom}; }
   constexpr Vec2 LeftCenter() const { return {left, CenterY()}; }
   constexpr Vec2 RightCenter() const { return {right, CenterY()}; }
+
+  void ExpandToInclude(Vec2 point) {
+    left = std::min(left, point.x);
+    right = std::max(right, point.x);
+    bottom = std::min(bottom, point.y);
+    top = std::max(top, point.y);
+  }
 };
 
 union RRect {

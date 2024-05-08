@@ -565,8 +565,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   window_height = rect.bottom - rect.top;
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
   window->RequestResize = [&](Vec2 new_size) {
-    SetWindowPos(main_window, nullptr, 0, 0, new_size.x * DisplayPxPerMeter(),
-                 new_size.y * DisplayPxPerMeter(), SWP_NOMOVE | SWP_NOZORDER);
+    int w = roundf(new_size.x * DisplayPxPerMeter());
+    int h = roundf(new_size.y * DisplayPxPerMeter());
+
+    // If the window is maximized and requested size is different, un-maximize it first.
+    if (w == window_width && h == window_height) {
+      return;
+    }
+    if (IsMaximized(main_window)) {
+      ShowWindow(main_window, SW_RESTORE);
+    }
+
+    // Account for window border when calling SetWindowPos
+    RECT client_rect, window_rect;
+    GetClientRect(main_window, &client_rect);
+    GetWindowRect(main_window, &window_rect);
+    float vertical_frame_adjustment = (window_rect.bottom - window_rect.top) - client_rect.bottom;
+    float horizontal_frame_adjustment = (window_rect.right - window_rect.left) - client_rect.right;
+    h += vertical_frame_adjustment;
+    w += horizontal_frame_adjustment;
+
+    SetWindowPos(main_window, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
   };
 
   {

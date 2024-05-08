@@ -25,6 +25,8 @@ struct Path {
   // Path to the currently executing binary.
   static Path ExecutablePath();
 
+  static Path TempDirPath();
+
   Path Parent() const;
 
   // Replace initial "~" or "~user" with user's home directory.

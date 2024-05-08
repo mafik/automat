@@ -72,6 +72,12 @@ Path Path::ExecutablePath() {
   str.resize(len);
   return Path(str);
 }
+
+Path Path::TempDirPath() {
+  char temp_path[MAX_PATH + 1];
+  GetTempPath(MAX_PATH, temp_path);
+  return &temp_path[0];
+}
 #endif  // defined(_WIN32)
 
 Path Path::Parent() const {

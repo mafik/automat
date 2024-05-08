@@ -216,12 +216,7 @@ void QueryDisplayCaps() {
   ReleaseDC(main_window, hdc);
 }
 
-std::string StatePath() {
-  char temp_path[MAX_PATH + 1];
-  GetTempPath(MAX_PATH, temp_path);
-  PathAppend(temp_path, "automat_state.json");
-  return &temp_path[0];
-}
+std::string StatePath() { return Path::ExecutablePath().Parent() / "automat_state.json"; }
 
 bool IsMaximized(HWND hWnd) {
   WINDOWPLACEMENT placement = {};

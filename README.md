@@ -21,3 +21,7 @@ Automat is under active development. It's not ready for use yet.
 - GoogleTest
 - Noto Sans
 - HIDAPI
+
+# Credits
+
+- Cable texture: [TextureCan](https://www.texturecan.com)

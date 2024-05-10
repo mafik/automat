@@ -473,16 +473,22 @@ static sk_sp<SkImage>& CableWeave() {
   return image;
 }
 
+static sk_sp<SkImage>& CableWeaveNormal() {
+  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_normal_webp);
+  return image;
+}
+
 void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
   auto& canvas = ctx.canvas;
   Rect clip = canvas.getLocalClipBounds();
   const Rect& path_bounds = path.getBounds();
+  // TODO: grow path_bounds by the cable width/2
   if (!clip.sk.intersects(path_bounds.sk)) {
     return;
   }
   // TODO: adjust the tesselation density based on the zoom level
 
-  SkMeshSpecification::Attribute attributes[2] = {
+  SkMeshSpecification::Attribute attributes[3] = {
       {
           .type = SkMeshSpecification::Attribute::Type::kFloat2,
           .offset = 0,
@@ -492,8 +498,14 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
           .type = SkMeshSpecification::Attribute::Type::kFloat2,
           .offset = 8,
           .name = SkString("uv"),
-      }};
-  SkMeshSpecification::Varying varyings[2] = {
+      },
+      {
+          .type = SkMeshSpecification::Attribute::Type::kFloat2,
+          .offset = 16,
+          .name = SkString("tangent"),
+      },
+  };
+  SkMeshSpecification::Varying varyings[3] = {
       {
           .type = SkMeshSpecification::Varying::Type::kFloat2,
           .name = SkString("position"),
@@ -501,36 +513,73 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
       {
           .type = SkMeshSpecification::Varying::Type::kFloat2,
           .name = SkString("uv"),
+      },
+      {
+          .type = SkMeshSpecification::Varying::Type::kFloat2,
+          .name = SkString("tangent"),
       }};
   auto vs = SkString(R"(
       Varyings main(const Attributes attrs) {
         Varyings v;
         v.position = attrs.position;
         v.uv = attrs.uv;
+        v.tangent = normalize(attrs.tangent);
         return v;
       }
     )");
   auto fs = SkString(R"(
+      const float PI = 3.1415926535897932384626433832795;
+
       const float kCableWidth = 0.002;
 
       uniform float plug_width_pixels;
       uniform shader cable_weave;
+      uniform shader cable_weave_normal;
 
       float2 main(const Varyings v, out float4 color) {
+        vec3 lightDir = vec3(0, sqrt(2)/2, sqrt(2)/2); // normalized vector pointing from current fragment towards the light
         float h = sqrt(1 - v.uv.x * v.uv.x );
-        float a = asin(v.uv.x) / 3.1415926535897932384626433832795 * 1.5;
-        vec2 pos = vec2(a, v.uv.y / kCableWidth) * 3;
-        color.rgba = cable_weave.eval(pos * 128).rgba;
-        color.rgb = color.rgb * 0.4 + 0.1;
-        color.rgb *= h;
+        vec3 worldCoords = vec3(v.position.x, v.position.y, h * kCableWidth / 2);
+        vec2 tangent = normalize(v.tangent);
+        float angle = atan(h, v.uv.x);
+        vec2 texCoord = vec2(asin(v.uv.x) / (PI / 2), v.uv.y / kCableWidth) / 4 * 1024;
+        vec3 n = normalize(cable_weave_normal.eval(texCoord).rgb * 2 - 1);
+
+        // TODO: Use proper binormal calculation
+        vec3 normal = vec3(
+          cos(angle) * tangent.y + n.x * tangent.y - n.y * tangent.x,
+          -cos(angle) * tangent.x - n.x * tangent.x - n.y * tangent.y, h);
+        normal = normalize(normal);
+        
+        color.rgba = cable_weave.eval(texCoord).rgba;
+        color.rgb = color.rgb * 4;
+        float light = max(dot(normal, lightDir), 0);
+        vec3 ambient = vec3(0.1, 0.1, 0.2);
+        color.rgb = light * color.rgb + ambient * color.rgb;
+
+        color.rgb += pow(length(normal.xy), 8) * vec3(0.9, 0.9, 0.9) * 0.5;
+
+        color.rgb += pow(max(dot(reflect(-lightDir, normal), vec3(0, 0, 1)), 0), 3) * vec3(0.4, 0.4, 0.35);
+
+        // n.x -> pointing right
+        // n.y -> pointing down
+        // tangent.x -> 1 when cable is pointing right, -1 when left
+        // tangent.y -> 1 when cable is pointing up, -1 when down
+        // color.rgb = normal;
+        // color.rgb = color.rgb * 0.5 + 0.5;
         return v.position;
       }
     )");
-  auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
+  struct VertexInfo {
+    Vec2 coords;
+    Vec2 uv;
+    Vec2 tangent;
+  } __attribute__((packed));
+  auto spec_result = SkMeshSpecification::Make(attributes, sizeof(VertexInfo), varyings, vs, fs);
   if (!spec_result.error.isEmpty()) {
     ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
   } else {
-    Vec<Vec2> vertex_vector;
+    Vec<VertexInfo> vertex_vector;
     Size verb_count = path.countVerbs();
     U8 verbs[verb_count];
     path.getVerbs(verbs, verb_count);
@@ -551,16 +600,24 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
         for (int step = 0; step <= n_steps; step++) {
           float t = (float)step / n_steps;
           Vec2 point = conic(points[0], points[1], points[2], weight, t);
-          Vec2 tangent = conic_tangent(points[0], points[1], points[2], weight, t);
+          Vec2 tangent = -conic_tangent(points[0], points[1], points[2], weight, t);
           Vec2 normal = Rotate90DegreesClockwise(tangent) * kCableWidth / 2 / Length(tangent);
           length += Length(point - last_point);
           last_point = point;
-          vertex_vector.push_back(point + normal);
-          bounds.ExpandToInclude(vertex_vector.back());
-          vertex_vector.push_back(Vec2(-1, length));
-          vertex_vector.push_back(point - normal);
-          bounds.ExpandToInclude(vertex_vector.back());
-          vertex_vector.push_back(Vec2(1, length));
+          Vec2 left = point - normal;
+          Vec2 right = point + normal;
+          bounds.ExpandToInclude(left);
+          bounds.ExpandToInclude(right);
+          vertex_vector.push_back({
+              .coords = left,
+              .uv = Vec2(-1, length),
+              .tangent = tangent,
+          });
+          vertex_vector.push_back({
+              .coords = right,
+              .uv = Vec2(1, length),
+              .tangent = tangent,
+          });
         }
 
       } else if (SkPath::kMove_Verb == verb) {
@@ -569,21 +626,37 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
         Vec2 diff = points[1] - points[0];
         float segment_length = Length(diff);
         Vec2 normal = Rotate90DegreesClockwise(diff) * kCableWidth / 2 / segment_length;
-        vertex_vector.push_back(points[0] - normal);
-        bounds.ExpandToInclude(vertex_vector.back());
-        vertex_vector.push_back(Vec2(-1, length));
-        vertex_vector.push_back(points[0] + normal);
-        bounds.ExpandToInclude(vertex_vector.back());
-        vertex_vector.push_back(Vec2(1, length));
 
+        Vec2 left0 = points[0] - normal;
+        Vec2 right0 = points[0] + normal;
+        Vec2 left1 = points[1] - normal;
+        Vec2 right1 = points[1] + normal;
+        bounds.ExpandToInclude(left0);
+        bounds.ExpandToInclude(right0);
+        bounds.ExpandToInclude(left1);
+        bounds.ExpandToInclude(right1);
+
+        vertex_vector.push_back({
+            .coords = left0,
+            .uv = Vec2(-1, length),
+            .tangent = diff,
+        });
+        vertex_vector.push_back({
+            .coords = right0,
+            .uv = Vec2(1, length),
+            .tangent = diff,
+        });
+        vertex_vector.push_back({
+            .coords = left1,
+            .uv = Vec2(-1, length + segment_length),
+            .tangent = diff,
+        });
+        vertex_vector.push_back({
+            .coords = right1,
+            .uv = Vec2(1, length + segment_length),
+            .tangent = diff,
+        });
         length += segment_length;
-
-        vertex_vector.push_back(points[1] - normal);
-        bounds.ExpandToInclude(vertex_vector.back());
-        vertex_vector.push_back(Vec2(-1, length));
-        vertex_vector.push_back(points[1] + normal);
-        bounds.ExpandToInclude(vertex_vector.back());
-        vertex_vector.push_back(Vec2(1, length));
       } else if (SkPath::kCubic_Verb == verb) {
         Vec2 p0 = points[0];
         Vec2 p1 = points[1];
@@ -600,12 +673,20 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
           Vec2 normal = Rotate90DegreesClockwise(tangent) * kCableWidth / 2 / Length(tangent);
           length += Length(point - last_point);
           last_point = point;
-          vertex_vector.push_back(point - normal);
-          bounds.ExpandToInclude(vertex_vector.back());
-          vertex_vector.push_back(Vec2(-1, length));
-          vertex_vector.push_back(point + normal);
-          bounds.ExpandToInclude(vertex_vector.back());
-          vertex_vector.push_back(Vec2(1, length));
+          Vec2 left = point - normal;
+          Vec2 right = point + normal;
+          bounds.ExpandToInclude(left);
+          bounds.ExpandToInclude(right);
+          vertex_vector.push_back({
+              .coords = left,
+              .uv = Vec2(-1, length),
+              .tangent = tangent,
+          });
+          vertex_vector.push_back({
+              .coords = right,
+              .uv = Vec2(1, length),
+              .tangent = tangent,
+          });
         }
       }
     } while (SkPath::kDone_Verb != verb);
@@ -613,14 +694,17 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
     float plug_width_pixels = canvas.getTotalMatrix().mapRadius(10);
     auto uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
     auto vertex_buffer =
-        SkMeshes::MakeVertexBuffer(vertex_vector.data(), vertex_vector.size() * sizeof(Vec2));
+        SkMeshes::MakeVertexBuffer(vertex_vector.data(), vertex_vector.size() * sizeof(VertexInfo));
     sk_sp<SkShader> cable_weave =
         CableWeave()->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
                                  SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-    SkMesh::ChildPtr children[] = {cable_weave};
+    sk_sp<SkShader> cable_weave_normal = CableWeaveNormal()->makeRawShader(
+        SkTileMode::kRepeat, SkTileMode::kRepeat,
+        SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+    SkMesh::ChildPtr children[] = {cable_weave, cable_weave_normal};
     auto mesh_result =
         SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
-                     vertex_vector.size() / 2, 0, uniforms, {children, 1}, bounds);
+                     vertex_vector.size(), 0, uniforms, {children, 2}, bounds);
     if (!mesh_result.error.isEmpty()) {
       ERROR << "Error creating mesh: " << mesh_result.error.c_str();
     } else {
@@ -667,16 +751,6 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       }
     }
     p.setIsVolatile(true);
-    canvas.drawPath(p, cable_paint);
-    SkPaint cable_paint2;
-    cable_paint2.setStyle(SkPaint::kStroke_Style);
-    cable_paint2.setStrokeWidth(0.002);
-    cable_paint2.setAntiAlias(true);
-    cable_paint2.setColor(0xff444444);
-    cable_paint2.setMaskFilter(
-        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0005, true));
-    canvas.drawPath(p, cable_paint2);
-
     DrawCable(ctx, state, p);
   }
 

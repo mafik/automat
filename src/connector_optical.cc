@@ -468,8 +468,8 @@ static sk_sp<SkImage> MakeImageFromAsset(fs::VFile& asset) {
   return image;
 }
 
-static sk_sp<SkImage>& CableWeave() {
-  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_webp);
+static sk_sp<SkImage>& CableWeaveColor() {
+  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_color_webp);
   return image;
 }
 
@@ -533,40 +533,38 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
       const float kCableWidth = 0.002;
 
       uniform float plug_width_pixels;
-      uniform shader cable_weave;
+      uniform shader cable_weave_color;
       uniform shader cable_weave_normal;
 
       float2 main(const Varyings v, out float4 color) {
-        vec3 lightDir = vec3(0, sqrt(2)/2, sqrt(2)/2); // normalized vector pointing from current fragment towards the light
+        vec3 lightDir = normalize(vec3(0, 1, 1)); // normalized vector pointing from current fragment towards the light
         float h = sqrt(1 - v.uv.x * v.uv.x );
-        vec3 worldCoords = vec3(v.position.x, v.position.y, h * kCableWidth / 2);
-        vec2 tangent = normalize(v.tangent);
         float angle = atan(h, v.uv.x);
-        vec2 texCoord = vec2(asin(v.uv.x) / (PI / 2), v.uv.y / kCableWidth) / 4 * 1024;
-        vec3 n = normalize(cable_weave_normal.eval(texCoord).rgb * 2 - 1);
 
-        // TODO: Use proper binormal calculation
-        vec3 normal = vec3(
-          cos(angle) * tangent.y + n.x * tangent.y - n.y * tangent.x,
-          -cos(angle) * tangent.x - n.x * tangent.x - n.y * tangent.y, h);
-        normal = normalize(normal);
+        vec3 T = vec3(normalize(v.tangent), 0);
+        vec3 N = normalize(vec3(cos(angle) * T.y, -cos(angle) * T.x, h));
+        vec3 B = cross(T, N);
+        float3x3 TBN = float3x3(T, B, N);
+        float3x3 TBN_inv = transpose(TBN);
+
+        vec2 texCoord = vec2(asin(v.uv.x) / (PI / 2) + 1, v.uv.y / kCableWidth) * 256;
+
+        vec3 normalTanSpace = normalize(cable_weave_normal.eval(texCoord).yxz * 2 - 1 + vec3(0, 0, 0.5)); // already in tangent space
+        normalTanSpace.x = -normalTanSpace.x;
+        vec3 lightDirTanSpace = normalize(TBN_inv * lightDir);
+        vec3 viewDirTanSpace = normalize(TBN_inv * vec3(0, 0, 1));
+
+        vec3 normal = normalize(TBN * normalTanSpace);
         
-        color.rgba = cable_weave.eval(texCoord).rgba;
+        color.rgba = cable_weave_color.eval(texCoord).rgba;
         color.rgb = color.rgb * 4;
-        float light = max(dot(normal, lightDir), 0);
+        float light = max(dot(normalTanSpace, lightDirTanSpace), 0);
         vec3 ambient = vec3(0.1, 0.1, 0.2);
         color.rgb = light * color.rgb + ambient * color.rgb;
 
-        color.rgb += pow(length(normal.xy), 8) * vec3(0.9, 0.9, 0.9) * 0.5;
+        color.rgb += pow(length(normal.xy), 8) * vec3(0.9, 0.9, 0.9) * 0.5; // rim lighting
 
-        color.rgb += pow(max(dot(reflect(-lightDir, normal), vec3(0, 0, 1)), 0), 3) * vec3(0.4, 0.4, 0.35);
-
-        // n.x -> pointing right
-        // n.y -> pointing down
-        // tangent.x -> 1 when cable is pointing right, -1 when left
-        // tangent.y -> 1 when cable is pointing up, -1 when down
-        // color.rgb = normal;
-        // color.rgb = color.rgb * 0.5 + 0.5;
+        color.rgb += pow(max(dot(reflect(-lightDirTanSpace, normalTanSpace), viewDirTanSpace), 0), 10) * vec3(0.4, 0.4, 0.35);
         return v.position;
       }
     )");
@@ -695,9 +693,9 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
     auto uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
     auto vertex_buffer =
         SkMeshes::MakeVertexBuffer(vertex_vector.data(), vertex_vector.size() * sizeof(VertexInfo));
-    sk_sp<SkShader> cable_weave =
-        CableWeave()->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
-                                 SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+    sk_sp<SkShader> cable_weave = CableWeaveColor()->makeShader(
+        SkTileMode::kRepeat, SkTileMode::kRepeat,
+        SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
     sk_sp<SkShader> cable_weave_normal = CableWeaveNormal()->makeRawShader(
         SkTileMode::kRepeat, SkTileMode::kRepeat,
         SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));

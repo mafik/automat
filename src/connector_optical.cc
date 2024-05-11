@@ -540,15 +540,15 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
       float2 main(const Varyings v, out float4 color) {
         vec3 lightDir = normalize(vec3(0, 1, 1)); // normalized vector pointing from current fragment towards the light
         float h = sqrt(1 - v.uv.x * v.uv.x );
-        float angle = atan(h, v.uv.x);
+        float angle = acos(v.uv.x);
 
         vec3 T = vec3(normalize(v.tangent), 0);
-        vec3 N = normalize(vec3(cos(angle) * T.y, -cos(angle) * T.x, h));
+        vec3 N = normalize(vec3(v.uv.x * T.y, -v.uv.x * T.x, h));
         vec3 B = cross(T, N);
         float3x3 TBN = float3x3(T, B, N);
         float3x3 TBN_inv = transpose(TBN);
 
-        vec2 texCoord = vec2(asin(v.uv.x) / (PI / 2) + 1, v.uv.y / kCableWidth) * 256;
+        vec2 texCoord = vec2(-angle / PI, v.uv.y / kCableWidth / 2) * 512;
 
         vec3 normalTanSpace = normalize(cable_weave_normal.eval(texCoord).yxz * 2 - 1 + vec3(0, 0, 0.5)); // already in tangent space
         normalTanSpace.x = -normalTanSpace.x;

@@ -464,17 +464,19 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
 static sk_sp<SkImage> MakeImageFromAsset(fs::VFile& asset) {
   auto& content = asset.content;
   auto data = SkData::MakeWithoutCopy(content.data(), content.size());
-  auto image = SkImages::DeferredFromEncodedData(data, SkAlphaType::kUnpremul_SkAlphaType);
+  auto image = SkImages::DeferredFromEncodedData(data);
   return image;
 }
 
 static sk_sp<SkImage>& CableWeaveColor() {
-  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_color_webp);
+  static auto image =
+      MakeImageFromAsset(embedded::assets_cable_weave_color_webp)->withDefaultMipmaps();
   return image;
 }
 
 static sk_sp<SkImage>& CableWeaveNormal() {
-  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_normal_webp);
+  static auto image =
+      MakeImageFromAsset(embedded::assets_cable_weave_normal_webp)->withDefaultMipmaps();
   return image;
 }
 
@@ -693,13 +695,13 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
     auto uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
     auto vertex_buffer =
         SkMeshes::MakeVertexBuffer(vertex_vector.data(), vertex_vector.size() * sizeof(VertexInfo));
-    sk_sp<SkShader> cable_weave = CableWeaveColor()->makeShader(
+    sk_sp<SkShader> cable_weave_color = CableWeaveColor()->makeShader(
         SkTileMode::kRepeat, SkTileMode::kRepeat,
         SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
     sk_sp<SkShader> cable_weave_normal = CableWeaveNormal()->makeRawShader(
         SkTileMode::kRepeat, SkTileMode::kRepeat,
         SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-    SkMesh::ChildPtr children[] = {cable_weave, cable_weave_normal};
+    SkMesh::ChildPtr children[] = {cable_weave_color, cable_weave_normal};
     auto mesh_result =
         SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
                      vertex_vector.size(), 0, uniforms, {children, 2}, bounds);

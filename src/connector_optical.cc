@@ -482,9 +482,8 @@ static sk_sp<SkImage>& CableWeaveNormal() {
 
 void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
   auto& canvas = ctx.canvas;
-  Rect clip = canvas.getLocalClipBounds();
+  Rect clip = canvas.getLocalClipBounds().makeOutset(kCableWidth / 2, kCableWidth / 2);
   const Rect& path_bounds = path.getBounds();
-  // TODO: grow path_bounds by the cable width/2
   if (!clip.sk.intersects(path_bounds.sk)) {
     return;
   }

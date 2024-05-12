@@ -5,6 +5,7 @@
 #include <include/core/SkImage.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMesh.h>
+#include <include/core/SkSamplingOptions.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
 
@@ -14,7 +15,6 @@
 #include "arcline.hh"
 #include "font.hh"
 #include "gui_constants.hh"
-#include "include/core/SkSamplingOptions.h"
 #include "math.hh"
 #include "svg.hh"
 

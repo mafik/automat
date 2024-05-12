@@ -197,10 +197,19 @@ if False:
     debug.compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
     debug.link_args += ['-fsanitize=address']
 
-# Ubuntu 20.04 has some troubles when statically linking to Vulkan
+# Static linking to Vulkan on Linux seems to fail because the dynamically loaded libc / pthread is not properly initialized
+# by dlopen. It seems that glibc is closely coupled with ld.
+# Note that this problem might disappear when executed under debugger because they might be initialized when debugger ld runs.
+# Some discussion can be found here: https://www.openwall.com/lists/musl/2012/12/08/4
+# Most online discussions wrongly claim its nonsensical to call dlopen from a static binary because this loses the static linking benefits.
+# It is in fact useful, for example because it might allow Automat to bundle its dependencies but still use the system's vulkan drivers.
+# Anyway there is no clean, officially supported solution to dlopen from a static binary on Linux :(
+# A potential, slightly hacky workaround might be found here: https://github.com/pfalcon/foreign-dlopen/tree/master
+# For the time being we disable static linking on Linux and instead statically link everything except libm & libc (they seem to be coupled).
 if platform == 'linux':
     base.compile_args = [x for x in base.compile_args if x != '-static']
     base.link_args = [x for x in base.link_args if x != '-static']
+    base.link_args += ['-Wl,-Bstatic', '-static-libstdc++', '-lpthread', '-static-libgcc', '-ldl', '-Wl,-Bdynamic']
 
 
 if 'g++' in compiler and 'clang' not in compiler:

@@ -6,7 +6,7 @@ import build
 RAPIDJSON_ROOT = fs_utils.build_dir / 'rapidjson'
 RAPIDJSON_INCLUDE = RAPIDJSON_ROOT / 'include'
 
-build.default_compile_args += ['-I', RAPIDJSON_INCLUDE]
+build.base.compile_args += ['-I', RAPIDJSON_INCLUDE]
 
 def hook_recipe(recipe):
   recipe.add_step(

@@ -106,7 +106,7 @@ class File:
                 self.direct_includes.append(str(dep))
 
             match = re.match(
-                r'^#pragma maf add (?P<build_type>debug|release|) ?(?P<target>link|compile|run) argument "(?P<arg>.+)"', line)
+                r'^#pragma maf add (?P<build_type>debug|release|fast|) ?(?P<target>link|compile|run) argument "(?P<arg>.+)"', line)
             if match:
                 build_type, target, arg = match.groups()
                 if target == 'link':

@@ -13,17 +13,83 @@ from dataclasses import dataclass
 from sys import platform
 
 
+class BuildType:
+    def __init__(self, name, base=None):
+        self.name = name
+        self.name_lower = name.lower()
+        self.base = base
+        self.compile_args = [f'-I{self.PREFIX()}/include']
+        self.link_args = [f'-L{self.PREFIX()}/lib']
+        self.PREFIX().mkdir(parents=True, exist_ok=True)
+    
+    def rule_suffix(self):
+        global default
+        return '' if self == default else self.name_lower
+    
+    def PREFIX(self): # TODO: change this to a member variable
+        return (fs_utils.build_dir / 'prefix' / self.name).absolute()
+    
+    def CXXFLAGS(self):
+        return [str(x) for x in (self.base.CXXFLAGS() if self.base else []) + self.compile_args]
+
+    def CFLAGS(self):
+        return [x for x in self.CXXFLAGS() if x != '-std=gnu++2c']
+    
+    def LDFLAGS(self):
+        return [str(x) for x in (self.base.LDFLAGS() if self.base else []) + self.link_args]
+    
+    def __str__(self):
+        return self.name
+    
+    def __repr__(self):
+        return f'BuildType({self.name})'
+    
+
+# Common config for all build types
+base = BuildType('Base')
+
+base.compile_args += ['-static', '-std=gnu++2c', '-fcolor-diagnostics', '-ffunction-sections',
+    '-fdata-sections', '-funsigned-char', '-D_FORTIFY_SOURCE=2', '-Wformat',
+    '-Wformat-security', '-Werror=format-security', '-fno-plt', '-Wno-vla-extension', '-Wno-trigraphs']
+
+if 'CXXFLAGS' in os.environ:
+    base.compile_args += os.environ['CXXFLAGS'].split()
+
+base.link_args += ['-static', '-fuse-ld=lld']
+
+if 'LDFLAGS' in os.environ:
+    for flag in os.environ['LDFLAGS'].split():
+        base.link_args.append(f'-Wl,{flag}')
+
+# Build type optimized for fast incremental builds
+fast = BuildType('Fast', base)
+fast.compile_args += ['-O1']
+
+# Build type intended for practical usage (slow to build but very high performance)
+release = BuildType('Release', base)
+release.compile_args += ['-O3', '-DNDEBUG', '-flto', '-fstack-protector']
+release.link_args += ['-flto']
+
+# Build type intended for debugging
+debug = BuildType('Debug', base)
+debug.compile_args += ['-O0', '-g', '-D_DEBUG', '-fno-omit-frame-pointer']
+
+default = fast
+
+types = [fast, release, debug]
+
+
 class ObjectFile:
     path: Path
     deps: set[src.File]
     source: src.File
     compile_args: list[str]
-    build_type: str
+    build_type: BuildType
 
     def __init__(self, path: Path):
         self.path = path
         self.deps = set()
-        self.build_type = ''
+        self.build_type = default
         self.compile_args = []
 
     def __str__(self) -> str:
@@ -38,14 +104,14 @@ class Binary:
     objects: list[ObjectFile]
     link_args: list[str]
     run_args: list[str]
-    build_type: str
+    build_type: BuildType
 
     def __init__(self, path: Path):
         self.path = path
         self.objects = []
         self.link_args = []
         self.run_args = []
-        self.build_type = ''
+        self.build_type = default
 
     def __str__(self) -> str:
         return str(self.path)
@@ -54,17 +120,15 @@ class Binary:
         return f'Binary({self.path}, {self.objects}, {self.link_args}, {self.run_args}, {self.build_type})'
 
 
-build_type_list = ('', 'debug', 'release')
-
 OBJ_DIR = fs_utils.build_dir / 'obj'
 OBJ_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def obj_path(src_path: Path, build_type: str = '') -> Path:
-    if build_type:
-        return OBJ_DIR / (build_type + '_' + src_path.stem + '.o')
-    else:
+def obj_path(src_path: Path, build_type: BuildType = default) -> Path:
+    if build_type == default:
         return OBJ_DIR / (src_path.stem + '.o')
+    else:
+        return OBJ_DIR / (build_type.name_lower + '_' + src_path.stem + '.o')
     
 def libname(name):
     return f'{name}.lib' if platform == 'win32' else f'lib{name}.a'
@@ -75,23 +139,23 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
 
     objs: dict[str, ObjectFile] = dict()
     sources = [f for f in srcs.values() if f.is_source()]
-    for src_file, build_type in product(sources, build_type_list):
+    for src_file, build_type in product(sources, types):
         f_obj = ObjectFile(obj_path(src_file.path, build_type))
         objs[str(f_obj.path)] = f_obj
         f_obj.deps = set(src_file.transitive_includes)
         f_obj.deps.add(src_file)
         f_obj.source = src_file
         f_obj.build_type = build_type
-        f_obj.compile_args += src_file.build_compile_args(build_type)
+        f_obj.compile_args += src_file.build_compile_args(build_type.name_lower)
         for inc in src_file.transitive_includes:
-            f_obj.compile_args += inc.build_compile_args(build_type)
+            f_obj.compile_args += inc.build_compile_args(build_type.name_lower)
 
     binaries: list[Binary] = []
     main_sources = [f for f in sources if f.main]
-    for src_file, build_type in product(main_sources, build_type_list):
+    for src_file, build_type in product(main_sources, types):
         bin_name = src_file.path.stem
-        if build_type:
-            bin_name = build_type + '_' + bin_name
+        if build_type != default:
+            bin_name = build_type.name_lower + '_' + bin_name
         bin_path = fs_utils.build_dir / bin_name
         if binary_extension:
             bin_path = bin_path.with_suffix(binary_extension)
@@ -106,8 +170,8 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
             if f in visited:
                 continue
             visited.add(f)
-            bin_file.link_args += f.build_link_args(build_type)
-            bin_file.run_args += f.build_run_args(build_type)
+            bin_file.link_args += f.build_link_args(build_type.name_lower)
+            bin_file.run_args += f.build_run_args(build_type.name_lower)
             if f_obj := objs.get(str(obj_path(f.path, build_type)), None):
                 if f_obj not in bin_file.objects:
                     bin_file.objects.append(f_obj)
@@ -121,61 +185,37 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
 compiler = os.environ['CXX'] = os.environ['CXX'] if 'CXX' in os.environ else 'clang++'
 compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else 'clang'
 
-default_compile_args = [
-    '-static', '-O1',
-    '-std=gnu++2c', '-fcolor-diagnostics', '-ffunction-sections',
-    '-fdata-sections', '-funsigned-char', '-D_FORTIFY_SOURCE=2', '-Wformat',
-    '-Wformat-security', '-Werror=format-security', '-fno-plt', '-Wno-vla-extension', '-Wno-trigraphs'
-]
-release_compile_args = [
-    '-O3',
-    '-DNDEBUG',
-    '-flto',
-    '-fstack-protector',
-]
-debug_compile_args = ['-O0', '-g', '-D_DEBUG', '-fno-omit-frame-pointer']
-
-default_link_args = ['-static', '-fuse-ld=lld']
-release_link_args = ['-flto']
-debug_link_args = []
-
-if 'CXXFLAGS' in os.environ:
-    default_compile_args += os.environ['CXXFLAGS'].split()
-
-if 'LDFLAGS' in os.environ:
-    for flag in os.environ['LDFLAGS'].split():
-        default_link_args.append(f'-Wl,{flag}')
-
 if platform == 'win32':
-    default_compile_args += ['-D_USE_MATH_DEFINES']
-    default_link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
-    debug_link_args += ['-Wl,/debug']
+    base.compile_args += ['-D_USE_MATH_DEFINES']
+    base.link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
+    debug.link_args += ['-Wl,/debug']
 else:
-    default_link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none']
-    release_link_args += ['-Wl,--strip-all', '-Wl,-z,relro', '-Wl,-z,now']
+    base.link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none']
+    release.link_args += ['-Wl,--strip-all', '-Wl,-z,relro', '-Wl,-z,now']
 
 if False:
-    debug_compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
-    debug_link_args += ['-fsanitize=address']
+    debug.compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
+    debug.link_args += ['-fsanitize=address']
 
 # Ubuntu 20.04 has some troubles when statically linking to Vulkan
 if platform == 'linux':
-    default_compile_args = [x for x in default_compile_args if x != '-static']
-    default_link_args = [x for x in default_link_args if x != '-static']
+    base.compile_args = [x for x in base.compile_args if x != '-static']
+    base.link_args = [x for x in base.link_args if x != '-static']
+
 
 if 'g++' in compiler and 'clang' not in compiler:
     # GCC doesn't support -fcolor-diagnostics
-    default_compile_args.remove('-fcolor-diagnostics')
+    base.compile_args.remove('-fcolor-diagnostics')
 
 if 'OPENWRT_BUILD' in os.environ:
     # OpenWRT has issues with -static C++ builds
     # https://github.com/openwrt/openwrt/issues/6710
-    default_link_args.append('-lgcc_pic')
+    base.link_args.append('-lgcc_pic')
     # OpenWRT doesn't come with lld
-    default_link_args.remove('-fuse-ld=lld')
+    base.link_args.remove('-fuse-ld=lld')
 
 if args.verbose:
-    default_compile_args.append('-v')
+    base.compile_args.append('-v')
 
 @dataclass
 class CompilationEntry:
@@ -209,14 +249,10 @@ def recipe() -> make.Recipe:
 
     compilation_db = []
     for obj in objs:
-        pargs = [compiler] + default_compile_args
-        if obj.build_type == 'debug':
-            pargs += debug_compile_args
-        elif obj.build_type == 'release':
-            pargs += release_compile_args
         if obj.source.path.name.endswith('.c'):
-            pargs[0] = compiler_c
-            pargs = [x for x in pargs if x != '-std=gnu++2c']
+            pargs = [compiler_c] + obj.build_type.CFLAGS()
+        else:
+            pargs = [compiler] + obj.build_type.CXXFLAGS()
 
         pargs += obj.compile_args
         pargs += [str(obj.source.path)]
@@ -233,11 +269,7 @@ def recipe() -> make.Recipe:
     for bin in bins:
         pargs = [compiler]
         pargs += [str(obj.path) for obj in bin.objects]
-        pargs += default_link_args
-        if bin.build_type == 'debug':
-            pargs += debug_link_args
-        elif bin.build_type == 'release':
-            pargs += release_link_args
+        pargs += bin.build_type.LDFLAGS()
         pargs += bin.link_args
         pargs += ['-o', str(bin.path)]
         builder = functools.partial(make.Popen, pargs)

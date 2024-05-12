@@ -12,8 +12,7 @@ int main() { return WinMain(GetModuleHandle(NULL), NULL, GetCommandLine(), SW_SH
 
 #include "linux_main.hh"
 
-#pragma comment(lib, "fontconfig")
-#pragma comment(lib, "freetype")
+#pragma comment(lib, "freetype2")
 
 int main(int argc, char* argv[]) { return LinuxMain(argc, argv); }
 

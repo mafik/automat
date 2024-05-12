@@ -22,6 +22,7 @@ default_gn_args += ' skia_use_system_libpng=false'
 default_gn_args += ' skia_use_system_libwebp=false'
 default_gn_args += ' skia_use_system_zlib=false'
 default_gn_args += ' skia_use_system_harfbuzz=false'
+default_gn_args += ' skia_use_system_freetype2=false'
 
 @dataclass
 class BuildVariant:

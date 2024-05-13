@@ -10,6 +10,7 @@
 #include <include/effects/SkRuntimeEffect.h>
 
 #include <cmath>
+#include <numbers>
 
 #include "../build/generated/embedded.hh"
 #include "arcline.hh"
@@ -480,45 +481,225 @@ static sk_sp<SkImage>& CableWeaveNormal() {
   return image;
 }
 
+struct StrokeToMesh {
+  struct VertexInfo {
+    Vec2 coords;
+    Vec2 uv;
+    Vec2 tangent;
+  } __attribute__((packed));
+
+  Vec<VertexInfo> vertex_vector;
+  Rect bounds = Rect(HUGE_VALF, HUGE_VALF, -HUGE_VALF, -HUGE_VALF);
+  float length = 0;
+
+  static const SkMeshSpecification::Attribute kAttributes[3];
+  static const SkMeshSpecification::Varying kVaryings[3];
+
+  virtual float GetWidth() const = 0;
+  virtual bool IsConstantWidth() const { return false; }
+
+  void Convert(const SkPath& path, float length_limit = HUGE_VALF) {
+    SkPath::Iter iter(path, false);
+    SkPath::Verb verb;
+    do {
+      SkPoint points[4];
+      verb = iter.next(points);
+      if (SkPath::kConic_Verb == verb) {
+        float weight = iter.conicWeight();
+        float angle = acosf(weight) * 2 * 180 / M_PI;
+        int n_steps = ceil(angle / 5);
+        Vec2 last_point = points[0];
+        for (int step = 0; step <= n_steps; step++) {
+          float t = (float)step / n_steps;
+          Vec2 point = conic(points[0], points[1], points[2], weight, t);
+          float delta_length = Length(point - last_point);
+          bool limit_reached = false;
+          if (length + delta_length >= length_limit) {
+            t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
+            point = conic(points[0], points[1], points[2], weight, t);
+            length = length_limit;
+            limit_reached = true;
+          } else {
+            length += delta_length;
+          }
+          Vec2 tangent = -conic_tangent(points[0], points[1], points[2], weight, t);
+          Vec2 normal = Rotate90DegreesClockwise(tangent) * GetWidth() / 2 / Length(tangent);
+          last_point = point;
+          Vec2 left = point - normal;
+          Vec2 right = point + normal;
+          bounds.ExpandToInclude(left);
+          bounds.ExpandToInclude(right);
+          vertex_vector.push_back({
+              .coords = left,
+              .uv = Vec2(-1, length),
+              .tangent = tangent,
+          });
+          vertex_vector.push_back({
+              .coords = right,
+              .uv = Vec2(1, length),
+              .tangent = tangent,
+          });
+          if (limit_reached) {
+            return;
+          }
+        }
+
+      } else if (SkPath::kMove_Verb == verb) {
+        // pass
+      } else if (SkPath::kLine_Verb == verb) {
+        Vec2 diff = points[1] - points[0];
+        float segment_length = Length(diff);
+        diff = diff / std::max(segment_length, 0.00001f);
+
+        int n_steps = IsConstantWidth() ? 1 : std::max<int>(1, ceil(segment_length / 0.002));
+        for (int step = 0; step <= n_steps; ++step) {
+          float t = (float)step / n_steps;
+
+          float delta_length = step ? segment_length / n_steps : 0;
+          bool limit_reached = false;
+          if (length + delta_length >= length_limit) {
+            t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
+            length = length_limit;
+            limit_reached = true;
+          } else {
+            length += delta_length;
+          }
+
+          Vec2 point = points[0] * (1 - t) + points[1] * t;
+          Vec2 normal = Rotate90DegreesClockwise(diff) * GetWidth() / 2;
+          Vec2 left = point - normal;
+          Vec2 right = point + normal;
+          bounds.ExpandToInclude(left);
+          bounds.ExpandToInclude(right);
+          vertex_vector.push_back({
+              .coords = left,
+              .uv = Vec2(-1, length),
+              .tangent = diff,
+          });
+          vertex_vector.push_back({
+              .coords = right,
+              .uv = Vec2(1, length),
+              .tangent = diff,
+          });
+          if (limit_reached) {
+            return;
+          }
+        }
+      } else if (SkPath::kCubic_Verb == verb) {
+        Vec2 p0 = points[0];
+        Vec2 p1 = points[1];
+        Vec2 p2 = points[2];
+        Vec2 p3 = points[3];
+        constexpr int n_steps = 8;
+        Vec2 last_point = p0;
+        for (int step = 0; step <= n_steps; step++) {
+          float t = (float)step / n_steps;
+          Vec2 point = p0 * powf(1 - t, 3) + p1 * 3 * powf(1 - t, 2) * t +
+                       p2 * 3 * (1 - t) * t * t + p3 * powf(t, 3);
+
+          float delta_length = Length(point - last_point);
+          bool limit_reached = false;
+          if (length + delta_length >= length_limit) {
+            t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
+            point = p0 * powf(1 - t, 3) + p1 * 3 * powf(1 - t, 2) * t + p2 * 3 * (1 - t) * t * t +
+                    p3 * powf(t, 3);
+            length = length_limit;
+            limit_reached = true;
+          } else {
+            length += delta_length;
+          }
+
+          Vec2 tangent = p0 * -3 * powf(1 - t, 2) + p1 * (3 * powf(1 - t, 2) - 6 * t * (1 - t)) +
+                         p2 * (6 * t * (1 - t) - 3 * t * t) + p3 * 3 * powf(t, 2);
+          Vec2 normal = Rotate90DegreesClockwise(tangent) * GetWidth() / 2 / Length(tangent);
+          last_point = point;
+          Vec2 left = point - normal;
+          Vec2 right = point + normal;
+          bounds.ExpandToInclude(left);
+          bounds.ExpandToInclude(right);
+          vertex_vector.push_back({
+              .coords = left,
+              .uv = Vec2(-1, length),
+              .tangent = tangent,
+          });
+          vertex_vector.push_back({
+              .coords = right,
+              .uv = Vec2(1, length),
+              .tangent = tangent,
+          });
+          if (limit_reached) {
+            return;
+          }
+        }
+      }
+    } while (SkPath::kDone_Verb != verb);
+  }
+
+  sk_sp<SkMesh::VertexBuffer> BuildBuffer() {
+    return SkMeshes::MakeVertexBuffer(vertex_vector.data(),
+                                      vertex_vector.size() * sizeof(VertexInfo));
+  }
+};
+
+const SkMeshSpecification::Attribute StrokeToMesh::kAttributes[3] = {
+    {
+        .type = SkMeshSpecification::Attribute::Type::kFloat2,
+        .offset = 0,
+        .name = SkString("position"),
+    },
+    {
+        .type = SkMeshSpecification::Attribute::Type::kFloat2,
+        .offset = 8,
+        .name = SkString("uv"),
+    },
+    {
+        .type = SkMeshSpecification::Attribute::Type::kFloat2,
+        .offset = 16,
+        .name = SkString("tangent"),
+    },
+};
+
+const SkMeshSpecification::Varying StrokeToMesh::kVaryings[3] = {
+    {
+        .type = SkMeshSpecification::Varying::Type::kFloat2,
+        .name = SkString("position"),
+    },
+    {
+        .type = SkMeshSpecification::Varying::Type::kFloat2,
+        .name = SkString("uv"),
+    },
+    {
+        .type = SkMeshSpecification::Varying::Type::kFloat2,
+        .name = SkString("tangent"),
+    }};
+
+struct StrokeToCable : StrokeToMesh {
+  float GetWidth() const override { return kCableWidth; }
+  bool IsConstantWidth() const override { return true; }
+};
+
+struct StrokeToStrainReliever : StrokeToMesh {
+  static constexpr float kLength = 15_mm;
+  static constexpr float kTopWidth = kCableWidth + 1_mm;
+  static constexpr float kBottomWidth = kCasingWidth;
+
+  float GetWidth() const override {
+    // Interpolate between kTopWidth & kBottomWidth in a sine-like fashion
+    float a = length / kLength * std::numbers::pi;  // scale position to [0, pi]
+    float t = cos(a) * 0.5 + 0.5;                   // map cos to [0, 1] range
+    return t * kBottomWidth + (1 - t) * kTopWidth;
+  }
+};
+
 void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
   auto& canvas = ctx.canvas;
-  Rect clip = canvas.getLocalClipBounds().makeOutset(kCableWidth / 2, kCableWidth / 2);
-  const Rect& path_bounds = path.getBounds();
+  Rect clip = canvas.getLocalClipBounds();
+  Rect path_bounds = path.getBounds().makeOutset(kCableWidth / 2, kCableWidth / 2);
   if (!clip.sk.intersects(path_bounds.sk)) {
     return;
   }
   // TODO: adjust the tesselation density based on the zoom level
 
-  SkMeshSpecification::Attribute attributes[3] = {
-      {
-          .type = SkMeshSpecification::Attribute::Type::kFloat2,
-          .offset = 0,
-          .name = SkString("position"),
-      },
-      {
-          .type = SkMeshSpecification::Attribute::Type::kFloat2,
-          .offset = 8,
-          .name = SkString("uv"),
-      },
-      {
-          .type = SkMeshSpecification::Attribute::Type::kFloat2,
-          .offset = 16,
-          .name = SkString("tangent"),
-      },
-  };
-  SkMeshSpecification::Varying varyings[3] = {
-      {
-          .type = SkMeshSpecification::Varying::Type::kFloat2,
-          .name = SkString("position"),
-      },
-      {
-          .type = SkMeshSpecification::Varying::Type::kFloat2,
-          .name = SkString("uv"),
-      },
-      {
-          .type = SkMeshSpecification::Varying::Type::kFloat2,
-          .name = SkString("tangent"),
-      }};
   auto vs = SkString(R"(
       Varyings main(const Attributes attrs) {
         Varyings v;
@@ -533,7 +714,6 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
 
       const float kCableWidth = 0.002;
 
-      uniform float plug_width_pixels;
       uniform shader cable_weave_color;
       uniform shader cable_weave_normal;
 
@@ -569,189 +749,67 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
         return v.position;
       }
     )");
-  struct VertexInfo {
-    Vec2 coords;
-    Vec2 uv;
-    Vec2 tangent;
-  } __attribute__((packed));
-  auto spec_result = SkMeshSpecification::Make(attributes, sizeof(VertexInfo), varyings, vs, fs);
+  auto spec_result = SkMeshSpecification::Make(
+      StrokeToMesh::kAttributes, sizeof(StrokeToMesh::VertexInfo), StrokeToMesh::kVaryings, vs, fs);
   if (!spec_result.error.isEmpty()) {
     ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-  } else {
-    Vec<VertexInfo> vertex_vector;
-    Size verb_count = path.countVerbs();
-    U8 verbs[verb_count];
-    path.getVerbs(verbs, verb_count);
-    int verb_i = 0;
-    int point_i = 0;
-    float length = 0;
-    Rect bounds = Rect(HUGE_VALF, HUGE_VALF, -HUGE_VALF, -HUGE_VALF);
-    SkPath::Iter iter(path, false);
-    SkPath::Verb verb;
-    do {
-      SkPoint points[4];
-      verb = iter.next(points);
-      if (SkPath::kConic_Verb == verb) {
-        float weight = iter.conicWeight();
-        float angle = acosf(weight) * 2 * 180 / M_PI;
-        int n_steps = ceil(angle / 5);
-        Vec2 last_point = points[0];
-        for (int step = 0; step <= n_steps; step++) {
-          float t = (float)step / n_steps;
-          Vec2 point = conic(points[0], points[1], points[2], weight, t);
-          Vec2 tangent = -conic_tangent(points[0], points[1], points[2], weight, t);
-          Vec2 normal = Rotate90DegreesClockwise(tangent) * kCableWidth / 2 / Length(tangent);
-          length += Length(point - last_point);
-          last_point = point;
-          Vec2 left = point - normal;
-          Vec2 right = point + normal;
-          bounds.ExpandToInclude(left);
-          bounds.ExpandToInclude(right);
-          vertex_vector.push_back({
-              .coords = left,
-              .uv = Vec2(-1, length),
-              .tangent = tangent,
-          });
-          vertex_vector.push_back({
-              .coords = right,
-              .uv = Vec2(1, length),
-              .tangent = tangent,
-          });
-        }
-
-      } else if (SkPath::kMove_Verb == verb) {
-        // pass
-      } else if (SkPath::kLine_Verb == verb) {
-        Vec2 diff = points[1] - points[0];
-        float segment_length = Length(diff);
-        Vec2 normal = Rotate90DegreesClockwise(diff) * kCableWidth / 2 / segment_length;
-
-        Vec2 left0 = points[0] - normal;
-        Vec2 right0 = points[0] + normal;
-        Vec2 left1 = points[1] - normal;
-        Vec2 right1 = points[1] + normal;
-        bounds.ExpandToInclude(left0);
-        bounds.ExpandToInclude(right0);
-        bounds.ExpandToInclude(left1);
-        bounds.ExpandToInclude(right1);
-
-        vertex_vector.push_back({
-            .coords = left0,
-            .uv = Vec2(-1, length),
-            .tangent = diff,
-        });
-        vertex_vector.push_back({
-            .coords = right0,
-            .uv = Vec2(1, length),
-            .tangent = diff,
-        });
-        vertex_vector.push_back({
-            .coords = left1,
-            .uv = Vec2(-1, length + segment_length),
-            .tangent = diff,
-        });
-        vertex_vector.push_back({
-            .coords = right1,
-            .uv = Vec2(1, length + segment_length),
-            .tangent = diff,
-        });
-        length += segment_length;
-      } else if (SkPath::kCubic_Verb == verb) {
-        Vec2 p0 = points[0];
-        Vec2 p1 = points[1];
-        Vec2 p2 = points[2];
-        Vec2 p3 = points[3];
-        constexpr int n_steps = 8;
-        Vec2 last_point = p0;
-        for (int step = 0; step <= n_steps; step++) {
-          float t = (float)step / n_steps;
-          Vec2 point = p0 * powf(1 - t, 3) + p1 * 3 * powf(1 - t, 2) * t +
-                       p2 * 3 * (1 - t) * t * t + p3 * powf(t, 3);
-          Vec2 tangent = p0 * -3 * powf(1 - t, 2) + p1 * (3 * powf(1 - t, 2) - 6 * t * (1 - t)) +
-                         p2 * (6 * t * (1 - t) - 3 * t * t) + p3 * 3 * powf(t, 2);
-          Vec2 normal = Rotate90DegreesClockwise(tangent) * kCableWidth / 2 / Length(tangent);
-          length += Length(point - last_point);
-          last_point = point;
-          Vec2 left = point - normal;
-          Vec2 right = point + normal;
-          bounds.ExpandToInclude(left);
-          bounds.ExpandToInclude(right);
-          vertex_vector.push_back({
-              .coords = left,
-              .uv = Vec2(-1, length),
-              .tangent = tangent,
-          });
-          vertex_vector.push_back({
-              .coords = right,
-              .uv = Vec2(1, length),
-              .tangent = tangent,
-          });
-        }
-      }
-    } while (SkPath::kDone_Verb != verb);
-
-    float plug_width_pixels = canvas.getTotalMatrix().mapRadius(10);
-    auto uniforms = SkData::MakeWithCopy(&plug_width_pixels, sizeof(plug_width_pixels));
-    auto vertex_buffer =
-        SkMeshes::MakeVertexBuffer(vertex_vector.data(), vertex_vector.size() * sizeof(VertexInfo));
-    sk_sp<SkShader> cable_weave_color = CableWeaveColor()->makeShader(
-        SkTileMode::kRepeat, SkTileMode::kRepeat,
-        SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-    sk_sp<SkShader> cable_weave_normal = CableWeaveNormal()->makeRawShader(
-        SkTileMode::kRepeat, SkTileMode::kRepeat,
-        SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-    SkMesh::ChildPtr children[] = {cable_weave_color, cable_weave_normal};
-    auto mesh_result =
-        SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
-                     vertex_vector.size(), 0, uniforms, {children, 2}, bounds);
-    if (!mesh_result.error.isEmpty()) {
-      ERROR << "Error creating mesh: " << mesh_result.error.c_str();
-    } else {
-      SkPaint default_paint;
-      default_paint.setColor(0xffffffff);
-      default_paint.setAntiAlias(true);
-      canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
-    }
+    return;
   }
+
+  StrokeToCable stroke_to_cable;
+  stroke_to_cable.Convert(path);
+
+  if (stroke_to_cable.vertex_vector.empty()) {
+    return;
+  }
+
+  auto vertex_buffer = stroke_to_cable.BuildBuffer();
+  sk_sp<SkShader> cable_weave_color = CableWeaveColor()->makeShader(
+      SkTileMode::kRepeat, SkTileMode::kRepeat,
+      SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+  sk_sp<SkShader> cable_weave_normal = CableWeaveNormal()->makeRawShader(
+      SkTileMode::kRepeat, SkTileMode::kRepeat,
+      SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+  SkMesh::ChildPtr children[] = {cable_weave_color, cable_weave_normal};
+  auto mesh_result = SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip,
+                                  vertex_buffer, stroke_to_cable.vertex_vector.size(), 0, nullptr,
+                                  {children, 2}, stroke_to_cable.bounds);
+  if (!mesh_result.error.isEmpty()) {
+    ERROR << "Error creating mesh: " << mesh_result.error.c_str();
+    return;
+  }
+  SkPaint default_paint;
+  default_paint.setColor(0xffffffff);
+  default_paint.setAntiAlias(true);
+  canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
 }
 
 void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
 
-  // Find the index of the last section that is part of the rubber sleeve
-  int rubber_sleeve_tail_i = std::min<int>(3, (int)state.sections.size() - 1);
-  bool rubber_touching_dispenser = rubber_sleeve_tail_i == state.sections.size() - 1;
-
-  // Draw the cable as a bezier curve
-  if (!rubber_touching_dispenser) {
-    SkPaint cable_paint;
-    cable_paint.setStyle(SkPaint::kStroke_Style);
-    cable_paint.setStrokeWidth(kCableWidth);
-    cable_paint.setAntiAlias(true);
-    cable_paint.setColor(0xff111111);
-
-    SkPath p;
-    if (state.stabilized) {
-      if (state.arcline) {
-        SkPath p2 = state.arcline->ToPath(false);
-        p.reverseAddPath(p2);
-      }
-    } else {
-      p.moveTo(state.sections[0].pos);
-      for (int i = 1; i < state.sections.size(); i++) {
-        Vec2 p1 = state.sections[i - 1].pos +
-                  Vec2::Polar(state.sections[i - 1].dir + state.sections[i - 1].true_dir_offset,
-                              state.sections[i - 1].distance / 3);
-        Vec2 p2 = state.sections[i].pos -
-                  Vec2::Polar(state.sections[i].dir + state.sections[i].true_dir_offset,
-                              state.sections[i].distance / 3);
-        p.cubicTo(p1, p2, state.sections[i].pos);
-      }
+  SkPath p;
+  if (state.stabilized) {
+    if (state.arcline) {
+      SkPath p2 = state.arcline->ToPath(false);
+      p.reverseAddPath(p2);
     }
-    p.setIsVolatile(true);
-    DrawCable(ctx, state, p);
+  } else {
+    p.moveTo(state.sections[0].pos);
+    for (int i = 1; i < state.sections.size(); i++) {
+      Vec2 p1 = state.sections[i - 1].pos +
+                Vec2::Polar(state.sections[i - 1].dir + state.sections[i - 1].true_dir_offset,
+                            state.sections[i - 1].distance / 3);
+      Vec2 p2 = state.sections[i].pos -
+                Vec2::Polar(state.sections[i].dir + state.sections[i].true_dir_offset,
+                            state.sections[i].distance / 3);
+      p.cubicTo(p1, p2, state.sections[i].pos);
+    }
   }
+  p.setIsVolatile(true);
+
+  // Draw the cable
+  DrawCable(ctx, state, p);
 
   canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
@@ -1006,80 +1064,6 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     }
   }
 
-  {  // Rubber cable holder
-    constexpr float kRubberWidth = 0.003;
-    constexpr float kRubberHeight = 0.015;
-    constexpr float kUpperCpOffset = kRubberHeight * 0.5;
-    constexpr float kTopCpOffset = kRubberWidth * 0.2;
-    float lower_cp_offset = kRubberHeight * 0.3;
-
-    Vec2 pts[6];
-    Vec2& left = pts[0];
-    Vec2& left_cp1 = pts[1];
-    Vec2& left_cp2 = pts[2];
-    Vec2& right = pts[3];
-    Vec2& right_cp1 = pts[4];
-    Vec2& right_cp2 = pts[5];
-    SkMatrix inverse;
-    if (rubber_sleeve_tail_i >= 0 && transform.invert(&inverse)) {
-      auto& p = state.sections[rubber_sleeve_tail_i];
-      Vec2 local_sleeve_top = inverse.mapPoint(p.pos);
-      float sleeve_top_dist = Length(Vec2(0, casing_top) - local_sleeve_top);
-      // 1 when cable is fully retracted, 0 when the rubber part of the connector is fully exposed
-      float flatten_factor = std::clamp<float>(1 - 2 * sleeve_top_dist / kRubberHeight, 0, 1);
-      float flatten_factor_sin = sin(flatten_factor * M_PI / 2);
-
-      lower_cp_offset *= (1 - flatten_factor_sin);
-
-      float rubber_width = std::lerp(kRubberWidth, kCasingWidth, flatten_factor_sin);
-
-      Vec2 side_offset = Vec2::Polar(p.dir + M_PI / 2, rubber_width / 2);
-      Vec2 upper_cp_offset =
-          Vec2::Polar(p.dir + M_PI, kUpperCpOffset * powf(1 - flatten_factor_sin, 2));
-      Vec2 top_cp_offset = Vec2::Polar(p.dir, kTopCpOffset);
-      left = p.pos + side_offset;
-      left_cp1 = left + upper_cp_offset;
-      left_cp2 = left + top_cp_offset;
-      right = p.pos - side_offset;
-      right_cp1 = right + top_cp_offset;
-      right_cp2 = right + upper_cp_offset;
-      inverse.mapPoints(&pts[0].sk, 6);
-    } else {
-      float sleeve_left = -kRubberWidth / 2;
-      float sleeve_right = kRubberWidth / 2;
-      float sleeve_top = kCasingHeight + kRubberHeight;
-      left = Vec2(sleeve_left, sleeve_top);
-      left_cp1 = Vec2(sleeve_left, sleeve_top - kUpperCpOffset);
-      left_cp2 = Vec2(sleeve_left, sleeve_top + kTopCpOffset);
-      right = Vec2(sleeve_right, sleeve_top);
-      right_cp1 = Vec2(sleeve_right, sleeve_top + kTopCpOffset);
-      right_cp2 = Vec2(sleeve_right, sleeve_top - kUpperCpOffset);
-    }
-    Vec2 bottom_left = Vec2(casing_left, casing_top);
-    Vec2 bottom_left_cp = bottom_left + Vec2(0, lower_cp_offset);
-    Vec2 bottom_right = Vec2(casing_right, casing_top);
-    Vec2 bottom_right_cp = bottom_right + Vec2(0, lower_cp_offset);
-    SkPath rubber_path;
-    rubber_path.moveTo(bottom_left);                      // bottom left
-    rubber_path.cubicTo(bottom_left_cp, left_cp1, left);  // upper left
-    rubber_path.cubicTo(left_cp2, right_cp1, right);      // upper right
-    rubber_path.cubicTo(right_cp2, bottom_right_cp,
-                        bottom_right);  // bottom right
-    rubber_path.close();
-
-    SkPaint dark_flat;
-    dark_flat.setAntiAlias(true);
-    dark_flat.setColor(0xff151515);
-    canvas.drawPath(rubber_path, dark_flat);
-
-    SkPaint lighter_inside;
-    lighter_inside.setAntiAlias(false);
-    lighter_inside.setMaskFilter(
-        SkMaskFilter::MakeBlur(SkBlurStyle::kInner_SkBlurStyle, 0.0010, true));
-    lighter_inside.setColor(0xff2a2a2a);
-    canvas.drawPath(rubber_path, lighter_inside);
-  }
-
   {  // Icon on the metal casing
     SkPath path = PathFromSVG(kNextShape);
     path.offset(0, 0.004);
@@ -1090,6 +1074,93 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   }
 
   canvas.restore();
+
+  {  // Rubber cable holder
+    auto vs = SkString(R"(
+      Varyings main(const Attributes attrs) {
+        Varyings v;
+        v.position = attrs.position;
+        v.uv = attrs.uv;
+        v.tangent = normalize(attrs.tangent);
+        return v;
+      }
+    )");
+    auto fs = SkString(embedded::assets_cable_strain_reliever_frag_sksl.content);
+    auto spec_result =
+        SkMeshSpecification::Make(StrokeToMesh::kAttributes, sizeof(StrokeToMesh::VertexInfo),
+                                  StrokeToMesh::kVaryings, vs, fs);
+    if (!spec_result.error.isEmpty()) {
+      ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
+      return;
+    }
+
+    StrokeToStrainReliever mesh_builder;
+    mesh_builder.Convert(p, StrokeToStrainReliever::kLength);
+    if (mesh_builder.vertex_vector.empty()) {
+      // Add two points on the left & right side of the connector - just so that we can build the
+      // ellipse cap.
+      mesh_builder.vertex_vector.push_back({
+          .coords = cable_end + Vec2(kCasingWidth / 2, 0),
+          .uv = Vec2(-1, 0),
+          .tangent = Vec2(0, 1),
+      });
+      mesh_builder.vertex_vector.push_back({
+          .coords = cable_end + Vec2(-kCasingWidth / 2, 0),
+          .uv = Vec2(1, 0),
+          .tangent = Vec2(0, 1),
+      });
+    }
+    // Add an ellipse cap at the end of the mesh
+    if (mesh_builder.vertex_vector.size() >= 2) {
+      auto& left = mesh_builder.vertex_vector[mesh_builder.vertex_vector.size() - 2];
+      auto& right = mesh_builder.vertex_vector[mesh_builder.vertex_vector.size() - 1];
+      Vec2 middle = (left.coords + right.coords) / 2;
+      Vec2 left_to_right = right.coords - left.coords;
+      Vec2 tangent = Normalize(left.tangent);
+      float width = Length(left_to_right);
+      float height = width / 8;
+      constexpr int n_steps = 10;
+      for (int i = 0; i < n_steps; ++i) {
+        float t = (float)i / n_steps;
+        auto mat = SkMatrix::RotateDeg(-t * 90);
+        auto mat2 = SkMatrix::RotateDeg(t * 90);
+        t = 1 - (1 - t) * (1 - t);
+        float step_width = sqrt(1 - t * t);
+        float step_height = height * t;
+        mesh_builder.vertex_vector.push_back({
+            .coords = middle - left_to_right * step_width / 2 + tangent * step_height,
+            .uv = Vec2(-step_width, left.uv.y + step_height),
+            .tangent = mat.mapPoint(tangent),
+        });
+        mesh_builder.bounds.ExpandToInclude(mesh_builder.vertex_vector.back().coords);
+        mesh_builder.vertex_vector.push_back({
+            .coords = middle + left_to_right * step_width / 2 + tangent * step_height,
+            .uv = Vec2(step_width, left.uv.y + step_height),
+            .tangent = mat2.mapPoint(tangent),
+        });
+        mesh_builder.bounds.ExpandToInclude(mesh_builder.vertex_vector.back().coords);
+      }
+      mesh_builder.vertex_vector.push_back({
+          .coords = middle + tangent * height,
+          .uv = Vec2(0, left.uv.y + height),
+          .tangent = SkMatrix::RotateDeg(90).mapPoint(tangent),
+      });
+      mesh_builder.bounds.ExpandToInclude(mesh_builder.vertex_vector.back().coords);
+
+      auto vertex_buffer = mesh_builder.BuildBuffer();
+      auto mesh_result =
+          SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
+                       mesh_builder.vertex_vector.size(), 0, nullptr, {}, mesh_builder.bounds);
+      if (!mesh_result.error.isEmpty()) {
+        ERROR << "Error creating mesh: " << mesh_result.error.c_str();
+      } else {
+        SkPaint default_paint;
+        default_paint.setColor(0xffffffff);
+        default_paint.setAntiAlias(true);
+        canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
+      }
+    }
+  }
 
   if constexpr (kDebugCable) {  // Draw the arcline
     if (state.arcline) {

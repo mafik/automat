@@ -7,8 +7,12 @@ namespace maf {
 ArcLine::ArcLine(Vec2 start, float start_angle) : start(start), start_angle(start_angle) {}
 
 ArcLine& ArcLine::MoveBy(float length) {
-  types.push_back(Type::Line);
-  segments.push_back({Line{length}});
+  if (!types.empty() && types.back() == Type::Line) {
+    segments.back().line.length += length;
+  } else {
+    types.push_back(Type::Line);
+    segments.push_back({Line{length}});
+  }
   return *this;
 }
 
@@ -24,6 +28,9 @@ static void Turn(Vec2& point, float& angle, float sweep_angle, float radius) {
 }
 
 ArcLine& ArcLine::TurnBy(float sweep_angle, float radius) {
+  if (fabsf(sweep_angle) < 1e-6) {
+    return *this;
+  }
   types.push_back(Type::Arc);
   Segment segment;
   segment.arc.radius = radius;

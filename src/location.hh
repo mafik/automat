@@ -6,13 +6,16 @@
 #include "animation.hh"
 #include "connection.hh"
 #include "error.hh"
-#include "gui_connection_widget.hh"
 #include "object.hh"
 #include "run_button.hh"
 #include "string_multimap.hh"
 #include "tasks.hh"
 #include "text_field.hh"
 #include "widget.hh"
+
+namespace automat::gui {
+struct ConnectionWidget;
+}  // namespace automat::gui
 
 namespace automat {
 
@@ -50,6 +53,16 @@ struct Location : gui::Widget {
 
   std::unordered_set<Location*> error_observers;
   std::unordered_set<Location*> observing_errors;
+
+  struct NextObserver {
+    virtual void OnNextActivated(Location& source) = 0;
+  };
+
+  // NextObservers are notified when this location is finishes its work and activates the next
+  // in chain.
+  // NextObservers are not owned by the location and are responsible for adding / removing
+  // themselves from this list.
+  std::set<NextObserver*> next_observers;
 
   mutable product_ptr<animation::Approach> highlight_ptr;
 

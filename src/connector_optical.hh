@@ -5,14 +5,16 @@
 // This type of connector can transmit boolean & event signals.
 
 #include "arcline.hh"
+#include "location.hh"
 #include "math.hh"
 #include "optional.hh"
+#include "time.hh"
 #include "vec.hh"
 #include "widget.hh"
 
 namespace automat::gui {
 
-struct OpticalConnectorState {
+struct OpticalConnectorState : Location::NextObserver {
   float dispenser_v;
 
   struct CableSection {
@@ -39,10 +41,16 @@ struct OpticalConnectorState {
   Vec2 stabilized_start;
   maf::Optional<Vec2> stabilized_end;
 
-  OpticalConnectorState(Vec2 start);
+  Location& location;
+  time::point last_activity = time::kZero;
+
+  OpticalConnectorState(Location&, Vec2 start);
+  ~OpticalConnectorState();
 
   Vec2 PlugTopCenter() const;
   Vec2 PlugBottomCenter() const;
+
+  void OnNextActivated(Location& source) override;
 };
 
 void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2 start, maf::Optional<Vec2> end);

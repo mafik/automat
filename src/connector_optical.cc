@@ -14,6 +14,7 @@
 
 #include "../build/generated/embedded.hh"
 #include "arcline.hh"
+#include "color.hh"
 #include "font.hh"
 #include "gui_constants.hh"
 #include "math.hh"
@@ -691,7 +692,7 @@ struct StrokeToStrainReliever : StrokeToMesh {
   }
 };
 
-void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
+static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
   auto& canvas = ctx.canvas;
   Rect clip = canvas.getLocalClipBounds();
   Rect path_bounds = path.getBounds().makeOutset(kCableWidth / 2, kCableWidth / 2);
@@ -736,7 +737,7 @@ void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
         vec3 viewDirTanSpace = normalize(TBN_inv * vec3(0, 0, 1));
 
         vec3 normal = normalize(TBN * normalTanSpace);
-        
+
         color.rgba = cable_weave_color.eval(texCoord).rgba;
         color.rgb = color.rgb * 4;
         float light = max(dot(normalTanSpace, lightDirTanSpace), 0);
@@ -1067,10 +1068,28 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   {  // Icon on the metal casing
     SkPath path = PathFromSVG(kNextShape);
     path.offset(0, 0.004);
+
+    SkColor base_color = "#808080"_color;
+    float lightness_pct = exp(-(actx.timer.now - state.last_activity).count() * 10) * 100;
+    SkColor bright_light = "#fcfef7"_color;
+    SkColor adjusted_color = color::AdjustLightness(base_color, lightness_pct);
+    adjusted_color = color::MixColors(adjusted_color, bright_light, lightness_pct / 100);
+
     SkPaint icon_paint;
-    icon_paint.setColor(0xff808080);
+    icon_paint.setColor(adjusted_color);
     icon_paint.setAntiAlias(true);
     canvas.drawPath(path, icon_paint);
+
+    // Draw blur
+    if (lightness_pct > 1) {
+      SkPaint glow_paint;
+      glow_paint.setColor("#ef9f37"_color);
+      glow_paint.setAlphaf(lightness_pct / 100);
+      glow_paint.setMaskFilter(
+          SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, 0.5_mm, true));
+      glow_paint.setBlendMode(SkBlendMode::kScreen);
+      canvas.drawPath(path, glow_paint);
+    }
   }
 
   canvas.restore();
@@ -1289,7 +1308,8 @@ void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shap
   canvas.restore();
 }
 
-OpticalConnectorState::OpticalConnectorState(Vec2 start) : dispenser_v(0) {
+OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2 start)
+    : dispenser_v(0), location(loc) {
   sections.emplace_back(CableSection{
       .pos = start,
       .vel = Vec2(0, 0),
@@ -1308,5 +1328,11 @@ OpticalConnectorState::OpticalConnectorState(Vec2 start) : dispenser_v(0) {
       .distance = 0,
       .next_dir_delta = 0,
   });  // dispenser
+  loc.next_observers.insert(this);
 }
+
+OpticalConnectorState::~OpticalConnectorState() { location.next_observers.erase(this); }
+
+void OpticalConnectorState::OnNextActivated(Location& source) { last_activity = time::now(); }
+
 }  // namespace automat::gui

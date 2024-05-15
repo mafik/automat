@@ -81,7 +81,7 @@ struct LiveObject : Object {
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Machine : LiveObject {
   static const Machine proto;
-  Machine() = default;
+  Machine();
   string name = "";
   unordered_set<unique_ptr<Location>> locations;
   mutable std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
@@ -137,32 +137,8 @@ struct Machine : LiveObject {
   // Add ConnectionWidgets for all arguments defined by the objects.
   void UpdateConnectionWidgets() const;
 
-  ControlFlow VisitChildren(gui::Visitor& visitor) override {
-    UpdateConnectionWidgets();
-    int i = 0;
-    Size n = locations.size() + connection_widgets.size();
-    Widget* arr[n];
-    for (auto& it : connection_widgets) {
-      arr[i++] = it.get();
-    }
-    for (auto& it : locations) {
-      arr[i++] = it.get();
-    }
-    if (visitor(maf::SpanOfArr(arr, n)) == ControlFlow::Stop) {
-      return ControlFlow::Stop;
-    }
-    return ControlFlow::Continue;
-  }
-  SkMatrix TransformToChild(const Widget& child, animation::Context& actx) const override {
-    if (const Location* l = dynamic_cast<const Location*>(&child)) {
-      Vec2 pos = l->AnimatedPosition(&actx);
-      return SkMatrix::Translate(-pos.x, -pos.y);
-    } else if (const gui::ConnectionWidget* w =
-                   dynamic_cast<const gui::ConnectionWidget*>(&child)) {
-      return SkMatrix::I();
-    }
-    return SkMatrix::I();
-  }
+  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  SkMatrix TransformToChild(const Widget& child, animation::Context& actx) const override;
   void Args(std::function<void(Argument&)> cb) override {}
   void Relocate(Location* parent) override {
     for (auto& it : locations) {

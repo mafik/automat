@@ -12,6 +12,7 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
+#include "gui_connection_widget.hh"
 #include "library_timer.hh"
 #include "tasks.hh"
 #include "thread_name.hh"
@@ -285,5 +286,33 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
   if (!OK(list_fields_status)) {
     l.ReportError(list_fields_status.ToStr());
   }
+}
+
+Machine::Machine() {}
+
+ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
+  UpdateConnectionWidgets();
+  int i = 0;
+  Size n = locations.size() + connection_widgets.size();
+  Widget* arr[n];
+  for (auto& it : connection_widgets) {
+    arr[i++] = it.get();
+  }
+  for (auto& it : locations) {
+    arr[i++] = it.get();
+  }
+  if (visitor(maf::SpanOfArr(arr, n)) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
+  }
+  return ControlFlow::Continue;
+}
+SkMatrix Machine::TransformToChild(const Widget& child, animation::Context& actx) const {
+  if (const Location* l = dynamic_cast<const Location*>(&child)) {
+    Vec2 pos = l->AnimatedPosition(&actx);
+    return SkMatrix::Translate(-pos.x, -pos.y);
+  } else if (const gui::ConnectionWidget* w = dynamic_cast<const gui::ConnectionWidget*>(&child)) {
+    return SkMatrix::I();
+  }
+  return SkMatrix::I();
 }
 }  // namespace automat

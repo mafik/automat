@@ -16,7 +16,7 @@ static Vec2 StartPosition(animation::Context* actx, const ConnectionWidget& widg
 
 ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {
   if (arg.name == "next") {
-    state.emplace(StartPosition(nullptr, *this));
+    state.emplace(from, StartPosition(nullptr, *this));
   }
 }
 

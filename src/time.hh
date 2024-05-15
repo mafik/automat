@@ -24,6 +24,7 @@ struct Timer {
     now = time::now();
     d = (now - last).count();
   }
+  double Now() const { return now.time_since_epoch().count(); }
 };
 
 }  // namespace time

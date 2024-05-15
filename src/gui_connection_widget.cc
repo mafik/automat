@@ -55,9 +55,12 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
       m.postConcat(parent_to_local);
       to_shape.transform(m);
       to_point = Rect::TopCenter(to_shape.getBounds());
+      state->steel_insert_hidden.target = 1;
     } else {
       to_point = manual_position;
+      state->steel_insert_hidden.target = 0;
     }
+    state->steel_insert_hidden.Tick(actx);
 
     float dt = ctx.animation_context.timer.d;
     SimulateCablePhysics(dt, *state, from_point, to_point);
@@ -119,6 +122,7 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
   if (widget.state) {
     grab_offset =
         pointer.PositionWithin(*widget.from.ParentAs<Machine>()) - widget.state->PlugBottomCenter();
+    widget.manual_position = widget.state->PlugBottomCenter();
   } else {
     grab_offset = Vec2(0, 0);
   }

@@ -44,6 +44,8 @@ struct OpticalConnectorState : Location::NextObserver {
   Location& location;
   time::point last_activity = time::kZero;
 
+  animation::Spring steel_insert_hidden;
+
   OpticalConnectorState(Location&, Vec2 start);
   ~OpticalConnectorState();
 
@@ -52,6 +54,8 @@ struct OpticalConnectorState : Location::NextObserver {
 
   void OnNextActivated(Location& source) override;
 };
+
+// TODO: grabbing the connector causes it to move a bit
 
 void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2 start, maf::Optional<Vec2> end);
 

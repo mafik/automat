@@ -17,6 +17,7 @@
 #include "color.hh"
 #include "font.hh"
 #include "gui_constants.hh"
+#include "log.hh"
 #include "math.hh"
 #include "svg.hh"
 
@@ -945,7 +946,10 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       return std::nullopt;
     }();
     if (mesh) {
+      canvas.save();
+      canvas.translate(0, 2_mm * state.steel_insert_hidden);
       mesh->Draw(canvas);
+      canvas.restore();
     }
   }
 
@@ -1329,6 +1333,8 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2 start)
       .next_dir_delta = 0,
   });  // dispenser
   loc.next_observers.insert(this);
+  steel_insert_hidden.acceleration = 400;
+  steel_insert_hidden.friction = 40;
 }
 
 OpticalConnectorState::~OpticalConnectorState() { location.next_observers.erase(this); }

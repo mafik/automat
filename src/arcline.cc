@@ -203,7 +203,7 @@ float ArcLine::Iterator::AdvanceToEnd() {
     i_fract = 0;
     ++i;
   }
-  for (; i < arcline.types.size() - 1; ++i) {
+  for (; i < ((I32)arcline.types.size()) - 1; ++i) {
     if (arcline.types[i] == Type::Line) {
       segment_start_pos += Vec2::Polar(segment_start_angle, arcline.segments[i].line.length);
       distance += arcline.segments[i].line.length;

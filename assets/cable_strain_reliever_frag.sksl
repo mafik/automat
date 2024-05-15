@@ -57,6 +57,7 @@ float2 main(const Varyings v, out float4 color) {
     float light = max(dot(normalTanSpace, lightDirTanSpace), 0.2);
     color.rgb = light * color.rgb;
 
+    color.rgb += pow(length(N.xy), 10) * vec3(0x8f / 255., 0x92 / 255., 0x93 / 255.) * 0.7;
     color.rgb += pow(max(dot(reflect(-lightDirTanSpace, normalTanSpace), viewDirTanSpace), 0), 5) * vec3(0x8f / 255., 0x92 / 255., 0x93 / 255.) * 0.7;
 
     vec2 dist_to_edge = vec2(max(0, ROUNDED_R - edge_dist), max(0, ROUNDED_R - v.uv.y))  / ROUNDED_R;

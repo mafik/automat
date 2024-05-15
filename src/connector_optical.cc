@@ -444,7 +444,8 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
 Vec2 OpticalConnectorState::PlugTopCenter() const { return sections.front().pos; }
 
 Vec2 OpticalConnectorState::PlugBottomCenter() const {
-  return sections.front().pos - Vec2::Polar(sections.front().dir, kCasingHeight);
+  return sections.front().pos -
+         Vec2::Polar(sections.front().dir + sections.front().true_dir_offset, kCasingHeight);
 }
 
 static SkPoint conic(SkPoint p0, SkPoint p1, SkPoint p2, float w, float t) {

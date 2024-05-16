@@ -9,7 +9,7 @@ import build
 VK_ROOT = fs_utils.build_dir / 'vulkan-headers'
 VK_INCLUDE = VK_ROOT / 'include'
 
-build.default_compile_args += ['-I', VK_INCLUDE]
+build.base.compile_args += ['-I', VK_INCLUDE]
 
 def hook_recipe(recipe):
   recipe.add_step(

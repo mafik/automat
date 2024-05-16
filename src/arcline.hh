@@ -2,7 +2,6 @@
 
 #include <include/core/SkPath.h>
 
-#include "log.hh"
 #include "math.hh"
 #include "vec.hh"
 
@@ -54,7 +53,7 @@ struct ArcLine {
 
   struct Iterator {
     const ArcLine& arcline;
-    U32 i;
+    I32 i;
     float i_fract;  // A value between 0 and 1.
 
     Vec2 segment_start_pos;
@@ -70,7 +69,9 @@ struct ArcLine {
 
     // Return the current position of the iterator.
     Vec2 Position() const {
-      if (arcline.types[i] == Type::Line) {
+      if (arcline.segments.empty()) {
+        return arcline.start;
+      } else if (arcline.types[i] == Type::Line) {
         return segment_start_pos +
                Vec2::Polar(segment_start_angle, arcline.segments[i].line.length * i_fract);
       } else {

@@ -9,13 +9,10 @@ import build
 VK_BOOTSTRAP_ROOT = fs_utils.build_dir / 'vk-bootstrap'
 VK_BOOTSTRAP_INCLUDE = VK_BOOTSTRAP_ROOT / 'src'
 
-build.default_compile_args += ['-I', VK_BOOTSTRAP_INCLUDE]
+build.base.compile_args += ['-I', VK_BOOTSTRAP_INCLUDE]
 
-build_dirs = {
-  'release': VK_BOOTSTRAP_ROOT / 'build' / 'Release',
-  'debug': VK_BOOTSTRAP_ROOT / 'build' / 'Debug',
-  '': VK_BOOTSTRAP_ROOT / 'build' / 'RelWithDebInfo',
-}
+def get_build_dir(build_type : build.BuildType):
+  return VK_BOOTSTRAP_ROOT / 'build' / build_type.name
 
 libname = build.libname('vk-bootstrap')
 
@@ -28,8 +25,8 @@ def hook_recipe(recipe):
       shortcut='get vk-bootstrap')
 
 
-  for build_type, build_dir in build_dirs.items():
-
+  for build_type in build.types:
+    build_dir = get_build_dir(build_type)
     cmake_args = cmake.CMakeArgs(build_type)
     recipe.add_step(
         partial(Popen, cmake_args +
@@ -59,17 +56,18 @@ def hook_plan(srcs, objs, bins, recipe):
 
   for bin in bins:
     if vk_bootstrap_objs.intersection(bin.objects):
-      bin.link_args.append('-L' + str(build_dirs[bin.build_type]))
+      bin.link_args.append('-L' + str(get_build_dir(bin.build_type)))
       vk_bootstrap_bins.add(bin)
 
 def hook_final(srcs, objs, bins, recipe):
   for step in recipe.steps:
     needs_vk_bootstrap = False
-    build_type = ''
+    build_type = None
     for bin in vk_bootstrap_bins:
       if str(bin.path) in step.outputs:
         needs_vk_bootstrap = True
         build_type = bin.build_type
         break
+    
     if needs_vk_bootstrap:
-      step.inputs.add(str(build_dirs[build_type] / libname))
+      step.inputs.add(str(get_build_dir(build_type) / libname))

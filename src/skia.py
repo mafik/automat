@@ -22,52 +22,57 @@ default_gn_args += ' skia_use_system_libpng=false'
 default_gn_args += ' skia_use_system_libwebp=false'
 default_gn_args += ' skia_use_system_zlib=false'
 default_gn_args += ' skia_use_system_harfbuzz=false'
+default_gn_args += ' skia_use_system_freetype2=false'
 
 @dataclass
 class BuildVariant:
-  build_type: str
-  build_dir: Path
+  build_type: build.BuildType
   gn_args: str
 
+  def __init__(self, build_type: build.BuildType, gn_args: str):
+    self.build_type = build_type
+    self.gn_args = gn_args
+    self.build_dir = SKIA_ROOT / 'out' / self.build_type.name
+
 variants = {
-  '' : BuildVariant('', SKIA_ROOT / 'out' / 'Default', 'is_official_build=true'),
-  'debug' : BuildVariant('debug', SKIA_ROOT / 'out' / 'Debug', 'is_debug=true'),
-  'release' : BuildVariant('release', SKIA_ROOT / 'out' / 'Release', 'is_official_build=true is_debug=false'),
+  'Fast' : BuildVariant(build.fast, 'is_official_build=true'),
+  'Debug' : BuildVariant(build.debug, 'is_debug=true'),
+  'Release' : BuildVariant(build.release, 'is_official_build=true is_debug=false'),
 }
 
 if platform == 'win32':
-  build.default_compile_args += ['-DNOMINMAX']
+  build.base.compile_args += ['-DNOMINMAX']
   # Prefer UTF-8 over UTF-16. This means no "UNICODE" define.
   # https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page
-  # DO NOT ADD: build.default_compile_args += ('UNICODE')
+  # DO NOT ADD: build.base.compile_args += ('UNICODE')
   # <windows.h> has a side effect of defining ERROR macro.
   # Adding NOGDI prevents it from happening.
-  build.default_compile_args += ['-DNOGDI']
+  build.base.compile_args += ['-DNOGDI']
   # Silence some MSCRT-specific deprecation warnings.
-  build.default_compile_args += ['-D_CRT_SECURE_NO_WARNINGS']
+  build.base.compile_args += ['-D_CRT_SECURE_NO_WARNINGS']
   # No clue what it precisely does but many projects use it.
-  build.default_compile_args += ['-DWIN32_LEAN_AND_MEAN']
-  build.default_compile_args += ['-DVK_USE_PLATFORM_WIN32_KHR']
+  build.base.compile_args += ['-DWIN32_LEAN_AND_MEAN']
+  build.base.compile_args += ['-DVK_USE_PLATFORM_WIN32_KHR']
   # Set Windows version to Windows 10.
-  build.default_compile_args += ['-D_WIN32_WINNT=0x0A00']
-  build.default_compile_args += ['-DWINVER=0x0A00']
+  build.base.compile_args += ['-D_WIN32_WINNT=0x0A00']
+  build.base.compile_args += ['-DWINVER=0x0A00']
   default_gn_args += ' clang_win="C:\Program Files\LLVM"'
   default_gn_args += ' clang_win_version=17'
-  variants['debug'].gn_args += ' extra_cflags=["/MTd"]'
+  variants['Debug'].gn_args += ' extra_cflags=["/MTd"]'
   # This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.
   # For more interesting defines, check out:
   # https://github.com/google/skia/blob/main/include/config/SkUserConfig.h
-  build.debug_compile_args += ['-DSK_TRIVIAL_ABI=[[clang::trivial_abi]]']
+  build.debug.compile_args += ['-DSK_TRIVIAL_ABI=[[clang::trivial_abi]]']
 elif platform == 'linux':
-  build.default_compile_args += ['-DVK_USE_PLATFORM_XCB_KHR']
+  build.base.compile_args += ['-DVK_USE_PLATFORM_XCB_KHR']
 
-build.default_compile_args += ['-I', SKIA_ROOT]
-build.default_compile_args += ['-DSK_GANESH']
-build.default_compile_args += ['-DSK_VULKAN']
-build.default_compile_args += ['-DSK_USE_VMA']
-build.default_compile_args += ['-DSK_SHAPER_HARFBUZZ_AVAILABLE']
+build.base.compile_args += ['-I', SKIA_ROOT]
+build.base.compile_args += ['-DSK_GANESH']
+build.base.compile_args += ['-DSK_VULKAN']
+build.base.compile_args += ['-DSK_USE_VMA']
+build.base.compile_args += ['-DSK_SHAPER_HARFBUZZ_AVAILABLE']
 
-build.debug_compile_args += ['-DSK_DEBUG']
+build.debug.compile_args += ['-DSK_DEBUG']
 
 libname = build.libname('skia')
 
@@ -98,9 +103,9 @@ def hook_recipe(recipe):
 
   for v in variants.values():
     args_gn = v.build_dir / 'args.gn'
-    recipe.add_step(partial(skia_gn_gen, v), outputs=[args_gn], inputs=[GN, __file__], desc='Generating Skia build files', shortcut=('skia gn gen ' + v.build_type).strip())
+    recipe.add_step(partial(skia_gn_gen, v), outputs=[args_gn], inputs=[GN, __file__], desc='Generating Skia build files', shortcut='skia gn gen' + v.build_type.rule_suffix())
 
-    recipe.add_step(partial(skia_compile, v), outputs=[v.build_dir / libname], inputs=[args_gn], desc='Compiling Skia', shortcut=('skia ' + v.build_type).strip())
+    recipe.add_step(partial(skia_compile, v), outputs=[v.build_dir / libname], inputs=[args_gn], desc='Compiling Skia', shortcut='skia' + v.build_type.rule_suffix())
 
 # Libraries offered by Skia
 skia_libs = set(['shshaper', 'skunicode', 'skia', 'skottie'])
@@ -120,19 +125,19 @@ def hook_plan(srcs, objs, bins, recipe):
         needs_skia = True
         skia_bins.add(bin)
     if needs_skia:
-      v = variants[bin.build_type]
+      v = variants[bin.build_type.name]
       bin.link_args.append('-L' + str(v.build_dir))
         
 
 def hook_final(srcs, objs, bins, recipe):
   for step in recipe.steps:
     needs_skia = False
-    build_type = ''
+    build_type = None
     for bin in skia_bins:
       if str(bin.path) in step.outputs:
         needs_skia = True
         build_type = bin.build_type
         break
     if needs_skia:
-      v = variants[build_type]
+      v = variants[build_type.name]
       step.inputs.add(str(v.build_dir / libname))

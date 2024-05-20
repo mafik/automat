@@ -4,7 +4,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <cstdio>
 #include <map>
 #include <memory>
 #include <regex>
@@ -23,6 +22,7 @@
 #include "library_increment.hh"    // IWYU pragma: keep
 #include "library_mouse_click.hh"  // IWYU pragma: keep
 #include "library_number.hh"       // IWYU pragma: keep
+#include "library_timeline.hh"     // IWYU pragma: keep
 #include "library_timer.hh"        // IWYU pragma: keep
 #include "treemath.hh"
 

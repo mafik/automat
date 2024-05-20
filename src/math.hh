@@ -180,6 +180,10 @@ union Rect {
   constexpr Rect(float left, float bottom, float right, float top)
       : left(left), bottom(bottom), right(right), top(top) {}
 
+  static constexpr Rect MakeWH(float width, float height) {
+    return {-width / 2, -height / 2, width / 2, height / 2};
+  }
+
   operator SkRect&() { return sk; }
 
   static constexpr float MinY(const SkRect& r) { return r.fTop; }
@@ -228,6 +232,14 @@ union Rect {
     bottom = std::min(bottom, point.y);
     top = std::max(top, point.y);
   }
+
+  Rect Outset(float amount) {
+    return {left - amount, bottom - amount, right + amount, top + amount};
+  }
+
+  constexpr Rect MoveBy(Vec2 offset) {
+    return {left + offset.x, bottom + offset.y, right + offset.x, top + offset.y};
+  }
 };
 
 union RRect {
@@ -235,6 +247,7 @@ union RRect {
   struct {
     Rect rect;
     Vec2 radii[4];  // LL, LR, UR, UL
+    SkRRect::Type type;
   };
 
   // Left end of the upper line.
@@ -255,6 +268,19 @@ union RRect {
   Vec2 LineEndRightLower() const { return {rect.right, rect.bottom + radii[1].y}; }
 
   constexpr Vec2 Center() const { return rect.Center(); }
+
+  constexpr RRect Outset(float amount) {
+    return {.rect = rect.Outset(amount),
+            .radii = {radii[0] + Vec2(amount, amount), radii[1] + Vec2(amount, amount),
+                      radii[2] + Vec2(amount, amount), radii[3] + Vec2(amount, amount)},
+            .type = type};
+  }
+
+  constexpr RRect MoveBy(Vec2 offset) {
+    return {.rect = rect.MoveBy(offset),
+            .radii = {radii[0], radii[1], radii[2], radii[3]},
+            .type = type};
+  }
 };
 
 inline float atan(Vec2 v) { return atan2f(v.y, v.x); }

@@ -118,6 +118,7 @@ struct ArcLine {
 
     TurnShift(float distance_sideways, float turn_radius);
     void Apply(ArcLine& line) const;
+    void ApplyNegative(ArcLine& line) const;
   };
 };
 

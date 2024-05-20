@@ -135,6 +135,13 @@ void ArcLine::TurnShift::Apply(ArcLine& line) const {
   }
   line.TurnBy(-first_turn_angle, turn_radius);
 }
+void ArcLine::TurnShift::ApplyNegative(ArcLine& line) const {
+  line.TurnBy(-first_turn_angle, turn_radius);
+  if (move_between_turns > 0) {
+    line.MoveBy(move_between_turns);
+  }
+  line.TurnBy(first_turn_angle, turn_radius);
+}
 
 float ArcLine::Iterator::Advance(float length) {
   float distance = 0;

@@ -15,12 +15,32 @@ struct NextButton : virtual gui::Button, gui::CircularButtonMixin {
   NextButton();
 };
 
+struct TrackBase : Object {
+  Vec<time::T> timestamps;
+  SkPath Shape() const override;
+  void Draw(gui::DrawContext&) const override;
+};
+
+struct OnOffTrack : TrackBase {
+  string_view Name() const override { return "On/Off Track"; }
+  std::unique_ptr<Object> Clone() const override { return std::make_unique<OnOffTrack>(*this); }
+  void Draw(gui::DrawContext&) const override;
+};
+
 struct Timeline : LiveObject {
   static const Timeline proto;
 
   gui::RunButton run_button;
   PrevButton prev_button;
   NextButton next_button;
+
+  Vec<std::unique_ptr<TrackBase>> tracks;
+
+  bool currently_playing = false;
+  union {
+    time::T playback_offset;          // Used when playback is paused
+    time::point playback_started_at;  // Used when playback is active
+  };
 
   Timeline();
   Timeline(const Timeline&);

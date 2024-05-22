@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sys/types.h>
 #include <type_traits>
 
 namespace maf {
@@ -8,7 +9,7 @@ using I8 = signed char;
 using I16 = signed short;
 using I32 = signed int;
 using I64 = signed long long;
-using I128 = __int128;  // _BitInt(128);
+using I128 = __int128; // _BitInt(128);
 
 static_assert(sizeof(I64) == 8);
 
@@ -32,18 +33,17 @@ static_assert(sizeof(U24) == 3);
 
 using U32 = unsigned int;
 using U64 = unsigned long;
-using U128 = unsigned __int128;  // _BitInt(128);
+using U128 = unsigned __int128; // _BitInt(128);
 
-using Size = unsigned long long;
-using SSize = signed long long;
+using Size = size_t;
+using SSize = ssize_t;
 
-}  // namespace maf
+} // namespace maf
 
 namespace std {
 
-template <>
-struct is_integral<maf::U24> {
+template <> struct is_integral<maf::U24> {
   static constexpr bool value = true;
 };
 
-}  // namespace std
+} // namespace std

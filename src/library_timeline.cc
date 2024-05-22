@@ -3,6 +3,7 @@
 #include <include/core/SkRRect.h>
 
 #include "arcline.hh"
+#include "base.hh"
 #include "gui_constants.hh"
 #include "include/core/SkPath.h"
 #include "library_macros.hh"
@@ -101,7 +102,14 @@ const SkPaint kScrewPaint = []() {
 
 DEFINE_PROTO(Timeline);
 
-Timeline::Timeline() {}
+Timeline::Timeline() : run_button(nullptr, kPlayButtonRadius) {}
+
+Timeline::Timeline(const Timeline& other) : run_button(nullptr, kPlayButtonRadius) {}
+
+void Timeline::Relocate(Location* new_here) {
+  LiveObject::Relocate(new_here);
+  run_button.location = new_here;
+}
 
 string_view Timeline::Name() const { return "Timeline"; }
 
@@ -173,7 +181,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
       kScrewRadius, kScrewPaint);
 
   // Play button
-  canvas.drawCircle({0, kDisplayMargin + kPlayButtonRadius}, kPlayButtonRadius, SkPaint());
+  DrawChildren(dctx);
 }
 
 SkPath Timeline::Shape() const {
@@ -182,5 +190,19 @@ SkPath Timeline::Shape() const {
 }
 
 void Timeline::Args(std::function<void(Argument&)> cb) {}
+
+ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
+  Widget* arr[] = {&run_button};
+  if (visitor(arr) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
+  }
+  return ControlFlow::Continue;
+}
+SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context&) const {
+  if (&child == &run_button) {
+    return SkMatrix::Translate(kPlayButtonRadius, -kDisplayMargin);
+  }
+  return SkMatrix::I();
+}
 
 }  // namespace automat::library

@@ -10,9 +10,9 @@ struct Location;
 
 namespace automat::gui {
 
-struct RunButton : ToggleButton {
+struct RunButton : ToggleButton, CircularButtonMixin {
   Location* location;
-  RunButton(Location* parent = nullptr);
+  RunButton(Location* parent = nullptr, float radius = kMinimalTouchableSize / 2);
   void Activate(Pointer&) override;
   bool Filled() const override;
 };

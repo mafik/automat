@@ -218,7 +218,9 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) co
 }
 
 PowerButton::PowerButton(OnOff* target)
-    : ToggleButton(MakeShapeWidget(kPowerSVG, SK_ColorWHITE), "#fa2305"_color), target(target) {}
+    : Button(MakeShapeWidget(kPowerSVG, SK_ColorWHITE), "#fa2305"_color),
+      ToggleButton(),
+      target(target) {}
 
 static SkColor KeyColor(bool enabled) { return enabled ? kKeyEnabledColor : kKeyDisabledColor; }
 

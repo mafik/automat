@@ -33,11 +33,19 @@ struct Button : Widget {
   void DrawButton(DrawContext&, SkColor bg) const;
 };
 
-struct ToggleButton : Button {
+struct CircularButtonMixin : virtual Button {
+  float radius;
+  CircularButtonMixin(float radius) : Button(nullptr, 0xffffffff), radius(radius) {}
+  SkRRect RRect() const override {
+    SkRect oval = SkRect::MakeXYWH(0, 0, 2 * radius, 2 * radius);
+    return SkRRect::MakeOval(oval);
+  }
+};
+
+struct ToggleButton : virtual Button {
   mutable product_ptr<animation::Approach> filling_ptr;
 
-  ToggleButton(std::unique_ptr<Widget>&& child, SkColor color = 0xffd69d00)
-      : Button(std::move(child), color) {}
+  ToggleButton() : Button(nullptr, 0xffffffff) {}
   void Draw(DrawContext&) const override;
   virtual bool Filled() const { return false; }
 };

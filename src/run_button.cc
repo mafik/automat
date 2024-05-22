@@ -1,6 +1,7 @@
 #include "run_button.hh"
 
 #include "base.hh"
+#include "gui_button.hh"
 #include "gui_shape_widget.hh"
 #include "location.hh"
 #include "pointer.hh"
@@ -8,8 +9,11 @@
 
 namespace automat::gui {
 
-RunButton::RunButton(Location* parent)
-    : ToggleButton(MakeShapeWidget(kPlayShape, 0xffffffff)), location(parent) {}
+RunButton::RunButton(Location* parent, float radius)
+    : Button(MakeShapeWidget(kPlayShape, 0xffffffff)),
+      ToggleButton(),
+      CircularButtonMixin(radius),
+      location(parent) {}
 
 void RunButton::Activate(Pointer&) {
   if (Filled()) {

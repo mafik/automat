@@ -7,10 +7,20 @@
 
 namespace automat::library {
 
+struct PrevButton : virtual gui::Button, gui::CircularButtonMixin {
+  PrevButton();
+};
+
+struct NextButton : virtual gui::Button, gui::CircularButtonMixin {
+  NextButton();
+};
+
 struct Timeline : LiveObject {
   static const Timeline proto;
 
   gui::RunButton run_button;
+  PrevButton prev_button;
+  NextButton next_button;
 
   Timeline();
   Timeline(const Timeline&);

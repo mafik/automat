@@ -4,9 +4,12 @@
 
 #include "arcline.hh"
 #include "base.hh"
+#include "gui_button.hh"
 #include "gui_constants.hh"
+#include "gui_shape_widget.hh"
 #include "include/core/SkPath.h"
 #include "library_macros.hh"
+#include "svg.hh"
 
 using namespace automat::gui;
 
@@ -100,11 +103,23 @@ const SkPaint kScrewPaint = []() {
   return p;
 }();
 
+const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
+
 DEFINE_PROTO(Timeline);
 
-Timeline::Timeline() : run_button(nullptr, kPlayButtonRadius) {}
+PrevButton::PrevButton()
+    : gui::Button(MakeShapeWidget(kNextShape, 0xffffffff, &kHorizontalFlip), "#404040"_color),
+      gui::CircularButtonMixin(kSideButtonRadius) {}
 
-Timeline::Timeline(const Timeline& other) : run_button(nullptr, kPlayButtonRadius) {}
+NextButton::NextButton()
+    : gui::Button(MakeShapeWidget(kNextShape, 0xffffffff), "#404040"_color),
+      gui::CircularButtonMixin(kSideButtonRadius) {}
+
+Timeline::Timeline() : run_button(nullptr, kPlayButtonRadius) {
+  run_button.color = "#e24e1f"_color;
+}
+
+Timeline::Timeline(const Timeline& other) : Timeline() {}
 
 void Timeline::Relocate(Location* new_here) {
   LiveObject::Relocate(new_here);
@@ -161,11 +176,6 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   auto window_path = window.ToPath(true);
   canvas.drawPath(window_path, SkPaint());
 
-  canvas.drawCircle({kPlasticWidth / 2 - kSideButtonMargin - kSideButtonRadius, 0},
-                    kSideButtonRadius, SkPaint());
-  canvas.drawCircle({-kPlasticWidth / 2 + kSideButtonMargin + kSideButtonRadius, 0},
-                    kSideButtonRadius, SkPaint());
-
   // Screws
   canvas.drawCircle({kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
                      -WindowHeight(0) - kDisplayMargin + kScrewMargin + kScrewRadius},
@@ -192,7 +202,7 @@ SkPath Timeline::Shape() const {
 void Timeline::Args(std::function<void(Argument&)> cb) {}
 
 ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
-  Widget* arr[] = {&run_button};
+  Widget* arr[] = {&run_button, &prev_button, &next_button};
   if (visitor(arr) == ControlFlow::Stop) {
     return ControlFlow::Stop;
   }
@@ -201,7 +211,13 @@ ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
 SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context&) const {
   if (&child == &run_button) {
     return SkMatrix::Translate(kPlayButtonRadius, -kDisplayMargin);
+  } else if (&child == &prev_button) {
+    return SkMatrix::Translate(kPlasticWidth / 2 - kSideButtonMargin, kSideButtonRadius);
+  } else if (&child == &next_button) {
+    return SkMatrix::Translate(-kPlasticWidth / 2 + kSideButtonMargin + kSideButtonDiameter,
+                               kSideButtonRadius);
   }
+
   return SkMatrix::I();
 }
 

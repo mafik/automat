@@ -65,6 +65,19 @@ if platform == 'win32':
   build.debug.compile_args += ['-DSK_TRIVIAL_ABI=[[clang::trivial_abi]]']
 elif platform == 'linux':
   build.base.compile_args += ['-DVK_USE_PLATFORM_XCB_KHR']
+    # Static linking to Vulkan on Linux seems to fail because the dynamically loaded libc / pthread is not properly initialized
+  # by dlopen. It seems that glibc is closely coupled with ld.
+  # Note that this problem might disappear when executed under debugger because they might be initialized when debugger ld runs.
+  # Some discussion can be found here: https://www.openwall.com/lists/musl/2012/12/08/4
+  # Most online discussions wrongly claim its nonsensical to call dlopen from a static binary because this loses the static linking benefits.
+  # It is in fact useful, for example because it might allow Automat to bundle its dependencies but still use the system's vulkan drivers.
+  # Anyway there is no clean, officially supported solution to dlopen from a static binary on Linux :(
+  # A potential, slightly hacky workaround might be found here: https://github.com/pfalcon/foreign-dlopen/tree/master
+  # For the time being we disable static linking on Linux and instead statically link everything except libm & libc (they seem to be coupled).
+  build.base.compile_args = [x for x in build.base.compile_args if x != '-static']
+  build.base.link_args = [x for x in build.base.link_args if x != '-static']
+  build.base.link_args += ['-Wl,-Bstatic', '-static-libstdc++', '-lpthread', '-static-libgcc', '-ldl', '-Wl,-Bdynamic']
+
 
 build.base.compile_args += ['-I', SKIA_ROOT]
 build.base.compile_args += ['-DSK_GANESH']

@@ -12,7 +12,7 @@ using Clock = std::chrono::steady_clock;
 using Duration = std::chrono::duration<double>;
 using TimePoint = std::chrono::time_point<Clock, Duration>;
 
-struct TimerDelay : LiveObject, Runnable {
+struct TimerDelay : LiveObject, Runnable, LongRunning {
   Duration duration = 10s;
   TimePoint start_time;
   mutable animation::Approach start_pusher_depression;
@@ -46,8 +46,8 @@ struct TimerDelay : LiveObject, Runnable {
   SkPath ArgShape(Argument&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
-  void Run(Location& here) override;
-  void RunAndScheduleNext(Location& here) override;
+  LongRunning* OnRun(Location& here) override;
+  void Cancel() override;
   void Updated(Location& here, Location& updated) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;

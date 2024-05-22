@@ -43,12 +43,13 @@ struct Delete : Object, Runnable {
   static Argument target_arg;
   string_view Name() const override { return "Delete"; }
   std::unique_ptr<Object> Clone() const override { return std::make_unique<Delete>(); }
-  void Run(Location& here) override {
+  LongRunning* OnRun(Location& here) override {
     auto target = target_arg.GetLocation(here);
     if (!target.ok) {
-      return;
+      return nullptr;
     }
     target.location->Take();
+    return nullptr;
   }
 };
 
@@ -58,14 +59,15 @@ struct Set : Object, Runnable {
   static Argument target_arg;
   string_view Name() const override { return "Set"; }
   std::unique_ptr<Object> Clone() const override { return std::make_unique<Set>(); }
-  void Run(Location& here) override {
+  LongRunning* OnRun(Location& here) override {
     auto value = value_arg.GetObject(here);
     auto target = target_arg.GetLocation(here);
     if (!value.ok || !target.ok) {
-      return;
+      return nullptr;
     }
     auto clone = value.object->Clone();
     target.location->Put(std::move(clone));
+    return nullptr;
   }
 };
 
@@ -159,7 +161,7 @@ struct Timer : Object, Runnable {
     Duration elapsed = now - start;
     return f("%.3lf", elapsed.count());
   }
-  void Run(Location& here) override {
+  LongRunning* OnRun(Location& here) override {
     using namespace std::chrono_literals;
     TimePoint now = GetNow();
     if (now - last_tick >= 1ms) {
@@ -167,6 +169,7 @@ struct Timer : Object, Runnable {
       here.ScheduleUpdate();
     }
     ScheduleNextRun(here);
+    return nullptr;
   }
   void Reset(Location& here) {
     start = GetNow();
@@ -188,12 +191,13 @@ struct TimerReset : Object, Runnable {
   static Argument timer_arg;
   string_view Name() const override { return "TimerReset"; }
   std::unique_ptr<Object> Clone() const override { return std::make_unique<TimerReset>(); }
-  void Run(Location& here) override {
+  LongRunning* OnRun(Location& here) override {
     auto timer = timer_arg.GetTyped<Timer>(here);
     if (!timer.ok) {
-      return;
+      return nullptr;
     }
     timer.typed->Reset(*timer.location);
+    return nullptr;
   }
 };
 
@@ -472,27 +476,28 @@ struct Append : Object, Runnable {
   static Argument what_arg;
   string_view Name() const override { return "Append"; }
   std::unique_ptr<Object> Clone() const override { return std::make_unique<Append>(); }
-  void Run(Location& here) override {
+  LongRunning* OnRun(Location& here) override {
     auto to = to_arg.GetTyped<AbstractList>(here);
     if (!to.ok) {
-      return;
+      return nullptr;
     }
     auto list_object = to.typed;
     int size = 0;
     if (auto error = list_object->GetSize(size)) {
       here.error.reset(error);
-      return;
+      return nullptr;
     }
     auto what = what_arg.GetLocation(here);
     if (!what.ok) {
-      return;
+      return nullptr;
     }
     if (auto obj = what.location->Take()) {
       if (auto error = list_object->PutAtIndex(size, false, obj->Clone())) {
         here.error.reset(error);
-        return;
+        return nullptr;
       }
     }
+    return nullptr;
   }
 };
 
@@ -573,13 +578,13 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
     cb(element_arg);
     cb(test_arg);
   }
-  void Run(Location& here) override {
+  LongRunning* OnRun(Location& here) override {
     if (phase == Phase::kSequential) {
       // Check the value of test, possibly copying element from list to output.
       // Then increment index and schedule another iteration.
       auto test = test_arg.GetObject(here);
       if (!test.ok) {
-        return;
+        return nullptr;
       }
       if (test.object->GetText() == "true") {
         if (auto obj = GetCurrent()) {
@@ -592,6 +597,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
     } else {
       here.ReportError("Tried to Run this Filter but filtering is already completed.");
     }
+    return nullptr;
   }
   void StartFiltering() {
     objects.clear();
@@ -895,12 +901,12 @@ struct Button : Object, Runnable {
   }
   string GetText() const override { return label; }
   void SetText(Location& error_context, string_view new_label) override { label = new_label; }
-  void Run(Location& h) override {
+  LongRunning* OnRun(Location& h) override {
     auto enabled = enabled_arg.GetObject(h);
     if (enabled.object && enabled.object->GetText() == "false") {
       h.ReportError("Button is disabled.");
-      return;
     }
+    return nullptr;
   }
 };
 

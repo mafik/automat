@@ -68,6 +68,7 @@ static void TimerFinished(Location* here) {
     return;
   }
   timer->state = TimerDelay::State::Idle;
+  timer->Done(*here);
   if (timer->here) {
     ScheduleNext(*timer->here);
   }
@@ -779,7 +780,7 @@ void StartTimerHelperThread(std::stop_token automat_stop_token) {
   timer_thread.detach();
 }
 
-void TimerDelay::Run(Location& here) {
+LongRunning* TimerDelay::OnRun(Location& here) {
   if (state == State::Idle) {
     state = State::Running;
     start_time = Clock::now();
@@ -788,12 +789,25 @@ void TimerDelay::Run(Location& here) {
       tasks.emplace(start_time + duration, new TimerFinishedTask(&here));
       cv.notify_all();
     }
+    return this;
   }
+  return nullptr;
 }
 
-void TimerDelay::RunAndScheduleNext(Location& here) {
-  Run(here);
-  // Don't schedule the `next` because the timer will do that when it finishes.
+void TimerDelay::Cancel() {
+  if (state == TimerDelay::State::Running) {
+    std::unique_lock<std::mutex> lck(mtx);
+    if (state == TimerDelay::State::Running) {
+      auto [a, b] = tasks.equal_range(start_time + duration);
+      for (auto it = a; it != b; ++it) {
+        if (it->second->target == here) {
+          tasks.erase(it);
+          break;
+        }
+      }
+      cv.notify_all();
+    }
+  }
 }
 
 }  // namespace automat::library

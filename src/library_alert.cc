@@ -1,5 +1,6 @@
 #include "library_alert.hh"
 
+#include "base.hh"
 #include "library_macros.hh"
 
 #ifdef _WIN32
@@ -24,7 +25,7 @@ static void ShowAlert(string_view message) {
 static void ShowAlert(string_view message) { LOG << message; }
 #endif
 
-void Alert::Run(Location& here) {
+LongRunning* Alert::OnRun(Location& here) {
   auto message = message_arg.GetObject(here);
   if (message.ok) {
     string text = message.object->GetText();
@@ -34,6 +35,7 @@ void Alert::Run(Location& here) {
       ShowAlert(text);
     }
   }
+  return nullptr;
 }
 
 }  // namespace automat

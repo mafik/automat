@@ -3,6 +3,7 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
+#include "base.hh"
 #include "color.hh"
 #include "font.hh"
 #include "gui_constants.hh"
@@ -24,13 +25,14 @@ string_view Increment::Name() const { return "Increment"; }
 
 std::unique_ptr<Object> Increment::Clone() const { return std::make_unique<Increment>(); }
 
-void Increment::Run(Location& h) {
+LongRunning* Increment::OnRun(Location& h) {
   auto integer = target_arg.GetTyped<Number>(h);
   if (!integer.ok) {
-    return;
+    return nullptr;
   }
   integer.typed->value += 1;
   integer.location->ScheduleUpdate();
+  return nullptr;
 }
 
 namespace {

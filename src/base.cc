@@ -126,10 +126,24 @@ bool NoScheduling(Location* location) {
   return no_scheduling.find(location) != no_scheduling.end();
 }
 
-void Runnable::RunAndScheduleNext(Location& here) {
-  Run(here);
+static void DoneRunning(Location& here) {
   if (!here.HasError()) {
     ScheduleNext(here);
+  }
+}
+
+void LongRunning::Done(Location& here) {
+  here.long_running = nullptr;
+  DoneRunning(here);
+}
+
+void Runnable::Run(Location& here) {
+  if (here.long_running) {
+    return;
+  }
+  here.long_running = OnRun(here);
+  if (here.long_running == nullptr) {
+    DoneRunning(here);
   }
 }
 

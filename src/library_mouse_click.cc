@@ -1,5 +1,7 @@
 #include "library_mouse_click.hh"
 
+#include "base.hh"
+
 #if defined(_WIN32)
 #include <windows.h>
 #endif
@@ -191,7 +193,7 @@ std::unique_ptr<Action> MouseClick::ButtonDownAction(gui::Pointer& pointer,
 
 void MouseClick::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
-void MouseClick::Run(Location& location) {
+LongRunning* MouseClick::OnRun(Location& location) {
 #if defined(_WIN32)
   INPUT input;
   input.type = INPUT_MOUSE;
@@ -209,7 +211,7 @@ void MouseClick::Run(Location& location) {
       input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
       break;
     default:
-      return;
+      return nullptr;
   }
   SendInput(1, &input, sizeof(INPUT));
 #endif
@@ -219,6 +221,7 @@ void MouseClick::Run(Location& location) {
   xcb_test_fake_input(connection, type, detail, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
   xcb_flush(connection);
 #endif
+  return nullptr;
 }
 
 }  // namespace automat::library

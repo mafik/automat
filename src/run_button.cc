@@ -13,7 +13,12 @@ RunButton::RunButton(Location* parent)
 
 void RunButton::Activate(Pointer&) {
   if (Filled()) {
-    // TODO: Cancel.
+    if (location->run_task.scheduled) {
+      // TODO: cancel the task
+    } else if (location->long_running != nullptr) {
+      location->long_running->Cancel();
+      location->long_running = nullptr;
+    }
   } else {
     // This will destroy a potential object saved in the error so it shouldn't
     // be automatic. Maybe we could ClearError only if there is no object?
@@ -24,6 +29,11 @@ void RunButton::Activate(Pointer&) {
   }
 }
 
-bool RunButton::Filled() const { return location->run_task.scheduled; }
+bool RunButton::Filled() const {
+  if (location == nullptr) {
+    return false;
+  }
+  return location->run_task.scheduled || (location->long_running != nullptr);
+}
 
 }  // namespace automat::gui

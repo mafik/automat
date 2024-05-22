@@ -20,6 +20,7 @@ struct ConnectionWidget;
 namespace automat {
 
 struct DragLocationAction;
+struct LongRunning;
 
 // Each Container holds its inner objects in Locations.
 //
@@ -67,6 +68,7 @@ struct Location : gui::Widget {
   mutable product_ptr<animation::Approach> highlight_ptr;
 
   RunTask run_task;
+  LongRunning* long_running = nullptr;
 
   Location(Location* parent = nullptr);
 

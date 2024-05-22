@@ -12,7 +12,7 @@ namespace automat::gui {
 
 struct RunButton : ToggleButton {
   Location* location;
-  RunButton(Location* parent);
+  RunButton(Location* parent = nullptr);
   void Activate(Pointer&) override;
   bool Filled() const override;
 };

@@ -48,14 +48,26 @@ struct Object;
 struct Location;
 struct Machine;
 
+struct LongRunning {
+  // Called from Automat thread when user wants to cancel the execution.
+  virtual void Cancel() = 0;
+
+  // Called from arbitrary thread by the object when it finishes execution.
+  //
+  // After this call, the object is free to release the memory related to this LongRunning instance
+  // because its not going to be used again.
+  void Done(Location& here);
+};
+
 struct Runnable {
   // Derived classes should override this method to implement their behavior.
-  virtual void Run(Location& here) = 0;
-
-  // Wrapper around Run that takes care of autoscheduling the next argument.
   //
-  // Override to implement custom scheduling behavior.
-  virtual void RunAndScheduleNext(Location& here);
+  // If an object executes immediately, it should return nullptr. Otherwise it should return a
+  // pointer to a LongRunning interface.
+  virtual LongRunning* OnRun(Location& here) = 0;
+
+  // Kicks off the execution of the object.
+  void Run(Location& here);
 };
 
 struct LiveObject : Object {

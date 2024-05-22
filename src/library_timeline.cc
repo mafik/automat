@@ -93,6 +93,12 @@ const SkPaint kDisplayPaint = []() {
   return p;
 }();
 
+const SkPaint kScrewPaint = []() {
+  SkPaint p;
+  p.setColor("#9b9994"_color);
+  return p;
+}();
+
 DEFINE_PROTO(Timeline);
 
 Timeline::Timeline() {}
@@ -155,16 +161,16 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   // Screws
   canvas.drawCircle({kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
                      -WindowHeight(0) - kDisplayMargin + kScrewMargin + kScrewRadius},
-                    kScrewRadius, SkPaint());
+                    kScrewRadius, kScrewPaint);
   canvas.drawCircle({-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
                      -WindowHeight(0) - kDisplayMargin + kScrewMargin + kScrewRadius},
-                    kScrewRadius, SkPaint());
+                    kScrewRadius, kScrewPaint);
   canvas.drawCircle(
       {kPlasticWidth / 2 - kScrewMargin - kScrewRadius, kPlasticTop - kScrewMargin - kScrewRadius},
-      kScrewRadius, SkPaint());
+      kScrewRadius, kScrewPaint);
   canvas.drawCircle(
       {-kPlasticWidth / 2 + kScrewMargin + kScrewRadius, kPlasticTop - kScrewMargin - kScrewRadius},
-      kScrewRadius, SkPaint());
+      kScrewRadius, kScrewPaint);
 
   // Play button
   canvas.drawCircle({0, kDisplayMargin + kPlayButtonRadius}, kPlayButtonRadius, SkPaint());

@@ -15,7 +15,10 @@ struct NextButton : virtual gui::Button, gui::CircularButtonMixin {
   NextButton();
 };
 
+struct Timeline;
+
 struct TrackBase : Object {
+  Timeline* timeline = nullptr;
   Vec<time::T> timestamps;
   SkPath Shape() const override;
   void Draw(gui::DrawContext&) const override;

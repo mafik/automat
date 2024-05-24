@@ -1,9 +1,12 @@
 #include "library_timeline.hh"
 
+#include <include/core/SkPaint.h>
+#include <include/core/SkPath.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
 #include <cmath>
+#include <memory>
 
 #include "arcline.hh"
 #include "base.hh"
@@ -11,11 +14,10 @@
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
-#include "include/core/SkPaint.h"
-#include "include/core/SkPath.h"
 #include "library_macros.hh"
 #include "svg.hh"
 #include "time.hh"
+#include "window.hh"
 
 using namespace automat::gui;
 
@@ -54,8 +56,6 @@ constexpr float kWindowWidth = kPlasticWidth - 2 * kDisplayMargin;
 constexpr float kTrackMargin = 1_mm;
 constexpr float kTrackHeight = 1_cm;
 constexpr float kTrackWidth = kWindowWidth - 2 * kTrackMargin;
-
-constexpr Rect kTrackRect = Rect(0, -kTrackHeight / 2, kTrackWidth, kTrackHeight / 2);
 
 static constexpr float WindowHeight(int num_tracks) {
   return kRulerHeight * 2 + kMarginAroundTracks * 2 + std::max(0, num_tracks - 1) * kTrackMargin +
@@ -237,6 +237,112 @@ static Font& LcdFont() {
   return *font.get();
 }
 
+static time::T MaxTrackLength(const Timeline& timeline) {
+  time::T max_track_length = 0;
+  for (const auto& track : timeline.tracks) {
+    max_track_length = std::max(max_track_length, track->timestamps.back());
+  }
+  return max_track_length;
+}
+
+static float CurrentPosRatio(const Timeline& timeline, time::point now) {
+  time::T max_track_length = MaxTrackLength(timeline);
+  if (max_track_length == 0) {
+    return 0;
+  } else if (timeline.currently_playing) {
+    return (now - timeline.playback_started_at).count() / max_track_length;
+  } else {
+    return timeline.playback_offset / max_track_length;
+  }
+}
+
+void SetPosRatio(Timeline& timeline, float pos_ratio) {
+  pos_ratio = std::clamp(pos_ratio, 0.0f, 1.0f);
+  if (timeline.currently_playing) {
+    // TODO
+  } else {
+    time::T max_track_length = MaxTrackLength(timeline);
+    timeline.playback_offset = pos_ratio * max_track_length;
+  }
+}
+
+static float BridgeOffsetX(float current_pos_ratio) {
+  return -kRulerLength / 2 + kRulerLength * current_pos_ratio;
+}
+
+static float PosRatioFromBridgeOffsetX(float bridge_offset_x) {
+  return (bridge_offset_x + kRulerLength / 2) / kRulerLength;
+}
+
+SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
+  float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
+
+  float bottom_y = -(kMarginAroundTracks * 2 + kTrackHeight * num_tracks +
+                     kTrackMargin * std::max(0, num_tracks - 1));
+
+  float line_width = 0.5_mm;
+  float line_gap = 1_mm;
+
+  SkPath bridge_handle;
+  bridge_handle.moveTo(0, kRulerHeight / 6);                              // top of the arrow
+  bridge_handle.lineTo(kMinimalTouchableSize / 4, 0);                     // right of the arrow
+  bridge_handle.lineTo(kMinimalTouchableSize / 2, 0);                     // top right
+  bridge_handle.lineTo(kMinimalTouchableSize / 2, -kMarginAroundTracks);  // bottom right
+
+  {  // right vertical line
+    bridge_handle.lineTo(line_gap / 2 + line_width, -kMarginAroundTracks);
+    bridge_handle.lineTo(line_gap / 2 + line_width, bottom_y);
+    bridge_handle.lineTo(line_gap / 2, bottom_y);
+    bridge_handle.lineTo(line_gap / 2, -kMarginAroundTracks);
+  }
+
+  {  // left vertical line
+    bridge_handle.lineTo(-line_gap / 2, -kMarginAroundTracks);
+    bridge_handle.lineTo(-line_gap / 2, bottom_y);
+    bridge_handle.lineTo(-line_gap / 2 - line_width, bottom_y);
+    bridge_handle.lineTo(-line_gap / 2 - line_width, -kMarginAroundTracks);
+  }
+
+  bridge_handle.lineTo(-kMinimalTouchableSize / 2, -kMarginAroundTracks);  // bottom left
+  bridge_handle.lineTo(-kMinimalTouchableSize / 2, 0);                     // top left
+  bridge_handle.lineTo(-kMinimalTouchableSize / 4, 0);                     // left of the arrow
+  bridge_handle.close();
+  bridge_handle.offset(bridge_offset_x, -kRulerHeight);
+
+  return bridge_handle;
+}
+
+struct DragBridgeAction : Action {
+  float press_offset_x;
+  Timeline& timeline;
+  DragBridgeAction(Timeline& timeline) : timeline(timeline) {}
+  virtual void Begin(gui::Pointer& ptr) {
+    float initial_x = ptr.PositionWithin(timeline).x;
+    float initial_pos_ratio = CurrentPosRatio(timeline, ptr.window.actx.timer.now);
+    float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
+    press_offset_x = initial_x - initial_bridge_x;
+  }
+  virtual void Update(gui::Pointer& ptr) {
+    float x = ptr.PositionWithin(timeline).x;
+    float new_bridge_x = x - press_offset_x;
+    SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x));
+  }
+  virtual void End() {}
+  virtual void DrawAction(gui::DrawContext&) {}
+};
+
+std::unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerButton btn) {
+  if (btn == gui::PointerButton::kMouseLeft) {
+    auto bridge_shape =
+        BridgeShape(tracks.size(), CurrentPosRatio(*this, ptr.window.actx.timer.now));
+    auto pos = ptr.PositionWithin(*this);
+    if (bridge_shape.contains(pos.x, pos.y)) {
+      return std::unique_ptr<Action>(new DragBridgeAction(*this));
+    }
+  }
+  return Object::ButtonDownAction(ptr, btn);
+}
+
 void Timeline::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
   canvas.drawRRect(WoodenCaseRRect(*this), kWoodPaint);
@@ -245,21 +351,8 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   constexpr float PI = std::numbers::pi;
 
-  float current_pos_ratio = 0;
-
-  time::T max_track_length = 0;
-  for (const auto& track : tracks) {
-    max_track_length = std::max(max_track_length, track->timestamps.back());
-  }
-
-  if (max_track_length == 0) {
-    current_pos_ratio = 0;
-  } else if (currently_playing) {
-    time::point now = time::now();
-    current_pos_ratio = (now - playback_started_at).count() / max_track_length;
-  } else {
-    current_pos_ratio = playback_offset / max_track_length;
-  }
+  time::T max_track_length = MaxTrackLength(*this);
+  float current_pos_ratio = CurrentPosRatio(*this, dctx.animation_context.timer.now);
 
   std::function<Str(time::T)> format_time;
   if (max_track_length > 3600) {
@@ -336,12 +429,12 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   canvas.restore();
 
-  float bridge_offset = -kRulerLength / 2 + kRulerLength * current_pos_ratio;
+  float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
 
-  ArcLine signal_line = ArcLine({bridge_offset, -kRulerHeight}, M_PI_2);
+  ArcLine signal_line = ArcLine({bridge_offset_x, -kRulerHeight}, M_PI_2);
 
   float x_behind_display = -kPlayButtonRadius - kDisplayMargin - kDisplayWidth - kDisplayMargin / 2;
-  auto turn_shift = ArcLine::TurnShift(bridge_offset - x_behind_display, kDisplayMargin / 2);
+  auto turn_shift = ArcLine::TurnShift(bridge_offset_x - x_behind_display, kDisplayMargin / 2);
 
   signal_line.MoveBy(kRulerHeight + kDisplayMargin / 2 - turn_shift.distance_forward / 2);
   turn_shift.Apply(signal_line);
@@ -429,20 +522,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
       Rect(-kWindowWidth / 2, -window_height, kWindowWidth / 2, -window_height + kRulerHeight);
   canvas.drawRect(bottom_bar, kRulerPaint);
 
-  canvas.drawLine(bridge_offset, -kRulerHeight, bridge_offset, 0, kSignalPaint);
-
-  SkPath bridge_handle;
-  bridge_handle.moveTo(0, kRulerHeight / 6);
-  bridge_handle.lineTo(kMinimalTouchableSize / 4, 0);
-  bridge_handle.lineTo(kMinimalTouchableSize / 2, 0);
-  bridge_handle.lineTo(kMinimalTouchableSize / 2, -kMarginAroundTracks);
-  bridge_handle.lineTo(-kMinimalTouchableSize / 2, -kMarginAroundTracks);
-  bridge_handle.lineTo(-kMinimalTouchableSize / 2, 0);
-  bridge_handle.lineTo(-kMinimalTouchableSize / 4, 0);
-  bridge_handle.close();
-  bridge_handle.offset(bridge_offset, -kRulerHeight);
-
-  canvas.drawPath(bridge_handle, kBridgeHandlePaint);
+  canvas.drawLine(bridge_offset_x, -kRulerHeight, bridge_offset_x, 0, kSignalPaint);
 
   // Bottom ticks
   {
@@ -450,20 +530,37 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
     // each 1 cm corresponds to 1 second
     // so at the middle we will have...
     float distance_to_seconds = 100;  // 1 cm = 1 second
-    float middle_time = playback_offset - bridge_offset * distance_to_seconds;
+
+    float track_width = MaxTrackLength(*this) / distance_to_seconds;
+
+    // at time 0 the first tick is at -kRulerWidth / 2
+    // at time 0 the last tick is at -kRulerWidth / 2 + track_width
+    // at time END the first tick is at kRulerWidth / 2 - track_width
+    // at time END the last tick is at kRulerWidth / 2
+
+    float first_tick_x0 = -kRulerLength / 2;
+    float first_tick_x1 = kRulerLength / 2 - track_width;
+
+    float first_tick_x = std::lerp(first_tick_x0, first_tick_x1, current_pos_ratio);
+    float last_tick_x = first_tick_x + track_width;
+
+    float middle_time = playback_offset + bridge_offset_x * distance_to_seconds;
     float left_time = middle_time - kWindowWidth / 2 * distance_to_seconds;
     float right_time = middle_time + kWindowWidth / 2 * distance_to_seconds;
 
-    float tick_every = 0.1;
-    float start = ceil(left_time / tick_every) * tick_every;
-    float end = floor(right_time / tick_every) * tick_every;
-    for (float i = start; i <= end; i += tick_every) {
-      if (i < 0) {
-        continue;
-      }
-      float x = bridge_offset + i / distance_to_seconds;
+    float tick_every_s = 0.1;
+    float tick_every_x = tick_every_s / distance_to_seconds;
+
+    int first_i = (-kWindowWidth / 2 - first_tick_x) / tick_every_x;
+    first_i = std::max(0, first_i);
+
+    int last_i = (kWindowWidth / 2 - first_tick_x) / tick_every_x;
+    last_i = std::min<int>(last_i, (last_tick_x - first_tick_x) / tick_every_x);
+
+    for (int i = first_i; i <= last_i; ++i) {
+      float x = first_tick_x + i * tick_every_x;
       float h = kRulerHeight / 4;
-      if (fabs(round(i) - i) <= 0.00001) {
+      if (i % 10 == 0) {
         h *= 2;
       }
       canvas.drawLine(x, -window_height + kRulerHeight, x, -window_height + kRulerHeight - h,
@@ -489,10 +586,8 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   DrawChildren(dctx);
 
-  canvas.drawLine(bridge_offset + 1_mm, -kRulerHeight, bridge_offset + 1_mm,
-                  -window_height + kRulerHeight, kBridgeLinePaint);
-  canvas.drawLine(bridge_offset - 1_mm, -kRulerHeight, bridge_offset - 1_mm,
-                  -window_height + kRulerHeight, kBridgeLinePaint);
+  auto bridge_shape = BridgeShape(tracks.size(), current_pos_ratio);
+  canvas.drawPath(bridge_shape, kBridgeHandlePaint);
 }
 
 SkPath Timeline::Shape() const {
@@ -516,7 +611,8 @@ ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
   }
   return ControlFlow::Continue;
 }
-SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context&) const {
+
+SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context& actx) const {
   if (&child == &run_button) {
     return SkMatrix::Translate(kPlayButtonRadius, -kDisplayMargin);
   } else if (&child == &prev_button) {
@@ -525,18 +621,32 @@ SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context&) co
     return SkMatrix::Translate(-kPlasticWidth / 2 + kSideButtonMargin + kSideButtonDiameter,
                                kSideButtonRadius);
   } else if (auto* track = dynamic_cast<const TrackBase*>(&child)) {
+    float distance_to_seconds = 100;  // 1 cm = 1 second
+    float track_width = MaxTrackLength(*this) / distance_to_seconds;
+
+    float current_pos_ratio = CurrentPosRatio(*this, actx.timer.now);
+
+    float track_offset_x0 = kRulerLength / 2;
+    float track_offset_x1 = track_width - kRulerLength / 2;
+
+    float track_offset_x = std::lerp(track_offset_x0, track_offset_x1, current_pos_ratio);
+
     for (size_t i = 0; i < tracks.size(); ++i) {
       if (tracks[i].get() == track) {
-        return SkMatrix::Translate(kWindowWidth / 2 - kTrackMargin,
-                                   kRulerHeight + kMarginAroundTracks + kTrackHeight / 2 +
-                                       i * (kTrackMargin + kTrackHeight));
+        return SkMatrix::Translate(track_offset_x, kRulerHeight + kMarginAroundTracks +
+                                                       kTrackHeight / 2 +
+                                                       i * (kTrackMargin + kTrackHeight));
       }
     }
   }
   return SkMatrix::I();
 }
 
-SkPath TrackBase::Shape() const { return SkPath::Rect(kTrackRect.sk); }
+SkPath TrackBase::Shape() const {
+  float distance_to_seconds = 100;  // 1 cm = 1 second
+  Rect rect = Rect(0, -kTrackHeight / 2, timestamps.back() / distance_to_seconds, kTrackHeight / 2);
+  return SkPath::Rect(rect.sk);
+}
 void TrackBase::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
   canvas.drawPath(Shape(), kTrackPaint);
@@ -545,15 +655,15 @@ void TrackBase::Draw(gui::DrawContext& dctx) const {
 void OnOffTrack::Draw(gui::DrawContext& dctx) const {
   TrackBase::Draw(dctx);
   for (int i = 0; i + 1 < timestamps.size(); i += 2) {
+    float distance_to_seconds = 100;  // 1 cm = 1 second
     auto start = timestamps[i];
     auto end = timestamps[i + 1];
-    float distance_to_seconds = 100;  // 1 cm = 1 second
-    if (start > kTrackWidth * distance_to_seconds) {
-      break;
-    }
-    if (end > kTrackWidth * distance_to_seconds) {
-      end = kTrackWidth * distance_to_seconds;
-    }
+    // if (start > kTrackWidth * distance_to_seconds) {
+    //   break;
+    // }
+    // if (end > kTrackWidth * distance_to_seconds) {
+    //   end = kTrackWidth * distance_to_seconds;
+    // }
 
     dctx.canvas.drawLine({(float)(start / distance_to_seconds), 0},
                          {(float)(end / distance_to_seconds), 0}, kOnOffPaint);

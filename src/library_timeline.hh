@@ -52,6 +52,7 @@ struct Timeline : LiveObject {
   void Args(std::function<void(Argument&)> cb) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
+  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
 };
 
 }  // namespace automat::library

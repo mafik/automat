@@ -425,8 +425,13 @@ unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerBut
     auto pos = ptr.PositionWithin(*this);
     if (bridge_shape.contains(pos.x, pos.y)) {
       return unique_ptr<Action>(new DragBridgeAction(*this));
-    } else if (pos.y < -kRulerHeight && window_shape.contains(pos.x, pos.y)) {
-      return unique_ptr<Action>(new DragTimelineAction(*this));
+    } else if (window_shape.contains(pos.x, pos.y)) {
+      if (pos.y < -kRulerHeight) {
+        return unique_ptr<Action>(new DragTimelineAction(*this));
+      } else {
+        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x));
+        return unique_ptr<Action>(new DragBridgeAction(*this));
+      }
     }
   }
   return Object::ButtonDownAction(ptr, btn);

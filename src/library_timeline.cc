@@ -645,7 +645,7 @@ SkPath Timeline::Shape() const {
   return SkPath::RRect(r);
 }
 
-void Timeline::Args(function<void(Argument&)> cb) {}
+void Timeline::Args(function<void(Argument&)> cb) { cb(next_arg); }
 
 ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
   Widget* arr[] = {&run_button, &prev_button, &next_button};

@@ -259,12 +259,34 @@ static float CurrentPosRatio(const Timeline& timeline, time::SystemPoint now) {
   }
 }
 
+void TimelineCancelScheduledAt(Timeline& t) {
+  CancelScheduledAt(*t.here, t.playback_started_at + time::Duration(MaxTrackLength(t)));
+}
+
+void TimelineScheduleAt(Timeline& t) {
+  ScheduleAt(*t.here, t.playback_started_at + time::Duration(MaxTrackLength(t)));
+}
+
+void OffsetPosRatio(Timeline& timeline, time::T offset) {
+  if (timeline.currently_playing) {
+    TimelineCancelScheduledAt(timeline);
+    timeline.playback_started_at -= time::Duration(offset);
+    timeline.playback_started_at = min(timeline.playback_started_at, time::SteadyNow());
+    TimelineScheduleAt(timeline);
+  } else {
+    timeline.playback_offset =
+        clamp<time::T>(timeline.playback_offset + offset, 0, MaxTrackLength(timeline));
+  }
+}
+
 void SetPosRatio(Timeline& timeline, float pos_ratio) {
   pos_ratio = clamp(pos_ratio, 0.0f, 1.0f);
+  time::T max_track_length = MaxTrackLength(timeline);
   if (timeline.currently_playing) {
-    // TODO
+    TimelineCancelScheduledAt(timeline);
+    timeline.playback_started_at = time::SteadyNow() - time::Duration(pos_ratio * max_track_length);
+    TimelineScheduleAt(timeline);
   } else {
-    time::T max_track_length = MaxTrackLength(timeline);
     timeline.playback_offset = pos_ratio * max_track_length;
   }
 }
@@ -369,8 +391,7 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    timeline.playback_offset = clamp<time::T>(timeline.playback_offset - delta_x * scaling_factor,
-                                              0, MaxTrackLength(timeline));
+    OffsetPosRatio(timeline, -delta_x * scaling_factor);
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -735,7 +756,7 @@ void OnOffTrack::Draw(gui::DrawContext& dctx) const {
 void Timeline::Cancel() {
   if (currently_playing) {
     currently_playing = false;
-    CancelScheduledAt(*here, playback_started_at + time::Duration(MaxTrackLength(*this)));
+    TimelineCancelScheduledAt(*this);
     playback_offset = (time::SteadyNow() - playback_started_at).count();
   }
 }
@@ -746,8 +767,7 @@ LongRunning* Timeline::OnRun(Location& here) {
   }
   currently_playing = true;
   playback_started_at = time::SteadyNow() - time::Duration(playback_offset);
-  time::SteadyPoint end_time = playback_started_at + time::Duration(MaxTrackLength(*this));
-  ScheduleAt(here, end_time);
+  TimelineScheduleAt(*this);
   return this;
 }
 

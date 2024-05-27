@@ -22,6 +22,7 @@ struct TrackBase : Object {
   Vec<time::T> timestamps;
   SkPath Shape() const override;
   void Draw(gui::DrawContext&) const override;
+  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
 };
 
 struct OnOffTrack : TrackBase {

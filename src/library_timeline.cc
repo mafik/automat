@@ -757,4 +757,12 @@ void Timeline::OnTimerNotification(Location& here) {
   Done(here);
 }
 
+std::unique_ptr<Action> TrackBase::ButtonDownAction(gui::Pointer& ptr, gui::PointerButton btn) {
+  if (timeline) {
+    return timeline->ButtonDownAction(ptr, btn);
+  } else {
+    return Object::ButtonDownAction(ptr, btn);
+  }
+}
+
 }  // namespace automat::library

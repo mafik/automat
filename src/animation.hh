@@ -34,7 +34,7 @@ struct DeltaFraction {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
     if (dt <= 0) return 0;
-    return 1 - exp(-dt * speed);
+    return -expm1f(-dt * speed);  // equivalent to 1 - exp(-dt * speed);
   }
 };
 
@@ -58,7 +58,7 @@ struct Approach : Base {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
     if (dt <= 0) return;
-    float delta = (target - value) * (1 - exp(-dt * speed));
+    float delta = (target - value) * (-expm1f(-dt * speed));
     float delta_abs = fabs(delta);
     if (delta_abs > cap * dt) {
       value += cap * dt * (delta > 0 ? 1 : -1);

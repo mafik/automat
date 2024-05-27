@@ -90,7 +90,7 @@ void HypnoRect::PrePaint(SkCanvas& canvas) {
     canvas.drawRect(rect, paint);
   }
 
-  unfold += (1 - unfold) * (1 - exp(-dt.count() * 2));
+  unfold += (1 - unfold) * -(expm1f(-dt.count() * 2));
 
   float outer_rect_side = rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
   float window_diag = sqrt(window_width * window_width + window_height * window_height);
@@ -98,7 +98,7 @@ void HypnoRect::PrePaint(SkCanvas& canvas) {
     if (state == kPreLoading) {
       state = kLoading;
     }
-    first_twist_v += (2 - first_twist_v) * (1 - exp(-dt.count()));
+    first_twist_v += (2 - first_twist_v) * -(expm1f(-dt.count()));
   }
   first_twist += first_twist_v * dt.count();
   if (first_twist > 1) {

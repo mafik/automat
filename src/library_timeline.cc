@@ -291,6 +291,22 @@ void SetPosRatio(Timeline& timeline, float pos_ratio) {
   }
 }
 
+void NextButton::Activate(gui::Pointer& ptr) {
+  for (int i = ptr.path.size() - 1; i >= 0; --i) {
+    if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
+      SetPosRatio(*timeline, 1);
+    }
+  }
+}
+
+void PrevButton::Activate(gui::Pointer& ptr) {
+  for (int i = ptr.path.size() - 1; i >= 0; --i) {
+    if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
+      SetPosRatio(*timeline, 0);
+    }
+  }
+}
+
 static float BridgeOffsetX(float current_pos_ratio) {
   return -kRulerLength / 2 + kRulerLength * current_pos_ratio;
 }
@@ -764,6 +780,9 @@ void Timeline::Cancel() {
 LongRunning* Timeline::OnRun(Location& here) {
   if (currently_playing) {
     return nullptr;
+  }
+  if (playback_offset >= MaxTrackLength(*this)) {
+    playback_offset = 0;
   }
   currently_playing = true;
   playback_started_at = time::SteadyNow() - time::Duration(playback_offset);

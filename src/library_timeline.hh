@@ -9,10 +9,12 @@ namespace automat::library {
 
 struct PrevButton : virtual gui::Button, gui::CircularButtonMixin {
   PrevButton();
+  void Activate(gui::Pointer&) override;
 };
 
 struct NextButton : virtual gui::Button, gui::CircularButtonMixin {
   NextButton();
+  void Activate(gui::Pointer&) override;
 };
 
 struct Timeline;
@@ -31,6 +33,10 @@ struct OnOffTrack : TrackBase {
   void Draw(gui::DrawContext&) const override;
 };
 
+// Currently Timeline pauses at end which is consistent with standard media player behavour.
+// This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
+// The user should be able to connect the "next" connection to the "jump to start" so that it loops
+// (or stops).
 struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   static const Timeline proto;
 

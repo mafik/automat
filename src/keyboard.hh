@@ -152,7 +152,7 @@ struct Caret final {
   CaretOwner* owner = nullptr;
   SkPath shape;
   Path widget_path;
-  time::point last_blink;
+  time::SystemPoint last_blink;
   Caret(Keyboard& keyboard);
   ~Caret() = default;
   void PlaceIBeam(Vec2 position);
@@ -266,7 +266,7 @@ struct CaretAnimation {
   const Keyboard& keyboard;
   animation::DeltaFraction delta_fraction;
   SkPath shape;
-  time::point last_blink;
+  time::SystemPoint last_blink;
   animation::Approach fade_out;
   CaretAnimation(const Keyboard&);
 };

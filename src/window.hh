@@ -9,13 +9,14 @@
 #include "keyboard.hh"
 #include "math.hh"
 #include "root.hh"
+#include "time.hh"
 #include "widget.hh"
 
 namespace automat::gui {
 
 // Ensures that the 1x1m canvas is at least 1mm on screen.
 constexpr float kMinZoom = 0.001f;
-constexpr time::duration kClickTimeout = std::chrono::milliseconds(300);
+constexpr time::Duration kClickTimeout = std::chrono::milliseconds(300);
 constexpr float kClickRadius = 0.002f;  // 2mm
 
 struct PrototypeButton : Widget {
@@ -150,7 +151,7 @@ struct Window final : Widget {
   bool panning_during_last_frame = false;
   bool inertia = false;
   std::deque<Vec3> camera_timeline;
-  std::deque<time::point> timeline;
+  std::deque<time::SystemPoint> timeline;
 
   animation::Context actx;
 

@@ -124,7 +124,7 @@ void Pointer::ButtonDown(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount) return;
   RunOnAutomatThread([=]() {
     button_down_position[btn] = pointer_position;
-    button_down_time[btn] = time::now();
+    button_down_time[btn] = time::SystemNow();
 
     if (action == nullptr && !path.empty()) {
       action = path.back()->ButtonDownAction(*this, btn);
@@ -145,7 +145,7 @@ void Pointer::ButtonUp(PointerButton btn) {
       }
     }
     if (btn == kMouseMiddle) {
-      time::duration down_duration = time::now() - button_down_time[kMouseMiddle];
+      time::Duration down_duration = time::SystemNow() - button_down_time[kMouseMiddle];
       Vec2 delta = pointer_position - button_down_position[kMouseMiddle];
       float delta_m = Length(delta);
       if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {

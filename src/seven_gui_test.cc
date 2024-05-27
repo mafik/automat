@@ -298,7 +298,7 @@ TEST(TimerTest, DurationChange) {
 
   Location& timer = m.Create<Timer>("T");
   FakeTime fake_time;
-  fake_time.SetNow(TimePoint(0s));
+  fake_time.SetNow(SteadyPoint(0s));
   timer.As<Timer>()->fake_time = &fake_time;
 
   Location& timer_reset = m.Create<TimerReset>();
@@ -318,7 +318,7 @@ TEST(TimerTest, DurationChange) {
   RunLoop();
   EXPECT_EQ(0, progress_bar.GetNumber()) << "Initial progress is wrong";
 
-  fake_time.SetNow(TimePoint(5s));
+  fake_time.SetNow(SteadyPoint(5s));
   RunLoop();
   EXPECT_EQ(0.5, progress_bar.GetNumber()) << "Progress after 5 seconds is wrong";
 

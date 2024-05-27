@@ -1340,6 +1340,6 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2 start)
 
 OpticalConnectorState::~OpticalConnectorState() { location.next_observers.erase(this); }
 
-void OpticalConnectorState::OnNextActivated(Location& source) { last_activity = time::now(); }
+void OpticalConnectorState::OnNextActivated(Location& source) { last_activity = time::SystemNow(); }
 
 }  // namespace automat::gui

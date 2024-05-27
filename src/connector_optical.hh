@@ -42,7 +42,7 @@ struct OpticalConnectorState : Location::NextObserver {
   maf::Optional<Vec2> stabilized_end;
 
   Location& location;
-  time::point last_activity = time::kZero;
+  time::SystemPoint last_activity = time::kZero;
 
   animation::Spring steel_insert_hidden;
 

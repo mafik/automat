@@ -145,7 +145,7 @@ void ToggleButton::Draw(DrawContext& ctx) const {
                      pressed_outer_oval.rect().fBottom * filling;
     constexpr int n_points = 6;
     Vec2 points[n_points];
-    static time::point base = actx.timer.now;
+    static time::SystemPoint base = actx.timer.now;
     float timeS = (actx.timer.now - base).count();
     constexpr float waving_x = kRadius / n_points / 2;
     float waving_y = waving_x * filling * (1 - filling) * 8;

@@ -26,9 +26,10 @@ struct Context {
 
 struct DeltaFraction {
   float speed = 15;
-  time::point last_tick;
+  time::SystemPoint last_tick;
 
-  DeltaFraction(float speed = 15) : speed(speed), last_tick(time::now()) {}
+  // TODO: think about replacing `speed` with `half_life`.
+  DeltaFraction(float speed = 15) : speed(speed), last_tick(time::SystemNow()) {}
 
   float Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
@@ -47,13 +48,13 @@ struct Approach : Base {
   float speed = 15;
   float cap_min;
   float cap;
-  time::point last_tick;
+  time::SystemPoint last_tick;
 
   Approach(float initial = 0, float cap_min = 0.01)
       : Base{.value = initial, .target = initial},
         cap_min(cap_min),
         cap(cap_min),
-        last_tick(time::now()) {}
+        last_tick(time::SystemNow()) {}
   void Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
@@ -80,8 +81,8 @@ struct Spring : Base {
   float acceleration = 100;
   float velocity = 0;
   float friction = 10;
-  time::point last_tick;
-  Spring() : last_tick(time::now()) {}
+  time::SystemPoint last_tick;
+  Spring() : last_tick(time::SystemNow()) {}
   void Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;

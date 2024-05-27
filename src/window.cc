@@ -54,7 +54,7 @@ void Window::Draw(SkCanvas& canvas) {
     // Record camera movement timeline. This is used to create inertia effect.
     camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
     timeline.emplace_back(actx.timer.now);
-    while (timeline.front() < actx.timer.now - time::duration(0.2)) {
+    while (timeline.front() < actx.timer.now - time::Duration(0.2)) {
       camera_timeline.pop_front();
       timeline.pop_front();
     }

@@ -61,7 +61,7 @@ struct Pointer final {
   std::vector<Pointer::IconType> icons;
 
   Vec2 button_down_position[kButtonCount];
-  time::point button_down_time[kButtonCount];
+  time::SystemPoint button_down_time[kButtonCount];
 
   std::unique_ptr<Action> action;
   Path path;

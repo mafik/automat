@@ -243,7 +243,7 @@ void Location::Draw(gui::DrawContext& ctx) const {
     dash_paint.setAlphaf(highlight.value);
     float intervals[] = {0.0035, 0.0015};
     double ignore;
-    time::duration period = 200s;
+    time::Duration period = 200s;
     float phase =
         std::fmod(ctx.animation_context.timer.now.time_since_epoch().count(), period.count()) /
         period.count();

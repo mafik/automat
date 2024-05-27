@@ -1,20 +1,15 @@
 #pragma once
 
-#include <chrono>
-
 #include "animation.hh"
 #include "base.hh"
 #include "number_text_field.hh"
+#include "time.hh"
 
 namespace automat::library {
 
-using Clock = std::chrono::steady_clock;
-using Duration = std::chrono::duration<double>;
-using TimePoint = std::chrono::time_point<Clock, Duration>;
-
-struct TimerDelay : LiveObject, Runnable, LongRunning {
-  Duration duration = 10s;
-  TimePoint start_time;
+struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
+  time::Duration duration = 10s;
+  time::SteadyPoint start_time;
   mutable animation::Approach start_pusher_depression;
   mutable animation::Approach left_pusher_depression;
   mutable animation::Approach right_pusher_depression;
@@ -51,10 +46,7 @@ struct TimerDelay : LiveObject, Runnable, LongRunning {
   void Updated(Location& here, Location& updated) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
+  void OnTimerNotification(Location&) override;
 };
-
-// Call this only once during startup. This starts a helper thread for timers. The thread will
-// run until the stop_token is set.
-void StartTimerHelperThread(std::stop_token);
 
 }  // namespace automat::library

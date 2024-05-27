@@ -110,15 +110,11 @@ struct Date : Object {
   }
 };
 
-using Clock = std::chrono::high_resolution_clock;
-using Duration = std::chrono::duration<double>;
-using TimePoint = std::chrono::time_point<Clock, Duration>;
-
 struct FakeTime {
-  TimePoint now;
-  std::multimap<TimePoint, Location*> schedule;
+  time::SteadyPoint now;
+  std::multimap<time::SteadyPoint, Location*> schedule;
 
-  void SetNow(TimePoint time) {
+  void SetNow(time::SteadyPoint time) {
     this->now = time;
     while (!schedule.empty() && schedule.begin()->first <= now) {
       auto [time, location] = *schedule.begin();
@@ -126,7 +122,7 @@ struct FakeTime {
       location->ScheduleRun();
     }
   }
-  void RunAfter(Duration duration, Location& location) {
+  void RunAfter(time::Duration duration, Location& location) {
     schedule.emplace(now + duration, &location);
   }
 };
@@ -138,8 +134,8 @@ struct FakeTime {
 // 2. _Lazy_ timers - which never `Run` but can be queried with `GetText`.
 struct Timer : Object, Runnable {
   static const Timer proto;
-  TimePoint start;
-  TimePoint last_tick;
+  time::SteadyPoint start;
+  time::SteadyPoint last_tick;
   FakeTime* fake_time = nullptr;
   string_view Name() const override { return "Timer"; }
   std::unique_ptr<Object> Clone() const override {
@@ -157,13 +153,13 @@ struct Timer : Object, Runnable {
   }
   string GetText() const override {
     using namespace std::chrono_literals;
-    TimePoint now = GetNow();
-    Duration elapsed = now - start;
+    time::SteadyPoint now = GetNow();
+    time::Duration elapsed = now - start;
     return f("%.3lf", elapsed.count());
   }
   LongRunning* OnRun(Location& here) override {
     using namespace std::chrono_literals;
-    TimePoint now = GetNow();
+    time::SteadyPoint now = GetNow();
     if (now - last_tick >= 1ms) {
       last_tick = now;
       here.ScheduleUpdate();
@@ -177,11 +173,11 @@ struct Timer : Object, Runnable {
     here.ScheduleUpdate();
     ScheduleNextRun(here);
   }
-  TimePoint GetNow() const {
+  time::SteadyPoint GetNow() const {
     if (fake_time) {
       return fake_time->now;
     } else {
-      return Clock::now();
+      return time::SteadyClock::now();
     }
   }
 };

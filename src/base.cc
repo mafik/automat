@@ -13,9 +13,9 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "gui_connection_widget.hh"
-#include "library_timer.hh"
 #include "tasks.hh"
 #include "thread_name.hh"
+#include "time.hh"
 
 namespace automat {
 
@@ -90,7 +90,7 @@ struct ShutdownTask : Task {
 };
 
 void RunThread(std::stop_token stop_token) {
-  library::StartTimerHelperThread(stop_token);
+  StartTimeThread(stop_token);
   std::stop_callback wakeup_for_shutdown(stop_token,
                                          [] { events.send(std::make_unique<ShutdownTask>()); });
 

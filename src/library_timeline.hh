@@ -30,7 +30,7 @@ struct OnOffTrack : TrackBase {
   void Draw(gui::DrawContext&) const override;
 };
 
-struct Timeline : LiveObject {
+struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   static const Timeline proto;
 
   gui::RunButton run_button;
@@ -41,8 +41,8 @@ struct Timeline : LiveObject {
 
   bool currently_playing = false;
   union {
-    time::T playback_offset;          // Used when playback is paused
-    time::point playback_started_at;  // Used when playback is active
+    time::T playback_offset;                // Used when playback is paused
+    time::SteadyPoint playback_started_at;  // Used when playback is active
   };
 
   Timeline();
@@ -56,6 +56,9 @@ struct Timeline : LiveObject {
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
+  LongRunning* OnRun(Location& here) override;
+  void Cancel() override;
+  void OnTimerNotification(Location&) override;
 };
 
 }  // namespace automat::library

@@ -11,10 +11,7 @@
 #include <include/pathops/SkPathOps.h>
 
 #include <cmath>
-#include <condition_variable>
-#include <map>
 #include <memory>
-#include <thread>
 
 #include "animation.hh"
 #include "base.hh"
@@ -25,9 +22,13 @@
 #include "number_text_field.hh"
 #include "pointer.hh"
 #include "tasks.hh"
-#include "thread_name.hh"
+#include "time.hh"
 
 namespace automat::library {
+
+using time::Duration;
+using time::SteadyClock;
+using time::SteadyPoint;
 
 DEFINE_PROTO(TimerDelay);
 
@@ -56,33 +57,11 @@ LiveArgument duration_arg = LiveArgument("duration", Argument::kOptional);
 
 static constexpr float kHandAcceleration = 2000;
 
-static std::jthread timer_thread;
-static std::mutex mtx;
-static std::condition_variable cv;
-
-static std::multimap<TimePoint, std::unique_ptr<Task>> tasks;
-
-static void TimerFinished(Location* here) {
-  TimerDelay* timer = here->As<TimerDelay>();
-  if (timer == nullptr) {
-    return;
-  }
-  timer->state = TimerDelay::State::Idle;
-  timer->Done(*here);
-  if (timer->here) {
-    ScheduleNext(*timer->here);
-  }
+void TimerDelay::OnTimerNotification(Location& here2) {
+  state = TimerDelay::State::Idle;
+  Done(here2);
+  ScheduleNext(here2);
 }
-
-struct TimerFinishedTask : Task {
-  TimerFinishedTask(Location* target) : Task(target) {}
-  std::string Format() override { return "TimerFinishedTask"; }
-  void Execute() override {
-    PreExecute();
-    TimerFinished(target);
-    PostExecute();
-  }
-};
 
 // How long it takes for the timer dial to rotate once.
 static Duration RangeDuration(TimerDelay::Range range) {
@@ -160,23 +139,7 @@ static void UpdateTextField(TimerDelay& timer) {
 
 static void SetDuration(TimerDelay& timer, Duration new_duration) {
   if (timer.state == TimerDelay::State::Running) {
-    std::unique_lock<std::mutex> lck(mtx);
-    if (timer.state == TimerDelay::State::Running) {
-      auto [a, b] = tasks.equal_range(timer.start_time + timer.duration);
-      for (auto it = a; it != b; ++it) {
-        if (it->second->target == timer.here) {
-          tasks.erase(it);
-          break;
-        }
-      }
-      auto new_end = timer.start_time + Duration(new_duration);
-      if (new_end <= Clock::now()) {
-        TimerFinished(timer.here);
-      } else {
-        tasks.emplace(new_end, new TimerFinishedTask(timer.here));
-      }
-      cv.notify_all();
-    }
+    RescheduleAt(*timer.here, timer.start_time + timer.duration, timer.start_time + new_duration);
   }
 
   timer.duration = new_duration;
@@ -271,7 +234,7 @@ static void AdjustRotation(float& rotation, float target = 0) {
 
 static float HandBaseDegrees(const TimerDelay& timer) {
   if (timer.state == TimerDelay::State::Running) {
-    Duration elapsed = Clock::now() - timer.start_time;
+    Duration elapsed = SteadyClock::now() - timer.start_time;
     return 90 - 360 * elapsed.count() / RangeDuration(timer.range).count();
   } else {
     return 90;
@@ -418,7 +381,7 @@ static SkPath DurationHandlePath(const TimerDelay& timer) {
   return path.makeTransform(SkMatrix::RotateRad(timer.duration_handle_rotation));
 }
 
-static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, Duration duration) {
+static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration duration) {
   int range_max = TickCount(range);
   int tick_count = TickCount(range);
   int major_tick_count = MajorTickCount(range);
@@ -660,7 +623,7 @@ struct DragDurationHandleAction : Action {
     }
     new_duration *= RangeDuration(timer.range).count();
 
-    SetDuration(timer, Duration(new_duration));
+    SetDuration(timer, time::Duration(new_duration));
     PropagateDurationOutwards(timer);
   }
   virtual void End() {}
@@ -744,51 +707,11 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
   cb(next_arg);
 }
 
-static void TimerThread(std::stop_token automat_stop_token) {
-  SetThreadName("Timer");
-  bool stop = false;  // doesn't have to be atomic because it's protected by mtx
-  std::stop_callback on_automat_stop(automat_stop_token, [&] {
-    std::unique_lock<std::mutex> lck(mtx);
-    stop = true;
-    cv.notify_all();
-  });
-
-  while (true) {
-    std::unique_lock<std::mutex> lck(mtx);
-    if (tasks.empty()) {
-      // LOG << "Timer thread waiting";
-      cv.wait(lck);
-    } else {
-      // LOG << "Timer thread waiting until " << tasks.begin()->first.time_since_epoch().count()
-      //     << " (" << tasks.size() << " tasks)";
-      cv.wait_until(lck, tasks.begin()->first);
-    }
-    if (stop) {
-      break;
-    }
-    auto now = Clock::now();
-    while (!tasks.empty() && tasks.begin()->first <= now) {
-      // LOG << "Timer thread executing task " << tasks.begin()->second->Format();
-      events.send(std::move(tasks.begin()->second));
-      tasks.erase(tasks.begin());
-    }
-  }
-}
-
-void StartTimerHelperThread(std::stop_token automat_stop_token) {
-  timer_thread = std::jthread(TimerThread, automat_stop_token);
-  timer_thread.detach();
-}
-
 LongRunning* TimerDelay::OnRun(Location& here) {
   if (state == State::Idle) {
     state = State::Running;
-    start_time = Clock::now();
-    {
-      std::unique_lock<std::mutex> lck(mtx);
-      tasks.emplace(start_time + duration, new TimerFinishedTask(&here));
-      cv.notify_all();
-    }
+    start_time = time::SteadyClock::now();
+    ScheduleAt(here, start_time + duration);
     return this;
   }
   return nullptr;
@@ -796,17 +719,7 @@ LongRunning* TimerDelay::OnRun(Location& here) {
 
 void TimerDelay::Cancel() {
   if (state == TimerDelay::State::Running) {
-    std::unique_lock<std::mutex> lck(mtx);
-    if (state == TimerDelay::State::Running) {
-      auto [a, b] = tasks.equal_range(start_time + duration);
-      for (auto it = a; it != b; ++it) {
-        if (it->second->target == here) {
-          tasks.erase(it);
-          break;
-        }
-      }
-      cv.notify_all();
-    }
+    CancelScheduledAt(*here, start_time + duration);
   }
 }
 

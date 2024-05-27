@@ -248,12 +248,12 @@ static time::T MaxTrackLength(const Timeline& timeline) {
   return max_track_length;
 }
 
-static float CurrentPosRatio(const Timeline& timeline, time::point now) {
+static float CurrentPosRatio(const Timeline& timeline, time::SystemPoint now) {
   time::T max_track_length = MaxTrackLength(timeline);
   if (max_track_length == 0) {
     return 0;
   } else if (timeline.currently_playing) {
-    return (now - timeline.playback_started_at).count() / max_track_length;
+    return (now - time::SystemFromSteady(timeline.playback_started_at)).count() / max_track_length;
   } else {
     return timeline.playback_offset / max_track_length;
   }
@@ -277,9 +277,9 @@ static float PosRatioFromBridgeOffsetX(float bridge_offset_x) {
   return (bridge_offset_x + kRulerLength / 2) / kRulerLength;
 }
 
-time::T TimeAtX(const Timeline& timeline, float x, time::point now = time::kZero) {
+time::T TimeAtX(const Timeline& timeline, float x, time::SystemPoint now = time::kZero) {
   if (now == time::kZero) {
-    now = time::now();
+    now = time::SystemNow();
   }
   // Find the time at the center of the timeline
   float distance_to_seconds = 100;  // 1 cm = 1 second
@@ -725,6 +725,31 @@ void OnOffTrack::Draw(gui::DrawContext& dctx) const {
 
     dctx.canvas.drawLine({start, 0}, {end, 0}, kOnOffPaint);
   }
+}
+
+void Timeline::Cancel() {
+  if (currently_playing) {
+    currently_playing = false;
+    CancelScheduledAt(*here, playback_started_at + time::Duration(MaxTrackLength(*this)));
+    playback_offset = (time::SteadyNow() - playback_started_at).count();
+  }
+}
+
+LongRunning* Timeline::OnRun(Location& here) {
+  if (currently_playing) {
+    return nullptr;
+  }
+  currently_playing = true;
+  playback_started_at = time::SteadyNow() - time::Duration(playback_offset);
+  time::SteadyPoint end_time = playback_started_at + time::Duration(MaxTrackLength(*this));
+  ScheduleAt(here, end_time);
+  return this;
+}
+
+void Timeline::OnTimerNotification(Location& here) {
+  currently_playing = false;
+  playback_offset = MaxTrackLength(*this);
+  Done(here);
 }
 
 }  // namespace automat::library

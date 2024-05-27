@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "animation.hh"
 #include "base.hh"
 #include "run_button.hh"
 
@@ -45,6 +46,8 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   NextButton next_button;
 
   Vec<std::unique_ptr<TrackBase>> tracks;
+
+  mutable animation::Approach zoom;  // stores the time in seconds
 
   bool currently_playing = false;
   union {

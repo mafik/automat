@@ -15,6 +15,7 @@
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "library_macros.hh"
+#include "math.hh"
 #include "svg.hh"
 #include "time.hh"
 #include "window.hh"
@@ -57,6 +58,13 @@ constexpr float kWindowWidth = kPlasticWidth - 2 * kDisplayMargin;
 constexpr float kTrackMargin = 1_mm;
 constexpr float kTrackHeight = 1_cm;
 constexpr float kTrackWidth = kWindowWidth - 2 * kTrackMargin;
+
+constexpr float kZoomRadius = 3_cm;
+constexpr float kZoomVisible = kRulerHeight + kMarginAroundTracks / 2;
+
+static constexpr Vec2 ZoomDialCenter(float window_height) {
+  return {kWindowWidth / 4, -window_height - kZoomRadius + kZoomVisible};
+}
 
 static constexpr float WindowHeight(int num_tracks) {
   return kRulerHeight * 2 + kMarginAroundTracks * 2 + max(0, num_tracks - 1) * kTrackMargin +
@@ -192,6 +200,28 @@ const SkPaint kOnOffPaint = []() {
   return p;
 }();
 
+const SkPaint kZoomPaint = []() {
+  SkPaint p;
+  p.setColor("#000000"_color);
+  p.setAlphaf(0.5f);
+  return p;
+}();
+
+const SkPaint kZoomTextPaint = []() {
+  SkPaint p;
+  p.setColor("#ffffff"_color);
+  p.setAlphaf(0.9f);
+  return p;
+}();
+
+const SkPaint kZoomTickPaint = []() {
+  SkPaint p;
+  p.setColor("#ffffff"_color);
+  p.setAlphaf(0.9f);
+  p.setStyle(SkPaint::kStroke_Style);
+  return p;
+}();
+
 const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
 
 DEFINE_PROTO(Timeline);
@@ -204,7 +234,7 @@ NextButton::NextButton()
     : gui::Button(MakeShapeWidget(kNextShape, 0xffffffff), "#404040"_color),
       gui::CircularButtonMixin(kSideButtonRadius) {}
 
-Timeline::Timeline() : run_button(nullptr, kPlayButtonRadius), playback_offset(0) {
+Timeline::Timeline() : run_button(nullptr, kPlayButtonRadius), playback_offset(0), zoom(10) {
   run_button.color = "#e24e1f"_color;
 }
 
@@ -235,8 +265,9 @@ string_view Timeline::Name() const { return "Timeline"; }
 
 unique_ptr<Object> Timeline::Clone() const { return make_unique<Timeline>(*this); }
 
+constexpr float kLcdFontSize = 1.5_mm;
 static Font& LcdFont() {
-  static unique_ptr<Font> font = Font::Make(1.5, 700);
+  static unique_ptr<Font> font = Font::Make(kLcdFontSize * 1000, 700);
   return *font.get();
 }
 
@@ -315,12 +346,16 @@ static float PosRatioFromBridgeOffsetX(float bridge_offset_x) {
   return (bridge_offset_x + kRulerLength / 2) / kRulerLength;
 }
 
+static float DistanceToSeconds(const Timeline& timeline) {
+  return timeline.zoom.value / kWindowWidth;
+}
+
 time::T TimeAtX(const Timeline& timeline, float x, time::SystemPoint now = time::kZero) {
   if (now == time::kZero) {
     now = time::SystemNow();
   }
   // Find the time at the center of the timeline
-  float distance_to_seconds = 100;  // 1 cm = 1 second
+  float distance_to_seconds = DistanceToSeconds(timeline);
   float current_pos_ratio = CurrentPosRatio(timeline, now);
   float track_width = MaxTrackLength(timeline);
 
@@ -396,7 +431,7 @@ struct DragTimelineAction : Action {
     float x = ptr.PositionWithin(timeline).x;
     float delta_x = x - last_x;
     last_x = x;
-    float distance_to_seconds = 100;  // 1 cm = 1 second
+    float distance_to_seconds = DistanceToSeconds(timeline);
     float max_track_length = MaxTrackLength(timeline);
     float denominator = max_track_length - kRulerLength * distance_to_seconds;
 
@@ -410,6 +445,65 @@ struct DragTimelineAction : Action {
     OffsetPosRatio(timeline, -delta_x * scaling_factor);
   }
   virtual void End() {}
+  virtual void DrawAction(gui::DrawContext&) {}
+};
+
+constexpr float kZoomTresholdsS[] = {
+    0.001, 0.02, 0.1, 1, 20, 120, 3600,
+};
+
+constexpr float kZoomStepSizeS[] = {
+    0.001, 0.001, 0.01, 0.1, 1, 10, 60,
+};
+
+constexpr Size kZoomLevelsCount = sizeof(kZoomTresholdsS) / sizeof(kZoomTresholdsS[0]);
+
+static float NearestZoomTick(float zoom) {
+  if (zoom < kZoomTresholdsS[0]) {
+    return kZoomTresholdsS[0];
+  }
+  for (int i = 0; i < kZoomLevelsCount; ++i) {
+    if (zoom < kZoomTresholdsS[i] + kZoomStepSizeS[i] / 2) {
+      return roundf(zoom / kZoomStepSizeS[i]) * kZoomStepSizeS[i];
+    }
+  }
+  return kZoomTresholdsS[kZoomLevelsCount - 1];
+}
+
+static float NextZoomTick(float zoom) {
+  for (int i = 0; i < kZoomLevelsCount; ++i) {
+    if (zoom < kZoomTresholdsS[i] - kZoomStepSizeS[i] / 2) {
+      return zoom + kZoomStepSizeS[i];
+    }
+  }
+  return zoom + kZoomStepSizeS[kZoomLevelsCount - 1];
+}
+
+static float PreviousZoomTick(float zoom) {
+  for (int i = 0; i < kZoomLevelsCount; ++i) {
+    if (zoom <= kZoomTresholdsS[i] + kZoomStepSizeS[i] / 2) {
+      return zoom - kZoomStepSizeS[i];
+    }
+  }
+  return zoom - kZoomStepSizeS[kZoomLevelsCount - 1];
+}
+
+struct DragZoomAction : Action {
+  Timeline& timeline;
+  float last_x;
+  DragZoomAction(Timeline& timeline) : timeline(timeline) {}
+  virtual void Begin(gui::Pointer& ptr) { last_x = ptr.PositionWithin(timeline).x; }
+  virtual void Update(gui::Pointer& ptr) {
+    float x = ptr.PositionWithin(timeline).x;
+    float delta_x = x - last_x;
+    last_x = x;
+    float factor = expf(delta_x * -30);
+    timeline.zoom.value *= factor;
+    timeline.zoom.target *= factor;
+    timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
+    timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
+  }
+  virtual void End() { timeline.zoom.target = NearestZoomTick(timeline.zoom.target); }
   virtual void DrawAction(gui::DrawContext&) {}
 };
 
@@ -464,7 +558,12 @@ unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerBut
       return unique_ptr<Action>(new DragBridgeAction(*this));
     } else if (window_shape.contains(pos.x, pos.y)) {
       if (pos.y < -kRulerHeight) {
-        return unique_ptr<Action>(new DragTimelineAction(*this));
+        if (LengthSquared(pos - ZoomDialCenter(WindowHeight(tracks.size()))) <
+            kZoomRadius * kZoomRadius) {
+          return unique_ptr<Action>(new DragZoomAction(*this));
+        } else {
+          return unique_ptr<Action>(new DragTimelineAction(*this));
+        }
       } else {
         SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x));
         return unique_ptr<Action>(new DragBridgeAction(*this));
@@ -481,6 +580,8 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   canvas.drawRRect(kDisplayRRect.sk, kDisplayPaint);
 
   constexpr float PI = numbers::pi;
+
+  zoom.Tick(dctx.animation_context);
 
   time::T max_track_length = MaxTrackLength(*this);
   float current_pos_ratio = CurrentPosRatio(*this, dctx.animation_context.timer.now);
@@ -622,11 +723,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   // Bottom ticks
   {
-    // bridge_offset corresponds to playback_offset
-    // each 1 cm corresponds to 1 second
-    // so at the middle we will have...
-    float distance_to_seconds = 100;  // 1 cm = 1 second
-
+    float distance_to_seconds = DistanceToSeconds(*this);
     float track_width = MaxTrackLength(*this) / distance_to_seconds;
 
     // at time 0 the first tick is at -kRulerWidth / 2
@@ -660,7 +757,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
     }
   }
 
-  canvas.restore();
+  canvas.restore();  // unclip
 
   // Screws
   canvas.drawCircle({kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
@@ -680,6 +777,86 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   auto bridge_shape = BridgeShape(tracks.size(), current_pos_ratio);
   canvas.drawPath(bridge_shape, kBridgeHandlePaint);
+
+  canvas.save();
+  canvas.clipPath(window_path, true);
+  {  // Zoom dial
+    auto zoom_center = ZoomDialCenter(window_height);
+    canvas.drawCircle(zoom_center, kZoomRadius, kZoomPaint);
+    canvas.save();
+    float zoom_text_width = lcd_font.MeasureText("ZOOM");
+    canvas.translate(zoom_center.x - zoom_text_width / 2, -window_height + kMarginAroundTracks / 2);
+    lcd_font.DrawText(canvas, "ZOOM", kZoomTextPaint);
+    canvas.restore();
+
+    auto DrawZoomText = [&](float angle_degrees, Str text) {
+      float text_width = lcd_font.MeasureText(text);
+      canvas.save();
+      canvas.translate(zoom_center.x - text_width / 2, -window_height - kZoomRadius + kZoomVisible);
+      canvas.rotate(angle_degrees);
+      canvas.translate(0, kZoomRadius - kLcdFontSize - 2_mm);
+      lcd_font.DrawText(canvas, text, kZoomTextPaint);
+      canvas.restore();
+    };
+
+    Str current_zoom_text;
+    if (zoom < 1) {
+      current_zoom_text = f("%d ms", (int)roundf(zoom.value * 1000));
+    } else {
+      current_zoom_text = f("%.1f s", zoom.value);
+    }
+    DrawZoomText(0, current_zoom_text);
+
+    float nearest_tick = NearestZoomTick(zoom.value);
+    float next_tick, previous_tick;
+    if (nearest_tick > zoom.value) {
+      next_tick = nearest_tick;
+      previous_tick = PreviousZoomTick(nearest_tick);
+    } else {
+      next_tick = NextZoomTick(nearest_tick);
+      previous_tick = nearest_tick;
+    }
+
+    auto tick_angle = [](float tick0, float tick1) {
+      return ((tick1 - tick0) / (tick1 + tick0)) * .5f;
+    };
+
+    float ratio = (zoom.value - previous_tick) / (next_tick - previous_tick);
+    float angle0 = lerp(0, tick_angle(previous_tick, next_tick), ratio) + numbers::pi / 2;
+
+    float line_start = kZoomRadius - 1_mm;
+    float line_end = kZoomRadius;
+
+    float angle = angle0;
+    float tick = previous_tick;
+
+    while (tick <= 3600) {
+      Vec2 p0 = Vec2::Polar(angle, line_start) + zoom_center;
+      Vec2 p1 = Vec2::Polar(angle, line_end) + zoom_center;
+      if (p1.y < -window_height) {
+        break;
+      }
+      canvas.drawLine(p0.x, p0.y, p1.x, p1.y, kZoomTickPaint);
+      float next = NextZoomTick(tick);
+      angle -= tick_angle(tick, next);
+      tick = next;
+    }
+    angle = angle0;
+    tick = previous_tick;
+    while (angle >= 0.001) {
+      Vec2 p0 = Vec2::Polar(angle, line_start) + zoom_center;
+      Vec2 p1 = Vec2::Polar(angle, line_end) + zoom_center;
+      if (p1.y < -window_height) {
+        break;
+      }
+      canvas.drawLine(p0.x, p0.y, p1.x, p1.y, kZoomTickPaint);
+      float prev = PreviousZoomTick(tick);
+      angle += tick_angle(prev, tick);
+      tick = prev;
+    }
+  }
+
+  canvas.restore();  // unclip
 }
 
 SkPath Timeline::Shape() const {
@@ -713,7 +890,7 @@ SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context& act
     return SkMatrix::Translate(-kPlasticWidth / 2 + kSideButtonMargin + kSideButtonDiameter,
                                kSideButtonRadius);
   } else if (auto* track = dynamic_cast<const TrackBase*>(&child)) {
-    float distance_to_seconds = 100;  // 1 cm = 1 second
+    float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
     float track_width = MaxTrackLength(*this) / distance_to_seconds;
 
     float current_pos_ratio = CurrentPosRatio(*this, actx.timer.now);
@@ -735,7 +912,12 @@ SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context& act
 }
 
 SkPath TrackBase::Shape() const {
-  float distance_to_seconds = 100;  // 1 cm = 1 second
+  float distance_to_seconds;
+  if (timeline) {
+    distance_to_seconds = DistanceToSeconds(*timeline);
+  } else {
+    distance_to_seconds = 100;  // 1 cm = 1 second
+  }
   Rect rect = Rect(0, -kTrackHeight / 2, timestamps.back() / distance_to_seconds, kTrackHeight / 2);
   if (timeline) {
     // Clip to the width of the timeline window
@@ -755,7 +937,7 @@ void OnOffTrack::Draw(gui::DrawContext& dctx) const {
   Rect rect;
   shape.isRect(&rect.sk);
   for (int i = 0; i + 1 < timestamps.size(); i += 2) {
-    float distance_to_seconds = 100;  // 1 cm = 1 second
+    float distance_to_seconds = DistanceToSeconds(*timeline);
     float start = timestamps[i] / distance_to_seconds;
     float end = timestamps[i + 1] / distance_to_seconds;
 

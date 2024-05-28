@@ -720,6 +720,20 @@ static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& pa
       uniform shader cable_weave_color;
       uniform shader cable_weave_normal;
 
+      float3x3 transpose3x3(in float3x3 inMatrix) {
+          float3 i0 = inMatrix[0];
+          float3 i1 = inMatrix[1];
+          float3 i2 = inMatrix[2];
+
+          float3x3 outMatrix = float3x3(
+                      float3(i0.x, i1.x, i2.x),
+                      float3(i0.y, i1.y, i2.y),
+                      float3(i0.z, i1.z, i2.z)
+                      );
+
+          return outMatrix;
+      }
+
       float2 main(const Varyings v, out float4 color) {
         vec3 lightDir = normalize(vec3(0, 1, 1)); // normalized vector pointing from current fragment towards the light
         float h = sqrt(1 - v.uv.x * v.uv.x );
@@ -729,7 +743,7 @@ static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& pa
         vec3 N = normalize(vec3(v.uv.x * T.y, -v.uv.x * T.x, h));
         vec3 B = cross(T, N);
         float3x3 TBN = float3x3(T, B, N);
-        float3x3 TBN_inv = transpose(TBN);
+        float3x3 TBN_inv = transpose3x3(TBN);
 
         vec2 texCoord = vec2(-angle / PI, v.uv.y / kCableWidth / 2) * 512;
 

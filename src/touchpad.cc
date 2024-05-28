@@ -115,9 +115,9 @@ void UnlockCursor() {
   }
 }
 
-time::point last_pan_time;
+time::SystemPoint last_pan_time;
 
-bool ShouldIgnoreScrollEvents() { return time::now() < last_pan_time + time::duration(1.0); }
+bool ShouldIgnoreScrollEvents() { return time::SystemNow() < last_pan_time + time::Duration(1.0); }
 
 struct TouchPadImpl {
   TouchPad touchpad;
@@ -201,7 +201,7 @@ struct TouchPadImpl {
   void ScanComplete() {
     std::vector<Touch>& new_touches = touchpad.touches;
     if (old_touches.size() == 2 && new_touches.size() == 2) {
-      last_pan_time = time::now();
+      last_pan_time = time::SystemNow();
       touchpad.panning = true;
       LockCursor();
       float old_d = Length(old_touches[0].pos - old_touches[1].pos);

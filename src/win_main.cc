@@ -125,7 +125,7 @@ uint32_t ScanCode(LPARAM lParam) {
 }
 
 std::jthread render_thread;
-time::point next_frame;
+time::SystemPoint next_frame;
 constexpr bool kPowersave = true;
 
 #pragma comment(lib, "winmm.lib")  // needed for timeBeginPeriod
@@ -133,13 +133,13 @@ constexpr bool kPowersave = true;
 
 void VulkanPaint() {
   if (kPowersave) {
-    time::point now = time::now();
+    time::SystemPoint now = time::SystemNow();
     // TODO: Adjust next_frame to minimize input latency
     // VK_EXT_present_timing
     // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
     if (next_frame <= now) {
       double frame_count = ceil((now - next_frame).count() * screen_refresh_rate);
-      next_frame += time::duration(frame_count / screen_refresh_rate);
+      next_frame += time::Duration(frame_count / screen_refresh_rate);
       constexpr bool kLogSkippedFrames = false;
       if (kLogSkippedFrames && frame_count > 1) {
         LOG << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
@@ -149,7 +149,7 @@ void VulkanPaint() {
       // With timeBeginPeriod(1) it's T + ~1ms.
       // TODO: try condition_variable instead
       std::this_thread::sleep_until(next_frame);
-      next_frame += time::duration(1.0 / screen_refresh_rate);
+      next_frame += time::Duration(1.0 / screen_refresh_rate);
     }
   }
   SkCanvas* canvas = vk::GetBackbufferCanvas();
@@ -556,7 +556,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     FATAL << "Failed to initialize Vulkan: " << err;
   }
 
-  next_frame = time::now();
+  next_frame = time::SystemNow();
   ShowWindow(main_window, nCmdShow);
   UpdateWindow(main_window);
   RECT rect;

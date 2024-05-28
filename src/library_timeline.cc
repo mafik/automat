@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <memory>
+#include <numbers>
 
 #include "arcline.hh"
 #include "base.hh"

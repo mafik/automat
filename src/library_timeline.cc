@@ -311,15 +311,27 @@ void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
   ScheduleAt(*t.here, t.playback_started_at + time::Duration(next_update));
 }
 
+static void TimelineUpdateOutputs(Location& here, Timeline& t, time::T current_offset) {
+  for (int i = 0; i < t.tracks.size(); ++i) {
+    auto obj_result = t.track_args[i].GetObject(here);
+    if (obj_result.location == nullptr || obj_result.object == nullptr) {
+      continue;
+    }
+    t.tracks[i]->UpdateOutput(*obj_result.location, current_offset);
+  }
+}
+
 void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
   if (timeline.currently_playing) {
     TimelineCancelScheduledAt(timeline);
     timeline.playback_started_at -= time::Duration(offset);
     timeline.playback_started_at = min(timeline.playback_started_at, now);
+    TimelineUpdateOutputs(*timeline.here, timeline, (now - timeline.playback_started_at).count());
     TimelineScheduleAt(timeline, now);
   } else {
     timeline.playback_offset =
         clamp<time::T>(timeline.playback_offset + offset, 0, MaxTrackLength(timeline));
+    TimelineUpdateOutputs(*timeline.here, timeline, timeline.playback_offset);
   }
 }
 
@@ -329,9 +341,11 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   if (timeline.currently_playing) {
     TimelineCancelScheduledAt(timeline);
     timeline.playback_started_at = now - time::Duration(pos_ratio * max_track_length);
+    TimelineUpdateOutputs(*timeline.here, timeline, (now - timeline.playback_started_at).count());
     TimelineScheduleAt(timeline, now);
   } else {
     timeline.playback_offset = pos_ratio * max_track_length;
+    TimelineUpdateOutputs(*timeline.here, timeline, timeline.playback_offset);
   }
 }
 
@@ -989,16 +1003,6 @@ void Timeline::Cancel() {
     currently_playing = false;
     TimelineCancelScheduledAt(*this);
     playback_offset = (time::SteadyNow() - playback_started_at).count();
-  }
-}
-
-static void TimelineUpdateOutputs(Location& here, Timeline& t, time::T current_offset) {
-  for (int i = 0; i < t.tracks.size(); ++i) {
-    auto obj_result = t.track_args[i].GetObject(here);
-    if (obj_result.location == nullptr || obj_result.object == nullptr) {
-      continue;
-    }
-    t.tracks[i]->UpdateOutput(*obj_result.location, current_offset);
   }
 }
 

@@ -452,11 +452,11 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
       kWidth / 2 - kFrameWidth,
       kHeight / 2 - kFrameWidth,
   };
-  float fire_radius = 10_mm;
-  auto fire_paint = GetFirePaint(inner_rect, fire_radius);
-  inner_rect.sk.outset(fire_radius, fire_radius * 1.5);
+  // float fire_radius = 10_mm;
+  // auto fire_paint = GetFirePaint(inner_rect, fire_radius);
+  // inner_rect.sk.outset(fire_radius, fire_radius * 1.5);
 
-  canvas.drawRect(inner_rect.sk, fire_paint);
+  // canvas.drawRect(inner_rect.sk, fire_paint);
 
   // Frame shadow
   SkPaint background_shadow_paint;

@@ -54,28 +54,42 @@ void StartTimeThread(std::stop_token automat_stop_token) {
   timer_thread.detach();
 }
 
-static void TimerFinished(Location& here) {
+static void TimerFinished(Location& here, SteadyPoint scheduled_time) {
   TimerNotificationReceiver* timer = here.As<TimerNotificationReceiver>();
   if (timer == nullptr) {
     ERROR << "Timer notification sent to an object which cannot receive it: " << here.Name();
     return;
   }
-  timer->OnTimerNotification(here);
+  timer->OnTimerNotification(here, scheduled_time);
 }
 
 struct TimerFinishedTask : Task {
-  TimerFinishedTask(Location* target) : Task(target) {}
+  time::SteadyPoint scheduled_time;
+  TimerFinishedTask(Location* target, time::SteadyPoint scheduled_time)
+      : Task(target), scheduled_time(scheduled_time) {}
   std::string Format() override { return "TimerFinishedTask"; }
   void Execute() override {
     PreExecute();
-    TimerFinished(*target);
+    TimerFinished(*target, scheduled_time);
     PostExecute();
   }
 };
 
 void ScheduleAt(Location& here, SteadyPoint time) {
   std::unique_lock<std::mutex> lck(mtx);
-  tasks.emplace(time, new TimerFinishedTask(&here));
+  tasks.emplace(time, new TimerFinishedTask(&here, time));
+  cv.notify_all();
+}
+
+void CancelScheduledAt(Location& here) {
+  std::unique_lock<std::mutex> lck(mtx);
+  for (auto it = tasks.begin(); it != tasks.end();) {
+    if (it->second->target == &here) {
+      it = tasks.erase(it);
+    } else {
+      ++it;
+    }
+  }
   cv.notify_all();
 }
 
@@ -102,9 +116,9 @@ void RescheduleAt(Location& here, SteadyPoint old_time, SteadyPoint new_time) {
   }
   if (new_time <= SteadyClock::now()) {
     cv.notify_all();
-    TimerFinished(here);
+    TimerFinished(here, new_time);
   } else {
-    tasks.emplace(new_time, new TimerFinishedTask(&here));
+    tasks.emplace(new_time, new TimerFinishedTask(&here, new_time));
     cv.notify_all();
   }
 }

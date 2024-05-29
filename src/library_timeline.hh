@@ -5,6 +5,7 @@
 #include "animation.hh"
 #include "base.hh"
 #include "run_button.hh"
+#include "time.hh"
 
 namespace automat::library {
 
@@ -26,12 +27,14 @@ struct TrackBase : Object {
   SkPath Shape() const override;
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
+  virtual void UpdateOutput(Location& target, time::T current_offset) = 0;
 };
 
 struct OnOffTrack : TrackBase {
   string_view Name() const override { return "On/Off Track"; }
   std::unique_ptr<Object> Clone() const override { return std::make_unique<OnOffTrack>(*this); }
   void Draw(gui::DrawContext&) const override;
+  void UpdateOutput(Location& target, time::T current_offset) override;
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
@@ -70,7 +73,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;
-  void OnTimerNotification(Location&) override;
+  void OnTimerNotification(Location&, time::SteadyPoint) override;
 };
 
 }  // namespace automat::library

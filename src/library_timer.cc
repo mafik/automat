@@ -74,7 +74,7 @@ DurationArgument duration_arg = DurationArgument();
 
 static constexpr float kHandAcceleration = 2000;
 
-void TimerDelay::OnTimerNotification(Location& here2) {
+void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) {
   state = TimerDelay::State::Idle;
   Done(here2);
   ScheduleNext(here2);
@@ -736,6 +736,7 @@ LongRunning* TimerDelay::OnRun(Location& here) {
 
 void TimerDelay::Cancel() {
   if (state == TimerDelay::State::Running) {
+    state = TimerDelay::State::Idle;
     CancelScheduledAt(*here, start_time + duration);
   }
 }

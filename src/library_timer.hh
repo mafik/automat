@@ -46,7 +46,7 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   void Updated(Location& here, Location& updated) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
-  void OnTimerNotification(Location&) override;
+  void OnTimerNotification(Location&, time::SteadyPoint) override;
 };
 
 }  // namespace automat::library

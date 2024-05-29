@@ -5,6 +5,7 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <numbers>
@@ -255,8 +256,8 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
     track->timestamps.push_back(i * 5);
   }
   tracks.emplace_back(std::move(track));
-  track_args.emplace_back("track 1", Argument::kRequiresConcreteType);
-  track_args.emplace_back("track 2", Argument::kRequiresConcreteType);
+  track_args.emplace_back("track 1", Argument::kOptional);
+  track_args.emplace_back("track 2", Argument::kOptional);
 }
 
 void Timeline::Relocate(Location* new_here) {
@@ -293,33 +294,42 @@ static float CurrentPosRatio(const Timeline& timeline, time::SystemPoint now) {
   }
 }
 
-void TimelineCancelScheduledAt(Timeline& t) {
-  CancelScheduledAt(*t.here, t.playback_started_at + time::Duration(MaxTrackLength(t)));
+void TimelineCancelScheduledAt(Timeline& t) { CancelScheduledAt(*t.here); }
+
+void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
+  time::T current_offset = (now - t.playback_started_at).count();
+  auto next_update = MaxTrackLength(t);
+  for (const auto& track : t.tracks) {
+    for (time::T timestamp : track->timestamps) {
+      if (timestamp <= current_offset) {
+        continue;
+      }
+      next_update = min(next_update, timestamp);
+      break;
+    }
+  }
+  ScheduleAt(*t.here, t.playback_started_at + time::Duration(next_update));
 }
 
-void TimelineScheduleAt(Timeline& t) {
-  ScheduleAt(*t.here, t.playback_started_at + time::Duration(MaxTrackLength(t)));
-}
-
-void OffsetPosRatio(Timeline& timeline, time::T offset) {
+void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
   if (timeline.currently_playing) {
     TimelineCancelScheduledAt(timeline);
     timeline.playback_started_at -= time::Duration(offset);
-    timeline.playback_started_at = min(timeline.playback_started_at, time::SteadyNow());
-    TimelineScheduleAt(timeline);
+    timeline.playback_started_at = min(timeline.playback_started_at, now);
+    TimelineScheduleAt(timeline, now);
   } else {
     timeline.playback_offset =
         clamp<time::T>(timeline.playback_offset + offset, 0, MaxTrackLength(timeline));
   }
 }
 
-void SetPosRatio(Timeline& timeline, float pos_ratio) {
+void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   pos_ratio = clamp(pos_ratio, 0.0f, 1.0f);
   time::T max_track_length = MaxTrackLength(timeline);
   if (timeline.currently_playing) {
     TimelineCancelScheduledAt(timeline);
-    timeline.playback_started_at = time::SteadyNow() - time::Duration(pos_ratio * max_track_length);
-    TimelineScheduleAt(timeline);
+    timeline.playback_started_at = now - time::Duration(pos_ratio * max_track_length);
+    TimelineScheduleAt(timeline, now);
   } else {
     timeline.playback_offset = pos_ratio * max_track_length;
   }
@@ -328,7 +338,7 @@ void SetPosRatio(Timeline& timeline, float pos_ratio) {
 void NextButton::Activate(gui::Pointer& ptr) {
   for (int i = ptr.path.size() - 1; i >= 0; --i) {
     if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
-      SetPosRatio(*timeline, 1);
+      SetPosRatio(*timeline, 1, ptr.window.actx.timer.steady_now);
     }
   }
 }
@@ -336,7 +346,7 @@ void NextButton::Activate(gui::Pointer& ptr) {
 void PrevButton::Activate(gui::Pointer& ptr) {
   for (int i = ptr.path.size() - 1; i >= 0; --i) {
     if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
-      SetPosRatio(*timeline, 0);
+      SetPosRatio(*timeline, 0, ptr.window.actx.timer.steady_now);
     }
   }
 }
@@ -419,7 +429,8 @@ struct DragBridgeAction : Action {
   virtual void Update(gui::Pointer& ptr) {
     float x = ptr.PositionWithin(timeline).x;
     float new_bridge_x = x - press_offset_x;
-    SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x));
+    SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x),
+                ptr.window.actx.timer.steady_now);
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -445,7 +456,7 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    OffsetPosRatio(timeline, -delta_x * scaling_factor);
+    OffsetPosRatio(timeline, -delta_x * scaling_factor, ptr.window.actx.timer.steady_now);
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -568,7 +579,7 @@ unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerBut
           return unique_ptr<Action>(new DragTimelineAction(*this));
         }
       } else {
-        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x));
+        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.actx.timer.steady_now);
         return unique_ptr<Action>(new DragBridgeAction(*this));
       }
     }
@@ -981,6 +992,16 @@ void Timeline::Cancel() {
   }
 }
 
+static void TimelineUpdateOutputs(Location& here, Timeline& t, time::T current_offset) {
+  for (int i = 0; i < t.tracks.size(); ++i) {
+    auto obj_result = t.track_args[i].GetObject(here);
+    if (obj_result.location == nullptr || obj_result.object == nullptr) {
+      continue;
+    }
+    t.tracks[i]->UpdateOutput(*obj_result.location, current_offset);
+  }
+}
+
 LongRunning* Timeline::OnRun(Location& here) {
   if (currently_playing) {
     return nullptr;
@@ -988,16 +1009,48 @@ LongRunning* Timeline::OnRun(Location& here) {
   if (playback_offset >= MaxTrackLength(*this)) {
     playback_offset = 0;
   }
+  TimelineUpdateOutputs(here, *this, playback_offset);
   currently_playing = true;
-  playback_started_at = time::SteadyNow() - time::Duration(playback_offset);
-  TimelineScheduleAt(*this);
+  time::SteadyPoint now = time::SteadyNow();
+  playback_started_at = now - time::Duration(playback_offset);
+  TimelineScheduleAt(*this, now);
   return this;
 }
 
-void Timeline::OnTimerNotification(Location& here) {
-  currently_playing = false;
-  playback_offset = MaxTrackLength(*this);
-  Done(here);
+void OnOffTrack::UpdateOutput(Location& target, time::T current_offset) {
+  int i = 0;
+  for (; i < timestamps.size(); ++i) {
+    if (timestamps[i] > current_offset) {
+      break;
+    }
+  }
+  i = max(0, i - 1);
+  bool on = i % 2 == 0;
+  if (auto runnable = dynamic_cast<Runnable*>(target.object.get())) {
+    if (on) {
+      target.ScheduleRun();
+    } else {
+      if (target.long_running) {
+        target.long_running->Cancel();
+        target.long_running = nullptr;
+      }
+    }
+  } else {
+    ERROR << "Target is not runnable!";
+  }
+}
+
+void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
+  auto length = MaxTrackLength(*this);
+  auto current_offset = (now - playback_started_at).count();
+  TimelineUpdateOutputs(here, *this, current_offset);
+  if (current_offset >= length) {
+    currently_playing = false;
+    playback_offset = length;
+    Done(here);
+  } else {
+    TimelineScheduleAt(*this, now);
+  }
 }
 
 std::unique_ptr<Action> TrackBase::ButtonDownAction(gui::Pointer& ptr, gui::PointerButton btn) {

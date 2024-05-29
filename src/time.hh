@@ -23,12 +23,14 @@ SystemPoint SystemFromSteady(SteadyPoint steady);
 SteadyPoint SteadyFromSystem(SystemPoint system);
 
 struct Timer {
+  SteadyPoint steady_now = time::SteadyNow();
   SystemPoint now = time::SystemNow();
   SystemPoint last = now;
   T d = 0;  // delta from last frame
   void Tick() {
     last = now;
     now = time::SystemNow();
+    steady_now = time::SteadyNow();
     d = (now - last).count();
   }
   double Now() const { return now.time_since_epoch().count(); }
@@ -43,10 +45,11 @@ struct Location;
 void StartTimeThread(std::stop_token);
 
 struct TimerNotificationReceiver {
-  virtual void OnTimerNotification(Location&) = 0;
+  virtual void OnTimerNotification(Location&, time::SteadyPoint) = 0;
 };
 
 void ScheduleAt(Location&, time::SteadyPoint);
+void CancelScheduledAt(Location&);
 void CancelScheduledAt(Location&, time::SteadyPoint);
 void RescheduleAt(Location& here, time::SteadyPoint old_time, time::SteadyPoint new_time);
 

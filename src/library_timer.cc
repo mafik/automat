@@ -14,6 +14,7 @@
 #include <memory>
 
 #include "animation.hh"
+#include "argument.hh"
 #include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
@@ -53,7 +54,23 @@ constexpr static float kTickOuterRadius = r4 * 0.95;
 constexpr static float kTickMajorLength = r4 * 0.05;
 constexpr static float kTickMinorLength = r4 * 0.025;
 
-LiveArgument duration_arg = LiveArgument("duration", Argument::kOptional);
+struct DurationArgument : LiveArgument {
+  DurationArgument() : LiveArgument("duration", Argument::kOptional) {
+    requirements.push_back([](Location* location, Object* object, std::string& error) {
+      if (object == nullptr) {
+        error = "Duration argument must be set.";
+      }
+      Str text = object->GetText();
+      char* endptr = nullptr;
+      double val = strtod(text.c_str(), &endptr);
+      if (endptr == text.c_str() || endptr == nullptr) {
+        error = "Duration argument must be a number.";
+      }
+    });
+  }
+};
+
+DurationArgument duration_arg = DurationArgument();
 
 static constexpr float kHandAcceleration = 2000;
 

@@ -6,17 +6,25 @@
 #include "base.hh"
 #include "connector_optical.hh"
 #include "location.hh"
+#include "object.hh"
 
 namespace automat::gui {
 
-static Vec2 StartPosition(animation::Context* actx, const ConnectionWidget& widget) {
-  SkPath from_shape = widget.from.ArgShape(widget.arg);
-  return Rect::BottomCenter(from_shape.getBounds()) + widget.from.AnimatedPosition(actx);
+struct DummyRunnable : Object, Runnable {
+  LongRunning* OnRun(Location& here) override { return nullptr; }
+  std::unique_ptr<Object> Clone() const override { return std::make_unique<DummyRunnable>(); }
+} kDummyRunnable;
+
+static bool IsArgumentOptical(Location& from, Argument& arg) {
+  Str error;
+  arg.CheckRequirements(from, nullptr, &kDummyRunnable, error);
+  return error.empty();
 }
 
 ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {
-  if (arg.name == "next") {
-    state.emplace(from, StartPosition(nullptr, *this));
+  if (IsArgumentOptical(from, arg)) {
+    auto pos_dir = from.ArgStart(nullptr, arg);
+    state.emplace(from, pos_dir.pos);
   }
 }
 
@@ -35,59 +43,54 @@ SkPath ConnectionWidget::Shape() const {
 void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
+  SkPath from_shape =
+      from.ArgShape(arg);       // initially from's coords but later transformed to machine coords
+  SkPath to_shape;              // machine coords
+  SkPath to_shape_from_coords;  // from's coords
+  Widget* parent_machine = ctx.path[ctx.path.size() - 2];
+  Optional<Vec2> to_point;  // machine coords
+  Location* to = nullptr;
+
+  auto pos_dir = from.ArgStart(&actx, arg);
+
+  if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
+    Connection* c = it->second;
+    to = &c->to;
+    if (to->object) {
+      to_shape = to->object->Shape();
+      SkMatrix m = TransformUp(Path{parent_machine, to}, ctx.animation_context);
+      to_point = m.mapPoint(Rect::TopCenter(to_shape.getBounds()));
+      to_shape.transform(m);
+      to_shape.transform(TransformDown(Path{parent_machine, (Widget*)&from}, ctx.animation_context),
+                         &to_shape_from_coords);
+    }
+  } else {
+    to_point = manual_position;
+  }
+
+  auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, ctx.animation_context);
+  // from_point = transform_from_to_machine.mapPoint(from_point);
+  from_shape.transform(transform_from_to_machine);
 
   if (state) {
-    Vec2 from_point = StartPosition(&ctx.animation_context, *this);
-
-    Optional<Vec2> to_point;
-    if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
-      Widget* parent_machine = ctx.path[ctx.path.size() - 2];
-      SkMatrix parent_to_local =
-          TransformDown(Path{parent_machine, (Widget*)this}, ctx.animation_context);
-
-      Connection* c = it->second;
-      Location& to = c->to;
-      SkPath to_shape;
-      if (to.object) {
-        to_shape = to.object->Shape();
-      }
-      SkMatrix m = TransformUp(Path{parent_machine, &to}, ctx.animation_context);
-      m.postConcat(parent_to_local);
-      to_shape.transform(m);
-      to_point = Rect::TopCenter(to_shape.getBounds());
+    if (to) {
       state->steel_insert_hidden.target = 1;
     } else {
-      to_point = manual_position;
       state->steel_insert_hidden.target = 0;
     }
     state->steel_insert_hidden.Tick(actx);
 
     float dt = ctx.animation_context.timer.d;
-    SimulateCablePhysics(dt, *state, from_point, to_point);
+    SimulateCablePhysics(dt, *state, pos_dir.pos, to_point);
     DrawOpticalConnector(ctx, *state);
   } else {
-    SkPath from_shape = from.ArgShape(arg);
-    from_shape.offset(from.position.x, from.position.y);
-    SkPath to_shape;
-    if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
-      Connection* c = it->second;
-      Location* to_location = &c->to;
-      if (to_location) {
-        Object* to_object = to_location->object.get();
-        if (to_object) {
-          to_shape = to_object->Shape();
-          to_shape.offset(to_location->position.x, to_location->position.y);
-        }
-      }
-    }
     if (to_shape.isEmpty()) {
-      if (manual_position) {
-        to_shape.moveTo(*manual_position);
+      if (to_point) {
+        to_shape.moveTo(*to_point);
       } else {
         return;
       }
     }
-
     DrawArrow(canvas, from_shape, to_shape);
   }
 }

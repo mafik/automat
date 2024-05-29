@@ -255,6 +255,8 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
     track->timestamps.push_back(i * 5);
   }
   tracks.emplace_back(std::move(track));
+  track_args.emplace_back("track 1", Argument::kRequiresConcreteType);
+  track_args.emplace_back("track 2", Argument::kRequiresConcreteType);
 }
 
 void Timeline::Relocate(Location* new_here) {
@@ -865,7 +867,26 @@ SkPath Timeline::Shape() const {
   return SkPath::RRect(r);
 }
 
-void Timeline::Args(function<void(Argument&)> cb) { cb(next_arg); }
+void Timeline::Args(function<void(Argument&)> cb) {
+  for (auto& track_arg : track_args) {
+    cb(track_arg);
+  }
+  cb(next_arg);
+}
+
+Object::PosDir Timeline::ArgStart(Argument& arg) {
+  for (int i = 0; i < tracks.size(); ++i) {
+    if (&track_args[i] != &arg) {
+      continue;
+    }
+    return {
+        .pos = {kPlasticWidth / 2, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
+                                       i * (kTrackMargin + kTrackHeight)},
+        .dir = 0,
+    };
+  }
+  return Object::ArgStart(arg);
+}
 
 ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
   Widget* arr[] = {&run_button, &prev_button, &next_button};

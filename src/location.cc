@@ -16,7 +16,6 @@
 #include "format.hh"
 #include "gui_constants.hh"
 #include "span.hh"
-#include "svg.hh"
 
 using namespace automat::gui;
 
@@ -339,4 +338,9 @@ void Location::Run() {
   }
 }
 
+Object::PosDir Location::ArgStart(animation::Context* actx, Argument& arg) {
+  auto pos_dir = object ? object->ArgStart(arg) : Object::PosDir{};
+  pos_dir.pos += AnimatedPosition(actx);
+  return pos_dir;
+}
 }  // namespace automat

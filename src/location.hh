@@ -241,6 +241,10 @@ struct Location : gui::Widget {
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;
   SkPath ArgShape(Argument&) const;
+
+  // Returns the position in parent machine's coordinates where the connections for this argument
+  // should start.
+  Object::PosDir ArgStart(animation::Context*, Argument&);
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   bool ChildrenOutside() const override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;

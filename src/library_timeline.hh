@@ -46,6 +46,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   NextButton next_button;
 
   Vec<std::unique_ptr<TrackBase>> tracks;
+  Vec<Argument> track_args;
 
   mutable animation::Approach zoom;  // stores the time in seconds
 
@@ -63,6 +64,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
+  PosDir ArgStart(Argument&) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;

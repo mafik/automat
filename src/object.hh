@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "deserializer.hh"
+#include "math.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -42,7 +43,15 @@ struct Object : gui::Widget {
   virtual Pointer* AsPointer() { return nullptr; }
 
   virtual void Args(std::function<void(Argument&)> cb) {}
+
   virtual SkPath ArgShape(Argument&) const { return SkPath(); }
+
+  struct PosDir {
+    Vec2 pos;
+    float dir;
+  };
+
+  virtual PosDir ArgStart(Argument&);
 
   virtual void Updated(Location& here, Location& updated);
   virtual void Errored(Location& here, Location& errored) {}

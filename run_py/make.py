@@ -62,6 +62,8 @@ class Step:
             desc = f'Running {build_func.__name__}'
         if not shortcut:
             shortcut = build_func.__name__
+        if '/' in shortcut:
+            raise ValueError(f'Slashes not allowed in step shortcuts: {shortcut}')
         self.desc = desc
         self.shortcut = shortcut
         self.outputs = set(str(x) for x in outputs)

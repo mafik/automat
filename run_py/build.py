@@ -12,19 +12,35 @@ from args import args
 from dataclasses import dataclass
 from sys import platform
 
+TRIPLE = 'x86_64-pc-linux-gnu'
 
 class BuildType:
-    def __init__(self, name, base=None):
+    def __init__(self, name, base=None, is_default=False):
         self.name = name
         self.name_lower = name.lower()
         self.base = base
-        self.compile_args = [f'-I{self.PREFIX()}/include']
-        self.link_args = [f'-L{self.PREFIX()}/lib']
+        self.compile_args = []
+        self.link_args = []
+        self.is_default = is_default
+
+        gcc_arch_dir = self.PREFIX() / 'lib' / 'gcc' / TRIPLE
+        if gcc_arch_dir.exists():
+            # TODO: support versions like 10.3.0
+            gcc_version = max(int(x.name) for x in gcc_arch_dir.iterdir() if x.is_dir())
+            gcc_dir = gcc_arch_dir / str(gcc_version)
+            if args.verbose:
+                print(f'{self.name} build using GCC', gcc_version, 'from', gcc_dir)
+            self.compile_args += [f'--gcc-install-dir={gcc_dir}']
+            self.link_args += [f'--gcc-install-dir={gcc_dir}']
+        elif args.verbose:
+            print(f'{self.name} build using system-provided GCC. Build `gcc{self.rule_suffix()}` to create a custom GCC installation.')
+
+        self.compile_args += [f'-I{self.PREFIX()}/include']
+        self.link_args += [f'-L{self.PREFIX()}/lib']
         self.PREFIX().mkdir(parents=True, exist_ok=True)
     
     def rule_suffix(self):
-        global default
-        return '' if self == default else self.name_lower
+        return '' if self.is_default else f'_{self.name_lower}'
     
     def PREFIX(self): # TODO: change this to a member variable
         return (fs_utils.build_dir / 'prefix' / self.name).absolute()
@@ -46,11 +62,13 @@ class BuildType:
     
 
 # Common config for all build types
-base = BuildType('Base')
+base = BuildType('Base', is_default=True)
 
 base.compile_args += ['-static', '-std=gnu++2c', '-fcolor-diagnostics', '-ffunction-sections',
-    '-fdata-sections', '-funsigned-char', '-D_FORTIFY_SOURCE=2', '-Wformat',
-    '-Wformat-security', '-Werror=format-security', '-fno-plt', '-Wno-vla-extension', '-Wno-trigraphs']
+    '-fdata-sections', '-funsigned-char', '-fno-signed-zeros', '-fno-semantic-interposition',
+    '-fno-plt', '-fno-strict-aliasing', '-fno-exceptions',
+    '-D_FORTIFY_SOURCE=2', '-Wformat',
+    '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs']
 
 if 'CXXFLAGS' in os.environ:
     base.compile_args += os.environ['CXXFLAGS'].split()
@@ -67,7 +85,7 @@ fast.compile_args += ['-O1']
 
 # Build type intended for practical usage (slow to build but very high performance)
 release = BuildType('Release', base)
-release.compile_args += ['-O3', '-DNDEBUG', '-flto', '-fstack-protector']
+release.compile_args += ['-O3', '-DNDEBUG', '-flto', '-fstack-protector', '-fno-trapping-math']
 release.link_args += ['-flto']
 
 # Build type intended for debugging

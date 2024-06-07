@@ -82,7 +82,7 @@ VFile {slug} = {{
 
 def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
     paths = list(Path('static').glob('**/*'))
-    paths = list(Path('assets').glob('**/*'))
+    paths += list(Path('assets').glob('**/*'))
     paths.append(Path('gatekeeper.service'))
 
     # retain only files

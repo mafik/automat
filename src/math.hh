@@ -101,6 +101,10 @@ inline Vec2 Rotate90DegreesClockwise(Vec2 v) { return {v.y, -v.x}; }
 
 constexpr float Dot(Vec2 a, Vec2 b) { return a.x * b.x + a.y * b.y; }
 constexpr float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+constexpr float Cross(Vec2 a, Vec2 b) { return a.x * b.y - a.y * b.x; }
+constexpr Vec3 Cross(Vec3 a, Vec3 b) {
+  return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+}
 
 // Project vector p onto vector dir.
 template <typename T>
@@ -281,6 +285,11 @@ union RRect {
             .radii = {radii[0], radii[1], radii[2], radii[3]},
             .type = type};
   }
+};
+
+struct Vec2AndDir {
+  Vec2 pos;
+  float dir;
 };
 
 inline float atan(Vec2 v) { return atan2f(v.y, v.x); }

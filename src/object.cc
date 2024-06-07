@@ -107,13 +107,13 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
   SetText(l, value);
 }
 
-Object::PosDir Object::ArgStart(Argument& arg) {
+Vec2AndDir Object::ArgStart(Argument& arg) {
   auto shape = ArgShape(arg);
   if (shape.isEmpty()) {
     shape = Shape();
   }
   Rect bounds = shape.getBounds();
-  return PosDir{
+  return Vec2AndDir{
       .pos = bounds.BottomCenter(),
       .dir = -std::numbers::pi / 2,
   };

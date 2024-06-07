@@ -46,12 +46,7 @@ struct Object : gui::Widget {
 
   virtual SkPath ArgShape(Argument&) const { return SkPath(); }
 
-  struct PosDir {
-    Vec2 pos;
-    float dir;
-  };
-
-  virtual PosDir ArgStart(Argument&);
+  virtual Vec2AndDir ArgStart(Argument&);
 
   virtual void Updated(Location& here, Location& updated);
   virtual void Errored(Location& here, Location& errored) {}

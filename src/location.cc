@@ -338,8 +338,8 @@ void Location::Run() {
   }
 }
 
-Object::PosDir Location::ArgStart(animation::Context* actx, Argument& arg) {
-  auto pos_dir = object ? object->ArgStart(arg) : Object::PosDir{};
+Vec2AndDir Location::ArgStart(animation::Context* actx, Argument& arg) {
+  auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
   pos_dir.pos += AnimatedPosition(actx);
   return pos_dir;
 }

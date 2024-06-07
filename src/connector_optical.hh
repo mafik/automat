@@ -46,7 +46,7 @@ struct OpticalConnectorState : Location::NextObserver {
 
   animation::Spring steel_insert_hidden;
 
-  OpticalConnectorState(Location&, Vec2 start);
+  OpticalConnectorState(Location&, Vec2AndDir start);
   ~OpticalConnectorState();
 
   Vec2 PlugTopCenter() const;
@@ -57,7 +57,8 @@ struct OpticalConnectorState : Location::NextObserver {
 
 // TODO: grabbing the connector causes it to move a bit
 
-void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2 start, maf::Optional<Vec2> end);
+void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2AndDir start,
+                          maf::Optional<Vec2> end);
 
 void DrawOpticalConnector(DrawContext&, OpticalConnectorState&);
 

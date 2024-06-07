@@ -899,7 +899,7 @@ void Timeline::Args(function<void(Argument&)> cb) {
   cb(next_arg);
 }
 
-Object::PosDir Timeline::ArgStart(Argument& arg) {
+Vec2AndDir Timeline::ArgStart(Argument& arg) {
   for (int i = 0; i < tracks.size(); ++i) {
     if (&track_args[i] != &arg) {
       continue;

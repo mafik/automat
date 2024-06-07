@@ -244,7 +244,7 @@ struct Location : gui::Widget {
 
   // Returns the position in parent machine's coordinates where the connections for this argument
   // should start.
-  Object::PosDir ArgStart(animation::Context*, Argument&);
+  Vec2AndDir ArgStart(animation::Context*, Argument&);
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   bool ChildrenOutside() const override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;

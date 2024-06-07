@@ -24,7 +24,7 @@ static bool IsArgumentOptical(Location& from, Argument& arg) {
 ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {
   if (IsArgumentOptical(from, arg)) {
     auto pos_dir = from.ArgStart(nullptr, arg);
-    state.emplace(from, pos_dir.pos);
+    state.emplace(from, pos_dir);
   }
 }
 
@@ -81,7 +81,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     state->steel_insert_hidden.Tick(actx);
 
     float dt = ctx.animation_context.timer.d;
-    SimulateCablePhysics(dt, *state, pos_dir.pos, to_point);
+    SimulateCablePhysics(dt, *state, pos_dir, to_point);
     DrawOpticalConnector(ctx, *state);
   } else {
     if (to_shape.isEmpty()) {

@@ -25,16 +25,44 @@ using namespace maf;
 
 namespace automat::gui {
 
+constexpr bool kDebugCable = false;
 constexpr float kCasingWidth = 0.008;
 constexpr float kCasingHeight = 0.008;
-constexpr bool kDebugCable = false;
 constexpr float kStep = 0.005;
 constexpr float kCrossSize = 0.001;
 constexpr float kCableWidth = 0.002;
 
-ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
-  ArcLine cable = ArcLine(start, M_PI * 1.5);
-  Vec2 delta = cable_end - start;
+// The job of RouteCable is to find a visually pleasing path from the given start (point &
+// direction) to the given end point. End point is assumed to always point down (could change in the
+// future).
+//
+// Current algorithms:
+//
+// 1. For the case with connections going down
+//    - go horizontally down (as much as possible)
+//    - turn sideways (left or right) to compensate horizontal distance between start & end
+//    - ONLY IF there is not enough vertical space - turn vertically (up or down) to compensate for
+//    the vertical distance between start & end
+//    - complete the path symmetrically
+// 2. For the case with connections going down where the first algorithm fails
+//    - turn 180 degrees, away from the end point
+//    - go up, to match the Y position of the end point
+//    - turn 90 degree towards the end point
+//    - go horizontally to the end point X
+//    - final 90 degree turn to arrive at the end point
+// 3. For the case with connections starting in arbitrary directions
+//    - imagine pairs of circles touching start & end points tangent to the direction of the cable
+//    - follow the circumference of the circle until a straight line can be drawn to the next circle
+//    - follow the circumference of the target circle until the end point is reached
+// 4. Hypothetical approach for the case where the lines coming from the start & end points
+// intersect at a convenient point (after start, before end) (maybe TODO)
+//    - go straight to the intersection point
+//    - turn towards the end point
+//    - go straight to the end point
+
+static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
+  ArcLine cable = ArcLine(start.pos, M_PI * 1.5);
+  Vec2 delta = cable_end - start.pos;
   float distance = Length(delta);
   float turn_radius = std::max<float>(distance / 8, 0.01);
 
@@ -43,17 +71,17 @@ ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
   if (move_down < 0) {
     // Increase the turn radius of the vertical move to allow ∞-type routing
     float vertical_turn_radius = std::max(turn_radius, horizontal_shift.move_between_turns * 0.5f);
-    auto vertical_shift = ArcLine::TurnShift(cable_end.x < start.x ? move_down * 2 : -move_down * 2,
-                                             vertical_turn_radius);
+    auto vertical_shift = ArcLine::TurnShift(
+        cable_end.x < start.pos.x ? move_down * 2 : -move_down * 2, vertical_turn_radius);
 
     float move_side = (horizontal_shift.move_between_turns - vertical_shift.distance_forward) / 2;
     if (move_side < 0) {
       // If there is not enough space to route the cable in the middle, we will route it around the
       // objects.
-      float x = start.x;
-      float y = start.y;
+      float x = start.pos.x;
+      float y = start.pos.y;
       float dir;
-      if (start.x > cable_end.x) {
+      if (start.pos.x > cable_end.x) {
         dir = 1;
       } else {
         dir = -1;
@@ -99,6 +127,83 @@ ArcLine RouteCable(Vec2 start, Vec2 cable_end) {
     }
   }
   return cable;
+}
+
+static ArcLine RoutCableStraight(Vec2AndDir start, Vec2 cable_end) {
+  float radius = 1_cm;
+  ArcLine cable = ArcLine(start.pos, start.dir);
+  // check if the end point is on the left or right side of start (point + dir)
+  Vec2 relative_end = cable_end - start.pos;
+  float end_dir = atan(relative_end);
+  float delta_dir = NormalizeAngle(end_dir - start.dir);
+
+  float best_start_turn;
+  float best_end_turn;
+  float best_line_length;
+  float best_total_length = HUGE_VALF;
+
+  for (bool start_left : {false, true}) {
+    Vec2 start_circle_center =
+        start.pos + Vec2::Polar(start.dir + (start_left ? M_PI / 2 : -M_PI / 2), radius);
+    for (bool end_left : {false, true}) {
+      Vec2 end_circle_center = cable_end + Vec2(end_left ? radius : -radius, 0);
+      Vec2 circle_diff = end_circle_center - start_circle_center;
+      float circle_dist = Length(circle_diff);
+      float circle_angle = atan(circle_diff);
+      float line_dir;
+      float line_length;
+      if (start_left == end_left) {
+        line_dir = circle_angle;
+        line_length = circle_dist;
+      } else if (circle_dist > 2 * radius) {
+        line_length = sqrt(circle_dist * circle_dist - radius * radius * 4);
+        line_dir = circle_angle + acosf(line_length / circle_dist) * (start_left ? 1 : -1);
+      } else {
+        continue;
+      }
+
+      float start_turn = line_dir - start.dir;
+      constexpr float kEpsilon = 1e-6;
+      while (start_left && start_turn < -kEpsilon) {
+        start_turn += 2 * M_PI;
+      }
+      if (!start_left && start_turn > kEpsilon) {
+        start_turn -= 2 * M_PI;
+      }
+
+      float end_turn = -M_PI / 2 - start_turn;
+      while (end_left && end_turn < -kEpsilon) {
+        end_turn += 2 * M_PI;
+      }
+      if (!end_left && end_turn > kEpsilon) {
+        end_turn -= 2 * M_PI;
+      }
+
+      float total_length = fabsf(start_turn) * radius + line_length + fabsf(end_turn) * radius;
+      if (total_length < best_total_length) {
+        best_total_length = total_length;
+        best_start_turn = start_turn;
+        best_end_turn = end_turn;
+        best_line_length = line_length;
+      }
+    }
+  }
+
+  // LOG << " start_turn:" << best_start_turn << " end_turn:" << best_end_turn
+  //     << " line_length:" << best_line_length;
+
+  cable.TurnBy(best_start_turn, radius);
+  cable.MoveBy(best_line_length);
+  cable.TurnBy(best_end_turn, radius);
+  return cable;
+}
+
+static ArcLine RouteCable(Vec2AndDir start, Vec2 cable_end) {
+  if (fabsf(start.dir + (float)M_PI / 2) < 0.000001) {
+    return RouteCableDown(start, cable_end);
+  } else {
+    return RoutCableStraight(start, cable_end);
+  }
 }
 
 // This function walks along the given arcline (from the end to its start) and adds
@@ -189,27 +294,27 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
   return pulling;
 }
 
-void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Optional<Vec2> end) {
+void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dispenser,
+                          Optional<Vec2> end) {
   Optional<Vec2> cable_end;
   if (end) {
     cable_end = Vec2(end->x, end->y + kCasingHeight);
   }
-  if (state.stabilized && Length(start - state.stabilized_start) < 0.0001) {
+  if (state.stabilized && Length(dispenser.pos - state.stabilized_start) < 0.0001) {
     if (cable_end.has_value() == state.stabilized_end.has_value() &&
         (!cable_end.has_value() || Length(*cable_end - *state.stabilized_end) < 0.0001)) {
       return;
     }
   }
 
-  auto& dispenser = start;
   auto& chain = state.sections;
   if (cable_end) {
     chain.front().pos = *cable_end;
   }
-  chain.back().pos = start;
+  chain.back().pos = dispenser.pos;
 
   if (cable_end) {  // Create the arcline & pull the cable towards it
-    state.arcline = RouteCable(start, *cable_end);
+    state.arcline = RouteCable(dispenser, *cable_end);
   } else {
     state.arcline.reset();
   }
@@ -339,7 +444,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
     state.stabilized = average_anchor_distance < 0.1 && chain.size() == anchors.size();
   }
   if (state.stabilized) {
-    state.stabilized_start = start;
+    state.stabilized_start = dispenser.pos;
     if (cable_end) {
       state.stabilized_end = *cable_end;
     } else {
@@ -378,7 +483,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       if (cable_end) {
         chain.front().pos = *cable_end;
       }
-      chain.back().pos = dispenser;
+      chain.back().pos = dispenser.pos;
       chain.back().distance = kStep;
 
       OpticalConnectorState::CableSection cN;
@@ -436,7 +541,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2 start, Op
       if (cable_end) {
         chain.front().pos = *cable_end;
       }
-      chain.back().pos = dispenser;
+      chain.back().pos = dispenser.pos;
     }
   }
 }
@@ -1327,22 +1432,22 @@ void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shap
   canvas.restore();
 }
 
-OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2 start)
+OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2AndDir start)
     : dispenser_v(0), location(loc) {
   sections.emplace_back(CableSection{
-      .pos = start,
+      .pos = start.pos,
       .vel = Vec2(0, 0),
       .acc = Vec2(0, 0),
-      .dir = M_PI / 2,
+      .dir = start.dir,
       .true_dir_offset = 0,
       .distance = 0,
       .next_dir_delta = 0,
   });  // plug
   sections.emplace_back(CableSection{
-      .pos = start,
+      .pos = start.pos,
       .vel = Vec2(0, 0),
       .acc = Vec2(0, 0),
-      .dir = M_PI / 2,
+      .dir = start.dir,
       .true_dir_offset = 0,
       .distance = 0,
       .next_dir_delta = 0,

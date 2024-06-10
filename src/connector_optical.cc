@@ -215,7 +215,7 @@ static void PopulateAnchors(Vec<Vec2>& anchors, Vec<float>& anchor_dir, const Ar
   Vec2 tail = it.Position();
 
   anchors.push_back(tail);
-  anchor_dir.push_back(M_PI / 2);
+  anchor_dir.push_back(NormalizeAngle(it.Angle() + M_PI));
   for (float cable_pos = kStep; cable_pos < cable_length - kCableWidth / 2; cable_pos += kStep) {
     it.Advance(-kStep);
     anchors.push_back(it.Position());
@@ -223,7 +223,7 @@ static void PopulateAnchors(Vec<Vec2>& anchors, Vec<float>& anchor_dir, const Ar
     anchor_dir.push_back(dir);
   }
   anchors.push_back(dispenser);
-  anchor_dir.push_back(M_PI / 2);
+  anchor_dir.push_back(NormalizeAngle(it.Angle() + M_PI));
 }
 
 // Simulate the dispenser pulling in the cable. This function may remove some of the cable segments
@@ -269,21 +269,23 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
         auto new_it = state.sections.insert(
             state.sections.begin() + state.sections.size() - 1,
             OpticalConnectorState::CableSection{
-                .pos = state.sections[state.sections.size() - 2].pos - Vec2(0, kCableWidth / 2) -
+                .pos = state.sections[state.sections.size() - 2].pos -
+                       Vec2::Polar(state.sections.back().dir, kCableWidth / 2) -
                        delta / current_dist * kStep,
                 .vel = Vec2(0, 0),
                 .acc = Vec2(0, 0),
                 .distance = current_dist - kStep,
             });
       } else if (state.sections.size() < anchor_count) {
-        auto new_it =
-            state.sections.insert(state.sections.begin() + state.sections.size() - 1,
-                                  OpticalConnectorState::CableSection{
-                                      .pos = state.sections.back().pos - Vec2(0, kCableWidth / 2),
-                                      .vel = Vec2(0, 0),
-                                      .acc = Vec2(0, 0),
-                                      .distance = kCableWidth / 2,
-                                  });
+        auto new_it = state.sections.insert(
+            state.sections.begin() + state.sections.size() - 1,
+            OpticalConnectorState::CableSection{
+                .pos = state.sections.back().pos -
+                       Vec2::Polar(state.sections.back().dir, kCableWidth / 2),
+                .vel = Vec2(0, 0),
+                .acc = Vec2(0, 0),
+                .distance = kCableWidth / 2,
+            });
         break;
       } else {
         break;
@@ -372,7 +374,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dis
       chain[chain.size() - 2].distance > kDistanceEpsilon) {
     chain[chain.size() - 1].dir = atan(chain[chain.size() - 1].pos - chain[chain.size() - 2].pos);
   } else {
-    chain[chain.size() - 1].dir = M_PI / 2;
+    chain[chain.size() - 1].dir = NormalizeAngle(dispenser.dir + M_PI);  // M_PI / 2;
   }
   if (Length(chain[1].pos - chain[0].pos) > kDistanceEpsilon &&
       chain[0].distance > kDistanceEpsilon) {
@@ -435,7 +437,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dis
   if (cable_end) {
     chain.front().true_dir_offset = NormalizeAngle(M_PI / 2 - chain.front().dir);
   }
-  chain.back().true_dir_offset = NormalizeAngle(M_PI / 2 - chain.back().dir);
+  chain.back().true_dir_offset = NormalizeAngle(dispenser.dir + M_PI - chain.back().dir);
 
   if (anchors.empty()) {
     state.stabilized = chain.size() == 2 && Length(chain[0].pos - chain[1].pos) < 0.0001;
@@ -1438,7 +1440,7 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2AndDir start)
       .pos = start.pos,
       .vel = Vec2(0, 0),
       .acc = Vec2(0, 0),
-      .dir = start.dir,
+      .dir = NormalizeAngle(start.dir + M_PI),
       .true_dir_offset = 0,
       .distance = 0,
       .next_dir_delta = 0,
@@ -1447,7 +1449,7 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2AndDir start)
       .pos = start.pos,
       .vel = Vec2(0, 0),
       .acc = Vec2(0, 0),
-      .dir = start.dir,
+      .dir = NormalizeAngle(start.dir + M_PI),
       .true_dir_offset = 0,
       .distance = 0,
       .next_dir_delta = 0,

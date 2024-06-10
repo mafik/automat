@@ -86,7 +86,9 @@ struct ArcLine {
 
     // Return the current angle of the iterator. May fall outside of [-PI, PI] range.
     float Angle() const {
-      if (arcline.types[i] == Type::Line) {
+      if (arcline.segments.empty()) {
+        return arcline.start_angle;
+      } else if (arcline.types[i] == Type::Line) {
         return segment_start_angle;
       } else {
         const auto& arc = arcline.segments[i].arc;

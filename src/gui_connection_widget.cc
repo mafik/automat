@@ -30,11 +30,7 @@ ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), 
 
 SkPath ConnectionWidget::Shape() const {
   if (state) {
-    Vec2 bottom_center = state->PlugBottomCenter();
-    SkRect black_metal_rect = SkRect::MakeLTRB(bottom_center.x - 0.004, bottom_center.y,
-                                               bottom_center.x + 0.004, bottom_center.y + 0.008);
-    SkPath path = SkPath::Rect(black_metal_rect);
-    return path;
+    return state->Shape();
   } else {
     return SkPath();
   }
@@ -122,12 +118,15 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
     delete it->second;
   }
 
+  grab_offset = Vec2(0, 0);
   if (widget.state) {
-    grab_offset =
-        pointer.PositionWithin(*widget.from.ParentAs<Machine>()) - widget.state->PlugBottomCenter();
-    widget.manual_position = widget.state->PlugBottomCenter();
-  } else {
-    grab_offset = Vec2(0, 0);
+    auto pointer_pos = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
+    auto mat = widget.state->ConnectorMatrix();
+    SkMatrix mat_inv;
+    if (mat.invert(&mat_inv)) {
+      grab_offset = mat_inv.mapXY(pointer_pos.x, pointer_pos.y);
+    }
+    widget.manual_position = pointer_pos - grab_offset;
   }
 
   animation_context = &pointer.AnimationContext();

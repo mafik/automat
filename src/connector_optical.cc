@@ -2,9 +2,11 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkCanvas.h>
+#include <include/core/SkColor.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMesh.h>
+#include <include/core/SkPaint.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
@@ -380,7 +382,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dis
       chain[0].distance > kDistanceEpsilon) {
     chain[0].dir = atan(chain[1].pos - chain[0].pos);
   } else {
-    chain[0].dir = M_PI / 2;
+    chain[0].dir = NormalizeAngle(dispenser.dir + M_PI);
   }
   for (int i = 1; i < chain.size() - 1; i++) {
     chain[i].dir = atan(chain[i + 1].pos - chain[i - 1].pos);
@@ -553,6 +555,19 @@ Vec2 OpticalConnectorState::PlugTopCenter() const { return sections.front().pos;
 Vec2 OpticalConnectorState::PlugBottomCenter() const {
   return sections.front().pos -
          Vec2::Polar(sections.front().dir + sections.front().true_dir_offset, kCasingHeight);
+}
+
+SkMatrix OpticalConnectorState::ConnectorMatrix() const {
+  Vec2 pos = sections.front().pos;
+  float dir = sections.front().dir + sections.front().true_dir_offset - M_PI / 2;
+  return SkMatrix::RotateRad(dir).postTranslate(pos.x, pos.y).preTranslate(0, -kCasingHeight);
+}
+
+SkPath OpticalConnectorState::Shape() const {
+  auto rect = Rect(-kCasingWidth / 2, 0, kCasingWidth / 2, kCasingHeight);
+  SkPath path = SkPath::Rect(rect);
+  path.transform(ConnectorMatrix());
+  return path;
 }
 
 static SkPoint conic(SkPoint p0, SkPoint p1, SkPoint p2, float w, float t) {
@@ -1244,15 +1259,17 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     if (mesh_builder.vertex_vector.empty()) {
       // Add two points on the left & right side of the connector - just so that we can build the
       // ellipse cap.
+      Vec2 offset = Vec2::Polar(connector_dir + M_PI / 2, kCasingWidth / 2);
+      Vec2 tangent = Vec2::Polar(connector_dir, 1);
       mesh_builder.vertex_vector.push_back({
-          .coords = cable_end + Vec2(kCasingWidth / 2, 0),
+          .coords = cable_end + offset,
           .uv = Vec2(-1, 0),
-          .tangent = Vec2(0, 1),
+          .tangent = tangent,
       });
       mesh_builder.vertex_vector.push_back({
-          .coords = cable_end + Vec2(-kCasingWidth / 2, 0),
+          .coords = cable_end - offset,
           .uv = Vec2(1, 0),
-          .tangent = Vec2(0, 1),
+          .tangent = tangent,
       });
     }
     // Add an ellipse cap at the end of the mesh

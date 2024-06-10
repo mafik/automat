@@ -7,8 +7,16 @@
 
 namespace automat::library {
 
+struct DurationArgument : LiveArgument {
+  DurationArgument();
+};
+
 struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
-  time::Duration duration = 10s;
+  struct MyDuration : Object {
+    time::Duration value = 10s;
+    std::unique_ptr<Object> Clone() const override { return std::make_unique<MyDuration>(*this); }
+  } duration;
+  DurationArgument duration_arg;
   time::SteadyPoint start_time;
   mutable animation::Approach start_pusher_depression;
   mutable animation::Approach left_pusher_depression;
@@ -34,11 +42,13 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   } range = Range::Seconds;
   static const TimerDelay proto;
   TimerDelay();
+  TimerDelay(const TimerDelay&);
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
-  SkPath ArgShape(Argument&) const override;
+  void Fields(std::function<void(Object&)> cb) override;
+  SkPath FieldShape(Object&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
   LongRunning* OnRun(Location& here) override;

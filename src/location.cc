@@ -137,11 +137,11 @@ SkPath Location::Shape() const {
   return empty_path;
 }
 
-SkPath Location::ArgShape(Argument& arg) const {
+SkPath Location::FieldShape(Object& field) const {
   if (object) {
-    auto object_arg_shape = object->ArgShape(arg);
-    if (!object_arg_shape.isEmpty()) {
-      return object_arg_shape;
+    auto object_field_shape = object->FieldShape(field);
+    if (!object_field_shape.isEmpty()) {
+      return object_field_shape;
     } else {
       return object->Shape();
     }

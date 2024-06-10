@@ -11,6 +11,7 @@
 #include "string_multimap.hh"
 #include "tasks.hh"
 #include "text_field.hh"
+#include "time.hh"
 #include "widget.hh"
 
 namespace automat::gui {
@@ -55,15 +56,7 @@ struct Location : gui::Widget {
   std::unordered_set<Location*> error_observers;
   std::unordered_set<Location*> observing_errors;
 
-  struct NextObserver {
-    virtual void OnNextActivated(Location& source) = 0;
-  };
-
-  // NextObservers are notified when this location is finishes its work and activates the next
-  // in chain.
-  // NextObservers are not owned by the location and are responsible for adding / removing
-  // themselves from this list.
-  std::set<NextObserver*> next_observers;
+  time::SteadyPoint last_finished;
 
   mutable product_ptr<animation::Approach> highlight_ptr;
 
@@ -240,7 +233,7 @@ struct Location : gui::Widget {
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;
-  SkPath ArgShape(Argument&) const;
+  SkPath FieldShape(Object&) const;
 
   // Returns the position in parent machine's coordinates where the connections for this argument
   // should start.

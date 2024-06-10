@@ -24,7 +24,7 @@ static bool IsArgumentOptical(Location& from, Argument& arg) {
 ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {
   if (IsArgumentOptical(from, arg)) {
     auto pos_dir = from.ArgStart(nullptr, arg);
-    state.emplace(from, pos_dir);
+    state.emplace(from, arg, pos_dir);
     state->tint = arg.tint;
   }
 }
@@ -40,8 +40,10 @@ SkPath ConnectionWidget::Shape() const {
 void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
-  SkPath from_shape =
-      from.ArgShape(arg);       // initially from's coords but later transformed to machine coords
+  SkPath from_shape = from.Shape();
+  if (arg.field) {
+    from_shape = from.FieldShape(*arg.field);
+  }
   SkPath to_shape;              // machine coords
   SkPath to_shape_from_coords;  // from's coords
   Widget* parent_machine = ctx.path[ctx.path.size() - 2];
@@ -66,7 +68,6 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   }
 
   auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, ctx.animation_context);
-  // from_point = transform_from_to_machine.mapPoint(from_point);
   from_shape.transform(transform_from_to_machine);
 
   if (state) {

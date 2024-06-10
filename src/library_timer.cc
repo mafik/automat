@@ -54,24 +54,6 @@ constexpr static float kTickOuterRadius = r4 * 0.95;
 constexpr static float kTickMajorLength = r4 * 0.05;
 constexpr static float kTickMinorLength = r4 * 0.025;
 
-struct DurationArgument : LiveArgument {
-  DurationArgument() : LiveArgument("duration", Argument::kOptional) {
-    requirements.push_back([](Location* location, Object* object, std::string& error) {
-      if (object == nullptr) {
-        error = "Duration argument must be set.";
-      }
-      Str text = object->GetText();
-      char* endptr = nullptr;
-      double val = strtod(text.c_str(), &endptr);
-      if (endptr == text.c_str() || endptr == nullptr) {
-        error = "Duration argument must be a number.";
-      }
-    });
-  }
-};
-
-DurationArgument duration_arg = DurationArgument();
-
 static constexpr float kHandAcceleration = 2000;
 
 void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) {
@@ -150,25 +132,27 @@ static const char* RangeName(TimerDelay::Range range) {
 }
 
 static void UpdateTextField(TimerDelay& timer) {
-  auto n = timer.duration.count() / RangeDuration(timer.range).count() * TickCount(timer.range);
+  auto n =
+      timer.duration.value.count() / RangeDuration(timer.range).count() * TickCount(timer.range);
   timer.text_field.SetNumber(n);
 }
 
 static void SetDuration(TimerDelay& timer, Duration new_duration) {
   if (timer.state == TimerDelay::State::Running) {
-    RescheduleAt(*timer.here, timer.start_time + timer.duration, timer.start_time + new_duration);
+    RescheduleAt(*timer.here, timer.start_time + timer.duration.value,
+                 timer.start_time + new_duration);
   }
 
-  timer.duration = new_duration;
+  timer.duration.value = new_duration;
   UpdateTextField(timer);
 }
 
 static void PropagateDurationOutwards(TimerDelay& timer) {
   if (timer.here) {
     NoSchedulingGuard guard(*timer.here);
-    auto duration_obj = duration_arg.GetLocation(*timer.here);
+    auto duration_obj = timer.duration_arg.GetLocation(*timer.here);
     if (duration_obj.ok && duration_obj.location) {
-      duration_obj.location->SetNumber(timer.duration.count() * TickCount(timer.range) /
+      duration_obj.location->SetNumber(timer.duration.value.count() * TickCount(timer.range) /
                                        RangeDuration(timer.range).count());
     }
   }
@@ -183,7 +167,12 @@ TimerDelay::TimerDelay() : text_field(kTextWidth) {
 
   duration_handle_rotation.speed = 100;
   text_field.argument = &duration_arg;
+  duration_arg.field = &duration;
   SetDuration(*this, 10s);
+}
+
+TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay() {
+  SetDuration(*this, other.duration.value);
 }
 
 string_view TimerDelay::Name() const { return "Delay"; }
@@ -469,7 +458,7 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
 
   double circles;
   duration_handle_rotation.target =
-      M_PI * 2.5 - modf(duration.count() / RangeDuration(range).count(), &circles) * 2 * M_PI;
+      M_PI * 2.5 - modf(duration.value.count() / RangeDuration(range).count(), &circles) * 2 * M_PI;
   duration_handle_rotation.target =
       modf(duration_handle_rotation.target / (2 * M_PI), &circles) * 2 * M_PI;
   animation::WrapModulo(duration_handle_rotation, 2 * M_PI);
@@ -501,7 +490,7 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
     m.normalizePerspective();
     canvas.concat(m);
   }
-  DrawDial(canvas, (Range)(((int)roundf(range_dial) + range_end) % range_end), duration);
+  DrawDial(canvas, (Range)(((int)roundf(range_dial) + range_end) % range_end), duration.value);
   canvas.restore();
 
   canvas.save();
@@ -575,8 +564,8 @@ ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-SkPath TimerDelay::ArgShape(Argument& arg) const {
-  if (&arg == &duration_arg) {
+SkPath TimerDelay::FieldShape(Object& field) const {
+  if (&field == &duration) {
     auto transform = SkMatrix::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
     return text_field.Shape().makeTransform(transform);
   }
@@ -719,6 +708,8 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
   return nullptr;
 }
 
+void TimerDelay::Fields(std::function<void(Object&)> cb) { cb(duration); }
+
 void TimerDelay::Args(std::function<void(Argument&)> cb) {
   cb(duration_arg);
   cb(next_arg);
@@ -728,7 +719,7 @@ LongRunning* TimerDelay::OnRun(Location& here) {
   if (state == State::Idle) {
     state = State::Running;
     start_time = time::SteadyClock::now();
-    ScheduleAt(here, start_time + duration);
+    ScheduleAt(here, start_time + duration.value);
     return this;
   }
   return nullptr;
@@ -737,8 +728,21 @@ LongRunning* TimerDelay::OnRun(Location& here) {
 void TimerDelay::Cancel() {
   if (state == TimerDelay::State::Running) {
     state = TimerDelay::State::Idle;
-    CancelScheduledAt(*here, start_time + duration);
+    CancelScheduledAt(*here, start_time + duration.value);
   }
 }
 
+DurationArgument::DurationArgument() : LiveArgument("duration", Argument::kOptional) {
+  requirements.push_back([](Location* location, Object* object, std::string& error) {
+    if (object == nullptr) {
+      error = "Duration argument must be set.";
+    }
+    Str text = object->GetText();
+    char* endptr = nullptr;
+    double val = strtod(text.c_str(), &endptr);
+    if (endptr == text.c_str() || endptr == nullptr) {
+      error = "Duration argument must be a number.";
+    }
+  });
+}
 }  // namespace automat::library

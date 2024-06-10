@@ -17,11 +17,13 @@
 
 #include "../build/generated/embedded.hh"
 #include "arcline.hh"
+#include "argument.hh"
 #include "color.hh"
 #include "font.hh"
 #include "gui_constants.hh"
 #include "log.hh"
 #include "math.hh"
+#include "on_off.hh"
 #include "svg.hh"
 
 using namespace maf;
@@ -1243,7 +1245,17 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     path.offset(0, 0.004);
 
     SkColor base_color = "#808080"_color;
-    float lightness_pct = exp(-(actx.timer.now - state.last_activity).count() * 10) * 100;
+    float lightness_pct = 0;
+    if (state.arg.name == "next") {
+      lightness_pct =
+          exp(-(actx.timer.steady_now - state.location.last_finished).count() * 10) * 100;
+    }
+    if (state.arg.field) {
+      if (auto on_off = dynamic_cast<OnOff*>(state.arg.field)) {
+        lightness_pct = on_off->IsOn() ? 100 : 0;
+        // TODO: decay the lightness over time
+      }
+    }
     SkColor bright_light = "#fcfef7"_color;
     SkColor adjusted_color = color::AdjustLightness(base_color, lightness_pct);
     adjusted_color = color::MixColors(adjusted_color, bright_light, lightness_pct / 100);
@@ -1485,8 +1497,8 @@ void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shap
   canvas.restore();
 }
 
-OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2AndDir start)
-    : dispenser_v(0), location(loc) {
+OpticalConnectorState::OpticalConnectorState(Location& loc, Argument& arg, Vec2AndDir start)
+    : dispenser_v(0), location(loc), arg(arg) {
   sections.emplace_back(CableSection{
       .pos = start.pos,
       .vel = Vec2(0, 0),
@@ -1505,13 +1517,10 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Vec2AndDir start)
       .distance = 0,
       .next_dir_delta = 0,
   });  // dispenser
-  loc.next_observers.insert(this);
   steel_insert_hidden.acceleration = 400;
   steel_insert_hidden.friction = 40;
 }
 
-OpticalConnectorState::~OpticalConnectorState() { location.next_observers.erase(this); }
-
-void OpticalConnectorState::OnNextActivated(Location& source) { last_activity = time::SystemNow(); }
+OpticalConnectorState::~OpticalConnectorState() {}
 
 }  // namespace automat::gui

@@ -42,9 +42,11 @@ struct Object : gui::Widget {
   // Pointer-like objects can be followed.
   virtual Pointer* AsPointer() { return nullptr; }
 
-  virtual void Args(std::function<void(Argument&)> cb) {}
+  virtual void Fields(std::function<void(Object&)> cb) {}
 
-  virtual SkPath ArgShape(Argument&) const { return SkPath(); }
+  virtual SkPath FieldShape(Object&) const { return SkPath(); }
+
+  virtual void Args(std::function<void(Argument&)> cb) {}
 
   virtual Vec2AndDir ArgStart(Argument&);
 

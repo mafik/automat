@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "arcline.hh"
+#include "argument.hh"
 #include "location.hh"
 #include "math.hh"
 #include "optional.hh"
@@ -18,7 +19,7 @@ namespace automat::gui {
 
 struct OpticalConnectorPimpl;
 
-struct OpticalConnectorState : Location::NextObserver {
+struct OpticalConnectorState {
   float dispenser_v;
 
   struct CableSection {
@@ -46,25 +47,21 @@ struct OpticalConnectorState : Location::NextObserver {
   maf::Optional<Vec2> stabilized_end;
 
   Location& location;
-  time::SystemPoint last_activity = time::kZero;
+  Argument& arg;
 
   animation::Spring steel_insert_hidden;
   SkColor tint = "#808080"_color;
 
   std::unique_ptr<OpticalConnectorPimpl> pimpl;
 
-  OpticalConnectorState(Location&, Vec2AndDir start);
+  OpticalConnectorState(Location&, Argument& arg, Vec2AndDir start);
   ~OpticalConnectorState();
 
   Vec2 PlugTopCenter() const;
   Vec2 PlugBottomCenter() const;
   SkPath Shape() const;
   SkMatrix ConnectorMatrix() const;
-
-  void OnNextActivated(Location& source) override;
 };
-
-// TODO: grabbing the connector causes it to move a bit
 
 void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2AndDir start,
                           maf::Optional<Vec2> end);

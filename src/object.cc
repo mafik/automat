@@ -108,7 +108,10 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 }
 
 Vec2AndDir Object::ArgStart(Argument& arg) {
-  auto shape = ArgShape(arg);
+  SkPath shape;
+  if (arg.field) {
+    shape = FieldShape(*arg.field);
+  }
   if (shape.isEmpty()) {
     shape = Shape();
   }

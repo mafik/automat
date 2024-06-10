@@ -4,23 +4,9 @@
 
 #include "base.hh"
 #include "keyboard.hh"
+#include "on_off.hh"
 
 namespace automat::library {
-
-struct OnOff {
-  virtual ~OnOff() = default;
-
-  virtual bool IsOn() const = 0;
-  virtual void On() = 0;
-  virtual void Off() = 0;
-
-  void Toggle() {
-    if (IsOn())
-      Off();
-    else
-      On();
-  }
-};
 
 struct PowerButton : gui::ToggleButton {
   OnOff* target;

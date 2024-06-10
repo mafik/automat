@@ -1,6 +1,7 @@
 #include "tasks.hh"
 
 #include "base.hh"
+#include "time.hh"
 
 namespace automat {
 
@@ -56,9 +57,8 @@ std::string Task::Format() { return "Task()"; }
 std::string RunTask::Format() { return f("RunTask(%s)", target->ToStr().c_str()); }
 
 void ScheduleNext(Location& source) {
-  for (auto* observer : source.next_observers) {
-    observer->OnNextActivated(source);
-  }
+  source.last_finished = time::SteadyClock::now();
+
   next_arg.LoopLocations<bool>(source, [](Location& next) {
     next.ScheduleRun();
     return false;

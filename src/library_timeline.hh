@@ -4,6 +4,7 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "on_off.hh"
 #include "run_button.hh"
 #include "time.hh"
 
@@ -30,11 +31,15 @@ struct TrackBase : Object {
   virtual void UpdateOutput(Location& target, time::T current_offset) = 0;
 };
 
-struct OnOffTrack : TrackBase {
+struct OnOffTrack : TrackBase, OnOff {
   string_view Name() const override { return "On/Off Track"; }
   std::unique_ptr<Object> Clone() const override { return std::make_unique<OnOffTrack>(*this); }
   void Draw(gui::DrawContext&) const override;
   void UpdateOutput(Location& target, time::T current_offset) override;
+
+  bool IsOn() const override;
+  void On() override {}
+  void Off() override {}
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.

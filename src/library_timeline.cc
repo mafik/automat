@@ -257,8 +257,10 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
   }
   tracks.emplace_back(std::move(track));
   track_args.emplace_back("track 1", Argument::kOptional);
+  track_args.back().field = tracks[0].get();
   track_args.back().tint = "#57dce4"_color;
   track_args.emplace_back("track 2", Argument::kOptional);
+  track_args.back().field = tracks[1].get();
   track_args.back().tint = "#57dce4"_color;
 }
 
@@ -321,6 +323,11 @@ static void TimelineUpdateOutputs(Location& here, Timeline& t, time::T current_o
     }
     t.tracks[i]->UpdateOutput(*obj_result.location, current_offset);
   }
+}
+
+static time::T CurrentOffset(Timeline& timeline, time::SteadyPoint now) {
+  return timeline.currently_playing ? (now - timeline.playback_started_at).count()
+                                    : timeline.playback_offset;
 }
 
 void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
@@ -1067,4 +1074,18 @@ std::unique_ptr<Action> TrackBase::ButtonDownAction(gui::Pointer& ptr, gui::Poin
   }
 }
 
+bool OnOffTrack::IsOn() const {
+  auto now = time::SteadyNow();
+  auto current_offset = CurrentOffset(*timeline, now);
+
+  int i = 0;
+  for (; i < timestamps.size(); ++i) {
+    if (timestamps[i] > current_offset) {
+      break;
+    }
+  }
+  i = max(0, i - 1);
+  bool on = i % 2 == 0;
+  return on;
+}
 }  // namespace automat::library

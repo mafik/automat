@@ -84,6 +84,7 @@ union Vec3 {
     return x == rhs.x && y == rhs.y && z == rhs.z;
   }
   constexpr bool operator!=(const Vec3& rhs) const { return !(*this == rhs); }
+  std::string ToStr() const;
 };
 
 static_assert(sizeof(Vec3) == 12, "Vec3 is not 12 bytes");

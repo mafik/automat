@@ -40,6 +40,12 @@ float3x3 transpose3x3(in float3x3 inMatrix) {
     return outMatrix;
 }
 
+layout(color) uniform float3 tint;
+
+float3 ApplyTint(float3 a) {
+    return (1 - 2 * tint) * a * a + 2 * tint * a;
+}
+
 float2 main(const Varyings v, out float4 color) {
     vec3 lightDir = normalize(vec3(0, 1, 1)); // normalized vector pointing from current fragment towards the light
 
@@ -63,6 +69,7 @@ float2 main(const Varyings v, out float4 color) {
     vec3 viewDirTanSpace = normalize(TBN_inv * vec3(0, 0, 1));
     
     color.rgba = vec4(0x30 / 255., 0x30 / 255., 0x30 / 255., 1);
+    color.rgb = ApplyTint(color.rgb);
 
     if (v.uv.y < DARK_EDGE_R) {
         float t = v.uv.y / DARK_EDGE_R;

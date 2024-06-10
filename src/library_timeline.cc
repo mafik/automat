@@ -257,7 +257,9 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
   }
   tracks.emplace_back(std::move(track));
   track_args.emplace_back("track 1", Argument::kOptional);
+  track_args.back().tint = "#57dce4"_color;
   track_args.emplace_back("track 2", Argument::kOptional);
+  track_args.back().tint = "#57dce4"_color;
 }
 
 void Timeline::Relocate(Location* new_here) {

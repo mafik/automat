@@ -4,6 +4,8 @@
 //
 // This type of connector can transmit boolean & event signals.
 
+#include <memory>
+
 #include "arcline.hh"
 #include "location.hh"
 #include "math.hh"
@@ -13,6 +15,8 @@
 #include "widget.hh"
 
 namespace automat::gui {
+
+struct OpticalConnectorPimpl;
 
 struct OpticalConnectorState : Location::NextObserver {
   float dispenser_v;
@@ -45,6 +49,9 @@ struct OpticalConnectorState : Location::NextObserver {
   time::SystemPoint last_activity = time::kZero;
 
   animation::Spring steel_insert_hidden;
+  SkColor tint = "#808080"_color;
+
+  std::unique_ptr<OpticalConnectorPimpl> pimpl;
 
   OpticalConnectorState(Location&, Vec2AndDir start);
   ~OpticalConnectorState();

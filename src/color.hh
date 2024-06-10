@@ -3,6 +3,7 @@
 #include <include/core/SkColor.h>
 
 #include "hex.hh"
+#include "math.hh"
 #include "template.hh"
 
 namespace automat::color {
@@ -36,6 +37,11 @@ consteval SkColor operator""_color() {
     static_assert(S.size() == 0, "Hex color must be 6 or 8 characters long");
   }
   return 0;
+}
+
+inline Vec3 SkColorToVec3(SkColor color) {
+  return Vec3(SkColorGetR(color) / 255.0f, SkColorGetG(color) / 255.0f,
+              SkColorGetB(color) / 255.0f);
 }
 
 }  // namespace automat

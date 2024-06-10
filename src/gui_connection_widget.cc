@@ -25,6 +25,7 @@ ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), 
   if (IsArgumentOptical(from, arg)) {
     auto pos_dir = from.ArgStart(nullptr, arg);
     state.emplace(from, pos_dir);
+    state->tint = arg.tint;
   }
 }
 

@@ -107,8 +107,9 @@ void Button::Draw(DrawContext& ctx) const {
   auto& hover = hover_ptr[actx];
   hover.Tick(actx);
 
-  DrawButtonShadow(ctx.canvas, SK_ColorWHITE);
-  DrawButtonFace(ctx, SK_ColorWHITE, color);
+  auto bg = BackgroundColor();
+  DrawButtonShadow(ctx.canvas, bg);
+  DrawButtonFace(ctx, bg, color);
 }
 
 void ToggleButton::Draw(DrawContext& ctx) const {
@@ -124,7 +125,7 @@ void ToggleButton::Draw(DrawContext& ctx) const {
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
-  constexpr SkColor white = 0xffffffff;
+  SkColor bg = BackgroundColor();
 
   float lightness_adjust = hover * 10;
   float press_shift_y = press * -kPressOffset;
@@ -135,12 +136,12 @@ void ToggleButton::Draw(DrawContext& ctx) const {
 
   if (filling >= 0.999) {
     DrawButtonShadow(canvas, color);
-    DrawButtonFace(ctx, color, white);
+    DrawButtonFace(ctx, color, bg);
   } else if (filling <= 0.001) {
-    DrawButtonShadow(canvas, white);
-    DrawButtonFace(ctx, white, color);
+    DrawButtonShadow(canvas, bg);
+    DrawButtonFace(ctx, bg, color);
   } else {
-    DrawButtonShadow(canvas, color::MixColors(white, color, filling));
+    DrawButtonShadow(canvas, color::MixColors(bg, color, filling));
     float baseline = pressed_outer_oval.rect().fTop * (1 - filling) +
                      pressed_outer_oval.rect().fBottom * filling;
     constexpr int n_points = 6;
@@ -170,11 +171,11 @@ void ToggleButton::Draw(DrawContext& ctx) const {
 
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kDifference, true);
-    DrawButtonFace(ctx, white, color);
+    DrawButtonFace(ctx, bg, color);
     canvas.restore();
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kIntersect, true);
-    DrawButtonFace(ctx, color, white);
+    DrawButtonFace(ctx, color, bg);
     canvas.restore();
   }
 }

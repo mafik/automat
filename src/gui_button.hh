@@ -1,5 +1,7 @@
 #pragma once
 
+#include <include/core/SkColor.h>
+
 #include "animation.hh"
 #include "color.hh"
 #include "gui_constants.hh"
@@ -27,6 +29,7 @@ struct Button : Widget {
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
   virtual Vec2 Position() const { return Vec2(0, 0); }
   virtual void Activate(gui::Pointer&) {}
+  virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg) const;

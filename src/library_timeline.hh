@@ -13,11 +13,18 @@ namespace automat::library {
 struct PrevButton : virtual gui::Button, gui::CircularButtonMixin {
   PrevButton();
   void Activate(gui::Pointer&) override;
+  SkColor BackgroundColor() const override;
 };
 
 struct NextButton : virtual gui::Button, gui::CircularButtonMixin {
   NextButton();
   void Activate(gui::Pointer&) override;
+  SkColor BackgroundColor() const override;
+};
+
+struct TimelineRunButton : virtual gui::Button, gui::RunButton {
+  TimelineRunButton();
+  SkColor BackgroundColor() const override;
 };
 
 struct Timeline;
@@ -49,7 +56,7 @@ struct OnOffTrack : TrackBase, OnOff {
 struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   static const Timeline proto;
 
-  gui::RunButton run_button;
+  TimelineRunButton run_button;
   PrevButton prev_button;
   NextButton next_button;
 

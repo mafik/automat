@@ -25,6 +25,7 @@
 #include "math.hh"
 #include "on_off.hh"
 #include "svg.hh"
+#include "textures.hh"
 
 using namespace maf;
 
@@ -588,13 +589,6 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
   float w1 = 2 * w * (2 * t - 1) / denominator;
   float w2 = 2 * t * (-w * t + t - 1) / denominator;
   return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
-}
-
-static sk_sp<SkImage> MakeImageFromAsset(fs::VFile& asset) {
-  auto& content = asset.content;
-  auto data = SkData::MakeWithoutCopy(content.data(), content.size());
-  auto image = SkImages::DeferredFromEncodedData(data);
-  return image;
 }
 
 static sk_sp<SkImage>& CableWeaveColor() {

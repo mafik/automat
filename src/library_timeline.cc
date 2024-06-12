@@ -1,5 +1,7 @@
 #include "library_timeline.hh"
 
+#include <include/core/SkBlurTypes.h>
+#include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkRRect.h>
@@ -10,15 +12,18 @@
 #include <memory>
 #include <numbers>
 
+#include "../build/generated/embedded.hh"
 #include "arcline.hh"
 #include "base.hh"
 #include "font.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
+#include "include/core/SkColor.h"
 #include "library_macros.hh"
 #include "math.hh"
 #include "svg.hh"
+#include "textures.hh"
 #include "time.hh"
 #include "window.hh"
 
@@ -37,7 +42,7 @@ constexpr float kWoodenCaseCornerRadius = kPlasticCornerRadius + kWoodWidth;
 
 constexpr float kDisplayHeight = kLetterSize * 3 + 4 * 1_mm;
 constexpr float kDisplayMargin = 2_mm;
-constexpr float kDisplayWidth = 2.5_cm;
+constexpr float kDisplayWidth = 2.55_cm;
 
 constexpr float kPlayButtonDiameter = kDisplayHeight;
 constexpr float kPlayButtonRadius = kPlayButtonDiameter / 2;
@@ -100,15 +105,31 @@ constexpr RRect kDisplayRRect = []() {
                .type = SkRRect::kSimple_Type};
 }();
 
+static sk_sp<SkImage>& RosewoodColor() {
+  static auto image =
+      MakeImageFromAsset(embedded::assets_rosewood_color_webp)->withDefaultMipmaps();
+  return image;
+}
+
 const SkPaint kWoodPaint = []() {
   SkPaint p;
   p.setColor("#805338"_color);
+  auto s = kWoodenCaseWidth / 512 / 2;
+  p.setShader(RosewoodColor()
+                  ->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
+                               SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear))
+                  ->makeWithLocalMatrix(SkMatrix::Scale(s, s).postRotate(-85)));
   return p;
 }();
 
 const SkPaint kPlasticPaint = []() {
   SkPaint p;
-  p.setColor("#ecede9"_color);
+  // p.setColor("#f0eae5"_color);
+  SkPoint pts[2] = {{0, kPlasticTop}, {0, 0}};
+  SkColor colors[3] = {"#f2ece8"_color, "#e0dbd8"_color};
+  sk_sp<SkShader> gradient =
+      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  p.setShader(gradient);
   return p;
 }();
 
@@ -136,25 +157,20 @@ const SkPaint kDisplayRemainingPaint = []() {
   return p;
 }();
 
-const SkPaint kScrewPaint = []() {
+const SkPaint kRulerPaint = []() {
   SkPaint p;
-  p.setColor("#9b9994"_color);
+  p.setColor("#4e4e4e"_color);
   return p;
 }();
 
 const SkPaint kTrackPaint = []() {
   SkPaint p;
-  SkPoint pts[2] = {{0, 0}, {kTrackWidth, 0}};
-  SkColor colors[3] = {"#787878"_color, "#f3f3f3"_color, "#787878"_color};
-  sk_sp<SkShader> gradient =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 3, SkTileMode::kClamp);
-  p.setShader(gradient);
-  return p;
-}();
-
-const SkPaint kRulerPaint = []() {
-  SkPaint p;
-  p.setColor("#4e4e4e"_color);
+  // SkPoint pts[2] = {{0, 0}, {kTrackWidth, 0}};
+  // SkColor colors[3] = {"#787878"_color, "#f3f3f3"_color, "#787878"_color};
+  // sk_sp<SkShader> gradient =
+  //     SkGradientShader::MakeLinear(pts, colors, nullptr, 3, SkTileMode::kClamp);
+  // p.setShader(gradient);
+  p.setColor("#d3d3d3"_color);
   return p;
 }();
 
@@ -198,7 +214,7 @@ const SkPaint kOnOffPaint = []() {
   p.setColor("#57dce4"_color);
   p.setStyle(SkPaint::kStroke_Style);
   p.setStrokeWidth(2_mm);
-  p.setBlendMode(SkBlendMode::kColorBurn);
+  p.setBlendMode(SkBlendMode::kMultiply);
   return p;
 }();
 
@@ -612,7 +628,44 @@ unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerBut
 
 void Timeline::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
-  canvas.drawRRect(WoodenCaseRRect(*this), kWoodPaint);
+
+  auto wood_case_rrect = WoodenCaseRRect(*this);
+  SkPath wood_case_path = SkPath::RRect(wood_case_rrect);
+
+  {  // Wooden case, light & shadow
+    canvas.save();
+    canvas.clipRRect(wood_case_rrect);
+    canvas.drawPaint(kWoodPaint);
+
+    SkPaint outer_shadow;
+    outer_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 1_mm));
+    SkPoint pts[2] = {{0, kPlasticTop + kWoodWidth},
+                      {0, kPlasticTop + kWoodWidth - kWoodenCaseCornerRadius}};
+    SkColor colors[2] = {"#aa6048"_color, "#2d1f1b"_color};
+
+    outer_shadow.setShader(
+        SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp));
+
+    wood_case_path.toggleInverseFillType();
+    canvas.drawPath(wood_case_path, outer_shadow);
+
+    canvas.restore();
+  }
+
+  {  // Inset in the wooden case
+    SkPaint inset_shadow;
+    SkRRect inset_rrect = PlasticRRect(*this);
+    inset_rrect.outset(0.2_mm, 0.2_mm);
+    inset_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
+    SkPoint pts[2] = {{0, inset_rrect.getBounds().fTop + inset_rrect.getSimpleRadii().y()},
+                      {0, inset_rrect.getBounds().fTop}};
+    SkColor colors[2] = {"#2d1f1b"_color, "#aa6048"_color};
+
+    inset_shadow.setShader(
+        SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp));
+    canvas.drawRRect(inset_rrect, inset_shadow);
+  }
+
   canvas.drawRRect(PlasticRRect(*this), kPlasticPaint);
   canvas.drawRRect(kDisplayRRect.sk, kDisplayPaint);
 
@@ -797,26 +850,53 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   canvas.restore();  // unclip
 
   // Screws
-  canvas.drawCircle({kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
-                     -WindowHeight(tracks.size()) - kDisplayMargin + kScrewMargin + kScrewRadius},
-                    kScrewRadius, kScrewPaint);
-  canvas.drawCircle({-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
-                     -WindowHeight(tracks.size()) - kDisplayMargin + kScrewMargin + kScrewRadius},
-                    kScrewRadius, kScrewPaint);
-  canvas.drawCircle(
-      {kPlasticWidth / 2 - kScrewMargin - kScrewRadius, kPlasticTop - kScrewMargin - kScrewRadius},
-      kScrewRadius, kScrewPaint);
-  canvas.drawCircle(
-      {-kPlasticWidth / 2 + kScrewMargin + kScrewRadius, kPlasticTop - kScrewMargin - kScrewRadius},
-      kScrewRadius, kScrewPaint);
+  auto DrawScrew = [&](float x, float y) {
+    SkPaint inner_paint;
+    inner_paint.setAntiAlias(true);
+    inner_paint.setStyle(SkPaint::kStroke_Style);
+    inner_paint.setStrokeWidth(0.1_mm);
+    SkPoint pts[2] = {{x, y - kScrewRadius}, {x, y + kScrewRadius}};
+    SkColor colors[2] = {"#615954"_color, "#fbf9f3"_color};
+    auto inner_gradient = SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+    inner_paint.setShader(inner_gradient);
+
+    SkPaint outer_paint;
+    outer_paint.setAntiAlias(true);
+    outer_paint.setStyle(SkPaint::kStroke_Style);
+    outer_paint.setStrokeWidth(0.1_mm);
+    SkColor outer_colors[2] = {"#fbf9f3"_color, "#615954"_color};
+    auto outer_gradient =
+        SkGradientShader::MakeLinear(pts, outer_colors, nullptr, 2, SkTileMode::kClamp);
+    outer_paint.setShader(outer_gradient);
+
+    canvas.drawCircle(x, y, kScrewRadius - 0.05_mm, inner_paint);
+    canvas.drawCircle(x, y, kScrewRadius + 0.05_mm, outer_paint);
+  };
+
+  DrawScrew(kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
+            -WindowHeight(tracks.size()) - kDisplayMargin + kScrewMargin + kScrewRadius);
+  DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
+            -WindowHeight(tracks.size()) - kDisplayMargin + kScrewMargin + kScrewRadius);
+  DrawScrew(kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
+            kPlasticTop - kScrewMargin - kScrewRadius);
+  DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
+            kPlasticTop - kScrewMargin - kScrewRadius);
 
   DrawChildren(dctx);
 
-  auto bridge_shape = BridgeShape(tracks.size(), current_pos_ratio);
-  canvas.drawPath(bridge_shape, kBridgeHandlePaint);
-
   canvas.save();
   canvas.clipPath(window_path, true);
+
+  {  // Window shadow
+    SkPaint paint;
+    paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 5_mm));
+    window_path.toggleInverseFillType();
+    canvas.drawPath(window_path, paint);
+  }
+  {
+    auto bridge_shape = BridgeShape(tracks.size(), current_pos_ratio);
+    canvas.drawPath(bridge_shape, kBridgeHandlePaint);
+  }
   {  // Zoom dial
     auto zoom_center = ZoomDialCenter(window_height);
     canvas.drawCircle(zoom_center, kZoomRadius, kZoomPaint);
@@ -892,7 +972,6 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
       tick = prev;
     }
   }
-
   canvas.restore();  // unclip
 }
 

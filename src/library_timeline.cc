@@ -189,7 +189,10 @@ const SkPaint kTickPaint = []() {
 
 const SkPaint kBridgeHandlePaint = []() {
   SkPaint p;
-  p.setColor("#e24e1f"_color);
+  SkPoint pts[2] = {{0, -kRulerHeight - kMarginAroundTracks}, {0, -kRulerHeight}};
+  SkColor colors[2] = {"#e24e1f"_color, "#f17149"_color};
+  auto shader = SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+  p.setShader(shader);
   return p;
 }();
 
@@ -894,8 +897,42 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
     canvas.drawPath(window_path, paint);
   }
   {
+    float x = BridgeOffsetX(current_pos_ratio);
+    float bottom_y = -(kMarginAroundTracks * 2 + kTrackHeight * tracks.size() +
+                       kTrackMargin * max(0, (int)tracks.size() - 1));
+
+    SkPaint hairline;
+    hairline.setColor(kBridgeLinePaint.getColor());
+    hairline.setStyle(SkPaint::kStroke_Style);
+    hairline.setAntiAlias(true);
+    canvas.drawLine({x, -kRulerHeight}, {x, bottom_y - kRulerHeight}, hairline);
+
     auto bridge_shape = BridgeShape(tracks.size(), current_pos_ratio);
-    canvas.drawPath(bridge_shape, kBridgeHandlePaint);
+
+    canvas.save();
+
+    canvas.clipPath(bridge_shape);
+    canvas.drawPaint(kBridgeHandlePaint);
+
+    SkPoint pts2[2] = {{x, 0}, {x + 0.4_mm, 0}};
+    SkColor colors2[2] = {"#cb532d"_color, "#809d3312"_color};
+    auto shader2 = SkGradientShader::MakeLinear(pts2, colors2, nullptr, 2, SkTileMode::kMirror);
+    SkPaint wavy_paint;
+    wavy_paint.setShader(shader2);
+    wavy_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.5_mm));
+    Rect wavy_rect = Rect(x - kMinimalTouchableSize / 2, -kRulerHeight - kMarginAroundTracks,
+                          x + kMinimalTouchableSize / 2, -kRulerHeight);
+    wavy_rect = wavy_rect.Outset(-0.5_mm);
+    canvas.drawRect(wavy_rect.sk, wavy_paint);
+
+    SkPaint bridge_stroke_paint;
+    bridge_stroke_paint.setColor("#5d1e0a"_color);
+    bridge_stroke_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
+    bridge_shape.toggleInverseFillType();
+
+    canvas.drawPath(bridge_shape, bridge_stroke_paint);
+
+    canvas.restore();
   }
   {  // Zoom dial
     auto zoom_center = ZoomDialCenter(window_height);

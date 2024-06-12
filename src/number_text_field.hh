@@ -14,6 +14,8 @@ struct NumberTextField : gui::TextField {
   Vec2 GetTextPos() const override;
   void SetNumber(double x);
   string_view Name() const override { return "NumberTextField"; }
+
+  static void DrawBackground(gui::DrawContext&, SkRRect rrect);
 };
 
 }  // namespace automat::gui

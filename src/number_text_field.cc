@@ -1,5 +1,7 @@
 #include "number_text_field.hh"
 
+#include <include/core/SkBlurTypes.h>
+#include <include/core/SkMaskFilter.h>
 #include <include/effects/SkGradientShader.h>
 
 #include "font.hh"
@@ -14,11 +16,13 @@ SkRRect NumberTextField::ShapeRRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, kHeight), kHeight / 2, kHeight / 2);
 }
 
+// First bottom then top
+static constexpr SkColor kNumberBackgroundColors[2] = {"#bec8b7"_color, "#dee3db"_color};
+
 static const SkPaint kNumberTextBackgroundPaint = []() {
   SkPoint pts[2] = {{0, 0}, {0, TextField::kHeight}};
-  SkColor colors[2] = {0xffbec8b7, 0xffdee3db};
   sk_sp<SkShader> shader =
-      SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+      SkGradientShader::MakeLinear(pts, kNumberBackgroundColors, nullptr, 2, SkTileMode::kClamp);
   SkPaint paint;
   paint.setShader(shader);
   paint.setAntiAlias(true);
@@ -41,13 +45,38 @@ static const SkPaint kNumberTextBorderPaint = []() {
   return paint;
 }();
 
-void NumberTextField::DrawBackground(gui::DrawContext& ctx) const {
+void NumberTextField::DrawBackground(gui::DrawContext& ctx, SkRRect rrect) {
   auto& canvas = ctx.canvas;
-  SkRRect rrect = ShapeRRect();
   rrect.inset(kBorderWidth, kBorderWidth);
-  canvas.drawRRect(rrect, GetBackgroundPaint());
+  SkPoint pts[2] = {{0, rrect.getBounds().top()}, {0, rrect.getBounds().bottom()}};
+  sk_sp<SkShader> shader =
+      SkGradientShader::MakeLinear(pts, kNumberBackgroundColors, nullptr, 2, SkTileMode::kClamp);
+  SkPaint paint;
+  paint.setShader(shader);
+  paint.setAntiAlias(true);
+
+  canvas.save();
+  canvas.clipRRect(rrect);
+  canvas.drawPaint(paint);
+
+  // Inner shadows
+  SkPath path = SkPath::RRect(rrect);
+  path.toggleInverseFillType();
+  SkPaint shadow_paint;
+  shadow_paint.setColor("#86a174"_color);
+  shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 0.5_mm));
+  shadow_paint.setBlendMode(SkBlendMode::kColorBurn);
+  canvas.drawPath(path, shadow_paint);
+
+  canvas.restore();
+
   rrect.outset(kBorderWidth / 2, kBorderWidth / 2);
   canvas.drawRRect(rrect, kNumberTextBorderPaint);
+}
+
+void NumberTextField::DrawBackground(gui::DrawContext& ctx) const {
+  SkRRect rrect = ShapeRRect();
+  DrawBackground(ctx, rrect);
 }
 
 void NumberTextField::DrawText(gui::DrawContext& ctx) const {

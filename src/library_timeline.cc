@@ -22,6 +22,7 @@
 #include "include/core/SkColor.h"
 #include "library_macros.hh"
 #include "math.hh"
+#include "number_text_field.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
@@ -130,12 +131,6 @@ const SkPaint kPlasticPaint = []() {
   sk_sp<SkShader> gradient =
       SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
   p.setShader(gradient);
-  return p;
-}();
-
-const SkPaint kDisplayPaint = []() {
-  SkPaint p;
-  p.setColor("#b4b992"_color);
   return p;
 }();
 
@@ -670,7 +665,9 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   }
 
   canvas.drawRRect(PlasticRRect(*this), kPlasticPaint);
-  canvas.drawRRect(kDisplayRRect.sk, kDisplayPaint);
+
+  NumberTextField::DrawBackground(dctx, kDisplayRRect.sk);
+  // canvas.drawRRect(kDisplayRRect.sk, kDisplayPaint);
 
   constexpr float PI = numbers::pi;
 

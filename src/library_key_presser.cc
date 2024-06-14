@@ -24,15 +24,24 @@ static sk_sp<SkImage>& PointingHandColor() {
   return image;
 }
 
+static sk_sp<SkImage>& PressingHandColor() {
+  static auto image =
+      MakeImageFromAsset(embedded::assets_pressing_hand_color_webp)->withDefaultMipmaps();
+  return image;
+}
+
 constexpr static char kHandShapeSVG[] =
-    "M16 17 9 17C7 17 5 11 2 10 2 7 5 7 7 9L7 3C7 0 11 0 11 3L11 5 17 7C18 8 17 17 16 17";
+    "M9 19.9C7.9 20.1 7.9 19.2 8.4 18.6 7.9 17.1 5.9 16.3 5.3 14.8 3.7 11.4.7 10.2 1.1 9.3 1.2 8.9 "
+    "2.2 6.6 7 10.9 7.8 10.4 6.5 1.2 7.8.4 9.1-.3 10.4 0 10.3 3.2L10.5 5.5C12 5.4 12.3 5.4 13.2 "
+    "6.5 13.8 6.2 15 6.1 16 7.4 16.8 7 19.2 7.1 18.9 10.3L18.7 11 18.3 15.9 17.8 16.6 17.8 "
+    "17.6C18.7 17.7 18.3 18.8 17.8 18.8L13 19.3Z";
 
 static SkPath GetHandShape() {
   static SkPath path = []() {
     auto path = PathFromSVG(kHandShapeSVG);
     SkMatrix matrix = SkMatrix::I();
-    float s = 1.5;
-    matrix.preTranslate(0, 2.8_mm);
+    float s = 1.67;
+    matrix.preTranslate(-0.4_mm, 3_mm);
     matrix.preScale(s, s);
     path.transform(matrix);
     return path;
@@ -65,7 +74,7 @@ void KeyPresser::Draw(gui::DrawContext& dctx) const {
   shortcut_button.color = key_selector ? kKeyGrabbingColor : KeyColor(false);
   DrawChildren(dctx);
   auto& canvas = dctx.canvas;
-  auto img = PointingHandColor();
+  auto img = key_pressed ? PressingHandColor() : PointingHandColor();
   canvas.save();
   float s = shortcut_button.width / img->width();
   canvas.translate(0, 3_mm);

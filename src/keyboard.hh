@@ -147,6 +147,8 @@ struct Key {
   std::string text;
 };
 
+void SendKeyEvent(AnsiKey physical, bool down);
+
 struct Caret final {
   Keyboard& keyboard;
   CaretOwner* owner = nullptr;

@@ -14,7 +14,6 @@ struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
 
   std::unique_ptr<Widget> child;
-  mutable product_ptr<float> press_ptr;
   mutable product_ptr<animation::Approach> hover_ptr;
   int press_action_count = 0;
   SkColor color;
@@ -30,6 +29,7 @@ struct Button : Widget {
   virtual Vec2 Position() const { return Vec2(0, 0); }
   virtual void Activate(gui::Pointer&) {}
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
+  virtual float PressRatio() const { return press_action_count ? 1 : 0; }
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg) const;

@@ -59,12 +59,11 @@ void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
 void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
-  auto& press = press_ptr[actx];
   auto& hover = hover_ptr[actx];
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
-  float press_shift_y = press * -kPressOffset;
+  float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
   float lightness_adjust = hover * 10;
 
@@ -115,7 +114,6 @@ void Button::Draw(DrawContext& ctx) const {
 void ToggleButton::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
-  auto& press = press_ptr[actx];
   auto& hover = hover_ptr[actx];
   auto& filling = filling_ptr[actx];
   filling.speed = 5;
@@ -128,7 +126,7 @@ void ToggleButton::Draw(DrawContext& ctx) const {
   SkColor bg = BackgroundColor();
 
   float lightness_adjust = hover * 10;
-  float press_shift_y = press * -kPressOffset;
+  float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
   SkRRect pressed_outer_oval;
   pressed_oval.outset(kBorderWidth / 2 + kShadowSigma * 0, kBorderWidth / 2 + kShadowSigma * 0,
@@ -189,21 +187,11 @@ struct ButtonAction : public Action {
   void Begin(gui::Pointer& pointer) override {
     button.Activate(pointer);
     button.press_action_count++;
-    for (auto& press : button.press_ptr) {
-      press = 1;
-    }
   }
 
   void Update(gui::Pointer&) override {}
 
-  void End() override {
-    button.press_action_count--;
-    if (button.press_action_count == 0) {
-      for (auto& press : button.press_ptr) {
-        press = 0;
-      }
-    }
-  }
+  void End() override { button.press_action_count--; }
 
   void DrawAction(DrawContext&) override {}
 };

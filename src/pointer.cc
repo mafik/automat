@@ -122,12 +122,20 @@ void Pointer::Wheel(float delta) {
 
 void Pointer::ButtonDown(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount) return;
-  RunOnAutomatThread([=]() {
+  RunOnAutomatThread([=, this]() {
     button_down_position[btn] = pointer_position;
     button_down_time[btn] = time::SystemNow();
 
     if (action == nullptr && !path.empty()) {
-      action = path.back()->ButtonDownAction(*this, btn);
+      for (Widget* w : path) {
+        action = w->CaptureButtonDownAction(*this, btn);
+        if (action) {
+          break;
+        }
+      }
+      if (action == nullptr) {
+        action = path.back()->ButtonDownAction(*this, btn);
+      }
       if (action) {
         action->Begin(*this);
       }

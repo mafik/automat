@@ -48,6 +48,9 @@ struct Widget {
   virtual void PointerLeave(Pointer&, animation::Context&) {}
   virtual void Draw(DrawContext&) const = 0;
   virtual SkPath Shape() const = 0;
+  virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {
+    return nullptr;
+  }
   virtual std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) { return nullptr; }
 
   // Return true if the widget should be highlighted as draggable.
@@ -66,6 +69,10 @@ struct Widget {
   }
 
   void DrawChildren(DrawContext&) const;
+};
+
+struct LabelMixin {
+  virtual void SetLabel(maf::StrView label) = 0;
 };
 
 struct PaintMixin {

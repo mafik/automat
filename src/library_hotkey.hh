@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "base.hh"
+#include "key_button.hh"
 #include "keyboard.hh"
 #include "on_off.hh"
 
@@ -13,15 +14,6 @@ struct PowerButton : gui::ToggleButton {
   PowerButton(OnOff* target);
   void Activate(gui::Pointer&) override { target->Toggle(); }
   bool Filled() const override { return target->IsOn(); }
-};
-
-struct KeyButton : gui::Button {
-  float width;
-  function<void(gui::Pointer&)> activate;
-  KeyButton(std::unique_ptr<Widget> child, SkColor color, float width);
-  void Activate(gui::Pointer&) override;
-  SkRRect RRect() const override;
-  void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg) const override;
 };
 
 struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {

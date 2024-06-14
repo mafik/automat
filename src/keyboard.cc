@@ -16,6 +16,7 @@
 
 #if defined(__linux__)
 #include <xcb/xproto.h>
+#include <xcb/xtest.h>
 
 #include "linux_main.hh"
 #include "x11.hh"
@@ -528,6 +529,16 @@ StrView ToStr(AnsiKey k) noexcept {
     default:
       return "<?>";
   }
+}
+
+void SendKeyEvent(AnsiKey physical, bool down) {
+#if defined(__linux__)
+  xcb_test_fake_input(connection, down ? XCB_KEY_PRESS : XCB_KEY_RELEASE,
+                      (uint8_t)x11::KeyToX11KeyCode(physical), XCB_CURRENT_TIME, screen->root, 0, 0,
+                      0);
+  xcb_flush(connection);
+#endif
+  // TODO: Implement SendKeyEvent for Windows
 }
 
 Caret::Caret(Keyboard& keyboard) : keyboard(keyboard) {}

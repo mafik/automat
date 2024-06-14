@@ -532,13 +532,19 @@ StrView ToStr(AnsiKey k) noexcept {
 }
 
 void SendKeyEvent(AnsiKey physical, bool down) {
+#if defined(_WIN32)
+  INPUT input = {};
+  input.type = INPUT_KEYBOARD;
+  input.ki.wScan = KeyToScanCode(physical);
+  input.ki.dwFlags = KEYEVENTF_SCANCODE | (down ? 0 : KEYEVENTF_KEYUP);
+  SendInput(1, &input, sizeof(INPUT));
+#endif
 #if defined(__linux__)
   xcb_test_fake_input(connection, down ? XCB_KEY_PRESS : XCB_KEY_RELEASE,
                       (uint8_t)x11::KeyToX11KeyCode(physical), XCB_CURRENT_TIME, screen->root, 0, 0,
                       0);
   xcb_flush(connection);
 #endif
-  // TODO: Implement SendKeyEvent for Windows
 }
 
 Caret::Caret(Keyboard& keyboard) : keyboard(keyboard) {}

@@ -28,6 +28,7 @@ struct Font {
   int NextIndex(std::string_view text, int index);
 };
 
+sk_sp<SkFontMgr> GetFontMgr();
 Font& GetFont();
 
 }  // namespace automat::gui

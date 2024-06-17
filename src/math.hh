@@ -91,6 +91,8 @@ static_assert(sizeof(Vec3) == 12, "Vec3 is not 12 bytes");
 
 constexpr float LengthSquared(Vec2 v) { return v.x * v.x + v.y * v.y; }
 inline float Length(Vec2 v) { return v.sk.length(); }
+constexpr float LengthSquared(Vec3 v) { return v.x * v.x + v.y * v.y + v.z * v.z; }
+inline float Length(Vec3 v) { return sqrtf(LengthSquared(v)); }
 
 inline Vec2 Normalize(Vec2 v) {
   float len = Length(v);
@@ -187,6 +189,10 @@ union Rect {
 
   static constexpr Rect MakeWH(float width, float height) {
     return {-width / 2, -height / 2, width / 2, height / 2};
+  }
+  static constexpr Rect MakeCenterWH(Vec2 center, float width, float height) {
+    return {center.x - width / 2, center.y - height / 2, center.x + width / 2,
+            center.y + height / 2};
   }
 
   operator SkRect&() { return sk; }

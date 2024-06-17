@@ -63,11 +63,24 @@ Vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter
 // corner. "Window" coordinates are in meters and their origin is in the bottom
 // left window corner.
 
+namespace automat::gui {
 Vec2 ScreenToWindow(Vec2 screen) {
   Vec2 window = (screen - window_position_on_screen - Vec2(0, window_height)) / DisplayPxPerMeter();
   window.y = -window.y;
   return window;
 }
+
+Vec2 WindowToScreen(Vec2 window) {
+  window.y = -window.y;
+  return window * DisplayPxPerMeter() + window_position_on_screen + Vec2(0, window_height);
+}
+
+Vec2 GetMainPointerScreenPos() { return mouse_position_on_screen; }
+
+Vec2 MainScreenSizePixels() { return Vec2(screen->width_in_pixels, screen->height_in_pixels); }
+}  // namespace automat::gui
+
+using namespace automat::gui;
 
 gui::Pointer& GetMouse() {
   if (!mouse) {

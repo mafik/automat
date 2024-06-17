@@ -34,7 +34,7 @@ namespace automat::gui {
 
 constexpr static SkFourByteTag kFontWeightTag = SkSetFourByteTag('w', 'g', 'h', 't');
 
-static sk_sp<SkFontMgr> GetFontMgr() {
+sk_sp<SkFontMgr> GetFontMgr() {
   static sk_sp<SkFontMgr> font_mgr = []() {
 #if defined(_WIN32)
     return SkFontMgr_New_DirectWrite();

@@ -1,6 +1,7 @@
 #include "library_timeline.hh"
 
 #include <include/core/SkBlurTypes.h>
+#include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
@@ -19,7 +20,6 @@
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
-#include "include/core/SkColor.h"
 #include "library_macros.hh"
 #include "math.hh"
 #include "number_text_field.hh"

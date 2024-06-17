@@ -141,7 +141,6 @@ struct Window final : Widget {
   // Restores state when Automat is restarted.
   void DeserializeState(Deserializer&, Status&);
 
-  Vec2 position = Vec2(0, 0);  // center of the window
   Vec2 size;
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
 
@@ -163,5 +162,20 @@ struct Window final : Widget {
   std::vector<Pointer*> pointers;
   std::vector<Keyboard*> keyboards;
 };
+
+// Converts a point in the screen pixel coordinates (origin at the top left) to window coordinates
+// (SI units origin at the bottom left).
+Vec2 ScreenToWindow(Vec2 screen);
+
+// Converts a point in the window (SI units origin at the bottom left) to screen pixel coordinates
+// (origin at the top left).
+Vec2 WindowToScreen(Vec2 window);
+
+// Returns the position of the main pointer in screen coordinates (pixels originating at the top
+// left).
+Vec2 GetMainPointerScreenPos();
+
+// Returns the size of the main screen in pixels.
+Vec2 MainScreenSizePixels();
 
 }  // namespace automat::gui

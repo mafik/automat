@@ -121,7 +121,7 @@ def hook_recipe(recipe):
     recipe.add_step(partial(skia_compile, v), outputs=[v.build_dir / libname], inputs=[args_gn], desc='Compiling Skia', shortcut='skia' + v.build_type.rule_suffix())
 
 # Libraries offered by Skia
-skia_libs = set(['shshaper', 'skunicode', 'skia', 'skottie'])
+skia_libs = set(['shshaper', 'skunicode', 'skia', 'skottie', 'svg'])
 
 # Binaries that should link to Skia
 skia_bins = set()

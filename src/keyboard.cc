@@ -306,10 +306,13 @@ void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
       .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
       .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
       .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-      .external = ev.event == screen->root,
       .text = "",
   };
-  KeyDown(key);
+  if (ev.event == screen->root) {
+    LogKeyDown(key);
+  } else {
+    KeyDown(key);
+  }
 }
 
 void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
@@ -319,9 +322,12 @@ void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
                   .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
                   .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                   .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-                  .external = ev.event == screen->root,
                   .text = ""};
-  gui::keyboard->KeyUp(key);
+  if (ev.event == screen->root) {
+    LogKeyUp(key);
+  } else {
+    gui::keyboard->KeyUp(key);
+  }
 }
 #endif  // __linux__
 

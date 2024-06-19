@@ -15,11 +15,14 @@
 #endif
 
 #if defined(__linux__)
+#include <xcb/xinput.h>
 #include <xcb/xproto.h>
 #include <xcb/xtest.h>
 
+#include "format.hh"
 #include "linux_main.hh"
 #include "x11.hh"
+
 #endif
 
 using namespace maf;
@@ -161,6 +164,28 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
   return *key_grabs.back().get();
 }
 
+Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
+#if defined(__linux__)
+  if (keyloggings.empty()) {
+    struct input_event_mask {
+      xcb_input_event_mask_t header = {
+          .deviceid = XCB_INPUT_DEVICE_ALL,
+          .mask_len = 1,
+      };
+      uint32_t mask = XCB_INPUT_XI_EVENT_MASK_KEY_PRESS | XCB_INPUT_XI_EVENT_MASK_KEY_RELEASE;
+    } event_mask;
+
+    xcb_void_cookie_t cookie =
+        xcb_input_xi_select_events_checked(connection, screen->root, 1, &event_mask.header);
+
+    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+      ERROR << f("Couldn't select X11 events for keylogging: %d", error->error_code);
+    }
+  }
+#endif  // defined(__linux__)
+  return *keyloggings.emplace_back(new Keylogging(*this, keylogger));
+}
+
 enum class CaretAnimAction { Keep, Delete };
 
 static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, Caret* caret) {
@@ -269,6 +294,32 @@ void Keyboard::Draw(DrawContext& ctx) const {
   }
 }
 
+void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
+  gui::Key key = {
+      .ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
+      .alt = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_1),
+      .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
+      .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
+      .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+      .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+      .external = ev.event == screen->root,
+      .text = "",
+  };
+  KeyDown(key);
+}
+
+void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
+  gui::Key key = {.ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
+                  .alt = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_1),
+                  .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
+                  .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
+                  .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+                  .external = ev.event == screen->root,
+                  .text = ""};
+  gui::keyboard->KeyUp(key);
+}
+
 void Keyboard::KeyDown(Key key) {
   // Quit on Ctrl + Q
   if (key.ctrl && key.physical == AnsiKey::Q) {
@@ -276,21 +327,27 @@ void Keyboard::KeyDown(Key key) {
     return;
   }
   RunOnAutomatThread([=, this]() {
-    if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-      pressed_keys.set((size_t)key.physical);
-    }
-    if (grab) {
-      // KeyboardGrabber takes over all key events
-      grab->grabber.KeyboardGrabberKeyDown(*grab, key);
-    } else if (key.physical == AnsiKey::Escape) {
-      // Release the carets when Escape is pressed
-      for (auto& caret : carets) {
-        caret->owner->ReleaseCaret(*caret);
+    if (key.external) {
+      for (auto& keylogging : keyloggings) {
+        keylogging->keylogger.KeyloggerKeyDown(key);
       }
-      carets.clear();
     } else {
-      for (auto& caret : carets) {
-        caret->owner->KeyDown(*caret, key);
+      if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+        pressed_keys.set((size_t)key.physical);
+      }
+      if (grab) {
+        // KeyboardGrabber takes over all key events
+        grab->grabber.KeyboardGrabberKeyDown(*grab, key);
+      } else if (key.physical == AnsiKey::Escape) {
+        // Release the carets when Escape is pressed
+        for (auto& caret : carets) {
+          caret->owner->ReleaseCaret(*caret);
+        }
+        carets.clear();
+      } else {
+        for (auto& caret : carets) {
+          caret->owner->KeyDown(*caret, key);
+        }
       }
     }
   });
@@ -298,15 +355,21 @@ void Keyboard::KeyDown(Key key) {
 
 void Keyboard::KeyUp(Key key) {
   RunOnAutomatThread([=, this]() {
-    if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-      pressed_keys.reset((size_t)key.physical);
-    }
-    if (grab) {
-      grab->grabber.KeyboardGrabberKeyUp(*grab, key);
+    if (key.external) {
+      for (auto& keylogging : keyloggings) {
+        keylogging->keylogger.KeyloggerKeyUp(key);
+      }
     } else {
-      for (auto& caret : carets) {
-        if (caret->owner) {
-          caret->owner->KeyUp(*caret, key);
+      if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+        pressed_keys.reset((size_t)key.physical);
+      }
+      if (grab) {
+        grab->grabber.KeyboardGrabberKeyUp(*grab, key);
+      } else {
+        for (auto& caret : carets) {
+          if (caret->owner) {
+            caret->owner->KeyUp(*caret, key);
+          }
         }
       }
     }
@@ -639,4 +702,36 @@ void KeyGrab::Release() {
     }
   }
 }
+
+void Keylogging::Release() {
+  auto it = keyboard.keyloggings.begin();
+  for (; it != keyboard.keyloggings.end(); ++it) {
+    if (it->get() == this) {
+      break;
+    }
+  }
+  if (it == keyboard.keyloggings.end()) {
+    return;
+  }
+  if (keyboard.keyloggings.size() == 1) {
+#if defined(__linux__)
+    struct input_event_mask {
+      xcb_input_event_mask_t header = {
+          .deviceid = XCB_INPUT_DEVICE_ALL,
+          .mask_len = 1,
+      };
+      uint32_t mask = 0;
+    } event_mask;
+
+    xcb_void_cookie_t cookie =
+        xcb_input_xi_select_events_checked(connection, screen->root, 1, &event_mask.header);
+
+    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+      ERROR << f("Couldn't release X11 event selection: %d", error->error_code);
+    }
+#endif  // defined(__linux__)
+  }
+  keyboard.keyloggings.erase(it);  // After this line `this` is deleted!
+}
+
 }  // namespace automat::gui

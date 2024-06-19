@@ -17,7 +17,6 @@
 #include "root.hh"
 #include "vk.hh"
 #include "window.hh"
-#include "x11.hh"
 
 #pragma comment(lib, "vk-bootstrap")
 #pragma comment(lib, "xcb")
@@ -345,29 +344,11 @@ void RenderLoop() {
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
-                xcb_input_key_press_event_t* ev = (xcb_input_key_press_event_t*)event;
-                gui::Key key = {
-                    .ctrl = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_CONTROL),
-                    .alt = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_1),
-                    .shift = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_SHIFT),
-                    .windows = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_4),
-                    .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
-                    .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
-                    .text = "",
-                };
-                gui::keyboard->KeyDown(key);
+                gui::keyboard->KeyDown(*(xcb_input_key_press_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
-                xcb_input_key_release_event_t* ev = (xcb_input_key_release_event_t*)event;
-                gui::Key key = {.ctrl = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_CONTROL),
-                                .alt = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_1),
-                                .shift = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_SHIFT),
-                                .windows = static_cast<bool>(ev->mods.base & XCB_MOD_MASK_4),
-                                .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
-                                .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail),
-                                .text = ""};
-                gui::keyboard->KeyUp(key);
+                gui::keyboard->KeyUp(*(xcb_input_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_BUTTON_PRESS: {

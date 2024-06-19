@@ -16,6 +16,10 @@
 #include "str.hh"
 #include "time.hh"
 
+#if defined(__linux__)
+#include <xcb/xinput.h>
+#endif  // defined(__linux__)
+
 namespace automat::gui {
 
 struct CaretOwner;
@@ -144,6 +148,7 @@ struct Key {
   bool windows;
   AnsiKey physical;
   AnsiKey logical;
+  bool external;
   std::string text;
 };
 
@@ -192,6 +197,12 @@ struct KeyboardGrabber {
 
   virtual void KeyboardGrabberKeyDown(KeyboardGrab&, Key) {}
   virtual void KeyboardGrabberKeyUp(KeyboardGrab&, Key) {}
+};
+
+struct Keylogger {
+  virtual ~Keylogger() = default;
+  virtual void KeyloggerKeyDown(Key) {}
+  virtual void KeyloggerKeyUp(Key) {}
 };
 
 #if defined(_WIN32)
@@ -264,6 +275,13 @@ struct KeyGrab {
   void Release();
 };
 
+struct Keylogging {
+  Keyboard& keyboard;
+  Keylogger& keylogger;
+  Keylogging(Keyboard& keyboard, Keylogger& keylogger) : keyboard(keyboard), keylogger(keylogger) {}
+  void Release();
+};
+
 struct CaretAnimation {
   const Keyboard& keyboard;
   animation::DeltaFraction delta_fraction;
@@ -293,6 +311,7 @@ struct Keyboard final {
   std::unique_ptr<KeyboardGrab> grab;
 
   std::vector<std::unique_ptr<KeyGrab>> key_grabs;
+  std::vector<std::unique_ptr<Keylogging>> keyloggings;
 
   Keyboard(Window&);
   ~Keyboard();
@@ -310,8 +329,15 @@ struct Keyboard final {
   KeyGrab& RequestKeyGrab(KeyGrabber&, AnsiKey key, bool ctrl, bool alt, bool shift, bool windows,
                           maf::Fn<void(maf::Status&)> cb);
 
+  Keylogging& BeginKeylogging(Keylogger&);
+
   // Called by Automat drawing logic to draw the keyboard carets & other keyboard related visuals.
   void Draw(DrawContext&) const;
+
+#if defined(__linux__)
+  void KeyDown(xcb_input_key_press_event_t&);
+  void KeyUp(xcb_input_key_release_event_t&);
+#endif  // defined(__linux__)
 
   // Called by the OS event loop to notify the Keyboard of a key press.
   void KeyDown(Key);

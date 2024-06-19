@@ -46,6 +46,12 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
 }
 
 MacroRecorder::MacroRecorder() {}
+MacroRecorder::~MacroRecorder() {
+  if (keylogging) {
+    keylogging->Release();
+    keylogging = nullptr;
+  }
+}
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
 std::unique_ptr<Object> MacroRecorder::Clone() const { return std::make_unique<MacroRecorder>(); }
 void MacroRecorder::Draw(gui::DrawContext& dctx) const {
@@ -126,7 +132,20 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   // canvas.drawPath(Shape(), outline);
 }
 SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
-LongRunning* MacroRecorder::OnRun(Location& here) { return this; }
-void MacroRecorder::Cancel() {}
+LongRunning* MacroRecorder::OnRun(Location& here) {
+  if (keylogging == nullptr) {
+    keylogging = &gui::keyboard->BeginKeylogging(*this);
+  }
+  return this;
+}
+void MacroRecorder::Cancel() {
+  if (keylogging) {
+    keylogging->Release();
+    keylogging = nullptr;
+  }
+}
+
+void MacroRecorder::KeyloggerKeyDown(gui::Key key) { LOG << "Key down: " << ToStr(key.physical); }
+void MacroRecorder::KeyloggerKeyUp(gui::Key key) { LOG << "Key up: " << ToStr(key.physical); }
 
 }  // namespace automat::library

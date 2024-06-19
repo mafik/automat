@@ -76,8 +76,6 @@ Vec2 WindowToScreen(Vec2 window) {
 }
 
 Vec2 GetMainPointerScreenPos() { return mouse_position_on_screen; }
-
-Vec2 MainScreenSizePixels() { return Vec2(screen->width_in_pixels, screen->height_in_pixels); }
 }  // namespace automat::gui
 
 using namespace automat::gui;

@@ -19,14 +19,13 @@
 #include <thread>
 
 #include "backtrace.hh"
-#include "library.hh"
+#include "library.hh"  // IWYU pragma: export
 #include "loading_animation.hh"
 #include "path.hh"
 #include "root.hh"
 #include "thread_name.hh"
 #include "touchpad.hh"
 #include "vk.hh"
-#include "widget.hh"
 #include "win.hh"
 #include "win_key.hh"
 #include "win_main.hh"
@@ -66,18 +65,29 @@ Vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter
 // - Canvas (used for gui.cc <=> Automat communication, origin in the center
 // of the window, Y axis goes up)
 
+namespace automat::gui {
+
 Vec2 ScreenToWindow(Vec2 screen) {
   Vec2 window = (screen - Vec2(client_x, client_y + window_height)) / DisplayPxPerMeter();
   window.y = -window.y;
   return window;
 }
 
+Vec2 WindowToScreen(Vec2 window) {
+  window.y = -window.y;
+  return window * DisplayPxPerMeter() + Vec2(client_x, window_height + client_y);
+}
+
+Vec2 GetMainPointerScreenPos() { return mouse_position; }
+
+}  // namespace automat::gui
+
 std::unique_ptr<gui::Window> window;
 std::unique_ptr<gui::Pointer> mouse;
 
 gui::Pointer& GetMouse() {
   if (!mouse) {
-    mouse = std::make_unique<gui::Pointer>(*window, ScreenToWindow(mouse_position));
+    mouse = std::make_unique<gui::Pointer>(*window, automat::gui::ScreenToWindow(mouse_position));
     TRACKMOUSEEVENT track_mouse_event = {
         .cbSize = sizeof(TRACKMOUSEEVENT),
         .dwFlags = TME_LEAVE,
@@ -395,7 +405,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       int16_t y = (lParam >> 16) & 0xFFFF;
       mouse_position.x = x + client_x;
       mouse_position.y = y + client_y;
-      GetMouse().Move(ScreenToWindow(mouse_position));
+      GetMouse().Move(automat::gui::ScreenToWindow(mouse_position));
       break;
     }
     case WM_MOUSELEAVE: {

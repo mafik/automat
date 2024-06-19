@@ -175,7 +175,4 @@ Vec2 WindowToScreen(Vec2 window);
 // left).
 Vec2 GetMainPointerScreenPos();
 
-// Returns the size of the main screen in pixels.
-Vec2 MainScreenSizePixels();
-
 }  // namespace automat::gui

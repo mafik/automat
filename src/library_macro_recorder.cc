@@ -66,7 +66,6 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
     auto size = sharingan->containerSize();
     float s = 0.9 * kEyeRadius * 2 / size.height();
-    auto screen_diameter = Length(MainScreenSizePixels());
 
     auto DrawEye = [&](Vec2 center) {
       auto eye_window = local_to_window.mapPoint(center.sk);

@@ -1,5 +1,9 @@
 #include <stdint.h>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif  // _WIN32
+
 #include <mutex>
 #include <vector>
 
@@ -51,9 +55,9 @@ bool ShouldIgnoreScrollEvents();
 extern std::mutex touchpads_mutex;
 extern std::vector<TouchPad*> touchpads;
 
-void Init();
-
 #if defined(_WIN32)
+RAWINPUTDEVICE GetRAWINPUTDEVICE();
+
 maf::Optional<maf::I64> ProcessEvent(uint32_t msg, uint64_t wParam, int64_t lParam);
 #endif  // _WIN32
 

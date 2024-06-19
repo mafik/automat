@@ -204,7 +204,7 @@ compiler = os.environ['CXX'] = os.environ['CXX'] if 'CXX' in os.environ else 'cl
 compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else 'clang'
 
 if platform == 'win32':
-    base.compile_args += ['-D_USE_MATH_DEFINES']
+    base.compile_args += ['-D_USE_MATH_DEFINES', '-DNODRAWTEXT']
     base.link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
     debug.link_args += ['-Wl,/debug']
 else:

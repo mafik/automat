@@ -19,6 +19,7 @@
 #include <thread>
 
 #include "backtrace.hh"
+#include "hid.hh"
 #include "library.hh"  // IWYU pragma: export
 #include "loading_animation.hh"
 #include "path.hh"
@@ -235,6 +236,28 @@ bool IsMaximized(HWND hWnd) {
   return placement.showCmd == SW_SHOWMAXIMIZED;
 }
 
+bool window_active = false;
+bool keylogging_enabled = false;
+
+void RegisterRawInput(bool keylogging) {
+  vector<RAWINPUTDEVICE> rids;
+  rids.emplace_back(touchpad::GetRAWINPUTDEVICE());
+  rids.emplace_back(RAWINPUTDEVICE{
+      .usUsagePage = hid::UsagePage_GenericDesktop,
+      .usUsage = hid::Usage_GenericDesktop_Keyboard,
+      .dwFlags =
+          (keylogging ? RIDEV_INPUTSINK
+                      : (DWORD)0) |  // captures input even when the window is not in the foreground
+          RIDEV_NOLEGACY,            // adds keyboard and also ignores legacy keyboard messages
+      .hwndTarget = main_window,
+  });
+  BOOL register_result = RegisterRawInputDevices(rids.data(), rids.size(), sizeof(RAWINPUTDEVICE));
+  if (!register_result) {
+    ERROR << "Failed to register raw input device";
+  }
+  keylogging_enabled = keylogging;
+}
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static unsigned char key_state[256] = {};
   static char utf8_buffer[4] = {};
@@ -296,88 +319,91 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
                    size_hint->bottom - size_hint->top, SWP_NOZORDER | SWP_NOACTIVATE);
       break;
     }
-    case WM_KEYDOWN: {
-      auto scan_code = ScanCode(lParam);      // identifies the physical key
-      uint8_t virtual_key = (uint8_t)wParam;  // layout-dependent key code
-      key_state[virtual_key] = 0x80;
+    case WM_ACTIVATEAPP: {
+      window_active = wParam != WA_INACTIVE;
+      return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    }
+    case WM_INPUT: {
+      HRAWINPUT hRawInput = (HRAWINPUT)lParam;
+      UINT size = 0;
+      UINT ret = GetRawInputData(hRawInput, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
+      if (ret == (UINT)-1) {  // error when retrieving size of buffer
+        ERROR << "Error when retrieving size of buffer. Error code: " << GetLastError();
+        return DefWindowProc(main_window, uMsg, wParam, lParam);
+      }
+      alignas(8) uint8_t raw_input_buffer[size];
+      RAWINPUT* raw_input = (RAWINPUT*)raw_input_buffer;
+      UINT size_copied =
+          GetRawInputData(hRawInput, RID_INPUT, raw_input_buffer, &size, sizeof(RAWINPUTHEADER));
+      if (size != size_copied) {  // error when retrieving buffer
+        ERROR << "Error when retrieving buffer. Size=" << size << " Error code: " << GetLastError();
+        return DefWindowProc(main_window, uMsg, wParam, lParam);
+      }
+      if (raw_input->header.dwType != RIM_TYPEKEYBOARD) {
+        ERROR << "Received WM_INPUT event with type other than RIM_TYPEKEYBOARD";
+        return DefWindowProc(main_window, uMsg, wParam, lParam);
+      }
+      RAWKEYBOARD& ev = raw_input->data.keyboard;
+      U32 scan_code = ev.MakeCode;
+      if (ev.Flags & RI_KEY_E0) {
+        scan_code |= 0xE000;
+      }
+      if (ev.Flags & RI_KEY_E1) {
+        scan_code |= 0xE11D00;
+      }
+      auto physical = ScanCodeToKey(scan_code);
+      auto virtual_key = KeyToVirtualKey(physical);  // layout-dependent key code
 
       gui::Key key;
-      key.physical = ScanCodeToKey(scan_code);
+      key.physical = physical;
       key.logical = VirtualKeyToKey(virtual_key);
 
-      char key_name[256];
-      GetKeyNameText(lParam, key_name, sizeof(key_name));
-
-      std::array<wchar_t, 16> utf16_buffer;
-      int utf16_len =
-          ToUnicode(virtual_key, scan_code, key_state, utf16_buffer.data(), utf16_buffer.size(), 0);
-      if (utf16_len) {
-        std::array<char, 32> utf8_buffer = {};
-        int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
-                                          (uint16_t*)utf16_buffer.data(), utf16_len);
-        key.text = std::string(utf8_buffer.data(), utf8_len);
-      }
-
-      if (gui::keyboard) {
-        gui::keyboard->KeyDown(key);
-      }
-      break;
-    }
-    case WM_KEYUP: {
-      auto scan_code = ScanCode(lParam);  // identifies the physical key
-      uint8_t virtual_key = (uint8_t)wParam;
-      key_state[virtual_key] = 0;
-      // Right Alt sends WM_KEYDOWN for Control & Alt, but WM_KEYUP for Alt only.
-      // This is a workaround for that.
-      if (virtual_key == 0x12) {
-        key_state[0x11] = 0;
-      }
-
-      gui::Key key;
-      key.physical = ScanCodeToKey(scan_code);
-      key.logical = VirtualKeyToKey(virtual_key);
-
-      if (gui::keyboard) {
-        gui::keyboard->KeyUp(key);
-      }
-      break;
-    }
-    case WM_CHAR: {
-      uint8_t utf8_char = (uint8_t)wParam;
-      uint32_t scan_code = ScanCode(lParam);
-      utf8_buffer[utf8_i++] = utf8_char;
-      bool utf8_complete = false;
-      if ((utf8_buffer[0] & 0x80) == 0) {
-        // 1-byte UTF-8 character
-        utf8_complete = true;
-      } else if ((utf8_buffer[0] & 0xE0) == 0xC0) {
-        // 2-byte UTF-8 character
-        utf8_complete = (utf8_i == 2);
-      } else if ((utf8_buffer[0] & 0xF0) == 0xE0) {
-        // 3-byte UTF-8 character
-        utf8_complete = (utf8_i == 3);
-      } else if ((utf8_buffer[0] & 0xF8) == 0xF0) {
-        // 4-byte UTF-8 character
-        utf8_complete = (utf8_i == 4);
-      } else {
-        // Invalid UTF-8 character
-        ERROR << "Invalid UTF-8 start byte: 0x" << f("%x", utf8_char) << " (" << utf8_char
-              << "), scancode=0x" << f("%x", scan_code);
-        utf8_i = 0;
-      }
-      if (utf8_complete) {
-        if (gui::keyboard) {
-          gui::Key key;
-          key.physical = ScanCodeToKey(scan_code);
-          key.logical = gui::AnsiKey::Unknown;
-          key.text = std::string(utf8_buffer, utf8_i);
-          gui::keyboard->KeyDown(key);
-          gui::keyboard->KeyUp(key);
+      if (ev.Message == WM_KEYDOWN) {
+        key_state[virtual_key] = 0x80;
+        std::array<wchar_t, 16> utf16_buffer;
+        int utf16_len = ToUnicode(virtual_key, scan_code, key_state, utf16_buffer.data(),
+                                  utf16_buffer.size(), 0);
+        if (utf16_len) {
+          std::array<char, 32> utf8_buffer = {};
+          int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
+                                            (uint16_t*)utf16_buffer.data(), utf16_len);
+          key.text = std::string(utf8_buffer.data(), utf8_len);
         }
-        utf8_i = 0;
+        if (gui::keyboard) {
+          if (keylogging_enabled) {
+            gui::keyboard->LogKeyDown(key);
+          }
+          LOG << "Sending key down event " << window_active;
+          if (window_active) {
+            gui::keyboard->KeyDown(key);
+          }
+        }
+      } else if (ev.Message == WM_KEYUP) {
+        key_state[virtual_key] = 0;
+        // Right Alt sends WM_KEYDOWN for Control & Alt, but WM_KEYUP for Alt only.
+        // This is a workaround for that.
+        if (virtual_key == 0x12) {
+          key_state[0x11] = 0;
+        }
+        if (gui::keyboard) {
+          if (keylogging_enabled) {
+            gui::keyboard->LogKeyUp(key);
+          }
+          if (window_active) {
+            gui::keyboard->KeyUp(key);
+          }
+        }
+      } else if (ev.Message == WM_SYSKEYDOWN) {
+        // ignore
+      } else {
+        LOG << "Unknown WM_INPUT Message: " << dump_struct(ev);
       }
-      break;
+      return DefWindowProc(main_window, uMsg, wParam, lParam);
     }
+    case WM_KEYDOWN:
+    case WM_KEYUP:
+    case WM_CHAR:
+      break;
     case WM_HOTKEY: {
       int id = wParam;  // discard the upper 32 bits
       // lParam carries the modifiers (first 16 bits) and then the keycode
@@ -558,7 +584,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   if (!main_window) {
     FATAL << "Failed to create main window.";
   }
-  touchpad::Init();
+
+  RegisterRawInput();
 
   QueryDisplayCaps();
 

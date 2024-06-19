@@ -15,6 +15,8 @@ const char* UsagePageToString(UsagePage usage_page);
 enum Usage : uint16_t {
   Usage_Undefined = 0x00,
 
+  Usage_GenericDesktop_Keyboard = 0x06,
+
   Usage_GenericDesktop_X = 0x30,
   Usage_GenericDesktop_Y = 0x31,
 

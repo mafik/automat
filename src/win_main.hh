@@ -15,3 +15,5 @@ extern int window_width;
 extern int window_height;
 
 void RunOnWindowsThread(std::function<void()>&&);
+
+void RegisterRawInput(bool keylogging = false);

@@ -148,7 +148,6 @@ struct Key {
   bool windows;
   AnsiKey physical;
   AnsiKey logical;
-  bool external;
   std::string text;
 };
 
@@ -344,6 +343,10 @@ struct Keyboard final {
 
   // Called by the OS event loop to notify the Keyboard of a key release.
   void KeyUp(Key);
+
+  void LogKeyDown(Key);
+
+  void LogKeyUp(Key);
 };
 
 extern std::unique_ptr<gui::Keyboard> keyboard;

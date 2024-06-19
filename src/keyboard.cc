@@ -165,8 +165,8 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
 }
 
 Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
-#if defined(__linux__)
   if (keyloggings.empty()) {
+#ifdef __linux__
     struct input_event_mask {
       xcb_input_event_mask_t header = {
           .deviceid = XCB_INPUT_DEVICE_ALL,
@@ -181,8 +181,11 @@ Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
     if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
       ERROR << f("Couldn't select X11 events for keylogging: %d", error->error_code);
     }
+#endif  // __linux__
+#ifdef _WIN32
+    RegisterRawInput(true);
+#endif
   }
-#endif  // defined(__linux__)
   return *keyloggings.emplace_back(new Keylogging(*this, keylogger));
 }
 
@@ -294,6 +297,7 @@ void Keyboard::Draw(DrawContext& ctx) const {
   }
 }
 
+#ifdef __linux__
 void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
   gui::Key key = {
       .ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
@@ -319,6 +323,7 @@ void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
                   .text = ""};
   gui::keyboard->KeyUp(key);
 }
+#endif  // __linux__
 
 void Keyboard::KeyDown(Key key) {
   // Quit on Ctrl + Q
@@ -327,27 +332,21 @@ void Keyboard::KeyDown(Key key) {
     return;
   }
   RunOnAutomatThread([=, this]() {
-    if (key.external) {
-      for (auto& keylogging : keyloggings) {
-        keylogging->keylogger.KeyloggerKeyDown(key);
+    if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+      pressed_keys.set((size_t)key.physical);
+    }
+    if (grab) {
+      // KeyboardGrabber takes over all key events
+      grab->grabber.KeyboardGrabberKeyDown(*grab, key);
+    } else if (key.physical == AnsiKey::Escape) {
+      // Release the carets when Escape is pressed
+      for (auto& caret : carets) {
+        caret->owner->ReleaseCaret(*caret);
       }
+      carets.clear();
     } else {
-      if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-        pressed_keys.set((size_t)key.physical);
-      }
-      if (grab) {
-        // KeyboardGrabber takes over all key events
-        grab->grabber.KeyboardGrabberKeyDown(*grab, key);
-      } else if (key.physical == AnsiKey::Escape) {
-        // Release the carets when Escape is pressed
-        for (auto& caret : carets) {
-          caret->owner->ReleaseCaret(*caret);
-        }
-        carets.clear();
-      } else {
-        for (auto& caret : carets) {
-          caret->owner->KeyDown(*caret, key);
-        }
+      for (auto& caret : carets) {
+        caret->owner->KeyDown(*caret, key);
       }
     }
   });
@@ -355,23 +354,32 @@ void Keyboard::KeyDown(Key key) {
 
 void Keyboard::KeyUp(Key key) {
   RunOnAutomatThread([=, this]() {
-    if (key.external) {
-      for (auto& keylogging : keyloggings) {
-        keylogging->keylogger.KeyloggerKeyUp(key);
-      }
+    if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+      pressed_keys.reset((size_t)key.physical);
+    }
+    if (grab) {
+      grab->grabber.KeyboardGrabberKeyUp(*grab, key);
     } else {
-      if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-        pressed_keys.reset((size_t)key.physical);
-      }
-      if (grab) {
-        grab->grabber.KeyboardGrabberKeyUp(*grab, key);
-      } else {
-        for (auto& caret : carets) {
-          if (caret->owner) {
-            caret->owner->KeyUp(*caret, key);
-          }
+      for (auto& caret : carets) {
+        if (caret->owner) {
+          caret->owner->KeyUp(*caret, key);
         }
       }
+    }
+  });
+}
+void Keyboard::LogKeyDown(Key key) {
+  RunOnAutomatThread([=, this]() {
+    for (auto& keylogging : keyloggings) {
+      keylogging->keylogger.KeyloggerKeyDown(key);
+    }
+  });
+}
+
+void Keyboard::LogKeyUp(Key key) {
+  RunOnAutomatThread([=, this]() {
+    for (auto& keylogging : keyloggings) {
+      keylogging->keylogger.KeyloggerKeyUp(key);
     }
   });
 }
@@ -714,7 +722,7 @@ void Keylogging::Release() {
     return;
   }
   if (keyboard.keyloggings.size() == 1) {
-#if defined(__linux__)
+#ifdef __linux__
     struct input_event_mask {
       xcb_input_event_mask_t header = {
           .deviceid = XCB_INPUT_DEVICE_ALL,
@@ -729,7 +737,10 @@ void Keylogging::Release() {
     if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
       ERROR << f("Couldn't release X11 event selection: %d", error->error_code);
     }
-#endif  // defined(__linux__)
+#endif  // __linux__
+#ifdef _WIN32
+    RegisterRawInput(false);
+#endif
   }
   keyboard.keyloggings.erase(it);  // After this line `this` is deleted!
 }

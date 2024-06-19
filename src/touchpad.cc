@@ -1,5 +1,7 @@
 #include "touchpad.hh"
 
+#include <optional>
+
 using namespace maf;
 
 namespace automat::touchpad {
@@ -307,17 +309,11 @@ struct TouchPadImpl {
 
 std::list<TouchPadImpl> touchpad_impls;
 
-void Init() {
-  // Register for WM_INPUT messages on Win32
-  RAWINPUTDEVICE rid = {.usUsagePage = hid::UsagePage_Digitizer,
-                        .usUsage = hid::Usage_Digitizer_TouchPad,
-                        .dwFlags = RIDEV_DEVNOTIFY,  // Request WM_INPUT_DEVICE_CHANGE
-                        .hwndTarget = main_window};
-
-  BOOL register_result = RegisterRawInputDevices(&rid, 1, sizeof(rid));
-  if (!register_result) {
-    ERROR << "Failed to register raw input device";
-  }
+RAWINPUTDEVICE GetRAWINPUTDEVICE() {
+  return {.usUsagePage = hid::UsagePage_Digitizer,
+          .usUsage = hid::Usage_Digitizer_TouchPad,
+          .dwFlags = RIDEV_DEVNOTIFY,  // Request WM_INPUT_DEVICE_CHANGE
+          .hwndTarget = main_window};
 }
 
 std::string GetRawInputDeviceName(HANDLE device) {
@@ -374,10 +370,9 @@ std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
         ERROR << "Error when retrieving buffer. Size=" << size << " Error code: " << GetLastError();
         return DefWindowProc(main_window, msg, wParam, lParam);
       }
-      // This shouldn't happen because we're only registered for HID devices
+      // Let other devices handle the input. Touchpad is only interested in RIM_TYPEHID.
       if (raw_input->header.dwType != RIM_TYPEHID) {
-        ERROR << "Unexpected RAWINPUTHEADER.dwType: " << raw_input->header.dwType;
-        return DefWindowProc(main_window, msg, wParam, lParam);
+        return std::nullopt;
       }
       std::lock_guard<std::mutex> lock(touchpads_mutex);
       TouchPadImpl* touchpad = nullptr;

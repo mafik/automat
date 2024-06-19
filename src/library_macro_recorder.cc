@@ -46,6 +46,7 @@ MacroRecorder::MacroRecorder() {}
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
 std::unique_ptr<Object> MacroRecorder::Clone() const { return std::make_unique<MacroRecorder>(); }
 void MacroRecorder::Draw(gui::DrawContext& dctx) const {
+  auto& animation_state = animation_state_ptr[dctx.animation_context];
   auto& image = MacroRecorderFrontColor();
   auto& canvas = dctx.canvas;
   SkPaint white_eye_paint = SkPaint();
@@ -67,7 +68,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     auto size = sharingan->containerSize();
     float s = 0.9 * kEyeRadius * 2 / size.height();
 
-    auto DrawEye = [&](Vec2 center) {
+    auto DrawEye = [&](Vec2 center, animation::Spring<Vec2>& googly) {
       auto eye_window = local_to_window.mapPoint(center.sk);
       auto eye_screen = WindowToScreen(eye_window);
       auto eye_delta = main_pointer_screen - eye_screen;
@@ -78,15 +79,20 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
       float dist = eye_dist_2d / eye_dist_3d * kEyeRadius * 0.5;
 
+      googly.target.x = eye_dir.x * dist;
+      googly.target.y = -eye_dir.y * dist;
+      googly.Tick(dctx.animation_context);
+
+      Vec2 pos = center + googly;
       canvas.save();
-      canvas.translate(center.x + eye_dir.x * dist, center.y - eye_dir.y * dist);
+      canvas.translate(pos.x, pos.y);
       canvas.scale(s, s);
       canvas.translate(-size.width() / 2, -size.height() / 2);
       sharingan->render(&canvas);
       canvas.restore();
     };
-    DrawEye(kLeftEyeCenter);
-    DrawEye(kRightEyeCenter);
+    DrawEye(kLeftEyeCenter, animation_state.googly_left);
+    DrawEye(kRightEyeCenter, animation_state.googly_right);
   }
 
   {

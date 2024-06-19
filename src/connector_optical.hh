@@ -49,7 +49,7 @@ struct OpticalConnectorState {
   Location& location;
   Argument& arg;
 
-  animation::Spring steel_insert_hidden;
+  animation::Spring<float> steel_insert_hidden;
   SkColor tint = "#808080"_color;
 
   std::unique_ptr<OpticalConnectorPimpl> pimpl;

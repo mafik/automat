@@ -39,12 +39,13 @@ struct DeltaFraction {
   }
 };
 
+template <typename T>
 struct Base {
-  float value = 0;
-  float target = 0;
+  T value = {};
+  T target = {};
 };
 
-struct Approach : Base {
+struct Approach : Base<float> {
   float speed = 15;
   float cap_min;
   float cap;
@@ -77,9 +78,10 @@ struct Approach : Base {
   operator float() const { return value; }
 };
 
-struct Spring : Base {
+template <typename T>
+struct Spring : Base<T> {
   float acceleration = 100;
-  float velocity = 0;
+  T velocity = {};
   float friction = 10;
   time::SystemPoint last_tick;
   Spring() : last_tick(time::SystemNow()) {}
@@ -87,14 +89,14 @@ struct Spring : Base {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
     if (dt <= 0) return;
-    float delta = target - value;
+    T delta = this->target - this->value;
     velocity += delta * acceleration * dt;
     velocity *= pow(0.5, dt * friction);
-    value += velocity * dt;
+    this->value += velocity * dt;
   }
-  operator float() const { return value; }
+  operator T() const { return this->value; }
 };
 
-void WrapModulo(Base& base, float range);
+void WrapModulo(Base<float>& base, float range);
 
 }  // namespace automat::animation

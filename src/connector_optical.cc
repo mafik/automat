@@ -946,7 +946,8 @@ struct MeshWithUniforms {
     SkPaint default_paint;
     default_paint.setColor(0xffffffff);
     auto mesh_result = SkMesh::Make(mesh_specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
-                                    4, 0, uniforms, SkSpan<SkMesh::ChildPtr>(), bounds);
+                                    4, 0, SkData::MakeWithCopy(uniforms->data(), uniforms->size()),
+                                    SkSpan<SkMesh::ChildPtr>(), bounds);
     if (!mesh_result.error.isEmpty()) {
       ERROR << "Error creating mesh: " << mesh_result.error.c_str();
     } else {

@@ -199,8 +199,20 @@ LongRunning* MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);
     // TODO: check if the nearby timeline already has some data and append new stuff at the end
-    timeline->state = Timeline::kRecording;
-    timeline->recording.recording_started_at = time::SteadyNow();
+    switch (timeline->state) {
+      case Timeline::kPaused:
+        timeline->state = Timeline::kRecording;
+        timeline->recording.recording_started_at =
+            time::SteadyNow() - time::Duration(timeline->paused.playback_offset);
+        break;
+      case Timeline::kRecording:
+        // WTF? Maybe show an error?
+        break;
+      case Timeline::kPlaying:
+        timeline->state = Timeline::kRecording;
+        timeline->recording.recording_started_at = timeline->playing.playback_started_at;
+        break;
+    }
     keylogging = &gui::keyboard->BeginKeylogging(*this);
   }
   return this;

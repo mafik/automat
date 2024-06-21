@@ -253,7 +253,7 @@ NextButton::NextButton()
 
 TimelineRunButton::TimelineRunButton() : gui::RunButton(nullptr, kPlayButtonRadius) {}
 
-Timeline::Timeline() : run_button(), playback_offset(0), zoom(10) {}
+Timeline::Timeline() : run_button(), state(kPaused), paused{.playback_offset = 0}, zoom(10) {}
 
 static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
   auto arg = make_unique<Argument>(track_name, Argument::kOptional);
@@ -296,30 +296,33 @@ static Font& LcdFont() {
   return *font.get();
 }
 
-static time::T MaxTrackLength(const Timeline& timeline) {
+time::T Timeline::MaxTrackLength() const {
   time::T max_track_length = 0;
-  for (const auto& track : timeline.tracks) {
+  for (const auto& track : tracks) {
     max_track_length = max(max_track_length, track->timestamps.back());
   }
   return max_track_length;
 }
 
 static float CurrentPosRatio(const Timeline& timeline, time::SystemPoint now) {
-  time::T max_track_length = MaxTrackLength(timeline);
+  time::T max_track_length = timeline.MaxTrackLength();
   if (max_track_length == 0) {
     return 0;
-  } else if (timeline.currently_playing) {
-    return (now - time::SystemFromSteady(timeline.playback_started_at)).count() / max_track_length;
-  } else {
-    return timeline.playback_offset / max_track_length;
+  } else if (timeline.state == Timeline::kPlaying) {
+    return (now - time::SystemFromSteady(timeline.playing.playback_started_at)).count() /
+           max_track_length;
+  } else if (timeline.state == Timeline::kPaused) {
+    return timeline.paused.playback_offset / max_track_length;
+  } else {  // recording
+    return 1;
   }
 }
 
 void TimelineCancelScheduledAt(Timeline& t) { CancelScheduledAt(*t.here); }
 
 void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
-  time::T current_offset = (now - t.playback_started_at).count();
-  auto next_update = MaxTrackLength(t);
+  time::T current_offset = (now - t.playing.playback_started_at).count();
+  auto next_update = t.MaxTrackLength();
   for (const auto& track : t.tracks) {
     for (time::T timestamp : track->timestamps) {
       if (timestamp <= current_offset) {
@@ -329,7 +332,7 @@ void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
       break;
     }
   }
-  ScheduleAt(*t.here, t.playback_started_at + time::Duration(next_update));
+  ScheduleAt(*t.here, t.playing.playback_started_at + time::Duration(next_update));
 }
 
 static void TimelineUpdateOutputs(Location& here, Timeline& t, time::T current_offset) {
@@ -343,35 +346,43 @@ static void TimelineUpdateOutputs(Location& here, Timeline& t, time::T current_o
 }
 
 static time::T CurrentOffset(Timeline& timeline, time::SteadyPoint now) {
-  return timeline.currently_playing ? (now - timeline.playback_started_at).count()
-                                    : timeline.playback_offset;
+  switch (timeline.state) {
+    case Timeline::kPlaying:
+      return (now - timeline.playing.playback_started_at).count();
+    case Timeline::kPaused:
+      return timeline.paused.playback_offset;
+    case Timeline::kRecording:
+      return (now - timeline.recording.recording_started_at).count();
+  }
 }
 
 void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
-  if (timeline.currently_playing) {
+  if (timeline.state == Timeline::kPlaying) {
     TimelineCancelScheduledAt(timeline);
-    timeline.playback_started_at -= time::Duration(offset);
-    timeline.playback_started_at = min(timeline.playback_started_at, now);
-    TimelineUpdateOutputs(*timeline.here, timeline, (now - timeline.playback_started_at).count());
+    timeline.playing.playback_started_at -= time::Duration(offset);
+    timeline.playing.playback_started_at = min(timeline.playing.playback_started_at, now);
+    TimelineUpdateOutputs(*timeline.here, timeline,
+                          (now - timeline.playing.playback_started_at).count());
     TimelineScheduleAt(timeline, now);
-  } else {
-    timeline.playback_offset =
-        clamp<time::T>(timeline.playback_offset + offset, 0, MaxTrackLength(timeline));
-    TimelineUpdateOutputs(*timeline.here, timeline, timeline.playback_offset);
+  } else if (timeline.state == Timeline::kPaused) {
+    timeline.paused.playback_offset =
+        clamp<time::T>(timeline.paused.playback_offset + offset, 0, timeline.MaxTrackLength());
+    TimelineUpdateOutputs(*timeline.here, timeline, timeline.paused.playback_offset);
   }
 }
 
 void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   pos_ratio = clamp(pos_ratio, 0.0f, 1.0f);
-  time::T max_track_length = MaxTrackLength(timeline);
-  if (timeline.currently_playing) {
+  time::T max_track_length = timeline.MaxTrackLength();
+  if (timeline.state == Timeline::kPlaying) {
     TimelineCancelScheduledAt(timeline);
-    timeline.playback_started_at = now - time::Duration(pos_ratio * max_track_length);
-    TimelineUpdateOutputs(*timeline.here, timeline, (now - timeline.playback_started_at).count());
+    timeline.playing.playback_started_at = now - time::Duration(pos_ratio * max_track_length);
+    TimelineUpdateOutputs(*timeline.here, timeline,
+                          (now - timeline.playing.playback_started_at).count());
     TimelineScheduleAt(timeline, now);
-  } else {
-    timeline.playback_offset = pos_ratio * max_track_length;
-    TimelineUpdateOutputs(*timeline.here, timeline, timeline.playback_offset);
+  } else if (timeline.state == Timeline::kPaused) {
+    timeline.paused.playback_offset = pos_ratio * max_track_length;
+    TimelineUpdateOutputs(*timeline.here, timeline, timeline.paused.playback_offset);
   }
 }
 
@@ -410,7 +421,7 @@ time::T TimeAtX(const Timeline& timeline, float x, time::SystemPoint now = time:
   // Find the time at the center of the timeline
   float distance_to_seconds = DistanceToSeconds(timeline);
   float current_pos_ratio = CurrentPosRatio(timeline, now);
-  float track_width = MaxTrackLength(timeline);
+  float track_width = timeline.MaxTrackLength();
 
   float center_t0 = kRulerLength / 2 * distance_to_seconds;
   float center_t1 = track_width - kRulerLength / 2 * distance_to_seconds;
@@ -486,7 +497,7 @@ struct DragTimelineAction : Action {
     float delta_x = x - last_x;
     last_x = x;
     float distance_to_seconds = DistanceToSeconds(timeline);
-    float max_track_length = MaxTrackLength(timeline);
+    float max_track_length = timeline.MaxTrackLength();
     float denominator = max_track_length - kRulerLength * distance_to_seconds;
 
     float scaling_factor;
@@ -676,7 +687,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   zoom.Tick(dctx.animation_context);
 
-  time::T max_track_length = MaxTrackLength(*this);
+  time::T max_track_length = MaxTrackLength();
   float current_pos_ratio = CurrentPosRatio(*this, dctx.animation_context.timer.now);
 
   function<Str(time::T)> format_time;
@@ -817,7 +828,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   // Bottom ticks
   {
     float distance_to_seconds = DistanceToSeconds(*this);
-    float track_width = MaxTrackLength(*this) / distance_to_seconds;
+    float track_width = MaxTrackLength() / distance_to_seconds;
 
     // at time 0 the first tick is at -kRulerWidth / 2
     // at time 0 the last tick is at -kRulerWidth / 2 + track_width
@@ -1063,7 +1074,7 @@ SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context& act
                                kSideButtonRadius);
   } else if (auto* track = dynamic_cast<const TrackBase*>(&child)) {
     float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
-    float track_width = MaxTrackLength(*this) / distance_to_seconds;
+    float track_width = MaxTrackLength() / distance_to_seconds;
 
     float current_pos_ratio = CurrentPosRatio(*this, actx.timer.now);
 
@@ -1124,24 +1135,24 @@ void OnOffTrack::Draw(gui::DrawContext& dctx) const {
 }
 
 void Timeline::Cancel() {
-  if (currently_playing) {
-    currently_playing = false;
+  if (state == kPlaying) {
+    state = kPaused;
     TimelineCancelScheduledAt(*this);
-    playback_offset = (time::SteadyNow() - playback_started_at).count();
+    paused.playback_offset = (time::SteadyNow() - playing.playback_started_at).count();
   }
 }
 
 LongRunning* Timeline::OnRun(Location& here) {
-  if (currently_playing) {
+  if (state != kPaused) {
     return nullptr;
   }
-  if (playback_offset >= MaxTrackLength(*this)) {
-    playback_offset = 0;
+  if (paused.playback_offset >= MaxTrackLength()) {
+    paused.playback_offset = 0;
   }
-  TimelineUpdateOutputs(here, *this, playback_offset);
-  currently_playing = true;
+  TimelineUpdateOutputs(here, *this, paused.playback_offset);
+  state = kPlaying;
   time::SteadyPoint now = time::SteadyNow();
-  playback_started_at = now - time::Duration(playback_offset);
+  playing.playback_started_at = now - time::Duration(paused.playback_offset);
   TimelineScheduleAt(*this, now);
   return this;
 }
@@ -1153,7 +1164,7 @@ void OnOffTrack::UpdateOutput(Location& target, time::T current_offset) {
       break;
     }
   }
-  i = max(0, i - 1);
+  i = i - 1;
   bool on = i % 2 == 0;
   if (auto runnable = dynamic_cast<Runnable*>(target.object.get())) {
     if (on) {
@@ -1170,12 +1181,12 @@ void OnOffTrack::UpdateOutput(Location& target, time::T current_offset) {
 }
 
 void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
-  auto length = MaxTrackLength(*this);
-  auto current_offset = (now - playback_started_at).count();
+  auto length = MaxTrackLength();
+  auto current_offset = (now - playing.playback_started_at).count();
   TimelineUpdateOutputs(here, *this, current_offset);
   if (current_offset >= length) {
-    currently_playing = false;
-    playback_offset = length;
+    state = kPaused;
+    paused.playback_offset = length;
     Done(here);
   } else {
     TimelineScheduleAt(*this, now);
@@ -1200,7 +1211,7 @@ bool OnOffTrack::IsOn() const {
       break;
     }
   }
-  i = max(0, i - 1);
+  i = i - 1;
   bool on = i % 2 == 0;
   return on;
 }

@@ -69,10 +69,24 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
 
   mutable animation::Approach zoom;  // stores the time in seconds
 
-  bool currently_playing = false;
-  union {
-    time::T playback_offset;                // Used when playback is paused
+  enum State { kPaused, kPlaying, kRecording } state;
+
+  struct Paused {
+    time::T playback_offset;  // Used when playback is paused
+  };
+
+  struct Playing {
     time::SteadyPoint playback_started_at;  // Used when playback is active
+  };
+
+  struct Recording {
+    time::SteadyPoint recording_started_at;  // Used when recording is active
+  };
+
+  union {
+    Paused paused;
+    Playing playing;
+    Recording recording;
   };
 
   Timeline();
@@ -91,6 +105,8 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   void Cancel() override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
+
+  time::T MaxTrackLength() const;
 };
 
 }  // namespace automat::library

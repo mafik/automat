@@ -24,12 +24,13 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
   struct AnimationState {
     animation::Spring<Vec2> googly_left;
     animation::Spring<Vec2> googly_right;
+    animation::Approach eye_speed;
+    float eye_rotation = 0;
   };
 
   mutable product_ptr<AnimationState> animation_state_ptr;
   gui::Keylogging* keylogging = nullptr;
   GlassRunButton record_button;
-  time::SteadyPoint recording_start_time;
 
   MacroRecorder();
   ~MacroRecorder();

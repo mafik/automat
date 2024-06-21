@@ -66,6 +66,18 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   auto& image = MacroRecorderFrontColor();
   auto& canvas = dctx.canvas;
 
+  if (keylogging) {
+    animation_state.eye_speed.target = 1;
+  } else {
+    animation_state.eye_speed.target = 0;
+  }
+  animation_state.eye_speed.speed = 5;
+  animation_state.eye_speed.Tick(dctx.animation_context);
+  animation_state.eye_rotation -= dctx.animation_context.timer.d * 360 * animation_state.eye_speed;
+  if (animation_state.eye_rotation < 0) {
+    animation_state.eye_rotation += 360;
+  }
+
   {
     auto sharingan = SharinganColor();
 
@@ -109,7 +121,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
       canvas.rotate(-h_angle);
       canvas.scale(squeeze_3d, 1);
       canvas.rotate(h_angle);
-
+      canvas.rotate(animation_state.eye_rotation);
       canvas.translate(-size.width() / 2, -size.height() / 2);
 
       sharingan->render(&canvas);
@@ -145,26 +157,63 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   // canvas.drawPath(record_button.child->Shape(), outline);
 }
 
+static void PositionBelow(Location& origin, Location& below) {
+  Rect origin_shape = origin.object->Shape().getBounds();
+  Rect below_shape = below.object->Shape().getBounds();
+  below.position = origin_shape.BottomCenter() + origin.position - below_shape.TopCenter();
+}
+
+static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
+  auto machine = macro_recorder.here->ParentAs<Machine>();
+  if (machine == nullptr) {
+    FATAL << "MacroRecorder must be a child of a Machine";
+    return nullptr;
+  }
+  auto timeline = (Timeline*)macro_recorder.here->Nearby([](Location& loc) -> void* {
+    if (auto timeline = loc.As<Timeline>()) {
+      return timeline;
+    }
+    return nullptr;
+  });
+  return timeline;
+}
+
+static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
+  auto timeline = FindTimeline(macro_recorder);
+  if (timeline == nullptr) {
+    auto machine = macro_recorder.here->ParentAs<Machine>();
+    if (machine == nullptr) {
+      FATAL << "MacroRecorder must be a child of a Machine";
+      return nullptr;
+    }
+    Location& loc = machine->Create<Timeline>();
+    timeline = loc.As<Timeline>();
+    // TODO: animate timeline creation
+    PositionBelow(*macro_recorder.here, loc);
+  }
+  return timeline;
+}
+
 SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
 LongRunning* MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
+    auto timeline = FindOrCreateTimeline(*this);
     // TODO: check if the nearby timeline already has some data and append new stuff at the end
-    recording_start_time = time::SteadyNow();
+    timeline->state = Timeline::kRecording;
+    timeline->recording.recording_started_at = time::SteadyNow();
     keylogging = &gui::keyboard->BeginKeylogging(*this);
   }
   return this;
 }
 void MacroRecorder::Cancel() {
   if (keylogging) {
+    if (auto timeline = FindTimeline(*this)) {
+      timeline->state = Timeline::kPaused;
+      timeline->paused.playback_offset = timeline->MaxTrackLength();
+    }
     keylogging->Release();
     keylogging = nullptr;
   }
-}
-
-static void PositionBelow(Location& origin, Location& below) {
-  Rect origin_shape = origin.object->Shape().getBounds();
-  Rect below_shape = below.object->Shape().getBounds();
-  below.position = origin_shape.BottomCenter() + origin.position - below_shape.TopCenter();
 }
 
 static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down) {
@@ -174,18 +223,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     return;
   }
   // Find the nearby timeline (or create one)
-  auto timeline = (Timeline*)macro_recorder.here->Nearby([](Location& loc) -> void* {
-    if (auto timeline = loc.As<Timeline>()) {
-      return timeline;
-    }
-    return nullptr;
-  });
-  if (timeline == nullptr) {
-    Location& loc = machine->Create<Timeline>();
-    timeline = loc.As<Timeline>();
-    // TODO: animate timeline creation
-    PositionBelow(*macro_recorder.here, loc);
-  }
+  auto timeline = FindOrCreateTimeline(macro_recorder);
 
   // Find a track which is attached to the given key
   int track_index = -1;
@@ -224,7 +262,8 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     return;
   }
 
-  track->timestamps.push_back((time::SteadyNow() - macro_recorder.recording_start_time).count());
+  track->timestamps.push_back(
+      (time::SteadyNow() - timeline->recording.recording_started_at).count());
 }
 
 void MacroRecorder::KeyloggerKeyDown(gui::Key key) {

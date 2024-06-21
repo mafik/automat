@@ -56,7 +56,7 @@ if platform == 'win32':
   # Set Windows version to Windows 10.
   build.base.compile_args += ['-D_WIN32_WINNT=0x0A00']
   build.base.compile_args += ['-DWINVER=0x0A00']
-  default_gn_args += ' clang_win="C:\Program Files\LLVM"'
+  default_gn_args += ' clang_win="C:\\Program Files\\LLVM"'
   default_gn_args += ' clang_win_version=17'
   variants['Debug'].gn_args += ' extra_cflags=["/MTd"]'
   # This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.

@@ -8,13 +8,14 @@
 #include "on_off.hh"
 #include "product_ptr.hh"
 #include "run_button.hh"
+#include "time.hh"
 
 namespace automat::library {
 
 struct GlassRunButton : gui::PowerButton {
   GlassRunButton(OnOff* on_off) : gui::PowerButton(on_off) {}
   SkColor ForegroundColor() const override { return "#bd1929"_color; }
-  SkColor BackgroundColor() const override { return "#490b13"_color; }
+  // SkColor BackgroundColor() const override { return "#490b13"_color; }
 };
 
 struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff {
@@ -28,6 +29,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
   mutable product_ptr<AnimationState> animation_state_ptr;
   gui::Keylogging* keylogging = nullptr;
   GlassRunButton record_button;
+  time::SteadyPoint recording_start_time;
 
   MacroRecorder();
   ~MacroRecorder();

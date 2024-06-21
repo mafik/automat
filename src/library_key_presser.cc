@@ -90,11 +90,15 @@ SkPath KeyPresser::Shape() const {
   return joined_shape;
 }
 
+void KeyPresser::SetKey(gui::AnsiKey k) {
+  key = k;
+  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(key));
+}
+
 void KeyPresser::ReleaseGrab(gui::KeyboardGrab&) { key_selector = nullptr; }
 void KeyPresser::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key k) {
   key_selector->Release();
-  key = k.physical;
-  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(key));
+  SetKey(k.physical);
 }
 
 ControlFlow KeyPresser::VisitChildren(gui::Visitor& visitor) {

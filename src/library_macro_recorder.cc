@@ -8,14 +8,21 @@
 
 #include "../build/generated/embedded.hh"
 #include "gui_constants.hh"
+#include "keyboard.hh"
+#include "library_key_presser.hh"
 #include "library_macros.hh"
+#include "library_timeline.hh"
+#include "log.hh"
+#include "math.hh"
 #include "svg.hh"
 #include "textures.hh"
+#include "time.hh"
 #include "window.hh"
 
 namespace automat::library {
 
 using namespace automat::gui;
+using namespace std;
 
 DEFINE_PROTO(MacroRecorder);
 
@@ -141,6 +148,8 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
 LongRunning* MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
+    // TODO: check if the nearby timeline already has some data and append new stuff at the end
+    recording_start_time = time::SteadyNow();
     keylogging = &gui::keyboard->BeginKeylogging(*this);
   }
   return this;
@@ -152,8 +161,80 @@ void MacroRecorder::Cancel() {
   }
 }
 
-void MacroRecorder::KeyloggerKeyDown(gui::Key key) { LOG << "Key down: " << ToStr(key.physical); }
-void MacroRecorder::KeyloggerKeyUp(gui::Key key) { LOG << "Key up: " << ToStr(key.physical); }
+static void PositionBelow(Location& origin, Location& below) {
+  Rect origin_shape = origin.object->Shape().getBounds();
+  Rect below_shape = below.object->Shape().getBounds();
+  below.position = origin_shape.BottomCenter() + origin.position - below_shape.TopCenter();
+}
+
+static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down) {
+  auto machine = macro_recorder.here->ParentAs<Machine>();
+  if (machine == nullptr) {
+    FATAL << "MacroRecorder must be a child of a Machine";
+    return;
+  }
+  // Find the nearby timeline (or create one)
+  auto timeline = (Timeline*)macro_recorder.here->Nearby([](Location& loc) -> void* {
+    if (auto timeline = loc.As<Timeline>()) {
+      return timeline;
+    }
+    return nullptr;
+  });
+  if (timeline == nullptr) {
+    Location& loc = machine->Create<Timeline>();
+    timeline = loc.As<Timeline>();
+    // TODO: animate timeline creation
+    PositionBelow(*macro_recorder.here, loc);
+  }
+
+  // Find a track which is attached to the given key
+  int track_index = -1;
+  Str key_name = "Key " + Str(ToStr(key));
+  for (int i = 0; i < timeline->tracks.size(); i++) {
+    if (timeline->track_args[i]->name == key_name) {
+      track_index = i;
+      break;
+    }
+  }
+
+  if (track_index == -1) {
+    // TODO: animate track creation
+    timeline->AddOnOffTrack(key_name);
+    track_index = timeline->tracks.size() - 1;
+    // TODO: animate key presser creation
+    Location& key_presser_loc = machine->Create<KeyPresser>();
+    KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();
+    key_presser->SetKey(key);
+    Rect key_presser_shape = key_presser_loc.object->Shape().getBounds();
+    Vec2AndDir arg_start = timeline->here->ArgStart(nullptr, *timeline->track_args.back());
+    key_presser_loc.position = arg_start.pos + Vec2(2_cm, 0) * track_index + Vec2(2_cm, -1.8_cm) -
+                               key_presser_shape.TopCenter();
+    timeline->here->ConnectTo(key_presser_loc, key_name);
+  }
+
+  bool is_down = timeline->tracks[track_index]->timestamps.size() % 2 == 1;
+  if (is_down == down) {
+    return;
+  }
+
+  // Append the current timestamp to that track
+  OnOffTrack* track = dynamic_cast<OnOffTrack*>(timeline->tracks[track_index].get());
+  if (track == nullptr) {
+    ERROR << "Track is not an OnOffTrack";
+    return;
+  }
+
+  track->timestamps.push_back((time::SteadyNow() - macro_recorder.recording_start_time).count());
+}
+
+void MacroRecorder::KeyloggerKeyDown(gui::Key key) {
+  LOG << "Key down: " << ToStr(key.physical);
+  RecordKeyEvent(*this, key.physical, true);
+}
+void MacroRecorder::KeyloggerKeyUp(gui::Key key) {
+  LOG << "Key up: " << ToStr(key.physical);
+  RecordKeyEvent(*this, key.physical, false);
+}
 
 SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Context&) const {
   if (&child == &record_button) {

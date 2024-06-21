@@ -15,6 +15,7 @@
 
 #include "../build/generated/embedded.hh"
 #include "arcline.hh"
+#include "argument.hh"
 #include "base.hh"
 #include "font.hh"
 #include "gui_button.hh"
@@ -254,28 +255,30 @@ TimelineRunButton::TimelineRunButton() : gui::RunButton(nullptr, kPlayButtonRadi
 
 Timeline::Timeline() : run_button(), playback_offset(0), zoom(10) {}
 
+static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
+  auto arg = make_unique<Argument>(track_name, Argument::kOptional);
+  arg->field = t.tracks[track_number].get();
+  arg->tint = "#57dce4"_color;
+  t.track_args.emplace_back(std::move(arg));
+}
+
+OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
+  auto track = make_unique<OnOffTrack>();
+  track->timeline = this;
+  tracks.emplace_back(std::move(track));
+  AddTrackArg(*this, tracks.size() - 1, name);
+  return *dynamic_cast<OnOffTrack*>(tracks.back().get());
+}
+
 Timeline::Timeline(const Timeline& other) : Timeline() {
-  // Create some sample data:
-  // - a track which switches on/off every second
-  unique_ptr<OnOffTrack> track = make_unique<OnOffTrack>();
-  track->timeline = this;
-  for (int i = 0; i < 16; ++i) {
-    track->timestamps.push_back(i);
+  tracks.reserve(other.tracks.size());
+  for (const auto& track : other.tracks) {
+    tracks.emplace_back(dynamic_cast<TrackBase*>(track->Clone().release()));
   }
-  tracks.emplace_back(std::move(track));
-  // - a track which switches on/off every 5 seconds
-  track = make_unique<OnOffTrack>();
-  track->timeline = this;
-  for (int i = 0; i < 4; ++i) {
-    track->timestamps.push_back(i * 5);
+  track_args.reserve(other.track_args.size());
+  for (int i = 0; i < other.track_args.size(); ++i) {
+    AddTrackArg(*this, i, other.track_args[i]->name);
   }
-  tracks.emplace_back(std::move(track));
-  track_args.emplace_back("track 1", Argument::kOptional);
-  track_args.back().field = tracks[0].get();
-  track_args.back().tint = "#57dce4"_color;
-  track_args.emplace_back("track 2", Argument::kOptional);
-  track_args.back().field = tracks[1].get();
-  track_args.back().tint = "#57dce4"_color;
 }
 
 void Timeline::Relocate(Location* new_here) {
@@ -331,7 +334,7 @@ void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
 
 static void TimelineUpdateOutputs(Location& here, Timeline& t, time::T current_offset) {
   for (int i = 0; i < t.tracks.size(); ++i) {
-    auto obj_result = t.track_args[i].GetObject(here);
+    auto obj_result = t.track_args[i]->GetObject(here);
     if (obj_result.location == nullptr || obj_result.object == nullptr) {
       continue;
     }
@@ -1016,14 +1019,14 @@ SkPath Timeline::Shape() const {
 
 void Timeline::Args(function<void(Argument&)> cb) {
   for (auto& track_arg : track_args) {
-    cb(track_arg);
+    cb(*track_arg);
   }
   cb(next_arg);
 }
 
 Vec2AndDir Timeline::ArgStart(Argument& arg) {
   for (int i = 0; i < tracks.size(); ++i) {
-    if (&track_args[i] != &arg) {
+    if (track_args[i].get() != &arg) {
       continue;
     }
     return {

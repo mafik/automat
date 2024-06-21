@@ -65,7 +65,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   NextButton next_button;
 
   Vec<std::unique_ptr<TrackBase>> tracks;
-  Vec<Argument> track_args;
+  Vec<std::unique_ptr<Argument>> track_args;
 
   mutable animation::Approach zoom;  // stores the time in seconds
 
@@ -90,6 +90,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
+  OnOffTrack& AddOnOffTrack(StrView name);
 };
 
 }  // namespace automat::library

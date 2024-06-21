@@ -36,6 +36,8 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
   void ReleaseGrab(gui::KeyboardGrab&) override;
   Widget* GrabWidget() override { return this; }
 
+  void SetKey(gui::AnsiKey);
+
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
 

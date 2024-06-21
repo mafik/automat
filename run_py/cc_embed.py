@@ -1,4 +1,3 @@
-import itertools
 import string
 
 byte_to_c_string_table = {c: chr(c) for c in range(32, 127)}
@@ -22,8 +21,16 @@ def byte_to_c_string(b, next_b=None):
         return '\\' + format(b, '03o')
     else:
         return '\\' + format(b, 'o')
+    
+
+def pairwise(iterable):
+    it = iter(iterable)
+    a = next(it)
+    for b in it:
+        yield a, b
+        a = b
 
 
 def bytes_to_c_string(bytes):
     # x is a dummy byte
-    return '"' + ''.join(byte_to_c_string(b, next_b) for b, next_b in itertools.pairwise(bytes + b'x')) + '"'
+    return '"' + ''.join(byte_to_c_string(b, next_b) for b, next_b in pairwise(bytes + b'x')) + '"'

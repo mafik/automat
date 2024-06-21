@@ -13,11 +13,9 @@
 #include "arcline.hh"
 #include "color.hh"
 #include "gui_constants.hh"
-#include "gui_shape_widget.hh"
 #include "key_button.hh"
 #include "library_macros.hh"
 #include "math.hh"
-#include "svg.hh"
 #include "text_field.hh"
 #include "widget.hh"
 
@@ -69,11 +67,6 @@ static const SkRRect kShapeRRect = [] {
   ret.setRectRadii(kShapeRect, radii);
   return ret;
 }();
-
-PowerButton::PowerButton(OnOff* target)
-    : Button(MakeShapeWidget(kPowerSVG, SK_ColorWHITE), "#fa2305"_color),
-      ToggleButton(),
-      target(target) {}
 
 static SkPaint& GetFirePaint(const Rect& rect, float radius) {
   static SkRuntimeShaderBuilder builder = []() {
@@ -195,7 +188,7 @@ HotKey::HotKey()
     if (on) {
       On();
     }
-    ctrl_button.color = KeyColor(ctrl);
+    ctrl_button.fg = KeyColor(ctrl);
   };
   alt_button.activate = [this](gui::Pointer&) {
     bool on = IsOn();
@@ -206,7 +199,7 @@ HotKey::HotKey()
     if (on) {
       On();
     }
-    alt_button.color = KeyColor(alt);
+    alt_button.fg = KeyColor(alt);
   };
   shift_button.activate = [this](gui::Pointer&) {
     bool on = IsOn();
@@ -217,7 +210,7 @@ HotKey::HotKey()
     if (on) {
       On();
     }
-    shift_button.color = KeyColor(shift);
+    shift_button.fg = KeyColor(shift);
   };
   windows_button.activate = [this](gui::Pointer&) {
     bool on = IsOn();
@@ -228,9 +221,9 @@ HotKey::HotKey()
     if (on) {
       On();
     }
-    windows_button.color = KeyColor(windows);
+    windows_button.fg = KeyColor(windows);
   };
-  dynamic_cast<LabelMixin*>(shortcut_button.child.get())->SetLabel(ToStr(key));
+  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(key));
   shortcut_button.activate = [this](gui::Pointer& pointer) {
     if (hotkey_selector) {
       // Cancel HotKey selection.
@@ -352,9 +345,9 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.restore();
 
   if (hotkey_selector) {
-    shortcut_button.color = kKeyGrabbingColor;
+    shortcut_button.fg = kKeyGrabbingColor;
   } else {
-    shortcut_button.color = KeyColor(true);
+    shortcut_button.fg = KeyColor(true);
   }
 
   DrawChildren(ctx);
@@ -427,7 +420,7 @@ void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
   hotkey_selector->Release();
   // Maybe also set the modifiers from the key event?
   this->key = key.physical;
-  dynamic_cast<LabelMixin*>(shortcut_button.child.get())->SetLabel(ToStr(key.physical));
+  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(key.physical));
   if (on) {
     On();
   }

@@ -4,26 +4,30 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "gui_button.hh"
 #include "on_off.hh"
 #include "run_button.hh"
 #include "time.hh"
 
 namespace automat::library {
 
-struct PrevButton : virtual gui::Button, gui::CircularButtonMixin {
+struct PrevButton : virtual gui::Button, gui::ChildButtonMixin, gui::CircularButtonMixin {
   PrevButton();
   void Activate(gui::Pointer&) override;
+  SkColor ForegroundColor() const override;
   SkColor BackgroundColor() const override;
 };
 
-struct NextButton : virtual gui::Button, gui::CircularButtonMixin {
+struct NextButton : virtual gui::Button, gui::ChildButtonMixin, gui::CircularButtonMixin {
   NextButton();
   void Activate(gui::Pointer&) override;
+  SkColor ForegroundColor() const override;
   SkColor BackgroundColor() const override;
 };
 
 struct TimelineRunButton : virtual gui::Button, gui::RunButton {
   TimelineRunButton();
+  SkColor ForegroundColor() const override;
   SkColor BackgroundColor() const override;
 };
 

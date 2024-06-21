@@ -12,9 +12,6 @@ SkPath Text::Shape() const {
   return SkPath::Rect(SkRect::MakeWH(w, kLetterSize));
 }
 
-void Text::Draw(DrawContext& ctx) const {
-  SkPaint paint;
-  GetFont().DrawText(ctx.canvas, text, paint);
-}
+void Text::Draw(DrawContext& ctx) const { GetFont().DrawText(ctx.canvas, text, paint); }
 
 }  // namespace automat::gui

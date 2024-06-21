@@ -2,6 +2,8 @@
 
 #include <include/core/SkColor.h>
 
+#include <memory>
+
 #include "animation.hh"
 #include "color.hh"
 #include "gui_constants.hh"
@@ -13,12 +15,10 @@ namespace automat::gui {
 struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
 
-  std::unique_ptr<Widget> child;
   mutable product_ptr<animation::Approach> hover_ptr;
   int press_action_count = 0;
-  SkColor color;
 
-  Button(std::unique_ptr<Widget>&& child, SkColor color = "#d69d00"_color);
+  Button();
   void PointerOver(Pointer&, animation::Context&) override;
   void PointerLeave(Pointer&, animation::Context&) override;
   void Draw(DrawContext&) const override;
@@ -26,8 +26,10 @@ struct Button : Widget {
   virtual SkRRect RRect() const;
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
-  virtual Vec2 Position() const { return Vec2(0, 0); }
   virtual void Activate(gui::Pointer&) {}
+  virtual Widget* Child() const { return nullptr; }
+  SkRect ChildBounds() const;
+  virtual SkColor ForegroundColor() const { return "#d69d00"_color; }
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
 
@@ -36,9 +38,15 @@ struct Button : Widget {
   void DrawButton(DrawContext&, SkColor bg) const;
 };
 
+struct ChildButtonMixin : virtual Button {
+  std::unique_ptr<Widget> child;
+  ChildButtonMixin(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
+  Widget* Child() const override { return child.get(); }
+};
+
 struct CircularButtonMixin : virtual Button {
   float radius;
-  CircularButtonMixin(float radius) : Button(nullptr, 0xffffffff), radius(radius) {}
+  CircularButtonMixin(float radius) : radius(radius) {}
   SkRRect RRect() const override {
     SkRect oval = SkRect::MakeXYWH(0, 0, 2 * radius, 2 * radius);
     return SkRRect::MakeOval(oval);
@@ -48,7 +56,7 @@ struct CircularButtonMixin : virtual Button {
 struct ToggleButton : virtual Button {
   mutable product_ptr<animation::Approach> filling_ptr;
 
-  ToggleButton() : Button(nullptr, 0xffffffff) {}
+  ToggleButton() : Button() {}
   void Draw(DrawContext&) const override;
   virtual bool Filled() const { return false; }
 };

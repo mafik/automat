@@ -34,16 +34,15 @@ constexpr float kShadowSigma = kRadius / 10;
 }  // namespace
 
 float Button::Height() const {
-  SkRect child_bounds = child->Shape().getBounds();
+  SkRect child_bounds = ChildBounds();
   return std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
 }
 
 SkRRect Button::RRect() const {
-  Vec2 p = Position();
-  SkRect child_bounds = child->Shape().getBounds();
+  SkRect child_bounds = ChildBounds();
   float w = std::max(kMinimalTouchableSize, child_bounds.width() + 2 * kMargin);
   float h = std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
-  return SkRRect::MakeRectXY(SkRect::MakeXYWH(p.x, p.y, w, h), kRadius, kRadius);
+  return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, w, h), kRadius, kRadius);
 }
 
 void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
@@ -60,6 +59,7 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   auto& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
   auto& hover = hover_ptr[actx];
+  SkRect child_bounds = ChildBounds();
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -87,13 +87,18 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   border.setStrokeWidth(kBorderWidth);
   canvas.drawRRect(pressed_oval, border);
 
-  if (auto paint = PaintMixin::Get(child.get())) {
+  if (auto paint = PaintMixin::Get(Child())) {
     paint->setColor(fg);
     paint->setAntiAlias(true);
   }
-  canvas.translate(pressed_oval.rect().centerX(), pressed_oval.rect().centerY());
-  child->Draw(ctx);
-  canvas.translate(-pressed_oval.rect().centerX(), -pressed_oval.rect().centerY());
+  if (auto child = Child()) {
+    canvas.save();
+    canvas.translate(
+        pressed_oval.rect().centerX() - child_bounds.width() / 2 - child_bounds.left(),
+        pressed_oval.rect().centerY() - child_bounds.height() / 2 + child_bounds.bottom());
+    child->Draw(ctx);
+    canvas.restore();
+  }
 }
 
 void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
@@ -107,8 +112,9 @@ void Button::Draw(DrawContext& ctx) const {
   hover.Tick(actx);
 
   auto bg = BackgroundColor();
+  auto fg = ForegroundColor();
   DrawButtonShadow(ctx.canvas, bg);
-  DrawButtonFace(ctx, bg, color);
+  DrawButtonFace(ctx, bg, fg);
 }
 
 void ToggleButton::Draw(DrawContext& ctx) const {
@@ -124,6 +130,7 @@ void ToggleButton::Draw(DrawContext& ctx) const {
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
   SkColor bg = BackgroundColor();
+  SkColor fg = ForegroundColor();
 
   float lightness_adjust = hover * 10;
   float press_shift_y = PressRatio() * -kPressOffset;
@@ -133,13 +140,13 @@ void ToggleButton::Draw(DrawContext& ctx) const {
                       &pressed_outer_oval);
 
   if (filling >= 0.999) {
-    DrawButtonShadow(canvas, color);
-    DrawButtonFace(ctx, color, bg);
+    DrawButtonShadow(canvas, fg);
+    DrawButtonFace(ctx, fg, bg);
   } else if (filling <= 0.001) {
     DrawButtonShadow(canvas, bg);
-    DrawButtonFace(ctx, bg, color);
+    DrawButtonFace(ctx, bg, fg);
   } else {
-    DrawButtonShadow(canvas, color::MixColors(bg, color, filling));
+    DrawButtonShadow(canvas, color::MixColors(bg, fg, filling));
     float baseline = pressed_outer_oval.rect().fTop * (1 - filling) +
                      pressed_outer_oval.rect().fBottom * filling;
     constexpr int n_points = 6;
@@ -169,11 +176,11 @@ void ToggleButton::Draw(DrawContext& ctx) const {
 
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kDifference, true);
-    DrawButtonFace(ctx, bg, color);
+    DrawButtonFace(ctx, bg, fg);
     canvas.restore();
     canvas.save();
     canvas.clipPath(waves_clip, SkClipOp::kIntersect, true);
-    DrawButtonFace(ctx, color, bg);
+    DrawButtonFace(ctx, fg, bg);
     canvas.restore();
   }
 }
@@ -203,7 +210,11 @@ std::unique_ptr<Action> Button::ButtonDownAction(Pointer& pointer, PointerButton
   return nullptr;
 }
 
-Button::Button(std::unique_ptr<Widget>&& child, SkColor color)
-    : child(std::move(child)), color(color) {}
+Button::Button() {}
+
+SkRect Button::ChildBounds() const {
+  if (auto child = Child()) return child->Shape().getBounds();
+  return SkRect::MakeEmpty();
+}
 
 }  // namespace automat::gui

@@ -4,7 +4,7 @@
 
 namespace automat::gui {
 
-struct Text : Widget {
+struct Text : Widget, PaintMixin {
   std::string text;
   Text(std::string_view text = "");
   SkPath Shape() const override;

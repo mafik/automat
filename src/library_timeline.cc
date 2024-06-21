@@ -243,16 +243,14 @@ const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
 DEFINE_PROTO(Timeline);
 
 PrevButton::PrevButton()
-    : gui::Button(MakeShapeWidget(kNextShape, SK_ColorWHITE, &kHorizontalFlip), "#404040"_color),
+    : gui::ChildButtonMixin(MakeShapeWidget(kNextShape, SK_ColorWHITE, &kHorizontalFlip)),
       gui::CircularButtonMixin(kSideButtonRadius) {}
 
 NextButton::NextButton()
-    : gui::Button(MakeShapeWidget(kNextShape, SK_ColorWHITE), "#404040"_color),
+    : gui::ChildButtonMixin(MakeShapeWidget(kNextShape, SK_ColorWHITE)),
       gui::CircularButtonMixin(kSideButtonRadius) {}
 
-TimelineRunButton::TimelineRunButton()
-    : gui::Button(MakeShapeWidget(kPlayShape, SK_ColorWHITE), "#e24e1f"_color),
-      gui::RunButton(nullptr, kPlayButtonRadius) {}
+TimelineRunButton::TimelineRunButton() : gui::RunButton(nullptr, kPlayButtonRadius) {}
 
 Timeline::Timeline() : run_button(), playback_offset(0), zoom(10) {}
 
@@ -1204,7 +1202,10 @@ bool OnOffTrack::IsOn() const {
   return on;
 }
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
+SkColor PrevButton::ForegroundColor() const { return "#404040"_color; }
 SkColor PrevButton::BackgroundColor() const { return kTimelineButtonBackground; }
+SkColor NextButton::ForegroundColor() const { return "#404040"_color; }
 SkColor NextButton::BackgroundColor() const { return kTimelineButtonBackground; }
 SkColor TimelineRunButton::BackgroundColor() const { return kTimelineButtonBackground; }
+SkColor TimelineRunButton::ForegroundColor() const { return "#e24e1f"_color; }
 }  // namespace automat::library

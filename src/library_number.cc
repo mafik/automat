@@ -56,7 +56,7 @@ using gui::Text;
 using std::make_unique;
 
 NumberButton::NumberButton(std::unique_ptr<Widget>&& child)
-    : Button(make_unique<AlignCenter>(std::move(child))) {}
+    : ChildButtonMixin(make_unique<AlignCenter>(std::move(child))) {}
 
 void NumberButton::Draw(gui::DrawContext& ctx) const { DrawButton(ctx, 0xffc8c4b7); }
 

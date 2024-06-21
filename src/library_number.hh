@@ -1,13 +1,14 @@
 #pragma once
 
 #include "base.hh"
+#include "gui_button.hh"
 #include "number_text_field.hh"
 
 namespace automat::library {
 
 struct Number;
 
-struct NumberButton : gui::Button {
+struct NumberButton : virtual gui::Button, gui::ChildButtonMixin {
   std::function<void(Location&)> activate;
   NumberButton(std::unique_ptr<Widget>&& child);
   void Draw(gui::DrawContext&) const override;

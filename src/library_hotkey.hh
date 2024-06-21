@@ -9,13 +9,6 @@
 
 namespace automat::library {
 
-struct PowerButton : gui::ToggleButton {
-  OnOff* target;
-  PowerButton(OnOff* target);
-  void Activate(gui::Pointer&) override { target->Toggle(); }
-  bool Filled() const override { return target->IsOn(); }
-};
-
 struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   static const HotKey proto;
 

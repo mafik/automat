@@ -45,7 +45,7 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
   return dom;
 }
 
-MacroRecorder::MacroRecorder() {}
+MacroRecorder::MacroRecorder() : record_button(this) {}
 MacroRecorder::~MacroRecorder() {
   if (keylogging) {
     keylogging->Release();
@@ -127,10 +127,17 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     canvas.drawImage(MacroRecorderFrontColor(), 0, 0, kDefaultSamplingOptions);
     canvas.restore();
   }
+
+  DrawChildren(dctx);
+
   // SkPaint outline;
   // outline.setStyle(SkPaint::kStroke_Style);
-  // canvas.drawPath(Shape(), outline);
+  // canvas.drawPath(record_button.Shape(), outline);
+
+  // outline.setStyle(SkPaint::kStroke_Style);
+  // canvas.drawPath(record_button.child->Shape(), outline);
 }
+
 SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
 LongRunning* MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
@@ -148,4 +155,13 @@ void MacroRecorder::Cancel() {
 void MacroRecorder::KeyloggerKeyDown(gui::Key key) { LOG << "Key down: " << ToStr(key.physical); }
 void MacroRecorder::KeyloggerKeyUp(gui::Key key) { LOG << "Key up: " << ToStr(key.physical); }
 
+SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Context&) const {
+  if (&child == &record_button) {
+    return SkMatrix::Translate(-17.5_mm, -3.2_mm);
+  }
+  return SkMatrix::I();
+}
+bool MacroRecorder::IsOn() const { return keylogging != nullptr; }
+void MacroRecorder::On() { OnRun(*here); }
+void MacroRecorder::Off() { Cancel(); }
 }  // namespace automat::library

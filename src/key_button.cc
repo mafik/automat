@@ -3,14 +3,15 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "font.hh"
+#include "gui_button.hh"
 #include "widget.hh"
 
 using namespace maf;
 
 namespace automat::library {
 
-KeyButton::KeyButton(std::unique_ptr<Widget> child, SkColor color, float width)
-    : Button(std::move(child), color), width(width) {}
+KeyButton::KeyButton(std::unique_ptr<Widget>&& child, SkColor color, float width)
+    : ChildButtonMixin(std::move(child)), width(width), fg(color) {}
 
 void KeyButton::Activate(gui::Pointer& pointer) {
   if (activate) {
@@ -77,8 +78,8 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) co
 
   SkPaint face_paint;
   SkPoint face_pts[] = {{0, key_face.rect().bottom()}, {0, key_face.rect().top()}};
-  SkColor face_colors[] = {color::AdjustLightness(color, -10 + lightness_adjust),
-                           color::AdjustLightness(color, lightness_adjust)};
+  SkColor face_colors[] = {color::AdjustLightness(fg, -10 + lightness_adjust),
+                           color::AdjustLightness(fg, lightness_adjust)};
   face_paint.setShader(
       SkGradientShader::MakeLinear(face_pts, face_colors, nullptr, 2, SkTileMode::kClamp));
 
@@ -87,10 +88,10 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) co
 
   canvas.drawRRect(key_face, face_paint);
 
-  SkColor top_color = color::AdjustLightness(color, 20 + lightness_adjust);
-  SkColor side_color = color::AdjustLightness(color, -20 + lightness_adjust);
-  SkColor side_color2 = color::AdjustLightness(color, -25 + lightness_adjust);
-  SkColor bottom_color = color::AdjustLightness(color, -50 + lightness_adjust);
+  SkColor top_color = color::AdjustLightness(fg, 20 + lightness_adjust);
+  SkColor side_color = color::AdjustLightness(fg, -20 + lightness_adjust);
+  SkColor side_color2 = color::AdjustLightness(fg, -25 + lightness_adjust);
+  SkColor bottom_color = color::AdjustLightness(fg, -50 + lightness_adjust);
 
   SkPaint side_paint;
   side_paint.setAntiAlias(true);
@@ -99,13 +100,15 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) co
                                        bottom_color));
   canvas.drawDRRect(key_base, key_face, side_paint);
 
-  if (auto paint = PaintMixin::Get(child.get())) {
-    paint->setColor(fg);
-    paint->setAntiAlias(true);
+  if (auto child = Child()) {
+    if (auto paint = PaintMixin::Get(child)) {
+      paint->setColor(fg);
+      paint->setAntiAlias(true);
+    }
+    canvas.translate(key_face.rect().centerX(), key_face.rect().centerY());
+    child->Draw(ctx);
+    canvas.translate(-key_face.rect().centerX(), -key_face.rect().centerY());
   }
-  canvas.translate(key_face.rect().centerX(), key_face.rect().centerY());
-  child->Draw(ctx);
-  canvas.translate(-key_face.rect().centerX(), -key_face.rect().centerY());
 }
 
 static Font& KeyFont() {
@@ -118,7 +121,9 @@ struct KeyLabelWidget : Widget, LabelMixin {
   float width;
 
   KeyLabelWidget(StrView label) { SetLabel(label); }
-  SkPath Shape() const override { return SkPath::Rect(SkRect::MakeWH(width, kKeyLetterSize)); }
+  SkPath Shape() const override {
+    return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
+  }
   void Draw(DrawContext& ctx) const override {
     SkPaint paint;
     paint.setAntiAlias(true);

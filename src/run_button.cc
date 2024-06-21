@@ -10,12 +10,11 @@
 namespace automat::gui {
 
 RunButton::RunButton(Location* parent, float radius)
-    : Button(MakeShapeWidget(kPlayShape, 0xffffffff)),
-      ToggleButton(),
+    : RunLocationMixin(parent),
       CircularButtonMixin(radius),
-      location(parent) {}
+      child(MakeShapeWidget(kPlayShape, 0xffffffff)) {}
 
-void RunButton::Activate(Pointer&) {
+void RunLocationMixin::Activate(Pointer&) {
   if (Filled()) {
     if (location->run_task.scheduled) {
       // TODO: cancel the task
@@ -33,11 +32,17 @@ void RunButton::Activate(Pointer&) {
   }
 }
 
-bool RunButton::Filled() const {
+bool RunLocationMixin::Filled() const {
   if (location == nullptr) {
     return false;
   }
   return location->run_task.scheduled || (location->long_running != nullptr);
 }
 
+RunLocationMixin::RunLocationMixin(Location* parent) : Button(), location(parent) {}
+
+PowerButton::PowerButton(OnOff* target)
+    : RunOnOffMixin(target), child(MakeShapeWidget(kPowerSVG, SK_ColorWHITE)) {}
+
+RunOnOffMixin::RunOnOffMixin(OnOff* target) : Button(), target(target) {}
 }  // namespace automat::gui

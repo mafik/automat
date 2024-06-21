@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "gui_button.hh"
 
 namespace automat::library {
@@ -23,12 +25,14 @@ static constexpr float kKeyBaseRadius = kKeyFaceRadius;
 // static constexpr float kKeySpareHeight = kKeyHeight - kKeyLetterSize;
 // static constexpr float kKeyFaceHeight = kKeyHeight - kKeyTopSide - kKeyBottomSide;
 
-struct KeyButton : gui::Button {
+struct KeyButton : virtual gui::Button, ChildButtonMixin {
   float width;
   std::function<void(gui::Pointer&)> activate;
-  KeyButton(std::unique_ptr<Widget> child, SkColor color, float width);
+  SkColor fg;
+  KeyButton(std::unique_ptr<Widget>&& child, SkColor color, float width);
   void Activate(gui::Pointer&) override;
   SkRRect RRect() const override;
+  SkColor ForegroundColor() const override { return fg; }
   void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg) const override;
 };
 

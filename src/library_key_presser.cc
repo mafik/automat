@@ -71,7 +71,7 @@ KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 std::unique_ptr<Object> KeyPresser::Clone() const { return std::make_unique<KeyPresser>(key); }
 void KeyPresser::Draw(gui::DrawContext& dctx) const {
-  shortcut_button.color = key_selector ? kKeyGrabbingColor : KeyColor(false);
+  shortcut_button.fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
   DrawChildren(dctx);
   auto& canvas = dctx.canvas;
   auto img = key_pressed ? PressingHandColor() : PointingHandColor();
@@ -94,7 +94,7 @@ void KeyPresser::ReleaseGrab(gui::KeyboardGrab&) { key_selector = nullptr; }
 void KeyPresser::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key k) {
   key_selector->Release();
   key = k.physical;
-  dynamic_cast<LabelMixin*>(shortcut_button.child.get())->SetLabel(ToStr(key));
+  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(key));
 }
 
 ControlFlow KeyPresser::VisitChildren(gui::Visitor& visitor) {

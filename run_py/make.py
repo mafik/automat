@@ -255,13 +255,19 @@ class Recipe:
                 print(
                     f'Waiting for one of {len(self.pid_to_step)} running steps ({running_names})...'
                 )
-                pid, status = wait_for_pid()
-                if pid == watcher.pid:
-                    print(
-                        'Sources have been modified. Interrupting the build process...'
-                    )
-                    self.interrupt()
-                    return False
+                while True:
+                    pid, status = wait_for_pid()
+                    if pid == watcher.pid:
+                        if cmdline_args.args.live:
+                            print(
+                                'Sources have been modified. Interrupting the build process...'
+                            )
+                            self.interrupt()
+                            return False
+                        else:
+                            print('Sources have been modified but the build is not in live mode. Continuing the build...')
+                            continue
+                    break
                 step = self.pid_to_step[pid]
                 if status:
                     print(f'{step.desc} finished with an error:\n')

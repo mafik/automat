@@ -31,12 +31,13 @@
 #     recipe.generated.add(GOOGLETEST_OUT)
 
 from subprocess import run
+import build
 
 
 def hook_final(srcs, objs, bins, recipe):
     # Shortcut recipe for running all tests (default build type)
     tests = [
-        bin for bin in bins if '-lgtest' in bin.link_args and bin.build_type == '' and bin.path.stem != 'gtest']
+        bin for bin in bins if '-lgtest' in bin.link_args and bin.build_type == build.fast and bin.path.stem != 'gtest']
 
     def run_tests():
         for test in tests:

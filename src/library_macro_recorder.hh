@@ -6,7 +6,6 @@
 #include "base.hh"
 #include "keyboard.hh"
 #include "on_off.hh"
-#include "product_ptr.hh"
 #include "run_button.hh"
 #include "time.hh"
 
@@ -28,7 +27,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
     float eye_rotation = 0;
   };
 
-  mutable product_ptr<AnimationState> animation_state_ptr;
+  DoublePtr<AnimationState> animation_state_ptr;
   gui::Keylogging* keylogging = nullptr;
   GlassRunButton record_button;
 

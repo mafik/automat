@@ -187,8 +187,8 @@ SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) co
 Vec2 Location::AnimatedPosition(animation::Context* actx) const {
   Vec2 ret = position;
   if (drag_action && actx) {
-    ret.x += drag_action->round_x[*actx];
-    ret.y += drag_action->round_y[*actx];
+    ret.x += drag_action->round_x.FindOrMake(*actx, DragActionBase::ApproachMaker()).value;
+    ret.y += drag_action->round_y.FindOrMake(*actx, DragActionBase::ApproachMaker()).value;
   }
   return ret;
 }
@@ -224,7 +224,7 @@ void Location::Draw(gui::DrawContext& ctx) const {
   SkRect bounds = my_shape.getBounds();
 
   {  // Draw dashed highlight outline
-    auto& highlight = highlight_ptr[ctx.animation_context];
+    auto& highlight = animation_state[ctx.animation_context].highlight;
     highlight.Tick(ctx.animation_context);
     SkPath outset_shape = Outset(my_shape, 0.0025 * highlight.value);
     SkPathMeasure measure(outset_shape, false);

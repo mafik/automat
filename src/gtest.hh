@@ -1,4 +1,5 @@
-#include <gtest/gtest.h> // IWYU pragma: export
+#include <gmock/gmock.h>  // IWYU pragma: export
+#include <gtest/gtest.h>  // IWYU pragma: export
 
 #pragma maf add link argument "-lgmock"
 #pragma maf add link argument "-lgtest"

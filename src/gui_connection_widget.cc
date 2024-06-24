@@ -103,7 +103,7 @@ DragConnectionAction::~DragConnectionAction() {
   widget.manual_position.reset();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      l->highlight_ptr[*animation_context].target = 0;
+      l->animation_state[*animation_context].highlight.target = 0;
     }
   }
 }
@@ -135,9 +135,9 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       if (CanConnect(widget.from, *l, widget.arg)) {
-        l->highlight_ptr[*animation_context].target = 1;
+        l->animation_state[*animation_context].highlight.target = 1;
       } else {
-        l->highlight_ptr[*animation_context].target = 0;
+        l->animation_state[*animation_context].highlight.target = 0;
       }
     }
   }

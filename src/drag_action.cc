@@ -26,13 +26,13 @@ void DragActionBase::Update(gui::Pointer& pointer) {
   auto new_pos = current_position - contact_point;
   auto new_round = RoundToMilimeters(new_pos);
   Vec2 d = new_pos - old_pos;
-  if (old_round.x != new_round.x && abs(d.x) < 0.0005f) {
+  if (old_round.x != new_round.x && fabs(d.x) < 0.0005f) {
     for (auto& rx : round_x) {
       rx.value += old_round.x - new_round.x;
       rx.value = std::clamp(rx.value, -0.001f, 0.001f);
     }
   }
-  if (old_round.y != new_round.y && abs(d.y) < 0.0005f) {
+  if (old_round.y != new_round.y && fabs(d.y) < 0.0005f) {
     for (auto& ry : round_y) {
       ry.value += old_round.y - new_round.y;
       ry.value = std::clamp(ry.value, -0.001f, 0.001f);

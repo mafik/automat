@@ -1,7 +1,5 @@
 #pragma once
 
-#include <stdckdint.h>
-
 #include "format.hh"
 #include "int.hh"
 #include "log.hh"

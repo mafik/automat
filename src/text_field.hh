@@ -43,7 +43,7 @@ struct TextField : Widget, CaretOwner {
       }
     }
   };
-  mutable product_ptr<HoverState> hover_ptr;
+  maf::DoublePtr<HoverState> hover_ptr;
   std::optional<Argument*> argument;
 
   TextField(std::string* text, float width) : text(text), width(width) {}

@@ -6,8 +6,8 @@
 
 #include "animation.hh"
 #include "color.hh"
+#include "double_ptr.hh"
 #include "gui_constants.hh"
-#include "product_ptr.hh"
 #include "widget.hh"
 
 namespace automat::gui {
@@ -15,7 +15,7 @@ namespace automat::gui {
 struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
 
-  mutable product_ptr<animation::Approach> hover_ptr;
+  maf::DoublePtr<animation::Approach> hover_ptr;
   int press_action_count = 0;
 
   Button();
@@ -54,7 +54,7 @@ struct CircularButtonMixin : virtual Button {
 };
 
 struct ToggleButton : virtual Button {
-  mutable product_ptr<animation::Approach> filling_ptr;
+  maf::DoublePtr<animation::Approach> filling_ptr;
 
   ToggleButton() : Button() {}
   void Draw(DrawContext&) const override;

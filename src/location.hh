@@ -5,8 +5,10 @@
 
 #include "animation.hh"
 #include "connection.hh"
+#include "double_ptr.hh"
 #include "error.hh"
 #include "object.hh"
+#include "product_ptr.hh"
 #include "run_button.hh"
 #include "string_multimap.hh"
 #include "tasks.hh"
@@ -34,6 +36,16 @@ struct LongRunning;
 // Implementations of this interface would typically extend it with
 // container-specific functions.
 struct Location : gui::Widget {
+  struct AnimationState {
+    Location* location;
+    product_holder* holder;
+    animation::Spring<Vec2> position_offset;
+    animation::Approach scale;
+    animation::Approach highlight;
+  };
+
+  maf::DoublePtr<AnimationState> animation_state;
+
   Location* parent;
 
   std::unique_ptr<Object> object;
@@ -57,8 +69,6 @@ struct Location : gui::Widget {
   std::unordered_set<Location*> observing_errors;
 
   time::SteadyPoint last_finished;
-
-  mutable product_ptr<animation::Approach> highlight_ptr;
 
   RunTask run_task;
   LongRunning* long_running = nullptr;

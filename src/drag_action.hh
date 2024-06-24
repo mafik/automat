@@ -24,8 +24,8 @@ struct DragActionBase : Action {
     }
   };
 
-  product_ptr<animation::Approach, ApproachMaker> round_x;
-  product_ptr<animation::Approach, ApproachMaker> round_y;
+  maf::DoublePtr<animation::Approach> round_x;
+  maf::DoublePtr<animation::Approach> round_y;
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
   void End() override;

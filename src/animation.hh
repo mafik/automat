@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include "product_ptr.hh"
+#include "double_ptr.hh"
 #include "time.hh"
 
 namespace automat::animation {
@@ -12,12 +12,8 @@ namespace automat::animation {
 // Every frame the device should call `timer.Tick()` to update the timer.
 //
 // This struct should be kept alive for as long as the display device is active. On destruction it
-// will also destroy temporary objects used for animation.
-struct Context {
-  // `holder` can be used with `product_ptr` to create temporary objects which will be destroyed
-  // alongside Context (or `product_ptr` - whichever comes first).
-  product_holder holder;
-  operator product_holder&() { return holder; }
+// will also destroy temporary objects used for animation (see DoublePtrBase).
+struct Context : maf::DoublePtrBase {
   // `timer` should be advanced once per frame on the device that displays the animation. Its `d`
   // field can be used by animated objects to animate their properties.
   time::Timer timer;

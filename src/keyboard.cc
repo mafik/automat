@@ -169,10 +169,11 @@ Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
 #ifdef __linux__
     struct input_event_mask {
       xcb_input_event_mask_t header = {
-          .deviceid = XCB_INPUT_DEVICE_ALL,
+          .deviceid = XCB_INPUT_DEVICE_ALL_MASTER,
           .mask_len = 1,
       };
-      uint32_t mask = XCB_INPUT_XI_EVENT_MASK_KEY_PRESS | XCB_INPUT_XI_EVENT_MASK_KEY_RELEASE;
+      uint32_t mask =
+          XCB_INPUT_XI_EVENT_MASK_RAW_KEY_PRESS | XCB_INPUT_XI_EVENT_MASK_RAW_KEY_RELEASE;
     } event_mask;
 
     xcb_void_cookie_t cookie =
@@ -306,13 +307,15 @@ void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
       .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
       .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
       .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-      .text = "",
   };
-  if (ev.event == screen->root) {
-    LogKeyDown(key);
-  } else {
-    KeyDown(key);
-  }
+  KeyDown(key);
+}
+void Keyboard::KeyDown(xcb_input_raw_key_press_event_t& ev) {
+  gui::Key key = {
+      .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+      .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+  };
+  LogKeyDown(key);
 }
 
 void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
@@ -321,13 +324,14 @@ void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
                   .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
                   .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
                   .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-                  .text = ""};
-  if (ev.event == screen->root) {
-    LogKeyUp(key);
-  } else {
-    gui::keyboard->KeyUp(key);
-  }
+                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+  KeyUp(key);
+}
+
+void Keyboard::KeyUp(xcb_input_raw_key_release_event_t& ev) {
+  gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+  LogKeyUp(key);
 }
 #endif  // __linux__
 
@@ -731,7 +735,7 @@ void Keylogging::Release() {
 #ifdef __linux__
     struct input_event_mask {
       xcb_input_event_mask_t header = {
-          .deviceid = XCB_INPUT_DEVICE_ALL,
+          .deviceid = XCB_INPUT_DEVICE_ALL_MASTER,
           .mask_len = 1,
       };
       uint32_t mask = 0;

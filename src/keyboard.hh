@@ -335,7 +335,9 @@ struct Keyboard final {
 
 #if defined(__linux__)
   void KeyDown(xcb_input_key_press_event_t&);
+  void KeyDown(xcb_input_raw_key_press_event_t&);
   void KeyUp(xcb_input_key_release_event_t&);
+  void KeyUp(xcb_input_raw_key_release_event_t&);
 #endif  // defined(__linux__)
 
   // Called by the OS event loop to notify the Keyboard of a key press.

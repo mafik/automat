@@ -241,7 +241,7 @@ const SkPaint kZoomTickPaint = []() {
 
 const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
 
-DEFINE_PROTO(Timeline);
+const Timeline Timeline::proto;
 
 PrevButton::PrevButton()
     : gui::ChildButtonMixin(MakeShapeWidget(kNextShape, SK_ColorWHITE, &kHorizontalFlip)),

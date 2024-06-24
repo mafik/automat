@@ -312,6 +312,12 @@ void RenderLoop() {
           if (cm->data.data32[0] == wm_delete_window) running = false;
           break;
         }
+        case XCB_MAPPING_NOTIFY: {
+          xcb_mapping_notify_event_t* ev = (xcb_mapping_notify_event_t*)event;
+          // TODO: check this out
+          // https://tronche.com/gui/x/xlib/events/window-state-change/mapping.html
+          break;
+        }
         case XCB_GE_GENERIC: {
           xcb_ge_generic_event_t* ev = (xcb_ge_generic_event_t*)event;
           if (ev->extension == xi_opcode) {
@@ -343,8 +349,16 @@ void RenderLoop() {
                 }
                 break;
               }
+              case XCB_INPUT_RAW_KEY_PRESS: {
+                gui::keyboard->KeyDown(*(xcb_input_raw_key_press_event_t*)event);
+                break;
+              }
               case XCB_INPUT_KEY_PRESS: {
                 gui::keyboard->KeyDown(*(xcb_input_key_press_event_t*)event);
+                break;
+              }
+              case XCB_INPUT_RAW_KEY_RELEASE: {
+                gui::keyboard->KeyUp(*(xcb_input_raw_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {

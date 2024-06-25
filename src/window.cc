@@ -11,9 +11,7 @@
 
 namespace automat::gui {
 
-namespace {
 std::vector<Window*> windows;
-}  // namespace
 
 Window::Window(Vec2 size, float pixels_per_meter)
     : size(size), display_pixels_per_meter(pixels_per_meter) {

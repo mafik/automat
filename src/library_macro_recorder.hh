@@ -23,7 +23,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
   struct AnimationState {
     animation::Spring<Vec2> googly_left;
     animation::Spring<Vec2> googly_right;
-    animation::Approach eye_speed;
+    animation::Approach<> eye_speed;
     float eye_rotation = 0;
   };
 

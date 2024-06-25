@@ -31,7 +31,7 @@ struct TextField : Widget, CaretOwner {
   std::unordered_map<Caret*, CaretPosition> caret_positions;
   struct HoverState {
     int hovering_pointers = 0;
-    animation::Approach animation;
+    animation::Approach<> animation;
     void Increment() {
       hovering_pointers++;
       animation.target = 1;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "control_flow.hh"
-#include "fn.hh"
+#include <utility>
+#include <vector>
 
 namespace maf {
 
@@ -24,8 +24,8 @@ extern std::vector<DoublePtrValueBase*> double_ptr_buffers;
 template <typename T>
 struct DoublePtrValue : DoublePtrValueBase {
   T value;
-  DoublePtrValue(const DoublePtrBase* owner_a, const DoublePtrBase* owner_b, T value)
-      : DoublePtrValueBase(owner_a, owner_b), value(value) {}
+  DoublePtrValue(const DoublePtrBase* owner_a, const DoublePtrBase* owner_b)
+      : DoublePtrValueBase(owner_a, owner_b), value{} {}
   ~DoublePtrValue() override = default;
 
   // Call this to
@@ -46,7 +46,7 @@ struct DoublePtrValue : DoublePtrValueBase {
 };
 
 struct DoublePtrBase {
-  virtual ~DoublePtrBase() {
+  ~DoublePtrBase() {
     for (auto it = double_ptr_buffers.begin(); it != double_ptr_buffers.end();) {
       auto* buffer = static_cast<DoublePtrValueBase*>(*it);
       if (buffer->owner_a == this || buffer->owner_b == this) {
@@ -72,42 +72,29 @@ struct DoublePtr : DoublePtrBase {
   DoublePtr(DoublePtr&&) = delete;
 
   // Find and return value owned by this & other ptr
-  DoublePtrValue<T>* Find(const DoublePtrBase& other) const {
+  T* Find(const DoublePtrBase& other) const {
     for (auto* ptr : double_ptr_buffers) {
       auto* buffer = static_cast<DoublePtrValue<T>*>(ptr);
       if ((buffer->owner_a == this && buffer->owner_b == &other) ||
           (buffer->owner_a == &other && buffer->owner_b == this)) {
-        return buffer;
+        return &buffer->value;
       }
     }
     return nullptr;
   }
 
   // Try to find a value owned by this & other ptr, if not found, make it using the provided
-  // function
-  DoublePtrValue<T>& FindOrMake(const DoublePtrBase& other, maf::Fn<T()> make) const {
-    if (auto* value = Find(other)) {
-      return *value;
+  // function. Returns a reference to the value and a bool indicating if the value was created.
+  std::pair<T&, bool> FindOrMake(const DoublePtrBase& other) const {
+    if (auto* buffer = Find(other)) {
+      return {*buffer, false};
     }
-    auto* buffer = new DoublePtrValue<T>(this, &other, make());
+    auto* buffer = new DoublePtrValue<T>(this, &other);
     double_ptr_buffers.push_back(buffer);
-    return *buffer;
+    return {buffer->value, true};
   }
 
-  T& operator[](const DoublePtrBase& other) const {
-    return FindOrMake(other, [] { return T{}; }).value;
-  }
-
-  void ForEach(maf::Fn<automat::ControlFlow(DoublePtrValue<T>&)> fn) {
-    for (auto* ptr : double_ptr_buffers) {
-      auto* buffer = static_cast<DoublePtrValue<T>*>(ptr);
-      if (buffer->owner_a == this || buffer->owner_b == this) {
-        if (fn(buffer) == automat::ControlFlow::Stop) {
-          break;
-        }
-      }
-    }
-  }
+  T& operator[](const DoublePtrBase& other) const { return FindOrMake(other).first; }
 
   struct end_iterator {
     bool operator!=(const end_iterator&) { return false; }

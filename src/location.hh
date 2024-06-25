@@ -40,8 +40,9 @@ struct Location : gui::Widget {
     Location* location;
     product_holder* holder;
     animation::Spring<Vec2> position_offset;
-    animation::Approach scale;
-    animation::Approach highlight;
+    animation::Approach<> scale = {1};
+    animation::Approach<> transparency;
+    animation::Approach<> highlight;
   };
 
   maf::DoublePtr<AnimationState> animation_state;
@@ -239,7 +240,6 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number);
 
-  Vec2 AnimatedPosition(animation::Context*) const;
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape() const override;
@@ -250,7 +250,6 @@ struct Location : gui::Widget {
   Vec2AndDir ArgStart(animation::Context*, Argument&);
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   bool ChildrenOutside() const override;
-  SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
 
   ////////////////////////////
   // Error reporting

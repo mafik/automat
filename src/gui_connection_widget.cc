@@ -40,6 +40,12 @@ SkPath ConnectionWidget::Shape() const {
 void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& actx = ctx.animation_context;
+  auto& from_animation_state = from.animation_state[actx];
+  bool using_layer = false;
+  if (from_animation_state.transparency > 0.01f) {
+    using_layer = true;
+    canvas.saveLayerAlphaf(nullptr, 1.f - from_animation_state.transparency);
+  }
   SkPath from_shape = from.Shape();
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
@@ -90,6 +96,9 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
       }
     }
     DrawArrow(canvas, from_shape, to_shape);
+  }
+  if (using_layer) {
+    canvas.restore();
   }
 }
 

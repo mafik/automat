@@ -16,16 +16,8 @@ struct DragActionBase : Action {
   Vec2 TargetPosition() const;
   Vec2 TargetPositionRounded() const;
 
-  struct ApproachMaker {
-    animation::Approach operator()() {
-      animation::Approach ret(0);
-      ret.speed = 50;
-      return ret;
-    }
-  };
-
-  maf::DoublePtr<animation::Approach> round_x;
-  maf::DoublePtr<animation::Approach> round_y;
+  maf::DoublePtr<animation::Approach<>> round_x;
+  maf::DoublePtr<animation::Approach<>> round_y;
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
   void End() override;

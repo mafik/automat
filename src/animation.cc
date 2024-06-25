@@ -2,6 +2,8 @@
 
 namespace automat::animation {
 
+Context Context::kHeadless;
+
 void WrapModulo(Base<float>& base, float range) {
   if (base.value - base.target > range / 2) {
     base.value -= range;

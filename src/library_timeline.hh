@@ -67,7 +67,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   Vec<std::unique_ptr<TrackBase>> tracks;
   Vec<std::unique_ptr<Argument>> track_args;
 
-  mutable animation::Approach zoom;  // stores the time in seconds
+  mutable animation::Approach<> zoom;  // stores the time in seconds
 
   enum State { kPaused, kPlaying, kRecording } state;
 

@@ -18,6 +18,10 @@ struct Context : maf::DoublePtrBase {
   // field can be used by animated objects to animate their properties.
   time::Timer timer;
   operator time::Timer&() { return timer; }
+
+  // Placeholder that can be used when no Window is available
+  // TODO: replace with nullptr
+  static Context kHeadless;
 };
 
 struct DeltaFraction {
@@ -41,37 +45,26 @@ struct Base {
   T target = {};
 };
 
-struct Approach : Base<float> {
+template <typename T = float>
+struct Approach : Base<T> {
   float speed = 15;
-  float cap_min;
-  float cap;
   time::SystemPoint last_tick;
 
-  Approach(float initial = 0, float cap_min = 0.01)
-      : Base{.value = initial, .target = initial},
-        cap_min(cap_min),
-        cap(cap_min),
-        last_tick(time::SystemNow()) {}
+  Approach(T initial = {})
+      : Base<T>{.value = initial, .target = initial}, last_tick(time::SystemNow()) {}
   void Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
     if (dt <= 0) return;
-    float delta = (target - value) * (-expm1f(-dt * speed));
-    float delta_abs = fabs(delta);
-    if (delta_abs > cap * dt) {
-      value += cap * dt * (delta > 0 ? 1 : -1);
-      cap = std::min(delta_abs / dt, 2 * cap);
-    } else {
-      value += delta;
-      cap = std::max(delta_abs / dt, cap_min);
-    }
+    T delta = (this->target - this->value) * (-expm1f(-dt * speed));
+    this->value += delta;
   }
   void Shift(float delta) {
-    value += delta;
-    target += delta;
+    this->value += delta;
+    this->target += delta;
   }
-  float Remaining() const { return target - value; }
-  operator float() const { return value; }
+  float Remaining() const { return this->target - this->value; }
+  operator float() const { return this->value; }
 };
 
 template <typename T>

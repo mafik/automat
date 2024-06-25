@@ -15,7 +15,7 @@ namespace automat::gui {
 struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
 
-  maf::DoublePtr<animation::Approach> hover_ptr;
+  maf::DoublePtr<animation::Approach<>> hover_ptr;
   int press_action_count = 0;
 
   Button();
@@ -54,7 +54,7 @@ struct CircularButtonMixin : virtual Button {
 };
 
 struct ToggleButton : virtual Button {
-  maf::DoublePtr<animation::Approach> filling_ptr;
+  maf::DoublePtr<animation::Approach<>> filling_ptr;
 
   ToggleButton() : Button() {}
   void Draw(DrawContext&) const override;

@@ -38,6 +38,8 @@ struct Keyboard;
 struct Pointer;
 struct WindowImpl;
 
+extern std::vector<Window*> windows;
+
 struct Window final : Widget {
   Window(Vec2 size, float pixels_per_meter);
   ~Window();
@@ -144,9 +146,9 @@ struct Window final : Widget {
   Vec2 size;
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
 
-  animation::Approach zoom = animation::Approach(1.0, 0.01);
-  animation::Approach camera_x = animation::Approach(0.0, 0.005);
-  animation::Approach camera_y = animation::Approach(0.0, 0.005);
+  animation::Approach<> zoom = animation::Approach<>(1.0);
+  animation::Approach<> camera_x = animation::Approach<>(0.0);
+  animation::Approach<> camera_y = animation::Approach<>(0.0);
   bool panning_during_last_frame = false;
   bool inertia = false;
   std::deque<Vec3> camera_timeline;

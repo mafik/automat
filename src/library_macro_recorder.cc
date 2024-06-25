@@ -6,6 +6,8 @@
 #include <include/effects/SkGradientShader.h>
 #include <modules/svg/include/SkSVGDOM.h>
 
+#include <cstdint>
+
 #include "../build/generated/embedded.hh"
 #include "gui_constants.hh"
 #include "keyboard.hh"
@@ -161,6 +163,43 @@ static void PositionBelow(Location& origin, Location& below) {
   Rect origin_shape = origin.object->Shape().getBounds();
   Rect below_shape = below.object->Shape().getBounds();
   below.position = origin_shape.BottomCenter() + origin.position - below_shape.TopCenter();
+  Machine* m = origin.ParentAs<Machine>();
+  Size origin_index = SIZE_MAX;
+  Size below_index = SIZE_MAX;
+  for (Size i = 0; i < m->locations.size(); i++) {
+    if (m->locations[i].get() == &origin) {
+      origin_index = i;
+      if (below_index != SIZE_MAX) {
+        break;
+      }
+    }
+    if (m->locations[i].get() == &below) {
+      below_index = i;
+      if (origin_index != SIZE_MAX) {
+        break;
+      }
+    }
+  }
+  if (origin_index > below_index) {
+    std::swap(m->locations[origin_index], m->locations[below_index]);
+  }
+}
+
+static void AnimateGrowFrom(Location& source, Location& grown) {
+  for (auto* window : gui::windows) {
+    auto& animation_state = grown.animation_state[window->actx];
+    animation_state.scale.target = 1;
+    animation_state.scale.speed = 10;
+    animation_state.scale.value = 0.5;
+    Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
+    Vec2 grown_center = grown.object->Shape().getBounds().center() + grown.position;
+    animation_state.position_offset.value = source_center - grown_center;
+    animation_state.position_offset.target = Vec2(0, 0);
+    animation_state.position_offset.acceleration = 400;
+    animation_state.position_offset.friction = 40;
+    animation_state.transparency.value = 1;
+    animation_state.transparency.speed = 5;
+  }
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
@@ -190,6 +229,7 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
     timeline = loc.As<Timeline>();
     // TODO: animate timeline creation
     PositionBelow(*macro_recorder.here, loc);
+    AnimateGrowFrom(*macro_recorder.here, loc);
   }
   return timeline;
 }

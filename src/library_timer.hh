@@ -18,12 +18,12 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   } duration;
   DurationArgument duration_arg;
   time::SteadyPoint start_time;
-  mutable animation::Approach start_pusher_depression;
-  mutable animation::Approach left_pusher_depression;
-  mutable animation::Approach right_pusher_depression;
+  mutable animation::Approach<> start_pusher_depression;
+  mutable animation::Approach<> left_pusher_depression;
+  mutable animation::Approach<> right_pusher_depression;
   mutable animation::Spring<float> hand_degrees;
   mutable animation::Spring<float> range_dial;
-  mutable animation::Approach duration_handle_rotation;
+  mutable animation::Approach<> duration_handle_rotation;
   gui::NumberTextField text_field;
   enum class State : char { Idle, Running } state = State::Idle;
   enum class OverrunPolicy : char {

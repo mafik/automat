@@ -34,6 +34,7 @@
 
 namespace automat {
 
+using std::deque;
 using std::function;
 using std::hash;
 using std::string;
@@ -95,14 +96,14 @@ struct Machine : LiveObject {
   static const Machine proto;
   Machine();
   string name = "";
-  unordered_set<unique_ptr<Location>> locations;
+  deque<unique_ptr<Location>> locations;
   mutable std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
   vector<Location*> front;
   vector<Location*> children_with_errors;
 
   Location& CreateEmpty(const string& name = "") {
-    auto [it, already_present] = locations.emplace(new Location(here));
-    Location* h = it->get();
+    auto& it = locations.emplace_front(new Location(here));
+    Location* h = it.get();
     h->name = name;
     return *h;
   }

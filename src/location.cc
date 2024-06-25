@@ -1,13 +1,16 @@
 #include "location.hh"
 
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkPathEffect.h>
 #include <include/core/SkPathMeasure.h>
 #include <include/core/SkPathUtils.h>
+#include <include/core/SkPictureRecorder.h>
 #include <include/effects/SkDashPathEffect.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
 
+#include "animation.hh"
 #include "base.hh"
 #include "color.hh"
 #include "control_flow.hh"
@@ -15,7 +18,9 @@
 #include "font.hh"
 #include "format.hh"
 #include "gui_constants.hh"
+#include "math.hh"
 #include "span.hh"
+#include "widget.hh"
 
 using namespace automat::gui;
 
@@ -168,31 +173,6 @@ ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
 
 bool Location::ChildrenOutside() const { return true; }
 
-SkMatrix Location::TransformToChild(const Widget& child, animation::Context&) const {
-  if constexpr (false) {
-    // Keeping this around because locations will eventually be toggleable between frame & no frame
-    // modes.
-    SkPath my_shape = Shape();
-    SkRect my_bounds = my_shape.getBounds();
-    if (&child == &run_button) {
-      SkPath run_button_shape = run_button.Shape();
-      SkRect run_bounds = run_button_shape.getBounds();
-      return SkMatrix::Translate(-(my_bounds.centerX() - run_bounds.centerX()),
-                                 -(my_bounds.top() - run_bounds.fTop) - 0.001);
-    }
-  }
-  return SkMatrix::I();
-}
-
-Vec2 Location::AnimatedPosition(animation::Context* actx) const {
-  Vec2 ret = position;
-  if (drag_action && actx) {
-    ret.x += drag_action->round_x.FindOrMake(*actx, DragActionBase::ApproachMaker()).value;
-    ret.y += drag_action->round_y.FindOrMake(*actx, DragActionBase::ApproachMaker()).value;
-  }
-  return ret;
-}
-
 SkPath Outset(const SkPath& path, float distance) {
   SkRRect rrect;
   if (path.isRRect(&rrect)) {
@@ -212,21 +192,26 @@ SkPath Outset(const SkPath& path, float distance) {
 void Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   SkPath my_shape;
-  if constexpr (true) {
-    if (object) {
-      my_shape = object->Shape();
-    } else {
-      my_shape = Shape();
-    }
+  if (object) {
+    my_shape = object->Shape();
   } else {
     my_shape = Shape();
   }
   SkRect bounds = my_shape.getBounds();
 
+  auto& state = animation_state[ctx.animation_context];
+  state.scale.Tick(ctx.animation_context);
+  state.position_offset.Tick(ctx.animation_context);
+  state.highlight.Tick(ctx.animation_context);
+  state.transparency.Tick(ctx.animation_context);
+  bool using_layer = false;
+  if (state.transparency > 0.01) {
+    using_layer = true;
+    ctx.canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
+  }
+
   {  // Draw dashed highlight outline
-    auto& highlight = animation_state[ctx.animation_context].highlight;
-    highlight.Tick(ctx.animation_context);
-    SkPath outset_shape = Outset(my_shape, 0.0025 * highlight.value);
+    SkPath outset_shape = Outset(my_shape, 0.0025 * state.highlight.value);
     SkPathMeasure measure(outset_shape, false);
     float length = measure.getLength();
 
@@ -239,7 +224,7 @@ void Location::Draw(gui::DrawContext& ctx) const {
       return paint;
     }();
     SkPaint dash_paint(kHighlightPaint);
-    dash_paint.setAlphaf(highlight.value);
+    dash_paint.setAlphaf(state.highlight.value);
     float intervals[] = {0.0035, 0.0015};
     double ignore;
     time::Duration period = 200s;
@@ -295,6 +280,10 @@ void Location::Draw(gui::DrawContext& ctx) const {
     canvas.translate(-offset_x, -offset_y + n_lines * line_height);
     n_lines += 1;
   }
+
+  if (using_layer) {
+    ctx.canvas.restore();
+  }
 }
 
 std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
@@ -339,8 +328,14 @@ void Location::Run() {
 }
 
 Vec2AndDir Location::ArgStart(animation::Context* actx, Argument& arg) {
+  if (actx == nullptr) {
+    actx = &animation::Context::kHeadless;
+  }
   auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
-  pos_dir.pos += AnimatedPosition(actx);
+  Path path = {ParentAs<Widget>(), (Widget*)this};
+  auto m = TransformUp(path, *actx);
+  pos_dir.pos = m.mapPoint(pos_dir.pos);
   return pos_dir;
 }
+
 }  // namespace automat

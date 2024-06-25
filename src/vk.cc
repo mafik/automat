@@ -1,5 +1,7 @@
 #include "vk.hh"
 
+#include <include/gpu/GrTypes.h>
+
 #if defined(_WIN32)
 #include "win.hh"
 #include "win_main.hh"

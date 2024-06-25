@@ -25,10 +25,19 @@ class DoublePtrTest : public ::testing::Test {
 using Event = DoublePtrTest::Event;
 
 struct Value {
-  DoublePtrTest& test;
-  Value(DoublePtrTest& test) : test(test) { test.events.push_back(Event::ValueCreated); }
-  Value(Value&& other) : test(other.test) { test.events.push_back(Event::ValueMoved); }
-  ~Value() { test.events.push_back(Event::ValueDestroyed); }
+  DoublePtrTest* test;
+  Value() : test(nullptr) {}
+  Value(Value&& other) = delete;
+  Value(const Value& other) = delete;
+  void SetTest(DoublePtrTest* test) {
+    this->test = test;
+    if (test) {
+      test->events.push_back(Event::ValueCreated);
+    }
+  }
+  ~Value() {
+    if (test) test->events.push_back(Event::ValueDestroyed);
+  }
 };
 
 TEST_F(DoublePtrTest, BasicTest) {
@@ -38,7 +47,7 @@ TEST_F(DoublePtrTest, BasicTest) {
   ptr2.emplace();
   EXPECT_EQ(ptr1->Find(*ptr2), nullptr);
   EXPECT_THAT(events, testing::ElementsAre());
-  ptr1->FindOrMake(*ptr2, [this]() -> Value { return Value(*this); });
+  ptr1->FindOrMake(*ptr2).first.SetTest(this);
   EXPECT_THAT(events, testing::ElementsAre(Event::ValueCreated));
   ptr2.reset();
   EXPECT_THAT(events, testing::ElementsAre(Event::ValueCreated, Event::ValueDestroyed));

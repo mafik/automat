@@ -10,6 +10,10 @@
 
 constexpr float kMetersPerInch = 0.0254f;
 
+union Vec2;
+
+constexpr float LengthSquared(Vec2 v);
+
 union Vec2 {
   struct {
     float x, y;
@@ -21,6 +25,7 @@ union Vec2 {
   SkPoint sk;
 
   constexpr Vec2() : x(0), y(0) {}
+  constexpr Vec2(float xy) : x(xy), y(xy) {}
   constexpr Vec2(float x, float y) : x(x), y(y) {}
   constexpr Vec2(SkPoint p) : sk(p) {}
   constexpr static Vec2 Polar(float angle, float length) {

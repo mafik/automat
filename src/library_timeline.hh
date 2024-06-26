@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <memory>
 
 #include "animation.hh"
@@ -43,6 +44,7 @@ struct TrackBase : Object {
 };
 
 struct OnOffTrack : TrackBase, OnOff {
+  time::T on_at = NAN;
   string_view Name() const override { return "On/Off Track"; }
   std::unique_ptr<Object> Clone() const override { return std::make_unique<OnOffTrack>(*this); }
   void Draw(gui::DrawContext&) const override;

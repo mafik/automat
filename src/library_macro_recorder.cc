@@ -286,11 +286,6 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     timeline->here->ConnectTo(key_presser_loc, key_name);
   }
 
-  bool is_down = timeline->tracks[track_index]->timestamps.size() % 2 == 1;
-  if (is_down == down) {
-    return;
-  }
-
   // Append the current timestamp to that track
   OnOffTrack* track = dynamic_cast<OnOffTrack*>(timeline->tracks[track_index].get());
   if (track == nullptr) {
@@ -298,17 +293,129 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     return;
   }
 
-  track->timestamps.push_back((time::SteadyNow() - timeline->recording.started_at).count());
+  auto& ts = track->timestamps;
+  time::T t = (time::SteadyNow() - timeline->recording.started_at).count();
+
+  size_t next_i = std::lower_bound(ts.begin(), ts.end(), t) - ts.begin();
+
+  // LOG << "key " << (down ? "down" : "up") << " while in " << (next_i % 2 ? "filled" : "empty")
+  //       << " section" << (isnan(track->on_at) ? "" : " with on_at");
+
+  // How recording over existing tracks works:
+  // - if either start or end of a key-down section touches another section, that section is
+  // adjusted to cover the new key-down section
+  // - otherwise a new section is added and any overlapping sections are removed
+  if (down) {
+    if (next_i % 2) {
+      // Key is pressed down while in a filled section. Move the start time to `t`.
+      ts[next_i - 1] = t;
+      track->on_at = t;
+    } else {
+      // Key is pressed while in an empty section. Mark current time as `on_at` and continue.
+      if (next_i == ts.size()) {
+        ts.push_back(t);
+      }
+      track->on_at = t;
+    }
+  } else {
+    if (next_i % 2) {
+      // filled section
+      if (isnan(track->on_at)) {
+        // This shouldn't happen but in some edge cases it might. We just adjust the end time of
+        // the current section to `t`.
+        if (next_i < ts.size()) {
+          ts[next_i] = t;
+        } else {
+          ts.push_back(t);
+        }
+      } else {
+        // Replace the current section with one
+        auto first_it = std::lower_bound(ts.begin(), ts.end(), track->on_at);
+        size_t first_i = first_it - ts.begin();
+        auto second_it = ts.begin() + next_i;
+        size_t second_i = next_i;
+
+        // LOG << "first_i: " << first_i << " second_i: " << second_i << " ts.size(): " <<
+        // ts.size();
+
+        // Example starting state:
+        // 0  1  2  3  4  5  6
+        // ---###---###---###---
+        // ts idxs: 0 1 2 3 4 5
+        // ts vals: 1 2 3 4 5 6
+        //
+        // Test case 1 (spanning 3 existing sections):
+        // Let's say on_at is 1 and t is 5.5
+        // We want to remove stuff between indexes 1 (inclusive) and 5 (exclusive).
+        // Then we overwrite the value 1 (idx 0) with 1 and value 6 (idx 1) 5.5.
+        // lower_bound (on_at) = 0
+        // upper_bound (on_at) = 1
+        // lower_bound (t) = 5
+        //
+        // Test case 2 (spanning 2 existing sections):
+        // Let's say on_at is 1 and t is 2.5
+        // We want to remove stuff between indexes 1 (inclusive) and 3 (exclusive).
+        // Then we overwrite the value 1 (idx 0) with 1 and value 4 (idx 1) with 2.5.
+        // lower_bound (on_at) = 0
+        // upper_bound (on_at) = 1
+        // lower_bound (t) = 2
+        //
+        // Test case 3 (starting empty, ending in the next section):
+        // Let's say on_at is at 2.5 and t is 3.5
+        // We don't want to remove anything.
+        // We overwrite the value 3 (idx 2) with 2.5 and value 4 (idx 3) with 3.5.
+        // lower_bound (on_at) = 2
+        // upper_bound (on_at) = 2
+        // lower_bound (t) = 3
+        //
+        // Test case 4 (starting empty, spanning one section and ending in another):
+        // Let's say on_at is at 2.5 and t is 5.5
+        // We want to remove stuff between indexes 3 (inclusive) and 5 (exclusive).
+        // We overwrite the value 3 (idx 2) with 2.5 and value 6 (idx 3) with 5.5.
+        // lower_bound (on_at) = 2
+        // upper_bound (on_at) = 2
+        // lower_bound (t) = 5
+
+        first_it++;
+        if (second_it > first_it) {
+          first_it = ts.erase(first_it, second_it);
+        }
+        if (first_i < ts.size()) {
+          ts[first_i] = track->on_at;
+        } else {
+          ts.push_back(track->on_at);
+        }
+        if (first_i + 1 < ts.size()) {
+          ts[first_i + 1] = t;
+        } else {
+          ts.push_back(t);
+        }
+        track->on_at = NAN;
+      }
+    } else {
+      // empty section
+      if (isnan(track->on_at)) {
+        // This shouldn't happen but in some edge cases it might. We just adjust the end time of
+        // the previous section to `t`.
+        if (next_i > 0) {
+          ts[next_i - 1] = t;  // DONE!
+        }
+      } else {
+        // Key released in an empty section.
+        auto first_it = std::lower_bound(ts.begin(), ts.end(), track->on_at);
+        auto second_it = ts.begin() + next_i;
+        if (second_it > first_it) {
+          ts.erase(first_it, second_it);
+        }
+        ts.insert(first_it, {track->on_at, t});
+        track->on_at = NAN;
+      }
+    }
+  }
 }
 
-void MacroRecorder::KeyloggerKeyDown(gui::Key key) {
-  LOG << "Key down: " << ToStr(key.physical);
-  RecordKeyEvent(*this, key.physical, true);
-}
-void MacroRecorder::KeyloggerKeyUp(gui::Key key) {
-  LOG << "Key up: " << ToStr(key.physical);
-  RecordKeyEvent(*this, key.physical, false);
-}
+void MacroRecorder::KeyloggerKeyDown(gui::Key key) { RecordKeyEvent(*this, key.physical, true); }
+void MacroRecorder::KeyloggerKeyUp(gui::Key key) { RecordKeyEvent(*this, key.physical, false); }
 
 SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Display*) const {
   if (&child == &record_button) {

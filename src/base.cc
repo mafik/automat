@@ -326,13 +326,6 @@ SkMatrix Machine::TransformToChild(const Widget& child, animation::Display* disp
     SkMatrix transform = SkMatrix::I();
     transform.postTranslate(-l->position.x, -l->position.y);
     if (display) {
-      if (l->drag_action) {
-        auto& round_x = l->drag_action->round_x[*display];
-        auto& round_y = l->drag_action->round_y[*display];
-        round_x.speed = 50;
-        round_y.speed = 50;
-        transform.postTranslate(-round_x, -round_y);
-      }
       if (auto* state = l->animation_state.Find(*display)) {
         float s = std::max<float>(state->scale, 0.00001f);
         transform.postScale(1 / s, 1 / s);

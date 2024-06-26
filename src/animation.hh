@@ -32,6 +32,14 @@ extern maf::Vec<Display*> displays;
 // This struct should be kept alive for as long as the display device is active. On destruction it
 // will also destroy temporary objects used for animation.
 struct Display {
+  Display() { displays.push_back(this); }
+  // forbid copy and move
+  Display(const Display&) = delete;
+  Display& operator=(const Display&) = delete;
+  Display(Display&&) = delete;
+
+  ~Display() { displays.erase(std::find(displays.begin(), displays.end(), this)); }
+
   // `timer` should be advanced once per frame on the device that displays the animation. Its `d`
   // field can be used by animated objects to animate their properties.
   time::Timer timer;

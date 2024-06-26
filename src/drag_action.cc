@@ -1,18 +1,18 @@
 #include "drag_action.hh"
 
-#include <algorithm>
-
+#include "animation.hh"
 #include "pointer.hh"
 #include "root.hh"
+#include "units.hh"
 
 namespace automat {
 
 static Vec2 RoundToMilimeters(Vec2 v) {
-  return Vec2(round(v.x * 1000) / 1000., round(v.y * 1000) / 1000.);
+  return Vec2(roundf(v.x * 1000) / 1000., roundf(v.y * 1000) / 1000.);
 }
 
 void DragActionBase::Begin(gui::Pointer& pointer) {
-  current_position = pointer.PositionWithinRootMachine();
+  last_position = current_position = pointer.PositionWithinRootMachine();
 }
 
 Vec2 DragActionBase::TargetPosition() const { return current_position - contact_point; }
@@ -20,48 +20,26 @@ Vec2 DragActionBase::TargetPosition() const { return current_position - contact_
 Vec2 DragActionBase::TargetPositionRounded() const { return RoundToMilimeters(TargetPosition()); }
 
 void DragActionBase::Update(gui::Pointer& pointer) {
-  auto old_pos = current_position - contact_point;
-  auto old_round = RoundToMilimeters(old_pos);
+  last_position = current_position;
   current_position = pointer.PositionWithinRootMachine();
-  auto new_pos = current_position - contact_point;
-  auto new_round = RoundToMilimeters(new_pos);
-  Vec2 d = new_pos - old_pos;
-  if (old_round.x != new_round.x && fabs(d.x) < 0.0005f) {
-    for (auto& rx : round_x) {
-      rx.value += old_round.x - new_round.x;
-      rx.value = std::clamp(rx.value, -0.001f, 0.001f);
-    }
-  }
-  if (old_round.y != new_round.y && fabs(d.y) < 0.0005f) {
-    for (auto& ry : round_y) {
-      ry.value += old_round.y - new_round.y;
-      ry.value = std::clamp(ry.value, -0.001f, 0.001f);
-    }
-  }
   DragUpdate();
 }
 
 void DragActionBase::End() { DragEnd(); }
 
-void DragActionBase::DrawAction(gui::DrawContext& ctx) {
-  auto& canvas = ctx.canvas;
-  auto& display = ctx.display;
-  auto original = current_position - contact_point;
-  auto rounded = RoundToMilimeters(original);
-
-  auto& rx = round_x[display];
-  auto& ry = round_y[display];
-  rx.Tick(display);
-  ry.Tick(display);
-
-  auto pos = rounded + Vec2(rx, ry);
-  canvas.translate(pos.x, pos.y);
-  DragDraw(ctx);
-  canvas.translate(-pos.x, -pos.y);
-}
+void DragActionBase::DrawAction(gui::DrawContext& ctx) { DragDraw(ctx); }
 
 void DragObjectAction::DragUpdate() {
-  // Nothing to do here.
+  auto last_round = RoundToMilimeters(last_position - contact_point);
+  auto curr_round = RoundToMilimeters(current_position - contact_point);
+  if (last_round != curr_round && Length(current_position - last_position) < 0.5_mm) {
+    auto& offset = position_offset;
+    offset.acceleration = 1000;
+    offset.friction = 50;
+    offset.value += last_round - curr_round;
+    offset.value.x = std::clamp(offset.value.x, -1_mm, 1_mm);
+    offset.value.y = std::clamp(offset.value.y, -1_mm, 1_mm);
+  }
 }
 
 void DragObjectAction::DragEnd() {
@@ -70,23 +48,38 @@ void DragObjectAction::DragEnd() {
   loc.InsertHere(std::move(object));
 }
 
-void DragObjectAction::DragDraw(gui::DrawContext& ctx) { object->Draw(ctx); }
-
-DragLocationAction::DragLocationAction(Location* location) : location(location) {
-  location->drag_action = this;
+void DragObjectAction::DragDraw(gui::DrawContext& ctx) {
+  position_offset.Tick(ctx.display);
+  auto pos = TargetPositionRounded() + position_offset.value;
+  ctx.canvas.translate(pos.x, pos.y);
+  object->Draw(ctx);
+  ctx.canvas.translate(-pos.x, -pos.y);
 }
 
-DragLocationAction::~DragLocationAction() {
-  assert(location->drag_action == this);
-  location->drag_action = nullptr;
-}
+DragLocationAction::DragLocationAction(Location* location) : location(location) {}
 
-void DragLocationAction::DragUpdate() { location->position = TargetPositionRounded(); }
+DragLocationAction::~DragLocationAction() {}
+
+void DragLocationAction::DragUpdate() {
+  auto last_round = RoundToMilimeters(last_position - contact_point);
+  auto curr_round = RoundToMilimeters(current_position - contact_point);
+  if (last_round != curr_round && Length(current_position - last_position) < 0.5_mm) {
+    for (auto display : animation::displays) {
+      auto& animation_state = location->animation_state[*display];
+      auto& offset = animation_state.position_offset;
+      offset.acceleration = 1000;
+      offset.friction = 50;
+      offset.value += last_round - curr_round;
+      offset.value.x = std::clamp(offset.value.x, -1_mm, 1_mm);
+      offset.value.y = std::clamp(offset.value.y, -1_mm, 1_mm);
+    }
+  }
+  location->position = curr_round;
+}
 
 void DragLocationAction::DragEnd() { location->position = TargetPositionRounded(); }
 
 void DragLocationAction::DragDraw(gui::DrawContext&) {
   // Location is drawn by its parent Machine so nothing to do here.
 }
-
 }  // namespace automat

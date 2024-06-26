@@ -2,12 +2,12 @@
 
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 #include "animation.hh"
 #include "connection.hh"
 #include "error.hh"
 #include "object.hh"
-#include "product_ptr.hh"
 #include "run_button.hh"
 #include "string_multimap.hh"
 #include "tasks.hh"
@@ -21,7 +21,6 @@ struct ConnectionWidget;
 
 namespace automat {
 
-struct DragLocationAction;
 struct LongRunning;
 
 // Each Container holds its inner objects in Locations.
@@ -36,8 +35,6 @@ struct LongRunning;
 // container-specific functions.
 struct Location : gui::Widget {
   struct AnimationState {
-    Location* location;
-    product_holder* holder;
     animation::Spring<Vec2> position_offset;
     animation::Approach<> scale = {1};
     animation::Approach<> transparency;
@@ -54,7 +51,6 @@ struct Location : gui::Widget {
   std::string name;
   gui::RunButton run_button;
 
-  DragLocationAction* drag_action = nullptr;
   Vec2 position = {0, 0};
 
   // Connections of this Location.

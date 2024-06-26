@@ -4,21 +4,20 @@
 
 #include "action.hh"
 #include "animation.hh"
+#include "object.hh"
 
 namespace automat {
 
-struct Object;
 struct Location;
 
 struct DragActionBase : Action {
   Vec2 contact_point;
+  Vec2 last_position;
   Vec2 current_position;
 
   Vec2 TargetPosition() const;
   Vec2 TargetPositionRounded() const;
 
-  animation::PerDisplay<animation::Approach<>> round_x;
-  animation::PerDisplay<animation::Approach<>> round_y;
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
   void End() override;
@@ -30,6 +29,7 @@ struct DragActionBase : Action {
 
 struct DragObjectAction : DragActionBase {
   std::unique_ptr<Object> object;
+  animation::Spring<Vec2> position_offset;
   void DragUpdate() override;
   void DragEnd() override;
   void DragDraw(gui::DrawContext&) override;

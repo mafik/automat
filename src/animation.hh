@@ -37,10 +37,6 @@ struct Display {
   time::Timer timer;
   operator time::Timer&() { return timer; }
 
-  // Placeholder that can be used when no Window is available
-  // TODO: replace with nullptr
-  static Display kHeadless;
-
   mutable std::map<void*, std::unique_ptr<PerDisplayValueBase>> per_display_values;
 };
 

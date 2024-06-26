@@ -151,7 +151,7 @@ struct Machine : LiveObject {
   void UpdateConnectionWidgets() const;
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
-  SkMatrix TransformToChild(const Widget& child, animation::Display& actx) const override;
+  SkMatrix TransformToChild(const Widget& child, animation::Display* actx) const override;
   void Args(std::function<void(Argument&)> cb) override {}
   void Relocate(Location* parent) override {
     for (auto& it : locations) {

@@ -321,21 +321,23 @@ ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
   }
   return ControlFlow::Continue;
 }
-SkMatrix Machine::TransformToChild(const Widget& child, animation::Display& actx) const {
+SkMatrix Machine::TransformToChild(const Widget& child, animation::Display* actx) const {
   if (const Location* l = dynamic_cast<const Location*>(&child)) {
     SkMatrix transform = SkMatrix::I();
     transform.postTranslate(-l->position.x, -l->position.y);
-    if (l->drag_action) {
-      auto& round_x = l->drag_action->round_x[actx];
-      auto& round_y = l->drag_action->round_y[actx];
-      round_x.speed = 50;
-      round_y.speed = 50;
-      transform.postTranslate(-round_x, -round_y);
-    }
-    if (auto* state = l->animation_state.Find(actx)) {
-      float s = std::max<float>(state->scale, 0.00001f);
-      transform.postScale(1 / s, 1 / s);
-      transform.preTranslate(-state->position_offset.value.x, -state->position_offset.value.y);
+    if (actx) {
+      if (l->drag_action) {
+        auto& round_x = l->drag_action->round_x[*actx];
+        auto& round_y = l->drag_action->round_y[*actx];
+        round_x.speed = 50;
+        round_y.speed = 50;
+        transform.postTranslate(-round_x, -round_y);
+      }
+      if (auto* state = l->animation_state.Find(*actx)) {
+        float s = std::max<float>(state->scale, 0.00001f);
+        transform.postScale(1 / s, 1 / s);
+        transform.preTranslate(-state->position_offset.value.x, -state->position_offset.value.y);
+      }
     }
     return transform;
   } else if (const gui::ConnectionWidget* w = dynamic_cast<const gui::ConnectionWidget*>(&child)) {

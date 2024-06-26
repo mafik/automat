@@ -21,8 +21,8 @@ using Path = std::vector<Widget*>;
 
 using Visitor = std::function<ControlFlow(maf::Span<Widget*>)>;
 
-SkMatrix TransformDown(const Path& path, animation::Display&);
-SkMatrix TransformUp(const Path& path, animation::Display&);
+SkMatrix TransformDown(const Path& path, animation::Display*);
+SkMatrix TransformUp(const Path& path, animation::Display*);
 
 struct DrawContext {
   SkCanvas& canvas;
@@ -64,7 +64,7 @@ struct Widget {
   // Return true if the widget's children should be drawn outside of its bounds.
   virtual bool ChildrenOutside() const { return false; }
 
-  virtual SkMatrix TransformToChild(const Widget& child, animation::Display&) const {
+  virtual SkMatrix TransformToChild(const Widget& child, animation::Display*) const {
     return SkMatrix::I();
   }
 

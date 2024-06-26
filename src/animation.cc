@@ -3,7 +3,6 @@
 namespace automat::animation {
 
 maf::Vec<Display*> displays;
-Display Display::kHeadless;
 
 void WrapModulo(Base<float>& base, float range) {
   if (base.value - base.target > range / 2) {

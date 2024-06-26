@@ -58,7 +58,7 @@ void Pointer::Move(Vec2 position) {
       for (auto w : widgets) {
         Vec2 transformed;
         if (!path.empty()) {
-          transformed = path.back()->TransformToChild(*w, window.actx).mapPoint(point);
+          transformed = path.back()->TransformToChild(*w, &window.actx).mapPoint(point);
         } else {
           transformed = point;
         }
@@ -180,14 +180,14 @@ Vec2 Pointer::PositionWithin(Widget& widget) const {
   auto it = std::find(path.begin(), path.end(), &widget);
   auto end = it == path.end() ? path.end() : it + 1;
   Path sub_path(path.begin(), end);
-  SkMatrix transform_down = TransformDown(sub_path, window.actx);
+  SkMatrix transform_down = TransformDown(sub_path, &window.actx);
   return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
 }
 Vec2 Pointer::PositionWithinRootMachine() const {
   gui::Path root_machine_path;
   root_machine_path.push_back(path.front());
   root_machine_path.push_back(root_machine);
-  SkMatrix transform_down = TransformDown(root_machine_path, window.actx);
+  SkMatrix transform_down = TransformDown(root_machine_path, &window.actx);
   return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
 }
 animation::Display& Pointer::AnimationContext() const { return window.actx; }

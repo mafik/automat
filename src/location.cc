@@ -328,12 +328,9 @@ void Location::Run() {
 }
 
 Vec2AndDir Location::ArgStart(animation::Display* actx, Argument& arg) {
-  if (actx == nullptr) {
-    actx = &animation::Display::kHeadless;
-  }
   auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
   Path path = {ParentAs<Widget>(), (Widget*)this};
-  auto m = TransformUp(path, *actx);
+  auto m = TransformUp(path, actx);
   pos_dir.pos = m.mapPoint(pos_dir.pos);
   return pos_dir;
 }

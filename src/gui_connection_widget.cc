@@ -63,17 +63,18 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     to = &c->to;
     if (to->object) {
       to_shape = to->object->Shape();
-      SkMatrix m = TransformUp(Path{parent_machine, to}, ctx.animation_context);
+      SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.animation_context);
       to_point = m.mapPoint(Rect::TopCenter(to_shape.getBounds()));
       to_shape.transform(m);
-      to_shape.transform(TransformDown(Path{parent_machine, (Widget*)&from}, ctx.animation_context),
-                         &to_shape_from_coords);
+      to_shape.transform(
+          TransformDown(Path{parent_machine, (Widget*)&from}, &ctx.animation_context),
+          &to_shape_from_coords);
     }
   } else {
     to_point = manual_position;
   }
 
-  auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, ctx.animation_context);
+  auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, &ctx.animation_context);
   from_shape.transform(transform_from_to_machine);
 
   if (state) {

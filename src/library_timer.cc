@@ -572,7 +572,7 @@ SkPath TimerDelay::FieldShape(Object& field) const {
   return SkPath();
 }
 
-SkMatrix TimerDelay::TransformToChild(const Widget& child, animation::Display&) const {
+SkMatrix TimerDelay::TransformToChild(const Widget& child, animation::Display*) const {
   if (&child == &text_field) {
     return SkMatrix::Translate(kTextWidth / 2, gui::NumberTextField::kHeight);
   }

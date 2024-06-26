@@ -106,7 +106,7 @@ ControlFlow KeyPresser::VisitChildren(gui::Visitor& visitor) {
   return visitor(children);
 }
 
-SkMatrix KeyPresser::TransformToChild(const Widget& child, animation::Display&) const {
+SkMatrix KeyPresser::TransformToChild(const Widget& child, animation::Display*) const {
   return SkMatrix::I();
 }
 

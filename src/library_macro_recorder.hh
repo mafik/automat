@@ -47,7 +47,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
   void On() override;
   void Off() override;
 
-  SkMatrix TransformToChild(const Widget& child, animation::Display&) const override;
+  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;

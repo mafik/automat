@@ -184,7 +184,7 @@ ControlFlow Number::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-SkMatrix Number::TransformToChild(const Widget& child, animation::Display&) const {
+SkMatrix Number::TransformToChild(const Widget& child, animation::Display*) const {
   auto cell = [](int row, int col) {
     float x = kBorderWidth + kAroundWidgetMargin + col * (kButtonWidth + kBetweenButtonsMargin);
     float y = kBorderWidth + kAroundWidgetMargin + row * (kButtonHeight + kBetweenButtonsMargin);

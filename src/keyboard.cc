@@ -76,7 +76,7 @@ void Caret::Release() {
 SkPath Caret::MakeRootShape(animation::Display& actx) const {
   auto begin = find(widget_path.begin(), widget_path.end(), root_machine);
   Path sub_path(begin, widget_path.end());
-  SkMatrix text_to_root = TransformUp(sub_path, actx);
+  SkMatrix text_to_root = TransformUp(sub_path, &actx);
   return shape.makeTransform(text_to_root);
 }
 

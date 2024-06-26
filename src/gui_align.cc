@@ -19,7 +19,7 @@ ControlFlow AlignCenter::VisitChildren(Visitor& visitor) {
   }
   return ControlFlow::Continue;
 }
-SkMatrix AlignCenter::TransformToChild(const Widget& child_arg, animation::Display&) const {
+SkMatrix AlignCenter::TransformToChild(const Widget& child_arg, animation::Display*) const {
   if (&child_arg != this->child.get()) {
     return SkMatrix::I();
   }

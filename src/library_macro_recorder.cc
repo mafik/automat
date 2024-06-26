@@ -83,7 +83,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   {
     auto sharingan = SharinganColor();
 
-    auto local_to_window = TransformUp(dctx.path, dctx.animation_context);
+    auto local_to_window = TransformUp(dctx.path, &dctx.animation_context);
 
     auto top_window = (Window*)dctx.path[0];
 
@@ -327,7 +327,7 @@ void MacroRecorder::KeyloggerKeyUp(gui::Key key) {
   RecordKeyEvent(*this, key.physical, false);
 }
 
-SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Display&) const {
+SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Display*) const {
   if (&child == &record_button) {
     return SkMatrix::Translate(-17.5_mm, -3.2_mm);
   }

@@ -1104,7 +1104,8 @@ SkPath TrackBase::Shape() const {
   } else {
     distance_to_seconds = 100;  // 1 cm = 1 second
   }
-  Rect rect = Rect(0, -kTrackHeight / 2, timestamps.back() / distance_to_seconds, kTrackHeight / 2);
+  time::T end_time = timeline ? timeline->MaxTrackLength() : timestamps.back();
+  Rect rect = Rect(0, -kTrackHeight / 2, end_time / distance_to_seconds, kTrackHeight / 2);
   if (timeline) {
     // Clip to the width of the timeline window
     rect.right = min(rect.right, (float)TimeAtX(*timeline, kWindowWidth / 2) / distance_to_seconds);

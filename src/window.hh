@@ -25,11 +25,11 @@ struct PrototypeButton : Widget {
   void Draw(DrawContext& ctx) const override { proto->Draw(ctx); }
   SkPath Shape() const override { return proto->Shape(); }
 
-  void PointerOver(Pointer& pointer, animation::Context&) override {
+  void PointerOver(Pointer& pointer, animation::Display&) override {
     pointer.PushIcon(Pointer::kIconHand);
   }
 
-  void PointerLeave(Pointer& pointer, animation::Context&) override { pointer.PopIcon(); }
+  void PointerLeave(Pointer& pointer, animation::Display&) override { pointer.PopIcon(); }
 
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton btn) override;
 };
@@ -123,7 +123,7 @@ struct Window final : Widget {
     });
     return result;
   }
-  SkMatrix TransformToChild(const Widget& child, animation::Context&) const override {
+  SkMatrix TransformToChild(const Widget& child, animation::Display&) const override {
     for (int i = 0; i < prototype_buttons.size(); i++) {
       if (&child == &prototype_buttons[i]) {
         return SkMatrix::Translate(-prototype_button_positions[i].x,
@@ -154,7 +154,7 @@ struct Window final : Widget {
   std::deque<Vec3> camera_timeline;
   std::deque<time::SystemPoint> timeline;
 
-  animation::Context actx;
+  animation::Display actx;
 
   std::vector<PrototypeButton> prototype_buttons;
   std::vector<Vec2> prototype_button_positions;

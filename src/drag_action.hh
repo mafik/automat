@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "action.hh"
+#include "animation.hh"
 
 namespace automat {
 
@@ -16,8 +17,8 @@ struct DragActionBase : Action {
   Vec2 TargetPosition() const;
   Vec2 TargetPositionRounded() const;
 
-  maf::DoublePtr<animation::Approach<>> round_x;
-  maf::DoublePtr<animation::Approach<>> round_y;
+  animation::PerDisplay<animation::Approach<>> round_x;
+  animation::PerDisplay<animation::Approach<>> round_y;
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
   void End() override;

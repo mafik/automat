@@ -327,7 +327,7 @@ void MacroRecorder::KeyloggerKeyUp(gui::Key key) {
   RecordKeyEvent(*this, key.physical, false);
 }
 
-SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Context&) const {
+SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Display&) const {
   if (&child == &record_button) {
     return SkMatrix::Translate(-17.5_mm, -3.2_mm);
   }

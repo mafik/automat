@@ -21,7 +21,6 @@
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
-#include "library_macros.hh"
 #include "math.hh"
 #include "number_text_field.hh"
 #include "svg.hh"
@@ -1064,7 +1063,7 @@ ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-SkMatrix Timeline::TransformToChild(const Widget& child, animation::Context& actx) const {
+SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display& actx) const {
   if (&child == &run_button) {
     return SkMatrix::Translate(kPlayButtonRadius, -kDisplayMargin);
   } else if (&child == &prev_button) {

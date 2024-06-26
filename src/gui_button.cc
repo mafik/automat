@@ -14,14 +14,14 @@
 
 namespace automat::gui {
 
-void Button::PointerOver(Pointer& pointer, animation::Context& actx) {
+void Button::PointerOver(Pointer& pointer, animation::Display& actx) {
   auto& hover = hover_ptr[actx];
   hover.target = 1;
   hover.speed = 5;
   pointer.PushIcon(Pointer::kIconHand);
 }
 
-void Button::PointerLeave(Pointer& pointer, animation::Context& actx) {
+void Button::PointerLeave(Pointer& pointer, animation::Display& actx) {
   hover_ptr[actx].target = 0;
   pointer.PopIcon();
 }

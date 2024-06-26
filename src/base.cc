@@ -321,7 +321,7 @@ ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
   }
   return ControlFlow::Continue;
 }
-SkMatrix Machine::TransformToChild(const Widget& child, animation::Context& actx) const {
+SkMatrix Machine::TransformToChild(const Widget& child, animation::Display& actx) const {
   if (const Location* l = dynamic_cast<const Location*>(&child)) {
     SkMatrix transform = SkMatrix::I();
     transform.postTranslate(-l->position.x, -l->position.y);

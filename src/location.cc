@@ -327,9 +327,9 @@ void Location::Run() {
   }
 }
 
-Vec2AndDir Location::ArgStart(animation::Context* actx, Argument& arg) {
+Vec2AndDir Location::ArgStart(animation::Display* actx, Argument& arg) {
   if (actx == nullptr) {
-    actx = &animation::Context::kHeadless;
+    actx = &animation::Display::kHeadless;
   }
   auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
   Path path = {ParentAs<Widget>(), (Widget*)this};

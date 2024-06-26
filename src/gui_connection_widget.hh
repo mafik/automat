@@ -16,7 +16,7 @@ struct ConnectionWidget;
 
 struct DragConnectionAction : Action {
   ConnectionWidget& widget;
-  animation::Context* animation_context;
+  animation::Display* animation_context;
 
   Vec2 grab_offset;
   DragConnectionAction(ConnectionWidget&);

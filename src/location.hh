@@ -5,7 +5,6 @@
 
 #include "animation.hh"
 #include "connection.hh"
-#include "double_ptr.hh"
 #include "error.hh"
 #include "object.hh"
 #include "product_ptr.hh"
@@ -45,7 +44,7 @@ struct Location : gui::Widget {
     animation::Approach<> highlight;
   };
 
-  maf::DoublePtr<AnimationState> animation_state;
+  animation::PerDisplay<AnimationState> animation_state;
 
   Location* parent;
 
@@ -247,7 +246,7 @@ struct Location : gui::Widget {
 
   // Returns the position in parent machine's coordinates where the connections for this argument
   // should start.
-  Vec2AndDir ArgStart(animation::Context*, Argument&);
+  Vec2AndDir ArgStart(animation::Display*, Argument&);
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   bool ChildrenOutside() const override;
 

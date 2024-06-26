@@ -162,7 +162,7 @@ struct Caret final {
   Caret(Keyboard& keyboard);
   ~Caret() = default;
   void PlaceIBeam(Vec2 position);
-  SkPath MakeRootShape(animation::Context&) const;
+  SkPath MakeRootShape(animation::Display&) const;
 
   // Called by the CaretOwner to release this Caret.
   void Release();
@@ -305,7 +305,7 @@ struct Keyboard final {
   // A keyboard can write to multiple carets at the same time! (not finished!)
   std::set<std::unique_ptr<Caret>> carets;
   std::bitset<static_cast<size_t>(AnsiKey::Count)> pressed_keys;
-  maf::DoublePtr<KeyboardAnimation> anim;
+  animation::PerDisplay<KeyboardAnimation> anim;
 
   std::unique_ptr<KeyboardGrab> grab;
 

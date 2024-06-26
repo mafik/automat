@@ -27,7 +27,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
     float eye_rotation = 0;
   };
 
-  DoublePtr<AnimationState> animation_state_ptr;
+  animation::PerDisplay<AnimationState> animation_state_ptr;
   gui::Keylogging* keylogging = nullptr;
   GlassRunButton record_button;
 
@@ -47,7 +47,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
   void On() override;
   void Off() override;
 
-  SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
+  SkMatrix TransformToChild(const Widget& child, animation::Display&) const override;
 
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;

@@ -73,7 +73,7 @@ void Caret::Release() {
   }
 }
 
-SkPath Caret::MakeRootShape(animation::Context& actx) const {
+SkPath Caret::MakeRootShape(animation::Display& actx) const {
   auto begin = find(widget_path.begin(), widget_path.end(), root_machine);
   Path sub_path(begin, widget_path.end());
   SkMatrix text_to_root = TransformUp(sub_path, actx);
@@ -194,7 +194,7 @@ enum class CaretAnimAction { Keep, Delete };
 
 static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, Caret* caret) {
   SkCanvas& canvas = ctx.canvas;
-  animation::Context& actx = ctx.animation_context;
+  animation::Display& actx = ctx.animation_context;
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
   paint.setAntiAlias(true);
@@ -252,7 +252,7 @@ CaretAnimation::CaretAnimation(const Keyboard& keyboard)
 
 void Keyboard::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
-  animation::Context& actx = ctx.animation_context;
+  animation::Display& actx = ctx.animation_context;
   // Iterate through each Caret & CaretAnimation, and draw them.
   // After a Caret has been removed, its CaretAnimation is kept around for some
   // time to animate it out.

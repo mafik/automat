@@ -7,7 +7,7 @@
 #include "time.hh"
 
 namespace automat::animation {
-struct Context;
+struct Display;
 }  // namespace automat::animation
 
 namespace automat::gui {
@@ -51,7 +51,7 @@ struct Pointer final {
   Vec2 PositionWithin(Widget&) const;
   Vec2 PositionWithinRootMachine() const;
 
-  animation::Context& AnimationContext() const;
+  animation::Display& AnimationContext() const;
 
   Window& window;
   // The main keyboard associated with this pointer device. May be null!

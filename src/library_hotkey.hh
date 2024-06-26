@@ -55,7 +55,7 @@ struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
 
-  SkMatrix TransformToChild(const Widget& child, animation::Context&) const override;
+  SkMatrix TransformToChild(const Widget& child, animation::Display&) const override;
 };
 
 }  // namespace automat::library

@@ -190,5 +190,5 @@ Vec2 Pointer::PositionWithinRootMachine() const {
   SkMatrix transform_down = TransformDown(root_machine_path, window.actx);
   return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
 }
-animation::Context& Pointer::AnimationContext() const { return window.actx; }
+animation::Display& Pointer::AnimationContext() const { return window.actx; }
 }  // namespace automat::gui

@@ -21,14 +21,14 @@ using Path = std::vector<Widget*>;
 
 using Visitor = std::function<ControlFlow(maf::Span<Widget*>)>;
 
-SkMatrix TransformDown(const Path& path, animation::Context&);
-SkMatrix TransformUp(const Path& path, animation::Context&);
+SkMatrix TransformDown(const Path& path, animation::Display&);
+SkMatrix TransformUp(const Path& path, animation::Display&);
 
 struct DrawContext {
   SkCanvas& canvas;
-  animation::Context& animation_context;
+  animation::Display& animation_context;
   Path path;
-  DrawContext(SkCanvas& canvas, animation::Context& actx)
+  DrawContext(SkCanvas& canvas, animation::Display& actx)
       : canvas(canvas), animation_context(actx), path() {}
 };
 
@@ -44,8 +44,8 @@ struct Widget {
     return info.name();
   }
 
-  virtual void PointerOver(Pointer&, animation::Context&) {}
-  virtual void PointerLeave(Pointer&, animation::Context&) {}
+  virtual void PointerOver(Pointer&, animation::Display&) {}
+  virtual void PointerLeave(Pointer&, animation::Display&) {}
   virtual void Draw(DrawContext&) const = 0;
   virtual SkPath Shape() const = 0;
   virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {
@@ -64,7 +64,7 @@ struct Widget {
   // Return true if the widget's children should be drawn outside of its bounds.
   virtual bool ChildrenOutside() const { return false; }
 
-  virtual SkMatrix TransformToChild(const Widget& child, animation::Context&) const {
+  virtual SkMatrix TransformToChild(const Widget& child, animation::Display&) const {
     return SkMatrix::I();
   }
 

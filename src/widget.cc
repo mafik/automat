@@ -34,7 +34,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
   const_cast<Widget*>(this)->VisitChildren(visitor);
 }
 
-SkMatrix TransformDown(const Path& path, animation::Context& actx) {
+SkMatrix TransformDown(const Path& path, animation::Display& actx) {
   SkMatrix ret = SkMatrix::I();
   for (int i = 1; i < path.size(); ++i) {
     Widget& parent = *path[i - 1];
@@ -44,7 +44,7 @@ SkMatrix TransformDown(const Path& path, animation::Context& actx) {
   return ret;
 }
 
-SkMatrix TransformUp(const Path& path, animation::Context& actx) {
+SkMatrix TransformUp(const Path& path, animation::Display& actx) {
   SkMatrix down = TransformDown(path, actx);
   SkMatrix up;
   if (down.invert(&up)) {

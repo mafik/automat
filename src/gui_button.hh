@@ -6,7 +6,6 @@
 
 #include "animation.hh"
 #include "color.hh"
-#include "double_ptr.hh"
 #include "gui_constants.hh"
 #include "widget.hh"
 
@@ -15,12 +14,12 @@ namespace automat::gui {
 struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
 
-  maf::DoublePtr<animation::Approach<>> hover_ptr;
+  animation::PerDisplay<animation::Approach<>> hover_ptr;
   int press_action_count = 0;
 
   Button();
-  void PointerOver(Pointer&, animation::Context&) override;
-  void PointerLeave(Pointer&, animation::Context&) override;
+  void PointerOver(Pointer&, animation::Display&) override;
+  void PointerLeave(Pointer&, animation::Display&) override;
   void Draw(DrawContext&) const override;
   float Height() const;
   virtual SkRRect RRect() const;
@@ -54,7 +53,7 @@ struct CircularButtonMixin : virtual Button {
 };
 
 struct ToggleButton : virtual Button {
-  maf::DoublePtr<animation::Approach<>> filling_ptr;
+  animation::PerDisplay<animation::Approach<>> filling_ptr;
 
   ToggleButton() : Button() {}
   void Draw(DrawContext&) const override;

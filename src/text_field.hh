@@ -43,12 +43,12 @@ struct TextField : Widget, CaretOwner {
       }
     }
   };
-  maf::DoublePtr<HoverState> hover_ptr;
+  animation::PerDisplay<HoverState> hover_ptr;
   std::optional<Argument*> argument;
 
   TextField(std::string* text, float width) : text(text), width(width) {}
-  void PointerOver(Pointer&, animation::Context&) override;
-  void PointerLeave(Pointer&, animation::Context&) override;
+  void PointerOver(Pointer&, animation::Display&) override;
+  void PointerLeave(Pointer&, animation::Display&) override;
   void Draw(DrawContext&) const override;
   SkPath Shape() const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;

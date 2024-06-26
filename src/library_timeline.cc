@@ -1123,18 +1123,22 @@ void OnOffTrack::Draw(gui::DrawContext& dctx) const {
   auto shape = Shape();
   Rect rect;
   shape.isRect(&rect.sk);
-  for (int i = 0; i + 1 < timestamps.size(); i += 2) {
-    float distance_to_seconds = DistanceToSeconds(*timeline);
-    float start = timestamps[i] / distance_to_seconds;
-    float end = timestamps[i + 1] / distance_to_seconds;
-
+  float distance_to_seconds = DistanceToSeconds(*timeline);
+  auto DrawSegment = [&](time::T start_t, time::T end_t) {
+    float start = start_t / distance_to_seconds;
+    float end = end_t / distance_to_seconds;
     if (end < rect.left || start > rect.right) {
-      continue;
+      return;
     }
     start = max(start, rect.left);
     end = min(end, rect.right);
-
     dctx.canvas.drawLine({start, 0}, {end, 0}, kOnOffPaint);
+  };
+  for (int i = 0; i + 1 < timestamps.size(); i += 2) {
+    DrawSegment(timestamps[i], timestamps[i + 1]);
+  }
+  if (!isnan(on_at)) {
+    DrawSegment(on_at, (dctx.display.timer.steady_now - timeline->recording.started_at).count());
   }
 }
 

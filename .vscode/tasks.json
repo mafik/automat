@@ -6,7 +6,7 @@
     {
       "label": "debug_automat",
       "type": "shell",
-      "command": "./run.py 'link debug_automat'",
+      "command": "./run 'link debug_automat'",
       "presentation": {
         "reveal": "silent"
       }

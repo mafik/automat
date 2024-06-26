@@ -70,17 +70,20 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   mutable animation::Approach<> zoom;  // stores the time in seconds
 
   enum State { kPaused, kPlaying, kRecording } state;
+  time::T timeline_length = 0;
 
   struct Paused {
     time::T playback_offset;  // Used when playback is paused
   };
 
   struct Playing {
-    time::SteadyPoint playback_started_at;  // Used when playback is active
+    time::SteadyPoint started_at;  // Used when playback is active
   };
 
   struct Recording {
-    time::SteadyPoint recording_started_at;  // Used when recording is active
+    time::SteadyPoint started_at;  // Used when recording is active
+    // there is no point in staring the length of the timeline because it's always `now -
+    // started_at`
   };
 
   union {
@@ -105,6 +108,9 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   void Cancel() override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
+
+  void BeginRecording();
+  void StopRecording();
 
   time::T MaxTrackLength() const;
 };

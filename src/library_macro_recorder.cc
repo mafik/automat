@@ -238,21 +238,7 @@ SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
 LongRunning* MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);
-    // TODO: check if the nearby timeline already has some data and append new stuff at the end
-    switch (timeline->state) {
-      case Timeline::kPaused:
-        timeline->state = Timeline::kRecording;
-        timeline->recording.recording_started_at =
-            time::SteadyNow() - time::Duration(timeline->paused.playback_offset);
-        break;
-      case Timeline::kRecording:
-        // WTF? Maybe show an error?
-        break;
-      case Timeline::kPlaying:
-        timeline->state = Timeline::kRecording;
-        timeline->recording.recording_started_at = timeline->playing.playback_started_at;
-        break;
-    }
+    timeline->BeginRecording();
     keylogging = &gui::keyboard->BeginKeylogging(*this);
   }
   return this;
@@ -260,8 +246,7 @@ LongRunning* MacroRecorder::OnRun(Location& here) {
 void MacroRecorder::Cancel() {
   if (keylogging) {
     if (auto timeline = FindTimeline(*this)) {
-      timeline->state = Timeline::kPaused;
-      timeline->paused.playback_offset = timeline->MaxTrackLength();
+      timeline->StopRecording();
     }
     keylogging->Release();
     keylogging = nullptr;
@@ -313,8 +298,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     return;
   }
 
-  track->timestamps.push_back(
-      (time::SteadyNow() - timeline->recording.recording_started_at).count());
+  track->timestamps.push_back((time::SteadyNow() - timeline->recording.started_at).count());
 }
 
 void MacroRecorder::KeyloggerKeyDown(gui::Key key) {

@@ -9,7 +9,7 @@
 #include <cstdint>
 
 #include "../build/generated/embedded.hh"
-#include "gui_constants.hh"
+#include "animation.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
 #include "library_macros.hh"
@@ -186,8 +186,8 @@ static void PositionBelow(Location& origin, Location& below) {
 }
 
 static void AnimateGrowFrom(Location& source, Location& grown) {
-  for (auto* window : gui::windows) {
-    auto& animation_state = grown.animation_state[window->display];
+  for (auto* display : animation::displays) {
+    auto& animation_state = grown.animation_state[*display];
     animation_state.scale.target = 1;
     animation_state.scale.speed = 10;
     animation_state.scale.value = 0.5;
@@ -288,10 +288,8 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
   }
 
   if (track_index == -1) {
-    // TODO: animate track creation
     timeline->AddOnOffTrack(key_name);
     track_index = timeline->tracks.size() - 1;
-    // TODO: animate key presser creation
     Location& key_presser_loc = machine->Create<KeyPresser>();
     KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();
     key_presser->SetKey(key);
@@ -299,6 +297,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     Vec2AndDir arg_start = timeline->here->ArgStart(nullptr, *timeline->track_args.back());
     key_presser_loc.position = arg_start.pos + Vec2(2_cm, 0) * track_index + Vec2(2_cm, -1.8_cm) -
                                key_presser_shape.TopCenter();
+    AnimateGrowFrom(*macro_recorder.here, key_presser_loc);
     timeline->here->ConnectTo(key_presser_loc, key_name);
   }
 

@@ -45,3 +45,7 @@ inline Vec3 SkColorToVec3(SkColor color) {
 }
 
 }  // namespace automat
+
+namespace automat::color {
+constexpr SkColor kParrotRed = "#bd1929"_color;
+}  // namespace automat::color

@@ -4,6 +4,7 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "color.hh"
 #include "keyboard.hh"
 #include "on_off.hh"
 #include "run_button.hh"
@@ -13,7 +14,7 @@ namespace automat::library {
 
 struct GlassRunButton : gui::PowerButton {
   GlassRunButton(OnOff* on_off) : gui::PowerButton(on_off) {}
-  SkColor ForegroundColor() const override { return "#bd1929"_color; }
+  SkColor ForegroundColor(gui::DrawContext&) const override { return color::kParrotRed; }
   // SkColor BackgroundColor() const override { return "#490b13"_color; }
 };
 

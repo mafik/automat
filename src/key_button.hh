@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "gui_button.hh"
+#include "gui_constants.hh"
 
 namespace automat::library {
 
@@ -32,8 +33,8 @@ struct KeyButton : virtual gui::Button, ChildButtonMixin {
   KeyButton(std::unique_ptr<Widget>&& child, SkColor color, float width);
   void Activate(gui::Pointer&) override;
   SkRRect RRect() const override;
-  SkColor ForegroundColor() const override { return fg; }
-  void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg) const override;
+  SkColor ForegroundColor(gui::DrawContext&) const override { return fg; }
+  void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg, Widget* child) const override;
 };
 
 std::unique_ptr<Widget> MakeKeyLabelWidget(maf::StrView label);

@@ -6,7 +6,7 @@
 
 #include "animation.hh"
 #include "color.hh"
-#include "gui_constants.hh"
+#include "units.hh"
 #include "widget.hh"
 
 namespace automat::gui {
@@ -28,12 +28,12 @@ struct Button : Widget {
   virtual void Activate(gui::Pointer&) {}
   virtual Widget* Child() const { return nullptr; }
   SkRect ChildBounds() const;
-  virtual SkColor ForegroundColor() const { return "#d69d00"_color; }
+  virtual SkColor ForegroundColor(DrawContext&) const { return "#d69d00"_color; }
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
-  virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg) const;
+  virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg, Widget* child) const;
   void DrawButton(DrawContext&, SkColor bg) const;
 };
 
@@ -58,6 +58,7 @@ struct ToggleButton : virtual Button {
   ToggleButton() : Button() {}
   void Draw(DrawContext&) const override;
   virtual bool Filled() const { return false; }
+  virtual Widget* FilledChild() const { return Child(); }
 };
 
 }  // namespace automat::gui

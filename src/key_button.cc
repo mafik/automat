@@ -59,7 +59,7 @@ static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, S
   return SkGradientShader::MakeSweep(center.x, center.y, colors, pos, 13);
 }
 
-void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) const {
+void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg, Widget* child) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
   auto& hover = hover_ptr[display];
@@ -100,7 +100,7 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) co
                                        bottom_color));
   canvas.drawDRRect(key_base, key_face, side_paint);
 
-  if (auto child = Child()) {
+  if (child) {
     if (auto paint = PaintMixin::Get(child)) {
       paint->setColor(fg);
       paint->setAntiAlias(true);

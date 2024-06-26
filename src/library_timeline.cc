@@ -17,6 +17,7 @@
 #include "arcline.hh"
 #include "argument.hh"
 #include "base.hh"
+#include "color.hh"
 #include "font.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
@@ -69,6 +70,8 @@ constexpr float kTrackWidth = kWindowWidth - 2 * kTrackMargin;
 
 constexpr float kZoomRadius = 3_cm;
 constexpr float kZoomVisible = kRulerHeight + kMarginAroundTracks / 2;
+
+constexpr SkColor kOrange = "#e24e1f"_color;
 
 static constexpr Vec2 ZoomDialCenter(float window_height) {
   return {kWindowWidth / 4, -window_height - kZoomRadius + kZoomVisible};
@@ -136,7 +139,7 @@ const SkPaint kPlasticPaint = []() {
 
 const SkPaint kDisplayCurrentPaint = []() {
   SkPaint p;
-  p.setColor("#e24e1f"_color);
+  p.setColor(kOrange);
   return p;
 }();
 
@@ -185,7 +188,7 @@ const SkPaint kTickPaint = []() {
 const SkPaint kBridgeHandlePaint = []() {
   SkPaint p;
   SkPoint pts[2] = {{0, -kRulerHeight - kMarginAroundTracks}, {0, -kRulerHeight}};
-  SkColor colors[2] = {"#e24e1f"_color, "#f17149"_color};
+  SkColor colors[2] = {kOrange, "#f17149"_color};
   auto shader = SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
   p.setShader(shader);
   return p;
@@ -193,7 +196,7 @@ const SkPaint kBridgeHandlePaint = []() {
 
 const SkPaint kBridgeLinePaint = []() {
   SkPaint p;
-  p.setColor("#e24e1f"_color);
+  p.setColor(kOrange);
   p.setStyle(SkPaint::kStroke_Style);
   p.setStrokeWidth(1_mm);
   return p;
@@ -1250,10 +1253,56 @@ bool OnOffTrack::IsOn() const {
   return on;
 }
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
-SkColor PrevButton::ForegroundColor() const { return "#404040"_color; }
+SkColor PrevButton::ForegroundColor(gui::DrawContext&) const { return "#404040"_color; }
 SkColor PrevButton::BackgroundColor() const { return kTimelineButtonBackground; }
-SkColor NextButton::ForegroundColor() const { return "#404040"_color; }
+SkColor NextButton::ForegroundColor(gui::DrawContext&) const { return "#404040"_color; }
 SkColor NextButton::BackgroundColor() const { return kTimelineButtonBackground; }
+
 SkColor TimelineRunButton::BackgroundColor() const { return kTimelineButtonBackground; }
-SkColor TimelineRunButton::ForegroundColor() const { return "#e24e1f"_color; }
+SkColor TimelineRunButton::ForegroundColor(gui::DrawContext& dctx) const {
+  if (rec) {
+    return color::MixColors(kOrange, color::kParrotRed, filling_ptr[dctx.display].value);
+  } else {
+    return kOrange;
+  }
+}
+bool TimelineRunButton::Filled() const {
+  if (location == nullptr) {
+    return false;
+  }
+  return location->run_task.scheduled || (location->long_running != nullptr) ||
+         location->As<Timeline>()->state == Timeline::kRecording;
+}
+static Widget* GetRecordingIcon() {
+  static std::unique_ptr<gui::ShapeWidget> rec_icon = []() {
+    SkPath path;
+    path.addCircle(0, 0, 2.5_mm);
+    return std::make_unique<gui::ShapeWidget>(path);
+  }();
+  return rec_icon.get();
+}
+static Widget* GetPausedIcon() {
+  static std::unique_ptr<gui::ShapeWidget> paused_icon = []() {
+    SkPath path;
+    path.addRect(-1.5_mm, -1.5_mm, -0.5_mm, 1.5_mm);
+    path.addRect(0.5_mm, -1.5_mm, 1.5_mm, 1.5_mm);
+    return std::make_unique<gui::ShapeWidget>(path);
+  }();
+  return paused_icon.get();
+}
+gui::Widget* TimelineRunButton::Child() const { return child.get(); }
+gui::Widget* TimelineRunButton::FilledChild() const {
+  auto timeline_state = location->As<Timeline>()->state;
+  if (timeline_state == Timeline::kRecording) {
+    rec = true;
+  } else if (timeline_state == Timeline::kPlaying) {
+    rec = false;
+  }
+  if (rec) {
+    return GetRecordingIcon();
+  } else {
+    return GetPausedIcon();
+  }
+}
+
 }  // namespace automat::library

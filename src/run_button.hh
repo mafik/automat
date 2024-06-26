@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gui_button.hh"
+#include "gui_constants.hh"
 #include "on_off.hh"
 
 namespace automat {
@@ -35,7 +36,7 @@ struct RunButton : RunLocationMixin, CircularButtonMixin {
 struct PowerButton : RunOnOffMixin {
   std::unique_ptr<Widget> child;
   PowerButton(OnOff* target);
-  SkColor ForegroundColor() const override { return "#fa2305"_color; }
+  SkColor ForegroundColor(DrawContext&) const override { return "#fa2305"_color; }
   Widget* Child() const override { return child.get(); }
 };
 

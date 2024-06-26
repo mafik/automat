@@ -15,21 +15,25 @@ namespace automat::library {
 struct PrevButton : virtual gui::Button, gui::ChildButtonMixin, gui::CircularButtonMixin {
   PrevButton();
   void Activate(gui::Pointer&) override;
-  SkColor ForegroundColor() const override;
+  SkColor ForegroundColor(gui::DrawContext&) const override;
   SkColor BackgroundColor() const override;
 };
 
 struct NextButton : virtual gui::Button, gui::ChildButtonMixin, gui::CircularButtonMixin {
   NextButton();
   void Activate(gui::Pointer&) override;
-  SkColor ForegroundColor() const override;
+  SkColor ForegroundColor(gui::DrawContext&) const override;
   SkColor BackgroundColor() const override;
 };
 
 struct TimelineRunButton : virtual gui::Button, gui::RunButton {
+  mutable bool rec = false;
   TimelineRunButton();
-  SkColor ForegroundColor() const override;
+  SkColor ForegroundColor(gui::DrawContext&) const override;
   SkColor BackgroundColor() const override;
+  bool Filled() const override;
+  Widget* FilledChild() const override;
+  Widget* Child() const override;
 };
 
 struct Timeline;

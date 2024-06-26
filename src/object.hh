@@ -49,6 +49,7 @@ struct Object : gui::Widget {
   virtual void Args(std::function<void(Argument&)> cb) {}
 
   virtual Vec2AndDir ArgStart(Argument&);
+  virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;
 
   virtual void Updated(Location& here, Location& updated);
   virtual void Errored(Location& here, Location& errored) {}

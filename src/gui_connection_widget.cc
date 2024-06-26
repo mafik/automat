@@ -64,15 +64,11 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     to = &c->to;
     if (to->object) {
       to_shape = to->object->Shape();
-      auto to_bounds = to_shape.getBounds();
+      to->object->ConnectionPositions(to_points);
       SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);
-      to_points.emplace_back(
-          Vec2AndDir{.pos = m.mapPoint(Rect::TopCenter(to_bounds)), .dir = -M_PI / 2});
-      to_points.emplace_back(
-          Vec2AndDir{.pos = m.mapPoint(Rect::RightCenter(to_bounds)), .dir = M_PI});
-      to_points.emplace_back(Vec2AndDir{.pos = m.mapPoint(Rect::LeftCenter(to_bounds)), .dir = 0});
-      to_points.emplace_back(
-          Vec2AndDir{.pos = m.mapPoint(Rect::BottomCenter(to_bounds)), .dir = M_PI / 2});
+      for (auto& vec_and_dir : to_points) {
+        vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
+      }
       to_shape.transform(m);
       to_shape.transform(TransformDown(Path{parent_machine, (Widget*)&from}, &ctx.display),
                          &to_shape_from_coords);

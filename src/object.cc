@@ -123,4 +123,15 @@ Vec2AndDir Object::ArgStart(Argument& arg) {
       .dir = -std::numbers::pi / 2,
   };
 }
+
+void Object::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
+  // By default just one position on the top of the bounding box.
+  auto shape = Shape();
+  Rect bounds = shape.getBounds();
+  out_positions.push_back(Vec2AndDir{
+      .pos = bounds.TopCenter(),
+      .dir = -std::numbers::pi / 2,
+  });
+}
+
 }  // namespace automat

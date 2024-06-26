@@ -980,6 +980,7 @@ struct MeshWithUniforms {
 struct BlackCasingUniforms {
   float plug_width_pixels;
   Vec3 tint;
+  float light_dir;
 };
 
 struct BlackCasing : MeshWithUniforms<BlackCasingUniforms> {
@@ -992,6 +993,7 @@ struct BlackCasing : MeshWithUniforms<BlackCasingUniforms> {
   void DrawState(SkCanvas& canvas, OpticalConnectorState& state) {
     BlackCasingUniforms& u = GetUniforms();
     u.tint = SkColorToVec3(state.tint);
+    u.light_dir = M_PI / 2 - state.sections.front().dir - state.sections.front().true_dir_offset;
     Draw(canvas);
   }
 };
@@ -1177,11 +1179,19 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
                 .name = SkString("light"),
             }};
         auto vs = SkString(R"(
+      uniform float plug_width_pixels;
+      layout(color) uniform float3 tint;
+      uniform float light_dir;
+
       Varyings main(const Attributes attrs) {
         Varyings v;
         v.position = attrs.position;
         v.uv = attrs.uv;
-        v.light = attrs.uv.y;
+        float cos_light_dir = cos(light_dir);
+        float sin_light_dir = sin(light_dir);
+        vec2 center = vec2(0.5, 0.5);
+        vec2 delta = attrs.uv - center;
+        v.light = cos_light_dir * delta.y - sin_light_dir * delta.x + center.y;
         return v;
       }
     )");

@@ -64,7 +64,7 @@ struct OpticalConnectorState {
 };
 
 void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2AndDir start,
-                          maf::Optional<Vec2> end);
+                          maf::Span<Vec2AndDir> end_candidates);
 
 void DrawOpticalConnector(DrawContext&, OpticalConnectorState&);
 

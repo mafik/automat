@@ -20,7 +20,6 @@
 #include "argument.hh"
 #include "color.hh"
 #include "font.hh"
-#include "gui_constants.hh"
 #include "log.hh"
 #include "math.hh"
 #include "on_off.hh"
@@ -135,13 +134,9 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
   return cable;
 }
 
-static ArcLine RoutCableStraight(Vec2AndDir start, Vec2 cable_end) {
+static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end) {
   float radius = 1_cm;
   ArcLine cable = ArcLine(start.pos, start.dir);
-  // check if the end point is on the left or right side of start (point + dir)
-  Vec2 relative_end = cable_end - start.pos;
-  float end_dir = atan(relative_end);
-  float delta_dir = NormalizeAngle(end_dir - start.dir);
 
   float best_start_turn;
   float best_end_turn;
@@ -152,7 +147,8 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2 cable_end) {
     Vec2 start_circle_center =
         start.pos + Vec2::Polar(start.dir + (start_left ? M_PI / 2 : -M_PI / 2), radius);
     for (bool end_left : {false, true}) {
-      Vec2 end_circle_center = cable_end + Vec2(end_left ? radius : -radius, 0);
+      Vec2 end_circle_center =
+          end.pos + Vec2::Polar(end.dir + (end_left ? M_PI / 2 : -M_PI / 2), radius);
       Vec2 circle_diff = end_circle_center - start_circle_center;
       float circle_dist = Length(circle_diff);
       float circle_angle = atan(circle_diff);
@@ -177,7 +173,7 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2 cable_end) {
         start_turn -= 2 * M_PI;
       }
 
-      float end_turn = -M_PI / 2 - start_turn;
+      float end_turn = end.dir - start_turn;
       while (end_left && end_turn < -kEpsilon) {
         end_turn += 2 * M_PI;
       }
@@ -204,12 +200,27 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2 cable_end) {
   return cable;
 }
 
-static ArcLine RouteCable(Vec2AndDir start, Vec2 cable_end) {
-  if (fabsf(start.dir + (float)M_PI / 2) < 0.000001) {
-    return RouteCableDown(start, cable_end);
+static ArcLine RouteCableOneEnd(Vec2AndDir start, Vec2AndDir end) {
+  if (fabsf(start.dir + (float)M_PI / 2) < 0.000001 &&
+      fabsf(end.dir + (float)M_PI / 2) < 0.000001) {
+    return RouteCableDown(start, end.pos);
   } else {
-    return RoutCableStraight(start, cable_end);
+    return RoutCableStraight(start, end);
   }
+}
+
+static ArcLine RouteCable(Vec2AndDir start, maf::Span<Vec2AndDir> cable_ends) {
+  float best_total_length = HUGE_VALF;
+  ArcLine best_route = ArcLine(start.pos, start.dir);
+  for (auto& end : cable_ends) {
+    ArcLine current = RouteCableOneEnd(start, end);
+    float current_length = ArcLine::Iterator(current).AdvanceToEnd();
+    if (current_length < best_total_length) {
+      best_total_length = current_length;
+      best_route = current;
+    }
+  }
+  return best_route;
 }
 
 // This function walks along the given arcline (from the end to its start) and adds
@@ -303,16 +314,32 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
 }
 
 void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dispenser,
-                          Optional<Vec2> end) {
-  Optional<Vec2> cable_end;
-  if (end) {
-    cable_end = Vec2(end->x, end->y + kCasingHeight);
+                          maf::Span<Vec2AndDir> end_candidates) {
+  for (auto& end : end_candidates) {
+    end.pos -= Vec2::Polar(end.dir, kCasingHeight);
   }
-  if (state.stabilized && Length(dispenser.pos - state.stabilized_start) < 0.0001) {
-    if (cable_end.has_value() == state.stabilized_end.has_value() &&
-        (!cable_end.has_value() || Length(*cable_end - *state.stabilized_end) < 0.0001)) {
-      return;
+
+  Optional<Vec2> cable_end;
+  float cable_end_dir;
+  for (auto& end : end_candidates) {
+    cable_end = end.pos;
+    if (state.stabilized && Length(dispenser.pos - state.stabilized_start) < 0.0001) {
+      if (cable_end.has_value() == state.stabilized_end.has_value() &&
+          (!cable_end.has_value() || Length(*cable_end - *state.stabilized_end) < 0.0001)) {
+        return;
+      }
     }
+  }
+
+  if (!end_candidates.empty()) {  // Create the arcline & pull the cable towards it
+    state.arcline = RouteCable(dispenser, end_candidates);
+    ArcLine::Iterator it = *state.arcline;
+    it.AdvanceToEnd();
+    cable_end = it.Position();
+    cable_end_dir = it.Angle();
+  } else {
+    state.arcline.reset();
+    cable_end.reset();
   }
 
   auto& chain = state.sections;
@@ -320,12 +347,6 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dis
     chain.front().pos = *cable_end;
   }
   chain.back().pos = dispenser.pos;
-
-  if (cable_end) {  // Create the arcline & pull the cable towards it
-    state.arcline = RouteCable(dispenser, *cable_end);
-  } else {
-    state.arcline.reset();
-  }
 
   Vec<Vec2> anchors;
   Vec<float> true_anchor_dir;
@@ -441,7 +462,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dis
     }
   }
   if (cable_end) {
-    chain.front().true_dir_offset = NormalizeAngle(M_PI / 2 - chain.front().dir);
+    chain.front().true_dir_offset = NormalizeAngle(cable_end_dir + M_PI - chain.front().dir);
   }
   chain.back().true_dir_offset = NormalizeAngle(dispenser.dir + M_PI - chain.back().dir);
 
@@ -1015,9 +1036,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
   SkMatrix transform = SkMatrix::Translate(cable_end);
-  float connector_dir = state.arcline
-                            ? M_PI / 2
-                            : state.sections.front().dir + state.sections.front().true_dir_offset;
+  float connector_dir = state.sections.front().dir + state.sections.front().true_dir_offset;
   transform.preRotate(connector_dir * 180 / M_PI - 90);
   transform.preTranslate(0, -kCasingHeight);
   canvas.concat(transform);

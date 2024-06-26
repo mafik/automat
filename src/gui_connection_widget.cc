@@ -6,6 +6,7 @@
 #include "base.hh"
 #include "connector_optical.hh"
 #include "location.hh"
+#include "math.hh"
 #include "object.hh"
 
 namespace automat::gui {
@@ -53,7 +54,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkPath to_shape;              // machine coords
   SkPath to_shape_from_coords;  // from's coords
   Widget* parent_machine = ctx.path[ctx.path.size() - 2];
-  Optional<Vec2> to_point;  // machine coords
+  Vec<Vec2AndDir> to_points;  // machine coords
   Location* to = nullptr;
 
   auto pos_dir = from.ArgStart(&display, arg);
@@ -63,14 +64,26 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     to = &c->to;
     if (to->object) {
       to_shape = to->object->Shape();
+      auto to_bounds = to_shape.getBounds();
       SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);
-      to_point = m.mapPoint(Rect::TopCenter(to_shape.getBounds()));
+      to_points.emplace_back(
+          Vec2AndDir{.pos = m.mapPoint(Rect::TopCenter(to_bounds)), .dir = -M_PI / 2});
+      to_points.emplace_back(
+          Vec2AndDir{.pos = m.mapPoint(Rect::RightCenter(to_bounds)), .dir = M_PI});
+      to_points.emplace_back(Vec2AndDir{.pos = m.mapPoint(Rect::LeftCenter(to_bounds)), .dir = 0});
+      to_points.emplace_back(
+          Vec2AndDir{.pos = m.mapPoint(Rect::BottomCenter(to_bounds)), .dir = M_PI / 2});
       to_shape.transform(m);
       to_shape.transform(TransformDown(Path{parent_machine, (Widget*)&from}, &ctx.display),
                          &to_shape_from_coords);
     }
   } else {
-    to_point = manual_position;
+    if (manual_position) {
+      to_points.emplace_back(Vec2AndDir{
+          .pos = *manual_position,
+          .dir = -M_PI / 2,
+      });
+    }
   }
 
   auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, &ctx.display);
@@ -85,12 +98,12 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     state->steel_insert_hidden.Tick(display);
 
     float dt = ctx.display.timer.d;
-    SimulateCablePhysics(dt, *state, pos_dir, to_point);
+    SimulateCablePhysics(dt, *state, pos_dir, to_points);
     DrawOpticalConnector(ctx, *state);
   } else {
     if (to_shape.isEmpty()) {
-      if (to_point) {
-        to_shape.moveTo(*to_point);
+      if (!to_points.empty()) {
+        to_shape.moveTo(to_points[0].pos);
       } else {
         return;
       }

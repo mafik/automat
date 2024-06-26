@@ -987,7 +987,7 @@ struct OpticalConnectorPimpl {
 
 void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   auto& canvas = ctx.canvas;
-  auto& actx = ctx.animation_context;
+  auto& display = ctx.display;
 
   SkPath p;
   if (state.stabilized) {
@@ -1243,7 +1243,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     float lightness_pct = 0;
     if (state.arg.name == "next") {
       lightness_pct =
-          exp(-(actx.timer.steady_now - state.location.last_finished).count() * 10) * 100;
+          exp(-(display.timer.steady_now - state.location.last_finished).count() * 10) * 100;
     }
     if (state.arg.field) {
       if (auto on_off = dynamic_cast<OnOff*>(state.arg.field)) {

@@ -39,8 +39,8 @@ SkPath ConnectionWidget::Shape() const {
 
 void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
-  auto& actx = ctx.animation_context;
-  auto& from_animation_state = from.animation_state[actx];
+  auto& display = ctx.display;
+  auto& from_animation_state = from.animation_state[display];
   bool using_layer = false;
   if (from_animation_state.transparency > 0.01f) {
     using_layer = true;
@@ -56,25 +56,24 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   Optional<Vec2> to_point;  // machine coords
   Location* to = nullptr;
 
-  auto pos_dir = from.ArgStart(&actx, arg);
+  auto pos_dir = from.ArgStart(&display, arg);
 
   if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
     Connection* c = it->second;
     to = &c->to;
     if (to->object) {
       to_shape = to->object->Shape();
-      SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.animation_context);
+      SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);
       to_point = m.mapPoint(Rect::TopCenter(to_shape.getBounds()));
       to_shape.transform(m);
-      to_shape.transform(
-          TransformDown(Path{parent_machine, (Widget*)&from}, &ctx.animation_context),
-          &to_shape_from_coords);
+      to_shape.transform(TransformDown(Path{parent_machine, (Widget*)&from}, &ctx.display),
+                         &to_shape_from_coords);
     }
   } else {
     to_point = manual_position;
   }
 
-  auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, &ctx.animation_context);
+  auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, &ctx.display);
   from_shape.transform(transform_from_to_machine);
 
   if (state) {
@@ -83,9 +82,9 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     } else {
       state->steel_insert_hidden.target = 0;
     }
-    state->steel_insert_hidden.Tick(actx);
+    state->steel_insert_hidden.Tick(display);
 
-    float dt = ctx.animation_context.timer.d;
+    float dt = ctx.display.timer.d;
     SimulateCablePhysics(dt, *state, pos_dir, to_point);
     DrawOpticalConnector(ctx, *state);
   } else {
@@ -113,7 +112,7 @@ DragConnectionAction::~DragConnectionAction() {
   widget.manual_position.reset();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      l->animation_state[*animation_context].highlight.target = 0;
+      l->animation_state[*display].highlight.target = 0;
     }
   }
 }
@@ -141,13 +140,13 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
     widget.manual_position = pointer_pos - grab_offset;
   }
 
-  animation_context = &pointer.AnimationContext();
+  display = &pointer.AnimationContext();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       if (CanConnect(widget.from, *l, widget.arg)) {
-        l->animation_state[*animation_context].highlight.target = 1;
+        l->animation_state[*display].highlight.target = 1;
       } else {
-        l->animation_state[*animation_context].highlight.target = 0;
+        l->animation_state[*display].highlight.target = 0;
       }
     }
   }

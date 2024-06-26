@@ -388,7 +388,7 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
 void NextButton::Activate(gui::Pointer& ptr) {
   for (int i = ptr.path.size() - 1; i >= 0; --i) {
     if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
-      SetPosRatio(*timeline, 1, ptr.window.actx.timer.steady_now);
+      SetPosRatio(*timeline, 1, ptr.window.display.timer.steady_now);
     }
   }
 }
@@ -396,7 +396,7 @@ void NextButton::Activate(gui::Pointer& ptr) {
 void PrevButton::Activate(gui::Pointer& ptr) {
   for (int i = ptr.path.size() - 1; i >= 0; --i) {
     if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
-      SetPosRatio(*timeline, 0, ptr.window.actx.timer.steady_now);
+      SetPosRatio(*timeline, 0, ptr.window.display.timer.steady_now);
     }
   }
 }
@@ -472,7 +472,7 @@ struct DragBridgeAction : Action {
   DragBridgeAction(Timeline& timeline) : timeline(timeline) {}
   virtual void Begin(gui::Pointer& ptr) {
     float initial_x = ptr.PositionWithin(timeline).x;
-    float initial_pos_ratio = CurrentPosRatio(timeline, ptr.window.actx.timer.now);
+    float initial_pos_ratio = CurrentPosRatio(timeline, ptr.window.display.timer.now);
     float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
     press_offset_x = initial_x - initial_bridge_x;
   }
@@ -480,7 +480,7 @@ struct DragBridgeAction : Action {
     float x = ptr.PositionWithin(timeline).x;
     float new_bridge_x = x - press_offset_x;
     SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x),
-                ptr.window.actx.timer.steady_now);
+                ptr.window.display.timer.steady_now);
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -506,7 +506,7 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    OffsetPosRatio(timeline, -delta_x * scaling_factor, ptr.window.actx.timer.steady_now);
+    OffsetPosRatio(timeline, -delta_x * scaling_factor, ptr.window.display.timer.steady_now);
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -615,7 +615,7 @@ SkPath WindowShape(int num_tracks) {
 unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerButton btn) {
   if (btn == gui::PointerButton::kMouseLeft) {
     auto bridge_shape =
-        BridgeShape(tracks.size(), CurrentPosRatio(*this, ptr.window.actx.timer.now));
+        BridgeShape(tracks.size(), CurrentPosRatio(*this, ptr.window.display.timer.now));
     auto window_shape = WindowShape(tracks.size());
     auto pos = ptr.PositionWithin(*this);
     if (bridge_shape.contains(pos.x, pos.y)) {
@@ -629,7 +629,7 @@ unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerBut
           return unique_ptr<Action>(new DragTimelineAction(*this));
         }
       } else {
-        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.actx.timer.steady_now);
+        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.display.timer.steady_now);
         return unique_ptr<Action>(new DragBridgeAction(*this));
       }
     }
@@ -684,10 +684,10 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   constexpr float PI = numbers::pi;
 
-  zoom.Tick(dctx.animation_context);
+  zoom.Tick(dctx.display);
 
   time::T max_track_length = MaxTrackLength();
-  float current_pos_ratio = CurrentPosRatio(*this, dctx.animation_context.timer.now);
+  float current_pos_ratio = CurrentPosRatio(*this, dctx.display.timer.now);
 
   function<Str(time::T)> format_time;
   if (max_track_length > 3600) {
@@ -1063,7 +1063,7 @@ ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display* actx) const {
+SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display* display) const {
   if (&child == &run_button) {
     return SkMatrix::Translate(kPlayButtonRadius, -kDisplayMargin);
   } else if (&child == &prev_button) {
@@ -1075,7 +1075,8 @@ SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display* act
     float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
     float track_width = MaxTrackLength() / distance_to_seconds;
 
-    float current_pos_ratio = CurrentPosRatio(*this, actx ? actx->timer.now : time::SystemNow());
+    float current_pos_ratio =
+        CurrentPosRatio(*this, display ? display->timer.now : time::SystemNow());
 
     float track_offset_x0 = kRulerLength / 2;
     float track_offset_x1 = track_width - kRulerLength / 2;

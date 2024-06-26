@@ -447,14 +447,14 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
 void TimerDelay::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
 
-  start_pusher_depression.Tick(ctx.animation_context);
-  left_pusher_depression.Tick(ctx.animation_context);
-  right_pusher_depression.Tick(ctx.animation_context);
+  start_pusher_depression.Tick(ctx.display);
+  left_pusher_depression.Tick(ctx.display);
+  right_pusher_depression.Tick(ctx.display);
 
   range_dial.target = (float)range;
   int range_end = (int)Range::EndGuard;
   animation::WrapModulo(range_dial, range_end);
-  range_dial.Tick(ctx.animation_context);
+  range_dial.Tick(ctx.display);
 
   double circles;
   duration_handle_rotation.target =
@@ -462,7 +462,7 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   duration_handle_rotation.target =
       modf(duration_handle_rotation.target / (2 * M_PI), &circles) * 2 * M_PI;
   animation::WrapModulo(duration_handle_rotation, 2 * M_PI);
-  duration_handle_rotation.Tick(ctx.animation_context);
+  duration_handle_rotation.Tick(ctx.display);
 
   if (state == TimerDelay::State::Running) {
     auto base_degrees = HandBaseDegrees(*this);
@@ -472,7 +472,7 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
     hand_degrees.target = 90;
   }
   AdjustRotation(hand_degrees.value, hand_degrees.target);
-  hand_degrees.Tick(ctx.animation_context);
+  hand_degrees.Tick(ctx.display);
 
   DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
 

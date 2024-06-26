@@ -19,7 +19,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
     std::ranges::reverse_view rv{widgets};
     for (Widget* widget : rv) {
       canvas.save();
-      const SkMatrix down = this->TransformToChild(*widget, &ctx.animation_context);
+      const SkMatrix down = this->TransformToChild(*widget, &ctx.display);
       SkMatrix up;
       if (down.invert(&up)) {
         canvas.concat(up);
@@ -34,18 +34,18 @@ void Widget::DrawChildren(DrawContext& ctx) const {
   const_cast<Widget*>(this)->VisitChildren(visitor);
 }
 
-SkMatrix TransformDown(const Path& path, animation::Display* actx) {
+SkMatrix TransformDown(const Path& path, animation::Display* display) {
   SkMatrix ret = SkMatrix::I();
   for (int i = 1; i < path.size(); ++i) {
     Widget& parent = *path[i - 1];
     Widget& child = *path[i];
-    ret.postConcat(parent.TransformToChild(child, actx));
+    ret.postConcat(parent.TransformToChild(child, display));
   }
   return ret;
 }
 
-SkMatrix TransformUp(const Path& path, animation::Display* actx) {
-  SkMatrix down = TransformDown(path, actx);
+SkMatrix TransformUp(const Path& path, animation::Display* display) {
+  SkMatrix down = TransformDown(path, display);
   SkMatrix up;
   if (down.invert(&up)) {
     return up;

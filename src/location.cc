@@ -199,11 +199,11 @@ void Location::Draw(gui::DrawContext& ctx) const {
   }
   SkRect bounds = my_shape.getBounds();
 
-  auto& state = animation_state[ctx.animation_context];
-  state.scale.Tick(ctx.animation_context);
-  state.position_offset.Tick(ctx.animation_context);
-  state.highlight.Tick(ctx.animation_context);
-  state.transparency.Tick(ctx.animation_context);
+  auto& state = animation_state[ctx.display];
+  state.scale.Tick(ctx.display);
+  state.position_offset.Tick(ctx.display);
+  state.highlight.Tick(ctx.display);
+  state.transparency.Tick(ctx.display);
   bool using_layer = false;
   if (state.transparency > 0.01) {
     using_layer = true;
@@ -228,9 +228,8 @@ void Location::Draw(gui::DrawContext& ctx) const {
     float intervals[] = {0.0035, 0.0015};
     double ignore;
     time::Duration period = 200s;
-    float phase =
-        std::fmod(ctx.animation_context.timer.now.time_since_epoch().count(), period.count()) /
-        period.count();
+    float phase = std::fmod(ctx.display.timer.now.time_since_epoch().count(), period.count()) /
+                  period.count();
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));
     ctx.canvas.drawPath(outset_shape, dash_paint);
   }
@@ -327,10 +326,10 @@ void Location::Run() {
   }
 }
 
-Vec2AndDir Location::ArgStart(animation::Display* actx, Argument& arg) {
+Vec2AndDir Location::ArgStart(animation::Display* display, Argument& arg) {
   auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
   Path path = {ParentAs<Widget>(), (Widget*)this};
-  auto m = TransformUp(path, actx);
+  auto m = TransformUp(path, display);
   pos_dir.pos = m.mapPoint(pos_dir.pos);
   return pos_dir;
 }

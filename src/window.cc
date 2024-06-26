@@ -44,15 +44,15 @@ std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer& pointer, Poin
 }
 
 void Window::Draw(SkCanvas& canvas) {
-  actx.timer.Tick();
-  gui::DrawContext draw_ctx(canvas, actx);
+  display.timer.Tick();
+  gui::DrawContext draw_ctx(canvas, display);
   draw_ctx.path.push_back(this);
   draw_ctx.path.push_back(root_machine);
   RunOnAutomatThreadSynchronous([&] {
     // Record camera movement timeline. This is used to create inertia effect.
     camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
-    timeline.emplace_back(actx.timer.now);
-    while (timeline.front() < actx.timer.now - time::Duration(0.2)) {
+    timeline.emplace_back(display.timer.now);
+    while (timeline.front() < display.timer.now - time::Duration(0.2)) {
       camera_timeline.pop_front();
       timeline.pop_front();
     }
@@ -92,9 +92,9 @@ void Window::Draw(SkCanvas& canvas) {
         auto dx = camera_timeline.back().x - camera_timeline.front().x;
         auto dy = camera_timeline.back().y - camera_timeline.front().y;
         auto dz = camera_timeline.back().z / camera_timeline.front().z;
-        camera_x.Shift(dx / dt * actx.timer.d * 0.8);
-        camera_y.Shift(dy / dt * actx.timer.d * 0.8);
-        float z = pow(dz, actx.timer.d / dt * 0.8);
+        camera_x.Shift(dx / dt * display.timer.d * 0.8);
+        camera_y.Shift(dy / dt * display.timer.d * 0.8);
+        float z = pow(dz, display.timer.d / dt * 0.8);
         zoom.target *= z;
         zoom.value *= z;
         float lz = logf(z);
@@ -117,7 +117,7 @@ void Window::Draw(SkCanvas& canvas) {
         Pointer* first_pointer = *pointers.begin();
         Vec2 mouse_position = first_pointer->pointer_position;
         Vec2 focus_pre = WindowToCanvas(mouse_position);
-        zoom.Tick(actx);
+        zoom.Tick(display);
         Vec2 focus_post = WindowToCanvas(mouse_position);
         Vec2 focus_delta = focus_post - focus_pre;
         camera_x.Shift(-focus_delta.x);
@@ -126,32 +126,32 @@ void Window::Draw(SkCanvas& canvas) {
     } else {  // stabilize camera target
       Vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
       Vec2 target_screen = CanvasToWindow(focus_pre);
-      zoom.Tick(actx);
+      zoom.Tick(display);
       Vec2 focus_post = WindowToCanvas(target_screen);
       Vec2 focus_delta = focus_post - focus_pre;
       camera_x.value -= focus_delta.x;
       camera_y.value -= focus_delta.y;
     }
 
-    camera_x.Tick(actx);
-    camera_y.Tick(actx);
+    camera_x.Tick(display);
+    camera_y.Tick(display);
 
     for (Keyboard* keyboard : keyboards) {
       if (keyboard->carets.empty()) {
         if (keyboard->pressed_keys.test((size_t)AnsiKey::W)) {
-          camera_y.Shift(0.1 * actx.timer.d);
+          camera_y.Shift(0.1 * display.timer.d);
           inertia = false;
         }
         if (keyboard->pressed_keys.test((size_t)AnsiKey::S)) {
-          camera_y.Shift(-0.1 * actx.timer.d);
+          camera_y.Shift(-0.1 * display.timer.d);
           inertia = false;
         }
         if (keyboard->pressed_keys.test((size_t)AnsiKey::A)) {
-          camera_x.Shift(-0.1 * actx.timer.d);
+          camera_x.Shift(-0.1 * display.timer.d);
           inertia = false;
         }
         if (keyboard->pressed_keys.test((size_t)AnsiKey::D)) {
-          camera_x.Shift(0.1 * actx.timer.d);
+          camera_x.Shift(0.1 * display.timer.d);
           inertia = false;
         }
       }
@@ -236,7 +236,7 @@ void Window::Draw(SkCanvas& canvas) {
   }
 
   // Draw fps counter
-  float fps = 1.0f / actx.timer.d;
+  float fps = 1.0f / display.timer.d;
   fps_history.push_back(fps);
   while (fps_history.size() > 100) {
     fps_history.pop_front();

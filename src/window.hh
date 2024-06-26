@@ -154,7 +154,7 @@ struct Window final : Widget {
   std::deque<Vec3> camera_timeline;
   std::deque<time::SystemPoint> timeline;
 
-  animation::Display actx;
+  animation::Display display;
 
   std::vector<PrototypeButton> prototype_buttons;
   std::vector<Vec2> prototype_button_positions;

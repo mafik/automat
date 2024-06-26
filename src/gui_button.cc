@@ -14,15 +14,15 @@
 
 namespace automat::gui {
 
-void Button::PointerOver(Pointer& pointer, animation::Display& actx) {
-  auto& hover = hover_ptr[actx];
+void Button::PointerOver(Pointer& pointer, animation::Display& display) {
+  auto& hover = hover_ptr[display];
   hover.target = 1;
   hover.speed = 5;
   pointer.PushIcon(Pointer::kIconHand);
 }
 
-void Button::PointerLeave(Pointer& pointer, animation::Display& actx) {
-  hover_ptr[actx].target = 0;
+void Button::PointerLeave(Pointer& pointer, animation::Display& display) {
+  hover_ptr[display].target = 0;
   pointer.PopIcon();
 }
 
@@ -57,8 +57,8 @@ void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
 
 void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   auto& canvas = ctx.canvas;
-  auto& actx = ctx.animation_context;
-  auto& hover = hover_ptr[actx];
+  auto& display = ctx.display;
+  auto& hover = hover_ptr[display];
   SkRect child_bounds = ChildBounds();
 
   auto oval = RRect();
@@ -107,9 +107,9 @@ void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
 }
 
 void Button::Draw(DrawContext& ctx) const {
-  auto& actx = ctx.animation_context;
-  auto& hover = hover_ptr[actx];
-  hover.Tick(actx);
+  auto& display = ctx.display;
+  auto& hover = hover_ptr[display];
+  hover.Tick(display);
 
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
@@ -119,13 +119,13 @@ void Button::Draw(DrawContext& ctx) const {
 
 void ToggleButton::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& actx = ctx.animation_context;
-  auto& hover = hover_ptr[actx];
-  auto& filling = filling_ptr[actx];
+  auto& display = ctx.display;
+  auto& hover = hover_ptr[display];
+  auto& filling = filling_ptr[display];
   filling.speed = 5;
   filling.target = Filled() ? 1 : 0;
-  hover.Tick(actx);
-  filling.Tick(actx);
+  hover.Tick(display);
+  filling.Tick(display);
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -151,8 +151,8 @@ void ToggleButton::Draw(DrawContext& ctx) const {
                      pressed_outer_oval.rect().fBottom * filling;
     constexpr int n_points = 6;
     Vec2 points[n_points];
-    static time::SystemPoint base = actx.timer.now;
-    float timeS = (actx.timer.now - base).count();
+    static time::SystemPoint base = display.timer.now;
+    float timeS = (display.timer.now - base).count();
     constexpr float waving_x = kRadius / n_points / 2;
     float waving_y = waving_x * filling * (1 - filling) * 8;
     for (int i = 0; i < n_points; ++i) {

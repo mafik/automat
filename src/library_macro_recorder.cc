@@ -64,7 +64,7 @@ MacroRecorder::~MacroRecorder() {
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
 std::unique_ptr<Object> MacroRecorder::Clone() const { return std::make_unique<MacroRecorder>(); }
 void MacroRecorder::Draw(gui::DrawContext& dctx) const {
-  auto& animation_state = animation_state_ptr[dctx.animation_context];
+  auto& animation_state = animation_state_ptr[dctx.display];
   auto& image = MacroRecorderFrontColor();
   auto& canvas = dctx.canvas;
 
@@ -74,8 +74,8 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     animation_state.eye_speed.target = 0;
   }
   animation_state.eye_speed.speed = 5;
-  animation_state.eye_speed.Tick(dctx.animation_context);
-  animation_state.eye_rotation -= dctx.animation_context.timer.d * 360 * animation_state.eye_speed;
+  animation_state.eye_speed.Tick(dctx.display);
+  animation_state.eye_rotation -= dctx.display.timer.d * 360 * animation_state.eye_speed;
   if (animation_state.eye_rotation < 0) {
     animation_state.eye_rotation += 360;
   }
@@ -83,7 +83,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   {
     auto sharingan = SharinganColor();
 
-    auto local_to_window = TransformUp(dctx.path, &dctx.animation_context);
+    auto local_to_window = TransformUp(dctx.path, &dctx.display);
 
     auto top_window = (Window*)dctx.path[0];
 
@@ -110,7 +110,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
       googly.target.x = eye_dir.x * dist;
       googly.target.y = -eye_dir.y * dist;
-      googly.Tick(dctx.animation_context);
+      googly.Tick(dctx.display);
 
       Vec2 pos = center + googly.value * kEyeRadius * 0.5;
       canvas.save();
@@ -187,7 +187,7 @@ static void PositionBelow(Location& origin, Location& below) {
 
 static void AnimateGrowFrom(Location& source, Location& grown) {
   for (auto* window : gui::windows) {
-    auto& animation_state = grown.animation_state[window->actx];
+    auto& animation_state = grown.animation_state[window->display];
     animation_state.scale.target = 1;
     animation_state.scale.speed = 10;
     animation_state.scale.value = 0.5;

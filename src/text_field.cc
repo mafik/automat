@@ -17,14 +17,14 @@ using namespace maf;
 
 namespace automat::gui {
 
-void TextField::PointerOver(Pointer& pointer, animation::Display& actx) {
+void TextField::PointerOver(Pointer& pointer, animation::Display& display) {
   pointer.PushIcon(Pointer::kIconIBeam);
-  hover_ptr[actx].Increment();
+  hover_ptr[display].Increment();
 }
 
-void TextField::PointerLeave(Pointer& pointer, animation::Display& actx) {
+void TextField::PointerLeave(Pointer& pointer, animation::Display& display) {
   pointer.PopIcon();
-  hover_ptr[actx].Decrement();
+  hover_ptr[display].Decrement();
 }
 
 void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
@@ -82,9 +82,9 @@ const SkPaint& TextField::GetTextPaint() const { return kDefaultTextPaint; }
 const SkPaint& TextField::GetBackgroundPaint() const { return kDefaultBackgroundPaint; }
 
 void TextField::Draw(DrawContext& ctx) const {
-  auto& actx = ctx.animation_context;
-  auto& hover = hover_ptr[actx].animation;
-  hover.Tick(actx);
+  auto& display = ctx.display;
+  auto& hover = hover_ptr[display].animation;
+  hover.Tick(display);
   DrawBackground(ctx);
   DrawText(ctx);
 }
@@ -93,8 +93,8 @@ void TextField::DrawBackground(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   SkRRect rrect = ShapeRRect();
   canvas.drawRRect(rrect, GetBackgroundPaint());
-  auto& actx = ctx.animation_context;
-  auto& hover = hover_ptr[actx].animation;
+  auto& display = ctx.display;
+  auto& hover = hover_ptr[display].animation;
   if (hover.value > 0.0001) {
     SkPaint hover_outline;
     hover_outline.setColor(SkColorSetRGB(0xff, 0x00, 0x00));

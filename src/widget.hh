@@ -26,10 +26,10 @@ SkMatrix TransformUp(const Path& path, animation::Display*);
 
 struct DrawContext {
   SkCanvas& canvas;
-  animation::Display& animation_context;
+  animation::Display& display;
   Path path;
-  DrawContext(SkCanvas& canvas, animation::Display& actx)
-      : canvas(canvas), animation_context(actx), path() {}
+  DrawContext(SkCanvas& canvas, animation::Display& display)
+      : canvas(canvas), display(display), path() {}
 };
 
 // Base class for widgets.

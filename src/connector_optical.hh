@@ -66,6 +66,6 @@ struct OpticalConnectorState {
 void SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&, Vec2AndDir start,
                           maf::Span<Vec2AndDir> end_candidates);
 
-void DrawOpticalConnector(DrawContext&, OpticalConnectorState&);
+void DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
 
 }  // namespace automat::gui

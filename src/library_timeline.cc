@@ -22,6 +22,7 @@
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
+#include "key_button.hh"
 #include "math.hh"
 #include "number_text_field.hh"
 #include "svg.hh"
@@ -257,8 +258,29 @@ TimelineRunButton::TimelineRunButton() : gui::RunButton(nullptr, kPlayButtonRadi
 
 Timeline::Timeline() : run_button(), state(kPaused), paused{.playback_offset = 0}, zoom(10) {}
 
+struct TextDrawable : PaintDrawable {
+  Str text;
+  float width;
+  constexpr static float kLetterSize = kKeyLetterSize;
+  TextDrawable(StrView text) : text(text) { width = KeyFont().MeasureText(text); }
+
+  void onDraw(SkCanvas* canvas) override {
+    canvas->translate(-width / 2, -kLetterSize / 2);
+    KeyFont().DrawText(*canvas, text, paint);
+  }
+  SkRect onGetBounds() override {
+    return SkRect::MakeXYWH(-width / 2, -kLetterSize / 2, width, kLetterSize);
+  }
+};
+
+struct TrackArgument : Argument {
+  TextDrawable icon;
+  TrackArgument(StrView name) : Argument(name, Argument::kOptional), icon(name) {}
+  PaintDrawable& Icon() override { return icon; }
+};
+
 static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
-  auto arg = make_unique<Argument>(track_name, Argument::kOptional);
+  auto arg = make_unique<TrackArgument>(track_name);
   arg->field = t.tracks[track_number].get();
   arg->tint = "#57dce4"_color;
   t.track_args.emplace_back(std::move(arg));

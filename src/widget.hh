@@ -77,7 +77,6 @@ struct LabelMixin {
 
 struct PaintMixin {
   SkPaint paint;
-  virtual ~PaintMixin() {}
   static SkPaint* Get(Widget* widget) {
     if (auto p = dynamic_cast<PaintMixin*>(widget)) {
       return &p->paint;

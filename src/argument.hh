@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "drawable.hh"
 #include "format.hh"
 #include "location.hh"
 
@@ -37,6 +38,8 @@ struct Argument {
       : name(name), precondition(precondition), quantity(quantity) {}
 
   virtual ~Argument() = default;
+
+  virtual PaintDrawable& Icon();
 
   template <typename T>
   Argument& RequireInstanceOf() {

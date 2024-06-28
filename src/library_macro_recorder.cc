@@ -264,7 +264,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
 
   // Find a track which is attached to the given key
   int track_index = -1;
-  Str key_name = "Key " + Str(ToStr(key));
+  Str key_name = Str(ToStr(key));
   for (int i = 0; i < timeline->tracks.size(); i++) {
     if (timeline->track_args[i]->name == key_name) {
       track_index = i;
@@ -310,8 +310,9 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
 
   size_t next_i = std::lower_bound(ts.begin(), ts.end(), t) - ts.begin();
 
-  // LOG << "key " << (down ? "down" : "up") << " while in " << (next_i % 2 ? "filled" : "empty")
-  //       << " section" << (isnan(track->on_at) ? "" : " with on_at");
+  // LOG << "key " << ToStr(key) << " " << (down ? "down" : "up") << " while in "
+  //     << (next_i % 2 ? "filled" : "empty") << " section"
+  //     << (isnan(track->on_at) ? "" : " with on_at");
 
   // How recording over existing tracks works:
   // - if either start or end of a key-down section touches another section, that section is

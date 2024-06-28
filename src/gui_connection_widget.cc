@@ -108,7 +108,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
 
     float dt = ctx.display.timer.d;
     SimulateCablePhysics(ctx, dt, *state, pos_dir, to_points);
-    DrawOpticalConnector(ctx, *state);
+    DrawOpticalConnector(ctx, *state, arg.Icon());
   } else {
     if (to_shape.isEmpty()) {
       if (!to_points.empty()) {

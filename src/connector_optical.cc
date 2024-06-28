@@ -3,6 +3,7 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkDrawable.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMesh.h>
@@ -1037,7 +1038,7 @@ struct OpticalConnectorPimpl {
   std::unique_ptr<BlackCasing> mesh;
 };
 
-void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
+void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintDrawable& icon) {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
 
@@ -1296,13 +1297,11 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
   canvas.restore();
 
   {  // Icon on the metal casing
-    SkPath path = PathFromSVG(kNextShape);
-    Vec2 path_offset = cable_end - Vec2::Polar(connector_dir, kCasingWidth / 2);
-    path.offset(path_offset.x, path_offset.y);
+    Vec2 icon_offset = cable_end - Vec2::Polar(connector_dir, kCasingWidth / 2);
 
     SkColor base_color = "#808080"_color;
     float lightness_pct = 0;
-    if (state.arg.name == "next") {
+    if (&state.arg == &next_arg) {
       lightness_pct =
           exp(-(display.timer.steady_now - state.location.last_finished).count() * 10) * 100;
     }
@@ -1319,7 +1318,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     SkPaint icon_paint;
     icon_paint.setColor(adjusted_color);
     icon_paint.setAntiAlias(true);
-    canvas.drawPath(path, icon_paint);
+    icon.paint = icon_paint;
+    icon.draw(&canvas, icon_offset.x, icon_offset.y);
 
     // Draw blur
     if (lightness_pct > 1) {
@@ -1329,7 +1329,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       glow_paint.setMaskFilter(
           SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, 0.5_mm, true));
       glow_paint.setBlendMode(SkBlendMode::kScreen);
-      canvas.drawPath(path, glow_paint);
+      icon.paint = glow_paint;
+      icon.draw(&canvas, icon_offset.x, icon_offset.y);
     }
   }
 

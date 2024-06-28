@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "font.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
 
@@ -22,6 +23,8 @@ static constexpr float kKeyBottomSide = 1.5_mm;
 
 static constexpr float kKeyFaceRadius = 1_mm;
 static constexpr float kKeyBaseRadius = kKeyFaceRadius;
+
+gui::Font& KeyFont();
 
 // static constexpr float kKeySpareHeight = kKeyHeight - kKeyLetterSize;
 // static constexpr float kKeyFaceHeight = kKeyHeight - kKeyTopSide - kKeyBottomSide;

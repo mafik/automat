@@ -111,7 +111,7 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg, Wi
   }
 }
 
-static Font& KeyFont() {
+Font& KeyFont() {
   static std::unique_ptr<Font> font = Font::Make(kKeyLetterSizeMM, 700);
   return *font.get();
 }

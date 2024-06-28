@@ -10,6 +10,9 @@
 
 #include "../build/generated/embedded.hh"
 #include "animation.hh"
+#include "argument.hh"
+#include "color.hh"
+#include "connector_optical.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
 #include "library_macros.hh"
@@ -19,6 +22,7 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
+#include "widget.hh"
 #include "window.hh"
 
 namespace automat::library {
@@ -61,6 +65,21 @@ MacroRecorder::~MacroRecorder() {
     keylogging = nullptr;
   }
 }
+
+static Timeline* FindTimeline(const MacroRecorder& macro_recorder) {
+  auto machine = macro_recorder.here->ParentAs<Machine>();
+  if (machine == nullptr) {
+    FATAL << "MacroRecorder must be a child of a Machine";
+    return nullptr;
+  }
+  auto timeline = (Timeline*)macro_recorder.here->Nearby([](Location& loc) -> void* {
+    if (auto timeline = loc.As<Timeline>()) {
+      return timeline;
+    }
+    return nullptr;
+  });
+  return timeline;
+}
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
 std::unique_ptr<Object> MacroRecorder::Clone() const { return std::make_unique<MacroRecorder>(); }
 void MacroRecorder::Draw(gui::DrawContext& dctx) const {
@@ -78,6 +97,26 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   animation_state.eye_rotation -= dctx.display.timer.d * 360 * animation_state.eye_speed;
   if (animation_state.eye_rotation < 0) {
     animation_state.eye_rotation += 360;
+  }
+
+  if (animation_state.pointers_over > 0) {
+    if (Timeline* timeline = FindTimeline(*this)) {
+      Vec2AndDir start = {.pos = Vec2(2.15_cm, 1_mm), .dir = -M_PI / 2};
+
+      Vec<Vec2AndDir> ends = {};
+      timeline->ConnectionPositions(ends);
+      Path up_path = {timeline->here->ParentAs<Widget>(), timeline->here, timeline};
+      auto matrix = TransformUp(up_path, &dctx.display);
+      Path down_path = {here->ParentAs<Widget>(), here, const_cast<MacroRecorder*>(this)};
+      matrix.postConcat(TransformDown(down_path, &dctx.display));
+      for (auto& end : ends) {
+        end.pos = matrix.mapPoint(end.pos);
+      }
+
+      auto arcline = RouteCable(dctx, start, ends);
+
+      DrawGenericConnector(dctx, arcline, color::kParrotRed, CableTexture::Smooth);
+    }
   }
 
   {
@@ -200,21 +239,6 @@ static void AnimateGrowFrom(Location& source, Location& grown) {
     animation_state.transparency.value = 1;
     animation_state.transparency.speed = 5;
   }
-}
-
-static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
-  auto machine = macro_recorder.here->ParentAs<Machine>();
-  if (machine == nullptr) {
-    FATAL << "MacroRecorder must be a child of a Machine";
-    return nullptr;
-  }
-  auto timeline = (Timeline*)macro_recorder.here->Nearby([](Location& loc) -> void* {
-    if (auto timeline = loc.As<Timeline>()) {
-      return timeline;
-    }
-    return nullptr;
-  });
-  return timeline;
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
@@ -439,4 +463,10 @@ SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Display
 bool MacroRecorder::IsOn() const { return keylogging != nullptr; }
 void MacroRecorder::On() { OnRun(*here); }
 void MacroRecorder::Off() { Cancel(); }
+void MacroRecorder::PointerOver(gui::Pointer&, animation::Display& d) {
+  animation_state_ptr[d].pointers_over++;
+}
+void MacroRecorder::PointerLeave(gui::Pointer&, animation::Display& d) {
+  animation_state_ptr[d].pointers_over--;
+}
 }  // namespace automat::library

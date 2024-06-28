@@ -31,7 +31,7 @@ struct Argument {
   Quantity quantity;
   std::vector<std::function<void(Location* location, Object* object, std::string& error)>>
       requirements;
-  SkColor tint = "#808080"_color;
+  SkColor tint = "#404040"_color;
   Object* field = nullptr;
 
   Argument(std::string_view name, Precondition precondition, Quantity quantity = kSingle)

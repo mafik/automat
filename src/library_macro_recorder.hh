@@ -26,6 +26,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
     animation::Spring<Vec2> googly_right;
     animation::Approach<> eye_speed;
     float eye_rotation = 0;
+    int pointers_over = 0;
   };
 
   animation::PerDisplay<AnimationState> animation_state_ptr;
@@ -47,6 +48,9 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
   bool IsOn() const override;
   void On() override;
   void Off() override;
+
+  void PointerOver(gui::Pointer&, animation::Display&) override;
+  void PointerLeave(gui::Pointer&, animation::Display&) override;
 
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 

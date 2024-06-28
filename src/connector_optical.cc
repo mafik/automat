@@ -3,6 +3,7 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkColorFilter.h>
 #include <include/core/SkDrawable.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkMaskFilter.h>
@@ -223,7 +224,7 @@ static ArcLine RouteCableOneEnd(DrawContext& dctx, Vec2AndDir start, Vec2AndDir 
   }
 }
 
-static ArcLine RouteCable(DrawContext& dctx, Vec2AndDir start, maf::Span<Vec2AndDir> cable_ends) {
+ArcLine RouteCable(DrawContext& dctx, Vec2AndDir start, maf::Span<Vec2AndDir> cable_ends) {
   float best_total_length = HUGE_VALF;
   ArcLine best_route = ArcLine(start.pos, start.dir);
   for (auto& end : cable_ends) {
@@ -864,7 +865,8 @@ struct StrokeToStrainReliever : StrokeToMesh {
   }
 };
 
-static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& path) {
+static void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filter,
+                      CableTexture texture) {
   auto& canvas = ctx.canvas;
   Rect clip = canvas.getLocalClipBounds();
   Rect path_bounds = path.getBounds().makeOutset(kCableWidth / 2, kCableWidth / 2);
@@ -887,8 +889,8 @@ static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& pa
 
       const float kCableWidth = 0.002;
 
-      uniform shader cable_weave_color;
-      uniform shader cable_weave_normal;
+      uniform shader cable_color;
+      uniform shader cable_normal;
 
       float3x3 transpose3x3(in float3x3 inMatrix) {
           float3 i0 = inMatrix[0];
@@ -904,12 +906,6 @@ static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& pa
           return outMatrix;
       }
 
-      layout(color) uniform float3 tint;
-
-      float3 ApplyTint(float3 a) {
-          return (1 - 2 * tint) * a * a + 2 * tint * a;
-      }
-
       float2 main(const Varyings v, out float4 color) {
         vec3 lightDir = normalize(vec3(0, 1, 1)); // normalized vector pointing from current fragment towards the light
         float h = sqrt(1 - v.uv.x * v.uv.x );
@@ -923,18 +919,16 @@ static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& pa
 
         vec2 texCoord = vec2(-angle / PI, v.uv.y / kCableWidth / 2) * 512;
 
-        vec3 normalTanSpace = normalize(cable_weave_normal.eval(texCoord).yxz * 2 - 1 + vec3(0, 0, 0.5)); // already in tangent space
+        vec3 normalTanSpace = normalize(cable_normal.eval(texCoord).yxz * 2 - 1 + vec3(0, 0, 0.5)); // already in tangent space
         normalTanSpace.x = -normalTanSpace.x;
         vec3 lightDirTanSpace = normalize(TBN_inv * lightDir);
         vec3 viewDirTanSpace = normalize(TBN_inv * vec3(0, 0, 1));
 
         vec3 normal = normalize(TBN * normalTanSpace);
 
-        color.rgba = cable_weave_color.eval(texCoord).rgba;
-        color.rgb = ApplyTint(color.rgb * 4);
-        float light = max(dot(normalTanSpace, lightDirTanSpace), 0);
-        vec3 ambient = vec3(0.1, 0.1, 0.2);
-        color.rgb = light * color.rgb + ambient * color.rgb;
+        color.rgba = cable_color.eval(texCoord).rgba;
+        float light = min(1, 0.2 + max(dot(normalTanSpace, lightDirTanSpace), 0));
+        color.rgb = light * color.rgb;
 
         color.rgb += pow(length(normal.xy), 8) * vec3(0.9, 0.9, 0.9) * 0.5; // rim lighting
 
@@ -957,17 +951,24 @@ static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& pa
   }
 
   auto vertex_buffer = stroke_to_cable.BuildBuffer();
-  sk_sp<SkShader> cable_weave_color = CableWeaveColor()->makeShader(
-      SkTileMode::kRepeat, SkTileMode::kRepeat,
-      SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-  sk_sp<SkShader> cable_weave_normal = CableWeaveNormal()->makeRawShader(
-      SkTileMode::kRepeat, SkTileMode::kRepeat,
-      SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-  SkMesh::ChildPtr children[] = {cable_weave_color, cable_weave_normal};
-  Vec3 tint = SkColorToVec3(state.tint);
-  auto uniforms = SkData::MakeWithCopy(&tint, sizeof(tint));
+  sk_sp<SkShader> cable_color, cable_normal;
+  switch (texture) {
+    case CableTexture::Braided:
+      cable_color = CableWeaveColor()->makeShader(
+          SkTileMode::kRepeat, SkTileMode::kRepeat,
+          SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+      cable_normal = CableWeaveNormal()->makeRawShader(
+          SkTileMode::kRepeat, SkTileMode::kRepeat,
+          SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+      break;
+    case CableTexture::Smooth:
+      cable_color = SkShaders::Color(SkColorSetARGB(255, 0x80, 0x80, 0x80));
+      cable_normal = SkShaders::Color(SkColorSetARGB(255, 0x80, 0x80, 0xff));
+      break;
+  }
+  SkMesh::ChildPtr children[] = {cable_color, cable_normal};
   auto mesh_result = SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip,
-                                  vertex_buffer, stroke_to_cable.vertex_vector.size(), 0, uniforms,
+                                  vertex_buffer, stroke_to_cable.vertex_vector.size(), 0, nullptr,
                                   {children, 2}, stroke_to_cable.bounds);
   if (!mesh_result.error.isEmpty()) {
     ERROR << "Error creating mesh: " << mesh_result.error.c_str();
@@ -976,6 +977,7 @@ static void DrawCable(DrawContext& ctx, OpticalConnectorState& state, SkPath& pa
   SkPaint default_paint;
   default_paint.setColor(0xffffffff);
   default_paint.setAntiAlias(true);
+  default_paint.setColorFilter(color_filter);
   canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
 }
 
@@ -1038,6 +1040,21 @@ struct OpticalConnectorPimpl {
   std::unique_ptr<BlackCasing> mesh;
 };
 
+static sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
+  if (isnanf(depth)) {
+    // set depth to average value of all channels
+    depth = (SkColorGetR(tint) + SkColorGetG(tint) + SkColorGetB(tint)) / 255.f / 3 * 50 + 20;
+  }
+  uint8_t r[256], g[256], b[256];
+  for (int i = 0; i < 256; i++) {
+    SkColor adjusted = color::AdjustLightness(tint, (i - 128) * depth / 128);
+    r[i] = SkColorGetR(adjusted);
+    g[i] = SkColorGetG(adjusted);
+    b[i] = SkColorGetB(adjusted);
+  }
+  return SkColorFilters::TableARGB(nullptr, r, g, b);
+}
+
 void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintDrawable& icon) {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
@@ -1063,7 +1080,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
   p.setIsVolatile(true);
 
   // Draw the cable
-  DrawCable(ctx, state, p);
+  auto color_filter = MakeTintFilter(state.tint, NAN);
+  DrawCable(ctx, p, color_filter, CableTexture::Braided);
 
   canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
@@ -1577,5 +1595,11 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Argument& arg, Vec2A
 }
 
 OpticalConnectorState::~OpticalConnectorState() {}
+
+void DrawGenericConnector(DrawContext& dctx, ArcLine& arcline, SkColor tint, CableTexture texture) {
+  auto color_filter = MakeTintFilter(tint, 30);
+  auto path = arcline.ToPath(false);
+  DrawCable(dctx, path, color_filter, texture);
+}
 
 }  // namespace automat::gui

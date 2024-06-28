@@ -49,7 +49,7 @@ void Pointer::Move(Vec2 position) {
   if (action) {
     action->Update(*this);
   } else {
-    Widget* old_hovered_widget = path.empty() ? nullptr : path.back();
+    Path old_path = path;
 
     path.clear();
     Vec2 point = pointer_position;
@@ -83,13 +83,14 @@ void Pointer::Move(Vec2 position) {
     Widget* window_arr[] = {&window};
     dfs(window_arr);
 
-    Widget* hovered_widget = path.empty() ? nullptr : path.back();
-    if (old_hovered_widget != hovered_widget) {
-      if (old_hovered_widget) {
-        old_hovered_widget->PointerLeave(*this, window.display);
+    for (Widget* old_w : old_path) {
+      if (std::find(path.begin(), path.end(), old_w) == path.end()) {
+        old_w->PointerLeave(*this, window.display);
       }
-      if (hovered_widget) {
-        hovered_widget->PointerOver(*this, window.display);
+    }
+    for (Widget* new_w : path) {
+      if (std::find(old_path.begin(), old_path.end(), new_w) == old_path.end()) {
+        new_w->PointerOver(*this, window.display);
       }
     }
 

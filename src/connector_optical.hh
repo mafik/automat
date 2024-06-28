@@ -63,9 +63,17 @@ struct OpticalConnectorState {
   SkMatrix ConnectorMatrix() const;
 };
 
+enum class CableTexture {
+  Smooth,
+  Braided,
+};
+
+ArcLine RouteCable(DrawContext&, Vec2AndDir start, maf::Span<Vec2AndDir> ends);
+
 void SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&, Vec2AndDir start,
                           maf::Span<Vec2AndDir> end_candidates);
 
 void DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
+void DrawGenericConnector(DrawContext&, ArcLine& arcline, SkColor tint, CableTexture);
 
 }  // namespace automat::gui

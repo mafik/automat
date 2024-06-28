@@ -44,6 +44,9 @@ inline Vec3 SkColorToVec3(SkColor color) {
               SkColorGetB(color) / 255.0f);
 }
 
+inline SkColor Vec3ToSkColor(Vec3 vec) {
+  return SkColorSetRGB(vec.x * 255, vec.y * 255, vec.z * 255);
+}
 }  // namespace automat
 
 namespace automat::color {

@@ -395,7 +395,6 @@ void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset =
         clamp<time::T>(timeline.paused.playback_offset + offset, 0, timeline.MaxTrackLength());
-    TimelineUpdateOutputs(*timeline.here, timeline, timeline.paused.playback_offset);
   }
 }
 
@@ -409,7 +408,6 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
     TimelineScheduleAt(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = pos_ratio * max_track_length;
-    TimelineUpdateOutputs(*timeline.here, timeline, timeline.paused.playback_offset);
   }
 }
 
@@ -1261,6 +1259,9 @@ std::unique_ptr<Action> TrackBase::ButtonDownAction(gui::Pointer& ptr, gui::Poin
 }
 
 bool OnOffTrack::IsOn() const {
+  if (timeline->state == Timeline::kPaused) {
+    return false;
+  }
   auto now = time::SteadyNow();
   auto current_offset = CurrentOffset(*timeline, now);
 

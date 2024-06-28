@@ -41,8 +41,9 @@ static SkPath GetHandShape() {
     auto path = PathFromSVG(kHandShapeSVG);
     SkMatrix matrix = SkMatrix::I();
     float s = 1.67;
-    matrix.preTranslate(-0.4_mm, 3_mm);
-    matrix.preScale(s, s);
+    matrix.postScale(s, s);
+    matrix.postRotate(15);
+    matrix.postTranslate(2.6_mm, 1.9_mm);
     path.transform(matrix);
     return path;
   }();
@@ -75,9 +76,10 @@ void KeyPresser::Draw(gui::DrawContext& dctx) const {
   DrawChildren(dctx);
   auto& canvas = dctx.canvas;
   auto img = key_pressed ? PressingHandColor() : PointingHandColor();
-  canvas.save();
   float s = shortcut_button.width / img->width();
-  canvas.translate(0, 3_mm);
+  canvas.save();
+  canvas.translate(3_mm, 2_mm);
+  canvas.rotate(15);
   canvas.scale(s, -s);
   canvas.drawImage(img.get(), 0, 0, kDefaultSamplingOptions);
   canvas.restore();

@@ -1196,7 +1196,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
   }
 
   {  // Black metal casing
-
+    float pixels_per_meter = canvas.getLocalToDeviceAs3x3().mapRadius(1);
+    canvas.translate(0, 1 / pixels_per_meter);  // move one pixel up to close the one pixel gap
     if (state.pimpl == nullptr) {
       state.pimpl = std::make_unique<OpticalConnectorPimpl>();
       state.pimpl->mesh = [&]() -> std::unique_ptr<BlackCasing> {

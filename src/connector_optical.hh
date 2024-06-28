@@ -63,7 +63,7 @@ struct OpticalConnectorState {
   SkMatrix ConnectorMatrix() const;
 };
 
-void SimulateCablePhysics(float dt, OpticalConnectorState&, Vec2AndDir start,
+void SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&, Vec2AndDir start,
                           maf::Span<Vec2AndDir> end_candidates);
 
 void DrawOpticalConnector(DrawContext&, OpticalConnectorState&);

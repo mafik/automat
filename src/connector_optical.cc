@@ -36,6 +36,7 @@ constexpr float kCasingHeight = 0.008;
 constexpr float kStep = 0.005;
 constexpr float kCrossSize = 0.001;
 constexpr float kCableWidth = 0.002;
+constexpr SkColor kRoutingDebugColor = "#28387f"_color;
 
 // The job of RouteCable is to find a visually pleasing path from the given start (point &
 // direction) to the given end point. End point is assumed to always point down (could change in the
@@ -134,7 +135,7 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
   return cable;
 }
 
-static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end) {
+static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir end) {
   float radius = 1_cm;
   ArcLine cable = ArcLine(start.pos, start.dir);
 
@@ -146,9 +147,21 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end) {
   for (bool start_left : {false, true}) {
     Vec2 start_circle_center =
         start.pos + Vec2::Polar(start.dir + (start_left ? M_PI / 2 : -M_PI / 2), radius);
+    if constexpr (kDebugCable) {
+      SkPaint circle_paint;
+      circle_paint.setStyle(SkPaint::kStroke_Style);
+      circle_paint.setColor(kRoutingDebugColor);
+      dctx.canvas.drawCircle(start_circle_center, radius, circle_paint);
+    }
     for (bool end_left : {false, true}) {
       Vec2 end_circle_center =
           end.pos + Vec2::Polar(end.dir + (end_left ? M_PI / 2 : -M_PI / 2), radius);
+      if constexpr (kDebugCable) {
+        SkPaint circle_paint;
+        circle_paint.setStyle(SkPaint::kStroke_Style);
+        circle_paint.setColor(kRoutingDebugColor);
+        dctx.canvas.drawCircle(end_circle_center, radius, circle_paint);
+      }
       Vec2 circle_diff = end_circle_center - start_circle_center;
       float circle_dist = Length(circle_diff);
       float circle_angle = atan(circle_diff);
@@ -173,7 +186,7 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end) {
         start_turn -= 2 * M_PI;
       }
 
-      float end_turn = end.dir - start_turn;
+      float end_turn = end.dir - line_dir;
       while (end_left && end_turn < -kEpsilon) {
         end_turn += 2 * M_PI;
       }
@@ -200,20 +213,20 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end) {
   return cable;
 }
 
-static ArcLine RouteCableOneEnd(Vec2AndDir start, Vec2AndDir end) {
+static ArcLine RouteCableOneEnd(DrawContext& dctx, Vec2AndDir start, Vec2AndDir end) {
   if (fabsf(start.dir + (float)M_PI / 2) < 0.000001 &&
       fabsf(end.dir + (float)M_PI / 2) < 0.000001) {
     return RouteCableDown(start, end.pos);
   } else {
-    return RoutCableStraight(start, end);
+    return RoutCableStraight(dctx, start, end);
   }
 }
 
-static ArcLine RouteCable(Vec2AndDir start, maf::Span<Vec2AndDir> cable_ends) {
+static ArcLine RouteCable(DrawContext& dctx, Vec2AndDir start, maf::Span<Vec2AndDir> cable_ends) {
   float best_total_length = HUGE_VALF;
   ArcLine best_route = ArcLine(start.pos, start.dir);
   for (auto& end : cable_ends) {
-    ArcLine current = RouteCableOneEnd(start, end);
+    ArcLine current = RouteCableOneEnd(dctx, start, end);
     float current_length = ArcLine::Iterator(current).AdvanceToEnd();
     if (current_length < best_total_length) {
       best_total_length = current_length;
@@ -313,8 +326,24 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
   return pulling;
 }
 
-void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dispenser,
-                          maf::Span<Vec2AndDir> end_candidates) {
+void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& state,
+                          Vec2AndDir dispenser, maf::Span<Vec2AndDir> end_candidates) {
+  if constexpr (kDebugCable) {
+    // Draw the end candidates
+    SkPaint end_paint;
+    end_paint.setStyle(SkPaint::kStroke_Style);
+    end_paint.setStrokeWidth(1_mm);
+    end_paint.setColor(kRoutingDebugColor);
+    SkPaint circle_paint;
+    circle_paint.setStyle(SkPaint::kFill_Style);
+    circle_paint.setColor(kRoutingDebugColor);
+    for (auto& end : end_candidates) {
+      dctx.canvas.drawLine(end.pos, end.pos + Vec2::Polar(end.dir, 2_mm), end_paint);
+      // Now let's draw a circle at the end point
+      dctx.canvas.drawCircle(end.pos, 1_mm, circle_paint);
+    }
+  }
+
   for (auto& end : end_candidates) {
     end.pos -= Vec2::Polar(end.dir, kCasingHeight);
   }
@@ -332,7 +361,7 @@ void SimulateCablePhysics(float dt, OpticalConnectorState& state, Vec2AndDir dis
   }
 
   if (!end_candidates.empty()) {  // Create the arcline & pull the cable towards it
-    state.arcline = RouteCable(dispenser, end_candidates);
+    state.arcline = RouteCable(dctx, dispenser, end_candidates);
     ArcLine::Iterator it = *state.arcline;
     it.AdvanceToEnd();
     cable_end = it.Position();

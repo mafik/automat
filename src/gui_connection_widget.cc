@@ -3,6 +3,7 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkRRect.h>
 
+#include "argument.hh"
 #include "base.hh"
 #include "connector_optical.hh"
 #include "location.hh"
@@ -82,6 +83,18 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     }
   }
 
+  if (&arg == &next_arg) {
+    while (to_points.size() > 1) {
+      // from the last two, pick the one which is closer to pointing down (-pi/2)
+      float delta_1 = fabs(to_points[to_points.size() - 1].dir + M_PI / 2);
+      float delta_2 = fabs(to_points[to_points.size() - 2].dir + M_PI / 2);
+      if (delta_1 < delta_2) {
+        std::swap(to_points[to_points.size() - 1], to_points[to_points.size() - 2]);
+      }
+      to_points.pop_back();
+    }
+  }
+
   auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, &ctx.display);
   from_shape.transform(transform_from_to_machine);
 
@@ -94,7 +107,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     state->steel_insert_hidden.Tick(display);
 
     float dt = ctx.display.timer.d;
-    SimulateCablePhysics(dt, *state, pos_dir, to_points);
+    SimulateCablePhysics(ctx, dt, *state, pos_dir, to_points);
     DrawOpticalConnector(ctx, *state);
   } else {
     if (to_shape.isEmpty()) {

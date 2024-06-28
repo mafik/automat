@@ -282,7 +282,7 @@ struct TrackArgument : Argument {
 static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
   auto arg = make_unique<TrackArgument>(track_name);
   arg->field = t.tracks[track_number].get();
-  arg->tint = "#57dce4"_color;
+  arg->tint = "#17aeb7"_color;
   t.track_args.emplace_back(std::move(arg));
 }
 

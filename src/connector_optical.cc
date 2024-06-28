@@ -681,7 +681,7 @@ struct StrokeToMesh {
       if (SkPath::kConic_Verb == verb) {
         float weight = iter.conicWeight();
         float angle = acosf(weight) * 2 * 180 / M_PI;
-        int n_steps = ceil(angle / 5);
+        int n_steps = ceil(angle * 2 / 5);
         Vec2 last_point = points[0];
         for (int step = 0; step <= n_steps; step++) {
           float t = (float)step / n_steps;
@@ -725,7 +725,7 @@ struct StrokeToMesh {
         float segment_length = Length(diff);
         diff = diff / std::max(segment_length, 0.00001f);
 
-        int n_steps = IsConstantWidth() ? 1 : std::max<int>(1, ceil(segment_length / 0.002));
+        int n_steps = IsConstantWidth() ? 1 : std::max<int>(1, ceil(segment_length / 0.25_mm));
         for (int step = 0; step <= n_steps; ++step) {
           float t = (float)step / n_steps;
 
@@ -987,8 +987,11 @@ struct MeshWithUniforms {
   sk_sp<SkMeshSpecification> mesh_specification;
   const sk_sp<SkData> uniforms;
   SkRect bounds;
+  SkPaint paint;
 
-  MeshWithUniforms() : uniforms(SkData::MakeUninitialized(sizeof(T))) {}
+  MeshWithUniforms() : uniforms(SkData::MakeUninitialized(sizeof(T))) {
+    paint.setColor(0xffffffff);
+  }
 
   T& GetUniforms() { return *(T*)uniforms->writable_data(); }
 
@@ -996,22 +999,19 @@ struct MeshWithUniforms {
 
   void Draw(SkCanvas& canvas) {
     UpdateUniforms(canvas);
-    SkPaint default_paint;
-    default_paint.setColor(0xffffffff);
     auto mesh_result = SkMesh::Make(mesh_specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
                                     4, 0, SkData::MakeWithCopy(uniforms->data(), uniforms->size()),
                                     SkSpan<SkMesh::ChildPtr>(), bounds);
     if (!mesh_result.error.isEmpty()) {
       ERROR << "Error creating mesh: " << mesh_result.error.c_str();
     } else {
-      canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
+      canvas.drawMesh(mesh_result.mesh, nullptr, paint);
     }
   }
 };
 
 struct BlackCasingUniforms {
   float plug_width_pixels;
-  Vec3 tint;
   float light_dir;
 };
 
@@ -1024,7 +1024,6 @@ struct BlackCasing : MeshWithUniforms<BlackCasingUniforms> {
 
   void DrawState(SkCanvas& canvas, OpticalConnectorState& state) {
     BlackCasingUniforms& u = GetUniforms();
-    u.tint = SkColorToVec3(state.tint);
     u.light_dir = M_PI / 2 - state.sections.front().dir - state.sections.front().true_dir_offset;
     Draw(canvas);
   }
@@ -1043,7 +1042,7 @@ struct OpticalConnectorPimpl {
 static sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
   if (isnanf(depth)) {
     // set depth to average value of all channels
-    depth = (SkColorGetR(tint) + SkColorGetG(tint) + SkColorGetB(tint)) / 255.f / 3 * 50 + 20;
+    depth = (SkColorGetR(tint) + SkColorGetG(tint) + SkColorGetB(tint)) / 255.f / 3 * 20 + 40;
   }
   uint8_t r[256], g[256], b[256];
   for (int i = 0; i < 256; i++) {
@@ -1228,7 +1227,6 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
             }};
         auto vs = SkString(R"(
       uniform float plug_width_pixels;
-      layout(color) uniform float3 tint;
       uniform float light_dir;
 
       Varyings main(const Attributes attrs) {
@@ -1247,36 +1245,31 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
       const float kCaseSideRadius = 0.12;
       // NOTE: fix this once Skia supports array initializers here
       const vec3 kCaseBorderDarkColor = vec3(5) / 255; // subtle dark contour
-      const vec3 kCaseBorderReflectionColor = vec3(0x36, 0x39, 0x3c) / 255; // canvas reflection
-      const vec3 kCaseSideDarkColor = vec3(0x14, 0x15, 0x16) / 255; // darker metal between reflections
-      const vec3 kCaseSideLightColor = vec3(0x2a, 0x2c, 0x2f) / 255; // side-light reflection
-      const vec3 kCaseFrontColor = vec3(0x15, 0x16, 0x1a) / 255; // front color
+      const vec3 kCaseBorderReflectionColor = vec3(115, 115, 115) / 255 * 1.6; // canvas reflection
+      const vec3 kCaseSideDarkColor = vec3(42, 42, 42) / 255; // darker metal between reflections
+      const vec3 kCaseSideLightColor = vec3(88, 88, 88) / 255; // side-light reflection
+      const vec3 kCaseFrontColor = vec3(0x1c, 0x1c, 0x1c) * 2 / 255; // front color
       const float kBorderDarkWidth = 0.2;
       const float kCaseSideDarkH = 0.4;
       const float kCaseSideLightH = 0.8;
       const float kCaseFrontH = 1;
-      const vec3 kTopLightColor = vec3(0x32, 0x34, 0x39) / 255 - kCaseFrontColor;
+      const vec3 kTopLightColor = vec3(0.114, 0.114, 0.114) * 2;
       const float kBevelRadius = kBorderDarkWidth * kCaseSideRadius;
 
       uniform float plug_width_pixels;
-      layout(color) uniform float3 tint;
-
-      float3 ApplyTint(float3 a) {
-        return (1 - 2 * tint) * a * a + 2 * tint * a;
-      }
 
       float2 main(const Varyings v, out float4 color) {
         float2 h = sin(min((0.5 - abs(0.5 - v.uv)) / kCaseSideRadius, 1) * 3.14159265358979323846 / 2);
         float bevel = 1 - length(1 - sin(min((0.5 - abs(0.5 - v.uv)) / kBevelRadius, 1) * 3.14159265358979323846 / 2));
         if (h.x < kCaseSideDarkH) {
-          color.rgb = mix(ApplyTint(kCaseBorderReflectionColor), ApplyTint(kCaseSideDarkColor), (h.x - kBorderDarkWidth) / (kCaseSideDarkH - kBorderDarkWidth));
+          color.rgb = mix(kCaseBorderReflectionColor, kCaseSideDarkColor, (h.x - kBorderDarkWidth) / (kCaseSideDarkH - kBorderDarkWidth));
         } else if (h.x < kCaseSideLightH) {
-          color.rgb = mix(ApplyTint(kCaseSideDarkColor), ApplyTint(kCaseSideLightColor), (h.x - kCaseSideDarkH) / (kCaseSideLightH - kCaseSideDarkH));
+          color.rgb = mix(kCaseSideDarkColor, kCaseSideLightColor, (h.x - kCaseSideDarkH) / (kCaseSideLightH - kCaseSideDarkH));
         } else {
-          color.rgb = mix(ApplyTint(kCaseSideLightColor), ApplyTint(kCaseFrontColor), (h.x - kCaseSideLightH) / (kCaseFrontH - kCaseSideLightH));
+          color.rgb = mix(kCaseSideLightColor, kCaseFrontColor, (h.x - kCaseSideLightH) / (kCaseFrontH - kCaseSideLightH));
         }
         if (bevel < 1) {
-          vec3 edge_color = ApplyTint(kCaseBorderDarkColor);
+          vec3 edge_color = kCaseBorderDarkColor;
           if (v.uv.y > 0.5) {
             edge_color = mix(edge_color, vec3(0.4), clamp((h.x - kCaseSideDarkH) / (kCaseFrontH - kCaseSideDarkH), 0, 1));
           }
@@ -1302,6 +1295,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
           };
           result->vertex_buffer = SkMeshes::MakeVertexBuffer(vertex_data, sizeof(vertex_data));
           result->mesh_specification = spec_result.specification;
+          result->paint.setColorFilter(color_filter);
           return result;
         }
         return nullptr;
@@ -1427,18 +1421,17 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
       mesh_builder.bounds.ExpandToInclude(mesh_builder.vertex_vector.back().coords);
 
       auto vertex_buffer = mesh_builder.BuildBuffer();
-      Vec3 tint = SkColorToVec3(state.tint);
-      auto uniforms = SkData::MakeWithCopy(&tint, sizeof(tint));
       auto mesh_result =
           SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
-                       mesh_builder.vertex_vector.size(), 0, uniforms, {}, mesh_builder.bounds);
+                       mesh_builder.vertex_vector.size(), 0, nullptr, {}, mesh_builder.bounds);
       if (!mesh_result.error.isEmpty()) {
         ERROR << "Error creating mesh: " << mesh_result.error.c_str();
       } else {
-        SkPaint default_paint;
-        default_paint.setColor(0xffffffff);
-        default_paint.setAntiAlias(true);
-        canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
+        SkPaint paint;
+        paint.setColor(0xffffffff);
+        paint.setAntiAlias(true);
+        paint.setColorFilter(color_filter);
+        canvas.drawMesh(mesh_result.mesh, nullptr, paint);
       }
     }
   }

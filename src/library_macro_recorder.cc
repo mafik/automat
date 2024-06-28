@@ -280,8 +280,20 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     key_presser->SetKey(key);
     Rect key_presser_shape = key_presser_loc.object->Shape().getBounds();
     Vec2AndDir arg_start = timeline->here->ArgStart(nullptr, *timeline->track_args.back());
-    key_presser_loc.position = arg_start.pos + Vec2(2_cm, 0) * track_index + Vec2(2_cm, -1.8_cm) -
-                               key_presser_shape.TopCenter();
+
+    // Pick the position that allows the cable to come in most horizontally (left to right).
+    Vec2 best_connector_pos = key_presser_shape.TopCenter();
+    float best_connector_angle = M_PI / 2;
+    Vec<Vec2AndDir> connector_positions;
+    key_presser->ConnectionPositions(connector_positions);
+    for (auto& pos : connector_positions) {
+      if (fabs(pos.dir) < fabs(best_connector_angle)) {
+        best_connector_pos = pos.pos;
+        best_connector_angle = pos.dir;
+      }
+    }
+
+    key_presser_loc.position = arg_start.pos + Vec2(3_cm, 0) - best_connector_pos;
     AnimateGrowFrom(*macro_recorder.here, key_presser_loc);
     timeline->here->ConnectTo(key_presser_loc, key_name);
   }

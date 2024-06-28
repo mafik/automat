@@ -1264,9 +1264,12 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
     }
   }
 
+  canvas.restore();
+
   {  // Icon on the metal casing
     SkPath path = PathFromSVG(kNextShape);
-    path.offset(0, 0.004);
+    Vec2 path_offset = cable_end - Vec2::Polar(connector_dir, kCasingWidth / 2);
+    path.offset(path_offset.x, path_offset.y);
 
     SkColor base_color = "#808080"_color;
     float lightness_pct = 0;
@@ -1300,8 +1303,6 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state) {
       canvas.drawPath(path, glow_paint);
     }
   }
-
-  canvas.restore();
 
   {  // Rubber cable holder
     auto vs = SkString(R"(

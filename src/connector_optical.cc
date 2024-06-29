@@ -1312,7 +1312,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
   {  // Icon on the metal casing
     Vec2 icon_offset = cable_end - Vec2::Polar(connector_dir, kCasingWidth / 2);
 
-    SkColor base_color = "#808080"_color;
+    SkColor base_color = color::AdjustLightness(state.tint, 30);
     float lightness_pct = 0;
     if (&state.arg == &next_arg) {
       lightness_pct =
@@ -1339,8 +1339,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
       SkPaint glow_paint;
       glow_paint.setColor("#ef9f37"_color);
       glow_paint.setAlphaf(lightness_pct / 100);
+      float sigma = canvas.getLocalToDeviceAs3x3().mapRadius(0.5_mm);
       glow_paint.setMaskFilter(
-          SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, 0.5_mm, true));
+          SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, sigma, false));
       glow_paint.setBlendMode(SkBlendMode::kScreen);
       icon.paint = glow_paint;
       icon.draw(&canvas, icon_offset.x, icon_offset.y);

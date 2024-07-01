@@ -350,27 +350,28 @@ static float CurrentPosRatio(const Timeline& timeline, time::SystemPoint now) {
 void TimelineCancelScheduledAt(Timeline& t) { CancelScheduledAt(*t.here); }
 
 void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
-  time::T current_offset = (now - t.playing.started_at).count();
-  auto next_update = t.MaxTrackLength();
+  time::SteadyPoint next_update = t.playing.started_at + time::Duration(t.MaxTrackLength());
   for (const auto& track : t.tracks) {
     for (time::T timestamp : track->timestamps) {
-      if (timestamp <= current_offset) {
+      auto timestamp_abs = t.playing.started_at + time::Duration(timestamp);
+      if (timestamp_abs <= now) {
         continue;
       }
-      next_update = min(next_update, timestamp);
+      next_update = min(next_update, timestamp_abs);
       break;
     }
   }
-  ScheduleAt(*t.here, t.playing.started_at + time::Duration(next_update));
+  ScheduleAt(*t.here, next_update);
 }
 
-static void TimelineUpdateOutputs(Location& here, Timeline& t, time::T current_offset) {
+static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint started_at,
+                                  time::SteadyPoint now) {
   for (int i = 0; i < t.tracks.size(); ++i) {
     auto obj_result = t.track_args[i]->GetObject(here);
     if (obj_result.location == nullptr || obj_result.object == nullptr) {
       continue;
     }
-    t.tracks[i]->UpdateOutput(*obj_result.location, current_offset);
+    t.tracks[i]->UpdateOutput(*obj_result.location, started_at, now);
   }
 }
 
@@ -390,7 +391,7 @@ void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
     TimelineCancelScheduledAt(timeline);
     timeline.playing.started_at -= time::Duration(offset);
     timeline.playing.started_at = min(timeline.playing.started_at, now);
-    TimelineUpdateOutputs(*timeline.here, timeline, (now - timeline.playing.started_at).count());
+    TimelineUpdateOutputs(*timeline.here, timeline, timeline.playing.started_at, now);
     TimelineScheduleAt(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset =
@@ -404,7 +405,7 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   if (timeline.state == Timeline::kPlaying) {
     TimelineCancelScheduledAt(timeline);
     timeline.playing.started_at = now - time::Duration(pos_ratio * max_track_length);
-    TimelineUpdateOutputs(*timeline.here, timeline, (now - timeline.playing.started_at).count());
+    TimelineUpdateOutputs(*timeline.here, timeline, timeline.playing.started_at, now);
     TimelineScheduleAt(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = pos_ratio * max_track_length;
@@ -1180,7 +1181,8 @@ LongRunning* Timeline::OnRun(Location& here) {
   if (paused.playback_offset >= MaxTrackLength()) {
     paused.playback_offset = 0;
   }
-  TimelineUpdateOutputs(here, *this, paused.playback_offset);
+  TimelineUpdateOutputs(here, *this, time::SteadyPoint{},
+                        time::SteadyPoint{} + time::Duration(paused.playback_offset));
   state = kPlaying;
   time::SteadyPoint now = time::SteadyNow();
   playing = {.started_at = now - time::Duration(paused.playback_offset)};
@@ -1214,10 +1216,11 @@ void Timeline::StopRecording() {
   state = Timeline::kPaused;
 }
 
-void OnOffTrack::UpdateOutput(Location& target, time::T current_offset) {
+void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
+                              time::SteadyPoint now) {
   int i = 0;
   for (; i < timestamps.size(); ++i) {
-    if (timestamps[i] > current_offset) {
+    if (started_at + time::Duration(timestamps[i]) > now) {
       break;
     }
   }
@@ -1238,12 +1241,11 @@ void OnOffTrack::UpdateOutput(Location& target, time::T current_offset) {
 }
 
 void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
-  auto length = MaxTrackLength();
-  auto current_offset = (now - playing.started_at).count();
-  TimelineUpdateOutputs(here, *this, current_offset);
-  if (current_offset >= length) {
+  auto end_at = playing.started_at + time::Duration(MaxTrackLength());
+  TimelineUpdateOutputs(here, *this, playing.started_at, now);
+  if (now >= end_at) {
     state = kPaused;
-    paused = {.playback_offset = length};
+    paused = {.playback_offset = MaxTrackLength()};
     Done(here);
   } else {
     TimelineScheduleAt(*this, now);

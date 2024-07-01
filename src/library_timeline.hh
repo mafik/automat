@@ -44,7 +44,8 @@ struct TrackBase : Object {
   SkPath Shape() const override;
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
-  virtual void UpdateOutput(Location& target, time::T current_offset) = 0;
+  virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
+                            time::SteadyPoint now) = 0;
 };
 
 struct OnOffTrack : TrackBase, OnOff {
@@ -52,7 +53,7 @@ struct OnOffTrack : TrackBase, OnOff {
   string_view Name() const override { return "On/Off Track"; }
   std::unique_ptr<Object> Clone() const override { return std::make_unique<OnOffTrack>(*this); }
   void Draw(gui::DrawContext&) const override;
-  void UpdateOutput(Location& target, time::T current_offset) override;
+  void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   bool IsOn() const override;
   void On() override {}

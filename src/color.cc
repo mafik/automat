@@ -1,5 +1,7 @@
 #include "color.hh"
 
+#include <include/core/SkColorFilter.h>
+
 #include <algorithm>
 #include <limits>
 
@@ -250,6 +252,22 @@ SkColor MixColors(SkColor zero, SkColor one, float ratio) {
   // LOG << "0=" << zero_luv << " 1=" << one_luv << " " << ratio << "=" <<
   // mixed_luv;
   return SkColorSetARGB(alpha, mixed_rgb.r * 255, mixed_rgb.g * 255, mixed_rgb.b * 255);
+}
+
+sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
+  if (isnanf(depth)) {
+    // set depth to average value of all channels
+    depth = (SkColorGetR(tint) + SkColorGetG(tint) + SkColorGetB(tint)) / 255.f / 3 * 20 + 40;
+  }
+  uint8_t a[256], r[256], g[256], b[256];
+  for (int i = 0; i < 256; i++) {
+    SkColor adjusted = color::AdjustLightness(tint, (i - 128) * depth / 128);
+    a[i] = SkColorGetA(tint);
+    r[i] = SkColorGetR(adjusted);
+    g[i] = SkColorGetG(adjusted);
+    b[i] = SkColorGetB(adjusted);
+  }
+  return SkColorFilters::TableARGB(a, r, g, b);
 }
 
 }  // namespace automat::color

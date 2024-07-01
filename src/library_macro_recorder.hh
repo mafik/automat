@@ -27,6 +27,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
     animation::Approach<> eye_speed;
     float eye_rotation = 0;
     int pointers_over = 0;
+    animation::Approach<> timeline_cable_width;
   };
 
   animation::PerDisplay<AnimationState> animation_state_ptr;

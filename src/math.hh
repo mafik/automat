@@ -8,6 +8,8 @@
 #include <cmath>
 #include <string>
 
+#include "str.hh"
+
 constexpr float kMetersPerInch = 0.0254f;
 
 union Vec2;
@@ -256,6 +258,8 @@ union Rect {
   constexpr Rect MoveBy(Vec2 offset) {
     return {left + offset.x, bottom + offset.y, right + offset.x, top + offset.y};
   }
+
+  std::string ToStr() const;
 };
 
 union RRect {

@@ -18,6 +18,7 @@
 namespace automat::gui {
 
 struct OpticalConnectorPimpl;
+constexpr float kCableWidth = 2_mm;
 
 struct OpticalConnectorState {
   float dispenser_v;
@@ -74,6 +75,8 @@ void SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&, Vec2An
                           maf::Span<Vec2AndDir> end_candidates);
 
 void DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
-void DrawGenericConnector(DrawContext&, ArcLine& arcline, SkColor tint, CableTexture);
+
+void DrawCable(DrawContext&, SkPath&, sk_sp<SkColorFilter>&, CableTexture,
+               float width = kCableWidth);
 
 }  // namespace automat::gui

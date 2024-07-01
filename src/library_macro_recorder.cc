@@ -67,9 +67,11 @@ MacroRecorder::~MacroRecorder() {
 }
 
 static Timeline* FindTimeline(const MacroRecorder& macro_recorder) {
+  if (macro_recorder.here == nullptr) {
+    return nullptr;
+  }
   auto machine = macro_recorder.here->ParentAs<Machine>();
   if (machine == nullptr) {
-    FATAL << "MacroRecorder must be a child of a Machine";
     return nullptr;
   }
   auto timeline = (Timeline*)macro_recorder.here->Nearby([](Location& loc) -> void* {
@@ -99,24 +101,32 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     animation_state.eye_rotation += 360;
   }
 
-  if (animation_state.pointers_over > 0) {
-    if (Timeline* timeline = FindTimeline(*this)) {
-      Vec2AndDir start = {.pos = Vec2(2.15_cm, 1_mm), .dir = -M_PI / 2};
+  Timeline* timeline = FindTimeline(*this);
+  animation_state.timeline_cable_width.target =
+      (animation_state.pointers_over > 0 && timeline != nullptr) ? 2_mm : 0;
+  animation_state.timeline_cable_width.Tick(dctx.display);
+  animation_state.timeline_cable_width.speed = 5;
 
-      Vec<Vec2AndDir> ends = {};
-      timeline->ConnectionPositions(ends);
-      Path up_path = {timeline->here->ParentAs<Widget>(), timeline->here, timeline};
-      auto matrix = TransformUp(up_path, &dctx.display);
-      Path down_path = {here->ParentAs<Widget>(), here, const_cast<MacroRecorder*>(this)};
-      matrix.postConcat(TransformDown(down_path, &dctx.display));
-      for (auto& end : ends) {
-        end.pos = matrix.mapPoint(end.pos);
-      }
+  if (animation_state.timeline_cable_width > 0.01_mm && timeline) {
+    Vec2AndDir start = {.pos = Vec2(2.2_cm, 1_mm), .dir = -M_PI / 2};
 
-      auto arcline = RouteCable(dctx, start, ends);
-
-      DrawGenericConnector(dctx, arcline, color::kParrotRed, CableTexture::Smooth);
+    Vec<Vec2AndDir> ends = {};
+    timeline->ConnectionPositions(ends);
+    Path up_path = {timeline->here->ParentAs<Widget>(), timeline->here, timeline};
+    auto matrix = TransformUp(up_path, &dctx.display);
+    Path down_path = {here->ParentAs<Widget>(), here, const_cast<MacroRecorder*>(this)};
+    matrix.postConcat(TransformDown(down_path, &dctx.display));
+    for (auto& end : ends) {
+      end.pos = matrix.mapPoint(end.pos);
     }
+
+    auto arcline = RouteCable(dctx, start, ends);
+    auto color =
+        SkColorSetA(color::kParrotRed, 255 * animation_state.timeline_cable_width.value / 2_mm);
+    auto color_filter = color::MakeTintFilter(color, 30);
+    auto path = arcline.ToPath(false);
+    DrawCable(dctx, path, color_filter, CableTexture::Smooth,
+              animation_state.timeline_cable_width.value);
   }
 
   {
@@ -199,9 +209,6 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 }
 
 static void PositionBelow(Location& origin, Location& below) {
-  Rect origin_shape = origin.object->Shape().getBounds();
-  Rect below_shape = below.object->Shape().getBounds();
-  below.position = origin_shape.BottomCenter() + origin.position - below_shape.TopCenter();
   Machine* m = origin.ParentAs<Machine>();
   Size origin_index = SIZE_MAX;
   Size below_index = SIZE_MAX;
@@ -251,7 +258,8 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
     }
     Location& loc = machine->Create<Timeline>();
     timeline = loc.As<Timeline>();
-    // TODO: animate timeline creation
+    Rect timeline_bounds = timeline->Shape().getBounds();
+    loc.position = macro_recorder.here->position + Vec2(2.2_cm, 0) - timeline_bounds.TopCenter();
     PositionBelow(*macro_recorder.here, loc);
     AnimateGrowFrom(*macro_recorder.here, loc);
   }

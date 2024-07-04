@@ -8,7 +8,7 @@
 #include <cmath>
 #include <string>
 
-#include "str.hh"
+#include "sincos.hh"
 
 constexpr float kMetersPerInch = 0.0254f;
 
@@ -30,6 +30,9 @@ union Vec2 {
   constexpr Vec2(float xy) : x(xy), y(xy) {}
   constexpr Vec2(float x, float y) : x(x), y(y) {}
   constexpr Vec2(SkPoint p) : sk(p) {}
+  constexpr static Vec2 Polar(maf::SinCos angle, float length) {
+    return Vec2((float)angle.cos * length, (float)angle.sin * length);
+  }
   constexpr static Vec2 Polar(float angle, float length) {
     return Vec2(cosf(angle) * length, sinf(angle) * length);
   }
@@ -305,13 +308,7 @@ union RRect {
 
 struct Vec2AndDir {
   Vec2 pos;
-  float dir;
+  maf::SinCos dir;
 };
 
 inline float atan(Vec2 v) { return atan2f(v.y, v.x); }
-
-inline float NormalizeAngle(float angle) {
-  while (angle < -M_PI) angle += 2 * M_PI;
-  while (angle >= M_PI) angle -= 2 * M_PI;
-  return angle;
-}

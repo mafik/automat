@@ -15,6 +15,14 @@
 // Non-leaf nodes can usually be cut in many ways, which produce different
 // variations of the same basic equality (for example "x - y = z + v" for the
 // Sum node & "x / y = z * v" for the Product node).
+//
+// 2 * 3 = 1 + 5
+//
+// 2        1
+//  \      /
+//   * == +
+//  /      \
+// 3        5
 namespace treemath {
 
 struct Node {

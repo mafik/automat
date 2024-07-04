@@ -78,7 +78,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     if (manual_position) {
       to_points.emplace_back(Vec2AndDir{
           .pos = *manual_position,
-          .dir = -M_PI / 2,
+          .dir = -90_deg,
       });
     }
   }
@@ -86,8 +86,8 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   if (&arg == &next_arg) {
     while (to_points.size() > 1) {
       // from the last two, pick the one which is closer to pointing down (-pi/2)
-      float delta_1 = fabs(to_points[to_points.size() - 1].dir + M_PI / 2);
-      float delta_2 = fabs(to_points[to_points.size() - 2].dir + M_PI / 2);
+      float delta_1 = fabs((to_points[to_points.size() - 1].dir + 90_deg).ToRadians());
+      float delta_2 = fabs((to_points[to_points.size() - 2].dir + 90_deg).ToRadians());
       if (delta_1 < delta_2) {
         std::swap(to_points[to_points.size() - 1], to_points[to_points.size() - 2]);
       }

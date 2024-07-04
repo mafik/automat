@@ -3,12 +3,15 @@
 #include <include/core/SkPath.h>
 
 #include "math.hh"
+#include "sincos.hh"
 #include "vec.hh"
 
 namespace maf {
 
-// ArcLine describes a shape composed of lines and arcs. It is always closed and follows a CCW
-// winding order.
+// TODO: move the turn direction to the `radius` sign bit (from the `sweep_angle` sign)
+// TODO: update those docs!
+//
+// ArcLine describes a shape composed of lines and arcs.
 //
 // The basic functionality to outset the shape is implemented, but it is not perfect. A couple
 // edge-cases are still not handled:
@@ -24,28 +27,44 @@ struct ArcLine {
 
   struct Arc {
     float radius;
-    float sweep_angle;
+    SinCos sweep_angle;
+    float ToRadians() const {
+      return std::signbit(radius) ? sweep_angle.ToRadiansNegative()
+                                  : sweep_angle.ToRadiansPositive();
+    }
+    float ToDegrees() const {
+      return std::signbit(radius) ? sweep_angle.ToDegreesNegative()
+                                  : sweep_angle.ToDegreesPositive();
+    }
   };
 
   enum class Type : uint8_t { Line, Arc } type;
   union Segment {
-    Line line;
+    Segment(const Segment& other) : arc(other.arc) {}
+    Segment(Line&& line) : line(line) {}
+    Segment(Arc&& arc) : arc(arc) {}
     Arc arc;
+    Line line;
   };
 
   Vec2 start;
-  float start_angle;
+  SinCos start_angle;
   Vec<Type> types;
   Vec<Segment> segments;
 
-  ArcLine(Vec2 start, float start_angle);
+  ArcLine(Vec2 start, SinCos start_angle);
   ArcLine(const ArcLine& copy) = default;
 
   ArcLine& MoveBy(float length);
 
+  // Turn the ArcLine by at most 180 degrees.
   // When `sweep_angle` is positive, the arc turns to the left.
   // Turn radius should be always positive.
-  ArcLine& TurnBy(float sweep_angle, float turn_radius);
+  ArcLine& TurnConvex(SinCos sweep_angle, float turn_radius);
+
+  // Turn the ArcLine by at most 360 degrees.
+  // When `turn_radius` is positive, the arc turns to the left.
+  ArcLine& TurnBy(SinCos sweep_angle, float turn_radius);
 
   ArcLine& Outset(float offset);
 
@@ -57,7 +76,7 @@ struct ArcLine {
     float i_fract;  // A value between 0 and 1.
 
     Vec2 segment_start_pos;
-    float segment_start_angle;
+    SinCos segment_start_angle;
 
     // Constructs a new iterator at the beginning of the ArcLine.
     Iterator(const ArcLine& arcline)
@@ -76,23 +95,23 @@ struct ArcLine {
                Vec2::Polar(segment_start_angle, arcline.segments[i].line.length * i_fract);
       } else {
         const auto& arc = arcline.segments[i].arc;
-        const float angle_to_center =
-            segment_start_angle + (arc.sweep_angle > 0 ? M_PI / 2 : -M_PI / 2);
-        const Vec2 center = segment_start_pos + Vec2::Polar(angle_to_center, arc.radius);
-        const float angle_to_p = M_PI + angle_to_center + arc.sweep_angle * i_fract;
-        return center + Vec2::Polar(angle_to_p, arc.radius);
+        const Vec2 center =
+            segment_start_pos + Vec2::Polar(segment_start_angle + 90_deg, arc.radius);
+        return center + Vec2::Polar(Angle() - 90_deg, arc.radius);
       }
     }
 
-    // Return the current angle of the iterator. May fall outside of [-PI, PI] range.
-    float Angle() const {
+    // Return the current angle of the iterator.
+    SinCos Angle() const {
       if (arcline.segments.empty()) {
         return arcline.start_angle;
       } else if (arcline.types[i] == Type::Line) {
         return segment_start_angle;
       } else {
         const auto& arc = arcline.segments[i].arc;
-        return segment_start_angle + arc.sweep_angle * i_fract;
+        return segment_start_angle + (std::signbit(arc.radius)
+                                          ? arc.sweep_angle.ScaleNegative(i_fract)
+                                          : arc.sweep_angle.ScalePositive(i_fract));
       }
     }
 
@@ -114,7 +133,7 @@ struct ArcLine {
   // The operation can then be performed using the Apply method.
   struct TurnShift {
     const float turn_radius;
-    float first_turn_angle;
+    SinCos first_turn_angle;
     float move_between_turns;
     float distance_forward;
 

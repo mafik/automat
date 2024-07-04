@@ -19,6 +19,7 @@
 #include "library_timeline.hh"
 #include "log.hh"
 #include "math.hh"
+#include "sincos.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
@@ -119,7 +120,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   animation_state.timeline_cable_width.speed = 5;
 
   if (animation_state.timeline_cable_width > 0.01_mm && timeline) {
-    Vec2AndDir start = {.pos = Vec2(2.2_cm, 1_mm), .dir = -M_PI / 2};
+    Vec2AndDir start = {.pos = Vec2(2.2_cm, 1_mm), .dir = -90_deg};
 
     Vec<Vec2AndDir> ends = {};
     timeline->ConnectionPositions(ends);
@@ -355,11 +356,11 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
 
     // Pick the position that allows the cable to come in most horizontally (left to right).
     Vec2 best_connector_pos = key_presser_shape.TopCenter();
-    float best_connector_angle = M_PI / 2;
+    SinCos best_connector_angle = 90_deg;
     Vec<Vec2AndDir> connector_positions;
     key_presser->ConnectionPositions(connector_positions);
     for (auto& pos : connector_positions) {
-      if (fabs(pos.dir) < fabs(best_connector_angle)) {
+      if (fabs(pos.dir.ToRadians()) < fabs(best_connector_angle.ToRadians())) {
         best_connector_pos = pos.pos;
         best_connector_angle = pos.dir;
       }

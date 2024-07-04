@@ -256,20 +256,20 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 
   float start_x = frame_inner2.rect().right();
   float start_y = frame_inner2.rect().top() + kFrameInnerRadius;
-  ArcLine inner_outline = ArcLine({start_x, start_y}, M_PI / 2);
+  ArcLine inner_outline = ArcLine({start_x, start_y}, 90_deg);
   inner_outline.MoveBy(kKeySpacing + kKeyHeight - kKeyBaseRadius - kFrameInnerRadius);
-  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.TurnConvex(90_deg, kFrameInnerRadius);
   inner_outline.MoveBy(kMinimalTouchableSize / 2 - kFrameInnerRadius);
-  inner_outline.TurnBy(-M_PI / 2, kMinimalTouchableSize / 2 + kKeySpacing);
+  inner_outline.TurnConvex(-90_deg, kMinimalTouchableSize / 2 + kKeySpacing);
   inner_outline.MoveBy(kMinimalTouchableSize / 2 - kFrameInnerRadius);
-  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.TurnConvex(90_deg, kFrameInnerRadius);
   inner_outline.MoveBy(frame_inner2.width() - kFrameInnerRadius * 2 - kMinimalTouchableSize -
                        kKeySpacing);
-  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.TurnConvex(90_deg, kFrameInnerRadius);
   inner_outline.MoveBy(frame_inner2.height() - kFrameInnerRadius * 2);
-  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.TurnConvex(90_deg, kFrameInnerRadius);
   inner_outline.MoveBy(frame_inner2.width() - kFrameInnerRadius * 2);
-  inner_outline.TurnBy(M_PI / 2, kFrameInnerRadius);
+  inner_outline.TurnConvex(90_deg, kFrameInnerRadius);
   SkPath inner_contour = inner_outline.ToPath();
 
   // Draw background

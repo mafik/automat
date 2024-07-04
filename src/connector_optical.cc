@@ -25,6 +25,7 @@
 #include "log.hh"
 #include "math.hh"
 #include "on_off.hh"
+#include "sincos.hh"
 #include "svg.hh"
 #include "textures.hh"
 
@@ -68,7 +69,7 @@ constexpr SkColor kRoutingDebugColor = "#28387f"_color;
 //    - go straight to the end point
 
 static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
-  ArcLine cable = ArcLine(start.pos, M_PI * 1.5);
+  ArcLine cable = ArcLine(start.pos, -90_deg);
   Vec2 delta = cable_end - start.pos;
   float distance = Length(delta);
   float turn_radius = std::max<float>(distance / 8, 0.01);
@@ -93,10 +94,10 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
       } else {
         dir = -1;
       }
-      cable.TurnBy(dir * M_PI / 2, turn_radius);
+      cable.TurnConvex(90_deg * dir, turn_radius);
       x += turn_radius * dir;
       y += turn_radius;
-      cable.TurnBy(dir * M_PI / 2, turn_radius);
+      cable.TurnConvex(90_deg * dir, turn_radius);
       x += turn_radius * dir;
       y -= turn_radius;
       float move_up = cable_end.y - y;
@@ -105,16 +106,16 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
         cable.MoveBy(move_up);
       }
       y = cable_end.y;
-      cable.TurnBy(dir * M_PI / 2, turn_radius);
+      cable.TurnConvex(90_deg * dir, turn_radius);
       x -= turn_radius * dir;
       y -= turn_radius;
       cable.MoveBy(dir * (x - cable_end.x) - turn_radius);
-      cable.TurnBy(dir * M_PI / 2, turn_radius);
+      cable.TurnConvex(90_deg * dir, turn_radius);
       if (move_down > 0) {
         cable.MoveBy(move_down);
       }
     } else {
-      cable.TurnBy(horizontal_shift.first_turn_angle, turn_radius);
+      cable.TurnConvex(horizontal_shift.first_turn_angle, turn_radius);
       if (move_side > 0) {
         cable.MoveBy(move_side);
       }
@@ -122,7 +123,7 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
       if (move_side > 0) {
         cable.MoveBy(move_side);
       }
-      cable.TurnBy(-horizontal_shift.first_turn_angle, turn_radius);
+      cable.TurnConvex(-horizontal_shift.first_turn_angle, turn_radius);
     }
   } else {
     if (move_down > 0) {
@@ -144,10 +145,12 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
   float best_end_turn;
   float best_line_length;
   float best_total_length = HUGE_VALF;
+  float best_start_radius;
+  float best_end_radius;
 
   for (bool start_left : {false, true}) {
     Vec2 start_circle_center =
-        start.pos + Vec2::Polar(start.dir + (start_left ? M_PI / 2 : -M_PI / 2), radius);
+        start.pos + Vec2::Polar(start.dir + (start_left ? 90_deg : -90_deg), radius);
     if constexpr (kDebugCable) {
       SkPaint circle_paint;
       circle_paint.setStyle(SkPaint::kStroke_Style);
@@ -156,7 +159,7 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
     }
     for (bool end_left : {false, true}) {
       Vec2 end_circle_center =
-          end.pos + Vec2::Polar(end.dir + (end_left ? M_PI / 2 : -M_PI / 2), radius);
+          end.pos + Vec2::Polar(end.dir + (end_left ? 90_deg : -90_deg), radius);
       if constexpr (kDebugCable) {
         SkPaint circle_paint;
         circle_paint.setStyle(SkPaint::kStroke_Style);
@@ -165,20 +168,21 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
       }
       Vec2 circle_diff = end_circle_center - start_circle_center;
       float circle_dist = Length(circle_diff);
-      float circle_angle = atan(circle_diff);
-      float line_dir;
+      SinCos circle_angle = SinCos::FromVec2(circle_diff, circle_dist);
+      SinCos line_dir;
       float line_length;
       if (start_left == end_left) {
         line_dir = circle_angle;
         line_length = circle_dist;
       } else if (circle_dist > 2 * radius) {
         line_length = sqrt(circle_dist * circle_dist - radius * radius * 4);
-        line_dir = circle_angle + acosf(line_length / circle_dist) * (start_left ? 1 : -1);
+        line_dir = circle_angle +
+                   SinCos::FromRadians(acosf(line_length / circle_dist) * (start_left ? 1 : -1));
       } else {
         continue;
       }
 
-      float start_turn = line_dir - start.dir;
+      float start_turn = (line_dir - start.dir).ToRadians();
       constexpr float kEpsilon = 1e-6;
       while (start_left && start_turn < -kEpsilon) {
         start_turn += 2 * M_PI;
@@ -187,7 +191,7 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
         start_turn -= 2 * M_PI;
       }
 
-      float end_turn = end.dir - line_dir;
+      float end_turn = (end.dir - line_dir).ToRadians();
       while (end_left && end_turn < -kEpsilon) {
         end_turn += 2 * M_PI;
       }
@@ -201,22 +205,20 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
         best_start_turn = start_turn;
         best_end_turn = end_turn;
         best_line_length = line_length;
+        best_start_radius = start_left ? radius : -radius;
+        best_end_radius = end_left ? radius : -radius;
       }
     }
   }
 
-  // LOG << " start_turn:" << best_start_turn << " end_turn:" << best_end_turn
-  //     << " line_length:" << best_line_length;
-
-  cable.TurnBy(best_start_turn, radius);
+  cable.TurnBy(SinCos::FromRadians(best_start_turn), best_start_radius);
   cable.MoveBy(best_line_length);
-  cable.TurnBy(best_end_turn, radius);
+  cable.TurnBy(SinCos::FromRadians(best_end_turn), best_end_radius);
   return cable;
 }
 
 static ArcLine RouteCableOneEnd(DrawContext& dctx, Vec2AndDir start, Vec2AndDir end) {
-  if (fabsf(start.dir + (float)M_PI / 2) < 0.000001 &&
-      fabsf(end.dir + (float)M_PI / 2) < 0.000001) {
+  if (start.dir == -90_deg) {
     return RouteCableDown(start, end.pos);
   } else {
     return RoutCableStraight(dctx, start, end);
@@ -239,22 +241,21 @@ ArcLine RouteCable(DrawContext& dctx, Vec2AndDir start, maf::Span<Vec2AndDir> ca
 
 // This function walks along the given arcline (from the end to its start) and adds
 // an anchor every kStep distance. It populates the `anchors` and `anchor_tangents` vectors.
-static void PopulateAnchors(Vec<Vec2>& anchors, Vec<float>& anchor_dir, const ArcLine& arcline) {
+static void PopulateAnchors(Vec<Vec2>& anchors, Vec<SinCos>& anchor_dir, const ArcLine& arcline) {
   auto it = ArcLine::Iterator(arcline);
   Vec2 dispenser = it.Position();
   float cable_length = it.AdvanceToEnd();
   Vec2 tail = it.Position();
 
   anchors.push_back(tail);
-  anchor_dir.push_back(NormalizeAngle(it.Angle() + M_PI));
+  anchor_dir.push_back(it.Angle().Opposite());
   for (float cable_pos = kStep; cable_pos < cable_length - kCableWidth / 2; cable_pos += kStep) {
     it.Advance(-kStep);
     anchors.push_back(it.Position());
-    float dir = NormalizeAngle(it.Angle() + M_PI);
-    anchor_dir.push_back(dir);
+    anchor_dir.push_back(it.Angle().Opposite());
   }
   anchors.push_back(dispenser);
-  anchor_dir.push_back(NormalizeAngle(it.Angle() + M_PI));
+  anchor_dir.push_back(it.Angle().Opposite());
 }
 
 // Simulate the dispenser pulling in the cable. This function may remove some of the cable segments
@@ -350,7 +351,7 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
   }
 
   Optional<Vec2> cable_end;
-  float cable_end_dir;
+  SinCos cable_end_dir;
   for (auto& end : end_candidates) {
     cable_end = end.pos;
     if (state.stabilized && Length(dispenser.pos - state.stabilized_start) < 0.0001) {
@@ -379,7 +380,7 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
   chain.back().pos = dispenser.pos;
 
   Vec<Vec2> anchors;
-  Vec<float> true_anchor_dir;
+  Vec<SinCos> true_anchor_dir;
   if (state.arcline) {
     PopulateAnchors(anchors, true_anchor_dir, *state.arcline);
   }
@@ -392,7 +393,7 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
   // segments.
   bool dispenser_active = SimulateDispenser(state, dt, anchors.size());
 
-  float numerical_anchor_dir[anchors.size()];
+  SinCos numerical_anchor_dir[anchors.size()];
 
   int anchor_i[chain.size()];  // Index of the anchor that the chain link is attached to
 
@@ -427,20 +428,22 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
   }
 
   constexpr float kDistanceEpsilon = 1e-6;
-  if (Length(chain[chain.size() - 1].pos - chain[chain.size() - 2].pos) > kDistanceEpsilon &&
+  auto last_two_pos_diff = chain[chain.size() - 1].pos - chain[chain.size() - 2].pos;
+  auto last_two_pos_diff_len = Length(last_two_pos_diff);
+  if (last_two_pos_diff_len > kDistanceEpsilon &&
       chain[chain.size() - 2].distance > kDistanceEpsilon) {
-    chain[chain.size() - 1].dir = atan(chain[chain.size() - 1].pos - chain[chain.size() - 2].pos);
+    chain[chain.size() - 1].dir = SinCos::FromVec2(last_two_pos_diff, last_two_pos_diff_len);
   } else {
-    chain[chain.size() - 1].dir = NormalizeAngle(dispenser.dir + M_PI);  // M_PI / 2;
+    chain[chain.size() - 1].dir = dispenser.dir.Opposite();
   }
   if (Length(chain[1].pos - chain[0].pos) > kDistanceEpsilon &&
       chain[0].distance > kDistanceEpsilon) {
-    chain[0].dir = atan(chain[1].pos - chain[0].pos);
+    chain[0].dir = SinCos::FromVec2(chain[1].pos - chain[0].pos);
   } else {
-    chain[0].dir = NormalizeAngle(dispenser.dir + M_PI);
+    chain[0].dir = dispenser.dir.Opposite();
   }
   for (int i = 1; i < chain.size() - 1; i++) {
-    chain[i].dir = atan(chain[i + 1].pos - chain[i - 1].pos);
+    chain[i].dir = SinCos::FromVec2(chain[i + 1].pos - chain[i - 1].pos);
   }
 
   // Copy over the alignment of the anchors to the chain links.
@@ -451,33 +454,35 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
     int next_ai = i < chain.size() - 1 ? anchor_i[i + 1] : -1;
 
     if (ai != -1 && prev_ai != -1 && next_ai != -1) {
-      numerical_anchor_dir[ai] = atan(anchors[next_ai] - anchors[prev_ai]);
+      numerical_anchor_dir[ai] = SinCos::FromVec2(anchors[next_ai] - anchors[prev_ai]);
     } else if (ai != -1 && prev_ai != -1) {
-      numerical_anchor_dir[ai] = atan(anchors[ai] - anchors[prev_ai]);
+      numerical_anchor_dir[ai] = SinCos::FromVec2(anchors[ai] - anchors[prev_ai]);
     } else if (ai != -1 && next_ai != -1) {
-      numerical_anchor_dir[ai] = atan(anchors[next_ai] - anchors[ai]);
+      numerical_anchor_dir[ai] = SinCos::FromVec2(anchors[next_ai] - anchors[ai]);
     } else if (ai != -1) {
-      numerical_anchor_dir[ai] = M_PI / 2;
+      numerical_anchor_dir[ai] = 90_deg;
     }
-    float true_dir_offset;
+    SinCos true_dir_offset;
     if (ai != -1) {
       float distance_mm = Length(anchors[ai] - chain[i].pos) * 1000;
       total_anchor_distance += distance_mm;
-      true_dir_offset = NormalizeAngle(true_anchor_dir[ai] - chain[i].dir);
-      true_dir_offset = std::lerp(true_dir_offset, 0, std::min<float>(distance_mm, 1));
+      true_dir_offset = true_anchor_dir[ai] - chain[i].dir;
+      true_dir_offset = true_dir_offset * (1.f - std::min<float>(distance_mm, 1));
       chain[i].true_dir_offset = true_dir_offset;
     } else {
-      chain[i].true_dir_offset *= expf(-dt * 10);
+      chain[i].true_dir_offset = chain[i].true_dir_offset * expf(-dt * 10);
     }
     if (ai != -1 && prev_ai != -1) {
-      chain[i].prev_dir_delta = atan(anchors[prev_ai] - anchors[ai]) - numerical_anchor_dir[ai];
+      chain[i].prev_dir_delta =
+          SinCos::FromVec2(anchors[prev_ai] - anchors[ai]) - numerical_anchor_dir[ai];
     } else {
-      chain[i].prev_dir_delta = M_PI;
+      chain[i].prev_dir_delta = 180_deg;
     }
     if (ai != -1 && next_ai != -1) {
-      chain[i].next_dir_delta = atan(anchors[next_ai] - anchors[ai]) - numerical_anchor_dir[ai];
+      chain[i].next_dir_delta =
+          SinCos::FromVec2(anchors[next_ai] - anchors[ai]) - numerical_anchor_dir[ai];
     } else {
-      chain[i].next_dir_delta = 0;
+      chain[i].next_dir_delta = 0_deg;
     }
     if (dispenser_active && i == chain.size() - 2) {
       // pass
@@ -492,9 +497,9 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
     }
   }
   if (cable_end) {
-    chain.front().true_dir_offset = NormalizeAngle(cable_end_dir + M_PI - chain.front().dir);
+    chain.front().true_dir_offset = cable_end_dir.Opposite() - chain.front().dir;
   }
-  chain.back().true_dir_offset = NormalizeAngle(dispenser.dir + M_PI - chain.back().dir);
+  chain.back().true_dir_offset = dispenser.dir.Opposite() - chain.back().dir;
 
   if (anchors.empty()) {
     state.stabilized = chain.size() == 2 && Length(chain[0].pos - chain[1].pos) < 0.0001;
@@ -508,7 +513,7 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
       state.stabilized_end = *cable_end;
     } else {
       state.stabilized_end.reset();
-      chain.front().true_dir_offset = 0;
+      chain.front().true_dir_offset = 0_deg;
     }
   }
 
@@ -564,8 +569,8 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
 
         Vec2 middle_pre_fix = (a.pos + b.pos + c.pos) / 3;
 
-        float a_dir_offset = b.prev_dir_delta;
-        float c_dir_offset = b.next_dir_delta;
+        SinCos a_dir_offset = b.prev_dir_delta;
+        SinCos c_dir_offset = b.next_dir_delta;
         Vec2 a_target = b.pos + Vec2::Polar(chain[i].dir + a_dir_offset, a.distance);
         Vec2 c_target = b.pos + Vec2::Polar(chain[i].dir + c_dir_offset, b.distance);
 
@@ -614,8 +619,8 @@ Vec2 OpticalConnectorState::PlugBottomCenter() const {
 
 SkMatrix OpticalConnectorState::ConnectorMatrix() const {
   Vec2 pos = sections.front().pos;
-  float dir = sections.front().dir + sections.front().true_dir_offset - M_PI / 2;
-  return SkMatrix::RotateRad(dir).postTranslate(pos.x, pos.y).preTranslate(0, -kCasingHeight);
+  SinCos dir = sections.front().dir + sections.front().true_dir_offset - 90_deg;
+  return dir.ToMatrix().postTranslate(pos.x, pos.y).preTranslate(0, -kCasingHeight);
 }
 
 SkPath OpticalConnectorState::Shape() const {
@@ -1026,7 +1031,8 @@ struct BlackCasing : MeshWithUniforms<BlackCasingUniforms> {
 
   void DrawState(SkCanvas& canvas, OpticalConnectorState& state) {
     BlackCasingUniforms& u = GetUniforms();
-    u.light_dir = M_PI / 2 - state.sections.front().dir - state.sections.front().true_dir_offset;
+    u.light_dir = M_PI / 2 -
+                  (state.sections.front().dir - state.sections.front().true_dir_offset).ToRadians();
     Draw(canvas);
   }
 };
@@ -1072,8 +1078,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
   canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
   SkMatrix transform = SkMatrix::Translate(cable_end);
-  float connector_dir = state.sections.front().dir + state.sections.front().true_dir_offset;
-  transform.preRotate(connector_dir * 180 / M_PI - 90);
+  SinCos connector_dir = state.sections.front().dir + state.sections.front().true_dir_offset;
+
+  (connector_dir - 90_deg).PreRotate(transform);
   transform.preTranslate(0, -kCasingHeight);
   canvas.concat(transform);
 
@@ -1359,7 +1366,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
     if (mesh_builder.vertex_vector.empty()) {
       // Add two points on the left & right side of the connector - just so that we can build the
       // ellipse cap.
-      Vec2 offset = Vec2::Polar(connector_dir + M_PI / 2, kCasingWidth / 2);
+      Vec2 offset = Vec2::Polar(connector_dir + 90_deg, kCasingWidth / 2);
       Vec2 tangent = Vec2::Polar(connector_dir, 1);
       mesh_builder.vertex_vector.push_back({
           .coords = cable_end + offset,
@@ -1429,12 +1436,37 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
     if (state.arcline) {
       SkPath cable_path = state.arcline->ToPath(false);
       SkPaint arcline_paint;
-      arcline_paint.setColor(SK_ColorBLACK);
-      arcline_paint.setAlphaf(.5);
+      arcline_paint.setColor("#eee19d"_color);
+      // arcline_paint.setAlphaf(.5);
       arcline_paint.setStrokeWidth(0.0005);
       arcline_paint.setStyle(SkPaint::kStroke_Style);
       arcline_paint.setAntiAlias(true);
+      arcline_paint.setBlendMode(SkBlendMode::kDifference);
       canvas.drawPath(cable_path, arcline_paint);
+
+      Vec<Vec2> anchors;
+      Vec<SinCos> true_anchor_dir;
+      PopulateAnchors(anchors, true_anchor_dir, *state.arcline);
+      SkPath anchor_shape;
+      anchor_shape.moveTo(1_mm, 0);
+      anchor_shape.lineTo(0.5_mm, 0.5_mm);
+      anchor_shape.lineTo(0.5_mm, 0.2_mm);
+      anchor_shape.lineTo(-1_mm, 0.2_mm);
+      anchor_shape.lineTo(-1_mm, -0.2_mm);
+      anchor_shape.lineTo(0.5_mm, -0.2_mm);
+      anchor_shape.lineTo(0.5_mm, -0.5_mm);
+      anchor_shape.close();
+      SkPaint anchor_paint;
+      anchor_paint.setColor("#ff00ff"_color);
+      anchor_paint.setBlendMode(SkBlendMode::kDifference);
+      for (int i = 0; i < anchors.size(); i++) {
+        auto saved_matrix = canvas.getTotalMatrix();
+        canvas.translate(anchors[i].x, anchors[i].y);
+        canvas.concat(true_anchor_dir[i].ToMatrix());
+        canvas.drawPath(anchor_shape, anchor_paint);
+
+        canvas.setMatrix(saved_matrix);
+      }
     }
   }
 
@@ -1558,19 +1590,19 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Argument& arg, Vec2A
       .pos = start.pos,
       .vel = Vec2(0, 0),
       .acc = Vec2(0, 0),
-      .dir = NormalizeAngle(start.dir + M_PI),
-      .true_dir_offset = 0,
+      .dir = start.dir.Opposite(),
+      .true_dir_offset = 0_deg,
       .distance = 0,
-      .next_dir_delta = 0,
+      .next_dir_delta = 0_deg,
   });  // plug
   sections.emplace_back(CableSection{
       .pos = start.pos,
       .vel = Vec2(0, 0),
       .acc = Vec2(0, 0),
-      .dir = NormalizeAngle(start.dir + M_PI),
-      .true_dir_offset = 0,
+      .dir = start.dir.Opposite(),
+      .true_dir_offset = 0_deg,
       .distance = 0,
-      .next_dir_delta = 0,
+      .next_dir_delta = 0_deg,
   });  // dispenser
   steel_insert_hidden.acceleration = 400;
   steel_insert_hidden.friction = 40;

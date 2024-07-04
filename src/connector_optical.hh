@@ -11,6 +11,7 @@
 #include "location.hh"
 #include "math.hh"
 #include "optional.hh"
+#include "sincos.hh"
 #include "time.hh"
 #include "vec.hh"
 #include "widget.hh"
@@ -28,16 +29,16 @@ struct OpticalConnectorState {
     Vec2 vel;
     Vec2 acc;
 
-    float dir;  // Direction of the cable at this point. This is calculated from the previous and
-                // next points.
-    float
+    SinCos dir;  // Direction of the cable at this point. This is calculated from the previous and
+                 // next points.
+    SinCos
         true_dir_offset;  // Difference between the "true" dir (coming from the arcline) and `dir`.
 
     // Distance to the next element
     float distance;
 
-    float next_dir_delta;         // 0 when the cable is straight
-    float prev_dir_delta = M_PI;  // M_PI when the cable is straight
+    SinCos next_dir_delta;            // 0 when the cable is straight
+    SinCos prev_dir_delta = 180_deg;  // M_PI when the cable is straight
   };
 
   maf::Vec<CableSection> sections;

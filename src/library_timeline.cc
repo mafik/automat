@@ -25,6 +25,7 @@
 #include "key_button.hh"
 #include "math.hh"
 #include "number_text_field.hh"
+#include "sincos.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
@@ -599,7 +600,7 @@ struct DragZoomAction : Action {
 };
 
 SkPath WindowShape(int num_tracks) {
-  ArcLine window = ArcLine({0, 0}, 0);
+  ArcLine window = ArcLine({0, 0}, 0_deg);
 
   auto side_button_turn = ArcLine::TurnShift(-kSideButtonRadius - kSideButtonMargin,
                                              kSideButtonRadius + kSideButtonMargin);
@@ -609,10 +610,12 @@ SkPath WindowShape(int num_tracks) {
 
   side_button_turn.Apply(window);
   window.MoveBy(kSideButtonRadius - kSideButtonMargin);
-  window.TurnBy(-numbers::pi / 2, kSideButtonMargin);
+  window.TurnConvex(-90_deg, kSideButtonMargin);
 
-  float lower_turn_angle = acos((kScrewMargin - kScrewRadius) / (kScrewRadius + 2 * kScrewMargin));
-  float lower_turn_dist = sin(lower_turn_angle) * (kScrewRadius + kScrewMargin * 2) + kScrewRadius;
+  SinCos lower_turn_angle =
+      SinCos::FromRadians(acos((kScrewMargin - kScrewRadius) / (kScrewRadius + 2 * kScrewMargin)));
+  float lower_turn_dist =
+      (float)lower_turn_angle.sin * (kScrewRadius + kScrewMargin * 2) + kScrewRadius;
 
   float window_height = WindowHeight(num_tracks);
 
@@ -620,19 +623,19 @@ SkPath WindowShape(int num_tracks) {
       window_height - kSideButtonMargin - kSideButtonRadius - kSideButtonMargin - lower_turn_dist;
   window.MoveBy(vertical_dist);
 
-  window.TurnBy(-lower_turn_angle, kScrewMargin);
-  window.TurnBy(-numbers::pi / 2 + 2 * lower_turn_angle, kScrewRadius + kScrewMargin);
-  window.TurnBy(-lower_turn_angle, kScrewMargin);
+  window.TurnConvex(-lower_turn_angle, kScrewMargin);
+  window.TurnConvex(-90_deg + lower_turn_angle * 2, kScrewRadius + kScrewMargin);
+  window.TurnConvex(-lower_turn_angle, kScrewMargin);
 
   window.MoveBy(kWindowWidth - lower_turn_dist * 2);
 
-  window.TurnBy(-lower_turn_angle, kScrewMargin);
-  window.TurnBy(-numbers::pi / 2 + 2 * lower_turn_angle, kScrewRadius + kScrewMargin);
-  window.TurnBy(-lower_turn_angle, kScrewMargin);
+  window.TurnConvex(-lower_turn_angle, kScrewMargin);
+  window.TurnConvex(-90_deg + lower_turn_angle * 2, kScrewRadius + kScrewMargin);
+  window.TurnConvex(-lower_turn_angle, kScrewMargin);
 
   window.MoveBy(vertical_dist);
 
-  window.TurnBy(-numbers::pi / 2, kSideButtonMargin);
+  window.TurnConvex(-90_deg, kSideButtonMargin);
   window.MoveBy(kSideButtonRadius - kSideButtonMargin);
   side_button_turn.ApplyNegative(window);
 
@@ -793,7 +796,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
 
-  ArcLine signal_line = ArcLine({bridge_offset_x, -kRulerHeight}, M_PI_2);
+  ArcLine signal_line = ArcLine({bridge_offset_x, -kRulerHeight}, 90_deg);
 
   float x_behind_display = -kPlayButtonRadius - kDisplayMargin - kDisplayWidth - kDisplayMargin / 2;
   auto turn_shift = ArcLine::TurnShift(bridge_offset_x - x_behind_display, kDisplayMargin / 2);
@@ -802,7 +805,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   turn_shift.Apply(signal_line);
   signal_line.MoveBy(kLetterSize * 2 + 1_mm * 3 + kDisplayMargin / 2 -
                      turn_shift.distance_forward / 2);
-  signal_line.TurnBy(-M_PI_2, kDisplayMargin / 2);
+  signal_line.TurnConvex(-90_deg, kDisplayMargin / 2);
 
   // signal_line.TurnBy(M_PI_2, kDisplayMargin / 2);
   auto signal_path = signal_line.ToPath(false);
@@ -1069,7 +1072,7 @@ Vec2AndDir Timeline::ArgStart(Argument& arg) {
     return {
         .pos = {kPlasticWidth / 2, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
                                        i * (kTrackMargin + kTrackHeight)},
-        .dir = 0,
+        .dir = 0_deg,
     };
   }
   return Object::ArgStart(arg);

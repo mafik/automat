@@ -10,6 +10,7 @@
 #include "key_button.hh"
 #include "keyboard.hh"
 #include "library_macros.hh"
+#include "sincos.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
@@ -95,11 +96,9 @@ void KeyPresser::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const 
   auto button_shape = shortcut_button.Shape();
   SkRRect rrect;
   if (button_shape.isRRect(&rrect)) {
-    out_positions.push_back(
-        Vec2AndDir{.pos = Rect::TopCenter(rrect.rect()), .dir = -std::numbers::pi / 2});
-    out_positions.push_back(Vec2AndDir{.pos = Rect::LeftCenter(rrect.rect()), .dir = 0});
-    out_positions.push_back(
-        Vec2AndDir{.pos = Rect::RightCenter(rrect.rect()), .dir = std::numbers::pi});
+    out_positions.push_back(Vec2AndDir{.pos = Rect::TopCenter(rrect.rect()), .dir = -90_deg});
+    out_positions.push_back(Vec2AndDir{.pos = Rect::LeftCenter(rrect.rect()), .dir = 0_deg});
+    out_positions.push_back(Vec2AndDir{.pos = Rect::RightCenter(rrect.rect()), .dir = 180_deg});
   }
 }
 

@@ -10,6 +10,7 @@
 #include "font.hh"
 #include "gui_constants.hh"
 #include "location.hh"
+#include "sincos.hh"
 
 namespace automat {
 
@@ -120,7 +121,7 @@ Vec2AndDir Object::ArgStart(Argument& arg) {
   Rect bounds = shape.getBounds();
   return Vec2AndDir{
       .pos = bounds.BottomCenter(),
-      .dir = -std::numbers::pi / 2,
+      .dir = -90_deg,
   };
 }
 
@@ -130,7 +131,7 @@ void Object::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
   Rect bounds = shape.getBounds();
   out_positions.push_back(Vec2AndDir{
       .pos = bounds.TopCenter(),
-      .dir = -std::numbers::pi / 2,
+      .dir = -90_deg,
   });
 }
 

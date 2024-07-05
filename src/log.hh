@@ -41,31 +41,29 @@ struct LogEntry {
   std::chrono::system_clock::time_point timestamp;
   std::source_location location;
   mutable std::string buffer;
-  mutable int errsv; // saved errno (if any)
+  mutable int errsv;  // saved errno (if any)
 
-  LogEntry(LogLevel, const std::source_location location =
-                         std::source_location::current());
+  LogEntry(LogLevel, const std::source_location location = std::source_location::current());
   ~LogEntry();
 };
 
-using Logger = std::function<void(const LogEntry &)>;
+using Logger = std::function<void(const LogEntry&)>;
 
-void DefaultLogger(const LogEntry &e);
+void DefaultLogger(const LogEntry& e);
 
 // The default logger prints to stdout (or JavaScript console when running under
 // Emscripten).
 extern std::vector<Logger> loggers;
 
 #define LOG maf::LogEntry(maf::LogLevel::Info, std::source_location::current())
-#define ERROR                                                                  \
-  maf::LogEntry(maf::LogLevel::Error, std::source_location::current())
-#define FATAL                                                                  \
-  maf::LogEntry(maf::LogLevel::Fatal, std::source_location::current())
 
-const LogEntry &operator<<(const LogEntry &, StrView);
-const LogEntry &operator<<(const LogEntry &, Status &status);
+#define ERROR maf::LogEntry(maf::LogLevel::Error, std::source_location::current())
+#define FATAL maf::LogEntry(maf::LogLevel::Fatal, std::source_location::current())
 
-const LogEntry &operator<<(const LogEntry &logger, const Stringer auto &t) {
+const LogEntry& operator<<(const LogEntry&, StrView);
+const LogEntry& operator<<(const LogEntry&, Status& status);
+
+const LogEntry& operator<<(const LogEntry& logger, const Stringer auto& t) {
   return logger << ToStr(t);
 }
 
@@ -73,10 +71,10 @@ void LOG_Indent(int n = 2);
 
 void LOG_Unindent(int n = 2);
 
-#define EVERY_N_SEC(n)                                                         \
-  static time::point last_log_time;                                            \
-  if (time::now() - last_log_time > time::duration(n)                          \
-          ? (last_log_time = time::now(), true)                                \
+#define EVERY_N_SEC(n)                                                                          \
+  static std::chrono::steady_clock::time_point last_log_time;                                   \
+  if (std::chrono::steady_clock::now() - last_log_time > std::chrono::steady_clock::duration(n) \
+          ? (last_log_time = std::chrono::steady_clock::now(), true)                            \
           : false)
 
-} // namespace maf
+}  // namespace maf

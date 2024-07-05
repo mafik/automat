@@ -1,5 +1,6 @@
 #pragma once
 
+#include <fasttrigo.h>
 #include <include/core/SkMatrix.h>
 #include <sys/types.h>
 
@@ -147,7 +148,9 @@ struct SinCos {
   }
 
   constexpr static SinCos FromRadians(float radians) {
-    return SinCos(std::sin(radians), std::cos(radians));
+    float fsin = 0, fcos = 0;
+    FTA::sincos(radians, &fsin, &fcos);
+    return SinCos(fsin, fcos);
   }
 
   // Initializes SinCos with the angle of the given cartesian vector.
@@ -176,7 +179,10 @@ struct SinCos {
   }
 
   // Return the angle in the range (-pi, pi].
-  float ToRadians() const { return atan2f((float)sin, (float)cos); }
+  float ToRadians() const {
+    float angle = FTA::atan2((float)sin, (float)cos);
+    return angle <= -M_PIf ? angle + M_PIf * 2 : angle;
+  }
   constexpr SinCos operator+(const SinCos& other) const {
     return SinCos(sin * other.cos + cos * other.sin, cos * other.cos - sin * other.sin);
   }
@@ -222,7 +228,7 @@ struct SinCos {
                   cos - (normal.cos * cos + normal.sin * sin) * normal.cos * 2);
   }
   constexpr auto operator==(const SinCos& other) const {
-    constexpr uint32_t kEpsilon = 1 << (Fixed1::EXTRA_BITS + 1);
+    constexpr uint32_t kEpsilon = 1 << (Fixed1::EXTRA_BITS + 9);
     return abs((sin - other.sin).value) <= kEpsilon && abs((cos - other.cos).value) <= kEpsilon;
   }
   // Convert this angle into a 90 degree turn to either left or right.

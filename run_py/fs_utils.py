@@ -13,3 +13,4 @@ def relative_to_root(path: Path) -> Path:
 build_dir = relative_to_root(project_root / 'build')
 src_dir = project_root / 'src'
 generated_dir = relative_to_root(build_dir / 'generated')
+third_party_dir = project_root / 'third_party'

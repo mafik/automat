@@ -1,8 +1,19 @@
 #include "sincos.hh"
 
+#include <cmath>
+
+#include "fasttrigo.h"
+#include "format.hh"
 #include "gtest.hh"
 
 using namespace maf;
+
+namespace testing {
+template <>
+::std::string PrintToString(const SinCos& value) {
+  return f("SinCos(sin=%f, cos=%f)", (float)value.sin, (float)value.cos);
+}
+}  // namespace testing
 
 TEST(Fixed1, ConstructionZero) {
   EXPECT_EQ(Fixed1(0.0f).value, 0);
@@ -129,7 +140,7 @@ TEST(SinCos, Constructors) {
 
   {
     SinCos sc = SinCos::FromDegrees(30.f);
-    EXPECT_FLOAT_EQ(0.5f, (float)sc.sin);
+    EXPECT_NEAR(0.5f, (float)sc.sin, 0.0001f);
   }
 
   {
@@ -143,7 +154,7 @@ float kTestDegrees[] = {-720.f, -360.f, -180.f, -90.f, 0.f, 30.f, 45.f, 90.f, 18
 
 TEST(SinCos, ToDegrees) {
   for (float degrees : kTestDegrees) {
-    EXPECT_FLOAT_EQ(NormalizeDegrees180(degrees), SinCos::FromDegrees(degrees).ToDegrees())
+    EXPECT_NEAR(NormalizeDegrees180(degrees), SinCos::FromDegrees(degrees).ToDegrees(), 0.001f)
         << degrees;
   }
 }
@@ -151,8 +162,7 @@ TEST(SinCos, ToDegrees) {
 TEST(SinCos, Addition) {
   for (float a : kTestDegrees) {
     for (float b : kTestDegrees) {
-      EXPECT_FLOAT_EQ(NormalizeDegrees180(a + b),
-                      (SinCos::FromDegrees(a) + SinCos::FromDegrees(b)).ToDegrees())
+      EXPECT_EQ(SinCos::FromDegrees(a + b), (SinCos::FromDegrees(a) + SinCos::FromDegrees(b)))
           << a << " + " << b;
     }
   }
@@ -160,8 +170,7 @@ TEST(SinCos, Addition) {
 
 TEST(SinCos, DoubleAngle) {
   for (float a : kTestDegrees) {
-    EXPECT_FLOAT_EQ(NormalizeDegrees180(a * 2.f), SinCos::FromDegrees(a).DoubleAngle().ToDegrees())
-        << a;
+    EXPECT_EQ(SinCos::FromDegrees(a * 2.f), SinCos::FromDegrees(a).DoubleAngle()) << a;
   }
 }
 
@@ -185,4 +194,15 @@ TEST(SinCos, ReflectFrom) {
           << expected.ToDegrees();
     }
   }
+}
+
+TEST(FastTrigo, CorrectAtan2) {
+  float sin = 0.979796f, cos = -0.200000f;
+  float result = FT::atan2(sin, cos);
+  float ref = std::atan2(sin, cos);
+  EXPECT_NEAR(result, ref, 0.01f) << "atan2(" << sin << ", " << cos << ") = " << result
+                                  << " should be close to " << ref
+                                  << " see "
+                                     "https://github.com/Sonotsugipaa/FastTrigo/commit/"
+                                     "06f9cd78f70d58aa6507706912917854ebfade0b for more info.";
 }

@@ -59,7 +59,6 @@ static constexpr float kHandAcceleration = 2000;
 void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) {
   state = TimerDelay::State::Idle;
   Done(here2);
-  ScheduleNext(here2);
 }
 
 // How long it takes for the timer dial to rotate once.

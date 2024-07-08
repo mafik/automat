@@ -1311,12 +1311,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
     if (&state.arg == &next_arg) {
       lightness_pct =
           exp(-(display.timer.steady_now - state.location.last_finished).count() * 10) * 100;
-    }
-    if (state.arg.field) {
-      if (auto on_off = dynamic_cast<OnOff*>(state.arg.field)) {
-        lightness_pct = on_off->IsOn() ? 100 : 0;
-        // TODO: decay the lightness over time
-      }
+    } else {
+      lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
+      // TODO: animate this
     }
     SkColor bright_light = "#fcfef7"_color;
     SkColor adjusted_color = color::AdjustLightness(base_color, lightness_pct);

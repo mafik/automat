@@ -31,6 +31,7 @@ struct Button : Widget {
   virtual SkColor ForegroundColor(DrawContext&) const { return "#d69d00"_color; }
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
+  virtual void TweakShadow(float& sigma, float& offset) const {}
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg, Widget* child) const;

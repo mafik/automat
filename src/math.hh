@@ -197,6 +197,9 @@ union Rect {
   constexpr Rect(float left, float bottom, float right, float top)
       : left(left), bottom(bottom), right(right), top(top) {}
 
+  // Make a rectangle with the given width & height and its lower left corner at (0,0).
+  static constexpr Rect MakeZeroWH(float width, float height) { return {0, 0, width, height}; }
+
   static constexpr Rect MakeWH(float width, float height) {
     return {-width / 2, -height / 2, width / 2, height / 2};
   }
@@ -204,6 +207,7 @@ union Rect {
     return {center.x - width / 2, center.y - height / 2, center.x + width / 2,
             center.y + height / 2};
   }
+  static constexpr Rect MakeCircleR(float r) { return {-r, -r, r, r}; }
 
   operator SkRect&() { return sk; }
 

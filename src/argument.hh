@@ -40,6 +40,7 @@ struct Argument {
   virtual ~Argument() = default;
 
   virtual PaintDrawable& Icon();
+  virtual bool IsOn(Location& here) const;
 
   template <typename T>
   Argument& RequireInstanceOf() {

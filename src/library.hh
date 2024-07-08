@@ -18,6 +18,7 @@
 #include "base.hh"
 #include "format.hh"
 #include "library_alert.hh"           // IWYU pragma: keep
+#include "library_flip_flop.hh"       // IWYU pragma: keep
 #include "library_hotkey.hh"          // IWYU pragma: keep
 #include "library_increment.hh"       // IWYU pragma: keep
 #include "library_key_presser.hh"     // IWYU pragma: keep

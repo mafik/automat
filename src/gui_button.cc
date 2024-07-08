@@ -29,7 +29,6 @@ void Button::PointerLeave(Pointer& pointer, animation::Display& display) {
 namespace {
 
 constexpr float kRadius = kMinimalTouchableSize / 2;
-constexpr float kShadowSigma = kRadius / 10;
 
 }  // namespace
 
@@ -46,12 +45,14 @@ SkRRect Button::RRect() const {
 }
 
 void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
+  float offset = -kPressOffset, sigma = kRadius / 10;
+  TweakShadow(sigma, offset);
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
-  oval.offset(0, -kPressOffset);
+  oval.offset(0, offset);
   SkPaint shadow_paint;
   shadow_paint.setColor(color::AdjustLightness(bg, -40));
-  shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, kShadowSigma, true));
+  shadow_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, sigma, true));
   canvas.drawRRect(oval, shadow_paint);
 }
 
@@ -138,8 +139,7 @@ void ToggleButton::Draw(DrawContext& ctx) const {
   float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
   SkRRect pressed_outer_oval;
-  pressed_oval.outset(kBorderWidth / 2 + kShadowSigma * 0, kBorderWidth / 2 + kShadowSigma * 0,
-                      &pressed_outer_oval);
+  pressed_oval.outset(kBorderWidth / 2, kBorderWidth / 2, &pressed_outer_oval);
 
   if (filling >= 0.999) {
     DrawButtonShadow(canvas, fg);

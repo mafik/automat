@@ -73,4 +73,12 @@ PaintDrawable& Argument::Icon() {
   }();
   return default_icon;
 }
+bool Argument::IsOn(Location& here) const {
+  if (field) {
+    if (auto on_off = dynamic_cast<OnOff*>(field)) {
+      return on_off->IsOn();
+    }
+  }
+  return false;
+}
 }  // namespace automat

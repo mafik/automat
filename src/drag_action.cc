@@ -3,6 +3,7 @@
 #include "animation.hh"
 #include "pointer.hh"
 #include "root.hh"
+#include "time.hh"
 #include "units.hh"
 
 namespace automat {
@@ -29,13 +30,16 @@ void DragActionBase::End() { DragEnd(); }
 
 void DragActionBase::DrawAction(gui::DrawContext& ctx) { DragDraw(ctx); }
 
+constexpr time::Duration kDragSpringPeriod = 0.3s;
+constexpr time::Duration kDragSpringHalfTime = 0.08s;
+
 void DragObjectAction::DragUpdate() {
   auto last_round = RoundToMilimeters(last_position - contact_point);
   auto curr_round = RoundToMilimeters(current_position - contact_point);
   if (last_round != curr_round && Length(current_position - last_position) < 0.5_mm) {
     auto& offset = position_offset;
-    offset.acceleration = 1000;
-    offset.friction = 50;
+    offset.period = kDragSpringPeriod;
+    offset.half_life = kDragSpringHalfTime;
     offset.value += last_round - curr_round;
     offset.value.x = std::clamp(offset.value.x, -1_mm, 1_mm);
     offset.value.y = std::clamp(offset.value.y, -1_mm, 1_mm);
@@ -67,8 +71,8 @@ void DragLocationAction::DragUpdate() {
     for (auto display : animation::displays) {
       auto& animation_state = location->animation_state[*display];
       auto& offset = animation_state.position_offset;
-      offset.acceleration = 1000;
-      offset.friction = 50;
+      offset.period = kDragSpringPeriod;
+      offset.half_life = kDragSpringHalfTime;
       offset.value += last_round - curr_round;
       offset.value.x = std::clamp(offset.value.x, -1_mm, 1_mm);
       offset.value.y = std::clamp(offset.value.y, -1_mm, 1_mm);

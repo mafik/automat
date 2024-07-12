@@ -1,8 +1,9 @@
 #include "sincos.hh"
 
+#include <fasttrigo.h>
+
 #include <cmath>
 
-#include "fasttrigo.h"
 #include "format.hh"
 #include "gtest.hh"
 

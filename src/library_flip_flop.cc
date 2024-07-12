@@ -1,5 +1,6 @@
 #include "library_flip_flop.hh"
 
+#include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
@@ -14,7 +15,6 @@
 #include "arcline.hh"
 #include "argument.hh"
 #include "color.hh"
-#include "include/core/SkBlurTypes.h"
 #include "library_macros.hh"
 #include "sincos.hh"
 #include "textures.hh"

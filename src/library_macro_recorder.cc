@@ -169,6 +169,8 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
       float dist = eye_dist_2d / eye_dist_3d;
 
+      googly.period = 0.5s;
+      googly.half_life = 0.2s;
       googly.target.x = eye_dir.x * dist;
       googly.target.y = -eye_dir.y * dist;
       googly.Tick(dctx.display);
@@ -282,8 +284,6 @@ static void AnimateGrowFrom(Location& source, Location& grown) {
     Vec2 grown_center = grown.object->Shape().getBounds().center() + grown.position;
     animation_state.position_offset.value = source_center - grown_center;
     animation_state.position_offset.target = Vec2(0, 0);
-    animation_state.position_offset.acceleration = 400;
-    animation_state.position_offset.friction = 40;
     animation_state.transparency.value = 1;
     animation_state.transparency.speed = 5;
   }

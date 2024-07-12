@@ -3,8 +3,11 @@
 #include <cmath>
 #include <map>
 
+#include "math.hh"
 #include "time.hh"
 #include "vec.hh"
+
+using namespace std::chrono_literals;
 
 namespace automat::animation {
 
@@ -150,19 +153,52 @@ struct Approach : Base<T> {
 
 template <typename T>
 struct Spring : Base<T> {
-  float acceleration = 100;
   T velocity = {};
-  float friction = 10;
-  time::SystemPoint last_tick;
-  Spring() : last_tick(time::SystemNow()) {}
+  time::Duration period = 0.1s;     // how long does it take for one oscillation
+  time::Duration half_life = 0.1s;  // how long does it take for the amplitude to decrease by half
+  time::SteadyPoint last_tick;
+  Spring() : last_tick(time::SteadyNow()) {}
+
+  void TickComponent(float dt, float target, float& value, float& velocity) {
+    float Q = 2 * M_PI / period.count();
+    float D = value - target;
+    float V = velocity;
+    float H = half_life.count();
+
+    float t;
+    float amplitude;
+    if (fabsf(D) > 1e-6f) {
+      t = -atanf((D * M_LOG2Ef + V * H) / (D * H * Q)) / Q;
+      amplitude = D / powf(2, -t / H) / cosf(t * Q);
+    } else {
+      t = period.count() / 4;
+      amplitude = -velocity * powf(2.f, t / H) / Q;
+    }
+    float t2 = t + dt;
+    value = target + amplitude * cosf(t2 * Q) * powf(2, -t2 / H);
+    velocity = (-(amplitude * M_LOG2Ef * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) /
+               powf(2, t2 / H);
+  }
+
+  template <typename P>
+  void TickComponents(float dt) {
+    TickComponent(dt, this->target, this->value, this->velocity);
+  }
+
+  template <>
+  void TickComponents<Vec2>(float dt) {
+    TickComponent(dt, this->target.x, this->value.x, this->velocity.x);
+    TickComponent(dt, this->target.y, this->value.y, this->velocity.y);
+  }
+
   void Tick(time::Timer& timer) {
-    float dt = (timer.now - last_tick).count();
-    last_tick = timer.now;
+    float dt = (timer.steady_now - last_tick).count();
+    last_tick = timer.steady_now;
     if (dt <= 0) return;
-    T delta = this->target - this->value;
-    velocity += delta * acceleration * dt;
-    velocity *= pow(0.5, dt * friction);
-    this->value += velocity * dt;
+    if (half_life.count() <= 0) return;
+    if (period.count() <= 0) return;
+
+    TickComponents<T>(dt);
   }
   operator T() const { return this->value; }
 };

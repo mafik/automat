@@ -9,6 +9,7 @@
 #include "on_off.hh"
 #include "run_button.hh"
 #include "time.hh"
+#include "timer_thread.hh"
 
 namespace automat::library {
 

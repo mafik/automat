@@ -16,7 +16,7 @@
 #include "gui_connection_widget.hh"
 #include "tasks.hh"
 #include "thread_name.hh"
-#include "time.hh"
+#include "timer_thread.hh"
 
 namespace automat {
 

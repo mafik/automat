@@ -54,7 +54,7 @@ constexpr static float kTickOuterRadius = r4 * 0.95;
 constexpr static float kTickMajorLength = r4 * 0.05;
 constexpr static float kTickMinorLength = r4 * 0.025;
 
-static constexpr float kHandAcceleration = 2000;
+static constexpr time::Duration kHandPeriod = 0.1s;
 
 void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) {
   state = TimerDelay::State::Idle;
@@ -158,11 +158,13 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
 }
 
 TimerDelay::TimerDelay() : text_field(kTextWidth) {
-  hand_degrees.acceleration = kHandAcceleration;
-  hand_degrees.friction = 40;
+  hand_degrees.period = kHandPeriod;
+  hand_degrees.half_life = 0.05s;
 
-  range_dial.acceleration = 2000;
-  range_dial.friction = 80;
+  range_dial.period = 0.4s;
+  range_dial.half_life = 0.05s;
+  range_dial.velocity = 0;
+  range_dial.value = 1;
 
   duration_handle_rotation.speed = 100;
   text_field.argument = &duration_arg;
@@ -171,6 +173,8 @@ TimerDelay::TimerDelay() : text_field(kTextWidth) {
 }
 
 TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay() {
+  range_dial.velocity = other.range_dial.velocity;
+  range_dial.value = other.range_dial.value;
   SetDuration(*this, other.duration.value);
 }
 
@@ -649,13 +653,13 @@ void TimerDelay::Updated(Location& here, Location& updated) {
 struct DragHandAction : Action {
   TimerDelay& timer;
   DragHandAction(TimerDelay& timer) : timer(timer) {}
-  virtual void Begin(gui::Pointer& pointer) { timer.hand_degrees.acceleration = 0; }
+  virtual void Begin(gui::Pointer& pointer) { timer.hand_degrees.period = 0s; }
   virtual void Update(gui::Pointer& pointer) {
     auto pos = pointer.PositionWithin(timer);
     float angle = atan2(pos.sk.y(), pos.sk.x());
     timer.hand_degrees.value = angle * 180 / M_PI;
   }
-  virtual void End() { timer.hand_degrees.acceleration = kHandAcceleration; }
+  virtual void End() { timer.hand_degrees.period = kHandPeriod; }
   virtual void DrawAction(gui::DrawContext&) {}
 };
 

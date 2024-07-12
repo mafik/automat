@@ -4,6 +4,7 @@
 #include "base.hh"
 #include "number_text_field.hh"
 #include "time.hh"
+#include "timer_thread.hh"
 
 namespace automat::library {
 

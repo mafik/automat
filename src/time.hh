@@ -1,11 +1,8 @@
 #pragma once
 
 #include <chrono>
-#include <stop_token>
 
-namespace automat {
-
-namespace time {
+namespace automat::time {
 
 using T = double;
 using Duration = std::chrono::duration<T>;
@@ -36,21 +33,4 @@ struct Timer {
   double Now() const { return now.time_since_epoch().count(); }
 };
 
-}  // namespace time
-
-struct Location;
-
-// Call this only once during startup. This starts a helper thread for timers. The thread will
-// run until the stop_token is set.
-void StartTimeThread(std::stop_token);
-
-struct TimerNotificationReceiver {
-  virtual void OnTimerNotification(Location&, time::SteadyPoint) = 0;
-};
-
-void ScheduleAt(Location&, time::SteadyPoint);
-void CancelScheduledAt(Location&);
-void CancelScheduledAt(Location&, time::SteadyPoint);
-void RescheduleAt(Location& here, time::SteadyPoint old_time, time::SteadyPoint new_time);
-
-}  // namespace automat
+}  // namespace automat::time

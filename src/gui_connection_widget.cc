@@ -140,7 +140,6 @@ DragConnectionAction::~DragConnectionAction() {
 }
 
 bool CanConnect(Location& from, Location& to, Argument& arg) {
-  if (&from == &to) return false;
   std::string error;
   arg.CheckRequirements(from, &to, to.object.get(), error);
   return error.empty();

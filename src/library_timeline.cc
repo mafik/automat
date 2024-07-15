@@ -1174,6 +1174,8 @@ void Timeline::Cancel() {
     TimelineCancelScheduledAt(*this);
     state = kPaused;
     paused = {.playback_offset = (time::SteadyNow() - playing.started_at).count()};
+    TimelineUpdateOutputs(*here, *this, time::SteadyPoint{},
+                          time::SteadyPoint{} + time::Duration(paused.playback_offset));
   }
 }
 
@@ -1184,11 +1186,10 @@ LongRunning* Timeline::OnRun(Location& here) {
   if (paused.playback_offset >= MaxTrackLength()) {
     paused.playback_offset = 0;
   }
-  TimelineUpdateOutputs(here, *this, time::SteadyPoint{},
-                        time::SteadyPoint{} + time::Duration(paused.playback_offset));
   state = kPlaying;
   time::SteadyPoint now = time::SteadyNow();
   playing = {.started_at = now - time::Duration(paused.playback_offset)};
+  TimelineUpdateOutputs(here, *this, playing.started_at, now);
   TimelineScheduleAt(*this, now);
   return this;
 }
@@ -1229,6 +1230,9 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
   }
   i = i - 1;
   bool on = i % 2 == 0;
+  if (timeline->state != Timeline::kPlaying) {
+    on = false;
+  }
   if (auto runnable = dynamic_cast<Runnable*>(target.object.get())) {
     if (on) {
       target.ScheduleRun();

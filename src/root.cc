@@ -23,6 +23,8 @@ void StopRoot() {
   }
 }
 
+void AssertAutomatThread() { assert(std::this_thread::get_id() == automat_thread.get_id()); }
+
 void RunOnAutomatThread(std::function<void()> f) {
   if (std::this_thread::get_id() == automat_thread.get_id()) {
     f();

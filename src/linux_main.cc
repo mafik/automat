@@ -371,7 +371,7 @@ void RenderLoop() {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
-                GetMouse().ButtonDown(EventDetailToButton(ev->detail));
+                RunOnAutomatThread([=] { GetMouse().ButtonDown(EventDetailToButton(ev->detail)); });
                 break;
               }
               case XCB_INPUT_BUTTON_RELEASE: {
@@ -380,7 +380,7 @@ void RenderLoop() {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
-                GetMouse().ButtonUp(EventDetailToButton(ev->detail));
+                RunOnAutomatThread([=] { GetMouse().ButtonUp(EventDetailToButton(ev->detail)); });
                 break;
               }
               case XCB_INPUT_MOTION: {
@@ -405,7 +405,8 @@ void RenderLoop() {
                             // http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
                             delta = (delta > 0 ? 1 : -1) * vertical_scroll->increment;
                           }
-                          GetMouse().Wheel(-delta / vertical_scroll->increment);
+                          RunOnAutomatThread(
+                              [=] { GetMouse().Wheel(-delta / vertical_scroll->increment); });
                         }
                         ++i_axis;
                       }
@@ -416,7 +417,8 @@ void RenderLoop() {
                 }
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
-                GetMouse().Move(ScreenToWindow(mouse_position_on_screen));
+                RunOnAutomatThread(
+                    [=] { GetMouse().Move(ScreenToWindow(mouse_position_on_screen)); });
                 break;
               }
               case XCB_INPUT_ENTER: {
@@ -431,11 +433,12 @@ void RenderLoop() {
                 xcb_input_enter_event_t* ev = (xcb_input_enter_event_t*)event;
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
-                GetMouse().Move(ScreenToWindow(mouse_position_on_screen));
+                RunOnAutomatThread(
+                    [=] { GetMouse().Move(ScreenToWindow(mouse_position_on_screen)); });
                 break;
               }
               case XCB_INPUT_LEAVE: {
-                mouse.reset();
+                RunOnAutomatThread([=] { mouse.reset(); });
                 break;
               }
               case XCB_INPUT_FOCUS_IN: {

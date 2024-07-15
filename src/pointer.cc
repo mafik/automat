@@ -11,6 +11,7 @@ namespace automat::gui {
 
 Pointer::Pointer(Window& window, Vec2 position)
     : window(window), pointer_position(position), button_down_position(), button_down_time() {
+  AssertAutomatThread();
   window.pointers.push_back(this);
   assert(!window.keyboards.empty());
   if (window.keyboards.empty()) {
@@ -21,6 +22,7 @@ Pointer::Pointer(Window& window, Vec2 position)
   }
 }
 Pointer::~Pointer() {
+  AssertAutomatThread();
   if (!path.empty()) {
     path.back()->PointerLeave(*this, window.display);
   }
@@ -38,87 +40,91 @@ void Pointer::Draw(DrawContext& ctx) {
   }
 }
 void Pointer::Move(Vec2 position) {
-  Vec2 old_mouse_pos = pointer_position;
-  pointer_position = position;
-  if (button_down_time[kMouseMiddle] > time::kZero) {
-    Vec2 delta = window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
-    window.camera_x.Shift(-delta.x);
-    window.camera_y.Shift(-delta.y);
-    window.inertia = false;
-  }
-  if (action) {
-    action->Update(*this);
-  } else {
-    Path old_path = path;
+  RunOnAutomatThread([=, this]() {
+    Vec2 old_mouse_pos = pointer_position;
+    pointer_position = position;
+    if (button_down_time[kMouseMiddle] > time::kZero) {
+      Vec2 delta = window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
+      window.camera_x.Shift(-delta.x);
+      window.camera_y.Shift(-delta.y);
+      window.inertia = false;
+    }
+    if (action) {
+      action->Update(*this);
+    } else {
+      Path old_path = path;
 
-    path.clear();
-    Vec2 point = pointer_position;
+      path.clear();
+      Vec2 point = pointer_position;
 
-    Visitor dfs = [&](Span<Widget*> widgets) -> ControlFlow {
-      for (auto w : widgets) {
-        Vec2 transformed;
-        if (!path.empty()) {
-          transformed = path.back()->TransformToChild(*w, &window.display).mapPoint(point);
-        } else {
-          transformed = point;
-        }
-
-        auto shape = w->Shape();
-        path.push_back(w);
-        std::swap(point, transformed);
-        if (shape.contains(point.x, point.y)) {
-          w->VisitChildren(dfs);
-          return ControlFlow::Stop;
-        } else if (w->ChildrenOutside()) {
-          if (w->VisitChildren(dfs) == ControlFlow::Stop) {
-            return ControlFlow::Stop;
+      Visitor dfs = [&](Span<Widget*> widgets) -> ControlFlow {
+        for (auto w : widgets) {
+          Vec2 transformed;
+          if (!path.empty()) {
+            transformed = path.back()->TransformToChild(*w, &window.display).mapPoint(point);
+          } else {
+            transformed = point;
           }
+
+          auto shape = w->Shape();
+          path.push_back(w);
+          std::swap(point, transformed);
+          if (shape.contains(point.x, point.y)) {
+            w->VisitChildren(dfs);
+            return ControlFlow::Stop;
+          } else if (w->ChildrenOutside()) {
+            if (w->VisitChildren(dfs) == ControlFlow::Stop) {
+              return ControlFlow::Stop;
+            }
+          }
+          std::swap(point, transformed);
+          path.pop_back();
         }
-        std::swap(point, transformed);
-        path.pop_back();
-      }
-      return ControlFlow::Continue;
-    };
+        return ControlFlow::Continue;
+      };
 
-    Widget* window_arr[] = {&window};
-    dfs(window_arr);
+      Widget* window_arr[] = {&window};
+      dfs(window_arr);
 
-    for (Widget* old_w : old_path) {
-      if (std::find(path.begin(), path.end(), old_w) == path.end()) {
-        old_w->PointerLeave(*this, window.display);
-      }
-    }
-    for (Widget* new_w : path) {
-      if (std::find(old_path.begin(), old_path.end(), new_w) == old_path.end()) {
-        new_w->PointerOver(*this, window.display);
-      }
-    }
-
-    if constexpr (false) {  // enable for debugging
-      Str path_str;
-      for (Widget* w : path) {
-        if (!path_str.empty()) {
-          path_str += " -> ";
+      for (Widget* old_w : old_path) {
+        if (std::find(path.begin(), path.end(), old_w) == path.end()) {
+          old_w->PointerLeave(*this, window.display);
         }
-        path_str += w->Name();
       }
-      LOG << "Pointer path: " << path_str;
+      for (Widget* new_w : path) {
+        if (std::find(old_path.begin(), old_path.end(), new_w) == old_path.end()) {
+          new_w->PointerOver(*this, window.display);
+        }
+      }
+
+      if constexpr (false) {  // enable for debugging
+        Str path_str;
+        for (Widget* w : path) {
+          if (!path_str.empty()) {
+            path_str += " -> ";
+          }
+          path_str += w->Name();
+        }
+        LOG << "Pointer path: " << path_str;
+      }
     }
-  }
+  });
 }
 void Pointer::Wheel(float delta) {
-  float factor = exp(delta / 4);
-  window.zoom.target *= factor;
-  // For small changes we skip the animation to increase responsiveness.
-  if (fabs(delta) < 1.0) {
-    Vec2 mouse_pre = window.WindowToCanvas(pointer_position);
-    window.zoom.value *= factor;
-    Vec2 mouse_post = window.WindowToCanvas(pointer_position);
-    Vec2 mouse_delta = mouse_post - mouse_pre;
-    window.camera_x.Shift(-mouse_delta.x);
-    window.camera_y.Shift(-mouse_delta.y);
-  }
-  window.zoom.target = std::max(kMinZoom, window.zoom.target);
+  RunOnAutomatThread([=, this]() {
+    float factor = exp(delta / 4);
+    window.zoom.target *= factor;
+    // For small changes we skip the animation to increase responsiveness.
+    if (fabs(delta) < 1.0) {
+      Vec2 mouse_pre = window.WindowToCanvas(pointer_position);
+      window.zoom.value *= factor;
+      Vec2 mouse_post = window.WindowToCanvas(pointer_position);
+      Vec2 mouse_delta = mouse_post - mouse_pre;
+      window.camera_x.Shift(-mouse_delta.x);
+      window.camera_y.Shift(-mouse_delta.y);
+    }
+    window.zoom.target = std::max(kMinZoom, window.zoom.target);
+  });
 }
 
 void Pointer::ButtonDown(PointerButton btn) {
@@ -178,6 +184,7 @@ Pointer::IconType Pointer::Icon() const {
 void Pointer::PushIcon(IconType icon) { icons.push_back(icon); }
 void Pointer::PopIcon() { icons.pop_back(); }
 Vec2 Pointer::PositionWithin(Widget& widget) const {
+  AssertAutomatThread();
   auto it = std::find(path.begin(), path.end(), &widget);
   auto end = it == path.end() ? path.end() : it + 1;
   Path sub_path(path.begin(), end);

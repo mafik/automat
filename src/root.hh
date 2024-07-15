@@ -18,5 +18,6 @@ void StopRoot();
 
 void RunOnAutomatThread(std::function<void()>);
 void RunOnAutomatThreadSynchronous(std::function<void()>);
+void AssertAutomatThread();
 
 }  // namespace automat

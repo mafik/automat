@@ -42,11 +42,19 @@ static void TimerThread(std::stop_token automat_stop_token) {
     if (stop) {
       break;
     }
+    deque<unique_ptr<Task>> ready_tasks;
     auto now = SteadyClock::now();
     while (!tasks.empty() && tasks.begin()->first <= now) {
-      // LOG << "Timer thread executing task " << tasks.begin()->second->Format();
-      events.send(std::move(tasks.begin()->second));
+      ready_tasks.emplace_back(std::move(tasks.begin()->second));
       tasks.erase(tasks.begin());
+    }
+
+    lck.unlock();
+
+    while (!ready_tasks.empty()) {
+      // LOG << "Timer thread executing task " << tasks.begin()->second->Format();
+      events.send(std::move(ready_tasks.front()));
+      ready_tasks.pop_front();
     }
   }
 }

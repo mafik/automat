@@ -141,8 +141,8 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
   float radius = 1_cm;
   ArcLine cable = ArcLine(start.pos, start.dir);
 
-  float best_start_turn;
-  float best_end_turn;
+  SinCos best_start_turn;
+  SinCos best_end_turn;
   float best_line_length;
   float best_total_length = HUGE_VALF;
   float best_start_radius;
@@ -182,24 +182,17 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
         continue;
       }
 
-      float start_turn = (line_dir - start.dir).ToRadians();
-      constexpr float kEpsilon = 1e-6;
-      while (start_left && start_turn < -kEpsilon) {
-        start_turn += 2 * M_PI;
-      }
-      if (!start_left && start_turn > kEpsilon) {
-        start_turn -= 2 * M_PI;
-      }
+      SinCos start_turn = line_dir - start.dir;
+      SinCos end_turn = end.dir - line_dir;
 
-      float end_turn = (end.dir - line_dir).ToRadians();
-      while (end_left && end_turn < -kEpsilon) {
-        end_turn += 2 * M_PI;
+      float total_length =
+          fabsf(start_left ? start_turn.ToRadiansPositive() : start_turn.ToRadiansNegative()) *
+              radius +
+          line_length +
+          fabsf(end_left ? end_turn.ToRadiansPositive() : end_turn.ToRadiansNegative()) * radius;
+      if (end_left) {
+        total_length += 0.0001f;
       }
-      if (!end_left && end_turn > kEpsilon) {
-        end_turn -= 2 * M_PI;
-      }
-
-      float total_length = fabsf(start_turn) * radius + line_length + fabsf(end_turn) * radius;
       if (total_length < best_total_length) {
         best_total_length = total_length;
         best_start_turn = start_turn;
@@ -211,9 +204,9 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
     }
   }
 
-  cable.TurnBy(SinCos::FromRadians(best_start_turn), best_start_radius);
+  cable.TurnBy(best_start_turn, best_start_radius);
   cable.MoveBy(best_line_length);
-  cable.TurnBy(SinCos::FromRadians(best_end_turn), best_end_radius);
+  cable.TurnBy(best_end_turn, best_end_radius);
   return cable;
 }
 
@@ -1601,8 +1594,8 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Argument& arg, Vec2A
       .distance = 0,
       .next_dir_delta = 0_deg,
   });  // dispenser
-  steel_insert_hidden.acceleration = 400;
-  steel_insert_hidden.friction = 40;
+  steel_insert_hidden.period = 0.5s;
+  steel_insert_hidden.half_life = 0.2s;
 }
 
 OpticalConnectorState::~OpticalConnectorState() {}

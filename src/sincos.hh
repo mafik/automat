@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "str.hh"
+
 union Vec2;
 
 namespace maf {
@@ -122,6 +124,7 @@ inline float NormalizeDegrees180(float degrees) {
 
 struct SinCos {
   using T = Fixed1;
+  constexpr static int32_t kEpsilon = 1 << (Fixed1::EXTRA_BITS + 9);
   T sin, cos;
   constexpr SinCos() : sin(), cos(1.f) {}
   constexpr SinCos(T sin, T cos) : sin(sin), cos(cos) {}
@@ -162,7 +165,7 @@ struct SinCos {
 
   // Return the angle in the range [0, pi*2).
   float ToRadiansPositive() const {
-    if (sin >= 0) {
+    if (sin.value >= 0) {
       return acosf((float)cos);
     } else {
       return -acosf((float)cos) + M_PIf * 2;
@@ -171,7 +174,7 @@ struct SinCos {
 
   // Return the angle in the range (-pi*2, 0].
   float ToRadiansNegative() const {
-    if (sin < 0) {
+    if (sin <= 0) {
       return -acosf((float)cos);
     } else {
       return acosf((float)cos) - M_PIf * 2;
@@ -228,11 +231,12 @@ struct SinCos {
                   cos - (normal.cos * cos + normal.sin * sin) * normal.cos * 2);
   }
   constexpr auto operator==(const SinCos& other) const {
-    constexpr uint32_t kEpsilon = 1 << (Fixed1::EXTRA_BITS + 9);
     return abs((sin - other.sin).value) <= kEpsilon && abs((cos - other.cos).value) <= kEpsilon;
   }
   // Convert this angle into a 90 degree turn to either left or right.
   constexpr SinCos RightAngle() const { return SinCos(sin >= 0 ? 1.f : -1.f, 0.f); }
+
+  Str ToStr() const;
 };
 
 constexpr SinCos operator""_deg(long double degrees) { return SinCos::FromDegrees(degrees); }

@@ -1,5 +1,6 @@
 #include "sincos.hh"
 
+#include "format.hh"
 #include "math.hh"
 
 namespace maf {
@@ -27,4 +28,5 @@ SkMatrix SinCos::ToMatrix(Vec2 pivot) const {
   return m;
 }
 
+Str SinCos::ToStr() const { return f("SinCos(%f, %f)", (float)sin, (float)cos); }
 }  // namespace maf

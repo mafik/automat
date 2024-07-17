@@ -6,6 +6,7 @@
 
 #include "drag_action.hh"
 #include "font.hh"
+#include "include/core/SkPath.h"
 #include "prototypes.hh"
 #include "touchpad.hh"
 
@@ -32,13 +33,13 @@ Window::~Window() {
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 static SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
+constexpr float kTrashRadius = 3_cm;
 
 std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer& pointer, PointerButton btn) {
   if (btn != kMouseLeft) {
     return nullptr;
   }
-  auto drag_action = std::make_unique<DragObjectAction>();
-  drag_action->object = proto->Clone();
+  auto drag_action = std::make_unique<DragObjectAction>(proto->Clone());
   drag_action->contact_point = pointer.PositionWithin(*this);
   return drag_action;
 }
@@ -183,6 +184,7 @@ void Window::Draw(SkCanvas& canvas) {
       }
     }
 
+    auto default_matrix = canvas.getLocalToDevice();
     canvas.save();
     canvas.translate(size.width / 2., size.height / 2.);
     canvas.scale(zoom, zoom);
@@ -207,6 +209,27 @@ void Window::Draw(SkCanvas& canvas) {
           SkRect::MakeXYWH(camera_x.target - target_width / 2, camera_y.target - target_height / 2,
                            target_width, target_height);
       canvas.drawRect(target_rect, target_paint);
+    }
+
+    {  // Draw trash area
+      // swap matrices
+      auto matrix_backup = canvas.getLocalToDevice();
+      canvas.setMatrix(default_matrix);
+      bool object_is_dragged = false;
+      for (auto* pointer : pointers) {
+        auto action = pointer->action.get();
+        if (action == nullptr) continue;
+        auto drag_action = dynamic_cast<DragActionBase*>(action);
+        if (drag_action == nullptr) continue;
+        object_is_dragged = true;
+      }
+      trash_radius.target = object_is_dragged ? kTrashRadius : 0;
+      trash_radius.Tick(display);
+
+      SkPaint trash_bg_paint;
+      trash_bg_paint.setColor("#808080"_color);
+      canvas.drawCircle(size.width, size.height, trash_radius, trash_bg_paint);
+      canvas.setMatrix(matrix_backup);
     }
 
     root_machine->DrawChildren(draw_ctx);
@@ -362,4 +385,7 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
   }
 }
 
+bool Window::IsOverTrash(Vec2 window_pos) {
+  return LengthSquared(window_pos - Vec2(size.width, size.height)) < trash_radius * trash_radius;
+}
 }  // namespace automat::gui

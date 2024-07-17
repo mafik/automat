@@ -278,14 +278,12 @@ static void AnimateGrowFrom(Location& source, Location& grown) {
   for (auto* display : animation::displays) {
     auto& animation_state = grown.animation_state[*display];
     animation_state.scale.target = 1;
-    animation_state.scale.speed = 10;
     animation_state.scale.value = 0.5;
     Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
     Vec2 grown_center = grown.object->Shape().getBounds().center() + grown.position;
     animation_state.position_offset.value = source_center - grown_center;
     animation_state.position_offset.target = Vec2(0, 0);
     animation_state.transparency.value = 1;
-    animation_state.transparency.speed = 5;
   }
 }
 

@@ -8,6 +8,7 @@
 #include "connection.hh"
 #include "error.hh"
 #include "object.hh"
+#include "optional.hh"
 #include "run_button.hh"
 #include "string_multimap.hh"
 #include "tasks.hh"
@@ -23,6 +24,16 @@ namespace automat {
 
 struct LongRunning;
 
+struct LocationAnimationState {
+  animation::Spring<Vec2> position_offset;
+  animation::Spring<float> scale = {1};
+  animation::Approach<> transparency;
+  animation::Approach<> highlight;
+
+  LocationAnimationState();
+  void Apply(SkMatrix&, const Object& object) const;
+};
+
 // Each Container holds its inner objects in Locations.
 //
 // Location specifies location & relations of an object.
@@ -34,14 +45,7 @@ struct LongRunning;
 // Implementations of this interface would typically extend it with
 // container-specific functions.
 struct Location : gui::Widget {
-  struct AnimationState {
-    animation::Spring<Vec2> position_offset;
-    animation::Approach<> scale = {1};
-    animation::Approach<> transparency;
-    animation::Approach<> highlight;
-  };
-
-  animation::PerDisplay<AnimationState> animation_state;
+  animation::PerDisplay<LocationAnimationState> animation_state;
 
   Location* parent;
 

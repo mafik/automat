@@ -16,6 +16,7 @@
 #include "gui_connection_widget.hh"
 #include "tasks.hh"
 #include "thread_name.hh"
+#include "time.hh"
 #include "timer_thread.hh"
 
 namespace automat {
@@ -327,9 +328,7 @@ SkMatrix Machine::TransformToChild(const Widget& child, animation::Display* disp
     transform.postTranslate(-l->position.x, -l->position.y);
     if (display) {
       if (auto* state = l->animation_state.Find(*display)) {
-        float s = std::max<float>(state->scale, 0.00001f);
-        transform.postScale(1 / s, 1 / s);
-        transform.preTranslate(-state->position_offset.value.x, -state->position_offset.value.y);
+        state->Apply(transform, *l->object);
       }
     }
     return transform;

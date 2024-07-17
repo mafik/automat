@@ -158,6 +158,10 @@ struct Spring : Base<T> {
   time::Duration half_life = 0.1s;  // how long does it take for the amplitude to decrease by half
   time::SteadyPoint last_tick;
   Spring() : last_tick(time::SteadyNow()) {}
+  Spring(T initial_value) : Spring() {
+    this->value = initial_value;
+    this->target = initial_value;
+  }
 
   void TickComponent(float dt, float target, float& value, float& velocity) {
     float Q = 2 * M_PI / period.count();

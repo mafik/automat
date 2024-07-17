@@ -334,4 +334,21 @@ Vec2AndDir Location::ArgStart(animation::Display* display, Argument& arg) {
   return pos_dir;
 }
 
+void LocationAnimationState::Apply(SkMatrix& transform, const Object& object) const {
+  float s = std::max<float>(scale, 0.00001f);
+  auto bounds = object.Shape().getBounds();
+  Vec2 pivot = bounds.center();
+  transform.postScale(1 / s, 1 / s, pivot.x, pivot.y);
+  transform.preTranslate(-position_offset.value.x, -position_offset.value.y);
+}
+
+LocationAnimationState::LocationAnimationState() {
+  constexpr auto spring_period = 0.3s;
+  constexpr auto spring_half_time = 0.08s;
+  transparency.speed = 5;
+  scale.period = spring_period;
+  scale.half_life = spring_half_time;
+  position_offset.period = spring_period;
+  position_offset.half_life = spring_half_time;
+}
 }  // namespace automat

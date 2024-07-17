@@ -16,8 +16,8 @@ namespace automat::gui {
 
 // Ensures that the 1x1m canvas is at least 1mm on screen.
 constexpr float kMinZoom = 0.001f;
-constexpr time::Duration kClickTimeout = std::chrono::milliseconds(300);
-constexpr float kClickRadius = 0.002f;  // 2mm
+constexpr time::Duration kClickTimeout = 300ms;
+constexpr float kClickRadius = 2_mm;
 
 struct PrototypeButton : Widget {
   const Object* proto;
@@ -45,6 +45,8 @@ struct Window final : Widget {
   ~Window();
 
   std::string_view Name() const override { return "Window"; }
+
+  bool IsOverTrash(Vec2 window_pos);
 
   void ArrangePrototypeButtons() {
     float max_w = size.width;
@@ -149,6 +151,7 @@ struct Window final : Widget {
   animation::Approach<> zoom = animation::Approach<>(1.0);
   animation::Approach<> camera_x = animation::Approach<>(0.0);
   animation::Approach<> camera_y = animation::Approach<>(0.0);
+  animation::Approach<> trash_radius = animation::Approach<>(0.0);
   bool panning_during_last_frame = false;
   bool inertia = false;
   std::deque<Vec3> camera_timeline;

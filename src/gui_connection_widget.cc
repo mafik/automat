@@ -42,7 +42,7 @@ SkPath ConnectionWidget::Shape() const {
 void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& display = ctx.display;
-  auto& from_animation_state = from.animation_state[display];
+  auto& from_animation_state = from.GetAnimationState(display);
   bool using_layer = false;
   if (from_animation_state.transparency > 0.01f) {
     using_layer = true;
@@ -101,13 +101,16 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   if (state) {
     if (to) {
       state->steel_insert_hidden.target = 1;
+      state->connector_scale.SpringTowards(to->scale, ctx.DeltaT(), Location::kSpringPeriod,
+                                           Location::kSpringHalfTime);
     } else {
       state->steel_insert_hidden.target = 0;
+      state->connector_scale.SpringTowards(from.scale, ctx.DeltaT(), Location::kSpringPeriod,
+                                           Location::kSpringHalfTime);
     }
     state->steel_insert_hidden.Tick(display);
 
-    float dt = ctx.display.timer.d;
-    SimulateCablePhysics(ctx, dt, *state, pos_dir, to_points);
+    SimulateCablePhysics(ctx, ctx.DeltaT(), *state, pos_dir, to_points);
     DrawOpticalConnector(ctx, *state, arg.Icon());
   } else {
     if (to_shape.isEmpty()) {
@@ -134,7 +137,9 @@ DragConnectionAction::~DragConnectionAction() {
   widget.manual_position.reset();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      l->animation_state[*display].highlight.target = 0;
+      if (auto* anim = l->animation_state.Find(*display)) {
+        anim->highlight.target = 0;
+      }
     }
   }
 }
@@ -152,6 +157,7 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
 
   grab_offset = Vec2(0, 0);
   if (widget.state) {
+    // Position within parent machine
     auto pointer_pos = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
     auto mat = widget.state->ConnectorMatrix();
     SkMatrix mat_inv;
@@ -165,9 +171,9 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       if (CanConnect(widget.from, *l, widget.arg)) {
-        l->animation_state[*display].highlight.target = 1;
+        l->GetAnimationState(*display).highlight.target = 1;
       } else {
-        l->animation_state[*display].highlight.target = 0;
+        l->GetAnimationState(*display).highlight.target = 0;
       }
     }
   }

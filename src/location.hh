@@ -25,13 +25,15 @@ namespace automat {
 struct LongRunning;
 
 struct LocationAnimationState {
-  animation::Spring<Vec2> position_offset;
-  animation::Spring<float> scale = {1};
+  animation::SpringV2<float> scale;
+  animation::SpringV2<Vec2> position;
   animation::Approach<> transparency;
   animation::Approach<> highlight;
 
   LocationAnimationState();
-  void Apply(SkMatrix&, const Object& object) const;
+
+  SkMatrix GetTransform(Vec2 scale_pivot) const;
+  void Tick(float delta_time, Vec2 target_position, float target_scale);
 };
 
 // Each Container holds its inner objects in Locations.
@@ -45,6 +47,12 @@ struct LocationAnimationState {
 // Implementations of this interface would typically extend it with
 // container-specific functions.
 struct Location : gui::Widget {
+  constexpr static float kSpringPeriod = 0.3s .count();
+  constexpr static float kSpringHalfTime = 0.08s .count();
+
+  LocationAnimationState& GetAnimationState(animation::Display&) const;
+  SkMatrix GetTransform(animation::Display*) const;
+
   animation::PerDisplay<LocationAnimationState> animation_state;
 
   Location* parent;
@@ -56,6 +64,7 @@ struct Location : gui::Widget {
   gui::RunButton run_button;
 
   Vec2 position = {0, 0};
+  float scale = 1.f;
 
   // Connections of this Location.
   // Connection is owned by both incoming & outgoing locations.

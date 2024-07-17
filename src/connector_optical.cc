@@ -24,7 +24,6 @@
 #include "font.hh"
 #include "log.hh"
 #include "math.hh"
-#include "on_off.hh"
 #include "sincos.hh"
 #include "svg.hh"
 #include "textures.hh"
@@ -340,7 +339,7 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
   }
 
   for (auto& end : end_candidates) {
-    end.pos -= Vec2::Polar(end.dir, kCasingHeight);
+    end.pos -= Vec2::Polar(end.dir, kCasingHeight * state.connector_scale);
   }
 
   Optional<Vec2> cable_end;
@@ -613,7 +612,10 @@ Vec2 OpticalConnectorState::PlugBottomCenter() const {
 SkMatrix OpticalConnectorState::ConnectorMatrix() const {
   Vec2 pos = sections.front().pos;
   SinCos dir = sections.front().dir + sections.front().true_dir_offset - 90_deg;
-  return dir.ToMatrix().postTranslate(pos.x, pos.y).preTranslate(0, -kCasingHeight);
+  return dir.ToMatrix()
+      .postTranslate(pos.x, pos.y)
+      .preScale(connector_scale, connector_scale)
+      .preTranslate(0, -kCasingHeight);
 }
 
 SkPath OpticalConnectorState::Shape() const {
@@ -845,29 +847,30 @@ const SkMeshSpecification::Varying StrokeToMesh::kVaryings[3] = {
     }};
 
 struct StrokeToCable : StrokeToMesh {
-  float width = kCableWidth;
-  float GetWidth() const override { return width; }
-  bool IsConstantWidth() const override { return true; }
-};
-
-struct StrokeToStrainReliever : StrokeToMesh {
-  static constexpr float kLength = 15_mm;
-  static constexpr float kTopWidth = kCableWidth + 1_mm;
-  static constexpr float kBottomWidth = kCasingWidth;
+  float start_offset = 0;
+  float end_offset = kCableWidth * 10;  // default value shouold be overriden!
+  float start_width = kCableWidth;
+  float end_width = kCableWidth;
 
   float GetWidth() const override {
-    // Interpolate between kTopWidth & kBottomWidth in a sine-like fashion
-    float a = length / kLength * std::numbers::pi;  // scale position to [0, pi]
-    float t = cos(a) * 0.5 + 0.5;                   // map cos to [0, 1] range
-    return t * kBottomWidth + (1 - t) * kTopWidth;
+    if (start_width == end_width) {
+      return start_width;
+    } else {
+      float a = std::clamp<float>((length - start_offset) / (end_offset - start_offset), 0, 1) *
+                std::numbers::pi;    // scale position to [0, pi]
+      float t = cos(a) * 0.5 + 0.5;  // map cos to [0, 1] range
+      return t * start_width + (1 - t) * end_width;
+    }
   }
+  bool IsConstantWidth() const override { return start_width == end_width; }
 };
 
 void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filter,
-               CableTexture texture, float width) {
+               CableTexture texture, float start_width, float end_width, float* length) {
   auto& canvas = ctx.canvas;
   Rect clip = canvas.getLocalClipBounds();
-  Rect path_bounds = path.getBounds().makeOutset(width / 2, width / 2);
+  float max_width = std::max(start_width, end_width);
+  Rect path_bounds = path.getBounds().makeOutset(max_width / 2, max_width / 2);
   if (!clip.sk.intersects(path_bounds.sk)) {
     return;
   }
@@ -942,8 +945,15 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
   }
 
   StrokeToCable stroke_to_cable;
-  stroke_to_cable.width = width;
+  stroke_to_cable.start_width = start_width;
+  stroke_to_cable.end_width = end_width;
+  if (length) {
+    stroke_to_cable.end_offset = *length;
+  }
   stroke_to_cable.Convert(path);
+  if (length) {
+    *length = stroke_to_cable.length;
+  }
 
   if (stroke_to_cable.vertex_vector.empty()) {
     return;
@@ -965,7 +975,7 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
       cable_normal = SkShaders::Color(SkColorSetARGB(255, 0x80, 0x80, 0xff));
       break;
   }
-  sk_sp<SkData> uniforms = SkData::MakeWithCopy(&width, 4);
+  sk_sp<SkData> uniforms = SkData::MakeWithCopy(&max_width, 4);
   SkMesh::ChildPtr children[] = {cable_color, cable_normal};
   auto mesh_result = SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip,
                                   vertex_buffer, stroke_to_cable.vertex_vector.size(), 0, uniforms,
@@ -1044,6 +1054,10 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
 
+  float dispenser_scale = state.location.GetAnimationState(ctx.display).scale;
+
+  SkMatrix connector_matrix = state.ConnectorMatrix();
+
   SkPath p;
   if (state.stabilized) {
     if (state.arcline) {
@@ -1066,16 +1080,14 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
 
   // Draw the cable
   auto color_filter = color::MakeTintFilter(state.tint, NAN);
-  DrawCable(ctx, p, color_filter, CableTexture::Braided);
+  DrawCable(ctx, p, color_filter, CableTexture::Braided, kCableWidth * state.connector_scale,
+            kCableWidth * dispenser_scale, &state.approx_length);
 
-  canvas.save();
   Vec2 cable_end = state.PlugTopCenter();
-  SkMatrix transform = SkMatrix::Translate(cable_end);
   SinCos connector_dir = state.sections.front().dir + state.sections.front().true_dir_offset;
 
-  (connector_dir - 90_deg).PreRotate(transform);
-  transform.preTranslate(0, -kCasingHeight);
-  canvas.concat(transform);
+  canvas.save();
+  canvas.concat(connector_matrix);
 
   constexpr float casing_left = -kCasingWidth / 2;
   constexpr float casing_right = kCasingWidth / 2;
@@ -1297,7 +1309,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
   canvas.restore();
 
   {  // Icon on the metal casing
-    Vec2 icon_offset = cable_end - Vec2::Polar(connector_dir, kCasingWidth / 2);
+
+    Vec2 icon_offset = connector_matrix.mapPoint(Vec2(0, kCasingHeight / 2));
 
     SkColor base_color = color::AdjustLightness(state.tint, 30);
     float lightness_pct = 0;
@@ -1316,7 +1329,10 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
     icon_paint.setColor(adjusted_color);
     icon_paint.setAntiAlias(true);
     icon.paint = icon_paint;
-    icon.draw(&canvas, icon_offset.x, icon_offset.y);
+    canvas.save();
+    canvas.translate(icon_offset.x, icon_offset.y);
+    canvas.scale(state.connector_scale, state.connector_scale);
+    icon.draw(&canvas, 0, 0);
 
     // Draw blur
     if (lightness_pct > 1) {
@@ -1328,8 +1344,9 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
           SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, sigma, false));
       glow_paint.setBlendMode(SkBlendMode::kScreen);
       icon.paint = glow_paint;
-      icon.draw(&canvas, icon_offset.x, icon_offset.y);
+      icon.draw(&canvas, 0, 0);
     }
+    canvas.restore();
   }
 
   {  // Rubber cable holder
@@ -1351,12 +1368,17 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
       return;
     }
 
-    StrokeToStrainReliever mesh_builder;
-    mesh_builder.Convert(p, StrokeToStrainReliever::kLength);
+    float length = 15_mm * state.connector_scale;
+    StrokeToCable mesh_builder;
+    mesh_builder.start_offset = 0;
+    mesh_builder.start_width = kCasingWidth * state.connector_scale;
+    mesh_builder.end_offset = length;
+    mesh_builder.end_width = (kCableWidth + 1_mm) * state.connector_scale;
+    mesh_builder.Convert(p, length);
     if (mesh_builder.vertex_vector.empty()) {
       // Add two points on the left & right side of the connector - just so that we can build the
       // ellipse cap.
-      Vec2 offset = Vec2::Polar(connector_dir + 90_deg, kCasingWidth / 2);
+      Vec2 offset = Vec2::Polar(connector_dir + 90_deg, kCasingWidth / 2 * state.connector_scale);
       Vec2 tangent = Vec2::Polar(connector_dir, 1);
       mesh_builder.vertex_vector.push_back({
           .coords = cable_end + offset,

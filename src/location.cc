@@ -199,9 +199,9 @@ void Location::Draw(gui::DrawContext& ctx) const {
   }
   SkRect bounds = my_shape.getBounds();
 
-  auto& state = animation_state[ctx.display];
-  state.scale.Tick(ctx.display);
-  state.position_offset.Tick(ctx.display);
+  auto& state = GetAnimationState(ctx.display);
+  state.Tick(ctx.DeltaT(), position, scale);
+
   state.highlight.Tick(ctx.display);
   state.transparency.Tick(ctx.display);
   bool using_layer = false;
@@ -334,21 +334,45 @@ Vec2AndDir Location::ArgStart(animation::Display* display, Argument& arg) {
   return pos_dir;
 }
 
-void LocationAnimationState::Apply(SkMatrix& transform, const Object& object) const {
+static SkMatrix GetLocationTransform(Vec2 position, float scale, Vec2 scale_pivot) {
+  SkMatrix transform = SkMatrix::I();
   float s = std::max<float>(scale, 0.00001f);
-  auto bounds = object.Shape().getBounds();
-  Vec2 pivot = bounds.center();
-  transform.postScale(1 / s, 1 / s, pivot.x, pivot.y);
-  transform.preTranslate(-position_offset.value.x, -position_offset.value.y);
+  transform.postScale(1 / s, 1 / s, scale_pivot.x, scale_pivot.y);
+  transform.preTranslate(-position.x, -position.y);
+  return transform;
 }
 
-LocationAnimationState::LocationAnimationState() {
-  constexpr auto spring_period = 0.3s;
-  constexpr auto spring_half_time = 0.08s;
+SkMatrix LocationAnimationState::GetTransform(Vec2 scale_pivot) const {
+  return GetLocationTransform(position, scale, scale_pivot);
+}
+
+SkMatrix Location::GetTransform(animation::Display* display) const {
+  Vec2 scale_pivot = object->Shape().getBounds().center();
+  if (display) {
+    if (auto* anim = animation_state.Find(*display)) {
+      return anim->GetTransform(scale_pivot);
+    }
+  }
+  return GetLocationTransform(position, scale, scale_pivot);
+}
+
+void LocationAnimationState::Tick(float delta_time, Vec2 target_position, float target_scale) {
+  position.SpringTowards(target_position, delta_time, Location::kSpringPeriod,
+                         Location::kSpringHalfTime);
+  scale.SpringTowards(target_scale, delta_time, Location::kSpringPeriod, Location::kSpringHalfTime);
+}
+
+LocationAnimationState::LocationAnimationState() : scale(1), position(Vec2{}) {
   transparency.speed = 5;
-  scale.period = spring_period;
-  scale.half_life = spring_half_time;
-  position_offset.period = spring_period;
-  position_offset.half_life = spring_half_time;
+}
+LocationAnimationState& Location::GetAnimationState(animation::Display& display) const {
+  if (auto* anim = animation_state.Find(display)) {
+    return *anim;
+  } else {
+    auto& new_anim = animation_state[display];
+    new_anim.position.value = position;
+    new_anim.scale.value = scale;
+    return new_anim;
+  }
 }
 }  // namespace automat

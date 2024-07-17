@@ -48,6 +48,10 @@ struct OpticalConnectorState {
   Vec2 stabilized_start;
   maf::Optional<Vec2> stabilized_end;
 
+  // The length of the cable calculated during the last DrawCable call.
+  float approx_length = 0;
+  animation::SpringV2<float> connector_scale = 1;
+
   Location& location;
   Argument& arg;
 
@@ -77,7 +81,9 @@ void SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&, Vec2An
 
 void DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
 
+// Draws the given path as a cable and possibly update its length.
 void DrawCable(DrawContext&, SkPath&, sk_sp<SkColorFilter>&, CableTexture,
-               float width = kCableWidth);
+               float start_width = kCableWidth, float end_width = kCableWidth,
+               float* length = nullptr);
 
 }  // namespace automat::gui

@@ -24,7 +24,7 @@ struct DragActionBase : Action {
   // DragActionBase takes care of snapping objects to grid and animating a virtual spring that
   // animates them smoothly. Derived classes are given the snapped position and should call the
   // given callback so that spring animation can be applied.
-  virtual void DragUpdate(Vec2 pos, maf::Fn<void(LocationAnimationState&)> callback) = 0;
+  virtual void DragUpdate(Vec2 pos, float scale) = 0;
   virtual void DragEnd() = 0;
   virtual void DragDraw(gui::DrawContext&) = 0;
   virtual SkRect DragBox() = 0;
@@ -32,11 +32,12 @@ struct DragActionBase : Action {
 
 struct DragObjectAction : DragActionBase {
   Vec2 position;
+  float scale;
   std::unique_ptr<Object> object;
   std::unique_ptr<LocationAnimationState> anim;
   DragObjectAction(std::unique_ptr<Object>&&);
   ~DragObjectAction() override;
-  void DragUpdate(Vec2 pos, maf::Fn<void(LocationAnimationState&)> callback) override;
+  void DragUpdate(Vec2 pos, float scale) override;
   void DragEnd() override;
   void DragDraw(gui::DrawContext&) override;
   SkRect DragBox() override;
@@ -46,7 +47,7 @@ struct DragLocationAction : DragActionBase {
   Location* location;
   DragLocationAction(Location* location);
   ~DragLocationAction() override;
-  void DragUpdate(Vec2 pos, maf::Fn<void(LocationAnimationState&)> callback) override;
+  void DragUpdate(Vec2 pos, float scale) override;
   void DragEnd() override;
   void DragDraw(gui::DrawContext&) override;
   SkRect DragBox() override;

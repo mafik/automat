@@ -23,7 +23,7 @@ namespace automat {
 
 Location* Machine::LocationAtPoint(Vec2 point) {
   for (auto& loc : locations) {
-    Vec2 local_point = point - loc->position;
+    Vec2 local_point = (point - loc->position) / loc->scale;
     SkPath shape;
     if (loc->object) {
       shape = loc->object->Shape();
@@ -324,14 +324,7 @@ ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
 }
 SkMatrix Machine::TransformToChild(const Widget& child, animation::Display* display) const {
   if (const Location* l = dynamic_cast<const Location*>(&child)) {
-    SkMatrix transform = SkMatrix::I();
-    transform.postTranslate(-l->position.x, -l->position.y);
-    if (display) {
-      if (auto* state = l->animation_state.Find(*display)) {
-        state->Apply(transform, *l->object);
-      }
-    }
-    return transform;
+    return l->GetTransform(display);
   } else if (const gui::ConnectionWidget* w = dynamic_cast<const gui::ConnectionWidget*>(&child)) {
     return SkMatrix::I();
   }

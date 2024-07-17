@@ -276,13 +276,10 @@ static void PositionBelow(Location& origin, Location& below) {
 
 static void AnimateGrowFrom(Location& source, Location& grown) {
   for (auto* display : animation::displays) {
-    auto& animation_state = grown.animation_state[*display];
-    animation_state.scale.target = 1;
+    auto& animation_state = grown.GetAnimationState(*display);
     animation_state.scale.value = 0.5;
     Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
-    Vec2 grown_center = grown.object->Shape().getBounds().center() + grown.position;
-    animation_state.position_offset.value = source_center - grown_center;
-    animation_state.position_offset.target = Vec2(0, 0);
+    animation_state.position.value = source_center;
     animation_state.transparency.value = 1;
   }
 }

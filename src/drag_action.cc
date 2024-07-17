@@ -6,8 +6,6 @@
 #include "math.hh"
 #include "pointer.hh"
 #include "root.hh"
-#include "time.hh"
-#include "units.hh"
 #include "window.hh"
 
 namespace automat {
@@ -30,7 +28,7 @@ void DragActionBase::Update(gui::Pointer& pointer) {
 
   auto last_round = RoundToMilimeters(last_position - contact_point);
   auto curr_round = RoundToMilimeters(current_position - contact_point);
-  maf::Fn<void(LocationAnimationState&)> callback;
+  float scale = 1;
 
   if (pointer.window.IsOverTrash(pointer.pointer_position)) {
     gui::Path root_machine_path;
@@ -41,33 +39,13 @@ void DragActionBase::Update(gui::Pointer& pointer) {
     Vec2 box_size = Vec2(drag_box.width(), drag_box.height());
     float diagonal = Length(box_size);
 
-    Vec2 actual_target_position =
+    curr_round =
         mat.mapPoint(pointer.window.size - box_size / diagonal * pointer.window.trash_radius / 2) -
         drag_box.center();
 
-    float target_scale = mat.mapRadius(pointer.window.trash_radius) / diagonal * 0.9f;
-    callback = [=](LocationAnimationState& anim) {
-      anim.scale.target = target_scale;
-      anim.position_offset.target = actual_target_position - curr_round;
-      anim.position_offset.value += last_round - curr_round;
-    };
-  } else if (last_round != curr_round && Length(current_position - last_position) < 0.5_mm) {
-    callback = [delta = last_round - curr_round](LocationAnimationState& anim) {
-      anim.scale.target = 1;
-      anim.position_offset.target = Vec2(0, 0);
-      anim.position_offset.value += delta;
-      anim.position_offset.value.x = std::clamp(anim.position_offset.value.x, -1_mm, 1_mm);
-      anim.position_offset.value.y = std::clamp(anim.position_offset.value.y, -1_mm, 1_mm);
-    };
-  } else {
-    callback = [](LocationAnimationState& anim) {
-      anim.scale.target = 1;
-      anim.position_offset.target = Vec2(0, 0);
-      anim.position_offset.value.x = std::clamp(anim.position_offset.value.x, -1_mm, 1_mm);
-      anim.position_offset.value.y = std::clamp(anim.position_offset.value.y, -1_mm, 1_mm);
-    };
+    scale = mat.mapRadius(pointer.window.trash_radius) / diagonal * 0.9f;
   }
-  DragUpdate(curr_round, callback);
+  DragUpdate(curr_round, scale);
 }
 
 DragObjectAction::DragObjectAction(std::unique_ptr<Object>&& object_arg)
@@ -77,18 +55,18 @@ DragObjectAction::DragObjectAction(std::unique_ptr<Object>&& object_arg)
 
 DragObjectAction::~DragObjectAction() {}
 
-void DragObjectAction::DragUpdate(Vec2 pos, maf::Fn<void(LocationAnimationState& state)> callback) {
-  callback(*anim);
+void DragObjectAction::DragUpdate(Vec2 pos, float scale) {
+  this->scale = scale;
   position = pos;
+  // TODO: clamp animation
 }
 
-void DragLocationAction::DragUpdate(Vec2 pos,
-                                    maf::Fn<void(LocationAnimationState& anim)> callback) {
-  for (auto display : animation::displays) {
-    auto& animation_state = location->animation_state[*display];
-    callback(animation_state);
-  }
+void DragLocationAction::DragUpdate(Vec2 pos, float scale) {
+  location->scale = scale;
   location->position = pos;
+  for (auto& anim : location->animation_state) {
+    // TODO: clamp animation
+  }
 }
 
 void DragActionBase::End() { DragEnd(); }
@@ -98,16 +76,14 @@ void DragActionBase::DrawAction(gui::DrawContext& ctx) { DragDraw(ctx); }
 void DragObjectAction::DragEnd() {
   Location& loc = root_machine->CreateEmpty();
   loc.position = position;
+  loc.scale = scale;
   loc.InsertHere(std::move(object));
 }
 
 void DragObjectAction::DragDraw(gui::DrawContext& ctx) {
-  anim->position_offset.Tick(ctx.display);
-  anim->scale.Tick(ctx.display);
+  anim->Tick(ctx.DeltaT(), position, scale);
 
-  auto mat = SkMatrix::Translate(-position);
-  anim->Apply(mat, *object);
-
+  auto mat = anim->GetTransform(object->Shape().getBounds().center());
   SkMatrix inv;
   mat.invert(&inv);
 

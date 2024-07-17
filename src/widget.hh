@@ -30,6 +30,8 @@ struct DrawContext {
   Path path;
   DrawContext(SkCanvas& canvas, animation::Display& display)
       : canvas(canvas), display(display), path() {}
+
+  float DeltaT() const { return display.timer.d; }
 };
 
 // Base class for widgets.

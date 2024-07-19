@@ -604,11 +604,6 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
 
 Vec2 OpticalConnectorState::PlugTopCenter() const { return sections.front().pos; }
 
-Vec2 OpticalConnectorState::PlugBottomCenter() const {
-  return sections.front().pos -
-         Vec2::Polar(sections.front().dir + sections.front().true_dir_offset, kCasingHeight);
-}
-
 SkMatrix OpticalConnectorState::ConnectorMatrix() const {
   Vec2 pos = sections.front().pos;
   SinCos dir = sections.front().dir + sections.front().true_dir_offset - 90_deg;

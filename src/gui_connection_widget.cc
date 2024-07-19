@@ -164,7 +164,7 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
     if (mat.invert(&mat_inv)) {
       grab_offset = mat_inv.mapXY(pointer_pos.x, pointer_pos.y);
     }
-    widget.manual_position = pointer_pos - grab_offset;
+    widget.manual_position = pointer_pos - grab_offset * widget.state->connector_scale;
   }
 
   display = &pointer.AnimationContext();
@@ -181,14 +181,14 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
 
 void DragConnectionAction::Update(gui::Pointer& pointer) {
   Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
-  widget.manual_position = new_position - grab_offset;
+  widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
 }
 
 void DragConnectionAction::End() {
   Machine* m = widget.from.ParentAs<Machine>();
   Vec2 pos;
   if (widget.state) {
-    pos = widget.state->PlugBottomCenter();
+    pos = widget.state->ConnectorMatrix().mapPoint({});
   } else if (widget.manual_position) {
     pos = *widget.manual_position;
   } else {

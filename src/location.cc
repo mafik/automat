@@ -121,20 +121,20 @@ void Location::ScheduleLocalUpdate(Location& updated) {
 
 void Location::ScheduleErrored(Location& errored) { (new ErroredTask(this, &errored))->Schedule(); }
 
-SkPath Location::Shape() const {
+SkPath Location::Shape(animation::Display*) const {
   if constexpr (false) {  // Gray box shape
     // Keeping this around because locations will eventually be toggleable between frame & no frame
     // modes.
     SkRect object_bounds;
     if (object) {
-      object_bounds = object->Shape().getBounds();
+      object_bounds = object->Shape(nullptr).getBounds();
     } else {
       object_bounds = SkRect::MakeEmpty();
     }
     float outset = 0.001 - kBorderWidth / 2;
     SkRect bounds = object_bounds.makeOutset(outset, outset);
     // expand the bounds to include the run button
-    SkPath run_button_shape = run_button.Shape();
+    SkPath run_button_shape = run_button.Shape(nullptr);
     bounds.fTop -= run_button_shape.getBounds().height() + 0.001;
     return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
   }
@@ -148,7 +148,7 @@ SkPath Location::FieldShape(Object& field) const {
     if (!object_field_shape.isEmpty()) {
       return object_field_shape;
     } else {
-      return object->Shape();
+      return object->Shape(nullptr);
     }
   }
   return SkPath();
@@ -193,9 +193,9 @@ void Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   SkPath my_shape;
   if (object) {
-    my_shape = object->Shape();
+    my_shape = object->Shape(nullptr);
   } else {
-    my_shape = Shape();
+    my_shape = Shape(nullptr);
   }
   SkRect bounds = my_shape.getBounds();
 
@@ -347,7 +347,7 @@ SkMatrix LocationAnimationState::GetTransform(Vec2 scale_pivot) const {
 }
 
 SkMatrix Location::GetTransform(animation::Display* display) const {
-  Vec2 scale_pivot = object->Shape().getBounds().center();
+  Vec2 scale_pivot = object->Shape(nullptr).getBounds().center();
   if (display) {
     if (auto* anim = animation_state.Find(*display)) {
       return anim->GetTransform(scale_pivot);

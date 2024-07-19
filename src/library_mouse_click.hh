@@ -16,7 +16,7 @@ struct MouseClick : Object, Runnable {
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   void Args(std::function<void(Argument&)> cb) override;
   LongRunning* OnRun(Location&) override;

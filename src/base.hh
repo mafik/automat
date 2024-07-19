@@ -24,6 +24,7 @@
 #include "connection.hh"
 #include "control_flow.hh"
 #include "deserializer.hh"
+#include "drag_action.hh"
 #include "format.hh"
 #include "location.hh"
 #include "log.hh"
@@ -31,6 +32,7 @@
 #include "run_button.hh"
 #include "tasks.hh"
 #include "text_field.hh"
+#include "widget.hh"
 
 namespace automat {
 
@@ -92,7 +94,7 @@ struct LiveObject : Object {
 };
 
 // 2D Canvas holding objects & a spaghetti of connections.
-struct Machine : LiveObject {
+struct Machine : LiveObject, gui::DropTarget {
   static const Machine proto;
   Machine();
   string name = "";
@@ -138,14 +140,11 @@ struct Machine : LiveObject {
     return std::unique_ptr<Object>(m);
   }
 
-  SkPath Shape() const override {
-    static SkPath empty_path = []() {
-      SkPath path;
-      path.toggleInverseFillType();
-      return path;
-    }();
-    return empty_path;
-  }
+  void Draw(gui::DrawContext&) const override;
+  gui::DropTarget* CanDrop() override { return this; }
+  void SnapPosition(Vec2& position, float& scale, Object* object) override;
+
+  SkPath Shape(animation::Display*) const override;
 
   // Add ConnectionWidgets for all arguments defined by the objects.
   void UpdateConnectionWidgets() const;

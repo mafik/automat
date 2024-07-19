@@ -11,7 +11,7 @@ struct ShapeWidget : Widget, PaintMixin {
   SkPath path;
 
   ShapeWidget(SkPath path);
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   void Draw(DrawContext&) const override;
 };
 

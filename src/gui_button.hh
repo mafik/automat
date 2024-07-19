@@ -23,7 +23,7 @@ struct Button : Widget {
   void Draw(DrawContext&) const override;
   float Height() const;
   virtual SkRRect RRect() const;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
   virtual void Activate(gui::Pointer&) {}
   virtual Widget* Child() const { return nullptr; }

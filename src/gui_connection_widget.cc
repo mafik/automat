@@ -31,9 +31,9 @@ ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), 
   }
 }
 
-SkPath ConnectionWidget::Shape() const {
+SkPath ConnectionWidget::Shape(animation::Display*) const {
   if (state) {
-    return state->Shape();
+    return state->Shape(nullptr);
   } else {
     return SkPath();
   }
@@ -48,7 +48,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     using_layer = true;
     canvas.saveLayerAlphaf(nullptr, 1.f - from_animation_state.transparency);
   }
-  SkPath from_shape = from.Shape();
+  SkPath from_shape = from.Shape(nullptr);
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
   }
@@ -64,7 +64,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     Connection* c = it->second;
     to = &c->to;
     if (to->object) {
-      to_shape = to->object->Shape();
+      to_shape = to->object->Shape(nullptr);
       to->object->ConnectionPositions(to_points);
       SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);
       for (auto& vec_and_dir : to_points) {

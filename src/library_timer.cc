@@ -570,7 +570,7 @@ ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {
 SkPath TimerDelay::FieldShape(Object& field) const {
   if (&field == &duration) {
     auto transform = SkMatrix::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
-    return text_field.Shape().makeTransform(transform);
+    return text_field.Shape(nullptr).makeTransform(transform);
   }
   return SkPath();
 }
@@ -582,7 +582,7 @@ SkMatrix TimerDelay::TransformToChild(const Widget& child, animation::Display*) 
   return SkMatrix::I();
 }
 
-SkPath TimerDelay::Shape() const {
+SkPath TimerDelay::Shape(animation::Display*) const {
   static SkPath shape = []() {
     SkPathBuilder path_builder;
     path_builder.addOval(kOuterOval);

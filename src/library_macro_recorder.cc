@@ -245,10 +245,10 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
   // SkPaint outline;
   // outline.setStyle(SkPaint::kStroke_Style);
-  // canvas.drawPath(record_button.Shape(), outline);
+  // canvas.drawPath(record_button.Shape(nullptr), outline);
 
   // outline.setStyle(SkPaint::kStroke_Style);
-  // canvas.drawPath(record_button.child->Shape(), outline);
+  // canvas.drawPath(record_button.child->Shape(nullptr), outline);
 }
 
 static void PositionBelow(Location& origin, Location& below) {
@@ -278,7 +278,7 @@ static void AnimateGrowFrom(Location& source, Location& grown) {
   for (auto* display : animation::displays) {
     auto& animation_state = grown.GetAnimationState(*display);
     animation_state.scale.value = 0.5;
-    Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
+    Vec2 source_center = source.object->Shape(nullptr).getBounds().center() + source.position;
     animation_state.position.value = source_center;
     animation_state.transparency.value = 1;
   }
@@ -294,7 +294,7 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
     }
     Location& loc = machine->Create<Timeline>();
     timeline = loc.As<Timeline>();
-    Rect timeline_bounds = timeline->Shape().getBounds();
+    Rect timeline_bounds = timeline->Shape(nullptr).getBounds();
     loc.position = macro_recorder.here->position + Vec2(2.2_cm, 0) - timeline_bounds.TopCenter();
     PositionBelow(*macro_recorder.here, loc);
     AnimateGrowFrom(*macro_recorder.here, loc);
@@ -302,7 +302,7 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
   return timeline;
 }
 
-SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
+SkPath MacroRecorder::Shape(animation::Display*) const { return MacroRecorderShape(); }
 LongRunning* MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);
@@ -346,7 +346,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     Location& key_presser_loc = machine->Create<KeyPresser>();
     KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();
     key_presser->SetKey(key);
-    Rect key_presser_shape = key_presser_loc.object->Shape().getBounds();
+    Rect key_presser_shape = key_presser_loc.object->Shape(nullptr).getBounds();
     Vec2AndDir arg_start = timeline->here->ArgStart(nullptr, *timeline->track_args.back());
 
     // Pick the position that allows the cable to come in most horizontally (left to right).

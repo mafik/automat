@@ -6,6 +6,7 @@
 #include "base.hh"
 #include "control_flow.hh"
 #include "deserializer.hh"
+#include "drag_action.hh"
 #include "keyboard.hh"
 #include "math.hh"
 #include "root.hh"
@@ -23,7 +24,7 @@ struct PrototypeButton : Widget {
   const Object* proto;
   PrototypeButton(const Object* proto) : proto(proto) {}
   void Draw(DrawContext& ctx) const override { proto->Draw(ctx); }
-  SkPath Shape() const override { return proto->Shape(); }
+  SkPath Shape(animation::Display*) const override { return proto->Shape(nullptr); }
 
   void PointerOver(Pointer& pointer, animation::Display&) override {
     pointer.PushIcon(Pointer::kIconHand);
@@ -40,13 +41,11 @@ struct WindowImpl;
 
 extern std::vector<Window*> windows;
 
-struct Window final : Widget {
+struct Window final : Widget, DropTarget {
   Window(Vec2 size, float pixels_per_meter);
   ~Window();
 
   std::string_view Name() const override { return "Window"; }
-
-  bool IsOverTrash(Vec2 window_pos);
 
   void ArrangePrototypeButtons() {
     float max_w = size.width;
@@ -54,7 +53,7 @@ struct Window final : Widget {
     for (int i = 0; i < prototype_buttons.size(); i++) {
       auto& btn = prototype_buttons[i];
       Vec2& pos = prototype_button_positions[i];
-      SkPath shape = btn.Shape();
+      SkPath shape = btn.Shape(nullptr);
       SkRect bounds = shape.getBounds();
       if (cursor.x + bounds.width() + 0.001 > max_w) {
         cursor.x = 0;
@@ -65,14 +64,18 @@ struct Window final : Widget {
     }
   }
 
+  DropTarget* CanDrop() override { return this; }
+  void SnapPosition(Vec2& position, float& scale, Object* object) override;
+
+  // Return the shape of the trash zone in the corner of the window (in Machine coordinates).
+  SkPath TrashShape() const;
+
   float PxPerMeter() { return display_pixels_per_meter * zoom; }
 
   SkRect GetCameraRect() {
     return SkRect::MakeXYWH(camera_x - size.width / 2, camera_y - size.height / 2, size.width,
                             size.height);
   }
-
-  SkPaint& GetBackgroundPaint();
 
   Vec2 WindowToCanvas(Vec2 window) const {
     return (window - size / 2) / zoom + Vec2(camera_x, camera_y);
@@ -88,6 +91,7 @@ struct Window final : Widget {
 
   SkMatrix CanvasToWindow() const {
     SkMatrix m;
+    // assert(WindowToCanvas().invert(&m));
     m.setTranslate(-camera_x, -camera_y);
     m.postScale(zoom, zoom);
     m.postTranslate(size.width / 2, size.height / 2);
@@ -103,7 +107,7 @@ struct Window final : Widget {
     ArrangePrototypeButtons();
   }
   void DisplayPixelDensity(float pixels_per_meter);
-  SkPath Shape() const override {
+  SkPath Shape(animation::Display*) const override {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
   void Draw(SkCanvas&);

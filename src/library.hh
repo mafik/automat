@@ -992,7 +992,7 @@ struct ProgressBar : library::Number {
     return bar;
   }
   void Draw(gui::DrawContext& ctx) const override { Object::Draw(ctx); }
-  SkPath Shape() const override { return Object::Shape(); }
+  SkPath Shape(animation::Display*) const override { return Object::Shape(nullptr); }
 };
 
 struct ListView : Pointer {

@@ -9,7 +9,7 @@ struct AlignCenter : Widget {
 
   AlignCenter(std::unique_ptr<Widget>&& child);
   void Draw(DrawContext&) const override;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   ControlFlow VisitChildren(Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 };

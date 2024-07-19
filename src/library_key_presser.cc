@@ -85,15 +85,15 @@ void KeyPresser::Draw(gui::DrawContext& dctx) const {
   canvas.drawImage(img.get(), 0, 0, kDefaultSamplingOptions);
   canvas.restore();
 }
-SkPath KeyPresser::Shape() const {
-  auto button_shape = shortcut_button.Shape();
+SkPath KeyPresser::Shape(animation::Display*) const {
+  auto button_shape = shortcut_button.Shape(nullptr);
   auto hand_shape = GetHandShape();
   SkPath joined_shape;
   Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
   return joined_shape;
 }
 void KeyPresser::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
-  auto button_shape = shortcut_button.Shape();
+  auto button_shape = shortcut_button.Shape(nullptr);
   SkRRect rrect;
   if (button_shape.isRRect(&rrect)) {
     out_positions.push_back(Vec2AndDir{.pos = Rect::TopCenter(rrect.rect()), .dir = -90_deg});

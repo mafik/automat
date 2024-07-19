@@ -7,6 +7,8 @@
 #include "time.hh"
 #include "window.hh"
 
+using namespace maf;
+
 namespace automat::gui {
 
 Pointer::Pointer(Window& window, Vec2 position)
@@ -51,7 +53,8 @@ void Pointer::Move(Vec2 position) {
     }
     if (action) {
       action->Update(*this);
-    } else {
+    }
+    if (true) {
       Path old_path = path;
 
       path.clear();
@@ -66,7 +69,7 @@ void Pointer::Move(Vec2 position) {
             transformed = point;
           }
 
-          auto shape = w->Shape();
+          auto shape = w->Shape(&window.display);
           path.push_back(w);
           std::swap(point, transformed);
           if (shape.contains(point.x, point.y)) {
@@ -98,14 +101,7 @@ void Pointer::Move(Vec2 position) {
       }
 
       if constexpr (false) {  // enable for debugging
-        Str path_str;
-        for (Widget* w : path) {
-          if (!path_str.empty()) {
-            path_str += " -> ";
-          }
-          path_str += w->Name();
-        }
-        LOG << "Pointer path: " << path_str;
+        LOG << "Pointer path: " << *this;
       }
     }
   });
@@ -199,4 +195,17 @@ Vec2 Pointer::PositionWithinRootMachine() const {
   return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
 }
 animation::Display& Pointer::AnimationContext() const { return window.display; }
+
+Str Pointer::ToStr() const {
+  Str ret;
+  for (Widget* w : path) {
+    if (!ret.empty()) {
+      ret += " -> ";
+    }
+    ret += w->Name();
+    ret += PositionWithin(*w).ToStrMetric();
+  }
+  return ret;
+}
+
 }  // namespace automat::gui

@@ -8,6 +8,12 @@
 
 namespace automat {
 
+namespace gui {
+struct DropTarget {
+  virtual void SnapPosition(Vec2& position, float& scale, Object* object) = 0;
+};
+}  // namespace gui
+
 struct Location;
 struct LocationAnimationState;
 
@@ -15,6 +21,7 @@ struct DragActionBase : Action {
   Vec2 contact_point;
   Vec2 last_position;
   Vec2 current_position;
+  Vec2 last_snapped_position;
 
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
@@ -27,7 +34,7 @@ struct DragActionBase : Action {
   virtual void DragUpdate(Vec2 pos, float scale) = 0;
   virtual void DragEnd() = 0;
   virtual void DragDraw(gui::DrawContext&) = 0;
-  virtual SkRect DragBox() = 0;
+  virtual Object* DraggedObject() = 0;
 };
 
 struct DragObjectAction : DragActionBase {
@@ -40,7 +47,7 @@ struct DragObjectAction : DragActionBase {
   void DragUpdate(Vec2 pos, float scale) override;
   void DragEnd() override;
   void DragDraw(gui::DrawContext&) override;
-  SkRect DragBox() override;
+  Object* DraggedObject() override;
 };
 
 struct DragLocationAction : DragActionBase {
@@ -50,7 +57,7 @@ struct DragLocationAction : DragActionBase {
   void DragUpdate(Vec2 pos, float scale) override;
   void DragEnd() override;
   void DragDraw(gui::DrawContext&) override;
-  SkRect DragBox() override;
+  Object* DraggedObject() override;
 };
 
 }  // namespace automat

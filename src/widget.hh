@@ -34,6 +34,8 @@ struct DrawContext {
   float DeltaT() const { return display.timer.d; }
 };
 
+struct DropTarget;
+
 // Base class for widgets.
 struct Widget {
   Widget() {}
@@ -49,7 +51,7 @@ struct Widget {
   virtual void PointerOver(Pointer&, animation::Display&) {}
   virtual void PointerLeave(Pointer&, animation::Display&) {}
   virtual void Draw(DrawContext&) const = 0;
-  virtual SkPath Shape() const = 0;
+  virtual SkPath Shape(animation::Display*) const = 0;
   virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {
     return nullptr;
   }
@@ -57,6 +59,8 @@ struct Widget {
 
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
+
+  virtual DropTarget* CanDrop() { return nullptr; }
 
   // Used to visit the child widgets in a generic fashion.
   // Widgets are stored in front-to-back order.

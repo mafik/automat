@@ -250,7 +250,7 @@ struct Location : gui::Widget {
 
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   SkPath FieldShape(Object&) const;
 
   // Returns the position in parent machine's coordinates where the connections for this argument

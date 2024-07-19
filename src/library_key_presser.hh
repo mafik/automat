@@ -29,7 +29,7 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const override;
   std::unique_ptr<Action> CaptureButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;
 

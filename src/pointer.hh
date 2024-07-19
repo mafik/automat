@@ -53,6 +53,8 @@ struct Pointer final {
 
   animation::Display& AnimationContext() const;
 
+  maf::Str ToStr() const;
+
   Window& window;
   // The main keyboard associated with this pointer device. May be null!
   Keyboard* keyboard;

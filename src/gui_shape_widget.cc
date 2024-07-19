@@ -6,7 +6,7 @@ namespace automat::gui {
 
 ShapeWidget::ShapeWidget(SkPath path) : path(path) {}
 
-SkPath ShapeWidget::Shape() const { return path; }
+SkPath ShapeWidget::Shape(animation::Display*) const { return path; }
 
 void ShapeWidget::Draw(DrawContext& ctx) const { ctx.canvas.drawPath(path, paint); }
 

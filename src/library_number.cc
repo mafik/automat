@@ -174,7 +174,7 @@ void Number::Draw(gui::DrawContext& ctx) const {
   DrawChildren(ctx);
 }
 
-SkPath Number::Shape() const { return kNumberShape; }
+SkPath Number::Shape(animation::Display*) const { return kNumberShape; }
 
 ControlFlow Number::VisitChildren(gui::Visitor& visitor) {
   Widget* arr[] = {&dot,       &backspace, &digits[0], &digits[1], &digits[2],

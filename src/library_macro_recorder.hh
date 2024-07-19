@@ -40,7 +40,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override {
     Widget* widgets[] = {&record_button};
     if (visitor(widgets) == ControlFlow::Stop) return ControlFlow::Stop;

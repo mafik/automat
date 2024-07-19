@@ -1,13 +1,13 @@
 #include "window.hh"
 
-#include <include/effects/SkRuntimeEffect.h>
-
 #include <memory>
 
 #include "drag_action.hh"
 #include "font.hh"
 #include "include/core/SkPath.h"
+#include "math.hh"
 #include "prototypes.hh"
+#include "root.hh"
 #include "touchpad.hh"
 
 namespace automat::gui {
@@ -23,6 +23,7 @@ Window::Window(Vec2 size, float pixels_per_meter)
   }
   ArrangePrototypeButtons();
   windows.push_back(this);
+  display.window = this;
 }
 Window::~Window() {
   auto it = std::find(windows.begin(), windows.end(), this);
@@ -32,7 +33,6 @@ Window::~Window() {
 }
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
-static SkColor tick_color = SkColorSetRGB(0x40, 0x40, 0x40);
 constexpr float kTrashRadius = 3_cm;
 
 std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer& pointer, PointerButton btn) {
@@ -186,17 +186,22 @@ void Window::Draw(SkCanvas& canvas) {
 
     auto default_matrix = canvas.getLocalToDevice();
     canvas.save();
-    canvas.translate(size.width / 2., size.height / 2.);
-    canvas.scale(zoom, zoom);
-    canvas.translate(-camera_x, -camera_y);
+    canvas.concat(CanvasToWindow());
 
-    // Draw background
+    {  // Animate trash area
+      bool object_is_dragged = false;
+      for (auto* pointer : pointers) {
+        auto action = pointer->action.get();
+        if (action == nullptr) continue;
+        auto drag_action = dynamic_cast<DragActionBase*>(action);
+        if (drag_action == nullptr) continue;
+        object_is_dragged = true;
+      }
+      trash_radius.target = object_is_dragged ? kTrashRadius : 0;
+      trash_radius.Tick(display);
+    }
+
     canvas.clear(background_color);
-    canvas.drawRect(work_area, GetBackgroundPaint());
-    SkPaint border_paint;
-    border_paint.setColor(tick_color);
-    border_paint.setStyle(SkPaint::kStroke_Style);
-    canvas.drawRect(work_area, border_paint);
 
     // Draw target window size when zooming in with middle mouse button
     if (zoom.target == 1 && rz > 0.001) {
@@ -211,28 +216,7 @@ void Window::Draw(SkCanvas& canvas) {
       canvas.drawRect(target_rect, target_paint);
     }
 
-    {  // Draw trash area
-      // swap matrices
-      auto matrix_backup = canvas.getLocalToDevice();
-      canvas.setMatrix(default_matrix);
-      bool object_is_dragged = false;
-      for (auto* pointer : pointers) {
-        auto action = pointer->action.get();
-        if (action == nullptr) continue;
-        auto drag_action = dynamic_cast<DragActionBase*>(action);
-        if (drag_action == nullptr) continue;
-        object_is_dragged = true;
-      }
-      trash_radius.target = object_is_dragged ? kTrashRadius : 0;
-      trash_radius.Tick(display);
-
-      SkPaint trash_bg_paint;
-      trash_bg_paint.setColor("#808080"_color);
-      canvas.drawCircle(size.width, size.height, trash_radius, trash_bg_paint);
-      canvas.setMatrix(matrix_backup);
-    }
-
-    root_machine->DrawChildren(draw_ctx);
+    root_machine->Draw(draw_ctx);
 
     for (auto& pointer : pointers) {
       pointer->Draw(draw_ctx);
@@ -294,45 +278,6 @@ void Window::Zoom(float delta) {
   }
 }
 
-SkPaint& Window::GetBackgroundPaint() {
-  static SkRuntimeShaderBuilder builder = []() {
-    const char* sksl = R"(
-        uniform float px_per_m;
-
-        // Dark theme
-        //float4 bg = float4(0.05, 0.05, 0.00, 1);
-        //float4 fg = float4(0.0, 0.32, 0.8, 1);
-
-        float4 bg = float4(0.9, 0.9, 0.9, 1);
-        float4 fg = float4(0.5, 0.5, 0.5, 1);
-
-        float grid(vec2 coord_m, float dots_per_m, float r_px) {
-          float r = r_px / px_per_m;
-          vec2 grid_coord = fract(coord_m * dots_per_m + 0.5) - 0.5;
-          return smoothstep(r, r - 1/px_per_m, length(grid_coord) / dots_per_m) * smoothstep(1./(3*r), 1./(32*r), dots_per_m);
-        }
-
-        half4 main(vec2 fragcoord) {
-          float dm_grid = grid(fragcoord, 10, 2);
-          float cm_grid = grid(fragcoord, 100, 2) * 0.8;
-          float mm_grid = grid(fragcoord, 1000, 1) * 0.8;
-          float d = max(max(mm_grid, cm_grid), dm_grid);
-          return mix(bg, fg, d);
-        }
-      )";
-
-    auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl));
-    if (!err.isEmpty()) {
-      FATAL << err.c_str();
-    }
-    SkRuntimeShaderBuilder builder(effect);
-    return builder;
-  }();
-  static SkPaint paint;
-  builder.uniform("px_per_m") = PxPerMeter();
-  paint.setShader(builder.makeShader());
-  return paint;
-}
 void Window::DisplayPixelDensity(float pixels_per_meter) {
   display_pixels_per_meter = pixels_per_meter;
 }
@@ -385,7 +330,58 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
   }
 }
 
-bool Window::IsOverTrash(Vec2 window_pos) {
-  return LengthSquared(window_pos - Vec2(size.width, size.height)) < trash_radius * trash_radius;
+SkPath Window::TrashShape() const {
+  SkPath trash_area_path = SkPath::Circle(size.width, size.height, trash_radius);
+  trash_area_path.transform(this->WindowToCanvas());
+  return trash_area_path;
+}
+
+void Window::SnapPosition(Vec2& position, float& scale, Object* object) {
+  Rect object_bounds = object->Shape(nullptr).getBounds();
+  Rect machine_bounds = root_machine->Shape(nullptr).getBounds();
+
+  machine_bounds.top -= object_bounds.bottom + object_bounds.Height() / 4;
+  machine_bounds.bottom -= object_bounds.top - object_bounds.Height() / 4;
+  machine_bounds.left -= object_bounds.right - object_bounds.Width() / 4;
+  machine_bounds.right -= object_bounds.left + object_bounds.Width() / 4;
+  Vec2 position1 = position;
+  if (machine_bounds.sk.contains(position.x, position.y)) {
+    float dist_to_top = fabsf(machine_bounds.top - position.y);
+    float dist_to_bottom = fabsf(position.y - machine_bounds.bottom);
+    float dist_to_left = fabsf(machine_bounds.left - position.x);
+    float dist_to_right = fabsf(position.x - machine_bounds.right);
+    if (dist_to_top < dist_to_bottom && dist_to_top < dist_to_left && dist_to_top < dist_to_right) {
+      position1.y = machine_bounds.top;
+    } else if (dist_to_bottom < dist_to_top && dist_to_bottom < dist_to_left &&
+               dist_to_bottom < dist_to_right) {
+      position1.y = machine_bounds.bottom;
+    } else if (dist_to_left < dist_to_top && dist_to_left < dist_to_bottom &&
+               dist_to_left < dist_to_right) {
+      position1.x = machine_bounds.left;
+    } else {
+      position1.x = machine_bounds.right;
+    }
+  }
+  float scale1 = 0.5;
+
+  Vec2 window_pos = (position - Vec2(camera_x, camera_y)) * zoom + size / 2;
+  bool is_over_trash =
+      LengthSquared(window_pos - Vec2(size.width, size.height)) < trash_radius * trash_radius;
+  Vec2 box_size = Vec2(object_bounds.Width(), object_bounds.Height());
+  float diagonal = Length(box_size);
+  SkMatrix mat = WindowToCanvas();
+  Vec2 position2 =
+      mat.mapPoint(size - box_size / diagonal * trash_radius / 2) - object_bounds.Center();
+  float scale2 = mat.mapRadius(trash_radius) / diagonal * 0.9f;
+  if (scale2 > 0.5) {
+    scale2 = 0.5;
+  }
+  if (LengthSquared(position1 - position) < LengthSquared(position2 - position)) {
+    position = position1;
+    scale = scale1;
+  } else {
+    position = position2;
+    scale = scale2;
+  }
 }
 }  // namespace automat::gui

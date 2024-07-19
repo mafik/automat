@@ -9,6 +9,10 @@
 
 using namespace std::chrono_literals;
 
+namespace automat::gui {
+struct Window;
+}  // namespace automat::gui
+
 namespace automat::animation {
 
 struct PerDisplayValueBase {
@@ -47,6 +51,8 @@ struct Display {
   // field can be used by animated objects to animate their properties.
   time::Timer timer;
   operator time::Timer&() { return timer; }
+
+  gui::Window* window = nullptr;
 
   mutable std::map<void*, std::unique_ptr<PerDisplayValueBase>> per_display_values;
 };

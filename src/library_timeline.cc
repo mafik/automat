@@ -1052,7 +1052,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   canvas.restore();  // unclip
 }
 
-SkPath Timeline::Shape() const {
+SkPath Timeline::Shape(animation::Display*) const {
   auto r = WoodenCaseRRect(*this);
   return SkPath::RRect(r);
 }
@@ -1124,7 +1124,7 @@ SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display* dis
   return SkMatrix::I();
 }
 
-SkPath TrackBase::Shape() const {
+SkPath TrackBase::Shape(animation::Display*) const {
   float distance_to_seconds;
   if (timeline) {
     distance_to_seconds = DistanceToSeconds(*timeline);
@@ -1142,12 +1142,12 @@ SkPath TrackBase::Shape() const {
 }
 void TrackBase::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
-  canvas.drawPath(Shape(), kTrackPaint);
+  canvas.drawPath(Shape(nullptr), kTrackPaint);
 }
 
 void OnOffTrack::Draw(gui::DrawContext& dctx) const {
   TrackBase::Draw(dctx);
-  auto shape = Shape();
+  auto shape = Shape(nullptr);
   Rect rect;
   shape.isRect(&rect.sk);
   float distance_to_seconds = DistanceToSeconds(*timeline);

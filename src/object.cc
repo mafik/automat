@@ -16,7 +16,7 @@ namespace automat {
 
 void Object::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  SkPath path = Shape();
+  SkPath path = Shape(nullptr);
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, 0.01}};
@@ -56,7 +56,7 @@ void Object::Draw(gui::DrawContext& ctx) const {
   canvas.restore();
 }
 
-SkPath Object::Shape() const {
+SkPath Object::Shape(animation::Display*) const {
   static std::unordered_map<std::string_view, SkPath> basic_shapes;
   auto it = basic_shapes.find(Name());
   if (it == basic_shapes.end()) {
@@ -116,7 +116,7 @@ Vec2AndDir Object::ArgStart(Argument& arg) {
     shape = FieldShape(*arg.field);
   }
   if (shape.isEmpty()) {
-    shape = Shape();
+    shape = Shape(nullptr);
   }
   Rect bounds = shape.getBounds();
   return Vec2AndDir{
@@ -127,7 +127,7 @@ Vec2AndDir Object::ArgStart(Argument& arg) {
 
 void Object::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
   // By default just one position on the top of the bounding box.
-  auto shape = Shape();
+  auto shape = Shape(nullptr);
   Rect bounds = shape.getBounds();
   out_positions.push_back(Vec2AndDir{
       .pos = bounds.TopCenter(),

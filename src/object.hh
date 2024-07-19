@@ -58,7 +58,7 @@ struct Object : gui::Widget {
     return GetText() <=> other.GetText();
   }
   void Draw(gui::DrawContext&) const override;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;
 };
 

@@ -36,7 +36,7 @@ struct ConnectionWidget : Widget {
   ConnectionWidget(Location&, Argument&);
 
   maf::StrView Name() const override { return "ConnectionWidget"; }
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   void Draw(DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
 };

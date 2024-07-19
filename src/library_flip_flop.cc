@@ -124,7 +124,7 @@ Rect FlipFlopRect() {
   float s = kFlipFlopWidth / img->width();
   return Rect::MakeZeroWH(kFlipFlopWidth, s * img->height());
 }
-SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
+SkPath FlipFlop::Shape(animation::Display*) const { return SkPath::Rect(FlipFlopRect()); }
 
 ControlFlow FlipFlop::VisitChildren(gui::Visitor& visitor) {
   Widget* children[] = {&button};
@@ -173,7 +173,9 @@ void YingYangIcon::Draw(gui::DrawContext& dctx) const {
   black_path.addCircle(0, -kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
   canvas.drawPath(black_path, paint);
 }
-SkPath YingYangIcon::Shape() const { return SkPath::Circle(0, 0, kYingYangRadius); }
+SkPath YingYangIcon::Shape(animation::Display*) const {
+  return SkPath::Circle(0, 0, kYingYangRadius);
+}
 SkRRect FlipFlopButton::RRect() const {
   SkRect oval = SkRect::MakeXYWH(0, 0, 2 * kYingYangButtonRadius, 2 * kYingYangButtonRadius);
   return SkRRect::MakeOval(oval);

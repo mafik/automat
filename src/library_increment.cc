@@ -106,6 +106,6 @@ void Increment::Draw(gui::DrawContext& ctx) const {
   canvas.restore();
 }
 
-SkPath Increment::Shape() const { return SkPath::RRect(GetShape()); }
+SkPath Increment::Shape(animation::Display*) const { return SkPath::RRect(GetShape()); }
 
 }  // namespace automat::library

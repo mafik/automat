@@ -353,7 +353,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   DrawChildren(ctx);
 }
 
-SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
+SkPath HotKey::Shape(animation::Display*) const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {

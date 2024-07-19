@@ -42,7 +42,7 @@ struct Timeline;
 struct TrackBase : Object {
   Timeline* timeline = nullptr;
   Vec<time::T> timestamps;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
@@ -106,7 +106,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;
-  SkPath Shape() const override;
+  SkPath Shape(animation::Display*) const override;
   void Args(std::function<void(Argument&)> cb) override;
   Vec2AndDir ArgStart(Argument&) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;

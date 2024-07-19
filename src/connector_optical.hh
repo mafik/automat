@@ -64,7 +64,7 @@ struct OpticalConnectorState {
   ~OpticalConnectorState();
 
   Vec2 PlugTopCenter() const;
-  SkPath Shape() const;
+  SkPath Shape(animation::Display*) const;
   SkMatrix ConnectorMatrix() const;
 };
 

@@ -60,7 +60,7 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg, Widget* ch
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
   auto& hover = hover_ptr[display];
-  SkRect child_bounds = child->Shape().getBounds();
+  SkRect child_bounds = child->Shape(nullptr).getBounds();
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -191,7 +191,7 @@ void ToggleButton::Draw(DrawContext& ctx) const {
   }
 }
 
-SkPath Button::Shape() const { return SkPath::RRect(RRect()); }
+SkPath Button::Shape(animation::Display*) const { return SkPath::RRect(RRect()); }
 
 struct ButtonAction : public Action {
   Button& button;
@@ -219,7 +219,7 @@ std::unique_ptr<Action> Button::ButtonDownAction(Pointer& pointer, PointerButton
 Button::Button() {}
 
 SkRect Button::ChildBounds() const {
-  if (auto child = Child()) return child->Shape().getBounds();
+  if (auto child = Child()) return child->Shape(nullptr).getBounds();
   return SkRect::MakeEmpty();
 }
 

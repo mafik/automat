@@ -11,13 +11,15 @@
 #include <include/core/SkPathEffect.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
+#include <include/effects/SkRuntimeEffect.h>
+#include <include/pathops/SkPathOps.h>
 
 #include "drag_action.hh"
 #include "gui_connection_widget.hh"
 #include "tasks.hh"
 #include "thread_name.hh"
-#include "time.hh"
 #include "timer_thread.hh"
+#include "window.hh"
 
 namespace automat {
 
@@ -26,7 +28,7 @@ Location* Machine::LocationAtPoint(Vec2 point) {
     Vec2 local_point = (point - loc->position) / loc->scale;
     SkPath shape;
     if (loc->object) {
-      shape = loc->object->Shape();
+      shape = loc->object->Shape(nullptr);
     }
     if (shape.contains(local_point.x, local_point.y)) {
       return loc.get();
@@ -329,5 +331,86 @@ SkMatrix Machine::TransformToChild(const Widget& child, animation::Display* disp
     return SkMatrix::I();
   }
   return SkMatrix::I();
+}
+
+SkPath Machine::Shape(animation::Display* display) const {
+  SkPath rect = SkPath::Rect(Rect::MakeWH(100_cm, 100_cm));
+  if (display && display->window) {
+    auto trash = display->window->TrashShape();
+    SkPath rect_minus_trash;
+    Op(rect, trash, kDifference_SkPathOp, &rect_minus_trash);
+    return rect_minus_trash;
+  }
+  return rect;
+}
+
+SkPaint& GetBackgroundPaint(float px_per_m) {
+  static SkRuntimeShaderBuilder builder = []() {
+    const char* sksl = R"(
+        uniform float px_per_m;
+
+        // Dark theme
+        //float4 bg = float4(0.05, 0.05, 0.00, 1);
+        //float4 fg = float4(0.0, 0.32, 0.8, 1);
+
+        float4 bg = float4(0.9, 0.9, 0.9, 1);
+        float4 fg = float4(0.5, 0.5, 0.5, 1);
+
+        float grid(vec2 coord_m, float dots_per_m, float r_px) {
+          float r = r_px / px_per_m;
+          vec2 grid_coord = fract(coord_m * dots_per_m + 0.5) - 0.5;
+          return smoothstep(r, r - 1/px_per_m, length(grid_coord) / dots_per_m) * smoothstep(1./(3*r), 1./(32*r), dots_per_m);
+        }
+
+        half4 main(vec2 fragcoord) {
+          float dm_grid = grid(fragcoord, 10, 2);
+          float cm_grid = grid(fragcoord, 100, 2) * 0.8;
+          float mm_grid = grid(fragcoord, 1000, 1) * 0.8;
+          float d = max(max(mm_grid, cm_grid), dm_grid);
+          return mix(bg, fg, d);
+        }
+      )";
+
+    auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl));
+    if (!err.isEmpty()) {
+      FATAL << err.c_str();
+    }
+    SkRuntimeShaderBuilder builder(effect);
+    return builder;
+  }();
+  static SkPaint paint;
+  builder.uniform("px_per_m") = px_per_m;
+  paint.setShader(builder.makeShader());
+  return paint;
+}
+
+void Machine::Draw(gui::DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+  auto shape = Shape(&ctx.display);
+  float px_per_m = ctx.canvas.getLocalToDeviceAs3x3().mapRadius(1);
+  SkPaint background_paint = GetBackgroundPaint(px_per_m);
+  canvas.drawPath(shape, background_paint);
+  SkPaint border_paint;
+  border_paint.setColor("#404040"_color);
+  border_paint.setStyle(SkPaint::kStroke_Style);
+  canvas.drawPath(shape, border_paint);
+  DrawChildren(ctx);
+}
+void Machine::SnapPosition(Vec2& position, float& scale, Object* object) {
+  scale = 1.0;
+  Rect rect = object->Shape(nullptr).getBounds();
+  if (position.x + rect.left < -0.5) {
+    position.x = -rect.left - 0.5;
+  }
+  if (position.x + rect.right > 0.5) {
+    position.x = -rect.right + 0.5;
+  }
+  if (position.y + rect.bottom < -0.5) {
+    position.y = -rect.bottom - 0.5;
+  }
+  if (position.y + rect.top > 0.5) {
+    position.y = -rect.top + 0.5;
+  }
+  position = Vec2(roundf(position.x * 1000) / 1000., roundf(position.y * 1000) / 1000.);
 }
 }  // namespace automat

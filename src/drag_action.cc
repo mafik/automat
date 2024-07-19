@@ -26,26 +26,16 @@ void DragActionBase::Update(gui::Pointer& pointer) {
   last_position = current_position;
   current_position = pointer.PositionWithinRootMachine();
 
-  auto last_round = RoundToMilimeters(last_position - contact_point);
-  auto curr_round = RoundToMilimeters(current_position - contact_point);
+  Vec2 position = current_position - contact_point;
   float scale = 1;
 
-  if (pointer.window.IsOverTrash(pointer.pointer_position)) {
-    gui::Path root_machine_path;
-    root_machine_path.push_back(&pointer.window);
-    root_machine_path.push_back(root_machine);
-    SkMatrix mat = TransformDown(root_machine_path, &pointer.window.display);
-    auto drag_box = DragBox();
-    Vec2 box_size = Vec2(drag_box.width(), drag_box.height());
-    float diagonal = Length(box_size);
-
-    curr_round =
-        mat.mapPoint(pointer.window.size - box_size / diagonal * pointer.window.trash_radius / 2) -
-        drag_box.center();
-
-    scale = mat.mapRadius(pointer.window.trash_radius) / diagonal * 0.9f;
+  for (int i = pointer.path.size() - 1; i >= 0; --i) {
+    if (gui::DropTarget* drop_target = pointer.path[i]->CanDrop()) {
+      drop_target->SnapPosition(position, scale, DraggedObject());
+      break;
+    }
   }
-  DragUpdate(curr_round, scale);
+  DragUpdate(position, scale);
 }
 
 DragObjectAction::DragObjectAction(std::unique_ptr<Object>&& object_arg)
@@ -83,7 +73,7 @@ void DragObjectAction::DragEnd() {
 void DragObjectAction::DragDraw(gui::DrawContext& ctx) {
   anim->Tick(ctx.DeltaT(), position, scale);
 
-  auto mat = anim->GetTransform(object->Shape().getBounds().center());
+  auto mat = anim->GetTransform(object->Shape(nullptr).getBounds().center());
   SkMatrix inv;
   mat.invert(&inv);
 
@@ -93,7 +83,7 @@ void DragObjectAction::DragDraw(gui::DrawContext& ctx) {
   ctx.canvas.setMatrix(matrix_backup);
 }
 
-SkRect DragObjectAction::DragBox() { return object->Shape().getBounds(); }
+Object* DragObjectAction::DraggedObject() { return object.get(); }
 
 DragLocationAction::DragLocationAction(Location* location) : location(location) {}
 
@@ -105,5 +95,5 @@ void DragLocationAction::DragDraw(gui::DrawContext&) {
   // Location is drawn by its parent Machine so nothing to do here.
 }
 
-SkRect DragLocationAction::DragBox() { return location->object->Shape().getBounds(); }
+Object* DragLocationAction::DraggedObject() { return location->object.get(); }
 }  // namespace automat

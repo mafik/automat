@@ -613,7 +613,7 @@ SkMatrix OpticalConnectorState::ConnectorMatrix() const {
       .preTranslate(0, -kCasingHeight);
 }
 
-SkPath OpticalConnectorState::Shape() const {
+SkPath OpticalConnectorState::Shape(animation::Display*) const {
   auto rect = Rect(-kCasingWidth / 2, 0, kCasingWidth / 2, kCasingHeight);
   SkPath path = SkPath::Rect(rect);
   path.transform(ConnectorMatrix());

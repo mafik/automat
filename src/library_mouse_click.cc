@@ -167,7 +167,7 @@ void MouseClick::Draw(gui::DrawContext& ctx) const {
   canvas.drawImage(mouse_image, 0, 0, sampling);
   canvas.restore();
 }
-SkPath MouseClick::Shape() const {
+SkPath MouseClick::Shape(animation::Display*) const {
   auto& mouse_base_image = MouseBaseImage();
   return SkPath::Rect(SkRect::MakeXYWH(0, 0, mouse_base_image->width() * kScale,
                                        mouse_base_image->height() * kScale));

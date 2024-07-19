@@ -121,7 +121,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
   float width;
 
   KeyLabelWidget(StrView label) { SetLabel(label); }
-  SkPath Shape() const override {
+  SkPath Shape(animation::Display*) const override {
     return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
   }
   void Draw(DrawContext& ctx) const override {

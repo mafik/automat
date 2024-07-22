@@ -1,10 +1,12 @@
 #pragma once
 
+#include <deque>
 #include <memory>
 
 #include "action.hh"
 #include "animation.hh"
 #include "object.hh"
+#include "time.hh"
 
 namespace automat {
 
@@ -22,6 +24,7 @@ struct DragActionBase : Action {
   Vec2 last_position;
   Vec2 current_position;
   Vec2 last_snapped_position;
+  time::SteadyPoint last_update;
 
   void Begin(gui::Pointer& pointer) override;
   void Update(gui::Pointer& pointer) override;
@@ -31,20 +34,26 @@ struct DragActionBase : Action {
   // DragActionBase takes care of snapping objects to grid and animating a virtual spring that
   // animates them smoothly. Derived classes are given the snapped position and should call the
   // given callback so that spring animation can be applied.
-  virtual void DragUpdate(Vec2 pos, float scale) = 0;
+  virtual void SnapUpdate(Vec2 pos, float scale) = 0;
+
+  // Called when the object should be immediately shifted on screen by the given delta_pos. This is
+  // used when the user drags the object directly so the movement should be immediate.
+  virtual void DragUpdate(animation::Display&, Vec2 delta_pos) = 0;
   virtual void DragEnd() = 0;
   virtual void DragDraw(gui::DrawContext&) = 0;
   virtual Object* DraggedObject() = 0;
 };
 
 struct DragObjectAction : DragActionBase {
-  Vec2 position;
-  float scale;
+  Vec2 position = {};
+  float scale = 1;
   std::unique_ptr<Object> object;
   std::unique_ptr<LocationAnimationState> anim;
+
   DragObjectAction(std::unique_ptr<Object>&&);
   ~DragObjectAction() override;
-  void DragUpdate(Vec2 pos, float scale) override;
+  void DragUpdate(animation::Display&, Vec2 delta_pos) override;
+  void SnapUpdate(Vec2 pos, float scale) override;
   void DragEnd() override;
   void DragDraw(gui::DrawContext&) override;
   Object* DraggedObject() override;
@@ -54,7 +63,9 @@ struct DragLocationAction : DragActionBase {
   Location* location;
   DragLocationAction(Location* location);
   ~DragLocationAction() override;
-  void DragUpdate(Vec2 pos, float scale) override;
+
+  void DragUpdate(animation::Display&, Vec2 delta_pos) override;
+  void SnapUpdate(Vec2 pos, float scale) override;
   void DragEnd() override;
   void DragDraw(gui::DrawContext&) override;
   Object* DraggedObject() override;

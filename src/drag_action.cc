@@ -23,7 +23,6 @@ Vec2 SnapPosition(DragActionBase& d) {
 }
 
 void DragActionBase::Update(gui::Pointer& pointer) {
-  last_position = current_position;
   current_position = pointer.PositionWithinRootMachine();
 
   Vec2 position = current_position - contact_point;
@@ -35,28 +34,38 @@ void DragActionBase::Update(gui::Pointer& pointer) {
       break;
     }
   }
-  DragUpdate(position, scale);
+
+  if (last_snapped_position != position) {
+    last_snapped_position = position;
+    DragUpdate(pointer.window.display, current_position - last_position);
+  }
+  SnapUpdate(position, scale);
+
+  last_position = current_position;
 }
 
 DragObjectAction::DragObjectAction(std::unique_ptr<Object>&& object_arg)
-    : object(std::move(object_arg)) {
+    : object(std::move(object_arg)), position({}), scale(1) {
   anim = std::make_unique<LocationAnimationState>();
 }
 
 DragObjectAction::~DragObjectAction() {}
 
-void DragObjectAction::DragUpdate(Vec2 pos, float scale) {
+void DragObjectAction::SnapUpdate(Vec2 pos, float scale) {
   this->scale = scale;
   position = pos;
-  // TODO: clamp animation
 }
 
-void DragLocationAction::DragUpdate(Vec2 pos, float scale) {
+void DragObjectAction::DragUpdate(animation::Display&, Vec2 delta_pos) {
+  anim->position.value += delta_pos;
+}
+void DragLocationAction::DragUpdate(animation::Display& display, Vec2 delta_pos) {
+  location->animation_state[display].position.value += delta_pos;
+}
+
+void DragLocationAction::SnapUpdate(Vec2 pos, float scale) {
   location->scale = scale;
   location->position = pos;
-  for (auto& anim : location->animation_state) {
-    // TODO: clamp animation
-  }
 }
 
 void DragActionBase::End() { DragEnd(); }

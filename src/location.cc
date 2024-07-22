@@ -357,8 +357,7 @@ SkMatrix Location::GetTransform(animation::Display* display) const {
 }
 
 void LocationAnimationState::Tick(float delta_time, Vec2 target_position, float target_scale) {
-  position.SpringTowards(target_position, delta_time, Location::kSpringPeriod,
-                         Location::kSpringHalfTime);
+  position.SineTowards(target_position, delta_time, Location::kSpringPeriod);
   scale.SpringTowards(target_scale, delta_time, Location::kSpringPeriod, Location::kSpringHalfTime);
 }
 

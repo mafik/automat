@@ -1,10 +1,11 @@
 #include "window.hh"
 
+#include <include/core/SkPath.h>
+
 #include <memory>
 
 #include "drag_action.hh"
 #include "font.hh"
-#include "include/core/SkPath.h"
 #include "math.hh"
 #include "prototypes.hh"
 #include "root.hh"

@@ -222,30 +222,13 @@ struct SpringV2 {
 
   void SpringTowards(T target, float delta_time, float period_time, float half_time);
 
-  void LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
-                             float& value, float& velocity) {
-    float Q = 2 * M_PI / period_time;
-    float D = value - target;
-    float V = velocity;
-    float H = half_time;
-
-    float t;
-    float amplitude;
-    if (fabsf(D) > 1e-6f) {
-      t = -atanf((D * M_LOG2Ef + V * H) / (D * H * Q)) / Q;
-      amplitude = D / powf(2, -t / H) / cosf(t * Q);
-    } else {
-      t = period_time / 4;
-      amplitude = -velocity * powf(2.f, t / H) / Q;
-    }
-    float t2 = t + delta_time;
-    value = target + amplitude * cosf(t2 * Q) * powf(2, -t2 / H);
-    velocity = (-(amplitude * M_LOG2Ef * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) /
-               powf(2, t2 / H);
-  }
+  void SineTowards(T target, float delta_time, float period_time);
 
   operator T() const { return value; }
 };
+
+void LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
+                           float& value, float& velocity);
 
 template <>
 inline void SpringV2<float>::SpringTowards(float target, float delta_time, float period_time,
@@ -258,6 +241,20 @@ inline void SpringV2<Vec2>::SpringTowards(Vec2 target, float delta_time, float p
                                           float half_time) {
   LowLevelSpringTowards(target.x, delta_time, period_time, half_time, value.x, velocity.x);
   LowLevelSpringTowards(target.y, delta_time, period_time, half_time, value.y, velocity.y);
+}
+
+void LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
+                         float& velocity);
+
+template <>
+inline void SpringV2<float>::SineTowards(float target, float delta_time, float period_time) {
+  LowLevelSineTowards(target, delta_time, period_time, value, velocity);
+}
+
+template <>
+inline void SpringV2<Vec2>::SineTowards(Vec2 target, float delta_time, float period_time) {
+  LowLevelSineTowards(target.x, delta_time, period_time, value.x, velocity.x);
+  LowLevelSineTowards(target.y, delta_time, period_time, value.y, velocity.y);
 }
 
 void WrapModulo(Base<float>& base, float range);

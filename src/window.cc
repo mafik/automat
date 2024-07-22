@@ -373,9 +373,7 @@ void Window::SnapPosition(Vec2& position, float& scale, Object* object) {
   Vec2 position2 =
       mat.mapPoint(size - box_size / diagonal * trash_radius / 2) - object_bounds.Center();
   float scale2 = mat.mapRadius(trash_radius) / diagonal * 0.9f;
-  if (scale2 > 0.5) {
-    scale2 = 0.5;
-  }
+  scale2 = std::clamp<float>(scale2, 0.1, 0.5);
   if (LengthSquared(position1 - position) < LengthSquared(position2 - position)) {
     position = position1;
     scale = scale1;

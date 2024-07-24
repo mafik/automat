@@ -518,8 +518,11 @@ SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Display
   return SkMatrix::I();
 }
 bool MacroRecorder::IsOn() const { return keylogging != nullptr; }
-void MacroRecorder::On() { OnRun(*here); }
-void MacroRecorder::Off() { Cancel(); }
+void MacroRecorder::On() { here->long_running = OnRun(*here); }
+void MacroRecorder::Off() {
+  Cancel();
+  here->long_running = nullptr;
+}
 void MacroRecorder::PointerOver(gui::Pointer&, animation::Display& d) {
   animation_state_ptr[d].pointers_over++;
 }

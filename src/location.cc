@@ -376,6 +376,10 @@ ObjectAnimationState& Location::GetAnimationState(animation::Display& display) c
   }
 }
 Location::~Location() {
+  if (long_running) {
+    long_running->Cancel();
+    long_running = nullptr;
+  }
   // Location can only be destroyed by its parent so we don't have to do anything there.
   parent = nullptr;
   while (not incoming.empty()) {
@@ -395,10 +399,6 @@ Location::~Location() {
   }
   for (auto other : observing_errors) {
     other->error_observers.erase(this);
-  }
-  if (long_running) {
-    long_running->Cancel();
-    long_running = nullptr;
   }
   if (no_scheduling.contains(this)) {
     no_scheduling.erase(this);

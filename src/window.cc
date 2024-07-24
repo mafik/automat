@@ -329,33 +329,47 @@ SkPath Window::TrashShape() const {
   return trash_area_path;
 }
 
-void Window::SnapPosition(Vec2& position, float& scale, Object* object) {
+void Window::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {
   Rect object_bounds = object->Shape(nullptr).getBounds();
   Rect machine_bounds = root_machine->Shape(nullptr).getBounds();
-
-  machine_bounds.top -= object_bounds.bottom + object_bounds.Height() / 4;
-  machine_bounds.bottom -= object_bounds.top - object_bounds.Height() / 4;
-  machine_bounds.left -= object_bounds.right - object_bounds.Width() / 4;
-  machine_bounds.right -= object_bounds.left + object_bounds.Width() / 4;
-  Vec2 position1 = position;
-  if (machine_bounds.sk.contains(position.x, position.y)) {
-    float dist_to_top = fabsf(machine_bounds.top - position.y);
-    float dist_to_bottom = fabsf(position.y - machine_bounds.bottom);
-    float dist_to_left = fabsf(machine_bounds.left - position.x);
-    float dist_to_right = fabsf(position.x - machine_bounds.right);
-    if (dist_to_top < dist_to_bottom && dist_to_top < dist_to_left && dist_to_top < dist_to_right) {
-      position1.y = machine_bounds.top;
-    } else if (dist_to_bottom < dist_to_top && dist_to_bottom < dist_to_left &&
-               dist_to_bottom < dist_to_right) {
-      position1.y = machine_bounds.bottom;
-    } else if (dist_to_left < dist_to_top && dist_to_left < dist_to_bottom &&
-               dist_to_left < dist_to_right) {
-      position1.x = machine_bounds.left;
-    } else {
-      position1.x = machine_bounds.right;
-    }
+  Vec2 fake_fixed_point = Vec2(0, 0);
+  if (fixed_point == nullptr) {
+    fixed_point = &fake_fixed_point;
   }
+
   float scale1 = 0.5;
+  Vec2 position1 = position;
+  {  // Find a snap position outside of the canvas
+    auto object_bounds_machine = object_bounds.MoveBy(position);
+    SkMatrix machine_scale_mat_fixed =
+        SkMatrix::Translate(-position)
+            .postScale(scale1, scale1, fixed_point->x, fixed_point->y)
+            .postTranslate(position.x, position.y);
+
+    Rect scaled_object_bounds = machine_scale_mat_fixed.mapRect(object_bounds_machine);
+    Vec2 true_object_origin = machine_scale_mat_fixed.mapPoint(position);
+    if (machine_bounds.sk.intersects(scaled_object_bounds)) {
+      float move_up = fabsf(machine_bounds.top - scaled_object_bounds.bottom);
+      float move_down = fabsf(scaled_object_bounds.top - machine_bounds.bottom);
+      float move_left = fabsf(machine_bounds.left - scaled_object_bounds.right);
+      float move_right = fabsf(scaled_object_bounds.left - machine_bounds.right);
+      if (move_up < move_down && move_up < move_left && move_up < move_right) {
+        true_object_origin.y += move_up;
+        scaled_object_bounds = scaled_object_bounds.MoveBy({0, move_up});
+      } else if (move_down < move_up && move_down < move_left && move_down < move_right) {
+        true_object_origin.y -= move_down;
+        scaled_object_bounds = scaled_object_bounds.MoveBy({0, -move_down});
+      } else if (move_left < move_up && move_left < move_down && move_left < move_right) {
+        true_object_origin.x -= move_left;
+        scaled_object_bounds = scaled_object_bounds.MoveBy({-move_left, 0});
+      } else {
+        true_object_origin.x += move_right;
+        scaled_object_bounds = scaled_object_bounds.MoveBy({move_right, 0});
+      }
+    }
+    position1 =
+        (true_object_origin - scaled_object_bounds.Center()) * 2 + scaled_object_bounds.Center();
+  }
 
   Vec2 window_pos = (position - Vec2(camera_x, camera_y)) * zoom + size / 2;
   bool is_over_trash =

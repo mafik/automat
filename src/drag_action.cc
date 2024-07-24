@@ -30,7 +30,7 @@ void DragActionBase::Update() {
 
   for (int i = pointer.path.size() - 1; i >= 0; --i) {
     if (gui::DropTarget* drop_target = pointer.path[i]->CanDrop()) {
-      drop_target->SnapPosition(position, scale, DraggedObject());
+      drop_target->SnapPosition(position, scale, DraggedObject(), &contact_point);
       break;
     }
   }

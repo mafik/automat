@@ -396,7 +396,7 @@ void Machine::Draw(gui::DrawContext& ctx) const {
   canvas.drawPath(shape, border_paint);
   DrawChildren(ctx);
 }
-void Machine::SnapPosition(Vec2& position, float& scale, Object* object) {
+void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {
   scale = 1.0;
   Rect rect = object->Shape(nullptr).getBounds();
   if (position.x + rect.left < -0.5) {

@@ -142,7 +142,7 @@ struct Machine : LiveObject, gui::DropTarget {
 
   void Draw(gui::DrawContext&) const override;
   gui::DropTarget* CanDrop() override { return this; }
-  void SnapPosition(Vec2& position, float& scale, Object* object) override;
+  void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
 
   SkPath Shape(animation::Display*) const override;
 

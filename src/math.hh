@@ -234,6 +234,9 @@ union Rect {
   constexpr float Width() const { return right - left; }
   constexpr float Height() const { return top - bottom; }
 
+  static constexpr Vec2 Size(const SkRect& r) { return {Width(r), Height(r)}; }
+  constexpr Vec2 Size() const { return {Width(), Height()}; }
+
   static constexpr Vec2 Center(const SkRect& r) { return r.center(); }
   constexpr Vec2 Center() const { return sk.center(); }
 
@@ -261,11 +264,11 @@ union Rect {
     top = std::max(top, point.y);
   }
 
-  Rect Outset(float amount) {
+  [[nodiscard]] Rect Outset(float amount) {
     return {left - amount, bottom - amount, right + amount, top + amount};
   }
 
-  constexpr Rect MoveBy(Vec2 offset) {
+  [[nodiscard]] constexpr Rect MoveBy(Vec2 offset) {
     return {left + offset.x, bottom + offset.y, right + offset.x, top + offset.y};
   }
 

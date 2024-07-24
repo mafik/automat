@@ -64,7 +64,7 @@ struct Window final : Widget, DropTarget {
   }
 
   DropTarget* CanDrop() override { return this; }
-  void SnapPosition(Vec2& position, float& scale, Object* object) override;
+  void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
 
   // Return the shape of the trash zone in the corner of the window (in Machine coordinates).
   SkPath TrashShape() const;

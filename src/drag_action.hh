@@ -10,7 +10,8 @@ namespace automat {
 
 namespace gui {
 struct DropTarget {
-  virtual void SnapPosition(Vec2& position, float& scale, Object* object) = 0;
+  virtual void SnapPosition(Vec2& position, float& scale, Object* object,
+                            Vec2* fixed_point = nullptr) = 0;
 };
 }  // namespace gui
 
@@ -18,10 +19,10 @@ struct Location;
 struct LocationAnimationState;
 
 struct DragActionBase : Action {
-  Vec2 contact_point;
-  Vec2 last_position;
-  Vec2 current_position;
-  Vec2 last_snapped_position;
+  Vec2 contact_point;          // in the coordinate space of the dragged Object
+  Vec2 last_position;          // root machine coordinates
+  Vec2 current_position;       // root machine coordinates
+  Vec2 last_snapped_position;  // root machine coordinates
   time::SteadyPoint last_update;
 
   DragActionBase(gui::Pointer& pointer);

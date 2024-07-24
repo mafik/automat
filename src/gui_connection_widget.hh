@@ -19,10 +19,10 @@ struct DragConnectionAction : Action {
   animation::Display* display;
 
   Vec2 grab_offset;
-  DragConnectionAction(ConnectionWidget&);
+  DragConnectionAction(Pointer&, ConnectionWidget&);
   ~DragConnectionAction() override;
-  void Begin(gui::Pointer& pointer) override;
-  void Update(gui::Pointer& pointer) override;
+  void Begin() override;
+  void Update() override;
   void End() override;
   void DrawAction(DrawContext&) override {}
 };

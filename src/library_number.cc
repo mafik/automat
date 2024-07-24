@@ -227,7 +227,8 @@ std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer& pointer, gui::Poi
   if (!location) {
     return nullptr;
   }
-  std::unique_ptr<DragLocationAction> action = std::make_unique<DragLocationAction>(location);
+  std::unique_ptr<DragLocationAction> action =
+      std::make_unique<DragLocationAction>(pointer, location);
   action->contact_point = pointer.PositionWithin(*this);
   LOG << "Action contact point is " << action->contact_point;
   return action;

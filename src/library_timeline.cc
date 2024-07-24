@@ -25,6 +25,7 @@
 #include "key_button.hh"
 #include "math.hh"
 #include "number_text_field.hh"
+#include "pointer.hh"
 #include "sincos.hh"
 #include "svg.hh"
 #include "textures.hh"
@@ -497,18 +498,19 @@ SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
 struct DragBridgeAction : Action {
   float press_offset_x;
   Timeline& timeline;
-  DragBridgeAction(Timeline& timeline) : timeline(timeline) {}
-  virtual void Begin(gui::Pointer& ptr) {
-    float initial_x = ptr.PositionWithin(timeline).x;
-    float initial_pos_ratio = CurrentPosRatio(timeline, ptr.window.display.timer.now);
+  DragBridgeAction(gui::Pointer& pointer, Timeline& timeline)
+      : Action(pointer), timeline(timeline) {}
+  virtual void Begin() {
+    float initial_x = pointer.PositionWithin(timeline).x;
+    float initial_pos_ratio = CurrentPosRatio(timeline, pointer.window.display.timer.now);
     float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
     press_offset_x = initial_x - initial_bridge_x;
   }
-  virtual void Update(gui::Pointer& ptr) {
-    float x = ptr.PositionWithin(timeline).x;
+  virtual void Update() {
+    float x = pointer.PositionWithin(timeline).x;
     float new_bridge_x = x - press_offset_x;
     SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x),
-                ptr.window.display.timer.steady_now);
+                pointer.window.display.timer.steady_now);
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -517,10 +519,11 @@ struct DragBridgeAction : Action {
 struct DragTimelineAction : Action {
   Timeline& timeline;
   float last_x;
-  DragTimelineAction(Timeline& timeline) : timeline(timeline) {}
-  virtual void Begin(gui::Pointer& ptr) { last_x = ptr.PositionWithin(timeline).x; }
-  virtual void Update(gui::Pointer& ptr) {
-    float x = ptr.PositionWithin(timeline).x;
+  DragTimelineAction(gui::Pointer& pointer, Timeline& timeline)
+      : Action(pointer), timeline(timeline) {}
+  virtual void Begin() { last_x = pointer.PositionWithin(timeline).x; }
+  virtual void Update() {
+    float x = pointer.PositionWithin(timeline).x;
     float delta_x = x - last_x;
     last_x = x;
     float distance_to_seconds = DistanceToSeconds(timeline);
@@ -534,7 +537,7 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    OffsetPosRatio(timeline, -delta_x * scaling_factor, ptr.window.display.timer.steady_now);
+    OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.window.display.timer.steady_now);
   }
   virtual void End() {}
   virtual void DrawAction(gui::DrawContext&) {}
@@ -583,10 +586,10 @@ static float PreviousZoomTick(float zoom) {
 struct DragZoomAction : Action {
   Timeline& timeline;
   float last_x;
-  DragZoomAction(Timeline& timeline) : timeline(timeline) {}
-  virtual void Begin(gui::Pointer& ptr) { last_x = ptr.PositionWithin(timeline).x; }
-  virtual void Update(gui::Pointer& ptr) {
-    float x = ptr.PositionWithin(timeline).x;
+  DragZoomAction(gui::Pointer& pointer, Timeline& timeline) : Action(pointer), timeline(timeline) {}
+  virtual void Begin() { last_x = pointer.PositionWithin(timeline).x; }
+  virtual void Update() {
+    float x = pointer.PositionWithin(timeline).x;
     float delta_x = x - last_x;
     last_x = x;
     float factor = expf(delta_x * -30);
@@ -649,18 +652,18 @@ unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerBut
     auto window_shape = WindowShape(tracks.size());
     auto pos = ptr.PositionWithin(*this);
     if (bridge_shape.contains(pos.x, pos.y)) {
-      return unique_ptr<Action>(new DragBridgeAction(*this));
+      return unique_ptr<Action>(new DragBridgeAction(ptr, *this));
     } else if (window_shape.contains(pos.x, pos.y)) {
       if (pos.y < -kRulerHeight) {
         if (LengthSquared(pos - ZoomDialCenter(WindowHeight(tracks.size()))) <
             kZoomRadius * kZoomRadius) {
-          return unique_ptr<Action>(new DragZoomAction(*this));
+          return unique_ptr<Action>(new DragZoomAction(ptr, *this));
         } else {
-          return unique_ptr<Action>(new DragTimelineAction(*this));
+          return unique_ptr<Action>(new DragTimelineAction(ptr, *this));
         }
       } else {
         SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.display.timer.steady_now);
-        return unique_ptr<Action>(new DragBridgeAction(*this));
+        return unique_ptr<Action>(new DragBridgeAction(ptr, *this));
       }
     }
   }

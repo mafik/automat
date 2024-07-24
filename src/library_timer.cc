@@ -607,9 +607,10 @@ SkPath TimerDelay::Shape(animation::Display*) const {
 
 struct DragDurationHandleAction : Action {
   TimerDelay& timer;
-  DragDurationHandleAction(TimerDelay& timer) : timer(timer) {}
-  virtual void Begin(gui::Pointer& pointer) {}
-  virtual void Update(gui::Pointer& pointer) {
+  DragDurationHandleAction(gui::Pointer& pointer, TimerDelay& timer)
+      : Action(pointer), timer(timer) {}
+  virtual void Begin() {}
+  virtual void Update() {
     auto pos = pointer.PositionWithin(timer);
     auto tick_count = TickCount(timer.range);
     double angle = atan2(pos.sk.y(), pos.sk.x());
@@ -652,9 +653,9 @@ void TimerDelay::Updated(Location& here, Location& updated) {
 
 struct DragHandAction : Action {
   TimerDelay& timer;
-  DragHandAction(TimerDelay& timer) : timer(timer) {}
-  virtual void Begin(gui::Pointer& pointer) { timer.hand_degrees.period = 0s; }
-  virtual void Update(gui::Pointer& pointer) {
+  DragHandAction(gui::Pointer& pointer, TimerDelay& timer) : Action(pointer), timer(timer) {}
+  virtual void Begin() { timer.hand_degrees.period = 0s; }
+  virtual void Update() {
     auto pos = pointer.PositionWithin(timer);
     float angle = atan2(pos.sk.y(), pos.sk.x());
     timer.hand_degrees.value = angle * 180 / M_PI;
@@ -669,7 +670,7 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
     auto pos = pointer.PositionWithin(*this);
     auto duration_handle_path = DurationHandlePath(*this);
     if (duration_handle_path.contains(pos.x, pos.y)) {
-      return std::make_unique<DragDurationHandleAction>(*this);
+      return std::make_unique<DragDurationHandleAction>(pointer, *this);
     }
     if (kStartPusherBox.contains(pos.x, pos.y)) {
       if (here) {
@@ -700,11 +701,11 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
       SkPath hand_outline;
       skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
       if (hand_outline.contains(pos.x, pos.y)) {
-        return std::make_unique<DragHandAction>(*this);
+        return std::make_unique<DragHandAction>(pointer, *this);
       }
     }
 
-    auto action = std::make_unique<DragLocationAction>(here);
+    auto action = std::make_unique<DragLocationAction>(pointer, here);
     action->contact_point = pos;
     return action;
   }

@@ -44,7 +44,6 @@ extern std::vector<Window*> windows;
 struct Window final : Widget, DropTarget {
   Window(Vec2 size, float pixels_per_meter);
   ~Window();
-
   std::string_view Name() const override { return "Window"; }
 
   void ArrangePrototypeButtons() {
@@ -156,6 +155,7 @@ struct Window final : Widget, DropTarget {
   animation::Approach<> camera_x = animation::Approach<>(0.0);
   animation::Approach<> camera_y = animation::Approach<>(0.0);
   animation::Approach<> trash_radius = animation::Approach<>(0.0);
+  int drag_action_count = 0;
   bool panning_during_last_frame = false;
   bool inertia = false;
   std::deque<Vec3> camera_timeline;

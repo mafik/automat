@@ -123,32 +123,28 @@ SkMatrix KeyPresser::TransformToChild(const Widget& child, animation::Display*) 
 }
 
 struct DragAndClickAction : Action {
-  gui::Pointer& pointer;
   gui::PointerButton btn;
   std::unique_ptr<Action> drag_action;
   std::unique_ptr<Action> click_action;
   time::SystemPoint press_time;
-  Vec2 press_pos;
   DragAndClickAction(gui::Pointer& pointer, gui::PointerButton btn,
                      std::unique_ptr<Action>&& drag_action, std::unique_ptr<Action>&& click_action)
-      : pointer(pointer),
+      : Action(pointer),
         btn(btn),
         drag_action(std::move(drag_action)),
         click_action(std::move(click_action)) {}
-  void Begin(gui::Pointer& p) {
-    press_pos = p.button_down_position[btn];
-    press_time = p.button_down_time[btn];
-    drag_action->Begin(p);
+  void Begin() {
+    press_time = pointer.button_down_time[btn];
+    drag_action->Begin();
   }
-  void Update(gui::Pointer& p) {
+  void Update() {
     if (drag_action) {
-      drag_action->Update(p);
+      drag_action->Update();
     }
   }
   void End() {
     if (click_action && (time::SystemNow() - press_time < 0.2s)) {
-      gui::Pointer fake_pointer(pointer.window, press_pos);
-      click_action->Begin(fake_pointer);
+      click_action->Begin();
       click_action->End();
     }
     if (drag_action) {
@@ -160,8 +156,8 @@ struct DragAndClickAction : Action {
 
 struct RunAction : Action {
   Location& location;
-  RunAction(Location& location) : location(location) {}
-  void Begin(gui::Pointer& p) {
+  RunAction(gui::Pointer& pointer, Location& location) : Action(pointer), location(location) {}
+  void Begin() {
     if (location.long_running) {
       location.long_running->Cancel();
       location.long_running = nullptr;
@@ -169,7 +165,7 @@ struct RunAction : Action {
       location.ScheduleRun();
     }
   }
-  void Update(gui::Pointer& p) {}
+  void Update() {}
   void End() {}
   void DrawAction(gui::DrawContext& dctx) {}
 };
@@ -182,7 +178,7 @@ std::unique_ptr<Action> KeyPresser::CaptureButtonDownAction(gui::Pointer& p,
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
     return std::make_unique<DragAndClickAction>(
         p, btn, Object::ButtonDownAction(p, btn),
-        std::make_unique<RunAction>(*Closest<Location>(p.path)));
+        std::make_unique<RunAction>(p, *Closest<Location>(p.path)));
   } else {
     return std::make_unique<DragAndClickAction>(p, btn, Object::ButtonDownAction(p, btn),
                                                 shortcut_button.ButtonDownAction(p, btn));

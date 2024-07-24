@@ -127,11 +127,12 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   }
 }
 
-std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer&, PointerButton) {
-  return std::make_unique<DragConnectionAction>(*this);
+std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer& pointer, PointerButton) {
+  return std::make_unique<DragConnectionAction>(pointer, *this);
 }
 
-DragConnectionAction::DragConnectionAction(ConnectionWidget& widget) : widget(widget) {}
+DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)
+    : Action(pointer), widget(widget) {}
 
 DragConnectionAction::~DragConnectionAction() {
   widget.manual_position.reset();
@@ -150,7 +151,7 @@ bool CanConnect(Location& from, Location& to, Argument& arg) {
   return error.empty();
 }
 
-void DragConnectionAction::Begin(gui::Pointer& pointer) {
+void DragConnectionAction::Begin() {
   if (auto it = widget.from.outgoing.find(widget.arg.name); it != widget.from.outgoing.end()) {
     delete it->second;
   }
@@ -179,7 +180,7 @@ void DragConnectionAction::Begin(gui::Pointer& pointer) {
   }
 }
 
-void DragConnectionAction::Update(gui::Pointer& pointer) {
+void DragConnectionAction::Update() {
   Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
 }

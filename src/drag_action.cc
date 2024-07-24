@@ -14,7 +14,7 @@ static Vec2 RoundToMilimeters(Vec2 v) {
   return Vec2(roundf(v.x * 1000) / 1000., roundf(v.y * 1000) / 1000.);
 }
 
-void DragActionBase::Begin(gui::Pointer& pointer) {
+void DragActionBase::Begin() {
   last_position = current_position = pointer.PositionWithinRootMachine();
 }
 
@@ -22,7 +22,7 @@ Vec2 SnapPosition(DragActionBase& d) {
   return RoundToMilimeters(d.current_position - d.contact_point);
 }
 
-void DragActionBase::Update(gui::Pointer& pointer) {
+void DragActionBase::Update() {
   current_position = pointer.PositionWithinRootMachine();
 
   Vec2 position = current_position - contact_point;
@@ -44,8 +44,8 @@ void DragActionBase::Update(gui::Pointer& pointer) {
   last_position = current_position;
 }
 
-DragObjectAction::DragObjectAction(std::unique_ptr<Object>&& object_arg)
-    : object(std::move(object_arg)), position({}), scale(1) {
+DragObjectAction::DragObjectAction(gui::Pointer& pointer, std::unique_ptr<Object>&& object_arg)
+    : DragActionBase(pointer), object(std::move(object_arg)), position({}), scale(1) {
   anim = std::make_unique<LocationAnimationState>();
 }
 
@@ -94,7 +94,8 @@ void DragObjectAction::DragDraw(gui::DrawContext& ctx) {
 
 Object* DragObjectAction::DraggedObject() { return object.get(); }
 
-DragLocationAction::DragLocationAction(Location* location) : location(location) {}
+DragLocationAction::DragLocationAction(gui::Pointer& pointer, Location* location)
+    : DragActionBase(pointer), location(location) {}
 
 DragLocationAction::~DragLocationAction() {}
 
@@ -105,4 +106,8 @@ void DragLocationAction::DragDraw(gui::DrawContext&) {
 }
 
 Object* DragLocationAction::DraggedObject() { return location->object.get(); }
+DragActionBase::DragActionBase(gui::Pointer& pointer) : Action(pointer) {
+  pointer.window.drag_action_count++;
+}
+DragActionBase::~DragActionBase() { pointer.window.drag_action_count--; }
 }  // namespace automat

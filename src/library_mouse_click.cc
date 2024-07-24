@@ -186,7 +186,8 @@ std::unique_ptr<Action> MouseClick::ButtonDownAction(gui::Pointer& pointer,
   if (!location) {
     return nullptr;
   }
-  std::unique_ptr<DragLocationAction> action = std::make_unique<DragLocationAction>(location);
+  std::unique_ptr<DragLocationAction> action =
+      std::make_unique<DragLocationAction>(pointer, location);
   action->contact_point = pointer.PositionWithin(*this);
   return action;
 }

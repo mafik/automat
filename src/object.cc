@@ -77,7 +77,7 @@ std::unique_ptr<Action> Object::ButtonDownAction(gui::Pointer& p, gui::PointerBu
     auto& path = p.path;
     for (int i = path.size() - 1; i >= 0; --i) {
       if (Location* location = dynamic_cast<Location*>(path[i])) {
-        auto a = std::make_unique<DragLocationAction>(location);
+        auto a = std::make_unique<DragLocationAction>(p, location);
         a->contact_point = p.PositionWithin(*location);
         return a;
       }

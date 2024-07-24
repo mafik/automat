@@ -145,7 +145,8 @@ struct TextSelectAction : Action {
   bool selecting_text = true;
   std::optional<DragConnectionAction> drag;
 
-  TextSelectAction(TextField& text_field) : text_field(text_field) {}
+  TextSelectAction(Pointer& pointer, TextField& text_field)
+      : Action(pointer), text_field(text_field) {}
 
   void UpdateCaretFromPointer(Pointer& pointer) {
     auto it = text_field.caret_positions.find(caret);
@@ -168,11 +169,11 @@ struct TextSelectAction : Action {
         UpdateCaret(text_field, *caret);
       }
     } else {
-      drag->Update(pointer);
+      drag->Update();
     }
   }
 
-  void Begin(Pointer& pointer) override {
+  void Begin() override {
     if (text_field.argument.has_value()) {
       auto pointer_path = pointer.path;
       Location* location = nullptr;
@@ -184,8 +185,8 @@ struct TextSelectAction : Action {
             for (auto& connection_widget : m->connection_widgets) {
               if (&connection_widget->arg == text_field.argument &&
                   &connection_widget->from == location) {
-                drag.emplace(*connection_widget);
-                drag->Begin(pointer);
+                drag.emplace(pointer, *connection_widget);
+                drag->Begin();
                 goto outside;
               }
             }
@@ -201,7 +202,7 @@ struct TextSelectAction : Action {
     caret = &pointer.keyboard->RequestCaret(text_field, pointer.path, pos);
     text_field.caret_positions[caret] = {.index = index};
   }
-  void Update(Pointer& pointer) override { UpdateCaretFromPointer(pointer); }
+  void Update() override { UpdateCaretFromPointer(pointer); }
   void End() override {
     if (drag.has_value() && !selecting_text) {
       drag->End();
@@ -214,9 +215,9 @@ struct TextSelectAction : Action {
   }
 };
 
-std::unique_ptr<Action> TextField::ButtonDownAction(Pointer&, PointerButton btn) {
+std::unique_ptr<Action> TextField::ButtonDownAction(Pointer& pointer, PointerButton btn) {
   if (btn == PointerButton::kMouseLeft) {
-    return std::make_unique<TextSelectAction>(*this);
+    return std::make_unique<TextSelectAction>(pointer, *this);
   }
   return nullptr;
 }

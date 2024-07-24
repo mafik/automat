@@ -1,6 +1,4 @@
 #pragma once
-
-#include <deque>
 #include <memory>
 
 #include "action.hh"
@@ -26,8 +24,10 @@ struct DragActionBase : Action {
   Vec2 last_snapped_position;
   time::SteadyPoint last_update;
 
-  void Begin(gui::Pointer& pointer) override;
-  void Update(gui::Pointer& pointer) override;
+  DragActionBase(gui::Pointer& pointer);
+  ~DragActionBase();
+  void Begin() override;
+  void Update() override;
   void End() override;
   void DrawAction(gui::DrawContext&) override;
 
@@ -50,7 +50,7 @@ struct DragObjectAction : DragActionBase {
   std::unique_ptr<Object> object;
   std::unique_ptr<LocationAnimationState> anim;
 
-  DragObjectAction(std::unique_ptr<Object>&&);
+  DragObjectAction(gui::Pointer&, std::unique_ptr<Object>&&);
   ~DragObjectAction() override;
   void DragUpdate(animation::Display&, Vec2 delta_pos) override;
   void SnapUpdate(Vec2 pos, float scale) override;
@@ -61,7 +61,7 @@ struct DragObjectAction : DragActionBase {
 
 struct DragLocationAction : DragActionBase {
   Location* location;
-  DragLocationAction(Location* location);
+  DragLocationAction(gui::Pointer&, Location*);
   ~DragLocationAction() override;
 
   void DragUpdate(animation::Display&, Vec2 delta_pos) override;

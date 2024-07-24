@@ -52,7 +52,7 @@ void Pointer::Move(Vec2 position) {
       window.inertia = false;
     }
     if (action) {
-      action->Update(*this);
+      action->Update();
     }
     Path old_path = path;
 
@@ -138,7 +138,7 @@ void Pointer::ButtonDown(PointerButton btn) {
         action = path.back()->ButtonDownAction(*this, btn);
       }
       if (action) {
-        action->Begin(*this);
+        action->Begin();
       }
     }
   });
@@ -146,7 +146,7 @@ void Pointer::ButtonDown(PointerButton btn) {
 
 void Pointer::ButtonUp(PointerButton btn) {
   if (btn == kButtonUnknown || btn >= kButtonCount) return;
-  RunOnAutomatThread([=]() {
+  RunOnAutomatThread([=, this]() {
     if (btn == kMouseLeft) {
       if (action) {
         action->End();

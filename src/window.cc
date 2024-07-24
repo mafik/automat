@@ -40,7 +40,7 @@ std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer& pointer, Poin
   if (btn != kMouseLeft) {
     return nullptr;
   }
-  auto drag_action = std::make_unique<DragObjectAction>(proto->Clone());
+  auto drag_action = std::make_unique<DragObjectAction>(pointer, proto->Clone());
   drag_action->contact_point = pointer.PositionWithin(*this);
   return drag_action;
 }
@@ -190,15 +190,7 @@ void Window::Draw(SkCanvas& canvas) {
     canvas.concat(CanvasToWindow());
 
     {  // Animate trash area
-      bool object_is_dragged = false;
-      for (auto* pointer : pointers) {
-        auto action = pointer->action.get();
-        if (action == nullptr) continue;
-        auto drag_action = dynamic_cast<DragActionBase*>(action);
-        if (drag_action == nullptr) continue;
-        object_is_dragged = true;
-      }
-      trash_radius.target = object_is_dragged ? kTrashRadius : 0;
+      trash_radius.target = drag_action_count ? kTrashRadius : 0;
       trash_radius.Tick(display);
     }
 

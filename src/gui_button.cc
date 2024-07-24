@@ -195,14 +195,14 @@ SkPath Button::Shape(animation::Display*) const { return SkPath::RRect(RRect());
 
 struct ButtonAction : public Action {
   Button& button;
-  ButtonAction(Button& button) : button(button) {}
+  ButtonAction(Pointer& pointer, Button& button) : Action(pointer), button(button) {}
 
-  void Begin(gui::Pointer& pointer) override {
+  void Begin() override {
     button.Activate(pointer);
     button.press_action_count++;
   }
 
-  void Update(gui::Pointer&) override {}
+  void Update() override {}
 
   void End() override { button.press_action_count--; }
 
@@ -211,7 +211,7 @@ struct ButtonAction : public Action {
 
 std::unique_ptr<Action> Button::ButtonDownAction(Pointer& pointer, PointerButton pointer_button) {
   if (pointer_button == PointerButton::kMouseLeft) {
-    return std::make_unique<ButtonAction>(*this);
+    return std::make_unique<ButtonAction>(pointer, *this);
   }
   return nullptr;
 }

@@ -1168,7 +1168,17 @@ void OnOffTrack::Draw(gui::DrawContext& dctx) const {
     DrawSegment(timestamps[i], timestamps[i + 1]);
   }
   if (!isnan(on_at)) {
-    DrawSegment(on_at, (dctx.display.timer.steady_now - timeline->recording.started_at).count());
+    switch (timeline->state) {
+      case Timeline::kRecording:
+        DrawSegment(on_at,
+                    (dctx.display.timer.steady_now - timeline->recording.started_at).count());
+        break;
+      case Timeline::kPlaying:
+      case Timeline::kPaused:
+        // segment ends at the right edge of the track
+        DrawSegment(on_at, timeline->MaxTrackLength());
+        break;
+    }
   }
 }
 
@@ -1252,12 +1262,13 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
 
 void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   auto end_at = playing.started_at + time::Duration(MaxTrackLength());
-  TimelineUpdateOutputs(here, *this, playing.started_at, now);
   if (now >= end_at) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
     Done(here);
-  } else {
+  }
+  TimelineUpdateOutputs(here, *this, playing.started_at, now);
+  if (now < end_at) {
     TimelineScheduleAt(*this, now);
   }
 }

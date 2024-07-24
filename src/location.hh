@@ -24,13 +24,13 @@ namespace automat {
 
 struct LongRunning;
 
-struct LocationAnimationState {
+struct ObjectAnimationState {
   animation::SpringV2<float> scale;
   animation::SpringV2<Vec2> position;
   animation::Approach<> transparency;
   animation::Approach<> highlight;
 
-  LocationAnimationState();
+  ObjectAnimationState();
 
   SkMatrix GetTransform(Vec2 scale_pivot) const;
   void Tick(float delta_time, Vec2 target_position, float target_scale);
@@ -50,10 +50,10 @@ struct Location : gui::Widget {
   constexpr static float kSpringPeriod = 0.3s .count();
   constexpr static float kSpringHalfTime = 0.08s .count();
 
-  LocationAnimationState& GetAnimationState(animation::Display&) const;
+  ObjectAnimationState& GetAnimationState(animation::Display&) const;
   SkMatrix GetTransform(animation::Display*) const;
 
-  animation::PerDisplay<LocationAnimationState> animation_state;
+  animation::PerDisplay<ObjectAnimationState> animation_state;
 
   Location* parent;
 
@@ -83,6 +83,7 @@ struct Location : gui::Widget {
   LongRunning* long_running = nullptr;
 
   Location(Location* parent = nullptr);
+  ~Location();
 
   std::string_view Name() const override {
     if (name.empty()) {

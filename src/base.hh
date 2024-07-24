@@ -103,6 +103,8 @@ struct Machine : LiveObject, gui::DropTarget {
   vector<Location*> front;
   vector<Location*> children_with_errors;
 
+  std::unique_ptr<Location> Extract(Location& location);
+
   Location& CreateEmpty(const string& name = "") {
     auto& it = locations.emplace_front(new Location(here));
     Location* h = it.get();
@@ -143,6 +145,10 @@ struct Machine : LiveObject, gui::DropTarget {
   void Draw(gui::DrawContext&) const override;
   gui::DropTarget* CanDrop() override { return this; }
   void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
+  void DropObject(
+      std::unique_ptr<Object>&& object, Vec2 position, float scale,
+      std::unique_ptr<animation::PerDisplay<ObjectAnimationState>>&& animation_state) override;
+  void DropLocation(Location*) override;
 
   SkPath Shape(animation::Display*) const override;
 
@@ -153,10 +159,10 @@ struct Machine : LiveObject, gui::DropTarget {
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
   void Args(std::function<void(Argument&)> cb) override {}
   void Relocate(Location* parent) override {
+    LiveObject::Relocate(parent);
     for (auto& it : locations) {
       it->parent = here;
     }
-    LiveObject::Relocate(parent);
   }
 
   string ToStr() const { return f("Machine(%s)", name.c_str()); }

@@ -389,4 +389,15 @@ void Window::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fi
     scale = scale2;
   }
 }
+
+void Window::DropObject(
+    std::unique_ptr<Object>&& object, Vec2 position, float scale,
+    std::unique_ptr<animation::PerDisplay<ObjectAnimationState>>&& animation_state) {
+  // do nothing - objects immediately disappears when dropped on the window
+}
+
+void Window::DropLocation(Location* location) {
+  auto location_ptr = location->ParentAs<Machine>()->Extract(*location);
+}
+
 }  // namespace automat::gui

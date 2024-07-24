@@ -413,4 +413,49 @@ void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* f
   }
   position = Vec2(roundf(position.x * 1000) / 1000., roundf(position.y * 1000) / 1000.);
 }
+
+void Machine::DropObject(
+    std::unique_ptr<Object>&& object, Vec2 position, float scale,
+    std::unique_ptr<animation::PerDisplay<ObjectAnimationState>>&& animation_state) {
+  Location& loc = root_machine->CreateEmpty();
+  loc.position = position;
+  loc.scale = scale;
+  loc.InsertHere(std::move(object));
+  loc.animation_state = std::move(*animation_state);
+}
+
+void Machine::DropLocation(Location* location) {
+  // nothing to do here
+}
+
+std::unique_ptr<Location> Machine::Extract(Location& location) {
+  auto it =
+      std::find_if(locations.begin(), locations.end(),
+                   [&location](const unique_ptr<Location>& l) { return l.get() == &location; });
+  if (it != locations.end()) {
+    std::unique_ptr<Location> result = std::move(*it);
+    locations.erase(it);
+    for (int i = 0; i < front.size(); ++i) {
+      if (front[i] == result.get()) {
+        front.erase(front.begin() + i);
+        break;
+      }
+    }
+    for (int i = 0; i < children_with_errors.size(); ++i) {
+      if (children_with_errors[i] == result.get()) {
+        children_with_errors.erase(children_with_errors.begin() + i);
+        break;
+      }
+    }
+    for (int i = 0; i < connection_widgets.size(); ++i) {
+      if (&connection_widgets[i]->from == &location) {
+        connection_widgets.erase(connection_widgets.begin() + i);
+        --i;
+      }
+    }
+    return result;
+  } else {
+    return nullptr;
+  }
+}
 }  // namespace automat

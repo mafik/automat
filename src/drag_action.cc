@@ -46,7 +46,7 @@ void DragActionBase::Update() {
 
 DragObjectAction::DragObjectAction(gui::Pointer& pointer, std::unique_ptr<Object>&& object_arg)
     : DragActionBase(pointer), object(std::move(object_arg)), position({}), scale(1) {
-  anim = std::make_unique<LocationAnimationState>();
+  anim = std::make_unique<ObjectAnimationState>();
 }
 
 DragObjectAction::~DragObjectAction() {}
@@ -72,11 +72,21 @@ void DragActionBase::End() { DragEnd(); }
 
 void DragActionBase::DrawAction(gui::DrawContext& ctx) { DragDraw(ctx); }
 
+gui::DropTarget* DragActionBase::FindDropTarget() {
+  for (int i = pointer.path.size() - 1; i >= 0; --i) {
+    if (gui::DropTarget* drop_target = pointer.path[i]->CanDrop()) {
+      return drop_target;
+    }
+  }
+  return nullptr;
+}
+
 void DragObjectAction::DragEnd() {
-  Location& loc = root_machine->CreateEmpty();
-  loc.position = position;
-  loc.scale = scale;
-  loc.InsertHere(std::move(object));
+  if (gui::DropTarget* drop_target = FindDropTarget()) {
+    auto animation_state = std::make_unique<animation::PerDisplay<ObjectAnimationState>>();
+    (*animation_state)[pointer.window.display] = *anim;
+    drop_target->DropObject(std::move(object), position, scale, std::move(animation_state));
+  }
 }
 
 void DragObjectAction::DragDraw(gui::DrawContext& ctx) {
@@ -99,7 +109,11 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Location* location
 
 DragLocationAction::~DragLocationAction() {}
 
-void DragLocationAction::DragEnd() { location->position = SnapPosition(*this); }
+void DragLocationAction::DragEnd() {
+  if (gui::DropTarget* drop_target = FindDropTarget()) {
+    drop_target->DropLocation(location);
+  }
+}
 
 void DragLocationAction::DragDraw(gui::DrawContext&) {
   // Location is drawn by its parent Machine so nothing to do here.

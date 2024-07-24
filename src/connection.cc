@@ -20,4 +20,6 @@ Connection::~Connection() {
   }
 }
 
+Connection::Connection(Location& from, Location& to, PointerBehavior pointer_behavior)
+    : from(from), to(to), pointer_behavior(pointer_behavior) {}
 }  // namespace automat

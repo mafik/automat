@@ -20,6 +20,7 @@
 #include "gui_constants.hh"
 #include "math.hh"
 #include "span.hh"
+#include "timer_thread.hh"
 #include "widget.hh"
 
 using namespace automat::gui;
@@ -342,7 +343,7 @@ static SkMatrix GetLocationTransform(Vec2 position, float scale, Vec2 scale_pivo
   return transform;
 }
 
-SkMatrix LocationAnimationState::GetTransform(Vec2 scale_pivot) const {
+SkMatrix ObjectAnimationState::GetTransform(Vec2 scale_pivot) const {
   return GetLocationTransform(position, scale, scale_pivot);
 }
 
@@ -356,15 +357,15 @@ SkMatrix Location::GetTransform(animation::Display* display) const {
   return GetLocationTransform(position, scale, scale_pivot);
 }
 
-void LocationAnimationState::Tick(float delta_time, Vec2 target_position, float target_scale) {
+void ObjectAnimationState::Tick(float delta_time, Vec2 target_position, float target_scale) {
   position.SineTowards(target_position, delta_time, Location::kSpringPeriod);
   scale.SpringTowards(target_scale, delta_time, Location::kSpringPeriod, Location::kSpringHalfTime);
 }
 
-LocationAnimationState::LocationAnimationState() : scale(1), position(Vec2{}) {
+ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}) {
   transparency.speed = 5;
 }
-LocationAnimationState& Location::GetAnimationState(animation::Display& display) const {
+ObjectAnimationState& Location::GetAnimationState(animation::Display& display) const {
   if (auto* anim = animation_state.Find(display)) {
     return *anim;
   } else {
@@ -372,6 +373,51 @@ LocationAnimationState& Location::GetAnimationState(animation::Display& display)
     new_anim.position.value = position;
     new_anim.scale.value = scale;
     return new_anim;
+  }
+}
+Location::~Location() {
+  // Location can only be destroyed by its parent so we don't have to do anything there.
+  parent = nullptr;
+  while (not incoming.empty()) {
+    delete incoming.begin()->second;
+  }
+  while (not outgoing.empty()) {
+    delete outgoing.begin()->second;
+  }
+  for (auto other : update_observers) {
+    other->observing_updates.erase(this);
+  }
+  for (auto other : observing_updates) {
+    other->update_observers.erase(this);
+  }
+  for (auto other : error_observers) {
+    other->observing_errors.erase(this);
+  }
+  for (auto other : observing_errors) {
+    other->error_observers.erase(this);
+  }
+  if (long_running) {
+    long_running->Cancel();
+    long_running = nullptr;
+  }
+  if (no_scheduling.contains(this)) {
+    no_scheduling.erase(this);
+  }
+  CancelScheduledAt(*this);
+  if (auto waiting_task = events.peek<Task>()) {
+    if (waiting_task->target == this) {
+      events.recv<Task>();  // drops the unique_ptr
+    }
+  }
+  for (int i = queue.size() - 1; i >= 0; --i) {
+    if (queue[i]->target == this) {
+      queue.erase(queue.begin() + i);
+    }
+  }
+  for (int i = global_successors.size() - 1; i >= 0; --i) {
+    if (global_successors[i]->target == this) {
+      global_successors.erase(global_successors.begin() + i);
+    }
   }
 }
 }  // namespace automat

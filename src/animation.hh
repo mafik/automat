@@ -60,10 +60,32 @@ struct Display {
 template <typename T>
 struct PerDisplay {
   PerDisplay() = default;
-  // forbid copy and move
+  // forbid copy
   PerDisplay(const PerDisplay&) = delete;
   PerDisplay& operator=(const PerDisplay&) = delete;
-  PerDisplay(PerDisplay&&) = delete;
+
+  // moving is slow but ok
+  PerDisplay(PerDisplay&& orig) {
+    for (auto* display : displays) {
+      if (auto it = display->per_display_values.find((void*)&orig);
+          it != display->per_display_values.end()) {
+        auto value = std::move(it->second);
+        display->per_display_values.erase(it);
+        display->per_display_values.emplace(this, std::move(value));
+      }
+    }
+  }
+  PerDisplay& operator=(const PerDisplay&& orig) {
+    for (auto* display : displays) {
+      if (auto it = display->per_display_values.find((void*)&orig);
+          it != display->per_display_values.end()) {
+        auto value = std::move(it->second);
+        display->per_display_values.erase(it);
+        display->per_display_values.emplace(this, std::move(value));
+      }
+    }
+    return *this;
+  }
 
   ~PerDisplay() {
     for (auto* display : displays) {

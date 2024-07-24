@@ -46,6 +46,8 @@ struct channel {
     atomic.notify_all();
   }
 
+  void* peek() { return atomic.load(std::memory_order_acquire); }
+
   // May block.
   void* recv() {
     void* ptr = atomic.exchange(nullptr, std::memory_order_acquire);
@@ -70,6 +72,11 @@ struct channel {
   template <typename T>
   std::unique_ptr<T> recv() {
     return std::unique_ptr<T>(static_cast<T*>(recv()));
+  }
+
+  template <typename T>
+  T* peek() {
+    return static_cast<T*>(peek());
   }
 };
 

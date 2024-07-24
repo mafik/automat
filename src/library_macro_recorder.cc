@@ -299,6 +299,9 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
     PositionBelow(*macro_recorder.here, loc);
     AnimateGrowFrom(*macro_recorder.here, loc);
   }
+  if (macro_recorder.keylogging && timeline->state != Timeline::State::kRecording) {
+    timeline->BeginRecording();
+  }
   return timeline;
 }
 
@@ -341,7 +344,16 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
   }
 
   if (track_index == -1) {
-    timeline->AddOnOffTrack(key_name);
+    if (!down && timeline->tracks.empty()) {
+      // Timeline is empty and the key is released. Do nothing.
+      return;
+    }
+    auto& new_track = timeline->AddOnOffTrack(key_name);
+    if (!down) {
+      // If the key is released then we should assume that it was pressed before the recording and
+      // the pressed section should start at 0.
+      new_track.timestamps.push_back(0);
+    }
     track_index = timeline->tracks.size() - 1;
     Location& key_presser_loc = machine->Create<KeyPresser>();
     KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();

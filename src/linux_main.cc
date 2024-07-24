@@ -371,6 +371,16 @@ void RenderLoop() {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
+                // auto cookie =
+                //     xcb_grab_pointer(connection, 0, xcb_window,
+                //                      XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_BUTTON_MOTION
+                //                      |
+                //                          XCB_EVENT_MASK_POINTER_MOTION_HINT,
+                //                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_WINDOW_NONE,
+                //                      XCB_CURSOR_NONE, XCB_CURRENT_TIME);
+                // xcb_flush(connection);
+                // xcb_request_check(connection, cookie)
+
                 RunOnAutomatThread([=] { GetMouse().ButtonDown(EventDetailToButton(ev->detail)); });
                 break;
               }
@@ -438,7 +448,6 @@ void RenderLoop() {
                 break;
               }
               case XCB_INPUT_LEAVE: {
-                RunOnAutomatThread([=] { mouse.reset(); });
                 break;
               }
               case XCB_INPUT_FOCUS_IN: {

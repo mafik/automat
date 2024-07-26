@@ -420,4 +420,38 @@ Location::~Location() {
     }
   }
 }
+
+void PositionBelow(Location& origin, Location& below) {
+  Machine* m = origin.ParentAs<Machine>();
+  Size origin_index = SIZE_MAX;
+  Size below_index = SIZE_MAX;
+  for (Size i = 0; i < m->locations.size(); i++) {
+    if (m->locations[i].get() == &origin) {
+      origin_index = i;
+      if (below_index != SIZE_MAX) {
+        break;
+      }
+    }
+    if (m->locations[i].get() == &below) {
+      below_index = i;
+      if (origin_index != SIZE_MAX) {
+        break;
+      }
+    }
+  }
+  if (origin_index > below_index) {
+    std::swap(m->locations[origin_index], m->locations[below_index]);
+  }
+}
+
+void AnimateGrowFrom(Location& source, Location& grown) {
+  for (auto* display : animation::displays) {
+    auto& animation_state = grown.GetAnimationState(*display);
+    animation_state.scale.value = 0.5;
+    Vec2 source_center = source.object->Shape(nullptr).getBounds().center() + source.position;
+    animation_state.position.value = source_center;
+    animation_state.transparency.value = 1;
+  }
+}
+
 }  // namespace automat

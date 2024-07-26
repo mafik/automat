@@ -47,6 +47,9 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
     return ControlFlow::Continue;
   }
 
+  void Args(std::function<void(Argument&)> cb) override;
+  const Object* ArgPrototype(const Argument&) override;
+
   bool IsOn() const override;
   void On() override;
   void Off() override;

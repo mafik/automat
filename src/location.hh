@@ -298,4 +298,7 @@ struct Location : gui::Widget {
   std::string ToStr() const;
 };
 
+void PositionBelow(Location& origin, Location& below);
+void AnimateGrowFrom(Location& source, Location& grown);
+
 }  // namespace automat

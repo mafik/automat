@@ -12,6 +12,22 @@ using namespace maf;
 
 namespace automat {
 
+// Arguments are responsible for finding dependencies (input & output) of objects.
+// - the know how to follow pointers (objects that point to other objects)
+// - they know about the requirements of the target object
+// - they can connect fields of source objects (rather than whole objects)
+// - they may automatically create target objects using given prototype
+// - they may search for nearby valid objects in a given search radius
+//
+// IMPORTANT: Arguments are identified by their ADDRESS in memory (not name!). Don't move them
+// around!
+//
+// Note: the API for Arguments is in the process of being re-designed - see the bottom of this file
+//
+// TODO: finish re-design
+// TODO: think about pointer following
+// TODO: think about requirement checking
+// TODO: think about multiple arguments
 struct Argument {
   enum Precondition {
     kOptional,
@@ -32,10 +48,20 @@ struct Argument {
   std::vector<std::function<void(Location* location, Object* object, std::string& error)>>
       requirements;
   SkColor tint = "#404040"_color;
+  float search_radius = 20_cm;
+
+  // TODO: get rid of this property, the parent should instead provide the "field" object based on
+  // Argument.
   Object* field = nullptr;
 
-  Argument(std::string_view name, Precondition precondition, Quantity quantity = kSingle)
+  Argument(std::string_view name, Precondition precondition = kOptional,
+           Quantity quantity = kSingle)
       : name(name), precondition(precondition), quantity(quantity) {}
+
+  // Uncomment to find potential bugs related to arguments being moved around.
+  // Argument(const Argument&) = delete;
+  // Argument& operator=(const Argument&) = delete;
+  // Argument(Argument&&) = delete;
 
   virtual ~Argument() = default;
 
@@ -147,6 +173,20 @@ struct Argument {
       ret += " (requires concrete type)";
     }
     return ret;
+  }
+
+#pragma region New API
+  ////////////////////////////////////////////////////////////////////
+  // New, simple API - completely separate from the *Result APIs.
+  ////////////////////////////////////////////////////////////////////
+
+  enum class IfMissing { ReturnNull, CreateFromPrototype };
+
+  Object* FindObject(Location& here, IfMissing = IfMissing::ReturnNull) const;
+
+  template <typename T>
+  T* FindObject(Location& here, IfMissing if_missing = IfMissing::ReturnNull) const {
+    return dynamic_cast<T*>(FindObject(here, if_missing));
   }
 };
 

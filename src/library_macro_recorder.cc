@@ -67,22 +67,23 @@ MacroRecorder::~MacroRecorder() {
   }
 }
 
-static Timeline* FindTimeline(const MacroRecorder& macro_recorder) {
-  if (macro_recorder.here == nullptr) {
-    return nullptr;
+// We will provide a prototype of the Timeline - to be created if no timeline can be found.
+// We will also specify here that it should search for any Timeline objects nearby (with some
+// radius).
+Argument timeline_arg = []() {
+  Argument arg("Timeline", Argument::kRequiresObject);
+  arg.RequireInstanceOf<Timeline>();
+  return arg;
+}();
+
+void MacroRecorder::Args(std::function<void(Argument&)> cb) { cb(timeline_arg); }
+const Object* MacroRecorder::ArgPrototype(const Argument& arg) {
+  if (&arg == &timeline_arg) {
+    return &Timeline::proto;
   }
-  auto machine = macro_recorder.here->ParentAs<Machine>();
-  if (machine == nullptr) {
-    return nullptr;
-  }
-  auto timeline = (Timeline*)macro_recorder.here->Nearby([](Location& loc) -> void* {
-    if (auto timeline = loc.As<Timeline>()) {
-      return timeline;
-    }
-    return nullptr;
-  });
-  return timeline;
+  return nullptr;
 }
+
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
 std::unique_ptr<Object> MacroRecorder::Clone() const { return std::make_unique<MacroRecorder>(); }
 void MacroRecorder::Draw(gui::DrawContext& dctx) const {
@@ -113,7 +114,8 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     animation_state.eye_rotation += 360;
   }
 
-  Timeline* timeline = FindTimeline(*this);
+  Timeline* timeline =
+      here ? timeline_arg.FindObject<Timeline>(*here, Argument::IfMissing::ReturnNull) : nullptr;
   animation_state.timeline_cable_width.target =
       (animation_state.pointers_over > 0 && timeline != nullptr) ? 2_mm : 0;
   animation_state.timeline_cable_width.Tick(dctx.display);
@@ -251,54 +253,16 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   // canvas.drawPath(record_button.child->Shape(nullptr), outline);
 }
 
-static void PositionBelow(Location& origin, Location& below) {
-  Machine* m = origin.ParentAs<Machine>();
-  Size origin_index = SIZE_MAX;
-  Size below_index = SIZE_MAX;
-  for (Size i = 0; i < m->locations.size(); i++) {
-    if (m->locations[i].get() == &origin) {
-      origin_index = i;
-      if (below_index != SIZE_MAX) {
-        break;
-      }
-    }
-    if (m->locations[i].get() == &below) {
-      below_index = i;
-      if (origin_index != SIZE_MAX) {
-        break;
-      }
-    }
-  }
-  if (origin_index > below_index) {
-    std::swap(m->locations[origin_index], m->locations[below_index]);
-  }
-}
-
-static void AnimateGrowFrom(Location& source, Location& grown) {
-  for (auto* display : animation::displays) {
-    auto& animation_state = grown.GetAnimationState(*display);
-    animation_state.scale.value = 0.5;
-    Vec2 source_center = source.object->Shape(nullptr).getBounds().center() + source.position;
-    animation_state.position.value = source_center;
-    animation_state.transparency.value = 1;
-  }
+static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
+  Timeline* timeline =
+      timeline_arg.FindObject<Timeline>(*macro_recorder.here, Argument::IfMissing::ReturnNull);
+  return timeline;
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
-  auto timeline = FindTimeline(macro_recorder);
-  if (timeline == nullptr) {
-    auto machine = macro_recorder.here->ParentAs<Machine>();
-    if (machine == nullptr) {
-      FATAL << "MacroRecorder must be a child of a Machine";
-      return nullptr;
-    }
-    Location& loc = machine->Create<Timeline>();
-    timeline = loc.As<Timeline>();
-    Rect timeline_bounds = timeline->Shape(nullptr).getBounds();
-    loc.position = macro_recorder.here->position + Vec2(2.2_cm, 0) - timeline_bounds.TopCenter();
-    PositionBelow(*macro_recorder.here, loc);
-    AnimateGrowFrom(*macro_recorder.here, loc);
-  }
+  Timeline* timeline = timeline_arg.FindObject<Timeline>(*macro_recorder.here,
+                                                         Argument::IfMissing::CreateFromPrototype);
+  assert(timeline);
   if (macro_recorder.keylogging && timeline->state != Timeline::State::kRecording) {
     timeline->BeginRecording();
   }

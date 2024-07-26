@@ -81,4 +81,46 @@ bool Argument::IsOn(Location& here) const {
   }
   return false;
 }
+
+#pragma region New API
+
+Object* Argument::FindObject(Location& here, IfMissing if_missing) const {
+  auto conn_it = here.outgoing.find(name);
+  Object* result = nullptr;
+  if (conn_it != here.outgoing.end()) {  // explicit connection
+    auto c = conn_it->second;
+    result = c->to.object.get();
+  } else {  // otherwise, search for other locations in this machine
+    result = reinterpret_cast<Object*>(here.Nearby([&](Location& other) -> void* {
+      if (Length(other.position - here.position) < search_radius) {
+        for (auto& req : requirements) {
+          std::string error;
+          req(&other, other.object.get(), error);
+          if (!error.empty()) {
+            return nullptr;
+          }
+        }
+        return other.object.get();
+      }
+      return nullptr;
+    }));
+  }
+
+  if (result == nullptr && if_missing == IfMissing::CreateFromPrototype) {
+    // Ask the current location for the prototype for this object.
+    if (auto prototype = here.object->ArgPrototype(*this)) {
+      if (auto machine = here.ParentAs<Machine>()) {
+        Location& l = machine->Create(*prototype);
+        result = l.object.get();
+        Rect object_bounds = result->Shape().getBounds();
+        l.position = here.position + Rect::BottomCenter(here.object->Shape().getBounds()) -
+                     object_bounds.TopCenter();
+        PositionBelow(here, l);
+        AnimateGrowFrom(here, l);
+      }
+    }
+  }
+  return result;
+}
+
 }  // namespace automat

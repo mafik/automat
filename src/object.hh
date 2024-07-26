@@ -49,6 +49,8 @@ struct Object : gui::Widget {
   virtual void Args(std::function<void(Argument&)> cb) {}
 
   virtual Vec2AndDir ArgStart(Argument&);
+  virtual const Object* ArgPrototype(const Argument&) { return nullptr; }
+
   virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;
 
   virtual void Updated(Location& here, Location& updated);
@@ -58,7 +60,7 @@ struct Object : gui::Widget {
     return GetText() <=> other.GetText();
   }
   void Draw(gui::DrawContext&) const override;
-  SkPath Shape(animation::Display*) const override;
+  SkPath Shape(animation::Display* = nullptr) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;
 };
 

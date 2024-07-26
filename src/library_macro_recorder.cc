@@ -6,8 +6,6 @@
 #include <include/effects/SkGradientShader.h>
 #include <modules/svg/include/SkSVGDOM.h>
 
-#include <cstdint>
-
 #include "../build/generated/embedded.hh"
 #include "animation.hh"
 #include "argument.hh"

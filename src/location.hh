@@ -8,7 +8,6 @@
 #include "connection.hh"
 #include "error.hh"
 #include "object.hh"
-#include "optional.hh"
 #include "run_button.hh"
 #include "string_multimap.hh"
 #include "tasks.hh"

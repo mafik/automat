@@ -8,7 +8,6 @@
 #include "keyboard.hh"
 #include "on_off.hh"
 #include "run_button.hh"
-#include "time.hh"
 
 namespace automat::library {
 

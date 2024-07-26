@@ -31,6 +31,13 @@ struct ConnectionWidget : Widget {
   Location& from;
   Argument& arg;
 
+  struct AnimationState {
+    float radar_alpha = 0;
+    float radar_alpha_target = 0;
+  };
+
+  animation::PerDisplay<AnimationState> animation_state;
+
   mutable animation::Approach<> cable_width;
   mutable maf::Optional<OpticalConnectorState> state;
   mutable maf::Optional<Vec2> manual_position;  // position of the plug (bottom center)
@@ -39,6 +46,7 @@ struct ConnectionWidget : Widget {
 
   maf::StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape(animation::Display*) const override;
+  void PreDraw(DrawContext&) const override;
   void Draw(DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
 };

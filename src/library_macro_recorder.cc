@@ -10,7 +10,6 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "color.hh"
-#include "connector_optical.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
 #include "library_macros.hh"
@@ -71,7 +70,7 @@ MacroRecorder::~MacroRecorder() {
 Argument timeline_arg = []() {
   Argument arg("Timeline", Argument::kRequiresObject);
   arg.RequireInstanceOf<Timeline>();
-  arg.autoconnect_radius = 15_cm;
+  arg.autoconnect_radius = 10_cm;
   arg.tint = color::kParrotRed;
   arg.style = Argument::Style::Cable;
   return arg;

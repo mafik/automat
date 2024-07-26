@@ -53,7 +53,7 @@ struct Argument {
   std::vector<std::function<void(Location* location, Object* object, std::string& error)>>
       requirements;
   SkColor tint = "#404040"_color;
-  float autoconnect_radius = 5_cm;
+  float autoconnect_radius = 0_cm;
 
   enum class Style { Arrow, Cable } style = Style::Arrow;
 

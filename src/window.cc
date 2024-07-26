@@ -209,6 +209,8 @@ void Window::Draw(SkCanvas& canvas) {
       canvas.drawRect(target_rect, target_paint);
     }
 
+    root_machine->PreDraw(draw_ctx);
+
     root_machine->Draw(draw_ctx);
 
     for (auto& pointer : pointers) {

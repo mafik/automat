@@ -13,6 +13,27 @@ using namespace maf;
 
 namespace automat::gui {
 
+void Widget::PreDrawChildren(DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
+  Visitor visitor = [&](Span<Widget*> widgets) {
+    std::ranges::reverse_view rv{widgets};
+    for (Widget* widget : rv) {
+      canvas.save();
+      const SkMatrix down = this->TransformToChild(*widget, &ctx.display);
+      SkMatrix up;
+      if (down.invert(&up)) {
+        canvas.concat(up);
+      }
+      ctx.path.push_back(widget);
+      widget->PreDraw(ctx);
+      ctx.path.pop_back();
+      canvas.restore();
+    }
+    return ControlFlow::Continue;
+  };
+  const_cast<Widget*>(this)->VisitChildren(visitor);
+}
+
 void Widget::DrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   Visitor visitor = [&](Span<Widget*> widgets) {

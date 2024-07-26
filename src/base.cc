@@ -421,7 +421,7 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
   return paint;
 }
 
-void Machine::Draw(gui::DrawContext& ctx) const {
+void Machine::PreDraw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto shape = Shape(&ctx.display);
   float px_per_m = ctx.canvas.getLocalToDeviceAs3x3().mapRadius(1);
@@ -431,8 +431,10 @@ void Machine::Draw(gui::DrawContext& ctx) const {
   border_paint.setColor("#404040"_color);
   border_paint.setStyle(SkPaint::kStroke_Style);
   canvas.drawPath(shape, border_paint);
-  DrawChildren(ctx);
+  PreDrawChildren(ctx);
 }
+
+void Machine::Draw(gui::DrawContext& ctx) const { DrawChildren(ctx); }
 void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {
   scale = 1.0;
   Rect rect = object->Shape(nullptr).getBounds();

@@ -180,6 +180,22 @@ struct Approach : Base<T> {
   operator float() const { return this->value; }
 };
 
+inline void ExponentialApproach(float target, float delta_time, float e_time, float& value) {
+  if (delta_time <= 0) return;
+  value += (target - value) * (-expm1f(-delta_time / e_time));
+}
+
+inline void LinearApproach(float target, float delta_time, float speed, float& value) {
+  if (delta_time <= 0) return;
+  if (value < target) {
+    value += delta_time * speed;
+    if (value > target) value = target;
+  } else if (value > target) {
+    value -= delta_time * speed;
+    if (value < target) value = target;
+  }
+}
+
 template <typename T>
 struct Spring : Base<T> {
   T velocity = {};

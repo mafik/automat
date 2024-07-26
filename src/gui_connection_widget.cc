@@ -2,6 +2,7 @@
 
 #include <include/core/SkColor.h>
 #include <include/core/SkRRect.h>
+#include <include/effects/SkGradientShader.h>
 
 #include "argument.hh"
 #include "base.hh"
@@ -36,6 +37,36 @@ SkPath ConnectionWidget::Shape(animation::Display*) const {
     return state->Shape(nullptr);
   } else {
     return SkPath();
+  }
+}
+void ConnectionWidget::PreDraw(DrawContext& ctx) const {
+  if (arg.autoconnect_radius > 0) {
+    auto anim = animation_state.Find(ctx.display);
+    if (anim == nullptr) {
+      return;
+    }
+    float target = anim->radar_alpha_target;
+    if (auto to = arg.FindLocation(from, Argument::IfMissing::ReturnNull)) {
+      target = 0;
+    }
+    animation::LinearApproach(target, ctx.DeltaT(), 2.f, anim->radar_alpha);
+    if (anim->radar_alpha < 0.01f) {
+      return;
+    }
+    auto pos_dir = from.ArgStart(&ctx.display, arg);
+    SkPaint radius_paint;
+    SkColor colors[] = {SkColorSetA(arg.tint, 0),
+                        SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
+    float pos[] = {0, 1, 1};
+    constexpr float kPeriod = 2.f;
+    auto local_matrix =
+        SkMatrix::RotateRad(ctx.display.timer.steady_now.time_since_epoch().count() * 2 * M_PI /
+                            kPeriod)
+            .postTranslate(pos_dir.pos.x, pos_dir.pos.y);
+    radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
+                                                       60, 0, &local_matrix));
+    // TODO: switch to drawArc instead
+    ctx.canvas.drawCircle(pos_dir.pos, arg.autoconnect_radius, radius_paint);
   }
 }
 

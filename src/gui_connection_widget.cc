@@ -60,20 +60,16 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
 
   auto pos_dir = from.ArgStart(&display, arg);
 
-  if (auto it = from.outgoing.find(arg.name); it != from.outgoing.end()) {
-    Connection* c = it->second;
-    to = &c->to;
-    if (to->object) {
-      to_shape = to->object->Shape(nullptr);
-      to->object->ConnectionPositions(to_points);
-      SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);
-      for (auto& vec_and_dir : to_points) {
-        vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
-      }
-      to_shape.transform(m);
-      to_shape.transform(TransformDown(Path{parent_machine, (Widget*)&from}, &ctx.display),
-                         &to_shape_from_coords);
+  if ((to = arg.FindLocation(from, Argument::IfMissing::ReturnNull))) {
+    to_shape = to->object->Shape(nullptr);
+    to->object->ConnectionPositions(to_points);
+    SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);
+    for (auto& vec_and_dir : to_points) {
+      vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
     }
+    to_shape.transform(m);
+    to_shape.transform(TransformDown(Path{parent_machine, (Widget*)&from}, &ctx.display),
+                       &to_shape_from_coords);
   } else {
     if (manual_position) {
       to_points.emplace_back(Vec2AndDir{
@@ -113,14 +109,31 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     SimulateCablePhysics(ctx, ctx.DeltaT(), *state, pos_dir, to_points);
     DrawOpticalConnector(ctx, *state, arg.Icon());
   } else {
-    if (to_shape.isEmpty()) {
-      if (!to_points.empty()) {
-        to_shape.moveTo(to_points[0].pos);
-      } else {
-        return;
+    if (arg.style == Argument::Style::Arrow) {
+      if (to_shape.isEmpty()) {
+        if (!to_points.empty()) {
+          to_shape.moveTo(to_points[0].pos);
+          DrawArrow(canvas, from_shape, to_shape);
+        }
+      }
+      if (!to_shape.isEmpty()) {
+        DrawArrow(canvas, from_shape, to_shape);
+      }
+    } else {
+      cable_width.target = to != nullptr ? 2_mm : 0;
+      cable_width.speed = 5;
+      cable_width.Tick(ctx.display);
+
+      if (cable_width > 0.01_mm && to) {
+        Vec2AndDir start = {.pos = Vec2(2.2_cm, 1_mm), .dir = -90_deg};
+        auto arcline = RouteCable(ctx, pos_dir, to_points);
+        auto color = SkColorSetA(arg.tint, 255 * cable_width.value / 2_mm);
+        auto color_filter = color::MakeTintFilter(color, 30);
+        auto path = arcline.ToPath(false);
+        DrawCable(ctx, path, color_filter, CableTexture::Smooth, cable_width.value,
+                  cable_width.value);
       }
     }
-    DrawArrow(canvas, from_shape, to_shape);
   }
   if (using_layer) {
     canvas.restore();

@@ -71,6 +71,9 @@ MacroRecorder::~MacroRecorder() {
 Argument timeline_arg = []() {
   Argument arg("Timeline", Argument::kRequiresObject);
   arg.RequireInstanceOf<Timeline>();
+  arg.autoconnect_radius = 15_cm;
+  arg.tint = color::kParrotRed;
+  arg.style = Argument::Style::Cable;
   return arg;
 }();
 
@@ -84,6 +87,8 @@ const Object* MacroRecorder::ArgPrototype(const Argument& arg) {
 
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
 std::unique_ptr<Object> MacroRecorder::Clone() const { return std::make_unique<MacroRecorder>(); }
+
+#pragma region Draw
 void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   auto& animation_state = animation_state_ptr[dctx.display];
   auto& image = MacroRecorderFrontColor();
@@ -112,36 +117,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     animation_state.eye_rotation += 360;
   }
 
-  Timeline* timeline =
-      here ? timeline_arg.FindObject<Timeline>(*here, Argument::IfMissing::ReturnNull) : nullptr;
-  animation_state.timeline_cable_width.target =
-      (animation_state.pointers_over > 0 && timeline != nullptr) ? 2_mm : 0;
-  animation_state.timeline_cable_width.Tick(dctx.display);
-  animation_state.timeline_cable_width.speed = 5;
-
-  if (animation_state.timeline_cable_width > 0.01_mm && timeline) {
-    Vec2AndDir start = {.pos = Vec2(2.2_cm, 1_mm), .dir = -90_deg};
-
-    Vec<Vec2AndDir> ends = {};
-    timeline->ConnectionPositions(ends);
-    Path up_path = {timeline->here->ParentAs<Widget>(), timeline->here, timeline};
-    auto matrix = TransformUp(up_path, &dctx.display);
-    Path down_path = {here->ParentAs<Widget>(), here, const_cast<MacroRecorder*>(this)};
-    matrix.postConcat(TransformDown(down_path, &dctx.display));
-    for (auto& end : ends) {
-      end.pos = matrix.mapPoint(end.pos);
-    }
-
-    auto arcline = RouteCable(dctx, start, ends);
-    auto color =
-        SkColorSetA(color::kParrotRed, 255 * animation_state.timeline_cable_width.value / 2_mm);
-    auto color_filter = color::MakeTintFilter(color, 30);
-    auto path = arcline.ToPath(false);
-    DrawCable(dctx, path, color_filter, CableTexture::Smooth,
-              animation_state.timeline_cable_width.value);
-  }
-
-  {
+  {  // Draw the eyes
     auto sharingan = SharinganColor();
 
     auto local_to_window = TransformUp(dctx.path, &dctx.display);
@@ -232,7 +208,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     DrawEye(kRightEyeCenter, animation_state.googly_right);
   }
 
-  {
+  {  // Draw the main body
     canvas.save();
     float s = 5_cm / image->height();
     canvas.translate(0, 5_cm);
@@ -242,13 +218,6 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   }
 
   DrawChildren(dctx);
-
-  // SkPaint outline;
-  // outline.setStyle(SkPaint::kStroke_Style);
-  // canvas.drawPath(record_button.Shape(nullptr), outline);
-
-  // outline.setStyle(SkPaint::kStroke_Style);
-  // canvas.drawPath(record_button.child->Shape(nullptr), outline);
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {

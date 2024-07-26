@@ -1,5 +1,7 @@
 #include "argument.hh"
 
+#include <cmath>
+
 #include "base.hh"
 #include "svg.hh"
 
@@ -25,12 +27,15 @@ Argument::LocationResult Argument::GetLocation(Location& here,
     result.location = &c->to;
     result.follow_pointers = c->pointer_behavior == Connection::kFollowPointers;
   } else {  // otherwise, search for other locations in this machine
-    result.location = reinterpret_cast<Location*>(here.Nearby([&](Location& other) -> void* {
-      if (other.name == name) {
-        return &other;
-      }
-      return nullptr;
-    }));
+    if (auto machine = here.ParentAs<Machine>()) {
+      result.location = reinterpret_cast<Location*>(
+          machine->Nearby(here.position, HUGE_VALF, [&](Location& other) -> void* {
+            if (other.name == name) {
+              return &other;
+            }
+            return nullptr;
+          }));
+    }
   }
   if (result.location == nullptr && precondition >= kRequiresLocation) {
     here.ReportError(
@@ -84,26 +89,30 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Object* Argument::FindObject(Location& here, IfMissing if_missing) const {
+Location* Argument::FindLocation(Location& here, IfMissing if_missing) const {
   auto conn_it = here.outgoing.find(name);
-  Object* result = nullptr;
+  Location* result = nullptr;
   if (conn_it != here.outgoing.end()) {  // explicit connection
     auto c = conn_it->second;
-    result = c->to.object.get();
-  } else {  // otherwise, search for other locations in this machine
-    result = reinterpret_cast<Object*>(here.Nearby([&](Location& other) -> void* {
-      if (Length(other.position - here.position) < search_radius) {
-        for (auto& req : requirements) {
-          std::string error;
-          req(&other, other.object.get(), error);
-          if (!error.empty()) {
-            return nullptr;
-          }
-        }
-        return other.object.get();
-      }
-      return nullptr;
-    }));
+    result = &c->to;
+  } else if (autoconnect_radius > 0) {  // otherwise, search for other locations in this machine
+    if (auto parent_machine = here.ParentAs<Machine>()) {
+      Vec2 center = here.position + here.object->ArgStart(*this).pos;
+      result = reinterpret_cast<Location*>(
+          parent_machine->Nearby(center, autoconnect_radius, [&](Location& other) -> void* {
+            if (&other == &here) {
+              return nullptr;
+            }
+            for (auto& req : requirements) {
+              std::string error;
+              req(&other, other.object.get(), error);
+              if (!error.empty()) {
+                return nullptr;
+              }
+            }
+            return &other;
+          }));
+    }
   }
 
   if (result == nullptr && if_missing == IfMissing::CreateFromPrototype) {
@@ -111,8 +120,8 @@ Object* Argument::FindObject(Location& here, IfMissing if_missing) const {
     if (auto prototype = here.object->ArgPrototype(*this)) {
       if (auto machine = here.ParentAs<Machine>()) {
         Location& l = machine->Create(*prototype);
-        result = l.object.get();
-        Rect object_bounds = result->Shape().getBounds();
+        result = &l;
+        Rect object_bounds = result->object->Shape().getBounds();
         l.position = here.position + Rect::BottomCenter(here.object->Shape().getBounds()) -
                      object_bounds.TopCenter();
         PositionBelow(here, l);
@@ -123,4 +132,47 @@ Object* Argument::FindObject(Location& here, IfMissing if_missing) const {
   return result;
 }
 
+Object* Argument::FindObject(Location& here, IfMissing if_missing) const {
+  if (auto loc = FindLocation(here, if_missing)) {
+    return loc->object.get();
+  }
+  return nullptr;
+}
+
+void LiveArgument::Detach(Location& here) {
+  auto connections = here.outgoing.equal_range(name);
+  for (auto it = connections.first; it != connections.second; ++it) {
+    auto& connection = it->second;
+    here.StopObservingUpdates(connection->to);
+  }
+  // If there were no connections, try to find nearby objects instead.
+  if (auto machine = here.ParentAs<Machine>()) {
+    if (connections.first == here.outgoing.end()) {
+      machine->Nearby(here.position, HUGE_VALF, [&](Location& other) {
+        if (other.name == name) {
+          here.StopObservingUpdates(other);
+        }
+        return nullptr;
+      });
+    }
+  }
+}
+void LiveArgument::Attach(Location& here) {
+  auto connections = here.outgoing.equal_range(name);
+  for (auto it = connections.first; it != connections.second; ++it) {
+    auto& connection = it->second;
+    here.ObserveUpdates(connection->to);
+  }
+  // If there were no connections, try to find nearby objects instead.
+  if (connections.first == here.outgoing.end()) {
+    if (auto machine = here.ParentAs<Machine>()) {
+      machine->Nearby(here.position, HUGE_VALF, [&](Location& other) {
+        if (other.name == name) {
+          here.ObserveUpdates(other);
+        }
+        return nullptr;
+      });
+    }
+  }
+}
 }  // namespace automat

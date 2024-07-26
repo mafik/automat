@@ -32,41 +32,6 @@ constexpr float kFrameCornerRadius = 0.001;
 
 Location::Location(Location* parent) : parent(parent), run_button(this), run_task(this) {}
 
-void* Location::Nearby(std::function<void*(Location&)> callback) {
-  if (auto parent_machine = ParentAs<Machine>()) {
-    int n = parent_machine->locations.size() - 1;
-    Location* locations[n];
-    int i = 0;
-    for (auto& other : parent_machine->locations) {
-      if (other.get() == this) continue;
-      locations[i++] = other.get();
-    }
-    assert(i == n);
-    float distances[n];
-    auto my_center = position + (object ? Rect::Center(object->Shape().getBounds()) : Vec2{});
-    for (int i = 0; i < n; i++) {
-      auto other_center =
-          locations[i]->position +
-          (locations[i]->object ? Rect::Center(locations[i]->object->Shape().getBounds()) : Vec2{});
-      distances[i] = LengthSquared(other_center - my_center);
-    }
-    // Sort indexes (rather than location pointers) incrementally, using heap operations.
-    int indexes[n];
-    auto comp = [&](int a, int b) { return distances[a] > distances[b]; };
-    for (int i = 0; i < n; i++) {
-      indexes[i] = i;
-      push_heap(indexes, indexes + i + 1, comp);
-    }
-    for (int i = n - 1; i >= 0; i--) {
-      pop_heap(indexes, indexes + i + 1, comp);
-      if (auto ret = callback(*locations[indexes[i]])) {
-        return ret;
-      }
-    }
-  }
-  return nullptr;
-}
-
 bool Location::HasError() {
   if (error != nullptr) return true;
   if (auto machine = ThisAs<Machine>()) {

@@ -108,7 +108,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   void Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   void Args(std::function<void(Argument&)> cb) override;
-  Vec2AndDir ArgStart(Argument&) override;
+  Vec2AndDir ArgStart(const Argument&) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;

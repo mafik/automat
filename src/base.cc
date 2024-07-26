@@ -21,6 +21,8 @@
 #include "timer_thread.hh"
 #include "window.hh"
 
+using namespace std;
+
 namespace automat {
 
 Location* Machine::LocationAtPoint(Vec2 point) {
@@ -32,6 +34,41 @@ Location* Machine::LocationAtPoint(Vec2 point) {
     }
     if (shape.contains(local_point.x, local_point.y)) {
       return loc.get();
+    }
+  }
+  return nullptr;
+}
+
+void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
+  int n = locations.size();
+  Location* locations_arr[n];
+  int i = 0;
+  for (auto& other : locations) {
+    locations_arr[i++] = other.get();
+  }
+  assert(i == n);
+  float distances[n];
+  for (int i = 0; i < n; i++) {
+    auto other_center =
+        locations[i]->position +
+        (locations[i]->object ? Rect::Center(locations[i]->object->Shape().getBounds()) : Vec2{});
+    distances[i] = LengthSquared(other_center - start);
+  }
+  // Sort indexes (rather than location pointers) incrementally, using heap operations.
+  int indexes[n];
+  auto comp = [&](int a, int b) { return distances[a] > distances[b]; };
+  for (int i = 0; i < n; i++) {
+    indexes[i] = i;
+    push_heap(indexes, indexes + i + 1, comp);
+  }
+  float radius2 = radius * radius;
+  for (int i = n - 1; i >= 0; i--) {
+    pop_heap(indexes, indexes + i + 1, comp);
+    if (distances[indexes[i]] > radius2) {
+      break;
+    }
+    if (auto ret = callback(*locations[indexes[i]])) {
+      return ret;
     }
   }
   return nullptr;

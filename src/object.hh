@@ -48,7 +48,7 @@ struct Object : gui::Widget {
 
   virtual void Args(std::function<void(Argument&)> cb) {}
 
-  virtual Vec2AndDir ArgStart(Argument&);
+  virtual Vec2AndDir ArgStart(const Argument&);
   virtual const Object* ArgPrototype(const Argument&) { return nullptr; }
 
   virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;

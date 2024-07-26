@@ -1067,7 +1067,7 @@ void Timeline::Args(function<void(Argument&)> cb) {
   cb(next_arg);
 }
 
-Vec2AndDir Timeline::ArgStart(Argument& arg) {
+Vec2AndDir Timeline::ArgStart(const Argument& arg) {
   for (int i = 0; i < tracks.size(); ++i) {
     if (track_args[i].get() != &arg) {
       continue;

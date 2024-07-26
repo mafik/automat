@@ -12,6 +12,11 @@ using namespace maf;
 
 namespace automat {
 
+enum class CableTexture {
+  Smooth,
+  Braided,
+};
+
 // Arguments are responsible for finding dependencies (input & output) of objects.
 // - the know how to follow pointers (objects that point to other objects)
 // - they know about the requirements of the target object
@@ -48,7 +53,9 @@ struct Argument {
   std::vector<std::function<void(Location* location, Object* object, std::string& error)>>
       requirements;
   SkColor tint = "#404040"_color;
-  float search_radius = 20_cm;
+  float autoconnect_radius = 5_cm;
+
+  enum class Style { Arrow, Cable } style = Style::Arrow;
 
   // TODO: get rid of this property, the parent should instead provide the "field" object based on
   // Argument.
@@ -182,6 +189,8 @@ struct Argument {
 
   enum class IfMissing { ReturnNull, CreateFromPrototype };
 
+  Location* FindLocation(Location& here, IfMissing = IfMissing::ReturnNull) const;
+
   Object* FindObject(Location& here, IfMissing = IfMissing::ReturnNull) const;
 
   template <typename T>
@@ -200,38 +209,8 @@ struct LiveArgument : Argument {
     Argument::RequireInstanceOf<T>();
     return *this;
   }
-  void Detach(Location& here) {
-    auto connections = here.outgoing.equal_range(name);
-    for (auto it = connections.first; it != connections.second; ++it) {
-      auto& connection = it->second;
-      here.StopObservingUpdates(connection->to);
-    }
-    // If there were no connections, try to find nearby objects instead.
-    if (connections.first == here.outgoing.end()) {
-      here.Nearby([&](Location& other) {
-        if (other.name == name) {
-          here.StopObservingUpdates(other);
-        }
-        return nullptr;
-      });
-    }
-  }
-  void Attach(Location& here) {
-    auto connections = here.outgoing.equal_range(name);
-    for (auto it = connections.first; it != connections.second; ++it) {
-      auto& connection = it->second;
-      here.ObserveUpdates(connection->to);
-    }
-    // If there were no connections, try to find nearby objects instead.
-    if (connections.first == here.outgoing.end()) {
-      here.Nearby([&](Location& other) {
-        if (other.name == name) {
-          here.ObserveUpdates(other);
-        }
-        return nullptr;
-      });
-    }
-  }
+  void Detach(Location& here);
+  void Attach(Location& here);
   void Relocate(Location* old_self, Location* new_self) {
     if (old_self) {
       Detach(*old_self);

@@ -30,6 +30,8 @@ struct DragConnectionAction : Action {
 struct ConnectionWidget : Widget {
   Location& from;
   Argument& arg;
+
+  mutable animation::Approach<> cable_width;
   mutable maf::Optional<OpticalConnectorState> state;
   mutable maf::Optional<Vec2> manual_position;  // position of the plug (bottom center)
 

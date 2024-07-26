@@ -1116,38 +1116,40 @@ struct BlackboardUpdater : LiveObject {
   void Relocate(Location* here) override {
     // 1. Find nearby blackboards & register as an observer.
     // 2. Extract variables from math statements.
-    here->Nearby([&](Location& other) -> void* {
-      if (Blackboard* blackboard = other.As<Blackboard>()) {
-        here->ObserveUpdates(other);
-        if (algebra::Equation* equation =
-                dynamic_cast<algebra::Equation*>(blackboard->statement.get())) {
-          // fmt::print("Found equation: {}\n", equation->GetText());
-          treemath::Tree tree(*equation);
-          vector<algebra::Variable*> variables = ExtractVariables(equation);
-          std::unordered_set<algebra::Variable*> independent_variables;
-          // 3. Derive formulas for each of the variables.
-          for (algebra::Variable* variable : variables) {
-            if (treemath::Variable* tree_var = tree.FindVariable(variable->name)) {
-              if (auto expr = tree_var->DeriveExpression(nullptr)) {
-                // fmt::print("Derived formula for {}: {}\n", variable->name,
-                // expr->GetText());
-                formulas[variable->name] = std::move(expr);
-                for (algebra::Variable* independent :
-                     ExtractVariables(formulas[variable->name].get())) {
-                  independent_variables.insert(independent);
+    if (auto parent_machine = here->ParentAs<Machine>()) {
+      parent_machine->Nearby(here->position, HUGE_VALF, [&](Location& other) -> void* {
+        if (Blackboard* blackboard = other.As<Blackboard>()) {
+          here->ObserveUpdates(other);
+          if (algebra::Equation* equation =
+                  dynamic_cast<algebra::Equation*>(blackboard->statement.get())) {
+            // fmt::print("Found equation: {}\n", equation->GetText());
+            treemath::Tree tree(*equation);
+            vector<algebra::Variable*> variables = ExtractVariables(equation);
+            std::unordered_set<algebra::Variable*> independent_variables;
+            // 3. Derive formulas for each of the variables.
+            for (algebra::Variable* variable : variables) {
+              if (treemath::Variable* tree_var = tree.FindVariable(variable->name)) {
+                if (auto expr = tree_var->DeriveExpression(nullptr)) {
+                  // fmt::print("Derived formula for {}: {}\n", variable->name,
+                  // expr->GetText());
+                  formulas[variable->name] = std::move(expr);
+                  for (algebra::Variable* independent :
+                       ExtractVariables(formulas[variable->name].get())) {
+                    independent_variables.insert(independent);
+                  }
                 }
               }
             }
-          }
-          // 4. Observe all of the independent variables.
-          for (algebra::Variable* variable : independent_variables) {
-            independent_variable_args.emplace(
-                variable->name, LiveArgument(variable->name, Argument::kRequiresObject));
+            // 4. Observe all of the independent variables.
+            for (algebra::Variable* variable : independent_variables) {
+              independent_variable_args.emplace(
+                  variable->name, LiveArgument(variable->name, Argument::kRequiresObject));
+            }
           }
         }
-      }
-      return nullptr;
-    });
+        return nullptr;
+      });
+    }
     LiveObject::Relocate(here);
   }
   string_view Name() const override { return "Blackboard Updater"; }

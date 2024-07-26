@@ -132,6 +132,11 @@ struct Machine : LiveObject, gui::DropTarget {
 
   Location* LocationAtPoint(Vec2);
 
+  // Iterate over all nearby objects (within the given radius around start point).
+  //
+  // Return non-null to stop iteration and return from Nearby.
+  void* Nearby(Vec2 center, float radius, std::function<void*(Location&)> callback);
+
   string_view Name() const override { return name; }
   std::unique_ptr<Object> Clone() const override {
     Machine* m = new Machine();

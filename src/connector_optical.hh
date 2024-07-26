@@ -12,7 +12,6 @@
 #include "math.hh"
 #include "optional.hh"
 #include "sincos.hh"
-#include "time.hh"
 #include "vec.hh"
 #include "widget.hh"
 
@@ -66,11 +65,6 @@ struct OpticalConnectorState {
   Vec2 PlugTopCenter() const;
   SkPath Shape(animation::Display*) const;
   SkMatrix ConnectorMatrix() const;
-};
-
-enum class CableTexture {
-  Smooth,
-  Braided,
 };
 
 ArcLine RouteCable(DrawContext&, Vec2AndDir start, maf::Span<Vec2AndDir> ends);

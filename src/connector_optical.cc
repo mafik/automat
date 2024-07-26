@@ -1507,7 +1507,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
 // Keeping this for potential usage in the future
 void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape) {
   static const SkPath kConnectionArrowShape = PathFromSVG(kConnectionArrowShapeSVG);
-  SkColor color = 0xff6e4521;
+  SkColor color = "#6e4521"_color;
   SkPaint line_paint;
   line_paint.setAntiAlias(true);
   line_paint.setStyle(SkPaint::kStroke_Style);

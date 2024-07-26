@@ -158,11 +158,6 @@ struct Location : gui::Widget {
   // Misc
   ////////////////////////////
 
-  // Iterate over all nearby objects (including this object).
-  //
-  // Return non-null from the callback to stop the search.
-  void* Nearby(std::function<void*(Location&)> callback);
-
   // This function should register a connection from this location to the
   // `other` so that subsequent calls to `Find` will return `other`.
   //

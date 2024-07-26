@@ -110,7 +110,7 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
   SetText(l, value);
 }
 
-Vec2AndDir Object::ArgStart(Argument& arg) {
+Vec2AndDir Object::ArgStart(const Argument& arg) {
   SkPath shape;
   if (arg.field) {
     shape = FieldShape(*arg.field);

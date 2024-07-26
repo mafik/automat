@@ -748,5 +748,6 @@ DurationArgument::DurationArgument() : LiveArgument("duration", Argument::kOptio
       error = "Duration argument must be a number.";
     }
   });
+  tint = "#6e4521"_color;
 }
 }  // namespace automat::library

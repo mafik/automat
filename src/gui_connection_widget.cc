@@ -63,94 +63,110 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
   if (anim == nullptr) {
     return;
   }
-  float target = anim->radar_alpha_target;
-  animation::LinearApproach(target, ctx.DeltaT(), 2.f, anim->radar_alpha);
-  if (anim->radar_alpha < 0.01f) {
-    return;
+  animation::LinearApproach(anim->radar_alpha_target, ctx.DeltaT(), 2.f, anim->radar_alpha);
+  float prototype_alpha_target = anim->prototype_alpha_target;
+  if (arg.FindLocation(from)) {
+    prototype_alpha_target = 0;
   }
-  auto pos_dir = from.ArgStart(&ctx.display, arg);
-  SkPaint radius_paint;
-  SkColor colors[] = {SkColorSetA(arg.tint, 0),
-                      SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
-  float pos[] = {0, 1, 1};
-  constexpr float kPeriod = 2.f;
-  float t = ctx.display.timer.steady_now.time_since_epoch().count();
-  auto local_matrix =
-      SkMatrix::RotateRad(t * 2 * M_PI / kPeriod).postTranslate(pos_dir.pos.x, pos_dir.pos.y);
-  radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
-                                                     60, 0, &local_matrix));
-  // TODO: switch to drawArc instead
-  SkRect oval =
-      Rect::MakeCenterWH(pos_dir.pos, arg.autoconnect_radius * 2, arg.autoconnect_radius * 2);
+  animation::LinearApproach(prototype_alpha_target, ctx.DeltaT(), 2.f, anim->prototype_alpha);
+  if (anim->radar_alpha >= 0.01f) {
+    auto pos_dir = from.ArgStart(&ctx.display, arg);
+    SkPaint radius_paint;
+    SkColor colors[] = {SkColorSetA(arg.tint, 0),
+                        SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
+    float pos[] = {0, 1, 1};
+    constexpr float kPeriod = 2.f;
+    float t = ctx.display.timer.steady_now.time_since_epoch().count();
+    auto local_matrix =
+        SkMatrix::RotateRad(t * 2 * M_PI / kPeriod).postTranslate(pos_dir.pos.x, pos_dir.pos.y);
+    radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
+                                                       60, 0, &local_matrix));
+    // TODO: switch to drawArc instead
+    SkRect oval =
+        Rect::MakeCenterWH(pos_dir.pos, arg.autoconnect_radius * 2, arg.autoconnect_radius * 2);
 
-  float crt_width =
-      animation::SinInterp(anim->radar_alpha, 0.2f, 0.1f, 0.5f, 1.f) * arg.autoconnect_radius * 2;
-  float crt_height =
-      animation::SinInterp(anim->radar_alpha, 0.4f, 0.1f, 0.8f, 1.f) * arg.autoconnect_radius * 2;
-  SkRect crt_oval = Rect::MakeCenterWH(pos_dir.pos, crt_width, crt_height);
-  ctx.canvas.drawArc(crt_oval, 0, 360, true, radius_paint);
+    float crt_width =
+        animation::SinInterp(anim->radar_alpha, 0.2f, 0.1f, 0.5f, 1.f) * arg.autoconnect_radius * 2;
+    float crt_height =
+        animation::SinInterp(anim->radar_alpha, 0.4f, 0.1f, 0.8f, 1.f) * arg.autoconnect_radius * 2;
+    SkRect crt_oval = Rect::MakeCenterWH(pos_dir.pos, crt_width, crt_height);
+    ctx.canvas.drawArc(crt_oval, 0, 360, true, radius_paint);
 
-  SkPaint stroke_paint;
-  stroke_paint.setColor(SkColorSetA(arg.tint, (int)(anim->radar_alpha * 128)));
-  stroke_paint.setStyle(SkPaint::kStroke_Style);
+    SkPaint stroke_paint;
+    stroke_paint.setColor(SkColorSetA(arg.tint, (int)(anim->radar_alpha * 128)));
+    stroke_paint.setStyle(SkPaint::kStroke_Style);
 
-  float radar_alpha_sin = sin((anim->radar_alpha - 0.5f) * M_PI) * 0.5f + 0.5f;
-  radar_alpha_sin *= radar_alpha_sin;
-  constexpr float kQuadrantSweep = 80;
-  float quadrant_offset = -t * 15;
-  ctx.canvas.drawArc(crt_oval, quadrant_offset - kQuadrantSweep / 2 * radar_alpha_sin,
-                     kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
-  ctx.canvas.drawArc(crt_oval, quadrant_offset + 90 - kQuadrantSweep / 2 * radar_alpha_sin,
-                     kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
-  ctx.canvas.drawArc(crt_oval, quadrant_offset + 180 - kQuadrantSweep / 2 * radar_alpha_sin,
-                     kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
-  ctx.canvas.drawArc(crt_oval, quadrant_offset + 270 - kQuadrantSweep / 2 * radar_alpha_sin,
-                     kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+    float radar_alpha_sin = sin((anim->radar_alpha - 0.5f) * M_PI) * 0.5f + 0.5f;
+    radar_alpha_sin *= radar_alpha_sin;
+    constexpr float kQuadrantSweep = 80;
+    float quadrant_offset = -t * 15;
+    ctx.canvas.drawArc(crt_oval, quadrant_offset - kQuadrantSweep / 2 * radar_alpha_sin,
+                       kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+    ctx.canvas.drawArc(crt_oval, quadrant_offset + 90 - kQuadrantSweep / 2 * radar_alpha_sin,
+                       kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+    ctx.canvas.drawArc(crt_oval, quadrant_offset + 180 - kQuadrantSweep / 2 * radar_alpha_sin,
+                       kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+    ctx.canvas.drawArc(crt_oval, quadrant_offset + 270 - kQuadrantSweep / 2 * radar_alpha_sin,
+                       kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
 
-  auto& font = GetFont();
-  SkRSXform transforms[arg.name.size()];
-  for (size_t i = 0; i < arg.name.size(); ++i) {
-    float i_fract = (i + 1.f) / (arg.name.size() + 1.f);
-    // float i_fract = i / (float)arg.name.size();
-    float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_alpha_sin * M_PIf +
-                     quadrant_offset / 180 * M_PIf;
+    auto& font = GetFont();
+    SkRSXform transforms[arg.name.size()];
+    for (size_t i = 0; i < arg.name.size(); ++i) {
+      float i_fract = (i + 1.f) / (arg.name.size() + 1.f);
+      // float i_fract = i / (float)arg.name.size();
+      float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_alpha_sin * M_PIf +
+                       quadrant_offset / 180 * M_PIf;
 
-    float x = sin(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
-    float y = cos(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
-    float w = font.sk_font.measureText(arg.name.data() + i, 1, SkTextEncoding::kUTF8, nullptr);
+      float x = sin(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
+      float y = cos(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
+      float w = font.sk_font.measureText(arg.name.data() + i, 1, SkTextEncoding::kUTF8, nullptr);
 
-    transforms[i] = SkRSXform::MakeFromRadians(font.font_scale, -letter_a, x, y, w / 2, 0);
+      transforms[i] = SkRSXform::MakeFromRadians(font.font_scale, -letter_a, x, y, w / 2, 0);
+    }
+    auto text_blob =
+        SkTextBlob::MakeFromRSXform(arg.name.data(), arg.name.size(), transforms, font.sk_font);
+    SkPaint text_paint;
+    float text_alpha = animation::SinInterp(anim->radar_alpha, 0.5f, 0.0f, 1.f, 1.f);
+    text_paint.setColor(SkColorSetA(arg.tint, (int)(text_alpha * 255)));
+
+    ctx.canvas.save();
+    ctx.canvas.translate(pos_dir.pos.x, pos_dir.pos.y);
+    ctx.canvas.scale(1, -1);
+    ctx.canvas.drawTextBlob(text_blob, 0, 0, text_paint);
+    ctx.canvas.rotate(90);
+    ctx.canvas.drawTextBlob(text_blob, 0, 0, text_paint);
+    ctx.canvas.rotate(90);
+    ctx.canvas.drawTextBlob(text_blob, 0, 0, text_paint);
+    ctx.canvas.rotate(90);
+    ctx.canvas.drawTextBlob(text_blob, 0, 0, text_paint);
+    ctx.canvas.restore();
+
+    arg.NearbyCandidates(
+        from, arg.autoconnect_radius * 2 + 10_cm,
+        [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
+          auto arcline = RouteConnection(ctx, pos_dir, candidate);
+          auto it = ArcLine::Iterator(arcline);
+          float total_length = it.AdvanceToEnd() * anim->radar_alpha;
+          Vec2 end_point = it.Position();
+          float relative_dist = Length(pos_dir.pos - to_points[0].pos) / arg.autoconnect_radius;
+          auto path = arcline.ToPath(false, std::lerp(total_length, 0, relative_dist - 1));
+          ctx.canvas.drawPath(path, stroke_paint);
+          ctx.canvas.drawCircle(end_point, 1_mm, stroke_paint);
+        });
   }
-  auto text_blob =
-      SkTextBlob::MakeFromRSXform(arg.name.data(), arg.name.size(), transforms, font.sk_font);
-  SkPaint text_paint;
-  float text_alpha = animation::SinInterp(anim->radar_alpha, 0.5f, 0.0f, 1.f, 1.f);
-  text_paint.setColor(SkColorSetA(arg.tint, (int)(text_alpha * 255)));
-
-  ctx.canvas.save();
-  ctx.canvas.translate(pos_dir.pos.x, pos_dir.pos.y);
-  ctx.canvas.scale(1, -1);
-  ctx.canvas.drawTextBlob(text_blob, 0, 0, text_paint);
-  ctx.canvas.rotate(90);
-  ctx.canvas.drawTextBlob(text_blob, 0, 0, text_paint);
-  ctx.canvas.rotate(90);
-  ctx.canvas.drawTextBlob(text_blob, 0, 0, text_paint);
-  ctx.canvas.rotate(90);
-  ctx.canvas.drawTextBlob(text_blob, 0, 0, text_paint);
-  ctx.canvas.restore();
-
-  arg.NearbyCandidates(
-      from, arg.autoconnect_radius * 2 + 10_cm,
-      [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
-        auto arcline = RouteConnection(ctx, pos_dir, candidate);
-        auto it = ArcLine::Iterator(arcline);
-        float total_length = it.AdvanceToEnd() * anim->radar_alpha;
-        Vec2 end_point = it.Position();
-        float relative_dist = Length(pos_dir.pos - to_points[0].pos) / arg.autoconnect_radius;
-        auto path = arcline.ToPath(false, std::lerp(total_length, 0, relative_dist - 1));
-        ctx.canvas.drawPath(path, stroke_paint);
-        ctx.canvas.drawCircle(end_point, 1_mm, stroke_paint);
-      });
+  if (anim->prototype_alpha >= 0.01f) {
+    auto* proto = from.object->ArgPrototype(arg);
+    auto proto_shape = proto->Shape(&ctx.display);
+    Rect proto_bounds = proto_shape.getBounds();
+    ctx.canvas.save();
+    Vec2 offset = from.position + Rect::BottomCenter(from.object->Shape().getBounds()) -
+                  proto_bounds.TopCenter();
+    ctx.canvas.translate(offset.x, offset.y);
+    ctx.canvas.saveLayerAlphaf(&proto_shape.getBounds(), anim->prototype_alpha * 0.4f);
+    proto->Draw(ctx);
+    ctx.canvas.restore();
+    ctx.canvas.restore();
+  }
 }
 
 void ConnectionWidget::Draw(DrawContext& ctx) const {

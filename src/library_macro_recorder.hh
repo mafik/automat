@@ -14,6 +14,8 @@ namespace automat::library {
 struct GlassRunButton : gui::PowerButton {
   GlassRunButton(OnOff* on_off) : gui::PowerButton(on_off) {}
   SkColor ForegroundColor(gui::DrawContext&) const override { return color::kParrotRed; }
+  void PointerOver(gui::Pointer&, animation::Display&) override;
+  void PointerLeave(gui::Pointer&, animation::Display&) override;
   // SkColor BackgroundColor() const override { return "#490b13"_color; }
 };
 

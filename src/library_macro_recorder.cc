@@ -10,6 +10,7 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "color.hh"
+#include "gui_connection_widget.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
 #include "library_macros.hh"
@@ -459,4 +460,36 @@ void MacroRecorder::PointerOver(gui::Pointer&, animation::Display& d) {
 void MacroRecorder::PointerLeave(gui::Pointer&, animation::Display& d) {
   animation_state_ptr[d].pointers_over--;
 }
+
+static ConnectionWidget* FindConnectionWidget(Location& here, Argument& arg) {
+  auto machine = here.ParentAs<Machine>();
+  if (machine == nullptr) {
+    return nullptr;
+  }
+  for (auto& connection_widget : machine->connection_widgets) {
+    if (&connection_widget->from != &here) {
+      continue;
+    }
+    if (&connection_widget->arg != &arg) {
+      continue;
+    }
+    return connection_widget.get();
+  }
+  return nullptr;
+}
+
+void GlassRunButton::PointerOver(gui::Pointer&, animation::Display& display) {
+  auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
+  if (auto connection_widget = FindConnectionWidget(*macro_recorder->here, timeline_arg)) {
+    connection_widget->animation_state[display].prototype_alpha_target = 1;
+  }
+}
+
+void GlassRunButton::PointerLeave(gui::Pointer&, animation::Display& display) {
+  auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
+  if (auto connection_widget = FindConnectionWidget(*macro_recorder->here, timeline_arg)) {
+    connection_widget->animation_state[display].prototype_alpha_target = 0;
+  }
+}
+
 }  // namespace automat::library

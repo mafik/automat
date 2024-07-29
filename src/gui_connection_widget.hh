@@ -34,6 +34,8 @@ struct ConnectionWidget : Widget {
   struct AnimationState {
     float radar_alpha = 0;
     float radar_alpha_target = 0;
+    float prototype_alpha = 0;
+    float prototype_alpha_target = 0;
   };
 
   animation::PerDisplay<AnimationState> animation_state;

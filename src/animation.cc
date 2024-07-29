@@ -66,4 +66,16 @@ void LowLevelSpringTowards(float target, float delta_time, float period_time, fl
   velocity =
       (-(amplitude * M_LOG2Ef * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) / powf(2, t2 / H);
 }
+
+float SinInterp(float x, float x0, float y0, float x1, float y1) {
+  float t = (x - x0) / (x1 - x0);
+  if (t <= 0) {
+    return y0;
+  } else if (t >= 1) {
+    return y1;
+  } else {
+    return y0 + (y1 - y0) * (1 - cosf(t * M_PIf)) / 2;
+  }
+}
+
 }  // namespace automat::animation

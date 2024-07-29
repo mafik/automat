@@ -2,14 +2,19 @@
 
 #include <include/core/SkColor.h>
 #include <include/core/SkRRect.h>
+#include <include/core/SkRSXform.h>
+#include <include/core/SkTextBlob.h>
 #include <include/effects/SkGradientShader.h>
 
 #include "argument.hh"
 #include "base.hh"
 #include "connector_optical.hh"
+#include "font.hh"
 #include "location.hh"
 #include "math.hh"
 #include "object.hh"
+
+using namespace maf;
 
 namespace automat::gui {
 
@@ -39,6 +44,17 @@ SkPath ConnectionWidget::Shape(animation::Display*) const {
     return SkPath();
   }
 }
+
+static ArcLine RouteConnection(DrawContext& ctx, Vec2AndDir start, Location& to) {
+  Vec<Vec2AndDir> to_points;  // machine coords
+  to.object->ConnectionPositions(to_points);
+  SkMatrix m = TransformUp(Path{to.ParentAs<Widget>(), &to}, &ctx.display);
+  for (auto& to_point : to_points) {
+    to_point.pos = m.mapPoint(to_point.pos);
+  }
+  return RouteCable(ctx, start, to_points);
+}
+
 void ConnectionWidget::PreDraw(DrawContext& ctx) const {
   if (arg.autoconnect_radius > 0) {
     auto anim = animation_state.Find(ctx.display);
@@ -46,9 +62,6 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
       return;
     }
     float target = anim->radar_alpha_target;
-    if (auto to = arg.FindLocation(from, Argument::IfMissing::ReturnNull)) {
-      target = 0;
-    }
     animation::LinearApproach(target, ctx.DeltaT(), 2.f, anim->radar_alpha);
     if (anim->radar_alpha < 0.01f) {
       return;
@@ -59,14 +72,63 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
                         SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
+    float t = ctx.display.timer.steady_now.time_since_epoch().count();
     auto local_matrix =
-        SkMatrix::RotateRad(ctx.display.timer.steady_now.time_since_epoch().count() * 2 * M_PI /
-                            kPeriod)
-            .postTranslate(pos_dir.pos.x, pos_dir.pos.y);
+        SkMatrix::RotateRad(t * 2 * M_PI / kPeriod).postTranslate(pos_dir.pos.x, pos_dir.pos.y);
     radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
                                                        60, 0, &local_matrix));
     // TODO: switch to drawArc instead
-    ctx.canvas.drawCircle(pos_dir.pos, arg.autoconnect_radius, radius_paint);
+    SkRect oval =
+        Rect::MakeCenterWH(pos_dir.pos, arg.autoconnect_radius * 2, arg.autoconnect_radius * 2);
+
+    float crt_width =
+        animation::SinInterp(anim->radar_alpha, 0.2f, 0.1f, 0.5f, 1.f) * arg.autoconnect_radius * 2;
+    float crt_height =
+        animation::SinInterp(anim->radar_alpha, 0.4f, 0.1f, 0.8f, 1.f) * arg.autoconnect_radius * 2;
+    SkRect crt_oval = Rect::MakeCenterWH(pos_dir.pos, crt_width, crt_height);
+    ctx.canvas.drawArc(crt_oval, 0, 360, true, radius_paint);
+
+    SkPaint stroke_paint;
+    stroke_paint.setColor(SkColorSetA(arg.tint, (int)(anim->radar_alpha * 128)));
+    stroke_paint.setStyle(SkPaint::kStroke_Style);
+
+    float radar_alpha_sin = sin((anim->radar_alpha - 0.5f) * M_PI) * 0.5f + 0.5f;
+    radar_alpha_sin *= radar_alpha_sin;
+    constexpr float kQuadrantSweep = 80;
+    float quadrant_offset = -t * 45;
+    ctx.canvas.drawArc(crt_oval, quadrant_offset - kQuadrantSweep / 2 * radar_alpha_sin,
+                       kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+    ctx.canvas.drawArc(crt_oval, quadrant_offset + 90 - kQuadrantSweep / 2 * radar_alpha_sin,
+                       kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+    ctx.canvas.drawArc(crt_oval, quadrant_offset + 180 - kQuadrantSweep / 2 * radar_alpha_sin,
+                       kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+    ctx.canvas.drawArc(crt_oval, quadrant_offset + 270 - kQuadrantSweep / 2 * radar_alpha_sin,
+                       kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
+
+    auto& font = GetFont();
+    SkRSXform transforms[arg.name.size()];
+    for (size_t i = 0; i < arg.name.size(); ++i) {
+      float i_fract = (i + 1.f) / (arg.name.size() + 1.f);
+      float letter_a = (i_fract - 0.5f) * kQuadrantSweep * radar_alpha_sin / 180 * M_PIf -
+                       quadrant_offset / 180 * M_PIf;
+
+      float x = sin(letter_a) * crt_width / 2;
+      float y = cos(letter_a) * crt_height / 2;
+
+      transforms[i] = SkRSXform::MakeFromRadians(font.font_scale, -letter_a, x, y, 0, 0);
+    }
+    auto text_blob =
+        SkTextBlob::MakeFromRSXform(arg.name.data(), arg.name.size(), transforms, font.sk_font);
+    ctx.canvas.drawTextBlob(text_blob, pos_dir.pos.x, pos_dir.pos.y, SkPaint());
+
+    arg.NearbyCandidates(from, arg.autoconnect_radius * 2, [&](Location& candidate) {
+      auto arcline = RouteConnection(ctx, pos_dir, candidate);
+      auto it = ArcLine::Iterator(arcline);
+      float total_length = it.AdvanceToEnd() * anim->radar_alpha;
+      float relative_dist = Length(pos_dir.pos - candidate.position) / arg.autoconnect_radius;
+      auto path = arcline.ToPath(false, std::lerp(total_length, 0, relative_dist - 1));
+      ctx.canvas.drawPath(path, stroke_paint);
+    });
   }
 }
 
@@ -91,7 +153,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
 
   auto pos_dir = from.ArgStart(&display, arg);
 
-  if ((to = arg.FindLocation(from, Argument::IfMissing::ReturnNull))) {
+  if ((to = arg.FindLocation(from))) {
     to_shape = to->object->Shape(nullptr);
     to->object->ConnectionPositions(to_points);
     SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);

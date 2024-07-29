@@ -295,6 +295,8 @@ inline void SpringV2<Vec2>::SineTowards(Vec2 target, float delta_time, float per
   LowLevelSineTowards(target.y, delta_time, period_time, value.y, velocity.y);
 }
 
+float SinInterp(float x, float x0, float y0, float x1, float y1);
+
 void WrapModulo(Base<float>& base, float range);
 
 }  // namespace automat::animation

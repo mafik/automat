@@ -12,6 +12,8 @@
 #include "location.hh"
 #include "sincos.hh"
 
+using namespace maf;
+
 namespace automat {
 
 void Object::Draw(gui::DrawContext& ctx) const {

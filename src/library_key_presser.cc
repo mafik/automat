@@ -15,6 +15,8 @@
 #include "textures.hh"
 #include "time.hh"
 
+using namespace maf;
+
 namespace automat::library {
 
 DEFINE_PROTO(KeyPresser);

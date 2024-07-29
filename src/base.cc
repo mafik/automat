@@ -22,6 +22,7 @@
 #include "window.hh"
 
 using namespace std;
+using namespace maf;
 
 namespace automat {
 

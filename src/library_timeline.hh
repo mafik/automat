@@ -41,7 +41,7 @@ struct Timeline;
 
 struct TrackBase : Object {
   Timeline* timeline = nullptr;
-  Vec<time::T> timestamps;
+  maf::Vec<time::T> timestamps;
   SkPath Shape(animation::Display*) const override;
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
@@ -72,8 +72,8 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   PrevButton prev_button;
   NextButton next_button;
 
-  Vec<std::unique_ptr<TrackBase>> tracks;
-  Vec<std::unique_ptr<Argument>> track_args;
+  maf::Vec<std::unique_ptr<TrackBase>> tracks;
+  maf::Vec<std::unique_ptr<Argument>> track_args;
 
   mutable animation::Approach<> zoom;  // stores the time in seconds
 
@@ -115,7 +115,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
-  OnOffTrack& AddOnOffTrack(StrView name);
+  OnOffTrack& AddOnOffTrack(maf::StrView name);
 
   void BeginRecording();
   void StopRecording();

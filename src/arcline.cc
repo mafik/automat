@@ -74,25 +74,46 @@ ArcLine& ArcLine::Outset(float offset) {
   return *this;
 }
 
-SkPath ArcLine::ToPath(bool close) const {
+SkPath ArcLine::ToPath(bool close, float length_limit) const {
   SkPath path;
   path.moveTo(start.x, start.y);
   Vec2 p = start;
   SinCos current_alpha = start_angle;
+  float length = 0;
   for (int i = 0; i < types.size(); ++i) {
+    float remaining = length_limit - length;
     if (types[i] == Type::Line) {
-      p += Vec2::Polar(current_alpha, segments[i].line.length);
-      path.lineTo(p.x, p.y);
+      if (segments[i].line.length < remaining) {
+        p += Vec2::Polar(current_alpha, segments[i].line.length);
+        path.lineTo(p.x, p.y);
+        length += segments[i].line.length;
+      } else {
+        p += Vec2::Polar(current_alpha, remaining);
+        path.lineTo(p.x, p.y);
+        length = length_limit;
+        break;
+      }
     } else {
+      float sweep_radians = segments[i].arc.ToRadians();
       float r = segments[i].arc.radius;
       float r_abs = fabsf(r);
-      SinCos sweep_angle = segments[i].arc.sweep_angle;
-      SinCos alpha0 = current_alpha;
+      float l = fabsf(sweep_radians * r);
       Vec2 center = p + Vec2::Polar(current_alpha + 90_deg, r);
-      Turn(p, current_alpha, sweep_angle, r);
       SkRect oval = SkRect::MakeXYWH(center.x - r_abs, center.y - r_abs, 2 * r_abs, 2 * r_abs);
-      path.arcTo(oval, (std::signbit(r) ? 90 : -90) + alpha0.ToDegrees(),
-                 segments[i].arc.ToDegrees(), false);
+      SinCos alpha0 = current_alpha;
+      if (l < remaining) {
+        SinCos sweep_angle = segments[i].arc.sweep_angle;
+        Turn(p, current_alpha, sweep_angle, r);
+        path.arcTo(oval, (std::signbit(r) ? 90 : -90) + alpha0.ToDegrees(),
+                   segments[i].arc.ToDegrees(), false);
+        length += l;
+      } else {
+        sweep_radians = remaining / r;
+        path.arcTo(oval, (std::signbit(r) ? 90 : -90) + alpha0.ToDegrees(),
+                   sweep_radians * 180 / M_PI, false);
+        length = length_limit;
+        break;
+      }
     }
   }
   if (close) {

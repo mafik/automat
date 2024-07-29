@@ -25,6 +25,8 @@
 #include "tasks.hh"
 #include "time.hh"
 
+using namespace maf;
+
 namespace automat::library {
 
 using time::Duration;

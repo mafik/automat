@@ -5,7 +5,7 @@
 namespace automat::gui {
 
 struct NumberTextField : gui::TextField {
-  Str text;
+  maf::Str text;
   NumberTextField(float width);
   SkRRect ShapeRRect() const override;
   const SkPaint& GetBackgroundPaint() const override;

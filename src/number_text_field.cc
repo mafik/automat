@@ -8,6 +8,8 @@
 #include "gui_constants.hh"
 #include "text_field.hh"
 
+using namespace maf;
+
 namespace automat::gui {
 
 NumberTextField::NumberTextField(float width) : gui::TextField(&text, width), text("0") {}

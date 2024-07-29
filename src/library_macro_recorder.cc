@@ -27,6 +27,7 @@ namespace automat::library {
 
 using namespace automat::gui;
 using namespace std;
+using namespace maf;
 
 DEFINE_PROTO(MacroRecorder);
 
@@ -220,14 +221,13 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
-  Timeline* timeline =
-      timeline_arg.FindObject<Timeline>(*macro_recorder.here, Argument::IfMissing::ReturnNull);
+  Timeline* timeline = timeline_arg.FindObject<Timeline>(*macro_recorder.here);
   return timeline;
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
-  Timeline* timeline = timeline_arg.FindObject<Timeline>(*macro_recorder.here,
-                                                         Argument::IfMissing::CreateFromPrototype);
+  Timeline* timeline = timeline_arg.FindObject<Timeline>(
+      *macro_recorder.here, {.if_missing = Argument::IfMissing::CreateFromPrototype});
   assert(timeline);
   if (macro_recorder.keylogging && timeline->state != Timeline::State::kRecording) {
     timeline->BeginRecording();

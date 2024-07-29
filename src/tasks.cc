@@ -3,6 +3,8 @@
 #include "base.hh"
 #include "time.hh"
 
+using namespace maf;
+
 namespace automat {
 
 Task::Task(Location* target) : target(target), predecessors(), successors(global_successors) {

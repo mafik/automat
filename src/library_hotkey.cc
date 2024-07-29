@@ -26,6 +26,7 @@
 #endif
 
 using namespace automat::gui;
+using namespace maf;
 
 namespace automat::library {
 

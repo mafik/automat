@@ -171,7 +171,7 @@ struct Machine : LiveObject, gui::DropTarget {
     }
   }
 
-  string ToStr() const { return f("Machine(%s)", name.c_str()); }
+  string ToStr() const { return maf::f("Machine(%s)", name.c_str()); }
 
   Location* Front(const string& name) {
     for (int i = 0; i < front.size(); ++i) {
@@ -226,7 +226,7 @@ struct Machine : LiveObject, gui::DropTarget {
         here.parent->ScheduleErrored(here);
       } else {
         Error* error = errored.GetError();
-        LogEntry(LogLevel::Error, error->source_location) << error->text;
+        maf::LogEntry(maf::LogLevel::Error, error->source_location) << error->text;
       }
     }
   }

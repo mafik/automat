@@ -150,7 +150,7 @@ struct Window final : Widget, DropTarget {
   void SerializeState(Serializer&) const;
 
   // Restores state when Automat is restarted.
-  void DeserializeState(Deserializer&, Status&);
+  void DeserializeState(Deserializer&, maf::Status&);
 
   Vec2 size;
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI

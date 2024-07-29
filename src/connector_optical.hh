@@ -28,16 +28,16 @@ struct OpticalConnectorState {
     Vec2 vel;
     Vec2 acc;
 
-    SinCos dir;  // Direction of the cable at this point. This is calculated from the previous and
-                 // next points.
-    SinCos
+    maf::SinCos dir;  // Direction of the cable at this point. This is calculated from the previous
+                      // and next points.
+    maf::SinCos
         true_dir_offset;  // Difference between the "true" dir (coming from the arcline) and `dir`.
 
     // Distance to the next element
     float distance;
 
-    SinCos next_dir_delta;            // 0 when the cable is straight
-    SinCos prev_dir_delta = 180_deg;  // M_PI when the cable is straight
+    maf::SinCos next_dir_delta;                                  // 0 when the cable is straight
+    maf::SinCos prev_dir_delta = maf::SinCos::FromDegrees(180);  // M_PI when the cable is straight
   };
 
   maf::Vec<CableSection> sections;
@@ -67,7 +67,7 @@ struct OpticalConnectorState {
   SkMatrix ConnectorMatrix() const;
 };
 
-ArcLine RouteCable(DrawContext&, Vec2AndDir start, maf::Span<Vec2AndDir> ends);
+maf::ArcLine RouteCable(DrawContext&, Vec2AndDir start, maf::Span<Vec2AndDir> ends);
 
 void SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&, Vec2AndDir start,
                           maf::Span<Vec2AndDir> end_candidates);

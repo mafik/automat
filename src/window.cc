@@ -11,6 +11,8 @@
 #include "root.hh"
 #include "touchpad.hh"
 
+using namespace maf;
+
 namespace automat::gui {
 
 std::vector<Window*> windows;

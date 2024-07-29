@@ -5,6 +5,8 @@
 #include "base.hh"
 #include "svg.hh"
 
+using namespace maf;
+
 namespace automat {
 
 Argument next_arg("next", Argument::kOptional);
@@ -89,7 +91,28 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Location* Argument::FindLocation(Location& here, IfMissing if_missing) const {
+void Argument::NearbyCandidates(Location& here, float radius,
+                                std::function<void(Location&)> callback) const {
+  if (auto parent_machine = here.ParentAs<Machine>()) {
+    Vec2 center = here.position + here.object->ArgStart(*this).pos;
+    parent_machine->Nearby(center, radius, [&](Location& other) -> void* {
+      if (&other == &here) {
+        return nullptr;
+      }
+      for (auto& req : requirements) {
+        std::string error;
+        req(&other, other.object.get(), error);
+        if (!error.empty()) {
+          return nullptr;
+        }
+      }
+      callback(other);
+      return nullptr;
+    });
+  }
+}
+
+Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
   auto conn_it = here.outgoing.find(name);
   Location* result = nullptr;
   if (conn_it != here.outgoing.end()) {  // explicit connection
@@ -98,24 +121,11 @@ Location* Argument::FindLocation(Location& here, IfMissing if_missing) const {
   } else if (autoconnect_radius > 0) {  // otherwise, search for other locations in this machine
     if (auto parent_machine = here.ParentAs<Machine>()) {
       Vec2 center = here.position + here.object->ArgStart(*this).pos;
-      result = reinterpret_cast<Location*>(
-          parent_machine->Nearby(center, autoconnect_radius, [&](Location& other) -> void* {
-            if (&other == &here) {
-              return nullptr;
-            }
-            for (auto& req : requirements) {
-              std::string error;
-              req(&other, other.object.get(), error);
-              if (!error.empty()) {
-                return nullptr;
-              }
-            }
-            return &other;
-          }));
+      NearbyCandidates(here, autoconnect_radius, [&](Location& loc) { result = &loc; });
     }
   }
 
-  if (result == nullptr && if_missing == IfMissing::CreateFromPrototype) {
+  if (result == nullptr && cfg.if_missing == IfMissing::CreateFromPrototype) {
     // Ask the current location for the prototype for this object.
     if (auto prototype = here.object->ArgPrototype(*this)) {
       if (auto machine = here.ParentAs<Machine>()) {
@@ -132,8 +142,8 @@ Location* Argument::FindLocation(Location& here, IfMissing if_missing) const {
   return result;
 }
 
-Object* Argument::FindObject(Location& here, IfMissing if_missing) const {
-  if (auto loc = FindLocation(here, if_missing)) {
+Object* Argument::FindObject(Location& here, const FindConfig& cfg) const {
+  if (auto loc = FindLocation(here, cfg)) {
     return loc->object.get();
   }
   return nullptr;
@@ -157,6 +167,7 @@ void LiveArgument::Detach(Location& here) {
     }
   }
 }
+
 void LiveArgument::Attach(Location& here) {
   auto connections = here.outgoing.equal_range(name);
   for (auto it = connections.first; it != connections.second; ++it) {
@@ -175,4 +186,5 @@ void LiveArgument::Attach(Location& here) {
     }
   }
 }
+
 }  // namespace automat

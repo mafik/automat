@@ -7,8 +7,7 @@
 #include "drawable.hh"
 #include "format.hh"
 #include "location.hh"
-
-using namespace maf;
+#include "optional.hh"
 
 namespace automat {
 
@@ -77,12 +76,13 @@ struct Argument {
 
   template <typename T>
   Argument& RequireInstanceOf() {
-    requirements.emplace_back(
-        [name = name](Location* location, Object* object, std::string& error) {
-          if (dynamic_cast<T*>(object) == nullptr) {
-            error = f("The %s argument must be an instance of %s.", name.c_str(), typeid(T).name());
-          }
-        });
+    requirements.emplace_back([name = name](Location* location, Object* object,
+                                            std::string& error) {
+      if (dynamic_cast<T*>(object) == nullptr) {
+        error =
+            maf::f("The %s argument must be an instance of %s.", name.c_str(), typeid(T).name());
+      }
+    });
     return *this;
   }
 
@@ -134,7 +134,7 @@ struct Argument {
       result.typed = dynamic_cast<T*>(result.object);
       if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
         here.ReportError(
-            f("The %s argument is not an instance of %s.", name.c_str(), typeid(T).name()),
+            maf::f("The %s argument is not an instance of %s.", name.c_str(), typeid(T).name()),
             source_location);
         result.ok = false;
       }
@@ -189,13 +189,26 @@ struct Argument {
 
   enum class IfMissing { ReturnNull, CreateFromPrototype };
 
-  Location* FindLocation(Location& here, IfMissing = IfMissing::ReturnNull) const;
+  struct FindConfig {
+    IfMissing if_missing = IfMissing::ReturnNull;
+    maf::Optional<float> search_radius;  // overrides autoconnect_radius
+  };
 
-  Object* FindObject(Location& here, IfMissing = IfMissing::ReturnNull) const;
+  static constexpr FindConfig kDefaultFindConfig = {
+      .if_missing = IfMissing::ReturnNull,
+      .search_radius = std::nullopt,
+  };
+
+  void NearbyCandidates(Location& here, float radius,
+                        std::function<void(Location&)> callback) const;
+
+  Location* FindLocation(Location& here, const FindConfig& = kDefaultFindConfig) const;
+
+  Object* FindObject(Location& here, const FindConfig& = kDefaultFindConfig) const;
 
   template <typename T>
-  T* FindObject(Location& here, IfMissing if_missing = IfMissing::ReturnNull) const {
-    return dynamic_cast<T*>(FindObject(here, if_missing));
+  T* FindObject(Location& here, const FindConfig& cfg = kDefaultFindConfig) const {
+    return dynamic_cast<T*>(FindObject(here, cfg));
   }
 };
 

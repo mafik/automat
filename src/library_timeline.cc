@@ -34,6 +34,7 @@
 
 using namespace automat::gui;
 using namespace std;
+using namespace maf;
 
 namespace automat::library {
 

@@ -68,7 +68,7 @@ struct ArcLine {
 
   ArcLine& Outset(float offset);
 
-  SkPath ToPath(bool close = true) const;
+  SkPath ToPath(bool close = true, float length_limit = HUGE_VALF) const;
 
   struct Iterator {
     const ArcLine& arcline;

@@ -84,7 +84,7 @@ struct Date : Object {
   std::unique_ptr<Object> Clone() const override {
     return std::make_unique<Date>(year, month, day);
   }
-  string GetText() const override { return f("%04d-%02d-%02d", year, month, day); }
+  string GetText() const override { return maf::f("%04d-%02d-%02d", year, month, day); }
   void SetText(Location& error_context, string_view text) override {
     std::regex re(R"((\d{4})-(\d{2})-(\d{2}))");
     std::match_results<string_view::const_iterator> match;
@@ -158,7 +158,7 @@ struct Timer : Object, Runnable {
     using namespace std::chrono_literals;
     time::SteadyPoint now = GetNow();
     time::Duration elapsed = now - start;
-    return f("%.3lf", elapsed.count());
+    return maf::f("%.3lf", elapsed.count());
   }
   LongRunning* OnRun(Location& here) override {
     using namespace std::chrono_literals;
@@ -860,7 +860,7 @@ struct Text : LiveObject {
                               if (arg.ok) {
                                 buffer += arg.object->GetText();
                               } else {
-                                buffer += f("{%s}", ref.arg.name.c_str());
+                                buffer += maf::f("{%s}", ref.arg.name.c_str());
                               }
                             }},
                  chunk);
@@ -927,7 +927,7 @@ struct ComboBox : LiveObject {
       return nullptr;
     });
     if (selected == nullptr) {
-      error_context.ReportError(f("No option named %*s", new_text.size(), new_text.data()));
+      error_context.ReportError(maf::f("No option named %*s", new_text.size(), new_text.data()));
     }
   }
   void ConnectionAdded(Location& here, string_view label, Connection& connection) override {

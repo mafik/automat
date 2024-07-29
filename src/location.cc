@@ -24,6 +24,7 @@
 #include "widget.hh"
 
 using namespace automat::gui;
+using namespace maf;
 using namespace std;
 
 namespace automat {

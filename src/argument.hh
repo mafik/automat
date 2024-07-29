@@ -199,8 +199,9 @@ struct Argument {
       .search_radius = std::nullopt,
   };
 
-  void NearbyCandidates(Location& here, float radius,
-                        std::function<void(Location&)> callback) const;
+  void NearbyCandidates(
+      Location& here, float radius,
+      std::function<void(Location&, maf::Vec<Vec2AndDir>& to_points)> callback) const;
 
   Location* FindLocation(Location& here, const FindConfig& = kDefaultFindConfig) const;
 

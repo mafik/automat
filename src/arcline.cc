@@ -77,6 +77,9 @@ ArcLine& ArcLine::Outset(float offset) {
 SkPath ArcLine::ToPath(bool close, float length_limit) const {
   SkPath path;
   path.moveTo(start.x, start.y);
+  if (length_limit <= 0) {
+    return path;
+  }
   Vec2 p = start;
   SinCos current_alpha = start_angle;
   float length = 0;

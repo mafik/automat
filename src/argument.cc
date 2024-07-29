@@ -91,8 +91,9 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-void Argument::NearbyCandidates(Location& here, float radius,
-                                std::function<void(Location&)> callback) const {
+void Argument::NearbyCandidates(
+    Location& here, float radius,
+    std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const {
   if (auto parent_machine = here.ParentAs<Machine>()) {
     Vec2 center = here.position + here.object->ArgStart(*this).pos;
     parent_machine->Nearby(center, radius, [&](Location& other) -> void* {
@@ -106,7 +107,13 @@ void Argument::NearbyCandidates(Location& here, float radius,
           return nullptr;
         }
       }
-      callback(other);
+      Vec<Vec2AndDir> to_points;
+      other.object->ConnectionPositions(to_points);
+      SkMatrix m = TransformUp(gui::Path{other.ParentAs<gui::Widget>(), &other}, nullptr);
+      for (auto& vec_and_dir : to_points) {
+        vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
+      }
+      callback(other, to_points);
       return nullptr;
     });
   }
@@ -120,11 +127,20 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
     result = &c->to;
   } else if (autoconnect_radius > 0) {  // otherwise, search for other locations in this machine
     if (auto parent_machine = here.ParentAs<Machine>()) {
-      Vec2 center = here.position + here.object->ArgStart(*this).pos;
-      NearbyCandidates(here, autoconnect_radius, [&](Location& loc) { result = &loc; });
+      Vec2 start_pos = here.position + here.object->ArgStart(*this).pos;
+      NearbyCandidates(
+          here,
+          autoconnect_radius * 2,  // * 2 is just to give some margin for the connection
+          [&](Location& loc, Vec<Vec2AndDir>& to_points) {
+            for (auto& to_point : to_points) {
+              if (Length(to_point.pos - start_pos) < autoconnect_radius) {
+                result = &loc;
+                break;
+              }
+            }
+          });
     }
   }
-
   if (result == nullptr && cfg.if_missing == IfMissing::CreateFromPrototype) {
     // Ask the current location for the prototype for this object.
     if (auto prototype = here.object->ArgPrototype(*this)) {

@@ -240,8 +240,8 @@ std::string CreateWindow() {
 void Paint() {
   SkCanvas& canvas = *vk::GetBackbufferCanvas();
   canvas.save();
-  canvas.translate(0, window_height);
-  canvas.scale(DisplayPxPerMeter(), -DisplayPxPerMeter());
+  canvas.translate(0, 0);
+  canvas.scale(DisplayPxPerMeter(), DisplayPxPerMeter());
   if (window) {
     window->Draw(canvas);
   }

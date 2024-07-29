@@ -426,17 +426,17 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat 
                           .fSharingMode = sharingMode};
     if (usageFlags & VK_IMAGE_USAGE_SAMPLED_BIT) {
       GrBackendTexture backendTexture = GrBackendTextures::MakeVk(width, height, info);
-      surfaces[i] =
-          SkSurfaces::WrapBackendTexture(gr_context.get(), backendTexture, kTopLeft_GrSurfaceOrigin,
-                                         sample_count, colorType, color_space, &surface_props);
+      surfaces[i] = SkSurfaces::WrapBackendTexture(gr_context.get(), backendTexture,
+                                                   kBottomLeft_GrSurfaceOrigin, sample_count,
+                                                   colorType, color_space, &surface_props);
     } else {
       if (sample_count > 1) {
         return false;
       }
       GrBackendRenderTarget backendRT = GrBackendRenderTargets::MakeVk(width, height, info);
-      surfaces[i] =
-          SkSurfaces::WrapBackendRenderTarget(gr_context.get(), backendRT, kTopLeft_GrSurfaceOrigin,
-                                              colorType, color_space, &surface_props);
+      surfaces[i] = SkSurfaces::WrapBackendRenderTarget(gr_context.get(), backendRT,
+                                                        kBottomLeft_GrSurfaceOrigin, colorType,
+                                                        color_space, &surface_props);
     }
     if (!surfaces[i]) {
       return false;

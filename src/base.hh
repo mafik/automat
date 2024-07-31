@@ -28,6 +28,7 @@
 #include "format.hh"
 #include "location.hh"
 #include "log.hh"
+#include "pointer.hh"
 #include "prototypes.hh"
 #include "run_button.hh"
 #include "tasks.hh"

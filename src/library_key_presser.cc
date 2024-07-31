@@ -153,7 +153,6 @@ struct DragAndClickAction : Action {
       drag_action->End();
     }
   }
-  void DrawAction(gui::DrawContext& dctx) {}
 };
 
 struct RunAction : Action {
@@ -169,7 +168,6 @@ struct RunAction : Action {
   }
   void Update() {}
   void End() {}
-  void DrawAction(gui::DrawContext& dctx) {}
 };
 
 std::unique_ptr<Action> KeyPresser::CaptureButtonDownAction(gui::Pointer& p,

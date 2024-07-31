@@ -11,6 +11,7 @@
 
 #include "color.hh"
 #include "gui_constants.hh"
+#include "pointer.hh"
 
 namespace automat::gui {
 
@@ -205,8 +206,6 @@ struct ButtonAction : public Action {
   void Update() override {}
 
   void End() override { button.press_action_count--; }
-
-  void DrawAction(DrawContext&) override {}
 };
 
 std::unique_ptr<Action> Button::ButtonDownAction(Pointer& pointer, PointerButton pointer_button) {

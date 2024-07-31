@@ -1,4 +1,6 @@
 #pragma once
+#include <include/core/SkPath.h>
+
 #include <memory>
 
 #include "action.hh"
@@ -39,7 +41,6 @@ struct DragActionBase : Action {
   void Begin() override;
   void Update() override;
   void End() override;
-  void DrawAction(gui::DrawContext&) override;
 
   gui::DropTarget* FindDropTarget();
 
@@ -52,11 +53,10 @@ struct DragActionBase : Action {
   // used when the user drags the object directly so the movement should be immediate.
   virtual void DragUpdate(animation::Display&, Vec2 delta_pos) = 0;
   virtual void DragEnd() = 0;
-  virtual void DragDraw(gui::DrawContext&) = 0;
   virtual Object* DraggedObject() = 0;
 };
 
-struct DragObjectAction : DragActionBase {
+struct DragObjectAction : DragActionBase, gui::Widget {
   Vec2 position = {};
   float scale = 1;
   std::unique_ptr<Object> object;
@@ -67,8 +67,14 @@ struct DragObjectAction : DragActionBase {
   void DragUpdate(animation::Display&, Vec2 delta_pos) override;
   void SnapUpdate(Vec2 pos, float scale) override;
   void DragEnd() override;
-  void DragDraw(gui::DrawContext&) override;
+  gui::Widget* Widget() override;
   Object* DraggedObject() override;
+
+  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  SkMatrix TransformToChild(const gui::Widget& child, animation::Display*) const override;
+  bool ChildrenOutside() const override { return true; }
+  void Draw(gui::DrawContext&) const override;
+  SkPath Shape(animation::Display*) const override;
 };
 
 struct DragLocationAction : DragActionBase {
@@ -79,7 +85,6 @@ struct DragLocationAction : DragActionBase {
   void DragUpdate(animation::Display&, Vec2 delta_pos) override;
   void SnapUpdate(Vec2 pos, float scale) override;
   void DragEnd() override;
-  void DragDraw(gui::DrawContext&) override;
   Object* DraggedObject() override;
 };
 

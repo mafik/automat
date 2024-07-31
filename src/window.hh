@@ -10,7 +10,6 @@
 #include "keyboard.hh"
 #include "library_toolbar.hh"
 #include "math.hh"
-#include "root.hh"
 #include "time.hh"
 #include "widget.hh"
 
@@ -84,24 +83,15 @@ struct Window final : Widget, DropTarget {
     FATAL << "Window::Draw(DrawContext&) should never be called";
   }
   void Zoom(float delta);
-  ControlFlow VisitChildren(Visitor& visitor) override {
-    Widget* arr[] = {&toolbar};
-    if (visitor(maf::SpanOfArr(arr, 1)) == ControlFlow::Stop) return ControlFlow::Stop;
-    ControlFlow result = ControlFlow::Continue;
-    RunOnAutomatThreadSynchronous([&]() {
-      Widget* root_machine_widget = root_machine;
-      result = visitor(maf::Span<Widget*>(&root_machine_widget, 1));
-    });
-    return result;
-  }
+  ControlFlow VisitChildren(Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override {
     if (&child == &toolbar) {
       return SkMatrix::Translate(-size.x / 2, 0);
     }
-    if (&child == root_machine) {
-      return WindowToCanvas();
-    }
-    return SkMatrix::I();
+    // if (&child == root_machine) {
+    return WindowToCanvas();
+    // }
+    // return SkMatrix::I();
   }
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 

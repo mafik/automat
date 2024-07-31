@@ -7,6 +7,7 @@
 
 #include "animation.hh"
 #include "control_flow.hh"
+#include "window.hh"
 
 using namespace automat;
 using namespace maf;
@@ -84,6 +85,19 @@ maf::Str ToStr(const Path& path) {
     ret += widget->Name();
   }
   return ret;
+}
+
+Widget::~Widget() {
+  // TODO: design a better "PointerLeave" API so that this is not necessary.
+  for (auto window : windows) {
+    for (auto pointer : window->pointers) {
+      for (auto& widget : pointer->path) {
+        if (widget == this) {
+          widget = nullptr;
+        }
+      }
+    }
+  }
 }
 
 }  // namespace automat::gui

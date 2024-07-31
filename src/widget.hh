@@ -10,7 +10,6 @@
 #include "animation.hh"
 #include "control_flow.hh"
 #include "keyboard.hh"
-#include "pointer.hh"
 #include "span.hh"
 #include "str.hh"
 
@@ -21,6 +20,16 @@ struct Widget;
 using Path = std::vector<Widget*>;
 
 maf::Str ToStr(const Path& path);
+
+template <typename T>
+T* Closest(const Path& path) {
+  for (int i = path.size() - 1; i >= 0; --i) {
+    if (auto* result = dynamic_cast<T*>(path[i])) {
+      return result;
+    }
+  }
+  return nullptr;
+}
 
 using Visitor = std::function<ControlFlow(maf::Span<Widget*>)>;
 
@@ -39,10 +48,12 @@ struct DrawContext {
 
 struct DropTarget;
 
+enum PointerButton { kButtonUnknown, kMouseLeft, kMouseMiddle, kMouseRight, kButtonCount };
+
 // Base class for widgets.
 struct Widget {
   Widget() {}
-  virtual ~Widget() {}
+  virtual ~Widget();
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".

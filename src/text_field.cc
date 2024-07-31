@@ -208,10 +208,11 @@ struct TextSelectAction : Action {
       drag->End();
     }
   }
-  void DrawAction(DrawContext& ctx) override {
+  gui::Widget* Widget() override {
     if (drag.has_value() && !selecting_text) {
-      drag->DrawAction(ctx);
+      drag->Widget();
     }
+    return nullptr;
   }
 };
 

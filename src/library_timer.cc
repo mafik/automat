@@ -639,7 +639,6 @@ struct DragDurationHandleAction : Action {
     PropagateDurationOutwards(timer);
   }
   virtual void End() {}
-  virtual void DrawAction(gui::DrawContext&) {}
 };
 
 void TimerDelay::Updated(Location& here, Location& updated) {
@@ -663,7 +662,6 @@ struct DragHandAction : Action {
     timer.hand_degrees.value = angle * 180 / M_PI;
   }
   virtual void End() { timer.hand_degrees.period = kHandPeriod; }
-  virtual void DrawAction(gui::DrawContext&) {}
 };
 
 std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,

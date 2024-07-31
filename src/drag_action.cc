@@ -2,6 +2,7 @@
 
 #include <cmath>
 
+#include "action.hh"
 #include "animation.hh"
 #include "gui_connection_widget.hh"
 #include "log.hh"
@@ -70,8 +71,6 @@ void DragLocationAction::SnapUpdate(Vec2 pos, float scale) {
 
 void DragActionBase::End() { DragEnd(); }
 
-void DragActionBase::DrawAction(gui::DrawContext& ctx) { DragDraw(ctx); }
-
 gui::DropTarget* DragActionBase::FindDropTarget() {
   using namespace gui;
   using namespace maf;
@@ -82,7 +81,7 @@ gui::DropTarget* DragActionBase::FindDropTarget() {
 
   gui::DropTarget* drop_target = nullptr;
 
-  Visitor dfs = [&](Span<Widget*> widgets) -> ControlFlow {
+  Visitor dfs = [&](Span<struct Widget*> widgets) -> ControlFlow {
     for (auto w : widgets) {
       Vec2 transformed;
       if (!path.empty()) {
@@ -94,15 +93,11 @@ gui::DropTarget* DragActionBase::FindDropTarget() {
       auto shape = w->Shape(display);
       path.push_back(w);
       std::swap(point, transformed);
-      if (shape.contains(point.x, point.y)) {
+      if (w->ChildrenOutside() || shape.contains(point.x, point.y)) {
         if (w->VisitChildren(dfs) == ControlFlow::Stop) {
           return ControlFlow::Stop;
         }
         if ((drop_target = w->CanDrop())) {
-          return ControlFlow::Stop;
-        }
-      } else if (w->ChildrenOutside()) {
-        if (w->VisitChildren(dfs) == ControlFlow::Stop) {
           return ControlFlow::Stop;
         }
       }
@@ -112,7 +107,7 @@ gui::DropTarget* DragActionBase::FindDropTarget() {
     return ControlFlow::Continue;
   };
 
-  Widget* window_arr[] = {pointer.path[0]};
+  struct Widget* window_arr[] = {pointer.path[0]};
   dfs(window_arr);
   return drop_target;
 }
@@ -125,18 +120,23 @@ void DragObjectAction::DragEnd() {
   }
 }
 
-void DragObjectAction::DragDraw(gui::DrawContext& ctx) {
-  anim->Tick(ctx.DeltaT(), position, scale);
+gui::Widget* DragObjectAction::Widget() { return this; }
 
-  auto mat = anim->GetTransform(object->Shape(nullptr).getBounds().center());
-  SkMatrix inv;
-  mat.invert(&inv);
-
-  auto matrix_backup = ctx.canvas.getTotalMatrix();
-  ctx.canvas.concat(inv);
-  object->Draw(ctx);
-  ctx.canvas.setMatrix(matrix_backup);
+ControlFlow DragObjectAction::VisitChildren(gui::Visitor& visitor) {
+  gui::Widget* widgets[] = {object.get()};
+  return visitor(widgets);
 }
+
+SkMatrix DragObjectAction::TransformToChild(const gui::Widget& child, animation::Display*) const {
+  return anim->GetTransform(object->Shape(nullptr).getBounds().center());
+}
+
+void DragObjectAction::Draw(gui::DrawContext& ctx) const {
+  anim->Tick(ctx.DeltaT(), position, scale);
+  DrawChildren(ctx);
+}
+
+SkPath DragObjectAction::Shape(animation::Display*) const { return SkPath(); }
 
 Object* DragObjectAction::DraggedObject() { return object.get(); }
 
@@ -168,10 +168,6 @@ void DragLocationAction::DragEnd() {
   if (gui::DropTarget* drop_target = FindDropTarget()) {
     drop_target->DropLocation(location);
   }
-}
-
-void DragLocationAction::DragDraw(gui::DrawContext&) {
-  // Location is drawn by its parent Machine so nothing to do here.
 }
 
 Object* DragLocationAction::DraggedObject() { return location->object.get(); }

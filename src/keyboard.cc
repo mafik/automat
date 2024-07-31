@@ -21,6 +21,7 @@
 
 #include "format.hh"
 #include "linux_main.hh"
+#include "root.hh"
 #include "x11.hh"
 
 #endif

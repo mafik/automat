@@ -16,6 +16,7 @@
 
 #include "drag_action.hh"
 #include "gui_connection_widget.hh"
+#include "root.hh"
 #include "tasks.hh"
 #include "thread_name.hh"
 #include "timer_thread.hh"

@@ -24,7 +24,6 @@ struct DragConnectionAction : Action {
   void Begin() override;
   void Update() override;
   void End() override;
-  void DrawAction(DrawContext&) override {}
 };
 
 struct ConnectionWidget : Widget {

@@ -36,11 +36,6 @@ Pointer::~Pointer() {
     window.pointers.erase(it);
   }
 }
-void Pointer::Draw(DrawContext& ctx) {
-  if (action) {
-    action->DrawAction(ctx);
-  }
-}
 void Pointer::Move(Vec2 position) {
   RunOnAutomatThread([=, this]() {
     Vec2 old_mouse_pos = pointer_position;
@@ -89,6 +84,10 @@ void Pointer::Move(Vec2 position) {
     dfs(window_arr);
 
     for (Widget* old_w : old_path) {
+      if (old_w == nullptr) {  // Ephemeral widgets (DragObjectAction) replace themselves with
+                               // nullptr upon destruction.
+        continue;
+      }
       if (std::find(path.begin(), path.end(), old_w) == path.end()) {
         old_w->PointerLeave(*this, window.display);
       }
@@ -97,10 +96,6 @@ void Pointer::Move(Vec2 position) {
       if (std::find(old_path.begin(), old_path.end(), new_w) == old_path.end()) {
         new_w->PointerOver(*this, window.display);
       }
-    }
-
-    if constexpr (false) {  // enable for debugging
-      LOG << "Pointer path: " << *this;
     }
   });
 }

@@ -7,6 +7,7 @@ namespace automat {
 namespace gui {
 struct Pointer;
 struct DrawContext;
+struct Widget;
 }  // namespace gui
 
 struct Action {
@@ -16,7 +17,7 @@ struct Action {
   virtual void Begin() = 0;
   virtual void Update() = 0;
   virtual void End() = 0;
-  virtual void DrawAction(gui::DrawContext&) = 0;
+  virtual gui::Widget* Widget() { return nullptr; }
 };
 
 }  // namespace automat

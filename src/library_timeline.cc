@@ -514,7 +514,6 @@ struct DragBridgeAction : Action {
                 pointer.window.display.timer.steady_now);
   }
   virtual void End() {}
-  virtual void DrawAction(gui::DrawContext&) {}
 };
 
 struct DragTimelineAction : Action {
@@ -541,7 +540,6 @@ struct DragTimelineAction : Action {
     OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.window.display.timer.steady_now);
   }
   virtual void End() {}
-  virtual void DrawAction(gui::DrawContext&) {}
 };
 
 constexpr float kZoomTresholdsS[] = {
@@ -600,7 +598,6 @@ struct DragZoomAction : Action {
     timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
   }
   virtual void End() { timeline.zoom.target = NearestZoomTick(timeline.zoom.target); }
-  virtual void DrawAction(gui::DrawContext&) {}
 };
 
 SkPath WindowShape(int num_tracks) {

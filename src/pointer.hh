@@ -4,7 +4,9 @@
 
 #include "action.hh"
 #include "math.hh"
+#include "str.hh"
 #include "time.hh"
+#include "widget.hh"
 
 namespace automat::animation {
 struct Display;
@@ -18,20 +20,6 @@ struct Widget;
 struct Window;
 struct DrawContext;
 
-using Path = std::vector<Widget*>;
-
-template <typename T>
-T* Closest(const Path& path) {
-  for (int i = path.size() - 1; i >= 0; --i) {
-    if (auto* result = dynamic_cast<T*>(path[i])) {
-      return result;
-    }
-  }
-  return nullptr;
-}
-
-enum PointerButton { kButtonUnknown, kMouseLeft, kMouseMiddle, kMouseRight, kButtonCount };
-
 struct Pointer final {
   Pointer(Window&, Vec2 position);
   ~Pointer();
@@ -40,7 +28,12 @@ struct Pointer final {
   void ButtonDown(PointerButton);
   void ButtonUp(PointerButton);
 
-  void Draw(DrawContext& ctx);
+  Widget* GetWidget() {
+    if (action) {
+      return action->Widget();
+    }
+    return nullptr;
+  }
 
   enum IconType { kIconArrow, kIconHand, kIconIBeam };
 

@@ -7,6 +7,7 @@
 #include "drag_action.hh"
 #include "font.hh"
 #include "math.hh"
+#include "pointer.hh"
 #include "prototypes.hh"
 #include "root.hh"
 #include "touchpad.hh"
@@ -186,6 +187,11 @@ void Window::Draw(SkCanvas& canvas) {
 
     canvas.clear(background_color);
 
+    canvas.setMatrix(window_space_matrix);
+    PreDrawChildren(draw_ctx);
+    DrawChildren(draw_ctx);
+    canvas.setMatrix(machine_space_matrix);
+
     // Draw target window size when zooming in with middle mouse button
     if (zoom.target == 1 && rz > 0.001) {
       SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
@@ -197,23 +203,6 @@ void Window::Draw(SkCanvas& canvas) {
           SkRect::MakeXYWH(camera_x.target - target_width / 2, camera_y.target - target_height / 2,
                            target_width, target_height);
       canvas.drawRect(target_rect, target_paint);
-    }
-
-    draw_ctx.path.push_back(root_machine);
-    root_machine->PreDraw(draw_ctx);
-    root_machine->Draw(draw_ctx);
-    draw_ctx.path.pop_back();  // pops root_machine
-
-    // Draw toolbar
-    canvas.setMatrix(window_space_matrix);
-    canvas.translate(size.x / 2, 0);
-    draw_ctx.path.push_back(&toolbar);
-    toolbar.Draw(draw_ctx);
-    draw_ctx.path.pop_back();
-    canvas.setMatrix(machine_space_matrix);
-
-    for (auto& pointer : pointers) {
-      pointer->Draw(draw_ctx);
     }
 
     for (auto& each_window : windows) {
@@ -390,4 +379,20 @@ void Window::DropLocation(Location* location) {
   auto location_ptr = location->ParentAs<Machine>()->Extract(*location);
 }
 
+ControlFlow Window::VisitChildren(Visitor& visitor) {
+  ControlFlow result = ControlFlow::Continue;
+  RunOnAutomatThreadSynchronous([&]() {
+    Vec<Widget*> widgets;
+    widgets.reserve(2 + pointers.size());
+    for (auto& pointer : pointers) {
+      if (auto widget = pointer->GetWidget()) {
+        widgets.push_back(widget);
+      }
+    }
+    widgets.push_back(&toolbar);
+    widgets.push_back(root_machine);
+    result = visitor(widgets);
+  });
+  return result;
+}
 }  // namespace automat::gui

@@ -17,6 +17,11 @@ std::unique_ptr<Action> PrototypeButton::ButtonDownAction(gui::Pointer& pointer,
   }
   auto drag_action = std::make_unique<DragObjectAction>(pointer, proto->Clone());
   drag_action->contact_point = pointer.PositionWithin(*this);
+
+  auto matrix = TransformUp(pointer.path, &pointer.window.display);
+  drag_action->anim->scale = matrix.get(0);
+  drag_action->position = drag_action->anim->position =
+      pointer.PositionWithinRootMachine() - drag_action->contact_point;
   return drag_action;
 }
 }  // namespace automat::gui
@@ -38,17 +43,19 @@ SkPath Toolbar::Shape(animation::Display*) const {
   return SkPath::Rect(rect);
 }
 
+constexpr float kMarginBetweenIcons = 1_mm;
+constexpr float kMarginAroundIcons = 1_mm;
+
 void Toolbar::Draw(gui::DrawContext& dctx) const {
   float width_targets[buttons.size()];
   for (size_t i = 0; i < buttons.size(); ++i) {
-    width_targets[i] = gui::kToolbarIconSize;
+    width_targets[i] = buttons[i]->natural_width;
   }
 
   auto my_transform = gui::TransformDown(dctx.path, &dctx.display);
 
   float width = CalculateWidth();
   for (auto* pointer : dctx.display.window->pointers) {
-    float x = -width / 2;
     Vec2 pointer_position = my_transform.mapPoint(pointer->pointer_position);
     if (pointer_position.x < -width / 2 || pointer_position.x > width / 2) {
       continue;
@@ -56,12 +63,24 @@ void Toolbar::Draw(gui::DrawContext& dctx) const {
     if (pointer_position.y > gui::kToolbarIconSize) {
       continue;
     }
+    float x = -width / 2;
     for (int i = 0; i < buttons.size(); ++i) {
-      if (x <= pointer_position.x && pointer_position.x <= x + buttons[i]->width) {
-        width_targets[i] = gui::kToolbarIconSize * 2;
+      float button_width = buttons[i]->width;
+      if (i == 0) {
+        button_width += kMarginAroundIcons;
+      } else {
+        button_width += kMarginBetweenIcons / 2;
+      }
+      if (i == buttons.size() - 1) {
+        button_width += kMarginAroundIcons;
+      } else {
+        button_width += kMarginBetweenIcons / 2;
+      }
+      if (x <= pointer_position.x && pointer_position.x <= x + button_width) {
+        width_targets[i] = buttons[i]->natural_width * 2;
         break;
       }
-      x += buttons[i]->width;
+      x += button_width;
     }
   }
 
@@ -96,14 +115,15 @@ void Toolbar::AddObjectPrototype(const Object* new_proto) {
 SkMatrix Toolbar::TransformToChild(const Widget& child, animation::Display* display) const {
   float width = CalculateWidth();
 
-  float x = -width / 2;
-
+  float x = -width / 2 + kMarginAroundIcons;
   for (int i = 0; i < buttons.size(); ++i) {
     if (buttons[i].get() == &child) {
       Rect src = prototypes[i]->CoarseBounds(display).rect;
       float size = buttons[i]->width;
       x += size / 2;
-      Rect dst = Rect::MakeWH(size, size).MoveBy({x, size / 2});
+      float scale = buttons[i]->width / buttons[i]->natural_width;
+      Rect dst = Rect::MakeWH(size, gui::kToolbarIconSize * scale)
+                     .MoveBy({x, gui::kToolbarIconSize * scale / 2});
       auto child_to_parent = SkMatrix::RectToRect(src, dst, SkMatrix::kCenter_ScaleToFit);
       SkMatrix parent_to_child;
       if (child_to_parent.invert(&parent_to_child)) {
@@ -111,12 +131,14 @@ SkMatrix Toolbar::TransformToChild(const Widget& child, animation::Display* disp
       }
       return SkMatrix::I();
     }
-    x += buttons[i]->width;
+    x += buttons[i]->width + kMarginBetweenIcons;
   }
   return SkMatrix::I();
 }
+
 float Toolbar::CalculateWidth() const {
-  float width = 0;
+  float width =
+      kMarginAroundIcons * 2 + std::max<float>(0, buttons.size() - 1) * kMarginBetweenIcons;
   for (const auto& button : buttons) {
     width += button->width;
   }

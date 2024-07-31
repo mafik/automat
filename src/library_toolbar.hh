@@ -10,23 +10,24 @@ constexpr float kToolbarIconSize = gui::kMinimalTouchableSize * 2;
 
 struct PrototypeButton : Widget {
   const Object* proto;
-  int pointers_over = 0;
+  float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
 
-  PrototypeButton(const Object* proto) : proto(proto) {}
+  PrototypeButton(const Object* proto) : proto(proto) {
+    auto rect = proto->CoarseBounds(nullptr).rect;
+    natural_width =
+        std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());
+    width.value = natural_width;
+  }
 
   void Draw(DrawContext& ctx) const override { proto->Draw(ctx); }
   SkPath Shape(animation::Display*) const override { return proto->Shape(nullptr); }
 
   void PointerOver(Pointer& pointer, animation::Display&) override {
     pointer.PushIcon(Pointer::kIconHand);
-    ++pointers_over;
   }
 
-  void PointerLeave(Pointer& pointer, animation::Display&) override {
-    --pointers_over;
-    pointer.PopIcon();
-  }
+  void PointerLeave(Pointer& pointer, animation::Display&) override { pointer.PopIcon(); }
 
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton btn) override;
 };

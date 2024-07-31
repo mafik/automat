@@ -18,6 +18,7 @@ static Vec2 RoundToMilimeters(Vec2 v) {
 
 void DragActionBase::Begin() {
   last_position = current_position = pointer.PositionWithinRootMachine();
+  Update();
 }
 
 Vec2 SnapPosition(DragActionBase& d) {

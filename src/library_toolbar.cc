@@ -18,7 +18,7 @@ std::unique_ptr<Action> PrototypeButton::ButtonDownAction(gui::Pointer& pointer,
   drag_action->contact_point = pointer.PositionWithin(*this);
 
   auto matrix = TransformUp(pointer.path, &pointer.window.display);
-  drag_action->anim->scale = matrix.get(0);
+  drag_action->anim->scale = matrix.get(0) / pointer.window.zoom.value;
   drag_action->position = drag_action->anim->position =
       pointer.PositionWithinRootMachine() - drag_action->contact_point;
   return drag_action;

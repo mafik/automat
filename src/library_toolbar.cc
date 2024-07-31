@@ -2,7 +2,6 @@
 
 #include <include/core/SkMatrix.h>
 
-#include "gui_constants.hh"
 #include "span.hh"
 #include "widget.hh"
 #include "window.hh"

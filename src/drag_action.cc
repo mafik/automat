@@ -4,6 +4,7 @@
 
 #include "animation.hh"
 #include "gui_connection_widget.hh"
+#include "log.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "root.hh"
@@ -29,11 +30,8 @@ void DragActionBase::Update() {
   Vec2 position = current_position - contact_point;
   float scale = 1;
 
-  for (int i = pointer.path.size() - 1; i >= 0; --i) {
-    if (gui::DropTarget* drop_target = pointer.path[i]->CanDrop()) {
-      drop_target->SnapPosition(position, scale, DraggedObject(), &contact_point);
-      break;
-    }
+  if (gui::DropTarget* drop_target = FindDropTarget()) {
+    drop_target->SnapPosition(position, scale, DraggedObject(), &contact_point);
   }
 
   if (last_snapped_position != position) {
@@ -74,12 +72,48 @@ void DragActionBase::End() { DragEnd(); }
 void DragActionBase::DrawAction(gui::DrawContext& ctx) { DragDraw(ctx); }
 
 gui::DropTarget* DragActionBase::FindDropTarget() {
-  for (int i = pointer.path.size() - 1; i >= 0; --i) {
-    if (gui::DropTarget* drop_target = pointer.path[i]->CanDrop()) {
-      return drop_target;
+  using namespace gui;
+  using namespace maf;
+
+  Path path;
+  Vec2 point = pointer.pointer_position;
+  auto* display = &pointer.window.display;
+
+  gui::DropTarget* drop_target = nullptr;
+
+  Visitor dfs = [&](Span<Widget*> widgets) -> ControlFlow {
+    for (auto w : widgets) {
+      Vec2 transformed;
+      if (!path.empty()) {
+        transformed = path.back()->TransformToChild(*w, display).mapPoint(point);
+      } else {
+        transformed = point;
+      }
+
+      auto shape = w->Shape(display);
+      path.push_back(w);
+      std::swap(point, transformed);
+      if (shape.contains(point.x, point.y)) {
+        if (w->VisitChildren(dfs) == ControlFlow::Stop) {
+          return ControlFlow::Stop;
+        }
+        if ((drop_target = w->CanDrop())) {
+          return ControlFlow::Stop;
+        }
+      } else if (w->ChildrenOutside()) {
+        if (w->VisitChildren(dfs) == ControlFlow::Stop) {
+          return ControlFlow::Stop;
+        }
+      }
+      std::swap(point, transformed);
+      path.pop_back();
     }
-  }
-  return nullptr;
+    return ControlFlow::Continue;
+  };
+
+  Widget* window_arr[] = {pointer.path[0]};
+  dfs(window_arr);
+  return drop_target;
 }
 
 void DragObjectAction::DragEnd() {

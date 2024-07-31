@@ -75,4 +75,15 @@ SkMatrix TransformUp(const Path& path, animation::Display* display) {
   }
 }
 
+maf::Str ToStr(const Path& path) {
+  maf::Str ret;
+  for (Widget* widget : path) {
+    if (!ret.empty()) {
+      ret += " -> ";
+    }
+    ret += widget->Name();
+  }
+  return ret;
+}
+
 }  // namespace automat::gui

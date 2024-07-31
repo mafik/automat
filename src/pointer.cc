@@ -177,7 +177,7 @@ Pointer::IconType Pointer::Icon() const {
 }
 void Pointer::PushIcon(IconType icon) { icons.push_back(icon); }
 void Pointer::PopIcon() { icons.pop_back(); }
-Vec2 Pointer::PositionWithin(Widget& widget) const {
+Vec2 Pointer::PositionWithin(const Widget& widget) const {
   AssertAutomatThread();
   auto it = std::find(path.begin(), path.end(), &widget);
   auto end = it == path.end() ? path.end() : it + 1;

@@ -48,7 +48,7 @@ struct Pointer final {
   void PushIcon(IconType);
   void PopIcon();
 
-  Vec2 PositionWithin(Widget&) const;
+  Vec2 PositionWithin(const Widget&) const;
   Vec2 PositionWithinRootMachine() const;
 
   animation::Display& AnimationContext() const;

@@ -61,6 +61,7 @@ struct Object : gui::Widget {
   }
   void Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display* = nullptr) const override;
+  virtual RRect CoarseBounds(animation::Display* display = nullptr) const;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;
 };
 

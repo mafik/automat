@@ -3,6 +3,8 @@
 #include <condition_variable>
 #include <thread>
 
+#include "prototypes.hh"
+
 namespace automat {
 
 Location root_location;
@@ -14,6 +16,9 @@ void InitRoot() {
   root_machine = root_location.Create<Machine>();
   root_machine->name = "Root machine";
   automat_thread = std::jthread(RunThread);
+  auto& prototypes = Prototypes();
+  sort(prototypes.begin(), prototypes.end(),
+       [](const auto* a, const auto* b) { return a->Name() < b->Name(); });
 }
 
 void StopRoot() {

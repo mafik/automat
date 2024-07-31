@@ -12,12 +12,15 @@
 #include "keyboard.hh"
 #include "pointer.hh"
 #include "span.hh"
+#include "str.hh"
 
 namespace automat::gui {
 
 struct Widget;
 
 using Path = std::vector<Widget*>;
+
+maf::Str ToStr(const Path& path);
 
 using Visitor = std::function<ControlFlow(maf::Span<Widget*>)>;
 

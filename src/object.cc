@@ -137,4 +137,10 @@ void Object::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
   });
 }
 
+RRect Object::CoarseBounds(animation::Display* display) const {
+  return RRect{.rect = Shape(display).getBounds(),
+               .radii = {{0, 0}, {0, 0}, {0, 0}, {0, 0}},
+               .type = SkRRect::kRect_Type};
+}
+
 }  // namespace automat

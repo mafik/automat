@@ -19,12 +19,9 @@ std::vector<Window*> windows;
 
 Window::Window(Vec2 size, float pixels_per_meter)
     : size(size), display_pixels_per_meter(pixels_per_meter) {
-  prototype_buttons.reserve(Prototypes().size());
   for (auto& proto : Prototypes()) {
-    prototype_buttons.emplace_back(proto);
-    prototype_button_positions.emplace_back(Vec2(0, 0));
+    toolbar.AddObjectPrototype(proto);
   }
-  ArrangePrototypeButtons();
   windows.push_back(this);
   display.window = this;
 }
@@ -37,15 +34,6 @@ Window::~Window() {
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 constexpr float kTrashRadius = 3_cm;
-
-std::unique_ptr<Action> PrototypeButton::ButtonDownAction(Pointer& pointer, PointerButton btn) {
-  if (btn != kMouseLeft) {
-    return nullptr;
-  }
-  auto drag_action = std::make_unique<DragObjectAction>(pointer, proto->Clone());
-  drag_action->contact_point = pointer.PositionWithin(*this);
-  return drag_action;
-}
 
 void Window::Draw(SkCanvas& canvas) {
   display.timer.Tick();
@@ -230,14 +218,13 @@ void Window::Draw(SkCanvas& canvas) {
 
   draw_ctx.path.pop_back();  // pops root_machine
 
-  // Draw prototype shelf
-  for (int i = 0; i < prototype_buttons.size(); i++) {
-    Vec2& position = prototype_button_positions[i];
-    canvas.save();
-    canvas.translate(position.x, position.y);
-    prototype_buttons[i].Draw(draw_ctx);
-    canvas.restore();
-  }
+  // Draw toolbar
+  canvas.save();
+  canvas.translate(size.x / 2, 0);
+  draw_ctx.path.push_back(&toolbar);
+  toolbar.Draw(draw_ctx);
+  draw_ctx.path.pop_back();
+  canvas.restore();
 
   // Draw fps counter
   float fps = 1.0f / display.timer.d;

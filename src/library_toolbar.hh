@@ -23,13 +23,18 @@ struct PrototypeButton : Widget {
   void Draw(DrawContext& ctx) const override { proto->Draw(ctx); }
   SkPath Shape(animation::Display*) const override { return proto->Shape(nullptr); }
 
+  ControlFlow VisitChildren(gui::Visitor& visitor) override {
+    Widget* arr[] = {const_cast<Object*>(proto)};
+    return visitor(arr);
+  }
+
   void PointerOver(Pointer& pointer, animation::Display&) override {
     pointer.PushIcon(Pointer::kIconHand);
   }
 
   void PointerLeave(Pointer& pointer, animation::Display&) override { pointer.PopIcon(); }
 
-  std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton btn) override;
+  std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton btn) override;
 };
 
 }  // namespace automat::gui

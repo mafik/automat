@@ -480,15 +480,19 @@ static ConnectionWidget* FindConnectionWidget(Location& here, Argument& arg) {
 
 void GlassRunButton::PointerOver(gui::Pointer&, animation::Display& display) {
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
-  if (auto connection_widget = FindConnectionWidget(*macro_recorder->here, timeline_arg)) {
-    connection_widget->animation_state[display].prototype_alpha_target = 1;
+  if (macro_recorder->here) {
+    if (auto connection_widget = FindConnectionWidget(*macro_recorder->here, timeline_arg)) {
+      connection_widget->animation_state[display].prototype_alpha_target = 1;
+    }
   }
 }
 
 void GlassRunButton::PointerLeave(gui::Pointer&, animation::Display& display) {
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
-  if (auto connection_widget = FindConnectionWidget(*macro_recorder->here, timeline_arg)) {
-    connection_widget->animation_state[display].prototype_alpha_target = 0;
+  if (macro_recorder->here) {
+    if (auto connection_widget = FindConnectionWidget(*macro_recorder->here, timeline_arg)) {
+      connection_widget->animation_state[display].prototype_alpha_target = 0;
+    }
   }
 }
 

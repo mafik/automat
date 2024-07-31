@@ -9,8 +9,8 @@
 using namespace std::literals;
 
 namespace automat::gui {
-std::unique_ptr<Action> PrototypeButton::ButtonDownAction(gui::Pointer& pointer,
-                                                          gui::PointerButton btn) {
+std::unique_ptr<Action> PrototypeButton::CaptureButtonDownAction(gui::Pointer& pointer,
+                                                                 gui::PointerButton btn) {
   if (btn != gui::kMouseLeft) {
     return nullptr;
   }

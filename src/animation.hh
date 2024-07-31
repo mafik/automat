@@ -60,9 +60,22 @@ struct Display {
 template <typename T>
 struct PerDisplay {
   PerDisplay() = default;
-  // forbid copy
-  PerDisplay(const PerDisplay&) = delete;
-  PerDisplay& operator=(const PerDisplay&) = delete;
+
+  // copy
+  PerDisplay(const PerDisplay& orig) {
+    *this = orig;  // defer to operator=
+  }
+  PerDisplay& operator=(const PerDisplay& orig) {
+    for (auto* display : displays) {
+      if (auto it = display->per_display_values.find((void*)&orig);
+          it != display->per_display_values.end()) {
+        auto copy = std::make_unique<PerDisplayValue<T>>(this);
+        copy->value = ((PerDisplayValue<T>*)it->second.get())->value;
+        display->per_display_values.emplace(this, std::move(copy));
+      }
+    }
+    return *this;
+  }
 
   // moving is slow but ok
   PerDisplay(PerDisplay&& orig) {
@@ -70,6 +83,7 @@ struct PerDisplay {
       if (auto it = display->per_display_values.find((void*)&orig);
           it != display->per_display_values.end()) {
         auto value = std::move(it->second);
+        value->owner = this;
         display->per_display_values.erase(it);
         display->per_display_values.emplace(this, std::move(value));
       }
@@ -80,6 +94,7 @@ struct PerDisplay {
       if (auto it = display->per_display_values.find((void*)&orig);
           it != display->per_display_values.end()) {
         auto value = std::move(it->second);
+        value->owner = this;
         display->per_display_values.erase(it);
         display->per_display_values.emplace(this, std::move(value));
       }
@@ -114,15 +129,16 @@ struct PerDisplay {
   struct end_iterator {};
 
   struct iterator {
-    PerDisplay& ptr;
+    const PerDisplay& ptr;
     size_t index = 0;
-    iterator(PerDisplay& ptr) : ptr(ptr) { SkipMissing(); }
+    iterator(const PerDisplay& ptr) : ptr(ptr) { SkipMissing(); }
     void SkipMissing() {
       while (index < displays.size() &&
              !displays[index]->per_display_values.contains((void*)&ptr)) {
         ++index;
       }
     }
+    Display* Display() { return displays[index]; }
     T& operator*() { return *ptr.Find(*displays[index]); }
     iterator& operator++() {
       ++index;
@@ -132,8 +148,8 @@ struct PerDisplay {
     bool operator!=(const end_iterator&) { return index < displays.size(); }
   };
 
-  iterator begin() { return iterator(*this); }
-  end_iterator end() { return end_iterator{}; }
+  iterator begin() const { return iterator(*this); }
+  end_iterator end() const { return end_iterator{}; }
 };
 
 // TODO: delete almost everything from this file (and replace with "LowLevel*Towards" functions)

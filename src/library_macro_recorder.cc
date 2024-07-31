@@ -87,7 +87,14 @@ const Object* MacroRecorder::ArgPrototype(const Argument& arg) {
 }
 
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
-std::unique_ptr<Object> MacroRecorder::Clone() const { return std::make_unique<MacroRecorder>(); }
+std::unique_ptr<Object> MacroRecorder::Clone() const {
+  auto clone = std::make_unique<MacroRecorder>();
+  clone->animation_state_ptr = animation_state_ptr;
+  for (auto& anim : clone->animation_state_ptr) {
+    anim.pointers_over = 0;
+  }
+  return clone;
+}
 
 #pragma region Draw
 void MacroRecorder::Draw(gui::DrawContext& dctx) const {

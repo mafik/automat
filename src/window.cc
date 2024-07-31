@@ -39,7 +39,6 @@ void Window::Draw(SkCanvas& canvas) {
   display.timer.Tick();
   gui::DrawContext draw_ctx(canvas, display);
   draw_ctx.path.push_back(this);
-  draw_ctx.path.push_back(root_machine);
   RunOnAutomatThreadSynchronous([&] {
     // Record camera movement timeline. This is used to create inertia effect.
     camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
@@ -175,9 +174,10 @@ void Window::Draw(SkCanvas& canvas) {
       }
     }
 
-    auto default_matrix = canvas.getLocalToDevice();
+    auto window_space_matrix = canvas.getLocalToDevice();
     canvas.save();
     canvas.concat(CanvasToWindow());
+    auto machine_space_matrix = canvas.getLocalToDevice();
 
     {  // Animate trash area
       trash_radius.target = drag_action_count ? kTrashRadius : 0;
@@ -199,9 +199,18 @@ void Window::Draw(SkCanvas& canvas) {
       canvas.drawRect(target_rect, target_paint);
     }
 
+    draw_ctx.path.push_back(root_machine);
     root_machine->PreDraw(draw_ctx);
-
     root_machine->Draw(draw_ctx);
+    draw_ctx.path.pop_back();  // pops root_machine
+
+    // Draw toolbar
+    canvas.setMatrix(window_space_matrix);
+    canvas.translate(size.x / 2, 0);
+    draw_ctx.path.push_back(&toolbar);
+    toolbar.Draw(draw_ctx);
+    draw_ctx.path.pop_back();
+    canvas.setMatrix(machine_space_matrix);
 
     for (auto& pointer : pointers) {
       pointer->Draw(draw_ctx);
@@ -215,16 +224,6 @@ void Window::Draw(SkCanvas& canvas) {
 
     canvas.restore();
   });  // RunOnAutomatThreadSynchronous
-
-  draw_ctx.path.pop_back();  // pops root_machine
-
-  // Draw toolbar
-  canvas.save();
-  canvas.translate(size.x / 2, 0);
-  draw_ctx.path.push_back(&toolbar);
-  toolbar.Draw(draw_ctx);
-  draw_ctx.path.pop_back();
-  canvas.restore();
 
   // Draw fps counter
   float fps = 1.0f / display.timer.d;

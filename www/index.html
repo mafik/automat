@@ -2,52 +2,11 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description"
-  content="Automat is a FOSS software that allows anyone to control their computers by combining interactive blocks.">
+<meta name="description" content="Automat is a FOSS software that allows anyone to control their computers by combining interactive blocks.">
 <title>Automat</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-<style>
-  html {
-    font-family: 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
-    font-size: 21px;
-    background: #dfddd3;
-  }
-
-  #bg {
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: -1;
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -khtml-user-select: none;
-    -ms-user-select: none;
-  }
-
-  body {
-    max-width: 30em;
-    margin: clamp(0em, calc((94% - 30em) / 2), 1em) auto;
-    padding: 1em 3%;
-    background: white;
-    box-shadow: .5em .5em 0 rgba(0, 25, 50, 0.5);
-  }
-
-  ul {
-    list-style: '❧ ';
-  }
-
-  p,
-  li {
-    max-width: 30em;
-  }
-
-  li {
-    margin-block-start: .5em;
-    margin-block-end: .5em;
-  }
-</style>
+<link rel="stylesheet" href="style.css">
 <canvas id="bg" width="800" height="600"></canvas>
 <h1>Automat</h1>
 <p><em>Automat is a graphical system for controling computers by combining interactive blocks.</em></p>
@@ -69,15 +28,13 @@
 <p><em>Free & open-source</em>. Automat is free to use. There are no ads & no subscription fees. Anyone can download,
   modify & redistribute Automat, which is provided under the permissive MIT license.</p>
 <h2>Status</h2>
-<p>Automat is under development. It's not functional yet. Current builds can be downloaded from <a
-    href="builds/">here</a>.</p>
+<p>Automat is under development. It's not functional yet. Current builds can be downloaded from <a href="builds/">here</a>.</p>
 <video controls autoplay loop muted playsinline width="100%">
   <source src="assets/2024-01-24 09-54-03.webm" type="video/webm">
 </video>
 <details>
   <summary>History</summary>
-  <p>Prototype of Automat has been developed under the name <a href="https://dessin.it">Dessin</a> (<a
-      href="https://www.youtube.com/@DessinIt/videos">YouTube</a>) winning the Samsung AppCup award and being sold on
+  <p>Prototype of Automat has been developed under the name <a href="https://dessin.it">Dessin</a> (<a href="https://www.youtube.com/@DessinIt/videos">YouTube</a>) winning the Samsung AppCup award and being sold on
     Android between 2013 & 2014.</p>
   <p>The author then took a couple of years break to focus on work & PhD. The work on Automat resumed again in 2022 with
     new experiments & modern, C/C++ based implementation.</p>
@@ -318,10 +275,7 @@
   }
 </style>
 <div id="maf_embed_signup">
-  <form
-    action="https://ist.us21.list-manage.com/subscribe/post?u=4a27023dae6e47302c3788ea5&amp;id=0b218713b8&amp;f_id=00d1d3e1f0"
-    method="post" id="mc-embedded-subscribe-form" name="mc-embedded-subscribe-form" class="validate" target="_blank"
-    novalidate>
+  <form action="https://ist.us21.list-manage.com/subscribe/post?u=4a27023dae6e47302c3788ea5&amp;id=0b218713b8&amp;f_id=00d1d3e1f0" method="post" id="mc-embedded-subscribe-form" name="mc-embedded-subscribe-form" class="validate" target="_blank" novalidate>
 
     <div class="mc-field-group">
       <label for="mce-EMAIL">Email Address</label>
@@ -331,22 +285,18 @@
     <div class="response" id="mce-error-response" style="display:none"></div>
     <div class="response" id="mce-success-response" style="display:none"></div>
     <!-- real people should not fill this in and expect good things - do not remove this or risk form bot signups-->
-    <div style="position: absolute; left: -5000px;" aria-hidden="true"><input type="text"
-        name="b_4a27023dae6e47302c3788ea5_0b218713b8" tabindex="-1" value=""></div>
+    <div style="position: absolute; left: -5000px;" aria-hidden="true"><input type="text" name="b_4a27023dae6e47302c3788ea5_0b218713b8" tabindex="-1" value=""></div>
     <input type="submit" value="Subscribe" name="subscribe" id="mc-embedded-subscribe" class="button">
   </form>
 </div>
 <script type='text/javascript' src='//s3.amazonaws.com/downloads.mailchimp.com/js/mc-validate.js'></script>
-<script
-  type='text/javascript'>(function ($) { window.fnames = new Array(); window.ftypes = new Array(); fnames[0] = 'EMAIL'; ftypes[0] = 'email'; fnames[1] = 'FNAME'; ftypes[1] = 'text'; fnames[2] = 'LNAME'; ftypes[2] = 'text'; fnames[3] = 'ADDRESS'; ftypes[3] = 'address'; fnames[4] = 'PHONE'; ftypes[4] = 'phone'; fnames[5] = 'BIRTHDAY'; ftypes[5] = 'birthday'; }(jQuery)); var $mcj = jQuery.noConflict(true);</script>
+<script type='text/javascript'>(function ($) { window.fnames = new Array(); window.ftypes = new Array(); fnames[0] = 'EMAIL'; ftypes[0] = 'email'; fnames[1] = 'FNAME'; ftypes[1] = 'text'; fnames[2] = 'LNAME'; ftypes[2] = 'text'; fnames[3] = 'ADDRESS'; ftypes[3] = 'address'; fnames[4] = 'PHONE'; ftypes[4] = 'phone'; fnames[5] = 'BIRTHDAY'; ftypes[5] = 'birthday'; }(jQuery)); var $mcj = jQuery.noConflict(true);</script>
 <!--End maf_embed_signup-->
 
 <script src="bg.js"></script>
 
 <h2>Live Coding</h2>
-<p>Every now & then I stream my work online. If you'd like to watch, you can subscribe my channel on <a
-    href="https://www.youtube.com/channel/UCBPKTkmfqWCVnrEv8CBPrbg?sub_confirmation=1">YouTube</a> or <a
-    href="https://www.twitch.tv/maf_pl">Twitch</a>.</p>
+<p>Every now & then I stream my work online. If you'd like to watch, you can subscribe my channel on <a href="https://www.youtube.com/channel/UCBPKTkmfqWCVnrEv8CBPrbg?sub_confirmation=1">YouTube</a> or <a href="https://www.twitch.tv/maf_pl">Twitch</a>.</p>
 
 <details>
   <summary><a href="/archive/">VOD Archive</a></summary>

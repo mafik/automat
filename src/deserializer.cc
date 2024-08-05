@@ -155,7 +155,9 @@ static void FillToken(Deserializer& d) {
   }
 }
 
-Deserializer::Deserializer(StringStream& stream) : stream(stream) { reader.IterativeParseInit(); }
+Deserializer::Deserializer(InsituStringStream& stream) : stream(stream) {
+  reader.IterativeParseInit();
+}
 
 maf::Str Deserializer::GetString(maf::Status& status) {
   FillToken(*this);

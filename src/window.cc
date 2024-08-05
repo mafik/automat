@@ -256,6 +256,8 @@ void Window::DisplayPixelDensity(float pixels_per_meter) {
 
 void Window::SerializeState(Serializer& writer) const {
   writer.StartObject();
+  writer.Key("maximized");
+  writer.Bool(maximized);
   writer.String("width");
   writer.Double(size.width);
   writer.String("height");
@@ -274,8 +276,11 @@ void Window::SerializeState(Serializer& writer) const {
 
 void Window::DeserializeState(Deserializer& d, Status& status) {
   Vec2 new_size = size;
+  bool new_maximized = maximized;
   for (auto& key : ObjectView(d, status)) {
-    if (key == "width") {
+    if (key == "maximized") {
+      new_maximized = d.GetBool(status);
+    } else if (key == "width") {
       new_size.width = d.GetDouble(status);
     } else if (key == "height") {
       new_size.height = d.GetDouble(status);
@@ -297,7 +302,9 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
       return;
     }
   }
-  if (new_size != size && RequestResize) {
+  if (!maximized && new_maximized && RequestMaximize) {
+    RequestMaximize(new_maximized);  // always true because of the if condition
+  } else if (new_size != size && RequestResize) {
     RequestResize(new_size);
   }
 }

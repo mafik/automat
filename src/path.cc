@@ -46,6 +46,19 @@ Path Path::ReadLink(Status& status) const {
   }
   return Path(StrView(link, link_size));
 }
+
+Path Path::ExecutablePath() {
+  static Path executable_path = []() {
+    char path[PATH_MAX];
+    SSize len = readlink("/proc/self/exe", path, sizeof(path));
+    if (len < 0) {
+      return Path();
+    }
+    return Path(StrView(path, len));
+  }();
+  return executable_path;
+}
+
 #elif defined(_WIN32)
 Path Path::ExpandUser() const { return *this; }
 

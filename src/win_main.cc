@@ -227,8 +227,6 @@ void QueryDisplayCaps() {
   ReleaseDC(main_window, hdc);
 }
 
-std::string StatePath() { return Path::ExecutablePath().Parent() / "automat_state.json"; }
-
 bool IsMaximized(HWND hWnd) {
   WINDOWPLACEMENT placement = {};
   placement.length = sizeof(WINDOWPLACEMENT);
@@ -517,47 +515,6 @@ void RunOnWindowsThread(std::function<void()>&& f) {
   PostMessage(main_window, WM_USER, 0, (LPARAM) new std::function<void()>(std::move(f)));
 }
 
-static void DeserializeState(Deserializer& d, Status& status) {
-  for (auto& key : ObjectView(d, status)) {
-    if (key == "version") {
-      int version = d.GetInt(status);
-      if (!OK(status)) {
-        AppendErrorMessage(status) += "Failed to deserialize version";
-        return;
-      } else if (version != 1) {
-        AppendErrorMessage(status) += "Unsupported version: " + std::to_string(version);
-        return;
-      }
-    } else if (key == "window") {
-      window->DeserializeState(d, status);
-      if (!OK(status)) {
-        AppendErrorMessage(status) += "Failed to deserialize window state";
-        return;
-      }
-    } else if (key == "maximized") {
-      bool maximized = d.GetBool(status);
-      if (!OK(status)) {
-        AppendErrorMessage(status) += "Failed to deserialize maximized state";
-        return;
-      } else {
-        if (maximized) {
-          ShowWindow(main_window, SW_MAXIMIZE);
-        }
-      }
-    } else if (key == "root") {
-      root_machine->DeserializeState(root_location, d);
-    } else {
-      AppendErrorMessage(status) += "Unexpected key: " + key;
-      return;
-    }
-  }
-  bool fully_decoded = d.reader.IterativeParseComplete();
-  if (!fully_decoded) {
-    AppendErrorMessage(status) += "Extra data at the end of the JSON string, " + d.ErrorContext();
-    return;
-  }
-}
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow) {
   EnableBacktraceOnSIGSEGV();
   SetThreadName("WinMain");
@@ -621,8 +578,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     float horizontal_frame_adjustment = (window_rect.right - window_rect.left) - client_rect.right;
     h += vertical_frame_adjustment;
     w += horizontal_frame_adjustment;
-
     SetWindowPos(main_window, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
+  };
+  window->RequestMaximize = [&](bool maximize) {
+    if (maximize) {
+      ShowWindow(main_window, SW_MAXIMIZE);
+    }
   };
 
   {

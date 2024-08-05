@@ -14,7 +14,9 @@
 #include "keyboard.hh"
 #include "library.hh"  // IWYU pragma: keep
 #include "log.hh"
+#include "persistence.hh"
 #include "root.hh"
+#include "status.hh"
 #include "vk.hh"
 #include "window.hh"
 
@@ -503,7 +505,20 @@ int LinuxMain(int argc, char* argv[]) {
   window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
   gui::keyboard = std::make_unique<gui::Keyboard>(*window);
 
+  Status status;
+  LoadState(*window, status);
+  if (!OK(status)) {
+    ERROR << "Failed to load state: " << status;
+  }
+
   RenderLoop();
+
+  StopRoot();
+
+  SaveState(*window, status);
+  if (!OK(status)) {
+    ERROR << "Failed to save state: " << status;
+  }
 
   mouse.reset();
 

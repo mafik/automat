@@ -47,7 +47,7 @@ struct JsonToken {
 maf::Str ToStr(JsonToken::TokenType type);
 
 struct Deserializer {
-  Deserializer(rapidjson::StringStream&);
+  Deserializer(rapidjson::InsituStringStream&);
   maf::Str GetString(maf::Status&);
   double GetDouble(maf::Status&);
   int GetInt(maf::Status&);
@@ -55,7 +55,7 @@ struct Deserializer {
 
   maf::Str ErrorContext();
 
-  rapidjson::StringStream& stream;
+  rapidjson::InsituStringStream& stream;
   rapidjson::Reader reader;
   JsonToken token;
 };

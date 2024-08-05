@@ -72,7 +72,9 @@ struct Window final : Widget, DropTarget {
   Vec2 CanvasToWindow(Vec2 canvas) { return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2; }
 
   std::function<void(Vec2 new_size)> RequestResize = nullptr;
+  std::function<void(bool maximize)> RequestMaximize = nullptr;
 
+  // Used to tell the window that it's OS window has been resized.
   void Resize(Vec2 size) { this->size = size; }
   void DisplayPixelDensity(float pixels_per_meter);
   SkPath Shape(animation::Display*) const override {
@@ -102,6 +104,7 @@ struct Window final : Widget, DropTarget {
   void DeserializeState(Deserializer&, maf::Status&);
 
   Vec2 size;
+  bool maximized = false;
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
   library::Toolbar toolbar;
 

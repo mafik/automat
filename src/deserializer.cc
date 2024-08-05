@@ -124,6 +124,13 @@ struct Handler {
   }
 };
 
+static void FillToken(Deserializer& d) {
+  if (d.token.type == kNoTokenType) {
+    Handler handler(d);
+    d.reader.IterativeParseNext<kParseNoFlags>(d.stream, handler);
+  }
+}
+
 static void RecoverParser(Deserializer& d) {
   int n_objects = 0;
   int n_arrays = 0;
@@ -131,6 +138,8 @@ static void RecoverParser(Deserializer& d) {
     n_objects = 1;
   } else if (d.token.type == JsonToken::kStartArrayTokenType) {
     n_arrays = 1;
+  } else {
+    d.token.type = kNoTokenType;
   }
   while (n_objects + n_arrays > 0) {
     d.token.type = kNoTokenType;
@@ -145,13 +154,6 @@ static void RecoverParser(Deserializer& d) {
     } else if (d.token.type == JsonToken::kEndArrayTokenType) {
       n_arrays--;
     }
-  }
-}
-
-static void FillToken(Deserializer& d) {
-  if (d.token.type == kNoTokenType) {
-    Handler handler(d);
-    d.reader.IterativeParseNext<kParseNoFlags>(d.stream, handler);
   }
 }
 
@@ -205,6 +207,11 @@ bool Deserializer::GetBool(Status& status) {
   token.type = kNoTokenType;
   return token.value.b;
 }
+void Deserializer::Skip() {
+  FillToken(*this);
+  RecoverParser(*this);
+  token.type = kNoTokenType;
+}
 
 ObjectView::ObjectView(Deserializer& deserializer, maf::Status& status)
     : deserializer(deserializer) {
@@ -213,6 +220,7 @@ ObjectView::ObjectView(Deserializer& deserializer, maf::Status& status)
     AppendErrorMessage(status) += "Expected an object but got " + ToStr(deserializer.token.type);
     RecoverParser(deserializer);
     finished = true;
+    return;
   }
   deserializer.token.type = kNoTokenType;
   ++*this;
@@ -229,7 +237,8 @@ ObjectView& ObjectView::operator++() {
     deserializer.token.type = kNoTokenType;
     key = Str(deserializer.token.value.key);
   } else {
-    // append an error message maybe?
+    ERROR << "While parsing object fields we got " << ToStr(deserializer.token.type)
+          << ". Did you forget to call Deserializer::Skip() when iterating over ObjectView?";
     finished = true;
   }
   return *this;
@@ -268,5 +277,4 @@ Str Deserializer::ErrorContext() {
   int col = last_newline == Str::npos ? 0 : pos - last_newline;
   return f("line %d, column %d", n_lines, col);
 }
-
 }  // namespace automat

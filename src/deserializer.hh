@@ -52,6 +52,7 @@ struct Deserializer {
   double GetDouble(maf::Status&);
   int GetInt(maf::Status&);
   bool GetBool(maf::Status&);
+  void Skip();
 
   maf::Str ErrorContext();
 

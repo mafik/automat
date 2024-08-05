@@ -140,6 +140,7 @@ enum class AnsiKey : uint8_t {
 };
 
 maf::StrView ToStr(AnsiKey) noexcept;
+AnsiKey AnsiKeyFromStr(maf::StrView) noexcept;
 
 struct Key {
   bool ctrl;

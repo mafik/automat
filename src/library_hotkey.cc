@@ -14,6 +14,7 @@
 #include "color.hh"
 #include "gui_constants.hh"
 #include "key_button.hh"
+#include "keyboard.hh"
 #include "library_macros.hh"
 #include "math.hh"
 #include "text_field.hh"
@@ -444,5 +445,90 @@ void HotKey::Off() {
 
 void HotKey::ReleaseGrab(gui::KeyboardGrab&) { hotkey_selector = nullptr; }
 void HotKey::ReleaseKeyGrab(gui::KeyGrab&) { hotkey = nullptr; }
+
+void HotKey::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+  writer.Key("key");
+  auto key_str = ToStr(this->key);
+  writer.String(key_str.data(), key_str.size(), true);
+  writer.Key("ctrl");
+  writer.Bool(ctrl);
+  writer.Key("alt");
+  writer.Bool(alt);
+  writer.Key("shift");
+  writer.Bool(shift);
+  writer.Key("windows");
+  writer.Bool(windows);
+  writer.Key("active");
+  writer.Bool(IsOn());
+  writer.EndObject();
+}
+
+void HotKey::DeserializeState(Location& l, Deserializer& d) {
+  Status list_fields_status;
+  bool on = IsOn();
+  if (on) {
+    Off();  // temporarily switch off to ungrab the old key combo
+  }
+  for (auto& key : ObjectView(d, list_fields_status)) {
+    if (key == "key") {
+      Status status;
+      auto key_str = d.GetString(status);
+      if (!OK(status)) {
+        l.ReportError(status.ToStr());
+        continue;
+      }
+      this->key = AnsiKeyFromStr(key_str);
+    } else if (key == "ctrl") {
+      Status status;
+      ctrl = d.GetBool(status);
+      if (!OK(status)) {
+        l.ReportError(status.ToStr());
+      }
+    } else if (key == "alt") {
+      Status status;
+      alt = d.GetBool(status);
+      if (!OK(status)) {
+        l.ReportError(status.ToStr());
+      }
+    } else if (key == "shift") {
+      Status status;
+      shift = d.GetBool(status);
+      if (!OK(status)) {
+        l.ReportError(status.ToStr());
+      }
+    } else if (key == "windows") {
+      Status status;
+      windows = d.GetBool(status);
+      if (!OK(status)) {
+        l.ReportError(status.ToStr());
+      }
+    } else if (key == "active") {
+      Status status;
+      on = d.GetBool(status);
+      if (!OK(status)) {
+        l.ReportError(status.ToStr());
+      }
+    } else {
+      d.Skip();
+    }
+  }
+  if (on) {
+    On();
+  }
+
+  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(this->key));
+  ctrl_button.fg = KeyColor(ctrl);
+  alt_button.fg = KeyColor(alt);
+  shift_button.fg = KeyColor(shift);
+  windows_button.fg = KeyColor(windows);
+
+  if (!OK(list_fields_status)) {
+    ERROR << "Error deserializing HotKey: " << list_fields_status;
+    l.ReportError(list_fields_status.ToStr());
+    return;
+  }
+}
 
 }  // namespace automat::library

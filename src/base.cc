@@ -212,9 +212,7 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
         writer.Key("type");
         auto type = location->object->Name();
         writer.String(type.data(), type.size());
-        writer.Key("value");
-        auto value = location->object->GetText();
-        writer.String(value.data(), value.size());
+        location->object->SerializeState(writer, "value");
       }
       writer.Key("x");
       writer.Double(location->position.x);
@@ -316,6 +314,8 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
               l.ReportError(list_connections_status.ToStr());
               // try to continue parsing
             }
+          } else {
+            d.Skip();
           }
         }
         if (!OK(list_location_fields_status)) {

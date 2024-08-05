@@ -613,6 +613,20 @@ StrView ToStr(AnsiKey k) noexcept {
   }
 }
 
+AnsiKey AnsiKeyFromStr(maf::StrView str) noexcept {
+  static std::map<StrView, AnsiKey> map = []() {
+    std::map<StrView, AnsiKey> map;
+    for (AnsiKey key = (AnsiKey)0; key < AnsiKey::Count; key = (AnsiKey)((int)key + 1)) {
+      map[ToStr(key)] = key;
+    }
+    return map;
+  }();
+  if (auto it = map.find(str); it != map.end()) {
+    return it->second;
+  }
+  return AnsiKey::Unknown;
+}
+
 void SendKeyEvent(AnsiKey physical, bool down) {
 #if defined(_WIN32)
   INPUT input = {};

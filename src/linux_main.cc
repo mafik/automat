@@ -297,11 +297,12 @@ Vec<xcb_atom_t> GetPropertyAtoms(xcb_atom_t property) {
   return vec;
 }
 
-std::string CreateWindow() {
+void ConnectXCB(Status& status) {
   int screenp = 0;
   connection = xcb_connect(nullptr, &screenp);
   if (xcb_connection_has_error(connection)) {
-    return "Failed to connect to X server.";
+    AppendErrorMessage(status) += "Failed to connect to X server.";
+    return;
   }
 
   atom::Initialize();
@@ -311,11 +312,9 @@ std::string CreateWindow() {
     xcb_screen_next(&iter);
   }
   screen = iter.data;
+}
 
-  float pixels_per_meter = DisplayPxPerMeter();
-  window_width = window->size.x * pixels_per_meter;
-  window_height = window->size.y * pixels_per_meter;
-
+void CreateWindow(Status& status) {
   xcb_window = xcb_generate_id(connection);
   uint32_t value_mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
   uint32_t value_list[] = {screen->white_pixel, XCB_EVENT_MASK_EXPOSURE |
@@ -343,7 +342,8 @@ std::string CreateWindow() {
   const xcb_query_extension_reply_t* xinput_data =
       xcb_get_extension_data(connection, &xcb_input_id);
   if (!xinput_data->present) {
-    return "XInput extension not present.";
+    AppendErrorMessage(status) += "XInput extension not present.";
+    return;
   }
   xi_opcode = xinput_data->major_opcode;
 
@@ -352,10 +352,12 @@ std::string CreateWindow() {
     std::pair<int, int> server_version(reply->major_version, reply->minor_version);
     std::pair<int, int> required_version(2, 2);
     if (server_version < required_version) {
-      return "XInput version 2.2 or higher required for multitouch.";
+      AppendErrorMessage(status) += "XInput version 2.2 or higher required for multitouch.";
+      return;
     }
   } else {
-    return "Failed to query XInput version.";
+    AppendErrorMessage(status) += "Failed to query XInput version.";
+    return;
   }
 
   struct input_event_mask {
@@ -375,12 +377,11 @@ std::string CreateWindow() {
   xcb_void_cookie_t cookie =
       xcb_input_xi_select_events_checked(connection, xcb_window, 1, &event_mask.header);
   if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
-    return f("Failed to select events: %d", error->error_code);
+    AppendErrorMessage(status) += f("Failed to select events: %d", error->error_code);
+    return;
   }
 
   ScanDevices();
-
-  return "";
 }
 
 #undef WRAP
@@ -652,21 +653,33 @@ int LinuxMain(int argc, char* argv[]) {
   SkGraphics::Init();
   InitRoot();
 
+  Status status;
+  ConnectXCB(status);
+  if (!OK(status)) {
+    FATAL << status;
+  }
+
   window.reset(new gui::Window());
   window->RequestResize = [&](Vec2 new_size) { window->Resize(new_size); };
   window->RequestMaximize = [&](bool horizontally, bool vertically) {
     window->maximized_horizontally = horizontally;
     window->maximized_vertically = vertically;
   };
+  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
 
-  Status status;
   LoadState(*window, status);
   if (!OK(status)) {
     ERROR << "Failed to load state: " << status;
+    status.Reset();  // try to continue
   }
 
-  if (auto err = CreateWindow(); !err.empty()) {
-    FATAL << "Failed to create window: " << err;
+  float pixels_per_meter = DisplayPxPerMeter();
+  window_width = window->size.x * pixels_per_meter;
+  window_height = window->size.y * pixels_per_meter;
+
+  CreateWindow(status);
+  if (!OK(status)) {
+    FATAL << "Failed to create window: " << status;
   }
 
   window->DisplayPixelDensity(DisplayPxPerMeter());
@@ -683,7 +696,6 @@ int LinuxMain(int argc, char* argv[]) {
   if (auto err = vk::Init(); !err.empty()) {
     FATAL << "Failed to initialize Vulkan: " << err;
   }
-  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
 
   RenderLoop();
 

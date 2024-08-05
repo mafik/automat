@@ -28,11 +28,72 @@
 
 using namespace automat;
 
+constexpr bool kDebugWindowManager = false;
+
 xcb_connection_t* connection;
 xcb_window_t xcb_window;
 xcb_screen_t* screen;
-xcb_atom_t wm_protocols;
-xcb_atom_t wm_delete_window;
+
+#define WRAP(f, ...)                             \
+  std::unique_ptr<f##_reply_t, void (*)(void*)>( \
+      f##_reply(connection, f(connection, __VA_ARGS__), nullptr), free)
+
+namespace atom {
+
+#define ATOMS(MACRO)                  \
+  MACRO(WM_PROTOCOLS)                 \
+  MACRO(WM_DELETE_WINDOW)             \
+  MACRO(_NET_WM_STATE)                \
+  MACRO(_NET_WM_STATE_MODAL)          \
+  MACRO(_NET_WM_STATE_STICKY)         \
+  MACRO(_NET_WM_STATE_MAXIMIZED_VERT) \
+  MACRO(_NET_WM_STATE_MAXIMIZED_HORZ) \
+  MACRO(_NET_WM_STATE_SHADED)         \
+  MACRO(_NET_WM_STATE_SKIP_TASKBAR)   \
+  MACRO(_NET_WM_STATE_SKIP_PAGER)     \
+  MACRO(_NET_WM_STATE_HIDDEN)         \
+  MACRO(_NET_WM_STATE_FULLSCREEN)     \
+  MACRO(_NET_WM_STATE_ABOVE)          \
+  MACRO(_NET_WM_STATE_BELOW)          \
+  MACRO(_NET_WM_STATE_DEMANDS_ATTENTION)
+
+#define DECLARE_ATOM(name) xcb_atom_t name;
+
+ATOMS(DECLARE_ATOM)
+
+#undef DECLARE_ATOM
+
+std::map<xcb_atom_t, Str> atom_names;
+
+void Initialize() {
+#define REQUEST_ATOM(name) \
+  auto name##_request = xcb_intern_atom(connection, 0, strlen(#name), #name);
+  ATOMS(REQUEST_ATOM)
+#undef REQUEST_ATOM
+
+#define ATOM_REPLY(name)                                                         \
+  auto name##_reply = std::unique_ptr<xcb_intern_atom_reply_t, void (*)(void*)>( \
+      xcb_intern_atom_reply(connection, name##_request, nullptr), free);         \
+  name = name##_reply->atom;                                                     \
+  atom_names[name] = #name;
+  ATOMS(ATOM_REPLY)
+#undef ATOM_REPLY
+}
+
+Str ToStr(xcb_atom_t atom) {
+  if (auto it = atom_names.find(atom); it != atom_names.end()) {
+    return it->second;
+  }
+  xcb_get_atom_name_reply_t* reply =
+      xcb_get_atom_name_reply(connection, xcb_get_atom_name(connection, atom), NULL);
+  char* name = xcb_get_atom_name_name(reply);
+  Str name_str(name, xcb_get_atom_name_name_length(reply));
+  free(reply);
+  return atom_names[atom] = name_str;
+}
+
+}  // namespace atom
+
 int window_width = 1280;
 int window_height = 720;
 uint8_t xi_opcode;
@@ -106,10 +167,6 @@ const char kWindowName[] = "Automat";
 float fp1616_to_float(xcb_input_fp1616_t fp) { return fp / 65536.0f; }
 double fp3232_to_double(xcb_input_fp3232_t fp) { return fp.integral + fp.frac / 4294967296.0; }
 
-#define WRAP(f, ...)                             \
-  std::unique_ptr<f##_reply_t, void (*)(void*)>( \
-      f##_reply(connection, f(connection, __VA_ARGS__), nullptr), free)
-
 void ScanDevices() {
   vertical_scroll.reset();
   if (auto reply = WRAP(xcb_input_xi_query_device, XCB_INPUT_DEVICE_ALL_MASTER)) {
@@ -156,6 +213,90 @@ void ScanDevices() {
   }
 }
 
+struct WM_STATE {
+  bool MODAL = false;
+  bool STICKY = false;
+  bool MAXIMIZED_VERT = false;
+  bool MAXIMIZED_HORZ = false;
+  bool SHADED = false;
+  bool SKIP_TASKBAR = false;
+  bool SKIP_PAGER = false;
+  bool HIDDEN = false;
+  bool FULLSCREEN = false;
+  bool ABOVE = false;
+  bool BELOW = false;
+  bool DEMANDS_ATTENTION = false;
+
+  static WM_STATE Get() {
+    using namespace atom;
+    WM_STATE state;
+    xcb_get_property_reply_t* reply = xcb_get_property_reply(
+        connection, xcb_get_property(connection, 0, xcb_window, _NET_WM_STATE, XCB_ATOM_ANY, 0, 32),
+        nullptr);
+    if (reply) {
+      xcb_atom_t* atoms = (xcb_atom_t*)xcb_get_property_value(reply);
+      int n_atoms = xcb_get_property_value_length(reply) / sizeof(xcb_atom_t);
+      std::map<xcb_atom_t, Fn<void()>> callbacks = {
+          {_NET_WM_STATE_MODAL, [&] { state.MODAL = true; }},
+          {_NET_WM_STATE_STICKY, [&] { state.STICKY = true; }},
+          {_NET_WM_STATE_MAXIMIZED_VERT, [&] { state.MAXIMIZED_VERT = true; }},
+          {_NET_WM_STATE_MAXIMIZED_HORZ, [&] { state.MAXIMIZED_HORZ = true; }},
+          {_NET_WM_STATE_SHADED, [&] { state.SHADED = true; }},
+          {_NET_WM_STATE_SKIP_TASKBAR, [&] { state.SKIP_TASKBAR = true; }},
+          {_NET_WM_STATE_SKIP_PAGER, [&] { state.SKIP_PAGER = true; }},
+          {_NET_WM_STATE_HIDDEN, [&] { state.HIDDEN = true; }},
+          {_NET_WM_STATE_FULLSCREEN, [&] { state.FULLSCREEN = true; }},
+          {_NET_WM_STATE_ABOVE, [&] { state.ABOVE = true; }},
+          {_NET_WM_STATE_BELOW, [&] { state.BELOW = true; }},
+          {_NET_WM_STATE_DEMANDS_ATTENTION, [&] { state.DEMANDS_ATTENTION = true; }},
+      };
+      for (int i = 0; i < n_atoms; ++i) {
+        if (auto cb = callbacks.find(atoms[i]); cb != callbacks.end()) {
+          cb->second();
+        }
+      }
+      free(reply);
+    }
+    return state;
+  }
+
+  void Set() {
+    using namespace atom;
+    Vec<xcb_atom_t> atoms;
+    if (MODAL) atoms.push_back(_NET_WM_STATE_MODAL);
+    if (STICKY) atoms.push_back(_NET_WM_STATE_STICKY);
+    if (MAXIMIZED_VERT) atoms.push_back(_NET_WM_STATE_MAXIMIZED_VERT);
+    if (MAXIMIZED_HORZ) atoms.push_back(_NET_WM_STATE_MAXIMIZED_HORZ);
+    if (SHADED) atoms.push_back(_NET_WM_STATE_SHADED);
+    if (SKIP_TASKBAR) atoms.push_back(_NET_WM_STATE_SKIP_TASKBAR);
+    if (SKIP_PAGER) atoms.push_back(_NET_WM_STATE_SKIP_PAGER);
+    if (HIDDEN) atoms.push_back(_NET_WM_STATE_HIDDEN);
+    if (FULLSCREEN) atoms.push_back(_NET_WM_STATE_FULLSCREEN);
+    if (ABOVE) atoms.push_back(_NET_WM_STATE_ABOVE);
+    if (BELOW) atoms.push_back(_NET_WM_STATE_BELOW);
+    if (DEMANDS_ATTENTION) atoms.push_back(_NET_WM_STATE_DEMANDS_ATTENTION);
+    xcb_change_property(connection, XCB_PROP_MODE_REPLACE, xcb_window, _NET_WM_STATE, XCB_ATOM_ATOM,
+                        32, atoms.size(), atoms.data());
+  }
+};
+
+Vec<xcb_atom_t> GetPropertyAtoms(xcb_atom_t property) {
+  xcb_get_property_reply_t* reply = xcb_get_property_reply(
+      connection, xcb_get_property(connection, 0, xcb_window, property, XCB_ATOM_ANY, 0, 32),
+      nullptr);
+  Vec<xcb_atom_t> vec;
+  if (reply) {
+    xcb_atom_t* atoms = (xcb_atom_t*)xcb_get_property_value(reply);
+    int n_atoms = xcb_get_property_value_length(reply) / sizeof(xcb_atom_t);
+    vec.reserve(n_atoms);
+    for (int i = 0; i < n_atoms; ++i) {
+      vec.push_back(atoms[i]);
+    }
+    free(reply);
+  }
+  return vec;
+}
+
 std::string CreateWindow() {
   int screenp = 0;
   connection = xcb_connect(nullptr, &screenp);
@@ -163,33 +304,38 @@ std::string CreateWindow() {
     return "Failed to connect to X server.";
   }
 
+  atom::Initialize();
+
   xcb_screen_iterator_t iter = xcb_setup_roots_iterator(xcb_get_setup(connection));
   for (int i = 0; i < screenp; ++i) {
     xcb_screen_next(&iter);
   }
   screen = iter.data;
 
+  float pixels_per_meter = DisplayPxPerMeter();
+  window_width = window->size.x * pixels_per_meter;
+  window_height = window->size.y * pixels_per_meter;
+
   xcb_window = xcb_generate_id(connection);
   uint32_t value_mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-  uint32_t value_list[] = {screen->black_pixel,
-                           XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY};
+  uint32_t value_list[] = {screen->white_pixel, XCB_EVENT_MASK_EXPOSURE |
+                                                    XCB_EVENT_MASK_STRUCTURE_NOTIFY |
+                                                    XCB_EVENT_MASK_PROPERTY_CHANGE};
 
   xcb_create_window(connection, XCB_COPY_FROM_PARENT, xcb_window, screen->root, 0, 0, window_width,
                     window_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
                     value_mask, value_list);
 
+  WM_STATE wm_state = WM_STATE::Get();
+  wm_state.MAXIMIZED_HORZ = window->maximized_horizontally;
+  wm_state.MAXIMIZED_VERT = window->maximized_vertically;
+  wm_state.Set();
+
   xcb_change_property(connection, XCB_PROP_MODE_REPLACE, xcb_window, XCB_ATOM_WM_NAME,
                       XCB_ATOM_STRING, 8, sizeof(kWindowName), kWindowName);
 
-  if (auto reply = WRAP(xcb_intern_atom, 0, strlen("WM_DELETE_WINDOW"), "WM_DELETE_WINDOW")) {
-    wm_delete_window = reply->atom;
-  }
-  if (auto reply = WRAP(xcb_intern_atom, 0, strlen("WM_PROTOCOLS"), "WM_PROTOCOLS")) {
-    wm_protocols = reply->atom;
-  }
-
-  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, xcb_window, wm_protocols, 4, 32, 1,
-                      &wm_delete_window);
+  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, xcb_window, atom::WM_PROTOCOLS, 4, 32, 1,
+                      &atom::WM_DELETE_WINDOW);
 
   xcb_map_window(connection, xcb_window);
   xcb_flush(connection);
@@ -309,9 +455,21 @@ void RenderLoop() {
           window_position_on_screen.y = reply->dst_y;
           break;
         }
+        case XCB_PROPERTY_NOTIFY: {
+          xcb_property_notify_event_t* ev = (xcb_property_notify_event_t*)event;
+          if (ev->atom == atom::_NET_WM_STATE) {
+            WM_STATE wm_state = WM_STATE::Get();
+            window->maximized_horizontally = wm_state.MAXIMIZED_HORZ;
+            window->maximized_vertically = wm_state.MAXIMIZED_VERT;
+          } else if (kDebugWindowManager) {
+            LOG << "Unhandled property notify event " << atom::ToStr(ev->atom) << ": "
+                << dump_struct(*ev);
+          }
+          break;
+        }
         case XCB_CLIENT_MESSAGE: {
           xcb_client_message_event_t* cm = (xcb_client_message_event_t*)event;
-          if (cm->data.data32[0] == wm_delete_window) running = false;
+          if (cm->data.data32[0] == atom::WM_DELETE_WINDOW) running = false;
           break;
         }
         case XCB_MAPPING_NOTIFY: {
@@ -494,22 +652,38 @@ int LinuxMain(int argc, char* argv[]) {
   SkGraphics::Init();
   InitRoot();
 
-  if (auto err = CreateWindow(); !err.empty()) {
-    FATAL << "Failed to create window: " << err;
-  }
-
-  if (auto err = vk::Init(); !err.empty()) {
-    FATAL << "Failed to initialize Vulkan: " << err;
-  }
-
-  window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
-  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
+  window.reset(new gui::Window());
+  window->RequestResize = [&](Vec2 new_size) { window->Resize(new_size); };
+  window->RequestMaximize = [&](bool horizontally, bool vertically) {
+    window->maximized_horizontally = horizontally;
+    window->maximized_vertically = vertically;
+  };
 
   Status status;
   LoadState(*window, status);
   if (!OK(status)) {
     ERROR << "Failed to load state: " << status;
   }
+
+  if (auto err = CreateWindow(); !err.empty()) {
+    FATAL << "Failed to create window: " << err;
+  }
+
+  window->DisplayPixelDensity(DisplayPxPerMeter());
+  window->RequestResize = [&](Vec2 new_size) {
+    const static uint32_t values[] = {
+        static_cast<uint32_t>(new_size.x * window->display_pixels_per_meter),
+        static_cast<uint32_t>(new_size.y * window->display_pixels_per_meter)};
+    xcb_configure_window(connection, xcb_window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+                         values);
+    xcb_flush(connection);
+  };
+  window->RequestMaximize = nullptr;
+
+  if (auto err = vk::Init(); !err.empty()) {
+    FATAL << "Failed to initialize Vulkan: " << err;
+  }
+  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
 
   RenderLoop();
 

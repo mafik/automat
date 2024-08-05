@@ -38,6 +38,7 @@ void LoadState(gui::Window& window, Status& status) {
   auto contents = fs::real.Read(state_path, status);
   if (!OK(status)) {
     AppendErrorMessage(status) += "Failed to read automat state";
+    return;
   }
   rapidjson::InsituStringStream stream(const_cast<char*>(contents.c_str()));
   Deserializer d(stream);

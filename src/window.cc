@@ -18,8 +18,7 @@ namespace automat::gui {
 
 std::vector<Window*> windows;
 
-Window::Window(Vec2 size, float pixels_per_meter)
-    : size(size), display_pixels_per_meter(pixels_per_meter) {
+Window::Window() {
   for (auto& proto : Prototypes()) {
     toolbar.AddObjectPrototype(proto);
   }
@@ -257,7 +256,14 @@ void Window::DisplayPixelDensity(float pixels_per_meter) {
 void Window::SerializeState(Serializer& writer) const {
   writer.StartObject();
   writer.Key("maximized");
-  writer.Bool(maximized);
+
+  writer.StartObject();
+  writer.Key("horizontally");
+  writer.Bool(maximized_horizontally);
+  writer.Key("vertically");
+  writer.Bool(maximized_vertically);
+  writer.EndObject();
+
   writer.String("width");
   writer.Double(size.width);
   writer.String("height");
@@ -276,10 +282,21 @@ void Window::SerializeState(Serializer& writer) const {
 
 void Window::DeserializeState(Deserializer& d, Status& status) {
   Vec2 new_size = size;
-  bool new_maximized = maximized;
+  bool new_maximized_horizontally = maximized_horizontally;
+  bool new_maximized_vertically = maximized_vertically;
   for (auto& key : ObjectView(d, status)) {
     if (key == "maximized") {
-      new_maximized = d.GetBool(status);
+      for (auto& maximized_key : ObjectView(d, status)) {
+        if (maximized_key == "horizontally") {
+          new_maximized_horizontally = d.GetBool(status);
+        } else if (maximized_key == "vertically") {
+          new_maximized_vertically = d.GetBool(status);
+        } else {
+          AppendErrorMessage(status) +=
+              f("Unexpected maximized key: \"%s\"", maximized_key.c_str());
+          return;
+        }
+      }
     } else if (key == "width") {
       new_size.width = d.GetDouble(status);
     } else if (key == "height") {
@@ -302,10 +319,14 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
       return;
     }
   }
-  if (!maximized && new_maximized && RequestMaximize) {
-    RequestMaximize(new_maximized);  // always true because of the if condition
-  } else if (new_size != size && RequestResize) {
+  if (new_size != size && RequestResize) {
     RequestResize(new_size);
+  }
+  if (((maximized_horizontally != new_maximized_horizontally) ||
+       (maximized_vertically != new_maximized_vertically)) &&
+      RequestMaximize) {
+    RequestMaximize(new_maximized_horizontally,
+                    new_maximized_vertically);  // always true because of the if condition
   }
 }
 

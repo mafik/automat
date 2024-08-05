@@ -1,12 +1,17 @@
 #include "library_toolbar.hh"
 
 #include <include/core/SkMatrix.h>
+#include <include/core/SkRect.h>
+#include <include/core/SkSamplingOptions.h>
 
+#include "../build/generated/embedded.hh"
 #include "span.hh"
+#include "textures.hh"
 #include "widget.hh"
 #include "window.hh"
 
 using namespace std::literals;
+using namespace maf;
 
 namespace automat::gui {
 std::unique_ptr<Action> PrototypeButton::CaptureButtonDownAction(gui::Pointer& pointer,
@@ -34,16 +39,21 @@ std::unique_ptr<Object> Toolbar::Clone() const {
   }
   return new_toolbar;
 }
+constexpr float kMarginBetweenIcons = 1_mm;
+constexpr float kMarginAroundIcons = 7_mm;
+constexpr float kMarginAboveIcons = 8_mm;
+constexpr float kToolbarHeight = gui::kToolbarIconSize + kMarginAboveIcons;
 
 SkPath Toolbar::Shape(animation::Display*) const {
   float width = CalculateWidth();
-  float height = gui::kToolbarIconSize;
-  auto rect = Rect(-width / 2, 0, width / 2, height);
+  auto rect = Rect(-width / 2, 0, width / 2, kToolbarHeight);
   return SkPath::Rect(rect);
 }
 
-constexpr float kMarginBetweenIcons = 1_mm;
-constexpr float kMarginAroundIcons = 1_mm;
+static sk_sp<SkImage>& ToolbarColor() {
+  static auto image = MakeImageFromAsset(embedded::assets_tray_webp)->withDefaultMipmaps();
+  return image;
+}
 
 void Toolbar::Draw(gui::DrawContext& dctx) const {
   float width_targets[buttons.size()];
@@ -59,7 +69,7 @@ void Toolbar::Draw(gui::DrawContext& dctx) const {
     if (pointer_position.x < -width / 2 || pointer_position.x > width / 2) {
       continue;
     }
-    if (pointer_position.y > gui::kToolbarIconSize) {
+    if (pointer_position.y > kToolbarHeight) {
       continue;
     }
     float x = -width / 2;
@@ -84,14 +94,21 @@ void Toolbar::Draw(gui::DrawContext& dctx) const {
   }
 
   for (int i = 0; i < buttons.size(); ++i) {
-    // width.SpringTowards(width_target, ctx.DeltaT(), 0.3, 0.05);
     buttons[i]->width.SineTowards(width_targets[i], dctx.DeltaT(), 0.4);
   }
 
   auto my_shape = Shape(&dctx.display);
-  SkPaint debug_paint;
-  debug_paint.setStyle(SkPaint::kStroke_Style);
-  dctx.canvas.drawPath(my_shape, debug_paint);
+
+  auto color = ToolbarColor();
+  SkIRect center = SkIRect::MakeLTRB(color->height() / 2, 0, color->width() - color->height() / 2,
+                                     color->height());
+  SkRect dst = my_shape.getBounds();
+  dctx.canvas.save();
+  dctx.canvas.translate(0, kToolbarHeight);
+  dctx.canvas.scale(1, -1);
+  dctx.canvas.drawImageNine(color.get(), center, dst, SkFilterMode::kLinear);
+  dctx.canvas.restore();
+
   DrawChildren(dctx);
 }
 

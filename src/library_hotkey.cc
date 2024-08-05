@@ -525,7 +525,6 @@ void HotKey::DeserializeState(Location& l, Deserializer& d) {
   windows_button.fg = KeyColor(windows);
 
   if (!OK(list_fields_status)) {
-    ERROR << "Error deserializing HotKey: " << list_fields_status;
     l.ReportError(list_fields_status.ToStr());
     return;
   }

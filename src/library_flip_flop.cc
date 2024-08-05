@@ -193,4 +193,18 @@ void FlipFlopButton::TweakShadow(float& sigma, float& offset) const {
 }
 
 void FlipFlop::Args(std::function<void(Argument&)> cb) { cb(flip_arg); }
+
+void FlipFlop::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.Bool(current_state);
+}
+
+void FlipFlop::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  current_state = d.GetBool(status);
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+    return;
+  }
+}
 }  // namespace automat::library

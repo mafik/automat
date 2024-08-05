@@ -51,6 +51,8 @@ struct FlipFlop : LiveObject, Runnable {
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 
   LongRunning* OnRun(Location& here) override;
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
 };
 
 }  // namespace automat::library

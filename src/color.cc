@@ -8,6 +8,8 @@
 #include "log.hh"
 #include "math.hh"
 
+using namespace maf;
+
 namespace automat::color {
 
 namespace {
@@ -271,3 +273,8 @@ sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
 }
 
 }  // namespace automat::color
+
+Str automat::ToStr(SkColor color) {
+  return f("#%02x%02x%02x%02x", SkColorGetA(color), SkColorGetR(color), SkColorGetG(color),
+           SkColorGetB(color));
+}

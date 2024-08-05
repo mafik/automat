@@ -23,6 +23,8 @@ SkColor MixColors(SkColor zero, SkColor one, float ratio);
 
 namespace automat {
 
+maf::Str ToStr(SkColor color);
+
 template <maf::TemplateStringArg S>
 consteval SkColor operator""_color() {
   static_assert(S.c_str[0] == '#', "Color must start with #");

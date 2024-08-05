@@ -28,6 +28,7 @@
 #include "number_text_field.hh"
 #include "pointer.hh"
 #include "sincos.hh"
+#include "status.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
@@ -1347,6 +1348,181 @@ gui::Widget* TimelineRunButton::FilledChild() const {
     return GetRecordingIcon();
   } else {
     return GetPausedIcon();
+  }
+}
+
+void TrackBase::SerializeState(Serializer& writer, const char* key) const {
+  // Using nullptr as a guard value to reduce JSON nesting
+  if (key != nullptr) {
+    writer.Key(key);
+    writer.StartObject();
+  }
+  writer.Key("timestamps");
+  writer.StartArray();
+  for (auto t : timestamps) {
+    writer.Double(t);
+  }
+  writer.EndArray();
+  if (key != nullptr) {
+    writer.EndObject();
+  }
+}
+
+void OnOffTrack::SerializeState(Serializer& writer, const char* key) const {
+  // Using nullptr as a guard value to reduce JSON nesting
+  if (key != nullptr) {
+    writer.Key(key);
+    writer.StartObject();
+  }
+  writer.Key("type");
+  writer.String("on/off");
+  TrackBase::SerializeState(writer, nullptr);
+  if (!isnan(on_at)) {
+    writer.Key("on_at");
+    writer.Double(on_at);
+  }
+  if (key != nullptr) {
+    writer.EndObject();
+  }
+}
+
+void Timeline::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+
+  writer.Key("tracks");
+  writer.StartArray();
+  for (int i = 0; i < tracks.size(); ++i) {
+    writer.StartObject();
+    writer.Key("name");
+    writer.String(track_args[i]->name.c_str());
+    tracks[i]->SerializeState(writer, nullptr);
+    writer.EndObject();
+  }
+  writer.EndArray();
+  writer.Key("zoom");
+  writer.Double(zoom.value);
+  writer.Key("length");
+  writer.Double(timeline_length);
+
+  switch (state) {
+    case kPaused:
+      writer.Key("paused");
+      writer.Double(paused.playback_offset);
+      break;
+    case kPlaying:
+      writer.Key("playing");
+      writer.Double((time::SteadyNow() - playing.started_at).count());
+      break;
+    case kRecording:
+      writer.Key("recording");
+      writer.Double((time::SteadyNow() - recording.started_at).count());
+      break;
+  }
+
+  writer.EndObject();
+}
+
+bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name) {
+  if (field_name == "timestamps") {
+    timestamps.clear();
+    Status status;
+    for (int i : ArrayView(d, status)) {
+      if (!OK(status)) {
+        d.Skip();
+        continue;
+      }
+      timestamps.push_back(d.GetDouble(status));
+    }
+    if (!OK(status)) {
+      l.ReportError(status.ToStr());
+    }
+    return true;
+  }
+  return false;
+}
+bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name) {
+  if (field_name == "on_at") {
+    Status status;
+    on_at = d.GetDouble(status);
+    if (!OK(status)) {
+      l.ReportError(status.ToStr());
+    }
+    return true;
+  }
+  return TrackBase::TryDeserializeField(l, d, field_name);
+}
+
+void TrackBase::DeserializeState(Location& l, Deserializer& d) {
+  ERROR << "TrackBase::DeserializeState() not implemented";
+}
+
+void OnOffTrack::DeserializeState(Location& l, Deserializer& d) {
+  ERROR << "OnOffTrack::DeserializeState() not implemented";
+}
+
+void Timeline::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  for (auto key : ObjectView(d, status)) {
+    if (!OK(status)) {
+      d.Skip();
+      continue;
+    }
+    if (key == "tracks") {
+      for (auto elem : ArrayView(d, status)) {
+        if (!OK(status)) {
+          d.Skip();
+          continue;
+        }
+        Str track_name = "";
+        Str track_type = "";
+        TrackBase* track = nullptr;
+        for (auto track_key : ObjectView(d, status)) {
+          if (!OK(status)) {
+            d.Skip();
+            continue;
+          }
+          if (track_key == "name") {
+            track_name = d.GetString(status);
+          } else if (track_key == "type") {
+            track_type = d.GetString(status);
+          } else {
+            if (track == nullptr) {
+              if (track_type == "on/off") {
+                track = &AddOnOffTrack(track_name);
+              } else {
+                AppendErrorMessage(status) += f("Unknown track type: %s", track_type.c_str());
+              }
+            }
+            if (track && track->TryDeserializeField(l, d, track_key)) {
+              // do nothing
+            } else {
+              d.Skip();
+            }
+          }
+        }
+      }
+    } else if (key == "zoom") {
+      zoom.value = d.GetDouble(status);
+    } else if (key == "length") {
+      timeline_length = d.GetDouble(status);
+    } else if (key == "paused") {
+      state = kPaused;
+      paused.playback_offset = d.GetDouble(status);
+    } else if (key == "playing") {
+      state = kPlaying;
+      playing.started_at = time::SteadyNow() - time::Duration(d.GetDouble(status));
+    } else if (key == "recording") {
+      state = kRecording;
+      recording.started_at = time::SteadyNow() - time::Duration(d.GetDouble(status));
+    } else {
+      AppendErrorMessage(status) += f("Unknown key when deserializing Timeline: %s", key.c_str());
+      d.Skip();
+    }
+  }
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+    return;
   }
 }
 

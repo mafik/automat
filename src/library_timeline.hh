@@ -47,6 +47,10 @@ struct TrackBase : Object {
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
                             time::SteadyPoint now) = 0;
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
+  virtual bool TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name);
 };
 
 struct OnOffTrack : TrackBase, OnOff {
@@ -59,6 +63,10 @@ struct OnOffTrack : TrackBase, OnOff {
   bool IsOn() const override;
   void On() override {}
   void Off() override {}
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
+  bool TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name) override;
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
@@ -121,6 +129,9 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   void StopRecording();
 
   time::T MaxTrackLength() const;
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
 };
 
 }  // namespace automat::library

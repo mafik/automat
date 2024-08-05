@@ -44,7 +44,8 @@ struct JsonToken {
   JsonToken() : type(kNoTokenType) {}
 };
 
-maf::Str ToStr(JsonToken::TokenType type);
+maf::Str ToStr(JsonToken::TokenType);
+maf::Str ToStr(const JsonToken&);
 
 struct Deserializer {
   Deserializer(rapidjson::InsituStringStream&);

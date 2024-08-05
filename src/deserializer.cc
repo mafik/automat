@@ -45,6 +45,46 @@ Str ToStr(JsonToken::TokenType type) {
   }
 }
 
+maf::Str ToStr(const JsonToken& token) {
+  Str value;
+  switch (token.type) {
+    case JsonToken::kNullTokenType:
+      value = "null";
+      break;
+    case JsonToken::kBooleanTokenType:
+      value = token.value.b ? "true" : "false";
+      break;
+    case JsonToken::kIntTokenType:
+      value = f("%d", token.value.i);
+      break;
+    case JsonToken::kUintTokenType:
+      value = f("%u", token.value.u);
+      break;
+    case JsonToken::kInt64TokenType:
+      value = f("%" PRId64, token.value.i64);
+      break;
+    case JsonToken::kUint64TokenType:
+      value = f("%" PRIu64, token.value.u64);
+      break;
+    case JsonToken::kDoubleTokenType:
+      value = f("%f", token.value.d);
+      break;
+    case JsonToken::kRawNumberTokenType:
+      value = token.value.raw_number;
+      break;
+    case JsonToken::kStringTokenType:
+      value = token.value.string;
+      break;
+    case JsonToken::kKeyTokenType:
+      value = token.value.key;
+      break;
+    default:
+      value = "??";
+      break;
+  }
+  return f("%s(%s)", ToStr(token.type).c_str(), value.c_str());
+}
+
 using enum JsonToken::TokenType;
 
 struct Handler {
@@ -237,7 +277,7 @@ ObjectView& ObjectView::operator++() {
     deserializer.token.type = kNoTokenType;
     key = Str(deserializer.token.value.key);
   } else {
-    ERROR << "While parsing object fields we got " << ToStr(deserializer.token.type)
+    ERROR << "While parsing object fields we got " << ToStr(deserializer.token)
           << ". Did you forget to call Deserializer::Skip() when iterating over ObjectView?";
     finished = true;
   }
@@ -250,8 +290,14 @@ ArrayView::ArrayView(Deserializer& deserializer, maf::Status& status) : deserial
     AppendErrorMessage(status) += "Expected an array";
     RecoverParser(deserializer);
     finished = true;
+  } else {
+    deserializer.token.type = kNoTokenType;
+    FillToken(deserializer);
+    if (deserializer.token.type == JsonToken::kEndArrayTokenType) {
+      deserializer.token.type = kNoTokenType;
+      finished = true;
+    }
   }
-  deserializer.token.type = kNoTokenType;
 }
 
 ArrayView& ArrayView::begin() { return *this; }

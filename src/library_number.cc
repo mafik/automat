@@ -14,9 +14,11 @@
 #include "gui_shape_widget.hh"
 #include "gui_text.hh"
 #include "library_macros.hh"
+#include "rapidjson/rapidjson.h"
 #include "widget.hh"
 
 using namespace automat::gui;
+using namespace maf;
 
 namespace automat::library {
 
@@ -232,6 +234,21 @@ std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer& pointer, gui::Poi
   action->contact_point = pointer.PositionWithin(*this);
   LOG << "Action contact point is " << action->contact_point;
   return action;
+}
+
+void Number::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.RawValue(text_field.text.data(), text_field.text.size(), rapidjson::kNumberType);
+}
+void Number::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  auto dbl = d.GetDouble(status);
+  if (!OK(status)) {
+    l.ReportError("Couldn't deserialize Number value: " + status.ToStr());
+    return;
+  }
+  value = dbl;
+  text_field.text = GetText();
 }
 
 }  // namespace automat::library

@@ -345,6 +345,7 @@ struct NoSchedulingGuard {
 
 void RunLoop(const int max_iterations = -1);
 
+// THIS IS THE MOST IMPORTANT OBJECT IN AUTOMAT - the only entry into the main loop.
 extern channel events;
 
 void RunThread(std::stop_token);

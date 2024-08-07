@@ -503,4 +503,42 @@ void GlassRunButton::PointerLeave(gui::Pointer&, animation::Display& display) {
   }
 }
 
+void MacroRecorder::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+  writer.Key("recording");
+  writer.Bool(keylogging != nullptr);
+  writer.EndObject();
+}
+void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "recording") {
+      Status get_bool_status;
+      auto value = d.GetBool(get_bool_status);
+      if (!OK(get_bool_status)) {
+        if (OK(status)) {
+          status = std::move(get_bool_status);
+        }
+        continue;
+      }
+      if (IsOn() != value) {
+        if (value) {
+          l.ScheduleRun();
+        } else {
+          queue.push_back(new CancelTask(&l));
+        }
+      }
+    } else {
+      d.Skip();
+      if (OK(status)) {
+        AppendErrorMessage(status) += "Unknown field when deserializing MacroRecorder: " + key;
+      }
+    }
+  }
+  if (!OK(status)) {
+    l.ReportError("Failed to deserialize MacroRecorder");
+  }
+}
+
 }  // namespace automat::library

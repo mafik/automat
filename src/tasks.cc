@@ -73,6 +73,16 @@ void RunTask::Execute() {
   PostExecute();
 }
 
+std::string CancelTask::Format() { return f("CancelTask(%s)", target->ToStr().c_str()); }
+
+void CancelTask::Execute() {
+  if (target->long_running) {
+    target->long_running->Cancel();
+    target->long_running = nullptr;
+  }
+  delete this;
+}
+
 std::string UpdateTask::Format() {
   return f("UpdateTask(%s, %s)", target->ToStr().c_str(), updated->ToStr().c_str());
 }

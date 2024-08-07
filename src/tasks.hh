@@ -32,6 +32,12 @@ struct RunTask : Task {
   void Execute() override;
 };
 
+struct CancelTask : Task {
+  CancelTask(Location* target) : Task(target) {}
+  std::string Format() override;
+  void Execute() override;
+};
+
 struct UpdateTask : Task {
   Location* updated;
   UpdateTask(Location* target, Location* updated) : Task(target), updated(updated) {}

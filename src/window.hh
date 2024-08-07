@@ -109,6 +109,7 @@ struct Window final : Widget, DropTarget {
   Vec2 size = Vec2(10_cm, 10_cm);
   bool maximized_vertically = false;
   bool maximized_horizontally = false;
+  bool always_on_top = false;
 
   // Position where Automat window should be restored.
   float output_device_x =

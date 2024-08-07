@@ -263,7 +263,6 @@ void Window::SerializeState(Serializer& writer) const {
   writer.Key("vertically");
   writer.Bool(maximized_vertically);
   writer.EndObject();
-
   if (!isnan(output_device_x)) {
     writer.String("output_device_x");
     writer.Double(output_device_x);
@@ -272,7 +271,10 @@ void Window::SerializeState(Serializer& writer) const {
     writer.String("output_device_y");
     writer.Double(output_device_y);
   }
-
+  if (always_on_top) {
+    writer.String("always_on_top");
+    writer.Bool(always_on_top);
+  }
   writer.String("width");
   writer.Double(size.width);
   writer.String("height");
@@ -310,6 +312,8 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
       output_device_x = d.GetDouble(status);
     } else if (key == "output_device_y") {
       output_device_y = d.GetDouble(status);
+    } else if (key == "always_on_top") {
+      always_on_top = d.GetBool(status);
     } else if (key == "width") {
       new_size.width = d.GetDouble(status);
     } else if (key == "height") {

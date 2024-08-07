@@ -328,6 +328,7 @@ void CreateWindow(Status& status) {
   WM_STATE wm_state = WM_STATE::Get();
   wm_state.MAXIMIZED_HORZ = window->maximized_horizontally;
   wm_state.MAXIMIZED_VERT = window->maximized_vertically;
+  wm_state.ABOVE = window->always_on_top;
   wm_state.Set();
 
   xcb_change_property(connection, XCB_PROP_MODE_REPLACE, xcb_window, XCB_ATOM_WM_NAME,
@@ -501,6 +502,7 @@ void RenderLoop() {
             WM_STATE wm_state = WM_STATE::Get();
             window->maximized_horizontally = wm_state.MAXIMIZED_HORZ;
             window->maximized_vertically = wm_state.MAXIMIZED_VERT;
+            window->always_on_top = wm_state.ABOVE;
           } else if (kDebugWindowManager) {
             LOG << "Unhandled property notify event " << atom::ToStr(ev->atom) << ": "
                 << dump_struct(*ev);

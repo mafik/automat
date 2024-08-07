@@ -22,6 +22,7 @@
 #include "math.hh"
 #include "number_text_field.hh"
 #include "pointer.hh"
+#include "status.hh"
 #include "tasks.hh"
 #include "time.hh"
 
@@ -749,5 +750,99 @@ DurationArgument::DurationArgument() : LiveArgument("duration", Argument::kOptio
     }
   });
   tint = "#6e4521"_color;
+}
+
+StrView ToStr(TimerDelay::Range r) {
+  switch (r) {
+    using enum TimerDelay::Range;
+    case Milliseconds:
+      return "milliseconds";
+    case Seconds:
+      return "seconds";
+    case Minutes:
+      return "minutes";
+    case Hours:
+      return "hours";
+    case Days:
+      return "days";
+    default:
+      return "unknown";
+  }
+}
+TimerDelay::Range TimerRangeFromStr(StrView str, Status& status) {
+  using enum TimerDelay::Range;
+  if (str == "milliseconds") return Milliseconds;
+  if (str == "seconds") return Seconds;
+  if (str == "minutes") return Minutes;
+  if (str == "hours") return Hours;
+  if (str == "days") return Days;
+  AppendErrorMessage(status) += "Unknown value for timer range: " + Str(str);
+  return Seconds;
+}
+
+void TimerDelay::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+  writer.Key("range");
+  auto range_str = ToStr(range);
+  writer.String(range_str.data(), range_str.size());
+  writer.Key("duration_seconds");
+  writer.Double(duration.value.count());
+  if (state == State::Running) {
+    writer.Key("running");
+    writer.Double((time::SteadyNow() - start_time).count());
+  }
+  writer.EndObject();
+}
+void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  // TODO: handle deserialization into a running timer
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "running") {
+      Status get_double_status;
+      auto value = d.GetDouble(get_double_status);
+      if (!OK(get_double_status)) {
+        if (OK(status)) {
+          status = std::move(get_double_status);
+        }
+        continue;
+      }
+      state = State::Running;
+      start_time = time::SteadyNow() - Duration(value);
+    } else if (key == "duration_seconds") {
+      Status get_double_status;
+      auto value = d.GetDouble(get_double_status);
+      if (!OK(get_double_status)) {
+        if (OK(status)) {
+          status = std::move(get_double_status);
+        }
+        continue;
+      }
+      duration.value = Duration(value);
+    } else if (key == "range") {
+      Status get_string_status;
+      auto value = d.GetString(get_string_status);
+      if (!OK(get_string_status)) {
+        if (OK(status)) {
+          status = std::move(get_string_status);
+        }
+        continue;
+      }
+      range = TimerRangeFromStr(value, status);
+    } else {
+      d.Skip();
+      if (OK(status)) {
+        AppendErrorMessage(status) += "Unknown field when deserializing TimerDelay: " + key;
+      }
+    }
+  }
+  UpdateTextField(*this);
+  if (state == State::Running) {
+    ScheduleAt(l, start_time + duration.value);
+  }
+
+  if (!OK(status)) {
+    l.ReportError("Failed to deserialize TimerDelay: " + status.ToStr());
+  }
 }
 }  // namespace automat::library

@@ -11,6 +11,7 @@
 #include "keyboard.hh"
 #include "library_macros.hh"
 #include "sincos.hh"
+#include "status.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
@@ -194,6 +195,39 @@ LongRunning* KeyPresser::OnRun(Location& here) {
 void KeyPresser::Cancel() {
   SendKeyEvent(key, false);
   key_pressed = false;
+}
+
+void KeyPresser::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+  writer.Key("key");
+  auto key_name = ToStr(this->key);
+  writer.String(key_name.data(), key_name.size());
+  writer.EndObject();
+}
+void KeyPresser::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "key") {
+      Status get_string_status;
+      auto value = d.GetString(get_string_status);
+      if (!OK(get_string_status)) {
+        if (OK(status)) {
+          status = std::move(get_string_status);
+        }
+        continue;
+      }
+      SetKey(AnsiKeyFromStr(value));
+    } else {
+      d.Skip();
+      if (OK(status)) {
+        AppendErrorMessage(status) += "Unknown field when deserializing KeyPresser: " + key;
+      }
+    }
+  }
+  if (!OK(status)) {
+    l.ReportError("Failed to deserialize KeyPresser");
+  }
 }
 
 }  // namespace automat::library

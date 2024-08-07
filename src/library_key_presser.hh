@@ -44,6 +44,9 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
 
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
 };
 
 }  // namespace automat::library

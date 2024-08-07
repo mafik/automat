@@ -61,6 +61,16 @@ struct Deserializer {
   rapidjson::InsituStringStream& stream;
   rapidjson::Reader reader;
   JsonToken token;
+
+  char debug_path[256] = {};
+  int debug_path_size = 0;
+
+  maf::Str DebugPath() const { return maf::Str(debug_path, debug_path_size); }
+  void DebugPut(char c) {
+    if (debug_path_size < sizeof(debug_path)) {
+      debug_path[debug_path_size++] = c;
+    }
+  }
 };
 
 // Provides begin and end iterators that can be used to iterate over the keys & fields of an object.
@@ -98,6 +108,7 @@ struct ObjectView {
   bool finished = false;
   maf::Status& status;
   maf::Status first_issue;
+  int debug_json_path_size;
 };
 
 struct ArrayView {
@@ -126,6 +137,7 @@ struct ArrayView {
   bool finished = false;
   maf::Status& status;
   maf::Status first_issue;
+  int debug_json_path_size;
 };
 
 };  // namespace automat

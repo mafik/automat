@@ -214,19 +214,28 @@ void Deserializer::Get(double& result, Status& status) {
   if (token.type == kDoubleTokenType) {
     token.type = kNoTokenType;
     result = token.value.d;
+  } else if (token.type == kUintTokenType) {
+    token.type = kNoTokenType;
+    result = token.value.u;
+  } else if (token.type == kIntTokenType) {
+    token.type = kNoTokenType;
+    result = token.value.i;
+  } else if (token.type == kInt64TokenType) {
+    token.type = kNoTokenType;
+    result = token.value.i64;
+  } else if (token.type == kUint64TokenType) {
+    token.type = kNoTokenType;
+    result = token.value.u64;
   } else {
     AppendErrorMessage(status) += "Expected a double but got " + ToStr(token.type);
     RecoverParser(*this);
   }
 }
 void Deserializer::Get(float& result, Status& status) {
-  FillToken(*this);
-  if (token.type == kDoubleTokenType) {
-    token.type = kNoTokenType;
-    result = token.value.d;
-  } else {
-    AppendErrorMessage(status) += "Expected a double but got " + ToStr(token.type);
-    RecoverParser(*this);
+  double d;
+  Get(d, status);
+  if (OK(status)) {
+    result = d;
   }
 }
 void Deserializer::Get(int& result, Status& status) {
@@ -259,12 +268,15 @@ void Deserializer::Skip() {
 }
 
 ObjectView::ObjectView(Deserializer& deserializer, Status& status)
-    : deserializer(deserializer), status(status) {
+    : deserializer(deserializer),
+      status(status),
+      debug_json_path_size(deserializer.debug_path_size) {
   FillToken(deserializer);
   if (deserializer.token.type != JsonToken::kStartObjectTokenType) {
     AppendErrorMessage(status) += "Expected an object but got " + ToStr(deserializer.token.type);
     RecoverParser(deserializer);
     finished = true;
+    deserializer.debug_path_size = debug_json_path_size;
     return;
   }
   deserializer.token.type = kNoTokenType;
@@ -288,30 +300,53 @@ void ObjectView::ReadKey() {
   if (deserializer.token.type == JsonToken::kEndObjectTokenType) {
     deserializer.token.type = kNoTokenType;
     finished = true;
+    deserializer.debug_path_size = debug_json_path_size;
     status = std::move(first_issue);
   } else if (deserializer.token.type == JsonToken::kKeyTokenType) {
     deserializer.token.type = kNoTokenType;
     key = Str(deserializer.token.value.key);
+
+    deserializer.debug_path_size = debug_json_path_size;
+
+    bool bracket = false;
+    if (key.find_first_of(" .[]") != Str::npos) {
+      bracket = true;
+      deserializer.DebugPut('[');
+    } else if (deserializer.debug_path_size) {
+      deserializer.DebugPut('.');
+    }
+    for (char c : key) {
+      deserializer.DebugPut(c);
+    }
+    if (bracket) {
+      deserializer.DebugPut(']');
+    }
+
   } else {
-    AppendErrorMessage(status) += "Unknown field \"" + key + "\": " + ToStr(deserializer.token);
+    AppendErrorMessage(status) +=
+        "Unknown field " + deserializer.DebugPath() + ": " + ToStr(deserializer.token);
     deserializer.Skip();
     ReadKey();
   }
 }
 
 ArrayView::ArrayView(Deserializer& deserializer, Status& status)
-    : deserializer(deserializer), status(status) {
+    : deserializer(deserializer),
+      status(status),
+      debug_json_path_size(deserializer.debug_path_size) {
   FillToken(deserializer);
   if (deserializer.token.type != JsonToken::kStartArrayTokenType) {
     AppendErrorMessage(status) += "Expected an array";
     RecoverParser(deserializer);
     finished = true;
+    deserializer.debug_path_size = debug_json_path_size;
   } else {
     deserializer.token.type = kNoTokenType;
     FillToken(deserializer);
     if (deserializer.token.type == JsonToken::kEndArrayTokenType) {
       deserializer.token.type = kNoTokenType;
       finished = true;
+      deserializer.debug_path_size = debug_json_path_size;
     }
   }
 }
@@ -320,11 +355,18 @@ void ArrayView::Next() {
   ClearError(status, first_issue);
   ++i;
   FillToken(deserializer);
+  deserializer.debug_path_size = debug_json_path_size;
   if (deserializer.token.type == JsonToken::kEndArrayTokenType) {
     deserializer.token.type = kNoTokenType;
     finished = true;
     status = std::move(first_issue);
   } else {
+    deserializer.DebugPut('[');
+    auto i_str = std::to_string(i);
+    for (char c : i_str) {
+      deserializer.DebugPut(c);
+    }
+    deserializer.DebugPut(']');
     // Note that we're not clearing the token type. This means that the next `FillToken` call will
     // reuse the existing token!
   }

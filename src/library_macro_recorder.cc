@@ -514,30 +514,19 @@ void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "recording") {
-      Status get_bool_status;
-      auto value = d.GetBool(get_bool_status);
-      if (!OK(get_bool_status)) {
-        if (OK(status)) {
-          status = std::move(get_bool_status);
-        }
-        continue;
-      }
-      if (IsOn() != value) {
+      bool value;
+      d.Get(value, status);
+      if (OK(status) && IsOn() != value) {
         if (value) {
           l.ScheduleRun();
         } else {
           queue.push_back(new CancelTask(&l));
         }
       }
-    } else {
-      d.Skip();
-      if (OK(status)) {
-        AppendErrorMessage(status) += "Unknown field when deserializing MacroRecorder: " + key;
-      }
     }
   }
   if (!OK(status)) {
-    l.ReportError("Failed to deserialize MacroRecorder");
+    l.ReportError("Failed to deserialize MacroRecorder. " + status.ToStr());
   }
 }
 

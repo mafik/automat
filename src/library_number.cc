@@ -242,12 +242,11 @@ void Number::SerializeState(Serializer& writer, const char* key) const {
 }
 void Number::DeserializeState(Location& l, Deserializer& d) {
   Status status;
-  auto dbl = d.GetDouble(status);
+  d.Get(value, status);
   if (!OK(status)) {
     l.ReportError("Couldn't deserialize Number value: " + status.ToStr());
     return;
   }
-  value = dbl;
   text_field.text = GetText();
 }
 

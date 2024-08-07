@@ -234,17 +234,11 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 void Machine::DeserializeState(Location& l, Deserializer& d) {
-  Status list_fields_status;
-  for (auto& key : ObjectView(d, list_fields_status)) {
+  Status status;
+  for (auto& key : ObjectView(d, status)) {
     if (key == "name") {
-      Status get_name_status;
-      name = d.GetString(get_name_status);
-      if (!OK(get_name_status)) {
-        l.ReportError(get_name_status.ToStr());
-        // NOTE: no return here because we try to continue parsing
-      }
+      d.Get(name, status);
     } else if (key == "locations") {
-      Status array_status;
       Vec<Location*> location_idx;
       struct ConnectionRecord {
         Str label;
@@ -252,26 +246,17 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
         int to;
       };
       Vec<ConnectionRecord> connections;
-      for (int i : ArrayView(d, array_status)) {
+      for (int i : ArrayView(d, status)) {
         LOG << "Deserializing location " << i;
         auto& l = CreateEmpty();
         location_idx.push_back(&l);
-        Status list_location_fields_status;
-        for (auto& field : ObjectView(d, list_location_fields_status)) {
+        for (auto& field : ObjectView(d, status)) {
           if (field == "name") {
-            Status get_name_status;
-            l.name = d.GetString(get_name_status);
-            if (!OK(get_name_status)) {
-              l.ReportError(get_name_status.ToStr());
-              // try to continue parsing
-            }
+            d.Get(l.name, status);
           } else if (field == "type") {
-            Status get_type_status;
-            Str type = d.GetString(get_type_status);
-            if (!OK(get_type_status)) {
-              l.ReportError(get_type_status.ToStr());
-              // try to continue parsing
-            } else {
+            Str type;
+            d.Get(type, status);
+            if (OK(status)) {
               const Object* proto = FindPrototype(type);
               if (proto == nullptr) {
                 l.ReportError(f("Unknown object type: %s", type.c_str()));
@@ -285,47 +270,19 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
               l.object->DeserializeState(l, d);
             }
           } else if (field == "x") {
-            Status get_x_status;
-            l.position.x = d.GetDouble(get_x_status);
-            if (!OK(get_x_status)) {
-              l.ReportError(get_x_status.ToStr());
-              // try to continue parsing
-            }
+            d.Get(l.position.x, status);
           } else if (field == "y") {
-            Status get_y_status;
-            l.position.y = d.GetDouble(get_y_status);
-            if (!OK(get_y_status)) {
-              l.ReportError(get_y_status.ToStr());
-              // try to continue parsing
-            }
+            d.Get(l.position.y, status);
           } else if (field == "connections") {
-            Status list_connections_status;
-            for (auto& connection_label : ObjectView(d, list_connections_status)) {
-              Status get_target_status;
-              int target = d.GetInt(get_target_status);
-              if (!OK(get_target_status)) {
-                l.ReportError(get_target_status.ToStr());
-                // try to continue parsing
-              } else {
+            for (auto& connection_label : ObjectView(d, status)) {
+              int target;
+              d.Get(target, status);
+              if (OK(status)) {
                 connections.push_back({connection_label, i, target});
               }
             }
-            if (!OK(list_connections_status)) {
-              l.ReportError(list_connections_status.ToStr());
-              // try to continue parsing
-            }
-          } else {
-            d.Skip();
           }
         }
-        if (!OK(list_location_fields_status)) {
-          l.ReportError(list_location_fields_status.ToStr());
-          // try to continue parsing
-        }
-      }
-      if (!OK(array_status)) {
-        l.ReportError(array_status.ToStr());
-        // try to continue parsing
       }
       for (auto& connection_record : connections) {
         if (connection_record.from < 0 || connection_record.from >= location_idx.size()) {
@@ -340,8 +297,8 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
       }
     }
   }
-  if (!OK(list_fields_status)) {
-    l.ReportError(list_fields_status.ToStr());
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
   }
 }
 

@@ -1,9 +1,8 @@
 #include "deserializer.hh"
 
-#include <cmath>
-
 #include "format.hh"
 #include "log.hh"
+#include "status.hh"
 
 using namespace maf;
 using namespace rapidjson;
@@ -45,7 +44,7 @@ Str ToStr(JsonToken::TokenType type) {
   }
 }
 
-maf::Str ToStr(const JsonToken& token) {
+Str ToStr(const JsonToken& token) {
   Str value;
   switch (token.type) {
     case JsonToken::kNullTokenType:
@@ -73,8 +72,7 @@ maf::Str ToStr(const JsonToken& token) {
       value = token.value.raw_number;
       break;
     case JsonToken::kStringTokenType:
-      value = token.value.string;
-      break;
+      return f("\"%*s\"", token.value.string.size(), token.value.string.data());
     case JsonToken::kKeyTokenType:
       value = token.value.key;
       break;
@@ -138,7 +136,7 @@ struct Handler {
   }
   bool String(const char* str, rapidjson::SizeType length, bool copy) {
     deserializer.token.type = kStringTokenType;
-    deserializer.token.value.string = maf::StrView(str, length);
+    deserializer.token.value.string = StrView(str, length);
     return true;
   }
   bool StartObject() {
@@ -147,7 +145,7 @@ struct Handler {
   }
   bool Key(const char* str, rapidjson::SizeType length, bool copy) {
     deserializer.token.type = kKeyTokenType;
-    deserializer.token.value.key = maf::StrView(str, length);
+    deserializer.token.value.key = StrView(str, length);
     return true;
   }
   bool EndObject(rapidjson::SizeType memberCount) {
@@ -201,51 +199,58 @@ Deserializer::Deserializer(InsituStringStream& stream) : stream(stream) {
   reader.IterativeParseInit();
 }
 
-maf::Str Deserializer::GetString(maf::Status& status) {
+void Deserializer::Get(Str& result, Status& status) {
   FillToken(*this);
   if (token.type == kStringTokenType) {
     token.type = kNoTokenType;
-    return Str(token.value.string);
+    result = token.value.string;
   } else {
     AppendErrorMessage(status) += "Expected a string but got " + ToStr(token.type);
     RecoverParser(*this);
-    return "";
   }
 }
-double Deserializer::GetDouble(Status& status) {
+void Deserializer::Get(double& result, Status& status) {
   FillToken(*this);
   if (token.type == kDoubleTokenType) {
     token.type = kNoTokenType;
-    return token.value.d;
+    result = token.value.d;
   } else {
     AppendErrorMessage(status) += "Expected a double but got " + ToStr(token.type);
     RecoverParser(*this);
-    return NAN;
   }
 }
-int Deserializer::GetInt(Status& status) {
+void Deserializer::Get(float& result, Status& status) {
+  FillToken(*this);
+  if (token.type == kDoubleTokenType) {
+    token.type = kNoTokenType;
+    result = token.value.d;
+  } else {
+    AppendErrorMessage(status) += "Expected a double but got " + ToStr(token.type);
+    RecoverParser(*this);
+  }
+}
+void Deserializer::Get(int& result, Status& status) {
   FillToken(*this);
   if (token.type == JsonToken::kIntTokenType) {
     token.type = kNoTokenType;
-    return token.value.i;
+    result = token.value.i;
   } else if (token.type == JsonToken::kUintTokenType) {
     token.type = kNoTokenType;
-    return token.value.u;
+    result = token.value.u;
   } else {
     AppendErrorMessage(status) += "Expected an integer but got " + ToStr(token.type);
     RecoverParser(*this);
-    return 0;
   }
 }
-bool Deserializer::GetBool(Status& status) {
+void Deserializer::Get(bool& result, Status& status) {
   FillToken(*this);
-  if (token.type != JsonToken::kBooleanTokenType) {
+  if (token.type == JsonToken::kBooleanTokenType) {
+    token.type = kNoTokenType;
+    result = token.value.b;
+  } else {
     AppendErrorMessage(status) += "Expected a boolean";
     RecoverParser(*this);
-    return false;
   }
-  token.type = kNoTokenType;
-  return token.value.b;
 }
 void Deserializer::Skip() {
   FillToken(*this);
@@ -253,8 +258,8 @@ void Deserializer::Skip() {
   token.type = kNoTokenType;
 }
 
-ObjectView::ObjectView(Deserializer& deserializer, maf::Status& status)
-    : deserializer(deserializer) {
+ObjectView::ObjectView(Deserializer& deserializer, Status& status)
+    : deserializer(deserializer), status(status) {
   FillToken(deserializer);
   if (deserializer.token.type != JsonToken::kStartObjectTokenType) {
     AppendErrorMessage(status) += "Expected an object but got " + ToStr(deserializer.token.type);
@@ -263,28 +268,39 @@ ObjectView::ObjectView(Deserializer& deserializer, maf::Status& status)
     return;
   }
   deserializer.token.type = kNoTokenType;
-  ++*this;
+  ReadKey();
 }
 
-ObjectView& ObjectView::begin() { return *this; }
+// Move the error from `cleared` to `filled` (if `filled` is OK) or just clear it.
+static void ClearError(Status& cleared, Status& filled) {
+  if (!OK(cleared)) {
+    if (OK(filled)) {
+      filled = std::move(cleared);
+    } else {
+      cleared.Reset();
+    }
+  }
+}
 
-ObjectView& ObjectView::operator++() {
+void ObjectView::ReadKey() {
+  ClearError(status, first_issue);
   FillToken(deserializer);
   if (deserializer.token.type == JsonToken::kEndObjectTokenType) {
     deserializer.token.type = kNoTokenType;
     finished = true;
+    status = std::move(first_issue);
   } else if (deserializer.token.type == JsonToken::kKeyTokenType) {
     deserializer.token.type = kNoTokenType;
     key = Str(deserializer.token.value.key);
   } else {
-    ERROR << "While parsing object fields we got " << ToStr(deserializer.token)
-          << ". Did you forget to call Deserializer::Skip() when iterating over ObjectView?";
-    finished = true;
+    AppendErrorMessage(status) += "Unknown field \"" + key + "\": " + ToStr(deserializer.token);
+    deserializer.Skip();
+    ReadKey();
   }
-  return *this;
 }
 
-ArrayView::ArrayView(Deserializer& deserializer, maf::Status& status) : deserializer(deserializer) {
+ArrayView::ArrayView(Deserializer& deserializer, Status& status)
+    : deserializer(deserializer), status(status) {
   FillToken(deserializer);
   if (deserializer.token.type != JsonToken::kStartArrayTokenType) {
     AppendErrorMessage(status) += "Expected an array";
@@ -300,19 +316,18 @@ ArrayView::ArrayView(Deserializer& deserializer, maf::Status& status) : deserial
   }
 }
 
-ArrayView& ArrayView::begin() { return *this; }
-
-ArrayView& ArrayView::operator++() {
+void ArrayView::Next() {
+  ClearError(status, first_issue);
   ++i;
   FillToken(deserializer);
   if (deserializer.token.type == JsonToken::kEndArrayTokenType) {
     deserializer.token.type = kNoTokenType;
     finished = true;
+    status = std::move(first_issue);
   } else {
     // Note that we're not clearing the token type. This means that the next `FillToken` call will
     // reuse the existing token!
   }
-  return *this;
 }
 
 Str Deserializer::ErrorContext() {

@@ -49,10 +49,11 @@ maf::Str ToStr(const JsonToken&);
 
 struct Deserializer {
   Deserializer(rapidjson::InsituStringStream&);
-  maf::Str GetString(maf::Status&);
-  double GetDouble(maf::Status&);
-  int GetInt(maf::Status&);
-  bool GetBool(maf::Status&);
+  void Get(maf::Str&, maf::Status&);
+  void Get(double&, maf::Status&);
+  void Get(float&, maf::Status&);
+  void Get(int&, maf::Status&);
+  void Get(bool&, maf::Status&);
   void Skip();
 
   maf::Str ErrorContext();
@@ -63,39 +64,68 @@ struct Deserializer {
 };
 
 // Provides begin and end iterators that can be used to iterate over the keys & fields of an object.
+//
+// This class also helps with Status management. It saves the first error that occurs and makes sure
+// that its returned through the Status object after iteration ends. On every iteration cycle, it
+// ensures that the Status object is clean.
+//
+// This limits any parsing errors to the property that had issues and allows other properties to be
+// parsed correctly, while still providing the initial error message after iteration ends.
 struct ObjectView {
   struct EndIterator {};
+  struct Iterator {
+    ObjectView& view;
+    Iterator(ObjectView& view) : view(view) {}
+
+    Iterator& operator++() {
+      view.ReadKey();
+      return *this;
+    }
+    bool operator!=(EndIterator) const { return !view.finished; }
+    maf::Str& operator*() { return view.key; }
+  };
 
   ObjectView(Deserializer&, maf::Status&);
 
   // Return `this` as an iterator for less verbose code.
-  ObjectView& begin();
+  Iterator begin() { return *this; }
   EndIterator end() { return {}; }
 
-  ObjectView& operator++();
-  bool operator!=(EndIterator) const { return !finished; }
-  maf::Str& operator*() { return key; }
+  void ReadKey();
 
   maf::Str key;
   Deserializer& deserializer;
   bool finished = false;
+  maf::Status& status;
+  maf::Status first_issue;
 };
 
 struct ArrayView {
   struct EndIterator {};
+  struct Iterator {
+    ArrayView& view;
+    Iterator(ArrayView& view) : view(view) {}
+
+    Iterator& operator++() {
+      view.Next();
+      return *this;
+    }
+    bool operator!=(EndIterator) const { return !view.finished; }
+    int operator*() { return view.i; }
+  };
 
   ArrayView(Deserializer&, maf::Status&);
 
-  ArrayView& begin();
+  Iterator begin() { return *this; }
   EndIterator end() { return {}; }
 
-  ArrayView& operator++();
-  bool operator!=(EndIterator) const { return !finished; }
-  int operator*() { return i; }
+  void Next();
 
   Deserializer& deserializer;
   int i = 0;
   bool finished = false;
+  maf::Status& status;
+  maf::Status first_issue;
 };
 
 };  // namespace automat

@@ -45,35 +45,21 @@ void LoadState(gui::Window& window, Status& status) {
 
   for (auto& key : ObjectView(d, status)) {
     if (key == "version") {
-      int version = d.GetInt(status);
-      if (!OK(status)) {
-        AppendErrorMessage(status) += "Failed to deserialize version";
-        return;
-      } else if (version != 1) {
+      int version;
+      d.Get(version, status);
+      if (OK(status) && version != 1) {
         AppendErrorMessage(status) += "Unsupported version: " + std::to_string(version);
-        return;
       }
     } else if (key == "window") {
       window.DeserializeState(d, status);
-      if (!OK(status)) {
-        AppendErrorMessage(status) += "Failed to deserialize window state";
-        return;
-      }
     } else if (key == "root") {
       root_machine->DeserializeState(root_location, d);
-    } else {
-      AppendErrorMessage(status) += "Unexpected key: " + key;
-      return;
     }
   }
+
   bool fully_decoded = d.reader.IterativeParseComplete();
   if (!fully_decoded) {
     AppendErrorMessage(status) += "Extra data at the end of the JSON string, " + d.ErrorContext();
-    return;
-  }
-
-  if (!OK(status)) {
-    AppendErrorMessage(status) += "Failed to deserialize saved state";
   }
 }
 }  // namespace automat

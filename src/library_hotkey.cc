@@ -466,52 +466,28 @@ void HotKey::SerializeState(Serializer& writer, const char* key) const {
 }
 
 void HotKey::DeserializeState(Location& l, Deserializer& d) {
-  Status list_fields_status;
+  Status status;
   bool on = IsOn();
   if (on) {
     Off();  // temporarily switch off to ungrab the old key combo
   }
-  for (auto& key : ObjectView(d, list_fields_status)) {
+  for (auto& key : ObjectView(d, status)) {
     if (key == "key") {
-      Status status;
-      auto key_str = d.GetString(status);
-      if (!OK(status)) {
-        l.ReportError(status.ToStr());
-        continue;
+      Str key_str;
+      d.Get(key_str, status);
+      if (OK(status)) {
+        this->key = AnsiKeyFromStr(key_str);
       }
-      this->key = AnsiKeyFromStr(key_str);
     } else if (key == "ctrl") {
-      Status status;
-      ctrl = d.GetBool(status);
-      if (!OK(status)) {
-        l.ReportError(status.ToStr());
-      }
+      d.Get(ctrl, status);
     } else if (key == "alt") {
-      Status status;
-      alt = d.GetBool(status);
-      if (!OK(status)) {
-        l.ReportError(status.ToStr());
-      }
+      d.Get(alt, status);
     } else if (key == "shift") {
-      Status status;
-      shift = d.GetBool(status);
-      if (!OK(status)) {
-        l.ReportError(status.ToStr());
-      }
+      d.Get(shift, status);
     } else if (key == "windows") {
-      Status status;
-      windows = d.GetBool(status);
-      if (!OK(status)) {
-        l.ReportError(status.ToStr());
-      }
+      d.Get(windows, status);
     } else if (key == "active") {
-      Status status;
-      on = d.GetBool(status);
-      if (!OK(status)) {
-        l.ReportError(status.ToStr());
-      }
-    } else {
-      d.Skip();
+      d.Get(on, status);
     }
   }
   if (on) {
@@ -524,9 +500,8 @@ void HotKey::DeserializeState(Location& l, Deserializer& d) {
   shift_button.fg = KeyColor(shift);
   windows_button.fg = KeyColor(windows);
 
-  if (!OK(list_fields_status)) {
-    l.ReportError(list_fields_status.ToStr());
-    return;
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
   }
 }
 

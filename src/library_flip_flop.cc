@@ -201,10 +201,9 @@ void FlipFlop::SerializeState(Serializer& writer, const char* key) const {
 
 void FlipFlop::DeserializeState(Location& l, Deserializer& d) {
   Status status;
-  current_state = d.GetBool(status);
+  d.Get(current_state, status);
   if (!OK(status)) {
     l.ReportError(status.ToStr());
-    return;
   }
 }
 }  // namespace automat::library

@@ -104,7 +104,8 @@ void Object::SerializeState(Serializer& writer, const char* key) const {
 
 void Object::DeserializeState(Location& l, Deserializer& d) {
   maf::Status status;
-  auto value = d.GetString(status);
+  Str value;
+  d.Get(value, status);
   if (!OK(status)) {
     l.ReportError(status.ToStr());
     return;

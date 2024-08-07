@@ -799,40 +799,21 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
   // TODO: handle deserialization into a running timer
   for (auto& key : ObjectView(d, status)) {
     if (key == "running") {
-      Status get_double_status;
-      auto value = d.GetDouble(get_double_status);
-      if (!OK(get_double_status)) {
-        if (OK(status)) {
-          status = std::move(get_double_status);
-        }
-        continue;
-      }
+      double value = 0;
+      d.Get(value, status);
       state = State::Running;
       start_time = time::SteadyNow() - Duration(value);
     } else if (key == "duration_seconds") {
-      Status get_double_status;
-      auto value = d.GetDouble(get_double_status);
-      if (!OK(get_double_status)) {
-        if (OK(status)) {
-          status = std::move(get_double_status);
-        }
-        continue;
-      }
-      duration.value = Duration(value);
-    } else if (key == "range") {
-      Status get_string_status;
-      auto value = d.GetString(get_string_status);
-      if (!OK(get_string_status)) {
-        if (OK(status)) {
-          status = std::move(get_string_status);
-        }
-        continue;
-      }
-      range = TimerRangeFromStr(value, status);
-    } else {
-      d.Skip();
+      double value;
+      d.Get(value, status);
       if (OK(status)) {
-        AppendErrorMessage(status) += "Unknown field when deserializing TimerDelay: " + key;
+        duration.value = Duration(value);
+      }
+    } else if (key == "range") {
+      Str value;
+      d.Get(value, status);
+      if (OK(status)) {
+        range = TimerRangeFromStr(value, status);
       }
     }
   }

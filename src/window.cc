@@ -299,41 +299,34 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
     if (key == "maximized") {
       for (auto& maximized_key : ObjectView(d, status)) {
         if (maximized_key == "horizontally") {
-          new_maximized_horizontally = d.GetBool(status);
+          d.Get(new_maximized_horizontally, status);
         } else if (maximized_key == "vertically") {
-          new_maximized_vertically = d.GetBool(status);
-        } else {
-          AppendErrorMessage(status) +=
-              f("Unexpected maximized key: \"%s\"", maximized_key.c_str());
-          return;
+          d.Get(new_maximized_vertically, status);
         }
       }
     } else if (key == "output_device_x") {
-      output_device_x = d.GetDouble(status);
+      d.Get(output_device_x, status);
     } else if (key == "output_device_y") {
-      output_device_y = d.GetDouble(status);
+      d.Get(output_device_y, status);
     } else if (key == "always_on_top") {
-      always_on_top = d.GetBool(status);
+      d.Get(always_on_top, status);
     } else if (key == "width") {
-      new_size.width = d.GetDouble(status);
+      d.Get(new_size.width, status);
     } else if (key == "height") {
-      new_size.height = d.GetDouble(status);
+      d.Get(new_size.height, status);
     } else if (key == "camera") {
       for (auto& camera_key : ObjectView(d, status)) {
         if (camera_key == "x") {
-          camera_x = d.GetDouble(status);
+          d.Get(camera_x.target, status);
+          camera_x.value = camera_x.target;
         } else if (camera_key == "y") {
-          camera_y = d.GetDouble(status);
+          d.Get(camera_y.target, status);
+          camera_y.value = camera_y.target;
         } else if (camera_key == "zoom") {
-          zoom = d.GetDouble(status);
-        } else {
-          AppendErrorMessage(status) += f("Unexpected camera key: \"%s\"", camera_key.c_str());
-          return;
+          d.Get(zoom.target, status);
+          zoom.value = zoom.target;
         }
       }
-    } else {
-      AppendErrorMessage(status) += f("Unexpected window key: \"%s\"", key.c_str());
-      return;
     }
   }
   if (new_size != size && RequestResize) {

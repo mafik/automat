@@ -209,24 +209,15 @@ void KeyPresser::DeserializeState(Location& l, Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "key") {
-      Status get_string_status;
-      auto value = d.GetString(get_string_status);
-      if (!OK(get_string_status)) {
-        if (OK(status)) {
-          status = std::move(get_string_status);
-        }
-        continue;
-      }
-      SetKey(AnsiKeyFromStr(value));
-    } else {
-      d.Skip();
+      Str value;
+      d.Get(value, status);
       if (OK(status)) {
-        AppendErrorMessage(status) += "Unknown field when deserializing KeyPresser: " + key;
+        SetKey(AnsiKeyFromStr(value));
       }
     }
   }
   if (!OK(status)) {
-    l.ReportError("Failed to deserialize KeyPresser");
+    l.ReportError("Failed to deserialize KeyPresser. " + status.ToStr());
   }
 }
 

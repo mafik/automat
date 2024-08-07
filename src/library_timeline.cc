@@ -1428,11 +1428,11 @@ bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, maf::Str& fiel
     timestamps.clear();
     Status status;
     for (int i : ArrayView(d, status)) {
-      if (!OK(status)) {
-        d.Skip();
-        continue;
+      double t;
+      d.Get(t, status);
+      if (OK(status)) {
+        timestamps.push_back(t);
       }
-      timestamps.push_back(d.GetDouble(status));
     }
     if (!OK(status)) {
       l.ReportError(status.ToStr());
@@ -1444,7 +1444,7 @@ bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, maf::Str& fiel
 bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name) {
   if (field_name == "on_at") {
     Status status;
-    on_at = d.GetDouble(status);
+    d.Get(on_at, status);
     if (!OK(status)) {
       l.ReportError(status.ToStr());
     }
@@ -1464,28 +1464,16 @@ void OnOffTrack::DeserializeState(Location& l, Deserializer& d) {
 void Timeline::DeserializeState(Location& l, Deserializer& d) {
   Status status;
   for (auto key : ObjectView(d, status)) {
-    if (!OK(status)) {
-      d.Skip();
-      continue;
-    }
     if (key == "tracks") {
       for (auto elem : ArrayView(d, status)) {
-        if (!OK(status)) {
-          d.Skip();
-          continue;
-        }
         Str track_name = "";
         Str track_type = "";
         TrackBase* track = nullptr;
         for (auto track_key : ObjectView(d, status)) {
-          if (!OK(status)) {
-            d.Skip();
-            continue;
-          }
           if (track_key == "name") {
-            track_name = d.GetString(status);
+            d.Get(track_name, status);
           } else if (track_key == "type") {
-            track_type = d.GetString(status);
+            d.Get(track_type, status);
           } else {
             if (track == nullptr) {
               if (track_type == "on/off") {
@@ -1494,35 +1482,33 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
                 AppendErrorMessage(status) += f("Unknown track type: %s", track_type.c_str());
               }
             }
-            if (track && track->TryDeserializeField(l, d, track_key)) {
-              // do nothing
-            } else {
-              d.Skip();
+            if (track) {
+              track->TryDeserializeField(l, d, track_key);
             }
           }
         }
       }
     } else if (key == "zoom") {
-      zoom.value = d.GetDouble(status);
+      d.Get(zoom.value, status);
     } else if (key == "length") {
-      timeline_length = d.GetDouble(status);
+      d.Get(timeline_length, status);
     } else if (key == "paused") {
       state = kPaused;
-      paused.playback_offset = d.GetDouble(status);
+      d.Get(paused.playback_offset, status);
     } else if (key == "playing") {
       state = kPlaying;
-      playing.started_at = time::SteadyNow() - time::Duration(d.GetDouble(status));
+      double value = 0;
+      d.Get(value, status);
+      playing.started_at = time::SteadyNow() - time::Duration(value);
     } else if (key == "recording") {
       state = kRecording;
-      recording.started_at = time::SteadyNow() - time::Duration(d.GetDouble(status));
-    } else {
-      AppendErrorMessage(status) += f("Unknown key when deserializing Timeline: %s", key.c_str());
-      d.Skip();
+      double value = 0;
+      d.Get(value, status);
+      recording.started_at = time::SteadyNow() - time::Duration(value);
     }
   }
   if (!OK(status)) {
     l.ReportError(status.ToStr());
-    return;
   }
 }
 

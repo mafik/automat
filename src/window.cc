@@ -264,6 +264,15 @@ void Window::SerializeState(Serializer& writer) const {
   writer.Bool(maximized_vertically);
   writer.EndObject();
 
+  if (!isnan(output_device_x)) {
+    writer.String("output_device_x");
+    writer.Double(output_device_x);
+  }
+  if (!isnan(output_device_y)) {
+    writer.String("output_device_y");
+    writer.Double(output_device_y);
+  }
+
   writer.String("width");
   writer.Double(size.width);
   writer.String("height");
@@ -297,6 +306,10 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
           return;
         }
       }
+    } else if (key == "output_device_x") {
+      output_device_x = d.GetDouble(status);
+    } else if (key == "output_device_y") {
+      output_device_y = d.GetDouble(status);
     } else if (key == "width") {
       new_size.width = d.GetDouble(status);
     } else if (key == "height") {

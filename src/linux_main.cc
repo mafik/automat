@@ -337,6 +337,28 @@ void CreateWindow(Status& status) {
                       &atom::WM_DELETE_WINDOW);
 
   xcb_map_window(connection, xcb_window);
+
+  if (!isnan(window->output_device_x)) {
+    uint32_t x = 0;
+    if (window->output_device_x >= 0) {
+      x = roundf(window->output_device_x * DisplayPxPerMeter());
+    } else {
+      x = roundf(screen->width_in_pixels + window->output_device_x * DisplayPxPerMeter() -
+                 window_width);
+    }
+    xcb_configure_window(connection, xcb_window, XCB_CONFIG_WINDOW_X, &x);
+  }
+  if (!isnan(window->output_device_y)) {
+    uint32_t y = 0;
+    if (window->output_device_y >= 0) {
+      y = roundf(window->output_device_y * DisplayPxPerMeter());
+    } else {
+      y = roundf(screen->height_in_pixels + window->output_device_y * DisplayPxPerMeter() -
+                 window_height);
+    }
+    xcb_configure_window(connection, xcb_window, XCB_CONFIG_WINDOW_Y, &y);
+  }
+
   xcb_flush(connection);
 
   const xcb_query_extension_reply_t* xinput_data =
@@ -454,6 +476,23 @@ void RenderLoop() {
               nullptr);
           window_position_on_screen.x = reply->dst_x;
           window_position_on_screen.y = reply->dst_y;
+
+          if (window_position_on_screen.x <= screen->width_in_pixels / 2.f) {
+            window->output_device_x = window_position_on_screen.x / DisplayPxPerMeter();
+          } else {
+            // store the distance from the right screen edge, as a negative number
+            window->output_device_x =
+                (window_position_on_screen.x + window_width - (int)screen->width_in_pixels) /
+                DisplayPxPerMeter();
+          }
+          if (window_position_on_screen.y <= screen->height_in_pixels / 2.f) {
+            window->output_device_y = window_position_on_screen.y / DisplayPxPerMeter();
+          } else {
+            // store the distance from the bottom screen edge, as a negative number
+            window->output_device_y =
+                (window_position_on_screen.y + window_height - (int)screen->height_in_pixels) /
+                DisplayPxPerMeter();
+          }
           break;
         }
         case XCB_PROPERTY_NOTIFY: {

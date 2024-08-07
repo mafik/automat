@@ -3,6 +3,7 @@
 #include <include/core/SkMatrix.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
+#include <rapidjson/rapidjson.h>
 
 #include <charconv>
 #include <memory>
@@ -14,7 +15,6 @@
 #include "gui_shape_widget.hh"
 #include "gui_text.hh"
 #include "library_macros.hh"
-#include "rapidjson/rapidjson.h"
 #include "widget.hh"
 
 using namespace automat::gui;

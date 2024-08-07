@@ -2,6 +2,8 @@
 
 #include <include/core/SkCanvas.h>
 
+#include <cmath>
+
 #include "animation.hh"
 #include "base.hh"
 #include "control_flow.hh"
@@ -107,6 +109,13 @@ struct Window final : Widget, DropTarget {
   Vec2 size = Vec2(10_cm, 10_cm);
   bool maximized_vertically = false;
   bool maximized_horizontally = false;
+
+  // Position where Automat window should be restored.
+  float output_device_x =
+      NAN;  // distance from the left edge of the screen (or right when negative)
+  float output_device_y =
+      NAN;  // distance from the top edge of the screen (or bottom when negative)
+
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
   library::Toolbar toolbar;
 

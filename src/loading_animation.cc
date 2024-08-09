@@ -56,13 +56,13 @@ void HypnoRect::PrePaint(SkCanvas& canvas) {
     return;
   }
 
-  shader_builder->uniform("resolution") = SkV2(window_width, window_height);
+  shader_builder->uniform("resolution") = SkV2(client_width, client_height);
   paint.setShader(shader_builder->makeShader());
 
   canvas.clear(kBackgroundColor);
 
-  int cx = window_width / 2;
-  int cy = window_height / 2;
+  int cx = client_width / 2;
+  int cy = client_height / 2;
 
   SkPath clip_path = SkPath::Rect(rect);
   float rect_side = rect.width() - paint.getStrokeWidth();
@@ -93,7 +93,7 @@ void HypnoRect::PrePaint(SkCanvas& canvas) {
   unfold += (1 - unfold) * -(expm1f(-dt.count() * 2));
 
   float outer_rect_side = rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
-  float window_diag = sqrt(window_width * window_width + window_height * window_height);
+  float window_diag = sqrt(client_width * client_width + client_height * client_height);
   if (outer_rect_side > window_diag) {
     if (state == kPreLoading) {
       state = kLoading;

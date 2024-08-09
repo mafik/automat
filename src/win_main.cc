@@ -41,8 +41,8 @@ HWND main_window;
 
 int client_x;
 int client_y;
-int window_width;
-int window_height;
+int client_width;
+int client_height;
 
 // Placeholder values for screen size. They should be updated when window is
 // resized.
@@ -57,7 +57,7 @@ float screen_height_m = (float)screen_height_px / USER_DEFAULT_SCREEN_DPI * kMet
 Vec2 mouse_position;
 
 float DisplayPxPerMeter() { return screen_width_px / screen_width_m; }
-Vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter(); }
+Vec2 WindowSize() { return Vec2(client_width, client_height) / DisplayPxPerMeter(); }
 
 // Coordinate spaces:
 // - Screen (used by Windows & win_main.cc, origin in the top left corner of the
@@ -70,14 +70,14 @@ Vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter
 namespace automat::gui {
 
 Vec2 ScreenToWindow(Vec2 screen) {
-  Vec2 window = (screen - Vec2(client_x, client_y + window_height)) / DisplayPxPerMeter();
+  Vec2 window = (screen - Vec2(client_x, client_y + client_height)) / DisplayPxPerMeter();
   window.y = -window.y;
   return window;
 }
 
 Vec2 WindowToScreen(Vec2 window) {
   window.y = -window.y;
-  return window * DisplayPxPerMeter() + Vec2(client_x, window_height + client_y);
+  return window * DisplayPxPerMeter() + Vec2(client_x, client_height + client_y);
 }
 
 Vec2 GetMainPointerScreenPos() { return mouse_position; }
@@ -100,7 +100,7 @@ gui::Pointer& GetMouse() {
 }
 
 void ResizeVulkan() {
-  if (auto err = vk::Resize(window_width, window_height); !err.empty()) {
+  if (auto err = vk::Resize(client_width, client_height); !err.empty()) {
     MessageBox(nullptr, err.c_str(), "ALERT", 0);
   }
 }
@@ -110,8 +110,7 @@ void Paint(SkCanvas& canvas) {
     return;
   }
   canvas.save();
-  canvas.translate(0, window_height);
-  canvas.scale(DisplayPxPerMeter(), -DisplayPxPerMeter());
+  canvas.scale(DisplayPxPerMeter(), DisplayPxPerMeter());
   window->Draw(canvas);
   canvas.restore();
 }
@@ -143,6 +142,9 @@ constexpr bool kPowersave = true;
 #pragma comment(lib, "vk-bootstrap")
 
 void VulkanPaint() {
+  if (!vk::initialized) {
+    return;
+  }
   if (kPowersave) {
     time::SystemPoint now = time::SystemNow();
     // TODO: Adjust next_frame to minimize input latency
@@ -192,7 +194,7 @@ void RenderingStart() {
 }
 
 void QueryDisplayCaps() {
-  constexpr bool kLogScreenCaps = true;
+  constexpr bool kLogScreenCaps = false;
   {
     screen_left_px = GetSystemMetrics(SM_XVIRTUALSCREEN);
     screen_width_px = GetSystemMetrics(SM_CXVIRTUALSCREEN);
@@ -291,11 +293,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       if (restart_rendering) {
         RenderingStop();
       }
-      window_width = LOWORD(lParam);
-      window_height = HIWORD(lParam);
+      client_width = LOWORD(lParam);
+      client_height = HIWORD(lParam);
       ResizeVulkan();
       if (window) {
         window->Resize(WindowSize());
+        bool is_maximized = wParam == SIZE_MAXIMIZED;
+        window->maximized_horizontally = is_maximized;
+        window->maximized_vertically = is_maximized;
       }
       VulkanPaint();  // for smoother resizing
       if (restart_rendering) {
@@ -306,6 +311,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     case WM_MOVE: {
       client_x = LOWORD(lParam);
       client_y = HIWORD(lParam);
+      if (window) {
+        float left = std::max<float>(client_x / DisplayPxPerMeter(), 0.f);
+        float right = std::min<float>(
+            (client_x + client_width - screen_width_px) / DisplayPxPerMeter(), -0.f);
+        if (left < fabsf(right)) {
+          window->output_device_x = left;
+        } else {
+          window->output_device_x = right;
+        }
+        float top = std::max<float>(client_y / DisplayPxPerMeter(), 0.f);
+        float bottom = std::min<float>(
+            (client_y + client_height - screen_height_px) / DisplayPxPerMeter(), -0.f);
+        if (top < fabsf(bottom)) {
+          window->output_device_y = top;
+        } else {
+          window->output_device_y = bottom;
+        }
+      }
       break;
     }
     case WM_SETCURSOR: {
@@ -456,9 +479,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_MOUSELEAVE: {
-      RunOnAutomatThread([]() {
-        mouse.reset();
-      });
+      RunOnAutomatThread([]() { mouse.reset(); });
       break;
     }
     case WM_MOUSEWHEEL: {
@@ -492,30 +513,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     case WM_CLOSE: {
       RenderingStop();
       StopRoot();
-      // Write window_state to a temp file
-      auto state_path = StatePath();
-      rapidjson::StringBuffer sb;
-      rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);
-      writer.SetMaxDecimalPlaces(6);
-      writer.StartObject();
-      writer.Key("version");
-      writer.Uint(1);
-      writer.Key("maximized");
-      writer.Bool(IsMaximized(main_window));
-      writer.Key("window");
-      window->SerializeState(writer);
-      root_machine->SerializeState(writer, "root");
-
-      writer.EndObject();
-      writer.Flush();
-      std::string window_state = sb.GetString();
-      HANDLE file =
-          CreateFile(state_path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-      if (file != INVALID_HANDLE_VALUE) {
-        DWORD bytes_written;
-        WriteFile(file, window_state.c_str(), window_state.size(), &bytes_written, nullptr);
-        CloseHandle(file);
-        LOG << "Saved window state to " << state_path;
+      Status status;
+      SaveState(*window, status);
+      if (!OK(status)) {
+        ERROR << "Couldn't save automat state: " << status;
       }
       DestroyWindow(hWnd);
       break;
@@ -569,55 +570,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
   QueryDisplayCaps();
 
-  window_width = roundf(window->size.x * DisplayPxPerMeter());
-  window_height = roundf(window->size.y * DisplayPxPerMeter());
-  int x, y;
-  if (isnan(window->output_device_x)) {
-    x = CW_USEDEFAULT;
-  } else {
-    if (window->output_device_x >= 0) {
-      x = screen_left_px + roundf(window->output_device_x * DisplayPxPerMeter());
-    } else {
-      x = screen_left_px +
-          roundf(screen_width_px + window->output_device_x * DisplayPxPerMeter() - window_width);
-    }
-  }
-  if (isnan(window->output_device_y)) {
-    y = CW_USEDEFAULT;
-  } else {
-    if (window->output_device_y >= 0) {
-      y = screen_top_px + roundf(window->output_device_y * DisplayPxPerMeter());
-    } else {
-      y = screen_top_px +
-          roundf(screen_height_px + window->output_device_y * DisplayPxPerMeter() - window_height);
-    }
-  }
+  // Save the window size and position - those values may be overwritten by WndProc when the window
+  // is created.
+  auto desired_size = window->size;
+  Vec2 desired_pos = Vec2(window->output_device_x, window->output_device_y);
+  bool maximized = window->maximized_horizontally || window->maximized_vertically;
   main_window =
-      CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowClass, kWindowTitle, WS_OVERLAPPEDWINDOW, x, y,
-                     window_width, window_height, nullptr, nullptr, GetInstance(), nullptr);
+      CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowClass, kWindowTitle, WS_OVERLAPPEDWINDOW, 0, 0,
+                     CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, GetInstance(), nullptr);
   if (!main_window) {
     FATAL << "Failed to create main window.";
   }
 
-  RegisterRawInput();
-
-  if (auto err = vk::Init(); !err.empty()) {
-    FATAL << "Failed to initialize Vulkan: " << err;
-  }
-
-  next_frame = time::SystemNow();
-  ShowWindow(main_window, nCmdShow);
-  UpdateWindow(main_window);
-  RECT rect;
-  GetClientRect(main_window, &rect);
-  window_width = rect.right - rect.left;
-  window_height = rect.bottom - rect.top;
   window->RequestResize = [&](Vec2 new_size) {
     int w = roundf(new_size.x * DisplayPxPerMeter());
     int h = roundf(new_size.y * DisplayPxPerMeter());
 
     // If the window is maximized and requested size is different, un-maximize it first.
-    if (w == window_width && h == window_height) {
+    if (w == client_width && h == client_height) {
       return;
     }
     if (IsMaximized(main_window)) {
@@ -640,30 +610,44 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     }
   };
 
-  /*
-    {
-      auto state_path = StatePath();
-      HANDLE file =
-          CreateFile(state_path.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr);
-      if (file != INVALID_HANDLE_VALUE) {
-        DWORD file_size = GetFileSize(file, nullptr);
-        auto json = std::string(file_size, '\0');
-        DWORD bytes_read;
-        ReadFile(file, json.data(), file_size, &bytes_read, nullptr);
-        CloseHandle(file);
-
-        rapidjson::StringStream stream(json.c_str());
-        Deserializer deserializer(stream);
-        Status status;
-        DeserializeState(deserializer, status);
-        if (!OK(status)) {
-          ERROR << "Failed to deserialize saved state: " << status;
-        }
-      }
+  // Restore the position of the client area.
+  if (!maximized && !isnan(desired_pos.x) && !isnan(desired_pos.y)) {
+    int client_x, client_y;
+    if (signbit(desired_pos.x)) {  // desired_pos.x is negative - distance from the right edge
+      client_x = screen_left_px +
+                 roundf(screen_width_px + (desired_pos.x - desired_size.x) * DisplayPxPerMeter());
+    } else {
+      client_x = screen_left_px + roundf(desired_pos.x * DisplayPxPerMeter());
     }
-    */
+    if (signbit(desired_pos.y)) {  // desired_pos.y is negative - distance from the bottom edge
+      client_y = screen_top_px +
+                 roundf(screen_height_px + (desired_pos.y - desired_size.y) * DisplayPxPerMeter());
+    } else {
+      client_y = screen_top_px + roundf(desired_pos.y * DisplayPxPerMeter());
+    }
+    POINT zero = {0, 0};
+    ClientToScreen(main_window, &zero);
+    int delta_x = client_x - zero.x;
+    int delta_y = client_y - zero.y;
+    SetWindowPos(main_window, nullptr, delta_x, delta_y, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+  }
+
+  if (!maximized) {
+    window->RequestResize(desired_size);
+  }
+
+  RegisterRawInput();
+
+  if (auto err = vk::Init(); !err.empty()) {
+    FATAL << "Failed to initialize Vulkan: " << err;
+  }
   ResizeVulkan();
+
+  next_frame = time::SystemNow();
   RenderingStart();
+
+  ShowWindow(main_window, maximized ? SW_SHOWMAXIMIZED : nCmdShow);
+  UpdateWindow(main_window);
 
   while (true) {
     MSG msg = {};

@@ -9,6 +9,8 @@ namespace automat::vk {
 constexpr int cfg_MSAASampleCount = 4;
 constexpr bool cfg_DisableVsync = true;
 
+extern bool initialized;
+
 std::string Init();
 void Destroy();
 

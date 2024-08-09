@@ -747,7 +747,9 @@ void Swapchain::WaitAndDestroy() {
     swapchain = VK_NULL_HANDLE;
   }
 }
+bool initialized = false;
 std::string Init() {
+  initialized = true;
   instance.Init();
   if (!instance.error.empty()) {
     return "Failed to create Vulkan instance: " + instance.error;
@@ -791,6 +793,9 @@ void Destroy() {
 }
 
 std::string Resize(int width_hint, int height_hint) {
+  if (!initialized) {
+    return "";
+  }
   if (!vk::swapchain.Create(width_hint, height_hint)) {
     return "Couldn't create swapchain";
   }

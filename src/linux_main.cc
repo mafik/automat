@@ -94,8 +94,8 @@ Str ToStr(xcb_atom_t atom) {
 
 }  // namespace atom
 
-int window_width = 1280;
-int window_height = 720;
+int client_width = 1280;
+int client_height = 720;
 uint8_t xi_opcode;
 
 Vec2 window_position_on_screen;
@@ -118,7 +118,7 @@ float DisplayPxPerMeter() {
   return 1000.0f * screen->width_in_pixels / screen->width_in_millimeters;
 }
 
-Vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter(); }
+Vec2 WindowSize() { return Vec2(client_width, client_height) / DisplayPxPerMeter(); }
 
 // "Screen" coordinates are in pixels and their origin is in the upper left
 // corner. "Window" coordinates are in meters and their origin is in the bottom
@@ -126,14 +126,14 @@ Vec2 WindowSize() { return Vec2(window_width, window_height) / DisplayPxPerMeter
 
 namespace automat::gui {
 Vec2 ScreenToWindow(Vec2 screen) {
-  Vec2 window = (screen - window_position_on_screen - Vec2(0, window_height)) / DisplayPxPerMeter();
+  Vec2 window = (screen - window_position_on_screen - Vec2(0, client_height)) / DisplayPxPerMeter();
   window.y = -window.y;
   return window;
 }
 
 Vec2 WindowToScreen(Vec2 window) {
   window.y = -window.y;
-  return window * DisplayPxPerMeter() + window_position_on_screen + Vec2(0, window_height);
+  return window * DisplayPxPerMeter() + window_position_on_screen + Vec2(0, client_height);
 }
 
 Vec2 GetMainPointerScreenPos() { return mouse_position_on_screen; }
@@ -344,7 +344,7 @@ void CreateWindow(Status& status) {
       x = roundf(window->output_device_x * DisplayPxPerMeter());
     } else {
       x = roundf(screen->width_in_pixels + window->output_device_x * DisplayPxPerMeter() -
-                 window_width);
+                 client_width);
     }
     xcb_configure_window(connection, xcb_window, XCB_CONFIG_WINDOW_X, &x);
   }
@@ -354,7 +354,7 @@ void CreateWindow(Status& status) {
       y = roundf(window->output_device_y * DisplayPxPerMeter());
     } else {
       y = roundf(screen->height_in_pixels + window->output_device_y * DisplayPxPerMeter() -
-                 window_height);
+                 client_height);
     }
     xcb_configure_window(connection, xcb_window, XCB_CONFIG_WINDOW_Y, &y);
   }
@@ -456,11 +456,11 @@ void RenderLoop() {
         }
         case XCB_CONFIGURE_NOTIFY: {
           xcb_configure_notify_event_t* ev = (xcb_configure_notify_event_t*)event;
-          if (ev->width != window_width || ev->height != window_height) {
-            window_width = ev->width;
-            window_height = ev->height;
+          if (ev->width != client_width || ev->height != client_height) {
+            client_width = ev->width;
+            client_height = ev->height;
 
-            if (auto err = vk::Resize(window_width, window_height); !err.empty()) {
+            if (auto err = vk::Resize(client_width, client_height); !err.empty()) {
               ERROR << err;
             }
             window->Resize(WindowSize());
@@ -482,7 +482,7 @@ void RenderLoop() {
           } else {
             // store the distance from the right screen edge, as a negative number
             window->output_device_x =
-                (window_position_on_screen.x + window_width - (int)screen->width_in_pixels) /
+                (window_position_on_screen.x + client_width - (int)screen->width_in_pixels) /
                 DisplayPxPerMeter();
           }
           if (window_position_on_screen.y <= screen->height_in_pixels / 2.f) {
@@ -490,7 +490,7 @@ void RenderLoop() {
           } else {
             // store the distance from the bottom screen edge, as a negative number
             window->output_device_y =
-                (window_position_on_screen.y + window_height - (int)screen->height_in_pixels) /
+                (window_position_on_screen.y + client_height - (int)screen->height_in_pixels) /
                 DisplayPxPerMeter();
           }
           break;
@@ -704,8 +704,8 @@ int LinuxMain(int argc, char* argv[]) {
   }
 
   float pixels_per_meter = DisplayPxPerMeter();
-  window_width = window->size.x * pixels_per_meter;
-  window_height = window->size.y * pixels_per_meter;
+  client_width = window->size.x * pixels_per_meter;
+  client_height = window->size.y * pixels_per_meter;
 
   CreateWindow(status);
   if (!OK(status)) {

@@ -48,26 +48,19 @@ Str ToStr(const JsonToken& token) {
   Str value;
   switch (token.type) {
     case JsonToken::kNullTokenType:
-      value = "null";
-      break;
+      return "null";
     case JsonToken::kBooleanTokenType:
-      value = token.value.b ? "true" : "false";
-      break;
+      return token.value.b ? "true" : "false";
     case JsonToken::kIntTokenType:
-      value = f("%d", token.value.i);
-      break;
+      return f("%d", token.value.i);
     case JsonToken::kUintTokenType:
-      value = f("%u", token.value.u);
-      break;
+      return f("%u", token.value.u);
     case JsonToken::kInt64TokenType:
-      value = f("%" PRId64, token.value.i64);
-      break;
+      return f("%" PRId64, token.value.i64);
     case JsonToken::kUint64TokenType:
-      value = f("%" PRIu64, token.value.u64);
-      break;
+      return f("%" PRIu64, token.value.u64);
     case JsonToken::kDoubleTokenType:
-      value = f("%f", token.value.d);
-      break;
+      return f("%f", token.value.d);
     case JsonToken::kRawNumberTokenType:
       value = token.value.raw_number;
       break;

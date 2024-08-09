@@ -8,9 +8,8 @@
 #include <cmath>
 #include <string>
 
+#include "math_constants.hh"  // IWYU pragma: export
 #include "sincos.hh"
-
-constexpr float kMetersPerInch = 0.0254f;
 
 union Vec2;
 

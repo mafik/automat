@@ -114,8 +114,8 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
     for (size_t i = 0; i < arg.name.size(); ++i) {
       float i_fract = (i + 1.f) / (arg.name.size() + 1.f);
       // float i_fract = i / (float)arg.name.size();
-      float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_alpha_sin * M_PIf +
-                       quadrant_offset / 180 * M_PIf;
+      float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_alpha_sin * kPi +
+                       quadrant_offset / 180 * kPi;
 
       float x = sin(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
       float y = cos(letter_a) * arg.autoconnect_radius * radar_alpha_sin;

@@ -7,13 +7,12 @@
 #include <cmath>
 #include <cstdint>
 
+#include "math_constants.hh"
 #include "str.hh"
 
 union Vec2;
 
 namespace maf {
-
-// TODO: use FastTrigo for the implementation.
 
 // A number in the range [-1, 1], with 23 bits of precision and fast conversion to float.
 struct Fixed1 {
@@ -139,15 +138,15 @@ struct SinCos {
     } else if (degrees == 270.f) {
       return SinCos(-1.f, 0.f);
     } else if (degrees == 45.f) {
-      return SinCos(M_SQRT1_2f, M_SQRT1_2f);
+      return SinCos(kSqrt1_2, kSqrt1_2);
     } else if (degrees == 135.f) {
-      return SinCos(M_SQRT1_2f, -M_SQRT1_2f);
+      return SinCos(kSqrt1_2, -kSqrt1_2);
     } else if (degrees == 225.f) {
-      return SinCos(-M_SQRT1_2f, -M_SQRT1_2f);
+      return SinCos(-kSqrt1_2, -kSqrt1_2);
     } else if (degrees == 315.f) {
-      return SinCos(-M_SQRT1_2f, M_SQRT1_2f);
+      return SinCos(-kSqrt1_2, kSqrt1_2);
     }
-    return FromRadians(degrees / 180.f * M_PIf);
+    return FromRadians(degrees / 180.f * kPi);
   }
 
   constexpr static SinCos FromRadians(float radians) {
@@ -168,7 +167,7 @@ struct SinCos {
     if (sin.value >= 0) {
       return acosf((float)cos);
     } else {
-      return -acosf((float)cos) + M_PIf * 2;
+      return -acosf((float)cos) + kPi * 2;
     }
   }
 
@@ -177,14 +176,14 @@ struct SinCos {
     if (sin <= 0) {
       return -acosf((float)cos);
     } else {
-      return acosf((float)cos) - M_PIf * 2;
+      return acosf((float)cos) - kPi * 2;
     }
   }
 
   // Return the angle in the range (-pi, pi].
   float ToRadians() const {
     float angle = FTA::atan2((float)sin, (float)cos);
-    return angle <= -M_PIf ? angle + M_PIf * 2 : angle;
+    return angle <= -kPi ? angle + kPi * 2 : angle;
   }
   constexpr SinCos operator+(const SinCos& other) const {
     return SinCos(sin * other.cos + cos * other.sin, cos * other.cos - sin * other.sin);

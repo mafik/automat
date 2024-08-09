@@ -68,7 +68,7 @@ std::unique_ptr<Font> Font::Make(float letter_size_mm, float weight) {
   if (!typeface) {
     FATAL << "Could not find Noto Sans font.";
   }
-  if (!std::isnan(weight)) {
+  if (!isnan(weight)) {
     SkFontArguments::VariationPosition::Coordinate coordinates[1];
     coordinates[0].axis = kFontWeightTag;
     coordinates[0].value = weight;

@@ -257,7 +257,7 @@ SkColor MixColors(SkColor zero, SkColor one, float ratio) {
 }
 
 sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
-  if (isnanf(depth)) {
+  if (isnan(depth)) {
     // set depth to average value of all channels
     depth = (SkColorGetR(tint) + SkColorGetG(tint) + SkColorGetB(tint)) / 255.f / 3 * 20 + 40;
   }

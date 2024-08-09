@@ -1180,7 +1180,7 @@ struct BlackboardUpdater : LiveObject {
 
               } else {
                 double new_value = expr->Eval(&context);
-                if (std::isnan(new_value)) {
+                if (isnan(new_value)) {
                   // LOG << "  would write to " << *target
                   //     << " but the value would be NaN.";
                 } else {

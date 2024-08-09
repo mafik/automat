@@ -13,7 +13,6 @@ static const char kWindowTitle[] = "Automat";
 
 HINSTANCE GetInstance();
 WNDCLASSEX& GetWindowClass();
-HWND CreateAutomatWindow();
 maf::Str GetLastErrorStr();
 
 }  // namespace automat

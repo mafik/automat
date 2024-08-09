@@ -1,6 +1,9 @@
 #include "win.hh"
 
 #include "win_main.hh"
+#include "window.hh"
+
+using namespace automat::gui;
 
 namespace automat {
 
@@ -28,19 +31,13 @@ WNDCLASSEX& GetWindowClass() {
   return wcex;
 }
 
-HWND CreateAutomatWindow() {
-  return CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowClass, kWindowTitle, WS_OVERLAPPEDWINDOW,
-                        CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, nullptr, nullptr, GetInstance(),
-                        nullptr);
-}
-
 maf::Str GetLastErrorStr() {
   DWORD error = GetLastError();
   if (error == 0) return "No error";
   LPSTR messageBuffer = nullptr;
-  size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
-                                   FORMAT_MESSAGE_IGNORE_INSERTS,
-                               nullptr, error, 0, (LPSTR)&messageBuffer, 0, nullptr);
+  size_t size = FormatMessageA(
+      FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+      nullptr, error, 0, (LPSTR)&messageBuffer, 0, nullptr);
   maf::Str message(messageBuffer, size);
   LocalFree(messageBuffer);
   return message;

@@ -112,7 +112,6 @@ struct VerticalScroll {
 
 std::optional<VerticalScroll> vertical_scroll;
 
-std::unique_ptr<gui::Window> window;
 std::unique_ptr<gui::Pointer> mouse;
 
 float DisplayPxPerMeter() {
@@ -692,25 +691,15 @@ void RenderLoop() {
 
 int LinuxMain(int argc, char* argv[]) {
   SkGraphics::Init();
-  InitRoot();
-
   Status status;
   ConnectXCB(status);
   if (!OK(status)) {
     FATAL << status;
   }
 
-  window.reset(new gui::Window());
-  window->RequestResize = [&](Vec2 new_size) { window->Resize(new_size); };
-  window->RequestMaximize = [&](bool horizontally, bool vertically) {
-    window->maximized_horizontally = horizontally;
-    window->maximized_vertically = vertically;
-  };
-  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
-
-  LoadState(*window, status);
+  InitAutomat(status);
   if (!OK(status)) {
-    ERROR << "Failed to load state: " << status;
+    ERROR << "Failed to initialize Automat: " << status;
     status.Reset();  // try to continue
   }
 

@@ -18,11 +18,12 @@
 #include <memory>
 #include <thread>
 
+#include "automat.hh"
 #include "backtrace.hh"
 #include "hid.hh"
 #include "library.hh"  // IWYU pragma: export
 #include "loading_animation.hh"
-#include "path.hh"
+#include "persistence.hh"
 #include "root.hh"
 #include "thread_name.hh"
 #include "touchpad.hh"
@@ -33,12 +34,10 @@
 #include "window.hh"
 
 using namespace automat;
+using namespace automat::gui;
+using namespace maf;
 
 HWND main_window;
-
-// This is based on the scaling configured by the user in Windows settings.
-// It's not used anywhere by Automat.
-int main_window_dpi = USER_DEFAULT_SCREEN_DPI;
 
 int client_x;
 int client_y;
@@ -47,6 +46,8 @@ int window_height;
 
 // Placeholder values for screen size. They should be updated when window is
 // resized.
+int screen_left_px = 0;
+int screen_top_px = 0;
 int screen_width_px = 1920;
 int screen_height_px = 1080;
 int screen_refresh_rate = 60;
@@ -83,7 +84,6 @@ Vec2 GetMainPointerScreenPos() { return mouse_position; }
 
 }  // namespace automat::gui
 
-std::unique_ptr<gui::Window> window;
 std::unique_ptr<gui::Pointer> mouse;
 
 gui::Pointer& GetMouse() {
@@ -192,39 +192,61 @@ void RenderingStart() {
 }
 
 void QueryDisplayCaps() {
-  main_window_dpi = GetDpiForWindow(main_window);
-  auto get_device_caps = [](HDC hdc) {
-    screen_width_m = GetDeviceCaps(hdc, HORZSIZE) / 1000.0f;
-    screen_height_m = GetDeviceCaps(hdc, VERTSIZE) / 1000.0f;
-    screen_width_px = GetDeviceCaps(hdc, HORZRES);
-    screen_height_px = GetDeviceCaps(hdc, VERTRES);
-    screen_refresh_rate = GetDeviceCaps(hdc, VREFRESH);
-    if (window) {
-      window->DisplayPixelDensity(DisplayPxPerMeter());
-    }
-    constexpr bool kLogScreenCaps = true;
+  constexpr bool kLogScreenCaps = true;
+  {
+    screen_left_px = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    screen_width_px = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+    screen_height_px = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    screen_top_px = GetSystemMetrics(SM_YVIRTUALSCREEN);
     if constexpr (kLogScreenCaps) {
-      float diag =
-          sqrt(screen_height_m * screen_height_m + screen_width_m * screen_width_m) / 0.0254f;
-      LOG << "Display: " << f("%.1f", diag) << "″ " << int(screen_width_m * 1000) << "x"
-          << int(screen_height_m * 1000) << "mm (" << screen_width_px << "x" << screen_height_px
-          << "px) " << screen_refresh_rate << "Hz";
+      LOG << "Virtual screen: left=" << screen_left_px << ", top=" << screen_top_px << ", "
+          << screen_width_px << "x" << screen_height_px;
     }
-  };
-  HMONITOR monitor = MonitorFromWindow(main_window, MONITOR_DEFAULTTONEAREST);
-  MONITORINFOEX monitor_info = {};
-  monitor_info.cbSize = sizeof(monitor_info);
-  if (GetMonitorInfo(monitor, &monitor_info)) {
-    HDC ic = CreateIC(nullptr, monitor_info.szDevice, nullptr, nullptr);
-    if (ic) {
-      get_device_caps(ic);
-      DeleteDC(ic);
-      return;
-    }
+    EnumDisplayMonitors(
+        nullptr, nullptr,
+        [](HMONITOR hMonitor, HDC crappy_hdc, LPRECT rect, LPARAM) {
+          MONITORINFOEX monitor_info = {};
+          monitor_info.cbSize = sizeof(monitor_info);
+          if (!GetMonitorInfo(hMonitor, &monitor_info)) {
+            return TRUE;
+          }
+          if (!(monitor_info.dwFlags & MONITORINFOF_PRIMARY)) {
+            // Skip non-primary monitors
+            return TRUE;
+          }
+          HDC hdc = CreateIC(nullptr, monitor_info.szDevice, nullptr, nullptr);
+          if (hdc == 0) {
+            return TRUE;
+          }
+          float monitor_width_m = GetDeviceCaps(hdc, HORZSIZE) / 1000.0f;
+          float monitor_height_m = GetDeviceCaps(hdc, VERTSIZE) / 1000.0f;
+          float monitor_diagonal_m =
+              sqrt(monitor_width_m * monitor_width_m + monitor_height_m * monitor_height_m);
+          float monitor_width_px = monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+          float monitor_height_px = monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+          float monitor_diagonal_px =
+              sqrt(monitor_width_px * monitor_width_px + monitor_height_px * monitor_height_px);
+          screen_width_m = screen_width_px * monitor_diagonal_m / monitor_diagonal_px;
+          screen_height_m = screen_height_px * monitor_diagonal_m / monitor_diagonal_px;
+          screen_refresh_rate = GetDeviceCaps(hdc, VREFRESH);
+          DeleteDC(hdc);
+
+          if (window) {
+            window->DisplayPixelDensity(DisplayPxPerMeter());
+          }
+
+          if constexpr (kLogScreenCaps) {
+            float diag =
+                sqrt(screen_height_m * screen_height_m + screen_width_m * screen_width_m) / 0.0254f;
+            LOG << "Display: " << f("%.1f", diag) << "″ " << int(screen_width_m * 1000) << "x"
+                << int(screen_height_m * 1000) << "mm (" << screen_width_px << "x"
+                << screen_height_px << "px) " << screen_refresh_rate << "Hz";
+          }
+
+          return TRUE;
+        },
+        0);
   }
-  HDC hdc = GetDC(main_window);
-  get_device_caps(hdc);
-  ReleaseDC(main_window, hdc);
 }
 
 bool IsMaximized(HWND hWnd) {
@@ -290,7 +312,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       // Intercept this message to prevent Windows from changing the cursor back
       // to an arrow.
       if (LOWORD(lParam) == HTCLIENT) {
-        switch (GetMouse().Icon()) {
+        gui::Pointer::IconType icon;
+        RunOnAutomatThreadSynchronous([&]() { icon = GetMouse().Icon(); });
+        switch (icon) {
           case gui::Pointer::kIconArrow:
             SetCursor(LoadCursor(nullptr, IDC_ARROW));
             break;
@@ -310,7 +334,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_DPICHANGED: {
-      main_window_dpi = HIWORD(wParam);
       QueryDisplayCaps();
       RECT* const size_hint = (RECT*)lParam;
       SetWindowPos(hWnd, NULL, size_hint->left, size_hint->top, size_hint->right - size_hint->left,
@@ -433,7 +456,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_MOUSELEAVE: {
-      mouse.reset();
+      RunOnAutomatThread([]() {
+        mouse.reset();
+      });
       break;
     }
     case WM_MOUSEWHEEL: {
@@ -527,9 +552,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   // This makes std::this_thread::sleep_until() more accurate.
   timeBeginPeriod(1);
 
-  InitRoot();
-  anim.LoadingCompleted();
-
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   SkGraphics::Init();
 
@@ -537,14 +559,47 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     FATAL << "Failed to register window class.";
   }
 
-  main_window = CreateAutomatWindow();
+  Status status;
+  InitAutomat(status);
+  if (!OK(status)) {
+    ERROR << "Failed to load Automat state: " << status;
+    // Try to continue with damaged state.
+  }
+  anim.LoadingCompleted();
+
+  QueryDisplayCaps();
+
+  window_width = roundf(window->size.x * DisplayPxPerMeter());
+  window_height = roundf(window->size.y * DisplayPxPerMeter());
+  int x, y;
+  if (isnan(window->output_device_x)) {
+    x = CW_USEDEFAULT;
+  } else {
+    if (window->output_device_x >= 0) {
+      x = screen_left_px + roundf(window->output_device_x * DisplayPxPerMeter());
+    } else {
+      x = screen_left_px +
+          roundf(screen_width_px + window->output_device_x * DisplayPxPerMeter() - window_width);
+    }
+  }
+  if (isnan(window->output_device_y)) {
+    y = CW_USEDEFAULT;
+  } else {
+    if (window->output_device_y >= 0) {
+      y = screen_top_px + roundf(window->output_device_y * DisplayPxPerMeter());
+    } else {
+      y = screen_top_px +
+          roundf(screen_height_px + window->output_device_y * DisplayPxPerMeter() - window_height);
+    }
+  }
+  main_window =
+      CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowClass, kWindowTitle, WS_OVERLAPPEDWINDOW, x, y,
+                     window_width, window_height, nullptr, nullptr, GetInstance(), nullptr);
   if (!main_window) {
     FATAL << "Failed to create main window.";
   }
 
   RegisterRawInput();
-
-  QueryDisplayCaps();
 
   if (auto err = vk::Init(); !err.empty()) {
     FATAL << "Failed to initialize Vulkan: " << err;
@@ -557,7 +612,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   GetClientRect(main_window, &rect);
   window_width = rect.right - rect.left;
   window_height = rect.bottom - rect.top;
-  window.reset(new gui::Window(WindowSize(), DisplayPxPerMeter()));
   window->RequestResize = [&](Vec2 new_size) {
     int w = roundf(new_size.x * DisplayPxPerMeter());
     int h = roundf(new_size.y * DisplayPxPerMeter());
@@ -580,33 +634,34 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     w += horizontal_frame_adjustment;
     SetWindowPos(main_window, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
   };
-  window->RequestMaximize = [&](bool maximize) {
-    if (maximize) {
+  window->RequestMaximize = [&](bool horiz, bool vert) {
+    if (horiz || vert) {
       ShowWindow(main_window, SW_MAXIMIZE);
     }
   };
 
-  {
-    auto state_path = StatePath();
-    HANDLE file =
-        CreateFile(state_path.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr);
-    if (file != INVALID_HANDLE_VALUE) {
-      DWORD file_size = GetFileSize(file, nullptr);
-      auto json = std::string(file_size, '\0');
-      DWORD bytes_read;
-      ReadFile(file, json.data(), file_size, &bytes_read, nullptr);
-      CloseHandle(file);
+  /*
+    {
+      auto state_path = StatePath();
+      HANDLE file =
+          CreateFile(state_path.c_str(), GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+      if (file != INVALID_HANDLE_VALUE) {
+        DWORD file_size = GetFileSize(file, nullptr);
+        auto json = std::string(file_size, '\0');
+        DWORD bytes_read;
+        ReadFile(file, json.data(), file_size, &bytes_read, nullptr);
+        CloseHandle(file);
 
-      rapidjson::StringStream stream(json.c_str());
-      Deserializer deserializer(stream);
-      Status status;
-      DeserializeState(deserializer, status);
-      if (!OK(status)) {
-        ERROR << "Failed to deserialize saved state: " << status;
+        rapidjson::StringStream stream(json.c_str());
+        Deserializer deserializer(stream);
+        Status status;
+        DeserializeState(deserializer, status);
+        if (!OK(status)) {
+          ERROR << "Failed to deserialize saved state: " << status;
+        }
       }
     }
-  }
-  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
+    */
   ResizeVulkan();
   RenderingStart();
 

@@ -27,6 +27,7 @@ struct Pointer;
 struct WindowImpl;
 
 extern std::vector<Window*> windows;
+extern std::unique_ptr<Window> window;
 
 struct Window final : Widget, DropTarget {
   Window();

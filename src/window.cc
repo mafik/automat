@@ -17,6 +17,7 @@ using namespace maf;
 namespace automat::gui {
 
 std::vector<Window*> windows;
+std::unique_ptr<Window> window;
 
 Window::Window() {
   for (auto& proto : Prototypes()) {
@@ -433,4 +434,5 @@ ControlFlow Window::VisitChildren(Visitor& visitor) {
   });
   return result;
 }
+
 }  // namespace automat::gui

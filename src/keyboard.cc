@@ -4,6 +4,7 @@
 #include <set>
 
 #include "font.hh"
+#include "root.hh"
 #include "window.hh"
 
 #if defined(_WIN32)
@@ -21,7 +22,6 @@
 
 #include "format.hh"
 #include "linux_main.hh"
-#include "root.hh"
 #include "x11.hh"
 
 #endif

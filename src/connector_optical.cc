@@ -1495,7 +1495,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
       Vec2 line_offset = Vec2::Polar(chain[i].dir, kStep / 4);
       canvas.drawLine(chain[i].pos - line_offset, chain[i].pos + line_offset, chain_paint);
       canvas.save();
-      Str i_str = ::ToStr(i);
+      Str i_str = std::to_string(i);
       canvas.translate(chain[i].pos.x, chain[i].pos.y);
       font.DrawText(canvas, i_str, SkPaint());
       canvas.restore();

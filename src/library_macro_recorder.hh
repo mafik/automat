@@ -64,6 +64,8 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
   void KeyloggerKeyDown(gui::Key) override;
   void KeyloggerKeyUp(gui::Key) override;
 
+  Vec2AndDir ArgStart(const Argument&) override;
+
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
 };

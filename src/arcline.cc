@@ -140,6 +140,12 @@ ArcLine::TurnShift::TurnShift(float distance_sideways, float turn_radius)
    delta_y
 
   */
+  if (distance_sideways == 0) {
+    first_turn_angle = 0_deg;
+    move_between_turns = 0;
+    distance_forward = 0;
+    return;
+  }
   const float delta_x = distance_sideways / 2;
   const float delta_x_abs = std::abs(delta_x);
   if (delta_x_abs < turn_radius) {

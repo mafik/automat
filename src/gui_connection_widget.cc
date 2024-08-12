@@ -255,7 +255,6 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
       cable_width.Tick(ctx.display);
 
       if (cable_width > 0.01_mm && to) {
-        Vec2AndDir start = {.pos = Vec2(2.2_cm, 1_mm), .dir = -90_deg};
         auto arcline = RouteCable(ctx, pos_dir, to_points);
         auto color = SkColorSetA(arg.tint, 255 * cable_width.value / 2_mm);
         auto color_filter = color::MakeTintFilter(color, 30);

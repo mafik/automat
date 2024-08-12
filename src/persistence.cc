@@ -37,8 +37,11 @@ void LoadState(gui::Window& window, Status& status) {
   auto state_path = StatePath();
   auto contents = fs::real.Read(state_path, status);
   if (!OK(status)) {
-    AppendErrorMessage(status) += "Failed to read automat state";
-    return;
+    status.Reset();
+    contents = fs::embedded.Read(Path("assets") / "automat_state.json", status);
+    if (!OK(status)) {
+      return;
+    }
   }
   rapidjson::InsituStringStream stream(const_cast<char*>(contents.c_str()));
   Deserializer d(stream);

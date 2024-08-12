@@ -215,9 +215,10 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
         location->object->SerializeState(writer, "value");
       }
       writer.Key("x");
-      writer.Double(location->position.x);
+      writer.Double(round(location->position.x * 1000000.) /
+                    1000000.);  // round to 6 decimal places
       writer.Key("y");
-      writer.Double(location->position.y);
+      writer.Double(round(location->position.y * 1000000.) / 1000000.);
       if (!location->outgoing.empty()) {
         writer.Key("connections");
         writer.StartObject();

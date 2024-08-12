@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "automat.hh"
 #include "format.hh"
 #include "keyboard.hh"
 #include "library.hh"  // IWYU pragma: keep
@@ -320,8 +321,8 @@ void CreateWindow(Status& status) {
                                                     XCB_EVENT_MASK_STRUCTURE_NOTIFY |
                                                     XCB_EVENT_MASK_PROPERTY_CHANGE};
 
-  xcb_create_window(connection, XCB_COPY_FROM_PARENT, xcb_window, screen->root, 0, 0, window_width,
-                    window_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
+  xcb_create_window(connection, XCB_COPY_FROM_PARENT, xcb_window, screen->root, 0, 0, client_width,
+                    client_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
                     value_mask, value_list);
 
   WM_STATE wm_state = WM_STATE::Get();

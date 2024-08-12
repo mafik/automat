@@ -55,8 +55,8 @@ static constexpr float kTopRowWidth = kFrameWidth + kKeySpacing + kShiftKeyWidth
 
 static constexpr float kWidth = std::max(kTopRowWidth, kBottomRowWidth);
 static constexpr float kHeight = kFrameWidth * 2 + kKeyHeight * 2 + kKeySpacing * 3;
-
-static constexpr SkRect kShapeRect = SkRect::MakeXYWH(-kWidth / 2, -kHeight / 2, kWidth, kHeight);
+static constexpr float kY = -kHeight / 2 - 0.5_mm;
+static constexpr Rect kShapeRect = Rect::MakeCenterWH({0, 0.5_mm}, kWidth, kHeight);
 static const SkRRect kShapeRRect = [] {
   SkRRect ret;
   float top_right_radius = kFrameWidth + kMinimalTouchableSize / 2 - kBorderWidth;
@@ -66,7 +66,7 @@ static const SkRRect kShapeRRect = [] {
       {top_right_radius, top_right_radius},
       {kFrameOuterRadius, kFrameOuterRadius},
   };
-  ret.setRectRadii(kShapeRect, radii);
+  ret.setRectRadii(kShapeRect.sk, radii);
   return ret;
 }();
 
@@ -281,12 +281,12 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
   inner_paint.setStrokeWidth(0.5_mm);
   canvas.drawPath(inner_contour, inner_paint);
 
-  Rect inner_rect = Rect{
-      -kWidth / 2 + kFrameWidth,
-      -kHeight / 2 + kFrameWidth,
-      kWidth / 2 - kFrameWidth,
-      kHeight / 2 - kFrameWidth,
-  };
+  // Rect inner_rect = Rect{
+  //     -kWidth / 2 + kFrameWidth,
+  //     -kHeight / 2 + kFrameWidth,
+  //     kWidth / 2 - kFrameWidth,
+  //     kHeight / 2 - kFrameWidth,
+  // };
   // float fire_radius = 10_mm;
   // auto fire_paint = GetFirePaint(inner_rect, fire_radius);
   // inner_rect.sk.outset(fire_radius, fire_radius * 1.5);
@@ -302,12 +302,12 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 
   // Draw frame
 
-  SkRect gradient_rect = kShapeRect.makeInset(kFrameWidth / 2, kFrameWidth / 2);
+  SkRect gradient_rect = kShapeRect.sk.makeInset(kFrameWidth / 2, kFrameWidth / 2);
   float gradient_r = kFrameInnerRadius;
 
   SkPaint border_paint;
   border_paint.setAntiAlias(true);
-  SkPoint border_pts[] = {{0, kShapeRect.bottom()}, {0, kShapeRect.top()}};
+  SkPoint border_pts[] = {{0, kShapeRect.top}, {0, kShapeRect.bottom}};
   SkColor border_colors[] = {"#f0f0f0"_color, "#cccccc"_color};
   border_paint.setShader(
       SkGradientShader::MakeLinear(border_pts, border_colors, nullptr, 2, SkTileMode::kClamp));
@@ -320,7 +320,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 
   SkBlendMode shade_blend_mode = SkBlendMode::kHardLight;
   float shade_alpha = 0.5;
-  SkPoint light_pts[] = {{0, kShapeRect.bottom()}, {0, kShapeRect.top()}};
+  SkPoint light_pts[] = {{0, kShapeRect.top}, {0, kShapeRect.bottom}};
   SkColor light_colors[] = {"#fdf8e0"_color, "#111c22"_color};
   SkPaint light_paint;
   light_paint.setAntiAlias(true);
@@ -331,7 +331,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
 
   canvas.drawDRRect(kShapeRRect, frame_outer, light_paint);
 
-  SkPoint shadow_pts[] = {{0, kShapeRect.top() + kFrameOuterRadius}, {0, kShapeRect.top()}};
+  SkPoint shadow_pts[] = {{0, kShapeRect.bottom + kFrameOuterRadius}, {0, kShapeRect.bottom}};
   SkColor shadow_colors[] = {"#111c22"_color, "#fdf8e0"_color};
   SkPaint shadow_paint;
   shadow_paint.setAntiAlias(true);
@@ -369,29 +369,30 @@ ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
 
 SkMatrix HotKey::TransformToChild(const Widget& child, animation::Display*) const {
   if (&child == &power_button) {
-    return SkMatrix::Translate(-kWidth / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth,
-                               -kHeight / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth);
+    return SkMatrix::Translate(
+        -kWidth / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth,
+        -kShapeRect.top + kFrameWidth + kMinimalTouchableSize - kBorderWidth);
   }
   if (&child == &ctrl_button) {
     return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing,
-                               kHeight / 2 - kFrameWidth - kKeySpacing);
+                               -kShapeRect.bottom - kFrameWidth - kKeySpacing);
   }
   if (&child == &windows_button) {
     return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing * 2 - kCtrlKeyWidth,
-                               kHeight / 2 - kFrameWidth - kKeySpacing);
+                               -kShapeRect.bottom - kFrameWidth - kKeySpacing);
   }
   if (&child == &alt_button) {
     return SkMatrix::Translate(
         kWidth / 2 - kFrameWidth - kKeySpacing * 3 - kCtrlKeyWidth - kSuperKeyWidth,
-        kHeight / 2 - kFrameWidth - kKeySpacing);
+        -kShapeRect.bottom - kFrameWidth - kKeySpacing);
   }
   if (&child == &shift_button) {
     return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing,
-                               kHeight / 2 - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
+                               -kShapeRect.bottom - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
   }
   if (&child == &shortcut_button) {
     return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing * 2 - kShiftKeyWidth,
-                               kHeight / 2 - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
+                               -kShapeRect.bottom - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
   }
   return SkMatrix::I();
 }

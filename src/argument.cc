@@ -148,8 +148,7 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
         Location& l = machine->Create(*prototype);
         result = &l;
         Rect object_bounds = result->object->Shape().getBounds();
-        l.position = here.position + Rect::BottomCenter(here.object->Shape().getBounds()) -
-                     object_bounds.TopCenter();
+        l.position = here.position + here.object->ArgStart(*this).pos - object_bounds.TopCenter();
         PositionBelow(here, l);
         AnimateGrowFrom(here, l);
       }

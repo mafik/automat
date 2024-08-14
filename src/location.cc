@@ -6,9 +6,11 @@
 #include <include/core/SkPathMeasure.h>
 #include <include/core/SkPathUtils.h>
 #include <include/core/SkPictureRecorder.h>
+#include <include/core/SkPoint3.h>
 #include <include/effects/SkDashPathEffect.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
+#include <include/utils/SkShadowUtils.h>
 
 #include "animation.hh"
 #include "base.hh"
@@ -444,6 +446,21 @@ void AnimateGrowFrom(Location& source, Location& grown) {
     animation_state.position.value = source_center;
     animation_state.transparency.value = 1;
   }
+}
+
+void Location::PreDraw(gui::DrawContext& ctx) const {
+  // Draw shadow
+  if (object == nullptr) {
+    return;
+  }
+  auto shape = object->Shape(&ctx.display);
+  SkPoint3 z_plane_params = {0, 0, 5_mm * ctx.canvas.getTotalMatrix().getScaleX()};
+  SkPoint3 light_pos = {0, 1, 1};
+  SkShadowUtils::DrawShadow(
+      &ctx.canvas, shape, z_plane_params, light_pos, 100_cm, "#ff0000"_color, "#00ff00"_color,
+      SkShadowFlags::kDirectionalLight_ShadowFlag | SkShadowFlags::kTransparentOccluder_ShadowFlag |
+          SkShadowFlags::kConcaveBlurOnly_ShadowFlag);
+  PreDrawChildren(ctx);
 }
 
 }  // namespace automat

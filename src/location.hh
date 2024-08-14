@@ -245,6 +245,7 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number);
 
+  void PreDraw(gui::DrawContext&) const override;
   void Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape(animation::Display*) const override;

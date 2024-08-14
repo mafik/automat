@@ -5,7 +5,6 @@
 #include "action.hh"
 #include "animation.hh"
 #include "gui_connection_widget.hh"
-#include "log.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "root.hh"
@@ -17,52 +16,24 @@ static Vec2 RoundToMilimeters(Vec2 v) {
   return Vec2(roundf(v.x * 1000) / 1000., roundf(v.y * 1000) / 1000.);
 }
 
-void DragActionBase::Begin() {
+static Object* DraggedObject(DragLocationAction& a) { return a.location->object.get(); }
+
+void DragLocationAction::Begin() {
   last_position = current_position = pointer.PositionWithinRootMachine();
   Update();
 }
 
-Vec2 SnapPosition(DragActionBase& d) {
+Vec2 SnapPosition(DragLocationAction& d) {
   return RoundToMilimeters(d.current_position - d.contact_point);
 }
 
-void DragActionBase::Update() {
-  current_position = pointer.PositionWithinRootMachine();
-
-  Vec2 position = current_position - contact_point;
-  float scale = 1;
-
-  if (gui::DropTarget* drop_target = FindDropTarget()) {
-    drop_target->SnapPosition(position, scale, DraggedObject(), &contact_point);
-  }
-
-  if (last_snapped_position != position) {
-    last_snapped_position = position;
-    DragUpdate(pointer.window.display, current_position - last_position);
-  }
-  SnapUpdate(position, scale);
-
-  last_position = current_position;
-}
-
-void DragLocationAction::DragUpdate(animation::Display& display, Vec2 delta_pos) {
-  location->animation_state[display].position.value += delta_pos;
-}
-
-void DragLocationAction::SnapUpdate(Vec2 pos, float scale) {
-  location->scale = scale;
-  location->position = pos;
-}
-
-void DragActionBase::End() { DragEnd(); }
-
-gui::DropTarget* DragActionBase::FindDropTarget() {
+static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
   using namespace gui;
   using namespace maf;
 
   Path path;
-  Vec2 point = pointer.pointer_position;
-  auto* display = &pointer.window.display;
+  Vec2 point = a.pointer.pointer_position;
+  auto* display = &a.pointer.window.display;
 
   gui::DropTarget* drop_target = nullptr;
 
@@ -92,13 +63,41 @@ gui::DropTarget* DragActionBase::FindDropTarget() {
     return ControlFlow::Continue;
   };
 
-  struct Widget* window_arr[] = {pointer.path[0]};
+  struct Widget* window_arr[] = {a.pointer.path[0]};
   dfs(window_arr);
   return drop_target;
 }
 
+void DragLocationAction::Update() {
+  current_position = pointer.PositionWithinRootMachine();
+
+  Vec2 position = current_position - contact_point;
+  float scale = 1;
+
+  if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
+    drop_target->SnapPosition(position, scale, DraggedObject(*this), &contact_point);
+  }
+
+  if (last_snapped_position != position) {
+    last_snapped_position = position;
+    location->animation_state[pointer.window.display].position.value +=
+        current_position - last_position;
+  }
+  location->scale = scale;
+  location->position = position;
+
+  last_position = current_position;
+}
+
+void DragLocationAction::End() {
+  if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
+    drop_target->DropLocation(location);
+  }
+}
+
 DragLocationAction::DragLocationAction(gui::Pointer& pointer, Location* location)
-    : DragActionBase(pointer), location(location) {
+    : Action(pointer), location(location) {
+  pointer.window.drag_action_count++;
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this object.
   // Set their "radar" to 1
   for (auto& connection_widget : root_machine->connection_widgets) {
@@ -106,8 +105,8 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Location* location
       connection_widget->animation_state[pointer.window.display].radar_alpha_target = 1;
     } else {
       string error;
-      connection_widget->arg.CheckRequirements(connection_widget->from, location, DraggedObject(),
-                                               error);
+      connection_widget->arg.CheckRequirements(connection_widget->from, location,
+                                               DraggedObject(*this), error);
       if (error.empty()) {
         connection_widget->animation_state[pointer.window.display].radar_alpha_target = 1;
       }
@@ -116,23 +115,10 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Location* location
 }
 
 DragLocationAction::~DragLocationAction() {
+  pointer.window.drag_action_count--;
   for (auto& connection_widget : root_machine->connection_widgets) {
     connection_widget->animation_state[pointer.window.display].radar_alpha_target = 0;
   }
 }
-
-void DragLocationAction::DragEnd() {
-  if (gui::DropTarget* drop_target = FindDropTarget()) {
-    drop_target->DropLocation(location);
-  }
-}
-
-Object* DragLocationAction::DraggedObject() { return location->object.get(); }
-
-DragActionBase::DragActionBase(gui::Pointer& pointer) : Action(pointer) {
-  pointer.window.drag_action_count++;
-}
-
-DragActionBase::~DragActionBase() { pointer.window.drag_action_count--; }
 
 }  // namespace automat

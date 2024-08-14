@@ -148,6 +148,7 @@ struct Machine : LiveObject, gui::DropTarget {
     return std::unique_ptr<Object>(m);
   }
 
+  void Draw(gui::DrawContext& ctx) const override { Widget::Draw(ctx); }
   void PreDraw(gui::DrawContext&) const override;
   gui::DropTarget* CanDrop() override { return this; }
   void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;

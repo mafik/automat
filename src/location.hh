@@ -28,6 +28,7 @@ struct ObjectAnimationState {
   animation::SpringV2<Vec2> position;
   animation::Approach<> transparency;
   animation::Approach<> highlight;
+  animation::SpringV2<float> elevation;
 
   ObjectAnimationState();
 

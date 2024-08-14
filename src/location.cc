@@ -350,7 +350,7 @@ void ObjectAnimationState::Tick(float delta_time, Vec2 target_position, float ta
   scale.SpringTowards(target_scale, delta_time, Location::kSpringPeriod, Location::kSpringHalfTime);
 }
 
-ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}) {
+ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}), elevation(0) {
   transparency.speed = 5;
 }
 ObjectAnimationState& Location::GetAnimationState(animation::Display& display) const {
@@ -454,15 +454,43 @@ void Location::PreDraw(gui::DrawContext& ctx) const {
   if (object == nullptr) {
     return;
   }
+  auto& anim = animation_state[ctx.display];
+  float target_elevation = 0;
+  for (auto* window : windows) {
+    for (auto* pointer : window->pointers) {
+      if (auto& action = pointer->action) {
+        if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
+          if (drag_action->location.get() == this) {
+            target_elevation = 1;
+          }
+        }
+      }
+    }
+  }
+  anim.elevation.SineTowards(target_elevation, ctx.DeltaT(), 0.2);
   auto shape = object->Shape(&ctx.display);
+  auto rect = shape.getBounds();
   auto surface = ctx.canvas.getSurface();
   float s = ctx.canvas.getTotalMatrix().getScaleX();
-  SkPoint3 z_plane_params = {0, 0, 2_mm * s};
+  float min_elevation = 1_mm;
+  SkPoint3 z_plane_params = {0, 0, (min_elevation + anim.elevation * 8_mm) * s};
   SkPoint3 light_pos = {surface->width() / 2.f, (float)surface->height(), (float)surface->height()};
-  SkShadowUtils::DrawShadow(
-      &ctx.canvas, shape, z_plane_params, light_pos, surface->width(), "#51500080"_color,
-      "#00285180"_color,
-      SkShadowFlags::kTransparentOccluder_ShadowFlag | SkShadowFlags::kConcaveBlurOnly_ShadowFlag);
+  float light_radius = surface->width() / 2.f;
+  uint32_t flags =
+      SkShadowFlags::kTransparentOccluder_ShadowFlag | SkShadowFlags::kConcaveBlurOnly_ShadowFlag;
+  SkPaint shadow_paint;
+  shadow_paint.setBlendMode(SkBlendMode::kMultiply);
+  SkRect shadow_bounds;
+  SkShadowUtils::GetLocalBounds(ctx.canvas.getTotalMatrix(), shape, z_plane_params, light_pos,
+                                light_radius, flags, &shadow_bounds);
+  ctx.canvas.saveLayer(&shadow_bounds, &shadow_paint);
+  // Z plane params are parameters for the height function. h(x, y, z) = param_X * x + param_Y * y +
+  // param_Z The height seems to be computed only for the center of the shape.
+  // All of the light parameters (position, radius) are specified in pixel coordinates and ignore
+  // current canvas transform.
+  SkShadowUtils::DrawShadow(&ctx.canvas, shape, z_plane_params, light_pos, light_radius,
+                            "#c9ced6"_color, "#ada4b0"_color, flags);
+  ctx.canvas.restore();
   PreDrawChildren(ctx);
 }
 

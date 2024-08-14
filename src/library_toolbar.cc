@@ -5,6 +5,7 @@
 #include <include/core/SkSamplingOptions.h>
 
 #include "../build/generated/embedded.hh"
+#include "root.hh"
 #include "span.hh"
 #include "textures.hh"
 #include "widget.hh"
@@ -19,13 +20,14 @@ std::unique_ptr<Action> PrototypeButton::CaptureButtonDownAction(gui::Pointer& p
   if (btn != gui::kMouseLeft) {
     return nullptr;
   }
-  auto drag_action = std::make_unique<DragObjectAction>(pointer, proto->Clone());
+  auto& loc = root_machine->Create(*proto);
+  auto drag_action = std::make_unique<DragLocationAction>(pointer, &loc);
   drag_action->contact_point = pointer.PositionWithin(*this);
 
   auto matrix = TransformUp(pointer.path, &pointer.window.display);
-  drag_action->anim->scale = matrix.get(0) / pointer.window.zoom.value;
-  drag_action->position = drag_action->anim->position =
-      pointer.PositionWithinRootMachine() - drag_action->contact_point;
+  auto& anim = loc.animation_state[pointer.window.display];
+  anim.scale = matrix.get(0) / pointer.window.zoom.value;
+  loc.position = anim.position = pointer.PositionWithinRootMachine() - drag_action->contact_point;
   return drag_action;
 }
 }  // namespace automat::gui

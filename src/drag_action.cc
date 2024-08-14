@@ -45,21 +45,6 @@ void DragActionBase::Update() {
   last_position = current_position;
 }
 
-DragObjectAction::DragObjectAction(gui::Pointer& pointer, std::unique_ptr<Object>&& object_arg)
-    : DragActionBase(pointer), object(std::move(object_arg)), position({}), scale(1) {
-  anim = std::make_unique<ObjectAnimationState>();
-}
-
-DragObjectAction::~DragObjectAction() {}
-
-void DragObjectAction::SnapUpdate(Vec2 pos, float scale) {
-  this->scale = scale;
-  position = pos;
-}
-
-void DragObjectAction::DragUpdate(animation::Display&, Vec2 delta_pos) {
-  anim->position.value += delta_pos;
-}
 void DragLocationAction::DragUpdate(animation::Display& display, Vec2 delta_pos) {
   location->animation_state[display].position.value += delta_pos;
 }
@@ -111,34 +96,6 @@ gui::DropTarget* DragActionBase::FindDropTarget() {
   dfs(window_arr);
   return drop_target;
 }
-
-void DragObjectAction::DragEnd() {
-  if (gui::DropTarget* drop_target = FindDropTarget()) {
-    auto animation_state = std::make_unique<animation::PerDisplay<ObjectAnimationState>>();
-    (*animation_state)[pointer.window.display] = *anim;
-    drop_target->DropObject(std::move(object), position, scale, std::move(animation_state));
-  }
-}
-
-gui::Widget* DragObjectAction::Widget() { return this; }
-
-ControlFlow DragObjectAction::VisitChildren(gui::Visitor& visitor) {
-  gui::Widget* widgets[] = {object.get()};
-  return visitor(widgets);
-}
-
-SkMatrix DragObjectAction::TransformToChild(const gui::Widget& child, animation::Display*) const {
-  return anim->GetTransform(object->Shape(nullptr).getBounds().center());
-}
-
-void DragObjectAction::Draw(gui::DrawContext& ctx) const {
-  anim->Tick(ctx.DeltaT(), position, scale);
-  DrawChildren(ctx);
-}
-
-SkPath DragObjectAction::Shape(animation::Display*) const { return SkPath(); }
-
-Object* DragObjectAction::DraggedObject() { return object.get(); }
 
 DragLocationAction::DragLocationAction(gui::Pointer& pointer, Location* location)
     : DragActionBase(pointer), location(location) {

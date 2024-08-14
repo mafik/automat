@@ -56,27 +56,6 @@ struct DragActionBase : Action {
   virtual Object* DraggedObject() = 0;
 };
 
-struct DragObjectAction : DragActionBase, gui::Widget {
-  Vec2 position = {};
-  float scale = 1;
-  std::unique_ptr<Object> object;
-  std::unique_ptr<ObjectAnimationState> anim;
-
-  DragObjectAction(gui::Pointer&, std::unique_ptr<Object>&&);
-  ~DragObjectAction() override;
-  void DragUpdate(animation::Display&, Vec2 delta_pos) override;
-  void SnapUpdate(Vec2 pos, float scale) override;
-  void DragEnd() override;
-  gui::Widget* Widget() override;
-  Object* DraggedObject() override;
-
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
-  SkMatrix TransformToChild(const gui::Widget& child, animation::Display*) const override;
-  bool ChildrenOutside() const override { return true; }
-  void Draw(gui::DrawContext&) const override;
-  SkPath Shape(animation::Display*) const override;
-};
-
 struct DragLocationAction : DragActionBase {
   Location* location;
   DragLocationAction(gui::Pointer&, Location*);

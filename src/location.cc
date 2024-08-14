@@ -7,6 +7,7 @@
 #include <include/core/SkPathUtils.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkPoint3.h>
+#include <include/core/SkSurface.h>
 #include <include/effects/SkDashPathEffect.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
@@ -454,12 +455,14 @@ void Location::PreDraw(gui::DrawContext& ctx) const {
     return;
   }
   auto shape = object->Shape(&ctx.display);
-  SkPoint3 z_plane_params = {0, 0, 5_mm * ctx.canvas.getTotalMatrix().getScaleX()};
-  SkPoint3 light_pos = {0, 1, 1};
+  auto surface = ctx.canvas.getSurface();
+  float s = ctx.canvas.getTotalMatrix().getScaleX();
+  SkPoint3 z_plane_params = {0, 0, 2_mm * s};
+  SkPoint3 light_pos = {surface->width() / 2.f, (float)surface->height(), (float)surface->height()};
   SkShadowUtils::DrawShadow(
-      &ctx.canvas, shape, z_plane_params, light_pos, 100_cm, "#ff0000"_color, "#00ff00"_color,
-      SkShadowFlags::kDirectionalLight_ShadowFlag | SkShadowFlags::kTransparentOccluder_ShadowFlag |
-          SkShadowFlags::kConcaveBlurOnly_ShadowFlag);
+      &ctx.canvas, shape, z_plane_params, light_pos, surface->width(), "#51500080"_color,
+      "#00285180"_color,
+      SkShadowFlags::kTransparentOccluder_ShadowFlag | SkShadowFlags::kConcaveBlurOnly_ShadowFlag);
   PreDrawChildren(ctx);
 }
 

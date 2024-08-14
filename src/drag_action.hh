@@ -5,6 +5,7 @@
 
 #include "action.hh"
 #include "animation.hh"
+#include "control_flow.hh"
 #include "object.hh"
 #include "time.hh"
 
@@ -25,24 +26,30 @@ struct DropTarget {
   // When a location is being dragged around, its still owned by its original Machine. Only when
   // this method is called, the location may be re-parented into the new drop target.
   // The drop target is responsible for re-parenting the location!
-  virtual void DropLocation(Location* location) = 0;
+  virtual void DropLocation(std::unique_ptr<Location>&&) = 0;
 };
 }  // namespace gui
 
-struct DragLocationAction : Action {
+struct DragLocationAction : Action, gui::Widget {
   Vec2 contact_point;          // in the coordinate space of the dragged Object
   Vec2 last_position;          // root machine coordinates
   Vec2 current_position;       // root machine coordinates
   Vec2 last_snapped_position;  // root machine coordinates
   time::SteadyPoint last_update;
-  Location* location;
+  std::unique_ptr<Location> location;
 
-  DragLocationAction(gui::Pointer&, Location*);
+  DragLocationAction(gui::Pointer&, std::unique_ptr<Location>&&);
   ~DragLocationAction() override;
+
+  SkPath Shape(animation::Display*) const override;
+  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  SkMatrix TransformToChild(const gui::Widget& child, animation::Display* display) const override;
+  bool ChildrenOutside() const override { return true; }
 
   void Begin() override;
   void Update() override;
   void End() override;
+  gui::Widget* Widget() override { return this; }
 };
 
 }  // namespace automat

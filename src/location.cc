@@ -277,13 +277,6 @@ void Location::Draw(gui::DrawContext& ctx) const {
 }
 
 std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
-  if constexpr (false) {
-    if (btn == gui::PointerButton::kMouseLeft) {
-      auto a = std::make_unique<DragLocationAction>(p, this);
-      a->contact_point = p.PositionWithin(*this);
-      return a;
-    }
-  }
   return nullptr;
 }
 

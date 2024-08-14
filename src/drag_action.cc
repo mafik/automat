@@ -1,5 +1,7 @@
 #include "drag_action.hh"
 
+#include <include/core/SkPath.h>
+
 #include <cmath>
 
 #include "action.hh"
@@ -89,23 +91,26 @@ void DragLocationAction::Update() {
   last_position = current_position;
 }
 
+SkPath DragLocationAction::Shape(animation::Display*) const { return SkPath(); }
+
 void DragLocationAction::End() {
   if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
-    drop_target->DropLocation(location);
+    drop_target->DropLocation(std::move(location));
   }
 }
 
-DragLocationAction::DragLocationAction(gui::Pointer& pointer, Location* location)
-    : Action(pointer), location(location) {
+DragLocationAction::DragLocationAction(gui::Pointer& pointer,
+                                       std::unique_ptr<Location>&& location_arg)
+    : Action(pointer), location(std::move(location_arg)) {
   pointer.window.drag_action_count++;
-  // Go over every ConnectionWidget and see if any of its arguments can be connected to this object.
-  // Set their "radar" to 1
+  // Go over every ConnectionWidget and see if any of its arguments can be connected to this
+  // object. Set their "radar" to 1
   for (auto& connection_widget : root_machine->connection_widgets) {
-    if (&connection_widget->from == location) {
+    if (&connection_widget->from == location.get()) {
       connection_widget->animation_state[pointer.window.display].radar_alpha_target = 1;
     } else {
       string error;
-      connection_widget->arg.CheckRequirements(connection_widget->from, location,
+      connection_widget->arg.CheckRequirements(connection_widget->from, location.get(),
                                                DraggedObject(*this), error);
       if (error.empty()) {
         connection_widget->animation_state[pointer.window.display].radar_alpha_target = 1;
@@ -119,6 +124,20 @@ DragLocationAction::~DragLocationAction() {
   for (auto& connection_widget : root_machine->connection_widgets) {
     connection_widget->animation_state[pointer.window.display].radar_alpha_target = 0;
   }
+}
+ControlFlow DragLocationAction::VisitChildren(gui::Visitor& visitor) {
+  struct Widget* child = location.get();
+  if (visitor(maf::SpanOfArr(&child, 1)) == ControlFlow::Stop) {
+    return ControlFlow::Stop;
+  }
+  return ControlFlow::Continue;
+}
+SkMatrix DragLocationAction::TransformToChild(const gui::Widget& child,
+                                              animation::Display* display) const {
+  if (&child == location.get()) {
+    return location->GetTransform(display);
+  }
+  return SkMatrix::I();
 }
 
 }  // namespace automat

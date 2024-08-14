@@ -149,13 +149,12 @@ struct Machine : LiveObject, gui::DropTarget {
   }
 
   void PreDraw(gui::DrawContext&) const override;
-  void Draw(gui::DrawContext&) const override;
   gui::DropTarget* CanDrop() override { return this; }
   void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
   void DropObject(
       std::unique_ptr<Object>&& object, Vec2 position, float scale,
       std::unique_ptr<animation::PerDisplay<ObjectAnimationState>>&& animation_state) override;
-  void DropLocation(Location*) override;
+  void DropLocation(std::unique_ptr<Location>&&) override;
 
   SkPath Shape(animation::Display*) const override;
 

@@ -20,14 +20,15 @@ std::unique_ptr<Action> PrototypeButton::CaptureButtonDownAction(gui::Pointer& p
   if (btn != gui::kMouseLeft) {
     return nullptr;
   }
-  auto& loc = root_machine->Create(*proto);
-  auto drag_action = std::make_unique<DragLocationAction>(pointer, &loc);
-  drag_action->contact_point = pointer.PositionWithin(*this);
-
   auto matrix = TransformUp(pointer.path, &pointer.window.display);
-  auto& anim = loc.animation_state[pointer.window.display];
+  auto loc = std::make_unique<Location>();
+  loc->Create(*proto);
+  auto& anim = loc->animation_state[pointer.window.display];
   anim.scale = matrix.get(0) / pointer.window.zoom.value;
-  loc.position = anim.position = pointer.PositionWithinRootMachine() - drag_action->contact_point;
+  auto contact_point = pointer.PositionWithin(*this);
+  loc->position = anim.position = pointer.PositionWithinRootMachine() - contact_point;
+  auto drag_action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
+  drag_action->contact_point = contact_point;
   return drag_action;
 }
 }  // namespace automat::gui

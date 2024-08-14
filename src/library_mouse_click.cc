@@ -172,25 +172,6 @@ SkPath MouseClick::Shape(animation::Display*) const {
   return SkPath::Rect(SkRect::MakeXYWH(0, 0, mouse_base_image->width() * kScale,
                                        mouse_base_image->height() * kScale));
 }
-std::unique_ptr<Action> MouseClick::ButtonDownAction(gui::Pointer& pointer,
-                                                     gui::PointerButton btn) {
-  if (btn != gui::PointerButton::kMouseLeft) {
-    return nullptr;
-  }
-  auto& path = pointer.path;
-  if (path.size() < 2) {
-    return nullptr;
-  }
-  auto* parent = path[path.size() - 2];
-  Location* location = dynamic_cast<Location*>(parent);
-  if (!location) {
-    return nullptr;
-  }
-  std::unique_ptr<DragLocationAction> action =
-      std::make_unique<DragLocationAction>(pointer, location);
-  action->contact_point = pointer.PositionWithin(*this);
-  return action;
-}
 
 void MouseClick::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 

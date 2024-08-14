@@ -39,7 +39,7 @@ struct Window final : Widget, DropTarget {
   void DropObject(
       std::unique_ptr<Object>&& object, Vec2 position, float scale,
       std::unique_ptr<animation::PerDisplay<ObjectAnimationState>>&& animation_state) override;
-  void DropLocation(Location* location) override;
+  void DropLocation(std::unique_ptr<Location>&&) override;
 
   // Return the shape of the trash zone in the corner of the window (in Machine coordinates).
   SkPath TrashShape() const;

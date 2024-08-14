@@ -36,6 +36,59 @@ Pointer::~Pointer() {
     window.pointers.erase(it);
   }
 }
+static void UpdatePath(Pointer& pointer) {
+  Path& path = pointer.path;
+  Path old_path = path;
+  auto& display = pointer.window.display;
+
+  path.clear();
+  Vec2 point = pointer.pointer_position;
+
+  Visitor dfs = [&](Span<Widget*> widgets) -> ControlFlow {
+    for (auto w : widgets) {
+      Vec2 transformed;
+      if (!path.empty()) {
+        transformed = path.back()->TransformToChild(*w, &display).mapPoint(point);
+      } else {
+        transformed = point;
+      }
+
+      auto shape = w->Shape(&display);
+      path.push_back(w);
+      std::swap(point, transformed);
+      if (shape.contains(point.x, point.y)) {
+        w->VisitChildren(dfs);
+        return ControlFlow::Stop;
+      } else if (w->ChildrenOutside()) {
+        if (w->VisitChildren(dfs) == ControlFlow::Stop) {
+          return ControlFlow::Stop;
+        }
+      }
+      std::swap(point, transformed);
+      path.pop_back();
+    }
+    return ControlFlow::Continue;
+  };
+
+  Widget* window_arr[] = {&pointer.window};
+  dfs(window_arr);
+
+  for (Widget* old_w : old_path) {
+    if (old_w == nullptr) {  // Ephemeral widgets (DragObjectAction) replace themselves with
+                             // nullptr upon destruction.
+      continue;
+    }
+    if (std::find(path.begin(), path.end(), old_w) == path.end()) {
+      old_w->PointerLeave(pointer, display);
+    }
+  }
+  for (Widget* new_w : path) {
+    if (std::find(old_path.begin(), old_path.end(), new_w) == old_path.end()) {
+      new_w->PointerOver(pointer, display);
+    }
+  }
+}
+
 void Pointer::Move(Vec2 position) {
   RunOnAutomatThread([=, this]() {
     Vec2 old_mouse_pos = pointer_position;
@@ -49,54 +102,7 @@ void Pointer::Move(Vec2 position) {
     if (action) {
       action->Update();
     }
-    Path old_path = path;
-
-    path.clear();
-    Vec2 point = pointer_position;
-
-    Visitor dfs = [&](Span<Widget*> widgets) -> ControlFlow {
-      for (auto w : widgets) {
-        Vec2 transformed;
-        if (!path.empty()) {
-          transformed = path.back()->TransformToChild(*w, &window.display).mapPoint(point);
-        } else {
-          transformed = point;
-        }
-
-        auto shape = w->Shape(&window.display);
-        path.push_back(w);
-        std::swap(point, transformed);
-        if (shape.contains(point.x, point.y)) {
-          w->VisitChildren(dfs);
-          return ControlFlow::Stop;
-        } else if (w->ChildrenOutside()) {
-          if (w->VisitChildren(dfs) == ControlFlow::Stop) {
-            return ControlFlow::Stop;
-          }
-        }
-        std::swap(point, transformed);
-        path.pop_back();
-      }
-      return ControlFlow::Continue;
-    };
-
-    Widget* window_arr[] = {&window};
-    dfs(window_arr);
-
-    for (Widget* old_w : old_path) {
-      if (old_w == nullptr) {  // Ephemeral widgets (DragObjectAction) replace themselves with
-                               // nullptr upon destruction.
-        continue;
-      }
-      if (std::find(path.begin(), path.end(), old_w) == path.end()) {
-        old_w->PointerLeave(*this, window.display);
-      }
-    }
-    for (Widget* new_w : path) {
-      if (std::find(old_path.begin(), old_path.end(), new_w) == old_path.end()) {
-        new_w->PointerOver(*this, window.display);
-      }
-    }
+    UpdatePath(*this);
   });
 }
 void Pointer::Wheel(float delta) {
@@ -121,6 +127,7 @@ void Pointer::ButtonDown(PointerButton btn) {
   RunOnAutomatThread([=, this]() {
     button_down_position[btn] = pointer_position;
     button_down_time[btn] = time::SystemNow();
+    UpdatePath(*this);
 
     if (action == nullptr && !path.empty()) {
       for (Widget* w : path) {

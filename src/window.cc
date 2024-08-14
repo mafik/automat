@@ -414,8 +414,8 @@ void Window::DropObject(
   // do nothing - objects immediately disappears when dropped on the window
 }
 
-void Window::DropLocation(Location* location) {
-  auto location_ptr = location->ParentAs<Machine>()->Extract(*location);
+void Window::DropLocation(std::unique_ptr<Location>&& location) {
+  // do nothing - location will be deleted by unique_ptr
 }
 
 ControlFlow Window::VisitChildren(Visitor& visitor) {

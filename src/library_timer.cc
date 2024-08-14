@@ -705,12 +705,8 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
         return std::make_unique<DragHandAction>(pointer, *this);
       }
     }
-
-    auto action = std::make_unique<DragLocationAction>(pointer, here);
-    action->contact_point = pos;
-    return action;
   }
-  return nullptr;
+  return Object::ButtonDownAction(pointer, btn);
 }
 
 void TimerDelay::Fields(std::function<void(Object&)> cb) { cb(duration); }

@@ -66,7 +66,7 @@ struct Widget {
   virtual void PointerLeave(Pointer&, animation::Display&) {}
 
   virtual void PreDraw(DrawContext& ctx) const { PreDrawChildren(ctx); }
-  virtual void Draw(DrawContext&) const = 0;
+  virtual void Draw(DrawContext& ctx) const { DrawChildren(ctx); }
   virtual SkPath Shape(animation::Display*) const = 0;
   virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {
     return nullptr;

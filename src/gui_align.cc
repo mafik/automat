@@ -8,8 +8,6 @@ namespace automat::gui {
 
 AlignCenter::AlignCenter(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
 
-void AlignCenter::Draw(DrawContext& ctx) const { DrawChildren(ctx); }
-
 SkPath AlignCenter::Shape(animation::Display*) const { return SkPath(); }
 
 ControlFlow AlignCenter::VisitChildren(Visitor& visitor) {

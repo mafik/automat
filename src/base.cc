@@ -394,7 +394,6 @@ void Machine::PreDraw(gui::DrawContext& ctx) const {
   PreDrawChildren(ctx);
 }
 
-void Machine::Draw(gui::DrawContext& ctx) const { DrawChildren(ctx); }
 void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {
   scale = 1.0;
   Rect rect = object->Shape(nullptr).getBounds();
@@ -423,8 +422,9 @@ void Machine::DropObject(
   loc.animation_state = std::move(*animation_state);
 }
 
-void Machine::DropLocation(Location* location) {
-  // nothing to do here
+void Machine::DropLocation(std::unique_ptr<Location>&& l) {
+  l->parent = here;
+  root_machine->locations.insert(root_machine->locations.begin(), std::move(l));
 }
 
 std::unique_ptr<Location> Machine::Extract(Location& location) {

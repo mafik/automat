@@ -50,6 +50,8 @@ struct Location : gui::Widget {
   constexpr static float kSpringHalfTime = 0.08s .count();
 
   ObjectAnimationState& GetAnimationState(animation::Display&) const;
+
+  // TODO: remove this and move it into TransformToChild
   SkMatrix GetTransform(animation::Display*) const;
 
   animation::PerDisplay<ObjectAnimationState> animation_state;

@@ -17,11 +17,13 @@
 #include "drag_action.hh"
 #include "font.hh"
 #include "format.hh"
+#include "gui_connection_widget.hh"
 #include "gui_constants.hh"
 #include "math.hh"
 #include "span.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
+#include "window.hh"
 
 using namespace automat::gui;
 using namespace maf;
@@ -400,6 +402,13 @@ Location::~Location() {
   for (int i = global_successors.size() - 1; i >= 0; --i) {
     if (global_successors[i]->target == this) {
       global_successors.erase(global_successors.begin() + i);
+    }
+  }
+
+  for (int i = 0; i < window->connection_widgets.size(); ++i) {
+    if (&window->connection_widgets[i]->from == this) {
+      window->connection_widgets.erase(window->connection_widgets.begin() + i);
+      --i;
     }
   }
 }

@@ -6,6 +6,7 @@
 
 #include "drag_action.hh"
 #include "font.hh"
+#include "gui_connection_widget.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
@@ -418,11 +419,41 @@ void Window::DropLocation(std::unique_ptr<Location>&& location) {
   // do nothing - location will be deleted by unique_ptr
 }
 
+static void UpdateConnectionWidgets(Window& window) {
+  for (auto& loc : root_machine->locations) {
+    if (loc->object) {
+      loc->object->Args([&](Argument& arg) {
+        // Check if this argument already has a widget.
+        bool has_widget = false;
+        for (auto& widget : window.connection_widgets) {
+          if (&widget->from != loc.get()) {
+            continue;
+          }
+          if (&widget->arg != &arg) {
+            continue;
+          }
+          has_widget = true;
+        }
+        if (has_widget) {
+          return;
+        }
+        // Create a new widget.
+        LOG << "Creating a ConnectionWidget for argument " << arg.name;
+        window.connection_widgets.emplace_back(new gui::ConnectionWidget(*loc, arg));
+      });
+    }
+  }
+}
+
 ControlFlow Window::VisitChildren(Visitor& visitor) {
   ControlFlow result = ControlFlow::Continue;
   RunOnAutomatThreadSynchronous([&]() {
+    UpdateConnectionWidgets(*this);
     Vec<Widget*> widgets;
-    widgets.reserve(2 + pointers.size());
+    widgets.reserve(2 + pointers.size() + connection_widgets.size());
+    for (auto& it : connection_widgets) {
+      widgets.push_back(it.get());
+    }
     for (auto& pointer : pointers) {
       if (auto widget = pointer->GetWidget()) {
         widgets.push_back(widget);

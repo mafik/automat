@@ -479,11 +479,7 @@ void MacroRecorder::PointerLeave(gui::Pointer&, animation::Display& d) {
 }
 
 static ConnectionWidget* FindConnectionWidget(Location& here, Argument& arg) {
-  auto machine = here.ParentAs<Machine>();
-  if (machine == nullptr) {
-    return nullptr;
-  }
-  for (auto& connection_widget : machine->connection_widgets) {
+  for (auto& connection_widget : window->connection_widgets) {
     if (&connection_widget->from != &here) {
       continue;
     }

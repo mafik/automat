@@ -13,6 +13,7 @@
 #include "location.hh"
 #include "math.hh"
 #include "object.hh"
+#include "root.hh"
 
 using namespace maf;
 
@@ -184,15 +185,19 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   }
   SkPath to_shape;              // machine coords
   SkPath to_shape_from_coords;  // from's coords
-  Widget* parent_machine = ctx.path[ctx.path.size() - 2];
-  Vec<Vec2AndDir> to_points;  // machine coords
+  Vec<Vec2AndDir> to_points;    // machine coords
   Location* to = nullptr;
+
+  // TODO: parent_machine is not necessarily correct.
+  // For example when a location is being dragged around, or when there are nested machines.
+  Widget* parent_machine = root_machine;
 
   auto pos_dir = from.ArgStart(&display, arg);
 
   if ((to = arg.FindLocation(from))) {
     to_shape = to->object->Shape(nullptr);
     to->object->ConnectionPositions(to_points);
+    Path target_path;
     SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);
     for (auto& vec_and_dir : to_points) {
       vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);

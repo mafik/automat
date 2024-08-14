@@ -76,32 +76,6 @@ void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> 
   return nullptr;
 }
 
-void Machine::UpdateConnectionWidgets() const {
-  for (auto& loc : locations) {
-    if (loc->object) {
-      loc->object->Args([&](Argument& arg) {
-        // Check if this argument already has a widget.
-        bool has_widget = false;
-        for (auto& widget : connection_widgets) {
-          if (&widget->from != loc.get()) {
-            continue;
-          }
-          if (&widget->arg != &arg) {
-            continue;
-          }
-          has_widget = true;
-        }
-        if (has_widget) {
-          return;
-        }
-        // Create a new widget.
-        LOG << "Creating a ConnectionWidget for argument " << arg.name;
-        connection_widgets.emplace_back(new gui::ConnectionWidget(*loc, arg));
-      });
-    }
-  }
-}
-
 const Machine Machine::proto;
 
 int log_executed_tasks = 0;
@@ -306,13 +280,9 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
 Machine::Machine() {}
 
 ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
-  UpdateConnectionWidgets();
   int i = 0;
-  Size n = locations.size() + connection_widgets.size();
+  Size n = locations.size();
   Widget* arr[n];
-  for (auto& it : connection_widgets) {
-    arr[i++] = it.get();
-  }
   for (auto& it : locations) {
     arr[i++] = it.get();
   }
@@ -444,12 +414,6 @@ std::unique_ptr<Location> Machine::Extract(Location& location) {
       if (children_with_errors[i] == result.get()) {
         children_with_errors.erase(children_with_errors.begin() + i);
         break;
-      }
-    }
-    for (int i = 0; i < connection_widgets.size(); ++i) {
-      if (&connection_widgets[i]->from == &location) {
-        connection_widgets.erase(connection_widgets.begin() + i);
-        --i;
       }
     }
     return result;

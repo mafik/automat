@@ -100,7 +100,6 @@ struct Machine : LiveObject, gui::DropTarget {
   Machine();
   string name = "";
   deque<unique_ptr<Location>> locations;
-  mutable std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
   vector<Location*> front;
   vector<Location*> children_with_errors;
 
@@ -158,9 +157,6 @@ struct Machine : LiveObject, gui::DropTarget {
   void DropLocation(std::unique_ptr<Location>&&) override;
 
   SkPath Shape(animation::Display*) const override;
-
-  // Add ConnectionWidgets for all arguments defined by the objects.
-  void UpdateConnectionWidgets() const;
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;

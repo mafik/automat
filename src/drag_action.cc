@@ -105,7 +105,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
   pointer.window.drag_action_count++;
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
-  for (auto& connection_widget : root_machine->connection_widgets) {
+  for (auto& connection_widget : gui::window->connection_widgets) {
     if (&connection_widget->from == location.get()) {
       connection_widget->animation_state[pointer.window.display].radar_alpha_target = 1;
     } else {
@@ -121,7 +121,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
 
 DragLocationAction::~DragLocationAction() {
   pointer.window.drag_action_count--;
-  for (auto& connection_widget : root_machine->connection_widgets) {
+  for (auto& connection_widget : gui::window->connection_widgets) {
     connection_widget->animation_state[pointer.window.display].radar_alpha_target = 0;
   }
 }

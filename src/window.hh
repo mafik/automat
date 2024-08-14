@@ -120,6 +120,7 @@ struct Window final : Widget, DropTarget {
 
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
   library::Toolbar toolbar;
+  std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
   animation::Approach<> zoom = animation::Approach<>(1.0);
   animation::Approach<> camera_x = animation::Approach<>(0.0);

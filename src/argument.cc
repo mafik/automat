@@ -3,7 +3,9 @@
 #include <cmath>
 
 #include "base.hh"
+#include "drag_action.hh"
 #include "svg.hh"
+#include "window.hh"
 
 using namespace maf;
 
@@ -96,6 +98,34 @@ void Argument::NearbyCandidates(
     std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const {
   if (auto parent_machine = here.ParentAs<Machine>()) {
     Vec2 center = here.position + here.object->ArgStart(*this).pos;
+    for (auto& pointer : gui::window->pointers) {
+      if (auto* action = pointer->action.get()) {
+        if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action)) {
+          auto& location = *drag_location_action->location;
+          if (&location == &here) {
+            continue;
+          }
+          std::string error;
+          for (auto& req : requirements) {
+            req(&location, location.object.get(), error);
+            if (!error.empty()) {
+              break;
+            }
+          }
+          if (!error.empty()) {
+            continue;
+          }
+          Vec<Vec2AndDir> to_points;
+          location.object->ConnectionPositions(to_points);
+          SkMatrix m = TransformUp(gui::Path{drag_location_action->Widget(), &location},
+                                   &pointer->window.display);
+          for (auto& vec_and_dir : to_points) {
+            vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
+          }
+          callback(location, to_points);
+        }
+      }
+    }
     parent_machine->Nearby(center, radius, [&](Location& other) -> void* {
       if (&other == &here) {
         return nullptr;

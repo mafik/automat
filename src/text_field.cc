@@ -12,6 +12,7 @@
 #include "font.hh"
 #include "format.hh"
 #include "gui_connection_widget.hh"
+#include "window.hh"
 
 using namespace maf;
 
@@ -178,22 +179,19 @@ struct TextSelectAction : Action {
       auto pointer_path = pointer.path;
       Location* location = nullptr;
       for (int i = pointer_path.size() - 1; i >= 0; --i) {
-        if (location == nullptr) {
-          location = dynamic_cast<Location*>(pointer_path[i]);
-        } else {
-          if (auto m = dynamic_cast<Machine*>(pointer_path[i])) {
-            for (auto& connection_widget : m->connection_widgets) {
-              if (&connection_widget->arg == text_field.argument &&
-                  &connection_widget->from == location) {
-                drag.emplace(pointer, *connection_widget);
-                drag->Begin();
-                goto outside;
-              }
-            }
-          }
+        if ((location = dynamic_cast<Location*>(pointer_path[i]))) {
+          break;
         }
       }
-    outside:
+
+      for (auto& connection_widget : window->connection_widgets) {
+        if (&connection_widget->arg == text_field.argument &&
+            &connection_widget->from == location) {
+          drag.emplace(pointer, *connection_widget);
+          drag->Begin();
+          break;
+        }
+      }
     }
 
     Vec2 local = pointer.PositionWithin(text_field);

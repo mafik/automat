@@ -103,6 +103,8 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
                                        std::unique_ptr<Location>&& location_arg)
     : Action(pointer), location(std::move(location_arg)) {
   pointer.window.drag_action_count++;
+  // TODO: the right way to do this is to clear the parent here
+  // location->parent = nullptr;
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
   for (auto& connection_widget : gui::window->connection_widgets) {

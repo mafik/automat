@@ -14,6 +14,7 @@
 #include "math.hh"
 #include "object.hh"
 #include "root.hh"
+#include "widget.hh"
 
 using namespace maf;
 
@@ -44,16 +45,6 @@ SkPath ConnectionWidget::Shape(animation::Display*) const {
   } else {
     return SkPath();
   }
-}
-
-static ArcLine RouteConnection(DrawContext& ctx, Vec2AndDir start, Location& to) {
-  Vec<Vec2AndDir> to_points;  // machine coords
-  to.object->ConnectionPositions(to_points);
-  SkMatrix m = TransformUp(Path{to.ParentAs<Widget>(), &to}, &ctx.display);
-  for (auto& to_point : to_points) {
-    to_point.pos = m.mapPoint(to_point.pos);
-  }
-  return RouteCable(ctx, start, to_points);
 }
 
 void ConnectionWidget::PreDraw(DrawContext& ctx) const {
@@ -145,7 +136,7 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
     arg.NearbyCandidates(
         from, arg.autoconnect_radius * 2 + 10_cm,
         [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
-          auto arcline = RouteConnection(ctx, pos_dir, candidate);
+          auto arcline = RouteCable(ctx, pos_dir, to_points);
           auto it = ArcLine::Iterator(arcline);
           float total_length = it.AdvanceToEnd() * anim->radar_alpha;
           Vec2 end_point = it.Position();
@@ -192,7 +183,9 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   // For example when a location is being dragged around, or when there are nested machines.
   Widget* parent_machine = root_machine;
 
-  auto pos_dir = from.ArgStart(&display, arg);
+  auto fromDisplayCtx = GuessDisplayContext(from, display);
+  fromDisplayCtx.path.erase(fromDisplayCtx.path.begin());  // remove the window
+  auto pos_dir = arg.Start(fromDisplayCtx);
 
   if ((to = arg.FindLocation(from))) {
     to_shape = to->object->Shape(nullptr);

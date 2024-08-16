@@ -73,6 +73,10 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
   float distance = Length(delta);
   float turn_radius = std::max<float>(distance / 8, 0.01);
 
+  if (fabsf(delta.x) < 1e-7f) {
+    delta.x = 0.f;
+  }
+
   auto horizontal_shift = ArcLine::TurnShift(delta.x, turn_radius);
   float move_down = (-delta.y - horizontal_shift.distance_forward) / 2;
   if (move_down < 0) {

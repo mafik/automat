@@ -298,7 +298,8 @@ struct Location : gui::Widget {
 };
 
 // Try to guess how this location is displayed. Returns a DisplayContext that starts with Window and
-// ends with this Location and its Object.
+// ends with this Location and its Object. This is an interim function - ideally in each context
+// where a Location is displayed, it should be clear what the DisplayContext is.
 gui::DisplayContext GuessDisplayContext(Location&, animation::Display&);
 void PositionBelow(Location& origin, Location& below);
 void AnimateGrowFrom(Location& source, Location& grown);

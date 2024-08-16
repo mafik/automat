@@ -5,6 +5,7 @@
 #include <chrono>
 #include <source_location>
 
+#include "argument.hh"
 #include "backtrace.hh"
 #include "base.hh"
 #include "library.hh"
@@ -22,11 +23,11 @@ TEST(CounterTest, Count) {
 
   Location& i = counter.Create<Number>();
   Location& inc = counter.Create<Increment>();
-  inc.ConnectTo(i, "target");
+  inc.ConnectTo(i, Increment::target_arg);
   Location& txt = counter.Create<Text>("Count");
-  txt.ConnectTo(i, "target");
-  Location& btn = counter.Create<Button>("Increment");
-  btn.ConnectTo(inc, "next");
+  txt.ConnectTo(i, Text::target_arg);
+  Location& btn = counter.Create<automat::Button>("Increment");
+  btn.ConnectTo(inc, next_arg);
 
   counter.AddToFrontPanel(txt);
   counter.AddToFrontPanel(btn);
@@ -85,8 +86,8 @@ TEST(TemperatureConverterTest, Conversion) {
   Location& c = converter.Create<Integer>("C");
   Location& f = converter.Create<Integer>("F");
 
-  c_txt.ConnectTo(c, "target");
-  f_txt.ConnectTo(f, "target");
+  c_txt.ConnectTo(c, Text::target_arg);
+  f_txt.ConnectTo(f, Text::target_arg);
 
   Location& blackboard = converter.Create<Blackboard>();
   blackboard.SetText("F = C * 9 / 5 + 32");
@@ -136,7 +137,7 @@ struct FlightBookerTest {
     c = &booker.Create<ComboBox>("C");
     t1 = &booker.Create<Text>("T1");
     t2 = &booker.Create<Text>("T2");
-    b = &booker.Create<Button>("B");
+    b = &booker.Create<automat::Button>("B");
     b->SetText("Book");
 
     one_way = &booker.Create<Text>("one-way flight");
@@ -144,8 +145,8 @@ struct FlightBookerTest {
     return_flight = &booker.Create<Text>("return flight");
     return_flight->SetText("return flight");
 
-    c->ConnectTo(*one_way, "option");
-    c->ConnectTo(*return_flight, "option");
+    c->ConnectTo(*one_way, ComboBox::options_arg);
+    c->ConnectTo(*return_flight, ComboBox::options_arg);
 
     booker.AddToFrontPanel(*c);
     booker.AddToFrontPanel(*t1);
@@ -154,34 +155,34 @@ struct FlightBookerTest {
 
     // T2 is enabled iff C’s value is “return flight”.
     t2_enabled = &booker.Create<EqualityTest>("T2 enabled");
-    t2_enabled->ConnectTo(*c, "target");
-    t2_enabled->ConnectTo(*return_flight, "target");
-    t2->ConnectTo(*t2_enabled, "enabled");
+    t2_enabled->ConnectTo(*c, EqualityTest::target_arg);
+    t2_enabled->ConnectTo(*return_flight, EqualityTest::target_arg);
+    t2->ConnectTo(*t2_enabled, automat::Button::enabled_arg);
 
     // When there is an error, B is disabled.
     parent = &booker.Create<Parent>();
     health_test = &booker.Create<HealthTest>();
-    health_test->ConnectTo(*parent, "target");
-    b->ConnectTo(*health_test, "enabled");
+    health_test->ConnectTo(*parent, HealthTest::target_arg);
+    b->ConnectTo(*health_test, automat::Button::enabled_arg);
 
     // Report an error when C’s value is “return flight” & T2’s date is strictly
     // before T1.
     t1_date = &booker.Create<Date>("T1");
-    t1->ConnectTo(*t1_date, "target");
+    t1->ConnectTo(*t1_date, Text::target_arg);
     t2_date = &booker.Create<Date>("T2");
-    t2->ConnectTo(*t2_date, "target");
+    t2->ConnectTo(*t2_date, Text::target_arg);
     t2_before_t1 = &booker.Create<LessThanTest>();
-    t2_before_t1->ConnectTo(*t2_date, "less");
-    t2_before_t1->ConnectTo(*t1_date, "than");
+    t2_before_t1->ConnectTo(*t2_date, LessThanTest::less_arg);
+    t2_before_t1->ConnectTo(*t1_date, LessThanTest::than_arg);
     all_test = &booker.Create<AllTest>();
-    all_test->ConnectTo(*t2_before_t1, "test");
-    all_test->ConnectTo(*t2_enabled, "test");
+    all_test->ConnectTo(*t2_before_t1, AllTest::test_arg);
+    all_test->ConnectTo(*t2_enabled, AllTest::test_arg);
     error_message = &booker.Create<Text>("Error message");
     error_message->SetText("Return flight date must be after departure date.");
     error_reporter = &booker.Create<ErrorReporter>();
-    error_reporter->ConnectTo(*error_message, "message");
-    error_reporter->ConnectTo(*all_test, "test");
-    error_reporter->ConnectTo(*t2, "target");
+    error_reporter->ConnectTo(*error_message, ErrorReporter::message_arg);
+    error_reporter->ConnectTo(*all_test, ErrorReporter::test_arg);
+    // error_reporter->ConnectTo(*t2, "target");
 
     // When a non-disabled textfield T has an ill-formatted date then T is
     // colored red and B is disabled.
@@ -193,16 +194,16 @@ struct FlightBookerTest {
     //                                      \-{return flight}-> Formatter
     alert = &booker.Create<Alert>();
     GetAlert().test_interceptor.reset(new std::vector<std::string>());
-    b->ConnectTo(*alert, "next");
+    b->ConnectTo(*alert, next_arg);
     switch_ = &booker.Create<Switch>();
-    alert->ConnectTo(*switch_, "message");
-    switch_->ConnectTo(*c, "target");
+    alert->ConnectTo(*switch_, Alert::message_arg);
+    switch_->ConnectTo(*c, Switch::target_arg);
     one_way_message = &booker.Create<Text>();
     one_way_message->SetText("You have booked a one-way flight on {T1}.");
-    switch_->ConnectTo(*one_way_message, one_way->GetText());
+    // switch_->ConnectTo(*one_way_message, one_way->GetText());
     return_flight_message = &booker.Create<Text>();
     return_flight_message->SetText("You have booked a return flight on {T1} and {T2}.");
-    switch_->ConnectTo(*return_flight_message, return_flight->GetText());
+    // switch_->ConnectTo(*return_flight_message, return_flight->GetText());
 
     // Initially, C has the value “one-way flight” and T1 as well as T2 have the
     // same (arbitrary) date (it is implied that T2 is disabled).
@@ -298,20 +299,20 @@ TEST(TimerTest, DurationChange) {
 
   Location& timer = m.Create<Timer>("T");
   FakeTime fake_time;
-  fake_time.SetNow(SteadyPoint(0s));
+  fake_time.SetNow(automat::time::SteadyPoint(0s));
   timer.As<Timer>()->fake_time = &fake_time;
 
   Location& timer_reset = m.Create<TimerReset>();
-  timer_reset.ConnectTo(timer, "timer");
+  timer_reset.ConnectTo(timer, TimerReset::timer_arg);
   Location& reset_button = m.Create<Button>("reset");
-  reset_button.ConnectTo(timer_reset, "next");
+  reset_button.ConnectTo(timer_reset, next_arg);
 
   Location& progress_bar = m.Create<ProgressBar>("progress");
 
   Location& blackboard = m.Create<Blackboard>();
   blackboard.SetText("progress = T / duration");
-  blackboard.ConnectTo(timer, "const");
-  blackboard.ConnectTo(duration, "const");
+  blackboard.ConnectTo(timer, BlackboardUpdater::const_arg);
+  blackboard.ConnectTo(duration, BlackboardUpdater::const_arg);
   m.Create<BlackboardUpdater>();
 
   reset_button.ScheduleRun();
@@ -421,7 +422,7 @@ struct CrudTest : public TestBase {
     list_view.ConnectTo(filter, "list");
 
     deleter.ConnectTo(list_view, "target");
-    button_delete.ConnectTo(deleter, "next");
+    button_delete.ConnectTo(deleter, next_arg);
 
     first_name_selected_field.ConnectTo(list_view, "complex");
     first_name_selected_field.ConnectTo(first_name_label, "label");
@@ -435,8 +436,8 @@ struct CrudTest : public TestBase {
     set_first_name.ConnectTo(first_name_complex_field, "value");
     set_last_name.ConnectTo(last_name_selected_field, "target");
     set_last_name.ConnectTo(last_name_complex_field, "value");
-    button_update.ConnectTo(set_first_name, "next");
-    button_update.ConnectTo(set_last_name, "next");
+    button_update.ConnectTo(set_first_name, next_arg);
+    button_update.ConnectTo(set_last_name, next_arg);
 
     first_name_complex_field.ConnectTo(complex, "complex");
     first_name_complex_field.ConnectTo(first_name_label, "label");
@@ -445,10 +446,10 @@ struct CrudTest : public TestBase {
     first_name_complex_field.Put(Create<Text>());
     last_name_complex_field.Put(Create<Text>());
 
-    button_create.ConnectTo(set_complex, "next");
+    button_create.ConnectTo(set_complex, next_arg);
     set_complex.ConnectTo(complex, "value");
     set_complex.ConnectTo(append_target, "target");
-    set_complex.ConnectTo(append, "next");
+    set_complex.ConnectTo(append, next_arg);
 
     append.ConnectTo(append_target, "what");
     append.ConnectTo(list, "to");

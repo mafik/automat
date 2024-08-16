@@ -10,6 +10,7 @@ struct DrawContext;
 struct Widget;
 }  // namespace gui
 
+// TODO: maybe merge Begin & End into constructor & destructor
 struct Action {
   gui::Pointer& pointer;
   Action(gui::Pointer& pointer) : pointer(pointer) {}

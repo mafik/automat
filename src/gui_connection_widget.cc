@@ -172,7 +172,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     using_layer = true;
     canvas.saveLayerAlphaf(nullptr, 1.f - from_animation_state.transparency);
   }
-  SkPath from_shape = from.Shape(nullptr);
+  SkPath from_shape = from.object->Shape(&display);
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
   }
@@ -255,12 +255,24 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
       cable_width.Tick(ctx.display);
 
       if (cable_width > 0.01_mm && to) {
-        auto arcline = RouteCable(ctx, pos_dir, to_points);
-        auto color = SkColorSetA(arg.tint, 255 * cable_width.value / 2_mm);
-        auto color_filter = color::MakeTintFilter(color, 30);
-        auto path = arcline.ToPath(false);
-        DrawCable(ctx, path, color_filter, CableTexture::Smooth, cable_width.value,
-                  cable_width.value);
+        // If one of the to_points is over from_shape, don't draw the cable
+        bool overlapping = false;
+        if (!from_shape.isEmpty()) {
+          for (auto& to_point : to_points) {
+            if (from_shape.contains(to_point.pos.x, to_point.pos.y)) {
+              overlapping = true;
+              break;
+            }
+          }
+        }
+        if (!overlapping) {
+          auto arcline = RouteCable(ctx, pos_dir, to_points);
+          auto color = SkColorSetA(arg.tint, 255 * cable_width.value / 2_mm);
+          auto color_filter = color::MakeTintFilter(color, 30);
+          auto path = arcline.ToPath(false);
+          DrawCable(ctx, path, color_filter, CableTexture::Smooth, cable_width.value,
+                    cable_width.value);
+        }
       }
     }
   }

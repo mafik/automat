@@ -62,7 +62,9 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
   }
   animation::LinearApproach(prototype_alpha_target, ctx.DeltaT(), 2.f, anim->prototype_alpha);
   if (anim->radar_alpha >= 0.01f) {
-    auto pos_dir = from.ArgStart(&ctx.display, arg);
+    gui::DisplayContext fromDisplayCtx = GuessDisplayContext(from, ctx.display);
+    fromDisplayCtx.path.erase(fromDisplayCtx.path.begin());  // remove the window
+    auto pos_dir = arg.Start(fromDisplayCtx);
     SkPaint radius_paint;
     SkColor colors[] = {SkColorSetA(arg.tint, 0),
                         SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};

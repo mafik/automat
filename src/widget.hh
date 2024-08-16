@@ -36,14 +36,21 @@ using Visitor = std::function<ControlFlow(maf::Span<Widget*>)>;
 SkMatrix TransformDown(const Path& path, animation::Display*);
 SkMatrix TransformUp(const Path& path, animation::Display*);
 
-struct DrawContext {
-  SkCanvas& canvas;
+// Describes the transform sequence for displaying widgets.
+//
+// The path is necessary to compute on-screen positions for widgets.
+//
+// The display is necessary to retrieve per-display cached data (mostly animation state).
+struct DisplayContext {
   animation::Display& display;
   Path path;
-  DrawContext(SkCanvas& canvas, animation::Display& display)
-      : canvas(canvas), display(display), path() {}
-
   float DeltaT() const { return display.timer.d; }
+};
+
+struct DrawContext : DisplayContext {
+  SkCanvas& canvas;
+  DrawContext(SkCanvas& canvas, animation::Display& display)
+      : DisplayContext{display, {}}, canvas(canvas) {}
 };
 
 struct DropTarget;

@@ -416,6 +416,26 @@ Location::~Location() {
   }
 }
 
+gui::DisplayContext GuessDisplayContext(Location& location, animation::Display& display) {
+  DisplayContext ctx = {.display = display, .path = {window.get()}};
+  if (auto* parent = location.ParentAs<Widget>()) {
+    ctx.path.push_back(parent);
+  } else {
+    // TODO: This is so wrong... Fix it somehow...
+    for (auto& pointer : gui::window->pointers) {
+      if (auto* action = pointer->action.get()) {
+        if (auto* action_widget = action->Widget()) {
+          ctx.path.push_back(action_widget);
+          break;
+        }
+      }
+    }
+  }
+  ctx.path.push_back(&location);
+  ctx.path.push_back(location.object.get());
+  return ctx;
+}
+
 void PositionBelow(Location& origin, Location& below) {
   Machine* m = origin.ParentAs<Machine>();
   Size origin_index = SIZE_MAX;

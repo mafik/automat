@@ -252,8 +252,9 @@ struct Location : gui::Widget {
   SkPath Shape(animation::Display*) const override;
   SkPath FieldShape(Object&) const;
 
-  // Returns the position in parent machine's coordinates where the connections for this argument
-  // should start.
+  // DEPRECATED. Returns the position in parent machine's coordinates where the connections for this
+  // argument should start.
+  // TODO: replace with Argument::Start
   Vec2AndDir ArgStart(animation::Display*, Argument&);
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   bool ChildrenOutside() const override;
@@ -296,6 +297,9 @@ struct Location : gui::Widget {
   std::string ToStr() const;
 };
 
+// Try to guess how this location is displayed. Returns a DisplayContext that starts with Window and
+// ends with this Location and its Object.
+gui::DisplayContext GuessDisplayContext(Location&, animation::Display&);
 void PositionBelow(Location& origin, Location& below);
 void AnimateGrowFrom(Location& source, Location& grown);
 

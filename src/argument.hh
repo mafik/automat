@@ -199,6 +199,18 @@ struct Argument {
       .search_radius = std::nullopt,
   };
 
+  // Return the position and direction of this argument in the DisplayContext's root coordinate
+  // space.
+  //
+  // If the first object in the path is the Window, then the position will use the window coordinate
+  // space (pixels), but it's not the only option. The path could also stripped of some elements to
+  // get the position within some parent object (for example, a Machine).
+  //
+  // The final element of the path should be the object that contains this argument.
+  Vec2AndDir Start(gui::DisplayContext&);
+
+  // The returned "to_points" should use the same coordinate space as the "here" Location
+  // TODO: it might be necessary to pass a gui::DisplayContext to compute positions
   void NearbyCandidates(
       Location& here, float radius,
       std::function<void(Location&, maf::Vec<Vec2AndDir>& to_points)> callback) const;

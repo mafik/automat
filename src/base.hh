@@ -85,12 +85,10 @@ struct LiveObject : Object {
     });
     here = new_self;
   }
-  void ConnectionAdded(Location& here, string_view label, Connection& connection) override {
-    Args([&here, &label, &connection](Argument& arg) {
-      if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {
-        live_arg->ConnectionAdded(here, label, connection);
-      }
-    });
+  void ConnectionAdded(Location& here, Argument& arg, Connection& connection) override {
+    if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {
+      live_arg->ConnectionAdded(here, connection);
+    }
   }
 };
 

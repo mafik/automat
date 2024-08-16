@@ -25,7 +25,7 @@ Argument::FinalLocationResult Argument::GetFinalLocation(
 Argument::LocationResult Argument::GetLocation(Location& here,
                                                std::source_location source_location) const {
   LocationResult result;
-  auto conn_it = here.outgoing.find(name);
+  auto conn_it = here.outgoing.find(this);
   if (conn_it != here.outgoing.end()) {  // explicit connection
     auto c = conn_it->second;
     result.location = &c->to;
@@ -137,6 +137,7 @@ void Argument::NearbyCandidates(
   }
   // Query nearby objects in the parent machine
   if (auto parent_machine = here.ParentAs<Machine>()) {
+    // gui::DisplayContext ctx = GuessDisplayContext(here, ???display???);
     Vec2 center = here.position + here.object->ArgStart(*this).pos;
     parent_machine->Nearby(center, radius, [&](Location& other) -> void* {
       if (&other == &here) {
@@ -162,7 +163,7 @@ void Argument::NearbyCandidates(
 }
 
 Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
-  auto conn_it = here.outgoing.find(name);
+  auto conn_it = here.outgoing.find(this);
   Location* result = nullptr;
   if (conn_it != here.outgoing.end()) {  // explicit connection
     auto c = conn_it->second;
@@ -207,7 +208,7 @@ Object* Argument::FindObject(Location& here, const FindConfig& cfg) const {
 }
 
 void LiveArgument::Detach(Location& here) {
-  auto connections = here.outgoing.equal_range(name);
+  auto connections = here.outgoing.equal_range(this);
   for (auto it = connections.first; it != connections.second; ++it) {
     auto& connection = it->second;
     here.StopObservingUpdates(connection->to);
@@ -226,7 +227,7 @@ void LiveArgument::Detach(Location& here) {
 }
 
 void LiveArgument::Attach(Location& here) {
-  auto connections = here.outgoing.equal_range(name);
+  auto connections = here.outgoing.equal_range(this);
   for (auto it = connections.first; it != connections.second; ++it) {
     auto& connection = it->second;
     here.ObserveUpdates(connection->to);

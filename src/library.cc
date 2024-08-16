@@ -102,5 +102,6 @@ LiveArgument ListView::list_arg =
 DEFINE_PROTO(Blackboard);
 
 DEFINE_PROTO(BlackboardUpdater);
+Argument BlackboardUpdater::const_arg = Argument("const", Argument::kOptional);
 
 }  // namespace automat

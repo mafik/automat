@@ -146,7 +146,7 @@ struct Argument {
   // `true`.
   template <typename T>
   T LoopLocations(Location& here, std::function<T(Location&)> callback) {
-    auto [begin, end] = here.outgoing.equal_range(name);
+    auto [begin, end] = here.outgoing.equal_range(this);
     for (auto it = begin; it != end; ++it) {
       if (auto ret = callback(it->second->to)) {
         return ret;
@@ -245,14 +245,12 @@ struct LiveArgument : Argument {
       Attach(*new_self);
     }
   }
-  void ConnectionAdded(Location& here, std::string_view label, Connection& connection) {
+  void ConnectionAdded(Location& here, Connection& connection) {
     // TODO: handle the case where `here` is observing nearby objects (without
     // connections) and a connection is added.
     // TODO: handle ConnectionRemoved
-    if (label == name) {
-      here.ObserveUpdates(connection.to);
-      here.ScheduleLocalUpdate(connection.to);
-    }
+    here.ObserveUpdates(connection.to);
+    here.ScheduleLocalUpdate(connection.to);
   }
   void Rename(Location& here, std::string_view new_name) {
     Detach(here);

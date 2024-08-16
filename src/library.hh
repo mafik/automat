@@ -425,8 +425,8 @@ struct HealthTest : Object {
     }
   }
   void Relocate(Location* here) override { UpdateState(here); }
-  void ConnectionAdded(Location& here, string_view label, Connection& connection) override {
-    if (label == "target") {
+  void ConnectionAdded(Location& here, Argument& arg, Connection& connection) override {
+    if (&arg == &target_arg) {
       UpdateState(&here);
     }
   }
@@ -453,8 +453,8 @@ struct ErrorCleaner : Object {
     }
   }
   void Relocate(Location* here) override { ObserveErrors(here); }
-  void ConnectionAdded(Location& here, string_view label, Connection& connection) override {
-    if (label == "target") {
+  void ConnectionAdded(Location& here, Argument& arg, Connection& connection) override {
+    if (&arg == &target_arg) {
       ObserveErrors(&here);
     }
   }
@@ -930,9 +930,9 @@ struct ComboBox : LiveObject {
       error_context.ReportError(maf::f("No option named %*s", new_text.size(), new_text.data()));
     }
   }
-  void ConnectionAdded(Location& here, string_view label, Connection& connection) override {
-    LiveObject::ConnectionAdded(here, label, connection);
-    if (selected == nullptr && label == "option") {
+  void ConnectionAdded(Location& here, Argument& arg, Connection& connection) override {
+    LiveObject::ConnectionAdded(here, arg, connection);
+    if (selected == nullptr && &arg == &options_arg) {
       auto option = options_arg.GetLocation(here);
       selected = option.location;
     }
@@ -1106,6 +1106,7 @@ struct BlackboardUpdater : LiveObject {
   static const BlackboardUpdater proto;
   std::unordered_map<string, unique_ptr<algebra::Expression>> formulas;
   std::map<string, LiveArgument> independent_variable_args;
+  static Argument const_arg;
 
   std::unique_ptr<Object> Clone() const override { return std::make_unique<BlackboardUpdater>(); }
   void Args(std::function<void(Argument&)> cb) override {
@@ -1174,7 +1175,7 @@ struct BlackboardUpdater : LiveObject {
             }
             auto target = arg_it->second.GetObject(here);
             if (target.object) {
-              if (target.location->incoming.find("const") != target.location->incoming.end()) {
+              if (target.location->incoming.find(&const_arg) != target.location->incoming.end()) {
                 // LOG << "  would write to " << *target
                 //     << " but it's marked as const.";
 

@@ -91,21 +91,19 @@ unique_ptr<Object> Location::Take() {
   return std::move(object);
 }
 
-Connection* Location::ConnectTo(Location& other, string_view label,
+Connection* Location::ConnectTo(Location& other, Argument& arg,
                                 Connection::PointerBehavior pointer_behavior) {
-  object->Args([&](Argument& arg) {
-    if (arg.name == label && arg.precondition >= Argument::kRequiresConcreteType) {
-      std::string error;
-      arg.CheckRequirements(*this, &other, other.object.get(), error);
-      if (error.empty()) {
-        pointer_behavior = Connection::kTerminateHere;
-      }
+  if (arg.precondition >= Argument::kRequiresConcreteType) {
+    std::string error;
+    arg.CheckRequirements(*this, &other, other.object.get(), error);
+    if (error.empty()) {
+      pointer_behavior = Connection::kTerminateHere;
     }
-  });
+  }
   Connection* c = new Connection(*this, other, pointer_behavior);
-  outgoing.emplace(label, c);
-  other.incoming.emplace(label, c);
-  object->ConnectionAdded(*this, label, *c);
+  outgoing.emplace(&arg, c);
+  other.incoming.emplace(&arg, c);
+  object->ConnectionAdded(*this, arg, *c);
   return c;
 }
 

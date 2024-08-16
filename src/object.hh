@@ -26,7 +26,7 @@ struct Object : gui::Widget {
   virtual std::unique_ptr<Object> Clone() const = 0;
 
   virtual void Relocate(Location* new_here) {}
-  virtual void ConnectionAdded(Location& here, std::string_view label, Connection& connection) {}
+  virtual void ConnectionAdded(Location& here, Argument&, Connection& connection) {}
 
   // Release the memory occupied by this object.
   virtual ~Object() = default;

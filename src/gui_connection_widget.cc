@@ -294,7 +294,7 @@ bool CanConnect(Location& from, Location& to, Argument& arg) {
 }
 
 void DragConnectionAction::Begin() {
-  if (auto it = widget.from.outgoing.find(widget.arg.name); it != widget.from.outgoing.end()) {
+  if (auto it = widget.from.outgoing.find(&widget.arg); it != widget.from.outgoing.end()) {
     delete it->second;
   }
 
@@ -339,7 +339,7 @@ void DragConnectionAction::End() {
   }
   Location* to = m->LocationAtPoint(pos);
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
-    widget.from.ConnectTo(*to, widget.arg.name);
+    widget.from.ConnectTo(*to, widget.arg);
   }
 }
 

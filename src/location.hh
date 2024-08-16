@@ -70,8 +70,8 @@ struct Location : gui::Widget {
 
   // Connections of this Location.
   // Connection is owned by both incoming & outgoing locations.
-  string_multimap<Connection*> outgoing;
-  string_multimap<Connection*> incoming;
+  std::unordered_multimap<const Argument*, Connection*> outgoing;
+  std::unordered_multimap<const Argument*, Connection*> incoming;
 
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;
@@ -170,7 +170,7 @@ struct Location : gui::Widget {
   //
   // This function should also notify the object with the `ConnectionAdded`
   // call.
-  Connection* ConnectTo(Location& other, std::string_view label,
+  Connection* ConnectTo(Location& other, Argument&,
                         Connection::PointerBehavior pointer_behavior = Connection::kFollowPointers);
 
   // Immediately execute this object's Updated function.

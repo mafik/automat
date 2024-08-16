@@ -307,7 +307,8 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();
     key_presser->SetKey(key);
     Rect key_presser_shape = key_presser_loc.object->Shape(nullptr).getBounds();
-    Vec2AndDir arg_start = timeline->here->ArgStart(nullptr, *timeline->track_args.back());
+    Argument& track_arg = *timeline->track_args.back();
+    Vec2AndDir arg_start = timeline->here->ArgStart(nullptr, track_arg);
 
     // Pick the position that allows the cable to come in most horizontally (left to right).
     Vec2 best_connector_pos = key_presser_shape.TopCenter();
@@ -323,7 +324,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
 
     key_presser_loc.position = arg_start.pos + Vec2(3_cm, 0) - best_connector_pos;
     AnimateGrowFrom(*macro_recorder.here, key_presser_loc);
-    timeline->here->ConnectTo(key_presser_loc, key_name);
+    timeline->here->ConnectTo(key_presser_loc, track_arg);
   }
 
   // Append the current timestamp to that track

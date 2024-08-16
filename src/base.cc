@@ -197,7 +197,7 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
         writer.Key("connections");
         writer.StartObject();
         for (auto& [key, conn] : location->outgoing) {
-          writer.Key(key.data(), key.size());
+          writer.Key(key->name.data(), key->name.size());
           writer.Int(location_ids.at(&conn->to));
         }
         writer.EndObject();
@@ -267,8 +267,13 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
           l.ReportError(f("Invalid connection target index: %d", connection_record.to));
           continue;
         }
-        location_idx[connection_record.from]->ConnectTo(*location_idx[connection_record.to],
-                                                        connection_record.label);
+        Location* from = location_idx[connection_record.from];
+        from->object->Args([&](Argument& arg) {
+          if (arg.name != connection_record.label) {
+            return;
+          }
+          from->ConnectTo(*location_idx[connection_record.to], arg);
+        });
       }
     }
   }

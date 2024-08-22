@@ -20,6 +20,7 @@
 #include "status.hh"
 #include "vk.hh"
 #include "window.hh"
+#include "x11.hh"
 
 #pragma comment(lib, "vk-bootstrap")
 #pragma comment(lib, "xcb")
@@ -423,12 +424,19 @@ void Paint() {
 
 void RenderLoop() {
   std::atomic_bool running = true;
-  xcb_generic_event_t* event;
+  // TODO: maybe use unique_ptr here
+  xcb_generic_event_t *event, *peeked_event = nullptr;
+  bool keys_down[256] = {0};
 
   std::stop_callback on_automat_stop(automat_thread.get_stop_token(), [&] { running = false; });
 
   while (running) {
-    event = xcb_poll_for_event(connection);
+    if (peeked_event) {
+      event = peeked_event;
+      peeked_event = nullptr;
+    } else {
+      event = xcb_poll_for_event(connection);
+    }
 
     if (event) {
       for (auto hook : system_event_hooks) {
@@ -437,7 +445,8 @@ void RenderLoop() {
         }
       }
 
-      switch (event->response_type & ~0x80) {
+      auto opcode = event->response_type & ~0x80;
+      switch (opcode) {
         case XCB_EXPOSE: {
           xcb_expose_event_t* ev = (xcb_expose_event_t*)event;
           // ev-count is the number of expose events that are still in the queue.
@@ -675,6 +684,61 @@ void RenderLoop() {
           } else {
             LOG << "Unknown XCB_GE_GENERIC event (extension=" << ev->extension
                 << ", event_type=" << ev->event_type << ")";
+          }
+          break;
+        }
+        case XCB_KEY_PRESS:  // fallthrough
+        case XCB_KEY_RELEASE: {
+          // This is only called by registered hotkeys
+          xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
+          auto key = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail);
+          // LOG << "Key event: " << dump_struct(*ev) << " " << automat::gui::ToStr(key);
+          if (opcode == XCB_KEY_RELEASE) {
+            peeked_event = xcb_poll_for_event(connection);
+            if (peeked_event && peeked_event->response_type == XCB_KEY_PRESS) {
+              xcb_key_press_event_t* peeked_ev = (xcb_key_press_event_t*)peeked_event;
+              if (peeked_ev->time == ev->time && peeked_ev->detail == ev->detail) {
+                // Ignore key repeats
+                break;
+              }
+            }
+          }
+          if (opcode == XCB_KEY_PRESS && keys_down[ev->detail]) {
+            // Ignore key repeats
+            break;
+          }
+          if (opcode == XCB_KEY_PRESS) {
+            keys_down[ev->detail] = true;
+          } else {
+            keys_down[ev->detail] = false;
+          }
+          gui::Key key_struct = {
+              .physical = key,
+              .logical = key,
+          };
+          bool handled = false;
+          for (auto& key_grab : keyboard->key_grabs) {
+            if (key_grab->key == key) {
+              if (opcode == XCB_KEY_PRESS) {
+                key_grab->grabber.KeyGrabberKeyDown(*key_grab);
+              } else {
+                key_grab->grabber.KeyGrabberKeyUp(*key_grab);
+              }
+              handled = true;
+              break;
+            }
+          }
+          if (opcode == XCB_KEY_PRESS) {
+            gui::keyboard->LogKeyDown(key_struct);
+          } else {
+            gui::keyboard->LogKeyUp(key_struct);
+          }
+          if (!handled) {
+            if (opcode == XCB_KEY_PRESS) {
+              gui::keyboard->KeyDown(*(xcb_input_key_press_event_t*)event);
+            } else {
+              gui::keyboard->KeyUp(*(xcb_input_key_release_event_t*)event);
+            }
           }
           break;
         }

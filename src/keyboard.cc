@@ -318,6 +318,13 @@ void Keyboard::KeyDown(xcb_input_raw_key_press_event_t& ev) {
   };
   LogKeyDown(key);
 }
+void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
+  gui::Key key = {
+      .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+      .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+  };
+  KeyDown(key);
+}
 
 void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
   gui::Key key = {.ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
@@ -328,11 +335,15 @@ void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
                   .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   KeyUp(key);
 }
-
 void Keyboard::KeyUp(xcb_input_raw_key_release_event_t& ev) {
   gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                   .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   LogKeyUp(key);
+}
+void Keyboard::KeyUp(xcb_key_press_event_t& ev) {
+  gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+  KeyUp(key);
 }
 #endif  // __linux__
 

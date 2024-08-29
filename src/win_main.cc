@@ -403,23 +403,24 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       key.logical = VirtualKeyToKey(virtual_key);
 
       if (ev.Message == WM_KEYDOWN) {
-        key_state[virtual_key] = 0x80;
-        std::array<wchar_t, 16> utf16_buffer;
-        int utf16_len = ToUnicode(virtual_key, scan_code, key_state, utf16_buffer.data(),
-                                  utf16_buffer.size(), 0);
-        if (utf16_len) {
-          std::array<char, 32> utf8_buffer = {};
-          int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
-                                            (uint16_t*)utf16_buffer.data(), utf16_len);
-          key.text = std::string(utf8_buffer.data(), utf8_len);
-        }
-        if (gui::keyboard) {
-          if (keylogging_enabled) {
-            gui::keyboard->LogKeyDown(key);
+        if (key_state[virtual_key] == 0) {
+          key_state[virtual_key] = 0x80;
+          std::array<wchar_t, 16> utf16_buffer;
+          int utf16_len = ToUnicode(virtual_key, scan_code, key_state, utf16_buffer.data(),
+                                    utf16_buffer.size(), 0);
+          if (utf16_len) {
+            std::array<char, 32> utf8_buffer = {};
+            int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
+                                              (uint16_t*)utf16_buffer.data(), utf16_len);
+            key.text = std::string(utf8_buffer.data(), utf8_len);
           }
-          LOG << "Sending key down event " << window_active;
-          if (window_active) {
-            gui::keyboard->KeyDown(key);
+          if (gui::keyboard) {
+            if (keylogging_enabled) {
+              gui::keyboard->LogKeyDown(key);
+            }
+            if (window_active) {
+              gui::keyboard->KeyDown(key);
+            }
           }
         }
       } else if (ev.Message == WM_KEYUP) {

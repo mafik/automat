@@ -627,6 +627,7 @@ AnsiKey VirtualKeyToKey(uint8_t virtual_key) {
       return Application;
     case VK_RCONTROL:
       return ControlRight;
+    case 0x0:
     case 0xff:
       return Unknown;
     default:

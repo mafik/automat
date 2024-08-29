@@ -141,6 +141,7 @@ void Pointer::ButtonDown(PointerButton btn) {
       }
       if (action) {
         action->Begin();
+        UpdatePath(*this);
       }
     }
   });

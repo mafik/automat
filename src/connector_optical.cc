@@ -1078,7 +1078,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
   p.setIsVolatile(true);
 
   // Draw the cable
-  auto color_filter = color::MakeTintFilter(state.tint, NAN);
+  auto color_filter = color::MakeTintFilter(state.arg.tint, NAN);
   DrawCable(ctx, p, color_filter, CableTexture::Braided, kCableWidth * state.connector_scale,
             kCableWidth * dispenser_scale, &state.approx_length);
 
@@ -1311,16 +1311,15 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
 
     Vec2 icon_offset = connector_matrix.mapPoint(Vec2(0, kCasingHeight / 2));
 
-    SkColor base_color = color::AdjustLightness(state.tint, 30);
+    SkColor base_color = color::AdjustLightness(state.arg.tint, 30);
     float lightness_pct = 0;
     if (&state.arg == &next_arg) {
       lightness_pct =
           exp(-(display.timer.steady_now - state.location.last_finished).count() * 10) * 100;
     } else {
       lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
-      // TODO: animate this
     }
-    SkColor bright_light = "#fcfef7"_color;
+    SkColor bright_light = color::AdjustLightness(state.arg.light, 50);
     SkColor adjusted_color = color::AdjustLightness(base_color, lightness_pct);
     adjusted_color = color::MixColors(adjusted_color, bright_light, lightness_pct / 100);
 
@@ -1336,7 +1335,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
     // Draw blur
     if (lightness_pct > 1) {
       SkPaint glow_paint;
-      glow_paint.setColor("#ef9f37"_color);
+      glow_paint.setColor(state.arg.light);
       glow_paint.setAlphaf(lightness_pct / 100);
       float sigma = canvas.getLocalToDeviceAs3x3().mapRadius(0.5_mm);
       glow_paint.setMaskFilter(

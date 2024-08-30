@@ -68,6 +68,9 @@ void Toolbar::Draw(gui::DrawContext& dctx) const {
 
   float width = CalculateWidth();
   for (auto* pointer : dctx.display.window->pointers) {
+    if (pointer->action) {
+      continue;
+    }
     Vec2 pointer_position = my_transform.mapPoint(pointer->pointer_position);
     if (pointer_position.x < -width / 2 || pointer_position.x > width / 2) {
       continue;

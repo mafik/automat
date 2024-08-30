@@ -9,7 +9,6 @@
 #include "error.hh"
 #include "object.hh"
 #include "run_button.hh"
-#include "string_multimap.hh"
 #include "tasks.hh"
 #include "text_field.hh"
 #include "time.hh"

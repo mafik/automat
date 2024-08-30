@@ -231,17 +231,17 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   if (state) {
     state->hidden = overlapping;
   }
-  animation::LinearApproach(overlapping ? 1 : 0, ctx.DeltaT(), 5, state->transparency);
+  animation::LinearApproach(overlapping ? 1 : 0, ctx.DeltaT(), 5, transparency);
 
   bool using_layer = false;
-  auto alpha = (1.f - from_animation_state.transparency) * (1.f - state->transparency);
+  auto alpha = (1.f - from_animation_state.transparency) * (1.f - transparency);
 
   if (!state.has_value() && arg.style != Argument::Style::Arrow && alpha > 0.01f) {
     auto arcline = RouteCable(ctx, pos_dir, to_points);
     auto new_length = ArcLine::Iterator(arcline).AdvanceToEnd();
     if (new_length > length + 2_cm) {
       alpha = 0;
-      state->transparency = 1;
+      transparency = 1;
     }
     length = new_length;
   }

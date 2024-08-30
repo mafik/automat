@@ -1,7 +1,6 @@
 #pragma once
 
 #include "animation.hh"
-#include "connection.hh"
 #include "connector_optical.hh"
 #include "widget.hh"
 
@@ -42,6 +41,7 @@ struct ConnectionWidget : Widget {
   mutable animation::Approach<> cable_width;
   mutable maf::Optional<OpticalConnectorState>
       state;  // if the state is non-empty then the cable is physically simulated
+  mutable float transparency = 1;
   mutable float length = 0;
   mutable maf::Optional<Vec2> manual_position;  // position of the plug (bottom center)
 

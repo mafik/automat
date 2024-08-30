@@ -56,7 +56,6 @@ struct OpticalConnectorState {
 
   animation::Spring<float> steel_insert_hidden;
   bool hidden = false;
-  float transparency = 1;
 
   std::unique_ptr<OpticalConnectorPimpl> pimpl;
 

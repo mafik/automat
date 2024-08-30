@@ -237,9 +237,9 @@ constexpr static float kHandWidth = 0.0004;
 constexpr static float kHandLength = r4 * 0.8;
 
 static void AdjustRotation(float& rotation, float target = 0) {
-  if (rotation - target + 180 >= 360) {
+  if (rotation - target >= 180) {
     rotation -= floorf((rotation - target + 180) / 360) * 360;
-  } else if (rotation - target + 180 < 0) {
+  } else if (rotation - target < -180) {
     rotation += floorf((target - rotation + 180) / 360) * 360;
   }
 }
@@ -256,25 +256,27 @@ static float HandBaseDegrees(const TimerDelay& timer) {
 static SkPath HandPath(const TimerDelay& timer) {
   float base_degrees = HandBaseDegrees(timer);
   float end_degrees = timer.hand_degrees.value;
-  float degrees = end_degrees - base_degrees;
-  AdjustRotation(degrees);
+  float twist_degrees = end_degrees - base_degrees;
+  AdjustRotation(twist_degrees);
 
-  if (fabs(degrees) < 1) {
+  if (fabs(twist_degrees) < 1) {
     SkPath path;
     auto end_point = SkMatrix::RotateDeg(end_degrees).mapXY(kHandLength, 0);
     path.lineTo(end_point);
     return path;
   }
 
-  float R = kHandLength / ((degrees / 360) * 2 * M_PI);
+  float R = kHandLength / ((twist_degrees / 360) * 2 * M_PI);
 
   SkPath path;
 
-  auto end_point = SkMatrix::Translate(R, 0).postRotate(degrees).postTranslate(-R, 0).mapXY(0, 0);
+  auto end_point =
+      SkMatrix::Translate(R, 0).postRotate(twist_degrees).postTranslate(-R, 0).mapXY(0, 0);
 
   path.rArcTo(R, R, 0, SkPath::kSmall_ArcSize,
-              degrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW, end_point.x(),
+              twist_degrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW, end_point.x(),
               end_point.y());
+  path.transform(SkMatrix::RotateDeg(base_degrees - 90));
   return path;
 }
 
@@ -472,8 +474,9 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
 
   if (state == TimerDelay::State::Running) {
     auto base_degrees = HandBaseDegrees(*this);
-    hand_degrees.target = base_degrees;
-    hand_degrees.value = base_degrees;
+    if (hand_degrees.period != 0s) {  // If the hand is not being dragged
+      hand_degrees.target = base_degrees;
+    }
   } else {
     hand_degrees.target = 90;
   }
@@ -661,8 +664,7 @@ struct DragHandAction : Action {
     Vec2 pos = GuessDisplayContext(*timer.here, pointer.AnimationContext())
                    .TransformDown()
                    .mapPoint(pointer.pointer_position);
-    float angle = atan2(pos.sk.y(), pos.sk.x());
-    timer.hand_degrees.value = angle * 180 / M_PI;
+    timer.hand_degrees.value = atan(pos) * 180 / M_PI;
   }
   virtual void End() { timer.hand_degrees.period = kHandPeriod; }
 };
@@ -699,13 +701,11 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
       return nullptr;
     }
 
-    if (state == State::Idle) {
-      SkPath hand_path = HandPath(*this);
-      SkPath hand_outline;  // Hand is just a straight line so we have to "widen" it
-      skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
-      if (hand_outline.contains(pos.x, pos.y)) {
-        return std::make_unique<DragHandAction>(pointer, *this);
-      }
+    SkPath hand_path = HandPath(*this);
+    SkPath hand_outline;  // Hand is just a straight line so we have to "widen" it
+    skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
+    if (hand_outline.contains(pos.x, pos.y)) {
+      return std::make_unique<DragHandAction>(pointer, *this);
     }
   }
   return Object::ButtonDownAction(pointer, btn);

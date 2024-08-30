@@ -92,6 +92,11 @@ struct LiveObject : Object {
   }
 };
 
+template <typename T>
+bool IsRunning(const T& object) {
+  return object.here && object.here->long_running;
+}
+
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Machine : LiveObject, gui::DropTarget {
   static const Machine proto;

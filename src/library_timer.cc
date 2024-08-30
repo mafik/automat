@@ -59,10 +59,7 @@ constexpr static float kTickMinorLength = r4 * 0.025;
 
 static constexpr time::Duration kHandPeriod = 0.1s;
 
-void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) {
-  state = TimerDelay::State::Idle;
-  Done(here2);
-}
+void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) { Done(here2); }
 
 // How long it takes for the timer dial to rotate once.
 static Duration RangeDuration(TimerDelay::Range range) {
@@ -140,7 +137,7 @@ static void UpdateTextField(TimerDelay& timer) {
 }
 
 static void SetDuration(TimerDelay& timer, Duration new_duration) {
-  if (timer.state == TimerDelay::State::Running) {
+  if (IsRunning(timer)) {
     RescheduleAt(*timer.here, timer.start_time + timer.duration.value,
                  timer.start_time + new_duration);
   }
@@ -245,7 +242,7 @@ static void AdjustRotation(float& rotation, float target = 0) {
 }
 
 static float HandBaseDegrees(const TimerDelay& timer) {
-  if (timer.state == TimerDelay::State::Running) {
+  if (IsRunning(timer)) {
     Duration elapsed = SteadyClock::now() - timer.start_time;
     return 90 - 360 * elapsed.count() / RangeDuration(timer.range).count();
   } else {
@@ -472,7 +469,7 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   animation::WrapModulo(duration_handle_rotation, 2 * M_PI);
   duration_handle_rotation.Tick(ctx.display);
 
-  if (state == TimerDelay::State::Running) {
+  if (IsRunning(*this)) {
     auto base_degrees = HandBaseDegrees(*this);
     if (hand_degrees.period != 0s) {  // If the hand is not being dragged
       hand_degrees.target = base_degrees;
@@ -678,9 +675,14 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
       return std::make_unique<DragDurationHandleAction>(pointer, *this);
     }
     if (kStartPusherBox.contains(pos.x, pos.y)) {
+      start_pusher_depression.value = 1;
       if (here) {
-        start_pusher_depression.value = 1;
-        here->ScheduleRun();
+        if (IsRunning(*this)) {
+          Cancel();
+          here->long_running = nullptr;
+        } else {
+          here->ScheduleRun();
+        }
         return nullptr;
       }
     }
@@ -719,21 +721,12 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
 }
 
 LongRunning* TimerDelay::OnRun(Location& here) {
-  if (state == State::Idle) {
-    state = State::Running;
-    start_time = time::SteadyClock::now();
-    ScheduleAt(here, start_time + duration.value);
-    return this;
-  }
-  return nullptr;
+  start_time = time::SteadyClock::now();
+  ScheduleAt(here, start_time + duration.value);
+  return this;
 }
 
-void TimerDelay::Cancel() {
-  if (state == TimerDelay::State::Running) {
-    state = TimerDelay::State::Idle;
-    CancelScheduledAt(*here, start_time + duration.value);
-  }
-}
+void TimerDelay::Cancel() { CancelScheduledAt(*here, start_time + duration.value); }
 
 DurationArgument::DurationArgument() : LiveArgument("duration", Argument::kOptional) {
   requirements.push_back([](Location* location, Object* object, std::string& error) {
@@ -786,7 +779,7 @@ void TimerDelay::SerializeState(Serializer& writer, const char* key) const {
   writer.String(range_str.data(), range_str.size());
   writer.Key("duration_seconds");
   writer.Double(duration.value.count());
-  if (state == State::Running) {
+  if (IsRunning(*this)) {
     writer.Key("running");
     writer.Double((time::SteadyNow() - start_time).count());
   }
@@ -799,7 +792,7 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
     if (key == "running") {
       double value = 0;
       d.Get(value, status);
-      state = State::Running;
+      l.long_running = this;
       start_time = time::SteadyNow() - Duration(value);
     } else if (key == "duration_seconds") {
       double value;
@@ -816,7 +809,7 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   UpdateTextField(*this);
-  if (state == State::Running) {
+  if (l.long_running) {
     ScheduleAt(l, start_time + duration.value);
   }
 

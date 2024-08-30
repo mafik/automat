@@ -26,13 +26,6 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   mutable animation::Spring<float> range_dial;
   mutable animation::Approach<> duration_handle_rotation;
   gui::NumberTextField text_field;
-  enum class State : char { Idle, Running } state = State::Idle;
-  enum class OverrunPolicy : char {
-    Ignore,
-    Toggle,
-    Restart,
-    Extend
-  } overrun_policy = OverrunPolicy::Toggle;
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
     Seconds,       // 0 - 60 s

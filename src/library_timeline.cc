@@ -1499,7 +1499,11 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       state = kPlaying;
       double value = 0;
       d.Get(value, status);
-      playing.started_at = time::SteadyNow() - time::Duration(value);
+      time::SteadyPoint now = time::SteadyNow();
+      playing.started_at = now - time::Duration(value);
+      // We're not updating the outputs because they should be deserialized in a proper state
+      // TimelineUpdateOutputs(l, *this, playing.started_at, now);
+      TimelineScheduleAt(*this, now);
     } else if (key == "recording") {
       state = kRecording;
       double value = 0;

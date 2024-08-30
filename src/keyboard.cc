@@ -33,7 +33,7 @@ namespace automat::gui {
 static SkPath PointerIBeam(const Keyboard& keyboard) {
   if (keyboard.pointer) {
     float px = 1 / keyboard.window.PxPerMeter();
-    Vec2 pos = keyboard.pointer->PositionWithin(*root_machine);
+    Vec2 pos = keyboard.pointer->PositionWithinRootMachine();
     SkRect bounds = SkRect::MakeXYWH(pos.x, pos.y, 0, 0);
     switch (keyboard.pointer->Icon()) {
       case Pointer::IconType::kIconArrow:
@@ -65,12 +65,17 @@ void Caret::PlaceIBeam(Vec2 position) {
 
 void Caret::Release() {
   if (owner) {
-    owner->ReleaseCaret(*this);
     if (auto it = std::find(owner->carets.begin(), owner->carets.end(), this);
         it != owner->carets.end()) {
       owner->carets.erase(it);
     }
     owner = nullptr;
+  }
+  for (auto it = keyboard.carets.begin(); it != keyboard.carets.end(); ++it) {
+    if (it->get() == this) {
+      keyboard.carets.erase(it);
+      break;
+    }
   }
 }
 
@@ -658,7 +663,7 @@ Caret::Caret(Keyboard& keyboard) : keyboard(keyboard) {}
 
 CaretOwner::~CaretOwner() {
   for (auto caret : carets) {
-    caret->owner = nullptr;
+    caret->Release();
   }
 }
 

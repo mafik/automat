@@ -214,7 +214,7 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
 }
 
 static ArcLine RouteCableOneEnd(DrawContext& dctx, Vec2AndDir start, Vec2AndDir end) {
-  if (start.dir == -90_deg) {
+  if (start.dir == -90_deg && end.dir == -90_deg) {
     return RouteCableDown(start, end.pos);
   } else {
     return RoutCableStraight(dctx, start, end);

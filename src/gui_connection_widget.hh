@@ -40,7 +40,9 @@ struct ConnectionWidget : Widget {
   animation::PerDisplay<AnimationState> animation_state;
 
   mutable animation::Approach<> cable_width;
-  mutable maf::Optional<OpticalConnectorState> state;
+  mutable maf::Optional<OpticalConnectorState>
+      state;  // if the state is non-empty then the cable is physically simulated
+  mutable float length = 0;
   mutable maf::Optional<Vec2> manual_position;  // position of the plug (bottom center)
 
   ConnectionWidget(Location&, Argument&);

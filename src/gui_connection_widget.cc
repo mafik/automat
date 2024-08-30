@@ -39,7 +39,7 @@ ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), 
 }
 
 SkPath ConnectionWidget::Shape(animation::Display*) const {
-  if (state) {
+  if (state && !state->hidden) {
     return state->Shape(nullptr);
   } else {
     return SkPath();
@@ -166,11 +166,6 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& display = ctx.display;
   auto& from_animation_state = from.GetAnimationState(display);
-  bool using_layer = false;
-  if (from_animation_state.transparency > 0.01f) {
-    using_layer = true;
-    canvas.saveLayerAlphaf(nullptr, 1.f - from_animation_state.transparency);
-  }
   SkPath from_shape = from.object->Shape(&display);
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
@@ -223,6 +218,39 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, &ctx.display);
   from_shape.transform(transform_from_to_machine);
 
+  // If one of the to_points is over from_shape, don't draw the cable
+  bool overlapping = to_shape.contains(pos_dir.pos.x, pos_dir.pos.y);
+  if (!overlapping && !from_shape.isEmpty()) {
+    for (auto& to_point : to_points) {
+      if (from_shape.contains(to_point.pos.x, to_point.pos.y)) {
+        overlapping = true;
+        break;
+      }
+    }
+  }
+  if (state) {
+    state->hidden = overlapping;
+  }
+  animation::LinearApproach(overlapping ? 1 : 0, ctx.DeltaT(), 5, state->transparency);
+
+  bool using_layer = false;
+  auto alpha = (1.f - from_animation_state.transparency) * (1.f - state->transparency);
+
+  if (!state.has_value() && arg.style != Argument::Style::Arrow && alpha > 0.01f) {
+    auto arcline = RouteCable(ctx, pos_dir, to_points);
+    auto new_length = ArcLine::Iterator(arcline).AdvanceToEnd();
+    if (new_length > length + 2_cm) {
+      alpha = 0;
+      state->transparency = 1;
+    }
+    length = new_length;
+  }
+
+  if (alpha < 0.99f) {
+    using_layer = true;
+    canvas.saveLayerAlphaf(nullptr, alpha);
+  }
+
   if (state) {
     if (to) {
       state->steel_insert_hidden.target = 1;
@@ -236,7 +264,9 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     state->steel_insert_hidden.Tick(display);
 
     SimulateCablePhysics(ctx, ctx.DeltaT(), *state, pos_dir, to_points);
-    DrawOpticalConnector(ctx, *state, arg.Icon());
+    if (alpha > 0.01f) {
+      DrawOpticalConnector(ctx, *state, arg.Icon());
+    }
   } else {
     if (arg.style == Argument::Style::Arrow) {
       if (to_shape.isEmpty()) {
@@ -254,17 +284,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
       cable_width.Tick(ctx.display);
 
       if (cable_width > 0.01_mm && to) {
-        // If one of the to_points is over from_shape, don't draw the cable
-        bool overlapping = false;
-        if (!from_shape.isEmpty()) {
-          for (auto& to_point : to_points) {
-            if (from_shape.contains(to_point.pos.x, to_point.pos.y)) {
-              overlapping = true;
-              break;
-            }
-          }
-        }
-        if (!overlapping) {
+        if (alpha > 0.01f) {
           auto arcline = RouteCable(ctx, pos_dir, to_points);
           auto color = SkColorSetA(arg.tint, 255 * cable_width.value / 2_mm);
           auto color_filter = color::MakeTintFilter(color, 30);

@@ -658,7 +658,9 @@ struct DragHandAction : Action {
   DragHandAction(gui::Pointer& pointer, TimerDelay& timer) : Action(pointer), timer(timer) {}
   virtual void Begin() { timer.hand_degrees.period = 0s; }
   virtual void Update() {
-    auto pos = pointer.PositionWithin(timer);
+    Vec2 pos = GuessDisplayContext(*timer.here, pointer.AnimationContext())
+                   .TransformDown()
+                   .mapPoint(pointer.pointer_position);
     float angle = atan2(pos.sk.y(), pos.sk.x());
     timer.hand_degrees.value = angle * 180 / M_PI;
   }
@@ -699,7 +701,7 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
 
     if (state == State::Idle) {
       SkPath hand_path = HandPath(*this);
-      SkPath hand_outline;
+      SkPath hand_outline;  // Hand is just a straight line so we have to "widen" it
       skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
       if (hand_outline.contains(pos.x, pos.y)) {
         return std::make_unique<DragHandAction>(pointer, *this);

@@ -45,6 +45,7 @@ struct DisplayContext {
   animation::Display& display;
   Path path;
   float DeltaT() const { return display.timer.d; }
+  SkMatrix TransformDown() { return gui::TransformDown(path, &display); }
 };
 
 struct DrawContext : DisplayContext {

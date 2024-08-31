@@ -80,9 +80,9 @@ void KeyPresser::Draw(gui::DrawContext& dctx) const {
   DrawChildren(dctx);
   auto& canvas = dctx.canvas;
   auto img = key_pressed ? PressingHandColor() : PointingHandColor();
-  float s = shortcut_button.width / img->width();
+  float s = 8.8_mm / img->height();
   canvas.save();
-  canvas.translate(3_mm, 2_mm);
+  canvas.translate(2.2_mm, 1.8_mm);
   canvas.rotate(15);
   canvas.scale(s, -s);
   canvas.drawImage(img.get(), 0, 0, kDefaultSamplingOptions);

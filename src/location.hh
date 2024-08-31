@@ -251,6 +251,9 @@ struct Location : gui::Widget {
   SkPath Shape(animation::Display*) const override;
   SkPath FieldShape(Object&) const;
 
+  // Call this when the position of this location changes to update the autoconnect arguments.
+  void UpdateAutoconnectArgs();
+
   // DEPRECATED. Returns the position in parent machine's coordinates where the connections for this
   // argument should start.
   // TODO: replace with Argument::Start

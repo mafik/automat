@@ -13,6 +13,8 @@
 #include <include/pathops/SkPathOps.h>
 #include <include/utils/SkShadowUtils.h>
 
+#include <cmath>
+
 #include "animation.hh"
 #include "base.hh"
 #include "color.hh"
@@ -23,6 +25,7 @@
 #include "gui_connection_widget.hh"
 #include "gui_constants.hh"
 #include "math.hh"
+#include "root.hh"
 #include "span.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
@@ -510,6 +513,128 @@ void Location::PreDraw(gui::DrawContext& ctx) const {
                             "#c9ced6"_color, "#ada4b0"_color, flags);
   ctx.canvas.restore();
   PreDrawChildren(ctx);
+}
+
+void Location::UpdateAutoconnectArgs() {
+  auto here_up = TransformUp(Path{root_machine, this}, nullptr);
+  object->Args([&](Argument& arg) {
+    if (arg.autoconnect_radius <= 0) {
+      return;
+    }
+
+    auto start = object->ArgStart(arg);
+    start.pos = here_up.mapPoint(start.pos);
+
+    // Find the current distance & target of this connection
+    float old_dist2 = HUGE_VALF;
+    Location* old_target = nullptr;
+    if (auto it = outgoing.find(&arg); it != outgoing.end()) {
+      Vec<Vec2AndDir> to_positions;
+      auto conn = it->second;
+      conn->to.object->ConnectionPositions(to_positions);
+      auto other_up = TransformUp(Path{root_machine, &conn->to}, nullptr);
+      for (auto& to : to_positions) {
+        Vec2 to_pos = other_up.mapPoint(to.pos);
+        float dist2 = LengthSquared(start.pos - to_pos);
+        if (dist2 <= old_dist2) {
+          old_target = &conn->to;
+          old_dist2 = dist2;
+        }
+      }
+    }
+
+    // Find the new distance & target
+    float new_dist2 = arg.autoconnect_radius * arg.autoconnect_radius;
+    Location* new_target = nullptr;
+    arg.NearbyCandidates(*this, arg.autoconnect_radius,
+                         [&](Location& other, maf::Vec<Vec2AndDir>& to_points) {
+                           for (auto& to_pos : to_points) {
+                             float dist2 = LengthSquared(start.pos - to_pos.pos);
+                             if (dist2 <= new_dist2) {
+                               new_dist2 = dist2;
+                               new_target = &other;
+                             }
+                           }
+                         });
+
+    if (new_target == old_target) {
+      return;
+    }
+    if (old_target) {
+      auto old_conn = outgoing.find(&arg)->second;
+      delete old_conn;
+    }
+    if (new_target) {
+      ConnectTo(*new_target, arg);
+    }
+  });
+
+  // Now check other locatinos & their arguments that might want to connect to this location
+
+  Vec<Vec2AndDir> to_points;
+  object->ConnectionPositions(to_points);
+  for (auto& to : to_points) {
+    to.pos = here_up.mapPoint(to.pos);
+  }
+
+  for (auto& other : root_machine->locations) {
+    if (other.get() == this) {
+      continue;
+    }
+    auto other_up = TransformUp(Path{root_machine, other.get()}, nullptr);
+    other->object->Args([&](Argument& arg) {
+      if (arg.autoconnect_radius <= 0) {
+        return;
+      }
+      Str error;
+      arg.CheckRequirements(*other, this, object.get(), error);
+      if (!error.empty()) {
+        return;  // `this` location can't be connected to `other`s `arg`
+      }
+      auto start = other->object->ArgStart(arg);
+      start.pos = other_up.mapPoint(start.pos);
+
+      // Find the current distance & target of this connection
+      float old_dist2 = HUGE_VALF;
+      Location* old_target = nullptr;
+      if (auto it = other->outgoing.find(&arg); it != other->outgoing.end()) {
+        Vec<Vec2AndDir> to_positions;
+        auto conn = it->second;
+        conn->to.object->ConnectionPositions(to_positions);
+        auto to_up = TransformUp(Path{root_machine, &conn->to}, nullptr);
+        for (auto& to : to_positions) {
+          Vec2 to_pos = to_up.mapPoint(to.pos);
+          float dist2 = LengthSquared(start.pos - to_pos);
+          if (dist2 <= old_dist2) {
+            old_target = &conn->to;
+            old_dist2 = dist2;
+          }
+        }
+      }
+
+      // Find the new distance & target
+      float new_dist2 = arg.autoconnect_radius * arg.autoconnect_radius;
+      Location* new_target = nullptr;
+      for (auto& to : to_points) {
+        float dist2 = LengthSquared(start.pos - to.pos);
+        if (dist2 <= new_dist2) {
+          new_dist2 = dist2;
+          new_target = this;
+        }
+      }
+
+      if (new_target == old_target) {
+        return;
+      }
+      if (old_target) {
+        auto old_conn = other->outgoing.find(&arg)->second;
+        delete old_conn;
+      }
+      if (new_target) {
+        other->ConnectTo(*new_target, arg);
+      }
+    });
+  }
 }
 
 }  // namespace automat

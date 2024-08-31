@@ -208,7 +208,7 @@ struct Argument {
   // get the position within some parent object (for example, a Machine).
   //
   // The final element of the path should be the object that contains this argument.
-  Vec2AndDir Start(gui::DisplayContext&);
+  Vec2AndDir Start(gui::DisplayContext&) const;
 
   // The returned "to_points" should use the same coordinate space as the "here" Location
   // TODO: it might be necessary to pass a gui::DisplayContext to compute positions

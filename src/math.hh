@@ -256,6 +256,13 @@ union Rect {
   constexpr Vec2 LeftCenter() const { return {left, CenterY()}; }
   constexpr Vec2 RightCenter() const { return {right, CenterY()}; }
 
+  constexpr float DistanceSquared(Vec2 point) {
+    float dx = std::max(0.f, std::max(left - point.x, point.x - right));
+    float dy = std::max(0.f, std::max(bottom - point.y, point.y - top));
+    return dx * dx + dy * dy;
+  }
+  constexpr float Discance(Vec2 point) { return sqrtf(DistanceSquared(point)); }
+
   void ExpandToInclude(Vec2 point) {
     left = std::min(left, point.x);
     right = std::max(right, point.x);

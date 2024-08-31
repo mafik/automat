@@ -80,13 +80,15 @@ void DragLocationAction::Update() {
     drop_target->SnapPosition(position, scale, DraggedObject(*this), &contact_point);
   }
 
+  location->scale = scale;
+  location->position = position;
+
   if (last_snapped_position != position) {
     last_snapped_position = position;
     location->animation_state[pointer.window.display].position.value +=
         current_position - last_position;
+    location->UpdateAutoconnectArgs();
   }
-  location->scale = scale;
-  location->position = position;
 
   last_position = current_position;
 }

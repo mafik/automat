@@ -93,7 +93,7 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Vec2AndDir Argument::Start(gui::DisplayContext& ctx) {
+Vec2AndDir Argument::Start(gui::DisplayContext& ctx) const {
   assert(ctx.path.size() > 0);
   Object* object = dynamic_cast<Object*>(ctx.path.back());
   assert(object);
@@ -168,21 +168,6 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
   if (conn_it != here.outgoing.end()) {  // explicit connection
     auto c = conn_it->second;
     result = &c->to;
-  } else if (autoconnect_radius > 0) {  // otherwise, search for other locations in this machine
-    if (auto parent_machine = here.ParentAs<Machine>()) {
-      Vec2 start_pos = here.position + here.object->ArgStart(*this).pos;
-      NearbyCandidates(
-          here,
-          autoconnect_radius * 2,  // * 2 is just to give some margin for the connection
-          [&](Location& loc, Vec<Vec2AndDir>& to_points) {
-            for (auto& to_point : to_points) {
-              if (Length(to_point.pos - start_pos) < autoconnect_radius) {
-                result = &loc;
-                break;
-              }
-            }
-          });
-    }
   }
   if (result == nullptr && cfg.if_missing == IfMissing::CreateFromPrototype) {
     // Ask the current location for the prototype for this object.

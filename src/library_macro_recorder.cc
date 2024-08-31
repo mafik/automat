@@ -254,6 +254,21 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
 }
 
 SkPath MacroRecorder::Shape(animation::Display*) const { return MacroRecorderShape(); }
+
+void MacroRecorder::ConnectionAdded(Location& here, Connection& c) {
+  if (&c.argument == &timeline_arg && IsOn()) {
+    if (auto timeline = FindTimeline(*this)) {
+      timeline->BeginRecording();
+    }
+  }
+}
+void MacroRecorder::ConnectionRemoved(Location& here, Connection& c) {
+  if (&c.argument == &timeline_arg && IsOn()) {
+    if (auto timeline = FindTimeline(*this)) {
+      timeline->StopRecording();
+    }
+  }
+}
 LongRunning* MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);

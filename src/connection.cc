@@ -5,7 +5,7 @@
 namespace automat {
 
 Connection::~Connection() {
-  // Maybe call some "OnConnectionDeleted" method on "from" and "to"?
+  from.object->ConnectionRemoved(from, *this);
   auto [begin, end] = from.outgoing.equal_range(this);
   for (auto it = begin; it != end; ++it) {
     if (*it == this) {

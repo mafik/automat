@@ -28,6 +28,7 @@ struct Object : gui::Widget {
   virtual void Relocate(Location* new_here) {}
 
   virtual void ConnectionAdded(Location& here, Connection&) {}
+  virtual void ConnectionRemoved(Location& here, Connection&) {}
 
   // Release the memory occupied by this object.
   virtual ~Object() = default;

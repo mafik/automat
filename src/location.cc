@@ -103,10 +103,10 @@ Connection* Location::ConnectTo(Location& other, Argument& arg,
       pointer_behavior = Connection::kTerminateHere;
     }
   }
-  Connection* c = new Connection(*this, other, pointer_behavior);
-  outgoing.emplace(&arg, c);
-  other.incoming.emplace(&arg, c);
-  object->ConnectionAdded(*this, arg, *c);
+  Connection* c = new Connection(arg, *this, other, pointer_behavior);
+  outgoing.emplace(c);
+  other.incoming.emplace(c);
+  object->ConnectionAdded(*this, *c);
   return c;
 }
 
@@ -372,10 +372,10 @@ Location::~Location() {
   // Location can only be destroyed by its parent so we don't have to do anything there.
   parent = nullptr;
   while (not incoming.empty()) {
-    delete incoming.begin()->second;
+    delete *incoming.begin();
   }
   while (not outgoing.empty()) {
-    delete outgoing.begin()->second;
+    delete *outgoing.begin();
   }
   for (auto other : update_observers) {
     other->observing_updates.erase(this);
@@ -530,7 +530,7 @@ void Location::UpdateAutoconnectArgs() {
     Location* old_target = nullptr;
     if (auto it = outgoing.find(&arg); it != outgoing.end()) {
       Vec<Vec2AndDir> to_positions;
-      auto conn = it->second;
+      auto conn = *it;
       conn->to.object->ConnectionPositions(to_positions);
       auto other_up = TransformUp(Path{root_machine, &conn->to}, nullptr);
       for (auto& to : to_positions) {
@@ -561,7 +561,7 @@ void Location::UpdateAutoconnectArgs() {
       return;
     }
     if (old_target) {
-      auto old_conn = outgoing.find(&arg)->second;
+      auto old_conn = *outgoing.find(&arg);
       delete old_conn;
     }
     if (new_target) {
@@ -599,7 +599,7 @@ void Location::UpdateAutoconnectArgs() {
       Location* old_target = nullptr;
       if (auto it = other->outgoing.find(&arg); it != other->outgoing.end()) {
         Vec<Vec2AndDir> to_positions;
-        auto conn = it->second;
+        auto conn = *it;
         conn->to.object->ConnectionPositions(to_positions);
         auto to_up = TransformUp(Path{root_machine, &conn->to}, nullptr);
         for (auto& to : to_positions) {
@@ -627,7 +627,7 @@ void Location::UpdateAutoconnectArgs() {
         return;
       }
       if (old_target) {
-        auto old_conn = other->outgoing.find(&arg)->second;
+        auto old_conn = *other->outgoing.find(&arg);
         delete old_conn;
       }
       if (new_target) {

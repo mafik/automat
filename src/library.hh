@@ -425,8 +425,8 @@ struct HealthTest : Object {
     }
   }
   void Relocate(Location* here) override { UpdateState(here); }
-  void ConnectionAdded(Location& here, Argument& arg, Connection& connection) override {
-    if (&arg == &target_arg) {
+  void ConnectionAdded(Location& here, Connection& connection) override {
+    if (&connection.argument == &target_arg) {
       UpdateState(&here);
     }
   }
@@ -453,8 +453,8 @@ struct ErrorCleaner : Object {
     }
   }
   void Relocate(Location* here) override { ObserveErrors(here); }
-  void ConnectionAdded(Location& here, Argument& arg, Connection& connection) override {
-    if (&arg == &target_arg) {
+  void ConnectionAdded(Location& here, Connection& connection) override {
+    if (&connection.argument == &target_arg) {
       ObserveErrors(&here);
     }
   }
@@ -930,9 +930,9 @@ struct ComboBox : LiveObject {
       error_context.ReportError(maf::f("No option named %*s", new_text.size(), new_text.data()));
     }
   }
-  void ConnectionAdded(Location& here, Argument& arg, Connection& connection) override {
-    LiveObject::ConnectionAdded(here, arg, connection);
-    if (selected == nullptr && &arg == &options_arg) {
+  void ConnectionAdded(Location& here, Connection& connection) override {
+    LiveObject::ConnectionAdded(here, connection);
+    if (selected == nullptr && &connection.argument == &options_arg) {
       auto option = options_arg.GetLocation(here);
       selected = option.location;
     }

@@ -85,8 +85,8 @@ struct LiveObject : Object {
     });
     here = new_self;
   }
-  void ConnectionAdded(Location& here, Argument& arg, Connection& connection) override {
-    if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {
+  void ConnectionAdded(Location& here, Connection& connection) override {
+    if (auto live_arg = dynamic_cast<LiveArgument*>(&connection.argument)) {
       live_arg->ConnectionAdded(here, connection);
     }
   }

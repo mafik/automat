@@ -149,7 +149,8 @@ struct Argument {
   T LoopLocations(Location& here, std::function<T(Location&)> callback) {
     auto [begin, end] = here.outgoing.equal_range(this);
     for (auto it = begin; it != end; ++it) {
-      if (auto ret = callback(it->second->to)) {
+      auto conn = *it;
+      if (auto ret = callback(conn->to)) {
         return ret;
       }
     }

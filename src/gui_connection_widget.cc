@@ -326,7 +326,7 @@ bool CanConnect(Location& from, Location& to, Argument& arg) {
 
 void DragConnectionAction::Begin() {
   if (auto it = widget.from.outgoing.find(&widget.arg); it != widget.from.outgoing.end()) {
-    delete it->second;
+    delete *it;
   }
 
   grab_offset = Vec2(0, 0);

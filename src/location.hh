@@ -69,8 +69,8 @@ struct Location : gui::Widget {
 
   // Connections of this Location.
   // Connection is owned by both incoming & outgoing locations.
-  std::unordered_multimap<const Argument*, Connection*> outgoing;
-  std::unordered_multimap<const Argument*, Connection*> incoming;
+  std::unordered_multiset<Connection*, ConnectionHasher, ConnectionEqual> outgoing;
+  std::unordered_multiset<Connection*, ConnectionHasher, ConnectionEqual> incoming;
 
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;

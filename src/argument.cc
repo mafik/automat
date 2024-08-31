@@ -27,7 +27,7 @@ Argument::LocationResult Argument::GetLocation(Location& here,
   LocationResult result;
   auto conn_it = here.outgoing.find(this);
   if (conn_it != here.outgoing.end()) {  // explicit connection
-    auto c = conn_it->second;
+    auto* c = *conn_it;
     result.location = &c->to;
     result.follow_pointers = c->pointer_behavior == Connection::kFollowPointers;
   } else {  // otherwise, search for other locations in this machine
@@ -166,7 +166,7 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
   auto conn_it = here.outgoing.find(this);
   Location* result = nullptr;
   if (conn_it != here.outgoing.end()) {  // explicit connection
-    auto c = conn_it->second;
+    auto* c = *conn_it;
     result = &c->to;
   }
   if (result == nullptr && cfg.if_missing == IfMissing::CreateFromPrototype) {
@@ -177,6 +177,7 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
         result = &l;
         Rect object_bounds = result->object->Shape().getBounds();
         l.position = here.position + here.object->ArgStart(*this).pos - object_bounds.TopCenter();
+        l.UpdateAutoconnectArgs();
         PositionBelow(here, l);
         AnimateGrowFrom(here, l);
       }
@@ -195,7 +196,7 @@ Object* Argument::FindObject(Location& here, const FindConfig& cfg) const {
 void LiveArgument::Detach(Location& here) {
   auto connections = here.outgoing.equal_range(this);
   for (auto it = connections.first; it != connections.second; ++it) {
-    auto& connection = it->second;
+    auto& connection = *it;
     here.StopObservingUpdates(connection->to);
   }
   // If there were no connections, try to find nearby objects instead.
@@ -214,7 +215,7 @@ void LiveArgument::Detach(Location& here) {
 void LiveArgument::Attach(Location& here) {
   auto connections = here.outgoing.equal_range(this);
   for (auto it = connections.first; it != connections.second; ++it) {
-    auto& connection = it->second;
+    auto* connection = *it;
     here.ObserveUpdates(connection->to);
   }
   // If there were no connections, try to find nearby objects instead.

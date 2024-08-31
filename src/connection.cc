@@ -6,20 +6,23 @@ namespace automat {
 
 Connection::~Connection() {
   // Maybe call some "OnConnectionDeleted" method on "from" and "to"?
-  for (auto it = from.outgoing.begin(); it != from.outgoing.end(); ++it) {
-    if (it->second == this) {
+  auto [begin, end] = from.outgoing.equal_range(this);
+  for (auto it = begin; it != end; ++it) {
+    if (*it == this) {
       from.outgoing.erase(it);
       break;
     }
   }
-  for (auto it = to.incoming.begin(); it != to.incoming.end(); ++it) {
-    if (it->second == this) {
+  auto [begin2, end2] = to.incoming.equal_range(this);
+  for (auto it = begin2; it != end2; ++it) {
+    if (*it == this) {
       to.incoming.erase(it);
       break;
     }
   }
 }
 
-Connection::Connection(Location& from, Location& to, PointerBehavior pointer_behavior)
-    : from(from), to(to), pointer_behavior(pointer_behavior) {}
+Connection::Connection(Argument& arg, Location& from, Location& to,
+                       PointerBehavior pointer_behavior)
+    : argument(arg), from(from), to(to), pointer_behavior(pointer_behavior) {}
 }  // namespace automat

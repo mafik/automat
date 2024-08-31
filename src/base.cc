@@ -177,8 +177,8 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
       if (!location->outgoing.empty()) {
         writer.Key("connections");
         writer.StartObject();
-        for (auto& [key, conn] : location->outgoing) {
-          writer.Key(key->name.data(), key->name.size());
+        for (auto* conn : location->outgoing) {
+          writer.Key(conn->argument.name.data(), conn->argument.name.size());
           writer.Int(location_ids.at(&conn->to));
         }
         writer.EndObject();

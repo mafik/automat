@@ -282,6 +282,9 @@ void RegisterRawInput(bool keylogging) {
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static unsigned char key_state[256] = {};
+  auto IsCtrlDown = []() {
+    return key_state[VK_LCONTROL] || key_state[VK_RCONTROL] || key_state[VK_CONTROL];
+  };
   static char utf8_buffer[4] = {};
   static int utf8_i = 0;
   if (std::optional<LRESULT> result = touchpad::ProcessEvent(uMsg, wParam, lParam)) {
@@ -405,6 +408,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       if (ev.Message == WM_KEYDOWN) {
         if (key_state[virtual_key] == 0) {
           key_state[virtual_key] = 0x80;
+          key.ctrl = IsCtrlDown();
           std::array<wchar_t, 16> utf16_buffer;
           int utf16_len = ToUnicode(virtual_key, scan_code, key_state, utf16_buffer.data(),
                                     utf16_buffer.size(), 0);
@@ -430,6 +434,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
         if (virtual_key == 0x12) {
           key_state[0x11] = 0;
         }
+        key.ctrl = IsCtrlDown();
         if (gui::keyboard) {
           if (keylogging_enabled) {
             gui::keyboard->LogKeyUp(key);

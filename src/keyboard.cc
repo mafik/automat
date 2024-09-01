@@ -3,6 +3,7 @@
 #include <map>
 #include <set>
 
+#include "automat.hh"
 #include "font.hh"
 #include "root.hh"
 #include "window.hh"
@@ -355,7 +356,12 @@ void Keyboard::KeyUp(xcb_key_press_event_t& ev) {
 void Keyboard::KeyDown(Key key) {
   // Quit on Ctrl + Q
   if (key.ctrl && key.physical == AnsiKey::Q) {
-    automat_thread.get_stop_source().request_stop();
+    Status status;
+    automat::StopAutomat(status);
+    if (!OK(status)) {
+      ERROR << "Error while stopping Automat: " << status;
+    }
+
     return;
   }
   RunOnAutomatThread([=, this]() {

@@ -9,4 +9,6 @@ namespace automat {
 // Sets up gui::window, gui::keyboard, and loads the state from JSON.
 void InitAutomat(maf::Status&);
 
+void StopAutomat(maf::Status&);
+
 }  // namespace automat

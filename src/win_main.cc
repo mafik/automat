@@ -280,6 +280,15 @@ void RegisterRawInput(bool keylogging) {
   keylogging_enabled = keylogging;
 }
 
+namespace automat {
+void StopAutomat(Status& status) {
+  RenderingStop();
+  StopRoot();
+  SaveState(*window, status);
+  DestroyWindow(main_window);
+}
+}  // namespace automat
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
   static unsigned char key_state[256] = {};
   auto IsCtrlDown = []() {
@@ -517,14 +526,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_CLOSE: {
-      RenderingStop();
-      StopRoot();
       Status status;
-      SaveState(*window, status);
+      StopAutomat(status);
       if (!OK(status)) {
         ERROR << "Couldn't save automat state: " << status;
       }
-      DestroyWindow(hWnd);
       break;
     }
     case WM_DESTROY: {

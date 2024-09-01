@@ -1,6 +1,6 @@
 #include "root.hh"
 
-#include <condition_variable>
+#include <atomic>
 #include <thread>
 
 #include "prototypes.hh"
@@ -10,6 +10,7 @@ namespace automat {
 Location root_location;
 Machine* root_machine;
 std::jthread automat_thread;
+std::atomic_bool automat_thread_finished = false;
 
 void InitRoot() {
   root_location.name = "Root location";
@@ -28,10 +29,23 @@ void StopRoot() {
   }
 }
 
-void AssertAutomatThread() { assert(std::this_thread::get_id() == automat_thread.get_id()); }
+void AssertAutomatThread() {
+  if (automat_thread.get_stop_source().stop_requested()) {
+    assert(automat_thread_finished);
+  } else {
+    assert(std::this_thread::get_id() == automat_thread.get_id());
+  }
+}
 
 void RunOnAutomatThread(std::function<void()> f) {
   if (std::this_thread::get_id() == automat_thread.get_id()) {
+    f();
+    return;
+  }
+  if (automat_thread.get_stop_source().stop_requested()) {
+    if (!automat_thread_finished) {
+      automat_thread_finished.wait(false);
+    }
     f();
     return;
   }
@@ -43,16 +57,14 @@ void RunOnAutomatThreadSynchronous(std::function<void()> f) {
     f();
     return;
   }
-  std::mutex mutex;
-  std::condition_variable automat_thread_done;
-  std::unique_lock<std::mutex> lock(mutex);
+  std::atomic_bool done = false;
   RunOnAutomatThread([&]() {
     f();
     // wake the UI thread
-    std::unique_lock<std::mutex> lock(mutex);
-    automat_thread_done.notify_all();
+    done = true;
+    done.notify_all();
   });
-  automat_thread_done.wait(lock);
+  done.wait(false);
 }
 
 }  // namespace automat

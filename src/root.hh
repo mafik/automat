@@ -9,6 +9,7 @@ namespace automat {
 extern Location root_location;
 extern Machine* root_machine;
 extern std::jthread automat_thread;
+extern std::atomic_bool automat_thread_finished;
 
 // Starts the Automat main loop
 void InitRoot();

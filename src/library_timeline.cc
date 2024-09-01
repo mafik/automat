@@ -1494,6 +1494,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       }
     } else if (key == "zoom") {
       d.Get(zoom.value, status);
+      zoom.target = zoom.value;
     } else if (key == "length") {
       d.Get(timeline_length, status);
     } else if (key == "paused") {

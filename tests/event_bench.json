@@ -1,0 +1,152 @@
+{
+    "version": 1,
+    "window": {
+        "maximized": {
+            "horizontally": false,
+            "vertically": false
+        },
+        "output_device_x": 0.002333,
+        "output_device_y": 0.010759,
+        "width": 0.190166,
+        "height": 0.090611,
+        "camera": {
+            "x": 0.09442,
+            "y": -0.051148,
+            "zoom": 0.330347
+        }
+    },
+    "root": {
+        "name": "Root machine",
+        "locations": [
+            {
+                "type": "Macro Recorder",
+                "value": {
+                    "recording": true
+                },
+                "x": 0.213,
+                "y": -0.029,
+                "connections": {
+                    "Timeline": 1
+                }
+            },
+            {
+                "type": "Timeline",
+                "value": {
+                    "tracks": [
+                        {
+                            "name": "Space",
+                            "type": "on/off",
+                            "timestamps": []
+                        }
+                    ],
+                    "zoom": 10.0,
+                    "length": 0.0,
+                    "recording": 0
+                },
+                "x": 0.235,
+                "y": -0.05
+            },
+            {
+                "type": "Delay",
+                "value": {
+                    "range": "seconds",
+                    "duration_seconds": 1.0,
+                    "running": 0
+                },
+                "x": -0.021,
+                "y": 0.016,
+                "connections": {
+                    "next": 3
+                }
+            },
+            {
+                "type": "Timeline",
+                "value": {
+                    "tracks": [
+                        {
+                            "name": "Space",
+                            "type": "on/off",
+                            "timestamps": [
+                                0.0,
+                                0.1,
+                                0.2,
+                                0.3,
+                                0.4,
+                                0.5,
+                                0.6,
+                                0.7,
+                                0.8,
+                                0.9
+                            ]
+                        }
+                    ],
+                    "zoom": 1,
+                    "length": 1,
+                    "paused": 0.0
+                },
+                "x": -0.021,
+                "y": -0.062,
+                "connections": {
+                    "next": 3,
+                    "Space": 4
+                }
+            },
+            {
+                "type": "Key Presser",
+                "value": {
+                    "key": "Space"
+                },
+                "x": 0.029,
+                "y": -0.079
+            },
+            {
+                "type": "Timeline",
+                "value": {
+                    "tracks": [
+                        {
+                            "name": "Ctrl",
+                            "type": "on/off",
+                            "timestamps": [
+                                10.0,
+                                11.0
+                            ]
+                        },
+                        {
+                            "name": "Q",
+                            "type": "on/off",
+                            "timestamps": [
+                                10.1,
+                                11.0
+                            ]
+                        }
+                    ],
+                    "zoom": 10.0,
+                    "length": 11.0,
+                    "playing": 0.0
+                },
+                "x": 0.089,
+                "y": -0.062,
+                "connections": {
+                    "Ctrl": 6,
+                    "Q": 7
+                }
+            },
+            {
+                "type": "Key Presser",
+                "value": {
+                    "key": "Left Control"
+                },
+                "x": 0.129,
+                "y": -0.079
+            },
+            {
+                "type": "Key Presser",
+                "value": {
+                    "key": "Q"
+                },
+                "x": 0.129,
+                "y": -0.089
+            }
+        ]
+    }
+}

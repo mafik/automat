@@ -332,6 +332,9 @@ time::T Timeline::MaxTrackLength() const {
     max_track_length = max(max_track_length, (time::SteadyNow() - recording.started_at).count());
   }
   for (const auto& track : tracks) {
+    if (track->timestamps.empty()) {
+      continue;
+    }
     max_track_length = max(max_track_length, track->timestamps.back());
   }
   return max_track_length;
@@ -1505,6 +1508,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       // We're not updating the outputs because they should be deserialized in a proper state
       // TimelineUpdateOutputs(l, *this, playing.started_at, now);
       TimelineScheduleAt(*this, now);
+      l.long_running = this;
     } else if (key == "recording") {
       state = kRecording;
       double value = 0;

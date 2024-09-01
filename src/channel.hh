@@ -39,6 +39,18 @@ struct channel {
     atomic.notify_all();
   }
 
+  void* try_send(void* ptr) {
+    assert(ptr != nullptr);
+    void* expected = nullptr;
+    bool success = atomic.compare_exchange_strong(expected, ptr, std::memory_order_release,
+                                                  std::memory_order_relaxed);
+    if (success) {
+      atomic.notify_all();
+      return nullptr;
+    }
+    return ptr;
+  }
+
   // Will never block.
   void send_force(void* ptr) {
     assert(ptr != nullptr);
@@ -67,6 +79,11 @@ struct channel {
   template <typename T>
   void send_force(std::unique_ptr<T> ptr) {
     send_force(ptr.release());
+  }
+
+  template <typename T>
+  std::unique_ptr<T> try_send(std::unique_ptr<T> ptr) {
+    return std::unique_ptr<T>(static_cast<T*>(try_send(ptr.release())));
   }
 
   template <typename T>

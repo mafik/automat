@@ -90,7 +90,7 @@ struct ShutdownTask : Task {
 void RunThread(std::stop_token stop_token) {
   StartTimeThread(stop_token);
   std::stop_callback wakeup_for_shutdown(stop_token,
-                                         [] { events.send(std::make_unique<ShutdownTask>()); });
+                                         [] { events.try_send(std::make_unique<ShutdownTask>()); });
 
   SetThreadName("Automat Loop");
   while (!stop_token.stop_requested()) {
@@ -101,6 +101,8 @@ void RunThread(std::stop_token stop_token) {
       wrapper->Schedule();  // Will delete itself after executing.
     }
   }
+  automat_thread_finished = true;
+  automat_thread_finished.notify_all();
 }
 
 void RunLoop(const int max_iterations) {

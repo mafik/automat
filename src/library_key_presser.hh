@@ -26,6 +26,7 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
 
   KeyPresser(gui::AnsiKey);
   KeyPresser();
+  ~KeyPresser() override;
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   void Draw(gui::DrawContext&) const override;

@@ -9,6 +9,7 @@ struct Text : Widget, PaintMixin {
   Text(std::string_view text = "");
   SkPath Shape(animation::Display*) const override;
   void Draw(DrawContext&) const override;
+  maf::StrView Name() const override { return "Text"; }
 };
 
 }  // namespace automat::gui

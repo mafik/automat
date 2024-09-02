@@ -13,6 +13,7 @@ struct NumberButton : virtual gui::Button, gui::ChildButtonMixin {
   NumberButton(std::unique_ptr<Widget>&& child);
   void Draw(gui::DrawContext&) const override;
   void Activate(gui::Pointer&) override;
+  maf::StrView Name() const override { return "NumberButton"; }
 };
 
 struct Number : Object {

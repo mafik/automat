@@ -754,6 +754,8 @@ void RenderLoop() {
   }
 }
 
+void automat::StopAutomat(maf::Status&) { automat_thread.request_stop(); }
+
 int LinuxMain(int argc, char* argv[]) {
   SkGraphics::Init();
   Status status;
@@ -800,6 +802,8 @@ int LinuxMain(int argc, char* argv[]) {
   if (!OK(status)) {
     ERROR << "Failed to save state: " << status;
   }
+
+  root_machine->locations.clear();
 
   mouse.reset();
 

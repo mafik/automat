@@ -38,6 +38,7 @@ struct KeyButton : virtual gui::Button, ChildButtonMixin {
   SkRRect RRect() const override;
   SkColor ForegroundColor(gui::DrawContext&) const override { return fg; }
   void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg, Widget* child) const override;
+  maf::StrView Name() const override { return "KeyButton"; }
 };
 
 std::unique_ptr<Widget> MakeKeyLabelWidget(maf::StrView label);

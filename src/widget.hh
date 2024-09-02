@@ -3,6 +3,7 @@
 #include <include/core/SkCanvas.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
+#include <include/gpu/GrDirectContext.h>
 
 #include <functional>
 
@@ -52,6 +53,7 @@ struct DrawContext : DisplayContext {
   SkCanvas& canvas;
   DrawContext(SkCanvas& canvas, animation::Display& display)
       : DisplayContext{display, {}}, canvas(canvas) {}
+  operator GrDirectContext*() const { return canvas.recordingContext()->asDirectContext(); }
 };
 
 struct DropTarget;

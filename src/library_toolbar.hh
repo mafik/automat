@@ -35,6 +35,8 @@ struct PrototypeButton : Widget {
   void PointerLeave(Pointer& pointer, animation::Display&) override { pointer.PopIcon(); }
 
   std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton btn) override;
+
+  maf::StrView Name() const override { return "PrototypeButton"; }
 };
 
 }  // namespace automat::gui

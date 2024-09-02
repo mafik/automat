@@ -1,0 +1,255 @@
+{
+    "version": 1,
+    "window": {
+        "maximized": {
+            "horizontally": false,
+            "vertically": false
+        },
+        "output_device_x": -0.170656,
+        "output_device_y": 0.084931,
+        "width": 0.231259,
+        "height": 0.145444,
+        "camera": {
+            "x": 0.106864,
+            "y": 0.048767,
+            "zoom": 0.778798
+        }
+    },
+    "root": {
+        "name": "Root machine",
+        "locations": [
+            {
+                "type": "Key Presser",
+                "value": {
+                    "key": "F"
+                },
+                "x": 0.105,
+                "y": 0.002
+            },
+            {
+                "type": "Timeline",
+                "value": {
+                    "tracks": [
+                        {
+                            "name": "Left Control",
+                            "type": "on/off",
+                            "timestamps": [
+                                9.9,
+                                11.0
+                            ]
+                        },
+                        {
+                            "name": "Q",
+                            "type": "on/off",
+                            "timestamps": [
+                                10.0,
+                                11.0
+                            ]
+                        }
+                    ],
+                    "zoom": 10.0,
+                    "length": 11.0,
+                    "paused": 0.0
+                },
+                "x": 0.05,
+                "y": 0.043,
+                "connections": {
+                    "Left Control": 19,
+                    "Q": 20
+                }
+            },
+            {
+                "type": "Timeline",
+                "value": {
+                    "tracks": [],
+                    "zoom": 10.0,
+                    "length": 0.0,
+                    "paused": 0.0
+                },
+                "x": -0.044,
+                "y": -0.007
+            },
+            {
+                "type": "Timeline",
+                "value": {
+                    "tracks": [],
+                    "zoom": 10.0,
+                    "length": 0.0,
+                    "paused": 0.0
+                },
+                "x": 0.232,
+                "y": 0.128
+            },
+            {
+                "type": "Number",
+                "value": 0,
+                "x": 0.205,
+                "y": -0.007
+            },
+            {
+                "type": "Number",
+                "value": 0,
+                "x": 0.165,
+                "y": 0.008
+            },
+            {
+                "type": "Number",
+                "value": 0,
+                "x": 0.127,
+                "y": -0.001
+            },
+            {
+                "type": "Mouse Right Down",
+                "x": 0.157,
+                "y": 0.069,
+                "connections": {
+                    "next": 9
+                }
+            },
+            {
+                "type": "Mouse Left Down",
+                "x": 0.136,
+                "y": 0.063,
+                "connections": {
+                    "next": 7
+                }
+            },
+            {
+                "type": "Mouse Left Down",
+                "x": 0.112,
+                "y": 0.064,
+                "connections": {
+                    "next": 8
+                }
+            },
+            {
+                "type": "HotKey",
+                "value": {
+                    "key": "F11",
+                    "ctrl": true,
+                    "alt": false,
+                    "shift": false,
+                    "windows": false,
+                    "active": false
+                },
+                "x": 0.125,
+                "y": 0.124,
+                "connections": {
+                    "next": 12
+                }
+            },
+            {
+                "type": "HotKey",
+                "value": {
+                    "key": "F11",
+                    "ctrl": true,
+                    "alt": false,
+                    "shift": false,
+                    "windows": false,
+                    "active": false
+                },
+                "x": 0.077,
+                "y": 0.089,
+                "connections": {
+                    "next": 10
+                }
+            },
+            {
+                "type": "HotKey",
+                "value": {
+                    "key": "F11",
+                    "ctrl": true,
+                    "alt": false,
+                    "shift": false,
+                    "windows": false,
+                    "active": false
+                },
+                "x": 0.071,
+                "y": 0.123,
+                "connections": {
+                    "next": 11
+                }
+            },
+            {
+                "type": "Macro Recorder",
+                "value": {
+                    "recording": false
+                },
+                "x": 0.004,
+                "y": -0.055
+            },
+            {
+                "type": "Macro Recorder",
+                "value": {
+                    "recording": false
+                },
+                "x": -0.041,
+                "y": -0.047
+            },
+            {
+                "type": "Macro Recorder",
+                "value": {
+                    "recording": false
+                },
+                "x": -0.048,
+                "y": 0.01,
+                "connections": {
+                    "Timeline": 1
+                }
+            },
+            {
+                "type": "Delay",
+                "value": {
+                    "range": "seconds",
+                    "duration_seconds": 10.0
+                },
+                "x": -0.024,
+                "y": 0.135,
+                "connections": {
+                    "next": 17
+                }
+            },
+            {
+                "type": "Delay",
+                "value": {
+                    "range": "seconds",
+                    "duration_seconds": 10.0
+                },
+                "x": 0.021,
+                "y": 0.11,
+                "connections": {
+                    "next": 16
+                }
+            },
+            {
+                "type": "Delay",
+                "value": {
+                    "range": "seconds",
+                    "duration_seconds": 1.0,
+                    "running": 0.0
+                },
+                "x": -0.025,
+                "y": 0.089,
+                "connections": {
+                    "next": 1
+                }
+            },
+            {
+                "type": "Key Presser",
+                "value": {
+                    "key": "Left Control"
+                },
+                "x": 0.109,
+                "y": 0.026
+            },
+            {
+                "type": "Key Presser",
+                "value": {
+                    "key": "Q"
+                },
+                "x": 0.11,
+                "y": 0.015
+            }
+        ]
+    }
+}

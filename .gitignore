@@ -52,3 +52,6 @@ compile_commands.json
 
 www/assets
 www/builds
+
+perf.data
+perf.data.old

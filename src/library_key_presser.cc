@@ -22,15 +22,13 @@ namespace automat::library {
 
 DEFINE_PROTO(KeyPresser);
 
-static sk_sp<SkImage>& PointingHandColor() {
-  static auto image =
-      MakeImageFromAsset(embedded::assets_pointing_hand_color_webp)->withDefaultMipmaps();
+static sk_sp<SkImage>& PointingHandColor(DrawContext& ctx) {
+  static auto image = MakeImageFromAsset(embedded::assets_pointing_hand_color_webp, ctx);
   return image;
 }
 
-static sk_sp<SkImage>& PressingHandColor() {
-  static auto image =
-      MakeImageFromAsset(embedded::assets_pressing_hand_color_webp)->withDefaultMipmaps();
+static sk_sp<SkImage>& PressingHandColor(DrawContext& ctx) {
+  static auto image = MakeImageFromAsset(embedded::assets_pressing_hand_color_webp, ctx);
   return image;
 }
 
@@ -79,7 +77,7 @@ void KeyPresser::Draw(gui::DrawContext& dctx) const {
   shortcut_button.fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
   DrawChildren(dctx);
   auto& canvas = dctx.canvas;
-  auto img = key_pressed ? PressingHandColor() : PointingHandColor();
+  auto img = key_pressed ? PressingHandColor(dctx) : PointingHandColor(dctx);
   float s = 8.8_mm / img->height();
   canvas.save();
   canvas.translate(2.2_mm, 1.8_mm);
@@ -89,11 +87,14 @@ void KeyPresser::Draw(gui::DrawContext& dctx) const {
   canvas.restore();
 }
 SkPath KeyPresser::Shape(animation::Display*) const {
-  auto button_shape = shortcut_button.Shape(nullptr);
-  auto hand_shape = GetHandShape();
-  SkPath joined_shape;
-  Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
-  return joined_shape;
+  static SkPath shape = [this]() {
+    auto button_shape = shortcut_button.Shape(nullptr);
+    auto hand_shape = GetHandShape();
+    SkPath joined_shape;
+    Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
+    return joined_shape;
+  }();
+  return shape;
 }
 void KeyPresser::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
   auto button_shape = shortcut_button.Shape(nullptr);
@@ -228,4 +229,9 @@ void KeyPresser::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
+KeyPresser::~KeyPresser() {
+  if (key_pressed) {
+    Cancel();
+  }
+}
 }  // namespace automat::library

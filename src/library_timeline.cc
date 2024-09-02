@@ -115,22 +115,24 @@ constexpr RRect kDisplayRRect = []() {
                .type = SkRRect::kSimple_Type};
 }();
 
-static sk_sp<SkImage>& RosewoodColor() {
-  static auto image =
-      MakeImageFromAsset(embedded::assets_rosewood_color_webp)->withDefaultMipmaps();
+static sk_sp<SkImage>& RosewoodColor(DrawContext& ctx) {
+  static auto image = MakeImageFromAsset(embedded::assets_rosewood_color_webp, ctx);
   return image;
 }
 
-const SkPaint kWoodPaint = []() {
-  SkPaint p;
-  p.setColor("#805338"_color);
-  auto s = kWoodenCaseWidth / 512 / 2;
-  p.setShader(RosewoodColor()
-                  ->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
-                               SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear))
-                  ->makeWithLocalMatrix(SkMatrix::Scale(s, s).postRotate(-85)));
+const SkPaint& WoodPaint(DrawContext& ctx) {
+  static SkPaint p = [&]() {
+    SkPaint p;
+    p.setColor("#805338"_color);
+    auto s = kWoodenCaseWidth / 512 / 2;
+    p.setShader(RosewoodColor(ctx)
+                    ->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
+                                 SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear))
+                    ->makeWithLocalMatrix(SkMatrix::Scale(s, s).postRotate(-85)));
+    return p;
+  }();
   return p;
-}();
+}
 
 const SkPaint kPlasticPaint = []() {
   SkPaint p;
@@ -683,7 +685,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   {  // Wooden case, light & shadow
     canvas.save();
     canvas.clipRRect(wood_case_rrect);
-    canvas.drawPaint(kWoodPaint);
+    canvas.drawPaint(WoodPaint(dctx));
 
     SkPaint outer_shadow;
     outer_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 1_mm));

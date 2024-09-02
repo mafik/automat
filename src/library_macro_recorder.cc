@@ -4,6 +4,7 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradientShader.h>
+#include <include/gpu/GrDirectContext.h>
 #include <modules/svg/include/SkSVGDOM.h>
 
 #include "../build/generated/embedded.hh"
@@ -57,9 +58,8 @@ static SkPath& MacroRecorderShape() {
   return path;
 }
 
-static sk_sp<SkImage>& MacroRecorderFrontColor() {
-  static auto image =
-      MakeImageFromAsset(embedded::assets_macro_recorder_front_color_webp)->withDefaultMipmaps();
+static sk_sp<SkImage>& MacroRecorderFrontColor(GrDirectContext* gr_ctx) {
+  static auto image = MakeImageFromAsset(embedded::assets_macro_recorder_front_color_webp, gr_ctx);
   return image;
 }
 
@@ -109,7 +109,7 @@ std::unique_ptr<Object> MacroRecorder::Clone() const {
 #pragma region Draw
 void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   auto& animation_state = animation_state_ptr[dctx.display];
-  auto& image = MacroRecorderFrontColor();
+  auto& image = MacroRecorderFrontColor(dctx.canvas.recordingContext()->asDirectContext());
   auto& canvas = dctx.canvas;
 
   if (keylogging) {
@@ -231,7 +231,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     float s = 5_cm / image->height();
     canvas.translate(0, 5_cm);
     canvas.scale(s, -s);
-    canvas.drawImage(MacroRecorderFrontColor(), 0, 0, kDefaultSamplingOptions);
+    canvas.drawImage(image, 0, 0, kDefaultSamplingOptions);
     canvas.restore();
   }
 

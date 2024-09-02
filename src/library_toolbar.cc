@@ -5,7 +5,6 @@
 #include <include/core/SkSamplingOptions.h>
 
 #include "../build/generated/embedded.hh"
-#include "root.hh"
 #include "span.hh"
 #include "textures.hh"
 #include "widget.hh"
@@ -53,8 +52,8 @@ SkPath Toolbar::Shape(animation::Display*) const {
   return SkPath::Rect(rect);
 }
 
-static sk_sp<SkImage>& ToolbarColor() {
-  static auto image = MakeImageFromAsset(embedded::assets_tray_webp)->withDefaultMipmaps();
+static sk_sp<SkImage>& ToolbarColor(gui::DrawContext& ctx) {
+  static auto image = MakeImageFromAsset(embedded::assets_tray_webp, ctx);
   return image;
 }
 
@@ -105,7 +104,7 @@ void Toolbar::Draw(gui::DrawContext& dctx) const {
 
   auto my_shape = Shape(&dctx.display);
 
-  auto color = ToolbarColor();
+  auto color = ToolbarColor(dctx);
   SkIRect center = SkIRect::MakeLTRB(color->height() / 2, 0, color->width() - color->height() / 2,
                                      color->height());
   SkRect dst = my_shape.getBounds();

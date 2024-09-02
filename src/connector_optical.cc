@@ -641,15 +641,13 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
   return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
 }
 
-static sk_sp<SkImage>& CableWeaveColor() {
-  static auto image =
-      MakeImageFromAsset(embedded::assets_cable_weave_color_webp)->withDefaultMipmaps();
+static sk_sp<SkImage>& CableWeaveColor(gui::DrawContext& ctx) {
+  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_color_webp, ctx);
   return image;
 }
 
-static sk_sp<SkImage>& CableWeaveNormal() {
-  static auto image =
-      MakeImageFromAsset(embedded::assets_cable_weave_normal_webp)->withDefaultMipmaps();
+static sk_sp<SkImage>& CableWeaveNormal(gui::DrawContext& ctx) {
+  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_normal_webp, ctx);
   return image;
 }
 
@@ -962,10 +960,10 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
   sk_sp<SkShader> cable_color, cable_normal;
   switch (texture) {
     case CableTexture::Braided:
-      cable_color = CableWeaveColor()->makeShader(
+      cable_color = CableWeaveColor(ctx)->makeShader(
           SkTileMode::kRepeat, SkTileMode::kRepeat,
           SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-      cable_normal = CableWeaveNormal()->makeRawShader(
+      cable_normal = CableWeaveNormal(ctx)->makeRawShader(
           SkTileMode::kRepeat, SkTileMode::kRepeat,
           SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
       break;

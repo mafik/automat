@@ -18,7 +18,6 @@
 #include "library_macros.hh"
 #include "sincos.hh"
 #include "textures.hh"
-#include "time.hh"
 
 using namespace maf;
 
@@ -51,9 +50,8 @@ struct FlipFlopTarget : Argument {
 
 FlipFlopTarget flip_arg("flip", Argument::kOptional);
 
-static sk_sp<SkImage>& FlipFlopColor() {
-  static auto image =
-      MakeImageFromAsset(embedded::assets_flip_flop_color_webp)->withDefaultMipmaps();
+static sk_sp<SkImage>& FlipFlopColor(gui::DrawContext& ctx) {
+  static auto image = MakeImageFromAsset(embedded::assets_flip_flop_color_webp, ctx);
   return image;
 }
 
@@ -68,7 +66,7 @@ std::unique_ptr<Object> FlipFlop::Clone() const {
 }
 void FlipFlop::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
-  auto img = FlipFlopColor();
+  auto img = FlipFlopColor(dctx);
   float s = kFlipFlopWidth / img->width();
   float height = s * img->height();
   auto m = canvas.getLocalToDevice();
@@ -122,9 +120,11 @@ void FlipFlop::Draw(gui::DrawContext& dctx) const {
   DrawChildren(dctx);
 }
 Rect FlipFlopRect() {
-  auto img = FlipFlopColor();
-  float s = kFlipFlopWidth / img->width();
-  return Rect::MakeZeroWH(kFlipFlopWidth, s * img->height());
+  // Update this if the image changes
+  constexpr int kFlipFlopImageWidth = 342;
+  constexpr int kFlipFlopImageHeight = 475;
+  constexpr float s = kFlipFlopWidth / kFlipFlopImageWidth;
+  return Rect::MakeZeroWH(kFlipFlopWidth, s * kFlipFlopImageHeight);
 }
 SkPath FlipFlop::Shape(animation::Display*) const { return SkPath::Rect(FlipFlopRect()); }
 

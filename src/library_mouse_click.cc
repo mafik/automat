@@ -20,6 +20,9 @@
 #include <include/core/SkColorFilter.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkSamplingOptions.h>
+#include <include/gpu/GrDirectContext.h>
+#include <include/gpu/GrRecordingContext.h>
+#include <include/gpu/ganesh/SkImageGanesh.h>
 
 #include "../build/generated/embedded.hh"
 #include "argument.hh"
@@ -27,7 +30,7 @@
 #include "pointer.hh"
 #include "prototypes.hh"
 #include "svg.hh"
-#include "virtual_fs.hh"
+#include "textures.hh"
 
 #if defined(__linux__)
 #include "linux_main.hh"
@@ -49,31 +52,25 @@ __attribute__((constructor)) void RegisterMouseClick() {
   RegisterPrototype(MouseClick::rmb_up);
 }
 
-static sk_sp<SkImage> MakeImageFromAsset(fs::VFile& asset) {
-  auto& content = asset.content;
-  auto data = SkData::MakeWithoutCopy(content.data(), content.size());
-  auto image = SkImages::DeferredFromEncodedData(data, SkAlphaType::kUnpremul_SkAlphaType);
-  return image;
-}
-
 static sk_sp<SkImage>& MouseBaseImage() {
-  static auto image = MakeImageFromAsset(embedded::assets_mouse_base_webp);
+  static auto image = MakeImageFromAsset(embedded::assets_mouse_base_webp, nullptr);
   return image;
 }
 
 static sk_sp<SkImage>& MouseLMBMask() {
-  static auto image = MakeImageFromAsset(embedded::assets_mouse_lmb_mask_webp);
+  static auto image = MakeImageFromAsset(embedded::assets_mouse_lmb_mask_webp, nullptr);
   return image;
 }
 
 static sk_sp<SkImage>& MouseRMBMask() {
-  static auto image = MakeImageFromAsset(embedded::assets_mouse_rmb_mask_webp);
+  static auto image = MakeImageFromAsset(embedded::assets_mouse_rmb_mask_webp, nullptr);
   return image;
 }
 
 constexpr float kScale = 0.00005;
 
-static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
+static sk_sp<SkImage> RenderMouseImage(SkCanvas& root_canvas, gui::PointerButton button,
+                                       bool down) {
   auto base = MouseBaseImage();
   auto mask = button == gui::kMouseLeft ? MouseLMBMask() : MouseRMBMask();
   SkBitmap bitmap;
@@ -108,29 +105,31 @@ static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
     canvas.drawPath(path, paint);
   }
   bitmap.setImmutable();
-  return SkImages::RasterFromBitmap(bitmap);
+  auto raster_image = SkImages::RasterFromBitmap(bitmap);
+  return SkImages::TextureFromImage(root_canvas.recordingContext()->asDirectContext(),
+                                    raster_image.get(), skgpu::Mipmapped::kYes);
 }
 
-static sk_sp<SkImage>& CachedMouseImage(gui::PointerButton button, bool down) {
+static sk_sp<SkImage>& CachedMouseImage(SkCanvas& canvas, gui::PointerButton button, bool down) {
   switch (button) {
     case gui::PointerButton::kMouseLeft:
       if (down) {
-        static auto image = RenderMouseImage(button, down);
+        static auto image = RenderMouseImage(canvas, button, down);
         return image;
       } else {
-        static auto image = RenderMouseImage(button, down);
+        static auto image = RenderMouseImage(canvas, button, down);
         return image;
       }
     case gui::PointerButton::kMouseRight:
       if (down) {
-        static auto image = RenderMouseImage(button, down);
+        static auto image = RenderMouseImage(canvas, button, down);
         return image;
       } else {
-        static auto image = RenderMouseImage(button, down);
+        static auto image = RenderMouseImage(canvas, button, down);
         return image;
       }
     default:
-      static auto image = RenderMouseImage(button, down);
+      static auto image = RenderMouseImage(canvas, button, down);
       return image;
   }
 }
@@ -159,7 +158,7 @@ std::unique_ptr<Object> MouseClick::Clone() const {
 }
 void MouseClick::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& mouse_image = CachedMouseImage(button, down);
+  auto& mouse_image = CachedMouseImage(ctx.canvas, button, down);
   canvas.save();
   canvas.scale(kScale, -kScale);
   canvas.translate(0, -mouse_image->height());

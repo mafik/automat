@@ -446,42 +446,38 @@ static void UpdateConnectionWidgets(Window& window) {
 }
 
 ControlFlow Window::VisitChildren(Visitor& visitor) {
-  ControlFlow result = ControlFlow::Continue;
-  RunOnAutomatThreadSynchronous([&]() {
-    UpdateConnectionWidgets(*this);
-    Vec<Widget*> widgets;
-    widgets.reserve(2 + pointers.size() + connection_widgets.size());
+  UpdateConnectionWidgets(*this);
+  Vec<Widget*> widgets;
+  widgets.reserve(2 + pointers.size() + connection_widgets.size());
 
-    unordered_set<Location*> dragged_locations(pointers.size());
-    for (auto* pointer : pointers) {
-      if (auto& action = pointer->action) {
-        if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
-          dragged_locations.insert(drag_action->location.get());
-        }
+  unordered_set<Location*> dragged_locations(pointers.size());
+  for (auto* pointer : pointers) {
+    if (auto& action = pointer->action) {
+      if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
+        dragged_locations.insert(drag_action->location.get());
       }
     }
-    Vec<Widget*> connection_widgets_below;
-    connection_widgets_below.reserve(connection_widgets.size());
-    for (auto& it : connection_widgets) {
-      if (it->manual_position.has_value() || dragged_locations.count(&it->from)) {
-        widgets.push_back(it.get());
-      } else {
-        connection_widgets_below.push_back(it.get());
-      }
+  }
+  Vec<Widget*> connection_widgets_below;
+  connection_widgets_below.reserve(connection_widgets.size());
+  for (auto& it : connection_widgets) {
+    if (it->manual_position.has_value() || dragged_locations.count(&it->from)) {
+      widgets.push_back(it.get());
+    } else {
+      connection_widgets_below.push_back(it.get());
     }
-    for (auto& pointer : pointers) {
-      if (auto widget = pointer->GetWidget()) {
-        widgets.push_back(widget);
-      }
+  }
+  for (auto& pointer : pointers) {
+    if (auto widget = pointer->GetWidget()) {
+      widgets.push_back(widget);
     }
-    widgets.push_back(&toolbar);
-    for (auto w : connection_widgets_below) {
-      widgets.push_back(w);
-    }
-    widgets.push_back(root_machine);
-    result = visitor(widgets);
-  });
-  return result;
+  }
+  widgets.push_back(&toolbar);
+  for (auto w : connection_widgets_below) {
+    widgets.push_back(w);
+  }
+  widgets.push_back(root_machine);
+  return visitor(widgets);
 }
 
 }  // namespace automat::gui

@@ -111,6 +111,7 @@ struct Widget {
 
   virtual void PreDraw(DrawContext& ctx) const { PreDrawChildren(ctx); }
   void DrawCached(DrawContext& ctx) const;
+  void InvalidateDrawCache() const;
   virtual void Draw(DrawContext& ctx) const { DrawChildren(ctx); }
   virtual SkPath Shape(animation::Display*) const = 0;
   virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {

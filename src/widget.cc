@@ -126,6 +126,26 @@ void Widget::DrawCached(DrawContext& ctx) const {
   entry.surface->draw(&canvas, entry.root_bounds.left(), entry.root_bounds.top());
 }
 
+void Widget::InvalidateDrawCache() const {
+  for (auto& window : windows) {
+    for (int i = 0; i < window->draw_cache.entries.size(); ++i) {
+      auto& e = window->draw_cache.entries[i];
+      bool invalidate = false;
+      for (auto widget : e->path) {
+        if (widget == this) {
+          invalidate = true;
+          break;
+        }
+      }
+      if (invalidate) {
+        // TODO: maybe find a cleaner way to invalidate entries
+        // because matrix prevents us from reusing this surface
+        e->matrix = SkMatrix();
+      }
+    }
+  }
+}
+
 void Widget::DrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   Visitor visitor = [&](Span<Widget*> widgets) {

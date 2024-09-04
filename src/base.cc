@@ -372,7 +372,8 @@ void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* f
 
 void Machine::DropLocation(std::unique_ptr<Location>&& l) {
   l->parent = here;
-  root_machine->locations.insert(root_machine->locations.begin(), std::move(l));
+  locations.insert(locations.begin(), std::move(l));
+  InvalidateDrawCache();
 }
 
 std::unique_ptr<Location> Machine::Extract(Location& location) {

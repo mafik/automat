@@ -48,6 +48,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
     for (Widget* widget : rv) {
       ctx.path.push_back(widget);
       canvas.save();
+
       const SkMatrix down = this->TransformToChild(*widget, &ctx.display);
       SkMatrix up;
       if (down.invert(&up)) {
@@ -60,46 +61,19 @@ void Widget::DrawChildren(DrawContext& ctx) const {
         auto surface_label = ToStr(ctx.path);
         auto shape = widget->Shape(&ctx.display);
         auto bounds = shape.getBounds();
-        canvas.getTotalMatrix().mapRect(&bounds);
-        // LOG << "Bounds of " << surface_label << ": " << Rect(bounds);
+        SkRect root_bounds;
+        canvas.getTotalMatrix().mapRect(&root_bounds, bounds);
         auto baseLayerSize = canvas.getBaseLayerSize();
-        // LOG << "Screen bounds: " << Rect::MakeZeroWH(baseLayerSize.width(),
-        // baseLayerSize.height());
         bool intersects =
-            bounds.intersect(Rect::MakeZeroWH(baseLayerSize.width(), baseLayerSize.height()));
-        bounds.fBottom = ceil(bounds.fBottom);
-        bounds.fRight = ceil(bounds.fRight);
-        bounds.fLeft = floor(bounds.fLeft);
-        bounds.fTop = floor(bounds.fTop);
+            root_bounds.intersect(Rect::MakeZeroWH(baseLayerSize.width(), baseLayerSize.height()));
+        root_bounds.fBottom = ceil(root_bounds.fBottom);
+        root_bounds.fRight = ceil(root_bounds.fRight);
+        root_bounds.fLeft = floor(root_bounds.fLeft);
+        root_bounds.fTop = floor(root_bounds.fTop);
 
-        if (intersects && bounds.width() >= 1 && bounds.height() >= 1) {
-          // LOG << "Drawing " << surface_label << " at " << Rect(bounds);
+        if (intersects && root_bounds.width() >= 1 && root_bounds.height() >= 1) {
+          // LOG << "Drawing " << surface_label << " at " << Rect(root_bounds);
 
-          GrDirectContext* gr_ctx = ctx.canvas.recordingContext()->asDirectContext();
-          auto image_info = canvas.imageInfo();
-          GrBackendTexture tex = gr_ctx->createBackendTexture(
-              bounds.width(), bounds.height(), image_info.colorType(), skgpu::Mipmapped::kNo,
-              GrRenderable::kYes, GrProtected::kNo, surface_label);
-
-          struct ReleaseContext {
-            GrBackendTexture tex;
-            GrDirectContext* gr_ctx;
-          };
-          ReleaseContext* release_ctx = new ReleaseContext{tex, gr_ctx};
-
-          auto base_props = canvas.getBaseProps();
-
-          auto surf = SkSurfaces::WrapBackendTexture(
-              gr_ctx, tex, kBottomLeft_GrSurfaceOrigin, 1, image_info.colorType(),
-              image_info.refColorSpace(), &base_props,
-              [](void* ptr) {
-                ReleaseContext* rctx = (ReleaseContext*)ptr;
-                rctx->gr_ctx->deleteBackendTexture(rctx->tex);
-                delete rctx;
-              },
-              release_ctx);
-
-          surf->getCanvas();
           // DONE Create a new surface with size clipped to screen & widget size.
           // DONE Create a new canvas for the surface.
           // DONE Draw the widget.
@@ -116,24 +90,22 @@ void Widget::DrawChildren(DrawContext& ctx) const {
           // TODO: Periodically check all cache entries and remove the ones that were not used in
           // the last X seconds.
 
+          auto surf = canvas.getSurface()->makeSurface(root_bounds.width(), root_bounds.height());
+
           DrawContext fake_ctx(*surf->getCanvas(), ctx.display);
           fake_ctx.path = ctx.path;
-          fake_ctx.canvas.translate(-bounds.left(), -bounds.top());
+          fake_ctx.canvas.translate(-root_bounds.left(), -root_bounds.top());
           fake_ctx.canvas.concat(canvas.getTotalMatrix());
 
           widget->Draw(fake_ctx);
 
-          auto img = surf->makeImageSnapshot();
-
-          SkMatrix total_inverse;
-          (void)canvas.getTotalMatrix().invert(&total_inverse);
-          total_inverse.mapRect(&bounds);
           SkPaint debug_paint;
           debug_paint.setColor(SK_ColorRED);
           debug_paint.setStyle(SkPaint::kStroke_Style);
           canvas.drawRect(bounds, debug_paint);
 
-          canvas.drawImageRect(img, bounds, SkSamplingOptions(), nullptr);
+          canvas.resetMatrix();
+          surf->draw(&canvas, root_bounds.left(), root_bounds.top());
 
         } else {
           // LOG << "Skipping " << surface_label;

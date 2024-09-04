@@ -69,14 +69,6 @@ void Widget::DrawCached(DrawContext& ctx) const {
     return;
   }
 
-  // TODO: mark more objects as ChildrenOutside
-
-  // TODO: A bunch of invalidate calls.
-  // - "invalidate" function could just clear cache entries with the given widget
-
-  // TODO: Periodically check all cache entries and remove the ones that were not used in
-  // the last X seconds.
-
   DrawCache::Entry& entry = ctx.draw_cache[ctx.path];
   bool needs_refresh = false;
 
@@ -85,18 +77,8 @@ void Widget::DrawCached(DrawContext& ctx) const {
   } else if (m.getScaleX() == entry.matrix.getScaleX() &&
              m.getScaleY() == entry.matrix.getScaleY() && m.getSkewX() == entry.matrix.getSkewX() &&
              m.getSkewY() == entry.matrix.getSkewY()) {
-    Vec2 d(m.getTranslateX() - entry.matrix.getTranslateX(),
-           m.getTranslateY() - entry.matrix.getTranslateY());
-    d.x -= std::round(d.x);
-    d.y -= std::round(d.y);
-    // This knob can be used to control the aliasing artifacts. Lower this to make the movement
-    // smoother or increase to improve texture reuse.
-    constexpr float kTranslationTreshold = 0.125f;
-    if (std::abs(d.x) <= kTranslationTreshold && std::abs(d.y) <= kTranslationTreshold) {
-      needs_refresh = false;
-    } else {
-      needs_refresh = true;
-    }
+    // TODO: check if object bounds are the same
+    needs_refresh = false;
   } else {
     needs_refresh = true;
   }
@@ -108,6 +90,7 @@ void Widget::DrawCached(DrawContext& ctx) const {
 
     DrawContext fake_ctx(ctx.display, *entry.surface->getCanvas(), ctx.draw_cache);
     fake_ctx.path = ctx.path;
+    fake_ctx.canvas.clear(SK_ColorTRANSPARENT);
     fake_ctx.canvas.translate(-root_bounds.left(), -root_bounds.top());
     fake_ctx.canvas.concat(m);
 

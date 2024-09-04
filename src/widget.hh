@@ -3,9 +3,11 @@
 #include <include/core/SkCanvas.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
+#include <include/core/SkSurface.h>
 #include <include/gpu/GrDirectContext.h>
 
 #include <functional>
+#include <memory>
 
 #include "action.hh"
 #include "animation.hh"
@@ -13,6 +15,7 @@
 #include "keyboard.hh"
 #include "span.hh"
 #include "str.hh"
+#include "time.hh"
 
 namespace automat::gui {
 
@@ -49,10 +52,41 @@ struct DisplayContext {
   SkMatrix TransformDown() { return gui::TransformDown(path, &display); }
 };
 
+struct DrawCache {
+  struct Entry {
+    Path path;        // they key for this cache entry
+    SkMatrix matrix;  // converts from local coordinates to base layer coordinates
+    SkRect root_bounds;
+    sk_sp<SkSurface> surface;
+    time::SteadyPoint last_used;
+
+    Entry(const Path& path)
+        : path(path),
+          matrix(),
+          root_bounds(),
+          surface(nullptr),
+          last_used(time::SteadyPoint::min()) {}
+  };
+
+  // TODO: index by path & last_used
+  std::vector<std::unique_ptr<Entry>> entries;
+
+  Entry& operator[](const Path& path) {
+    for (auto& entry : entries) {
+      if (entry->path == path) {
+        return *entry;
+      }
+    }
+    entries.push_back(std::make_unique<Entry>(path));
+    return *entries.back();
+  }
+};
+
 struct DrawContext : DisplayContext {
   SkCanvas& canvas;
-  DrawContext(SkCanvas& canvas, animation::Display& display)
-      : DisplayContext{display, {}}, canvas(canvas) {}
+  DrawCache& draw_cache;
+  DrawContext(animation::Display& display, SkCanvas& canvas, DrawCache& draw_cache)
+      : DisplayContext{display, {}}, canvas(canvas), draw_cache(draw_cache) {}
   operator GrDirectContext*() const { return canvas.recordingContext()->asDirectContext(); }
 };
 
@@ -76,6 +110,7 @@ struct Widget {
   virtual void PointerLeave(Pointer&, animation::Display&) {}
 
   virtual void PreDraw(DrawContext& ctx) const { PreDrawChildren(ctx); }
+  void DrawCached(DrawContext& ctx) const;
   virtual void Draw(DrawContext& ctx) const { DrawChildren(ctx); }
   virtual SkPath Shape(animation::Display*) const = 0;
   virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {

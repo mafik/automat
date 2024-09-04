@@ -41,6 +41,91 @@ void Widget::PreDrawChildren(DrawContext& ctx) const {
 
 struct CacheEntry {};
 
+void Widget::DrawCached(DrawContext& ctx) const {
+  if (ChildrenOutside()) {
+    Draw(ctx);
+    return;
+  }
+  auto& canvas = ctx.canvas;
+  SkMatrix m = canvas.getTotalMatrix();
+  auto shape = Shape(&ctx.display);
+  auto bounds = shape.getBounds();
+  SkRect root_bounds;
+  m.mapRect(&root_bounds, bounds);
+  auto baseLayerSize = canvas.getBaseLayerSize();
+  bool intersects =
+      root_bounds.intersect(Rect::MakeZeroWH(baseLayerSize.width(), baseLayerSize.height()));
+
+  if (!intersects) {
+    return;
+  }
+
+  root_bounds.fBottom = ceil(root_bounds.fBottom);
+  root_bounds.fRight = ceil(root_bounds.fRight);
+  root_bounds.fLeft = floor(root_bounds.fLeft);
+  root_bounds.fTop = floor(root_bounds.fTop);
+
+  if (root_bounds.width() < 1 || root_bounds.height() < 1) {
+    return;
+  }
+
+  // TODO: mark more objects as ChildrenOutside
+
+  // TODO: A bunch of invalidate calls.
+  // - "invalidate" function could just clear cache entries with the given widget
+
+  // TODO: Periodically check all cache entries and remove the ones that were not used in
+  // the last X seconds.
+
+  DrawCache::Entry& entry = ctx.draw_cache[ctx.path];
+  bool needs_refresh = false;
+
+  if (entry.surface.get() == nullptr) {
+    needs_refresh = true;
+  } else if (m.getScaleX() == entry.matrix.getScaleX() &&
+             m.getScaleY() == entry.matrix.getScaleY() && m.getSkewX() == entry.matrix.getSkewX() &&
+             m.getSkewY() == entry.matrix.getSkewY()) {
+    Vec2 d(m.getTranslateX() - entry.matrix.getTranslateX(),
+           m.getTranslateY() - entry.matrix.getTranslateY());
+    d.x -= std::round(d.x);
+    d.y -= std::round(d.y);
+    // This knob can be used to control the aliasing artifacts. Lower this to make the movement
+    // smoother or increase to improve texture reuse.
+    constexpr float kTranslationTreshold = 0.125f;
+    if (std::abs(d.x) <= kTranslationTreshold && std::abs(d.y) <= kTranslationTreshold) {
+      needs_refresh = false;
+    } else {
+      needs_refresh = true;
+    }
+  } else {
+    needs_refresh = true;
+  }
+
+  if (needs_refresh) {
+    entry.surface = canvas.getSurface()->makeSurface(root_bounds.width(), root_bounds.height());
+    entry.matrix = m;
+    entry.root_bounds = root_bounds;
+
+    DrawContext fake_ctx(ctx.display, *entry.surface->getCanvas(), ctx.draw_cache);
+    fake_ctx.path = ctx.path;
+    fake_ctx.canvas.translate(-root_bounds.left(), -root_bounds.top());
+    fake_ctx.canvas.concat(m);
+
+    Draw(fake_ctx);
+  }
+  entry.last_used = ctx.display.timer.steady_now;
+
+  // Inside entry we have a cached surface that was renderd with old matrix. Now we want to
+  // draw this surface using canvas.getTotalMatrix(). We do this by appending the inverse of
+  // the old matrix to the current canvas. When the surface is drawn, its hardcoded matrix
+  // will cancel the inverse and leave us with canvas.getTotalMatrix().
+  SkMatrix old_inverse;
+  (void)entry.matrix.invert(&old_inverse);
+  canvas.concat(old_inverse);
+
+  entry.surface->draw(&canvas, entry.root_bounds.left(), entry.root_bounds.top());
+}
+
 void Widget::DrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   Visitor visitor = [&](Span<Widget*> widgets) {
@@ -55,66 +140,11 @@ void Widget::DrawChildren(DrawContext& ctx) const {
         canvas.concat(up);
       }
 
-      if (widget->ChildrenOutside()) {
-        widget->Draw(ctx);
-      } else {
-        auto surface_label = ToStr(ctx.path);
-        auto shape = widget->Shape(&ctx.display);
-        auto bounds = shape.getBounds();
-        SkRect root_bounds;
-        canvas.getTotalMatrix().mapRect(&root_bounds, bounds);
-        auto baseLayerSize = canvas.getBaseLayerSize();
-        bool intersects =
-            root_bounds.intersect(Rect::MakeZeroWH(baseLayerSize.width(), baseLayerSize.height()));
-        root_bounds.fBottom = ceil(root_bounds.fBottom);
-        root_bounds.fRight = ceil(root_bounds.fRight);
-        root_bounds.fLeft = floor(root_bounds.fLeft);
-        root_bounds.fTop = floor(root_bounds.fTop);
-
-        if (intersects && root_bounds.width() >= 1 && root_bounds.height() >= 1) {
-          // LOG << "Drawing " << surface_label << " at " << Rect(root_bounds);
-
-          // DONE Create a new surface with size clipped to screen & widget size.
-          // DONE Create a new canvas for the surface.
-          // DONE Draw the widget.
-
-          // TODO: Store the surfafce in the cache:
-          // - key: (widget path)
-          // - value: (surface, clip, matrix, last used time)
-
-          // TODO: mark more objects as ChildrenOutside
-
-          // TODO: A bunch of invalidate calls.
-          // - "invalidate" function could just clear cache entries with the given widget
-
-          // TODO: Periodically check all cache entries and remove the ones that were not used in
-          // the last X seconds.
-
-          auto surf = canvas.getSurface()->makeSurface(root_bounds.width(), root_bounds.height());
-
-          DrawContext fake_ctx(*surf->getCanvas(), ctx.display);
-          fake_ctx.path = ctx.path;
-          fake_ctx.canvas.translate(-root_bounds.left(), -root_bounds.top());
-          fake_ctx.canvas.concat(canvas.getTotalMatrix());
-
-          widget->Draw(fake_ctx);
-
-          SkPaint debug_paint;
-          debug_paint.setColor(SK_ColorRED);
-          debug_paint.setStyle(SkPaint::kStroke_Style);
-          canvas.drawRect(bounds, debug_paint);
-
-          canvas.resetMatrix();
-          surf->draw(&canvas, root_bounds.left(), root_bounds.top());
-
-        } else {
-          // LOG << "Skipping " << surface_label;
-        }
-      }
+      widget->DrawCached(ctx);
 
       canvas.restore();
       ctx.path.pop_back();
-    }
+    }  // for each Widget
     return ControlFlow::Continue;
   };
   const_cast<Widget*>(this)->VisitChildren(visitor);

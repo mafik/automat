@@ -32,6 +32,8 @@ extern std::unique_ptr<Window> window;
 struct Window final : Widget, DropTarget {
   Window();
   ~Window();
+
+  DrawCache draw_cache;
   std::string_view Name() const override { return "Window"; }
 
   DropTarget* CanDrop() override { return this; }
@@ -94,10 +96,7 @@ struct Window final : Widget, DropTarget {
     if (&child == &toolbar) {
       return SkMatrix::Translate(-size.x / 2, 0);
     }
-    // if (&child == root_machine) {
     return WindowToCanvas();
-    // }
-    // return SkMatrix::I();
   }
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 

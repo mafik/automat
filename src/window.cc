@@ -39,7 +39,7 @@ constexpr float kTrashRadius = 3_cm;
 
 void Window::Draw(SkCanvas& canvas) {
   display.timer.Tick();
-  gui::DrawContext draw_ctx(canvas, display);
+  gui::DrawContext draw_ctx(display, canvas, draw_cache);
   draw_ctx.path.push_back(this);
   RunOnAutomatThreadSynchronous([&] {
     // Record camera movement timeline. This is used to create inertia effect.

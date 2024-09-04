@@ -38,9 +38,9 @@ ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), 
   }
 }
 
-SkPath ConnectionWidget::Shape(animation::Display*) const {
+SkPath ConnectionWidget::Shape(animation::Display* d) const {
   if (state && !state->hidden) {
-    return state->Shape(nullptr);
+    return state->Shape(d);
   } else {
     return SkPath();
   }

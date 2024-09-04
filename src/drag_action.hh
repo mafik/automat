@@ -19,10 +19,6 @@ struct DropTarget {
   virtual void SnapPosition(Vec2& position, float& scale, Object* object,
                             Vec2* fixed_point = nullptr) = 0;
 
-  virtual void DropObject(
-      std::unique_ptr<Object>&& object, Vec2 position, float scale,
-      std::unique_ptr<animation::PerDisplay<ObjectAnimationState>>&& animation_state) = 0;
-
   // When a location is being dragged around, its still owned by its original Machine. Only when
   // this method is called, the location may be re-parented into the new drop target.
   // The drop target is responsible for re-parenting the location!

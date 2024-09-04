@@ -370,16 +370,6 @@ void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* f
   position = Vec2(roundf(position.x * 1000) / 1000., roundf(position.y * 1000) / 1000.);
 }
 
-void Machine::DropObject(
-    std::unique_ptr<Object>&& object, Vec2 position, float scale,
-    std::unique_ptr<animation::PerDisplay<ObjectAnimationState>>&& animation_state) {
-  Location& loc = root_machine->CreateEmpty();
-  loc.position = position;
-  loc.scale = scale;
-  loc.InsertHere(std::move(object));
-  loc.animation_state = std::move(*animation_state);
-}
-
 void Machine::DropLocation(std::unique_ptr<Location>&& l) {
   l->parent = here;
   root_machine->locations.insert(root_machine->locations.begin(), std::move(l));

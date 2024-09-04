@@ -409,12 +409,6 @@ void Window::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fi
   }
 }
 
-void Window::DropObject(
-    std::unique_ptr<Object>&& object, Vec2 position, float scale,
-    std::unique_ptr<animation::PerDisplay<ObjectAnimationState>>&& animation_state) {
-  // do nothing - objects immediately disappears when dropped on the window
-}
-
 void Window::DropLocation(std::unique_ptr<Location>&& location) {
   // do nothing - location will be deleted by unique_ptr
 }

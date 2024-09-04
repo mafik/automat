@@ -395,6 +395,7 @@ std::unique_ptr<Location> Machine::Extract(Location& location) {
         break;
       }
     }
+    InvalidateDrawCache();
     return result;
   } else {
     return nullptr;

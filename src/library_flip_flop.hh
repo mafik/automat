@@ -25,6 +25,7 @@ struct FlipFlopButton : gui::ToggleButton {
   void TweakShadow(float& sigma, float& offset) const override;
   SkColor ForegroundColor(gui::DrawContext&) const override;
   SkColor BackgroundColor() const override;
+  bool ChildrenOutside() const override { return true; }
 };
 
 struct FlipFlop : LiveObject, Runnable {

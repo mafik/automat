@@ -52,12 +52,16 @@ void Widget::DrawCached(DrawContext& ctx) const {
   auto bounds = shape.getBounds();
   SkRect root_bounds;
   m.mapRect(&root_bounds, bounds);
-  auto baseLayerSize = canvas.getBaseLayerSize();
-  // TODO: maybe it's worth to render the whole object (if it's small enough) to avoid expensive
-  // redraws later
-  bool intersects =
-      root_bounds.intersect(Rect::MakeZeroWH(baseLayerSize.width(), baseLayerSize.height()));
+  auto canvas_bounds = SkRect::Make(canvas.getBaseLayerSize());
 
+  bool intersects;
+  if (root_bounds.width() * root_bounds.height() < 512 * 512) {
+    // Render small objects without clipping
+    intersects = SkRect::Intersects(root_bounds, canvas_bounds);
+  } else {
+    // This mutates the `root_bounds` - they're clipped to `canvas_bounds`!
+    intersects = root_bounds.intersect(canvas_bounds);
+  }
   if (!intersects) {
     return;
   }

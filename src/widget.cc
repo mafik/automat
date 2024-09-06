@@ -74,15 +74,19 @@ void Widget::DrawCached(DrawContext& ctx) const {
   }
 
   DrawCache::Entry& entry = ctx.draw_cache[ctx.path];
-  bool needs_refresh = false;
+  bool needs_refresh = entry.needs_refresh;
 
-  if (entry.surface.get() == nullptr) {
+  if (needs_refresh) {
+    // Already needs a refresh, no need to check further.
+  } else if (entry.surface.get() == nullptr) {
     needs_refresh = true;
   } else if (m.getScaleX() != entry.matrix.getScaleX() ||
              m.getScaleY() != entry.matrix.getScaleY() || m.getSkewX() != entry.matrix.getSkewX() ||
              m.getSkewY() != entry.matrix.getSkewY()) {
     needs_refresh = true;
   } else {
+    // Check what part of the object was rendered in the cached surface.
+    // If the new bounds are within that surface, then we don't need to refresh.
     SkMatrix old_inverse;
     (void)entry.matrix.invert(&old_inverse);
     SkMatrix m_inverse;
@@ -102,6 +106,7 @@ void Widget::DrawCached(DrawContext& ctx) const {
         canvas.getSurface()->makeSurface(root_bounds_rounded.width(), root_bounds_rounded.height());
     entry.matrix = m;
     entry.root_bounds = root_bounds_rounded;
+    entry.needs_refresh = false;
 
     DrawContext fake_ctx(ctx.display, *entry.surface->getCanvas(), ctx.draw_cache);
     fake_ctx.path = ctx.path;
@@ -128,17 +133,8 @@ void Widget::InvalidateDrawCache() const {
   for (auto& window : windows) {
     for (int i = 0; i < window->draw_cache.entries.size(); ++i) {
       auto& e = window->draw_cache.entries[i];
-      bool invalidate = false;
-      for (auto widget : e->path) {
-        if (widget == this) {
-          invalidate = true;
-          break;
-        }
-      }
-      if (invalidate) {
-        // TODO: maybe find a cleaner way to invalidate entries
-        // because matrix prevents us from reusing this surface
-        e->matrix = SkMatrix();
+      if (find(e->path.begin(), e->path.end(), this) != e->path.end()) {
+        e->needs_refresh = true;
       }
     }
   }

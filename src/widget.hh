@@ -59,13 +59,15 @@ struct DrawCache {
     SkIRect root_bounds;
     sk_sp<SkSurface> surface;
     time::SteadyPoint last_used;
+    bool needs_refresh;
 
     Entry(const Path& path)
         : path(path),
           matrix(),
           root_bounds(),
           surface(nullptr),
-          last_used(time::SteadyPoint::min()) {}
+          last_used(time::SteadyPoint::min()),
+          needs_refresh(true) {}
   };
 
   // TODO: index by path & last_used

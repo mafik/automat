@@ -279,6 +279,7 @@ union Rect {
   }
 
   std::string ToStr() const;
+  std::string ToStrMetric() const;
 };
 
 union RRect {

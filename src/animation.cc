@@ -12,12 +12,13 @@ void WrapModulo(Base<float>& base, float range) {
   }
 }
 
-void LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
-                         float& velocity) {
+Phase LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
+                          float& velocity) {
   float D = value - target;
   if (fabsf(D) < 0.00001f) {
     value = target;
     velocity = 0;
+    return Finished;
   } else {
     // Use the cosine tweening here.
     // D = A * (cos(t) / 2 + 0.5)
@@ -43,10 +44,11 @@ void LowLevelSineTowards(float target, float delta_time, float period_time, floa
     }
     value = A * (cos(x2) / 2 + 0.5) + target;
     velocity = -A * sin(x2) / 2;
+    return Animating;
   }
 }
-void LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
-                           float& value, float& velocity) {
+Phase LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
+                            float& value, float& velocity) {
   float Q = 2 * M_PI / period_time;
   float D = value - target;
   float V = velocity;
@@ -58,6 +60,11 @@ void LowLevelSpringTowards(float target, float delta_time, float period_time, fl
     t = -atanf((D * kLog2e + V * H) / (D * H * Q)) / Q;
     amplitude = D / powf(2, -t / H) / cosf(t * Q);
   } else {
+    if (fabsf(V) < 1e-6f) {
+      value = target;
+      velocity = 0;
+      return Finished;
+    }
     t = period_time / 4;
     amplitude = -velocity * powf(2.f, t / H) / Q;
   }
@@ -65,6 +72,7 @@ void LowLevelSpringTowards(float target, float delta_time, float period_time, fl
   value = target + amplitude * cosf(t2 * Q) * powf(2, -t2 / H);
   velocity =
       (-(amplitude * kLog2e * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) / powf(2, t2 / H);
+  return Animating;
 }
 
 float SinInterp(float x, float x0, float y0, float x1, float y1) {

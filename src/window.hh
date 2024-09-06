@@ -84,8 +84,9 @@ struct Window final : Widget, DropTarget {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
   void Draw(SkCanvas&);
-  void Draw(gui::DrawContext&) const override {
+  animation::Phase Draw(gui::DrawContext&) const override {
     FATAL << "Window::Draw(DrawContext&) should never be called";
+    return animation::Finished;
   }
   void Zoom(float delta);
   ControlFlow VisitChildren(Visitor& visitor) override;

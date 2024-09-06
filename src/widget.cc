@@ -41,10 +41,9 @@ void Widget::PreDrawChildren(DrawContext& ctx) const {
 
 struct CacheEntry {};
 
-void Widget::DrawCached(DrawContext& ctx) const {
+animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   if (ChildrenOutside()) {
-    Draw(ctx);
-    return;
+    return Draw(ctx);
   }
   auto& canvas = ctx.canvas;
   SkMatrix m = canvas.getTotalMatrix();
@@ -63,14 +62,14 @@ void Widget::DrawCached(DrawContext& ctx) const {
     intersects = root_bounds.intersect(canvas_bounds);
   }
   if (!intersects) {
-    return;
+    return animation::Finished;
   }
 
   SkIRect root_bounds_rounded;
   root_bounds.roundOut(&root_bounds_rounded);
 
   if (root_bounds.width() < 1 || root_bounds.height() < 1) {
-    return;
+    return animation::Finished;
   }
 
   DrawCache::Entry& entry = ctx.draw_cache[ctx.path];
@@ -101,12 +100,12 @@ void Widget::DrawCached(DrawContext& ctx) const {
     }
   }
 
+  animation::Phase phase = animation::Finished;
   if (needs_refresh) {
     entry.surface =
         canvas.getSurface()->makeSurface(root_bounds_rounded.width(), root_bounds_rounded.height());
     entry.matrix = m;
     entry.root_bounds = root_bounds_rounded;
-    entry.needs_refresh = false;
 
     DrawContext fake_ctx(ctx.display, *entry.surface->getCanvas(), ctx.draw_cache);
     fake_ctx.path = ctx.path;
@@ -114,7 +113,10 @@ void Widget::DrawCached(DrawContext& ctx) const {
     fake_ctx.canvas.translate(-root_bounds_rounded.left(), -root_bounds_rounded.top());
     fake_ctx.canvas.concat(m);
 
-    Draw(fake_ctx);
+    LOG << "Expensive redraw of " << ctx.path;
+    phase = Draw(fake_ctx);
+
+    entry.needs_refresh = phase == animation::Animating;
   }
   entry.last_used = ctx.display.timer.steady_now;
 
@@ -127,6 +129,7 @@ void Widget::DrawCached(DrawContext& ctx) const {
   canvas.concat(old_inverse);
 
   entry.surface->draw(&canvas, entry.root_bounds.left(), entry.root_bounds.top());
+  return phase;
 }
 
 void Widget::InvalidateDrawCache() const {
@@ -140,7 +143,8 @@ void Widget::InvalidateDrawCache() const {
   }
 }
 
-void Widget::DrawChildren(DrawContext& ctx) const {
+animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
+  auto phase = animation::Finished;
   auto& canvas = ctx.canvas;
   Visitor visitor = [&](Span<Widget*> widgets) {
     std::ranges::reverse_view rv{widgets};
@@ -154,7 +158,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
         canvas.concat(up);
       }
 
-      widget->DrawCached(ctx);
+      phase |= widget->DrawCached(ctx);
 
       canvas.restore();
       ctx.path.pop_back();
@@ -162,6 +166,7 @@ void Widget::DrawChildren(DrawContext& ctx) const {
     return ControlFlow::Continue;
   };
   const_cast<Widget*>(this)->VisitChildren(visitor);
+  return phase;
 }
 
 SkMatrix TransformDown(const Path& path, animation::Display* display) {

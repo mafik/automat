@@ -61,7 +61,7 @@ struct Object : gui::Widget {
   virtual std::partial_ordering operator<=>(const Object& other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  void Draw(gui::DrawContext&) const override;
+  animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display* = nullptr) const override;
   virtual RRect CoarseBounds(animation::Display* display = nullptr) const;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;

@@ -676,11 +676,12 @@ unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerBut
   return Object::ButtonDownAction(ptr, btn);
 }
 
-void Timeline::Draw(gui::DrawContext& dctx) const {
+animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
 
   auto wood_case_rrect = WoodenCaseRRect(*this);
   SkPath wood_case_path = SkPath::RRect(wood_case_rrect);
+  auto phase = state == kPaused ? animation::Finished : animation::Animating;
 
   {  // Wooden case, light & shadow
     canvas.save();
@@ -723,7 +724,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
 
   constexpr float PI = numbers::pi;
 
-  zoom.Tick(dctx.display);
+  phase |= zoom.Tick(dctx.display);
 
   time::T max_track_length = MaxTrackLength();
   float current_pos_ratio = CurrentPosRatio(*this, dctx.display.timer.now);
@@ -934,7 +935,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
   DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
             kPlasticTop - kScrewMargin - kScrewRadius);
 
-  DrawChildren(dctx);
+  phase |= DrawChildren(dctx);
 
   canvas.save();
   canvas.clipPath(window_path, true);
@@ -1059,6 +1060,7 @@ void Timeline::Draw(gui::DrawContext& dctx) const {
     }
   }
   canvas.restore();  // unclip
+  return phase;
 }
 
 SkPath Timeline::Shape(animation::Display*) const {
@@ -1149,12 +1151,13 @@ SkPath TrackBase::Shape(animation::Display*) const {
   }
   return SkPath::Rect(rect.sk);
 }
-void TrackBase::Draw(gui::DrawContext& dctx) const {
+animation::Phase TrackBase::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
   canvas.drawPath(Shape(nullptr), kTrackPaint);
+  return animation::Finished;
 }
 
-void OnOffTrack::Draw(gui::DrawContext& dctx) const {
+animation::Phase OnOffTrack::Draw(gui::DrawContext& dctx) const {
   TrackBase::Draw(dctx);
   auto shape = Shape(nullptr);
   Rect rect;
@@ -1186,6 +1189,7 @@ void OnOffTrack::Draw(gui::DrawContext& dctx) const {
         break;
     }
   }
+  return animation::Finished;
 }
 
 void Timeline::Cancel() {

@@ -57,7 +57,7 @@ static sk_sp<SkImage>& ToolbarColor(gui::DrawContext& ctx) {
   return image;
 }
 
-void Toolbar::Draw(gui::DrawContext& dctx) const {
+animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
   float width_targets[buttons.size()];
   for (size_t i = 0; i < buttons.size(); ++i) {
     width_targets[i] = buttons[i]->natural_width;
@@ -98,8 +98,9 @@ void Toolbar::Draw(gui::DrawContext& dctx) const {
     }
   }
 
+  auto phase = animation::Finished;
   for (int i = 0; i < buttons.size(); ++i) {
-    buttons[i]->width.SineTowards(width_targets[i], dctx.DeltaT(), 0.4);
+    phase = phase || buttons[i]->width.SineTowards(width_targets[i], dctx.DeltaT(), 0.4);
   }
 
   auto my_shape = Shape(&dctx.display);
@@ -115,6 +116,7 @@ void Toolbar::Draw(gui::DrawContext& dctx) const {
   dctx.canvas.restore();
 
   DrawChildren(dctx);
+  return phase;
 }
 
 ControlFlow Toolbar::VisitChildren(gui::Visitor& visitor) {

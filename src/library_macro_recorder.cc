@@ -107,10 +107,11 @@ std::unique_ptr<Object> MacroRecorder::Clone() const {
 }
 
 #pragma region Draw
-void MacroRecorder::Draw(gui::DrawContext& dctx) const {
+animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
   auto& animation_state = animation_state_ptr[dctx.display];
   auto& image = MacroRecorderFrontColor(dctx.canvas.recordingContext()->asDirectContext());
   auto& canvas = dctx.canvas;
+  auto phase = animation::Finished;
 
   if (keylogging) {
     animation_state.eye_speed.target = 1;
@@ -118,7 +119,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     animation_state.eye_speed.target = 0;
   }
   animation_state.eye_speed.speed = 5;
-  animation_state.eye_speed.Tick(dctx.display);
+  phase |= animation_state.eye_speed.Tick(dctx.display);
   if (keylogging) {
     animation_state.eyes_open.target = 1;
     animation_state.eyes_open.speed = 5;
@@ -129,7 +130,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
     animation_state.eyes_open.target = 0;
     animation_state.eyes_open.speed = 5;
   }
-  animation_state.eyes_open.Tick(dctx.display);
+  phase |= animation_state.eyes_open.Tick(dctx.display);
   animation_state.eye_rotation -= dctx.display.timer.d * 360 * animation_state.eye_speed;
   if (animation_state.eye_rotation < 0) {
     animation_state.eye_rotation += 360;
@@ -149,42 +150,45 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
     auto DrawEye = [&](Vec2 center, animation::Spring<Vec2>& googly) {
       Rect bounds = Rect::MakeCenterWH(center, kEyeRadius * 2, kEyeRadius * 2);
-      SkPaint white_eye_paint = SkPaint();
-      white_eye_paint.setColor(SK_ColorWHITE);
-      canvas.drawRect(bounds, white_eye_paint);
 
-      auto eye_window = local_to_window.mapPoint(center.sk);
-      auto eye_screen = WindowToScreen(eye_window);
-      auto eye_delta = main_pointer_screen - eye_screen;
-      auto eye_dir = Normalize(eye_delta);
-      float z = local_to_window.mapRadius(kEyeRadius * 2) * top_window->display_pixels_per_meter;
-      auto eye_dist_3d = Length(Vec3(eye_delta.x, eye_delta.y, z));
-      auto eye_dist_2d = Length(eye_delta);
+      if (animation_state.eyes_open.value > 0) {
+        SkPaint white_eye_paint = SkPaint();
+        white_eye_paint.setColor(SK_ColorWHITE);
+        canvas.drawRect(bounds, white_eye_paint);
 
-      float dist = eye_dist_2d / eye_dist_3d;
+        auto eye_window = local_to_window.mapPoint(center.sk);
+        auto eye_screen = WindowToScreen(eye_window);
+        auto eye_delta = main_pointer_screen - eye_screen;
+        auto eye_dir = Normalize(eye_delta);
+        float z = local_to_window.mapRadius(kEyeRadius * 2) * top_window->display_pixels_per_meter;
+        auto eye_dist_3d = Length(Vec3(eye_delta.x, eye_delta.y, z));
+        auto eye_dist_2d = Length(eye_delta);
 
-      googly.period = 0.5s;
-      googly.half_life = 0.2s;
-      googly.target.x = eye_dir.x * dist;
-      googly.target.y = -eye_dir.y * dist;
-      googly.Tick(dctx.display);
+        float dist = eye_dist_2d / eye_dist_3d;
 
-      Vec2 pos = center + googly.value * kEyeRadius * 0.5;
-      canvas.save();
-      canvas.translate(pos.x, pos.y);
-      canvas.scale(s, s);
+        googly.period = 0.5s;
+        googly.half_life = 0.2s;
+        googly.target.x = eye_dir.x * dist;
+        googly.target.y = -eye_dir.y * dist;
+        phase |= googly.Tick(dctx.display);
 
-      float h_angle = atan(googly.value) * 180 / -M_PI;
-      float squeeze_3d = 1 - Length(googly.value) / 3;
+        Vec2 pos = center + googly.value * kEyeRadius * 0.5;
+        canvas.save();
+        canvas.translate(pos.x, pos.y);
+        canvas.scale(s, s);
 
-      canvas.rotate(-h_angle);
-      canvas.scale(squeeze_3d, 1);
-      canvas.rotate(h_angle);
-      canvas.rotate(animation_state.eye_rotation);
-      canvas.translate(-size.width() / 2, -size.height() / 2);
+        float h_angle = atan(googly.value) * 180 / -M_PI;
+        float squeeze_3d = 1 - Length(googly.value) / 3;
 
-      sharingan->render(&canvas);
-      canvas.restore();
+        canvas.rotate(-h_angle);
+        canvas.scale(squeeze_3d, 1);
+        canvas.rotate(h_angle);
+        canvas.rotate(animation_state.eye_rotation);
+        canvas.translate(-size.width() / 2, -size.height() / 2);
+
+        sharingan->render(&canvas);
+        canvas.restore();
+      }
 
       if (animation_state.eyes_open < 0.999) {
         float eyelid_offset =
@@ -236,6 +240,7 @@ void MacroRecorder::Draw(gui::DrawContext& dctx) const {
   }
 
   DrawChildren(dctx);
+  return phase;
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {

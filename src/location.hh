@@ -32,7 +32,7 @@ struct ObjectAnimationState {
   ObjectAnimationState();
 
   SkMatrix GetTransform(Vec2 scale_pivot) const;
-  void Tick(float delta_time, Vec2 target_position, float target_scale);
+  animation::Phase Tick(float delta_time, Vec2 target_position, float target_scale);
 };
 
 // Each Container holds its inner objects in Locations.
@@ -246,7 +246,7 @@ struct Location : gui::Widget {
   void SetNumber(double number);
 
   void PreDraw(gui::DrawContext&) const override;
-  void Draw(gui::DrawContext&) const override;
+  animation::Phase Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
   SkPath Shape(animation::Display*) const override;
   SkPath FieldShape(Object&) const;

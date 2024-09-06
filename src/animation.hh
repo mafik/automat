@@ -15,6 +15,16 @@ struct Window;
 
 namespace automat::animation {
 
+enum class Phase : bool {
+  Finished = false,  // default value, when initialized with {}
+  Animating = true,
+};
+
+using enum Phase;
+
+inline Phase operator||(Phase a, Phase b) { return Phase(bool(a) || bool(b)); }
+inline Phase& operator|=(Phase& a, Phase b) { return a = a || b; }
+
 struct PerDisplayValueBase {
   const void* owner;
   PerDisplayValueBase(const void* owner) : owner(owner) {}
@@ -181,12 +191,18 @@ struct Approach : Base<T> {
 
   Approach(T initial = {})
       : Base<T>{.value = initial, .target = initial}, last_tick(time::SystemNow()) {}
-  void Tick(time::Timer& timer) {
+  animation::Phase Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
-    if (dt <= 0) return;
+    if (dt <= 0) return animation::Finished;
     T delta = (this->target - this->value) * (-expm1f(-dt * speed));
-    this->value += delta;
+    if (fabsf(delta) < 1e-6f) {
+      this->value = this->target;
+      return animation::Finished;
+    } else {
+      this->value += delta;
+      return animation::Animating;
+    }
   }
   void Shift(float delta) {
     this->value += delta;
@@ -212,6 +228,7 @@ inline void LinearApproach(float target, float delta_time, float speed, float& v
   }
 }
 
+// TODO: remove this and replace with `SpringV2`
 template <typename T>
 struct Spring : Base<T> {
   T velocity = {};
@@ -224,7 +241,7 @@ struct Spring : Base<T> {
     this->target = initial_value;
   }
 
-  void TickComponent(float dt, float target, float& value, float& velocity) {
+  Phase TickComponent(float dt, float target, float& value, float& velocity) {
     float Q = 2 * M_PI / period.count();
     float D = value - target;
     float V = velocity;
@@ -236,6 +253,11 @@ struct Spring : Base<T> {
       t = -atanf((D * kLog2e + V * H) / (D * H * Q)) / Q;
       amplitude = D / powf(2, -t / H) / cosf(t * Q);
     } else {
+      if (fabsf(V) < 1e-6f) {
+        value = target;
+        velocity = 0;
+        return Finished;
+      }
       t = period.count() / 4;
       amplitude = -velocity * powf(2.f, t / H) / Q;
     }
@@ -243,27 +265,29 @@ struct Spring : Base<T> {
     value = target + amplitude * cosf(t2 * Q) * powf(2, -t2 / H);
     velocity =
         (-(amplitude * kLog2e * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) / powf(2, t2 / H);
+    return Animating;
   }
 
   template <typename P>
-  void TickComponents(float dt) {
-    TickComponent(dt, this->target, this->value, this->velocity);
+  Phase TickComponents(float dt) {
+    return TickComponent(dt, this->target, this->value, this->velocity);
   }
 
   template <>
-  void TickComponents<Vec2>(float dt) {
-    TickComponent(dt, this->target.x, this->value.x, this->velocity.x);
-    TickComponent(dt, this->target.y, this->value.y, this->velocity.y);
+  Phase TickComponents<Vec2>(float dt) {
+    auto x = TickComponent(dt, this->target.x, this->value.x, this->velocity.x);
+    auto y = TickComponent(dt, this->target.y, this->value.y, this->velocity.y);
+    return x || y;
   }
 
-  void Tick(time::Timer& timer) {
+  Phase Tick(time::Timer& timer) {
     float dt = (timer.steady_now - last_tick).count();
     last_tick = timer.steady_now;
-    if (dt <= 0) return;
-    if (half_life.count() <= 0) return;
-    if (period.count() <= 0) return;
+    if (dt <= 0) return Finished;
+    if (half_life.count() <= 0) return Finished;
+    if (period.count() <= 0) return Finished;
 
-    TickComponents<T>(dt);
+    return TickComponents<T>(dt);
   }
   operator T() const { return this->value; }
 };
@@ -274,41 +298,43 @@ struct SpringV2 {
 
   SpringV2(T initial_value) : value(initial_value), velocity() {}
 
-  void SpringTowards(T target, float delta_time, float period_time, float half_time);
+  Phase SpringTowards(T target, float delta_time, float period_time, float half_time);
 
-  void SineTowards(T target, float delta_time, float period_time);
+  Phase SineTowards(T target, float delta_time, float period_time);
 
   operator T() const { return value; }
 };
 
-void LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
-                           float& value, float& velocity);
+Phase LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
+                            float& value, float& velocity);
 
 template <>
-inline void SpringV2<float>::SpringTowards(float target, float delta_time, float period_time,
+inline Phase SpringV2<float>::SpringTowards(float target, float delta_time, float period_time,
+                                            float half_time) {
+  return LowLevelSpringTowards(target, delta_time, period_time, half_time, value, velocity);
+}
+
+template <>
+inline Phase SpringV2<Vec2>::SpringTowards(Vec2 target, float delta_time, float period_time,
                                            float half_time) {
-  LowLevelSpringTowards(target, delta_time, period_time, half_time, value, velocity);
+  auto x = LowLevelSpringTowards(target.x, delta_time, period_time, half_time, value.x, velocity.x);
+  auto y = LowLevelSpringTowards(target.y, delta_time, period_time, half_time, value.y, velocity.y);
+  return x || y;
+}
+
+Phase LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
+                          float& velocity);
+
+template <>
+inline Phase SpringV2<float>::SineTowards(float target, float delta_time, float period_time) {
+  return LowLevelSineTowards(target, delta_time, period_time, value, velocity);
 }
 
 template <>
-inline void SpringV2<Vec2>::SpringTowards(Vec2 target, float delta_time, float period_time,
-                                          float half_time) {
-  LowLevelSpringTowards(target.x, delta_time, period_time, half_time, value.x, velocity.x);
-  LowLevelSpringTowards(target.y, delta_time, period_time, half_time, value.y, velocity.y);
-}
-
-void LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
-                         float& velocity);
-
-template <>
-inline void SpringV2<float>::SineTowards(float target, float delta_time, float period_time) {
-  LowLevelSineTowards(target, delta_time, period_time, value, velocity);
-}
-
-template <>
-inline void SpringV2<Vec2>::SineTowards(Vec2 target, float delta_time, float period_time) {
-  LowLevelSineTowards(target.x, delta_time, period_time, value.x, velocity.x);
-  LowLevelSineTowards(target.y, delta_time, period_time, value.y, velocity.y);
+inline Phase SpringV2<Vec2>::SineTowards(Vec2 target, float delta_time, float period_time) {
+  auto x = LowLevelSineTowards(target.x, delta_time, period_time, value.x, velocity.x);
+  auto y = LowLevelSineTowards(target.y, delta_time, period_time, value.y, velocity.y);
+  return x || y;
 }
 
 float SinInterp(float x, float x0, float y0, float x1, float y1);

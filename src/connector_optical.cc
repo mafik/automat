@@ -324,8 +324,8 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
   return pulling;
 }
 
-void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& state,
-                          Vec2AndDir dispenser, maf::Span<Vec2AndDir> end_candidates) {
+animation::Phase SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& state,
+                                      Vec2AndDir dispenser, maf::Span<Vec2AndDir> end_candidates) {
   if constexpr (kDebugCable) {
     // Draw the end candidates
     SkPaint end_paint;
@@ -353,9 +353,12 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
     if (state.stabilized && Length(dispenser.pos - state.stabilized_start) < 0.0001) {
       if (cable_end.has_value() == state.stabilized_end.has_value() &&
           (!cable_end.has_value() || Length(*cable_end - *state.stabilized_end) < 0.0001)) {
-        return;
+        return animation::Finished;
       }
     }
+  }
+  if (end_candidates.empty() && state.stabilized && !state.stabilized_end.has_value()) {
+    return animation::Finished;
   }
 
   if (!end_candidates.empty()) {  // Create the arcline & pull the cable towards it
@@ -604,6 +607,7 @@ void SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& st
       chain.back().pos = dispenser.pos;
     }
   }
+  return animation::Animating;
 }
 
 Vec2 OpticalConnectorState::PlugTopCenter() const { return sections.front().pos; }

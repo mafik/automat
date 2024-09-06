@@ -20,7 +20,7 @@ struct PrototypeButton : Widget {
     width.value = natural_width;
   }
 
-  void Draw(DrawContext& ctx) const override { proto->Draw(ctx); }
+  animation::Phase Draw(DrawContext& ctx) const override { return proto->Draw(ctx); }
   SkPath Shape(animation::Display*) const override { return proto->Shape(nullptr); }
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override {
@@ -55,7 +55,7 @@ struct Toolbar : Object {
   maf::StrView Name() const override;
   std::unique_ptr<Object> Clone() const override;
   SkPath Shape(animation::Display* = nullptr) const override;
-  void Draw(gui::DrawContext&) const override;
+  animation::Phase Draw(gui::DrawContext&) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
   float CalculateWidth() const;

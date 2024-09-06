@@ -156,7 +156,7 @@ string_view MouseClick::Name() const {
 std::unique_ptr<Object> MouseClick::Clone() const {
   return std::make_unique<MouseClick>(button, down);
 }
-void MouseClick::Draw(gui::DrawContext& ctx) const {
+animation::Phase MouseClick::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto& mouse_image = CachedMouseImage(ctx.canvas, button, down);
   canvas.save();
@@ -165,6 +165,7 @@ void MouseClick::Draw(gui::DrawContext& ctx) const {
   SkSamplingOptions sampling = SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);
   canvas.drawImage(mouse_image, 0, 0, sampling);
   canvas.restore();
+  return animation::Finished;
 }
 SkPath MouseClick::Shape(animation::Display*) const {
   auto& mouse_base_image = MouseBaseImage();

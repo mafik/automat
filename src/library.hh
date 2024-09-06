@@ -2,7 +2,6 @@
 
 #include <math.h>
 
-#include <chrono>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -991,7 +990,7 @@ struct ProgressBar : library::Number {
     bar->value = value;
     return bar;
   }
-  void Draw(gui::DrawContext& ctx) const override { Object::Draw(ctx); }
+  animation::Phase Draw(gui::DrawContext& ctx) const override { return Object::Draw(ctx); }
   SkPath Shape(animation::Display*) const override { return Object::Shape(nullptr); }
 };
 

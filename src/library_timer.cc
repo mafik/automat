@@ -449,17 +449,17 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
   canvas.restore();
 }
 
-void TimerDelay::Draw(gui::DrawContext& ctx) const {
+animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
 
-  start_pusher_depression.Tick(ctx.display);
-  left_pusher_depression.Tick(ctx.display);
-  right_pusher_depression.Tick(ctx.display);
+  auto phase = start_pusher_depression.Tick(ctx.display);
+  phase |= left_pusher_depression.Tick(ctx.display);
+  phase |= right_pusher_depression.Tick(ctx.display);
 
   range_dial.target = (float)range;
   int range_end = (int)Range::EndGuard;
   animation::WrapModulo(range_dial, range_end);
-  range_dial.Tick(ctx.display);
+  phase |= range_dial.Tick(ctx.display);
 
   double circles;
   duration_handle_rotation.target =
@@ -478,7 +478,7 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
     hand_degrees.target = 90;
   }
   AdjustRotation(hand_degrees.value, hand_degrees.target);
-  hand_degrees.Tick(ctx.display);
+  phase |= hand_degrees.Tick(ctx.display);
 
   DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
 
@@ -562,6 +562,7 @@ void TimerDelay::Draw(gui::DrawContext& ctx) const {
   canvas.drawPaint(duration_handle_paint);
   canvas.drawPath(duration_path_rotated, highlight_paint);
   canvas.restore();
+  return phase;
 }
 
 ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {

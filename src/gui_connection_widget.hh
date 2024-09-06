@@ -50,7 +50,7 @@ struct ConnectionWidget : Widget {
   maf::StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape(animation::Display*) const override;
   void PreDraw(DrawContext&) const override;
-  void Draw(DrawContext&) const override;
+  animation::Phase Draw(DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
 };
 

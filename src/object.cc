@@ -3,8 +3,6 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
-#include <numbers>
-
 #include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
@@ -16,7 +14,7 @@ using namespace maf;
 
 namespace automat {
 
-void Object::Draw(gui::DrawContext& ctx) const {
+animation::Phase Object::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   SkPath path = Shape(nullptr);
 
@@ -56,6 +54,7 @@ void Object::Draw(gui::DrawContext& ctx) const {
                    path_bounds.height() / 2 - gui::kLetterSizeMM / 2 / 1000);
   gui::GetFont().DrawText(canvas, Name(), text_paint);
   canvas.restore();
+  return animation::Finished;
 }
 
 SkPath Object::Shape(animation::Display*) const {

@@ -124,13 +124,14 @@ struct KeyLabelWidget : Widget, LabelMixin {
   SkPath Shape(animation::Display*) const override {
     return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
   }
-  void Draw(DrawContext& ctx) const override {
+  animation::Phase Draw(DrawContext& ctx) const override {
     SkPaint paint;
     paint.setAntiAlias(true);
     paint.setColor("#000000"_color);
     ctx.canvas.translate(-width / 2, -kKeyLetterSize / 2);
     KeyFont().DrawText(ctx.canvas, label, paint);
     ctx.canvas.translate(width / 2, kKeyLetterSize / 2);
+    return animation::Finished;
   }
   void SetLabel(StrView label) override {
     this->label = label;

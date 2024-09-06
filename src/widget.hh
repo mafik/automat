@@ -112,9 +112,14 @@ struct Widget {
   virtual void PointerLeave(Pointer&, animation::Display&) {}
 
   virtual void PreDraw(DrawContext& ctx) const { PreDrawChildren(ctx); }
-  void DrawCached(DrawContext& ctx) const;
+  animation::Phase DrawCached(DrawContext& ctx) const;
   void InvalidateDrawCache() const;
-  virtual void Draw(DrawContext& ctx) const { DrawChildren(ctx); }
+
+  virtual animation::Phase Draw(DrawContext& ctx) const {
+    auto phase = animation::Finished;
+    phase |= DrawChildren(ctx);
+    return phase;
+  }
   virtual SkPath Shape(animation::Display*) const = 0;
   virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {
     return nullptr;
@@ -139,7 +144,7 @@ struct Widget {
   }
 
   void PreDrawChildren(DrawContext&) const;
-  void DrawChildren(DrawContext&) const;
+  animation::Phase DrawChildren(DrawContext&) const;
 };
 
 struct LabelMixin {

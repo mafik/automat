@@ -39,7 +39,7 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   TimerDelay(const TimerDelay&);
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
-  void Draw(gui::DrawContext&) const override;
+  animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   void Fields(std::function<void(Object&)> cb) override;
   SkPath FieldShape(Object&) const override;

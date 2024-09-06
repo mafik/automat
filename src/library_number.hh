@@ -11,7 +11,7 @@ struct Number;
 struct NumberButton : virtual gui::Button, gui::ChildButtonMixin {
   std::function<void(Location&)> activate;
   NumberButton(std::unique_ptr<Widget>&& child);
-  void Draw(gui::DrawContext&) const override;
+  animation::Phase Draw(gui::DrawContext&) const override;
   void Activate(gui::Pointer&) override;
   maf::StrView Name() const override { return "NumberButton"; }
 };
@@ -28,7 +28,7 @@ struct Number : Object {
   std::unique_ptr<Object> Clone() const override;
   string GetText() const override;
   void SetText(Location& error_context, string_view text) override;
-  void Draw(gui::DrawContext&) const override;
+  animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;

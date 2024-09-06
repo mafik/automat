@@ -246,7 +246,7 @@ std::unique_ptr<Object> HotKey::Clone() const {
   return ret;
 }
 
-void HotKey::Draw(gui::DrawContext& ctx) const {
+animation::Phase HotKey::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
 
   SkRRect frame_outer;
@@ -352,7 +352,7 @@ void HotKey::Draw(gui::DrawContext& ctx) const {
     shortcut_button.fg = KeyColor(true);
   }
 
-  DrawChildren(ctx);
+  return DrawChildren(ctx);
 }
 
 SkPath HotKey::Shape(animation::Display*) const { return SkPath::RRect(kShapeRRect); }

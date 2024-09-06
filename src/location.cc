@@ -186,8 +186,9 @@ SkPath Outset(const SkPath& path, float distance) {
   }
 }
 
-void Location::Draw(gui::DrawContext& ctx) const {
+animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
+  auto phase = animation::Finished;
   SkPath my_shape;
   if (object) {
     my_shape = object->Shape(nullptr);
@@ -197,7 +198,7 @@ void Location::Draw(gui::DrawContext& ctx) const {
   SkRect bounds = my_shape.getBounds();
 
   auto& state = GetAnimationState(ctx.display);
-  state.Tick(ctx.DeltaT(), position, scale);
+  phase |= state.Tick(ctx.DeltaT(), position, scale);
 
   state.highlight.Tick(ctx.display);
   state.transparency.Tick(ctx.display);
@@ -251,7 +252,7 @@ void Location::Draw(gui::DrawContext& ctx) const {
     canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
   }
 
-  DrawChildren(ctx);
+  phase |= DrawChildren(ctx);
 
   // Draw debug text log below the Location
   float n_lines = 1;
@@ -280,6 +281,8 @@ void Location::Draw(gui::DrawContext& ctx) const {
   if (using_layer) {
     ctx.canvas.restore();
   }
+
+  return phase;
 }
 
 std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
@@ -346,9 +349,12 @@ SkMatrix Location::GetTransform(animation::Display* display) const {
   return GetLocationTransform(position, scale, scale_pivot);
 }
 
-void ObjectAnimationState::Tick(float delta_time, Vec2 target_position, float target_scale) {
-  position.SineTowards(target_position, delta_time, Location::kSpringPeriod);
-  scale.SpringTowards(target_scale, delta_time, Location::kSpringPeriod, Location::kSpringHalfTime);
+animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_position,
+                                            float target_scale) {
+  auto a = position.SineTowards(target_position, delta_time, Location::kSpringPeriod);
+  auto b = scale.SpringTowards(target_scale, delta_time, Location::kSpringPeriod,
+                               Location::kSpringHalfTime);
+  return a || b;
 }
 
 ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}), elevation(0) {

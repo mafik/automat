@@ -82,12 +82,13 @@ static SkPaint kDefaultBackgroundPaint = []() {
 const SkPaint& TextField::GetTextPaint() const { return kDefaultTextPaint; }
 const SkPaint& TextField::GetBackgroundPaint() const { return kDefaultBackgroundPaint; }
 
-void TextField::Draw(DrawContext& ctx) const {
+animation::Phase TextField::Draw(DrawContext& ctx) const {
   auto& display = ctx.display;
   auto& hover = hover_ptr[display].animation;
-  hover.Tick(display);
+  auto phase = hover.Tick(display);
   DrawBackground(ctx);
   DrawText(ctx);
+  return phase;
 }
 
 void TextField::DrawBackground(DrawContext& ctx) const {

@@ -95,7 +95,7 @@ void DrawBackground(SkCanvas& canvas) {
 
 }  // namespace
 
-void Increment::Draw(gui::DrawContext& ctx) const {
+animation::Phase Increment::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   DrawBackground(canvas);
   SkPaint paint;
@@ -104,6 +104,7 @@ void Increment::Draw(gui::DrawContext& ctx) const {
   canvas.translate(kMargin, kHeight / 2 - gui::kLetterSize / 2);
   gui::GetFont().DrawText(canvas, "x+1", paint);
   canvas.restore();
+  return animation::Finished;
 }
 
 SkPath Increment::Shape(animation::Display*) const { return SkPath::RRect(GetShape()); }

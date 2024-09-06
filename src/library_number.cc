@@ -60,7 +60,10 @@ using std::make_unique;
 NumberButton::NumberButton(std::unique_ptr<Widget>&& child)
     : ChildButtonMixin(make_unique<AlignCenter>(std::move(child))) {}
 
-void NumberButton::Draw(gui::DrawContext& ctx) const { DrawButton(ctx, 0xffc8c4b7); }
+animation::Phase NumberButton::Draw(gui::DrawContext& ctx) const {
+  DrawButton(ctx, 0xffc8c4b7);
+  return animation::Finished;
+}
 
 void NumberButton::Activate(gui::Pointer& pointer) {
   if (activate) {
@@ -169,11 +172,11 @@ static const SkPaint kNumberBorderPaint = []() {
   return paint_border;
 }();
 
-void Number::Draw(gui::DrawContext& ctx) const {
+animation::Phase Number::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   canvas.drawRRect(kNumberRRectInner, kNumberBackgroundPaint);
   canvas.drawRRect(kNumberRRectInner, kNumberBorderPaint);
-  DrawChildren(ctx);
+  return DrawChildren(ctx);
 }
 
 SkPath Number::Shape(animation::Display*) const { return kNumberShape; }

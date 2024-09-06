@@ -109,27 +109,28 @@ void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
   DrawButtonFace(ctx, bg, 0xff000000, child);
 }
 
-void Button::Draw(DrawContext& ctx) const {
+animation::Phase Button::Draw(DrawContext& ctx) const {
   auto& display = ctx.display;
   auto& hover = hover_ptr[display];
-  hover.Tick(display);
+  auto phase = hover.Tick(display);
 
   auto bg = BackgroundColor();
   auto fg = ForegroundColor(ctx);
   DrawButtonShadow(ctx.canvas, bg);
   auto child = Child();
   DrawButtonFace(ctx, bg, fg, child);
+  return phase;
 }
 
-void ToggleButton::Draw(DrawContext& ctx) const {
+animation::Phase ToggleButton::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
   auto& hover = hover_ptr[display];
   auto& filling = filling_ptr[display];
   filling.speed = 5;
   filling.target = Filled() ? 1 : 0;
-  hover.Tick(display);
-  filling.Tick(display);
+  auto phase = hover.Tick(display);
+  phase |= filling.Tick(display);
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -190,6 +191,7 @@ void ToggleButton::Draw(DrawContext& ctx) const {
     DrawButtonFace(ctx, fg, bg, filled_child);
     canvas.restore();
   }
+  return phase;
 }
 
 SkPath Button::Shape(animation::Display*) const { return SkPath::RRect(RRect()); }

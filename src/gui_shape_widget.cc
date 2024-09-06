@@ -8,7 +8,10 @@ ShapeWidget::ShapeWidget(SkPath path) : path(path) {}
 
 SkPath ShapeWidget::Shape(animation::Display*) const { return path; }
 
-void ShapeWidget::Draw(DrawContext& ctx) const { ctx.canvas.drawPath(path, paint); }
+animation::Phase ShapeWidget::Draw(DrawContext& ctx) const {
+  ctx.canvas.drawPath(path, paint);
+  return animation::Finished;
+}
 
 std::unique_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color,
                                         const SkMatrix* transform) {

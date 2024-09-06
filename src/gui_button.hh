@@ -20,7 +20,7 @@ struct Button : Widget {
   Button();
   void PointerOver(Pointer&, animation::Display&) override;
   void PointerLeave(Pointer&, animation::Display&) override;
-  void Draw(DrawContext&) const override;
+  animation::Phase Draw(DrawContext&) const override;
   float Height() const;
   virtual SkRRect RRect() const;
   SkPath Shape(animation::Display*) const override;
@@ -57,7 +57,7 @@ struct ToggleButton : virtual Button {
   animation::PerDisplay<animation::Approach<>> filling_ptr;
 
   ToggleButton() : Button() {}
-  void Draw(DrawContext&) const override;
+  animation::Phase Draw(DrawContext&) const override;
   virtual bool Filled() const { return false; }
   virtual Widget* FilledChild() const { return Child(); }
 };

@@ -11,7 +11,7 @@ struct Increment : Object, Runnable {
   std::unique_ptr<Object> Clone() const override;
   void Args(std::function<void(Argument&)> cb) override { cb(target_arg); }
   LongRunning* OnRun(Location& h) override;
-  void Draw(gui::DrawContext&) const override;
+  animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
 };
 

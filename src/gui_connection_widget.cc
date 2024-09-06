@@ -162,7 +162,7 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
   }
 }
 
-void ConnectionWidget::Draw(DrawContext& ctx) const {
+animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& display = ctx.display;
   auto& from_animation_state = from.GetAnimationState(display);
@@ -251,19 +251,20 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
     canvas.saveLayerAlphaf(nullptr, alpha);
   }
 
+  auto phase = animation::Finished;
   if (state) {
     if (to) {
       state->steel_insert_hidden.target = 1;
-      state->connector_scale.SpringTowards(to->scale, ctx.DeltaT(), Location::kSpringPeriod,
-                                           Location::kSpringHalfTime);
+      phase |= state->connector_scale.SpringTowards(
+          to->scale, ctx.DeltaT(), Location::kSpringPeriod, Location::kSpringHalfTime);
     } else {
       state->steel_insert_hidden.target = 0;
-      state->connector_scale.SpringTowards(from.scale, ctx.DeltaT(), Location::kSpringPeriod,
-                                           Location::kSpringHalfTime);
+      phase |= state->connector_scale.SpringTowards(
+          from.scale, ctx.DeltaT(), Location::kSpringPeriod, Location::kSpringHalfTime);
     }
-    state->steel_insert_hidden.Tick(display);
+    phase |= state->steel_insert_hidden.Tick(display);
 
-    SimulateCablePhysics(ctx, ctx.DeltaT(), *state, pos_dir, to_points);
+    phase |= SimulateCablePhysics(ctx, ctx.DeltaT(), *state, pos_dir, to_points);
     if (alpha > 0.01f) {
       DrawOpticalConnector(ctx, *state, arg.Icon());
     }
@@ -298,6 +299,7 @@ void ConnectionWidget::Draw(DrawContext& ctx) const {
   if (using_layer) {
     canvas.restore();
   }
+  return phase;
 }
 
 std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer& pointer, PointerButton) {

@@ -73,9 +73,9 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
 KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 std::unique_ptr<Object> KeyPresser::Clone() const { return std::make_unique<KeyPresser>(key); }
-void KeyPresser::Draw(gui::DrawContext& dctx) const {
+animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
   shortcut_button.fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
-  DrawChildren(dctx);
+  auto phase = DrawChildren(dctx);
   auto& canvas = dctx.canvas;
   auto img = key_pressed ? PressingHandColor(dctx) : PointingHandColor(dctx);
   float s = 8.8_mm / img->height();
@@ -85,6 +85,7 @@ void KeyPresser::Draw(gui::DrawContext& dctx) const {
   canvas.scale(s, -s);
   canvas.drawImage(img.get(), 0, 0, kDefaultSamplingOptions);
   canvas.restore();
+  return phase;
 }
 SkPath KeyPresser::Shape(animation::Display*) const {
   static SkPath shape = [this]() {

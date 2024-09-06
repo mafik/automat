@@ -64,9 +64,10 @@ std::unique_ptr<Object> FlipFlop::Clone() const {
   ret->current_state = current_state;
   return ret;
 }
-void FlipFlop::Draw(gui::DrawContext& dctx) const {
+animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
   auto img = FlipFlopColor(dctx);
+  auto phase = animation::Finished;
   float s = kFlipFlopWidth / img->width();
   float height = s * img->height();
   auto m = canvas.getLocalToDevice();
@@ -81,7 +82,7 @@ void FlipFlop::Draw(gui::DrawContext& dctx) const {
       animation_state->light.value = current_state;
     }
     animation_state->light.target = current_state;
-    animation_state->light.Tick(dctx.display);
+    phase |= animation_state->light.Tick(dctx.display);
     SkPaint gradient;
     SkPoint center = {kFlipFlopWidth / 2, 2_cm};
     float radius = 0.5_mm;
@@ -117,7 +118,8 @@ void FlipFlop::Draw(gui::DrawContext& dctx) const {
     canvas.drawCircle(center, radius, red_glow);
   }
 
-  DrawChildren(dctx);
+  phase |= DrawChildren(dctx);
+  return phase;
 }
 Rect FlipFlopRect() {
   // Update this if the image changes
@@ -163,7 +165,7 @@ LongRunning* FlipFlop::OnRun(Location& here) {
   return nullptr;
 }
 
-void YingYangIcon::Draw(gui::DrawContext& dctx) const {
+animation::Phase YingYangIcon::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
   Rect rect = Rect::MakeCircleR(kYingYangRadius);
   ArcLine tear = ArcLine(Vec2(0, kYingYangRadius), 0_deg);
@@ -174,6 +176,7 @@ void YingYangIcon::Draw(gui::DrawContext& dctx) const {
   black_path.addCircle(0, kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
   black_path.addCircle(0, -kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
   canvas.drawPath(black_path, paint);
+  return animation::Finished;
 }
 SkPath YingYangIcon::Shape(animation::Display*) const {
   return SkPath::Circle(0, 0, kYingYangRadius);

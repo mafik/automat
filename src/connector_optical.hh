@@ -69,8 +69,8 @@ struct OpticalConnectorState {
 
 maf::ArcLine RouteCable(DrawContext&, Vec2AndDir start, maf::Span<Vec2AndDir> ends);
 
-void SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&, Vec2AndDir start,
-                          maf::Span<Vec2AndDir> end_candidates);
+animation::Phase SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&,
+                                      Vec2AndDir start, maf::Span<Vec2AndDir> end_candidates);
 
 void DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
 

@@ -53,6 +53,8 @@ void Widget::DrawCached(DrawContext& ctx) const {
   SkRect root_bounds;
   m.mapRect(&root_bounds, bounds);
   auto baseLayerSize = canvas.getBaseLayerSize();
+  // TODO: maybe it's worth to render the whole object (if it's small enough) to avoid expensive
+  // redraws later
   bool intersects =
       root_bounds.intersect(Rect::MakeZeroWH(baseLayerSize.width(), baseLayerSize.height()));
 
@@ -60,10 +62,8 @@ void Widget::DrawCached(DrawContext& ctx) const {
     return;
   }
 
-  root_bounds.fBottom = ceil(root_bounds.fBottom);
-  root_bounds.fRight = ceil(root_bounds.fRight);
-  root_bounds.fLeft = floor(root_bounds.fLeft);
-  root_bounds.fTop = floor(root_bounds.fTop);
+  SkIRect root_bounds_rounded;
+  root_bounds.roundOut(&root_bounds_rounded);
 
   if (root_bounds.width() < 1 || root_bounds.height() < 1) {
     return;
@@ -74,24 +74,35 @@ void Widget::DrawCached(DrawContext& ctx) const {
 
   if (entry.surface.get() == nullptr) {
     needs_refresh = true;
-  } else if (m.getScaleX() == entry.matrix.getScaleX() &&
-             m.getScaleY() == entry.matrix.getScaleY() && m.getSkewX() == entry.matrix.getSkewX() &&
-             m.getSkewY() == entry.matrix.getSkewY()) {
-    // TODO: check if object bounds are the same
-    needs_refresh = false;
-  } else {
+  } else if (m.getScaleX() != entry.matrix.getScaleX() ||
+             m.getScaleY() != entry.matrix.getScaleY() || m.getSkewX() != entry.matrix.getSkewX() ||
+             m.getSkewY() != entry.matrix.getSkewY()) {
     needs_refresh = true;
+  } else {
+    SkMatrix old_inverse;
+    (void)entry.matrix.invert(&old_inverse);
+    SkMatrix m_inverse;
+    (void)m.invert(&m_inverse);
+
+    SkRect old_bounds, new_bounds;  // Local coordinates
+    old_inverse.mapRect(&old_bounds, SkRect::Make(entry.root_bounds));
+    m_inverse.mapRect(&new_bounds, root_bounds);
+
+    if (!old_bounds.contains(new_bounds)) {
+      needs_refresh = true;
+    }
   }
 
   if (needs_refresh) {
-    entry.surface = canvas.getSurface()->makeSurface(root_bounds.width(), root_bounds.height());
+    entry.surface =
+        canvas.getSurface()->makeSurface(root_bounds_rounded.width(), root_bounds_rounded.height());
     entry.matrix = m;
-    entry.root_bounds = root_bounds;
+    entry.root_bounds = root_bounds_rounded;
 
     DrawContext fake_ctx(ctx.display, *entry.surface->getCanvas(), ctx.draw_cache);
     fake_ctx.path = ctx.path;
     fake_ctx.canvas.clear(SK_ColorTRANSPARENT);
-    fake_ctx.canvas.translate(-root_bounds.left(), -root_bounds.top());
+    fake_ctx.canvas.translate(-root_bounds_rounded.left(), -root_bounds_rounded.top());
     fake_ctx.canvas.concat(m);
 
     Draw(fake_ctx);

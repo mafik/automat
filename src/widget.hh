@@ -56,7 +56,7 @@ struct DrawCache {
   struct Entry {
     Path path;        // they key for this cache entry
     SkMatrix matrix;  // converts from local coordinates to base layer coordinates
-    SkRect root_bounds;
+    SkIRect root_bounds;
     sk_sp<SkSurface> surface;
     time::SteadyPoint last_used;
 

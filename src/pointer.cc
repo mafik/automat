@@ -103,6 +103,9 @@ void Pointer::Move(Vec2 position) {
       action->Update();
     }
     UpdatePath(*this);
+    for (auto* cb : move_callbacks) {
+      cb->PointerMove(*this, position);
+    }
   });
 }
 void Pointer::Wheel(float delta) {

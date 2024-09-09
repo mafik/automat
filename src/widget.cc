@@ -8,6 +8,7 @@
 #include <include/gpu/ganesh/SkSurfaceGanesh.h>
 
 #include <ranges>
+#include <set>
 
 #include "animation.hh"
 #include "control_flow.hh"
@@ -15,6 +16,7 @@
 
 using namespace automat;
 using namespace maf;
+using namespace std;
 
 namespace automat::gui {
 
@@ -133,10 +135,25 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
 }
 
 void Widget::InvalidateDrawCache() const {
+  // NOTE: It might be more efficient to redraw only the updated widget & then redraw its parents up
+  // to the top-level window. This needs some protections against high-frequency redraws caused for
+  // example by gaming mice or touchscreens but could actually bring down the draw latency.
+  // TODO: use a more efficient data structure for this (less allocations).
+  set<Widget*> parents;
   for (auto& window : windows) {
     for (int i = 0; i < window->draw_cache.entries.size(); ++i) {
       auto& e = window->draw_cache.entries[i];
-      if (find(e->path.begin(), e->path.end(), this) != e->path.end()) {
+      if (auto it = find(e->path.begin(), e->path.end(), this); it != e->path.end()) {
+        e->needs_refresh = true;
+        for (auto it2 = e->path.begin(); it2 != it; ++it2) {
+          parents.insert(*it2);
+        }
+      }
+    }
+
+    for (int i = 0; i < window->draw_cache.entries.size(); ++i) {
+      auto& e = window->draw_cache.entries[i];
+      if (parents.contains(e->path.back())) {
         e->needs_refresh = true;
       }
     }

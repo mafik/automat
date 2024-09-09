@@ -20,6 +20,10 @@ struct Widget;
 struct Window;
 struct DrawContext;
 
+struct PointerMoveCallback {
+  virtual void PointerMove(Pointer&, Vec2 position) = 0;
+};
+
 struct Pointer final {
   Pointer(Window&, Vec2 position);
   ~Pointer();
@@ -57,6 +61,8 @@ struct Pointer final {
 
   Vec2 button_down_position[kButtonCount];
   time::SystemPoint button_down_time[kButtonCount];
+
+  std::vector<PointerMoveCallback*> move_callbacks;
 
   std::unique_ptr<Action> action;
   Path path;

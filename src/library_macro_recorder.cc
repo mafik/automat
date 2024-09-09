@@ -111,27 +111,23 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
   auto& animation_state = animation_state_ptr[dctx.display];
   auto& image = MacroRecorderFrontColor(dctx.canvas.recordingContext()->asDirectContext());
   auto& canvas = dctx.canvas;
-  auto phase = animation::Finished;
+  auto phase = keylogging ? animation::Animating : animation::Finished;
 
+  phase |= animation::ExponentialApproach(keylogging ? 1 : 0, dctx.DeltaT(), 0.2,
+                                          animation_state.eye_rotation_speed);
+
+  float eyes_open_target;
   if (keylogging) {
-    animation_state.eye_speed.target = 1;
-  } else {
-    animation_state.eye_speed.target = 0;
-  }
-  animation_state.eye_speed.speed = 5;
-  phase |= animation_state.eye_speed.Tick(dctx.display);
-  if (keylogging) {
-    animation_state.eyes_open.target = 1;
-    animation_state.eyes_open.speed = 5;
+    eyes_open_target = 1;
   } else if (animation_state.pointers_over > 0) {
-    animation_state.eyes_open.target = 0.8;
-    animation_state.eyes_open.speed = 5;
+    eyes_open_target = 0.8;
   } else {
-    animation_state.eyes_open.target = 0;
-    animation_state.eyes_open.speed = 5;
+    eyes_open_target = 0;
   }
-  phase |= animation_state.eyes_open.Tick(dctx.display);
-  animation_state.eye_rotation -= dctx.display.timer.d * 360 * animation_state.eye_speed;
+
+  phase |= animation::ExponentialApproach(eyes_open_target, dctx.DeltaT(), 0.2,
+                                          animation_state.eyes_open);
+  animation_state.eye_rotation -= dctx.display.timer.d * 360 * animation_state.eye_rotation_speed;
   if (animation_state.eye_rotation < 0) {
     animation_state.eye_rotation += 360;
   }
@@ -148,10 +144,10 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
     auto size = sharingan->containerSize();
     float s = 0.9 * kEyeRadius * 2 / size.height();
 
-    auto DrawEye = [&](Vec2 center, animation::Spring<Vec2>& googly) {
+    auto DrawEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) {
       Rect bounds = Rect::MakeCenterWH(center, kEyeRadius * 2, kEyeRadius * 2);
 
-      if (animation_state.eyes_open.value > 0) {
+      if (animation_state.eyes_open > 0) {
         SkPaint white_eye_paint = SkPaint();
         white_eye_paint.setColor(SK_ColorWHITE);
         canvas.drawRect(bounds, white_eye_paint);
@@ -166,11 +162,8 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
         float dist = eye_dist_2d / eye_dist_3d;
 
-        googly.period = 0.5s;
-        googly.half_life = 0.2s;
-        googly.target.x = eye_dir.x * dist;
-        googly.target.y = -eye_dir.y * dist;
-        phase |= googly.Tick(dctx.display);
+        Vec2 target = Vec2(eye_dir.x * dist, -eye_dir.y * dist);
+        phase |= googly.SpringTowards(target, dctx.DeltaT(), 0.5, 0.2);
 
         Vec2 pos = center + googly.value * kEyeRadius * 0.5;
         canvas.save();
@@ -492,12 +485,20 @@ void MacroRecorder::Off() {
   Cancel();
   here->long_running = nullptr;
 }
-void MacroRecorder::PointerOver(gui::Pointer&, animation::Display& d) {
+void MacroRecorder::PointerOver(gui::Pointer& p, animation::Display& d) {
   animation_state_ptr[d].pointers_over++;
+  p.move_callbacks.push_back(this);
+  InvalidateDrawCache();
 }
-void MacroRecorder::PointerLeave(gui::Pointer&, animation::Display& d) {
+void MacroRecorder::PointerLeave(gui::Pointer& p, animation::Display& d) {
   animation_state_ptr[d].pointers_over--;
+  auto new_end = std::remove(p.move_callbacks.begin(), p.move_callbacks.end(), this);
+  if (new_end != p.move_callbacks.end()) {
+    p.move_callbacks.erase(new_end, p.move_callbacks.end());
+  }
 }
+
+void MacroRecorder::PointerMove(gui::Pointer&, Vec2 position) { InvalidateDrawCache(); }
 
 static ConnectionWidget* FindConnectionWidget(Location& here, Argument& arg) {
   for (auto& connection_widget : window->connection_widgets) {

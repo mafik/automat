@@ -19,16 +19,21 @@ struct GlassRunButton : gui::PowerButton {
   // SkColor BackgroundColor() const override { return "#490b13"_color; }
 };
 
-struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff {
+struct MacroRecorder : LiveObject,
+                       Runnable,
+                       LongRunning,
+                       gui::Keylogger,
+                       OnOff,
+                       gui::PointerMoveCallback {
   static const MacroRecorder proto;
 
   struct AnimationState {
-    animation::Spring<Vec2> googly_left;
-    animation::Spring<Vec2> googly_right;
-    animation::Approach<> eye_speed;
+    animation::SpringV2<Vec2> googly_left;
+    animation::SpringV2<Vec2> googly_right;
+    float eye_rotation_speed = 0;
     float eye_rotation = 0;
     int pointers_over = 0;
-    animation::Approach<> eyes_open;
+    float eyes_open = 0;
   };
 
   animation::PerDisplay<AnimationState> animation_state_ptr;
@@ -56,6 +61,7 @@ struct MacroRecorder : LiveObject, Runnable, LongRunning, gui::Keylogger, OnOff 
 
   void PointerOver(gui::Pointer&, animation::Display&) override;
   void PointerLeave(gui::Pointer&, animation::Display&) override;
+  void PointerMove(gui::Pointer&, Vec2 position) override;
 
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 

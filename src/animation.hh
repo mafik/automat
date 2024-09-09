@@ -212,9 +212,18 @@ struct Approach : Base<T> {
   operator float() const { return this->value; }
 };
 
-inline void ExponentialApproach(float target, float delta_time, float e_time, float& value) {
-  if (delta_time <= 0) return;
-  value += (target - value) * (-expm1f(-delta_time / e_time));
+inline Phase ExponentialApproach(float target, float delta_time, float e_time, float& value) {
+  if (delta_time <= 0) return Finished;
+  float delta = target - value;
+  if (fabsf(delta) < 1e-6f) {
+    value = target;
+    return Finished;
+  } else {
+    float old_value = value;
+    value += delta * (-expm1f(-delta_time / e_time));
+    if (old_value == value) return Finished;
+    return Animating;
+  }
 }
 
 inline void LinearApproach(float target, float delta_time, float speed, float& value) {
@@ -296,7 +305,8 @@ template <typename T>
 struct SpringV2 {
   T value, velocity;
 
-  SpringV2(T initial_value) : value(initial_value), velocity() {}
+  SpringV2() : value{}, velocity{} {}
+  SpringV2(T initial_value) : value(initial_value), velocity{} {}
 
   Phase SpringTowards(T target, float delta_time, float period_time, float half_time);
 

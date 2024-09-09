@@ -16,6 +16,7 @@ struct GlassRunButton : gui::PowerButton {
   SkColor ForegroundColor(gui::DrawContext&) const override { return color::kParrotRed; }
   void PointerOver(gui::Pointer&, animation::Display&) override;
   void PointerLeave(gui::Pointer&, animation::Display&) override;
+  maf::StrView Name() const override { return "GlassRunButton"; }
   // SkColor BackgroundColor() const override { return "#490b13"_color; }
 };
 

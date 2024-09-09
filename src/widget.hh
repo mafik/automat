@@ -13,6 +13,7 @@
 #include "animation.hh"
 #include "control_flow.hh"
 #include "keyboard.hh"
+#include "optional.hh"
 #include "span.hh"
 #include "str.hh"
 #include "time.hh"
@@ -136,8 +137,8 @@ struct Widget {
   // The function stops once the visitor returns ControlFlow::Stop.
   virtual ControlFlow VisitChildren(Visitor& visitor) { return ControlFlow::Continue; }
 
-  // Return true if the widget's children should be drawn outside of its bounds.
-  virtual bool ChildrenOutside() const { return false; }
+  // If the object should be cached into a texture, return its bounds in local coordinates.
+  virtual maf::Optional<Rect> TextureBounds() const { return Shape(nullptr).getBounds(); }
 
   virtual SkMatrix TransformToChild(const Widget& child, animation::Display*) const {
     return SkMatrix::I();

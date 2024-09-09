@@ -44,13 +44,13 @@ void Widget::PreDrawChildren(DrawContext& ctx) const {
 struct CacheEntry {};
 
 animation::Phase Widget::DrawCached(DrawContext& ctx) const {
-  if (ChildrenOutside()) {
+  auto texture_bounds = TextureBounds();
+  if (texture_bounds == nullopt) {
     return Draw(ctx);
   }
   auto& canvas = ctx.canvas;
   SkMatrix m = canvas.getTotalMatrix();
-  auto shape = Shape(&ctx.display);
-  auto bounds = shape.getBounds();
+  auto bounds = *texture_bounds;
   SkRect root_bounds;
   m.mapRect(&root_bounds, bounds);
   auto canvas_bounds = SkRect::Make(canvas.getBaseLayerSize());

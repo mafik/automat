@@ -236,4 +236,13 @@ SkRect Button::ChildBounds() const {
   return SkRect::MakeEmpty();
 }
 
+maf::Optional<Rect> Button::TextureBounds() const {
+  auto rrect = RRect();
+  float offset = -kPressOffset, sigma = kRadius / 10;
+  TweakShadow(sigma, offset);
+  Rect base_rect = rrect.rect();
+  Rect shadow_rect = base_rect.sk.makeOffset(0, offset).makeOutset(sigma * 2, sigma * 2);
+  base_rect.sk.join(shadow_rect.sk);
+  return base_rect;
+}
 }  // namespace automat::gui

@@ -59,7 +59,7 @@ static void UpdatePath(Pointer& pointer) {
       if (shape.contains(point.x, point.y)) {
         w->VisitChildren(dfs);
         return ControlFlow::Stop;
-      } else if (w->ChildrenOutside()) {
+      } else if (w->TextureBounds() == std::nullopt) {
         if (w->VisitChildren(dfs) == ControlFlow::Stop) {
           return ControlFlow::Stop;
         }

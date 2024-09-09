@@ -168,7 +168,7 @@ ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-bool Location::ChildrenOutside() const { return true; }
+Optional<Rect> Location::TextureBounds() const { return nullopt; }
 
 SkPath Outset(const SkPath& path, float distance) {
   SkRRect rrect;

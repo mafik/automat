@@ -41,6 +41,8 @@ struct Button : Widget {
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg, Widget* child) const;
   animation::Phase DrawButton(DrawContext&, SkColor bg) const;
+
+  maf::Optional<Rect> TextureBounds() const override;
 };
 
 struct ChildButtonMixin : virtual Button {

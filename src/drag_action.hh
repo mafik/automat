@@ -2,6 +2,7 @@
 #include <include/core/SkPath.h>
 
 #include <memory>
+#include <optional>
 
 #include "action.hh"
 #include "animation.hh"
@@ -40,7 +41,7 @@ struct DragLocationAction : Action, gui::Widget {
   SkPath Shape(animation::Display*) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const gui::Widget& child, animation::Display* display) const override;
-  bool ChildrenOutside() const override { return true; }
+  maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
 
   void Begin() override;
   void Update() override;

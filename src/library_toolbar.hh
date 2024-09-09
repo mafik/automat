@@ -43,7 +43,7 @@ struct PrototypeButton : Widget {
 
 namespace automat::library {
 
-struct Toolbar : Object {
+struct Toolbar : Object, gui::PointerMoveCallback {
   static const Toolbar proto;
 
   maf::Vec<unique_ptr<Object>> prototypes;
@@ -59,6 +59,18 @@ struct Toolbar : Object {
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
   float CalculateWidth() const;
+
+  // If the object should be cached into a texture, return its bounds in local coordinates.
+  maf::Optional<Rect> TextureBounds() const override;
+
+  void PointerOver(gui::Pointer& pointer, animation::Display&) override {
+    pointer.move_callbacks.push_back(this);
+  }
+
+  void PointerLeave(gui::Pointer& pointer, animation::Display&) override {
+    pointer.move_callbacks.Erase(this);
+  }
+  void PointerMove(gui::Pointer&, Vec2 position) override { InvalidateDrawCache(); }
 };
 
 }  // namespace automat::library

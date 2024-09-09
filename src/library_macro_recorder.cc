@@ -492,10 +492,7 @@ void MacroRecorder::PointerOver(gui::Pointer& p, animation::Display& d) {
 }
 void MacroRecorder::PointerLeave(gui::Pointer& p, animation::Display& d) {
   animation_state_ptr[d].pointers_over--;
-  auto new_end = std::remove(p.move_callbacks.begin(), p.move_callbacks.end(), this);
-  if (new_end != p.move_callbacks.end()) {
-    p.move_callbacks.erase(new_end, p.move_callbacks.end());
-  }
+  p.move_callbacks.Erase(this);
 }
 
 void MacroRecorder::PointerMove(gui::Pointer&, Vec2 position) { InvalidateDrawCache(); }

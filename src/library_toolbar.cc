@@ -100,7 +100,7 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
 
   auto phase = animation::Finished;
   for (int i = 0; i < buttons.size(); ++i) {
-    phase = phase || buttons[i]->width.SineTowards(width_targets[i], dctx.DeltaT(), 0.4);
+    phase |= buttons[i]->width.SineTowards(width_targets[i], dctx.DeltaT(), 0.4);
   }
 
   auto my_shape = Shape(&dctx.display);
@@ -115,7 +115,7 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
   dctx.canvas.drawImageNine(color.get(), center, dst, SkFilterMode::kLinear);
   dctx.canvas.restore();
 
-  DrawChildren(dctx);
+  phase |= DrawChildren(dctx);
   return phase;
 }
 
@@ -168,4 +168,8 @@ float Toolbar::CalculateWidth() const {
   return width;
 }
 maf::StrView Toolbar::Name() const { return "Toolbar"sv; }
+maf::Optional<Rect> Toolbar::TextureBounds() const {
+  float width = CalculateWidth();
+  return Rect(-width / 2, 0, width / 2, kToolbarHeight * 2);
+}
 }  // namespace automat::library

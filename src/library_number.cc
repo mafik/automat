@@ -11,6 +11,7 @@
 #include "control_flow.hh"
 #include "drag_action.hh"
 #include "gui_align.hh"
+#include "gui_button.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "gui_text.hh"
@@ -61,11 +62,11 @@ NumberButton::NumberButton(std::unique_ptr<Widget>&& child)
     : ChildButtonMixin(make_unique<AlignCenter>(std::move(child))) {}
 
 animation::Phase NumberButton::Draw(gui::DrawContext& ctx) const {
-  DrawButton(ctx, 0xffc8c4b7);
-  return animation::Finished;
+  return DrawButton(ctx, 0xffc8c4b7);
 }
 
 void NumberButton::Activate(gui::Pointer& pointer) {
+  Button::Activate(pointer);
   if (activate) {
     if (auto l = Closest<Location>(pointer.path)) {
       activate(*l);

@@ -106,14 +106,18 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg, Widget* ch
   }
 }
 
-void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
+static animation::Phase UpdateHighlight(DrawContext& ctx, Button::AnimationState& state) {
+  return animation::LinearApproach(state.pointers_over ? 1 : 0, ctx.DeltaT(), 10, state.highlight);
+}
+
+animation::Phase Button::DrawButton(DrawContext& ctx, SkColor bg) const {
+  auto& display = ctx.display;
+  auto& animation_state = animation_state_ptr[display];
+  auto phase = UpdateHighlight(ctx, animation_state);
   DrawButtonShadow(ctx.canvas, bg);
   auto child = Child();
   DrawButtonFace(ctx, bg, 0xff000000, child);
-}
-
-static animation::Phase UpdateHighlight(DrawContext& ctx, Button::AnimationState& state) {
-  return animation::LinearApproach(state.pointers_over ? 1 : 0, ctx.DeltaT(), 10, state.highlight);
+  return phase;
 }
 
 animation::Phase Button::Draw(DrawContext& ctx) const {
@@ -212,7 +216,10 @@ struct ButtonAction : public Action {
 
   void Update() override {}
 
-  void End() override { button.press_action_count--; }
+  void End() override {
+    button.press_action_count--;
+    button.InvalidateDrawCache();
+  }
 };
 
 std::unique_ptr<Action> Button::ButtonDownAction(Pointer& pointer, PointerButton pointer_button) {

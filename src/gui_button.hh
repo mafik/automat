@@ -40,7 +40,7 @@ struct Button : Widget {
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg, Widget* child) const;
-  void DrawButton(DrawContext&, SkColor bg) const;
+  animation::Phase DrawButton(DrawContext&, SkColor bg) const;
 };
 
 struct ChildButtonMixin : virtual Button {

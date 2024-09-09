@@ -14,7 +14,12 @@ namespace automat::gui {
 struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
 
-  animation::PerDisplay<animation::Approach<>> hover_ptr;
+  struct AnimationState {
+    int pointers_over = 0;
+    float highlight = 0;
+  };
+
+  animation::PerDisplay<AnimationState> animation_state_ptr;
   int press_action_count = 0;
 
   Button();
@@ -25,7 +30,7 @@ struct Button : Widget {
   virtual SkRRect RRect() const;
   SkPath Shape(animation::Display*) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
-  virtual void Activate(gui::Pointer&) {}
+  virtual void Activate(gui::Pointer&) { InvalidateDrawCache(); }
   virtual Widget* Child() const { return nullptr; }
   SkRect ChildBounds() const;
   virtual SkColor ForegroundColor(DrawContext&) const { return "#d69d00"_color; }
@@ -54,7 +59,7 @@ struct CircularButtonMixin : virtual Button {
 };
 
 struct ToggleButton : virtual Button {
-  animation::PerDisplay<animation::Approach<>> filling_ptr;
+  animation::PerDisplay<float> filling_ptr;
 
   ToggleButton() : Button() {}
   animation::Phase Draw(DrawContext&) const override;

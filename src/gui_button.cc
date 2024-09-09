@@ -9,22 +9,25 @@
 
 #include <cmath>
 
+#include "animation.hh"
 #include "color.hh"
 #include "gui_constants.hh"
 #include "pointer.hh"
+#include "widget.hh"
 
 namespace automat::gui {
 
 void Button::PointerOver(Pointer& pointer, animation::Display& display) {
-  auto& hover = hover_ptr[display];
-  hover.target = 1;
-  hover.speed = 5;
+  auto& animation_state = animation_state_ptr[display];
+  animation_state.pointers_over++;
   pointer.PushIcon(Pointer::kIconHand);
+  InvalidateDrawCache();
 }
 
 void Button::PointerLeave(Pointer& pointer, animation::Display& display) {
-  hover_ptr[display].target = 0;
+  animation_state_ptr[display].pointers_over--;
   pointer.PopIcon();
+  InvalidateDrawCache();
 }
 
 namespace {
@@ -60,14 +63,14 @@ void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
 void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg, Widget* child) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
-  auto& hover = hover_ptr[display];
+  auto& animation_state = animation_state_ptr[display];
   SkRect child_bounds = child->Shape(nullptr).getBounds();
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
   float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
-  float lightness_adjust = hover * 10;
+  float lightness_adjust = animation_state.highlight * 10;
 
   SkPaint paint;
   SkPoint pts[2] = {{0, oval.rect().bottom()}, {0, oval.rect().top()}};
@@ -109,10 +112,14 @@ void Button::DrawButton(DrawContext& ctx, SkColor bg) const {
   DrawButtonFace(ctx, bg, 0xff000000, child);
 }
 
+static animation::Phase UpdateHighlight(DrawContext& ctx, Button::AnimationState& state) {
+  return animation::LinearApproach(state.pointers_over ? 1 : 0, ctx.DeltaT(), 10, state.highlight);
+}
+
 animation::Phase Button::Draw(DrawContext& ctx) const {
   auto& display = ctx.display;
-  auto& hover = hover_ptr[display];
-  auto phase = hover.Tick(display);
+  auto& animation_state = animation_state_ptr[display];
+  auto phase = UpdateHighlight(ctx, animation_state);
 
   auto bg = BackgroundColor();
   auto fg = ForegroundColor(ctx);
@@ -125,19 +132,17 @@ animation::Phase Button::Draw(DrawContext& ctx) const {
 animation::Phase ToggleButton::Draw(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
-  auto& hover = hover_ptr[display];
+  auto& animation_state = animation_state_ptr[display];
   auto& filling = filling_ptr[display];
-  filling.speed = 5;
-  filling.target = Filled() ? 1 : 0;
-  auto phase = hover.Tick(display);
-  phase |= filling.Tick(display);
+  auto phase = UpdateHighlight(ctx, animation_state);
+  phase |= animation::ExponentialApproach(Filled() ? 1 : 0, ctx.DeltaT(), 0.2, filling);
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
   SkColor bg = BackgroundColor();
   SkColor fg = ForegroundColor(ctx);
 
-  float lightness_adjust = hover * 10;
+  float lightness_adjust = animation_state.highlight * 10;
   float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
   SkRRect pressed_outer_oval;

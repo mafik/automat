@@ -186,7 +186,10 @@ SkRRect FlipFlopButton::RRect() const {
   return SkRRect::MakeOval(oval);
 }
 
-void FlipFlopButton::Activate(gui::Pointer&) { flip_flop->here->ScheduleRun(); }
+void FlipFlopButton::Activate(gui::Pointer& p) {
+  gui::ToggleButton::Activate(p);
+  flip_flop->here->ScheduleRun();
+}
 
 SkColor FlipFlopButton::ForegroundColor(gui::DrawContext&) const { return "#1d1d1d"_color; }
 SkColor FlipFlopButton::BackgroundColor() const { return "#eae9e8"_color; }

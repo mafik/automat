@@ -424,6 +424,7 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
 }
 
 void NextButton::Activate(gui::Pointer& ptr) {
+  Button::Activate(ptr);
   for (int i = ptr.path.size() - 1; i >= 0; --i) {
     if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
       SetPosRatio(*timeline, 1, ptr.window.display.timer.steady_now);
@@ -432,6 +433,7 @@ void NextButton::Activate(gui::Pointer& ptr) {
 }
 
 void PrevButton::Activate(gui::Pointer& ptr) {
+  Button::Activate(ptr);
   for (int i = ptr.path.size() - 1; i >= 0; --i) {
     if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
       SetPosRatio(*timeline, 0, ptr.window.display.timer.steady_now);
@@ -1317,7 +1319,7 @@ SkColor NextButton::BackgroundColor() const { return kTimelineButtonBackground; 
 SkColor TimelineRunButton::BackgroundColor() const { return kTimelineButtonBackground; }
 SkColor TimelineRunButton::ForegroundColor(gui::DrawContext& dctx) const {
   if (rec) {
-    return color::MixColors(kOrange, color::kParrotRed, filling_ptr[dctx.display].value);
+    return color::MixColors(kOrange, color::kParrotRed, filling_ptr[dctx.display]);
   } else {
     return kOrange;
   }

@@ -23,7 +23,10 @@ struct RunLocationMixin : virtual ToggleButton {
 struct RunOnOffMixin : virtual ToggleButton {
   OnOff* target;
   RunOnOffMixin(OnOff* target);
-  void Activate(gui::Pointer&) override { target->Toggle(); }
+  void Activate(gui::Pointer& p) override {
+    ToggleButton::Activate(p);
+    target->Toggle();
+  }
   bool Filled() const override { return target->IsOn(); }
 };
 

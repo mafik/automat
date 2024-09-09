@@ -14,7 +14,8 @@ RunButton::RunButton(Location* parent, float radius)
       CircularButtonMixin(radius),
       child(MakeShapeWidget(kPlayShape, 0xffffffff)) {}
 
-void RunLocationMixin::Activate(Pointer&) {
+void RunLocationMixin::Activate(Pointer& p) {
+  ToggleButton::Activate(p);
   if (Filled()) {
     if (location->run_task.scheduled) {
       // TODO: cancel the task

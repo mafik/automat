@@ -226,15 +226,24 @@ inline Phase ExponentialApproach(float target, float delta_time, float e_time, f
   }
 }
 
-inline void LinearApproach(float target, float delta_time, float speed, float& value) {
-  if (delta_time <= 0) return;
+inline Phase LinearApproach(float target, float delta_time, float speed, float& value) {
+  if (delta_time <= 0) return Finished;
   if (value < target) {
     value += delta_time * speed;
-    if (value > target) value = target;
+    if (value >= target) {
+      value = target;
+      return Finished;
+    }
   } else if (value > target) {
     value -= delta_time * speed;
-    if (value < target) value = target;
+    if (value < target) {
+      value = target;
+      return Finished;
+    }
+  } else {
+    return Finished;
   }
+  return Animating;
 }
 
 // TODO: remove this and replace with `SpringV2`

@@ -62,7 +62,7 @@ static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, S
 void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg, Widget* child) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
-  auto& hover = hover_ptr[display];
+  auto& animation_state = animation_state_ptr[display];
   bool enabled = false;
 
   SkRRect key_base = RRect();
@@ -74,7 +74,7 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg, Wi
                        key_base.rect().right() - kKeySide, key_base.rect().bottom() - kKeyTopSide),
       kKeyFaceRadius, kKeyFaceRadius);
 
-  float lightness_adjust = hover * 10;
+  float lightness_adjust = animation_state.highlight * 10;
 
   SkPaint face_paint;
   SkPoint face_pts[] = {{0, key_face.rect().bottom()}, {0, key_face.rect().top()}};

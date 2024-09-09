@@ -1220,6 +1220,7 @@ void Timeline::Cancel() {
     paused = {.playback_offset = (time::SteadyNow() - playing.started_at).count()};
     TimelineUpdateOutputs(*here, *this, time::SteadyPoint{},
                           time::SteadyPoint{} + time::Duration(paused.playback_offset));
+    run_button.InvalidateDrawCache();
   }
 }
 
@@ -1235,6 +1236,7 @@ LongRunning* Timeline::OnRun(Location& here) {
   playing = {.started_at = now - time::Duration(paused.playback_offset)};
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   TimelineScheduleAt(*this, now);
+  run_button.InvalidateDrawCache();
   return this;
 }
 
@@ -1252,6 +1254,7 @@ void Timeline::BeginRecording() {
       recording.started_at = playing.started_at;
       break;
   }
+  run_button.InvalidateDrawCache();
 }
 
 void Timeline::StopRecording() {
@@ -1262,6 +1265,7 @@ void Timeline::StopRecording() {
   paused = {.playback_offset =
                 min((time::SteadyNow() - recording.started_at).count(), timeline_length)};
   state = Timeline::kPaused;
+  run_button.InvalidateDrawCache();
 }
 
 void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,

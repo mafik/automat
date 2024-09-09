@@ -122,6 +122,8 @@ struct Widget {
     return phase;
   }
   virtual SkPath Shape(animation::Display*) const = 0;
+
+  // DEPRECATED: override PointerVisitChildren to block pointer events from propagating to children.
   virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {
     return nullptr;
   }
@@ -136,6 +138,10 @@ struct Widget {
   // Widgets are stored in front-to-back order.
   // The function stops once the visitor returns ControlFlow::Stop.
   virtual ControlFlow VisitChildren(Visitor& visitor) { return ControlFlow::Continue; }
+
+  // A variant of `VisitChildren` used by the pointer events (PointerOver, PointerLeave, etc).
+  // This can be used to block pointer events from propagating to children.
+  virtual ControlFlow PointerVisitChildren(Visitor& visitor) { return VisitChildren(visitor); }
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
   virtual maf::Optional<Rect> TextureBounds() const { return Shape(nullptr).getBounds(); }

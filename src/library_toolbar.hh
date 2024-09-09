@@ -34,7 +34,9 @@ struct PrototypeButton : Widget {
 
   void PointerLeave(Pointer& pointer, animation::Display&) override { pointer.PopIcon(); }
 
-  std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton btn) override;
+  ControlFlow PointerVisitChildren(Visitor&) override { return ControlFlow::Continue; }
+
+  std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton btn) override;
 
   maf::StrView Name() const override { return "PrototypeButton"; }
 };
@@ -69,6 +71,7 @@ struct Toolbar : Object, gui::PointerMoveCallback {
 
   void PointerLeave(gui::Pointer& pointer, animation::Display&) override {
     pointer.move_callbacks.Erase(this);
+    InvalidateDrawCache();
   }
   void PointerMove(gui::Pointer&, Vec2 position) override { InvalidateDrawCache(); }
 };

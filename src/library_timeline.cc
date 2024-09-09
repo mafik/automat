@@ -408,6 +408,7 @@ void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
     timeline.paused.playback_offset =
         clamp<time::T>(timeline.paused.playback_offset + offset, 0, timeline.MaxTrackLength());
   }
+  timeline.InvalidateDrawCache();
 }
 
 void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
@@ -421,6 +422,7 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = pos_ratio * max_track_length;
   }
+  timeline.InvalidateDrawCache();
 }
 
 void NextButton::Activate(gui::Pointer& ptr) {
@@ -606,8 +608,18 @@ struct DragZoomAction : Action {
     timeline.zoom.target *= factor;
     timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
     timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
+    timeline.InvalidateDrawCache();
+    for (auto& track : timeline.tracks) {
+      track->InvalidateDrawCache();
+    }
   }
-  virtual void End() { timeline.zoom.target = NearestZoomTick(timeline.zoom.target); }
+  virtual void End() {
+    timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
+    timeline.InvalidateDrawCache();
+    for (auto& track : timeline.tracks) {
+      track->InvalidateDrawCache();
+    }
+  }
 };
 
 SkPath WindowShape(int num_tracks) {
@@ -902,6 +914,12 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
     }
   }
 
+  Widget* tracks_arr[tracks.size()];
+  for (size_t i = 0; i < tracks.size(); ++i) {
+    tracks_arr[i] = tracks[i].get();
+  }
+  phase |= DrawChildrenSubset(dctx, Span<Widget*>(tracks_arr, tracks.size()));
+
   canvas.restore();  // unclip
 
   // Screws
@@ -937,7 +955,8 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
   DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
             kPlasticTop - kScrewMargin - kScrewRadius);
 
-  phase |= DrawChildren(dctx);
+  Widget* arr[] = {(Widget*)&run_button, (Widget*)&prev_button, (Widget*)&next_button};
+  phase |= DrawChildrenSubset(dctx, arr);
 
   canvas.save();
   canvas.clipPath(window_path, true);

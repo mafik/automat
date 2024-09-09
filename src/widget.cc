@@ -143,10 +143,13 @@ void Widget::InvalidateDrawCache() const {
   for (auto& window : windows) {
     for (int i = 0; i < window->draw_cache.entries.size(); ++i) {
       auto& e = window->draw_cache.entries[i];
-      if (auto it = find(e->path.begin(), e->path.end(), this); it != e->path.end()) {
+      if (e->path.back() == this) {
         e->needs_refresh = true;
-        for (auto it2 = e->path.begin(); it2 != it; ++it2) {
-          parents.insert(*it2);
+        for (auto* parent : e->path) {
+          if (parent == this) {
+            break;
+          }
+          parents.insert(parent);
         }
       }
     }
@@ -160,26 +163,32 @@ void Widget::InvalidateDrawCache() const {
   }
 }
 
-animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
+animation::Phase Widget::DrawChildrenSubset(DrawContext& ctx, maf::Span<Widget*> widgets) const {
   auto phase = animation::Finished;
   auto& canvas = ctx.canvas;
+  std::ranges::reverse_view rv{widgets};
+  for (auto* widget : rv) {
+    ctx.path.push_back(widget);
+    canvas.save();
+
+    const SkMatrix down = this->TransformToChild(*widget, &ctx.display);
+    SkMatrix up;
+    if (down.invert(&up)) {
+      canvas.concat(up);
+    }
+
+    phase |= widget->DrawCached(ctx);
+
+    canvas.restore();
+    ctx.path.pop_back();
+  }  // for each Widget
+  return phase;
+}
+
+animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
+  auto phase = animation::Finished;
   Visitor visitor = [&](Span<Widget*> widgets) {
-    std::ranges::reverse_view rv{widgets};
-    for (Widget* widget : rv) {
-      ctx.path.push_back(widget);
-      canvas.save();
-
-      const SkMatrix down = this->TransformToChild(*widget, &ctx.display);
-      SkMatrix up;
-      if (down.invert(&up)) {
-        canvas.concat(up);
-      }
-
-      phase |= widget->DrawCached(ctx);
-
-      canvas.restore();
-      ctx.path.pop_back();
-    }  // for each Widget
+    phase |= DrawChildrenSubset(ctx, widgets);
     return ControlFlow::Continue;
   };
   const_cast<Widget*>(this)->VisitChildren(visitor);

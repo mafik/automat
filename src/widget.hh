@@ -145,6 +145,9 @@ struct Widget {
   }
 
   void PreDrawChildren(DrawContext&) const;
+
+  animation::Phase DrawChildrenSubset(DrawContext&, maf::Span<Widget*> widgets) const;
+
   animation::Phase DrawChildren(DrawContext&) const;
 };
 

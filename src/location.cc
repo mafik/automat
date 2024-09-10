@@ -200,8 +200,8 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   auto& state = GetAnimationState(ctx.display);
   phase |= state.Tick(ctx.DeltaT(), position, scale);
 
-  state.highlight.Tick(ctx.display);
-  state.transparency.Tick(ctx.display);
+  phase |= state.highlight.Tick(ctx.display);
+  phase |= state.transparency.Tick(ctx.display);
   bool using_layer = false;
   if (state.transparency > 0.01) {
     using_layer = true;

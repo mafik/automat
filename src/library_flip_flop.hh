@@ -16,15 +16,9 @@ struct YingYangIcon : gui::Widget, gui::PaintMixin {
 
 struct FlipFlopButton : gui::ToggleButton {
   FlipFlop* flip_flop;
-  mutable YingYangIcon icon;
-  using ToggleButton::ToggleButton;
+
+  FlipFlopButton();
   bool Filled() const override;
-  SkRRect RRect() const override;
-  Widget* Child() const override { return &icon; }
-  void Activate(gui::Pointer&) override;
-  void TweakShadow(float& sigma, float& offset) const override;
-  SkColor ForegroundColor(gui::DrawContext&) const override;
-  SkColor BackgroundColor() const override;
 };
 
 struct FlipFlop : LiveObject, Runnable {

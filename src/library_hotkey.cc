@@ -225,7 +225,7 @@ HotKey::HotKey()
     }
     windows_button.fg = KeyColor(windows);
   };
-  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(key));
+  shortcut_button.SetLabel(ToStr(key));
   shortcut_button.activate = [this](gui::Pointer& pointer) {
     if (hotkey_selector) {
       // Cancel HotKey selection.
@@ -423,7 +423,7 @@ void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
   hotkey_selector->Release();
   // Maybe also set the modifiers from the key event?
   this->key = key.physical;
-  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(key.physical));
+  shortcut_button.SetLabel(ToStr(key.physical));
   if (on) {
     On();
   }
@@ -495,7 +495,7 @@ void HotKey::DeserializeState(Location& l, Deserializer& d) {
     On();
   }
 
-  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(this->key));
+  shortcut_button.SetLabel(ToStr(this->key));
   ctrl_button.fg = KeyColor(ctrl);
   alt_button.fg = KeyColor(alt);
   shift_button.fg = KeyColor(shift);

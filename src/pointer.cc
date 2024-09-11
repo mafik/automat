@@ -36,13 +36,12 @@ Pointer::~Pointer() {
     window.pointers.erase(it);
   }
 }
-static void UpdatePath(Pointer& pointer) {
-  Path& path = pointer.path;
+void Pointer::UpdatePath() {
   Path old_path = path;
-  auto& display = pointer.window.display;
+  auto& display = window.display;
 
   path.clear();
-  Vec2 point = pointer.pointer_position;
+  Vec2 point = pointer_position;
 
   Visitor dfs = [&](Span<Widget*> widgets) -> ControlFlow {
     for (auto w : widgets) {
@@ -70,7 +69,7 @@ static void UpdatePath(Pointer& pointer) {
     return ControlFlow::Continue;
   };
 
-  Widget* window_arr[] = {&pointer.window};
+  Widget* window_arr[] = {&window};
   dfs(window_arr);
 
   for (Widget* old_w : old_path) {
@@ -79,12 +78,12 @@ static void UpdatePath(Pointer& pointer) {
       continue;
     }
     if (std::find(path.begin(), path.end(), old_w) == path.end()) {
-      old_w->PointerLeave(pointer, display);
+      old_w->PointerLeave(*this, display);
     }
   }
   for (Widget* new_w : path) {
     if (std::find(old_path.begin(), old_path.end(), new_w) == old_path.end()) {
-      new_w->PointerOver(pointer, display);
+      new_w->PointerOver(*this, display);
     }
   }
 }
@@ -102,7 +101,7 @@ void Pointer::Move(Vec2 position) {
     if (action) {
       action->Update();
     }
-    UpdatePath(*this);
+    UpdatePath();
     for (auto* cb : move_callbacks) {
       cb->PointerMove(*this, position);
     }
@@ -130,7 +129,7 @@ void Pointer::ButtonDown(PointerButton btn) {
   RunOnAutomatThread([=, this]() {
     button_down_position[btn] = pointer_position;
     button_down_time[btn] = time::SystemNow();
-    UpdatePath(*this);
+    UpdatePath();
 
     if (action == nullptr && !path.empty()) {
       for (Widget* w : path) {
@@ -144,7 +143,7 @@ void Pointer::ButtonDown(PointerButton btn) {
       }
       if (action) {
         action->Begin();
-        UpdatePath(*this);
+        UpdatePath();
       }
     }
   });

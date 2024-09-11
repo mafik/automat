@@ -10,7 +10,6 @@
 
 #include "control_flow.hh"
 #include "drag_action.hh"
-#include "gui_align.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
@@ -54,16 +53,12 @@ static constexpr char kBackspaceShape[] =
     "M-9 0-5.6 5.1A2 2 0 00-4 6H4A2 2 0 006 4V-4A2 2 0 004-6H-4A2 2 0 00-5.6-5.1ZM-3-4 0-1 3-4 4-3 "
     "1 0 4 3 3 4 0 1-3 4-4 3-1 0-4-3Z";
 
-using gui::AlignCenter;
 using gui::Text;
 using std::make_unique;
 
-NumberButton::NumberButton(std::unique_ptr<Widget>&& child)
-    : ChildButtonMixin(make_unique<AlignCenter>(std::move(child))) {}
+NumberButton::NumberButton(std::unique_ptr<Widget>&& child) : Button(std::move(child)) {}
 
-animation::Phase NumberButton::Draw(gui::DrawContext& ctx) const {
-  return DrawButton(ctx, 0xffc8c4b7);
-}
+SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
 
 void NumberButton::Activate(gui::Pointer& pointer) {
   Button::Activate(pointer);

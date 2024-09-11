@@ -109,7 +109,7 @@ void KeyPresser::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const 
 
 void KeyPresser::SetKey(gui::AnsiKey k) {
   key = k;
-  dynamic_cast<LabelMixin*>(shortcut_button.Child())->SetLabel(ToStr(key));
+  shortcut_button.SetLabel(ToStr(k));
 }
 
 void KeyPresser::ReleaseGrab(gui::KeyboardGrab&) { key_selector = nullptr; }

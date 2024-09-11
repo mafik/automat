@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "color.hh"
 #include "drawable.hh"
 #include "format.hh"
 #include "location.hh"

@@ -1,49 +1,66 @@
 #include "run_button.hh"
 
+#include <include/core/SkColor.h>
+
 #include "base.hh"
 #include "gui_button.hh"
-#include "gui_shape_widget.hh"
 #include "location.hh"
 #include "pointer.hh"
 #include "svg.hh"
 
+using namespace std;
+
 namespace automat::gui {
 
 RunButton::RunButton(Location* parent, float radius)
-    : RunLocationMixin(parent),
-      CircularButtonMixin(radius),
-      child(MakeShapeWidget(kPlayShape, 0xffffffff)) {}
+    : location(parent),
+      ToggleButton(
+          make_unique<ColoredButton>(
+              kPlayShape, ColoredButtonArgs{.fg = SK_ColorBLACK,
+                                            .bg = SK_ColorWHITE,
+                                            .on_click =
+                                                [this](gui::Pointer& ptr) {
+                                                  if (location->run_task.scheduled) {
+                                                    // TODO: cancel the task
+                                                  } else if (location->long_running != nullptr) {
+                                                    location->long_running->Cancel();
+                                                    location->long_running = nullptr;
+                                                  }
+                                                }}),
+          make_unique<ColoredButton>(
+              kPlayShape,
+              ColoredButtonArgs{
+                  .fg = SK_ColorWHITE, .bg = SK_ColorBLACK, .on_click = [this](gui::Pointer& ptr) {
+                    // This will destroy a potential object saved in the error so it shouldn't
+                    // be automatic. Maybe we could ClearError only if there is no object?
+                    // Otherwise we should ask the user.
+                    // TODO(after Errors are visualized): Ask the user.
+                    location->ClearError();
+                    location->ScheduleRun();
+                  }})) {}
 
-void RunLocationMixin::Activate(Pointer& p) {
-  ToggleButton::Activate(p);
-  if (Filled()) {
-    if (location->run_task.scheduled) {
-      // TODO: cancel the task
-    } else if (location->long_running != nullptr) {
-      location->long_running->Cancel();
-      location->long_running = nullptr;
-    }
-  } else {
-    // This will destroy a potential object saved in the error so it shouldn't
-    // be automatic. Maybe we could ClearError only if there is no object?
-    // Otherwise we should ask the user.
-    // TODO(after Errors are visualized): Ask the user.
-    location->ClearError();
-    location->ScheduleRun();
-  }
-}
-
-bool RunLocationMixin::Filled() const {
+bool RunButton::Filled() const {
   if (location == nullptr) {
     return false;
   }
   return location->run_task.scheduled || (location->long_running != nullptr);
 }
 
-RunLocationMixin::RunLocationMixin(Location* parent) : Button(), location(parent) {}
+PowerButton::PowerButton(OnOff* target, SkColor fg, SkColor bg)
+    : target(target),
+      ToggleButton(
+          make_unique<ColoredButton>(
+              kPowerSVG,
+              ColoredButtonArgs{
+                  .fg = bg, .bg = fg, .on_click = [this](gui::Pointer& p) { Activate(p); }}),
+          make_unique<ColoredButton>(
+              kPowerSVG, ColoredButtonArgs{.fg = fg, .bg = bg, .on_click = [this](gui::Pointer& p) {
+                                             Activate(p);
+                                           }})) {}
 
-PowerButton::PowerButton(OnOff* target)
-    : RunOnOffMixin(target), child(MakeShapeWidget(kPowerSVG, SK_ColorWHITE)) {}
-
-RunOnOffMixin::RunOnOffMixin(OnOff* target) : Button(), target(target) {}
+void PowerButton::Activate(gui::Pointer& p) {
+  target->Toggle();
+  InvalidateDrawCache();
+}
+bool PowerButton::Filled() const { return target->IsOn(); }
 }  // namespace automat::gui

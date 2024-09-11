@@ -4,19 +4,30 @@
 
 #include "font.hh"
 #include "gui_button.hh"
+#include "log.hh"
 #include "widget.hh"
 
 using namespace maf;
+using namespace std;
 
 namespace automat::library {
 
 KeyButton::KeyButton(std::unique_ptr<Widget>&& child, SkColor color, float width)
-    : ChildButtonMixin(std::move(child)), width(width), fg(color) {}
+    : Button(std::move(child)), width(width), fg(color) {}
 
 void KeyButton::Activate(gui::Pointer& pointer) {
   if (activate) {
     activate(pointer);
   }
+}
+
+SkMatrix KeyButton::TransformToChild(const Widget& child, animation::Display*) const {
+  SkRect child_bounds = ChildBounds();
+  SkRRect key_base = RRect();
+  SkRect key_face =
+      SkRect::MakeLTRB(key_base.rect().left() + kKeySide, key_base.rect().top() + kKeyBottomSide,
+                       key_base.rect().right() - kKeySide, key_base.rect().bottom() - kKeyTopSide);
+  return SkMatrix::Translate(child_bounds.center() - key_face.center());
 }
 
 SkRRect KeyButton::RRect() const {
@@ -59,7 +70,7 @@ static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, S
   return SkGradientShader::MakeSweep(center.x, center.y, colors, pos, 13);
 }
 
-void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg, Widget* child) const {
+void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
   auto& animation_state = animation_state_ptr[display];
@@ -99,16 +110,6 @@ void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg, Wi
                                        top_color, top_color, side_color, side_color2, bottom_color,
                                        bottom_color));
   canvas.drawDRRect(key_base, key_face, side_paint);
-
-  if (child) {
-    if (auto paint = PaintMixin::Get(child)) {
-      paint->setColor(fg);
-      paint->setAntiAlias(true);
-    }
-    canvas.translate(key_face.rect().centerX(), key_face.rect().centerY());
-    child->Draw(ctx);
-    canvas.translate(-key_face.rect().centerX(), -key_face.rect().centerY());
-  }
 }
 
 Font& KeyFont() {
@@ -124,6 +125,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
   SkPath Shape(animation::Display*) const override {
     return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
   }
+  maf::Optional<Rect> TextureBounds() const override { return nullopt; }
   animation::Phase Draw(DrawContext& ctx) const override {
     SkPaint paint;
     paint.setAntiAlias(true);
@@ -136,11 +138,17 @@ struct KeyLabelWidget : Widget, LabelMixin {
   void SetLabel(StrView label) override {
     this->label = label;
     width = KeyFont().MeasureText(label);
+    LOG << "KeyLabelWidget::SetLabel: " << label << " width: " << width;
+    InvalidateDrawCache();
   }
 };
 
 std::unique_ptr<Widget> MakeKeyLabelWidget(StrView label) {
   return std::make_unique<KeyLabelWidget>(label);
+}
+
+void KeyButton::SetLabel(maf::StrView new_label) {
+  dynamic_cast<LabelMixin*>(child.get())->SetLabel(new_label);
 }
 
 }  // namespace automat::library

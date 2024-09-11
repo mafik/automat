@@ -5,7 +5,10 @@
 #include <memory>
 
 #include "animation.hh"
-#include "color.hh"
+#include "control_flow.hh"
+#include "gui_constants.hh"
+#include "gui_shape_widget.hh"
+#include "pointer.hh"
 #include "units.hh"
 #include "widget.hh"
 
@@ -21,52 +24,103 @@ struct Button : Widget {
 
   animation::PerDisplay<AnimationState> animation_state_ptr;
   int press_action_count = 0;
+  std::unique_ptr<Widget> child;
 
-  Button();
+  Button(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
   void PointerOver(Pointer&, animation::Display&) override;
   void PointerLeave(Pointer&, animation::Display&) override;
+  void PreDraw(DrawContext& ctx) const override;
   animation::Phase Draw(DrawContext&) const override;
   float Height() const;
   virtual SkRRect RRect() const;
   SkPath Shape(animation::Display*) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
   virtual void Activate(gui::Pointer&) { InvalidateDrawCache(); }
-  virtual Widget* Child() const { return nullptr; }
-  SkRect ChildBounds() const;
-  virtual SkColor ForegroundColor(DrawContext&) const { return "#d69d00"_color; }
+  virtual SkColor ForegroundColor(DrawContext&) const { return SK_ColorBLACK; }  // "#d69d00"_color
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
-  virtual void TweakShadow(float& sigma, float& offset) const {}
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
-  virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg, Widget* child) const;
-  animation::Phase DrawButton(DrawContext&, SkColor bg) const;
+  virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg) const;
 
   maf::Optional<Rect> TextureBounds() const override;
-};
 
-struct ChildButtonMixin : virtual Button {
-  std::unique_ptr<Widget> child;
-  ChildButtonMixin(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
-  Widget* Child() const override { return child.get(); }
-};
+  SkRect ChildBounds() const;
 
-struct CircularButtonMixin : virtual Button {
-  float radius;
-  CircularButtonMixin(float radius) : radius(radius) {}
-  SkRRect RRect() const override {
-    SkRect oval = SkRect::MakeXYWH(0, 0, 2 * radius, 2 * radius);
-    return SkRRect::MakeOval(oval);
+  ControlFlow VisitChildren(Visitor& visitor) override {
+    Widget* children[] = {child.get()};
+    return visitor(children);
   }
+
+  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
+  // We don't want the children to interact with mouse events.
+  ControlFlow PointerVisitChildren(Visitor& visitor) override { return ControlFlow::Continue; }
 };
 
-struct ToggleButton : virtual Button {
+struct ColoredButtonArgs {
+  SkColor fg = SK_ColorBLACK, bg = SK_ColorWHITE;
+  float radius = kMinimalTouchableSize / 2;
+  std::function<void(gui::Pointer&)> on_click = nullptr;
+};
+
+struct ColoredButton : Button {
+  SkColor fg, bg;
+  float radius;
+  std::function<void(gui::Pointer&)> on_click;
+
+  ColoredButton(std::unique_ptr<Widget>&& child, ColoredButtonArgs args = {})
+      : Button(std::move(child)),
+        fg(args.fg),
+        bg(args.bg),
+        radius(args.radius),
+        on_click(args.on_click) {}
+
+  ColoredButton(const char* svg_path, ColoredButtonArgs args = {})
+      : ColoredButton(MakeShapeWidget(svg_path, SK_ColorWHITE), args) {}
+
+  ColoredButton(SkPath path, ColoredButtonArgs args = {})
+      : ColoredButton(std::make_unique<ShapeWidget>(path), args) {}
+
+  SkColor ForegroundColor(DrawContext&) const override { return fg; }
+  SkColor BackgroundColor() const override { return bg; }
+  void Activate(gui::Pointer& ptr) override {
+    if (on_click) {
+      on_click(ptr);
+    }
+  }
+
+  SkRRect RRect() const override {
+    return SkRRect::MakeOval(SkRect::MakeWH(radius * 2, radius * 2));
+  };
+};
+
+struct ToggleButton : Widget {
+  std::unique_ptr<Button> on;
+  std::unique_ptr<Button> off;
+
   animation::PerDisplay<float> filling_ptr;
 
-  ToggleButton() : Button() {}
+  ToggleButton(std::unique_ptr<Button>&& child_on, std::unique_ptr<Button>&& child_off)
+      : on(std::move(child_on)), off(std::move(child_off)) {}
+
+  ControlFlow VisitChildren(Visitor& visitor) override {
+    Widget* children[] = {OnWidget(), off.get()};
+    return visitor(children);
+  }
+  ControlFlow PointerVisitChildren(Visitor& visitor) override {
+    Widget* children[] = {Filled() ? OnWidget() : off.get()};
+    return visitor(children);
+  }
+
+  virtual Button* OnWidget() const { return on.get(); }
+  void PreDrawChildren(DrawContext& ctx) const override;
   animation::Phase Draw(DrawContext&) const override;
+  animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const override;
+  SkRRect RRect() const { return off->RRect(); }
+  SkPath Shape(animation::Display* d) const override { return off->Shape(d); }
+  maf::Optional<Rect> TextureBounds() const override { return off->TextureBounds(); }
+
   virtual bool Filled() const { return false; }
-  virtual Widget* FilledChild() const { return Child(); }
 };
 
 }  // namespace automat::gui

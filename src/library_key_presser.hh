@@ -9,6 +9,9 @@ struct KeyPresser;
 
 struct KeyPresserButton : KeyButton {
   KeyPresser* key_presser;
+  KeyPresserButton(KeyPresser* key_presser, std::unique_ptr<Widget>&& child, SkColor color,
+                   float width)
+      : key_presser(key_presser), KeyButton(std::move(child), color, width) {}
   using KeyButton::KeyButton;
   float PressRatio() const override;
 };

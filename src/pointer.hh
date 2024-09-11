@@ -45,6 +45,8 @@ struct Pointer final {
   void PushIcon(IconType);
   void PopIcon();
 
+  void UpdatePath();
+
   Vec2 PositionWithin(const Widget&) const;
   Vec2 PositionWithinRootMachine() const;
 

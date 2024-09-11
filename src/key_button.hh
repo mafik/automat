@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "color.hh"
 #include "font.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
@@ -29,7 +30,7 @@ gui::Font& KeyFont();
 // static constexpr float kKeySpareHeight = kKeyHeight - kKeyLetterSize;
 // static constexpr float kKeyFaceHeight = kKeyHeight - kKeyTopSide - kKeyBottomSide;
 
-struct KeyButton : virtual gui::Button, ChildButtonMixin {
+struct KeyButton : gui::Button {
   float width;
   std::function<void(gui::Pointer&)> activate;
   SkColor fg;
@@ -37,8 +38,10 @@ struct KeyButton : virtual gui::Button, ChildButtonMixin {
   void Activate(gui::Pointer&) override;
   SkRRect RRect() const override;
   SkColor ForegroundColor(gui::DrawContext&) const override { return fg; }
-  void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg, Widget* child) const override;
+  void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg) const override;
   maf::StrView Name() const override { return "KeyButton"; }
+  void SetLabel(maf::StrView new_label);
+  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 };
 
 std::unique_ptr<Widget> MakeKeyLabelWidget(maf::StrView label);

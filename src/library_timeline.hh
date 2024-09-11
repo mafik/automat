@@ -13,31 +13,36 @@
 
 namespace automat::library {
 
-struct PrevButton : virtual gui::Button, gui::ChildButtonMixin, gui::CircularButtonMixin {
+struct SideButton : gui::Button {
+  using gui::Button::Button;
+  SkColor ForegroundColor(gui::DrawContext&) const override;
+  SkColor BackgroundColor() const override;
+  SkRRect RRect() const override;
+};
+
+struct PrevButton : SideButton {
   PrevButton();
   void Activate(gui::Pointer&) override;
-  SkColor ForegroundColor(gui::DrawContext&) const override;
-  SkColor BackgroundColor() const override;
 };
 
-struct NextButton : virtual gui::Button, gui::ChildButtonMixin, gui::CircularButtonMixin {
+struct NextButton : SideButton {
   NextButton();
   void Activate(gui::Pointer&) override;
-  SkColor ForegroundColor(gui::DrawContext&) const override;
-  SkColor BackgroundColor() const override;
-};
-
-struct TimelineRunButton : virtual gui::Button, gui::RunButton {
-  mutable bool rec = false;
-  TimelineRunButton();
-  SkColor ForegroundColor(gui::DrawContext&) const override;
-  SkColor BackgroundColor() const override;
-  bool Filled() const override;
-  Widget* FilledChild() const override;
-  Widget* Child() const override;
 };
 
 struct Timeline;
+
+struct TimelineRunButton : gui::ToggleButton {
+  Timeline* timeline;
+
+  std::unique_ptr<gui::Button> rec_button;
+  mutable gui::Button* last_on_widget = nullptr;
+
+  TimelineRunButton(Timeline* timeline);
+  gui::Button* OnWidget() const override;
+  bool Filled() const override;
+  void Activate(gui::Pointer&);
+};
 
 struct TrackBase : Object {
   Timeline* timeline = nullptr;
@@ -110,7 +115,6 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
 
   Timeline();
   Timeline(const Timeline&);
-  void Relocate(Location* new_here) override;
   string_view Name() const override;
   std::unique_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;

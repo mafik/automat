@@ -254,16 +254,92 @@ const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
 DEFINE_PROTO(Timeline);
 
 PrevButton::PrevButton()
-    : gui::ChildButtonMixin(MakeShapeWidget(kNextShape, SK_ColorWHITE, &kHorizontalFlip)),
-      gui::CircularButtonMixin(kSideButtonRadius) {}
+    : SideButton(MakeShapeWidget(kNextShape, SK_ColorWHITE, &kHorizontalFlip)) {}
 
-NextButton::NextButton()
-    : gui::ChildButtonMixin(MakeShapeWidget(kNextShape, SK_ColorWHITE)),
-      gui::CircularButtonMixin(kSideButtonRadius) {}
+NextButton::NextButton() : SideButton(MakeShapeWidget(kNextShape, SK_ColorWHITE)) {}
 
-TimelineRunButton::TimelineRunButton() : gui::RunButton(nullptr, kPlayButtonRadius) {}
+static SkPath GetPausedPath() {
+  static SkPath path = []() {
+    SkPath path;
+    path.addRect(-1.5_mm, -1.5_mm, -0.5_mm, 1.5_mm);
+    path.addRect(0.5_mm, -1.5_mm, 1.5_mm, 1.5_mm);
+    return path;
+  }();
+  return path;
+}
 
-Timeline::Timeline() : run_button(), state(kPaused), paused{.playback_offset = 0}, zoom(10) {}
+static SkPath GetRecPath() {
+  static SkPath path = []() {
+    SkPath path;
+    path.addCircle(0, 0, 2.5_mm);
+    return path;
+  }();
+  return path;
+}
+
+static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
+SkColor SideButton::ForegroundColor(gui::DrawContext&) const { return "#404040"_color; }
+SkColor SideButton::BackgroundColor() const { return kTimelineButtonBackground; }
+
+TimelineRunButton::TimelineRunButton(Timeline* timeline)
+    : gui::ToggleButton(
+          make_unique<ColoredButton>(
+              GetPausedPath(),
+              ColoredButtonArgs{.fg = kTimelineButtonBackground,
+                                .bg = kOrange,
+                                .radius = kPlayButtonRadius,
+                                .on_click = [this](gui::Pointer& p) { Activate(p); }}),
+          make_unique<ColoredButton>(
+              kPlayShape, ColoredButtonArgs{.fg = kOrange,
+                                            .bg = kTimelineButtonBackground,
+                                            .radius = kPlayButtonRadius,
+                                            .on_click = [this](gui::Pointer& p) { Activate(p); }})),
+      timeline(timeline),
+      rec_button(make_unique<ColoredButton>(
+          GetRecPath(), ColoredButtonArgs{.fg = kTimelineButtonBackground,
+                                          .bg = color::kParrotRed,
+                                          .radius = kPlayButtonRadius,
+                                          .on_click = [this](gui::Pointer& p) { Activate(p); }})) {}
+
+void TimelineRunButton::Activate(gui::Pointer& p) {
+  LOG << "TimelineRunButton::Activate";
+  switch (timeline->state) {
+    case Timeline::kPlaying:
+      LOG << "Timeline is playing - Cancelling it!";
+      timeline->Cancel();
+      timeline->here->long_running = nullptr;
+      break;
+    case Timeline::kPaused:
+      LOG << "Timeline is paused - Scheduling it!";
+      timeline->here->ScheduleRun();
+      break;
+    case Timeline::kRecording:
+      LOG << "Timeline is recording - Stopping!";
+      timeline->StopRecording();
+      break;
+  }
+}
+
+gui::Button* TimelineRunButton::OnWidget() const {
+  if (timeline->state == Timeline::kRecording) {
+    last_on_widget = rec_button.get();
+  } else if (timeline->state == Timeline::kPlaying) {
+    last_on_widget = on.get();
+  } else if (last_on_widget == nullptr) {
+    last_on_widget = on.get();
+  }
+  return last_on_widget;
+}
+
+bool TimelineRunButton::Filled() const {
+  bool filled = timeline->state == Timeline::kRecording;
+  if (timeline->here) {
+    filled |= timeline->here->run_task.scheduled || (timeline->here->long_running != nullptr);
+  }
+  return filled;
+}
+
+Timeline::Timeline() : run_button(this), state(kPaused), paused{.playback_offset = 0}, zoom(10) {}
 
 struct TextDrawable : PaintDrawable {
   Str text;
@@ -311,11 +387,6 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
   for (int i = 0; i < other.track_args.size(); ++i) {
     AddTrackArg(*this, i, other.track_args[i]->name);
   }
-}
-
-void Timeline::Relocate(Location* new_here) {
-  LiveObject::Relocate(new_here);
-  run_button.location = new_here;
 }
 
 string_view Timeline::Name() const { return "Timeline"; }
@@ -1225,6 +1296,7 @@ void Timeline::Cancel() {
 }
 
 LongRunning* Timeline::OnRun(Location& here) {
+  LOG << "Timeline::OnRun";
   if (state != kPaused) {
     return nullptr;
   }
@@ -1332,58 +1404,6 @@ bool OnOffTrack::IsOn() const {
   i = i - 1;
   bool on = i % 2 == 0;
   return on;
-}
-static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
-SkColor PrevButton::ForegroundColor(gui::DrawContext&) const { return "#404040"_color; }
-SkColor PrevButton::BackgroundColor() const { return kTimelineButtonBackground; }
-SkColor NextButton::ForegroundColor(gui::DrawContext&) const { return "#404040"_color; }
-SkColor NextButton::BackgroundColor() const { return kTimelineButtonBackground; }
-
-SkColor TimelineRunButton::BackgroundColor() const { return kTimelineButtonBackground; }
-SkColor TimelineRunButton::ForegroundColor(gui::DrawContext& dctx) const {
-  if (rec) {
-    return color::MixColors(kOrange, color::kParrotRed, filling_ptr[dctx.display]);
-  } else {
-    return kOrange;
-  }
-}
-bool TimelineRunButton::Filled() const {
-  if (location == nullptr) {
-    return false;
-  }
-  return location->run_task.scheduled || (location->long_running != nullptr) ||
-         location->As<Timeline>()->state == Timeline::kRecording;
-}
-static Widget* GetRecordingIcon() {
-  static std::unique_ptr<gui::ShapeWidget> rec_icon = []() {
-    SkPath path;
-    path.addCircle(0, 0, 2.5_mm);
-    return std::make_unique<gui::ShapeWidget>(path);
-  }();
-  return rec_icon.get();
-}
-static Widget* GetPausedIcon() {
-  static std::unique_ptr<gui::ShapeWidget> paused_icon = []() {
-    SkPath path;
-    path.addRect(-1.5_mm, -1.5_mm, -0.5_mm, 1.5_mm);
-    path.addRect(0.5_mm, -1.5_mm, 1.5_mm, 1.5_mm);
-    return std::make_unique<gui::ShapeWidget>(path);
-  }();
-  return paused_icon.get();
-}
-gui::Widget* TimelineRunButton::Child() const { return child.get(); }
-gui::Widget* TimelineRunButton::FilledChild() const {
-  auto timeline_state = location->As<Timeline>()->state;
-  if (timeline_state == Timeline::kRecording) {
-    rec = true;
-  } else if (timeline_state == Timeline::kPlaying) {
-    rec = false;
-  }
-  if (rec) {
-    return GetRecordingIcon();
-  } else {
-    return GetPausedIcon();
-  }
 }
 
 void TrackBase::SerializeState(Serializer& writer, const char* key) const {
@@ -1553,4 +1573,8 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
+SkRRect SideButton::RRect() const {
+  SkRect oval = SkRect::MakeXYWH(0, 0, 2 * kSideButtonRadius, 2 * kSideButtonRadius);
+  return SkRRect::MakeOval(oval);
+}
 }  // namespace automat::library

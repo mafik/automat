@@ -115,7 +115,7 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
     fake_ctx.canvas.translate(-root_bounds_rounded.left(), -root_bounds_rounded.top());
     fake_ctx.canvas.concat(m);
 
-    LOG << "Expensive redraw of " << ctx.path;
+    // LOG << "Expensive redraw of " << ctx.path;
     phase = Draw(fake_ctx);
 
     entry.needs_refresh = phase == animation::Animating;
@@ -163,6 +163,15 @@ void Widget::InvalidateDrawCache() const {
   }
 }
 
+animation::Phase Widget::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
+  const SkMatrix down = this->TransformToChild(child, &ctx.display);
+  SkMatrix up;
+  if (down.invert(&up)) {
+    ctx.canvas.concat(up);
+  }
+  return child.DrawCached(ctx);
+}
+
 animation::Phase Widget::DrawChildrenSubset(DrawContext& ctx, maf::Span<Widget*> widgets) const {
   auto phase = animation::Finished;
   auto& canvas = ctx.canvas;
@@ -171,13 +180,7 @@ animation::Phase Widget::DrawChildrenSubset(DrawContext& ctx, maf::Span<Widget*>
     ctx.path.push_back(widget);
     canvas.save();
 
-    const SkMatrix down = this->TransformToChild(*widget, &ctx.display);
-    SkMatrix up;
-    if (down.invert(&up)) {
-      canvas.concat(up);
-    }
-
-    phase |= widget->DrawCached(ctx);
+    phase |= DrawChildCachced(ctx, *widget);
 
     canvas.restore();
     ctx.path.pop_back();
@@ -186,6 +189,8 @@ animation::Phase Widget::DrawChildrenSubset(DrawContext& ctx, maf::Span<Widget*>
 }
 
 animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
+  PreDrawChildren(ctx);
+
   auto phase = animation::Finished;
   Visitor visitor = [&](Span<Widget*> widgets) {
     phase |= DrawChildrenSubset(ctx, widgets);

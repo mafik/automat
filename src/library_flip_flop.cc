@@ -15,11 +15,13 @@
 #include "arcline.hh"
 #include "argument.hh"
 #include "color.hh"
+#include "gui_button.hh"
 #include "library_macros.hh"
 #include "sincos.hh"
 #include "textures.hh"
 
 using namespace maf;
+using namespace std;
 
 namespace automat::library {
 
@@ -56,6 +58,29 @@ static sk_sp<SkImage>& FlipFlopColor(gui::DrawContext& ctx) {
 }
 
 bool FlipFlopButton::Filled() const { return (flip_flop && flip_flop->current_state); }
+
+// SkRRect FlipFlopButton::RRect() const {
+//   SkRect oval = SkRect::MakeXYWH(0, 0, 2 * kYingYangButtonRadius, 2 * kYingYangButtonRadius);
+//   return SkRRect::MakeOval(oval);
+// }
+// SkColor FlipFlopButton::ForegroundColor(gui::DrawContext&) const { return "#1d1d1d"_color; }
+// SkColor FlipFlopButton::BackgroundColor() const { return "#eae9e8"_color; }
+FlipFlopButton::FlipFlopButton()
+    : gui::ToggleButton(
+          make_unique<gui::ColoredButton>(
+              make_unique<YingYangIcon>(),
+              gui::ColoredButtonArgs{
+                  .fg = "#eae9e8"_color,
+                  .bg = "#1d1d1d"_color,
+                  .radius = kYingYangButtonRadius,
+                  .on_click = [this](gui::Pointer&) { this->flip_flop->here->ScheduleRun(); }}),
+          make_unique<gui::ColoredButton>(
+              make_unique<YingYangIcon>(),
+              gui::ColoredButtonArgs{
+                  .fg = "#1d1d1d"_color,
+                  .bg = "#eae9e8"_color,
+                  .radius = kYingYangButtonRadius,
+                  .on_click = [this](gui::Pointer&) { this->flip_flop->here->ScheduleRun(); }})) {}
 
 FlipFlop::FlipFlop() { button.flip_flop = this; }
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
@@ -181,22 +206,6 @@ animation::Phase YingYangIcon::Draw(gui::DrawContext& dctx) const {
 }
 SkPath YingYangIcon::Shape(animation::Display*) const {
   return SkPath::Circle(0, 0, kYingYangRadius);
-}
-SkRRect FlipFlopButton::RRect() const {
-  SkRect oval = SkRect::MakeXYWH(0, 0, 2 * kYingYangButtonRadius, 2 * kYingYangButtonRadius);
-  return SkRRect::MakeOval(oval);
-}
-
-void FlipFlopButton::Activate(gui::Pointer& p) {
-  gui::ToggleButton::Activate(p);
-  flip_flop->here->ScheduleRun();
-}
-
-SkColor FlipFlopButton::ForegroundColor(gui::DrawContext&) const { return "#1d1d1d"_color; }
-SkColor FlipFlopButton::BackgroundColor() const { return "#eae9e8"_color; }
-void FlipFlopButton::TweakShadow(float& sigma, float& offset) const {
-  sigma = kYingYangButtonRadius / 5;
-  offset = -kYingYangRadiusSmall / 2;
 }
 
 void FlipFlop::Args(std::function<void(Argument&)> cb) { cb(flip_arg); }

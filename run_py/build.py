@@ -86,7 +86,7 @@ if 'LDFLAGS' in os.environ:
 
 # Build type optimized for fast incremental builds
 fast = BuildType('Fast', base)
-fast.compile_args += ['-O1']
+fast.compile_args += ['-O1', '-g']
 
 # Build type intended for practical usage (slow to build but very high performance)
 release = BuildType('Release', base)

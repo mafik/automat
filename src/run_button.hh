@@ -1,5 +1,6 @@
 #pragma once
 
+#include "color.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
 #include "on_off.hh"
@@ -12,35 +13,25 @@ struct Location;
 
 namespace automat::gui {
 
-// Make sure to set the `location` or the button won't work.
-struct RunLocationMixin : virtual ToggleButton {
+struct RunButton : ToggleButton {
   Location* location;
-  RunLocationMixin(Location* parent = nullptr);
-  void Activate(Pointer&) override;
+
+  RunButton(Location* parent = nullptr, float radius = kMinimalTouchableSize / 2);
+
+  SkPath Shape(animation::Display*) const override {
+    return SkPath::Circle(kMinimalTouchableSize / 2, kMinimalTouchableSize / 2,
+                          kMinimalTouchableSize / 2);
+  }
   bool Filled() const override;
 };
 
-struct RunOnOffMixin : virtual ToggleButton {
+struct PowerButton : ToggleButton {
   OnOff* target;
-  RunOnOffMixin(OnOff* target);
-  void Activate(gui::Pointer& p) override {
-    ToggleButton::Activate(p);
-    target->Toggle();
-  }
-  bool Filled() const override { return target->IsOn(); }
-};
 
-struct RunButton : RunLocationMixin, CircularButtonMixin {
-  std::unique_ptr<Widget> child;
-  RunButton(Location* parent = nullptr, float radius = kMinimalTouchableSize / 2);
-  Widget* Child() const override { return child.get(); }
-};
+  PowerButton(OnOff* target, SkColor fg = "#fa2305"_color, SkColor bg = SK_ColorWHITE);
 
-struct PowerButton : RunOnOffMixin {
-  std::unique_ptr<Widget> child;
-  PowerButton(OnOff* target);
-  SkColor ForegroundColor(DrawContext&) const override { return "#fa2305"_color; }
-  Widget* Child() const override { return child.get(); }
+  void Activate(gui::Pointer& p);
+  bool Filled() const override;
 };
 
 }  // namespace automat::gui

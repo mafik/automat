@@ -189,8 +189,8 @@ void Window::Draw(SkCanvas& canvas) {
     canvas.clear(background_color);
 
     canvas.setMatrix(window_space_matrix);
-    PreDrawChildren(draw_ctx);
-    DrawChildren(draw_ctx);
+    auto phase = DrawChildren(draw_ctx);
+
     canvas.setMatrix(machine_space_matrix);
 
     // Draw target window size when zooming in with middle mouse button
@@ -209,6 +209,14 @@ void Window::Draw(SkCanvas& canvas) {
     for (auto& each_window : windows) {
       for (auto& each_keyboard : each_window->keyboards) {
         each_keyboard->Draw(draw_ctx);
+      }
+    }
+
+    if (phase == animation::Animating) {
+      for (auto& each_window : windows) {
+        for (auto& each_pointer : each_window->pointers) {
+          each_pointer->UpdatePath();
+        }
       }
     }
 

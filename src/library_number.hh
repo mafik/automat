@@ -8,12 +8,12 @@ namespace automat::library {
 
 struct Number;
 
-struct NumberButton : virtual gui::Button, gui::ChildButtonMixin {
+struct NumberButton : gui::Button {
   std::function<void(Location&)> activate;
   NumberButton(std::unique_ptr<Widget>&& child);
-  animation::Phase Draw(gui::DrawContext&) const override;
   void Activate(gui::Pointer&) override;
   maf::StrView Name() const override { return "NumberButton"; }
+  SkColor BackgroundColor() const override;
 };
 
 struct Number : Object {

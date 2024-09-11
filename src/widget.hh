@@ -112,7 +112,7 @@ struct Widget {
   virtual void PointerOver(Pointer&, animation::Display&) {}
   virtual void PointerLeave(Pointer&, animation::Display&) {}
 
-  virtual void PreDraw(DrawContext& ctx) const { PreDrawChildren(ctx); }
+  virtual void PreDraw(DrawContext& ctx) const {}
   animation::Phase DrawCached(DrawContext& ctx) const;
   void InvalidateDrawCache() const;
 
@@ -150,7 +150,9 @@ struct Widget {
     return SkMatrix::I();
   }
 
-  void PreDrawChildren(DrawContext&) const;
+  virtual animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const;
+
+  virtual void PreDrawChildren(DrawContext&) const;
 
   animation::Phase DrawChildrenSubset(DrawContext&, maf::Span<Widget*> widgets) const;
 

@@ -158,9 +158,6 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
 }
 
 TimerDelay::TimerDelay() : text_field(kTextWidth) {
-  hand_degrees.period = kHandPeriod;
-  hand_degrees.half_life = 0.05s;
-
   range_dial.velocity = 0;
   range_dial.value = 1;
 
@@ -442,7 +439,8 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
 animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
 
-  auto phase = start_pusher_depression.Tick(ctx.display);
+  auto phase = IsRunning(*this) ? animation::Animating : animation::Finished;
+  phase |= start_pusher_depression.Tick(ctx.display);
   phase |= left_pusher_depression.Tick(ctx.display);
   phase |= right_pusher_depression.Tick(ctx.display);
 
@@ -458,16 +456,19 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   animation::WrapModulo<2 * M_PIf>(duration_handle_rotation.value, duration_handle_rotation.target);
   duration_handle_rotation.Tick(ctx.display);
 
-  if (IsRunning(*this)) {
-    auto base_degrees = HandBaseDegrees(*this);
-    if (hand_degrees.period != 0s) {  // If the hand is not being dragged
-      hand_degrees.target = base_degrees;
-    }
+  if (hand_draggers) {
+    // do nothing...
   } else {
-    hand_degrees.target = 90;
+    float hand_target;
+    if (IsRunning(*this)) {
+      auto base_degrees = HandBaseDegrees(*this);
+      hand_target = base_degrees;
+    } else {
+      hand_target = 90;
+    }
+    animation::WrapModulo<360.f>(hand_degrees.value, hand_target);
+    phase |= hand_degrees.SpringTowards(hand_target, ctx.DeltaT(), kHandPeriod.count(), 0.05);
   }
-  animation::WrapModulo<360.f>(hand_degrees.value, hand_degrees.target);
-  phase |= hand_degrees.Tick(ctx.display);
 
   DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
 
@@ -642,8 +643,10 @@ void TimerDelay::Updated(Location& here, Location& updated) {
 
 struct DragHandAction : Action {
   TimerDelay& timer;
-  DragHandAction(gui::Pointer& pointer, TimerDelay& timer) : Action(pointer), timer(timer) {}
-  virtual void Begin() { timer.hand_degrees.period = 0s; }
+  DragHandAction(gui::Pointer& pointer, TimerDelay& timer) : Action(pointer), timer(timer) {
+    ++timer.hand_draggers;
+  }
+  virtual void Begin() {}
   virtual void Update() {
     Vec2 pos = GuessDisplayContext(*timer.here, pointer.AnimationContext())
                    .TransformDown()
@@ -651,8 +654,9 @@ struct DragHandAction : Action {
     timer.hand_degrees.value = atan(pos) * 180 / M_PI;
     timer.InvalidateDrawCache();
   }
-  virtual void End() {
-    timer.hand_degrees.period = kHandPeriod;
+  virtual void End() {}
+  ~DragHandAction() {
+    --timer.hand_draggers;
     timer.InvalidateDrawCache();
   }
 };

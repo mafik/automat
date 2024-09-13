@@ -22,7 +22,8 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   mutable animation::Approach<> start_pusher_depression;
   mutable animation::Approach<> left_pusher_depression;
   mutable animation::Approach<> right_pusher_depression;
-  mutable animation::Spring<float> hand_degrees;
+  mutable animation::SpringV2<float> hand_degrees;
+  int hand_draggers = 0;
   // Controls the current range (milliseconds, seconds, etc.)
   mutable animation::SpringV2<float> range_dial;
   mutable animation::Approach<> duration_handle_rotation;

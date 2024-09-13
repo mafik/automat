@@ -161,8 +161,6 @@ TimerDelay::TimerDelay() : text_field(kTextWidth) {
   hand_degrees.period = kHandPeriod;
   hand_degrees.half_life = 0.05s;
 
-  range_dial.period = 0.4s;
-  range_dial.half_life = 0.05s;
   range_dial.velocity = 0;
   range_dial.value = 1;
 
@@ -456,17 +454,16 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   phase |= left_pusher_depression.Tick(ctx.display);
   phase |= right_pusher_depression.Tick(ctx.display);
 
-  range_dial.target = (float)range;
   int range_end = (int)Range::EndGuard;
-  animation::WrapModulo(range_dial, range_end);
-  phase |= range_dial.Tick(ctx.display);
+  animation::WrapModulo(range_dial.value, (float)range, range_end);
+  phase |= range_dial.SpringTowards((float)range, ctx.DeltaT(), 0.4, 0.05);
 
   double circles;
   duration_handle_rotation.target =
       M_PI * 2.5 - modf(duration.value.count() / RangeDuration(range).count(), &circles) * 2 * M_PI;
   duration_handle_rotation.target =
       modf(duration_handle_rotation.target / (2 * M_PI), &circles) * 2 * M_PI;
-  animation::WrapModulo(duration_handle_rotation, 2 * M_PI);
+  animation::WrapModulo(duration_handle_rotation.value, duration_handle_rotation.target, 2 * M_PI);
   duration_handle_rotation.Tick(ctx.display);
 
   if (IsRunning(*this)) {
@@ -694,6 +691,7 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
       left_pusher_depression.value = 1;
       UpdateTextField(*this);
       PropagateDurationOutwards(*this);
+      InvalidateDrawCache();
       return nullptr;
     }
     if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
@@ -701,6 +699,7 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
       right_pusher_depression.value = 1;
       UpdateTextField(*this);
       PropagateDurationOutwards(*this);
+      InvalidateDrawCache();
       return nullptr;
     }
 

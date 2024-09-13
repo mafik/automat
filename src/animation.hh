@@ -358,6 +358,7 @@ inline Phase SpringV2<Vec2>::SineTowards(Vec2 target, float delta_time, float pe
 
 float SinInterp(float x, float x0, float y0, float x1, float y1);
 
-void WrapModulo(Base<float>& base, float range);
+// Add or subtract `range` to `value` until it is within `target` +/- `range/2`.
+void WrapModulo(float& value, float target, float range);
 
 }  // namespace automat::animation

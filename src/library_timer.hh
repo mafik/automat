@@ -23,7 +23,8 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   mutable animation::Approach<> left_pusher_depression;
   mutable animation::Approach<> right_pusher_depression;
   mutable animation::Spring<float> hand_degrees;
-  mutable animation::Spring<float> range_dial;
+  // Controls the current range (milliseconds, seconds, etc.)
+  mutable animation::SpringV2<float> range_dial;
   mutable animation::Approach<> duration_handle_rotation;
   gui::NumberTextField text_field;
   enum class Range : char {

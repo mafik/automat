@@ -496,10 +496,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   DrawDial(canvas, (Range)(((int)roundf(range_dial) + range_end) % range_end), duration.value);
   canvas.restore();
 
-  canvas.save();
-  canvas.translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
-  text_field.Draw(ctx);
-  canvas.restore();
+  DrawChildren(ctx);
 
   DrawRing(canvas, r4, r4_b, 0x46000000, 0xe1ffffff, kRingInset);  // shadow over white watch face
 
@@ -660,8 +657,12 @@ struct DragHandAction : Action {
                    .TransformDown()
                    .mapPoint(pointer.pointer_position);
     timer.hand_degrees.value = atan(pos) * 180 / M_PI;
+    timer.InvalidateDrawCache();
   }
-  virtual void End() { timer.hand_degrees.period = kHandPeriod; }
+  virtual void End() {
+    timer.hand_degrees.period = kHandPeriod;
+    timer.InvalidateDrawCache();
+  }
 };
 
 std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
@@ -723,10 +724,14 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
 LongRunning* TimerDelay::OnRun(Location& here) {
   start_time = time::SteadyClock::now();
   ScheduleAt(here, start_time + duration.value);
+  InvalidateDrawCache();
   return this;
 }
 
-void TimerDelay::Cancel() { CancelScheduledAt(*here, start_time + duration.value); }
+void TimerDelay::Cancel() {
+  CancelScheduledAt(*here, start_time + duration.value);
+  InvalidateDrawCache();
+}
 
 DurationArgument::DurationArgument() : LiveArgument("duration", Argument::kOptional) {
   requirements.push_back([](Location* location, Object* object, std::string& error) {

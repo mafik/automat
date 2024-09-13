@@ -150,6 +150,10 @@ static Str FormatNumber(double x, int max_digits = 5) {
   return ret;
 }
 
-void NumberTextField::SetNumber(double x) { text = FormatNumber(x, 5); }
+void NumberTextField::SetNumber(double x) {
+  text = FormatNumber(x, 5);
+  auto texture_bounds = TextureBounds();
+  InvalidateDrawCache();
+}
 
 }  // namespace automat::gui

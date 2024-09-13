@@ -139,8 +139,8 @@ void Widget::InvalidateDrawCache() const {
   // to the top-level window. This needs some protections against high-frequency redraws caused for
   // example by gaming mice or touchscreens but could actually bring down the draw latency.
   // TODO: use a more efficient data structure for this (less allocations).
-  set<Widget*> parents;
   for (auto& window : windows) {
+    set<Widget*> parents;
     for (int i = 0; i < window->draw_cache.entries.size(); ++i) {
       auto& e = window->draw_cache.entries[i];
       if (e->path.back() == this) {
@@ -160,6 +160,11 @@ void Widget::InvalidateDrawCache() const {
         e->needs_refresh = true;
       }
     }
+#ifndef NDEBUG
+    if (parents.empty()) {
+      ERROR << "Invalidated Widget \"" << Name() << "\" not found in draw cache.";
+    }
+#endif
   }
 }
 

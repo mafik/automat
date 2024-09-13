@@ -39,7 +39,7 @@ ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), 
 }
 
 SkPath ConnectionWidget::Shape(animation::Display* d) const {
-  if (state && !state->hidden) {
+  if (state && transparency < 0.99f) {
     return state->Shape(d);
   } else {
     return SkPath();
@@ -137,7 +137,7 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
     arg.NearbyCandidates(
         from, arg.autoconnect_radius * 2 + 10_cm,
         [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
-          auto arcline = RouteCable(ctx, pos_dir, to_points);
+          auto arcline = RouteCable(pos_dir, to_points, &ctx);
           auto it = ArcLine::Iterator(arcline);
           float total_length = it.AdvanceToEnd() * anim->radar_alpha;
           Vec2 end_point = it.Position();
@@ -231,13 +231,13 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   if (state) {
     state->hidden = overlapping;
   }
-  animation::LinearApproach(overlapping ? 1 : 0, ctx.DeltaT(), 5, transparency);
+  auto phase = animation::LinearApproach(overlapping ? 1 : 0, ctx.DeltaT(), 5, transparency);
 
   bool using_layer = false;
   auto alpha = (1.f - from_animation_state.transparency) * (1.f - transparency);
 
   if (!state.has_value() && arg.style != Argument::Style::Arrow && alpha > 0.01f) {
-    auto arcline = RouteCable(ctx, pos_dir, to_points);
+    auto arcline = RouteCable(pos_dir, to_points, &ctx);
     auto new_length = ArcLine::Iterator(arcline).AdvanceToEnd();
     if (new_length > length + 2_cm) {
       alpha = 0;
@@ -251,7 +251,6 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     canvas.saveLayerAlphaf(nullptr, alpha);
   }
 
-  auto phase = animation::Finished;
   if (state) {
     if (to) {
       state->steel_insert_hidden.target = 1;
@@ -286,7 +285,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
 
       if (cable_width > 0.01_mm && to) {
         if (alpha > 0.01f) {
-          auto arcline = RouteCable(ctx, pos_dir, to_points);
+          auto arcline = RouteCable(pos_dir, to_points, &ctx);
           auto color = SkColorSetA(arg.tint, 255 * cable_width.value / 2_mm);
           auto color_filter = color::MakeTintFilter(color, 30);
           auto path = arcline.ToPath(false);
@@ -353,11 +352,13 @@ void DragConnectionAction::Begin() {
       }
     }
   }
+  widget.InvalidateDrawCache();
 }
 
 void DragConnectionAction::Update() {
   Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
+  widget.InvalidateDrawCache();
 }
 
 void DragConnectionAction::End() {
@@ -374,6 +375,36 @@ void DragConnectionAction::End() {
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
     widget.from.ConnectTo(*to, widget.arg);
   }
+  widget.InvalidateDrawCache();
 }
 
+maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
+  if (state) {
+    Rect bounds = Shape(nullptr).getBounds();
+    float w = state->cable_width / 2 +
+              0.5_mm;  // add 0.5mm to account for cable stiffener width (1mm wider than cable)
+    for (auto& section : state->sections) {
+      bounds.ExpandToInclude(section.pos + Vec2{w, w});
+      bounds.ExpandToInclude(section.pos - Vec2{w, w});
+    }
+    return bounds;
+  } else {
+    Path from_path;
+    GuessPath(from, from_path);
+    from_path.erase(from_path.begin());  // remove the window
+    auto pos_dir = arg.Start(from_path, nullptr);
+    Vec<Vec2AndDir> to_points;  // machine coords
+    if (auto to = arg.FindLocation(from)) {
+      to->object->ConnectionPositions(to_points);
+      Path target_path;
+      SkMatrix m = TransformUp(Path{root_machine, to}, nullptr);
+      for (auto& to_point : to_points) {
+        to_point.pos = m.mapPoint(to_point.pos);
+      }
+    }
+    ArcLine arcline = RouteCable(pos_dir, to_points);
+    Rect rect = arcline.Bounds();
+    return rect.Outset(cable_width / 2);
+  }
+}
 }  // namespace automat::gui

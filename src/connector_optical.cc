@@ -140,7 +140,8 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
   return cable;
 }
 
-static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir end) {
+static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end,
+                                 DrawContext* debug_ctx = nullptr) {
   float radius = 1_cm;
   ArcLine cable = ArcLine(start.pos, start.dir);
 
@@ -158,7 +159,7 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
       SkPaint circle_paint;
       circle_paint.setStyle(SkPaint::kStroke_Style);
       circle_paint.setColor(kRoutingDebugColor);
-      dctx.canvas.drawCircle(start_circle_center, radius, circle_paint);
+      if (debug_ctx) debug_ctx->canvas.drawCircle(start_circle_center, radius, circle_paint);
     }
     for (bool end_left : {false, true}) {
       Vec2 end_circle_center =
@@ -167,7 +168,7 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
         SkPaint circle_paint;
         circle_paint.setStyle(SkPaint::kStroke_Style);
         circle_paint.setColor(kRoutingDebugColor);
-        dctx.canvas.drawCircle(end_circle_center, radius, circle_paint);
+        if (debug_ctx) debug_ctx->canvas.drawCircle(end_circle_center, radius, circle_paint);
       }
       Vec2 circle_diff = end_circle_center - start_circle_center;
       float circle_dist = Length(circle_diff);
@@ -213,19 +214,20 @@ static ArcLine RoutCableStraight(DrawContext& dctx, Vec2AndDir start, Vec2AndDir
   return cable;
 }
 
-static ArcLine RouteCableOneEnd(DrawContext& dctx, Vec2AndDir start, Vec2AndDir end) {
+static ArcLine RouteCableOneEnd(Vec2AndDir start, Vec2AndDir end,
+                                DrawContext* debug_ctx = nullptr) {
   if (start.dir == -90_deg && end.dir == -90_deg) {
     return RouteCableDown(start, end.pos);
   } else {
-    return RoutCableStraight(dctx, start, end);
+    return RoutCableStraight(start, end, debug_ctx);
   }
 }
 
-ArcLine RouteCable(DrawContext& dctx, Vec2AndDir start, maf::Span<Vec2AndDir> cable_ends) {
+ArcLine RouteCable(Vec2AndDir start, maf::Span<Vec2AndDir> cable_ends, DrawContext* debug_ctx) {
   float best_total_length = HUGE_VALF;
   ArcLine best_route = ArcLine(start.pos, start.dir);
   for (auto& end : cable_ends) {
-    ArcLine current = RouteCableOneEnd(dctx, start, end);
+    ArcLine current = RouteCableOneEnd(start, end, debug_ctx);
     float current_length = ArcLine::Iterator(current).AdvanceToEnd();
     if (current_length < best_total_length) {
       best_total_length = current_length;
@@ -245,7 +247,7 @@ static void PopulateAnchors(Vec<Vec2>& anchors, Vec<SinCos>& anchor_dir, const A
 
   anchors.push_back(tail);
   anchor_dir.push_back(it.Angle().Opposite());
-  for (float cable_pos = kStep; cable_pos < cable_length - kCableWidth / 2; cable_pos += kStep) {
+  for (float cable_pos = kStep; cable_pos < cable_length - 1_mm; cable_pos += kStep) {
     it.Advance(-kStep);
     anchors.push_back(it.Position());
     anchor_dir.push_back(it.Angle().Opposite());
@@ -291,14 +293,14 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
     do {  // Add a new link if the last one is too far from the dispenser
       auto delta = state.sections[state.sections.size() - 2].pos - state.sections.back().pos;
       auto current_dist = Length(delta);
-      constexpr float kExtendThreshold = kStep + kCableWidth / 2;
-      if (current_dist > kExtendThreshold) {
+      float extend_threshold = kStep + state.cable_width / 2;
+      if (current_dist > extend_threshold) {
         state.sections[state.sections.size() - 2].distance = kStep;
         auto new_it = state.sections.insert(
             state.sections.begin() + state.sections.size() - 1,
             OpticalConnectorState::CableSection{
                 .pos = state.sections[state.sections.size() - 2].pos -
-                       Vec2::Polar(state.sections.back().dir, kCableWidth / 2) -
+                       Vec2::Polar(state.sections.back().dir, state.cable_width / 2) -
                        delta / current_dist * kStep,
                 .vel = Vec2(0, 0),
                 .acc = Vec2(0, 0),
@@ -309,10 +311,10 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
             state.sections.begin() + state.sections.size() - 1,
             OpticalConnectorState::CableSection{
                 .pos = state.sections.back().pos -
-                       Vec2::Polar(state.sections.back().dir, kCableWidth / 2),
+                       Vec2::Polar(state.sections.back().dir, state.cable_width / 2),
                 .vel = Vec2(0, 0),
                 .acc = Vec2(0, 0),
-                .distance = kCableWidth / 2,
+                .distance = state.cable_width / 2,
             });
         break;
       } else {
@@ -362,7 +364,7 @@ animation::Phase SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnec
   }
 
   if (!end_candidates.empty()) {  // Create the arcline & pull the cable towards it
-    state.arcline = RouteCable(dctx, dispenser, end_candidates);
+    state.arcline = RouteCable(dispenser, end_candidates, &dctx);
     ArcLine::Iterator it = *state.arcline;
     it.AdvanceToEnd();
     cable_end = it.Position();
@@ -621,9 +623,12 @@ SkMatrix OpticalConnectorState::ConnectorMatrix() const {
       .preTranslate(0, -kCasingHeight);
 }
 
+static const Rect kSteelRect = Rect(-3_mm, -1_mm, 3_mm, 1_mm);
+
 SkPath OpticalConnectorState::Shape(animation::Display*) const {
   auto rect = Rect(-kCasingWidth / 2, 0, kCasingWidth / 2, kCasingHeight);
   SkPath path = SkPath::Rect(rect);
+  path.addRect(kSteelRect.sk.makeOffset(0, 2_mm * steel_insert_hidden));
   path.transform(ConnectorMatrix());
   return path;
 }
@@ -849,9 +854,9 @@ const SkMeshSpecification::Varying StrokeToMesh::kVaryings[3] = {
 
 struct StrokeToCable : StrokeToMesh {
   float start_offset = 0;
-  float end_offset = kCableWidth * 10;  // default value shouold be overriden!
-  float start_width = kCableWidth;
-  float end_width = kCableWidth;
+  float end_offset = 20_mm;  // default value shouold be overriden!
+  float start_width = 2_mm;
+  float end_width = 2_mm;
 
   float GetWidth() const override {
     if (start_width == end_width) {
@@ -1081,8 +1086,8 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
 
   // Draw the cable
   auto color_filter = color::MakeTintFilter(state.arg.tint, NAN);
-  DrawCable(ctx, p, color_filter, CableTexture::Braided, kCableWidth * state.connector_scale,
-            kCableWidth * dispenser_scale, &state.approx_length);
+  DrawCable(ctx, p, color_filter, CableTexture::Braided, state.cable_width * state.connector_scale,
+            state.cable_width * dispenser_scale, &state.approx_length);
 
   Vec2 cable_end = state.PlugTopCenter();
   SinCos connector_dir = state.sections.front().dir + state.sections.front().true_dir_offset;
@@ -1095,8 +1100,6 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
   constexpr float casing_top = kCasingHeight;
 
   {  // Steel insert
-    static const Rect kSteelRect = Rect(-3_mm, -1_mm, 3_mm, 1_mm);
-
     struct SteelInsert : MeshWithUniforms<float> {
       SteelInsert() : MeshWithUniforms() {}
       void UpdateUniforms(SkCanvas& canvas) override {
@@ -1373,7 +1376,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
     mesh_builder.start_offset = 0;
     mesh_builder.start_width = kCasingWidth * state.connector_scale;
     mesh_builder.end_offset = length;
-    mesh_builder.end_width = (kCableWidth + 1_mm) * state.connector_scale;
+    mesh_builder.end_width = (state.cable_width + 1_mm) * state.connector_scale;
     mesh_builder.Convert(p, length);
     if (mesh_builder.vertex_vector.empty()) {
       // Add two points on the left & right side of the connector - just so that we can build the

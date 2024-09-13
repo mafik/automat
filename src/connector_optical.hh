@@ -18,7 +18,6 @@
 namespace automat::gui {
 
 struct OpticalConnectorPimpl;
-constexpr float kCableWidth = 2_mm;
 
 struct OpticalConnectorState {
   float dispenser_v;
@@ -57,6 +56,8 @@ struct OpticalConnectorState {
   animation::Spring<float> steel_insert_hidden;
   bool hidden = false;
 
+  float cable_width = 2_mm;
+
   std::unique_ptr<OpticalConnectorPimpl> pimpl;
 
   OpticalConnectorState(Location&, Argument& arg, Vec2AndDir start);
@@ -67,7 +68,8 @@ struct OpticalConnectorState {
   SkMatrix ConnectorMatrix() const;
 };
 
-maf::ArcLine RouteCable(DrawContext&, Vec2AndDir start, maf::Span<Vec2AndDir> ends);
+maf::ArcLine RouteCable(Vec2AndDir start, maf::Span<Vec2AndDir> ends,
+                        DrawContext* debug_ctx = nullptr);
 
 animation::Phase SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&,
                                       Vec2AndDir start, maf::Span<Vec2AndDir> end_candidates);
@@ -75,8 +77,7 @@ animation::Phase SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorSt
 void DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
 
 // Draws the given path as a cable and possibly update its length.
-void DrawCable(DrawContext&, SkPath&, sk_sp<SkColorFilter>&, CableTexture,
-               float start_width = kCableWidth, float end_width = kCableWidth,
-               float* length = nullptr);
+void DrawCable(DrawContext&, SkPath&, sk_sp<SkColorFilter>&, CableTexture, float start_width,
+               float end_width, float* length = nullptr);
 
 }  // namespace automat::gui

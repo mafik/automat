@@ -198,12 +198,14 @@ std::unique_ptr<Action> KeyPresser::CaptureButtonDownAction(gui::Pointer& p,
 LongRunning* KeyPresser::OnRun(Location& here) {
   SendKeyEvent(key, true);
   key_pressed = true;
+  InvalidateDrawCache();
   return this;
 }
 
 void KeyPresser::Cancel() {
   SendKeyEvent(key, false);
   key_pressed = false;
+  InvalidateDrawCache();
 }
 
 void KeyPresser::SerializeState(Serializer& writer, const char* key) const {

@@ -4,6 +4,7 @@
 
 #include "font.hh"
 #include "gui_button.hh"
+#include "gui_constants.hh"
 #include "log.hh"
 #include "widget.hh"
 
@@ -125,7 +126,9 @@ struct KeyLabelWidget : Widget, LabelMixin {
   SkPath Shape(animation::Display*) const override {
     return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
   }
-  maf::Optional<Rect> TextureBounds() const override { return nullopt; }
+  maf::Optional<Rect> TextureBounds() const override {
+    return SkRect::MakeLTRB(-width / 2, 1.5 * kLetterSize, width / 2, -0.5 * kLetterSize);
+  }
   animation::Phase Draw(DrawContext& ctx) const override {
     SkPaint paint;
     paint.setAntiAlias(true);

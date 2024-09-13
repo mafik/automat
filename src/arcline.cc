@@ -125,6 +125,21 @@ SkPath ArcLine::ToPath(bool close, float length_limit) const {
   return path;
 }
 
+Rect ArcLine::Bounds() const {
+  Vec2 p = start;
+  Rect bounds = Rect(p.x, p.y, p.x, p.y);
+  SinCos current_alpha = start_angle;
+  for (int i = 0; i < types.size(); ++i) {
+    if (types[i] == Type::Line) {
+      p += Vec2::Polar(current_alpha, segments[i].line.length);
+    } else {
+      Turn(p, current_alpha, segments[i].arc.sweep_angle, segments[i].arc.radius);
+    }
+    bounds.ExpandToInclude(p);
+  }
+  return bounds;
+}
+
 ArcLine::TurnShift::TurnShift(float distance_sideways, float turn_radius)
     : turn_radius(turn_radius) {
   /*

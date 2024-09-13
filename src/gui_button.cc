@@ -256,8 +256,9 @@ SkRect Button::ChildBounds() const {
   return SkRect::MakeEmpty();
 }
 SkMatrix Button::TransformToChild(const Widget& child, animation::Display*) const {
+  SkRect rect = RRect().rect();
+  if (child.CenteredAtZero()) return SkMatrix::Translate(-rect.center());
   SkRect child_bounds = ChildBounds();
-  SkRRect rrect = RRect();
-  return SkMatrix::Translate(child_bounds.center() - rrect.rect().center());
+  return SkMatrix::Translate(child_bounds.center() - rect.center());
 }
 }  // namespace automat::gui

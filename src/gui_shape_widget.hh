@@ -13,6 +13,7 @@ struct ShapeWidget : Widget, PaintMixin {
   ShapeWidget(SkPath path);
   SkPath Shape(animation::Display*) const override;
   animation::Phase Draw(DrawContext&) const override;
+  bool CenteredAtZero() const override { return true; }
 };
 
 std::unique_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color,

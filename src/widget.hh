@@ -123,7 +123,10 @@ struct Widget {
   }
   virtual SkPath Shape(animation::Display*) const = 0;
 
-  // DEPRECATED: override PointerVisitChildren to block pointer events from propagating to children.
+  virtual bool CenteredAtZero() const { return false; }
+
+  // DEPRECATED: override PointerVisitChildren to block pointer events from propagating to
+  // children.
   virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {
     return nullptr;
   }

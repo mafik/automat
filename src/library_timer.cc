@@ -231,14 +231,6 @@ static void DrawRing(SkCanvas& canvas, float outer_r, float inner_r, SkColor top
 constexpr static float kHandWidth = 0.0004;
 constexpr static float kHandLength = r4 * 0.8;
 
-static void AdjustRotation(float& rotation, float target = 0) {
-  if (rotation - target >= 180) {
-    rotation -= floorf((rotation - target + 180) / 360) * 360;
-  } else if (rotation - target < -180) {
-    rotation += floorf((target - rotation + 180) / 360) * 360;
-  }
-}
-
 static float HandBaseDegrees(const TimerDelay& timer) {
   if (IsRunning(timer)) {
     Duration elapsed = SteadyClock::now() - timer.start_time;
@@ -252,7 +244,7 @@ static SkPath HandPath(const TimerDelay& timer) {
   float base_degrees = HandBaseDegrees(timer);
   float end_degrees = timer.hand_degrees.value;
   float twist_degrees = end_degrees - base_degrees;
-  AdjustRotation(twist_degrees);
+  animation::WrapModulo<360.f>(twist_degrees, 0);
 
   if (fabs(twist_degrees) < 1) {
     SkPath path;
@@ -455,7 +447,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   phase |= right_pusher_depression.Tick(ctx.display);
 
   int range_end = (int)Range::EndGuard;
-  animation::WrapModulo(range_dial.value, (float)range, range_end);
+  animation::WrapModulo<(float)Range::EndGuard>(range_dial.value, (float)range);
   phase |= range_dial.SpringTowards((float)range, ctx.DeltaT(), 0.4, 0.05);
 
   double circles;
@@ -463,7 +455,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
       M_PI * 2.5 - modf(duration.value.count() / RangeDuration(range).count(), &circles) * 2 * M_PI;
   duration_handle_rotation.target =
       modf(duration_handle_rotation.target / (2 * M_PI), &circles) * 2 * M_PI;
-  animation::WrapModulo(duration_handle_rotation.value, duration_handle_rotation.target, 2 * M_PI);
+  animation::WrapModulo<2 * M_PIf>(duration_handle_rotation.value, duration_handle_rotation.target);
   duration_handle_rotation.Tick(ctx.display);
 
   if (IsRunning(*this)) {
@@ -474,7 +466,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   } else {
     hand_degrees.target = 90;
   }
-  AdjustRotation(hand_degrees.value, hand_degrees.target);
+  animation::WrapModulo<360.f>(hand_degrees.value, hand_degrees.target);
   phase |= hand_degrees.Tick(ctx.display);
 
   DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face

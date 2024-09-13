@@ -4,14 +4,6 @@ namespace automat::animation {
 
 maf::Vec<Display*> displays;
 
-void WrapModulo(float& value, float target, float range) {
-  if (value - target > range / 2) {
-    value -= range;
-  } else if (target - value > range / 2) {
-    value += range;
-  }
-}
-
 Phase LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
                           float& velocity) {
   float D = value - target;

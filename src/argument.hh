@@ -210,6 +210,7 @@ struct Argument {
   // get the position within some parent object (for example, a Machine).
   //
   // The final element of the path should be the object that contains this argument.
+  Vec2AndDir Start(gui::Path&, animation::Display*) const;
   Vec2AndDir Start(gui::DisplayContext&) const;
 
   // The returned "to_points" should use the same coordinate space as the "here" Location

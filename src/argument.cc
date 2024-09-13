@@ -93,15 +93,17 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Vec2AndDir Argument::Start(gui::DisplayContext& ctx) const {
-  assert(ctx.path.size() > 0);
-  Object* object = dynamic_cast<Object*>(ctx.path.back());
+Vec2AndDir Argument::Start(gui::Path& path, animation::Display* display) const {
+  assert(path.size() > 0);
+  Object* object = dynamic_cast<Object*>(path.back());
   assert(object);
   auto pos_dir = object->ArgStart(*this);
-  auto m = TransformUp(ctx.path, &ctx.display);
+  auto m = TransformUp(path, display);
   m.mapPoints(&pos_dir.pos.sk, 1);
   return pos_dir;
 }
+
+Vec2AndDir Argument::Start(gui::DisplayContext& ctx) const { return Start(ctx.path, &ctx.display); }
 
 void Argument::NearbyCandidates(
     Location& here, float radius,

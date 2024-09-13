@@ -299,10 +299,14 @@ struct Location : gui::Widget {
   std::string ToStr() const;
 };
 
-// Try to guess how this location is displayed. Returns a DisplayContext that starts with Window and
-// ends with this Location and its Object. This is an interim function - ideally in each context
-// where a Location is displayed, it should be clear what the DisplayContext is.
+// Try to guess how this location is displayed. Results in a `out_path` that starts with Window
+// and ends with this Location and its Object. This is an interim function - ideally in each
+// context where a Location is displayed, it should be clear what the path is.
+void GuessPath(Location& location, gui::Path& out_path);
+
+// See `GuessPath`.
 gui::DisplayContext GuessDisplayContext(Location&, animation::Display&);
+
 void PositionBelow(Location& origin, Location& below);
 void AnimateGrowFrom(Location& source, Location& grown);
 

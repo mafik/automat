@@ -423,23 +423,29 @@ Location::~Location() {
   }
 }
 
-gui::DisplayContext GuessDisplayContext(Location& location, animation::Display& display) {
-  DisplayContext ctx = {.display = display, .path = {window.get()}};
-  if (auto* parent = location.ParentAs<Widget>()) {
-    ctx.path.push_back(parent);
+// Fill the `out_path` with the chain of widgets, starting at `window` and ending at `object`.
+void GuessPath(Location& location, gui::Path& out_path) {
+  if (location.parent) {
+    GuessPath(*location.parent, out_path);
   } else {
+    out_path.push_back(window.get());
     // TODO: This is so wrong... Fix it somehow...
     for (auto& pointer : gui::window->pointers) {
       if (auto* action = pointer->action.get()) {
         if (auto* action_widget = action->Widget()) {
-          ctx.path.push_back(action_widget);
+          out_path.push_back(action_widget);
           break;
         }
       }
     }
   }
-  ctx.path.push_back(&location);
-  ctx.path.push_back(location.object.get());
+  out_path.push_back(&location);
+  out_path.push_back(location.object.get());
+}
+
+gui::DisplayContext GuessDisplayContext(Location& location, animation::Display& display) {
+  DisplayContext ctx = {.display = display, .path = {}};
+  GuessPath(location, ctx.path);
   return ctx;
 }
 

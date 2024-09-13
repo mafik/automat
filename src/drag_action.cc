@@ -9,7 +9,6 @@
 #include "gui_connection_widget.hh"
 #include "math.hh"
 #include "pointer.hh"
-#include "root.hh"
 #include "window.hh"
 
 namespace automat {
@@ -89,6 +88,7 @@ void DragLocationAction::Update() {
         current_position - last_position;
     location->UpdateAutoconnectArgs();
     InvalidateDrawCache();
+    location->InvalidateConnectionWidgets();
   }
 
   last_position = current_position;

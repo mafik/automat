@@ -198,7 +198,10 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   SkRect bounds = my_shape.getBounds();
 
   auto& state = GetAnimationState(ctx.display);
-  phase |= state.Tick(ctx.DeltaT(), position, scale);
+  if (state.Tick(ctx.DeltaT(), position, scale) == animation::Animating) {
+    phase = animation::Animating;
+    InvalidateConnectionWidgets();
+  }
 
   phase |= state.highlight.Tick(ctx.display);
   phase |= state.transparency.Tick(ctx.display);
@@ -283,6 +286,22 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   }
 
   return phase;
+}
+
+void Location::InvalidateConnectionWidgets() const {
+  for (auto& w : gui::window->connection_widgets) {
+    if (&w->from == this) {  // updates all outgoing connection widgets
+      w->InvalidateDrawCache();
+    } else {
+      auto [begin, end] = incoming.equal_range(&w->arg);
+      for (auto it = begin; it != end; ++it) {
+        auto* connection = *it;
+        if (&w->from == &connection->from) {
+          w->InvalidateDrawCache();
+        }
+      }
+    }
+  }
 }
 
 std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {

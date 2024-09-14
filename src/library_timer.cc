@@ -241,7 +241,7 @@ static SkPath HandPath(const TimerDelay& timer) {
   float base_degrees = HandBaseDegrees(timer);
   float end_degrees = timer.hand_degrees.value;
   float twist_degrees = end_degrees - base_degrees;
-  animation::WrapModulo<360.f>(twist_degrees, 0);
+  animation::WrapModulo(twist_degrees, 0, 360);
 
   if (fabs(twist_degrees) < 1) {
     SkPath path;
@@ -445,7 +445,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   phase |= right_pusher_depression.Tick(ctx.display);
 
   int range_end = (int)Range::EndGuard;
-  animation::WrapModulo<(float)Range::EndGuard>(range_dial.value, (float)range);
+  animation::WrapModulo(range_dial.value, (float)range, range_end);
   phase |= range_dial.SpringTowards((float)range, ctx.DeltaT(), 0.4, 0.05);
 
   double circles;
@@ -453,7 +453,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
       M_PI * 2.5 - modf(duration.value.count() / RangeDuration(range).count(), &circles) * 2 * M_PI;
   duration_handle_rotation.target =
       modf(duration_handle_rotation.target / (2 * M_PI), &circles) * 2 * M_PI;
-  animation::WrapModulo<2 * M_PIf>(duration_handle_rotation.value, duration_handle_rotation.target);
+  animation::WrapModulo(duration_handle_rotation.value, duration_handle_rotation.target, M_PI * 2);
   duration_handle_rotation.Tick(ctx.display);
 
   if (hand_draggers) {
@@ -466,7 +466,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
     } else {
       hand_target = 90;
     }
-    animation::WrapModulo<360.f>(hand_degrees.value, hand_target);
+    animation::WrapModulo(hand_degrees.value, hand_target, 360);
     phase |= hand_degrees.SpringTowards(hand_target, ctx.DeltaT(), kHandPeriod.count(), 0.05);
   }
 

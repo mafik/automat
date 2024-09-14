@@ -78,4 +78,8 @@ float SinInterp(float x, float x0, float y0, float x1, float y1) {
   }
 }
 
+void WrapModulo(float& value, float target, float range) {
+  value = std::remainder(value - target, range) + target;
+}
+
 }  // namespace automat::animation

@@ -11,6 +11,21 @@ using namespace maf;
 
 namespace automat::gui {
 
+PointerMoveCallback::~PointerMoveCallback() {
+  for (Pointer* p : pointers) {
+    p->move_callbacks.Erase(this);
+  }
+  pointers.clear();
+}
+void PointerMoveCallback::StartWatching(Pointer& p) {
+  pointers.push_back(&p);
+  p.move_callbacks.push_back(this);
+}
+void PointerMoveCallback::StopWatching(Pointer& p) {
+  pointers.Erase(&p);
+  p.move_callbacks.Erase(this);
+}
+
 Pointer::Pointer(Window& window, Vec2 position)
     : window(window), pointer_position(position), button_down_position(), button_down_time() {
   AssertAutomatThread();

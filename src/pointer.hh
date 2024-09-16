@@ -6,6 +6,7 @@
 #include "math.hh"
 #include "str.hh"
 #include "time.hh"
+#include "vec.hh"
 #include "widget.hh"
 
 namespace automat::animation {
@@ -21,7 +22,11 @@ struct Window;
 struct DrawContext;
 
 struct PointerMoveCallback {
+  maf::Vec<Pointer*> pointers;
+  virtual ~PointerMoveCallback();
   virtual void PointerMove(Pointer&, Vec2 position) = 0;
+  void StartWatching(Pointer& p);
+  void StopWatching(Pointer& p);
 };
 
 struct Pointer final {

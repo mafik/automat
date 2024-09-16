@@ -487,11 +487,12 @@ void MacroRecorder::Off() {
 }
 void MacroRecorder::PointerOver(gui::Pointer& p, animation::Display& d) {
   animation_state_ptr[d].pointers_over++;
-  p.move_callbacks.push_back(this);
+  StartWatching(p);
   InvalidateDrawCache();
 }
 void MacroRecorder::PointerLeave(gui::Pointer& p, animation::Display& d) {
   animation_state_ptr[d].pointers_over--;
+  StopWatching(p);
   p.move_callbacks.Erase(this);
 }
 

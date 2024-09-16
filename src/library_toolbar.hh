@@ -65,12 +65,10 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   // If the object should be cached into a texture, return its bounds in local coordinates.
   maf::Optional<Rect> TextureBounds(animation::Display*) const override;
 
-  void PointerOver(gui::Pointer& pointer, animation::Display&) override {
-    pointer.move_callbacks.push_back(this);
-  }
+  void PointerOver(gui::Pointer& pointer, animation::Display&) override { StartWatching(pointer); }
 
   void PointerLeave(gui::Pointer& pointer, animation::Display&) override {
-    pointer.move_callbacks.Erase(this);
+    StopWatching(pointer);
     InvalidateDrawCache();
   }
   void PointerMove(gui::Pointer&, Vec2 position) override { InvalidateDrawCache(); }

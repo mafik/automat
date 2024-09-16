@@ -17,7 +17,7 @@ Phase LowLevelSineTowards(float target, float delta_time, float period_time, flo
     // V = - A * sin(t) / 2
     // -V*2/sin(t) = A
     // D = (-V*2/sin(t)) * (cos(t) / 2 + 0.5)
-    float x = fabsf(velocity) < 0.00001f ? 0 : -2 * atan2(velocity, D);
+    float x = fabsf(velocity) < 0.0000001f ? 0 : -2 * atan2(velocity, D);
     if (x <= -kPi) {
       x += kPi * 2;
     } else if (x > kPi) {

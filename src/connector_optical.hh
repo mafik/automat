@@ -74,7 +74,7 @@ maf::ArcLine RouteCable(Vec2AndDir start, maf::Span<Vec2AndDir> ends,
 animation::Phase SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&,
                                       Vec2AndDir start, maf::Span<Vec2AndDir> end_candidates);
 
-void DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
+animation::Phase DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
 
 // Draws the given path as a cable and possibly update its length.
 void DrawCable(DrawContext&, SkPath&, sk_sp<SkColorFilter>&, CableTexture, float start_width,

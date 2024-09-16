@@ -60,6 +60,8 @@ std::string RunTask::Format() { return f("RunTask(%s)", target->ToStr().c_str())
 
 void ScheduleNext(Location& source) {
   source.last_finished = time::SteadyClock::now();
+  // TODO: maybe there is a better way to do this...
+  source.InvalidateConnectionWidgets();  // so that the "next" connection flashes
 
   next_arg.LoopLocations<bool>(source, [](Location& next) {
     next.ScheduleRun();

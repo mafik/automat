@@ -1056,7 +1056,8 @@ struct OpticalConnectorPimpl {
   std::unique_ptr<BlackCasing> mesh;
 };
 
-void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintDrawable& icon) {
+animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state,
+                                      PaintDrawable& icon) {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
 
@@ -1312,15 +1313,18 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
 
   canvas.restore();
 
+  auto phase = animation::Finished;
+
   {  // Icon on the metal casing
 
     Vec2 icon_offset = connector_matrix.mapPoint(Vec2(0, kCasingHeight / 2));
 
     SkColor base_color = color::AdjustLightness(state.arg.tint, 30);
-    float lightness_pct = 0;
+    float lightness_pct;
     if (&state.arg == &next_arg) {
-      lightness_pct =
-          exp(-(display.timer.steady_now - state.location.last_finished).count() * 10) * 100;
+      lightness_pct = 100;
+      phase |= animation::ExponentialApproach(
+          0, (display.timer.steady_now - state.location.last_finished).count(), 0.1, lightness_pct);
     } else {
       lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
     }
@@ -1368,7 +1372,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
                                   StrokeToMesh::kVaryings, vs, fs);
     if (!spec_result.error.isEmpty()) {
       ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-      return;
+      return animation::Finished;
     }
 
     float length = 15_mm * state.connector_scale;
@@ -1509,6 +1513,7 @@ void DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state, PaintD
       canvas.restore();
     }
   }
+  return phase;
 }
 
 // This function has some nice code for drawing connections between rounded rectangles.

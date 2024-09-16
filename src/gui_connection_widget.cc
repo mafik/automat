@@ -266,7 +266,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
 
     phase |= SimulateCablePhysics(ctx, ctx.DeltaT(), *state, pos_dir, to_points);
     if (alpha > 0.01f) {
-      DrawOpticalConnector(ctx, *state, arg.Icon());
+      phase |= DrawOpticalConnector(ctx, *state, arg.Icon());
     }
   } else {
     if (arg.style == Argument::Style::Arrow) {

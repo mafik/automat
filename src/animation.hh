@@ -223,7 +223,14 @@ inline Phase ExponentialApproach(float target, float delta_time, float e_time, f
   } else {
     float old_value = value;
     value += delta * (-expm1f(-delta_time / e_time));
-    if (old_value == value) return Finished;
+    if (old_value == value) {
+      value = target;
+      return Finished;
+    }
+    if (fabsf(target - value) < 1e-6f) {
+      value = target;
+      return Finished;
+    }
     return Animating;
   }
 }

@@ -83,6 +83,14 @@ struct DrawCache {
     entries.push_back(std::make_unique<Entry>(path));
     return *entries.back();
   }
+
+  void Clean(time::SteadyPoint now) {
+    auto deadline = now - time::Duration(1);
+    auto new_end = std::remove_if(entries.begin(), entries.end(), [deadline](const auto& entry) {
+      return entry->last_used < deadline;
+    });
+    entries.erase(new_end, entries.end());
+  }
 };
 
 struct DrawContext : DisplayContext {

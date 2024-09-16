@@ -240,6 +240,8 @@ void Window::Draw(SkCanvas& canvas) {
   canvas.translate(0.001, size.y - 0.001 - gui::kLetterSize);
   font.DrawText(canvas, fps_str, fps_paint);
   canvas.restore();
+
+  draw_cache.Clean(display.timer.steady_now);
 }
 
 void Window::Zoom(float delta) {

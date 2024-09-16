@@ -450,10 +450,10 @@ static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint
                                   time::SteadyPoint now) {
   for (int i = 0; i < t.tracks.size(); ++i) {
     auto obj_result = t.track_args[i]->GetObject(here);
-    if (obj_result.location == nullptr || obj_result.object == nullptr) {
-      continue;
+    if (obj_result.location != nullptr && obj_result.object != nullptr) {
+      t.tracks[i]->UpdateOutput(*obj_result.location, started_at, now);
     }
-    t.tracks[i]->UpdateOutput(*obj_result.location, started_at, now);
+    t.track_args[i]->InvalidateConnectionWidgets(here);
   }
 }
 
@@ -1373,6 +1373,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
     Done(here);
+    run_button.InvalidateDrawCache();
   }
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   if (now < end_at) {

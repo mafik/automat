@@ -172,6 +172,7 @@ SkMatrix FlipFlop::TransformToChild(const Widget& child, animation::Display*) co
 LongRunning* FlipFlop::OnRun(Location& here) {
   current_state = !current_state;
   button.InvalidateDrawCache();
+  flip_arg.InvalidateConnectionWidgets(here);
 
   if (current_state) {
     flip_arg.LoopLocations<bool>(here, [](Location& other) {

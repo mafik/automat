@@ -4,6 +4,7 @@
 
 #include "base.hh"
 #include "drag_action.hh"
+#include "gui_connection_widget.hh"
 #include "svg.hh"
 #include "window.hh"
 
@@ -229,6 +230,17 @@ void LiveArgument::Attach(Location& here) {
         }
         return nullptr;
       });
+    }
+  }
+}
+
+void Argument::InvalidateConnectionWidgets(Location& here) const {
+  for (auto& w : gui::window->connection_widgets) {
+    if (&w->from == &here && &w->arg == this) {  // updates all outgoing connection widgets
+      w->InvalidateDrawCache();
+      if (w->state) {
+        w->state->stabilized = false;
+      }
     }
   }
 }

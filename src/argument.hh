@@ -227,6 +227,8 @@ struct Argument {
   T* FindObject(Location& here, const FindConfig& cfg = kDefaultFindConfig) const {
     return dynamic_cast<T*>(FindObject(here, cfg));
   }
+
+  void InvalidateConnectionWidgets(Location& here) const;
 };
 
 extern Argument next_arg;

@@ -43,7 +43,7 @@ struct Window final : Widget, DropTarget {
   // Return the shape of the trash zone in the corner of the window (in Machine coordinates).
   SkPath TrashShape() const;
 
-  float PxPerMeter() { return display_pixels_per_meter * zoom; }
+  float PxPerMeter() const { return display_pixels_per_meter * zoom; }
 
   SkRect GetCameraRect() {
     return SkRect::MakeXYWH(camera_x - size.width / 2, camera_y - size.height / 2, size.width,
@@ -71,7 +71,9 @@ struct Window final : Widget, DropTarget {
     return m;
   }
 
-  Vec2 CanvasToWindow(Vec2 canvas) { return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2; }
+  Vec2 CanvasToWindow(Vec2 canvas) const {
+    return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2;
+  }
 
   std::function<void(Vec2 new_size)> RequestResize = nullptr;
   std::function<void(bool maximize_horizontally, bool maximize_vertically)> RequestMaximize =
@@ -84,11 +86,8 @@ struct Window final : Widget, DropTarget {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
   void Draw(SkCanvas&);
-  animation::Phase Draw(gui::DrawContext&) const override {
-    FATAL << "Window::Draw(DrawContext&) should never be called";
-    return animation::Finished;
-  }
-  void Zoom(float delta);
+  animation::Phase Draw(gui::DrawContext&) const override;
+  void Zoom(float delta) const;
   ControlFlow VisitChildren(Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override {
     if (&child == &toolbar) {
@@ -119,17 +118,18 @@ struct Window final : Widget, DropTarget {
   library::Toolbar toolbar;
   std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
-  animation::Approach<> zoom = animation::Approach<>(1.0);
-  animation::Approach<> camera_x = animation::Approach<>(0.0);
-  animation::Approach<> camera_y = animation::Approach<>(0.0);
-  animation::Approach<> trash_radius = animation::Approach<>(0.0);
+  mutable float zoom = 1;
+  mutable float zoom_target = 1;
+  mutable animation::Approach<> camera_x = animation::Approach<>(0.0);
+  mutable animation::Approach<> camera_y = animation::Approach<>(0.0);
+  mutable animation::Approach<> trash_radius = animation::Approach<>(0.0);
   int drag_action_count = 0;
-  bool panning_during_last_frame = false;
-  bool inertia = false;
-  std::deque<Vec3> camera_timeline;
-  std::deque<time::SystemPoint> timeline;
+  mutable bool panning_during_last_frame = false;
+  mutable bool inertia = false;
+  mutable std::deque<Vec3> camera_timeline;
+  mutable std::deque<time::SystemPoint> timeline;
 
-  animation::Display display;
+  mutable animation::Display display;
 
   std::deque<float> fps_history;
 

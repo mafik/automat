@@ -4,6 +4,7 @@
 
 #include <memory>
 
+#include "animation.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "gui_connection_widget.hh"
@@ -41,187 +42,9 @@ void Window::Draw(SkCanvas& canvas) {
   display.timer.Tick();
   gui::DrawContext draw_ctx(display, canvas, draw_cache);
   draw_ctx.path.push_back(this);
-  RunOnAutomatThreadSynchronous([&] {
-    // Record camera movement timeline. This is used to create inertia effect.
-    camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
-    timeline.emplace_back(display.timer.now);
-    while (timeline.front() < display.timer.now - time::Duration(0.2)) {
-      camera_timeline.pop_front();
-      timeline.pop_front();
-    }
-
-    bool panning_now = false;
-    Vec2 total_pan = Vec2(0, 0);
-    float total_zoom = 1;
-    {
-      std::lock_guard<std::mutex> lock(touchpad::touchpads_mutex);
-      for (touchpad::TouchPad* touchpad : touchpad::touchpads) {
-        total_pan += touchpad->pan;
-        touchpad->pan = Vec2(0, 0);
-        total_zoom *= touchpad->zoom;
-        touchpad->zoom = 1;
-        panning_now |= touchpad->panning;
-      }
-    }
-    if (total_pan != Vec2(0, 0)) {
-      camera_x.Shift(total_pan.x / zoom);
-      camera_y.Shift(total_pan.y / zoom);
-    }
-    if (total_zoom != 1) {
-      Zoom(total_zoom);
-    }
-    if (panning_now) {
-      inertia = false;
-    }
-    if (panning_during_last_frame && !panning_now) {
-      // Panning just stopped - apply inertia effect
-      inertia = true;
-    }
-    panning_during_last_frame = panning_now;
-
-    if (inertia) {
-      if (timeline.size() > 1) {
-        auto dt = (timeline.back() - timeline.front()).count();
-        auto dx = camera_timeline.back().x - camera_timeline.front().x;
-        auto dy = camera_timeline.back().y - camera_timeline.front().y;
-        auto dz = camera_timeline.back().z / camera_timeline.front().z;
-        camera_x.Shift(dx / dt * display.timer.d * 0.8);
-        camera_y.Shift(dy / dt * display.timer.d * 0.8);
-        float z = pow(dz, display.timer.d / dt * 0.8);
-        zoom.target *= z;
-        zoom.value *= z;
-        float lz = logf(z);
-        float dpx = sqrtf(dx * dx + dy * dy + lz * lz) * PxPerMeter();
-        if (dpx < 1) {
-          inertia = false;
-        }
-      }
-    }
-
-    float rx = camera_x.Remaining();
-    float ry = camera_y.Remaining();
-    float rz = zoom.Remaining();
-    float r = sqrt(rx * rx + ry * ry);
-    float rpx = PxPerMeter() * r;
-    bool stabilize_mouse = rpx < 1;
-
-    if (stabilize_mouse) {
-      if (pointers.size() > 0) {
-        Pointer* first_pointer = *pointers.begin();
-        Vec2 mouse_position = first_pointer->pointer_position;
-        Vec2 focus_pre = WindowToCanvas(mouse_position);
-        zoom.Tick(display);
-        Vec2 focus_post = WindowToCanvas(mouse_position);
-        Vec2 focus_delta = focus_post - focus_pre;
-        camera_x.Shift(-focus_delta.x);
-        camera_y.Shift(-focus_delta.y);
-      }
-    } else {  // stabilize camera target
-      Vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
-      Vec2 target_screen = CanvasToWindow(focus_pre);
-      zoom.Tick(display);
-      Vec2 focus_post = WindowToCanvas(target_screen);
-      Vec2 focus_delta = focus_post - focus_pre;
-      camera_x.value -= focus_delta.x;
-      camera_y.value -= focus_delta.y;
-    }
-
-    camera_x.Tick(display);
-    camera_y.Tick(display);
-
-    for (Keyboard* keyboard : keyboards) {
-      if (keyboard->carets.empty()) {
-        if (keyboard->pressed_keys.test((size_t)AnsiKey::W)) {
-          camera_y.Shift(0.1 * display.timer.d);
-          inertia = false;
-        }
-        if (keyboard->pressed_keys.test((size_t)AnsiKey::S)) {
-          camera_y.Shift(-0.1 * display.timer.d);
-          inertia = false;
-        }
-        if (keyboard->pressed_keys.test((size_t)AnsiKey::A)) {
-          camera_x.Shift(-0.1 * display.timer.d);
-          inertia = false;
-        }
-        if (keyboard->pressed_keys.test((size_t)AnsiKey::D)) {
-          camera_x.Shift(0.1 * display.timer.d);
-          inertia = false;
-        }
-      }
-    }
-
-    SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
-
-    // Make sure that work area doesn't leave the window bounds (so the user
-    // doesn't get lost)
-    {
-      // Leave 1mm of margin so that the user can still see the edge of the
-      // work area
-      Vec2 bottom_left = WindowToCanvas(Vec2(0.001, 0.001));
-      Vec2 top_right = WindowToCanvas(size - Vec2(0.001, 0.001));
-      SkRect window_bounds =
-          SkRect::MakeLTRB(bottom_left.x, top_right.y, top_right.x, bottom_left.y);
-      if (work_area.left() > window_bounds.right()) {
-        camera_x.Shift(work_area.left() - window_bounds.right());
-      }
-      if (work_area.right() < window_bounds.left()) {
-        camera_x.Shift(work_area.right() - window_bounds.left());
-      }
-      // The y axis is flipped so `work_area.bottom()` is actually its top
-      if (work_area.bottom() < window_bounds.bottom()) {
-        camera_y.Shift(work_area.bottom() - window_bounds.bottom());
-      }
-      if (work_area.top() > window_bounds.top()) {
-        camera_y.Shift(work_area.top() - window_bounds.top());
-      }
-    }
-
-    auto window_space_matrix = canvas.getLocalToDevice();
-    canvas.save();
-    canvas.concat(CanvasToWindow());
-    auto machine_space_matrix = canvas.getLocalToDevice();
-
-    {  // Animate trash area
-      trash_radius.target = drag_action_count ? kTrashRadius : 0;
-      trash_radius.Tick(display);
-    }
-
-    canvas.clear(background_color);
-
-    canvas.setMatrix(window_space_matrix);
-    auto phase = DrawChildren(draw_ctx);
-
-    canvas.setMatrix(machine_space_matrix);
-
-    // Draw target window size when zooming in with middle mouse button
-    if (zoom.target == 1 && rz > 0.001) {
-      SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
-      target_paint.setStyle(SkPaint::kStroke_Style);
-      target_paint.setStrokeWidth(0.001);  // 1mm
-      float target_width = size.width;
-      float target_height = size.height;
-      SkRect target_rect =
-          SkRect::MakeXYWH(camera_x.target - target_width / 2, camera_y.target - target_height / 2,
-                           target_width, target_height);
-      canvas.drawRect(target_rect, target_paint);
-    }
-
-    for (auto& each_window : windows) {
-      for (auto& each_keyboard : each_window->keyboards) {
-        each_keyboard->Draw(draw_ctx);
-      }
-    }
-
-    if (phase == animation::Animating) {
-      for (auto& each_window : windows) {
-        for (auto& each_pointer : each_window->pointers) {
-          each_pointer->UpdatePath();
-        }
-      }
-    }
-
-    canvas.restore();
-  });  // RunOnAutomatThreadSynchronous
+  canvas.save();
+  RunOnAutomatThreadSynchronous([&] { DrawCached(draw_ctx); });  // RunOnAutomatThreadSynchronous
+  canvas.restore();
 
   // Draw fps counter
   float fps = 1.0f / display.timer.d;
@@ -244,20 +67,214 @@ void Window::Draw(SkCanvas& canvas) {
   draw_cache.Clean(display.timer.steady_now);
 }
 
-void Window::Zoom(float delta) {
+animation::Phase Window::Draw(gui::DrawContext& ctx) const {
+  auto phase = animation::Finished;
+
+  // Record camera movement timeline. This is used to create inertia effect.
+  camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
+  timeline.emplace_back(display.timer.now);
+  while (timeline.front() < display.timer.now - time::Duration(0.2)) {
+    camera_timeline.pop_front();
+    timeline.pop_front();
+  }
+
+  bool panning_now = false;
+  Vec2 total_pan = Vec2(0, 0);
+  float total_zoom = 1;
+  {
+    std::lock_guard<std::mutex> lock(touchpad::touchpads_mutex);
+    for (touchpad::TouchPad* touchpad : touchpad::touchpads) {
+      total_pan += touchpad->pan;
+      touchpad->pan = Vec2(0, 0);
+      total_zoom *= touchpad->zoom;
+      touchpad->zoom = 1;
+      panning_now |= touchpad->panning;
+    }
+  }
+  if (total_pan != Vec2(0, 0)) {
+    camera_x.Shift(total_pan.x / zoom);
+    camera_y.Shift(total_pan.y / zoom);
+  }
+  if (total_zoom != 1) {
+    Zoom(total_zoom);
+  }
+  if (panning_now) {
+    inertia = false;
+  }
+  if (panning_during_last_frame && !panning_now) {
+    // Panning just stopped - apply inertia effect
+    inertia = true;
+  }
+  panning_during_last_frame = panning_now;
+
+  if (inertia) {
+    if (timeline.size() > 1) {
+      auto dt = (timeline.back() - timeline.front()).count();
+      auto dx = camera_timeline.back().x - camera_timeline.front().x;
+      auto dy = camera_timeline.back().y - camera_timeline.front().y;
+      auto dz = camera_timeline.back().z / camera_timeline.front().z;
+      camera_x.Shift(dx / dt * display.timer.d * 0.8);
+      camera_y.Shift(dy / dt * display.timer.d * 0.8);
+      float z = pow(dz, display.timer.d / dt * 0.8);
+      zoom_target *= z;
+      zoom *= z;
+      float lz = logf(z);
+      float dpx = sqrtf(dx * dx + dy * dy + lz * lz) * PxPerMeter();
+      if (dpx < 1) {
+        inertia = false;
+      }
+    }
+  }
+
+  if (inertia) {
+    phase = animation::Animating;
+  }
+
+  float rx = camera_x.Remaining();
+  float ry = camera_y.Remaining();
+  float rz = fabsf(zoom - zoom_target);
+  float r = sqrt(rx * rx + ry * ry);
+  float rpx = PxPerMeter() * r;
+  bool stabilize_mouse = rpx < 1;
+
+  if (stabilize_mouse) {
+    if (pointers.size() > 0) {
+      Pointer* first_pointer = *pointers.begin();
+      Vec2 mouse_position = first_pointer->pointer_position;
+      Vec2 focus_pre = WindowToCanvas(mouse_position);
+      phase |= animation::ExponentialApproach(zoom_target, ctx.DeltaT(), 1.0 / 15, zoom);
+      Vec2 focus_post = WindowToCanvas(mouse_position);
+      Vec2 focus_delta = focus_post - focus_pre;
+      camera_x.Shift(-focus_delta.x);
+      camera_y.Shift(-focus_delta.y);
+    }
+  } else {  // stabilize camera target
+    Vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
+    Vec2 target_screen = CanvasToWindow(focus_pre);
+    phase |= animation::ExponentialApproach(zoom_target, ctx.DeltaT(), 1.0 / 15, zoom);
+    Vec2 focus_post = WindowToCanvas(target_screen);
+    Vec2 focus_delta = focus_post - focus_pre;
+    camera_x.value -= focus_delta.x;
+    camera_y.value -= focus_delta.y;
+  }
+
+  phase |= camera_x.Tick(display);
+  phase |= camera_y.Tick(display);
+
+  for (Keyboard* keyboard : keyboards) {
+    if (keyboard->carets.empty()) {
+      if (keyboard->pressed_keys.test((size_t)AnsiKey::W)) {
+        camera_y.Shift(0.1 * display.timer.d);
+        inertia = false;
+        phase = animation::Animating;
+      }
+      if (keyboard->pressed_keys.test((size_t)AnsiKey::S)) {
+        camera_y.Shift(-0.1 * display.timer.d);
+        inertia = false;
+        phase = animation::Animating;
+      }
+      if (keyboard->pressed_keys.test((size_t)AnsiKey::A)) {
+        camera_x.Shift(-0.1 * display.timer.d);
+        inertia = false;
+        phase = animation::Animating;
+      }
+      if (keyboard->pressed_keys.test((size_t)AnsiKey::D)) {
+        camera_x.Shift(0.1 * display.timer.d);
+        inertia = false;
+        phase = animation::Animating;
+      }
+    }
+  }
+
+  SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
+
+  // Make sure that work area doesn't leave the window bounds (so the user
+  // doesn't get lost)
+  {
+    // Leave 1mm of margin so that the user can still see the edge of the
+    // work area
+    Vec2 bottom_left = WindowToCanvas(Vec2(0.001, 0.001));
+    Vec2 top_right = WindowToCanvas(size - Vec2(0.001, 0.001));
+    SkRect window_bounds = SkRect::MakeLTRB(bottom_left.x, top_right.y, top_right.x, bottom_left.y);
+    if (work_area.left() > window_bounds.right()) {
+      camera_x.Shift(work_area.left() - window_bounds.right());
+    }
+    if (work_area.right() < window_bounds.left()) {
+      camera_x.Shift(work_area.right() - window_bounds.left());
+    }
+    // The y axis is flipped so `work_area.bottom()` is actually its top
+    if (work_area.bottom() < window_bounds.bottom()) {
+      camera_y.Shift(work_area.bottom() - window_bounds.bottom());
+    }
+    if (work_area.top() > window_bounds.top()) {
+      camera_y.Shift(work_area.top() - window_bounds.top());
+    }
+  }
+
+  auto& canvas = ctx.canvas;
+  auto window_space_matrix = canvas.getLocalToDevice();
+  canvas.save();
+  canvas.concat(CanvasToWindow());
+  auto machine_space_matrix = canvas.getLocalToDevice();
+
+  {  // Animate trash area
+    trash_radius.target = drag_action_count ? kTrashRadius : 0;
+    phase |= trash_radius.Tick(display);
+  }
+
+  canvas.clear(background_color);
+
+  canvas.setMatrix(window_space_matrix);
+  phase |= DrawChildren(ctx);
+
+  canvas.setMatrix(machine_space_matrix);
+
+  // Draw target window size when zooming in with middle mouse button
+  if (zoom_target == 1 && rz > 0.001) {
+    SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
+    target_paint.setStyle(SkPaint::kStroke_Style);
+    target_paint.setStrokeWidth(0.001);  // 1mm
+    float target_width = size.width;
+    float target_height = size.height;
+    SkRect target_rect =
+        SkRect::MakeXYWH(camera_x.target - target_width / 2, camera_y.target - target_height / 2,
+                         target_width, target_height);
+    canvas.drawRect(target_rect, target_paint);
+  }
+
+  for (auto& each_window : windows) {
+    for (auto& each_keyboard : each_window->keyboards) {
+      each_keyboard->Draw(ctx);
+    }
+  }
+
+  if (phase == animation::Animating) {
+    for (auto& each_window : windows) {
+      for (auto& each_pointer : each_window->pointers) {
+        each_pointer->UpdatePath();
+      }
+    }
+  }
+
+  canvas.restore();
+
+  return phase;
+}
+
+void Window::Zoom(float delta) const {
   if (pointers.size() > 0) {
     Pointer* first_pointer = *pointers.begin();
     Vec2 mouse_position = first_pointer->pointer_position;
     Vec2 focus_pre = WindowToCanvas(mouse_position);
-    zoom.target *= delta;
-    zoom.value *= delta;
+    zoom_target *= delta;
+    zoom *= delta;
     Vec2 focus_post = WindowToCanvas(mouse_position);
     Vec2 focus_delta = focus_post - focus_pre;
     camera_x.Shift(-focus_delta.x);
     camera_y.Shift(-focus_delta.y);
   } else {
-    zoom.target *= delta;
-    zoom.value *= delta;
+    zoom_target *= delta;
+    zoom *= delta;
   }
 }
 
@@ -335,8 +352,8 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
           d.Get(camera_y.target, status);
           camera_y.value = camera_y.target;
         } else if (camera_key == "zoom") {
-          d.Get(zoom.target, status);
-          zoom.value = zoom.target;
+          d.Get(zoom_target, status);
+          zoom = zoom_target;
         }
       }
     }
@@ -483,5 +500,4 @@ ControlFlow Window::VisitChildren(Visitor& visitor) {
   widgets.push_back(root_machine);
   return visitor(widgets);
 }
-
 }  // namespace automat::gui

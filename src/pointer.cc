@@ -112,6 +112,7 @@ void Pointer::Move(Vec2 position) {
       window.camera_x.Shift(-delta.x);
       window.camera_y.Shift(-delta.y);
       window.inertia = false;
+      window.InvalidateDrawCache();
     }
     if (action) {
       action->Update();
@@ -125,17 +126,18 @@ void Pointer::Move(Vec2 position) {
 void Pointer::Wheel(float delta) {
   RunOnAutomatThread([=, this]() {
     float factor = exp(delta / 4);
-    window.zoom.target *= factor;
+    window.zoom_target *= factor;
     // For small changes we skip the animation to increase responsiveness.
     if (fabs(delta) < 1.0) {
       Vec2 mouse_pre = window.WindowToCanvas(pointer_position);
-      window.zoom.value *= factor;
+      window.zoom *= factor;
       Vec2 mouse_post = window.WindowToCanvas(pointer_position);
       Vec2 mouse_delta = mouse_post - mouse_pre;
       window.camera_x.Shift(-mouse_delta.x);
       window.camera_y.Shift(-mouse_delta.y);
     }
-    window.zoom.target = std::max(kMinZoom, window.zoom.target);
+    window.zoom_target = std::max(kMinZoom, window.zoom_target);
+    window.InvalidateDrawCache();
   });
 }
 
@@ -181,8 +183,9 @@ void Pointer::ButtonUp(PointerButton btn) {
         Vec2 canvas_pos = window.WindowToCanvas(pointer_position);
         window.camera_x.target = canvas_pos.x;
         window.camera_y.target = canvas_pos.y;
-        window.zoom.target = 1;
+        window.zoom_target = 1;
         window.inertia = false;
+        window.InvalidateDrawCache();
       }
     }
     button_down_position[btn] = Vec2(0, 0);

@@ -23,7 +23,7 @@ std::unique_ptr<Action> PrototypeButton::ButtonDownAction(gui::Pointer& pointer,
   auto loc = std::make_unique<Location>();
   loc->Create(*proto);
   auto& anim = loc->animation_state[pointer.window.display];
-  anim.scale = matrix.get(0) / pointer.window.zoom.value;
+  anim.scale = matrix.get(0) / pointer.window.zoom;
   auto contact_point = pointer.PositionWithin(*this);
   loc->position = anim.position = pointer.PositionWithinRootMachine() - contact_point;
   auto drag_action = std::make_unique<DragLocationAction>(pointer, std::move(loc));

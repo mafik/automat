@@ -289,9 +289,14 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
 }
 
 void Location::InvalidateConnectionWidgets() const {
+  // We don't have backlinks to connection widgets so we have to iterate over all connection widgets
+  // in window and check if they're connected to this location.
   for (auto& w : gui::window->connection_widgets) {
     if (&w->from == this) {  // updates all outgoing connection widgets
       w->InvalidateDrawCache();
+      if (w->state) {
+        w->state->stabilized = false;
+      }
     } else {
       auto [begin, end] = incoming.equal_range(&w->arg);
       for (auto it = begin; it != end; ++it) {

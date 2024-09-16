@@ -375,10 +375,10 @@ SkMatrix Location::GetTransform(animation::Display* display) const {
 
 animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_position,
                                             float target_scale) {
-  auto a = position.SineTowards(target_position, delta_time, Location::kSpringPeriod);
-  auto b = scale.SpringTowards(target_scale, delta_time, Location::kSpringPeriod,
+  auto phase = position.SineTowards(target_position, delta_time, Location::kPositionSpringPeriod);
+  phase |= scale.SpringTowards(target_scale, delta_time, Location::kScaleSpringPeriod,
                                Location::kSpringHalfTime);
-  return a || b;
+  return phase;
 }
 
 ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}), elevation(0) {

@@ -256,11 +256,11 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     if (to) {
       state->steel_insert_hidden.target = 1;
       phase |= state->connector_scale.SpringTowards(
-          to->scale, ctx.DeltaT(), Location::kSpringPeriod, Location::kSpringHalfTime);
+          to->scale, ctx.DeltaT(), Location::kScaleSpringPeriod, Location::kSpringHalfTime);
     } else {
       state->steel_insert_hidden.target = 0;
       phase |= state->connector_scale.SpringTowards(
-          from.scale, ctx.DeltaT(), Location::kSpringPeriod, Location::kSpringHalfTime);
+          from.scale, ctx.DeltaT(), Location::kScaleSpringPeriod, Location::kSpringHalfTime);
     }
     phase |= state->steel_insert_hidden.Tick(display);
 

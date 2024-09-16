@@ -41,6 +41,7 @@ Phase LowLevelSineTowards(float target, float delta_time, float period_time, flo
 }
 Phase LowLevelSpringTowards(float target, float delta_time, float period_time, float half_time,
                             float& value, float& velocity) {
+  float initial_value = value;
   float Q = 2 * M_PI / period_time;
   float D = value - target;
   float V = velocity;
@@ -64,6 +65,16 @@ Phase LowLevelSpringTowards(float target, float delta_time, float period_time, f
   value = target + amplitude * cosf(t2 * Q) * powf(2, -t2 / H);
   velocity =
       (-(amplitude * kLog2e * cosf(t2 * Q)) / H - amplitude * Q * sinf(t2 * Q)) / powf(2, t2 / H);
+
+  // This section fixes an issue where the animation would keep going if the delta time was too
+  // small. If animation is done using double precision, this section can be probably removed.
+  float value_change = value - initial_value;
+  if (fabsf(value_change) < 1e-6f && fabsf(velocity) < 1e-3f) {
+    value = target;
+    velocity = 0;
+    return Finished;
+  }
+
   return Animating;
 }
 

@@ -168,7 +168,7 @@ float Toolbar::CalculateWidth() const {
   return width;
 }
 maf::StrView Toolbar::Name() const { return "Toolbar"sv; }
-maf::Optional<Rect> Toolbar::TextureBounds() const {
+maf::Optional<Rect> Toolbar::TextureBounds(animation::Display*) const {
   float width = CalculateWidth();
   return Rect(-width / 2, 0, width / 2, kToolbarHeight * 2);
 }

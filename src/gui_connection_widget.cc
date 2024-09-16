@@ -242,11 +242,12 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     if (new_length > length + 2_cm) {
       alpha = 0;
       transparency = 1;
+      phase = animation::Animating;
     }
     length = new_length;
   }
 
-  if (alpha < 0.99f) {
+  if (alpha < 1.0f) {
     using_layer = true;
     canvas.saveLayerAlphaf(nullptr, alpha);
   }
@@ -281,7 +282,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     } else {
       cable_width.target = to != nullptr ? 2_mm : 0;
       cable_width.speed = 5;
-      cable_width.Tick(ctx.display);
+      phase |= cable_width.Tick(ctx.display);
 
       if (cable_width > 0.01_mm && to) {
         if (alpha > 0.01f) {
@@ -378,9 +379,9 @@ void DragConnectionAction::End() {
   widget.InvalidateDrawCache();
 }
 
-maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
+maf::Optional<Rect> ConnectionWidget::TextureBounds(animation::Display* d) const {
   if (state) {
-    Rect bounds = Shape(nullptr).getBounds();
+    Rect bounds = Shape(d).getBounds();
     float w = state->cable_width / 2 +
               0.5_mm;  // add 0.5mm to account for cable stiffener width (1mm wider than cable)
     for (auto& section : state->sections) {
@@ -392,12 +393,12 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
     Path from_path;
     GuessPath(from, from_path);
     from_path.erase(from_path.begin());  // remove the window
-    auto pos_dir = arg.Start(from_path, nullptr);
+    auto pos_dir = arg.Start(from_path, d);
     Vec<Vec2AndDir> to_points;  // machine coords
     if (auto to = arg.FindLocation(from)) {
       to->object->ConnectionPositions(to_points);
       Path target_path;
-      SkMatrix m = TransformUp(Path{root_machine, to}, nullptr);
+      SkMatrix m = TransformUp(Path{root_machine, to}, d);
       for (auto& to_point : to_points) {
         to_point.pos = m.mapPoint(to_point.pos);
       }

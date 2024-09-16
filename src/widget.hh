@@ -147,7 +147,9 @@ struct Widget {
   virtual ControlFlow PointerVisitChildren(Visitor& visitor) { return VisitChildren(visitor); }
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  virtual maf::Optional<Rect> TextureBounds() const { return Shape(nullptr).getBounds(); }
+  virtual maf::Optional<Rect> TextureBounds(animation::Display* d) const {
+    return Shape(d).getBounds();
+  }
 
   virtual SkMatrix TransformToChild(const Widget& child, animation::Display*) const {
     return SkMatrix::I();

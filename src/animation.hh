@@ -22,6 +22,8 @@ enum class Phase : bool {
 
 using enum Phase;
 
+inline maf::Str ToStr(Phase p) { return p == Animating ? "Animating" : "Finished"; }
+
 inline Phase operator||(Phase a, Phase b) { return Phase(bool(a) || bool(b)); }
 inline Phase& operator|=(Phase& a, Phase b) { return a = a || b; }
 

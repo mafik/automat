@@ -52,7 +52,7 @@ struct ConnectionWidget : Widget {
   void PreDraw(DrawContext&) const override;
   animation::Phase Draw(DrawContext&) const override;
   std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
-  maf::Optional<Rect> TextureBounds() const override;
+  maf::Optional<Rect> TextureBounds(animation::Display* d) const override;
 };
 
 void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);

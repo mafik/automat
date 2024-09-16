@@ -260,7 +260,7 @@ struct Location : gui::Widget {
   // TODO: replace with Argument::Start
   Vec2AndDir ArgStart(animation::Display*, Argument&);
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
-  maf::Optional<Rect> TextureBounds() const override;
+  maf::Optional<Rect> TextureBounds(animation::Display*) const override;
 
   ////////////////////////////
   // Error reporting

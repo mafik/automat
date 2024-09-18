@@ -45,7 +45,7 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   SkPath Shape(animation::Display*) const override;
   void Fields(std::function<void(Object&)> cb) override;
   SkPath FieldShape(Object&) const override;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
+  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   void Args(std::function<void(Argument&)> cb) override;
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;

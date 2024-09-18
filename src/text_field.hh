@@ -51,7 +51,7 @@ struct TextField : Widget, CaretOwner {
   void PointerLeave(Pointer&, animation::Display&) override;
   animation::Phase Draw(DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
-  std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
+  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   void ReleaseCaret(Caret&) override;
   Widget* CaretWidget() override { return this; }
   void KeyDown(Caret&, Key) override;

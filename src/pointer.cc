@@ -149,7 +149,7 @@ void Pointer::ButtonDown(PointerButton btn) {
     UpdatePath();
 
     if (action == nullptr && !path.empty()) {
-      action = path.back()->ButtonDownAction(*this, btn);
+      action = path.back()->FindAction(*this, btn);
       if (action) {
         action->Begin();
         UpdatePath();

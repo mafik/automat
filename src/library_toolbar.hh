@@ -36,7 +36,7 @@ struct PrototypeButton : Widget {
 
   ControlFlow PointerVisitChildren(Visitor&) override { return ControlFlow::Continue; }
 
-  std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton btn) override;
+  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger btn) override;
 
   maf::StrView Name() const override { return "PrototypeButton"; }
 };

@@ -185,17 +185,17 @@ struct RunAction : Action {
   void End() {}
 };
 
-std::unique_ptr<Action> KeyPresser::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
+std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
   if (btn != gui::kMouseLeft) return nullptr;
   auto hand_shape = GetHandShape();
   auto local_pos = p.PositionWithin(*this);
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
     return std::make_unique<DragAndClickAction>(
-        p, btn, Object::ButtonDownAction(p, btn),
+        p, btn, Object::FindAction(p, btn),
         std::make_unique<RunAction>(p, *Closest<Location>(p.path)));
   } else {
-    return std::make_unique<DragAndClickAction>(p, btn, Object::ButtonDownAction(p, btn),
-                                                shortcut_button.ButtonDownAction(p, btn));
+    return std::make_unique<DragAndClickAction>(p, btn, Object::FindAction(p, btn),
+                                                shortcut_button.FindAction(p, btn));
   }
 }
 

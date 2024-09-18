@@ -32,7 +32,7 @@ struct Number : Object {
   SkPath Shape(animation::Display*) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
+  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

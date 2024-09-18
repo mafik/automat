@@ -34,7 +34,7 @@ struct Button : Widget {
   float Height() const;
   virtual SkRRect RRect() const;
   SkPath Shape(animation::Display*) const override;
-  std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
+  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   virtual void Activate(gui::Pointer&) { InvalidateDrawCache(); }
   virtual SkColor ForegroundColor(DrawContext&) const { return SK_ColorBLACK; }  // "#d69d00"_color
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }

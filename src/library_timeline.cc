@@ -736,7 +736,7 @@ SkPath WindowShape(int num_tracks) {
   return window.ToPath(true);
 }
 
-unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerButton btn) {
+unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::kMouseLeft) {
     auto bridge_shape =
         BridgeShape(tracks.size(), CurrentPosRatio(*this, ptr.window.display.timer.now));
@@ -758,7 +758,7 @@ unique_ptr<Action> Timeline::ButtonDownAction(gui::Pointer& ptr, gui::PointerBut
       }
     }
   }
-  return Object::ButtonDownAction(ptr, btn);
+  return Object::FindAction(ptr, btn);
 }
 
 animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
@@ -1381,11 +1381,11 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   }
 }
 
-std::unique_ptr<Action> TrackBase::ButtonDownAction(gui::Pointer& ptr, gui::PointerButton btn) {
+std::unique_ptr<Action> TrackBase::FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) {
   if (timeline) {
-    return timeline->ButtonDownAction(ptr, btn);
+    return timeline->FindAction(ptr, btn);
   } else {
-    return Object::ButtonDownAction(ptr, btn);
+    return Object::FindAction(ptr, btn);
   }
 }
 

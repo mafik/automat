@@ -249,7 +249,7 @@ struct Location : gui::Widget {
   void PreDraw(gui::DrawContext&) const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   void InvalidateConnectionWidgets() const;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
+  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   SkPath Shape(animation::Display*) const override;
   SkPath FieldShape(Object&) const;
 

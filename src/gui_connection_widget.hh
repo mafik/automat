@@ -51,7 +51,7 @@ struct ConnectionWidget : Widget {
   SkPath Shape(animation::Display*) const override;
   void PreDraw(DrawContext&) const override;
   animation::Phase Draw(DrawContext&) const override;
-  std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) override;
+  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   maf::Optional<Rect> TextureBounds(animation::Display* d) const override;
 };
 

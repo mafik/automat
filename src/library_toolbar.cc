@@ -14,8 +14,7 @@ using namespace std::literals;
 using namespace maf;
 
 namespace automat::gui {
-std::unique_ptr<Action> PrototypeButton::ButtonDownAction(gui::Pointer& pointer,
-                                                          gui::PointerButton btn) {
+std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
   if (btn != gui::kMouseLeft) {
     return nullptr;
   }

@@ -218,7 +218,7 @@ SkMatrix Number::TransformToChild(const Widget& child, animation::Display*) cons
   return SkMatrix::I();
 }
 
-std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer& pointer, gui::PointerButton btn) {
+std::unique_ptr<Action> Number::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
   if (btn != gui::PointerButton::kMouseLeft) {
     return nullptr;
   }
@@ -231,7 +231,7 @@ std::unique_ptr<Action> Number::ButtonDownAction(gui::Pointer& pointer, gui::Poi
   if (!location) {
     return nullptr;
   }
-  return Object::ButtonDownAction(pointer, btn);
+  return Object::FindAction(pointer, btn);
 }
 
 void Number::SerializeState(Serializer& writer, const char* key) const {

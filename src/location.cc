@@ -309,7 +309,7 @@ void Location::InvalidateConnectionWidgets() const {
   }
 }
 
-std::unique_ptr<Action> Location::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
+std::unique_ptr<Action> Location::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
   return nullptr;
 }
 

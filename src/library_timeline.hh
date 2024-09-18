@@ -49,7 +49,7 @@ struct TrackBase : Object {
   maf::Vec<time::T> timestamps;
   SkPath Shape(animation::Display*) const override;
   animation::Phase Draw(gui::DrawContext&) const override;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
+  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
                             time::SteadyPoint now) = 0;
 
@@ -123,7 +123,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   Vec2AndDir ArgStart(const Argument&) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer&, gui::PointerButton) override;
+  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;

@@ -64,7 +64,7 @@ struct Object : gui::Widget {
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display* = nullptr) const override;
   virtual RRect CoarseBounds(animation::Display* display = nullptr) const;
-  std::unique_ptr<Action> ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;
+  std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 };
 
 template <typename T>

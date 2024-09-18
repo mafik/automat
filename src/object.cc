@@ -73,7 +73,7 @@ SkPath Object::Shape(animation::Display*) const {
   return it->second;
 }
 
-std::unique_ptr<Action> Object::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
+std::unique_ptr<Action> Object::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::kMouseLeft) {
     auto& path = p.path;
     for (int i = path.size() - 1; i >= 0; --i) {

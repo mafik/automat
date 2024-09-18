@@ -661,8 +661,7 @@ struct DragHandAction : Action {
   }
 };
 
-std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
-                                                     gui::PointerButton btn) {
+std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::kMouseLeft) {
     auto pos = pointer.PositionWithin(*this);
     auto duration_handle_path = DurationHandlePath(*this);
@@ -707,7 +706,7 @@ std::unique_ptr<Action> TimerDelay::ButtonDownAction(gui::Pointer& pointer,
       return std::make_unique<DragHandAction>(pointer, *this);
     }
   }
-  return Object::ButtonDownAction(pointer, btn);
+  return Object::FindAction(pointer, btn);
 }
 
 void TimerDelay::Fields(std::function<void(Object&)> cb) { cb(duration); }

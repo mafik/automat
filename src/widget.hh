@@ -105,6 +105,37 @@ struct DropTarget;
 
 enum PointerButton { kButtonUnknown, kMouseLeft, kMouseMiddle, kMouseRight, kButtonCount };
 
+struct ActionTrigger {
+  int repr;
+
+  constexpr static int kAnsiKeyStart = 0;
+  constexpr static int kAnsiKeyEnd = static_cast<int>(AnsiKey::Count);
+  constexpr static int kPointerStart = kAnsiKeyEnd;
+  constexpr static int kPointerEnd = kPointerStart + kButtonCount;
+
+  constexpr ActionTrigger(PointerButton button) : repr(kPointerStart + static_cast<int>(button)) {}
+  constexpr ActionTrigger(AnsiKey key) : repr(kAnsiKeyStart + static_cast<int>(key)) {}
+
+  constexpr operator PointerButton() const {
+    if (repr < kPointerStart || repr >= kPointerEnd) {
+      return PointerButton::kButtonUnknown;
+    }
+    return static_cast<PointerButton>(repr - kPointerStart);
+  }
+
+  constexpr operator AnsiKey() const {
+    if (repr < kAnsiKeyStart || repr >= kAnsiKeyEnd) {
+      return AnsiKey::Unknown;
+    }
+    return static_cast<AnsiKey>(repr - kAnsiKeyStart);
+  }
+
+  constexpr auto operator<=>(const ActionTrigger&) const = default;
+  constexpr bool operator==(PointerButton button) const {
+    return ActionTrigger(button).repr == repr;
+  }
+};
+
 // Base class for widgets.
 struct Widget {
   Widget() {}
@@ -133,7 +164,7 @@ struct Widget {
 
   virtual bool CenteredAtZero() const { return false; }
 
-  virtual std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) { return nullptr; }
+  virtual std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) { return nullptr; }
 
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }

@@ -215,7 +215,7 @@ struct TextSelectAction : Action {
   }
 };
 
-std::unique_ptr<Action> TextField::ButtonDownAction(Pointer& pointer, PointerButton btn) {
+std::unique_ptr<Action> TextField::FindAction(Pointer& pointer, ActionTrigger btn) {
   if (btn == PointerButton::kMouseLeft) {
     return std::make_unique<TextSelectAction>(pointer, *this);
   }

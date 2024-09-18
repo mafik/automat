@@ -302,7 +302,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   return phase;
 }
 
-std::unique_ptr<Action> ConnectionWidget::ButtonDownAction(Pointer& pointer, PointerButton) {
+std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTrigger) {
   return std::make_unique<DragConnectionAction>(pointer, *this);
 }
 

@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "../build/generated/embedded.hh"
+#include "control_flow.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
 #include "library_macros.hh"
@@ -123,6 +124,10 @@ ControlFlow KeyPresser::VisitChildren(gui::Visitor& visitor) {
   return visitor(children);
 }
 
+ControlFlow KeyPresser::PointerVisitChildren(gui::Visitor& visitor) {
+  return ControlFlow::Continue;
+}
+
 SkMatrix KeyPresser::TransformToChild(const Widget& child, animation::Display*) const {
   return SkMatrix::I();
 }
@@ -180,8 +185,7 @@ struct RunAction : Action {
   void End() {}
 };
 
-std::unique_ptr<Action> KeyPresser::CaptureButtonDownAction(gui::Pointer& p,
-                                                            gui::PointerButton btn) {
+std::unique_ptr<Action> KeyPresser::ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) {
   if (btn != gui::kMouseLeft) return nullptr;
   auto hand_shape = GetHandShape();
   auto local_pos = p.PositionWithin(*this);

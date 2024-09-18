@@ -133,11 +133,6 @@ struct Widget {
 
   virtual bool CenteredAtZero() const { return false; }
 
-  // DEPRECATED: override PointerVisitChildren to block pointer events from propagating to
-  // children.
-  virtual std::unique_ptr<Action> CaptureButtonDownAction(Pointer&, PointerButton) {
-    return nullptr;
-  }
   virtual std::unique_ptr<Action> ButtonDownAction(Pointer&, PointerButton) { return nullptr; }
 
   // Return true if the widget should be highlighted as draggable.

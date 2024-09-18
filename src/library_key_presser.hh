@@ -35,7 +35,7 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const override;
-  std::unique_ptr<Action> CaptureButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;
+  std::unique_ptr<Action> ButtonDownAction(gui::Pointer& p, gui::PointerButton btn) override;
 
   void KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key) override;
   void ReleaseGrab(gui::KeyboardGrab&) override;
@@ -44,6 +44,7 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
   void SetKey(gui::AnsiKey);
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  ControlFlow PointerVisitChildren(Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 
   LongRunning* OnRun(Location& here) override;

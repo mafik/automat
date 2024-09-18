@@ -149,15 +149,7 @@ void Pointer::ButtonDown(PointerButton btn) {
     UpdatePath();
 
     if (action == nullptr && !path.empty()) {
-      for (Widget* w : path) {
-        action = w->CaptureButtonDownAction(*this, btn);
-        if (action) {
-          break;
-        }
-      }
-      if (action == nullptr) {
-        action = path.back()->ButtonDownAction(*this, btn);
-      }
+      action = path.back()->ButtonDownAction(*this, btn);
       if (action) {
         action->Begin();
         UpdatePath();

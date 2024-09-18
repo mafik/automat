@@ -87,7 +87,7 @@ void DragLocationAction::Update() {
     location->animation_state[pointer.window.display].position.value +=
         current_position - last_position;
     location->UpdateAutoconnectArgs();
-    InvalidateDrawCache();
+    location->InvalidateDrawCache();
     location->InvalidateConnectionWidgets();
   }
 

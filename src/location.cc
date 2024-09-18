@@ -211,8 +211,9 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
     ctx.canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
   }
 
-  {  // Draw dashed highlight outline
-    SkPath outset_shape = Outset(my_shape, 0.0025 * state.highlight.value);
+  if (state.highlight > 0.01f) {  // Draw dashed highlight outline
+    phase = animation::Animating;
+    SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight.value);
     SkPathMeasure measure(outset_shape, false);
     float length = measure.getLength();
 
@@ -506,10 +507,10 @@ void AnimateGrowFrom(Location& source, Location& grown) {
   }
 }
 
-void Location::PreDraw(gui::DrawContext& ctx) const {
+animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
   // Draw shadow
   if (object == nullptr) {
-    return;
+    return animation::Finished;
   }
   auto& anim = animation_state[ctx.display];
   float target_elevation = 0;
@@ -524,7 +525,7 @@ void Location::PreDraw(gui::DrawContext& ctx) const {
       }
     }
   }
-  anim.elevation.SineTowards(target_elevation, ctx.DeltaT(), 0.2);
+  auto phase = anim.elevation.SineTowards(target_elevation, ctx.DeltaT(), 0.2);
   auto shape = object->Shape(&ctx.display);
   auto rect = shape.getBounds();
   auto surface = ctx.canvas.getSurface();
@@ -548,7 +549,7 @@ void Location::PreDraw(gui::DrawContext& ctx) const {
   SkShadowUtils::DrawShadow(&ctx.canvas, shape, z_plane_params, light_pos, light_radius,
                             "#c9ced6"_color, "#ada4b0"_color, flags);
   ctx.canvas.restore();
-  PreDrawChildren(ctx);
+  return phase;
 }
 
 void Location::UpdateAutoconnectArgs() {
@@ -673,4 +674,11 @@ void Location::UpdateAutoconnectArgs() {
   }
 }
 
+void Location::InvalidateDrawCache() const {
+  if (auto widget = ParentAs<Widget>()) {
+    widget->InvalidateDrawCache();
+  } else {
+    root_machine->InvalidateDrawCache();
+  }
+}
 }  // namespace automat

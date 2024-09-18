@@ -29,7 +29,7 @@ struct Button : Widget {
   Button(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
   void PointerOver(Pointer&, animation::Display&) override;
   void PointerLeave(Pointer&, animation::Display&) override;
-  void PreDraw(DrawContext& ctx) const override;
+  animation::Phase PreDraw(DrawContext& ctx) const override;
   animation::Phase Draw(DrawContext&) const override;
   float Height() const;
   virtual SkRRect RRect() const;
@@ -113,7 +113,7 @@ struct ToggleButton : Widget {
   }
 
   virtual Button* OnWidget() const { return on.get(); }
-  void PreDrawChildren(DrawContext& ctx) const override;
+  animation::Phase PreDrawChildren(DrawContext& ctx) const override;
   animation::Phase Draw(DrawContext&) const override;
   animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const override;
   SkRRect RRect() const { return off->RRect(); }

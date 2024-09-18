@@ -46,21 +46,24 @@ SkPath ConnectionWidget::Shape(animation::Display* d) const {
   }
 }
 
-void ConnectionWidget::PreDraw(DrawContext& ctx) const {
+animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
   if (arg.autoconnect_radius <= 0) {
-    return;
+    return animation::Finished;
   }
   auto anim = animation_state.Find(ctx.display);
   if (anim == nullptr) {
-    return;
+    return animation::Finished;
   }
-  animation::LinearApproach(anim->radar_alpha_target, ctx.DeltaT(), 2.f, anim->radar_alpha);
+  auto phase =
+      animation::LinearApproach(anim->radar_alpha_target, ctx.DeltaT(), 2.f, anim->radar_alpha);
   float prototype_alpha_target = anim->prototype_alpha_target;
   if (arg.FindLocation(from)) {
     prototype_alpha_target = 0;
   }
-  animation::LinearApproach(prototype_alpha_target, ctx.DeltaT(), 2.f, anim->prototype_alpha);
+  phase |=
+      animation::LinearApproach(prototype_alpha_target, ctx.DeltaT(), 2.f, anim->prototype_alpha);
   if (anim->radar_alpha >= 0.01f) {
+    phase = animation::Animating;
     gui::DisplayContext fromDisplayCtx = GuessDisplayContext(from, ctx.display);
     fromDisplayCtx.path.erase(fromDisplayCtx.path.begin());  // remove the window
     auto pos_dir = arg.Start(fromDisplayCtx);
@@ -160,6 +163,7 @@ void ConnectionWidget::PreDraw(DrawContext& ctx) const {
     ctx.canvas.restore();
     ctx.canvas.restore();
   }
+  return phase;
 }
 
 animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
@@ -354,6 +358,7 @@ void DragConnectionAction::Begin() {
       } else {
         l->GetAnimationState(*display).highlight.target = 0;
       }
+      l->InvalidateDrawCache();
     }
   }
   widget.InvalidateDrawCache();

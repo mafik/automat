@@ -113,9 +113,10 @@ static animation::Phase UpdateHighlight(DrawContext& ctx, Button::AnimationState
   return animation::LinearApproach(state.pointers_over ? 1 : 0, ctx.DeltaT(), 10, state.highlight);
 }
 
-void Button::PreDraw(DrawContext& ctx) const {
+animation::Phase Button::PreDraw(DrawContext& ctx) const {
   auto bg = BackgroundColor();
   DrawButtonShadow(ctx.canvas, bg);
+  return animation::Finished;
 }
 
 animation::Phase Button::Draw(DrawContext& ctx) const {
@@ -205,7 +206,7 @@ animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& 
   return child.DrawCached(ctx);
 }
 
-void ToggleButton::PreDrawChildren(DrawContext& ctx) const {
+animation::Phase ToggleButton::PreDrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
   auto& filling = filling_ptr[display];
@@ -214,15 +215,16 @@ void ToggleButton::PreDrawChildren(DrawContext& ctx) const {
 
   canvas.saveLayerAlphaf(nullptr, filling);
   ctx.path.push_back(on_widget);
-  on_widget->PreDraw(ctx);
+  auto phase = on_widget->PreDraw(ctx);
   ctx.path.pop_back();
   canvas.restore();
 
   canvas.saveLayerAlphaf(nullptr, 1 - filling);
   ctx.path.push_back(off.get());
-  off->PreDraw(ctx);
+  phase |= off->PreDraw(ctx);
   ctx.path.pop_back();
   canvas.restore();
+  return phase;
 }
 
 SkPath Button::Shape(animation::Display*) const { return SkPath::RRect(RRect()); }

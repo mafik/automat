@@ -151,7 +151,7 @@ struct Machine : LiveObject, gui::DropTarget {
   }
 
   animation::Phase Draw(gui::DrawContext& ctx) const override { return Widget::Draw(ctx); }
-  void PreDraw(gui::DrawContext&) const override;
+  animation::Phase PreDraw(gui::DrawContext&) const override;
   gui::DropTarget* CanDrop() override { return this; }
   void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
   void DropLocation(std::unique_ptr<Location>&&) override;

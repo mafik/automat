@@ -246,8 +246,11 @@ struct Location : gui::Widget {
   }
   void SetNumber(double number);
 
-  void PreDraw(gui::DrawContext&) const override;
+  animation::Phase PreDraw(gui::DrawContext&) const override;
   animation::Phase Draw(gui::DrawContext&) const override;
+  // Location has no texture attached so it cacn't be invalidated. It draws into its parent
+  // texture instead. This override allows one to invalidate the parent texture.
+  void InvalidateDrawCache() const override;
   void InvalidateConnectionWidgets() const;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   SkPath Shape(animation::Display*) const override;

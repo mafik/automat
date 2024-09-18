@@ -151,9 +151,9 @@ struct Widget {
   virtual void PointerOver(Pointer&, animation::Display&) {}
   virtual void PointerLeave(Pointer&, animation::Display&) {}
 
-  virtual void PreDraw(DrawContext& ctx) const {}
+  virtual animation::Phase PreDraw(DrawContext& ctx) const { return animation::Finished; }
   animation::Phase DrawCached(DrawContext& ctx) const;
-  void InvalidateDrawCache() const;
+  virtual void InvalidateDrawCache() const;
 
   virtual animation::Phase Draw(DrawContext& ctx) const {
     auto phase = animation::Finished;
@@ -191,7 +191,7 @@ struct Widget {
 
   virtual animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const;
 
-  virtual void PreDrawChildren(DrawContext&) const;
+  virtual animation::Phase PreDrawChildren(DrawContext&) const;
 
   animation::Phase DrawChildrenSubset(DrawContext&, maf::Span<Widget*> widgets) const;
 

@@ -49,7 +49,7 @@ struct ConnectionWidget : Widget {
 
   maf::StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape(animation::Display*) const override;
-  void PreDraw(DrawContext&) const override;
+  animation::Phase PreDraw(DrawContext&) const override;
   animation::Phase Draw(DrawContext&) const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   maf::Optional<Rect> TextureBounds(animation::Display* d) const override;

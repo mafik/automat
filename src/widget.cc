@@ -20,8 +20,9 @@ using namespace std;
 
 namespace automat::gui {
 
-void Widget::PreDrawChildren(DrawContext& ctx) const {
+animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
+  auto phase = animation::Finished;
   Visitor visitor = [&](Span<Widget*> widgets) {
     std::ranges::reverse_view rv{widgets};
     for (Widget* widget : rv) {
@@ -32,13 +33,14 @@ void Widget::PreDrawChildren(DrawContext& ctx) const {
         canvas.concat(up);
       }
       ctx.path.push_back(widget);
-      widget->PreDraw(ctx);
+      phase |= widget->PreDraw(ctx);
       ctx.path.pop_back();
       canvas.restore();
     }
     return ControlFlow::Continue;
   };
   const_cast<Widget*>(this)->VisitChildren(visitor);
+  return phase;
 }
 
 struct CacheEntry {};
@@ -194,9 +196,7 @@ animation::Phase Widget::DrawChildrenSubset(DrawContext& ctx, maf::Span<Widget*>
 }
 
 animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
-  PreDrawChildren(ctx);
-
-  auto phase = animation::Finished;
+  auto phase = PreDrawChildren(ctx);
   Visitor visitor = [&](Span<Widget*> widgets) {
     phase |= DrawChildrenSubset(ctx, widgets);
     return ControlFlow::Continue;

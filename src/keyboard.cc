@@ -377,9 +377,21 @@ void Keyboard::KeyDown(Key key) {
         caret->owner->ReleaseCaret(*caret);
       }
       carets.clear();
-    } else {
+    } else if (!carets.empty()) {
       for (auto& caret : carets) {
         caret->owner->KeyDown(*caret, key);
+      }
+    } else {
+      size_t i = static_cast<int>(key.physical);
+      if (actions[i] == nullptr && !pointer->path.empty()) {
+        int path_i = pointer->path.size() - 1;
+        do {
+          actions[i] = pointer->path[path_i]->FindAction(*pointer, key.physical);
+        } while (actions[i] == nullptr && --path_i >= 0);
+        if (actions[i]) {
+          actions[i]->Begin();
+          pointer->UpdatePath();
+        }
       }
     }
   });
@@ -392,11 +404,18 @@ void Keyboard::KeyUp(Key key) {
     }
     if (grab) {
       grab->grabber.KeyboardGrabberKeyUp(*grab, key);
-    } else {
+    } else if (!carets.empty()) {
       for (auto& caret : carets) {
         if (caret->owner) {
           caret->owner->KeyUp(*caret, key);
         }
+      }
+    } else {
+      size_t i = static_cast<int>(key.physical);
+      if (actions[i]) {
+        actions[i]->End();
+        actions[i].reset();
+        pointer->UpdatePath();
       }
     }
   });

@@ -166,6 +166,7 @@ void Pointer::ButtonUp(PointerButton btn) {
       if (action) {
         action->End();
         action.reset();
+        UpdatePath();
       }
     }
     if (btn == PointerButton::Middle) {

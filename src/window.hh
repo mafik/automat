@@ -87,6 +87,10 @@ struct Window final : Widget, DropTarget {
   }
   void Draw(SkCanvas&);
   animation::Phase Draw(gui::DrawContext&) const override;
+
+  Vec2 move_velocity = Vec2(0, 0);
+  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
+
   void Zoom(float delta) const;
   ControlFlow VisitChildren(Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override {

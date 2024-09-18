@@ -161,29 +161,15 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
   phase |= camera_x.Tick(display);
   phase |= camera_y.Tick(display);
 
-  for (Keyboard* keyboard : keyboards) {
-    if (keyboard->carets.empty()) {
-      if (keyboard->pressed_keys.test((size_t)AnsiKey::W)) {
-        camera_y.Shift(0.1 * display.timer.d);
-        inertia = false;
-        phase = animation::Animating;
-      }
-      if (keyboard->pressed_keys.test((size_t)AnsiKey::S)) {
-        camera_y.Shift(-0.1 * display.timer.d);
-        inertia = false;
-        phase = animation::Animating;
-      }
-      if (keyboard->pressed_keys.test((size_t)AnsiKey::A)) {
-        camera_x.Shift(-0.1 * display.timer.d);
-        inertia = false;
-        phase = animation::Animating;
-      }
-      if (keyboard->pressed_keys.test((size_t)AnsiKey::D)) {
-        camera_x.Shift(0.1 * display.timer.d);
-        inertia = false;
-        phase = animation::Animating;
-      }
-    }
+  if (move_velocity.x != 0) {
+    camera_x.Shift(move_velocity.x * display.timer.d);
+    inertia = false;
+    phase = animation::Animating;
+  }
+  if (move_velocity.y != 0) {
+    camera_y.Shift(move_velocity.y * display.timer.d);
+    inertia = false;
+    phase = animation::Animating;
   }
 
   SkRect work_area = SkRect::MakeXYWH(-0.5, -0.5, 1, 1);
@@ -259,6 +245,36 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
   canvas.restore();
 
   return phase;
+}
+
+struct MoveCameraAction : Action {
+  Window& window;
+  Vec2 delta;
+  MoveCameraAction(Pointer& pointer, Window& window, Vec2 delta)
+      : Action(pointer), window(window), delta(delta) {}
+  ~MoveCameraAction() {
+    window.move_velocity -= delta;
+    window.InvalidateDrawCache();
+  }
+  void Begin() override {
+    window.move_velocity += delta;
+    window.InvalidateDrawCache();
+  }
+  void Update() override {}
+  void End() override {}
+};
+
+std::unique_ptr<Action> Window::FindAction(Pointer& p, ActionTrigger trigger) {
+  if (trigger == AnsiKey::W) {
+    return std::make_unique<MoveCameraAction>(p, *this, Vec2(0, 0.1));
+  } else if (trigger == AnsiKey::S) {
+    return std::make_unique<MoveCameraAction>(p, *this, Vec2(0, -0.1));
+  } else if (trigger == AnsiKey::A) {
+    return std::make_unique<MoveCameraAction>(p, *this, Vec2(-0.1, 0));
+  } else if (trigger == AnsiKey::D) {
+    return std::make_unique<MoveCameraAction>(p, *this, Vec2(0.1, 0));
+  }
+  return nullptr;
 }
 
 void Window::Zoom(float delta) const {

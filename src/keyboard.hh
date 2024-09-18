@@ -9,6 +9,7 @@
 #include <set>
 #include <vector>
 
+#include "action.hh"
 #include "animation.hh"
 #include "fn.hh"
 #include "math.hh"
@@ -312,6 +313,7 @@ struct Keyboard final {
 
   std::vector<std::unique_ptr<KeyGrab>> key_grabs;
   std::vector<std::unique_ptr<Keylogging>> keyloggings;
+  std::unique_ptr<Action> actions[static_cast<size_t>(AnsiKey::Count)];
 
   Keyboard(Window&);
   ~Keyboard();

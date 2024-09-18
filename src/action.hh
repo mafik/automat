@@ -1,7 +1,5 @@
 #pragma once
 
-#include <include/core/SkCanvas.h>
-
 namespace automat {
 
 namespace gui {

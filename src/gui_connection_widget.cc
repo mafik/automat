@@ -302,8 +302,11 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   return phase;
 }
 
-std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTrigger) {
-  return std::make_unique<DragConnectionAction>(pointer, *this);
+std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTrigger trigger) {
+  if (trigger == PointerButton::Left) {
+    return std::make_unique<DragConnectionAction>(pointer, *this);
+  }
+  return nullptr;
 }
 
 DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)

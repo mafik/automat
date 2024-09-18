@@ -245,7 +245,7 @@ struct ButtonAction : public Action {
 };
 
 std::unique_ptr<Action> Button::FindAction(Pointer& pointer, ActionTrigger pointer_button) {
-  if (pointer_button == PointerButton::kMouseLeft) {
+  if (pointer_button == PointerButton::Left) {
     return std::make_unique<ButtonAction>(pointer, *this);
   }
   return nullptr;

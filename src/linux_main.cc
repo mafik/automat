@@ -153,13 +153,13 @@ gui::Pointer& GetMouse() {
 gui::PointerButton EventDetailToButton(uint32_t detail) {
   switch (detail) {
     case 1:
-      return gui::kMouseLeft;
+      return gui::PointerButton::Left;
     case 2:
-      return gui::kMouseMiddle;
+      return gui::PointerButton::Middle;
     case 3:
-      return gui::kMouseRight;
+      return gui::PointerButton::Right;
     default:
-      return gui::kButtonUnknown;
+      return gui::PointerButton::Unknown;
   }
 }
 

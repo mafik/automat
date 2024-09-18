@@ -144,7 +144,7 @@ struct DragAndClickAction : Action {
         drag_action(std::move(drag_action)),
         click_action(std::move(click_action)) {}
   void Begin() override {
-    press_time = pointer.button_down_time[btn];
+    press_time = pointer.button_down_time[static_cast<int>(btn)];
     drag_action->Begin();
   }
   void Update() override {
@@ -186,7 +186,7 @@ struct RunAction : Action {
 };
 
 std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
-  if (btn != gui::kMouseLeft) return nullptr;
+  if (btn != gui::PointerButton::Left) return nullptr;
   auto hand_shape = GetHandShape();
   auto local_pos = p.PositionWithin(*this);
   if (hand_shape.contains(local_pos.x, local_pos.y)) {

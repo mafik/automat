@@ -5,6 +5,7 @@
 #include "action.hh"
 #include "root.hh"
 #include "time.hh"
+#include "widget.hh"
 #include "window.hh"
 
 using namespace maf;
@@ -107,7 +108,7 @@ void Pointer::Move(Vec2 position) {
   RunOnAutomatThread([=, this]() {
     Vec2 old_mouse_pos = pointer_position;
     pointer_position = position;
-    if (button_down_time[kMouseMiddle] > time::kZero) {
+    if (button_down_time[static_cast<int>(PointerButton::Middle)] > time::kZero) {
       Vec2 delta = window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
       window.camera_x.Shift(-delta.x);
       window.camera_y.Shift(-delta.y);
@@ -142,10 +143,10 @@ void Pointer::Wheel(float delta) {
 }
 
 void Pointer::ButtonDown(PointerButton btn) {
-  if (btn == kButtonUnknown || btn >= kButtonCount) return;
+  if (btn == PointerButton::Unknown || btn >= PointerButton::Count) return;
   RunOnAutomatThread([=, this]() {
-    button_down_position[btn] = pointer_position;
-    button_down_time[btn] = time::SystemNow();
+    button_down_position[static_cast<int>(btn)] = pointer_position;
+    button_down_time[static_cast<int>(btn)] = time::SystemNow();
     UpdatePath();
 
     if (action == nullptr && !path.empty()) {
@@ -159,17 +160,18 @@ void Pointer::ButtonDown(PointerButton btn) {
 }
 
 void Pointer::ButtonUp(PointerButton btn) {
-  if (btn == kButtonUnknown || btn >= kButtonCount) return;
+  if (btn == PointerButton::Unknown || btn >= PointerButton::Count) return;
   RunOnAutomatThread([=, this]() {
-    if (btn == kMouseLeft) {
+    if (btn == PointerButton::Left) {
       if (action) {
         action->End();
         action.reset();
       }
     }
-    if (btn == kMouseMiddle) {
-      time::Duration down_duration = time::SystemNow() - button_down_time[kMouseMiddle];
-      Vec2 delta = pointer_position - button_down_position[kMouseMiddle];
+    if (btn == PointerButton::Middle) {
+      time::Duration down_duration =
+          time::SystemNow() - button_down_time[static_cast<int>(PointerButton::Middle)];
+      Vec2 delta = pointer_position - button_down_position[static_cast<int>(PointerButton::Middle)];
       float delta_m = Length(delta);
       if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
         Vec2 canvas_pos = window.WindowToCanvas(pointer_position);
@@ -180,8 +182,8 @@ void Pointer::ButtonUp(PointerButton btn) {
         window.InvalidateDrawCache();
       }
     }
-    button_down_position[btn] = Vec2(0, 0);
-    button_down_time[btn] = time::kZero;
+    button_down_position[static_cast<int>(btn)] = Vec2(0, 0);
+    button_down_time[static_cast<int>(btn)] = time::kZero;
   });
 }
 Pointer::IconType Pointer::Icon() const {

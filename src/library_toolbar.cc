@@ -15,7 +15,7 @@ using namespace maf;
 
 namespace automat::gui {
 std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
-  if (btn != gui::kMouseLeft) {
+  if (btn != gui::PointerButton::Left) {
     return nullptr;
   }
   auto matrix = TransformUp(pointer.path, &pointer.window.display);

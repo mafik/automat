@@ -662,7 +662,7 @@ struct DragHandAction : Action {
 };
 
 std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::kMouseLeft) {
+  if (btn == gui::PointerButton::Left) {
     auto pos = pointer.PositionWithin(*this);
     auto duration_handle_path = DurationHandlePath(*this);
     if (duration_handle_path.contains(pos.x, pos.y)) {

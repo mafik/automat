@@ -40,10 +40,10 @@ using namespace maf;
 
 namespace automat::library {
 
-const MouseClick MouseClick::lmb_down(gui::PointerButton::kMouseLeft, true);
-const MouseClick MouseClick::lmb_up(gui::PointerButton::kMouseLeft, false);
-const MouseClick MouseClick::rmb_down(gui::PointerButton::kMouseRight, true);
-const MouseClick MouseClick::rmb_up(gui::PointerButton::kMouseRight, false);
+const MouseClick MouseClick::lmb_down(gui::PointerButton::Left, true);
+const MouseClick MouseClick::lmb_up(gui::PointerButton::Left, false);
+const MouseClick MouseClick::rmb_down(gui::PointerButton::Right, true);
+const MouseClick MouseClick::rmb_up(gui::PointerButton::Right, false);
 
 __attribute__((constructor)) void RegisterMouseClick() {
   RegisterPrototype(MouseClick::lmb_down);
@@ -72,7 +72,7 @@ constexpr float kScale = 0.00005;
 static sk_sp<SkImage> RenderMouseImage(SkCanvas& root_canvas, gui::PointerButton button,
                                        bool down) {
   auto base = MouseBaseImage();
-  auto mask = button == gui::kMouseLeft ? MouseLMBMask() : MouseRMBMask();
+  auto mask = button == gui::PointerButton::Left ? MouseLMBMask() : MouseRMBMask();
   SkBitmap bitmap;
   SkSamplingOptions sampling;
   bitmap.allocN32Pixels(base->width(), base->height());
@@ -95,7 +95,7 @@ static sk_sp<SkImage> RenderMouseImage(SkCanvas& root_canvas, gui::PointerButton
     SkPaint paint;
     paint.setBlendMode(SkBlendMode::kMultiply);
     paint.setAlphaf(0.9f);
-    canvas.translate(button == gui::kMouseLeft ? 85 : 285, 130);
+    canvas.translate(button == gui::PointerButton::Left ? 85 : 285, 130);
     if (down) {
       paint.setColor(SkColorSetARGB(255, 255, 128, 128));
       canvas.scale(1, -1);
@@ -112,7 +112,7 @@ static sk_sp<SkImage> RenderMouseImage(SkCanvas& root_canvas, gui::PointerButton
 
 static sk_sp<SkImage>& CachedMouseImage(SkCanvas& canvas, gui::PointerButton button, bool down) {
   switch (button) {
-    case gui::PointerButton::kMouseLeft:
+    case gui::PointerButton::Left:
       if (down) {
         static auto image = RenderMouseImage(canvas, button, down);
         return image;
@@ -120,7 +120,7 @@ static sk_sp<SkImage>& CachedMouseImage(SkCanvas& canvas, gui::PointerButton but
         static auto image = RenderMouseImage(canvas, button, down);
         return image;
       }
-    case gui::PointerButton::kMouseRight:
+    case gui::PointerButton::Right:
       if (down) {
         static auto image = RenderMouseImage(canvas, button, down);
         return image;
@@ -137,13 +137,13 @@ static sk_sp<SkImage>& CachedMouseImage(SkCanvas& canvas, gui::PointerButton but
 MouseClick::MouseClick(gui::PointerButton button, bool down) : button(button), down(down) {}
 string_view MouseClick::Name() const {
   switch (button) {
-    case gui::PointerButton::kMouseLeft:
+    case gui::PointerButton::Left:
       if (down) {
         return "Mouse Left Down"sv;
       } else {
         return "Mouse Left Up"sv;
       }
-    case gui::PointerButton::kMouseRight:
+    case gui::PointerButton::Right:
       if (down) {
         return "Mouse Right Down"sv;
       } else {
@@ -199,7 +199,7 @@ LongRunning* MouseClick::OnRun(Location& location) {
 #endif
 #if defined(__linux__)
   U8 type = down ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE;
-  U8 detail = button == gui::PointerButton::kMouseLeft ? 1 : 3;
+  U8 detail = button == gui::PointerButton::Left ? 1 : 3;
   xcb_test_fake_input(connection, type, detail, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
   xcb_flush(connection);
 #endif

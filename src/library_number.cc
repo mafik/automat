@@ -219,7 +219,7 @@ SkMatrix Number::TransformToChild(const Widget& child, animation::Display*) cons
 }
 
 std::unique_ptr<Action> Number::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
-  if (btn != gui::PointerButton::kMouseLeft) {
+  if (btn != gui::PointerButton::Left) {
     return nullptr;
   }
   auto& path = pointer.path;

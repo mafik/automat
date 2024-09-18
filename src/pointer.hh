@@ -66,8 +66,8 @@ struct Pointer final {
   Vec2 pointer_position;
   std::vector<Pointer::IconType> icons;
 
-  Vec2 button_down_position[kButtonCount];
-  time::SystemPoint button_down_time[kButtonCount];
+  Vec2 button_down_position[static_cast<int>(PointerButton::Count)];
+  time::SystemPoint button_down_time[static_cast<int>(PointerButton::Count)];
 
   maf::Vec<PointerMoveCallback*> move_callbacks;
 

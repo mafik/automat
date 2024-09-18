@@ -737,7 +737,7 @@ SkPath WindowShape(int num_tracks) {
 }
 
 unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::kMouseLeft) {
+  if (btn == gui::PointerButton::Left) {
     auto bridge_shape =
         BridgeShape(tracks.size(), CurrentPosRatio(*this, ptr.window.display.timer.now));
     auto window_shape = WindowShape(tracks.size());

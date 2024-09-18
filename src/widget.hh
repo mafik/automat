@@ -103,7 +103,7 @@ struct DrawContext : DisplayContext {
 
 struct DropTarget;
 
-enum PointerButton { kButtonUnknown, kMouseLeft, kMouseMiddle, kMouseRight, kButtonCount };
+enum class PointerButton { Unknown, Left, Middle, Right, Count };
 
 struct ActionTrigger {
   int repr;
@@ -111,14 +111,14 @@ struct ActionTrigger {
   constexpr static int kAnsiKeyStart = 0;
   constexpr static int kAnsiKeyEnd = static_cast<int>(AnsiKey::Count);
   constexpr static int kPointerStart = kAnsiKeyEnd;
-  constexpr static int kPointerEnd = kPointerStart + kButtonCount;
+  constexpr static int kPointerEnd = kPointerStart + static_cast<int>(PointerButton::Count);
 
   constexpr ActionTrigger(PointerButton button) : repr(kPointerStart + static_cast<int>(button)) {}
   constexpr ActionTrigger(AnsiKey key) : repr(kAnsiKeyStart + static_cast<int>(key)) {}
 
   constexpr operator PointerButton() const {
     if (repr < kPointerStart || repr >= kPointerEnd) {
-      return PointerButton::kButtonUnknown;
+      return PointerButton::Unknown;
     }
     return static_cast<PointerButton>(repr - kPointerStart);
   }

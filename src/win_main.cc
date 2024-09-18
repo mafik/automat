@@ -470,19 +470,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_LBUTTONDOWN: {
-      GetMouse().ButtonDown(gui::kMouseLeft);
+      GetMouse().ButtonDown(gui::PointerButton::kMouseLeft);
       break;
     }
     case WM_LBUTTONUP: {
-      GetMouse().ButtonUp(gui::kMouseLeft);
+      GetMouse().ButtonUp(gui::PointerButton::kMouseLeft);
       break;
     }
     case WM_MBUTTONDOWN: {
-      GetMouse().ButtonDown(gui::kMouseMiddle);
+      GetMouse().ButtonDown(gui::PointerButton::kMouseMiddle);
       break;
     }
     case WM_MBUTTONUP: {
-      GetMouse().ButtonUp(gui::kMouseMiddle);
+      GetMouse().ButtonUp(gui::PointerButton::kMouseMiddle);
       break;
     }
     case WM_MOUSEMOVE: {

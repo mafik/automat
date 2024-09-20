@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "audio.hh"
 #include "automat.hh"
 #include "format.hh"
 #include "keyboard.hh"
@@ -757,6 +758,7 @@ void RenderLoop() {
 void automat::StopAutomat(maf::Status&) { automat_thread.request_stop(); }
 
 int LinuxMain(int argc, char* argv[]) {
+  audio::Init(&argc, &argv);
   SkGraphics::Init();
   Status status;
   ConnectXCB(status);

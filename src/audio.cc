@@ -49,11 +49,6 @@ static void on_process(void* userdata) {
   int n_frames = buf.maxsize / sizeof(Frame);
   if (b->requested) n_frames = SPA_MIN(b->requested, n_frames);
 
-  // PipeWire uses 512B buffers (which correspond to ~10ms) by default.
-  // We manually bring down the latency to 2.667ms here.
-  // This is likely to cause audio glitches so it might be a good idea to relax this.
-  n_frames = 128;
-
   Span<Frame> dst = Span<Frame>((Frame*)buf.data, n_frames);
 
   dst.Zero();
@@ -61,8 +56,20 @@ static void on_process(void* userdata) {
   for (auto& span : playing) {
     auto end = min<int>(span.size(), n_frames);
     for (int i = 0; i < end; i++) {
-      __builtin_add_overflow(dst[i].l, span[i].l, &dst[i].l);
-      __builtin_add_overflow(dst[i].r, span[i].r, &dst[i].r);
+      if (__builtin_add_overflow(dst[i].l, span[i].l, &dst[i].l)) {
+        if (dst[i].l >= 0) {
+          dst[i].l = SHRT_MAX;
+        } else {
+          dst[i].l = SHRT_MIN;
+        }
+      }
+      if (__builtin_add_overflow(dst[i].r, span[i].r, &dst[i].r)) {
+        if (dst[i].r >= 0) {
+          dst[i].r = SHRT_MAX;
+        } else {
+          dst[i].r = SHRT_MIN;
+        }
+      }
     }
     span.RemovePrefix(end);
   }

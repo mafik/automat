@@ -19,8 +19,9 @@ template <class T = char, Size Extent = DynamicExtent>
 struct Span : std::span<T, Extent> {
   using std::span<T, Extent>::span;
 
-  inline Span(const Str& s) : Span(const_cast<char*>(s.data()), s.size() / sizeof(T)) {}
-  inline Span(StrView s) : Span(const_cast<char*>(s.data()), s.size() / sizeof(T)) {}
+  inline Span(const Str& s) : Span(static_cast<T*>(s.data()), s.size() / sizeof(T)) {}
+  inline Span(StrView s)
+      : Span(reinterpret_cast<T*>(const_cast<char*>(s.data())), s.size() / sizeof(T)) {}
 
   // Arrays
   template <Size N>
@@ -58,10 +59,17 @@ struct Span : std::span<T, Extent> {
     return *(U*)this->data();
   }
 
+  void Zero() { memset(this->data(), 0, this->size() * sizeof(T)); }
+
   // Unchecked version of As. Use only when you know the span is big enough.
   template <typename U>
   U& As() {
     return *(U*)this->data();
+  }
+
+  template <typename U>
+  Span<U> AsSpanOf() {
+    return Span<U>((U*)this->data(), this->size_bytes() / sizeof(U));
   }
 
   template <typename U>

@@ -37,6 +37,7 @@ class BuildType:
 
         self.compile_args += [f'-I{self.PREFIX()}/include']
         self.link_args += [f'-L{self.PREFIX()}/lib']
+        self.link_args += [f'-L{self.PREFIX()}/lib64']
         self.PREFIX().mkdir(parents=True, exist_ok=True)
     
     def rule_suffix(self):

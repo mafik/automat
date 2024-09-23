@@ -7,10 +7,11 @@
 #include <include/gpu/GrDirectContext.h>
 #include <modules/svg/include/SkSVGDOM.h>
 
-#include "../build/generated/embedded.hh"
 #include "animation.hh"
 #include "argument.hh"
+#include "audio.hh"
 #include "color.hh"
+#include "embedded.hh"
 #include "gui_connection_widget.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
@@ -271,6 +272,7 @@ LongRunning* MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);
     timeline->BeginRecording();
+    audio::Play(embedded::assets_SFX_macro_start_wav);
     keylogging = &gui::keyboard->BeginKeylogging(*this);
   }
   return this;
@@ -280,6 +282,7 @@ void MacroRecorder::Cancel() {
     if (auto timeline = FindTimeline(*this)) {
       timeline->StopRecording();
     }
+    audio::Play(embedded::assets_SFX_macro_stop_wav);
     keylogging->Release();
     keylogging = nullptr;
   }

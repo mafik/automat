@@ -11,6 +11,8 @@
 #include "pointer.hh"
 #include "window.hh"
 
+using namespace maf;
+
 namespace automat {
 
 static Vec2 RoundToMilimeters(Vec2 v) {

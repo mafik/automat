@@ -19,6 +19,7 @@ struct MouseClick : Object, Runnable {
   SkPath Shape(animation::Display*) const override;
   void Args(std::function<void(Argument&)> cb) override;
   LongRunning* OnRun(Location&) override;
+  audio::Sound& NextSound() override;
 };
 
 }  // namespace automat::library

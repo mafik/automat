@@ -346,7 +346,7 @@ void Location::Run() {
 
 Vec2AndDir Location::ArgStart(animation::Display* display, Argument& arg) {
   auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
-  Path path = {ParentAs<Widget>(), (Widget*)this};
+  gui::Path path = {ParentAs<Widget>(), (Widget*)this};
   auto m = TransformUp(path, display);
   pos_dir.pos = m.mapPoint(pos_dir.pos);
   return pos_dir;
@@ -553,7 +553,7 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
 }
 
 void Location::UpdateAutoconnectArgs() {
-  auto here_up = TransformUp(Path{root_machine, this}, nullptr);
+  auto here_up = TransformUp(gui::Path{root_machine, this}, nullptr);
   object->Args([&](Argument& arg) {
     if (arg.autoconnect_radius <= 0) {
       return;
@@ -569,7 +569,7 @@ void Location::UpdateAutoconnectArgs() {
       Vec<Vec2AndDir> to_positions;
       auto conn = *it;
       conn->to.object->ConnectionPositions(to_positions);
-      auto other_up = TransformUp(Path{root_machine, &conn->to}, nullptr);
+      auto other_up = TransformUp(gui::Path{root_machine, &conn->to}, nullptr);
       for (auto& to : to_positions) {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
@@ -618,7 +618,7 @@ void Location::UpdateAutoconnectArgs() {
     if (other.get() == this) {
       continue;
     }
-    auto other_up = TransformUp(Path{root_machine, other.get()}, nullptr);
+    auto other_up = TransformUp(gui::Path{root_machine, other.get()}, nullptr);
     other->object->Args([&](Argument& arg) {
       if (arg.autoconnect_radius <= 0) {
         return;
@@ -638,7 +638,7 @@ void Location::UpdateAutoconnectArgs() {
         Vec<Vec2AndDir> to_positions;
         auto conn = *it;
         conn->to.object->ConnectionPositions(to_positions);
-        auto to_up = TransformUp(Path{root_machine, &conn->to}, nullptr);
+        auto to_up = TransformUp(gui::Path{root_machine, &conn->to}, nullptr);
         for (auto& to : to_positions) {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);

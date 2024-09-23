@@ -15,6 +15,7 @@
 #include <include/pathops/SkPathOps.h>
 
 #include "drag_action.hh"
+#include "embedded.hh"
 #include "gui_connection_widget.hh"
 #include "root.hh"
 #include "tasks.hh"
@@ -373,6 +374,7 @@ void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* f
 void Machine::DropLocation(std::unique_ptr<Location>&& l) {
   l->parent = here;
   locations.insert(locations.begin(), std::move(l));
+  audio::Play(embedded::assets_SFX_canvas_drop_wav);
   InvalidateDrawCache();
 }
 
@@ -396,6 +398,7 @@ std::unique_ptr<Location> Machine::Extract(Location& location) {
       }
     }
     InvalidateDrawCache();
+    audio::Play(embedded::assets_SFX_canvas_pick_wav);
     return result;
   } else {
     return nullptr;

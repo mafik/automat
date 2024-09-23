@@ -7,6 +7,8 @@
 #include <cassert>
 #include <thread>
 
+#include "concurrentqueue.hh"
+#include "log.hh"
 #include "span.hh"
 #include "str.hh"
 
@@ -20,15 +22,22 @@ namespace automat::audio {
 jthread pw_loop_thread;
 
 constexpr int kDefaultRate = 48'000;
-constexpr int kDefaultChannels = 2;
+constexpr int kDefaultChannels = 1;
 
 struct Frame {
-  I16 l, r;
+  I16 mono;
 };
 
-Vec<Span<Frame>> playing;
+struct Clip {
+  Span<Frame> remaining;
+  Span<Frame> all;
+  atomic<shared_ptr<Clip>> next = nullptr;
+  Clip(Span<Frame> frames) : remaining(frames), all(frames) {}
+};
 
-atomic<Span<Frame>*> to_play;
+Vec<shared_ptr<Clip>> playing;
+
+moodycamel::ConcurrentQueue<shared_ptr<Clip>> to_play;
 
 struct data {
   struct pw_main_loop* loop;
@@ -53,31 +62,37 @@ static void on_process(void* userdata) {
 
   dst.Zero();
 
-  for (auto& span : playing) {
-    auto end = min<int>(span.size(), n_frames);
-    for (int i = 0; i < end; i++) {
-      if (__builtin_add_overflow(dst[i].l, span[i].l, &dst[i].l)) {
-        if (dst[i].l >= 0) {
-          dst[i].l = SHRT_MAX;
+  for (auto& clip : playing) {
+    int dst_pos = 0;
+    while (true) {
+      if (dst_pos >= n_frames) {
+        break;
+      }
+      if (clip->remaining.empty()) {
+        clip = clip->next;
+        if (clip == nullptr) {
+          break;
+        }
+        clip->remaining = clip->all;
+      }
+      if (__builtin_add_overflow(dst[dst_pos].mono, clip->remaining.front().mono,
+                                 &dst[dst_pos].mono)) {
+        if (dst[dst_pos].mono >= 0) {
+          dst[dst_pos].mono = SHRT_MAX;
         } else {
-          dst[i].l = SHRT_MIN;
+          dst[dst_pos].mono = SHRT_MIN;
         }
       }
-      if (__builtin_add_overflow(dst[i].r, span[i].r, &dst[i].r)) {
-        if (dst[i].r >= 0) {
-          dst[i].r = SHRT_MAX;
-        } else {
-          dst[i].r = SHRT_MIN;
-        }
-      }
+      clip->remaining.RemovePrefix(1);
+      ++dst_pos;
     }
-    span.RemovePrefix(end);
   }
 
-  for (auto& span : playing) {
-    if (span.empty()) {
-      span = playing.back();
+  for (int i = 0; i < playing.size(); ++i) {
+    if (playing[i] == nullptr) {
+      swap(playing[i], playing.back());
       playing.pop_back();
+      --i;
     }
   }
 
@@ -87,14 +102,9 @@ static void on_process(void* userdata) {
 
   pw_stream_queue_buffer(data->stream, b);
 
-  while (true) {
-    auto new_span = to_play.exchange(nullptr);
-    if (new_span == nullptr) {
-      break;
-    }
-    to_play.notify_one();
-    playing.Append(*new_span);
-    delete new_span;
+  shared_ptr<Clip> to_play_clip = nullptr;
+  while (to_play.try_dequeue(to_play_clip)) {
+    playing.emplace_back(std::move(to_play_clip));
   }
 }
 
@@ -105,8 +115,6 @@ static const struct pw_stream_events stream_events = {
 
 void Init(int* argc, char*** argv) {
   pw_init(argc, argv);
-
-  to_play = nullptr;
 
   pw_loop_thread = std::jthread([] {
     struct data data = {
@@ -154,25 +162,50 @@ struct WAV_Header {
   I32 data_size;
 };
 
-void Play(maf::fs::VFile& file) {
+shared_ptr<Clip> MakeClipFromWAV(maf::fs::VFile& file) {
   Span<> content = file.content;
   WAV_Header& header = content.Consume<WAV_Header>();
+
+  if (content.size_bytes() > header.data_size) {
+    ERROR << file.path << " contains extra data at the end. Run `./run.py optimize_sfx` to fix.";
+    content.Resize(header.data_size);
+  }
   assert(StrView(header.riff, 4) == "RIFF");
   assert(StrView(header.wave, 4) == "WAVE");
   assert(StrView(header.fmt, 4) == "fmt ");
   assert(StrView(header.data, 4) == "data");
+  assert(header.bits_per_sample == 16);
+  assert(header.format == 1);
+  assert(header.rate == kDefaultRate);
+  assert(header.channels == kDefaultChannels);
   assert(content.size_bytes() == header.data_size);
-  assert(to_play.is_lock_free());
+  return make_shared<Clip>(content.AsSpanOf<Frame>());
+}
 
-  auto data = new Span<Frame>(content.AsSpanOf<Frame>());
-  Span<Frame>* expected_null = nullptr;
-  while (!to_play.compare_exchange_strong(expected_null, data)) {
-    auto current = to_play.load();
-    if (current == nullptr) {
-      continue;
-    }
-    to_play.wait(current);
+void ScheduleClip(shared_ptr<Clip> clip) { to_play.enqueue(std::move(clip)); }
+
+void Play(maf::fs::VFile& file) { ScheduleClip(MakeClipFromWAV(file)); }
+
+struct BeginLoopEndEffect : Effect {
+  shared_ptr<Clip> loop;
+  shared_ptr<Clip> end;
+
+  BeginLoopEndEffect(maf::fs::VFile& begin_file, maf::fs::VFile& loop_file,
+                     maf::fs::VFile& end_file)
+      : loop(MakeClipFromWAV(loop_file)), end(MakeClipFromWAV(end_file)) {
+    auto begin = MakeClipFromWAV(begin_file);
+    begin->next = loop;
+    loop->next = loop;
+    ScheduleClip(begin);
   }
+
+  ~BeginLoopEndEffect() override { loop->next = end; }
+};
+
+std::unique_ptr<Effect> MakeBeginLoopEndEffect(maf::fs::VFile& begin_file,
+                                               maf::fs::VFile& loop_file,
+                                               maf::fs::VFile& end_file) {
+  return make_unique<BeginLoopEndEffect>(begin_file, loop_file, end_file);
 }
 
 }  // namespace automat::audio

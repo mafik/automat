@@ -200,6 +200,7 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
 }
 
 LongRunning* KeyPresser::OnRun(Location& here) {
+  audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
   key_pressed = true;
   InvalidateDrawCache();
@@ -207,6 +208,7 @@ LongRunning* KeyPresser::OnRun(Location& here) {
 }
 
 void KeyPresser::Cancel() {
+  audio::Play(embedded::assets_SFX_key_up_wav);
   SendKeyEvent(key, false);
   key_pressed = false;
   InvalidateDrawCache();

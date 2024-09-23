@@ -6,6 +6,7 @@
 
 #include "animation.hh"
 #include "drag_action.hh"
+#include "embedded.hh"
 #include "font.hh"
 #include "gui_connection_widget.hh"
 #include "math.hh"
@@ -454,6 +455,7 @@ void Window::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fi
 
 void Window::DropLocation(std::unique_ptr<Location>&& location) {
   // do nothing - location will be deleted by unique_ptr
+  audio::Play(embedded::assets_SFX_trash_wav);
 }
 
 static void UpdateConnectionWidgets(Window& window) {

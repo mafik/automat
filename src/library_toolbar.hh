@@ -51,6 +51,8 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   maf::Vec<unique_ptr<Object>> prototypes;
   maf::Vec<unique_ptr<gui::PrototypeButton>> buttons;
 
+  animation::PerDisplay<int> hovered_button;
+
   // This will clone the provided object and add it to the toolbar.
   void AddObjectPrototype(const Object*);
 

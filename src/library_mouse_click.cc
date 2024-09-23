@@ -1,5 +1,6 @@
 #include "library_mouse_click.hh"
 
+#include "audio.hh"
 #include "base.hh"
 
 #if defined(_WIN32)
@@ -174,6 +175,10 @@ SkPath MouseClick::Shape(animation::Display*) const {
 }
 
 void MouseClick::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
+
+audio::Sound& MouseClick::NextSound() {
+  return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
+}
 
 LongRunning* MouseClick::OnRun(Location& location) {
 #if defined(_WIN32)

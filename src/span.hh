@@ -41,6 +41,11 @@ struct Span : std::span<T, Extent> {
     return *this;
   }
 
+  auto Resize(Size n) {
+    *this = this->first(n);
+    return *this;
+  }
+
   template <Size ExtentRhs>
   constexpr inline bool StartsWith(Span<T, ExtentRhs> prefix) {
     if (this->size() < prefix.size()) {

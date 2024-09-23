@@ -286,6 +286,9 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
       state.sections.EraseIndex(j);
     }
     float remaining = total_dist - retract;
+    if (total_dist > 0 && remaining == 0) {
+      audio::Play(embedded::assets_SFX_cable_click_wav);
+    }
     // Move chain[i] to |remaining| distance from dispenser
     state.sections[i].distance = remaining;
   } else {

@@ -10,8 +10,10 @@
 #include <cmath>
 
 #include "animation.hh"
+#include "audio.hh"
 #include "color.hh"
 #include "control_flow.hh"
+#include "embedded.hh"
 #include "gui_constants.hh"
 #include "pointer.hh"
 #include "widget.hh"
@@ -234,6 +236,7 @@ struct ButtonAction : public Action {
   ButtonAction(Pointer& pointer, Button& button) : Action(pointer), button(button) {}
 
   void Begin() override {
+    audio::Play(embedded::assets_SFX_button_down_wav);
     button.Activate(pointer);
     button.press_action_count++;
   }
@@ -244,6 +247,8 @@ struct ButtonAction : public Action {
     button.press_action_count--;
     button.InvalidateDrawCache();
   }
+
+  ~ButtonAction() override { audio::Play(embedded::assets_SFX_button_up_wav); }
 };
 
 std::unique_ptr<Action> Button::FindAction(Pointer& pointer, ActionTrigger pointer_button) {

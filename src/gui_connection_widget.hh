@@ -1,6 +1,7 @@
 #pragma once
 
 #include "animation.hh"
+#include "audio.hh"
 #include "connector_optical.hh"
 #include "widget.hh"
 
@@ -16,6 +17,7 @@ struct ConnectionWidget;
 struct DragConnectionAction : Action {
   ConnectionWidget& widget;
   animation::Display* display;
+  std::unique_ptr<audio::Effect> effect;
 
   Vec2 grab_offset;
   DragConnectionAction(Pointer&, ConnectionWidget&);

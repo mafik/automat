@@ -5,6 +5,8 @@
 #include <include/core/SkSamplingOptions.h>
 
 #include "../build/generated/embedded.hh"
+#include "audio.hh"
+#include "random.hh"
 #include "span.hh"
 #include "textures.hh"
 #include "widget.hh"
@@ -21,6 +23,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   auto matrix = TransformUp(pointer.path, &pointer.window.display);
   auto loc = std::make_unique<Location>();
   loc->Create(*proto);
+  audio::Play(embedded::assets_SFX_toolbar_pick_wav);
   auto& anim = loc->animation_state[pointer.window.display];
   anim.scale = matrix.get(0) / pointer.window.zoom;
   auto contact_point = pointer.PositionWithin(*this);
@@ -65,6 +68,7 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
   auto my_transform = gui::TransformDown(dctx.path, &dctx.display);
 
   float width = CalculateWidth();
+  int new_hovered_button = -1;
   for (auto* pointer : dctx.display.window->pointers) {
     if (pointer->action) {
       continue;
@@ -91,10 +95,25 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
       }
       if (x <= pointer_position.x && pointer_position.x <= x + button_width) {
         width_targets[i] = buttons[i]->natural_width * 2;
+        new_hovered_button = i;
         break;
       }
       x += button_width;
     }
+  }
+
+  if (hovered_button.Find(dctx.display) == nullptr) {
+    hovered_button[dctx.display] = -1;
+  }
+  if (hovered_button[dctx.display] != new_hovered_button) {
+    hovered_button[dctx.display] = new_hovered_button;
+
+    static SplitMix64 rng(123);
+    static audio::Sound* sounds[3] = {&embedded::assets_SFX_toolbar_select_01_wav,
+                                      &embedded::assets_SFX_toolbar_select_02_wav,
+                                      &embedded::assets_SFX_toolbar_select_03_wav};
+
+    audio::Play(*sounds[RandomInt<0, 2>(rng)]);
   }
 
   auto phase = animation::Finished;

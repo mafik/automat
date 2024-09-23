@@ -6,7 +6,9 @@
 #include <include/core/SkTextBlob.h>
 #include <include/effects/SkGradientShader.h>
 
+#include "../build/generated/embedded.hh"
 #include "argument.hh"
+#include "audio.hh"
 #include "base.hh"
 #include "connector_optical.hh"
 #include "font.hh"
@@ -314,7 +316,11 @@ std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTri
 }
 
 DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)
-    : Action(pointer), widget(widget) {}
+    : Action(pointer),
+      widget(widget),
+      effect(audio::MakeBeginLoopEndEffect(embedded::assets_SFX_cable_start_wav,
+                                           embedded::assets_SFX_cable_loop_wav,
+                                           embedded::assets_SFX_cable_end_wav)) {}
 
 DragConnectionAction::~DragConnectionAction() {
   widget.manual_position.reset();

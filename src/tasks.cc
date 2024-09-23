@@ -1,5 +1,6 @@
 #include "tasks.hh"
 
+#include "audio.hh"
 #include "base.hh"
 #include "time.hh"
 
@@ -59,6 +60,7 @@ std::string Task::Format() { return "Task()"; }
 std::string RunTask::Format() { return f("RunTask(%s)", target->ToStr().c_str()); }
 
 void ScheduleNext(Location& source) {
+  audio::Play(source.object->NextSound());
   source.last_finished = time::SteadyClock::now();
   // TODO: maybe there is a better way to do this...
   next_arg.InvalidateConnectionWidgets(source);  // so that the "next" connection flashes

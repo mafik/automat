@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 
+#include "audio.hh"
 #include "deserializer.hh"
 #include "math.hh"
 #include "widget.hh"
@@ -57,6 +58,8 @@ struct Object : gui::Widget {
 
   virtual void Updated(Location& here, Location& updated);
   virtual void Errored(Location& here, Location& errored) {}
+
+  virtual audio::Sound& NextSound();
 
   virtual std::partial_ordering operator<=>(const Object& other) const noexcept {
     return GetText() <=> other.GetText();

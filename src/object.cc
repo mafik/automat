@@ -3,6 +3,7 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
+#include "../build/generated/embedded.hh"
 #include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
@@ -144,5 +145,7 @@ RRect Object::CoarseBounds(animation::Display* display) const {
                .radii = {{0, 0}, {0, 0}, {0, 0}, {0, 0}},
                .type = SkRRect::kRect_Type};
 }
+
+audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
 }  // namespace automat

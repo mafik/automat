@@ -86,10 +86,7 @@ struct DrawCache {
 
   void Clean(time::SteadyPoint now) {
     auto deadline = now - 60s;
-    auto new_end = std::remove_if(entries.begin(), entries.end(), [deadline](const auto& entry) {
-      return entry->last_used < deadline;
-    });
-    entries.erase(new_end, entries.end());
+    std::erase_if(entries, [deadline](const auto& entry) { return entry->last_used < deadline; });
   }
 };
 

@@ -191,10 +191,10 @@ LongRunning* MouseClick::OnRun(Location& location) {
   input.mi.time = 0;
   input.mi.dwExtraInfo = 0;
   switch (button) {
-    case gui::PointerButton::kMouseLeft:
+    case gui::PointerButton::Left:
       input.mi.dwFlags |= down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
       break;
-    case gui::PointerButton::kMouseRight:
+    case gui::PointerButton::Right:
       input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
       break;
     default:

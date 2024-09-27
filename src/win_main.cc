@@ -470,19 +470,19 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     }
     case WM_LBUTTONDOWN: {
-      GetMouse().ButtonDown(gui::PointerButton::kMouseLeft);
+      GetMouse().ButtonDown(gui::PointerButton::Left);
       break;
     }
     case WM_LBUTTONUP: {
-      GetMouse().ButtonUp(gui::PointerButton::kMouseLeft);
+      GetMouse().ButtonUp(gui::PointerButton::Left);
       break;
     }
     case WM_MBUTTONDOWN: {
-      GetMouse().ButtonDown(gui::PointerButton::kMouseMiddle);
+      GetMouse().ButtonDown(gui::PointerButton::Middle);
       break;
     }
     case WM_MBUTTONUP: {
-      GetMouse().ButtonUp(gui::PointerButton::kMouseMiddle);
+      GetMouse().ButtonUp(gui::PointerButton::Middle);
       break;
     }
     case WM_MOUSEMOVE: {
@@ -564,6 +564,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   SetConsoleOutputCP(CP_UTF8);
   // This makes std::this_thread::sleep_until() more accurate.
   timeBeginPeriod(1);
+
+  audio::Init();
 
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
   SkGraphics::Init();

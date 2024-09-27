@@ -6,7 +6,11 @@ namespace automat::audio {
 
 using Sound = maf::fs::VFile;
 
+#ifdef __linux__
 void Init(int* argc, char*** argv);
+#else
+void Init();
+#endif
 
 void Play(Sound&);
 

@@ -1,8 +1,23 @@
 #include "audio.hh"
 
 #include <math.h>
+
+#ifdef __linux__
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
+
+#pragma maf add link argument "-latomic"
+#else
+// clang-format off
+#undef NOGDI
+#include <windows.h>
+#undef ERROR
+#include <audioclient.h>
+#include <mmdeviceapi.h>
+
+#pragma comment(lib, "ole32.lib")
+// clang-format on
+#endif
 
 #include <cassert>
 #include <thread>
@@ -12,14 +27,18 @@
 #include "span.hh"
 #include "str.hh"
 
-#pragma maf add link argument "-latomic"
-
 using namespace maf;
 using namespace std;
 
+// TODO: switch Linux build to MixPlayingClips<FORMAT>
+// TODO: if audio thread fails for whatever reason, audio clips shouldn't accumulate in the queue
+// TODO: replace the "Frame" class with I16
+// TODO: call AvSetMmThreadCharacteristicsA
+// (https://learn.microsoft.com/en-us/windows/win32/coreaudio/exclusive-mode-streams)
+
 namespace automat::audio {
 
-jthread pw_loop_thread;
+jthread loop_thread;
 
 constexpr int kDefaultRate = 48'000;
 constexpr int kDefaultChannels = 1;
@@ -31,13 +50,80 @@ struct Frame {
 struct Clip {
   Span<Frame> remaining;
   Span<Frame> all;
-  atomic<shared_ptr<Clip>> next = nullptr;
+  atomic<shared_ptr<Clip>> next = {};
   Clip(Span<Frame> frames) : remaining(frames), all(frames) {}
 };
 
 Vec<shared_ptr<Clip>> playing;
 
 moodycamel::ConcurrentQueue<shared_ptr<Clip>> to_play;
+
+// Called from the audio thread to receive new clips from other threads.
+static void ReceiveClips() {
+  shared_ptr<Clip> to_play_clip = nullptr;
+  while (to_play.try_dequeue(to_play_clip)) {
+    playing.emplace_back(std::move(to_play_clip));
+  }
+}
+
+template <typename T>
+static void Add(T& out, I16 in);
+
+template <>
+void Add(I16& out, I16 in) {
+  if (__builtin_add_overflow(out, in, &out)) {
+    if (out >= 0) {
+      out = SHRT_MAX;
+    } else {
+      out = SHRT_MIN;
+    }
+  }
+}
+
+template <>
+void Add(float& out, I16 in) {
+  out += in / 32768.0f;
+  if (out > 1) {
+    out = 1;
+  } else if (out < -1) {
+    out = -1;
+  }
+}
+
+template <typename SAMPLE_T>
+static void MixPlayingClips(char* buffer, int n_channels, int n_frames) {
+  auto dst = Span<SAMPLE_T>((SAMPLE_T*)buffer, n_frames * n_channels);
+  dst.Zero();
+  for (auto& clip : playing) {
+    auto dst2 = dst;
+    while (!dst2.empty()) {
+      if (clip->remaining.empty()) {
+        clip = clip->next;
+        if (clip == nullptr) {
+          break;
+        }
+        clip->remaining = clip->all;
+      }
+      for (int c = 0; c < n_channels; ++c) {
+        Add(dst2[c], clip->remaining.front().mono);
+      }
+      clip->remaining.RemovePrefix(1);
+      dst2.RemovePrefix(n_channels);
+    }
+  }
+
+  for (int i = 0; i < playing.size(); ++i) {
+    if (playing[i] == nullptr) {
+      swap(playing[i], playing.back());
+      playing.pop_back();
+      --i;
+    }
+  }
+}
+
+#pragma region Linux
+
+#ifdef __linux__
 
 struct data {
   struct pw_main_loop* loop;
@@ -102,10 +188,7 @@ static void on_process(void* userdata) {
 
   pw_stream_queue_buffer(data->stream, b);
 
-  shared_ptr<Clip> to_play_clip = nullptr;
-  while (to_play.try_dequeue(to_play_clip)) {
-    playing.emplace_back(std::move(to_play_clip));
-  }
+  ReceiveClips();
 }
 
 static const struct pw_stream_events stream_events = {
@@ -116,7 +199,7 @@ static const struct pw_stream_events stream_events = {
 void Init(int* argc, char*** argv) {
   pw_init(argc, argv);
 
-  pw_loop_thread = std::jthread([] {
+  loop_thread = std::jthread([] {
     struct data data = {
         0,
     };
@@ -145,6 +228,154 @@ void Init(int* argc, char*** argv) {
     pw_main_loop_destroy(data.loop);
   });
 }
+
+#endif
+#pragma endregion
+
+#pragma region Windows
+#ifdef _WIN32
+
+#define VERIFY(hr)                          \
+  do {                                      \
+    auto temp = (hr);                       \
+    if (FAILED(temp)) {                     \
+      ERROR << #hr << ": " << temp << "\n"; \
+      goto error;                           \
+    }                                       \
+  } while (0)
+
+static char* GetBuffer(IAudioRenderClient* client, int num_frames, Status& status) {
+  BYTE* buffer;
+  auto hr = client->GetBuffer(num_frames, &buffer);
+  if (FAILED(hr)) {
+    Str msg;
+    switch (hr) {
+      case AUDCLNT_E_BUFFER_ERROR:
+        msg =
+            "GetBuffer failed to retrieve a data buffer and *ppData points to NULL. For more "
+            "information, see Remarks.";
+        break;
+      case AUDCLNT_E_BUFFER_TOO_LARGE:
+        msg =
+            "The NumFramesRequested value exceeds the available buffer space (buffer size "
+            "minus padding size).";
+        break;
+      case AUDCLNT_E_BUFFER_SIZE_ERROR:
+        msg =
+            "The stream is exclusive mode and uses event-driven buffering, but the client "
+            "attempted to get a packet that was not the size of the buffer.";
+        break;
+      case AUDCLNT_E_OUT_OF_ORDER:
+        msg = "A previous IAudioRenderClient::GetBuffer call is still in effect.";
+        break;
+      case AUDCLNT_E_DEVICE_INVALIDATED:
+        msg =
+            "The audio endpoint device has been unplugged, or the audio hardware or "
+            "associated hardware resources have been reconfigured, disabled, removed, or "
+            "otherwise made unavailable for use.";
+        break;
+      case AUDCLNT_E_BUFFER_OPERATION_PENDING:
+        msg = "Buffer cannot be accessed because a stream reset is in progress.";
+        break;
+      case AUDCLNT_E_SERVICE_NOT_RUNNING:
+        msg = "The Windows audio service is not running.";
+        break;
+      case E_POINTER:
+        msg = "Parameter ppData is NULL.";
+        break;
+      default:
+        msg = std::to_string(hr);
+        break;
+    }
+    AppendErrorMessage(status) += "GetBuffer failed: "s + msg;
+    return {};
+  }
+  return (char*)buffer;
+}
+
+void Init() {
+  loop_thread = std::jthread([] {
+    Status status;
+    IMMDeviceEnumerator* enumerator = nullptr;
+    IMMDevice* device = nullptr;
+    IAudioClient3* client = nullptr;
+    WAVEFORMATEX* format = nullptr;
+    UINT32 n_frames;  // number of frames
+    UINT32 bufferFrameCount;
+    HANDLE event;
+    AudioClientProperties props = {
+        .cbSize = sizeof(AudioClientProperties),
+        .bIsOffload = false,
+        .eCategory = AudioCategory_GameEffects,
+        .Options = AUDCLNT_STREAMOPTIONS_RAW | AUDCLNT_STREAMOPTIONS_MATCH_FORMAT,
+    };
+    IAudioRenderClient* render_client = nullptr;
+    bool is_float;
+
+    VERIFY(CoInitialize(nullptr));
+    VERIFY(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                            __uuidof(IMMDeviceEnumerator), (void**)&enumerator));
+    VERIFY(enumerator->GetDefaultAudioEndpoint(eRender, eMultimedia, &device));
+    VERIFY(device->Activate(__uuidof(IAudioClient3), CLSCTX_ALL, nullptr, (void**)&client));
+    VERIFY(client->GetCurrentSharedModeEnginePeriod(&format, &n_frames));
+    VERIFY(client->SetClientProperties(&props));
+    VERIFY(client->InitializeSharedAudioStream(AUDCLNT_STREAMFLAGS_EVENTCALLBACK, n_frames, format,
+                                               nullptr));
+    VERIFY(client->GetBufferSize(&bufferFrameCount));
+    event = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+    if (!event) {
+      ERROR << "CreateEvent failed: " << GetLastError();
+      goto error;
+    }
+    VERIFY(client->SetEventHandle(event));
+    VERIFY(client->GetService(__uuidof(IAudioRenderClient), (void**)&render_client));
+    VERIFY(client->Start());
+
+    is_float = format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+               (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+                ((WAVEFORMATEXTENSIBLE*)format)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+
+    if (!is_float) {
+      Str error_msg = "Unsupported audio format. ";
+      if (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+        error_msg += dump_struct(*(WAVEFORMATEXTENSIBLE*)format);
+      } else {
+        error_msg += dump_struct(*format);
+      }
+      ERROR << error_msg;
+      goto error;
+    }
+
+    while (true) {
+      char* buffer = GetBuffer(render_client, n_frames, status);
+      if (!OK(status)) {
+        ERROR << status;
+        goto error;
+      }
+      MixPlayingClips<float>(buffer, format->nChannels, n_frames);
+      VERIFY(render_client->ReleaseBuffer(n_frames, 0));
+      ReceiveClips();
+
+      // Wait for next buffer event to be signaled.
+      DWORD retval = WaitForSingleObject(event, 2000);
+      if (retval != WAIT_OBJECT_0) {
+        ERROR << "WaitForSingleObject failed: " << GetLastError();
+        goto error;
+      }
+    }
+
+  error:
+    if (event) CloseHandle(event);
+    if (render_client) render_client->Release();
+    if (format) CoTaskMemFree(format);
+    if (enumerator) enumerator->Release();
+    if (device) device->Release();
+    CoUninitialize();
+  });
+}
+
+#endif
+#pragma endregion
 
 struct WAV_Header {
   char riff[4];

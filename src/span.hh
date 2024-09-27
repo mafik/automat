@@ -96,7 +96,7 @@ struct Span : std::span<T, Extent> {
   template <typename U>
   U& Consume() {
     U* ret = (U*)this->data();
-    RemovePrefix(sizeof(U));
+    RemovePrefix(sizeof(U) / sizeof(T));
     return *ret;
   }
 

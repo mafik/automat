@@ -440,10 +440,12 @@ Location::~Location() {
     }
   }
 
-  for (int i = 0; i < window->connection_widgets.size(); ++i) {
-    if (&window->connection_widgets[i]->from == this) {
-      window->connection_widgets.erase(window->connection_widgets.begin() + i);
-      --i;
+  if (window) {
+    for (int i = 0; i < window->connection_widgets.size(); ++i) {
+      if (&window->connection_widgets[i]->from == this) {
+        window->connection_widgets.erase(window->connection_widgets.begin() + i);
+        --i;
+      }
     }
   }
 }

@@ -39,6 +39,10 @@ void InitAutomat(maf::Status& status) {
   };
   gui::keyboard = std::make_unique<gui::Keyboard>(*window);
   LoadState(*window, status);
+  RunOnAutomatThread([&] {
+    // nothing to do here - just make sure that memory allocated in main thread is synchronized to
+    // automat thread
+  });
 }
 
 }  // namespace automat

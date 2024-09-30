@@ -217,7 +217,7 @@ else:
     base.link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none']
     release.link_args += ['-Wl,--strip-all', '-Wl,-z,relro', '-Wl,-z,now']
 
-if False:
+if platform == 'linux':
     debug.compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
     debug.link_args += ['-fsanitize=address']
 

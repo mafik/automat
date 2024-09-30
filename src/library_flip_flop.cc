@@ -52,9 +52,8 @@ struct FlipFlopTarget : Argument {
 
 FlipFlopTarget flip_arg("flip", Argument::kOptional);
 
-static sk_sp<SkImage>& FlipFlopColor(gui::DrawContext& ctx) {
-  static auto image = MakeImageFromAsset(embedded::assets_flip_flop_color_webp, ctx);
-  return image;
+static sk_sp<SkImage> FlipFlopColor(gui::DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_flip_flop_color_webp, &ctx);
 }
 
 bool FlipFlopButton::Filled() const { return (flip_flop && flip_flop->current_state); }

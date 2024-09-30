@@ -653,14 +653,12 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
   return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
 }
 
-static sk_sp<SkImage>& CableWeaveColor(gui::DrawContext& ctx) {
-  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_color_webp, ctx);
-  return image;
+static sk_sp<SkImage> CableWeaveColor(gui::DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_cable_weave_color_webp, &ctx);
 }
 
-static sk_sp<SkImage>& CableWeaveNormal(gui::DrawContext& ctx) {
-  static auto image = MakeImageFromAsset(embedded::assets_cable_weave_normal_webp, ctx);
-  return image;
+static sk_sp<SkImage> CableWeaveNormal(gui::DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_cable_weave_normal_webp, &ctx);
 }
 
 struct StrokeToMesh {

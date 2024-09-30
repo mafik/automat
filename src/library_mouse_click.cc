@@ -2,6 +2,7 @@
 
 #include "audio.hh"
 #include "base.hh"
+#include "widget.hh"
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -53,27 +54,25 @@ __attribute__((constructor)) void RegisterMouseClick() {
   RegisterPrototype(MouseClick::rmb_up);
 }
 
-static sk_sp<SkImage>& MouseBaseImage() {
-  static auto image = MakeImageFromAsset(embedded::assets_mouse_base_webp, nullptr);
-  return image;
+static sk_sp<SkImage> MouseBaseImage(gui::DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_mouse_base_webp, &ctx);
 }
 
-static sk_sp<SkImage>& MouseLMBMask() {
-  static auto image = MakeImageFromAsset(embedded::assets_mouse_lmb_mask_webp, nullptr);
-  return image;
+static sk_sp<SkImage> MouseLMBMask(gui::DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_mouse_lmb_mask_webp, &ctx);
 }
 
-static sk_sp<SkImage>& MouseRMBMask() {
-  static auto image = MakeImageFromAsset(embedded::assets_mouse_rmb_mask_webp, nullptr);
-  return image;
+static sk_sp<SkImage> MouseRMBMask(gui::DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_mouse_rmb_mask_webp, &ctx);
 }
 
 constexpr float kScale = 0.00005;
 
-static sk_sp<SkImage> RenderMouseImage(SkCanvas& root_canvas, gui::PointerButton button,
+static sk_sp<SkImage> RenderMouseImage(gui::DrawContext& ctx, gui::PointerButton button,
                                        bool down) {
-  auto base = MouseBaseImage();
-  auto mask = button == gui::PointerButton::Left ? MouseLMBMask() : MouseRMBMask();
+  auto& root_canvas = ctx.canvas;
+  auto base = MouseBaseImage(ctx);
+  auto mask = button == gui::PointerButton::Left ? MouseLMBMask(ctx) : MouseRMBMask(ctx);
   SkBitmap bitmap;
   SkSamplingOptions sampling;
   bitmap.allocN32Pixels(base->width(), base->height());
@@ -115,28 +114,12 @@ static sk_sp<SkImage> RenderMouseImage(SkCanvas& root_canvas, gui::PointerButton
 #endif
 }
 
-static sk_sp<SkImage>& CachedMouseImage(SkCanvas& canvas, gui::PointerButton button, bool down) {
-  switch (button) {
-    case gui::PointerButton::Left:
-      if (down) {
-        static auto image = RenderMouseImage(canvas, button, down);
-        return image;
-      } else {
-        static auto image = RenderMouseImage(canvas, button, down);
-        return image;
-      }
-    case gui::PointerButton::Right:
-      if (down) {
-        static auto image = RenderMouseImage(canvas, button, down);
-        return image;
-      } else {
-        static auto image = RenderMouseImage(canvas, button, down);
-        return image;
-      }
-    default:
-      static auto image = RenderMouseImage(canvas, button, down);
-      return image;
-  }
+static sk_sp<SkImage> CachedMouseImage(gui::DrawContext dctx, gui::PointerButton button,
+                                       bool down) {
+  Str key = f("MouseImage:%d:%d", (int)button, (int)down);
+  return CacheImage(dctx, key, [&dctx, button, down]() -> sk_sp<SkImage> {
+    return RenderMouseImage(dctx, button, down);
+  });
 }
 
 MouseClick::MouseClick(gui::PointerButton button, bool down) : button(button), down(down) {}
@@ -163,7 +146,7 @@ std::unique_ptr<Object> MouseClick::Clone() const {
 }
 animation::Phase MouseClick::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& mouse_image = CachedMouseImage(ctx.canvas, button, down);
+  auto mouse_image = CachedMouseImage(ctx, button, down);
   canvas.save();
   canvas.scale(kScale, -kScale);
   canvas.translate(0, -mouse_image->height());
@@ -173,9 +156,7 @@ animation::Phase MouseClick::Draw(gui::DrawContext& ctx) const {
   return animation::Finished;
 }
 SkPath MouseClick::Shape(animation::Display*) const {
-  auto& mouse_base_image = MouseBaseImage();
-  return SkPath::Rect(SkRect::MakeXYWH(0, 0, mouse_base_image->width() * kScale,
-                                       mouse_base_image->height() * kScale));
+  return SkPath::Rect(SkRect::MakeXYWH(0, 0, 373 * kScale, 624 * kScale));
 }
 
 void MouseClick::Args(std::function<void(Argument&)> cb) { cb(next_arg); }

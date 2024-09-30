@@ -59,9 +59,8 @@ static SkPath& MacroRecorderShape() {
   return path;
 }
 
-static sk_sp<SkImage>& MacroRecorderFrontColor(GrDirectContext* gr_ctx) {
-  static auto image = MakeImageFromAsset(embedded::assets_macro_recorder_front_color_webp, gr_ctx);
-  return image;
+static sk_sp<SkImage> MacroRecorderFrontColor(gui::DrawContext& dctx) {
+  return MakeImageFromAsset(embedded::assets_macro_recorder_front_color_webp, &dctx);
 }
 
 static sk_sp<SkSVGDOM>& SharinganColor() {
@@ -110,7 +109,7 @@ std::unique_ptr<Object> MacroRecorder::Clone() const {
 #pragma region Draw
 animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
   auto& animation_state = animation_state_ptr[dctx.display];
-  auto& image = MacroRecorderFrontColor((GrDirectContext*)dctx);
+  auto image = MacroRecorderFrontColor(dctx);
   auto& canvas = dctx.canvas;
   auto phase = keylogging ? animation::Animating : animation::Finished;
 

@@ -14,6 +14,7 @@
 #include <numbers>
 
 #include "../build/generated/embedded.hh"
+#include "animation.hh"
 #include "arcline.hh"
 #include "argument.hh"
 #include "base.hh"
@@ -115,13 +116,13 @@ constexpr RRect kDisplayRRect = []() {
                .type = SkRRect::kSimple_Type};
 }();
 
-static sk_sp<SkImage>& RosewoodColor(DrawContext& ctx) {
-  static auto image = MakeImageFromAsset(embedded::assets_rosewood_color_webp, ctx);
-  return image;
+static sk_sp<SkImage> RosewoodColor(DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_rosewood_color_webp, &ctx);
 }
 
 const SkPaint& WoodPaint(DrawContext& ctx) {
-  static SkPaint p = [&]() {
+  static animation::PerDisplay<SkPaint> wood_paint;
+  if (wood_paint.Find(ctx.display) == nullptr) {
     SkPaint p;
     p.setColor("#805338"_color);
     auto s = kWoodenCaseWidth / 512 / 2;
@@ -129,9 +130,9 @@ const SkPaint& WoodPaint(DrawContext& ctx) {
                     ->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
                                  SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear))
                     ->makeWithLocalMatrix(SkMatrix::Scale(s, s).postRotate(-85)));
-    return p;
-  }();
-  return p;
+    wood_paint[ctx.display] = p;
+  }
+  return wood_paint[ctx.display];
 }
 
 const SkPaint kPlasticPaint = []() {

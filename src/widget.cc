@@ -43,8 +43,6 @@ animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
   return phase;
 }
 
-struct CacheEntry {};
-
 animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   auto texture_bounds = TextureBounds(&ctx.display);
   if (texture_bounds == nullopt) {

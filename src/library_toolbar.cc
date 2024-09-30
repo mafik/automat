@@ -54,9 +54,8 @@ SkPath Toolbar::Shape(animation::Display*) const {
   return SkPath::Rect(rect);
 }
 
-static sk_sp<SkImage>& ToolbarColor(gui::DrawContext& ctx) {
-  static auto image = MakeImageFromAsset(embedded::assets_tray_webp, ctx);
-  return image;
+static sk_sp<SkImage> ToolbarColor(gui::DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_tray_webp, &ctx);
 }
 
 animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {

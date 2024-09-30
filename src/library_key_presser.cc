@@ -23,14 +23,12 @@ namespace automat::library {
 
 DEFINE_PROTO(KeyPresser);
 
-static sk_sp<SkImage>& PointingHandColor(DrawContext& ctx) {
-  static auto image = MakeImageFromAsset(embedded::assets_pointing_hand_color_webp, ctx);
-  return image;
+static sk_sp<SkImage> PointingHandColor(DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_pointing_hand_color_webp, &ctx);
 }
 
-static sk_sp<SkImage>& PressingHandColor(DrawContext& ctx) {
-  static auto image = MakeImageFromAsset(embedded::assets_pressing_hand_color_webp, ctx);
-  return image;
+static sk_sp<SkImage> PressingHandColor(DrawContext& ctx) {
+  return MakeImageFromAsset(embedded::assets_pressing_hand_color_webp, &ctx);
 }
 
 constexpr static char kHandShapeSVG[] =

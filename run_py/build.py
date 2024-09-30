@@ -55,6 +55,11 @@ class BuildType:
     def LDFLAGS(self):
         return [str(x) for x in (self.base.LDFLAGS() if self.base else []) + self.link_args]
     
+    def __getattr__(self, name):
+        # if this object doesn't have the attribute, try to get it from the base
+        if self.base:
+            return getattr(self.base, name)
+    
     def __str__(self):
         return self.name
     
@@ -101,6 +106,12 @@ debug.compile_args += ['-O0', '-g', '-D_DEBUG', '-fno-omit-frame-pointer']
 default = fast
 
 types = [fast, release, debug]
+
+if platform == 'linux':
+    asan = BuildType('ASan', debug)
+    asan.compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
+    asan.link_args += ['-fsanitize=address']
+    types.append(asan)
 
 
 class ObjectFile:
@@ -216,10 +227,6 @@ if platform == 'win32':
 else:
     base.link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none']
     release.link_args += ['-Wl,--strip-all', '-Wl,-z,relro', '-Wl,-z,now']
-
-if platform == 'linux':
-    debug.compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
-    debug.link_args += ['-fsanitize=address']
 
 
 if 'g++' in compiler and 'clang' not in compiler:

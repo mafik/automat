@@ -64,7 +64,7 @@ if platform == 'win32':
   build.debug.compile_args += ['-DSK_TRIVIAL_ABI=[[clang::trivial_abi]]']
 elif platform == 'linux':
   build.base.compile_args += ['-DVK_USE_PLATFORM_XCB_KHR']
-    # Static linking to Vulkan on Linux seems to fail because the dynamically loaded libc / pthread is not properly initialized
+  # Static linking to Vulkan on Linux seems to fail because the dynamically loaded libc / pthread is not properly initialized
   # by dlopen. It seems that glibc is closely coupled with ld.
   # Note that this problem might disappear when executed under debugger because they might be initialized when debugger ld runs.
   # Some discussion can be found here: https://www.openwall.com/lists/musl/2012/12/08/4
@@ -126,6 +126,11 @@ skia_libs = set(['shshaper', 'skunicode', 'skia', 'skottie', 'svg'])
 # Binaries that should link to Skia
 skia_bins = set()
 
+def get_variant(build_type):
+  if build_type.name in variants:
+    return variants[build_type.name]
+  return get_variant(build_type.base)
+
 def hook_plan(srcs, objs, bins, recipe):
   for obj in objs:
     if any(re.match(r'(include|src)/.*Sk.*\.h', inc) for inc in obj.source.system_includes):
@@ -138,7 +143,7 @@ def hook_plan(srcs, objs, bins, recipe):
         needs_skia = True
         skia_bins.add(bin)
     if needs_skia:
-      v = variants[bin.build_type.name]
+      v = get_variant(bin.build_type)
       bin.link_args.append('-L' + str(v.build_dir))
         
 
@@ -152,5 +157,5 @@ def hook_final(srcs, objs, bins, recipe):
         build_type = bin.build_type
         break
     if needs_skia:
-      v = variants[build_type.name]
+      v = get_variant(build_type)
       step.inputs.add(str(v.build_dir / libname))

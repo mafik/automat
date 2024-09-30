@@ -1,8 +1,7 @@
 #include "audio.hh"
 
-#include <math.h>
-
 #ifdef __linux__
+#include <math.h>
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
 
@@ -14,8 +13,10 @@
 #undef ERROR
 #include <audioclient.h>
 #include <mmdeviceapi.h>
+#include <avrt.h>
 
 #pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "avrt.lib")
 // clang-format on
 #endif
 
@@ -29,9 +30,6 @@
 
 using namespace maf;
 using namespace std;
-
-// TODO: call AvSetMmThreadCharacteristicsA
-// (https://learn.microsoft.com/en-us/windows/win32/coreaudio/exclusive-mode-streams)
 
 namespace automat::audio {
 
@@ -279,6 +277,8 @@ void Init() {
     };
     IAudioRenderClient* render_client = nullptr;
     bool is_float;
+    DWORD taskIndex = 0;
+    HANDLE hTask;
 
     VERIFY(CoInitialize(nullptr));
     VERIFY(CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
@@ -297,6 +297,13 @@ void Init() {
     }
     VERIFY(client->SetEventHandle(event));
     VERIFY(client->GetService(__uuidof(IAudioRenderClient), (void**)&render_client));
+
+    // NOTE: change to "Pro Audio" for low latency
+    hTask = AvSetMmThreadCharacteristics(TEXT("Audio"), &taskIndex);
+    if (hTask == NULL) {
+      ERROR << "AvSetMmThreadCharacteristics failed";
+      // priority is not critical - continue
+    }
     VERIFY(client->Start());
 
     is_float = format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||

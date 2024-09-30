@@ -107,8 +107,12 @@ static sk_sp<SkImage> RenderMouseImage(SkCanvas& root_canvas, gui::PointerButton
   }
   bitmap.setImmutable();
   auto raster_image = SkImages::RasterFromBitmap(bitmap);
+#ifdef CPU_RENDERING
+  return raster_image;
+#else
   return SkImages::TextureFromImage(root_canvas.recordingContext()->asDirectContext(),
                                     raster_image.get(), skgpu::Mipmapped::kYes);
+#endif
 }
 
 static sk_sp<SkImage>& CachedMouseImage(SkCanvas& canvas, gui::PointerButton button, bool down) {

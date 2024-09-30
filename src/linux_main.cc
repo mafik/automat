@@ -1,6 +1,8 @@
 #include "linux_main.hh"
 
+#include <include/core/SkBitmap.h>
 #include <include/core/SkGraphics.h>
+#include <include/core/SkSurface.h>
 #include <xcb/xcb.h>
 #include <xcb/xinput.h>
 #include <xcb/xproto.h>
@@ -412,7 +414,19 @@ void CreateWindow(Status& status) {
 #undef WRAP
 
 void Paint() {
+#ifdef CPU_RENDERING
+  auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(client_width, client_height));
+
+  SkCanvas& canvas = *surface->getCanvas();
+  canvas.translate(0, client_height);
+  canvas.scale(1, -1);
+
+  xcb_gcontext_t graphics_context = xcb_generate_id(connection);
+  xcb_create_gc(connection, graphics_context, xcb_window, 0, nullptr);
+
+#else
   SkCanvas& canvas = *vk::GetBackbufferCanvas();
+#endif
   canvas.save();
   canvas.translate(0, 0);
   canvas.scale(DisplayPxPerMeter(), DisplayPxPerMeter());
@@ -420,7 +434,22 @@ void Paint() {
     window->Draw(canvas);
   }
   canvas.restore();
+#ifdef CPU_RENDERING
+  SkPixmap pixmap;
+  if (!surface->peekPixels(&pixmap)) {
+    FATAL << "Failed to peek pixels.";
+  }
+  xcb_void_cookie_t cookie =
+      xcb_put_image_checked(connection, XCB_IMAGE_FORMAT_Z_PIXMAP, xcb_window, graphics_context,
+                            client_width, client_height, 0, 0, 0, screen->root_depth,
+                            pixmap.computeByteSize(), (const U8*)pixmap.addr());
+  if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+    ERROR << "Failed to put image: " << error->error_code;
+  }
+  xcb_free_gc(connection, graphics_context);
+#else
   vk::Present();
+#endif
 }
 
 void RenderLoop() {
@@ -794,9 +823,12 @@ int LinuxMain(int argc, char* argv[]) {
   };
   window->RequestMaximize = nullptr;
 
+#ifdef CPU_RENDERING
+#else
   if (auto err = vk::Init(); !err.empty()) {
     FATAL << "Failed to initialize Vulkan: " << err;
   }
+#endif
 
   RenderLoop();
 

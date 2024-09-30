@@ -95,7 +95,12 @@ struct DrawContext : DisplayContext {
   DrawCache& draw_cache;
   DrawContext(animation::Display& display, SkCanvas& canvas, DrawCache& draw_cache)
       : DisplayContext{display, {}}, canvas(canvas), draw_cache(draw_cache) {}
-  operator GrDirectContext*() const { return canvas.recordingContext()->asDirectContext(); }
+  operator GrDirectContext*() const {
+    if (auto recording_context = canvas.recordingContext()) {
+      return recording_context->asDirectContext();
+    }
+    return nullptr;
+  }
 };
 
 struct DropTarget;

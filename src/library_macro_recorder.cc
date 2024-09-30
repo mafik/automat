@@ -110,7 +110,7 @@ std::unique_ptr<Object> MacroRecorder::Clone() const {
 #pragma region Draw
 animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
   auto& animation_state = animation_state_ptr[dctx.display];
-  auto& image = MacroRecorderFrontColor(dctx.canvas.recordingContext()->asDirectContext());
+  auto& image = MacroRecorderFrontColor((GrDirectContext*)dctx);
   auto& canvas = dctx.canvas;
   auto phase = keylogging ? animation::Animating : animation::Finished;
 

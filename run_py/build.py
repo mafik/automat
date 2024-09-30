@@ -113,6 +113,14 @@ if platform == 'linux':
     asan.link_args += ['-fsanitize=address']
     types.append(asan)
 
+    # As of 2024-09-30, libnvidia-glcore.so bypasses pthread initialization which breaks
+    # tsan. One workaround might be to disable GPU rendering and try CPU-based rendering.
+    # https://github.com/google/sanitizers/issues/1647
+    tsan = BuildType('TSan', debug)
+    tsan.compile_args += ['-fsanitize=thread', '-DCPU_RENDERING']
+    tsan.link_args += ['-fsanitize=thread']
+    types.append(tsan)
+
 
 class ObjectFile:
     path: Path

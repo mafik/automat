@@ -593,7 +593,8 @@ void RenderLoop() {
                 // xcb_flush(connection);
                 // xcb_request_check(connection, cookie)
 
-                RunOnAutomatThread([=] { GetMouse().ButtonDown(EventDetailToButton(ev->detail)); });
+                RunOnAutomatThread(
+                    [detail = ev->detail] { GetMouse().ButtonDown(EventDetailToButton(detail)); });
                 break;
               }
               case XCB_INPUT_BUTTON_RELEASE: {
@@ -602,7 +603,8 @@ void RenderLoop() {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
-                RunOnAutomatThread([=] { GetMouse().ButtonUp(EventDetailToButton(ev->detail)); });
+                RunOnAutomatThread(
+                    [detail = ev->detail] { GetMouse().ButtonUp(EventDetailToButton(detail)); });
                 break;
               }
               case XCB_INPUT_MOTION: {

@@ -35,7 +35,7 @@ class BuildVariant:
 
 variants = {
   'Fast' : BuildVariant(build.fast, 'is_official_build=true'),
-  'Debug' : BuildVariant(build.debug, 'is_debug=true'),
+  'Debug' : BuildVariant(build.debug, 'is_debug=true extra_cflags_cc=["-frtti"]'),
   'Release' : BuildVariant(build.release, 'is_official_build=true is_debug=false'),
 }
 

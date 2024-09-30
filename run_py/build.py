@@ -121,6 +121,18 @@ if platform == 'linux':
     tsan.link_args += ['-fsanitize=thread']
     types.append(tsan)
 
+    # TODO(custom libc++ in place): enable Memory Sanitizer
+    # Memory Sanitizer requires us to build all dependencies with MSan enabled
+    # Skia instructions: https://skia.org/docs/dev/testing/xsan/
+    # msan = BuildType('MSan', debug)
+    # msan.compile_args += ['-fsanitize=memory', '-fsanitize-memory-track-origins']
+    # msan.link_args += ['-fsanitize=memory']
+    # types.append(msan)
+
+    ubsan = BuildType('UBSan', debug)
+    ubsan.compile_args += ['-fsanitize=undefined']
+    ubsan.link_args += ['-fsanitize=undefined']
+    types.append(ubsan)
 
 class ObjectFile:
     path: Path

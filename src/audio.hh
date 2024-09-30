@@ -12,6 +12,8 @@ void Init(int* argc, char*** argv);
 void Init();
 #endif
 
+void Stop();
+
 void Play(Sound&);
 
 struct Effect {

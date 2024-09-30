@@ -2,6 +2,7 @@
 
 #ifdef __linux__
 #include <math.h>
+#include <pipewire/main-loop.h>
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
 
@@ -127,6 +128,11 @@ struct data {
 
 static void on_process(void* userdata) {
   struct data* data = (struct data*)userdata;
+
+  if (!running) {
+    pw_main_loop_quit(data->loop);
+  }
+
   struct pw_buffer* b;
 
   if ((b = pw_stream_dequeue_buffer(data->stream)) == NULL) {
@@ -192,6 +198,11 @@ void Init(int* argc, char*** argv) {
     pw_stream_destroy(data.stream);
     pw_main_loop_destroy(data.loop);
   });
+}
+
+void Stop() {
+  running = false;
+  loop_thread.join();
 }
 
 #endif

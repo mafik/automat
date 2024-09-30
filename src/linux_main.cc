@@ -842,11 +842,13 @@ int LinuxMain(int argc, char* argv[]) {
   root_machine->locations.clear();
 
   mouse.reset();
+  keyboard.reset();
+  window.reset();
 
   vk::Destroy();
   xcb_destroy_window(connection, xcb_window);
 
-  window.reset();
+  audio::Stop();
 
   LOG << "Exiting.";
 

@@ -37,7 +37,8 @@ static void TimerThread(std::stop_token automat_stop_token) {
     } else {
       // LOG << "Timer thread waiting until " << tasks.begin()->first.time_since_epoch().count()
       //     << " (" << tasks.size() << " tasks)";
-      cv.wait_until(lck, tasks.begin()->first);
+      auto wake_time = tasks.begin()->first;
+      cv.wait_until(lck, wake_time);
     }
     if (stop) {
       break;

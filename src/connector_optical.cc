@@ -1403,8 +1403,8 @@ animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& s
     }
     // Add an ellipse cap at the end of the mesh
     if (mesh_builder.vertex_vector.size() >= 2) {
-      auto& left = mesh_builder.vertex_vector[mesh_builder.vertex_vector.size() - 2];
-      auto& right = mesh_builder.vertex_vector[mesh_builder.vertex_vector.size() - 1];
+      auto left = mesh_builder.vertex_vector[mesh_builder.vertex_vector.size() - 2];
+      auto right = mesh_builder.vertex_vector[mesh_builder.vertex_vector.size() - 1];
       Vec2 middle = (left.coords + right.coords) / 2;
       Vec2 left_to_right = right.coords - left.coords;
       Vec2 tangent = Normalize(left.tangent);

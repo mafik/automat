@@ -30,22 +30,18 @@
 using namespace maf;
 using namespace std;
 
-// TODO: switch Linux build to MixPlayingClips<FORMAT>
-// TODO: if audio thread fails for whatever reason, audio clips shouldn't accumulate in the queue
-// TODO: replace the "Frame" class with I16
 // TODO: call AvSetMmThreadCharacteristicsA
 // (https://learn.microsoft.com/en-us/windows/win32/coreaudio/exclusive-mode-streams)
 
 namespace automat::audio {
 
 jthread loop_thread;
+atomic<bool> running = false;
 
 constexpr int kDefaultRate = 48'000;
 constexpr int kDefaultChannels = 1;
 
-struct Frame {
-  I16 mono;
-};
+using Frame = I16;
 
 struct Clip {
   Span<Frame> remaining;
@@ -92,6 +88,7 @@ void Add(float& out, I16 in) {
 
 template <typename SAMPLE_T>
 static void MixPlayingClips(char* buffer, int n_channels, int n_frames) {
+  // TODO(performance, maintainability): mix clips into float buffer, then convert to SAMPLE_T
   auto dst = Span<SAMPLE_T>((SAMPLE_T*)buffer, n_frames * n_channels);
   dst.Zero();
   for (auto& clip : playing) {
@@ -105,7 +102,7 @@ static void MixPlayingClips(char* buffer, int n_channels, int n_frames) {
         clip->remaining = clip->all;
       }
       for (int c = 0; c < n_channels; ++c) {
-        Add(dst2[c], clip->remaining.front().mono);
+        Add(dst2[c], clip->remaining.front());
       }
       clip->remaining.RemovePrefix(1);
       dst2.RemovePrefix(n_channels);
@@ -148,39 +145,7 @@ static void on_process(void* userdata) {
 
   dst.Zero();
 
-  for (auto& clip : playing) {
-    int dst_pos = 0;
-    while (true) {
-      if (dst_pos >= n_frames) {
-        break;
-      }
-      if (clip->remaining.empty()) {
-        clip = clip->next;
-        if (clip == nullptr) {
-          break;
-        }
-        clip->remaining = clip->all;
-      }
-      if (__builtin_add_overflow(dst[dst_pos].mono, clip->remaining.front().mono,
-                                 &dst[dst_pos].mono)) {
-        if (dst[dst_pos].mono >= 0) {
-          dst[dst_pos].mono = SHRT_MAX;
-        } else {
-          dst[dst_pos].mono = SHRT_MIN;
-        }
-      }
-      clip->remaining.RemovePrefix(1);
-      ++dst_pos;
-    }
-  }
-
-  for (int i = 0; i < playing.size(); ++i) {
-    if (playing[i] == nullptr) {
-      swap(playing[i], playing.back());
-      playing.pop_back();
-      --i;
-    }
-  }
+  MixPlayingClips<I16>((char*)buf.data, kDefaultChannels, n_frames);
 
   buf.chunk->offset = 0;
   buf.chunk->stride = sizeof(Frame);
@@ -198,6 +163,7 @@ static const struct pw_stream_events stream_events = {
 
 void Init(int* argc, char*** argv) {
   pw_init(argc, argv);
+  running = true;
 
   loop_thread = std::jthread([] {
     struct data data = {
@@ -224,6 +190,7 @@ void Init(int* argc, char*** argv) {
                                         PW_STREAM_FLAG_RT_PROCESS),
                       params, 1);
     pw_main_loop_run(data.loop);
+    running = false;
     pw_stream_destroy(data.stream);
     pw_main_loop_destroy(data.loop);
   });
@@ -294,6 +261,7 @@ static char* GetBuffer(IAudioRenderClient* client, int num_frames, Status& statu
 }
 
 void Init() {
+  running = true;
   loop_thread = std::jthread([] {
     Status status;
     IMMDeviceEnumerator* enumerator = nullptr;
@@ -365,6 +333,7 @@ void Init() {
     }
 
   error:
+    running = false;
     if (event) CloseHandle(event);
     if (render_client) render_client->Release();
     if (format) CoTaskMemFree(format);
@@ -413,7 +382,12 @@ shared_ptr<Clip> MakeClipFromWAV(maf::fs::VFile& file) {
   return make_shared<Clip>(content.AsSpanOf<Frame>());
 }
 
-void ScheduleClip(shared_ptr<Clip> clip) { to_play.enqueue(std::move(clip)); }
+void ScheduleClip(shared_ptr<Clip> clip) {
+  if (!running) {
+    return;
+  }
+  to_play.enqueue(std::move(clip));
+}
 
 void Play(maf::fs::VFile& file) { ScheduleClip(MakeClipFromWAV(file)); }
 

@@ -376,6 +376,7 @@ OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
   track->timeline = this;
   tracks.emplace_back(std::move(track));
   AddTrackArg(*this, tracks.size() - 1, name);
+  here->InvalidateConnectionWidgets();
   return *dynamic_cast<OnOffTrack*>(tracks.back().get());
 }
 

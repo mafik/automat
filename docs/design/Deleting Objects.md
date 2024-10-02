@@ -15,4 +15,3 @@ Alternatively drop objects outside of the canvas to delete them :P
 4. A new "dock" object that holds the prototypes
   - buttons to delete and move prototypes around
   - "edit" mode when the dock can be altered (iOS approach)
-

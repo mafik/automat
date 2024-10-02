@@ -73,7 +73,7 @@ base = BuildType('Base', is_default=True)
 base.compile_args += ['-static', '-std=gnu++2c', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-plt', '-fno-strict-aliasing', '-fno-exceptions',
-    '-D_FORTIFY_SOURCE=2', '-Wformat',
+    '-D_FORTIFY_SOURCE=2', '-Wformat', '-Wchanges-meaning',
     '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type']
 
 if platform != 'win32':

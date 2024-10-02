@@ -11,7 +11,7 @@ struct Vec : std::vector<T> {
   using std::vector<T>::vector;
   using iterator = typename std::vector<T>::iterator;
 
-  Span<> Span() { return {this->data(), this->size()}; }
+  operator Span<T>() { return {this->data(), this->size()}; }
 
   template <typename U>
   void Append(const U& u) {

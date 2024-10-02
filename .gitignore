@@ -40,6 +40,8 @@ __pycache__
 *.pdb
 
 build
+third_party/PipeWire
+third_party/FlameGraph
 
 .gdb_history
 

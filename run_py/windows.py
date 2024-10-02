@@ -1,4 +1,6 @@
-# Utilities for working with Windows
+''' Utilities for working with Windows. '''
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 
 import sys
 

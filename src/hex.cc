@@ -1,8 +1,10 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "hex.hh"
 
 namespace maf {
 
-void HexToBytesUnchecked(StrView hex, char *bytes) {
+void HexToBytesUnchecked(StrView hex, char* bytes) {
   bool high = true;
   for (int i = 0; i < hex.size(); i++) {
     char c = hex[i];
@@ -64,7 +66,7 @@ Str HexDump(StrView bytes) {
       if (col % 4 == 3) {
         result += " ";
       }
-      if (col % 8 == 7) { // extra space after 8 bytes
+      if (col % 8 == 7) {  // extra space after 8 bytes
         result += " ";
       }
     }
@@ -90,4 +92,4 @@ Str HexDump(StrView bytes) {
 
 Str HexDump(Span<> bytes) { return HexDump(StrViewOf(bytes)); }
 
-} // namespace maf
+}  // namespace maf

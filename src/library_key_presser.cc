@@ -1,4 +1,5 @@
-
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "library_key_presser.hh"
 
 #include <include/core/SkSamplingOptions.h>

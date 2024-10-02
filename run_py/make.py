@@ -1,4 +1,6 @@
 '''Pythonic replacement for GNU Make.'''
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 
 from pathlib import Path
 from collections import defaultdict

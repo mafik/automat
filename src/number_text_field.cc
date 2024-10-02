@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "number_text_field.hh"
 
 #include <include/core/SkBlurTypes.h>

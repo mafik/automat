@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 // The point of this code is to see:
 // 1. Whether multi-threaded object execution is possible (no scheduler)
 //    and which approach has lowest synchronization overhead.

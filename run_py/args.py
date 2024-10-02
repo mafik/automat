@@ -1,4 +1,6 @@
 '''Module with all of the command line flags used by the build script.'''
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 
 # TODO: allow different python modules to add their own args - instead of a centralized location. This should allow for better Hyperdeck / Automat reusability.
 

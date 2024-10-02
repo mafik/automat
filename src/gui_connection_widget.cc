@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "gui_connection_widget.hh"
 
 #include <include/core/SkColor.h>

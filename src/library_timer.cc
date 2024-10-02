@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "library_timer.hh"
 
 #include <include/core/SkBlurTypes.h>

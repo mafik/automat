@@ -1,4 +1,6 @@
 '''Utilities for operating on filesystem.'''
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 
 from pathlib import Path
 

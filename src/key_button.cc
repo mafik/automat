@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "key_button.hh"
 
 #include <include/effects/SkGradientShader.h>

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 import build
 
 build.fast.CMAKE_BUILD_TYPE = 'RelWithDebInfo'

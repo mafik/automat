@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #pragma once
 
 #include <string>
@@ -9,10 +11,10 @@ using StrView = std::string_view;
 
 using namespace std::literals;
 
-void ReplaceAll(Str &s, const Str &from, const Str &to);
-void StripLeadingWhitespace(Str &);
-void StripTrailingWhitespace(Str &);
-void StripWhitespace(Str &);
+void ReplaceAll(Str& s, const Str& from, const Str& to);
+void StripLeadingWhitespace(Str&);
+void StripTrailingWhitespace(Str&);
+void StripWhitespace(Str&);
 Str Indent(StrView, int spaces = 2);
 
 // ToStr function should be the default way of converting values to strings.
@@ -45,7 +47,7 @@ template <typename T>
   requires requires(T t) {
     { t.ToStr() } -> std::same_as<Str>;
   }
-Str ToStr(const T &t) {
+Str ToStr(const T& t) {
   return t.ToStr();
 }
 
@@ -54,4 +56,4 @@ concept Stringer = requires(T t) {
   { ToStr(t) } -> std::same_as<Str>;
 };
 
-} // namespace maf
+}  // namespace maf

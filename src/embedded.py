@@ -1,4 +1,6 @@
 '''Generates embedded.hh and embedded.cc, with contents of all the static files.'''
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 
 # Note: command for crushing png files
 # pngcrush -ow -rem alla -brute -reduce static/*

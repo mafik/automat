@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "loading_animation.hh"
 
 #include <include/core/SkCanvas.h>

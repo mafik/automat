@@ -1,5 +1,6 @@
 '''Defines what files are built.'''
-
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 from pathlib import Path
 from itertools import product
 import src

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 from collections import defaultdict
 from functools import partial
 import multiprocessing

@@ -1,4 +1,6 @@
 #! /usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 
 # This file needs a .py suffix in order to run under Windows.
 

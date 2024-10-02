@@ -1,4 +1,6 @@
 '''This module ensures that all of the necessary Debian dependencies are installed.'''
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 
 import os
 from subprocess import run

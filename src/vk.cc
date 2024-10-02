@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "vk.hh"
 
 #include <include/gpu/GrTypes.h>
@@ -62,9 +64,9 @@ struct Instance : vkb::Instance {
   std::string error = "";
   std::vector<const char*> extensions = {
 #if defined(_WIN32)
-    "VK_KHR_win32_surface"
+      "VK_KHR_win32_surface"
 #elif defined(__linux__)
-    "VK_KHR_xcb_surface"
+      "VK_KHR_xcb_surface"
 #endif
   };
 } instance;

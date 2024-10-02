@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "format.hh"
 
 #include <cstdarg>
@@ -5,7 +7,7 @@
 
 namespace maf {
 
-std::string f(const char *fmt, ...) {
+std::string f(const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
   va_list args2;
@@ -65,4 +67,4 @@ std::string Slugify(std::string in) {
   return out;
 }
 
-} // namespace maf
+}  // namespace maf

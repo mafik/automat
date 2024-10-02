@@ -1,8 +1,0 @@
-Equation <- Expression "=" Expression
-Expression <- Sum
-Sum <- Product (("+" / "-") Product)*
-Product <- Power (("*" / "/") Power)*
-Power <- Value ('^' Power)?
-Value <- Number / Variable / "(" Expr ")"
-Variable <- [a-zA-Z]+
-Number <- "-"? [0-9]+ ("." [0-9]+)?

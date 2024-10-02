@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-License-Identifier: MIT
 #include "drawable_nortti.hh"
 
 #pragma maf add compile argument "-fno-rtti"

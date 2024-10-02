@@ -1,4 +1,5 @@
-
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path

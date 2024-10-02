@@ -1,4 +1,6 @@
 '''Functions related to the `src/` directory.'''
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 
 from collections import defaultdict
 from pathlib import Path

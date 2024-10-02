@@ -6,21 +6,28 @@ Control computers by combining interactive blocks.
 
 Automat is under active development. It's not ready for use yet.
 
-# TODOs
+# License
 
-- [ ] Update position of text cursors when text is appended by a numpad button
-- [ ] Buttons get highlighted immediately on mouse over
-- [ ] When precision touchpad is pressed down, initial touch point is "forgotten" for the purpose of dragging
-- [ ] "Iconified" drawing of widgets
-- [ ] `LICENSE` file
-- [ ] Synchronize GitHub readme with automat.org
+Automat is licensed under the MIT license. Some of its components use slightly different but compatible licenses. This means that you are free to embed & resell Automat, as long as you follow the license terms.
 
-# External dependencies
+Here is an overview of the licenses used by Automat's dependencies:
 
-- Skia
-- GoogleTest
-- Noto Sans
-- HIDAPI
+- Skia: BSD 3-Clause
+- FastTrigo: BSD 3-Clause
+- HIDAPI: BSD 3-Clause
+- libXau: MIT/X Consortium License
+- libxcb: MIT/X Consortium License
+- libxcb-proto: MIT/X Consortium License
+- xorg-util-macros: MIT/X Consortium License
+- xorgproto: various licenses
+- concurrentqueue: BSD 2-Clause
+- PipeWire: (not linked statically) MIT + LGPL for some plugins
+- RapidJSON: MIT (tests rely on non-MIT licensed files but they're not used for release)
+- vk-bootstrap: MIT
+- Vulkan-Headers: Apache 2.0 + MIT
+- Noto Sans: Open Font License
+
+Do your own due dilligence and check the licenses of the dependencies you use!
 
 # Credits
 

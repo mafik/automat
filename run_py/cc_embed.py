@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+# SPDX-License-Identifier: MIT
 import string
 
 byte_to_c_string_table = {c: chr(c) for c in range(32, 127)}

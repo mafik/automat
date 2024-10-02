@@ -16,7 +16,7 @@ jobs:
           python-version: "3.12"
 
       - name: Build
-        run: ./run.py 'link release_automat'
+        run: python run.py 'link release_automat'
 
       # - name: Upload
       #   uses: actions/upload-artifact@v2

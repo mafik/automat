@@ -21,6 +21,7 @@ PIPEWIRE_OPTIONS = {
   'libpulse': 'disabled',
   'pw-cat': 'disabled',
   'sndfile': 'disabled',
+  'dbus': 'disabled',
   'session-managers': '[]',
 }
 

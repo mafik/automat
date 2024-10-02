@@ -4,11 +4,12 @@
 
 #pragma comment(lib, "hid")
 
-#include <winioctl.h>
+// clang-format off
 #include <wtypes.h>
+#include <winioctl.h>
+// clang-format on
 
 #include "win_hidapi.c"
-
 
 #elif defined(__linux__)
 

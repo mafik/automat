@@ -324,7 +324,7 @@ def recipe() -> make.Recipe:
                    outputs=[bin.path],
                    inputs=bin.objects,
                    desc=f'Linking {bin.path.name}',
-                   shortcut=f'link {bin.path.name}')
+                   shortcut=f'link {bin.path.stem}')
         r.generated.add(bin.path)
 
         # if platform == 'win32':
@@ -337,7 +337,7 @@ def recipe() -> make.Recipe:
                    outputs=[],
                    inputs=[bin.path],
                    desc=f'Running {bin.path.name}',
-                   shortcut=bin.path.name)
+                   shortcut=bin.path.stem)
 
     for ext in extensions:
         if hasattr(ext, 'hook_final'):

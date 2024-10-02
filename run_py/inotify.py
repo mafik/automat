@@ -7,6 +7,11 @@ Does not support recursion - just watches on the provided directory.'''
 
 import ctypes, sys
 
+if __name__ != '__main__':
+  raise ImportError('This module is not meant to be imported.')
+
+watch_dir = sys.argv[1]
+
 if sys.platform == 'linux':
   libc = ctypes.cdll.LoadLibrary('libc.so.6')
 
@@ -24,27 +29,52 @@ if sys.platform == 'linux':
 
   IN_CLOSE_WRITE = 0x008
 
-  def inotify_init():
-    return libc.inotify_init()
-
-  def inotify_add_watch(fd, path, mask):
-    return libc.inotify_add_watch(fd, path.encode(), mask)
-
-  def inotify_wait(fd):
-    buf = ctypes.create_string_buffer(1024)
-    n = libc.read(fd, buf, 1024)
-    if n == -1:
-      raise OSError(ctypes.get_errno(), strerror(ctypes.get_errno()))
-    return buf.raw[:n]
-
   def strerror(errno):
     return libc.strerror(errno).decode()
 
-  if __name__ == '__main__':
-    fd = inotify_init()
-    wd = inotify_add_watch(fd, sys.argv[1], IN_CLOSE_WRITE)
-    buf = inotify_wait(fd)[16:].decode()
-    print(buf)
+  fd = libc.inotify_init()
+  wd = libc.inotify_add_watch(fd, watch_dir.encode(), IN_CLOSE_WRITE)
+  
+  buf = ctypes.create_string_buffer(1024)
+  # blocks until an event occurs
+  n = libc.read(fd, buf, 1024)
+  if n == -1:
+    raise OSError(ctypes.get_errno(), strerror(ctypes.get_errno()))
+  buf = buf.raw[:n]
+  buf = buf[16:].decode()
+  print(buf)
 
 elif sys.platform == 'win32':
-  pass
+  import win32api, win32file, win32con, threading
+
+  semaphore = threading.Semaphore(0)
+
+  win32api.SetConsoleCtrlHandler(lambda x: semaphore.release(), True)
+
+  def watch_thread():
+    handle = win32file.CreateFile(
+      watch_dir,
+      win32file.GENERIC_READ,
+      win32file.FILE_SHARE_READ | win32file.FILE_SHARE_WRITE | win32file.FILE_SHARE_DELETE,
+      None,
+      win32file.OPEN_EXISTING,
+      win32file.FILE_FLAG_BACKUP_SEMANTICS,
+      None
+    )
+
+    results = win32file.ReadDirectoryChangesW(
+      handle,
+      1024,
+      True,
+      win32con.FILE_NOTIFY_CHANGE_LAST_WRITE,
+      None,
+      None
+    )
+
+    for action, file in results:
+      print(file)
+
+    semaphore.release()
+  
+  threading.Thread(target=watch_thread, daemon=True).start()
+  semaphore.acquire()

@@ -32,17 +32,8 @@ if __name__ == '__main__':
 
     while True:
         recipe.set_target(args.target)
-        if platform == 'linux':
-            events = 'CLOSE_WRITE'
-        elif platform == 'win32':
-            events = 'create,modify,delete,move'
-        else:
-            raise Exception(
-                f'Unknown platfrorm: "{platform}". Expected either "linux" or "win32". Automat is not supported on this platform yet!')
-
-        # TODO: include inotify-win in the build scripts for Windows
         watcher = subprocess.Popen(
-            ['inotifywait', '-qe', events, 'src/'], stdout=subprocess.DEVNULL)
+            ['python', 'run_py/inotify.py', 'src/'], stdout=subprocess.DEVNULL)
 
         ok = recipe.execute(watcher)
         if ok:

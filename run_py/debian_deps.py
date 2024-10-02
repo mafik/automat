@@ -9,7 +9,6 @@ from sys import platform
 path_to_package = {
     "/usr/include/zlib.h": "zlib1g-dev",
     "/usr/include/openssl/ssl.h": "libssl-dev",
-    "/usr/bin/inotifywait": "inotify-tools",
     "/usr/include/gmock": "libgmock-dev",
 }
 

@@ -225,12 +225,15 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   from_shape.transform(transform_from_to_machine);
 
   // If one of the to_points is over from_shape, don't draw the cable
-  bool overlapping = to_shape.contains(pos_dir.pos.x, pos_dir.pos.y);
-  if (!overlapping && !from_shape.isEmpty()) {
-    for (auto& to_point : to_points) {
-      if (from_shape.contains(to_point.pos.x, to_point.pos.y)) {
-        overlapping = true;
-        break;
+  bool overlapping = false;
+  if (to != &from && to != nullptr) {
+    overlapping = to_shape.contains(pos_dir.pos.x, pos_dir.pos.y);
+    if (!overlapping && !from_shape.isEmpty()) {
+      for (auto& to_point : to_points) {
+        if (from_shape.contains(to_point.pos.x, to_point.pos.y)) {
+          overlapping = true;
+          break;
+        }
       }
     }
   }

@@ -22,6 +22,7 @@ PIPEWIRE_OPTIONS = {
   'pw-cat': 'disabled',
   'sndfile': 'disabled',
   'dbus': 'disabled',
+  'flatpak': 'disabled',
   'session-managers': '[]',
 }
 

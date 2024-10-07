@@ -9,6 +9,7 @@ import os
 import build
 import re
 import make
+import ninja
 
 DEPOT_TOOLS_ROOT = fs_utils.build_dir / 'depot_tools'
 SKIA_ROOT = fs_utils.build_dir / 'skia'
@@ -104,7 +105,7 @@ def skia_gn_gen(variant: BuildVariant):
   return make.Popen(args, cwd=SKIA_ROOT)
 
 def skia_compile(variant: BuildVariant):
-  args = ['ninja', '-C', variant.build_dir]
+  args = [ninja.BIN, '-C', variant.build_dir]
   return make.Popen(args)
 
 def hook_recipe(recipe):
@@ -119,7 +120,7 @@ def hook_recipe(recipe):
     args_gn = v.build_dir / 'args.gn'
     recipe.add_step(partial(skia_gn_gen, v), outputs=[args_gn], inputs=[GN, __file__], desc='Generating Skia build files', shortcut='skia gn gen' + v.build_type.rule_suffix())
 
-    recipe.add_step(partial(skia_compile, v), outputs=[v.build_dir / libname], inputs=[args_gn], desc='Compiling Skia', shortcut='skia' + v.build_type.rule_suffix())
+    recipe.add_step(partial(skia_compile, v), outputs=[v.build_dir / libname], inputs=[ninja.BIN, args_gn], desc='Compiling Skia', shortcut='skia' + v.build_type.rule_suffix())
 
 # Libraries offered by Skia
 skia_libs = set(['shshaper', 'skunicode', 'skia', 'skottie', 'svg'])

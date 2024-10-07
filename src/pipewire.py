@@ -11,6 +11,7 @@ import os
 import make
 import re
 import src
+import ninja
 
 PIPEWIRE_OPTIONS = {
   'spa-plugins': 'disabled',
@@ -111,9 +112,9 @@ def hook_recipe(recipe):
     
     install_output = str(build_dir / 'src' / 'pipewire' / 'libpipewire-0.3.a')
     recipe.add_step(
-      partial(make.Popen, ['ninja', '-C', build_dir, 'install']),
+      partial(make.Popen, [ninja.BIN, '-C', build_dir, 'install']),
       outputs=[install_output],
-      inputs=[build_dir / 'Makefile'],
+      inputs=[build_dir / 'Makefile', ninja.BIN],
       desc=f'Building PipeWire {build_type}',
       shortcut=f'build pipewire {build_type}')
     

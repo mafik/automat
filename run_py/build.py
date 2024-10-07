@@ -40,6 +40,7 @@ class BuildType:
         self.link_args += [f'-L{self.PREFIX()}/lib']
         self.link_args += [f'-L{self.PREFIX()}/lib64']
         self.PREFIX().mkdir(parents=True, exist_ok=True)
+        (self.PREFIX() / 'bin').mkdir(parents=True, exist_ok=True)
     
     def rule_suffix(self):
         return '' if self.is_default else f'_{self.name_lower}'
@@ -278,6 +279,9 @@ def recipe() -> make.Recipe:
     for ext in extensions:
         if hasattr(ext, 'hook_recipe'):
             ext.hook_recipe(r)
+
+    import ninja
+    ninja.hook_recipe(r)
 
     srcs = src.scan()
 

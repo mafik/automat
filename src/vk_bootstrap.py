@@ -7,9 +7,11 @@ from sys import platform
 import cmake
 import fs_utils
 import build
+import ninja
 
 VK_BOOTSTRAP_ROOT = fs_utils.build_dir / 'vk-bootstrap'
 VK_BOOTSTRAP_INCLUDE = VK_BOOTSTRAP_ROOT / 'src'
+TAG = 'v1.3.290' # must match TAG in vk_bootstrap.py
 
 build.base.compile_args += ['-I', VK_BOOTSTRAP_INCLUDE]
 
@@ -20,7 +22,7 @@ libname = build.libname('vk-bootstrap')
 
 def hook_recipe(recipe):
   recipe.add_step(
-      partial(Popen, ['git', 'clone', '--depth', '1', 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
+      partial(Popen, ['git', 'clone', '--depth', '1', '--branch', TAG, 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
       outputs=[VK_BOOTSTRAP_ROOT / 'CMakeLists.txt', VK_BOOTSTRAP_INCLUDE],
       inputs=[],
       desc = 'Downloading vk-bootstrap',
@@ -41,9 +43,9 @@ def hook_recipe(recipe):
     lib_path = build_dir / libname
 
     recipe.add_step(
-        partial(Popen, ['ninja', '-C', str(build_dir)]),
+        partial(Popen, [ninja.BIN, '-C', str(build_dir)]),
         outputs=[lib_path],
-        inputs=[build_dir / 'build.ninja'],
+        inputs=[build_dir / 'build.ninja', ninja.BIN],
         desc='Building vk-bootstrap',
         shortcut=f'vk-bootstrap {build_type}'.strip())
 

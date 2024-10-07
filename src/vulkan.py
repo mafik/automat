@@ -16,7 +16,7 @@ build.base.compile_args += ['-I', VK_INCLUDE]
 
 def hook_recipe(recipe):
   recipe.add_step(
-      partial(Popen, ['git', 'clone', '--depth', '1', '--branch', TAG, 'https://github.com/KhronosGroup/Vulkan-Headers.git', VK_ROOT]),
+      partial(Popen, ['git', '-c', 'advice.detachedHead=false', 'clone', '--depth', '1', '--branch', TAG, 'https://github.com/KhronosGroup/Vulkan-Headers.git', VK_ROOT]),
       outputs=[VK_INCLUDE],
       inputs=[],
       desc = 'Downloading Vulkan-Headers',

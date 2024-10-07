@@ -13,7 +13,7 @@ build.base.compile_args += ['-I', RAPIDJSON_INCLUDE]
 
 def hook_recipe(recipe):
   recipe.add_step(
-      git.clone('https://github.com/Tencent/rapidjson.git', RAPIDJSON_ROOT, 'v1.1.0'),
+      git.clone('https://github.com/Tencent/rapidjson.git', RAPIDJSON_ROOT, 'master'),
       outputs=[RAPIDJSON_ROOT / 'CMakeLists.txt', RAPIDJSON_INCLUDE],
       inputs=[],
       desc = 'Downloading RapidJSON',

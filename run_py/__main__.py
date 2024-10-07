@@ -32,23 +32,24 @@ if __name__ == '__main__':
 
     while True:
         recipe.set_target(args.target)
-        watcher = subprocess.Popen(
-            ['python', 'run_py/inotify.py', 'src/'], stdout=subprocess.DEVNULL)
+        if args.live:
+            watcher = subprocess.Popen(
+                ['python', 'run_py/inotify.py', 'src/'], stdout=subprocess.DEVNULL)
+        else:
+            watcher = None
 
         ok = recipe.execute(watcher)
         if ok:
             if active_recipe:
                 active_recipe.interrupt()
             active_recipe = recipe
-        if not args.live:
-            watcher.kill()
-            break
-        try:
-            print('Watching src/ for changes...')
-            watcher.wait()
-        except KeyboardInterrupt:
-            watcher.kill()
-            break
+        if watcher:
+            try:
+                print('Watching src/ for changes...')
+                watcher.wait()
+            except KeyboardInterrupt:
+                watcher.kill()
+                break
         # Reload the recipe because dependencies may have changed
         recipe = build.recipe()
     if not ok:

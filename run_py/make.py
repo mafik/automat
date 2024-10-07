@@ -260,10 +260,8 @@ class Recipe:
                 )
                 while True:
                     pid, status = wait_for_pid()
-                    if pid == watcher.pid:
-                        print(
-                            'Sources have been modified. Interrupting the build process...'
-                        )
+                    if watcher and pid == watcher.pid:
+                        print('Sources have been modified. Interrupting the build process...')
                         self.interrupt()
                         return False
                     break

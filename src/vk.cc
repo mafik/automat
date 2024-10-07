@@ -23,7 +23,8 @@
 #include <include/gpu/ganesh/vk/GrVkBackendSemaphore.h>
 #include <include/gpu/ganesh/vk/GrVkBackendSurface.h>
 #include <include/gpu/ganesh/vk/GrVkDirectContext.h>
-#include <include/gpu/vk/GrVkBackendContext.h>
+#include <include/gpu/vk/GrVkTypes.h>
+#include <include/gpu/vk/VulkanBackendContext.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
 #include <src/gpu/ganesh/GrDirectContextPriv.h>
@@ -64,9 +65,9 @@ struct Instance : vkb::Instance {
   std::string error = "";
   std::vector<const char*> extensions = {
 #if defined(_WIN32)
-      "VK_KHR_win32_surface"
+    "VK_KHR_win32_surface"
 #elif defined(__linux__)
-      "VK_KHR_xcb_surface"
+    "VK_KHR_xcb_surface"
 #endif
   };
 } instance;
@@ -349,7 +350,7 @@ void Device::Destroy() {
   error = "";
 }
 void InitGrContext() {
-  GrVkBackendContext backend = {
+  skgpu::VulkanBackendContext backend = {
       .fInstance = instance,
       .fPhysicalDevice = physical_device,
       .fDevice = device,

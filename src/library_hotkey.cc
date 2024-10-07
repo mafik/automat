@@ -135,8 +135,7 @@ vec4 main(in vec2 fragCoord) {
     if (!err.isEmpty()) {
       FATAL << err.c_str();
     }
-    SkRuntimeShaderBuilder builder(effect);
-    return builder;
+    return SkRuntimeShaderBuilder(effect);
   }();
 
   static auto start = std::chrono::steady_clock::now();

@@ -333,8 +333,7 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
     if (!err.isEmpty()) {
       FATAL << err.c_str();
     }
-    SkRuntimeShaderBuilder builder(effect);
-    return builder;
+    return SkRuntimeShaderBuilder(effect);
   }();
   static SkPaint paint;
   builder.uniform("px_per_m") = px_per_m;

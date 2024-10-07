@@ -125,13 +125,24 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
   auto my_shape = Shape(&dctx.display);
 
   auto color = ToolbarColor(dctx);
-  SkIRect center = SkIRect::MakeLTRB(color->height() / 2, 0, color->width() - color->height() / 2,
-                                     color->height());
   SkRect dst = my_shape.getBounds();
   dctx.canvas.save();
   dctx.canvas.translate(0, kToolbarHeight);
   dctx.canvas.scale(1, -1);
-  dctx.canvas.drawImageNine(color.get(), center, dst, SkFilterMode::kLinear);
+  SkRect left_src = SkRect::MakeLTRB(0, 0, color->height() / 2.f, color->height());
+  SkRect left_dst = Rect(dst.left(), 0, dst.left() + kToolbarHeight / 2, kToolbarHeight);
+  dctx.canvas.drawImageRect(color, left_src, left_dst, SkSamplingOptions(), nullptr,
+                            SkCanvas::kFast_SrcRectConstraint);
+  SkRect right_src =
+      SkRect::MakeLTRB(color->width() - color->height() / 2.f, 0, color->width(), color->height());
+  SkRect right_dst = Rect(dst.right() - kToolbarHeight / 2, 0, dst.right(), kToolbarHeight);
+  dctx.canvas.drawImageRect(color, right_src, right_dst, SkSamplingOptions(), nullptr,
+                            SkCanvas::kFast_SrcRectConstraint);
+
+  SkRect center_src = SkRect::MakeLTRB(left_src.right(), 0, right_src.left(), color->height());
+  SkRect center_dst = Rect(left_dst.right(), 0, right_dst.left(), kToolbarHeight);
+  dctx.canvas.drawImageRect(color, center_src, center_dst, SkSamplingOptions(), nullptr,
+                            SkCanvas::kFast_SrcRectConstraint);
   dctx.canvas.restore();
 
   phase |= DrawChildren(dctx);

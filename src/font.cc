@@ -7,7 +7,8 @@
 #include <include/core/SkFontMgr.h>
 #include <include/core/SkTypeface.h>
 #include <modules/skshaper/include/SkShaper.h>
-#include <modules/skunicode/include/SkUnicode.h>
+#include <modules/skshaper/include/SkShaper_harfbuzz.h>
+#include <modules/skunicode/include/SkUnicode_icu.h>
 #include <src/base/SkUTF.h>
 
 #if defined(_WIN32)
@@ -25,7 +26,8 @@
 #include "virtual_fs.hh"
 
 #pragma comment(lib, "skshaper")
-#pragma comment(lib, "skunicode")
+#pragma comment(lib, "skunicode_core")
+#pragma comment(lib, "skunicode_icu")
 #ifdef _WIN32
 #pragma comment(lib, "Advapi32")
 #endif
@@ -179,7 +181,7 @@ SkShaper& GetShaper() {
     fs::Copy(fs::real, "C:\\Windows\\Globalization\\ICU\\icudtl.dat", maf::fs::real,
              Path::ExecutablePath().Parent() / "icudtl.dat", status);
 #endif  // defined(_WIN32)
-    return SkShaper::MakeShapeDontWrapOrReorder(SkUnicode::MakeIcuBasedUnicode(), GetFontMgr());
+    return SkShapers::HB::ShapeDontWrapOrReorder(SkUnicodes::ICU::Make(), GetFontMgr());
   }();
   return *shaper;
 }

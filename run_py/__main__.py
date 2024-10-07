@@ -12,14 +12,17 @@ from sys import platform, exit
 
 recipe = build.recipe()
 
+def print_step(step):
+    print(' Step', step.shortcut)
+    print('  Inputs:')
+    for inp in sorted(str(x) for x in step.inputs):
+        print('    ', inp)
+    print('  Outputs: ', step.outputs)
+
 if args.verbose:
     print('Build graph')
     for step in recipe.steps:
-        print(' Step', step.shortcut)
-        print('  Inputs:')
-        for inp in sorted(str(x) for x in step.inputs):
-            print('    ', inp)
-        print('  Outputs: ', step.outputs)
+        print_step(step)
 
 if __name__ == '__main__':
     debian_deps.check_and_install()

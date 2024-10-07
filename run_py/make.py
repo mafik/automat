@@ -234,9 +234,10 @@ class Recipe:
                 status = step.builder.poll()
                 if status != None:
                     return pid, status
-            status = watcher.poll()
-            if status != None:
-                return watcher.pid, status
+            if watcher:
+                status = watcher.poll()
+                if status != None:
+                    return watcher.pid, status
             return 0, 0
 
         def wait_for_pid():
@@ -268,6 +269,7 @@ class Recipe:
                             return False
                         else:
                             print('Sources have been modified but the build is not in live mode. Continuing the build...')
+                            watcher = None
                             continue
                     break
                 step = self.pid_to_step[pid]

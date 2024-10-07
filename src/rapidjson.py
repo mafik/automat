@@ -4,6 +4,7 @@ from functools import partial
 from subprocess import Popen
 import fs_utils
 import build
+import git
 
 RAPIDJSON_ROOT = fs_utils.build_dir / 'rapidjson'
 RAPIDJSON_INCLUDE = RAPIDJSON_ROOT / 'include'
@@ -12,7 +13,7 @@ build.base.compile_args += ['-I', RAPIDJSON_INCLUDE]
 
 def hook_recipe(recipe):
   recipe.add_step(
-      partial(Popen, ['git', 'clone', '--depth', '1', 'https://github.com/Tencent/rapidjson.git', RAPIDJSON_ROOT]),
+      git.clone('https://github.com/Tencent/rapidjson.git', RAPIDJSON_ROOT, 'v1.1.0'),
       outputs=[RAPIDJSON_ROOT / 'CMakeLists.txt', RAPIDJSON_INCLUDE],
       inputs=[],
       desc = 'Downloading RapidJSON',

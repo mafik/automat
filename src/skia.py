@@ -10,7 +10,9 @@ import build
 import re
 import make
 import ninja
+import git
 
+TAG = 'chrome/m130'
 DEPOT_TOOLS_ROOT = fs_utils.build_dir / 'depot_tools'
 SKIA_ROOT = fs_utils.build_dir / 'skia'
 GN = (SKIA_ROOT / 'bin' / 'gn').with_suffix(build.binary_extension).absolute()
@@ -91,12 +93,6 @@ build.debug.compile_args += ['-DSK_DEBUG']
 
 libname = build.libname('skia')
 
-def git_clone_depot_tools():
-  return make.Popen(['git', 'clone', '--depth', '1', 'https://chromium.googlesource.com/chromium/tools/depot_tools.git', DEPOT_TOOLS_ROOT])
-
-def git_clone_skia():
-  return make.Popen(['git', 'clone', '--depth', '1', 'https://skia.googlesource.com/skia.git', SKIA_ROOT])
-
 def skia_git_sync_with_deps():
   return make.Popen(['python', 'tools/git-sync-deps'], cwd=SKIA_ROOT)
 
@@ -109,10 +105,20 @@ def skia_compile(variant: BuildVariant):
   return make.Popen(args)
 
 def hook_recipe(recipe):
-  recipe.add_step(git_clone_depot_tools, outputs=[fs_utils.build_dir / 'depot_tools'], inputs=[], desc='Downloading depot_tools', shortcut='get depot_tools')
+  recipe.add_step(
+    git.clone('https://chromium.googlesource.com/chromium/tools/depot_tools.git', DEPOT_TOOLS_ROOT, 'main'),
+    outputs=[fs_utils.build_dir / 'depot_tools'],
+    inputs=[],
+    desc='Downloading depot_tools',
+    shortcut='get depot_tools')
   os.environ['PATH'] = str(DEPOT_TOOLS_ROOT) + ':' + os.environ['PATH']
 
-  recipe.add_step(git_clone_skia, outputs=[SKIA_ROOT], inputs=[], desc='Downloading Skia', shortcut='get skia')
+  recipe.add_step(
+    git.clone('https://skia.googlesource.com/skia.git', SKIA_ROOT, TAG),
+    outputs=[SKIA_ROOT],
+    inputs=[],
+    desc='Downloading Skia',
+    shortcut='get skia')
   
   recipe.add_step(skia_git_sync_with_deps, outputs=[GN], inputs=[SKIA_ROOT], desc='Syncing Skia git deps', shortcut='skia git sync with deps')
 

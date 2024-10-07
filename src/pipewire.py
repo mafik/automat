@@ -12,6 +12,7 @@ import make
 import re
 import src
 import ninja
+import git
 
 PIPEWIRE_OPTIONS = {
   'spa-plugins': 'disabled',
@@ -84,7 +85,7 @@ autolinker = LibraryAutolinker('pipewire/pipewire.h')
 
 def hook_recipe(recipe):
   recipe.add_step(
-      partial(make.Popen, ['git', 'clone', '--depth', '1', 'https://gitlab.freedesktop.org/pipewire/pipewire.git', PIPEWIRE_ROOT]),
+      git.clone('https://gitlab.freedesktop.org/pipewire/pipewire.git', PIPEWIRE_ROOT, '1.2.5'),
       outputs=[PATCH_INPUT],
       inputs=[],
       desc = 'Downloading PipeWire',

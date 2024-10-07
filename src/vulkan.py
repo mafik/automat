@@ -7,6 +7,7 @@ from sys import platform
 import cmake
 import fs_utils
 import build
+import git
 
 VK_ROOT = fs_utils.build_dir / 'vulkan-headers'
 VK_INCLUDE = VK_ROOT / 'include'
@@ -16,7 +17,7 @@ build.base.compile_args += ['-I', VK_INCLUDE]
 
 def hook_recipe(recipe):
   recipe.add_step(
-      partial(Popen, ['git', '-c', 'advice.detachedHead=false', 'clone', '--depth', '1', '--branch', TAG, 'https://github.com/KhronosGroup/Vulkan-Headers.git', VK_ROOT]),
+      git.clone('https://github.com/KhronosGroup/Vulkan-Headers.git', VK_ROOT, TAG),
       outputs=[VK_INCLUDE],
       inputs=[],
       desc = 'Downloading Vulkan-Headers',

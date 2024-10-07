@@ -8,6 +8,7 @@ import cmake
 import fs_utils
 import build
 import ninja
+import git
 
 VK_BOOTSTRAP_ROOT = fs_utils.build_dir / 'vk-bootstrap'
 VK_BOOTSTRAP_INCLUDE = VK_BOOTSTRAP_ROOT / 'src'
@@ -22,7 +23,7 @@ libname = build.libname('vk-bootstrap')
 
 def hook_recipe(recipe):
   recipe.add_step(
-      partial(Popen, ['git', '-c', 'advice.detachedHead=false', 'clone', '--depth', '1', '--branch', TAG, 'https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT]),
+      git.clone('https://github.com/charles-lunarg/vk-bootstrap', VK_BOOTSTRAP_ROOT, TAG),
       outputs=[VK_BOOTSTRAP_ROOT / 'CMakeLists.txt', VK_BOOTSTRAP_INCLUDE],
       inputs=[],
       desc = 'Downloading vk-bootstrap',

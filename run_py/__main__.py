@@ -50,6 +50,8 @@ if __name__ == '__main__':
             except KeyboardInterrupt:
                 watcher.kill()
                 break
+        else:
+            break
         # Reload the recipe because dependencies may have changed
         recipe = build.recipe()
     if not ok:

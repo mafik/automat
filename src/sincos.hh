@@ -6,6 +6,7 @@
 #include <include/core/SkMatrix.h>
 #include <sys/types.h>
 
+#include <bit>
 #include <cmath>
 #include <cstdint>
 

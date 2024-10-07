@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
 import build
+import ninja
 
 build.fast.CMAKE_BUILD_TYPE = 'RelWithDebInfo'
 build.release.CMAKE_BUILD_TYPE = 'Release'
@@ -16,8 +17,9 @@ build.debug.CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreadedDebug'
 def CMakeArgs(build_type: build.BuildType):
     CMAKE_BUILD_TYPE = build_type.CMAKE_BUILD_TYPE
     CMAKE_MSVC_RUNTIME_LIBRARY = build_type.CMAKE_MSVC_RUNTIME_LIBRARY
+    CMAKE_MAKE_PROGRAM = str(ninja.BIN)
 
-    cmake_args = ['cmake', '-G', 'Ninja', f'-D{CMAKE_BUILD_TYPE=}',
+    cmake_args = ['cmake', '-G', 'Ninja', f'-D{CMAKE_BUILD_TYPE=}', f'-D{CMAKE_MAKE_PROGRAM=}',
                   f'-DCMAKE_C_COMPILER={build.compiler_c}', f'-DCMAKE_CXX_COMPILER={build.compiler}']
 
     cmake_args += ['-DCMAKE_POLICY_DEFAULT_CMP0091=NEW', f'-D{CMAKE_MSVC_RUNTIME_LIBRARY=}']

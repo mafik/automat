@@ -293,6 +293,10 @@ class Recipe:
                         self.pid_to_step[builder.pid] = next
                     else:
                         on_step_finished(next)
+                except PermissionError as err:
+                    print(f'{next.desc} failed due to a permission error.', err)
+                    self.interrupt()
+                    return False
                 except subprocess.CalledProcessError as err:
                     print(f'{next.desc} finished with an error.', err)
                     self.interrupt()

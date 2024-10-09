@@ -25,7 +25,10 @@ def check_and_install():
         print("  ", ', '.join(missing_packages))
         print("In case of errors with clang or libc++ installation - add the repositories from https://apt.llvm.org/ and re-run this script.\n")
         print("Press enter to continue or Ctrl+C to cancel.")
-        input()
+        try:
+            input()
+        except EOFError:
+            print("Got EOF - batch job detected. Continuing with the installation.")
         command = ["apt", "-y", "install"] + list(missing_packages)
         if os.geteuid() != 0:  # non-root users need `sudo` to install stuff
             command = ["sudo"] + command

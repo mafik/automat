@@ -9,4 +9,4 @@ from subprocess import run
 from pathlib import Path
 
 base_dir = Path(__file__).parent
-run(['python', base_dir / 'run_py'] + sys.argv[1:])
+run(['python', base_dir / 'run_py'] + sys.argv[1:], check=True)

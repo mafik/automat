@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: MIT
 '''Rules for downloading the Ninja build system'''
 
+# TODO: move this to src/ and remove the empty hook_recipe function
+
 import shutil
 
 BIN = shutil.which('ninja')

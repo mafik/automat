@@ -10,6 +10,8 @@ import debian_deps
 from args import args
 from sys import platform, exit
 
+debian_deps.check_and_install()
+
 recipe = build.recipe()
 
 def print_step(step):
@@ -24,38 +26,35 @@ if args.verbose:
     for step in recipe.steps:
         print_step(step)
 
-if __name__ == '__main__':
-    debian_deps.check_and_install()
-    
-    if args.fresh:
-        print('Cleaning old build results:')
-        recipe.clean()
+if args.fresh:
+    print('Cleaning old build results:')
+    recipe.clean()
 
-    active_recipe = None
+active_recipe = None
 
-    while True:
-        recipe.set_target(args.target)
-        if args.live:
-            watcher = subprocess.Popen(
-                ['python', 'run_py/inotify.py', 'src/'], stdout=subprocess.DEVNULL)
-        else:
-            watcher = None
+while True:
+    recipe.set_target(args.target)
+    if args.live:
+        watcher = subprocess.Popen(
+            ['python', 'run_py/inotify.py', 'src/'], stdout=subprocess.DEVNULL)
+    else:
+        watcher = None
 
-        ok = recipe.execute(watcher)
-        if ok:
-            if active_recipe:
-                active_recipe.interrupt()
-            active_recipe = recipe
-        if watcher:
-            try:
-                print('Watching src/ for changes...')
-                watcher.wait()
-            except KeyboardInterrupt:
-                watcher.kill()
-                break
-        else:
+    ok = recipe.execute(watcher)
+    if ok:
+        if active_recipe:
+            active_recipe.interrupt()
+        active_recipe = recipe
+    if watcher:
+        try:
+            print('Watching src/ for changes...')
+            watcher.wait()
+        except KeyboardInterrupt:
+            watcher.kill()
             break
-        # Reload the recipe because dependencies may have changed
-        recipe = build.recipe()
-    if not ok:
-        exit(1)
+    else:
+        break
+    # Reload the recipe because dependencies may have changed
+    recipe = build.recipe()
+if not ok:
+    exit(1)

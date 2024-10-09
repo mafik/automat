@@ -1,4 +1,4 @@
-This doc is meant for folks who would like to tinker Automat on their own
+This doc is meant for folks who would like to tinker with Automat on their own
 machines. It lists the underlying technologies and describes how they're
 connected together.
 

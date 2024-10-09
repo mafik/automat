@@ -18,7 +18,9 @@ jobs:
       - name: Build
         run: python run.py 'link release_automat'
 
-      # - name: Upload
-      #   uses: actions/upload-artifact@v2
-      #   with:
-      #     name: dist
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows Executable
+          path: build/release_automat.exe
+          if-no-files-found: error

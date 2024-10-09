@@ -10,6 +10,7 @@ path_to_package = {
     "/usr/include/zlib.h": "zlib1g-dev",
     "/usr/include/openssl/ssl.h": "libssl-dev",
     "/usr/include/gmock": "libgmock-dev",
+    "/usr/bin/meson": "meson",
 }
 
 

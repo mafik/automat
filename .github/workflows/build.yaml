@@ -62,14 +62,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            build/skia
-            build/vk-bootstrap
-            build/vulkan-headers
-            build/rapidjson
-            build/depot_tools
-            build/FastTrigo
-            build/pipewire
-            build/prefix
+            build/
           key: ${{ runner.os }}-deps
 
       - name: Build
@@ -81,14 +74,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            build/skia
-            build/vk-bootstrap
-            build/vulkan-headers
-            build/rapidjson
-            build/depot_tools
-            build/FastTrigo
-            build/pipewire
-            build/prefix
+            build/
           key: ${{ steps.cache-restore.outputs.cache-primary-key }}
 
       - name: Upload

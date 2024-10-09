@@ -15,6 +15,7 @@ path_to_package = {
     "/usr/include/X11/extensions/Xrandr.h": "libxrandr-dev",
     "/usr/include/X11/extensions/Xinerama.h": "libxinerama-dev",
     "/usr/include/X11/Xcursor/Xcursor.h": "libxcursor-dev",
+    "/usr/include/X11/extensions/XInput2.h": "libxi-dev",
 }
 
 

@@ -12,6 +12,7 @@ path_to_package = {
     "/usr/include/gmock": "libgmock-dev",
     "/usr/bin/meson": "meson",
     "/usr/include/X11/Xlib.h": "libx11-dev",
+    "/usr/include/X11/extensions/Xrandr.h": "libxrandr-dev",
 }
 
 

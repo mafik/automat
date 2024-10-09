@@ -15,24 +15,34 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Restore Skia
-        id: cache-skia-restore
+      - name: Restore dependencies from cache
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
             build/skia
-          key: ${{ runner.os }}-skia
+            build/vk-bootstrap
+            build/vulkan-headers
+            build/rapidjson
+            build/depot_tools
+            build/FastTrigo
+          key: ${{ runner.os }}-deps
 
       - name: Build
         run: python run.py 'link release_automat'
 
-      - name: Cache Skia
-        id: cache-skia-save
+      - name: Cache dependencies
+        id: cache-save
         uses: actions/cache/save@v4
         with:
           path: |
             build/skia
-          key: ${{ steps.cache-skia-restore.outputs.cache-primary-key }}
+            build/vk-bootstrap
+            build/vulkan-headers
+            build/rapidjson
+            build/depot_tools
+            build/FastTrigo
+          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
 
       - name: Upload
         uses: actions/upload-artifact@v4

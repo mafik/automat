@@ -1,0 +1,14 @@
+{
+  "tab_size": 2,
+  "lsp": {
+    "pyright": {
+      "settings": {
+        "python.analysis": {
+          "diagnosticMode": "workspace",
+          "typeCheckingMode": "strict",
+          "extraPaths": ["./src", "./run_py"]
+        }
+      }
+    }
+  }
+}

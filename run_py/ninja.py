@@ -58,3 +58,6 @@ if not BIN:
         inputs=[ZIP_PATH],
         desc='Unzipping Ninja',
         shortcut='unzip ninja')
+else:
+  def hook_recipe(recipe):
+    pass

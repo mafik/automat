@@ -6,7 +6,11 @@ import shutil
 
 BIN = shutil.which('ninja')
 
+print('Ninja found at', BIN)
+
 if not BIN:
+  print('Ninja not found - adding recipe to download it.')
+
   import build, sys, fs_utils
   if sys.platform == 'win32':
     ZIP_NAME = 'ninja-win.zip'

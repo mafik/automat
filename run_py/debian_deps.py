@@ -11,6 +11,7 @@ path_to_package = {
     "/usr/include/openssl/ssl.h": "libssl-dev",
     "/usr/include/gmock": "libgmock-dev",
     "/usr/bin/meson": "meson",
+    "/usr/include/X11/Xlib.h": "libx11-dev",
 }
 
 

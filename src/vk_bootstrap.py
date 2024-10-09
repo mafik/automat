@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
 from functools import partial
-from subprocess import Popen
+from make import Popen
 from sys import platform
 
 import cmake
@@ -73,6 +73,6 @@ def hook_final(srcs, objs, bins, recipe):
         needs_vk_bootstrap = True
         build_type = bin.build_type
         break
-    
+
     if needs_vk_bootstrap:
       step.inputs.add(str(get_build_dir(build_type) / libname))

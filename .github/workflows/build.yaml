@@ -50,3 +50,45 @@ jobs:
           name: Windows Executable
           path: build/release_automat.exe
           if-no-files-found: error
+
+  linux_release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore dependencies from cache
+        id: cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/skia
+            build/vk-bootstrap
+            build/vulkan-headers
+            build/rapidjson
+            build/depot_tools
+            build/FastTrigo
+          key: ${{ runner.os }}-deps
+
+      - name: Build
+        run: python run.py 'link release_automat'
+
+      - name: Cache dependencies
+        id: cache-save
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build/skia
+            build/vk-bootstrap
+            build/vulkan-headers
+            build/rapidjson
+            build/depot_tools
+            build/FastTrigo
+          key: ${{ steps.cache-restore.outputs.cache-primary-key }}
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: Linux Executable
+          path: build/release_automat
+          if-no-files-found: error

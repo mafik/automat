@@ -1,14 +1,27 @@
 # Automat
 
-Control computers by combining interactive blocks.
+Automat is a tangible interface for virtual objects.
+
+
 
 # Status
 
-Automat is under active development. It's not ready for use yet.
+Currently Automat's functionality is limited to keyboard macro recording &
+playback. It's fairly unstable but if you're lucky and it runs on your machine,
+it can be useful for automating some basic actions.
+
+You can, of course, check it out just to see how the interface works - but
+don't assume that it's going to stay like that. It's very much a work in
+progress. Roadmap includes some pretty radical new features which will
+drastically change how it looks and works.
+
+Current roadmap can be found [here](https://www.tldraw.com/ro/3d97dFMiuM0MLgqyyP0SG?d=v-1312.-804.2500.1170.page).
 
 # License
 
-Automat is licensed under the MIT license. Some of its components use slightly different but compatible licenses. This means that you are free to embed & resell Automat, as long as you follow the license terms.
+Automat is licensed under the MIT license. Some of its components use slightly
+different but compatible licenses. This means that you are free to embed &
+resell Automat, as long as you follow the license terms.
 
 Here is an overview of the licenses used by Automat's dependencies:
 

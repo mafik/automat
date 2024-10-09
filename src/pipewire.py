@@ -43,7 +43,7 @@ def patch_meson_build():
     for line in lines:
       f.write(re.sub(r'libpipewire = shared_library', 'libpipewire = library', line))
   PATCH_MARKER.touch()
-    
+
 class LibraryAutolinker:
   '''Automatically recognize if any file uses the given library and link it properly.'''
 
@@ -90,13 +90,13 @@ def hook_recipe(recipe):
       inputs=[],
       desc = 'Downloading PipeWire',
       shortcut='get pipewire')
-  
+
   recipe.add_step(patch_meson_build,
       outputs=[PATCH_MARKER],
       inputs=[PATCH_INPUT],
       desc = 'Patching meson.build',
       shortcut='patch pipewire meson.build')
-  
+
   autolinker.compile_args[''] += ['-D_REENTRANT']
   autolinker.link_args[''] += ['-ldl', '-lm', '-pthread', '-lpipewire-0.3']
   for build_type in build.types:
@@ -105,12 +105,12 @@ def hook_recipe(recipe):
     for key, value in PIPEWIRE_OPTIONS.items():
       opts.append(f'-D{key}={value}')
     recipe.add_step(
-      partial(make.Popen, ['meson', 'setup'] + opts + ['--default-library=both', '--prefix', str(build_type.PREFIX()), build_dir, PIPEWIRE_ROOT]),
+      partial(make.Popen, ['meson', 'setup'] + opts + ['--default-library=both', '--prefix', str(build_type.PREFIX()), '--libdir', 'lib64', build_dir, PIPEWIRE_ROOT]),
       outputs=[build_dir / 'Makefile'],
       inputs=[PATCH_MARKER],
       desc=f'Configuring PipeWire {build_type}',
       shortcut=f'configure pipewire {build_type}')
-    
+
     install_output = str(build_dir / 'src' / 'pipewire' / 'libpipewire-0.3.a')
     recipe.add_step(
       partial(make.Popen, [ninja.BIN, '-C', build_dir, 'install']),
@@ -118,7 +118,7 @@ def hook_recipe(recipe):
       inputs=[build_dir / 'Makefile', ninja.BIN],
       desc=f'Building PipeWire {build_type}',
       shortcut=f'build pipewire {build_type}')
-    
+
     autolinker.inputs[build_type.name] += [install_output]
     autolinker.compile_args[build_type.name] += [f'-I{build_type.PREFIX()}/include/pipewire-0.3', f'-I{build_type.PREFIX()}/include/spa-0.2']
 

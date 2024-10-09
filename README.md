@@ -5,7 +5,7 @@
 Automat is a tangible interface for virtual objects.
 
 Its objective is to be able to semi-autonomously play a variety of games. This
-is a first step towards a more general environment for interacting with
+is the first step towards a more general environment for interacting with
 computers.
 
 # Status

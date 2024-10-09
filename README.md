@@ -21,6 +21,21 @@ drastically change how it looks and works.
 
 Current roadmap can be found [here](https://www.tldraw.com/ro/3d97dFMiuM0MLgqyyP0SG?d=v-1312.-804.2500.1170.page).
 
+# Contributing
+
+First read [ARCHITECTURE.md](ARCHITECTURE.md) to get a general idea of how
+things are organized. Once you do that, you may try to clone the Automat
+repository and run it (build script should take care of everything for you - if
+not - you can report it as a bug).
+
+The same commands should work on Linux and Windows:
+
+```sh
+git clone https://github.com/mafik/automat.git
+cd automat
+./run.py automat
+```
+
 # License
 
 Automat is licensed under the MIT license. Some of its components use slightly

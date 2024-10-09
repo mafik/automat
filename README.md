@@ -1,8 +1,12 @@
 # Automat
 
+[![Build](https://github.com/mafik/automat/actions/workflows/build.yaml/badge.svg?branch=main)](https://github.com/mafik/automat/actions/workflows/build.yaml)
+
 Automat is a tangible interface for virtual objects.
 
-
+Its objective is to be able to semi-autonomously play a variety of games. This
+is a first step towards a more general environment for interacting with
+computers.
 
 # Status
 

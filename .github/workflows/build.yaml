@@ -68,6 +68,8 @@ jobs:
             build/rapidjson
             build/depot_tools
             build/FastTrigo
+            build/pipewire
+            build/prefix
           key: ${{ runner.os }}-deps
 
       - name: Build
@@ -75,6 +77,7 @@ jobs:
 
       - name: Cache dependencies
         id: cache-save
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: |
@@ -84,6 +87,8 @@ jobs:
             build/rapidjson
             build/depot_tools
             build/FastTrigo
+            build/pipewire
+            build/prefix
           key: ${{ steps.cache-restore.outputs.cache-primary-key }}
 
       - name: Upload

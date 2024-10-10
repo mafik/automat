@@ -2,10 +2,7 @@
 
 [![Build](https://github.com/mafik/automat/actions/workflows/build.yaml/badge.svg?branch=main)](https://github.com/mafik/automat/actions/workflows/build.yaml)
 
-Automat is a tangible interface for virtual objects.
-
-Its objective is to be able to semi-autonomously play a variety of games. This
-is the first step towards a more general environment for interacting with
+Automat's objective is to be able to semi-autonomously play a variety of games. It's the first step towards a more general environment for interacting with
 computers.
 
 # Status

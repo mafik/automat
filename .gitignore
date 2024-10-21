@@ -39,6 +39,8 @@ __pycache__
 *.pcap
 *.pdb
 
+*~
+
 build
 third_party/PipeWire
 third_party/FlameGraph

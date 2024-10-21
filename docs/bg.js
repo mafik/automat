@@ -1,8 +1,7 @@
+let canvas = document.getElementById("bg");
+let ctx = canvas.getContext("2d", { alpha: false });
 
-let canvas = document.getElementById('bg');
-let ctx = canvas.getContext('2d');
-
-window.addEventListener('resize', () => {
+window.addEventListener("resize", () => {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 });
@@ -20,15 +19,21 @@ for (let i = 0; i < n_points; i++) {
   let rscale = 100;
   let omega_scale = 1;
   let canvas_center = { x: canvas.width / 2, y: canvas.height / 2 };
-  let alpha = Math.PI * 2 / n_points * i;
+  let alpha = ((Math.PI * 2) / n_points) * i;
   points.push({
-    x: canvas_center.x + Math.cos(alpha) * canvas.width / 4 + Math.random() * canvas.width / 8,
-    y: canvas_center.y + Math.sin(alpha) * canvas.height / 4 + Math.random() * canvas.height / 8,
+    x:
+      canvas_center.x +
+      (Math.cos(alpha) * canvas.width) / 4 +
+      (Math.random() * canvas.width) / 8,
+    y:
+      canvas_center.y +
+      (Math.sin(alpha) * canvas.height) / 4 +
+      (Math.random() * canvas.height) / 8,
     vx: Math.cos(angle) * vscale,
     vy: Math.sin(angle) * vscale,
     radius: (Math.random() + 0.5) * rscale,
     angle: Math.random() * Math.PI * 2,
-    angularVelocity: (Math.random() - 0.5) * omega_scale
+    angularVelocity: (Math.random() - 0.5) * omega_scale,
   });
 }
 
@@ -36,7 +41,7 @@ function MovePoints(pts, step) {
   // Attract points to the center
   for (let p1 of pts) {
     let dx1 = canvas.width / 4 - p1.x;
-    let dx2 = canvas.width * 3 / 4 - p1.x;
+    let dx2 = (canvas.width * 3) / 4 - p1.x;
     let dy = canvas.height / 2 - p1.y;
     let d1 = Math.hypot(dx1, dy);
     let d2 = Math.hypot(dx2, dy);
@@ -60,10 +65,10 @@ function MovePoints(pts, step) {
       let d = Math.hypot(dx, dy);
       if (d < 0.001) d = 0.001;
       // TODO: figure out the constant based on canvas size
-      let f = canvas.width * canvas.height / Math.pow(Math.abs(d), 2);
+      let f = (canvas.width * canvas.height) / Math.pow(Math.abs(d), 2);
       let angle = Math.atan2(dy, dx);
-      p1.vx -= Math.cos(angle) * f * step * canvas.width / canvas.height;
-      p1.vy -= Math.sin(angle) * f * step * canvas.height / canvas.width;
+      p1.vx -= (Math.cos(angle) * f * step * canvas.width) / canvas.height;
+      p1.vy -= (Math.sin(angle) * f * step * canvas.height) / canvas.width;
     }
   }
   for (let i = 0; i < pts.length; i++) {
@@ -71,7 +76,7 @@ function MovePoints(pts, step) {
     let prev_i = (i + pts.length - 1) % pts.length;
     let center = {
       x: (pts[next_i].x + pts[prev_i].x) / 2,
-      y: (pts[next_i].y + pts[prev_i].y) / 2
+      y: (pts[next_i].y + pts[prev_i].y) / 2,
     };
     let p = pts[i];
     let dx = center.x - p.x;
@@ -104,7 +109,7 @@ function MovePoints(pts, step) {
     if (point.x < 0 || point.x > canvas.width) {
       point.vx *= -1;
       if (point.x < 0) {
-        point.x = - point.x;
+        point.x = -point.x;
       } else if (point.x > canvas.width) {
         point.x = canvas.width - (point.x - canvas.width);
       }
@@ -126,26 +131,39 @@ function Clamp(x, min, max) {
   return x;
 }
 
+let frame_times = [];
+for (let i = 0; i < 60; i++) {
+  frame_times.push(0);
+}
 let last_t = 0;
 function Tick(t) {
   let dt = t - last_t;
   last_t = t;
   dt /= 1000;
-  if (dt > 0.05) dt = 0.05;
-  MovePoints(points, dt);
+
 
   let canvas_scale_factor = Math.sqrt(canvas.width * canvas.height) / 600;
 
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = "#dfddd3";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  frame_times.push(dt);
+  frame_times.shift();
+  let median_frame_time = frame_times.sort()[Math.floor(frame_times.length / 2)];
+  if (median_frame_time > 0.05) {
+    // remove canvas
+    canvas.parentElement.removeChild(canvas);
+    return;
+  }
+
+  if (dt > 0.05) dt = 0.05;
+  MovePoints(points, dt);
   history.push(JSON.parse(JSON.stringify(points)));
 
   if (history.length > 1000) {
     history.shift();
   }
-
-  // Draw 10% white to fate the previous frame to white
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.fillStyle = '#dfddd3';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   let furthest_d = 1;
   for (let i = 1; i < points.length; i++) {
@@ -154,9 +172,16 @@ function Tick(t) {
     furthest_d = Math.max(furthest_d, Math.hypot(dx, dy));
   }
 
-  let gradient = ctx.createRadialGradient(points[0].x, points[0].y, 0, points[0].x, points[0].y, furthest_d * 1.2);
-  gradient.addColorStop(0, '#2069c2');
-  gradient.addColorStop(1, '#cca916');
+  let gradient = ctx.createRadialGradient(
+    points[0].x,
+    points[0].y,
+    0,
+    points[0].x,
+    points[0].y,
+    furthest_d * 1.2,
+  );
+  gradient.addColorStop(0, "#2069c2");
+  gradient.addColorStop(1, "#cca916");
   ctx.fillStyle = gradient;
   ctx.globalCompositeOperation = "color-burn";
 
@@ -175,24 +200,41 @@ function Tick(t) {
     let opacity = 1 - strip / n_strips;
     ctx.globalAlpha = opacity;
 
-
     ctx.beginPath();
 
-
     // Draw the bezier array
-    ctx.moveTo(ribbon_start[ribbon_start.length - 1].x, ribbon_start[ribbon_start.length - 1].y);
+    ctx.moveTo(
+      ribbon_start[ribbon_start.length - 1].x,
+      ribbon_start[ribbon_start.length - 1].y,
+    );
     for (let i = 0; i < ribbon_start.length; i++) {
       let prev_i = (i + ribbon_start.length - 1) % ribbon_start.length;
       let next_i = (i + 1) % ribbon_start.length;
 
       let cp1 = {
-        x: ribbon_start[prev_i].x - Math.cos(ribbon_start[prev_i].angle) * ribbon_start[prev_i].radius * canvas_scale_factor,
-        y: ribbon_start[prev_i].y - Math.sin(ribbon_start[prev_i].angle) * ribbon_start[prev_i].radius * canvas_scale_factor
+        x:
+          ribbon_start[prev_i].x -
+          Math.cos(ribbon_start[prev_i].angle) *
+          ribbon_start[prev_i].radius *
+          canvas_scale_factor,
+        y:
+          ribbon_start[prev_i].y -
+          Math.sin(ribbon_start[prev_i].angle) *
+          ribbon_start[prev_i].radius *
+          canvas_scale_factor,
       };
       let p = { x: ribbon_start[i].x, y: ribbon_start[i].y };
       let cp2 = {
-        x: ribbon_start[i].x + Math.cos(ribbon_start[i].angle) * ribbon_start[i].radius * canvas_scale_factor,
-        y: ribbon_start[i].y + Math.sin(ribbon_start[i].angle) * ribbon_start[i].radius * canvas_scale_factor
+        x:
+          ribbon_start[i].x +
+          Math.cos(ribbon_start[i].angle) *
+          ribbon_start[i].radius *
+          canvas_scale_factor,
+        y:
+          ribbon_start[i].y +
+          Math.sin(ribbon_start[i].angle) *
+          ribbon_start[i].radius *
+          canvas_scale_factor,
       };
 
       ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y);
@@ -207,13 +249,29 @@ function Tick(t) {
       let prev_i = (i + 1) % ribbon_end.length;
 
       let cp1 = {
-        x: ribbon_end[prev_i].x + Math.cos(ribbon_end[prev_i].angle) * ribbon_end[prev_i].radius * canvas_scale_factor,
-        y: ribbon_end[prev_i].y + Math.sin(ribbon_end[prev_i].angle) * ribbon_end[prev_i].radius * canvas_scale_factor
+        x:
+          ribbon_end[prev_i].x +
+          Math.cos(ribbon_end[prev_i].angle) *
+          ribbon_end[prev_i].radius *
+          canvas_scale_factor,
+        y:
+          ribbon_end[prev_i].y +
+          Math.sin(ribbon_end[prev_i].angle) *
+          ribbon_end[prev_i].radius *
+          canvas_scale_factor,
       };
       let p = { x: ribbon_end[i].x, y: ribbon_end[i].y };
       let cp2 = {
-        x: ribbon_end[i].x - Math.cos(ribbon_end[i].angle) * ribbon_end[i].radius * canvas_scale_factor,
-        y: ribbon_end[i].y - Math.sin(ribbon_end[i].angle) * ribbon_end[i].radius * canvas_scale_factor
+        x:
+          ribbon_end[i].x -
+          Math.cos(ribbon_end[i].angle) *
+          ribbon_end[i].radius *
+          canvas_scale_factor,
+        y:
+          ribbon_end[i].y -
+          Math.sin(ribbon_end[i].angle) *
+          ribbon_end[i].radius *
+          canvas_scale_factor,
       };
 
       ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, p.x, p.y);

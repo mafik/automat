@@ -60,6 +60,7 @@ class Step:
                  id,
                  desc=None,
                  shortcut=None,
+                 cleanup=None,
                  stderr_prettifier=lambda x: x):
         if not desc:
             if hasattr(build_func, '__name__'):
@@ -81,6 +82,7 @@ class Step:
         self.builder = None  # Popen instance while this step is being built
         self.id = id
         self.stderr_prettifier = stderr_prettifier
+        self.cleanup = cleanup
 
     def __repr__(self):
         return f'{self.desc}'
@@ -286,6 +288,11 @@ class Recipe:
                             print('  ' + step.stderr_prettifier(line))
                     else:
                         print('  (no stderr)')
+                    if step.cleanup:
+                        try:
+                            step.cleanup()
+                        except Exception as e:
+                            print(f'Cleanup failed: {e}')
                     self.interrupt()
                     return False
                 step.builder = None

@@ -314,7 +314,7 @@ def recipe() -> make.Recipe:
                    inputs=obj.deps | set(['compile_commands.json']),
                    desc=f'Compiling {obj.path.name}',
                    shortcut=obj.path.name)
-        r.generated.add(obj.path)
+        r.generated.add(str(obj.path))
         compilation_db.append(
             CompilationEntry(str(obj.source.path), str(obj.path), pargs))
     for bin in bins:
@@ -329,7 +329,7 @@ def recipe() -> make.Recipe:
                    inputs=bin.objects,
                    desc=f'Linking {bin.path.name}',
                    shortcut=f'link {bin.path.stem}')
-        r.generated.add(bin.path)
+        r.generated.add(str(bin.path))
 
         # if platform == 'win32':
         #     MT = 'C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.19041.0\\x64\\mt.exe'

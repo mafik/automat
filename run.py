@@ -10,7 +10,6 @@ from pathlib import Path
 
 base_dir = Path(__file__).parent
 try:
-  run(['python', base_dir / 'run_py'] + sys.argv[1:], check=True)
-except Exception:
-  print('Script failed. Contents of the build/prefix directory:')
-  run(['find', 'build/prefix'])
+  run(['python', str(base_dir / 'run_py')] + sys.argv[1:], check=True)
+except Exception as e:
+  print(e)

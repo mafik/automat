@@ -77,7 +77,7 @@ def artifact_download(url, path):
   
 def build_release():
   # report an error if there are uncommited changes
-  uncommited_changes = bool(subprocess.run(['git', 'diff', '--quiet']))
+  uncommited_changes = bool(subprocess.run(['git', 'diff', '--quiet']).returncode)
   if uncommited_changes:
     raise Exception('Uncommited changes, please commit before building the release')
   # report an error if the current branch is not main

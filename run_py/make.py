@@ -29,9 +29,10 @@ def Popen(args, **kwargs):
     str_args = [str(x) for x in args]
     if cmdline_args.args.verbose:
         print(' $ \033[90m' + ' '.join(str_args) + '\033[0m')
+    if 'stdout' in kwargs and isinstance(kwargs['stdout'], Path):
+        kwargs['stdout'] = kwargs['stdout'].open('w')
     p = subprocess.Popen(str_args,
                          stdin=subprocess.DEVNULL,
-                         #stdout=f,
                          stderr=f,
                          **kwargs)
     p.stderr = f
@@ -61,9 +62,15 @@ class Step:
                  shortcut=None,
                  stderr_prettifier=lambda x: x):
         if not desc:
-            desc = f'Running {build_func.__name__}'
+            if hasattr(build_func, '__name__'):
+                desc = f'Running {build_func.__name__}'
+            else:
+                raise ValueError(f'Step from module {build_func.__module__} is missing a required "desc" parameter')
         if not shortcut:
-            shortcut = build_func.__name__
+            if hasattr(build_func, '__name__'):
+                shortcut = f'{build_func.__name__}'
+            else:
+                raise ValueError(f'Step from module {build_func.__module__} is missing a required "shortcut" parameter')
         if '/' in shortcut:
             raise ValueError(f'Slashes not allowed in step shortcuts: {shortcut}')
         self.desc = desc

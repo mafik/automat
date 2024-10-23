@@ -5,12 +5,15 @@
 # TODO: move this to src/ and remove the empty hook_recipe function
 
 import shutil
+from pathlib import Path
 
-BIN = shutil.which('ninja')
+BIN_STR = shutil.which('ninja')
 
-print('Ninja found at', BIN)
-
-if not BIN:
+if BIN_STR:
+  BIN = Path(BIN_STR)
+  def hook_recipe(recipe):
+    pass
+else:
   print('Ninja not found - adding recipe to download it.')
 
   import build, sys, fs_utils
@@ -60,6 +63,3 @@ if not BIN:
         inputs=[ZIP_PATH],
         desc='Unzipping Ninja',
         shortcut='unzip ninja')
-else:
-  def hook_recipe(recipe):
-    pass

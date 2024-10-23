@@ -144,19 +144,15 @@ def build_release():
       break
     elif total == 0:
       print('No runs found, dispatching a new one')
-      # TODO: make sure this works
-      post_dispatch = github_call('actions/workflows/Build/dispatches', 'POST', {
-        'ref': '#' + main_hash,
-        'inputs': {
-          'ref': main_hash,
-          'release_name': TAG,
-        }
+      github_call('actions/workflows/build.yaml/dispatches', 'POST', {
+        'ref': 'main',
+        'inputs': {},
       })
-      time.sleep(10)
+      time.sleep(30)
       continue
     elif in_progress:
       print('Run is already queued or in progress, waiting for it to finish')
-      time.sleep(10)
+      time.sleep(30)
       continue
     else:
       print("There are some runs but they're not in-progress")

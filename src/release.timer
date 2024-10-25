@@ -1,0 +1,10 @@
+[Unit]
+Description=Release Automat every week
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+Unit=release.service
+
+[Install]
+WantedBy=timers.target

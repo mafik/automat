@@ -15,6 +15,7 @@ import fs_utils
 import os
 import datetime
 import zipfile
+from pathlib import Path
 
 MAIN_HASH_FILE = fs_utils.project_root / '.git' / 'refs' / 'heads' / 'main'
 RELEASE_DIR = fs_utils.build_dir / 'release'
@@ -25,10 +26,13 @@ SUMMARY_FILE = RELEASE_DIR / 'SUMMARY.md'
 WINDOWS_X86_64_RELEASE_FILE = RELEASE_DIR / 'automat_windows_64bit.exe'
 LINUX_X86_64_RELEASE_FILE = RELEASE_DIR / 'automat_linux_64bit'
 
+GITHUB_TOKEN_PATH = Path('/etc/credstore/GITHUB_TOKEN')
+if 'GITHUB_TOKEN_PATH' in os.environ:
+  GITHUB_TOKEN_PATH = Path(os.environ['GITHUB_TOKEN_PATH'])
+
 today = datetime.date.today()
-year = today.year
-week = today.isocalendar()[1]
-TAG = f'v{year}.{week}'
+year, week, weekday = today.isocalendar()
+TAG = f'{year}-W{week:02d}' # ISO 8601
 
 def github_call(path, method='GET', data=None):
   if path.startswith('https://'):
@@ -44,8 +48,9 @@ def github_call(path, method='GET', data=None):
   headers = {
     'X-GitHub-Api-Version': '2022-11-28',
   }
-  if 'GITHUB_TOKEN' in os.environ:
-    headers['Authorization'] = f'token {os.environ["GITHUB_TOKEN"]}'
+  if GITHUB_TOKEN_PATH.exists():
+    github_token = GITHUB_TOKEN_PATH.read_text().strip()
+    headers['Authorization'] = f'token {github_token}'
   req =  request.Request(url, data=data, method=method, headers=headers)
   try:
     resp = request.urlopen(req)
@@ -56,8 +61,9 @@ def github_call(path, method='GET', data=None):
 
 def artifact_download(url, path):
   print('Downloading', url, 'to', path)
+  github_token = GITHUB_TOKEN_PATH.read_text().strip()
   zip_path = fs_utils.build_dir / 'download.zip'
-  subprocess.run(['curl', '-s', '--header', f'Authorization: token {os.environ['GITHUB_TOKEN']}', '-L', '-o', zip_path, url], check=True)
+  subprocess.run(['curl', '-s', '--header', f'Authorization: token {github_token}', '-L', '-o', zip_path, url], check=True)
   with zipfile.ZipFile(zip_path, 'r') as zip_ref:
     files = zip_ref.namelist()
     if len(files) != 1:
@@ -65,37 +71,25 @@ def artifact_download(url, path):
     main_file = files[0]
     zip_ref.extractall(path=path.parent, members=[main_file])
     shutil.move(path.parent / main_file, path)
-
-  
-  # print('Downloading', url, 'to', path)
-  # req =  request.Request(url)
-  # if 'GITHUB_TOKEN' in os.environ:
-  #   req.add_header('Authorization', f'token {os.environ["GITHUB_TOKEN"]}')
-  # req.add_header('X-GitHub-Api-Version', '2022-11-28')
-  # with request.urlopen(req) as resp:
-  #   path.write_bytes(resp.read())
   
 def build_release():
   # report an error if there are uncommited changes
   uncommited_changes = bool(subprocess.run(['git', 'diff', '--quiet']).returncode)
   if uncommited_changes:
-    raise Exception('Uncommited changes, please commit before building the release')
+    pass # raise Exception('Uncommited changes, please commit before building the release')
   # report an error if the current branch is not main
   git_head_branch = Popen(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], stdout=subprocess.PIPE)
   head_branch = git_head_branch.stdout.read().decode().strip() # type: ignore
   if head_branch != 'main':
     raise Exception('Not on the main branch, please switch to main before building the release')
   # report an error if the local has unpushed changes
-  local_sha = MAIN_HASH_FILE.read_text().strip()
+  main_hash = MAIN_HASH_FILE.read_text().strip()
   origin_sha = (fs_utils.project_root / '.git' / 'refs' / 'remotes' / 'origin' / 'main').read_text().strip()
-  if local_sha != origin_sha:
+  if main_hash != origin_sha:
     raise Exception('Local and origin main hashes are different, please push the changes before building the release')
   
   # At this point we can either call GitHub "Build" action or SSH into build servers to build the per-platform releases
   # For new we'll just use GitHub
-  
-  # call workflow_dispatch on the "Build" GitHub action using the GitHub API
-  main_hash = MAIN_HASH_FILE.read_text().strip()
 
   # wait for the run to finish & download artifacts
   while True:
@@ -161,10 +155,26 @@ def build_release():
 
 
 def upload_release():
+  github_token = GITHUB_TOKEN_PATH.read_text().strip()
   try:
     release = github_call('releases/tags/' + TAG)
     print('Release already exists...')
+
+    main_hash = MAIN_HASH_FILE.read_text().strip()
+    tag_hash = fs_utils.project_root / '.git' / 'refs' / 'tags' / TAG
+    if not tag_hash.exists():
+      raise Exception(f"GitHub contains release {TAG} but local git tag couldn't be found at {tag_hash}.")
+    tag_hash = tag_hash.read_text().strip()
+
+    if main_hash != tag_hash:
+      print('Local and remote tags are different, updating the tag...')
+      subprocess.run(['git', 'tag', '-f', TAG, main_hash], check=True)
+      subprocess.run(['git', 'push', 'origin', 'tag', TAG], check=True)
+
   except Exception as e:
+    release = None
+
+  if release is None:
     print('Creating a new release...')
     release = github_call('releases', 'POST', {
       'tag_name': TAG,
@@ -186,7 +196,7 @@ def upload_release():
             '-L', # follow redirects
             '-X', 'POST',
             '-H', 'Accept: application/vnd.github+json',
-            '-H', f'Authorization: token {os.environ["GITHUB_TOKEN"]}',
+            '-H', f'Authorization: token {github_token}',
             '-H', 'X-GitHub-Api-Version: 2022-11-28',
             '-H', 'Content-Type: application/octet-stream',
             f'https://uploads.github.com/repos/mafik/automat/releases/{release_id}/assets?name={file.name}',

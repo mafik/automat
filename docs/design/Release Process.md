@@ -36,6 +36,8 @@ Currently it's a responsibility of the pushing developer to run the necessary te
 
 ## Release Builders
 
+Automat avoids cross-compilation as a build strategy because many platforms don't support it at all. The platforms which do support it, usually still provide a better build experience when building natively. So instead of one machine that can build Automat for all platforms, Automat opts for multiple machines (or VMs), each runing an environment that can build for that specific platform. This complicates the release process (and also testing) because the release script must talk to multiple other machines.
+
 Release code from `release.py` relies on GitHub Actions to build Automat for different platofrms (see `build.yaml`). This has some advantages (ensures that users on those platforms also can build the release) but also ties Automat to GitHub. 
 
 The risk for GitHub's entshittification is high (it's the current monopolist in the space) so it's necessary to take precautions. All functions relying on GitHub should be implemented with eventual replacement in mind.

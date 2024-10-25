@@ -18,6 +18,12 @@ drastically change how it looks and works.
 
 Current roadmap can be found [here](https://www.tldraw.com/ro/3d97dFMiuM0MLgqyyP0SG?d=v-1312.-804.2500.1170.page).
 
+# Downloading and Running
+
+Automat can be downloaded from the [releases page](https://github.com/mafik/automat/releases/latest/).
+
+[Release Process.md](docs/design/Release%20Process.md) contains some more notes about the Automat's release regime.
+
 # Contributing
 
 First read [ARCHITECTURE.md](ARCHITECTURE.md) to get a general idea of how

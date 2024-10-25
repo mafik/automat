@@ -298,6 +298,7 @@ def recipe() -> make.Recipe:
         if hasattr(ext, 'hook_plan'):
             ext.hook_plan(srcs, objs, bins, r)
 
+    COMPILE_COMMANDS_PATH = fs_utils.project_root / 'compile_commands.json'
     compilation_db = []
     for obj in objs:
         if obj.source.path.name.endswith('.c'):
@@ -311,7 +312,7 @@ def recipe() -> make.Recipe:
         builder = functools.partial(make.Popen, pargs)
         r.add_step(builder,
                    outputs=[obj.path],
-                   inputs=obj.deps | set(['compile_commands.json']),
+                   inputs=obj.deps | set([str(COMPILE_COMMANDS_PATH)]),
                    desc=f'Compiling {obj.path.name}',
                    shortcut=obj.path.name)
         r.generated.add(str(obj.path))
@@ -359,13 +360,13 @@ def recipe() -> make.Recipe:
   "arguments": [{arguments}]
 }}'''
             jsons.append(json_entry)
-        with open('compile_commands.json', 'w') as f:
+        with COMPILE_COMMANDS_PATH.open('w') as f:
             print('[' + ', '.join(jsons) + ']', file=f)
 
-    r.add_step(compile_commands, ['compile_commands.json'], [],
+    r.add_step(compile_commands, [COMPILE_COMMANDS_PATH], [],
                desc='Writing JSON Compilation Database',
                shortcut='compile_commands.json')
-    r.generated.add('compile_commands.json')
+    r.generated.add(str(COMPILE_COMMANDS_PATH))
 
     def deploy():
         return make.Popen(['rsync', '--protect-args', '-av', '--delete', '--exclude', 'builds', '--exclude', 'assets', '-og', '--chown=maf:www-data', 'www/', 'protectli:/var/www/automat.org/'], shell=False)

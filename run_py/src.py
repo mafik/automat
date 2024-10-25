@@ -59,7 +59,7 @@ class File:
         if_stack = [True]
         current_defines = clang.default_defines.copy()
 
-        for line in open(self.path, encoding='utf-8').readlines():
+        for line in self.path.open(encoding='utf-8').readlines():
 
             # Minimal preprocessor. This allows us to skip platform-specific imports.
 
@@ -102,9 +102,8 @@ class File:
 
             match = re.match(r'^#include \"([a-zA-Z0-9_/\.-]+\.hh?)\"', line)
             if match:
-                # relative to current source file
                 dep = self.path.parent / match.group(1)
-                dep = fs_utils.relative_to_root(dep)  # normalize
+                dep = dep.resolve()
                 self.direct_includes.append(str(dep))
 
             match = re.match(
@@ -158,8 +157,7 @@ def scan() -> dict[str, File]:
     for ext in ['.cc', '.hh', '.h', '.c']:
         paths.extend(fs_utils.src_dir.glob(f'**/*{ext}'))
 
-    for path_abs in paths:
-        path = path_abs.relative_to(fs_utils.project_root)
+    for path in paths:
         file = File(path)
         result[str(path)] = file
         file.scan_contents()

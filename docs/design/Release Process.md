@@ -50,7 +50,7 @@ Automat discourages unnecessary updates.
 
 Updates come with a risk of regressions and quite often break the muscle memory that existing users already developed. The two main arguments for updates are "new features", which are only welcomed by enthusiasts, and "security fixes", which are hardly relevant in the context of local software.
 
-It's possible that somebody may still want to update Automat (for example to get access to new features) and at the same time retain the machines that they built in an old version. Because of that Automat tries to be as backwards-compatible as possible (sometimes too expensive). The backup strategy employed by Automat is to try to load the old format where it's compatible and if there are any issues, emit them as new "error" objects - allowing recovery by patient users.
+It's possible that somebody may still want to update Automat (for example to get access to new features) and at the same time retain the machines that they built in an old version. Because of that Automat attempts to be backwards-compatible - although it's not always possible. The backup strategy employed by Automat is to try to load the old format where it's compatible and if there are any issues, emit them as new "error" objects - allowing recovery by patient users.
 
 ### Customizing Automat
 

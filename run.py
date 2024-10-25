@@ -10,6 +10,7 @@ from pathlib import Path
 
 base_dir = Path(__file__).parent
 try:
-  run(['python', str(base_dir / 'run_py')] + sys.argv[1:], check=True)
+  completed_process = run(['python', str(base_dir / 'run_py')] + sys.argv[1:], cwd=base_dir)
+  sys.exit(completed_process.returncode)
 except Exception as e:
   print(e)

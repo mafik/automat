@@ -41,6 +41,13 @@ class BuildType:
         self.link_args += [f'-L{self.PREFIX()}/lib64']
         self.PREFIX().mkdir(parents=True, exist_ok=True)
         (self.PREFIX() / 'bin').mkdir(parents=True, exist_ok=True)
+
+    def is_subtype_of(self, other):
+        if self == other:
+            return True
+        if self.base:
+            return self.base.is_subtype_of(other)
+        return False
     
     def rule_suffix(self):
         return '' if self.is_default else f'_{self.name_lower}'

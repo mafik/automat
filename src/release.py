@@ -76,7 +76,9 @@ def build_release():
   # report an error if there are uncommited changes
   uncommited_changes = bool(subprocess.run(['git', 'diff', '--quiet']).returncode)
   if uncommited_changes:
-    pass # raise Exception('Uncommited changes, please commit before building the release')
+    raise Exception('Uncommited changes, please commit before building the release')
+  # fetch the most recent changes from GitHub
+  subprocess.run(['git', 'fetch', 'origin', 'main'], check=True)
   # report an error if the current branch is not main
   git_head_branch = Popen(['git', 'rev-parse', '--abbrev-ref', 'HEAD'], stdout=subprocess.PIPE)
   head_branch = git_head_branch.stdout.read().decode().strip() # type: ignore

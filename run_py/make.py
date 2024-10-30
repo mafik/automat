@@ -176,15 +176,23 @@ class Recipe:
 
     # prunes the list of steps and only leaves the steps that are required for some target
     def set_target(self, target):
-        out_index = dict()
-        target_step = None
+        out_index = defaultdict(list)
+        new_steps = set()
+        q = []
         for step in self.steps:
             if step.shortcut == target:
-                target_step = step
+                q.append(step)
             for output in step.outputs:
-                out_index[output] = step
+                out_index[output].append(step)
 
-        if target_step == None:
+        if len(q) == 0:
+            for step in self.steps:
+                for output in step.outputs:
+                    if str(Path(output).relative_to(fs_utils.project_root)) == target:
+                        q.append(step)
+                        break
+
+        if len(q) == 0:
             from difflib import get_close_matches
             close = get_close_matches(target, [s.shortcut for s in self.steps])
             if close:
@@ -197,15 +205,15 @@ class Recipe:
                     f'{target} is not a valid target. Valid targets: {targets}.'
                 )
 
-        new_steps = set()
-        q = [target_step]
         while q:
             step = q.pop()
+            if step in new_steps:
+                continue
             new_steps.add(step)
             for input in step.inputs:
                 if input in out_index:
-                    dep = out_index[input]
-                    q.append(dep)
+                    for dep in out_index[input]:
+                        q.append(dep)
                 elif not Path(input).exists():
                     raise Exception(
                         f'"{step.desc}" requires `{input}` but it doesn\'t exist and there is no recipe to build it.'
@@ -225,6 +233,8 @@ class Recipe:
 
         for a in self.steps:
             for b in self.steps:
+                if a == b:
+                    continue
                 if b.outputs & a.inputs:
                     a.blocker_count += 1
             if a.blocker_count == 0:

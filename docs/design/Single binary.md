@@ -58,3 +58,7 @@ def hook_plan(srcs, objs : list[build.ObjectFile], bins : list[build.Binary], re
 ## Cosmopolitan libc
 
 Cosmopolitan libc is probably the way to go. Not only it produces static binaries, but they also work across operating systems. It still needs to be examined. The key question that needs to be answered is - whether it's possible to display a Vulkan surface with it.
+
+## foreign dlopen
+
+This repository contains a *very* interesting approach, that may help with cosmopolitan libc: https://github.com/pfalcon/foreign-dlopen.

@@ -15,11 +15,11 @@ Weekly release is normally triggered automatically on Monday (midnight CE(S)T) a
 
 ### Forks
 
-Forks of Automat can set up their own weekly release by enabling the systemd `release.timer` & `relase.service`:
+Forks of Automat can set up their own weekly release by enabling the systemd `release.timer` & `relase.service`. Assuming automat's repo was checked out to /opt/automat/:
 
 ```bash
-systemctl --user enable /<absolute automat dir>/src/release.timer
-systemctl --user enable /<absolute automat dir>/src/release.service
+systemctl enable /opt/automat/src/release.timer
+systemctl enable /opt/automat/src/release.service
 ```
 
 And then customizing `release.py` (replace instances of `mafik` with your GitHub username).

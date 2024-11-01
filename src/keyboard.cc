@@ -385,7 +385,7 @@ void Keyboard::KeyDown(Key key) {
       }
     } else {
       size_t i = static_cast<int>(key.physical);
-      if (actions[i] == nullptr && !pointer->path.empty()) {
+      if (actions[i] == nullptr && pointer && !pointer->path.empty()) {
         int path_i = pointer->path.size() - 1;
         do {
           actions[i] = pointer->path[path_i]->FindAction(*pointer, key.physical);

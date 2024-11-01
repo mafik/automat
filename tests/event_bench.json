@@ -5,7 +5,7 @@
             "horizontally": false,
             "vertically": false
         },
-        "output_device_x": 0.002333,
+        "output_device_x": 0.512333,
         "output_device_y": 0.010759,
         "width": 0.190166,
         "height": 0.090611,
@@ -146,6 +146,32 @@
                 },
                 "x": 0.129,
                 "y": -0.089
+            },
+            {
+                "type": "Delay",
+                "value": {
+                    "range": "milliseconds",
+                    "duration_seconds": 0.25,
+                    "running": 0
+                },
+                "x": -0.121,
+                "y": 0.016,
+                "connections": {
+                    "next": 8
+                }
+            },
+            {
+                "type": "Delay",
+                "value": {
+                    "range": "milliseconds",
+                    "duration_seconds": 0.25,
+                    "running": 0
+                },
+                "x": -0.121,
+                "y": -0.084,
+                "connections": {
+                    "next": 9
+                }
             }
         ]
     }

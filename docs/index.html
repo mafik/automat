@@ -1187,7 +1187,7 @@
         sound_up.play();
       }
 
-      if (toy === video_player) {
+      if (toy === video_player && video_player.inserted) {
         LoadVideo(defaultVideo);
         Eject();
       }

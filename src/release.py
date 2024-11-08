@@ -84,6 +84,8 @@ def build_release():
   head_branch = git_head_branch.stdout.read().decode().strip() # type: ignore
   if head_branch != 'main':
     raise Exception('Not on the main branch, please switch to main before building the release')
+  # attempt fast-forward to origin/HEAD
+  subprocess.run(['git', 'merge', '--ff-only', 'origin/main'], check=True)
   # report an error if the local has unpushed changes
   main_hash = MAIN_HASH_FILE.read_text().strip()
   origin_sha = (fs_utils.project_root / '.git' / 'refs' / 'remotes' / 'origin' / 'main').read_text().strip()

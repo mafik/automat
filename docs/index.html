@@ -625,6 +625,12 @@
     display: none;
   }
 
+  * {
+    /* Disable the double-tap-to-zoom action */
+    /* The interface should really be zoomable but it's very complicated (technically and metaphorically) */
+    touch-action: manipulation;
+  }
+
   html,
   body {
     margin: 0;

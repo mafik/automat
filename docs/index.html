@@ -1158,6 +1158,19 @@
         if (sound_down) {
           sound_down.play();
         }
+        let releaseTime = performance.now();
+        let delta = releaseTime - toy.mouseDownTime;
+        if (delta < 200) {
+          // When a toy is clicked, it means that the user isn't aware that it's draggable.
+          // Signal the draggability by disturbing the toy a little.
+          let [x, y, scale, rot] = ParseTransform(toy);
+          let randomDir = Math.random() * 2 * Math.PI;
+          toy.targetX = x + Math.cos(randomDir) * 100;
+          toy.targetY = y + Math.sin(randomDir) * 100;
+          toy.targetScale = 1;
+          toy.targetRotation = (Math.random() - 0.5) * 45;
+          toy.animator = ExponentialApproach;
+        }
       }
       if (toy === coffee) {
         coffee.classList.remove('tilt1');
@@ -1184,6 +1197,7 @@
       toy.lastClientY = e.clientY / zoom;
       toy.mouseDownX = e.clientX / zoom - startX;
       toy.mouseDownY = e.clientY / zoom - startY;
+      toy.mouseDownTime = performance.now();
       toy.animator = SpringApproach;
 
       UpdateToyTargets(toy, e);

@@ -452,32 +452,7 @@ struct PackedFrame {
   animation::Phase animation_phase;
 };
 
-template <typename T, typename K, typename F>
-int FindSorted(const T& arr, K key, F key_fn) {
-  int lo = 0;
-  int hi = arr.size();
-  while (lo < hi) {
-    int mid = lo + (hi - lo) / 2;
-    K mid_key = key_fn(arr[mid]);
-    if (key < mid_key) {
-      hi = mid;
-    } else if (key > mid_key) {
-      lo = mid + 1;
-    } else {
-      return mid;
-    }
-  }
-  return -1;
-}
-
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
-  for (int i = 1; i < request.render_results.size(); ++i) {
-    if (request.render_results[i - 1].id >= request.render_results[i].id) {
-      ERROR << "Render results are not sorted by ID!";
-      return;
-    }
-  }
-
   window->display.timer.Tick();
   auto now = window->display.timer.steady_now;
   auto window_bounds_px =
@@ -575,37 +550,35 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 
   {  // Step 2 - update the cache entries for widgets rendered by the client
-    for (auto& tree_entry : tree) {
-      auto& widget = *tree_entry.widget;
-      if (widget.draw_time > time::SteadyPoint::min()) {
-        uint32_t id = widget.choppy_drawable.sk->getGenerationID();
-        int i = FindSorted(request.render_results, id, [](const RenderResult& t) { return t.id; });
-        if (i >= 0) {
-          float draw_millis = request.render_results[i].render_time * 1000;
-          if (isnanf(widget.draw_millis)) {
-            widget.draw_millis = draw_millis;
-          } else {
-            widget.draw_millis = 0.9 * widget.draw_millis + 0.1 * draw_millis;
-          }
-
-          if (widget.draw_present == false) {
-            // Find the parent that has a cache entry.
-            int parent_i = tree_entry.parent;
-            while (!tree[parent_i].widget->draw_to_texture) {
-              parent_i = tree[parent_i].parent;
-            }
-            tree[parent_i].widget->invalidated =
-                min(tree[parent_i].widget->invalidated, widget.draw_time);
-          }
-
-          widget.draw_time = time::SteadyPoint::min();
-          widget.draw_present = false;
-        }
+    for (auto& render_result : request.render_results) {
+      Widget* widget = Widget::Find(render_result.id);
+      if (widget == nullptr) {
+        ERROR << "Widget " << render_result.id << " not found!";
+        continue;
       }
+      assert(widget->draw_time > time::SteadyPoint::min());
+      float draw_millis = render_result.render_time * 1000;
+      if (isnanf(widget->draw_millis)) {
+        widget->draw_millis = draw_millis;
+      } else {
+        widget->draw_millis = 0.9 * widget->draw_millis + 0.1 * draw_millis;
+      }
+
+      if (widget->draw_present == false) {
+        // Find the closest parent that can be rendered to texture.
+        Widget* renderable_parent = widget->parent.get();
+        while (!renderable_parent->draw_to_texture) {
+          // Root widget (window) can always be rendered to texture so we don't need any extra stop
+          // condition here.
+          renderable_parent = renderable_parent->parent.get();
+        }
+        renderable_parent->invalidated = min(renderable_parent->invalidated, widget->draw_time);
+      }
+
+      widget->draw_time = time::SteadyPoint::min();
+      widget->draw_present = false;
     }
   }
-
-  // TODO: Maybe we should propagate the "animation_state == Animating"?
 
   {  // Step 3 - create a list of render jobs for the updated widgets
     int first_job = -1;
@@ -843,7 +816,7 @@ void Paint() {
     auto start_time = time::SteadyNow();
     drawable->Render(canvas);
     auto render_time = time::SteadyNow() - start_time;
-    render_times[drawable->sk->getGenerationID()] = render_time.count();
+    render_times[drawable->ID()] = render_time.count();
   }
 
   for (auto& drawable : pack.overflow) {
@@ -851,7 +824,7 @@ void Paint() {
     auto start_time = time::SteadyNow();
     drawable->Render(canvas);
     auto render_time = time::SteadyNow() - start_time;
-    render_times[drawable->sk->getGenerationID()] = render_time.count();
+    render_times[drawable->ID()] = render_time.count();
   }
 
   canvas.resetMatrix();

@@ -53,6 +53,8 @@ struct ChoppyDrawable : Drawable {
   SkRect onGetBounds() override;
 
   void onDraw(SkCanvas* canvas) override;
+
+  int ID() const;
 };
 
 struct DrawContext {
@@ -105,7 +107,12 @@ struct ActionTrigger {
 
 // Base class for widgets.
 struct Widget : public std::enable_shared_from_this<Widget> {
+  Widget();
   virtual ~Widget();
+
+  // IDs are used to identify a Widget across frames.
+  int ID() const;
+  static Widget* Find(int id);
 
   std::shared_ptr<Widget> parent;
 
@@ -137,8 +144,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   // How long, on average it takes to draw this widget.
   float draw_millis = FP_NAN;
-
-  Widget() : choppy_drawable(this) {}
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".

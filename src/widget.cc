@@ -127,11 +127,23 @@ Str ToStr(shared_ptr<Widget> widget) {
   return ret;
 }
 
-Widget::~Widget() {}
+std::map<int, Widget*> widget_index;
+
+Widget::Widget() : choppy_drawable(this) { widget_index[ID()] = this; }
+Widget::~Widget() { widget_index.erase(ID()); }
+
+int Widget::ID() const { return choppy_drawable.sk->getGenerationID(); }
+
+Widget* Widget::Find(int id) {
+  if (auto it = widget_index.find(id); it != widget_index.end()) {
+    return it->second;
+  } else {
+    return nullptr;
+  }
+}
 
 void ChoppyDrawable::Render(SkCanvas& root_canvas) {
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
-
   widget->surface = root_canvas.getSurface()->makeSurface(widget->root_bounds_rounded.width(),
                                                           widget->root_bounds_rounded.height());
 
@@ -180,5 +192,7 @@ void ChoppyDrawable::onDraw(SkCanvas* canvas) {
 }
 
 SkRect ChoppyDrawable::onGetBounds() { return widget->draw_bounds; }
+
+int ChoppyDrawable::ID() const { return widget->ID(); }
 
 }  // namespace automat::gui

@@ -9,7 +9,7 @@
 namespace automat {
 
 struct Drawable {
-  std::unique_ptr<SkDrawable> sk;
+  sk_sp<SkDrawable> sk;
   Drawable();
   void draw(SkCanvas*, SkScalar x, SkScalar y);
 

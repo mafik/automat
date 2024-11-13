@@ -45,7 +45,7 @@ constexpr float kTrashRadius = 3_cm;
 
 void Window::Draw(SkCanvas& canvas) {
   display.timer.Tick();
-  gui::DrawContext draw_ctx(display, canvas, draw_cache);
+  gui::DrawContext draw_ctx(display, canvas);
   canvas.save();
   RunOnAutomatThreadSynchronous([&] { DrawCached(draw_ctx); });  // RunOnAutomatThreadSynchronous
   canvas.restore();
@@ -67,8 +67,6 @@ void Window::Draw(SkCanvas& canvas) {
   canvas.translate(0.001, size.y - 0.001 - gui::kLetterSize);
   font.DrawText(canvas, fps_str, fps_paint);
   canvas.restore();
-
-  draw_cache.Clean(display.timer.steady_now);
 }
 
 animation::Phase Window::Draw(gui::DrawContext& ctx) const {

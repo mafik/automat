@@ -488,7 +488,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
   struct WidgetTree {
     std::shared_ptr<Widget> widget;
-    DrawCache::Entry* entry;
     bool packed = false;
     bool overflowed = false;
     bool intersects = false;
@@ -501,11 +500,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   vector<WidgetTree> tree;
 
   auto GetLag = [now](WidgetTree& tree_entry) -> float {
-    return max(time::Duration(0), now - tree_entry.entry->invalidated).count();
+    return max(time::Duration(0), now - tree_entry.widget->invalidated).count();
   };
 
   auto GetRenderTime = [](WidgetTree& tree_entry) {
-    return isnanf(tree_entry.entry->draw_millis) ? 0 : tree_entry.entry->draw_millis / 1000;
+    return isnanf(tree_entry.widget->draw_millis) ? 0 : tree_entry.widget->draw_millis / 1000;
   };
 
   {  // Step 1 - flatten the widget tree for analysis.
@@ -526,7 +525,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
       tree.push_back(WidgetTree{
           .widget = widget,
-          .entry = nullptr,
           .parent = i_parent,
           .window_to_local = SkMatrix::I(),
       });
@@ -551,21 +549,21 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
       optional<SkRect> local_bounds_opt = widget->TextureBounds(&window->display);
       if (local_bounds_opt.has_value()) {
-        node.entry = &window->draw_cache[widget];
         // Compute the bounds of the widget - in local & root coordinates
-        node.entry->local_bounds = *local_bounds_opt;
-        node.local_to_window.mapRect(&node.entry->root_bounds, node.entry->local_bounds);
+        widget->draw_to_texture = true;
+        widget->local_bounds = *local_bounds_opt;
+        node.local_to_window.mapRect(&widget->root_bounds, widget->local_bounds);
 
         // Clip the `root_bounds` to the window bounds;
-        if (node.entry->root_bounds.width() * node.entry->root_bounds.height() < 512 * 512) {
+        if (widget->root_bounds.width() * widget->root_bounds.height() < 512 * 512) {
           // Render small objects without clipping
-          node.intersects = SkRect::Intersects(node.entry->root_bounds, window_bounds_px);
+          node.intersects = SkRect::Intersects(widget->root_bounds, window_bounds_px);
         } else {
           // This mutates the `root_bounds` - they're clipped to `canvas_bounds`!
-          node.intersects = node.entry->root_bounds.intersect(window_bounds_px);
+          node.intersects = widget->root_bounds.intersect(window_bounds_px);
         }
 
-        node.entry->root_bounds.roundOut(&node.entry->root_bounds_rounded);
+        widget->root_bounds.roundOut(&widget->root_bounds_rounded);
       } else {
         node.intersects = true;
       }
@@ -580,32 +578,32 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
   {  // Step 2 - update the cache entries for widgets rendered by the client
     for (auto& tree_entry : tree) {
-      if (tree_entry.entry && tree_entry.entry->draw_time > time::SteadyPoint::min()) {
-        uint32_t id = tree_entry.entry->choppy_drawable.sk->getGenerationID();
+      auto& widget = *tree_entry.widget;
+      if (widget.draw_time > time::SteadyPoint::min()) {
+        uint32_t id = widget.choppy_drawable.sk->getGenerationID();
         int i = FindSorted(request.render_results, id, [](const RenderResult& t) { return t.id; });
         if (i >= 0) {
-          auto& entry = *tree_entry.entry;
           float draw_millis = request.render_results[i].render_time * 1000;
-          if (isnanf(entry.draw_millis)) {
-            entry.draw_millis = draw_millis;
+          if (isnanf(widget.draw_millis)) {
+            widget.draw_millis = draw_millis;
           } else {
-            entry.draw_millis = 0.9 * entry.draw_millis + 0.1 * draw_millis;
+            widget.draw_millis = 0.9 * widget.draw_millis + 0.1 * draw_millis;
           }
 
-          if (tree_entry.entry->draw_present) {
-            entry.presented_time = entry.draw_time;
+          if (widget.draw_present) {
+            widget.presented_time = widget.draw_time;
           } else {
             // Find the parent that has a cache entry.
             int parent_i = tree_entry.parent;
-            while (tree[parent_i].entry == nullptr) {
+            while (!tree[parent_i].widget->draw_to_texture) {
               parent_i = tree[parent_i].parent;
             }
-            tree[parent_i].entry->invalidated =
-                min(tree[parent_i].entry->invalidated, entry.draw_time);
+            tree[parent_i].widget->invalidated =
+                min(tree[parent_i].widget->invalidated, widget.draw_time);
           }
 
-          entry.draw_time = time::SteadyPoint::min();
-          entry.draw_present = false;
+          widget.draw_time = time::SteadyPoint::min();
+          widget.draw_present = false;
         }
       }
     }
@@ -616,22 +614,22 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   {  // Step 3 - create a list of render jobs for the updated widgets
     int first_job = -1;
     for (int i = 0; i < tree.size(); ++i) {
-      if (tree[i].entry == nullptr) {
+      if (!tree[i].widget->draw_to_texture) {
         continue;
       }
-      auto& entry = *tree[i].entry;
+      auto& widget = *tree[i].widget;
       // Widgets that are still being rendered shouldn't be scheduled again.
-      if (entry.draw_time != time::SteadyPoint::min()) {
+      if (widget.draw_time != time::SteadyPoint::min()) {
         continue;
       }
 
-      bool same_scale = (tree[i].local_to_window.getScaleX() == entry.draw_matrix.getScaleX() &&
-                         tree[i].local_to_window.getScaleY() == entry.draw_matrix.getScaleY() &&
-                         tree[i].local_to_window.getSkewX() == entry.draw_matrix.getSkewX() &&
-                         tree[i].local_to_window.getSkewY() == entry.draw_matrix.getSkewY());
+      bool same_scale = (tree[i].local_to_window.getScaleX() == widget.draw_matrix.getScaleX() &&
+                         tree[i].local_to_window.getScaleY() == widget.draw_matrix.getScaleY() &&
+                         tree[i].local_to_window.getSkewX() == widget.draw_matrix.getSkewX() &&
+                         tree[i].local_to_window.getSkewY() == widget.draw_matrix.getSkewY());
 
       // Widgets that haven't been invalidated don't have to be re-rendered.
-      if (entry.invalidated == time::SteadyPoint::max() && same_scale) {
+      if (widget.invalidated == time::SteadyPoint::max() && same_scale) {
         continue;
       }
 
@@ -651,7 +649,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         if (tree[i].packed) {
           break;
         }
-        if (tree[i].entry == nullptr) {
+        if (!tree[i].widget->draw_to_texture) {
           continue;
         }
         render_time += GetRenderTime(tree[i]);
@@ -693,7 +691,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
             ancestor_overflowed = true;
             break;
           }
-          if (tree[i_parent].entry) {
+          if (tree[i_parent].widget->draw_to_texture) {
             // Only count effect of widgets that participate in caching.
             total_lag += GetLag(tree[i_parent]);
             total_render_time += GetRenderTime(tree[i_parent]);
@@ -742,7 +740,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         str += " ";
       }
       str += tree[index].widget->Name();
-      if (tree[index].entry == nullptr) {
+      if (!tree[index].widget->draw_to_texture) {
         str += " (not cached)";
       } else {
         str += " lag=";
@@ -750,9 +748,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         str += " render_time=";
         str += to_string(GetRenderTime(tree[index]));
         str += " local=";
-        str += Rect(tree[index].entry->local_bounds).ToStrMetric();
+        str += Rect(tree[index].widget->local_bounds).ToStrMetric();
         str += " root=";
-        str += Rect(tree[index].entry->root_bounds).ToStr();
+        str += Rect(tree[index].widget->root_bounds).ToStr();
         if (tree[index].overflowed) {
           str += " (overflowed)";
         }
@@ -784,34 +782,34 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     if (!packed && !overflowed) {
       continue;
     }
-    auto& entry = *tree[i].entry;
-    entry.draw_time = now;
+    auto& widget = *tree[i].widget;
+    widget.draw_time = now;
 
     SkMatrix& m = tree[i].local_to_window;
 
     // This should really be updated only after the rendering is finished.
     // It's ok for packed widgets, but overflowed widgets should update those properties only after
     // the rendering finishes.
-    tree[i].window_to_local.mapRect(&entry.draw_bounds, SkRect::Make(entry.root_bounds_rounded));
-    entry.draw_matrix = tree[i].local_to_window;
+    tree[i].window_to_local.mapRect(&widget.draw_bounds, SkRect::Make(widget.root_bounds_rounded));
+    widget.draw_matrix = tree[i].local_to_window;
 
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
     rec_canvas->setMatrix(m);
-    DrawContext ctx(window->display, *rec_canvas, window->draw_cache);
+    DrawContext ctx(window->display, *rec_canvas);
     auto animation_phase = tree[i].widget->Draw(ctx);
     if (animation_phase == animation::Finished) {
-      entry.invalidated = time::SteadyPoint::max();
+      widget.invalidated = time::SteadyPoint::max();
     } else {
-      entry.invalidated = now;
+      widget.invalidated = now;
     }
 
-    entry.recording = recorder.finishRecordingAsDrawable();
-    entry.draw_present = packed;
+    widget.recording = recorder.finishRecordingAsDrawable();
+    widget.draw_present = packed;
     if (packed) {
-      pack.frame.push_back(&entry.choppy_drawable);
+      pack.frame.push_back(&widget.choppy_drawable);
     } else {
-      pack.overflow.push_back(&entry.choppy_drawable);
+      pack.overflow.push_back(&widget.choppy_drawable);
     }
   }
 }
@@ -1262,17 +1260,6 @@ int LinuxMain(int argc, char* argv[]) {
   RenderLoop();
 
   StopRoot();
-
-  bool slow_widgets_found = false;
-  for (auto& entry : window->draw_cache.entries) {
-    if (entry->draw_millis > 1) {
-      if (!slow_widgets_found) {
-        LOG << "Slow widgets found:";
-      }
-      slow_widgets_found = true;
-      LOG << " - drawing of [" << entry->widget.lock() << "] took " << entry->draw_millis << " ms!";
-    }
-  }
 
   SaveState(*window, status);
   if (!OK(status)) {

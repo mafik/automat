@@ -35,7 +35,6 @@ struct Window final : Widget, DropTarget {
   Window();
   ~Window();
 
-  DrawCache draw_cache;
   std::string_view Name() const override { return "Window"; }
 
   DropTarget* CanDrop() override { return this; }

@@ -17,7 +17,6 @@
 #include "animation.hh"
 #include "control_flow.hh"
 #include "time.hh"
-#include "window.hh"
 
 using namespace automat;
 using namespace maf;
@@ -46,17 +45,14 @@ animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
   return phase;
 }
 
-using Entry = DrawCache::Entry;
-
 animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   auto texture_bounds = TextureBounds(&ctx.display);
   if (texture_bounds == nullopt) {
     return Draw(ctx);
   }
 
-  auto& entry = ctx.draw_cache[WeakPtr()];
-  ctx.canvas.drawDrawable(entry.choppy_drawable.sk.get());
-  return entry.invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
+  ctx.canvas.drawDrawable(choppy_drawable.sk.get());
+  return invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
 
   // if (root_bounds.width() < 1 || root_bounds.height() < 1) {
   //   return animation::Finished;
@@ -65,13 +61,7 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   // entry.last_used = ctx.display.timer.steady_now;
 }
 
-void Widget::InvalidateDrawCache() const {
-  for (auto& window : windows) {
-    if (auto e = window->draw_cache.Find(WeakPtr())) {
-      e->invalidated = min(e->invalidated, time::SteadyNow());
-    }
-  }
-}
+void Widget::InvalidateDrawCache() const { invalidated = min(invalidated, time::SteadyNow()); }
 
 animation::Phase Widget::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
   const SkMatrix down = this->TransformToChild(child, &ctx.display);
@@ -142,16 +132,16 @@ Widget::~Widget() {}
 void ChoppyDrawable::Render(SkCanvas& root_canvas) {
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
 
-  entry->surface = root_canvas.getSurface()->makeSurface(entry->root_bounds_rounded.width(),
-                                                         entry->root_bounds_rounded.height());
+  widget->surface = root_canvas.getSurface()->makeSurface(widget->root_bounds_rounded.width(),
+                                                          widget->root_bounds_rounded.height());
 
-  auto fake_canvas = entry->surface->getCanvas();
+  auto fake_canvas = widget->surface->getCanvas();
   fake_canvas->clear(SK_ColorTRANSPARENT);
-  entry->recording->draw(
-      fake_canvas, -entry->root_bounds_rounded.left(),
-      -entry->root_bounds_rounded.top());  // execute the draw commands immediately
+  widget->recording->draw(
+      fake_canvas, -widget->root_bounds_rounded.left(),
+      -widget->root_bounds_rounded.top());  // execute the draw commands immediately
 
-  direct_ctx->flush(entry->surface.get());
+  direct_ctx->flush(widget->surface.get());
   direct_ctx->submit(GrSyncCpu::kYes);
 }
 
@@ -164,9 +154,9 @@ void ChoppyDrawable::onDraw(SkCanvas* canvas) {
   SkPaint red_paint;
   red_paint.setStyle(SkPaint::kStroke_Style);
   red_paint.setColor(SK_ColorRED);
-  canvas->drawRect(entry->local_bounds, red_paint);
+  canvas->drawRect(widget->local_bounds, red_paint);
 
-  if (entry->surface == nullptr) {
+  if (widget->surface == nullptr) {
     // LOG << "Drawing choppy drawable " << entry->path << " (no surface!)";
   } else {
     // Inside entry we have a cached surface that was renderd with old matrix. Now we want to
@@ -179,12 +169,12 @@ void ChoppyDrawable::onDraw(SkCanvas* canvas) {
     // entry->surface->draw(canvas, 0, 0);
 
     // Alternative approach, where we map the old texture to the new bounds:
-    SkRect surface_bounds = SkRect::MakeWH(entry->surface->width(), entry->surface->height());
-    canvas->concat(SkMatrix::RectToRect(surface_bounds, entry->draw_bounds));
-    entry->surface->draw(canvas, 0, 0);
+    SkRect surface_bounds = SkRect::MakeWH(widget->surface->width(), widget->surface->height());
+    canvas->concat(SkMatrix::RectToRect(surface_bounds, widget->draw_bounds));
+    widget->surface->draw(canvas, 0, 0);
   }
 }
 
-SkRect ChoppyDrawable::onGetBounds() { return entry->draw_bounds; }
+SkRect ChoppyDrawable::onGetBounds() { return widget->draw_bounds; }
 
 }  // namespace automat::gui

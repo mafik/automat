@@ -41,14 +41,12 @@ SkMatrix TransformDown(const Widget& to, const Widget* from = nullptr,
 // coordinates).
 SkMatrix TransformUp(const Widget& from, const Widget* to = nullptr, animation::Display* = nullptr);
 
-struct DrawCacheEntry;
-
 // A type of drawable that draws the Widget using the most recently cached texture.
 // A choppy drawable can be asked to "update" itself, which will update the cached texture.
 struct ChoppyDrawable : Drawable {
-  DrawCacheEntry* entry;
+  Widget* widget;
 
-  ChoppyDrawable(DrawCacheEntry* entry) : entry(entry) {}
+  ChoppyDrawable(Widget* widget) : widget(widget) {}
 
   void Render(SkCanvas& canvas);
 
@@ -57,105 +55,10 @@ struct ChoppyDrawable : Drawable {
   void onDraw(SkCanvas* canvas) override;
 };
 
-struct DrawCacheEntry {
-  // OLD entries
-  // TODO: delete them once choppy animations are in order
-  std::weak_ptr<Widget> widget;
-
-  SkMatrix draw_matrix;  // converts from local coordinates to base layer coordinates
-  time::SteadyPoint last_used = time::SteadyPoint::min();
-
-  // NEW entries
-  // The time when the cache entry was first invalidated.
-  // Initially this is set to 0 (meaning it was never drawn).
-  // When the widget is scheduled, set this to max value.
-  time::SteadyPoint invalidated = time::SteadyPoint::min();
-
-  // The timestamp of the currently presented frame.
-  // This may actually be very old - for example if the widget wasn't invalidated for a long time
-  // or was very slow to draw.
-  time::SteadyPoint presented_time = time::SteadyPoint::min();
-
-  // The ID of the current draw job.
-  ChoppyDrawable choppy_drawable;
-  // Bounds of the current draw job:
-  SkRect local_bounds;          // local coordinates
-  SkRect root_bounds;           // root coordinates, clipped to the window viewport
-  SkIRect root_bounds_rounded;  // same as above, but rounded to integer pixels
-  SkRect draw_bounds;           // Area of the widget which was drawn (local coordinates)
-  // The recording that is being drawn.
-  sk_sp<SkDrawable> recording = nullptr;
-  // The surface that is being drawn to.
-  sk_sp<SkSurface> surface = nullptr;
-  // The time when the current draw job was started.
-  time::SteadyPoint draw_time = time::SteadyPoint::min();
-  // Whether the current draw job is going to be presented.
-  bool draw_present = false;
-
-  // How long, on average it takes to draw this widget.
-  float draw_millis = FP_NAN;
-
-  DrawCacheEntry(std::weak_ptr<Widget>&& widget) : widget(widget), choppy_drawable(this) {}
-};
-
-struct DrawCache {
-  using Entry = DrawCacheEntry;
-
-  // TODO: index by widget & last_used
-  std::vector<std::unique_ptr<Entry>> entries;
-
-  int FindIndex(const std::weak_ptr<Widget>& widget) {
-    int lo = 0;
-    int hi = entries.size();
-    while (lo < hi) {
-      int mid = lo + (hi - lo) / 2;
-      if (entries[mid]->widget.owner_before(widget)) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    return lo;
-  }
-
-  Entry* Find(const std::weak_ptr<Widget>& widget) {
-    int i = FindIndex(widget);
-    if (i >= entries.size()) {
-      return nullptr;
-    }
-    const std::weak_ptr<Widget>& i_widget = entries[i]->widget;
-    if (i_widget.owner_before(widget) || widget.owner_before(i_widget)) {
-      return nullptr;
-    }
-    return entries[i].get();
-  }
-
-  Entry& operator[](const std::weak_ptr<Widget>& widget) {
-    int i = FindIndex(widget);
-    if (i >= entries.size()) {
-      entries.push_back(std::make_unique<Entry>(std::weak_ptr<Widget>(widget)));
-      return *entries.back();
-    }
-    const std::weak_ptr<Widget>& i_widget = entries[i]->widget;
-    if (i_widget.owner_before(widget) || widget.owner_before(i_widget)) {
-      entries.insert(entries.begin() + i, std::make_unique<Entry>(std::weak_ptr<Widget>(widget)));
-      return *entries[i];
-    }
-    return *entries[i];
-  }
-
-  void Clean(time::SteadyPoint now) {
-    auto deadline = now - 60s;
-    std::erase_if(entries, [deadline](const auto& entry) { return entry->last_used < deadline; });
-  }
-};
-
 struct DrawContext {
   animation::Display& display;
   SkCanvas& canvas;
-  DrawCache& draw_cache;
-  DrawContext(animation::Display& display, SkCanvas& canvas, DrawCache& draw_cache)
-      : display(display), canvas(canvas), draw_cache(draw_cache) {}
+  DrawContext(animation::Display& display, SkCanvas& canvas) : display(display), canvas(canvas) {}
   float DeltaT() const { return display.timer.d; }
   operator GrDirectContext*() const {
     if (auto recording_context = canvas.recordingContext()) {
@@ -205,6 +108,44 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual ~Widget();
 
   std::shared_ptr<Widget> parent;
+
+  // OLD entries
+  // TODO: delete them once choppy animations are in order
+
+  SkMatrix draw_matrix;  // converts from local coordinates to base layer coordinates
+  time::SteadyPoint last_used = time::SteadyPoint::min();
+
+  // NEW entries
+  // The time when the cache entry was first invalidated.
+  // Initially this is set to 0 (meaning it was never drawn).
+  // When the widget is scheduled, set this to max value.
+  mutable time::SteadyPoint invalidated = time::SteadyPoint::min();
+
+  // The timestamp of the currently presented frame.
+  // This may actually be very old - for example if the widget wasn't invalidated for a long time
+  // or was very slow to draw.
+  time::SteadyPoint presented_time = time::SteadyPoint::min();
+
+  bool draw_to_texture = false;
+  // The ID of the current draw job.
+  ChoppyDrawable choppy_drawable;
+  SkRect local_bounds;          // local coordinates
+  SkRect root_bounds;           // root coordinates, clipped to the window viewport
+  SkIRect root_bounds_rounded;  // same as above, but rounded to integer pixels
+  // The time when the current draw job was started.
+  time::SteadyPoint draw_time = time::SteadyPoint::min();
+  SkRect draw_bounds;  // Area of the widget which was drawn (local coordinates)
+  // The recording that is being drawn.
+  sk_sp<SkDrawable> recording = nullptr;
+  // The surface that is being drawn to.
+  sk_sp<SkSurface> surface = nullptr;
+  // Whether the current draw job is going to be presented.
+  bool draw_present = false;
+
+  // How long, on average it takes to draw this widget.
+  float draw_millis = FP_NAN;
+
+  Widget() : choppy_drawable(this) {}
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".

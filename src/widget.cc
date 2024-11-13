@@ -143,6 +143,10 @@ void ChoppyDrawable::Render(SkCanvas& root_canvas) {
 
   direct_ctx->flush(widget->surface.get());
   direct_ctx->submit(GrSyncCpu::kYes);
+
+  SkMatrix window_to_local;
+  (void)widget->draw_matrix.invert(&window_to_local);
+  window_to_local.mapRect(&widget->draw_bounds, SkRect::Make(widget->root_bounds_rounded));
 }
 
 // Lifetime of the frame (from the Widget's perspective):

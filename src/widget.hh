@@ -109,22 +109,15 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   std::shared_ptr<Widget> parent;
 
-  // OLD entries
-  // TODO: delete them once choppy animations are in order
-
-  SkMatrix draw_matrix;  // converts from local coordinates to base layer coordinates
+  // The matrix that converts from local coordinates to window coordinates.
+  // Populated at PackFrame time.
+  SkMatrix draw_matrix;
   time::SteadyPoint last_used = time::SteadyPoint::min();
 
-  // NEW entries
   // The time when the cache entry was first invalidated.
   // Initially this is set to 0 (meaning it was never drawn).
   // When the widget is scheduled, set this to max value.
   mutable time::SteadyPoint invalidated = time::SteadyPoint::min();
-
-  // The timestamp of the currently presented frame.
-  // This may actually be very old - for example if the widget wasn't invalidated for a long time
-  // or was very slow to draw.
-  time::SteadyPoint presented_time = time::SteadyPoint::min();
 
   bool draw_to_texture = false;
   // The ID of the current draw job.

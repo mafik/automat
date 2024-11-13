@@ -588,9 +588,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
             widget.draw_millis = 0.9 * widget.draw_millis + 0.1 * draw_millis;
           }
 
-          if (widget.draw_present) {
-            widget.presented_time = widget.draw_time;
-          } else {
+          if (widget.draw_present == false) {
             // Find the parent that has a cache entry.
             int parent_i = tree_entry.parent;
             while (!tree[parent_i].widget->draw_to_texture) {
@@ -788,10 +786,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
     SkMatrix& m = tree[i].local_to_window;
 
-    // This should really be updated only after the rendering is finished.
-    // It's ok for packed widgets, but overflowed widgets should update those properties only after
-    // the rendering finishes.
-    tree[i].window_to_local.mapRect(&widget.draw_bounds, SkRect::Make(widget.root_bounds_rounded));
     widget.draw_matrix = tree[i].local_to_window;
 
     SkPictureRecorder recorder;

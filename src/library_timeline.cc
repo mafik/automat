@@ -281,7 +281,7 @@ static SkPath GetRecPath() {
 }
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
-SkColor SideButton::ForegroundColor(gui::DrawContext&) const { return "#404040"_color; }
+SkColor SideButton::ForegroundColor() const { return "#404040"_color; }
 SkColor SideButton::BackgroundColor() const { return kTimelineButtonBackground; }
 
 TimelineRunButton::TimelineRunButton(Timeline* timeline)

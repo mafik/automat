@@ -65,6 +65,7 @@ struct Display {
   // field can be used by animated objects to animate their properties.
   time::Timer timer;
   operator time::Timer&() { return timer; }
+  float DeltaT() const { return timer.d; }
 
   gui::Window* window = nullptr;
 

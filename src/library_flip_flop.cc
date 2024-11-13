@@ -64,7 +64,7 @@ bool FlipFlopButton::Filled() const { return (flip_flop && flip_flop->current_st
 //   SkRect oval = SkRect::MakeXYWH(0, 0, 2 * kYingYangButtonRadius, 2 * kYingYangButtonRadius);
 //   return SkRRect::MakeOval(oval);
 // }
-// SkColor FlipFlopButton::ForegroundColor(gui::DrawContext&) const { return "#1d1d1d"_color; }
+// SkColor FlipFlopButton::ForegroundColor() const { return "#1d1d1d"_color; }
 // SkColor FlipFlopButton::BackgroundColor() const { return "#eae9e8"_color; }
 FlipFlopButton::FlipFlopButton()
     : gui::ToggleButton(

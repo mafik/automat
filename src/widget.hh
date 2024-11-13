@@ -61,7 +61,7 @@ struct DrawContext {
   animation::Display& display;
   SkCanvas& canvas;
   DrawContext(animation::Display& display, SkCanvas& canvas) : display(display), canvas(canvas) {}
-  float DeltaT() const { return display.timer.d; }
+  float DeltaT() const { return display.DeltaT(); }
   operator GrDirectContext*() const {
     if (auto recording_context = canvas.recordingContext()) {
       return recording_context->asDirectContext();
@@ -169,11 +169,11 @@ struct Widget : public std::enable_shared_from_this<Widget> {
     return static_pointer_cast<T>(const_cast<Widget*>(this)->shared_from_this());
   }
 
-  virtual animation::Phase Draw(DrawContext& ctx) const {
-    auto phase = animation::Finished;
-    phase |= DrawChildren(ctx);
-    return phase;
-  }
+  // Called before Draw & PreDraw. The widgets can use this to update their state.
+  // Only widgets that are being drawn will have this called.
+  virtual animation::Phase Update(animation::Display&) { return animation::Finished; }
+
+  virtual animation::Phase Draw(DrawContext& ctx) const { return DrawChildren(ctx); }
   virtual SkPath Shape(animation::Display*) const = 0;
 
   virtual bool CenteredAtZero() const { return false; }

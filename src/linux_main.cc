@@ -423,8 +423,8 @@ void CreateWindow(Status& status) {
 
 #undef WRAP
 
-// TODO: why the icons are initially white?
 // TODO: fix objects not being redrawn when panning
+// TODO: Timeline run button is broken
 // -- at this point we should be back in the working state
 // TODO: lots of cleanups!
 //       - widgets should have pointers to their parents (remove "Paths")
@@ -746,7 +746,20 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 
   // Step 4 - walk through the tree and record the draw commands into drawables.
-
+  for (int i = 0; i < tree.size(); ++i) {
+    auto packed = tree[i].packed;
+    auto overflowed = tree[i].overflowed;
+    if (!packed && !overflowed) {
+      continue;
+    }
+    auto& widget = *tree[i].widget;
+    auto animation_phase = widget.Update(window->display);
+    if (animation_phase == animation::Finished) {
+      widget.invalidated = time::SteadyPoint::max();
+    } else {
+      widget.invalidated = now;
+    }
+  }
   for (int i = tree.size() - 1; i >= 0; --i) {
     auto packed = tree[i].packed;
     auto overflowed = tree[i].overflowed;
@@ -764,11 +777,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
     rec_canvas->setMatrix(m);
     DrawContext ctx(window->display, *rec_canvas);
-    auto animation_phase = tree[i].widget->Draw(ctx);
-    if (animation_phase == animation::Finished) {
-      widget.invalidated = time::SteadyPoint::max();
-    } else {
-      widget.invalidated = now;
+    auto animation_phase = tree[i].widget->Draw(ctx);  // This is where we actually draw stuff!
+    if (animation_phase == animation::Animating) {
+      widget.invalidated = min(widget.invalidated, now);
     }
 
     widget.recording = recorder.finishRecordingAsDrawable();

@@ -31,6 +31,7 @@ struct Button : Widget {
   Button(std::shared_ptr<Widget> child) : child(child) {}
   void PointerOver(Pointer&, animation::Display&) override;
   void PointerLeave(Pointer&, animation::Display&) override;
+  animation::Phase Update(animation::Display&) override;
   animation::Phase PreDraw(DrawContext& ctx) const override;
   animation::Phase Draw(DrawContext&) const override;
   float Height() const;
@@ -38,7 +39,7 @@ struct Button : Widget {
   SkPath Shape(animation::Display*) const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   virtual void Activate(gui::Pointer&) { InvalidateDrawCache(); }
-  virtual SkColor ForegroundColor(DrawContext&) const { return SK_ColorBLACK; }  // "#d69d00"_color
+  virtual SkColor ForegroundColor() const { return SK_ColorBLACK; }  // "#d69d00"_color
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
 
@@ -78,7 +79,7 @@ struct ColoredButton : Button {
   ColoredButton(SkPath path, ColoredButtonArgs args = {})
       : ColoredButton(std::make_shared<ShapeWidget>(path), args) {}
 
-  SkColor ForegroundColor(DrawContext&) const override { return fg; }
+  SkColor ForegroundColor() const override { return fg; }
   SkColor BackgroundColor() const override { return bg; }
   void Activate(gui::Pointer& ptr) override {
     if (on_click) {

@@ -18,7 +18,7 @@ namespace automat::library {
 struct SideButton : gui::Button {
   using gui::Button::Button;
   SideButton(std::shared_ptr<Widget> child) : gui::Button(child) {}
-  SkColor ForegroundColor(gui::DrawContext&) const override;
+  SkColor ForegroundColor() const override;
   SkColor BackgroundColor() const override;
   SkRRect RRect() const override;
 };

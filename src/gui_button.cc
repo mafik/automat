@@ -114,8 +114,28 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   canvas.drawRRect(pressed_oval, border);
 }
 
-static animation::Phase UpdateHighlight(DrawContext& ctx, Button::AnimationState& state) {
-  return animation::LinearApproach(state.pointers_over ? 1 : 0, ctx.DeltaT(), 10, state.highlight);
+animation::Phase Button::Update(animation::Display& display) {
+  auto& state = animation_state_ptr[display];
+  auto phase =
+      animation::LinearApproach(state.pointers_over ? 1 : 0, display.DeltaT(), 10, state.highlight);
+
+  auto bg = BackgroundColor();
+  auto fg = ForegroundColor();
+
+  gui::Visitor visitor = [fg](Span<shared_ptr<Widget>> children) {
+    for (auto& child : children) {
+      if (auto paint = PaintMixin::Get(child.get())) {
+        if (paint->getColor() == fg) {
+          continue;
+        }
+        paint->setColor(fg);
+        paint->setAntiAlias(true);
+      }
+    }
+    return ControlFlow::Continue;
+  };
+  const_cast<Button*>(this)->VisitChildren(visitor);
+  return phase;
 }
 
 animation::Phase Button::PreDraw(DrawContext& ctx) const {
@@ -127,25 +147,12 @@ animation::Phase Button::PreDraw(DrawContext& ctx) const {
 animation::Phase Button::Draw(DrawContext& ctx) const {
   auto& display = ctx.display;
   auto& animation_state = animation_state_ptr[display];
-  auto phase = UpdateHighlight(ctx, animation_state);
 
   auto bg = BackgroundColor();
-  auto fg = ForegroundColor(ctx);
-
-  gui::Visitor visitor = [fg](Span<shared_ptr<Widget>> children) {
-    for (auto& child : children) {
-      if (auto paint = PaintMixin::Get(child.get())) {
-        paint->setColor(fg);
-        paint->setAntiAlias(true);
-      }
-    }
-    return ControlFlow::Continue;
-  };
-  const_cast<Button*>(this)->VisitChildren(visitor);
+  auto fg = ForegroundColor();
 
   DrawButtonFace(ctx, bg, fg);
-  phase |= DrawChildren(ctx);
-  return phase;
+  return DrawChildren(ctx);
 }
 
 animation::Phase ToggleButton::Draw(DrawContext& ctx) const {

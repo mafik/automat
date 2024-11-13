@@ -10,6 +10,7 @@ if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Run the event bench')
   parser.add_argument('--skip-run', action='store_true', help='Skip running the automat')
   parser.add_argument('--skip-plot', action='store_true', help='Skip plotting the results')
+  parser.add_argument('--skip-record', action='store_true', help='Skip recording the results')
 
   args = parser.parse_args()
 
@@ -82,7 +83,9 @@ if __name__ == '__main__':
     a, b = np.polyfit(expected_timestamps, timestamps, 1)
     drift = a - 1
 
-    if not args.skip_plot:
+    if args.skip_plot:
+      print(f'Max jitter: {ms(max_jitter)}   Drift: {ms(drift)} per second')
+    else:
       import matplotlib.pyplot as plt
 
       plt.title(f'Max jitter: {ms(max_jitter)}   Drift: {ms(drift)} per second')
@@ -91,20 +94,20 @@ if __name__ == '__main__':
 
       plt.show()
 
-    save = input('Record the results? [y/n] DID YOU TOUCH THE MOUSE DURING THE TEST? BECAUSE YOU SHOULDN\'T! ')
-    if save == 'y':
-      result_path = Path(__file__).parent / 'event_bench_log.json'
-      results = json.load(open(result_path)) if result_path.exists() else dict()
-      import datetime
-      today = str(datetime.date.today())
-      if today not in results:
-        results[today] = {
-          'max_jitter': [],
-          'drift': []
-        }
-      results[today]['max_jitter'].append(round(max_jitter, 4))
-      results[today]['drift'].append(round(drift, 4))
-      json.dump(results, open(result_path, 'w'), indent=2)
-    else:
-      print('Results not saved')
-
+    if not args.skip_record:
+      save = input('Record the results? [y/n] DID YOU TOUCH THE MOUSE DURING THE TEST? BECAUSE YOU SHOULDN\'T! ')
+      if save == 'y':
+        result_path = Path(__file__).parent / 'event_bench_log.json'
+        results = json.load(open(result_path)) if result_path.exists() else dict()
+        import datetime
+        today = str(datetime.date.today())
+        if today not in results:
+          results[today] = {
+            'max_jitter': [],
+            'drift': []
+          }
+        results[today]['max_jitter'].append(round(max_jitter, 4))
+        results[today]['drift'].append(round(drift, 4))
+        json.dump(results, open(result_path, 'w'), indent=2)
+      else:
+        print('Results not saved')

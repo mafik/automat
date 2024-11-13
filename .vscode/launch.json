@@ -5,6 +5,9 @@
       "name": "(lldb) debug_automat",
       "type": "lldb",
       "request": "launch",
+      "env": {
+        "DISPLAY": ":0"
+      },
       "program": "${workspaceFolder}/build/debug_automat",
       "preLaunchTask": "debug_automat",
     },

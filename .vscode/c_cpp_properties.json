@@ -6,10 +6,9 @@
                 "${workspaceFolder}/**"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/clang++-17",
-            "cStandard": "c20",
-            "cppStandard": "c++20",
-            "intelliSenseMode": "linux-clang-x64",
+            "compilerPath": "/usr/lib/llvm/18/bin/clang++",
+            "cStandard": "gnu23",
+            "cppStandard": "gnu++23",
             "compileCommands": "${workspaceFolder}/compile_commands.json"
         }
     ],

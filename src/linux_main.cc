@@ -423,8 +423,6 @@ void CreateWindow(Status& status) {
 
 #undef WRAP
 
-// TODO: why are we crashing when an object is dropped?
-// TODO: why are we crashing at high zoom?
 // TODO: why is the text entry in Timer not re-rendered at higher zoom?
 // TODO: why invisible connection widgets have so large bounds?
 // TODO: why the icons are initially white?
@@ -614,10 +612,13 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   {  // Step 3 - create a list of render jobs for the updated widgets
     int first_job = -1;
     for (int i = 0; i < tree.size(); ++i) {
-      if (!tree[i].widget->draw_to_texture) {
+      auto& widget = *tree[i].widget;
+      if (!widget.draw_to_texture) {
         continue;
       }
-      auto& widget = *tree[i].widget;
+      if (!tree[i].intersects) {
+        continue;
+      }
       // Widgets that are still being rendered shouldn't be scheduled again.
       if (widget.draw_time != time::SteadyPoint::min()) {
         continue;

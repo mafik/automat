@@ -15,13 +15,13 @@ animation::Phase ShapeWidget::Draw(DrawContext& ctx) const {
   return animation::Finished;
 }
 
-std::unique_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color,
+std::shared_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color,
                                         const SkMatrix* transform) {
   SkPath path = PathFromSVG(svg_path);
   if (transform) {
     path.transform(*transform);
   }
-  auto ret = std::make_unique<ShapeWidget>(path);
+  auto ret = std::make_shared<ShapeWidget>(path);
   ret->paint.setAntiAlias(true);
   ret->paint.setColor(fill_color);
   return ret;

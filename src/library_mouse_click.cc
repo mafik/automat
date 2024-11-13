@@ -44,12 +44,16 @@ using namespace maf;
 
 namespace automat::library {
 
-const MouseClick MouseClick::lmb_down(gui::PointerButton::Left, true);
-const MouseClick MouseClick::lmb_up(gui::PointerButton::Left, false);
-const MouseClick MouseClick::rmb_down(gui::PointerButton::Right, true);
-const MouseClick MouseClick::rmb_up(gui::PointerButton::Right, false);
+std::shared_ptr<MouseClick> MouseClick::lmb_down;
+std::shared_ptr<MouseClick> MouseClick::lmb_up;
+std::shared_ptr<MouseClick> MouseClick::rmb_down;
+std::shared_ptr<MouseClick> MouseClick::rmb_up;
 
 __attribute__((constructor)) void RegisterMouseClick() {
+  MouseClick::lmb_down = std::make_shared<MouseClick>(gui::PointerButton::Left, true);
+  MouseClick::lmb_up = std::make_shared<MouseClick>(gui::PointerButton::Left, false);
+  MouseClick::rmb_down = std::make_shared<MouseClick>(gui::PointerButton::Right, true);
+  MouseClick::rmb_up = std::make_shared<MouseClick>(gui::PointerButton::Right, false);
   RegisterPrototype(MouseClick::lmb_down);
   RegisterPrototype(MouseClick::lmb_up);
   RegisterPrototype(MouseClick::rmb_down);
@@ -108,12 +112,13 @@ static sk_sp<SkImage> RenderMouseImage(gui::DrawContext& ctx, gui::PointerButton
   }
   bitmap.setImmutable();
   auto raster_image = SkImages::RasterFromBitmap(bitmap);
-#ifdef CPU_RENDERING
-  return raster_image;
-#else
-  return SkImages::TextureFromImage(root_canvas.recordingContext()->asDirectContext(),
-                                    raster_image.get(), skgpu::Mipmapped::kYes);
-#endif
+  auto recording_context = root_canvas.recordingContext();
+  if (recording_context) {
+    return SkImages::TextureFromImage(recording_context->asDirectContext(), raster_image.get(),
+                                      skgpu::Mipmapped::kYes);
+  } else {
+    return raster_image;
+  }
 }
 
 static sk_sp<SkImage> CachedMouseImage(gui::DrawContext dctx, gui::PointerButton button,
@@ -143,8 +148,8 @@ string_view MouseClick::Name() const {
       return "Mouse Unknown Click"sv;
   }
 }
-std::unique_ptr<Object> MouseClick::Clone() const {
-  return std::make_unique<MouseClick>(button, down);
+std::shared_ptr<Object> MouseClick::Clone() const {
+  return std::make_shared<MouseClick>(button, down);
 }
 animation::Phase MouseClick::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;

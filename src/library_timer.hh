@@ -17,7 +17,7 @@ struct DurationArgument : LiveArgument {
 struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   struct MyDuration : Object {
     time::Duration value = 10s;
-    std::unique_ptr<Object> Clone() const override { return std::make_unique<MyDuration>(*this); }
+    std::shared_ptr<Object> Clone() const override { return std::make_shared<MyDuration>(*this); }
   } duration;
   DurationArgument duration_arg;
   time::SteadyPoint start_time;
@@ -29,7 +29,7 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   // Controls the current range (milliseconds, seconds, etc.)
   mutable animation::SpringV2<float> range_dial;
   mutable animation::Approach<> duration_handle_rotation;
-  gui::NumberTextField text_field;
+  std::shared_ptr<gui::NumberTextField> text_field;
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
     Seconds,       // 0 - 60 s
@@ -38,11 +38,11 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
-  static const TimerDelay proto;
+  static std::shared_ptr<TimerDelay> proto;
   TimerDelay();
   TimerDelay(const TimerDelay&);
   string_view Name() const override;
-  std::unique_ptr<Object> Clone() const override;
+  std::shared_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   void Fields(std::function<void(Object&)> cb) override;

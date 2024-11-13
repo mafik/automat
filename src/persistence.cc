@@ -58,7 +58,7 @@ void LoadState(gui::Window& window, Status& status) {
     } else if (key == "window") {
       window.DeserializeState(d, status);
     } else if (key == "root") {
-      root_machine->DeserializeState(root_location, d);
+      root_machine->DeserializeState(*root_location, d);
     }
   }
 

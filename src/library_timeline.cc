@@ -286,19 +286,19 @@ SkColor SideButton::BackgroundColor() const { return kTimelineButtonBackground; 
 
 TimelineRunButton::TimelineRunButton(Timeline* timeline)
     : gui::ToggleButton(
-          make_unique<ColoredButton>(
+          make_shared<ColoredButton>(
               GetPausedPath(),
               ColoredButtonArgs{.fg = kTimelineButtonBackground,
                                 .bg = kOrange,
                                 .radius = kPlayButtonRadius,
                                 .on_click = [this](gui::Pointer& p) { Activate(p); }}),
-          make_unique<ColoredButton>(
+          make_shared<ColoredButton>(
               kPlayShape, ColoredButtonArgs{.fg = kOrange,
                                             .bg = kTimelineButtonBackground,
                                             .radius = kPlayButtonRadius,
                                             .on_click = [this](gui::Pointer& p) { Activate(p); }})),
       timeline(timeline),
-      rec_button(make_unique<ColoredButton>(
+      rec_button(make_shared<ColoredButton>(
           GetRecPath(), ColoredButtonArgs{.fg = kTimelineButtonBackground,
                                           .bg = color::kParrotRed,
                                           .radius = kPlayButtonRadius,
@@ -310,11 +310,15 @@ void TimelineRunButton::Activate(gui::Pointer& p) {
     case Timeline::kPlaying:
       LOG << "Timeline is playing - Cancelling it!";
       timeline->Cancel();
-      timeline->here->long_running = nullptr;
+      if (auto h = timeline->here.lock()) {
+        h->long_running = nullptr;
+      }
       break;
     case Timeline::kPaused:
       LOG << "Timeline is paused - Scheduling it!";
-      timeline->here->ScheduleRun();
+      if (auto h = timeline->here.lock()) {
+        h->ScheduleRun();
+      }
       break;
     case Timeline::kRecording:
       LOG << "Timeline is recording - Stopping!";
@@ -323,26 +327,32 @@ void TimelineRunButton::Activate(gui::Pointer& p) {
   }
 }
 
-gui::Button* TimelineRunButton::OnWidget() const {
+shared_ptr<gui::Button>& TimelineRunButton::OnWidget() {
   if (timeline->state == Timeline::kRecording) {
-    last_on_widget = rec_button.get();
+    last_on_widget = &rec_button;
   } else if (timeline->state == Timeline::kPlaying) {
-    last_on_widget = on.get();
+    last_on_widget = &on;
   } else if (last_on_widget == nullptr) {
-    last_on_widget = on.get();
+    last_on_widget = &on;
   }
-  return last_on_widget;
+  return *last_on_widget;
 }
 
 bool TimelineRunButton::Filled() const {
   bool filled = timeline->state == Timeline::kRecording;
-  if (timeline->here) {
-    filled |= timeline->here->run_task.scheduled || (timeline->here->long_running != nullptr);
+  if (auto h = timeline->here.lock()) {
+    filled |= (h->run_task && h->run_task->scheduled) || (h->long_running != nullptr);
   }
   return filled;
 }
 
-Timeline::Timeline() : run_button(this), state(kPaused), paused{.playback_offset = 0}, zoom(10) {}
+Timeline::Timeline()
+    : run_button(make_shared<TimelineRunButton>(this)),
+      prev_button(make_shared<PrevButton>()),
+      next_button(make_shared<NextButton>()),
+      state(kPaused),
+      paused{.playback_offset = 0},
+      zoom(10) {}
 
 struct TextDrawable : PaintDrawable {
   Str text;
@@ -378,14 +388,16 @@ OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
   track->timeline = this;
   tracks.emplace_back(std::move(track));
   AddTrackArg(*this, tracks.size() - 1, name);
-  here->InvalidateConnectionWidgets();
+  if (auto h = here.lock()) {
+    h->InvalidateConnectionWidgets();
+  }
   return *dynamic_cast<OnOffTrack*>(tracks.back().get());
 }
 
 Timeline::Timeline(const Timeline& other) : Timeline() {
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
-    tracks.emplace_back(dynamic_cast<TrackBase*>(track->Clone().release()));
+    tracks.emplace_back(dynamic_pointer_cast<TrackBase>(track->Clone()));
   }
   track_args.reserve(other.track_args.size());
   for (int i = 0; i < other.track_args.size(); ++i) {
@@ -395,7 +407,7 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
 
 string_view Timeline::Name() const { return "Timeline"; }
 
-unique_ptr<Object> Timeline::Clone() const { return make_unique<Timeline>(*this); }
+shared_ptr<Object> Timeline::Clone() const { return make_shared<Timeline>(*this); }
 
 constexpr float kLcdFontSize = 1.5_mm;
 static Font& LcdFont() {
@@ -433,7 +445,11 @@ static float CurrentPosRatio(const Timeline& timeline, time::SystemPoint now) {
   }
 }
 
-void TimelineCancelScheduledAt(Timeline& t) { CancelScheduledAt(*t.here); }
+void TimelineCancelScheduledAt(Timeline& t) {
+  if (auto h = t.here.lock()) {
+    CancelScheduledAt(*h);
+  }
+}
 
 void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
   time::SteadyPoint next_update = t.playing.started_at + time::Duration(t.MaxTrackLength());
@@ -447,7 +463,9 @@ void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
       break;
     }
   }
-  ScheduleAt(*t.here, next_update);
+  if (auto h = t.here.lock()) {
+    ScheduleAt(*h, next_update);
+  }
 }
 
 static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint started_at,
@@ -477,7 +495,9 @@ void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
     TimelineCancelScheduledAt(timeline);
     timeline.playing.started_at -= time::Duration(offset);
     timeline.playing.started_at = min(timeline.playing.started_at, now);
-    TimelineUpdateOutputs(*timeline.here, timeline, timeline.playing.started_at, now);
+    if (auto h = timeline.here.lock()) {
+      TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
+    }
     TimelineScheduleAt(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset =
@@ -492,7 +512,9 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   if (timeline.state == Timeline::kPlaying) {
     TimelineCancelScheduledAt(timeline);
     timeline.playing.started_at = now - time::Duration(pos_ratio * max_track_length);
-    TimelineUpdateOutputs(*timeline.here, timeline, timeline.playing.started_at, now);
+    if (auto h = timeline.here.lock()) {
+      TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
+    }
     TimelineScheduleAt(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = pos_ratio * max_track_length;
@@ -502,19 +524,15 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
 
 void NextButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
-  for (int i = ptr.path.size() - 1; i >= 0; --i) {
-    if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
-      SetPosRatio(*timeline, 1, ptr.window.display.timer.steady_now);
-    }
+  if (auto timeline = Closest<Timeline>(ptr.hover)) {
+    SetPosRatio(*timeline, 1, ptr.window.display.timer.steady_now);
   }
 }
 
 void PrevButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
-  for (int i = ptr.path.size() - 1; i >= 0; --i) {
-    if (Timeline* timeline = dynamic_cast<Timeline*>(ptr.path[i])) {
-      SetPosRatio(*timeline, 0, ptr.window.display.timer.steady_now);
-    }
+  if (Timeline* timeline = Closest<Timeline>(ptr.hover)) {
+    SetPosRatio(*timeline, 0, ptr.window.display.timer.steady_now);
   }
 }
 
@@ -989,11 +1007,11 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
     }
   }
 
-  Widget* tracks_arr[tracks.size()];
+  shared_ptr<Widget> tracks_arr[tracks.size()];  // TODO: awful, fix this
   for (size_t i = 0; i < tracks.size(); ++i) {
-    tracks_arr[i] = tracks[i].get();
+    tracks_arr[i] = tracks[i];
   }
-  phase |= DrawChildrenSubset(dctx, Span<Widget*>(tracks_arr, tracks.size()));
+  phase |= DrawChildrenSpan(dctx, SpanOfArr(tracks_arr, tracks.size()));
 
   canvas.restore();  // unclip
 
@@ -1030,8 +1048,8 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
   DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
             kPlasticTop - kScrewMargin - kScrewRadius);
 
-  Widget* arr[] = {(Widget*)&run_button, (Widget*)&prev_button, (Widget*)&next_button};
-  phase |= DrawChildrenSubset(dctx, arr);
+  shared_ptr<Widget> arr[] = {run_button, prev_button, next_button};
+  phase |= DrawChildrenSpan(dctx, arr);
 
   canvas.save();
   canvas.clipPath(window_path, true);
@@ -1186,13 +1204,13 @@ Vec2AndDir Timeline::ArgStart(const Argument& arg) {
 }
 
 ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
-  Widget* arr[] = {&run_button, &prev_button, &next_button};
+  shared_ptr<Widget> arr[] = {run_button, prev_button, next_button};
   if (visitor(arr) == ControlFlow::Stop) {
     return ControlFlow::Stop;
   }
-  Widget* tracks_arr[tracks.size()];
+  shared_ptr<Widget> tracks_arr[tracks.size()];
   for (size_t i = 0; i < tracks.size(); ++i) {
-    tracks_arr[i] = tracks[i].get();
+    tracks_arr[i] = tracks[i];
   }
   if (visitor({tracks_arr, tracks.size()}) == ControlFlow::Stop) {
     return ControlFlow::Stop;
@@ -1201,11 +1219,11 @@ ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
 }
 
 SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display* display) const {
-  if (&child == &run_button) {
+  if (&child == run_button.get()) {
     return SkMatrix::Translate(kPlayButtonRadius, -kDisplayMargin);
-  } else if (&child == &prev_button) {
+  } else if (&child == prev_button.get()) {
     return SkMatrix::Translate(kPlasticWidth / 2 - kSideButtonMargin, kSideButtonRadius);
-  } else if (&child == &next_button) {
+  } else if (&child == next_button.get()) {
     return SkMatrix::Translate(-kPlasticWidth / 2 + kSideButtonMargin + kSideButtonDiameter,
                                kSideButtonRadius);
   } else if (auto* track = dynamic_cast<const TrackBase*>(&child)) {
@@ -1293,9 +1311,11 @@ void Timeline::Cancel() {
     TimelineCancelScheduledAt(*this);
     state = kPaused;
     paused = {.playback_offset = (time::SteadyNow() - playing.started_at).count()};
-    TimelineUpdateOutputs(*here, *this, time::SteadyPoint{},
-                          time::SteadyPoint{} + time::Duration(paused.playback_offset));
-    run_button.InvalidateDrawCache();
+    if (auto h = here.lock()) {
+      TimelineUpdateOutputs(*h, *this, time::SteadyPoint{},
+                            time::SteadyPoint{} + time::Duration(paused.playback_offset));
+    }
+    run_button->InvalidateDrawCache();
   }
 }
 
@@ -1312,7 +1332,7 @@ LongRunning* Timeline::OnRun(Location& here) {
   playing = {.started_at = now - time::Duration(paused.playback_offset)};
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   TimelineScheduleAt(*this, now);
-  run_button.InvalidateDrawCache();
+  run_button->InvalidateDrawCache();
   return this;
 }
 
@@ -1330,7 +1350,7 @@ void Timeline::BeginRecording() {
       recording.started_at = playing.started_at;
       break;
   }
-  run_button.InvalidateDrawCache();
+  run_button->InvalidateDrawCache();
 }
 
 void Timeline::StopRecording() {
@@ -1341,7 +1361,7 @@ void Timeline::StopRecording() {
   paused = {.playback_offset =
                 min((time::SteadyNow() - recording.started_at).count(), timeline_length)};
   state = Timeline::kPaused;
-  run_button.InvalidateDrawCache();
+  run_button->InvalidateDrawCache();
 }
 
 void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
@@ -1377,7 +1397,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
     Done(here);
-    run_button.InvalidateDrawCache();
+    run_button->InvalidateDrawCache();
   }
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   if (now < end_at) {

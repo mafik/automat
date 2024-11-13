@@ -21,12 +21,15 @@ struct Argument;
 //
 // Instances of this class provide custom logic & appearance.
 struct Object : gui::Widget {
+  // TODO: separate objects & widgets!
+  Object() {}
+
   // Create a copy of this object.
   //
   // Subclasses of Object should have a static `proto` field, holding their own
   // prototype instance. This prototype will be cloned when new objects are
   // created. See the `Machine::Create` function for details.
-  virtual std::unique_ptr<Object> Clone() const = 0;
+  virtual std::shared_ptr<Object> Clone() const = 0;
 
   virtual void Relocate(Location* new_here) {}
 
@@ -54,7 +57,7 @@ struct Object : gui::Widget {
   virtual void Args(std::function<void(Argument&)> cb) {}
 
   virtual Vec2AndDir ArgStart(const Argument&);
-  virtual const Object* ArgPrototype(const Argument&) { return nullptr; }
+  virtual std::shared_ptr<Object> ArgPrototype(const Argument&) { return nullptr; }
 
   virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;
 

@@ -19,6 +19,7 @@
 #include "time.hh"
 
 using namespace maf;
+using namespace std;
 
 namespace automat::library {
 
@@ -60,9 +61,10 @@ float KeyPresserButton::PressRatio() const {
 }
 
 KeyPresser::KeyPresser(gui::AnsiKey key)
-    : key(key), shortcut_button(MakeKeyLabelWidget(ToStr(key)), KeyColor(false), kBaseKeyWidth) {
-  shortcut_button.key_presser = this;
-  shortcut_button.activate = [this](gui::Pointer& pointer) {
+    : key(key),
+      shortcut_button(make_shared<KeyPresserButton>(this, MakeKeyLabelWidget(ToStr(key)),
+                                                    KeyColor(false), kBaseKeyWidth)) {
+  shortcut_button->activate = [this](gui::Pointer& pointer) {
     if (key_selector) {
       key_selector->Release();
     } else {
@@ -72,9 +74,9 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
 }
 KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
-std::unique_ptr<Object> KeyPresser::Clone() const { return std::make_unique<KeyPresser>(key); }
+std::shared_ptr<Object> KeyPresser::Clone() const { return std::make_shared<KeyPresser>(key); }
 animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
-  shortcut_button.fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
+  shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
   auto phase = DrawChildren(dctx);
   auto& canvas = dctx.canvas;
   auto img = key_pressed ? PressingHandColor(dctx) : PointingHandColor(dctx);
@@ -89,7 +91,7 @@ animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
 }
 SkPath KeyPresser::Shape(animation::Display*) const {
   static SkPath shape = [this]() {
-    auto button_shape = shortcut_button.Shape(nullptr);
+    auto button_shape = shortcut_button->Shape(nullptr);
     auto hand_shape = GetHandShape();
     SkPath joined_shape;
     Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
@@ -98,7 +100,7 @@ SkPath KeyPresser::Shape(animation::Display*) const {
   return shape;
 }
 void KeyPresser::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
-  auto button_shape = shortcut_button.Shape(nullptr);
+  auto button_shape = shortcut_button->Shape(nullptr);
   SkRRect rrect;
   if (button_shape.isRRect(&rrect)) {
     out_positions.push_back(Vec2AndDir{.pos = Rect::TopCenter(rrect.rect()), .dir = -90_deg});
@@ -109,7 +111,7 @@ void KeyPresser::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const 
 
 void KeyPresser::SetKey(gui::AnsiKey k) {
   key = k;
-  shortcut_button.SetLabel(ToStr(k));
+  shortcut_button->SetLabel(ToStr(k));
 }
 
 void KeyPresser::ReleaseGrab(gui::KeyboardGrab&) { key_selector = nullptr; }
@@ -119,8 +121,7 @@ void KeyPresser::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key k) {
 }
 
 ControlFlow KeyPresser::VisitChildren(gui::Visitor& visitor) {
-  Widget* children[] = {&shortcut_button};
-  return visitor(children);
+  return visitor(SpanOfArr<shared_ptr<Widget>>((shared_ptr<Widget>*)&shortcut_button, 1));
 }
 
 ControlFlow KeyPresser::PointerVisitChildren(gui::Visitor& visitor) {
@@ -191,10 +192,10 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
     return std::make_unique<DragAndClickAction>(
         p, btn, Object::FindAction(p, btn),
-        std::make_unique<RunAction>(p, *Closest<Location>(p.path)));
+        std::make_unique<RunAction>(p, *Closest<Location>(p.hover)));
   } else {
     return std::make_unique<DragAndClickAction>(p, btn, Object::FindAction(p, btn),
-                                                shortcut_button.FindAction(p, btn));
+                                                shortcut_button->FindAction(p, btn));
   }
 }
 

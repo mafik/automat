@@ -26,7 +26,7 @@ struct MacroRecorder : LiveObject,
                        gui::Keylogger,
                        OnOff,
                        gui::PointerMoveCallback {
-  static const MacroRecorder proto;
+  static std::shared_ptr<MacroRecorder> proto;
 
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
@@ -39,22 +39,20 @@ struct MacroRecorder : LiveObject,
 
   animation::PerDisplay<AnimationState> animation_state_ptr;
   gui::Keylogging* keylogging = nullptr;
-  GlassRunButton record_button;
+  std::shared_ptr<Widget> record_button;
 
   MacroRecorder();
   ~MacroRecorder();
   string_view Name() const override;
-  std::unique_ptr<Object> Clone() const override;
+  std::shared_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override {
-    Widget* widgets[] = {&record_button};
-    if (visitor(widgets) == ControlFlow::Stop) return ControlFlow::Stop;
-    return ControlFlow::Continue;
+    return visitor(maf::SpanOfArr(&record_button, 1));
   }
 
   void Args(std::function<void(Argument&)> cb) override;
-  const Object* ArgPrototype(const Argument&) override;
+  std::shared_ptr<Object> ArgPrototype(const Argument&) override;
 
   bool IsOn() const override;
   void On() override;

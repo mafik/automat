@@ -24,6 +24,7 @@ static Vec2 RoundToMilimeters(Vec2 v) {
 static Object* DraggedObject(DragLocationAction& a) { return a.location->object.get(); }
 
 void DragLocationAction::Begin() {
+  widget->parent = pointer.window.SharedPtr();
   last_position = current_position = pointer.PositionWithinRootMachine();
   Update();
 }
@@ -36,23 +37,21 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
   using namespace gui;
   using namespace maf;
 
-  Path path;
   Vec2 point = a.pointer.pointer_position;
   auto* display = &a.pointer.window.display;
 
   gui::DropTarget* drop_target = nullptr;
 
-  Visitor dfs = [&](Span<struct Widget*> widgets) -> ControlFlow {
+  Visitor dfs = [&](Span<std::shared_ptr<gui::Widget>> widgets) -> ControlFlow {
     for (auto w : widgets) {
       Vec2 transformed;
-      if (!path.empty()) {
-        transformed = path.back()->TransformToChild(*w, display).mapPoint(point);
+      if (w->parent) {
+        transformed = w->parent->TransformToChild(*w, display).mapPoint(point);
       } else {
         transformed = point;
       }
 
       auto shape = w->Shape(display);
-      path.push_back(w);
       std::swap(point, transformed);
       if ((w->TextureBounds(display) == std::nullopt) || shape.contains(point.x, point.y)) {
         if (w->VisitChildren(dfs) == ControlFlow::Stop) {
@@ -63,12 +62,11 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
         }
       }
       std::swap(point, transformed);
-      path.pop_back();
     }
     return ControlFlow::Continue;
   };
 
-  struct Widget* window_arr[] = {a.pointer.path[0]};
+  std::shared_ptr<Widget> window_arr[] = {a.pointer.window.SharedPtr<Widget>()};
   dfs(window_arr);
   return drop_target;
 }
@@ -98,7 +96,7 @@ void DragLocationAction::Update() {
   last_position = current_position;
 }
 
-SkPath DragLocationAction::Shape(animation::Display*) const { return SkPath(); }
+SkPath DragLocationWidget::Shape(animation::Display*) const { return SkPath(); }
 
 void DragLocationAction::End() {
   if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
@@ -107,8 +105,10 @@ void DragLocationAction::End() {
 }
 
 DragLocationAction::DragLocationAction(gui::Pointer& pointer,
-                                       std::unique_ptr<Location>&& location_arg)
-    : Action(pointer), location(std::move(location_arg)) {
+                                       std::shared_ptr<Location>&& location_arg)
+    : Action(pointer),
+      location(std::move(location_arg)),
+      widget(std::make_shared<DragLocationWidget>(*this)) {
   pointer.window.drag_action_count++;
   // TODO: the right way to do this is to clear the parent here
   // location->parent = nullptr;
@@ -134,17 +134,17 @@ DragLocationAction::~DragLocationAction() {
     connection_widget->animation_state[pointer.window.display].radar_alpha_target = 0;
   }
 }
-ControlFlow DragLocationAction::VisitChildren(gui::Visitor& visitor) {
-  struct Widget* child = location.get();
+ControlFlow DragLocationWidget::VisitChildren(gui::Visitor& visitor) {
+  std::shared_ptr<gui::Widget> child = action.location;
   if (visitor(maf::SpanOfArr(&child, 1)) == ControlFlow::Stop) {
     return ControlFlow::Stop;
   }
   return ControlFlow::Continue;
 }
-SkMatrix DragLocationAction::TransformToChild(const gui::Widget& child,
+SkMatrix DragLocationWidget::TransformToChild(const gui::Widget& child,
                                               animation::Display* display) const {
-  if (&child == location.get()) {
-    return location->GetTransform(display);
+  if (&child == action.location.get()) {
+    return action.location->GetTransform(display);
   }
   return SkMatrix::I();
 }

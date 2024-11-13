@@ -179,13 +179,7 @@ struct TextSelectAction : Action {
 
   void Begin() override {
     if (text_field.argument.has_value()) {
-      auto pointer_path = pointer.path;
-      Location* location = nullptr;
-      for (int i = pointer_path.size() - 1; i >= 0; --i) {
-        if ((location = dynamic_cast<Location*>(pointer_path[i]))) {
-          break;
-        }
-      }
+      Location* location = Closest<Location>(pointer.hover);
 
       for (auto& connection_widget : window->connection_widgets) {
         if (&connection_widget->arg == text_field.argument &&
@@ -200,7 +194,7 @@ struct TextSelectAction : Action {
     Vec2 local = pointer.PositionWithin(text_field);
     int index = text_field.IndexFromPosition(local.x);
     Vec2 pos = text_field.PositionFromIndex(index);
-    caret = &pointer.keyboard->RequestCaret(text_field, pointer.path, pos);
+    caret = &pointer.keyboard->RequestCaret(text_field, pointer.hover, pos);
     text_field.caret_positions[caret] = {.index = index};
   }
   void Update() override { UpdateCaretFromPointer(pointer); }

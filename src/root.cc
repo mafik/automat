@@ -9,19 +9,21 @@
 
 namespace automat {
 
-Location root_location;
-Machine* root_machine;
+std::shared_ptr<Location> root_location;
+std::shared_ptr<Machine> root_machine;
 std::jthread automat_thread;
 std::atomic_bool automat_thread_finished = false;
 
+// TODO: merge this with InitAutomat
 void InitRoot() {
-  root_location.name = "Root location";
-  root_machine = root_location.Create<Machine>();
+  root_location = std::make_shared<Location>();
+  root_location->name = "Root location";
+  root_machine = root_location->Create<Machine>();
   root_machine->name = "Root machine";
   automat_thread = std::jthread(RunThread);
   auto& prototypes = Prototypes();
   sort(prototypes.begin(), prototypes.end(),
-       [](const auto* a, const auto* b) { return a->Name() < b->Name(); });
+       [](const auto& a, const auto& b) { return a->Name() < b->Name(); });
 }
 
 void StopRoot() {
@@ -51,7 +53,7 @@ void RunOnAutomatThread(std::function<void()> f) {
     f();
     return;
   }
-  events.send(std::make_unique<FunctionTask>(&root_location, [f](Location& l) { f(); }));
+  events.send(std::make_unique<FunctionTask>(root_location, [f](Location& l) { f(); }));
 }
 
 void RunOnAutomatThreadSynchronous(std::function<void()> f) {

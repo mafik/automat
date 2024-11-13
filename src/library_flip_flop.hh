@@ -11,7 +11,7 @@ namespace automat::library {
 struct FlipFlop;
 
 struct YingYangIcon : gui::Widget, gui::PaintMixin {
-  YingYangIcon() = default;
+  YingYangIcon() {}
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
 };
@@ -24,9 +24,9 @@ struct FlipFlopButton : gui::ToggleButton {
 };
 
 struct FlipFlop : LiveObject, Runnable {
-  static const FlipFlop proto;
+  static std::shared_ptr<FlipFlop> proto;
 
-  mutable FlipFlopButton button;
+  std::shared_ptr<FlipFlopButton> button;
 
   bool current_state = false;
   struct AnimationState {
@@ -36,7 +36,7 @@ struct FlipFlop : LiveObject, Runnable {
 
   FlipFlop();
   string_view Name() const override;
-  std::unique_ptr<Object> Clone() const override;
+  std::shared_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   void Args(std::function<void(Argument&)> cb) override;

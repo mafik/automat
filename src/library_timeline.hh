@@ -17,6 +17,7 @@ namespace automat::library {
 
 struct SideButton : gui::Button {
   using gui::Button::Button;
+  SideButton(std::shared_ptr<Widget> child) : gui::Button(child) {}
   SkColor ForegroundColor(gui::DrawContext&) const override;
   SkColor BackgroundColor() const override;
   SkRRect RRect() const override;
@@ -37,11 +38,11 @@ struct Timeline;
 struct TimelineRunButton : gui::ToggleButton {
   Timeline* timeline;
 
-  std::unique_ptr<gui::Button> rec_button;
-  mutable gui::Button* last_on_widget = nullptr;
+  std::shared_ptr<gui::Button> rec_button;
+  mutable std::shared_ptr<gui::Button>* last_on_widget = nullptr;
 
   TimelineRunButton(Timeline* timeline);
-  gui::Button* OnWidget() const override;
+  std::shared_ptr<gui::Button>& OnWidget() override;
   bool Filled() const override;
   void Activate(gui::Pointer&);
 };
@@ -63,7 +64,7 @@ struct TrackBase : Object {
 struct OnOffTrack : TrackBase, OnOff {
   time::T on_at = NAN;
   string_view Name() const override { return "On/Off Track"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<OnOffTrack>(*this); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<OnOffTrack>(*this); }
   animation::Phase Draw(gui::DrawContext&) const override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -81,13 +82,13 @@ struct OnOffTrack : TrackBase, OnOff {
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
 // (or stops).
 struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
-  static const Timeline proto;
+  static std::shared_ptr<Timeline> proto;
 
-  TimelineRunButton run_button;
-  PrevButton prev_button;
-  NextButton next_button;
+  std::shared_ptr<TimelineRunButton> run_button;
+  std::shared_ptr<PrevButton> prev_button;
+  std::shared_ptr<NextButton> next_button;
 
-  maf::Vec<std::unique_ptr<TrackBase>> tracks;
+  maf::Vec<std::shared_ptr<TrackBase>> tracks;
   maf::Vec<std::unique_ptr<Argument>> track_args;
 
   mutable animation::Approach<> zoom;  // stores the time in seconds
@@ -118,7 +119,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   Timeline();
   Timeline(const Timeline&);
   string_view Name() const override;
-  std::unique_ptr<Object> Clone() const override;
+  std::shared_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   void Args(std::function<void(Argument&)> cb) override;

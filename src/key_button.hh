@@ -36,7 +36,7 @@ struct KeyButton : gui::Button {
   float width;
   std::function<void(gui::Pointer&)> activate;
   SkColor fg;
-  KeyButton(std::unique_ptr<Widget>&& child, SkColor color, float width);
+  KeyButton(std::shared_ptr<Widget> parent, SkColor color, float width);
   void Activate(gui::Pointer&) override;
   SkRRect RRect() const override;
   SkColor ForegroundColor(gui::DrawContext&) const override { return fg; }
@@ -46,7 +46,7 @@ struct KeyButton : gui::Button {
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 };
 
-std::unique_ptr<Widget> MakeKeyLabelWidget(maf::StrView label);
+std::shared_ptr<Widget> MakeKeyLabelWidget(maf::StrView label);
 
 static constexpr SkColor kKeyEnabledColor = "#f3a75b"_color;
 static constexpr SkColor kKeyDisabledColor = "#f4efea"_color;

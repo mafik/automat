@@ -9,7 +9,7 @@ using namespace std;
 
 namespace automat::gui {
 
-Text::Text(string_view text) : text(text) {};
+Text::Text(string_view text) : text(text){};
 
 SkPath Text::Shape(animation::Display*) const {
   float w = GetFont().MeasureText(text);

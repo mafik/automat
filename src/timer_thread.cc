@@ -44,7 +44,7 @@ static void TimerThread(std::stop_token automat_stop_token) {
     if (stop) {
       break;
     }
-    deque<unique_ptr<Task>> ready_tasks;
+    deque<std::unique_ptr<Task>> ready_tasks;
     auto now = SteadyClock::now();
     while (!tasks.empty() && tasks.begin()->first <= now) {
       ready_tasks.emplace_back(std::move(tasks.begin()->second));
@@ -77,26 +77,26 @@ static void TimerFinished(Location& here, SteadyPoint scheduled_time) {
 
 struct TimerFinishedTask : Task {
   time::SteadyPoint scheduled_time;
-  TimerFinishedTask(Location* target, time::SteadyPoint scheduled_time)
+  TimerFinishedTask(std::weak_ptr<Location> target, time::SteadyPoint scheduled_time)
       : Task(target), scheduled_time(scheduled_time) {}
   std::string Format() override { return "TimerFinishedTask"; }
   void Execute() override {
     PreExecute();
-    TimerFinished(*target, scheduled_time);
+    TimerFinished(*target.lock(), scheduled_time);
     PostExecute();
   }
 };
 
 void ScheduleAt(Location& here, SteadyPoint time) {
   std::unique_lock<std::mutex> lck(mtx);
-  tasks.emplace(time, new TimerFinishedTask(&here, time));
+  tasks.emplace(time, new TimerFinishedTask(here.SharedPtr<Location>(), time));
   cv.notify_all();
 }
 
 void CancelScheduledAt(Location& here) {
   std::unique_lock<std::mutex> lck(mtx);
   for (auto it = tasks.begin(); it != tasks.end();) {
-    if (it->second->target == &here) {
+    if (it->second->target.lock().get() == &here) {
       it = tasks.erase(it);
     } else {
       ++it;
@@ -109,7 +109,7 @@ void CancelScheduledAt(Location& here, SteadyPoint time) {
   std::unique_lock<std::mutex> lck(mtx);
   auto [a, b] = tasks.equal_range(time);
   for (auto it = a; it != b; ++it) {
-    if (it->second->target == &here) {
+    if (it->second->target.lock().get() == &here) {
       tasks.erase(it);
       break;
     }
@@ -121,7 +121,7 @@ void RescheduleAt(Location& here, SteadyPoint old_time, SteadyPoint new_time) {
   std::unique_lock<std::mutex> lck(mtx);
   auto [a, b] = tasks.equal_range(old_time);
   for (auto it = a; it != b; ++it) {
-    if (it->second->target == &here) {
+    if (it->second->target.lock().get() == &here) {
       tasks.erase(it);
       break;
     }
@@ -130,7 +130,7 @@ void RescheduleAt(Location& here, SteadyPoint old_time, SteadyPoint new_time) {
     cv.notify_all();
     TimerFinished(here, new_time);
   } else {
-    tasks.emplace(new_time, new TimerFinishedTask(&here, new_time));
+    tasks.emplace(new_time, new TimerFinishedTask(here.SharedPtr<Location>(), new_time));
     cv.notify_all();
   }
 }

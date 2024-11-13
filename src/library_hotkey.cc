@@ -175,14 +175,18 @@ vec4 main(in vec2 fragCoord) {
 //   }
 // }
 
-HotKey::HotKey()
-    : power_button(this),
-      ctrl_button(MakeKeyLabelWidget("Ctrl"), KeyColor(ctrl), kCtrlKeyWidth),
-      alt_button(MakeKeyLabelWidget("Alt"), KeyColor(alt), kAltKeyWidth),
-      shift_button(MakeKeyLabelWidget("Shift"), KeyColor(shift), kShiftKeyWidth),
-      windows_button(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth),
-      shortcut_button(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth) {
-  ctrl_button.activate = [this](gui::Pointer&) {
+HotKey::HotKey() {
+  power_button = std::make_shared<PowerButton>(this);
+  ctrl_button =
+      std::make_shared<KeyButton>(MakeKeyLabelWidget("Ctrl"), KeyColor(ctrl), kCtrlKeyWidth);
+  alt_button = std::make_shared<KeyButton>(MakeKeyLabelWidget("Alt"), KeyColor(alt), kAltKeyWidth);
+  shift_button =
+      std::make_shared<KeyButton>(MakeKeyLabelWidget("Shift"), KeyColor(shift), kShiftKeyWidth);
+  windows_button =
+      std::make_shared<KeyButton>(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth);
+  shortcut_button =
+      std::make_shared<KeyButton>(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth);
+  ctrl_button->activate = [this](gui::Pointer&) {
     bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
@@ -191,9 +195,9 @@ HotKey::HotKey()
     if (on) {
       On();
     }
-    ctrl_button.fg = KeyColor(ctrl);
+    ctrl_button->fg = KeyColor(ctrl);
   };
-  alt_button.activate = [this](gui::Pointer&) {
+  alt_button->activate = [this](gui::Pointer&) {
     bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
@@ -202,9 +206,9 @@ HotKey::HotKey()
     if (on) {
       On();
     }
-    alt_button.fg = KeyColor(alt);
+    alt_button->fg = KeyColor(alt);
   };
-  shift_button.activate = [this](gui::Pointer&) {
+  shift_button->activate = [this](gui::Pointer&) {
     bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
@@ -213,9 +217,9 @@ HotKey::HotKey()
     if (on) {
       On();
     }
-    shift_button.fg = KeyColor(shift);
+    shift_button->fg = KeyColor(shift);
   };
-  windows_button.activate = [this](gui::Pointer&) {
+  windows_button->activate = [this](gui::Pointer&) {
     bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
@@ -224,10 +228,10 @@ HotKey::HotKey()
     if (on) {
       On();
     }
-    windows_button.fg = KeyColor(windows);
+    windows_button->fg = KeyColor(windows);
   };
-  shortcut_button.SetLabel(ToStr(key));
-  shortcut_button.activate = [this](gui::Pointer& pointer) {
+  shortcut_button->SetLabel(ToStr(key));
+  shortcut_button->activate = [this](gui::Pointer& pointer) {
     if (hotkey_selector) {
       // Cancel HotKey selection.
       hotkey_selector->Release();  // This will also set itself to nullptr
@@ -237,8 +241,8 @@ HotKey::HotKey()
   };
 }
 string_view HotKey::Name() const { return "HotKey"; }
-std::unique_ptr<Object> HotKey::Clone() const {
-  auto ret = std::make_unique<HotKey>();
+std::shared_ptr<Object> HotKey::Clone() const {
+  auto ret = std::make_shared<HotKey>();
   ret->key = key;
   ret->ctrl = ctrl;
   ret->alt = alt;
@@ -348,9 +352,9 @@ animation::Phase HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.restore();
 
   if (hotkey_selector) {
-    shortcut_button.fg = kKeyGrabbingColor;
+    shortcut_button->fg = kKeyGrabbingColor;
   } else {
-    shortcut_button.fg = KeyColor(true);
+    shortcut_button->fg = KeyColor(true);
   }
 
   return DrawChildren(ctx);
@@ -360,8 +364,8 @@ SkPath HotKey::Shape(animation::Display*) const { return SkPath::RRect(kShapeRRe
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
-  Widget* arr[] = {&power_button, &ctrl_button,    &alt_button,
-                   &shift_button, &windows_button, &shortcut_button};
+  std::shared_ptr<Widget> arr[] = {power_button, ctrl_button,    alt_button,
+                                   shift_button, windows_button, shortcut_button};
   if (visitor(arr) == ControlFlow::Stop) {
     return ControlFlow::Stop;
   }
@@ -369,29 +373,29 @@ ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
 }
 
 SkMatrix HotKey::TransformToChild(const Widget& child, animation::Display*) const {
-  if (&child == &power_button) {
+  if (&child == power_button.get()) {
     return SkMatrix::Translate(
         -kWidth / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth,
         -kShapeRect.top + kFrameWidth + kMinimalTouchableSize - kBorderWidth);
   }
-  if (&child == &ctrl_button) {
+  if (&child == ctrl_button.get()) {
     return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing,
                                -kShapeRect.bottom - kFrameWidth - kKeySpacing);
   }
-  if (&child == &windows_button) {
+  if (&child == windows_button.get()) {
     return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing * 2 - kCtrlKeyWidth,
                                -kShapeRect.bottom - kFrameWidth - kKeySpacing);
   }
-  if (&child == &alt_button) {
+  if (&child == alt_button.get()) {
     return SkMatrix::Translate(
         kWidth / 2 - kFrameWidth - kKeySpacing * 3 - kCtrlKeyWidth - kSuperKeyWidth,
         -kShapeRect.bottom - kFrameWidth - kKeySpacing);
   }
-  if (&child == &shift_button) {
+  if (&child == shift_button.get()) {
     return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing,
                                -kShapeRect.bottom - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
   }
-  if (&child == &shortcut_button) {
+  if (&child == shortcut_button.get()) {
     return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing * 2 - kShiftKeyWidth,
                                -kShapeRect.bottom - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
   }
@@ -424,15 +428,15 @@ void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
   hotkey_selector->Release();
   // Maybe also set the modifiers from the key event?
   this->key = key.physical;
-  shortcut_button.SetLabel(ToStr(key.physical));
+  shortcut_button->SetLabel(ToStr(key.physical));
   if (on) {
     On();
   }
 }
 
 void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) {
-  if (here) {
-    ScheduleNext(*here);
+  if (auto h = here.lock()) {
+    ScheduleNext(*h);
   }
 }
 void HotKey::KeyGrabberKeyUp(gui::KeyGrab&) {}
@@ -496,11 +500,11 @@ void HotKey::DeserializeState(Location& l, Deserializer& d) {
     On();
   }
 
-  shortcut_button.SetLabel(ToStr(this->key));
-  ctrl_button.fg = KeyColor(ctrl);
-  alt_button.fg = KeyColor(alt);
-  shift_button.fg = KeyColor(shift);
-  windows_button.fg = KeyColor(windows);
+  shortcut_button->SetLabel(ToStr(this->key));
+  ctrl_button->fg = KeyColor(ctrl);
+  alt_button->fg = KeyColor(alt);
+  shift_button->fg = KeyColor(shift);
+  windows_button->fg = KeyColor(windows);
 
   if (!OK(status)) {
     l.ReportError(status.ToStr());

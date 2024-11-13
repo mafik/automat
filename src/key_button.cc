@@ -15,8 +15,8 @@ using namespace std;
 
 namespace automat::library {
 
-KeyButton::KeyButton(std::unique_ptr<Widget>&& child, SkColor color, float width)
-    : Button(std::move(child)), width(width), fg(color) {}
+KeyButton::KeyButton(std::shared_ptr<Widget> child, SkColor color, float width)
+    : Button(child), width(width), fg(color) {}
 
 void KeyButton::Activate(gui::Pointer& pointer) {
   if (activate) {
@@ -148,8 +148,8 @@ struct KeyLabelWidget : Widget, LabelMixin {
   }
 };
 
-std::unique_ptr<Widget> MakeKeyLabelWidget(StrView label) {
-  return std::make_unique<KeyLabelWidget>(label);
+std::shared_ptr<Widget> MakeKeyLabelWidget(StrView label) {
+  return std::make_shared<KeyLabelWidget>(label);
 }
 
 void KeyButton::SetLabel(maf::StrView new_label) {

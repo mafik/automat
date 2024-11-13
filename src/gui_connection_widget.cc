@@ -26,7 +26,7 @@ namespace automat::gui {
 
 struct DummyRunnable : Object, Runnable {
   LongRunning* OnRun(Location& here) override { return nullptr; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<DummyRunnable>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<DummyRunnable>(); }
 } kDummyRunnable;
 
 static bool IsArgumentOptical(Location& from, Argument& arg) {
@@ -68,9 +68,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
       animation::LinearApproach(prototype_alpha_target, ctx.DeltaT(), 2.f, anim->prototype_alpha);
   if (anim->radar_alpha >= 0.01f) {
     phase = animation::Animating;
-    gui::DisplayContext fromDisplayCtx = GuessDisplayContext(from, ctx.display);
-    fromDisplayCtx.path.erase(fromDisplayCtx.path.begin());  // remove the window
-    auto pos_dir = arg.Start(fromDisplayCtx);
+    auto pos_dir = arg.Start(*from.object, root_machine.get(), &ctx.display);
     SkPaint radius_paint;
     SkColor colors[] = {SkColorSetA(arg.tint, 0),
                         SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
@@ -155,7 +153,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
         });
   }
   if (anim->prototype_alpha >= 0.01f) {
-    auto* proto = from.object->ArgPrototype(arg);
+    auto proto = from.object->ArgPrototype(arg);
     auto proto_shape = proto->Shape(&ctx.display);
     Rect proto_bounds = proto_shape.getBounds();
     ctx.canvas.save();
@@ -185,23 +183,20 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
 
   // TODO: parent_machine is not necessarily correct.
   // For example when a location is being dragged around, or when there are nested machines.
-  Widget* parent_machine = root_machine;
+  Widget* parent_machine = root_machine.get();
 
-  auto fromDisplayCtx = GuessDisplayContext(from, display);
-  fromDisplayCtx.path.erase(fromDisplayCtx.path.begin());  // remove the window
-  auto pos_dir = arg.Start(fromDisplayCtx);
+  auto pos_dir = arg.Start(*from.object, parent_machine, &display);
 
   if ((to = arg.FindLocation(from))) {
     to_shape = to->object->Shape(nullptr);
     to->object->ConnectionPositions(to_points);
     Path target_path;
-    SkMatrix m = TransformUp(Path{parent_machine, to}, &ctx.display);
+    SkMatrix m = TransformUp(*to, parent_machine, &ctx.display);
     for (auto& vec_and_dir : to_points) {
       vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
     }
     to_shape.transform(m);
-    to_shape.transform(TransformDown(Path{parent_machine, (Widget*)&from}, &ctx.display),
-                       &to_shape_from_coords);
+    to_shape.transform(TransformDown(from, parent_machine, &ctx.display), &to_shape_from_coords);
   } else {
     if (manual_position) {
       to_points.emplace_back(Vec2AndDir{
@@ -223,7 +218,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     }
   }
 
-  auto transform_from_to_machine = TransformUp(Path{parent_machine, &from}, &ctx.display);
+  auto transform_from_to_machine = TransformUp(from, parent_machine, &ctx.display);
   from_shape.transform(transform_from_to_machine);
 
   // If one of the to_points is over from_shape, don't draw the cable
@@ -409,15 +404,12 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds(animation::Display* d) const
     }
     return bounds;
   } else {
-    Path from_path;
-    GuessPath(from, from_path);
-    from_path.erase(from_path.begin());  // remove the window
-    auto pos_dir = arg.Start(from_path, d);
+    auto pos_dir = arg.Start(*from.object, root_machine.get(), d);
     Vec<Vec2AndDir> to_points;  // machine coords
     if (auto to = arg.FindLocation(from)) {
       to->object->ConnectionPositions(to_points);
       Path target_path;
-      SkMatrix m = TransformUp(Path{root_machine, to}, d);
+      SkMatrix m = TransformUp(*to, root_machine.get(), d);
       for (auto& to_point : to_points) {
         to_point.pos = m.mapPoint(to_point.pos);
       }

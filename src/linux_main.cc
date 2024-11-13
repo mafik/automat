@@ -3,19 +3,25 @@
 #include "linux_main.hh"
 
 #include <include/core/SkBitmap.h>
+#include <include/core/SkDrawable.h>
 #include <include/core/SkGraphics.h>
+#include <include/core/SkPictureRecorder.h>
 #include <include/core/SkSurface.h>
+#include <include/gpu/ganesh/GrTypes.h>
 #include <xcb/xcb.h>
 #include <xcb/xinput.h>
 #include <xcb/xproto.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 
+#include "animation.hh"
 #include "audio.hh"
 #include "automat.hh"
+#include "base.hh"
 #include "format.hh"
 #include "keyboard.hh"
 #include "library.hh"  // IWYU pragma: keep
@@ -23,6 +29,7 @@
 #include "persistence.hh"
 #include "root.hh"
 #include "status.hh"
+#include "time.hh"
 #include "vk.hh"
 #include "window.hh"
 #include "x11.hh"
@@ -34,6 +41,7 @@
 // See http://who-t.blogspot.com/search/label/xi2 for XInput2 documentation.
 
 using namespace automat;
+using namespace std;
 
 constexpr bool kDebugWindowManager = false;
 
@@ -415,7 +423,413 @@ void CreateWindow(Status& status) {
 
 #undef WRAP
 
+// TODO: why are we crashing when an object is dropped?
+// TODO: why are we crashing at high zoom?
+// TODO: why is the text entry in Timer not re-rendered at higher zoom?
+// TODO: why invisible connection widgets have so large bounds?
+// TODO: why the icons are initially white?
+// -- at this point we should be back in the working state
+// TODO: lots of cleanups!
+//       - widgets should have pointers to their parents (remove "Paths")
+//       - remove redundancy between WidgetTree & Widget & DrawCache::Entry
+//       - the three phases of rendering should be put in sequence (locally)
+//         (record / Draw / Update) -> (render) -> (present / DrawCached / onDraw)
+//       - move frame packing & execution elsewhere
+// TODO: use correct bounds in SkPictureRecorder::beginRecording
+// TODO: render this using a job system
+
+struct RenderResult {
+  uint32_t id;
+  float render_time;
+};
+
+struct PackFrameRequest {
+  // Must be sorted by ID!
+  vector<RenderResult> render_results;
+};
+
+struct PackedFrame {
+  vector<ChoppyDrawable*> frame;
+  vector<ChoppyDrawable*> overflow;
+  animation::Phase animation_phase;
+};
+
+template <typename T, typename K, typename F>
+int FindSorted(const T& arr, K key, F key_fn) {
+  int lo = 0;
+  int hi = arr.size();
+  while (lo < hi) {
+    int mid = lo + (hi - lo) / 2;
+    K mid_key = key_fn(arr[mid]);
+    if (key < mid_key) {
+      hi = mid;
+    } else if (key > mid_key) {
+      lo = mid + 1;
+    } else {
+      return mid;
+    }
+  }
+  return -1;
+}
+
+void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
+  for (int i = 1; i < request.render_results.size(); ++i) {
+    if (request.render_results[i - 1].id >= request.render_results[i].id) {
+      ERROR << "Render results are not sorted by ID!";
+      return;
+    }
+  }
+
+  window->display.timer.Tick();
+  auto now = window->display.timer.steady_now;
+  auto window_bounds_px =
+      SkRect::MakeWH(round(window->size.width * window->display_pixels_per_meter),
+                     round(window->size.width * window->display_pixels_per_meter));
+
+  struct WidgetTree {
+    std::shared_ptr<Widget> widget;
+    DrawCache::Entry* entry;
+    bool packed = false;
+    bool overflowed = false;
+    bool intersects = false;
+    int parent;
+    int prev_job = -1;
+    int next_job = -1;
+    SkMatrix window_to_local;
+    SkMatrix local_to_window;  // Skia's "TotalMatrix".
+  };
+  vector<WidgetTree> tree;
+
+  auto GetLag = [now](WidgetTree& tree_entry) -> float {
+    return max(time::Duration(0), now - tree_entry.entry->invalidated).count();
+  };
+
+  auto GetRenderTime = [](WidgetTree& tree_entry) {
+    return isnanf(tree_entry.entry->draw_millis) ? 0 : tree_entry.entry->draw_millis / 1000;
+  };
+
+  {  // Step 1 - flatten the widget tree for analysis.
+    // Queue with (parent index, widget) pairs.
+    vector<pair<int, std::shared_ptr<Widget>>> q;
+    q.push_back(make_pair(0, window));
+    int i_parent;
+    Visitor visitor = [&](maf::Span<shared_ptr<Widget>> children) {
+      for (auto& child : children) {
+        q.push_back(make_pair(i_parent, child));
+      }
+      return ControlFlow::Continue;
+    };
+    while (!q.empty()) {
+      auto [i_parent_tmp, widget] = std::move(q.back());
+      i_parent = i_parent_tmp;
+      q.pop_back();
+
+      tree.push_back(WidgetTree{
+          .widget = widget,
+          .entry = nullptr,
+          .parent = i_parent,
+          .window_to_local = SkMatrix::I(),
+      });
+      int i_self = tree.size() - 1;
+
+      if (widget->parent == nullptr && i_self != i_parent) {
+        ERROR << "Widget " << widget->Name() << " has parent " << f("%p", widget->parent.get())
+              << " but should have " << tree[i_parent].widget->Name()
+              << f(" (%p)", tree[i_parent].widget.get());
+        widget->parent = tree[i_parent].widget;
+      }
+
+      auto& node = tree.back();
+      if (i_parent != i_self) {
+        node.window_to_local = tree[i_parent].window_to_local;
+        node.window_to_local.postConcat(
+            tree[i_parent].widget->TransformToChild(*widget, &window->display));
+      } else {
+        node.window_to_local.postScale(1 / DisplayPxPerMeter(), 1 / DisplayPxPerMeter());
+      }
+      (void)node.window_to_local.invert(&node.local_to_window);
+
+      optional<SkRect> local_bounds_opt = widget->TextureBounds(&window->display);
+      if (local_bounds_opt.has_value()) {
+        node.entry = &window->draw_cache[widget];
+        // Compute the bounds of the widget - in local & root coordinates
+        node.entry->local_bounds = *local_bounds_opt;
+        node.local_to_window.mapRect(&node.entry->root_bounds, node.entry->local_bounds);
+
+        // Clip the `root_bounds` to the window bounds;
+        if (node.entry->root_bounds.width() * node.entry->root_bounds.height() < 512 * 512) {
+          // Render small objects without clipping
+          node.intersects = SkRect::Intersects(node.entry->root_bounds, window_bounds_px);
+        } else {
+          // This mutates the `root_bounds` - they're clipped to `canvas_bounds`!
+          node.intersects = node.entry->root_bounds.intersect(window_bounds_px);
+        }
+
+        node.entry->root_bounds.roundOut(&node.entry->root_bounds_rounded);
+      } else {
+        node.intersects = true;
+      }
+
+      // Advance the parent to current widget & visit its children.
+      if (node.intersects) {
+        i_parent = tree.size() - 1;
+        widget->VisitChildren(visitor);
+      }
+    }
+  }
+
+  {  // Step 2 - update the cache entries for widgets rendered by the client
+    for (auto& tree_entry : tree) {
+      if (tree_entry.entry && tree_entry.entry->draw_time > time::SteadyPoint::min()) {
+        uint32_t id = tree_entry.entry->choppy_drawable.sk->getGenerationID();
+        int i = FindSorted(request.render_results, id, [](const RenderResult& t) { return t.id; });
+        if (i >= 0) {
+          auto& entry = *tree_entry.entry;
+          float draw_millis = request.render_results[i].render_time * 1000;
+          if (isnanf(entry.draw_millis)) {
+            entry.draw_millis = draw_millis;
+          } else {
+            entry.draw_millis = 0.9 * entry.draw_millis + 0.1 * draw_millis;
+          }
+
+          if (tree_entry.entry->draw_present) {
+            entry.presented_time = entry.draw_time;
+          } else {
+            // Find the parent that has a cache entry.
+            int parent_i = tree_entry.parent;
+            while (tree[parent_i].entry == nullptr) {
+              parent_i = tree[parent_i].parent;
+            }
+            tree[parent_i].entry->invalidated =
+                min(tree[parent_i].entry->invalidated, entry.draw_time);
+          }
+
+          entry.draw_time = time::SteadyPoint::min();
+          entry.draw_present = false;
+        }
+      }
+    }
+  }
+
+  // TODO: Maybe we should propagate the "animation_state == Animating"?
+
+  {  // Step 3 - create a list of render jobs for the updated widgets
+    int first_job = -1;
+    for (int i = 0; i < tree.size(); ++i) {
+      if (tree[i].entry == nullptr) {
+        continue;
+      }
+      auto& entry = *tree[i].entry;
+      // Widgets that are still being rendered shouldn't be scheduled again.
+      if (entry.draw_time != time::SteadyPoint::min()) {
+        continue;
+      }
+
+      bool same_scale = (tree[i].local_to_window.getScaleX() == entry.draw_matrix.getScaleX() &&
+                         tree[i].local_to_window.getScaleY() == entry.draw_matrix.getScaleY() &&
+                         tree[i].local_to_window.getSkewX() == entry.draw_matrix.getSkewX() &&
+                         tree[i].local_to_window.getSkewY() == entry.draw_matrix.getSkewY());
+
+      // Widgets that haven't been invalidated don't have to be re-rendered.
+      if (entry.invalidated == time::SteadyPoint::max() && same_scale) {
+        continue;
+      }
+
+      tree[i].next_job = first_job;
+      tree[i].prev_job = -1;
+      if (first_job != -1) {
+        tree[first_job].prev_job = i;
+      }
+      first_job = i;
+    }
+
+    float remaining_time = 1.0f / 60;
+
+    auto Pack = [&](int pack_i) {
+      float render_time = 0;
+      for (int i = pack_i; true; i = tree[i].parent) {
+        if (tree[i].packed) {
+          break;
+        }
+        if (tree[i].entry == nullptr) {
+          continue;
+        }
+        render_time += GetRenderTime(tree[i]);
+        tree[i].packed = true;
+        if (tree[i].prev_job != -1) {
+          tree[tree[i].prev_job].next_job = tree[i].next_job;
+        } else if (i == first_job) {
+          first_job = tree[i].next_job;
+        }
+        if (tree[i].next_job != -1) {
+          tree[tree[i].next_job].prev_job = tree[i].prev_job;
+        }
+        if (i == 0) {
+          break;
+        }
+      }
+      remaining_time -= render_time;
+    };
+
+    Pack(0);
+
+    while (first_job != -1) {
+      int best_i = -1;
+      float best_factor = -1;
+      float best_render_time = 0;
+      for (int i = first_job; i != -1; i = tree[i].next_job) {
+        float self_lag = GetLag(tree[i]);
+        float self_render_time = GetRenderTime(tree[i]);
+
+        float total_lag = self_lag;
+        float total_render_time = self_render_time;
+        bool ancestor_overflowed = false;
+
+        for (int i_parent = tree[i].parent; true; i_parent = tree[i_parent].parent) {
+          if (tree[i_parent].packed) {
+            break;
+          }
+          if (tree[i_parent].overflowed) {
+            ancestor_overflowed = true;
+            break;
+          }
+          if (tree[i_parent].entry) {
+            // Only count effect of widgets that participate in caching.
+            total_lag += GetLag(tree[i_parent]);
+            total_render_time += GetRenderTime(tree[i_parent]);
+          }
+          if (i_parent == 0) {
+            break;
+          }
+        }
+
+        total_render_time = max(total_render_time, 0.000001f);
+
+        if (ancestor_overflowed || total_render_time > remaining_time) {
+          tree[i].overflowed = true;
+          if (tree[i].prev_job != -1) {
+            tree[tree[i].prev_job].next_job = tree[i].next_job;
+          } else {
+            first_job = tree[i].next_job;
+          }
+          if (tree[i].next_job != -1) {
+            tree[tree[i].next_job].prev_job = tree[i].prev_job;
+          }
+        } else {
+          float factor = total_lag / total_render_time;
+          if (factor > best_factor) {
+            best_factor = factor;
+            best_i = i;
+            best_render_time = total_render_time;
+          }
+        }
+      }
+
+      if (best_i == -1) {
+        break;
+      }
+
+      // Pack this job
+      Pack(best_i);
+
+    }  // while (!jobs.empty())
+  }
+
+  {  // Step 3.5 - print the packing results for debugging
+    function<string(int, int)> FormatTree = [&](int index, int indent = 0) {
+      string str;
+      for (int i = 0; i < indent; ++i) {
+        str += " ";
+      }
+      str += tree[index].widget->Name();
+      if (tree[index].entry == nullptr) {
+        str += " (not cached)";
+      } else {
+        str += " lag=";
+        str += to_string(GetLag(tree[index]));
+        str += " render_time=";
+        str += to_string(GetRenderTime(tree[index]));
+        str += " local=";
+        str += Rect(tree[index].entry->local_bounds).ToStrMetric();
+        str += " root=";
+        str += Rect(tree[index].entry->root_bounds).ToStr();
+        if (tree[index].overflowed) {
+          str += " (overflowed)";
+        }
+        if (tree[index].packed) {
+          str += " (packed)";
+        }
+      }
+      str += "\n";
+      for (int i = index + 1; i < tree.size(); ++i) {
+        if (tree[i].parent == index) {
+          str += FormatTree(i, indent + 2);
+        }
+      }
+      return str;
+    };
+
+    static auto last_time = time::SteadyNow();
+    if (now - last_time > 10s) {  // print every 10 seconds
+      last_time = now;
+      LOG << FormatTree(0, 0);
+    }
+  }
+
+  // Step 4 - walk through the tree and record the draw commands into drawables.
+
+  for (int i = tree.size() - 1; i >= 0; --i) {
+    auto packed = tree[i].packed;
+    auto overflowed = tree[i].overflowed;
+    if (!packed && !overflowed) {
+      continue;
+    }
+    auto& entry = *tree[i].entry;
+    entry.draw_time = now;
+
+    SkMatrix& m = tree[i].local_to_window;
+
+    // This should really be updated only after the rendering is finished.
+    // It's ok for packed widgets, but overflowed widgets should update those properties only after
+    // the rendering finishes.
+    tree[i].window_to_local.mapRect(&entry.draw_bounds, SkRect::Make(entry.root_bounds_rounded));
+    entry.draw_matrix = tree[i].local_to_window;
+
+    SkPictureRecorder recorder;
+    SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
+    rec_canvas->setMatrix(m);
+    DrawContext ctx(window->display, *rec_canvas, window->draw_cache);
+    auto animation_phase = tree[i].widget->Draw(ctx);
+    if (animation_phase == animation::Finished) {
+      entry.invalidated = time::SteadyPoint::max();
+    } else {
+      entry.invalidated = now;
+    }
+
+    entry.recording = recorder.finishRecordingAsDrawable();
+    entry.draw_present = packed;
+    if (packed) {
+      pack.frame.push_back(&entry.choppy_drawable);
+    } else {
+      pack.overflow.push_back(&entry.choppy_drawable);
+    }
+  }
+}
+
 void Paint() {
+  static map<uint32_t, float> render_times;
+
+  PackFrameRequest frame_request;
+  for (auto& [id, render_time] : render_times) {
+    frame_request.render_results.push_back({id, render_time});
+  }
+  render_times.clear();
+
+  PackedFrame pack;
+  PackFrame(frame_request, pack);
+
+  // Render the PackedFrame
+
 #ifdef CPU_RENDERING
   auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(client_width, client_height));
 
@@ -429,13 +843,28 @@ void Paint() {
 #else
   SkCanvas& canvas = *vk::GetBackbufferCanvas();
 #endif
-  canvas.save();
-  canvas.translate(0, 0);
-  canvas.scale(DisplayPxPerMeter(), DisplayPxPerMeter());
-  if (window) {
-    window->Draw(canvas);
+
+  for (auto& drawable : pack.frame) {
+    // LOG << "Rendering drawable " << drawable->entry->path
+    //     << " root bounds=" << Rect(drawable->entry->root_bounds);
+    auto start_time = time::SteadyNow();
+    drawable->Render(canvas);
+    auto render_time = time::SteadyNow() - start_time;
+    render_times[drawable->sk->getGenerationID()] = render_time.count();
   }
-  canvas.restore();
+
+  for (auto& drawable : pack.overflow) {
+    // LOG << "Rendering (overflowed) drawable " << drawable->entry->path;
+    auto start_time = time::SteadyNow();
+    drawable->Render(canvas);
+    auto render_time = time::SteadyNow() - start_time;
+    render_times[drawable->sk->getGenerationID()] = render_time.count();
+  }
+
+  canvas.resetMatrix();
+  canvas.scale(DisplayPxPerMeter(), DisplayPxPerMeter());
+  canvas.drawDrawable(pack.frame.back()->sk.get());
+
 #ifdef CPU_RENDERING
   SkPixmap pixmap;
   if (!surface->peekPixels(&pixmap)) {
@@ -452,6 +881,8 @@ void Paint() {
 #else
   vk::Present();
 #endif
+  // Status status;
+  // StopAutomat(status);
 }
 
 void RenderLoop() {
@@ -510,9 +941,9 @@ void RenderLoop() {
 
           // This event may be sent when the window is moved. However sometimes it holds the wrong
           // coordinates. This happens for example on Ubuntu 22.04 - only events sent from the
-          // window manager are correct. Querying the position from geometry also returns the wrong
-          // position. The only way to get the correct on-screen position that was found to be
-          // reliable was to translate the point 0, 0 to root window coordinates.
+          // window manager are correct. Querying the position from geometry also returns the
+          // wrong position. The only way to get the correct on-screen position that was found to
+          // be reliable was to translate the point 0, 0 to root window coordinates.
           xcb_translate_coordinates_reply_t* reply = xcb_translate_coordinates_reply(
               connection, xcb_translate_coordinates(connection, xcb_window, screen->root, 0, 0),
               nullptr);
@@ -616,7 +1047,8 @@ void RenderLoop() {
                 }
                 // auto cookie =
                 //     xcb_grab_pointer(connection, 0, xcb_window,
-                //                      XCB_EVENT_MASK_BUTTON_RELEASE | XCB_EVENT_MASK_BUTTON_MOTION
+                //                      XCB_EVENT_MASK_BUTTON_RELEASE |
+                //                      XCB_EVENT_MASK_BUTTON_MOTION
                 //                      |
                 //                          XCB_EVENT_MASK_POINTER_MOTION_HINT,
                 //                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_WINDOW_NONE,
@@ -624,8 +1056,7 @@ void RenderLoop() {
                 // xcb_flush(connection);
                 // xcb_request_check(connection, cookie)
 
-                RunOnAutomatThread(
-                    [detail = ev->detail] { GetMouse().ButtonDown(EventDetailToButton(detail)); });
+                GetMouse().ButtonDown(EventDetailToButton(ev->detail));
                 break;
               }
               case XCB_INPUT_BUTTON_RELEASE: {
@@ -634,8 +1065,7 @@ void RenderLoop() {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
-                RunOnAutomatThread(
-                    [detail = ev->detail] { GetMouse().ButtonUp(EventDetailToButton(detail)); });
+                GetMouse().ButtonUp(EventDetailToButton(ev->detail));
                 break;
               }
               case XCB_INPUT_MOTION: {
@@ -660,8 +1090,7 @@ void RenderLoop() {
                             // http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
                             delta = (delta > 0 ? 1 : -1) * vertical_scroll->increment;
                           }
-                          RunOnAutomatThread(
-                              [=] { GetMouse().Wheel(-delta / vertical_scroll->increment); });
+                          GetMouse().Wheel(-delta / vertical_scroll->increment);
                         }
                         ++i_axis;
                       }
@@ -672,8 +1101,7 @@ void RenderLoop() {
                 }
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
-                RunOnAutomatThread(
-                    [=] { GetMouse().Move(ScreenToWindow(mouse_position_on_screen)); });
+                GetMouse().Move(ScreenToWindow(mouse_position_on_screen));
                 break;
               }
               case XCB_INPUT_ENTER: {
@@ -688,8 +1116,7 @@ void RenderLoop() {
                 xcb_input_enter_event_t* ev = (xcb_input_enter_event_t*)event;
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
-                RunOnAutomatThread(
-                    [=] { GetMouse().Move(ScreenToWindow(mouse_position_on_screen)); });
+                GetMouse().Move(ScreenToWindow(mouse_position_on_screen));
                 break;
               }
               case XCB_INPUT_LEAVE: {
@@ -835,6 +1262,17 @@ int LinuxMain(int argc, char* argv[]) {
   RenderLoop();
 
   StopRoot();
+
+  bool slow_widgets_found = false;
+  for (auto& entry : window->draw_cache.entries) {
+    if (entry->draw_millis > 1) {
+      if (!slow_widgets_found) {
+        LOG << "Slow widgets found:";
+      }
+      slow_widgets_found = true;
+      LOG << " - drawing of [" << entry->widget.lock() << "] took " << entry->draw_millis << " ms!";
+    }
+  }
 
   SaveState(*window, status);
   if (!OK(status)) {

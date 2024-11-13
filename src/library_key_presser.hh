@@ -11,19 +11,19 @@ struct KeyPresser;
 
 struct KeyPresserButton : KeyButton {
   KeyPresser* key_presser;
-  KeyPresserButton(KeyPresser* key_presser, std::unique_ptr<Widget>&& child, SkColor color,
+  KeyPresserButton(KeyPresser* key_presser, std::shared_ptr<Widget> parent, SkColor color,
                    float width)
-      : key_presser(key_presser), KeyButton(std::move(child), color, width) {}
+      : key_presser(key_presser), KeyButton(parent, color, width) {}
   using KeyButton::KeyButton;
   float PressRatio() const override;
 };
 
 struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
-  static const KeyPresser proto;
+  static std::shared_ptr<KeyPresser> proto;
 
   gui::AnsiKey key = gui::AnsiKey::F;
 
-  mutable KeyPresserButton shortcut_button;
+  mutable std::shared_ptr<KeyPresserButton> shortcut_button;
 
   // This is used to select the pressed key
   gui::KeyboardGrab* key_selector = nullptr;
@@ -33,7 +33,7 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
   KeyPresser();
   ~KeyPresser() override;
   string_view Name() const override;
-  std::unique_ptr<Object> Clone() const override;
+  std::shared_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const override;

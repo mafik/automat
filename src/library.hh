@@ -35,18 +35,18 @@ namespace automat {
 struct Integer : Object {
   int32_t i;
   Integer(int32_t i = 0) : i(i) {}
-  static const Integer proto;
+  static std::shared_ptr<Integer> proto;
   string_view Name() const override { return "Integer"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Integer>(i); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<Integer>(i); }
   string GetText() const override { return std::to_string(i); }
   void SetText(Location& error_context, string_view text) override { i = std::stoi(string(text)); }
 };
 
 struct Delete : Object, Runnable {
-  static const Delete proto;
+  static std::shared_ptr<Delete> proto;
   static Argument target_arg;
   string_view Name() const override { return "Delete"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Delete>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<Delete>(); }
   LongRunning* OnRun(Location& here) override {
     auto target = target_arg.GetLocation(here);
     if (!target.ok) {
@@ -58,11 +58,11 @@ struct Delete : Object, Runnable {
 };
 
 struct Set : Object, Runnable {
-  static const Set proto;
+  static std::shared_ptr<Set> proto;
   static Argument value_arg;
   static Argument target_arg;
   string_view Name() const override { return "Set"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Set>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<Set>(); }
   LongRunning* OnRun(Location& here) override {
     auto value = value_arg.GetObject(here);
     auto target = target_arg.GetLocation(here);
@@ -76,14 +76,14 @@ struct Set : Object, Runnable {
 };
 
 struct Date : Object {
-  static const Date proto;
+  static std::shared_ptr<Date> proto;
   int year;
   int month;
   int day;
   Date(int year = 0, int month = 0, int day = 0) : year(year), month(month), day(day) {}
   string_view Name() const override { return "Date"; }
-  std::unique_ptr<Object> Clone() const override {
-    return std::make_unique<Date>(year, month, day);
+  std::shared_ptr<Object> Clone() const override {
+    return std::make_shared<Date>(year, month, day);
   }
   string GetText() const override { return maf::f("%04d-%02d-%02d", year, month, day); }
   void SetText(Location& error_context, string_view text) override {
@@ -137,15 +137,15 @@ struct FakeTime {
 // 1. _Continuous_ timers - which reschedule their `Run` without any delay.
 // 2. _Lazy_ timers - which never `Run` but can be queried with `GetText`.
 struct Timer : Object, Runnable {
-  static const Timer proto;
+  static std::shared_ptr<Timer> proto;
   time::SteadyPoint start;
   time::SteadyPoint last_tick;
   FakeTime* fake_time = nullptr;
   string_view Name() const override { return "Timer"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto other = new Timer();
+  std::shared_ptr<Object> Clone() const override {
+    auto other = std::make_shared<Timer>();
     other->start = start;
-    return std::unique_ptr<Object>(other);
+    return other;
   }
   void ScheduleNextRun(Location& here) {
     using namespace std::chrono_literals;
@@ -187,10 +187,10 @@ struct Timer : Object, Runnable {
 };
 
 struct TimerReset : Object, Runnable {
-  static const TimerReset proto;
+  static std::shared_ptr<TimerReset> proto;
   static Argument timer_arg;
   string_view Name() const override { return "TimerReset"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<TimerReset>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<TimerReset>(); }
   LongRunning* OnRun(Location& here) override {
     auto timer = timer_arg.GetTyped<Timer>(here);
     if (!timer.ok) {
@@ -202,13 +202,13 @@ struct TimerReset : Object, Runnable {
 };
 
 struct EqualityTest : LiveObject {
-  static const EqualityTest proto;
+  static std::shared_ptr<EqualityTest> proto;
   static LiveArgument target_arg;
   bool state = true;
   EqualityTest() {}
   string_view Name() const override { return "Equality Test"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto other = std::make_unique<EqualityTest>();
+  std::shared_ptr<Object> Clone() const override {
+    auto other = std::make_shared<EqualityTest>();
     other->state = true;
     return other;
   }
@@ -232,13 +232,13 @@ struct EqualityTest : LiveObject {
 };
 
 struct LessThanTest : LiveObject {
-  static const LessThanTest proto;
+  static std::shared_ptr<LessThanTest> proto;
   static LiveArgument less_arg;
   static LiveArgument than_arg;
   bool state = true;
   LessThanTest() {}
   string_view Name() const override { return "Less Than Test"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<LessThanTest>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<LessThanTest>(); }
   string GetText() const override { return state ? "true" : "false"; }
   void Args(std::function<void(Argument&)> cb) override {
     cb(less_arg);
@@ -259,14 +259,14 @@ struct LessThanTest : LiveObject {
 };
 
 struct StartsWithTest : LiveObject {
-  static const StartsWithTest proto;
+  static std::shared_ptr<StartsWithTest> proto;
   static LiveArgument starts_arg;
   static LiveArgument with_arg;
   bool state = true;
   StartsWithTest() {}
   string_view Name() const override { return "Starts With Test"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto other = std::make_unique<StartsWithTest>();
+  std::shared_ptr<Object> Clone() const override {
+    auto other = std::make_shared<StartsWithTest>();
     other->state = state;
     return other;
   }
@@ -292,12 +292,12 @@ struct StartsWithTest : LiveObject {
 };
 
 struct AllTest : LiveObject {
-  static const AllTest proto;
+  static std::shared_ptr<AllTest> proto;
   static LiveArgument test_arg;
   bool state = true;
   AllTest() {}
   string_view Name() const override { return "All Test"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<AllTest>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<AllTest>(); }
   string GetText() const override { return state ? "true" : "false"; }
   void Args(std::function<void(Argument&)> cb) override { cb(test_arg); }
   void Updated(Location& here, Location& updated) override {
@@ -316,17 +316,17 @@ struct AllTest : LiveObject {
 };
 
 struct Switch : LiveObject {
-  static const Switch proto;
+  static std::shared_ptr<Switch> proto;
   static LiveArgument target_arg;
   LiveArgument case_arg = LiveArgument("case", Argument::kRequiresObject);
   string_view Name() const override { return "Switch"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Switch>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<Switch>(); }
   void Args(std::function<void(Argument&)> cb) override {
     cb(target_arg);
     cb(case_arg);
   }
   string GetText() const override {
-    auto case_ = case_arg.GetObject(*here);
+    auto case_ = case_arg.GetObject(*here.lock());
     if (!case_.ok) {
       return "";
     }
@@ -355,11 +355,11 @@ struct Switch : LiveObject {
 };
 
 struct ErrorReporter : LiveObject {
-  static const ErrorReporter proto;
+  static std::shared_ptr<ErrorReporter> proto;
   static LiveArgument test_arg;
   static LiveArgument message_arg;
   string_view Name() const override { return "Error Reporter"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<ErrorReporter>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<ErrorReporter>(); }
   void Args(std::function<void(Argument&)> cb) override {
     cb(test_arg);
     cb(message_arg);
@@ -383,27 +383,33 @@ struct ErrorReporter : LiveObject {
 };
 
 struct Parent : Pointer {
-  static const Parent proto;
+  static std::shared_ptr<Parent> proto;
   string_view Name() const override { return "Parent"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Parent>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<Parent>(); }
   void Args(std::function<void(Argument&)> cb) override {}
   Object* Next(Location& error_context) const override {
-    if (here && here->parent) {
-      return here->parent->object.get();
+    if (auto h = here.lock()) {
+      if (auto p = h->parent.lock()) {
+        return p->object.get();
+      }
     }
     return nullptr;
   }
-  void PutNext(Location& error_context, std::unique_ptr<Object> obj) override {
-    if (here && here->parent) {
-      here->parent->Put(std::move(obj));
-    } else {
-      auto err = error_context.ReportError("No parent to put to");
-      err->saved_object = std::move(obj);
+  void PutNext(Location& error_context, std::shared_ptr<Object> obj) override {
+    if (auto h = here.lock()) {
+      if (auto p = h->parent.lock()) {
+        p->Put(std::move(obj));
+        return;
+      }
     }
+    auto err = error_context.ReportError("No parent to put to");
+    err->saved_object = std::move(obj);
   }
-  std::unique_ptr<Object> TakeNext(Location& error_context) override {
-    if (here && here->parent) {
-      return here->parent->Take();
+  std::shared_ptr<Object> TakeNext(Location& error_context) override {
+    if (auto h = here.lock()) {
+      if (auto p = h->parent.lock()) {
+        return p->Take();
+      }
     }
     auto err = error_context.ReportError("No parent to take from");
     return nullptr;
@@ -411,11 +417,11 @@ struct Parent : Pointer {
 };
 
 struct HealthTest : Object {
-  static const HealthTest proto;
+  static std::shared_ptr<HealthTest> proto;
   static Argument target_arg;
   bool state = true;
   HealthTest() {}
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<HealthTest>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<HealthTest>(); }
   void UpdateState(Location* here) {
     auto target = target_arg.GetFinalLocation(*here);
     if (target.final_location) {
@@ -440,10 +446,10 @@ struct HealthTest : Object {
 };
 
 struct ErrorCleaner : Object {
-  static const ErrorCleaner proto;
+  static std::shared_ptr<ErrorCleaner> proto;
   static Argument target_arg;
   ErrorCleaner() {}
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<ErrorCleaner>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<ErrorCleaner>(); }
   void ObserveErrors(Location* here) {
     if (!here) {
       return;
@@ -465,17 +471,17 @@ struct ErrorCleaner : Object {
 
 struct AbstractList {
   virtual Error* GetAtIndex(int index, Object*& obj) = 0;
-  virtual Error* PutAtIndex(int index, bool overwrite, std::unique_ptr<Object> obj) = 0;
-  virtual Error* TakeAtIndex(int index, bool leave_null, std::unique_ptr<Object>& obj) = 0;
+  virtual Error* PutAtIndex(int index, bool overwrite, std::shared_ptr<Object> obj) = 0;
+  virtual Error* TakeAtIndex(int index, bool leave_null, std::shared_ptr<Object>& obj) = 0;
   virtual Error* GetSize(int& size) = 0;
 };
 
 struct Append : Object, Runnable {
-  static const Append proto;
+  static std::shared_ptr<Append> proto;
   static Argument to_arg;
   static Argument what_arg;
   string_view Name() const override { return "Append"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Append>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<Append>(); }
   LongRunning* OnRun(Location& here) override {
     auto to = to_arg.GetTyped<AbstractList>(here);
     if (!to.ok) {
@@ -502,12 +508,12 @@ struct Append : Object, Runnable {
 };
 
 struct List : Object, AbstractList {
-  static const List proto;
+  static std::shared_ptr<List> proto;
   Location* here = nullptr;
-  vector<unique_ptr<Object>> objects;
+  vector<std::shared_ptr<Object>> objects;
   string_view Name() const override { return "List"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto list = std::make_unique<List>();
+  std::shared_ptr<Object> Clone() const override {
+    auto list = std::make_shared<List>();
     for (auto& object : objects) {
       list->objects.emplace_back(object->Clone());
     }
@@ -521,7 +527,7 @@ struct List : Object, AbstractList {
     obj = objects[index].get();
     return nullptr;
   }
-  Error* PutAtIndex(int index, bool overwrite, std::unique_ptr<Object> obj) override {
+  Error* PutAtIndex(int index, bool overwrite, std::shared_ptr<Object> obj) override {
     if (index < 0 || (overwrite ? index >= objects.size() : index > objects.size())) {
       // TODO: save the object in the error - it shouldn't be destroyed!
       return here->ReportError("Index out of bounds.");
@@ -534,7 +540,7 @@ struct List : Object, AbstractList {
     here->ScheduleUpdate();
     return nullptr;
   }
-  Error* TakeAtIndex(int index, bool keep_null, std::unique_ptr<Object>& obj) override {
+  Error* TakeAtIndex(int index, bool keep_null, std::shared_ptr<Object>& obj) override {
     if (index < 0 || index >= objects.size()) {
       return here->ReportError("Index out of bounds.");
     }
@@ -558,7 +564,7 @@ struct Iterator {
 struct CurrentElement;
 struct Filter : LiveObject, Iterator, AbstractList, Runnable {
   enum class Phase { kSequential, kDone };
-  static const Filter proto;
+  static std::shared_ptr<Filter> proto;
   static LiveArgument list_arg;
   static LiveArgument element_arg;
   static LiveArgument test_arg;
@@ -567,8 +573,8 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
   vector<Object*> objects;
   vector<int> indices;
   string_view Name() const override { return "Filter"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto filter = std::make_unique<Filter>();
+  std::shared_ptr<Object> Clone() const override {
+    auto filter = std::make_shared<Filter>();
     filter->phase = Phase::kDone;
     filter->index = 0;
     return filter;
@@ -603,7 +609,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
     objects.clear();
     phase = Phase::kSequential;
     index = 0;
-    BeginNextIteration(*here);
+    BeginNextIteration(*here.lock());
   }
   void BeginNextIteration(Location& here) {
     int list_size = 0;
@@ -613,7 +619,11 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
     }
     list.typed->GetSize(list_size);
     if (index < list_size) {
-      NextGuard next_guard({&here.run_task});
+      vector<Task*> successors;
+      if (here.run_task) {
+        successors.emplace_back(here.run_task.get());
+      }
+      NextGuard next_guard(std::move(successors));
       auto element = element_arg.GetLocation(here);
       if (!element.ok) {
         return;
@@ -625,7 +635,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
   }
   // Iterator interface
   Object* GetCurrent() const override {
-    auto list = list_arg.GetTyped<AbstractList>(*here);
+    auto list = list_arg.GetTyped<AbstractList>(*here.lock());
     if (!list.ok) {
       return nullptr;
     }
@@ -646,26 +656,26 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
   // AbstractList interface
   Error* GetAtIndex(int index, Object*& obj) override {
     if (index < 0 || index >= objects.size()) {
-      return here->ReportError("Index out of bounds.");
+      return here.lock()->ReportError("Index out of bounds.");
     }
     obj = objects[index];
     return nullptr;
   }
-  Error* PutAtIndex(int index, bool overwrite, std::unique_ptr<Object> obj) override {
+  Error* PutAtIndex(int index, bool overwrite, std::shared_ptr<Object> obj) override {
     // Filter doesn't own the objects it contains, so it must pass them to its
     // parent list. In order to insert them at the right position in the parent
     // list, it must also know the mapping between filtered & unfiltered
     // indices. This is not yet implemented. NOTE: object dropped here!
-    return here->ReportError("Not implemented yet.");
+    return here.lock()->ReportError("Not implemented yet.");
   }
-  Error* TakeAtIndex(int index, bool leave_null, std::unique_ptr<Object>& obj) override {
+  Error* TakeAtIndex(int index, bool leave_null, std::shared_ptr<Object>& obj) override {
     if (index < 0 || index >= objects.size()) {
-      return here->ReportError("Index out of bounds.");
+      return here.lock()->ReportError("Index out of bounds.");
     }
     int orig_index = indices[index];
-    auto list = list_arg.GetTyped<AbstractList>(*here);
+    auto list = list_arg.GetTyped<AbstractList>(*here.lock());
     if (!list.ok) {
-      return here->GetError();
+      return here.lock()->GetError();
     }
     if (Error* err = list.typed->TakeAtIndex(orig_index, leave_null, obj)) {
       return err;
@@ -684,23 +694,23 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
 };
 
 struct CurrentElement : Pointer {
-  static const CurrentElement proto;
+  static std::shared_ptr<CurrentElement> proto;
   static LiveArgument of_arg;
   string_view Name() const override { return "Current Element"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<CurrentElement>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<CurrentElement>(); }
   void Args(std::function<void(Argument&)> cb) override { cb(of_arg); }
   Object* Next(Location& error_context) const override {
-    auto of = of_arg.GetTyped<Iterator>(*here);
+    auto of = of_arg.GetTyped<Iterator>(*here.lock());
     if (!of.ok) {
       return nullptr;
     }
     return of.typed->GetCurrent();
   }
-  void PutNext(Location& error_context, std::unique_ptr<Object> obj) override {
-    here->ReportError("Tried to put an object to Current Element but it's not possible.");
+  void PutNext(Location& error_context, std::shared_ptr<Object> obj) override {
+    here.lock()->ReportError("Tried to put an object to Current Element but it's not possible.");
   }
-  std::unique_ptr<Object> TakeNext(Location& error_context) override {
-    here->ReportError("Tried to take an object from Current Element but it's not possible.");
+  std::shared_ptr<Object> TakeNext(Location& error_context) override {
+    here.lock()->ReportError("Tried to take an object from Current Element but it's not possible.");
     return nullptr;
   }
 };
@@ -723,30 +733,30 @@ inline void Filter::Updated(Location& here, Location& updated) {
 //
 // The structure contains named fields and is here-descriptive.
 struct Complex : Object {
-  static const Complex proto;
-  std::unordered_map<std::string, unique_ptr<Object>> objects;
+  static std::shared_ptr<Complex> proto;
+  std::unordered_map<std::string, std::shared_ptr<Object>> objects;
   string_view Name() const override { return "Complex"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto c = new Complex();
+  std::shared_ptr<Object> Clone() const override {
+    auto c = std::make_shared<Complex>();
     for (auto& [name, obj] : objects) {
       c->objects.emplace(name, obj->Clone());
     }
-    return std::unique_ptr<Object>(c);
+    return c;
   }
 };
 
 struct ComplexField : Pointer {
-  static const ComplexField proto;
+  static std::shared_ptr<ComplexField> proto;
   static LiveArgument complex_arg;
   static LiveArgument label_arg;
   string_view Name() const override { return "Complex Field"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<ComplexField>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<ComplexField>(); }
   void Args(std::function<void(Argument&)> cb) override {
     cb(complex_arg);
     cb(label_arg);
   }
   Object* Next(Location& unused_error_context) const override {
-    auto [complex, label] = FollowComplex(*here);
+    auto [complex, label] = FollowComplex(*here.lock());
     if (complex == nullptr) {
       return nullptr;
     }
@@ -756,15 +766,15 @@ struct ComplexField : Pointer {
     }
     return it->second.get();
   }
-  void PutNext(Location& error_context, std::unique_ptr<Object> obj) override {
-    auto [complex, label] = FollowComplex(*here);
+  void PutNext(Location& error_context, std::shared_ptr<Object> obj) override {
+    auto [complex, label] = FollowComplex(*here.lock());
     if (complex == nullptr) {
       return;
     }
     complex->objects[label] = std::move(obj);
   }
-  std::unique_ptr<Object> TakeNext(Location& error_context) override {
-    auto [complex, label] = FollowComplex(*here);
+  std::shared_ptr<Object> TakeNext(Location& error_context) override {
+    auto [complex, label] = FollowComplex(*here.lock());
     auto it = complex->objects.find(label);
     if (it == complex->objects.end()) {
       return nullptr;
@@ -836,11 +846,11 @@ struct Text : LiveObject {
     }
     return chunks;
   }
-  static const Text proto;
+  static std::shared_ptr<Text> proto;
   static LiveArgument target_arg;
   string_view Name() const override { return "Text Editor"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto other = std::make_unique<Text>();
+  std::shared_ptr<Object> Clone() const override {
+    auto other = std::make_shared<Text>();
     other->chunks = chunks;
     return other;
   }
@@ -857,7 +867,7 @@ struct Text : LiveObject {
     for (const std::variant<string, RefChunk>& chunk : chunks) {
       std::visit(overloaded{[&](const string& text) { buffer += text; },
                             [&](const RefChunk& ref) {
-                              auto arg = ref.arg.GetObject(*here);
+                              auto arg = ref.arg.GetObject(*here.lock());
                               if (arg.ok) {
                                 buffer += arg.object->GetText();
                               } else {
@@ -874,8 +884,8 @@ struct Text : LiveObject {
     chunks.clear();
     chunks = Parse(new_text);
     // chunks.emplace_back(string(new_text));
-    if (here) {
-      auto target = target_arg.GetLocation(*here);
+    if (auto h = here.lock()) {
+      auto target = target_arg.GetLocation(*h);
       if (target.location) {
         target.location->SetText(new_text);
       }
@@ -891,11 +901,11 @@ struct Text : LiveObject {
 
 struct Button : Object, Runnable {
   string label;
-  static const Button proto;
+  static std::shared_ptr<Button> proto;
   static Argument enabled_arg;
   string_view Name() const override { return "Button"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto other = std::make_unique<Button>();
+  std::shared_ptr<Object> Clone() const override {
+    auto other = std::make_shared<Button>();
     other->label = label;
     return other;
   }
@@ -911,12 +921,12 @@ struct Button : Object, Runnable {
 };
 
 struct ComboBox : LiveObject {
-  static const ComboBox proto;
+  static std::shared_ptr<ComboBox> proto;
   static LiveArgument options_arg;
   Location* here = nullptr;
   Location* selected = nullptr;
   string_view Name() const override { return "Combo Box"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<ComboBox>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<ComboBox>(); }
   void Args(std::function<void(Argument&)> cb) override { cb(options_arg); }
   void Relocate(Location* here) override { this->here = here; }
   string GetText() const override { return selected->GetText(); }
@@ -941,13 +951,13 @@ struct ComboBox : LiveObject {
 };
 
 struct Slider : LiveObject {
-  static const Slider proto;
+  static std::shared_ptr<Slider> proto;
   static LiveArgument min_arg;
   static LiveArgument max_arg;
   double value = 0;
   string_view Name() const override { return "Slider"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto s = std::make_unique<Slider>();
+  std::shared_ptr<Object> Clone() const override {
+    auto s = std::make_shared<Slider>();
     s->value = value;
     return s;
   }
@@ -970,12 +980,12 @@ struct Slider : LiveObject {
   string GetText() const override { return std::to_string(value); }
   void SetText(Location& error_context, string_view new_text) override {
     double new_value = std::stod(string(new_text));
-    auto min = min_arg.GetLocation(*here);
+    auto min = min_arg.GetLocation(*here.lock());
     if (min.location) {
       double min_val = min.location->GetNumber();
       new_value = std::max(new_value, min_val);
     }
-    auto max = max_arg.GetLocation(*here);
+    auto max = max_arg.GetLocation(*here.lock());
     if (max.location) {
       double max_val = max.location->GetNumber();
       new_value = std::min(new_value, max_val);
@@ -985,10 +995,10 @@ struct Slider : LiveObject {
 };
 
 struct ProgressBar : library::Number {
-  static const ProgressBar proto;
+  static std::shared_ptr<ProgressBar> proto;
   string_view Name() const override { return "Progress Bar"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto bar = std::make_unique<ProgressBar>();
+  std::shared_ptr<Object> Clone() const override {
+    auto bar = std::make_shared<ProgressBar>();
     bar->value = value;
     return bar;
   }
@@ -997,12 +1007,12 @@ struct ProgressBar : library::Number {
 };
 
 struct ListView : Pointer {
-  static const ListView proto;
+  static std::shared_ptr<ListView> proto;
   static LiveArgument list_arg;
   int index = -1;
   string_view Name() const override { return "List View"; }
-  std::unique_ptr<Object> Clone() const override {
-    std::unique_ptr<Object> clone = std::make_unique<ListView>();
+  std::shared_ptr<Object> Clone() const override {
+    std::shared_ptr<Object> clone = std::make_shared<ListView>();
     dynamic_cast<ListView&>(*clone).index = index;
     return clone;
   }
@@ -1010,7 +1020,7 @@ struct ListView : Pointer {
   void Select(int new_index) {
     if (new_index != index) {
       index = new_index;
-      here->ScheduleUpdate();
+      here.lock()->ScheduleUpdate();
     }
   }
   Object* Next(Location& error_context) const override {
@@ -1030,7 +1040,7 @@ struct ListView : Pointer {
     }
     return obj;
   }
-  void PutNext(Location& error_context, std::unique_ptr<Object> obj) override {
+  void PutNext(Location& error_context, std::shared_ptr<Object> obj) override {
     auto list = list_arg.GetTyped<AbstractList>(error_context);
     if (!list.ok) {
       return;
@@ -1046,7 +1056,7 @@ struct ListView : Pointer {
       list.typed->PutAtIndex(index, false, std::move(obj));
     }
   }
-  std::unique_ptr<Object> TakeNext(Location& error_context) override {
+  std::shared_ptr<Object> TakeNext(Location& error_context) override {
     auto list = list_arg.GetTyped<AbstractList>(error_context);
     if (!list.ok) {
       return nullptr;
@@ -1054,7 +1064,7 @@ struct ListView : Pointer {
     int size = 0;
     list.typed->GetSize(size);
     if (index < 0 || index >= size) return nullptr;
-    std::unique_ptr<Object> obj;
+    std::shared_ptr<Object> obj;
     list.typed->TakeAtIndex(index, false, obj);
     if (index >= size) --index;
     return obj;
@@ -1082,11 +1092,11 @@ struct AlgebraContext : algebra::Context {
 };
 
 struct Blackboard : Object {
-  static const Blackboard proto;
-  unique_ptr<algebra::Statement> statement = nullptr;
+  static std::shared_ptr<Blackboard> proto;
+  std::unique_ptr<algebra::Statement> statement = nullptr;
   string_view Name() const override { return "Formula"; }
-  std::unique_ptr<Object> Clone() const override {
-    auto other = std::make_unique<Blackboard>();
+  std::shared_ptr<Object> Clone() const override {
+    auto other = std::make_shared<Blackboard>();
     if (statement) {
       other->statement = statement->Clone();
     }
@@ -1104,12 +1114,12 @@ struct Blackboard : Object {
 };
 
 struct BlackboardUpdater : LiveObject {
-  static const BlackboardUpdater proto;
-  std::unordered_map<string, unique_ptr<algebra::Expression>> formulas;
+  static std::shared_ptr<BlackboardUpdater> proto;
+  std::unordered_map<string, std::unique_ptr<algebra::Expression>> formulas;
   std::map<string, LiveArgument> independent_variable_args;
   static Argument const_arg;
 
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<BlackboardUpdater>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<BlackboardUpdater>(); }
   void Args(std::function<void(Argument&)> cb) override {
     for (auto& arg : independent_variable_args) {
       cb(arg.second);

@@ -41,7 +41,7 @@ namespace automat {
 
 constexpr float kFrameCornerRadius = 0.001;
 
-Location::Location(Location* parent) : parent(parent), run_button(this), run_task(this) {}
+Location::Location(std::weak_ptr<Location> parent) : parent(parent) {}
 
 bool Location::HasError() {
   if (error != nullptr) return true;
@@ -77,7 +77,7 @@ Object* Location::Follow() {
   return object.get();
 }
 
-void Location::Put(unique_ptr<Object> obj) {
+void Location::Put(shared_ptr<Object> obj) {
   if (object == nullptr) {
     object = std::move(obj);
     return;
@@ -89,7 +89,7 @@ void Location::Put(unique_ptr<Object> obj) {
   }
 }
 
-unique_ptr<Object> Location::Take() {
+shared_ptr<Object> Location::Take() {
   if (Pointer* ptr = object->AsPointer()) {
     return ptr->Take(*this);
   }
@@ -112,13 +112,20 @@ Connection* Location::ConnectTo(Location& other, Argument& arg,
   return c;
 }
 
-void Location::ScheduleRun() { run_task.Schedule(); }
-
-void Location::ScheduleLocalUpdate(Location& updated) {
-  (new UpdateTask(this, &updated))->Schedule();
+void Location::ScheduleRun() {
+  if (run_task == nullptr) {
+    run_task = make_unique<RunTask>(SharedPtr<Location>());
+  }
+  run_task->Schedule();
 }
 
-void Location::ScheduleErrored(Location& errored) { (new ErroredTask(this, &errored))->Schedule(); }
+void Location::ScheduleLocalUpdate(Location& updated) {
+  (new UpdateTask(SharedPtr<Location>(), updated.SharedPtr<Location>()))->Schedule();
+}
+
+void Location::ScheduleErrored(Location& errored) {
+  (new ErroredTask(SharedPtr<Location>(), errored.SharedPtr<Location>()))->Schedule();
+}
 
 SkPath Location::Shape(animation::Display*) const {
   if constexpr (false) {  // Gray box shape
@@ -132,9 +139,6 @@ SkPath Location::Shape(animation::Display*) const {
     }
     float outset = 0.001 - kBorderWidth / 2;
     SkRect bounds = object_bounds.makeOutset(outset, outset);
-    // expand the bounds to include the run button
-    SkPath run_button_shape = run_button.Shape(nullptr);
-    bounds.fTop -= run_button_shape.getBounds().height() + 0.001;
     return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
   }
   static SkPath empty_path = SkPath();
@@ -155,7 +159,7 @@ SkPath Location::FieldShape(Object& field) const {
 
 ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
   if (object) {
-    Widget* arr[] = {object.get()};
+    shared_ptr<Widget> arr[] = {object};
     if (visitor(arr) == ControlFlow::Stop) {
       return ControlFlow::Stop;
     }
@@ -348,8 +352,7 @@ void Location::Run() {
 
 Vec2AndDir Location::ArgStart(animation::Display* display, Argument& arg) {
   auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
-  gui::Path path = {ParentAs<Widget>(), (Widget*)this};
-  auto m = TransformUp(path, display);
+  auto m = ParentAs<Machine>()->TransformFromChild(*this, display);
   pos_dir.pos = m.mapPoint(pos_dir.pos);
   return pos_dir;
 }
@@ -403,7 +406,7 @@ Location::~Location() {
     long_running = nullptr;
   }
   // Location can only be destroyed by its parent so we don't have to do anything there.
-  parent = nullptr;
+  parent = {};
   while (not incoming.empty()) {
     delete *incoming.begin();
   }
@@ -426,22 +429,6 @@ Location::~Location() {
     no_scheduling.erase(this);
   }
   CancelScheduledAt(*this);
-  if (auto waiting_task = events.peek<Task>()) {
-    if (waiting_task->target == this) {
-      events.recv<Task>();  // drops the unique_ptr
-    }
-  }
-  for (int i = queue.size() - 1; i >= 0; --i) {
-    if (queue[i]->target == this) {
-      queue.erase(queue.begin() + i);
-    }
-  }
-  for (int i = global_successors.size() - 1; i >= 0; --i) {
-    if (global_successors[i]->target == this) {
-      global_successors.erase(global_successors.begin() + i);
-    }
-  }
-
   if (window) {
     for (int i = 0; i < window->connection_widgets.size(); ++i) {
       if (&window->connection_widgets[i]->from == this) {
@@ -450,32 +437,6 @@ Location::~Location() {
       }
     }
   }
-}
-
-// Fill the `out_path` with the chain of widgets, starting at `window` and ending at `object`.
-void GuessPath(Location& location, gui::Path& out_path) {
-  if (location.parent) {
-    GuessPath(*location.parent, out_path);
-  } else {
-    out_path.push_back(window.get());
-    // TODO: This is so wrong... Fix it somehow...
-    for (auto& pointer : gui::window->pointers) {
-      if (auto* action = pointer->action.get()) {
-        if (auto* action_widget = action->Widget()) {
-          out_path.push_back(action_widget);
-          break;
-        }
-      }
-    }
-  }
-  out_path.push_back(&location);
-  out_path.push_back(location.object.get());
-}
-
-gui::DisplayContext GuessDisplayContext(Location& location, animation::Display& display) {
-  DisplayContext ctx = {.display = display, .path = {}};
-  GuessPath(location, ctx.path);
-  return ctx;
 }
 
 void PositionBelow(Location& origin, Location& below) {
@@ -516,7 +477,7 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
   if (object == nullptr) {
     return animation::Finished;
   }
-  auto& anim = animation_state[ctx.display];
+  auto& anim = GetAnimationState(ctx.display);
   float target_elevation = 0;
   for (auto* window : windows) {
     for (auto* pointer : window->pointers) {
@@ -532,12 +493,13 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
   auto phase = anim.elevation.SineTowards(target_elevation, ctx.DeltaT(), 0.2);
   auto shape = object->Shape(&ctx.display);
   auto rect = shape.getBounds();
-  auto surface = ctx.canvas.getSurface();
+  auto window_size_px = ctx.display.window->size * ctx.display.window->display_pixels_per_meter;
   float s = ctx.canvas.getTotalMatrix().getScaleX();
   float min_elevation = 1_mm;
   SkPoint3 z_plane_params = {0, 0, (min_elevation + anim.elevation * 8_mm) * s};
-  SkPoint3 light_pos = {surface->width() / 2.f, (float)surface->height(), (float)surface->height()};
-  float light_radius = surface->width() / 2.f;
+  SkPoint3 light_pos = {window_size_px.width / 2.f, (float)window_size_px.height,
+                        (float)window_size_px.height};
+  float light_radius = window_size_px.width / 2.f;
   uint32_t flags =
       SkShadowFlags::kTransparentOccluder_ShadowFlag | SkShadowFlags::kConcaveBlurOnly_ShadowFlag;
   SkPaint shadow_paint;
@@ -557,7 +519,7 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
 }
 
 void Location::UpdateAutoconnectArgs() {
-  auto here_up = TransformUp(gui::Path{root_machine, this}, nullptr);
+  auto here_up = ParentAs<Machine>()->TransformFromChild(*this, nullptr);
   object->Args([&](Argument& arg) {
     if (arg.autoconnect_radius <= 0) {
       return;
@@ -573,7 +535,7 @@ void Location::UpdateAutoconnectArgs() {
       Vec<Vec2AndDir> to_positions;
       auto conn = *it;
       conn->to.object->ConnectionPositions(to_positions);
-      auto other_up = TransformUp(gui::Path{root_machine, &conn->to}, nullptr);
+      auto other_up = ParentAs<Machine>()->TransformFromChild(conn->to, nullptr);
       for (auto& to : to_positions) {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
@@ -622,7 +584,7 @@ void Location::UpdateAutoconnectArgs() {
     if (other.get() == this) {
       continue;
     }
-    auto other_up = TransformUp(gui::Path{root_machine, other.get()}, nullptr);
+    auto other_up = ParentAs<Machine>()->TransformFromChild(*other, nullptr);
     other->object->Args([&](Argument& arg) {
       if (arg.autoconnect_radius <= 0) {
         return;
@@ -642,7 +604,7 @@ void Location::UpdateAutoconnectArgs() {
         Vec<Vec2AndDir> to_positions;
         auto conn = *it;
         conn->to.object->ConnectionPositions(to_positions);
-        auto to_up = TransformUp(gui::Path{root_machine, &conn->to}, nullptr);
+        auto to_up = ParentAs<Machine>()->TransformFromChild(conn->to, nullptr);
         for (auto& to : to_positions) {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);

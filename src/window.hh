@@ -29,7 +29,7 @@ struct Pointer;
 struct WindowImpl;
 
 extern std::vector<Window*> windows;
-extern std::unique_ptr<Window> window;
+extern std::shared_ptr<Window> window;
 
 struct Window final : Widget, DropTarget {
   Window();
@@ -40,7 +40,7 @@ struct Window final : Widget, DropTarget {
 
   DropTarget* CanDrop() override { return this; }
   void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
-  void DropLocation(std::unique_ptr<Location>&&) override;
+  void DropLocation(std::shared_ptr<Location>&&) override;
 
   // Return the shape of the trash zone in the corner of the window (in Machine coordinates).
   SkPath TrashShape() const;
@@ -96,7 +96,7 @@ struct Window final : Widget, DropTarget {
   void Zoom(float delta) const;
   ControlFlow VisitChildren(Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override {
-    if (&child == &toolbar) {
+    if (&child == toolbar.get()) {
       return SkMatrix::Translate(-size.x / 2, 0);
     }
     return WindowToCanvas();
@@ -121,8 +121,8 @@ struct Window final : Widget, DropTarget {
       NAN;  // distance from the top edge of the screen (or bottom when negative)
 
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
-  library::Toolbar toolbar;
-  std::vector<std::unique_ptr<gui::ConnectionWidget>> connection_widgets;
+  std::shared_ptr<library::Toolbar> toolbar;
+  std::vector<std::shared_ptr<gui::ConnectionWidget>> connection_widgets;
 
   mutable float zoom = 1;
   mutable float zoom_target = 1;

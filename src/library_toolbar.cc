@@ -22,7 +22,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   if (btn != gui::PointerButton::Left) {
     return nullptr;
   }
-  auto matrix = TransformUp(pointer.path, &pointer.window.display);
+  auto matrix = TransformUp(*pointer.hover, nullptr, &pointer.window.display);
   auto loc = std::make_unique<Location>();
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
@@ -38,10 +38,10 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
 
 namespace automat::library {
 
-std::unique_ptr<Object> Toolbar::Clone() const {
-  auto new_toolbar = std::make_unique<Toolbar>();
+std::shared_ptr<Object> Toolbar::Clone() const {
+  auto new_toolbar = std::make_shared<Toolbar>();
   for (const auto& prototype : prototypes) {
-    new_toolbar->AddObjectPrototype(prototype.get());
+    new_toolbar->AddObjectPrototype(prototype);
   }
   return new_toolbar;
 }
@@ -66,7 +66,7 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
     width_targets[i] = buttons[i]->natural_width;
   }
 
-  auto my_transform = gui::TransformDown(dctx.path, &dctx.display);
+  auto my_transform = gui::TransformDown(*this, nullptr, &dctx.display);
 
   float width = CalculateWidth();
   int new_hovered_button = -1;
@@ -150,9 +150,9 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
 }
 
 ControlFlow Toolbar::VisitChildren(gui::Visitor& visitor) {
-  Widget* arr[buttons.size()];
+  std::shared_ptr<Widget> arr[buttons.size()];
   for (size_t i = 0; i < buttons.size(); ++i) {
-    arr[i] = buttons[i].get();
+    arr[i] = buttons[i];
   }
   if (auto ret = visitor(maf::SpanOfArr(arr, buttons.size())); ret == ControlFlow::Stop) {
     return ControlFlow::Stop;
@@ -160,9 +160,10 @@ ControlFlow Toolbar::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-void Toolbar::AddObjectPrototype(const Object* new_proto) {
+void Toolbar::AddObjectPrototype(const std::shared_ptr<Object>& new_proto) {
   prototypes.push_back(new_proto->Clone());
-  buttons.emplace_back(std::make_unique<gui::PrototypeButton>(prototypes.back().get()));
+  buttons.emplace_back(std::make_shared<gui::PrototypeButton>(prototypes.back()));
+  buttons.back()->parent = SharedPtr();
 }
 
 SkMatrix Toolbar::TransformToChild(const Widget& child, animation::Display* display) const {

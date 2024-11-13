@@ -18,15 +18,17 @@
 #include "touchpad.hh"
 
 using namespace maf;
+using namespace std;
 
 namespace automat::gui {
 
 std::vector<Window*> windows;
-std::unique_ptr<Window> window;
+std::shared_ptr<Window> window;
 
 Window::Window() {
+  toolbar = std::make_shared<library::Toolbar>();
   for (auto& proto : Prototypes()) {
-    toolbar.AddObjectPrototype(proto);
+    toolbar->AddObjectPrototype(proto);
   }
   windows.push_back(this);
   display.window = this;
@@ -44,7 +46,6 @@ constexpr float kTrashRadius = 3_cm;
 void Window::Draw(SkCanvas& canvas) {
   display.timer.Tick();
   gui::DrawContext draw_ctx(display, canvas, draw_cache);
-  draw_ctx.path.push_back(this);
   canvas.save();
   RunOnAutomatThreadSynchronous([&] { DrawCached(draw_ctx); });  // RunOnAutomatThreadSynchronous
   canvas.restore();
@@ -455,7 +456,7 @@ void Window::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fi
   }
 }
 
-void Window::DropLocation(std::unique_ptr<Location>&& location) {
+void Window::DropLocation(std::shared_ptr<Location>&& location) {
   // do nothing - location will be deleted by unique_ptr
   audio::Play(embedded::assets_SFX_trash_wav);
 }
@@ -481,6 +482,7 @@ static void UpdateConnectionWidgets(Window& window) {
         // Create a new widget.
         LOG << "Creating a ConnectionWidget for argument " << arg.name;
         window.connection_widgets.emplace_back(new gui::ConnectionWidget(*loc, arg));
+        window.connection_widgets.back()->parent = window.SharedPtr();
       });
     }
   }
@@ -488,7 +490,7 @@ static void UpdateConnectionWidgets(Window& window) {
 
 ControlFlow Window::VisitChildren(Visitor& visitor) {
   UpdateConnectionWidgets(*this);
-  Vec<Widget*> widgets;
+  Vec<shared_ptr<Widget>> widgets;
   widgets.reserve(2 + pointers.size() + connection_widgets.size());
 
   unordered_set<Location*> dragged_locations(pointers.size());
@@ -499,21 +501,21 @@ ControlFlow Window::VisitChildren(Visitor& visitor) {
       }
     }
   }
-  Vec<Widget*> connection_widgets_below;
+  Vec<shared_ptr<Widget>> connection_widgets_below;
   connection_widgets_below.reserve(connection_widgets.size());
   for (auto& it : connection_widgets) {
     if (it->manual_position.has_value() || dragged_locations.count(&it->from)) {
-      widgets.push_back(it.get());
+      widgets.push_back(it);
     } else {
-      connection_widgets_below.push_back(it.get());
+      connection_widgets_below.push_back(it);
     }
   }
   for (auto& pointer : pointers) {
     if (auto widget = pointer->GetWidget()) {
-      widgets.push_back(widget);
+      widgets.push_back(widget->SharedPtr<Widget>());
     }
   }
-  widgets.push_back(&toolbar);
+  widgets.push_back(toolbar);
   for (auto w : connection_widgets_below) {
     widgets.push_back(w);
   }

@@ -68,25 +68,32 @@ bool FlipFlopButton::Filled() const { return (flip_flop && flip_flop->current_st
 // SkColor FlipFlopButton::BackgroundColor() const { return "#eae9e8"_color; }
 FlipFlopButton::FlipFlopButton()
     : gui::ToggleButton(
-          make_unique<gui::ColoredButton>(
-              make_unique<YingYangIcon>(),
-              gui::ColoredButtonArgs{
-                  .fg = "#eae9e8"_color,
-                  .bg = "#1d1d1d"_color,
-                  .radius = kYingYangButtonRadius,
-                  .on_click = [this](gui::Pointer&) { this->flip_flop->here->ScheduleRun(); }}),
-          make_unique<gui::ColoredButton>(
-              make_unique<YingYangIcon>(),
-              gui::ColoredButtonArgs{
-                  .fg = "#1d1d1d"_color,
-                  .bg = "#eae9e8"_color,
-                  .radius = kYingYangButtonRadius,
-                  .on_click = [this](gui::Pointer&) { this->flip_flop->here->ScheduleRun(); }})) {}
+          make_shared<gui::ColoredButton>(
+              make_shared<YingYangIcon>(),
+              gui::ColoredButtonArgs{.fg = "#eae9e8"_color,
+                                     .bg = "#1d1d1d"_color,
+                                     .radius = kYingYangButtonRadius,
+                                     .on_click =
+                                         [this](gui::Pointer&) {
+                                           if (auto h = this->flip_flop->here.lock()) {
+                                             h->ScheduleRun();
+                                           }
+                                         }}),
+          make_shared<gui::ColoredButton>(
+              make_shared<YingYangIcon>(),
+              gui::ColoredButtonArgs{.fg = "#1d1d1d"_color,
+                                     .bg = "#eae9e8"_color,
+                                     .radius = kYingYangButtonRadius,
+                                     .on_click = [this](gui::Pointer&) {
+                                       if (auto h = this->flip_flop->here.lock()) {
+                                         h->ScheduleRun();
+                                       }
+                                     }})) {}
 
-FlipFlop::FlipFlop() { button.flip_flop = this; }
+FlipFlop::FlipFlop() : button(make_shared<FlipFlopButton>()) { button->flip_flop = this; }
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
-std::unique_ptr<Object> FlipFlop::Clone() const {
-  auto ret = std::make_unique<FlipFlop>();
+std::shared_ptr<Object> FlipFlop::Clone() const {
+  auto ret = std::make_shared<FlipFlop>();
   ret->current_state = current_state;
   return ret;
 }
@@ -157,13 +164,13 @@ Rect FlipFlopRect() {
 SkPath FlipFlop::Shape(animation::Display*) const { return SkPath::Rect(FlipFlopRect()); }
 
 ControlFlow FlipFlop::VisitChildren(gui::Visitor& visitor) {
-  Widget* children[] = {&button};
+  std::shared_ptr<Widget> children[] = {button};
   return visitor(children);
 }
 
 SkMatrix FlipFlop::TransformToChild(const Widget& child, animation::Display*) const {
   auto rect = FlipFlopRect();
-  if (&child == &button) {
+  if (&child == button.get()) {
     return SkMatrix::Translate(-rect.CenterX() + kYingYangButtonRadius,
                                -rect.CenterY() + kYingYangButtonRadius);
   }
@@ -172,7 +179,7 @@ SkMatrix FlipFlop::TransformToChild(const Widget& child, animation::Display*) co
 
 LongRunning* FlipFlop::OnRun(Location& here) {
   current_state = !current_state;
-  button.InvalidateDrawCache();
+  button->InvalidateDrawCache();
   flip_arg.InvalidateConnectionWidgets(here);
 
   if (current_state) {

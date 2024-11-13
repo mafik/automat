@@ -8,8 +8,8 @@
 
 namespace automat {
 
-extern Location root_location;
-extern Machine* root_machine;
+extern std::shared_ptr<Location> root_location;
+extern std::shared_ptr<Machine> root_machine;
 extern std::jthread automat_thread;
 extern std::atomic_bool automat_thread_finished;
 

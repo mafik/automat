@@ -83,9 +83,7 @@ void Caret::Release() {
 }
 
 SkPath Caret::MakeRootShape(animation::Display& display) const {
-  auto begin = find(widget_path.begin(), widget_path.end(), root_machine);
-  Path sub_path(begin, widget_path.end());
-  SkMatrix text_to_root = TransformUp(sub_path, &display);
+  SkMatrix text_to_root = TransformUp(*widget, root_machine.get(), &display);
   return shape.makeTransform(text_to_root);
 }
 
@@ -363,7 +361,6 @@ void Keyboard::KeyDown(Key key) {
     if (!OK(status)) {
       ERROR << "Error while stopping Automat: " << status;
     }
-
     return;
   }
   RunOnAutomatThread([=, this]() {
@@ -385,11 +382,12 @@ void Keyboard::KeyDown(Key key) {
       }
     } else {
       size_t i = static_cast<int>(key.physical);
-      if (actions[i] == nullptr && pointer && !pointer->path.empty()) {
-        int path_i = pointer->path.size() - 1;
+      if (actions[i] == nullptr && pointer && pointer->hover) {
+        auto current = pointer->hover;
         do {
-          actions[i] = pointer->path[path_i]->FindAction(*pointer, key.physical);
-        } while (actions[i] == nullptr && --path_i >= 0);
+          actions[i] = current->FindAction(*pointer, key.physical);
+          current = current->parent;
+        } while (actions[i] == nullptr && current);
         if (actions[i]) {
           actions[i]->Begin();
           pointer->UpdatePath();
@@ -694,7 +692,8 @@ CaretOwner::~CaretOwner() {
   }
 }
 
-Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const Path& widget_path, Vec2 position) {
+Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const std::shared_ptr<Widget>& widget,
+                              Vec2 position) {
   std::set<std::unique_ptr<Caret>>::iterator it;
   if (carets.empty()) {
     it = carets.emplace(std::make_unique<Caret>(*this)).first;
@@ -708,7 +707,7 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const Path& widget_path, 
         std::find(caret.owner->carets.begin(), caret.owner->carets.end(), &caret));
   }
   caret.owner = &caret_owner;
-  caret.widget_path = widget_path;
+  caret.widget = widget;
   caret.PlaceIBeam(position);
   caret_owner.carets.emplace_back(&caret);
   return caret;

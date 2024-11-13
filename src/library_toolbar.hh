@@ -11,23 +11,23 @@ namespace automat::gui {
 constexpr float kToolbarIconSize = gui::kMinimalTouchableSize * 2;
 
 struct PrototypeButton : Widget {
-  const Object* proto;
+  std::shared_ptr<Object> proto;
   float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
 
-  PrototypeButton(const Object* proto) : proto(proto) {
+  PrototypeButton(std::shared_ptr<Object>& proto) : proto(proto) {
     auto rect = proto->CoarseBounds(nullptr).rect;
     natural_width =
         std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());
     width.value = natural_width;
   }
 
-  animation::Phase Draw(DrawContext& ctx) const override { return proto->Draw(ctx); }
+  animation::Phase Draw(DrawContext& ctx) const override { return DrawChildren(ctx); }
   SkPath Shape(animation::Display*) const override { return proto->Shape(nullptr); }
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override {
-    Widget* arr[] = {const_cast<Object*>(proto)};
-    return visitor(arr);
+    const std::shared_ptr<Widget>& proto_widget = proto;
+    return visitor(maf::SpanOfArr(const_cast<std::shared_ptr<Widget>*>(&proto_widget), 1));
   }
 
   void PointerOver(Pointer& pointer, animation::Display&) override {
@@ -48,18 +48,18 @@ struct PrototypeButton : Widget {
 namespace automat::library {
 
 struct Toolbar : Object, gui::PointerMoveCallback {
-  static const Toolbar proto;
+  static std::shared_ptr<Toolbar> proto;
 
-  maf::Vec<unique_ptr<Object>> prototypes;
-  maf::Vec<unique_ptr<gui::PrototypeButton>> buttons;
+  maf::Vec<shared_ptr<Object>> prototypes;
+  maf::Vec<shared_ptr<gui::PrototypeButton>> buttons;
 
   animation::PerDisplay<int> hovered_button;
 
   // This will clone the provided object and add it to the toolbar.
-  void AddObjectPrototype(const Object*);
+  void AddObjectPrototype(const std::shared_ptr<Object>&);
 
   maf::StrView Name() const override;
-  std::unique_ptr<Object> Clone() const override;
+  std::shared_ptr<Object> Clone() const override;
   SkPath Shape(animation::Display* = nullptr) const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;

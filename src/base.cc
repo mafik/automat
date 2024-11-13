@@ -60,7 +60,7 @@ void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> 
   return nullptr;
 }
 
-const Machine Machine::proto;
+std::shared_ptr<Machine> Machine::proto = std::make_shared<Machine>();
 
 int log_executed_tasks = 0;
 
@@ -85,7 +85,7 @@ struct AutodeleteTaskWrapper : Task {
 
 // Dummy task to wake up the Automat Thread to process the shutdown.
 struct ShutdownTask : Task {
-  ShutdownTask() : Task(nullptr) {}
+  ShutdownTask() : Task(std::weak_ptr<Location>()) {}
   std::string Format() override { return "Shutdown"; }
   void Execute() override {}
 };
@@ -218,7 +218,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
             Str type;
             d.Get(type, status);
             if (OK(status)) {
-              const Object* proto = FindPrototype(type);
+              auto proto = FindPrototype(type);
               if (proto == nullptr) {
                 l.ReportError(f("Unknown object type: %s", type.c_str()));
                 // try to continue parsing
@@ -273,9 +273,9 @@ Machine::Machine() {}
 ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
   int i = 0;
   Size n = locations.size();
-  Widget* arr[n];
+  std::shared_ptr<Widget> arr[n];
   for (auto& it : locations) {
-    arr[i++] = it.get();
+    arr[i++] = it;
   }
   if (visitor(maf::SpanOfArr(arr, n)) == ControlFlow::Stop) {
     return ControlFlow::Stop;
@@ -372,19 +372,19 @@ void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* f
   position = Vec2(roundf(position.x * 1000) / 1000., roundf(position.y * 1000) / 1000.);
 }
 
-void Machine::DropLocation(std::unique_ptr<Location>&& l) {
+void Machine::DropLocation(std::shared_ptr<Location>&& l) {
   l->parent = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
   InvalidateDrawCache();
 }
 
-std::unique_ptr<Location> Machine::Extract(Location& location) {
+std::shared_ptr<Location> Machine::Extract(Location& location) {
   auto it =
       std::find_if(locations.begin(), locations.end(),
-                   [&location](const unique_ptr<Location>& l) { return l.get() == &location; });
+                   [&location](const shared_ptr<Location>& l) { return l.get() == &location; });
   if (it != locations.end()) {
-    std::unique_ptr<Location> result = std::move(*it);
+    auto result = std::move(*it);
     locations.erase(it);
     for (int i = 0; i < front.size(); ++i) {
       if (front[i] == result.get()) {

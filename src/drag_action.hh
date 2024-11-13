@@ -25,30 +25,37 @@ struct DropTarget {
   // When a location is being dragged around, its still owned by its original Machine. Only when
   // this method is called, the location may be re-parented into the new drop target.
   // The drop target is responsible for re-parenting the location!
-  virtual void DropLocation(std::unique_ptr<Location>&&) = 0;
+  virtual void DropLocation(std::shared_ptr<Location>&&) = 0;
 };
 }  // namespace gui
 
-struct DragLocationAction : Action, gui::Widget {
+struct DragLocationAction;
+
+struct DragLocationWidget : gui::Widget {
+  DragLocationAction& action;
+  DragLocationWidget(DragLocationAction& action) : action(action) {}
+  SkPath Shape(animation::Display*) const override;
+  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  SkMatrix TransformToChild(const gui::Widget& child, animation::Display* display) const override;
+  maf::Optional<Rect> TextureBounds(animation::Display*) const override { return std::nullopt; }
+};
+
+struct DragLocationAction : Action {
   Vec2 contact_point;          // in the coordinate space of the dragged Object
   Vec2 last_position;          // root machine coordinates
   Vec2 current_position;       // root machine coordinates
   Vec2 last_snapped_position;  // root machine coordinates
   time::SteadyPoint last_update;
-  std::unique_ptr<Location> location;
+  std::shared_ptr<Location> location;
+  std::shared_ptr<DragLocationWidget> widget;
 
-  DragLocationAction(gui::Pointer&, std::unique_ptr<Location>&&);
+  DragLocationAction(gui::Pointer&, std::shared_ptr<Location>&&);
   ~DragLocationAction() override;
-
-  SkPath Shape(animation::Display*) const override;
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
-  SkMatrix TransformToChild(const gui::Widget& child, animation::Display* display) const override;
-  maf::Optional<Rect> TextureBounds(animation::Display*) const override { return std::nullopt; }
 
   void Begin() override;
   void Update() override;
   void End() override;
-  gui::Widget* Widget() override { return this; }
+  gui::Widget* Widget() override { return widget.get(); }
 };
 
 }  // namespace automat

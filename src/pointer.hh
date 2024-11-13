@@ -74,7 +74,9 @@ struct Pointer final {
   maf::Vec<PointerMoveCallback*> move_callbacks;
 
   std::unique_ptr<Action> action;
-  Path path;
+  std::shared_ptr<Widget> hover;
+
+  maf::Vec<std::weak_ptr<Widget>> path;
 };
 
 }  // namespace automat::gui

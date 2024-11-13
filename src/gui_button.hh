@@ -26,9 +26,9 @@ struct Button : Widget {
 
   animation::PerDisplay<AnimationState> animation_state_ptr;
   int press_action_count = 0;
-  std::unique_ptr<Widget> child;
+  std::shared_ptr<Widget> child;
 
-  Button(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
+  Button(std::shared_ptr<Widget> child) : child(child) {}
   void PointerOver(Pointer&, animation::Display&) override;
   void PointerLeave(Pointer&, animation::Display&) override;
   animation::Phase PreDraw(DrawContext& ctx) const override;
@@ -50,8 +50,7 @@ struct Button : Widget {
   SkRect ChildBounds() const;
 
   ControlFlow VisitChildren(Visitor& visitor) override {
-    Widget* children[] = {child.get()};
-    return visitor(children);
+    return visitor(maf::SpanOfArr(&child, 1));
   }
 
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
@@ -70,18 +69,14 @@ struct ColoredButton : Button {
   float radius;
   std::function<void(gui::Pointer&)> on_click;
 
-  ColoredButton(std::unique_ptr<Widget>&& child, ColoredButtonArgs args = {})
-      : Button(std::move(child)),
-        fg(args.fg),
-        bg(args.bg),
-        radius(args.radius),
-        on_click(args.on_click) {}
+  ColoredButton(std::shared_ptr<Widget> child, ColoredButtonArgs args = {})
+      : Button(child), fg(args.fg), bg(args.bg), radius(args.radius), on_click(args.on_click) {}
 
   ColoredButton(const char* svg_path, ColoredButtonArgs args = {})
       : ColoredButton(MakeShapeWidget(svg_path, SK_ColorWHITE), args) {}
 
   ColoredButton(SkPath path, ColoredButtonArgs args = {})
-      : ColoredButton(std::make_unique<ShapeWidget>(path), args) {}
+      : ColoredButton(std::make_shared<ShapeWidget>(path), args) {}
 
   SkColor ForegroundColor(DrawContext&) const override { return fg; }
   SkColor BackgroundColor() const override { return bg; }
@@ -97,24 +92,23 @@ struct ColoredButton : Button {
 };
 
 struct ToggleButton : Widget {
-  std::unique_ptr<Button> on;
-  std::unique_ptr<Button> off;
+  std::shared_ptr<Button> on;
+  std::shared_ptr<Button> off;
 
   animation::PerDisplay<float> filling_ptr;
 
-  ToggleButton(std::unique_ptr<Button>&& child_on, std::unique_ptr<Button>&& child_off)
-      : on(std::move(child_on)), off(std::move(child_off)) {}
+  ToggleButton(std::shared_ptr<Button> on, std::shared_ptr<Button> off) : on(on), off(off) {}
 
   ControlFlow VisitChildren(Visitor& visitor) override {
-    Widget* children[] = {OnWidget(), off.get()};
+    std::shared_ptr<Widget> children[] = {OnWidget(), off};
     return visitor(children);
   }
   ControlFlow PointerVisitChildren(Visitor& visitor) override {
-    Widget* children[] = {Filled() ? OnWidget() : off.get()};
+    std::shared_ptr<Widget> children[] = {Filled() ? OnWidget() : off};
     return visitor(children);
   }
 
-  virtual Button* OnWidget() const { return on.get(); }
+  virtual std::shared_ptr<Button>& OnWidget() { return on; }
   animation::Phase PreDrawChildren(DrawContext& ctx) const override;
   animation::Phase Draw(DrawContext&) const override;
   animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const override;

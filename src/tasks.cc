@@ -10,14 +10,15 @@ using namespace maf;
 
 namespace automat {
 
-Task::Task(Location* target) : target(target), predecessors(), successors(global_successors) {
+Task::Task(std::weak_ptr<Location> target)
+    : target(target), predecessors(), successors(global_successors) {
   for (Task* successor : successors) {
     successor->predecessors.push_back(this);
   }
 }
 
 void Task::Schedule() {
-  if (NoScheduling(target)) {
+  if (NoScheduling(target.lock().get())) {
     return;
   }
   if (log_executed_tasks) {
@@ -57,9 +58,17 @@ void Task::PostExecute() {
   }
 }
 
+std::string Task::TargetName() {
+  if (auto s = target.lock()) {
+    return s->ToStr();
+  } else {
+    return "Invalid";
+  }
+}
+
 std::string Task::Format() { return "Task()"; }
 
-std::string RunTask::Format() { return f("RunTask(%s)", target->ToStr().c_str()); }
+std::string RunTask::Format() { return f("RunTask(%s)", TargetName().c_str()); }
 
 void ScheduleNext(Location& source) {
   audio::Play(source.object->NextSound());
@@ -75,46 +84,62 @@ void ScheduleNext(Location& source) {
 
 void RunTask::Execute() {
   PreExecute();
-  target->Run();
+  if (auto s = target.lock()) {
+    s->Run();
+  }
   PostExecute();
 }
 
-std::string CancelTask::Format() { return f("CancelTask(%s)", target->ToStr().c_str()); }
+std::string CancelTask::Format() { return f("CancelTask(%s)", TargetName().c_str()); }
 
 void CancelTask::Execute() {
-  if (target->long_running) {
-    target->long_running->Cancel();
-    target->long_running = nullptr;
+  if (auto s = target.lock()) {
+    if (s->long_running) {
+      s->long_running->Cancel();
+      s->long_running = nullptr;
+    }
   }
   delete this;
 }
 
 std::string UpdateTask::Format() {
-  return f("UpdateTask(%s, %s)", target->ToStr().c_str(), updated->ToStr().c_str());
+  std::string updated_str = updated.lock() ? updated.lock()->ToStr() : "Invalid";
+  return f("UpdateTask(%s, %s)", TargetName().c_str(), updated_str.c_str());
 }
 
 void UpdateTask::Execute() {
   PreExecute();
-  target->Updated(*updated);
+  if (auto t = target.lock()) {
+    if (auto u = updated.lock()) {
+      t->Updated(*u);
+    }
+  }
   PostExecute();
   delete this;
 }
 
-std::string FunctionTask::Format() { return f("FunctionTask(%s)", target->ToStr().c_str()); }
+std::string FunctionTask::Format() { return f("FunctionTask(%s)", TargetName().c_str()); }
 
 void FunctionTask::Execute() {
   PreExecute();
-  function(*target);
+  if (auto t = target.lock()) {
+    function(*t);
+  }
   PostExecute();
 }
 
 std::string ErroredTask::Format() {
-  return f("ErroredTask(%s, %s)", target->ToStr().c_str(), errored->ToStr().c_str());
+  std::string errored_str = errored.lock() ? errored.lock()->ToStr() : "Invalid";
+  return f("ErroredTask(%s, %s)", TargetName().c_str(), errored_str.c_str());
 }
 
 void ErroredTask::Execute() {
   PreExecute();
-  target->Errored(*errored);
+  if (auto t = target.lock()) {
+    if (auto e = errored.lock()) {
+      t->Errored(*e);
+    }
+  }
   PostExecute();
   delete this;
 }

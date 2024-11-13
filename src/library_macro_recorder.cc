@@ -70,7 +70,7 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
   return dom;
 }
 
-MacroRecorder::MacroRecorder() : record_button(this) {}
+MacroRecorder::MacroRecorder() : record_button(make_shared<GlassRunButton>(this)) {}
 MacroRecorder::~MacroRecorder() {
   if (keylogging) {
     keylogging->Release();
@@ -91,16 +91,16 @@ Argument timeline_arg = []() {
 }();
 
 void MacroRecorder::Args(std::function<void(Argument&)> cb) { cb(timeline_arg); }
-const Object* MacroRecorder::ArgPrototype(const Argument& arg) {
+std::shared_ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
   if (&arg == &timeline_arg) {
-    return &Timeline::proto;
+    return Timeline::proto;
   }
   return nullptr;
 }
 
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
-std::unique_ptr<Object> MacroRecorder::Clone() const {
-  auto clone = std::make_unique<MacroRecorder>();
+std::shared_ptr<Object> MacroRecorder::Clone() const {
+  auto clone = std::make_shared<MacroRecorder>();
   clone->animation_state_ptr = animation_state_ptr;
   for (auto& anim : clone->animation_state_ptr) {
     anim.pointers_over = 0;
@@ -137,9 +137,9 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
   {  // Draw the eyes
     auto sharingan = SharinganColor();
 
-    auto local_to_window = TransformUp(dctx.path, &dctx.display);
+    auto local_to_window = TransformUp(*this, nullptr, &dctx.display);
 
-    auto top_window = (Window*)dctx.path[0];
+    auto top_window = dctx.display.window;
 
     auto main_pointer_screen = GetMainPointerScreenPos();
 
@@ -239,13 +239,13 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
-  Timeline* timeline = timeline_arg.FindObject<Timeline>(*macro_recorder.here);
+  Timeline* timeline = timeline_arg.FindObject<Timeline>(*macro_recorder.here.lock());
   return timeline;
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
   Timeline* timeline = timeline_arg.FindObject<Timeline>(
-      *macro_recorder.here, {.if_missing = Argument::IfMissing::CreateFromPrototype});
+      *macro_recorder.here.lock(), {.if_missing = Argument::IfMissing::CreateFromPrototype});
   assert(timeline);
   if (macro_recorder.keylogging && timeline->state != Timeline::State::kRecording) {
     timeline->BeginRecording();
@@ -290,7 +290,7 @@ void MacroRecorder::Cancel() {
 }
 
 static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down) {
-  auto machine = macro_recorder.here->ParentAs<Machine>();
+  auto machine = macro_recorder.here.lock()->ParentAs<Machine>();
   if (machine == nullptr) {
     FATAL << "MacroRecorder must be a child of a Machine";
     return;
@@ -325,7 +325,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     key_presser->SetKey(key);
     Rect key_presser_shape = key_presser_loc.object->Shape(nullptr).getBounds();
     Argument& track_arg = *timeline->track_args.back();
-    Vec2AndDir arg_start = timeline->here->ArgStart(nullptr, track_arg);
+    Vec2AndDir arg_start = timeline->here.lock()->ArgStart(nullptr, track_arg);
 
     // Pick the position that allows the cable to come in most horizontally (left to right).
     Vec2 best_connector_pos = key_presser_shape.TopCenter();
@@ -340,8 +340,8 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     }
 
     key_presser_loc.position = arg_start.pos + Vec2(3_cm, 0) - best_connector_pos;
-    AnimateGrowFrom(*macro_recorder.here, key_presser_loc);
-    timeline->here->ConnectTo(key_presser_loc, track_arg);
+    AnimateGrowFrom(*macro_recorder.here.lock(), key_presser_loc);
+    timeline->here.lock()->ConnectTo(key_presser_loc, track_arg);
   }
 
   // Append the current timestamp to that track
@@ -478,16 +478,16 @@ void MacroRecorder::KeyloggerKeyDown(gui::Key key) { RecordKeyEvent(*this, key.p
 void MacroRecorder::KeyloggerKeyUp(gui::Key key) { RecordKeyEvent(*this, key.physical, false); }
 
 SkMatrix MacroRecorder::TransformToChild(const Widget& child, animation::Display*) const {
-  if (&child == &record_button) {
+  if (&child == record_button.get()) {
     return SkMatrix::Translate(-17.5_mm, -3.2_mm);
   }
   return SkMatrix::I();
 }
 bool MacroRecorder::IsOn() const { return keylogging != nullptr; }
-void MacroRecorder::On() { here->long_running = OnRun(*here); }
+void MacroRecorder::On() { here.lock()->long_running = OnRun(*here.lock()); }
 void MacroRecorder::Off() {
   Cancel();
-  here->long_running = nullptr;
+  here.lock()->long_running = nullptr;
 }
 void MacroRecorder::PointerOver(gui::Pointer& p, animation::Display& d) {
   animation_state_ptr[d].pointers_over++;
@@ -518,8 +518,8 @@ static ConnectionWidget* FindConnectionWidget(Location& here, Argument& arg) {
 void GlassRunButton::PointerOver(gui::Pointer& p, animation::Display& display) {
   ToggleButton::PointerOver(p, display);
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
-  if (macro_recorder->here) {
-    if (auto connection_widget = FindConnectionWidget(*macro_recorder->here, timeline_arg)) {
+  if (auto h = macro_recorder->here.lock()) {
+    if (auto connection_widget = FindConnectionWidget(*h, timeline_arg)) {
       connection_widget->animation_state[display].prototype_alpha_target = 1;
     }
   }
@@ -528,8 +528,8 @@ void GlassRunButton::PointerOver(gui::Pointer& p, animation::Display& display) {
 void GlassRunButton::PointerLeave(gui::Pointer& p, animation::Display& display) {
   ToggleButton::PointerLeave(p, display);
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
-  if (macro_recorder->here) {
-    if (auto connection_widget = FindConnectionWidget(*macro_recorder->here, timeline_arg)) {
+  if (auto h = macro_recorder->here.lock()) {
+    if (auto connection_widget = FindConnectionWidget(*h, timeline_arg)) {
       connection_widget->animation_state[display].prototype_alpha_target = 0;
     }
   }
@@ -562,7 +562,7 @@ void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
         if (value) {
           l.ScheduleRun();
         } else {
-          queue.push_back(new CancelTask(&l));
+          queue.push_back(new CancelTask(l.SharedPtr<Location>()));
         }
       }
     }

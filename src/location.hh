@@ -47,7 +47,7 @@ struct ObjectAnimationState {
 //
 // Implementations of this interface would typically extend it with
 // container-specific functions.
-struct Location : gui::Widget {
+struct Location : public gui::Widget {
   constexpr static float kPositionSpringPeriod = 0.2s .count();
   constexpr static float kScaleSpringPeriod = 0.3s .count();
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
@@ -59,13 +59,12 @@ struct Location : gui::Widget {
 
   animation::PerDisplay<ObjectAnimationState> animation_state;
 
-  Location* parent;
+  std::weak_ptr<Location> parent;
 
-  std::unique_ptr<Object> object;
+  std::shared_ptr<Object> object;
 
   // Name of this Location.
   std::string name;
-  gui::RunButton run_button;
 
   Vec2 position = {0, 0};
   float scale = 1.f;
@@ -83,10 +82,12 @@ struct Location : gui::Widget {
 
   time::SteadyPoint last_finished;
 
-  RunTask run_task;
+  // Retained to make it possible to check if the task is scheduled & cancel it.
+  // Initialized lazily (may be nullptr).
+  std::unique_ptr<RunTask> run_task;
   LongRunning* long_running = nullptr;
 
-  Location(Location* parent = nullptr);
+  Location(std::weak_ptr<Location> parent = {});
   ~Location();
 
   std::string_view Name() const override {
@@ -97,21 +98,21 @@ struct Location : gui::Widget {
     }
   }
 
-  std::unique_ptr<Object> InsertHere(std::unique_ptr<Object>&& object) {
+  std::shared_ptr<Object> InsertHere(std::shared_ptr<Object>&& object) {
     this->object.swap(object);
     this->object->Relocate(this);
     return object;
   }
 
-  Object* Create(const Object& prototype) {
+  std::shared_ptr<Object> Create(const Object& prototype) {
     object = prototype.Clone();
     object->Relocate(this);
-    return object.get();
+    return object;
   }
 
   template <typename T>
-  T* Create() {
-    return dynamic_cast<T*>(Create(T::proto));
+  std::shared_ptr<T> Create() {
+    return dynamic_pointer_cast<T>(Create(*T::proto));
   }
 
   // Remove the objects held by this location.
@@ -135,8 +136,8 @@ struct Location : gui::Widget {
   ////////////////////////////
 
   Object* Follow();
-  void Put(std::unique_ptr<Object> obj);
-  std::unique_ptr<Object> Take();
+  void Put(std::shared_ptr<Object> obj);
+  std::shared_ptr<Object> Take();
 
   ////////////////////////////
   // Task queue interface.
@@ -235,7 +236,10 @@ struct Location : gui::Widget {
   }
   template <typename T>
   T* ParentAs() const {
-    return parent ? dynamic_cast<T*>(parent->object.get()) : nullptr;
+    if (auto p = parent.lock()) {
+      return dynamic_cast<T*>(p->object.get());
+    }
+    return nullptr;
   }
 
   void SetText(std::string_view text) {
@@ -292,8 +296,8 @@ struct Location : gui::Widget {
       for (auto observer : error_observers) {
         observer->ScheduleErrored(*this);
       }
-      if (parent) {
-        parent->ScheduleErrored(*this);
+      if (auto p = parent.lock()) {
+        p->ScheduleErrored(*this);
       }
     }
     return error.get();
@@ -305,14 +309,6 @@ struct Location : gui::Widget {
 
   std::string ToStr() const;
 };
-
-// Try to guess how this location is displayed. Results in a `out_path` that starts with Window
-// and ends with this Location and its Object. This is an interim function - ideally in each
-// context where a Location is displayed, it should be clear what the path is.
-void GuessPath(Location& location, gui::Path& out_path);
-
-// See `GuessPath`.
-gui::DisplayContext GuessDisplayContext(Location&, animation::Display&);
 
 void PositionBelow(Location& origin, Location& below);
 void AnimateGrowFrom(Location& source, Location& grown);

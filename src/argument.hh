@@ -204,16 +204,14 @@ struct Argument {
       .search_radius = std::nullopt,
   };
 
-  // Return the position and direction of this argument in the DisplayContext's root coordinate
+  // Return the position and direction of this argument in the given Widget's coordinate
   // space.
   //
-  // If the first object in the path is the Window, then the position will use the window coordinate
-  // space (pixels), but it's not the only option. The path could also stripped of some elements to
-  // get the position within some parent object (for example, a Machine).
-  //
-  // The final element of the path should be the object that contains this argument.
-  Vec2AndDir Start(gui::Path&, animation::Display*) const;
-  Vec2AndDir Start(gui::DisplayContext&) const;
+  // If the passed widget is the Window, then the returned position will use the window coordinate
+  // space (pixels), but it's not the only option. The widget could also be located at some
+  // intermediate level so the returned position will be located within some parent object (for
+  // example, a Machine).
+  Vec2AndDir Start(Object&, gui::Widget*, animation::Display*) const;
 
   // The returned "to_points" should use the same coordinate space as the "here" Location
   // TODO: it might be necessary to pass a gui::DisplayContext to compute positions
@@ -245,12 +243,12 @@ struct LiveArgument : Argument {
   }
   void Detach(Location& here);
   void Attach(Location& here);
-  void Relocate(Location* old_self, Location* new_self) {
-    if (old_self) {
-      Detach(*old_self);
+  void Relocate(Location* old_here, Location* new_here) {
+    if (old_here) {
+      Detach(*old_here);
     }
-    if (new_self) {
-      Attach(*new_self);
+    if (new_here) {
+      Attach(*new_here);
     }
   }
   void ConnectionAdded(Location& here, Connection& connection) {

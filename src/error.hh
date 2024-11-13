@@ -45,7 +45,7 @@ the error upwards. Top-level Machines print their errors to the console.
 struct Error {
   std::string text;
   Location* source;
-  std::unique_ptr<Object> saved_object;
+  std::shared_ptr<Object> saved_object;
   std::source_location source_location;
 
   Error(std::string_view text,

@@ -78,15 +78,12 @@ SkPath Object::Shape(animation::Display*) const {
 
 std::unique_ptr<Action> Object::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
-    auto& path = p.path;
-    for (int i = path.size() - 1; i >= 0; --i) {
-      if (Location* location = dynamic_cast<Location*>(path[i])) {
-        if (Machine* machine = location->ParentAs<Machine>()) {
-          auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
-          a->contact_point = p.PositionWithin(*location);
-          return a;
-        }
-      }
+    auto* location = Closest<Location>(p.hover);
+    auto* machine = Closest<Machine>(p.hover);
+    if (location && machine) {
+      auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
+      a->contact_point = p.PositionWithin(*location);
+      return a;
     }
   }
   return nullptr;

@@ -4,7 +4,6 @@
 
 #include "color.hh"
 #include "gui_button.hh"
-#include "gui_constants.hh"
 #include "on_off.hh"
 
 namespace automat {
@@ -14,18 +13,6 @@ struct Location;
 }  // namespace automat
 
 namespace automat::gui {
-
-struct RunButton : ToggleButton {
-  Location* location;
-
-  RunButton(Location* parent = nullptr, float radius = kMinimalTouchableSize / 2);
-
-  SkPath Shape(animation::Display*) const override {
-    return SkPath::Circle(kMinimalTouchableSize / 2, kMinimalTouchableSize / 2,
-                          kMinimalTouchableSize / 2);
-  }
-  bool Filled() const override;
-};
 
 struct PowerButton : ToggleButton {
   OnOff* target;

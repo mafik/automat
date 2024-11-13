@@ -18,7 +18,7 @@ struct ShapeWidget : Widget, PaintMixin {
   bool CenteredAtZero() const override { return true; }
 };
 
-std::unique_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color,
+std::shared_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color,
                                         const SkMatrix* transform = nullptr);
 
 }  // namespace automat::gui

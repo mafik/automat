@@ -8,11 +8,11 @@
 namespace automat {
 
 struct Alert : Object, Runnable {
-  static const Alert proto;
+  static std::shared_ptr<Alert> proto;
   static Argument message_arg;
   std::unique_ptr<vector<string>> test_interceptor;
   string_view Name() const override { return "Alert"; }
-  std::unique_ptr<Object> Clone() const override { return std::make_unique<Alert>(); }
+  std::shared_ptr<Object> Clone() const override { return std::make_shared<Alert>(); }
   void Args(std::function<void(Argument&)> cb) override { cb(message_arg); }
   LongRunning* OnRun(Location& here) override;
 };

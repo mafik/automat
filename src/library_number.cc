@@ -56,16 +56,17 @@ static constexpr char kBackspaceShape[] =
     "1 0 4 3 3 4 0 1-3 4-4 3-1 0-4-3Z";
 
 using gui::Text;
-using std::make_unique;
 
-NumberButton::NumberButton(std::unique_ptr<Widget>&& child) : Button(std::move(child)) {}
+NumberButton::NumberButton(std::shared_ptr<Widget> child) : Button(child) {}
+
+NumberButton::NumberButton(std::string text) : NumberButton(std::make_shared<Text>(text)) {}
 
 SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
 
 void NumberButton::Activate(gui::Pointer& pointer) {
   Button::Activate(pointer);
   if (activate) {
-    if (auto l = Closest<Location>(pointer.path)) {
+    if (auto l = Closest<Location>(pointer.hover)) {
       activate(*l);
     }
   } else {
@@ -73,58 +74,55 @@ void NumberButton::Activate(gui::Pointer& pointer) {
   }
 }
 
-Number::Number(double x)
-    : value(x),
-      digits{NumberButton(make_unique<Text>("0")), NumberButton(make_unique<Text>("1")),
-             NumberButton(make_unique<Text>("2")), NumberButton(make_unique<Text>("3")),
-             NumberButton(make_unique<Text>("4")), NumberButton(make_unique<Text>("5")),
-             NumberButton(make_unique<Text>("6")), NumberButton(make_unique<Text>("7")),
-             NumberButton(make_unique<Text>("8")), NumberButton(make_unique<Text>("9"))},
-      dot(make_unique<Text>(".")),
-      backspace(gui::MakeShapeWidget(kBackspaceShape, 0xff000000)),
-      text_field(kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth) {
+Number::Number(double x) : value(x) {
+  text_field =
+      std::make_shared<gui::NumberTextField>(kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
+  dot = std::make_shared<NumberButton>(".");
+  backspace = std::make_shared<NumberButton>(gui::MakeShapeWidget(kBackspaceShape, 0xff000000));
   for (int i = 0; i < 10; ++i) {
-    digits[i].activate = [this, i](Location& l) {
-      if (text_field.text.empty() || text_field.text == "0") {
-        text_field.text = std::to_string(i);
+    digits[i] = make_shared<NumberButton>(std::to_string(i));
+    digits[i]->activate = [this, i](Location& l) {
+      if (text_field->text.empty() || text_field->text == "0") {
+        text_field->text = std::to_string(i);
       } else {
-        text_field.text += std::to_string(i);
+        text_field->text += std::to_string(i);
       }
-      value = std::stod(text_field.text);
-      text_field.InvalidateDrawCache();
+      value = std::stod(text_field->text);
+      text_field->InvalidateDrawCache();
       l.ScheduleUpdate();
     };
   }
-  dot.activate = [this](Location& l) {
-    if (text_field.text.empty()) {
-      text_field.text = "0";
-    } else if (auto it = text_field.text.find('.'); it != std::string::npos) {
-      text_field.text.erase(it, 1);
+  dot->activate = [this](Location& l) {
+    if (text_field->text.empty()) {
+      text_field->text = "0";
+    } else if (auto it = text_field->text.find('.'); it != std::string::npos) {
+      text_field->text.erase(it, 1);
     }
-    text_field.text += ".";
-    while (text_field.text.size() > 1 && text_field.text[0] == '0' && text_field.text[1] != '.') {
-      text_field.text.erase(0, 1);
+    text_field->text += ".";
+    while (text_field->text.size() > 1 && text_field->text[0] == '0' &&
+           text_field->text[1] != '.') {
+      text_field->text.erase(0, 1);
     }
-    value = std::stod(text_field.text);
-    text_field.InvalidateDrawCache();
+    value = std::stod(text_field->text);
+    text_field->InvalidateDrawCache();
     l.ScheduleUpdate();
   };
-  backspace.activate = [this](Location& l) {
-    if (!text_field.text.empty()) {
-      text_field.text.pop_back();
+  backspace->activate = [this](Location& l) {
+    if (!text_field->text.empty()) {
+      text_field->text.pop_back();
     }
-    if (text_field.text.empty()) {
-      text_field.text = "0";
+    if (text_field->text.empty()) {
+      text_field->text = "0";
     }
-    value = std::stod(text_field.text);
-    text_field.InvalidateDrawCache();
+    value = std::stod(text_field->text);
+    text_field->InvalidateDrawCache();
     l.ScheduleUpdate();
   };
 }
 
 string_view Number::Name() const { return "Number"; }
 
-std::unique_ptr<Object> Number::Clone() const { return std::make_unique<Number>(value); }
+std::shared_ptr<Object> Number::Clone() const { return std::make_shared<Number>(value); }
 
 string Number::GetText() const {
   char buffer[100];
@@ -135,7 +133,7 @@ string Number::GetText() const {
 
 void Number::SetText(Location& error_context, string_view text) {
   value = std::stod(string(text));
-  text_field.text = text;
+  text_field->text = text;
 }
 
 static const SkRRect kNumberRRect = [] {
@@ -183,9 +181,9 @@ animation::Phase Number::Draw(gui::DrawContext& ctx) const {
 SkPath Number::Shape(animation::Display*) const { return kNumberShape; }
 
 ControlFlow Number::VisitChildren(gui::Visitor& visitor) {
-  Widget* arr[] = {&dot,       &backspace, &digits[0], &digits[1], &digits[2],
-                   &digits[3], &digits[4], &digits[5], &digits[6], &digits[7],
-                   &digits[8], &digits[9], &text_field};
+  std::shared_ptr<Widget> arr[] = {dot,       backspace, digits[0], digits[1], digits[2],
+                                   digits[3], digits[4], digits[5], digits[6], digits[7],
+                                   digits[8], digits[9], text_field};
   if (visitor(arr) == ControlFlow::Stop) return ControlFlow::Stop;
   return ControlFlow::Continue;
 }
@@ -196,23 +194,23 @@ SkMatrix Number::TransformToChild(const Widget& child, animation::Display*) cons
     float y = kBorderWidth + kAroundWidgetMargin + row * (kButtonHeight + kBetweenButtonsMargin);
     return SkMatrix::Translate(-x, -y);
   };
-  if (&child == &text_field) {
+  if (&child == text_field.get()) {
     return SkMatrix::Translate(-kBorderWidth - kAroundWidgetMargin,
                                -kHeight + kBorderWidth + kAroundWidgetMargin + kTextHeight);
   }
-  if (&child == &digits[0]) {
+  if (&child == digits[0].get()) {
     return cell(0, 0);
   }
-  if (&child == &dot) {
+  if (&child == dot.get()) {
     return cell(0, 1);
   }
-  if (&child == &backspace) {
+  if (&child == backspace.get()) {
     return cell(0, 2);
   }
   for (int row = 0; row < 3; ++row) {
     for (int col = 0; col < 3; ++col) {
       int digit = 3 * row + col + 1;
-      if (&child == &digits[digit]) {
+      if (&child == digits[digit].get()) {
         return cell(row + 1, col);
       }
     }
@@ -220,25 +218,9 @@ SkMatrix Number::TransformToChild(const Widget& child, animation::Display*) cons
   return SkMatrix::I();
 }
 
-std::unique_ptr<Action> Number::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
-  if (btn != gui::PointerButton::Left) {
-    return nullptr;
-  }
-  auto& path = pointer.path;
-  if (path.size() < 2) {
-    return nullptr;
-  }
-  auto* parent = path[path.size() - 2];
-  Location* location = dynamic_cast<Location*>(parent);
-  if (!location) {
-    return nullptr;
-  }
-  return Object::FindAction(pointer, btn);
-}
-
 void Number::SerializeState(Serializer& writer, const char* key) const {
   writer.Key(key);
-  writer.RawValue(text_field.text.data(), text_field.text.size(), rapidjson::kNumberType);
+  writer.RawValue(text_field->text.data(), text_field->text.size(), rapidjson::kNumberType);
 }
 void Number::DeserializeState(Location& l, Deserializer& d) {
   Status status;
@@ -247,7 +229,7 @@ void Number::DeserializeState(Location& l, Deserializer& d) {
     l.ReportError("Couldn't deserialize Number value: " + status.ToStr());
     return;
   }
-  text_field.text = GetText();
+  text_field->text = GetText();
 }
 
 }  // namespace automat::library

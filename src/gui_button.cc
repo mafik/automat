@@ -21,6 +21,7 @@
 #include "widget.hh"
 
 using namespace maf;
+using namespace std;
 
 namespace automat::gui {
 
@@ -131,9 +132,9 @@ animation::Phase Button::Draw(DrawContext& ctx) const {
   auto bg = BackgroundColor();
   auto fg = ForegroundColor(ctx);
 
-  gui::Visitor visitor = [fg](Span<Widget*> children) {
-    for (auto* child : children) {
-      if (auto paint = PaintMixin::Get(child)) {
+  gui::Visitor visitor = [fg](Span<shared_ptr<Widget>> children) {
+    for (auto& child : children) {
+      if (auto paint = PaintMixin::Get(child.get())) {
         paint->setColor(fg);
         paint->setAntiAlias(true);
       }
@@ -160,7 +161,7 @@ animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& 
   auto& filling = filling_ptr[display];
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
   if (filling >= 0.999) {
-    if (&child == on_widget) {
+    if (&child == on_widget.get()) {
       return on_widget->DrawCached(ctx);
     } else {
       return animation::Finished;
@@ -218,15 +219,11 @@ animation::Phase ToggleButton::PreDrawChildren(DrawContext& ctx) const {
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
 
   canvas.saveLayerAlphaf(nullptr, filling);
-  ctx.path.push_back(on_widget);
   auto phase = on_widget->PreDraw(ctx);
-  ctx.path.pop_back();
   canvas.restore();
 
   canvas.saveLayerAlphaf(nullptr, 1 - filling);
-  ctx.path.push_back(off.get());
   phase |= off->PreDraw(ctx);
-  ctx.path.pop_back();
   canvas.restore();
   return phase;
 }

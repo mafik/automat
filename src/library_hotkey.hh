@@ -12,7 +12,7 @@
 namespace automat::library {
 
 struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
-  static const HotKey proto;
+  static std::shared_ptr<HotKey> proto;
 
   gui::AnsiKey key = gui::AnsiKey::F11;
   bool ctrl = true;
@@ -20,13 +20,12 @@ struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   bool shift = false;
   bool windows = false;
 
-  PowerButton power_button;
-
-  KeyButton ctrl_button;
-  KeyButton alt_button;
-  KeyButton shift_button;
-  KeyButton windows_button;
-  mutable KeyButton shortcut_button;
+  std::shared_ptr<PowerButton> power_button;
+  std::shared_ptr<KeyButton> ctrl_button;
+  std::shared_ptr<KeyButton> alt_button;
+  std::shared_ptr<KeyButton> shift_button;
+  std::shared_ptr<KeyButton> windows_button;
+  std::shared_ptr<KeyButton> shortcut_button;
 
   // This is used to select the main hotkey
   gui::KeyboardGrab* hotkey_selector = nullptr;
@@ -36,7 +35,7 @@ struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
 
   HotKey();
   string_view Name() const override;
-  std::unique_ptr<Object> Clone() const override;
+  std::shared_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape(animation::Display*) const override;
   void Args(std::function<void(Argument&)> cb) override;

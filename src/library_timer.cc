@@ -135,13 +135,14 @@ static const char* RangeName(TimerDelay::Range range) {
 static void UpdateTextField(TimerDelay& timer) {
   auto n =
       timer.duration.value.count() / RangeDuration(timer.range).count() * TickCount(timer.range);
-  timer.text_field.SetNumber(n);
+  timer.text_field->SetNumber(n);
 }
 
 static void SetDuration(TimerDelay& timer, Duration new_duration) {
   if (IsRunning(timer)) {
-    RescheduleAt(*timer.here, timer.start_time + timer.duration.value,
-                 timer.start_time + new_duration);
+    if (auto h = timer.here.lock()) {
+      RescheduleAt(*h, timer.start_time + timer.duration.value, timer.start_time + new_duration);
+    }
   }
 
   timer.duration.value = new_duration;
@@ -149,9 +150,9 @@ static void SetDuration(TimerDelay& timer, Duration new_duration) {
 }
 
 static void PropagateDurationOutwards(TimerDelay& timer) {
-  if (timer.here) {
-    NoSchedulingGuard guard(*timer.here);
-    auto duration_obj = timer.duration_arg.GetLocation(*timer.here);
+  if (auto h = timer.here.lock()) {
+    NoSchedulingGuard guard(*h);
+    auto duration_obj = timer.duration_arg.GetLocation(*h);
     if (duration_obj.ok && duration_obj.location) {
       duration_obj.location->SetNumber(timer.duration.value.count() * TickCount(timer.range) /
                                        RangeDuration(timer.range).count());
@@ -159,12 +160,12 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
   }
 }
 
-TimerDelay::TimerDelay() : text_field(kTextWidth) {
+TimerDelay::TimerDelay() : text_field(std::make_shared<gui::NumberTextField>(kTextWidth)) {
   range_dial.velocity = 0;
   range_dial.value = 1;
 
   duration_handle_rotation.speed = 100;
-  text_field.argument = &duration_arg;
+  text_field->argument = &duration_arg;
   duration_arg.field = &duration;
   SetDuration(*this, 10s);
 }
@@ -177,7 +178,7 @@ TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay() {
 
 string_view TimerDelay::Name() const { return "Delay"; }
 
-std::unique_ptr<Object> TimerDelay::Clone() const { return std::make_unique<TimerDelay>(*this); }
+std::shared_ptr<Object> TimerDelay::Clone() const { return std::make_shared<TimerDelay>(*this); }
 
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
@@ -555,7 +556,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
 }
 
 ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {
-  Widget* arr[] = {&text_field};
+  std::shared_ptr<Widget> arr[] = {text_field};
   if (visitor(arr) == ControlFlow::Stop) return ControlFlow::Stop;
   return ControlFlow::Continue;
 }
@@ -563,13 +564,13 @@ ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {
 SkPath TimerDelay::FieldShape(Object& field) const {
   if (&field == &duration) {
     auto transform = SkMatrix::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
-    return text_field.Shape(nullptr).makeTransform(transform);
+    return text_field->Shape(nullptr).makeTransform(transform);
   }
   return SkPath();
 }
 
 SkMatrix TimerDelay::TransformToChild(const Widget& child, animation::Display*) const {
-  if (&child == &text_field) {
+  if (&child == text_field.get()) {
     return SkMatrix::Translate(kTextWidth / 2, gui::NumberTextField::kHeight);
   }
   return SkMatrix::I();
@@ -644,22 +645,28 @@ void TimerDelay::Updated(Location& here, Location& updated) {
 }
 
 struct DragHandAction : Action {
-  TimerDelay& timer;
-  DragHandAction(gui::Pointer& pointer, TimerDelay& timer) : Action(pointer), timer(timer) {
-    ++timer.hand_draggers;
+  std::weak_ptr<TimerDelay> timer_weak;
+  DragHandAction(gui::Pointer& pointer, std::shared_ptr<TimerDelay> timer)
+      : Action(pointer), timer_weak(timer) {
+    ++timer->hand_draggers;
   }
   virtual void Begin() {}
   virtual void Update() {
-    Vec2 pos = GuessDisplayContext(*timer.here, pointer.AnimationContext())
-                   .TransformDown()
+    auto timer_shared = timer_weak.lock();
+    if (!timer_shared) {
+      return;
+    }
+    Vec2 pos = gui::TransformDown(*timer_shared, nullptr, &pointer.AnimationContext())
                    .mapPoint(pointer.pointer_position);
-    timer.hand_degrees.value = atan(pos) * 180 / M_PI;
-    timer.InvalidateDrawCache();
+    timer_shared->hand_degrees.value = atan(pos) * 180 / M_PI;
+    timer_shared->InvalidateDrawCache();
   }
   virtual void End() {}
   ~DragHandAction() {
-    --timer.hand_draggers;
-    timer.InvalidateDrawCache();
+    if (auto timer = timer_weak.lock()) {
+      --timer->hand_draggers;
+      timer->InvalidateDrawCache();
+    }
   }
 };
 
@@ -672,12 +679,12 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
     }
     if (kStartPusherBox.contains(pos.x, pos.y)) {
       start_pusher_depression.value = 1;
-      if (here) {
+      if (auto h = here.lock()) {
         if (IsRunning(*this)) {
           Cancel();
-          here->long_running = nullptr;
+          h->long_running = nullptr;
         } else {
-          here->ScheduleRun();
+          h->ScheduleRun();
         }
         return nullptr;
       }
@@ -705,7 +712,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
     SkPath hand_outline;  // Hand is just a straight line so we have to "widen" it
     skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
     if (hand_outline.contains(pos.x, pos.y)) {
-      return std::make_unique<DragHandAction>(pointer, *this);
+      return std::make_unique<DragHandAction>(pointer, SharedPtr<TimerDelay>());
     }
   }
   return Object::FindAction(pointer, btn);
@@ -726,7 +733,9 @@ LongRunning* TimerDelay::OnRun(Location& here) {
 }
 
 void TimerDelay::Cancel() {
-  CancelScheduledAt(*here, start_time + duration.value);
+  if (auto h = here.lock()) {
+    CancelScheduledAt(*h, start_time + duration.value);
+  }
   InvalidateDrawCache();
 }
 

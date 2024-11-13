@@ -20,7 +20,7 @@ Argument::FinalLocationResult Argument::GetFinalLocation(
     Location& here, std::source_location source_location) const {
   FinalLocationResult result(GetObject(here, source_location));
   if (auto live_object = dynamic_cast<LiveObject*>(result.object)) {
-    result.final_location = live_object->here;
+    result.final_location = live_object->here.lock().get();
   }
   return result;
 }
@@ -96,17 +96,12 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Vec2AndDir Argument::Start(gui::Path& path, animation::Display* display) const {
-  assert(path.size() > 0);
-  Object* object = dynamic_cast<Object*>(path.back());
-  assert(object);
-  auto pos_dir = object->ArgStart(*this);
-  auto m = TransformUp(path, display);
+Vec2AndDir Argument::Start(Object& object, gui::Widget* widget, animation::Display* display) const {
+  auto pos_dir = object.ArgStart(*this);
+  auto m = TransformUp(object, widget, display);
   m.mapPoints(&pos_dir.pos.sk, 1);
   return pos_dir;
 }
-
-Vec2AndDir Argument::Start(gui::DisplayContext& ctx) const { return Start(ctx.path, &ctx.display); }
 
 void Argument::NearbyCandidates(
     Location& here, float radius,
@@ -131,8 +126,8 @@ void Argument::NearbyCandidates(
         }
         Vec<Vec2AndDir> to_points;
         location.object->ConnectionPositions(to_points);
-        SkMatrix m = TransformUp(gui::Path{drag_location_action->Widget(), &location},
-                                 &pointer->window.display);
+        SkMatrix m =
+            drag_location_action->Widget()->TransformFromChild(location, &pointer->window.display);
         for (auto& vec_and_dir : to_points) {
           vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
         }
@@ -142,7 +137,6 @@ void Argument::NearbyCandidates(
   }
   // Query nearby objects in the parent machine
   if (auto parent_machine = here.ParentAs<Machine>()) {
-    // gui::DisplayContext ctx = GuessDisplayContext(here, ???display???);
     Vec2 center = here.position + here.object->ArgStart(*this).pos;
     parent_machine->Nearby(center, radius, [&](Location& other) -> void* {
       if (&other == &here) {
@@ -157,7 +151,7 @@ void Argument::NearbyCandidates(
       }
       Vec<Vec2AndDir> to_points;
       other.object->ConnectionPositions(to_points);
-      SkMatrix m = TransformUp(gui::Path{other.ParentAs<gui::Widget>(), &other}, nullptr);
+      SkMatrix m = other.ParentAs<gui::Widget>()->TransformFromChild(other, nullptr);
       for (auto& vec_and_dir : to_points) {
         vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
       }

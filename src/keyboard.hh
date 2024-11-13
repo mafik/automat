@@ -31,7 +31,6 @@ struct Window;
 struct Widget;
 struct DrawContext;
 struct Pointer;
-using Path = std::vector<Widget*>;
 
 enum class AnsiKey : uint8_t {
   Unknown,
@@ -161,7 +160,7 @@ struct Caret final {
   Keyboard& keyboard;
   CaretOwner* owner = nullptr;
   SkPath shape;
-  Path widget_path;
+  std::shared_ptr<Widget> widget;
   time::SystemPoint last_blink;
   Caret(Keyboard& keyboard);
   ~Caret() = default;
@@ -321,7 +320,7 @@ struct Keyboard final {
   ~Keyboard();
 
   // Called by a CaretOwner that wants to start receiving keyboard input.
-  Caret& RequestCaret(CaretOwner&, const Path& widget_path, Vec2 position);
+  Caret& RequestCaret(CaretOwner&, const std::shared_ptr<Widget>& widget, Vec2 position);
 
   // Called by a KeyboardGrabber that wants to grab all keyboard events.
   KeyboardGrab& RequestGrab(KeyboardGrabber&);

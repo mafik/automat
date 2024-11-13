@@ -423,9 +423,8 @@ void CreateWindow(Status& status) {
 
 #undef WRAP
 
-// TODO: why is the text entry in Timer not re-rendered at higher zoom?
-// TODO: why invisible connection widgets have so large bounds?
 // TODO: why the icons are initially white?
+// TODO: fix objects not being redrawn when panning
 // -- at this point we should be back in the working state
 // TODO: lots of cleanups!
 //       - widgets should have pointers to their parents (remove "Paths")

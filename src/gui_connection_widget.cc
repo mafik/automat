@@ -8,6 +8,8 @@
 #include <include/core/SkTextBlob.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <optional>
+
 #include "../build/generated/embedded.hh"
 #include "argument.hh"
 #include "audio.hh"
@@ -394,6 +396,9 @@ void DragConnectionAction::End() {
 }
 
 maf::Optional<Rect> ConnectionWidget::TextureBounds(animation::Display* d) const {
+  if (transparency >= 0.99f) {
+    return std::nullopt;
+  }
   if (state) {
     Rect bounds = Shape(d).getBounds();
     float w = state->cable_width / 2 +

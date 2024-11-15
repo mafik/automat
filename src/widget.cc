@@ -7,6 +7,7 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkRect.h>
+#include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/gpu/GrBackendSurface.h>
 #include <include/gpu/GrDirectContext.h>
@@ -16,7 +17,7 @@
 
 #include "animation.hh"
 #include "control_flow.hh"
-#include "log.hh"
+#include "font.hh"
 #include "time.hh"
 
 using namespace automat;
@@ -176,6 +177,7 @@ void ChoppyDrawable::Render(SkCanvas& root_canvas) {
   SkMatrix window_to_local;
   (void)widget->draw_matrix.invert(&window_to_local);
   window_to_local.mapRect(&widget->draw_bounds, SkRect::Make(widget->root_bounds_rounded));
+  draw_time_copy = widget->draw_time.time_since_epoch().count();
 }
 
 // Lifetime of the frame (from the Widget's perspective):
@@ -184,10 +186,12 @@ void ChoppyDrawable::Render(SkCanvas& root_canvas) {
 // - onDraw - composite the drawn SkSurface onto the canvas
 
 void ChoppyDrawable::onDraw(SkCanvas* canvas) {
-  SkPaint red_paint;
-  red_paint.setStyle(SkPaint::kStroke_Style);
-  red_paint.setColor(SK_ColorRED);
-  canvas->drawRect(widget->local_bounds, red_paint);
+#ifdef DEBUG_RENDERING
+  SkPaint local_bounds_paint;  // translucent black
+  local_bounds_paint.setStyle(SkPaint::kStroke_Style);
+  local_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
+  canvas->drawRect(widget->local_bounds, local_bounds_paint);
+#endif
 
   if (widget->surface == nullptr) {
     // LOG << "Drawing choppy drawable " << entry->path << " (no surface!)";
@@ -203,8 +207,40 @@ void ChoppyDrawable::onDraw(SkCanvas* canvas) {
 
     // Alternative approach, where we map the old texture to the new bounds:
     SkRect surface_bounds = SkRect::MakeWH(widget->surface->width(), widget->surface->height());
+#ifdef DEBUG_RENDERING
+    auto matrix_backup = canvas->getTotalMatrix();
+#endif
     canvas->concat(SkMatrix::RectToRect(surface_bounds, widget->draw_bounds));
     widget->surface->draw(canvas, 0, 0);
+#ifdef DEBUG_RENDERING
+    SkPaint surface_bounds_paint;
+    constexpr int kNumColors = 10;
+    SkColor colors[kNumColors];
+    float pos[kNumColors];
+    double integer;
+    double fraction = modf(draw_time_copy / 4,
+                           &integer);  // ignore the integer part & set offset to just fraction
+    SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_bounds.center());
+    for (int i = 0; i < kNumColors; ++i) {
+      float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
+      colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
+      pos[i] = (float)i / (kNumColors - 1);
+    }
+    surface_bounds_paint.setShader(SkGradientShader::MakeSweep(surface_bounds.centerX(),
+                                                               surface_bounds.centerY(), colors,
+                                                               pos, kNumColors, 0, &shader_matrix));
+    surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
+    surface_bounds_paint.setStrokeWidth(2.0f);
+    canvas->drawRect(surface_bounds.makeInset(1, 1), surface_bounds_paint);
+
+    auto& font = GetFont();
+    SkPaint text_paint;
+    canvas->setMatrix(matrix_backup);
+    canvas->translate(widget->local_bounds.left(),
+                      min(widget->local_bounds.top(), widget->local_bounds.bottom()));
+    auto text = f("%.1f", widget->draw_millis);
+    font.DrawText(*canvas, text, text_paint);
+#endif
   }
 }
 

@@ -60,6 +60,7 @@ extern PackFrameRequest next_frame_request;
 struct ChoppyDrawable : Drawable {
   Widget* widget;
   time::SteadyPoint render_started;
+  double draw_time_copy;
 
   ChoppyDrawable(Widget* widget) : widget(widget) {}
 

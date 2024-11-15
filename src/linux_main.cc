@@ -467,6 +467,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     int next_job = -1;
     SkMatrix window_to_local;
     SkMatrix local_to_window;  // Skia's "TotalMatrix".
+    SkIRect root_bounds_rounded;
   };
   vector<WidgetTree> tree;
 
@@ -518,24 +519,25 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
       (void)node.window_to_local.invert(&node.local_to_window);
 
-      optional<SkRect> local_bounds_opt = widget->TextureBounds(&window->display);
+      optional<SkRect> texture_bounds_opt = widget->TextureBounds(&window->display);
       bool intersects = true;
-      if (local_bounds_opt.has_value()) {
+      if (texture_bounds_opt.has_value()) {
         // Compute the bounds of the widget - in local & root coordinates
         widget->draw_to_texture = true;
-        widget->local_bounds = *local_bounds_opt;
-        node.local_to_window.mapRect(&widget->root_bounds, widget->local_bounds);
+        widget->texture_bounds = *texture_bounds_opt;
+        SkRect root_bounds;
+        node.local_to_window.mapRect(&root_bounds, widget->texture_bounds);
 
         // Clip the `root_bounds` to the window bounds;
-        if (widget->root_bounds.width() * widget->root_bounds.height() < 512 * 512) {
+        if (root_bounds.width() * root_bounds.height() < 512 * 512) {
           // Render small objects without clipping
-          intersects = SkRect::Intersects(widget->root_bounds, window_bounds_px);
+          intersects = SkRect::Intersects(root_bounds, window_bounds_px);
         } else {
           // This mutates the `root_bounds` - they're clipped to `canvas_bounds`!
-          intersects = widget->root_bounds.intersect(window_bounds_px);
+          intersects = root_bounds.intersect(window_bounds_px);
         }
 
-        widget->root_bounds.roundOut(&widget->root_bounds_rounded);
+        root_bounds.roundOut(&node.root_bounds_rounded);
       } else {
         node.verdict = Verdict::Skip_NoTexture;
       }
@@ -736,7 +738,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     if (!packed && !overflowed) {
       continue;
     }
-    auto& widget = *tree[i].widget;
+    auto& node = tree[i];
+    auto& widget = *node.widget;
 
 #ifdef DEBUG_RENDERING
     if (widget.draw_time != time::SteadyPoint::min()) {
@@ -745,14 +748,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 #endif
 
     widget.draw_time = now;
-    SkMatrix& m = tree[i].local_to_window;
-    widget.draw_matrix = tree[i].local_to_window;
-    widget.draw_root_bounds_rounded = widget.root_bounds_rounded;
+    SkMatrix& m = node.local_to_window;
+    widget.draw_matrix = node.local_to_window;
+    widget.surface_bounds_root = node.root_bounds_rounded;
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
     rec_canvas->setMatrix(m);
     DrawContext ctx(window->display, *rec_canvas);
-    auto animation_phase = tree[i].widget->Draw(ctx);  // This is where we actually draw stuff!
+    auto animation_phase = widget.Draw(ctx);  // This is where we actually draw stuff!
     if (animation_phase == animation::Animating) {
       widget.invalidated = min(widget.invalidated, now);
     }

@@ -59,10 +59,6 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   ctx.canvas.restore();
   return invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
 
-  // if (root_bounds.width() < 1 || root_bounds.height() < 1) {
-  //   return animation::Finished;
-  // }
-
   // entry.last_used = ctx.display.timer.steady_now;
 }
 
@@ -161,14 +157,13 @@ PackFrameRequest next_frame_request = {};
 void Widget::RenderToSurface(SkCanvas& root_canvas) {
   render_started = time::SteadyNow();
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
-  auto root_bounds_rounded = draw_root_bounds_rounded;
-  surface = root_canvas.getSurface()->makeSurface(root_bounds_rounded.width(),
-                                                  root_bounds_rounded.height());
+  surface = root_canvas.getSurface()->makeSurface(surface_bounds_root.width(),
+                                                  surface_bounds_root.height());
 
   auto fake_canvas = surface->getCanvas();
   fake_canvas->clear(SK_ColorTRANSPARENT);
-  recording->draw(fake_canvas, -root_bounds_rounded.left(),
-                  -root_bounds_rounded.top());  // execute the draw
+  recording->draw(fake_canvas, -surface_bounds_root.left(),
+                  -surface_bounds_root.top());  // execute the draw
                                                 // commands immediately
 
   GrFlushInfo flush_info = {
@@ -186,7 +181,7 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
 
   SkMatrix window_to_local;
   (void)draw_matrix.invert(&window_to_local);
-  window_to_local.mapRect(&draw_bounds, SkRect::Make(root_bounds_rounded));
+  window_to_local.mapRect(&surface_bounds_local, SkRect::Make(surface_bounds_root));
   draw_time_copy = draw_time.time_since_epoch().count();
 }
 
@@ -201,7 +196,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
   SkPaint local_bounds_paint;  // translucent black
   local_bounds_paint.setStyle(SkPaint::kStroke_Style);
   local_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-  canvas->drawRect(local_bounds, local_bounds_paint);
+  canvas->drawRect(texture_bounds, local_bounds_paint);
 #endif
 
   if (surface == nullptr) {
@@ -217,11 +212,11 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     // entry->surface->draw(canvas, 0, 0);
 
     // Alternative approach, where we map the old texture to the new bounds:
-    SkRect surface_bounds = SkRect::MakeWH(surface->width(), surface->height());
+    SkRect surface_size = SkRect::MakeWH(surface->width(), surface->height());
 #ifdef DEBUG_RENDERING
     auto matrix_backup = canvas->getTotalMatrix();
 #endif
-    canvas->concat(SkMatrix::RectToRect(surface_bounds, draw_bounds));
+    canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local));
     surface->draw(canvas, 0, 0);
 #ifdef DEBUG_RENDERING
     SkPaint surface_bounds_paint;
@@ -231,23 +226,23 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     double integer;
     double fraction = modf(draw_time_copy / 4,
                            &integer);  // ignore the integer part & set offset to just fraction
-    SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_bounds.center());
+    SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
     for (int i = 0; i < kNumColors; ++i) {
       float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
       colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
       pos[i] = (float)i / (kNumColors - 1);
     }
-    surface_bounds_paint.setShader(SkGradientShader::MakeSweep(surface_bounds.centerX(),
-                                                               surface_bounds.centerY(), colors,
-                                                               pos, kNumColors, 0, &shader_matrix));
+    surface_bounds_paint.setShader(SkGradientShader::MakeSweep(surface_size.centerX(),
+                                                               surface_size.centerY(), colors, pos,
+                                                               kNumColors, 0, &shader_matrix));
     surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
     surface_bounds_paint.setStrokeWidth(2.0f);
-    canvas->drawRect(surface_bounds.makeInset(1, 1), surface_bounds_paint);
+    canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
 
     auto& font = GetFont();
     SkPaint text_paint;
     canvas->setMatrix(matrix_backup);
-    canvas->translate(local_bounds.left(), min(local_bounds.top(), local_bounds.bottom()));
+    canvas->translate(texture_bounds.left(), min(texture_bounds.top(), texture_bounds.bottom()));
     auto text = f("%.1f", draw_millis);
     font.DrawText(*canvas, text, text_paint);
 #endif

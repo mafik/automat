@@ -131,21 +131,19 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   void ComposeSurface(SkCanvas* canvas) const;
 
-  SkRect local_bounds;          // local coordinates
-  SkRect root_bounds;           // root coordinates, clipped to the window viewport
-  SkIRect root_bounds_rounded;  // same as above, but rounded to integer pixels
-  // The time when the current draw job was started.
+  SkRect texture_bounds;  // local coordinates
+
+  // Things updated in PackFrame (& Draw)
   time::SteadyPoint draw_time = time::SteadyPoint::min();
-  double draw_time_copy;             // Time when the last (finished) draw job was started
-  SkRect draw_bounds;                // Area of the widget which was drawn (local coordinates)
-  SkIRect draw_root_bounds_rounded;  // root_bounds_rounded, when the drawing operation started
-
-  time::SteadyPoint render_started;  // Used by the client to measure rendering time
-
-  // The recording that is being drawn.
+  double draw_time_copy;  // Time when the last (finished) draw job was started
+  SkIRect surface_bounds_root;
   sk_sp<SkDrawable> recording = nullptr;
-  // The surface that is being drawn to.
+
+  // Things updated in RenderToSurface
+  time::SteadyPoint render_started;  // Used by the client to measure rendering time
+  SkRect surface_bounds_local;
   sk_sp<SkSurface> surface = nullptr;
+
   // Whether the current draw job is going to be presented.
   bool draw_present = false;
 

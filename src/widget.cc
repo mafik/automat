@@ -182,7 +182,6 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
   SkMatrix window_to_local;
   (void)draw_matrix.invert(&window_to_local);
   window_to_local.mapRect(&surface_bounds_local, SkRect::Make(surface_bounds_root));
-  draw_time_copy = draw_time.time_since_epoch().count();
 }
 
 // Lifetime of the frame (from the Widget's perspective):
@@ -223,9 +222,8 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     constexpr int kNumColors = 10;
     SkColor colors[kNumColors];
     float pos[kNumColors];
-    double integer;
-    double fraction = modf(draw_time_copy / 4,
-                           &integer);  // ignore the integer part & set offset to just fraction
+    double integer_ignored;
+    double fraction = modf(draw_time.time_since_epoch().count() / 4, &integer_ignored);
     SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
     for (int i = 0; i < kNumColors; ++i) {
       float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};

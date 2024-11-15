@@ -560,7 +560,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         continue;
       }
 #ifdef DEBUG_RENDERING
-      if (widget->draw_time == time::SteadyPoint::min()) {
+      if (widget->recording == nullptr) {
         FATAL << "Widget " << widget->Name() << " has been returned by client multiple times!";
       }
 #endif
@@ -582,14 +582,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         renderable_parent->invalidated = min(renderable_parent->invalidated, widget->draw_time);
       }
 
-      widget->draw_time = time::SteadyPoint::min();
+      widget->recording.reset();
       widget->draw_present = false;
     }
   }
 
   {  // Step 3 - create a list of render jobs for the updated widgets
     for (int i = 0; i < tree.size(); ++i) {
-      if (tree[i].widget->draw_time != time::SteadyPoint::min()) {
+      if (tree[i].widget->recording) {
         tree[i].verdict = Verdict::Skip_StillDrawing;
       }
       auto parent = tree[i].parent;
@@ -742,7 +742,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     auto& widget = *node.widget;
 
 #ifdef DEBUG_RENDERING
-    if (widget.draw_time != time::SteadyPoint::min()) {
+    if (widget.recording) {
       FATAL << "Widget " << widget.Name() << " has been repacked!";
     }
 #endif

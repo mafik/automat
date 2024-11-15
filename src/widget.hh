@@ -135,7 +135,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   // Things updated in PackFrame (& Draw)
   time::SteadyPoint draw_time = time::SteadyPoint::min();
-  double draw_time_copy;  // Time when the last (finished) draw job was started
   SkIRect surface_bounds_root;
   sk_sp<SkDrawable> recording = nullptr;
 

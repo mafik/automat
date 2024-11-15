@@ -715,47 +715,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }  // while (!jobs.empty())
   }
 
-  {  // Step 3.5 - print the packing results for debugging
-    function<string(int, int)> FormatTree = [&](int index, int indent = 0) {
-      string str;
-      for (int i = 0; i < indent; ++i) {
-        str += " ";
-      }
-      str += tree[index].widget->Name();
-      if (!tree[index].widget->draw_to_texture) {
-        str += " (not cached)";
-      } else {
-        str += " lag=";
-        str += to_string(GetLag(tree[index]));
-        str += " render_time=";
-        str += to_string(GetRenderTime(tree[index]));
-        str += " local=";
-        str += Rect(tree[index].widget->local_bounds).ToStrMetric();
-        str += " root=";
-        str += Rect(tree[index].widget->root_bounds).ToStr();
-        if (tree[index].verdict == Verdict::Overflow) {
-          str += " (overflowed)";
-        }
-        if (tree[index].verdict == Verdict::Pack) {
-          str += " (packed)";
-        }
-      }
-      str += "\n";
-      for (int i = index + 1; i < tree.size(); ++i) {
-        if (tree[i].parent == index) {
-          str += FormatTree(i, indent + 2);
-        }
-      }
-      return str;
-    };
-
-    static auto last_time = time::SteadyNow();
-    if (now - last_time > 10s) {  // print every 10 seconds
-      last_time = now;
-      LOG << FormatTree(0, 0);
-    }
-  }
-
   // Step 4 - walk through the tree and record the draw commands into drawables.
   for (int i = 0; i < tree.size(); ++i) {
     auto packed = tree[i].verdict == Verdict::Pack;

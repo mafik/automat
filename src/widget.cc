@@ -191,7 +191,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
   SkPaint texture_bounds_paint;  // translucent black
   texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
   texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-  canvas->drawRect(texture_bounds, texture_bounds_paint);
+  canvas->drawRect(*texture_bounds, texture_bounds_paint);
 #endif
 
   if (surface == nullptr) {
@@ -236,8 +236,8 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     auto& font = GetFont();
     SkPaint text_paint;
     canvas->setMatrix(matrix_backup);
-    canvas->translate(texture_bounds.left(), min(texture_bounds.top(), texture_bounds.bottom()));
-    auto text = f("%.1f", draw_millis);
+    canvas->translate(texture_bounds->left(), min(texture_bounds->top(), texture_bounds->bottom()));
+    auto text = f("%.1f", average_draw_millis);
     font.DrawText(*canvas, text, text_paint);
 #endif
   }

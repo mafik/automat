@@ -113,36 +113,30 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   std::shared_ptr<Widget> parent;
 
+  void RenderToSurface(SkCanvas& canvas);
+
+  void ComposeSurface(SkCanvas* canvas) const;
+
+  maf::Optional<SkRect> texture_bounds;  // local coordinates
   mutable uint32_t id = 0;
+  float average_draw_millis = FP_NAN;
 
   // The time when the cache entry was first invalidated.
   // Initially this is set to 0 (meaning it was never drawn).
   // When the widget is scheduled, set this to max value.
   mutable time::SteadyPoint invalidated = time::SteadyPoint::min();
 
-  void RenderToSurface(SkCanvas& canvas);
-
-  void ComposeSurface(SkCanvas* canvas) const;
-
-  bool draw_to_texture = false;
-  SkRect texture_bounds;  // local coordinates
-
   // Things updated in PackFrame (& Draw)
   time::SteadyPoint draw_time = time::SteadyPoint::min();
   SkIRect surface_bounds_root;
   sk_sp<SkDrawable> recording = nullptr;
   SkMatrix window_to_local;
+  bool draw_present = false;  // Whether the current draw job is going to be presented.
 
   // Things updated in RenderToSurface
   time::SteadyPoint render_started;  // Used by the client to measure rendering time
   SkRect surface_bounds_local;
   sk_sp<SkSurface> surface = nullptr;
-
-  // Whether the current draw job is going to be presented.
-  bool draw_present = false;
-
-  // How long, on average it takes to draw this widget.
-  float draw_millis = FP_NAN;
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".

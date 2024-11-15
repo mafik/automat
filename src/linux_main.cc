@@ -477,7 +477,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   };
 
   auto GetRenderTime = [](WidgetTree& tree_entry) {
-    return isnanf(tree_entry.widget->draw_millis) ? 0 : tree_entry.widget->draw_millis / 1000;
+    return isnanf(tree_entry.widget->average_draw_millis)
+               ? 0
+               : tree_entry.widget->average_draw_millis / 1000;
   };
 
   {  // Step 1 - flatten the widget tree for analysis.
@@ -520,14 +522,12 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
       (void)node.window_to_local.invert(&node.local_to_window);
 
-      optional<SkRect> texture_bounds_opt = widget->TextureBounds(&window->display);
+      widget->texture_bounds = widget->TextureBounds(&window->display);
       bool intersects = true;
-      if (texture_bounds_opt.has_value()) {
+      if (widget->texture_bounds.has_value()) {
         // Compute the bounds of the widget - in local & root coordinates
-        widget->draw_to_texture = true;
-        widget->texture_bounds = *texture_bounds_opt;
         SkRect root_bounds;
-        node.local_to_window.mapRect(&root_bounds, widget->texture_bounds);
+        node.local_to_window.mapRect(&root_bounds, *widget->texture_bounds);
 
         // Clip the `root_bounds` to the window bounds;
         if (root_bounds.width() * root_bounds.height() < 512 * 512) {
@@ -566,16 +566,16 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
 #endif
       float draw_millis = render_result.render_time * 1000;
-      if (isnanf(widget->draw_millis)) {
-        widget->draw_millis = draw_millis;
+      if (isnanf(widget->average_draw_millis)) {
+        widget->average_draw_millis = draw_millis;
       } else {
-        widget->draw_millis = 0.9 * widget->draw_millis + 0.1 * draw_millis;
+        widget->average_draw_millis = 0.9 * widget->average_draw_millis + 0.1 * draw_millis;
       }
 
       if (widget->draw_present == false) {
         // Find the closest parent that can be rendered to texture.
         Widget* renderable_parent = widget->parent.get();
-        while (!renderable_parent->draw_to_texture) {
+        while (!renderable_parent->texture_bounds.has_value()) {
           // Root widget (window) can always be rendered to texture so we don't need any extra stop
           // condition here.
           renderable_parent = renderable_parent->parent.get();

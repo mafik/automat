@@ -807,12 +807,14 @@ void Paint() {
   // Render the PackedFrame
 
   for (auto& drawable : pack.frame) {
-    drawable->Render(canvas);
+    drawable->RenderToSurface(canvas);
   }
 
   canvas.resetMatrix();
   canvas.scale(DisplayPxPerMeter(), DisplayPxPerMeter());
-  canvas.drawDrawable(*pack.frame.back());
+  canvas.save();
+  pack.frame.back()->ComposeSurface(&canvas);
+  canvas.restore();
 
   auto& font = GetFont();
   canvas.save();
@@ -848,7 +850,7 @@ void Paint() {
     if (paint_time_so_far > 15ms) {
       break;
     }
-    overflow_queue.front()->Render(canvas);
+    overflow_queue.front()->RenderToSurface(canvas);
     overflow_queue.pop_front();
   }
   canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kNo);

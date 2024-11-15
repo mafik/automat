@@ -15,7 +15,6 @@
 #include "action.hh"
 #include "animation.hh"
 #include "control_flow.hh"
-#include "drawable.hh"
 #include "keyboard.hh"
 #include "optional.hh"
 #include "span.hh"
@@ -57,18 +56,16 @@ extern PackFrameRequest next_frame_request;
 
 // A type of drawable that draws the Widget using the most recently cached texture.
 // A choppy drawable can be asked to "update" itself, which will update the cached texture.
-struct ChoppyDrawable : Drawable {
+struct ChoppyDrawable {
   Widget* widget;
   time::SteadyPoint render_started;
   double draw_time_copy;
 
   ChoppyDrawable(Widget* widget) : widget(widget) {}
 
-  void Render(SkCanvas& canvas);
+  void RenderToSurface(SkCanvas& canvas);
 
-  SkRect onGetBounds() override;
-
-  void onDraw(SkCanvas* canvas) override;
+  void ComposeSurface(SkCanvas* canvas) const;
 
   uint32_t ID() const;
 };
@@ -131,6 +128,8 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   static Widget* Find(uint32_t id);
 
   std::shared_ptr<Widget> parent;
+
+  mutable uint32_t id = 0;
 
   // The matrix that converts from local coordinates to window coordinates.
   // Populated at PackFrame time.

@@ -3,6 +3,7 @@
 #include "widget.hh"
 
 #include <include/core/SkColorSpace.h>
+#include <include/core/SkDrawable.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPictureRecorder.h>
@@ -53,7 +54,9 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
     return Draw(ctx);
   }
 
-  ctx.canvas.drawDrawable(choppy_drawable.sk.get());
+  ctx.canvas.save();
+  choppy_drawable.ComposeSurface(&ctx.canvas);
+  ctx.canvas.restore();
   return invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
 
   // if (root_bounds.width() < 1 || root_bounds.height() < 1) {
@@ -137,7 +140,13 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
 Widget::Widget() : choppy_drawable(this) { GetWidgetIndex()[ID()] = this; }
 Widget::~Widget() { GetWidgetIndex().erase(ID()); }
 
-uint32_t Widget::ID() const { return choppy_drawable.sk->getGenerationID(); }
+uint32_t Widget::ID() const {
+  static atomic<uint32_t> id_counter = 1;
+  if (id == 0) {
+    id = id_counter++;
+  }
+  return id;
+}
 
 Widget* Widget::Find(uint32_t id) {
   if (auto it = GetWidgetIndex().find(id); it != GetWidgetIndex().end()) {
@@ -149,7 +158,7 @@ Widget* Widget::Find(uint32_t id) {
 
 PackFrameRequest next_frame_request = {};
 
-void ChoppyDrawable::Render(SkCanvas& root_canvas) {
+void ChoppyDrawable::RenderToSurface(SkCanvas& root_canvas) {
   render_started = time::SteadyNow();
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
   auto root_bounds_rounded = widget->draw_root_bounds_rounded;
@@ -182,11 +191,12 @@ void ChoppyDrawable::Render(SkCanvas& root_canvas) {
 }
 
 // Lifetime of the frame (from the Widget's perspective):
-// - Draw - includes the logic / animation / and only actually records stuff into SkDrawable
-// - Update - ChoppyDrawable re-renders the SkSurface with the recorded commands
-// - onDraw - composite the drawn SkSurface onto the canvas
+// - Update - includes the logic / animation update for the widget
+// - Draw - records drawing commands into SkDrawable
+// - RenderToSurface - ChoppyDrawable re-renders the SkSurface with the recorded commands
+// - ComposeSurface - compose the drawn SkSurface onto the canvas
 
-void ChoppyDrawable::onDraw(SkCanvas* canvas) {
+void ChoppyDrawable::ComposeSurface(SkCanvas* canvas) const {
 #ifdef DEBUG_RENDERING
   SkPaint local_bounds_paint;  // translucent black
   local_bounds_paint.setStyle(SkPaint::kStroke_Style);
@@ -244,8 +254,6 @@ void ChoppyDrawable::onDraw(SkCanvas* canvas) {
 #endif
   }
 }
-
-SkRect ChoppyDrawable::onGetBounds() { return widget->draw_bounds; }
 
 uint32_t ChoppyDrawable::ID() const { return widget->ID(); }
 

@@ -1327,7 +1327,7 @@ animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& s
     if (&state.arg == &next_arg) {
       lightness_pct = 100;
       phase |= animation::ExponentialApproach(
-          0, (display.timer.steady_now - state.location.last_finished).count(), 0.1, lightness_pct);
+          0, (display.timer.now - state.location.last_finished).count(), 0.1, lightness_pct);
     } else {
       lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
     }

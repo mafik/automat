@@ -132,7 +132,7 @@ struct Window final : Widget, DropTarget {
   mutable bool panning_during_last_frame = false;
   mutable bool inertia = false;
   mutable std::deque<Vec3> camera_timeline;
-  mutable std::deque<time::SystemPoint> timeline;
+  mutable std::deque<time::SteadyPoint> timeline;
 
   mutable animation::Display display;
 

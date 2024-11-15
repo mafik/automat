@@ -445,7 +445,7 @@ struct PackedFrame {
 
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   window->display.timer.Tick();
-  auto now = window->display.timer.steady_now;
+  auto now = window->display.timer.now;
   auto window_bounds_px =
       SkRect::MakeWH(round(window->size.width * window->display_pixels_per_meter),
                      round(window->size.width * window->display_pixels_per_meter));

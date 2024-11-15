@@ -14,6 +14,7 @@ using SystemPoint = std::chrono::time_point<SystemClock, Duration>;
 using SteadyPoint = std::chrono::time_point<SteadyClock, Duration>;
 
 constexpr SystemPoint kZero = {};
+constexpr SteadyPoint kZeroSteady = {};
 
 inline SystemPoint SystemNow() { return SystemClock::now(); }
 inline SteadyPoint SteadyNow() { return SteadyClock::now(); }
@@ -22,17 +23,14 @@ SystemPoint SystemFromSteady(SteadyPoint steady);
 SteadyPoint SteadyFromSystem(SystemPoint system);
 
 struct Timer {
-  SteadyPoint steady_now = time::SteadyNow();
-  SystemPoint now = time::SystemNow();
-  SystemPoint last = now;
+  SteadyPoint now = time::SteadyNow();
+  SteadyPoint last = now;
   T d = 0;  // delta from last frame
   void Tick() {
     last = now;
-    now = time::SystemNow();
-    steady_now = time::SteadyNow();
+    now = time::SteadyNow();
     d = (now - last).count();
   }
-  double Now() const { return now.time_since_epoch().count(); }
 };
 
 }  // namespace automat::time

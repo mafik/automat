@@ -170,10 +170,10 @@ struct PerDisplay {
 // TODO: delete almost everything from this file (and replace with "LowLevel*Towards" functions)
 struct DeltaFraction {
   float speed = 15;
-  time::SystemPoint last_tick;
+  time::SteadyPoint last_tick;
 
   // TODO: think about replacing `speed` with `half_life`.
-  DeltaFraction(float speed = 15) : speed(speed), last_tick(time::SystemNow()) {}
+  DeltaFraction(float speed = 15) : speed(speed), last_tick(time::SteadyNow()) {}
 
   float Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
@@ -192,10 +192,10 @@ struct Base {
 template <typename T = float>
 struct Approach : Base<T> {
   float speed = 15;
-  time::SystemPoint last_tick;
+  time::SteadyPoint last_tick;
 
   Approach(T initial = {})
-      : Base<T>{.value = initial, .target = initial}, last_tick(time::SystemNow()) {}
+      : Base<T>{.value = initial, .target = initial}, last_tick(time::SteadyNow()) {}
   animation::Phase Tick(time::Timer& timer) {
     float dt = (timer.now - last_tick).count();
     last_tick = timer.now;
@@ -311,8 +311,8 @@ struct Spring : Base<T> {
   }
 
   Phase Tick(time::Timer& timer) {
-    float dt = (timer.steady_now - last_tick).count();
-    last_tick = timer.steady_now;
+    float dt = (timer.now - last_tick).count();
+    last_tick = timer.now;
     if (dt <= 0) return Finished;
     if (half_life.count() <= 0) return Finished;
     if (period.count() <= 0) return Finished;

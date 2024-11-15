@@ -63,7 +63,7 @@ void Caret::PlaceIBeam(Vec2 position) {
   float width = GetFont().line_thickness;
   float height = kLetterSize;
   shape = SkPath::Rect(SkRect::MakeXYWH(position.x - width / 2, position.y, width, height));
-  last_blink = time::SystemNow();
+  last_blink = time::SteadyNow();
 }
 
 void Caret::Release() {
@@ -255,7 +255,7 @@ CaretAnimation::CaretAnimation(const Keyboard& keyboard)
     : keyboard(keyboard),
       delta_fraction(50),
       shape(PointerIBeam(keyboard)),
-      last_blink(time::SystemNow()) {}
+      last_blink(time::SteadyNow()) {}
 
 void Keyboard::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;

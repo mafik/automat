@@ -76,7 +76,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
                         SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
-    double t = ctx.display.timer.steady_now.time_since_epoch().count();
+    double t = ctx.display.timer.now.time_since_epoch().count();
     auto local_matrix = SkMatrix::RotateRad(fmod(t * 2 * M_PI / kPeriod, 2 * M_PI))
                             .postTranslate(pos_dir.pos.x, pos_dir.pos.y);
     radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,

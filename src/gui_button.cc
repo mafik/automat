@@ -186,7 +186,7 @@ animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& 
       pressed_outer_oval.rect().fTop * (1 - filling) + pressed_outer_oval.rect().fBottom * filling;
   constexpr int n_points = 6;
   Vec2 points[n_points];
-  static time::SystemPoint base = display.timer.now;
+  static time::SteadyPoint base = display.timer.now;
   float timeS = (display.timer.now - base).count();
   constexpr float waving_x = kRadius / n_points / 2;
   float waving_y = waving_x * filling * (1 - filling) * 8;

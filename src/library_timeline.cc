@@ -429,19 +429,18 @@ time::T Timeline::MaxTrackLength() const {
   return max_track_length;
 }
 
-static float CurrentPosRatio(const Timeline& timeline, time::SystemPoint now) {
+static float CurrentPosRatio(const Timeline& timeline, time::SteadyPoint now) {
   time::T max_track_length = timeline.MaxTrackLength();
   if (max_track_length == 0) {
     return 1;
   }
   switch (timeline.state) {
     case Timeline::kPlaying:
-      return (now - time::SystemFromSteady(timeline.playing.started_at)).count() / max_track_length;
+      return (now - timeline.playing.started_at).count() / max_track_length;
     case Timeline::kPaused:
       return timeline.paused.playback_offset / max_track_length;
     case Timeline::kRecording:
-      return (now - time::SystemFromSteady(timeline.recording.started_at)).count() /
-             max_track_length;
+      return (now - timeline.recording.started_at).count() / max_track_length;
   }
 }
 
@@ -525,14 +524,14 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
 void NextButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
   if (auto timeline = Closest<Timeline>(ptr.hover)) {
-    SetPosRatio(*timeline, 1, ptr.window.display.timer.steady_now);
+    SetPosRatio(*timeline, 1, ptr.window.display.timer.now);
   }
 }
 
 void PrevButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
   if (Timeline* timeline = Closest<Timeline>(ptr.hover)) {
-    SetPosRatio(*timeline, 0, ptr.window.display.timer.steady_now);
+    SetPosRatio(*timeline, 0, ptr.window.display.timer.now);
   }
 }
 
@@ -548,9 +547,9 @@ static float DistanceToSeconds(const Timeline& timeline) {
   return timeline.zoom.value / kWindowWidth;
 }
 
-time::T TimeAtX(const Timeline& timeline, float x, time::SystemPoint now = time::kZero) {
-  if (now == time::kZero) {
-    now = time::SystemNow();
+time::T TimeAtX(const Timeline& timeline, float x, time::SteadyPoint now = time::kZeroSteady) {
+  if (now == time::kZeroSteady) {
+    now = time::SteadyNow();
   }
   // Find the time at the center of the timeline
   float distance_to_seconds = DistanceToSeconds(timeline);
@@ -616,7 +615,7 @@ struct DragBridgeAction : Action {
     float x = pointer.PositionWithin(timeline).x;
     float new_bridge_x = x - press_offset_x;
     SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x),
-                pointer.window.display.timer.steady_now);
+                pointer.window.display.timer.now);
   }
   virtual void End() {}
 };
@@ -642,7 +641,7 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.window.display.timer.steady_now);
+    OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.window.display.timer.now);
   }
   virtual void End() {}
 };
@@ -775,7 +774,7 @@ unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger bt
           return unique_ptr<Action>(new DragTimelineAction(ptr, *this));
         }
       } else {
-        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.display.timer.steady_now);
+        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.display.timer.now);
         return unique_ptr<Action>(new DragBridgeAction(ptr, *this));
       }
     }
@@ -1231,7 +1230,7 @@ SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display* dis
     float track_width = MaxTrackLength() / distance_to_seconds;
 
     float current_pos_ratio =
-        CurrentPosRatio(*this, display ? display->timer.now : time::SystemNow());
+        CurrentPosRatio(*this, display ? display->timer.now : time::SteadyNow());
 
     float track_offset_x0 = kRulerLength / 2;
     float track_offset_x1 = track_width - kRulerLength / 2;
@@ -1293,8 +1292,7 @@ animation::Phase OnOffTrack::Draw(gui::DrawContext& dctx) const {
   if (!isnan(on_at)) {
     switch (timeline->state) {
       case Timeline::kRecording:
-        DrawSegment(on_at,
-                    (dctx.display.timer.steady_now - timeline->recording.started_at).count());
+        DrawSegment(on_at, (dctx.display.timer.now - timeline->recording.started_at).count());
         break;
       case Timeline::kPlaying:
       case Timeline::kPaused:

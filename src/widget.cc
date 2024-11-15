@@ -55,7 +55,7 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   }
 
   ctx.canvas.save();
-  choppy_drawable.ComposeSurface(&ctx.canvas);
+  ComposeSurface(&ctx.canvas);
   ctx.canvas.restore();
   return invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
 
@@ -137,7 +137,7 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
   return widget_index;
 }
 
-Widget::Widget() : choppy_drawable(this) { GetWidgetIndex()[ID()] = this; }
+Widget::Widget() { GetWidgetIndex()[ID()] = this; }
 Widget::~Widget() { GetWidgetIndex().erase(ID()); }
 
 uint32_t Widget::ID() const {
@@ -158,53 +158,53 @@ Widget* Widget::Find(uint32_t id) {
 
 PackFrameRequest next_frame_request = {};
 
-void ChoppyDrawable::RenderToSurface(SkCanvas& root_canvas) {
+void Widget::RenderToSurface(SkCanvas& root_canvas) {
   render_started = time::SteadyNow();
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
-  auto root_bounds_rounded = widget->draw_root_bounds_rounded;
-  widget->surface = root_canvas.getSurface()->makeSurface(root_bounds_rounded.width(),
-                                                          root_bounds_rounded.height());
+  auto root_bounds_rounded = draw_root_bounds_rounded;
+  surface = root_canvas.getSurface()->makeSurface(root_bounds_rounded.width(),
+                                                  root_bounds_rounded.height());
 
-  auto fake_canvas = widget->surface->getCanvas();
+  auto fake_canvas = surface->getCanvas();
   fake_canvas->clear(SK_ColorTRANSPARENT);
-  widget->recording->draw(fake_canvas, -root_bounds_rounded.left(),
-                          -root_bounds_rounded.top());  // execute the draw
-                                                        // commands immediately
+  recording->draw(fake_canvas, -root_bounds_rounded.left(),
+                  -root_bounds_rounded.top());  // execute the draw
+                                                // commands immediately
 
   GrFlushInfo flush_info = {
       .fFinishedProc =
           [](GrGpuFinishedContext context) {
-            ChoppyDrawable* cd = static_cast<ChoppyDrawable*>(context);
-            auto id = cd->ID();
-            float render_time = (float)(time::SteadyNow() - cd->render_started).count();
+            Widget* w = static_cast<Widget*>(context);
+            auto id = w->ID();
+            float render_time = (float)(time::SteadyNow() - w->render_started).count();
             next_frame_request.render_results.push_back({id, render_time});
           },
       .fFinishedContext = this,
   };
 
-  direct_ctx->flush(widget->surface.get(), flush_info);
+  direct_ctx->flush(surface.get(), flush_info);
 
   SkMatrix window_to_local;
-  (void)widget->draw_matrix.invert(&window_to_local);
-  window_to_local.mapRect(&widget->draw_bounds, SkRect::Make(root_bounds_rounded));
-  draw_time_copy = widget->draw_time.time_since_epoch().count();
+  (void)draw_matrix.invert(&window_to_local);
+  window_to_local.mapRect(&draw_bounds, SkRect::Make(root_bounds_rounded));
+  draw_time_copy = draw_time.time_since_epoch().count();
 }
 
 // Lifetime of the frame (from the Widget's perspective):
 // - Update - includes the logic / animation update for the widget
 // - Draw - records drawing commands into SkDrawable
-// - RenderToSurface - ChoppyDrawable re-renders the SkSurface with the recorded commands
+// - RenderToSurface - Widget renders its SkSurface using the recorded commands
 // - ComposeSurface - compose the drawn SkSurface onto the canvas
 
-void ChoppyDrawable::ComposeSurface(SkCanvas* canvas) const {
+void Widget::ComposeSurface(SkCanvas* canvas) const {
 #ifdef DEBUG_RENDERING
   SkPaint local_bounds_paint;  // translucent black
   local_bounds_paint.setStyle(SkPaint::kStroke_Style);
   local_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-  canvas->drawRect(widget->local_bounds, local_bounds_paint);
+  canvas->drawRect(local_bounds, local_bounds_paint);
 #endif
 
-  if (widget->surface == nullptr) {
+  if (surface == nullptr) {
     // LOG << "Drawing choppy drawable " << entry->path << " (no surface!)";
   } else {
     // Inside entry we have a cached surface that was renderd with old matrix. Now we want to
@@ -217,12 +217,12 @@ void ChoppyDrawable::ComposeSurface(SkCanvas* canvas) const {
     // entry->surface->draw(canvas, 0, 0);
 
     // Alternative approach, where we map the old texture to the new bounds:
-    SkRect surface_bounds = SkRect::MakeWH(widget->surface->width(), widget->surface->height());
+    SkRect surface_bounds = SkRect::MakeWH(surface->width(), surface->height());
 #ifdef DEBUG_RENDERING
     auto matrix_backup = canvas->getTotalMatrix();
 #endif
-    canvas->concat(SkMatrix::RectToRect(surface_bounds, widget->draw_bounds));
-    widget->surface->draw(canvas, 0, 0);
+    canvas->concat(SkMatrix::RectToRect(surface_bounds, draw_bounds));
+    surface->draw(canvas, 0, 0);
 #ifdef DEBUG_RENDERING
     SkPaint surface_bounds_paint;
     constexpr int kNumColors = 10;
@@ -247,14 +247,11 @@ void ChoppyDrawable::ComposeSurface(SkCanvas* canvas) const {
     auto& font = GetFont();
     SkPaint text_paint;
     canvas->setMatrix(matrix_backup);
-    canvas->translate(widget->local_bounds.left(),
-                      min(widget->local_bounds.top(), widget->local_bounds.bottom()));
-    auto text = f("%.1f", widget->draw_millis);
+    canvas->translate(local_bounds.left(), min(local_bounds.top(), local_bounds.bottom()));
+    auto text = f("%.1f", draw_millis);
     font.DrawText(*canvas, text, text_paint);
 #endif
   }
 }
-
-uint32_t ChoppyDrawable::ID() const { return widget->ID(); }
 
 }  // namespace automat::gui

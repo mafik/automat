@@ -438,8 +438,8 @@ void CreateWindow(Status& status) {
 // TODO: render this using a job system
 
 struct PackedFrame {
-  vector<ChoppyDrawable*> frame;
-  vector<ChoppyDrawable*> overflow;
+  vector<Widget*> frame;
+  vector<Widget*> overflow;
   animation::Phase animation_phase;
 };
 
@@ -760,14 +760,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     widget.recording = recorder.finishRecordingAsDrawable();
     widget.draw_present = packed;
     if (packed) {
-      pack.frame.push_back(&widget.choppy_drawable);
+      pack.frame.push_back(&widget);
     } else {
-      pack.overflow.push_back(&widget.choppy_drawable);
+      pack.overflow.push_back(&widget);
     }
   }
 }
 
-std::deque<ChoppyDrawable*> overflow_queue;
+std::deque<Widget*> overflow_queue;
 
 void Paint() {
   auto paint_start = time::SteadyNow();
@@ -790,22 +790,7 @@ void Paint() {
   PackFrame(next_frame_request, pack);
   next_frame_request.render_results.clear();
 
-  set<ChoppyDrawable*> choppy_drawables;
-  for (auto cd : pack.frame) {
-    if (choppy_drawables.count(cd)) {
-      ERROR << "Duplicate choppy drawable!";
-    }
-    choppy_drawables.insert(cd);
-  }
-  for (auto cd : pack.overflow) {
-    if (choppy_drawables.count(cd)) {
-      ERROR << "Duplicate choppy drawable!";
-    }
-    choppy_drawables.insert(cd);
-  }
-
   // Render the PackedFrame
-
   for (auto& drawable : pack.frame) {
     drawable->RenderToSurface(canvas);
   }

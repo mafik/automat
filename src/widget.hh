@@ -54,22 +54,6 @@ struct PackFrameRequest {
 
 extern PackFrameRequest next_frame_request;
 
-// A type of drawable that draws the Widget using the most recently cached texture.
-// A choppy drawable can be asked to "update" itself, which will update the cached texture.
-struct ChoppyDrawable {
-  Widget* widget;
-  time::SteadyPoint render_started;
-  double draw_time_copy;
-
-  ChoppyDrawable(Widget* widget) : widget(widget) {}
-
-  void RenderToSurface(SkCanvas& canvas);
-
-  void ComposeSurface(SkCanvas* canvas) const;
-
-  uint32_t ID() const;
-};
-
 struct DrawContext {
   animation::Display& display;
   SkCanvas& canvas;
@@ -142,15 +126,22 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   mutable time::SteadyPoint invalidated = time::SteadyPoint::min();
 
   bool draw_to_texture = false;
-  // The ID of the current draw job.
-  ChoppyDrawable choppy_drawable;
+
+  void RenderToSurface(SkCanvas& canvas);
+
+  void ComposeSurface(SkCanvas* canvas) const;
+
   SkRect local_bounds;          // local coordinates
   SkRect root_bounds;           // root coordinates, clipped to the window viewport
   SkIRect root_bounds_rounded;  // same as above, but rounded to integer pixels
   // The time when the current draw job was started.
   time::SteadyPoint draw_time = time::SteadyPoint::min();
+  double draw_time_copy;             // Time when the last (finished) draw job was started
   SkRect draw_bounds;                // Area of the widget which was drawn (local coordinates)
   SkIRect draw_root_bounds_rounded;  // root_bounds_rounded, when the drawing operation started
+
+  time::SteadyPoint render_started;  // Used by the client to measure rendering time
+
   // The recording that is being drawn.
   sk_sp<SkDrawable> recording = nullptr;
   // The surface that is being drawn to.

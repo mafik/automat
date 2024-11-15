@@ -55,7 +55,7 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   }
 
   ctx.canvas.save();
-  ComposeSurface(&ctx.canvas);
+  ctx.canvas.drawDrawable(compose_surface_drawable);
   ctx.canvas.restore();
   return invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
 }

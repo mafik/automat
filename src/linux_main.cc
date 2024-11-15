@@ -482,78 +482,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
                : tree_entry.widget->average_draw_millis / 1000;
   };
 
-  {  // Step 1 - flatten the widget tree for analysis.
-    // Queue with (parent index, widget) pairs.
-    vector<pair<int, std::shared_ptr<Widget>>> q;
-    q.push_back(make_pair(0, window));
-    int i_parent;
-    Visitor visitor = [&](maf::Span<shared_ptr<Widget>> children) {
-      for (auto& child : children) {
-        q.push_back(make_pair(i_parent, child));
-      }
-      return ControlFlow::Continue;
-    };
-    while (!q.empty()) {
-      auto [i_parent_tmp, widget] = std::move(q.back());
-      i_parent = i_parent_tmp;
-      q.pop_back();
-
-      tree.push_back(WidgetTree{
-          .widget = widget,
-          .parent = i_parent,
-          .window_to_local = SkMatrix::I(),
-      });
-      int i_self = tree.size() - 1;
-
-      if (widget->parent == nullptr && i_self != i_parent) {
-        ERROR << "Widget " << widget->Name() << " has parent " << f("%p", widget->parent.get())
-              << " but should have " << tree[i_parent].widget->Name()
-              << f(" (%p)", tree[i_parent].widget.get());
-        widget->parent = tree[i_parent].widget;
-      }
-
-      auto& node = tree.back();
-      if (i_parent != i_self) {
-        node.window_to_local = tree[i_parent].window_to_local;
-        node.window_to_local.postConcat(
-            tree[i_parent].widget->TransformToChild(*widget, &window->display));
-      } else {
-        node.window_to_local.postScale(1 / DisplayPxPerMeter(), 1 / DisplayPxPerMeter());
-      }
-      (void)node.window_to_local.invert(&node.local_to_window);
-
-      widget->texture_bounds = widget->TextureBounds(&window->display);
-      bool intersects = true;
-      if (widget->texture_bounds.has_value()) {
-        // Compute the bounds of the widget - in local & root coordinates
-        SkRect root_bounds;
-        node.local_to_window.mapRect(&root_bounds, *widget->texture_bounds);
-
-        // Clip the `root_bounds` to the window bounds;
-        if (root_bounds.width() * root_bounds.height() < 512 * 512) {
-          // Render small objects without clipping
-          intersects = SkRect::Intersects(root_bounds, window_bounds_px);
-        } else {
-          // This mutates the `root_bounds` - they're clipped to `canvas_bounds`!
-          intersects = root_bounds.intersect(window_bounds_px);
-        }
-
-        root_bounds.roundOut(&node.surface_bounds_root);
-      } else {
-        node.verdict = Verdict::Skip_NoTexture;
-      }
-
-      // Advance the parent to current widget & visit its children.
-      if (intersects) {
-        i_parent = tree.size() - 1;
-        widget->VisitChildren(visitor);
-      } else {
-        node.verdict = Verdict::Skip_Clipped;
-      }
-    }
-  }
-
-  {  // Step 2 - update the cache entries for widgets rendered by the client
+  {  // Step 1 - update the cache entries for widgets rendered by the client
     for (auto& render_result : request.render_results) {
       Widget* widget = Widget::Find(render_result.id);
       if (widget == nullptr) {
@@ -588,17 +517,80 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
   }
 
-  {  // Step 3 - create a list of render jobs for the updated widgets
-    for (int i = 0; i < tree.size(); ++i) {
-      if (tree[i].widget->recording) {
-        tree[i].verdict = Verdict::Skip_StillDrawing;
+  {  // Step 2 - flatten the widget tree for analysis.
+    // Queue with (parent index, widget) pairs.
+    vector<pair<int, std::shared_ptr<Widget>>> q;
+    q.push_back(make_pair(0, window));
+    int parent;
+    Visitor visitor = [&](maf::Span<shared_ptr<Widget>> children) {
+      for (auto& child : children) {
+        q.push_back(make_pair(parent, child));
       }
-      auto parent = tree[i].parent;
-      if (parent != i && tree[parent].verdict == Verdict::Skip_StillDrawing) {
-        tree[i].verdict = Verdict::Skip_StillDrawing;
+      return ControlFlow::Continue;
+    };
+    while (!q.empty()) {
+      auto [parent_tmp, widget] = std::move(q.back());
+      parent = parent_tmp;
+      q.pop_back();
+
+      tree.push_back(WidgetTree{
+          .widget = widget,
+          .parent = parent,
+          .window_to_local = SkMatrix::I(),
+      });
+      int i = tree.size() - 1;
+
+      if (widget->parent == nullptr && i != parent) {
+        ERROR << "Widget " << widget->Name() << " has parent " << f("%p", widget->parent.get())
+              << " but should have " << tree[parent].widget->Name()
+              << f(" (%p)", tree[parent].widget.get());
+        widget->parent = tree[parent].widget;
+      }
+
+      auto& node = tree.back();
+      if (parent != i) {
+        node.window_to_local = tree[parent].window_to_local;
+        node.window_to_local.postConcat(
+            tree[parent].widget->TransformToChild(*widget, &window->display));
+      } else {
+        node.window_to_local.postScale(1 / DisplayPxPerMeter(), 1 / DisplayPxPerMeter());
+      }
+      (void)node.window_to_local.invert(&node.local_to_window);
+
+      widget->texture_bounds = widget->TextureBounds(&window->display);
+      bool intersects = true;
+      if (widget->texture_bounds.has_value()) {
+        // Compute the bounds of the widget - in local & root coordinates
+        SkRect root_bounds;
+        node.local_to_window.mapRect(&root_bounds, *widget->texture_bounds);
+
+        // Clip the `root_bounds` to the window bounds;
+        if (root_bounds.width() * root_bounds.height() < 512 * 512) {
+          // Render small objects without clipping
+          intersects = SkRect::Intersects(root_bounds, window_bounds_px);
+        } else {
+          // This mutates the `root_bounds` - they're clipped to `canvas_bounds`!
+          intersects = root_bounds.intersect(window_bounds_px);
+        }
+
+        root_bounds.roundOut(&node.surface_bounds_root);
+      } else {
+        node.verdict = Verdict::Skip_NoTexture;
+      }
+
+      // Advance the parent to current widget & visit its children.
+      if (node.widget->recording) {
+        node.verdict = Verdict::Skip_StillDrawing;
+      } else if (!intersects) {
+        node.verdict = Verdict::Skip_Clipped;
+      } else {
+        parent = tree.size() - 1;
+        widget->VisitChildren(visitor);
       }
     }
+  }
 
+  {  // Step 3 - create a list of render jobs for the updated widgets
     int first_job = -1;
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
@@ -794,8 +786,8 @@ void Paint() {
   next_frame_request.render_results.clear();
 
   // Render the PackedFrame
-  for (auto& drawable : pack.frame) {
-    drawable->RenderToSurface(canvas);
+  for (auto* widget : pack.frame) {
+    widget->RenderToSurface(canvas);
   }
 
   canvas.resetMatrix();

@@ -15,6 +15,7 @@
 #include "action.hh"
 #include "animation.hh"
 #include "control_flow.hh"
+#include "drawable.hh"
 #include "keyboard.hh"
 #include "optional.hh"
 #include "span.hh"
@@ -113,9 +114,23 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   std::shared_ptr<Widget> parent;
 
-  void RenderToSurface(SkCanvas& canvas);
+  void RenderToSurface(SkCanvas& root_canvas);
 
   void ComposeSurface(SkCanvas* canvas) const;
+
+  // Instead of calling ComposeSurface directly (which would use the current surface), we're using a
+  // drawable. This delays the actual drawing until the canvas is "flushed" and allows us to use the
+  // most recent surface.
+  struct ComposeSurfaceDrawable : Drawable {
+    Widget& Widget() {
+      auto offset = offsetof(struct Widget, compose_surface_drawable);
+      return *reinterpret_cast<struct Widget*>(reinterpret_cast<uintptr_t>(this) - offset);
+    }
+    SkRect onGetBounds() override { return *Widget().texture_bounds; }
+    void onDraw(SkCanvas* canvas) override { Widget().ComposeSurface(canvas); }
+  };
+
+  mutable ComposeSurfaceDrawable compose_surface_drawable;
 
   maf::Optional<SkRect> texture_bounds;  // local coordinates
   mutable uint32_t id = 0;

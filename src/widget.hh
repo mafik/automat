@@ -150,7 +150,8 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   SkIRect root_bounds_rounded;  // same as above, but rounded to integer pixels
   // The time when the current draw job was started.
   time::SteadyPoint draw_time = time::SteadyPoint::min();
-  SkRect draw_bounds;  // Area of the widget which was drawn (local coordinates)
+  SkRect draw_bounds;                // Area of the widget which was drawn (local coordinates)
+  SkIRect draw_root_bounds_rounded;  // root_bounds_rounded, when the drawing operation started
   // The recording that is being drawn.
   sk_sp<SkDrawable> recording = nullptr;
   // The surface that is being drawn to.

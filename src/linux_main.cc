@@ -788,6 +788,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     widget.draw_time = now;
     SkMatrix& m = tree[i].local_to_window;
     widget.draw_matrix = tree[i].local_to_window;
+    widget.draw_root_bounds_rounded = widget.root_bounds_rounded;
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
     rec_canvas->setMatrix(m);

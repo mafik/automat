@@ -152,14 +152,15 @@ PackFrameRequest next_frame_request = {};
 void ChoppyDrawable::Render(SkCanvas& root_canvas) {
   render_started = time::SteadyNow();
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
-  widget->surface = root_canvas.getSurface()->makeSurface(widget->root_bounds_rounded.width(),
-                                                          widget->root_bounds_rounded.height());
+  auto root_bounds_rounded = widget->draw_root_bounds_rounded;
+  widget->surface = root_canvas.getSurface()->makeSurface(root_bounds_rounded.width(),
+                                                          root_bounds_rounded.height());
 
   auto fake_canvas = widget->surface->getCanvas();
   fake_canvas->clear(SK_ColorTRANSPARENT);
-  widget->recording->draw(
-      fake_canvas, -widget->root_bounds_rounded.left(),
-      -widget->root_bounds_rounded.top());  // execute the draw commands immediately
+  widget->recording->draw(fake_canvas, -root_bounds_rounded.left(),
+                          -root_bounds_rounded.top());  // execute the draw
+                                                        // commands immediately
 
   GrFlushInfo flush_info = {
       .fFinishedProc =
@@ -176,7 +177,7 @@ void ChoppyDrawable::Render(SkCanvas& root_canvas) {
 
   SkMatrix window_to_local;
   (void)widget->draw_matrix.invert(&window_to_local);
-  window_to_local.mapRect(&widget->draw_bounds, SkRect::Make(widget->root_bounds_rounded));
+  window_to_local.mapRect(&widget->draw_bounds, SkRect::Make(root_bounds_rounded));
   draw_time_copy = widget->draw_time.time_since_epoch().count();
 }
 

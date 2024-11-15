@@ -15,6 +15,8 @@ struct Drawable {
 
   virtual SkRect onGetBounds() = 0;
   virtual void onDraw(SkCanvas*) = 0;
+
+  operator SkDrawable*() { return sk.get(); }
 };
 
 struct PaintDrawable : Drawable {

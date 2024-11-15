@@ -41,10 +41,24 @@ SkMatrix TransformDown(const Widget& to, const Widget* from = nullptr,
 // coordinates).
 SkMatrix TransformUp(const Widget& from, const Widget* to = nullptr, animation::Display* = nullptr);
 
+struct RenderResult {
+  uint32_t id;
+  float render_time;
+};
+
+struct PackFrameRequest {
+  // Must be sorted by ID!
+  std::vector<RenderResult> render_results;
+};
+
+extern PackFrameRequest next_frame_request;
+
 // A type of drawable that draws the Widget using the most recently cached texture.
 // A choppy drawable can be asked to "update" itself, which will update the cached texture.
 struct ChoppyDrawable : Drawable {
   Widget* widget;
+  time::SteadyPoint render_started;
+  int finished_count = 0;
 
   ChoppyDrawable(Widget* widget) : widget(widget) {}
 
@@ -54,7 +68,7 @@ struct ChoppyDrawable : Drawable {
 
   void onDraw(SkCanvas* canvas) override;
 
-  int ID() const;
+  uint32_t ID() const;
 };
 
 struct DrawContext {
@@ -111,8 +125,8 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual ~Widget();
 
   // IDs are used to identify a Widget across frames.
-  int ID() const;
-  static Widget* Find(int id);
+  uint32_t ID() const;
+  static Widget* Find(uint32_t id);
 
   std::shared_ptr<Widget> parent;
 

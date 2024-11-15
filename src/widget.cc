@@ -16,6 +16,7 @@
 
 #include "animation.hh"
 #include "control_flow.hh"
+#include "log.hh"
 #include "time.hh"
 
 using namespace automat;
@@ -127,22 +128,29 @@ Str ToStr(shared_ptr<Widget> widget) {
   return ret;
 }
 
-std::map<int, Widget*> widget_index;
+std::map<uint32_t, Widget*>& GetWidgetIndex() {
+  static std::map<uint32_t, Widget*> widget_index = {};
+  return widget_index;
+}
 
-Widget::Widget() : choppy_drawable(this) { widget_index[ID()] = this; }
-Widget::~Widget() { widget_index.erase(ID()); }
+Widget::Widget() : choppy_drawable(this) { GetWidgetIndex()[ID()] = this; }
+Widget::~Widget() { GetWidgetIndex().erase(ID()); }
 
-int Widget::ID() const { return choppy_drawable.sk->getGenerationID(); }
+uint32_t Widget::ID() const { return choppy_drawable.sk->getGenerationID(); }
 
-Widget* Widget::Find(int id) {
-  if (auto it = widget_index.find(id); it != widget_index.end()) {
+Widget* Widget::Find(uint32_t id) {
+  if (auto it = GetWidgetIndex().find(id); it != GetWidgetIndex().end()) {
     return it->second;
   } else {
     return nullptr;
   }
 }
 
+PackFrameRequest next_frame_request = {};
+
 void ChoppyDrawable::Render(SkCanvas& root_canvas) {
+  render_started = time::SteadyNow();
+  finished_count = 0;
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
   widget->surface = root_canvas.getSurface()->makeSurface(widget->root_bounds_rounded.width(),
                                                           widget->root_bounds_rounded.height());
@@ -153,8 +161,29 @@ void ChoppyDrawable::Render(SkCanvas& root_canvas) {
       fake_canvas, -widget->root_bounds_rounded.left(),
       -widget->root_bounds_rounded.top());  // execute the draw commands immediately
 
-  direct_ctx->flush(widget->surface.get());
-  direct_ctx->submit(GrSyncCpu::kYes);
+  GrFlushInfo flush_info = {
+      .fFinishedProc =
+          [](GrGpuFinishedContext context) {
+            ChoppyDrawable* cd = static_cast<ChoppyDrawable*>(context);
+            cd->finished_count++;
+            if (cd->finished_count > 1) {
+              FATAL << "Widget " << cd->widget->Name()
+                    << " has 'finished' rendering multiple times!";
+            }
+            auto id = cd->ID();
+            float render_time = (float)(time::SteadyNow() - cd->render_started).count();
+            next_frame_request.render_results.push_back({id, render_time});
+            for (int i = 0; i < next_frame_request.render_results.size() - 1; i++) {
+              if (next_frame_request.render_results[i].id == id) {
+                FATAL << "Widget " << cd->widget->Name()
+                      << " is being added to the queue multiple times!";
+              }
+            }
+          },
+      .fFinishedContext = this,
+  };
+
+  direct_ctx->flush(widget->surface.get(), flush_info);
 
   SkMatrix window_to_local;
   (void)widget->draw_matrix.invert(&window_to_local);
@@ -193,6 +222,6 @@ void ChoppyDrawable::onDraw(SkCanvas* canvas) {
 
 SkRect ChoppyDrawable::onGetBounds() { return widget->draw_bounds; }
 
-int ChoppyDrawable::ID() const { return widget->ID(); }
+uint32_t ChoppyDrawable::ID() const { return widget->ID(); }
 
 }  // namespace automat::gui

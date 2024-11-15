@@ -31,6 +31,7 @@
 #include "status.hh"
 #include "time.hh"
 #include "vk.hh"
+#include "widget.hh"
 #include "window.hh"
 #include "x11.hh"
 
@@ -435,16 +436,6 @@ void CreateWindow(Status& status) {
 // TODO: use correct bounds in SkPictureRecorder::beginRecording
 // TODO: render this using a job system
 
-struct RenderResult {
-  uint32_t id;
-  float render_time;
-};
-
-struct PackFrameRequest {
-  // Must be sorted by ID!
-  vector<RenderResult> render_results;
-};
-
 struct PackedFrame {
   vector<ChoppyDrawable*> frame;
   vector<ChoppyDrawable*> overflow;
@@ -555,7 +546,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         ERROR << "Widget " << render_result.id << " not found!";
         continue;
       }
-      assert(widget->draw_time > time::SteadyPoint::min());
+      if (widget->draw_time == time::SteadyPoint::min()) {
+        FATAL << "Widget " << widget->Name() << " has been returned by client multiple times!";
+      }
       float draw_millis = render_result.render_time * 1000;
       if (isnanf(widget->draw_millis)) {
         widget->draw_millis = draw_millis;
@@ -793,19 +786,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 }
 
 void Paint() {
-  static map<uint32_t, float> render_times;
-
-  PackFrameRequest frame_request;
-  for (auto& [id, render_time] : render_times) {
-    frame_request.render_results.push_back({id, render_time});
-  }
-  render_times.clear();
-
-  PackedFrame pack;
-  PackFrame(frame_request, pack);
-
-  // Render the PackedFrame
-
 #ifdef CPU_RENDERING
   auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(client_width, client_height));
 
@@ -819,27 +799,43 @@ void Paint() {
 #else
   SkCanvas& canvas = *vk::GetBackbufferCanvas();
 #endif
+  canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kYes);
 
-  for (auto& drawable : pack.frame) {
-    // LOG << "Rendering drawable " << drawable->entry->path
-    //     << " root bounds=" << Rect(drawable->entry->root_bounds);
-    auto start_time = time::SteadyNow();
-    drawable->Render(canvas);
-    auto render_time = time::SteadyNow() - start_time;
-    render_times[drawable->ID()] = render_time.count();
+  PackedFrame pack;
+  PackFrame(next_frame_request, pack);
+  next_frame_request.render_results.clear();
+
+  set<ChoppyDrawable*> choppy_drawables;
+  for (auto& cd : pack.frame) {
+    if (choppy_drawables.count(cd)) {
+      ERROR << "Duplicate choppy drawable!";
+    }
+    choppy_drawables.insert(cd);
+  }
+  for (auto& cd : pack.overflow) {
+    if (choppy_drawables.count(cd)) {
+      ERROR << "Duplicate choppy drawable!";
+    }
+    choppy_drawables.insert(cd);
   }
 
-  for (auto& drawable : pack.overflow) {
-    // LOG << "Rendering (overflowed) drawable " << drawable->entry->path;
-    auto start_time = time::SteadyNow();
+  // Render the PackedFrame
+
+  for (auto& drawable : pack.frame) {
     drawable->Render(canvas);
-    auto render_time = time::SteadyNow() - start_time;
-    render_times[drawable->ID()] = render_time.count();
   }
 
   canvas.resetMatrix();
   canvas.scale(DisplayPxPerMeter(), DisplayPxPerMeter());
-  canvas.drawDrawable(pack.frame.back()->sk.get());
+  canvas.drawDrawable(*pack.frame.back());
+
+  auto& font = GetFont();
+  canvas.save();
+  canvas.translate(0, window->size.height - 1_cm);
+  canvas.scale(2.7, 2.7);
+  auto fps_text = f("%.1fms", window->display.DeltaT() * 1000);
+  font.DrawText(canvas, fps_text, SkPaint());
+  canvas.restore();
 
 #ifdef CPU_RENDERING
   SkPixmap pixmap;
@@ -857,6 +853,11 @@ void Paint() {
 #else
   vk::Present();
 #endif
+
+  for (auto& drawable : pack.overflow) {
+    drawable->Render(canvas);
+  }
+  canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kNo);
   // Status status;
   // StopAutomat(status);
 }

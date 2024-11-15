@@ -150,7 +150,6 @@ PackFrameRequest next_frame_request = {};
 
 void ChoppyDrawable::Render(SkCanvas& root_canvas) {
   render_started = time::SteadyNow();
-  finished_count = 0;
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
   widget->surface = root_canvas.getSurface()->makeSurface(widget->root_bounds_rounded.width(),
                                                           widget->root_bounds_rounded.height());
@@ -165,20 +164,9 @@ void ChoppyDrawable::Render(SkCanvas& root_canvas) {
       .fFinishedProc =
           [](GrGpuFinishedContext context) {
             ChoppyDrawable* cd = static_cast<ChoppyDrawable*>(context);
-            cd->finished_count++;
-            if (cd->finished_count > 1) {
-              FATAL << "Widget " << cd->widget->Name()
-                    << " has 'finished' rendering multiple times!";
-            }
             auto id = cd->ID();
             float render_time = (float)(time::SteadyNow() - cd->render_started).count();
             next_frame_request.render_results.push_back({id, render_time});
-            for (int i = 0; i < next_frame_request.render_results.size() - 1; i++) {
-              if (next_frame_request.render_results[i].id == id) {
-                FATAL << "Widget " << cd->widget->Name()
-                      << " is being added to the queue multiple times!";
-              }
-            }
           },
       .fFinishedContext = this,
   };

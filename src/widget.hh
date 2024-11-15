@@ -22,6 +22,8 @@
 #include "str.hh"
 #include "time.hh"
 
+#define DEBUG_RENDERING 1
+
 namespace automat::gui {
 
 struct Widget;
@@ -58,7 +60,6 @@ extern PackFrameRequest next_frame_request;
 struct ChoppyDrawable : Drawable {
   Widget* widget;
   time::SteadyPoint render_started;
-  int finished_count = 0;
 
   ChoppyDrawable(Widget* widget) : widget(widget) {}
 

@@ -443,8 +443,6 @@ struct PackedFrame {
   animation::Phase animation_phase;
 };
 
-#define DEBUG_RENDERING 1
-
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   window->display.timer.Tick();
   auto now = window->display.timer.steady_now;

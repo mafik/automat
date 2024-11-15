@@ -142,7 +142,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   mutable time::SteadyPoint invalidated = time::SteadyPoint::min();
 
   // Things updated in PackFrame (& Draw)
-  time::SteadyPoint draw_time = time::SteadyPoint::min();
+  mutable time::SteadyPoint draw_time = time::SteadyPoint::min();
   SkIRect surface_bounds_root;
   sk_sp<SkDrawable> recording = nullptr;
   SkMatrix window_to_local;

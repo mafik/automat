@@ -718,7 +718,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       continue;
     }
     auto& widget = *tree[i].widget;
+    auto true_d = window->display.timer.d;
+    auto fake_d = min(1.0, (now - widget.draw_time).count());
+    window->display.timer.d = fake_d;
     auto animation_phase = widget.Update(window->display);
+    window->display.timer.d = true_d;
     if (animation_phase == animation::Finished) {
       widget.invalidated = time::SteadyPoint::max();
     } else {
@@ -740,6 +744,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
 #endif
 
+    // ACTUALLY the delta time is `draw_time - now`.
+    auto true_d = window->display.timer.d;
+    auto fake_d = min(1.0, (now - widget.draw_time).count());
     widget.draw_time = now;
     widget.window_to_local = node.window_to_local;
     widget.surface_bounds_root = node.surface_bounds_root;
@@ -747,7 +754,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
     rec_canvas->setMatrix(node.local_to_window);
     DrawContext ctx(window->display, *rec_canvas);
+    window->display.timer.d = fake_d;
     auto animation_phase = widget.Draw(ctx);  // This is where we actually draw stuff!
+    window->display.timer.d = true_d;
     if (animation_phase == animation::Animating) {
       widget.invalidated = min(widget.invalidated, now);
     }

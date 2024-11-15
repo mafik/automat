@@ -60,7 +60,14 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   return invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
 }
 
-void Widget::InvalidateDrawCache() const { invalidated = min(invalidated, time::SteadyNow()); }
+void Widget::InvalidateDrawCache() const {
+  if (invalidated == time::SteadyPoint::max()) {
+    // When a widget is invalidated after a long sleep, we assume that it was just rendered. This
+    // prevents the animation from thinking that the initial frame took a very long time.
+    draw_time = time::SteadyNow();
+  }
+  invalidated = min(invalidated, time::SteadyNow());
+}
 
 animation::Phase Widget::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
   const SkMatrix down = this->TransformToChild(child, &ctx.display);

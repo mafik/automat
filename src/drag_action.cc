@@ -110,7 +110,8 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
       location(std::move(location_arg)),
       widget(std::make_shared<DragLocationWidget>(*this)) {
   pointer.window.drag_action_count++;
-  // TODO: the right way to do this is to clear the parent here
+  location->Widget::parent = pointer.window.SharedPtr();
+  // TODO: the right way to do this is to clear the (location's - not Widget's!) parent here
   // location->parent = nullptr;
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1

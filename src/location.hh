@@ -101,12 +101,14 @@ struct Location : public gui::Widget {
   std::shared_ptr<Object> InsertHere(std::shared_ptr<Object>&& object) {
     this->object.swap(object);
     this->object->Relocate(this);
+    this->object->parent = this->SharedPtr();
     return object;
   }
 
   std::shared_ptr<Object> Create(const Object& prototype) {
     object = prototype.Clone();
     object->Relocate(this);
+    object->parent = this->SharedPtr();
     return object;
   }
 

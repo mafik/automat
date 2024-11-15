@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "prototypes.hh"
+#include "window.hh"
 
 namespace automat {
 
@@ -19,6 +20,7 @@ void InitRoot() {
   root_location = std::make_shared<Location>();
   root_location->name = "Root location";
   root_machine = root_location->Create<Machine>();
+  root_machine->parent = gui::window;
   root_machine->name = "Root machine";
   automat_thread = std::jthread(RunThread);
   auto& prototypes = Prototypes();

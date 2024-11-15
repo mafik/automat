@@ -519,7 +519,7 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
 }
 
 void Location::UpdateAutoconnectArgs() {
-  auto here_up = ParentAs<Machine>()->TransformFromChild(*this, nullptr);
+  auto here_up = Widget::parent->TransformFromChild(*this, nullptr);
   object->Args([&](Argument& arg) {
     if (arg.autoconnect_radius <= 0) {
       return;

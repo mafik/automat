@@ -23,7 +23,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
     return nullptr;
   }
   auto matrix = TransformUp(*pointer.hover, nullptr, &pointer.window.display);
-  auto loc = std::make_unique<Location>();
+  auto loc = std::make_shared<Location>();
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
   auto& anim = loc->animation_state[pointer.window.display];

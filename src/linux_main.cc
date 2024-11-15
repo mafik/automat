@@ -26,6 +26,7 @@
 #include "keyboard.hh"
 #include "library.hh"  // IWYU pragma: keep
 #include "log.hh"
+#include "math.hh"
 #include "persistence.hh"
 #include "root.hh"
 #include "status.hh"
@@ -442,6 +443,8 @@ struct PackedFrame {
   animation::Phase animation_phase;
 };
 
+#define DEBUG_RENDERING 1
+
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   window->display.timer.Tick();
   auto now = window->display.timer.steady_now;
@@ -449,11 +452,18 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       SkRect::MakeWH(round(window->size.width * window->display_pixels_per_meter),
                      round(window->size.width * window->display_pixels_per_meter));
 
+  enum class Verdict {
+    Unknown = 0,
+    Pack = 1,
+    Overflow = 2,
+    Skip_Clipped = 3,
+    Skip_NoTexture = 4,
+    Skip_StillDrawing = 5,
+  };
+
   struct WidgetTree {
     std::shared_ptr<Widget> widget;
-    bool packed = false;
-    bool overflowed = false;
-    bool intersects = false;
+    Verdict verdict = Verdict::Unknown;
     int parent;
     int prev_job = -1;
     int next_job = -1;
@@ -511,6 +521,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       (void)node.window_to_local.invert(&node.local_to_window);
 
       optional<SkRect> local_bounds_opt = widget->TextureBounds(&window->display);
+      bool intersects = true;
       if (local_bounds_opt.has_value()) {
         // Compute the bounds of the widget - in local & root coordinates
         widget->draw_to_texture = true;
@@ -520,21 +531,23 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         // Clip the `root_bounds` to the window bounds;
         if (widget->root_bounds.width() * widget->root_bounds.height() < 512 * 512) {
           // Render small objects without clipping
-          node.intersects = SkRect::Intersects(widget->root_bounds, window_bounds_px);
+          intersects = SkRect::Intersects(widget->root_bounds, window_bounds_px);
         } else {
           // This mutates the `root_bounds` - they're clipped to `canvas_bounds`!
-          node.intersects = widget->root_bounds.intersect(window_bounds_px);
+          intersects = widget->root_bounds.intersect(window_bounds_px);
         }
 
         widget->root_bounds.roundOut(&widget->root_bounds_rounded);
       } else {
-        node.intersects = true;
+        node.verdict = Verdict::Skip_NoTexture;
       }
 
       // Advance the parent to current widget & visit its children.
-      if (node.intersects) {
+      if (intersects) {
         i_parent = tree.size() - 1;
         widget->VisitChildren(visitor);
+      } else {
+        node.verdict = Verdict::Skip_Clipped;
       }
     }
   }
@@ -546,9 +559,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         ERROR << "Widget " << render_result.id << " not found!";
         continue;
       }
+#ifdef DEBUG_RENDERING
       if (widget->draw_time == time::SteadyPoint::min()) {
         FATAL << "Widget " << widget->Name() << " has been returned by client multiple times!";
       }
+#endif
       float draw_millis = render_result.render_time * 1000;
       if (isnanf(widget->draw_millis)) {
         widget->draw_millis = draw_millis;
@@ -573,32 +588,37 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 
   {  // Step 3 - create a list of render jobs for the updated widgets
+    for (int i = 0; i < tree.size(); ++i) {
+      if (tree[i].widget->draw_time != time::SteadyPoint::min()) {
+        tree[i].verdict = Verdict::Skip_StillDrawing;
+      }
+      auto parent = tree[i].parent;
+      if (parent != i && tree[parent].verdict == Verdict::Skip_StillDrawing) {
+        tree[i].verdict = Verdict::Skip_StillDrawing;
+      }
+    }
+
     int first_job = -1;
     for (int i = 0; i < tree.size(); ++i) {
-      auto& widget = *tree[i].widget;
-      if (!widget.draw_to_texture) {
-        continue;
-      }
-      if (!tree[i].intersects) {
-        continue;
-      }
-      // Widgets that are still being rendered shouldn't be scheduled again.
-      if (widget.draw_time != time::SteadyPoint::min()) {
+      auto& node = tree[i];
+      auto& widget = *node.widget;
+      if ((node.verdict == Verdict::Skip_NoTexture) || (node.verdict == Verdict::Skip_Clipped) ||
+          (node.verdict == Verdict::Skip_StillDrawing)) {
         continue;
       }
 
-      bool same_scale = (tree[i].local_to_window.getScaleX() == widget.draw_matrix.getScaleX() &&
-                         tree[i].local_to_window.getScaleY() == widget.draw_matrix.getScaleY() &&
-                         tree[i].local_to_window.getSkewX() == widget.draw_matrix.getSkewX() &&
-                         tree[i].local_to_window.getSkewY() == widget.draw_matrix.getSkewY());
+      bool same_scale = (node.local_to_window.getScaleX() == widget.draw_matrix.getScaleX() &&
+                         node.local_to_window.getScaleY() == widget.draw_matrix.getScaleY() &&
+                         node.local_to_window.getSkewX() == widget.draw_matrix.getSkewX() &&
+                         node.local_to_window.getSkewY() == widget.draw_matrix.getSkewY());
 
       // Widgets that haven't been invalidated don't have to be re-rendered.
       if (widget.invalidated == time::SteadyPoint::max() && same_scale) {
         continue;
       }
 
-      tree[i].next_job = first_job;
-      tree[i].prev_job = -1;
+      node.next_job = first_job;
+      node.prev_job = -1;
       if (first_job != -1) {
         tree[first_job].prev_job = i;
       }
@@ -610,14 +630,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     auto Pack = [&](int pack_i) {
       float render_time = 0;
       for (int i = pack_i; true; i = tree[i].parent) {
-        if (tree[i].packed) {
+        if (tree[i].verdict == Verdict::Pack) {
           break;
         }
-        if (!tree[i].widget->draw_to_texture) {
+        if (tree[i].verdict == Verdict::Skip_NoTexture) {
           continue;
         }
         render_time += GetRenderTime(tree[i]);
-        tree[i].packed = true;
+        tree[i].verdict = Verdict::Pack;
         if (tree[i].prev_job != -1) {
           tree[tree[i].prev_job].next_job = tree[i].next_job;
         } else if (i == first_job) {
@@ -648,18 +668,18 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         bool ancestor_overflowed = false;
 
         for (int i_parent = tree[i].parent; true; i_parent = tree[i_parent].parent) {
-          if (tree[i_parent].packed) {
+          if (tree[i_parent].verdict == Verdict::Pack) {
             break;
           }
-          if (tree[i_parent].overflowed) {
+          if (tree[i_parent].verdict == Verdict::Overflow) {
             ancestor_overflowed = true;
             break;
           }
-          if (tree[i_parent].widget->draw_to_texture) {
-            // Only count effect of widgets that participate in caching.
-            total_lag += GetLag(tree[i_parent]);
-            total_render_time += GetRenderTime(tree[i_parent]);
+          if (tree[i_parent].verdict == Verdict::Skip_NoTexture) {
+            continue;
           }
+          total_lag += GetLag(tree[i_parent]);
+          total_render_time += GetRenderTime(tree[i_parent]);
           if (i_parent == 0) {
             break;
           }
@@ -668,7 +688,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         total_render_time = max(total_render_time, 0.000001f);
 
         if (ancestor_overflowed || total_render_time > remaining_time) {
-          tree[i].overflowed = true;
+          tree[i].verdict = Verdict::Overflow;
           if (tree[i].prev_job != -1) {
             tree[tree[i].prev_job].next_job = tree[i].next_job;
           } else {
@@ -715,10 +735,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         str += Rect(tree[index].widget->local_bounds).ToStrMetric();
         str += " root=";
         str += Rect(tree[index].widget->root_bounds).ToStr();
-        if (tree[index].overflowed) {
+        if (tree[index].verdict == Verdict::Overflow) {
           str += " (overflowed)";
         }
-        if (tree[index].packed) {
+        if (tree[index].verdict == Verdict::Pack) {
           str += " (packed)";
         }
       }
@@ -740,8 +760,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
   // Step 4 - walk through the tree and record the draw commands into drawables.
   for (int i = 0; i < tree.size(); ++i) {
-    auto packed = tree[i].packed;
-    auto overflowed = tree[i].overflowed;
+    auto packed = tree[i].verdict == Verdict::Pack;
+    auto overflowed = tree[i].verdict == Verdict::Overflow;
     if (!packed && !overflowed) {
       continue;
     }
@@ -754,18 +774,22 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
   }
   for (int i = tree.size() - 1; i >= 0; --i) {
-    auto packed = tree[i].packed;
-    auto overflowed = tree[i].overflowed;
+    auto packed = tree[i].verdict == Verdict::Pack;
+    auto overflowed = tree[i].verdict == Verdict::Overflow;
     if (!packed && !overflowed) {
       continue;
     }
     auto& widget = *tree[i].widget;
+
+#ifdef DEBUG_RENDERING
+    if (widget.draw_time != time::SteadyPoint::min()) {
+      FATAL << "Widget " << widget.Name() << " has been repacked!";
+    }
+#endif
+
     widget.draw_time = now;
-
     SkMatrix& m = tree[i].local_to_window;
-
     widget.draw_matrix = tree[i].local_to_window;
-
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
     rec_canvas->setMatrix(m);
@@ -785,7 +809,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 }
 
+std::deque<ChoppyDrawable*> overflow_queue;
+
 void Paint() {
+  auto paint_start = time::SteadyNow();
 #ifdef CPU_RENDERING
   auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(client_width, client_height));
 
@@ -798,21 +825,21 @@ void Paint() {
 
 #else
   SkCanvas& canvas = *vk::GetBackbufferCanvas();
-#endif
   canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kYes);
+#endif
 
   PackedFrame pack;
   PackFrame(next_frame_request, pack);
   next_frame_request.render_results.clear();
 
   set<ChoppyDrawable*> choppy_drawables;
-  for (auto& cd : pack.frame) {
+  for (auto cd : pack.frame) {
     if (choppy_drawables.count(cd)) {
       ERROR << "Duplicate choppy drawable!";
     }
     choppy_drawables.insert(cd);
   }
-  for (auto& cd : pack.overflow) {
+  for (auto cd : pack.overflow) {
     if (choppy_drawables.count(cd)) {
       ERROR << "Duplicate choppy drawable!";
     }
@@ -854,8 +881,17 @@ void Paint() {
   vk::Present();
 #endif
 
-  for (auto& drawable : pack.overflow) {
-    drawable->Render(canvas);
+  for (auto* drawable : pack.overflow) {
+    overflow_queue.push_back(drawable);
+  }
+
+  while (!overflow_queue.empty()) {
+    auto paint_time_so_far = time::SteadyNow() - paint_start;
+    if (paint_time_so_far > 15ms) {
+      break;
+    }
+    overflow_queue.front()->Render(canvas);
+    overflow_queue.pop_front();
   }
   canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kNo);
   // Status status;

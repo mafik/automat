@@ -466,8 +466,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     int prev_job = -1;
     int next_job = -1;
     SkMatrix window_to_local;
-    SkMatrix local_to_window;  // Skia's "TotalMatrix".
-    SkIRect root_bounds_rounded;
+
+    SkMatrix local_to_window;     // copied over to Widget, if drawn
+    SkIRect surface_bounds_root;  // copied over to Widget, if drawn
   };
   vector<WidgetTree> tree;
 
@@ -537,7 +538,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
           intersects = root_bounds.intersect(window_bounds_px);
         }
 
-        root_bounds.roundOut(&node.root_bounds_rounded);
+        root_bounds.roundOut(&node.surface_bounds_root);
       } else {
         node.verdict = Verdict::Skip_NoTexture;
       }
@@ -607,10 +608,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         continue;
       }
 
-      bool same_scale = (node.local_to_window.getScaleX() == widget.draw_matrix.getScaleX() &&
-                         node.local_to_window.getScaleY() == widget.draw_matrix.getScaleY() &&
-                         node.local_to_window.getSkewX() == widget.draw_matrix.getSkewX() &&
-                         node.local_to_window.getSkewY() == widget.draw_matrix.getSkewY());
+      bool same_scale = (node.window_to_local.getScaleX() == widget.window_to_local.getScaleX() &&
+                         node.window_to_local.getScaleY() == widget.window_to_local.getScaleY() &&
+                         node.window_to_local.getSkewX() == widget.window_to_local.getSkewX() &&
+                         node.window_to_local.getSkewY() == widget.window_to_local.getSkewY());
 
       // Widgets that haven't been invalidated don't have to be re-rendered.
       if (widget.invalidated == time::SteadyPoint::max() && same_scale) {
@@ -748,12 +749,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 #endif
 
     widget.draw_time = now;
-    SkMatrix& m = node.local_to_window;
-    widget.draw_matrix = node.local_to_window;
-    widget.surface_bounds_root = node.root_bounds_rounded;
+    widget.window_to_local = node.window_to_local;
+    widget.surface_bounds_root = node.surface_bounds_root;
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
-    rec_canvas->setMatrix(m);
+    rec_canvas->setMatrix(node.local_to_window);
     DrawContext ctx(window->display, *rec_canvas);
     auto animation_phase = widget.Draw(ctx);  // This is where we actually draw stuff!
     if (animation_phase == animation::Animating) {

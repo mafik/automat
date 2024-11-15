@@ -115,28 +115,23 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   mutable uint32_t id = 0;
 
-  // The matrix that converts from local coordinates to window coordinates.
-  // Populated at PackFrame time.
-  SkMatrix draw_matrix;
-  time::SteadyPoint last_used = time::SteadyPoint::min();
-
   // The time when the cache entry was first invalidated.
   // Initially this is set to 0 (meaning it was never drawn).
   // When the widget is scheduled, set this to max value.
   mutable time::SteadyPoint invalidated = time::SteadyPoint::min();
 
-  bool draw_to_texture = false;
-
   void RenderToSurface(SkCanvas& canvas);
 
   void ComposeSurface(SkCanvas* canvas) const;
 
+  bool draw_to_texture = false;
   SkRect texture_bounds;  // local coordinates
 
   // Things updated in PackFrame (& Draw)
   time::SteadyPoint draw_time = time::SteadyPoint::min();
   SkIRect surface_bounds_root;
   sk_sp<SkDrawable> recording = nullptr;
+  SkMatrix window_to_local;
 
   // Things updated in RenderToSurface
   time::SteadyPoint render_started;  // Used by the client to measure rendering time

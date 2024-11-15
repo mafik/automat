@@ -58,8 +58,6 @@ animation::Phase Widget::DrawCached(DrawContext& ctx) const {
   ComposeSurface(&ctx.canvas);
   ctx.canvas.restore();
   return invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
-
-  // entry.last_used = ctx.display.timer.steady_now;
 }
 
 void Widget::InvalidateDrawCache() const { invalidated = min(invalidated, time::SteadyNow()); }
@@ -179,8 +177,6 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
 
   direct_ctx->flush(surface.get(), flush_info);
 
-  SkMatrix window_to_local;
-  (void)draw_matrix.invert(&window_to_local);
   window_to_local.mapRect(&surface_bounds_local, SkRect::Make(surface_bounds_root));
 }
 
@@ -192,10 +188,10 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
 
 void Widget::ComposeSurface(SkCanvas* canvas) const {
 #ifdef DEBUG_RENDERING
-  SkPaint local_bounds_paint;  // translucent black
-  local_bounds_paint.setStyle(SkPaint::kStroke_Style);
-  local_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-  canvas->drawRect(texture_bounds, local_bounds_paint);
+  SkPaint texture_bounds_paint;  // translucent black
+  texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
+  texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
+  canvas->drawRect(texture_bounds, texture_bounds_paint);
 #endif
 
   if (surface == nullptr) {

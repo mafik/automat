@@ -7,7 +7,6 @@
 #include <include/gpu/GrDirectContext.h>
 #include <include/gpu/ganesh/SkImageGanesh.h>
 
-#include "animation.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -16,11 +15,11 @@ struct ImageCache {
   std::unordered_map<maf::Str, sk_sp<SkImage>> images;
 };
 
-animation::PerDisplay<ImageCache> image_cache;
+ImageCache image_cache;
 
 sk_sp<SkImage> CacheImage(gui::DrawContext& ctx, const maf::Str& key,
                           std::function<sk_sp<SkImage>()> generator) {
-  auto& cache = image_cache[ctx.display];
+  auto& cache = image_cache;
   if (auto it = cache.images.find(key); it != cache.images.end()) {
     return it->second;
   }
@@ -31,7 +30,7 @@ sk_sp<SkImage> CacheImage(gui::DrawContext& ctx, const maf::Str& key,
 
 sk_sp<SkImage> MakeImageFromAsset(maf::fs::VFile& asset, gui::DrawContext* dctx) {
   if (dctx) {
-    auto& cache = image_cache[dctx->display];
+    auto& cache = image_cache;
     if (auto it = cache.images.find(maf::Str(asset.path)); it != cache.images.end()) {
       return it->second;
     }

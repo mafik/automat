@@ -3,7 +3,6 @@
 #pragma once
 
 #include <cmath>
-#include <map>
 
 #include "math.hh"
 #include "time.hh"
@@ -28,19 +27,6 @@ inline maf::Str ToStr(Phase p) { return p == Animating ? "Animating" : "Finished
 
 inline Phase operator||(Phase a, Phase b) { return Phase(bool(a) || bool(b)); }
 inline Phase& operator|=(Phase& a, Phase b) { return a = a || b; }
-
-struct PerDisplayValueBase {
-  const void* owner;
-  PerDisplayValueBase(const void* owner) : owner(owner) {}
-  virtual ~PerDisplayValueBase() = default;
-};
-
-template <typename T>
-struct PerDisplayValue : PerDisplayValueBase {
-  T value;
-  PerDisplayValue(const void* owner) : PerDisplayValueBase(owner), value{} {}
-  ~PerDisplayValue() override = default;
-};
 
 struct Display;
 
@@ -68,103 +54,6 @@ struct Display {
   float DeltaT() const { return timer.d; }
 
   gui::Window* window = nullptr;
-
-  mutable std::map<void*, std::unique_ptr<PerDisplayValueBase>> per_display_values;
-};
-
-template <typename T>
-struct PerDisplay {
-  PerDisplay() = default;
-
-  // copy
-  PerDisplay(const PerDisplay& orig) {
-    *this = orig;  // defer to operator=
-  }
-  PerDisplay& operator=(const PerDisplay& orig) {
-    for (auto* display : displays) {
-      if (auto it = display->per_display_values.find((void*)&orig);
-          it != display->per_display_values.end()) {
-        auto copy = std::make_unique<PerDisplayValue<T>>(this);
-        copy->value = ((PerDisplayValue<T>*)it->second.get())->value;
-        display->per_display_values.emplace(this, std::move(copy));
-      }
-    }
-    return *this;
-  }
-
-  // moving is slow but ok
-  PerDisplay(PerDisplay&& orig) {
-    for (auto* display : displays) {
-      if (auto it = display->per_display_values.find((void*)&orig);
-          it != display->per_display_values.end()) {
-        auto value = std::move(it->second);
-        value->owner = this;
-        display->per_display_values.erase(it);
-        display->per_display_values.emplace(this, std::move(value));
-      }
-    }
-  }
-  PerDisplay& operator=(const PerDisplay&& orig) {
-    for (auto* display : displays) {
-      if (auto it = display->per_display_values.find((void*)&orig);
-          it != display->per_display_values.end()) {
-        auto value = std::move(it->second);
-        value->owner = this;
-        display->per_display_values.erase(it);
-        display->per_display_values.emplace(this, std::move(value));
-      }
-    }
-    return *this;
-  }
-
-  ~PerDisplay() {
-    for (auto* display : displays) {
-      if (auto it = display->per_display_values.find(this);
-          it != display->per_display_values.end()) {
-        display->per_display_values.erase(it);
-      }
-    }
-  }
-
-  T* Find(const Display& d) const {
-    if (auto it = d.per_display_values.find((void*)this); it != d.per_display_values.end()) {
-      return &static_cast<PerDisplayValue<T>*>(it->second.get())->value;
-    }
-    return nullptr;
-  }
-
-  T& operator[](const Display& d) const {
-    if (auto* val = Find(d)) {
-      return *val;
-    }
-    auto [it, present] = d.per_display_values.emplace((void*)this, new PerDisplayValue<T>(this));
-    return static_cast<PerDisplayValue<T>*>(it->second.get())->value;
-  }
-
-  struct end_iterator {};
-
-  struct iterator {
-    const PerDisplay& ptr;
-    size_t index = 0;
-    iterator(const PerDisplay& ptr) : ptr(ptr) { SkipMissing(); }
-    void SkipMissing() {
-      while (index < displays.size() &&
-             !displays[index]->per_display_values.contains((void*)&ptr)) {
-        ++index;
-      }
-    }
-    Display* Display() { return displays[index]; }
-    T& operator*() { return *ptr.Find(*displays[index]); }
-    iterator& operator++() {
-      ++index;
-      SkipMissing();
-      return *this;
-    }
-    bool operator!=(const end_iterator&) { return index < displays.size(); }
-  };
-
-  iterator begin() const { return iterator(*this); }
-  end_iterator end() const { return end_iterator{}; }
 };
 
 // TODO: delete almost everything from this file (and replace with "LowLevel*Towards" functions)

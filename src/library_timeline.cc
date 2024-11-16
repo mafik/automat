@@ -123,8 +123,7 @@ static sk_sp<SkImage> RosewoodColor(DrawContext& ctx) {
 }
 
 const SkPaint& WoodPaint(DrawContext& ctx) {
-  static animation::PerDisplay<SkPaint> wood_paint;
-  if (wood_paint.Find(ctx.display) == nullptr) {
+  static SkPaint wood_paint = ([&]() {
     SkPaint p;
     p.setColor("#805338"_color);
     auto s = kWoodenCaseWidth / 512 / 2;
@@ -132,9 +131,9 @@ const SkPaint& WoodPaint(DrawContext& ctx) {
                     ->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
                                  SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear))
                     ->makeWithLocalMatrix(SkMatrix::Scale(s, s).postRotate(-85)));
-    wood_paint[ctx.display] = p;
-  }
-  return wood_paint[ctx.display];
+    return p;
+  })();
+  return wood_paint;
 }
 
 const SkPaint kPlasticPaint = []() {

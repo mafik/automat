@@ -57,7 +57,7 @@ struct Location : public gui::Widget {
   // TODO: remove this and move it into TransformToChild
   SkMatrix GetTransform(animation::Display*) const;
 
-  animation::PerDisplay<ObjectAnimationState> animation_state;
+  mutable ObjectAnimationState animation_state;
 
   std::weak_ptr<Location> parent;
 

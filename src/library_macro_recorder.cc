@@ -101,16 +101,13 @@ std::shared_ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
 string_view MacroRecorder::Name() const { return "Macro Recorder"; }
 std::shared_ptr<Object> MacroRecorder::Clone() const {
   auto clone = std::make_shared<MacroRecorder>();
-  clone->animation_state_ptr = animation_state_ptr;
-  for (auto& anim : clone->animation_state_ptr) {
-    anim.pointers_over = 0;
-  }
+  clone->animation_state = animation_state;
+  clone->animation_state.pointers_over = 0;
   return clone;
 }
 
 #pragma region Draw
 animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
-  auto& animation_state = animation_state_ptr[dctx.display];
   auto image = MacroRecorderFrontColor(dctx);
   auto& canvas = dctx.canvas;
   auto phase = keylogging ? animation::Animating : animation::Finished;
@@ -490,12 +487,12 @@ void MacroRecorder::Off() {
   here.lock()->long_running = nullptr;
 }
 void MacroRecorder::PointerOver(gui::Pointer& p, animation::Display& d) {
-  animation_state_ptr[d].pointers_over++;
+  animation_state.pointers_over++;
   StartWatching(p);
   InvalidateDrawCache();
 }
 void MacroRecorder::PointerLeave(gui::Pointer& p, animation::Display& d) {
-  animation_state_ptr[d].pointers_over--;
+  animation_state.pointers_over--;
   StopWatching(p);
   p.move_callbacks.Erase(this);
 }
@@ -520,7 +517,7 @@ void GlassRunButton::PointerOver(gui::Pointer& p, animation::Display& display) {
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
   if (auto h = macro_recorder->here.lock()) {
     if (auto connection_widget = FindConnectionWidget(*h, timeline_arg)) {
-      connection_widget->animation_state[display].prototype_alpha_target = 1;
+      connection_widget->animation_state.prototype_alpha_target = 1;
     }
   }
 }
@@ -530,7 +527,7 @@ void GlassRunButton::PointerLeave(gui::Pointer& p, animation::Display& display) 
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
   if (auto h = macro_recorder->here.lock()) {
     if (auto connection_widget = FindConnectionWidget(*h, timeline_arg)) {
-      connection_widget->animation_state[display].prototype_alpha_target = 0;
+      connection_widget->animation_state.prototype_alpha_target = 0;
     }
   }
 }

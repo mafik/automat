@@ -308,7 +308,7 @@ struct Keyboard final {
   // A keyboard can write to multiple carets at the same time! (not finished!)
   std::set<std::unique_ptr<Caret>> carets;
   std::bitset<static_cast<size_t>(AnsiKey::Count)> pressed_keys;
-  animation::PerDisplay<KeyboardAnimation> anim;
+  mutable KeyboardAnimation anim;
 
   std::unique_ptr<KeyboardGrab> grab;
 

@@ -40,7 +40,7 @@ struct ConnectionWidget : Widget {
     float prototype_alpha_target = 0;
   };
 
-  animation::PerDisplay<AnimationState> animation_state;
+  mutable AnimationState animation_state;
 
   mutable animation::Approach<> cable_width;
   mutable maf::Optional<OpticalConnectorState>

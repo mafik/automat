@@ -53,7 +53,7 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   maf::Vec<shared_ptr<Object>> prototypes;
   maf::Vec<shared_ptr<gui::PrototypeButton>> buttons;
 
-  animation::PerDisplay<int> hovered_button;
+  mutable int hovered_button = -1;
 
   // This will clone the provided object and add it to the toolbar.
   void AddObjectPrototype(const std::shared_ptr<Object>&);

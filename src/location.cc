@@ -371,12 +371,7 @@ SkMatrix ObjectAnimationState::GetTransform(Vec2 scale_pivot) const {
 
 SkMatrix Location::GetTransform(animation::Display* display) const {
   Vec2 scale_pivot = object->Shape(nullptr).getBounds().center();
-  if (display) {
-    if (auto* anim = animation_state.Find(*display)) {
-      return anim->GetTransform(scale_pivot);
-    }
-  }
-  return GetLocationTransform(position, scale, scale_pivot);
+  return animation_state.GetTransform(scale_pivot);
 }
 
 animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_position,
@@ -391,14 +386,7 @@ ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}), eleva
   transparency.speed = 5;
 }
 ObjectAnimationState& Location::GetAnimationState(animation::Display& display) const {
-  if (auto* anim = animation_state.Find(display)) {
-    return *anim;
-  } else {
-    auto& new_anim = animation_state[display];
-    new_anim.position.value = position;
-    new_anim.scale.value = scale;
-    return new_anim;
-  }
+  return animation_state;
 }
 Location::~Location() {
   if (long_running) {

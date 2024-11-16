@@ -24,7 +24,7 @@ struct Button : Widget {
     float highlight = 0;
   };
 
-  animation::PerDisplay<AnimationState> animation_state_ptr;
+  mutable AnimationState animation_state;
   int press_action_count = 0;
   std::shared_ptr<Widget> child;
 
@@ -96,7 +96,7 @@ struct ToggleButton : Widget {
   std::shared_ptr<Button> on;
   std::shared_ptr<Button> off;
 
-  animation::PerDisplay<float> filling_ptr;
+  mutable float filling;
 
   ToggleButton(std::shared_ptr<Button> on, std::shared_ptr<Button> off) : on(on), off(off) {}
 

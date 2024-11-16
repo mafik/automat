@@ -22,12 +22,12 @@ namespace automat::gui {
 
 void TextField::PointerOver(Pointer& pointer, animation::Display& display) {
   pointer.PushIcon(Pointer::kIconIBeam);
-  hover_ptr[display].Increment();
+  hover.Increment();
 }
 
 void TextField::PointerLeave(Pointer& pointer, animation::Display& display) {
   pointer.PopIcon();
-  hover_ptr[display].Decrement();
+  hover.Decrement();
 }
 
 void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
@@ -86,8 +86,7 @@ const SkPaint& TextField::GetBackgroundPaint() const { return kDefaultBackground
 
 animation::Phase TextField::Draw(DrawContext& ctx) const {
   auto& display = ctx.display;
-  auto& hover = hover_ptr[display].animation;
-  auto phase = hover.Tick(display);
+  auto phase = hover.animation.Tick(display);
   DrawBackground(ctx);
   DrawText(ctx);
   return phase;
@@ -98,12 +97,11 @@ void TextField::DrawBackground(DrawContext& ctx) const {
   SkRRect rrect = ShapeRRect();
   canvas.drawRRect(rrect, GetBackgroundPaint());
   auto& display = ctx.display;
-  auto& hover = hover_ptr[display].animation;
-  if (hover.value > 0.0001) {
+  if (hover.animation.value > 0.0001) {
     SkPaint hover_outline;
     hover_outline.setColor(SkColorSetRGB(0xff, 0x00, 0x00));
     hover_outline.setStyle(SkPaint::kStroke_Style);
-    hover_outline.setStrokeWidth(hover.value * 0.0005);
+    hover_outline.setStrokeWidth(hover.animation.value * 0.0005);
     canvas.drawRRect(rrect, hover_outline);
   }
 }

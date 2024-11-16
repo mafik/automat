@@ -32,7 +32,7 @@ struct FlipFlop : LiveObject, Runnable {
   struct AnimationState {
     animation::Approach<float> light;
   };
-  animation::PerDisplay<AnimationState> animation_states;
+  mutable AnimationState animation_state;
 
   FlipFlop();
   string_view Name() const override;

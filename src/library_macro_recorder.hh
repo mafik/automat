@@ -37,7 +37,7 @@ struct MacroRecorder : LiveObject,
     float eyes_open = 0;
   };
 
-  animation::PerDisplay<AnimationState> animation_state_ptr;
+  mutable AnimationState animation_state;
   gui::Keylogging* keylogging = nullptr;
   std::shared_ptr<Widget> record_button;
 

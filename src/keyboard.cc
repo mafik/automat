@@ -263,22 +263,21 @@ void Keyboard::Draw(DrawContext& ctx) const {
   // Iterate through each Caret & CaretAnimation, and draw them.
   // After a Caret has been removed, its CaretAnimation is kept around for some
   // time to animate it out.
-  auto& anim_carets = anim[display].carets;
-  auto anim_it = anim_carets.begin();
+  auto anim_it = anim.carets.begin();
   auto caret_it = carets.begin();
-  while (anim_it != anim_carets.end() && caret_it != carets.end()) {
+  while (anim_it != anim.carets.end() && caret_it != carets.end()) {
     if (anim_it->first < caret_it->get()) {
       // Caret was removed.
       auto a = DrawCaret(ctx, anim_it->second, nullptr);
       if (a == CaretAnimAction::Delete) {
-        anim_it = anim_carets.erase(anim_it);
+        anim_it = anim.carets.erase(anim_it);
       } else {
         ++anim_it;
       }
     } else if (anim_it->first > caret_it->get()) {
       // Caret was added.
       auto new_it =
-          anim_carets.emplace(std::make_pair<Caret*, CaretAnimation>(caret_it->get(), *this)).first;
+          anim.carets.emplace(std::make_pair<Caret*, CaretAnimation>(caret_it->get(), *this)).first;
       DrawCaret(ctx, new_it->second, caret_it->get());
       ++caret_it;
     } else {
@@ -287,11 +286,11 @@ void Keyboard::Draw(DrawContext& ctx) const {
       ++caret_it;
     }
   }
-  while (anim_it != anim_carets.end()) {
+  while (anim_it != anim.carets.end()) {
     // Caret at end was removed.
     auto a = DrawCaret(ctx, anim_it->second, nullptr);
     if (a == CaretAnimAction::Delete) {
-      anim_it = anim_carets.erase(anim_it);
+      anim_it = anim.carets.erase(anim_it);
     } else {
       ++anim_it;
     }
@@ -299,7 +298,7 @@ void Keyboard::Draw(DrawContext& ctx) const {
   while (caret_it != carets.end()) {
     // Caret at end was added.
     auto new_it =
-        anim_carets.emplace(std::make_pair<Caret*, CaretAnimation>(caret_it->get(), *this)).first;
+        anim.carets.emplace(std::make_pair<Caret*, CaretAnimation>(caret_it->get(), *this)).first;
     DrawCaret(ctx, new_it->second, caret_it->get());
     ++caret_it;
   }

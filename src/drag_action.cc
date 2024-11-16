@@ -86,8 +86,7 @@ void DragLocationAction::Update() {
 
   if (last_snapped_position != position) {
     last_snapped_position = position;
-    location->animation_state[pointer.window.display].position.value +=
-        current_position - last_position;
+    location->animation_state.position.value += current_position - last_position;
     location->UpdateAutoconnectArgs();
     location->InvalidateDrawCache();
     location->InvalidateConnectionWidgets();
@@ -117,13 +116,13 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
   // object. Set their "radar" to 1
   for (auto& connection_widget : gui::window->connection_widgets) {
     if (&connection_widget->from == location.get()) {
-      connection_widget->animation_state[pointer.window.display].radar_alpha_target = 1;
+      connection_widget->animation_state.radar_alpha_target = 1;
     } else {
       string error;
       connection_widget->arg.CheckRequirements(connection_widget->from, location.get(),
                                                DraggedObject(*this), error);
       if (error.empty()) {
-        connection_widget->animation_state[pointer.window.display].radar_alpha_target = 1;
+        connection_widget->animation_state.radar_alpha_target = 1;
       }
     }
   }
@@ -132,7 +131,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
 DragLocationAction::~DragLocationAction() {
   pointer.window.drag_action_count--;
   for (auto& connection_widget : gui::window->connection_widgets) {
-    connection_widget->animation_state[pointer.window.display].radar_alpha_target = 0;
+    connection_widget->animation_state.radar_alpha_target = 0;
   }
 }
 ControlFlow DragLocationWidget::VisitChildren(gui::Visitor& visitor) {

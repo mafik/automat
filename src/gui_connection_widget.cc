@@ -56,10 +56,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
   if (arg.autoconnect_radius <= 0) {
     return animation::Finished;
   }
-  auto anim = animation_state.Find(ctx.display);
-  if (anim == nullptr) {
-    return animation::Finished;
-  }
+  auto anim = &animation_state;
   auto phase =
       animation::LinearApproach(anim->radar_alpha_target, ctx.DeltaT(), 2.f, anim->radar_alpha);
   float prototype_alpha_target = anim->prototype_alpha_target;
@@ -328,9 +325,7 @@ DragConnectionAction::~DragConnectionAction() {
   widget.manual_position.reset();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      if (auto* anim = l->animation_state.Find(*display)) {
-        anim->highlight.target = 0;
-      }
+      l->animation_state.highlight.target = 0;
     }
   }
 }

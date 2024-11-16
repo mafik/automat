@@ -45,7 +45,7 @@ struct TextField : Widget, CaretOwner {
       }
     }
   };
-  animation::PerDisplay<HoverState> hover_ptr;
+  mutable HoverState hover;
   std::optional<Argument*> argument;
 
   TextField(std::string* text, float width) : text(text), width(width) {}

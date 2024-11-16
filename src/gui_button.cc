@@ -26,14 +26,13 @@ using namespace std;
 namespace automat::gui {
 
 void Button::PointerOver(Pointer& pointer, animation::Display& display) {
-  auto& animation_state = animation_state_ptr[display];
   animation_state.pointers_over++;
   pointer.PushIcon(Pointer::kIconHand);
   InvalidateDrawCache();
 }
 
 void Button::PointerLeave(Pointer& pointer, animation::Display& display) {
-  animation_state_ptr[display].pointers_over--;
+  animation_state.pointers_over--;
   pointer.PopIcon();
   InvalidateDrawCache();
 }
@@ -85,7 +84,6 @@ maf::Optional<Rect> Button::TextureBounds(animation::Display*) const {
 void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
-  auto& animation_state = animation_state_ptr[display];
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -115,9 +113,8 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
 }
 
 animation::Phase Button::Update(animation::Display& display) {
-  auto& state = animation_state_ptr[display];
-  auto phase =
-      animation::LinearApproach(state.pointers_over ? 1 : 0, display.DeltaT(), 10, state.highlight);
+  auto phase = animation::LinearApproach(animation_state.pointers_over ? 1 : 0, display.DeltaT(),
+                                         10, animation_state.highlight);
 
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
@@ -146,7 +143,6 @@ animation::Phase Button::PreDraw(DrawContext& ctx) const {
 
 animation::Phase Button::Draw(DrawContext& ctx) const {
   auto& display = ctx.display;
-  auto& animation_state = animation_state_ptr[display];
 
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
@@ -156,7 +152,6 @@ animation::Phase Button::Draw(DrawContext& ctx) const {
 }
 
 animation::Phase ToggleButton::Draw(DrawContext& ctx) const {
-  auto& filling = filling_ptr[ctx.display];
   auto phase = animation::ExponentialApproach(Filled() ? 1 : 0, ctx.DeltaT(), 0.15, filling);
   phase |= DrawChildren(ctx);
   return phase;
@@ -165,7 +160,6 @@ animation::Phase ToggleButton::Draw(DrawContext& ctx) const {
 animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
-  auto& filling = filling_ptr[display];
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
   if (filling >= 0.999) {
     if (&child == on_widget.get()) {
@@ -221,7 +215,6 @@ animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& 
 animation::Phase ToggleButton::PreDrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
-  auto& filling = filling_ptr[display];
 
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
 

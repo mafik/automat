@@ -109,17 +109,12 @@ animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
   canvas.setMatrix(m);
 
   {  // Red indicator light
-    auto animation_state = animation_states.Find(dctx.display);
-    if (animation_state == nullptr) {
-      animation_state = &animation_states[dctx.display];
-      animation_state->light.value = current_state;
-    }
-    animation_state->light.target = current_state;
-    phase |= animation_state->light.Tick(dctx.display);
+    animation_state.light.target = current_state;
+    phase |= animation_state.light.Tick(dctx.display);
     SkPaint gradient;
     SkPoint center = {kFlipFlopWidth / 2, 2_cm};
     float radius = 0.5_mm;
-    float a = animation_state->light.value;
+    float a = animation_state.light.value;
     SkColor colors[] = {color::MixColors("#725016"_color, "#ff8786"_color, a),
                         color::MixColors("#2b1e07"_color, "#ff3e3e"_color, a)};
     gradient.setShader(SkGradientShader::MakeRadial(center + SkPoint(0, 0.25_mm), radius, colors, 0,

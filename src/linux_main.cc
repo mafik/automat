@@ -425,7 +425,6 @@ void CreateWindow(Status& status) {
 
 #undef WRAP
 
-// TODO: Get rid of "per_display_value" - each widget can just store these values locally
 // TODO: Get rid of animation::Display
 // TODO: Move all the animation logic into Widget::Update (only pass timer there)
 // TODO: Only pass Canvas into Widget::Draw & remove animation::Phase from its return value

@@ -26,10 +26,10 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   auto loc = std::make_shared<Location>();
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-  auto& anim = loc->animation_state[pointer.window.display];
-  anim.scale = matrix.get(0) / pointer.window.zoom;
+  loc->animation_state.scale = matrix.get(0) / pointer.window.zoom;
   auto contact_point = pointer.PositionWithin(*this);
-  loc->position = anim.position = pointer.PositionWithinRootMachine() - contact_point;
+  loc->position = loc->animation_state.position =
+      pointer.PositionWithinRootMachine() - contact_point;
   auto drag_action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
   drag_action->contact_point = contact_point;
   return drag_action;
@@ -103,11 +103,8 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
     }
   }
 
-  if (hovered_button.Find(dctx.display) == nullptr) {
-    hovered_button[dctx.display] = -1;
-  }
-  if (hovered_button[dctx.display] != new_hovered_button) {
-    hovered_button[dctx.display] = new_hovered_button;
+  if (hovered_button != new_hovered_button) {
+    hovered_button = new_hovered_button;
 
     static SplitMix64 rng(123);
     static audio::Sound* sounds[3] = {&embedded::assets_SFX_toolbar_select_01_wav,

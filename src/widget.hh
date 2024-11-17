@@ -40,7 +40,7 @@ SkMatrix TransformDown(const Widget& to, const Widget* from = nullptr);
 // `from` is the widget located below `to` in the widget hierarchy.
 // `to` can be nullptr - if so then the transform ends at the root layer (produces pixel
 // coordinates).
-SkMatrix TransformUp(const Widget& from, const Widget* to = nullptr, animation::Display* = nullptr);
+SkMatrix TransformUp(const Widget& from, const Widget* to = nullptr);
 
 struct RenderResult {
   uint32_t id;
@@ -210,13 +210,11 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual ControlFlow PointerVisitChildren(Visitor& visitor) { return VisitChildren(visitor); }
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  virtual maf::Optional<Rect> TextureBounds(animation::Display* d) const {
-    return Shape().getBounds();
-  }
+  virtual maf::Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
 
   virtual SkMatrix TransformToChild(const Widget& child) const { return SkMatrix::I(); }
 
-  SkMatrix TransformFromChild(const Widget& child, animation::Display* d) {
+  SkMatrix TransformFromChild(const Widget& child) {
     auto to_child = TransformToChild(child);
     SkMatrix from_child = SkMatrix::I();
     (void)to_child.invert(&from_child);

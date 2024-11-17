@@ -134,7 +134,7 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
   {  // Draw the eyes
     auto sharingan = SharinganColor();
 
-    auto local_to_window = TransformUp(*this, nullptr, &dctx.display);
+    auto local_to_window = TransformUp(*this, nullptr);
 
     auto top_window = dctx.display.window;
 

@@ -22,7 +22,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   if (btn != gui::PointerButton::Left) {
     return nullptr;
   }
-  auto matrix = TransformUp(*pointer.hover, nullptr, &pointer.window.display);
+  auto matrix = TransformUp(*pointer.hover, nullptr);
   auto loc = std::make_shared<Location>();
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
@@ -196,7 +196,7 @@ float Toolbar::CalculateWidth() const {
   return width;
 }
 maf::StrView Toolbar::Name() const { return "Toolbar"sv; }
-maf::Optional<Rect> Toolbar::TextureBounds(animation::Display*) const {
+maf::Optional<Rect> Toolbar::TextureBounds() const {
   float width = CalculateWidth();
   return Rect(-width / 2, 0, width / 2, kToolbarHeight * 2);
 }

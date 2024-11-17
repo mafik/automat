@@ -67,7 +67,7 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   float CalculateWidth() const;
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  maf::Optional<Rect> TextureBounds(animation::Display*) const override;
+  maf::Optional<Rect> TextureBounds() const override;
 
   void PointerOver(gui::Pointer& pointer, animation::Display&) override { StartWatching(pointer); }
 

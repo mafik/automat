@@ -211,7 +211,7 @@ struct Argument {
   // space (pixels), but it's not the only option. The widget could also be located at some
   // intermediate level so the returned position will be located within some parent object (for
   // example, a Machine).
-  Vec2AndDir Start(Object&, gui::Widget*, animation::Display*) const;
+  Vec2AndDir Start(Object&, gui::Widget*) const;
 
   // The returned "to_points" should use the same coordinate space as the "here" Location
   // TODO: it might be necessary to pass a gui::DisplayContext to compute positions

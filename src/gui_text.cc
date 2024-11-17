@@ -21,5 +21,5 @@ animation::Phase Text::Draw(DrawContext& ctx) const {
   return animation::Finished;
 }
 
-maf::Optional<Rect> Text::TextureBounds(animation::Display*) const { return nullopt; }
+maf::Optional<Rect> Text::TextureBounds() const { return nullopt; }
 }  // namespace automat::gui

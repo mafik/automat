@@ -96,9 +96,9 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Vec2AndDir Argument::Start(Object& object, gui::Widget* widget, animation::Display* display) const {
+Vec2AndDir Argument::Start(Object& object, gui::Widget* widget) const {
   auto pos_dir = object.ArgStart(*this);
-  auto m = TransformUp(object, widget, display);
+  auto m = TransformUp(object, widget);
   m.mapPoints(&pos_dir.pos.sk, 1);
   return pos_dir;
 }
@@ -126,8 +126,7 @@ void Argument::NearbyCandidates(
         }
         Vec<Vec2AndDir> to_points;
         location.object->ConnectionPositions(to_points);
-        SkMatrix m =
-            drag_location_action->Widget()->TransformFromChild(location, &pointer->window.display);
+        SkMatrix m = drag_location_action->Widget()->TransformFromChild(location);
         for (auto& vec_and_dir : to_points) {
           vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
         }
@@ -151,7 +150,7 @@ void Argument::NearbyCandidates(
       }
       Vec<Vec2AndDir> to_points;
       other.object->ConnectionPositions(to_points);
-      SkMatrix m = other.ParentAs<gui::Widget>()->TransformFromChild(other, nullptr);
+      SkMatrix m = other.ParentAs<gui::Widget>()->TransformFromChild(other);
       for (auto& vec_and_dir : to_points) {
         vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
       }

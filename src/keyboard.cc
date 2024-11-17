@@ -83,7 +83,7 @@ void Caret::Release() {
 }
 
 SkPath Caret::MakeRootShape(animation::Display& display) const {
-  SkMatrix text_to_root = TransformUp(*widget, root_machine.get(), &display);
+  SkMatrix text_to_root = TransformUp(*widget, root_machine.get());
   return shape.makeTransform(text_to_root);
 }
 

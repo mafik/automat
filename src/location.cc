@@ -174,7 +174,7 @@ ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-Optional<Rect> Location::TextureBounds(animation::Display*) const { return nullopt; }
+Optional<Rect> Location::TextureBounds() const { return nullopt; }
 
 SkPath Outset(const SkPath& path, float distance) {
   SkRRect rrect;
@@ -352,7 +352,7 @@ void Location::Run() {
 
 Vec2AndDir Location::ArgStart(animation::Display* display, Argument& arg) {
   auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
-  auto m = ParentAs<Machine>()->TransformFromChild(*this, display);
+  auto m = ParentAs<Machine>()->TransformFromChild(*this);
   pos_dir.pos = m.mapPoint(pos_dir.pos);
   return pos_dir;
 }
@@ -507,7 +507,7 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
 }
 
 void Location::UpdateAutoconnectArgs() {
-  auto here_up = Widget::parent->TransformFromChild(*this, nullptr);
+  auto here_up = Widget::parent->TransformFromChild(*this);
   object->Args([&](Argument& arg) {
     if (arg.autoconnect_radius <= 0) {
       return;
@@ -523,7 +523,7 @@ void Location::UpdateAutoconnectArgs() {
       Vec<Vec2AndDir> to_positions;
       auto conn = *it;
       conn->to.object->ConnectionPositions(to_positions);
-      auto other_up = ParentAs<Machine>()->TransformFromChild(conn->to, nullptr);
+      auto other_up = ParentAs<Machine>()->TransformFromChild(conn->to);
       for (auto& to : to_positions) {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
@@ -572,7 +572,7 @@ void Location::UpdateAutoconnectArgs() {
     if (other.get() == this) {
       continue;
     }
-    auto other_up = ParentAs<Machine>()->TransformFromChild(*other, nullptr);
+    auto other_up = ParentAs<Machine>()->TransformFromChild(*other);
     other->object->Args([&](Argument& arg) {
       if (arg.autoconnect_radius <= 0) {
         return;
@@ -592,7 +592,7 @@ void Location::UpdateAutoconnectArgs() {
         Vec<Vec2AndDir> to_positions;
         auto conn = *it;
         conn->to.object->ConnectionPositions(to_positions);
-        auto to_up = ParentAs<Machine>()->TransformFromChild(conn->to, nullptr);
+        auto to_up = ParentAs<Machine>()->TransformFromChild(conn->to);
         for (auto& to : to_positions) {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);

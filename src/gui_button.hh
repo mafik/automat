@@ -46,7 +46,7 @@ struct Button : Widget {
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg) const;
 
-  maf::Optional<Rect> TextureBounds(animation::Display*) const override;
+  maf::Optional<Rect> TextureBounds() const override;
 
   SkRect ChildBounds() const;
 
@@ -115,9 +115,7 @@ struct ToggleButton : Widget {
   animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const override;
   SkRRect RRect() const { return off->RRect(); }
   SkPath Shape() const override { return off->Shape(); }
-  maf::Optional<Rect> TextureBounds(animation::Display* d) const override {
-    return off->TextureBounds(d);
-  }
+  maf::Optional<Rect> TextureBounds() const override { return off->TextureBounds(); }
 
   virtual bool Filled() const { return false; }
 };

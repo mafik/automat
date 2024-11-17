@@ -49,7 +49,7 @@ animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
 }
 
 animation::Phase Widget::DrawCached(DrawContext& ctx) const {
-  auto texture_bounds = TextureBounds(&ctx.display);
+  auto texture_bounds = TextureBounds();
   if (texture_bounds == nullopt) {
     return Draw(ctx);
   }
@@ -115,7 +115,7 @@ SkMatrix TransformDown(const Widget& to, const Widget* from) {
   }
 }
 
-SkMatrix TransformUp(const Widget& from, const Widget* to, animation::Display* display) {
+SkMatrix TransformUp(const Widget& from, const Widget* to) {
   SkMatrix down = TransformDown(from, to);
   SkMatrix up;
   if (down.invert(&up)) {

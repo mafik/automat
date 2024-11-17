@@ -261,7 +261,7 @@ SkRect Button::ChildBounds() const {
   if (child) return child->Shape().getBounds();
   return SkRect::MakeEmpty();
 }
-SkMatrix Button::TransformToChild(const Widget& child, animation::Display*) const {
+SkMatrix Button::TransformToChild(const Widget& child) const {
   SkRect rect = RRect().rect();
   if (child.CenteredAtZero()) return SkMatrix::Translate(-rect.center());
   SkRect child_bounds = ChildBounds();

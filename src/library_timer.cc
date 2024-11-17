@@ -569,7 +569,7 @@ SkPath TimerDelay::FieldShape(Object& field) const {
   return SkPath();
 }
 
-SkMatrix TimerDelay::TransformToChild(const Widget& child, animation::Display*) const {
+SkMatrix TimerDelay::TransformToChild(const Widget& child) const {
   if (&child == text_field.get()) {
     return SkMatrix::Translate(kTextWidth / 2, gui::NumberTextField::kHeight);
   }
@@ -656,8 +656,7 @@ struct DragHandAction : Action {
     if (!timer_shared) {
       return;
     }
-    Vec2 pos = gui::TransformDown(*timer_shared, nullptr, &pointer.AnimationContext())
-                   .mapPoint(pointer.pointer_position);
+    Vec2 pos = gui::TransformDown(*timer_shared, nullptr).mapPoint(pointer.pointer_position);
     timer_shared->hand_degrees.value = atan(pos) * 180 / M_PI;
     timer_shared->InvalidateDrawCache();
   }

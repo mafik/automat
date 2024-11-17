@@ -24,7 +24,7 @@ void KeyButton::Activate(gui::Pointer& pointer) {
   }
 }
 
-SkMatrix KeyButton::TransformToChild(const Widget& child, animation::Display*) const {
+SkMatrix KeyButton::TransformToChild(const Widget& child) const {
   SkRect child_bounds = ChildBounds();
   SkRRect key_base = RRect();
   SkRect key_face =

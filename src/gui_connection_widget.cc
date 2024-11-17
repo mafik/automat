@@ -195,7 +195,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
       vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
     }
     to_shape.transform(m);
-    to_shape.transform(TransformDown(from, parent_machine, &ctx.display), &to_shape_from_coords);
+    to_shape.transform(TransformDown(from, parent_machine), &to_shape_from_coords);
   } else {
     if (manual_position) {
       to_points.emplace_back(Vec2AndDir{

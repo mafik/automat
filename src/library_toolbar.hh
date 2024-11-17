@@ -63,7 +63,7 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   SkPath Shape() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
-  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
+  SkMatrix TransformToChild(const Widget& child) const override;
   float CalculateWidth() const;
 
   // If the object should be cached into a texture, return its bounds in local coordinates.

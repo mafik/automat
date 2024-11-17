@@ -62,7 +62,7 @@ struct MacroRecorder : LiveObject,
   void PointerLeave(gui::Pointer&, animation::Display&) override;
   void PointerMove(gui::Pointer&, Vec2 position) override;
 
-  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
+  SkMatrix TransformToChild(const Widget& child) const override;
 
   void ConnectionAdded(Location& here, Connection&) override;
   void ConnectionRemoved(Location& here, Connection&) override;

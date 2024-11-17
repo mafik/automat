@@ -163,7 +163,7 @@ ControlFlow FlipFlop::VisitChildren(gui::Visitor& visitor) {
   return visitor(children);
 }
 
-SkMatrix FlipFlop::TransformToChild(const Widget& child, animation::Display*) const {
+SkMatrix FlipFlop::TransformToChild(const Widget& child) const {
   auto rect = FlipFlopRect();
   if (&child == button.get()) {
     return SkMatrix::Translate(-rect.CenterX() + kYingYangButtonRadius,

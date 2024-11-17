@@ -46,7 +46,7 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
     for (auto w : widgets) {
       Vec2 transformed;
       if (w->parent) {
-        transformed = w->parent->TransformToChild(*w, display).mapPoint(point);
+        transformed = w->parent->TransformToChild(*w).mapPoint(point);
       } else {
         transformed = point;
       }
@@ -141,10 +141,9 @@ ControlFlow DragLocationWidget::VisitChildren(gui::Visitor& visitor) {
   }
   return ControlFlow::Continue;
 }
-SkMatrix DragLocationWidget::TransformToChild(const gui::Widget& child,
-                                              animation::Display* display) const {
+SkMatrix DragLocationWidget::TransformToChild(const gui::Widget& child) const {
   if (&child == action.location.get()) {
-    return action.location->GetTransform(display);
+    return action.location->GetTransform(nullptr);
   }
   return SkMatrix::I();
 }

@@ -94,7 +94,7 @@ struct Window final : Widget, DropTarget {
 
   void Zoom(float delta) const;
   ControlFlow VisitChildren(Visitor& visitor) override;
-  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override {
+  SkMatrix TransformToChild(const Widget& child) const override {
     if (&child == toolbar.get()) {
       return SkMatrix::Translate(-size.x / 2, 0);
     }

@@ -34,7 +34,7 @@ animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
     std::ranges::reverse_view rv{widgets};
     for (auto& widget : rv) {
       canvas.save();
-      const SkMatrix down = this->TransformToChild(*widget, &ctx.display);
+      const SkMatrix down = this->TransformToChild(*widget);
       SkMatrix up;
       if (down.invert(&up)) {
         canvas.concat(up);
@@ -70,7 +70,7 @@ void Widget::InvalidateDrawCache() const {
 }
 
 animation::Phase Widget::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
-  const SkMatrix down = this->TransformToChild(child, &ctx.display);
+  const SkMatrix down = this->TransformToChild(child);
   SkMatrix up;
   if (down.invert(&up)) {
     ctx.canvas.concat(up);
@@ -101,13 +101,13 @@ animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
   return phase;
 }
 
-SkMatrix TransformDown(const Widget& to, const Widget* from, animation::Display* display) {
+SkMatrix TransformDown(const Widget& to, const Widget* from) {
   if (to.parent) {
     if (to.parent.get() == from) {
-      return to.parent->TransformToChild(to, display);
+      return to.parent->TransformToChild(to);
     } else {
-      SkMatrix ret = TransformDown(*to.parent, from, display);
-      ret.postConcat(to.parent->TransformToChild(to, display));
+      SkMatrix ret = TransformDown(*to.parent, from);
+      ret.postConcat(to.parent->TransformToChild(to));
       return ret;
     }
   } else {
@@ -116,7 +116,7 @@ SkMatrix TransformDown(const Widget& to, const Widget* from, animation::Display*
 }
 
 SkMatrix TransformUp(const Widget& from, const Widget* to, animation::Display* display) {
-  SkMatrix down = TransformDown(from, to, display);
+  SkMatrix down = TransformDown(from, to);
   SkMatrix up;
   if (down.invert(&up)) {
     return up;

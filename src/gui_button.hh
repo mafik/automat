@@ -54,7 +54,7 @@ struct Button : Widget {
     return visitor(maf::SpanOfArr(&child, 1));
   }
 
-  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
+  SkMatrix TransformToChild(const Widget& child) const override;
   // We don't want the children to interact with mouse events.
   ControlFlow PointerVisitChildren(Visitor& visitor) override { return ControlFlow::Continue; }
 };

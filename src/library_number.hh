@@ -34,7 +34,7 @@ struct Number : Object {
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
-  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
+  SkMatrix TransformToChild(const Widget& child) const override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

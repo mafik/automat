@@ -128,9 +128,7 @@ ControlFlow KeyPresser::PointerVisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-SkMatrix KeyPresser::TransformToChild(const Widget& child, animation::Display*) const {
-  return SkMatrix::I();
-}
+SkMatrix KeyPresser::TransformToChild(const Widget& child) const { return SkMatrix::I(); }
 
 struct DragAndClickAction : Action {
   gui::PointerButton btn;

@@ -35,8 +35,7 @@ using Visitor = std::function<ControlFlow(maf::Span<std::shared_ptr<Widget>>)>;
 // `to` is the widget located below `from` in the widget hierarchy.
 // `from` can be nullptr - if so then the transform starts at the root layer (takes in pixel
 // coordinates).
-SkMatrix TransformDown(const Widget& to, const Widget* from = nullptr,
-                       animation::Display* = nullptr);
+SkMatrix TransformDown(const Widget& to, const Widget* from = nullptr);
 
 // `from` is the widget located below `to` in the widget hierarchy.
 // `to` can be nullptr - if so then the transform ends at the root layer (produces pixel
@@ -215,12 +214,10 @@ struct Widget : public std::enable_shared_from_this<Widget> {
     return Shape().getBounds();
   }
 
-  virtual SkMatrix TransformToChild(const Widget& child, animation::Display*) const {
-    return SkMatrix::I();
-  }
+  virtual SkMatrix TransformToChild(const Widget& child) const { return SkMatrix::I(); }
 
   SkMatrix TransformFromChild(const Widget& child, animation::Display* d) {
-    auto to_child = TransformToChild(child, d);
+    auto to_child = TransformToChild(child);
     SkMatrix from_child = SkMatrix::I();
     (void)to_child.invert(&from_child);
     return from_child;

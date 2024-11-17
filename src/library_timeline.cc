@@ -1216,7 +1216,7 @@ ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display* display) const {
+SkMatrix Timeline::TransformToChild(const Widget& child) const {
   if (&child == run_button.get()) {
     return SkMatrix::Translate(kPlayButtonRadius, -kDisplayMargin);
   } else if (&child == prev_button.get()) {
@@ -1228,8 +1228,7 @@ SkMatrix Timeline::TransformToChild(const Widget& child, animation::Display* dis
     float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
     float track_width = MaxTrackLength() / distance_to_seconds;
 
-    float current_pos_ratio =
-        CurrentPosRatio(*this, display ? display->timer.now : time::SteadyNow());
+    float current_pos_ratio = CurrentPosRatio(*this, time::SteadyNow());
 
     float track_offset_x0 = kRulerLength / 2;
     float track_offset_x1 = track_width - kRulerLength / 2;

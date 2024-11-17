@@ -372,7 +372,7 @@ ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 
-SkMatrix HotKey::TransformToChild(const Widget& child, animation::Display*) const {
+SkMatrix HotKey::TransformToChild(const Widget& child) const {
   if (&child == power_button.get()) {
     return SkMatrix::Translate(
         -kWidth / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth,

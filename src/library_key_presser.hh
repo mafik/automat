@@ -47,7 +47,7 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   ControlFlow PointerVisitChildren(Visitor& visitor) override;
-  SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
+  SkMatrix TransformToChild(const Widget& child) const override;
 
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;

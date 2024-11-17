@@ -559,8 +559,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       auto& node = tree.back();
       if (parent != i) {
         node.window_to_local = tree[parent].window_to_local;
-        node.window_to_local.postConcat(
-            tree[parent].widget->TransformToChild(*widget, &window->display));
+        node.window_to_local.postConcat(tree[parent].widget->TransformToChild(*widget));
       } else {
         node.window_to_local.postScale(1 / DisplayPxPerMeter(), 1 / DisplayPxPerMeter());
       }

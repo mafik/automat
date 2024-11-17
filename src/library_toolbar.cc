@@ -66,7 +66,7 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
     width_targets[i] = buttons[i]->natural_width;
   }
 
-  auto my_transform = gui::TransformDown(*this, nullptr, &dctx.display);
+  auto my_transform = gui::TransformDown(*this, nullptr);
 
   float width = CalculateWidth();
   int new_hovered_button = -1;
@@ -163,13 +163,13 @@ void Toolbar::AddObjectPrototype(const std::shared_ptr<Object>& new_proto) {
   buttons.back()->parent = SharedPtr();
 }
 
-SkMatrix Toolbar::TransformToChild(const Widget& child, animation::Display* display) const {
+SkMatrix Toolbar::TransformToChild(const Widget& child) const {
   float width = CalculateWidth();
 
   float x = -width / 2 + kMarginAroundIcons;
   for (int i = 0; i < buttons.size(); ++i) {
     if (buttons[i].get() == &child) {
-      Rect src = prototypes[i]->CoarseBounds(display).rect;
+      Rect src = prototypes[i]->CoarseBounds(nullptr).rect;
       float size = buttons[i]->width;
       x += size / 2;
       float scale = buttons[i]->width / buttons[i]->natural_width;

@@ -50,7 +50,7 @@ constexpr float kMarginAroundIcons = 7_mm;
 constexpr float kMarginAboveIcons = 8_mm;
 constexpr float kToolbarHeight = gui::kToolbarIconSize + kMarginAboveIcons;
 
-SkPath Toolbar::Shape(animation::Display*) const {
+SkPath Toolbar::Shape() const {
   float width = CalculateWidth();
   auto rect = Rect(-width / 2, 0, width / 2, kToolbarHeight);
   return SkPath::Rect(rect);
@@ -119,7 +119,7 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
     phase |= buttons[i]->width.SineTowards(width_targets[i], dctx.DeltaT(), 0.4);
   }
 
-  auto my_shape = Shape(&dctx.display);
+  auto my_shape = Shape();
 
   auto color = ToolbarColor(dctx);
   SkRect dst = my_shape.getBounds();

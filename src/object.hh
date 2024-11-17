@@ -70,7 +70,7 @@ struct Object : gui::Widget {
     return GetText() <=> other.GetText();
   }
   animation::Phase Draw(gui::DrawContext&) const override;
-  SkPath Shape(animation::Display* = nullptr) const override;
+  SkPath Shape() const override;
   virtual RRect CoarseBounds(animation::Display* display = nullptr) const;
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 };

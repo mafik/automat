@@ -160,6 +160,14 @@ struct Widget : public std::enable_shared_from_this<Widget> {
     return info.name();
   }
 
+  Widget& RootWidget() const {
+    Widget* root = const_cast<Widget*>(this);
+    while (root->parent.get()) {
+      root = root->parent.get();
+    }
+    return *root;
+  }
+
   virtual void PointerOver(Pointer&, animation::Display&) {}
   virtual void PointerLeave(Pointer&, animation::Display&) {}
 
@@ -182,7 +190,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual animation::Phase Update(animation::Display&) { return animation::Finished; }
 
   virtual animation::Phase Draw(DrawContext& ctx) const { return DrawChildren(ctx); }
-  virtual SkPath Shape(animation::Display*) const = 0;
+  virtual SkPath Shape() const = 0;
 
   virtual bool CenteredAtZero() const { return false; }
 
@@ -204,7 +212,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
   virtual maf::Optional<Rect> TextureBounds(animation::Display* d) const {
-    return Shape(d).getBounds();
+    return Shape().getBounds();
   }
 
   virtual SkMatrix TransformToChild(const Widget& child, animation::Display*) const {

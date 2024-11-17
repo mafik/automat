@@ -14,7 +14,7 @@ struct Increment : Object, Runnable {
   void Args(std::function<void(Argument&)> cb) override { cb(target_arg); }
   LongRunning* OnRun(Location& h) override;
   animation::Phase Draw(gui::DrawContext&) const override;
-  SkPath Shape(animation::Display*) const override;
+  SkPath Shape() const override;
 };
 
 }  // namespace automat::library

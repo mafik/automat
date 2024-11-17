@@ -360,7 +360,7 @@ animation::Phase HotKey::Draw(gui::DrawContext& ctx) const {
   return DrawChildren(ctx);
 }
 
-SkPath HotKey::Shape(animation::Display*) const { return SkPath::RRect(kShapeRRect); }
+SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {

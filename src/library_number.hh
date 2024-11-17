@@ -32,7 +32,7 @@ struct Number : Object {
   string GetText() const override;
   void SetText(Location& error_context, string_view text) override;
   animation::Phase Draw(gui::DrawContext&) const override;
-  SkPath Shape(animation::Display*) const override;
+  SkPath Shape() const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;
 

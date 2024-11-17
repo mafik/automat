@@ -261,7 +261,7 @@ struct Location : public gui::Widget {
   void InvalidateDrawCache() const override;
   void InvalidateConnectionWidgets() const;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
-  SkPath Shape(animation::Display*) const override;
+  SkPath Shape() const override;
   SkPath FieldShape(Object&) const;
 
   // Call this when the position of this location changes to update the autoconnect arguments.

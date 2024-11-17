@@ -89,9 +89,9 @@ animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
   canvas.restore();
   return phase;
 }
-SkPath KeyPresser::Shape(animation::Display*) const {
+SkPath KeyPresser::Shape() const {
   static SkPath shape = [this]() {
-    auto button_shape = shortcut_button->Shape(nullptr);
+    auto button_shape = shortcut_button->Shape();
     auto hand_shape = GetHandShape();
     SkPath joined_shape;
     Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
@@ -100,7 +100,7 @@ SkPath KeyPresser::Shape(animation::Display*) const {
   return shape;
 }
 void KeyPresser::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
-  auto button_shape = shortcut_button->Shape(nullptr);
+  auto button_shape = shortcut_button->Shape();
   SkRRect rrect;
   if (button_shape.isRRect(&rrect)) {
     out_positions.push_back(Vec2AndDir{.pos = Rect::TopCenter(rrect.rect()), .dir = -90_deg});

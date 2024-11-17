@@ -109,6 +109,6 @@ animation::Phase Increment::Draw(gui::DrawContext& ctx) const {
   return animation::Finished;
 }
 
-SkPath Increment::Shape(animation::Display*) const { return SkPath::RRect(GetShape()); }
+SkPath Increment::Shape() const { return SkPath::RRect(GetShape()); }
 
 }  // namespace automat::library

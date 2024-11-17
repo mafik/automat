@@ -1003,7 +1003,7 @@ struct ProgressBar : library::Number {
     return bar;
   }
   animation::Phase Draw(gui::DrawContext& ctx) const override { return Object::Draw(ctx); }
-  SkPath Shape(animation::Display*) const override { return Object::Shape(nullptr); }
+  SkPath Shape() const override { return Object::Shape(); }
 };
 
 struct ListView : Pointer {

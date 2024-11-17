@@ -83,7 +83,7 @@ struct Window final : Widget, DropTarget {
   // Used to tell the window that it's OS window has been resized.
   void Resize(Vec2 size) { this->size = size; }
   void DisplayPixelDensity(float pixels_per_meter);
-  SkPath Shape(animation::Display*) const override {
+  SkPath Shape() const override {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
   void Draw(SkCanvas&);

@@ -250,7 +250,7 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
   return timeline;
 }
 
-SkPath MacroRecorder::Shape(animation::Display*) const { return MacroRecorderShape(); }
+SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
 
 void MacroRecorder::ConnectionAdded(Location& here, Connection& c) {
   if (&c.argument == &timeline_arg && IsOn()) {
@@ -320,7 +320,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     Location& key_presser_loc = machine->Create<KeyPresser>();
     KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();
     key_presser->SetKey(key);
-    Rect key_presser_shape = key_presser_loc.object->Shape(nullptr).getBounds();
+    Rect key_presser_shape = key_presser_loc.object->Shape().getBounds();
     Argument& track_arg = *timeline->track_args.back();
     Vec2AndDir arg_start = timeline->here.lock()->ArgStart(nullptr, track_arg);
 

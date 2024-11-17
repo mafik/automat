@@ -9,9 +9,9 @@ using namespace std;
 
 namespace automat::gui {
 
-Text::Text(string_view text) : text(text){};
+Text::Text(string_view text) : text(text) {};
 
-SkPath Text::Shape(animation::Display*) const {
+SkPath Text::Shape() const {
   float w = GetFont().MeasureText(text);
   return SkPath::Rect(SkRect::MakeWH(w, kLetterSize));
 }

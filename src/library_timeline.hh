@@ -50,7 +50,7 @@ struct TimelineRunButton : gui::ToggleButton {
 struct TrackBase : Object {
   Timeline* timeline = nullptr;
   maf::Vec<time::T> timestamps;
-  SkPath Shape(animation::Display*) const override;
+  SkPath Shape() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
@@ -121,7 +121,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
-  SkPath Shape(animation::Display*) const override;
+  SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
   Vec2AndDir ArgStart(const Argument&) override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;

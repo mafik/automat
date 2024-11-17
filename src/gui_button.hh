@@ -36,7 +36,7 @@ struct Button : Widget {
   animation::Phase Draw(DrawContext&) const override;
   float Height() const;
   virtual SkRRect RRect() const;
-  SkPath Shape(animation::Display*) const override;
+  SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   virtual void Activate(gui::Pointer&) { InvalidateDrawCache(); }
   virtual SkColor ForegroundColor() const { return SK_ColorBLACK; }  // "#d69d00"_color
@@ -114,7 +114,7 @@ struct ToggleButton : Widget {
   animation::Phase Draw(DrawContext&) const override;
   animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const override;
   SkRRect RRect() const { return off->RRect(); }
-  SkPath Shape(animation::Display* d) const override { return off->Shape(d); }
+  SkPath Shape() const override { return off->Shape(); }
   maf::Optional<Rect> TextureBounds(animation::Display* d) const override {
     return off->TextureBounds(d);
   }

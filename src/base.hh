@@ -161,7 +161,7 @@ struct Machine : LiveObject, gui::DropTarget {
   void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
   void DropLocation(std::shared_ptr<Location>&&) override;
 
-  SkPath Shape(animation::Display*) const override;
+  SkPath Shape() const override;
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;

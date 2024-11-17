@@ -35,7 +35,7 @@ Location* Machine::LocationAtPoint(Vec2 point) {
     Vec2 local_point = (point - loc->position) / loc->scale;
     SkPath shape;
     if (loc->object) {
-      shape = loc->object->Shape(nullptr);
+      shape = loc->object->Shape();
     }
     if (shape.contains(local_point.x, local_point.y)) {
       return loc.get();
@@ -291,10 +291,10 @@ SkMatrix Machine::TransformToChild(const Widget& child, animation::Display* disp
   return SkMatrix::I();
 }
 
-SkPath Machine::Shape(animation::Display* display) const {
+SkPath Machine::Shape() const {
   SkPath rect = SkPath::Rect(Rect::MakeWH(100_cm, 100_cm));
-  if (display && display->window) {
-    auto trash = display->window->TrashShape();
+  if (auto window = dynamic_cast<gui::Window*>(&RootWidget())) {
+    auto trash = window->TrashShape();
     SkPath rect_minus_trash;
     Op(rect, trash, kDifference_SkPathOp, &rect_minus_trash);
     return rect_minus_trash;
@@ -343,7 +343,7 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
 
 animation::Phase Machine::PreDraw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto shape = Shape(&ctx.display);
+  auto shape = Shape();
   float px_per_m = ctx.canvas.getLocalToDeviceAs3x3().mapRadius(1);
   SkPaint background_paint = GetBackgroundPaint(px_per_m);
   canvas.drawPath(shape, background_paint);
@@ -356,7 +356,7 @@ animation::Phase Machine::PreDraw(gui::DrawContext& ctx) const {
 
 void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {
   scale = 1.0;
-  Rect rect = object->Shape(nullptr).getBounds();
+  Rect rect = object->Shape().getBounds();
   if (position.x + rect.left < -0.5) {
     position.x = -rect.left - 0.5;
   }

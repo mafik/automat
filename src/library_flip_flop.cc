@@ -156,7 +156,7 @@ Rect FlipFlopRect() {
   constexpr float s = kFlipFlopWidth / kFlipFlopImageWidth;
   return Rect::MakeZeroWH(kFlipFlopWidth, s * kFlipFlopImageHeight);
 }
-SkPath FlipFlop::Shape(animation::Display*) const { return SkPath::Rect(FlipFlopRect()); }
+SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
 
 ControlFlow FlipFlop::VisitChildren(gui::Visitor& visitor) {
   std::shared_ptr<Widget> children[] = {button};
@@ -208,9 +208,7 @@ animation::Phase YingYangIcon::Draw(gui::DrawContext& dctx) const {
   canvas.drawPath(black_path, paint);
   return animation::Finished;
 }
-SkPath YingYangIcon::Shape(animation::Display*) const {
-  return SkPath::Circle(0, 0, kYingYangRadius);
-}
+SkPath YingYangIcon::Shape() const { return SkPath::Circle(0, 0, kYingYangRadius); }
 
 void FlipFlop::Args(std::function<void(Argument&)> cb) { cb(flip_arg); }
 

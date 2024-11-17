@@ -394,8 +394,8 @@ SkPath Window::TrashShape() const {
 }
 
 void Window::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {
-  Rect object_bounds = object->Shape(nullptr).getBounds();
-  Rect machine_bounds = root_machine->Shape(nullptr).getBounds();
+  Rect object_bounds = object->Shape().getBounds();
+  Rect machine_bounds = root_machine->Shape().getBounds();
   Vec2 fake_fixed_point = Vec2(0, 0);
   if (fixed_point == nullptr) {
     fixed_point = &fake_fixed_point;

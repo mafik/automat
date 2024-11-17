@@ -630,7 +630,7 @@ SkMatrix OpticalConnectorState::ConnectorMatrix() const {
 
 static const Rect kSteelRect = Rect(-3_mm, -1_mm, 3_mm, 1_mm);
 
-SkPath OpticalConnectorState::Shape(animation::Display*) const {
+SkPath OpticalConnectorState::Shape() const {
   auto rect = Rect(-kCasingWidth / 2, 0, kCasingWidth / 2, kCasingHeight);
   SkPath path = SkPath::Rect(rect);
   path.addRect(kSteelRect.sk.makeOffset(0, 2_mm * steel_insert_hidden));

@@ -228,7 +228,7 @@ animation::Phase ToggleButton::PreDrawChildren(DrawContext& ctx) const {
   return phase;
 }
 
-SkPath Button::Shape(animation::Display*) const { return SkPath::RRect(RRect()); }
+SkPath Button::Shape() const { return SkPath::RRect(RRect()); }
 
 struct ButtonAction : public Action {
   Button& button;
@@ -258,7 +258,7 @@ std::unique_ptr<Action> Button::FindAction(Pointer& pointer, ActionTrigger point
 }
 
 SkRect Button::ChildBounds() const {
-  if (child) return child->Shape(nullptr).getBounds();
+  if (child) return child->Shape().getBounds();
   return SkRect::MakeEmpty();
 }
 SkMatrix Button::TransformToChild(const Widget& child, animation::Display*) const {

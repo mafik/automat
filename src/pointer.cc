@@ -70,7 +70,7 @@ void Pointer::UpdatePath() {
         transformed = point;
       }
 
-      auto shape = w->Shape(&display);
+      auto shape = w->Shape();
       path.push_back(w);
       std::swap(point, transformed);
       if (shape.contains(point.x, point.y)) {

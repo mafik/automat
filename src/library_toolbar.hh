@@ -23,7 +23,7 @@ struct PrototypeButton : Widget {
   }
 
   animation::Phase Draw(DrawContext& ctx) const override { return DrawChildren(ctx); }
-  SkPath Shape(animation::Display*) const override { return proto->Shape(nullptr); }
+  SkPath Shape() const override { return proto->Shape(); }
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override {
     const std::shared_ptr<Widget>& proto_widget = proto;
@@ -60,7 +60,7 @@ struct Toolbar : Object, gui::PointerMoveCallback {
 
   maf::StrView Name() const override;
   std::shared_ptr<Object> Clone() const override;
-  SkPath Shape(animation::Display* = nullptr) const override;
+  SkPath Shape() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   SkMatrix TransformToChild(const Widget& child, animation::Display*) const override;

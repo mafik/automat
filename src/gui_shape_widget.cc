@@ -8,7 +8,7 @@ namespace automat::gui {
 
 ShapeWidget::ShapeWidget(SkPath path) : path(path) {}
 
-SkPath ShapeWidget::Shape(animation::Display*) const { return path; }
+SkPath ShapeWidget::Shape() const { return path; }
 
 animation::Phase ShapeWidget::Draw(DrawContext& ctx) const {
   ctx.canvas.drawPath(path, paint);

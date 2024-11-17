@@ -44,9 +44,9 @@ ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), 
   }
 }
 
-SkPath ConnectionWidget::Shape(animation::Display* d) const {
+SkPath ConnectionWidget::Shape() const {
   if (state && transparency < 0.99f) {
-    return state->Shape(d);
+    return state->Shape();
   } else {
     return SkPath();
   }
@@ -153,7 +153,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
   }
   if (anim->prototype_alpha >= 0.01f) {
     auto proto = from.object->ArgPrototype(arg);
-    auto proto_shape = proto->Shape(&ctx.display);
+    auto proto_shape = proto->Shape();
     Rect proto_bounds = proto_shape.getBounds();
     ctx.canvas.save();
     Vec2 offset = from.position + Rect::BottomCenter(from.object->Shape().getBounds()) -
@@ -171,7 +171,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& display = ctx.display;
   auto& from_animation_state = from.GetAnimationState(display);
-  SkPath from_shape = from.object->Shape(&display);
+  SkPath from_shape = from.object->Shape();
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
   }
@@ -187,7 +187,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   auto pos_dir = arg.Start(*from.object, parent_machine, &display);
 
   if ((to = arg.FindLocation(from))) {
-    to_shape = to->object->Shape(nullptr);
+    to_shape = to->object->Shape();
     to->object->ConnectionPositions(to_points);
     Path target_path;
     SkMatrix m = TransformUp(*to, parent_machine, &ctx.display);
@@ -395,7 +395,7 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds(animation::Display* d) const
     return std::nullopt;
   }
   if (state) {
-    Rect bounds = Shape(d).getBounds();
+    Rect bounds = Shape().getBounds();
     float w = state->cable_width / 2 +
               0.5_mm;  // add 0.5mm to account for cable stiffener width (1mm wider than cable)
     for (auto& section : state->sections) {

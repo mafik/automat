@@ -178,7 +178,7 @@ animation::Phase Number::Draw(gui::DrawContext& ctx) const {
   return DrawChildren(ctx);
 }
 
-SkPath Number::Shape(animation::Display*) const { return kNumberShape; }
+SkPath Number::Shape() const { return kNumberShape; }
 
 ControlFlow Number::VisitChildren(gui::Visitor& visitor) {
   std::shared_ptr<Widget> arr[] = {dot,       backspace, digits[0], digits[1], digits[2],

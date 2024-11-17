@@ -51,7 +51,7 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
         transformed = point;
       }
 
-      auto shape = w->Shape(display);
+      auto shape = w->Shape();
       std::swap(point, transformed);
       if ((w->TextureBounds(display) == std::nullopt) || shape.contains(point.x, point.y)) {
         if (w->VisitChildren(dfs) == ControlFlow::Stop) {
@@ -95,7 +95,7 @@ void DragLocationAction::Update() {
   last_position = current_position;
 }
 
-SkPath DragLocationWidget::Shape(animation::Display*) const { return SkPath(); }
+SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
 void DragLocationAction::End() {
   if (gui::DropTarget* drop_target = FindDropTarget(*this)) {

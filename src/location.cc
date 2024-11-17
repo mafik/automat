@@ -127,13 +127,13 @@ void Location::ScheduleErrored(Location& errored) {
   (new ErroredTask(SharedPtr<Location>(), errored.SharedPtr<Location>()))->Schedule();
 }
 
-SkPath Location::Shape(animation::Display*) const {
+SkPath Location::Shape() const {
   if constexpr (false) {  // Gray box shape
     // Keeping this around because locations will eventually be toggleable between frame & no frame
     // modes.
     SkRect object_bounds;
     if (object) {
-      object_bounds = object->Shape(nullptr).getBounds();
+      object_bounds = object->Shape().getBounds();
     } else {
       object_bounds = SkRect::MakeEmpty();
     }
@@ -151,7 +151,7 @@ SkPath Location::FieldShape(Object& field) const {
     if (!object_field_shape.isEmpty()) {
       return object_field_shape;
     } else {
-      return object->Shape(nullptr);
+      return object->Shape();
     }
   }
   return SkPath();
@@ -197,9 +197,9 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   auto phase = animation::Finished;
   SkPath my_shape;
   if (object) {
-    my_shape = object->Shape(nullptr);
+    my_shape = object->Shape();
   } else {
-    my_shape = Shape(nullptr);
+    my_shape = Shape();
   }
   SkRect bounds = my_shape.getBounds();
 
@@ -370,7 +370,7 @@ SkMatrix ObjectAnimationState::GetTransform(Vec2 scale_pivot) const {
 }
 
 SkMatrix Location::GetTransform(animation::Display* display) const {
-  Vec2 scale_pivot = object->Shape(nullptr).getBounds().center();
+  Vec2 scale_pivot = object->Shape().getBounds().center();
   return animation_state.GetTransform(scale_pivot);
 }
 
@@ -454,7 +454,7 @@ void AnimateGrowFrom(Location& source, Location& grown) {
   for (auto* display : animation::displays) {
     auto& animation_state = grown.GetAnimationState(*display);
     animation_state.scale.value = 0.5;
-    Vec2 source_center = source.object->Shape(nullptr).getBounds().center() + source.position;
+    Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
     animation_state.position.value = source_center;
     animation_state.transparency.value = 1;
   }
@@ -479,7 +479,7 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
     }
   }
   auto phase = anim.elevation.SineTowards(target_elevation, ctx.DeltaT(), 0.2);
-  auto shape = object->Shape(&ctx.display);
+  auto shape = object->Shape();
   auto rect = shape.getBounds();
   auto window_size_px = ctx.display.window->size * ctx.display.window->display_pixels_per_meter;
   float s = ctx.canvas.getTotalMatrix().getScaleX();

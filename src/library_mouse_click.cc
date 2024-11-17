@@ -162,7 +162,7 @@ animation::Phase MouseClick::Draw(gui::DrawContext& ctx) const {
   canvas.restore();
   return animation::Finished;
 }
-SkPath MouseClick::Shape(animation::Display*) const {
+SkPath MouseClick::Shape() const {
   return SkPath::Rect(SkRect::MakeXYWH(0, 0, 373 * kScale, 624 * kScale));
 }
 

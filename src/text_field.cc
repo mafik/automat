@@ -130,7 +130,7 @@ Vec2 TextField::GetTextPos() const {
   return Vec2(kTextMargin, (kTextFieldHeight - kLetterSize) / 2);
 }
 
-SkPath TextField::Shape(animation::Display*) const { return SkPath::RRect(ShapeRRect()); }
+SkPath TextField::Shape() const { return SkPath::RRect(ShapeRRect()); }
 
 void UpdateCaret(TextField& text_field, Caret& caret) {
   int index = text_field.caret_positions[&caret].index;
@@ -158,7 +158,7 @@ struct TextSelectAction : Action {
     }
     Vec2 local = pointer.PositionWithin(text_field);
     if (drag.has_value()) {
-      bool new_inside = text_field.Shape(nullptr).contains(local.x, local.y);
+      bool new_inside = text_field.Shape().contains(local.x, local.y);
       if (new_inside != selecting_text) {
         selecting_text = new_inside;
       }

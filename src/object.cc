@@ -19,7 +19,7 @@ namespace automat {
 
 animation::Phase Object::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  SkPath path = Shape(nullptr);
+  SkPath path = Shape();
 
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, 0.01}};
@@ -60,7 +60,7 @@ animation::Phase Object::Draw(gui::DrawContext& ctx) const {
   return animation::Finished;
 }
 
-SkPath Object::Shape(animation::Display*) const {
+SkPath Object::Shape() const {
   static std::unordered_map<std::string_view, SkPath> basic_shapes;
   auto it = basic_shapes.find(Name());
   if (it == basic_shapes.end()) {
@@ -120,7 +120,7 @@ Vec2AndDir Object::ArgStart(const Argument& arg) {
     shape = FieldShape(*arg.field);
   }
   if (shape.isEmpty()) {
-    shape = Shape(nullptr);
+    shape = Shape();
   }
   Rect bounds = shape.getBounds();
   return Vec2AndDir{
@@ -131,7 +131,7 @@ Vec2AndDir Object::ArgStart(const Argument& arg) {
 
 void Object::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
   // By default just one position on the top of the bounding box.
-  auto shape = Shape(nullptr);
+  auto shape = Shape();
   Rect bounds = shape.getBounds();
   out_positions.push_back(Vec2AndDir{
       .pos = bounds.TopCenter(),
@@ -140,7 +140,7 @@ void Object::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
 }
 
 RRect Object::CoarseBounds(animation::Display* display) const {
-  return RRect{.rect = Shape(display).getBounds(),
+  return RRect{.rect = Shape().getBounds(),
                .radii = {{0, 0}, {0, 0}, {0, 0}, {0, 0}},
                .type = SkRRect::kRect_Type};
 }

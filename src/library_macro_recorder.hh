@@ -15,8 +15,8 @@ namespace automat::library {
 
 struct GlassRunButton : gui::PowerButton {
   GlassRunButton(OnOff* on_off) : gui::PowerButton(on_off, color::kParrotRed, "#eeeeee"_color) {}
-  void PointerOver(gui::Pointer&, animation::Display&) override;
-  void PointerLeave(gui::Pointer&, animation::Display&) override;
+  void PointerOver(gui::Pointer&) override;
+  void PointerLeave(gui::Pointer&) override;
   maf::StrView Name() const override { return "GlassRunButton"; }
 };
 
@@ -58,8 +58,8 @@ struct MacroRecorder : LiveObject,
   void On() override;
   void Off() override;
 
-  void PointerOver(gui::Pointer&, animation::Display&) override;
-  void PointerLeave(gui::Pointer&, animation::Display&) override;
+  void PointerOver(gui::Pointer&) override;
+  void PointerLeave(gui::Pointer&) override;
   void PointerMove(gui::Pointer&, Vec2 position) override;
 
   SkMatrix TransformToChild(const Widget& child) const override;

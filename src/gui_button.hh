@@ -29,8 +29,8 @@ struct Button : Widget {
   std::shared_ptr<Widget> child;
 
   Button(std::shared_ptr<Widget> child) : child(child) {}
-  void PointerOver(Pointer&, animation::Display&) override;
-  void PointerLeave(Pointer&, animation::Display&) override;
+  void PointerOver(Pointer&) override;
+  void PointerLeave(Pointer&) override;
   animation::Phase Update(animation::Display&) override;
   animation::Phase PreDraw(DrawContext& ctx) const override;
   animation::Phase Draw(DrawContext&) const override;

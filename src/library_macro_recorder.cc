@@ -486,12 +486,12 @@ void MacroRecorder::Off() {
   Cancel();
   here.lock()->long_running = nullptr;
 }
-void MacroRecorder::PointerOver(gui::Pointer& p, animation::Display& d) {
+void MacroRecorder::PointerOver(gui::Pointer& p) {
   animation_state.pointers_over++;
   StartWatching(p);
   InvalidateDrawCache();
 }
-void MacroRecorder::PointerLeave(gui::Pointer& p, animation::Display& d) {
+void MacroRecorder::PointerLeave(gui::Pointer& p) {
   animation_state.pointers_over--;
   StopWatching(p);
   p.move_callbacks.Erase(this);
@@ -512,8 +512,8 @@ static ConnectionWidget* FindConnectionWidget(Location& here, Argument& arg) {
   return nullptr;
 }
 
-void GlassRunButton::PointerOver(gui::Pointer& p, animation::Display& display) {
-  ToggleButton::PointerOver(p, display);
+void GlassRunButton::PointerOver(gui::Pointer& p) {
+  ToggleButton::PointerOver(p);
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
   if (auto h = macro_recorder->here.lock()) {
     if (auto connection_widget = FindConnectionWidget(*h, timeline_arg)) {
@@ -522,8 +522,8 @@ void GlassRunButton::PointerOver(gui::Pointer& p, animation::Display& display) {
   }
 }
 
-void GlassRunButton::PointerLeave(gui::Pointer& p, animation::Display& display) {
-  ToggleButton::PointerLeave(p, display);
+void GlassRunButton::PointerLeave(gui::Pointer& p) {
+  ToggleButton::PointerLeave(p);
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
   if (auto h = macro_recorder->here.lock()) {
     if (auto connection_widget = FindConnectionWidget(*h, timeline_arg)) {

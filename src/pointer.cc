@@ -42,7 +42,7 @@ Pointer::Pointer(Window& window, Vec2 position)
 }
 Pointer::~Pointer() {
   if (hover) {
-    hover->PointerLeave(*this, window.display);
+    hover->PointerLeave(*this);
   }
   if (keyboard) {
     keyboard->pointer = nullptr;
@@ -55,8 +55,6 @@ Pointer::~Pointer() {
 void Pointer::UpdatePath() {
   auto old_path = path;
   path.clear();
-
-  auto& display = window.display;
 
   path.clear();
   Vec2 point = pointer_position;
@@ -108,12 +106,12 @@ void Pointer::UpdatePath() {
 
   for (auto& old_w : old_path_shared) {
     if (std::find(new_path_shared.begin(), new_path_shared.end(), old_w) == new_path_shared.end()) {
-      old_w->PointerLeave(*this, display);
+      old_w->PointerLeave(*this);
     }
   }
   for (auto& new_w : new_path_shared) {
     if (std::find(old_path_shared.begin(), old_path_shared.end(), new_w) == old_path_shared.end()) {
-      new_w->PointerOver(*this, display);
+      new_w->PointerOver(*this);
     }
   }
 }

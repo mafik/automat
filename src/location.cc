@@ -203,7 +203,7 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   }
   SkRect bounds = my_shape.getBounds();
 
-  auto& state = GetAnimationState(ctx.display);
+  auto& state = GetAnimationState();
   if (state.Tick(ctx.DeltaT(), position, scale) == animation::Animating) {
     phase = animation::Animating;
     InvalidateConnectionWidgets();
@@ -385,9 +385,7 @@ animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_positi
 ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}), elevation(0) {
   transparency.speed = 5;
 }
-ObjectAnimationState& Location::GetAnimationState(animation::Display& display) const {
-  return animation_state;
-}
+ObjectAnimationState& Location::GetAnimationState() const { return animation_state; }
 Location::~Location() {
   if (long_running) {
     long_running->Cancel();
@@ -452,7 +450,7 @@ void PositionBelow(Location& origin, Location& below) {
 
 void AnimateGrowFrom(Location& source, Location& grown) {
   for (auto* display : animation::displays) {
-    auto& animation_state = grown.GetAnimationState(*display);
+    auto& animation_state = grown.GetAnimationState();
     animation_state.scale.value = 0.5;
     Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
     animation_state.position.value = source_center;
@@ -465,7 +463,7 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
   if (object == nullptr) {
     return animation::Finished;
   }
-  auto& anim = GetAnimationState(ctx.display);
+  auto& anim = GetAnimationState();
   float target_elevation = 0;
   for (auto* window : windows) {
     for (auto* pointer : window->pointers) {

@@ -1064,7 +1064,7 @@ animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& s
   auto& canvas = ctx.canvas;
   auto& display = ctx.display;
 
-  float dispenser_scale = state.location.GetAnimationState(ctx.display).scale;
+  float dispenser_scale = state.location.GetAnimationState().scale;
 
   SkMatrix connector_matrix = state.ConnectorMatrix();
 

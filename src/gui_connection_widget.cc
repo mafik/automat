@@ -170,7 +170,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
 animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
   auto& display = ctx.display;
-  auto& from_animation_state = from.GetAnimationState(display);
+  auto& from_animation_state = from.GetAnimationState();
   SkPath from_shape = from.object->Shape();
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
@@ -353,13 +353,12 @@ void DragConnectionAction::Begin() {
     widget.manual_position = pointer_pos - grab_offset * widget.state->connector_scale;
   }
 
-  display = &pointer.AnimationContext();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       if (CanConnect(widget.from, *l, widget.arg)) {
-        l->GetAnimationState(*display).highlight.target = 1;
+        l->GetAnimationState().highlight.target = 1;
       } else {
-        l->GetAnimationState(*display).highlight.target = 0;
+        l->GetAnimationState().highlight.target = 0;
       }
       l->InvalidateDrawCache();
     }

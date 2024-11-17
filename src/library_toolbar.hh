@@ -30,11 +30,9 @@ struct PrototypeButton : Widget {
     return visitor(maf::SpanOfArr(const_cast<std::shared_ptr<Widget>*>(&proto_widget), 1));
   }
 
-  void PointerOver(Pointer& pointer, animation::Display&) override {
-    pointer.PushIcon(Pointer::kIconHand);
-  }
+  void PointerOver(Pointer& pointer) override { pointer.PushIcon(Pointer::kIconHand); }
 
-  void PointerLeave(Pointer& pointer, animation::Display&) override { pointer.PopIcon(); }
+  void PointerLeave(Pointer& pointer) override { pointer.PopIcon(); }
 
   ControlFlow PointerVisitChildren(Visitor&) override { return ControlFlow::Continue; }
 
@@ -69,9 +67,9 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   // If the object should be cached into a texture, return its bounds in local coordinates.
   maf::Optional<Rect> TextureBounds() const override;
 
-  void PointerOver(gui::Pointer& pointer, animation::Display&) override { StartWatching(pointer); }
+  void PointerOver(gui::Pointer& pointer) override { StartWatching(pointer); }
 
-  void PointerLeave(gui::Pointer& pointer, animation::Display&) override {
+  void PointerLeave(gui::Pointer& pointer) override {
     StopWatching(pointer);
     InvalidateDrawCache();
   }

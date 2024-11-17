@@ -18,7 +18,6 @@ struct ConnectionWidget;
 
 struct DragConnectionAction : Action {
   ConnectionWidget& widget;
-  animation::Display* display;
   std::unique_ptr<audio::Effect> effect;
 
   Vec2 grab_offset;

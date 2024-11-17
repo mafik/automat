@@ -167,8 +167,8 @@ struct Widget : public std::enable_shared_from_this<Widget> {
     return *root;
   }
 
-  virtual void PointerOver(Pointer&, animation::Display&) {}
-  virtual void PointerLeave(Pointer&, animation::Display&) {}
+  virtual void PointerOver(Pointer&) {}
+  virtual void PointerLeave(Pointer&) {}
 
   virtual animation::Phase PreDraw(DrawContext& ctx) const { return animation::Finished; }
   animation::Phase DrawCached(DrawContext& ctx) const;

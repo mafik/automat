@@ -25,13 +25,13 @@ using namespace std;
 
 namespace automat::gui {
 
-void Button::PointerOver(Pointer& pointer, animation::Display& display) {
+void Button::PointerOver(Pointer& pointer) {
   animation_state.pointers_over++;
   pointer.PushIcon(Pointer::kIconHand);
   InvalidateDrawCache();
 }
 
-void Button::PointerLeave(Pointer& pointer, animation::Display& display) {
+void Button::PointerLeave(Pointer& pointer) {
   animation_state.pointers_over--;
   pointer.PopIcon();
   InvalidateDrawCache();

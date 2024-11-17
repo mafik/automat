@@ -20,12 +20,12 @@ using namespace maf;
 
 namespace automat::gui {
 
-void TextField::PointerOver(Pointer& pointer, animation::Display& display) {
+void TextField::PointerOver(Pointer& pointer) {
   pointer.PushIcon(Pointer::kIconIBeam);
   hover.Increment();
 }
 
-void TextField::PointerLeave(Pointer& pointer, animation::Display& display) {
+void TextField::PointerLeave(Pointer& pointer) {
   pointer.PopIcon();
   hover.Decrement();
 }

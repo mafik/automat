@@ -54,8 +54,7 @@ struct Location : public gui::Widget {
 
   ObjectAnimationState& GetAnimationState() const;
 
-  // TODO: remove this and move it into TransformToChild
-  SkMatrix GetTransform(animation::Display*) const;
+  SkMatrix GetTransform() const;
 
   mutable ObjectAnimationState animation_state;
 
@@ -270,7 +269,7 @@ struct Location : public gui::Widget {
   // DEPRECATED. Returns the position in parent machine's coordinates where the connections for this
   // argument should start.
   // TODO: replace with Argument::Start
-  Vec2AndDir ArgStart(animation::Display*, Argument&);
+  Vec2AndDir ArgStart(Argument&);
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
   maf::Optional<Rect> TextureBounds() const override;
 

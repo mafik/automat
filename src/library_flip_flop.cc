@@ -110,7 +110,7 @@ animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
 
   {  // Red indicator light
     animation_state.light.target = current_state;
-    phase |= animation_state.light.Tick(dctx.display);
+    phase |= animation_state.light.Tick(dctx.timer);
     SkPaint gradient;
     SkPoint center = {kFlipFlopWidth / 2, 2_cm};
     float radius = 0.5_mm;

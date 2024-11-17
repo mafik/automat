@@ -139,7 +139,7 @@ void Object::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
   });
 }
 
-RRect Object::CoarseBounds(animation::Display* display) const {
+RRect Object::CoarseBounds() const {
   return RRect{.rect = Shape().getBounds(),
                .radii = {{0, 0}, {0, 0}, {0, 0}, {0, 0}},
                .type = SkRRect::kRect_Type};

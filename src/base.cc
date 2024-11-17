@@ -284,7 +284,7 @@ ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
 }
 SkMatrix Machine::TransformToChild(const Widget& child) const {
   if (const Location* l = dynamic_cast<const Location*>(&child)) {
-    return l->GetTransform(nullptr);
+    return l->GetTransform();
   } else if (const gui::ConnectionWidget* w = dynamic_cast<const gui::ConnectionWidget*>(&child)) {
     return SkMatrix::I();
   }

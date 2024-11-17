@@ -209,8 +209,8 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
     InvalidateConnectionWidgets();
   }
 
-  phase |= state.highlight.Tick(ctx.display);
-  phase |= state.transparency.Tick(ctx.display);
+  phase |= state.highlight.Tick(ctx.timer);
+  phase |= state.transparency.Tick(ctx.timer);
   bool using_layer = false;
   if (state.transparency > 0.01) {
     using_layer = true;
@@ -236,8 +236,8 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
     float intervals[] = {0.0035, 0.0015};
     double ignore;
     time::Duration period = 200s;
-    float phase = std::fmod(ctx.display.timer.now.time_since_epoch().count(), period.count()) /
-                  period.count();
+    float phase =
+        std::fmod(ctx.timer.now.time_since_epoch().count(), period.count()) / period.count();
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));
     ctx.canvas.drawPath(outset_shape, dash_paint);
   }
@@ -350,7 +350,7 @@ void Location::Run() {
   }
 }
 
-Vec2AndDir Location::ArgStart(animation::Display* display, Argument& arg) {
+Vec2AndDir Location::ArgStart(Argument& arg) {
   auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
   auto m = ParentAs<Machine>()->TransformFromChild(*this);
   pos_dir.pos = m.mapPoint(pos_dir.pos);
@@ -369,7 +369,7 @@ SkMatrix ObjectAnimationState::GetTransform(Vec2 scale_pivot) const {
   return GetLocationTransform(position, scale, scale_pivot);
 }
 
-SkMatrix Location::GetTransform(animation::Display* display) const {
+SkMatrix Location::GetTransform() const {
   Vec2 scale_pivot = object->Shape().getBounds().center();
   return animation_state.GetTransform(scale_pivot);
 }
@@ -449,13 +449,11 @@ void PositionBelow(Location& origin, Location& below) {
 }
 
 void AnimateGrowFrom(Location& source, Location& grown) {
-  for (auto* display : animation::displays) {
-    auto& animation_state = grown.GetAnimationState();
-    animation_state.scale.value = 0.5;
-    Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
-    animation_state.position.value = source_center;
-    animation_state.transparency.value = 1;
-  }
+  auto& animation_state = grown.GetAnimationState();
+  animation_state.scale.value = 0.5;
+  Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
+  animation_state.position.value = source_center;
+  animation_state.transparency.value = 1;
 }
 
 animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
@@ -479,7 +477,8 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
   auto phase = anim.elevation.SineTowards(target_elevation, ctx.DeltaT(), 0.2);
   auto shape = object->Shape();
   auto rect = shape.getBounds();
-  auto window_size_px = ctx.display.window->size * ctx.display.window->display_pixels_per_meter;
+  auto window = dynamic_cast<gui::Window*>(&RootWidget());
+  auto window_size_px = window->size * window->display_pixels_per_meter;
   float s = ctx.canvas.getTotalMatrix().getScaleX();
   float min_elevation = 1_mm;
   SkPoint3 z_plane_params = {0, 0, (min_elevation + anim.elevation * 8_mm) * s};

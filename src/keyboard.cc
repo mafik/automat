@@ -82,7 +82,7 @@ void Caret::Release() {
   }
 }
 
-SkPath Caret::MakeRootShape(animation::Display& display) const {
+SkPath Caret::MakeRootShape() const {
   SkMatrix text_to_root = TransformUp(*widget, root_machine.get());
   return shape.makeTransform(text_to_root);
 }
@@ -201,24 +201,24 @@ enum class CaretAnimAction { Keep, Delete };
 
 static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, Caret* caret) {
   SkCanvas& canvas = ctx.canvas;
-  animation::Display& display = ctx.display;
+  time::Timer& timer = ctx.timer;
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
   paint.setAntiAlias(true);
 
   if (caret) {
-    SkPath root_shape = caret->MakeRootShape(display);
+    SkPath root_shape = caret->MakeRootShape();
     // Animate caret blinking.
     anim.last_blink = caret->last_blink;
     if (anim.shape.isInterpolatable(root_shape)) {
       SkPath out;
-      float weight = 1 - anim.delta_fraction.Tick(display);
+      float weight = 1 - anim.delta_fraction.Tick(timer);
       anim.shape.interpolate(root_shape, weight, &out);
       anim.shape = out;
     } else {
       anim.shape = root_shape;
     }
-    double now = (display.timer.now - anim.last_blink).count();
+    double now = (timer.now - anim.last_blink).count();
     double seconds, subseconds;
     subseconds = modf(now, &seconds);
     if (subseconds < 0.5) {
@@ -229,7 +229,7 @@ static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, Caret* 
     if (anim.keyboard.pointer) {
       SkPath grave = PointerIBeam(anim.keyboard);
       SkPath out;
-      float weight = 1 - anim.delta_fraction.Tick(display);
+      float weight = 1 - anim.delta_fraction.Tick(timer);
       anim.shape.interpolate(grave, weight, &out);
       anim.shape = out;
       float dist = (grave.getBounds().center() - anim.shape.getBounds().center()).length();
@@ -239,12 +239,12 @@ static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, Caret* 
       canvas.drawPath(anim.shape, paint);
     } else {
       anim.fade_out.target = 1;
-      anim.fade_out.Tick(display);
+      anim.fade_out.Tick(timer);
       paint.setAlphaf(1 - anim.fade_out.value);
       if (paint.getAlphaf() < 0.01) {
         return CaretAnimAction::Delete;
       }
-      anim.shape.offset(0, display.timer.d * kLetterSize);
+      anim.shape.offset(0, timer.d * kLetterSize);
       canvas.drawPath(anim.shape, paint);
     }
   }
@@ -259,7 +259,6 @@ CaretAnimation::CaretAnimation(const Keyboard& keyboard)
 
 void Keyboard::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
-  animation::Display& display = ctx.display;
   // Iterate through each Caret & CaretAnimation, and draw them.
   // After a Caret has been removed, its CaretAnimation is kept around for some
   // time to animate it out.

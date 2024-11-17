@@ -211,7 +211,6 @@ Vec2 Pointer::PositionWithinRootMachine() const {
   SkMatrix transform_down = TransformDown(*root_machine, nullptr);
   return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
 }
-animation::Display& Pointer::AnimationContext() const { return window.display; }
 
 Str Pointer::ToStr() const {
   Str ret;

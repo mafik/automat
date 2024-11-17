@@ -38,7 +38,6 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
   using namespace maf;
 
   Vec2 point = a.pointer.pointer_position;
-  auto* display = &a.pointer.window.display;
 
   gui::DropTarget* drop_target = nullptr;
 
@@ -143,7 +142,7 @@ ControlFlow DragLocationWidget::VisitChildren(gui::Visitor& visitor) {
 }
 SkMatrix DragLocationWidget::TransformToChild(const gui::Widget& child) const {
   if (&child == action.location.get()) {
-    return action.location->GetTransform(nullptr);
+    return action.location->GetTransform();
   }
   return SkMatrix::I();
 }

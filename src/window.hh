@@ -134,7 +134,9 @@ struct Window final : Widget, DropTarget {
   mutable std::deque<Vec3> camera_timeline;
   mutable std::deque<time::SteadyPoint> timeline;
 
-  mutable animation::Display display;
+  // `timer` should be advanced once per frame on the device that displays the animation. Its `d`
+  // field can be used by animated objects to animate their properties.
+  mutable time::Timer timer;
 
   std::deque<float> fps_history;
 

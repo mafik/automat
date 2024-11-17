@@ -39,7 +39,7 @@ static bool IsArgumentOptical(Location& from, Argument& arg) {
 
 ConnectionWidget::ConnectionWidget(Location& from, Argument& arg) : from(from), arg(arg) {
   if (IsArgumentOptical(from, arg)) {
-    auto pos_dir = from.ArgStart(nullptr, arg);
+    auto pos_dir = from.ArgStart(arg);
     state.emplace(from, arg, pos_dir);
   }
 }
@@ -73,7 +73,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
                         SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
-    double t = ctx.display.timer.now.time_since_epoch().count();
+    double t = ctx.timer.now.time_since_epoch().count();
     auto local_matrix = SkMatrix::RotateRad(fmod(t * 2 * M_PI / kPeriod, 2 * M_PI))
                             .postTranslate(pos_dir.pos.x, pos_dir.pos.y);
     radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
@@ -169,7 +169,6 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
 
 animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   SkCanvas& canvas = ctx.canvas;
-  auto& display = ctx.display;
   auto& from_animation_state = from.GetAnimationState();
   SkPath from_shape = from.object->Shape();
   if (arg.field) {
@@ -267,7 +266,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
       phase |= state->connector_scale.SpringTowards(
           from.scale, ctx.DeltaT(), Location::kScaleSpringPeriod, Location::kSpringHalfTime);
     }
-    phase |= state->steel_insert_hidden.Tick(display);
+    phase |= state->steel_insert_hidden.Tick(ctx.timer);
 
     phase |= SimulateCablePhysics(ctx, ctx.DeltaT(), *state, pos_dir, to_points);
     if (alpha > 0.01f) {
@@ -287,7 +286,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     } else {
       cable_width.target = to != nullptr ? 2_mm : 0;
       cable_width.speed = 5;
-      phase |= cable_width.Tick(ctx.display);
+      phase |= cable_width.Tick(ctx.timer);
 
       if (cable_width > 0.01_mm && to) {
         if (alpha > 0.01f) {

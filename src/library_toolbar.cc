@@ -70,7 +70,9 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
 
   float width = CalculateWidth();
   int new_hovered_button = -1;
-  for (auto* pointer : dctx.display.window->pointers) {
+  auto window = dynamic_cast<gui::Window*>(&RootWidget());
+
+  for (auto* pointer : window->pointers) {
     if (pointer->action) {
       continue;
     }
@@ -169,7 +171,7 @@ SkMatrix Toolbar::TransformToChild(const Widget& child) const {
   float x = -width / 2 + kMarginAroundIcons;
   for (int i = 0; i < buttons.size(); ++i) {
     if (buttons[i].get() == &child) {
-      Rect src = prototypes[i]->CoarseBounds(nullptr).rect;
+      Rect src = prototypes[i]->CoarseBounds().rect;
       float size = buttons[i]->width;
       x += size / 2;
       float scale = buttons[i]->width / buttons[i]->natural_width;

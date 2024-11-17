@@ -126,7 +126,7 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
   phase |= animation::ExponentialApproach(eyes_open_target, dctx.DeltaT(), 0.2,
                                           animation_state.eyes_open);
-  animation_state.eye_rotation -= dctx.display.timer.d * 360 * animation_state.eye_rotation_speed;
+  animation_state.eye_rotation -= dctx.timer.d * 360 * animation_state.eye_rotation_speed;
   if (animation_state.eye_rotation < 0) {
     animation_state.eye_rotation += 360;
   }
@@ -136,7 +136,7 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
     auto local_to_window = TransformUp(*this, nullptr);
 
-    auto top_window = dctx.display.window;
+    auto top_window = dynamic_cast<gui::Window*>(&RootWidget());
 
     auto main_pointer_screen = GetMainPointerScreenPos();
 
@@ -322,7 +322,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     key_presser->SetKey(key);
     Rect key_presser_shape = key_presser_loc.object->Shape().getBounds();
     Argument& track_arg = *timeline->track_args.back();
-    Vec2AndDir arg_start = timeline->here.lock()->ArgStart(nullptr, track_arg);
+    Vec2AndDir arg_start = timeline->here.lock()->ArgStart(track_arg);
 
     // Pick the position that allows the cable to come in most horizontally (left to right).
     Vec2 best_connector_pos = key_presser_shape.TopCenter();

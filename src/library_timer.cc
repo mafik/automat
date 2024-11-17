@@ -443,9 +443,9 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
 
   auto phase = IsRunning(*this) ? animation::Animating : animation::Finished;
-  phase |= start_pusher_depression.Tick(ctx.display);
-  phase |= left_pusher_depression.Tick(ctx.display);
-  phase |= right_pusher_depression.Tick(ctx.display);
+  phase |= start_pusher_depression.Tick(ctx.timer);
+  phase |= left_pusher_depression.Tick(ctx.timer);
+  phase |= right_pusher_depression.Tick(ctx.timer);
 
   int range_end = (int)Range::EndGuard;
   animation::WrapModulo(range_dial.value, (float)range, range_end);
@@ -457,7 +457,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   duration_handle_rotation.target =
       modf(duration_handle_rotation.target / (2 * M_PI), &circles) * 2 * M_PI;
   animation::WrapModulo(duration_handle_rotation.value, duration_handle_rotation.target, M_PI * 2);
-  duration_handle_rotation.Tick(ctx.display);
+  duration_handle_rotation.Tick(ctx.timer);
 
   if (hand_draggers) {
     // do nothing...

@@ -4,8 +4,6 @@
 
 namespace automat::animation {
 
-maf::Vec<Display*> displays;
-
 Phase LowLevelSineTowards(float target, float delta_time, float period_time, float& value,
                           float& velocity) {
   float D = value - target;

@@ -71,7 +71,7 @@ struct Object : gui::Widget {
   }
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
-  virtual RRect CoarseBounds(animation::Display* display = nullptr) const;
+  virtual RRect CoarseBounds() const;
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 };
 

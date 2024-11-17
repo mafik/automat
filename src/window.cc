@@ -31,7 +31,6 @@ Window::Window() {
     toolbar->AddObjectPrototype(proto);
   }
   windows.push_back(this);
-  display.window = this;
 }
 Window::~Window() {
   auto it = std::find(windows.begin(), windows.end(), this);
@@ -44,14 +43,14 @@ static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 constexpr float kTrashRadius = 3_cm;
 
 void Window::Draw(SkCanvas& canvas) {
-  display.timer.Tick();
-  gui::DrawContext draw_ctx(display, canvas);
+  timer.Tick();
+  gui::DrawContext draw_ctx(timer, canvas);
   canvas.save();
   RunOnAutomatThreadSynchronous([&] { DrawCached(draw_ctx); });  // RunOnAutomatThreadSynchronous
   canvas.restore();
 
   // Draw fps counter
-  float fps = 1.0f / display.timer.d;
+  float fps = 1.0f / timer.d;
   fps_history.push_back(fps);
   while (fps_history.size() > 100) {
     fps_history.pop_front();
@@ -74,8 +73,8 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
 
   // Record camera movement timeline. This is used to create inertia effect.
   camera_timeline.emplace_back(Vec3(camera_x, camera_y, zoom));
-  timeline.emplace_back(display.timer.now);
-  while (timeline.front() < display.timer.now - time::Duration(0.2)) {
+  timeline.emplace_back(timer.now);
+  while (timeline.front() < timer.now - time::Duration(0.2)) {
     camera_timeline.pop_front();
     timeline.pop_front();
   }
@@ -115,9 +114,9 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
       auto dx = camera_timeline.back().x - camera_timeline.front().x;
       auto dy = camera_timeline.back().y - camera_timeline.front().y;
       auto dz = camera_timeline.back().z / camera_timeline.front().z;
-      camera_x.Shift(dx / dt * display.timer.d * 0.8);
-      camera_y.Shift(dy / dt * display.timer.d * 0.8);
-      float z = pow(dz, display.timer.d / dt * 0.8);
+      camera_x.Shift(dx / dt * timer.d * 0.8);
+      camera_y.Shift(dy / dt * timer.d * 0.8);
+      float z = pow(dz, timer.d / dt * 0.8);
       zoom_target *= z;
       zoom *= z;
       float lz = logf(z);
@@ -160,16 +159,16 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
     camera_y.value -= focus_delta.y;
   }
 
-  phase |= camera_x.Tick(display);
-  phase |= camera_y.Tick(display);
+  phase |= camera_x.Tick(timer);
+  phase |= camera_y.Tick(timer);
 
   if (move_velocity.x != 0) {
-    camera_x.Shift(move_velocity.x * display.timer.d);
+    camera_x.Shift(move_velocity.x * timer.d);
     inertia = false;
     phase = animation::Animating;
   }
   if (move_velocity.y != 0) {
-    camera_y.Shift(move_velocity.y * display.timer.d);
+    camera_y.Shift(move_velocity.y * timer.d);
     inertia = false;
     phase = animation::Animating;
   }
@@ -207,7 +206,7 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
 
   {  // Animate trash area
     trash_radius.target = drag_action_count ? kTrashRadius : 0;
-    phase |= trash_radius.Tick(display);
+    phase |= trash_radius.Tick(timer);
   }
 
   canvas.clear(background_color);

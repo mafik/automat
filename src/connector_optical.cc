@@ -1062,7 +1062,6 @@ struct OpticalConnectorPimpl {
 animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state,
                                       PaintDrawable& icon) {
   auto& canvas = ctx.canvas;
-  auto& display = ctx.display;
 
   float dispenser_scale = state.location.GetAnimationState().scale;
 
@@ -1327,7 +1326,7 @@ animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& s
     if (&state.arg == &next_arg) {
       lightness_pct = 100;
       phase |= animation::ExponentialApproach(
-          0, (display.timer.now - state.location.last_finished).count(), 0.1, lightness_pct);
+          0, (ctx.timer.now - state.location.last_finished).count(), 0.1, lightness_pct);
     } else {
       lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
     }

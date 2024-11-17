@@ -16,7 +16,7 @@ struct PrototypeButton : Widget {
   mutable animation::SpringV2<float> width{kToolbarIconSize};
 
   PrototypeButton(std::shared_ptr<Object>& proto) : proto(proto) {
-    auto rect = proto->CoarseBounds(nullptr).rect;
+    auto rect = proto->CoarseBounds().rect;
     natural_width =
         std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());
     width.value = natural_width;

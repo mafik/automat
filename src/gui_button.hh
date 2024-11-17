@@ -31,7 +31,7 @@ struct Button : Widget {
   Button(std::shared_ptr<Widget> child) : child(child) {}
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
-  animation::Phase Update(animation::Display&) override;
+  animation::Phase Update(time::Timer&) override;
   animation::Phase PreDraw(DrawContext& ctx) const override;
   animation::Phase Draw(DrawContext&) const override;
   float Height() const;

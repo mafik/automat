@@ -57,8 +57,6 @@ struct Pointer final {
   Vec2 PositionWithin(const Widget&) const;
   Vec2 PositionWithinRootMachine() const;
 
-  animation::Display& AnimationContext() const;
-
   maf::Str ToStr() const;
 
   Window& window;

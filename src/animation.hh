@@ -6,7 +6,6 @@
 
 #include "math.hh"
 #include "time.hh"
-#include "vec.hh"
 
 using namespace std::chrono_literals;
 
@@ -27,34 +26,6 @@ inline maf::Str ToStr(Phase p) { return p == Animating ? "Animating" : "Finished
 
 inline Phase operator||(Phase a, Phase b) { return Phase(bool(a) || bool(b)); }
 inline Phase& operator|=(Phase& a, Phase b) { return a = a || b; }
-
-struct Display;
-
-extern maf::Vec<Display*> displays;
-
-// Holds data related to the device that displays an animation.
-//
-// Every frame the device should call `timer.Tick()` to update the timer.
-//
-// This struct should be kept alive for as long as the display device is active. On destruction it
-// will also destroy temporary objects used for animation.
-struct Display {
-  Display() { displays.push_back(this); }
-  // forbid copy and move
-  Display(const Display&) = delete;
-  Display& operator=(const Display&) = delete;
-  Display(Display&&) = delete;
-
-  ~Display() { displays.erase(std::find(displays.begin(), displays.end(), this)); }
-
-  // `timer` should be advanced once per frame on the device that displays the animation. Its `d`
-  // field can be used by animated objects to animate their properties.
-  time::Timer timer;
-  operator time::Timer&() { return timer; }
-  float DeltaT() const { return timer.d; }
-
-  gui::Window* window = nullptr;
-};
 
 // TODO: delete almost everything from this file (and replace with "LowLevel*Towards" functions)
 struct DeltaFraction {

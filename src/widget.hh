@@ -55,10 +55,10 @@ struct PackFrameRequest {
 extern PackFrameRequest next_frame_request;
 
 struct DrawContext {
-  animation::Display& display;
+  time::Timer& timer;
   SkCanvas& canvas;
-  DrawContext(animation::Display& display, SkCanvas& canvas) : display(display), canvas(canvas) {}
-  float DeltaT() const { return display.DeltaT(); }
+  DrawContext(time::Timer& timer, SkCanvas& canvas) : timer(timer), canvas(canvas) {}
+  float DeltaT() const { return timer.d; }
   operator GrDirectContext*() const {
     if (auto recording_context = canvas.recordingContext()) {
       return recording_context->asDirectContext();
@@ -186,7 +186,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   // Called before Draw & PreDraw. The widgets can use this to update their state.
   // Only widgets that are being drawn will have this called.
-  virtual animation::Phase Update(animation::Display&) { return animation::Finished; }
+  virtual animation::Phase Update(time::Timer&) { return animation::Finished; }
 
   virtual animation::Phase Draw(DrawContext& ctx) const { return DrawChildren(ctx); }
   virtual SkPath Shape() const = 0;

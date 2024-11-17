@@ -425,7 +425,7 @@ void CreateWindow(Status& status) {
 
 #undef WRAP
 
-// TODO: Get rid of animation::Display
+// TODO: remove Location::GetTransform and move it into TransformToChild
 // TODO: Move all the animation logic into Widget::Update (only pass timer there)
 // TODO: Only pass Canvas into Widget::Draw & remove animation::Phase from its return value
 // TODO: Each widget should hold its own transform matrix
@@ -453,8 +453,8 @@ struct PackedFrame {
 };
 
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
-  window->display.timer.Tick();
-  auto now = window->display.timer.now;
+  window->timer.Tick();
+  auto now = window->timer.now;
   auto window_bounds_px =
       SkRect::MakeWH(round(window->size.width * window->display_pixels_per_meter),
                      round(window->size.width * window->display_pixels_per_meter));
@@ -726,11 +726,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       continue;
     }
     auto& widget = *tree[i].widget;
-    auto true_d = window->display.timer.d;
+    auto true_d = window->timer.d;
     auto fake_d = min(1.0, (now - widget.draw_time).count());
-    window->display.timer.d = fake_d;
-    auto animation_phase = widget.Update(window->display);
-    window->display.timer.d = true_d;
+    window->timer.d = fake_d;
+    auto animation_phase = widget.Update(window->timer);
+    window->timer.d = true_d;
     if (animation_phase == animation::Finished) {
       widget.invalidated = time::SteadyPoint::max();
     } else {
@@ -753,7 +753,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 #endif
 
     // ACTUALLY the delta time is `draw_time - now`.
-    auto true_d = window->display.timer.d;
+    auto true_d = window->timer.d;
     auto fake_d = min(1.0, (now - widget.draw_time).count());
     widget.draw_time = now;
     widget.window_to_local = node.window_to_local;
@@ -761,10 +761,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
     rec_canvas->setMatrix(node.local_to_window);
-    DrawContext ctx(window->display, *rec_canvas);
-    window->display.timer.d = fake_d;
+    DrawContext ctx(window->timer, *rec_canvas);
+    window->timer.d = fake_d;
     auto animation_phase = widget.Draw(ctx);  // This is where we actually draw stuff!
-    window->display.timer.d = true_d;
+    window->timer.d = true_d;
     if (animation_phase == animation::Animating) {
       widget.invalidated = min(widget.invalidated, now);
     }
@@ -817,7 +817,7 @@ void Paint() {
   canvas.save();
   canvas.translate(0, window->size.height - 1_cm);
   canvas.scale(2.7, 2.7);
-  auto fps_text = f("%.1fms", window->display.DeltaT() * 1000);
+  auto fps_text = f("%.1fms", window->timer.d * 1000);
   font.DrawText(canvas, fps_text, SkPaint());
   canvas.restore();
 

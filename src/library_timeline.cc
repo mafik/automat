@@ -523,14 +523,14 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
 void NextButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
   if (auto timeline = Closest<Timeline>(ptr.hover)) {
-    SetPosRatio(*timeline, 1, ptr.window.display.timer.now);
+    SetPosRatio(*timeline, 1, ptr.window.timer.now);
   }
 }
 
 void PrevButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
   if (Timeline* timeline = Closest<Timeline>(ptr.hover)) {
-    SetPosRatio(*timeline, 0, ptr.window.display.timer.now);
+    SetPosRatio(*timeline, 0, ptr.window.timer.now);
   }
 }
 
@@ -606,15 +606,14 @@ struct DragBridgeAction : Action {
       : Action(pointer), timeline(timeline) {}
   virtual void Begin() {
     float initial_x = pointer.PositionWithin(timeline).x;
-    float initial_pos_ratio = CurrentPosRatio(timeline, pointer.window.display.timer.now);
+    float initial_pos_ratio = CurrentPosRatio(timeline, pointer.window.timer.now);
     float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
     press_offset_x = initial_x - initial_bridge_x;
   }
   virtual void Update() {
     float x = pointer.PositionWithin(timeline).x;
     float new_bridge_x = x - press_offset_x;
-    SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x),
-                pointer.window.display.timer.now);
+    SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x), pointer.window.timer.now);
   }
   virtual void End() {}
 };
@@ -640,7 +639,7 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.window.display.timer.now);
+    OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.window.timer.now);
   }
   virtual void End() {}
 };
@@ -758,8 +757,7 @@ SkPath WindowShape(int num_tracks) {
 
 unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
-    auto bridge_shape =
-        BridgeShape(tracks.size(), CurrentPosRatio(*this, ptr.window.display.timer.now));
+    auto bridge_shape = BridgeShape(tracks.size(), CurrentPosRatio(*this, ptr.window.timer.now));
     auto window_shape = WindowShape(tracks.size());
     auto pos = ptr.PositionWithin(*this);
     if (bridge_shape.contains(pos.x, pos.y)) {
@@ -773,7 +771,7 @@ unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger bt
           return unique_ptr<Action>(new DragTimelineAction(ptr, *this));
         }
       } else {
-        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.display.timer.now);
+        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.timer.now);
         return unique_ptr<Action>(new DragBridgeAction(ptr, *this));
       }
     }
@@ -829,10 +827,10 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
 
   constexpr float PI = numbers::pi;
 
-  phase |= zoom.Tick(dctx.display);
+  phase |= zoom.Tick(dctx.timer);
 
   time::T max_track_length = MaxTrackLength();
-  float current_pos_ratio = CurrentPosRatio(*this, dctx.display.timer.now);
+  float current_pos_ratio = CurrentPosRatio(*this, dctx.timer.now);
 
   function<Str(time::T)> format_time;
   if (max_track_length > 3600) {
@@ -1290,7 +1288,7 @@ animation::Phase OnOffTrack::Draw(gui::DrawContext& dctx) const {
   if (!isnan(on_at)) {
     switch (timeline->state) {
       case Timeline::kRecording:
-        DrawSegment(on_at, (dctx.display.timer.now - timeline->recording.started_at).count());
+        DrawSegment(on_at, (dctx.timer.now - timeline->recording.started_at).count());
         break;
       case Timeline::kPlaying:
       case Timeline::kPaused:

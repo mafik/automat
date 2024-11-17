@@ -165,7 +165,7 @@ struct Caret final {
   Caret(Keyboard& keyboard);
   ~Caret() = default;
   void PlaceIBeam(Vec2 position);
-  SkPath MakeRootShape(animation::Display&) const;
+  SkPath MakeRootShape() const;
 
   // Called by the CaretOwner to release this Caret.
   void Release();

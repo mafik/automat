@@ -83,7 +83,6 @@ maf::Optional<Rect> Button::TextureBounds() const {
 
 void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   auto& canvas = ctx.canvas;
-  auto& display = ctx.display;
 
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
@@ -112,9 +111,9 @@ void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
   canvas.drawRRect(pressed_oval, border);
 }
 
-animation::Phase Button::Update(animation::Display& display) {
-  auto phase = animation::LinearApproach(animation_state.pointers_over ? 1 : 0, display.DeltaT(),
-                                         10, animation_state.highlight);
+animation::Phase Button::Update(time::Timer& timer) {
+  auto phase = animation::LinearApproach(animation_state.pointers_over ? 1 : 0, timer.d, 10,
+                                         animation_state.highlight);
 
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
@@ -142,8 +141,6 @@ animation::Phase Button::PreDraw(DrawContext& ctx) const {
 }
 
 animation::Phase Button::Draw(DrawContext& ctx) const {
-  auto& display = ctx.display;
-
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
 
@@ -159,7 +156,6 @@ animation::Phase ToggleButton::Draw(DrawContext& ctx) const {
 
 animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
   auto& canvas = ctx.canvas;
-  auto& display = ctx.display;
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
   if (filling >= 0.999) {
     if (&child == on_widget.get()) {
@@ -180,8 +176,8 @@ animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& 
       pressed_outer_oval.rect().fTop * (1 - filling) + pressed_outer_oval.rect().fBottom * filling;
   constexpr int n_points = 6;
   Vec2 points[n_points];
-  static time::SteadyPoint base = display.timer.now;
-  float timeS = (display.timer.now - base).count();
+  static time::SteadyPoint base = ctx.timer.now;
+  float timeS = (ctx.timer.now - base).count();
   constexpr float waving_x = kRadius / n_points / 2;
   float waving_y = waving_x * filling * (1 - filling) * 8;
   for (int i = 0; i < n_points; ++i) {
@@ -214,7 +210,6 @@ animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& 
 
 animation::Phase ToggleButton::PreDrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto& display = ctx.display;
 
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
 

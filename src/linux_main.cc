@@ -433,7 +433,9 @@ void CreateWindow(Status& status) {
 // TODO: Replace VisitChildren with a child iterator
 // TODO: Split Widget from Object (largest change)
 
-// TODO: Timeline run button is broken
+// TODO: Some objects still crash when executed (for example macro recorder)
+// TODO: Throwing object in the trash doesn't really delete everything
+// TODO: Crashes when closing Automat
 // -- at this point we should be back in the working state
 // TODO: fix objects not being redrawn when panning
 // TODO: investigate why some widgets are not packed even when they should be

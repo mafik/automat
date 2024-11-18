@@ -404,9 +404,6 @@ Location::~Location() {
   for (auto other : observing_errors) {
     other->error_observers.erase(this);
   }
-  if (no_scheduling.contains(this)) {
-    no_scheduling.erase(this);
-  }
   CancelScheduledAt(*this);
   if (window) {
     for (int i = 0; i < window->connection_widgets.size(); ++i) {

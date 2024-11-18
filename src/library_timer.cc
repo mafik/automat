@@ -164,6 +164,7 @@ TimerDelay::TimerDelay() : text_field(std::make_shared<gui::NumberTextField>(kTe
   range_dial.velocity = 0;
   range_dial.value = 1;
 
+  hand_degrees.value = 90;
   duration_handle_rotation.speed = 100;
   text_field->argument = &duration_arg;
   duration_arg.field = &duration;
@@ -173,6 +174,8 @@ TimerDelay::TimerDelay() : text_field(std::make_shared<gui::NumberTextField>(kTe
 TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay() {
   range_dial.velocity = other.range_dial.velocity;
   range_dial.value = other.range_dial.value;
+  hand_degrees.value = other.hand_degrees.value;
+
   SetDuration(*this, other.duration.value);
 }
 
@@ -443,9 +446,9 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
 
   auto phase = IsRunning(*this) ? animation::Animating : animation::Finished;
-  phase |= start_pusher_depression.Tick(ctx.timer);
-  phase |= left_pusher_depression.Tick(ctx.timer);
-  phase |= right_pusher_depression.Tick(ctx.timer);
+  phase |= animation::ExponentialApproach(0, ctx.timer.d, 0.2, start_pusher_depression);
+  phase |= animation::ExponentialApproach(0, ctx.timer.d, 0.2, left_pusher_depression);
+  phase |= animation::ExponentialApproach(0, ctx.timer.d, 0.2, right_pusher_depression);
 
   int range_end = (int)Range::EndGuard;
   animation::WrapModulo(range_dial.value, (float)range, range_end);
@@ -677,7 +680,8 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
       return std::make_unique<DragDurationHandleAction>(pointer, *this);
     }
     if (kStartPusherBox.contains(pos.x, pos.y)) {
-      start_pusher_depression.value = 1;
+      start_pusher_depression = 1;
+      InvalidateDrawCache();
       if (auto h = here.lock()) {
         if (IsRunning(*this)) {
           Cancel();
@@ -692,7 +696,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
     auto right_rot = SkMatrix::RotateDeg(45).mapPoint(pos.sk);
     if (kSmallPusherBox.contains(left_rot.x(), left_rot.y())) {
       range = Range(((int)range + (int)Range::EndGuard - 1) % (int)Range::EndGuard);
-      left_pusher_depression.value = 1;
+      left_pusher_depression = 1;
       UpdateTextField(*this);
       PropagateDurationOutwards(*this);
       InvalidateDrawCache();
@@ -700,7 +704,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
     }
     if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
       range = Range(((int)range + 1) % (int)Range::EndGuard);
-      right_pusher_depression.value = 1;
+      right_pusher_depression = 1;
       UpdateTextField(*this);
       PropagateDurationOutwards(*this);
       InvalidateDrawCache();

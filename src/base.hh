@@ -13,7 +13,6 @@
 #include <functional>
 #include <memory>
 #include <source_location>
-#include <stop_token>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -22,7 +21,6 @@
 
 #include "animation.hh"
 #include "argument.hh"
-#include "channel.hh"
 #include "connection.hh"
 #include "control_flow.hh"
 #include "deserializer.hh"
@@ -292,49 +290,6 @@ struct Pointer : LiveObject {
   }
 };
 
-extern int log_executed_tasks;
-
-struct LogTasksGuard {
-  LogTasksGuard();
-  ~LogTasksGuard();
-};
-
-struct Task;
-
-extern std::deque<Task*> queue;
-extern std::unordered_set<Location*> no_scheduling;
-extern vector<Task*> global_successors;
-
-bool NoScheduling(Location* location);
-
-struct NextGuard {
-  std::vector<Task*> successors;
-  std::vector<Task*> old_global_successors;
-  NextGuard(std::vector<Task*>&& successors) : successors(std::move(successors)) {
-    old_global_successors = global_successors;
-    global_successors = this->successors;
-  }
-  ~NextGuard() {
-    assert(global_successors == successors);
-    global_successors = old_global_successors;
-    for (Task* successor : successors) {
-      auto& pred = successor->predecessors;
-      if (pred.empty()) {
-        successor->Schedule();
-      }
-    }
-  }
-};
-
-// Sometimes objects are updated automatically (for example by their LiveArguments). This class
-// allows such objects to block auto-scheduling and enable them to alter the values of their
-// arguments without triggering re-runs.
-struct NoSchedulingGuard {
-  Location& location;
-  NoSchedulingGuard(Location& location) : location(location) { no_scheduling.insert(&location); }
-  ~NoSchedulingGuard() { no_scheduling.erase(&location); }
-};
-
 // Types of objects that sholud work nicely with data updates:
 //
 // - stateful functions (e.g. X + Y => Z)      Solution: function adds itself to
@@ -346,12 +301,5 @@ struct NoSchedulingGuard {
 // all lazy nodes & activates their observers
 //
 // Complexity: O(connections + observers)
-
-void RunLoop(const int max_iterations = -1);
-
-// THIS IS THE MOST IMPORTANT OBJECT IN AUTOMAT - the only entry into the main loop.
-extern channel events;
-
-void RunThread(std::stop_token);
 
 }  // namespace automat

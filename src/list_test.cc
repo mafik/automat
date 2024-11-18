@@ -6,6 +6,7 @@
 
 #include "base.hh"
 #include "library.hh"
+#include "tasks.hh"
 #include "test_base.hh"
 
 using namespace automat;

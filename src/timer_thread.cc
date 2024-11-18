@@ -55,7 +55,8 @@ static void TimerThread(std::stop_token automat_stop_token) {
 
     while (!ready_tasks.empty()) {
       // LOG << "Timer thread executing task " << tasks.begin()->second->Format();
-      events.send(std::move(ready_tasks.front()));
+      auto task = ready_tasks.front().release();
+      task->Schedule();  // TODO: possible leak if NoScheduling is active
       ready_tasks.pop_front();
     }
   }

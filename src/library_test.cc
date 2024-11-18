@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "base.hh"
+#include "tasks.hh"
 #include "test_base.hh"
 
 using namespace automat;

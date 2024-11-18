@@ -66,4 +66,25 @@ struct ErroredTask : Task {
   void Execute() override;
 };
 
+struct NextGuard {
+  std::vector<Task*> successors;
+  std::vector<Task*> old_global_successors;
+  NextGuard(std::vector<Task*>&& successors);
+  ~NextGuard();
+};
+
+// Sometimes objects are updated automatically (for example by their LiveArguments). This class
+// allows such objects to block auto-scheduling and enable them to alter the values of their
+// arguments without triggering re-runs.
+struct NoSchedulingGuard {
+  Location& location;
+  NoSchedulingGuard(Location& location);
+  ~NoSchedulingGuard();
+};
+
+struct LogTasksGuard {
+  LogTasksGuard();
+  ~LogTasksGuard();
+};
+
 }  // namespace automat

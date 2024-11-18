@@ -4,11 +4,40 @@
 
 #include "audio.hh"
 #include "base.hh"
+#include "root.hh"
 #include "time.hh"
 
 using namespace maf;
 
 namespace automat {
+
+int log_executed_tasks = 0;
+
+LogTasksGuard::LogTasksGuard() { ++log_executed_tasks; }
+LogTasksGuard::~LogTasksGuard() { --log_executed_tasks; }
+
+std::vector<Task*> global_successors;
+
+NextGuard::NextGuard(std::vector<Task*>&& successors) : successors(std::move(successors)) {
+  old_global_successors = global_successors;
+  global_successors = this->successors;
+}
+NextGuard::~NextGuard() {
+  assert(global_successors == successors);
+  global_successors = old_global_successors;
+  for (Task* successor : successors) {
+    auto& pred = successor->predecessors;
+    if (pred.empty()) {
+      successor->Schedule();
+    }
+  }
+}
+
+std::unordered_set<Location*> no_scheduling;
+
+static bool NoScheduling(Location* location) {
+  return no_scheduling.find(location) != no_scheduling.end();
+}
 
 Task::Task(std::weak_ptr<Location> target)
     : target(target), predecessors(), successors(global_successors) {
@@ -26,10 +55,11 @@ void Task::Schedule() {
   }
   assert(!scheduled);
   scheduled = true;
-  queue.emplace_back(this);
+  EnqueueTask(this);
 }
 
 void Task::PreExecute() {
+  scheduled = false;
   if (log_executed_tasks) {
     LOG << Format();
     LOG_Indent();
@@ -126,6 +156,7 @@ void FunctionTask::Execute() {
     function(*t);
   }
   PostExecute();
+  delete this;
 }
 
 std::string ErroredTask::Format() {
@@ -144,4 +175,8 @@ void ErroredTask::Execute() {
   delete this;
 }
 
+NoSchedulingGuard::NoSchedulingGuard(Location& location) : location(location) {
+  no_scheduling.insert(&location);
+}
+NoSchedulingGuard::~NoSchedulingGuard() { no_scheduling.erase(&location); }
 }  // namespace automat

@@ -19,9 +19,7 @@
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "gui_connection_widget.hh"
-#include "root.hh"
 #include "tasks.hh"
-#include "thread_name.hh"
 #include "timer_thread.hh"
 #include "window.hh"
 
@@ -61,73 +59,6 @@ void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> 
 }
 
 std::shared_ptr<Machine> Machine::proto = std::make_shared<Machine>();
-
-int log_executed_tasks = 0;
-
-LogTasksGuard::LogTasksGuard() { ++log_executed_tasks; }
-LogTasksGuard::~LogTasksGuard() { --log_executed_tasks; }
-
-std::deque<Task*> queue;
-std::unordered_set<Location*> no_scheduling;
-std::vector<Task*> global_successors;
-
-channel events;
-
-struct AutodeleteTaskWrapper : Task {
-  std::unique_ptr<Task> wrapped;
-  AutodeleteTaskWrapper(std::unique_ptr<Task>&& task)
-      : Task(task->target), wrapped(std::move(task)) {}
-  void Execute() override {
-    wrapped->Execute();
-    delete this;
-  }
-};
-
-// Dummy task to wake up the Automat Thread to process the shutdown.
-struct ShutdownTask : Task {
-  ShutdownTask() : Task(std::weak_ptr<Location>()) {}
-  std::string Format() override { return "Shutdown"; }
-  void Execute() override {}
-};
-
-void RunThread(std::stop_token stop_token) {
-  StartTimeThread(stop_token);
-  std::stop_callback wakeup_for_shutdown(stop_token,
-                                         [] { events.try_send(std::make_unique<ShutdownTask>()); });
-
-  SetThreadName("Automat Loop");
-  while (!stop_token.stop_requested()) {
-    RunLoop();
-    std::unique_ptr<Task> task = events.recv<Task>();
-    if (task) {
-      auto* wrapper = new AutodeleteTaskWrapper(std::move(task));
-      wrapper->Schedule();  // Will delete itself after executing.
-    }
-  }
-  automat_thread_finished = true;
-  automat_thread_finished.notify_all();
-}
-
-void RunLoop(const int max_iterations) {
-  if (log_executed_tasks) {
-    LOG << "RunLoop(" << queue.size() << " tasks)";
-    LOG_Indent();
-  }
-  int iterations = 0;
-  while (!queue.empty() && (max_iterations < 0 || iterations < max_iterations)) {
-    Task* task = queue.front();
-    queue.pop_front();
-    task->scheduled = false;
-    task->Execute();
-    ++iterations;
-  }
-  if (log_executed_tasks) {
-    LOG_Unindent();
-  }
-}
-bool NoScheduling(Location* location) {
-  return no_scheduling.find(location) != no_scheduling.end();
-}
 
 static void DoneRunning(Location& here) {
   if (!here.HasError()) {

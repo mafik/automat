@@ -3,10 +3,16 @@
 #include "root.hh"
 
 #include <atomic>
+#include <condition_variable>
 #include <thread>
 
+#include "concurrentqueue.hh"
 #include "prototypes.hh"
+#include "thread_name.hh"
+#include "timer_thread.hh"
 #include "window.hh"
+
+using namespace maf;
 
 namespace automat {
 
@@ -15,6 +21,46 @@ std::shared_ptr<Machine> root_machine;
 std::jthread automat_thread;
 std::atomic_bool automat_thread_finished = false;
 
+moodycamel::ConcurrentQueue<Task*> queue;
+std::mutex automat_threads_mutex;
+std::condition_variable automat_threads_cv;
+
+// TODO: Merge this RunThread
+void RunLoop(const int max_iterations) {
+  int iterations = 0;
+  while (max_iterations < 0 || iterations < max_iterations) {
+    Task* task;
+    if (!queue.try_dequeue(task)) {
+      break;
+    }
+    task->Execute();
+    ++iterations;
+  }
+}
+
+void EnqueueTask(Task* task) {
+  queue.enqueue(task);
+  std::unique_lock lk(automat_threads_mutex);
+  automat_threads_cv.notify_one();
+}
+
+static void RunThread(std::stop_token stop_token) {
+  SetThreadName("Automat Loop");
+  while (!stop_token.stop_requested()) {
+    Task* task;
+    if (!queue.try_dequeue(task)) {
+      std::unique_lock lk(automat_threads_mutex);
+      if (!queue.try_dequeue(task)) {
+        automat_threads_cv.wait(lk);
+        continue;
+      }
+    }
+    task->Execute();
+  }
+  automat_thread_finished = true;
+  automat_thread_finished.notify_all();
+}
+
 // TODO: merge this with InitAutomat
 void InitRoot() {
   root_location = std::make_shared<Location>();
@@ -22,7 +68,9 @@ void InitRoot() {
   root_machine = root_location->Create<Machine>();
   root_machine->parent = gui::window;
   root_machine->name = "Root machine";
-  automat_thread = std::jthread(RunThread);
+  std::stop_token stop_token;
+  StartTimeThread(stop_token);
+  automat_thread = std::jthread(RunThread, stop_token);
   auto& prototypes = Prototypes();
   sort(prototypes.begin(), prototypes.end(),
        [](const auto& a, const auto& b) { return a->Name() < b->Name(); });
@@ -30,7 +78,11 @@ void InitRoot() {
 
 void StopRoot() {
   if (automat_thread.joinable()) {
-    automat_thread.request_stop();
+    {
+      std::unique_lock lk(automat_threads_mutex);
+      automat_thread.request_stop();
+    }
+    automat_threads_cv.notify_all();
     automat_thread.join();
   }
 }
@@ -55,7 +107,8 @@ void RunOnAutomatThread(std::function<void()> f) {
     f();
     return;
   }
-  events.send(std::make_unique<FunctionTask>(root_location, [f](Location& l) { f(); }));
+  auto task = new FunctionTask(root_location, [f](Location& l) { f(); });
+  task->Schedule();
 }
 
 void RunOnAutomatThreadSynchronous(std::function<void()> f) {

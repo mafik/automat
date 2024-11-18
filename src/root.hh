@@ -19,8 +19,11 @@ void InitRoot();
 // Stops the Automat main loop
 void StopRoot();
 
+void EnqueueTask(Task* task);
 void RunOnAutomatThread(std::function<void()>);
 void RunOnAutomatThreadSynchronous(std::function<void()>);
 void AssertAutomatThread();
+
+void RunLoop(const int max_iterations = -1);
 
 }  // namespace automat

@@ -559,7 +559,8 @@ void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
         if (value) {
           l.ScheduleRun();
         } else {
-          queue.push_back(new CancelTask(l.SharedPtr<Location>()));
+          (new CancelTask(l.SharedPtr<Location>()))
+              ->Schedule();  // TODO: memory leak if NoScheduling is active
         }
       }
     }

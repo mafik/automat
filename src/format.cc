@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT
 #include "format.hh"
 
-#include <cxxabi.h>
-
 #include <cstdarg>
 #include <cstdio>
 
@@ -69,11 +67,9 @@ std::string Slugify(std::string in) {
   return out;
 }
 
-std::string demangle(std::string_view mangled) {
-  int status;
-  char* demangled = abi::__cxa_demangle(mangled.data(), nullptr, nullptr, &status);
-  std::string ret = demangled;
-  free(demangled);
+std::string Demangle(std::string_view mangled) {
+  // TODO: actually demangle
+  std::string ret = std::string(mangled);
   return ret;
 }
 }  // namespace maf

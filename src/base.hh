@@ -164,7 +164,6 @@ struct Machine : LiveObject, gui::DropTarget {
   SkPath Shape() const override;
 
   ControlFlow VisitChildren(gui::Visitor& visitor) override;
-  SkMatrix TransformToChild(const Widget& child) const override;
   void Args(std::function<void(Argument&)> cb) override {}
   void Relocate(Location* parent) override {
     LiveObject::Relocate(parent);

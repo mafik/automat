@@ -189,7 +189,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     to_shape = to->object->Shape();
     to->object->ConnectionPositions(to_points);
     Path target_path;
-    SkMatrix m = TransformUp(*to, parent_machine);
+    SkMatrix m = TransformUp(*to->object, parent_machine);
     for (auto& vec_and_dir : to_points) {
       vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
     }

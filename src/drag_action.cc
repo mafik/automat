@@ -141,9 +141,6 @@ ControlFlow DragLocationWidget::VisitChildren(gui::Visitor& visitor) {
   return ControlFlow::Continue;
 }
 SkMatrix DragLocationWidget::TransformToChild(const gui::Widget& child) const {
-  if (&child == action.location.get()) {
-    return action.location->GetTransform();
-  }
   return SkMatrix::I();
 }
 

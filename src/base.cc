@@ -282,14 +282,6 @@ ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
   }
   return ControlFlow::Continue;
 }
-SkMatrix Machine::TransformToChild(const Widget& child) const {
-  if (const Location* l = dynamic_cast<const Location*>(&child)) {
-    return l->GetTransform();
-  } else if (const gui::ConnectionWidget* w = dynamic_cast<const gui::ConnectionWidget*>(&child)) {
-    return SkMatrix::I();
-  }
-  return SkMatrix::I();
-}
 
 SkPath Machine::Shape() const {
   SkPath rect = SkPath::Rect(Rect::MakeWH(100_cm, 100_cm));

@@ -54,7 +54,7 @@ struct Location : public gui::Widget {
 
   ObjectAnimationState& GetAnimationState() const;
 
-  SkMatrix GetTransform() const;
+  SkMatrix TransformToChild(const Widget& child) const override;
 
   mutable ObjectAnimationState animation_state;
 
@@ -231,10 +231,12 @@ struct Location : public gui::Widget {
   T* ThisAs() {
     return dynamic_cast<T*>(object.get());
   }
+
   template <typename T>
   T* As() {
     return dynamic_cast<T*>(Follow());
   }
+
   template <typename T>
   T* ParentAs() const {
     if (auto p = parent.lock()) {

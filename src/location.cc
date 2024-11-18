@@ -220,8 +220,9 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   if (state.highlight > 0.01f) {  // Draw dashed highlight outline
     phase = animation::Animating;
     SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight.value);
-    SkPathMeasure measure(outset_shape, false);
-    float length = measure.getLength();
+    outset_shape.setIsVolatile(true);
+    auto from_child = TransformFromChild(*object);
+    outset_shape.transform(from_child);
 
     static const SkPaint kHighlightPaint = [] {
       SkPaint paint;
@@ -357,21 +358,13 @@ Vec2AndDir Location::ArgStart(Argument& arg) {
   return pos_dir;
 }
 
-static SkMatrix GetLocationTransform(Vec2 position, float scale, Vec2 scale_pivot) {
-  SkMatrix transform = SkMatrix::I();
-  float s = std::max<float>(scale, 0.00001f);
-  transform.postScale(1 / s, 1 / s, scale_pivot.x, scale_pivot.y);
-  transform.preTranslate(-position.x, -position.y);
-  return transform;
-}
-
-SkMatrix ObjectAnimationState::GetTransform(Vec2 scale_pivot) const {
-  return GetLocationTransform(position, scale, scale_pivot);
-}
-
-SkMatrix Location::GetTransform() const {
+SkMatrix Location::TransformToChild(const Widget&) const {
   Vec2 scale_pivot = object->Shape().getBounds().center();
-  return animation_state.GetTransform(scale_pivot);
+  SkMatrix transform = SkMatrix::I();
+  float s = std::max<float>(animation_state.scale, 0.00001f);
+  transform.postScale(1 / s, 1 / s, scale_pivot.x, scale_pivot.y);
+  transform.preTranslate(-animation_state.position.value.x, -animation_state.position.value.y);
+  return transform;
 }
 
 animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_position,
@@ -476,6 +469,9 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
   }
   auto phase = anim.elevation.SineTowards(target_elevation, ctx.DeltaT(), 0.2);
   auto shape = object->Shape();
+
+  ctx.canvas.concat(TransformFromChild(*object));
+
   auto rect = shape.getBounds();
   auto window = dynamic_cast<gui::Window*>(&RootWidget());
   auto window_size_px = window->size * window->display_pixels_per_meter;

@@ -7,7 +7,6 @@
 #include <optional>
 
 #include "action.hh"
-#include "animation.hh"
 #include "control_flow.hh"
 #include "object.hh"
 #include "time.hh"
@@ -15,7 +14,6 @@
 namespace automat {
 
 struct Location;
-struct ObjectAnimationState;
 
 namespace gui {
 struct DropTarget {

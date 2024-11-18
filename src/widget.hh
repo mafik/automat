@@ -214,7 +214,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   virtual SkMatrix TransformToChild(const Widget& child) const { return SkMatrix::I(); }
 
-  SkMatrix TransformFromChild(const Widget& child) {
+  SkMatrix TransformFromChild(const Widget& child) const {
     auto to_child = TransformToChild(child);
     SkMatrix from_child = SkMatrix::I();
     (void)to_child.invert(&from_child);

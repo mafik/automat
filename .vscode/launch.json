@@ -52,7 +52,7 @@
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
       "environment": [],
-      "preLaunchTask": "debug_automat.exe"
+      "preLaunchTask": "debug_automat"
     }
   ]
 }

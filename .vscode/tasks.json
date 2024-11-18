@@ -20,14 +20,6 @@
       }
     },
     {
-      "label": "debug_automat.exe",
-      "type": "shell",
-      "command": "./run.py 'link debug_automat.exe'",
-      "presentation": {
-        "reveal": "silent"
-      }
-    },
-    {
       "label": "Build Debug",
       "dependsOn": [
         "link automat"

@@ -600,6 +600,25 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
   }
 
+#ifdef DEBUG_RENDERING
+  // Debug print the tree every 10 seconds
+  static time::SteadyPoint last_print = time::SteadyPoint::min();
+  if (now - last_print > 10s) {
+    last_print = now;
+    for (int i = 0; i < tree.size(); ++i) {
+      Str line;
+      for (int j = tree[i].parent; j != 0; j = tree[j].parent) {
+        line += " ┃ ";
+      }
+      if (i) {
+        line += " ┣━";
+      }
+      line += tree[i].widget->Name();
+      LOG << line;
+    }
+  }
+#endif
+
   {  // Step 3 - create a list of render jobs for the updated widgets
     int first_job = -1;
     for (int i = 0; i < tree.size(); ++i) {

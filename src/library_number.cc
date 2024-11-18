@@ -66,7 +66,7 @@ SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
 void NumberButton::Activate(gui::Pointer& pointer) {
   Button::Activate(pointer);
   if (activate) {
-    if (auto l = Closest<Location>(pointer.hover)) {
+    if (auto l = Closest<Location>(*pointer.hover)) {
       activate(*l);
     }
   } else {

@@ -175,7 +175,7 @@ struct TextSelectAction : Action {
 
   void Begin() override {
     if (text_field.argument.has_value()) {
-      Location* location = Closest<Location>(pointer.hover);
+      Location* location = Closest<Location>(*pointer.hover);
 
       for (auto& connection_widget : window->connection_widgets) {
         if (&connection_widget->arg == text_field.argument &&

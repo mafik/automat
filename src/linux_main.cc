@@ -433,7 +433,6 @@ void CreateWindow(Status& status) {
 // TODO: Replace VisitChildren with a child iterator
 // TODO: Split Widget from Object (largest change)
 
-// TODO: Dragging objects should not leave them in a corrupted state
 // TODO: Grabbing objects from toolbar should not crash the app
 // TODO: Timeline run button is broken
 // -- at this point we should be back in the working state

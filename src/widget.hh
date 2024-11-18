@@ -254,8 +254,8 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 };
 
 template <typename T>
-T* Closest(std::shared_ptr<Widget>& widget) {
-  Widget* w = widget.get();
+T* Closest(Widget& widget) {
+  Widget* w = &widget;
   while (w) {
     if (auto* result = dynamic_cast<T*>(w)) {
       return result;

@@ -126,10 +126,6 @@ void Argument::NearbyCandidates(
         }
         Vec<Vec2AndDir> to_points;
         location.object->ConnectionPositions(to_points);
-        SkMatrix m = drag_location_action->Widget()->TransformFromChild(location);
-        for (auto& vec_and_dir : to_points) {
-          vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
-        }
         callback(location, to_points);
       }
     }

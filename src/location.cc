@@ -500,14 +500,16 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
 }
 
 void Location::UpdateAutoconnectArgs() {
-  auto here_up = Widget::parent->TransformFromChild(*this);
+  if (object == nullptr) {
+    return;
+  }
+  auto parent_machine = root_machine.get();
   object->Args([&](Argument& arg) {
     if (arg.autoconnect_radius <= 0) {
       return;
     }
 
-    auto start = object->ArgStart(arg);
-    start.pos = here_up.mapPoint(start.pos);
+    auto start = arg.Start(*object, *parent_machine);
 
     // Find the current distance & target of this connection
     float old_dist2 = HUGE_VALF;
@@ -516,7 +518,7 @@ void Location::UpdateAutoconnectArgs() {
       Vec<Vec2AndDir> to_positions;
       auto conn = *it;
       conn->to.object->ConnectionPositions(to_positions);
-      auto other_up = ParentAs<Machine>()->TransformFromChild(conn->to);
+      auto other_up = TransformBetween(*conn->to.object, *parent_machine);
       for (auto& to : to_positions) {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
@@ -532,8 +534,10 @@ void Location::UpdateAutoconnectArgs() {
     Location* new_target = nullptr;
     arg.NearbyCandidates(*this, arg.autoconnect_radius,
                          [&](Location& other, maf::Vec<Vec2AndDir>& to_points) {
-                           for (auto& to_pos : to_points) {
-                             float dist2 = LengthSquared(start.pos - to_pos.pos);
+                           auto other_up = TransformBetween(*other.object, *parent_machine);
+                           for (auto& to : to_points) {
+                             Vec2 to_pos = other_up.mapPoint(to.pos);
+                             float dist2 = LengthSquared(start.pos - to_pos);
                              if (dist2 <= new_dist2) {
                                new_dist2 = dist2;
                                new_target = &other;
@@ -555,6 +559,7 @@ void Location::UpdateAutoconnectArgs() {
 
   // Now check other locatinos & their arguments that might want to connect to this location
 
+  auto here_up = TransformBetween(*object, *parent_machine);
   Vec<Vec2AndDir> to_points;
   object->ConnectionPositions(to_points);
   for (auto& to : to_points) {
@@ -565,7 +570,7 @@ void Location::UpdateAutoconnectArgs() {
     if (other.get() == this) {
       continue;
     }
-    auto other_up = ParentAs<Machine>()->TransformFromChild(*other);
+    auto other_up = TransformBetween(*other->object, *parent_machine);
     other->object->Args([&](Argument& arg) {
       if (arg.autoconnect_radius <= 0) {
         return;

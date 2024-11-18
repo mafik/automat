@@ -522,14 +522,14 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
 
 void NextButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
-  if (auto timeline = Closest<Timeline>(ptr.hover)) {
+  if (auto timeline = Closest<Timeline>(*ptr.hover)) {
     SetPosRatio(*timeline, 1, ptr.window.timer.now);
   }
 }
 
 void PrevButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
-  if (Timeline* timeline = Closest<Timeline>(ptr.hover)) {
+  if (Timeline* timeline = Closest<Timeline>(*ptr.hover)) {
     SetPosRatio(*timeline, 0, ptr.window.timer.now);
   }
 }

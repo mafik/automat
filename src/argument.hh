@@ -213,8 +213,7 @@ struct Argument {
   // example, a Machine).
   Vec2AndDir Start(Object&, gui::Widget&) const;
 
-  // The returned "to_points" should use the same coordinate space as the "here" Location
-  // TODO: it might be necessary to pass a gui::DisplayContext to compute positions
+  // The returned "to_points" use the target object's local coordinate space.
   void NearbyCandidates(
       Location& here, float radius,
       std::function<void(Location&, maf::Vec<Vec2AndDir>& to_points)> callback) const;

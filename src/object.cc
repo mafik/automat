@@ -78,8 +78,8 @@ SkPath Object::Shape() const {
 
 std::unique_ptr<Action> Object::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
-    auto* location = Closest<Location>(p.hover);
-    auto* machine = Closest<Machine>(p.hover);
+    auto* location = Closest<Location>(*p.hover);
+    auto* machine = Closest<Machine>(*p.hover);
     if (location && machine) {
       auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
       a->contact_point = p.PositionWithin(*this);

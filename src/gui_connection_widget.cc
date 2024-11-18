@@ -141,6 +141,10 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
     arg.NearbyCandidates(
         from, arg.autoconnect_radius * 2 + 10_cm,
         [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
+          auto m = TransformBetween(*candidate.object, *root_machine);
+          for (auto& to : to_points) {
+            to.pos = m.mapPoint(to.pos);
+          }
           auto arcline = RouteCable(pos_dir, to_points, &ctx);
           auto it = ArcLine::Iterator(arcline);
           float total_length = it.AdvanceToEnd() * anim->radar_alpha;
@@ -406,8 +410,7 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
     Vec<Vec2AndDir> to_points;  // machine coords
     if (auto to = arg.FindLocation(from)) {
       to->object->ConnectionPositions(to_points);
-      Path target_path;
-      SkMatrix m = TransformBetween(*to, *root_machine);
+      SkMatrix m = TransformBetween(*to->object, *root_machine);
       for (auto& to_point : to_points) {
         to_point.pos = m.mapPoint(to_point.pos);
       }

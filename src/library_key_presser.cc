@@ -190,7 +190,7 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
     return std::make_unique<DragAndClickAction>(
         p, btn, Object::FindAction(p, btn),
-        std::make_unique<RunAction>(p, *Closest<Location>(p.hover)));
+        std::make_unique<RunAction>(p, *Closest<Location>(*p.hover)));
   } else {
     return std::make_unique<DragAndClickAction>(p, btn, Object::FindAction(p, btn),
                                                 shortcut_button->FindAction(p, btn));

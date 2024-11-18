@@ -389,7 +389,7 @@ struct Parent : Pointer {
   void Args(std::function<void(Argument&)> cb) override {}
   Object* Next(Location& error_context) const override {
     if (auto h = here.lock()) {
-      if (auto p = h->parent.lock()) {
+      if (auto p = h->parent_location.lock()) {
         return p->object.get();
       }
     }
@@ -397,7 +397,7 @@ struct Parent : Pointer {
   }
   void PutNext(Location& error_context, std::shared_ptr<Object> obj) override {
     if (auto h = here.lock()) {
-      if (auto p = h->parent.lock()) {
+      if (auto p = h->parent_location.lock()) {
         p->Put(std::move(obj));
         return;
       }
@@ -407,7 +407,7 @@ struct Parent : Pointer {
   }
   std::shared_ptr<Object> TakeNext(Location& error_context) override {
     if (auto h = here.lock()) {
-      if (auto p = h->parent.lock()) {
+      if (auto p = h->parent_location.lock()) {
         return p->Take();
       }
     }

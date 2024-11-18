@@ -24,7 +24,6 @@ static Vec2 RoundToMilimeters(Vec2 v) {
 static Object* DraggedObject(DragLocationAction& a) { return a.location->object.get(); }
 
 void DragLocationAction::Begin() {
-  widget->parent = pointer.window.SharedPtr();
   last_position = current_position = pointer.PositionWithinRootMachine();
   Update();
 }
@@ -97,7 +96,8 @@ void DragLocationAction::Update() {
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
 void DragLocationAction::End() {
-  if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
+  gui::DropTarget* drop_target = FindDropTarget(*this);
+  if (drop_target) {
     drop_target->DropLocation(std::move(location));
   }
 }
@@ -107,10 +107,9 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
     : Action(pointer),
       location(std::move(location_arg)),
       widget(std::make_shared<DragLocationWidget>(*this)) {
+  widget->parent = pointer.window.SharedPtr();
   pointer.window.drag_action_count++;
-  location->Widget::parent = pointer.window.SharedPtr();
-  // TODO: the right way to do this is to clear the (location's - not Widget's!) parent here
-  // location->parent = nullptr;
+  location->Widget::parent = widget;
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
   for (auto& connection_widget : gui::window->connection_widgets) {

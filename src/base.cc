@@ -365,7 +365,8 @@ void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* f
 }
 
 void Machine::DropLocation(std::shared_ptr<Location>&& l) {
-  l->parent = here;
+  l->parent = SharedPtr();
+  l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
   InvalidateDrawCache();

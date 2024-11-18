@@ -41,7 +41,7 @@ namespace automat {
 
 constexpr float kFrameCornerRadius = 0.001;
 
-Location::Location(std::weak_ptr<Location> parent) : parent(parent) {}
+Location::Location(std::weak_ptr<Location> parent) : parent_location(parent) {}
 
 bool Location::HasError() {
   if (error != nullptr) return true;
@@ -385,7 +385,7 @@ Location::~Location() {
     long_running = nullptr;
   }
   // Location can only be destroyed by its parent so we don't have to do anything there.
-  parent = {};
+  parent_location = {};
   while (not incoming.empty()) {
     delete *incoming.begin();
   }

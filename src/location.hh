@@ -58,7 +58,7 @@ struct Location : public gui::Widget {
 
   mutable ObjectAnimationState animation_state;
 
-  std::weak_ptr<Location> parent;
+  std::weak_ptr<Location> parent_location;
 
   std::shared_ptr<Object> object;
 
@@ -239,7 +239,7 @@ struct Location : public gui::Widget {
 
   template <typename T>
   T* ParentAs() const {
-    if (auto p = parent.lock()) {
+    if (auto p = parent_location.lock()) {
       return dynamic_cast<T*>(p->object.get());
     }
     return nullptr;
@@ -299,7 +299,7 @@ struct Location : public gui::Widget {
       for (auto observer : error_observers) {
         observer->ScheduleErrored(*this);
       }
-      if (auto p = parent.lock()) {
+      if (auto p = parent_location.lock()) {
         p->ScheduleErrored(*this);
       }
     }

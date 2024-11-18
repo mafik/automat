@@ -168,7 +168,8 @@ struct Machine : LiveObject, gui::DropTarget {
   void Relocate(Location* parent) override {
     LiveObject::Relocate(parent);
     for (auto& it : locations) {
-      it->parent = here;
+      it->parent_location = here;
+      it->parent = SharedPtr();
     }
   }
 
@@ -223,7 +224,7 @@ struct Machine : LiveObject, gui::DropTarget {
         observer->ScheduleErrored(errored);
       }
 
-      if (auto parent_location = here.parent.lock()) {
+      if (auto parent_location = here.parent_location.lock()) {
         parent_location->ScheduleErrored(here);
       } else {
         Error* error = errored.GetError();

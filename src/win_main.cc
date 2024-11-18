@@ -23,9 +23,10 @@
 #include "automat.hh"
 #include "backtrace.hh"
 #include "hid.hh"
-#include "library.hh"  // IWYU pragma: export
+#include "library.hh"  // IWYU pragma: keep
 #include "loading_animation.hh"
 #include "persistence.hh"
+#include "renderer.hh"
 #include "root.hh"
 #include "thread_name.hh"
 #include "touchpad.hh"
@@ -107,16 +108,6 @@ void ResizeVulkan() {
   }
 }
 
-void Paint(SkCanvas& canvas) {
-  if (!window) {
-    return;
-  }
-  canvas.save();
-  canvas.scale(DisplayPxPerMeter(), DisplayPxPerMeter());
-  window->Draw(canvas);
-  canvas.restore();
-}
-
 uint32_t ScanCode(LPARAM lParam) {
   uint32_t scancode = (lParam >> 16) & 0xff;
   bool extended = (lParam >> 24) & 0x1;
@@ -169,11 +160,12 @@ void VulkanPaint() {
   }
   SkCanvas* canvas = vk::GetBackbufferCanvas();
   if (anim) {
-    anim.OnPaint(*canvas, Paint);
+    anim.OnPaint(*canvas, RenderFrame);
   } else {
-    Paint(*canvas);
+    RenderFrame(*canvas);
   }
   vk::Present();
+  RenderOverflow(*canvas);
 }
 
 void RenderThread(std::stop_token stop_token) {

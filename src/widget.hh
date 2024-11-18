@@ -145,7 +145,8 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   bool draw_present = false;  // Whether the current draw job is going to be presented.
 
   // Things updated in RenderToSurface
-  time::SteadyPoint render_started;  // Used by the client to measure rendering time
+  float cpu_time;                 // Used by the client to measure rendering time
+  time::SteadyPoint gpu_started;  // Used by the client to measure rendering time
   SkRect surface_bounds_local;
   sk_sp<SkSurface> surface = nullptr;
 
@@ -156,7 +157,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual std::string_view Name() const {
     if (name_cached.empty()) {
       const std::type_info& info = typeid(*this);
-      name_cached = maf::demangle(info.name());
+      name_cached = maf::Demangle(info.name());
     }
     return name_cached;
   }

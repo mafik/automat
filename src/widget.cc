@@ -164,7 +164,7 @@ Widget* Widget::Find(uint32_t id) {
 PackFrameRequest next_frame_request = {};
 
 void Widget::RenderToSurface(SkCanvas& root_canvas) {
-  render_started = time::SteadyNow();
+  auto cpu_started = time::SteadyNow();
   auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
   surface = root_canvas.getSurface()->makeSurface(surface_bounds_root.width(),
                                                   surface_bounds_root.height());
@@ -180,13 +180,21 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
           [](GrGpuFinishedContext context) {
             Widget* w = static_cast<Widget*>(context);
             auto id = w->ID();
-            float render_time = (float)(time::SteadyNow() - w->render_started).count();
+            float gpu_time = (float)(time::SteadyNow() - w->gpu_started).count();
+            float render_time = max(gpu_time, w->cpu_time);
             next_frame_request.render_results.push_back({id, render_time});
           },
       .fFinishedContext = this,
+      .fSubmittedProc =
+          [](GrGpuSubmittedContext context, bool success) {
+            Widget* w = static_cast<Widget*>(context);
+            w->gpu_started = time::SteadyNow();
+          },
+      .fSubmittedContext = this,
   };
 
   direct_ctx->flush(surface.get(), flush_info);
+  cpu_time = (time::SteadyNow() - cpu_started).count();
 
   window_to_local.mapRect(&surface_bounds_local, SkRect::Make(surface_bounds_root));
 }

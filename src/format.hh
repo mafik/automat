@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <cstring>
+
 #include "str.hh"
 
 #if !__has_builtin(__builtin_dump_struct)
@@ -27,6 +29,8 @@ constexpr void constexpr_sprintf(std::string& out, const char* format, auto... a
   out += buf;
 }
 #pragma clang diagnostic pop
+
+std::string demangle(std::string_view mangled);
 
 template <typename T>
 std::string dump_struct(const T& t) {

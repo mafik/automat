@@ -152,11 +152,16 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   SkRect surface_bounds_local;
   sk_sp<SkSurface> surface = nullptr;
 
+  mutable std::string name_cached;
+
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".
   virtual std::string_view Name() const {
-    const std::type_info& info = typeid(*this);
-    return info.name();
+    if (name_cached.empty()) {
+      const std::type_info& info = typeid(*this);
+      name_cached = maf::demangle(info.name());
+    }
+    return name_cached;
   }
 
   Widget& RootWidget() const {

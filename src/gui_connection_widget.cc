@@ -67,7 +67,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
       animation::LinearApproach(prototype_alpha_target, ctx.DeltaT(), 2.f, anim->prototype_alpha);
   if (anim->radar_alpha >= 0.01f) {
     phase = animation::Animating;
-    auto pos_dir = arg.Start(*from.object, root_machine.get());
+    auto pos_dir = arg.Start(*from.object, *root_machine);
     SkPaint radius_paint;
     SkColor colors[] = {SkColorSetA(arg.tint, 0),
                         SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
@@ -183,18 +183,18 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   // For example when a location is being dragged around, or when there are nested machines.
   Widget* parent_machine = root_machine.get();
 
-  auto pos_dir = arg.Start(*from.object, parent_machine);
+  auto pos_dir = arg.Start(*from.object, *parent_machine);
 
   if ((to = arg.FindLocation(from))) {
     to_shape = to->object->Shape();
     to->object->ConnectionPositions(to_points);
     Path target_path;
-    SkMatrix m = TransformUp(*to->object, parent_machine);
+    SkMatrix m = TransformBetween(*to->object, *parent_machine);
     for (auto& vec_and_dir : to_points) {
       vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
     }
     to_shape.transform(m);
-    to_shape.transform(TransformDown(from, parent_machine), &to_shape_from_coords);
+    // to_shape.transform(TransformDown(from, parent_machine), &to_shape_from_coords);
   } else {
     if (manual_position) {
       to_points.emplace_back(Vec2AndDir{
@@ -216,7 +216,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     }
   }
 
-  auto transform_from_to_machine = TransformUp(from, parent_machine);
+  auto transform_from_to_machine = TransformBetween(from, *parent_machine);
   from_shape.transform(transform_from_to_machine);
 
   // If one of the to_points is over from_shape, don't draw the cable
@@ -402,12 +402,12 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
     }
     return bounds;
   } else {
-    auto pos_dir = arg.Start(*from.object, root_machine.get());
+    auto pos_dir = arg.Start(*from.object, *root_machine);
     Vec<Vec2AndDir> to_points;  // machine coords
     if (auto to = arg.FindLocation(from)) {
       to->object->ConnectionPositions(to_points);
       Path target_path;
-      SkMatrix m = TransformUp(*to, root_machine.get());
+      SkMatrix m = TransformBetween(*to, *root_machine);
       for (auto& to_point : to_points) {
         to_point.pos = m.mapPoint(to_point.pos);
       }

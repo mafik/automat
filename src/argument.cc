@@ -96,9 +96,9 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Vec2AndDir Argument::Start(Object& object, gui::Widget* widget) const {
+Vec2AndDir Argument::Start(Object& object, gui::Widget& widget) const {
   auto pos_dir = object.ArgStart(*this);
-  auto m = TransformUp(object, widget);
+  auto m = TransformBetween(object, widget);
   m.mapPoints(&pos_dir.pos.sk, 1);
   return pos_dir;
 }

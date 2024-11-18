@@ -83,7 +83,7 @@ void Caret::Release() {
 }
 
 SkPath Caret::MakeRootShape() const {
-  SkMatrix text_to_root = TransformUp(*widget, root_machine.get());
+  SkMatrix text_to_root = TransformBetween(*widget, *root_machine);
   return shape.makeTransform(text_to_root);
 }
 

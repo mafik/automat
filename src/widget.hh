@@ -32,15 +32,12 @@ maf::Str ToStr(std::shared_ptr<Widget> widget);
 
 using Visitor = std::function<ControlFlow(maf::Span<std::shared_ptr<Widget>>)>;
 
-// `to` is the widget located below `from` in the widget hierarchy.
-// `from` can be nullptr - if so then the transform starts at the root layer (takes in pixel
-// coordinates).
-SkMatrix TransformDown(const Widget& to, const Widget* from = nullptr);
-
-// `from` is the widget located below `to` in the widget hierarchy.
-// `to` can be nullptr - if so then the transform ends at the root layer (produces pixel
-// coordinates).
-SkMatrix TransformUp(const Widget& from, const Widget* to = nullptr);
+// Transform from the window coordinates to the local coordinates of the widget.
+SkMatrix TransformDown(const Widget& to);
+// Transform from the local coordinates of the widget to the window coordinates.
+SkMatrix TransformUp(const Widget& from);
+// Transform from the local coordinates of the widget to the local coordinates of another widget.
+SkMatrix TransformBetween(const Widget& from, const Widget& to);
 
 struct RenderResult {
   uint32_t id;

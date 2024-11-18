@@ -656,7 +656,7 @@ struct DragHandAction : Action {
     if (!timer_shared) {
       return;
     }
-    Vec2 pos = gui::TransformDown(*timer_shared, nullptr).mapPoint(pointer.pointer_position);
+    Vec2 pos = gui::TransformDown(*timer_shared).mapPoint(pointer.pointer_position);
     timer_shared->hand_degrees.value = atan(pos) * 180 / M_PI;
     timer_shared->InvalidateDrawCache();
   }

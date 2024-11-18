@@ -101,28 +101,31 @@ animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
   return phase;
 }
 
-SkMatrix TransformDown(const Widget& to, const Widget* from) {
+SkMatrix TransformDown(const Widget& to) {
   if (to.parent) {
-    if (to.parent.get() == from) {
-      return to.parent->TransformToChild(to);
-    } else {
-      SkMatrix ret = TransformDown(*to.parent, from);
-      ret.postConcat(to.parent->TransformToChild(to));
-      return ret;
-    }
+    SkMatrix ret = TransformDown(*to.parent);
+    ret.postConcat(to.parent->TransformToChild(to));
+    return ret;
   } else {
     return SkMatrix::I();
   }
 }
 
-SkMatrix TransformUp(const Widget& from, const Widget* to) {
-  SkMatrix down = TransformDown(from, to);
+SkMatrix TransformUp(const Widget& from) {
+  SkMatrix down = TransformDown(from);
   SkMatrix up;
   if (down.invert(&up)) {
     return up;
   } else {
     return SkMatrix::I();
   }
+}
+
+SkMatrix TransformBetween(const Widget& from, const Widget& to) {
+  // TODO: optimize by finding the closest common parent
+  auto up = TransformUp(from);
+  auto down = TransformDown(to);
+  return SkMatrix::Concat(down, up);
 }
 
 Str ToStr(shared_ptr<Widget> widget) {

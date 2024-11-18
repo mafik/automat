@@ -204,11 +204,11 @@ Pointer::IconType Pointer::Icon() const {
 void Pointer::PushIcon(IconType icon) { icons.push_back(icon); }
 void Pointer::PopIcon() { icons.pop_back(); }
 Vec2 Pointer::PositionWithin(const Widget& widget) const {
-  SkMatrix transform_down = TransformDown(widget, nullptr);
+  SkMatrix transform_down = TransformDown(widget);
   return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
 }
 Vec2 Pointer::PositionWithinRootMachine() const {
-  SkMatrix transform_down = TransformDown(*root_machine, nullptr);
+  SkMatrix transform_down = TransformDown(*root_machine);
   return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
 }
 

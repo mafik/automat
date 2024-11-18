@@ -22,7 +22,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   if (btn != gui::PointerButton::Left) {
     return nullptr;
   }
-  auto matrix = TransformUp(*pointer.hover, nullptr);
+  auto matrix = TransformUp(*pointer.hover);
   auto loc = std::make_shared<Location>();
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
@@ -66,7 +66,7 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
     width_targets[i] = buttons[i]->natural_width;
   }
 
-  auto my_transform = gui::TransformDown(*this, nullptr);
+  auto my_transform = gui::TransformDown(*this);
 
   float width = CalculateWidth();
   int new_hovered_button = -1;

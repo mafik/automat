@@ -9,6 +9,7 @@
 #include "../build/generated/embedded.hh"
 #include "audio.hh"
 #include "random.hh"
+#include "root.hh"
 #include "span.hh"
 #include "textures.hh"
 #include "widget.hh"
@@ -24,6 +25,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   }
   auto matrix = TransformUp(*pointer.hover);
   auto loc = std::make_shared<Location>();
+  loc->parent_location = root_location;
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
   loc->animation_state.scale = matrix.get(0) / pointer.window.zoom;

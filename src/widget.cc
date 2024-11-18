@@ -19,6 +19,7 @@
 #include "animation.hh"
 #include "control_flow.hh"
 #include "font.hh"
+#include "log.hh"
 #include "time.hh"
 
 using namespace automat;
@@ -253,4 +254,18 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
   }
 }
 
+void Widget::FixParents() {
+  Visitor visitor = [this](maf::Span<std::shared_ptr<Widget>> children) {
+    for (auto& child : children) {
+      if (child->parent.get() != this) {
+        ERROR << "Widget " << child->Name() << " has parent " << f("%p", child->parent.get())
+              << " but should have " << this->Name() << f(" (%p)", this);
+        child->parent = this->SharedPtr();
+      }
+      child->FixParents();
+    }
+    return ControlFlow::Continue;
+  };
+  VisitChildren(visitor);
+}
 }  // namespace automat::gui

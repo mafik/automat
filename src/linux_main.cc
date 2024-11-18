@@ -433,7 +433,6 @@ void CreateWindow(Status& status) {
 // TODO: Replace VisitChildren with a child iterator
 // TODO: Split Widget from Object (largest change)
 
-// TODO: Grabbing objects from toolbar should not crash the app
 // TODO: Timeline run button is broken
 // -- at this point we should be back in the working state
 // TODO: fix objects not being redrawn when panning
@@ -527,6 +526,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
   }
 
+  window->FixParents();
+
   {  // Step 2 - flatten the widget tree for analysis.
     // Queue with (parent index, widget) pairs.
     vector<pair<int, std::shared_ptr<Widget>>> q;
@@ -549,13 +550,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
           .window_to_local = SkMatrix::I(),
       });
       int i = tree.size() - 1;
-
-      if (widget->parent == nullptr && i != parent) {
-        ERROR << "Widget " << widget->Name() << " has parent " << f("%p", widget->parent.get())
-              << " but should have " << tree[parent].widget->Name()
-              << f(" (%p)", tree[parent].widget.get());
-        widget->parent = tree[parent].widget;
-      }
 
       auto& node = tree.back();
       if (parent != i) {

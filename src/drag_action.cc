@@ -107,6 +107,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
     : Action(pointer),
       location(std::move(location_arg)),
       widget(std::make_shared<DragLocationWidget>(*this)) {
+  widget->FixParents();
   widget->parent = pointer.window.SharedPtr();
   pointer.window.drag_action_count++;
   location->Widget::parent = widget;

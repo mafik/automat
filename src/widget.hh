@@ -169,6 +169,18 @@ struct Widget : public std::enable_shared_from_this<Widget> {
     return *root;
   }
 
+  // Each widget needs to have a pointer to its parent.
+  // Because widgets share inheritance hierarchy with Objects (and objects must use shared_ptr), the
+  // widgets also must use shared_ptr for their references.
+  // While an object is constructed using `make_shared`, it doesn't know its own shared_ptr. This is
+  // a limitation of enable_shared_from_this - its inner pointer is initialized only after
+  // construction.
+  // In order to properly initialize the parents we currently use this workaround, that should be
+  // called after a widget hierarchy is constructed.
+  // Once Widget & Object classes are separated, and Widgets no longer use shared_ptr, this should
+  // be replaced with a proper `parent` initialization in the Widget constructor.
+  void FixParents();
+
   virtual void PointerOver(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}
 

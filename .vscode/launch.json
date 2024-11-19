@@ -9,7 +9,7 @@
         "DISPLAY": ":0"
       },
       "program": "${workspaceFolder}/build/debug_automat",
-      "preLaunchTask": "debug_automat",
+      "preLaunchTask": "debug_automat"
     },
     {
       "name": "(lldb) debug_sincos_test",
@@ -42,17 +42,6 @@
           "ignoreFailures": true
         }
       ]
-    },
-    {
-      "name": "(Windows/VSDbg) debug_automat",
-      "type": "cppvsdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/build/debug_automat.exe",
-      "args": [],
-      "stopAtEntry": false,
-      "cwd": "${fileDirname}",
-      "environment": [],
-      "preLaunchTask": "debug_automat"
     }
   ]
 }

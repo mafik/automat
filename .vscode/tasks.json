@@ -16,7 +16,8 @@
       "type": "shell",
       "command": "./run.py 'link debug_automat'",
       "presentation": {
-        "reveal": "silent"
+        "reveal": "silent",
+        "close": true
       }
     },
     {

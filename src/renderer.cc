@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "renderer.hh"
 
+#include <include/core/SkColor.h>
 #include <include/core/SkPictureRecorder.h>
 
 #include <cmath>
@@ -411,6 +412,27 @@ void RenderFrame(SkCanvas& canvas) {
   canvas.scale(window->display_pixels_per_meter, window->display_pixels_per_meter);
   canvas.save();
   pack.frame.back()->ComposeSurface(&canvas);
+
+#ifdef DEBUG_RENDERING
+  {  // bullseye for latency visualisation
+    std::lock_guard lock(window->mutex);
+    if (window->pointers.size() > 0) {
+      SkPaint red;
+      red.setColor(SK_ColorRED);
+      red.setAntiAlias(true);
+      SkPaint white;
+      white.setColor(SK_ColorWHITE);
+      white.setAntiAlias(true);
+      SkPaint orange;
+      orange.setColor("#ff8000"_color);
+      orange.setAntiAlias(true);
+      canvas.drawCircle(window->pointers[0]->pointer_position, 4_mm, red);
+      canvas.drawCircle(window->pointers[0]->pointer_position, 3_mm, white);
+      canvas.drawCircle(window->pointers[0]->pointer_position, 2_mm, orange);
+      canvas.drawCircle(window->pointers[0]->pointer_position, 1_mm, white);
+    }
+  }
+#endif
   canvas.restore();
 
   auto& font = GetFont();

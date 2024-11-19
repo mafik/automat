@@ -22,7 +22,7 @@
 #include "str.hh"
 #include "time.hh"
 
-#define DEBUG_RENDERING 1
+constexpr bool kDebugRendering = true;
 
 namespace automat::gui {
 

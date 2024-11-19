@@ -93,11 +93,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         ERROR << "Widget " << render_result.id << " not found!";
         continue;
       }
-#ifdef DEBUG_RENDERING
-      if (widget->recording == nullptr) {
-        FATAL << "Widget " << widget->Name() << " has been returned by client multiple times!";
+      if constexpr (kDebugRendering) {
+        if (widget->recording == nullptr) {
+          FATAL << "Widget " << widget->Name() << " has been returned by client multiple times!";
+        }
       }
-#endif
       float draw_millis = render_result.render_time * 1000;
       if (isnan(widget->average_draw_millis)) {
         widget->average_draw_millis = draw_millis;
@@ -189,24 +189,24 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
   }
 
-#ifdef DEBUG_RENDERING
-  // Debug print the tree every 10 seconds
-  static time::SteadyPoint last_print = time::SteadyPoint::min();
-  if (now - last_print > 10s) {
-    last_print = now;
-    for (int i = 0; i < tree.size(); ++i) {
-      Str line;
-      for (int j = tree[i].parent; j != 0; j = tree[j].parent) {
-        line += " ┃ ";
+  if constexpr (kDebugRendering) {
+    // Debug print the tree every 10 seconds
+    static time::SteadyPoint last_print = time::SteadyPoint::min();
+    if (now - last_print > 10s) {
+      last_print = now;
+      for (int i = 0; i < tree.size(); ++i) {
+        Str line;
+        for (int j = tree[i].parent; j != 0; j = tree[j].parent) {
+          line += " ┃ ";
+        }
+        if (i) {
+          line += " ┣━";
+        }
+        line += tree[i].widget->Name();
+        LOG << line;
       }
-      if (i) {
-        line += " ┣━";
-      }
-      line += tree[i].widget->Name();
-      LOG << line;
     }
   }
-#endif
 
   {  // Step 3 - create a list of render jobs for the updated widgets
     int first_job = -1;
@@ -356,11 +356,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     auto& node = tree[i];
     auto& widget = *node.widget;
 
-#ifdef DEBUG_RENDERING
-    if (widget.recording) {
-      FATAL << "Widget " << widget.Name() << " has been repacked!";
+    if constexpr (kDebugRendering) {
+      if (widget.recording) {
+        FATAL << "Widget " << widget.Name() << " has been repacked!";
+      }
     }
-#endif
 
     // ACTUALLY the delta time is `draw_time - now`.
     auto true_d = window->timer.d;
@@ -413,8 +413,7 @@ void RenderFrame(SkCanvas& canvas) {
   canvas.save();
   pack.frame.back()->ComposeSurface(&canvas);
 
-#ifdef DEBUG_RENDERING
-  {  // bullseye for latency visualisation
+  if constexpr (kDebugRendering) {  // bullseye for latency visualisation
     std::lock_guard lock(window->mutex);
     if (window->pointers.size() > 0) {
       SkPaint red;
@@ -432,7 +431,6 @@ void RenderFrame(SkCanvas& canvas) {
       canvas.drawCircle(window->pointers[0]->pointer_position, 1_mm, white);
     }
   }
-#endif
   canvas.restore();
 
   auto& font = GetFont();

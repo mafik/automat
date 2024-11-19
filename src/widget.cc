@@ -206,12 +206,12 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
 // - ComposeSurface - compose the drawn SkSurface onto the canvas
 
 void Widget::ComposeSurface(SkCanvas* canvas) const {
-#ifdef DEBUG_RENDERING
-  SkPaint texture_bounds_paint;  // translucent black
-  texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
-  texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-  canvas->drawRect(*texture_bounds, texture_bounds_paint);
-#endif
+  if constexpr (kDebugRendering) {
+    SkPaint texture_bounds_paint;  // translucent black
+    texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
+    texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
+    canvas->drawRect(*texture_bounds, texture_bounds_paint);
+  }
 
   if (surface == nullptr) {
     // LOG << "Drawing choppy drawable " << entry->path << " (no surface!)";
@@ -227,38 +227,39 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
 
     // Alternative approach, where we map the old texture to the new bounds:
     SkRect surface_size = SkRect::MakeWH(surface->width(), surface->height());
-#ifdef DEBUG_RENDERING
-    auto matrix_backup = canvas->getTotalMatrix();
-#endif
+    if constexpr (kDebugRendering) {
+      canvas->save();
+    }
     canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local));
     surface->draw(canvas, 0, 0);
-#ifdef DEBUG_RENDERING
-    SkPaint surface_bounds_paint;
-    constexpr int kNumColors = 10;
-    SkColor colors[kNumColors];
-    float pos[kNumColors];
-    double integer_ignored;
-    double fraction = modf(draw_time.time_since_epoch().count() / 4, &integer_ignored);
-    SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
-    for (int i = 0; i < kNumColors; ++i) {
-      float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
-      colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
-      pos[i] = (float)i / (kNumColors - 1);
-    }
-    surface_bounds_paint.setShader(SkGradientShader::MakeSweep(surface_size.centerX(),
-                                                               surface_size.centerY(), colors, pos,
-                                                               kNumColors, 0, &shader_matrix));
-    surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
-    surface_bounds_paint.setStrokeWidth(2.0f);
-    canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
+    if constexpr (kDebugRendering) {
+      SkPaint surface_bounds_paint;
+      constexpr int kNumColors = 10;
+      SkColor colors[kNumColors];
+      float pos[kNumColors];
+      double integer_ignored;
+      double fraction = modf(draw_time.time_since_epoch().count() / 4, &integer_ignored);
+      SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
+      for (int i = 0; i < kNumColors; ++i) {
+        float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
+        colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
+        pos[i] = (float)i / (kNumColors - 1);
+      }
+      surface_bounds_paint.setShader(
+          SkGradientShader::MakeSweep(surface_size.centerX(), surface_size.centerY(), colors, pos,
+                                      kNumColors, 0, &shader_matrix));
+      surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
+      surface_bounds_paint.setStrokeWidth(2.0f);
+      canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
 
-    auto& font = GetFont();
-    SkPaint text_paint;
-    canvas->setMatrix(matrix_backup);
-    canvas->translate(texture_bounds->left(), min(texture_bounds->top(), texture_bounds->bottom()));
-    auto text = f("%.1f", average_draw_millis);
-    font.DrawText(*canvas, text, text_paint);
-#endif
+      auto& font = GetFont();
+      SkPaint text_paint;
+      canvas->restore();
+      canvas->translate(texture_bounds->left(),
+                        min(texture_bounds->top(), texture_bounds->bottom()));
+      auto text = f("%.1f", average_draw_millis);
+      font.DrawText(*canvas, text, text_paint);
+    }
   }
 }
 

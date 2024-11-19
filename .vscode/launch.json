@@ -42,6 +42,17 @@
           "ignoreFailures": true
         }
       ]
+    },
+    {
+      "name": "(Windows/VSDbg) debug_automat",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/debug_automat.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${fileDirname}",
+      "environment": [],
+      "preLaunchTask": "debug_automat"
     }
   ]
 }

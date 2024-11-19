@@ -8,6 +8,8 @@
 #include <cmath>
 
 #include "font.hh"
+#include "include/core/SkPaint.h"
+#include "include/core/SkPathTypes.h"
 #include "widget.hh"
 #include "window.hh"
 
@@ -419,16 +421,22 @@ void RenderFrame(SkCanvas& canvas) {
       SkPaint red;
       red.setColor(SK_ColorRED);
       red.setAntiAlias(true);
-      SkPaint white;
-      white.setColor(SK_ColorWHITE);
-      white.setAntiAlias(true);
       SkPaint orange;
       orange.setColor("#ff8000"_color);
       orange.setAntiAlias(true);
-      canvas.drawCircle(window->pointers[0]->pointer_position, 4_mm, red);
-      canvas.drawCircle(window->pointers[0]->pointer_position, 3_mm, white);
-      canvas.drawCircle(window->pointers[0]->pointer_position, 2_mm, orange);
-      canvas.drawCircle(window->pointers[0]->pointer_position, 1_mm, white);
+      auto p = window->pointers[0]->pointer_position;
+      SkPath red_ring;
+      red_ring.addCircle(p.x, p.y, 4_mm);
+      red_ring.addCircle(p.x, p.y, 3_mm, SkPathDirection::kCCW);
+      SkPath orange_ring;
+      orange_ring.addCircle(p.x, p.y, 2_mm);
+      orange_ring.addCircle(p.x, p.y, 1_mm, SkPathDirection::kCCW);
+      canvas.drawPath(red_ring, red);
+      canvas.drawPath(orange_ring, orange);
+      SkPaint stroke;
+      stroke.setStyle(SkPaint::kStroke_Style);
+      canvas.drawLine(p.x, p.y - 5_mm, p.x, p.y + 5_mm, stroke);
+      canvas.drawLine(p.x - 5_mm, p.y, p.x + 5_mm, p.y, stroke);
     }
   }
   canvas.restore();

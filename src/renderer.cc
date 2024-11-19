@@ -196,13 +196,30 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     static time::SteadyPoint last_print = time::SteadyPoint::min();
     if (now - last_print > 10s) {
       last_print = now;
+      vector<bool> last_child = vector<bool>(tree.size(), false);
+      vector<bool> last_child_found = vector<bool>(tree.size(), false);
+      for (int i = tree.size() - 1; i > 0; --i) {
+        int parent = tree[i].parent;
+        if (!last_child_found[parent]) {
+          last_child_found[parent] = true;
+          last_child[i] = true;
+        }
+      }
       for (int i = 0; i < tree.size(); ++i) {
         Str line;
         for (int j = tree[i].parent; j != 0; j = tree[j].parent) {
-          line += " ┃ ";
+          if (last_child[j]) {
+            line = "   " + line;
+          } else {
+            line = " │ " + line;
+          }
         }
         if (i) {
-          line += " ┣━";
+          if (last_child[i]) {
+            line += " ╰╴";
+          } else {
+            line += " ├╴";
+          }
         }
         line += tree[i].widget->Name();
         LOG << line;

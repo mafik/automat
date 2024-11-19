@@ -342,7 +342,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       // to an arrow.
       if (LOWORD(lParam) == HTCLIENT) {
         gui::Pointer::IconType icon;
-        RunOnAutomatThreadSynchronous([&]() { icon = GetMouse().Icon(); });
+        {
+          std::lock_guard<std::mutex> lock(window->mutex);
+          icon = GetMouse().Icon();
+        }
         switch (icon) {
           case gui::Pointer::kIconArrow:
             SetCursor(LoadCursor(nullptr, IDC_ARROW));
@@ -459,23 +462,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       break;
     case WM_HOTKEY: {
       int id = wParam;  // discard the upper 32 bits
-      // lParam carries the modifiers (first 16 bits) and then the keycode
-      RunOnAutomatThread([id]() { automat::gui::OnHotKeyDown(id); });
+                        // lParam carries the modifiers (first 16 bits) and then the keycode
+      std::lock_guard<std::mutex> lock(window->mutex);
+      automat::gui::OnHotKeyDown(id);
       break;
     }
     case WM_LBUTTONDOWN: {
+      std::lock_guard<std::mutex> lock(window->mutex);
       GetMouse().ButtonDown(gui::PointerButton::Left);
       break;
     }
     case WM_LBUTTONUP: {
+      std::lock_guard<std::mutex> lock(window->mutex);
       GetMouse().ButtonUp(gui::PointerButton::Left);
       break;
     }
     case WM_MBUTTONDOWN: {
+      std::lock_guard<std::mutex> lock(window->mutex);
       GetMouse().ButtonDown(gui::PointerButton::Middle);
       break;
     }
     case WM_MBUTTONUP: {
+      std::lock_guard<std::mutex> lock(window->mutex);
       GetMouse().ButtonUp(gui::PointerButton::Middle);
       break;
     }
@@ -484,11 +492,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       int16_t y = (lParam >> 16) & 0xFFFF;
       mouse_position.x = x + client_x;
       mouse_position.y = y + client_y;
+      std::lock_guard<std::mutex> lock(window->mutex);
       GetMouse().Move(automat::gui::ScreenToWindow(mouse_position));
       break;
     }
     case WM_MOUSELEAVE: {
-      RunOnAutomatThread([]() { mouse.reset(); });
+      std::lock_guard<std::mutex> lock(window->mutex);
+      mouse.reset();
       break;
     }
     case WM_MOUSEWHEEL: {
@@ -497,6 +507,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       int16_t delta = GET_WHEEL_DELTA_WPARAM(wParam);
       int16_t keys = GET_KEYSTATE_WPARAM(wParam);
       if (!touchpad::ShouldIgnoreScrollEvents()) {
+        std::lock_guard<std::mutex> lock(window->mutex);
         GetMouse().Wheel(delta / 120.0);
       }
       break;

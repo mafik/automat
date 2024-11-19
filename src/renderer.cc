@@ -46,6 +46,7 @@ struct PackedFrame {
 };
 
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
+  std::lock_guard lock(window->mutex);
   window->timer.Tick();
   auto now = window->timer.now;
   auto window_bounds_px =

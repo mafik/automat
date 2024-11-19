@@ -54,7 +54,6 @@ Pointer::~Pointer() {
 }
 void Pointer::UpdatePath() {
   auto old_path = path;
-  path.clear();
 
   path.clear();
   Vec2 point = pointer_position;

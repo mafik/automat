@@ -142,6 +142,8 @@ struct Window final : Widget, DropTarget {
 
   std::vector<Pointer*> pointers;
   std::vector<Keyboard*> keyboards;
+
+  std::mutex mutex;
 };
 
 // Converts a point in the screen pixel coordinates (origin at the top left) to window coordinates

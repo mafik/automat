@@ -67,9 +67,20 @@ std::string Slugify(std::string in) {
   return out;
 }
 
-std::string Demangle(std::string_view mangled) {
-  // TODO: actually demangle
-  std::string ret = std::string(mangled);
-  return ret;
+std::string_view CleanTypeName(std::string_view mangled) {
+#ifdef _WIN32
+  if (mangled.starts_with("struct ")) {
+    mangled.remove_prefix(7);
+  }
+  for (int i = mangled.size() - 2; i > 0; --i) {
+    if (mangled[i] == ':' && mangled[i + 1] == ':') {
+      mangled.remove_prefix(i + 2);
+      break;
+    }
+  }
+  return mangled;
+#else
+  return mangled;
+#endif
 }
 }  // namespace maf

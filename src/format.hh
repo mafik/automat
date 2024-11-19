@@ -28,7 +28,8 @@ constexpr void constexpr_sprintf(std::string& out, const char* format, auto... a
 }
 #pragma clang diagnostic pop
 
-std::string Demangle(std::string_view mangled);
+// Convert a platform-specific type name (obtained from type_info.name()) into a short class name.
+std::string_view CleanTypeName(std::string_view mangled);
 
 template <typename T>
 std::string dump_struct(const T& t) {

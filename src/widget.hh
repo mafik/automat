@@ -157,7 +157,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual std::string_view Name() const {
     if (name_cached.empty()) {
       const std::type_info& info = typeid(*this);
-      name_cached = maf::Demangle(info.name());
+      name_cached = maf::CleanTypeName(info.name());
     }
     return name_cached;
   }

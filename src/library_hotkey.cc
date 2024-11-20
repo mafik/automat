@@ -237,6 +237,7 @@ HotKey::HotKey() {
       hotkey_selector->Release();  // This will also set itself to nullptr
     } else {
       hotkey_selector = &pointer.keyboard->RequestGrab(*this);
+      shortcut_button->InvalidateDrawCache();
     }
   };
 }
@@ -249,6 +250,15 @@ std::shared_ptr<Object> HotKey::Clone() const {
   ret->shift = shift;
   ret->windows = windows;
   return ret;
+}
+
+animation::Phase HotKey::Update(time::Timer& t) {
+  if (hotkey_selector) {
+    shortcut_button->fg = kKeyGrabbingColor;
+  } else {
+    shortcut_button->fg = KeyColor(true);
+  }
+  return animation::Finished;
 }
 
 animation::Phase HotKey::Draw(gui::DrawContext& ctx) const {
@@ -351,12 +361,6 @@ animation::Phase HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.drawPath(inner_contour, shadow_paint);
   canvas.restore();
 
-  if (hotkey_selector) {
-    shortcut_button->fg = kKeyGrabbingColor;
-  } else {
-    shortcut_button->fg = KeyColor(true);
-  }
-
   return DrawChildren(ctx);
 }
 
@@ -449,7 +453,11 @@ void HotKey::Off() {
   }
 }
 
-void HotKey::ReleaseGrab(gui::KeyboardGrab&) { hotkey_selector = nullptr; }
+void HotKey::ReleaseGrab(gui::KeyboardGrab&) {
+  hotkey_selector = nullptr;
+  LOG << "HotKey::ReleaseGrab - invalidating shortcut_button!";
+  shortcut_button->InvalidateDrawCache();
+}
 void HotKey::ReleaseKeyGrab(gui::KeyGrab&) { hotkey = nullptr; }
 
 void HotKey::SerializeState(Serializer& writer, const char* key) const {

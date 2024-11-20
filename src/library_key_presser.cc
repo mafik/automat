@@ -75,8 +75,11 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
 KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 std::shared_ptr<Object> KeyPresser::Clone() const { return std::make_shared<KeyPresser>(key); }
-animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
+animation::Phase KeyPresser::Update(time::Timer&) {
   shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
+  return animation::Finished;
+}
+animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
   auto phase = DrawChildren(dctx);
   auto& canvas = dctx.canvas;
   auto img = key_pressed ? PressingHandColor(dctx) : PointingHandColor(dctx);

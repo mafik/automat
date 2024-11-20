@@ -851,11 +851,14 @@ int LinuxMain(int argc, char* argv[]) {
     ERROR << "Failed to save state: " << status;
   }
 
+  window->ForgetParents();
   root_machine->locations.clear();
 
   mouse.reset();
   keyboard.reset();
   window.reset();
+  root_machine.reset();
+  root_location.reset();
 
   vk::Destroy();
   xcb_destroy_window(connection, xcb_window);

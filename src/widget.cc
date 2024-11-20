@@ -323,7 +323,7 @@ void Widget::FixParents() {
 }
 void Widget::ForgetParents() {
   parent = nullptr;
-  Visitor visitor = [this](Span<shared_ptr<Widget>> children) {
+  Visitor visitor = [](Span<shared_ptr<Widget>> children) {
     for (auto& child : children) {
       child->ForgetParents();
     }

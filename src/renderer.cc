@@ -3,17 +3,16 @@
 #include "renderer.hh"
 
 #include <include/core/SkColor.h>
+#include <include/core/SkPaint.h>
+#include <include/core/SkPathTypes.h>
 #include <include/core/SkPictureRecorder.h>
 
 #include <cmath>
 
 #include "font.hh"
-#include "include/core/SkPaint.h"
-#include "include/core/SkPathTypes.h"
 #include "widget.hh"
 #include "window.hh"
 
-// TODO: remove Location::GetTransform and move it into TransformToChild
 // TODO: Move all the animation logic into Widget::Update (only pass timer there)
 // TODO: Only pass Canvas into Widget::Draw & remove animation::Phase from its return value
 // TODO: Each widget should hold its own transform matrix
@@ -21,7 +20,6 @@
 // TODO: Replace VisitChildren with a child iterator
 // TODO: Split Widget from Object (largest change)
 
-// TODO: Crashes when closing Automat
 // -- at this point we should be back in the working state
 // TODO: fix objects not being redrawn when panning
 // TODO: investigate why some widgets are not packed even when they should be

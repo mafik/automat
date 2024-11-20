@@ -16,6 +16,7 @@ using namespace maf;
 
 namespace automat {
 
+std::stop_source stop_source;
 std::shared_ptr<Location> root_location;
 std::shared_ptr<Machine> root_machine;
 std::jthread automat_thread;
@@ -68,9 +69,8 @@ void InitRoot() {
   root_machine = root_location->Create<Machine>();
   root_machine->parent = gui::window;
   root_machine->name = "Root machine";
-  std::stop_token stop_token;
-  StartTimeThread(stop_token);
-  automat_thread = std::jthread(RunThread, stop_token);
+  StartTimeThread(stop_source.get_token());
+  automat_thread = std::jthread(RunThread, stop_source.get_token());
   auto& prototypes = Prototypes();
   sort(prototypes.begin(), prototypes.end(),
        [](const auto& a, const auto& b) { return a->Name() < b->Name(); });
@@ -80,7 +80,7 @@ void StopRoot() {
   if (automat_thread.joinable()) {
     {
       std::unique_lock lk(automat_threads_mutex);
-      automat_thread.request_stop();
+      stop_source.request_stop();
     }
     automat_threads_cv.notify_all();
     automat_thread.join();

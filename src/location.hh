@@ -108,6 +108,7 @@ struct Location : public gui::Widget {
     object = prototype.Clone();
     object->Relocate(this);
     object->parent = this->SharedPtr();
+    FixParents();
     return object;
   }
 

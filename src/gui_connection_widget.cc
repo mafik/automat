@@ -220,7 +220,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     }
   }
 
-  auto transform_from_to_machine = TransformBetween(from, *parent_machine);
+  auto transform_from_to_machine = TransformBetween(*from.object, *parent_machine);
   from_shape.transform(transform_from_to_machine);
 
   // If one of the to_points is over from_shape, don't draw the cable

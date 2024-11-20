@@ -322,7 +322,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     key_presser->SetKey(key);
     Rect key_presser_shape = key_presser_loc.object->Shape().getBounds();
     Argument& track_arg = *timeline->track_args.back();
-    Vec2AndDir arg_start = timeline->here.lock()->ArgStart(track_arg);
+    Vec2AndDir arg_start = track_arg.Start(*timeline, *timeline->parent);
 
     // Pick the position that allows the cable to come in most horizontally (left to right).
     Vec2 best_connector_pos = key_presser_shape.TopCenter();

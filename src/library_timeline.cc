@@ -383,8 +383,9 @@ static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
 }
 
 OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
-  auto track = make_unique<OnOffTrack>();
+  auto track = make_shared<OnOffTrack>();
   track->timeline = this;
+  track->parent = this->SharedPtr();
   tracks.emplace_back(std::move(track));
   AddTrackArg(*this, tracks.size() - 1, name);
   if (auto h = here.lock()) {

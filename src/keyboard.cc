@@ -124,13 +124,11 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
     if (!success) {
       AppendErrorMessage(cb->status) = "Failed to register hotkey: " + GetLastErrorStr();
     }
-    RunOnAutomatThread([cb]() {
-      if (cb->grab) {
-        cb->grab->cb = nullptr;
-        cb->fn(cb->status);
-      }
-      delete cb;
-    });
+    if (cb->grab) {
+      cb->grab->cb = nullptr;
+      cb->fn(cb->status);
+    }
+    delete cb;
   });
 #else
   U16 modifiers = 0;
@@ -361,77 +359,69 @@ void Keyboard::KeyDown(Key key) {
     }
     return;
   }
-  RunOnAutomatThread([=, this]() {
-    if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-      pressed_keys.set((size_t)key.physical);
+  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+    pressed_keys.set((size_t)key.physical);
+  }
+  if (grab) {
+    // KeyboardGrabber takes over all key events
+    grab->grabber.KeyboardGrabberKeyDown(*grab, key);
+  } else if (key.physical == AnsiKey::Escape) {
+    // Release the carets when Escape is pressed
+    for (auto& caret : carets) {
+      caret->owner->ReleaseCaret(*caret);
     }
-    if (grab) {
-      // KeyboardGrabber takes over all key events
-      grab->grabber.KeyboardGrabberKeyDown(*grab, key);
-    } else if (key.physical == AnsiKey::Escape) {
-      // Release the carets when Escape is pressed
-      for (auto& caret : carets) {
-        caret->owner->ReleaseCaret(*caret);
-      }
-      carets.clear();
-    } else if (!carets.empty()) {
-      for (auto& caret : carets) {
-        caret->owner->KeyDown(*caret, key);
-      }
-    } else {
-      size_t i = static_cast<int>(key.physical);
-      if (actions[i] == nullptr && pointer && pointer->hover) {
-        auto current = pointer->hover;
-        do {
-          actions[i] = current->FindAction(*pointer, key.physical);
-          current = current->parent;
-        } while (actions[i] == nullptr && current);
-        if (actions[i]) {
-          actions[i]->Begin();
-          pointer->UpdatePath();
-        }
-      }
+    carets.clear();
+  } else if (!carets.empty()) {
+    for (auto& caret : carets) {
+      caret->owner->KeyDown(*caret, key);
     }
-  });
-}
-
-void Keyboard::KeyUp(Key key) {
-  RunOnAutomatThread([=, this]() {
-    if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
-      pressed_keys.reset((size_t)key.physical);
-    }
-    if (grab) {
-      grab->grabber.KeyboardGrabberKeyUp(*grab, key);
-    } else if (!carets.empty()) {
-      for (auto& caret : carets) {
-        if (caret->owner) {
-          caret->owner->KeyUp(*caret, key);
-        }
-      }
-    } else {
-      size_t i = static_cast<int>(key.physical);
+  } else {
+    size_t i = static_cast<int>(key.physical);
+    if (actions[i] == nullptr && pointer && pointer->hover) {
+      auto current = pointer->hover;
+      do {
+        actions[i] = current->FindAction(*pointer, key.physical);
+        current = current->parent;
+      } while (actions[i] == nullptr && current);
       if (actions[i]) {
-        actions[i]->End();
-        actions[i].reset();
+        actions[i]->Begin();
         pointer->UpdatePath();
       }
     }
-  });
+  }
+}
+
+void Keyboard::KeyUp(Key key) {
+  if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
+    pressed_keys.reset((size_t)key.physical);
+  }
+  if (grab) {
+    grab->grabber.KeyboardGrabberKeyUp(*grab, key);
+  } else if (!carets.empty()) {
+    for (auto& caret : carets) {
+      if (caret->owner) {
+        caret->owner->KeyUp(*caret, key);
+      }
+    }
+  } else {
+    size_t i = static_cast<int>(key.physical);
+    if (actions[i]) {
+      actions[i]->End();
+      actions[i].reset();
+      pointer->UpdatePath();
+    }
+  }
 }
 void Keyboard::LogKeyDown(Key key) {
-  RunOnAutomatThread([=, this]() {
-    for (auto& keylogging : keyloggings) {
-      keylogging->keylogger.KeyloggerKeyDown(key);
-    }
-  });
+  for (auto& keylogging : keyloggings) {
+    keylogging->keylogger.KeyloggerKeyDown(key);
+  }
 }
 
 void Keyboard::LogKeyUp(Key key) {
-  RunOnAutomatThread([=, this]() {
-    for (auto& keylogging : keyloggings) {
-      keylogging->keylogger.KeyloggerKeyUp(key);
-    }
-  });
+  for (auto& keylogging : keyloggings) {
+    keylogging->keylogger.KeyloggerKeyUp(key);
+  }
 }
 
 std::unique_ptr<gui::Keyboard> keyboard;

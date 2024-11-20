@@ -46,7 +46,7 @@ void Window::Draw(SkCanvas& canvas) {
   timer.Tick();
   gui::DrawContext draw_ctx(timer, canvas);
   canvas.save();
-  RunOnAutomatThreadSynchronous([&] { DrawCached(draw_ctx); });  // RunOnAutomatThreadSynchronous
+  DrawCached(draw_ctx);
   canvas.restore();
 
   // Draw fps counter

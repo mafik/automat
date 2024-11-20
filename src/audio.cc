@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "audio.hh"
 
+#include "thread_name.hh"
+
 #ifdef __linux__
 #include <math.h>
 #include <pipewire/main-loop.h>
@@ -172,6 +174,7 @@ void Init(int* argc, char*** argv) {
   running = true;
 
   loop_thread = std::jthread([] {
+    SetThreadName("Audio");
     struct data data = {
         0,
     };

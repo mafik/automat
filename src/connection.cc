@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: MIT
 #include "connection.hh"
 
+#include "gui_connection_widget.hh"
 #include "location.hh"
+#include "window.hh"
+
+using namespace automat::gui;
 
 namespace automat {
-
 Connection::~Connection() {
   from.object->ConnectionRemoved(from, *this);
   auto [begin, end] = from.outgoing.equal_range(this);
@@ -20,6 +23,14 @@ Connection::~Connection() {
     if (*it == this) {
       to.incoming.erase(it);
       break;
+    }
+  }
+  if (window) {
+    for (int i = 0; i < window->connection_widgets.size(); ++i) {
+      auto& widget = *window->connection_widgets[i];
+      if (&widget.from == &from && &widget.arg == &argument) {
+        widget.InvalidateDrawCache();
+      }
     }
   }
 }

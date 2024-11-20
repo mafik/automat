@@ -43,8 +43,8 @@ namespace automat {
 std::string debug_render_events;
 
 struct PackedFrame {
-  vector<Widget*> frame;
-  vector<Widget*> overflow;
+  vector<U32> frame;
+  vector<U32> overflow;
   animation::Phase animation_phase;
 };
 
@@ -401,9 +401,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     widget.recording = recorder.finishRecordingAsDrawable();
     widget.draw_present = packed;
     if (packed) {
-      pack.frame.push_back(&widget);
+      pack.frame.push_back(widget.ID());
     } else {
-      pack.overflow.push_back(&widget);
+      pack.overflow.push_back(widget.ID());
     }
   }
 
@@ -417,14 +417,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
     LOG << "Finished since last frame: " << finished_widgets;
     Str packed_widgets;
-    for (auto* widget : pack.frame) {
-      packed_widgets += widget->Name();
+    for (auto id : pack.frame) {
+      packed_widgets += Widget::Find(id)->Name();
       packed_widgets += " ";
     }
     LOG << "Packed widgets: " << packed_widgets;
     Str overflow_widgets;
-    for (auto* widget : pack.overflow) {
-      overflow_widgets += widget->Name();
+    for (auto id : pack.overflow) {
+      overflow_widgets += Widget::Find(id)->Name();
       overflow_widgets += " ";
     }
     LOG << "Overflow widgets: " << overflow_widgets;
@@ -432,7 +432,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 }
 
-std::deque<Widget*> overflow_queue;
+std::deque<U32> overflow_queue;
 time::SteadyPoint paint_start;
 
 void RenderFrame(SkCanvas& canvas) {
@@ -458,17 +458,22 @@ void RenderFrame(SkCanvas& canvas) {
   PackFrame(request, pack);
 
   // Render the PackedFrame
-  for (auto* widget : pack.frame) {
-    widget->RenderToSurface(canvas);
+  for (auto id : pack.frame) {
+    if (auto* widget = Widget::Find(id)) {
+      widget->RenderToSurface(canvas);
+    }
   }
-  for (auto* drawable : pack.overflow) {
-    overflow_queue.push_back(drawable);
+  for (auto id : pack.overflow) {
+    overflow_queue.push_back(id);
   }
 
   canvas.resetMatrix();
   canvas.scale(window->display_pixels_per_meter, window->display_pixels_per_meter);
   canvas.save();
-  pack.frame.back()->ComposeSurface(&canvas);
+  // Final widget in the frame is the root window
+  if (auto* widget = Widget::Find(pack.frame.back())) {
+    widget->ComposeSurface(&canvas);
+  }
 
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
     std::lock_guard lock(window->mutex);
@@ -508,16 +513,21 @@ void RenderFrame(SkCanvas& canvas) {
 void RenderOverflow(SkCanvas& root_canvas) {
   // Render at least one widget from the overflow queue.
   if (!overflow_queue.empty()) {
-    overflow_queue.front()->RenderToSurface(root_canvas);
+    if (auto* widget = Widget::Find(overflow_queue.front())) {
+      widget->RenderToSurface(root_canvas);
+    }
     overflow_queue.pop_front();
   }
   for (int i = 0; i < overflow_queue.size(); ++i) {
-    auto paint_time_so_far = time::SteadyNow() - paint_start +
-                             time::Duration(overflow_queue[i]->average_draw_millis / 1000);
-    if (paint_time_so_far > 16.6ms) {
-      continue;
+    auto* widget = Widget::Find(overflow_queue[i]);
+    if (widget) {
+      auto paint_time_so_far =
+          time::SteadyNow() - paint_start + time::Duration(widget->average_draw_millis / 1000);
+      if (paint_time_so_far > 16.6ms) {
+        continue;
+      }
+      widget->RenderToSurface(root_canvas);
     }
-    overflow_queue[i]->RenderToSurface(root_canvas);
     overflow_queue.erase(overflow_queue.begin() + i);
     --i;
   }

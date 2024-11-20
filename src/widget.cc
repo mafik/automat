@@ -321,4 +321,14 @@ void Widget::FixParents() {
   };
   VisitChildren(visitor);
 }
+void Widget::ForgetParents() {
+  parent = nullptr;
+  Visitor visitor = [this](Span<shared_ptr<Widget>> children) {
+    for (auto& child : children) {
+      child->ForgetParents();
+    }
+    return ControlFlow::Continue;
+  };
+  VisitChildren(visitor);
+}
 }  // namespace automat::gui

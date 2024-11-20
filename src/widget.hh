@@ -266,6 +266,15 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   };
 
   ParentsView Parents() const { return ParentsView{SharedPtr<Widget>()}; }
+
+  // Widgets share the same base class with Objects (which must be always allocated using
+  // make_shared) so they also must be allocated using make_shared. This creates issues because
+  // widget's keep references to their parents and those references keep them alive, even after they
+  // are no longer reachable from the root window.
+  //
+  // In order to properly destroy a Widget we must clear all of the `parent` references from its
+  // children (and we need to do this recursively). This is done by this function.
+  virtual void ForgetParents();
 };
 
 template <typename T>

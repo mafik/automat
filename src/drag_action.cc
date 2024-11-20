@@ -132,6 +132,9 @@ DragLocationAction::~DragLocationAction() {
   for (auto& connection_widget : gui::window->connection_widgets) {
     connection_widget->animation_state.radar_alpha_target = 0;
   }
+  if (location) {
+    location->ForgetParents();
+  }
 }
 ControlFlow DragLocationWidget::VisitChildren(gui::Visitor& visitor) {
   std::shared_ptr<gui::Widget> child = action.location;

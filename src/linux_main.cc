@@ -12,13 +12,11 @@
 #include <xcb/xinput.h>
 #include <xcb/xproto.h>
 
-#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 
-#include "animation.hh"
 #include "audio.hh"
 #include "automat.hh"
 #include "base.hh"
@@ -28,9 +26,9 @@
 #include "log.hh"
 #include "math.hh"
 #include "persistence.hh"
+#include "renderer.hh"
 #include "root.hh"
 #include "status.hh"
-#include "time.hh"
 #include "vk.hh"
 #include "widget.hh"
 #include "window.hh"

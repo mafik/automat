@@ -42,6 +42,8 @@ using namespace maf;
 
 namespace automat {
 
+std::string debug_render_events;
+
 struct PackedFrame {
   vector<Widget*> frame;
   vector<Widget*> overflow;
@@ -406,18 +408,56 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       pack.overflow.push_back(&widget);
     }
   }
+
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    LOG << "Frame packing:";
+    LOG_Indent();
+    Str finished_widgets;
+    for (auto result : request.render_results) {
+      finished_widgets += Widget::Find(result.id)->Name();
+      finished_widgets += " ";
+    }
+    LOG << "Finished since last frame: " << finished_widgets;
+    Str packed_widgets;
+    for (auto* widget : pack.frame) {
+      packed_widgets += widget->Name();
+      packed_widgets += " ";
+    }
+    LOG << "Packed widgets: " << packed_widgets;
+    Str overflow_widgets;
+    for (auto* widget : pack.overflow) {
+      overflow_widgets += widget->Name();
+      overflow_widgets += " ";
+    }
+    LOG << "Overflow widgets: " << overflow_widgets;
+    LOG_Unindent();
+  }
 }
 
 std::deque<Widget*> overflow_queue;
 time::SteadyPoint paint_start;
 
 void RenderFrame(SkCanvas& canvas) {
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    debug_render_events += "BeginSubmit(synced) ";
+  }
   canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kYes);
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    debug_render_events += "EndSubmit(synced) ";
+  }
   paint_start = time::SteadyNow();
 
   PackedFrame pack;
-  PackFrame(next_frame_request, pack);
-  next_frame_request.render_results.clear();
+  PackFrameRequest request;
+  {
+    std::lock_guard lock(window->mutex);
+    request = std::move(next_frame_request);
+    if constexpr (kDebugRendering && kDebugRenderEvents) {
+      LOG << "Render events: " << debug_render_events;
+      debug_render_events.clear();
+    }
+  }
+  PackFrame(request, pack);
 
   // Render the PackedFrame
   for (auto* widget : pack.frame) {
@@ -468,15 +508,28 @@ void RenderFrame(SkCanvas& canvas) {
 }
 
 void RenderOverflow(SkCanvas& root_canvas) {
-  while (!overflow_queue.empty()) {
-    auto paint_time_so_far = time::SteadyNow() - paint_start;
-    if (paint_time_so_far > 15ms) {
-      break;
-    }
+  // Render at least one widget from the overflow queue.
+  if (!overflow_queue.empty()) {
     overflow_queue.front()->RenderToSurface(root_canvas);
     overflow_queue.pop_front();
   }
+  for (int i = 0; i < overflow_queue.size(); ++i) {
+    auto paint_time_so_far = time::SteadyNow() - paint_start +
+                             time::Duration(overflow_queue[i]->average_draw_millis / 1000);
+    if (paint_time_so_far > 16.6ms) {
+      continue;
+    }
+    overflow_queue[i]->RenderToSurface(root_canvas);
+    overflow_queue.erase(overflow_queue.begin() + i);
+    --i;
+  }
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    debug_render_events += "BeginSubmit(unsynced) ";
+  }
   root_canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kNo);
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    debug_render_events += "EndSubmit(unsynced) ";
+  }
 }
 
 }  // namespace automat

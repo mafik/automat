@@ -23,6 +23,7 @@
 #include "time.hh"
 
 constexpr bool kDebugRendering = true;
+constexpr bool kDebugRenderEvents = false;
 
 namespace automat::gui {
 
@@ -145,8 +146,9 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   bool draw_present = false;  // Whether the current draw job is going to be presented.
 
   // Things updated in RenderToSurface
-  float cpu_time;                 // Used by the client to measure rendering time
-  time::SteadyPoint gpu_started;  // Used by the client to measure rendering time
+  float cpu_time;  // Used by the client to measure rendering time
+  time::SteadyPoint gpu_started =
+      time::SteadyPoint::min();  // Used by the client to measure rendering time
   SkRect surface_bounds_local;
   sk_sp<SkSurface> surface = nullptr;
 

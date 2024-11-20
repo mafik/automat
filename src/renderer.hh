@@ -6,6 +6,8 @@
 
 namespace automat {
 
+extern std::string debug_render_events;
+
 // Call this first, to render the picture to the given canvas.
 //
 // Right after this call, make sure to present the canvas to the screen.

@@ -424,6 +424,11 @@ void CreateWindow(Status& status) {
 #undef WRAP
 
 void Paint() {
+  static int frame_number = 0;
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    LOG << "Frame " << ++frame_number;
+    LOG_Indent();
+  }
 #ifdef CPU_RENDERING
   auto surface = SkSurfaces::Raster(SkImageInfo::MakeN32Premul(client_width, client_height));
 
@@ -457,6 +462,10 @@ void Paint() {
 #endif
 
   RenderOverflow(canvas);
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    LOG_Unindent();
+    LOG << "End of frame " << frame_number;
+  }
 }
 
 void RenderLoop() {

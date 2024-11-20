@@ -20,6 +20,7 @@
 #include "control_flow.hh"
 #include "font.hh"
 #include "log.hh"
+#include "renderer.hh"
 #include "time.hh"
 
 using namespace automat;
@@ -180,20 +181,62 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
           [](GrGpuFinishedContext context) {
             Widget* w = static_cast<Widget*>(context);
             auto id = w->ID();
-            float gpu_time = (float)(time::SteadyNow() - w->gpu_started).count();
+            float gpu_time;
+            if (w->gpu_started == time::SteadyPoint::min()) {
+              gpu_time = 0;
+              w->gpu_started = time::SteadyPoint::max();
+            } else if (w->gpu_started == time::SteadyPoint::max()) {
+              gpu_time = 0;
+              ERROR << "FinishedProc for " << w->Name()
+                    << " was called multiple times, without SubmittedProc in between.";
+            } else {
+              gpu_time = (float)(time::SteadyNow() - w->gpu_started).count();
+              w->gpu_started = time::SteadyPoint::min();
+            }
             float render_time = max(gpu_time, w->cpu_time);
+            if (render_time > 1) {
+              LOG << "Widget " << w->Name() << " took " << render_time << "s to render";
+            }
             next_frame_request.render_results.push_back({id, render_time});
+            if constexpr (kDebugRendering && kDebugRenderEvents) {
+              debug_render_events += "Finished(";
+              debug_render_events += w->Name();
+              debug_render_events += ") ";
+            }
           },
       .fFinishedContext = this,
       .fSubmittedProc =
           [](GrGpuSubmittedContext context, bool success) {
             Widget* w = static_cast<Widget*>(context);
-            w->gpu_started = time::SteadyNow();
+            if (w->gpu_started == time::SteadyPoint::min()) {
+              w->gpu_started = time::SteadyNow();
+            } else if (w->gpu_started == time::SteadyPoint::max()) {
+              // Sometimes fFinishedProc is called before fSubmittedProc.
+              // When this happens, fFinishedProc sets the gpu_started to a guard value (max).
+              // When we see this value in SubmittedProc, this means that we have been reordered
+              // and we shouldn't record the time.
+              w->gpu_started = time::SteadyPoint::min();
+            } else {
+              ERROR << "SubmittedProc for " << w->Name()
+                    << " was called multiple times without FinishedProc in between. Current "
+                       "submitted success = "
+                    << success;
+            }
           },
       .fSubmittedContext = this,
   };
 
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    debug_render_events += "BeginFlush(";
+    debug_render_events += Name();
+    debug_render_events += ") ";
+  }
   direct_ctx->flush(surface.get(), flush_info);
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
+    debug_render_events += "EndFlush(";
+    debug_render_events += Name();
+    debug_render_events += ") ";
+  }
   cpu_time = (time::SteadyNow() - cpu_started).count();
 
   window_to_local.mapRect(&surface_bounds_local, SkRect::Make(surface_bounds_root));
@@ -267,8 +310,9 @@ void Widget::FixParents() {
   Visitor visitor = [this](maf::Span<std::shared_ptr<Widget>> children) {
     for (auto& child : children) {
       if (child->parent.get() != this) {
-        ERROR << "Widget " << child->Name() << " has parent " << f("%p", child->parent.get())
-              << " but should have " << this->Name() << f(" (%p)", this);
+        // TODO: uncomment this and fix all instances of this error
+        // ERROR << "Widget " << child->Name() << " has parent " << f("%p", child->parent.get())
+        //       << " but should have " << this->Name() << f(" (%p)", this);
         child->parent = this->SharedPtr();
       }
       child->FixParents();

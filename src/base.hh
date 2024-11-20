@@ -115,6 +115,7 @@ struct Machine : LiveObject, gui::DropTarget {
     auto& it = locations.emplace_front(std::make_shared<Location>(here));
     Location* h = it.get();
     h->name = name;
+    h->parent = this->SharedPtr();
     return *h;
   }
 

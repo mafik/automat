@@ -347,15 +347,18 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
   // Step 4 - walk through the tree and record the draw commands into drawables.
   for (int i = 0; i < tree.size(); ++i) {
-    auto packed = tree[i].verdict == Verdict::Pack;
-    auto overflowed = tree[i].verdict == Verdict::Overflow;
-    if (!packed && !overflowed) {
+    auto verdict = tree[i].verdict;
+    if ((verdict != Verdict::Pack) && (verdict != Verdict::Overflow) &&
+        (verdict != Verdict::Skip_NoTexture)) {
       continue;
     }
     auto& widget = *tree[i].widget;
     auto true_d = window->timer.d;
     auto fake_d = min(1.0, (now - widget.draw_time).count());
     window->timer.d = fake_d;
+    ////////////
+    // UPDATE //
+    ////////////
     auto animation_phase = widget.Update(window->timer);
     window->timer.d = true_d;
     if (animation_phase == animation::Finished) {
@@ -390,6 +393,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     rec_canvas->setMatrix(node.local_to_window);
     DrawContext ctx(window->timer, *rec_canvas);
     window->timer.d = fake_d;
+    //////////
+    // DRAW //
+    //////////
     auto animation_phase = widget.Draw(ctx);  // This is where we actually draw stuff!
     window->timer.d = true_d;
     if (animation_phase == animation::Animating) {

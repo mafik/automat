@@ -28,6 +28,13 @@ struct DragConnectionAction : Action {
   void End() override;
 };
 
+// ConnectionWidget can function in three different modes, depending on how the argument is set to
+// draw:
+// - Arrow: a simple arrow pointing to the target location
+// - Physical Cable: a cable with a plug at the end that wiggles when moved
+// - Analytically-routed Cable: a cable that always follows the nicest path
+//
+// TODO: separate the state of these three modes better
 struct ConnectionWidget : Widget {
   Location& from;
   Argument& arg;

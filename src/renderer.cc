@@ -60,7 +60,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     Overflow = 2,
     Skip_Clipped = 3,
     Skip_NoTexture = 4,
-    Skip_StillDrawing = 5,
   };
 
   struct WidgetTree {
@@ -139,6 +138,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       parent = parent_tmp;
       q.pop_back();
 
+      if (widget->recording) {
+        continue;
+      }
+
       tree.push_back(WidgetTree{
           .widget = widget,
           .parent = parent,
@@ -178,9 +181,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
 
       // Advance the parent to current widget & visit its children.
-      if (node.widget->recording) {
-        node.verdict = Verdict::Skip_StillDrawing;
-      } else if (!intersects) {
+      if (!intersects) {
         node.verdict = Verdict::Skip_Clipped;
       } else {
         parent = tree.size() - 1;
@@ -230,8 +231,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
       auto& widget = *node.widget;
-      if ((node.verdict == Verdict::Skip_NoTexture) || (node.verdict == Verdict::Skip_Clipped) ||
-          (node.verdict == Verdict::Skip_StillDrawing)) {
+      if ((node.verdict == Verdict::Skip_NoTexture) || (node.verdict == Verdict::Skip_Clipped)) {
         continue;
       }
 

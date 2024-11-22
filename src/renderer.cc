@@ -68,8 +68,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     int parent;
     int prev_job = -1;
     int next_job = -1;
+    bool same_scale;
+    bool wants_to_draw = false;
     SkMatrix window_to_local;
-
     SkMatrix local_to_window;     // copied over to Widget, if drawn
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
   };
@@ -150,6 +151,22 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       int i = tree.size() - 1;
 
       auto& node = tree.back();
+
+      // UPDATE
+      if (widget->invalidated != time::SteadyPoint::max()) {
+        node.wants_to_draw = true;
+        auto true_d = window->timer.d;
+        auto fake_d = min(1.0, (now - widget->draw_time).count());
+        window->timer.d = fake_d;
+        auto animation_phase = widget->Update(window->timer);
+        window->timer.d = true_d;
+        if (animation_phase == animation::Finished) {
+          widget->invalidated = time::SteadyPoint::max();
+        } else {
+          widget->invalidated = now;
+        }
+      }
+
       if (parent != i) {
         node.window_to_local = tree[parent].window_to_local;
         node.window_to_local.postConcat(tree[parent].widget->TransformToChild(*widget));
@@ -231,17 +248,22 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
       auto& widget = *node.widget;
-      if ((node.verdict == Verdict::Skip_NoTexture) || (node.verdict == Verdict::Skip_Clipped)) {
-        continue;
-      }
-
-      bool same_scale = (node.window_to_local.getScaleX() == widget.window_to_local.getScaleX() &&
+      node.same_scale = (node.window_to_local.getScaleX() == widget.window_to_local.getScaleX() &&
                          node.window_to_local.getScaleY() == widget.window_to_local.getScaleY() &&
                          node.window_to_local.getSkewX() == widget.window_to_local.getSkewX() &&
                          node.window_to_local.getSkewY() == widget.window_to_local.getSkewY());
+    }
 
-      // Widgets that haven't been invalidated don't have to be re-rendered.
-      if (widget.invalidated == time::SteadyPoint::max() && same_scale) {
+    for (int i = 0; i < tree.size(); ++i) {
+      auto& node = tree[i];
+      auto& widget = *node.widget;
+      if (node.verdict == Verdict::Skip_NoTexture) {
+        continue;
+      }
+      if (node.verdict == Verdict::Skip_Clipped) {
+        continue;
+      }
+      if (node.same_scale && !node.wants_to_draw) {
         continue;
       }
 
@@ -346,27 +368,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 
   // Step 4 - walk through the tree and record the draw commands into drawables.
-  for (int i = 0; i < tree.size(); ++i) {
-    auto verdict = tree[i].verdict;
-    if ((verdict != Verdict::Pack) && (verdict != Verdict::Overflow) &&
-        (verdict != Verdict::Skip_NoTexture)) {
-      continue;
-    }
-    auto& widget = *tree[i].widget;
-    auto true_d = window->timer.d;
-    auto fake_d = min(1.0, (now - widget.draw_time).count());
-    window->timer.d = fake_d;
-    ////////////
-    // UPDATE //
-    ////////////
-    auto animation_phase = widget.Update(window->timer);
-    window->timer.d = true_d;
-    if (animation_phase == animation::Finished) {
-      widget.invalidated = time::SteadyPoint::max();
-    } else {
-      widget.invalidated = now;
-    }
-  }
   for (int i = tree.size() - 1; i >= 0; --i) {
     auto packed = tree[i].verdict == Verdict::Pack;
     auto overflowed = tree[i].verdict == Verdict::Overflow;
@@ -385,7 +386,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     // ACTUALLY the delta time is `draw_time - now`.
     auto true_d = window->timer.d;
     auto fake_d = min(1.0, (now - widget.draw_time).count());
-    widget.draw_time = now;
+    widget.draw_time =
+        now;  // TODO(when Update & Draw are separated): update this right after Update
     widget.window_to_local = node.window_to_local;
     widget.surface_bounds_root = node.surface_bounds_root;
     SkPictureRecorder recorder;

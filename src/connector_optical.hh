@@ -21,7 +21,7 @@ namespace automat::gui {
 
 struct OpticalConnectorPimpl;
 
-struct OpticalConnectorState {
+struct CablePhysicsSimulation {
   float dispenser_v;
 
   struct CableSection {
@@ -49,7 +49,7 @@ struct OpticalConnectorState {
   maf::Optional<Vec2> stabilized_end;
 
   // The length of the cable calculated during the last DrawCable call.
-  float approx_length = 0;
+  mutable float approx_length = 0;
   animation::SpringV2<float> connector_scale = 1;
 
   Location& location;
@@ -59,24 +59,25 @@ struct OpticalConnectorState {
   bool hidden = false;
 
   float cable_width = 2_mm;
+  float lightness_pct;
 
-  std::unique_ptr<OpticalConnectorPimpl> pimpl;
+  mutable std::unique_ptr<OpticalConnectorPimpl> pimpl;
 
-  OpticalConnectorState(Location&, Argument& arg, Vec2AndDir start);
-  ~OpticalConnectorState();
+  CablePhysicsSimulation(Location&, Argument& arg, Vec2AndDir start);
+  ~CablePhysicsSimulation();
 
   Vec2 PlugTopCenter() const;
   SkPath Shape() const;
   SkMatrix ConnectorMatrix() const;
 };
 
-maf::ArcLine RouteCable(Vec2AndDir start, maf::Span<Vec2AndDir> ends,
+maf::ArcLine RouteCable(Vec2AndDir start, maf::Span<const Vec2AndDir> ends,
                         DrawContext* debug_ctx = nullptr);
 
-animation::Phase SimulateCablePhysics(DrawContext&, float dt, OpticalConnectorState&,
-                                      Vec2AndDir start, maf::Span<Vec2AndDir> end_candidates);
+animation::Phase SimulateCablePhysics(time::Timer&, CablePhysicsSimulation&, Vec2AndDir start,
+                                      maf::Span<Vec2AndDir> end_candidates);
 
-animation::Phase DrawOpticalConnector(DrawContext&, OpticalConnectorState&, PaintDrawable& icon);
+void DrawOpticalConnector(DrawContext&, const CablePhysicsSimulation&, PaintDrawable& icon);
 
 // Draws the given path as a cable and possibly update its length.
 void DrawCable(DrawContext&, SkPath&, sk_sp<SkColorFilter>&, CableTexture, float start_width,

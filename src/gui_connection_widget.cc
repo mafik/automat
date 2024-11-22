@@ -170,18 +170,14 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
   }
   return phase;
 }
-
-animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
-  SkCanvas& canvas = ctx.canvas;
+animation::Phase ConnectionWidget::Update(time::Timer& timer) {
   auto& from_animation_state = from.GetAnimationState();
   SkPath from_shape = from.object->Shape();
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
   }
-  SkPath to_shape;              // machine coords
-  SkPath to_shape_from_coords;  // from's coords
-  Vec<Vec2AndDir> to_points;    // machine coords
-  Location* to = nullptr;
+  SkPath to_shape;  // machine coords
+  to_points.clear();
 
   // TODO: parent_machine is not necessarily correct.
   // For example when a location is being dragged around, or when there are nested machines.
@@ -198,7 +194,6 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
       vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
     }
     to_shape.transform(m);
-    // to_shape.transform(TransformDown(from, parent_machine), &to_shape_from_coords);
   } else {
     if (manual_position) {
       to_points.emplace_back(Vec2AndDir{
@@ -239,13 +234,12 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   if (state) {
     state->hidden = overlapping;
   }
-  auto phase = animation::LinearApproach(overlapping ? 1 : 0, ctx.DeltaT(), 5, transparency);
+  auto phase = animation::LinearApproach(overlapping ? 1 : 0, timer.d, 5, transparency);
 
-  bool using_layer = false;
   auto alpha = (1.f - from_animation_state.transparency) * (1.f - transparency);
 
   if (!state.has_value() && arg.style != Argument::Style::Arrow && alpha > 0.01f) {
-    auto arcline = RouteCable(pos_dir, to_points, &ctx);
+    auto arcline = RouteCable(pos_dir, to_points, nullptr);
     auto new_length = ArcLine::Iterator(arcline).AdvanceToEnd();
     if (new_length > length + 2_cm) {
       alpha = 0;
@@ -255,26 +249,56 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
     length = new_length;
   }
 
+  if (state) {
+    if (to) {
+      state->steel_insert_hidden.target = 1;
+      phase |= state->connector_scale.SpringTowards(
+          to->scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
+    } else {
+      state->steel_insert_hidden.target = 0;
+      phase |= state->connector_scale.SpringTowards(
+          from.scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
+    }
+    phase |= state->steel_insert_hidden.Tick(timer);
+
+    phase |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
+  } else if (arg.style != Argument::Style::Arrow) {
+    cable_width.target = to != nullptr ? 2_mm : 0;
+    cable_width.speed = 5;
+    phase |= cable_width.Tick(timer);
+  }
+  return phase;
+}
+
+animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
+  SkCanvas& canvas = ctx.canvas;
+  auto& from_animation_state = from.GetAnimationState();
+  SkPath from_shape = from.object->Shape();
+  if (arg.field) {
+    from_shape = from.FieldShape(*arg.field);
+  }
+  SkPath to_shape;  // machine coords
+
+  // TODO: parent_machine is not necessarily correct.
+  // For example when a location is being dragged around, or when there are nested machines.
+  Widget* parent_machine = root_machine.get();
+
+  auto pos_dir = arg.Start(*from.object, *parent_machine);
+
+  auto transform_from_to_machine = TransformBetween(*from.object, *parent_machine);
+  from_shape.transform(transform_from_to_machine);
+
+  bool using_layer = false;
+  auto alpha = (1.f - from_animation_state.transparency) * (1.f - transparency);
+
   if (alpha < 1.0f) {
     using_layer = true;
     canvas.saveLayerAlphaf(nullptr, alpha);
   }
 
   if (state) {
-    if (to) {
-      state->steel_insert_hidden.target = 1;
-      phase |= state->connector_scale.SpringTowards(
-          to->scale, ctx.DeltaT(), Location::kScaleSpringPeriod, Location::kSpringHalfTime);
-    } else {
-      state->steel_insert_hidden.target = 0;
-      phase |= state->connector_scale.SpringTowards(
-          from.scale, ctx.DeltaT(), Location::kScaleSpringPeriod, Location::kSpringHalfTime);
-    }
-    phase |= state->steel_insert_hidden.Tick(ctx.timer);
-
-    phase |= SimulateCablePhysics(ctx, ctx.DeltaT(), *state, pos_dir, to_points);
     if (alpha > 0.01f) {
-      phase |= DrawOpticalConnector(ctx, *state, arg.Icon());
+      DrawOpticalConnector(ctx, *state, arg.Icon());
     }
   } else {
     if (arg.style == Argument::Style::Arrow) {
@@ -288,18 +312,13 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
         DrawArrow(canvas, from_shape, to_shape);
       }
     } else {
-      cable_width.target = to != nullptr ? 2_mm : 0;
-      cable_width.speed = 5;
-      phase |= cable_width.Tick(ctx.timer);
-
       if (cable_width > 0.01_mm && to) {
         if (alpha > 0.01f) {
           auto arcline = RouteCable(pos_dir, to_points, &ctx);
           auto color = SkColorSetA(arg.tint, 255 * cable_width.value / 2_mm);
           auto color_filter = color::MakeTintFilter(color, 30);
           auto path = arcline.ToPath(false);
-          DrawCable(ctx, path, color_filter, CableTexture::Smooth, cable_width.value,
-                    cable_width.value);
+          DrawCable(ctx, path, color_filter, CableTexture::Smooth, cable_width, cable_width);
         }
       }
     }
@@ -307,7 +326,7 @@ animation::Phase ConnectionWidget::Draw(DrawContext& ctx) const {
   if (using_layer) {
     canvas.restore();
   }
-  return phase;
+  return animation::Finished;
 }
 
 std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTrigger trigger) {

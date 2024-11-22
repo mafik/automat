@@ -11,6 +11,7 @@
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMesh.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPictureRecorder.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
@@ -225,7 +226,8 @@ static ArcLine RouteCableOneEnd(Vec2AndDir start, Vec2AndDir end,
   }
 }
 
-ArcLine RouteCable(Vec2AndDir start, maf::Span<Vec2AndDir> cable_ends, DrawContext* debug_ctx) {
+ArcLine RouteCable(Vec2AndDir start, const maf::Span<const Vec2AndDir> cable_ends,
+                   DrawContext* debug_ctx) {
   float best_total_length = HUGE_VALF;
   ArcLine best_route = ArcLine(start.pos, start.dir);
   for (auto& end : cable_ends) {
@@ -265,7 +267,7 @@ static void PopulateAnchors(Vec<Vec2>& anchors, Vec<SinCos>& anchor_dir, const A
 //
 // WARNING: this function will adjust the length of the final cable segment (the one closest to the
 // dispenser). Don't change it or visual glitches will occur.
-static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size anchor_count) {
+static bool SimulateDispenser(CablePhysicsSimulation& state, float dt, Size anchor_count) {
   bool pulling = anchor_count < state.sections.size();
   if (pulling) {
     state.dispenser_v += 5e-1 * dt;
@@ -303,7 +305,7 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
         state.sections[state.sections.size() - 2].distance = kStep;
         auto new_it = state.sections.insert(
             state.sections.begin() + state.sections.size() - 1,
-            OpticalConnectorState::CableSection{
+            CablePhysicsSimulation::CableSection{
                 .pos = state.sections[state.sections.size() - 2].pos -
                        Vec2::Polar(state.sections.back().dir, state.cable_width / 2) -
                        delta / current_dist * kStep,
@@ -314,7 +316,7 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
       } else if (state.sections.size() < anchor_count) {
         auto new_it = state.sections.insert(
             state.sections.begin() + state.sections.size() - 1,
-            OpticalConnectorState::CableSection{
+            CablePhysicsSimulation::CableSection{
                 .pos = state.sections.back().pos -
                        Vec2::Polar(state.sections.back().dir, state.cable_width / 2),
                 .vel = Vec2(0, 0),
@@ -331,9 +333,14 @@ static bool SimulateDispenser(OpticalConnectorState& state, float dt, Size ancho
   return pulling;
 }
 
-animation::Phase SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnectorState& state,
+animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation& state,
                                       Vec2AndDir dispenser, maf::Span<Vec2AndDir> end_candidates) {
+  SkCanvas* debug_canvas = nullptr;
   if constexpr (kDebugCable) {
+    // TODO: actually display this recording
+    SkPictureRecorder recorder;
+    debug_canvas = recorder.beginRecording(SkRect::MakeXYWH(-50_cm, -50_cm, 100_cm, 100_cm));
+
     // Draw the end candidates
     SkPaint end_paint;
     end_paint.setStyle(SkPaint::kStroke_Style);
@@ -343,15 +350,27 @@ animation::Phase SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnec
     circle_paint.setStyle(SkPaint::kFill_Style);
     circle_paint.setColor(kRoutingDebugColor);
     for (auto& end : end_candidates) {
-      dctx.canvas.drawLine(end.pos, end.pos + Vec2::Polar(end.dir, 2_mm), end_paint);
+      debug_canvas->drawLine(end.pos, end.pos + Vec2::Polar(end.dir, 2_mm), end_paint);
       // Now let's draw a circle at the end point
-      dctx.canvas.drawCircle(end.pos, 1_mm, circle_paint);
+      debug_canvas->drawCircle(end.pos, 1_mm, circle_paint);
     }
+  }
+
+  animation::Phase phase = animation::Finished;
+  float dt = timer.d;
+  if (&state.arg == &next_arg) {
+    state.lightness_pct = 100;
+    phase |= animation::ExponentialApproach(0, (timer.now - state.location.last_finished).count(),
+                                            0.1, state.lightness_pct);
+  } else {
+    state.lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
   }
 
   for (auto& end : end_candidates) {
     end.pos -= Vec2::Polar(end.dir, kCasingHeight * state.connector_scale);
   }
+
+  bool simulate_physics = true;
 
   Optional<Vec2> cable_end;
   SinCos cable_end_dir;
@@ -360,16 +379,22 @@ animation::Phase SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnec
     if (state.stabilized && Length(dispenser.pos - state.stabilized_start) < 0.0001) {
       if (cable_end.has_value() == state.stabilized_end.has_value() &&
           (!cable_end.has_value() || Length(*cable_end - *state.stabilized_end) < 0.0001)) {
-        return animation::Finished;
+        simulate_physics = false;
       }
     }
   }
   if (end_candidates.empty() && state.stabilized && !state.stabilized_end.has_value()) {
-    return animation::Finished;
+    simulate_physics = false;
+  }
+
+  if (simulate_physics) {
+    phase |= animation::Animating;
+  } else {
+    return phase;
   }
 
   if (!end_candidates.empty()) {  // Create the arcline & pull the cable towards it
-    state.arcline = RouteCable(dispenser, end_candidates, &dctx);
+    state.arcline = RouteCable(dispenser, end_candidates, nullptr);
     ArcLine::Iterator it = *state.arcline;
     it.AdvanceToEnd();
     cable_end = it.Position();
@@ -556,7 +581,7 @@ animation::Phase SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnec
       chain.back().pos = dispenser.pos;
       chain.back().distance = kStep;
 
-      OpticalConnectorState::CableSection cN;
+      CablePhysicsSimulation::CableSection cN;
       cN.pos = chain.back().pos + Vec2::Polar(chain.back().dir, kStep);
 
       int start = 1;
@@ -614,12 +639,12 @@ animation::Phase SimulateCablePhysics(DrawContext& dctx, float dt, OpticalConnec
       chain.back().pos = dispenser.pos;
     }
   }
-  return animation::Animating;
+  return phase;
 }
 
-Vec2 OpticalConnectorState::PlugTopCenter() const { return sections.front().pos; }
+Vec2 CablePhysicsSimulation::PlugTopCenter() const { return sections.front().pos; }
 
-SkMatrix OpticalConnectorState::ConnectorMatrix() const {
+SkMatrix CablePhysicsSimulation::ConnectorMatrix() const {
   Vec2 pos = sections.front().pos;
   SinCos dir = sections.front().dir + sections.front().true_dir_offset - 90_deg;
   return dir.ToMatrix()
@@ -630,7 +655,7 @@ SkMatrix OpticalConnectorState::ConnectorMatrix() const {
 
 static const Rect kSteelRect = Rect(-3_mm, -1_mm, 3_mm, 1_mm);
 
-SkPath OpticalConnectorState::Shape() const {
+SkPath CablePhysicsSimulation::Shape() const {
   auto rect = Rect(-kCasingWidth / 2, 0, kCasingWidth / 2, kCasingHeight);
   SkPath path = SkPath::Rect(rect);
   path.addRect(kSteelRect.sk.makeOffset(0, 2_mm * steel_insert_hidden));
@@ -1041,7 +1066,7 @@ struct BlackCasing : MeshWithUniforms<BlackCasingUniforms> {
     u.plug_width_pixels = canvas.getTotalMatrix().mapRadius(kCasingWidth);
   }
 
-  void DrawState(SkCanvas& canvas, OpticalConnectorState& state) {
+  void DrawState(SkCanvas& canvas, const CablePhysicsSimulation& state) {
     BlackCasingUniforms& u = GetUniforms();
     u.light_dir = M_PI / 2 -
                   (state.sections.front().dir - state.sections.front().true_dir_offset).ToRadians();
@@ -1059,8 +1084,8 @@ struct OpticalConnectorPimpl {
   std::unique_ptr<BlackCasing> mesh;
 };
 
-animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& state,
-                                      PaintDrawable& icon) {
+void DrawOpticalConnector(DrawContext& ctx, const CablePhysicsSimulation& state,
+                          PaintDrawable& icon) {
   auto& canvas = ctx.canvas;
 
   float dispenser_scale = state.location.GetAnimationState().scale;
@@ -1315,24 +1340,14 @@ animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& s
 
   canvas.restore();
 
-  auto phase = animation::Finished;
-
   {  // Icon on the metal casing
 
     Vec2 icon_offset = connector_matrix.mapPoint(Vec2(0, kCasingHeight / 2));
 
     SkColor base_color = color::AdjustLightness(state.arg.tint, 30);
-    float lightness_pct;
-    if (&state.arg == &next_arg) {
-      lightness_pct = 100;
-      phase |= animation::ExponentialApproach(
-          0, (ctx.timer.now - state.location.last_finished).count(), 0.1, lightness_pct);
-    } else {
-      lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
-    }
     SkColor bright_light = color::AdjustLightness(state.arg.light, 50);
-    SkColor adjusted_color = color::AdjustLightness(base_color, lightness_pct);
-    adjusted_color = color::MixColors(adjusted_color, bright_light, lightness_pct / 100);
+    SkColor adjusted_color = color::AdjustLightness(base_color, state.lightness_pct);
+    adjusted_color = color::MixColors(adjusted_color, bright_light, state.lightness_pct / 100);
 
     SkPaint icon_paint;
     icon_paint.setColor(adjusted_color);
@@ -1344,10 +1359,10 @@ animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& s
     icon.draw(&canvas, 0, 0);
 
     // Draw blur
-    if (lightness_pct > 1) {
+    if (state.lightness_pct > 1) {
       SkPaint glow_paint;
       glow_paint.setColor(state.arg.light);
-      glow_paint.setAlphaf(lightness_pct / 100);
+      glow_paint.setAlphaf(state.lightness_pct / 100);
       float sigma = canvas.getLocalToDeviceAs3x3().mapRadius(0.5_mm);
       glow_paint.setMaskFilter(
           SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, sigma, false));
@@ -1374,7 +1389,7 @@ animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& s
                                   StrokeToMesh::kVaryings, vs, fs);
     if (!spec_result.error.isEmpty()) {
       ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-      return animation::Finished;
+      return;
     }
 
     float length = 15_mm * state.connector_scale;
@@ -1515,7 +1530,6 @@ animation::Phase DrawOpticalConnector(DrawContext& ctx, OpticalConnectorState& s
       canvas.restore();
     }
   }
-  return phase;
 }
 
 // This function has some nice code for drawing connections between rounded rectangles.
@@ -1606,7 +1620,7 @@ void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shap
   canvas.restore();
 }
 
-OpticalConnectorState::OpticalConnectorState(Location& loc, Argument& arg, Vec2AndDir start)
+CablePhysicsSimulation::CablePhysicsSimulation(Location& loc, Argument& arg, Vec2AndDir start)
     : dispenser_v(0), location(loc), arg(arg) {
   sections.emplace_back(CableSection{
       .pos = start.pos,
@@ -1630,6 +1644,6 @@ OpticalConnectorState::OpticalConnectorState(Location& loc, Argument& arg, Vec2A
   steel_insert_hidden.half_life = 0.2s;
 }
 
-OpticalConnectorState::~OpticalConnectorState() {}
+CablePhysicsSimulation::~CablePhysicsSimulation() {}
 
 }  // namespace automat::gui

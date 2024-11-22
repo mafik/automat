@@ -41,18 +41,23 @@ struct ConnectionWidget : Widget {
 
   mutable AnimationState animation_state;
 
-  mutable animation::Approach<> cable_width;
-  mutable maf::Optional<OpticalConnectorState>
+  maf::Optional<CablePhysicsSimulation>
       state;  // if the state is non-empty then the cable is physically simulated
-  mutable float transparency = 1;
-  mutable float length = 0;
-  mutable maf::Optional<Vec2> manual_position;  // position of the plug (bottom center)
+  maf::Optional<Vec2> manual_position;  // position of the plug (bottom center)
+
+  // Updated in `Update()`
+  mutable animation::Approach<> cable_width;
+  maf::Vec<Vec2AndDir> to_points;
+  Location* to = nullptr;
+  float transparency = 1;
+  float length = 0;
 
   ConnectionWidget(Location&, Argument&);
 
   maf::StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;
   animation::Phase PreDraw(DrawContext&) const override;
+  animation::Phase Update(time::Timer&) override;
   animation::Phase Draw(DrawContext&) const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   maf::Optional<Rect> TextureBounds() const override;

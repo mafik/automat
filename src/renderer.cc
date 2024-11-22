@@ -13,7 +13,7 @@
 #include "widget.hh"
 #include "window.hh"
 
-// TODO: Fix connection rendering lag
+// TODO: Fix shader recompilation in ConnectionWidget
 // TODO: Fix objects not being redrawn when panning
 // TODO: Move all the animation logic into Widget::Update (only pass timer there)
 // TODO: Only pass Canvas into Widget::Draw & remove animation::Phase from its return value

@@ -281,11 +281,11 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       canvas->save();
     }
 
-    int anchor_count = min(draw_texture_anchors.size(), texture_anchors.size());
+    auto anchors = TextureAnchors();
+    int anchor_count = min(draw_texture_anchors.size(), anchors.size());
     if (anchor_count) {
       SkMatrix anchor_mapping;
-      if (anchor_mapping.setPolyToPoly(&draw_texture_anchors[0].sk, &texture_anchors[0].sk,
-                                       anchor_count)) {
+      if (anchor_mapping.setPolyToPoly(&draw_texture_anchors[0].sk, &anchors[0].sk, anchor_count)) {
         canvas->concat(anchor_mapping);
       }
     }

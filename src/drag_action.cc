@@ -51,7 +51,7 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
 
       auto shape = w->Shape();
       std::swap(point, transformed);
-      if ((w->TextureBounds() == std::nullopt) || shape.contains(point.x, point.y)) {
+      if ((w->texture_bounds == std::nullopt) || shape.contains(point.x, point.y)) {
         if (w->VisitChildren(dfs) == ControlFlow::Stop) {
           return ControlFlow::Stop;
         }
@@ -87,7 +87,7 @@ void DragLocationAction::Update() {
     location->animation_state.position.value += current_position - last_position;
     location->UpdateAutoconnectArgs();
     location->InvalidateDrawCache();
-    location->InvalidateConnectionWidgets();
+    location->InvalidateConnectionWidgets(true, false);
   }
 
   last_position = current_position;

@@ -206,7 +206,7 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   auto& state = GetAnimationState();
   if (state.Tick(ctx.DeltaT(), position, scale) == animation::Animating) {
     phase = animation::Animating;
-    InvalidateConnectionWidgets();
+    InvalidateConnectionWidgets(true, false);
   }
 
   phase |= state.highlight.Tick(ctx.timer);
@@ -296,14 +296,18 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   return phase;
 }
 
-void Location::InvalidateConnectionWidgets() const {
+void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
   // We don't have backlinks to connection widgets so we have to iterate over all connection widgets
   // in window and check if they're connected to this location.
   for (auto& w : gui::window->connection_widgets) {
     if (&w->from == this) {  // updates all outgoing connection widgets
-      w->InvalidateDrawCache();
-      if (w->state) {
-        w->state->stabilized = false;
+      if (moved && !value_changed) {
+        w->FromMoved();
+      } else {
+        w->InvalidateDrawCache();
+        if (w->state) {
+          w->state->stabilized = false;
+        }
       }
     } else {
       auto [begin, end] = incoming.equal_range(&w->arg);

@@ -261,7 +261,7 @@ struct Location : public gui::Widget {
   // Location has no texture attached so it cacn't be invalidated. It draws into its parent
   // texture instead. This override allows one to invalidate the parent texture.
   void InvalidateDrawCache() const override;
-  void InvalidateConnectionWidgets() const;
+  void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   SkPath Shape() const override;
   SkPath FieldShape(Object&) const;

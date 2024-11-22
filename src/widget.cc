@@ -22,6 +22,7 @@
 #include "log.hh"
 #include "renderer.hh"
 #include "time.hh"
+#include "units.hh"
 
 using namespace automat;
 using namespace maf;
@@ -51,7 +52,6 @@ animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
 }
 
 animation::Phase Widget::DrawCached(DrawContext& ctx) const {
-  auto texture_bounds = TextureBounds();
   if (texture_bounds == nullopt) {
     return Draw(ctx);
   }
@@ -240,6 +240,7 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
   cpu_time = (time::SteadyNow() - cpu_started).count();
 
   window_to_local.mapRect(&surface_bounds_local, SkRect::Make(surface_bounds_root));
+  draw_texture_anchors = texture_anchors;
 }
 
 // Lifetime of the frame (from the Widget's perspective):
@@ -254,6 +255,12 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
     texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
     canvas->drawRect(*texture_bounds, texture_bounds_paint);
+    SkPaint anchor_paint;
+    anchor_paint.setStyle(SkPaint::kFill_Style);
+    anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
+    for (auto& anchor : texture_anchors) {
+      canvas->drawCircle(anchor.sk, 1_mm, anchor_paint);
+    }
   }
 
   if (surface == nullptr) {
@@ -273,7 +280,18 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     if constexpr (kDebugRendering) {
       canvas->save();
     }
+
+    int anchor_count = min(draw_texture_anchors.size(), texture_anchors.size());
+    if (anchor_count) {
+      SkMatrix anchor_mapping;
+      if (anchor_mapping.setPolyToPoly(&draw_texture_anchors[0].sk, &texture_anchors[0].sk,
+                                       anchor_count)) {
+        canvas->concat(anchor_mapping);
+      }
+    }
+
     canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local));
+
     surface->draw(canvas, 0, 0);
     if constexpr (kDebugRendering) {
       SkPaint surface_bounds_paint;
@@ -295,9 +313,9 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       surface_bounds_paint.setStrokeWidth(2.0f);
       canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
 
+      canvas->restore();
       auto& font = GetFont();
       SkPaint text_paint;
-      canvas->restore();
       canvas->translate(texture_bounds->left(),
                         min(texture_bounds->top(), texture_bounds->bottom()));
       auto text = f("%.1f", average_draw_millis);

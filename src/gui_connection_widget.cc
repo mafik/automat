@@ -170,6 +170,21 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
   }
   return phase;
 }
+
+void ConnectionWidget::FromMoved() {
+  if (state) {
+    if (state->stabilized && !state->stabilized_end.has_value()) {
+      auto pos_dir = arg.Start(*from.object, *root_machine);
+      state->stabilized_start = pos_dir.pos;
+      state->sections.front().pos = pos_dir.pos;
+      state->sections.back().pos = pos_dir.pos;
+      return;
+    }
+    state->stabilized = false;
+  }
+  InvalidateDrawCache();
+}
+
 animation::Phase ConnectionWidget::Update(time::Timer& timer) {
   auto& from_animation_state = from.GetAnimationState();
   SkPath from_shape = from.object->Shape();
@@ -439,4 +454,45 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
     return rect.Outset(cable_width / 2);
   }
 }
+
+Vec<Vec2> ConnectionWidget::TextureAnchors() const {
+  Vec<Vec2> anchors;
+  if constexpr (false) {  // approach 1
+    Rect r = *texture_bounds;
+    anchors.push_back(r.TopRightCorner());
+    anchors.push_back(r.TopLeftCorner());
+    anchors.push_back(r.BottomRightCorner());
+    anchors.push_back(r.BottomLeftCorner());
+  } else if (true) {  // approach 2 - perspective
+    auto pos_dir = arg.Start(*from.object, *root_machine);
+    anchors.push_back(pos_dir.pos);
+    anchors.push_back(pos_dir.pos + Vec2(0, -1_cm));
+    if (auto to = arg.FindLocation(from)) {
+      Vec<Vec2AndDir> to_points;  // machine coords
+      to->object->ConnectionPositions(to_points);
+      SkMatrix m = TransformBetween(*to->object, *root_machine);
+      for (auto& to_point : to_points) {
+        to_point.pos = m.mapPoint(to_point.pos);
+      }
+      anchors.push_back(to_points.front().pos);
+      anchors.push_back(to_points.front().pos + Vec2(0, 1_cm));
+    }
+  } else if (true) {
+    auto pos_dir = arg.Start(*from.object, *root_machine);
+    anchors.push_back(pos_dir.pos);
+    if (auto to = arg.FindLocation(from)) {
+      Vec<Vec2AndDir> to_points;  // machine coords
+      to->object->ConnectionPositions(to_points);
+      SkMatrix m = TransformBetween(*to->object, *root_machine);
+      for (auto& to_point : to_points) {
+        to_point.pos = m.mapPoint(to_point.pos);
+      }
+      anchors.push_back(to_points.front().pos + Vec2(4_mm, 0));
+      anchors.push_back(to_points.front().pos + Vec2(-4_mm, 0));
+      anchors.push_back(to_points.front().pos + Vec2(0, 10_cm));
+    }
+  }
+  return anchors;
+}
+
 }  // namespace automat::gui

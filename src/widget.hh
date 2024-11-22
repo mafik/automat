@@ -21,6 +21,7 @@
 #include "span.hh"
 #include "str.hh"
 #include "time.hh"
+#include "vec.hh"
 
 constexpr bool kDebugRendering = true;
 constexpr bool kDebugRenderEvents = false;
@@ -130,6 +131,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   mutable ComposeSurfaceDrawable compose_surface_drawable;
 
   maf::Optional<SkRect> texture_bounds;  // local coordinates
+  maf::Vec<Vec2> texture_anchors;
   mutable uint32_t id = 0;
   float average_draw_millis = FP_NAN;
 
@@ -144,6 +146,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   sk_sp<SkDrawable> recording = nullptr;
   SkMatrix window_to_local;
   bool draw_present = false;  // Whether the current draw job is going to be presented.
+  maf::Vec<Vec2> draw_texture_anchors;
 
   // Things updated in RenderToSurface
   float cpu_time;  // Used by the client to measure rendering time
@@ -228,6 +231,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
   virtual maf::Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
+  virtual maf::Vec<Vec2> TextureAnchors() const { return {}; }
 
   virtual SkMatrix TransformToChild(const Widget& child) const { return SkMatrix::I(); }
 

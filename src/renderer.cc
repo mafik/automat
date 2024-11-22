@@ -177,6 +177,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       (void)node.window_to_local.invert(&node.local_to_window);
 
       widget->texture_bounds = widget->TextureBounds();
+      widget->texture_anchors = widget->TextureAnchors();
       bool intersects = true;
       if (widget->texture_bounds.has_value()) {
         // Compute the bounds of the widget - in local & root coordinates

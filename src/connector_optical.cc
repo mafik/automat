@@ -25,6 +25,7 @@
 #include "argument.hh"
 #include "color.hh"
 #include "font.hh"
+#include "global_resources.hh"
 #include "log.hh"
 #include "math.hh"
 #include "sincos.hh"
@@ -910,7 +911,8 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
   }
   // TODO: adjust the tesselation density based on the zoom level
 
-  auto vs = SkString(R"(
+  static sk_sp<SkMeshSpecification>& mesh_specification = []() -> sk_sp<SkMeshSpecification>& {
+    auto vs = SkString(R"(
       Varyings main(const Attributes attrs) {
         Varyings v;
         v.position = attrs.position;
@@ -919,7 +921,7 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
         return v;
       }
     )");
-  auto fs = SkString(R"(
+    auto fs = SkString(R"(
       const float PI = 3.1415926535897932384626433832795;
 
       uniform float cable_width;
@@ -971,10 +973,19 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
         return v.position;
       }
     )");
-  auto spec_result = SkMeshSpecification::Make(
-      StrokeToMesh::kAttributes, sizeof(StrokeToMesh::VertexInfo), StrokeToMesh::kVaryings, vs, fs);
-  if (!spec_result.error.isEmpty()) {
-    ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
+    auto spec_result =
+        SkMeshSpecification::Make(StrokeToMesh::kAttributes, sizeof(StrokeToMesh::VertexInfo),
+                                  StrokeToMesh::kVaryings, vs, fs);
+
+    if (!spec_result.error.isEmpty()) {
+      ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
+      return resources::Hold(nullptr);
+    } else {
+      return resources::Hold(spec_result.specification);
+    }
+  }();
+
+  if (mesh_specification.get() == nullptr) {
     return;
   }
 
@@ -1011,9 +1022,9 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
   }
   sk_sp<SkData> uniforms = SkData::MakeWithCopy(&max_width, 4);
   SkMesh::ChildPtr children[] = {cable_color, cable_normal};
-  auto mesh_result = SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip,
-                                  vertex_buffer, stroke_to_cable.vertex_vector.size(), 0, uniforms,
-                                  {children, 2}, stroke_to_cable.bounds);
+  auto mesh_result = SkMesh::Make(mesh_specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
+                                  stroke_to_cable.vertex_vector.size(), 0, uniforms, {children, 2},
+                                  stroke_to_cable.bounds);
   if (!mesh_result.error.isEmpty()) {
     ERROR << "Error creating mesh: " << mesh_result.error.c_str();
     return;
@@ -1374,7 +1385,9 @@ void DrawOpticalConnector(DrawContext& ctx, const CablePhysicsSimulation& state,
   }
 
   {  // Rubber cable holder
-    auto vs = SkString(R"(
+
+    static sk_sp<SkMeshSpecification>& mesh_specification = []() -> sk_sp<SkMeshSpecification>& {
+      auto vs = SkString(R"(
       Varyings main(const Attributes attrs) {
         Varyings v;
         v.position = attrs.position;
@@ -1383,14 +1396,16 @@ void DrawOpticalConnector(DrawContext& ctx, const CablePhysicsSimulation& state,
         return v;
       }
     )");
-    auto fs = SkString(embedded::assets_cable_strain_reliever_frag_sksl.content);
-    auto spec_result =
-        SkMeshSpecification::Make(StrokeToMesh::kAttributes, sizeof(StrokeToMesh::VertexInfo),
-                                  StrokeToMesh::kVaryings, vs, fs);
-    if (!spec_result.error.isEmpty()) {
-      ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-      return;
-    }
+      auto fs = SkString(embedded::assets_cable_strain_reliever_frag_sksl.content);
+      auto spec_result =
+          SkMeshSpecification::Make(StrokeToMesh::kAttributes, sizeof(StrokeToMesh::VertexInfo),
+                                    StrokeToMesh::kVaryings, vs, fs);
+      if (!spec_result.error.isEmpty()) {
+        ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
+        return resources::Hold(nullptr);
+      }
+      return resources::Hold(spec_result.specification);
+    }();
 
     float length = 15_mm * state.connector_scale;
     StrokeToCable mesh_builder;
@@ -1454,7 +1469,7 @@ void DrawOpticalConnector(DrawContext& ctx, const CablePhysicsSimulation& state,
 
       auto vertex_buffer = mesh_builder.BuildBuffer();
       auto mesh_result =
-          SkMesh::Make(spec_result.specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
+          SkMesh::Make(mesh_specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
                        mesh_builder.vertex_vector.size(), 0, nullptr, {}, mesh_builder.bounds);
       if (!mesh_result.error.isEmpty()) {
         ERROR << "Error creating mesh: " << mesh_result.error.c_str();

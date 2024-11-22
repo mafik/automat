@@ -7,6 +7,7 @@
 #include <thread>
 
 #include "concurrentqueue.hh"
+#include "global_resources.hh"
 #include "prototypes.hh"
 #include "thread_name.hh"
 #include "timer_thread.hh"
@@ -85,6 +86,7 @@ void StopRoot() {
     automat_threads_cv.notify_all();
     automat_thread.join();
   }
+  resources::Release();
 }
 
 void AssertAutomatThread() {

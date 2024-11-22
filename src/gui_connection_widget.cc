@@ -467,15 +467,21 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
     auto pos_dir = arg.Start(*from.object, *root_machine);
     anchors.push_back(pos_dir.pos);
     anchors.push_back(pos_dir.pos + Vec2(0, -1_cm));
-    if (auto to = arg.FindLocation(from)) {
+    Optional<Vec2> end_pos;
+    if (manual_position.has_value()) {
+      end_pos = *manual_position;
+    } else if (auto to = arg.FindLocation(from)) {
       Vec<Vec2AndDir> to_points;  // machine coords
       to->object->ConnectionPositions(to_points);
       SkMatrix m = TransformBetween(*to->object, *root_machine);
       for (auto& to_point : to_points) {
         to_point.pos = m.mapPoint(to_point.pos);
       }
-      anchors.push_back(to_points.front().pos);
-      anchors.push_back(to_points.front().pos + Vec2(0, 1_cm));
+      end_pos = to_points.front().pos;
+    }
+    if (end_pos) {
+      anchors.push_back(*end_pos);
+      anchors.push_back(*end_pos + Vec2(0, 1_cm));
     }
   } else if (true) {
     auto pos_dir = arg.Start(*from.object, *root_machine);

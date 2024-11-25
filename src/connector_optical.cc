@@ -979,7 +979,7 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
 
     if (!spec_result.error.isEmpty()) {
       ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-      return resources::Hold(nullptr);
+      return resources::Hold<SkMeshSpecification>(nullptr);
     } else {
       return resources::Hold(spec_result.specification);
     }
@@ -1008,12 +1008,18 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
   sk_sp<SkShader> cable_color, cable_normal;
   switch (texture) {
     case CableTexture::Braided:
-      cable_color = CableWeaveColor(ctx)->makeShader(
-          SkTileMode::kRepeat, SkTileMode::kRepeat,
-          SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-      cable_normal = CableWeaveNormal(ctx)->makeRawShader(
-          SkTileMode::kRepeat, SkTileMode::kRepeat,
-          SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+      static sk_sp<SkShader>& braided_color = resources::Hold([&ctx]() {
+        return CableWeaveColor(ctx)->makeShader(
+            SkTileMode::kRepeat, SkTileMode::kRepeat,
+            SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+      }());
+      cable_color = braided_color;
+      static sk_sp<SkShader>& braided_normal = resources::Hold([&ctx]() {
+        return CableWeaveNormal(ctx)->makeRawShader(
+            SkTileMode::kRepeat, SkTileMode::kRepeat,
+            SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
+      }());
+      cable_normal = braided_normal;
       break;
     case CableTexture::Smooth:
       cable_color = SkShaders::Color(SkColorSetARGB(255, 0x80, 0x80, 0x80));
@@ -1402,7 +1408,7 @@ void DrawOpticalConnector(DrawContext& ctx, const CablePhysicsSimulation& state,
                                     StrokeToMesh::kVaryings, vs, fs);
       if (!spec_result.error.isEmpty()) {
         ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-        return resources::Hold(nullptr);
+        return resources::Hold<SkMeshSpecification>(nullptr);
       }
       return resources::Hold(spec_result.specification);
     }();

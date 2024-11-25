@@ -152,7 +152,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   float cpu_time;  // Used by the client to measure rendering time
   time::SteadyPoint gpu_started =
       time::SteadyPoint::min();  // Used by the client to measure rendering time
-  SkRect surface_bounds_local;
+  Rect surface_bounds_local;
   sk_sp<SkSurface> surface = nullptr;
 
   mutable std::string name_cached;

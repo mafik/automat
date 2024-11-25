@@ -466,7 +466,6 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   } else if (true) {  // approach 2 - perspective
     auto pos_dir = arg.Start(*from.object, *root_machine);
     anchors.push_back(pos_dir.pos);
-    anchors.push_back(pos_dir.pos + Vec2(0, -1_cm));
     Optional<Vec2> end_pos;
     if (manual_position.has_value()) {
       end_pos = *manual_position;
@@ -481,7 +480,6 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
     }
     if (end_pos) {
       anchors.push_back(*end_pos);
-      anchors.push_back(*end_pos + Vec2(0, 1_cm));
     }
   } else if (true) {
     auto pos_dir = arg.Start(*from.object, *root_machine);

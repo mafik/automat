@@ -2,12 +2,15 @@
 // SPDX-License-Identifier: MIT
 #include "widget.hh"
 
+#include <include/core/SkColor.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkDrawable.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkRect.h>
+#include <include/core/SkSamplingOptions.h>
+#include <include/core/SkShader.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/gpu/GrBackendSurface.h>
@@ -16,6 +19,7 @@
 
 #include <ranges>
 
+#include "../build/generated/embedded.hh"
 #include "animation.hh"
 #include "control_flow.hh"
 #include "font.hh"
@@ -239,7 +243,7 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
   }
   cpu_time = (time::SteadyNow() - cpu_started).count();
 
-  window_to_local.mapRect(&surface_bounds_local, SkRect::Make(surface_bounds_root));
+  window_to_local.mapRect(&surface_bounds_local.sk, SkRect::Make(surface_bounds_root));
   draw_texture_anchors = texture_anchors;
 }
 
@@ -255,12 +259,6 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
     texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
     canvas->drawRect(*texture_bounds, texture_bounds_paint);
-    SkPaint anchor_paint;
-    anchor_paint.setStyle(SkPaint::kFill_Style);
-    anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-    for (auto& anchor : texture_anchors) {
-      canvas->drawCircle(anchor.sk, 1_mm, anchor_paint);
-    }
   }
 
   if (surface == nullptr) {
@@ -277,43 +275,86 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
 
     // Alternative approach, where we map the old texture to the new bounds:
     SkRect surface_size = SkRect::MakeWH(surface->width(), surface->height());
-    if constexpr (kDebugRendering) {
-      canvas->save();
-    }
 
     auto anchors = TextureAnchors();
+
     int anchor_count = min(draw_texture_anchors.size(), anchors.size());
-    if (anchor_count) {
-      SkMatrix anchor_mapping;
-      if (anchor_mapping.setPolyToPoly(&draw_texture_anchors[0].sk, &anchors[0].sk, anchor_count)) {
-        canvas->concat(anchor_mapping);
+
+    if (anchor_count == 2) {
+      SkSamplingOptions sampling;
+      auto fs = SkString(embedded::assets_anchor_warp_rt_sksl.content);
+      auto result = SkRuntimeEffect::MakeForShader(fs);
+      if (!result.effect) {
+        ERROR << "Failed to compile anchor warp shader: " << result.errorText.c_str();
+      } else {
+        auto builder = std::make_unique<SkRuntimeShaderBuilder>(result.effect);
+        builder->uniform("surfaceOrigin") = Rect(surface_bounds_local).BottomLeftCorner();
+        builder->uniform("surfaceSize") = Rect(surface_bounds_local).Size();
+        builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
+        builder->uniform("anchorsLast").set(&draw_texture_anchors[0], anchor_count);
+        builder->uniform("anchorsCurr").set(&anchors[0], anchor_count);
+        builder->child("surface") = surface->makeImageSnapshot()->makeShader(sampling);
+
+        auto shader = builder->makeShader();
+        SkPaint paint;
+        paint.setShader(shader);
+
+        // Heuristic for finding same texture bounds (guaranteed to contain the whole widget):
+        // - for every anchor move the old texture bounds by its displacement
+        // - compute a union of all the moved bounds
+        Rect new_anchor_bounds = anchors[0];
+        for (int i = 0; i < anchor_count; ++i) {
+          Vec2 delta = anchors[i] - draw_texture_anchors[i];
+          Rect offset_bounds = surface_bounds_local.sk.makeOffset(delta);
+          new_anchor_bounds.ExpandToInclude(offset_bounds);
+        }
+        canvas->drawRect(new_anchor_bounds.sk, paint);
+
+        if constexpr (kDebugRendering) {
+          SkPaint anchor_paint;
+          anchor_paint.setStyle(SkPaint::kFill_Style);
+          anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
+          for (auto& anchor : anchors) {
+            canvas->drawCircle(anchor.sk, 1_mm, anchor_paint);
+          }
+        }
       }
+    } else {
+      canvas->save();
+      if (anchor_count) {
+        SkMatrix anchor_mapping;
+        if (anchor_mapping.setPolyToPoly(&draw_texture_anchors[0].sk, &anchors[0].sk,
+                                         anchor_count)) {
+          canvas->concat(anchor_mapping);
+        }
+      }
+      canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local.sk));
+      surface->draw(canvas, 0, 0);
+
+      if constexpr (kDebugRendering) {
+        SkPaint surface_bounds_paint;
+        constexpr int kNumColors = 10;
+        SkColor colors[kNumColors];
+        float pos[kNumColors];
+        double integer_ignored;
+        double fraction = modf(draw_time.time_since_epoch().count() / 4, &integer_ignored);
+        SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
+        for (int i = 0; i < kNumColors; ++i) {
+          float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
+          colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
+          pos[i] = (float)i / (kNumColors - 1);
+        }
+        surface_bounds_paint.setShader(
+            SkGradientShader::MakeSweep(surface_size.centerX(), surface_size.centerY(), colors, pos,
+                                        kNumColors, 0, &shader_matrix));
+        surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
+        surface_bounds_paint.setStrokeWidth(2.0f);
+        canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
+      }
+      canvas->restore();
     }
 
-    canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local));
-
-    surface->draw(canvas, 0, 0);
     if constexpr (kDebugRendering) {
-      SkPaint surface_bounds_paint;
-      constexpr int kNumColors = 10;
-      SkColor colors[kNumColors];
-      float pos[kNumColors];
-      double integer_ignored;
-      double fraction = modf(draw_time.time_since_epoch().count() / 4, &integer_ignored);
-      SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
-      for (int i = 0; i < kNumColors; ++i) {
-        float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
-        colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
-        pos[i] = (float)i / (kNumColors - 1);
-      }
-      surface_bounds_paint.setShader(
-          SkGradientShader::MakeSweep(surface_size.centerX(), surface_size.centerY(), colors, pos,
-                                      kNumColors, 0, &shader_matrix));
-      surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
-      surface_bounds_paint.setStrokeWidth(2.0f);
-      canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
-
-      canvas->restore();
       auto& font = GetFont();
       SkPaint text_paint;
       canvas->translate(texture_bounds->left(),

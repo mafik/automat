@@ -1,0 +1,76 @@
+// kind=shader
+
+// N could be changed to any number, but is must be const.
+// If you need a different number of anchors, consider replacing it with a different value.
+const int N = 2;
+
+uniform shader surface;
+uniform float2 surfaceOrigin;
+uniform float2 surfaceSize;
+uniform float2 surfaceResolution;  // size of the surface, in pixels
+
+uniform float2 anchorsLast[N];
+uniform float2 anchorsCurr[N];
+
+vec4 main(vec2 uv) {
+    // Step 1: Calculate how similar is the current fragment to each anchor
+    vec2 minCoord = anchorsCurr[0];
+    vec2 maxCoord = anchorsCurr[0];
+    // vec2 minCoordLast = anchorsLast[0];
+    // vec2 maxCoordLast = anchorsLast[0];
+    for (int i = 1;
+    i < N;
+    ++i) {
+        minCoord = min(minCoord, anchorsCurr[i]);
+        maxCoord = max(maxCoord, anchorsCurr[i]);
+    }
+    float range = max(maxCoord.x - minCoord.x, maxCoord.y - minCoord.y);
+    range *= 2.0;
+
+    float similarity[N];
+    for (int i = 0;
+    i < N;
+    ++i) {
+        similarity[i] = range / distance(anchorsCurr[i], uv);
+    }
+
+    // Step 2: Normalize the anchor similarity using softmax
+    float expArr[N];
+    float expSum = 0.;
+    for (int i = 0;
+    i < N;
+    ++i) {
+        // glsl exp function cannot handle high exponents
+        expArr[i] = exp(min(50., similarity[i]));
+        expSum += expArr[i];
+    }
+    for (int i = 0;
+    i < N;
+    ++i) {
+        similarity[i] = expArr[i] / expSum;
+    }
+
+    // Step 3: Shift the UV by weighted sum of anchor displacements
+    vec2 displacements[N];
+    for (int i = 0;
+    i < N;
+    ++i) {
+        displacements[i] = anchorsLast[i] - anchorsCurr[i];
+    }
+    for (int i = 0;
+    i < N;
+    ++i) {
+        uv += displacements[i] * similarity[i];
+    }
+
+    // Step 4: Sample the texture at the shifted UV
+    uv = (uv - surfaceOrigin) / surfaceSize;
+    if (uv.x < 0. || uv.x > 1. || uv.y < 0. || uv.y > 1.) {
+        return vec4(0.);
+    }
+    vec4 ret = surface.eval(uv * surfaceResolution);
+    // Debug output: show similarity to some anchors
+    // ret.r = similarity[0];
+    // ret.g = similarity[1];
+    return ret;
+}

@@ -197,6 +197,8 @@ union Rect {
   };
 
   constexpr Rect() = default;
+  // Construct a zero-sized rectangle at the given point.
+  constexpr Rect(Vec2 point) : left(point.x), bottom(point.y), right(point.x), top(point.y) {}
   constexpr Rect(SkRect r) : sk(r) {}
   constexpr Rect(float left, float bottom, float right, float top)
       : left(left), bottom(bottom), right(right), top(top) {}
@@ -270,6 +272,11 @@ union Rect {
     right = std::max(right, point.x);
     bottom = std::min(bottom, point.y);
     top = std::max(top, point.y);
+  }
+
+  void ExpandToInclude(const Rect& other) {
+    ExpandToInclude(other.TopLeftCorner());
+    ExpandToInclude(other.BottomRightCorner());
   }
 
   [[nodiscard]] Rect Outset(float amount) {

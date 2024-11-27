@@ -60,25 +60,13 @@ __attribute__((constructor)) void RegisterMouseClick() {
   RegisterPrototype(MouseClick::rmb_up);
 }
 
-static sk_sp<SkImage> MouseBaseImage(gui::DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_mouse_base_webp, &ctx);
-}
-
-static sk_sp<SkImage> MouseLMBMask(gui::DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_mouse_lmb_mask_webp, &ctx);
-}
-
-static sk_sp<SkImage> MouseRMBMask(gui::DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_mouse_rmb_mask_webp, &ctx);
-}
-
 constexpr float kScale = 0.00005;
 
-static sk_sp<SkImage> RenderMouseImage(gui::DrawContext& ctx, gui::PointerButton button,
-                                       bool down) {
-  auto& root_canvas = ctx.canvas;
-  auto base = MouseBaseImage(ctx);
-  auto mask = button == gui::PointerButton::Left ? MouseLMBMask(ctx) : MouseRMBMask(ctx);
+static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
+  auto base = DecodeImage(embedded::assets_mouse_base_webp);
+  auto mask = button == gui::PointerButton::Left
+                  ? DecodeImage(embedded::assets_mouse_lmb_mask_webp)
+                  : DecodeImage(embedded::assets_mouse_rmb_mask_webp);
   SkBitmap bitmap;
   SkSamplingOptions sampling;
   bitmap.allocN32Pixels(base->width(), base->height());
@@ -111,22 +99,7 @@ static sk_sp<SkImage> RenderMouseImage(gui::DrawContext& ctx, gui::PointerButton
     canvas.drawPath(path, paint);
   }
   bitmap.setImmutable();
-  auto raster_image = SkImages::RasterFromBitmap(bitmap);
-  auto recording_context = root_canvas.recordingContext();
-  if (recording_context) {
-    return SkImages::TextureFromImage(recording_context->asDirectContext(), raster_image.get(),
-                                      skgpu::Mipmapped::kYes);
-  } else {
-    return raster_image;
-  }
-}
-
-static sk_sp<SkImage> CachedMouseImage(gui::DrawContext dctx, gui::PointerButton button,
-                                       bool down) {
-  Str key = f("MouseImage:%d:%d", (int)button, (int)down);
-  return CacheImage(dctx, key, [&dctx, button, down]() -> sk_sp<SkImage> {
-    return RenderMouseImage(dctx, button, down);
-  });
+  return SkImages::RasterFromBitmap(bitmap);
 }
 
 MouseClick::MouseClick(gui::PointerButton button, bool down) : button(button), down(down) {}
@@ -153,13 +126,24 @@ std::shared_ptr<Object> MouseClick::Clone() const {
 }
 animation::Phase MouseClick::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto mouse_image = CachedMouseImage(ctx, button, down);
-  canvas.save();
-  canvas.scale(kScale, -kScale);
-  canvas.translate(0, -mouse_image->height());
-  SkSamplingOptions sampling = SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);
-  canvas.drawImage(mouse_image, 0, 0, sampling);
-  canvas.restore();
+  static PersistentImage images[(long)gui::PointerButton::Count][2] = {
+      [(long)gui::PointerButton::Left] =
+          {
+              PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Left, false),
+                                               {.scale = kScale}),
+              PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Left, true),
+                                               {.scale = kScale}),
+          },
+      [(long)gui::PointerButton::Right] =
+          {
+              PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Right, false),
+                                               {.scale = kScale}),
+              PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Right, true),
+                                               {.scale = kScale}),
+          },
+  };
+  auto& mouse_image = images[(long)button][down];
+  mouse_image.draw(canvas);
   return animation::Finished;
 }
 SkPath MouseClick::Shape() const {

@@ -25,14 +25,6 @@ namespace automat::library {
 
 DEFINE_PROTO(KeyPresser);
 
-static sk_sp<SkImage> PointingHandColor(DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_pointing_hand_color_webp, &ctx);
-}
-
-static sk_sp<SkImage> PressingHandColor(DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_pressing_hand_color_webp, &ctx);
-}
-
 constexpr static char kHandShapeSVG[] =
     "M9 19.9C7.9 20.1 7.9 19.2 8.4 18.6 7.9 17.1 5.9 16.3 5.3 14.8 3.7 11.4.7 10.2 1.1 9.3 1.2 8.9 "
     "2.2 6.6 7 10.9 7.8 10.4 6.5 1.2 7.8.4 9.1-.3 10.4 0 10.3 3.2L10.5 5.5C12 5.4 12.3 5.4 13.2 "
@@ -82,13 +74,17 @@ animation::Phase KeyPresser::Update(time::Timer&) {
 animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
   auto phase = DrawChildren(dctx);
   auto& canvas = dctx.canvas;
-  auto img = key_pressed ? PressingHandColor(dctx) : PointingHandColor(dctx);
-  float s = 8.8_mm / img->height();
+
+  static auto pointing_hand_color =
+      PersistentImage::MakeFromAsset(embedded::assets_pointing_hand_color_webp, {.height = 8.8_mm});
+  static auto pressing_hand_color =
+      PersistentImage::MakeFromAsset(embedded::assets_pressing_hand_color_webp, {.height = 8.8_mm});
+
+  auto& img = key_pressed ? pressing_hand_color : pointing_hand_color;
   canvas.save();
-  canvas.translate(2.2_mm, 1.8_mm);
+  canvas.translate(4.5_mm, -6.8_mm);
   canvas.rotate(15);
-  canvas.scale(s, -s);
-  canvas.drawImage(img.get(), 0, 0, kDefaultSamplingOptions);
+  img.draw(canvas);
   canvas.restore();
   return phase;
 }

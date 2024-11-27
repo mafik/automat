@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <include/core/SkCanvas.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkSamplingOptions.h>
-#include <include/gpu/GrDirectContext.h>
+#include <include/core/SkTileMode.h>
 
-#include "include/core/SkTileMode.h"
 #include "virtual_fs.hh"
-#include "widget.hh"
 
 namespace automat {
 
@@ -41,27 +40,21 @@ struct PersistentImage {
     bool raw_shader = false;  // raw shaders don't apply gamma correction
   };
 
-  static PersistentImage MakeFromAsset(maf::fs::VFile& asset, MakeArgs = {
-                                                                  .width = 0,
-                                                                  .height = 0,
-                                                                  .scale = 0,
-                                                                  .tile_x = SkTileMode::kClamp,
-                                                                  .tile_y = SkTileMode::kClamp,
-                                                                  .raw_shader = false,
-                                                              });
+  constexpr static MakeArgs kDefaultArgs = {.width = 0,
+                                            .height = 0,
+                                            .scale = 0,
+                                            .tile_x = SkTileMode::kClamp,
+                                            .tile_y = SkTileMode::kClamp,
+                                            .raw_shader = false};
 
-  // SkImage& operator*() const { return **image; }
-  // SkImage* operator->() const { return image->get(); }
-  // operator SkImage*() { return image->get(); }
+  static PersistentImage MakeFromSkImage(sk_sp<SkImage> image, MakeArgs = kDefaultArgs);
+
+  static PersistentImage MakeFromAsset(maf::fs::VFile& asset, MakeArgs = kDefaultArgs);
 
   void draw(SkCanvas&);
 };
 
-// Pass non-null DrawContext to create GPU-backed image (MUCH cheaper to draw).
-sk_sp<SkImage> MakeImageFromAsset(maf::fs::VFile& asset, gui::DrawContext*);
-
-sk_sp<SkImage> CacheImage(gui::DrawContext& ctx, const maf::Str& key,
-                          std::function<sk_sp<SkImage>()> generator);
+sk_sp<SkImage> DecodeImage(maf::fs::VFile& asset);
 
 constexpr static SkSamplingOptions kDefaultSamplingOptions =
     SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);

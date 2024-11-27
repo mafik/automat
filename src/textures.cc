@@ -3,57 +3,24 @@
 #include "textures.hh"
 
 #include <include/core/SkData.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkShader.h>
 #include <include/gpu/GpuTypes.h>
 #include <include/gpu/GrDirectContext.h>
 #include <include/gpu/ganesh/SkImageGanesh.h>
 
-#include "include/core/SkMatrix.h"
 #include "log.hh"
-#include "widget.hh"
+#include "math.hh"
 
 namespace automat {
 
-struct ImageCache {
-  std::unordered_map<maf::Str, sk_sp<SkImage>> images;
-};
-
-ImageCache image_cache;
-
-sk_sp<SkImage> CacheImage(gui::DrawContext& ctx, const maf::Str& key,
-                          std::function<sk_sp<SkImage>()> generator) {
-  auto& cache = image_cache;
-  if (auto it = cache.images.find(key); it != cache.images.end()) {
-    return it->second;
-  }
-  auto image = generator();
-  cache.images[key] = image;
-  return image;
-}
-
-sk_sp<SkImage> MakeImageFromAsset(maf::fs::VFile& asset, gui::DrawContext* dctx) {
-  if (dctx) {
-    auto& cache = image_cache;
-    if (auto it = cache.images.find(maf::Str(asset.path)); it != cache.images.end()) {
-      return it->second;
-    }
-  }
+sk_sp<SkImage> DecodeImage(maf::fs::VFile& asset) {
   auto& content = asset.content;
   auto data = SkData::MakeWithoutCopy(content.data(), content.size());
-  auto image = SkImages::DeferredFromEncodedData(data);
-  if (dctx) {
-    if (auto gr_ctx = (GrDirectContext*)*dctx) {
-      image = image->withDefaultMipmaps();
-      image = SkImages::TextureFromImage(gr_ctx, image.get(), skgpu::Mipmapped::kYes);
-    }
-  }
-  return image;
+  return SkImages::DeferredFromEncodedData(data);
 }
-PersistentImage PersistentImage::MakeFromAsset(maf::fs::VFile& asset, MakeArgs args) {
-  auto& content = asset.content;
-  auto data = SkData::MakeWithoutCopy(content.data(), content.size());
-  auto image = SkImages::DeferredFromEncodedData(data);
 
+PersistentImage PersistentImage::MakeFromSkImage(sk_sp<SkImage> image, MakeArgs args) {
   float scale, width, height;
   if (args.scale) {
     scale = args.scale;
@@ -85,6 +52,10 @@ PersistentImage PersistentImage::MakeFromAsset(maf::fs::VFile& asset, MakeArgs a
       .paint = paint,
       .scale = scale,
   };
+}
+
+PersistentImage PersistentImage::MakeFromAsset(maf::fs::VFile& asset, MakeArgs args) {
+  return MakeFromSkImage(DecodeImage(asset), args);
 }
 
 int PersistentImage::widthPx() { return (*image)->width(); }

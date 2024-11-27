@@ -23,7 +23,7 @@
 #include "time.hh"
 #include "vec.hh"
 
-constexpr bool kDebugRendering = false;
+constexpr bool kDebugRendering = true;
 constexpr bool kDebugRenderEvents = false;
 
 namespace automat::gui {

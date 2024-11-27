@@ -3,10 +3,13 @@
 #include "textures.hh"
 
 #include <include/core/SkData.h>
+#include <include/core/SkShader.h>
 #include <include/gpu/GpuTypes.h>
 #include <include/gpu/GrDirectContext.h>
 #include <include/gpu/ganesh/SkImageGanesh.h>
 
+#include "include/core/SkMatrix.h"
+#include "log.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -45,5 +48,50 @@ sk_sp<SkImage> MakeImageFromAsset(maf::fs::VFile& asset, gui::DrawContext* dctx)
     }
   }
   return image;
+}
+PersistentImage PersistentImage::MakeFromAsset(maf::fs::VFile& asset, float width, float height) {
+  auto& content = asset.content;
+  auto data = SkData::MakeWithoutCopy(content.data(), content.size());
+  auto image = SkImages::DeferredFromEncodedData(data);
+
+  float scale = 1 / 300.f * 25.4f;
+  if (width == 0 && height == 0) {
+    scale = 0.0254f / 300.f;
+    width = image->width() * scale;
+    height = image->height() * scale;
+  } else if (width == 0) {
+    width = height * image->width() / image->height();
+    scale = height / image->height();
+  } else if (height == 0) {
+    height = width * image->height() / image->width();
+    scale = width / image->width();
+  } else {
+    scale = std::min(width / image->width(), height / image->height());
+  }
+  auto matrix = SkMatrix::Scale(scale, -scale).postTranslate(0, height);
+  auto shader = image->makeShader(kDefaultSamplingOptions, matrix);
+  SkPaint paint;
+  paint.setShader(shader);
+  return PersistentImage{
+      .image = image,
+      .shader = shader,
+      .paint = paint,
+      .scale = scale,
+  };
+}
+
+int PersistentImage::widthPx() { return (*image)->width(); }
+int PersistentImage::heightPx() { return (*image)->height(); }
+
+float PersistentImage::width() { return widthPx() * scale; }
+float PersistentImage::height() { return heightPx() * scale; }
+
+void PersistentImage::draw(SkCanvas& canvas) {
+  if (!image) {
+    ERROR << "Attempt to draw an uninitialized PersistentImage";
+  }
+
+  Rect rect = Rect(0, 0, width(), height());
+  canvas.drawRect(rect, paint);
 }
 }  // namespace automat

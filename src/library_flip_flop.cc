@@ -54,10 +54,6 @@ struct FlipFlopTarget : Argument {
 
 FlipFlopTarget flip_arg("flip", Argument::kOptional);
 
-static sk_sp<SkImage> FlipFlopColor(gui::DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_flip_flop_color_webp, &ctx);
-}
-
 bool FlipFlopButton::Filled() const { return (flip_flop && flip_flop->current_state); }
 
 // SkRRect FlipFlopButton::RRect() const {
@@ -97,16 +93,15 @@ std::shared_ptr<Object> FlipFlop::Clone() const {
   ret->current_state = current_state;
   return ret;
 }
+
+static auto flip_flop_color =
+    PersistentImage::MakeFromAsset(embedded::assets_flip_flop_color_webp, kFlipFlopWidth);
+
 animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
-  auto img = FlipFlopColor(dctx);
   auto phase = animation::Finished;
-  float s = kFlipFlopWidth / img->width();
-  float height = s * img->height();
-  auto m = canvas.getLocalToDevice();
-  canvas.scale(s, -s);
-  canvas.drawImage(img.get(), 0, -img->height(), kDefaultSamplingOptions);
-  canvas.setMatrix(m);
+
+  flip_flop_color.draw(canvas);
 
   {  // Red indicator light
     animation_state.light.target = current_state;
@@ -149,13 +144,7 @@ animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
   phase |= DrawChildren(dctx);
   return phase;
 }
-Rect FlipFlopRect() {
-  // Update this if the image changes
-  constexpr int kFlipFlopImageWidth = 342;
-  constexpr int kFlipFlopImageHeight = 475;
-  constexpr float s = kFlipFlopWidth / kFlipFlopImageWidth;
-  return Rect::MakeZeroWH(kFlipFlopWidth, s * kFlipFlopImageHeight);
-}
+Rect FlipFlopRect() { return Rect::MakeZeroWH(flip_flop_color.width(), flip_flop_color.height()); }
 SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
 
 ControlFlow FlipFlop::VisitChildren(gui::Visitor& visitor) {

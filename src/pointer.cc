@@ -73,7 +73,7 @@ void Pointer::UpdatePath() {
       if (shape.contains(point.x, point.y)) {
         w->PointerVisitChildren(dfs);
         return ControlFlow::Stop;
-      } else if (w->texture_bounds == std::nullopt) {
+      } else if (w->pack_frame_texture_bounds == std::nullopt) {
         if (w->PointerVisitChildren(dfs) == ControlFlow::Stop) {
           return ControlFlow::Stop;
         }

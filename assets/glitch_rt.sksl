@@ -1,0 +1,50 @@
+// kind=shader
+
+uniform shader surface;
+uniform float2 surfaceResolution;  // size of the surface, in pixels
+uniform float4 surfaceBounds;
+// uniform mat3 surfaceTransform;
+uniform float time;
+
+float hash(float n) {
+    return fract(sin(n + time) * 43758.5453);
+}
+
+vec4 main(float2 localCoord) {
+    float surfaceLeft = surfaceBounds.x;
+    float surfaceBottom = surfaceBounds.y;
+    float surfaceRight = surfaceBounds.z;
+    float surfaceTop = surfaceBounds.w;
+
+    float surfaceWidth = surfaceRight - surfaceLeft;
+    float surfaceHeight = surfaceTop - surfaceBottom;
+
+    float2 uv = (localCoord - vec2(surfaceLeft, surfaceBottom)) / vec2(surfaceWidth, surfaceHeight);
+    bool oob = false;
+    float x_overshot = 0;
+    float y_overshot = 0;
+    if (uv.x > 1 || uv.x < 0) {
+        oob = true;
+        x_overshot = min(max(0, abs(uv.x - 0.5) - 0.5) / 2, 0.05);
+        uv.x += hash(floor(uv.x * surfaceResolution.x / 10) / surfaceResolution.x) / 10;
+    }
+    if (uv.y > 1 || uv.y < 0) {
+        oob = true;
+        y_overshot = min(max(0, abs(uv.y - 0.5) - 0.5) / 2, 0.05);
+        uv.y += hash(floor(uv.y * surfaceResolution.y / 10) / surfaceResolution.y) / 10;
+    }
+    if (oob) {
+        uv.y += sin(uv.x / surfaceWidth * 4 + 2 * time * 2 * 3.14) * x_overshot;
+        uv.x += sin(uv.y / surfaceHeight * 4 + 2 * time * 2 * 3.14) * y_overshot;
+    }
+    // return vec4(uv.x, uv.y, 0, 1);
+    vec4 ret = surface.eval(uv * surfaceResolution);
+    if (oob) {
+        ret *= 0.5;
+        ret *= hash(dot(uv, uv));
+    }
+    // Debug output: show similarity to some anchors
+    // ret.r = similarity[0];
+    // ret.g = similarity[1];
+    return ret;
+}

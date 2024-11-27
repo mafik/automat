@@ -5,6 +5,8 @@
 #include <include/core/SkMesh.h>
 #include <include/core/SkRefCnt.h>
 
+#include "str.hh"
+
 namespace automat::resources {
 
 // Make a copy of the given sk_sp and return a reference to it.
@@ -20,6 +22,15 @@ sk_sp<SkMeshSpecification>& Hold(sk_sp<SkMeshSpecification>);
 
 template <>
 sk_sp<SkShader>& Hold(sk_sp<SkShader>);
+
+struct RuntimeEffectBuilder {
+  std::optional<SkRuntimeEffectBuilder> builder;
+
+  RuntimeEffectBuilder(maf::StrView sksl);
+  ~RuntimeEffectBuilder();
+
+  SkRuntimeEffectBuilder* operator->() { return &*builder; }
+};
 
 void Release();
 

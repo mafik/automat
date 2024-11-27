@@ -458,7 +458,7 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
 Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   Vec<Vec2> anchors;
   if constexpr (false) {  // approach 1
-    Rect r = *texture_bounds;
+    Rect r = *pack_frame_texture_bounds;
     anchors.push_back(r.TopRightCorner());
     anchors.push_back(r.TopLeftCorner());
     anchors.push_back(r.BottomRightCorner());

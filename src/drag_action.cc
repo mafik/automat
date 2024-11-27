@@ -51,7 +51,7 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
 
       auto shape = w->Shape();
       std::swap(point, transformed);
-      if ((w->texture_bounds == std::nullopt) || shape.contains(point.x, point.y)) {
+      if ((w->pack_frame_texture_bounds == std::nullopt) || shape.contains(point.x, point.y)) {
         if (w->VisitChildren(dfs) == ControlFlow::Stop) {
           return ControlFlow::Stop;
         }

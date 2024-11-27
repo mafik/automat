@@ -23,6 +23,7 @@
 #include "animation.hh"
 #include "control_flow.hh"
 #include "font.hh"
+#include "global_resources.hh"
 #include "log.hh"
 #include "renderer.hh"
 #include "time.hh"
@@ -56,7 +57,7 @@ animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
 }
 
 animation::Phase Widget::DrawCached(DrawContext& ctx) const {
-  if (texture_bounds == nullopt) {
+  if (pack_frame_texture_bounds == nullopt) {
     return Draw(ctx);
   }
 
@@ -244,7 +245,8 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
   cpu_time = (time::SteadyNow() - cpu_started).count();
 
   window_to_local.mapRect(&surface_bounds_local.sk, SkRect::Make(surface_bounds_root));
-  draw_texture_anchors = texture_anchors;
+  draw_texture_anchors = pack_frame_texture_anchors;
+  draw_texture_bounds = *pack_frame_texture_bounds;
 }
 
 // Lifetime of the frame (from the Widget's perspective):
@@ -258,7 +260,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     SkPaint texture_bounds_paint;  // translucent black
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
     texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-    canvas->drawRect(*texture_bounds, texture_bounds_paint);
+    canvas->drawRect(draw_texture_bounds.sk, texture_bounds_paint);
   }
 
   if (surface == nullptr) {
@@ -282,45 +284,66 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
 
     if (anchor_count == 2) {
       SkSamplingOptions sampling;
-      auto fs = SkString(embedded::assets_anchor_warp_rt_sksl.content);
-      auto result = SkRuntimeEffect::MakeForShader(fs);
-      if (!result.effect) {
-        ERROR << "Failed to compile anchor warp shader: " << result.errorText.c_str();
-      } else {
-        auto builder = std::make_unique<SkRuntimeShaderBuilder>(result.effect);
-        builder->uniform("surfaceOrigin") = Rect(surface_bounds_local).BottomLeftCorner();
-        builder->uniform("surfaceSize") = Rect(surface_bounds_local).Size();
-        builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
-        builder->uniform("anchorsLast").set(&draw_texture_anchors[0], anchor_count);
-        builder->uniform("anchorsCurr").set(&anchors[0], anchor_count);
-        builder->child("surface") = surface->makeImageSnapshot()->makeShader(sampling);
+      static auto builder =
+          resources::RuntimeEffectBuilder(embedded::assets_anchor_warp_rt_sksl.content);
 
-        auto shader = builder->makeShader();
-        SkPaint paint;
-        paint.setShader(shader);
+      builder->uniform("surfaceOrigin") = Rect(surface_bounds_local).BottomLeftCorner();
+      builder->uniform("surfaceSize") = Rect(surface_bounds_local).Size();
+      builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
+      builder->uniform("anchorsLast").set(&draw_texture_anchors[0], anchor_count);
+      builder->uniform("anchorsCurr").set(&anchors[0], anchor_count);
+      builder->child("surface") = surface->makeImageSnapshot()->makeShader(sampling);
 
-        // Heuristic for finding same texture bounds (guaranteed to contain the whole widget):
-        // - for every anchor move the old texture bounds by its displacement
-        // - compute a union of all the moved bounds
-        Rect new_anchor_bounds = anchors[0];
-        for (int i = 0; i < anchor_count; ++i) {
-          Vec2 delta = anchors[i] - draw_texture_anchors[i];
-          Rect offset_bounds = surface_bounds_local.sk.makeOffset(delta);
-          new_anchor_bounds.ExpandToInclude(offset_bounds);
-        }
-        canvas->drawRect(new_anchor_bounds.sk, paint);
+      auto shader = builder->makeShader();
+      SkPaint paint;
+      paint.setShader(shader);
 
-        if constexpr (kDebugRendering) {
-          SkPaint anchor_paint;
-          anchor_paint.setStyle(SkPaint::kFill_Style);
-          anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-          for (auto& anchor : anchors) {
-            canvas->drawCircle(anchor.sk, 1_mm, anchor_paint);
-          }
+      // Heuristic for finding same texture bounds (guaranteed to contain the whole widget):
+      // - for every anchor move the old texture bounds by its displacement
+      // - compute a union of all the moved bounds
+      Rect new_anchor_bounds = anchors[0];
+      for (int i = 0; i < anchor_count; ++i) {
+        Vec2 delta = anchors[i] - draw_texture_anchors[i];
+        Rect offset_bounds = surface_bounds_local.sk.makeOffset(delta);
+        new_anchor_bounds.ExpandToInclude(offset_bounds);
+      }
+      canvas->drawRect(new_anchor_bounds.sk, paint);
+
+      if constexpr (kDebugRendering) {
+        SkPaint anchor_paint;
+        anchor_paint.setStyle(SkPaint::kFill_Style);
+        anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
+        for (auto& anchor : anchors) {
+          canvas->drawCircle(anchor.sk, 1_mm, anchor_paint);
         }
       }
     } else {
       canvas->save();
+
+      if (anchor_count) {
+        SkMatrix anchor_mapping;
+        if (anchor_mapping.setPolyToPoly(&pack_frame_texture_anchors[0].sk, &anchors[0].sk,
+                                         anchor_count)) {
+          canvas->concat(anchor_mapping);
+        }
+      }
+      static auto builder =
+          resources::RuntimeEffectBuilder(embedded::assets_glitch_rt_sksl.content);
+      builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
+      builder->uniform("surfaceBounds") = surface_bounds_local;
+      float time = fmod(time::SteadyNow().time_since_epoch().count(), 1.0);
+      builder->uniform("time") = time;
+      SkSamplingOptions sampling;
+      builder->child("surface") = surface->makeImageSnapshot()->makeShader(
+          SkTileMode::kMirror, SkTileMode::kMirror, sampling);
+      auto shader = builder->makeShader();
+      SkPaint paint;
+      paint.setShader(shader);
+      canvas->drawRect(*pack_frame_texture_bounds, paint);
+
+      canvas->restore();
+      canvas->save();
+
       if (anchor_count) {
         SkMatrix anchor_mapping;
         if (anchor_mapping.setPolyToPoly(&draw_texture_anchors[0].sk, &anchors[0].sk,
@@ -328,8 +351,9 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
           canvas->concat(anchor_mapping);
         }
       }
+
       canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local.sk));
-      surface->draw(canvas, 0, 0);
+      // surface->draw(canvas, 0, 0);
 
       if constexpr (kDebugRendering) {
         SkPaint surface_bounds_paint;
@@ -357,8 +381,8 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     if constexpr (kDebugRendering) {
       auto& font = GetFont();
       SkPaint text_paint;
-      canvas->translate(texture_bounds->left(),
-                        min(texture_bounds->top(), texture_bounds->bottom()));
+      canvas->translate(pack_frame_texture_bounds->left(),
+                        min(pack_frame_texture_bounds->top(), pack_frame_texture_bounds->bottom()));
       auto text = f("%.1f", average_draw_millis);
       font.DrawText(*canvas, text, text_paint);
     }

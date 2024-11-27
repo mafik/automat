@@ -35,7 +35,7 @@ PersistentImage PersistentImage::MakeFromSkImage(sk_sp<SkImage> image, MakeArgs 
     width = image->width() * scale;
     height = args.height;
   } else {
-    scale = 1 / 300.f * 25.4f;
+    scale = 0.0254f /* meters / inch */ / 300.f /* pixels / inch */;
     width = image->width() * scale;
     height = image->height() * scale;
   }

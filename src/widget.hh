@@ -23,7 +23,7 @@
 #include "time.hh"
 #include "vec.hh"
 
-constexpr bool kDebugRendering = true;
+constexpr bool kDebugRendering = false;
 constexpr bool kDebugRenderEvents = false;
 
 namespace automat::gui {
@@ -124,14 +124,14 @@ struct Widget : public std::enable_shared_from_this<Widget> {
       auto offset = offsetof(struct Widget, compose_surface_drawable);
       return *reinterpret_cast<struct Widget*>(reinterpret_cast<uintptr_t>(this) - offset);
     }
-    SkRect onGetBounds() override { return *Widget().texture_bounds; }
+    SkRect onGetBounds() override { return *Widget().pack_frame_texture_bounds; }
     void onDraw(SkCanvas* canvas) override { Widget().ComposeSurface(canvas); }
   };
 
   mutable ComposeSurfaceDrawable compose_surface_drawable;
 
-  maf::Optional<SkRect> texture_bounds;  // local coordinates
-  maf::Vec<Vec2> texture_anchors;
+  maf::Optional<SkRect> pack_frame_texture_bounds;  // local coordinates
+  maf::Vec<Vec2> pack_frame_texture_anchors;
   mutable uint32_t id = 0;
   float average_draw_millis = FP_NAN;
 
@@ -142,11 +142,12 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   // Things updated in PackFrame (& Draw)
   mutable time::SteadyPoint draw_time = time::SteadyPoint::min();
+  Rect draw_texture_bounds;
+  maf::Vec<Vec2> draw_texture_anchors;
   SkIRect surface_bounds_root;
   sk_sp<SkDrawable> recording = nullptr;
   SkMatrix window_to_local;
   bool draw_present = false;  // Whether the current draw job is going to be presented.
-  maf::Vec<Vec2> draw_texture_anchors;
 
   // Things updated in RenderToSurface
   float cpu_time;  // Used by the client to measure rendering time

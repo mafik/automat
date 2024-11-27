@@ -108,7 +108,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       if (widget->draw_present == false) {
         // Find the closest parent that can be rendered to texture.
         Widget* renderable_parent = widget->parent.get();
-        while (!renderable_parent->texture_bounds.has_value()) {
+        while (!renderable_parent->pack_frame_texture_bounds.has_value()) {
           // Root widget (window) can always be rendered to texture so we don't need any extra stop
           // condition here.
           renderable_parent = renderable_parent->parent.get();
@@ -176,13 +176,13 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
       (void)node.window_to_local.invert(&node.local_to_window);
 
-      widget->texture_bounds = widget->TextureBounds();
-      widget->texture_anchors = widget->TextureAnchors();
+      widget->pack_frame_texture_bounds = widget->TextureBounds();
+      widget->pack_frame_texture_anchors = widget->TextureAnchors();
       bool intersects = true;
-      if (widget->texture_bounds.has_value()) {
+      if (widget->pack_frame_texture_bounds.has_value()) {
         // Compute the bounds of the widget - in local & root coordinates
         SkRect root_bounds;
-        node.local_to_window.mapRect(&root_bounds, *widget->texture_bounds);
+        node.local_to_window.mapRect(&root_bounds, *widget->pack_frame_texture_bounds);
 
         // Clip the `root_bounds` to the window bounds;
         if (root_bounds.width() * root_bounds.height() < 512 * 512) {

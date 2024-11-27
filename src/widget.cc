@@ -280,7 +280,8 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
 
     auto anchors = TextureAnchors();
 
-    int anchor_count = min(draw_texture_anchors.size(), anchors.size());
+    auto anchor_count = min<int>(draw_texture_anchors.size(), anchors.size());
+    anchor_count = min<int>(pack_frame_texture_anchors.size(), anchor_count);
 
     if (anchor_count == 2) {
       SkSamplingOptions sampling;
@@ -320,17 +321,32 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     } else {
       canvas->save();
 
+      // Maps from the local coordinates to surface UV
+      SkMatrix surface_transform;
+      Rect unit = Rect::MakeZeroWH(1, 1);
+      surface_transform.postConcat(SkMatrix::RectToRect(surface_bounds_local.sk, unit));
       if (anchor_count) {
         SkMatrix anchor_mapping;
+        // Modify the current canvas by the movement of the anchors since the last PackFrame
+        // This allows us to draw the most recent texture bounds (pack_frame_texture_bounds)
+        // which cover the whole currently visible part of the widget.
         if (anchor_mapping.setPolyToPoly(&pack_frame_texture_anchors[0].sk, &anchors[0].sk,
                                          anchor_count)) {
           canvas->concat(anchor_mapping);
         }
+        // Apply the inverse transform to the surface mapping - we want to get the original texture
+        // position. Note that this transform uses `draw_texture_anchors` which have been saved
+        // during the last RenderToSurface.
+        if (anchor_mapping.setPolyToPoly(&anchors[0].sk, &draw_texture_anchors[0].sk,
+                                         anchor_count)) {
+          surface_transform.preConcat(anchor_mapping);
+        }
       }
+
       static auto builder =
           resources::RuntimeEffectBuilder(embedded::assets_glitch_rt_sksl.content);
       builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
-      builder->uniform("surfaceBounds") = surface_bounds_local;
+      builder->uniform("surfaceTransform") = surface_transform;
       float time = fmod(time::SteadyNow().time_since_epoch().count(), 1.0);
       builder->uniform("time") = time;
       SkSamplingOptions sampling;
@@ -340,20 +356,6 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       SkPaint paint;
       paint.setShader(shader);
       canvas->drawRect(*pack_frame_texture_bounds, paint);
-
-      canvas->restore();
-      canvas->save();
-
-      if (anchor_count) {
-        SkMatrix anchor_mapping;
-        if (anchor_mapping.setPolyToPoly(&draw_texture_anchors[0].sk, &anchors[0].sk,
-                                         anchor_count)) {
-          canvas->concat(anchor_mapping);
-        }
-      }
-
-      canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local.sk));
-      // surface->draw(canvas, 0, 0);
 
       if constexpr (kDebugRendering) {
         SkPaint surface_bounds_paint;
@@ -373,6 +375,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
                                         kNumColors, 0, &shader_matrix));
         surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
         surface_bounds_paint.setStrokeWidth(2.0f);
+        canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local.sk));
         canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
       }
       canvas->restore();

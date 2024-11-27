@@ -2,8 +2,7 @@
 
 uniform shader surface;
 uniform float2 surfaceResolution;  // size of the surface, in pixels
-uniform float4 surfaceBounds;
-// uniform mat3 surfaceTransform;
+uniform mat3 surfaceTransform;
 uniform float time;
 
 float hash(float n) {
@@ -11,15 +10,9 @@ float hash(float n) {
 }
 
 vec4 main(float2 localCoord) {
-    float surfaceLeft = surfaceBounds.x;
-    float surfaceBottom = surfaceBounds.y;
-    float surfaceRight = surfaceBounds.z;
-    float surfaceTop = surfaceBounds.w;
 
-    float surfaceWidth = surfaceRight - surfaceLeft;
-    float surfaceHeight = surfaceTop - surfaceBottom;
-
-    float2 uv = (localCoord - vec2(surfaceLeft, surfaceBottom)) / vec2(surfaceWidth, surfaceHeight);
+    float2 uv = (surfaceTransform * vec3(localCoord, 1)).xy;
+    // return vec4(uv.x, uv.y, 0, 1);
     bool oob = false;
     float x_overshot = 0;
     float y_overshot = 0;
@@ -34,10 +27,9 @@ vec4 main(float2 localCoord) {
         uv.y += hash(floor(uv.y * surfaceResolution.y / 10) / surfaceResolution.y) / 10;
     }
     if (oob) {
-        uv.y += sin(uv.x / surfaceWidth * 4 + 2 * time * 2 * 3.14) * x_overshot;
-        uv.x += sin(uv.y / surfaceHeight * 4 + 2 * time * 2 * 3.14) * y_overshot;
+        uv.y += sin(uv.x * 4 + 2 * time * 2 * 3.14) * x_overshot;
+        uv.x += sin(uv.y * 4 + 2 * time * 2 * 3.14) * y_overshot;
     }
-    // return vec4(uv.x, uv.y, 0, 1);
     vec4 ret = surface.eval(uv * surfaceResolution);
     if (oob) {
         ret *= 0.5;

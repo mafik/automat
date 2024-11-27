@@ -61,9 +61,8 @@ static SkPath& MacroRecorderShape() {
   return path;
 }
 
-static sk_sp<SkImage> MacroRecorderFrontColor(gui::DrawContext& dctx) {
-  return MakeImageFromAsset(embedded::assets_macro_recorder_front_color_webp, &dctx);
-}
+static auto macro_recorder_front_color =
+    PersistentImage::MakeFromAsset(embedded::assets_macro_recorder_front_color_webp, 0, kHeight);
 
 static sk_sp<SkSVGDOM>& SharinganColor() {
   static auto dom = SVGFromAsset(embedded::assets_sharingan_color_svg.content);
@@ -108,7 +107,6 @@ std::shared_ptr<Object> MacroRecorder::Clone() const {
 
 #pragma region Draw
 animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
-  auto image = MacroRecorderFrontColor(dctx);
   auto& canvas = dctx.canvas;
   auto phase = keylogging ? animation::Animating : animation::Finished;
 
@@ -222,14 +220,7 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
     DrawEye(kRightEyeCenter, animation_state.googly_right);
   }
 
-  {  // Draw the main body
-    canvas.save();
-    float s = 5_cm / image->height();
-    canvas.translate(0, 5_cm);
-    canvas.scale(s, -s);
-    canvas.drawImage(image, 0, 0, kDefaultSamplingOptions);
-    canvas.restore();
-  }
+  macro_recorder_front_color.draw(canvas);
 
   DrawChildren(dctx);
   return phase;

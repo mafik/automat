@@ -681,14 +681,6 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
   return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
 }
 
-static sk_sp<SkImage> CableWeaveColor(gui::DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_cable_weave_color_webp, &ctx);
-}
-
-static sk_sp<SkImage> CableWeaveNormal(gui::DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_cable_weave_normal_webp, &ctx);
-}
-
 struct StrokeToMesh {
   struct VertexInfo {
     Vec2 coords;
@@ -1008,18 +1000,21 @@ void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filte
   sk_sp<SkShader> cable_color, cable_normal;
   switch (texture) {
     case CableTexture::Braided:
-      static sk_sp<SkShader>& braided_color = resources::Hold([&ctx]() {
-        return CableWeaveColor(ctx)->makeShader(
-            SkTileMode::kRepeat, SkTileMode::kRepeat,
-            SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-      }());
-      cable_color = braided_color;
-      static sk_sp<SkShader>& braided_normal = resources::Hold([&ctx]() {
-        return CableWeaveNormal(ctx)->makeRawShader(
-            SkTileMode::kRepeat, SkTileMode::kRepeat,
-            SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear));
-      }());
-      cable_normal = braided_normal;
+      static auto braided_color = PersistentImage::MakeFromAsset(
+          embedded::assets_cable_weave_color_webp, {
+                                                       .scale = 1,
+                                                       .tile_x = SkTileMode::kRepeat,
+                                                       .tile_y = SkTileMode::kRepeat,
+                                                   });
+      cable_color = *braided_color.shader;
+      static auto braided_normal = PersistentImage::MakeFromAsset(
+          embedded::assets_cable_weave_normal_webp, {
+                                                        .scale = 1,
+                                                        .tile_x = SkTileMode::kRepeat,
+                                                        .tile_y = SkTileMode::kRepeat,
+                                                        .raw_shader = true,
+                                                    });
+      cable_normal = *braided_normal.shader;
       break;
     case CableTexture::Smooth:
       cable_color = SkShaders::Color(SkColorSetARGB(255, 0x80, 0x80, 0x80));

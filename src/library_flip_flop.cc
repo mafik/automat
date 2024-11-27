@@ -94,8 +94,8 @@ std::shared_ptr<Object> FlipFlop::Clone() const {
   return ret;
 }
 
-static auto flip_flop_color =
-    PersistentImage::MakeFromAsset(embedded::assets_flip_flop_color_webp, kFlipFlopWidth);
+static auto flip_flop_color = PersistentImage::MakeFromAsset(embedded::assets_flip_flop_color_webp,
+                                                             {.width = kFlipFlopWidth});
 
 animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;

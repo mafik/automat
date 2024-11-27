@@ -49,27 +49,34 @@ sk_sp<SkImage> MakeImageFromAsset(maf::fs::VFile& asset, gui::DrawContext* dctx)
   }
   return image;
 }
-PersistentImage PersistentImage::MakeFromAsset(maf::fs::VFile& asset, float width, float height) {
+PersistentImage PersistentImage::MakeFromAsset(maf::fs::VFile& asset, MakeArgs args) {
   auto& content = asset.content;
   auto data = SkData::MakeWithoutCopy(content.data(), content.size());
   auto image = SkImages::DeferredFromEncodedData(data);
 
-  float scale = 1 / 300.f * 25.4f;
-  if (width == 0 && height == 0) {
-    scale = 0.0254f / 300.f;
+  float scale, width, height;
+  if (args.scale) {
+    scale = args.scale;
     width = image->width() * scale;
     height = image->height() * scale;
-  } else if (width == 0) {
-    width = height * image->width() / image->height();
-    scale = height / image->height();
-  } else if (height == 0) {
-    height = width * image->height() / image->width();
-    scale = width / image->width();
+  } else if (args.width) {
+    scale = args.width / image->width();
+    width = args.width;
+    height = image->height() * scale;
+  } else if (args.height) {
+    scale = args.height / image->height();
+    width = image->width() * scale;
+    height = args.height;
   } else {
-    scale = std::min(width / image->width(), height / image->height());
+    scale = 1 / 300.f * 25.4f;
+    width = image->width() * scale;
+    height = image->height() * scale;
   }
   auto matrix = SkMatrix::Scale(scale, -scale).postTranslate(0, height);
-  auto shader = image->makeShader(kDefaultSamplingOptions, matrix);
+  auto shader =
+      args.raw_shader
+          ? image->makeRawShader(args.tile_x, args.tile_y, kDefaultSamplingOptions, matrix)
+          : image->makeShader(args.tile_x, args.tile_y, kDefaultSamplingOptions, matrix);
   SkPaint paint;
   paint.setShader(shader);
   return PersistentImage{

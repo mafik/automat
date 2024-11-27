@@ -7,6 +7,7 @@
 #include <include/core/SkSamplingOptions.h>
 #include <include/gpu/GrDirectContext.h>
 
+#include "include/core/SkTileMode.h"
 #include "virtual_fs.hh"
 #include "widget.hh"
 
@@ -25,12 +26,29 @@ struct PersistentImage {
   float width();
   float height();
 
-  // The image will be initialized with the given width and height. Missing arguments will be
-  // initialized to make the image proportional. If both arguments are missing, the image will
-  // assume 300 DPI.
+  // Defines how the Image will be mapped to local coordinate space.
   //
-  // Image will never be stretched. The smaller dimension will be used to calculate the scale.
-  static PersistentImage MakeFromAsset(maf::fs::VFile& asset, float width = 0, float height = 0);
+  // Automat uses metric coordinates while images use pixels.
+  //
+  // Specify at most one of [width, height, scale]. The other values will be calculated
+  // automatically. When no values are specified, the image will be displayed at 300 DPI.
+  struct MakeArgs {
+    float width = 0;
+    float height = 0;
+    float scale = 0;
+    SkTileMode tile_x = SkTileMode::kClamp;
+    SkTileMode tile_y = SkTileMode::kClamp;
+    bool raw_shader = false;  // raw shaders don't apply gamma correction
+  };
+
+  static PersistentImage MakeFromAsset(maf::fs::VFile& asset, MakeArgs = {
+                                                                  .width = 0,
+                                                                  .height = 0,
+                                                                  .scale = 0,
+                                                                  .tile_x = SkTileMode::kClamp,
+                                                                  .tile_y = SkTileMode::kClamp,
+                                                                  .raw_shader = false,
+                                                              });
 
   // SkImage& operator*() const { return **image; }
   // SkImage* operator->() const { return image->get(); }

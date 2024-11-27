@@ -118,19 +118,17 @@ constexpr RRect kDisplayRRect = []() {
                .type = SkRRect::kSimple_Type};
 }();
 
-static sk_sp<SkImage> RosewoodColor(DrawContext& ctx) {
-  return MakeImageFromAsset(embedded::assets_rosewood_color_webp, &ctx);
-}
+static auto rosewood_color = PersistentImage::MakeFromAsset(embedded::assets_rosewood_color_webp,
+                                                            {
+                                                                .tile_x = SkTileMode::kRepeat,
+                                                                .tile_y = SkTileMode::kRepeat,
+                                                            });
 
 const SkPaint& WoodPaint(DrawContext& ctx) {
   static SkPaint wood_paint = ([&]() {
     SkPaint p;
     p.setColor("#805338"_color);
-    auto s = kWoodenCaseWidth / 512 / 2;
-    p.setShader(RosewoodColor(ctx)
-                    ->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
-                                 SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear))
-                    ->makeWithLocalMatrix(SkMatrix::Scale(s, s).postRotate(-85)));
+    p.setShader(rosewood_color.paint.getShader()->makeWithLocalMatrix(SkMatrix::RotateDeg(-5)));
     return p;
   })();
   return wood_paint;

@@ -61,8 +61,8 @@ static SkPath& MacroRecorderShape() {
   return path;
 }
 
-static auto macro_recorder_front_color =
-    PersistentImage::MakeFromAsset(embedded::assets_macro_recorder_front_color_webp, 0, kHeight);
+static auto macro_recorder_front_color = PersistentImage::MakeFromAsset(
+    embedded::assets_macro_recorder_front_color_webp, {.height = kHeight});
 
 static sk_sp<SkSVGDOM>& SharinganColor() {
   static auto dom = SVGFromAsset(embedded::assets_sharingan_color_svg.content);

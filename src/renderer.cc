@@ -128,16 +128,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     // Queue with (parent index, widget) pairs.
     vector<pair<int, std::shared_ptr<Widget>>> q;
     q.push_back(make_pair(0, window));
-    int parent;
-    Visitor visitor = [&](maf::Span<shared_ptr<Widget>> children) {
-      for (auto& child : children) {
-        q.push_back(make_pair(parent, child));
-      }
-      return ControlFlow::Continue;
-    };
     while (!q.empty()) {
-      auto [parent_tmp, widget] = std::move(q.back());
-      parent = parent_tmp;
+      auto [parent, widget] = std::move(q.back());
       q.pop_back();
 
       if (widget->recording) {
@@ -208,8 +200,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       if (!visible) {
         node.verdict = Verdict::Skip_Clipped;
       } else {
-        parent = tree.size() - 1;
-        widget->VisitChildren(visitor);
+        for (auto& child : widget->Children()) {
+          q.push_back(make_pair(i, child));
+        }
       }
     }
   }

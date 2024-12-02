@@ -251,6 +251,41 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   animation::Phase DrawChildren(DrawContext&) const;
 
+  // TEMPORARY iterator-based interface for traversing children.
+  // Refactoring plan:
+  // TODO: Replace all usages of VisitChildren with this
+  // TODO: Merge this with PointerVisitChildren
+  // TODO: Provide a way for Widgets to use their own iterators (polymorphic logic wrapper within
+  // iterator)
+  struct ChildrenView {
+    maf::Vec<std::shared_ptr<Widget>> children;
+    ChildrenView(Widget& parent) {
+      Visitor v = [this](maf::Span<std::shared_ptr<Widget>> span) {
+        for (auto& child : span) {
+          children.push_back(child);
+        }
+        return ControlFlow::Continue;
+      };
+      parent.VisitChildren(v);
+    }
+    struct end_iterator {};
+    struct iterator {
+      ChildrenView& view;
+      int i = 0;
+      iterator(ChildrenView& view) : view(view) {}
+      std::shared_ptr<Widget>& operator*() { return view.children[i]; }
+      iterator& operator++() {
+        ++i;
+        return *this;
+      }
+      bool operator!=(const end_iterator&) { return i < view.children.size(); }
+    };
+    iterator begin() { return iterator(*this); }
+    end_iterator end() { return end_iterator(); }
+  };
+
+  ChildrenView Children() { return ChildrenView{*this}; }
+
   struct ParentsView {
     std::shared_ptr<Widget> start;
 

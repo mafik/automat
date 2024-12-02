@@ -94,12 +94,13 @@ animation::Phase Widget::DrawChildrenSpan(DrawContext& ctx,
 }
 
 animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
   auto phase = PreDrawChildren(ctx);
-  Visitor visitor = [&](Span<shared_ptr<Widget>> widgets) {
-    phase |= DrawChildrenSpan(ctx, widgets);
-    return ControlFlow::Continue;
-  };
-  const_cast<Widget*>(this)->VisitChildren(visitor);
+  for (auto& child : ranges::reverse_view(Children())) {
+    canvas.save();
+    phase |= DrawChildCachced(ctx, *child);
+    canvas.restore();
+  }
   return phase;
 }
 

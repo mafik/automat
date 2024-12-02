@@ -34,7 +34,7 @@ struct PrototypeButton : Widget {
 
   void PointerLeave(Pointer& pointer) override { pointer.PopIcon(); }
 
-  ControlFlow PointerVisitChildren(Visitor&) override { return ControlFlow::Continue; }
+  bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger btn) override;
 

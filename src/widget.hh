@@ -226,10 +226,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   // The function stops once the visitor returns ControlFlow::Stop.
   virtual ControlFlow VisitChildren(Visitor& visitor) { return ControlFlow::Continue; }
 
-  // A variant of `VisitChildren` used by the pointer events (PointerOver, PointerLeave, etc).
-  // This can be used to block pointer events from propagating to children.
-  virtual ControlFlow PointerVisitChildren(Visitor& visitor) { return VisitChildren(visitor); }
-
   // If the object should be cached into a texture, return its bounds in local coordinates.
   virtual maf::Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
   virtual maf::Vec<Vec2> TextureAnchors() const { return {}; }
@@ -253,7 +249,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   // TEMPORARY iterator-based interface for traversing children.
   // Refactoring plan:
-  // TODO: Merge this with PointerVisitChildren
   // TODO: Provide a way for Widgets to use their own iterators (polymorphic logic wrapper within
   // iterator)
   struct ChildrenView : std::ranges::view_interface<ChildrenView> {
@@ -273,6 +268,9 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   };
 
   ChildrenView Children() const { return ChildrenView{*const_cast<Widget*>(this)}; }
+
+  // This can be used to block pointer events from propagating to children.
+  virtual bool AllowChildPointerEvents(Widget& child) const { return true; }
 
   struct ParentsView {
     std::shared_ptr<Widget> start;

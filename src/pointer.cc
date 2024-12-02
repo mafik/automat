@@ -60,6 +60,9 @@ void Pointer::UpdatePath() {
 
   Visitor dfs = [&](Span<std::shared_ptr<Widget>> widgets) -> ControlFlow {
     for (auto w : widgets) {
+      if (w->parent && !w->parent->AllowChildPointerEvents(*w)) {
+        continue;
+      }
       Vec2 transformed;
       if (!path.empty()) {
         transformed = w->parent->TransformToChild(*w).mapPoint(point);
@@ -71,10 +74,10 @@ void Pointer::UpdatePath() {
       path.push_back(w);
       std::swap(point, transformed);
       if (shape.contains(point.x, point.y)) {
-        w->PointerVisitChildren(dfs);
+        w->VisitChildren(dfs);
         return ControlFlow::Stop;
       } else if (w->pack_frame_texture_bounds == std::nullopt) {
-        if (w->PointerVisitChildren(dfs) == ControlFlow::Stop) {
+        if (w->VisitChildren(dfs) == ControlFlow::Stop) {
           return ControlFlow::Stop;
         }
       }

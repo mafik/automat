@@ -123,10 +123,6 @@ ControlFlow KeyPresser::VisitChildren(gui::Visitor& visitor) {
   return visitor(SpanOfArr<shared_ptr<Widget>>((shared_ptr<Widget>*)&shortcut_button, 1));
 }
 
-ControlFlow KeyPresser::PointerVisitChildren(gui::Visitor& visitor) {
-  return ControlFlow::Continue;
-}
-
 SkMatrix KeyPresser::TransformToChild(const Widget& child) const { return SkMatrix::I(); }
 
 struct DragAndClickAction : Action {

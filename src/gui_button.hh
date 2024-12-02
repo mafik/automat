@@ -56,7 +56,7 @@ struct Button : Widget {
 
   SkMatrix TransformToChild(const Widget& child) const override;
   // We don't want the children to interact with mouse events.
-  ControlFlow PointerVisitChildren(Visitor& visitor) override { return ControlFlow::Continue; }
+  bool AllowChildPointerEvents(Widget& child) const override { return false; }
 };
 
 struct ColoredButtonArgs {
@@ -104,9 +104,20 @@ struct ToggleButton : Widget {
     std::shared_ptr<Widget> children[] = {OnWidget(), off};
     return visitor(children);
   }
-  ControlFlow PointerVisitChildren(Visitor& visitor) override {
-    std::shared_ptr<Widget> children[] = {Filled() ? OnWidget() : off};
-    return visitor(children);
+  bool AllowChildPointerEvents(Widget& child) const override {
+    if (Filled()) {
+      if (&child == const_cast<ToggleButton*>(this)->OnWidget().get()) {
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      if (&child == off.get()) {
+        return true;
+      } else {
+        return false;
+      }
+    }
   }
 
   virtual std::shared_ptr<Button>& OnWidget() { return on; }

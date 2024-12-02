@@ -14,6 +14,7 @@
 #include "window.hh"
 
 using namespace maf;
+using namespace automat::gui;
 
 namespace automat {
 
@@ -32,41 +33,24 @@ Vec2 SnapPosition(DragLocationAction& d) {
   return RoundToMilimeters(d.current_position - d.contact_point);
 }
 
-static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
-  using namespace gui;
-  using namespace maf;
-
-  Vec2 point = a.pointer.pointer_position;
-
-  gui::DropTarget* drop_target = nullptr;
-
-  Visitor dfs = [&](Span<std::shared_ptr<gui::Widget>> widgets) -> ControlFlow {
-    for (auto w : widgets) {
-      Vec2 transformed;
-      if (w->parent) {
-        transformed = w->parent->TransformToChild(*w).mapPoint(point);
-      } else {
-        transformed = point;
-      }
-
-      auto shape = w->Shape();
-      std::swap(point, transformed);
-      if ((w->pack_frame_texture_bounds == std::nullopt) || shape.contains(point.x, point.y)) {
-        if (w->VisitChildren(dfs) == ControlFlow::Stop) {
-          return ControlFlow::Stop;
-        }
-        if ((drop_target = w->CanDrop())) {
-          return ControlFlow::Stop;
-        }
-      }
-      std::swap(point, transformed);
+static gui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
+  for (auto& child : widget.Children()) {
+    if (auto drop_target = FindDropTarget(a, *child)) {
+      return drop_target;
     }
-    return ControlFlow::Continue;
-  };
+  }
+  Vec2 point = a.pointer.PositionWithin(widget);
+  if ((widget.pack_frame_texture_bounds == std::nullopt) ||
+      widget.Shape().contains(point.x, point.y)) {
+    if (auto drop_target = widget.CanDrop()) {
+      return drop_target;
+    }
+  }
+  return nullptr;
+}
 
-  std::shared_ptr<Widget> window_arr[] = {a.pointer.window.SharedPtr<Widget>()};
-  dfs(window_arr);
-  return drop_target;
+static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
+  return FindDropTarget(a, a.pointer.window);
 }
 
 void DragLocationAction::Update() {

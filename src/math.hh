@@ -267,6 +267,10 @@ union Rect {
   }
   constexpr float Discance(Vec2 point) { return sqrtf(DistanceSquared(point)); }
 
+  constexpr bool Contains(const Rect& other) const {
+    return left <= other.left && right >= other.right && bottom <= other.bottom && top >= other.top;
+  }
+
   void ExpandToInclude(Vec2 point) {
     left = std::min(left, point.x);
     right = std::max(right, point.x);

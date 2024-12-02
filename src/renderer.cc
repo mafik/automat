@@ -70,6 +70,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     int next_job = -1;
     bool same_scale;
     bool wants_to_draw = false;
+    bool surface_reusable = false;  // set to true if existing surface covers the visible area
     SkMatrix window_to_local;
     SkMatrix local_to_window;     // copied over to Widget, if drawn
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
@@ -178,7 +179,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
       widget->pack_frame_texture_bounds = widget->TextureBounds();
       widget->pack_frame_texture_anchors = widget->TextureAnchors();
-      bool intersects = true;
+      bool visible = true;
       if (widget->pack_frame_texture_bounds.has_value()) {
         // Compute the bounds of the widget - in local & root coordinates
         SkRect root_bounds;
@@ -187,19 +188,24 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         // Clip the `root_bounds` to the window bounds;
         if (root_bounds.width() * root_bounds.height() < 512 * 512) {
           // Render small objects without clipping
-          intersects = SkRect::Intersects(root_bounds, window_bounds_px);
+          visible = SkRect::Intersects(root_bounds, window_bounds_px);
         } else {
           // This mutates the `root_bounds` - they're clipped to `window_bounds_px`!
-          intersects = root_bounds.intersect(window_bounds_px);
+          visible = root_bounds.intersect(window_bounds_px);
         }
 
         root_bounds.roundOut(&node.surface_bounds_root);
+
+        Rect new_visible_bounds;
+        node.window_to_local.mapRect(&new_visible_bounds.sk, root_bounds);
+        Rect& old_rendered_bounds = widget->surface_bounds_local;
+        node.surface_reusable = old_rendered_bounds.Contains(new_visible_bounds);
       } else {
         node.verdict = Verdict::Skip_NoTexture;
       }
 
       // Advance the parent to current widget & visit its children.
-      if (!intersects) {
+      if (!visible) {
         node.verdict = Verdict::Skip_Clipped;
       } else {
         parent = tree.size() - 1;
@@ -264,7 +270,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       if (node.verdict == Verdict::Skip_Clipped) {
         continue;
       }
-      if (node.same_scale && !node.wants_to_draw) {
+      if (node.same_scale && node.surface_reusable && !node.wants_to_draw) {
         continue;
       }
 

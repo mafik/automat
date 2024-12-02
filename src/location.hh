@@ -267,6 +267,9 @@ struct Location : public gui::Widget {
   SkPath FieldShape(Object&) const;
 
   // Call this when the position of this location changes to update the autoconnect arguments.
+  //
+  // IMPORTANT: this function uses the widget-based screen coordinates to determine the position
+  // of the object. Pay attention to the parent location's animation_state!
   void UpdateAutoconnectArgs();
 
   // DEPRECATED. Returns the position in parent machine's coordinates where the connections for this

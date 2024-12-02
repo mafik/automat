@@ -8,6 +8,7 @@
 #include "drag_action.hh"
 #include "gui_connection_widget.hh"
 #include "svg.hh"
+#include "widget.hh"
 #include "window.hh"
 
 using namespace maf;
@@ -132,7 +133,7 @@ void Argument::NearbyCandidates(
   }
   // Query nearby objects in the parent machine
   if (auto parent_machine = here.ParentAs<Machine>()) {
-    Vec2 center = here.position + here.object->ArgStart(*this).pos;
+    Vec2 center = this->Start(*here.object, *parent_machine).pos;
     parent_machine->Nearby(center, radius, [&](Location& other) -> void* {
       if (&other == &here) {
         return nullptr;
@@ -146,10 +147,6 @@ void Argument::NearbyCandidates(
       }
       Vec<Vec2AndDir> to_points;
       other.object->ConnectionPositions(to_points);
-      SkMatrix m = other.ParentAs<gui::Widget>()->TransformFromChild(other);
-      for (auto& vec_and_dir : to_points) {
-        vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
-      }
       callback(other, to_points);
       return nullptr;
     });
@@ -171,9 +168,10 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
         result = &l;
         Rect object_bounds = result->object->Shape().getBounds();
         l.position = here.position + here.object->ArgStart(*this).pos - object_bounds.TopCenter();
-        l.UpdateAutoconnectArgs();
         PositionBelow(here, l);
-        AnimateGrowFrom(here, l);
+        AnimateGrowFrom(here,
+                        l);  // this must go before UpdateAutoconnectArgs because of animation_state
+        l.UpdateAutoconnectArgs();
       }
     }
   }

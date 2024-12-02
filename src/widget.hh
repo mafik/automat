@@ -186,7 +186,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   // called after a widget hierarchy is constructed.
   // Once Widget & Object classes are separated, and Widgets no longer use shared_ptr, this should
   // be replaced with a proper `parent` initialization in the Widget constructor.
-  void FixParents();
+  virtual void FixParents();
 
   virtual void PointerOver(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}

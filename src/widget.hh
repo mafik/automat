@@ -253,7 +253,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   // TEMPORARY iterator-based interface for traversing children.
   // Refactoring plan:
-  // TODO: Replace all usages of VisitChildren with this
   // TODO: Merge this with PointerVisitChildren
   // TODO: Provide a way for Widgets to use their own iterators (polymorphic logic wrapper within
   // iterator)

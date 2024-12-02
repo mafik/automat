@@ -21,7 +21,6 @@
 
 #include "../build/generated/embedded.hh"
 #include "animation.hh"
-#include "control_flow.hh"
 #include "font.hh"
 #include "global_resources.hh"
 #include "log.hh"
@@ -389,28 +388,20 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
 }
 
 void Widget::FixParents() {
-  Visitor visitor = [this](maf::Span<std::shared_ptr<Widget>> children) {
-    for (auto& child : children) {
-      if (child->parent.get() != this) {
-        // TODO: uncomment this and fix all instances of this error
-        // ERROR << "Widget " << child->Name() << " has parent " << f("%p", child->parent.get())
-        //       << " but should have " << this->Name() << f(" (%p)", this);
-        child->parent = this->SharedPtr();
-      }
-      child->FixParents();
+  for (auto& child : Children()) {
+    if (child->parent.get() != this) {
+      // TODO: uncomment this and fix all instances of this error
+      // ERROR << "Widget " << child->Name() << " has parent " << f("%p", child->parent.get())
+      //       << " but should have " << this->Name() << f(" (%p)", this);
+      child->parent = this->SharedPtr();
     }
-    return ControlFlow::Continue;
-  };
-  VisitChildren(visitor);
+    child->FixParents();
+  }
 }
 void Widget::ForgetParents() {
   parent = nullptr;
-  Visitor visitor = [](Span<shared_ptr<Widget>> children) {
-    for (auto& child : children) {
-      child->ForgetParents();
-    }
-    return ControlFlow::Continue;
-  };
-  VisitChildren(visitor);
+  for (auto& child : Children()) {
+    child->ForgetParents();
+  }
 }
 }  // namespace automat::gui

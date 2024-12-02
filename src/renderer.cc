@@ -52,7 +52,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   auto now = window->timer.now;
   auto window_bounds_px =
       SkRect::MakeWH(round(window->size.width * window->display_pixels_per_meter),
-                     round(window->size.width * window->display_pixels_per_meter));
+                     round(window->size.height * window->display_pixels_per_meter));
 
   enum class Verdict {
     Unknown = 0,
@@ -189,7 +189,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
           // Render small objects without clipping
           intersects = SkRect::Intersects(root_bounds, window_bounds_px);
         } else {
-          // This mutates the `root_bounds` - they're clipped to `canvas_bounds`!
+          // This mutates the `root_bounds` - they're clipped to `window_bounds_px`!
           intersects = root_bounds.intersect(window_bounds_px);
         }
 

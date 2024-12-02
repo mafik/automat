@@ -38,21 +38,16 @@ namespace automat::gui {
 animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto phase = animation::Finished;
-  Visitor visitor = [&](Span<shared_ptr<Widget>> widgets) {
-    std::ranges::reverse_view rv{widgets};
-    for (auto& widget : rv) {
-      canvas.save();
-      const SkMatrix down = this->TransformToChild(*widget);
-      SkMatrix up;
-      if (down.invert(&up)) {
-        canvas.concat(up);
-      }
-      phase |= widget->PreDraw(ctx);
-      canvas.restore();
+  for (auto& widget : ranges::reverse_view(Children())) {
+    canvas.save();
+    const SkMatrix down = this->TransformToChild(*widget);
+    SkMatrix up;
+    if (down.invert(&up)) {
+      canvas.concat(up);
     }
-    return ControlFlow::Continue;
-  };
-  const_cast<Widget*>(this)->VisitChildren(visitor);
+    phase |= widget->PreDraw(ctx);
+    canvas.restore();
+  }
   return phase;
 }
 

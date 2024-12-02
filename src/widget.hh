@@ -257,7 +257,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   // TODO: Merge this with PointerVisitChildren
   // TODO: Provide a way for Widgets to use their own iterators (polymorphic logic wrapper within
   // iterator)
-  struct ChildrenView {
+  struct ChildrenView : std::ranges::view_interface<ChildrenView> {
     maf::Vec<std::shared_ptr<Widget>> children;
     ChildrenView(Widget& parent) {
       Visitor v = [this](maf::Span<std::shared_ptr<Widget>> span) {
@@ -268,23 +268,12 @@ struct Widget : public std::enable_shared_from_this<Widget> {
       };
       parent.VisitChildren(v);
     }
-    struct end_iterator {};
-    struct iterator {
-      ChildrenView& view;
-      int i = 0;
-      iterator(ChildrenView& view) : view(view) {}
-      std::shared_ptr<Widget>& operator*() { return view.children[i]; }
-      iterator& operator++() {
-        ++i;
-        return *this;
-      }
-      bool operator!=(const end_iterator&) { return i < view.children.size(); }
-    };
-    iterator begin() { return iterator(*this); }
-    end_iterator end() { return end_iterator(); }
+    using iterator = std::shared_ptr<Widget>*;
+    iterator begin() { return children.data(); }
+    iterator end() { return children.data() + children.size(); }
   };
 
-  ChildrenView Children() { return ChildrenView{*this}; }
+  ChildrenView Children() const { return ChildrenView{*const_cast<Widget*>(this)}; }
 
   struct ParentsView {
     std::shared_ptr<Widget> start;

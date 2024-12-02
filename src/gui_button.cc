@@ -14,7 +14,6 @@
 #include "animation.hh"
 #include "audio.hh"
 #include "color.hh"
-#include "control_flow.hh"
 #include "embedded.hh"
 #include "gui_constants.hh"
 #include "pointer.hh"
@@ -118,19 +117,16 @@ animation::Phase Button::Update(time::Timer& timer) {
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
 
-  gui::Visitor visitor = [fg](Span<shared_ptr<Widget>> children) {
-    for (auto& child : children) {
-      if (auto paint = PaintMixin::Get(child.get())) {
-        if (paint->getColor() == fg) {
-          continue;
-        }
-        paint->setColor(fg);
-        paint->setAntiAlias(true);
+  for (auto& child : Children()) {
+    if (auto paint = PaintMixin::Get(child.get())) {
+      if (paint->getColor() == fg) {
+        continue;
       }
+      paint->setColor(fg);
+      paint->setAntiAlias(true);
     }
-    return ControlFlow::Continue;
-  };
-  const_cast<Button*>(this)->VisitChildren(visitor);
+  }
+
   return phase;
 }
 

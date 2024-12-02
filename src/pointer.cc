@@ -11,6 +11,7 @@
 #include "window.hh"
 
 using namespace maf;
+using namespace std;
 
 namespace automat::gui {
 
@@ -52,43 +53,40 @@ Pointer::~Pointer() {
     window.pointers.erase(it);
   }
 }
+
+static bool FillPath(Pointer& p, Widget& w) {
+  p.path.push_back(w.WeakPtr());
+  Vec2 point = TransformDown(w).mapPoint(p.pointer_position);
+  auto shape = w.Shape();
+  bool p_inside_w = shape.contains(point.x, point.y);
+  bool w_is_unbounded = w.pack_frame_texture_bounds == std::nullopt;
+
+  if (p_inside_w || w_is_unbounded) {
+    for (auto& child : w.Children()) {
+      if (w.AllowChildPointerEvents(*child)) {
+        if (FillPath(p, *child)) {
+          return true;
+        }
+      }
+    }
+  }
+  // This condition happens at most once per search. All of the parent stack frames are
+  // short-circuited by `return true`.
+  if (p_inside_w) {
+    return true;
+  }
+
+  p.path.pop_back();
+  return false;
+}
+
 void Pointer::UpdatePath() {
   auto old_path = path;
 
   path.clear();
-  Vec2 point = pointer_position;
 
-  Visitor dfs = [&](Span<std::shared_ptr<Widget>> widgets) -> ControlFlow {
-    for (auto w : widgets) {
-      if (w->parent && !w->parent->AllowChildPointerEvents(*w)) {
-        continue;
-      }
-      Vec2 transformed;
-      if (!path.empty()) {
-        transformed = w->parent->TransformToChild(*w).mapPoint(point);
-      } else {
-        transformed = point;
-      }
+  FillPath(*this, window);
 
-      auto shape = w->Shape();
-      path.push_back(w);
-      std::swap(point, transformed);
-      if (shape.contains(point.x, point.y)) {
-        w->VisitChildren(dfs);
-        return ControlFlow::Stop;
-      } else if (w->pack_frame_texture_bounds == std::nullopt) {
-        if (w->VisitChildren(dfs) == ControlFlow::Stop) {
-          return ControlFlow::Stop;
-        }
-      }
-      std::swap(point, transformed);
-      path.pop_back();
-    }
-    return ControlFlow::Continue;
-  };
-
-  std::shared_ptr<Widget> window_arr[] = {window.SharedPtr<Widget>()};
-  dfs(window_arr);
   hover = path.empty() ? nullptr : path.back().lock();
 
   // Try to get references to all widgets in the path - during last & this frame.

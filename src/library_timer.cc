@@ -470,7 +470,7 @@ animation::Phase TimerDelay::Update(time::Timer& timer) {
       hand_target = 90;
     }
     animation::WrapModulo(hand_degrees.value, hand_target, 360);
-    phase |= hand_degrees.SpringTowards(hand_target, timer.d, kHandPeriod.count(), 0.01);
+    phase |= hand_degrees.SpringTowards(hand_target, timer.d, kHandPeriod.count(), 0.05);
   }
   return phase;
 }

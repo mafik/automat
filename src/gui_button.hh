@@ -95,7 +95,7 @@ struct ToggleButton : Widget {
   std::shared_ptr<Button> on;
   std::shared_ptr<Button> off;
 
-  float filling;
+  float filling = 0;
   float time_seconds;  // used for waving animation
 
   ToggleButton(std::shared_ptr<Button> on, std::shared_ptr<Button> off) : on(on), off(off) {}

@@ -785,12 +785,17 @@ unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger bt
   return Object::FindAction(ptr, btn);
 }
 
+animation::Phase Timeline::Update(time::Timer& timer) {
+  auto phase = state == kPaused ? animation::Finished : animation::Animating;
+  phase |= zoom.Tick(timer);
+  return phase;
+}
+
 animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
 
   auto wood_case_rrect = WoodenCaseRRect(*this);
   SkPath wood_case_path = SkPath::RRect(wood_case_rrect);
-  auto phase = state == kPaused ? animation::Finished : animation::Animating;
 
   {  // Wooden case, light & shadow
     canvas.save();
@@ -832,8 +837,6 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
   // canvas.drawRRect(kDisplayRRect.sk, kDisplayPaint);
 
   constexpr float PI = numbers::pi;
-
-  phase |= zoom.Tick(dctx.timer);
 
   time::T max_track_length = MaxTrackLength();
   float current_pos_ratio = CurrentPosRatio(*this, dctx.timer.now);
@@ -1013,7 +1016,7 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
   for (size_t i = 0; i < tracks.size(); ++i) {
     tracks_arr[i] = tracks[i];
   }
-  phase |= DrawChildrenSpan(dctx, SpanOfArr(tracks_arr, tracks.size()));
+  DrawChildrenSpan(dctx, SpanOfArr(tracks_arr, tracks.size()));
 
   canvas.restore();  // unclip
 
@@ -1051,7 +1054,7 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
             kPlasticTop - kScrewMargin - kScrewRadius);
 
   shared_ptr<Widget> arr[] = {run_button, prev_button, next_button};
-  phase |= DrawChildrenSpan(dctx, arr);
+  DrawChildrenSpan(dctx, arr);
 
   canvas.save();
   canvas.clipPath(window_path, true);
@@ -1176,7 +1179,7 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
     }
   }
   canvas.restore();  // unclip
-  return phase;
+  return animation::Finished;
 }
 
 SkPath Timeline::Shape() const {
@@ -1328,6 +1331,7 @@ LongRunning* Timeline::OnRun(Location& here) {
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   TimelineScheduleAt(*this, now);
   run_button->InvalidateDrawCache();
+  InvalidateDrawCache();
   return this;
 }
 

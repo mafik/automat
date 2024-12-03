@@ -252,6 +252,16 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
                          node.window_to_local.getSkewY() == widget.window_to_local.getSkewY());
     }
 
+    // Propagate `wants_to_draw` of textureless widgets to their parents.
+    // Reverse order means that long chains of textureless widgets will eventually mark some parent
+    // as `wants_to_draw`.
+    for (int i = tree.size() - 1; i >= 0; --i) {
+      auto& node = tree[i];
+      if (node.verdict == Verdict::Skip_NoTexture && node.wants_to_draw) {
+        tree[node.parent].wants_to_draw = true;
+      }
+    }
+
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
       auto& widget = *node.widget;

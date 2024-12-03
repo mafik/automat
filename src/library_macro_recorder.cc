@@ -105,14 +105,11 @@ std::shared_ptr<Object> MacroRecorder::Clone() const {
   return clone;
 }
 
-#pragma region Draw
-animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
-  auto& canvas = dctx.canvas;
+animation::Phase MacroRecorder::Update(time::Timer& timer) {
   auto phase = keylogging ? animation::Animating : animation::Finished;
 
-  phase |= animation::ExponentialApproach(keylogging ? 1 : 0, dctx.DeltaT(), 0.2,
+  phase |= animation::ExponentialApproach(keylogging ? 1 : 0, timer.d, 0.2,
                                           animation_state.eye_rotation_speed);
-
   float eyes_open_target;
   if (keylogging) {
     eyes_open_target = 1;
@@ -122,8 +119,37 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
     eyes_open_target = 0;
   }
 
-  phase |= animation::ExponentialApproach(eyes_open_target, dctx.DeltaT(), 0.2,
-                                          animation_state.eyes_open);
+  phase |=
+      animation::ExponentialApproach(eyes_open_target, timer.d, 0.2, animation_state.eyes_open);
+
+  auto local_to_window = TransformUp(*this);
+  auto main_pointer_screen = GetMainPointerScreenPos();
+  auto top_window = dynamic_cast<gui::Window*>(&RootWidget());
+
+  auto UpdateEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) -> animation::Phase {
+    auto eye_window = local_to_window.mapPoint(center.sk);
+    auto eye_screen = WindowToScreen(eye_window);
+    auto eye_delta = main_pointer_screen - eye_screen;
+    auto eye_dir = Normalize(eye_delta);
+    float z = local_to_window.mapRadius(kEyeRadius * 2) * top_window->display_pixels_per_meter;
+    auto eye_dist_3d = Length(Vec3(eye_delta.x, eye_delta.y, z));
+    auto eye_dist_2d = Length(eye_delta);
+
+    float dist = eye_dist_2d / eye_dist_3d;
+
+    Vec2 target = Vec2(eye_dir.x * dist, -eye_dir.y * dist);
+    return googly.SpringTowards(target, timer.d, 0.5, 0.2);
+  };
+  phase |= UpdateEye(kLeftEyeCenter, animation_state.googly_left);
+  phase |= UpdateEye(kRightEyeCenter, animation_state.googly_right);
+
+  return phase;
+}
+
+#pragma region Draw
+animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
+  auto& canvas = dctx.canvas;
+
   animation_state.eye_rotation -= dctx.timer.d * 360 * animation_state.eye_rotation_speed;
   if (animation_state.eye_rotation < 0) {
     animation_state.eye_rotation += 360;
@@ -131,12 +157,6 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
   {  // Draw the eyes
     auto sharingan = SharinganColor();
-
-    auto local_to_window = TransformUp(*this);
-
-    auto top_window = dynamic_cast<gui::Window*>(&RootWidget());
-
-    auto main_pointer_screen = GetMainPointerScreenPos();
 
     auto size = sharingan->containerSize();
     float s = 0.9 * kEyeRadius * 2 / size.height();
@@ -148,19 +168,6 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
         SkPaint white_eye_paint = SkPaint();
         white_eye_paint.setColor(SK_ColorWHITE);
         canvas.drawRect(bounds, white_eye_paint);
-
-        auto eye_window = local_to_window.mapPoint(center.sk);
-        auto eye_screen = WindowToScreen(eye_window);
-        auto eye_delta = main_pointer_screen - eye_screen;
-        auto eye_dir = Normalize(eye_delta);
-        float z = local_to_window.mapRadius(kEyeRadius * 2) * top_window->display_pixels_per_meter;
-        auto eye_dist_3d = Length(Vec3(eye_delta.x, eye_delta.y, z));
-        auto eye_dist_2d = Length(eye_delta);
-
-        float dist = eye_dist_2d / eye_dist_3d;
-
-        Vec2 target = Vec2(eye_dir.x * dist, -eye_dir.y * dist);
-        phase |= googly.SpringTowards(target, dctx.DeltaT(), 0.5, 0.2);
 
         Vec2 pos = center + googly.value * kEyeRadius * 0.5;
         canvas.save();
@@ -223,7 +230,7 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
   macro_recorder_front_color.draw(canvas);
 
   DrawChildren(dctx);
-  return phase;
+  return animation::Finished;
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {

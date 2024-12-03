@@ -27,8 +27,10 @@ struct LongRunning;
 struct ObjectAnimationState {
   animation::SpringV2<float> scale;
   animation::SpringV2<Vec2> position;
-  animation::Approach<> transparency;
-  animation::Approach<> highlight;
+  float transparency = 0;
+  float highlight = 0;
+  float highlight_target = 0;
+  float time_seconds = 0;  // used to animate dashed line
   animation::SpringV2<float> elevation;
 
   ObjectAnimationState();
@@ -256,11 +258,9 @@ struct Location : public gui::Widget {
   }
   void SetNumber(double number);
 
+  animation::Phase Update(time::Timer& timer) override;
   animation::Phase PreDraw(gui::DrawContext&) const override;
   animation::Phase Draw(gui::DrawContext&) const override;
-  // Location has no texture attached so it cacn't be invalidated. It draws into its parent
-  // texture instead. This override allows one to invalidate the parent texture.
-  void InvalidateDrawCache() const override;
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   SkPath Shape() const override;

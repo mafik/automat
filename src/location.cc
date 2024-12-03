@@ -179,9 +179,26 @@ SkPath Outset(const SkPath& path, float distance) {
   }
 }
 
+animation::Phase Location::Update(time::Timer& timer) {
+  auto phase = animation::Finished;
+
+  auto& state = GetAnimationState();
+  if (state.Tick(timer.d, position, scale) == animation::Animating) {
+    phase = animation::Animating;
+    InvalidateConnectionWidgets(true, false);
+  }
+
+  phase |= animation::ExponentialApproach(state.highlight_target, timer.d, 0.1, state.highlight);
+  phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.transparency);
+  if (state.highlight > 0.01f) {
+    phase = animation::Animating;
+    state.time_seconds = timer.NowSeconds();
+  }
+  return phase;
+}
+
 animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
-  auto phase = animation::Finished;
   SkPath my_shape;
   if (object) {
     my_shape = object->Shape();
@@ -189,15 +206,8 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
     my_shape = Shape();
   }
   SkRect bounds = my_shape.getBounds();
-
   auto& state = GetAnimationState();
-  if (state.Tick(ctx.DeltaT(), position, scale) == animation::Animating) {
-    phase = animation::Animating;
-    InvalidateConnectionWidgets(true, false);
-  }
 
-  phase |= state.highlight.Tick(ctx.timer);
-  phase |= state.transparency.Tick(ctx.timer);
   bool using_layer = false;
   if (state.transparency > 0.01) {
     using_layer = true;
@@ -205,8 +215,7 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   }
 
   if (state.highlight > 0.01f) {  // Draw dashed highlight outline
-    phase = animation::Animating;
-    SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight.value);
+    SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     auto from_child = TransformFromChild(*object);
     outset_shape.transform(from_child);
@@ -220,12 +229,11 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
       return paint;
     }();
     SkPaint dash_paint(kHighlightPaint);
-    dash_paint.setAlphaf(state.highlight.value);
+    dash_paint.setAlphaf(state.highlight);
     float intervals[] = {0.0035, 0.0015};
     double ignore;
-    time::Duration period = 200s;
-    float phase =
-        std::fmod(ctx.timer.now.time_since_epoch().count(), period.count()) / period.count();
+    float period_seconds = 200;
+    float phase = std::fmod(state.time_seconds, period_seconds) / period_seconds;
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));
     ctx.canvas.drawPath(outset_shape, dash_paint);
   }
@@ -250,7 +258,7 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
     canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
   }
 
-  phase |= DrawChildren(ctx);
+  auto phase = DrawChildren(ctx);
 
   // Draw debug text log below the Location
   float n_lines = 1;
@@ -366,9 +374,7 @@ animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_positi
   return phase;
 }
 
-ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}), elevation(0) {
-  transparency.speed = 5;
-}
+ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}), elevation(0) {}
 ObjectAnimationState& Location::GetAnimationState() const { return animation_state; }
 Location::~Location() {
   if (long_running) {
@@ -434,7 +440,7 @@ void AnimateGrowFrom(Location& source, Location& grown) {
   animation_state.scale.value = 0.5;
   Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
   animation_state.position.value = source_center;
-  animation_state.transparency.value = 1;
+  animation_state.transparency = 1;
 }
 
 animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
@@ -617,14 +623,6 @@ void Location::UpdateAutoconnectArgs() {
         other->ConnectTo(*new_target, arg);
       }
     });
-  }
-}
-
-void Location::InvalidateDrawCache() const {
-  if (auto widget = ParentAs<Widget>()) {
-    widget->InvalidateDrawCache();
-  } else {
-    root_machine->InvalidateDrawCache();
   }
 }
 }  // namespace automat

@@ -366,7 +366,8 @@ DragConnectionAction::~DragConnectionAction() {
   widget.manual_position.reset();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      l->animation_state.highlight.target = 0;
+      l->animation_state.highlight_target = 0;
+      l->InvalidateDrawCache();
     }
   }
 }
@@ -397,9 +398,9 @@ void DragConnectionAction::Begin() {
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       if (CanConnect(widget.from, *l, widget.arg)) {
-        l->GetAnimationState().highlight.target = 1;
+        l->GetAnimationState().highlight_target = 1;
       } else {
-        l->GetAnimationState().highlight.target = 0;
+        l->GetAnimationState().highlight_target = 0;
       }
       l->InvalidateDrawCache();
     }

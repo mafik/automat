@@ -7,14 +7,14 @@
 namespace automat::gui {
 
 struct AlignCenter : Widget {
-  std::unique_ptr<Widget> child;
+  std::shared_ptr<Widget> child;
 
-  AlignCenter(std::unique_ptr<Widget>&& child);
+  AlignCenter(std::shared_ptr<Widget>&& child);
   SkPath Shape() const override;
-  ControlFlow VisitChildren(Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const Widget& child) const override;
 };
 
-std::unique_ptr<Widget> MakeAlignCenter(std::unique_ptr<Widget>&& child);
+std::shared_ptr<Widget> MakeAlignCenter(std::shared_ptr<Widget>&& child);
 
 }  // namespace automat::gui

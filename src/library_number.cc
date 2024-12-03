@@ -10,7 +10,6 @@
 #include <charconv>
 #include <memory>
 
-#include "control_flow.hh"
 #include "drag_action.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
@@ -180,12 +179,21 @@ animation::Phase Number::Draw(gui::DrawContext& ctx) const {
 
 SkPath Number::Shape() const { return kNumberShape; }
 
-ControlFlow Number::VisitChildren(gui::Visitor& visitor) {
-  std::shared_ptr<Widget> arr[] = {dot,       backspace, digits[0], digits[1], digits[2],
-                                   digits[3], digits[4], digits[5], digits[6], digits[7],
-                                   digits[8], digits[9], text_field};
-  if (visitor(arr) == ControlFlow::Stop) return ControlFlow::Stop;
-  return ControlFlow::Continue;
+void Number::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+  children.reserve(13);
+  children.push_back(dot);
+  children.push_back(backspace);
+  children.push_back(digits[0]);
+  children.push_back(digits[1]);
+  children.push_back(digits[2]);
+  children.push_back(digits[3]);
+  children.push_back(digits[4]);
+  children.push_back(digits[5]);
+  children.push_back(digits[6]);
+  children.push_back(digits[7]);
+  children.push_back(digits[8]);
+  children.push_back(digits[9]);
+  children.push_back(text_field);
 }
 
 SkMatrix Number::TransformToChild(const Widget& child) const {

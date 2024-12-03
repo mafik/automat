@@ -558,10 +558,8 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   return phase;
 }
 
-ControlFlow TimerDelay::VisitChildren(gui::Visitor& visitor) {
-  std::shared_ptr<Widget> arr[] = {text_field};
-  if (visitor(arr) == ControlFlow::Stop) return ControlFlow::Stop;
-  return ControlFlow::Continue;
+void TimerDelay::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+  children.push_back(text_field);
 }
 
 SkPath TimerDelay::FieldShape(Object& field) const {

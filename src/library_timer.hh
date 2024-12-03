@@ -52,7 +52,7 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;
   void Updated(Location& here, Location& updated) override;
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const Widget& child) const override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 

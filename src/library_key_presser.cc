@@ -8,7 +8,6 @@
 #include <memory>
 
 #include "../build/generated/embedded.hh"
-#include "control_flow.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
 #include "library_macros.hh"
@@ -119,8 +118,8 @@ void KeyPresser::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key k) {
   SetKey(k.physical);
 }
 
-ControlFlow KeyPresser::VisitChildren(gui::Visitor& visitor) {
-  return visitor(SpanOfArr<shared_ptr<Widget>>((shared_ptr<Widget>*)&shortcut_button, 1));
+void KeyPresser::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+  children.push_back(shortcut_button);
 }
 
 SkMatrix KeyPresser::TransformToChild(const Widget& child) const { return SkMatrix::I(); }

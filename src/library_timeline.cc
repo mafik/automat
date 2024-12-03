@@ -1205,19 +1205,14 @@ Vec2AndDir Timeline::ArgStart(const Argument& arg) {
   return Object::ArgStart(arg);
 }
 
-ControlFlow Timeline::VisitChildren(gui::Visitor& visitor) {
-  shared_ptr<Widget> arr[] = {run_button, prev_button, next_button};
-  if (visitor(arr) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  shared_ptr<Widget> tracks_arr[tracks.size()];
+void Timeline::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+  children.reserve(3 + tracks.size());
+  children.push_back(run_button);
+  children.push_back(prev_button);
+  children.push_back(next_button);
   for (size_t i = 0; i < tracks.size(); ++i) {
-    tracks_arr[i] = tracks[i];
+    children.push_back(tracks[i]);
   }
-  if (visitor({tracks_arr, tracks.size()}) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  return ControlFlow::Continue;
 }
 
 SkMatrix Timeline::TransformToChild(const Widget& child) const {

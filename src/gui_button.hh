@@ -7,7 +7,6 @@
 #include <memory>
 
 #include "animation.hh"
-#include "control_flow.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "pointer.hh"
@@ -50,8 +49,8 @@ struct Button : Widget {
 
   SkRect ChildBounds() const;
 
-  ControlFlow VisitChildren(Visitor& visitor) override {
-    return visitor(maf::SpanOfArr(&child, 1));
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
+    children.push_back(child);
   }
 
   SkMatrix TransformToChild(const Widget& child) const override;
@@ -100,23 +99,15 @@ struct ToggleButton : Widget {
 
   ToggleButton(std::shared_ptr<Button> on, std::shared_ptr<Button> off) : on(on), off(off) {}
 
-  ControlFlow VisitChildren(Visitor& visitor) override {
-    std::shared_ptr<Widget> children[] = {OnWidget(), off};
-    return visitor(children);
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
+    children.push_back(on);
+    children.push_back(off);
   }
   bool AllowChildPointerEvents(Widget& child) const override {
     if (Filled()) {
-      if (&child == const_cast<ToggleButton*>(this)->OnWidget().get()) {
-        return true;
-      } else {
-        return false;
-      }
+      return &child == const_cast<ToggleButton*>(this)->OnWidget().get();
     } else {
-      if (&child == off.get()) {
-        return true;
-      } else {
-        return false;
-      }
+      return &child == off.get();
     }
   }
 

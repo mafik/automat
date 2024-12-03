@@ -20,7 +20,6 @@
 #include "animation.hh"
 #include "base.hh"
 #include "color.hh"
-#include "control_flow.hh"
 #include "drag_action.hh"
 #include "font.hh"
 #include "format.hh"
@@ -28,7 +27,6 @@
 #include "gui_constants.hh"
 #include "math.hh"
 #include "root.hh"
-#include "span.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
 #include "window.hh"
@@ -157,21 +155,10 @@ SkPath Location::FieldShape(Object& field) const {
   return SkPath();
 }
 
-ControlFlow Location::VisitChildren(gui::Visitor& visitor) {
+void Location::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   if (object) {
-    shared_ptr<Widget> arr[] = {object};
-    if (visitor(arr) == ControlFlow::Stop) {
-      return ControlFlow::Stop;
-    }
+    children.push_back(object);
   }
-  if constexpr (false) {
-    // Keeping this around because locations will eventually be toggleable between frame & no frame
-    // modes.
-    // if (visitor(run_button) == ControlFlow::Stop) {
-    //   return ControlFlow::Stop;
-    // }
-  }
-  return ControlFlow::Continue;
 }
 
 Optional<Rect> Location::TextureBounds() const { return nullopt; }

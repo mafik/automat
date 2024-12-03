@@ -120,12 +120,8 @@ DragLocationAction::~DragLocationAction() {
     location->ForgetParents();
   }
 }
-ControlFlow DragLocationWidget::VisitChildren(gui::Visitor& visitor) {
-  std::shared_ptr<gui::Widget> child = action.location;
-  if (visitor(maf::SpanOfArr(&child, 1)) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  return ControlFlow::Continue;
+void DragLocationWidget::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+  children.push_back(action.location);
 }
 SkMatrix DragLocationWidget::TransformToChild(const gui::Widget& child) const {
   return SkMatrix::I();

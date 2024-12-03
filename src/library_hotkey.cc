@@ -367,13 +367,13 @@ animation::Phase HotKey::Draw(gui::DrawContext& ctx) const {
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
-ControlFlow HotKey::VisitChildren(gui::Visitor& visitor) {
-  std::shared_ptr<Widget> arr[] = {power_button, ctrl_button,    alt_button,
-                                   shift_button, windows_button, shortcut_button};
-  if (visitor(arr) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  return ControlFlow::Continue;
+void HotKey::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+  children.push_back(power_button);
+  children.push_back(ctrl_button);
+  children.push_back(alt_button);
+  children.push_back(shift_button);
+  children.push_back(windows_button);
+  children.push_back(shortcut_button);
 }
 
 SkMatrix HotKey::TransformToChild(const Widget& child) const {

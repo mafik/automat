@@ -4,20 +4,16 @@
 
 #include <include/core/SkMatrix.h>
 
-#include "control_flow.hh"
-
 namespace automat::gui {
 
-AlignCenter::AlignCenter(std::unique_ptr<Widget>&& child) : child(std::move(child)) {}
+AlignCenter::AlignCenter(std::shared_ptr<Widget>&& child) : child(std::move(child)) {}
 
 SkPath AlignCenter::Shape() const { return SkPath(); }
 
-ControlFlow AlignCenter::VisitChildren(Visitor& visitor) {
+void AlignCenter::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   if (child) {
-    Widget* arr[] = {this->child.get()};
-    return visitor(arr);
+    children.push_back(child);
   }
-  return ControlFlow::Continue;
 }
 SkMatrix AlignCenter::TransformToChild(const Widget& child_arg) const {
   if (&child_arg != this->child.get()) {

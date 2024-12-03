@@ -8,7 +8,6 @@
 
 #include "animation.hh"
 #include "base.hh"
-#include "control_flow.hh"
 #include "deserializer.hh"
 #include "drag_action.hh"
 #include "keyboard.hh"
@@ -93,7 +92,7 @@ struct Window final : Widget, DropTarget {
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
 
   void Zoom(float delta) const;
-  ControlFlow VisitChildren(Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const Widget& child) const override {
     if (&child == toolbar.get()) {
       return SkMatrix::Translate(-size.x / 2, 0);

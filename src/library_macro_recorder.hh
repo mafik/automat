@@ -47,8 +47,8 @@ struct MacroRecorder : LiveObject,
   std::shared_ptr<Object> Clone() const override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
-  ControlFlow VisitChildren(gui::Visitor& visitor) override {
-    return visitor(maf::SpanOfArr(&record_button, 1));
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
+    children.push_back(record_button);
   }
 
   void Args(std::function<void(Argument&)> cb) override;

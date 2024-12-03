@@ -276,7 +276,7 @@ struct Location : public gui::Widget {
   // argument should start.
   // TODO: replace with Argument::Start
   Vec2AndDir ArgStart(Argument&);
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   maf::Optional<Rect> TextureBounds() const override;
 
   ////////////////////////////

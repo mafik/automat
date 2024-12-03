@@ -10,7 +10,6 @@
 #include "audio.hh"
 #include "random.hh"
 #include "root.hh"
-#include "span.hh"
 #include "textures.hh"
 #include "widget.hh"
 #include "window.hh"
@@ -146,15 +145,11 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
   return phase;
 }
 
-ControlFlow Toolbar::VisitChildren(gui::Visitor& visitor) {
-  std::shared_ptr<Widget> arr[buttons.size()];
+void Toolbar::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+  children.reserve(buttons.size());
   for (size_t i = 0; i < buttons.size(); ++i) {
-    arr[i] = buttons[i];
+    children.push_back(buttons[i]);
   }
-  if (auto ret = visitor(maf::SpanOfArr(arr, buttons.size())); ret == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  return ControlFlow::Continue;
 }
 
 void Toolbar::AddObjectPrototype(const std::shared_ptr<Object>& new_proto) {

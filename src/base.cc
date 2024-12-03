@@ -201,17 +201,13 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
 
 Machine::Machine() {}
 
-ControlFlow Machine::VisitChildren(gui::Visitor& visitor) {
+void Machine::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   int i = 0;
   Size n = locations.size();
-  std::shared_ptr<Widget> arr[n];
+  children.reserve(n);
   for (auto& it : locations) {
-    arr[i++] = it;
+    children.push_back(it);
   }
-  if (visitor(maf::SpanOfArr(arr, n)) == ControlFlow::Stop) {
-    return ControlFlow::Stop;
-  }
-  return ControlFlow::Continue;
 }
 
 SkPath Machine::Shape() const {

@@ -7,7 +7,6 @@
 #include <optional>
 
 #include "action.hh"
-#include "control_flow.hh"
 #include "object.hh"
 #include "time.hh"
 
@@ -33,7 +32,7 @@ struct DragLocationWidget : gui::Widget {
   DragLocationAction& action;
   DragLocationWidget(DragLocationAction& action) : action(action) {}
   SkPath Shape() const override;
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const gui::Widget& child) const override;
   maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
 };

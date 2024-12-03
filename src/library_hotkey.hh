@@ -54,7 +54,7 @@ struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
   void KeyGrabberKeyDown(gui::KeyGrab&) override;
   void KeyGrabberKeyUp(gui::KeyGrab&) override;
 
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
 
   SkMatrix TransformToChild(const Widget& child) const override;
 

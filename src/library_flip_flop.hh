@@ -43,7 +43,7 @@ struct FlipFlop : LiveObject, Runnable {
 
   void SetKey(gui::AnsiKey);
 
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const Widget& child) const override;
 
   LongRunning* OnRun(Location& here) override;

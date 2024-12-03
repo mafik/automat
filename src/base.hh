@@ -22,7 +22,6 @@
 #include "animation.hh"
 #include "argument.hh"
 #include "connection.hh"
-#include "control_flow.hh"
 #include "deserializer.hh"
 #include "drag_action.hh"
 #include "format.hh"
@@ -162,7 +161,7 @@ struct Machine : LiveObject, gui::DropTarget {
 
   SkPath Shape() const override;
 
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   void Args(std::function<void(Argument&)> cb) override {}
   void Relocate(Location* parent) override {
     LiveObject::Relocate(parent);

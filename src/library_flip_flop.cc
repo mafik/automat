@@ -147,9 +147,8 @@ animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
 Rect FlipFlopRect() { return Rect::MakeZeroWH(flip_flop_color.width(), flip_flop_color.height()); }
 SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
 
-ControlFlow FlipFlop::VisitChildren(gui::Visitor& visitor) {
-  std::shared_ptr<Widget> children[] = {button};
-  return visitor(children);
+void FlipFlop::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+  children.push_back(button);
 }
 
 SkMatrix FlipFlop::TransformToChild(const Widget& child) const {

@@ -13,13 +13,10 @@
 #include "widget.hh"
 #include "window.hh"
 
-// TODO: Fix shader recompilation in ConnectionWidget
-// TODO: Fix objects not being redrawn when panning
 // TODO: Move all the animation logic into Widget::Update (only pass timer there)
 // TODO: Only pass Canvas into Widget::Draw & remove animation::Phase from its return value
 // TODO: Each widget should hold its own transform matrix
 // TODO: Remove TransformFromChild & TransformToChild
-// TODO: Replace VisitChildren with a child iterator
 // TODO: Split Widget from Object (largest change)
 
 // TODO: investigate why some widgets are not packed even when they should be

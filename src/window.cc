@@ -485,10 +485,9 @@ static void UpdateConnectionWidgets(Window& window) {
   }
 }
 
-ControlFlow Window::VisitChildren(Visitor& visitor) {
+void Window::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   UpdateConnectionWidgets(*this);
-  Vec<shared_ptr<Widget>> widgets;
-  widgets.reserve(2 + pointers.size() + connection_widgets.size());
+  children.reserve(2 + pointers.size() + connection_widgets.size());
 
   unordered_set<Location*> dragged_locations(pointers.size());
   for (auto* pointer : pointers) {
@@ -502,21 +501,20 @@ ControlFlow Window::VisitChildren(Visitor& visitor) {
   connection_widgets_below.reserve(connection_widgets.size());
   for (auto& it : connection_widgets) {
     if (it->manual_position.has_value() || dragged_locations.count(&it->from)) {
-      widgets.push_back(it);
+      children.push_back(it);
     } else {
       connection_widgets_below.push_back(it);
     }
   }
   for (auto& pointer : pointers) {
     if (auto widget = pointer->GetWidget()) {
-      widgets.push_back(widget->SharedPtr<Widget>());
+      children.push_back(widget->SharedPtr<Widget>());
     }
   }
-  widgets.push_back(toolbar);
+  children.push_back(toolbar);
   for (auto w : connection_widgets_below) {
-    widgets.push_back(w);
+    children.push_back(w);
   }
-  widgets.push_back(root_machine);
-  return visitor(widgets);
+  children.push_back(root_machine);
 }
 }  // namespace automat::gui

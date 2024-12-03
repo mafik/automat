@@ -221,11 +221,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   virtual DropTarget* CanDrop() { return nullptr; }
 
-  // Used to visit the child widgets in a generic fashion.
-  // Widgets are stored in front-to-back order.
-  // The function stops once the visitor returns ControlFlow::Stop.
-  virtual ControlFlow VisitChildren(Visitor& visitor) { return ControlFlow::Continue; }
-
   // If the object should be cached into a texture, return its bounds in local coordinates.
   virtual maf::Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
   virtual maf::Vec<Vec2> TextureAnchors() const { return {}; }
@@ -247,27 +242,15 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   animation::Phase DrawChildren(DrawContext&) const;
 
-  // TEMPORARY iterator-based interface for traversing children.
-  // Refactoring plan:
-  // TODO: Provide a way for Widgets to use their own iterators (polymorphic logic wrapper within
-  // iterator)
-  struct ChildrenView : std::ranges::view_interface<ChildrenView> {
-    maf::Vec<std::shared_ptr<Widget>> children;
-    ChildrenView(Widget& parent) {
-      Visitor v = [this](maf::Span<std::shared_ptr<Widget>> span) {
-        for (auto& child : span) {
-          children.push_back(child);
-        }
-        return ControlFlow::Continue;
-      };
-      parent.VisitChildren(v);
-    }
-    using iterator = std::shared_ptr<Widget>*;
-    iterator begin() { return children.data(); }
-    iterator end() { return children.data() + children.size(); }
-  };
+  // Used to obtain references to the child widgets in a generic fashion.
+  // Widgets are stored in front-to-back order.
+  virtual void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {}
 
-  ChildrenView Children() const { return ChildrenView{*const_cast<Widget*>(this)}; }
+  maf::Vec<std::shared_ptr<Widget>> Children() const {
+    maf::Vec<std::shared_ptr<Widget>> children;
+    const_cast<Widget*>(this)->FillChildren(children);
+    return children;
+  }
 
   // This can be used to block pointer events from propagating to children.
   virtual bool AllowChildPointerEvents(Widget& child) const { return true; }

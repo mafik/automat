@@ -46,7 +46,7 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
 
   void SetKey(gui::AnsiKey);
 
-  ControlFlow VisitChildren(gui::Visitor& visitor) override;
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
   SkMatrix TransformToChild(const Widget& child) const override;
 

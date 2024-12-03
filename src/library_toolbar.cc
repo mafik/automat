@@ -57,7 +57,7 @@ SkPath Toolbar::Shape() const {
   return SkPath::Rect(rect);
 }
 
-animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
+animation::Phase Toolbar::Update(time::Timer& timer) {
   float width_targets[buttons.size()];
   for (size_t i = 0; i < buttons.size(); ++i) {
     width_targets[i] = buttons[i]->natural_width;
@@ -115,9 +115,12 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
 
   auto phase = animation::Finished;
   for (int i = 0; i < buttons.size(); ++i) {
-    phase |= buttons[i]->width.SineTowards(width_targets[i], dctx.DeltaT(), 0.4);
+    phase |= buttons[i]->width.SineTowards(width_targets[i], timer.d, 0.4);
   }
+  return phase;
+}
 
+animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
   auto my_shape = Shape();
 
   static auto color = PersistentImage::MakeFromAsset(embedded::assets_tray_webp, {.scale = 1});
@@ -141,8 +144,8 @@ animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
                             SkCanvas::kFast_SrcRectConstraint);
   dctx.canvas.restore();
 
-  phase |= DrawChildren(dctx);
-  return phase;
+  DrawChildren(dctx);
+  return animation::Finished;
 }
 
 void Toolbar::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {

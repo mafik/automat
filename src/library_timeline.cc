@@ -434,18 +434,18 @@ time::T Timeline::MaxTrackLength() const {
   return max_track_length;
 }
 
-static float CurrentPosRatio(const Timeline& timeline, time::SteadyPoint now) {
+static float CurrentPosRatio(const Timeline& timeline) {
   time::T max_track_length = timeline.MaxTrackLength();
   if (max_track_length == 0) {
     return 1;
   }
   switch (timeline.state) {
     case Timeline::kPlaying:
-      return (now - timeline.playing.started_at).count() / max_track_length;
+      return (timeline.playing.now - timeline.playing.started_at).count() / max_track_length;
     case Timeline::kPaused:
       return timeline.paused.playback_offset / max_track_length;
     case Timeline::kRecording:
-      return (now - timeline.recording.started_at).count() / max_track_length;
+      return (timeline.recording.now - timeline.recording.started_at).count() / max_track_length;
   }
 }
 
@@ -552,13 +552,10 @@ static float DistanceToSeconds(const Timeline& timeline) {
   return timeline.zoom.value / kWindowWidth;
 }
 
-time::T TimeAtX(const Timeline& timeline, float x, time::SteadyPoint now = time::kZeroSteady) {
-  if (now == time::kZeroSteady) {
-    now = time::SteadyNow();
-  }
+time::T TimeAtX(const Timeline& timeline, float x) {
   // Find the time at the center of the timeline
   float distance_to_seconds = DistanceToSeconds(timeline);
-  float current_pos_ratio = CurrentPosRatio(timeline, now);
+  float current_pos_ratio = CurrentPosRatio(timeline);
   float track_width = timeline.MaxTrackLength();
 
   float center_t0 = kRulerLength / 2 * distance_to_seconds;
@@ -612,7 +609,7 @@ struct DragBridgeAction : Action {
       : Action(pointer), timeline(timeline) {}
   virtual void Begin() {
     float initial_x = pointer.PositionWithin(timeline).x;
-    float initial_pos_ratio = CurrentPosRatio(timeline, pointer.window.timer.now);
+    float initial_pos_ratio = CurrentPosRatio(timeline);
     float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
     press_offset_x = initial_x - initial_bridge_x;
   }
@@ -763,7 +760,7 @@ SkPath WindowShape(int num_tracks) {
 
 unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
-    auto bridge_shape = BridgeShape(tracks.size(), CurrentPosRatio(*this, ptr.window.timer.now));
+    auto bridge_shape = BridgeShape(tracks.size(), CurrentPosRatio(*this));
     auto window_shape = WindowShape(tracks.size());
     auto pos = ptr.PositionWithin(*this);
     if (bridge_shape.contains(pos.x, pos.y)) {
@@ -786,7 +783,14 @@ unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger bt
 }
 
 animation::Phase Timeline::Update(time::Timer& timer) {
-  auto phase = state == kPaused ? animation::Finished : animation::Animating;
+  auto phase = animation::Finished;
+  if (state == kPlaying) {
+    playing.now = time::SteadyNow();
+    phase |= animation::Animating;
+  } else if (state == kRecording) {
+    recording.now = time::SteadyNow();
+    phase |= animation::Animating;
+  }
   phase |= zoom.Tick(timer);
   return phase;
 }
@@ -839,7 +843,7 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
   constexpr float PI = numbers::pi;
 
   time::T max_track_length = MaxTrackLength();
-  float current_pos_ratio = CurrentPosRatio(*this, dctx.timer.now);
+  float current_pos_ratio = CurrentPosRatio(*this);
 
   function<Str(time::T)> format_time;
   if (max_track_length > 3600) {
@@ -1230,7 +1234,7 @@ SkMatrix Timeline::TransformToChild(const Widget& child) const {
     float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
     float track_width = MaxTrackLength() / distance_to_seconds;
 
-    float current_pos_ratio = CurrentPosRatio(*this, time::SteadyNow());
+    float current_pos_ratio = CurrentPosRatio(*this);
 
     float track_offset_x0 = kRulerLength / 2;
     float track_offset_x1 = track_width - kRulerLength / 2;
@@ -1292,7 +1296,7 @@ animation::Phase OnOffTrack::Draw(gui::DrawContext& dctx) const {
   if (!isnan(on_at)) {
     switch (timeline->state) {
       case Timeline::kRecording:
-        DrawSegment(on_at, (dctx.timer.now - timeline->recording.started_at).count());
+        DrawSegment(on_at, (timeline->recording.now - timeline->recording.started_at).count());
         break;
       case Timeline::kPlaying:
       case Timeline::kPaused:
@@ -1339,7 +1343,8 @@ void Timeline::BeginRecording() {
   switch (state) {
     case Timeline::kPaused:
       state = Timeline::kRecording;
-      recording.started_at = time::SteadyNow() - time::Duration(paused.playback_offset);
+      recording.now = time::SteadyNow();
+      recording.started_at = recording.now - time::Duration(paused.playback_offset);
       break;
     case Timeline::kRecording:
       // WTF? Maybe show an error?
@@ -1347,9 +1352,11 @@ void Timeline::BeginRecording() {
     case Timeline::kPlaying:
       state = Timeline::kRecording;
       recording.started_at = playing.started_at;
+      recording.now = playing.now;
       break;
   }
   run_button->InvalidateDrawCache();
+  InvalidateDrawCache();
 }
 
 void Timeline::StopRecording() {
@@ -1361,6 +1368,7 @@ void Timeline::StopRecording() {
                 min((time::SteadyNow() - recording.started_at).count(), timeline_length)};
   state = Timeline::kPaused;
   run_button->InvalidateDrawCache();
+  InvalidateDrawCache();
 }
 
 void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,

@@ -86,12 +86,14 @@ struct Window final : Widget, DropTarget {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
   void Draw(SkCanvas&);
+
+  animation::Phase Update(time::Timer&) override;
   animation::Phase Draw(gui::DrawContext&) const override;
 
   Vec2 move_velocity = Vec2(0, 0);
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
 
-  void Zoom(float delta) const;
+  void Zoom(float delta);
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const Widget& child) const override {
     if (&child == toolbar.get()) {
@@ -122,20 +124,20 @@ struct Window final : Widget, DropTarget {
   std::shared_ptr<library::Toolbar> toolbar;
   std::vector<std::shared_ptr<gui::ConnectionWidget>> connection_widgets;
 
-  mutable float zoom = 1;
-  mutable float zoom_target = 1;
-  mutable animation::Approach<> camera_x = animation::Approach<>(0.0);
-  mutable animation::Approach<> camera_y = animation::Approach<>(0.0);
-  mutable animation::Approach<> trash_radius = animation::Approach<>(0.0);
+  float zoom = 1;
+  float zoom_target = 1;
+  animation::Approach<> camera_x = animation::Approach<>(0.0);
+  animation::Approach<> camera_y = animation::Approach<>(0.0);
+  animation::Approach<> trash_radius = animation::Approach<>(0.0);
   int drag_action_count = 0;
-  mutable bool panning_during_last_frame = false;
-  mutable bool inertia = false;
-  mutable std::deque<Vec3> camera_timeline;
-  mutable std::deque<time::SteadyPoint> timeline;
+  bool panning_during_last_frame = false;
+  bool inertia = false;
+  std::deque<Vec3> camera_timeline;
+  std::deque<time::SteadyPoint> timeline;
 
   // `timer` should be advanced once per frame on the device that displays the animation. Its `d`
   // field can be used by animated objects to animate their properties.
-  mutable time::Timer timer;
+  time::Timer timer;
 
   std::deque<float> fps_history;
 

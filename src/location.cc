@@ -194,6 +194,21 @@ animation::Phase Location::Update(time::Timer& timer) {
     phase = animation::Animating;
     state.time_seconds = timer.NowSeconds();
   }
+  {
+    float target_elevation = 0;
+    for (auto* window : windows) {
+      for (auto* pointer : window->pointers) {
+        if (auto& action = pointer->action) {
+          if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
+            if (drag_action->location.get() == this) {
+              target_elevation = 1;
+            }
+          }
+        }
+      }
+    }
+    phase |= state.elevation.SineTowards(target_elevation, timer.d, 0.2);
+  }
   return phase;
 }
 
@@ -449,19 +464,6 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
     return animation::Finished;
   }
   auto& anim = GetAnimationState();
-  float target_elevation = 0;
-  for (auto* window : windows) {
-    for (auto* pointer : window->pointers) {
-      if (auto& action = pointer->action) {
-        if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
-          if (drag_action->location.get() == this) {
-            target_elevation = 1;
-          }
-        }
-      }
-    }
-  }
-  auto phase = anim.elevation.SineTowards(target_elevation, ctx.DeltaT(), 0.2);
   auto shape = object->Shape();
 
   ctx.canvas.concat(TransformFromChild(*object));
@@ -490,7 +492,7 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
   SkShadowUtils::DrawShadow(&ctx.canvas, shape, z_plane_params, light_pos, light_radius,
                             "#c9ced6"_color, "#ada4b0"_color, flags);
   ctx.canvas.restore();
-  return phase;
+  return animation::Finished;
 }
 
 void Location::UpdateAutoconnectArgs() {

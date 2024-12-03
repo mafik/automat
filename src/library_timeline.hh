@@ -103,10 +103,12 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
 
   struct Playing {
     time::SteadyPoint started_at;  // Used when playback is active
+    time::SteadyPoint now;
   };
 
   struct Recording {
     time::SteadyPoint started_at;  // Used when recording is active
+    time::SteadyPoint now;
     // there is no point in staring the length of the timeline because it's always `now -
     // started_at`
   };

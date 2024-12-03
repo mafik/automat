@@ -58,6 +58,7 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   maf::StrView Name() const override;
   std::shared_ptr<Object> Clone() const override;
   SkPath Shape() const override;
+  animation::Phase Update(time::Timer&) override;
   animation::Phase Draw(gui::DrawContext&) const override;
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const Widget& child) const override;

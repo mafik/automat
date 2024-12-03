@@ -68,7 +68,7 @@ void Window::Draw(SkCanvas& canvas) {
   canvas.restore();
 }
 
-animation::Phase Window::Draw(gui::DrawContext& ctx) const {
+animation::Phase Window::Update(time::Timer& timer) {
   auto phase = animation::Finished;
 
   // Record camera movement timeline. This is used to create inertia effect.
@@ -143,7 +143,7 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
       Pointer* first_pointer = *pointers.begin();
       Vec2 mouse_position = first_pointer->pointer_position;
       Vec2 focus_pre = WindowToCanvas(mouse_position);
-      phase |= animation::ExponentialApproach(zoom_target, ctx.DeltaT(), 1.0 / 15, zoom);
+      phase |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
       Vec2 focus_post = WindowToCanvas(mouse_position);
       Vec2 focus_delta = focus_post - focus_pre;
       camera_x.Shift(-focus_delta.x);
@@ -152,7 +152,7 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
   } else {  // stabilize camera target
     Vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
     Vec2 target_screen = CanvasToWindow(focus_pre);
-    phase |= animation::ExponentialApproach(zoom_target, ctx.DeltaT(), 1.0 / 15, zoom);
+    phase |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
     Vec2 focus_post = WindowToCanvas(target_screen);
     Vec2 focus_delta = focus_post - focus_pre;
     camera_x.value -= focus_delta.x;
@@ -198,25 +198,38 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
     }
   }
 
+  {  // Animate trash area
+    trash_radius.target = drag_action_count ? kTrashRadius : 0;
+    phase |= trash_radius.Tick(timer);
+  }
+
+  if (phase == animation::Animating) {
+    for (auto& each_window : windows) {
+      for (auto& each_pointer : each_window->pointers) {
+        each_pointer->UpdatePath();
+      }
+    }
+  }
+
+  return phase;
+}
+
+animation::Phase Window::Draw(gui::DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   auto window_space_matrix = canvas.getLocalToDevice();
   canvas.save();
   canvas.concat(CanvasToWindow());
   auto machine_space_matrix = canvas.getLocalToDevice();
 
-  {  // Animate trash area
-    trash_radius.target = drag_action_count ? kTrashRadius : 0;
-    phase |= trash_radius.Tick(timer);
-  }
-
   canvas.clear(background_color);
 
   canvas.setMatrix(window_space_matrix);
-  phase |= DrawChildren(ctx);
+  DrawChildren(ctx);
 
   canvas.setMatrix(machine_space_matrix);
 
   // Draw target window size when zooming in with middle mouse button
+  float rz = fabsf(zoom - zoom_target);
   if (zoom_target == 1 && rz > 0.001) {
     SkPaint target_paint(SkColor4f(0, 0.3, 0.8, rz));
     target_paint.setStyle(SkPaint::kStroke_Style);
@@ -235,17 +248,9 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
     }
   }
 
-  if (phase == animation::Animating) {
-    for (auto& each_window : windows) {
-      for (auto& each_pointer : each_window->pointers) {
-        each_pointer->UpdatePath();
-      }
-    }
-  }
-
   canvas.restore();
 
-  return phase;
+  return animation::Finished;
 }
 
 struct MoveCameraAction : Action {
@@ -278,7 +283,7 @@ std::unique_ptr<Action> Window::FindAction(Pointer& p, ActionTrigger trigger) {
   return nullptr;
 }
 
-void Window::Zoom(float delta) const {
+void Window::Zoom(float delta) {
   if (pointers.size() > 0) {
     Pointer* first_pointer = *pointers.begin();
     Vec2 mouse_position = first_pointer->pointer_position;

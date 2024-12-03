@@ -57,13 +57,6 @@ struct DrawContext {
   time::Timer& timer;
   SkCanvas& canvas;
   DrawContext(time::Timer& timer, SkCanvas& canvas) : timer(timer), canvas(canvas) {}
-  float DeltaT() const { return timer.d; }
-  operator GrDirectContext*() const {
-    if (auto recording_context = canvas.recordingContext()) {
-      return recording_context->asDirectContext();
-    }
-    return nullptr;
-  }
 };
 
 struct DropTarget;

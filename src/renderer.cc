@@ -146,10 +146,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       if (widget->invalidated != time::SteadyPoint::max()) {
         node.wants_to_draw = true;
         auto true_d = window->timer.d;
-        auto fake_d = min(1.0, (now - widget->draw_time).count());
+        auto fake_d = min(1.0, (now - widget->update_time).count());
         window->timer.d = fake_d;
         auto animation_phase = widget->Update(window->timer);
         window->timer.d = true_d;
+        widget->update_time = now;
         if (animation_phase == animation::Finished) {
           widget->invalidated = time::SteadyPoint::max();
         } else {

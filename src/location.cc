@@ -568,6 +568,12 @@ void Location::UpdateAutoconnectArgs() {
       if (!error.empty()) {
         return;  // `this` location can't be connected to `other`s `arg`
       }
+
+      // Wake the animation loop of the ConnectionWidget
+      if (auto connection_widget = ConnectionWidget::Find(*other, arg)) {
+        connection_widget->InvalidateDrawCache();
+      }
+
       auto start = other->object->ArgStart(arg);
       start.pos = other_up.mapPoint(start.pos);
 

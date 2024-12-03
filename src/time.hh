@@ -26,6 +26,7 @@ struct Timer {
   SteadyPoint now = time::SteadyNow();
   SteadyPoint last = now;
   T d = 0;  // delta from last frame
+  T NowSeconds() const { return (now.time_since_epoch()).count(); }
   void Tick() {
     last = now;
     now = time::SteadyNow();

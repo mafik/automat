@@ -95,12 +95,13 @@ struct ToggleButton : Widget {
   std::shared_ptr<Button> on;
   std::shared_ptr<Button> off;
 
-  mutable float filling;
+  float filling;
+  float time_seconds;  // used for waving animation
 
   ToggleButton(std::shared_ptr<Button> on, std::shared_ptr<Button> off) : on(on), off(off) {}
 
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
-    children.push_back(on);
+    children.push_back(OnWidget());
     children.push_back(off);
   }
   bool AllowChildPointerEvents(Widget& child) const override {
@@ -112,8 +113,8 @@ struct ToggleButton : Widget {
   }
 
   virtual std::shared_ptr<Button>& OnWidget() { return on; }
+  animation::Phase Update(time::Timer&) override;
   animation::Phase PreDrawChildren(DrawContext& ctx) const override;
-  animation::Phase Draw(DrawContext&) const override;
   animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const override;
   SkRRect RRect() const { return off->RRect(); }
   SkPath Shape() const override { return off->Shape(); }

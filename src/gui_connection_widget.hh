@@ -44,7 +44,10 @@ struct ConnectionWidget : Widget {
     float radar_alpha_target = 0;
     float prototype_alpha = 0;
     float prototype_alpha_target = 0;
+    float time_seconds = 0;
   };
+
+  static ConnectionWidget* Find(Location& here, Argument& arg);
 
   mutable AnimationState animation_state;
 

@@ -21,6 +21,7 @@
 #include "object.hh"
 #include "root.hh"
 #include "widget.hh"
+#include "window.hh"
 
 using namespace maf;
 
@@ -53,27 +54,15 @@ SkPath ConnectionWidget::Shape() const {
 }
 
 animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
-  if (arg.autoconnect_radius <= 0) {
-    return animation::Finished;
-  }
   auto anim = &animation_state;
-  auto phase =
-      animation::LinearApproach(anim->radar_alpha_target, ctx.DeltaT(), 2.f, anim->radar_alpha);
-  float prototype_alpha_target = anim->prototype_alpha_target;
-  if (arg.FindLocation(from)) {
-    prototype_alpha_target = 0;
-  }
-  phase |=
-      animation::LinearApproach(prototype_alpha_target, ctx.DeltaT(), 2.f, anim->prototype_alpha);
   if (anim->radar_alpha >= 0.01f) {
-    phase = animation::Animating;
     auto pos_dir = arg.Start(*from.object, *root_machine);
     SkPaint radius_paint;
     SkColor colors[] = {SkColorSetA(arg.tint, 0),
                         SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
-    double t = ctx.timer.now.time_since_epoch().count();
+    double t = anim->time_seconds;
     auto local_matrix = SkMatrix::RotateRad(fmod(t * 2 * M_PI / kPeriod, 2 * M_PI))
                             .postTranslate(pos_dir.pos.x, pos_dir.pos.y);
     radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
@@ -168,7 +157,7 @@ animation::Phase ConnectionWidget::PreDraw(DrawContext& ctx) const {
     ctx.canvas.restore();
     ctx.canvas.restore();
   }
-  return phase;
+  return animation::Finished;  // Update returns the correct value
 }
 
 void ConnectionWidget::FromMoved() {
@@ -281,6 +270,21 @@ animation::Phase ConnectionWidget::Update(time::Timer& timer) {
     cable_width.target = to != nullptr ? 2_mm : 0;
     cable_width.speed = 5;
     phase |= cable_width.Tick(timer);
+  }
+
+  if (arg.autoconnect_radius > 0) {
+    auto& anim = animation_state;
+    phase |= animation::LinearApproach(anim.radar_alpha_target, timer.d, 2.f, anim.radar_alpha);
+    if (anim.radar_alpha >= 0.01f) {
+      phase = animation::Animating;
+      anim.time_seconds = timer.NowSeconds();
+    }
+
+    float prototype_alpha_target = anim.prototype_alpha_target;
+    if (arg.FindLocation(from)) {
+      prototype_alpha_target = 0;
+    }
+    phase |= animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
   }
   return phase;
 }
@@ -497,6 +501,19 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
     }
   }
   return anchors;
+}
+
+ConnectionWidget* ConnectionWidget::Find(Location& here, Argument& arg) {
+  for (auto& connection_widget : window->connection_widgets) {
+    if (&connection_widget->from != &here) {
+      continue;
+    }
+    if (&connection_widget->arg != &arg) {
+      continue;
+    }
+    return connection_widget.get();
+  }
+  return nullptr;
 }
 
 }  // namespace automat::gui

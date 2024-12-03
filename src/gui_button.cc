@@ -144,10 +144,9 @@ animation::Phase Button::Draw(DrawContext& ctx) const {
   return DrawChildren(ctx);
 }
 
-animation::Phase ToggleButton::Draw(DrawContext& ctx) const {
-  auto phase = animation::ExponentialApproach(Filled() ? 1 : 0, ctx.DeltaT(), 0.15, filling);
-  phase |= DrawChildren(ctx);
-  return phase;
+animation::Phase ToggleButton::Update(time::Timer& timer) {
+  time_seconds = timer.NowSeconds();
+  return animation::ExponentialApproach(Filled() ? 1 : 0, timer.d, 0.15, filling);
 }
 
 animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
@@ -172,13 +171,11 @@ animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& 
       pressed_outer_oval.rect().fTop * (1 - filling) + pressed_outer_oval.rect().fBottom * filling;
   constexpr int n_points = 6;
   Vec2 points[n_points];
-  static time::SteadyPoint base = ctx.timer.now;
-  float timeS = (ctx.timer.now - base).count();
   constexpr float waving_x = kRadius / n_points / 2;
   float waving_y = waving_x * filling * (1 - filling) * 8;
   for (int i = 0; i < n_points; ++i) {
     float frac = i / float(n_points - 1);
-    float a = (frac * 3 + timeS * 1) * 2 * M_PI;
+    float a = (frac * 3 + time_seconds * 1) * 2 * M_PI;
     points[i].x = frac * pressed_outer_oval.rect().fRight +
                   (1 - frac) * pressed_outer_oval.rect().fLeft + cos(a) * waving_x;
     points[i].y = baseline + sin(a) * waving_y;

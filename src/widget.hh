@@ -141,6 +141,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   mutable time::SteadyPoint invalidated = time::SteadyPoint::min();
 
   // Things updated in PackFrame (& Draw)
+  mutable time::SteadyPoint update_time = time::SteadyPoint::min();
   mutable time::SteadyPoint draw_time = time::SteadyPoint::min();
   Rect draw_texture_bounds;
   maf::Vec<Vec2> draw_texture_anchors;

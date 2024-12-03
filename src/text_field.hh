@@ -33,17 +33,9 @@ struct TextField : Widget, CaretOwner {
   std::unordered_map<Caret*, CaretPosition> caret_positions;
   struct HoverState {
     int hovering_pointers = 0;
-    animation::Approach<> animation;
-    void Increment() {
-      hovering_pointers++;
-      animation.target = 1;
-    }
-    void Decrement() {
-      hovering_pointers--;
-      if (hovering_pointers == 0) {
-        animation.target = 0;
-      }
-    }
+    float animation = 0;
+    void Increment() { hovering_pointers++; }
+    void Decrement() { hovering_pointers--; }
   };
   mutable HoverState hover;
   std::optional<Argument*> argument;
@@ -51,6 +43,7 @@ struct TextField : Widget, CaretOwner {
   TextField(std::string* text, float width) : text(text), width(width) {}
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
+  animation::Phase Update(time::Timer&) override;
   animation::Phase Draw(DrawContext&) const override;
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;

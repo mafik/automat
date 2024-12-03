@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 
+#include "animation.hh"
 #include "base.hh"
 #include "font.hh"
 #include "format.hh"
@@ -23,11 +24,13 @@ namespace automat::gui {
 void TextField::PointerOver(Pointer& pointer) {
   pointer.PushIcon(Pointer::kIconIBeam);
   hover.Increment();
+  InvalidateDrawCache();
 }
 
 void TextField::PointerLeave(Pointer& pointer) {
   pointer.PopIcon();
   hover.Decrement();
+  InvalidateDrawCache();
 }
 
 void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
@@ -84,22 +87,26 @@ static SkPaint kDefaultBackgroundPaint = []() {
 const SkPaint& TextField::GetTextPaint() const { return kDefaultTextPaint; }
 const SkPaint& TextField::GetBackgroundPaint() const { return kDefaultBackgroundPaint; }
 
+animation::Phase TextField::Update(time::Timer& timer) {
+  return animation::ExponentialApproach(hover.hovering_pointers ? 1 : 0, timer.d, 0.2,
+                                        hover.animation);
+}
+
 animation::Phase TextField::Draw(DrawContext& ctx) const {
-  auto phase = hover.animation.Tick(ctx.timer);
   DrawBackground(ctx);
   DrawText(ctx);
-  return phase;
+  return animation::Finished;
 }
 
 void TextField::DrawBackground(DrawContext& ctx) const {
   auto& canvas = ctx.canvas;
   SkRRect rrect = ShapeRRect();
   canvas.drawRRect(rrect, GetBackgroundPaint());
-  if (hover.animation.value > 0.0001) {
+  if (hover.animation > 0.0001) {
     SkPaint hover_outline;
     hover_outline.setColor(SkColorSetRGB(0xff, 0x00, 0x00));
     hover_outline.setStyle(SkPaint::kStroke_Style);
-    hover_outline.setStrokeWidth(hover.animation.value * 0.0005);
+    hover_outline.setStrokeWidth(hover.animation * 0.5_mm);
     canvas.drawRRect(rrect, hover_outline);
   }
 }

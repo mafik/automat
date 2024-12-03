@@ -14,6 +14,7 @@
 #include <memory>
 
 #include "../build/generated/embedded.hh"
+#include "animation.hh"
 #include "arcline.hh"
 #include "argument.hh"
 #include "color.hh"
@@ -94,22 +95,23 @@ std::shared_ptr<Object> FlipFlop::Clone() const {
   return ret;
 }
 
+animation::Phase FlipFlop::Update(time::Timer& timer) {
+  return animation::LinearApproach(current_state, timer.d, 10, animation_state.light);
+}
+
 static auto flip_flop_color = PersistentImage::MakeFromAsset(embedded::assets_flip_flop_color_webp,
                                                              {.width = kFlipFlopWidth});
 
 animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
-  auto phase = animation::Finished;
 
   flip_flop_color.draw(canvas);
 
   {  // Red indicator light
-    animation_state.light.target = current_state;
-    phase |= animation_state.light.Tick(dctx.timer);
     SkPaint gradient;
     SkPoint center = {kFlipFlopWidth / 2, 2_cm};
     float radius = 0.5_mm;
-    float a = animation_state.light.value;
+    float a = animation_state.light;
     SkColor colors[] = {color::MixColors("#725016"_color, "#ff8786"_color, a),
                         color::MixColors("#2b1e07"_color, "#ff3e3e"_color, a)};
     gradient.setShader(SkGradientShader::MakeRadial(center + SkPoint(0, 0.25_mm), radius, colors, 0,
@@ -141,8 +143,8 @@ animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
     canvas.drawCircle(center, radius, red_glow);
   }
 
-  phase |= DrawChildren(dctx);
-  return phase;
+  DrawChildren(dctx);
+  return animation::Finished;
 }
 Rect FlipFlopRect() { return Rect::MakeZeroWH(flip_flop_color.width(), flip_flop_color.height()); }
 SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
@@ -162,6 +164,7 @@ SkMatrix FlipFlop::TransformToChild(const Widget& child) const {
 
 LongRunning* FlipFlop::OnRun(Location& here) {
   current_state = !current_state;
+  InvalidateDrawCache();
   button->InvalidateDrawCache();
   flip_arg.InvalidateConnectionWidgets(here);
 

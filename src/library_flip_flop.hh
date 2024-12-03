@@ -30,13 +30,14 @@ struct FlipFlop : LiveObject, Runnable {
 
   bool current_state = false;
   struct AnimationState {
-    animation::Approach<float> light;
+    float light = 0;
   };
-  mutable AnimationState animation_state;
+  AnimationState animation_state;
 
   FlipFlop();
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
+  animation::Phase Update(time::Timer& timer) override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;

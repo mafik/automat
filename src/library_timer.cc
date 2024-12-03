@@ -147,6 +147,7 @@ static void SetDuration(TimerDelay& timer, Duration new_duration) {
 
   timer.duration.value = new_duration;
   UpdateTextField(timer);
+  timer.InvalidateDrawCache();
 }
 
 static void PropagateDurationOutwards(TimerDelay& timer) {
@@ -165,7 +166,6 @@ TimerDelay::TimerDelay() : text_field(std::make_shared<gui::NumberTextField>(kTe
   range_dial.value = 1;
 
   hand_degrees.value = 90;
-  duration_handle_rotation.speed = 100;
   text_field->argument = &duration_arg;
   duration_arg.field = &duration;
   SetDuration(*this, 10s);
@@ -442,25 +442,22 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
   canvas.restore();
 }
 
-animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
-
+animation::Phase TimerDelay::Update(time::Timer& timer) {
   auto phase = IsRunning(*this) ? animation::Animating : animation::Finished;
-  phase |= animation::ExponentialApproach(0, ctx.timer.d, 0.2, start_pusher_depression);
-  phase |= animation::ExponentialApproach(0, ctx.timer.d, 0.2, left_pusher_depression);
-  phase |= animation::ExponentialApproach(0, ctx.timer.d, 0.2, right_pusher_depression);
-
+  phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
+  phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
+  phase |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
   int range_end = (int)Range::EndGuard;
   animation::WrapModulo(range_dial.value, (float)range, range_end);
-  phase |= range_dial.SpringTowards((float)range, ctx.DeltaT(), 0.4, 0.05);
-
+  phase |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
   double circles;
-  duration_handle_rotation.target =
+  float duration_handle_rotation_target =
       M_PI * 2.5 - modf(duration.value.count() / RangeDuration(range).count(), &circles) * 2 * M_PI;
-  duration_handle_rotation.target =
-      modf(duration_handle_rotation.target / (2 * M_PI), &circles) * 2 * M_PI;
-  animation::WrapModulo(duration_handle_rotation.value, duration_handle_rotation.target, M_PI * 2);
-  duration_handle_rotation.Tick(ctx.timer);
+  duration_handle_rotation_target =
+      modf(duration_handle_rotation_target / (2 * M_PI), &circles) * 2 * M_PI;
+  animation::WrapModulo(duration_handle_rotation, duration_handle_rotation_target, M_PI * 2);
+  phase |= animation::ExponentialApproach(duration_handle_rotation_target, timer.d, 0.05,
+                                          duration_handle_rotation);
 
   if (hand_draggers) {
     // do nothing...
@@ -473,8 +470,13 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
       hand_target = 90;
     }
     animation::WrapModulo(hand_degrees.value, hand_target, 360);
-    phase |= hand_degrees.SpringTowards(hand_target, ctx.DeltaT(), kHandPeriod.count(), 0.05);
+    phase |= hand_degrees.SpringTowards(hand_target, timer.d, kHandPeriod.count(), 0.01);
   }
+  return phase;
+}
+
+animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
+  auto& canvas = ctx.canvas;
 
   DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
 
@@ -492,6 +494,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
     m.normalizePerspective();
     canvas.concat(m);
   }
+  int range_end = (int)Range::EndGuard;
   DrawDial(canvas, (Range)(((int)roundf(range_dial) + range_end) % range_end), duration.value);
   canvas.restore();
 
@@ -555,7 +558,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   canvas.drawPaint(duration_handle_paint);
   canvas.drawPath(duration_path_rotated, highlight_paint);
   canvas.restore();
-  return phase;
+  return animation::Finished;
 }
 
 void TimerDelay::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {

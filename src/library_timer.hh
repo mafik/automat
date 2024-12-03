@@ -21,14 +21,14 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   } duration;
   DurationArgument duration_arg;
   time::SteadyPoint start_time;
-  mutable float start_pusher_depression = 0;
-  mutable float left_pusher_depression = 0;
-  mutable float right_pusher_depression = 0;
-  mutable animation::SpringV2<float> hand_degrees;
+  float start_pusher_depression = 0;
+  float left_pusher_depression = 0;
+  float right_pusher_depression = 0;
+  animation::SpringV2<float> hand_degrees;
   int hand_draggers = 0;
   // Controls the current range (milliseconds, seconds, etc.)
-  mutable animation::SpringV2<float> range_dial;
-  mutable animation::Approach<> duration_handle_rotation;
+  animation::SpringV2<float> range_dial;
+  float duration_handle_rotation = 0;
   std::shared_ptr<gui::NumberTextField> text_field;
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
@@ -43,6 +43,7 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   TimerDelay(const TimerDelay&);
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
+  animation::Phase Update(time::Timer&) override;
   animation::Phase Draw(gui::DrawContext&) const override;
   SkPath Shape() const override;
   void Fields(std::function<void(Object&)> cb) override;

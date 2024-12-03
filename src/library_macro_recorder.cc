@@ -110,6 +110,12 @@ animation::Phase MacroRecorder::Update(time::Timer& timer) {
 
   phase |= animation::ExponentialApproach(keylogging ? 1 : 0, timer.d, 0.2,
                                           animation_state.eye_rotation_speed);
+
+  animation_state.eye_rotation -= timer.d * 360 * animation_state.eye_rotation_speed;
+  if (animation_state.eye_rotation < 0) {
+    animation_state.eye_rotation += 360;
+  }
+
   float eyes_open_target;
   if (keylogging) {
     eyes_open_target = 1;
@@ -149,11 +155,6 @@ animation::Phase MacroRecorder::Update(time::Timer& timer) {
 #pragma region Draw
 animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
   auto& canvas = dctx.canvas;
-
-  animation_state.eye_rotation -= dctx.timer.d * 360 * animation_state.eye_rotation_speed;
-  if (animation_state.eye_rotation < 0) {
-    animation_state.eye_rotation += 360;
-  }
 
   {  // Draw the eyes
     auto sharingan = SharinganColor();

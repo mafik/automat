@@ -294,7 +294,7 @@ void Machine::DropLocation(std::shared_ptr<Location>&& l) {
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 
 std::shared_ptr<Location> Machine::Extract(Location& location) {
@@ -316,7 +316,7 @@ std::shared_ptr<Location> Machine::Extract(Location& location) {
         break;
       }
     }
-    InvalidateDrawCache();
+    WakeAnimation();
     audio::Play(embedded::assets_SFX_canvas_pick_wav);
     return result;
   } else {

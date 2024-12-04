@@ -124,7 +124,7 @@ void Pointer::Move(Vec2 position) {
     window.camera_x.Shift(-delta.x);
     window.camera_y.Shift(-delta.y);
     window.inertia = false;
-    window.InvalidateDrawCache();
+    window.WakeAnimation();
   }
   if (action) {
     action->Update();
@@ -147,7 +147,7 @@ void Pointer::Wheel(float delta) {
     window.camera_y.Shift(-mouse_delta.y);
   }
   window.zoom_target = std::max(kMinZoom, window.zoom_target);
-  window.InvalidateDrawCache();
+  window.WakeAnimation();
 }
 
 void Pointer::ButtonDown(PointerButton btn) {
@@ -189,7 +189,7 @@ void Pointer::ButtonUp(PointerButton btn) {
       window.camera_y.target = canvas_pos.y;
       window.zoom_target = 1;
       window.inertia = false;
-      window.InvalidateDrawCache();
+      window.WakeAnimation();
     }
   }
   button_down_position[static_cast<int>(btn)] = Vec2(0, 0);

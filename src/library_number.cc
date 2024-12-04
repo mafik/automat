@@ -87,7 +87,7 @@ Number::Number(double x) : value(x) {
         text_field->text += std::to_string(i);
       }
       value = std::stod(text_field->text);
-      text_field->InvalidateDrawCache();
+      text_field->WakeAnimation();
       l.ScheduleUpdate();
     };
   }
@@ -103,7 +103,7 @@ Number::Number(double x) : value(x) {
       text_field->text.erase(0, 1);
     }
     value = std::stod(text_field->text);
-    text_field->InvalidateDrawCache();
+    text_field->WakeAnimation();
     l.ScheduleUpdate();
   };
   backspace->activate = [this](Location& l) {
@@ -114,7 +114,7 @@ Number::Number(double x) : value(x) {
       text_field->text = "0";
     }
     value = std::stod(text_field->text);
-    text_field->InvalidateDrawCache();
+    text_field->WakeAnimation();
     l.ScheduleUpdate();
   };
 }

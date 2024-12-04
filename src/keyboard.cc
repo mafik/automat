@@ -262,7 +262,7 @@ static CaretAnimAction UpdateCaret(time::Timer& timer, CaretAnimation& anim, Car
 CaretAnimation::CaretAnimation(const Keyboard& keyboard)
     : keyboard(keyboard), shape(PointerIBeam(keyboard)), last_blink(time::SteadyNow()) {}
 
-animation::Phase Keyboard::Update(time::Timer& timer) {
+animation::Phase Keyboard::Tick(time::Timer& timer) {
   // Iterate through each Caret & CaretAnimation, and update their animations.
   // Animations may result in a Caret being removed.
   // After a Caret has been removed, its CaretAnimation is kept around for some
@@ -498,7 +498,7 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const std::shared_ptr<Wid
   caret.widget = widget;
   caret.PlaceIBeam(position);
   caret_owner.carets.emplace_back(&caret);
-  InvalidateDrawCache();
+  WakeAnimation();
   return caret;
 }
 

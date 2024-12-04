@@ -56,13 +56,14 @@ void Widget::DrawCached(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void Widget::InvalidateDrawCache() const {
-  if (invalidated == time::SteadyPoint::max()) {
-    // When a widget is invalidated after a long sleep, we assume that it was just rendered. This
+void Widget::WakeAnimation() const {
+  auto now = time::SteadyNow();
+  if (wake_time == time::SteadyPoint::max()) {
+    // When a widget is woken up after a long sleep, we assume that it was just rendered. This
     // prevents the animation from thinking that the initial frame took a very long time.
-    draw_time = update_time = time::SteadyNow();
+    last_tick_time = now;
   }
-  invalidated = min(invalidated, time::SteadyNow());
+  wake_time = min(wake_time, now);
 }
 
 void Widget::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
@@ -347,7 +348,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
         SkColor colors[kNumColors];
         float pos[kNumColors];
         double integer_ignored;
-        double fraction = modf(draw_time.time_since_epoch().count() / 4, &integer_ignored);
+        double fraction = modf(last_tick_time.time_since_epoch().count() / 4, &integer_ignored);
         SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
         for (int i = 0; i < kNumColors; ++i) {
           float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};

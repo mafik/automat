@@ -507,7 +507,7 @@ void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
     timeline.paused.playback_offset =
         clamp<time::T>(timeline.paused.playback_offset + offset, 0, timeline.MaxTrackLength());
   }
-  timeline.InvalidateDrawCache();
+  timeline.WakeAnimation();
 }
 
 void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
@@ -523,7 +523,7 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = pos_ratio * max_track_length;
   }
-  timeline.InvalidateDrawCache();
+  timeline.WakeAnimation();
 }
 
 void NextButton::Activate(gui::Pointer& ptr) {
@@ -701,16 +701,16 @@ struct DragZoomAction : Action {
     timeline.zoom.target *= factor;
     timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
     timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
-    timeline.InvalidateDrawCache();
+    timeline.WakeAnimation();
     for (auto& track : timeline.tracks) {
-      track->InvalidateDrawCache();
+      track->WakeAnimation();
     }
   }
   virtual void End() {
     timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
-    timeline.InvalidateDrawCache();
+    timeline.WakeAnimation();
     for (auto& track : timeline.tracks) {
-      track->InvalidateDrawCache();
+      track->WakeAnimation();
     }
   }
 };
@@ -782,7 +782,7 @@ unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger bt
   return Object::FindAction(ptr, btn);
 }
 
-animation::Phase Timeline::Update(time::Timer& timer) {
+animation::Phase Timeline::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
   if (state == kPlaying) {
     playing.now = time::SteadyNow();
@@ -1309,7 +1309,7 @@ void Timeline::Cancel() {
       TimelineUpdateOutputs(*h, *this, time::SteadyPoint{},
                             time::SteadyPoint{} + time::Duration(paused.playback_offset));
     }
-    run_button->InvalidateDrawCache();
+    run_button->WakeAnimation();
   }
 }
 
@@ -1326,8 +1326,8 @@ LongRunning* Timeline::OnRun(Location& here) {
   playing = {.started_at = now - time::Duration(paused.playback_offset)};
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   TimelineScheduleAt(*this, now);
-  run_button->InvalidateDrawCache();
-  InvalidateDrawCache();
+  run_button->WakeAnimation();
+  WakeAnimation();
   return this;
 }
 
@@ -1347,8 +1347,8 @@ void Timeline::BeginRecording() {
       recording.now = playing.now;
       break;
   }
-  run_button->InvalidateDrawCache();
-  InvalidateDrawCache();
+  run_button->WakeAnimation();
+  WakeAnimation();
 }
 
 void Timeline::StopRecording() {
@@ -1359,8 +1359,8 @@ void Timeline::StopRecording() {
   paused = {.playback_offset =
                 min((time::SteadyNow() - recording.started_at).count(), timeline_length)};
   state = Timeline::kPaused;
-  run_button->InvalidateDrawCache();
-  InvalidateDrawCache();
+  run_button->WakeAnimation();
+  WakeAnimation();
 }
 
 void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
@@ -1396,7 +1396,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
     Done(here);
-    run_button->InvalidateDrawCache();
+    run_button->WakeAnimation();
   }
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   if (now < end_at) {

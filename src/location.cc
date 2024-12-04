@@ -179,7 +179,7 @@ SkPath Outset(const SkPath& path, float distance) {
   }
 }
 
-animation::Phase Location::Update(time::Timer& timer) {
+animation::Phase Location::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
   auto& state = GetAnimationState();
@@ -311,7 +311,7 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
       if (moved && !value_changed) {
         w->FromMoved();
       } else {
-        w->InvalidateDrawCache();
+        w->WakeAnimation();
         if (w->state) {
           w->state->stabilized = false;
         }
@@ -321,7 +321,7 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
       for (auto it = begin; it != end; ++it) {
         auto* connection = *it;
         if (&w->from == &connection->from) {
-          w->InvalidateDrawCache();
+          w->WakeAnimation();
         }
       }
     }
@@ -575,7 +575,7 @@ void Location::UpdateAutoconnectArgs() {
 
       // Wake the animation loop of the ConnectionWidget
       if (auto connection_widget = ConnectionWidget::Find(*other, arg)) {
-        connection_widget->InvalidateDrawCache();
+        connection_widget->WakeAnimation();
       }
 
       auto start = other->object->ArgStart(arg);

@@ -44,7 +44,7 @@ struct TextField : Widget, CaretOwner {
   TextField(std::string* text, float width) : text(text), width(width) {}
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
-  animation::Phase Update(time::Timer&) override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;

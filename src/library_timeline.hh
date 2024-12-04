@@ -123,7 +123,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   Timeline(const Timeline&);
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
-  animation::Phase Update(time::Timer&) override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;

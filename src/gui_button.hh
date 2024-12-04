@@ -30,14 +30,14 @@ struct Button : Widget {
   Button(std::shared_ptr<Widget> child) : child(child) {}
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
-  animation::Phase Update(time::Timer&) override;
+  animation::Phase Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
   float Height() const;
   virtual SkRRect RRect() const;
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
-  virtual void Activate(gui::Pointer&) { InvalidateDrawCache(); }
+  virtual void Activate(gui::Pointer&) { WakeAnimation(); }
   virtual SkColor ForegroundColor() const { return SK_ColorBLACK; }  // "#d69d00"_color
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
@@ -113,7 +113,7 @@ struct ToggleButton : Widget {
   }
 
   virtual std::shared_ptr<Button>& OnWidget() { return on; }
-  animation::Phase Update(time::Timer&) override;
+  animation::Phase Tick(time::Timer&) override;
   void PreDrawChildren(SkCanvas&) const override;
   void DrawChildCachced(SkCanvas&, const Widget& child) const override;
   SkRRect RRect() const { return off->RRect(); }

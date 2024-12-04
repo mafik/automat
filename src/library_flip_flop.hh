@@ -37,7 +37,7 @@ struct FlipFlop : LiveObject, Runnable {
   FlipFlop();
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
-  animation::Phase Update(time::Timer& timer) override;
+  animation::Phase Tick(time::Timer& timer) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;

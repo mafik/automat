@@ -208,7 +208,7 @@ struct Keyboard final : Widget {
 
   Keylogging& BeginKeylogging(Keylogger&);
 
-  animation::Phase Update(time::Timer&) override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }

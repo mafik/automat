@@ -24,13 +24,13 @@ namespace automat::gui {
 void TextField::PointerOver(Pointer& pointer) {
   pointer.PushIcon(Pointer::kIconIBeam);
   hover.Increment();
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 
 void TextField::PointerLeave(Pointer& pointer) {
   pointer.PopIcon();
   hover.Decrement();
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 
 void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
@@ -87,7 +87,7 @@ static SkPaint kDefaultBackgroundPaint = []() {
 const SkPaint& TextField::GetTextPaint() const { return kDefaultTextPaint; }
 const SkPaint& TextField::GetBackgroundPaint() const { return kDefaultBackgroundPaint; }
 
-animation::Phase TextField::Update(time::Timer& timer) {
+animation::Phase TextField::Tick(time::Timer& timer) {
   return animation::ExponentialApproach(hover.hovering_pointers ? 1 : 0, timer.d, 0.2,
                                         hover.animation);
 }

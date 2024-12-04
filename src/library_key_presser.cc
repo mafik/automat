@@ -66,7 +66,7 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
 KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 std::shared_ptr<Object> KeyPresser::Clone() const { return std::make_shared<KeyPresser>(key); }
-animation::Phase KeyPresser::Update(time::Timer&) {
+animation::Phase KeyPresser::Tick(time::Timer&) {
   shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
   return animation::Finished;
 }
@@ -193,7 +193,7 @@ LongRunning* KeyPresser::OnRun(Location& here) {
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
   key_pressed = true;
-  InvalidateDrawCache();
+  WakeAnimation();
   return this;
 }
 
@@ -201,7 +201,7 @@ void KeyPresser::Cancel() {
   audio::Play(embedded::assets_SFX_key_up_wav);
   SendKeyEvent(key, false);
   key_pressed = false;
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 
 void KeyPresser::SerializeState(Serializer& writer, const char* key) const {

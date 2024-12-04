@@ -95,7 +95,7 @@ std::shared_ptr<Object> FlipFlop::Clone() const {
   return ret;
 }
 
-animation::Phase FlipFlop::Update(time::Timer& timer) {
+animation::Phase FlipFlop::Tick(time::Timer& timer) {
   return animation::LinearApproach(current_state, timer.d, 10, animation_state.light);
 }
 
@@ -161,8 +161,8 @@ SkMatrix FlipFlop::TransformToChild(const Widget& child) const {
 
 LongRunning* FlipFlop::OnRun(Location& here) {
   current_state = !current_state;
-  InvalidateDrawCache();
-  button->InvalidateDrawCache();
+  WakeAnimation();
+  button->WakeAnimation();
   flip_arg.InvalidateConnectionWidgets(here);
 
   if (current_state) {

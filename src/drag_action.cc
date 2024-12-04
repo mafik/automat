@@ -70,7 +70,7 @@ void DragLocationAction::Update() {
     last_snapped_position = position;
     location->animation_state.position.value += current_position - last_position;
     location->UpdateAutoconnectArgs();
-    location->InvalidateDrawCache();
+    location->WakeAnimation();
     location->InvalidateConnectionWidgets(true, false);
   }
 
@@ -82,7 +82,7 @@ SkPath DragLocationWidget::Shape() const { return SkPath(); }
 void DragLocationAction::End() {
   gui::DropTarget* drop_target = FindDropTarget(*this);
   if (drop_target) {
-    location->InvalidateDrawCache();
+    location->WakeAnimation();
     drop_target->DropLocation(std::move(location));
   }
 }

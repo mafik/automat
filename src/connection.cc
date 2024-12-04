@@ -29,7 +29,7 @@ Connection::~Connection() {
     for (int i = 0; i < window->connection_widgets.size(); ++i) {
       auto& widget = *window->connection_widgets[i];
       if (&widget.from == &from && &widget.arg == &argument) {
-        widget.InvalidateDrawCache();
+        widget.WakeAnimation();
       }
     }
   }

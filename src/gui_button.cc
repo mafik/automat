@@ -27,13 +27,13 @@ namespace automat::gui {
 void Button::PointerOver(Pointer& pointer) {
   animation_state.pointers_over++;
   pointer.PushIcon(Pointer::kIconHand);
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 
 void Button::PointerLeave(Pointer& pointer) {
   animation_state.pointers_over--;
   pointer.PopIcon();
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 
 namespace {
@@ -108,7 +108,7 @@ void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
   canvas.drawRRect(pressed_oval, border);
 }
 
-animation::Phase Button::Update(time::Timer& timer) {
+animation::Phase Button::Tick(time::Timer& timer) {
   auto phase = animation::LinearApproach(animation_state.pointers_over ? 1 : 0, timer.d, 10,
                                          animation_state.highlight);
 
@@ -141,7 +141,7 @@ void Button::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-animation::Phase ToggleButton::Update(time::Timer& timer) {
+animation::Phase ToggleButton::Tick(time::Timer& timer) {
   time_seconds = timer.NowSeconds();
   return animation::ExponentialApproach(Filled() ? 1 : 0, timer.d, 0.15, filling);
 }
@@ -225,7 +225,7 @@ struct ButtonAction : public Action {
 
   void End() override {
     button.press_action_count--;
-    button.InvalidateDrawCache();
+    button.WakeAnimation();
   }
 
   ~ButtonAction() override { audio::Play(embedded::assets_SFX_button_up_wav); }

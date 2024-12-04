@@ -57,7 +57,7 @@ SkPath Toolbar::Shape() const {
   return SkPath::Rect(rect);
 }
 
-animation::Phase Toolbar::Update(time::Timer& timer) {
+animation::Phase Toolbar::Tick(time::Timer& timer) {
   float width_targets[buttons.size()];
   for (size_t i = 0; i < buttons.size(); ++i) {
     width_targets[i] = buttons[i]->natural_width;

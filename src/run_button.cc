@@ -26,7 +26,7 @@ PowerButton::PowerButton(OnOff* target, SkColor fg, SkColor bg)
 
 void PowerButton::Activate(gui::Pointer& p) {
   target->Toggle();
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 bool PowerButton::Filled() const { return target->IsOn(); }
 }  // namespace automat::gui

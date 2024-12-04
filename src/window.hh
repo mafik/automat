@@ -87,7 +87,7 @@ struct Window final : Widget, DropTarget {
   }
   void Draw(SkCanvas&);
 
-  animation::Phase Update(time::Timer&) override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
 
   Vec2 move_velocity = Vec2(0, 0);

@@ -67,7 +67,7 @@ void Window::Draw(SkCanvas& canvas) {
   canvas.restore();
 }
 
-animation::Phase Window::Update(time::Timer& timer) {
+animation::Phase Window::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
   // Record camera movement timeline. This is used to create inertia effect.
@@ -250,11 +250,11 @@ struct MoveCameraAction : Action {
       : Action(pointer), window(window), delta(delta) {}
   ~MoveCameraAction() {
     window.move_velocity -= delta;
-    window.InvalidateDrawCache();
+    window.WakeAnimation();
   }
   void Begin() override {
     window.move_velocity += delta;
-    window.InvalidateDrawCache();
+    window.WakeAnimation();
   }
   void Update() override {}
   void End() override {}

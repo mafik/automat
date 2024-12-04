@@ -226,7 +226,7 @@ void LiveArgument::Attach(Location& here) {
 void Argument::InvalidateConnectionWidgets(Location& here) const {
   for (auto& w : gui::window->connection_widgets) {
     if (&w->from == &here && &w->arg == this) {  // updates all outgoing connection widgets
-      w->InvalidateDrawCache();
+      w->WakeAnimation();
       if (w->state) {
         w->state->stabilized = false;
       }

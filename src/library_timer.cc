@@ -147,7 +147,7 @@ static void SetDuration(TimerDelay& timer, Duration new_duration) {
 
   timer.duration.value = new_duration;
   UpdateTextField(timer);
-  timer.InvalidateDrawCache();
+  timer.WakeAnimation();
 }
 
 static void PropagateDurationOutwards(TimerDelay& timer) {
@@ -440,7 +440,7 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
   canvas.restore();
 }
 
-animation::Phase TimerDelay::Update(time::Timer& timer) {
+animation::Phase TimerDelay::Tick(time::Timer& timer) {
   auto phase = IsRunning(*this) ? animation::Animating : animation::Finished;
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
@@ -657,13 +657,13 @@ struct DragHandAction : Action {
     }
     Vec2 pos = gui::TransformDown(*timer_shared).mapPoint(pointer.pointer_position);
     timer_shared->hand_degrees.value = atan(pos) * 180 / M_PI;
-    timer_shared->InvalidateDrawCache();
+    timer_shared->WakeAnimation();
   }
   virtual void End() {}
   ~DragHandAction() {
     if (auto timer = timer_weak.lock()) {
       --timer->hand_draggers;
-      timer->InvalidateDrawCache();
+      timer->WakeAnimation();
     }
   }
 };
@@ -677,7 +677,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
     }
     if (kStartPusherBox.contains(pos.x, pos.y)) {
       start_pusher_depression = 1;
-      InvalidateDrawCache();
+      WakeAnimation();
       if (auto h = here.lock()) {
         if (IsRunning(*this)) {
           Cancel();
@@ -695,7 +695,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
       left_pusher_depression = 1;
       UpdateTextField(*this);
       PropagateDurationOutwards(*this);
-      InvalidateDrawCache();
+      WakeAnimation();
       return nullptr;
     }
     if (kSmallPusherBox.contains(right_rot.x(), right_rot.y())) {
@@ -703,7 +703,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
       right_pusher_depression = 1;
       UpdateTextField(*this);
       PropagateDurationOutwards(*this);
-      InvalidateDrawCache();
+      WakeAnimation();
       return nullptr;
     }
 
@@ -727,7 +727,7 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
 LongRunning* TimerDelay::OnRun(Location& here) {
   start_time = time::SteadyClock::now();
   ScheduleAt(here, start_time + duration.value);
-  InvalidateDrawCache();
+  WakeAnimation();
   return this;
 }
 
@@ -735,7 +735,7 @@ void TimerDelay::Cancel() {
   if (auto h = here.lock()) {
     CancelScheduledAt(*h, start_time + duration.value);
   }
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 
 DurationArgument::DurationArgument() : LiveArgument("duration", Argument::kOptional) {

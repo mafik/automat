@@ -67,7 +67,7 @@ struct ConnectionWidget : Widget {
   maf::StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;
   void PreDraw(SkCanvas&) const override;
-  animation::Phase Update(time::Timer&) override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   maf::Optional<Rect> TextureBounds() const override;

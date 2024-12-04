@@ -73,7 +73,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   vector<WidgetTree> tree;
 
   auto GetLag = [now](WidgetTree& tree_entry) -> float {
-    return max(time::Duration(0), now - tree_entry.widget->invalidated).count();
+    return max(time::Duration(0), now - tree_entry.widget->wake_time).count();
   };
 
   auto GetRenderTime = [](WidgetTree& tree_entry) {
@@ -109,7 +109,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
           // condition here.
           renderable_parent = renderable_parent->parent.get();
         }
-        renderable_parent->invalidated = min(renderable_parent->invalidated, widget->draw_time);
+        renderable_parent->wake_time = min(renderable_parent->wake_time, widget->last_tick_time);
       }
 
       widget->recording.reset();
@@ -141,18 +141,18 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       auto& node = tree.back();
 
       // UPDATE
-      if (widget->invalidated != time::SteadyPoint::max()) {
+      if (widget->wake_time != time::SteadyPoint::max()) {
         node.wants_to_draw = true;
         auto true_d = window->timer.d;
-        auto fake_d = min(1.0, (now - widget->update_time).count());
+        auto fake_d = min(1.0, (now - widget->last_tick_time).count());
         window->timer.d = fake_d;
-        auto animation_phase = widget->Update(window->timer);
+        auto animation_phase = widget->Tick(window->timer);
         window->timer.d = true_d;
-        widget->update_time = now;
+        widget->last_tick_time = now;
         if (animation_phase == animation::Finished) {
-          widget->invalidated = time::SteadyPoint::max();
+          widget->wake_time = time::SteadyPoint::max();
         } else {
-          widget->invalidated = now;
+          widget->wake_time = now;
         }
       }
 
@@ -389,9 +389,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
     }
 
-    // ACTUALLY the delta time is `draw_time - now`.
-    widget.draw_time =
-        now;  // TODO(when Update & Draw are separated): update this right after Update
     widget.window_to_local = node.window_to_local;
     widget.surface_bounds_root = node.surface_bounds_root;
     SkPictureRecorder recorder;

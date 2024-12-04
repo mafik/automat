@@ -140,7 +140,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
     this->label = label;
     width = KeyFont().MeasureText(label);
     LOG << "KeyLabelWidget::SetLabel: " << label << " width: " << width;
-    InvalidateDrawCache();
+    WakeAnimation();
   }
 };
 

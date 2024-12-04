@@ -237,7 +237,7 @@ HotKey::HotKey() {
       hotkey_selector->Release();  // This will also set itself to nullptr
     } else {
       hotkey_selector = &pointer.keyboard->RequestGrab(*this);
-      shortcut_button->InvalidateDrawCache();
+      shortcut_button->WakeAnimation();
     }
   };
 }
@@ -252,7 +252,7 @@ std::shared_ptr<Object> HotKey::Clone() const {
   return ret;
 }
 
-animation::Phase HotKey::Update(time::Timer& t) {
+animation::Phase HotKey::Tick(time::Timer& t) {
   if (hotkey_selector) {
     shortcut_button->fg = kKeyGrabbingColor;
   } else {
@@ -454,7 +454,7 @@ void HotKey::Off() {
 void HotKey::ReleaseGrab(gui::KeyboardGrab&) {
   hotkey_selector = nullptr;
   LOG << "HotKey::ReleaseGrab - invalidating shortcut_button!";
-  shortcut_button->InvalidateDrawCache();
+  shortcut_button->WakeAnimation();
 }
 void HotKey::ReleaseKeyGrab(gui::KeyGrab&) { hotkey = nullptr; }
 

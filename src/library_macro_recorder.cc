@@ -105,7 +105,7 @@ std::shared_ptr<Object> MacroRecorder::Clone() const {
   return clone;
 }
 
-animation::Phase MacroRecorder::Update(time::Timer& timer) {
+animation::Phase MacroRecorder::Tick(time::Timer& timer) {
   auto phase = keylogging ? animation::Animating : animation::Finished;
 
   phase |= animation::ExponentialApproach(keylogging ? 1 : 0, timer.d, 0.2,
@@ -485,7 +485,7 @@ void MacroRecorder::Off() {
 void MacroRecorder::PointerOver(gui::Pointer& p) {
   animation_state.pointers_over++;
   StartWatching(p);
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 void MacroRecorder::PointerLeave(gui::Pointer& p) {
   animation_state.pointers_over--;
@@ -493,7 +493,7 @@ void MacroRecorder::PointerLeave(gui::Pointer& p) {
   p.move_callbacks.Erase(this);
 }
 
-void MacroRecorder::PointerMove(gui::Pointer&, Vec2 position) { InvalidateDrawCache(); }
+void MacroRecorder::PointerMove(gui::Pointer&, Vec2 position) { WakeAnimation(); }
 
 void GlassRunButton::PointerOver(gui::Pointer& p) {
   ToggleButton::PointerOver(p);
@@ -501,7 +501,7 @@ void GlassRunButton::PointerOver(gui::Pointer& p) {
   if (auto h = macro_recorder->here.lock()) {
     if (auto connection_widget = ConnectionWidget::Find(*h, timeline_arg)) {
       connection_widget->animation_state.prototype_alpha_target = 1;
-      connection_widget->InvalidateDrawCache();
+      connection_widget->WakeAnimation();
     }
   }
 }
@@ -512,7 +512,7 @@ void GlassRunButton::PointerLeave(gui::Pointer& p) {
   if (auto h = macro_recorder->here.lock()) {
     if (auto connection_widget = ConnectionWidget::Find(*h, timeline_arg)) {
       connection_widget->animation_state.prototype_alpha_target = 0;
-      connection_widget->InvalidateDrawCache();
+      connection_widget->WakeAnimation();
     }
   }
 }

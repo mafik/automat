@@ -170,10 +170,10 @@ void ConnectionWidget::FromMoved() {
     }
     state->stabilized = false;
   }
-  InvalidateDrawCache();
+  WakeAnimation();
 }
 
-animation::Phase ConnectionWidget::Update(time::Timer& timer) {
+animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   auto& from_animation_state = from.GetAnimationState();
   SkPath from_shape = from.object->Shape();
   if (arg.field) {
@@ -364,7 +364,7 @@ DragConnectionAction::~DragConnectionAction() {
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       l->animation_state.highlight_target = 0;
-      l->InvalidateDrawCache();
+      l->WakeAnimation();
     }
   }
 }
@@ -399,16 +399,16 @@ void DragConnectionAction::Begin() {
       } else {
         l->GetAnimationState().highlight_target = 0;
       }
-      l->InvalidateDrawCache();
+      l->WakeAnimation();
     }
   }
-  widget.InvalidateDrawCache();
+  widget.WakeAnimation();
 }
 
 void DragConnectionAction::Update() {
   Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
-  widget.InvalidateDrawCache();
+  widget.WakeAnimation();
 }
 
 void DragConnectionAction::End() {
@@ -425,7 +425,7 @@ void DragConnectionAction::End() {
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
     widget.from.ConnectTo(*to, widget.arg);
   }
-  widget.InvalidateDrawCache();
+  widget.WakeAnimation();
 }
 
 maf::Optional<Rect> ConnectionWidget::TextureBounds() const {

@@ -58,7 +58,7 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   maf::StrView Name() const override;
   std::shared_ptr<Object> Clone() const override;
   SkPath Shape() const override;
-  animation::Phase Update(time::Timer&) override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const Widget& child) const override;
@@ -71,9 +71,9 @@ struct Toolbar : Object, gui::PointerMoveCallback {
 
   void PointerLeave(gui::Pointer& pointer) override {
     StopWatching(pointer);
-    InvalidateDrawCache();
+    WakeAnimation();
   }
-  void PointerMove(gui::Pointer&, Vec2 position) override { InvalidateDrawCache(); }
+  void PointerMove(gui::Pointer&, Vec2 position) override { WakeAnimation(); }
 };
 
 }  // namespace automat::library

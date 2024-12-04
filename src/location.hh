@@ -258,7 +258,7 @@ struct Location : public gui::Widget {
   }
   void SetNumber(double number);
 
-  animation::Phase Update(time::Timer& timer) override;
+  animation::Phase Tick(time::Timer& timer) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;

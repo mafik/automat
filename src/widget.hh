@@ -122,14 +122,13 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   mutable uint32_t id = 0;
   float average_draw_millis = FP_NAN;
 
-  // The time when the cache entry was first invalidated.
-  // Initially this is set to 0 (meaning it was never drawn).
-  // When the widget is scheduled, set this to max value.
-  mutable time::SteadyPoint invalidated = time::SteadyPoint::min();
+  // The time when the animation should wake up.
+  // Initially this is set to 0 (meaning it should wake up immediately).
+  // When the widget's animation finishes, set this to max value.
+  mutable time::SteadyPoint wake_time = time::SteadyPoint::min();
 
   // Things updated in PackFrame (& Draw)
-  mutable time::SteadyPoint update_time = time::SteadyPoint::min();
-  mutable time::SteadyPoint draw_time = time::SteadyPoint::min();
+  mutable time::SteadyPoint last_tick_time = time::SteadyPoint::min();
   Rect draw_texture_bounds;
   maf::Vec<Vec2> draw_texture_anchors;
   SkIRect surface_bounds_root;
@@ -181,7 +180,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
 
   virtual void PreDraw(SkCanvas&) const {}
   void DrawCached(SkCanvas&) const;
-  virtual void InvalidateDrawCache() const;
+  virtual void WakeAnimation() const;
 
   std::weak_ptr<Widget> WeakPtr() const {
     // For some reason, `static_pointer_cast` doesn't work with weak_ptr.
@@ -193,9 +192,11 @@ struct Widget : public std::enable_shared_from_this<Widget> {
     return static_pointer_cast<T>(const_cast<Widget*>(this)->shared_from_this());
   }
 
-  // Called before Draw & PreDraw. The widgets can use this to update their state.
-  // Only widgets that are being drawn will have this called.
-  virtual animation::Phase Update(time::Timer&) { return animation::Finished; }
+  // Called for visible widgets while they're being animated.
+  // Use this function to update the widget's animation state.
+  // Once a widget finishes its animation, it's Tick is no longer being called. Wake it up again by
+  // calling WakeAnimation.
+  virtual animation::Phase Tick(time::Timer&) { return animation::Finished; }
 
   virtual void Draw(SkCanvas& canvas) const { return DrawChildren(canvas); }
   virtual SkPath Shape() const = 0;

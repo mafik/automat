@@ -121,10 +121,8 @@ void Pointer::Move(Vec2 position) {
   pointer_position = position;
   if (button_down_time[static_cast<int>(PointerButton::Middle)] > time::kZero) {
     Vec2 delta = window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
-    window.camera_x_target -= delta.x;
-    window.camera_y_target -= delta.y;
-    window.camera_x -= delta.x;
-    window.camera_y -= delta.y;
+    window.camera_target -= delta;
+    window.camera_pos -= delta;
     window.inertia = false;
     window.WakeAnimation();
   }
@@ -145,10 +143,8 @@ void Pointer::Wheel(float delta) {
     window.zoom *= factor;
     Vec2 mouse_post = window.WindowToCanvas(pointer_position);
     Vec2 mouse_delta = mouse_post - mouse_pre;
-    window.camera_x_target -= mouse_delta.x;
-    window.camera_y_target -= mouse_delta.y;
-    window.camera_x -= mouse_delta.x;
-    window.camera_y -= mouse_delta.y;
+    window.camera_target -= mouse_delta;
+    window.camera_pos -= mouse_delta;
   }
   window.zoom_target = std::max(kMinZoom, window.zoom_target);
   window.WakeAnimation();
@@ -189,8 +185,7 @@ void Pointer::ButtonUp(PointerButton btn) {
     float delta_m = Length(delta);
     if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
       Vec2 canvas_pos = window.WindowToCanvas(pointer_position);
-      window.camera_x_target = canvas_pos.x;
-      window.camera_y_target = canvas_pos.y;
+      window.camera_target = canvas_pos;
       window.zoom_target = 1;
       window.inertia = false;
       window.WakeAnimation();

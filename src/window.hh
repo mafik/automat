@@ -46,34 +46,30 @@ struct Window final : Widget, DropTarget {
   float PxPerMeter() const { return display_pixels_per_meter * zoom; }
 
   SkRect GetCameraRect() {
-    return SkRect::MakeXYWH(camera_x - size.width / 2, camera_y - size.height / 2, size.width,
-                            size.height);
+    return SkRect::MakeXYWH(camera_pos.x - size.width / 2, camera_pos.y - size.height / 2,
+                            size.width, size.height);
   }
 
-  Vec2 WindowToCanvas(Vec2 window) const {
-    return (window - size / 2) / zoom + Vec2(camera_x, camera_y);
-  }
+  Vec2 WindowToCanvas(Vec2 window) const { return (window - size / 2) / zoom + camera_pos; }
 
   SkMatrix WindowToCanvas() const {
     SkMatrix m;
     m.setTranslate(-size.width / 2, -size.height / 2);
     m.postScale(1 / zoom, 1 / zoom);
-    m.postTranslate(camera_x, camera_y);
+    m.postTranslate(camera_pos.x, camera_pos.y);
     return m;
   }
 
   SkMatrix CanvasToWindow() const {
     SkMatrix m;
     // assert(WindowToCanvas().invert(&m));
-    m.setTranslate(-camera_x, -camera_y);
+    m.setTranslate(-camera_pos.x, -camera_pos.y);
     m.postScale(zoom, zoom);
     m.postTranslate(size.width / 2, size.height / 2);
     return m;
   }
 
-  Vec2 CanvasToWindow(Vec2 canvas) const {
-    return (canvas - Vec2(camera_x, camera_y)) * zoom + size / 2;
-  }
+  Vec2 CanvasToWindow(Vec2 canvas) const { return (canvas - camera_pos) * zoom + size / 2; }
 
   std::function<void(Vec2 new_size)> RequestResize = nullptr;
   std::function<void(bool maximize_horizontally, bool maximize_vertically)> RequestMaximize =
@@ -120,10 +116,8 @@ struct Window final : Widget, DropTarget {
 
   float zoom = 1;
   float zoom_target = 1;
-  float camera_x = 0;
-  float camera_x_target = 0;
-  float camera_y = 0;
-  float camera_y_target = 0;
+  Vec2 camera_pos = Vec2(0, 0);
+  Vec2 camera_target = Vec2(0, 0);
   float trash_radius = 0;
   float trash_radius_target = 0;
   int drag_action_count = 0;

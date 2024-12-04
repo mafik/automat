@@ -78,6 +78,7 @@ union Vec3 {
   float elements[3];
   constexpr Vec3() : x(0), y(0), z(0) {}
   constexpr Vec3(float x, float y, float z) : x(x), y(y), z(z) {}
+  constexpr Vec3(Vec2 xy, float z) : x(xy.x), y(xy.y), z(z) {}
   constexpr Vec3& operator+=(const Vec3& rhs) {
     x += rhs.x;
     y += rhs.y;

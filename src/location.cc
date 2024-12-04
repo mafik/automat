@@ -233,11 +233,7 @@ void Location::Draw(SkCanvas& canvas) const {
     SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();
-    auto to_child = TransformToChild(*object);
-    SkMatrix from_child;
-    (void)to_child.invert(&from_child);
-    canvas.concat(from_child);
-
+    canvas.concat(object->local_to_parent);
     static const SkPaint kHighlightPaint = [] {
       SkPaint paint;
       paint.setAntiAlias(true);
@@ -454,11 +450,7 @@ void Location::PreDraw(SkCanvas& canvas) const {
   }
   auto& anim = GetAnimationState();
   auto shape = object->Shape();
-
-  auto to_child = TransformToChild(*object);
-  SkMatrix from_child;
-  (void)to_child.invert(&from_child);
-  canvas.concat(from_child);
+  canvas.concat(object->local_to_parent);
 
   auto rect = shape.getBounds();
   auto window = dynamic_cast<gui::Window*>(&RootWidget());

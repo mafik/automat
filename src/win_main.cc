@@ -72,15 +72,15 @@ Vec2 WindowSize() { return Vec2(client_width, client_height) / DisplayPxPerMeter
 
 namespace automat::gui {
 
-Vec2 ScreenToWindow(Vec2 screen) {
-  Vec2 window = (screen - Vec2(client_x, client_y + client_height)) / DisplayPxPerMeter();
+Vec2 ScreenToWindowPx(Vec2 screen) {
+  Vec2 window = (screen - Vec2(client_x, client_y + client_height));
   window.y = -window.y;
   return window;
 }
 
-Vec2 WindowToScreen(Vec2 window) {
+Vec2 WindowPxToScreen(Vec2 window) {
   window.y = -window.y;
-  return window * DisplayPxPerMeter() + Vec2(client_x, client_height + client_y);
+  return window + Vec2(client_x, client_height + client_y);
 }
 
 Vec2 GetMainPointerScreenPos() { return mouse_position; }
@@ -91,7 +91,7 @@ std::unique_ptr<gui::Pointer> mouse;
 
 gui::Pointer& GetMouse() {
   if (!mouse) {
-    mouse = std::make_unique<gui::Pointer>(*window, automat::gui::ScreenToWindow(mouse_position));
+    mouse = std::make_unique<gui::Pointer>(*window, automat::gui::ScreenToWindowPx(mouse_position));
     TRACKMOUSEEVENT track_mouse_event = {
         .cbSize = sizeof(TRACKMOUSEEVENT),
         .dwFlags = TME_LEAVE,
@@ -493,7 +493,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
       mouse_position.x = x + client_x;
       mouse_position.y = y + client_y;
       std::lock_guard<std::mutex> lock(window->mutex);
-      GetMouse().Move(automat::gui::ScreenToWindow(mouse_position));
+      GetMouse().Move(automat::gui::ScreenToWindowPx(mouse_position));
       break;
     }
     case WM_MOUSELEAVE: {

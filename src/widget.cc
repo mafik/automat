@@ -36,11 +36,7 @@ namespace automat::gui {
 void Widget::PreDrawChildren(SkCanvas& canvas) const {
   for (auto& widget : ranges::reverse_view(Children())) {
     canvas.save();
-    const SkMatrix down = this->TransformToChild(*widget);
-    SkMatrix up;
-    if (down.invert(&up)) {
-      canvas.concat(up);
-    }
+    canvas.concat(widget->local_to_parent);
     widget->PreDraw(canvas);
     canvas.restore();
   }
@@ -67,11 +63,7 @@ void Widget::WakeAnimation() const {
 }
 
 void Widget::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
-  const SkMatrix down = this->TransformToChild(child);
-  SkMatrix up;
-  if (down.invert(&up)) {
-    canvas.concat(up);
-  }
+  canvas.concat(child.local_to_parent);
   child.DrawCached(canvas);
 }
 
@@ -94,23 +86,18 @@ void Widget::DrawChildren(SkCanvas& canvas) const {
 }
 
 SkMatrix TransformDown(const Widget& to) {
-  if (to.parent) {
-    SkMatrix ret = TransformDown(*to.parent);
-    ret.postConcat(to.parent->TransformToChild(to));
-    return ret;
-  } else {
-    return SkMatrix::I();
-  }
+  auto up = TransformUp(to);
+  SkMatrix down;
+  (void)up.invert(&down);
+  return down;
 }
 
 SkMatrix TransformUp(const Widget& from) {
-  SkMatrix down = TransformDown(from);
-  SkMatrix up;
-  if (down.invert(&up)) {
-    return up;
-  } else {
-    return SkMatrix::I();
+  SkMatrix up = from.local_to_parent.asM33();
+  if (from.parent) {
+    up.postConcat(TransformUp(*from.parent));
   }
+  return up;
 }
 
 SkMatrix TransformBetween(const Widget& from, const Widget& to) {

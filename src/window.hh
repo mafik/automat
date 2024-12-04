@@ -50,26 +50,20 @@ struct Window final : Widget, DropTarget {
                             size.width, size.height);
   }
 
-  Vec2 WindowToCanvas(Vec2 window) const { return (window - size / 2) / zoom + camera_pos; }
-
   SkMatrix WindowToCanvas() const {
-    SkMatrix m;
-    m.setTranslate(-size.width / 2, -size.height / 2);
-    m.postScale(1 / zoom, 1 / zoom);
-    m.postTranslate(camera_pos.x, camera_pos.y);
-    return m;
+    auto m = CanvasToWindow();
+    SkMatrix inv;
+    (void)m.invert(&inv);
+    return inv;
   }
 
   SkMatrix CanvasToWindow() const {
     SkMatrix m;
-    // assert(WindowToCanvas().invert(&m));
     m.setTranslate(-camera_pos.x, -camera_pos.y);
     m.postScale(zoom, zoom);
     m.postTranslate(size.width / 2, size.height / 2);
     return m;
   }
-
-  Vec2 CanvasToWindow(Vec2 canvas) const { return (canvas - camera_pos) * zoom + size / 2; }
 
   std::function<void(Vec2 new_size)> RequestResize = nullptr;
   std::function<void(bool maximize_horizontally, bool maximize_vertically)> RequestMaximize =
@@ -138,13 +132,13 @@ struct Window final : Widget, DropTarget {
   std::mutex mutex;
 };
 
-// Converts a point in the screen pixel coordinates (origin at the top left) to window coordinates
-// (SI units origin at the bottom left).
-Vec2 ScreenToWindow(Vec2 screen);
+// Converts a point in the screen pixel coordinates (origin at the top left) to window pixel
+// coordinates (origin at the bottom left).
+Vec2 ScreenToWindowPx(Vec2 screen);
 
-// Converts a point in the window (SI units origin at the bottom left) to screen pixel coordinates
-// (origin at the top left).
-Vec2 WindowToScreen(Vec2 window);
+// Converts a point in the window pixel coordinates (origin at the bottom left) to screen pixel
+// coordinates (origin at the top left).
+Vec2 WindowPxToScreen(Vec2 window);
 
 // Returns the position of the main pointer in screen coordinates (pixels originating at the top
 // left).

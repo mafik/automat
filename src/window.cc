@@ -141,19 +141,20 @@ animation::Phase Window::Tick(time::Timer& timer) {
   if (stabilize_mouse) {
     if (pointers.size() > 0) {
       Pointer* first_pointer = *pointers.begin();
-      Vec2 mouse_position = first_pointer->pointer_position;
-      Vec2 focus_pre = WindowToCanvas(mouse_position);
+      Vec2 mouse_position = TransformDown(*this).mapPoint(first_pointer->pointer_position);
+      Vec2 focus_pre = WindowToCanvas().mapPoint(mouse_position);
       phase |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
-      Vec2 focus_post = WindowToCanvas(mouse_position);
+      Vec2 focus_post = WindowToCanvas().mapPoint(mouse_position);
       Vec2 focus_delta = focus_pre - focus_post;
       camera_pos += focus_delta;
       camera_target += focus_delta;
     }
   } else {  // stabilize camera target
     Vec2 focus_pre = camera_target;
-    Vec2 target_screen = CanvasToWindow(focus_pre);
+
+    Vec2 target_screen = CanvasToWindow().mapPoint(focus_pre);
     phase |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
-    Vec2 focus_post = WindowToCanvas(target_screen);
+    Vec2 focus_post = WindowToCanvas().mapPoint(target_screen);
     Vec2 focus_delta = focus_post - focus_pre;
     camera_pos -= focus_delta;
   }
@@ -183,27 +184,26 @@ animation::Phase Window::Tick(time::Timer& timer) {
   {
     // Leave 1mm of margin so that the user can still see the edge of the
     // work area
-    Vec2 bottom_left = WindowToCanvas(Vec2(0.001, 0.001));
-    Vec2 top_right = WindowToCanvas(size - Vec2(0.001, 0.001));
-    SkRect window_bounds = SkRect::MakeLTRB(bottom_left.x, top_right.y, top_right.x, bottom_left.y);
-    if (work_area.left() > window_bounds.right()) {
-      float shift_x = work_area.left() - window_bounds.right();
+    Rect window_bounds =
+        WindowToCanvas().mapRect(SkRect::MakeLTRB(1_mm, 1_mm, size.x - 1_mm, size.y - 1_mm));
+    if (work_area.left() > window_bounds.right) {
+      float shift_x = work_area.left() - window_bounds.right;
       camera_pos.x += shift_x;
       camera_target.x += shift_x;
     }
-    if (work_area.right() < window_bounds.left()) {
-      float shift_x = work_area.right() - window_bounds.left();
+    if (work_area.right() < window_bounds.left) {
+      float shift_x = work_area.right() - window_bounds.left;
       camera_pos.x += shift_x;
       camera_target.x += shift_x;
     }
     // The y axis is flipped so `work_area.bottom()` is actually its top
-    if (work_area.bottom() < window_bounds.bottom()) {
-      float shift_y = work_area.bottom() - window_bounds.bottom();
+    if (work_area.bottom() < window_bounds.bottom) {
+      float shift_y = work_area.bottom() - window_bounds.bottom;
       camera_pos.y += shift_y;
       camera_target.y += shift_y;
     }
-    if (work_area.top() > window_bounds.top()) {
-      float shift_y = work_area.top() - window_bounds.top();
+    if (work_area.top() > window_bounds.top) {
+      float shift_y = work_area.top() - window_bounds.top;
       camera_pos.y += shift_y;
       camera_target.y += shift_y;
     }
@@ -305,11 +305,11 @@ std::unique_ptr<Action> Window::FindAction(Pointer& p, ActionTrigger trigger) {
 void Window::Zoom(float delta) {
   if (pointers.size() > 0) {
     Pointer* first_pointer = *pointers.begin();
-    Vec2 mouse_position = first_pointer->pointer_position;
-    Vec2 focus_pre = WindowToCanvas(mouse_position);
+    Vec2 mouse_position = TransformDown(*this).mapPoint(first_pointer->pointer_position);
+    Vec2 focus_pre = WindowToCanvas().mapPoint(mouse_position);
     zoom_target *= delta;
     zoom *= delta;
-    Vec2 focus_post = WindowToCanvas(mouse_position);
+    Vec2 focus_post = WindowToCanvas().mapPoint(mouse_position);
     Vec2 focus_delta = focus_post - focus_pre;
     camera_pos -= focus_delta;
     camera_target -= focus_delta;
@@ -321,6 +321,7 @@ void Window::Zoom(float delta) {
 
 void Window::DisplayPixelDensity(float pixels_per_meter) {
   display_pixels_per_meter = pixels_per_meter;
+  local_to_parent = SkM44::Scale(pixels_per_meter, pixels_per_meter);
 }
 
 void Window::SerializeState(Serializer& writer) const {

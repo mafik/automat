@@ -13,20 +13,9 @@
 #include "widget.hh"
 #include "window.hh"
 
-// OLD API
-// NEW API
-// Step 1: provide data in the new API's format (as SkMatrix within the widget)
-// Step 2: remove usages of the old API
-// Step 3: remove providers of the old API
-// - the transform should work in the opposite direction (from child's local coordinate space, to
-// parent)
-// TODO: Each widget should hold its own transform matrix
-// TODO: Remove TransformToChild
 // TODO: Split Widget from Object (largest change)
 
-// TODO: investigate why some widgets are not packed even when they should be
 // TODO: lots of cleanups!
-//       - widgets should have pointers to their parents (remove "Paths")
 //       - remove redundancy between WidgetTree & Widget & DrawCache::Entry
 //       - the three phases of rendering should be put in sequence (locally)
 //         (record / Draw / Update) -> (render) -> (present / DrawCached / onDraw)
@@ -164,13 +153,12 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
 
       if (parent != i) {
-        node.window_to_local = tree[parent].window_to_local;
-        node.window_to_local.postConcat(tree[parent].widget->TransformToChild(*widget));
+        node.local_to_window = tree[parent].local_to_window;
       } else {
-        node.window_to_local.postScale(1 / window->display_pixels_per_meter,
-                                       1 / window->display_pixels_per_meter);
+        node.local_to_window = SkMatrix::I();
       }
-      (void)node.window_to_local.invert(&node.local_to_window);
+      node.local_to_window.preConcat(widget->local_to_parent.asM33());
+      (void)node.local_to_window.invert(&node.window_to_local);
 
       widget->pack_frame_texture_bounds = widget->TextureBounds();
       widget->pack_frame_texture_anchors = widget->TextureAnchors();

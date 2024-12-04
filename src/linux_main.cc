@@ -140,15 +140,15 @@ Vec2 WindowSize() { return Vec2(client_width, client_height) / DisplayPxPerMeter
 // left window corner.
 
 namespace automat::gui {
-Vec2 ScreenToWindow(Vec2 screen) {
-  Vec2 window = (screen - window_position_on_screen - Vec2(0, client_height)) / DisplayPxPerMeter();
+Vec2 ScreenToWindowPx(Vec2 screen) {
+  Vec2 window = (screen - window_position_on_screen - Vec2(0, client_height));
   window.y = -window.y;
   return window;
 }
 
-Vec2 WindowToScreen(Vec2 window) {
+Vec2 WindowPxToScreen(Vec2 window) {
   window.y = -window.y;
-  return window * DisplayPxPerMeter() + window_position_on_screen + Vec2(0, client_height);
+  return window + window_position_on_screen + Vec2(0, client_height);
 }
 
 Vec2 GetMainPointerScreenPos() { return mouse_position_on_screen; }
@@ -158,7 +158,7 @@ using namespace automat::gui;
 
 gui::Pointer& GetMouse() {
   if (!mouse) {
-    mouse = std::make_unique<gui::Pointer>(*window, ScreenToWindow(mouse_position_on_screen));
+    mouse = std::make_unique<gui::Pointer>(*window, ScreenToWindowPx(mouse_position_on_screen));
   }
   return *mouse;
 }
@@ -684,7 +684,7 @@ void RenderLoop() {
                 }
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
-                GetMouse().Move(ScreenToWindow(mouse_position_on_screen));
+                GetMouse().Move(ScreenToWindowPx(mouse_position_on_screen));
                 break;
               }
               case XCB_INPUT_ENTER: {
@@ -699,7 +699,7 @@ void RenderLoop() {
                 xcb_input_enter_event_t* ev = (xcb_input_enter_event_t*)event;
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
-                GetMouse().Move(ScreenToWindow(mouse_position_on_screen));
+                GetMouse().Move(ScreenToWindowPx(mouse_position_on_screen));
                 break;
               }
               case XCB_INPUT_LEAVE: {

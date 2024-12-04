@@ -119,8 +119,10 @@ void Pointer::UpdatePath() {
 void Pointer::Move(Vec2 position) {
   Vec2 old_mouse_pos = pointer_position;
   pointer_position = position;
+  auto px2canvas = TransformDown(*root_machine);
+
   if (button_down_time[static_cast<int>(PointerButton::Middle)] > time::kZero) {
-    Vec2 delta = window.WindowToCanvas(position) - window.WindowToCanvas(old_mouse_pos);
+    Vec2 delta = px2canvas.mapPoint(position) - px2canvas.mapPoint(old_mouse_pos);
     window.camera_target -= delta;
     window.camera_pos -= delta;
     window.inertia = false;
@@ -137,11 +139,12 @@ void Pointer::Move(Vec2 position) {
 void Pointer::Wheel(float delta) {
   float factor = exp(delta / 4);
   window.zoom_target *= factor;
+  auto position_metric = TransformDown(window).mapPoint(pointer_position);
   // For small changes we skip the animation to increase responsiveness.
   if (fabs(delta) < 1.0) {
-    Vec2 mouse_pre = window.WindowToCanvas(pointer_position);
+    Vec2 mouse_pre = window.WindowToCanvas().mapPoint(pointer_position);
     window.zoom *= factor;
-    Vec2 mouse_post = window.WindowToCanvas(pointer_position);
+    Vec2 mouse_post = window.WindowToCanvas().mapPoint(pointer_position);
     Vec2 mouse_delta = mouse_post - mouse_pre;
     window.camera_target -= mouse_delta;
     window.camera_pos -= mouse_delta;
@@ -184,7 +187,7 @@ void Pointer::ButtonUp(PointerButton btn) {
     Vec2 delta = pointer_position - button_down_position[static_cast<int>(PointerButton::Middle)];
     float delta_m = Length(delta);
     if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
-      Vec2 canvas_pos = window.WindowToCanvas(pointer_position);
+      Vec2 canvas_pos = TransformDown(*root_machine).mapPoint(pointer_position);
       window.camera_target = canvas_pos;
       window.zoom_target = 1;
       window.inertia = false;

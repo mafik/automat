@@ -215,12 +215,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual maf::Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
   virtual maf::Vec<Vec2> TextureAnchors() const { return {}; }
 
-  virtual SkMatrix TransformToChild(const Widget& child) const {
-    SkMatrix parent_to_local;
-    (void)child.local_to_parent.asM33().invert(&parent_to_local);
-    return parent_to_local;
-  }
-
   virtual void DrawChildCachced(SkCanvas&, const Widget& child) const;
 
   virtual void PreDrawChildren(SkCanvas&) const;

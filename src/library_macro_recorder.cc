@@ -136,10 +136,10 @@ animation::Phase MacroRecorder::Tick(time::Timer& timer) {
 
   auto UpdateEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) -> animation::Phase {
     auto eye_window = local_to_window.mapPoint(center.sk);
-    auto eye_screen = WindowToScreen(eye_window);
+    auto eye_screen = WindowPxToScreen(eye_window);
     auto eye_delta = main_pointer_screen - eye_screen;
     auto eye_dir = Normalize(eye_delta);
-    float z = local_to_window.mapRadius(kEyeRadius * 2) * top_window->display_pixels_per_meter;
+    float z = local_to_window.mapRadius(kEyeRadius * 2);
     auto eye_dist_3d = Length(Vec3(eye_delta.x, eye_delta.y, z));
     auto eye_dist_2d = Length(eye_delta);
 

@@ -142,7 +142,7 @@ struct Window final : Widget, DropTarget {
   std::deque<float> fps_history;
 
   std::vector<Pointer*> pointers;
-  std::vector<Keyboard*> keyboards;
+  std::vector<std::shared_ptr<Keyboard>> keyboards;
 
   std::mutex mutex;
 };

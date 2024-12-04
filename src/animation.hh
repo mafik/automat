@@ -28,20 +28,6 @@ inline Phase operator||(Phase a, Phase b) { return Phase(bool(a) || bool(b)); }
 inline Phase& operator|=(Phase& a, Phase b) { return a = a || b; }
 
 // TODO: delete almost everything from this file (and replace with "LowLevel*Towards" functions)
-struct DeltaFraction {
-  float speed = 15;
-  time::SteadyPoint last_tick;
-
-  // TODO: think about replacing `speed` with `half_life`.
-  DeltaFraction(float speed = 15) : speed(speed), last_tick(time::SteadyNow()) {}
-
-  float Tick(time::Timer& timer) {
-    float dt = (timer.now - last_tick).count();
-    last_tick = timer.now;
-    if (dt <= 0) return 0;
-    return -expm1f(-dt * speed);  // equivalent to 1 - exp(-dt * speed);
-  }
-};
 
 template <typename T>
 struct Base {

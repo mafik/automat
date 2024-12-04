@@ -6,6 +6,7 @@
 
 #include "animation.hh"
 #include "gui_constants.hh"
+#include "keyboard.hh"
 #include "widget.hh"
 
 namespace automat {

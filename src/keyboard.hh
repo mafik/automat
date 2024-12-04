@@ -16,8 +16,8 @@
 #include "fn.hh"
 #include "math.hh"
 #include "status.hh"
-#include "str.hh"
 #include "time.hh"
+#include "widget.hh"
 
 #if defined(__linux__)
 #include <xcb/xinput.h>
@@ -32,128 +32,6 @@ struct Widget;
 struct DrawContext;
 struct Pointer;
 
-enum class AnsiKey : uint8_t {
-  Unknown,
-  Escape,
-  F1,
-  F2,
-  F3,
-  F4,
-  F5,
-  F6,
-  F7,
-  F8,
-  F9,
-  F10,
-  F11,
-  F12,
-  PrintScreen,
-  ScrollLock,
-  Pause,
-  Insert,
-  Delete,
-  Home,
-  End,
-  PageUp,
-  PageDown,
-  Up,
-  Down,
-  Left,
-  Right,
-  NumLock,
-  NumpadDivide,
-  NumpadMultiply,
-  NumpadMinus,
-  NumpadPlus,
-  NumpadEnter,
-  NumpadPeriod,
-  Numpad0,
-  Numpad1,
-  Numpad2,
-  Numpad3,
-  Numpad4,
-  Numpad5,
-  Numpad6,
-  Numpad7,
-  Numpad8,
-  Numpad9,
-  Grave,
-  Digit1,
-  Digit2,
-  Digit3,
-  Digit4,
-  Digit5,
-  Digit6,
-  Digit7,
-  Digit8,
-  Digit9,
-  Digit0,
-  Minus,
-  Equals,
-  Backspace,
-  Tab,
-  Q,
-  W,
-  E,
-  R,
-  T,
-  Y,
-  U,
-  I,
-  O,
-  P,
-  BracketLeft,
-  BracketRight,
-  Backslash,
-  CapsLock,
-  A,
-  S,
-  D,
-  F,
-  G,
-  H,
-  J,
-  K,
-  L,
-  Semicolon,
-  Apostrophe,
-  Enter,
-  ShiftLeft,
-  Z,
-  X,
-  C,
-  V,
-  B,
-  N,
-  M,
-  Comma,
-  Period,
-  Slash,
-  ShiftRight,
-  ControlLeft,
-  SuperLeft,
-  AltLeft,
-  Space,
-  AltRight,
-  SuperRight,
-  Application,
-  ControlRight,
-  Count
-};
-
-maf::StrView ToStr(AnsiKey) noexcept;
-AnsiKey AnsiKeyFromStr(maf::StrView) noexcept;
-
-struct Key {
-  bool ctrl;
-  bool alt;
-  bool shift;
-  bool windows;
-  AnsiKey physical;
-  AnsiKey logical;
-  std::string text;
-};
-
 void SendKeyEvent(AnsiKey physical, bool down);
 
 struct Caret final {
@@ -161,7 +39,6 @@ struct Caret final {
   CaretOwner* owner = nullptr;
   SkPath shape;
   std::shared_ptr<Widget> widget;
-  time::SteadyPoint last_blink;
   Caret(Keyboard& keyboard);
   ~Caret() = default;
   void PlaceIBeam(Vec2 position);
@@ -286,10 +163,9 @@ struct Keylogging {
 
 struct CaretAnimation {
   const Keyboard& keyboard;
-  animation::DeltaFraction delta_fraction;
   SkPath shape;
   time::SteadyPoint last_blink;
-  animation::Approach<> fade_out;
+  float alpha = 1;
   CaretAnimation(const Keyboard&);
 };
 
@@ -297,7 +173,7 @@ struct KeyboardAnimation {
   std::map<Caret*, CaretAnimation> carets = {};
 };
 
-struct Keyboard final {
+struct Keyboard final : Widget {
   Window& window;
 
   // Each keyboard may be associated with a pointer. This is the global OS pointer that may actually
@@ -317,7 +193,6 @@ struct Keyboard final {
   std::unique_ptr<Action> actions[static_cast<size_t>(AnsiKey::Count)];
 
   Keyboard(Window&);
-  ~Keyboard();
 
   // Called by a CaretOwner that wants to start receiving keyboard input.
   Caret& RequestCaret(CaretOwner&, const std::shared_ptr<Widget>& widget, Vec2 position);
@@ -334,8 +209,10 @@ struct Keyboard final {
 
   Keylogging& BeginKeylogging(Keylogger&);
 
-  // Called by Automat drawing logic to draw the keyboard carets & other keyboard related visuals.
-  void Draw(DrawContext&) const;
+  animation::Phase Update(time::Timer&) override;
+  animation::Phase Draw(DrawContext&) const override;
+  SkPath Shape() const override;
+  maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
 
 #if defined(__linux__)
   // TODO: refactor this

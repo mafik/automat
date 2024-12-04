@@ -5,8 +5,10 @@
 #include <map>
 #include <set>
 
+#include "animation.hh"
 #include "automat.hh"
 #include "font.hh"
+#include "include/core/SkPathBuilder.h"
 #include "root.hh"
 #include "window.hh"
 
@@ -63,7 +65,6 @@ void Caret::PlaceIBeam(Vec2 position) {
   float width = GetFont().line_thickness;
   float height = kLetterSize;
   shape = SkPath::Rect(SkRect::MakeXYWH(position.x - width / 2, position.y, width, height));
-  last_blink = time::SteadyNow();
 }
 
 void Caret::Release() {
@@ -197,75 +198,81 @@ Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
 
 enum class CaretAnimAction { Keep, Delete };
 
-static CaretAnimAction DrawCaret(DrawContext& ctx, CaretAnimation& anim, Caret* caret) {
-  SkCanvas& canvas = ctx.canvas;
-  time::Timer& timer = ctx.timer;
-  SkPaint paint;
-  paint.setColor(SK_ColorBLACK);
-  paint.setAntiAlias(true);
-
+static CaretAnimAction UpdateCaret(time::Timer& timer, CaretAnimation& anim, Caret* caret) {
+  Optional<SkPath> target_path;
+  float target_dist;
+  bool disappear = false;
   if (caret) {
-    SkPath root_shape = caret->MakeRootShape();
-    // Animate caret blinking.
-    anim.last_blink = caret->last_blink;
-    if (anim.shape.isInterpolatable(root_shape)) {
-      SkPath out;
-      float weight = 1 - anim.delta_fraction.Tick(timer);
-      anim.shape.interpolate(root_shape, weight, &out);
-      anim.shape = out;
-    } else {
-      anim.shape = root_shape;
-    }
-    double now = (timer.now - anim.last_blink).count();
-    double seconds, subseconds;
-    subseconds = modf(now, &seconds);
-    if (subseconds < 0.5) {
-      canvas.drawPath(anim.shape, paint);
-    }
+    disappear = false;
+    target_path = caret->MakeRootShape();
   } else {
+    disappear = true;
     // Animate disappearance of caret.
     if (anim.keyboard.pointer) {
-      SkPath grave = PointerIBeam(anim.keyboard);
-      SkPath out;
-      float weight = 1 - anim.delta_fraction.Tick(timer);
-      anim.shape.interpolate(grave, weight, &out);
-      anim.shape = out;
-      float dist = (grave.getBounds().center() - anim.shape.getBounds().center()).length();
-      if (dist < 0.0001) {
-        return CaretAnimAction::Delete;
-      }
-      canvas.drawPath(anim.shape, paint);
-    } else {
-      anim.fade_out.target = 1;
-      anim.fade_out.Tick(timer);
-      paint.setAlphaf(1 - anim.fade_out.value);
-      if (paint.getAlphaf() < 0.01) {
-        return CaretAnimAction::Delete;
-      }
-      anim.shape.offset(0, timer.d * kLetterSize);
-      canvas.drawPath(anim.shape, paint);
+      target_path = PointerIBeam(anim.keyboard);
     }
   }
+
+  if (target_path.has_value()) {
+    if (anim.shape.isInterpolatable(*target_path)) {
+      SkPath out;
+      float weight = 1;
+      // The animation actually follows exponential curve.
+      // TODO: Make this a warp curve instead.
+      animation::LinearApproach(0, timer.d, 20, weight);
+      anim.shape.interpolate(*target_path, weight, &out);
+      anim.shape = out;
+    } else {
+      anim.shape = *target_path;
+    }
+    target_dist =
+        SkPoint::Distance(target_path->getBounds().center(), anim.shape.getBounds().center());
+    if (target_dist > 0.1_mm) {
+      anim.alpha = 1;  // while animating caret movement, we always want the caret to be visible
+    } else {
+      // once at target, blink the caret on and off
+      double seconds, subseconds;
+      subseconds = modf(timer.NowSeconds(), &seconds);
+      if (subseconds < 0.5) {
+        anim.alpha = 1;
+      } else {
+        anim.alpha = 0;
+      }
+    }
+  } else if (disappear) {
+    animation::LinearApproach(0, timer.d, 1, anim.alpha);
+    anim.shape.offset(0, timer.d * kLetterSize);
+  }
+
+  if (disappear) {
+    if (target_path.has_value()) {
+      if (target_dist < 0.1_mm) {
+        return CaretAnimAction::Delete;
+      }
+    } else {
+      if (anim.alpha < 0.01) {
+        return CaretAnimAction::Delete;
+      }
+    }
+  }
+
   return CaretAnimAction::Keep;
 }
 
 CaretAnimation::CaretAnimation(const Keyboard& keyboard)
-    : keyboard(keyboard),
-      delta_fraction(50),
-      shape(PointerIBeam(keyboard)),
-      last_blink(time::SteadyNow()) {}
+    : keyboard(keyboard), shape(PointerIBeam(keyboard)), last_blink(time::SteadyNow()) {}
 
-void Keyboard::Draw(DrawContext& ctx) const {
-  SkCanvas& canvas = ctx.canvas;
-  // Iterate through each Caret & CaretAnimation, and draw them.
+animation::Phase Keyboard::Update(time::Timer& timer) {
+  // Iterate through each Caret & CaretAnimation, and update their animations.
+  // Animations may result in a Caret being removed.
   // After a Caret has been removed, its CaretAnimation is kept around for some
-  // time to animate it out.
+  // time to animate its disappearance.
   auto anim_it = anim.carets.begin();
   auto caret_it = carets.begin();
   while (anim_it != anim.carets.end() && caret_it != carets.end()) {
     if (anim_it->first < caret_it->get()) {
       // Caret was removed.
-      auto a = DrawCaret(ctx, anim_it->second, nullptr);
+      auto a = UpdateCaret(timer, anim_it->second, nullptr);
       if (a == CaretAnimAction::Delete) {
         anim_it = anim.carets.erase(anim_it);
       } else {
@@ -275,17 +282,17 @@ void Keyboard::Draw(DrawContext& ctx) const {
       // Caret was added.
       auto new_it =
           anim.carets.emplace(std::make_pair<Caret*, CaretAnimation>(caret_it->get(), *this)).first;
-      DrawCaret(ctx, new_it->second, caret_it->get());
+      UpdateCaret(timer, new_it->second, caret_it->get());
       ++caret_it;
     } else {
-      DrawCaret(ctx, anim_it->second, caret_it->get());
+      UpdateCaret(timer, anim_it->second, caret_it->get());
       ++anim_it;
       ++caret_it;
     }
   }
   while (anim_it != anim.carets.end()) {
     // Caret at end was removed.
-    auto a = DrawCaret(ctx, anim_it->second, nullptr);
+    auto a = UpdateCaret(timer, anim_it->second, nullptr);
     if (a == CaretAnimAction::Delete) {
       anim_it = anim.carets.erase(anim_it);
     } else {
@@ -296,9 +303,34 @@ void Keyboard::Draw(DrawContext& ctx) const {
     // Caret at end was added.
     auto new_it =
         anim.carets.emplace(std::make_pair<Caret*, CaretAnimation>(caret_it->get(), *this)).first;
-    DrawCaret(ctx, new_it->second, caret_it->get());
+    UpdateCaret(timer, new_it->second, caret_it->get());
     ++caret_it;
   }
+  if (anim.carets.empty()) {
+    return animation::Finished;
+  } else {
+    return animation::Animating;
+  }
+}
+
+animation::Phase Keyboard::Draw(DrawContext& ctx) const {
+  SkCanvas& canvas = ctx.canvas;
+  SkPaint paint;
+  paint.setColor(SK_ColorBLACK);
+  paint.setAntiAlias(true);
+  for (auto& [caret, anim] : anim.carets) {
+    paint.setAlphaf(anim.alpha);
+    canvas.drawPath(anim.shape, paint);
+  }
+  return animation::Finished;
+}
+
+SkPath Keyboard::Shape() const {
+  SkPathBuilder builder;
+  for (auto& caret : carets) {
+    builder.addPath(caret->MakeRootShape());
+  }
+  return builder.detach();
 }
 
 #ifdef __linux__
@@ -426,236 +458,6 @@ void Keyboard::LogKeyUp(Key key) {
 
 std::unique_ptr<gui::Keyboard> keyboard;
 
-StrView ToStr(AnsiKey k) noexcept {
-  using enum AnsiKey;
-  switch (k) {
-    case Escape:
-      return "Esc";
-    case F1:
-      return "F1";
-    case F2:
-      return "F2";
-    case F3:
-      return "F3";
-    case F4:
-      return "F4";
-    case F5:
-      return "F5";
-    case F6:
-      return "F6";
-    case F7:
-      return "F7";
-    case F8:
-      return "F8";
-    case F9:
-      return "F9";
-    case F10:
-      return "F10";
-    case F11:
-      return "F11";
-    case F12:
-      return "F12";
-    case PrintScreen:
-      return "PrintScreen";
-    case ScrollLock:
-      return "ScrollLock";
-    case Pause:
-      return "Pause";
-    case Insert:
-      return "Insert";
-    case Delete:
-      return "Delete";
-    case Home:
-      return "Home";
-    case End:
-      return "End";
-    case PageUp:
-      return "PageUp";
-    case PageDown:
-      return "PageDown";
-    case Up:
-      return "Up";
-    case Down:
-      return "Down";
-    case Left:
-      return "Left";
-    case Right:
-      return "Right";
-    case NumLock:
-      return "NumLock";
-    case NumpadDivide:
-      return "NumpadDivide";
-    case NumpadMultiply:
-      return "NumpadMultiply";
-    case NumpadMinus:
-      return "NumpadMinus";
-    case NumpadPlus:
-      return "NumpadPlus";
-    case NumpadEnter:
-      return "NumpadEnter";
-    case NumpadPeriod:
-      return "NumpadPeriod";
-    case Numpad0:
-      return "Numpad 0";
-    case Numpad1:
-      return "Numpad 1";
-    case Numpad2:
-      return "Numpad 2";
-    case Numpad3:
-      return "Numpad 3";
-    case Numpad4:
-      return "Numpad 4";
-    case Numpad5:
-      return "Numpad 5";
-    case Numpad6:
-      return "Numpad 6";
-    case Numpad7:
-      return "Numpad 7";
-    case Numpad8:
-      return "Numpad 8";
-    case Numpad9:
-      return "Numpad 9";
-    case Grave:
-      return "`";
-    case Digit1:
-      return "1";
-    case Digit2:
-      return "2";
-    case Digit3:
-      return "3";
-    case Digit4:
-      return "4";
-    case Digit5:
-      return "5";
-    case Digit6:
-      return "6";
-    case Digit7:
-      return "7";
-    case Digit8:
-      return "8";
-    case Digit9:
-      return "9";
-    case Digit0:
-      return "0";
-    case Minus:
-      return "-";
-    case Equals:
-      return "=";
-    case Backspace:
-      return "Backspace";
-    case Tab:
-      return "Tab";
-    case Q:
-      return "Q";
-    case W:
-      return "W";
-    case E:
-      return "E";
-    case R:
-      return "R";
-    case T:
-      return "T";
-    case Y:
-      return "Y";
-    case U:
-      return "U";
-    case I:
-      return "I";
-    case O:
-      return "O";
-    case P:
-      return "P";
-    case BracketLeft:
-      return "[";
-    case BracketRight:
-      return "]";
-    case Backslash:
-      return "\\";
-    case CapsLock:
-      return "CapsLock";
-    case A:
-      return "A";
-    case S:
-      return "S";
-    case D:
-      return "D";
-    case F:
-      return "F";
-    case G:
-      return "G";
-    case H:
-      return "H";
-    case J:
-      return "J";
-    case K:
-      return "K";
-    case L:
-      return "L";
-    case Semicolon:
-      return ";";
-    case Apostrophe:
-      return "'";
-    case Enter:
-      return "Enter";
-    case ShiftLeft:
-      return "Left Shift";
-    case Z:
-      return "Z";
-    case X:
-      return "X";
-    case C:
-      return "C";
-    case V:
-      return "V";
-    case B:
-      return "B";
-    case N:
-      return "N";
-    case M:
-      return "M";
-    case Comma:
-      return ".";
-    case Period:
-      return ",";
-    case Slash:
-      return "Slash";
-    case ShiftRight:
-      return "Right Shift";
-    case ControlLeft:
-      return "Left Control";
-    case SuperLeft:
-      return "Left Super";
-    case AltLeft:
-      return "Left Alt";
-    case Space:
-      return "Space";
-    case AltRight:
-      return "Right Alt";
-    case SuperRight:
-      return "Right Super";
-    case Application:
-      return "Application";
-    case ControlRight:
-      return "Right Control";
-    default:
-      return "<?>";
-  }
-}
-
-AnsiKey AnsiKeyFromStr(maf::StrView str) noexcept {
-  static std::map<StrView, AnsiKey> map = []() {
-    std::map<StrView, AnsiKey> map;
-    for (AnsiKey key = (AnsiKey)0; key < AnsiKey::Count; key = (AnsiKey)((int)key + 1)) {
-      map[ToStr(key)] = key;
-    }
-    return map;
-  }();
-  if (auto it = map.find(str); it != map.end()) {
-    return it->second;
-  }
-  return AnsiKey::Unknown;
-}
-
 void SendKeyEvent(AnsiKey physical, bool down) {
 #if defined(_WIN32)
   INPUT input = {};
@@ -698,6 +500,7 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const std::shared_ptr<Wid
   caret.widget = widget;
   caret.PlaceIBeam(position);
   caret_owner.carets.emplace_back(&caret);
+  InvalidateDrawCache();
   return caret;
 }
 
@@ -705,13 +508,6 @@ void CaretOwner::KeyDown(Caret& caret, Key) {}
 void CaretOwner::KeyUp(Caret& caret, Key) {}
 
 Keyboard::Keyboard(Window& window) : window(window) { window.keyboards.emplace_back(this); }
-
-Keyboard::~Keyboard() {
-  auto it = std::find(window.keyboards.begin(), window.keyboards.end(), this);
-  if (it != window.keyboards.end()) {
-    window.keyboards.erase(it);
-  }
-}
 
 #if defined(_WIN32)
 

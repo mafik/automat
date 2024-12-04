@@ -16,7 +16,7 @@
 #include "animation.hh"
 #include "control_flow.hh"
 #include "drawable.hh"
-#include "keyboard.hh"
+#include "key.hh"
 #include "optional.hh"
 #include "span.hh"
 #include "str.hh"

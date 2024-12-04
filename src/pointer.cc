@@ -37,7 +37,7 @@ Pointer::Pointer(Window& window, Vec2 position)
   if (window.keyboards.empty()) {
     keyboard = nullptr;
   } else {
-    keyboard = window.keyboards.front();
+    keyboard = window.keyboards.front().get();
     keyboard->pointer = this;
   }
 }

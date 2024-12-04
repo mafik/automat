@@ -242,12 +242,6 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
     canvas.drawRect(target_rect, target_paint);
   }
 
-  for (auto& each_window : windows) {
-    for (auto& each_keyboard : each_window->keyboards) {
-      each_keyboard->Draw(ctx);
-    }
-  }
-
   canvas.restore();
 
   return animation::Finished;
@@ -492,7 +486,11 @@ static void UpdateConnectionWidgets(Window& window) {
 
 void Window::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   UpdateConnectionWidgets(*this);
-  children.reserve(2 + pointers.size() + connection_widgets.size());
+  children.reserve(2 + keyboards.size() + pointers.size() + connection_widgets.size());
+
+  for (auto& keyboard : keyboards) {
+    children.push_back(keyboard);
+  }
 
   unordered_set<Location*> dragged_locations(pointers.size());
   for (auto* pointer : pointers) {

@@ -14,6 +14,7 @@ struct YingYangIcon : gui::Widget, gui::PaintMixin {
   YingYangIcon() {}
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
+  bool CenteredAtZero() const override { return true; }
 };
 
 struct FlipFlopButton : gui::ToggleButton {

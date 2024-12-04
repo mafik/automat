@@ -13,8 +13,15 @@
 #include "widget.hh"
 #include "window.hh"
 
+// OLD API
+// NEW API
+// Step 1: provide data in the new API's format (as SkMatrix within the widget)
+// Step 2: remove usages of the old API
+// Step 3: remove providers of the old API
+// - the transform should work in the opposite direction (from child's local coordinate space, to
+// parent)
 // TODO: Each widget should hold its own transform matrix
-// TODO: Remove TransformFromChild & TransformToChild
+// TODO: Remove TransformToChild
 // TODO: Split Widget from Object (largest change)
 
 // TODO: investigate why some widgets are not packed even when they should be

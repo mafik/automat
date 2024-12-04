@@ -27,7 +27,7 @@ struct Button : Widget {
   int press_action_count = 0;
   std::shared_ptr<Widget> child;
 
-  Button(std::shared_ptr<Widget> child) : child(child) {}
+  Button(std::shared_ptr<Widget> child);
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
   animation::Phase Tick(time::Timer&) override;
@@ -53,7 +53,9 @@ struct Button : Widget {
     children.push_back(child);
   }
 
+  void UpdateChildTransform();
   SkMatrix TransformToChild(const Widget& child) const override;
+
   // We don't want the children to interact with mouse events.
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 };
@@ -70,13 +72,19 @@ struct ColoredButton : Button {
   std::function<void(gui::Pointer&)> on_click;
 
   ColoredButton(std::shared_ptr<Widget> child, ColoredButtonArgs args = {})
-      : Button(child), fg(args.fg), bg(args.bg), radius(args.radius), on_click(args.on_click) {}
+      : Button(child), fg(args.fg), bg(args.bg), radius(args.radius), on_click(args.on_click) {
+    UpdateChildTransform();
+  }
 
   ColoredButton(const char* svg_path, ColoredButtonArgs args = {})
-      : ColoredButton(MakeShapeWidget(svg_path, SK_ColorWHITE), args) {}
+      : ColoredButton(MakeShapeWidget(svg_path, SK_ColorWHITE), args) {
+    UpdateChildTransform();
+  }
 
   ColoredButton(SkPath path, ColoredButtonArgs args = {})
-      : ColoredButton(std::make_shared<ShapeWidget>(path), args) {}
+      : ColoredButton(std::make_shared<ShapeWidget>(path), args) {
+    UpdateChildTransform();
+  }
 
   SkColor ForegroundColor() const override { return fg; }
   SkColor BackgroundColor() const override { return bg; }
@@ -89,6 +97,8 @@ struct ColoredButton : Button {
   SkRRect RRect() const override {
     return SkRRect::MakeOval(SkRect::MakeWH(radius * 2, radius * 2));
   };
+
+  bool CenteredAtZero() const override { return true; }
 };
 
 struct ToggleButton : Widget {

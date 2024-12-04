@@ -231,8 +231,11 @@ void Location::Draw(SkCanvas& canvas) const {
   if (state.highlight > 0.01f) {  // Draw dashed highlight outline
     SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
-    auto from_child = TransformFromChild(*object);
-    outset_shape.transform(from_child);
+    canvas.save();
+    auto to_child = TransformToChild(*object);
+    SkMatrix from_child;
+    (void)to_child.invert(&from_child);
+    canvas.concat(from_child);
 
     static const SkPaint kHighlightPaint = [] {
       SkPaint paint;
@@ -250,6 +253,7 @@ void Location::Draw(SkCanvas& canvas) const {
     float phase = std::fmod(state.time_seconds, period_seconds) / period_seconds;
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));
     canvas.drawPath(outset_shape, dash_paint);
+    canvas.restore();
   }
 
   if constexpr (false) {  // Gray frame
@@ -362,12 +366,7 @@ void Location::Run() {
   }
 }
 
-Vec2AndDir Location::ArgStart(Argument& arg) {
-  auto pos_dir = object ? object->ArgStart(arg) : Vec2AndDir{};
-  auto m = ParentAs<Machine>()->TransformFromChild(*this);
-  pos_dir.pos = m.mapPoint(pos_dir.pos);
-  return pos_dir;
-}
+Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(*object, *parent); }
 
 SkMatrix Location::TransformToChild(const Widget&) const {
   Vec2 scale_pivot = object->Shape().getBounds().center();
@@ -463,7 +462,10 @@ void Location::PreDraw(SkCanvas& canvas) const {
   auto& anim = GetAnimationState();
   auto shape = object->Shape();
 
-  canvas.concat(TransformFromChild(*object));
+  auto to_child = TransformToChild(*object);
+  SkMatrix from_child;
+  (void)to_child.invert(&from_child);
+  canvas.concat(from_child);
 
   auto rect = shape.getBounds();
   auto window = dynamic_cast<gui::Window*>(&RootWidget());
@@ -588,7 +590,7 @@ void Location::UpdateAutoconnectArgs() {
         Vec<Vec2AndDir> to_positions;
         auto conn = *it;
         conn->to.object->ConnectionPositions(to_positions);
-        auto to_up = ParentAs<Machine>()->TransformFromChild(conn->to);
+        auto to_up = TransformBetween(*conn->to.object, *parent_machine);
         for (auto& to : to_positions) {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);

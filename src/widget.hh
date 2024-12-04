@@ -98,6 +98,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   static Widget* Find(uint32_t id);
 
   std::shared_ptr<Widget> parent;
+  SkM44 local_to_parent;
 
   void RenderToSurface(SkCanvas& root_canvas);
 
@@ -215,13 +216,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual maf::Vec<Vec2> TextureAnchors() const { return {}; }
 
   virtual SkMatrix TransformToChild(const Widget& child) const { return SkMatrix::I(); }
-
-  SkMatrix TransformFromChild(const Widget& child) const {
-    auto to_child = TransformToChild(child);
-    SkMatrix from_child = SkMatrix::I();
-    (void)to_child.invert(&from_child);
-    return from_child;
-  }
 
   virtual void DrawChildCachced(SkCanvas&, const Widget& child) const;
 

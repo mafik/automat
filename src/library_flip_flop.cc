@@ -184,7 +184,6 @@ LongRunning* FlipFlop::OnRun(Location& here) {
 }
 
 void YingYangIcon::Draw(SkCanvas& canvas) const {
-  Rect rect = Rect::MakeCircleR(kYingYangRadius);
   ArcLine tear = ArcLine(Vec2(0, kYingYangRadius), 0_deg);
   tear.TurnConvex(180_deg, -kYingYangRadius);
   tear.TurnConvex(180_deg, -kYingYangRadiusSmall);

@@ -44,13 +44,27 @@ constexpr float kRadius = kMinimalTouchableSize / 2;
 
 float Button::Height() const {
   SkRect child_bounds = ChildBounds();
-  return std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
+  if (child->CenteredAtZero()) {
+    return std::max(
+        kMinimalTouchableSize,
+        std::max(abs(child_bounds.bottom()), abs(child_bounds.top())) * 2 + 2 * kMargin);
+  } else {
+    return std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
+  }
 }
 
 SkRRect Button::RRect() const {
   SkRect child_bounds = ChildBounds();
-  float w = std::max(kMinimalTouchableSize, child_bounds.width() + 2 * kMargin);
-  float h = std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
+  float w, h;
+  if (child->CenteredAtZero()) {
+    w = std::max(kMinimalTouchableSize,
+                 std::max(child_bounds.right(), -child_bounds.left()) * 2 + 2 * kMargin);
+    h = std::max(kMinimalTouchableSize,
+                 std::max(abs(child_bounds.bottom()), abs(child_bounds.top())) * 2 + 2 * kMargin);
+  } else {
+    w = std::max(kMinimalTouchableSize, child_bounds.width() + 2 * kMargin);
+    h = std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
+  }
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, w, h), kRadius, kRadius);
 }
 
@@ -243,9 +257,18 @@ SkRect Button::ChildBounds() const {
   return SkRect::MakeEmpty();
 }
 SkMatrix Button::TransformToChild(const Widget& child) const {
-  SkRect rect = RRect().rect();
-  if (child.CenteredAtZero()) return SkMatrix::Translate(-rect.center());
-  SkRect child_bounds = ChildBounds();
-  return SkMatrix::Translate(child_bounds.center() - rect.center());
+  SkMatrix parent_to_local;
+  (void)child.local_to_parent.asM33().invert(&parent_to_local);
+  return parent_to_local;
+}
+
+Button::Button(std::shared_ptr<Widget> child) : child(child) { UpdateChildTransform(); }
+
+void Button::UpdateChildTransform() {
+  Vec2 offset = RRect().rect().center();
+  if (!child->CenteredAtZero()) {
+    offset -= ChildBounds().center();
+  }
+  child->local_to_parent = SkM44::Translate(offset.x, offset.y);
 }
 }  // namespace automat::gui

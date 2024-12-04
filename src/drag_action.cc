@@ -124,8 +124,5 @@ DragLocationAction::~DragLocationAction() {
 void DragLocationWidget::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   children.push_back(action.location);
 }
-SkMatrix DragLocationWidget::TransformToChild(const gui::Widget& child) const {
-  return SkMatrix::I();
-}
 
 }  // namespace automat

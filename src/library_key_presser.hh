@@ -48,7 +48,6 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
 
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
-  SkMatrix TransformToChild(const Widget& child) const override;
 
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;

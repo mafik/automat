@@ -120,8 +120,6 @@ void KeyPresser::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   children.push_back(shortcut_button);
 }
 
-SkMatrix KeyPresser::TransformToChild(const Widget& child) const { return SkMatrix::I(); }
-
 struct DragAndClickAction : Action {
   gui::PointerButton btn;
   std::unique_ptr<Action> drag_action;

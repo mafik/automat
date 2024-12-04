@@ -170,11 +170,10 @@ static const SkPaint kNumberBorderPaint = []() {
   return paint_border;
 }();
 
-animation::Phase Number::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+void Number::Draw(SkCanvas& canvas) const {
   canvas.drawRRect(kNumberRRectInner, kNumberBackgroundPaint);
   canvas.drawRRect(kNumberRRectInner, kNumberBorderPaint);
-  return DrawChildren(ctx);
+  DrawChildren(canvas);
 }
 
 SkPath Number::Shape() const { return kNumberShape; }

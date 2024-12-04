@@ -52,7 +52,7 @@ struct TrackBase : Object {
   Timeline* timeline = nullptr;
   maf::Vec<time::T> timestamps;
   SkPath Shape() const override;
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
                             time::SteadyPoint now) = 0;
@@ -66,7 +66,7 @@ struct OnOffTrack : TrackBase, OnOff {
   time::T on_at = NAN;
   string_view Name() const override { return "On/Off Track"; }
   std::shared_ptr<Object> Clone() const override { return std::make_shared<OnOffTrack>(*this); }
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   bool IsOn() const override;
@@ -124,7 +124,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
   animation::Phase Update(time::Timer&) override;
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
   Vec2AndDir ArgStart(const Argument&) override;

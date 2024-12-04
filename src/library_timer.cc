@@ -279,9 +279,7 @@ const static SkPaint kHandPaint = []() {
   return paint;
 }();
 
-static void DrawHand(gui::DrawContext& ctx, const TimerDelay& timer) {
-  auto& canvas = ctx.canvas;
-
+static void DrawHand(SkCanvas& canvas, const TimerDelay& timer) {
   SkPath path = HandPath(timer);
 
   canvas.save();
@@ -475,9 +473,7 @@ animation::Phase TimerDelay::Update(time::Timer& timer) {
   return phase;
 }
 
-animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
-
+void TimerDelay::Draw(SkCanvas& canvas) const {
   DrawRing(canvas, r4, r5, 0xffcfd0cf, 0xffc9c9cb);  // white watch face
 
   canvas.save();
@@ -498,7 +494,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   DrawDial(canvas, (Range)(((int)roundf(range_dial) + range_end) % range_end), duration.value);
   canvas.restore();
 
-  DrawChildren(ctx);
+  DrawChildren(canvas);
 
   DrawRing(canvas, r4, r4_b, 0x46000000, 0xe1ffffff, kRingInset);  // shadow over white watch face
 
@@ -530,7 +526,7 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   DrawRing(canvas, r2, r3, 0xff878682, 0xff020302);  // black metal band outer edge
   DrawRing(canvas, r3, r4, 0xff080604, 0xffe2e2e1);  // black metal band inner edge
 
-  DrawHand(ctx, *this);
+  DrawHand(canvas, *this);
 
   DrawRing(canvas, r5, 0, 0xff25272e, 0xff0d0b0f);               // black pin fill
   DrawRing(canvas, r5, r6, 0xff7e7d7a, 0xff05070b, kRingInset);  // black pin soft outer edge
@@ -558,7 +554,6 @@ animation::Phase TimerDelay::Draw(gui::DrawContext& ctx) const {
   canvas.drawPaint(duration_handle_paint);
   canvas.drawPath(duration_path_rotated, highlight_paint);
   canvas.restore();
-  return animation::Finished;
 }
 
 void TimerDelay::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {

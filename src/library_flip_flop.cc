@@ -102,9 +102,7 @@ animation::Phase FlipFlop::Update(time::Timer& timer) {
 static auto flip_flop_color = PersistentImage::MakeFromAsset(embedded::assets_flip_flop_color_webp,
                                                              {.width = kFlipFlopWidth});
 
-animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
-  auto& canvas = dctx.canvas;
-
+void FlipFlop::Draw(SkCanvas& canvas) const {
   flip_flop_color.draw(canvas);
 
   {  // Red indicator light
@@ -143,8 +141,7 @@ animation::Phase FlipFlop::Draw(gui::DrawContext& dctx) const {
     canvas.drawCircle(center, radius, red_glow);
   }
 
-  DrawChildren(dctx);
-  return animation::Finished;
+  DrawChildren(canvas);
 }
 Rect FlipFlopRect() { return Rect::MakeZeroWH(flip_flop_color.width(), flip_flop_color.height()); }
 SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
@@ -186,8 +183,7 @@ LongRunning* FlipFlop::OnRun(Location& here) {
   return nullptr;
 }
 
-animation::Phase YingYangIcon::Draw(gui::DrawContext& dctx) const {
-  auto& canvas = dctx.canvas;
+void YingYangIcon::Draw(SkCanvas& canvas) const {
   Rect rect = Rect::MakeCircleR(kYingYangRadius);
   ArcLine tear = ArcLine(Vec2(0, kYingYangRadius), 0_deg);
   tear.TurnConvex(180_deg, -kYingYangRadius);
@@ -197,7 +193,6 @@ animation::Phase YingYangIcon::Draw(gui::DrawContext& dctx) const {
   black_path.addCircle(0, kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
   black_path.addCircle(0, -kYingYangRadiusSmall, kYingYangRadiusSmall / 4);
   canvas.drawPath(black_path, paint);
-  return animation::Finished;
 }
 SkPath YingYangIcon::Shape() const { return SkPath::Circle(0, 0, kYingYangRadius); }
 

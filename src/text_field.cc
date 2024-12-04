@@ -92,14 +92,12 @@ animation::Phase TextField::Update(time::Timer& timer) {
                                         hover.animation);
 }
 
-animation::Phase TextField::Draw(DrawContext& ctx) const {
-  DrawBackground(ctx);
-  DrawText(ctx);
-  return animation::Finished;
+void TextField::Draw(SkCanvas& canvas) const {
+  DrawBackground(canvas);
+  DrawText(canvas);
 }
 
-void TextField::DrawBackground(DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+void TextField::DrawBackground(SkCanvas& canvas) const {
   SkRRect rrect = ShapeRRect();
   canvas.drawRRect(rrect, GetBackgroundPaint());
   if (hover.animation > 0.0001) {
@@ -111,15 +109,15 @@ void TextField::DrawBackground(DrawContext& ctx) const {
   }
 }
 
-void TextField::DrawText(DrawContext& ctx) const {
+void TextField::DrawText(SkCanvas& canvas) const {
   Font& font = GetFont();
   Vec2 text_pos = GetTextPos();
   SkRect underline_rect = SkRect::MakeXYWH(text_pos.x, text_pos.y - font.line_thickness * 2,
                                            width - 2 * kTextMargin, font.line_thickness);
-  ctx.canvas.drawRect(underline_rect, GetTextPaint());
-  ctx.canvas.translate(text_pos.x, text_pos.y);
+  canvas.drawRect(underline_rect, GetTextPaint());
+  canvas.translate(text_pos.x, text_pos.y);
   if (text) {
-    font.DrawText(ctx.canvas, *text, GetTextPaint());
+    font.DrawText(canvas, *text, GetTextPaint());
     // DrawDebugTextOutlines(canvas, text);
   }
 }

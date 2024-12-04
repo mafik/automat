@@ -6,7 +6,6 @@ namespace automat {
 
 namespace gui {
 struct Pointer;
-struct DrawContext;
 struct Widget;
 }  // namespace gui
 

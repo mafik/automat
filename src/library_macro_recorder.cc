@@ -153,9 +153,7 @@ animation::Phase MacroRecorder::Update(time::Timer& timer) {
 }
 
 #pragma region Draw
-animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
-  auto& canvas = dctx.canvas;
-
+void MacroRecorder::Draw(SkCanvas& canvas) const {
   {  // Draw the eyes
     auto sharingan = SharinganColor();
 
@@ -230,8 +228,7 @@ animation::Phase MacroRecorder::Draw(gui::DrawContext& dctx) const {
 
   macro_recorder_front_color.draw(canvas);
 
-  DrawChildren(dctx);
-  return animation::Finished;
+  DrawChildren(canvas);
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {

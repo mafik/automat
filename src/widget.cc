@@ -20,7 +20,6 @@
 #include <ranges>
 
 #include "../build/generated/embedded.hh"
-#include "animation.hh"
 #include "font.hh"
 #include "global_resources.hh"
 #include "log.hh"
@@ -34,9 +33,7 @@ using namespace std;
 
 namespace automat::gui {
 
-animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
-  auto phase = animation::Finished;
+void Widget::PreDrawChildren(SkCanvas& canvas) const {
   for (auto& widget : ranges::reverse_view(Children())) {
     canvas.save();
     const SkMatrix down = this->TransformToChild(*widget);
@@ -44,21 +41,19 @@ animation::Phase Widget::PreDrawChildren(DrawContext& ctx) const {
     if (down.invert(&up)) {
       canvas.concat(up);
     }
-    phase |= widget->PreDraw(ctx);
+    widget->PreDraw(canvas);
     canvas.restore();
   }
-  return phase;
 }
 
-animation::Phase Widget::DrawCached(DrawContext& ctx) const {
+void Widget::DrawCached(SkCanvas& canvas) const {
   if (pack_frame_texture_bounds == nullopt) {
-    return Draw(ctx);
+    return Draw(canvas);
   }
 
-  ctx.canvas.save();
-  ctx.canvas.drawDrawable(compose_surface_drawable);
-  ctx.canvas.restore();
-  return invalidated == time::SteadyPoint::max() ? animation::Finished : animation::Animating;
+  canvas.save();
+  canvas.drawDrawable(compose_surface_drawable);
+  canvas.restore();
 }
 
 void Widget::InvalidateDrawCache() const {
@@ -70,37 +65,31 @@ void Widget::InvalidateDrawCache() const {
   invalidated = min(invalidated, time::SteadyNow());
 }
 
-animation::Phase Widget::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
+void Widget::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
   const SkMatrix down = this->TransformToChild(child);
   SkMatrix up;
   if (down.invert(&up)) {
-    ctx.canvas.concat(up);
+    canvas.concat(up);
   }
-  return child.DrawCached(ctx);
+  child.DrawCached(canvas);
 }
 
-animation::Phase Widget::DrawChildrenSpan(DrawContext& ctx,
-                                          Span<shared_ptr<Widget>> widgets) const {
-  auto phase = animation::Finished;
-  auto& canvas = ctx.canvas;
+void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<shared_ptr<Widget>> widgets) const {
   std::ranges::reverse_view rv{widgets};
   for (auto& widget : rv) {
     canvas.save();
-    phase |= DrawChildCachced(ctx, *widget);
+    DrawChildCachced(canvas, *widget);
     canvas.restore();
   }  // for each Widget
-  return phase;
 }
 
-animation::Phase Widget::DrawChildren(DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
-  auto phase = PreDrawChildren(ctx);
+void Widget::DrawChildren(SkCanvas& canvas) const {
+  PreDrawChildren(canvas);
   for (auto& child : ranges::reverse_view(Children())) {
     canvas.save();
-    phase |= DrawChildCachced(ctx, *child);
+    DrawChildCachced(canvas, *child);
     canvas.restore();
   }
-  return phase;
 }
 
 SkMatrix TransformDown(const Widget& to) {

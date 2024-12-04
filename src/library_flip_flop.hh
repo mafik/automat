@@ -12,7 +12,7 @@ struct FlipFlop;
 
 struct YingYangIcon : gui::Widget, gui::PaintMixin {
   YingYangIcon() {}
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
 };
 
@@ -38,7 +38,7 @@ struct FlipFlop : LiveObject, Runnable {
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
   animation::Phase Update(time::Timer& timer) override;
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
 

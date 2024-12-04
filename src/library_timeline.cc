@@ -124,7 +124,7 @@ static auto rosewood_color = PersistentImage::MakeFromAsset(embedded::assets_ros
                                                                 .tile_y = SkTileMode::kRepeat,
                                                             });
 
-const SkPaint& WoodPaint(DrawContext& ctx) {
+const SkPaint& WoodPaint() {
   static SkPaint wood_paint = ([&]() {
     SkPaint p;
     p.setColor("#805338"_color);
@@ -795,16 +795,14 @@ animation::Phase Timeline::Update(time::Timer& timer) {
   return phase;
 }
 
-animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
-  auto& canvas = dctx.canvas;
-
+void Timeline::Draw(SkCanvas& canvas) const {
   auto wood_case_rrect = WoodenCaseRRect(*this);
   SkPath wood_case_path = SkPath::RRect(wood_case_rrect);
 
   {  // Wooden case, light & shadow
     canvas.save();
     canvas.clipRRect(wood_case_rrect);
-    canvas.drawPaint(WoodPaint(dctx));
+    canvas.drawPaint(WoodPaint());
 
     SkPaint outer_shadow;
     outer_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 1_mm));
@@ -837,7 +835,7 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
 
   canvas.drawRRect(PlasticRRect(*this), kPlasticPaint);
 
-  NumberTextField::DrawBackground(dctx, kDisplayRRect.sk);
+  NumberTextField::DrawBackground(canvas, kDisplayRRect.sk);
   // canvas.drawRRect(kDisplayRRect.sk, kDisplayPaint);
 
   constexpr float PI = numbers::pi;
@@ -1020,7 +1018,7 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
   for (size_t i = 0; i < tracks.size(); ++i) {
     tracks_arr[i] = tracks[i];
   }
-  DrawChildrenSpan(dctx, SpanOfArr(tracks_arr, tracks.size()));
+  DrawChildrenSpan(canvas, SpanOfArr(tracks_arr, tracks.size()));
 
   canvas.restore();  // unclip
 
@@ -1058,7 +1056,7 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
             kPlasticTop - kScrewMargin - kScrewRadius);
 
   shared_ptr<Widget> arr[] = {run_button, prev_button, next_button};
-  DrawChildrenSpan(dctx, arr);
+  DrawChildrenSpan(canvas, arr);
 
   canvas.save();
   canvas.clipPath(window_path, true);
@@ -1183,7 +1181,6 @@ animation::Phase Timeline::Draw(gui::DrawContext& dctx) const {
     }
   }
   canvas.restore();  // unclip
-  return animation::Finished;
 }
 
 SkPath Timeline::Shape() const {
@@ -1268,14 +1265,10 @@ SkPath TrackBase::Shape() const {
   }
   return SkPath::Rect(rect.sk);
 }
-animation::Phase TrackBase::Draw(gui::DrawContext& dctx) const {
-  auto& canvas = dctx.canvas;
-  canvas.drawPath(Shape(), kTrackPaint);
-  return animation::Finished;
-}
+void TrackBase::Draw(SkCanvas& canvas) const { canvas.drawPath(Shape(), kTrackPaint); }
 
-animation::Phase OnOffTrack::Draw(gui::DrawContext& dctx) const {
-  TrackBase::Draw(dctx);
+void OnOffTrack::Draw(SkCanvas& canvas) const {
+  TrackBase::Draw(canvas);
   auto shape = Shape();
   Rect rect;
   shape.isRect(&rect.sk);
@@ -1288,7 +1281,7 @@ animation::Phase OnOffTrack::Draw(gui::DrawContext& dctx) const {
     }
     start = max(start, rect.left);
     end = min(end, rect.right);
-    dctx.canvas.drawLine({start, 0}, {end, 0}, kOnOffPaint);
+    canvas.drawLine({start, 0}, {end, 0}, kOnOffPaint);
   };
   for (int i = 0; i + 1 < timestamps.size(); i += 2) {
     DrawSegment(timestamps[i], timestamps[i + 1]);
@@ -1305,7 +1298,6 @@ animation::Phase OnOffTrack::Draw(gui::DrawContext& dctx) const {
         break;
     }
   }
-  return animation::Finished;
 }
 
 void Timeline::Cancel() {

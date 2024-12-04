@@ -29,7 +29,6 @@ struct CaretOwner;
 struct Keyboard;
 struct Window;
 struct Widget;
-struct DrawContext;
 struct Pointer;
 
 void SendKeyEvent(AnsiKey physical, bool down);
@@ -210,7 +209,7 @@ struct Keyboard final : Widget {
   Keylogging& BeginKeylogging(Keylogger&);
 
   animation::Phase Update(time::Timer&) override;
-  animation::Phase Draw(DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
 

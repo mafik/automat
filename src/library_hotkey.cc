@@ -261,9 +261,7 @@ animation::Phase HotKey::Update(time::Timer& t) {
   return animation::Finished;
 }
 
-animation::Phase HotKey::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
-
+void HotKey::Draw(SkCanvas& canvas) const {
   SkRRect frame_outer;
   SkRRect frame_inner;
   SkRRect frame_inner2;
@@ -361,7 +359,7 @@ animation::Phase HotKey::Draw(gui::DrawContext& ctx) const {
   canvas.drawPath(inner_contour, shadow_paint);
   canvas.restore();
 
-  return DrawChildren(ctx);
+  DrawChildren(canvas);
 }
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }

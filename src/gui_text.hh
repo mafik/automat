@@ -10,7 +10,7 @@ struct Text : Widget, PaintMixin {
   std::string text;
   Text(std::string_view text = "");
   SkPath Shape() const override;
-  animation::Phase Draw(DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   maf::StrView Name() const override { return "Text"; }
   maf::Optional<Rect> TextureBounds() const override;
 };

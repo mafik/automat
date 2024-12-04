@@ -31,7 +31,7 @@ struct Number : Object {
   std::shared_ptr<Object> Clone() const override;
   string GetText() const override;
   void SetText(Location& error_context, string_view text) override;
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   SkMatrix TransformToChild(const Widget& child) const override;

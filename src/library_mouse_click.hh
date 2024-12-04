@@ -3,7 +3,6 @@
 #pragma once
 
 #include "base.hh"
-#include "pointer.hh"
 
 namespace automat::library {
 
@@ -17,7 +16,7 @@ struct MouseClick : Object, Runnable {
   static std::shared_ptr<MouseClick> rmb_up;
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
   LongRunning* OnRun(Location&) override;

@@ -145,7 +145,7 @@ static ArcLine RouteCableDown(Vec2AndDir start, Vec2 cable_end) {
 }
 
 static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end,
-                                 DrawContext* debug_ctx = nullptr) {
+                                 SkCanvas* debug_canvas = nullptr) {
   float radius = 1_cm;
   ArcLine cable = ArcLine(start.pos, start.dir);
 
@@ -163,7 +163,7 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end,
       SkPaint circle_paint;
       circle_paint.setStyle(SkPaint::kStroke_Style);
       circle_paint.setColor(kRoutingDebugColor);
-      if (debug_ctx) debug_ctx->canvas.drawCircle(start_circle_center, radius, circle_paint);
+      if (debug_canvas) debug_canvas->drawCircle(start_circle_center, radius, circle_paint);
     }
     for (bool end_left : {false, true}) {
       Vec2 end_circle_center =
@@ -172,7 +172,7 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end,
         SkPaint circle_paint;
         circle_paint.setStyle(SkPaint::kStroke_Style);
         circle_paint.setColor(kRoutingDebugColor);
-        if (debug_ctx) debug_ctx->canvas.drawCircle(end_circle_center, radius, circle_paint);
+        if (debug_canvas) debug_canvas->drawCircle(end_circle_center, radius, circle_paint);
       }
       Vec2 circle_diff = end_circle_center - start_circle_center;
       float circle_dist = Length(circle_diff);
@@ -219,20 +219,20 @@ static ArcLine RoutCableStraight(Vec2AndDir start, Vec2AndDir end,
 }
 
 static ArcLine RouteCableOneEnd(Vec2AndDir start, Vec2AndDir end,
-                                DrawContext* debug_ctx = nullptr) {
+                                SkCanvas* debug_canvas = nullptr) {
   if (start.dir == -90_deg && end.dir == -90_deg) {
     return RouteCableDown(start, end.pos);
   } else {
-    return RoutCableStraight(start, end, debug_ctx);
+    return RoutCableStraight(start, end, debug_canvas);
   }
 }
 
 ArcLine RouteCable(Vec2AndDir start, const maf::Span<const Vec2AndDir> cable_ends,
-                   DrawContext* debug_ctx) {
+                   SkCanvas* debug_canvas) {
   float best_total_length = HUGE_VALF;
   ArcLine best_route = ArcLine(start.pos, start.dir);
   for (auto& end : cable_ends) {
-    ArcLine current = RouteCableOneEnd(start, end, debug_ctx);
+    ArcLine current = RouteCableOneEnd(start, end, debug_canvas);
     float current_length = ArcLine::Iterator(current).AdvanceToEnd();
     if (current_length < best_total_length) {
       best_total_length = current_length;
@@ -892,9 +892,8 @@ struct StrokeToCable : StrokeToMesh {
   bool IsConstantWidth() const override { return start_width == end_width; }
 };
 
-void DrawCable(DrawContext& ctx, SkPath& path, sk_sp<SkColorFilter>& color_filter,
+void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filter,
                CableTexture texture, float start_width, float end_width, float* length) {
-  auto& canvas = ctx.canvas;
   Rect clip = canvas.getLocalClipBounds();
   float max_width = std::max(start_width, end_width);
   Rect path_bounds = path.getBounds().makeOutset(max_width / 2, max_width / 2);
@@ -1096,10 +1095,8 @@ struct OpticalConnectorPimpl {
   std::unique_ptr<BlackCasing> mesh;
 };
 
-void DrawOpticalConnector(DrawContext& ctx, const CablePhysicsSimulation& state,
+void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
                           PaintDrawable& icon) {
-  auto& canvas = ctx.canvas;
-
   float dispenser_scale = state.location.GetAnimationState().scale;
 
   SkMatrix connector_matrix = state.ConnectorMatrix();
@@ -1126,8 +1123,9 @@ void DrawOpticalConnector(DrawContext& ctx, const CablePhysicsSimulation& state,
 
   // Draw the cable
   auto color_filter = color::MakeTintFilter(state.arg.tint, NAN);
-  DrawCable(ctx, p, color_filter, CableTexture::Braided, state.cable_width * state.connector_scale,
-            state.cable_width * dispenser_scale, &state.approx_length);
+  DrawCable(canvas, p, color_filter, CableTexture::Braided,
+            state.cable_width * state.connector_scale, state.cable_width * dispenser_scale,
+            &state.approx_length);
 
   Vec2 cable_end = state.PlugTopCenter();
   SinCos connector_dir = state.sections.front().dir + state.sections.front().true_dir_offset;

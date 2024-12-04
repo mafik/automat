@@ -19,7 +19,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "animation.hh"
 #include "argument.hh"
 #include "connection.hh"
 #include "deserializer.hh"
@@ -153,8 +152,8 @@ struct Machine : LiveObject, gui::DropTarget {
     return m;
   }
 
-  animation::Phase Draw(gui::DrawContext& ctx) const override { return Widget::Draw(ctx); }
-  animation::Phase PreDraw(gui::DrawContext&) const override;
+  void Draw(SkCanvas& canvas) const override { Widget::Draw(canvas); }
+  void PreDraw(SkCanvas&) const override;
   gui::DropTarget* CanDrop() override { return this; }
   void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
   void DropLocation(std::shared_ptr<Location>&&) override;

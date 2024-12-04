@@ -44,9 +44,8 @@ constexpr float kTrashRadius = 3_cm;
 
 void Window::Draw(SkCanvas& canvas) {
   timer.Tick();
-  gui::DrawContext draw_ctx(timer, canvas);
   canvas.save();
-  DrawCached(draw_ctx);
+  DrawCached(canvas);
   canvas.restore();
 
   // Draw fps counter
@@ -214,8 +213,7 @@ animation::Phase Window::Update(time::Timer& timer) {
   return phase;
 }
 
-animation::Phase Window::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+void Window::Draw(SkCanvas& canvas) const {
   auto window_space_matrix = canvas.getLocalToDevice();
   canvas.save();
   canvas.concat(CanvasToWindow());
@@ -224,7 +222,7 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
   canvas.clear(background_color);
 
   canvas.setMatrix(window_space_matrix);
-  DrawChildren(ctx);
+  DrawChildren(canvas);
 
   canvas.setMatrix(machine_space_matrix);
 
@@ -243,8 +241,6 @@ animation::Phase Window::Draw(gui::DrawContext& ctx) const {
   }
 
   canvas.restore();
-
-  return animation::Finished;
 }
 
 struct MoveCameraAction : Action {

@@ -53,12 +53,6 @@ struct PackFrameRequest {
 
 extern PackFrameRequest next_frame_request;
 
-struct DrawContext {
-  time::Timer& timer;
-  SkCanvas& canvas;
-  DrawContext(time::Timer& timer, SkCanvas& canvas) : timer(timer), canvas(canvas) {}
-};
-
 struct DropTarget;
 
 enum class PointerButton { Unknown, Left, Middle, Right, Count };
@@ -185,8 +179,8 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual void PointerOver(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}
 
-  virtual animation::Phase PreDraw(DrawContext& ctx) const { return animation::Finished; }
-  animation::Phase DrawCached(DrawContext& ctx) const;
+  virtual void PreDraw(SkCanvas&) const {}
+  void DrawCached(SkCanvas&) const;
   virtual void InvalidateDrawCache() const;
 
   std::weak_ptr<Widget> WeakPtr() const {
@@ -203,7 +197,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   // Only widgets that are being drawn will have this called.
   virtual animation::Phase Update(time::Timer&) { return animation::Finished; }
 
-  virtual animation::Phase Draw(DrawContext& ctx) const { return DrawChildren(ctx); }
+  virtual void Draw(SkCanvas& canvas) const { return DrawChildren(canvas); }
   virtual SkPath Shape() const = 0;
 
   virtual bool CenteredAtZero() const { return false; }
@@ -228,13 +222,13 @@ struct Widget : public std::enable_shared_from_this<Widget> {
     return from_child;
   }
 
-  virtual animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const;
+  virtual void DrawChildCachced(SkCanvas&, const Widget& child) const;
 
-  virtual animation::Phase PreDrawChildren(DrawContext&) const;
+  virtual void PreDrawChildren(SkCanvas&) const;
 
-  animation::Phase DrawChildrenSpan(DrawContext&, maf::Span<std::shared_ptr<Widget>> widgets) const;
+  void DrawChildrenSpan(SkCanvas&, maf::Span<std::shared_ptr<Widget>> widgets) const;
 
-  animation::Phase DrawChildren(DrawContext&) const;
+  void DrawChildren(SkCanvas&) const;
 
   // Used to obtain references to the child widgets in a generic fashion.
   // Widgets are stored in front-to-back order.

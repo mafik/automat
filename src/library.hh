@@ -1002,7 +1002,7 @@ struct ProgressBar : library::Number {
     bar->value = value;
     return bar;
   }
-  animation::Phase Draw(gui::DrawContext& ctx) const override { return Object::Draw(ctx); }
+  void Draw(SkCanvas& canvas) const override { Object::Draw(canvas); }
   SkPath Shape() const override { return Object::Shape(); }
 };
 

@@ -120,32 +120,31 @@ animation::Phase Toolbar::Update(time::Timer& timer) {
   return phase;
 }
 
-animation::Phase Toolbar::Draw(gui::DrawContext& dctx) const {
+void Toolbar::Draw(SkCanvas& canvas) const {
   auto my_shape = Shape();
 
   static auto color = PersistentImage::MakeFromAsset(embedded::assets_tray_webp, {.scale = 1});
   SkRect dst = my_shape.getBounds();
-  dctx.canvas.save();
-  dctx.canvas.translate(0, kToolbarHeight);
-  dctx.canvas.scale(1, -1);
+  canvas.save();
+  canvas.translate(0, kToolbarHeight);
+  canvas.scale(1, -1);
   SkRect left_src = SkRect::MakeLTRB(0, 0, color.heightPx() / 2.f, color.heightPx());
   SkRect left_dst = Rect(dst.left(), 0, dst.left() + kToolbarHeight / 2, kToolbarHeight);
-  dctx.canvas.drawImageRect(*color.image, left_src, left_dst, SkSamplingOptions(), nullptr,
-                            SkCanvas::kFast_SrcRectConstraint);
+  canvas.drawImageRect(*color.image, left_src, left_dst, SkSamplingOptions(), nullptr,
+                       SkCanvas::kFast_SrcRectConstraint);
   SkRect right_src = SkRect::MakeLTRB(color.widthPx() - color.heightPx() / 2.f, 0, color.widthPx(),
                                       color.heightPx());
   SkRect right_dst = Rect(dst.right() - kToolbarHeight / 2, 0, dst.right(), kToolbarHeight);
-  dctx.canvas.drawImageRect(*color.image, right_src, right_dst, SkSamplingOptions(), nullptr,
-                            SkCanvas::kFast_SrcRectConstraint);
+  canvas.drawImageRect(*color.image, right_src, right_dst, SkSamplingOptions(), nullptr,
+                       SkCanvas::kFast_SrcRectConstraint);
 
   SkRect center_src = SkRect::MakeLTRB(left_src.right(), 0, right_src.left(), color.heightPx());
   SkRect center_dst = Rect(left_dst.right(), 0, right_dst.left(), kToolbarHeight);
-  dctx.canvas.drawImageRect(*color.image, center_src, center_dst, SkSamplingOptions(), nullptr,
-                            SkCanvas::kFast_SrcRectConstraint);
-  dctx.canvas.restore();
+  canvas.drawImageRect(*color.image, center_src, center_dst, SkSamplingOptions(), nullptr,
+                       SkCanvas::kFast_SrcRectConstraint);
+  canvas.restore();
 
-  DrawChildren(dctx);
-  return animation::Finished;
+  DrawChildren(canvas);
 }
 
 void Toolbar::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {

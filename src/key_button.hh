@@ -40,7 +40,7 @@ struct KeyButton : gui::Button {
   void Activate(gui::Pointer&) override;
   SkRRect RRect() const override;
   SkColor ForegroundColor() const override { return fg; }
-  void DrawButtonFace(gui::DrawContext&, SkColor bg, SkColor fg) const override;
+  void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;
   maf::StrView Name() const override { return "KeyButton"; }
   void SetLabel(maf::StrView new_label);
   SkMatrix TransformToChild(const Widget& child) const override;

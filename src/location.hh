@@ -259,8 +259,8 @@ struct Location : public gui::Widget {
   void SetNumber(double number);
 
   animation::Phase Update(time::Timer& timer) override;
-  animation::Phase PreDraw(gui::DrawContext&) const override;
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void PreDraw(SkCanvas&) const override;
+  void Draw(SkCanvas&) const override;
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   SkPath Shape() const override;

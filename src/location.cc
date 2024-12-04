@@ -212,8 +212,7 @@ animation::Phase Location::Update(time::Timer& timer) {
   return phase;
 }
 
-animation::Phase Location::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+void Location::Draw(SkCanvas& canvas) const {
   SkPath my_shape;
   if (object) {
     my_shape = object->Shape();
@@ -226,7 +225,7 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   bool using_layer = false;
   if (state.transparency > 0.01) {
     using_layer = true;
-    ctx.canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
+    canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
   }
 
   if (state.highlight > 0.01f) {  // Draw dashed highlight outline
@@ -250,7 +249,7 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
     float period_seconds = 200;
     float phase = std::fmod(state.time_seconds, period_seconds) / period_seconds;
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));
-    ctx.canvas.drawPath(outset_shape, dash_paint);
+    canvas.drawPath(outset_shape, dash_paint);
   }
 
   if constexpr (false) {  // Gray frame
@@ -273,7 +272,7 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
     canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
   }
 
-  auto phase = DrawChildren(ctx);
+  DrawChildren(canvas);
 
   // Draw debug text log below the Location
   float n_lines = 1;
@@ -300,10 +299,8 @@ animation::Phase Location::Draw(gui::DrawContext& ctx) const {
   }
 
   if (using_layer) {
-    ctx.canvas.restore();
+    canvas.restore();
   }
-
-  return phase;
 }
 
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
@@ -458,20 +455,20 @@ void AnimateGrowFrom(Location& source, Location& grown) {
   animation_state.transparency = 1;
 }
 
-animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
+void Location::PreDraw(SkCanvas& canvas) const {
   // Draw shadow
   if (object == nullptr) {
-    return animation::Finished;
+    return;
   }
   auto& anim = GetAnimationState();
   auto shape = object->Shape();
 
-  ctx.canvas.concat(TransformFromChild(*object));
+  canvas.concat(TransformFromChild(*object));
 
   auto rect = shape.getBounds();
   auto window = dynamic_cast<gui::Window*>(&RootWidget());
   auto window_size_px = window->size * window->display_pixels_per_meter;
-  float s = ctx.canvas.getTotalMatrix().getScaleX();
+  float s = canvas.getTotalMatrix().getScaleX();
   float min_elevation = 1_mm;
   SkPoint3 z_plane_params = {0, 0, (min_elevation + anim.elevation * 8_mm) * s};
   SkPoint3 light_pos = {window_size_px.width / 2.f, (float)window_size_px.height,
@@ -482,17 +479,16 @@ animation::Phase Location::PreDraw(gui::DrawContext& ctx) const {
   SkPaint shadow_paint;
   shadow_paint.setBlendMode(SkBlendMode::kMultiply);
   SkRect shadow_bounds;
-  SkShadowUtils::GetLocalBounds(ctx.canvas.getTotalMatrix(), shape, z_plane_params, light_pos,
+  SkShadowUtils::GetLocalBounds(canvas.getTotalMatrix(), shape, z_plane_params, light_pos,
                                 light_radius, flags, &shadow_bounds);
-  ctx.canvas.saveLayer(&shadow_bounds, &shadow_paint);
+  canvas.saveLayer(&shadow_bounds, &shadow_paint);
   // Z plane params are parameters for the height function. h(x, y, z) = param_X * x + param_Y * y +
   // param_Z The height seems to be computed only for the center of the shape.
   // All of the light parameters (position, radius) are specified in pixel coordinates and ignore
   // current canvas transform.
-  SkShadowUtils::DrawShadow(&ctx.canvas, shape, z_plane_params, light_pos, light_radius,
+  SkShadowUtils::DrawShadow(&canvas, shape, z_plane_params, light_pos, light_radius,
                             "#c9ced6"_color, "#ada4b0"_color, flags);
-  ctx.canvas.restore();
-  return animation::Finished;
+  canvas.restore();
 }
 
 void Location::UpdateAutoconnectArgs() {

@@ -13,8 +13,6 @@
 #include "widget.hh"
 #include "window.hh"
 
-// TODO: Move all the animation logic into Widget::Update (only pass timer there)
-// TODO: Only pass Canvas into Widget::Draw & remove animation::Phase from its return value
 // TODO: Each widget should hold its own transform matrix
 // TODO: Remove TransformFromChild & TransformToChild
 // TODO: Split Widget from Object (largest change)
@@ -392,8 +390,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
 
     // ACTUALLY the delta time is `draw_time - now`.
-    auto true_d = window->timer.d;
-    auto fake_d = min(1.0, (now - widget.draw_time).count());
     widget.draw_time =
         now;  // TODO(when Update & Draw are separated): update this right after Update
     widget.window_to_local = node.window_to_local;
@@ -401,16 +397,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
     rec_canvas->setMatrix(node.local_to_window);
-    DrawContext ctx(window->timer, *rec_canvas);
-    window->timer.d = fake_d;
     //////////
     // DRAW //
     //////////
-    auto animation_phase = widget.Draw(ctx);  // This is where we actually draw stuff!
-    window->timer.d = true_d;
-    if (animation_phase == animation::Animating) {
-      widget.invalidated = min(widget.invalidated, now);
-    }
+    widget.Draw(*rec_canvas);  // This is where we actually draw stuff!
 
     widget.recording = recorder.finishRecordingAsDrawable();
     widget.draw_present = packed;

@@ -31,8 +31,8 @@ struct Button : Widget {
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
   animation::Phase Update(time::Timer&) override;
-  animation::Phase PreDraw(DrawContext& ctx) const override;
-  animation::Phase Draw(DrawContext&) const override;
+  void PreDraw(SkCanvas&) const override;
+  void Draw(SkCanvas&) const override;
   float Height() const;
   virtual SkRRect RRect() const;
   SkPath Shape() const override;
@@ -43,7 +43,7 @@ struct Button : Widget {
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
-  virtual void DrawButtonFace(DrawContext&, SkColor bg, SkColor fg) const;
+  virtual void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const;
 
   maf::Optional<Rect> TextureBounds() const override;
 
@@ -114,8 +114,8 @@ struct ToggleButton : Widget {
 
   virtual std::shared_ptr<Button>& OnWidget() { return on; }
   animation::Phase Update(time::Timer&) override;
-  animation::Phase PreDrawChildren(DrawContext& ctx) const override;
-  animation::Phase DrawChildCachced(DrawContext&, const Widget& child) const override;
+  void PreDrawChildren(SkCanvas&) const override;
+  void DrawChildCachced(SkCanvas&, const Widget& child) const override;
   SkRRect RRect() const { return off->RRect(); }
   SkPath Shape() const override { return off->Shape(); }
   maf::Optional<Rect> TextureBounds() const override { return off->TextureBounds(); }

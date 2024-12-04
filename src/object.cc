@@ -17,8 +17,7 @@ using namespace maf;
 
 namespace automat {
 
-animation::Phase Object::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+void Object::Draw(SkCanvas& canvas) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -57,7 +56,6 @@ animation::Phase Object::Draw(gui::DrawContext& ctx) const {
                    path_bounds.height() / 2 - gui::kLetterSizeMM / 2 / 1000);
   gui::GetFont().DrawText(canvas, Name(), text_paint);
   canvas.restore();
-  return animation::Finished;
 }
 
 SkPath Object::Shape() const {

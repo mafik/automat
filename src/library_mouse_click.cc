@@ -31,7 +31,6 @@
 #include "../build/generated/embedded.hh"
 #include "argument.hh"
 #include "drag_action.hh"
-#include "pointer.hh"
 #include "prototypes.hh"
 #include "svg.hh"
 #include "textures.hh"
@@ -124,8 +123,7 @@ string_view MouseClick::Name() const {
 std::shared_ptr<Object> MouseClick::Clone() const {
   return std::make_shared<MouseClick>(button, down);
 }
-animation::Phase MouseClick::Draw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+void MouseClick::Draw(SkCanvas& canvas) const {
   static PersistentImage images[(long)gui::PointerButton::Count][2] = {
       [(long)gui::PointerButton::Left] =
           {
@@ -144,7 +142,6 @@ animation::Phase MouseClick::Draw(gui::DrawContext& ctx) const {
   };
   auto& mouse_image = images[(long)button][down];
   mouse_image.draw(canvas);
-  return animation::Finished;
 }
 SkPath MouseClick::Shape() const {
   return SkPath::Rect(SkRect::MakeXYWH(0, 0, 373 * kScale, 624 * kScale));

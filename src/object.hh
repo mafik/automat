@@ -69,7 +69,7 @@ struct Object : gui::Widget {
   virtual std::partial_ordering operator<=>(const Object& other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   virtual RRect CoarseBounds() const;
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;

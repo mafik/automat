@@ -260,17 +260,15 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
   return paint;
 }
 
-animation::Phase Machine::PreDraw(gui::DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
+void Machine::PreDraw(SkCanvas& canvas) const {
   auto shape = Shape();
-  float px_per_m = ctx.canvas.getLocalToDeviceAs3x3().mapRadius(1);
+  float px_per_m = canvas.getLocalToDeviceAs3x3().mapRadius(1);
   SkPaint background_paint = GetBackgroundPaint(px_per_m);
   canvas.drawPath(shape, background_paint);
   SkPaint border_paint;
   border_paint.setColor("#404040"_color);
   border_paint.setStyle(SkPaint::kStroke_Style);
   canvas.drawPath(shape, border_paint);
-  return animation::Finished;
 }
 
 void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {

@@ -70,9 +70,8 @@ animation::Phase KeyPresser::Update(time::Timer&) {
   shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
   return animation::Finished;
 }
-animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
-  auto phase = DrawChildren(dctx);
-  auto& canvas = dctx.canvas;
+void KeyPresser::Draw(SkCanvas& canvas) const {
+  DrawChildren(canvas);
 
   static auto pointing_hand_color =
       PersistentImage::MakeFromAsset(embedded::assets_pointing_hand_color_webp, {.height = 8.8_mm});
@@ -85,7 +84,6 @@ animation::Phase KeyPresser::Draw(gui::DrawContext& dctx) const {
   canvas.rotate(15);
   img.draw(canvas);
   canvas.restore();
-  return phase;
 }
 SkPath KeyPresser::Shape() const {
   static SkPath shape = [this]() {

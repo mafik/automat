@@ -15,7 +15,6 @@
 #include "optional.hh"
 #include "sincos.hh"
 #include "vec.hh"
-#include "widget.hh"
 
 namespace automat::gui {
 
@@ -72,15 +71,15 @@ struct CablePhysicsSimulation {
 };
 
 maf::ArcLine RouteCable(Vec2AndDir start, maf::Span<const Vec2AndDir> ends,
-                        DrawContext* debug_ctx = nullptr);
+                        SkCanvas* debug_canvas = nullptr);
 
 animation::Phase SimulateCablePhysics(time::Timer&, CablePhysicsSimulation&, Vec2AndDir start,
                                       maf::Span<Vec2AndDir> end_candidates);
 
-void DrawOpticalConnector(DrawContext&, const CablePhysicsSimulation&, PaintDrawable& icon);
+void DrawOpticalConnector(SkCanvas&, const CablePhysicsSimulation&, PaintDrawable& icon);
 
 // Draws the given path as a cable and possibly update its length.
-void DrawCable(DrawContext&, SkPath&, sk_sp<SkColorFilter>&, CableTexture, float start_width,
+void DrawCable(SkCanvas&, SkPath&, sk_sp<SkColorFilter>&, CableTexture, float start_width,
                float end_width, float* length = nullptr);
 
 }  // namespace automat::gui

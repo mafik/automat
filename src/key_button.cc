@@ -73,8 +73,7 @@ static sk_sp<SkShader> MakeSweepShader(const RRect& rrect, SkColor side_color, S
   return SkGradientShader::MakeSweep(center.x, center.y, colors, pos, 13);
 }
 
-void KeyButton::DrawButtonFace(gui::DrawContext& ctx, SkColor bg, SkColor fg) const {
-  auto& canvas = ctx.canvas;
+void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
   bool enabled = false;
 
   SkRRect key_base = RRect();
@@ -129,14 +128,13 @@ struct KeyLabelWidget : Widget, LabelMixin {
   maf::Optional<Rect> TextureBounds() const override {
     return SkRect::MakeLTRB(-width / 2, 1.5 * kLetterSize, width / 2, -0.5 * kLetterSize);
   }
-  animation::Phase Draw(DrawContext& ctx) const override {
+  void Draw(SkCanvas& canvas) const override {
     SkPaint paint;
     paint.setAntiAlias(true);
     paint.setColor("#000000"_color);
-    ctx.canvas.translate(-width / 2, -kKeyLetterSize / 2);
-    KeyFont().DrawText(ctx.canvas, label, paint);
-    ctx.canvas.translate(width / 2, kKeyLetterSize / 2);
-    return animation::Finished;
+    canvas.translate(-width / 2, -kKeyLetterSize / 2);
+    KeyFont().DrawText(canvas, label, paint);
+    canvas.translate(width / 2, kKeyLetterSize / 2);
   }
   void SetLabel(StrView label) override {
     this->label = label;

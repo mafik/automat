@@ -16,10 +16,7 @@ SkPath Text::Shape() const {
   return SkPath::Rect(SkRect::MakeWH(w, kLetterSize));
 }
 
-animation::Phase Text::Draw(DrawContext& ctx) const {
-  GetFont().DrawText(ctx.canvas, text, paint);
-  return animation::Finished;
-}
+void Text::Draw(SkCanvas& canvas) const { GetFont().DrawText(canvas, text, paint); }
 
 maf::Optional<Rect> Text::TextureBounds() const { return nullopt; }
 }  // namespace automat::gui

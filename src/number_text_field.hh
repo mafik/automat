@@ -11,13 +11,13 @@ struct NumberTextField : gui::TextField {
   NumberTextField(float width);
   SkRRect ShapeRRect() const override;
   const SkPaint& GetBackgroundPaint() const override;
-  void DrawBackground(gui::DrawContext&) const override;
-  void DrawText(gui::DrawContext&) const override;
+  void DrawBackground(SkCanvas&) const override;
+  void DrawText(SkCanvas&) const override;
   Vec2 GetTextPos() const override;
   void SetNumber(double x);
   string_view Name() const override { return "NumberTextField"; }
 
-  static void DrawBackground(gui::DrawContext&, SkRRect rrect);
+  static void DrawBackground(SkCanvas&, SkRRect rrect);
 };
 
 }  // namespace automat::gui

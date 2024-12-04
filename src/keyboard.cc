@@ -313,8 +313,7 @@ animation::Phase Keyboard::Update(time::Timer& timer) {
   }
 }
 
-animation::Phase Keyboard::Draw(DrawContext& ctx) const {
-  SkCanvas& canvas = ctx.canvas;
+void Keyboard::Draw(SkCanvas& canvas) const {
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
   paint.setAntiAlias(true);
@@ -322,7 +321,6 @@ animation::Phase Keyboard::Draw(DrawContext& ctx) const {
     paint.setAlphaf(anim.alpha);
     canvas.drawPath(anim.shape, paint);
   }
-  return animation::Finished;
 }
 
 SkPath Keyboard::Shape() const {

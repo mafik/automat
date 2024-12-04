@@ -21,7 +21,6 @@ struct Keyboard;
 struct PointerImpl;
 struct Widget;
 struct Window;
-struct DrawContext;
 
 struct PointerMoveCallback {
   maf::Vec<Pointer*> pointers;

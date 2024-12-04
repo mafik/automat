@@ -80,9 +80,7 @@ maf::Optional<Rect> Button::TextureBounds() const {
   return base_rect;
 }
 
-void Button::DrawButtonFace(DrawContext& ctx, SkColor bg, SkColor fg) const {
-  auto& canvas = ctx.canvas;
-
+void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
   auto oval = RRect();
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
   float press_shift_y = PressRatio() * -kPressOffset;
@@ -130,18 +128,17 @@ animation::Phase Button::Update(time::Timer& timer) {
   return phase;
 }
 
-animation::Phase Button::PreDraw(DrawContext& ctx) const {
+void Button::PreDraw(SkCanvas& canvas) const {
   auto bg = BackgroundColor();
-  DrawButtonShadow(ctx.canvas, bg);
-  return animation::Finished;
+  DrawButtonShadow(canvas, bg);
 }
 
-animation::Phase Button::Draw(DrawContext& ctx) const {
+void Button::Draw(SkCanvas& canvas) const {
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
 
-  DrawButtonFace(ctx, bg, fg);
-  return DrawChildren(ctx);
+  DrawButtonFace(canvas, bg, fg);
+  DrawChildren(canvas);
 }
 
 animation::Phase ToggleButton::Update(time::Timer& timer) {
@@ -149,20 +146,19 @@ animation::Phase ToggleButton::Update(time::Timer& timer) {
   return animation::ExponentialApproach(Filled() ? 1 : 0, timer.d, 0.15, filling);
 }
 
-animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& child) const {
-  auto& canvas = ctx.canvas;
+void ToggleButton::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
   if (filling >= 0.999) {
     if (&child == on_widget.get()) {
-      return on_widget->DrawCached(ctx);
+      return on_widget->DrawCached(canvas);
     } else {
-      return animation::Finished;
+      return;
     }
   } else if (filling <= 0.001) {
     if (&child == off.get()) {
-      return off->DrawCached(ctx);
+      return off->DrawCached(canvas);
     } else {
-      return animation::Finished;
+      return;
     }
   }
 
@@ -198,22 +194,19 @@ animation::Phase ToggleButton::DrawChildCachced(DrawContext& ctx, const Widget& 
     canvas.clipPath(waves_clip, SkClipOp::kIntersect, true);
   }
 
-  return child.DrawCached(ctx);
+  child.DrawCached(canvas);
 }
 
-animation::Phase ToggleButton::PreDrawChildren(DrawContext& ctx) const {
-  auto& canvas = ctx.canvas;
-
+void ToggleButton::PreDrawChildren(SkCanvas& canvas) const {
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
 
   canvas.saveLayerAlphaf(nullptr, filling);
-  auto phase = on_widget->PreDraw(ctx);
+  on_widget->PreDraw(canvas);
   canvas.restore();
 
   canvas.saveLayerAlphaf(nullptr, 1 - filling);
-  phase |= off->PreDraw(ctx);
+  off->PreDraw(canvas);
   canvas.restore();
-  return phase;
 }
 
 SkPath Button::Shape() const { return SkPath::RRect(RRect()); }

@@ -14,7 +14,7 @@ struct ShapeWidget : Widget, PaintMixin {
 
   ShapeWidget(SkPath path);
   SkPath Shape() const override;
-  animation::Phase Draw(DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   bool CenteredAtZero() const override { return true; }
 };
 

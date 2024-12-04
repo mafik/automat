@@ -45,7 +45,7 @@ struct TextField : Widget, CaretOwner {
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
   animation::Phase Update(time::Timer&) override;
-  animation::Phase Draw(DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   void ReleaseCaret(Caret&) override;
@@ -62,8 +62,8 @@ struct TextField : Widget, CaretOwner {
   //
   // Intended to be used internally by TextField::Draw. Subclasses may override this method to
   // customize background appearance.
-  virtual void DrawBackground(DrawContext&) const;
-  virtual void DrawText(DrawContext&) const;
+  virtual void DrawBackground(SkCanvas&) const;
+  virtual void DrawText(SkCanvas&) const;
 
   virtual SkRRect ShapeRRect() const;
   virtual const SkPaint& GetTextPaint() const;

@@ -49,8 +49,7 @@ static const SkPaint kNumberTextBorderPaint = []() {
   return paint;
 }();
 
-void NumberTextField::DrawBackground(gui::DrawContext& ctx, SkRRect rrect) {
-  auto& canvas = ctx.canvas;
+void NumberTextField::DrawBackground(SkCanvas& canvas, SkRRect rrect) {
   rrect.inset(kBorderWidth, kBorderWidth);
   SkPoint pts[2] = {{0, rrect.getBounds().top()}, {0, rrect.getBounds().bottom()}};
   sk_sp<SkShader> shader =
@@ -78,16 +77,16 @@ void NumberTextField::DrawBackground(gui::DrawContext& ctx, SkRRect rrect) {
   canvas.drawRRect(rrect, kNumberTextBorderPaint);
 }
 
-void NumberTextField::DrawBackground(gui::DrawContext& ctx) const {
+void NumberTextField::DrawBackground(SkCanvas& canvas) const {
   SkRRect rrect = ShapeRRect();
-  DrawBackground(ctx, rrect);
+  DrawBackground(canvas, rrect);
 }
 
-void NumberTextField::DrawText(gui::DrawContext& ctx) const {
+void NumberTextField::DrawText(SkCanvas& canvas) const {
   gui::Font& font = gui::GetFont();
   Vec2 text_pos = GetTextPos();
-  ctx.canvas.translate(text_pos.x, text_pos.y);
-  font.DrawText(ctx.canvas, text, GetTextPaint());
+  canvas.translate(text_pos.x, text_pos.y);
+  font.DrawText(canvas, text, GetTextPaint());
 }
 
 Vec2 NumberTextField::GetTextPos() const {

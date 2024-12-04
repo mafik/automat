@@ -35,7 +35,7 @@ struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
   animation::Phase Update(time::Timer&) override;
-  animation::Phase Draw(gui::DrawContext&) const override;
+  void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;

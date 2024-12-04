@@ -92,8 +92,10 @@ animation::Phase Window::Tick(time::Timer& timer) {
     }
   }
   if (total_pan != Vec2(0, 0)) {
-    camera_x.Shift(total_pan.x / zoom);
-    camera_y.Shift(total_pan.y / zoom);
+    camera_x_target += total_pan.x / zoom;
+    camera_x += total_pan.x / zoom;
+    camera_y_target += total_pan.y / zoom;
+    camera_y += total_pan.y / zoom;
   }
   if (total_zoom != 1) {
     Zoom(total_zoom);
@@ -113,8 +115,12 @@ animation::Phase Window::Tick(time::Timer& timer) {
       auto dx = camera_timeline.back().x - camera_timeline.front().x;
       auto dy = camera_timeline.back().y - camera_timeline.front().y;
       auto dz = camera_timeline.back().z / camera_timeline.front().z;
-      camera_x.Shift(dx / dt * timer.d * 0.8);
-      camera_y.Shift(dy / dt * timer.d * 0.8);
+      float shift_x = dx / dt * timer.d * 0.8;
+      float shift_y = dy / dt * timer.d * 0.8;
+      camera_x += shift_x;
+      camera_x_target += shift_x;
+      camera_y += shift_y;
+      camera_y_target += shift_y;
       float z = pow(dz, timer.d / dt * 0.8);
       zoom_target *= z;
       zoom *= z;
@@ -130,8 +136,8 @@ animation::Phase Window::Tick(time::Timer& timer) {
     phase = animation::Animating;
   }
 
-  float rx = camera_x.Remaining();
-  float ry = camera_y.Remaining();
+  float rx = camera_x_target - camera_x;
+  float ry = camera_y_target - camera_y;
   float rz = fabsf(zoom - zoom_target);
   float r = sqrt(rx * rx + ry * ry);
   float rpx = PxPerMeter() * r;
@@ -144,30 +150,36 @@ animation::Phase Window::Tick(time::Timer& timer) {
       Vec2 focus_pre = WindowToCanvas(mouse_position);
       phase |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
       Vec2 focus_post = WindowToCanvas(mouse_position);
-      Vec2 focus_delta = focus_post - focus_pre;
-      camera_x.Shift(-focus_delta.x);
-      camera_y.Shift(-focus_delta.y);
+      Vec2 focus_delta = focus_pre - focus_post;
+      camera_x += focus_delta.x;
+      camera_x_target += focus_delta.x;
+      camera_y += focus_delta.y;
+      camera_y_target += focus_delta.y;
     }
   } else {  // stabilize camera target
-    Vec2 focus_pre = Vec2(camera_x.target, camera_y.target);
+    Vec2 focus_pre = Vec2(camera_x_target, camera_y_target);
     Vec2 target_screen = CanvasToWindow(focus_pre);
     phase |= animation::ExponentialApproach(zoom_target, timer.d, 1.0 / 15, zoom);
     Vec2 focus_post = WindowToCanvas(target_screen);
     Vec2 focus_delta = focus_post - focus_pre;
-    camera_x.value -= focus_delta.x;
-    camera_y.value -= focus_delta.y;
+    camera_x -= focus_delta.x;
+    camera_y -= focus_delta.y;
   }
 
-  phase |= camera_x.Tick(timer);
-  phase |= camera_y.Tick(timer);
+  phase |= animation::ExponentialApproach(camera_x_target, timer.d, 0.1, camera_x);
+  phase |= animation::ExponentialApproach(camera_y_target, timer.d, 0.1, camera_y);
 
   if (move_velocity.x != 0) {
-    camera_x.Shift(move_velocity.x * timer.d);
+    float shift_x = move_velocity.x * timer.d;
+    camera_x += shift_x;
+    camera_x_target += shift_x;
     inertia = false;
     phase = animation::Animating;
   }
   if (move_velocity.y != 0) {
-    camera_y.Shift(move_velocity.y * timer.d);
+    float shift_y = move_velocity.y * timer.d;
+    camera_y += shift_y;
+    camera_y_target += shift_y;
     inertia = false;
     phase = animation::Animating;
   }
@@ -183,23 +195,31 @@ animation::Phase Window::Tick(time::Timer& timer) {
     Vec2 top_right = WindowToCanvas(size - Vec2(0.001, 0.001));
     SkRect window_bounds = SkRect::MakeLTRB(bottom_left.x, top_right.y, top_right.x, bottom_left.y);
     if (work_area.left() > window_bounds.right()) {
-      camera_x.Shift(work_area.left() - window_bounds.right());
+      float shift_x = work_area.left() - window_bounds.right();
+      camera_x += shift_x;
+      camera_x_target += shift_x;
     }
     if (work_area.right() < window_bounds.left()) {
-      camera_x.Shift(work_area.right() - window_bounds.left());
+      float shift_x = work_area.right() - window_bounds.left();
+      camera_x += shift_x;
+      camera_x_target += shift_x;
     }
     // The y axis is flipped so `work_area.bottom()` is actually its top
     if (work_area.bottom() < window_bounds.bottom()) {
-      camera_y.Shift(work_area.bottom() - window_bounds.bottom());
+      float shift_y = work_area.bottom() - window_bounds.bottom();
+      camera_y += shift_y;
+      camera_y_target += shift_y;
     }
     if (work_area.top() > window_bounds.top()) {
-      camera_y.Shift(work_area.top() - window_bounds.top());
+      float shift_y = work_area.top() - window_bounds.top();
+      camera_y += shift_y;
+      camera_y_target += shift_y;
     }
   }
 
   {  // Animate trash area
-    trash_radius.target = drag_action_count ? kTrashRadius : 0;
-    phase |= trash_radius.Tick(timer);
+    trash_radius_target = drag_action_count ? kTrashRadius : 0;
+    phase |= animation::ExponentialApproach(trash_radius_target, timer.d, 0.1, trash_radius);
   }
 
   if (phase == animation::Animating) {
@@ -252,7 +272,7 @@ void Window::Draw(SkCanvas& canvas) const {
     float target_width = size.width;
     float target_height = size.height;
     SkRect target_rect =
-        SkRect::MakeXYWH(camera_x.target - target_width / 2, camera_y.target - target_height / 2,
+        SkRect::MakeXYWH(camera_x_target - target_width / 2, camera_y_target - target_height / 2,
                          target_width, target_height);
     canvas.drawRect(target_rect, target_paint);
   }
@@ -299,8 +319,10 @@ void Window::Zoom(float delta) {
     zoom *= delta;
     Vec2 focus_post = WindowToCanvas(mouse_position);
     Vec2 focus_delta = focus_post - focus_pre;
-    camera_x.Shift(-focus_delta.x);
-    camera_y.Shift(-focus_delta.y);
+    camera_x -= focus_delta.x;
+    camera_x_target -= focus_delta.x;
+    camera_y -= focus_delta.y;
+    camera_y_target -= focus_delta.y;
   } else {
     zoom_target *= delta;
     zoom *= delta;
@@ -375,11 +397,11 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
     } else if (key == "camera") {
       for (auto& camera_key : ObjectView(d, status)) {
         if (camera_key == "x") {
-          d.Get(camera_x.target, status);
-          camera_x.value = camera_x.target;
+          d.Get(camera_x_target, status);
+          camera_x = camera_x_target;
         } else if (camera_key == "y") {
-          d.Get(camera_y.target, status);
-          camera_y.value = camera_y.target;
+          d.Get(camera_y_target, status);
+          camera_y = camera_y_target;
         } else if (camera_key == "zoom") {
           d.Get(zoom_target, status);
           zoom = zoom_target;

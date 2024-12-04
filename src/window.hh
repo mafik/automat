@@ -120,9 +120,12 @@ struct Window final : Widget, DropTarget {
 
   float zoom = 1;
   float zoom_target = 1;
-  animation::Approach<> camera_x = animation::Approach<>(0.0);
-  animation::Approach<> camera_y = animation::Approach<>(0.0);
-  animation::Approach<> trash_radius = animation::Approach<>(0.0);
+  float camera_x = 0;
+  float camera_x_target = 0;
+  float camera_y = 0;
+  float camera_y_target = 0;
+  float trash_radius = 0;
+  float trash_radius_target = 0;
   int drag_action_count = 0;
   bool panning_during_last_frame = false;
   bool inertia = false;

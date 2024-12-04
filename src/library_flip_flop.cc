@@ -87,7 +87,21 @@ FlipFlopButton::FlipFlopButton()
                                        }
                                      }})) {}
 
-FlipFlop::FlipFlop() : button(make_shared<FlipFlopButton>()) { button->flip_flop = this; }
+static PersistentImage& FlipFlopColor() {
+  static auto flip_flop_color = PersistentImage::MakeFromAsset(
+      embedded::assets_flip_flop_color_webp, {.width = kFlipFlopWidth});
+  return flip_flop_color;
+}
+
+Rect FlipFlopRect() { return Rect::MakeZeroWH(FlipFlopColor().width(), FlipFlopColor().height()); }
+SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
+
+FlipFlop::FlipFlop() : button(make_shared<FlipFlopButton>()) {
+  button->flip_flop = this;
+  auto rect = FlipFlopRect();
+  button->local_to_parent = SkM44::Translate(rect.CenterX() - kYingYangButtonRadius,
+                                             rect.CenterY() - kYingYangButtonRadius);
+}
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 std::shared_ptr<Object> FlipFlop::Clone() const {
   auto ret = std::make_shared<FlipFlop>();
@@ -99,11 +113,8 @@ animation::Phase FlipFlop::Tick(time::Timer& timer) {
   return animation::LinearApproach(current_state, timer.d, 10, animation_state.light);
 }
 
-static auto flip_flop_color = PersistentImage::MakeFromAsset(embedded::assets_flip_flop_color_webp,
-                                                             {.width = kFlipFlopWidth});
-
 void FlipFlop::Draw(SkCanvas& canvas) const {
-  flip_flop_color.draw(canvas);
+  FlipFlopColor().draw(canvas);
 
   {  // Red indicator light
     SkPaint gradient;
@@ -143,20 +154,9 @@ void FlipFlop::Draw(SkCanvas& canvas) const {
 
   DrawChildren(canvas);
 }
-Rect FlipFlopRect() { return Rect::MakeZeroWH(flip_flop_color.width(), flip_flop_color.height()); }
-SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
 
 void FlipFlop::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   children.push_back(button);
-}
-
-SkMatrix FlipFlop::TransformToChild(const Widget& child) const {
-  auto rect = FlipFlopRect();
-  if (&child == button.get()) {
-    return SkMatrix::Translate(-rect.CenterX() + kYingYangButtonRadius,
-                               -rect.CenterY() + kYingYangButtonRadius);
-  }
-  return SkMatrix::I();
 }
 
 LongRunning* FlipFlop::OnRun(Location& here) {

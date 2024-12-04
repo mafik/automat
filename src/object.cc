@@ -79,8 +79,9 @@ std::unique_ptr<Action> Object::FindAction(gui::Pointer& p, gui::ActionTrigger b
     auto* location = Closest<Location>(*p.hover);
     auto* machine = Closest<Machine>(*p.hover);
     if (location && machine) {
+      auto contact_point = p.PositionWithin(*this);
       auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
-      a->contact_point = p.PositionWithin(*this);
+      a->contact_point = contact_point;
       return a;
     }
   }

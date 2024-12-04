@@ -55,8 +55,7 @@ struct Location : public gui::Widget {
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
 
   ObjectAnimationState& GetAnimationState() const;
-
-  SkMatrix TransformToChild(const Widget& child) const override;
+  void UpdateChildTransform();
 
   mutable ObjectAnimationState animation_state;
 

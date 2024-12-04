@@ -69,7 +69,9 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
   return dom;
 }
 
-MacroRecorder::MacroRecorder() : record_button(make_shared<GlassRunButton>(this)) {}
+MacroRecorder::MacroRecorder() : record_button(make_shared<GlassRunButton>(this)) {
+  record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
+}
 MacroRecorder::~MacroRecorder() {
   if (keylogging) {
     keylogging->Release();
@@ -470,12 +472,6 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
 void MacroRecorder::KeyloggerKeyDown(gui::Key key) { RecordKeyEvent(*this, key.physical, true); }
 void MacroRecorder::KeyloggerKeyUp(gui::Key key) { RecordKeyEvent(*this, key.physical, false); }
 
-SkMatrix MacroRecorder::TransformToChild(const Widget& child) const {
-  if (&child == record_button.get()) {
-    return SkMatrix::Translate(-17.5_mm, -3.2_mm);
-  }
-  return SkMatrix::I();
-}
 bool MacroRecorder::IsOn() const { return keylogging != nullptr; }
 void MacroRecorder::On() { here.lock()->long_running = OnRun(*here.lock()); }
 void MacroRecorder::Off() {

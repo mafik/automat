@@ -56,8 +56,6 @@ struct HotKey : LiveObject, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
 
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
 
-  SkMatrix TransformToChild(const Widget& child) const override;
-
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
 };

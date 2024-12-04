@@ -46,7 +46,6 @@ struct FlipFlop : LiveObject, Runnable {
   void SetKey(gui::AnsiKey);
 
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
-  SkMatrix TransformToChild(const Widget& child) const override;
 
   LongRunning* OnRun(Location& here) override;
   void SerializeState(Serializer& writer, const char* key) const override;

@@ -210,6 +210,23 @@ animation::Phase Window::Tick(time::Timer& timer) {
     }
   }
 
+  auto canvas_to_window = SkM44(CanvasToWindow());
+
+  root_machine->local_to_parent = canvas_to_window;
+  for (auto& each_keyboard : keyboards) {
+    each_keyboard->local_to_parent = canvas_to_window;
+  }
+  for (auto& pointer : pointers) {
+    if (auto& action = pointer->action) {
+      if (auto* widget = action->Widget()) {
+        widget->local_to_parent = canvas_to_window;
+      }
+    }
+  }
+  for (auto& each_connection_widget : connection_widgets) {
+    each_connection_widget->local_to_parent = canvas_to_window;
+  }
+
   return phase;
 }
 
@@ -472,11 +489,14 @@ static void UpdateConnectionWidgets(Window& window) {
           return;
         }
         // Create a new widget.
-        LOG << "Creating a ConnectionWidget for argument " << arg.name;
         window.connection_widgets.emplace_back(new gui::ConnectionWidget(*loc, arg));
         window.connection_widgets.back()->parent = window.SharedPtr();
       });
     }
+  }
+
+  for (auto& widget : window.connection_widgets) {
+    widget->local_to_parent = SkM44(window.CanvasToWindow());
   }
 }
 
@@ -516,4 +536,9 @@ void Window::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   }
   children.push_back(root_machine);
 }
+void Window::Resize(Vec2 size) {
+  this->size = size;
+  toolbar->local_to_parent = SkM44(SkMatrix::Translate(size.x / 2, 0));
+}
+
 }  // namespace automat::gui

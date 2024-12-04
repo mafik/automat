@@ -61,7 +61,7 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
-  SkMatrix TransformToChild(const Widget& child) const override;
+  void UpdateChildTransform();
   float CalculateWidth() const;
 
   // If the object should be cached into a texture, return its bounds in local coordinates.

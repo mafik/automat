@@ -54,7 +54,6 @@ struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver
   void Cancel() override;
   void Updated(Location& here, Location& updated) override;
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
-  SkMatrix TransformToChild(const Widget& child) const override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;

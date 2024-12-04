@@ -256,11 +256,6 @@ SkRect Button::ChildBounds() const {
   if (child) return child->Shape().getBounds();
   return SkRect::MakeEmpty();
 }
-SkMatrix Button::TransformToChild(const Widget& child) const {
-  SkMatrix parent_to_local;
-  (void)child.local_to_parent.asM33().invert(&parent_to_local);
-  return parent_to_local;
-}
 
 Button::Button(std::shared_ptr<Widget> child) : child(child) { UpdateChildTransform(); }
 

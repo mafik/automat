@@ -356,7 +356,13 @@ Timeline::Timeline()
       next_button(make_shared<NextButton>()),
       state(kPaused),
       paused{.playback_offset = 0},
-      zoom(10) {}
+      zoom(10) {
+  run_button->local_to_parent = SkM44::Translate(-kPlayButtonRadius, kDisplayMargin);
+  prev_button->local_to_parent =
+      SkM44::Translate(-kPlasticWidth / 2 + kSideButtonMargin, -kSideButtonRadius);
+  next_button->local_to_parent = SkM44::Translate(
+      kPlasticWidth / 2 - kSideButtonMargin - kSideButtonDiameter, -kSideButtonRadius);
+}
 
 struct TextDrawable : PaintDrawable {
   Str text;
@@ -396,6 +402,7 @@ OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
   if (auto h = here.lock()) {
     h->InvalidateConnectionWidgets(true, true);
   }
+  UpdateChildTransform();
   return *dynamic_cast<OnOffTrack*>(tracks.back().get());
 }
 
@@ -408,6 +415,7 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
   for (int i = 0; i < other.track_args.size(); ++i) {
     AddTrackArg(*this, i, other.track_args[i]->name);
   }
+  UpdateChildTransform();
 }
 
 string_view Timeline::Name() const { return "Timeline"; }
@@ -792,6 +800,7 @@ animation::Phase Timeline::Tick(time::Timer& timer) {
     phase |= animation::Animating;
   }
   phase |= zoom.Tick(timer);
+  UpdateChildTransform();
   return phase;
 }
 
@@ -1219,34 +1228,22 @@ void Timeline::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   }
 }
 
-SkMatrix Timeline::TransformToChild(const Widget& child) const {
-  if (&child == run_button.get()) {
-    return SkMatrix::Translate(kPlayButtonRadius, -kDisplayMargin);
-  } else if (&child == prev_button.get()) {
-    return SkMatrix::Translate(kPlasticWidth / 2 - kSideButtonMargin, kSideButtonRadius);
-  } else if (&child == next_button.get()) {
-    return SkMatrix::Translate(-kPlasticWidth / 2 + kSideButtonMargin + kSideButtonDiameter,
-                               kSideButtonRadius);
-  } else if (auto* track = dynamic_cast<const TrackBase*>(&child)) {
-    float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
-    float track_width = MaxTrackLength() / distance_to_seconds;
+void Timeline::UpdateChildTransform() {
+  float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
+  float track_width = MaxTrackLength() / distance_to_seconds;
 
-    float current_pos_ratio = CurrentPosRatio(*this);
+  float current_pos_ratio = CurrentPosRatio(*this);
 
-    float track_offset_x0 = kRulerLength / 2;
-    float track_offset_x1 = track_width - kRulerLength / 2;
+  float track_offset_x0 = kRulerLength / 2;
+  float track_offset_x1 = track_width - kRulerLength / 2;
 
-    float track_offset_x = lerp(track_offset_x0, track_offset_x1, current_pos_ratio);
+  float track_offset_x = lerp(track_offset_x0, track_offset_x1, current_pos_ratio);
 
-    for (size_t i = 0; i < tracks.size(); ++i) {
-      if (tracks[i].get() == track) {
-        return SkMatrix::Translate(track_offset_x, kRulerHeight + kMarginAroundTracks +
-                                                       kTrackHeight / 2 +
-                                                       i * (kTrackMargin + kTrackHeight));
-      }
-    }
+  for (size_t i = 0; i < tracks.size(); ++i) {
+    tracks[i]->local_to_parent =
+        SkM44::Translate(-track_offset_x, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
+                                              i * (kTrackMargin + kTrackHeight));
   }
-  return SkMatrix::I();
 }
 
 SkPath TrackBase::Shape() const {

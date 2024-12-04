@@ -162,6 +162,7 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
 }
 
 TimerDelay::TimerDelay() : text_field(std::make_shared<gui::NumberTextField>(kTextWidth)) {
+  text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
   range_dial.velocity = 0;
   range_dial.value = 1;
 
@@ -566,13 +567,6 @@ SkPath TimerDelay::FieldShape(Object& field) const {
     return text_field->Shape().makeTransform(transform);
   }
   return SkPath();
-}
-
-SkMatrix TimerDelay::TransformToChild(const Widget& child) const {
-  if (&child == text_field.get()) {
-    return SkMatrix::Translate(kTextWidth / 2, gui::NumberTextField::kHeight);
-  }
-  return SkMatrix::I();
 }
 
 SkPath TimerDelay::Shape() const {

@@ -121,6 +121,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
 
   Timeline();
   Timeline(const Timeline&);
+  void UpdateChildTransform();
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;
@@ -129,7 +130,6 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   void Args(std::function<void(Argument&)> cb) override;
   Vec2AndDir ArgStart(const Argument&) override;
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
-  SkMatrix TransformToChild(const Widget& child) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   LongRunning* OnRun(Location& here) override;
   void Cancel() override;

@@ -186,6 +186,30 @@ HotKey::HotKey() {
       std::make_shared<KeyButton>(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth);
   shortcut_button =
       std::make_shared<KeyButton>(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth);
+
+  power_button->local_to_parent =
+      SkM44::Translate(kWidth / 2 - kFrameWidth - kMinimalTouchableSize + kBorderWidth,
+                       kShapeRect.top - kFrameWidth - kMinimalTouchableSize + kBorderWidth);
+
+  ctrl_button->local_to_parent = SkM44::Translate(-kWidth / 2 + kFrameWidth + kKeySpacing,
+                                                  kShapeRect.bottom + kFrameWidth + kKeySpacing);
+
+  windows_button->local_to_parent =
+      SkM44::Translate(-kWidth / 2 + kFrameWidth + kKeySpacing * 2 + kCtrlKeyWidth,
+                       kShapeRect.bottom + kFrameWidth + kKeySpacing);
+
+  alt_button->local_to_parent =
+      SkM44::Translate(-kWidth / 2 + kFrameWidth + kKeySpacing * 3 + kCtrlKeyWidth + kSuperKeyWidth,
+                       kShapeRect.bottom + kFrameWidth + kKeySpacing);
+
+  shift_button->local_to_parent =
+      SkM44::Translate(-kWidth / 2 + kFrameWidth + kKeySpacing,
+                       kShapeRect.bottom + kFrameWidth + kKeySpacing * 2 + kKeyHeight);
+
+  shortcut_button->local_to_parent =
+      SkM44::Translate(-kWidth / 2 + kFrameWidth + kKeySpacing * 2 + kShiftKeyWidth,
+                       kShapeRect.bottom + kFrameWidth + kKeySpacing * 2 + kKeyHeight);
+
   ctrl_button->activate = [this](gui::Pointer&) {
     bool on = IsOn();
     if (on) {
@@ -372,36 +396,6 @@ void HotKey::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   children.push_back(shift_button);
   children.push_back(windows_button);
   children.push_back(shortcut_button);
-}
-
-SkMatrix HotKey::TransformToChild(const Widget& child) const {
-  if (&child == power_button.get()) {
-    return SkMatrix::Translate(
-        -kWidth / 2 + kFrameWidth + kMinimalTouchableSize - kBorderWidth,
-        -kShapeRect.top + kFrameWidth + kMinimalTouchableSize - kBorderWidth);
-  }
-  if (&child == ctrl_button.get()) {
-    return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing,
-                               -kShapeRect.bottom - kFrameWidth - kKeySpacing);
-  }
-  if (&child == windows_button.get()) {
-    return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing * 2 - kCtrlKeyWidth,
-                               -kShapeRect.bottom - kFrameWidth - kKeySpacing);
-  }
-  if (&child == alt_button.get()) {
-    return SkMatrix::Translate(
-        kWidth / 2 - kFrameWidth - kKeySpacing * 3 - kCtrlKeyWidth - kSuperKeyWidth,
-        -kShapeRect.bottom - kFrameWidth - kKeySpacing);
-  }
-  if (&child == shift_button.get()) {
-    return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing,
-                               -kShapeRect.bottom - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
-  }
-  if (&child == shortcut_button.get()) {
-    return SkMatrix::Translate(kWidth / 2 - kFrameWidth - kKeySpacing * 2 - kShiftKeyWidth,
-                               -kShapeRect.bottom - kFrameWidth - kKeySpacing * 2 - kKeyHeight);
-  }
-  return SkMatrix::I();
 }
 
 bool HotKey::IsOn() const { return hotkey != nullptr; }

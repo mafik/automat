@@ -16,21 +16,20 @@ using namespace std;
 namespace automat::library {
 
 KeyButton::KeyButton(std::shared_ptr<Widget> child, SkColor color, float width)
-    : Button(child), width(width), fg(color) {}
-
-void KeyButton::Activate(gui::Pointer& pointer) {
-  if (activate) {
-    activate(pointer);
-  }
-}
-
-SkMatrix KeyButton::TransformToChild(const Widget& child) const {
+    : Button(child), width(width), fg(color) {
   SkRect child_bounds = ChildBounds();
   SkRRect key_base = RRect();
   SkRect key_face =
       SkRect::MakeLTRB(key_base.rect().left() + kKeySide, key_base.rect().top() + kKeyBottomSide,
                        key_base.rect().right() - kKeySide, key_base.rect().bottom() - kKeyTopSide);
-  return SkMatrix::Translate(child_bounds.center() - key_face.center());
+  auto offset = key_face.center() - child_bounds.center();
+  child->local_to_parent = SkM44::Translate(offset.x(), offset.y());
+}
+
+void KeyButton::Activate(gui::Pointer& pointer) {
+  if (activate) {
+    activate(pointer);
+  }
 }
 
 SkRRect KeyButton::RRect() const {

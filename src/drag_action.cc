@@ -26,6 +26,7 @@ static Object* DraggedObject(DragLocationAction& a) { return a.location->object.
 
 void DragLocationAction::Begin() {
   last_position = current_position = pointer.PositionWithinRootMachine();
+  widget->local_to_parent = SkM44(window->CanvasToWindow());
   Update();
 }
 
@@ -95,7 +96,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
   widget->FixParents();
   widget->parent = pointer.window.SharedPtr();
   pointer.window.drag_action_count++;
-  location->Widget::parent = widget;
+  location->parent = widget;
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
   for (auto& connection_widget : gui::window->connection_widgets) {

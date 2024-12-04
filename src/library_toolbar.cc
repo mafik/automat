@@ -22,12 +22,12 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   if (btn != gui::PointerButton::Left) {
     return nullptr;
   }
-  auto matrix = TransformUp(*pointer.hover);
+  auto matrix = TransformBetween(*pointer.hover, *root_machine);
   auto loc = std::make_shared<Location>();
   loc->parent_location = root_location;
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-  loc->animation_state.scale = matrix.get(0) / pointer.window.zoom;
+  loc->animation_state.scale = matrix.get(0);
   auto contact_point = pointer.PositionWithin(*this);
   loc->position = loc->animation_state.position =
       pointer.PositionWithinRootMachine() - contact_point;
@@ -117,6 +117,7 @@ animation::Phase Toolbar::Tick(time::Timer& timer) {
   for (int i = 0; i < buttons.size(); ++i) {
     phase |= buttons[i]->width.SineTowards(width_targets[i], timer.d, 0.4);
   }
+  UpdateChildTransform();
   return phase;
 }
 
@@ -160,28 +161,21 @@ void Toolbar::AddObjectPrototype(const std::shared_ptr<Object>& new_proto) {
   buttons.back()->parent = SharedPtr();
 }
 
-SkMatrix Toolbar::TransformToChild(const Widget& child) const {
+void Toolbar::UpdateChildTransform() {
   float width = CalculateWidth();
 
   float x = -width / 2 + kMarginAroundIcons;
   for (int i = 0; i < buttons.size(); ++i) {
-    if (buttons[i].get() == &child) {
-      Rect src = prototypes[i]->CoarseBounds().rect;
-      float size = buttons[i]->width;
-      x += size / 2;
-      float scale = buttons[i]->width / buttons[i]->natural_width;
-      Rect dst = Rect::MakeWH(size, gui::kToolbarIconSize * scale)
-                     .MoveBy({x, gui::kToolbarIconSize * scale / 2});
-      auto child_to_parent = SkMatrix::RectToRect(src, dst, SkMatrix::kCenter_ScaleToFit);
-      SkMatrix parent_to_child;
-      if (child_to_parent.invert(&parent_to_child)) {
-        return parent_to_child;
-      }
-      return SkMatrix::I();
-    }
+    Rect src = prototypes[i]->CoarseBounds().rect;
+    float size = buttons[i]->width;
+    float x2 = x + size / 2;
+    float scale = buttons[i]->width / buttons[i]->natural_width;
+    Rect dst = Rect::MakeWH(size, gui::kToolbarIconSize * scale)
+                   .MoveBy({x2, gui::kToolbarIconSize * scale / 2});
+    buttons[i]->local_to_parent =
+        SkM44(SkMatrix::RectToRect(src, dst, SkMatrix::kCenter_ScaleToFit));
     x += buttons[i]->width + kMarginBetweenIcons;
   }
-  return SkMatrix::I();
 }
 
 float Toolbar::CalculateWidth() const {

@@ -187,6 +187,7 @@ animation::Phase Location::Tick(time::Timer& timer) {
     phase = animation::Animating;
     InvalidateConnectionWidgets(true, false);
   }
+  UpdateChildTransform();
 
   phase |= animation::ExponentialApproach(state.highlight_target, timer.d, 0.1, state.highlight);
   phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.transparency);
@@ -368,15 +369,6 @@ void Location::Run() {
 
 Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(*object, *parent); }
 
-SkMatrix Location::TransformToChild(const Widget&) const {
-  Vec2 scale_pivot = object->Shape().getBounds().center();
-  SkMatrix transform = SkMatrix::I();
-  float s = std::max<float>(animation_state.scale, 0.00001f);
-  transform.postScale(1 / s, 1 / s, scale_pivot.x, scale_pivot.y);
-  transform.preTranslate(-animation_state.position.value.x, -animation_state.position.value.y);
-  return transform;
-}
-
 animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_position,
                                             float target_scale) {
   auto phase = position.SineTowards(target_position, delta_time, Location::kPositionSpringPeriod);
@@ -452,6 +444,7 @@ void AnimateGrowFrom(Location& source, Location& grown) {
   Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
   animation_state.position.value = source_center;
   animation_state.transparency = 1;
+  grown.UpdateChildTransform();
 }
 
 void Location::PreDraw(SkCanvas& canvas) const {
@@ -624,5 +617,13 @@ void Location::UpdateAutoconnectArgs() {
       }
     });
   }
+}
+void Location::UpdateChildTransform() {
+  Vec2 scale_pivot = object->Shape().getBounds().center();
+  SkMatrix transform = SkMatrix::I();
+  float s = std::max<float>(animation_state.scale, 0.00001f);
+  transform.postScale(s, s, scale_pivot.x, scale_pivot.y);
+  transform.postTranslate(animation_state.position.value.x, animation_state.position.value.y);
+  object->local_to_parent = SkM44(transform);
 }
 }  // namespace automat

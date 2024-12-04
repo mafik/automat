@@ -98,7 +98,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   static Widget* Find(uint32_t id);
 
   std::shared_ptr<Widget> parent;
-  SkM44 local_to_parent;
+  SkM44 local_to_parent = SkM44();
 
   void RenderToSurface(SkCanvas& root_canvas);
 
@@ -129,7 +129,7 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   mutable time::SteadyPoint wake_time = time::SteadyPoint::min();
 
   // Things updated in PackFrame (& Draw)
-  mutable time::SteadyPoint last_tick_time = time::SteadyPoint::min();
+  mutable time::SteadyPoint last_tick_time = time::SteadyNow();
   Rect draw_texture_bounds;
   maf::Vec<Vec2> draw_texture_anchors;
   SkIRect surface_bounds_root;
@@ -215,7 +215,11 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual maf::Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
   virtual maf::Vec<Vec2> TextureAnchors() const { return {}; }
 
-  virtual SkMatrix TransformToChild(const Widget& child) const { return SkMatrix::I(); }
+  virtual SkMatrix TransformToChild(const Widget& child) const {
+    SkMatrix parent_to_local;
+    (void)child.local_to_parent.asM33().invert(&parent_to_local);
+    return parent_to_local;
+  }
 
   virtual void DrawChildCachced(SkCanvas&, const Widget& child) const;
 

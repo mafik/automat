@@ -91,6 +91,29 @@ Number::Number(double x) : value(x) {
       l.ScheduleUpdate();
     };
   }
+
+  auto cell = [](int row, int col) {
+    float x = kBorderWidth + kAroundWidgetMargin + col * (kButtonWidth + kBetweenButtonsMargin);
+    float y = kBorderWidth + kAroundWidgetMargin + row * (kButtonHeight + kBetweenButtonsMargin);
+    return SkM44::Translate(x, y);
+  };
+  text_field->local_to_parent =
+      SkM44::Translate(kBorderWidth + kAroundWidgetMargin,
+                       kHeight - kBorderWidth - kAroundWidgetMargin - kTextHeight);
+
+  digits[0]->local_to_parent = cell(0, 0);
+
+  dot->local_to_parent = cell(0, 1);
+
+  backspace->local_to_parent = cell(0, 2);
+
+  for (int row = 0; row < 3; ++row) {
+    for (int col = 0; col < 3; ++col) {
+      int digit = 3 * row + col + 1;
+      digits[digit]->local_to_parent = cell(row + 1, col);
+    }
+  }
+
   dot->activate = [this](Location& l) {
     if (text_field->text.empty()) {
       text_field->text = "0";
@@ -193,36 +216,6 @@ void Number::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   children.push_back(digits[8]);
   children.push_back(digits[9]);
   children.push_back(text_field);
-}
-
-SkMatrix Number::TransformToChild(const Widget& child) const {
-  auto cell = [](int row, int col) {
-    float x = kBorderWidth + kAroundWidgetMargin + col * (kButtonWidth + kBetweenButtonsMargin);
-    float y = kBorderWidth + kAroundWidgetMargin + row * (kButtonHeight + kBetweenButtonsMargin);
-    return SkMatrix::Translate(-x, -y);
-  };
-  if (&child == text_field.get()) {
-    return SkMatrix::Translate(-kBorderWidth - kAroundWidgetMargin,
-                               -kHeight + kBorderWidth + kAroundWidgetMargin + kTextHeight);
-  }
-  if (&child == digits[0].get()) {
-    return cell(0, 0);
-  }
-  if (&child == dot.get()) {
-    return cell(0, 1);
-  }
-  if (&child == backspace.get()) {
-    return cell(0, 2);
-  }
-  for (int row = 0; row < 3; ++row) {
-    for (int col = 0; col < 3; ++col) {
-      int digit = 3 * row + col + 1;
-      if (&child == digits[digit].get()) {
-        return cell(row + 1, col);
-      }
-    }
-  }
-  return SkMatrix::I();
 }
 
 void Number::SerializeState(Serializer& writer, const char* key) const {

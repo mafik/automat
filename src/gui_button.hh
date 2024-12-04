@@ -54,7 +54,6 @@ struct Button : Widget {
   }
 
   void UpdateChildTransform();
-  SkMatrix TransformToChild(const Widget& child) const override;
 
   // We don't want the children to interact with mouse events.
   bool AllowChildPointerEvents(Widget& child) const override { return false; }

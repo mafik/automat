@@ -80,7 +80,7 @@ struct Window final : Widget, DropTarget {
       nullptr;
 
   // Used to tell the window that it's OS window has been resized.
-  void Resize(Vec2 size) { this->size = size; }
+  void Resize(Vec2 size);
   void DisplayPixelDensity(float pixels_per_meter);
   SkPath Shape() const override {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
@@ -95,12 +95,6 @@ struct Window final : Widget, DropTarget {
 
   void Zoom(float delta);
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
-  SkMatrix TransformToChild(const Widget& child) const override {
-    if (&child == toolbar.get()) {
-      return SkMatrix::Translate(-size.x / 2, 0);
-    }
-    return WindowToCanvas();
-  }
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 
   // Called when closing Automat to persist state across restarts.

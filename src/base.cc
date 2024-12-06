@@ -19,6 +19,7 @@
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "gui_connection_widget.hh"
+#include "location.hh"
 #include "tasks.hh"
 #include "timer_thread.hh"
 #include "window.hh"
@@ -33,7 +34,7 @@ Location* Machine::LocationAtPoint(Vec2 point) {
     Vec2 local_point = (point - loc->position) / loc->scale;
     SkPath shape;
     if (loc->object) {
-      shape = loc->object->Shape();
+      shape = loc->WidgetForObject()->Shape();
     }
     if (shape.contains(local_point.x, local_point.y)) {
       return loc.get();
@@ -45,7 +46,7 @@ Location* Machine::LocationAtPoint(Vec2 point) {
 void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
   float radius2 = radius * radius;
   for (auto& loc : locations) {
-    auto dist2 = (loc->object ? Rect(loc->object->Shape().getBounds()) : Rect{})
+    auto dist2 = (loc->object ? loc->WidgetForObject()->CoarseBounds().rect : Rect{})
                      .MoveBy(loc->position)
                      .DistanceSquared(start);
     if (dist2 > radius2) {
@@ -212,13 +213,11 @@ void Machine::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
 
 SkPath Machine::Shape() const {
   SkPath rect = SkPath::Rect(Rect::MakeWH(100_cm, 100_cm));
-  if (auto window = dynamic_cast<gui::Window*>(&RootWidget())) {
-    auto trash = window->TrashShape();
-    SkPath rect_minus_trash;
-    Op(rect, trash, kDifference_SkPathOp, &rect_minus_trash);
-    return rect_minus_trash;
-  }
-  return rect;
+  auto& window = FindWindow();
+  auto trash = window.TrashShape();
+  SkPath rect_minus_trash;
+  Op(rect, trash, kDifference_SkPathOp, &rect_minus_trash);
+  return rect_minus_trash;
 }
 
 SkPaint& GetBackgroundPaint(float px_per_m) {
@@ -271,9 +270,10 @@ void Machine::PreDraw(SkCanvas& canvas) const {
   canvas.drawPath(shape, border_paint);
 }
 
-void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {
+void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
   scale = 1.0;
-  Rect rect = object->Shape().getBounds();
+
+  Rect rect = location.WidgetForObject()->Shape().getBounds();
   if (position.x + rect.left < -0.5) {
     position.x = -rect.left - 0.5;
   }
@@ -290,7 +290,7 @@ void Machine::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* f
 }
 
 void Machine::DropLocation(std::shared_ptr<Location>&& l) {
-  l->parent = SharedPtr();
+  l->parent = SharedPtr<Widget>();
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
@@ -321,6 +321,30 @@ std::shared_ptr<Location> Machine::Extract(Location& location) {
     return result;
   } else {
     return nullptr;
+  }
+}
+
+void LiveObject::Relocate(Location* new_here) {
+  Args([old_here = here, new_here](Argument& arg) {
+    if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {
+      live_arg->Relocate(old_here.lock().get(), new_here);
+    }
+  });
+  here = new_here->SharedPtr<Location>();
+}
+
+Location& Machine::CreateEmpty(const string& name) {
+  auto& it = locations.emplace_front(std::make_shared<Location>(here));
+  Location* h = it.get();
+  h->name = name;
+  h->parent = this->SharedPtr();
+  return *h;
+}
+void Machine::Relocate(Location* parent) {
+  LiveObject::Relocate(parent);
+  for (auto& it : locations) {
+    it->parent_location = here;
+    it->parent = SharedPtr<Widget>();
   }
 }
 }  // namespace automat

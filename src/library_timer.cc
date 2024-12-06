@@ -708,7 +708,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
       return std::make_unique<DragHandAction>(pointer, SharedPtr<TimerDelay>());
     }
   }
-  return Object::FindAction(pointer, btn);
+  return Object::FallbackWidget::FindAction(pointer, btn);
 }
 
 void TimerDelay::Fields(std::function<void(Object&)> cb) { cb(duration); }

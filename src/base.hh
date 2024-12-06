@@ -30,7 +30,6 @@
 #include "prototypes.hh"
 #include "run_button.hh"
 #include "tasks.hh"
-#include "text_field.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -75,14 +74,7 @@ struct Runnable {
 struct LiveObject : Object {
   std::weak_ptr<Location> here = {};
 
-  void Relocate(Location* new_here) override {
-    Args([old_here = here, new_here](Argument& arg) {
-      if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {
-        live_arg->Relocate(old_here.lock().get(), new_here);
-      }
-    });
-    here = new_here->SharedPtr<Location>();
-  }
+  void Relocate(Location* new_here) override;
   void ConnectionAdded(Location& here, Connection& connection) override {
     if (auto live_arg = dynamic_cast<LiveArgument*>(&connection.argument)) {
       live_arg->ConnectionAdded(here, connection);
@@ -99,7 +91,7 @@ bool IsRunning(const T& object) {
 }
 
 // 2D Canvas holding objects & a spaghetti of connections.
-struct Machine : LiveObject, gui::DropTarget {
+struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   static std::shared_ptr<Machine> proto;
   Machine();
   string name = "";
@@ -109,13 +101,7 @@ struct Machine : LiveObject, gui::DropTarget {
 
   std::shared_ptr<Location> Extract(Location& location);
 
-  Location& CreateEmpty(const string& name = "") {
-    auto& it = locations.emplace_front(std::make_shared<Location>(here));
-    Location* h = it.get();
-    h->name = name;
-    h->parent = this->SharedPtr();
-    return *h;
-  }
+  Location& CreateEmpty(const string& name = "");
 
   Location& Create(const Object& prototype, const string& name = "") {
     auto& h = CreateEmpty(name);
@@ -155,20 +141,13 @@ struct Machine : LiveObject, gui::DropTarget {
   void Draw(SkCanvas& canvas) const override { Widget::Draw(canvas); }
   void PreDraw(SkCanvas&) const override;
   gui::DropTarget* CanDrop() override { return this; }
-  void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
+  void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
   void DropLocation(std::shared_ptr<Location>&&) override;
 
   SkPath Shape() const override;
 
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
-  void Args(std::function<void(Argument&)> cb) override {}
-  void Relocate(Location* parent) override {
-    LiveObject::Relocate(parent);
-    for (auto& it : locations) {
-      it->parent_location = here;
-      it->parent = SharedPtr();
-    }
-  }
+  void Relocate(Location* parent) override;
 
   string ToStr() const { return maf::f("Machine(%s)", name.c_str()); }
 

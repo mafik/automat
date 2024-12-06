@@ -61,7 +61,7 @@ void DragLocationAction::Update() {
   float scale = 1;
 
   if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
-    drop_target->SnapPosition(position, scale, DraggedObject(*this), &contact_point);
+    drop_target->SnapPosition(position, scale, *location, &contact_point);
   }
 
   location->scale = scale;
@@ -93,10 +93,10 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
     : Action(pointer),
       location(std::move(location_arg)),
       widget(std::make_shared<DragLocationWidget>(*this)) {
-  widget->FixParents();
   widget->parent = pointer.window.SharedPtr();
   pointer.window.drag_action_count++;
   location->parent = widget;
+  widget->FixParents();
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
   for (auto& connection_widget : gui::window->connection_widgets) {

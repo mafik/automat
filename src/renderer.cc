@@ -13,8 +13,6 @@
 #include "widget.hh"
 #include "window.hh"
 
-// TODO: Split Widget from Object (largest change)
-
 // TODO: lots of cleanups!
 //       - remove redundancy between WidgetTree & Widget & DrawCache::Entry
 //       - the three phases of rendering should be put in sequence (locally)

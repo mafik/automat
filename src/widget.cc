@@ -26,6 +26,7 @@
 #include "renderer.hh"
 #include "time.hh"
 #include "units.hh"
+#include "window.hh"
 
 using namespace automat;
 using namespace maf;
@@ -381,4 +382,41 @@ void Widget::ForgetParents() {
     child->ForgetParents();
   }
 }
+
+Window& Widget::FindWindow() const {
+  auto& root = RootWidget();
+  auto* window = dynamic_cast<struct Window*>(&root);
+  assert(window);
+  return *window;
+}
+
+std::shared_ptr<Widget>& Widget::ForObject(Object& object, const Widget& parent) {
+  return parent.FindWindow().widgets.For(object, parent);
+}
+
+void Widget::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
+  // By default just one position on the top of the bounding box.
+  auto shape = Shape();
+  Rect bounds = shape.getBounds();
+  out_positions.push_back(Vec2AndDir{
+      .pos = bounds.TopCenter(),
+      .dir = -90_deg,
+  });
+}
+
+Vec2AndDir Widget::ArgStart(const Argument& arg) {
+  SkPath shape;
+  if (arg.field) {
+    shape = FieldShape(*arg.field);
+  }
+  if (shape.isEmpty()) {
+    shape = Shape();
+  }
+  Rect bounds = shape.getBounds();
+  return Vec2AndDir{
+      .pos = bounds.BottomCenter(),
+      .dir = -90_deg,
+  };
+}
+
 }  // namespace automat::gui

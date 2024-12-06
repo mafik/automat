@@ -16,7 +16,7 @@ struct Location;
 
 namespace gui {
 struct DropTarget {
-  virtual void SnapPosition(Vec2& position, float& scale, Object* object,
+  virtual void SnapPosition(Vec2& position, float& scale, Location&,
                             Vec2* fixed_point = nullptr) = 0;
 
   // When a location is being dragged around, its still owned by its original Machine. Only when

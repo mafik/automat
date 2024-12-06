@@ -67,6 +67,7 @@ static void RunThread(std::stop_token stop_token) {
 void InitRoot() {
   root_location = std::make_shared<Location>();
   root_location->name = "Root location";
+  root_location->parent = gui::window;
   root_machine = root_location->Create<Machine>();
   root_machine->parent = gui::window;
   root_machine->name = "Root machine";

@@ -14,7 +14,11 @@ struct DurationArgument : LiveArgument {
   DurationArgument();
 };
 
-struct TimerDelay : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
+struct TimerDelay : LiveObject,
+                    Object::FallbackWidget,
+                    Runnable,
+                    LongRunning,
+                    TimerNotificationReceiver {
   struct MyDuration : Object {
     time::Duration value = 10s;
     std::shared_ptr<Object> Clone() const override { return std::make_shared<MyDuration>(*this); }

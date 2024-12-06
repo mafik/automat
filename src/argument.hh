@@ -211,7 +211,7 @@ struct Argument {
   // space (pixels), but it's not the only option. The widget could also be located at some
   // intermediate level so the returned position will be located within some parent object (for
   // example, a Machine).
-  Vec2AndDir Start(Object&, gui::Widget&) const;
+  Vec2AndDir Start(gui::Widget& object_widget, gui::Widget& coordinate_space) const;
 
   // The returned "to_points" use the target object's local coordinate space.
   void NearbyCandidates(

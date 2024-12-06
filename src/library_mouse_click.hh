@@ -6,7 +6,7 @@
 
 namespace automat::library {
 
-struct MouseClick : Object, Runnable {
+struct MouseClick : Object, Object::FallbackWidget, Runnable {
   gui::PointerButton button;
   bool down;
   MouseClick(gui::PointerButton, bool down);

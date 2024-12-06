@@ -62,6 +62,7 @@ struct Location : public gui::Widget {
   std::weak_ptr<Location> parent_location;
 
   std::shared_ptr<Object> object;
+  mutable std::shared_ptr<Widget> object_widget;
 
   // Name of this Location.
   std::string name;
@@ -98,20 +99,17 @@ struct Location : public gui::Widget {
     }
   }
 
-  std::shared_ptr<Object> InsertHere(std::shared_ptr<Object>&& object) {
-    this->object.swap(object);
-    this->object->Relocate(this);
-    this->object->parent = this->SharedPtr();
-    return object;
+  // Shortcut for Widget::ForObject(location.object, location);
+  std::shared_ptr<Widget>& WidgetForObject() const {
+    if (!object_widget) {
+      object_widget = Widget::ForObject(*object, *this);
+    }
+    return object_widget;
   }
 
-  std::shared_ptr<Object> Create(const Object& prototype) {
-    object = prototype.Clone();
-    object->Relocate(this);
-    object->parent = this->SharedPtr();
-    FixParents();
-    return object;
-  }
+  std::shared_ptr<Object> InsertHere(std::shared_ptr<Object>&& object);
+
+  std::shared_ptr<Object> Create(const Object& prototype);
 
   template <typename T>
   std::shared_ptr<T> Create() {
@@ -263,7 +261,7 @@ struct Location : public gui::Widget {
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   SkPath Shape() const override;
-  SkPath FieldShape(Object&) const;
+  SkPath FieldShape(Object&) const override;
 
   // Call this when the position of this location changes to update the autoconnect arguments.
   //

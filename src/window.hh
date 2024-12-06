@@ -30,14 +30,42 @@ struct WindowImpl;
 extern std::vector<Window*> windows;
 extern std::shared_ptr<Window> window;
 
+// Objects can create many widgets, to display themselves simultaneously in multiple contexts.
+// Each context which can display widgets must maintain their lifetime. This class helps with that.
+// It can be used either as a mixin or as a member.
+// TODO: introduce `WidgetMaker` interface, so that widgets can be created for non-Objects
+// TODO: delete widgets after some time
+struct WidgetStore {
+  struct WeakPtrCmp {
+    bool operator()(const std::weak_ptr<Object>& a, const std::weak_ptr<Object>& b) const {
+      return a.owner_before(b);
+    }
+  };
+  std::map<std::weak_ptr<Object>, std::shared_ptr<Widget>, WeakPtrCmp> container;
+
+  std::shared_ptr<Widget>& For(Object& object, const Widget& parent) {
+    auto weak = object.WeakPtr();
+    auto it = container.find(weak);
+    if (it == container.end()) {
+      it = container.emplace(weak, object.MakeWidget()).first;
+      it->second->parent = parent.SharedPtr();
+    }
+    return it->second;
+  }
+};
+
 struct Window final : Widget, DropTarget {
   Window();
   ~Window();
 
+  void InitToolbar();
+
+  WidgetStore widgets;
+
   std::string_view Name() const override { return "Window"; }
 
   DropTarget* CanDrop() override { return this; }
-  void SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) override;
+  void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
   void DropLocation(std::shared_ptr<Location>&&) override;
 
   // Return the shape of the trash zone in the corner of the window (in Machine coordinates).
@@ -105,7 +133,7 @@ struct Window final : Widget, DropTarget {
       NAN;  // distance from the top edge of the screen (or bottom when negative)
 
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
-  std::shared_ptr<library::Toolbar> toolbar;
+  std::shared_ptr<Toolbar> toolbar;
   std::vector<std::shared_ptr<gui::ConnectionWidget>> connection_widgets;
 
   float zoom = 1;

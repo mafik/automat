@@ -56,7 +56,7 @@ SkPath ConnectionWidget::Shape() const {
 void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   auto anim = &animation_state;
   if (anim->radar_alpha >= 0.01f) {
-    auto pos_dir = arg.Start(*from.object, *root_machine);
+    auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
     SkPaint radius_paint;
     SkColor colors[] = {SkColorSetA(arg.tint, 0),
                         SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
@@ -130,7 +130,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     arg.NearbyCandidates(
         from, arg.autoconnect_radius * 2 + 10_cm,
         [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
-          auto m = TransformBetween(*candidate.object, *root_machine);
+          auto m = TransformBetween(*candidate.WidgetForObject(), *root_machine);
           for (auto& to : to_points) {
             to.pos = m.mapPoint(to.pos);
           }
@@ -145,11 +145,11 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
         });
   }
   if (anim->prototype_alpha >= 0.01f) {
-    auto proto = from.object->ArgPrototype(arg);
+    auto proto = Widget::ForObject(*from.object->ArgPrototype(arg), *this);
     auto proto_shape = proto->Shape();
     Rect proto_bounds = proto_shape.getBounds();
     canvas.save();
-    Vec2 offset = from.position + Rect::BottomCenter(from.object->Shape().getBounds()) -
+    Vec2 offset = from.position + Rect::BottomCenter(from.WidgetForObject()->Shape().getBounds()) -
                   proto_bounds.TopCenter();
     canvas.translate(offset.x, offset.y);
     canvas.saveLayerAlphaf(&proto_shape.getBounds(), anim->prototype_alpha * 0.4f);
@@ -162,7 +162,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
 void ConnectionWidget::FromMoved() {
   if (state) {
     if (state->stabilized && !state->stabilized_end.has_value()) {
-      auto pos_dir = arg.Start(*from.object, *root_machine);
+      auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
       state->stabilized_start = pos_dir.pos;
       state->sections.front().pos = pos_dir.pos;
       state->sections.back().pos = pos_dir.pos;
@@ -175,7 +175,7 @@ void ConnectionWidget::FromMoved() {
 
 animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   auto& from_animation_state = from.GetAnimationState();
-  SkPath from_shape = from.object->Shape();
+  SkPath from_shape = from.WidgetForObject()->Shape();
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
   }
@@ -186,13 +186,14 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   // For example when a location is being dragged around, or when there are nested machines.
   Widget* parent_machine = root_machine.get();
 
-  auto pos_dir = arg.Start(*from.object, *parent_machine);
+  auto pos_dir = arg.Start(*from.WidgetForObject(), *parent_machine);
 
   if ((to = arg.FindLocation(from))) {
-    to_shape = to->object->Shape();
-    to->object->ConnectionPositions(to_points);
+    auto to_widget = to->WidgetForObject();
+    to_shape = to_widget->Shape();
+    to_widget->ConnectionPositions(to_points);
     Path target_path;
-    SkMatrix m = TransformBetween(*to->object, *parent_machine);
+    SkMatrix m = TransformBetween(*to_widget, *parent_machine);
     for (auto& vec_and_dir : to_points) {
       vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
     }
@@ -218,7 +219,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
   }
 
-  auto transform_from_to_machine = TransformBetween(*from.object, *parent_machine);
+  auto transform_from_to_machine = TransformBetween(*from.WidgetForObject(), *parent_machine);
   from_shape.transform(transform_from_to_machine);
 
   // If one of the to_points is over from_shape, don't draw the cable
@@ -290,7 +291,8 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
 void ConnectionWidget::Draw(SkCanvas& canvas) const {
   auto& from_animation_state = from.GetAnimationState();
-  SkPath from_shape = from.object->Shape();
+  auto from_widget = from.WidgetForObject();
+  SkPath from_shape = from_widget->Shape();
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
   }
@@ -300,9 +302,9 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   // For example when a location is being dragged around, or when there are nested machines.
   Widget* parent_machine = root_machine.get();
 
-  auto pos_dir = arg.Start(*from.object, *parent_machine);
+  auto pos_dir = arg.Start(*from_widget, *parent_machine);
 
-  auto transform_from_to_machine = TransformBetween(*from.object, *parent_machine);
+  auto transform_from_to_machine = TransformBetween(*from_widget, *parent_machine);
   from_shape.transform(transform_from_to_machine);
 
   bool using_layer = false;
@@ -442,11 +444,12 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
     }
     return bounds;
   } else {
-    auto pos_dir = arg.Start(*from.object, *root_machine);
+    auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
     Vec<Vec2AndDir> to_points;  // machine coords
     if (auto to = arg.FindLocation(from)) {
-      to->object->ConnectionPositions(to_points);
-      SkMatrix m = TransformBetween(*to->object, *root_machine);
+      auto to_widget = to->WidgetForObject();
+      to_widget->ConnectionPositions(to_points);
+      SkMatrix m = TransformBetween(*to_widget, *root_machine);
       for (auto& to_point : to_points) {
         to_point.pos = m.mapPoint(to_point.pos);
       }
@@ -466,15 +469,16 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
     anchors.push_back(r.BottomRightCorner());
     anchors.push_back(r.BottomLeftCorner());
   } else if (true) {  // approach 2 - perspective
-    auto pos_dir = arg.Start(*from.object, *root_machine);
+    auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
     anchors.push_back(pos_dir.pos);
     Optional<Vec2> end_pos;
     if (manual_position.has_value()) {
       end_pos = *manual_position;
     } else if (auto to = arg.FindLocation(from)) {
       Vec<Vec2AndDir> to_points;  // machine coords
-      to->object->ConnectionPositions(to_points);
-      SkMatrix m = TransformBetween(*to->object, *root_machine);
+      auto to_widget = to->WidgetForObject();
+      to_widget->ConnectionPositions(to_points);
+      SkMatrix m = TransformBetween(*to_widget, *root_machine);
       for (auto& to_point : to_points) {
         to_point.pos = m.mapPoint(to_point.pos);
       }
@@ -484,12 +488,13 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
       anchors.push_back(*end_pos);
     }
   } else if (true) {
-    auto pos_dir = arg.Start(*from.object, *root_machine);
+    auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
     anchors.push_back(pos_dir.pos);
     if (auto to = arg.FindLocation(from)) {
       Vec<Vec2AndDir> to_points;  // machine coords
-      to->object->ConnectionPositions(to_points);
-      SkMatrix m = TransformBetween(*to->object, *root_machine);
+      auto to_widget = to->WidgetForObject();
+      to_widget->ConnectionPositions(to_points);
+      SkMatrix m = TransformBetween(*to_widget, *root_machine);
       for (auto& to_point : to_points) {
         to_point.pos = m.mapPoint(to_point.pos);
       }

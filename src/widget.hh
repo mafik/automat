@@ -18,6 +18,7 @@
 #include "drawable.hh"
 #include "key.hh"
 #include "optional.hh"
+#include "shared_base.hh"
 #include "span.hh"
 #include "str.hh"
 #include "time.hh"
@@ -26,9 +27,16 @@
 constexpr bool kDebugRendering = false;
 constexpr bool kDebugRenderEvents = false;
 
+namespace automat {
+struct Object;
+struct Argument;
+struct Location;
+}  // namespace automat
+
 namespace automat::gui {
 
 struct Widget;
+struct Window;
 
 maf::Str ToStr(std::shared_ptr<Widget> widget);
 
@@ -89,7 +97,7 @@ struct ActionTrigger {
 };
 
 // Base class for widgets.
-struct Widget : public std::enable_shared_from_this<Widget> {
+struct Widget : public virtual SharedBase {
   Widget();
   virtual ~Widget();
 
@@ -144,16 +152,11 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   Rect surface_bounds_local;
   sk_sp<SkSurface> surface = nullptr;
 
-  mutable std::string name_cached;
-
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".
   virtual std::string_view Name() const {
-    if (name_cached.empty()) {
-      const std::type_info& info = typeid(*this);
-      name_cached = maf::CleanTypeName(info.name());
-    }
-    return name_cached;
+    const std::type_info& info = typeid(*this);
+    return maf::CleanTypeName(info.name());
   }
 
   Widget& RootWidget() const {
@@ -183,16 +186,6 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   void DrawCached(SkCanvas&) const;
   virtual void WakeAnimation() const;
 
-  std::weak_ptr<Widget> WeakPtr() const {
-    // For some reason, `static_pointer_cast` doesn't work with weak_ptr.
-    return const_cast<Widget*>(this)->weak_from_this();
-  }
-
-  template <typename T = Widget>
-  std::shared_ptr<T> SharedPtr() const {
-    return static_pointer_cast<T>(const_cast<Widget*>(this)->shared_from_this());
-  }
-
   // Called for visible widgets while they're being animated.
   // Use this function to update the widget's animation state.
   // Once a widget finishes its animation, it's Tick is no longer being called. Wake it up again by
@@ -202,6 +195,30 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   virtual void Draw(SkCanvas& canvas) const { return DrawChildren(canvas); }
   virtual SkPath Shape() const = 0;
 
+  // Can be overridden to provide a more efficient alternative to `Shape()->getBounds()`.
+  // When not overridden, `Shape().getBounds()` is used.
+  // Local (metric) coordinates.
+  virtual RRect CoarseBounds() const {
+    auto shape = Shape();
+    RRect ret{};
+    if (shape.isRect(&ret.rect.sk)) {
+      ret.type = SkRRect::kRect_Type;
+    } else if (shape.isRRect(&ret.sk)) {
+      // cool
+    } else if (shape.isOval(&ret.rect.sk)) {
+      auto r = ret.rect.Size() / 2;
+      ret.radii[0] = ret.radii[1] = ret.radii[2] = ret.radii[3] = r;
+      ret.type = SkRRect::kOval_Type;
+    } else {
+      ret.rect = shape.getBounds();
+      ret.type = SkRRect::kRect_Type;
+    }
+    return ret;
+  }
+
+  // Can be overridden to signal that the widget can be effectively centered by moving its origin to
+  // zero. This is useful for widgets that have a natural center point that is not the center of
+  // their bounds.
   virtual bool CenteredAtZero() const { return false; }
 
   virtual std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) { return nullptr; }
@@ -265,6 +282,25 @@ struct Widget : public std::enable_shared_from_this<Widget> {
   // In order to properly destroy a Widget we must clear all of the `parent` references from its
   // children (and we need to do this recursively). This is done by this function.
   virtual void ForgetParents();
+
+  // Methods related to Widgets that represent Objects.
+  // TODO: Move them to a separate class (ObjectWidget)
+
+  // Describes the area of the widget where the given field is located.
+  // Local (metric) coordinates.
+  virtual SkPath FieldShape(Object&) const { return SkPath(); }
+
+  // Returns the start position of the given argument.
+  // Local (metric) coordinates.
+  virtual Vec2AndDir ArgStart(const Argument&);
+
+  // Places where the connections to this widget may terminate.
+  // Local (metric) coordinates.
+  virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;
+
+  Window& FindWindow() const;
+
+  static std::shared_ptr<Widget>& ForObject(Object&, const Widget& parent);
 };
 
 template <typename T>

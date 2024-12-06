@@ -97,9 +97,9 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Vec2AndDir Argument::Start(Object& object, gui::Widget& widget) const {
-  auto pos_dir = object.ArgStart(*this);
-  auto m = TransformBetween(object, widget);
+Vec2AndDir Argument::Start(gui::Widget& object_widget, gui::Widget& widget) const {
+  auto pos_dir = object_widget.ArgStart(*this);
+  auto m = TransformBetween(object_widget, widget);
   m.mapPoints(&pos_dir.pos.sk, 1);
   return pos_dir;
 }
@@ -126,14 +126,14 @@ void Argument::NearbyCandidates(
           continue;
         }
         Vec<Vec2AndDir> to_points;
-        location.object->ConnectionPositions(to_points);
+        location.WidgetForObject()->ConnectionPositions(to_points);
         callback(location, to_points);
       }
     }
   }
   // Query nearby objects in the parent machine
   if (auto parent_machine = here.ParentAs<Machine>()) {
-    Vec2 center = this->Start(*here.object, *parent_machine).pos;
+    Vec2 center = this->Start(*here.WidgetForObject(), *parent_machine).pos;
     parent_machine->Nearby(center, radius, [&](Location& other) -> void* {
       if (&other == &here) {
         return nullptr;
@@ -146,7 +146,7 @@ void Argument::NearbyCandidates(
         }
       }
       Vec<Vec2AndDir> to_points;
-      other.object->ConnectionPositions(to_points);
+      other.WidgetForObject()->ConnectionPositions(to_points);
       callback(other, to_points);
       return nullptr;
     });
@@ -166,8 +166,9 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
       if (auto machine = here.ParentAs<Machine>()) {
         Location& l = machine->Create(*prototype);
         result = &l;
-        Rect object_bounds = result->object->Shape().getBounds();
-        l.position = here.position + here.object->ArgStart(*this).pos - object_bounds.TopCenter();
+        Rect object_bounds = l.WidgetForObject()->Shape().getBounds();
+        l.position =
+            here.position + here.WidgetForObject()->ArgStart(*this).pos - object_bounds.TopCenter();
         PositionBelow(here, l);
         AnimateGrowFrom(here,
                         l);  // this must go before UpdateAutoconnectArgs because of animation_state

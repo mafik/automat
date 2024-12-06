@@ -12,6 +12,7 @@
 #include "run_button.hh"
 #include "time.hh"
 #include "timer_thread.hh"
+#include "widget.hh"
 
 namespace automat::library {
 
@@ -48,7 +49,7 @@ struct TimelineRunButton : gui::ToggleButton {
   void FixParents() override;
 };
 
-struct TrackBase : Object {
+struct TrackBase : Object, Object::FallbackWidget {
   Timeline* timeline = nullptr;
   maf::Vec<time::T> timestamps;
   SkPath Shape() const override;
@@ -82,7 +83,11 @@ struct OnOffTrack : TrackBase, OnOff {
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
 // (or stops).
-struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
+struct Timeline : LiveObject,
+                  Object::FallbackWidget,
+                  Runnable,
+                  LongRunning,
+                  TimerNotificationReceiver {
   static std::shared_ptr<Timeline> proto;
 
   std::shared_ptr<TimelineRunButton> run_button;

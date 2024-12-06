@@ -32,13 +32,14 @@ int main(int argc, char* argv[]) { return LinuxMain(argc, argv); }
 #pragma region Initialization
 namespace automat {
 void InitAutomat(maf::Status& status) {
-  InitRoot();
   window.reset(new Window());
+  window->InitToolbar();
   window->RequestResize = [&](Vec2 new_size) { window->Resize(new_size); };
   window->RequestMaximize = [&](bool horizontally, bool vertically) {
     window->maximized_horizontally = horizontally;
     window->maximized_vertically = vertically;
   };
+  InitRoot();
   gui::keyboard = std::make_unique<gui::Keyboard>(*window);
   LoadState(*window, status);
   RunOnAutomatThread([&] {

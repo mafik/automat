@@ -25,6 +25,8 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   auto matrix = TransformBetween(*pointer.hover, *root_machine);
   auto loc = std::make_shared<Location>();
   loc->parent_location = root_location;
+  loc->parent = root_machine;
+
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
   loc->animation_state.scale = matrix.get(0);
@@ -35,17 +37,14 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   drag_action->contact_point = contact_point;
   return drag_action;
 }
-}  // namespace automat::gui
 
-namespace automat::library {
-
-std::shared_ptr<Object> Toolbar::Clone() const {
-  auto new_toolbar = std::make_shared<Toolbar>();
-  for (const auto& prototype : prototypes) {
-    new_toolbar->AddObjectPrototype(prototype);
-  }
-  return new_toolbar;
-}
+// std::shared_ptr<Object> Toolbar::Clone() const {
+//   auto new_toolbar = std::make_shared<Toolbar>();
+//   for (const auto& prototype : prototypes) {
+//     new_toolbar->AddObjectPrototype(prototype);
+//   }
+//   return new_toolbar;
+// }
 constexpr float kMarginBetweenIcons = 1_mm;
 constexpr float kMarginAroundIcons = 7_mm;
 constexpr float kMarginAboveIcons = 8_mm;
@@ -158,7 +157,7 @@ void Toolbar::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
 void Toolbar::AddObjectPrototype(const std::shared_ptr<Object>& new_proto) {
   prototypes.push_back(new_proto->Clone());
   buttons.emplace_back(std::make_shared<gui::PrototypeButton>(prototypes.back()));
-  buttons.back()->parent = SharedPtr();
+  buttons.back()->Init(SharedPtr());
 }
 
 void Toolbar::UpdateChildTransform() {
@@ -166,7 +165,7 @@ void Toolbar::UpdateChildTransform() {
 
   float x = -width / 2 + kMarginAroundIcons;
   for (int i = 0; i < buttons.size(); ++i) {
-    Rect src = prototypes[i]->CoarseBounds().rect;
+    Rect src = buttons[i]->CoarseBounds().rect;
     float size = buttons[i]->width;
     float x2 = x + size / 2;
     float scale = buttons[i]->width / buttons[i]->natural_width;
@@ -191,4 +190,5 @@ maf::Optional<Rect> Toolbar::TextureBounds() const {
   float width = CalculateWidth();
   return Rect(-width / 2, 0, width / 2, kToolbarHeight * 2);
 }
-}  // namespace automat::library
+
+}  // namespace automat::gui

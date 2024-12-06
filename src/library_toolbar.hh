@@ -12,21 +12,25 @@ constexpr float kToolbarIconSize = gui::kMinimalTouchableSize * 2;
 
 struct PrototypeButton : Widget {
   std::shared_ptr<Object> proto;
+  std::shared_ptr<Widget> proto_widget;
   float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
 
-  PrototypeButton(std::shared_ptr<Object>& proto) : proto(proto) {
-    auto rect = proto->CoarseBounds().rect;
+  PrototypeButton(std::shared_ptr<Object>& proto) : proto(proto) {}
+
+  void Init(std::shared_ptr<Widget> parent) {
+    this->parent = std::move(parent);
+    proto_widget = Widget::ForObject(*proto, *this);
+    auto rect = proto_widget->CoarseBounds().rect;
     natural_width =
         std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());
     width.value = natural_width;
   }
 
-  void Draw(SkCanvas& canvas) const override { DrawChildren(canvas); }
-  SkPath Shape() const override { return proto->Shape(); }
+  SkPath Shape() const override { return proto_widget->Shape(); }
 
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
-    children.push_back(proto);
+    children.push_back(proto_widget);
   }
 
   void PointerOver(Pointer& pointer) override { pointer.PushIcon(Pointer::kIconHand); }
@@ -40,13 +44,7 @@ struct PrototypeButton : Widget {
   maf::StrView Name() const override { return "PrototypeButton"; }
 };
 
-}  // namespace automat::gui
-
-namespace automat::library {
-
-struct Toolbar : Object, gui::PointerMoveCallback {
-  static std::shared_ptr<Toolbar> proto;
-
+struct Toolbar : gui::Widget, gui::PointerMoveCallback {
   maf::Vec<shared_ptr<Object>> prototypes;
   maf::Vec<shared_ptr<gui::PrototypeButton>> buttons;
 
@@ -56,7 +54,6 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   void AddObjectPrototype(const std::shared_ptr<Object>&);
 
   maf::StrView Name() const override;
-  std::shared_ptr<Object> Clone() const override;
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
@@ -76,4 +73,4 @@ struct Toolbar : Object, gui::PointerMoveCallback {
   void PointerMove(gui::Pointer&, Vec2 position) override { WakeAnimation(); }
 };
 
-}  // namespace automat::library
+}  // namespace automat::gui

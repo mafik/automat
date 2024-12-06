@@ -1002,8 +1002,8 @@ struct ProgressBar : library::Number {
     bar->value = value;
     return bar;
   }
-  void Draw(SkCanvas& canvas) const override { Object::Draw(canvas); }
-  SkPath Shape() const override { return Object::Shape(); }
+  void Draw(SkCanvas& canvas) const override { Object::FallbackWidget::Draw(canvas); }
+  SkPath Shape() const override { return Object::FallbackWidget::Shape(); }
 };
 
 struct ListView : Pointer {

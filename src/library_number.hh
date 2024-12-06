@@ -19,7 +19,7 @@ struct NumberButton : gui::Button {
   SkColor BackgroundColor() const override;
 };
 
-struct Number : Object {
+struct Number : Object, Object::FallbackWidget {
   double value;
   std::shared_ptr<NumberButton> digits[10];
   std::shared_ptr<NumberButton> dot;

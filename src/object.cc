@@ -17,7 +17,17 @@ using namespace maf;
 
 namespace automat {
 
-void Object::Draw(SkCanvas& canvas) const {
+std::string_view Object::FallbackWidget::Name() const {
+  StrView name;
+  if (auto obj = object.lock()) {
+    name = obj->Name();
+  } else {
+    name = Widget::Name();
+  }
+  return name;
+}
+
+void Object::FallbackWidget::Draw(SkCanvas& canvas) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -58,23 +68,25 @@ void Object::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-SkPath Object::Shape() const {
+SkPath Object::FallbackWidget::Shape() const {
   static std::unordered_map<std::string_view, SkPath> basic_shapes;
-  auto it = basic_shapes.find(Name());
+  auto name = Name();
+  auto it = basic_shapes.find(name);
   if (it == basic_shapes.end()) {
     constexpr float kNameMargin = 0.001;
-    float width_name = gui::GetFont().MeasureText(Name()) + 2 * kNameMargin;
+    float width_name = gui::GetFont().MeasureText(name) + 2 * kNameMargin;
     float width_rounded = ceil(width_name * 1000) / 1000;
     constexpr float kMinWidth = 0.008;
     float final_width = std::max(width_rounded, kMinWidth);
     SkRect rect = SkRect::MakeXYWH(0, 0, final_width, 0.008);
     SkRRect rrect = SkRRect::MakeRectXY(rect, 0.001, 0.001);
-    it = basic_shapes.emplace(std::make_pair(Name(), SkPath::RRect(rrect))).first;
+    it = basic_shapes.emplace(std::make_pair(name, SkPath::RRect(rrect))).first;
   }
   return it->second;
 }
 
-std::unique_ptr<Action> Object::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
+std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
+                                                           gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
     auto* location = Closest<Location>(*p.hover);
     auto* machine = Closest<Machine>(*p.hover);
@@ -111,37 +123,6 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
     return;
   }
   SetText(l, value);
-}
-
-Vec2AndDir Object::ArgStart(const Argument& arg) {
-  SkPath shape;
-  if (arg.field) {
-    shape = FieldShape(*arg.field);
-  }
-  if (shape.isEmpty()) {
-    shape = Shape();
-  }
-  Rect bounds = shape.getBounds();
-  return Vec2AndDir{
-      .pos = bounds.BottomCenter(),
-      .dir = -90_deg,
-  };
-}
-
-void Object::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
-  // By default just one position on the top of the bounding box.
-  auto shape = Shape();
-  Rect bounds = shape.getBounds();
-  out_positions.push_back(Vec2AndDir{
-      .pos = bounds.TopCenter(),
-      .dir = -90_deg,
-  });
-}
-
-RRect Object::CoarseBounds() const {
-  return RRect{.rect = Shape().getBounds(),
-               .radii = {{0, 0}, {0, 0}, {0, 0}, {0, 0}},
-               .type = SkRRect::kRect_Type};
 }
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }

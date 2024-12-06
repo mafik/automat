@@ -25,17 +25,19 @@ namespace automat::gui {
 std::vector<Window*> windows;
 std::shared_ptr<Window> window;
 
-Window::Window() {
-  toolbar = std::make_shared<library::Toolbar>();
-  for (auto& proto : Prototypes()) {
-    toolbar->AddObjectPrototype(proto);
-  }
-  windows.push_back(this);
-}
+Window::Window() { windows.push_back(this); }
 Window::~Window() {
   auto it = std::find(windows.begin(), windows.end(), this);
   if (it != windows.end()) {
     windows.erase(it);
+  }
+}
+
+void Window::InitToolbar() {
+  toolbar = std::make_shared<Toolbar>();
+  toolbar->parent = SharedPtr();
+  for (auto& proto : Prototypes()) {
+    toolbar->AddObjectPrototype(proto);
   }
 }
 
@@ -417,8 +419,8 @@ SkPath Window::TrashShape() const {
   return trash_area_path;
 }
 
-void Window::SnapPosition(Vec2& position, float& scale, Object* object, Vec2* fixed_point) {
-  Rect object_bounds = object->Shape().getBounds();
+void Window::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
+  Rect object_bounds = location.WidgetForObject()->Shape().getBounds();
   Rect machine_bounds = root_machine->Shape().getBounds();
   Vec2 fake_fixed_point = Vec2(0, 0);
   if (fixed_point == nullptr) {

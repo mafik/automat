@@ -21,6 +21,7 @@ struct GlassRunButton : gui::PowerButton {
 };
 
 struct MacroRecorder : LiveObject,
+                       Object::FallbackWidget,
                        Runnable,
                        LongRunning,
                        gui::Keylogger,
@@ -39,7 +40,7 @@ struct MacroRecorder : LiveObject,
 
   mutable AnimationState animation_state;
   gui::Keylogging* keylogging = nullptr;
-  std::shared_ptr<Widget> record_button;
+  std::shared_ptr<gui::Widget> record_button;
 
   MacroRecorder();
   ~MacroRecorder();

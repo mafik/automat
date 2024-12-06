@@ -126,30 +126,17 @@ void Location::ScheduleErrored(Location& errored) {
 }
 
 SkPath Location::Shape() const {
-  if constexpr (false) {  // Gray box shape
-    // Keeping this around because locations will eventually be toggleable between frame & no frame
-    // modes.
-    SkRect object_bounds;
-    if (object) {
-      object_bounds = object->Shape().getBounds();
-    } else {
-      object_bounds = SkRect::MakeEmpty();
-    }
-    float outset = 0.001 - kBorderWidth / 2;
-    SkRect bounds = object_bounds.makeOutset(outset, outset);
-    return SkPath::RRect(bounds, kFrameCornerRadius, kFrameCornerRadius);
-  }
   static SkPath empty_path = SkPath();
   return empty_path;
 }
 
 SkPath Location::FieldShape(Object& field) const {
   if (object) {
-    auto object_field_shape = object->FieldShape(field);
+    auto object_field_shape = WidgetForObject()->FieldShape(field);
     if (!object_field_shape.isEmpty()) {
       return object_field_shape;
     } else {
-      return object->Shape();
+      return WidgetForObject()->Shape();
     }
   }
   return SkPath();
@@ -157,7 +144,7 @@ SkPath Location::FieldShape(Object& field) const {
 
 void Location::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   if (object) {
-    children.push_back(object);
+    children.push_back(WidgetForObject());
   }
 }
 
@@ -215,8 +202,9 @@ animation::Phase Location::Tick(time::Timer& timer) {
 
 void Location::Draw(SkCanvas& canvas) const {
   SkPath my_shape;
+  auto object_widget = WidgetForObject();
   if (object) {
-    my_shape = object->Shape();
+    my_shape = object_widget->Shape();
   } else {
     my_shape = Shape();
   }
@@ -233,7 +221,7 @@ void Location::Draw(SkCanvas& canvas) const {
     SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();
-    canvas.concat(object->local_to_parent);
+    canvas.concat(object_widget->local_to_parent);
     static const SkPaint kHighlightPaint = [] {
       SkPaint paint;
       paint.setAntiAlias(true);
@@ -363,7 +351,7 @@ void Location::Run() {
   }
 }
 
-Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(*object, *parent); }
+Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(*WidgetForObject(), *parent); }
 
 animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_position,
                                             float target_scale) {
@@ -437,7 +425,7 @@ void PositionBelow(Location& origin, Location& below) {
 void AnimateGrowFrom(Location& source, Location& grown) {
   auto& animation_state = grown.GetAnimationState();
   animation_state.scale.value = 0.5;
-  Vec2 source_center = source.object->Shape().getBounds().center() + source.position;
+  Vec2 source_center = source.WidgetForObject()->Shape().getBounds().center() + source.position;
   animation_state.position.value = source_center;
   animation_state.transparency = 1;
   grown.UpdateChildTransform();
@@ -449,8 +437,9 @@ void Location::PreDraw(SkCanvas& canvas) const {
     return;
   }
   auto& anim = GetAnimationState();
-  auto shape = object->Shape();
-  canvas.concat(object->local_to_parent);
+  auto object_widget = WidgetForObject();
+  auto shape = object_widget->Shape();
+  canvas.concat(object_widget->local_to_parent);
 
   auto rect = shape.getBounds();
   auto window = dynamic_cast<gui::Window*>(&RootWidget());
@@ -482,13 +471,14 @@ void Location::UpdateAutoconnectArgs() {
   if (object == nullptr) {
     return;
   }
+  auto object_widget = WidgetForObject();
   auto parent_machine = root_machine.get();
   object->Args([&](Argument& arg) {
     if (arg.autoconnect_radius <= 0) {
       return;
     }
 
-    auto start = arg.Start(*object, *parent_machine);
+    auto start = arg.Start(*object_widget, *parent_machine);
 
     // Find the current distance & target of this connection
     float old_dist2 = HUGE_VALF;
@@ -496,8 +486,9 @@ void Location::UpdateAutoconnectArgs() {
     if (auto it = outgoing.find(&arg); it != outgoing.end()) {
       Vec<Vec2AndDir> to_positions;
       auto conn = *it;
-      conn->to.object->ConnectionPositions(to_positions);
-      auto other_up = TransformBetween(*conn->to.object, *parent_machine);
+      auto to_object_widget = conn->to.WidgetForObject();
+      to_object_widget->ConnectionPositions(to_positions);
+      auto other_up = TransformBetween(*to_object_widget, *parent_machine);
       for (auto& to : to_positions) {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
@@ -511,18 +502,18 @@ void Location::UpdateAutoconnectArgs() {
     // Find the new distance & target
     float new_dist2 = arg.autoconnect_radius * arg.autoconnect_radius;
     Location* new_target = nullptr;
-    arg.NearbyCandidates(*this, arg.autoconnect_radius,
-                         [&](Location& other, maf::Vec<Vec2AndDir>& to_points) {
-                           auto other_up = TransformBetween(*other.object, *parent_machine);
-                           for (auto& to : to_points) {
-                             Vec2 to_pos = other_up.mapPoint(to.pos);
-                             float dist2 = LengthSquared(start.pos - to_pos);
-                             if (dist2 <= new_dist2) {
-                               new_dist2 = dist2;
-                               new_target = &other;
-                             }
-                           }
-                         });
+    arg.NearbyCandidates(
+        *this, arg.autoconnect_radius, [&](Location& other, maf::Vec<Vec2AndDir>& to_points) {
+          auto other_up = TransformBetween(*other.WidgetForObject(), *parent_machine);
+          for (auto& to : to_points) {
+            Vec2 to_pos = other_up.mapPoint(to.pos);
+            float dist2 = LengthSquared(start.pos - to_pos);
+            if (dist2 <= new_dist2) {
+              new_dist2 = dist2;
+              new_target = &other;
+            }
+          }
+        });
 
     if (new_target == old_target) {
       return;
@@ -538,9 +529,9 @@ void Location::UpdateAutoconnectArgs() {
 
   // Now check other locatinos & their arguments that might want to connect to this location
 
-  auto here_up = TransformBetween(*object, *parent_machine);
+  auto here_up = TransformBetween(*object_widget, *parent_machine);
   Vec<Vec2AndDir> to_points;
-  object->ConnectionPositions(to_points);
+  object_widget->ConnectionPositions(to_points);
   for (auto& to : to_points) {
     to.pos = here_up.mapPoint(to.pos);
   }
@@ -549,7 +540,8 @@ void Location::UpdateAutoconnectArgs() {
     if (other.get() == this) {
       continue;
     }
-    auto other_up = TransformBetween(*other->object, *parent_machine);
+    auto other_widget = other->WidgetForObject();
+    auto other_up = TransformBetween(*other_widget, *parent_machine);
     other->object->Args([&](Argument& arg) {
       if (arg.autoconnect_radius <= 0) {
         return;
@@ -565,7 +557,7 @@ void Location::UpdateAutoconnectArgs() {
         connection_widget->WakeAnimation();
       }
 
-      auto start = other->object->ArgStart(arg);
+      auto start = other_widget->ArgStart(arg);
       start.pos = other_up.mapPoint(start.pos);
 
       // Find the current distance & target of this connection
@@ -574,8 +566,9 @@ void Location::UpdateAutoconnectArgs() {
       if (auto it = other->outgoing.find(&arg); it != other->outgoing.end()) {
         Vec<Vec2AndDir> to_positions;
         auto conn = *it;
-        conn->to.object->ConnectionPositions(to_positions);
-        auto to_up = TransformBetween(*conn->to.object, *parent_machine);
+        auto to_object_widget = conn->to.WidgetForObject();
+        to_object_widget->ConnectionPositions(to_positions);
+        auto to_up = TransformBetween(*to_object_widget, *parent_machine);
         for (auto& to : to_positions) {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);
@@ -611,11 +604,27 @@ void Location::UpdateAutoconnectArgs() {
   }
 }
 void Location::UpdateChildTransform() {
-  Vec2 scale_pivot = object->Shape().getBounds().center();
+  auto object_widget = WidgetForObject();
+  Vec2 scale_pivot = object_widget->Shape().getBounds().center();
   SkMatrix transform = SkMatrix::I();
   float s = std::max<float>(animation_state.scale, 0.00001f);
   transform.postScale(s, s, scale_pivot.x, scale_pivot.y);
   transform.postTranslate(animation_state.position.value.x, animation_state.position.value.y);
-  object->local_to_parent = SkM44(transform);
+  object_widget->local_to_parent = SkM44(transform);
+}
+std::shared_ptr<Object> Location::InsertHere(std::shared_ptr<Object>&& object) {
+  this->object.swap(object);
+  this->object->Relocate(this);
+  auto object_widget = WidgetForObject();
+  object_widget->parent = this->SharedPtr();
+  return object;
+}
+std::shared_ptr<Object> Location::Create(const Object& prototype) {
+  object = prototype.Clone();
+  object->Relocate(this);
+  auto object_widget = WidgetForObject();
+  object_widget->parent = this->SharedPtr();
+  FixParents();
+  return object;
 }
 }  // namespace automat

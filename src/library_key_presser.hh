@@ -18,7 +18,7 @@ struct KeyPresserButton : KeyButton {
   float PressRatio() const override;
 };
 
-struct KeyPresser : Object, gui::KeyboardGrabber, Runnable, LongRunning {
+struct KeyPresser : Object, Object::FallbackWidget, gui::KeyboardGrabber, Runnable, LongRunning {
   static std::shared_ptr<KeyPresser> proto;
 
   gui::AnsiKey key = gui::AnsiKey::F;

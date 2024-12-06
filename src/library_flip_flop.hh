@@ -24,7 +24,7 @@ struct FlipFlopButton : gui::ToggleButton {
   bool Filled() const override;
 };
 
-struct FlipFlop : LiveObject, Runnable {
+struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
   static std::shared_ptr<FlipFlop> proto;
 
   std::shared_ptr<FlipFlopButton> button;

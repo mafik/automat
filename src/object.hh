@@ -7,7 +7,7 @@
 
 #include "audio.hh"
 #include "deserializer.hh"
-#include "math.hh"
+#include "shared_base.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -20,8 +20,7 @@ struct Argument;
 // Objects are interactive pieces of data & behavior.
 //
 // Instances of this class provide custom logic & appearance.
-struct Object : gui::Widget {
-  // TODO: separate objects & widgets!
+struct Object : public virtual SharedBase {
   Object() {}
 
   // Create a copy of this object.
@@ -52,14 +51,9 @@ struct Object : gui::Widget {
 
   virtual void Fields(std::function<void(Object&)> cb) {}
 
-  virtual SkPath FieldShape(Object&) const { return SkPath(); }
-
   virtual void Args(std::function<void(Argument&)> cb) {}
 
-  virtual Vec2AndDir ArgStart(const Argument&);
   virtual std::shared_ptr<Object> ArgPrototype(const Argument&) { return nullptr; }
-
-  virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;
 
   virtual void Updated(Location& here, Location& updated);
   virtual void Errored(Location& here, Location& errored) {}
@@ -69,10 +63,37 @@ struct Object : gui::Widget {
   virtual std::partial_ordering operator<=>(const Object& other) const noexcept {
     return GetText() <=> other.GetText();
   }
-  void Draw(SkCanvas&) const override;
-  SkPath Shape() const override;
-  virtual RRect CoarseBounds() const;
-  std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+
+  // The name for objects of this type. English proper noun, UTF-8, capitalized.
+  // For example: "Text Editor".
+  virtual std::string_view Name() const {
+    const std::type_info& info = typeid(*this);
+    return maf::CleanTypeName(info.name());
+  }
+
+  // Green box with a name of the object.
+  struct FallbackWidget : gui::Widget {
+    std::weak_ptr<Object> object;
+
+    // FallbackWidget doesn't have a constructor that takes weak_ptr<Object> because it's sometimes
+    // used as a base class for Object/Widget hybrids (which should be refactored BTW). When an
+    // object is constructed, its weak_from_this is not available. It's only present after
+    // construction finishes.
+
+    std::string_view Name() const override;
+    SkPath Shape() const override;
+    void Draw(SkCanvas&) const override;
+    std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+  };
+
+  virtual std::shared_ptr<gui::Widget> MakeWidget() {
+    if (auto w = dynamic_cast<gui::Widget*>(this)) {
+      return w->SharedPtr();
+    }
+    auto w = std::make_shared<FallbackWidget>();
+    w->object = WeakPtr();
+    return w;
+  }
 };
 
 template <typename T>

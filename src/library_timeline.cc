@@ -787,7 +787,7 @@ unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger bt
       }
     }
   }
-  return Object::FindAction(ptr, btn);
+  return Object::FallbackWidget::FindAction(ptr, btn);
 }
 
 animation::Phase Timeline::Tick(time::Timer& timer) {
@@ -1215,7 +1215,7 @@ Vec2AndDir Timeline::ArgStart(const Argument& arg) {
         .dir = 0_deg,
     };
   }
-  return Object::ArgStart(arg);
+  return Object::FallbackWidget::ArgStart(arg);
 }
 
 void Timeline::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
@@ -1405,7 +1405,7 @@ std::unique_ptr<Action> TrackBase::FindAction(gui::Pointer& ptr, gui::ActionTrig
   if (timeline) {
     return timeline->FindAction(ptr, btn);
   } else {
-    return Object::FindAction(ptr, btn);
+    return Object::FallbackWidget::FindAction(ptr, btn);
   }
 }
 

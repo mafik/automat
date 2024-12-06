@@ -318,7 +318,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     Location& key_presser_loc = machine->Create<KeyPresser>();
     KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();
     key_presser->SetKey(key);
-    Rect key_presser_shape = key_presser_loc.object->Shape().getBounds();
+    Rect key_presser_shape = key_presser_loc.WidgetForObject()->Shape().getBounds();
     Argument& track_arg = *timeline->track_args.back();
     Vec2AndDir arg_start = track_arg.Start(*timeline, *timeline->parent);
 
@@ -520,7 +520,7 @@ Vec2AndDir MacroRecorder::ArgStart(const Argument& arg) {
         .dir = -90_deg,
     };
   }
-  return Object::ArgStart(arg);
+  return Widget::ArgStart(arg);
 }
 
 void MacroRecorder::SerializeState(Serializer& writer, const char* key) const {

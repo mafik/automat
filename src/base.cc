@@ -155,7 +155,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
                 l.ReportError(f("Unknown object type: %s", type.c_str()));
                 // try to continue parsing
               } else {
-                l.Create(*proto);
+                l.Create(**proto);
               }
             }
           } else if (field == "value") {

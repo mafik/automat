@@ -331,6 +331,13 @@ void TimelineRunButton::FixParents() {
   rec_button->FixParents();
 }
 
+void TimelineRunButton::ForgetParents() {
+  parent = nullptr;
+  rec_button->ForgetParents();
+  on->ForgetParents();
+  off->ForgetParents();
+}
+
 shared_ptr<gui::Button>& TimelineRunButton::OnWidget() {
   if (timeline->state == Timeline::kRecording) {
     last_on_widget = &rec_button;

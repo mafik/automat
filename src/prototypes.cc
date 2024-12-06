@@ -14,12 +14,15 @@ std::vector<std::shared_ptr<Object>>& Prototypes() {
 // TODO: when objects are registered (in the __attribute__((constructor)) functions), they may not
 // be themselves constructed! This should be fixed - we should move object registration to another
 // time.
-void RegisterPrototype(std::shared_ptr<Object> prototype) { Prototypes().push_back(prototype); }
+void RegisterPrototype(std::shared_ptr<Object>&& prototype) {
+  assert(prototype.get());
+  Prototypes().emplace_back(std::move(prototype));
+}
 
-std::shared_ptr<Object> FindPrototype(maf::StrView name) {
+std::shared_ptr<Object>* FindPrototype(maf::StrView name) {
   for (std::shared_ptr<Object>& prototype : Prototypes()) {
     if (prototype->Name() == name) {
-      return prototype;
+      return &prototype;
     }
   }
   return nullptr;

@@ -35,7 +35,7 @@ namespace automat {
 struct Integer : Object {
   int32_t i;
   Integer(int32_t i = 0) : i(i) {}
-  static std::shared_ptr<Integer> proto;
+  static Integer* proto;
   string_view Name() const override { return "Integer"; }
   std::shared_ptr<Object> Clone() const override { return std::make_shared<Integer>(i); }
   string GetText() const override { return std::to_string(i); }
@@ -43,7 +43,7 @@ struct Integer : Object {
 };
 
 struct Delete : Object, Runnable {
-  static std::shared_ptr<Delete> proto;
+  static Delete* proto;
   static Argument target_arg;
   string_view Name() const override { return "Delete"; }
   std::shared_ptr<Object> Clone() const override { return std::make_shared<Delete>(); }
@@ -58,7 +58,7 @@ struct Delete : Object, Runnable {
 };
 
 struct Set : Object, Runnable {
-  static std::shared_ptr<Set> proto;
+  static Set* proto;
   static Argument value_arg;
   static Argument target_arg;
   string_view Name() const override { return "Set"; }
@@ -76,7 +76,7 @@ struct Set : Object, Runnable {
 };
 
 struct Date : Object {
-  static std::shared_ptr<Date> proto;
+  static Date* proto;
   int year;
   int month;
   int day;
@@ -137,7 +137,7 @@ struct FakeTime {
 // 1. _Continuous_ timers - which reschedule their `Run` without any delay.
 // 2. _Lazy_ timers - which never `Run` but can be queried with `GetText`.
 struct Timer : Object, Runnable {
-  static std::shared_ptr<Timer> proto;
+  static Timer* proto;
   time::SteadyPoint start;
   time::SteadyPoint last_tick;
   FakeTime* fake_time = nullptr;
@@ -187,7 +187,7 @@ struct Timer : Object, Runnable {
 };
 
 struct TimerReset : Object, Runnable {
-  static std::shared_ptr<TimerReset> proto;
+  static TimerReset* proto;
   static Argument timer_arg;
   string_view Name() const override { return "TimerReset"; }
   std::shared_ptr<Object> Clone() const override { return std::make_shared<TimerReset>(); }
@@ -202,7 +202,7 @@ struct TimerReset : Object, Runnable {
 };
 
 struct EqualityTest : LiveObject {
-  static std::shared_ptr<EqualityTest> proto;
+  static EqualityTest* proto;
   static LiveArgument target_arg;
   bool state = true;
   EqualityTest() {}
@@ -232,7 +232,7 @@ struct EqualityTest : LiveObject {
 };
 
 struct LessThanTest : LiveObject {
-  static std::shared_ptr<LessThanTest> proto;
+  static LessThanTest* proto;
   static LiveArgument less_arg;
   static LiveArgument than_arg;
   bool state = true;
@@ -259,7 +259,7 @@ struct LessThanTest : LiveObject {
 };
 
 struct StartsWithTest : LiveObject {
-  static std::shared_ptr<StartsWithTest> proto;
+  static StartsWithTest* proto;
   static LiveArgument starts_arg;
   static LiveArgument with_arg;
   bool state = true;
@@ -292,7 +292,7 @@ struct StartsWithTest : LiveObject {
 };
 
 struct AllTest : LiveObject {
-  static std::shared_ptr<AllTest> proto;
+  static AllTest* proto;
   static LiveArgument test_arg;
   bool state = true;
   AllTest() {}
@@ -316,7 +316,7 @@ struct AllTest : LiveObject {
 };
 
 struct Switch : LiveObject {
-  static std::shared_ptr<Switch> proto;
+  static Switch* proto;
   static LiveArgument target_arg;
   LiveArgument case_arg = LiveArgument("case", Argument::kRequiresObject);
   string_view Name() const override { return "Switch"; }
@@ -355,7 +355,7 @@ struct Switch : LiveObject {
 };
 
 struct ErrorReporter : LiveObject {
-  static std::shared_ptr<ErrorReporter> proto;
+  static ErrorReporter* proto;
   static LiveArgument test_arg;
   static LiveArgument message_arg;
   string_view Name() const override { return "Error Reporter"; }
@@ -383,7 +383,7 @@ struct ErrorReporter : LiveObject {
 };
 
 struct Parent : Pointer {
-  static std::shared_ptr<Parent> proto;
+  static Parent* proto;
   string_view Name() const override { return "Parent"; }
   std::shared_ptr<Object> Clone() const override { return std::make_shared<Parent>(); }
   void Args(std::function<void(Argument&)> cb) override {}
@@ -417,7 +417,7 @@ struct Parent : Pointer {
 };
 
 struct HealthTest : Object {
-  static std::shared_ptr<HealthTest> proto;
+  static HealthTest* proto;
   static Argument target_arg;
   bool state = true;
   HealthTest() {}
@@ -446,7 +446,7 @@ struct HealthTest : Object {
 };
 
 struct ErrorCleaner : Object {
-  static std::shared_ptr<ErrorCleaner> proto;
+  static ErrorCleaner* proto;
   static Argument target_arg;
   ErrorCleaner() {}
   std::shared_ptr<Object> Clone() const override { return std::make_shared<ErrorCleaner>(); }
@@ -477,7 +477,7 @@ struct AbstractList {
 };
 
 struct Append : Object, Runnable {
-  static std::shared_ptr<Append> proto;
+  static Append* proto;
   static Argument to_arg;
   static Argument what_arg;
   string_view Name() const override { return "Append"; }
@@ -508,7 +508,7 @@ struct Append : Object, Runnable {
 };
 
 struct List : Object, AbstractList {
-  static std::shared_ptr<List> proto;
+  static List* proto;
   Location* here = nullptr;
   vector<std::shared_ptr<Object>> objects;
   string_view Name() const override { return "List"; }
@@ -564,7 +564,7 @@ struct Iterator {
 struct CurrentElement;
 struct Filter : LiveObject, Iterator, AbstractList, Runnable {
   enum class Phase { kSequential, kDone };
-  static std::shared_ptr<Filter> proto;
+  static Filter* proto;
   static LiveArgument list_arg;
   static LiveArgument element_arg;
   static LiveArgument test_arg;
@@ -694,7 +694,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
 };
 
 struct CurrentElement : Pointer {
-  static std::shared_ptr<CurrentElement> proto;
+  static CurrentElement* proto;
   static LiveArgument of_arg;
   string_view Name() const override { return "Current Element"; }
   std::shared_ptr<Object> Clone() const override { return std::make_shared<CurrentElement>(); }
@@ -733,7 +733,7 @@ inline void Filter::Updated(Location& here, Location& updated) {
 //
 // The structure contains named fields and is here-descriptive.
 struct Complex : Object {
-  static std::shared_ptr<Complex> proto;
+  static Complex* proto;
   std::unordered_map<std::string, std::shared_ptr<Object>> objects;
   string_view Name() const override { return "Complex"; }
   std::shared_ptr<Object> Clone() const override {
@@ -746,7 +746,7 @@ struct Complex : Object {
 };
 
 struct ComplexField : Pointer {
-  static std::shared_ptr<ComplexField> proto;
+  static ComplexField* proto;
   static LiveArgument complex_arg;
   static LiveArgument label_arg;
   string_view Name() const override { return "Complex Field"; }
@@ -846,7 +846,7 @@ struct Text : LiveObject {
     }
     return chunks;
   }
-  static std::shared_ptr<Text> proto;
+  static Text* proto;
   static LiveArgument target_arg;
   string_view Name() const override { return "Text Editor"; }
   std::shared_ptr<Object> Clone() const override {
@@ -901,7 +901,7 @@ struct Text : LiveObject {
 
 struct Button : Object, Runnable {
   string label;
-  static std::shared_ptr<Button> proto;
+  static Button* proto;
   static Argument enabled_arg;
   string_view Name() const override { return "Button"; }
   std::shared_ptr<Object> Clone() const override {
@@ -921,7 +921,7 @@ struct Button : Object, Runnable {
 };
 
 struct ComboBox : LiveObject {
-  static std::shared_ptr<ComboBox> proto;
+  static ComboBox* proto;
   static LiveArgument options_arg;
   Location* here = nullptr;
   Location* selected = nullptr;
@@ -951,7 +951,7 @@ struct ComboBox : LiveObject {
 };
 
 struct Slider : LiveObject {
-  static std::shared_ptr<Slider> proto;
+  static Slider* proto;
   static LiveArgument min_arg;
   static LiveArgument max_arg;
   double value = 0;
@@ -995,7 +995,7 @@ struct Slider : LiveObject {
 };
 
 struct ProgressBar : library::Number {
-  static std::shared_ptr<ProgressBar> proto;
+  static ProgressBar* proto;
   string_view Name() const override { return "Progress Bar"; }
   std::shared_ptr<Object> Clone() const override {
     auto bar = std::make_shared<ProgressBar>();
@@ -1007,7 +1007,7 @@ struct ProgressBar : library::Number {
 };
 
 struct ListView : Pointer {
-  static std::shared_ptr<ListView> proto;
+  static ListView* proto;
   static LiveArgument list_arg;
   int index = -1;
   string_view Name() const override { return "List View"; }
@@ -1092,7 +1092,7 @@ struct AlgebraContext : algebra::Context {
 };
 
 struct Blackboard : Object {
-  static std::shared_ptr<Blackboard> proto;
+  static Blackboard* proto;
   std::unique_ptr<algebra::Statement> statement = nullptr;
   string_view Name() const override { return "Formula"; }
   std::shared_ptr<Object> Clone() const override {
@@ -1114,7 +1114,7 @@ struct Blackboard : Object {
 };
 
 struct BlackboardUpdater : LiveObject {
-  static std::shared_ptr<BlackboardUpdater> proto;
+  static BlackboardUpdater* proto;
   std::unordered_map<string, std::unique_ptr<algebra::Expression>> formulas;
   std::map<string, LiveArgument> independent_variable_args;
   static Argument const_arg;

@@ -94,7 +94,7 @@ Argument timeline_arg = []() {
 void MacroRecorder::Args(std::function<void(Argument&)> cb) { cb(timeline_arg); }
 std::shared_ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
   if (&arg == &timeline_arg) {
-    return Timeline::proto;
+    return Timeline::proto->SharedPtr<Object>();
   }
   return nullptr;
 }

@@ -47,6 +47,7 @@ struct TimelineRunButton : gui::ToggleButton {
   bool Filled() const override;
   void Activate(gui::Pointer&);
   void FixParents() override;
+  void ForgetParents() override;
 };
 
 struct TrackBase : Object, Object::FallbackWidget {
@@ -88,7 +89,7 @@ struct Timeline : LiveObject,
                   Runnable,
                   LongRunning,
                   TimerNotificationReceiver {
-  static std::shared_ptr<Timeline> proto;
+  static Timeline* proto;
 
   std::shared_ptr<TimelineRunButton> run_button;
   std::shared_ptr<PrevButton> prev_button;

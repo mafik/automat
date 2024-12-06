@@ -124,6 +124,18 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
 Widget::Widget() { GetWidgetIndex()[ID()] = this; }
 Widget::~Widget() { GetWidgetIndex().erase(ID()); }
 
+void Widget::CheckAllWidgetsReleased() {
+  auto& widget_index = GetWidgetIndex();
+  if (widget_index.empty()) {
+    return;
+  }
+  ERROR << "Leaked references to " << widget_index.size() << " widget(s):";
+  for (auto& [id, widget] : widget_index) {
+    auto name = widget->Name();
+    ERROR << f("  %p with ID %d with name %*s", widget, id, name.size(), name.data());
+  }
+}
+
 uint32_t Widget::ID() const {
   static atomic<uint32_t> id_counter = 1;
   if (id == 0) {

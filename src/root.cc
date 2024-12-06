@@ -74,8 +74,8 @@ void InitRoot() {
   StartTimeThread(stop_source.get_token());
   automat_thread = std::jthread(RunThread, stop_source.get_token());
   auto& prototypes = Prototypes();
-  sort(prototypes.begin(), prototypes.end(),
-       [](const auto& a, const auto& b) { return a->Name() < b->Name(); });
+  stable_sort(prototypes.begin(), prototypes.end(),
+              [](const auto& a, const auto& b) { return a->Name() < b->Name(); });
 }
 
 void StopRoot() {

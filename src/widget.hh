@@ -101,6 +101,8 @@ struct Widget : public virtual SharedBase {
   Widget();
   virtual ~Widget();
 
+  static void CheckAllWidgetsReleased();
+
   // IDs are used to identify a Widget across frames.
   uint32_t ID() const;
   static Widget* Find(uint32_t id);

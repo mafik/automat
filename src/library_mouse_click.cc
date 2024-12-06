@@ -43,20 +43,11 @@ using namespace maf;
 
 namespace automat::library {
 
-std::shared_ptr<MouseClick> MouseClick::lmb_down;
-std::shared_ptr<MouseClick> MouseClick::lmb_up;
-std::shared_ptr<MouseClick> MouseClick::rmb_down;
-std::shared_ptr<MouseClick> MouseClick::rmb_up;
-
 __attribute__((constructor)) void RegisterMouseClick() {
-  MouseClick::lmb_down = std::make_shared<MouseClick>(gui::PointerButton::Left, true);
-  MouseClick::lmb_up = std::make_shared<MouseClick>(gui::PointerButton::Left, false);
-  MouseClick::rmb_down = std::make_shared<MouseClick>(gui::PointerButton::Right, true);
-  MouseClick::rmb_up = std::make_shared<MouseClick>(gui::PointerButton::Right, false);
-  RegisterPrototype(MouseClick::lmb_down);
-  RegisterPrototype(MouseClick::lmb_up);
-  RegisterPrototype(MouseClick::rmb_down);
-  RegisterPrototype(MouseClick::rmb_up);
+  RegisterPrototype(std::make_shared<MouseClick>(gui::PointerButton::Left, true));
+  RegisterPrototype(std::make_shared<MouseClick>(gui::PointerButton::Left, false));
+  RegisterPrototype(std::make_shared<MouseClick>(gui::PointerButton::Right, true));
+  RegisterPrototype(std::make_shared<MouseClick>(gui::PointerButton::Right, false));
 }
 
 constexpr float kScale = 0.00005;

@@ -10,10 +10,6 @@ struct MouseClick : Object, Object::FallbackWidget, Runnable {
   gui::PointerButton button;
   bool down;
   MouseClick(gui::PointerButton, bool down);
-  static std::shared_ptr<MouseClick> lmb_down;
-  static std::shared_ptr<MouseClick> lmb_up;
-  static std::shared_ptr<MouseClick> rmb_down;
-  static std::shared_ptr<MouseClick> rmb_up;
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
   void Draw(SkCanvas&) const override;

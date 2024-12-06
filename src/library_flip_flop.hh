@@ -25,7 +25,7 @@ struct FlipFlopButton : gui::ToggleButton {
 };
 
 struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
-  static std::shared_ptr<FlipFlop> proto;
+  static FlipFlop* proto;
 
   std::shared_ptr<FlipFlopButton> button;
 

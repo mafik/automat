@@ -860,6 +860,19 @@ int LinuxMain(int argc, char* argv[]) {
   root_machine.reset();
   root_location.reset();
 
+  // TODO: Initialize (& deinitialize) prototypes in a better place.
+  for (auto& proto : Prototypes()) {
+    if (auto widget = dynamic_cast<Widget*>(proto.get())) {
+      widget->ForgetParents();
+    }
+    proto.reset();
+  }
+  Prototypes().clear();
+  Machine::proto->ForgetParents();
+  Machine::proto.reset();
+
+  Widget::CheckAllWidgetsReleased();
+
   vk::Destroy();
   xcb_destroy_window(connection, xcb_window);
 

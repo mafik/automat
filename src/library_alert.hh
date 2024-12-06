@@ -8,7 +8,7 @@
 namespace automat {
 
 struct Alert : Object, Runnable {
-  static std::shared_ptr<Alert> proto;
+  static Alert* proto;
   static Argument message_arg;
   std::unique_ptr<vector<string>> test_interceptor;
   string_view Name() const override { return "Alert"; }

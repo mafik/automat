@@ -12,7 +12,7 @@
 namespace automat::library {
 
 struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
-  static std::shared_ptr<HotKey> proto;
+  static HotKey* proto;
 
   gui::AnsiKey key = gui::AnsiKey::F11;
   bool ctrl = true;

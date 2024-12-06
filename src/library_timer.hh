@@ -42,7 +42,7 @@ struct TimerDelay : LiveObject,
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
-  static std::shared_ptr<TimerDelay> proto;
+  static TimerDelay* proto;
   TimerDelay();
   TimerDelay(const TimerDelay&);
   string_view Name() const override;

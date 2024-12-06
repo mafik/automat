@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: MIT
 #include "keyboard.hh"
 
+#include <include/core/SkPathBuilder.h>
+
 #include <map>
 #include <set>
 
 #include "animation.hh"
 #include "automat.hh"
 #include "font.hh"
-#include "include/core/SkPathBuilder.h"
 #include "root.hh"
 #include "window.hh"
 
@@ -454,7 +455,7 @@ void Keyboard::LogKeyUp(Key key) {
   }
 }
 
-std::unique_ptr<gui::Keyboard> keyboard;
+std::shared_ptr<gui::Keyboard> keyboard;
 
 void SendKeyEvent(AnsiKey physical, bool down) {
 #if defined(_WIN32)
@@ -505,7 +506,7 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const std::shared_ptr<Wid
 void CaretOwner::KeyDown(Caret& caret, Key) {}
 void CaretOwner::KeyUp(Caret& caret, Key) {}
 
-Keyboard::Keyboard(Window& window) : window(window) { window.keyboards.emplace_back(this); }
+Keyboard::Keyboard(Window& window) : window(window) {}
 
 #if defined(_WIN32)
 

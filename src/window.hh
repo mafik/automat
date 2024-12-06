@@ -41,16 +41,24 @@ struct WidgetStore {
       return a.owner_before(b);
     }
   };
-  std::map<std::weak_ptr<Object>, std::shared_ptr<Widget>, WeakPtrCmp> container;
+  std::map<std::weak_ptr<Object>, std::weak_ptr<Widget>, WeakPtrCmp> container;
 
-  std::shared_ptr<Widget>& For(Object& object, const Widget& parent) {
+  std::shared_ptr<Widget> For(Object& object, const Widget& parent) {
     auto weak = object.WeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
-      it = container.emplace(weak, object.MakeWidget()).first;
-      it->second->parent = parent.SharedPtr();
+      auto widget = object.MakeWidget();
+      widget->parent = parent.SharedPtr();
+      container.emplace(weak, widget);
+      return widget;
+    } else if (auto strong_ref = it->second.lock()) {
+      return strong_ref;
+    } else {
+      auto widget = object.MakeWidget();
+      widget->parent = parent.SharedPtr();
+      it->second = widget;
+      return widget;
     }
-    return it->second;
   }
 };
 

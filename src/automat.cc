@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) { return LinuxMain(argc, argv); }
 #pragma region Initialization
 namespace automat {
 void InitAutomat(maf::Status& status) {
-  window.reset(new Window());
+  window = std::make_shared<Window>();
   window->InitToolbar();
   window->RequestResize = [&](Vec2 new_size) { window->Resize(new_size); };
   window->RequestMaximize = [&](bool horizontally, bool vertically) {
@@ -40,7 +40,9 @@ void InitAutomat(maf::Status& status) {
     window->maximized_vertically = vertically;
   };
   InitRoot();
-  gui::keyboard = std::make_unique<gui::Keyboard>(*window);
+  gui::keyboard = std::make_shared<gui::Keyboard>(*window);
+  window->keyboards.emplace_back(gui::keyboard);
+  gui::keyboard->parent = window;
   LoadState(*window, status);
   RunOnAutomatThread([&] {
     // nothing to do here - just make sure that memory allocated in main thread is synchronized to

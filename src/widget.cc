@@ -390,7 +390,7 @@ Window& Widget::FindWindow() const {
   return *window;
 }
 
-std::shared_ptr<Widget>& Widget::ForObject(Object& object, const Widget& parent) {
+std::shared_ptr<Widget> Widget::ForObject(Object& object, const Widget& parent) {
   return parent.FindWindow().widgets.For(object, parent);
 }
 

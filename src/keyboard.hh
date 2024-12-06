@@ -234,6 +234,6 @@ struct Keyboard final : Widget {
   void LogKeyUp(Key);
 };
 
-extern std::unique_ptr<gui::Keyboard> keyboard;
+extern std::shared_ptr<gui::Keyboard> keyboard;
 
 }  // namespace automat::gui

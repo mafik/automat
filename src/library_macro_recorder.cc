@@ -99,7 +99,7 @@ std::shared_ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
   return nullptr;
 }
 
-string_view MacroRecorder::Name() const { return "Macro Recorder"; }
+string_view MacroRecorder::Name() const { return "Macro Recorder"sv; }
 std::shared_ptr<Object> MacroRecorder::Clone() const {
   auto clone = std::make_shared<MacroRecorder>();
   clone->animation_state = animation_state;

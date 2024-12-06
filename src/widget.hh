@@ -154,7 +154,7 @@ struct Widget : public virtual SharedBase {
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".
-  virtual std::string_view Name() const {
+  virtual maf::StrView Name() const {
     const std::type_info& info = typeid(*this);
     return maf::CleanTypeName(info.name());
   }
@@ -300,7 +300,7 @@ struct Widget : public virtual SharedBase {
 
   Window& FindWindow() const;
 
-  static std::shared_ptr<Widget>& ForObject(Object&, const Widget& parent);
+  static std::shared_ptr<Widget> ForObject(Object&, const Widget& parent);
 };
 
 template <typename T>

@@ -5,9 +5,6 @@
 #include <include/core/SkData.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkShader.h>
-#include <include/gpu/GpuTypes.h>
-#include <include/gpu/GrDirectContext.h>
-#include <include/gpu/ganesh/SkImageGanesh.h>
 
 #include "log.hh"
 #include "math.hh"

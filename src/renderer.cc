@@ -6,6 +6,7 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkPathTypes.h>
 #include <include/core/SkPictureRecorder.h>
+#include <include/gpu/GrDirectContext.h>
 
 #include <cmath>
 

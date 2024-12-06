@@ -6,7 +6,6 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradientShader.h>
-#include <include/gpu/GrDirectContext.h>
 #include <modules/svg/include/SkSVGDOM.h>
 
 #include "animation.hh"

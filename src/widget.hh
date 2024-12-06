@@ -6,7 +6,6 @@
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkSurface.h>
-#include <include/gpu/GrDirectContext.h>
 
 #include <cmath>
 #include <functional>

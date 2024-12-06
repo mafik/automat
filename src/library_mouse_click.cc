@@ -23,10 +23,6 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkColorFilter.h>
 #include <include/core/SkImage.h>
-#include <include/core/SkSamplingOptions.h>
-#include <include/gpu/GrDirectContext.h>
-#include <include/gpu/GrRecordingContext.h>
-#include <include/gpu/ganesh/SkImageGanesh.h>
 
 #include "../build/generated/embedded.hh"
 #include "argument.hh"

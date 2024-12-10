@@ -8,8 +8,8 @@
 
 #include "../build/generated/embedded.hh"
 #include "audio.hh"
+#include "automat.hh"
 #include "random.hh"
-#include "root.hh"
 #include "textures.hh"
 #include "widget.hh"
 #include "window.hh"

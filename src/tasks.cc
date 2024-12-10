@@ -3,9 +3,10 @@
 #include "tasks.hh"
 
 #include "audio.hh"
+#include "automat.hh"
 #include "base.hh"
-#include "root.hh"
 #include "time.hh"
+
 
 using namespace maf;
 

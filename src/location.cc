@@ -18,6 +18,7 @@
 #include <cmath>
 
 #include "animation.hh"
+#include "automat.hh"
 #include "base.hh"
 #include "color.hh"
 #include "drag_action.hh"
@@ -26,10 +27,10 @@
 #include "gui_connection_widget.hh"
 #include "gui_constants.hh"
 #include "math.hh"
-#include "root.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
 #include "window.hh"
+
 
 using namespace automat::gui;
 using namespace maf;

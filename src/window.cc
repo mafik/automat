@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "animation.hh"
+#include "automat.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "font.hh"
@@ -14,7 +15,6 @@
 #include "math.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
-#include "root.hh"
 #include "touchpad.hh"
 
 using namespace maf;
@@ -555,5 +555,7 @@ void Window::Resize(Vec2 size) {
   this->size = size;
   toolbar->local_to_parent = SkM44(SkMatrix::Translate(size.x / 2, 0));
 }
+
+std::lock_guard<std::mutex> OSWindow::Lock() { return std::lock_guard(root.mutex); }
 
 }  // namespace automat::gui

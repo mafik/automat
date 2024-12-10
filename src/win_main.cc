@@ -27,7 +27,6 @@
 #include "loading_animation.hh"
 #include "persistence.hh"
 #include "renderer.hh"
-#include "root.hh"
 #include "thread_name.hh"
 #include "touchpad.hh"
 #include "vk.hh"
@@ -35,6 +34,7 @@
 #include "win_key.hh"
 #include "win_main.hh"
 #include "window.hh"
+
 
 using namespace automat;
 using namespace automat::gui;
@@ -569,15 +569,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   SetConsoleOutputCP(CP_UTF8);
   // This makes std::this_thread::sleep_until() more accurate.
   timeBeginPeriod(1);
-
-  audio::Init();
-
   SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-  SkGraphics::Init();
 
   if (!RegisterClassEx(&GetWindowClass())) {
     FATAL << "Failed to register window class.";
   }
+
+  audio::Init();
+
+  SkGraphics::Init();
 
   Status status;
   InitAutomat(status);

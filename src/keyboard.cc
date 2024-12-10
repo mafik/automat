@@ -10,7 +10,6 @@
 #include "animation.hh"
 #include "automat.hh"
 #include "font.hh"
-#include "root.hh"
 #include "window.hh"
 
 #if defined(_WIN32)
@@ -27,8 +26,8 @@
 #include <xcb/xtest.h>
 
 #include "format.hh"
-#include "linux_main.hh"
 #include "x11.hh"
+#include "xcb.hh"
 
 #endif
 
@@ -157,9 +156,9 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
           modifiers = num_lock ? (modifiers | XCB_MOD_MASK_2) : (modifiers & ~XCB_MOD_MASK_2);
           modifiers = scroll_lock ? (modifiers | XCB_MOD_MASK_5) : (modifiers & ~XCB_MOD_MASK_5);
           modifiers = level3shift ? (modifiers | XCB_MOD_MASK_3) : (modifiers & ~XCB_MOD_MASK_3);
-          auto cookie = xcb_grab_key(connection, 0, screen->root, modifiers, keycode,
+          auto cookie = xcb_grab_key(xcb::connection, 0, xcb::screen->root, modifiers, keycode,
                                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC);
-          if (auto err = xcb_request_check(connection, cookie)) {
+          if (auto err = xcb_request_check(xcb::connection, cookie)) {
             FATAL << "Failed to grab key: " << err->error_code;
           }
         }
@@ -183,10 +182,10 @@ Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
           XCB_INPUT_XI_EVENT_MASK_RAW_KEY_PRESS | XCB_INPUT_XI_EVENT_MASK_RAW_KEY_RELEASE;
     } event_mask;
 
-    xcb_void_cookie_t cookie =
-        xcb_input_xi_select_events_checked(connection, screen->root, 1, &event_mask.header);
+    xcb_void_cookie_t cookie = xcb_input_xi_select_events_checked(
+        xcb::connection, xcb::screen->root, 1, &event_mask.header);
 
-    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(xcb::connection, cookie)}) {
       ERROR << f("Couldn't select X11 events for keylogging: %d", error->error_code);
     }
 #endif  // __linux__
@@ -466,10 +465,10 @@ void SendKeyEvent(AnsiKey physical, bool down) {
   SendInput(1, &input, sizeof(INPUT));
 #endif
 #if defined(__linux__)
-  xcb_test_fake_input(connection, down ? XCB_KEY_PRESS : XCB_KEY_RELEASE,
-                      (uint8_t)x11::KeyToX11KeyCode(physical), XCB_CURRENT_TIME, screen->root, 0, 0,
-                      0);
-  xcb_flush(connection);
+  xcb_test_fake_input(xcb::connection, down ? XCB_KEY_PRESS : XCB_KEY_RELEASE,
+                      (uint8_t)x11::KeyToX11KeyCode(physical), XCB_CURRENT_TIME, xcb::screen->root,
+                      0, 0, 0);
+  xcb_flush(xcb::connection);
 #endif
 }
 
@@ -547,8 +546,9 @@ void KeyGrab::Release() {
 #else
   xcb_keycode_t keycode = (U8)x11::KeyToX11KeyCode(key);
 
-  auto cookie = xcb_ungrab_key_checked(connection, keycode, screen->root, XCB_MOD_MASK_ANY);
-  if (auto err = xcb_request_check(connection, cookie)) {
+  auto cookie =
+      xcb_ungrab_key_checked(xcb::connection, keycode, xcb::screen->root, XCB_MOD_MASK_ANY);
+  if (auto err = xcb_request_check(xcb::connection, cookie)) {
     FATAL << "Failed to ungrab key: " << err->error_code;
   }
 #endif
@@ -581,10 +581,10 @@ void Keylogging::Release() {
       uint32_t mask = 0;
     } event_mask;
 
-    xcb_void_cookie_t cookie =
-        xcb_input_xi_select_events_checked(connection, screen->root, 1, &event_mask.header);
+    xcb_void_cookie_t cookie = xcb_input_xi_select_events_checked(
+        xcb::connection, xcb::screen->root, 1, &event_mask.header);
 
-    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(xcb::connection, cookie)}) {
       ERROR << f("Couldn't release X11 event selection: %d", error->error_code);
     }
 #endif  // __linux__

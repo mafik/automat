@@ -8,7 +8,8 @@
 #include "win.hh"
 #include "win_main.hh"
 #elif defined(__linux__)
-#include "linux_main.hh"
+#include "xcb.hh"
+#include "xcb_window.hh"
 #endif
 
 #include <VkBootstrap.h>
@@ -200,11 +201,14 @@ void Surface::Init() {
   PFN_vkCreateXcbSurfaceKHR vkCreateXcbSurfaceKHR =
       (PFN_vkCreateXcbSurfaceKHR)instance.GetProc("vkCreateXcbSurfaceKHR");
 
+  auto xcb_window =
+      dynamic_cast<xcb::XCBWindow*>(automat::gui::window->os_window.get())->xcb_window;
+
   VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
       .pNext = nullptr,
       .flags = 0,
-      .connection = connection,
+      .connection = xcb::connection,
       .window = xcb_window};
 
   VkResult res = vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);

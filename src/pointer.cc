@@ -5,7 +5,7 @@
 #include <cassert>
 
 #include "action.hh"
-#include "root.hh"
+#include "automat.hh"
 #include "time.hh"
 #include "widget.hh"
 #include "window.hh"

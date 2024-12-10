@@ -13,6 +13,7 @@
 #include "keyboard.hh"
 #include "library_toolbar.hh"
 #include "math.hh"
+#include "optional.hh"
 #include "time.hh"
 #include "widget.hh"
 
@@ -23,9 +24,10 @@ constexpr float kMinZoom = 0.001f;
 constexpr time::Duration kClickTimeout = 300ms;
 constexpr float kClickRadius = 2_mm;
 
+const char kWindowName[] = "Automat";
+
 struct Keyboard;
 struct Pointer;
-struct WindowImpl;
 
 extern std::vector<Window*> windows;
 extern std::shared_ptr<Window> window;
@@ -62,9 +64,42 @@ struct WidgetStore {
   }
 };
 
+struct OSWindow {
+  Window& root;
+  int client_width;  // pixels
+  int client_height;
+  int screen_refresh_rate = 60;
+  std::unique_ptr<gui::Pointer> mouse;
+
+  virtual ~OSWindow() = default;
+
+  virtual void MainLoop() = 0;
+  virtual gui::Pointer& GetMouse() = 0;
+
+  // Converts a point in the screen pixel coordinates (origin at the top left) to window pixel
+  // coordinates (origin at the bottom left).
+  virtual Vec2 ScreenToWindowPx(Vec2 screen) = 0;
+
+  // Converts a point in the window pixel coordinates (origin at the bottom left) to screen pixel
+  // coordinates (origin at the top left).
+  virtual Vec2 WindowPxToScreen(Vec2 window) = 0;
+
+  virtual maf::Optional<Vec2> MousePositionScreenPx() = 0;
+
+  std::lock_guard<std::mutex> Lock();
+
+ protected:
+  OSWindow(Window& root) : root(root) {}
+
+  // TODO: move RequestResize & RequestMaximize here
+  // TODO: keep reference to vk::Surface and vk::Swapchain here
+};
+
 struct Window final : Widget, DropTarget {
   Window();
   ~Window();
+
+  std::unique_ptr<OSWindow> os_window;
 
   void InitToolbar();
 
@@ -167,17 +202,5 @@ struct Window final : Widget, DropTarget {
 
   std::mutex mutex;
 };
-
-// Converts a point in the screen pixel coordinates (origin at the top left) to window pixel
-// coordinates (origin at the bottom left).
-Vec2 ScreenToWindowPx(Vec2 screen);
-
-// Converts a point in the window pixel coordinates (origin at the bottom left) to screen pixel
-// coordinates (origin at the top left).
-Vec2 WindowPxToScreen(Vec2 window);
-
-// Returns the position of the main pointer in screen coordinates (pixels originating at the top
-// left).
-Vec2 GetMainPointerScreenPos();
 
 }  // namespace automat::gui

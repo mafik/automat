@@ -130,12 +130,13 @@ animation::Phase MacroRecorder::Tick(time::Timer& timer) {
       animation::ExponentialApproach(eyes_open_target, timer.d, 0.2, animation_state.eyes_open);
 
   auto local_to_window = TransformUp(*this);
-  auto main_pointer_screen = GetMainPointerScreenPos();
+  auto& window = FindWindow();
+  auto main_pointer_screen = *window.os_window->MousePositionScreenPx();
   auto top_window = dynamic_cast<gui::Window*>(&RootWidget());
 
   auto UpdateEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) -> animation::Phase {
     auto eye_window = local_to_window.mapPoint(center.sk);
-    auto eye_screen = WindowPxToScreen(eye_window);
+    auto eye_screen = window.os_window->WindowPxToScreen(eye_window);
     auto eye_delta = main_pointer_screen - eye_screen;
     auto eye_dir = Normalize(eye_delta);
     float z = local_to_window.mapRadius(kEyeRadius * 2);

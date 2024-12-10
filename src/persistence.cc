@@ -5,7 +5,7 @@
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/rapidjson.h>
 
-#include "root.hh"
+#include "automat.hh"
 #include "status.hh"
 #include "virtual_fs.hh"
 #include "window.hh"

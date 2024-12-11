@@ -6,9 +6,9 @@
 #include <windows.h>
 #pragma pop_macro("ERROR")
 
-#include "root_widget.hh"
+#include "window.hh"
 
-struct Win32Window : automat::gui::OSWindow {
+struct Win32Window : automat::gui::Window {
   HWND hwnd = 0;
   bool keylogging_enabled = false;
   bool window_active = false;
@@ -18,13 +18,15 @@ struct Win32Window : automat::gui::OSWindow {
 
   ~Win32Window();
 
-  static std::unique_ptr<automat::gui::OSWindow> Make(automat::gui::Window&, maf::Status&);
+  static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, maf::Status&);
 
   void MainLoop() override;
   automat::gui::Pointer& GetMouse() override;
   Vec2 ScreenToWindowPx(Vec2 screen) override;
   Vec2 WindowPxToScreen(Vec2 window) override;
   maf::Optional<Vec2> MousePositionScreenPx() override;
+  void RequestResize(Vec2 size) override;
+  void RequestMaximize(bool horizontal, bool vertical) override;
 
   // Windows-specific functions
 
@@ -32,5 +34,5 @@ struct Win32Window : automat::gui::OSWindow {
   void RegisterRawInput(bool keylogging = false);
 
  private:
-  Win32Window(automat::gui::Window& root);
+  Win32Window(automat::gui::RootWidget& root);
 };

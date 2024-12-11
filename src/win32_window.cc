@@ -21,7 +21,7 @@ using namespace std;
 
 map<HWND, Win32Window*> hwnd_to_window;
 
-Win32Window::Win32Window(automat::gui::Window& root) : automat::gui::OSWindow(root) {}
+Win32Window::Win32Window(automat::gui::RootWidget& root) : automat::gui::Window(root) {}
 
 Win32Window::~Win32Window() {
   if (hwnd) {
@@ -55,10 +55,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       if (root_widget) {
         auto size_px = Vec2(window.client_width, window.client_height);
         auto size_m = size_px / win32::caps.px_per_meter;
-        root_widget->Resize(size_m);
+        root_widget->Resized(size_m);
         bool is_maximized = wParam == SIZE_MAXIMIZED;
-        root_widget->maximized_horizontally = is_maximized;
-        root_widget->maximized_vertically = is_maximized;
+        root_widget->Maximized(is_maximized, is_maximized);
       }
       break;
     }
@@ -220,8 +219,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       break;
     case WM_HOTKEY: {
       int id = wParam;  // discard the upper 32 bits
-                        // lParam carries the modifiers (first 16 bits) and then the keycode
-      std::lock_guard<std::mutex> lock(window->mutex);
+      // lParam carries the modifiers (first 16 bits) and then the keycode
+      auto lock = window.Lock();
       automat::gui::OnHotKeyDown(id);
       break;
     }
@@ -321,16 +320,16 @@ static WNDCLASSEX& GetWindowClass() {
   return wcex;
 }
 
-unique_ptr<OSWindow> Win32Window::Make(Window& root, Status& status) {
+unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
   if (!RegisterClassEx(&GetWindowClass())) {
     AppendErrorMessage(status) += "Failed to register window class.";
     return nullptr;
   }
   // Save the window size and position - those values may be overwritten by WndProc when the window
   // is created.
-  auto desired_size = window->size;
-  Vec2 desired_pos = Vec2(window->output_device_x, window->output_device_y);
-  bool maximized = window->maximized_horizontally || window->maximized_vertically;
+  auto desired_size = root.size;
+  Vec2 desired_pos = Vec2(root.output_device_x, root.output_device_y);
+  bool maximized = root.maximized_horizontally || root.maximized_vertically;
   auto window = std::unique_ptr<Win32Window>(new Win32Window(root));
   window->hwnd =
       CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowName, kWindowName, WS_OVERLAPPEDWINDOW, 0, 0,
@@ -341,34 +340,6 @@ unique_ptr<OSWindow> Win32Window::Make(Window& root, Status& status) {
   }
   hwnd_to_window[window->hwnd] = window.get();
   root_widget->DisplayPixelDensity(win32::caps.px_per_meter);
-
-  window->RequestResize = [&, window = window.get()](Vec2 new_size) {
-    int w = roundf(new_size.x * caps.px_per_meter);
-    int h = roundf(new_size.y * caps.px_per_meter);
-
-    // If the window is maximized and requested size is different, un-maximize it first.
-    if (w == window->client_width && h == window->client_height) {
-      return;
-    }
-    if (IsMaximized(window->hwnd)) {
-      ShowWindow(window->hwnd, SW_RESTORE);
-    }
-
-    // Account for window border when calling SetWindowPos
-    RECT client_rect, window_rect;
-    GetClientRect(window->hwnd, &client_rect);
-    GetWindowRect(window->hwnd, &window_rect);
-    float vertical_frame_adjustment = (window_rect.bottom - window_rect.top) - client_rect.bottom;
-    float horizontal_frame_adjustment = (window_rect.right - window_rect.left) - client_rect.right;
-    h += vertical_frame_adjustment;
-    w += horizontal_frame_adjustment;
-    SetWindowPos(window->hwnd, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
-  };
-  root_widget->RequestMaximize = [&](bool horiz, bool vert) {
-    if (horiz || vert) {
-      ShowWindow(window->hwnd, SW_MAXIMIZE);
-    }
-  };
 
   // Restore the position of the client area.
   if (!maximized && !isnan(desired_pos.x) && !isnan(desired_pos.y)) {
@@ -393,7 +364,7 @@ unique_ptr<OSWindow> Win32Window::Make(Window& root, Status& status) {
   }
 
   if (!maximized) {
-    root_widget->RequestResize(desired_size);
+    root.Resized(desired_size);
   }
 
   window->RegisterRawInput();
@@ -472,4 +443,35 @@ void Win32Window::RegisterRawInput(bool keylogging) {
     ERROR << "Failed to register raw input device";
   }
   keylogging_enabled = keylogging;
+}
+
+void Win32Window::RequestResize(Vec2 new_size) {
+  int w = roundf(new_size.x * caps.px_per_meter);
+  int h = roundf(new_size.y * caps.px_per_meter);
+
+  // If the window is maximized and requested size is different, un-maximize it first.
+  if (w == client_width && h == client_height) {
+    return;
+  }
+  if (IsMaximized(hwnd)) {
+    ShowWindow(hwnd, SW_RESTORE);
+  }
+
+  // Account for window border when calling SetWindowPos
+  RECT client_rect, window_rect;
+  GetClientRect(hwnd, &client_rect);
+  GetWindowRect(hwnd, &window_rect);
+  float vertical_frame_adjustment = (window_rect.bottom - window_rect.top) - client_rect.bottom;
+  float horizontal_frame_adjustment = (window_rect.right - window_rect.left) - client_rect.right;
+  h += vertical_frame_adjustment;
+  w += horizontal_frame_adjustment;
+  SetWindowPos(hwnd, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
+  root.Resized(new_size);
+}
+
+void Win32Window::RequestMaximize(bool horiz, bool vert) {
+  if (horiz || vert) {
+    ShowWindow(hwnd, SW_MAXIMIZE);
+  }
+  root.Maximized(horiz, vert);
 }

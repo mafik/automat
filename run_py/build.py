@@ -254,8 +254,8 @@ if platform == 'win32':
     base.link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
     debug.link_args += ['-Wl,/debug']
 else:
-    base.link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none']
-    release.link_args += ['-Wl,--strip-all', '-Wl,-z,relro', '-Wl,-z,now']
+    base.link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none', '-Wl,-z,relro', '-Wl,-z,now']
+    release.link_args += ['-Wl,--strip-all']
 
 
 if 'g++' in compiler and 'clang' not in compiler:

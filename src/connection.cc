@@ -4,7 +4,7 @@
 
 #include "gui_connection_widget.hh"
 #include "location.hh"
-#include "window.hh"
+#include "root_widget.hh"
 
 using namespace automat::gui;
 
@@ -25,9 +25,9 @@ Connection::~Connection() {
       break;
     }
   }
-  if (window) {
-    for (int i = 0; i < window->connection_widgets.size(); ++i) {
-      auto& widget = *window->connection_widgets[i];
+  if (root_widget) {
+    for (int i = 0; i < root_widget->connection_widgets.size(); ++i) {
+      auto& widget = *root_widget->connection_widgets[i];
       if (&widget.from == &from && &widget.arg == &argument) {
         widget.WakeAnimation();
       }

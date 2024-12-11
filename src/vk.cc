@@ -2,16 +2,6 @@
 // SPDX-License-Identifier: MIT
 #include "vk.hh"
 
-#include <include/gpu/GrTypes.h>
-
-#if defined(_WIN32)
-#include "win32.hh"
-#include "win32_window.hh"
-#elif defined(__linux__)
-#include "xcb.hh"
-#include "xcb_window.hh"
-#endif
-
 #include <VkBootstrap.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkColorType.h>
@@ -19,6 +9,7 @@
 #include <include/gpu/GrBackendSemaphore.h>
 #include <include/gpu/GrBackendSurface.h>
 #include <include/gpu/GrDirectContext.h>
+#include <include/gpu/GrTypes.h>
 #include <include/gpu/MutableTextureState.h>
 #include <include/gpu/ganesh/SkSurfaceGanesh.h>
 #include <include/gpu/ganesh/vk/GrVkBackendSemaphore.h>
@@ -31,6 +22,16 @@
 #include <src/gpu/ganesh/GrDirectContextPriv.h>
 #include <src/gpu/ganesh/vk/GrVkUtil.h>
 #include <vulkan/vulkan.h>
+
+#include "root_widget.hh"
+
+#if defined(_WIN32)
+#include "win32.hh"
+#include "win32_window.hh"
+#elif defined(__linux__)
+#include "xcb.hh"
+#include "xcb_window.hh"
+#endif
 
 #pragma comment(lib, "vk-bootstrap")
 
@@ -180,7 +181,7 @@ void Surface::Init() {
   PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR =
       (PFN_vkCreateWin32SurfaceKHR)instance.GetProc("vkCreateWin32SurfaceKHR");
 
-  auto win32_window = dynamic_cast<Win32Window*>(automat::gui::window->os_window.get());
+  auto win32_window = dynamic_cast<Win32Window*>(automat::gui::root_widget->window.get());
 
   VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
@@ -206,7 +207,7 @@ void Surface::Init() {
       (PFN_vkCreateXcbSurfaceKHR)instance.GetProc("vkCreateXcbSurfaceKHR");
 
   auto xcb_window =
-      dynamic_cast<xcb::XCBWindow*>(automat::gui::window->os_window.get())->xcb_window;
+      dynamic_cast<xcb::XCBWindow*>(automat::gui::root_widget->window.get())->xcb_window;
 
   VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,

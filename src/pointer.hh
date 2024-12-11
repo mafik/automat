@@ -20,7 +20,7 @@ namespace automat::gui {
 struct Keyboard;
 struct PointerImpl;
 struct Widget;
-struct Window;
+struct RootWidget;
 
 struct PointerMoveCallback {
   maf::Vec<Pointer*> pointers;
@@ -31,7 +31,7 @@ struct PointerMoveCallback {
 };
 
 struct Pointer final {
-  Pointer(Window&, Vec2 position);
+  Pointer(RootWidget&, Vec2 position);
   ~Pointer();
   void Move(Vec2 position);
   void Wheel(float delta);
@@ -58,7 +58,7 @@ struct Pointer final {
 
   maf::Str ToStr() const;
 
-  Window& window;
+  RootWidget& root_widget;
   // The main keyboard associated with this pointer device. May be null!
   Keyboard* keyboard;
 

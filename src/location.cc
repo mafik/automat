@@ -27,9 +27,9 @@
 #include "gui_connection_widget.hh"
 #include "gui_constants.hh"
 #include "math.hh"
+#include "root_widget.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
-#include "window.hh"
 
 
 using namespace automat::gui;
@@ -185,8 +185,8 @@ animation::Phase Location::Tick(time::Timer& timer) {
   }
   {
     float target_elevation = 0;
-    for (auto* window : windows) {
-      for (auto* pointer : window->pointers) {
+    for (auto* root_widget : root_widgets) {
+      for (auto* pointer : root_widget->pointers) {
         if (auto& action = pointer->action) {
           if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
             if (drag_action->location.get() == this) {
@@ -295,8 +295,8 @@ void Location::Draw(SkCanvas& canvas) const {
 
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
   // We don't have backlinks to connection widgets so we have to iterate over all connection widgets
-  // in window and check if they're connected to this location.
-  for (auto& w : gui::window->connection_widgets) {
+  // in root_widget and check if they're connected to this location.
+  for (auto& w : gui::root_widget->connection_widgets) {
     if (&w->from == this) {  // updates all outgoing connection widgets
       if (moved && !value_changed) {
         w->FromMoved();
@@ -390,10 +390,10 @@ Location::~Location() {
     other->error_observers.erase(this);
   }
   CancelScheduledAt(*this);
-  if (window) {
-    for (int i = 0; i < window->connection_widgets.size(); ++i) {
-      if (&window->connection_widgets[i]->from == this) {
-        window->connection_widgets.erase(window->connection_widgets.begin() + i);
+  if (root_widget) {
+    for (int i = 0; i < root_widget->connection_widgets.size(); ++i) {
+      if (&root_widget->connection_widgets[i]->from == this) {
+        root_widget->connection_widgets.erase(root_widget->connection_widgets.begin() + i);
         --i;
       }
     }
@@ -443,8 +443,8 @@ void Location::PreDraw(SkCanvas& canvas) const {
   canvas.concat(object_widget->local_to_parent);
 
   auto rect = shape.getBounds();
-  auto window = dynamic_cast<gui::Window*>(&RootWidget());
-  auto window_size_px = window->size * window->display_pixels_per_meter;
+  auto& root_widget = FindRootWidget();
+  auto window_size_px = root_widget.size * root_widget.display_pixels_per_meter;
   float s = canvas.getTotalMatrix().getScaleX();
   float min_elevation = 1_mm;
   SkPoint3 z_plane_params = {0, 0, (min_elevation + anim.elevation * 8_mm) * s};

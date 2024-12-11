@@ -24,9 +24,10 @@
 #include "global_resources.hh"
 #include "log.hh"
 #include "renderer.hh"
+#include "root_widget.hh"
 #include "time.hh"
 #include "units.hh"
-#include "window.hh"
+
 
 using namespace automat;
 using namespace maf;
@@ -407,15 +408,8 @@ void Widget::ForgetParents() {
   }
 }
 
-Window& Widget::FindWindow() const {
-  auto& root = RootWidget();
-  auto* window = dynamic_cast<struct Window*>(&root);
-  assert(window);
-  return *window;
-}
-
 std::shared_ptr<Widget> Widget::ForObject(Object& object, const Widget& parent) {
-  return parent.FindWindow().widgets.For(object, parent);
+  return parent.FindRootWidget().widgets.For(object, parent);
 }
 
 void Widget::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
@@ -443,4 +437,13 @@ Vec2AndDir Widget::ArgStart(const Argument& arg) {
   };
 }
 
+RootWidget& Widget::FindRootWidget() const {
+  Widget* w = const_cast<Widget*>(this);
+  while (w->parent.get()) {
+    w = w->parent.get();
+  }
+  auto* root = dynamic_cast<struct RootWidget*>(w);
+  assert(root);
+  return *root;
+}
 }  // namespace automat::gui

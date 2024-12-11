@@ -8,12 +8,12 @@
 namespace automat {
 
 namespace gui {
-struct Window;
+struct RootWidget;
 }  // namespace gui
 
 maf::Path StatePath();
 
-void SaveState(gui::Window&, maf::Status&);
-void LoadState(gui::Window&, maf::Status&);
+void SaveState(gui::RootWidget&, maf::Status&);
+void LoadState(gui::RootWidget&, maf::Status&);
 
 }  // namespace automat

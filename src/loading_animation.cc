@@ -9,7 +9,7 @@
 #include <src/core/SkRuntimeEffectPriv.h>
 
 #include "log.hh"
-#include "window.hh"
+#include "root_widget.hh"
 
 namespace automat {
 
@@ -58,8 +58,8 @@ void HypnoRect::PrePaint(SkCanvas& canvas) {
     return;
   }
 
-  int client_width = gui::window->os_window->client_width;
-  int client_height = gui::window->os_window->client_height;
+  int client_width = gui::root_widget->window->client_width;
+  int client_height = gui::root_widget->window->client_height;
 
   shader_builder->uniform("resolution") = SkV2(client_width, client_height);
   paint.setShader(shader_builder->makeShader());

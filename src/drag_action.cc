@@ -11,7 +11,7 @@
 #include "gui_connection_widget.hh"
 #include "math.hh"
 #include "pointer.hh"
-#include "window.hh"
+#include "root_widget.hh"
 
 using namespace maf;
 using namespace automat::gui;
@@ -26,7 +26,7 @@ static Object* DraggedObject(DragLocationAction& a) { return a.location->object.
 
 void DragLocationAction::Begin() {
   last_position = current_position = pointer.PositionWithinRootMachine();
-  widget->local_to_parent = SkM44(window->CanvasToWindow());
+  widget->local_to_parent = SkM44(root_widget->CanvasToWindow());
   Update();
 }
 
@@ -51,7 +51,7 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
 }
 
 static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
-  return FindDropTarget(a, a.pointer.window);
+  return FindDropTarget(a, a.pointer.root_widget);
 }
 
 void DragLocationAction::Update() {
@@ -93,13 +93,13 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
     : Action(pointer),
       location(std::move(location_arg)),
       widget(std::make_shared<DragLocationWidget>(*this)) {
-  widget->parent = pointer.window.SharedPtr();
-  pointer.window.drag_action_count++;
+  widget->parent = pointer.root_widget.SharedPtr();
+  pointer.root_widget.drag_action_count++;
   location->parent = widget;
   widget->FixParents();
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
-  for (auto& connection_widget : gui::window->connection_widgets) {
+  for (auto& connection_widget : gui::root_widget->connection_widgets) {
     if (&connection_widget->from == location.get()) {
       connection_widget->animation_state.radar_alpha_target = 1;
     } else {
@@ -114,8 +114,8 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
 }
 
 DragLocationAction::~DragLocationAction() {
-  pointer.window.drag_action_count--;
-  for (auto& connection_widget : gui::window->connection_widgets) {
+  pointer.root_widget.drag_action_count--;
+  for (auto& connection_widget : gui::root_widget->connection_widgets) {
     connection_widget->animation_state.radar_alpha_target = 0;
   }
   if (location) {

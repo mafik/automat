@@ -27,7 +27,7 @@ namespace automat::gui {
 
 struct CaretOwner;
 struct Keyboard;
-struct Window;
+struct RootWidget;
 struct Widget;
 struct Pointer;
 
@@ -173,7 +173,7 @@ struct KeyboardAnimation {
 };
 
 struct Keyboard final : Widget {
-  Window& window;
+  RootWidget& root_widget;
 
   // Each keyboard may be associated with a pointer. This is the global OS pointer that may actually
   // aggregate multiple physical devices. If necessary, this should be switched to a collection of
@@ -191,7 +191,7 @@ struct Keyboard final : Widget {
   std::vector<std::unique_ptr<Keylogging>> keyloggings;
   std::unique_ptr<Action> actions[static_cast<size_t>(AnsiKey::Count)];
 
-  Keyboard(Window&);
+  Keyboard(RootWidget&);
 
   // Called by a CaretOwner that wants to start receiving keyboard input.
   Caret& RequestCaret(CaretOwner&, const std::shared_ptr<Widget>& widget, Vec2 position);

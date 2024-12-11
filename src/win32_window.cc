@@ -7,11 +7,11 @@
 #include "automat.hh"
 #include "hid.hh"
 #include "log.hh"
+#include "root_widget.hh"
 #include "status.hh"
 #include "touchpad.hh"
 #include "win32.hh"
 #include "win_key.hh"
-#include "window.hh"
 
 using namespace automat;
 using namespace automat::gui;
@@ -35,7 +35,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
   if (window_it == hwnd_to_window.end()) {
     return DefWindowProc(hWnd, uMsg, wParam, lParam);
   }
-  Win32Window& os_window = *window_it->second;
+  Win32Window& window = *window_it->second;
 
   // TODO: Move this into Win32Window
   static unsigned char key_state[256] = {};
@@ -49,43 +49,43 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
   }
   switch (uMsg) {
     case WM_SIZE: {
-      auto lock = os_window.Lock();
-      os_window.client_width = LOWORD(lParam);
-      os_window.client_height = HIWORD(lParam);
-      if (window) {
-        auto size_px = Vec2(os_window.client_width, os_window.client_height);
+      auto lock = window.Lock();
+      window.client_width = LOWORD(lParam);
+      window.client_height = HIWORD(lParam);
+      if (root_widget) {
+        auto size_px = Vec2(window.client_width, window.client_height);
         auto size_m = size_px / win32::caps.px_per_meter;
-        window->Resize(size_m);
+        root_widget->Resize(size_m);
         bool is_maximized = wParam == SIZE_MAXIMIZED;
-        window->maximized_horizontally = is_maximized;
-        window->maximized_vertically = is_maximized;
+        root_widget->maximized_horizontally = is_maximized;
+        root_widget->maximized_vertically = is_maximized;
       }
       break;
     }
     case WM_MOVE: {
-      auto lock = os_window.Lock();
-      os_window.client_x = LOWORD(lParam);
-      os_window.client_y = HIWORD(lParam);
-      if (window) {
-        float left = std::max<float>(os_window.client_x / win32::caps.px_per_meter, 0.f);
-        float right = std::min<float>(
-            (os_window.client_x + os_window.client_width - win32::caps.screen_width_px) /
-                win32::caps.px_per_meter,
-            -0.f);
+      auto lock = window.Lock();
+      window.client_x = LOWORD(lParam);
+      window.client_y = HIWORD(lParam);
+      if (root_widget) {
+        float left = std::max<float>(window.client_x / win32::caps.px_per_meter, 0.f);
+        float right =
+            std::min<float>((window.client_x + window.client_width - win32::caps.screen_width_px) /
+                                win32::caps.px_per_meter,
+                            -0.f);
         if (left < fabsf(right)) {
-          window->output_device_x = left;
+          root_widget->output_device_x = left;
         } else {
-          window->output_device_x = right;
+          root_widget->output_device_x = right;
         }
-        float top = std::max<float>(os_window.client_y / win32::caps.px_per_meter, 0.f);
+        float top = std::max<float>(window.client_y / win32::caps.px_per_meter, 0.f);
         float bottom = std::min<float>(
-            (os_window.client_y + os_window.client_height - win32::caps.screen_height_px) /
+            (window.client_y + window.client_height - win32::caps.screen_height_px) /
                 win32::caps.px_per_meter,
             -0.f);
         if (top < fabsf(bottom)) {
-          window->output_device_y = top;
+          root_widget->output_device_y = top;
         } else {
-          window->output_device_y = bottom;
+          root_widget->output_device_y = bottom;
         }
       }
       break;
@@ -96,8 +96,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       if (LOWORD(lParam) == HTCLIENT) {
         gui::Pointer::IconType icon;
         {
-          std::lock_guard<std::mutex> lock(window->mutex);
-          icon = os_window.GetMouse().Icon();
+          auto lock = window.Lock();
+          icon = window.GetMouse().Icon();
         }
         switch (icon) {
           case gui::Pointer::kIconArrow:
@@ -119,17 +119,17 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       break;
     }
     case WM_DPICHANGED: {
-      auto lock = os_window.Lock();
+      auto lock = window.Lock();
       win32::caps = win32::DisplayCaps::Query();
-      os_window.root.DisplayPixelDensity(win32::caps.px_per_meter);
+      window.root.DisplayPixelDensity(win32::caps.px_per_meter);
       RECT* const size_hint = (RECT*)lParam;
       SetWindowPos(hWnd, NULL, size_hint->left, size_hint->top, size_hint->right - size_hint->left,
                    size_hint->bottom - size_hint->top, SWP_NOZORDER | SWP_NOACTIVATE);
       break;
     }
     case WM_ACTIVATEAPP: {
-      auto lock = os_window.Lock();
-      os_window.window_active = wParam != WA_INACTIVE;
+      auto lock = window.Lock();
+      window.window_active = wParam != WA_INACTIVE;
       return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
     case WM_INPUT: {
@@ -180,12 +180,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                                               (uint16_t*)utf16_buffer.data(), utf16_len);
             key.text = std::string(utf8_buffer.data(), utf8_len);
           }
-          auto lock = os_window.Lock();
+          auto lock = window.Lock();
           if (gui::keyboard) {
-            if (os_window.keylogging_enabled) {
+            if (window.keylogging_enabled) {
               gui::keyboard->LogKeyDown(key);
             }
-            if (os_window.window_active) {
+            if (window.window_active) {
               gui::keyboard->KeyDown(key);
             }
           }
@@ -198,12 +198,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           key_state[0x11] = 0;
         }
         key.ctrl = IsCtrlDown();
-        auto lock = os_window.Lock();
+        auto lock = window.Lock();
         if (gui::keyboard) {
-          if (os_window.keylogging_enabled) {
+          if (window.keylogging_enabled) {
             gui::keyboard->LogKeyUp(key);
           }
-          if (os_window.window_active) {
+          if (window.window_active) {
             gui::keyboard->KeyUp(key);
           }
         }
@@ -226,37 +226,37 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       break;
     }
     case WM_LBUTTONDOWN: {
-      auto lock = os_window.Lock();
-      os_window.GetMouse().ButtonDown(gui::PointerButton::Left);
+      auto lock = window.Lock();
+      window.GetMouse().ButtonDown(gui::PointerButton::Left);
       break;
     }
     case WM_LBUTTONUP: {
-      auto lock = os_window.Lock();
-      os_window.GetMouse().ButtonUp(gui::PointerButton::Left);
+      auto lock = window.Lock();
+      window.GetMouse().ButtonUp(gui::PointerButton::Left);
       break;
     }
     case WM_MBUTTONDOWN: {
-      auto lock = os_window.Lock();
-      os_window.GetMouse().ButtonDown(gui::PointerButton::Middle);
+      auto lock = window.Lock();
+      window.GetMouse().ButtonDown(gui::PointerButton::Middle);
       break;
     }
     case WM_MBUTTONUP: {
-      auto lock = os_window.Lock();
-      os_window.GetMouse().ButtonUp(gui::PointerButton::Middle);
+      auto lock = window.Lock();
+      window.GetMouse().ButtonUp(gui::PointerButton::Middle);
       break;
     }
     case WM_MOUSEMOVE: {
       int16_t x = lParam & 0xFFFF;
       int16_t y = (lParam >> 16) & 0xFFFF;
-      os_window.mouse_position.x = x + os_window.client_x;
-      os_window.mouse_position.y = y + os_window.client_y;
-      auto lock = os_window.Lock();
-      os_window.GetMouse().Move(os_window.ScreenToWindowPx(os_window.mouse_position));
+      window.mouse_position.x = x + window.client_x;
+      window.mouse_position.y = y + window.client_y;
+      auto lock = window.Lock();
+      window.GetMouse().Move(window.ScreenToWindowPx(window.mouse_position));
       break;
     }
     case WM_MOUSELEAVE: {
-      auto lock = os_window.Lock();
-      os_window.mouse.reset();
+      auto lock = window.Lock();
+      window.mouse.reset();
       break;
     }
     case WM_MOUSEWHEEL: {
@@ -265,8 +265,8 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       int16_t delta = GET_WHEEL_DELTA_WPARAM(wParam);
       int16_t keys = GET_KEYSTATE_WPARAM(wParam);
       if (!touchpad::ShouldIgnoreScrollEvents()) {
-        auto lock = os_window.Lock();
-        os_window.GetMouse().Wheel(delta / 120.0);
+        auto lock = window.Lock();
+        window.GetMouse().Wheel(delta / 120.0);
       }
       break;
     }
@@ -331,42 +331,42 @@ unique_ptr<OSWindow> Win32Window::Make(Window& root, Status& status) {
   auto desired_size = window->size;
   Vec2 desired_pos = Vec2(window->output_device_x, window->output_device_y);
   bool maximized = window->maximized_horizontally || window->maximized_vertically;
-  auto os_window = std::unique_ptr<Win32Window>(new Win32Window(root));
-  os_window->hwnd =
+  auto window = std::unique_ptr<Win32Window>(new Win32Window(root));
+  window->hwnd =
       CreateWindowEx(WS_EX_OVERLAPPEDWINDOW, kWindowName, kWindowName, WS_OVERLAPPEDWINDOW, 0, 0,
                      CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, GetInstance(), nullptr);
-  if (!os_window->hwnd) {
+  if (!window->hwnd) {
     AppendErrorMessage(status) += "Failed to create main window.";
     return nullptr;
   }
-  hwnd_to_window[os_window->hwnd] = os_window.get();
-  window->DisplayPixelDensity(win32::caps.px_per_meter);
+  hwnd_to_window[window->hwnd] = window.get();
+  root_widget->DisplayPixelDensity(win32::caps.px_per_meter);
 
-  window->RequestResize = [&, os_window = os_window.get()](Vec2 new_size) {
+  window->RequestResize = [&, window = window.get()](Vec2 new_size) {
     int w = roundf(new_size.x * caps.px_per_meter);
     int h = roundf(new_size.y * caps.px_per_meter);
 
     // If the window is maximized and requested size is different, un-maximize it first.
-    if (w == os_window->client_width && h == os_window->client_height) {
+    if (w == window->client_width && h == window->client_height) {
       return;
     }
-    if (IsMaximized(os_window->hwnd)) {
-      ShowWindow(os_window->hwnd, SW_RESTORE);
+    if (IsMaximized(window->hwnd)) {
+      ShowWindow(window->hwnd, SW_RESTORE);
     }
 
     // Account for window border when calling SetWindowPos
     RECT client_rect, window_rect;
-    GetClientRect(os_window->hwnd, &client_rect);
-    GetWindowRect(os_window->hwnd, &window_rect);
+    GetClientRect(window->hwnd, &client_rect);
+    GetWindowRect(window->hwnd, &window_rect);
     float vertical_frame_adjustment = (window_rect.bottom - window_rect.top) - client_rect.bottom;
     float horizontal_frame_adjustment = (window_rect.right - window_rect.left) - client_rect.right;
     h += vertical_frame_adjustment;
     w += horizontal_frame_adjustment;
-    SetWindowPos(os_window->hwnd, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
+    SetWindowPos(window->hwnd, nullptr, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
   };
-  window->RequestMaximize = [&](bool horiz, bool vert) {
+  root_widget->RequestMaximize = [&](bool horiz, bool vert) {
     if (horiz || vert) {
-      ShowWindow(os_window->hwnd, SW_MAXIMIZE);
+      ShowWindow(window->hwnd, SW_MAXIMIZE);
     }
   };
 
@@ -386,18 +386,18 @@ unique_ptr<OSWindow> Win32Window::Make(Window& root, Status& status) {
       client_y = caps.screen_top_px + roundf(desired_pos.y * caps.px_per_meter);
     }
     POINT zero = {0, 0};
-    ClientToScreen(os_window->hwnd, &zero);
+    ClientToScreen(window->hwnd, &zero);
     int delta_x = client_x - zero.x;
     int delta_y = client_y - zero.y;
-    SetWindowPos(os_window->hwnd, nullptr, delta_x, delta_y, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+    SetWindowPos(window->hwnd, nullptr, delta_x, delta_y, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
   }
 
   if (!maximized) {
-    window->RequestResize(desired_size);
+    root_widget->RequestResize(desired_size);
   }
 
-  os_window->RegisterRawInput();
-  return os_window;
+  window->RegisterRawInput();
+  return window;
 }
 
 void Win32Window::MainLoop() {
@@ -431,7 +431,7 @@ void Win32Window::PostToMainLoop(function<void()> f) {
 
 gui::Pointer& Win32Window::GetMouse() {
   if (!mouse) {
-    mouse = std::make_unique<gui::Pointer>(*window, ScreenToWindowPx(mouse_position));
+    mouse = std::make_unique<gui::Pointer>(*root_widget, ScreenToWindowPx(mouse_position));
     TRACKMOUSEEVENT track_mouse_event = {
         .cbSize = sizeof(TRACKMOUSEEVENT),
         .dwFlags = TME_LEAVE,

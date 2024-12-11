@@ -6,9 +6,9 @@
 #include <rapidjson/rapidjson.h>
 
 #include "automat.hh"
+#include "root_widget.hh"
 #include "status.hh"
 #include "virtual_fs.hh"
-#include "window.hh"
 
 using namespace maf;
 
@@ -16,7 +16,7 @@ namespace automat {
 
 Path StatePath() { return Path::ExecutablePath().Parent() / "automat_state.json"; }
 
-void SaveState(gui::Window& window, Status& status) {
+void SaveState(gui::RootWidget& root_widget, Status& status) {
   // Write window_state to a temp file
   auto state_path = StatePath();
   rapidjson::StringBuffer sb;
@@ -26,7 +26,7 @@ void SaveState(gui::Window& window, Status& status) {
   writer.Key("version");
   writer.Uint(1);
   writer.Key("window");
-  window.SerializeState(writer);
+  root_widget.SerializeState(writer);
   root_machine->SerializeState(writer, "root");
 
   writer.EndObject();
@@ -35,7 +35,7 @@ void SaveState(gui::Window& window, Status& status) {
   fs::real.Write(state_path, window_state, status);
 }
 
-void LoadState(gui::Window& window, Status& status) {
+void LoadState(gui::RootWidget& root_widget, Status& status) {
   auto state_path = StatePath();
   auto contents = fs::real.Read(state_path, status);
   if (!OK(status)) {
@@ -56,7 +56,7 @@ void LoadState(gui::Window& window, Status& status) {
         AppendErrorMessage(status) += "Unsupported version: " + std::to_string(version);
       }
     } else if (key == "window") {
-      window.DeserializeState(d, status);
+      root_widget.DeserializeState(d, status);
     } else if (key == "root") {
       root_machine->DeserializeState(*root_location, d);
     }

@@ -10,7 +10,7 @@
 using namespace std::chrono_literals;
 
 namespace automat::gui {
-struct Window;
+struct RootWidget;
 }  // namespace automat::gui
 
 namespace automat::animation {

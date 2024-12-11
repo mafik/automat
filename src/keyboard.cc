@@ -10,7 +10,7 @@
 #include "animation.hh"
 #include "automat.hh"
 #include "font.hh"
-#include "window.hh"
+#include "root_widget.hh"
 
 #if defined(_WIN32)
 #include <Windows.h>
@@ -38,7 +38,7 @@ namespace automat::gui {
 
 static SkPath PointerIBeam(const Keyboard& keyboard) {
   if (keyboard.pointer) {
-    float px = 1 / keyboard.window.PxPerMeter();
+    float px = 1 / keyboard.root_widget.PxPerMeter();
     Vec2 pos = keyboard.pointer->PositionWithinRootMachine();
     SkRect bounds = SkRect::MakeXYWH(pos.x, pos.y, 0, 0);
     switch (keyboard.pointer->Icon()) {
@@ -122,7 +122,7 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
   U8 vk = KeyToVirtualKey(key);
   key_grab->cb = new KeyGrab::RegistrationCallback(key_grab.get(), std::move(cb));
 
-  auto& win32_window = dynamic_cast<Win32Window&>(*window.os_window);
+  auto& win32_window = dynamic_cast<Win32Window&>(*root_widget.window);
   win32_window.PostToMainLoop(
       [id = key_grab->id, modifiers, vk, cb = key_grab->cb, hwnd = win32_window.hwnd]() {
         bool success = RegisterHotKey(hwnd, id, modifiers, vk);
@@ -194,7 +194,7 @@ Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
     }
 #endif  // __linux__
 #ifdef _WIN32
-    auto& win32_window = dynamic_cast<Win32Window&>(*window.os_window);
+    auto& win32_window = dynamic_cast<Win32Window&>(*root_widget.window);
     win32_window.RegisterRawInput(true);
 #endif
   }
@@ -510,7 +510,7 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const std::shared_ptr<Wid
 void CaretOwner::KeyDown(Caret& caret, Key) {}
 void CaretOwner::KeyUp(Caret& caret, Key) {}
 
-Keyboard::Keyboard(Window& window) : window(window) {}
+Keyboard::Keyboard(RootWidget& root_widget) : root_widget(root_widget) {}
 
 #if defined(_WIN32)
 
@@ -542,7 +542,7 @@ void KeyGrab::Release() {
     cb->grab = nullptr;
     cb = nullptr;
   }
-  auto& win32_window = dynamic_cast<Win32Window&>(*keyboard.window.os_window);
+  auto& win32_window = dynamic_cast<Win32Window&>(*keyboard.root_widget.window);
   win32_window.PostToMainLoop([id = id, hwnd = win32_window.hwnd]() {
     bool success = UnregisterHotKey(hwnd, id);
     if (!success) {
@@ -595,7 +595,7 @@ void Keylogging::Release() {
     }
 #endif  // __linux__
 #ifdef _WIN32
-    auto& win32_window = dynamic_cast<Win32Window&>(*keyboard.window.os_window);
+    auto& win32_window = dynamic_cast<Win32Window&>(*keyboard.root_widget.window);
     win32_window.RegisterRawInput(false);
 #endif
   }

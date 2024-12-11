@@ -35,15 +35,15 @@ struct Location;
 namespace automat::gui {
 
 struct Widget;
-struct Window;
+struct RootWidget;
 
 maf::Str ToStr(std::shared_ptr<Widget> widget);
 
 using Visitor = std::function<ControlFlow(maf::Span<std::shared_ptr<Widget>>)>;
 
-// Transform from the window coordinates to the local coordinates of the widget.
+// Transform from the RootWidget coordinates to the local coordinates of the widget.
 SkMatrix TransformDown(const Widget& to);
-// Transform from the local coordinates of the widget to the window coordinates.
+// Transform from the local coordinates of the widget to the RootWidget coordinates.
 SkMatrix TransformUp(const Widget& from);
 // Transform from the local coordinates of the widget to the local coordinates of another widget.
 SkMatrix TransformBetween(const Widget& from, const Widget& to);
@@ -160,13 +160,7 @@ struct Widget : public virtual SharedBase {
     return maf::CleanTypeName(info.name());
   }
 
-  Widget& RootWidget() const {
-    Widget* root = const_cast<Widget*>(this);
-    while (root->parent.get()) {
-      root = root->parent.get();
-    }
-    return *root;
-  }
+  RootWidget& FindRootWidget() const;
 
   // Each widget needs to have a pointer to its parent.
   // Because widgets share inheritance hierarchy with Objects (and objects must use shared_ptr), the
@@ -278,7 +272,7 @@ struct Widget : public virtual SharedBase {
   // Widgets share the same base class with Objects (which must be always allocated using
   // make_shared) so they also must be allocated using make_shared. This creates issues because
   // widget's keep references to their parents and those references keep them alive, even after they
-  // are no longer reachable from the root window.
+  // are no longer reachable from the RootWidget.
   //
   // In order to properly destroy a Widget we must clear all of the `parent` references from its
   // children (and we need to do this recursively). This is done by this function.
@@ -298,8 +292,6 @@ struct Widget : public virtual SharedBase {
   // Places where the connections to this widget may terminate.
   // Local (metric) coordinates.
   virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;
-
-  Window& FindWindow() const;
 
   static std::shared_ptr<Widget> ForObject(Object&, const Widget& parent);
 };

@@ -25,8 +25,9 @@ std::vector<TouchPad*> touchpads;
 #include "hidapi.h"
 #include "log.hh"
 #include "optional.hh"
+#include "root_widget.hh"
 #include "time.hh"
-#include "window.hh"
+
 
 // Description of HID protocol:
 // https://www.usb.org/sites/default/files/hid1_11.pdf
@@ -223,7 +224,7 @@ struct TouchPadImpl {
       Vec2 delta = LengthSquared(d0) < LengthSquared(d1) ? d0 : d1;
       touchpad.pan.x -= delta.x;
       touchpad.pan.y += delta.y;
-      gui::window->WakeAnimation();
+      gui::root_widget->WakeAnimation();
     } else {
       touchpad.panning = false;
       UnlockCursor();

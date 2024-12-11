@@ -15,7 +15,7 @@
 #include "font.hh"
 #include "format.hh"
 #include "gui_connection_widget.hh"
-#include "window.hh"
+#include "root_widget.hh"
 
 using namespace maf;
 
@@ -182,7 +182,7 @@ struct TextSelectAction : Action {
     if (text_field.argument.has_value()) {
       Location* location = Closest<Location>(*pointer.hover);
 
-      for (auto& connection_widget : window->connection_widgets) {
+      for (auto& connection_widget : root_widget->connection_widgets) {
         if (&connection_widget->arg == text_field.argument &&
             &connection_widget->from == location) {
           drag.emplace(pointer, *connection_widget);

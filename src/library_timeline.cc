@@ -30,12 +30,12 @@
 #include "math.hh"
 #include "number_text_field.hh"
 #include "pointer.hh"
+#include "root_widget.hh"
 #include "sincos.hh"
 #include "status.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
-#include "window.hh"
 
 using namespace automat::gui;
 using namespace std;
@@ -544,14 +544,14 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
 void NextButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
   if (auto timeline = Closest<Timeline>(*ptr.hover)) {
-    SetPosRatio(*timeline, 1, ptr.window.timer.now);
+    SetPosRatio(*timeline, 1, ptr.root_widget.timer.now);
   }
 }
 
 void PrevButton::Activate(gui::Pointer& ptr) {
   Button::Activate(ptr);
   if (Timeline* timeline = Closest<Timeline>(*ptr.hover)) {
-    SetPosRatio(*timeline, 0, ptr.window.timer.now);
+    SetPosRatio(*timeline, 0, ptr.root_widget.timer.now);
   }
 }
 
@@ -631,7 +631,7 @@ struct DragBridgeAction : Action {
   virtual void Update() {
     float x = pointer.PositionWithin(timeline).x;
     float new_bridge_x = x - press_offset_x;
-    SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x), pointer.window.timer.now);
+    SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x), pointer.root_widget.timer.now);
   }
   virtual void End() {}
 };
@@ -657,7 +657,7 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.window.timer.now);
+    OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.root_widget.timer.now);
   }
   virtual void End() {}
 };
@@ -789,7 +789,7 @@ unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger bt
           return unique_ptr<Action>(new DragTimelineAction(ptr, *this));
         }
       } else {
-        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.window.timer.now);
+        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.root_widget.timer.now);
         return unique_ptr<Action>(new DragBridgeAction(ptr, *this));
       }
     }

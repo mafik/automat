@@ -20,8 +20,9 @@
 #include "location.hh"
 #include "math.hh"
 #include "object.hh"
+#include "root_widget.hh"
 #include "widget.hh"
-#include "window.hh"
+
 
 using namespace maf;
 
@@ -507,7 +508,7 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
 }
 
 ConnectionWidget* ConnectionWidget::Find(Location& here, Argument& arg) {
-  for (auto& connection_widget : window->connection_widgets) {
+  for (auto& connection_widget : root_widget->connection_widgets) {
     if (&connection_widget->from != &here) {
       continue;
     }

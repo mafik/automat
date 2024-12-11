@@ -8,8 +8,8 @@
 #ifdef _WIN32
 #include <windows.h>
 
+#include "root_widget.hh"
 #include "win32_window.hh"
-#include "window.hh"
 
 #endif
 
@@ -29,7 +29,7 @@ LongRunning* Alert::OnRun(Location& here) {
       test_interceptor->push_back(text);
     } else {
 #ifdef _WIN32
-      auto& win32_window = dynamic_cast<Win32Window&>(*gui::window->os_window);
+      auto& win32_window = dynamic_cast<Win32Window&>(*gui::root_widget->window);
       MessageBox(win32_window.hwnd, text.data(), "Alert", MB_OK);
 #else  // not Windows
       LOG << text;

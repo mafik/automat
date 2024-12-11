@@ -7,9 +7,10 @@
 #include "base.hh"
 #include "drag_action.hh"
 #include "gui_connection_widget.hh"
+#include "root_widget.hh"
 #include "svg.hh"
 #include "widget.hh"
-#include "window.hh"
+
 
 using namespace maf;
 
@@ -108,7 +109,7 @@ void Argument::NearbyCandidates(
     Location& here, float radius,
     std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const {
   // Check the currently dragged object
-  for (auto& pointer : gui::window->pointers) {
+  for (auto& pointer : gui::root_widget->pointers) {
     if (auto* action = pointer->action.get()) {
       if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action)) {
         auto& location = *drag_location_action->location;
@@ -225,7 +226,7 @@ void LiveArgument::Attach(Location& here) {
 }
 
 void Argument::InvalidateConnectionWidgets(Location& here) const {
-  for (auto& w : gui::window->connection_widgets) {
+  for (auto& w : gui::root_widget->connection_widgets) {
     if (&w->from == &here && &w->arg == this) {  // updates all outgoing connection widgets
       w->WakeAnimation();
       if (w->state) {

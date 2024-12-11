@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <xcb/xcb.h>
+#include <xcb/xinput.h>
+
 #include "window.hh"
 
 namespace xcb {
@@ -13,7 +16,7 @@ struct VerticalScroll {
   double last_value;
 };
 
-struct XCBWindow : automat::gui::OSWindow {
+struct XCBWindow : automat::gui::Window {
   xcb_window_t xcb_window = 0;
 
   std::optional<VerticalScroll> vertical_scroll;
@@ -30,10 +33,10 @@ struct XCBWindow : automat::gui::OSWindow {
   maf::Optional<Vec2> MousePositionScreenPx() override;
   void RequestResize(Vec2 new_size) override;
   void RequestMaximize(bool horizontally, bool vertically) override;
-  static std::unique_ptr<automat::gui::OSWindow> Make(automat::gui::Window&, maf::Status&);
+  static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, maf::Status&);
 
  protected:
-  XCBWindow(automat::gui::Window& root) : automat::gui::OSWindow(root) {}
+  XCBWindow(automat::gui::RootWidget& root) : automat::gui::Window(root) {}
 };
 
 }  // namespace xcb

@@ -6,7 +6,7 @@
 #include <windows.h>
 #pragma pop_macro("ERROR")
 
-#include "window.hh"
+#include "root_widget.hh"
 
 struct Win32Window : automat::gui::OSWindow {
   HWND hwnd = 0;

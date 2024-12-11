@@ -6,9 +6,10 @@
 
 #include "action.hh"
 #include "automat.hh"
+#include "root_widget.hh"
 #include "time.hh"
 #include "widget.hh"
-#include "window.hh"
+
 
 using namespace maf;
 using namespace std;
@@ -30,14 +31,17 @@ void PointerMoveCallback::StopWatching(Pointer& p) {
   p.move_callbacks.Erase(this);
 }
 
-Pointer::Pointer(Window& window, Vec2 position)
-    : window(window), pointer_position(position), button_down_position(), button_down_time() {
-  window.pointers.push_back(this);
-  assert(!window.keyboards.empty());
-  if (window.keyboards.empty()) {
+Pointer::Pointer(RootWidget& root_widget, Vec2 position)
+    : root_widget(root_widget),
+      pointer_position(position),
+      button_down_position(),
+      button_down_time() {
+  root_widget.pointers.push_back(this);
+  assert(!root_widget.keyboards.empty());
+  if (root_widget.keyboards.empty()) {
     keyboard = nullptr;
   } else {
-    keyboard = window.keyboards.front().get();
+    keyboard = root_widget.keyboards.front().get();
     keyboard->pointer = this;
   }
 }
@@ -48,9 +52,9 @@ Pointer::~Pointer() {
   if (keyboard) {
     keyboard->pointer = nullptr;
   }
-  auto it = std::find(window.pointers.begin(), window.pointers.end(), this);
-  if (it != window.pointers.end()) {
-    window.pointers.erase(it);
+  auto it = std::find(root_widget.pointers.begin(), root_widget.pointers.end(), this);
+  if (it != root_widget.pointers.end()) {
+    root_widget.pointers.erase(it);
   }
 }
 
@@ -85,7 +89,7 @@ void Pointer::UpdatePath() {
 
   path.clear();
 
-  FillPath(*this, window);
+  FillPath(*this, root_widget);
 
   hover = path.empty() ? nullptr : path.back().lock();
 
@@ -123,10 +127,10 @@ void Pointer::Move(Vec2 position) {
 
   if (button_down_time[static_cast<int>(PointerButton::Middle)] > time::kZero) {
     Vec2 delta = px2canvas.mapPoint(position) - px2canvas.mapPoint(old_mouse_pos);
-    window.camera_target -= delta;
-    window.camera_pos -= delta;
-    window.inertia = false;
-    window.WakeAnimation();
+    root_widget.camera_target -= delta;
+    root_widget.camera_pos -= delta;
+    root_widget.inertia = false;
+    root_widget.WakeAnimation();
   }
   if (action) {
     action->Update();
@@ -138,19 +142,19 @@ void Pointer::Move(Vec2 position) {
 }
 void Pointer::Wheel(float delta) {
   float factor = exp(delta / 4);
-  window.zoom_target *= factor;
-  auto position_metric = TransformDown(window).mapPoint(pointer_position);
+  root_widget.zoom_target *= factor;
+  auto position_metric = TransformDown(root_widget).mapPoint(pointer_position);
   // For small changes we skip the animation to increase responsiveness.
   if (fabs(delta) < 1.0) {
-    Vec2 mouse_pre = window.WindowToCanvas().mapPoint(pointer_position);
-    window.zoom *= factor;
-    Vec2 mouse_post = window.WindowToCanvas().mapPoint(pointer_position);
+    Vec2 mouse_pre = root_widget.WindowToCanvas().mapPoint(pointer_position);
+    root_widget.zoom *= factor;
+    Vec2 mouse_post = root_widget.WindowToCanvas().mapPoint(pointer_position);
     Vec2 mouse_delta = mouse_post - mouse_pre;
-    window.camera_target -= mouse_delta;
-    window.camera_pos -= mouse_delta;
+    root_widget.camera_target -= mouse_delta;
+    root_widget.camera_pos -= mouse_delta;
   }
-  window.zoom_target = std::max(kMinZoom, window.zoom_target);
-  window.WakeAnimation();
+  root_widget.zoom_target = std::max(kMinZoom, root_widget.zoom_target);
+  root_widget.WakeAnimation();
 }
 
 void Pointer::ButtonDown(PointerButton btn) {
@@ -188,10 +192,10 @@ void Pointer::ButtonUp(PointerButton btn) {
     float delta_m = Length(delta);
     if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
       Vec2 canvas_pos = TransformDown(*root_machine).mapPoint(pointer_position);
-      window.camera_target = canvas_pos;
-      window.zoom_target = 1;
-      window.inertia = false;
-      window.WakeAnimation();
+      root_widget.camera_target = canvas_pos;
+      root_widget.zoom_target = 1;
+      root_widget.inertia = false;
+      root_widget.WakeAnimation();
     }
   }
   button_down_position[static_cast<int>(btn)] = Vec2(0, 0);

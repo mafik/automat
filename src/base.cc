@@ -20,9 +20,10 @@
 #include "embedded.hh"
 #include "gui_connection_widget.hh"
 #include "location.hh"
+#include "root_widget.hh"
 #include "tasks.hh"
 #include "timer_thread.hh"
-#include "window.hh"
+
 
 using namespace std;
 using namespace maf;
@@ -213,8 +214,8 @@ void Machine::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
 
 SkPath Machine::Shape() const {
   SkPath rect = SkPath::Rect(Rect::MakeWH(100_cm, 100_cm));
-  auto& window = FindWindow();
-  auto trash = window.TrashShape();
+  auto& root = FindRootWidget();
+  auto trash = root.TrashShape();
   SkPath rect_minus_trash;
   Op(rect, trash, kDifference_SkPathOp, &rect_minus_trash);
   return rect_minus_trash;

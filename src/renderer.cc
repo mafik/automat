@@ -11,8 +11,9 @@
 #include <cmath>
 
 #include "font.hh"
+#include "root_widget.hh"
 #include "widget.hh"
-#include "window.hh"
+
 
 // TODO: lots of cleanups!
 //       - remove redundancy between WidgetTree & Widget & DrawCache::Entry
@@ -37,12 +38,12 @@ struct PackedFrame {
 };
 
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
-  std::lock_guard lock(window->mutex);
-  window->timer.Tick();
-  auto now = window->timer.now;
-  auto window_bounds_px =
-      SkRect::MakeWH(round(window->size.width * window->display_pixels_per_meter),
-                     round(window->size.height * window->display_pixels_per_meter));
+  std::lock_guard lock(root_widget->mutex);
+  root_widget->timer.Tick();
+  auto now = root_widget->timer.now;
+  auto root_widget_bounds_px =
+      SkRect::MakeWH(round(root_widget->size.width * root_widget->display_pixels_per_meter),
+                     round(root_widget->size.height * root_widget->display_pixels_per_meter));
 
   enum class Verdict {
     Unknown = 0,
@@ -100,7 +101,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         // Find the closest parent that can be rendered to texture.
         Widget* renderable_parent = widget->parent.get();
         while (!renderable_parent->pack_frame_texture_bounds.has_value()) {
-          // Root widget (window) can always be rendered to texture so we don't need any extra stop
+          // RootWidget can always be rendered to texture so we don't need any extra stop
           // condition here.
           renderable_parent = renderable_parent->parent.get();
         }
@@ -112,12 +113,12 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
   }
 
-  window->FixParents();
+  root_widget->FixParents();
 
   {  // Step 2 - flatten the widget tree for analysis.
     // Queue with (parent index, widget) pairs.
     vector<pair<int, std::shared_ptr<Widget>>> q;
-    q.push_back(make_pair(0, window));
+    q.push_back(make_pair(0, root_widget));
     while (!q.empty()) {
       auto [parent, widget] = std::move(q.back());
       q.pop_back();
@@ -138,11 +139,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       // UPDATE
       if (widget->wake_time != time::SteadyPoint::max()) {
         node.wants_to_draw = true;
-        auto true_d = window->timer.d;
+        auto true_d = root_widget->timer.d;
         auto fake_d = min(1.0, (now - widget->last_tick_time).count());
-        window->timer.d = fake_d;
-        auto animation_phase = widget->Tick(window->timer);
-        window->timer.d = true_d;
+        root_widget->timer.d = fake_d;
+        auto animation_phase = widget->Tick(root_widget->timer);
+        root_widget->timer.d = true_d;
         widget->last_tick_time = now;
         if (animation_phase == animation::Finished) {
           widget->wake_time = time::SteadyPoint::max();
@@ -167,13 +168,13 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         SkRect root_bounds;
         node.local_to_window.mapRect(&root_bounds, *widget->pack_frame_texture_bounds);
 
-        // Clip the `root_bounds` to the window bounds;
+        // Clip the `root_bounds` to the root widget bounds;
         if (root_bounds.width() * root_bounds.height() < 512 * 512) {
           // Render small objects without clipping
-          visible = SkRect::Intersects(root_bounds, window_bounds_px);
+          visible = SkRect::Intersects(root_bounds, root_widget_bounds_px);
         } else {
-          // This mutates the `root_bounds` - they're clipped to `window_bounds_px`!
-          visible = root_bounds.intersect(window_bounds_px);
+          // This mutates the `root_bounds` - they're clipped to `root_widget_bounds_px`!
+          visible = root_bounds.intersect(root_widget_bounds_px);
         }
 
         root_bounds.roundOut(&node.surface_bounds_root);
@@ -386,7 +387,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     widget.window_to_local = node.window_to_local;
     widget.surface_bounds_root = node.surface_bounds_root;
     SkPictureRecorder recorder;
-    SkCanvas* rec_canvas = recorder.beginRecording(window_bounds_px);
+    SkCanvas* rec_canvas = recorder.beginRecording(root_widget_bounds_px);
     rec_canvas->setMatrix(node.local_to_window);
     //////////
     // DRAW //
@@ -443,7 +444,7 @@ void RenderFrame(SkCanvas& canvas) {
   PackedFrame pack;
   PackFrameRequest request;
   {
-    std::lock_guard lock(window->mutex);
+    std::lock_guard lock(root_widget->mutex);
     request = std::move(next_frame_request);
     if constexpr (kDebugRendering && kDebugRenderEvents) {
       LOG << "Render events: " << debug_render_events;
@@ -463,23 +464,23 @@ void RenderFrame(SkCanvas& canvas) {
   }
 
   canvas.resetMatrix();
-  canvas.scale(window->display_pixels_per_meter, window->display_pixels_per_meter);
+  canvas.scale(root_widget->display_pixels_per_meter, root_widget->display_pixels_per_meter);
   canvas.save();
-  // Final widget in the frame is the root window
+  // Final widget in the frame is the RootWidget
   if (auto* widget = Widget::Find(pack.frame.back())) {
     widget->ComposeSurface(&canvas);
   }
 
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
-    std::lock_guard lock(window->mutex);
-    if (window->pointers.size() > 0) {
+    std::lock_guard lock(root_widget->mutex);
+    if (root_widget->pointers.size() > 0) {
       SkPaint red;
       red.setColor(SK_ColorRED);
       red.setAntiAlias(true);
       SkPaint orange;
       orange.setColor("#ff8000"_color);
       orange.setAntiAlias(true);
-      auto p = window->pointers[0]->pointer_position;
+      auto p = root_widget->pointers[0]->pointer_position;
       SkPath red_ring;
       red_ring.addCircle(p.x, p.y, 4_mm);
       red_ring.addCircle(p.x, p.y, 3_mm, SkPathDirection::kCCW);
@@ -498,9 +499,9 @@ void RenderFrame(SkCanvas& canvas) {
 
   auto& font = GetFont();
   canvas.save();
-  canvas.translate(0, window->size.height - 1_cm);
+  canvas.translate(0, root_widget->size.height - 1_cm);
   canvas.scale(2.7, 2.7);
-  auto fps_text = f("%.1fms", window->timer.d * 1000);
+  auto fps_text = f("%.1fms", root_widget->timer.d * 1000);
   font.DrawText(canvas, fps_text, SkPaint());
   canvas.restore();
 }

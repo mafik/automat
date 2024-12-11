@@ -207,7 +207,7 @@ struct Argument {
   // Return the position and direction of this argument in the given Widget's coordinate
   // space.
   //
-  // If the passed widget is the Window, then the returned position will use the window coordinate
+  // If the passed widget is the RootWidget, then the returned position will use the root coordinate
   // space (pixels), but it's not the only option. The widget could also be located at some
   // intermediate level so the returned position will be located within some parent object (for
   // example, a Machine).

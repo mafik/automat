@@ -26,10 +26,10 @@
 #include "persistence.hh"
 #include "prototypes.hh"
 #include "renderer.hh"
+#include "root_widget.hh"
 #include "thread_name.hh"
 #include "timer_thread.hh"
 #include "vk.hh"
-#include "window.hh"
 
 using namespace maf;
 using namespace automat::gui;
@@ -97,8 +97,8 @@ void VulkanPaint() {
     // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
     if (next_frame <= now) {
       double frame_count =
-          ceil((now - next_frame).count() * window->os_window->screen_refresh_rate);
-      next_frame += time::Duration(frame_count / window->os_window->screen_refresh_rate);
+          ceil((now - next_frame).count() * root_widget->window->screen_refresh_rate);
+      next_frame += time::Duration(frame_count / root_widget->window->screen_refresh_rate);
       constexpr bool kLogSkippedFrames = false;
       if (kLogSkippedFrames && frame_count > 1) {
         LOG << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
@@ -108,20 +108,21 @@ void VulkanPaint() {
       // With timeBeginPeriod(1) it's T + ~1ms.
       // TODO: try condition_variable instead
       std::this_thread::sleep_until(next_frame);
-      next_frame += time::Duration(1.0 / window->os_window->screen_refresh_rate);
+      next_frame += time::Duration(1.0 / root_widget->window->screen_refresh_rate);
     }
   }
 
   {
-    auto lock = window->os_window->Lock();
-    Vec2 size_px = Vec2(window->os_window->client_width, window->os_window->client_height);
-    if (window->os_window->vk_size != size_px) {
-      if (auto err = vk::Resize(window->os_window->client_width, window->os_window->client_height);
+    auto lock = root_widget->window->Lock();
+    Vec2 size_px = Vec2(root_widget->window->client_width, root_widget->window->client_height);
+    if (root_widget->window->vk_size != size_px) {
+      if (auto err =
+              vk::Resize(root_widget->window->client_width, root_widget->window->client_height);
           !err.empty()) {
-        FATAL << "Couldn't set window size to " << window->os_window->client_width << "x"
-              << window->os_window->client_height << ": " << err;
+        FATAL << "Couldn't set window size to " << root_widget->window->client_width << "x"
+              << root_widget->window->client_height << ": " << err;
       }
-      window->os_window->vk_size = size_px;
+      root_widget->window->vk_size = size_px;
     }
   }
 
@@ -224,22 +225,22 @@ int Main() {
     LOG << "Prototype: " << proto->Name();
   }
 
-  window = std::make_shared<Window>();
-  window->InitToolbar();
-  gui::keyboard = std::make_shared<gui::Keyboard>(*window);
-  window->keyboards.emplace_back(gui::keyboard);
-  gui::keyboard->parent = window;
+  root_widget = std::make_shared<RootWidget>();
+  root_widget->InitToolbar();
+  gui::keyboard = std::make_shared<gui::Keyboard>(*root_widget);
+  root_widget->keyboards.emplace_back(gui::keyboard);
+  gui::keyboard->parent = root_widget;
 
   root_location = std::make_shared<Location>();
   root_location->name = "Root location";
-  root_location->parent = gui::window;
+  root_location->parent = gui::root_widget;
   root_machine = root_location->Create<Machine>();
-  root_machine->parent = gui::window;
+  root_machine->parent = gui::root_widget;
   root_machine->name = "Root machine";
   StartTimeThread(stop_source.get_token());
 
   Status status;
-  LoadState(*window, status);
+  LoadState(*root_widget, status);
   if (!OK(status)) {
     ERROR << "Couldn't load saved state: " << status;
   }
@@ -252,9 +253,9 @@ int Main() {
   anim.LoadingCompleted();
 
 #ifdef __linux__
-  window->os_window = xcb::XCBWindow::Make(*window, status);
+  root_widget->window = xcb::XCBWindow::Make(*root_widget, status);
 #else
-  window->os_window = Win32Window::Make(*window, status);
+  root_widget->window = Win32Window::Make(*root_widget, status);
 #endif
   if (!OK(status)) {
     FATAL << "Couldn't create main window: " << status;
@@ -270,7 +271,7 @@ int Main() {
 
   render_thread = std::jthread(RenderThread, stop_source.get_token());
 
-  window->os_window->MainLoop();
+  root_widget->window->MainLoop();
 
   // Shutdown
   StopAutomat(status);
@@ -281,16 +282,16 @@ int Main() {
     render_thread.join();
   }
 
-  SaveState(*window, status);
+  SaveState(*root_widget, status);
   if (!OK(status)) {
     ERROR << "Failed to save state: " << status;
   }
 
-  window->ForgetParents();
+  root_widget->ForgetParents();
   root_machine->locations.clear();
 
   keyboard.reset();
-  window.reset();
+  root_widget.reset();
   root_machine.reset();
   root_location.reset();
 

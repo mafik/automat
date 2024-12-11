@@ -6,6 +6,7 @@
 
 #include "automat.hh"
 #include "fn.hh"
+#include "root_widget.hh"
 #include "vec.hh"
 #include "x11.hh"
 #include "xcb.hh"
@@ -98,8 +99,8 @@ float fp1616_to_float(xcb_input_fp1616_t fp) { return fp / 65536.0f; }
 double fp3232_to_double(xcb_input_fp3232_t fp) { return fp.integral + fp.frac / 4294967296.0; }
 
 // TODO: rename
-static void ScanDevices(XCBWindow& os_window) {
-  os_window.vertical_scroll.reset();
+static void ScanDevices(XCBWindow& window) {
+  window.vertical_scroll.reset();
   if (auto reply = xcb::input_xi_query_device(XCB_INPUT_DEVICE_ALL_MASTER)) {
     int n_devices = xcb_input_xi_query_device_infos_length(reply.get());
     auto it_device = xcb_input_xi_query_device_infos_iterator(reply.get());
@@ -125,8 +126,8 @@ static void ScanDevices(XCBWindow& os_window) {
                                           : "horizontal";
             std::string increment = std::to_string(fp3232_to_double(scroll_class->increment));
             if (scroll_class->scroll_type == XCB_INPUT_SCROLL_TYPE_VERTICAL) {
-              os_window.vertical_scroll.emplace(deviceid, scroll_class->number,
-                                                fp3232_to_double(scroll_class->increment), 0.0);
+              window.vertical_scroll.emplace(deviceid, scroll_class->number,
+                                             fp3232_to_double(scroll_class->increment), 0.0);
             }
             break;
           }
@@ -134,10 +135,10 @@ static void ScanDevices(XCBWindow& os_window) {
         xcb_input_device_class_next(&it_classes);
       }
 
-      if (os_window.vertical_scroll && os_window.vertical_scroll->device_id == deviceid) {
+      if (window.vertical_scroll && window.vertical_scroll->device_id == deviceid) {
         xcb_input_valuator_class_t* valuator =
-            valuator_by_number[os_window.vertical_scroll->valuator_number];
-        os_window.vertical_scroll->last_value = fp3232_to_double(valuator->value);
+            valuator_by_number[window.vertical_scroll->valuator_number];
+        window.vertical_scroll->last_value = fp3232_to_double(valuator->value);
       }
 
       xcb_input_xi_device_info_next(&it_device);
@@ -145,41 +146,41 @@ static void ScanDevices(XCBWindow& os_window) {
   }
 }
 
-std::unique_ptr<automat::gui::OSWindow> XCBWindow::Make(automat::gui::Window& root,
-                                                        maf::Status& status) {
+std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& root,
+                                                      maf::Status& status) {
   xcb::Connect(status);
   if (!OK(status)) {
     return nullptr;
   }
-  auto os_window = std::unique_ptr<XCBWindow>(new XCBWindow(root));
+  auto window = std::unique_ptr<XCBWindow>(new XCBWindow(root));
   float pixels_per_meter = DisplayPxPerMeter();
-  os_window->client_width = root.size.x * pixels_per_meter;
-  os_window->client_height = root.size.y * pixels_per_meter;
+  window->client_width = root.size.x * pixels_per_meter;
+  window->client_height = root.size.y * pixels_per_meter;
 
-  os_window->xcb_window = xcb_generate_id(connection);
+  window->xcb_window = xcb_generate_id(connection);
   uint32_t value_mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
   uint32_t value_list[] = {screen->white_pixel, XCB_EVENT_MASK_EXPOSURE |
                                                     XCB_EVENT_MASK_STRUCTURE_NOTIFY |
                                                     XCB_EVENT_MASK_PROPERTY_CHANGE};
 
-  xcb_create_window(connection, XCB_COPY_FROM_PARENT, os_window->xcb_window, screen->root, 0, 0,
-                    os_window->client_width, os_window->client_height, 0,
-                    XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, value_mask, value_list);
+  xcb_create_window(connection, XCB_COPY_FROM_PARENT, window->xcb_window, screen->root, 0, 0,
+                    window->client_width, window->client_height, 0, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+                    screen->root_visual, value_mask, value_list);
 
-  WM_STATE wm_state = WM_STATE::Get(os_window->xcb_window);
+  WM_STATE wm_state = WM_STATE::Get(window->xcb_window);
   wm_state.MAXIMIZED_HORZ = root.maximized_horizontally;
   wm_state.MAXIMIZED_VERT = root.maximized_vertically;
   wm_state.ABOVE = root.always_on_top;
-  wm_state.Set(os_window->xcb_window);
+  wm_state.Set(window->xcb_window);
 
-  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, os_window->xcb_window, XCB_ATOM_WM_NAME,
+  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, XCB_ATOM_WM_NAME,
                       XCB_ATOM_STRING, 8, sizeof(automat::gui::kWindowName),
                       automat::gui::kWindowName);
 
-  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, os_window->xcb_window, atom::WM_PROTOCOLS,
-                      4, 32, 1, &atom::WM_DELETE_WINDOW);
+  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, atom::WM_PROTOCOLS, 4,
+                      32, 1, &atom::WM_DELETE_WINDOW);
 
-  xcb_map_window(connection, os_window->xcb_window);
+  xcb_map_window(connection, window->xcb_window);
 
   if (!isnan(root.output_device_x) && !root.maximized_horizontally) {
     uint32_t x = 0;
@@ -187,9 +188,9 @@ std::unique_ptr<automat::gui::OSWindow> XCBWindow::Make(automat::gui::Window& ro
       x = roundf(root.output_device_x * DisplayPxPerMeter());
     } else {
       x = roundf(screen->width_in_pixels + root.output_device_x * DisplayPxPerMeter() -
-                 os_window->client_width);
+                 window->client_width);
     }
-    xcb_configure_window(connection, os_window->xcb_window, XCB_CONFIG_WINDOW_X, &x);
+    xcb_configure_window(connection, window->xcb_window, XCB_CONFIG_WINDOW_X, &x);
   }
   if (!isnan(root.output_device_y) && !root.maximized_vertically) {
     uint32_t y = 0;
@@ -197,9 +198,9 @@ std::unique_ptr<automat::gui::OSWindow> XCBWindow::Make(automat::gui::Window& ro
       y = roundf(root.output_device_y * DisplayPxPerMeter());
     } else {
       y = roundf(screen->height_in_pixels + root.output_device_y * DisplayPxPerMeter() -
-                 os_window->client_height);
+                 window->client_height);
     }
-    xcb_configure_window(connection, os_window->xcb_window, XCB_CONFIG_WINDOW_Y, &y);
+    xcb_configure_window(connection, window->xcb_window, XCB_CONFIG_WINDOW_Y, &y);
   }
 
   xcb_flush(connection);
@@ -231,17 +232,17 @@ std::unique_ptr<automat::gui::OSWindow> XCBWindow::Make(automat::gui::Window& ro
   } event_mask;
 
   xcb_void_cookie_t cookie =
-      xcb_input_xi_select_events_checked(connection, os_window->xcb_window, 1, &event_mask.header);
+      xcb_input_xi_select_events_checked(connection, window->xcb_window, 1, &event_mask.header);
   if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
     AppendErrorMessage(status) += f("Failed to select events: %d", error->error_code);
     return nullptr;
   }
 
-  ScanDevices(*os_window);
+  ScanDevices(*window);
 
   root.DisplayPixelDensity(DisplayPxPerMeter());
 
-  return os_window;
+  return window;
 }
 
 void XCBWindow::RequestResize(Vec2 new_size) {
@@ -325,7 +326,7 @@ void XCBWindow::MainLoop() {
           // ev-count is the number of expose events that are still in the queue.
           // We only want to do a full redraw on the last expose event.
           if (ev->count == 0) {
-            automat::gui::window->WakeAnimation();
+            automat::gui::root_widget->WakeAnimation();
           }
           break;
         }

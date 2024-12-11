@@ -10,9 +10,9 @@
 #include "audio.hh"
 #include "automat.hh"
 #include "random.hh"
+#include "root_widget.hh"
 #include "textures.hh"
 #include "widget.hh"
-#include "window.hh"
 
 using namespace std::literals;
 using namespace maf;
@@ -66,9 +66,9 @@ animation::Phase Toolbar::Tick(time::Timer& timer) {
 
   float width = CalculateWidth();
   int new_hovered_button = -1;
-  auto window = dynamic_cast<gui::Window*>(&RootWidget());
+  auto& root_widget = FindRootWidget();
 
-  for (auto* pointer : window->pointers) {
+  for (auto* pointer : root_widget.pointers) {
     if (pointer->action) {
       continue;
     }

@@ -16,6 +16,8 @@ extern std::shared_ptr<Machine> root_machine;
 extern std::jthread automat_thread;
 extern std::atomic_bool automat_thread_finished;
 
+extern std::thread::id main_thread_id;
+
 void StopAutomat(maf::Status&);
 
 void EnqueueTask(Task* task);

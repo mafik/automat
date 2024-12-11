@@ -26,7 +26,6 @@ std::vector<TouchPad*> touchpads;
 #include "log.hh"
 #include "optional.hh"
 #include "time.hh"
-#include "win_main.hh"
 #include "window.hh"
 
 // Description of HID protocol:
@@ -313,11 +312,11 @@ struct TouchPadImpl {
 
 std::list<TouchPadImpl> touchpad_impls;
 
-RAWINPUTDEVICE GetRAWINPUTDEVICE() {
+RAWINPUTDEVICE GetRAWINPUTDEVICE(HWND hwnd) {
   return {.usUsagePage = hid::UsagePage_Digitizer,
           .usUsage = hid::Usage_Digitizer_TouchPad,
           .dwFlags = RIDEV_DEVNOTIFY,  // Request WM_INPUT_DEVICE_CHANGE
-          .hwndTarget = main_window};
+          .hwndTarget = hwnd};
 }
 
 std::string GetRawInputDeviceName(HANDLE device) {
@@ -342,7 +341,7 @@ std::string GetRawInputDeviceName(HANDLE device) {
   return UTF16ToUTF8(device_name_utf16);
 }
 
-std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
+std::optional<LRESULT> ProcessEvent(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
   switch (msg) {
     case WM_ACTIVATE: {
       uint16_t active = LOWORD(wParam);
@@ -364,7 +363,7 @@ std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
       UINT ret = GetRawInputData(hRawInput, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
       if (ret == (UINT)-1) {  // error when retrieving size of buffer
         ERROR << "Error when retrieving size of buffer. Error code: " << GetLastError();
-        return DefWindowProc(main_window, msg, wParam, lParam);
+        return DefWindowProc(hwnd, msg, wParam, lParam);
       }
       alignas(8) uint8_t raw_input_buffer[size];
       RAWINPUT* raw_input = (RAWINPUT*)raw_input_buffer;
@@ -372,7 +371,7 @@ std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
           GetRawInputData(hRawInput, RID_INPUT, raw_input_buffer, &size, sizeof(RAWINPUTHEADER));
       if (size != size_copied) {  // error when retrieving buffer
         ERROR << "Error when retrieving buffer. Size=" << size << " Error code: " << GetLastError();
-        return DefWindowProc(main_window, msg, wParam, lParam);
+        return DefWindowProc(hwnd, msg, wParam, lParam);
       }
       // Let other devices handle the input. Touchpad is only interested in RIM_TYPEHID.
       if (raw_input->header.dwType != RIM_TYPEHID) {
@@ -410,7 +409,7 @@ std::optional<LRESULT> ProcessEvent(UINT msg, WPARAM wParam, LPARAM lParam) {
         touchpad->ProcessInputReport(ptr, hid.dwSizeHid);
         ptr += hid.dwSizeHid;
       }
-      return DefWindowProc(main_window, msg, wParam, lParam);
+      return DefWindowProc(hwnd, msg, wParam, lParam);
     }
     default:
       return std::nullopt;

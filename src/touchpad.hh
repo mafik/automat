@@ -58,9 +58,9 @@ extern std::mutex touchpads_mutex;
 extern std::vector<TouchPad*> touchpads;
 
 #if defined(_WIN32)
-RAWINPUTDEVICE GetRAWINPUTDEVICE();
+RAWINPUTDEVICE GetRAWINPUTDEVICE(HWND);
 
-maf::Optional<maf::I64> ProcessEvent(uint32_t msg, uint64_t wParam, int64_t lParam);
+maf::Optional<maf::I64> ProcessEvent(HWND hwnd, uint32_t msg, uint64_t wParam, int64_t lParam);
 #endif  // _WIN32
 
 }  // namespace automat::touchpad

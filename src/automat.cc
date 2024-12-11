@@ -4,7 +4,12 @@
 
 #pragma comment(lib, "skia")
 
-#include "automat.hh"
+#if defined(_WIN32)
+#include "win32.hh"
+#include "win32_window.hh"
+#elif defined(__linux__)
+#include "xcb_window.hh"
+#endif
 
 #include <include/core/SkGraphics.h>
 
@@ -12,6 +17,7 @@
 #include <condition_variable>
 #include <thread>
 
+#include "automat.hh"
 #include "backtrace.hh"
 #include "concurrentqueue.hh"
 #include "global_resources.hh"
@@ -24,10 +30,6 @@
 #include "timer_thread.hh"
 #include "vk.hh"
 #include "window.hh"
-
-#if defined(__linux__)
-#include "xcb_window.hh"
-#endif
 
 using namespace maf;
 using namespace automat::gui;
@@ -109,6 +111,20 @@ void VulkanPaint() {
       next_frame += time::Duration(1.0 / window->os_window->screen_refresh_rate);
     }
   }
+
+  {
+    auto lock = window->os_window->Lock();
+    Vec2 size_px = Vec2(window->os_window->client_width, window->os_window->client_height);
+    if (window->os_window->vk_size != size_px) {
+      if (auto err = vk::Resize(window->os_window->client_width, window->os_window->client_height);
+          !err.empty()) {
+        FATAL << "Couldn't set window size to " << window->os_window->client_width << "x"
+              << window->os_window->client_height << ": " << err;
+      }
+      window->os_window->vk_size = size_px;
+    }
+  }
+
   SkCanvas* canvas = vk::GetBackbufferCanvas();
   if (anim) {
     anim.OnPaint(*canvas, RenderFrame);
@@ -176,19 +192,25 @@ void StopAutomat(maf::Status&) {
     std::unique_lock lk(automat_threads_mutex);
     stop_source.request_stop();
   }
+  automat_threads_cv.notify_all();
 }
 
 int Main() {
   // Process setup
-  EnableBacktraceOnSIGSEGV();
+  // TODO: fix backtraces
+  // EnableBacktraceOnSIGSEGV();
   SetThreadName("Main");
   main_thread_id = std::this_thread::get_id();
 
 #if defined(_WIN32)
-  Win32ProcessSetup();
+  win32::ProcessSetup();
 #endif  // _WIN32
 
+#if defined(_WIN32)
+  audio::Init();
+#else
   audio::Init(&argc, &argv);
+#endif
   SkGraphics::Init();
 
   auto& prototypes = Prototypes();
@@ -233,7 +255,7 @@ int Main() {
 #ifdef __linux__
   window->os_window = xcb::XCBWindow::Make(*window, status);
 #else
-  window->os_window = nullptr;  // TODO!!!
+  window->os_window = Win32Window::Make(*window, status);
 #endif
   if (!OK(status)) {
     FATAL << "Couldn't create main window: " << status;
@@ -245,25 +267,15 @@ int Main() {
   if (auto err = vk::Init(); !err.empty()) {
     FATAL << "Failed to initialize Vulkan: " << err;
   }
-  if (auto err = vk::Resize(window->os_window->client_width, window->os_window->client_height);
-      !err.empty()) {
-    FATAL << "Couldn't set initial window size to " << window->os_window->client_width << "x"
-          << window->os_window->client_height << ": " << err;
-  }
 #endif
 
   render_thread = std::jthread(RenderThread, stop_source.get_token());
 
   window->os_window->MainLoop();
-  // TODO: MAIN LOOP HERE
 
   // Shutdown
+  StopAutomat(status);
   if (automat_thread.joinable()) {
-    {
-      std::unique_lock lk(automat_threads_mutex);
-      stop_source.request_stop();
-    }
-    automat_threads_cv.notify_all();
     automat_thread.join();
   }
   if (render_thread.joinable()) {
@@ -318,7 +330,6 @@ int main() { return automat::Main(); }
 #pragma region Linux
 
 #pragma comment(lib, "freetype2")
-#pragma comment(lib, "vk-bootstrap")
 #pragma comment(lib, "xcb")
 #pragma comment(lib, "xcb-xinput")
 

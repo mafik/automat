@@ -8,7 +8,9 @@
 #ifdef _WIN32
 #include <windows.h>
 
-#include "win_main.hh"
+#include "win32_window.hh"
+#include "window.hh"
+
 #endif
 
 namespace automat {
@@ -19,14 +21,6 @@ DEFINE_PROTO(Alert);
 
 Argument Alert::message_arg("message", Argument::kRequiresObject);
 
-#ifdef _WIN32
-static void ShowAlert(string_view message) {
-  MessageBox(main_window, message.data(), "Alert", MB_OK);
-}
-#else  // not Windows
-static void ShowAlert(string_view message) { LOG << message; }
-#endif
-
 LongRunning* Alert::OnRun(Location& here) {
   auto message = message_arg.GetObject(here);
   if (message.ok) {
@@ -34,7 +28,12 @@ LongRunning* Alert::OnRun(Location& here) {
     if (test_interceptor) {
       test_interceptor->push_back(text);
     } else {
-      ShowAlert(text);
+#ifdef _WIN32
+      auto& win32_window = dynamic_cast<Win32Window&>(*gui::window->os_window);
+      MessageBox(win32_window.hwnd, text.data(), "Alert", MB_OK);
+#else  // not Windows
+      LOG << text;
+#endif
     }
   }
   return nullptr;

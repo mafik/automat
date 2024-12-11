@@ -205,11 +205,6 @@ void Init(int* argc, char*** argv) {
   });
 }
 
-void Stop() {
-  running = false;
-  loop_thread.join();
-}
-
 #endif
 #pragma endregion
 
@@ -337,7 +332,7 @@ void Init() {
       goto error;
     }
 
-    while (true) {
+    while (running) {
       char* buffer = GetBuffer(render_client, n_frames, status);
       if (!OK(status)) {
         ERROR << status;
@@ -368,6 +363,11 @@ void Init() {
 
 #endif
 #pragma endregion
+
+void Stop() {
+  running = false;
+  loop_thread.join();
+}
 
 struct WAV_Header {
   char riff[4];

@@ -5,8 +5,8 @@
 #include <include/gpu/GrTypes.h>
 
 #if defined(_WIN32)
-#include "win.hh"
-#include "win_main.hh"
+#include "win32.hh"
+#include "win32_window.hh"
 #elif defined(__linux__)
 #include "xcb.hh"
 #include "xcb_window.hh"
@@ -31,6 +31,8 @@
 #include <src/gpu/ganesh/GrDirectContextPriv.h>
 #include <src/gpu/ganesh/vk/GrVkUtil.h>
 #include <vulkan/vulkan.h>
+
+#pragma comment(lib, "vk-bootstrap")
 
 namespace automat::vk {
 
@@ -178,12 +180,14 @@ void Surface::Init() {
   PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR =
       (PFN_vkCreateWin32SurfaceKHR)instance.GetProc("vkCreateWin32SurfaceKHR");
 
+  auto win32_window = dynamic_cast<Win32Window*>(automat::gui::window->os_window.get());
+
   VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
       .pNext = nullptr,
       .flags = 0,
-      .hinstance = GetInstance(),
-      .hwnd = main_window};
+      .hinstance = win32::GetInstance(),
+      .hwnd = win32_window->hwnd};
 
   VkResult res = vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
   if (VK_SUCCESS != res) {

@@ -66,6 +66,7 @@ struct WidgetStore {
 
 struct OSWindow {
   Window& root;
+  Vec2 vk_size = Vec2(-1, -1);
   int client_width;  // pixels
   int client_height;
   int screen_refresh_rate = 60;
@@ -74,6 +75,7 @@ struct OSWindow {
   virtual ~OSWindow() = default;
 
   virtual void MainLoop() = 0;
+
   virtual gui::Pointer& GetMouse() = 0;
 
   // Converts a point in the screen pixel coordinates (origin at the top left) to window pixel
@@ -175,6 +177,7 @@ struct Window final : Widget, DropTarget {
   float output_device_y =
       NAN;  // distance from the top edge of the screen (or bottom when negative)
 
+  // TODO: Remove (use os_window.px_per_meter instead)
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
   std::shared_ptr<Toolbar> toolbar;
   std::vector<std::shared_ptr<gui::ConnectionWidget>> connection_widgets;

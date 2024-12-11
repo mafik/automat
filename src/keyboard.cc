@@ -15,9 +15,10 @@
 #if defined(_WIN32)
 #include <Windows.h>
 
-#include "win.hh"
+#include "win32.hh"
+#include "win32_window.hh"
 #include "win_key.hh"
-#include "win_main.hh"
+
 #endif
 
 #if defined(__linux__)
@@ -120,17 +121,20 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
   }
   U8 vk = KeyToVirtualKey(key);
   key_grab->cb = new KeyGrab::RegistrationCallback(key_grab.get(), std::move(cb));
-  RunOnWindowsThread([id = key_grab->id, modifiers, vk, cb = key_grab->cb]() {
-    bool success = RegisterHotKey(main_window, id, modifiers, vk);
-    if (!success) {
-      AppendErrorMessage(cb->status) = "Failed to register hotkey: " + GetLastErrorStr();
-    }
-    if (cb->grab) {
-      cb->grab->cb = nullptr;
-      cb->fn(cb->status);
-    }
-    delete cb;
-  });
+
+  auto& win32_window = dynamic_cast<Win32Window&>(*window.os_window);
+  win32_window.PostToMainLoop(
+      [id = key_grab->id, modifiers, vk, cb = key_grab->cb, hwnd = win32_window.hwnd]() {
+        bool success = RegisterHotKey(hwnd, id, modifiers, vk);
+        if (!success) {
+          AppendErrorMessage(cb->status) = "Failed to register hotkey: " + win32::GetLastErrorStr();
+        }
+        if (cb->grab) {
+          cb->grab->cb = nullptr;
+          cb->fn(cb->status);
+        }
+        delete cb;
+      });
 #else
   U16 modifiers = 0;
   if (ctrl) {
@@ -190,7 +194,8 @@ Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
     }
 #endif  // __linux__
 #ifdef _WIN32
-    RegisterRawInput(true);
+    auto& win32_window = dynamic_cast<Win32Window&>(*window.os_window);
+    win32_window.RegisterRawInput(true);
 #endif
   }
   return *keyloggings.emplace_back(new Keylogging(*this, keylogger));
@@ -537,10 +542,11 @@ void KeyGrab::Release() {
     cb->grab = nullptr;
     cb = nullptr;
   }
-  RunOnWindowsThread([id = id]() {
-    bool success = UnregisterHotKey(main_window, id);
+  auto& win32_window = dynamic_cast<Win32Window&>(*keyboard.window.os_window);
+  win32_window.PostToMainLoop([id = id, hwnd = win32_window.hwnd]() {
+    bool success = UnregisterHotKey(hwnd, id);
     if (!success) {
-      ERROR << GetLastErrorStr();
+      ERROR << win32::GetLastErrorStr();
     }
   });
 #else
@@ -589,7 +595,8 @@ void Keylogging::Release() {
     }
 #endif  // __linux__
 #ifdef _WIN32
-    RegisterRawInput(false);
+    auto& win32_window = dynamic_cast<Win32Window&>(*keyboard.window.os_window);
+    win32_window.RegisterRawInput(false);
 #endif
   }
   keyboard.keyloggings.erase(it);  // After this line `this` is deleted!

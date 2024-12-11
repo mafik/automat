@@ -169,7 +169,13 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
   GrFlushInfo flush_info = {
       .fFinishedProc =
           [](GrGpuFinishedContext context) {
-            Widget* w = static_cast<Widget*>(context);
+            auto weak_ptr = static_cast<std::weak_ptr<Widget>*>(context);
+            auto shared_ptr = weak_ptr->lock();
+            delete weak_ptr;
+            Widget* w = shared_ptr.get();
+            if (w == nullptr) {
+              return;
+            }
             auto id = w->ID();
             float gpu_time;
             if (w->gpu_started == time::SteadyPoint::min()) {
@@ -194,10 +200,16 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
               debug_render_events += ") ";
             }
           },
-      .fFinishedContext = this,
+      .fFinishedContext = new std::weak_ptr(WeakPtr()),
       .fSubmittedProc =
           [](GrGpuSubmittedContext context, bool success) {
-            Widget* w = static_cast<Widget*>(context);
+            auto weak_ptr = static_cast<std::weak_ptr<Widget>*>(context);
+            auto shared_ptr = weak_ptr->lock();
+            delete weak_ptr;
+            Widget* w = shared_ptr.get();
+            if (w == nullptr) {
+              return;
+            }
             if (w->gpu_started == time::SteadyPoint::min()) {
               w->gpu_started = time::SteadyNow();
             } else if (w->gpu_started == time::SteadyPoint::max()) {
@@ -213,7 +225,7 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
                     << success;
             }
           },
-      .fSubmittedContext = this,
+      .fSubmittedContext = new std::weak_ptr(WeakPtr()),
   };
 
   if constexpr (kDebugRendering && kDebugRenderEvents) {

@@ -222,11 +222,6 @@ int Main() {
 
   window = std::make_shared<Window>();
   window->InitToolbar();
-  window->RequestResize = [&](Vec2 new_size) { window->Resize(new_size); };
-  window->RequestMaximize = [&](bool horizontally, bool vertically) {
-    window->maximized_horizontally = horizontally;
-    window->maximized_vertically = vertically;
-  };
   gui::keyboard = std::make_shared<gui::Keyboard>(*window);
   window->keyboards.emplace_back(gui::keyboard);
   gui::keyboard->parent = window;

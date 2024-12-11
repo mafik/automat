@@ -7,7 +7,6 @@
 #include "automat.hh"
 #include "fn.hh"
 #include "vec.hh"
-#include "vk.hh"
 #include "x11.hh"
 #include "xcb.hh"
 
@@ -83,6 +82,15 @@ struct WM_STATE {
     if (DEMANDS_ATTENTION) atoms.push_back(_NET_WM_STATE_DEMANDS_ATTENTION);
     xcb_change_property(connection, XCB_PROP_MODE_REPLACE, xcb_window, _NET_WM_STATE, XCB_ATOM_ATOM,
                         32, atoms.size(), atoms.data());
+  }
+
+  Str ToStr() const {
+    return f(
+        "WM_STATE: MODAL=%b STICKY=%b MAXIMIZED_VERT=%b MAXIMIZED_HORZ=%b SHADED=%b "
+        "SKIP_TASKBAR=%b SKIP_PAGER=%b HIDDEN=%b FULLSCREEN=%b ABOVE=%b BELOW=%b "
+        "DEMANDS_ATTENTION=%b",
+        MODAL, STICKY, MAXIMIZED_VERT, MAXIMIZED_HORZ, SHADED, SKIP_TASKBAR, SKIP_PAGER, HIDDEN,
+        FULLSCREEN, ABOVE, BELOW, DEMANDS_ATTENTION);
   }
 };
 
@@ -173,7 +181,7 @@ std::unique_ptr<automat::gui::OSWindow> XCBWindow::Make(automat::gui::Window& ro
 
   xcb_map_window(connection, os_window->xcb_window);
 
-  if (!isnan(root.output_device_x)) {
+  if (!isnan(root.output_device_x) && !root.maximized_horizontally) {
     uint32_t x = 0;
     if (root.output_device_x >= 0) {
       x = roundf(root.output_device_x * DisplayPxPerMeter());
@@ -183,7 +191,7 @@ std::unique_ptr<automat::gui::OSWindow> XCBWindow::Make(automat::gui::Window& ro
     }
     xcb_configure_window(connection, os_window->xcb_window, XCB_CONFIG_WINDOW_X, &x);
   }
-  if (!isnan(root.output_device_y)) {
+  if (!isnan(root.output_device_y) && !root.maximized_vertically) {
     uint32_t y = 0;
     if (root.output_device_y >= 0) {
       y = roundf(root.output_device_y * DisplayPxPerMeter());
@@ -232,17 +240,26 @@ std::unique_ptr<automat::gui::OSWindow> XCBWindow::Make(automat::gui::Window& ro
   ScanDevices(*os_window);
 
   root.DisplayPixelDensity(DisplayPxPerMeter());
-  root.RequestResize = [&](Vec2 new_size) {
-    const static uint32_t values[] = {
-        static_cast<uint32_t>(new_size.x * root.display_pixels_per_meter),
-        static_cast<uint32_t>(new_size.y * root.display_pixels_per_meter)};
-    xcb_configure_window(connection, os_window->xcb_window,
-                         XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, values);
-    xcb_flush(connection);
-  };
-  root.RequestMaximize = nullptr;
 
   return os_window;
+}
+
+void XCBWindow::RequestResize(Vec2 new_size) {
+  const static uint32_t values[] = {
+      static_cast<uint32_t>(new_size.x * root.display_pixels_per_meter),
+      static_cast<uint32_t>(new_size.y * root.display_pixels_per_meter)};
+  xcb_configure_window(connection, xcb_window, XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT,
+                       values);
+  xcb_flush(connection);
+  root.Resized(new_size);
+}
+
+void XCBWindow::RequestMaximize(bool horizontally, bool vertically) {
+  WM_STATE wm_state = WM_STATE::Get(xcb_window);
+  wm_state.MAXIMIZED_HORZ = horizontally;
+  wm_state.MAXIMIZED_VERT = vertically;
+  wm_state.Set(xcb_window);
+  root.Maximized(horizontally, vertically);
 }
 
 XCBWindow::~XCBWindow() {
@@ -321,15 +338,12 @@ void XCBWindow::MainLoop() {
           break;
         }
         case XCB_CONFIGURE_NOTIFY: {
+          auto lock = Lock();
           xcb_configure_notify_event_t* ev = (xcb_configure_notify_event_t*)event;
           if (ev->width != client_width || ev->height != client_height) {
             client_width = ev->width;
             client_height = ev->height;
-
-            if (auto err = automat::vk::Resize(client_width, client_height); !err.empty()) {
-              ERROR << err;
-            }
-            root.Resize(Vec2(client_width, client_height) / DisplayPxPerMeter());
+            root.Resized(Vec2(client_width, client_height) / DisplayPxPerMeter());
           }
 
           // This event may be sent when the window is moved. However sometimes it holds the wrong

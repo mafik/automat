@@ -402,14 +402,22 @@ void Window::DeserializeState(Deserializer& d, Status& status) {
       }
     }
   }
-  if (new_size != size && RequestResize) {
-    RequestResize(new_size);
+  if (new_size != size) {
+    if (os_window) {
+      os_window->RequestResize(new_size);
+    } else {
+      Resized(new_size);
+    }
   }
-  if (((maximized_horizontally != new_maximized_horizontally) ||
-       (maximized_vertically != new_maximized_vertically)) &&
-      RequestMaximize) {
-    RequestMaximize(new_maximized_horizontally,
-                    new_maximized_vertically);  // always true because of the if condition
+  if ((maximized_horizontally != new_maximized_horizontally) ||
+      (maximized_vertically != new_maximized_vertically)) {
+    if (os_window) {
+      os_window->RequestMaximize(
+          new_maximized_horizontally,
+          new_maximized_vertically);  // always true because of the if condition
+    } else {
+      Maximized(new_maximized_horizontally, new_maximized_vertically);
+    }
   }
 }
 
@@ -551,7 +559,7 @@ void Window::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   }
   children.push_back(root_machine);
 }
-void Window::Resize(Vec2 size) {
+void Window::Resized(Vec2 size) {
   this->size = size;
   toolbar->local_to_parent = SkM44(SkMatrix::Translate(size.x / 2, 0));
 }

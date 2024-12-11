@@ -88,12 +88,14 @@ struct OSWindow {
 
   virtual maf::Optional<Vec2> MousePositionScreenPx() = 0;
 
+  virtual void RequestResize(Vec2 new_size) = 0;
+  virtual void RequestMaximize(bool maximize_horizontally, bool maximize_vertically) = 0;
+
   std::lock_guard<std::mutex> Lock();
 
  protected:
   OSWindow(Window& root) : root(root) {}
 
-  // TODO: move RequestResize & RequestMaximize here
   // TODO: keep reference to vk::Surface and vk::Swapchain here
 };
 
@@ -138,12 +140,17 @@ struct Window final : Widget, DropTarget {
     return m;
   }
 
-  std::function<void(Vec2 new_size)> RequestResize = nullptr;
-  std::function<void(bool maximize_horizontally, bool maximize_vertically)> RequestMaximize =
-      nullptr;
-
   // Used to tell the window that it's OS window has been resized.
-  void Resize(Vec2 size);
+  // Should call Window::Resized() if successful.
+  void Resized(Vec2 size);
+
+  // Used to tell the window that it's OS window has been maximized.
+  // Should call Window::Maximized() if successful.
+  void Maximized(bool horizontally, bool vertically) {
+    maximized_horizontally = horizontally;
+    maximized_vertically = vertically;
+  }
+
   void DisplayPixelDensity(float pixels_per_meter);
   SkPath Shape() const override {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));

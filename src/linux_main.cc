@@ -518,7 +518,7 @@ void RenderLoop() {
             if (auto err = vk::Resize(client_width, client_height); !err.empty()) {
               ERROR << err;
             }
-            window->Resize(WindowSize());
+            window->Resized(WindowSize());
           }
 
           // This event may be sent when the window is moved. However sometimes it holds the wrong

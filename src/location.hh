@@ -113,7 +113,13 @@ struct Location : public gui::Widget {
 
   template <typename T>
   std::shared_ptr<T> Create() {
-    return std::make_shared<T>();
+    auto typed = std::make_shared<T>();
+    object = typed;
+    object->Relocate(this);
+    auto object_widget = WidgetForObject();
+    object_widget->parent = this->SharedPtr();
+    FixParents();
+    return typed;
   }
 
   // Remove the objects held by this location.

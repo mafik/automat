@@ -128,7 +128,9 @@ struct Widget : public virtual SharedBase {
   mutable ComposeSurfaceDrawable compose_surface_drawable;
 
   maf::Optional<SkRect> pack_frame_texture_bounds;  // local coordinates
-  maf::Vec<Vec2> pack_frame_texture_anchors;
+  maf::Vec<Vec2> fresh_texture_anchors;
+  maf::Vec<Vec2>
+      pack_frame_texture_anchors;  // copied into `draw_texture_anchors` during `RenderToSurface`
   mutable uint32_t id = 0;
   float average_draw_millis = FP_NAN;
 

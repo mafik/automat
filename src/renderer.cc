@@ -14,7 +14,6 @@
 #include "root_widget.hh"
 #include "widget.hh"
 
-
 // TODO: lots of cleanups!
 //       - remove redundancy between WidgetTree & Widget & DrawCache::Entry
 //       - the three phases of rendering should be put in sequence (locally)
@@ -400,6 +399,40 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       pack.frame.push_back(widget.ID());
     } else {
       pack.overflow.push_back(widget.ID());
+    }
+  }
+
+  // Update fresh_texture_anchors for all widgets that will be drawn & their children.
+  // This allows ComposeSurface to properly deform the texture.
+  {
+    unordered_set<U32> updated_ids;
+    for (auto id : pack.frame) {
+      if (!updated_ids.insert(id).second) {
+        continue;
+      }
+      if (auto* widget = Widget::Find(id)) {
+        widget->fresh_texture_anchors = widget->TextureAnchors();
+        for (auto& child : widget->Children()) {
+          if (!updated_ids.insert(child->ID()).second) {
+            continue;
+          }
+          child->fresh_texture_anchors = child->TextureAnchors();
+        }
+      }
+    }
+    for (auto id : pack.overflow) {
+      if (!updated_ids.insert(id).second) {
+        continue;
+      }
+      if (auto* widget = Widget::Find(id)) {
+        widget->fresh_texture_anchors = widget->TextureAnchors();
+        for (auto& child : widget->Children()) {
+          if (!updated_ids.insert(child->ID()).second) {
+            continue;
+          }
+          child->fresh_texture_anchors = child->TextureAnchors();
+        }
+      }
     }
   }
 

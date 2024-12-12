@@ -28,7 +28,6 @@
 #include "time.hh"
 #include "units.hh"
 
-
 using namespace automat;
 using namespace maf;
 using namespace std;
@@ -276,10 +275,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
     // Alternative approach, where we map the old texture to the new bounds:
     SkRect surface_size = SkRect::MakeWH(surface->width(), surface->height());
 
-    auto anchors = TextureAnchors();
-
-    auto anchor_count = min<int>(draw_texture_anchors.size(), anchors.size());
-    anchor_count = min<int>(pack_frame_texture_anchors.size(), anchor_count);
+    auto anchor_count = min<int>(draw_texture_anchors.size(), fresh_texture_anchors.size());
 
     if (anchor_count == 2) {
       SkSamplingOptions sampling;
@@ -290,7 +286,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       builder->uniform("surfaceSize") = Rect(surface_bounds_local).Size();
       builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
       builder->uniform("anchorsLast").set(&draw_texture_anchors[0], anchor_count);
-      builder->uniform("anchorsCurr").set(&anchors[0], anchor_count);
+      builder->uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);
       builder->child("surface") = surface->makeImageSnapshot()->makeShader(sampling);
 
       auto shader = builder->makeShader();
@@ -300,9 +296,9 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       // Heuristic for finding same texture bounds (guaranteed to contain the whole widget):
       // - for every anchor move the old texture bounds by its displacement
       // - compute a union of all the moved bounds
-      Rect new_anchor_bounds = anchors[0];
+      Rect new_anchor_bounds = fresh_texture_anchors[0];
       for (int i = 0; i < anchor_count; ++i) {
-        Vec2 delta = anchors[i] - draw_texture_anchors[i];
+        Vec2 delta = fresh_texture_anchors[i] - draw_texture_anchors[i];
         Rect offset_bounds = surface_bounds_local.sk.makeOffset(delta);
         new_anchor_bounds.ExpandToInclude(offset_bounds);
       }
@@ -312,7 +308,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
         SkPaint anchor_paint;
         anchor_paint.setStyle(SkPaint::kFill_Style);
         anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-        for (auto& anchor : anchors) {
+        for (auto& anchor : fresh_texture_anchors) {
           canvas->drawCircle(anchor.sk, 1_mm, anchor_paint);
         }
       }
@@ -325,17 +321,10 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       surface_transform.postConcat(SkMatrix::RectToRect(surface_bounds_local.sk, unit));
       if (anchor_count) {
         SkMatrix anchor_mapping;
-        // Modify the current canvas by the movement of the anchors since the last PackFrame
-        // This allows us to draw the most recent texture bounds (pack_frame_texture_bounds)
-        // which cover the whole currently visible part of the widget.
-        if (anchor_mapping.setPolyToPoly(&pack_frame_texture_anchors[0].sk, &anchors[0].sk,
-                                         anchor_count)) {
-          canvas->concat(anchor_mapping);
-        }
         // Apply the inverse transform to the surface mapping - we want to get the original texture
         // position. Note that this transform uses `draw_texture_anchors` which have been saved
         // during the last RenderToSurface.
-        if (anchor_mapping.setPolyToPoly(&anchors[0].sk, &draw_texture_anchors[0].sk,
+        if (anchor_mapping.setPolyToPoly(&fresh_texture_anchors[0].sk, &draw_texture_anchors[0].sk,
                                          anchor_count)) {
           surface_transform.preConcat(anchor_mapping);
         }

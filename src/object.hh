@@ -96,9 +96,4 @@ struct Object : public virtual SharedBase {
   }
 };
 
-template <typename T>
-std::unique_ptr<Object> Create() {
-  return T::proto.Clone();
-}
-
 }  // namespace automat

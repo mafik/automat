@@ -113,7 +113,7 @@ struct Location : public gui::Widget {
 
   template <typename T>
   std::shared_ptr<T> Create() {
-    return dynamic_pointer_cast<T>(Create(*T::proto));
+    return std::make_shared<T>();
   }
 
   // Remove the objects held by this location.

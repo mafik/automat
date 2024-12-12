@@ -16,7 +16,6 @@
 #include "gui_connection_widget.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
-#include "library_macros.hh"
 #include "library_timeline.hh"
 #include "log.hh"
 #include "math.hh"
@@ -32,8 +31,6 @@ namespace automat::library {
 using namespace automat::gui;
 using namespace std;
 using namespace maf;
-
-DEFINE_PROTO(MacroRecorder);
 
 const char kMacroRecorderShapeSVG[] =
     R"(m3.78-48.4c0-.58.49-.76.7-.76.6 0 2.62.04 2.62.04 0 0 3.06-.82 14.29-.82 11.22 0 15.12.75 15.12.75 0 0 2.17.03 2.69.03.46 0 .75.41.75.62l-.02 22.69.65.77-.51.05c.93 1 3.91 5.67 3.45 6.1-.28.26-.72-.3-.91-.06-.13.21 1.77 4.6.88 5.9-.29.42-.86 0-.88.48-.37 7.53-3.59 11.03-4.34 11.19-.09-.13-.17-.35-.17-.35 0 .97-.9 2.07-1.9 2.07-1.7 0-27.1 0-28.9 0-.9 0-2.2-1.2-2.3-2.3-.15.17-.5 2.05-1.24 2.03-2.94-4.1-2.8-12.41-2.64-13.19-2.07-.62-.06-5.09.28-5.51-.44-.04-1.31.06-1.34-.49-.03-.54 1.43-3.42 3.47-5.58-.03-.14-.64-.08-.65-.3-.02-.41.86-1.08.86-1.08z)";
@@ -93,7 +90,7 @@ Argument timeline_arg = []() {
 void MacroRecorder::Args(std::function<void(Argument&)> cb) { cb(timeline_arg); }
 std::shared_ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
   if (&arg == &timeline_arg) {
-    return Timeline::proto->SharedPtr<Object>();
+    return prototypes->Find<Timeline>()->SharedPtr<Object>();
   }
   return nullptr;
 }

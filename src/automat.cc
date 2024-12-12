@@ -218,12 +218,7 @@ int Main() {
 #endif
   SkGraphics::Init();
 
-  auto& prototypes = Prototypes();
-  stable_sort(prototypes.begin(), prototypes.end(),
-              [](const auto& a, const auto& b) { return a->Name() < b->Name(); });
-  for (auto& proto : prototypes) {
-    LOG << "Prototype: " << proto->Name();
-  }
+  prototypes.emplace();
 
   root_widget = std::make_shared<RootWidget>();
   root_widget->InitToolbar();
@@ -295,16 +290,7 @@ int Main() {
   root_machine.reset();
   root_location.reset();
 
-  // TODO: Initialize (& deinitialize) prototypes in a better place.
-  for (auto& proto : Prototypes()) {
-    if (auto widget = dynamic_cast<Widget*>(proto.get())) {
-      widget->ForgetParents();
-    }
-    proto.reset();
-  }
-  Prototypes().clear();
-  Machine::proto->ForgetParents();
-  Machine::proto.reset();
+  prototypes.reset();
 
   resources::Release();
 

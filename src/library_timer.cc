@@ -20,7 +20,6 @@
 #include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
-#include "library_macros.hh"
 #include "math.hh"
 #include "number_text_field.hh"
 #include "pointer.hh"
@@ -35,8 +34,6 @@ namespace automat::library {
 using time::Duration;
 using time::SteadyClock;
 using time::SteadyPoint;
-
-DEFINE_PROTO(TimerDelay);
 
 static constexpr float kOuterRadius = 0.02;
 static constexpr SkRect kOuterOval =

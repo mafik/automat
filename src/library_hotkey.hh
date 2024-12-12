@@ -12,8 +12,6 @@
 namespace automat::library {
 
 struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
-  static HotKey* proto;
-
   gui::AnsiKey key = gui::AnsiKey::F11;
   bool ctrl = true;
   bool alt = false;

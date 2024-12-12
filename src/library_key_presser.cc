@@ -10,7 +10,6 @@
 #include "../build/generated/embedded.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
-#include "library_macros.hh"
 #include "sincos.hh"
 #include "status.hh"
 #include "svg.hh"
@@ -21,8 +20,6 @@ using namespace maf;
 using namespace std;
 
 namespace automat::library {
-
-DEFINE_PROTO(KeyPresser);
 
 constexpr static char kHandShapeSVG[] =
     "M9 19.9C7.9 20.1 7.9 19.2 8.4 18.6 7.9 17.1 5.9 16.3 5.3 14.8 3.7 11.4.7 10.2 1.1 9.3 1.2 8.9 "

@@ -42,7 +42,6 @@ struct TimerDelay : LiveObject,
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
-  static TimerDelay* proto;
   TimerDelay();
   TimerDelay(const TimerDelay&);
   string_view Name() const override;

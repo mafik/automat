@@ -19,7 +19,6 @@
 #include "argument.hh"
 #include "color.hh"
 #include "gui_button.hh"
-#include "library_macros.hh"
 #include "sincos.hh"
 #include "textures.hh"
 
@@ -27,8 +26,6 @@ using namespace maf;
 using namespace std;
 
 namespace automat::library {
-
-DEFINE_PROTO(FlipFlop);
 
 constexpr float kYingYangRadius = 1.2_cm / 2 - 1_mm;
 constexpr float kYingYangRadiusSmall = kYingYangRadius / 2;

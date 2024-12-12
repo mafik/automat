@@ -89,8 +89,6 @@ struct Timeline : LiveObject,
                   Runnable,
                   LongRunning,
                   TimerNotificationReceiver {
-  static Timeline* proto;
-
   std::shared_ptr<TimelineRunButton> run_button;
   std::shared_ptr<PrevButton> prev_button;
   std::shared_ptr<NextButton> next_button;

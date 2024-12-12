@@ -17,7 +17,6 @@
 #include "gui_constants.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
-#include "library_macros.hh"
 #include "math.hh"
 #include "text_field.hh"
 #include "widget.hh"
@@ -32,8 +31,6 @@ using namespace automat::gui;
 using namespace maf;
 
 namespace automat::library {
-
-DEFINE_PROTO(HotKey);
 
 static constexpr float kCtrlKeyWidth = kBaseKeyWidth * 1.5;
 static constexpr float kSuperKeyWidth = kCtrlKeyWidth;

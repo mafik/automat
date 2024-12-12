@@ -92,7 +92,6 @@ bool IsRunning(const T& object) {
 
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Machine : LiveObject, gui::Widget, gui::DropTarget {
-  static std::shared_ptr<Machine> proto;
   Machine();
   string name = "";
   deque<shared_ptr<Location>> locations;
@@ -111,10 +110,10 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
   // Create an instance of T and return its location.
   //
-  // The new instance is created from a prototype instance in `T::proto`.
+  // The new instance is created from a prototype instance found in `prototypes`.
   template <typename T>
   Location& Create(const string& name = "") {
-    return Create(*T::proto, name);
+    return Create(*prototypes->Find<T>(), name);
   }
 
   void SerializeState(Serializer& writer, const char* key) const override;

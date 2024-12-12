@@ -7,7 +7,6 @@
 namespace automat::library {
 
 struct Increment : Object, gui::Widget, Runnable {
-  static Increment* proto;
   static Argument target_arg;
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;

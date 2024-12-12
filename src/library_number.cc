@@ -15,15 +15,12 @@
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "gui_text.hh"
-#include "library_macros.hh"
 #include "widget.hh"
 
 using namespace automat::gui;
 using namespace maf;
 
 namespace automat::library {
-
-DEFINE_PROTO(Number);
 
 // Margin used between rows and columns of buttons
 static constexpr float kBetweenButtonsMargin = kMargin;

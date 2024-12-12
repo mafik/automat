@@ -27,8 +27,6 @@ struct MacroRecorder : LiveObject,
                        gui::Keylogger,
                        OnOff,
                        gui::PointerMoveCallback {
-  static MacroRecorder* proto;
-
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
     animation::SpringV2<Vec2> googly_right;

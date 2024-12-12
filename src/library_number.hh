@@ -26,7 +26,6 @@ struct Number : Object, Object::FallbackWidget {
   std::shared_ptr<NumberButton> backspace;
   std::shared_ptr<gui::NumberTextField> text_field;
   Number(double x = 0);
-  static Number* proto;
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
   string GetText() const override;

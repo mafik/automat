@@ -36,7 +36,7 @@ RootWidget::~RootWidget() {
 void RootWidget::InitToolbar() {
   toolbar = std::make_shared<Toolbar>();
   toolbar->parent = SharedPtr();
-  for (auto& proto : Prototypes()) {
+  for (auto& [_, proto] : prototypes->name_index) {
     toolbar->AddObjectPrototype(proto);
   }
 }

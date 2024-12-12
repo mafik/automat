@@ -3,7 +3,6 @@
 #include "library_alert.hh"
 
 #include "base.hh"
-#include "library_macros.hh"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -14,10 +13,6 @@
 #endif
 
 namespace automat {
-
-#if not defined(NDEBUG)  // temporarily disable when in release mode
-DEFINE_PROTO(Alert);
-#endif
 
 Argument Alert::message_arg("message", Argument::kRequiresObject);
 

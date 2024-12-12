@@ -26,7 +26,6 @@
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "key_button.hh"
-#include "library_macros.hh"
 #include "math.hh"
 #include "number_text_field.hh"
 #include "pointer.hh"
@@ -250,8 +249,6 @@ const SkPaint kZoomTickPaint = []() {
 }();
 
 const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
-
-DEFINE_PROTO(Timeline);
 
 PrevButton::PrevButton()
     : SideButton(MakeShapeWidget(kNextShape, SK_ColorWHITE, &kHorizontalFlip)) {}

@@ -9,16 +9,11 @@
 #include "color.hh"
 #include "font.hh"
 #include "gui_constants.hh"
-#include "library_macros.hh"
 #include "library_number.hh"
 
 using namespace automat::gui;
 
 namespace automat::library {
-
-#if not defined(NDEBUG)  // temporarily disable when in release mode
-DEFINE_PROTO(Increment);
-#endif
 
 Argument Increment::target_arg =
     Argument("target", Argument::kRequiresConcreteType).RequireInstanceOf<Number>();

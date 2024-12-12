@@ -24,7 +24,6 @@
 #include "tasks.hh"
 #include "timer_thread.hh"
 
-
 using namespace std;
 using namespace maf;
 
@@ -59,8 +58,6 @@ void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> 
   }
   return nullptr;
 }
-
-std::shared_ptr<Machine> Machine::proto = std::make_shared<Machine>();
 
 static void DoneRunning(Location& here) {
   if (!here.HasError()) {
@@ -151,12 +148,12 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
             Str type;
             d.Get(type, status);
             if (OK(status)) {
-              auto proto = FindPrototype(type);
+              auto proto = prototypes->Find(type);
               if (proto == nullptr) {
                 l.ReportError(f("Unknown object type: %s", type.c_str()));
                 // try to continue parsing
               } else {
-                l.Create(**proto);
+                l.Create(*proto);
               }
             }
           } else if (field == "value") {

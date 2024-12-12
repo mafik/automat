@@ -39,13 +39,6 @@ using namespace maf;
 
 namespace automat::library {
 
-__attribute__((constructor)) void RegisterMouseClick() {
-  RegisterPrototype(std::make_shared<MouseClick>(gui::PointerButton::Left, true));
-  RegisterPrototype(std::make_shared<MouseClick>(gui::PointerButton::Left, false));
-  RegisterPrototype(std::make_shared<MouseClick>(gui::PointerButton::Right, true));
-  RegisterPrototype(std::make_shared<MouseClick>(gui::PointerButton::Right, false));
-}
-
 constexpr float kScale = 0.00005;
 
 static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {

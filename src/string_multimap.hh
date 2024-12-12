@@ -5,7 +5,6 @@
 // This header provides a multimap which uses std::string as the key but can
 // also be efficiently queried using std::string_view.
 
-#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -28,6 +27,9 @@ struct string_hash {
 
 template <typename Value>
 using string_multimap = std::unordered_multimap<std::string, Value, string_hash, string_equal>;
+
+template <typename Value>
+using string_map = std::unordered_map<std::string, Value, string_hash, string_equal>;
 
 // Multimap functors, similar to string_equal & string_hash, but which allow
 // interchangeable use of raw pointers and std::unique_ptr.

@@ -19,8 +19,6 @@ struct KeyPresserButton : KeyButton {
 };
 
 struct KeyPresser : Object, Object::FallbackWidget, gui::KeyboardGrabber, Runnable, LongRunning {
-  static KeyPresser* proto;
-
   gui::AnsiKey key = gui::AnsiKey::F;
 
   mutable std::shared_ptr<KeyPresserButton> shortcut_button;

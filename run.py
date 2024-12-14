@@ -12,5 +12,7 @@ base_dir = Path(__file__).parent
 try:
   completed_process = run(['python', str(base_dir / 'run_py')] + sys.argv[1:], cwd=base_dir)
   sys.exit(completed_process.returncode)
+except KeyboardInterrupt:
+  pass
 except Exception as e:
   print(e)

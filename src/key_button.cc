@@ -138,7 +138,6 @@ struct KeyLabelWidget : Widget, LabelMixin {
   void SetLabel(StrView label) override {
     this->label = label;
     width = KeyFont().MeasureText(label);
-    LOG << "KeyLabelWidget::SetLabel: " << label << " width: " << width;
     WakeAnimation();
   }
 };

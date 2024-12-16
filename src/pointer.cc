@@ -10,7 +10,6 @@
 #include "time.hh"
 #include "widget.hh"
 
-
 using namespace maf;
 using namespace std;
 

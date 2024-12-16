@@ -138,7 +138,6 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
       };
       Vec<ConnectionRecord> connections;
       for (int i : ArrayView(d, status)) {
-        LOG << "Deserializing location " << i;
         auto& l = CreateEmpty();
         location_idx.push_back(&l);
         for (auto& field : ObjectView(d, status)) {

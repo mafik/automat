@@ -64,6 +64,7 @@ union Vec2 {
   constexpr bool operator!=(const Vec2& rhs) const { return !(*this == rhs); }
   std::string ToStr() const;
   std::string ToStrMetric() const;
+  std::string ToStrPx() const;
 };
 
 static_assert(sizeof(Vec2) == 8, "Vec2 is not 8 bytes");
@@ -295,6 +296,11 @@ union Rect {
   std::string ToStr() const;
   std::string ToStrMetric() const;
 };
+
+std::string ToStrMetric(SkPoint);
+std::string ToStrPx(SkPoint);
+std::string ToStrPx(SkRect);
+std::string ToStrPx(SkIRect);
 
 union RRect {
   SkRRect sk;

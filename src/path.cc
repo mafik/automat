@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "path.hh"
 
+#include <sys/stat.h>
+
 #if defined(__linux__)
 #include <pwd.h>
 #include <unistd.h>
@@ -128,6 +130,13 @@ void Path::Rename(const Path& to, Status& status) const {
   int ret = rename(str.c_str(), to.str.c_str());
   if (ret < 0) {
     AppendErrorMessage(status) = "rename(" + str + ", " + to.str + ") failed";
+  }
+}
+
+void Path::MakeDirs(Status* status) const {
+  int ret = mkdir(str.c_str(), 0777);
+  if (status && ret < 0) {
+    AppendErrorMessage(*status) = "mkdir(" + str + ") failed";
   }
 }
 

@@ -31,7 +31,6 @@
 #include "timer_thread.hh"
 #include "widget.hh"
 
-
 using namespace automat::gui;
 using namespace maf;
 using namespace std;
@@ -440,24 +439,30 @@ void Location::PreDraw(SkCanvas& canvas) const {
   auto& anim = GetAnimationState();
   auto object_widget = WidgetForObject();
   auto shape = object_widget->Shape();
-  canvas.concat(object_widget->local_to_parent);
 
-  auto rect = shape.getBounds();
+  // Instead of using the Shape in its original (metric) coordinates, we transform it into pixel
+  // coords. This is necessary because ShadowUtils make some assumptions about shape coordinates
+  // equal to pixels.
+  shape.setIsVolatile(true);
+  auto local_to_device =
+      canvas.getLocalToDevice().preConcat(object_widget->local_to_parent).asM33();
+  canvas.resetMatrix();
+  shape.transform(local_to_device);
+
   auto& root_widget = FindRootWidget();
   auto window_size_px = root_widget.size * root_widget.display_pixels_per_meter;
-  float s = canvas.getTotalMatrix().getScaleX();
+  float s = local_to_device.getScaleX();
   float min_elevation = 1_mm;
   SkPoint3 z_plane_params = {0, 0, (min_elevation + anim.elevation * 8_mm) * s};
-  SkPoint3 light_pos = {window_size_px.width / 2.f, (float)window_size_px.height,
-                        (float)window_size_px.height};
+  SkPoint3 light_pos = {window_size_px.width / 2.f, 0, (float)window_size_px.height};
   float light_radius = window_size_px.width / 2.f;
   uint32_t flags =
       SkShadowFlags::kTransparentOccluder_ShadowFlag | SkShadowFlags::kConcaveBlurOnly_ShadowFlag;
   SkPaint shadow_paint;
   shadow_paint.setBlendMode(SkBlendMode::kMultiply);
   SkRect shadow_bounds;
-  SkShadowUtils::GetLocalBounds(canvas.getTotalMatrix(), shape, z_plane_params, light_pos,
-                                light_radius, flags, &shadow_bounds);
+  SkShadowUtils::GetLocalBounds(SkMatrix::I(), shape, z_plane_params, light_pos, light_radius,
+                                flags, &shadow_bounds);
   canvas.saveLayer(&shadow_bounds, &shadow_paint);
   // Z plane params are parameters for the height function. h(x, y, z) = param_X * x + param_Y * y +
   // param_Z The height seems to be computed only for the center of the shape.

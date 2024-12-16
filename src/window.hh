@@ -25,12 +25,12 @@ struct Window {
 
   virtual Pointer& GetMouse() = 0;
 
-  // Converts a point in the screen pixel coordinates (origin at the top left) to window pixel
-  // coordinates (origin at the bottom left).
+  // Converts a point from screen to window pixel coordinates.
+  // In pixel coordinates the origin is at the top left and Y goes down.
   virtual Vec2 ScreenToWindowPx(Vec2 screen) = 0;
 
-  // Converts a point in the window pixel coordinates (origin at the bottom left) to screen pixel
-  // coordinates (origin at the top left).
+  // Converts a point from window to screen pixel coordinates.
+  // In pixel coordinates the origin is at the top left and Y goes down.
   virtual Vec2 WindowPxToScreen(Vec2 window) = 0;
 
   virtual maf::Optional<Vec2> MousePositionScreenPx() = 0;

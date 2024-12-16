@@ -44,31 +44,6 @@ void RootWidget::InitToolbar() {
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
 constexpr float kTrashRadius = 3_cm;
 
-void RootWidget::Draw(SkCanvas& canvas) {
-  timer.Tick();
-  canvas.save();
-  DrawCached(canvas);
-  canvas.restore();
-
-  // Draw fps counter
-  float fps = 1.0f / timer.d;
-  fps_history.push_back(fps);
-  while (fps_history.size() > 100) {
-    fps_history.pop_front();
-  }
-  std::vector<float> fps_sorted(fps_history.begin(), fps_history.end());
-  std::sort(fps_sorted.begin(), fps_sorted.end());
-  float median_fps = fps_sorted[fps_sorted.size() / 2];
-  std::string fps_str = f("FPS min: %3.0f @50%%: %3.0f max: %3.0f", fps_sorted.front(), median_fps,
-                          fps_sorted.back());
-  SkPaint fps_paint;
-  auto& font = GetFont();
-  canvas.save();
-  canvas.translate(0.001, size.y - 0.001 - gui::kLetterSize);
-  font.DrawText(canvas, fps_str, fps_paint);
-  canvas.restore();
-}
-
 animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
@@ -245,17 +220,10 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 }
 
 void RootWidget::Draw(SkCanvas& canvas) const {
-  auto window_space_matrix = canvas.getLocalToDevice();
-  canvas.save();
-  canvas.concat(CanvasToWindow());
-  auto machine_space_matrix = canvas.getLocalToDevice();
-
   canvas.clear(background_color);
 
-  canvas.setMatrix(window_space_matrix);
   DrawChildren(canvas);
-
-  canvas.setMatrix(machine_space_matrix);
+  canvas.concat(CanvasToWindow());
 
   // Draw target root_widget size when zooming in with middle mouse button
   float rz = fabsf(zoom - zoom_target);
@@ -270,8 +238,6 @@ void RootWidget::Draw(SkCanvas& canvas) const {
                          target_width, target_height);
     canvas.drawRect(target_rect, target_paint);
   }
-
-  canvas.restore();
 }
 
 struct MoveCameraAction : Action {
@@ -319,11 +285,6 @@ void RootWidget::Zoom(float delta) {
     zoom_target *= delta;
     zoom *= delta;
   }
-}
-
-void RootWidget::DisplayPixelDensity(float pixels_per_meter) {
-  display_pixels_per_meter = pixels_per_meter;
-  local_to_parent = SkM44::Scale(pixels_per_meter, pixels_per_meter);
 }
 
 void RootWidget::SerializeState(Serializer& writer) const {
@@ -558,8 +519,21 @@ void RootWidget::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   }
   children.push_back(root_machine);
 }
+
+static void UpdateLocalToParent(RootWidget& root_widget) {
+  float px_per_meter = root_widget.display_pixels_per_meter;
+  root_widget.local_to_parent = SkM44::Scale(px_per_meter, -px_per_meter);
+  root_widget.local_to_parent.preTranslate(0, -root_widget.size.height);
+}
+
+void RootWidget::DisplayPixelDensity(float pixels_per_meter) {
+  display_pixels_per_meter = pixels_per_meter;
+  UpdateLocalToParent(*this);
+}
+
 void RootWidget::Resized(Vec2 size) {
   this->size = size;
+  UpdateLocalToParent(*this);
   toolbar->local_to_parent = SkM44(SkMatrix::Translate(size.x / 2, 0));
 }
 

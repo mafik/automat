@@ -5,6 +5,7 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkDrawable.h>
+#include <include/core/SkImageInfo.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPictureRecorder.h>
@@ -13,9 +14,8 @@
 #include <include/core/SkShader.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
-#include <include/gpu/GrBackendSurface.h>
-#include <include/gpu/GrDirectContext.h>
-#include <include/gpu/ganesh/SkSurfaceGanesh.h>
+#include <include/gpu/graphite/Context.h>
+#include <include/gpu/graphite/Surface.h>
 
 #include <ranges>
 
@@ -25,8 +25,10 @@
 #include "log.hh"
 #include "renderer.hh"
 #include "root_widget.hh"
+#include "textures.hh"
 #include "time.hh"
 #include "units.hh"
+#include "vk.hh"
 
 using namespace automat;
 using namespace maf;
@@ -48,9 +50,7 @@ void Widget::DrawCached(SkCanvas& canvas) const {
     return Draw(canvas);
   }
 
-  canvas.save();
   canvas.drawDrawable(compose_surface_drawable);
-  canvas.restore();
 }
 
 void Widget::WakeAnimation() const {
@@ -64,25 +64,23 @@ void Widget::WakeAnimation() const {
 }
 
 void Widget::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
+  canvas.save();
   canvas.concat(child.local_to_parent);
   child.DrawCached(canvas);
+  canvas.restore();
 }
 
 void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<shared_ptr<Widget>> widgets) const {
   std::ranges::reverse_view rv{widgets};
   for (auto& widget : rv) {
-    canvas.save();
     DrawChildCachced(canvas, *widget);
-    canvas.restore();
   }  // for each Widget
 }
 
 void Widget::DrawChildren(SkCanvas& canvas) const {
   PreDrawChildren(canvas);
   for (auto& child : ranges::reverse_view(Children())) {
-    canvas.save();
     DrawChildCachced(canvas, *child);
-    canvas.restore();
   }
 }
 
@@ -155,85 +153,84 @@ Widget* Widget::Find(uint32_t id) {
 PackFrameRequest next_frame_request = {};
 
 void Widget::RenderToSurface(SkCanvas& root_canvas) {
+  skgpu::graphite::RecorderOptions options;
+  options.fImageProvider = image_provider;
+  auto recorder = vk::graphite_context->makeRecorder(options);
   auto cpu_started = time::SteadyNow();
-  auto direct_ctx = root_canvas.recordingContext()->asDirectContext();
-  surface = root_canvas.getSurface()->makeSurface(surface_bounds_root.width(),
-                                                  surface_bounds_root.height());
+  auto root_surface = root_canvas.getSurface();
+  auto image_info = root_surface->imageInfo().makeDimensions(surface_bounds_root.size());
 
-  auto fake_canvas = surface->getCanvas();
-  fake_canvas->clear(SK_ColorTRANSPARENT);
-  recording->draw(fake_canvas, -surface_bounds_root.left(),
-                  -surface_bounds_root.top());  // execute the draw
-                                                // commands immediately
+  surface = SkSurfaces::RenderTarget(recorder.get(), image_info, skgpu::Mipmapped::kNo,
+                                     &root_surface->props(), Name());
 
-  GrFlushInfo flush_info = {
-      .fFinishedProc =
-          [](GrGpuFinishedContext context) {
-            auto weak_ptr = static_cast<std::weak_ptr<Widget>*>(context);
-            auto shared_ptr = weak_ptr->lock();
-            delete weak_ptr;
-            Widget* w = shared_ptr.get();
-            if (w == nullptr) {
-              return;
-            }
-            auto id = w->ID();
-            float gpu_time;
-            if (w->gpu_started == time::SteadyPoint::min()) {
-              gpu_time = 0;
-              w->gpu_started = time::SteadyPoint::max();
-            } else if (w->gpu_started == time::SteadyPoint::max()) {
-              gpu_time = 0;
-              ERROR << "FinishedProc for " << w->Name()
-                    << " was called multiple times, without SubmittedProc in between.";
-            } else {
-              gpu_time = (float)(time::SteadyNow() - w->gpu_started).count();
-              w->gpu_started = time::SteadyPoint::min();
-            }
-            float render_time = max(gpu_time, w->cpu_time);
-            if (render_time > 1) {
-              LOG << "Widget " << w->Name() << " took " << render_time << "s to render";
-            }
-            next_frame_request.render_results.push_back({id, render_time});
-            if constexpr (kDebugRendering && kDebugRenderEvents) {
-              debug_render_events += "Finished(";
-              debug_render_events += w->Name();
-              debug_render_events += ") ";
-            }
-          },
-      .fFinishedContext = new std::weak_ptr(WeakPtr()),
-      .fSubmittedProc =
-          [](GrGpuSubmittedContext context, bool success) {
-            auto weak_ptr = static_cast<std::weak_ptr<Widget>*>(context);
-            auto shared_ptr = weak_ptr->lock();
-            delete weak_ptr;
-            Widget* w = shared_ptr.get();
-            if (w == nullptr) {
-              return;
-            }
-            if (w->gpu_started == time::SteadyPoint::min()) {
-              w->gpu_started = time::SteadyNow();
-            } else if (w->gpu_started == time::SteadyPoint::max()) {
-              // Sometimes fFinishedProc is called before fSubmittedProc.
-              // When this happens, fFinishedProc sets the gpu_started to a guard value (max).
-              // When we see this value in SubmittedProc, this means that we have been reordered
-              // and we shouldn't record the time.
-              w->gpu_started = time::SteadyPoint::min();
-            } else {
-              ERROR << "SubmittedProc for " << w->Name()
-                    << " was called multiple times without FinishedProc in between. Current "
-                       "submitted success = "
-                    << success;
-            }
-          },
-      .fSubmittedContext = new std::weak_ptr(WeakPtr()),
-  };
+  auto graphite_canvas = surface->getCanvas();
+  graphite_canvas->clear(SK_ColorTRANSPARENT);
+  graphite_canvas->translate(-surface_bounds_root.left(), -surface_bounds_root.top());
+  // Remove all Drawables by converting the commands into SkPicture
+  recording->makePictureSnapshot()->playback(graphite_canvas);
 
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "BeginFlush(";
     debug_render_events += Name();
     debug_render_events += ") ";
   }
-  direct_ctx->flush(surface.get(), flush_info);
+  auto graphite_recording = recorder->snap();
+  skgpu::graphite::InsertRecordingInfo insert_recording_info;
+  insert_recording_info.fRecording = graphite_recording.get();
+  insert_recording_info.fFinishedContext = new std::weak_ptr(WeakPtr());
+  insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
+                                           skgpu::CallbackResult) {
+    auto weak_ptr = static_cast<std::weak_ptr<Widget>*>(context);
+    auto shared_ptr = weak_ptr->lock();
+    delete weak_ptr;
+    Widget* w = shared_ptr.get();
+    if (w == nullptr) {
+      return;
+    }
+    auto id = w->ID();
+    float gpu_time;
+    if (w->gpu_started == time::SteadyPoint::min()) {
+      gpu_time = 0;
+      w->gpu_started = time::SteadyPoint::max();
+    } else if (w->gpu_started == time::SteadyPoint::max()) {
+      gpu_time = 0;
+      ERROR << "FinishedProc for " << w->Name()
+            << " was called multiple times, without SubmittedProc in between.";
+    } else {
+      gpu_time = (float)(time::SteadyNow() - w->gpu_started).count();
+      w->gpu_started = time::SteadyPoint::min();
+    }
+    float render_time = max(gpu_time, w->cpu_time);
+    if (render_time > 1) {
+      LOG << "Widget " << w->Name() << " took " << render_time << "s to render";
+    }
+    next_frame_request.render_results.push_back({id, render_time});
+    if constexpr (kDebugRendering && kDebugRenderEvents) {
+      debug_render_events += "Finished(";
+      debug_render_events += w->Name();
+      debug_render_events += ") ";
+    }
+  };
+
+  vk::graphite_context->insertRecording(insert_recording_info);
+
+  bool success = vk::graphite_context->submit();
+
+  if (gpu_started == time::SteadyPoint::min()) {
+    gpu_started = time::SteadyNow();
+  } else if (gpu_started == time::SteadyPoint::max()) {
+    // Sometimes fFinishedProc is called before fSubmittedProc.
+    // When this happens, fFinishedProc sets the gpu_started to a guard value (max).
+    // When we see this value in SubmittedProc, this means that we have been reordered
+    // and we shouldn't record the time.
+    gpu_started = time::SteadyPoint::min();
+  } else {
+    ERROR << "SubmittedProc for " << Name()
+          << " was called multiple times without FinishedProc in between. Current "
+             "submitted success = "
+          << success;
+  }
+
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "EndFlush(";
     debug_render_events += Name();
@@ -261,7 +258,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
   }
 
   if (surface == nullptr) {
-    // LOG << "Drawing choppy drawable " << entry->path << " (no surface!)";
+    // LOG << "Missing surface for " << Name();
   } else {
     // Inside entry we have a cached surface that was renderd with old matrix. Now we want to
     // draw this surface using canvas.getTotalMatrix(). We do this by appending the inverse of
@@ -287,7 +284,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
       builder->uniform("anchorsLast").set(&draw_texture_anchors[0], anchor_count);
       builder->uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);
-      builder->child("surface") = surface->makeImageSnapshot()->makeShader(sampling);
+      builder->child("surface") = SkSurfaces::AsImage(surface)->makeShader(sampling);
 
       auto shader = builder->makeShader();
       SkPaint paint;
@@ -319,6 +316,9 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       SkMatrix surface_transform;
       Rect unit = Rect::MakeZeroWH(1, 1);
       surface_transform.postConcat(SkMatrix::RectToRect(surface_bounds_local.sk, unit));
+      // Skia puts the origin at the top left corner (going down), but we use bottom left (going
+      // up). This flip makes all the textures composite in our coordinate system correctly.
+      surface_transform.preScale(1, -1, 0, surface_bounds_local.CenterY());
       if (anchor_count) {
         SkMatrix anchor_mapping;
         // Apply the inverse transform to the surface mapping - we want to get the original texture
@@ -337,7 +337,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
       float time = fmod(time::SteadyNow().time_since_epoch().count(), 1.0);
       builder->uniform("time") = time;
       SkSamplingOptions sampling;
-      builder->child("surface") = surface->makeImageSnapshot()->makeShader(
+      builder->child("surface") = SkSurfaces::AsImage(surface)->makeShader(
           SkTileMode::kMirror, SkTileMode::kMirror, sampling);
       auto shader = builder->makeShader();
       SkPaint paint;

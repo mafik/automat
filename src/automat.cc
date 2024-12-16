@@ -27,6 +27,7 @@
 #include "prototypes.hh"
 #include "renderer.hh"
 #include "root_widget.hh"
+#include "textures.hh"
 #include "thread_name.hh"
 #include "timer_thread.hh"
 #include "vk.hh"
@@ -264,6 +265,8 @@ int Main() {
   }
 #endif
 
+  image_provider.reset(new AutomatImageProvider());
+
   render_thread = std::jthread(RenderThread, stop_source.get_token());
 
   root_widget->window->MainLoop();
@@ -293,6 +296,7 @@ int Main() {
   prototypes.reset();
 
   resources::Release();
+  image_provider.reset();
 
   Widget::CheckAllWidgetsReleased();
 

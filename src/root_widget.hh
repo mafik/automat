@@ -120,7 +120,6 @@ struct RootWidget final : Widget, DropTarget {
   SkPath Shape() const override {
     return SkPath::Rect(SkRect::MakeXYWH(0, 0, size.width, size.height));
   }
-  void Draw(SkCanvas&);
 
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;

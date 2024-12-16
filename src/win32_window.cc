@@ -414,15 +414,11 @@ gui::Pointer& Win32Window::GetMouse() {
 }
 
 Vec2 Win32Window::ScreenToWindowPx(Vec2 screen) {
-  Vec2 window = (screen - Vec2(client_x, client_y + client_height));
-  window.y = -window.y;
+  Vec2 window = (screen - Vec2(client_x, client_y));
   return window;
 }
 
-Vec2 Win32Window::WindowPxToScreen(Vec2 window) {
-  window.y = -window.y;
-  return window + Vec2(client_x, client_height + client_y);
-}
+Vec2 Win32Window::WindowPxToScreen(Vec2 window) { return window + Vec2(client_x, client_y); }
 
 Optional<Vec2> Win32Window::MousePositionScreenPx() { return mouse_position; }
 

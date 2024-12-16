@@ -6,21 +6,21 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkPathTypes.h>
 #include <include/core/SkPictureRecorder.h>
-#include <include/gpu/GrDirectContext.h>
+#include <include/core/SkStream.h>
+#include <include/encode/SkWebpEncoder.h>
+#include <include/gpu/graphite/GraphiteTypes.h>
 
 #include <cmath>
 
 #include "font.hh"
 #include "root_widget.hh"
+#include "vk.hh"
 #include "widget.hh"
 
-// TODO: lots of cleanups!
-//       - remove redundancy between WidgetTree & Widget & DrawCache::Entry
-//       - the three phases of rendering should be put in sequence (locally)
-//         (record / Draw / Update) -> (render) -> (present / DrawCached / onDraw)
-//       - move frame packing & execution elsewhere
+// TODO: replace `root_canvas` with surface properties
+// TODO: move the "rendering" logic of Widget into a separate class (intended to run in the Client)
 // TODO: use correct bounds in SkPictureRecorder::beginRecording
-// TODO: render this using a job system
+// TODO: render using a job system (tree of Semaphores)
 
 using namespace automat::gui;
 using namespace std;
@@ -129,7 +129,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       tree.push_back(WidgetTree{
           .widget = widget,
           .parent = parent,
-          .window_to_local = SkMatrix::I(),
       });
       int i = tree.size() - 1;
 
@@ -151,12 +150,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         }
       }
 
+      node.local_to_window = widget->local_to_parent.asM33();
       if (parent != i) {
-        node.local_to_window = tree[parent].local_to_window;
-      } else {
-        node.local_to_window = SkMatrix::I();
+        node.local_to_window.postConcat(tree[parent].local_to_window);
       }
-      node.local_to_window.preConcat(widget->local_to_parent.asM33());
       (void)node.local_to_window.invert(&node.window_to_local);
 
       widget->pack_frame_texture_bounds = widget->TextureBounds();
@@ -468,7 +465,7 @@ void RenderFrame(SkCanvas& canvas) {
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "BeginSubmit(synced) ";
   }
-  canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kYes);
+  vk::graphite_context->submit(skgpu::graphite::SyncToCpu::kYes);
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "EndSubmit(synced) ";
   }
@@ -496,9 +493,46 @@ void RenderFrame(SkCanvas& canvas) {
     overflow_queue.push_back(id);
   }
 
-  canvas.resetMatrix();
-  canvas.scale(root_widget->display_pixels_per_meter, root_widget->display_pixels_per_meter);
-  canvas.save();
+  if constexpr (kDebugRendering) {
+    static bool saved = false;
+    if (!saved) {
+      saved = true;
+      for (auto id : pack.frame) {
+        if (auto* widget = Widget::Find(id)) {
+          struct ReadPixelsContext {
+            std::string webp_path;
+            SkImageInfo image_info;
+          };
+
+          maf::Path("build/debug_widgets/").MakeDirs(nullptr);
+
+          auto read_pixels_context = new ReadPixelsContext{
+              .webp_path = f("build/debug_widgets/widget_%03d_%*s.webp", id, widget->Name().size(),
+                             widget->Name().data()),
+              .image_info = widget->surface->imageInfo(),
+          };
+          vk::graphite_context->asyncRescaleAndReadPixels(
+              widget->surface.get(), widget->surface->imageInfo(),
+              SkIRect::MakeSize(widget->surface->imageInfo().dimensions()),
+              SkImage::RescaleGamma::kLinear, SkImage::RescaleMode::kNearest,
+              [](SkImage::ReadPixelsContext context_arg,
+                 std::unique_ptr<const SkImage::AsyncReadResult> result) {
+                auto context = std::unique_ptr<ReadPixelsContext>(
+                    static_cast<ReadPixelsContext*>(context_arg));
+                // LOG << "      saving to " << context->webp_path;
+                SkPixmap pixmap =
+                    SkPixmap(context->image_info, result->data(0), result->rowBytes(0));
+                SkFILEWStream stream(context->webp_path.c_str());
+                SkWebpEncoder::Encode(&stream, pixmap, SkWebpEncoder::Options());
+              },
+              read_pixels_context);
+        }
+      }
+    }
+  }
+
+  canvas.setMatrix(root_widget->local_to_parent);
+
   // Final widget in the frame is the RootWidget
   if (auto* widget = Widget::Find(pack.frame.back())) {
     widget->ComposeSurface(&canvas);
@@ -507,28 +541,31 @@ void RenderFrame(SkCanvas& canvas) {
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
     std::lock_guard lock(root_widget->mutex);
     if (root_widget->pointers.size() > 0) {
+      auto p = root_widget->pointers[0]->pointer_position;
+      auto window_transform = canvas.getTotalMatrix();
+      canvas.resetMatrix();
       SkPaint red;
       red.setColor(SK_ColorRED);
       red.setAntiAlias(true);
       SkPaint orange;
       orange.setColor("#ff8000"_color);
       orange.setAntiAlias(true);
-      auto p = root_widget->pointers[0]->pointer_position;
       SkPath red_ring;
-      red_ring.addCircle(p.x, p.y, 4_mm);
-      red_ring.addCircle(p.x, p.y, 3_mm, SkPathDirection::kCCW);
+      auto mm = window_transform.mapRadius(1_mm);
+      red_ring.addCircle(p.x, p.y, 4 * mm);
+      red_ring.addCircle(p.x, p.y, 3 * mm, SkPathDirection::kCCW);
       SkPath orange_ring;
-      orange_ring.addCircle(p.x, p.y, 2_mm);
-      orange_ring.addCircle(p.x, p.y, 1_mm, SkPathDirection::kCCW);
+      orange_ring.addCircle(p.x, p.y, 2 * mm);
+      orange_ring.addCircle(p.x, p.y, 1 * mm, SkPathDirection::kCCW);
       canvas.drawPath(red_ring, red);
       canvas.drawPath(orange_ring, orange);
       SkPaint stroke;
       stroke.setStyle(SkPaint::kStroke_Style);
-      canvas.drawLine(p.x, p.y - 5_mm, p.x, p.y + 5_mm, stroke);
-      canvas.drawLine(p.x - 5_mm, p.y, p.x + 5_mm, p.y, stroke);
+      canvas.drawLine(p.x, p.y - 5 * mm, p.x, p.y + 5 * mm, stroke);
+      canvas.drawLine(p.x - 5 * mm, p.y, p.x + 5 * mm, p.y, stroke);
+      canvas.setMatrix(window_transform);
     }
   }
-  canvas.restore();
 
   auto& font = GetFont();
   canvas.save();
@@ -559,13 +596,6 @@ void RenderOverflow(SkCanvas& root_canvas) {
     }
     overflow_queue.erase(overflow_queue.begin() + i);
     --i;
-  }
-  if constexpr (kDebugRendering && kDebugRenderEvents) {
-    debug_render_events += "BeginSubmit(unsynced) ";
-  }
-  root_canvas.recordingContext()->asDirectContext()->submit(GrSyncCpu::kNo);
-  if constexpr (kDebugRendering && kDebugRenderEvents) {
-    debug_render_events += "EndSubmit(unsynced) ";
   }
 }
 

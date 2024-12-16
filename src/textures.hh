@@ -7,6 +7,7 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/core/SkTileMode.h>
+#include <include/gpu/graphite/ImageProvider.h>
 
 #include "virtual_fs.hh"
 
@@ -58,5 +59,13 @@ sk_sp<SkImage> DecodeImage(maf::fs::VFile& asset);
 
 constexpr static SkSamplingOptions kDefaultSamplingOptions =
     SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);
+
+struct AutomatImageProvider : public skgpu::graphite::ImageProvider {
+  std::unordered_map<uint32_t, sk_sp<SkImage>> cache;
+  sk_sp<SkImage> findOrCreate(skgpu::graphite::Recorder* recorder, const SkImage* image,
+                              SkImage::RequiredProperties) override;
+};
+
+extern sk_sp<skgpu::graphite::ImageProvider> image_provider;
 
 }  // namespace automat

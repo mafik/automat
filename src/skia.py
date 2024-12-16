@@ -26,6 +26,8 @@ default_gn_args += ' skia_use_system_libpng=false'
 default_gn_args += ' skia_use_system_libwebp=false'
 default_gn_args += ' skia_use_system_zlib=false'
 default_gn_args += ' skia_use_system_harfbuzz=false'
+default_gn_args += ' skia_enable_ganesh=false'
+default_gn_args += ' skia_enable_graphite=true'
 
 @dataclass
 class BuildVariant:
@@ -84,7 +86,7 @@ elif platform == 'linux':
 
 
 build.base.compile_args += ['-I', SKIA_ROOT]
-build.base.compile_args += ['-DSK_GANESH']
+build.base.compile_args += ['-DSK_GRAPHITE']
 build.base.compile_args += ['-DSK_VULKAN']
 build.base.compile_args += ['-DSK_USE_VMA']
 build.base.compile_args += ['-DSK_SHAPER_HARFBUZZ_AVAILABLE']

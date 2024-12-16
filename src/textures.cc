@@ -5,6 +5,7 @@
 #include <include/core/SkData.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkShader.h>
+#include <include/gpu/graphite/Image.h>
 
 #include "log.hh"
 #include "math.hh"
@@ -69,4 +70,19 @@ void PersistentImage::draw(SkCanvas& canvas) {
   Rect rect = Rect(0, 0, width(), height());
   canvas.drawRect(rect, paint);
 }
+
+sk_sp<skgpu::graphite::ImageProvider> image_provider;
+
+sk_sp<SkImage> AutomatImageProvider::findOrCreate(skgpu::graphite::Recorder* recorder,
+                                                  const SkImage* image,
+                                                  SkImage::RequiredProperties props) {
+  auto it = cache.find(image->uniqueID());
+  if (it == cache.end()) {
+    auto texture = SkImages::TextureFromImage(recorder, image, props);
+    auto [it2, _] = cache.emplace(image->uniqueID(), texture);
+    it = it2;
+  }
+  return it->second;
+}
+
 }  // namespace automat

@@ -278,16 +278,9 @@ automat::gui::Pointer& XCBWindow::GetMouse() {
   return *mouse;
 }
 
-Vec2 XCBWindow::ScreenToWindowPx(Vec2 screen) {
-  Vec2 window = (screen - window_position_on_screen - Vec2(0, client_height));
-  window.y = -window.y;
-  return window;
-}
+Vec2 XCBWindow::ScreenToWindowPx(Vec2 screen) { return screen - window_position_on_screen; }
 
-Vec2 XCBWindow::WindowPxToScreen(Vec2 window) {
-  window.y = -window.y;
-  return window + window_position_on_screen + Vec2(0, client_height);
-}
+Vec2 XCBWindow::WindowPxToScreen(Vec2 window) { return window + window_position_on_screen; }
 
 static automat::gui::PointerButton EventDetailToButton(uint32_t detail) {
   switch (detail) {

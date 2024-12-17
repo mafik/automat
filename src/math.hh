@@ -117,6 +117,7 @@ inline Vec2 Normalize(Vec2 v) {
 }
 
 inline Vec2 Rotate90DegreesClockwise(Vec2 v) { return {v.y, -v.x}; }
+inline Vec2 Rotate90DegreesCounterClockwise(Vec2 v) { return {-v.y, v.x}; }
 
 constexpr float Dot(Vec2 a, Vec2 b) { return a.x * b.x + a.y * b.y; }
 constexpr float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
@@ -205,13 +206,14 @@ union Rect {
   constexpr Rect(float left, float bottom, float right, float top)
       : left(left), bottom(bottom), right(right), top(top) {}
 
-  // Make a rectangle with the given width & height and its lower left corner at (0,0).
-  static constexpr Rect MakeZeroWH(float width, float height) { return {0, 0, width, height}; }
+  // Make a rectangle with the lower left corner at (0,0) and given width & height.
+  static constexpr Rect MakeCornerZero(float width, float height) { return {0, 0, width, height}; }
 
-  static constexpr Rect MakeWH(float width, float height) {
+  // Make a rectangle with the center at (0, 0) and given width & height.
+  static constexpr Rect MakeCenterZero(float width, float height) {
     return {-width / 2, -height / 2, width / 2, height / 2};
   }
-  static constexpr Rect MakeCenterWH(Vec2 center, float width, float height) {
+  static constexpr Rect MakeCenter(Vec2 center, float width, float height) {
     return {center.x - width / 2, center.y - height / 2, center.x + width / 2,
             center.y + height / 2};
   }
@@ -349,3 +351,8 @@ struct Vec2AndDir {
 };
 
 inline float atan(Vec2 v) { return atan2f(v.y, v.x); }
+
+inline float CosineInterpolate(float a, float b, float t) {
+  float t2 = (1 - cosf(t * M_PI)) / 2;
+  return a * (1 - t2) + b * t2;
+}

@@ -23,7 +23,6 @@
 #include "root_widget.hh"
 #include "widget.hh"
 
-
 using namespace maf;
 
 namespace automat::gui {
@@ -70,13 +69,13 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
                                                        60, 0, &local_matrix));
     // TODO: switch to drawArc instead
     SkRect oval =
-        Rect::MakeCenterWH(pos_dir.pos, arg.autoconnect_radius * 2, arg.autoconnect_radius * 2);
+        Rect::MakeCenter(pos_dir.pos, arg.autoconnect_radius * 2, arg.autoconnect_radius * 2);
 
     float crt_width =
         animation::SinInterp(anim->radar_alpha, 0.2f, 0.1f, 0.5f, 1.f) * arg.autoconnect_radius * 2;
     float crt_height =
         animation::SinInterp(anim->radar_alpha, 0.4f, 0.1f, 0.8f, 1.f) * arg.autoconnect_radius * 2;
-    SkRect crt_oval = Rect::MakeCenterWH(pos_dir.pos, crt_width, crt_height);
+    SkRect crt_oval = Rect::MakeCenter(pos_dir.pos, crt_width, crt_height);
     canvas.drawArc(crt_oval, 0, 360, true, radius_paint);
 
     SkPaint stroke_paint;

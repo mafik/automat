@@ -90,7 +90,9 @@ static PersistentImage& FlipFlopColor() {
   return flip_flop_color;
 }
 
-Rect FlipFlopRect() { return Rect::MakeZeroWH(FlipFlopColor().width(), FlipFlopColor().height()); }
+Rect FlipFlopRect() {
+  return Rect::MakeCornerZero(FlipFlopColor().width(), FlipFlopColor().height());
+}
 SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
 
 FlipFlop::FlipFlop() : button(make_shared<FlipFlopButton>()) {

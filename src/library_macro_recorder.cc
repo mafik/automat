@@ -160,7 +160,7 @@ void MacroRecorder::Draw(SkCanvas& canvas) const {
     float s = 0.9 * kEyeRadius * 2 / size.height();
 
     auto DrawEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) {
-      Rect bounds = Rect::MakeCenterWH(center, kEyeRadius * 2, kEyeRadius * 2);
+      Rect bounds = Rect::MakeCenter(center, kEyeRadius * 2, kEyeRadius * 2);
 
       if (animation_state.eyes_open > 0) {
         SkPaint white_eye_paint = SkPaint();

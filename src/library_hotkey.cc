@@ -55,7 +55,7 @@ static constexpr float kTopRowWidth = kFrameWidth + kKeySpacing + kShiftKeyWidth
 static constexpr float kWidth = std::max(kTopRowWidth, kBottomRowWidth);
 static constexpr float kHeight = kFrameWidth * 2 + kKeyHeight * 2 + kKeySpacing * 3;
 static constexpr float kY = -kHeight / 2 - 0.5_mm;
-static constexpr Rect kShapeRect = Rect::MakeCenterWH({0, 0.5_mm}, kWidth, kHeight);
+static constexpr Rect kShapeRect = Rect::MakeCenter({0, 0.5_mm}, kWidth, kHeight);
 static const SkRRect kShapeRRect = [] {
   SkRRect ret;
   float top_right_radius = kFrameWidth + kMinimalTouchableSize / 2 - kBorderWidth;

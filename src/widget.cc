@@ -299,6 +299,9 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
         Rect offset_bounds = surface_bounds_local.sk.makeOffset(delta);
         new_anchor_bounds.ExpandToInclude(offset_bounds);
       }
+      SkMatrix flip = SkMatrix::I();
+      flip.preScale(1, -1, 0, surface_bounds_local.CenterY());
+      canvas->concat(flip);
       canvas->drawRect(new_anchor_bounds.sk, paint);
 
       if constexpr (kDebugRendering) {
@@ -314,7 +317,7 @@ void Widget::ComposeSurface(SkCanvas* canvas) const {
 
       // Maps from the local coordinates to surface UV
       SkMatrix surface_transform;
-      Rect unit = Rect::MakeZeroWH(1, 1);
+      Rect unit = Rect::MakeCornerZero(1, 1);
       surface_transform.postConcat(SkMatrix::RectToRect(surface_bounds_local.sk, unit));
       // Skia puts the origin at the top left corner (going down), but we use bottom left (going
       // up). This flip makes all the textures composite in our coordinate system correctly.

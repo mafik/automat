@@ -209,7 +209,7 @@ void Machine::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
 }
 
 SkPath Machine::Shape() const {
-  SkPath rect = SkPath::Rect(Rect::MakeWH(100_cm, 100_cm));
+  SkPath rect = SkPath::Rect(Rect::MakeCenterZero(100_cm, 100_cm));
   auto& root = FindRootWidget();
   auto trash = root.TrashShape();
   SkPath rect_minus_trash;

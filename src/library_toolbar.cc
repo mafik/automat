@@ -169,7 +169,7 @@ void Toolbar::UpdateChildTransform() {
     float size = buttons[i]->width;
     float x2 = x + size / 2;
     float scale = buttons[i]->width / buttons[i]->natural_width;
-    Rect dst = Rect::MakeWH(size, gui::kToolbarIconSize * scale)
+    Rect dst = Rect::MakeCenterZero(size, gui::kToolbarIconSize * scale)
                    .MoveBy({x2, gui::kToolbarIconSize * scale / 2});
     buttons[i]->local_to_parent =
         SkM44(SkMatrix::RectToRect(src, dst, SkMatrix::kCenter_ScaleToFit));

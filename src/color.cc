@@ -266,7 +266,7 @@ sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
   uint8_t a[256], r[256], g[256], b[256];
   for (int i = 0; i < 256; i++) {
     SkColor adjusted = color::AdjustLightness(tint, (i - 128) * depth / 128);
-    a[i] = SkColorGetA(tint);
+    a[i] = i;
     r[i] = SkColorGetR(adjusted);
     g[i] = SkColorGetG(adjusted);
     b[i] = SkColorGetB(adjusted);

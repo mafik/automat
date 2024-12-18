@@ -903,102 +903,40 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
   if (!clip.sk.intersects(path_bounds.sk)) {
     return;
   }
-  // TODO: adjust the tesselation density based on the zoom level
 
-  static sk_sp<SkMeshSpecification>& mesh_specification = []() -> sk_sp<SkMeshSpecification>& {
-    auto vs = SkString(R"(
-      Varyings main(const Attributes attrs) {
-        Varyings v;
-        v.position = attrs.position;
-        v.uv = attrs.uv;
-        v.tangent = normalize(attrs.tangent);
-        return v;
-      }
-    )");
-    auto fs = SkString(R"(
-      const float PI = 3.1415926535897932384626433832795;
-
-      uniform float cable_width;
-
-      uniform shader cable_color;
-      uniform shader cable_normal;
-
-      float3x3 transpose3x3(in float3x3 inMatrix) {
-          float3 i0 = inMatrix[0];
-          float3 i1 = inMatrix[1];
-          float3 i2 = inMatrix[2];
-
-          float3x3 outMatrix = float3x3(
-                      float3(i0.x, i1.x, i2.x),
-                      float3(i0.y, i1.y, i2.y),
-                      float3(i0.z, i1.z, i2.z)
-                      );
-
-          return outMatrix;
-      }
-
-      float2 main(const Varyings v, out float4 color) {
-        vec3 lightDir = normalize(vec3(0, 1, 1)); // normalized vector pointing from current fragment towards the light
-        float h = sqrt(1 - v.uv.x * v.uv.x );
-        float angle = acos(v.uv.x);
-
-        vec3 T = vec3(normalize(v.tangent), 0);
-        vec3 N = normalize(vec3(v.uv.x * T.y, -v.uv.x * T.x, h));
-        vec3 B = cross(T, N);
-        float3x3 TBN = float3x3(T, B, N);
-        float3x3 TBN_inv = transpose3x3(TBN);
-
-        vec2 texCoord = vec2(-angle / PI, v.uv.y / cable_width / 2) * 512;
-
-        vec3 normalTanSpace = normalize(cable_normal.eval(texCoord).yxz * 2 - 1 + vec3(0, 0, 0.5)); // already in tangent space
-        normalTanSpace.x = -normalTanSpace.x;
-        vec3 lightDirTanSpace = normalize(TBN_inv * lightDir);
-        vec3 viewDirTanSpace = normalize(TBN_inv * vec3(0, 0, 1));
-
-        vec3 normal = normalize(TBN * normalTanSpace);
-
-        color.rgba = cable_color.eval(texCoord).rgba;
-        float light = min(1, 0.2 + max(dot(normalTanSpace, lightDirTanSpace), 0));
-        color.rgb = light * color.rgb;
-
-        color.rgb += pow(length(normal.xy), 8) * vec3(0.9, 0.9, 0.9) * 0.5; // rim lighting
-
-        color.rgb += pow(max(dot(reflect(-lightDirTanSpace, normalTanSpace), viewDirTanSpace), 0), 10) * vec3(0.4, 0.4, 0.35);
-        return v.position;
-      }
-    )");
-    auto spec_result =
-        SkMeshSpecification::Make(StrokeToMesh::kAttributes, sizeof(StrokeToMesh::VertexInfo),
-                                  StrokeToMesh::kVaryings, vs, fs);
-
-    if (!spec_result.error.isEmpty()) {
-      ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-      return resources::Hold<SkMeshSpecification>(nullptr);
+  float cached_length = 100_mm;
+  if (length_cache) {
+    cached_length = *length_cache;
+  }
+  auto GetWidth = [start_width, end_width, cached_length](float length) {
+    if (start_width == end_width) {
+      return start_width;
     } else {
-      return resources::Hold(spec_result.specification);
+      return CosineInterpolate(start_width, end_width, length / cached_length);
     }
-  }();
+  };
 
-  if (mesh_specification.get() == nullptr) {
-    return;
-  }
+  SkPaint paint;
 
-  StrokeToCable stroke_to_cable;
-  stroke_to_cable.start_width = start_width;
-  stroke_to_cable.end_width = end_width;
-  if (length_cache) {
-    stroke_to_cable.end_offset = *length_cache;
-  }
-  stroke_to_cable.Convert(path);
-  if (length_cache) {
-    *length_cache = stroke_to_cable.length;
-  }
+  struct OptionsHack {
+    bool forceUnoptimized = false;
+    bool allowPrivateAccess = false;
+    uint32_t fStableKey = 0;
+    SkSL::Version maxVersionAllowed = SkSL::Version::k300;
+    operator SkRuntimeEffect::Options&() {
+      return *reinterpret_cast<SkRuntimeEffect::Options*>(this);
+    }
+  };
 
-  if (stroke_to_cable.vertex_vector.empty()) {
-    return;
-  }
+  static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
 
-  auto vertex_buffer = stroke_to_cable.BuildBuffer();
+  OptionsHack options;
+
+  auto [effect, err] =
+      SkRuntimeEffect::MakeForShader(SkString(embedded::assets_cable_rt_sksl.content), options);
+  if (!err.isEmpty()) {
+    FATAL << err.c_str();
+  }
   sk_sp<SkShader> cable_color, cable_normal;
   switch (texture) {
     case CableTexture::Braided:
@@ -1023,50 +961,16 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
       cable_normal = SkShaders::Color(SkColorSetARGB(255, 0x80, 0x80, 0xff));
       break;
   }
-  sk_sp<SkData> uniforms = SkData::MakeWithCopy(&max_width, 4);
-  SkMesh::ChildPtr children[] = {cable_color, cable_normal};
-  auto mesh_result = SkMesh::Make(mesh_specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
-                                  stroke_to_cable.vertex_vector.size(), 0, uniforms, {children, 2},
-                                  stroke_to_cable.bounds);
-  if (!mesh_result.error.isEmpty()) {
-    ERROR << "Error creating mesh: " << mesh_result.error.c_str();
-    return;
-  }
-  SkPaint default_paint;
-  default_paint.setColor(0xffffffff);
-  default_paint.setAntiAlias(true);
-  default_paint.setColorFilter(color_filter);
-  canvas.drawMesh(mesh_result.mesh, nullptr, default_paint);
+  sk_sp<SkShader> child_shaders[2] = {cable_color, cable_normal};
 
-  static auto braided_color = PersistentImage::MakeFromAsset(
-      embedded::assets_cable_weave_color_webp, {
-                                                   .scale = 0.005,
-                                                   .tile_x = SkTileMode::kRepeat,
-                                                   .tile_y = SkTileMode::kRepeat,
-                                               });
-  SkPaint paint;
-  paint.setShader(*braided_color.shader);
-
-  float start_offset = 0;
-  float end_offset = 20_mm;
-  if (length_cache) {
-    end_offset = *length_cache;
-  }
-  auto GetWidth = [start_width, end_width, start_offset, end_offset](float length) {
-    if (start_width == end_width) {
-      return start_width;
-    } else {
-      float a = std::clamp<float>((length - start_offset) / (end_offset - start_offset), 0, 1) *
-                std::numbers::pi;    // scale position to [0, pi]
-      float t = cos(a) * 0.5 + 0.5;  // map cos to [0, 1] range
-      return t * start_width + (1 - t) * end_width;
-    }
-  };
+  paint.setShader(effect->makeShader(nullptr, child_shaders, 2));
+  paint.setColorFilter(color_filter);
 
   // Walk along the path and draw the cable segments
   SkPath::Iter iter(path, false);
   SkPath::Verb verb;
   float length = 0;
+  float scale = canvas.getTotalMatrix().getScaleX();
   do {
     SkPoint points[4];
     verb = iter.next(points);
@@ -1096,8 +1000,8 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
         Vec2 right = point + normal;
         builder.positions()[2 * step] = left;
         builder.positions()[2 * step + 1] = right;
-        builder.texCoords()[2 * step] = Vec2(-1, length * 400);
-        builder.texCoords()[2 * step + 1] = Vec2(1, length * 400);
+        builder.texCoords()[2 * step] = Vec2(-1, length * scale);
+        builder.texCoords()[2 * step + 1] = Vec2(1, length * scale);
       }
       canvas.drawVertices(builder.detach(), SkBlendMode::kSrcOver, paint);
 
@@ -1124,8 +1028,8 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
         Vec2 right = point + normal;
         builder.positions()[2 * step] = left;
         builder.positions()[2 * step + 1] = right;
-        builder.texCoords()[2 * step] = Vec2(-1, length * 400);
-        builder.texCoords()[2 * step + 1] = Vec2(1, length * 400);
+        builder.texCoords()[2 * step] = Vec2(-1, length * scale);
+        builder.texCoords()[2 * step + 1] = Vec2(1, length * scale);
       }
       canvas.drawVertices(builder.detach(), SkBlendMode::kSrcOver, paint);
     } else if (SkPath::kCubic_Verb == verb) {
@@ -1160,10 +1064,10 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
       cubics[11] = p1 - normal0 * w0;
 
       Vec2 tex_coords[4] = {
-          Vec2(-1, length * 400),
-          Vec2(1, length * 400),
-          Vec2(1, length_end * 400),
-          Vec2(-1, length_end * 400),
+          Vec2(-1, length * scale),
+          Vec2(1, length * scale),
+          Vec2(1, length_end * scale),
+          Vec2(-1, length_end * scale),
       };
       length = length_end;
 

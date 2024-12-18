@@ -353,6 +353,6 @@ struct Vec2AndDir {
 inline float atan(Vec2 v) { return atan2f(v.y, v.x); }
 
 inline float CosineInterpolate(float a, float b, float t) {
-  float t2 = (1 - cosf(t * M_PI)) / 2;
+  float t2 = (1 - cosf(std::clamp<float>(t, 0, 1) * M_PI)) / 2;
   return a * (1 - t2) + b * t2;
 }

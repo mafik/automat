@@ -19,15 +19,12 @@
 #include <include/effects/SkRuntimeEffect.h>
 
 #include <cmath>
-#include <memory>
-#include <numbers>
 
 #include "../build/generated/embedded.hh"
 #include "arcline.hh"
 #include "argument.hh"
 #include "color.hh"
 #include "font.hh"
-#include "global_resources.hh"
 #include "log.hh"
 #include "math.hh"
 #include "sincos.hh"
@@ -684,217 +681,6 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
   return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
 }
 
-struct StrokeToMesh {
-  struct VertexInfo {
-    Vec2 coords;
-    Vec2 uv;
-    Vec2 tangent;
-  } __attribute__((packed));
-
-  Vec<VertexInfo> vertex_vector;
-  Rect bounds = Rect(HUGE_VALF, HUGE_VALF, -HUGE_VALF, -HUGE_VALF);
-  float length = 0;
-
-  static const SkMeshSpecification::Attribute kAttributes[3];
-  static const SkMeshSpecification::Varying kVaryings[3];
-
-  virtual float GetWidth() const = 0;
-  virtual bool IsConstantWidth() const { return false; }
-
-  void Convert(const SkPath& path, float length_limit = HUGE_VALF) {
-    SkPath::Iter iter(path, false);
-    SkPath::Verb verb;
-    do {
-      SkPoint points[4];
-      verb = iter.next(points);
-      if (SkPath::kConic_Verb == verb) {
-        float weight = iter.conicWeight();
-        float angle = acosf(weight) * 2 * 180 / M_PI;
-        int n_steps = ceil(angle * 2 / 5);
-        Vec2 last_point = points[0];
-        for (int step = 0; step <= n_steps; step++) {
-          float t = (float)step / n_steps;
-          Vec2 point = conic(points[0], points[1], points[2], weight, t);
-          float delta_length = Length(point - last_point);
-          bool limit_reached = false;
-          if (length + delta_length >= length_limit) {
-            t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
-            point = conic(points[0], points[1], points[2], weight, t);
-            length = length_limit;
-            limit_reached = true;
-          } else {
-            length += delta_length;
-          }
-          Vec2 tangent = -conic_tangent(points[0], points[1], points[2], weight, t);
-          Vec2 normal = Rotate90DegreesClockwise(tangent) * GetWidth() / 2 / Length(tangent);
-          last_point = point;
-          Vec2 left = point - normal;
-          Vec2 right = point + normal;
-          bounds.ExpandToInclude(left);
-          bounds.ExpandToInclude(right);
-          vertex_vector.push_back({
-              .coords = left,
-              .uv = Vec2(-1, length),
-              .tangent = tangent,
-          });
-          vertex_vector.push_back({
-              .coords = right,
-              .uv = Vec2(1, length),
-              .tangent = tangent,
-          });
-          if (limit_reached) {
-            return;
-          }
-        }
-
-      } else if (SkPath::kMove_Verb == verb) {
-        // pass
-      } else if (SkPath::kLine_Verb == verb) {
-        Vec2 diff = points[1] - points[0];
-        float segment_length = Length(diff);
-        diff = diff / std::max(segment_length, 0.00001f);
-
-        int n_steps = IsConstantWidth() ? 1 : std::max<int>(1, ceil(segment_length / 0.25_mm));
-        for (int step = 0; step <= n_steps; ++step) {
-          float t = (float)step / n_steps;
-
-          float delta_length = step ? segment_length / n_steps : 0;
-          bool limit_reached = false;
-          if (length + delta_length >= length_limit) {
-            t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
-            length = length_limit;
-            limit_reached = true;
-          } else {
-            length += delta_length;
-          }
-
-          Vec2 point = points[0] * (1 - t) + points[1] * t;
-          Vec2 normal = Rotate90DegreesClockwise(diff) * GetWidth() / 2;
-          Vec2 left = point - normal;
-          Vec2 right = point + normal;
-          bounds.ExpandToInclude(left);
-          bounds.ExpandToInclude(right);
-          vertex_vector.push_back({
-              .coords = left,
-              .uv = Vec2(-1, length),
-              .tangent = diff,
-          });
-          vertex_vector.push_back({
-              .coords = right,
-              .uv = Vec2(1, length),
-              .tangent = diff,
-          });
-          if (limit_reached) {
-            return;
-          }
-        }
-      } else if (SkPath::kCubic_Verb == verb) {
-        Vec2 p0 = points[0];
-        Vec2 p1 = points[1];
-        Vec2 p2 = points[2];
-        Vec2 p3 = points[3];
-        constexpr int n_steps = 8;
-        Vec2 last_point = p0;
-        for (int step = 0; step <= n_steps; step++) {
-          float t = (float)step / n_steps;
-          Vec2 point = p0 * powf(1 - t, 3) + p1 * 3 * powf(1 - t, 2) * t +
-                       p2 * 3 * (1 - t) * t * t + p3 * powf(t, 3);
-
-          float delta_length = Length(point - last_point);
-          bool limit_reached = false;
-          if (length + delta_length >= length_limit) {
-            t = (float)(step - 1 + (length_limit - length) / delta_length) / n_steps;
-            point = p0 * powf(1 - t, 3) + p1 * 3 * powf(1 - t, 2) * t + p2 * 3 * (1 - t) * t * t +
-                    p3 * powf(t, 3);
-            length = length_limit;
-            limit_reached = true;
-          } else {
-            length += delta_length;
-          }
-
-          Vec2 tangent = p0 * -3 * powf(1 - t, 2) + p1 * (3 * powf(1 - t, 2) - 6 * t * (1 - t)) +
-                         p2 * (6 * t * (1 - t) - 3 * t * t) + p3 * 3 * powf(t, 2);
-          Vec2 normal = Rotate90DegreesClockwise(tangent) * GetWidth() / 2 / Length(tangent);
-          last_point = point;
-          Vec2 left = point - normal;
-          Vec2 right = point + normal;
-          bounds.ExpandToInclude(left);
-          bounds.ExpandToInclude(right);
-          vertex_vector.push_back({
-              .coords = left,
-              .uv = Vec2(-1, length),
-              .tangent = tangent,
-          });
-          vertex_vector.push_back({
-              .coords = right,
-              .uv = Vec2(1, length),
-              .tangent = tangent,
-          });
-          if (limit_reached) {
-            return;
-          }
-        }
-      }
-    } while (SkPath::kDone_Verb != verb);
-  }
-
-  sk_sp<SkMesh::VertexBuffer> BuildBuffer() {
-    return SkMeshes::MakeVertexBuffer(vertex_vector.data(),
-                                      vertex_vector.size() * sizeof(VertexInfo));
-  }
-};
-
-const SkMeshSpecification::Attribute StrokeToMesh::kAttributes[3] = {
-    {
-        .type = SkMeshSpecification::Attribute::Type::kFloat2,
-        .offset = 0,
-        .name = SkString("position"),
-    },
-    {
-        .type = SkMeshSpecification::Attribute::Type::kFloat2,
-        .offset = 8,
-        .name = SkString("uv"),
-    },
-    {
-        .type = SkMeshSpecification::Attribute::Type::kFloat2,
-        .offset = 16,
-        .name = SkString("tangent"),
-    },
-};
-
-const SkMeshSpecification::Varying StrokeToMesh::kVaryings[3] = {
-    {
-        .type = SkMeshSpecification::Varying::Type::kFloat2,
-        .name = SkString("position"),
-    },
-    {
-        .type = SkMeshSpecification::Varying::Type::kFloat2,
-        .name = SkString("uv"),
-    },
-    {
-        .type = SkMeshSpecification::Varying::Type::kFloat2,
-        .name = SkString("tangent"),
-    }};
-
-struct StrokeToCable : StrokeToMesh {
-  float start_offset = 0;
-  float end_offset = 20_mm;  // default value shouold be overriden!
-  float start_width = 2_mm;
-  float end_width = 2_mm;
-
-  float GetWidth() const override {
-    if (start_width == end_width) {
-      return start_width;
-    } else {
-      float a = std::clamp<float>((length - start_offset) / (end_offset - start_offset), 0, 1) *
-                std::numbers::pi;    // scale position to [0, pi]
-      float t = cos(a) * 0.5 + 0.5;  // map cos to [0, 1] range
-      return t * start_width + (1 - t) * end_width;
-    }
-  }
-  bool IsConstantWidth() const override { return start_width == end_width; }
-};
-
 void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filter,
                CableTexture texture, float start_width, float end_width, float* length_cache) {
   Rect clip = canvas.getLocalClipBounds();
@@ -1076,65 +862,6 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
   } while (SkPath::kDone_Verb != verb);
 }
 
-template <typename T>
-struct MeshWithUniforms {
-  sk_sp<SkMesh::VertexBuffer> vertex_buffer;
-  sk_sp<SkMeshSpecification> mesh_specification;
-  const sk_sp<SkData> uniforms;
-  SkRect bounds;
-  SkPaint paint;
-
-  MeshWithUniforms() : uniforms(SkData::MakeUninitialized(sizeof(T))) {
-    paint.setColor(0xffffffff);
-  }
-
-  T& GetUniforms() { return *(T*)uniforms->writable_data(); }
-
-  virtual void UpdateUniforms(SkCanvas&) = 0;
-
-  void Draw(SkCanvas& canvas) {
-    UpdateUniforms(canvas);
-    auto mesh_result = SkMesh::Make(mesh_specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
-                                    4, 0, SkData::MakeWithCopy(uniforms->data(), uniforms->size()),
-                                    SkSpan<SkMesh::ChildPtr>(), bounds);
-    if (!mesh_result.error.isEmpty()) {
-      ERROR << "Error creating mesh: " << mesh_result.error.c_str();
-    } else {
-      canvas.drawMesh(mesh_result.mesh, nullptr, paint);
-    }
-  }
-};
-
-struct BlackCasingUniforms {
-  float plug_width_pixels;
-  float light_dir;
-};
-
-struct BlackCasing : MeshWithUniforms<BlackCasingUniforms> {
-  BlackCasing() {}
-  void UpdateUniforms(SkCanvas& canvas) override {
-    BlackCasingUniforms& u = GetUniforms();
-    u.plug_width_pixels = canvas.getTotalMatrix().mapRadius(kCasingWidth);
-  }
-
-  void DrawState(SkCanvas& canvas, const CablePhysicsSimulation& state) {
-    BlackCasingUniforms& u = GetUniforms();
-    u.light_dir = M_PI / 2 -
-                  (state.sections.front().dir - state.sections.front().true_dir_offset).ToRadians();
-    Draw(canvas);
-  }
-};
-
-// Currently the code that allocates Pimpl is pretty ad-hoc. It only holds the mesh for black casing
-// and is allocated in the drawing routine. It might be cleaner to allocate it in a constructor and
-// also use it to store other private data (maybe some data from OpticalConnectorState could also be
-// moved).
-// For the sake of moving on, I'm leaving this for later. Maybe after a bigger rewrite this won't be
-// necessary anyway.
-struct OpticalConnectorPimpl {
-  std::unique_ptr<BlackCasing> mesh;
-};
-
 void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
                           PaintDrawable& icon) {
   float dispenser_scale = state.location.GetAnimationState().scale;
@@ -1178,121 +905,47 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
   constexpr float casing_top = kCasingHeight;
 
   {  // Steel insert
-    struct SteelInsert : MeshWithUniforms<float> {
-      SteelInsert() : MeshWithUniforms() {}
-      void UpdateUniforms(SkCanvas& canvas) override {
-        GetUniforms() = canvas.getTotalMatrix().mapRadius(kSteelRect.Width());
+    canvas.save();
+    canvas.translate(0, 2_mm * state.steel_insert_hidden);
+
+    auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
+                                       SkVertices::kHasTexCoords_BuilderFlag);
+    SkPoint* positions = builder.positions();
+    positions[0] = kSteelRect.BottomLeftCorner();
+    positions[1] = kSteelRect.BottomRightCorner();
+    positions[2] = kSteelRect.TopLeftCorner();
+    positions[3] = kSteelRect.TopRightCorner();
+
+    SkPoint* tex_coords = builder.texCoords();
+    tex_coords[0] = SkPoint::Make(0, 0);
+    tex_coords[1] = SkPoint::Make(1, 0);
+    tex_coords[2] = SkPoint::Make(0, 1);
+    tex_coords[3] = SkPoint::Make(1, 1);
+
+    SkPaint paint;
+    struct OptionsHack {
+      bool forceUnoptimized = false;
+      bool allowPrivateAccess = false;
+      uint32_t fStableKey = 0;
+      SkSL::Version maxVersionAllowed = SkSL::Version::k300;
+      operator SkRuntimeEffect::Options&() {
+        return *reinterpret_cast<SkRuntimeEffect::Options*>(this);
       }
     };
 
-    static Optional<SteelInsert> mesh = [&]() -> Optional<SteelInsert> {
-      SteelInsert result;
-      SkMeshSpecification::Attribute attributes[2] = {
-          {
-              .type = SkMeshSpecification::Attribute::Type::kFloat2,
-              .offset = 0,
-              .name = SkString("position"),
-          },
-          {
-              .type = SkMeshSpecification::Attribute::Type::kFloat2,
-              .offset = 8,
-              .name = SkString("uv"),
-          }};
-      SkMeshSpecification::Varying varyings[2] = {
-          {
-              .type = SkMeshSpecification::Varying::Type::kFloat2,
-              .name = SkString("position"),
-          },
-          {
-              .type = SkMeshSpecification::Varying::Type::kFloat2,
-              .name = SkString("uv"),
-          }};
-      auto vs = SkString(R"(
-      Varyings main(const Attributes attrs) {
-        Varyings v;
-        v.position = attrs.position;
-        v.uv = attrs.uv;
-        return v;
-      }
-    )");
-      auto fs = SkString(R"(
-      const float kCaseSideRadius = 0.08;
-      // NOTE: fix this once Skia supports array initializers here
-      const vec3 kCaseBorderDarkColor = vec3(0x38, 0x36, 0x33) / 255; // subtle dark contour
-      const vec3 kCaseBorderReflectionColor = vec3(0xdd, 0xdb, 0xd6) / 255; // canvas reflection
-      const vec3 kCaseSideDarkColor = vec3(0x54, 0x51, 0x4e) / 255; // darker metal between reflections
-      const vec3 kCaseFrontColor = vec3(0x85, 0x83, 0x80) / 255; // front color
-      const float kBorderDarkWidth = 0.3;
-      const float kCaseSideDarkH = 0.7;
-      const float kCaseFrontH = 1;
-      const vec3 kTopLightColor = vec3(0x32, 0x34, 0x39) / 255 - kCaseFrontColor;
-      const float kBevelRadius = kBorderDarkWidth * kCaseSideRadius;
+    static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
 
-      uniform float plug_width_pixels;
+    OptionsHack options;
 
-      float2 main(const Varyings v, out float4 color) {
-        float2 h = sin(min((0.5 - abs(0.5 - v.uv)) / kCaseSideRadius, 1) * 3.14159265358979323846 / 2);
-        float bevel = 1 - length(1 - sin(min((0.5 - abs(0.5 - v.uv)) / kBevelRadius, 1) * 3.14159265358979323846 / 2));
-        if (h.x < kCaseSideDarkH) {
-          color.rgb = mix(kCaseBorderReflectionColor, kCaseSideDarkColor, (h.x - kBorderDarkWidth) / (kCaseSideDarkH - kBorderDarkWidth));
-        } else {
-          color.rgb = mix(kCaseSideDarkColor, kCaseFrontColor, (h.x - kCaseSideDarkH) / (kCaseFrontH - kCaseSideDarkH));
-        }
-        if (bevel < 1) {
-          vec3 edge_color = kCaseBorderDarkColor;
-          if (v.uv.y > 0.5) {
-            edge_color = mix(edge_color, vec3(0.4), clamp((h.x - kCaseSideDarkH) / (kCaseFrontH - kCaseSideDarkH), 0, 1));
-          }
-          color.rgb = mix(edge_color, color.rgb, bevel);
-        }
-        color.a = 1;
-        float radius_pixels = kBevelRadius * plug_width_pixels;
-        // Make the corners transparent
-        color.rgba *= clamp(bevel * max(radius_pixels / 2, 1), 0, 1);
-        return v.position;
-      }
-    )");
-
-      auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
-      if (!spec_result.error.isEmpty()) {
-        ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-      } else {
-        Vec2 vertex_data[8] = {
-            kSteelRect.BottomLeftCorner(), Vec2(0, 0), kSteelRect.BottomRightCorner(), Vec2(1, 0),
-            kSteelRect.TopLeftCorner(),    Vec2(0, 1), kSteelRect.TopRightCorner(),    Vec2(1, 1),
-        };
-        result.vertex_buffer = SkMeshes::MakeVertexBuffer(vertex_data, sizeof(vertex_data));
-        result.mesh_specification = spec_result.specification;
-        result.bounds = kSteelRect.sk;
-        return result;
-      }
-      return std::nullopt;
-    }();
-    if (mesh) {
-      canvas.save();
-      canvas.translate(0, 2_mm * state.steel_insert_hidden);
-      mesh->Draw(canvas);
-
-      auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
-                                         SkVertices::kHasTexCoords_BuilderFlag);
-      SkPoint* positions = builder.positions();
-      positions[0] = kSteelRect.BottomLeftCorner();
-      positions[1] = kSteelRect.BottomRightCorner();
-      positions[2] = kSteelRect.TopLeftCorner();
-      positions[3] = kSteelRect.TopRightCorner();
-
-      SkPoint* tex_coords = builder.texCoords();
-      tex_coords[0] = SkPoint::Make(0, 0);
-      tex_coords[1] = SkPoint::Make(1, 0);
-      tex_coords[2] = SkPoint::Make(0, 1);
-      tex_coords[3] = SkPoint::Make(1, 1);
-
-      SkPaint paint;
-      paint.setColor("#cccccc"_color);
-      canvas.drawVertices(builder.detach(), SkBlendMode::kScreen, paint);
-
-      canvas.restore();
+    auto [effect, err] = SkRuntimeEffect::MakeForShader(
+        SkString(embedded::assets_connector_insert_rt_sksl.content), options);
+    if (!err.isEmpty()) {
+      FATAL << err.c_str();
     }
+    paint.setShader(effect->makeShader(nullptr, nullptr, 0));
+    canvas.drawVertices(builder.detach(), SkBlendMode::kScreen, paint);
+
+    canvas.restore();
   }
 
   {  // Black metal casing

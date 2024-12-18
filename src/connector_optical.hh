@@ -6,8 +6,6 @@
 //
 // This type of connector can transmit boolean & event signals.
 
-#include <memory>
-
 #include "arcline.hh"
 #include "argument.hh"
 #include "location.hh"
@@ -17,8 +15,6 @@
 #include "vec.hh"
 
 namespace automat::gui {
-
-struct OpticalConnectorPimpl;
 
 struct CablePhysicsSimulation {
   float dispenser_v;
@@ -59,8 +55,6 @@ struct CablePhysicsSimulation {
 
   float cable_width = 2_mm;
   float lightness_pct;
-
-  mutable std::unique_ptr<OpticalConnectorPimpl> pimpl;
 
   CablePhysicsSimulation(Location&, Argument& arg, Vec2AndDir start);
   ~CablePhysicsSimulation();

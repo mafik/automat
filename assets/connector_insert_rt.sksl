@@ -1,0 +1,38 @@
+// kind=shader
+
+const float kCaseSideRadius = 0.08;
+// NOTE: fix this once Skia supports array initializers here
+const vec3 kCaseBorderDarkColor = vec3(0x38, 0x36, 0x33) / 255;  // subtle dark contour
+const vec3 kCaseBorderReflectionColor = vec3(0xdd, 0xdb, 0xd6) / 255;  // canvas reflection
+const vec3 kCaseSideDarkColor = vec3(0x54, 0x51, 0x4e) / 255;  // darker metal between reflections
+const vec3 kCaseFrontColor = vec3(0x85, 0x83, 0x80) / 255;  // front color
+const float kBorderDarkWidth = 0.3;
+const float kCaseSideDarkH = 0.7;
+const float kCaseFrontH = 1;
+const vec3 kTopLightColor = vec3(0x32, 0x34, 0x39) / 255 - kCaseFrontColor;
+const float kBevelRadius = kBorderDarkWidth * kCaseSideRadius;
+
+vec4 main(vec2 uv) {
+    float2 h = sin(min((0.5 - abs(0.5 - uv)) / kCaseSideRadius, 1) * 3.14159265358979323846 / 2);
+    float bevel = 1 - length(1 - sin(min((0.5 - abs(0.5 - uv)) / kBevelRadius, 1) * 3.14159265358979323846 / 2));
+    vec4 color;
+    if (h.x < kCaseSideDarkH) {
+        color.rgb = mix(kCaseBorderReflectionColor, kCaseSideDarkColor, (h.x - kBorderDarkWidth) / (kCaseSideDarkH - kBorderDarkWidth));
+    } else {
+        color.rgb = mix(kCaseSideDarkColor, kCaseFrontColor, (h.x - kCaseSideDarkH) / (kCaseFrontH - kCaseSideDarkH));
+    }
+    if (bevel < 1) {
+        vec3 edge_color = kCaseBorderDarkColor;
+        if (uv.y > 0.5) {
+            edge_color = mix(edge_color, vec3(0.4), clamp((h.x - kCaseSideDarkH) / (kCaseFrontH - kCaseSideDarkH), 0, 1));
+        }
+        color.rgb = mix(edge_color, color.rgb, bevel);
+    }
+    color.a = 1;
+    // Make the corners transparent
+    vec2 grad_y = dFdy(uv);
+    float plug_width_pixels = 1/length(grad_y);
+    float radius_pixels = kBevelRadius * plug_width_pixels;
+    color.rgba *= clamp(bevel * max(radius_pixels / 2, 1), 0, 1);
+    return color;
+}

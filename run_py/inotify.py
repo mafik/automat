@@ -10,7 +10,7 @@ import ctypes, sys
 if __name__ != '__main__':
   raise ImportError('This module is not meant to be imported.')
 
-watch_dir = sys.argv[1]
+watch_dirs = sys.argv[1:]
 
 if sys.platform == 'linux':
   libc = ctypes.cdll.LoadLibrary('libc.so.6')
@@ -33,7 +33,8 @@ if sys.platform == 'linux':
     return libc.strerror(errno).decode()
 
   fd = libc.inotify_init()
-  wd = libc.inotify_add_watch(fd, watch_dir.encode(), IN_CLOSE_WRITE)
+  for watch_dir in watch_dirs:
+    wd = libc.inotify_add_watch(fd, watch_dir.encode(), IN_CLOSE_WRITE)
   
   buf = ctypes.create_string_buffer(1024)
   # blocks until an event occurs

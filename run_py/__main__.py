@@ -36,7 +36,7 @@ while True:
     recipe.set_target(args.target)
     if args.live:
         watcher = subprocess.Popen(
-            ['python', 'run_py/inotify.py', 'src/'], stdout=subprocess.DEVNULL)
+            ['python', 'run_py/inotify.py', 'src/', 'assets/'], stdout=subprocess.DEVNULL)
     else:
         watcher = None
 

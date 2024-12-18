@@ -1,0 +1,47 @@
+// kind=shader
+
+// This shader is used for the metal case at the end of the cable (below the icon).
+
+const float kCaseSideRadius = 0.12;
+// NOTE: fix this once Skia supports array initializers here
+const vec3 kCaseBorderDarkColor = vec3(5) / 255;  // subtle dark contour
+const vec3 kCaseBorderReflectionColor = vec3(115, 115, 115) / 255 * 1.6;  // canvas reflection
+const vec3 kCaseSideDarkColor = vec3(42, 42, 42) / 255;  // darker metal between reflections
+const vec3 kCaseSideLightColor = vec3(88, 88, 88) / 255;  // side-light reflection
+const vec3 kCaseFrontColor = vec3(0x1c, 0x1c, 0x1c) * 2 / 255;  // front color
+const float kBorderDarkWidth = 0.2;
+const float kCaseSideDarkH = 0.4;
+const float kCaseSideLightH = 0.8;
+const float kCaseFrontH = 1;
+const vec3 kTopLightColor = vec3(0.114, 0.114, 0.114) * 2;
+const float kBevelRadius = kBorderDarkWidth * kCaseSideRadius;
+
+vec4 main(vec2 uv) {
+    float4 color;
+    float2 h = sin(min((0.5 - abs(0.5 - uv)) / kCaseSideRadius, 1) * 3.14159265358979323846 / 2);
+    float bevel = 1 - length(1 - sin(min((0.5 - abs(0.5 - uv)) / kBevelRadius, 1) * 3.14159265358979323846 / 2));
+    if (h.x < kCaseSideDarkH) {
+        color.rgb = mix(kCaseBorderReflectionColor, kCaseSideDarkColor, (h.x - kBorderDarkWidth) / (kCaseSideDarkH - kBorderDarkWidth));
+    } else if (h.x < kCaseSideLightH) {
+        color.rgb = mix(kCaseSideDarkColor, kCaseSideLightColor, (h.x - kCaseSideDarkH) / (kCaseSideLightH - kCaseSideDarkH));
+    } else {
+        color.rgb = mix(kCaseSideLightColor, kCaseFrontColor, (h.x - kCaseSideLightH) / (kCaseFrontH - kCaseSideLightH));
+    }
+    if (bevel < 1) {
+        vec3 edge_color = kCaseBorderDarkColor;
+        if (uv.y > 0.5) {
+            edge_color = mix(edge_color, vec3(0.4), clamp((h.x - kCaseSideDarkH) / (kCaseFrontH - kCaseSideDarkH), 0, 1));
+        }
+        color.rgb = mix(edge_color, color.rgb, bevel);
+    }
+    vec2 grad_y = dFdy(uv);
+    float plug_width_pixels = 1/length(grad_y);
+    vec2 up = -normalize(grad_y);
+    float light = dot(up, uv * 2 - 1)/2 + 0.5;
+    color.rgb += kTopLightColor * light;
+    color.a = 1;
+    float radius_pixels = kBevelRadius * plug_width_pixels;
+    // Make the corners transparent
+    color.rgba *= clamp(bevel * max(radius_pixels / 2, 1), 0, 1);
+    return color;
+}

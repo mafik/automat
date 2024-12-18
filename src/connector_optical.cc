@@ -33,6 +33,7 @@
 #include "sincos.hh"
 #include "svg.hh"
 #include "textures.hh"
+#include "time.hh"
 
 using namespace maf;
 
@@ -1391,119 +1392,8 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
   }
 
   {  // Black metal casing
-    float pixels_per_meter = canvas.getLocalToDeviceAs3x3().mapRadius(1);
-    canvas.translate(0, 1 / pixels_per_meter);  // move one pixel up to close the one pixel gap
-    if (state.pimpl == nullptr) {
-      state.pimpl = std::make_unique<OpticalConnectorPimpl>();
-      state.pimpl->mesh = [&]() -> std::unique_ptr<BlackCasing> {
-        std::unique_ptr<BlackCasing> result = std::make_unique<BlackCasing>();
-        SkMeshSpecification::Attribute attributes[2] = {
-            {
-                .type = SkMeshSpecification::Attribute::Type::kFloat2,
-                .offset = 0,
-                .name = SkString("position"),
-            },
-            {
-                .type = SkMeshSpecification::Attribute::Type::kFloat2,
-                .offset = 8,
-                .name = SkString("uv"),
-            }};
-        SkMeshSpecification::Varying varyings[3] = {
-            {
-                .type = SkMeshSpecification::Varying::Type::kFloat2,
-                .name = SkString("position"),
-            },
-            {
-                .type = SkMeshSpecification::Varying::Type::kFloat2,
-                .name = SkString("uv"),
-            },
-            {
-                .type = SkMeshSpecification::Varying::Type::kFloat,
-                .name = SkString("light"),
-            }};
-        auto vs = SkString(R"(
-      uniform float plug_width_pixels;
-      uniform float light_dir;
-
-      Varyings main(const Attributes attrs) {
-        Varyings v;
-        v.position = attrs.position;
-        v.uv = attrs.uv;
-        float cos_light_dir = cos(light_dir);
-        float sin_light_dir = sin(light_dir);
-        vec2 center = vec2(0.5, 0.5);
-        vec2 delta = attrs.uv - center;
-        v.light = cos_light_dir * delta.y - sin_light_dir * delta.x + center.y;
-        return v;
-      }
-    )");
-        auto fs = SkString(R"(
-      const float kCaseSideRadius = 0.12;
-      // NOTE: fix this once Skia supports array initializers here
-      const vec3 kCaseBorderDarkColor = vec3(5) / 255; // subtle dark contour
-      const vec3 kCaseBorderReflectionColor = vec3(115, 115, 115) / 255 * 1.6; // canvas reflection
-      const vec3 kCaseSideDarkColor = vec3(42, 42, 42) / 255; // darker metal between reflections
-      const vec3 kCaseSideLightColor = vec3(88, 88, 88) / 255; // side-light reflection
-      const vec3 kCaseFrontColor = vec3(0x1c, 0x1c, 0x1c) * 2 / 255; // front color
-      const float kBorderDarkWidth = 0.2;
-      const float kCaseSideDarkH = 0.4;
-      const float kCaseSideLightH = 0.8;
-      const float kCaseFrontH = 1;
-      const vec3 kTopLightColor = vec3(0.114, 0.114, 0.114) * 2;
-      const float kBevelRadius = kBorderDarkWidth * kCaseSideRadius;
-
-      uniform float plug_width_pixels;
-
-      float2 main(const Varyings v, out float4 color) {
-        float2 h = sin(min((0.5 - abs(0.5 - v.uv)) / kCaseSideRadius, 1) * 3.14159265358979323846 / 2);
-        float bevel = 1 - length(1 - sin(min((0.5 - abs(0.5 - v.uv)) / kBevelRadius, 1) * 3.14159265358979323846 / 2));
-        if (h.x < kCaseSideDarkH) {
-          color.rgb = mix(kCaseBorderReflectionColor, kCaseSideDarkColor, (h.x - kBorderDarkWidth) / (kCaseSideDarkH - kBorderDarkWidth));
-        } else if (h.x < kCaseSideLightH) {
-          color.rgb = mix(kCaseSideDarkColor, kCaseSideLightColor, (h.x - kCaseSideDarkH) / (kCaseSideLightH - kCaseSideDarkH));
-        } else {
-          color.rgb = mix(kCaseSideLightColor, kCaseFrontColor, (h.x - kCaseSideLightH) / (kCaseFrontH - kCaseSideLightH));
-        }
-        if (bevel < 1) {
-          vec3 edge_color = kCaseBorderDarkColor;
-          if (v.uv.y > 0.5) {
-            edge_color = mix(edge_color, vec3(0.4), clamp((h.x - kCaseSideDarkH) / (kCaseFrontH - kCaseSideDarkH), 0, 1));
-          }
-          color.rgb = mix(edge_color, color.rgb, bevel);
-        }
-        color.rgb += kTopLightColor * v.light;
-        color.a = 1;
-        float radius_pixels = kBevelRadius * plug_width_pixels;
-        // Make the corners transparent
-        color.rgba *= clamp(bevel * max(radius_pixels / 2, 1), 0, 1);
-        return v.position;
-      }
-    )");
-
-        auto spec_result = SkMeshSpecification::Make(attributes, 16, varyings, vs, fs);
-        if (!spec_result.error.isEmpty()) {
-          ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-        } else {
-          result->bounds = SkRect::MakeLTRB(casing_left, casing_top, casing_right, 0);
-          Vec2 vertex_data[8] = {
-              Vec2(casing_left, 0),          Vec2(0, 0), Vec2(casing_right, 0),          Vec2(1, 0),
-              Vec2(casing_left, casing_top), Vec2(0, 1), Vec2(casing_right, casing_top), Vec2(1, 1),
-          };
-          result->vertex_buffer = SkMeshes::MakeVertexBuffer(vertex_data, sizeof(vertex_data));
-          result->mesh_specification = spec_result.specification;
-          result->paint.setColorFilter(color_filter);
-          return result;
-        }
-        return nullptr;
-      }();
-    }
-    if (state.pimpl->mesh) {
-      state.pimpl->mesh->DrawState(canvas, state);
-    }
-
-    auto builder = SkVertices::Builder(
-        SkVertices::kTriangleStrip_VertexMode, 4, 0,
-        SkVertices::kHasTexCoords_BuilderFlag | SkVertices::kHasColors_BuilderFlag);
+    auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
+                                       SkVertices::kHasTexCoords_BuilderFlag);
     constexpr Rect black_case_bounds =
         Rect::MakeCornerZero(kCasingWidth, kCasingHeight).MoveBy({-kCasingWidth / 2, 0});
     SkPoint* positions = builder.positions();
@@ -1518,15 +1408,31 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     tex_coords[2] = SkPoint::Make(0, 1);
     tex_coords[3] = SkPoint::Make(1, 1);
 
-    // TODO: decide whether to use vertex colors or tint color filter
-    SkColor* colors = builder.colors();
-    colors[0] = state.arg.tint;
-    colors[1] = state.arg.tint;
-    colors[2] = state.arg.tint;
-    colors[3] = state.arg.tint;
-
     SkPaint paint;
-    paint.setColor("#111111"_color);
+
+    struct OptionsHack {
+      bool forceUnoptimized = false;
+      bool allowPrivateAccess = false;
+      uint32_t fStableKey = 0;
+      SkSL::Version maxVersionAllowed = SkSL::Version::k300;
+      operator SkRuntimeEffect::Options&() {
+        return *reinterpret_cast<SkRuntimeEffect::Options*>(this);
+      }
+    };
+
+    static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
+
+    OptionsHack options;
+
+    auto [effect, err] = SkRuntimeEffect::MakeForShader(
+        SkString(embedded::assets_connector_case_rt_sksl.content), options);
+    if (!err.isEmpty()) {
+      FATAL << err.c_str();
+    }
+    SkRuntimeShaderBuilder shader_builder(effect);
+
+    paint.setShader(shader_builder.makeShader());
+    paint.setColorFilter(color_filter);
     canvas.drawVertices(builder.detach(), SkBlendMode::kScreen, paint);
   }
 

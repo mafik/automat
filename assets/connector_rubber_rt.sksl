@@ -1,5 +1,8 @@
-// #version 300
-// kind=meshfrag
+// kind=shader
+
+// This shader is used for the rubber cable stiffener.
+
+
 const float PI = 3.1415926535897932384626433832795;
 
 const float LENGTH = 0.015;
@@ -40,18 +43,18 @@ float3x3 transpose3x3(in float3x3 inMatrix) {
     return outMatrix;
 }
 
-float2 main(const Varyings v, out float4 color) {
+float4 main(vec2 uv) {
     vec3 lightDir = normalize(vec3(0, 1, 1)); // normalized vector pointing from current fragment towards the light
 
-    float width = GetWidth(v.uv.y);
-    float x_offset = width * v.uv.x / 2; // distance from the center in the horizontal direction
+    float width = GetWidth(uv.y);
+    float x_offset = width * uv.x / 2; // distance from the center in the horizontal direction
     float edge_dist = width / 2 - abs(x_offset); // distance from the edge of the shape
-    float r = lerp(0.0008, WIDTH_TOP / 2, v.uv.y / LENGTH);
+    float r = lerp(0.0008, WIDTH_TOP / 2, uv.y / LENGTH);
 
-    float angle = acos(sign(v.uv.x) * pow(abs(v.uv.x), lerp(5, 1, v.uv.y / LENGTH)));
+    float angle = acos(sign(uv.x) * pow(abs(uv.x), lerp(5, 1, uv.y / LENGTH)));
     float h = sin(angle);
 
-    vec3 T = vec3(normalize(v.tangent), 0);
+    vec3 T = vec3(normalize(vec2(dFdy(uv.x), dFdx(uv.x))), 0);
     vec3 N = normalize(vec3(cos(angle) * T.y, -cos(angle) * T.x, h));
     vec3 B = cross(T, N);
     float3x3 TBN = float3x3(T, B, N);
@@ -62,11 +65,12 @@ float2 main(const Varyings v, out float4 color) {
     vec3 lightDirTanSpace = normalize(TBN_inv * lightDir);
     vec3 viewDirTanSpace = normalize(TBN_inv * vec3(0, 0, 1));
     
+    vec4 color;
     color.rgba = vec4(0x30 / 255., 0x30 / 255., 0x30 / 255., 1);
     color.rgb *= 2;
 
-    if (v.uv.y < DARK_EDGE_R) {
-        float t = v.uv.y / DARK_EDGE_R;
+    if (uv.y < DARK_EDGE_R) {
+        float t = uv.y / DARK_EDGE_R;
         color.rgb = color.rgb * (t) + color.rgb / 2 * (1 - t);
     }
     float light = max(dot(normalTanSpace, lightDirTanSpace), 0.2);
@@ -75,12 +79,12 @@ float2 main(const Varyings v, out float4 color) {
     color.rgb += pow(length(N.xy), 10) * vec3(0x8f / 255., 0x92 / 255., 0x93 / 255.) * 0.7; // rim light
     color.rgb += pow(max(dot(reflect(-lightDirTanSpace, normalTanSpace), viewDirTanSpace), 0), 5) * vec3(0x8f / 255., 0x92 / 255., 0x93 / 255.) * 0.6; // specular
 
-    vec2 dist_to_edge = vec2(max(0, ROUNDED_R - edge_dist), max(0, ROUNDED_R - v.uv.y))  / ROUNDED_R;
+    vec2 dist_to_edge = vec2(max(0, ROUNDED_R - edge_dist), max(0, ROUNDED_R - uv.y))  / ROUNDED_R;
     // color.rgb = vec3(length(dist_to_edge));
     if (length(dist_to_edge) > 1) {
         color.rgba = vec4(0);
     }
     // color.rgba = color.rgba * (1 - length(dist_to_edge));
 
-    return v.position;
+    return color;
 }

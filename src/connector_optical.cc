@@ -1392,6 +1392,7 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
   }
 
   {  // Black metal casing
+     // TODO: optimize by caching vertices & shader
     auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
                                        SkVertices::kHasTexCoords_BuilderFlag);
     constexpr Rect black_case_bounds =
@@ -1429,9 +1430,7 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     if (!err.isEmpty()) {
       FATAL << err.c_str();
     }
-    SkRuntimeShaderBuilder shader_builder(effect);
-
-    paint.setShader(shader_builder.makeShader());
+    paint.setShader(effect->makeShader(nullptr, nullptr, 0));
     paint.setColorFilter(color_filter);
     canvas.drawVertices(builder.detach(), SkBlendMode::kScreen, paint);
   }
@@ -1473,104 +1472,8 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
 
   {  // Rubber cable holder
 
-    static sk_sp<SkMeshSpecification>& mesh_specification = []() -> sk_sp<SkMeshSpecification>& {
-      auto vs = SkString(R"(
-      Varyings main(const Attributes attrs) {
-        Varyings v;
-        v.position = attrs.position;
-        v.uv = attrs.uv;
-        v.tangent = normalize(attrs.tangent);
-        return v;
-      }
-    )");
-      auto fs = SkString(embedded::assets_cable_strain_reliever_frag_sksl.content);
-      auto spec_result =
-          SkMeshSpecification::Make(StrokeToMesh::kAttributes, sizeof(StrokeToMesh::VertexInfo),
-                                    StrokeToMesh::kVaryings, vs, fs);
-      if (!spec_result.error.isEmpty()) {
-        ERROR << "Error creating mesh specification: " << spec_result.error.c_str();
-        return resources::Hold<SkMeshSpecification>(nullptr);
-      }
-      return resources::Hold(spec_result.specification);
-    }();
-
-    float length = 15_mm * state.connector_scale;
-    StrokeToCable mesh_builder;
-    mesh_builder.start_offset = 0;
-    mesh_builder.start_width = kCasingWidth * state.connector_scale;
-    mesh_builder.end_offset = length;
-    mesh_builder.end_width = (state.cable_width + 1_mm) * state.connector_scale;
-    mesh_builder.Convert(p, length);
-    if (mesh_builder.vertex_vector.empty()) {
-      // Add two points on the left & right side of the connector - just so that we can build the
-      // ellipse cap.
-      Vec2 offset = Vec2::Polar(connector_dir + 90_deg, kCasingWidth / 2 * state.connector_scale);
-      Vec2 tangent = Vec2::Polar(connector_dir, 1);
-      mesh_builder.vertex_vector.push_back({
-          .coords = cable_end + offset,
-          .uv = Vec2(-1, 0),
-          .tangent = tangent,
-      });
-      mesh_builder.vertex_vector.push_back({
-          .coords = cable_end - offset,
-          .uv = Vec2(1, 0),
-          .tangent = tangent,
-      });
-    }
-    // Add an ellipse cap at the end of the mesh
-    if (mesh_builder.vertex_vector.size() >= 2) {
-      auto left = mesh_builder.vertex_vector[mesh_builder.vertex_vector.size() - 2];
-      auto right = mesh_builder.vertex_vector[mesh_builder.vertex_vector.size() - 1];
-      Vec2 middle = (left.coords + right.coords) / 2;
-      Vec2 left_to_right = right.coords - left.coords;
-      Vec2 tangent = Normalize(left.tangent);
-      float width = Length(left_to_right);
-      float height = width / 8;
-      constexpr int n_steps = 10;
-      for (int i = 0; i < n_steps; ++i) {
-        float t = (float)i / n_steps;
-        auto mat = SkMatrix::RotateDeg(-t * 90);
-        auto mat2 = SkMatrix::RotateDeg(t * 90);
-        t = 1 - (1 - t) * (1 - t);
-        float step_width = sqrt(1 - t * t);
-        float step_height = height * t;
-        mesh_builder.vertex_vector.push_back({
-            .coords = middle - left_to_right * step_width / 2 + tangent * step_height,
-            .uv = Vec2(-step_width, left.uv.y + step_height),
-            .tangent = mat.mapPoint(tangent),
-        });
-        mesh_builder.bounds.ExpandToInclude(mesh_builder.vertex_vector.back().coords);
-        mesh_builder.vertex_vector.push_back({
-            .coords = middle + left_to_right * step_width / 2 + tangent * step_height,
-            .uv = Vec2(step_width, left.uv.y + step_height),
-            .tangent = mat2.mapPoint(tangent),
-        });
-        mesh_builder.bounds.ExpandToInclude(mesh_builder.vertex_vector.back().coords);
-      }
-      mesh_builder.vertex_vector.push_back({
-          .coords = middle + tangent * height,
-          .uv = Vec2(0, left.uv.y + height),
-          .tangent = SkMatrix::RotateDeg(90).mapPoint(tangent),
-      });
-      mesh_builder.bounds.ExpandToInclude(mesh_builder.vertex_vector.back().coords);
-
-      auto vertex_buffer = mesh_builder.BuildBuffer();
-      auto mesh_result =
-          SkMesh::Make(mesh_specification, SkMesh::Mode::kTriangleStrip, vertex_buffer,
-                       mesh_builder.vertex_vector.size(), 0, nullptr, {}, mesh_builder.bounds);
-      if (!mesh_result.error.isEmpty()) {
-        ERROR << "Error creating mesh: " << mesh_result.error.c_str();
-      } else {
-        SkPaint paint;
-        paint.setColor(0xffffffff);
-        paint.setAntiAlias(true);
-        paint.setColorFilter(color_filter);
-        canvas.drawMesh(mesh_result.mesh, nullptr, paint);
-      }
-    }
-
     float length_limit = 15_mm * state.connector_scale;
-    length = 0;
+    float length = 0;
 
     SkPath::Iter iter(p, false);
     SkPath::Verb verb;
@@ -1664,9 +1567,6 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
       }
     } while (SkPath::kDone_Verb != verb && length < length_limit);
 
-    SkPaint paint;
-    paint.setColor(0xffff0000);
-
     Vec2 top_offset = normal * CosineInterpolate(kCasingWidth / 2, 1.5_mm, length / length_limit);
     Vec2 top_tangent = Rotate90DegreesCounterClockwise(normal);
     Vec2 base_offset =
@@ -1678,32 +1578,53 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     auto top_right = top + top_offset;
     auto base_left = base - base_offset;
     auto base_right = base + base_offset;
-    float vertical_control_point_distance_left = std::min(length, Length(base_left - top_left) / 2);
-    float vertical_control_point_distance_right =
-        std::min(length, Length(base_right - top_right) / 2);
+    float vertical_control_point_distance_left = std::min(length, Length(base_left - top_left));
+    float vertical_control_point_distance_right = std::min(length, Length(base_right - top_right));
     Vec2 positions[12] = {
         top_left,
-        top_left + top_tangent * 1_mm,
-        top_right + top_tangent * 1_mm,
+        top_left + top_tangent * 0.5_mm,
+        top_right + top_tangent * 0.5_mm,
         top_right,
-        top_right - top_tangent * vertical_control_point_distance_right,
-        base_right + base_tangent * vertical_control_point_distance_right,
+        top_right - top_tangent * vertical_control_point_distance_right * 0.2,
+        base_right + base_tangent * vertical_control_point_distance_right * 0.6,
         base_right,
         base + base_offset / 3,
         base - base_offset / 3,
         base_left,
-        base_left + base_tangent * vertical_control_point_distance_left,
-        top_left - top_tangent * vertical_control_point_distance_left,
+        base_left + base_tangent * vertical_control_point_distance_left * 0.6,
+        top_left - top_tangent * vertical_control_point_distance_left * 0.2,
     };
 
-    SkColor colors[4] = {
-        "#00ff00"_color,
-        "#ffff00"_color,
-        "#ff0000"_color,
-        "#000000"_color,
+    SkPaint paint;
+
+    struct OptionsHack {
+      bool forceUnoptimized = false;
+      bool allowPrivateAccess = false;
+      uint32_t fStableKey = 0;
+      SkSL::Version maxVersionAllowed = SkSL::Version::k300;
+      operator SkRuntimeEffect::Options&() {
+        return *reinterpret_cast<SkRuntimeEffect::Options*>(this);
+      }
     };
 
-    canvas.drawPatch(&positions[0].sk, colors, nullptr, SkBlendMode::kDstOver, paint);
+    static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
+
+    OptionsHack options;
+
+    auto [effect, err] = SkRuntimeEffect::MakeForShader(
+        SkString(embedded::assets_connector_rubber_rt_sksl.content), options);
+    if (!err.isEmpty()) {
+      FATAL << err.c_str();
+    }
+    paint.setShader(effect->makeShader(nullptr, nullptr, 0));
+    paint.setColorFilter(color_filter);
+    Vec2 tex_coords[4] = {
+        {-1, length},
+        {1, length},
+        {1, 0},
+        {-1, 0},
+    };
+    canvas.drawPatch(&positions[0].sk, nullptr, &tex_coords[0].sk, SkBlendMode::kSrcOver, paint);
   }
 
   if constexpr (kDebugCable) {  // Draw the arcline

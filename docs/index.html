@@ -2,8 +2,8 @@
 <html lang="en">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="description" content="Automat is a FOSS software that allows anyone to control their computers by combining interactive blocks." />
-<title>Automat</title>
+<meta name="description" content="Automat's objective is to be able to semi-autonomously play a variety of games. It's the first step towards a more general environment for interacting with computers." />
+<title>Automat - a game that plays other games</title>
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
 <style>
@@ -1054,7 +1054,7 @@
       screen.innerHTML = html;
     }
 
-    const defaultVideo = '<video controls autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit:cover"><source src = "assets/2024-01-24 09-54-03.webm" type = "video/webm" /></video>';
+    const defaultVideo = '<video controls autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit:cover"><source src = "assets/output.webm" type = "video/webm" /></video>';
     LoadVideo(defaultVideo);
 
     function Snap(element, x, y, scale, rot) {
@@ -1133,6 +1133,7 @@
         toy.targetRotation = 0;
         toy.targetScale = 0.9;
         toy.inserting = null;
+        video_player.targetRotation = 0;
         video_player.style.zIndex = ++z;
         let sound_insert = toy.querySelector('.sound_insert');
         if (sound_insert) {

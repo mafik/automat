@@ -235,19 +235,13 @@ int Main() {
   root_machine->name = "Root machine";
   StartTimeThread(stop_source.get_token());
 
-  Status status;
-  LoadState(*root_widget, status);
-  if (!OK(status)) {
-    ERROR << "Couldn't load saved state: " << status;
-  }
-
   automat_thread = std::jthread(RunThread, stop_source.get_token());
   RunOnAutomatThread([&] {
     // nothing to do here - just make sure that memory allocated in main thread is synchronized to
     // automat thread
   });
-  anim.LoadingCompleted();
 
+  Status status;
 #ifdef __linux__
   root_widget->window = xcb::XCBWindow::Make(*root_widget, status);
 #else
@@ -268,6 +262,12 @@ int Main() {
   image_provider.reset(new AutomatImageProvider());
 
   render_thread = std::jthread(RenderThread, stop_source.get_token());
+
+  LoadState(*root_widget, status);
+  if (!OK(status)) {
+    ERROR << "Couldn't load saved state: " << status;
+  }
+  anim.LoadingCompleted();
 
   root_widget->window->MainLoop();
 

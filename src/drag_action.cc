@@ -111,6 +111,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
       }
     }
   }
+  gui::root_widget->WakeAnimation();
 }
 
 DragLocationAction::~DragLocationAction() {
@@ -121,6 +122,7 @@ DragLocationAction::~DragLocationAction() {
   if (location) {
     location->ForgetParents();
   }
+  gui::root_widget->WakeAnimation();
 }
 void DragLocationWidget::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   children.push_back(action.location);

@@ -6,6 +6,8 @@
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkSurface.h>
+#include <src/core/SkReadBuffer.h>
+#include <src/core/SkWriteBuffer.h>
 
 #include <cmath>
 #include <functional>
@@ -14,8 +16,9 @@
 #include "action.hh"
 #include "animation.hh"
 #include "control_flow.hh"
-#include "drawable.hh"
+#include "drawable_rtti.hh"
 #include "key.hh"
+#include "log.hh"
 #include "optional.hh"
 #include "shared_base.hh"
 #include "span.hh"
@@ -95,65 +98,124 @@ struct ActionTrigger {
   }
 };
 
-// Base class for widgets.
+// Instead of calling ComposeSurface directly (which would use the current surface), we're using a
+// drawable. This delays the actual drawing until the canvas is "flushed" and allows us to use the
+// most recent surface.
+struct LazyComposeSurface : SkDrawableRTTI {
+  LazyComposeSurface(uint32_t id) : id(id) {}
+  uint32_t id;
+
+  SkRect onGetBounds() override;
+  void onDraw(SkCanvas* canvas) override;
+  const char* getTypeName() const override { return "LazyComposeSurface"; }
+  void flatten(SkWriteBuffer& buffer) const override;
+  static sk_sp<SkFlattenable> CreateProc(SkReadBuffer& buffer);
+};
+
+// Holds all the data necessary to actually render a Widget.
+struct WidgetRenderState {
+  const uint32_t id = 0;
+
+  // Debugging
+  float average_draw_millis = FP_NAN;
+  maf::Str name;
+
+  // Rendering
+  SkIRect surface_bounds_root;
+  sk_sp<SkDrawable> recording = nullptr;
+  SkMatrix window_to_local;
+  Rect surface_bounds_local;
+
+  maf::Optional<SkRect> pack_frame_texture_bounds;
+  maf::Vec<Vec2> pack_frame_texture_anchors;
+  Rect draw_texture_bounds;
+  maf::Vec<Vec2> draw_texture_anchors;
+  maf::Vec<Vec2> fresh_texture_anchors;
+  time::SteadyPoint last_tick_time;
+
+  sk_sp<SkSurface> surface = nullptr;
+
+  WidgetRenderState(uint32_t id);
+
+  struct Update {
+    uint32_t id;
+
+    // Debugging
+    float average_draw_millis;
+    maf::Str name;
+    time::SteadyPoint last_tick_time;
+
+    // Rendering
+    SkIRect surface_bounds_root;
+    sk_sp<SkData> recording;
+    // TODO: when rendering locally, avoid the serialization round-trip
+    // sk_sp<SkDrawable> recording_drawable;
+    SkMatrix window_to_local;  // TODO: remove (while fixing surface_bounds_local)
+    maf::Optional<SkRect> pack_frame_texture_bounds;
+    maf::Vec<Vec2> pack_frame_texture_anchors;
+  };
+
+  void UpdateState(const Update&);
+
+  void RenderToSurface(SkCanvas& root_canvas);
+
+  void ComposeSurface(SkCanvas* canvas) const;
+
+  sk_sp<SkDrawable> sk_lazy_compose_surface;
+};
+
+// Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
+// which can't draw themselves otherwise.
 struct Widget : public virtual SharedBase {
+  // DO NOT CONFUSE with automat::gui::LazyComposeSurface!
+  // This class is a doppleganger of that type that is only used while recording the draw commands.
+  // It can be flattened into a format compatible with the other LazyComposeSurface but internally
+  // it refers to a Widget (rather than WidgetRenderState).
+  //
+  // It's used because when recording the drawing commands, we don't necessarily have access to the
+  // rendering state of widgets (which may be stored on another machine - if rendering remotely).
+  struct LazyComposeSurfaceDoppleganger : SkDrawableRTTI {
+    LazyComposeSurfaceDoppleganger(Widget& widget) : widget(widget) {}
+    Widget& widget;
+
+    SkRect onGetBounds() override { return *widget.pack_frame_texture_bounds; }
+    void onDraw(SkCanvas* canvas) override {
+      FATAL << "Widget::LazyComposeSurface::onDraw shouldn't end up being called! Did you go "
+               "through the serialization round-trip?";
+    }
+    const char* getTypeName() const override { return "LazyComposeSurface"; }
+    void flatten(SkWriteBuffer& buffer) const override { buffer.writeInt(widget.id); }
+  };
+
   Widget();
   virtual ~Widget();
 
   static void CheckAllWidgetsReleased();
 
-  // IDs are used to identify a Widget across frames.
   uint32_t ID() const;
   static Widget* Find(uint32_t id);
 
   std::shared_ptr<Widget> parent;
   SkM44 local_to_parent = SkM44();
 
-  void RenderToSurface(SkCanvas& root_canvas);
-
-  void ComposeSurface(SkCanvas* canvas) const;
-
-  // Instead of calling ComposeSurface directly (which would use the current surface), we're using a
-  // drawable. This delays the actual drawing until the canvas is "flushed" and allows us to use the
-  // most recent surface.
-  struct ComposeSurfaceDrawable : Drawable {
-    Widget& Widget() {
-      auto offset = offsetof(struct Widget, compose_surface_drawable);
-      return *reinterpret_cast<struct Widget*>(reinterpret_cast<uintptr_t>(this) - offset);
-    }
-    SkRect onGetBounds() override { return *Widget().pack_frame_texture_bounds; }
-    void onDraw(SkCanvas* canvas) override { Widget().ComposeSurface(canvas); }
-  };
-
-  mutable ComposeSurfaceDrawable compose_surface_drawable;
-
-  maf::Optional<SkRect> pack_frame_texture_bounds;  // local coordinates
-  maf::Vec<Vec2> fresh_texture_anchors;
-  maf::Vec<Vec2>
-      pack_frame_texture_anchors;  // copied into `draw_texture_anchors` during `RenderToSurface`
-  mutable uint32_t id = 0;
-  float average_draw_millis = FP_NAN;
-
   // The time when the animation should wake up.
   // Initially this is set to 0 (meaning it should wake up immediately).
   // When the widget's animation finishes, set this to max value.
   mutable time::SteadyPoint wake_time = time::SteadyPoint::min();
+  mutable time::SteadyPoint last_tick_time;
 
   // Things updated in PackFrame (& Draw)
-  mutable time::SteadyPoint last_tick_time = time::SteadyNow();
-  Rect draw_texture_bounds;
-  maf::Vec<Vec2> draw_texture_anchors;
-  SkIRect surface_bounds_root;
-  sk_sp<SkDrawable> recording = nullptr;
-  SkMatrix window_to_local;
-  bool draw_present = false;  // Whether the current draw job is going to be presented.
 
-  // Things updated in RenderToSurface
-  float cpu_time;  // Used by the client to measure rendering time
-  time::SteadyPoint gpu_started =
-      time::SteadyPoint::min();  // Used by the client to measure rendering time
+  sk_sp<SkDrawable> sk_lazy_compose_surface;  // holds a LazyComposeSurfaceDoppleganger
+  mutable uint32_t id = 0;
+  float average_draw_millis = FP_NAN;
+
+  // TODO: remove / clean up those two fields
+  SkMatrix window_to_local;
   Rect surface_bounds_local;
-  sk_sp<SkSurface> surface = nullptr;
+  maf::Optional<SkRect> pack_frame_texture_bounds;
+  bool rendering = false;  // Whether the widget is currently being rendered by the client.
+  bool rendering_to_screen = false;  // Whether the current render job is going to be presented.
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".

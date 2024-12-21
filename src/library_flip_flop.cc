@@ -33,7 +33,6 @@ constexpr float kYingYangButtonRadius = kYingYangRadius + 0.5_mm;
 constexpr float kFlipFlopWidth = 1.8_cm;
 
 struct FlipFlopIcon : PaintDrawable {
-  SkRect onGetBounds() override { return Rect::MakeCircleR(1_mm); }
   void onDraw(SkCanvas* canvas) override { canvas->drawCircle(0, 0, 1_mm, paint); }
 };
 

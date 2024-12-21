@@ -2,23 +2,19 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <include/core/SkDrawable.h>
+#include <include/core/SkCanvas.h>
 #include <include/core/SkPaint.h>
-#include <include/core/SkRect.h>
 
 namespace automat {
 
+// A minimal alternative to SkDrawable, for internal use in Automat.
+// Can be used to represent arbitrary object that can be drawn on a canvas.
 struct Drawable {
-  sk_sp<SkDrawable> sk;
-  Drawable();
-  void draw(SkCanvas*, SkScalar x, SkScalar y);
-
-  virtual SkRect onGetBounds() = 0;
+  virtual ~Drawable() = default;
   virtual void onDraw(SkCanvas*) = 0;
-
-  operator SkDrawable*() { return sk.get(); }
 };
 
+// A base class for Drawables that may be drawn with arbitrary SkPaint.
 struct PaintDrawable : Drawable {
   SkPaint paint;
 };

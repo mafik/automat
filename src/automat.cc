@@ -219,6 +219,8 @@ int Main() {
 #endif
   SkGraphics::Init();
 
+  SK_REGISTER_FLATTENABLE(LazyComposeSurface);
+
   prototypes.emplace();
 
   root_widget = std::make_shared<RootWidget>();

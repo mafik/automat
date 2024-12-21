@@ -4,9 +4,16 @@
 
 #include <include/core/SkCanvas.h>
 
+#include <map>
+
 namespace automat {
 
+namespace gui {
+struct WidgetRenderState;
+}
+
 extern std::string debug_render_events;
+extern std::map<uint32_t, gui::WidgetRenderState> widget_render_states;
 
 // Call this first, to render the picture to the given canvas.
 //

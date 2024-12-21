@@ -1010,7 +1010,8 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     canvas.save();
     canvas.translate(icon_offset.x, icon_offset.y);
     canvas.scale(state.connector_scale, state.connector_scale);
-    icon.draw(&canvas, 0, 0);
+
+    icon.onDraw(&canvas);
 
     // Draw blur
     if (state.lightness_pct > 1) {
@@ -1022,7 +1023,7 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
           SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, sigma, false));
       glow_paint.setBlendMode(SkBlendMode::kScreen);
       icon.paint = glow_paint;
-      icon.draw(&canvas, 0, 0);
+      icon.onDraw(&canvas);
     }
     canvas.restore();
   }

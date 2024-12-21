@@ -5,18 +5,21 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkDrawable.h>
+#include <include/core/SkFlattenable.h>
 #include <include/core/SkImageInfo.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkRect.h>
 #include <include/core/SkSamplingOptions.h>
+#include <include/core/SkSerialProcs.h>
 #include <include/core/SkShader.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/gpu/graphite/Context.h>
 #include <include/gpu/graphite/Surface.h>
 
+#include <mutex>
 #include <ranges>
 
 #include "../build/generated/embedded.hh"
@@ -50,7 +53,7 @@ void Widget::DrawCached(SkCanvas& canvas) const {
     return Draw(canvas);
   }
 
-  canvas.drawDrawable(compose_surface_drawable);
+  canvas.drawDrawable(sk_lazy_compose_surface.get());
 }
 
 void Widget::WakeAnimation() const {
@@ -119,7 +122,10 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
   return widget_index;
 }
 
-Widget::Widget() { GetWidgetIndex()[ID()] = this; }
+Widget::Widget() {
+  GetWidgetIndex()[ID()] = this;
+  sk_lazy_compose_surface = SkDrawableRTTI::Make<LazyComposeSurfaceDoppleganger>(nullptr, *this);
+}
 Widget::~Widget() { GetWidgetIndex().erase(ID()); }
 
 void Widget::CheckAllWidgetsReleased() {
@@ -135,9 +141,9 @@ void Widget::CheckAllWidgetsReleased() {
 }
 
 uint32_t Widget::ID() const {
-  static atomic<uint32_t> id_counter = 1;
+  static atomic<uint32_t> id_counter = 0;
   if (id == 0) {
-    id = id_counter++;
+    id = ++id_counter;
   }
   return id;
 }
@@ -152,7 +158,47 @@ Widget* Widget::Find(uint32_t id) {
 
 PackFrameRequest next_frame_request = {};
 
-void Widget::RenderToSurface(SkCanvas& root_canvas) {
+// In order for remote rendering to work, the bandwidth of rendering commands must fit the
+// capabilities of the network. Automat aspires to render itself over a typical home Wi-Fi -
+// targetting 10 Mbps LAN connections. While it may seem conservative, even the sophisticated Wi-Fi
+// setups are unreliable and often degrade temporarily when under noisy conditions.
+//
+// Rendering at 60fps means that a single frame has a budget of 20kB.
+//
+// This procedure is meant to warn about widgets that require more than 10kB of rendering commands.
+// (10kB chosen arbitrarily - to leave some space for other widgets).
+static void WarnLargeRecording(StrView name, Size size) {
+#ifndef NDEBUG
+  static Size warning_threshold = 10 * 1024;
+  if (size > warning_threshold) {
+    LOG << "Warning: Widget " << name << " drew a frame of size " << size / 1024 << "kB";
+    warning_threshold = size;  // prevent spamming the log
+  }
+#endif
+}
+
+void WidgetRenderState::UpdateState(const Update& update) {
+  average_draw_millis = update.average_draw_millis;
+  surface_bounds_root = update.surface_bounds_root;
+
+  name = update.name;
+  last_tick_time = update.last_tick_time;
+
+  SkDeserialProcs deserial_procs{};
+  auto data = update.recording;
+
+  WarnLargeRecording(name, data->size());
+  sk_sp<SkFlattenable> deserialized_recording = SkFlattenable::Deserialize(
+      SkFlattenable::kSkDrawable_Type, data->data(), data->size(), &deserial_procs);
+  recording = sk_sp<SkDrawable>(static_cast<SkDrawable*>(deserialized_recording.release()));
+
+  // recording = source.recording;
+  window_to_local = update.window_to_local;
+  pack_frame_texture_bounds = update.pack_frame_texture_bounds;
+  pack_frame_texture_anchors = update.pack_frame_texture_anchors;
+}
+
+void WidgetRenderState::RenderToSurface(SkCanvas& root_canvas) {
   skgpu::graphite::RecorderOptions options;
   options.fImageProvider = image_provider;
   auto recorder = vk::graphite_context->makeRecorder(options);
@@ -161,7 +207,7 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
   auto image_info = root_surface->imageInfo().makeDimensions(surface_bounds_root.size());
 
   surface = SkSurfaces::RenderTarget(recorder.get(), image_info, skgpu::Mipmapped::kNo,
-                                     &root_surface->props(), Name());
+                                     &root_surface->props(), name);
 
   auto graphite_canvas = surface->getCanvas();
   graphite_canvas->clear(SK_ColorTRANSPARENT);
@@ -171,72 +217,71 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
 
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "BeginFlush(";
-    debug_render_events += Name();
+    debug_render_events += name;
     debug_render_events += ") ";
   }
   auto graphite_recording = recorder->snap();
   skgpu::graphite::InsertRecordingInfo insert_recording_info;
   insert_recording_info.fRecording = graphite_recording.get();
-  insert_recording_info.fFinishedContext = new std::weak_ptr(WeakPtr());
+
+  struct FinishedContext {
+    std::uint32_t id;
+    time::SteadyPoint gpu_started;
+    float cpu_time;
+    std::string name;
+    std::mutex mutex;
+  };
+
+  auto finished_context = std::make_shared<FinishedContext>();
+  finished_context->id = id;
+  finished_context->gpu_started = time::SteadyPoint::min();
+  finished_context->cpu_time = 0;
+  finished_context->name = name;
+
+  // Note that we're creating a dynamically allocated shared_ptr here. This is needed because we
+  // must store it inside `void* fFinishedContext`.
+  insert_recording_info.fFinishedContext = new std::shared_ptr<FinishedContext>(finished_context);
   insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
                                            skgpu::CallbackResult) {
-    auto weak_ptr = static_cast<std::weak_ptr<Widget>*>(context);
-    auto shared_ptr = weak_ptr->lock();
-    delete weak_ptr;
-    Widget* w = shared_ptr.get();
-    if (w == nullptr) {
-      return;
-    }
-    auto id = w->ID();
+    auto* finished_context_ptr = static_cast<std::shared_ptr<FinishedContext>*>(context);
+    auto finished_context =
+        std::move(*finished_context_ptr);  // create a stack-based copy of the shared_ptr
+    delete finished_context_ptr;           // free the heap allocated shared_ptr
+
+    auto lock = std::scoped_lock(finished_context->mutex);
     float gpu_time;
-    if (w->gpu_started == time::SteadyPoint::min()) {
+    if (finished_context->gpu_started == time::SteadyPoint::min()) {
       gpu_time = 0;
-      w->gpu_started = time::SteadyPoint::max();
-    } else if (w->gpu_started == time::SteadyPoint::max()) {
-      gpu_time = 0;
-      ERROR << "FinishedProc for " << w->Name()
-            << " was called multiple times, without SubmittedProc in between.";
     } else {
-      gpu_time = (float)(time::SteadyNow() - w->gpu_started).count();
-      w->gpu_started = time::SteadyPoint::min();
+      gpu_time = (float)(time::SteadyNow() - finished_context->gpu_started).count();
     }
-    float render_time = max(gpu_time, w->cpu_time);
+    float render_time = max(gpu_time, finished_context->cpu_time);
     if (render_time > 1) {
-      LOG << "Widget " << w->Name() << " took " << render_time << "s to render";
+      LOG << "Widget " << finished_context->name << " took " << render_time << "s to render";
     }
-    next_frame_request.render_results.push_back({id, render_time});
+    next_frame_request.render_results.push_back({finished_context->id, render_time});
     if constexpr (kDebugRendering && kDebugRenderEvents) {
       debug_render_events += "Finished(";
-      debug_render_events += w->Name();
+      debug_render_events += finished_context->name;
       debug_render_events += ") ";
     }
   };
 
   vk::graphite_context->insertRecording(insert_recording_info);
-
   bool success = vk::graphite_context->submit();
 
-  if (gpu_started == time::SteadyPoint::min()) {
-    gpu_started = time::SteadyNow();
-  } else if (gpu_started == time::SteadyPoint::max()) {
-    // Sometimes fFinishedProc is called before fSubmittedProc.
-    // When this happens, fFinishedProc sets the gpu_started to a guard value (max).
-    // When we see this value in SubmittedProc, this means that we have been reordered
-    // and we shouldn't record the time.
-    gpu_started = time::SteadyPoint::min();
-  } else {
-    ERROR << "SubmittedProc for " << Name()
-          << " was called multiple times without FinishedProc in between. Current "
-             "submitted success = "
-          << success;
+  {
+    auto lock = std::scoped_lock(finished_context->mutex);
+    auto now = time::SteadyNow();
+    finished_context->gpu_started = now;
+    finished_context->cpu_time = (now - cpu_started).count();
   }
 
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "EndFlush(";
-    debug_render_events += Name();
+    debug_render_events += name;
     debug_render_events += ") ";
   }
-  cpu_time = (time::SteadyNow() - cpu_started).count();
 
   window_to_local.mapRect(&surface_bounds_local.sk, SkRect::Make(surface_bounds_root));
   draw_texture_anchors = pack_frame_texture_anchors;
@@ -249,7 +294,7 @@ void Widget::RenderToSurface(SkCanvas& root_canvas) {
 // - RenderToSurface - Widget renders its SkSurface using the recorded commands
 // - ComposeSurface - compose the drawn SkSurface onto the canvas
 
-void Widget::ComposeSurface(SkCanvas* canvas) const {
+void WidgetRenderState::ComposeSurface(SkCanvas* canvas) const {
   if constexpr (kDebugRendering) {
     SkPaint texture_bounds_paint;  // translucent black
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
@@ -437,5 +482,36 @@ RootWidget& Widget::FindRootWidget() const {
   auto* root = dynamic_cast<struct RootWidget*>(w);
   assert(root);
   return *root;
+}
+
+static WidgetRenderState* FindRenderState(uint32_t id) {
+  if (auto it = widget_render_states.find(id); it != widget_render_states.end()) {
+    return &it->second;
+  }
+  // This may happen when the widget is off screen. Its parent usually isn't aware of that and
+  // attempts to compose it regardless. On the client side the result is that we don't find any
+  // WidgetRenderState to compose.
+  return nullptr;
+}
+
+void LazyComposeSurface::onDraw(SkCanvas* canvas) {
+  if (auto render_state = FindRenderState(id)) {
+    render_state->ComposeSurface(canvas);
+  }
+}
+SkRect LazyComposeSurface::onGetBounds() {
+  if (auto render_state = FindRenderState(id)) {
+    return *render_state->pack_frame_texture_bounds;
+  }
+  return SkRect::MakeEmpty();
+}
+
+WidgetRenderState::WidgetRenderState(uint32_t id) : id(id) {
+  sk_lazy_compose_surface = SkDrawableRTTI::Make<LazyComposeSurface>(nullptr, id);
+}
+void LazyComposeSurface::flatten(SkWriteBuffer& buffer) const { buffer.writeInt(id); }
+sk_sp<SkFlattenable> LazyComposeSurface::CreateProc(SkReadBuffer& buffer) {
+  auto sk = SkDrawableRTTI::Make<LazyComposeSurface>(nullptr, buffer.readInt());
+  return sk_sp(static_cast<SkFlattenable*>(sk.release()));
 }
 }  // namespace automat::gui

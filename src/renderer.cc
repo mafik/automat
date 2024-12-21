@@ -13,6 +13,7 @@
 #include <cmath>
 
 #include "font.hh"
+#include "log.hh"
 #include "root_widget.hh"
 #include "vk.hh"
 #include "widget.hh"
@@ -26,18 +27,43 @@ using namespace automat::gui;
 using namespace std;
 using namespace maf;
 
+template <typename T>
+struct Concat {
+  vector<T>& a;
+  vector<T>& b;
+
+  struct end_iterator {};
+
+  struct iterator {
+    vector<T>& a;
+    vector<T>& b;
+    size_t i = 0;
+
+    bool operator==(end_iterator) const { return i == a.size() + b.size(); }
+    bool operator!=(end_iterator) const { return i != a.size() + b.size(); }
+    T& operator*() const { return i < a.size() ? a[i] : b[i - a.size()]; }
+    iterator& operator++() {
+      ++i;
+      return *this;
+    }
+  };
+
+  iterator begin() { return iterator{a, b, 0}; }
+  end_iterator end() { return end_iterator{}; }
+};
+
 namespace automat {
 
 std::string debug_render_events;
 
 struct PackedFrame {
-  vector<U32> frame;
-  vector<U32> overflow;
+  vector<WidgetRenderState::Update> frame;
+  vector<WidgetRenderState::Update> overflow;
+  map<uint32_t, Vec<Vec2>> fresh_texture_anchors;
   animation::Phase animation_phase;
 };
 
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
-  std::lock_guard lock(root_widget->mutex);
   root_widget->timer.Tick();
   auto now = root_widget->timer.now;
   auto root_widget_bounds_px =
@@ -64,6 +90,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     SkMatrix window_to_local;
     SkMatrix local_to_window;     // copied over to Widget, if drawn
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
+    maf::Vec<Vec2> pack_frame_texture_anchors;
   };
   vector<WidgetTree> tree;
 
@@ -85,7 +112,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         continue;
       }
       if constexpr (kDebugRendering) {
-        if (widget->recording == nullptr) {
+        if (!widget->rendering) {
           FATAL << "Widget " << widget->Name() << " has been returned by client multiple times!";
         }
       }
@@ -96,19 +123,20 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         widget->average_draw_millis = 0.9 * widget->average_draw_millis + 0.1 * draw_millis;
       }
 
-      if (widget->draw_present == false) {
-        // Find the closest parent that can be rendered to texture.
-        Widget* renderable_parent = widget->parent.get();
-        while (!renderable_parent->pack_frame_texture_bounds.has_value()) {
+      if (widget->rendering_to_screen == false) {
+        // Find the closest ancestor that can be rendered to texture.
+        Widget* ancestor_with_texture = widget->parent.get();
+        while (!ancestor_with_texture->pack_frame_texture_bounds.has_value()) {
           // RootWidget can always be rendered to texture so we don't need any extra stop
           // condition here.
-          renderable_parent = renderable_parent->parent.get();
+          ancestor_with_texture = ancestor_with_texture->parent.get();
         }
-        renderable_parent->wake_time = min(renderable_parent->wake_time, widget->last_tick_time);
+        ancestor_with_texture->wake_time =
+            min(ancestor_with_texture->wake_time, widget->last_tick_time);
       }
 
-      widget->recording.reset();
-      widget->draw_present = false;
+      widget->rendering = false;
+      widget->rendering_to_screen = false;
     }
   }
 
@@ -122,7 +150,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       auto [parent, widget] = std::move(q.back());
       q.pop_back();
 
-      if (widget->recording) {
+      if (widget->rendering) {
         continue;
       }
 
@@ -157,7 +185,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       (void)node.local_to_window.invert(&node.window_to_local);
 
       widget->pack_frame_texture_bounds = widget->TextureBounds();
-      widget->pack_frame_texture_anchors = widget->TextureAnchors();
+      node.pack_frame_texture_anchors = widget->TextureAnchors();
       bool visible = true;
       if (widget->pack_frame_texture_bounds.has_value()) {
         // Compute the bounds of the widget - in local & root coordinates
@@ -375,13 +403,21 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     auto& widget = *node.widget;
 
     if constexpr (kDebugRendering) {
-      if (widget.recording) {
+      if (widget.rendering) {
         FATAL << "Widget " << widget.Name() << " has been repacked!";
       }
     }
 
-    widget.window_to_local = node.window_to_local;
-    widget.surface_bounds_root = node.surface_bounds_root;
+    WidgetRenderState::Update update;
+
+    update.id = widget.ID();
+
+    update.average_draw_millis = widget.average_draw_millis;
+    update.name = widget.Name();
+    update.last_tick_time = widget.last_tick_time;
+
+    update.surface_bounds_root = node.surface_bounds_root;
+
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(root_widget_bounds_px);
     rec_canvas->setMatrix(node.local_to_window);
@@ -389,45 +425,36 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     // DRAW //
     //////////
     widget.Draw(*rec_canvas);  // This is where we actually draw stuff!
+    update.recording = recorder.finishRecordingAsDrawable()->serialize();
 
-    widget.recording = recorder.finishRecordingAsDrawable();
-    widget.draw_present = packed;
+    update.window_to_local = node.window_to_local;
+    widget.window_to_local = node.window_to_local;
+    update.pack_frame_texture_bounds = widget.pack_frame_texture_bounds;
+    update.pack_frame_texture_anchors = node.pack_frame_texture_anchors;
+
+    widget.rendering = true;
+    widget.rendering_to_screen = packed;
     if (packed) {
-      pack.frame.push_back(widget.ID());
+      pack.frame.push_back(update);
     } else {
-      pack.overflow.push_back(widget.ID());
+      pack.overflow.push_back(update);
     }
   }
 
   // Update fresh_texture_anchors for all widgets that will be drawn & their children.
   // This allows ComposeSurface to properly deform the texture.
   {
-    unordered_set<U32> updated_ids;
-    for (auto id : pack.frame) {
-      if (!updated_ids.insert(id).second) {
+    for (auto& update : Concat(pack.frame, pack.overflow)) {
+      if (pack.fresh_texture_anchors.find(update.id) != pack.fresh_texture_anchors.end()) {
         continue;
       }
-      if (auto* widget = Widget::Find(id)) {
-        widget->fresh_texture_anchors = widget->TextureAnchors();
+      if (auto* widget = Widget::Find(update.id)) {
+        pack.fresh_texture_anchors[update.id] = widget->TextureAnchors();
         for (auto& child : widget->Children()) {
-          if (!updated_ids.insert(child->ID()).second) {
+          if (pack.fresh_texture_anchors.find(child->ID()) != pack.fresh_texture_anchors.end()) {
             continue;
           }
-          child->fresh_texture_anchors = child->TextureAnchors();
-        }
-      }
-    }
-    for (auto id : pack.overflow) {
-      if (!updated_ids.insert(id).second) {
-        continue;
-      }
-      if (auto* widget = Widget::Find(id)) {
-        widget->fresh_texture_anchors = widget->TextureAnchors();
-        for (auto& child : widget->Children()) {
-          if (!updated_ids.insert(child->ID()).second) {
-            continue;
-          }
-          child->fresh_texture_anchors = child->TextureAnchors();
+          pack.fresh_texture_anchors[child->ID()] = child->TextureAnchors();
         }
       }
     }
@@ -443,14 +470,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
     LOG << "Finished since last frame: " << finished_widgets;
     Str packed_widgets;
-    for (auto id : pack.frame) {
-      packed_widgets += Widget::Find(id)->Name();
+    for (auto& update : pack.frame) {
+      packed_widgets += update.name;
       packed_widgets += " ";
     }
     LOG << "Packed widgets: " << packed_widgets;
     Str overflow_widgets;
-    for (auto id : pack.overflow) {
-      overflow_widgets += Widget::Find(id)->Name();
+    for (auto& update : pack.overflow) {
+      overflow_widgets += update.name;
       overflow_widgets += " ";
     }
     LOG << "Overflow widgets: " << overflow_widgets;
@@ -458,7 +485,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 }
 
-std::deque<U32> overflow_queue;
+// TODO: replace with a set
+std::map<uint32_t, WidgetRenderState> widget_render_states;
+
+std::deque<WidgetRenderState*> overflow_queue;
+
 time::SteadyPoint paint_start;
 
 void RenderFrame(SkCanvas& canvas) {
@@ -473,6 +504,7 @@ void RenderFrame(SkCanvas& canvas) {
 
   PackedFrame pack;
   PackFrameRequest request;
+  std::vector<WidgetRenderState*> frame;
   {
     std::lock_guard lock(root_widget->mutex);
     request = std::move(next_frame_request);
@@ -480,53 +512,87 @@ void RenderFrame(SkCanvas& canvas) {
       LOG << "Render events: " << debug_render_events;
       debug_render_events.clear();
     }
-  }
-  PackFrame(request, pack);
 
-  // Render the PackedFrame
-  for (auto id : pack.frame) {
-    if (auto* widget = Widget::Find(id)) {
-      widget->RenderToSurface(canvas);
+    // TODO: remove this
+    // (Temporary) copy back some of the properties from WidgetRenderState to their original
+    // Widgets.
+    for (auto& result : request.render_results) {
+      if (auto widget = Widget::Find(result.id)) {
+        if (auto state_it = widget_render_states.find(result.id);
+            state_it != widget_render_states.end()) {
+          widget->surface_bounds_local = state_it->second.surface_bounds_local;
+        }
+      }
+    }
+
+    PackFrame(request, pack);
+  }
+
+  // Update all WidgetRenderStates
+  for (auto& update : Concat(pack.frame, pack.overflow)) {
+    WidgetRenderState* state;
+    if (auto state_it = widget_render_states.find(update.id);
+        state_it != widget_render_states.end()) {
+      state = &state_it->second;
+    } else {
+      state = &widget_render_states.emplace(update.id, update.id).first->second;
+    }
+    state->UpdateState(update);
+  }
+  for (auto& [id, fresh_texture_anchors] : pack.fresh_texture_anchors) {
+    if (auto state_it = widget_render_states.find(id); state_it != widget_render_states.end()) {
+      state_it->second.fresh_texture_anchors = fresh_texture_anchors;
     }
   }
-  for (auto id : pack.overflow) {
-    overflow_queue.push_back(id);
+  for (auto& update : pack.frame) {
+    if (auto state_it = widget_render_states.find(update.id);
+        state_it != widget_render_states.end()) {
+      frame.push_back(&state_it->second);
+    }
+  }
+  for (auto& update : pack.overflow) {
+    if (auto state_it = widget_render_states.find(update.id);
+        state_it != widget_render_states.end()) {
+      overflow_queue.push_back(&state_it->second);
+    }
+  }
+
+  // Render the PackedFrame
+  for (auto widget_render_state : frame) {
+    widget_render_state->RenderToSurface(canvas);
   }
 
   if constexpr (kDebugRendering) {
     static bool saved = false;
     if (!saved) {
       saved = true;
-      for (auto id : pack.frame) {
-        if (auto* widget = Widget::Find(id)) {
-          struct ReadPixelsContext {
-            std::string webp_path;
-            SkImageInfo image_info;
-          };
+      for (auto state : frame) {
+        struct ReadPixelsContext {
+          std::string webp_path;
+          SkImageInfo image_info;
+        };
 
-          maf::Path("build/debug_widgets/").MakeDirs(nullptr);
+        maf::Path("build/debug_widgets/").MakeDirs(nullptr);
 
-          auto read_pixels_context = new ReadPixelsContext{
-              .webp_path = f("build/debug_widgets/widget_%03d_%*s.webp", id, widget->Name().size(),
-                             widget->Name().data()),
-              .image_info = widget->surface->imageInfo(),
-          };
-          vk::graphite_context->asyncRescaleAndReadPixels(
-              widget->surface.get(), widget->surface->imageInfo(),
-              SkIRect::MakeSize(widget->surface->imageInfo().dimensions()),
-              SkImage::RescaleGamma::kLinear, SkImage::RescaleMode::kNearest,
-              [](SkImage::ReadPixelsContext context_arg,
-                 std::unique_ptr<const SkImage::AsyncReadResult> result) {
-                auto context = std::unique_ptr<ReadPixelsContext>(
-                    static_cast<ReadPixelsContext*>(context_arg));
-                // LOG << "      saving to " << context->webp_path;
-                SkPixmap pixmap =
-                    SkPixmap(context->image_info, result->data(0), result->rowBytes(0));
-                SkFILEWStream stream(context->webp_path.c_str());
-                SkWebpEncoder::Encode(&stream, pixmap, SkWebpEncoder::Options());
-              },
-              read_pixels_context);
-        }
+        auto read_pixels_context = new ReadPixelsContext{
+            .webp_path = f("build/debug_widgets/widget_%03d_%*s.webp", state->id,
+                           state->name.size(), state->name.data()),
+            .image_info = state->surface->imageInfo(),
+        };
+        vk::graphite_context->asyncRescaleAndReadPixels(
+            state->surface.get(), state->surface->imageInfo(),
+            SkIRect::MakeSize(state->surface->imageInfo().dimensions()),
+            SkImage::RescaleGamma::kLinear, SkImage::RescaleMode::kNearest,
+            [](SkImage::ReadPixelsContext context_arg,
+               std::unique_ptr<const SkImage::AsyncReadResult> result) {
+              auto context =
+                  std::unique_ptr<ReadPixelsContext>(static_cast<ReadPixelsContext*>(context_arg));
+              // LOG << "      saving to " << context->webp_path;
+              SkPixmap pixmap = SkPixmap(context->image_info, result->data(0), result->rowBytes(0));
+              SkFILEWStream stream(context->webp_path.c_str());
+              SkWebpEncoder::Encode(&stream, pixmap, SkWebpEncoder::Options());
+            },
+            read_pixels_context);
       }
     }
   }
@@ -534,9 +600,8 @@ void RenderFrame(SkCanvas& canvas) {
   canvas.setMatrix(root_widget->local_to_parent);
 
   // Final widget in the frame is the RootWidget
-  if (auto* widget = Widget::Find(pack.frame.back())) {
-    widget->ComposeSurface(&canvas);
-  }
+  auto root_widget_copy = frame.back();
+  root_widget_copy->ComposeSurface(&canvas);
 
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
     std::lock_guard lock(root_widget->mutex);
@@ -579,21 +644,19 @@ void RenderFrame(SkCanvas& canvas) {
 void RenderOverflow(SkCanvas& root_canvas) {
   // Render at least one widget from the overflow queue.
   if (!overflow_queue.empty()) {
-    if (auto* widget = Widget::Find(overflow_queue.front())) {
-      widget->RenderToSurface(root_canvas);
-    }
+    auto widget_render_state = overflow_queue.front();
+    widget_render_state->RenderToSurface(root_canvas);
     overflow_queue.pop_front();
   }
   for (int i = 0; i < overflow_queue.size(); ++i) {
-    auto* widget = Widget::Find(overflow_queue[i]);
-    if (widget) {
-      auto paint_time_so_far =
-          time::SteadyNow() - paint_start + time::Duration(widget->average_draw_millis / 1000);
-      if (paint_time_so_far > 16.6ms) {
-        continue;
-      }
-      widget->RenderToSurface(root_canvas);
+    auto widget_render_state = overflow_queue[i];
+    auto expected_total_paint_time =
+        time::SteadyNow() - paint_start +
+        time::Duration(widget_render_state->average_draw_millis / 1000);
+    if (expected_total_paint_time > 16.6ms) {
+      continue;
     }
+    widget_render_state->RenderToSurface(root_canvas);
     overflow_queue.erase(overflow_queue.begin() + i);
     --i;
   }

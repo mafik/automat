@@ -378,9 +378,6 @@ struct TextDrawable : PaintDrawable {
     canvas->translate(-width / 2, -kLetterSize / 2);
     KeyFont().DrawText(*canvas, text, paint);
   }
-  SkRect onGetBounds() override {
-    return SkRect::MakeXYWH(-width / 2, -kLetterSize / 2, width, kLetterSize);
-  }
 };
 
 struct TrackArgument : Argument {

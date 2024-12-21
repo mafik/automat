@@ -11,7 +11,6 @@
 #include "svg.hh"
 #include "widget.hh"
 
-
 using namespace maf;
 
 namespace automat {
@@ -76,7 +75,6 @@ Argument::ObjectResult Argument::GetObject(Location& here,
 struct DrawableSkPath : PaintDrawable {
   SkPath path;
   DrawableSkPath(SkPath path) : path(std::move(path)) {}
-  SkRect onGetBounds() override { return path.getBounds(); }
   void onDraw(SkCanvas* c) override { c->drawPath(path, paint); }
 };
 

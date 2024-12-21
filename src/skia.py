@@ -40,9 +40,9 @@ class BuildVariant:
     self.build_dir = SKIA_ROOT / 'out' / self.build_type.name
 
 variants = {
-  'Fast' : BuildVariant(build.fast, 'is_official_build=true'),
+  'Fast' : BuildVariant(build.fast, 'is_debug=false is_official_build=true'),
   'Debug' : BuildVariant(build.debug, 'is_debug=true extra_cflags_cc=["-frtti"]'),
-  'Release' : BuildVariant(build.release, 'is_official_build=true is_debug=false'),
+  'Release' : BuildVariant(build.release, 'is_debug=false is_official_build=true'),
 }
 
 if platform == 'win32':
@@ -91,7 +91,9 @@ build.base.compile_args += ['-DSK_VULKAN']
 build.base.compile_args += ['-DSK_USE_VMA']
 build.base.compile_args += ['-DSK_SHAPER_HARFBUZZ_AVAILABLE']
 
+build.fast.compile_args += ['-DSK_RELEASE']
 build.debug.compile_args += ['-DSK_DEBUG']
+build.release.compile_args += ['-DSK_RELEASE']
 
 libname = build.libname('skia')
 

@@ -83,7 +83,8 @@ base.compile_args += ['-static', '-std=gnu++2c', '-fcolor-diagnostics', '-ffunct
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-plt', '-fno-strict-aliasing', '-fno-exceptions',
     '-D_FORTIFY_SOURCE=2', '-Wformat', '-Wchanges-meaning', '-Wno-c99-designator',
-    '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type']
+    '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type',
+    '-gsplit-dwarf']
 
 if platform != 'win32':
     # On PE/COFF, functions cannot be interposed (https://maskray.me/blog/2021-05-09-fno-semantic-interposition)

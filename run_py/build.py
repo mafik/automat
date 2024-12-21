@@ -209,6 +209,9 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
         objs[str(f_obj.path)] = f_obj
         f_obj.deps = set(src_file.transitive_includes)
         f_obj.deps.add(src_file)
+        # TODO: maybe instead of depending on this file, it would be possible
+        # to depend on the specific compile_args that were used?
+        f_obj.deps.add('run_py/build.py')
         f_obj.source = src_file
         f_obj.build_type = build_type
         f_obj.compile_args += src_file.build_compile_args(build_type.name_lower)

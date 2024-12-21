@@ -2,24 +2,34 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "(lldb) debug_automat",
+      "name": "LLDB debug_automat",
       "type": "lldb",
       "request": "launch",
       "env": {
         "DISPLAY": ":0"
       },
       "program": "${workspaceFolder}/build/debug_automat",
-      "preLaunchTask": "debug_automat"
+      "preLaunchTask": "link debug_automat",
     },
     {
-      "name": "(lldb) debug_sincos_test",
+      "name": "LLDB automat",
+      "type": "lldb",
+      "request": "launch",
+      "env": {
+        "DISPLAY": ":0"
+      },
+      "program": "${workspaceFolder}/build/automat",
+      "preLaunchTask": "link automat",
+    },
+    {
+      "name": "LLDB debug_sincos_test",
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/build/debug_sincos_test",
-      "preLaunchTask": "debug_sincos",
+      "preLaunchTask": "link debug_sincos",
     },
     {
-      "name": "(gdb) Launch",
+      "name": "GDB debug_automat",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/debug_automat",
@@ -29,7 +39,7 @@
       "environment": [],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "debug_automat",
+      "preLaunchTask": "link debug_automat",
       "setupCommands": [
         {
           "description": "Włącz formatowanie kodu dla gdb",
@@ -44,7 +54,7 @@
       ]
     },
     {
-      "name": "(Windows/VSDbg) debug_automat",
+      "name": "VSDbg debug_automat",
       "type": "cppvsdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/debug_automat.exe",
@@ -52,7 +62,7 @@
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
       "environment": [],
-      "preLaunchTask": "debug_automat"
+      "preLaunchTask": "link debug_automat"
     }
   ]
 }

@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "debug_sincos",
+      "label": "link debug_sincos",
       "type": "shell",
       "command": "./run.py 'link debug_sincos_test'",
       "presentation": {
@@ -12,7 +12,7 @@
       }
     },
     {
-      "label": "debug_automat",
+      "label": "link debug_automat",
       "type": "shell",
       "command": "./run.py 'link debug_automat'",
       "presentation": {
@@ -21,13 +21,22 @@
       }
     },
     {
-      "label": "Build Debug",
-      "dependsOn": [
-        "link automat"
-      ],
-      "problemMatcher": [
-        "$gcc"
-      ]
-    }
+      "label": "link automat",
+      "type": "shell",
+      "command": "./run.py 'link automat'",
+      "presentation": {
+        "reveal": "silent",
+        "close": true
+      }
+    },
+    {
+      "label": "link release_automat",
+      "type": "shell",
+      "command": "./run.py 'link release_automat'",
+      "presentation": {
+        "reveal": "silent",
+        "close": true
+      }
+    },
   ]
 }

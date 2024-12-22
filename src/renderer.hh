@@ -4,7 +4,21 @@
 
 #include <include/core/SkCanvas.h>
 
+#include <vector>
+
 namespace automat {
+
+struct RenderResult {
+  uint32_t id;
+  float render_time;
+};
+
+struct PackFrameRequest {
+  // Must be sorted by ID!
+  std::vector<RenderResult> render_results;
+};
+
+extern PackFrameRequest next_frame_request;
 
 void RendererInit();
 

@@ -26,9 +26,6 @@
 #include "time.hh"
 #include "vec.hh"
 
-constexpr bool kDebugRendering = false;
-constexpr bool kDebugRenderEvents = false;
-
 namespace automat {
 struct Object;
 struct Argument;
@@ -50,18 +47,6 @@ SkMatrix TransformDown(const Widget& to);
 SkMatrix TransformUp(const Widget& from);
 // Transform from the local coordinates of the widget to the local coordinates of another widget.
 SkMatrix TransformBetween(const Widget& from, const Widget& to);
-
-struct RenderResult {
-  uint32_t id;
-  float render_time;
-};
-
-struct PackFrameRequest {
-  // Must be sorted by ID!
-  std::vector<RenderResult> render_results;
-};
-
-extern PackFrameRequest next_frame_request;
 
 struct DropTarget;
 

@@ -148,8 +148,6 @@ Widget* Widget::Find(uint32_t id) {
   }
 }
 
-PackFrameRequest next_frame_request = {};
-
 void Widget::FixParents() {
   for (auto& child : Children()) {
     if (child->parent.get() != this) {

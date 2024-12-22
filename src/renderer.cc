@@ -29,6 +29,9 @@
 // TODO: use correct bounds in SkPictureRecorder::beginRecording
 // TODO: render using a job system (tree of Semaphores)
 
+constexpr bool kDebugRendering = false;
+constexpr bool kDebugRenderEvents = false;
+
 using namespace automat::gui;
 using namespace std;
 using namespace maf;
@@ -60,13 +63,15 @@ struct Concat {
 
 namespace automat {
 
-std::string debug_render_events;
+string debug_render_events;
+
+PackFrameRequest next_frame_request = {};
 
 time::SteadyPoint paint_start;
 
 struct WidgetRenderState;
 
-std::deque<WidgetRenderState*> overflow_queue;
+deque<WidgetRenderState*> overflow_queue;
 
 // Instead of calling ComposeSurface directly (which would use the current surface), we're using a
 // drawable. This delays the actual drawing until the canvas is "flushed" and allows us to use the
@@ -156,7 +161,7 @@ static void WarnLargeRecording(StrView name, Size size) {
 }
 
 // TODO: replace with a set
-std::map<uint32_t, WidgetRenderState> widget_render_states;
+map<uint32_t, WidgetRenderState> widget_render_states;
 
 static WidgetRenderState* FindRenderState(uint32_t id) {
   if (auto it = widget_render_states.find(id); it != widget_render_states.end()) {
@@ -233,14 +238,14 @@ void WidgetRenderState::RenderToSurface(SkCanvas& root_canvas) {
   insert_recording_info.fRecording = graphite_recording.get();
 
   struct FinishedContext {
-    std::uint32_t id;
+    uint32_t id;
     time::SteadyPoint gpu_started;
     float cpu_time;
-    std::string name;
-    std::mutex mutex;
+    string name;
+    mutex mutex;
   };
 
-  auto finished_context = std::make_shared<FinishedContext>();
+  auto finished_context = make_shared<FinishedContext>();
   finished_context->id = id;
   finished_context->gpu_started = time::SteadyPoint::min();
   finished_context->cpu_time = 0;
@@ -248,15 +253,15 @@ void WidgetRenderState::RenderToSurface(SkCanvas& root_canvas) {
 
   // Note that we're creating a dynamically allocated shared_ptr here. This is needed because we
   // must store it inside `void* fFinishedContext`.
-  insert_recording_info.fFinishedContext = new std::shared_ptr<FinishedContext>(finished_context);
+  insert_recording_info.fFinishedContext = new shared_ptr<FinishedContext>(finished_context);
   insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
                                            skgpu::CallbackResult) {
-    auto* finished_context_ptr = static_cast<std::shared_ptr<FinishedContext>*>(context);
+    auto* finished_context_ptr = static_cast<shared_ptr<FinishedContext>*>(context);
     auto finished_context =
         std::move(*finished_context_ptr);  // create a stack-based copy of the shared_ptr
     delete finished_context_ptr;           // free the heap allocated shared_ptr
 
-    auto lock = std::lock_guard(finished_context->mutex);
+    auto lock = lock_guard(finished_context->mutex);
     float gpu_time;
     if (finished_context->gpu_started == time::SteadyPoint::min()) {
       gpu_time = 0;
@@ -279,7 +284,7 @@ void WidgetRenderState::RenderToSurface(SkCanvas& root_canvas) {
   bool success = vk::graphite_context->submit();
 
   {
-    auto lock = std::lock_guard(finished_context->mutex);
+    auto lock = lock_guard(finished_context->mutex);
     auto now = time::SteadyNow();
     finished_context->gpu_started = now;
     finished_context->cpu_time = (now - cpu_started).count();
@@ -456,7 +461,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   };
 
   struct WidgetTree {
-    std::shared_ptr<Widget> widget;
+    shared_ptr<Widget> widget;
     Verdict verdict = Verdict::Unknown;
     int parent;
     int prev_job = -1;
@@ -521,7 +526,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
   {  // Step 2 - flatten the widget tree for analysis.
     // Queue with (parent index, widget) pairs.
-    vector<pair<int, std::shared_ptr<Widget>>> q;
+    vector<pair<int, shared_ptr<Widget>>> q;
     q.push_back(make_pair(0, root_widget));
     while (!q.empty()) {
       auto [parent, widget] = std::move(q.back());
@@ -874,9 +879,9 @@ void RenderFrame(SkCanvas& canvas) {
 
   PackedFrame pack;
   PackFrameRequest request;
-  std::vector<WidgetRenderState*> frame;
+  vector<WidgetRenderState*> frame;
   {
-    std::lock_guard lock(root_widget->mutex);
+    lock_guard lock(root_widget->mutex);
     request = std::move(next_frame_request);
     if constexpr (kDebugRendering && kDebugRenderEvents) {
       LOG << "Render events: " << debug_render_events;
@@ -938,7 +943,7 @@ void RenderFrame(SkCanvas& canvas) {
       saved = true;
       for (auto state : frame) {
         struct ReadPixelsContext {
-          std::string webp_path;
+          string webp_path;
           SkImageInfo image_info;
         };
 
@@ -954,9 +959,9 @@ void RenderFrame(SkCanvas& canvas) {
             SkIRect::MakeSize(state->surface->imageInfo().dimensions()),
             SkImage::RescaleGamma::kLinear, SkImage::RescaleMode::kNearest,
             [](SkImage::ReadPixelsContext context_arg,
-               std::unique_ptr<const SkImage::AsyncReadResult> result) {
+               unique_ptr<const SkImage::AsyncReadResult> result) {
               auto context =
-                  std::unique_ptr<ReadPixelsContext>(static_cast<ReadPixelsContext*>(context_arg));
+                  unique_ptr<ReadPixelsContext>(static_cast<ReadPixelsContext*>(context_arg));
               // LOG << "      saving to " << context->webp_path;
               SkPixmap pixmap = SkPixmap(context->image_info, result->data(0), result->rowBytes(0));
               SkFILEWStream stream(context->webp_path.c_str());
@@ -974,7 +979,7 @@ void RenderFrame(SkCanvas& canvas) {
   root_widget_copy->ComposeSurface(&canvas);
 
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
-    std::lock_guard lock(root_widget->mutex);
+    lock_guard lock(root_widget->mutex);
     if (root_widget->pointers.size() > 0) {
       auto p = root_widget->pointers[0]->pointer_position;
       auto window_transform = canvas.getTotalMatrix();

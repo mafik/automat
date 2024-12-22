@@ -45,7 +45,7 @@ void Widget::DrawCached(SkCanvas& canvas) const {
     return Draw(canvas);
   }
 
-  canvas.drawDrawable(sk_lazy_compose_surface.get());
+  canvas.drawDrawable(sk_drawable.get());
 }
 
 void Widget::WakeAnimation() const {
@@ -116,7 +116,7 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
 
 Widget::Widget() {
   GetWidgetIndex()[ID()] = this;
-  sk_lazy_compose_surface = SkDrawableRTTI::Make<LazyComposeSurfaceDoppleganger>(nullptr, *this);
+  sk_drawable = SkDrawableRTTI::Make<WidgetDrawable>(nullptr, *this);
 }
 Widget::~Widget() { GetWidgetIndex().erase(ID()); }
 

@@ -86,30 +86,30 @@ struct ActionTrigger {
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
 struct Widget : public virtual SharedBase {
-  // DO NOT CONFUSE with LazyComposeSurface from `renderer.cc`!
+  // DO NOT CONFUSE with CachedWidgetDrawable from `renderer.cc`!
   // This class is a doppleganger of that type that is only used while recording the draw commands.
-  // It can be flattened into a format compatible with the actual LazyComposeSurface but internally
-  // it refers to a Widget (rather than WidgetRenderState).
+  // It can be flattened into a format compatible with the actual CachedWidgetDrawable but
+  // internally it refers to a Widget.
   //
   // It's used because when recording the drawing commands, we don't necessarily have access to the
   // rendering state of widgets (which may be stored on another machine - if rendering remotely).
-  // The second reason is that Widget may be destroyed while rendering is in progress so any
-  // references to drawable owned by Widget would become dangling.
-  struct LazyComposeSurfaceDoppleganger : SkDrawableRTTI {
-    LazyComposeSurfaceDoppleganger(Widget& widget) : widget(widget) {}
+  // The second reason is that Widget may be destroyed while rendering is in progress in another
+  // thread so any references to WidgetDrawable owned by Widget would become dangling.
+  //
+  // TODO(once Widget doesn't derive from SharedBase): merge this class with Widget
+  struct WidgetDrawable : SkDrawableRTTI {
+    WidgetDrawable(Widget& widget) : widget(widget) {}
     Widget& widget;
 
     SkRect onGetBounds() override { return *widget.pack_frame_texture_bounds; }
     void onDraw(SkCanvas* canvas) override {
-      FATAL << "Widget::LazyComposeSurface::onDraw shouldn't end up being called! Did you go "
+      FATAL << "Widget::WidgetDrawable::onDraw shouldn't end up being called! Did you go "
                "through the serialization round-trip?";
       // Fun fact: we could call widget.Draw() here and it would work (meaning it would properly
       // draw the Automat's UI). That wouldn't use any caching though - so everything would be
       // redrawn on every frame.
     }
-    const char* getTypeName() const override {
-      return "LazyComposeSurface";  // white lie
-    }
+    const char* getTypeName() const override { return "WidgetDrawable"; }
     void flatten(SkWriteBuffer& buffer) const override { buffer.writeInt(widget.id); }
   };
 
@@ -132,7 +132,7 @@ struct Widget : public virtual SharedBase {
 
   // Things updated in PackFrame (& Draw)
 
-  sk_sp<SkDrawable> sk_lazy_compose_surface;  // holds a LazyComposeSurfaceDoppleganger
+  sk_sp<SkDrawable> sk_drawable;  // holds a WidgetDrawable
   mutable uint32_t id = 0;
   float average_draw_millis = FP_NAN;
 

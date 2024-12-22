@@ -69,28 +69,20 @@ PackFrameRequest next_frame_request = {};
 
 time::SteadyPoint paint_start;
 
-struct WidgetRenderState;
+struct CachedWidgetDrawable;
 
-deque<WidgetRenderState*> overflow_queue;
+deque<CachedWidgetDrawable*> overflow_queue;
 
-// Instead of calling ComposeSurface directly (which would use the current surface), we're using a
-// drawable. This delays the actual drawing until the canvas is "flushed" and allows us to use the
-// most recent surface.
-struct LazyComposeSurface : SkDrawableRTTI {
-  LazyComposeSurface(uint32_t id) : id(id) {}
-  uint32_t id;
-
-  SkRect onGetBounds() override;
-  void onDraw(SkCanvas* canvas) override;
-  const char* getTypeName() const override { return "LazyComposeSurface"; }
-  void flatten(SkWriteBuffer& buffer) const override;
-  static sk_sp<SkFlattenable> CreateProc(SkReadBuffer& buffer);
+struct CachedWidgetDrawableHolder {
+  sk_sp<SkDrawable> sk_drawable;
+  CachedWidgetDrawable* cached_widget_drawable;
 };
 
-void RendererInit() { SK_REGISTER_FLATTENABLE(LazyComposeSurface); }
+// TODO: replace with a set
+map<uint32_t, CachedWidgetDrawableHolder> cached_widget_drawables;
 
 // Holds all the data necessary to actually render a Widget.
-struct WidgetRenderState {
+struct CachedWidgetDrawable : SkDrawableRTTI {
   const uint32_t id = 0;
 
   // Debugging
@@ -112,7 +104,7 @@ struct WidgetRenderState {
 
   sk_sp<SkSurface> surface = nullptr;
 
-  WidgetRenderState(uint32_t id);
+  CachedWidgetDrawable(uint32_t id);
 
   struct Update {
     uint32_t id;
@@ -136,10 +128,28 @@ struct WidgetRenderState {
 
   void RenderToSurface(SkCanvas& root_canvas);
 
-  void ComposeSurface(SkCanvas* canvas) const;
+  SkRect onGetBounds() override;
+  void onDraw(SkCanvas* canvas) override;
+  const char* getTypeName() const override { return "WidgetDrawable"; }
+  void flatten(SkWriteBuffer& buffer) const override;
+  static sk_sp<SkFlattenable> CreateProc(SkReadBuffer& buffer);
 
-  sk_sp<SkDrawable> sk_lazy_compose_surface;
+  static CachedWidgetDrawable* Find(uint32_t id) {
+    if (auto it = cached_widget_drawables.find(id); it != cached_widget_drawables.end()) {
+      return it->second.cached_widget_drawable;
+    }
+    // This may happen when the widget is off screen. Its parent usually isn't aware of that and
+    // attempts to compose it regardless. On the client side the result is that we don't find any
+    // CachedWidgetDrawable to compose.
+    return nullptr;
+  }
+
+  // May create a new CachedWidgetDrawable - if none exists for the given id. Otherwise returns a
+  // reference to the existing CachedWidgetDrawable.
+  static CachedWidgetDrawableHolder& Make(uint32_t id);
 };
+
+void RendererInit() { SkFlattenable::Register("WidgetDrawable", CachedWidgetDrawable::CreateProc); }
 
 // In order for remote rendering to work, the bandwidth of rendering commands must fit the
 // capabilities of the network. Automat aspires to render itself over a typical home Wi-Fi -
@@ -160,37 +170,28 @@ static void WarnLargeRecording(StrView name, Size size) {
 #endif
 }
 
-// TODO: replace with a set
-map<uint32_t, WidgetRenderState> widget_render_states;
-
-static WidgetRenderState* FindRenderState(uint32_t id) {
-  if (auto it = widget_render_states.find(id); it != widget_render_states.end()) {
-    return &it->second;
-  }
-  // This may happen when the widget is off screen. Its parent usually isn't aware of that and
-  // attempts to compose it regardless. On the client side the result is that we don't find any
-  // WidgetRenderState to compose.
-  return nullptr;
+SkRect CachedWidgetDrawable::onGetBounds() { return *pack_frame_texture_bounds; }
+void CachedWidgetDrawable::flatten(SkWriteBuffer& buffer) const {
+  // Normally this shouldn't be called. There is no point serializing the render state.
+  buffer.writeInt(id);
 }
-
-void LazyComposeSurface::onDraw(SkCanvas* canvas) {
-  if (auto render_state = FindRenderState(id)) {
-    render_state->ComposeSurface(canvas);
+CachedWidgetDrawableHolder& CachedWidgetDrawable::Make(uint32_t id) {
+  auto it = cached_widget_drawables.find(id);
+  if (it == cached_widget_drawables.end()) {
+    CachedWidgetDrawable* typed_ptr = nullptr;
+    auto sk = SkDrawableRTTI::Make<CachedWidgetDrawable>(&typed_ptr, id);
+    it = cached_widget_drawables.emplace(id, CachedWidgetDrawableHolder{std::move(sk), typed_ptr})
+             .first;
   }
+  return it->second;
 }
-SkRect LazyComposeSurface::onGetBounds() {
-  if (auto render_state = FindRenderState(id)) {
-    return *render_state->pack_frame_texture_bounds;
-  }
-  return SkRect::MakeEmpty();
-}
-void LazyComposeSurface::flatten(SkWriteBuffer& buffer) const { buffer.writeInt(id); }
-sk_sp<SkFlattenable> LazyComposeSurface::CreateProc(SkReadBuffer& buffer) {
-  auto sk = SkDrawableRTTI::Make<LazyComposeSurface>(nullptr, buffer.readInt());
-  return sk_sp(static_cast<SkFlattenable*>(sk.release()));
+sk_sp<SkFlattenable> CachedWidgetDrawable::CreateProc(SkReadBuffer& buffer) {
+  int id = buffer.readInt();
+  auto& ref = Make(id);
+  return ref.sk_drawable;
 }
 
-void WidgetRenderState::UpdateState(const Update& update) {
+void CachedWidgetDrawable::UpdateState(const Update& update) {
   average_draw_millis = update.average_draw_millis;
   surface_bounds_root = update.surface_bounds_root;
 
@@ -211,7 +212,7 @@ void WidgetRenderState::UpdateState(const Update& update) {
   pack_frame_texture_anchors = update.pack_frame_texture_anchors;
 }
 
-void WidgetRenderState::RenderToSurface(SkCanvas& root_canvas) {
+void CachedWidgetDrawable::RenderToSurface(SkCanvas& root_canvas) {
   skgpu::graphite::RecorderOptions options;
   options.fImageProvider = image_provider;
   auto recorder = vk::graphite_context->makeRecorder(options);
@@ -301,7 +302,7 @@ void WidgetRenderState::RenderToSurface(SkCanvas& root_canvas) {
   draw_texture_bounds = *pack_frame_texture_bounds;
 }
 
-void WidgetRenderState::ComposeSurface(SkCanvas* canvas) const {
+void CachedWidgetDrawable::onDraw(SkCanvas* canvas) {
   if constexpr (kDebugRendering) {
     SkPaint texture_bounds_paint;  // translucent black
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
@@ -434,13 +435,11 @@ void WidgetRenderState::ComposeSurface(SkCanvas* canvas) const {
   }
 }
 
-WidgetRenderState::WidgetRenderState(uint32_t id) : id(id) {
-  sk_lazy_compose_surface = SkDrawableRTTI::Make<LazyComposeSurface>(nullptr, id);
-}
+CachedWidgetDrawable::CachedWidgetDrawable(uint32_t id) : id(id) {}
 
 struct PackedFrame {
-  vector<WidgetRenderState::Update> frame;
-  vector<WidgetRenderState::Update> overflow;
+  vector<CachedWidgetDrawable::Update> frame;
+  vector<CachedWidgetDrawable::Update> overflow;
   map<uint32_t, Vec<Vec2>> fresh_texture_anchors;
   animation::Phase animation_phase;
 };
@@ -790,7 +789,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
     }
 
-    WidgetRenderState::Update update;
+    CachedWidgetDrawable::Update update;
 
     update.id = widget.ID();
 
@@ -824,7 +823,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   }
 
   // Update fresh_texture_anchors for all widgets that will be drawn & their children.
-  // This allows ComposeSurface to properly deform the texture.
+  // This allows CachedWidgetDrawable::onDraw to properly deform the texture.
   {
     for (auto& update : Concat(pack.frame, pack.overflow)) {
       if (pack.fresh_texture_anchors.find(update.id) != pack.fresh_texture_anchors.end()) {
@@ -879,7 +878,7 @@ void RenderFrame(SkCanvas& canvas) {
 
   PackedFrame pack;
   PackFrameRequest request;
-  vector<WidgetRenderState*> frame;
+  vector<CachedWidgetDrawable*> frame;
   {
     lock_guard lock(root_widget->mutex);
     request = std::move(next_frame_request);
@@ -893,9 +892,8 @@ void RenderFrame(SkCanvas& canvas) {
     // Widgets.
     for (auto& result : request.render_results) {
       if (auto widget = Widget::Find(result.id)) {
-        if (auto state_it = widget_render_states.find(result.id);
-            state_it != widget_render_states.end()) {
-          widget->surface_bounds_local = state_it->second.surface_bounds_local;
+        if (auto cached_widget_drawable = CachedWidgetDrawable::Find(result.id)) {
+          widget->surface_bounds_local = cached_widget_drawable->surface_bounds_local;
         }
       }
     }
@@ -905,36 +903,24 @@ void RenderFrame(SkCanvas& canvas) {
 
   // Update all WidgetRenderStates
   for (auto& update : Concat(pack.frame, pack.overflow)) {
-    WidgetRenderState* state;
-    if (auto state_it = widget_render_states.find(update.id);
-        state_it != widget_render_states.end()) {
-      state = &state_it->second;
-    } else {
-      state = &widget_render_states.emplace(update.id, update.id).first->second;
-    }
-    state->UpdateState(update);
+    CachedWidgetDrawableHolder& ref = CachedWidgetDrawable::Make(update.id);
+    ref.cached_widget_drawable->UpdateState(update);
   }
   for (auto& [id, fresh_texture_anchors] : pack.fresh_texture_anchors) {
-    if (auto state_it = widget_render_states.find(id); state_it != widget_render_states.end()) {
-      state_it->second.fresh_texture_anchors = fresh_texture_anchors;
+    if (auto* cached_widget_drawable = CachedWidgetDrawable::Find(id)) {
+      cached_widget_drawable->fresh_texture_anchors = fresh_texture_anchors;
     }
   }
   for (auto& update : pack.frame) {
-    if (auto state_it = widget_render_states.find(update.id);
-        state_it != widget_render_states.end()) {
-      frame.push_back(&state_it->second);
-    }
+    frame.push_back(CachedWidgetDrawable::Find(update.id));
   }
   for (auto& update : pack.overflow) {
-    if (auto state_it = widget_render_states.find(update.id);
-        state_it != widget_render_states.end()) {
-      overflow_queue.push_back(&state_it->second);
-    }
+    overflow_queue.push_back(CachedWidgetDrawable::Find(update.id));
   }
 
   // Render the PackedFrame
-  for (auto widget_render_state : frame) {
-    widget_render_state->RenderToSurface(canvas);
+  for (auto cached_widget_drawable : frame) {
+    cached_widget_drawable->RenderToSurface(canvas);
   }
 
   if constexpr (kDebugRendering) {
@@ -976,7 +962,7 @@ void RenderFrame(SkCanvas& canvas) {
 
   // Final widget in the frame is the RootWidget
   auto root_widget_copy = frame.back();
-  root_widget_copy->ComposeSurface(&canvas);
+  root_widget_copy->onDraw(&canvas);
 
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
     lock_guard lock(root_widget->mutex);
@@ -1019,19 +1005,19 @@ void RenderFrame(SkCanvas& canvas) {
 void RenderOverflow(SkCanvas& root_canvas) {
   // Render at least one widget from the overflow queue.
   if (!overflow_queue.empty()) {
-    auto widget_render_state = overflow_queue.front();
-    widget_render_state->RenderToSurface(root_canvas);
+    auto cached_widget_drawable = overflow_queue.front();
+    cached_widget_drawable->RenderToSurface(root_canvas);
     overflow_queue.pop_front();
   }
   for (int i = 0; i < overflow_queue.size(); ++i) {
-    auto widget_render_state = overflow_queue[i];
+    auto cached_widget_drawable = overflow_queue[i];
     auto expected_total_paint_time =
         time::SteadyNow() - paint_start +
-        time::Duration(widget_render_state->average_draw_millis / 1000);
+        time::Duration(cached_widget_drawable->average_draw_millis / 1000);
     if (expected_total_paint_time > 16.6ms) {
       continue;
     }
-    widget_render_state->RenderToSurface(root_canvas);
+    cached_widget_drawable->RenderToSurface(root_canvas);
     overflow_queue.erase(overflow_queue.begin() + i);
     --i;
   }

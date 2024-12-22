@@ -98,82 +98,18 @@ struct ActionTrigger {
   }
 };
 
-// Instead of calling ComposeSurface directly (which would use the current surface), we're using a
-// drawable. This delays the actual drawing until the canvas is "flushed" and allows us to use the
-// most recent surface.
-struct LazyComposeSurface : SkDrawableRTTI {
-  LazyComposeSurface(uint32_t id) : id(id) {}
-  uint32_t id;
-
-  SkRect onGetBounds() override;
-  void onDraw(SkCanvas* canvas) override;
-  const char* getTypeName() const override { return "LazyComposeSurface"; }
-  void flatten(SkWriteBuffer& buffer) const override;
-  static sk_sp<SkFlattenable> CreateProc(SkReadBuffer& buffer);
-};
-
-// Holds all the data necessary to actually render a Widget.
-struct WidgetRenderState {
-  const uint32_t id = 0;
-
-  // Debugging
-  float average_draw_millis = FP_NAN;
-  maf::Str name;
-
-  // Rendering
-  SkIRect surface_bounds_root;
-  sk_sp<SkDrawable> recording = nullptr;
-  SkMatrix window_to_local;
-  Rect surface_bounds_local;
-
-  maf::Optional<SkRect> pack_frame_texture_bounds;
-  maf::Vec<Vec2> pack_frame_texture_anchors;
-  Rect draw_texture_bounds;
-  maf::Vec<Vec2> draw_texture_anchors;
-  maf::Vec<Vec2> fresh_texture_anchors;
-  time::SteadyPoint last_tick_time;
-
-  sk_sp<SkSurface> surface = nullptr;
-
-  WidgetRenderState(uint32_t id);
-
-  struct Update {
-    uint32_t id;
-
-    // Debugging
-    float average_draw_millis;
-    maf::Str name;
-    time::SteadyPoint last_tick_time;
-
-    // Rendering
-    SkIRect surface_bounds_root;
-    sk_sp<SkData> recording;
-    // TODO: when rendering locally, avoid the serialization round-trip
-    // sk_sp<SkDrawable> recording_drawable;
-    SkMatrix window_to_local;  // TODO: remove (while fixing surface_bounds_local)
-    maf::Optional<SkRect> pack_frame_texture_bounds;
-    maf::Vec<Vec2> pack_frame_texture_anchors;
-  };
-
-  void UpdateState(const Update&);
-
-  void RenderToSurface(SkCanvas& root_canvas);
-
-  void ComposeSurface(SkCanvas* canvas) const;
-
-  sk_sp<SkDrawable> sk_lazy_compose_surface;
-};
-
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
 struct Widget : public virtual SharedBase {
-  // DO NOT CONFUSE with automat::gui::LazyComposeSurface!
+  // DO NOT CONFUSE with LazyComposeSurface from `renderer.cc`!
   // This class is a doppleganger of that type that is only used while recording the draw commands.
-  // It can be flattened into a format compatible with the other LazyComposeSurface but internally
+  // It can be flattened into a format compatible with the actual LazyComposeSurface but internally
   // it refers to a Widget (rather than WidgetRenderState).
   //
   // It's used because when recording the drawing commands, we don't necessarily have access to the
   // rendering state of widgets (which may be stored on another machine - if rendering remotely).
+  // The second reason is that Widget may be destroyed while rendering is in progress so any
+  // references to drawable owned by Widget would become dangling.
   struct LazyComposeSurfaceDoppleganger : SkDrawableRTTI {
     LazyComposeSurfaceDoppleganger(Widget& widget) : widget(widget) {}
     Widget& widget;
@@ -182,8 +118,13 @@ struct Widget : public virtual SharedBase {
     void onDraw(SkCanvas* canvas) override {
       FATAL << "Widget::LazyComposeSurface::onDraw shouldn't end up being called! Did you go "
                "through the serialization round-trip?";
+      // Fun fact: we could call widget.Draw() here and it would work (meaning it would properly
+      // draw the Automat's UI). That wouldn't use any caching though - so everything would be
+      // redrawn on every frame.
     }
-    const char* getTypeName() const override { return "LazyComposeSurface"; }
+    const char* getTypeName() const override {
+      return "LazyComposeSurface";  // white lie
+    }
     void flatten(SkWriteBuffer& buffer) const override { buffer.writeInt(widget.id); }
   };
 

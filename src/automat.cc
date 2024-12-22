@@ -219,7 +219,7 @@ int Main() {
 #endif
   SkGraphics::Init();
 
-  SK_REGISTER_FLATTENABLE(LazyComposeSurface);
+  RendererInit();
 
   prototypes.emplace();
 

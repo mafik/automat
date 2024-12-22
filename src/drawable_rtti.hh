@@ -26,9 +26,9 @@ struct SkDrawableRTTI {
   virtual const char* getTypeName() const = 0;
   virtual void flatten(SkWriteBuffer&) const = 0;
 
-  // Create an instance of T (derived from Drawable), wrap it in a sk_sp<SkDrawable> and return it.
-  // Optionally store a pointer to the typed instance in typed_ptr.
-  // Once sk_sp<SkDrawable> is destroyed, the *typed_ptr becomes invalid.
+  // Create an instance of T (derived from SkDrawableRTTI), wrap it in a sk_sp<SkDrawable> and
+  // return it. Optionally store a pointer to the typed instance in typed_ptr. Once
+  // sk_sp<SkDrawable> is destroyed, the *typed_ptr becomes invalid.
   template <SkDrawableRTTI_Subclass T, typename... Args>
   static sk_sp<SkDrawable> Make(T** typed_ptr = nullptr, Args&&... args) {
     T* ptr = new T(std::forward<Args>(args)...);

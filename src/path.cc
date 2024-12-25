@@ -10,6 +10,7 @@
 #endif  // defined(__linux__)
 
 #if defined(_WIN32)
+#include <direct.h>
 #include <windows.h>
 #endif  // defined(_WIN32)
 
@@ -134,7 +135,14 @@ void Path::Rename(const Path& to, Status& status) const {
 }
 
 void Path::MakeDirs(Status* status) const {
+#if defined(__linux__)
   int ret = mkdir(str.c_str(), 0777);
+#elif defined(_WIN32)
+  int ret = _mkdir(str.c_str());
+#endif
+  if (status && ret < 0) {
+    AppendErrorMessage(*status) = "mkdir(" + str + ") failed";
+  }
   if (status && ret < 0) {
     AppendErrorMessage(*status) = "mkdir(" + str + ") failed";
   }

@@ -22,6 +22,7 @@
 #include <ranges>
 
 #include "log.hh"
+#include "renderer.hh"
 #include "root_widget.hh"
 #include "time.hh"
 
@@ -116,7 +117,7 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
 
 Widget::Widget() {
   GetWidgetIndex()[ID()] = this;
-  sk_drawable = SkDrawableRTTI::Make<WidgetDrawable>(nullptr, *this);
+  sk_drawable = MakeWidgetDrawable(*this);
 }
 Widget::~Widget() { GetWidgetIndex().erase(ID()); }
 

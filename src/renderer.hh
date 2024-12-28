@@ -8,6 +8,10 @@
 
 namespace automat {
 
+namespace gui {
+struct Widget;
+}
+
 struct RenderResult {
   uint32_t id;
   float render_time;
@@ -17,6 +21,10 @@ struct PackFrameRequest {
   // Must be sorted by ID!
   std::vector<RenderResult> render_results;
 };
+
+// Create a SkDrawable that will draw the given widget. The drawable may cache the rendered widget
+// as a texture to speed up subsequent re-renders.
+sk_sp<SkDrawable> MakeWidgetDrawable(gui::Widget& widget);
 
 extern PackFrameRequest next_frame_request;
 

@@ -820,9 +820,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
     constexpr bool kSerializeRecording = false;
     if constexpr (kSerializeRecording) {
-      update.recording_drawable = recorder.finishRecordingAsDrawable();
-    } else {
       update.recording_data = recorder.finishRecordingAsDrawable()->serialize();
+    } else {
+      update.recording_drawable = recorder.finishRecordingAsDrawable();
     }
 
     update.window_to_local = node.window_to_local;

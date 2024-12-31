@@ -7,10 +7,6 @@
 #include <include/core/SkColorType.h>
 #include <include/core/SkImageInfo.h>
 #include <include/core/SkSurface.h>
-#include <include/gpu/GrBackendSemaphore.h>
-#include <include/gpu/GrBackendSurface.h>
-#include <include/gpu/GrDirectContext.h>
-#include <include/gpu/GrTypes.h>
 #include <include/gpu/MutableTextureState.h>
 #include <include/gpu/graphite/BackendSemaphore.h>
 #include <include/gpu/graphite/Context.h>
@@ -49,16 +45,16 @@ PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR GetPhysicalDeviceSurfaceCapabiliti
 PFN_vkGetPhysicalDeviceSurfaceFormatsKHR GetPhysicalDeviceSurfaceFormatsKHR;
 PFN_vkGetPhysicalDeviceSurfacePresentModesKHR GetPhysicalDeviceSurfacePresentModesKHR;
 
-PFN_vkCreateSwapchainKHR CreateSwapchainKHR;
-PFN_vkDestroySwapchainKHR DestroySwapchainKHR;
-PFN_vkGetSwapchainImagesKHR GetSwapchainImagesKHR;
-PFN_vkAcquireNextImageKHR AcquireNextImageKHR;
-PFN_vkQueuePresentKHR QueuePresentKHR;
-PFN_vkDeviceWaitIdle DeviceWaitIdle;
-PFN_vkQueueWaitIdle QueueWaitIdle;
-PFN_vkDestroyDevice DestroyDevice;
-PFN_vkCreateSemaphore CreateSemaphore;
-PFN_vkDestroySemaphore DestroySemaphore;
+PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR;
+PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR;
+PFN_vkGetSwapchainImagesKHR vkGetSwapchainImagesKHR;
+PFN_vkAcquireNextImageKHR vkAcquireNextImageKHR;
+PFN_vkQueuePresentKHR vkQueuePresentKHR;
+PFN_vkDeviceWaitIdle vkDeviceWaitIdle;
+PFN_vkQueueWaitIdle vkQueueWaitIdle;
+PFN_vkDestroyDevice vkDestroyDevice;
+PFN_vkCreateSemaphore vkCreateSemaphore;
+PFN_vkDestroySemaphore vkDestroySemaphore;
 
 struct Instance : vkb::Instance {
   void Init();
@@ -111,7 +107,26 @@ struct Device : vkb::Device {
   std::string error = "";
 } device;
 
+skgpu::graphite::BackendSemaphore CreateSemaphore() {
+  auto create_info = VkSemaphoreCreateInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+  };
+  VkSemaphore semaphore;
+  SkDEBUGCODE(VkResult result =) vkCreateSemaphore(device, &create_info, nullptr, &semaphore);
+  SkASSERT(result == VK_SUCCESS);
+  return skgpu::graphite::BackendSemaphores::MakeVulkan(semaphore);
+}
+
+void DestroySemaphore(const skgpu::graphite::BackendSemaphore& backend_semaphore) {
+  auto semaphore = skgpu::graphite::BackendSemaphores::GetVkSemaphore(backend_semaphore);
+  vkDestroySemaphore(device, semaphore, nullptr);
+}
+
 std::unique_ptr<skgpu::graphite::Context> graphite_context;
+extern std::mutex context_mutex;
+
 std::unique_ptr<skgpu::graphite::Recorder> graphite_recorder;
 VkSemaphore wait_semaphore = VK_NULL_HANDLE;
 
@@ -356,7 +371,7 @@ void Device::Init() {
 }
 void Device::Destroy() {
   if (device != VK_NULL_HANDLE) {
-    DestroyDevice(device, allocation_callbacks);
+    vkDestroyDevice(device, allocation_callbacks);
   }
   device = VK_NULL_HANDLE;
   extensions = {};
@@ -383,21 +398,21 @@ void InitGrContext() {
 }
 void InitFunctions() {
 #define INSTANCE_PROC(P) P = (PFN_vk##P)instance.GetProc("vk" #P)
-#define DEVICE_PROC(P) P = (PFN_vk##P)device.GetProc("vk" #P)
+#define DEVICE_PROC(P) P = (PFN_##P)device.GetProc(#P)
 
   INSTANCE_PROC(GetPhysicalDeviceSurfaceCapabilitiesKHR);
   INSTANCE_PROC(GetPhysicalDeviceSurfaceFormatsKHR);
   INSTANCE_PROC(GetPhysicalDeviceSurfacePresentModesKHR);
-  DEVICE_PROC(DeviceWaitIdle);
-  DEVICE_PROC(QueueWaitIdle);
-  DEVICE_PROC(DestroyDevice);
-  DEVICE_PROC(CreateSwapchainKHR);
-  DEVICE_PROC(DestroySwapchainKHR);
-  DEVICE_PROC(GetSwapchainImagesKHR);
-  DEVICE_PROC(AcquireNextImageKHR);
-  DEVICE_PROC(QueuePresentKHR);
-  DEVICE_PROC(CreateSemaphore);
-  DEVICE_PROC(DestroySemaphore);
+  DEVICE_PROC(vkDeviceWaitIdle);
+  DEVICE_PROC(vkQueueWaitIdle);
+  DEVICE_PROC(vkDestroyDevice);
+  DEVICE_PROC(vkCreateSwapchainKHR);
+  DEVICE_PROC(vkDestroySwapchainKHR);
+  DEVICE_PROC(vkGetSwapchainImagesKHR);
+  DEVICE_PROC(vkAcquireNextImageKHR);
+  DEVICE_PROC(vkQueuePresentKHR);
+  DEVICE_PROC(vkCreateSemaphore);
+  DEVICE_PROC(vkDestroySemaphore);
 
 #undef INSTANCE_PROC
 #undef DEVICE_PROC
@@ -406,7 +421,7 @@ void Swapchain::DestroyBuffers() {
   if (backbuffers) {
     for (uint32_t i = 0; i < image_count + 1; ++i) {
       backbuffers[i].image_index = -1;
-      DestroySemaphore(device, backbuffers[i].render_semaphore, nullptr);
+      vkDestroySemaphore(device, backbuffers[i].render_semaphore, nullptr);
     }
   }
 
@@ -422,10 +437,10 @@ void Swapchain::DestroyBuffers() {
 bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat format,
                               VkImageUsageFlags usageFlags, SkColorType colorType,
                               VkSharingMode sharingMode) {
-  GetSwapchainImagesKHR(device, swapchain, &image_count, nullptr);
+  vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr);
   SkASSERT(image_count);
   images = new VkImage[image_count];
-  GetSwapchainImagesKHR(device, swapchain, &image_count, images);
+  vkGetSwapchainImagesKHR(device, swapchain, &image_count, images);
 
   surfaces = new sk_sp<SkSurface>[image_count]();
 
@@ -460,7 +475,7 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat 
   for (uint32_t i = 0; i < image_count + 1; ++i) {
     backbuffers[i].image_index = -1;
     SkDEBUGCODE(VkResult result =)
-        CreateSemaphore(device, &semaphoreInfo, nullptr, &backbuffers[i].render_semaphore);
+        vkCreateSemaphore(device, &semaphoreInfo, nullptr, &backbuffers[i].render_semaphore);
     SkASSERT(result == VK_SUCCESS);
   }
   current_backbuffer_index = image_count;
@@ -617,23 +632,23 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   swapchainCreateInfo.presentMode = mode;
   swapchainCreateInfo.clipped = true;
   swapchainCreateInfo.oldSwapchain = swapchain;
-  if (CreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain)) {
+  if (vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain)) {
     return false;
   }
 
   // destroy the old swapchain
   if (swapchainCreateInfo.oldSwapchain != VK_NULL_HANDLE) {
-    DeviceWaitIdle(device);
+    vkDeviceWaitIdle(device);
     DestroyBuffers();
-    DestroySwapchainKHR(device, swapchainCreateInfo.oldSwapchain, nullptr);
+    vkDestroySwapchainKHR(device, swapchainCreateInfo.oldSwapchain, nullptr);
     swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
   }
 
   if (!CreateBuffers(width, height, sample_count, swapchainCreateInfo.imageFormat, usageFlags,
                      colorType, swapchainCreateInfo.imageSharingMode)) {
-    DeviceWaitIdle(device);
+    vkDeviceWaitIdle(device);
     DestroyBuffers();
-    DestroySwapchainKHR(device, swapchain, nullptr);
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
     swapchain = VK_NULL_HANDLE;
     return false;
   }
@@ -664,30 +679,31 @@ SkCanvas* Swapchain::GetBackbufferCanvas() {
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
   semaphoreInfo.pNext = nullptr;
   semaphoreInfo.flags = 0;
-  SkDEBUGCODE(VkResult result =) CreateSemaphore(device, &semaphoreInfo, nullptr, &wait_semaphore);
+  SkDEBUGCODE(VkResult result =)
+      vkCreateSemaphore(device, &semaphoreInfo, nullptr, &wait_semaphore);
   SkASSERT(result == VK_SUCCESS);
 
-  VkResult res = AcquireNextImageKHR(device, swapchain, UINT64_MAX, wait_semaphore, VK_NULL_HANDLE,
-                                     &backbuffer->image_index);
+  VkResult res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, wait_semaphore,
+                                       VK_NULL_HANDLE, &backbuffer->image_index);
   if (VK_ERROR_SURFACE_LOST_KHR == res) {
     // need to figure out how to create a new vkSurface without the
     // platformData* maybe use attach somehow? but need a Window
-    DestroySemaphore(device, wait_semaphore, nullptr);
+    vkDestroySemaphore(device, wait_semaphore, nullptr);
     return nullptr;
   }
   if (VK_ERROR_OUT_OF_DATE_KHR == res) {
     // tear swapchain down and try again
     if (!Create(-1, -1)) {
-      DestroySemaphore(device, wait_semaphore, nullptr);
+      vkDestroySemaphore(device, wait_semaphore, nullptr);
       return nullptr;
     }
     backbuffer = GetAvailableBackbuffer();
 
-    res = AcquireNextImageKHR(device, swapchain, UINT64_MAX, wait_semaphore, VK_NULL_HANDLE,
-                              &backbuffer->image_index);
+    res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, wait_semaphore, VK_NULL_HANDLE,
+                                &backbuffer->image_index);
 
     if (VK_SUCCESS != res) {
-      DestroySemaphore(device, wait_semaphore, nullptr);
+      vkDestroySemaphore(device, wait_semaphore, nullptr);
       return nullptr;
     }
   }
@@ -725,7 +741,7 @@ void Swapchain::SwapBuffers() {
     insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext c,
                                              skgpu::CallbackResult status) {
       const auto* context = reinterpret_cast<const FinishedContext*>(c);
-      DestroySemaphore(context->device, context->wait_semaphore, nullptr);
+      vkDestroySemaphore(context->device, context->wait_semaphore, nullptr);
       delete context;
     };
     wait_semaphore = VK_NULL_HANDLE;
@@ -743,14 +759,14 @@ void Swapchain::SwapBuffers() {
                                         &backbuffer.image_index,
                                         nullptr};
 
-  QueuePresentKHR(device.present_queue, &presentInfo);
+  vkQueuePresentKHR(device.present_queue, &presentInfo);
 }
 void Swapchain::WaitAndDestroy() {
   if (VK_NULL_HANDLE != swapchain) {
-    QueueWaitIdle(device.present_queue);
-    DeviceWaitIdle(device);
+    vkQueueWaitIdle(device.present_queue);
+    vkDeviceWaitIdle(device);
     DestroyBuffers();
-    DestroySwapchainKHR(device, swapchain, nullptr);
+    vkDestroySwapchainKHR(device, swapchain, nullptr);
     swapchain = VK_NULL_HANDLE;
   }
 }

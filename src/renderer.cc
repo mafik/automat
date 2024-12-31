@@ -9,6 +9,7 @@
 #include <include/core/SkStream.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/encode/SkWebpEncoder.h>
+#include <include/gpu/graphite/BackendSemaphore.h>
 #include <include/gpu/graphite/GraphiteTypes.h>
 #include <include/gpu/graphite/Surface.h>
 
@@ -76,7 +77,7 @@ deque<WidgetDrawable*> overflow_queue;
 
 struct WidgetDrawableHolder {
   sk_sp<SkDrawable> sk_drawable;
-  WidgetDrawable* cached_widget_drawable;
+  WidgetDrawable* widget_drawable;
 };
 
 // TODO: replace with a set
@@ -105,10 +106,22 @@ struct WidgetDrawable : SkDrawableRTTI {
 
   sk_sp<SkSurface> surface = nullptr;
 
+  // Synchronization
+  skgpu::graphite::BackendSemaphore semaphore;
+  bool signal_semaphore = false;  // only signal semaphore if there is a parent that waits for it
+  vector<skgpu::graphite::BackendSemaphore>
+      wait_list;  // child widgets that must be rendered first, cleared after every frame
+
   WidgetDrawable(uint32_t id);
+  ~WidgetDrawable() {
+    if (semaphore.isValid()) {
+      vk::DestroySemaphore(semaphore);
+    }
+  }
 
   struct Update {
     uint32_t id;
+    uint32_t parent_id;  // used to delay rendering of parents (which must render after children)
 
     // Debugging
     float average_draw_millis;
@@ -140,7 +153,7 @@ struct WidgetDrawable : SkDrawableRTTI {
 
   static WidgetDrawable* Find(uint32_t id) {
     if (auto it = cached_widget_drawables.find(id); it != cached_widget_drawables.end()) {
-      return it->second.cached_widget_drawable;
+      return it->second.widget_drawable;
     }
     // This may happen when the widget is off screen. Its parent usually isn't aware of that and
     // attempts to compose it regardless. On the client side the result is that we don't find any
@@ -249,6 +262,16 @@ void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas) {
   skgpu::graphite::InsertRecordingInfo insert_recording_info;
   insert_recording_info.fRecording = graphite_recording.get();
 
+  if (signal_semaphore) {
+    insert_recording_info.fSignalSemaphores = &semaphore;
+    insert_recording_info.fNumSignalSemaphores = 1;
+  }
+
+  if (!wait_list.empty()) {
+    insert_recording_info.fWaitSemaphores = wait_list.data();
+    insert_recording_info.fNumWaitSemaphores = wait_list.size();
+  }
+
   struct FinishedContext {
     uint32_t id;
     time::SteadyPoint gpu_started;
@@ -293,7 +316,11 @@ void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas) {
   };
 
   vk::graphite_context->insertRecording(insert_recording_info);
-  bool success = vk::graphite_context->submit();
+
+  wait_list.clear();
+  signal_semaphore = false;
+
+  vk::graphite_context->submit();
 
   {
     auto lock = lock_guard(finished_context->mutex);
@@ -800,9 +827,12 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       }
     }
 
-    WidgetDrawable::Update update;
+    WidgetDrawable::Update update = {};
 
     update.id = widget.ID();
+    if (node.parent != i) {
+      update.parent_id = tree[node.parent].widget->ID();
+    }
 
     update.average_draw_millis = widget.average_draw_millis;
     update.name = widget.Name();
@@ -921,7 +951,7 @@ void RenderFrame(SkCanvas& canvas) {
   // Update all WidgetRenderStates
   for (auto& update : Concat(pack.frame, pack.overflow)) {
     WidgetDrawableHolder& ref = WidgetDrawable::Make(update.id);
-    ref.cached_widget_drawable->UpdateState(update);
+    ref.widget_drawable->UpdateState(update);
   }
   for (auto& [id, fresh_texture_anchors] : pack.fresh_texture_anchors) {
     if (auto* cached_widget_drawable = WidgetDrawable::Find(id)) {
@@ -929,15 +959,29 @@ void RenderFrame(SkCanvas& canvas) {
     }
   }
   for (auto& update : pack.frame) {
-    frame.push_back(WidgetDrawable::Find(update.id));
+    auto widget_drawable = WidgetDrawable::Find(update.id);
+    frame.push_back(widget_drawable);
+
+    if (update.parent_id) {
+      // Make sure the widget has a semaphore.
+      if (!widget_drawable->semaphore.isValid()) {
+        widget_drawable->semaphore = vk::CreateSemaphore();
+      }
+
+      // Make the widget signal its semaphore when rendered.
+      widget_drawable->signal_semaphore = true;
+
+      // Make the parent wait for the child semaphore before rendering.
+      WidgetDrawable::Find(update.parent_id)->wait_list.push_back(widget_drawable->semaphore);
+    }
   }
   for (auto& update : pack.overflow) {
     overflow_queue.push_back(WidgetDrawable::Find(update.id));
   }
 
   // Render the PackedFrame
-  for (auto cached_widget_drawable : frame) {
-    cached_widget_drawable->RenderToSurface(canvas);
+  for (auto widget_drawable : frame) {
+    widget_drawable->RenderToSurface(canvas);
   }
 
   if constexpr (kDebugRendering) {

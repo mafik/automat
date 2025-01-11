@@ -13,8 +13,8 @@ import ninja
 import git
 
 TAG = 'chrome/m130'
-DEPOT_TOOLS_ROOT = fs_utils.build_dir / 'depot_tools'
-SKIA_ROOT = fs_utils.build_dir / 'skia'
+DEPOT_TOOLS_ROOT = fs_utils.third_party_dir / 'depot_tools'
+SKIA_ROOT = fs_utils.third_party_dir / 'Skia'
 GN = (SKIA_ROOT / 'bin' / 'gn').with_suffix(build.binary_extension).absolute()
 
 default_gn_args = 'skia_use_vulkan=true skia_use_vma=true'
@@ -37,7 +37,7 @@ class BuildVariant:
   def __init__(self, build_type: build.BuildType, gn_args: str):
     self.build_type = build_type
     self.gn_args = gn_args
-    self.build_dir = SKIA_ROOT / 'out' / self.build_type.name
+    self.build_dir = build_type.BASE() / 'Skia'
 
 variants = {
   'Fast' : BuildVariant(build.fast, 'is_debug=false is_official_build=true'),
@@ -101,7 +101,7 @@ def skia_git_sync_with_deps():
   return make.Popen(['python', 'tools/git-sync-deps'], cwd=SKIA_ROOT)
 
 def skia_gn_gen(variant: BuildVariant):
-  args = [GN, 'gen', variant.build_dir.relative_to(SKIA_ROOT), '--args=' + variant.gn_args + ' ' + default_gn_args]
+  args = [GN, 'gen', variant.build_dir.relative_to(SKIA_ROOT, walk_up=True), '--args=' + variant.gn_args + ' ' + default_gn_args]
   return make.Popen(args, cwd=SKIA_ROOT)
 
 def skia_compile(variant: BuildVariant):
@@ -111,7 +111,7 @@ def skia_compile(variant: BuildVariant):
 def hook_recipe(recipe):
   recipe.add_step(
     git.clone('https://chromium.googlesource.com/chromium/tools/depot_tools.git', DEPOT_TOOLS_ROOT, 'main'),
-    outputs=[fs_utils.build_dir / 'depot_tools'],
+    outputs=[DEPOT_TOOLS_ROOT],
     inputs=[],
     desc='Downloading depot_tools',
     shortcut='get depot_tools')
@@ -124,7 +124,7 @@ def hook_recipe(recipe):
     desc='Downloading Skia',
     shortcut='get skia')
   
-  recipe.add_step(skia_git_sync_with_deps, outputs=[GN], inputs=[SKIA_ROOT], desc='Syncing Skia git deps', shortcut='skia git sync with deps')
+  recipe.add_step(skia_git_sync_with_deps, outputs=[GN], inputs=[SKIA_ROOT, DEPOT_TOOLS_ROOT], desc='Syncing Skia git deps', shortcut='skia git sync with deps')
 
   for v in variants.values():
     args_gn = v.build_dir / 'args.gn'

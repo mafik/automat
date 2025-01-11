@@ -44,6 +44,10 @@ __pycache__
 build
 third_party/PipeWire
 third_party/FlameGraph
+third_party/LLVM
+third_party/Skia
+third_party/depot_tools
+third_party/*.patched
 
 .gdb_history
 

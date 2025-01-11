@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: MIT
 from functools import partial
 from make import Popen
-from sys import platform
 
 import cmake
 import fs_utils

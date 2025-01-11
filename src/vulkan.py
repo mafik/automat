@@ -1,10 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
-from functools import partial
-from subprocess import Popen
-from sys import platform
 
-import cmake
 import fs_utils
 import build
 import git

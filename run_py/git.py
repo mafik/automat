@@ -10,6 +10,7 @@ def clone(url, out_directory, tag):
   return partial(make.Popen, [
     'git',
     '-c', 'advice.detachedHead=false',
+    '-c', 'core.autocrlf=false',
     'clone',
     '--depth', '1',
     '--branch', tag,

@@ -20,6 +20,10 @@ class BuildType:
         self.name = name
         self.name_lower = name.lower()
         self.base = base
+
+        # Callables in the argument lists (`compile_args`, `link_args`) will be
+        # invoked with the build type as an argument. Everything else will be
+        # converted to strings.
         self.compile_args = []
         self.link_args = []
         self.is_default = is_default
@@ -52,8 +56,11 @@ class BuildType:
     def rule_suffix(self):
         return '' if self.is_default else f'_{self.name_lower}'
     
+    def BASE(self):
+        return (fs_utils.build_dir / self.name).absolute()
+    
     def PREFIX(self): # TODO: change this to a member variable
-        return (fs_utils.build_dir / 'prefix' / self.name).absolute()
+        return self.BASE() / 'PREFIX'
     
     def CXXFLAGS(self):
         return [str(x) for x in (self.base.CXXFLAGS() if self.base else []) + self.compile_args]
@@ -317,7 +324,11 @@ def recipe() -> make.Recipe:
         else:
             pargs = [compiler] + obj.build_type.CXXFLAGS()
 
-        pargs += obj.compile_args
+        for arg in obj.compile_args:
+            if callable(arg):
+                pargs.append(functools.partial(arg, obj.build_type))
+            else:
+                pargs.append(arg)
         pargs += [str(obj.source.path)]
         pargs += ['-c', '-o', str(obj.path)]
         builder = functools.partial(make.Popen, pargs)
@@ -327,13 +338,23 @@ def recipe() -> make.Recipe:
                    desc=f'Compiling {obj.path.name}',
                    shortcut=obj.path.name)
         r.generated.add(str(obj.path))
+        expanded_args = []
+        for arg in pargs:
+            if callable(arg):
+                expanded_args += arg()
+            else:
+                expanded_args.append(arg)
         compilation_db.append(
-            CompilationEntry(str(obj.source.path), str(obj.path), pargs))
+            CompilationEntry(str(obj.source.path), str(obj.path), expanded_args))
     for bin in bins:
         pargs = [compiler]
         pargs += [str(obj.path) for obj in bin.objects]
         pargs += bin.build_type.LDFLAGS()
-        pargs += bin.link_args
+        for arg in bin.link_args:
+            if callable(arg):
+                pargs.append(functools.partial(arg, bin.build_type))
+            else:
+                pargs.append(arg)
         pargs += ['-o', str(bin.path)]
         builder = functools.partial(make.Popen, pargs)
         r.add_step(builder,

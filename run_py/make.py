@@ -26,7 +26,13 @@ HASH_DIR.mkdir(parents=True, exist_ok=True)
 def Popen(args, **kwargs):
     '''Wrapper around subprocess.Popen which captures STDERR into a temporary file.'''
     f = tempfile.TemporaryFile()
-    str_args = [str(x) for x in args]
+    str_args = []
+    for x in args:
+        if callable(x):
+            str_args += x()
+        else:
+            str_args.append(str(x))
+
     if cmdline_args.args.verbose:
         print(' $ \033[90m' + ' '.join(str_args) + '\033[0m')
     if 'stdout' in kwargs and isinstance(kwargs['stdout'], Path):

@@ -20,6 +20,14 @@ struct Instruction : LiveObject, Runnable {
   LongRunning* OnRun(Location& here) override;
 
   static void SetupDevelopmentScenario();
+
+  // Green box with a name of the object.
+  struct Widget : FallbackWidget {
+    Widget(std::weak_ptr<Object> object);
+    std::string Text() const override;
+  };
+
+  std::shared_ptr<gui::Widget> MakeWidget() override { return std::make_shared<Widget>(WeakPtr()); }
 };
 
 }  // namespace automat::library

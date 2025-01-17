@@ -29,8 +29,9 @@ void Instruction::Relocate(Location* new_here) {
 }
 
 string_view Instruction::Name() const {
+  return "Instruction";
   // "ADD64rr"
-  return assembler->mc_inst_printer->getOpcodeName(mc_inst.getOpcode());
+  // return assembler->mc_inst_printer->getOpcodeName(mc_inst.getOpcode());
 
   // Nicely formatted assembly:
   // std::string str;
@@ -56,6 +57,28 @@ void Instruction::SetupDevelopmentScenario() {
 LongRunning* Instruction::OnRun(Location& here) {
   assembler->RunMachineCode(this);
   return nullptr;
+}
+
+Instruction::Widget::Widget(std::weak_ptr<Object> object) { this->object = object; }
+
+std::string Instruction::Widget::Text() const {
+  auto obj = object.lock();
+  Instruction* inst = dynamic_cast<Instruction*>(obj.get());
+
+  // Nicely formatted assembly:
+  std::string str;
+  raw_string_ostream os(str);
+  assembler->mc_inst_printer->printInst(&inst->mc_inst, 0, "", *assembler->mc_subtarget_info, os);
+  os.flush();
+  for (auto& c : str) {
+    if (c == '\t') {
+      c = ' ';
+    }
+  }
+  if (str.starts_with(' ')) {
+    str.erase(0, 1);
+  }
+  return str;
 }
 
 }  // namespace automat::library

@@ -61,26 +61,27 @@ void Object::FallbackWidget::Draw(SkCanvas& canvas) const {
 
   SkRect path_bounds = path.getBounds();
 
+  auto text = Text();
   canvas.save();
-  canvas.translate(path_bounds.width() / 2 - gui::GetFont().MeasureText(Name()) / 2,
+  canvas.translate(path_bounds.width() / 2 - gui::GetFont().MeasureText(text) / 2,
                    path_bounds.height() / 2 - gui::kLetterSizeMM / 2 / 1000);
-  gui::GetFont().DrawText(canvas, Name(), text_paint);
+  gui::GetFont().DrawText(canvas, text, text_paint);
   canvas.restore();
 }
 
 SkPath Object::FallbackWidget::Shape() const {
   static std::unordered_map<std::string_view, SkPath> basic_shapes;
-  auto name = Name();
-  auto it = basic_shapes.find(name);
+  auto text = Text();
+  auto it = basic_shapes.find(text);
   if (it == basic_shapes.end()) {
     constexpr float kNameMargin = 0.001;
-    float width_name = gui::GetFont().MeasureText(name) + 2 * kNameMargin;
+    float width_name = gui::GetFont().MeasureText(text) + 2 * kNameMargin;
     float width_rounded = ceil(width_name * 1000) / 1000;
     constexpr float kMinWidth = 0.008;
     float final_width = std::max(width_rounded, kMinWidth);
     SkRect rect = SkRect::MakeXYWH(0, 0, final_width, 0.008);
     SkRRect rrect = SkRRect::MakeRectXY(rect, 0.001, 0.001);
-    it = basic_shapes.emplace(std::make_pair(name, SkPath::RRect(rrect))).first;
+    it = basic_shapes.emplace(std::make_pair(text, SkPath::RRect(rrect))).first;
   }
   return it->second;
 }

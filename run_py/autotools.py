@@ -22,8 +22,8 @@ def register_package(recipe, url, inputs=[], outputs=[]):
     raise ValueError(f'Could not parse package name from: {filename}')
   name = match.group('name')
   version = match.group('version')
-  source_dir = fs_utils.build_dir / f'{name}-{version}'
-  tarball = fs_utils.build_dir / filename
+  source_dir = fs_utils.third_party_dir / f'{name}-{version}'
+  tarball = fs_utils.third_party_dir / filename
 
   recipe.add_step(
       partial(Popen, ['curl', '-L', url, '-o', tarball]),
@@ -33,14 +33,14 @@ def register_package(recipe, url, inputs=[], outputs=[]):
       shortcut=f'download {name}')
   
   recipe.add_step(
-      partial(Popen, ['tar', 'xf', tarball, '-C', fs_utils.build_dir]),
+      partial(Popen, ['tar', 'xf', tarball, '-C', fs_utils.third_party_dir]),
       outputs=[source_dir],
       inputs=[tarball],
       desc = f'Extracting {name}',
       shortcut=f'extract {name}')
 
   for build_type in build.types:
-    build_dir = source_dir / 'build' / build_type.name
+    build_dir = build_type.BASE() / name
     prefix = build_type.PREFIX()
     build_inputs = [i.format(PREFIX=prefix) for i in inputs]
     build_outputs = [o.format(PREFIX=prefix) for o in outputs]

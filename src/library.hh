@@ -22,6 +22,7 @@
 #include "library_flip_flop.hh"       // IWYU pragma: keep
 #include "library_hotkey.hh"          // IWYU pragma: keep
 #include "library_increment.hh"       // IWYU pragma: keep
+#include "library_instruction.hh"     // IWYU pragma: keep
 #include "library_key_presser.hh"     // IWYU pragma: keep
 #include "library_macro_recorder.hh"  // IWYU pragma: keep
 #include "library_mouse_click.hh"     // IWYU pragma: keep

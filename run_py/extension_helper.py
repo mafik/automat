@@ -131,7 +131,7 @@ class ExtensionHelper:
 
   def _hook_plan(self, srcs, objs, bins, recipe):
     for obj in objs:
-      if obj.source in self.install_srcs:
+      if obj.deps.intersection(self.install_srcs):
         self.install_objs.add(obj)
         obj.deps.update(self.beam[obj.build_type.name])
         obj.compile_args += self.compile_args

@@ -21,6 +21,7 @@
 #include "embedded.hh"
 #include "font.hh"
 #include "library_assembler.hh"
+#include "llvm_asm.hh"
 #include "textures.hh"
 
 using namespace std;
@@ -102,10 +103,13 @@ static std::string AssemblyText(const Instruction::Widget& widget) {
   std::string str;
   raw_string_ostream os(str);
 
+  auto& llvm_asm = LLVM_Assembler::Get();
+  auto& mc_inst_printer = llvm_asm.mc_inst_printer;
+  auto& mc_subtarget_info = llvm_asm.mc_subtarget_info;
+
   if (auto h = inst->here.lock()) {
     if (auto assembler = FindOrCreateAssembler(*h)) {
-      assembler->mc_inst_printer->printInst(&inst->mc_inst, 0, "", *assembler->mc_subtarget_info,
-                                            os);
+      mc_inst_printer->printInst(&inst->mc_inst, 0, "", *mc_subtarget_info, os);
     } else {
       return "assembler not found";
     }

@@ -26,17 +26,6 @@ struct Regs;
 // Assembler part takes care of emitting machine code to an executable memory region.
 // Thread part maintains register state across executions.
 struct Assembler : LiveObject {
-  const static llvm::Triple kNativeTriple;
-
-  const llvm::Target* target;
-  std::unique_ptr<llvm::TargetMachine> target_machine;
-  const llvm::MCAsmInfo* mc_asm_info;
-  const llvm::MCInstrInfo* mc_instr_info;
-  const llvm::MCRegisterInfo* mc_reg_info;
-  const llvm::MCSubtargetInfo* mc_subtarget_info;
-  std::optional<llvm::MCContext> mc_context;
-  std::unique_ptr<llvm::MCCodeEmitter> mc_code_emitter;
-  std::unique_ptr<llvm::MCInstPrinter> mc_inst_printer;
   std::unique_ptr<char, DeleteWithMunmap> machine_code;
 
   std::unique_ptr<Regs> regs;

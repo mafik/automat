@@ -13,6 +13,7 @@
 #include <sys/ptrace.h>
 #include <sys/wait.h>
 
+#include "llvm_asm.hh"
 #include "status.hh"
 
 #pragma maf add link argument "-lz"
@@ -23,10 +24,6 @@ using namespace std;
 using namespace maf;
 
 namespace automat {
-
-constexpr static char kTripleStr[] = "x86_64-pc-linux-gnu";
-
-const Triple Assembler::kNativeTriple = Triple(kTripleStr);
 
 void AssemblerSignalHandler(int sig, siginfo_t* si, struct ucontext_t* context) {
   // In Automat this handler will actually call Automat code to see what to do.
@@ -106,33 +103,8 @@ struct Regs {
 };
 
 Assembler::Assembler(Status& status) {
-  LLVMInitializeX86TargetInfo();
-  LLVMInitializeX86Target();
-  LLVMInitializeX86TargetMC();
-  LLVMInitializeX86AsmPrinter();
-
   static bool signal_handler_initialized =
       SetupSignalHandler();  // unused, ensures that initialization happens once
-
-  string err;
-  target = TargetRegistry::lookupTarget(kTripleStr, err);
-  if (!target) {
-    AppendErrorMessage(status) += err;
-    return;
-  }
-
-  TargetOptions target_options;
-  target_machine = std::unique_ptr<TargetMachine>(
-      target->createTargetMachine(kTripleStr, "generic", "", target_options, nullopt));
-  mc_asm_info = target_machine->getMCAsmInfo();
-  mc_instr_info = target_machine->getMCInstrInfo();
-  mc_reg_info = target_machine->getMCRegisterInfo();
-  mc_subtarget_info = target_machine->getMCSubtargetInfo();
-  mc_context.emplace(kNativeTriple, mc_asm_info, mc_reg_info, mc_subtarget_info);
-
-  mc_code_emitter.reset(target->createMCCodeEmitter(*mc_instr_info, *mc_context));
-  mc_inst_printer.reset(target->createMCInstPrinter(kNativeTriple, 1 /*Intel*/, *mc_asm_info,
-                                                    *mc_instr_info, *mc_reg_info));
 
   machine_code.reset((char*)mmap((void*)0x10000, kMachineCodeSize, PROT_READ | PROT_EXEC,
                                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
@@ -163,6 +135,10 @@ void Assembler::UpdateMachineCode() {
   SmallVector<char, 256> epilogue_prologue;
   SmallVector<MCFixup, 4> epilogue_prologue_fixups;
   int64_t regs_addr = reinterpret_cast<int64_t>(regs.get());
+
+  auto& llvm_asm = LLVM_Assembler::Get();
+  auto& mc_code_emitter = llvm_asm.mc_code_emitter;
+  auto& mc_subtarget_info = llvm_asm.mc_subtarget_info;
 
   auto MOVmRAX = [&](int64_t addr) {
     mc_code_emitter->encodeInstruction(MCInstBuilder(X86::MOV64o64a).addImm(addr).addReg(0),

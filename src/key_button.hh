@@ -17,7 +17,6 @@ static constexpr float kKeyHeight = gui::kMinimalTouchableSize;
 static constexpr float kBaseKeyWidth = kKeyHeight;
 
 static constexpr float kKeyLetterSize = 2.4_mm;
-static constexpr float kKeyLetterSizeMM = kKeyLetterSize * 1000;
 
 // Margins around the key face
 static constexpr float kKeyTopSide = 0.5_mm;

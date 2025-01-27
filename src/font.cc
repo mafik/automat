@@ -21,7 +21,6 @@
 
 #include "../build/generated/embedded.hh"
 #include "gui_constants.hh"
-#include "log.hh"
 #include "math.hh"
 #include "virtual_fs.hh"
 
@@ -49,48 +48,51 @@ sk_sp<SkFontMgr> GetFontMgr() {
   return font_mgr;
 }
 
-static sk_sp<SkTypeface> GetFontBase() {
-  static sk_sp<SkTypeface> font_base = []() {
-    auto& ttf_content = maf::embedded::assets_NotoSans_wght__ttf.content;
-    sk_sp<SkData> data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
-    sk_sp<SkFontMgr> font_mgr = GetFontMgr();
-    return font_mgr->makeFromData(data);
-  }();
-  return font_base;
+sk_sp<SkTypeface> Font::LoadTypeface(maf::fs::VFile& ttf_file) {
+  auto& ttf_content = ttf_file.content;
+  sk_sp<SkData> data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
+  sk_sp<SkFontMgr> font_mgr = GetFontMgr();
+  return font_mgr->makeFromData(data);
 }
 
-std::unique_ptr<Font> Font::Make(float letter_size_mm, float weight) {
+sk_sp<SkTypeface> Font::GetNotoSans() {
+  static sk_sp<SkTypeface> noto_sans = LoadTypeface(maf::embedded::assets_NotoSans_wght__ttf);
+  return noto_sans;
+}
+
+sk_sp<SkTypeface> Font::GetGrenzeThin() {
+  static sk_sp<SkTypeface> grenze_thin = LoadTypeface(maf::embedded::assets_Grenze_Thin_ttf);
+  return grenze_thin;
+}
+
+sk_sp<SkTypeface> Font::MakeWeightVariation(sk_sp<SkTypeface> base, float weight) {
+  SkFontArguments::VariationPosition::Coordinate coordinates[1];
+  coordinates[0].axis = kFontWeightTag;
+  coordinates[0].value = weight;
+  SkFontArguments::VariationPosition position{
+      .coordinates = coordinates,
+      .coordinateCount = 1,
+  };
+  SkFontArguments arguments;
+  arguments.setVariationDesignPosition(position);
+  return base->makeClone(arguments);
+}
+
+std::unique_ptr<Font> Font::MakeV2(sk_sp<SkTypeface> typeface, float letter_size) {
   constexpr float kMilimetersPerInch = 25.4;
   constexpr float kPointsPerInch = 72;
   // We want text to be `letter_size_mm` tall (by cap size).
+  float letter_size_mm = letter_size * 1000;
   float letter_size_pt = letter_size_mm / kMilimetersPerInch * kPointsPerInch;
   float font_size_guess = letter_size_pt / 0.7f;  // this was determined empirically
   // Create the font using the approximate size.
-  // TODO: embed & use Noto Color Emoji
-  auto typeface = GetFontBase();
-
-  if (!typeface) {
-    FATAL << "Could not find Noto Sans font.";
-  }
-  if (!isnan(weight)) {
-    SkFontArguments::VariationPosition::Coordinate coordinates[1];
-    coordinates[0].axis = kFontWeightTag;
-    coordinates[0].value = weight;
-    SkFontArguments::VariationPosition position{
-        .coordinates = coordinates,
-        .coordinateCount = 1,
-    };
-    SkFontArguments arguments;
-    arguments.setVariationDesignPosition(position);
-    typeface = typeface->makeClone(arguments);
-  }
   SkFont sk_font(typeface, font_size_guess, 1.f, 0.f);
   SkFontMetrics metrics;
   sk_font.getMetrics(&metrics);
   sk_font.setBaselineSnap(false);
   sk_font.setSubpixel(true);
   // The `fCapHeight` is the height of the capital letters.
-  float font_scale = 0.001 * letter_size_mm / metrics.fCapHeight;
+  float font_scale = letter_size / metrics.fCapHeight;
   float line_thickness = metrics.fUnderlineThickness * font_scale;
   return std::make_unique<Font>(sk_font, font_scale, line_thickness);
 }
@@ -246,7 +248,7 @@ void Font::DrawText(SkCanvas& canvas, std::string_view text, const SkPaint& pain
 float Font::MeasureText(std::string_view text) { return PositionFromIndex(text, text.size()); }
 
 Font& GetFont() {
-  static std::unique_ptr<Font> font = Font::Make(kLetterSizeMM);
+  static std::unique_ptr<Font> font = Font::MakeV2(Font::GetNotoSans(), kLetterSize);
   return *font;
 }
 

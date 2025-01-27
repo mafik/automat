@@ -9,6 +9,8 @@
 #include <cmath>
 #include <string_view>
 
+#include "virtual_fs.hh"
+
 namespace automat::gui {
 
 struct Font {
@@ -16,7 +18,11 @@ struct Font {
   float font_scale;
   float line_thickness;
 
-  static std::unique_ptr<Font> Make(float letter_size_mm, float weight = 400);
+  static sk_sp<SkTypeface> LoadTypeface(maf::fs::VFile& ttf_file);
+  static sk_sp<SkTypeface> GetNotoSans();
+  static sk_sp<SkTypeface> GetGrenzeThin();
+  static sk_sp<SkTypeface> MakeWeightVariation(sk_sp<SkTypeface> base, float weight);
+  static std::unique_ptr<Font> MakeV2(sk_sp<SkTypeface> typeface, float letter_size);
 
   // TODO: If this causes performance issues, cache text shaping / SkTextBlob
   // results somehow

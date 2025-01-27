@@ -404,7 +404,7 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
                                        major_tick_w, kTickMajorLength);
   SkRect minor_tick = SkRect::MakeXYWH(-minor_tick_w / 2, kTickOuterRadius - kTickMinorLength,
                                        minor_tick_w, kTickMinorLength);
-  static auto font = gui::Font::Make(2);
+  static auto font = gui::Font::MakeV2(gui::Font::GetNotoSans(), 2_mm);
   float text_r = r4 * 0.8;
   for (int i = 1; i <= major_tick_count; ++i) {
     float a = (float)i / major_tick_count;

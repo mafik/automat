@@ -81,6 +81,7 @@ struct Object : public virtual SharedBase {
     // construction finishes.
 
     std::string_view Name() const override;
+    virtual float Width() const;
     virtual std::string Text() const { return std::string(Name()); }
     SkPath Shape() const override;
     void Draw(SkCanvas&) const override;

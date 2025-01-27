@@ -7,7 +7,6 @@
 #include "font.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
-#include "log.hh"
 #include "widget.hh"
 
 using namespace maf;
@@ -112,7 +111,8 @@ void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
 }
 
 Font& KeyFont() {
-  static std::unique_ptr<Font> font = Font::Make(kKeyLetterSizeMM, 700);
+  static std::unique_ptr<Font> font =
+      Font::MakeV2(Font::MakeWeightVariation(Font::GetNotoSans(), 700), kKeyLetterSize);
   return *font.get();
 }
 

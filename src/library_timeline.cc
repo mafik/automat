@@ -425,7 +425,8 @@ shared_ptr<Object> Timeline::Clone() const { return make_shared<Timeline>(*this)
 
 constexpr float kLcdFontSize = 1.5_mm;
 static Font& LcdFont() {
-  static unique_ptr<Font> font = Font::Make(kLcdFontSize * 1000, 700);
+  static unique_ptr<Font> font =
+      Font::MakeV2(Font::MakeWeightVariation(Font::GetNotoSans(), 700), kLcdFontSize);
   return *font.get();
 }
 

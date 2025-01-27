@@ -204,6 +204,11 @@ struct Argument {
       .search_radius = std::nullopt,
   };
 
+  static constexpr FindConfig kFindOrCreateConfig = {
+      .if_missing = IfMissing::CreateFromPrototype,
+      .search_radius = std::nullopt,
+  };
+
   // Return the position and direction of this argument in the given Widget's coordinate
   // space.
   //
@@ -224,6 +229,11 @@ struct Argument {
 
   template <typename T>
   T* FindObject(Location& here, const FindConfig& cfg = kDefaultFindConfig) const {
+    return dynamic_cast<T*>(FindObject(here, cfg));
+  }
+
+  template <typename T>
+  T* FindOrCreateObject(Location& here, const FindConfig& cfg = kFindOrCreateConfig) const {
     return dynamic_cast<T*>(FindObject(here, cfg));
   }
 

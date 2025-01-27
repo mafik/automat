@@ -17,7 +17,6 @@
 #include <condition_variable>
 #include <thread>
 
-#include "assembler.hh"
 #include "automat.hh"
 #include "backtrace.hh"
 #include "concurrentqueue.hh"
@@ -266,15 +265,16 @@ int Main() {
 
   render_thread = std::jthread(RenderThread, stop_source.get_token());
 
-  assembler.emplace(status);
-  if (!OK(status)) {
-    FATAL << "Couldn't initialize assembler: " << status;
-  }
-
   LoadState(*root_widget, status);
   if (!OK(status)) {
     ERROR << "Couldn't load saved state: " << status;
   }
+
+  ////////////////////DEVELOPMENT CODE////////////////////
+
+  library::Instruction::SetupDevelopmentScenario();
+
+  ////////////////END OF DEVELOPMENT CODE/////////////////
 
   anim.LoadingCompleted();
 

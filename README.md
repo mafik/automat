@@ -67,6 +67,7 @@ Do your own due dilligence and check the licenses of the dependencies you use!
 # Credits
 
 - Cable texture: [TextureCan](https://www.texturecan.com)
+- Paper texture: [Krita](https://krita.org/)
 
 ## Sounds
 

@@ -66,8 +66,10 @@ Do your own due dilligence and check the licenses of the dependencies you use!
 
 # Credits
 
-- Cable texture: [TextureCan](https://www.texturecan.com)
-- Paper texture: [Krita](https://krita.org/)
+- Cable texture -- [TextureCan](https://www.texturecan.com)
+- Paper texture -- [Krita](https://krita.org/)
+- Grenze font -- [Omnibus-Type](https://www.omnibus-type.com/fonts/grenze/)
+- Noto Sans font -- [Google Fonts](https://fonts.google.com/noto)
 
 ## Sounds
 

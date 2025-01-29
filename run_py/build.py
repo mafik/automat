@@ -66,7 +66,7 @@ class BuildType:
         return [str(x) for x in (self.base.CXXFLAGS() if self.base else []) + self.compile_args]
 
     def CFLAGS(self):
-        return [x for x in self.CXXFLAGS() if x != '-std=gnu++2c']
+        return [x for x in self.CXXFLAGS() if x != '-std=gnu++26']
     
     def LDFLAGS(self):
         return [str(x) for x in (self.base.LDFLAGS() if self.base else []) + self.link_args]
@@ -86,7 +86,7 @@ class BuildType:
 # Common config for all build types
 base = BuildType('Base', is_default=True)
 
-base.compile_args += ['-static', '-std=gnu++2c', '-fcolor-diagnostics', '-ffunction-sections',
+base.compile_args += ['-static', '-std=gnu++26', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-plt', '-fno-strict-aliasing', '-fno-exceptions',
     '-D_FORTIFY_SOURCE=2', '-Wformat', '-Wchanges-meaning', '-Wno-c99-designator',

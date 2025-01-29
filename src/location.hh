@@ -102,7 +102,9 @@ struct Location : public gui::Widget {
   // Shortcut for Widget::ForObject(location.object, location);
   std::shared_ptr<Widget>& WidgetForObject() const {
     if (!object_widget) {
-      object_widget = Widget::ForObject(*object, *this);
+      if (object) {
+        object_widget = Widget::ForObject(*object, *this);
+      }
     }
     return object_widget;
   }

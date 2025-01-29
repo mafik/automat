@@ -29,6 +29,7 @@ struct Instruction : LiveObject, Runnable {
   struct Widget : gui::Widget {
     constexpr static float kWidth = 63.5_mm;
     constexpr static float kHeight = 44.5_mm;
+    inline const static float kDiagonal = sqrt(kWidth * kWidth + kHeight * kHeight);
 
     std::weak_ptr<Object> object;
     Widget(std::weak_ptr<Object> object);
@@ -38,6 +39,8 @@ struct Instruction : LiveObject, Runnable {
     void Draw(SkCanvas&) const override;
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
   };
+
+  static void DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst);
 
   std::shared_ptr<gui::Widget> MakeWidget() override { return std::make_shared<Widget>(WeakPtr()); }
 };

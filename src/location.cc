@@ -611,6 +611,9 @@ void Location::UpdateAutoconnectArgs() {
 }
 void Location::UpdateChildTransform() {
   auto object_widget = WidgetForObject();
+  if (object_widget == nullptr) {
+    return;
+  }
   Vec2 scale_pivot = object_widget->Shape().getBounds().center();
   SkMatrix transform = SkMatrix::I();
   float s = std::max<float>(animation_state.scale, 0.00001f);

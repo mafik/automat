@@ -4,6 +4,7 @@
 
 #include "library_flip_flop.hh"
 #include "library_hotkey.hh"
+#include "library_instruction_library.hh"
 #include "library_key_presser.hh"
 #include "library_macro_recorder.hh"
 #include "library_mouse_click.hh"
@@ -44,6 +45,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<MouseClick>(gui::PointerButton::Right, false);
   index.Register<Number>();
   index.Register<Timeline>();
+  index.Register<InstructionLibrary>();
 }
 
 PrototypeLibrary::~PrototypeLibrary() {

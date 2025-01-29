@@ -67,6 +67,8 @@ union Vec2 {
   std::string ToStrPx() const;
 };
 
+static constexpr Vec2 kZeroVec2 = {0, 0};
+
 static_assert(sizeof(Vec2) == 8, "Vec2 is not 8 bytes");
 
 union Vec3 {

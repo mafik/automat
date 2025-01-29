@@ -65,6 +65,22 @@ sk_sp<SkTypeface> Font::GetGrenzeThin() {
   return grenze_thin;
 }
 
+sk_sp<SkTypeface> Font::GetGrenzeLight() {
+  static sk_sp<SkTypeface> grenze_light = LoadTypeface(maf::embedded::assets_Grenze_Light_ttf);
+  return grenze_light;
+}
+
+sk_sp<SkTypeface> Font::GetGrenzeRegular() {
+  static sk_sp<SkTypeface> grenze_regular = LoadTypeface(maf::embedded::assets_Grenze_Regular_ttf);
+  return grenze_regular;
+}
+
+sk_sp<SkTypeface> Font::GetGrenzeSemiBold() {
+  static sk_sp<SkTypeface> grenze_semi_bold =
+      LoadTypeface(maf::embedded::assets_Grenze_SemiBold_ttf);
+  return grenze_semi_bold;
+}
+
 sk_sp<SkTypeface> Font::MakeWeightVariation(sk_sp<SkTypeface> base, float weight) {
   SkFontArguments::VariationPosition::Coordinate coordinates[1];
   coordinates[0].axis = kFontWeightTag;

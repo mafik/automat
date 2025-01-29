@@ -95,10 +95,7 @@ LongRunning* Instruction::OnRun(Location& here) {
   return nullptr;
 }
 
-static std::string AssemblyText(const Instruction::Widget& widget) {
-  auto obj = widget.object.lock();
-  Instruction* inst = dynamic_cast<Instruction*>(obj.get());
-
+static std::string AssemblyText(const llvm::MCInst& mc_inst) {
   // Nicely formatted assembly:
   std::string str;
   raw_string_ostream os(str);
@@ -107,13 +104,7 @@ static std::string AssemblyText(const Instruction::Widget& widget) {
   auto& mc_inst_printer = llvm_asm.mc_inst_printer;
   auto& mc_subtarget_info = llvm_asm.mc_subtarget_info;
 
-  if (auto h = inst->here.lock()) {
-    if (auto assembler = FindOrCreateAssembler(*h)) {
-      mc_inst_printer->printInst(&inst->mc_inst, 0, "", *mc_subtarget_info, os);
-    } else {
-      return "assembler not found";
-    }
-  }
+  mc_inst_printer->printInst(&mc_inst, 0, "", *mc_subtarget_info, os);
   os.flush();
   for (auto& c : str) {
     if (c == '\t') {
@@ -127,27 +118,30 @@ static std::string AssemblyText(const Instruction::Widget& widget) {
 }
 
 constexpr float kFineFontSize = 2_mm;
-constexpr float kBorderMargin = 5_mm;
+constexpr float kBorderMargin = 4_mm;
 
 static gui::Font& FineFont() {
   static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeThin(), kFineFontSize);
   return *font;
 }
 
+static const SkRect kInstructionRect =
+    SkRect::MakeWH(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
+
+static const SkRRect kInstructionRRect = SkRRect::MakeRectXY(kInstructionRect, 3_mm, 3_mm);
+
+static const SkPath kInstructionShape = SkPath::RRect(kInstructionRRect);
+
 Instruction::Widget::Widget(std::weak_ptr<Object> object) { this->object = object; }
 
-SkPath Instruction::Widget::Shape() const {
-  return SkPath::RRect(SkRRect::MakeRectXY(SkRect::MakeWH(kWidth, kHeight), 3_mm, 3_mm));
-}
+SkPath Instruction::Widget::Shape() const { return kInstructionShape; }
 
 PersistentImage paper_texture = PersistentImage::MakeFromAsset(
     maf::embedded::assets_04_paper_C_grain_webp,
     PersistentImage::MakeArgs{.tile_x = SkTileMode::kRepeat, .tile_y = SkTileMode::kRepeat});
 
-void Instruction::Widget::Draw(SkCanvas& canvas) const {
-  auto shape = Shape();
-  SkRRect rrect;
-  shape.isRRect(&rrect);  // always true
+void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
+  SkRRect rrect = kInstructionRRect;
 
   // Paper fill
   auto color = "#e6e6e6"_color;
@@ -159,17 +153,19 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   auto overlayed_shader =
       SkShaders::Blend(SkBlendMode::kOverlay, color_shader, paper_transparent_shader);
   paper_paint.setShader(overlayed_shader);
-  canvas.drawPath(shape, paper_paint);
+  canvas.drawRRect(rrect, paper_paint);
 
-  // Vignette
-  SkPaint vignette_paint;
-  vignette_paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 10_mm));
-  vignette_paint.setColor("#201008"_color);
-  vignette_paint.setBlendMode(SkBlendMode::kMultiply);
-  vignette_paint.setAlphaf(0.1);
-  shape.toggleInverseFillType();
-  canvas.drawPath(shape, vignette_paint);
-  shape.toggleInverseFillType();
+  constexpr float kHeight = Instruction::Widget::kHeight;
+  {  // Vignette
+    SkPaint vignette_paint;
+    float r = hypotf(Instruction::Widget::kWidth, kHeight) / 2;
+    SkColor colors[2] = {"#20100800"_color, "#20100810"_color};
+    vignette_paint.setShader(
+        SkGradientShader::MakeRadial(SkPoint::Make(Instruction::Widget::kWidth / 2, kHeight / 2), r,
+                                     colors, nullptr, 2, SkTileMode::kClamp));
+    vignette_paint.setBlendMode(SkBlendMode::kMultiply);
+    canvas.drawRRect(kInstructionRRect, vignette_paint);
+  }
 
   // Bevel
   SkPoint points[2] = {SkPoint::Make(0, kHeight), SkPoint::Make(0, 0)};
@@ -194,7 +190,7 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   canvas.drawRRect(inset_rrect, bevel_paint);
 
   // Assembly text
-  auto text = AssemblyText(*this);
+  auto text = AssemblyText(inst);
   auto& fine_font = FineFont();
   auto assembly_text_width = fine_font.MeasureText(text);
   Vec2 assembly_text_offset =
@@ -232,6 +228,14 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
     border_rrect.setRectRadii(border_rrect.rect(), radii);
     canvas.drawRRect(border_rrect, border_paint);
     canvas.restore();
+  }
+}
+
+void Instruction::Widget::Draw(SkCanvas& canvas) const {
+  if (auto obj = object.lock()) {
+    if (auto inst = dynamic_cast<Instruction*>(obj.get())) {
+      DrawInstruction(canvas, inst->mc_inst);
+    }
   }
 }
 

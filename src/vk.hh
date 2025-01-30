@@ -10,7 +10,6 @@
 
 #include <mutex>
 
-
 namespace automat::vk {
 
 constexpr int cfg_MSAASampleCount = 1;

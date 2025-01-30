@@ -101,7 +101,7 @@ def skia_git_sync_with_deps():
   return make.Popen(['python', 'tools/git-sync-deps'], cwd=SKIA_ROOT)
 
 def skia_gn_gen(variant: BuildVariant):
-  args = [GN, 'gen', variant.build_dir.relative_to(SKIA_ROOT, walk_up=True), '--args=' + variant.gn_args + ' ' + default_gn_args]
+  args = [GN, 'gen', variant.build_dir, '--args=' + variant.gn_args + ' ' + default_gn_args]
   return make.Popen(args, cwd=SKIA_ROOT)
 
 def skia_compile(variant: BuildVariant):

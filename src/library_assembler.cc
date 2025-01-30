@@ -7,17 +7,24 @@
 #include <llvm/MC/MCInstPrinter.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/lib/Target/X86/X86Subtarget.h>
+
+#if defined __linux__
 #include <signal.h>
 #include <sys/mman.h>  // For mmap related functions and constants
 #include <sys/prctl.h>
 #include <sys/ptrace.h>
 #include <sys/wait.h>
+#endif  // __linux__
 
 #include "llvm_asm.hh"
 #include "status.hh"
 
+#if defined __linux__
 #pragma maf add link argument "-lz"
 #pragma maf add link argument "-lzstd"
+#elif defined _WIN32
+#pragma comment(lib, "ntdll.lib")
+#endif  // __linux__
 
 using namespace llvm;
 using namespace std;
@@ -25,6 +32,7 @@ using namespace maf;
 
 namespace automat {
 
+#if defined __linux__
 void AssemblerSignalHandler(int sig, siginfo_t* si, struct ucontext_t* context) {
   // In Automat this handler will actually call Automat code to see what to do.
   // That code may block the current thread.
@@ -73,6 +81,12 @@ static bool SetupSignalHandler() {
   return true;
 }
 
+#else
+
+// TODO: Implement signal handler on Windows
+static bool SetupSignalHandler() { return true; }
+#endif  // __linux__
+
 // Note: We're not preserving RSP!
 // CB(RSP)
 #define REGS(CB) \
@@ -106,8 +120,13 @@ Assembler::Assembler(Status& status) {
   static bool signal_handler_initialized =
       SetupSignalHandler();  // unused, ensures that initialization happens once
 
+#if defined __linux__
   machine_code.reset((char*)mmap((void*)0x10000, kMachineCodeSize, PROT_READ | PROT_EXEC,
                                  MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+#else
+  // TODO: Implement on Windows
+  machine_code.reset(new char[kMachineCodeSize]);
+#endif  // __linux__
 
   regs = std::make_unique<Regs>();
 }
@@ -123,10 +142,21 @@ std::shared_ptr<Object> Assembler::Clone() const {
   return nullptr;
 }
 
-void DeleteWithMunmap::operator()(void* ptr) const { munmap(ptr, kMachineCodeSize); }
+void DeleteWithMunmap::operator()(void* ptr) const {
+#if defined __linux__
+  munmap(ptr, kMachineCodeSize);
+#else
+  // TODO: Implement on Windows
+  delete[] (char*)ptr;
+#endif  // __linux__
+}
 
 void Assembler::UpdateMachineCode() {
+#if defined __linux__
   mprotect(machine_code.get(), kMachineCodeSize, PROT_READ | PROT_WRITE);
+#else
+  // TODO: Implement on Windows
+#endif  // __linux__
 
   memset(machine_code.get(), 0x90, kMachineCodeSize);
 
@@ -297,7 +327,11 @@ void Assembler::UpdateMachineCode() {
   // }
   // LOG << epilogue_prologue_str;
 
+#if defined __linux__
   mprotect(machine_code.get(), kMachineCodeSize, PROT_READ | PROT_EXEC);
+#else
+  // TODO: Implement on Windows
+#endif  // __linux__
 }
 
 std::string Assembler::Widget::Text() const {
@@ -311,6 +345,7 @@ std::string Assembler::Widget::Text() const {
 }
 
 void Assembler::RunMachineCode(library::Instruction* entry_point) {
+#if defined __linux__
   int STACK_SIZE = 8 * 1024 * 1024;
   std::vector<char> stack;
   stack.resize(STACK_SIZE);
@@ -348,5 +383,8 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
   waitpid(v, NULL, 0);
 
   LOG << "Child exited";
+#else
+  // TODO: Implement on Windows
+#endif  // __linux__
 }
 }  // namespace automat

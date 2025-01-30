@@ -8,7 +8,7 @@ import extension_helper
 hook = extension_helper.ExtensionHelper('LLVM', globals())
 
 def llvm_config_path(build_type : build.BuildType):
-  return build_type.PREFIX() / 'bin' / 'llvm-config'
+  return (build_type.PREFIX() / 'bin' / 'llvm-config').with_suffix(build.binary_extension)
 
 def llvm_config(build_type : build.BuildType, args):
   '''Runs llvm-config for the given build_type and returns the output as a list of strings'''
@@ -23,7 +23,8 @@ def llvm_config(build_type : build.BuildType, args):
 def llvm_cxxflags(build_type : build.BuildType):
   flags = llvm_config(build_type, ['--cxxflags'])
   flags = [f for f in flags if not f.startswith('-std=')]
-  flags.append(f'-I{build_type.BASE() / 'LLVM' / 'lib' / 'Target' / 'X86'}')
+  x86_include = build_type.BASE() / 'LLVM' / 'lib' / 'Target' / 'X86'
+  flags.append(f'-I{x86_include}')
   return flags
 
 def llvm_ldflags(build_type : build.BuildType):
@@ -48,6 +49,8 @@ hook.ConfigureOption('LLVM_OPTIMIZED_TABLEGEN', 'ON') # we're not including tabl
 # LTO is disabled because it's using too much memory and is crashing the build
 # hook.ConfigureOption('LLVM_ENABLE_LTO', 'ON')
 hook.ConfigureOption('LLVM_RAM_PER_LINK_JOB', '10000')
+if build.platform == 'win32':
+  hook.ConfigureOption('LLVM_HOST_TRIPLE', 'x86_64-pc-windows') # needed to build on Windows
 hook.ConfigureOption('CMAKE_CXX_STANDARD', '20')
 hook.InstallWhenIncluded(r'llvm/.*\.h')
 hook.AddCompileArg(llvm_cxxflags)

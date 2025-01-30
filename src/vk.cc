@@ -27,6 +27,7 @@
 #if defined(_WIN32)
 #include "win32.hh"
 #include "win32_window.hh"
+#undef CreateSemaphore  // Windows is evil
 #elif defined(__linux__)
 #include "xcb.hh"
 #include "xcb_window.hh"

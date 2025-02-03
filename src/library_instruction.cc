@@ -118,7 +118,6 @@ static std::string AssemblyText(const llvm::MCInst& mc_inst) {
 }
 
 constexpr float kFineFontSize = 2_mm;
-constexpr float kBorderMargin = 4_mm;
 
 static gui::Font& FineFont() {
   static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeThin(), kFineFontSize);
@@ -189,45 +188,47 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
   inset_rrect.inset(bevel_width / 2, bevel_width / 2);
   canvas.drawRRect(inset_rrect, bevel_paint);
 
-  // Assembly text
-  auto text = AssemblyText(inst);
-  auto& fine_font = FineFont();
-  auto assembly_text_width = fine_font.MeasureText(text);
-  Vec2 assembly_text_offset =
-      Vec2{kBorderMargin - kFineFontSize / 2, kHeight - kFineFontSize / 2 - kBorderMargin};
+  if (inst.getOpcode() != X86::INSTRUCTION_LIST_END) {
+    // Assembly text
+    auto text = AssemblyText(inst);
+    auto& fine_font = FineFont();
+    auto assembly_text_width = fine_font.MeasureText(text);
+    Vec2 assembly_text_offset = Vec2{Widget::kBorderMargin - kFineFontSize / 2,
+                                     kHeight - kFineFontSize / 2 - Widget::kBorderMargin};
 
-  {
-    canvas.save();
-    SkPaint text_paint;
-    text_paint.setColor("#000000"_color);
-    text_paint.setAntiAlias(true);
-    canvas.translate(assembly_text_offset.x, assembly_text_offset.y);
-    fine_font.DrawText(canvas, text, text_paint);
-    canvas.restore();
-  }
+    {
+      canvas.save();
+      SkPaint text_paint;
+      text_paint.setColor("#000000"_color);
+      text_paint.setAntiAlias(true);
+      canvas.translate(assembly_text_offset.x, assembly_text_offset.y);
+      fine_font.DrawText(canvas, text, text_paint);
+      canvas.restore();
+    }
 
-  {  // Border
-    canvas.save();
-    Rect text_rect = Rect::MakeCornerZero(assembly_text_width, kFineFontSize)
-                         .Outset(kFineFontSize / 2)
-                         .MoveBy(assembly_text_offset);
-    canvas.clipRect(text_rect, SkClipOp::kDifference);
-    SkPaint border_paint;
-    border_paint.setColor("#000000"_color);
-    border_paint.setAntiAlias(true);
-    border_paint.setStyle(SkPaint::kStroke_Style);
-    border_paint.setStrokeWidth(0.1_mm);
-    SkRRect border_rrect = rrect;
-    border_rrect.inset(kBorderMargin, kBorderMargin);
-    SkVector radii[] = {
-        SkVector::Make(1_mm, 1_mm),
-        SkVector::Make(1_mm, 1_mm),
-        SkVector::Make(1_mm, 1_mm),
-        SkVector::Make(1_mm, 1_mm),
-    };
-    border_rrect.setRectRadii(border_rrect.rect(), radii);
-    canvas.drawRRect(border_rrect, border_paint);
-    canvas.restore();
+    {  // Border
+      canvas.save();
+      Rect text_rect = Rect::MakeCornerZero(assembly_text_width, kFineFontSize)
+                           .Outset(kFineFontSize / 2)
+                           .MoveBy(assembly_text_offset);
+      canvas.clipRect(text_rect, SkClipOp::kDifference);
+      SkPaint border_paint;
+      border_paint.setColor("#000000"_color);
+      border_paint.setAntiAlias(true);
+      border_paint.setStyle(SkPaint::kStroke_Style);
+      border_paint.setStrokeWidth(0.1_mm);
+      SkRRect border_rrect = rrect;
+      border_rrect.inset(Widget::kBorderMargin, Widget::kBorderMargin);
+      SkVector radii[] = {
+          SkVector::Make(1_mm, 1_mm),
+          SkVector::Make(1_mm, 1_mm),
+          SkVector::Make(1_mm, 1_mm),
+          SkVector::Make(1_mm, 1_mm),
+      };
+      border_rrect.setRectRadii(border_rrect.rect(), radii);
+      canvas.drawRRect(border_rrect, border_paint);
+      canvas.restore();
+    }
   }
 }
 

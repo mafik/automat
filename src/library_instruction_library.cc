@@ -270,6 +270,9 @@ static pair<Vec2, float> RosePosition(SkPathMeasure& path_measure, float growth)
 
 const float kThrowEndDistance = kCornerDist * 1;  // 10_cm;
 constexpr int kMaxInstructions = 10;
+constexpr float kCategoryLetterSize = 3_mm;
+constexpr bool kDebugRoseDrawing = false;
+constexpr bool kDebugAnimation = false;
 
 static int VisibleInstructions(InstructionLibrary& library) {
   return std::min<int>(library.instructions.size(), kMaxInstructions);
@@ -320,7 +323,10 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     for (int j = 0; j < instruction_helix.size(); ++j) {
       auto& card = instruction_helix[j];
       if (card.mc_inst.getOpcode() == inst.getOpcode()) {
-        card.angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
+        if (isnan(card.throw_direction_deg) || (j == i)) {
+          // Only update the rotation if the card is not being animated
+          card.angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
+        }
         card.library_index = i;
         found = true;
         // New cards should be inserted after the card that matches InstructionLibrary deck.
@@ -345,6 +351,8 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     }
   }
 
+  // TODO: This makes category switching boring.
+  // Consider animations based on card target states (index up, index down, remove, add)
   while (instruction_helix.back().library_index == -1) {
     instruction_helix.pop_back();
   }
@@ -357,10 +365,10 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       } else {
         if (j < card.library_index) {
           // We should move the card deeper into the deck (reordered)
-          phase |= animation::LinearApproach(1, timer.d, 5, card.throw_t);
+          phase |= animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
         } else {
           // Card is moving back to the deck
-          phase |= animation::LinearApproach(0, timer.d, 5, card.throw_t);
+          phase |= animation::LinearApproach(0, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
           if (card.throw_t == 0) {
             card.throw_direction_deg = NAN;
           }
@@ -370,7 +378,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       if (isnan(card.throw_direction_deg)) {
         card.throw_direction_deg = rng.RollFloat(-180, 180);
       }
-      phase |= animation::LinearApproach(1, timer.d, 5, card.throw_t);
+      phase |= animation::LinearApproach(1, timer.d, kDebugAnimation ? 1 : 5, card.throw_t);
       if (card.throw_t >= 1) {
         // Delete the card
         instruction_helix.erase(instruction_helix.begin() + j);
@@ -386,16 +394,16 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     if (isnan(card.throw_direction_deg)) {
       continue;  // skip cards which are not being animated
     }
-    if (card.library_index > j && card.throw_t > 0.5) {
+    bool move_down = card.library_index > j && card.throw_t > 0.5;
+    bool move_up = card.library_index >= 0 && card.library_index < j && card.throw_t < 0.5;
+    if (move_down || move_up) {
       auto card_copy = card;
+      card_copy.angle = CardAngleDeg(card_copy.library_index + rotation_offset_t + wobble, n);
       instruction_helix.erase(instruction_helix.begin() + j);
       instruction_helix.insert(instruction_helix.begin() + card_copy.library_index, card_copy);
-      --j;
-    }
-    if (card.library_index >= 0 && card.library_index < j && card.throw_t < 0.5) {
-      auto card_copy = card;
-      instruction_helix.erase(instruction_helix.begin() + j);
-      instruction_helix.insert(instruction_helix.begin() + card_copy.library_index, card_copy);
+      if (move_down) {
+        --j;
+      }
     }
   }
 
@@ -486,6 +494,11 @@ PersistentImage rose5 = PersistentImage::MakeFromAsset(maf::embedded::assets_ros
 PersistentImage rose6 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_6_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
+PersistentImage reverse = PersistentImage::MakeFromAsset(
+    maf::embedded::assets_card_reverse_webp,
+    PersistentImage::MakeArgs{.width = Instruction::Widget::kWidth -
+                                       Instruction::Widget::kBorderMargin * 2});
+
 PersistentImage* rose_images[] = {&rose0, &rose1, &rose2, &rose3, &rose4, &rose5, &rose6};
 
 PersistentImage stalk = PersistentImage::MakeFromAsset(maf::embedded::assets_stalk_png,
@@ -493,7 +506,6 @@ PersistentImage stalk = PersistentImage::MakeFromAsset(maf::embedded::assets_sta
 
 PersistentImage leaf = PersistentImage::MakeFromAsset(maf::embedded::assets_leaf_webp,
                                                       PersistentImage::MakeArgs{.width = 1.2_cm});
-constexpr float kCategoryLetterSize = 3_mm;
 
 static gui::Font& HeavyFont() {
   static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeSemiBold(), kCategoryLetterSize);
@@ -509,8 +521,6 @@ static gui::Font& LightFont() {
   static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeLight(), kCategoryLetterSize);
   return *font;
 }
-
-constexpr bool kDebugRoseDrawing = false;
 
 void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   SkPaint text_shadow_paint;
@@ -696,8 +706,9 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   auto DrawCard = [&](const InstructionCard& card) {
     canvas.save();
     float rotation_deg = card.angle;
+    float throw_t = 0;
     if (!isnan(card.throw_direction_deg)) {
-      float throw_t = card.throw_t;
+      throw_t = card.throw_t;
       float throw_distance = sin(throw_t * M_PI) * kThrowEndDistance;
       Vec2 throw_vec = Vec2::Polar(SinCos::FromDegrees(card.throw_direction_deg), throw_distance);
       canvas.translate(throw_vec.x, throw_vec.y);
@@ -710,7 +721,16 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     }
     canvas.rotate(rotation_deg);
     canvas.translate(-Instruction::Widget::kWidth / 2, -Instruction::Widget::kHeight / 2);
-    Instruction::DrawInstruction(canvas, card.mc_inst);
+    if (throw_t > 0.5) {
+      MCInst fake_inst;
+      fake_inst.setOpcode(X86::INSTRUCTION_LIST_END);
+      Instruction::DrawInstruction(canvas, fake_inst);
+      canvas.translate(Instruction::Widget::kWidth / 2, Instruction::Widget::kHeight / 2);
+      canvas.translate(-reverse.width() / 2, -reverse.height() / 2);
+      reverse.draw(canvas);
+    } else {
+      Instruction::DrawInstruction(canvas, card.mc_inst);
+    }
     canvas.restore();
   };
 
@@ -809,7 +829,7 @@ struct ScrollDeckAction : Action {
     float card0_deg = CardAngleDeg(0, n);
     float card1_deg = CardAngleDeg(1, n);
     float step_deg = card0_deg - card1_deg;
-    if (abs(diff_deg) > step_deg) {
+    if (abs(diff_deg) > step_deg / 2) {
       bool twist_left = diff_deg > 0;
       angle = angle + SinCos::FromDegrees(twist_left ? step_deg : -step_deg);
       diff = new_angle - angle;

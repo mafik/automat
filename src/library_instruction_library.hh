@@ -7,6 +7,7 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "random.hh"
 
 namespace automat::library {
 
@@ -63,9 +64,18 @@ struct InstructionLibrary : Object {
     struct InstructionCard {
       llvm::MCInst mc_inst;
       float angle = 0;
+      bool found_in_library = true;
+      float throw_direction_deg = NAN;
+      float throw_t = 0;  // 0..1
     };
 
     std::deque<InstructionCard> instruction_helix;
+    maf::XorShift32 rng;
+    animation::SpringV2<float> rotation_offset_t = 0;
+    float rotation_offset_t_target = 0;
+    bool wobble_cards = false;  // true when helix is hovered
+    animation::SpringV2<float> wobble_amplitude = 0;
+    float new_cards_dir_deg = NAN;
 
     struct CategoryState {
       struct LeafState {

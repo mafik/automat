@@ -246,6 +246,18 @@ static pair<Vec2, float> RosePosition(SkPathMeasure& path_measure, float growth)
   return {rose_pos, final_rose_dir};
 }
 
+const float kThrowEndDistance = kCornerDist * 1;  // 10_cm;
+constexpr int kMaxInstructions = 10;
+
+static int VisibleInstructions(InstructionLibrary& library) {
+  return std::min<int>(library.instructions.size(), kMaxInstructions);
+}
+
+static float CardAngleDeg(float i, int visible_instructions) {
+  float t = i / std::max<int>(1, visible_instructions - 1);
+  return CosineInterpolate(90, -90, 0.5 + t / 2);
+}
+
 animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
   auto object_shared_ptr = object.lock();
   if (!object_shared_ptr) return animation::Finished;
@@ -261,16 +273,86 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
   // Animate everything to match the state of `library`.
   auto& root = FindRootWidget();
 
-  constexpr int kMaxInstructions = 10;
-  int n = std::min<int>(library->instructions.size(), kMaxInstructions);
+  int n = VisibleInstructions(*library);
 
-  if (instruction_helix.empty()) {
-    for (int i = 0; i < n; ++i) {
-      instruction_helix.push_back(InstructionCard{library->instructions[i]});
-      float t = (float)i / (n - 1);
-      instruction_helix.back().angle = CosineInterpolate(90, -90, 0.5 + t / 2);
+  int insert_index = 0;
+
+  for (auto& card : instruction_helix) {
+    card.found_in_library = false;
+  }
+
+  float wobble = 0;
+  float wobble_amplitude_target = (wobble_cards && isnan(new_cards_dir_deg)) ? 1 : 0;
+  if (wobble_amplitude_target > 0) {
+    phase |= animation::Animating;
+  }
+  phase |= wobble_amplitude.SineTowards(wobble_amplitude_target, timer.d, 1);
+  wobble = wobble_amplitude * sin(timer.NowSeconds() * M_PI * 2) / 10;
+
+  for (int i = 0; i < n; ++i) {
+    llvm::MCInst& inst = library->instructions[i];
+    // Ensure that instruction_helix contains a card with the given `inst`.
+    bool found = false;
+    for (int j = 0; j < instruction_helix.size(); ++j) {
+      auto& card = instruction_helix[j];
+      if (card.mc_inst.getOpcode() == inst.getOpcode()) {
+        card.angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
+        card.found_in_library = true;
+        found = true;
+        // New cards should be inserted after the card that matches InstructionLibrary deck.
+        insert_index = j + 1;
+        break;
+      }
+    }
+    if (!found) {
+      auto it =
+          instruction_helix.insert(instruction_helix.begin() + insert_index, InstructionCard{inst});
+      it->angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
+      it->found_in_library = true;
+      if (insert_index == 0) {
+        if (isnan(new_cards_dir_deg)) {
+          it->throw_direction_deg = rng.RollFloat(-180, 180);
+        } else {
+          it->throw_direction_deg = new_cards_dir_deg;
+        }
+        it->throw_t = 0.5;
+      }
+      insert_index++;
     }
   }
+
+  while (!instruction_helix.back().found_in_library) {
+    instruction_helix.pop_back();
+  }
+
+  for (int j = 0; j < instruction_helix.size(); ++j) {
+    auto& card = instruction_helix[j];
+    if (card.found_in_library) {
+      if (isnan(card.throw_direction_deg)) {
+        card.throw_t = 0;
+      } else {
+        if (card.throw_t > 0) {
+          // phase |= animation::ExponentialApproach(0, timer.d, 0.04, card.throw_t);
+          phase |= animation::LinearApproach(0, timer.d, 5, card.throw_t);
+        } else {
+          card.throw_direction_deg = NAN;
+        }
+      }
+    } else {
+      if (isnan(card.throw_direction_deg)) {
+        card.throw_direction_deg = rng.RollFloat(-180, 180);
+      }
+      phase |= animation::LinearApproach(1, timer.d, 5, card.throw_t);
+      if (card.throw_t >= 1) {
+        // Delete the card
+        instruction_helix.erase(instruction_helix.begin() + j);
+        --j;
+        continue;
+      }
+    }
+  }
+
+  phase |= rotation_offset_t.SineTowards(rotation_offset_t_target, timer.d, 0.2);
 
   for (int i = 0; i < library->kCategories.size(); ++i) {
     if (category_states.size() <= i) {
@@ -564,17 +646,51 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     }
   }
 
-  for (auto& card : std::ranges::reverse_view(instruction_helix)) {
+  auto DrawCard = [&](const InstructionCard& card) {
     canvas.save();
-    canvas.rotate(card.angle);
+    float rotation_deg = card.angle;
+    if (!isnan(card.throw_direction_deg)) {
+      float throw_t = card.throw_t;
+      float throw_distance = sin(throw_t * M_PI) * kThrowEndDistance;
+      Vec2 throw_vec = Vec2::Polar(SinCos::FromDegrees(card.throw_direction_deg), throw_distance);
+      canvas.translate(throw_vec.x, throw_vec.y);
+      rotation_deg = CosineInterpolate(rotation_deg, -90, throw_t);
+      float scale = std::cos(throw_t * M_PI);
+      scale *= scale;
+      canvas.rotate(card.throw_direction_deg);
+      canvas.scale(scale, 1);
+      canvas.rotate(-card.throw_direction_deg);
+    }
+    canvas.rotate(rotation_deg);
     canvas.translate(-Instruction::Widget::kWidth / 2, -Instruction::Widget::kHeight / 2);
     Instruction::DrawInstruction(canvas, card.mc_inst);
     canvas.restore();
+  };
+
+  for (auto& card : instruction_helix) {
+    if (card.throw_t >= 0.5) {
+      DrawCard(card);
+    }
+  }
+
+  for (auto& card : std::ranges::reverse_view(instruction_helix)) {
+    if (card.throw_t < 0.5) {
+      DrawCard(card);
+    }
   }
 }
 
 void InstructionLibrary::Widget::PointerMove(gui::Pointer& p, Vec2 position) {
   Vec2 local_position = TransformDown(*this).mapPoint(position);
+
+  if (Length(local_position) < kCornerDist) {
+    // Over card helix
+    wobble_cards = true;
+    WakeAnimation();
+    return;
+  }
+  wobble_cards = false;
+
   for (int i = 0; i < category_states.size(); ++i) {
     auto& category_state = category_states[i];
 
@@ -610,12 +726,85 @@ void InstructionLibrary::Widget::PointerMove(gui::Pointer& p, Vec2 position) {
 
 void InstructionLibrary::Widget::PointerOver(gui::Pointer& p) { StartWatching(p); }
 
-void InstructionLibrary::Widget::PointerLeave(gui::Pointer& p) { StopWatching(p); }
+void InstructionLibrary::Widget::PointerLeave(gui::Pointer& p) {
+  StopWatching(p);
+  wobble_cards = false;
+}
+
+struct ScrollDeckAction : Action {
+  SinCos angle;
+  std::shared_ptr<gui::Widget> widget;
+  std::shared_ptr<Object> object;
+
+  InstructionLibrary::Widget& library_widget;  // same as widget
+  InstructionLibrary& library;
+
+  ScrollDeckAction(gui::Pointer& pointer, std::shared_ptr<gui::Widget> widget,
+                   std::shared_ptr<Object> object)
+      : Action(pointer),
+        widget(widget),
+        object(object),
+        library_widget(dynamic_cast<InstructionLibrary::Widget&>(*widget)),
+        library(dynamic_cast<InstructionLibrary&>(*object)) {}
+  void Begin() override {
+    auto pos = pointer.PositionWithin(*widget);
+    angle = SinCos::FromVec2(pos);
+    library_widget.new_cards_dir_deg = (angle + 180_deg).ToDegrees();
+  }
+  void Update() override {
+    auto pos = pointer.PositionWithin(*widget);
+    auto new_angle = SinCos::FromVec2(pos);
+    auto diff = new_angle - angle;
+
+    auto diff_deg = diff.ToDegrees();
+    lock_guard lock(library.mutex);
+    int n = VisibleInstructions(library);
+    float card0_deg = CardAngleDeg(0, n);
+    float card1_deg = CardAngleDeg(1, n);
+    float step_deg = card0_deg - card1_deg;
+    if (abs(diff_deg) > step_deg) {
+      bool twist_left = diff_deg > 0;
+      angle = angle + SinCos::FromDegrees(twist_left ? step_deg : -step_deg);
+      diff = new_angle - angle;
+      diff_deg = diff.ToDegrees();
+
+      if (twist_left) {
+        auto& mc_inst = library.instructions.front();
+        for (int j = 0; j < library_widget.instruction_helix.size(); ++j) {
+          auto& card = library_widget.instruction_helix[j];
+          if (card.mc_inst.getOpcode() == mc_inst.getOpcode()) {
+            card.throw_direction_deg = (new_angle + 180_deg).ToDegrees();
+            break;
+          }
+        }
+        library.instructions.push_back(library.instructions.front());
+        library.instructions.pop_front();
+      } else {
+        library_widget.new_cards_dir_deg = (new_angle + 180_deg).ToDegrees();
+        library.instructions.push_front(library.instructions.back());
+        library.instructions.pop_back();
+      }
+    }
+    library_widget.rotation_offset_t = library_widget.rotation_offset_t_target =
+        -diff_deg / step_deg;
+    library_widget.WakeAnimation();
+  }
+  void End() override {
+    library_widget.rotation_offset_t_target = 0;
+    library_widget.new_cards_dir_deg = NAN;
+    library_widget.WakeAnimation();
+  }
+};
 
 std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
                                                                gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
     auto contact_point = p.PositionWithin(*this);
+
+    if (Length(contact_point) < kCornerDist) {
+      return std::make_unique<ScrollDeckAction>(p, SharedPtr<Widget>(), object.lock());
+    }
+
     for (int i = 0; i < category_states.size(); ++i) {
       auto& category_state = category_states[i];
       float distance = Length(category_state.position - contact_point);

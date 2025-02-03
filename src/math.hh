@@ -165,6 +165,11 @@ bool PointInRectangle(T a, T b, T c, T p) {
 
 inline float Saturate(float x) { return std::clamp(x, 0.f, 1.f); }
 
+// Return value between 0 and 1, based on the value and the range.
+inline float GetRatio(float val, float min, float max) {
+  return Saturate((val - min) / (max - min));
+}
+
 // A smooth ReLU function.
 inline float SoftPlus(float x, float beta = 1) { return logf(1 + expf(beta * x)) / beta; }
 

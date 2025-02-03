@@ -17,6 +17,23 @@ T random() {
 
 namespace maf {
 
+// Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs"
+struct XorShift32 {
+  // The state must be initialized to non-zero
+  U32 state = 123456789;
+
+  U32 Roll() {
+    U32 x = state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return state = x;
+  }
+
+  // Pick a random float in the range [min, max).
+  float RollFloat(float min, float max) { return min + (max - min) * Roll() / 4294967296.0f; }
+};
+
 // This function may block if there is not enough entropy available.
 //
 // See `man 2 getrandom` for more information.

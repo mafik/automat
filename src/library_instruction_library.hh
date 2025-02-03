@@ -64,7 +64,7 @@ struct InstructionLibrary : Object {
     struct InstructionCard {
       llvm::MCInst mc_inst;
       float angle = 0;
-      bool found_in_library = true;
+      int library_index = -1;
       float throw_direction_deg = NAN;
       float throw_t = 0;  // 0..1
     };

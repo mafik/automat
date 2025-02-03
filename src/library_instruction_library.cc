@@ -98,8 +98,7 @@ void InstructionLibrary::Filter() {
   auto& mc_reg_info = *LLVM_Assembler::Get().mc_reg_info;
   auto& mc_asm_info = *LLVM_Assembler::Get().mc_asm_info;
 
-  int n = mc_instr_info.getNumOpcodes();
-  for (int i = 0; i < n; i++) {
+  auto AddOpcode = [&](int i) {
     auto name = mc_instr_info.getName(i);
 
     MCInstBuilder builder(i);
@@ -107,23 +106,23 @@ void InstructionLibrary::Filter() {
     // TODO: Custom tablegen processor to output just the instructions we want & info we need
 
     // TODO: Atomic instructions
-    if (name.contains("LOCK_")) continue;
+    if (name.contains("LOCK_")) return;
     // TODO: EVEX (requires Advanced Performance Extensions - only on newer CPUs - else crash)
-    if (name.contains("_NF")) continue;
-    if (name.contains("_EVEX")) continue;
-    if (name.contains("_ND")) continue;
-    if (name.contains("_REV")) continue;
-    if (name.contains("_alt")) continue;
+    if (name.contains("_NF")) return;
+    if (name.contains("_EVEX")) return;
+    if (name.contains("_ND")) return;
+    if (name.contains("_REV")) return;
+    if (name.contains("_alt")) return;
 
     const MCInstrDesc& op = mc_instr_info.get(i);
 
-    if (op.isPreISelOpcode()) continue;
-    if (op.isPseudo()) continue;
-    if (op.isMetaInstruction()) continue;
+    if (op.isPreISelOpcode()) return;
+    if (op.isPseudo()) return;
+    if (op.isMetaInstruction()) return;
 
     // TODO: Memory-related instructions
-    if (op.mayLoad()) continue;
-    if (op.mayStore()) continue;
+    if (op.mayLoad()) return;
+    if (op.mayStore()) return;
 
     int num_operands = op.getNumOperands();
 
@@ -162,10 +161,33 @@ void InstructionLibrary::Filter() {
     std::string info;
     bool is_deprecated = mc_instr_info.getDeprecatedInfo(inst, mc_subtarget_info, info);
     if (is_deprecated) {
-      continue;
+      return;
     }
 
     instructions.push_back(inst);
+  };
+
+  if (selected_category == -1) {
+    for (int i = 0; i < mc_instr_info.getNumOpcodes(); i++) {
+      AddOpcode(i);
+    }
+  } else {
+    auto& category = kCategories[selected_category];
+    if (selected_group == -1) {
+      std::vector<bool> visited(mc_instr_info.getNumOpcodes(), false);
+      for (auto& group : category.groups) {
+        for (auto& opcode : group.opcodes) {
+          if (visited[opcode]) continue;
+          visited[opcode] = true;
+          AddOpcode(opcode);
+        }
+      }
+    } else {
+      auto& group = category.groups[selected_group];
+      for (auto& opcode : group.opcodes) {
+        AddOpcode(opcode);
+      }
+    }
   }
 }
 
@@ -275,10 +297,12 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
 
   int n = VisibleInstructions(*library);
 
+  bool small_deck = instructions.size() <= kMaxInstructions;
+
   int insert_index = 0;
 
   for (auto& card : instruction_helix) {
-    card.found_in_library = false;
+    card.library_index = -1;
   }
 
   float wobble = 0;
@@ -286,8 +310,8 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
   if (wobble_amplitude_target > 0) {
     phase |= animation::Animating;
   }
-  phase |= wobble_amplitude.SineTowards(wobble_amplitude_target, timer.d, 1);
-  wobble = wobble_amplitude * sin(timer.NowSeconds() * M_PI * 2) / 10;
+  phase |= wobble_amplitude.SineTowards(wobble_amplitude_target, timer.d, 5);
+  wobble = wobble_amplitude * sin(timer.NowSeconds() * M_PI * 2) / 20;
 
   for (int i = 0; i < n; ++i) {
     llvm::MCInst& inst = library->instructions[i];
@@ -297,7 +321,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       auto& card = instruction_helix[j];
       if (card.mc_inst.getOpcode() == inst.getOpcode()) {
         card.angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
-        card.found_in_library = true;
+        card.library_index = i;
         found = true;
         // New cards should be inserted after the card that matches InstructionLibrary deck.
         insert_index = j + 1;
@@ -308,7 +332,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       auto it =
           instruction_helix.insert(instruction_helix.begin() + insert_index, InstructionCard{inst});
       it->angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
-      it->found_in_library = true;
+      it->library_index = i;
       if (insert_index == 0) {
         if (isnan(new_cards_dir_deg)) {
           it->throw_direction_deg = rng.RollFloat(-180, 180);
@@ -321,21 +345,25 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     }
   }
 
-  while (!instruction_helix.back().found_in_library) {
+  while (instruction_helix.back().library_index == -1) {
     instruction_helix.pop_back();
   }
 
   for (int j = 0; j < instruction_helix.size(); ++j) {
     auto& card = instruction_helix[j];
-    if (card.found_in_library) {
+    if (card.library_index >= 0) {
       if (isnan(card.throw_direction_deg)) {
         card.throw_t = 0;
       } else {
-        if (card.throw_t > 0) {
-          // phase |= animation::ExponentialApproach(0, timer.d, 0.04, card.throw_t);
-          phase |= animation::LinearApproach(0, timer.d, 5, card.throw_t);
+        if (j < card.library_index) {
+          // We should move the card deeper into the deck (reordered)
+          phase |= animation::LinearApproach(1, timer.d, 5, card.throw_t);
         } else {
-          card.throw_direction_deg = NAN;
+          // Card is moving back to the deck
+          phase |= animation::LinearApproach(0, timer.d, 5, card.throw_t);
+          if (card.throw_t == 0) {
+            card.throw_direction_deg = NAN;
+          }
         }
       }
     } else {
@@ -349,6 +377,25 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
         --j;
         continue;
       }
+    }
+  }
+
+  // Adjust z-order of cards that move their position in the deck
+  for (int j = 0; j < instruction_helix.size(); ++j) {
+    auto& card = instruction_helix[j];
+    if (isnan(card.throw_direction_deg)) {
+      continue;  // skip cards which are not being animated
+    }
+    if (card.library_index > j && card.throw_t > 0.5) {
+      auto card_copy = card;
+      instruction_helix.erase(instruction_helix.begin() + j);
+      instruction_helix.insert(instruction_helix.begin() + card_copy.library_index, card_copy);
+      --j;
+    }
+    if (card.library_index >= 0 && card.library_index < j && card.throw_t < 0.5) {
+      auto card_copy = card;
+      instruction_helix.erase(instruction_helix.begin() + j);
+      instruction_helix.insert(instruction_helix.begin() + card_copy.library_index, card_copy);
     }
   }
 
@@ -780,6 +827,15 @@ struct ScrollDeckAction : Action {
         library.instructions.push_back(library.instructions.front());
         library.instructions.pop_front();
       } else {
+        auto& mc_inst = library.instructions.back();
+        for (int j = 0; j < library_widget.instruction_helix.size(); ++j) {
+          auto& card = library_widget.instruction_helix[j];
+          if (card.mc_inst.getOpcode() == mc_inst.getOpcode()) {
+            card.throw_direction_deg = (new_angle + 180_deg).ToDegrees();
+            card.throw_t = 1;
+            break;
+          }
+        }
         library_widget.new_cards_dir_deg = (new_angle + 180_deg).ToDegrees();
         library.instructions.push_front(library.instructions.back());
         library.instructions.pop_back();
@@ -824,6 +880,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
           library->selected_category = -1;
           library->selected_group = -1;
         }
+        library->Filter();
         WakeAnimation();
         return nullptr;
       }
@@ -846,6 +903,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
           } else {
             library->selected_group = j;
           }
+          library->Filter();
           leaf_state.shake.velocity = 150;
           WakeAnimation();
           return nullptr;

@@ -19,10 +19,7 @@
 #include "llvm_asm.hh"
 #include "status.hh"
 
-#if defined __linux__
-#pragma maf add link argument "-lz"
-#pragma maf add link argument "-lzstd"
-#elif defined _WIN32
+#if defined _WIN32
 #pragma comment(lib, "ntdll.lib")
 #endif  // __linux__
 

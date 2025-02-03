@@ -28,7 +28,7 @@ def llvm_cxxflags(build_type : build.BuildType):
   return flags
 
 def llvm_ldflags(build_type : build.BuildType):
-  return llvm_config(build_type, ['--ldflags', '--libs'])
+  return llvm_config(build_type, ['--ldflags', '--libs']) + ['-lz', '-lzstd']
 
 def post_install(build_type : build.BuildType, marker):
   llvm_lib = build_type.PREFIX() / 'include' / 'llvm' / 'lib'

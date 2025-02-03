@@ -20,4 +20,13 @@ struct Action {
   virtual gui::Widget* Widget() { return nullptr; }
 };
 
+/* Keeping this around for copy-pasting
+struct MinimalActionTemplate : Action {
+  MinimalActionTemplate(gui::Pointer& pointer) : Action(pointer) {}
+  void Begin() override {}
+  void Update() override {}
+  void End() override {}
+};
+*/
+
 }  // namespace automat

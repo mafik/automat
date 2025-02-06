@@ -9,9 +9,9 @@
 # instructions is not supported. Accurate tracking will enable progressive expansion of the covered
 # instruction set, as the design is extended.
 #
-# To facilitate tracking, the script groups unsupported instructions into categories. Each instruction
-# must be assigned to a category, otherwise a warning will be shown. Similarly, each category must be
-# marked as supported or not (by inclusion in a "Super Category"). This structure means that once a new
+# To facilitate tracking, the script groups unsupported instructions. Each instruction
+# must be assigned to a group, otherwise a warning will be shown. Similarly, each group must be
+# marked as supported or not (by inclusion in a Category). This structure means that once a new
 # aspect of x86 is added to the design, all of the newly possible instructions can be enabled.
 
 import build
@@ -19,6 +19,7 @@ import make
 import src
 import json
 from functools import partial
+from pathlib import Path
 
 llvm = src.load_extension('llvm')
 
@@ -93,187 +94,262 @@ def gen_x86_hh(x86_json, x86_hh):
       skip_opcodes.add(opcode_name)
 
   for opcode_name in skip_opcodes:
-    del x[opcode_name]
+    if opcode_name in x:
+      del x[opcode_name]
 
   for opcode in x.values():
     for field in IRRELEVANT_FIELDS: 
       if field in opcode:
         del opcode[field]
 
-  def select_opcodes_by_prefix(category, opcode_name_prefix):
+  def select_opcodes_by_prefix(group, opcode_name_prefix):
     selected = {opcode_name: opcode for opcode_name, opcode in x.items() if opcode_name.startswith(opcode_name_prefix)}
-    category.update(selected)
+    group.update(selected)
   
-  categories = {}
+  groups = {}
 
-  class Category():
+  class Group:
     def __init__(self, name, prefixes, ring0=False):
       self.name = name
-      if name in categories:
-        raise ValueError(f'Category {name} already exists')
-      categories[name] = self
+      if name in groups:
+        raise ValueError(f'Group {name} already exists')
+      groups[name] = self
       self.prefixes = prefixes
       self.ring0 = ring0
       self.opcodes = {}
       for prefix in prefixes:
         select_opcodes_by_prefix(self.opcodes, prefix)
 
-  Category('LLVM sanitizers', ['UBSAN', 'ASAN'])
-  Category('LLVM internals', ['ADJCALLSTACK', 'CMOV_', 'CATCHRET', 'CLEANUPRET', 'DYN_ALLOCA_64', 'EH_', 'Int_', 'KCFI_CHECK', 'PROBED_ALLOCA', 'SEG_ALLOCA', 'PTDPBF16PS', 'REP_'])
-  Category('Synchronization prefixes', ['LOCK_PREFIX', 'XRELEASE_PREFIX', 'XACQUIRE_PREFIX'])
-  Category('Rep prefixes', ['REPNE_PREFIX', 'REP_PREFIX'])
-  Category('String scan', ['SCAS'])
-  Category('String store', ['STOS'])
-  Category('System Paging', ['WBINVD', 'INVLPG', 'TLBSYNC', 'WBNOINVD'], ring0=True)
-  Category('Restricted Transactional Memory', ['XABORT', 'XBEGIN', 'XEND', 'XTEST', 'XSUSLDTRK', 'XRESLDTRK'])
-  Category('Push/Pop FS/GS', ['POPFS', 'POPGS', 'PUSHFS', 'PUSHGS'])
-  Category('Control Flow Tracking/Indirect Branch Tracking', ['ENDBR'])
-  Category('Control Flow Shadow Stack', ['INCSSP', 'RDSSP', 'SAVEPREVSSP', 'RSTORSSP', 'WRSS', 'WRUSS', 'SETSSBSY', 'CLRSSBSY'])
-  Category('Port Input', ['IN8', 'IN16', 'IN32', 'IN64', 'INSB', 'INSW', 'INSL'])
-  Category('Port Output', ['OUT'])
-  Category('Exchange/Add', ['XADD'])
-  Category('Exchange', ['XCHG'])
-  Category('Not', ['NOT'])
-  Category('And', ['AND'])
-  Category('Or', ['OR'])
-  Category('Xor', ['XOR'])
-  Category('Increment', ['INC'])
-  Category('Decrement', ['DEC'])
-  Category('Add', ['ADD', 'ADC', 'ADOX'])
-  Category('Subtract', ['SUB', 'SBB'])
-  Category('Signed Multiply', ['IMUL'])
-  Category('Unsigned Multiply', ['MUL'])
-  Category('Unsigned Divide', ['DIV'])
-  Category('Signed Divide', ['IDIV'])
-  Category('Signed Shift', ['SAL', 'SAR'])
-  Category('Unsigned Double Shift', ['SHLD', 'SHRD'])
-  Category('Unsigned Shift', ['SHL', 'SHR'])
-  Category('Signed Negate', ['NEG'])
-  Category('Sign Extend', ['CBW', 'CDQ', 'CQO', 'CWD', 'MOVSX'])
-  Category('Zero Extend', ['MOVZX'])
-  Category('Move', ['MOV'])
-  Category('Move If', ['CMOV'])
-  Category('Jump', ['JMP'])
-  Category('Jump If', ['JCC', 'JECXZ', 'JRCXZ', 'LOOP'])
-  Category('CRC32', ['CRC32'])
-  Category('Flag Complement', ['CMC'])
-  Category('Auxiliary Carry', ['CLAC', 'STAC'])
-  Category('Flag Clear', ['CLC', 'CLD', 'CLI'])
-  Category('Flag Set', ['STC', 'STD', 'STI'])
-  Category('Flag Register', ['LAHF', 'SAHF'])
-  Category('Breakpoint', ['INT3'])
-  Category('Software Interrupt', ['INT'])
-  Category('User Interrupt', ['UIRED', 'CLUI', 'STUI', 'TESTUI', 'SENDUIPI', 'UIRET'])
-  Category('Bit Rotations Carry', ['RCL', 'RCR'])
-  Category('Bit Rotations', ['ROL', 'ROR'])
-  Category('Bit Tests', ['BT'])
-  Category('Bit Counting', ['LZCNT', 'POPCNT', 'TZCNT'])
-  Category('Bit Twiddling', ['BEXTR', 'BLC', 'BLS', 'BSF', 'BSR', 'BSWAP', 'BZHI', 'PDEP', 'PEXT', 'T1MSKC', 'TZMSK'])
-  Category('AMD-V', ['VMRUN', 'VMLOAD', 'VMSAVE', 'CLGI', 'VMMCALL', 'INVLPGA', 'SKINIT', 'STGI'])
-  Category('Intel VMX', ['VMPTRLD', 'VMPTRST', 'VMCLEAR', 'VMREAD', 'VMWRITE', 'VMCALL', 'VMLAUNCH', 'VMRESUME', 'VMXOFF', 'VMXON', 'INVEPT', 'INVVPID', 'VMFUNC', 'SEAMCALL', 'SEAMOPS', 'SEAMRET', 'TDCALL'])
-  Category('Intel FRED', ['ERET', 'LKGS'], ring0=True)
-  Category('SGX', ['ENCLS', 'ENCLU', 'ENCLV'])
-  Category('CPUID', ['CPUID'])
-  Category('System Task Switching', ['CLTS', 'LTR'], ring0=True)
-  Category('System Segment Descriptors', ['LLDT', 'LMSW'], ring0=True)
-  Category('Read/Write FS/GS', ['RDFSBASE', 'RDGSBASE', 'WRFSBASE', 'WRGSBASE'])
-  Category('Swap GS', ['SWAPGS'], ring0=True)
-  Category('System Call', ['SYSCALL', 'SYSRET', 'SYSENTER', 'SYSEXIT'])
-  Category('Cache Control', ['CLZERO'])
-  Category('Processor History', ['HRESET', 'INVD', 'INVLPGB64'], ring0=True)
-  Category('Compare and Exchange', ['CMPXCHG'])
-  Category('Compare', ['CMP'])
-  Category('Test', ['TEST'])
-  Category('Set If', ['SETCC'])
-  Category('Fence', ['LFENCE', 'SFENCE', 'MFENCE', 'SERIALIZE'])
-  Category('Stack Frames', ['ENTER', 'LEAVE'])
-  Category('x87', ['FEMMS'])
-  Category('Intel Trusted Execution', ['GETSEC'])
-  Category('Power', ['HLT'], ring0=True)
-  Category('Segment Descriptors', ['LAR', 'LSL', 'VERR', 'VERW', 'SLDT', 'STR', 'SMSW'])
-  Category('Performance Counters', ['RDPMC'])
-  Category('Get Extended Control Registers', ['XGETBV'])
-  Category('Set Extended Control Registers', ['XSETBV'], ring0=True)
-  Category('User Page Keys', ['RDPKRU', 'WRPKRU'])
-  Category('Core ID', ['RDPID'])
-  Category('System Model Specific Registers', ['RDMSR', 'WRMSR'], ring0=True)
-  Category('Model Specific Registers', ['RDPRU'])
-  Category('Random Numbers', ['RDRAND', 'RDSEED'])
-  Category('Time', ['RDTSC'])
-  Category('Memory Monitoring', ['MONITORX', 'MWAITX', 'UMONITOR', 'UMWAIT', 'TPAUSE'])
-  Category('System Memory Monitoring', ['MONITOR', 'MWAIT'], ring0=True)
-  Category('VIA PadLock', ['MONTMUL', 'XSTORE'])
-  Category('System Total Storage Encryption', ['PBNDKB', 'PCONFIG'], ring0=True)
-  Category('Software Tracing', ['PTWRITE'])
-  Category('System Management Mode', ['RSM'], ring0=True)
-  Category('AMD Secure Nested Paging', ['PSMASH', 'PVALIDATE', 'RMPADJUST', 'RMPQUERY', 'RMPUPDATE'], ring0=True)
+  Group('LLVM sanitizers', ['UBSAN', 'ASAN'])
+  Group('LLVM internals', ['ADJCALLSTACK', 'CMOV_', 'CATCHRET', 'CLEANUPRET', 'DYN_ALLOCA_64', 'EH_', 'Int_', 'KCFI_CHECK', 'PROBED_ALLOCA', 'SEG_ALLOCA', 'PTDPBF16PS', 'REP_'])
+  Group('Synchronization prefixes', ['LOCK_PREFIX', 'XRELEASE_PREFIX', 'XACQUIRE_PREFIX'])
+  Group('Rep prefixes', ['REPNE_PREFIX', 'REP_PREFIX'])
+  Group('String scan', ['SCAS'])
+  Group('String store', ['STOS'])
+  Group('System Paging', ['WBINVD', 'INVLPG', 'TLBSYNC', 'WBNOINVD'], ring0=True)
+  Group('Restricted Transactional Memory', ['XABORT', 'XBEGIN', 'XEND', 'XTEST', 'XSUSLDTRK', 'XRESLDTRK'])
+  Group('Push/Pop FS/GS', ['POPFS', 'POPGS', 'PUSHFS', 'PUSHGS'])
+  Group('Control Flow Tracking/Indirect Branch Tracking', ['ENDBR'])
+  Group('Control Flow Shadow Stack', ['INCSSP', 'RDSSP', 'SAVEPREVSSP', 'RSTORSSP', 'WRSS', 'WRUSS', 'SETSSBSY', 'CLRSSBSY'])
+  Group('Port Input', ['IN8', 'IN16', 'IN32', 'IN64', 'INSB', 'INSW', 'INSL'])
+  Group('Port Output', ['OUT'])
+  Group('Exchange/Add', ['XADD'])
+  Group('Exchange', ['XCHG'])
+  Group('Not', ['NOT'])
+  Group('And', ['AND'])
+  Group('Or', ['OR'])
+  Group('Xor', ['XOR'])
+  Group('Increment', ['INC'])
+  Group('Decrement', ['DEC'])
+  Group('Add', ['ADD', 'ADC', 'ADOX'])
+  Group('Subtract', ['SUB', 'SBB'])
+  Group('Signed Multiply', ['IMUL'])
+  Group('Unsigned Multiply', ['MUL'])
+  Group('Unsigned Divide', ['DIV'])
+  Group('Signed Divide', ['IDIV'])
+  Group('Signed Shift', ['SAL', 'SAR'])
+  Group('Unsigned Double Shift', ['SHLD', 'SHRD'])
+  Group('Unsigned Shift', ['SHL', 'SHR'])
+  Group('Signed Negate', ['NEG'])
+  Group('Sign Extend', ['CBW', 'CDQ', 'CQO', 'CWD', 'MOVSX'])
+  Group('Zero Extend', ['MOVZX'])
+  Group('Move', ['MOV'])
+  Group('Move If', ['CMOV'])
+  Group('Jump', ['JMP'])
+  Group('Jump If', ['JCC', 'JECXZ', 'JRCXZ', 'LOOP'])
+  Group('CRC32', ['CRC32'])
+  Group('Flag Complement', ['CMC'])
+  Group('Auxiliary Carry', ['CLAC', 'STAC'])
+  Group('Flag Clear', ['CLC', 'CLD', 'CLI'])
+  Group('Flag Set', ['STC', 'STD', 'STI'])
+  Group('Flag Register', ['LAHF', 'SAHF'])
+  Group('Breakpoint', ['INT3'])
+  Group('Software Interrupt', ['INT'])
+  Group('User Interrupt', ['UIRED', 'CLUI', 'STUI', 'TESTUI', 'SENDUIPI', 'UIRET'])
+  Group('Bit Rotations Carry', ['RCL', 'RCR'])
+  Group('Bit Rotations', ['ROL', 'ROR'])
+  Group('Bit Tests', ['BT'])
+  Group('Bit Counting', ['LZCNT', 'POPCNT', 'TZCNT'])
+  Group('Bit Twiddling', ['BEXTR', 'BLC', 'BLS', 'BSF', 'BSR', 'BSWAP', 'BZHI', 'PDEP', 'PEXT', 'T1MSKC', 'TZMSK'])
+  Group('AMD-V', ['VMRUN', 'VMLOAD', 'VMSAVE', 'CLGI', 'VMMCALL', 'INVLPGA', 'SKINIT', 'STGI'])
+  Group('Intel VMX', ['VMPTRLD', 'VMPTRST', 'VMCLEAR', 'VMREAD', 'VMWRITE', 'VMCALL', 'VMLAUNCH', 'VMRESUME', 'VMXOFF', 'VMXON', 'INVEPT', 'INVVPID', 'VMFUNC', 'SEAMCALL', 'SEAMOPS', 'SEAMRET', 'TDCALL'])
+  Group('Intel FRED', ['ERET', 'LKGS'], ring0=True)
+  Group('SGX', ['ENCLS', 'ENCLU', 'ENCLV'])
+  Group('CPUID', ['CPUID'])
+  Group('System Task Switching', ['CLTS', 'LTR'], ring0=True)
+  Group('System Segment Descriptors', ['LLDT', 'LMSW'], ring0=True)
+  Group('Read/Write FS/GS', ['RDFSBASE', 'RDGSBASE', 'WRFSBASE', 'WRGSBASE'])
+  Group('Swap GS', ['SWAPGS'], ring0=True)
+  Group('System Call', ['SYSCALL', 'SYSRET', 'SYSENTER', 'SYSEXIT'])
+  Group('Cache Control', ['CLZERO'])
+  Group('Processor History', ['HRESET', 'INVD', 'INVLPGB64'], ring0=True)
+  Group('Compare and Exchange', ['CMPXCHG'])
+  Group('Compare', ['CMP'])
+  Group('Test', ['TEST'])
+  Group('Set If', ['SETCC'])
+  Group('Fence', ['LFENCE', 'SFENCE', 'MFENCE', 'SERIALIZE'])
+  Group('Stack Frames', ['ENTER', 'LEAVE'])
+  Group('x87', ['FEMMS'])
+  Group('Intel Trusted Execution', ['GETSEC'])
+  Group('Power', ['HLT'], ring0=True)
+  Group('Segment Descriptors', ['LAR', 'LSL', 'VERR', 'VERW', 'SLDT', 'STR', 'SMSW'])
+  Group('Performance Counters', ['RDPMC'])
+  Group('Get Extended Control Registers', ['XGETBV'])
+  Group('Set Extended Control Registers', ['XSETBV'], ring0=True)
+  Group('User Page Keys', ['RDPKRU', 'WRPKRU'])
+  Group('Core ID', ['RDPID'])
+  Group('System Model Specific Registers', ['RDMSR', 'WRMSR'], ring0=True)
+  Group('Model Specific Registers', ['RDPRU'])
+  Group('Random Numbers', ['RDRAND', 'RDSEED'])
+  Group('Time', ['RDTSC'])
+  Group('Memory Monitoring', ['MONITORX', 'MWAITX', 'UMONITOR', 'UMWAIT', 'TPAUSE'])
+  Group('System Memory Monitoring', ['MONITOR', 'MWAIT'], ring0=True)
+  Group('VIA PadLock', ['MONTMUL', 'XSTORE'])
+  Group('System Total Storage Encryption', ['PBNDKB', 'PCONFIG'], ring0=True)
+  Group('Software Tracing', ['PTWRITE'])
+  Group('System Management Mode', ['RSM'], ring0=True)
+  Group('AMD Secure Nested Paging', ['PSMASH', 'PVALIDATE', 'RMPADJUST', 'RMPQUERY', 'RMPUPDATE'], ring0=True)
 
-  # At this point, all instructions should have been categorized.
-  categorized_opcodes = set()
-  for category in categories.values():
-    categorized_opcodes.update(category.opcodes.keys())
+  # At this point, all instructions should have been grouped.
+  grouped_opcodes = set()
+  for group_obj in groups.values():
+    grouped_opcodes.update(group_obj.opcodes.keys())
   
-  uncategorized_opcodes = set(x.keys()).difference(categorized_opcodes)
-  for opcode_name in uncategorized_opcodes:
+  ungrouped_opcodes = set(x.keys()).difference(grouped_opcodes)
+  for opcode_name in ungrouped_opcodes:
     # Useful reference: https://en.wikipedia.org/wiki/X86_instruction_listings
-    print(f'Warning: {opcode_name} is not covered by any category. Check build/<BUILD_TYPE>/x86.json for details. Update src/llvm_asm.py to fix it.')
+    print(f'Warning: {opcode_name} is not covered by any group. Check build/<BUILD_TYPE>/x86.json for details. Update src/llvm_asm.py to fix it.')
 
-  super_categories = {}
-  class SuperCategory():
-    def __init__(self, name, categories, supported=True):
+  categories = {}
+  class Category:
+    def __init__(self, name, groups_list, supported=True):
       self.name = name
-      super_categories[name] = self
-      self.categories = categories
+      categories[name] = self
+      self.groups = groups_list
       self.supported = supported
-  SuperCategory('System', [name for name in categories.keys() if categories[name].ring0], supported=False)
-  SuperCategory('Virtualization', ['AMD-V', 'Intel VMX'], supported=False)
-  SuperCategory('Floating Point', ['x87'], supported=False)
-  SuperCategory('LLVM Stuff', ['LLVM sanitizers', 'LLVM internals'], supported=False)
-  SuperCategory('Specialist Stuff', [
+
+  Category('System', [name for name in groups.keys() if groups[name].ring0], supported=False)
+  Category('Virtualization', ['AMD-V', 'Intel VMX'], supported=False)
+  Category('Floating Point', ['x87'], supported=False)
+  Category('LLVM Stuff', ['LLVM sanitizers', 'LLVM internals'], supported=False)
+  Category('Specialist Stuff', [
     'Push/Pop FS/GS', 'Get Extended Control Registers', 'Intel Trusted Execution', 'Unsigned Double Shift', 'CPUID',
     'Software Tracing', 'Model Specific Registers', 'Cache Control', 'Control Flow Tracking/Indirect Branch Tracking',
     'Performance Counters', 'Software Interrupt', 'User Interrupt', 'Segment Descriptors', 'SGX', 'System Call',
     'Breakpoint', 'Memory Monitoring', 'User Page Keys', 'Read/Write FS/GS', 'Control Flow Shadow Stack'], supported=False)
-  SuperCategory('Obsolete', ['VIA PadLock', 'Auxiliary Carry'], supported=False)
-  SuperCategory('Accesses Memory', ['String scan', 'String store', 'Stack Frames'], supported=False)
-  SuperCategory('Prefixes', ['Rep prefixes', 'Synchronization prefixes'], supported=False)
-  SuperCategory('Multithreading', ['Fence', 'Restricted Transactional Memory'], supported=False)
-  SuperCategory('Ports', ['Port Input', 'Port Output'], supported=False)
-  SuperCategory('Synchronization for experts', ['Exchange/Add', 'Compare and Exchange'], supported=False)
+  Category('Obsolete', ['VIA PadLock', 'Auxiliary Carry'], supported=False)
+  Category('Accesses Memory', ['String scan', 'String store', 'Stack Frames'], supported=False)
+  Category('Prefixes', ['Rep prefixes', 'Synchronization prefixes'], supported=False)
+  Category('Multithreading', ['Fence', 'Restricted Transactional Memory'], supported=False)
+  Category('Ports', ['Port Input', 'Port Output'], supported=False)
+  Category('Synchronization for experts', ['Exchange/Add', 'Compare and Exchange'], supported=False)
 
-  SuperCategory('Logic', ['Not', 'And', 'Or', 'Xor'])
-  SuperCategory('Universal Math', ['Increment', 'Decrement', 'Add', 'Subtract'])
-  SuperCategory('Bits', ['Bit Rotations Carry', 'Bit Rotations', 'Bit Tests', 'Bit Counting', 'Bit Twiddling'])
-  SuperCategory('Move', ['Move', 'Move If', 'Exchange', 'Sign Extend', 'Zero Extend'])
-  SuperCategory('Signed Math', ['Signed Negate', 'Signed Shift', 'Signed Divide', 'Signed Multiply', 'Sign Extend'])
-  SuperCategory('Unsigned Math', ['Unsigned Shift', 'Unsigned Divide', 'Unsigned Multiply', 'Zero Extend'])
-  SuperCategory('Misc', ['Random Numbers', 'Time', 'CRC32', 'Core ID'])
-  SuperCategory('Flags', ['Flag Complement', 'Flag Clear', 'Flag Set', 'Flag Register'])
-  SuperCategory('Control', ['Compare', 'Test', 'Jump', 'Jump If', 'Set If', 'Move If'])
+  Category('Logic', ['Not', 'And', 'Or', 'Xor'])
+  Category('Universal Math', ['Increment', 'Decrement', 'Add', 'Subtract'])
+  Category('Bits', ['Bit Rotations Carry', 'Bit Rotations', 'Bit Tests', 'Bit Counting', 'Bit Twiddling'])
+  Category('Move', ['Move', 'Move If', 'Exchange', 'Sign Extend', 'Zero Extend'])
+  Category('Signed Math', ['Signed Negate', 'Signed Shift', 'Signed Divide', 'Signed Multiply', 'Sign Extend'])
+  Category('Unsigned Math', ['Unsigned Shift', 'Unsigned Divide', 'Unsigned Multiply', 'Zero Extend'])
+  Category('Misc', ['Random Numbers', 'Time', 'CRC32', 'Core ID'])
+  Category('Flags', ['Flag Complement', 'Flag Clear', 'Flag Set', 'Flag Register'])
+  Category('Control', ['Compare', 'Test', 'Jump', 'Jump If', 'Set If', 'Move If'])
 
   # At this point all categories should have been grouped. Print the stragglers.
-  covered_categories = set()
-  for super_category in super_categories.values():
-    covered_categories.update(super_category.categories)
+  covered_groups = set()
+  for category in categories.values():
+    covered_groups.update(category.groups)
 
-  non_covered_categories = set(categories.keys()).difference(covered_categories)
-  for category in non_covered_categories:
-    print(f'Warning: {category} is not covered by any super category. Check src/llvm_asm.py to fix it.')
+  non_covered_groups = set(groups.keys()).difference(covered_groups)
+  for group in non_covered_groups:
+    print(f'Warning: {group} is not covered by any category. Check src/llvm_asm.py to fix it.')
 
-  # Print supported super-categories with instruction counts
-  for super_category in super_categories.values():
-    if not super_category.supported:
+  # Print supported categories with instruction counts
+  for category in categories.values():
+    if not category.supported:
       continue
-    print(f'# {super_category.name}')
-    for category_name in super_category.categories:
-      category = categories[category_name]
-      print(f'- {category_name:25s} ({len(category.opcodes)} instructions)')
+    print(f'# {category.name}')
+    for group_name in category.groups:
+      group = groups[group_name]
+      print(f'- {group_name:25s} ({len(group.opcodes)} instructions)')
     print()
 
+  # --- Generate x86.hh below ---
   f = x86_hh.open('w')
-  # json.dump(x, f, indent=2)
-  f.write('// This file was automatically generated by llvm_asm.py\n')
+  # First, emit the header and struct definitions.
+  print(f'''#pragma once
 
+// This file was automatically generated by {Path(__file__).name}
+
+#include <span>
+#include <string_view>
+
+#include <llvm/lib/Target/X86/X86Subtarget.h>
+
+namespace automat::x86 {{
+
+using namespace llvm::X86;
+
+struct Group {{
+  std::string_view name;
+  std::span<const unsigned> opcodes;
+}};
+
+struct Category {{
+  std::string_view name;
+  std::span<const Group> groups;
+}};
+''', file=f)
+
+  # A helper to sanitize names for identifiers (remove whitespace and punctuation)
+  import re
+  def sanitize(name):
+    return re.sub(r'[^a-zA-Z0-9]', '', name)
+
+  output_lines = []
+
+  # Only include groups referenced by supported categories.
+  supported_group_names = []
+  for cat in categories.values():
+    if not cat.supported:
+      continue
+    for g in cat.groups:
+      if g not in supported_group_names:
+        supported_group_names.append(g)
+
+  # For each group, generate an opcodes array.
+  for group_name in supported_group_names:
+    group_obj = groups[group_name]
+    sanitized_group = sanitize(group_obj.name)
+    opcodes = sorted(group_obj.opcodes.keys())
+    opcode_list = ', '.join(f'{opcode}' for opcode in opcodes)
+    output_lines.append(f'constexpr unsigned k{sanitized_group}Opcodes[] = {{{opcode_list}}};')
+  output_lines.append('')
+
+  # For each supported category, generate a groups array.
+  supported_categories = [cat for cat in categories.values() if cat.supported]
+  for cat in supported_categories:
+    sanitized_cat = sanitize(cat.name)
+    output_lines.append(f'constexpr Group k{sanitized_cat}Groups[] = {{')
+    for group_name in cat.groups:
+      if group_name not in groups:
+        continue
+      group_obj = groups[group_name]
+      sanitized_group = sanitize(group_obj.name)
+      output_lines.append(f'    {{"{group_obj.name}", k{sanitized_group}Opcodes}},')
+    output_lines.append('};')
+    output_lines.append('')
+
+  # Finally, generate the master categories array.
+  output_lines.append('constexpr Category kCategories[] = {')
+  for cat in supported_categories:
+    sanitized_cat = sanitize(cat.name)
+    output_lines.append(f'    {{.name = "{cat.name}", .groups = k{sanitized_cat}Groups}},')
+  output_lines.append('};')
+  output_lines.append('')
+  output_lines.append('}  // namespace automat::x86')
+  output_lines.append('')
+
+  print("\n".join(output_lines), file=f)
 
 def hook_recipe(r: make.Recipe):
   for build_type in build.types:

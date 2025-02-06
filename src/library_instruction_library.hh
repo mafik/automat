@@ -11,20 +11,7 @@
 
 namespace automat::library {
 
-// A "leaf" group of instructions
-struct InstructionGroup {
-  std::string_view name;
-  std::span<const unsigned> opcodes;
-};
-
-struct InstructionCategory {
-  std::string_view name;
-  std::span<const InstructionGroup> groups;
-};
-
 struct InstructionLibrary : Object {
-  static const std::span<const InstructionCategory> kCategories;
-
   constexpr static int kGeneralPurposeRegisterCount = 8;
 
   enum class RegisterWidth {

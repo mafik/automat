@@ -10,6 +10,7 @@
 #include <llvm/lib/Target/X86/MCTargetDesc/X86MCTargetDesc.h>
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 
+#include <automat/x86.hh>
 #include <cmath>
 #include <ranges>
 
@@ -28,62 +29,6 @@ using namespace llvm;
 using namespace maf;
 
 namespace automat::library {
-
-const unsigned SetImmediateGroupOpcodes[] = {
-    X86::MOV8ri,
-    X86::MOV16ri,
-    X86::MOV32ri,
-    X86::MOV64ri,
-};
-
-constexpr InstructionGroup SetImmediateGroup = {
-    .name = "Set to",
-    .opcodes = SetImmediateGroupOpcodes,
-};
-
-const unsigned CopyRegisterGroupOpcodes[] = {
-    X86::MOV8rr,
-    X86::MOV16rr,
-    X86::MOV32rr,
-    X86::MOV64rr,
-};
-
-constexpr InstructionGroup CopyRegisterGroup = {
-    .name = "Copy",
-    .opcodes = CopyRegisterGroupOpcodes,
-};
-
-constexpr InstructionGroup BaseGroups[] = {SetImmediateGroup, CopyRegisterGroup, CopyRegisterGroup,
-                                           CopyRegisterGroup, CopyRegisterGroup};
-constexpr InstructionCategory BaseCategory = {
-    .name = "Base",
-    .groups = BaseGroups,
-};
-
-constexpr InstructionCategory JumpsCategory = {
-    .name = "Jumps",
-    .groups = BaseGroups,
-};
-
-constexpr InstructionCategory MathCategory = {
-    .name = "Math",
-    .groups = BaseGroups,
-};
-
-constexpr InstructionCategory LogicCategory = {
-    .name = "Logic",
-    .groups = BaseGroups,
-};
-
-constexpr InstructionCategory StackCategory = {
-    .name = "Stack",
-    .groups = BaseGroups,
-};
-
-constexpr InstructionCategory InstructionCategories[] = {BaseCategory, JumpsCategory, MathCategory,
-                                                         LogicCategory, StackCategory};
-
-const std::span<const InstructionCategory> InstructionLibrary::kCategories = InstructionCategories;
 
 InstructionLibrary::InstructionLibrary() {
   Filter();
@@ -172,7 +117,7 @@ void InstructionLibrary::Filter() {
       AddOpcode(i);
     }
   } else {
-    auto& category = kCategories[selected_category];
+    auto& category = x86::kCategories[selected_category];
     if (selected_group == -1) {
       std::vector<bool> visited(mc_instr_info.getNumOpcodes(), false);
       for (auto& group : category.groups) {
@@ -198,7 +143,7 @@ shared_ptr<Object> InstructionLibrary::Clone() const { return make_shared<Instru
 InstructionLibrary::Widget::Widget(std::weak_ptr<Object> object) : object(object) {}
 SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 10_cm); }
 
-constexpr float kRoseFanDegrees = 120;
+constexpr float kRoseFanDegrees = 180;
 constexpr float kStartDist = Instruction::Widget::kHeight / 2;
 const float kCornerDist = Instruction::Widget::kDiagonal / 2;
 constexpr float kRoseDist = 8_cm;
@@ -222,7 +167,8 @@ static SkPathMeasure CategoryPathMeasure(int i, int n) {
     float segment_end_dist = kStartDist + kSegmentLength * (segment + 1);
     Vec2 segment_end = Vec2::Polar(branch_dir_sin_cos, segment_end_dist);
     float segment_end_angle_offset =
-        (fmodf(i * 1.7156420f + segment * 1.92345678f + 0.2f, 1.f) - 0.5) * 1.5;  // Pseudo-random
+        (fmodf(i * 1.7156420f + segment * 1.92345678f + 0.2f, 1.f) - 0.5) * 1.5 *
+        0.5;  // Pseudo-random
 
     if (segment == kSegmentCount - 1) {
       segment_end_angle_offset = angle_off_vertical / 3;
@@ -409,12 +355,12 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
 
   phase |= rotation_offset_t.SineTowards(rotation_offset_t_target, timer.d, 0.2);
 
-  for (int i = 0; i < library->kCategories.size(); ++i) {
+  for (int i = 0; i < std::size(x86::kCategories); ++i) {
     if (category_states.size() <= i) {
       category_states.push_back(CategoryState{
           .growth = 0,
       });
-      for (int j = 0; j < library->kCategories[i].groups.size(); ++j) {
+      for (int j = 0; j < x86::kCategories[i].groups.size(); ++j) {
         category_states.back().leaves.push_back(CategoryState::LeafState{
             .growth = 0,
         });
@@ -423,7 +369,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
   }
 
   for (int i = 0; i < category_states.size(); ++i) {
-    auto& category = InstructionLibrary::kCategories[i];
+    auto& category = x86::kCategories[i];
     auto& category_state = category_states[i];
     auto path_measure = CategoryPathMeasure(i, category_states.size());
     StalkMetrics stalk_metrics(path_measure, category_state.growth);
@@ -537,22 +483,23 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   debug_paint.setColor("#ff0000"_color);
 
   gui::Font font = LightFont();
+  constexpr int kCategoryCount = std::size(x86::kCategories);
   // For each category draw a rose:
   // 1. Cubic curve with control points along a line from the center to the edge.
   // 2. Pseudo-random offsets to tangents to make the curve more interesting.
   // 3. Leaves drawn alternatively along the curve, at offset to the current tangent.
   // 4. Rose drawn at the end of the curve.
-  for (int i = 0; i < category_states.size(); ++i) {
+  for (int i = 0; i < kCategoryCount; ++i) {
     // Number between 0 and 1 that indicates how much the rose has grown.
     float growth = category_states[i].growth;
 
-    auto& category = InstructionLibrary::kCategories[i];
-    float branch_dir = kRoseFanDegrees * M_PI / 180 * i / (category_states.size() - 1) +
+    auto& category = x86::kCategories[i];
+    float branch_dir = kRoseFanDegrees * M_PI / 180 * i / (kCategoryCount - 1) +
                        (180 - kRoseFanDegrees) * M_PI / 180 / 2;
 
     SinCos branch_dir_sin_cos = SinCos::FromRadians(branch_dir);
 
-    SkPathMeasure path_measure = CategoryPathMeasure(i, category_states.size());
+    SkPathMeasure path_measure = CategoryPathMeasure(i, kCategoryCount);
     StalkMetrics stalk_metrics(path_measure, growth);
 
     float step_length = 1_cm;

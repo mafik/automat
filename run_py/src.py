@@ -164,19 +164,30 @@ def scan() -> dict[str, File]:
 
     return result
 
+extensions = {}
 
 def load_extensions() -> list[ModuleType]:
-    extensions = []
+    extensions_list = []
     old_dont_write_bytecode = sys.dont_write_bytecode
     sys.dont_write_bytecode = True
     for path in fs_utils.src_dir.glob('*.py'):
-        spec = importlib.util.spec_from_file_location(path.stem, path)
-        if not spec:
-            continue
-        module = importlib.util.module_from_spec(spec)
-        if not spec.loader:
-            continue
-        extensions.append(module)
-        spec.loader.exec_module(module)
+        try:
+            module = load_extension(path.stem)
+            extensions_list.append(module)
+        except Exception as e:
+            print(f'Failed to load extension {path.stem}: {e}')
     sys.dont_write_bytecode = old_dont_write_bytecode
-    return extensions
+    return extensions_list
+
+def load_extension(name: str) -> ModuleType:
+    if name in extensions:
+        return extensions[name]
+    spec = importlib.util.spec_from_file_location(name, fs_utils.src_dir / f'{name}.py')
+    if not spec:
+        raise ImportError(f'No module named {name}')
+    module = importlib.util.module_from_spec(spec)
+    if not spec.loader:
+        raise ImportError(f'No loader for {name}')
+    spec.loader.exec_module(module)
+    extensions[name] = module
+    return module

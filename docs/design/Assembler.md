@@ -105,3 +105,27 @@ The mechanism for combining mathematical and app-like components is fundamentall
 * Object maintains register values (stateful, code + data).
 
 https://www.linuxjournal.com/article/6210
+
+## Notes on deck animation
+
+* Each card has some parameters
+** Rotation Z
+** Animation type, direction, distance & rotation
+* Each card defines its own animation type
+** no animation
+Card is immediately adjusted to the right position / angle. Z-order is not changed.
+** shift up
+Card is displaced outwards until it leaves the deck, then its z order changes to its target z order. Then it flies back into the deck.
+Rotation Z slowly changes towards target rotation.
+** shift down
+Same as above
+** move to back
+Card is displaced & rotated outwards until it leaves the deck. Then its z order changes and it flies back into the deck. It disappears once fully in the deck.
+Rotation Z slowly changes towards vertical.
+** move to front
+Card starts half-rotated at the side of the deck & proper z order. Then it flies back into the deck.
+** remove from deck
+Card is displaced out of the deck and disappears in flames
+https://www.shadertoy.com/view/XsVfWz
+** add to deck
+Card appears outside of deck and slides in at an angle that matches its rotation Z

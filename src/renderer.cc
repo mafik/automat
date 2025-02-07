@@ -384,7 +384,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       // Heuristic for finding same texture bounds (guaranteed to contain the whole widget):
       // - for every anchor move the old texture bounds by its displacement
       // - compute a union of all the moved bounds
-      Rect new_anchor_bounds = fresh_texture_anchors[0];
+      Rect new_anchor_bounds = Rect::MakeEmptyAt(fresh_texture_anchors[0]);
       for (int i = 0; i < anchor_count; ++i) {
         Vec2 delta = fresh_texture_anchors[i] - draw_texture_anchors[i];
         Rect offset_bounds = surface_bounds_local.sk.makeOffset(delta);

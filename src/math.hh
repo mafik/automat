@@ -292,6 +292,10 @@ union Rect {
     return left <= other.left && right >= other.right && bottom <= other.bottom && top >= other.top;
   }
 
+  constexpr bool Contains(Vec2 point) const {
+    return point.x >= left && point.x <= right && point.y >= bottom && point.y <= top;
+  }
+
   void ExpandToInclude(Vec2 point) {
     left = std::min(left, point.x);
     right = std::max(right, point.x);
@@ -391,4 +395,13 @@ inline float atan(Vec2 v) { return atan2f(v.y, v.x); }
 inline float CosineInterpolate(float a, float b, float t) {
   float t2 = (1 - cosf(std::clamp<float>(t, 0, 1) * M_PI)) / 2;
   return a * (1 - t2) + b * t2;
+}
+
+double constexpr Sqrt(double x) {
+  auto SqrtNewtonRaphson = [](this auto& self, double x, double curr, double prev) -> double {
+    return curr == prev ? curr : self(x, 0.5 * (curr + x / curr), curr);
+  };
+  return x >= 0 && x < std::numeric_limits<double>::infinity()
+             ? SqrtNewtonRaphson(x, x, 0)
+             : std::numeric_limits<double>::quiet_NaN();
 }

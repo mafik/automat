@@ -30,6 +30,52 @@ using namespace maf;
 
 namespace automat::library {
 
+struct RegisterPresentation {
+  PersistentImage image;
+  unsigned llvm_reg;
+};
+
+constexpr float kRegisterIconWidth = 12_mm;
+
+RegisterPresentation kRegisters[InstructionLibrary::kGeneralPurposeRegisterCount] = {
+    RegisterPresentation{
+        .image =
+            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_ax_webp,
+                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .llvm_reg = X86::RAX,
+    },
+    RegisterPresentation{
+        .image =
+            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_bx_webp,
+                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .llvm_reg = X86::RBX,
+    },
+    RegisterPresentation{
+        .image =
+            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_cx_webp,
+                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .llvm_reg = X86::RCX,
+    },
+    RegisterPresentation{
+        .image =
+            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_dx_webp,
+                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .llvm_reg = X86::RDX,
+    },
+    RegisterPresentation{
+        .image =
+            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_si_webp,
+                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .llvm_reg = X86::RSI,
+    },
+    RegisterPresentation{
+        .image =
+            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_di_webp,
+                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .llvm_reg = X86::RDI,
+    },
+};
+
 InstructionLibrary::InstructionLibrary() {
   Filter();
   selected_category = 1;
@@ -43,50 +89,69 @@ void InstructionLibrary::Filter() {
   auto& mc_reg_info = *LLVM_Assembler::Get().mc_reg_info;
   auto& mc_asm_info = *LLVM_Assembler::Get().mc_asm_info;
 
+  std::vector<bool> visited(mc_instr_info.getNumOpcodes(), false);
+
   auto AddOpcode = [&](int i) {
-    auto name = mc_instr_info.getName(i);
+    if (visited[i]) return;
+    visited[i] = true;
 
     MCInstBuilder builder(i);
-
-    // TODO: Custom tablegen processor to output just the instructions we want & info we need
-
-    // TODO: Atomic instructions
-    if (name.contains("LOCK_")) return;
-    // TODO: EVEX (requires Advanced Performance Extensions - only on newer CPUs - else crash)
-    if (name.contains("_NF")) return;
-    if (name.contains("_EVEX")) return;
-    if (name.contains("_ND")) return;
-    if (name.contains("_REV")) return;
-    if (name.contains("_alt")) return;
-
     const MCInstrDesc& op = mc_instr_info.get(i);
 
-    if (op.isPreISelOpcode()) return;
-    if (op.isPseudo()) return;
-    if (op.isMetaInstruction()) return;
-
-    // TODO: Memory-related instructions
-    if (op.mayLoad()) return;
-    if (op.mayStore()) return;
-
-    int num_operands = op.getNumOperands();
-
     auto operands = op.operands();
+
+    deque<unsigned> read_from_queue = {read_from.begin(), read_from.end()};  // register index 0..5
+    deque<unsigned> write_to_queue = {write_to.begin(), write_to.end()};     // register index 0..5
+
+    auto implicit_defs = op.implicit_defs();
+    for (auto& def : implicit_defs) {
+      for (int write_to_i = 0; write_to_i < write_to_queue.size(); ++write_to_i) {
+        auto reg_ours = write_to_queue[write_to_i];
+        auto reg_llvm = kRegisters[reg_ours].llvm_reg;
+
+        if (reg_llvm == def || mc_reg_info.isSuperRegister(reg_llvm, def)) {
+          write_to_queue.erase(write_to_queue.begin() + write_to_i);
+          break;
+        }
+      }
+    }
+    for (auto& use : op.implicit_uses()) {
+      for (int read_from_i = 0; read_from_i < read_from_queue.size(); ++read_from_i) {
+        auto reg_ours = read_from_queue[read_from_i];
+        auto reg_llvm = kRegisters[reg_ours].llvm_reg;
+
+        if (reg_llvm == use || mc_reg_info.isSuperRegister(reg_llvm, use)) {
+          read_from_queue.erase(read_from_queue.begin() + read_from_i);
+          break;
+        }
+      }
+    }
+
     for (int operand_i = 0; operand_i < operands.size(); ++operand_i) {
       auto& operand = operands[operand_i];
       if (operand.OperandType == MCOI::OPERAND_REGISTER) {
-        const MCRegisterClass& reg_class = mc_reg_info.getRegClass(operand.RegClass);
-        auto reg_class_name = mc_reg_info.getRegClassName(&reg_class);
+        deque<unsigned>* queue = (operand_i == 0) ? &write_to_queue : &read_from_queue;
 
-        builder.addReg(reg_class.getRegister(0));
+        unsigned reg_llvm;
+        if (queue->empty()) {
+          const MCRegisterClass& reg_class = mc_reg_info.getRegClass(operand.RegClass);
+          auto reg_class_name = mc_reg_info.getRegClassName(&reg_class);
+          reg_llvm = reg_class.getRegister(0);
+        } else {
+          reg_llvm = kRegisters[queue->front()].llvm_reg;
+          queue->pop_front();
+        }
+        builder.addReg(reg_llvm);
       } else if (operand.OperandType == MCOI::OPERAND_IMMEDIATE) {
         builder.addImm(0);
       } else if (operand.OperandType == MCOI::OPERAND_MEMORY) {
         // TODO: memory...
       } else if (operand.OperandType == MCOI::OPERAND_PCREL) {
         builder.addImm(0);
+      } else if (operand.OperandType == X86::OPERAND_COND_CODE) {
+        builder.addImm(X86::CondCode::COND_NE);
       } else {
-        // TODO: investigate (conditions)
+        assert(false);
       }
       if (operand.isBranchTarget()) {
       }
@@ -95,44 +160,36 @@ void InstructionLibrary::Filter() {
       }
     }
 
-    auto implicit_defs = op.implicit_defs();
-    for (auto& def : implicit_defs) {
-    }
-    for (auto& use : op.implicit_uses()) {
-    }
-
-    MCInst& inst = builder;
-
-    std::string info;
-    bool is_deprecated = mc_instr_info.getDeprecatedInfo(inst, mc_subtarget_info, info);
-    if (is_deprecated) {
+    if (!read_from_queue.empty() || !write_to_queue.empty()) {
       return;
     }
 
+    MCInst& inst = builder;
     instructions.push_back(inst);
   };
 
-  if (selected_category == -1) {
-    for (int i = 0; i < mc_instr_info.getNumOpcodes(); i++) {
-      AddOpcode(i);
+  auto AddGroup = [&](const x86::Group& group) {
+    for (auto& opcode : group.opcodes) {
+      AddOpcode(opcode);
     }
-  } else {
-    auto& category = x86::kCategories[selected_category];
+  };
+
+  auto AddCategory = [&](const x86::Category& category) {
     if (selected_group == -1) {
-      std::vector<bool> visited(mc_instr_info.getNumOpcodes(), false);
       for (auto& group : category.groups) {
-        for (auto& opcode : group.opcodes) {
-          if (visited[opcode]) continue;
-          visited[opcode] = true;
-          AddOpcode(opcode);
-        }
+        AddGroup(group);
       }
     } else {
-      auto& group = category.groups[selected_group];
-      for (auto& opcode : group.opcodes) {
-        AddOpcode(opcode);
-      }
+      AddGroup(category.groups[selected_group]);
     }
+  };
+
+  if (selected_category == -1) {
+    for (auto& category : x86::kCategories) {
+      AddCategory(category);
+    }
+  } else {
+    AddCategory(x86::kCategories[selected_category]);
   }
 }
 
@@ -468,6 +525,12 @@ static gui::Font& LightFont() {
   return *font;
 }
 
+auto read_icon = PersistentImage::MakeFromAsset(maf::embedded::assets_reg_read_webp,
+                                                PersistentImage::MakeArgs{.width = 9_mm});
+
+auto write_icon = PersistentImage::MakeFromAsset(maf::embedded::assets_reg_write_webp,
+                                                 PersistentImage::MakeArgs{.width = 9_mm});
+
 void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   SkPaint text_shadow_paint;
   // It's scaled down by Font::DrawText so it's really in ~pixels
@@ -650,6 +713,84 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     }
   }
 
+  {  // Draw Register Table
+    constexpr float kCellSize = 8_mm;
+    constexpr float kTableRadius = 2_mm;
+    float margin_top = -kCornerDist - kCellSize;
+    int cols = 1 + size(kRegisters);
+    int rows = 2;
+    Rect register_table_rect =
+        Rect::Make<CenterX, TopY>(cols * kCellSize, rows * kCellSize).MoveBy({0, margin_top});
+    auto register_table_rr =
+        SkRRect::MakeRectXY(register_table_rect.sk, kTableRadius, kTableRadius);
+
+    SkPaint register_table_paint;
+    register_table_paint.setColor("#e4e4e4"_color);
+
+    canvas.drawRRect(register_table_rr, register_table_paint);
+
+    SkPaint line_paint;
+    line_paint.setColor("#000000"_color);
+    line_paint.setAntiAlias(true);
+    line_paint.setStyle(SkPaint::kStroke_Style);
+    line_paint.setStrokeWidth(0.1_mm);
+
+    // Horizontal line
+    canvas.drawLine(register_table_rect.LeftCenter(), register_table_rect.RightCenter(),
+                    line_paint);
+
+    // Vertical lines
+    Vec2 top = register_table_rect.TopLeftCorner();
+    Vec2 bottom = register_table_rect.BottomLeftCorner();
+    for (int i = 1; i < cols; ++i) {
+      top.x += kCellSize;
+      bottom.x += kCellSize;
+      canvas.drawLine(top, bottom, line_paint);
+    }
+
+    // Register icons
+    canvas.save();
+    canvas.translate(register_table_rect.left, register_table_rect.top);
+    canvas.translate(kCellSize / 2, kCellSize / 2);
+    canvas.translate(-kRegisterIconWidth / 2, -kRegisterIconWidth / 2);
+    canvas.translate(kCellSize, 0.5_mm);
+    for (int i = 0; i < size(kRegisters); ++i) {
+      auto& register_presentation = kRegisters[i];
+      register_presentation.image.draw(canvas);
+      canvas.translate(kCellSize, 0);
+    }
+    canvas.restore();
+
+    canvas.save();
+    canvas.translate(register_table_rect.left, register_table_rect.top);
+    canvas.translate(kCellSize / 2 - read_icon.width() / 2, kCellSize / 2 - read_icon.height() / 2);
+    canvas.translate(0, -kCellSize);
+    read_icon.draw(canvas);
+    canvas.translate(0, -kCellSize);
+    write_icon.draw(canvas);
+    canvas.restore();
+
+    SkPaint table_text_paint;
+    table_text_paint.setColor("#003052"_color);
+    table_text_paint.setStyle(SkPaint::Style::kFill_Style);
+
+    for (int i = 0; i < size(kRegisters); ++i) {
+      canvas.save();
+      float w = font.MeasureText(std::to_string(read_from_count[i]));
+      canvas.translate(register_table_rect.left + kCellSize * (i + 1.5f) - w / 2,
+                       register_table_rect.top - kCellSize * 0.5f - kCategoryLetterSize / 2);
+      font.DrawText(canvas, std::to_string(read_from_count[i]), table_text_paint);
+      canvas.restore();
+
+      canvas.save();
+      float w2 = font.MeasureText(std::to_string(write_to_count[i]));
+      canvas.translate(register_table_rect.left + kCellSize * (i + 1.5f) - w2 / 2,
+                       register_table_rect.top - kCellSize * 1.5f - kCategoryLetterSize / 2);
+      font.DrawText(canvas, std::to_string(write_to_count[i]), table_text_paint);
+      canvas.restore();
+    }
+  }
+
   auto DrawCard = [&](const InstructionCard& card) {
     canvas.save();
     float rotation_deg = card.angle;
@@ -819,6 +960,52 @@ struct ScrollDeckAction : Action {
   }
 };
 
+static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary::Widget& widget) {
+  bool read_from_arr[InstructionLibrary::kGeneralPurposeRegisterCount];
+  bool write_to_arr[InstructionLibrary::kGeneralPurposeRegisterCount];
+  for (auto reg : library.read_from) {
+    read_from_arr[reg] = true;
+  }
+  for (auto reg : library.write_to) {
+    write_to_arr[reg] = true;
+  }
+  auto read_from_backup = library.read_from;
+  auto write_to_backup = library.write_to;
+
+  // Toggle each "read_from" filter, count instructions, and then restore.
+  for (int i = 0; i < InstructionLibrary::kGeneralPurposeRegisterCount; ++i) {
+    // Toggle the filter value.
+    if (read_from_arr[i]) {
+      // Remove i from library.read_from
+      library.read_from.erase(std::remove(library.read_from.begin(), library.read_from.end(), i),
+                              library.read_from.end());
+    } else {
+      library.read_from.push_back(i);
+    }
+    library.Filter();
+    // Record count for the toggled state.
+    widget.read_from_count[i] = library.instructions.size();
+    // Restore the original state.
+    library.read_from = read_from_backup;
+  }
+
+  // Toggle each "write_to" filter, count instructions, and then restore.
+  for (int i = 0; i < InstructionLibrary::kGeneralPurposeRegisterCount; ++i) {
+    if (write_to_arr[i]) {
+      library.write_to.erase(std::remove(library.write_to.begin(), library.write_to.end(), i),
+                             library.write_to.end());
+    } else {
+      library.write_to.push_back(i);
+    }
+    library.Filter();
+    widget.write_to_count[i] = library.instructions.size();
+    library.write_to = write_to_backup;
+  }
+
+  // Finally, restore the filter results by applying the original state.
+  library.Filter();
+}
+
 std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
                                                                gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
@@ -847,7 +1034,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
           library->selected_category = -1;
           library->selected_group = -1;
         }
-        library->Filter();
+        UpdateFilterCounters(*library, *this);
         WakeAnimation();
         return nullptr;
       }
@@ -870,8 +1057,8 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
           } else {
             library->selected_group = j;
           }
-          library->Filter();
           leaf_state.shake.velocity = 150;
+          UpdateFilterCounters(*library, *this);
           WakeAnimation();
           return nullptr;
         }

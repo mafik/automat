@@ -12,8 +12,7 @@
 namespace automat::library {
 
 struct InstructionLibrary : Object {
-  constexpr static int kGeneralPurposeRegisterCount = 8;
-
+  constexpr static int kGeneralPurposeRegisterCount = 6;
   enum class RegisterWidth {
     kNone,
     k8b,
@@ -29,8 +28,12 @@ struct InstructionLibrary : Object {
   // Filters
   int selected_category = -1;
   int selected_group = -1;
-  bool read_from[kGeneralPurposeRegisterCount] = {};
-  bool write_to[kGeneralPurposeRegisterCount] = {};
+
+  // LLVM enums of registers that should be read from
+  std::vector<unsigned> read_from = {};
+  // LLVM enums of registers that should be written to
+  std::vector<unsigned> write_to = {};
+
   RegisterWidth register_width = RegisterWidth::kNone;
 
   // Potential instructions (after filtering)
@@ -63,6 +66,13 @@ struct InstructionLibrary : Object {
     bool wobble_cards = false;  // true when helix is hovered
     animation::SpringV2<float> wobble_amplitude = 0;
     float new_cards_dir_deg = NAN;
+
+    // True if the button is pressed
+    bool read_from[kGeneralPurposeRegisterCount] = {};
+    bool write_to[kGeneralPurposeRegisterCount] = {};
+
+    int read_from_count[kGeneralPurposeRegisterCount] = {};
+    int write_to_count[kGeneralPurposeRegisterCount] = {};
 
     struct CategoryState {
       struct LeafState {

@@ -600,13 +600,13 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
 
       auto& group = category.groups[j];
 
-      float group_name_width = font.MeasureText(group.name);
+      float group_name_width = font.MeasureText(group.shortcut);
       // Draw text
       canvas.save();
       canvas.translate(leaf_state.position.x - group_name_width / 2,
                        leaf_state.position.y - kCategoryLetterSize / 2);
-      font.DrawText(canvas, group.name, text_shadow_paint);
-      font.DrawText(canvas, group.name, text_fill_paint);
+      font.DrawText(canvas, group.shortcut, text_shadow_paint);
+      font.DrawText(canvas, group.shortcut, text_fill_paint);
       canvas.restore();
 
       if constexpr (kDebugRoseDrawing) {

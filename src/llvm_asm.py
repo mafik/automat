@@ -109,8 +109,11 @@ def gen_x86_hh(x86_json, x86_hh):
   groups = {}
 
   class Group:
-    def __init__(self, name, prefixes, ring0=False):
+    def __init__(self, name, prefixes, ring0=False, shortcut=None):
+      if not shortcut:
+        shortcut = name
       self.name = name
+      self.shortcut = shortcut
       if name in groups:
         raise ValueError(f'Group {name} already exists')
       groups[name] = self
@@ -139,38 +142,39 @@ def gen_x86_hh(x86_json, x86_hh):
   Group('And', ['AND'])
   Group('Or', ['OR'])
   Group('Xor', ['XOR'])
-  Group('Increment', ['INC'])
-  Group('Decrement', ['DEC'])
-  Group('Add', ['ADD', 'ADC', 'ADOX'])
-  Group('Subtract', ['SUB', 'SBB'])
-  Group('Signed Multiply', ['IMUL'])
-  Group('Unsigned Multiply', ['MUL'])
-  Group('Unsigned Divide', ['DIV'])
-  Group('Signed Divide', ['IDIV'])
-  Group('Signed Shift', ['SAL', 'SAR'])
+  Group('Increment', ['INC'], shortcut='+1')
+  Group('Decrement', ['DEC'], shortcut='-1')
+  Group('Add', ['ADD', 'ADC', 'ADOX'], shortcut='+')
+  Group('Subtract', ['SUB', 'SBB'], shortcut='-')
+  Group('Signed Multiply', ['IMUL'], shortcut='×')
+  Group('Unsigned Multiply', ['MUL'], shortcut='×')
+  Group('Unsigned Divide', ['DIV'], shortcut='÷')
+  Group('Signed Divide', ['IDIV', 'CBW', 'CWD', 'CDQ', 'CQO'], shortcut='÷')
+  Group('Signed Shift', ['SAL', 'SAR'], shortcut='Shift')
   Group('Unsigned Double Shift', ['SHLD', 'SHRD'])
-  Group('Unsigned Shift', ['SHL', 'SHR'])
-  Group('Signed Negate', ['NEG'])
-  Group('Sign Extend', ['CBW', 'CDQ', 'CQO', 'CWD', 'MOVSX'])
-  Group('Zero Extend', ['MOVZX'])
+  Group('Unsigned Shift', ['SHL', 'SHR'], shortcut='Shift')
+  Group('Signed Negate', ['NEG'], shortcut='±')
+  Group('Sign Extend', ['MOVSX'], shortcut='Extend')
+  Group('Zero Extend', ['MOVZX'], shortcut='Extend')
   Group('Move', ['MOV'])
   Group('Move If', ['CMOV'])
   Group('Jump', ['JMP'])
   Group('Jump If', ['JCC', 'JECXZ', 'JRCXZ', 'LOOP'])
   Group('CRC32', ['CRC32'])
-  Group('Flag Complement', ['CMC'])
+  Group('Flag Complement', ['CMC'], shortcut='Flip')
   Group('Auxiliary Carry', ['CLAC', 'STAC'])
-  Group('Flag Clear', ['CLC', 'CLD', 'CLI'])
-  Group('Flag Set', ['STC', 'STD', 'STI'])
-  Group('Flag Register', ['LAHF', 'SAHF'])
+  Group('Flag Clear', ['CLC', 'CLD', 'CLI'], shortcut='Lower')
+  Group('Flag Set', ['STC', 'STD', 'STI'], shortcut='Raise')
+  Group('Flag Register', ['LAHF', 'SAHF'], shortcut='Move')
   Group('Breakpoint', ['INT3'])
   Group('Software Interrupt', ['INT'])
   Group('User Interrupt', ['UIRED', 'CLUI', 'STUI', 'TESTUI', 'SENDUIPI', 'UIRET'])
-  Group('Bit Rotations Carry', ['RCL', 'RCR'])
-  Group('Bit Rotations', ['ROL', 'ROR'])
-  Group('Bit Tests', ['BT'])
-  Group('Bit Counting', ['LZCNT', 'POPCNT', 'TZCNT'])
-  Group('Bit Twiddling', ['BEXTR', 'BLC', 'BLS', 'BSF', 'BSR', 'BSWAP', 'BZHI', 'PDEP', 'PEXT', 'T1MSKC', 'TZMSK'])
+  Group('Bit Rotations Carry', ['RCL', 'RCR'], shortcut='Rotate Carry')
+  Group('Bit Rotations', ['ROL', 'ROR'], shortcut='Rotate')
+  Group('Bit Complement', ['BTC'], shortcut='Flip')
+  Group('Bit Tests', ['BT'], shortcut='Test')
+  Group('Bit Counting', ['LZCNT', 'POPCNT', 'TZCNT'], shortcut='Count')
+  Group('Bit Twiddling', ['BEXTR', 'BLC', 'BLS', 'BSF', 'BSR', 'BSWAP', 'BZHI', 'PDEP', 'PEXT', 'T1MSKC', 'TZMSK'], shortcut='Twiddle')
   Group('AMD-V', ['VMRUN', 'VMLOAD', 'VMSAVE', 'CLGI', 'VMMCALL', 'INVLPGA', 'SKINIT', 'STGI'])
   Group('Intel VMX', ['VMPTRLD', 'VMPTRST', 'VMCLEAR', 'VMREAD', 'VMWRITE', 'VMCALL', 'VMLAUNCH', 'VMRESUME', 'VMXOFF', 'VMXON', 'INVEPT', 'INVVPID', 'VMFUNC', 'SEAMCALL', 'SEAMOPS', 'SEAMRET', 'TDCALL'])
   Group('Intel FRED', ['ERET', 'LKGS'], ring0=True)
@@ -200,7 +204,7 @@ def gen_x86_hh(x86_json, x86_hh):
   Group('Core ID', ['RDPID'])
   Group('System Model Specific Registers', ['RDMSR', 'WRMSR'], ring0=True)
   Group('Model Specific Registers', ['RDPRU'])
-  Group('Random Numbers', ['RDRAND', 'RDSEED'])
+  Group('Random Numbers', ['RDRAND', 'RDSEED'], shortcut='Random')
   Group('Time', ['RDTSC'])
   Group('Memory Monitoring', ['MONITORX', 'MWAITX', 'UMONITOR', 'UMWAIT', 'TPAUSE'])
   Group('System Memory Monitoring', ['MONITOR', 'MWAIT'], ring0=True)
@@ -246,8 +250,8 @@ def gen_x86_hh(x86_json, x86_hh):
 
   Category('Logic', ['Not', 'And', 'Or', 'Xor'])
   Category('Universal Math', ['Increment', 'Decrement', 'Add', 'Subtract'])
-  Category('Bits', ['Bit Rotations Carry', 'Bit Rotations', 'Bit Tests', 'Bit Counting', 'Bit Twiddling'])
-  Category('Move', ['Move', 'Move If', 'Exchange', 'Sign Extend', 'Zero Extend'])
+  Category('Bits', ['Bit Rotations Carry', 'Bit Rotations', 'Bit Tests', 'Bit Counting', 'Bit Twiddling', 'Bit Complement'])
+  Category('Move', ['Move', 'Move If', 'Exchange'])
   Category('Signed Math', ['Signed Negate', 'Signed Shift', 'Signed Divide', 'Signed Multiply', 'Sign Extend'])
   Category('Unsigned Math', ['Unsigned Shift', 'Unsigned Divide', 'Unsigned Multiply', 'Zero Extend'])
   Category('Misc', ['Random Numbers', 'Time', 'CRC32', 'Core ID'])
@@ -291,6 +295,7 @@ using namespace llvm::X86;
 
 struct Group {{
   std::string_view name;
+  std::string_view shortcut;
   std::span<const unsigned> opcodes;
 }};
 
@@ -335,7 +340,7 @@ struct Category {{
         continue
       group_obj = groups[group_name]
       sanitized_group = sanitize(group_obj.name)
-      output_lines.append(f'    {{"{group_obj.name}", k{sanitized_group}Opcodes}},')
+      output_lines.append(f'    {{"{group_obj.name}", "{group_obj.shortcut}", k{sanitized_group}Opcodes}},')
     output_lines.append('};')
     output_lines.append('')
 

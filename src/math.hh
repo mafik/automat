@@ -185,6 +185,9 @@ T ClampLength(T vec, float min, float max) {
   return vec;
 }
 
+struct CenterX;
+struct CenterY;
+
 // Helper for working in the Skia coordinate system. Swaps the coordinates on the Y axis.
 //
 // Skia uses a coordinate system where the Y axis points down.
@@ -207,11 +210,18 @@ union Rect {
   };
 
   constexpr Rect() = default;
-  // Construct a zero-sized rectangle at the given point.
-  constexpr Rect(Vec2 point) : left(point.x), bottom(point.y), right(point.x), top(point.y) {}
   constexpr Rect(SkRect r) : sk(r) {}
   constexpr Rect(float left, float bottom, float right, float top)
       : left(left), bottom(bottom), right(right), top(top) {}
+
+  template <typename AnchorX = ::CenterX, typename AnchorY = ::CenterY>
+  static constexpr Rect Make(float width, float height) {
+    Rect r{0, 0, width, height};
+    return r.MoveBy({-AnchorX{}(r), -AnchorY{}(r)});
+  }
+
+  // Construct a zero-sized rectangle at the given point.
+  static constexpr Rect MakeEmptyAt(Vec2 point) { return {point.x, point.y, point.x, point.y}; }
 
   // Make a rectangle with the lower left corner at (0,0) and given width & height.
   static constexpr Rect MakeCornerZero(float width, float height) { return {0, 0, width, height}; }
@@ -294,7 +304,7 @@ union Rect {
     ExpandToInclude(other.BottomRightCorner());
   }
 
-  [[nodiscard]] Rect Outset(float amount) {
+  [[nodiscard]] constexpr Rect Outset(float amount) {
     return {left - amount, bottom - amount, right + amount, top + amount};
   }
 
@@ -304,6 +314,25 @@ union Rect {
 
   std::string ToStr() const;
   std::string ToStrMetric() const;
+};
+
+struct LeftX {
+  constexpr float operator()(const Rect& r) const { return r.left; }
+};
+struct CenterX {
+  constexpr float operator()(const Rect& r) const { return r.CenterX(); }
+};
+struct RightX {
+  constexpr float operator()(const Rect& r) const { return r.right; }
+};
+struct TopY {
+  constexpr float operator()(const Rect& r) const { return r.top; }
+};
+struct CenterY {
+  constexpr float operator()(const Rect& r) const { return r.CenterY(); }
+};
+struct BottomY {
+  constexpr float operator()(const Rect& r) const { return r.bottom; }
 };
 
 std::string ToStrMetric(SkPoint);

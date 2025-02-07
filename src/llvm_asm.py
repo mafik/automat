@@ -102,6 +102,10 @@ def gen_x86_hh(x86_json, x86_hh):
       if field in opcode:
         del opcode[field]
 
+  # Dump formatted x86.json for manual inspection
+  if False:
+    json.dump(x, x86_json.open('w'), indent=2)
+
   def select_opcodes_by_prefix(group, opcode_name_prefix):
     selected = {opcode_name: opcode for opcode_name, opcode in x.items() if opcode_name.startswith(opcode_name_prefix)}
     group.update(selected)

@@ -268,14 +268,15 @@ def gen_x86_hh(x86_json, x86_hh):
     print(f'Warning: {group} is not covered by any category. Check src/llvm_asm.py to fix it.')
 
   # Print supported categories with instruction counts
-  for category in categories.values():
-    if not category.supported:
-      continue
-    print(f'# {category.name}')
-    for group_name in category.groups:
-      group = groups[group_name]
-      print(f'- {group_name:25s} ({len(group.opcodes)} instructions)')
-    print()
+  if False:
+    for category in categories.values():
+      if not category.supported:
+        continue
+      print(f'# {category.name}')
+      for group_name in category.groups:
+        group = groups[group_name]
+        print(f'- {group_name:25s} ({len(group.opcodes)} instructions)')
+      print()
 
   # --- Generate x86.hh below ---
   f = x86_hh.open('w')

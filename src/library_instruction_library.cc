@@ -109,7 +109,7 @@ void InstructionLibrary::Filter() {
         auto reg_ours = write_to_queue[write_to_i];
         auto reg_llvm = kRegisters[reg_ours].llvm_reg;
 
-        if (reg_llvm == def || mc_reg_info.isSuperRegister(reg_llvm, def)) {
+        if (reg_llvm == def || mc_reg_info.isSuperRegister(def, reg_llvm)) {
           write_to_queue.erase(write_to_queue.begin() + write_to_i);
           break;
         }
@@ -120,7 +120,7 @@ void InstructionLibrary::Filter() {
         auto reg_ours = read_from_queue[read_from_i];
         auto reg_llvm = kRegisters[reg_ours].llvm_reg;
 
-        if (reg_llvm == use || mc_reg_info.isSuperRegister(reg_llvm, use)) {
+        if (reg_llvm == use || mc_reg_info.isSuperRegister(use, reg_llvm)) {
           read_from_queue.erase(read_from_queue.begin() + read_from_i);
           break;
         }
@@ -133,13 +133,27 @@ void InstructionLibrary::Filter() {
         deque<unsigned>* queue = (operand_i == 0) ? &write_to_queue : &read_from_queue;
 
         unsigned reg_llvm;
-        if (queue->empty()) {
+
+        if (auto tied_to = op.getOperandConstraint(operand_i, MCOI::OperandConstraint::TIED_TO);
+            tied_to != -1) {
+          assert(tied_to < operand_i);
+          MCOperand& tied_operand = ((MCInst&)builder).getOperand(tied_to);
+          reg_llvm = tied_operand.getReg();
+        } else if (queue->empty()) {
           const MCRegisterClass& reg_class = mc_reg_info.getRegClass(operand.RegClass);
           auto reg_class_name = mc_reg_info.getRegClassName(&reg_class);
           reg_llvm = reg_class.getRegister(0);
         } else {
-          reg_llvm = kRegisters[queue->front()].llvm_reg;
-          queue->pop_front();
+          auto super_reg = kRegisters[queue->front()].llvm_reg;
+          const MCRegisterClass& reg_class = mc_reg_info.getRegClass(operand.RegClass);
+          reg_llvm = reg_class.getRegister(0);
+          for (auto reg : reg_class) {
+            if (reg == super_reg || mc_reg_info.isSuperRegister(reg, super_reg)) {
+              reg_llvm = reg;
+              queue->pop_front();
+              break;
+            }
+          }
         }
         builder.addReg(reg_llvm);
       } else if (operand.OperandType == MCOI::OPERAND_IMMEDIATE) {
@@ -154,9 +168,6 @@ void InstructionLibrary::Filter() {
         assert(false);
       }
       if (operand.isBranchTarget()) {
-      }
-      if (auto tied_to = op.getOperandConstraint(operand_i, MCOI::OperandConstraint::TIED_TO);
-          tied_to != -1) {
       }
     }
 
@@ -202,7 +213,7 @@ SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 1
 
 constexpr float kRoseFanDegrees = 180;
 constexpr float kStartDist = Instruction::Widget::kHeight / 2;
-const float kCornerDist = Instruction::Widget::kDiagonal / 2;
+constexpr float kCornerDist = Instruction::Widget::kDiagonal / 2;
 constexpr float kRoseDist = 8_cm;
 
 static SkPathMeasure CategoryPathMeasure(int i, int n) {
@@ -331,6 +342,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
           card.angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
         }
         card.library_index = i;
+        card.mc_inst = inst;
         found = true;
         // New cards should be inserted after the card that matches InstructionLibrary deck.
         insert_index = j + 1;
@@ -356,7 +368,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
 
   // TODO: This makes category switching boring.
   // Consider animations based on card target states (index up, index down, remove, add)
-  while (instruction_helix.back().library_index == -1) {
+  while (!instruction_helix.empty() && instruction_helix.back().library_index == -1) {
     instruction_helix.pop_back();
   }
 
@@ -530,6 +542,15 @@ auto read_icon = PersistentImage::MakeFromAsset(maf::embedded::assets_reg_read_w
 
 auto write_icon = PersistentImage::MakeFromAsset(maf::embedded::assets_reg_write_webp,
                                                  PersistentImage::MakeArgs{.width = 9_mm});
+
+constexpr float kTableCellSize = 8_mm;
+constexpr float kTableRadius = 2_mm;
+constexpr float kTableMarginTop = -kCornerDist - kTableCellSize;
+constexpr int kTableCols = 1 + size(kRegisters);
+constexpr int kTableRows = 2;
+constexpr Rect kRegisterTableRect =
+    Rect::Make<CenterX, TopY>(kTableCols * kTableCellSize, kTableRows* kTableCellSize)
+        .MoveBy({0, kTableMarginTop});
 
 void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   SkPaint text_shadow_paint;
@@ -714,15 +735,7 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   }
 
   {  // Draw Register Table
-    constexpr float kCellSize = 8_mm;
-    constexpr float kTableRadius = 2_mm;
-    float margin_top = -kCornerDist - kCellSize;
-    int cols = 1 + size(kRegisters);
-    int rows = 2;
-    Rect register_table_rect =
-        Rect::Make<CenterX, TopY>(cols * kCellSize, rows * kCellSize).MoveBy({0, margin_top});
-    auto register_table_rr =
-        SkRRect::MakeRectXY(register_table_rect.sk, kTableRadius, kTableRadius);
+    auto register_table_rr = SkRRect::MakeRectXY(kRegisterTableRect.sk, kTableRadius, kTableRadius);
 
     SkPaint register_table_paint;
     register_table_paint.setColor("#e4e4e4"_color);
@@ -736,37 +749,37 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     line_paint.setStrokeWidth(0.1_mm);
 
     // Horizontal line
-    canvas.drawLine(register_table_rect.LeftCenter(), register_table_rect.RightCenter(),
-                    line_paint);
+    canvas.drawLine(kRegisterTableRect.LeftCenter(), kRegisterTableRect.RightCenter(), line_paint);
 
     // Vertical lines
-    Vec2 top = register_table_rect.TopLeftCorner();
-    Vec2 bottom = register_table_rect.BottomLeftCorner();
-    for (int i = 1; i < cols; ++i) {
-      top.x += kCellSize;
-      bottom.x += kCellSize;
+    Vec2 top = kRegisterTableRect.TopLeftCorner();
+    Vec2 bottom = kRegisterTableRect.BottomLeftCorner();
+    for (int i = 1; i < kTableCols; ++i) {
+      top.x += kTableCellSize;
+      bottom.x += kTableCellSize;
       canvas.drawLine(top, bottom, line_paint);
     }
 
     // Register icons
     canvas.save();
-    canvas.translate(register_table_rect.left, register_table_rect.top);
-    canvas.translate(kCellSize / 2, kCellSize / 2);
+    canvas.translate(kRegisterTableRect.left, kRegisterTableRect.top);
+    canvas.translate(kTableCellSize / 2, kTableCellSize / 2);
     canvas.translate(-kRegisterIconWidth / 2, -kRegisterIconWidth / 2);
-    canvas.translate(kCellSize, 0.5_mm);
+    canvas.translate(kTableCellSize, 0.5_mm);
     for (int i = 0; i < size(kRegisters); ++i) {
       auto& register_presentation = kRegisters[i];
       register_presentation.image.draw(canvas);
-      canvas.translate(kCellSize, 0);
+      canvas.translate(kTableCellSize, 0);
     }
     canvas.restore();
 
     canvas.save();
-    canvas.translate(register_table_rect.left, register_table_rect.top);
-    canvas.translate(kCellSize / 2 - read_icon.width() / 2, kCellSize / 2 - read_icon.height() / 2);
-    canvas.translate(0, -kCellSize);
+    canvas.translate(kRegisterTableRect.left, kRegisterTableRect.top);
+    canvas.translate(kTableCellSize / 2 - read_icon.width() / 2,
+                     kTableCellSize / 2 - read_icon.height() / 2);
+    canvas.translate(0, -kTableCellSize);
     read_icon.draw(canvas);
-    canvas.translate(0, -kCellSize);
+    canvas.translate(0, -kTableCellSize);
     write_icon.draw(canvas);
     canvas.restore();
 
@@ -777,15 +790,15 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     for (int i = 0; i < size(kRegisters); ++i) {
       canvas.save();
       float w = font.MeasureText(std::to_string(read_from_count[i]));
-      canvas.translate(register_table_rect.left + kCellSize * (i + 1.5f) - w / 2,
-                       register_table_rect.top - kCellSize * 0.5f - kCategoryLetterSize / 2);
+      canvas.translate(kRegisterTableRect.left + kTableCellSize * (i + 1.5f) - w / 2,
+                       kRegisterTableRect.top - kTableCellSize * 0.5f - kCategoryLetterSize / 2);
       font.DrawText(canvas, std::to_string(read_from_count[i]), table_text_paint);
       canvas.restore();
 
       canvas.save();
       float w2 = font.MeasureText(std::to_string(write_to_count[i]));
-      canvas.translate(register_table_rect.left + kCellSize * (i + 1.5f) - w2 / 2,
-                       register_table_rect.top - kCellSize * 1.5f - kCategoryLetterSize / 2);
+      canvas.translate(kRegisterTableRect.left + kTableCellSize * (i + 1.5f) - w2 / 2,
+                       kRegisterTableRect.top - kTableCellSize * 1.5f - kCategoryLetterSize / 2);
       font.DrawText(canvas, std::to_string(write_to_count[i]), table_text_paint);
       canvas.restore();
     }
@@ -961,8 +974,8 @@ struct ScrollDeckAction : Action {
 };
 
 static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary::Widget& widget) {
-  bool read_from_arr[InstructionLibrary::kGeneralPurposeRegisterCount];
-  bool write_to_arr[InstructionLibrary::kGeneralPurposeRegisterCount];
+  bool read_from_arr[InstructionLibrary::kGeneralPurposeRegisterCount] = {};
+  bool write_to_arr[InstructionLibrary::kGeneralPurposeRegisterCount] = {};
   for (auto reg : library.read_from) {
     read_from_arr[reg] = true;
   }
@@ -1013,6 +1026,33 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
 
     if (Length(contact_point) < kCornerDist) {
       return std::make_unique<ScrollDeckAction>(p, SharedPtr<Widget>(), object.lock());
+    }
+
+    Rect register_table_rect = kRegisterTableRect;
+    register_table_rect.left += kTableCellSize;
+    if (register_table_rect.Contains(contact_point)) {
+      auto table_point = contact_point - register_table_rect.BottomLeftCorner();
+      int read = table_point.y / kTableCellSize;  // 0 for write, 1 for read
+      int reg = table_point.x / kTableCellSize;
+
+      auto object_shared_ptr = object.lock();
+      if (!object_shared_ptr) return nullptr;
+
+      auto* library = dynamic_cast<InstructionLibrary*>(object_shared_ptr.get());
+      if (!library) return nullptr;
+
+      lock_guard lock(library->mutex);
+
+      vector<unsigned>* queue = read ? &library->read_from : &library->write_to;
+      // Check if reg is in the queue
+      if (auto it = std::find(queue->begin(), queue->end(), reg); it != queue->end()) {
+        queue->erase(it);
+      } else {
+        queue->push_back(reg);
+      }
+      UpdateFilterCounters(*library, *this);
+      WakeAnimation();
+      return nullptr;
     }
 
     for (int i = 0; i < category_states.size(); ++i) {

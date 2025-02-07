@@ -375,3 +375,18 @@ def hook_recipe(r: make.Recipe):
                inputs=[x86_json, __file__],
                desc='Generating x86.hh',
                shortcut='x86.hh ' +  build_type.name)
+    
+# Hook x86.hh into the build graph
+
+files_using_x86_hh = set()
+
+def hook_srcs(srcs: dict[str, src.File], r: make.Recipe):
+  for file in srcs.values():
+    if 'automat/x86.hh' in file.system_includes:
+      files_using_x86_hh.add(file)
+
+def hook_plan(srcs: dict[str, src.File], objs: list[build.ObjectFile], bins: list[build.Binary], r: make.Recipe):
+  for obj in objs:
+    if obj.source in files_using_x86_hh:
+      x86_hh = obj.build_type.PREFIX() / 'include' / 'automat' / 'x86.hh'
+      obj.deps.add(x86_hh)

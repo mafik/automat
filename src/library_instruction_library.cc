@@ -17,6 +17,7 @@
 #include "animation.hh"
 #include "embedded.hh"
 #include "font.hh"
+#include "include/core/SkColor.h"
 #include "library_instruction.hh"
 #include "llvm_asm.hh"
 #include "math.hh"
@@ -298,13 +299,20 @@ static float CardAngleDeg(float i, int visible_instructions) {
 }
 
 animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
+  animation::Phase phase = animation::Finished;
+
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    phase |= animation::LinearApproach(read_from[i].hovered, timer.d, 10,
+                                       read_from[i].hovered_animation);
+    phase |=
+        animation::LinearApproach(write_to[i].hovered, timer.d, 10, write_to[i].hovered_animation);
+  }
+
   auto object_shared_ptr = object.lock();
   if (!object_shared_ptr) return animation::Finished;
 
   auto* library = dynamic_cast<InstructionLibrary*>(object_shared_ptr.get());
   if (!library) return animation::Finished;
-
-  animation::Phase phase = animation::Finished;
 
   lock_guard lock(library->mutex);
   auto& instructions = library->instructions;
@@ -742,6 +750,30 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
 
     canvas.drawRRect(register_table_rr, register_table_paint);
 
+    canvas.save();
+    canvas.clipRRect(register_table_rr);
+    for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+      if (read_from[i].hovered_animation > 0) {
+        SkPaint hovered_paint;
+        hovered_paint.setColor(SK_ColorWHITE);
+        hovered_paint.setAlphaf(read_from[i].hovered_animation);
+        Rect rect = Rect::Make<LeftX, TopY>(kTableCellSize, kTableCellSize)
+                        .MoveBy({kRegisterTableRect.left + kTableCellSize * (i + 1),
+                                 kRegisterTableRect.top});
+        canvas.drawRect(rect.sk, hovered_paint);
+      }
+      if (write_to[i].hovered_animation > 0) {
+        SkPaint hovered_paint;
+        hovered_paint.setColor(SK_ColorWHITE);
+        hovered_paint.setAlphaf(write_to[i].hovered_animation);
+        Rect rect = Rect::Make<LeftX, BottomY>(kTableCellSize, kTableCellSize)
+                        .MoveBy({kRegisterTableRect.left + kTableCellSize * (i + 1),
+                                 kRegisterTableRect.bottom});
+        canvas.drawRect(rect.sk, hovered_paint);
+      }
+    }
+    canvas.restore();
+
     SkPaint line_paint;
     line_paint.setColor("#000000"_color);
     line_paint.setAntiAlias(true);
@@ -789,17 +821,17 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
 
     for (int i = 0; i < size(kRegisters); ++i) {
       canvas.save();
-      float w = font.MeasureText(std::to_string(read_from_count[i]));
+      float w = font.MeasureText(std::to_string(read_from[i].count));
       canvas.translate(kRegisterTableRect.left + kTableCellSize * (i + 1.5f) - w / 2,
                        kRegisterTableRect.top - kTableCellSize * 0.5f - kCategoryLetterSize / 2);
-      font.DrawText(canvas, std::to_string(read_from_count[i]), table_text_paint);
+      font.DrawText(canvas, std::to_string(read_from[i].count), table_text_paint);
       canvas.restore();
 
       canvas.save();
-      float w2 = font.MeasureText(std::to_string(write_to_count[i]));
+      float w2 = font.MeasureText(std::to_string(write_to[i].count));
       canvas.translate(kRegisterTableRect.left + kTableCellSize * (i + 1.5f) - w2 / 2,
                        kRegisterTableRect.top - kTableCellSize * 1.5f - kCategoryLetterSize / 2);
-      font.DrawText(canvas, std::to_string(write_to_count[i]), table_text_paint);
+      font.DrawText(canvas, std::to_string(write_to[i].count), table_text_paint);
       canvas.restore();
     }
   }
@@ -848,8 +880,43 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   }
 }
 
+struct RegisterFilterButton {
+  int reg;  // 0..kGeneralPurposeRegisterCount
+  bool read;
+};
+
+std::optional<RegisterFilterButton> FindRegisterFilterButton(Vec2 contact_point) {
+  Rect register_table_rect = kRegisterTableRect;
+  register_table_rect.left += kTableCellSize;
+  if (register_table_rect.Contains(contact_point)) {
+    auto table_point = contact_point - register_table_rect.BottomLeftCorner();
+    int reg = table_point.x / kTableCellSize;
+    int read = table_point.y / kTableCellSize;
+    return RegisterFilterButton{reg, (bool)read};
+  }
+  return std::nullopt;
+}
+
 void InstructionLibrary::Widget::PointerMove(gui::Pointer& p, Vec2 position) {
   Vec2 local_position = TransformDown(*this).mapPoint(position);
+
+  bool new_read_from[kGeneralPurposeRegisterCount] = {};
+  bool new_write_to[kGeneralPurposeRegisterCount] = {};
+
+  if (auto reg_btn = FindRegisterFilterButton(local_position)) {
+    (reg_btn->read ? new_read_from : new_write_to)[reg_btn->reg] = true;
+  }
+
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    if (new_read_from[i] != read_from[i].hovered) {
+      read_from[i].hovered = new_read_from[i];
+      WakeAnimation();
+    }
+    if (new_write_to[i] != write_to[i].hovered) {
+      write_to[i].hovered = new_write_to[i];
+      WakeAnimation();
+    }
+  }
 
   if (Length(local_position) < kCornerDist) {
     // Over card helix
@@ -896,7 +963,26 @@ void InstructionLibrary::Widget::PointerOver(gui::Pointer& p) { StartWatching(p)
 
 void InstructionLibrary::Widget::PointerLeave(gui::Pointer& p) {
   StopWatching(p);
-  wobble_cards = false;
+  animation::Phase phase = animation::Finished;
+
+  if (wobble_cards) {
+    wobble_cards = false;
+    phase |= animation::Animating;
+  }
+
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    if (read_from[i].hovered) {
+      read_from[i].hovered = false;
+      phase |= animation::Animating;
+    }
+    if (write_to[i].hovered) {
+      write_to[i].hovered = false;
+      phase |= animation::Animating;
+    }
+  }
+  if (phase != animation::Finished) {
+    WakeAnimation();
+  }
 }
 
 struct ScrollDeckAction : Action {
@@ -997,7 +1083,7 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
     }
     library.Filter();
     // Record count for the toggled state.
-    widget.read_from_count[i] = library.instructions.size();
+    widget.read_from[i].count = library.instructions.size();
     // Restore the original state.
     library.read_from = read_from_backup;
   }
@@ -1011,7 +1097,7 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
       library.write_to.push_back(i);
     }
     library.Filter();
-    widget.write_to_count[i] = library.instructions.size();
+    widget.write_to[i].count = library.instructions.size();
     library.write_to = write_to_backup;
   }
 
@@ -1028,13 +1114,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
       return std::make_unique<ScrollDeckAction>(p, SharedPtr<Widget>(), object.lock());
     }
 
-    Rect register_table_rect = kRegisterTableRect;
-    register_table_rect.left += kTableCellSize;
-    if (register_table_rect.Contains(contact_point)) {
-      auto table_point = contact_point - register_table_rect.BottomLeftCorner();
-      int read = table_point.y / kTableCellSize;  // 0 for write, 1 for read
-      int reg = table_point.x / kTableCellSize;
-
+    if (auto reg_btn = FindRegisterFilterButton(contact_point)) {
       auto object_shared_ptr = object.lock();
       if (!object_shared_ptr) return nullptr;
 
@@ -1043,12 +1123,12 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
 
       lock_guard lock(library->mutex);
 
-      vector<unsigned>* queue = read ? &library->read_from : &library->write_to;
+      vector<unsigned>* queue = reg_btn->read ? &library->read_from : &library->write_to;
       // Check if reg is in the queue
-      if (auto it = std::find(queue->begin(), queue->end(), reg); it != queue->end()) {
+      if (auto it = std::find(queue->begin(), queue->end(), reg_btn->reg); it != queue->end()) {
         queue->erase(it);
       } else {
-        queue->push_back(reg);
+        queue->push_back(reg_btn->reg);
       }
       UpdateFilterCounters(*library, *this);
       WakeAnimation();

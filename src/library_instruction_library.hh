@@ -68,11 +68,17 @@ struct InstructionLibrary : Object {
     float new_cards_dir_deg = NAN;
 
     // True if the button is pressed
-    bool read_from[kGeneralPurposeRegisterCount] = {};
-    bool write_to[kGeneralPurposeRegisterCount] = {};
+    struct RegisterFilter {
+      bool pressed = false;
+      float pressed_animation = 0;
+      bool hovered = false;
+      float hovered_animation = 0;
 
-    int read_from_count[kGeneralPurposeRegisterCount] = {};
-    int write_to_count[kGeneralPurposeRegisterCount] = {};
+      int count = 0;  // how many cards would be in the library if this filter was toggled
+    };
+
+    RegisterFilter read_from[kGeneralPurposeRegisterCount] = {};
+    RegisterFilter write_to[kGeneralPurposeRegisterCount] = {};
 
     struct CategoryState {
       struct LeafState {

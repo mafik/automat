@@ -306,6 +306,11 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
                                        read_from[i].hovered_animation);
     phase |=
         animation::LinearApproach(write_to[i].hovered, timer.d, 10, write_to[i].hovered_animation);
+
+    phase |=
+        animation::LinearApproach(read_from[i].pressed, timer.d, 5, read_from[i].pressed_animation);
+    phase |=
+        animation::LinearApproach(write_to[i].pressed, timer.d, 5, write_to[i].pressed_animation);
   }
 
   auto object_shared_ptr = object.lock();
@@ -752,24 +757,42 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
 
     canvas.save();
     canvas.clipRRect(register_table_rr);
+    SkPaint hovered_paint;
+    hovered_paint.setColor(SK_ColorWHITE);
+    SkPaint pressed_paint;
+    pressed_paint.setColor("#003052"_color);
+    pressed_paint.setStyle(SkPaint::Style::kStroke_Style);
+    pressed_paint.setStrokeWidth(0.2_mm);
+    pressed_paint.setAntiAlias(true);
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-      if (read_from[i].hovered_animation > 0) {
-        SkPaint hovered_paint;
-        hovered_paint.setColor(SK_ColorWHITE);
-        hovered_paint.setAlphaf(read_from[i].hovered_animation);
-        Rect rect = Rect::Make<LeftX, TopY>(kTableCellSize, kTableCellSize)
-                        .MoveBy({kRegisterTableRect.left + kTableCellSize * (i + 1),
-                                 kRegisterTableRect.top});
-        canvas.drawRect(rect.sk, hovered_paint);
+      if (read_from[i].hovered_animation > 0 || read_from[i].pressed_animation > 0) {
+        Rect rect_read = Rect::Make<LeftX, TopY>(kTableCellSize, kTableCellSize)
+                             .MoveBy({kRegisterTableRect.left + kTableCellSize * (i + 1),
+                                      kRegisterTableRect.top});
+
+        if (read_from[i].hovered_animation > 0) {
+          hovered_paint.setAlphaf(read_from[i].hovered_animation);
+          canvas.drawRect(rect_read.sk, hovered_paint);
+        }
+        if (read_from[i].pressed_animation > 0) {
+          rect_read = rect_read.Outset(-0.25_mm);
+          canvas.drawArc(rect_read.sk, 90, -360 * read_from[i].pressed_animation, false,
+                         pressed_paint);
+        }
       }
-      if (write_to[i].hovered_animation > 0) {
-        SkPaint hovered_paint;
-        hovered_paint.setColor(SK_ColorWHITE);
-        hovered_paint.setAlphaf(write_to[i].hovered_animation);
-        Rect rect = Rect::Make<LeftX, BottomY>(kTableCellSize, kTableCellSize)
-                        .MoveBy({kRegisterTableRect.left + kTableCellSize * (i + 1),
-                                 kRegisterTableRect.bottom});
-        canvas.drawRect(rect.sk, hovered_paint);
+      if (write_to[i].hovered_animation > 0 || write_to[i].pressed_animation > 0) {
+        Rect rect_write = Rect::Make<LeftX, BottomY>(kTableCellSize, kTableCellSize)
+                              .MoveBy({kRegisterTableRect.left + kTableCellSize * (i + 1),
+                                       kRegisterTableRect.bottom});
+        if (write_to[i].hovered_animation > 0) {
+          hovered_paint.setAlphaf(write_to[i].hovered_animation);
+          canvas.drawRect(rect_write.sk, hovered_paint);
+        }
+        if (write_to[i].pressed_animation > 0) {
+          rect_write = rect_write.Outset(-0.25_mm);
+          canvas.drawArc(rect_write.sk, 90, -360 * write_to[i].pressed_animation, false,
+                         pressed_paint);
+        }
       }
     }
     canvas.restore();
@@ -1060,13 +1083,15 @@ struct ScrollDeckAction : Action {
 };
 
 static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary::Widget& widget) {
-  bool read_from_arr[InstructionLibrary::kGeneralPurposeRegisterCount] = {};
-  bool write_to_arr[InstructionLibrary::kGeneralPurposeRegisterCount] = {};
+  for (int i = 0; i < InstructionLibrary::kGeneralPurposeRegisterCount; ++i) {
+    widget.read_from[i].pressed = false;
+    widget.write_to[i].pressed = false;
+  }
   for (auto reg : library.read_from) {
-    read_from_arr[reg] = true;
+    widget.read_from[reg].pressed = true;
   }
   for (auto reg : library.write_to) {
-    write_to_arr[reg] = true;
+    widget.write_to[reg].pressed = true;
   }
   auto read_from_backup = library.read_from;
   auto write_to_backup = library.write_to;
@@ -1074,7 +1099,7 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
   // Toggle each "read_from" filter, count instructions, and then restore.
   for (int i = 0; i < InstructionLibrary::kGeneralPurposeRegisterCount; ++i) {
     // Toggle the filter value.
-    if (read_from_arr[i]) {
+    if (widget.read_from[i].pressed) {
       // Remove i from library.read_from
       library.read_from.erase(std::remove(library.read_from.begin(), library.read_from.end(), i),
                               library.read_from.end());
@@ -1090,7 +1115,7 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
 
   // Toggle each "write_to" filter, count instructions, and then restore.
   for (int i = 0; i < InstructionLibrary::kGeneralPurposeRegisterCount; ++i) {
-    if (write_to_arr[i]) {
+    if (widget.write_to[i].pressed) {
       library.write_to.erase(std::remove(library.write_to.begin(), library.write_to.end(), i),
                              library.write_to.end());
     } else {

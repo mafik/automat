@@ -677,34 +677,426 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
-      /* TODO: Handle
-         ROL8r1
-         ROL64ri
-         ROL64rCL
-         ROL64r1
-         ROL32ri
-         ROL32rCL
-         ROL32r1
-         ROL16ri
-         ROL16rCL
-         ROL16r1
-         ROL8rCL
-         ROL8ri
-         ROR16r1
-         ROR16rCL
-         ROR16ri
-         ROR32r1
-         ROR32rCL
-         ROR32ri
-         ROR64r1
-         ROR64rCL
-         ROR64ri
-         ROR8r1
-         ROR8rCL
-         ROR8ri
-         RORX32ri
-         RORX64ri
-  */
+    case X86::ROL8r1:
+    case X86::ROL64r1:
+    case X86::ROL32r1:
+    case X86::ROL16r1: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "once left"sv},
+      };
+      return tokens;
+    }
+
+    case X86::ROL64ri:
+    case X86::ROL32ri:
+    case X86::ROL16ri:
+    case X86::ROL8ri: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"sv}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "left"sv},   {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "times"sv},
+      };
+      return tokens;
+    }
+
+    case X86::ROL64rCL:
+    case X86::ROL32rCL:
+    case X86::ROL16rCL:
+    case X86::ROL8rCL: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "left"sv},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
+          {.tag = Token::String, .str = "times"sv},
+      };
+      return tokens;
+    }
+
+    case X86::ROR16r1:
+    case X86::ROR32r1:
+    case X86::ROR64r1:
+    case X86::ROR8r1: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "once right"sv},
+      };
+      return tokens;
+    }
+
+    case X86::ROR16rCL:
+    case X86::ROR32rCL:
+    case X86::ROR64rCL:
+    case X86::ROR8rCL: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "right"sv},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
+          {.tag = Token::String, .str = "times"sv},
+      };
+      return tokens;
+    }
+
+    case X86::ROR16ri:
+    case X86::ROR32ri:
+    case X86::ROR64ri:
+    case X86::ROR8ri:
+    case X86::RORX32ri:
+    case X86::RORX64ri: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"sv}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "right"sv},  {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "times"sv},
+      };
+      return tokens;
+    }
+
+    case X86::TZCNT64rr:
+    case X86::TZCNT32rr:
+    case X86::TZCNT16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to # of trailing zeroes in "sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::POPCNT64rr:
+    case X86::POPCNT32rr:
+    case X86::POPCNT16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to # of flags in "sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::LZCNT64rr:
+    case X86::LZCNT32rr:
+    case X86::LZCNT16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to # of leading zeroes in "sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::BTC64rr:
+    case X86::BTC32rr:
+    case X86::BTC16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Store bit"sv},
+          {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "of"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "in"sv},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "and flip it"sv},
+      };
+      return tokens;
+    }
+
+    case X86::BTC64ri8:
+    case X86::BTC32ri8:
+    case X86::BTC16ri8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Store bit"sv},
+          {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "of"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "in"sv},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "and flip it"sv},
+      };
+      return tokens;
+    }
+
+    case X86::BTR64rr:
+    case X86::BTR32rr:
+    case X86::BTR16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Store bit"sv},
+          {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "of"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "in"sv},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "and lower it"sv},
+      };
+      return tokens;
+    }
+
+    case X86::BTS64rr:
+    case X86::BTS32rr:
+    case X86::BTS16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Store bit"sv},
+          {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "of"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "in"sv},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "and raise it"sv},
+      };
+      return tokens;
+    }
+
+    case X86::BT64rr:
+    case X86::BT32rr:
+    case X86::BT16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Store bit"sv}, {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "of"sv},        {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "in"sv},        {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+
+    case X86::BT64ri8:
+    case X86::BT32ri8:
+    case X86::BT16ri8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Store bit"sv}, {.tag = Token::ImmediateOperand, .imm = 1},
+          {.tag = Token::String, .str = "of"sv},        {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "in"sv},        {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+
+    case X86::BTR16ri8:
+    case X86::BTR32ri8:
+    case X86::BTR64ri8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Store bit"sv},
+          {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "of"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "in"sv},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "and lower it"sv},
+      };
+      return tokens;
+    }
+
+    case X86::BTS16ri8:
+    case X86::BTS32ri8:
+    case X86::BTS64ri8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Store bit"sv},
+          {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "of"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "in"sv},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "and raise it"sv},
+      };
+      return tokens;
+    }
+
+    case X86::BEXTR64rr:
+    case X86::BEXTR32rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to bitfield extract of"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "using length & start from"sv},
+          {.tag = Token::RegisterOperand, .reg = 2},
+      };
+      return tokens;
+    }
+
+      // Lowest set bit operations
+
+    case X86::BLSI32rr:
+    case X86::BLSI64rr: {
+      // Isolate
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to (lowest raised bit) of"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::BLSMSK32rr:
+    case X86::BLSMSK64rr: {
+      // Mask
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to (all bits up to lowest raised bit) of"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::BLSR32rr:
+    case X86::BLSR64rr: {
+      // Reset
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set "sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to (lowering lowest set bit) of"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::BSF16rr:
+    case X86::BSF32rr:
+    case X86::BSF64rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to position of lowest raised bit in"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::BSR16rr:
+    case X86::BSR32rr:
+    case X86::BSR64rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to position of highest raised bit in"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::BSWAP32r:
+    case X86::BSWAP64r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Swap bytes of"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+
+    case X86::BZHI32rr:
+    case X86::BZHI64rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to bits of"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "below position"sv},
+          {.tag = Token::RegisterOperand, .reg = 2},
+      };
+      return tokens;
+    }
+
+    case X86::PDEP32rr:
+    case X86::PDEP64rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to parallel deposit of"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "using mask"sv},
+          {.tag = Token::RegisterOperand, .reg = 2},
+      };
+      return tokens;
+    }
+
+    case X86::PEXT32rr:
+    case X86::PEXT64rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to parallel extract of"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "using mask"sv},
+          {.tag = Token::RegisterOperand, .reg = 2},
+      };
+      return tokens;
+    }
+
+      // --- Move instructions ---
+
+    case X86::MOV8rr_REV:
+    case X86::MOV8rr:
+    case X86::MOV8rr_NOREX:
+    case X86::MOV32rr:
+    case X86::MOV16rr:
+    case X86::MOV64rr_REV:
+    case X86::MOV64rr:
+    case X86::MOV16rr_REV:
+    case X86::MOV32rr_REV: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::MOV16ri:
+    case X86::MOV16ri_alt:
+    case X86::MOV64ri:
+    case X86::MOV64ri32:
+    case X86::MOV8ri:
+    case X86::MOV8ri_alt:
+    case X86::MOV32ri:
+    case X86::MOV32ri_alt: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"sv},
+          {.tag = Token::ImmediateOperand, .imm = 1},
+      };
+      return tokens;
+    }
+
+    case X86::MOVSX16rr16:
+    case X86::MOVSX16rr32:
+    case X86::MOVSX16rr8:
+    case X86::MOVSX32rr16:
+    case X86::MOVSX32rr32:
+    case X86::MOVSX32rr8:
+    case X86::MOVSX32rr8_NOREX:
+    case X86::MOVSX64rr16:
+    case X86::MOVSX64rr32:
+    case X86::MOVSX64rr8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to sign-extended"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
+    case X86::MOVZX16rr16:
+    case X86::MOVZX16rr8:
+    case X86::MOVZX32rr16:
+    case X86::MOVZX32rr8:
+    case X86::MOVZX32rr8_NOREX:
+    case X86::MOVZX64rr16:
+    case X86::MOVZX64rr8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"sv},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to zero-extended"sv},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
 
     default: {
       static std::set<unsigned> warned_opcodes;

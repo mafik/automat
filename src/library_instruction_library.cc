@@ -3,6 +3,7 @@
 #include "library_instruction_library.hh"
 
 #include <include/core/SkBlurTypes.h>
+#include <include/core/SkColor.h>
 #include <include/core/SkPathMeasure.h>
 #include <llvm/MC/MCInstBuilder.h>
 #include <llvm/MC/MCInstrInfo.h>
@@ -17,7 +18,6 @@
 #include "animation.hh"
 #include "embedded.hh"
 #include "font.hh"
-#include "include/core/SkColor.h"
 #include "library_instruction.hh"
 #include "llvm_asm.hh"
 #include "math.hh"
@@ -30,52 +30,6 @@ using namespace llvm;
 using namespace maf;
 
 namespace automat::library {
-
-struct RegisterPresentation {
-  PersistentImage image;
-  unsigned llvm_reg;
-};
-
-constexpr float kRegisterIconWidth = 12_mm;
-
-RegisterPresentation kRegisters[InstructionLibrary::kGeneralPurposeRegisterCount] = {
-    RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_ax_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
-        .llvm_reg = X86::RAX,
-    },
-    RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_bx_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
-        .llvm_reg = X86::RBX,
-    },
-    RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_cx_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
-        .llvm_reg = X86::RCX,
-    },
-    RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_dx_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
-        .llvm_reg = X86::RDX,
-    },
-    RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_si_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
-        .llvm_reg = X86::RSI,
-    },
-    RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_di_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
-        .llvm_reg = X86::RDI,
-    },
-};
 
 InstructionLibrary::InstructionLibrary() {
   Filter();
@@ -335,13 +289,8 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     card.library_index = -1;
   }
 
-  float wobble = 0;
-  float wobble_amplitude_target = (wobble_cards && isnan(new_cards_dir_deg)) ? 1 : 0;
-  if (wobble_amplitude_target > 0) {
-    phase |= animation::Animating;
-  }
-  phase |= wobble_amplitude.SineTowards(wobble_amplitude_target, timer.d, 5);
-  wobble = wobble_amplitude * sin(timer.NowSeconds() * M_PI * 2) / 20;
+  float wobble_target = (wobble_cards && isnan(new_cards_dir_deg)) ? -0.2 : 0;
+  phase |= wobble.SineTowards(wobble_target, timer.d, 0.1);
 
   for (int i = 0; i < n; ++i) {
     llvm::MCInst& inst = library->instructions[i];
@@ -941,13 +890,11 @@ void InstructionLibrary::Widget::PointerMove(gui::Pointer& p, Vec2 position) {
     }
   }
 
-  if (Length(local_position) < kCornerDist) {
-    // Over card helix
-    wobble_cards = true;
+  bool new_wobble_cards = Length(local_position) < kCornerDist;
+  if (wobble_cards != new_wobble_cards) {
+    wobble_cards = new_wobble_cards;
     WakeAnimation();
-    return;
   }
-  wobble_cards = false;
 
   for (int i = 0; i < category_states.size(); ++i) {
     auto& category_state = category_states[i];
@@ -1027,6 +974,7 @@ struct ScrollDeckAction : Action {
     auto pos = pointer.PositionWithin(*widget);
     angle = SinCos::FromVec2(pos);
     library_widget.new_cards_dir_deg = (angle + 180_deg).ToDegrees();
+    widget->WakeAnimation();
   }
   void Update() override {
     auto pos = pointer.PositionWithin(*widget);
@@ -1083,7 +1031,7 @@ struct ScrollDeckAction : Action {
 };
 
 static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary::Widget& widget) {
-  for (int i = 0; i < InstructionLibrary::kGeneralPurposeRegisterCount; ++i) {
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     widget.read_from[i].pressed = false;
     widget.write_to[i].pressed = false;
   }
@@ -1097,7 +1045,7 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
   auto write_to_backup = library.write_to;
 
   // Toggle each "read_from" filter, count instructions, and then restore.
-  for (int i = 0; i < InstructionLibrary::kGeneralPurposeRegisterCount; ++i) {
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     // Toggle the filter value.
     if (widget.read_from[i].pressed) {
       // Remove i from library.read_from
@@ -1114,7 +1062,7 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
   }
 
   // Toggle each "write_to" filter, count instructions, and then restore.
-  for (int i = 0; i < InstructionLibrary::kGeneralPurposeRegisterCount; ++i) {
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     if (widget.write_to[i].pressed) {
       library.write_to.erase(std::remove(library.write_to.begin(), library.write_to.end(), i),
                              library.write_to.end());

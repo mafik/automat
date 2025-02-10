@@ -5,8 +5,28 @@
 #include <llvm/MC/MCInst.h>
 
 #include "base.hh"
+#include "textures.hh"
 
 namespace automat::library {
+
+constexpr float kRegisterIconWidth = 12_mm;
+
+struct RegisterPresentation {
+  PersistentImage image;
+  unsigned llvm_reg;
+};
+
+constexpr static int kGeneralPurposeRegisterCount = 6;
+
+extern RegisterPresentation kRegisters[kGeneralPurposeRegisterCount];
+
+enum class Flag {
+  CF,
+  OF,
+  PF,
+  ZF,
+  SF,
+};
 
 struct Instruction : LiveObject, Runnable {
   llvm::MCInst mc_inst;

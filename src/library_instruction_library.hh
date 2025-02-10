@@ -7,12 +7,12 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "library_instruction.hh"
 #include "random.hh"
 
 namespace automat::library {
 
 struct InstructionLibrary : Object {
-  constexpr static int kGeneralPurposeRegisterCount = 6;
   enum class RegisterWidth {
     kNone,
     k8b,
@@ -64,7 +64,7 @@ struct InstructionLibrary : Object {
     animation::SpringV2<float> rotation_offset_t = 0;
     float rotation_offset_t_target = 0;
     bool wobble_cards = false;  // true when helix is hovered
-    animation::SpringV2<float> wobble_amplitude = 0;
+    animation::SpringV2<float> wobble = 0;
     float new_cards_dir_deg = NAN;
 
     // True if the button is pressed

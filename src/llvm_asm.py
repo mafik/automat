@@ -18,6 +18,7 @@ import build
 import make
 import src
 import json
+import re
 from functools import partial
 from pathlib import Path
 
@@ -64,7 +65,7 @@ def gen_x86_hh(x86_json, x86_hh):
     skip = skip or opcode['isPseudo'] or opcode['mayStore'] or opcode['mayLoad'] or opcode['isCall']
     if not skip:
       for predicate in opcode['Predicates']:
-        if predicate['kind'] == 'def' and predicate['def'] in ('In32BitMode', 'Not64BitMode', 'HasX87', 'HasMMX', 'HasLWP', 'HasAMXCOMPLEX', 'HasAMXTILE', 'HasAMXINT8', 'HasAMXFP16'):
+        if predicate['kind'] == 'def' and predicate['def'] in ('In32BitMode', 'Not64BitMode', 'HasX87', 'HasMMX', 'HasLWP', 'HasAMXCOMPLEX', 'HasAMXTILE', 'HasAMXINT8', 'HasAMXFP16', 'HasTBM'):
           skip = True
     if not skip:
       for arg, arg_name in opcode['InOperandList']['args'] + opcode['OutOperandList']['args']:
@@ -106,14 +107,16 @@ def gen_x86_hh(x86_json, x86_hh):
   if False:
     json.dump(x, x86_json.open('w'), indent=2)
 
-  def select_opcodes_by_prefix(group, opcode_name_prefix):
-    selected = {opcode_name: opcode for opcode_name, opcode in x.items() if opcode_name.startswith(opcode_name_prefix)}
+  import re
+
+  def select_opcodes_by_regex(group, opcode_name_regexp):
+    selected = {opcode_name: opcode for opcode_name, opcode in x.items() if re.match(opcode_name_regexp, opcode_name)}
     group.update(selected)
   
   groups = {}
 
   class Group:
-    def __init__(self, name, prefixes, ring0=False, shortcut=None):
+    def __init__(self, name, regexps, ring0=False, shortcut=None):
       if not shortcut:
         shortcut = name
       self.name = name
@@ -121,102 +124,107 @@ def gen_x86_hh(x86_json, x86_hh):
       if name in groups:
         raise ValueError(f'Group {name} already exists')
       groups[name] = self
-      self.prefixes = prefixes
+      self.prefixes = regexps
       self.ring0 = ring0
       self.opcodes = {}
-      for prefix in prefixes:
-        select_opcodes_by_prefix(self.opcodes, prefix)
+      for regexp in regexps:
+        select_opcodes_by_regex(self.opcodes, regexp)
 
-  Group('LLVM sanitizers', ['UBSAN', 'ASAN'])
-  Group('LLVM internals', ['ADJCALLSTACK', 'CMOV_', 'CATCHRET', 'CLEANUPRET', 'DYN_ALLOCA_64', 'EH_', 'Int_', 'KCFI_CHECK', 'PROBED_ALLOCA', 'SEG_ALLOCA', 'PTDPBF16PS', 'REP_'])
-  Group('Synchronization prefixes', ['LOCK_PREFIX', 'XRELEASE_PREFIX', 'XACQUIRE_PREFIX'])
-  Group('Rep prefixes', ['REPNE_PREFIX', 'REP_PREFIX'])
-  Group('String scan', ['SCAS'])
-  Group('String store', ['STOS'])
-  Group('System Paging', ['WBINVD', 'INVLPG', 'TLBSYNC', 'WBNOINVD'], ring0=True)
-  Group('Restricted Transactional Memory', ['XABORT', 'XBEGIN', 'XEND', 'XTEST', 'XSUSLDTRK', 'XRESLDTRK'])
-  Group('Push/Pop FS/GS', ['POPFS', 'POPGS', 'PUSHFS', 'PUSHGS'])
-  Group('Control Flow Tracking/Indirect Branch Tracking', ['ENDBR'])
-  Group('Control Flow Shadow Stack', ['INCSSP', 'RDSSP', 'SAVEPREVSSP', 'RSTORSSP', 'WRSS', 'WRUSS', 'SETSSBSY', 'CLRSSBSY'])
-  Group('Port Input', ['IN8', 'IN16', 'IN32', 'IN64', 'INSB', 'INSW', 'INSL'])
-  Group('Port Output', ['OUT'])
-  Group('Exchange/Add', ['XADD'])
-  Group('Exchange', ['XCHG'])
-  Group('Not', ['NOT'])
-  Group('And', ['AND'])
-  Group('Or', ['OR'])
-  Group('Xor', ['XOR'])
-  Group('Increment', ['INC'], shortcut='+1')
-  Group('Decrement', ['DEC'], shortcut='-1')
-  Group('Add', ['ADD', 'ADC', 'ADOX'], shortcut='+')
-  Group('Subtract', ['SUB', 'SBB'], shortcut='-')
-  Group('Signed Multiply', ['IMUL'], shortcut='×')
-  Group('Unsigned Multiply', ['MUL'], shortcut='×')
-  Group('Unsigned Divide', ['DIV'], shortcut='÷')
-  Group('Signed Divide', ['IDIV', 'CBW', 'CWD', 'CDQ', 'CQO'], shortcut='÷')
-  Group('Signed Shift', ['SAL', 'SAR'], shortcut='Shift')
-  Group('Unsigned Double Shift', ['SHLD', 'SHRD'])
-  Group('Unsigned Shift', ['SHL', 'SHR'], shortcut='Shift')
-  Group('Signed Negate', ['NEG'], shortcut='±')
-  Group('Sign Extend', ['MOVSX'], shortcut='Extend')
-  Group('Zero Extend', ['MOVZX'], shortcut='Extend')
-  Group('Move', ['MOV'])
-  Group('Move If', ['CMOV'])
-  Group('Jump', ['JMP'])
-  Group('Jump If', ['JCC', 'JECXZ', 'JRCXZ', 'LOOP'])
-  Group('CRC32', ['CRC32'])
-  Group('Flag Complement', ['CMC'], shortcut='Flip')
-  Group('Auxiliary Carry', ['CLAC', 'STAC'])
-  Group('Flag Clear', ['CLC', 'CLD', 'CLI'], shortcut='Lower')
-  Group('Flag Set', ['STC', 'STD', 'STI'], shortcut='Raise')
-  Group('Flag Register', ['LAHF', 'SAHF'], shortcut='Move')
-  Group('Breakpoint', ['INT3'])
-  Group('Software Interrupt', ['INT'])
-  Group('User Interrupt', ['UIRED', 'CLUI', 'STUI', 'TESTUI', 'SENDUIPI', 'UIRET'])
-  Group('Bit Rotations Carry', ['RCL', 'RCR'], shortcut='Rotate Carry')
-  Group('Bit Rotations', ['ROL', 'ROR'], shortcut='Rotate')
-  Group('Bit Complement', ['BTC'], shortcut='Flip')
-  Group('Bit Tests', ['BT'], shortcut='Test')
-  Group('Bit Counting', ['LZCNT', 'POPCNT', 'TZCNT'], shortcut='Count')
-  Group('Bit Twiddling', ['BEXTR', 'BLC', 'BLS', 'BSF', 'BSR', 'BSWAP', 'BZHI', 'PDEP', 'PEXT', 'T1MSKC', 'TZMSK'], shortcut='Twiddle')
-  Group('AMD-V', ['VMRUN', 'VMLOAD', 'VMSAVE', 'CLGI', 'VMMCALL', 'INVLPGA', 'SKINIT', 'STGI'])
-  Group('Intel VMX', ['VMPTRLD', 'VMPTRST', 'VMCLEAR', 'VMREAD', 'VMWRITE', 'VMCALL', 'VMLAUNCH', 'VMRESUME', 'VMXOFF', 'VMXON', 'INVEPT', 'INVVPID', 'VMFUNC', 'SEAMCALL', 'SEAMOPS', 'SEAMRET', 'TDCALL'])
-  Group('Intel FRED', ['ERET', 'LKGS'], ring0=True)
-  Group('SGX', ['ENCLS', 'ENCLU', 'ENCLV'])
-  Group('CPUID', ['CPUID'])
-  Group('System Task Switching', ['CLTS', 'LTR'], ring0=True)
-  Group('System Segment Descriptors', ['LLDT', 'LMSW'], ring0=True)
-  Group('Read/Write FS/GS', ['RDFSBASE', 'RDGSBASE', 'WRFSBASE', 'WRGSBASE'])
-  Group('Swap GS', ['SWAPGS'], ring0=True)
-  Group('System Call', ['SYSCALL', 'SYSRET', 'SYSENTER', 'SYSEXIT'])
-  Group('Cache Control', ['CLZERO'])
-  Group('Processor History', ['HRESET', 'INVD', 'INVLPGB64'], ring0=True)
-  Group('Compare and Exchange', ['CMPXCHG'])
-  Group('Compare', ['CMP'])
-  Group('Test', ['TEST'])
-  Group('Set If', ['SETCC'])
-  Group('Fence', ['LFENCE', 'SFENCE', 'MFENCE', 'SERIALIZE'])
-  Group('Stack Frames', ['ENTER', 'LEAVE'])
-  Group('x87', ['FEMMS'])
-  Group('Intel Trusted Execution', ['GETSEC'])
-  Group('Power', ['HLT'], ring0=True)
-  Group('Segment Descriptors', ['LAR', 'LSL', 'VERR', 'VERW', 'SLDT', 'STR', 'SMSW'])
-  Group('Performance Counters', ['RDPMC'])
-  Group('Get Extended Control Registers', ['XGETBV'])
-  Group('Set Extended Control Registers', ['XSETBV'], ring0=True)
-  Group('User Page Keys', ['RDPKRU', 'WRPKRU'])
-  Group('Core ID', ['RDPID'])
-  Group('System Model Specific Registers', ['RDMSR', 'WRMSR'], ring0=True)
-  Group('Model Specific Registers', ['RDPRU'])
-  Group('Random Numbers', ['RDRAND', 'RDSEED'], shortcut='Random')
-  Group('Time', ['RDTSC'])
-  Group('Memory Monitoring', ['MONITORX', 'MWAITX', 'UMONITOR', 'UMWAIT', 'TPAUSE'])
-  Group('System Memory Monitoring', ['MONITOR', 'MWAIT'], ring0=True)
-  Group('VIA PadLock', ['MONTMUL', 'XSTORE'])
-  Group('System Total Storage Encryption', ['PBNDKB', 'PCONFIG'], ring0=True)
-  Group('Software Tracing', ['PTWRITE'])
-  Group('System Management Mode', ['RSM'], ring0=True)
-  Group('AMD Secure Nested Paging', ['PSMASH', 'PVALIDATE', 'RMPADJUST', 'RMPQUERY', 'RMPUPDATE'], ring0=True)
+  Group('LLVM sanitizers', ['^UBSAN', '^ASAN'])
+  Group('LLVM internals', ['^ADJCALLSTACK', '^CMOV_', '^CATCHRET', '^CLEANUPRET', '^DYN_ALLOCA_64', '^EH_', '^Int_', '^KCFI_CHECK', '^PROBED_ALLOCA', '^SEG_ALLOCA', '^PTDPBF16PS', '^REP_', '^CMOV_'])
+  Group('Synchronization prefixes', ['^LOCK_PREFIX', '^XRELEASE_PREFIX', '^XACQUIRE_PREFIX'])
+  Group('Rep prefixes', ['^REPNE_PREFIX', '^REP_PREFIX'])
+  Group('String scan', ['^SCAS'])
+  Group('String store', ['^STOS'])
+  Group('System Paging', ['^WBINVD', '^INVLPG', '^TLBSYNC', '^WBNOINVD'], ring0=True)
+  Group('Restricted Transactional Memory', ['^XABORT', '^XBEGIN', '^XEND', '^XTEST', '^XSUSLDTRK', '^XRESLDTRK'])
+  Group('Push/Pop FS/GS', ['^POPFS', '^POPGS', '^PUSHFS', '^PUSHGS'])
+  Group('Control Flow Tracking/Indirect Branch Tracking', ['^ENDBR'])
+  Group('Control Flow Shadow Stack', ['^INCSSP', '^RDSSP', '^SAVEPREVSSP', '^RSTORSSP', '^WRSS', '^WRUSS', '^SETSSBSY', '^CLRSSBSY'])
+  Group('Port Input', ['^IN8', '^IN16', '^IN32', '^IN64', '^INSB', '^INSW', '^INSL'])
+  Group('Port Output', ['^OUT'])
+  Group('Exchange/Add', ['^XADD'])
+  Group('Exchange', ['^XCHG'])
+  Group('Not', ['^NOT'])
+  Group('And', ['^AND'])
+  Group('Or', ['^OR'])
+  Group('Xor', ['^XOR'])
+  Group('Increment', ['^INC'], shortcut='+1')
+  Group('Decrement', ['^DEC'], shortcut='-1')
+  Group('Multi-line unsigned add', ['^ADOX', '^ADCX'])
+  Group('Add Carry', [r'^ADC\d'], shortcut='+ chain')
+  Group('Add', ['^ADD'], shortcut='+')
+  Group('Subtract Carry', ['^SBB'], shortcut='- chain')
+  Group('Subtract', ['^SUB'], shortcut='-')
+  Group('Signed Multiply', ['^IMUL'], shortcut='×')
+  Group('Unsigned Multiply', ['^MUL'], shortcut='×')
+  Group('Unsigned Divide', ['^DIV'], shortcut='÷')
+  Group('Signed Divide', ['^IDIV', '^CBW', '^CWD', '^CDQ', '^CQO'], shortcut='÷')
+  Group('Signed Shift', ['^SAL', '^SAR'], shortcut='Shift')
+  Group('Unsigned Double Shift', ['^SHLD', '^SHRD'])
+  Group('Unsigned Shift', ['^SHL', '^SHR'], shortcut='Shift')
+  Group('Signed Negate', ['^NEG'], shortcut='±')
+  Group('Sign Extend', ['^MOVSX'], shortcut='Extend')
+  Group('Zero Extend', ['^MOVZX'], shortcut='Extend')
+  Group('Move', [r'^MOV\d+(rr|ri)'])
+  Group('Move Debug', [r'^MOV\d+(rd|dr)'])
+  Group('Move If', [r'^CMOV\d'])
+  Group('Jump', ['^JMP'])
+  Group('Jump If', ['^JCC', '^JECXZ', '^JRCXZ', '^LOOP'])
+  Group('CRC32', ['^CRC32'])
+  Group('Flag Complement', ['^CMC'], shortcut='Flip')
+  Group('Auxiliary Carry', ['^CLAC', '^STAC'])
+  Group('Flag Clear', ['^CLC', '^CLD', '^CLI'], shortcut='Lower')
+  Group('Flag Set', ['^STC', '^STD', '^STI'], shortcut='Raise')
+  Group('Flag Register', ['^LAHF', '^SAHF'], shortcut='Move')
+  Group('Breakpoint', ['^INT3'])
+  Group('Software Interrupt', ['^INT'])
+  Group('User Interrupt', ['^UIRED', '^CLUI', '^STUI', '^TESTUI', '^SENDUIPI', '^UIRET'])
+  Group('Bit Rotations Carry', ['^RCL', '^RCR'], shortcut='Rotate Carry')
+  Group('Bit Rotations', ['^ROL', '^ROR'], shortcut='Rotate')
+  Group('Bit Complement', ['^BTC'], shortcut='Flip')
+  Group('Bit Tests', ['^BT'], shortcut='Test')
+  Group('Bit Counting', ['^LZCNT', '^POPCNT', '^TZCNT'], shortcut='Count')
+  Group('Invalid Byte Swap', ['^BSWAP16'])
+  Group('Bit Twiddling', ['^BEXTR', '^BLC', '^BLS', '^BSF', '^BSR', '^BSWAP(32|64)', '^BZHI', '^PDEP', '^PEXT', '^T1MSKC', '^TZMSK'], shortcut='Twiddle')
+  Group('AMD-V', ['^VMRUN', '^VMLOAD', '^VMSAVE', '^CLGI', '^VMMCALL', '^INVLPGA', '^SKINIT', '^STGI'])
+  Group('Intel VMX', ['^VMPTRLD', '^VMPTRST', '^VMCLEAR', '^VMREAD', '^VMWRITE', '^VMCALL', '^VMLAUNCH', '^VMRESUME', '^VMXOFF', '^VMXON', '^INVEPT', '^INVVPID', '^VMFUNC', '^SEAMCALL', '^SEAMOPS', '^SEAMRET', '^TDCALL'])
+  Group('Intel FRED', ['^ERET', '^LKGS'], ring0=True)
+  Group('SGX', ['^ENCLS', '^ENCLU', '^ENCLV'])
+  Group('CPUID', ['^CPUID'])
+  Group('System Task Switching', ['^CLTS', '^LTR'], ring0=True)
+  Group('System Segment Descriptors', ['^LLDT', '^LMSW'], ring0=True)
+  Group('Read/Write FS/GS', ['^RDFSBASE', '^RDGSBASE', '^WRFSBASE', '^WRGSBASE'])
+  Group('Swap GS', ['^SWAPGS'], ring0=True)
+  Group('System Call', ['^SYSCALL', '^SYSRET', '^SYSENTER', '^SYSEXIT'])
+  Group('Cache Control', ['^CLZERO'])
+  Group('Processor History', ['^HRESET', '^INVD', '^INVLPGB64'], ring0=True)
+  Group('Compare and Exchange', ['^CMPXCHG'])
+  Group('Compare', ['^CMP'])
+  Group('Test', ['^TEST'])
+  Group('Set If', ['^SETCC'])
+  Group('Fence', ['^LFENCE', '^SFENCE', '^MFENCE', '^SERIALIZE'])
+  Group('Stack Frames', ['^ENTER', '^LEAVE'])
+  Group('x87', ['^FEMMS'])
+  Group('Intel Trusted Execution', ['^GETSEC'])
+  Group('Power', ['^HLT'], ring0=True)
+  Group('Segment Descriptors', ['^LAR', '^LSL', '^VERR', '^VERW', '^SLDT', '^STR', '^SMSW'])
+  Group('Performance Counters', ['^RDPMC'])
+  Group('Get Extended Control Registers', ['^XGETBV'])
+  Group('Set Extended Control Registers', ['^XSETBV'], ring0=True)
+  Group('User Page Keys', ['^RDPKRU', '^WRPKRU'])
+  Group('Core ID', ['^RDPID'])
+  Group('System Model Specific Registers', ['^RDMSR', '^WRMSR'], ring0=True)
+  Group('Model Specific Registers', ['^RDPRU'])
+  Group('Random Numbers', ['^RDRAND', '^RDSEED'], shortcut='Random')
+  Group('Time', ['^RDTSC'])
+  Group('Memory Monitoring', ['^MONITORX', '^MWAITX', '^UMONITOR', '^UMWAIT', '^TPAUSE'])
+  Group('System Memory Monitoring', ['^MONITOR', '^MWAIT'], ring0=True)
+  Group('VIA PadLock', ['^MONTMUL', '^XSTORE'])
+  Group('System Total Storage Encryption', ['^PBNDKB', '^PCONFIG'], ring0=True)
+  Group('Software Tracing', ['^PTWRITE'])
+  Group('System Management Mode', ['^RSM'], ring0=True)
+  Group('AMD Secure Nested Paging', ['^PSMASH', '^PVALIDATE', '^RMPADJUST', '^RMPQUERY', '^RMPUPDATE'], ring0=True)
 
   # At this point, all instructions should have been grouped.
   grouped_opcodes = set()
@@ -244,8 +252,9 @@ def gen_x86_hh(x86_json, x86_hh):
     'Push/Pop FS/GS', 'Get Extended Control Registers', 'Intel Trusted Execution', 'Unsigned Double Shift', 'CPUID',
     'Software Tracing', 'Model Specific Registers', 'Cache Control', 'Control Flow Tracking/Indirect Branch Tracking',
     'Performance Counters', 'Software Interrupt', 'User Interrupt', 'Segment Descriptors', 'SGX', 'System Call',
-    'Breakpoint', 'Memory Monitoring', 'User Page Keys', 'Read/Write FS/GS', 'Control Flow Shadow Stack'], supported=False)
-  Category('Obsolete', ['VIA PadLock', 'Auxiliary Carry'], supported=False)
+    'Breakpoint', 'Memory Monitoring', 'User Page Keys', 'Read/Write FS/GS', 'Control Flow Shadow Stack',
+    'Multi-line unsigned add', 'Move Debug'], supported=False)
+  Category('Obsolete', ['VIA PadLock', 'Auxiliary Carry', 'Invalid Byte Swap'], supported=False)
   Category('Accesses Memory', ['String scan', 'String store', 'Stack Frames'], supported=False)
   Category('Prefixes', ['Rep prefixes', 'Synchronization prefixes'], supported=False)
   Category('Multithreading', ['Fence', 'Restricted Transactional Memory'], supported=False)
@@ -257,7 +266,7 @@ def gen_x86_hh(x86_json, x86_hh):
   Category('Bits', ['Bit Rotations Carry', 'Bit Rotations', 'Bit Tests', 'Bit Counting', 'Bit Twiddling', 'Bit Complement'])
   Category('Move', ['Move', 'Move If', 'Exchange'])
   Category('Signed Math', ['Signed Negate', 'Signed Shift', 'Signed Divide', 'Signed Multiply', 'Sign Extend'])
-  Category('Unsigned Math', ['Unsigned Shift', 'Unsigned Divide', 'Unsigned Multiply', 'Zero Extend'])
+  Category('Unsigned Math', ['Unsigned Shift', 'Unsigned Divide', 'Unsigned Multiply', 'Zero Extend', 'Add Carry', 'Subtract Carry'])
   Category('Misc', ['Random Numbers', 'Time', 'CRC32', 'Core ID'])
   Category('Flags', ['Flag Complement', 'Flag Clear', 'Flag Set', 'Flag Register'])
   Category('Control', ['Compare', 'Test', 'Jump', 'Jump If', 'Set If', 'Move If'])

@@ -195,6 +195,7 @@ struct Token {
     FixedRegister,
     FixedFlag,
     ConditionCode,
+    FixedCondition,
   } tag;
   union {
     const char* str;
@@ -203,6 +204,7 @@ struct Token {
     unsigned fixed_reg;
     Flag flag;
     unsigned cond_code;
+    X86::CondCode fixed_cond;
   };
 };
 
@@ -1221,6 +1223,78 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
+    case X86::LOOPNE: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
+          {.tag = Token::String, .str = "-1"},
+          {.tag = Token::String, .str = "If"},
+          {.tag = Token::FixedCondition, .fixed_cond = X86::CondCode::COND_NE},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
+          {.tag = Token::String, .str = "=0 then jump"},
+      };
+      return tokens;
+    }
+
+    case X86::LOOPE: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
+          {.tag = Token::String, .str = "-1"},
+          {.tag = Token::String, .str = "If"},
+          {.tag = Token::FixedCondition, .fixed_cond = X86::CondCode::COND_E},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
+          {.tag = Token::String, .str = "=0 then jump"},
+      };
+      return tokens;
+    }
+
+    case X86::LOOP: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
+          {.tag = Token::String, .str = "-1"},
+          {.tag = Token::String, .str = "If"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
+          {.tag = Token::String, .str = "=0 then jump"},
+      };
+      return tokens;
+    }
+
+    case X86::JRCXZ: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "If"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
+          {.tag = Token::String, .str = "=0 then jump"},
+      };
+      return tokens;
+    }
+
+    case X86::JECXZ: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "If"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::ECX},
+          {.tag = Token::String, .str = "=0 then jump"},
+      };
+      return tokens;
+    }
+
+    case X86::JCC_1:
+    case X86::JCC_4: {
+      constexpr static Token tokens[] = {{.tag = Token::String, .str = "If"},
+                                         {.tag = Token::ConditionCode, .cond_code = 1},
+                                         {.tag = Token::String, .str = "then jump"}};
+      return tokens;
+    }
+
+    case X86::SETCCr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "If"},       {.tag = Token::ConditionCode, .cond_code = 1},
+          {.tag = Token::String, .str = "then set"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to 1"},
+      };
+      return tokens;
+    }
+
     default: {
       static std::set<unsigned> warned_opcodes;
       if (warned_opcodes.insert(inst.getOpcode()).second) {
@@ -1468,7 +1542,7 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
         case Token::String:
           total_width += heavy_font.MeasureText(token.str);
           break;
-        case Token::RegisterOperand:
+        case Token::RegisterOperand:  // fallthrough
         case Token::FixedRegister:
           total_width += kRegisterTokenWidth;
           break;
@@ -1478,7 +1552,8 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
         case Token::FixedFlag:
           total_width += 6_mm;
           break;
-        case Token::ConditionCode:
+        case Token::ConditionCode:  // fallthrough
+        case Token::FixedCondition:
           total_width += kConditionCodeTokenWidth;
           break;
         default:
@@ -1564,6 +1639,12 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
         case Token::ConditionCode:
           canvas.translate(x, y - 2_mm);
           DrawConditionCode(canvas, (X86::CondCode)inst.getOperand(token.cond_code).getImm());
+          canvas.translate(-x, -y + 2_mm);
+          x += kConditionCodeTokenWidth;
+          break;
+        case Token::FixedCondition:
+          canvas.translate(x, y - 2_mm);
+          DrawConditionCode(canvas, token.fixed_cond);
           canvas.translate(-x, -y + 2_mm);
           x += kConditionCodeTokenWidth;
           break;

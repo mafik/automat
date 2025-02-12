@@ -152,6 +152,7 @@ def gen_x86_hh(x86_json, x86_hh):
   Group('Increment', [r'^INC\d'], shortcut='+1')
   Group('Decrement', ['^DEC'], shortcut='-1')
   Group('Multi-line unsigned add', ['^ADOX', '^ADCX'])
+  Group('Shift without affecting flags', ['^SHLX', '^SHRX'])
   Group('Add Carry', [r'^ADC\d'], shortcut='+ chain')
   Group('Add', ['^ADD'], shortcut='+')
   Group('Subtract Carry', ['^SBB'], shortcut='- chain')
@@ -162,7 +163,7 @@ def gen_x86_hh(x86_json, x86_hh):
   Group('Signed Divide', ['^IDIV', '^CBW', '^CWD', '^CDQ', '^CQO'], shortcut='÷')
   Group('Signed Shift', ['^SAL', '^SAR'], shortcut='Shift')
   Group('Unsigned Double Shift', ['^SHLD', '^SHRD'])
-  Group('Unsigned Shift', ['^SHL', '^SHR'], shortcut='Shift')
+  Group('Unsigned Shift', [r'^SHL\d', r'^SHR\d'], shortcut='Shift')
   Group('Signed Negate', ['^NEG'], shortcut='±')
   Group('Sign Extend', ['^MOVSX'], shortcut='Extend')
   Group('Zero Extend', ['^MOVZX'], shortcut='Extend')
@@ -251,7 +252,8 @@ def gen_x86_hh(x86_json, x86_hh):
     'Software Tracing', 'Model Specific Registers', 'Cache Control', 'Control Flow Tracking/Indirect Branch Tracking',
     'Performance Counters', 'Software Interrupt', 'User Interrupt', 'Segment Descriptors', 'SGX', 'System Call',
     'Breakpoint', 'Memory Monitoring', 'User Page Keys', 'Read/Write FS/GS', 'Control Flow Shadow Stack',
-    'Multi-line unsigned add', 'Move Debug', 'Flag Register', 'CRC32', 'Core ID', 'Time + Core ID'], supported=False)
+    'Multi-line unsigned add', 'Move Debug', 'Flag Register', 'CRC32', 'Core ID', 'Time + Core ID',
+    'Shift without affecting flags'], supported=False)
   Category('Obsolete', ['VIA PadLock', 'Auxiliary Carry', 'Invalid Byte Swap'], supported=False)
   Category('Accesses Memory', ['String scan', 'String store', 'Stack Frames', 'Direction Flag'], supported=False)
   Category('Prefixes', ['Rep prefixes', 'Synchronization prefixes'], supported=False)

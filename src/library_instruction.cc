@@ -1350,6 +1350,87 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
+    case X86::SHL64r1:
+    case X86::SHL32r1:
+    case X86::SHL16r1:
+    case X86::SHL8r1: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Multiply ±"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2"},
+      };
+      return tokens;
+    }
+
+    // Register+immediate shifts (left)
+    case X86::SHL64ri:
+    case X86::SHL32ri:
+    case X86::SHL16ri:
+    case X86::SHL8ri: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Multiply ±"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2,"},      {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "times"},
+      };
+      return tokens;
+    }
+
+    // Shift left by CL
+    case X86::SHL64rCL:
+    case X86::SHL32rCL:
+    case X86::SHL16rCL:
+    case X86::SHL8rCL: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Multiply ±"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2,"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
+          {.tag = Token::String, .str = "times"},
+      };
+      return tokens;
+    }
+
+    // Shift right by 1
+    case X86::SHR64r1:
+    case X86::SHR32r1:
+    case X86::SHR16r1:
+    case X86::SHR8r1: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Divide ±"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2"},
+      };
+      return tokens;
+    }
+
+    // Register+immediate shift right
+    case X86::SHR64ri:
+    case X86::SHR32ri:
+    case X86::SHR16ri:
+    case X86::SHR8ri: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Divide"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2,"},  {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "times"},
+      };
+      return tokens;
+    }
+
+    // Shift right by CL
+    case X86::SHR64rCL:
+    case X86::SHR32rCL:
+    case X86::SHR16rCL:
+    case X86::SHR8rCL: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Divide"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2,"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
+          {.tag = Token::String, .str = "times"},
+      };
+      return tokens;
+    }
+
     default: {
       static std::set<unsigned> warned_opcodes;
       if (warned_opcodes.insert(inst.getOpcode()).second) {

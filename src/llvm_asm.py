@@ -149,7 +149,7 @@ def gen_x86_hh(x86_json, x86_hh):
   Group('And', ['^AND'])
   Group('Or', ['^OR'])
   Group('Xor', ['^XOR'])
-  Group('Increment', ['^INC'], shortcut='+1')
+  Group('Increment', [r'^INC\d'], shortcut='+1')
   Group('Decrement', ['^DEC'], shortcut='-1')
   Group('Multi-line unsigned add', ['^ADOX', '^ADCX'])
   Group('Add Carry', [r'^ADC\d'], shortcut='+ chain')
@@ -214,7 +214,8 @@ def gen_x86_hh(x86_json, x86_hh):
   Group('System Model Specific Registers', ['^RDMSR', '^WRMSR'], ring0=True)
   Group('Model Specific Registers', ['^RDPRU'])
   Group('Random Numbers', ['^RDRAND', '^RDSEED'], shortcut='Random')
-  Group('Time', ['^RDTSC'])
+  Group('Time', ['^RDTSC$'])
+  Group('Time + Core ID', ['^RDTSCP$'])
   Group('Memory Monitoring', ['^MONITORX', '^MWAITX', '^UMONITOR', '^UMWAIT', '^TPAUSE'])
   Group('System Memory Monitoring', ['^MONITOR', '^MWAIT'], ring0=True)
   Group('VIA PadLock', ['^MONTMUL', '^XSTORE'])
@@ -250,7 +251,7 @@ def gen_x86_hh(x86_json, x86_hh):
     'Software Tracing', 'Model Specific Registers', 'Cache Control', 'Control Flow Tracking/Indirect Branch Tracking',
     'Performance Counters', 'Software Interrupt', 'User Interrupt', 'Segment Descriptors', 'SGX', 'System Call',
     'Breakpoint', 'Memory Monitoring', 'User Page Keys', 'Read/Write FS/GS', 'Control Flow Shadow Stack',
-    'Multi-line unsigned add', 'Move Debug', 'Flag Register', 'CRC32', 'Core ID'], supported=False)
+    'Multi-line unsigned add', 'Move Debug', 'Flag Register', 'CRC32', 'Core ID', 'Time + Core ID'], supported=False)
   Category('Obsolete', ['VIA PadLock', 'Auxiliary Carry', 'Invalid Byte Swap'], supported=False)
   Category('Accesses Memory', ['String scan', 'String store', 'Stack Frames', 'Direction Flag'], supported=False)
   Category('Prefixes', ['Rep prefixes', 'Synchronization prefixes'], supported=False)

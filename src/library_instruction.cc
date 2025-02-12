@@ -1295,7 +1295,6 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
-    // STC
     case X86::STC: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Raise"},
@@ -1304,7 +1303,6 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
-    // CLC
     case X86::CLC: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Lower"},
@@ -1313,11 +1311,41 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
-    // CMC
     case X86::CMC: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Flip"},
           {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+
+    case X86::RDTSC: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "to current time"},
+      };
+      return tokens;
+    }
+
+    case X86::RDSEED64r:
+    case X86::RDSEED32r:
+    case X86::RDSEED16r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Randomize"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "(slow!)"},
+      };
+      return tokens;
+    }
+
+    case X86::RDRAND64r:
+    case X86::RDRAND32r:
+    case X86::RDRAND16r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Randomize"},
+          {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
     }

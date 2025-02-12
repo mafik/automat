@@ -194,6 +194,7 @@ struct Token {
     ImmediateOperand,
     FixedRegister,
     FixedFlag,
+    ConditionCode,
   } tag;
   union {
     const char* str;
@@ -201,6 +202,7 @@ struct Token {
     unsigned imm;
     unsigned fixed_reg;
     Flag flag;
+    unsigned cond_code;
   };
 };
 
@@ -1121,6 +1123,18 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
+    // Implement conditional move opcodes.
+    case X86::CMOV64rr:
+    case X86::CMOV32rr:
+    case X86::CMOV16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "If"},       {.tag = Token::ConditionCode, .cond_code = 2},
+          {.tag = Token::String, .str = "then set"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},       {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
     default: {
       static std::set<unsigned> warned_opcodes;
       if (warned_opcodes.insert(inst.getOpcode()).second) {
@@ -1175,6 +1189,17 @@ void DrawFlag(SkCanvas& canvas, Flag flag) {
   }
 }
 
+constexpr float kConditionCodeTokenWidth = 8_mm;
+constexpr float kConditionCodeTokenHeight = 8_mm;
+
+constexpr Rect kConditionCodeRect = Rect::Make(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
+
+void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
+  SkPaint bg_paint;
+  bg_paint.setColor("#2e542a"_color);
+  canvas.drawRoundRect(kConditionCodeRect.sk, 2_mm, 4_mm, bg_paint);
+}
+
 void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
   SkRRect rrect = kInstructionRRect;
 
@@ -1224,159 +1249,169 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
   inset_rrect.inset(bevel_width / 2, bevel_width / 2);
   canvas.drawRRect(inset_rrect, bevel_paint);
 
-  if (inst.getOpcode() != X86::INSTRUCTION_LIST_END) {
-    // Assembly text
-    auto text = AssemblyText(inst);
-    auto& fine_font = FineFont();
-    auto assembly_text_width = fine_font.MeasureText(text);
-    Vec2 assembly_text_offset = Vec2{Widget::kBorderMargin - kFineFontSize / 2,
-                                     kHeight - kFineFontSize / 2 - Widget::kBorderMargin};
+  if (inst.getOpcode() == X86::INSTRUCTION_LIST_END) {
+    return;
+  }
+  // Assembly text
+  auto text = AssemblyText(inst);
+  auto& fine_font = FineFont();
+  auto assembly_text_width = fine_font.MeasureText(text);
+  Vec2 assembly_text_offset = Vec2{Widget::kBorderMargin - kFineFontSize / 2,
+                                   kHeight - kFineFontSize / 2 - Widget::kBorderMargin};
 
-    {
-      canvas.save();
-      SkPaint text_paint;
-      text_paint.setColor("#000000"_color);
-      text_paint.setAntiAlias(true);
-      canvas.translate(assembly_text_offset.x, assembly_text_offset.y);
-      fine_font.DrawText(canvas, text, text_paint);
-      canvas.restore();
-    }
+  {
+    canvas.save();
+    SkPaint text_paint;
+    text_paint.setColor("#000000"_color);
+    text_paint.setAntiAlias(true);
+    canvas.translate(assembly_text_offset.x, assembly_text_offset.y);
+    fine_font.DrawText(canvas, text, text_paint);
+    canvas.restore();
+  }
 
-    {  // Border
-      canvas.save();
-      Rect text_rect = Rect::MakeCornerZero(assembly_text_width, kFineFontSize)
-                           .Outset(kFineFontSize / 2)
-                           .MoveBy(assembly_text_offset);
-      canvas.clipRect(text_rect, SkClipOp::kDifference);
-      SkPaint border_paint;
-      border_paint.setColor("#000000"_color);
-      border_paint.setAntiAlias(true);
-      border_paint.setStyle(SkPaint::kStroke_Style);
-      border_paint.setStrokeWidth(0.1_mm);
-      SkRRect border_rrect = rrect;
-      border_rrect.inset(Widget::kBorderMargin, Widget::kBorderMargin);
-      SkVector radii[] = {
-          SkVector::Make(1_mm, 1_mm),
-          SkVector::Make(1_mm, 1_mm),
-          SkVector::Make(1_mm, 1_mm),
-          SkVector::Make(1_mm, 1_mm),
-      };
-      border_rrect.setRectRadii(border_rrect.rect(), radii);
-      canvas.drawRRect(border_rrect, border_paint);
-      canvas.restore();
-    }
+  {  // Border
+    canvas.save();
+    Rect text_rect = Rect::MakeCornerZero(assembly_text_width, kFineFontSize)
+                         .Outset(kFineFontSize / 2)
+                         .MoveBy(assembly_text_offset);
+    canvas.clipRect(text_rect, SkClipOp::kDifference);
+    SkPaint border_paint;
+    border_paint.setColor("#000000"_color);
+    border_paint.setAntiAlias(true);
+    border_paint.setStyle(SkPaint::kStroke_Style);
+    border_paint.setStrokeWidth(0.1_mm);
+    SkRRect border_rrect = rrect;
+    border_rrect.inset(Widget::kBorderMargin, Widget::kBorderMargin);
+    SkVector radii[] = {
+        SkVector::Make(1_mm, 1_mm),
+        SkVector::Make(1_mm, 1_mm),
+        SkVector::Make(1_mm, 1_mm),
+        SkVector::Make(1_mm, 1_mm),
+    };
+    border_rrect.setRectRadii(border_rrect.rect(), radii);
+    canvas.drawRRect(border_rrect, border_paint);
+    canvas.restore();
+  }
 
-    {  // Contents
-      auto tokens = PrintInstruction(inst);
-      auto& heavy_font = HeavyFont();
-      constexpr float kSpaceWidth = kHeavyFontSize / 4;
+  {  // Contents
+    auto tokens = PrintInstruction(inst);
+    auto& heavy_font = HeavyFont();
+    constexpr float kSpaceWidth = kHeavyFontSize / 4;
 
-      constexpr float kRegisterTokenWidth = kRegisterIconWidth;
-      constexpr float kRegisterIconScale = kRegisterTokenWidth / kRegisterIconWidth;
-      constexpr float kImmediateTokenWidth = 10_mm;
-      float total_width = 0;
-      // TODO: this might be cached
-      // Wrap & scale down to fit
-      for (auto& token : tokens) {
-        switch (token.tag) {
-          case Token::String:
-            total_width += heavy_font.MeasureText(token.str);
-            break;
-          case Token::RegisterOperand:
-          case Token::FixedRegister:
-            total_width += kRegisterTokenWidth;
-            break;
-          case Token::ImmediateOperand:
-            total_width += kImmediateTokenWidth;
-            break;
-          case Token::FixedFlag:
-            total_width += 6_mm;
-            break;
-          default:
-            break;
-        }
-        total_width += kSpaceWidth;
+    constexpr float kRegisterTokenWidth = kRegisterIconWidth;
+    constexpr float kRegisterIconScale = kRegisterTokenWidth / kRegisterIconWidth;
+    constexpr float kImmediateTokenWidth = 10_mm;
+    float total_width = 0;
+    // TODO: this might be cached
+    // Wrap & scale down to fit
+    for (auto& token : tokens) {
+      switch (token.tag) {
+        case Token::String:
+          total_width += heavy_font.MeasureText(token.str);
+          break;
+        case Token::RegisterOperand:
+        case Token::FixedRegister:
+          total_width += kRegisterTokenWidth;
+          break;
+        case Token::ImmediateOperand:
+          total_width += kImmediateTokenWidth;
+          break;
+        case Token::FixedFlag:
+          total_width += 6_mm;
+          break;
+        case Token::ConditionCode:
+          total_width += kConditionCodeTokenWidth;
+          break;
+        default:
+          break;
       }
+      total_width += kSpaceWidth;
+    }
 
-      SkPaint text_paint;
-      text_paint.setColor("#000000"_color);
-      text_paint.setAntiAlias(true);
+    SkPaint text_paint;
+    text_paint.setColor("#000000"_color);
+    text_paint.setAntiAlias(true);
 
-      float x_min = kInstructionRect.left() + Widget::kBorderMargin;
-      float x_max = kInstructionRect.right() - Widget::kBorderMargin;
-      float x_center = (x_max + x_min) / 2;
-      float x = x_center - total_width / 2;
-      float y = kInstructionRect.centerY() - kHeavyFontSize / 2;
+    float x_min = kInstructionRect.left() + Widget::kBorderMargin;
+    float x_max = kInstructionRect.right() - Widget::kBorderMargin;
+    float x_center = (x_max + x_min) / 2;
+    float x = x_center - total_width / 2;
+    float y = kInstructionRect.centerY() - kHeavyFontSize / 2;
 
-      auto& assembler = LLVM_Assembler::Get();
+    auto& assembler = LLVM_Assembler::Get();
 
-      for (auto& token : tokens) {
-        switch (token.tag) {
-          case Token::String:
-            canvas.translate(x, y);
-            heavy_font.DrawText(canvas, token.str, text_paint);
-            canvas.translate(-x, -y);
-            x += heavy_font.MeasureText(token.str);
-            break;
-          case Token::ImmediateOperand: {
-            canvas.save();
-            canvas.translate(x, y);
-            int64_t immediate_value = inst.getOperand(token.imm).getImm();
-            std::string immediate_str = std::to_string(immediate_value);
-            Rect immediate_rect = Rect::MakeCornerZero(kImmediateTokenWidth, kHeavyFontSize);
-            immediate_rect.bottom -= 2_mm;
-            immediate_rect.top += 2_mm;
-            SkPaint immediate_bg_paint;
-            immediate_bg_paint.setColor("#ffffff"_color);
-            immediate_bg_paint.setAntiAlias(true);
-            canvas.drawRoundRect(immediate_rect, 1_mm, 1_mm, immediate_bg_paint);
-            canvas.translate(1_mm, 0);
-            heavy_font.DrawText(canvas, immediate_str, text_paint);
-            canvas.restore();
-            x += kImmediateTokenWidth;
-            break;
+    for (auto& token : tokens) {
+      switch (token.tag) {
+        case Token::String:
+          canvas.translate(x, y);
+          heavy_font.DrawText(canvas, token.str, text_paint);
+          canvas.translate(-x, -y);
+          x += heavy_font.MeasureText(token.str);
+          break;
+        case Token::ImmediateOperand: {
+          canvas.save();
+          canvas.translate(x, y);
+          int64_t immediate_value = inst.getOperand(token.imm).getImm();
+          std::string immediate_str = std::to_string(immediate_value);
+          Rect immediate_rect = Rect::MakeCornerZero(kImmediateTokenWidth, kHeavyFontSize);
+          immediate_rect.bottom -= 2_mm;
+          immediate_rect.top += 2_mm;
+          SkPaint immediate_bg_paint;
+          immediate_bg_paint.setColor("#ffffff"_color);
+          immediate_bg_paint.setAntiAlias(true);
+          canvas.drawRoundRect(immediate_rect, 1_mm, 1_mm, immediate_bg_paint);
+          canvas.translate(1_mm, 0);
+          heavy_font.DrawText(canvas, immediate_str, text_paint);
+          canvas.restore();
+          x += kImmediateTokenWidth;
+          break;
+        }
+        case Token::FixedRegister:
+          canvas.translate(x, y - 2_mm);
+          canvas.scale(kRegisterIconScale, kRegisterIconScale);
+          for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+            bool found =
+                assembler.mc_reg_info->isSubRegisterEq(kRegisters[i].llvm_reg, token.fixed_reg);
+            if (found) {
+              kRegisters[i].image.draw(canvas);
+              break;
+            }
           }
-          case Token::FixedRegister:
-            canvas.translate(x, y - 2_mm);
-            canvas.scale(kRegisterIconScale, kRegisterIconScale);
-            for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-              bool found =
-                  assembler.mc_reg_info->isSubRegisterEq(kRegisters[i].llvm_reg, token.fixed_reg);
-              if (found) {
-                kRegisters[i].image.draw(canvas);
-                break;
-              }
+          canvas.scale(1 / kRegisterIconScale, 1 / kRegisterIconScale);
+          canvas.translate(-x, -y + 2_mm);
+          x += kRegisterIconWidth;
+          break;
+        case Token::RegisterOperand:
+          canvas.translate(x, y - 2_mm);
+          canvas.scale(kRegisterIconScale, kRegisterIconScale);
+          for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+            bool found = assembler.mc_reg_info->isSubRegisterEq(
+                kRegisters[i].llvm_reg, inst.getOperand(token.reg).getReg());
+            if (found) {
+              kRegisters[i].image.draw(canvas);
+              break;
             }
-            canvas.scale(1 / kRegisterIconScale, 1 / kRegisterIconScale);
-            canvas.translate(-x, -y + 2_mm);
-            x += kRegisterIconWidth;
-            break;
-          case Token::RegisterOperand:
-            canvas.translate(x, y - 2_mm);
-            canvas.scale(kRegisterIconScale, kRegisterIconScale);
-            for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-              bool found = assembler.mc_reg_info->isSubRegisterEq(
-                  kRegisters[i].llvm_reg, inst.getOperand(token.reg).getReg());
-              if (found) {
-                kRegisters[i].image.draw(canvas);
-                break;
-              }
-            }
-            canvas.scale(1 / kRegisterIconScale, 1 / kRegisterIconScale);
-            canvas.translate(-x, -y + 2_mm);
-            x += kRegisterIconWidth;
-            break;
-          case Token::FixedFlag:
-            canvas.translate(x, y - 2_mm);
-            DrawFlag(canvas, token.flag);
-            canvas.translate(-x, -y + 2_mm);
-            x += 6_mm;
-            break;
-          default:
-            break;
-        }
-        x += kSpaceWidth;
+          }
+          canvas.scale(1 / kRegisterIconScale, 1 / kRegisterIconScale);
+          canvas.translate(-x, -y + 2_mm);
+          x += kRegisterIconWidth;
+          break;
+        case Token::FixedFlag:
+          canvas.translate(x, y - 2_mm);
+          DrawFlag(canvas, token.flag);
+          canvas.translate(-x, -y + 2_mm);
+          x += 6_mm;
+          break;
+        case Token::ConditionCode:
+          canvas.translate(x, y - 2_mm);
+          // DrawConditionCode(canvas, (X86::CondCode)inst.getOperand(token.cond_code).getImm());
+          canvas.translate(-x, -y + 2_mm);
+          x += kConditionCodeTokenWidth;
+          break;
+        default:
+          break;
       }
+      x += kSpaceWidth;
     }
   }
 }

@@ -1295,6 +1295,33 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
+    // STC
+    case X86::STC: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Raise"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+
+    // CLC
+    case X86::CLC: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Lower"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+
+    // CMC
+    case X86::CMC: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Flip"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+
     default: {
       static std::set<unsigned> warned_opcodes;
       if (warned_opcodes.insert(inst.getOpcode()).second) {

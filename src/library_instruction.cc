@@ -1180,6 +1180,47 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
+    // --- TEST Instructions ---
+    case X86::TEST64i32:
+    case X86::TEST32i32:
+    case X86::TEST16i16:
+    case X86::TEST8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Test"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+
+    case X86::TEST64ri32:
+    case X86::TEST32ri:
+    case X86::TEST16ri:
+    case X86::TEST8ri: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Test"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 1},
+      };
+      return tokens;
+    }
+
+    // Register–register variants (TEST?rr):
+    case X86::TEST64rr:
+    case X86::TEST32rr:
+    case X86::TEST16rr:
+    case X86::TEST8rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Test"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::RegisterOperand, .reg = 1},
+      };
+      return tokens;
+    }
+
     default: {
       static std::set<unsigned> warned_opcodes;
       if (warned_opcodes.insert(inst.getOpcode()).second) {

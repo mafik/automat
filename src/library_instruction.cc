@@ -180,6 +180,13 @@ static gui::Font& HeavyFont() {
   return *font;
 }
 
+constexpr float kSubscriptFontSize = 2_mm;
+
+static gui::Font& SubscriptFont() {
+  static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeSemiBold(), kSubscriptFontSize);
+  return *font;
+}
+
 static const SkRect kInstructionRect =
     SkRect::MakeWH(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
@@ -1113,7 +1120,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Swap"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "with"},
+          {.tag = Token::String, .str = "and"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -1923,6 +1930,8 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
   if (inst.getOpcode() == X86::INSTRUCTION_LIST_END) {
     return;
   }
+
+  auto& subscript_font = SubscriptFont();
   // Assembly text
   auto assembly_text = AssemblyText(inst);
   auto& fine_font = FineFont();
@@ -2069,6 +2078,7 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
           x += kRegisterIconWidth;
           break;
         case Token::RegisterOperand:
+          canvas.save();
           canvas.translate(x, y - 2_mm);
           canvas.scale(kRegisterIconScale, kRegisterIconScale);
           for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
@@ -2079,8 +2089,20 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
               break;
             }
           }
-          canvas.scale(1 / kRegisterIconScale, 1 / kRegisterIconScale);
-          canvas.translate(-x, -y + 2_mm);
+          canvas.restore();
+          canvas.save();
+
+          {
+            auto& instr_info = assembler.mc_instr_info->get(inst.getOpcode());
+            auto reg_class = instr_info.operands()[token.reg].RegClass;
+            auto& class_info = assembler.mc_reg_info->getRegClass(reg_class);
+            auto text = std::to_string(class_info.RegSizeInBits);
+            auto text_width = subscript_font.MeasureText(text);
+            canvas.translate(x + kRegisterIconWidth / 2 - text_width / 2,
+                             y - 2_mm - kSubscriptFontSize / 2);
+            subscript_font.DrawText(canvas, text, text_paint);
+          }
+          canvas.restore();
           x += kRegisterIconWidth;
           break;
         case Token::FixedFlag:

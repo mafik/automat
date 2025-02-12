@@ -158,6 +158,14 @@ static std::string AssemblyText(const llvm::MCInst& mc_inst) {
   return str;
 }
 
+static std::string MachineText(const llvm::MCInst& mc_inst) {
+  auto& llvm_asm = LLVM_Assembler::Get();
+  SmallVector<char, 128> buffer;
+  SmallVector<MCFixup, 1> fixups;
+  llvm_asm.mc_code_emitter->encodeInstruction(mc_inst, buffer, fixups, *llvm_asm.mc_subtarget_info);
+  return BytesToHex(buffer);
+}
+
 constexpr float kFineFontSize = 2_mm;
 
 static gui::Font& FineFont() {
@@ -1916,11 +1924,17 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
     return;
   }
   // Assembly text
-  auto text = AssemblyText(inst);
+  auto assembly_text = AssemblyText(inst);
   auto& fine_font = FineFont();
-  auto assembly_text_width = fine_font.MeasureText(text);
+  auto assembly_text_width = fine_font.MeasureText(assembly_text);
   Vec2 assembly_text_offset = Vec2{Widget::kBorderMargin - kFineFontSize / 2,
                                    kHeight - kFineFontSize / 2 - Widget::kBorderMargin};
+
+  auto machine_text = MachineText(inst);
+  auto machine_text_width = fine_font.MeasureText(machine_text);
+  Vec2 machine_text_offset =
+      Vec2{Widget::kWidth - Widget::kBorderMargin + kFineFontSize / 2 - machine_text_width,
+           -kFineFontSize / 2 + Widget::kBorderMargin};
 
   {
     canvas.save();
@@ -1928,16 +1942,25 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
     text_paint.setColor("#000000"_color);
     text_paint.setAntiAlias(true);
     canvas.translate(assembly_text_offset.x, assembly_text_offset.y);
-    fine_font.DrawText(canvas, text, text_paint);
+    fine_font.DrawText(canvas, assembly_text, text_paint);
+    canvas.restore();
+
+    canvas.save();
+    canvas.translate(machine_text_offset.x, machine_text_offset.y);
+    fine_font.DrawText(canvas, machine_text, text_paint);
     canvas.restore();
   }
 
   {  // Border
     canvas.save();
-    Rect text_rect = Rect::MakeCornerZero(assembly_text_width, kFineFontSize)
+    Rect asm_rect = Rect::MakeCornerZero(assembly_text_width, kFineFontSize)
+                        .Outset(kFineFontSize / 2)
+                        .MoveBy(assembly_text_offset);
+    canvas.clipRect(asm_rect, SkClipOp::kDifference);
+    Rect code_rect = Rect::MakeCornerZero(machine_text_width, kFineFontSize)
                          .Outset(kFineFontSize / 2)
-                         .MoveBy(assembly_text_offset);
-    canvas.clipRect(text_rect, SkClipOp::kDifference);
+                         .MoveBy(machine_text_offset);
+    canvas.clipRect(code_rect, SkClipOp::kDifference);
     SkPaint border_paint;
     border_paint.setColor("#000000"_color);
     border_paint.setAntiAlias(true);

@@ -1355,7 +1355,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SHL16r1:
     case X86::SHL8r1: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Multiply ±"},
+          {.tag = Token::String, .str = "Multiply"},
           {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "by 2"},
       };
@@ -1368,8 +1368,8 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SHL16ri:
     case X86::SHL8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Multiply ±"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2,"},      {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "Multiply"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2,"},    {.tag = Token::ImmediateOperand, .imm = 2},
           {.tag = Token::String, .str = "times"},
       };
       return tokens;
@@ -1381,7 +1381,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SHL16rCL:
     case X86::SHL8rCL: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Multiply ±"},
+          {.tag = Token::String, .str = "Multiply"},
           {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "by 2,"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
@@ -1396,7 +1396,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SHR16r1:
     case X86::SHR8r1: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Divide ±"},
+          {.tag = Token::String, .str = "Divide"},
           {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "by 2"},
       };
@@ -1427,6 +1427,300 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::String, .str = "by 2,"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
           {.tag = Token::String, .str = "times"},
+      };
+      return tokens;
+    }
+
+    case X86::SAR64r1:
+    case X86::SAR32r1:
+    case X86::SAR16r1:
+    case X86::SAR8r1: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Divide ±"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2"},
+      };
+      return tokens;
+    }
+
+    case X86::SAR64rCL:
+    case X86::SAR32rCL:
+    case X86::SAR16rCL:
+    case X86::SAR8rCL: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Divide ±"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2,"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
+          {.tag = Token::String, .str = "times"},
+      };
+      return tokens;
+    }
+
+    case X86::SAR64ri:
+    case X86::SAR32ri:
+    case X86::SAR16ri:
+    case X86::SAR8ri: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Divide ±"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2,"},    {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "times"},
+      };
+      return tokens;
+    }
+
+    case X86::NEG8r:
+    case X86::NEG64r:
+    case X86::NEG32r:
+    case X86::NEG16r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to -"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+
+    case X86::IDIV8r:
+    case X86::DIV8r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "÷"},   {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AH},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "mod"}, {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::IDIV16r:
+    case X86::DIV16r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "÷"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "mod"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::IDIV32r:
+    case X86::DIV32r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "÷"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "mod"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::IDIV64r:
+    case X86::DIV64r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "÷"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "mod"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+
+    case X86::MUL8r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "×"},   {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::MUL16r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::MUL32r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::MUL64r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+
+    case X86::IMUL8r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "×"},   {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::IMUL16r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::IMUL32r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::IMUL64r: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+
+    case X86::IMUL64rr:
+    case X86::IMUL32rr:
+    case X86::IMUL16rr: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "×"},   {.tag = Token::RegisterOperand, .reg = 2},
+      };
+      return tokens;
+    }
+
+    case X86::IMUL64rri32:
+    case X86::IMUL64rri8:
+    case X86::IMUL32rri:
+    case X86::IMUL32rri8:
+    case X86::IMUL16rri:
+    case X86::IMUL16rri8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "×"},   {.tag = Token::ImmediateOperand, .imm = 2},
+      };
+      return tokens;
+    }
+
+    case X86::CQO: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
+          {.tag = Token::String, .str = "to sign of"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+      };
+      return tokens;
+    }
+    case X86::CDQ: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
+          {.tag = Token::String, .str = "to sign of"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+      };
+      return tokens;
+    }
+    case X86::CWD: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
+          {.tag = Token::String, .str = "to sign of"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+      };
+      return tokens;
+    }
+    case X86::CDQE: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "to (signed)"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+      };
+      return tokens;
+    }
+    case X86::CWDE: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to (signed)"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+      };
+      return tokens;
+    }
+    case X86::CBW: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to (signed)"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
       };
       return tokens;
     }

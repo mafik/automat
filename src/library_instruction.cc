@@ -1101,7 +1101,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::XCHG32rr:
     case X86::XCHG64rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Exchange"},
+          {.tag = Token::String, .str = "Swap"},
           {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "with"},
           {.tag = Token::RegisterOperand, .reg = 1},
@@ -1115,7 +1115,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::XCHG32ar:
     case X86::XCHG16ar: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Exchange"},
+          {.tag = Token::String, .str = "Swap"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "with"},
           {.tag = Token::RegisterOperand, .reg = 0},
@@ -1123,14 +1123,59 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
-    // Implement conditional move opcodes.
     case X86::CMOV64rr:
     case X86::CMOV32rr:
     case X86::CMOV16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "If"},       {.tag = Token::ConditionCode, .cond_code = 2},
+          {.tag = Token::String, .str = "If"},       {.tag = Token::ConditionCode, .cond_code = 3},
           {.tag = Token::String, .str = "then set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},       {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "to"},       {.tag = Token::RegisterOperand, .reg = 2},
+      };
+      return tokens;
+    }
+
+    case X86::CMP64i32:
+    case X86::CMP32i32:
+    case X86::CMP16i16:
+    case X86::CMP8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Compare"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "with"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+
+    case X86::CMP64ri32:
+    case X86::CMP64ri8:
+    case X86::CMP32ri8:
+    case X86::CMP32ri:
+    case X86::CMP16ri8:
+    case X86::CMP16ri:
+    case X86::CMP8ri: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Compare"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "with"},
+          {.tag = Token::ImmediateOperand, .imm = 1},
+      };
+      return tokens;
+    }
+
+    case X86::CMP64rr:
+    case X86::CMP64rr_REV:
+    case X86::CMP32rr:
+    case X86::CMP32rr_REV:
+    case X86::CMP16rr:
+    case X86::CMP16rr_REV:
+    case X86::CMP8rr:
+    case X86::CMP8rr_REV: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Compare"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "with"},
+          {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
     }
@@ -1192,12 +1237,85 @@ void DrawFlag(SkCanvas& canvas, Flag flag) {
 constexpr float kConditionCodeTokenWidth = 8_mm;
 constexpr float kConditionCodeTokenHeight = 8_mm;
 
-constexpr Rect kConditionCodeRect = Rect::Make(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
+constexpr Rect kConditionCodeRect =
+    Rect::Make<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
 
 void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
   SkPaint bg_paint;
   bg_paint.setColor("#2e542a"_color);
   canvas.drawRoundRect(kConditionCodeRect.sk, 2_mm, 4_mm, bg_paint);
+  SkPaint outline_paint;
+  outline_paint.setColor("#000000"_color);
+  outline_paint.setStyle(SkPaint::kStroke_Style);
+  outline_paint.setStrokeWidth(0.4_mm);
+  canvas.drawRoundRect(kConditionCodeRect.sk, 2_mm, 4_mm, outline_paint);
+
+  SkPath path;
+  switch (cond_code) {
+    case X86::CondCode::COND_O: {  // overflow
+      break;
+    }
+    case X86::CondCode::COND_NO: {  // no overflow
+      break;
+    }
+    case X86::CondCode::COND_L:  // fallthrough
+    case X86::CondCode::COND_B: {
+      static const SkPath static_path = PathFromSVG("m-10-1 0 2 19 9 1-2-17-8 17-8-1-2z");
+      path = static_path;
+      break;
+    }
+    case X86::CondCode::COND_GE:  // fallthrough
+    case X86::CondCode::COND_AE: {
+      static const SkPath static_path =
+          PathFromSVG("m10-1 0 2-19 9-1-2 17-8-17-8 1-2zm0 4-20 10 1 2 19-9.5z");
+      path = static_path;
+      break;
+    }
+    case X86::CondCode::COND_E: {
+      static const SkPath static_path = PathFromSVG("m-10-2 0-2 20 0 0 2zm0 4 20 0 0 2-20 0z");
+      path = static_path;
+      break;
+    }
+    case X86::CondCode::COND_NE: {
+      static const SkPath static_path =
+          PathFromSVG("m-10-2 0-2 20 0 0 2zm0 4 20 0 0 2-20 0zm14-9.5-7 16-2-1 7-16z");
+      path = static_path;
+      break;
+    }
+    case X86::CondCode::COND_LE:  // fallthrough
+    case X86::CondCode::COND_BE: {
+      static const SkPath static_path =
+          PathFromSVG("m-10-1 0 2 19 9 1-2-17-8 17-8-1-2zm0 4 20 10-1 2-19-9.5z");
+      path = static_path;
+      break;
+    }
+    case X86::CondCode::COND_G:  // fallthrough
+    case X86::CondCode::COND_A: {
+      static const SkPath static_path = PathFromSVG("m10-1 0 2-19 9-1-2 17-8-17-8 1-2z");
+      path = static_path;
+      break;
+    }
+    case X86::CondCode::COND_S: {  // sign / negative
+      break;
+    }
+    case X86::CondCode::COND_NS: {  // not sign / positive
+      break;
+    }
+    case X86::CondCode::COND_P: {  // even number of bits in the lowest byte
+      break;
+    }
+    case X86::CondCode::COND_NP: {  // odd number of bits in the lowest byte
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  SkPaint symbol_paint;
+  symbol_paint.setColor("#ffffff"_color);
+  canvas.translate(kConditionCodeTokenWidth / 2, kConditionCodeTokenHeight / 2);
+  canvas.drawPath(path, symbol_paint);
+  canvas.translate(-kConditionCodeTokenWidth / 2, -kConditionCodeTokenHeight / 2);
 }
 
 void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
@@ -1404,7 +1522,7 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
           break;
         case Token::ConditionCode:
           canvas.translate(x, y - 2_mm);
-          // DrawConditionCode(canvas, (X86::CondCode)inst.getOperand(token.cond_code).getImm());
+          DrawConditionCode(canvas, (X86::CondCode)inst.getOperand(token.cond_code).getImm());
           canvas.translate(-x, -y + 2_mm);
           x += kConditionCodeTokenWidth;
           break;

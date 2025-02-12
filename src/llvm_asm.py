@@ -55,7 +55,7 @@ def gen_x86_hh(x86_json, x86_hh):
   x = json.load(x86_json.open())
 
   skip_opcodes = set([
-    'JMP_2', # 16-bit jumps don't work in 64-bit mode
+    'JMP_2', 'JCC_2', # 16-bit jumps don't work in 64-bit mode
     'JMP64r_REX', 'JMP64r_NT', 'JMP64r', # memory is not supported yet
     ])
 
@@ -144,7 +144,7 @@ def gen_x86_hh(x86_json, x86_hh):
   Group('Port Input', ['^IN8', '^IN16', '^IN32', '^IN64', '^INSB', '^INSW', '^INSL'])
   Group('Port Output', ['^OUT'])
   Group('Exchange/Add', ['^XADD'])
-  Group('Exchange', ['^XCHG'])
+  Group('Exchange', ['^XCHG'], shortcut='Swap')
   Group('Not', ['^NOT'])
   Group('And', ['^AND'])
   Group('Or', ['^OR'])
@@ -200,7 +200,7 @@ def gen_x86_hh(x86_json, x86_hh):
   Group('Cache Control', ['^CLZERO'])
   Group('Processor History', ['^HRESET', '^INVD', '^INVLPGB64'], ring0=True)
   Group('Compare and Exchange', ['^CMPXCHG'])
-  Group('Compare', ['^CMP'])
+  Group('Compare', [r'^CMP\d'])
   Group('Test', ['^TEST'])
   Group('Set If', ['^SETCC'])
   Group('Fence', ['^LFENCE', '^SFENCE', '^MFENCE', '^SERIALIZE'])

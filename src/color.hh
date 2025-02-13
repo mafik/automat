@@ -57,4 +57,6 @@ inline SkColor Vec3ToSkColor(Vec3 vec) {
 namespace automat::color {
 constexpr SkColor kParrotRed = "#bd1929"_color;
 sk_sp<SkColorFilter> MakeTintFilter(SkColor, float contrast);
+sk_sp<SkColorFilter> DesaturateFilter();
+
 }  // namespace automat::color

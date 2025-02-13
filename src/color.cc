@@ -3,6 +3,7 @@
 #include "color.hh"
 
 #include <include/core/SkColorFilter.h>
+#include <include/effects/SkColorMatrix.h>
 
 #include <algorithm>
 #include <limits>
@@ -272,6 +273,15 @@ sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
     b[i] = SkColorGetB(adjusted);
   }
   return SkColorFilters::TableARGB(a, r, g, b);
+}
+
+sk_sp<SkColorFilter> DesaturateFilter() {
+  static sk_sp<SkColorFilter> filter = []() {
+    SkColorMatrix matrix = SkColorMatrix();
+    matrix.setSaturation(0);
+    return SkColorFilters::Matrix(matrix);
+  }();
+  return filter;
 }
 
 }  // namespace automat::color

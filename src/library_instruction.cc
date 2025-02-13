@@ -1757,10 +1757,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RDSEED32r:
     case X86::RDSEED16r: {
       constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Securely"},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "Randomize"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::BreakLine},
-          {.tag = Token::String, .str = "(slow!)"},
       };
       return tokens;
     }
@@ -2459,48 +2459,60 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
     constexpr float kRegisterIconScale = kRegisterTokenWidth / kRegisterIconWidth;
     constexpr float kImmediateTokenWidth = 10_mm;
     constexpr float kFixedFlagWidth = 6_mm;
+    constexpr float kMinTextScale = 0.9;
+    constexpr float kMaxTextScale = 1.1;
 
     // Measure the lines
-    float token_width[tokens.size()];
-    SmallVector<float, 6> line_widths;
-    line_widths.emplace_back(0);
+    float token_width_min[tokens.size()];
+    float token_width_max[tokens.size()];
+    float token_width_base[tokens.size()];
+    SmallVector<float, 6> line_widths_min;
+    SmallVector<float, 6> line_widths_max;
+    line_widths_min.emplace_back(0);
+    line_widths_max.emplace_back(0);
     for (int token_i = 0; token_i < tokens.size(); ++token_i) {
       auto& token = tokens[token_i];
       if (token.tag == Token::BreakLine) {
-        line_widths.emplace_back(0);
+        line_widths_min.emplace_back(0);
+        line_widths_max.emplace_back(0);
         continue;
       }
       switch (token.tag) {
-        case Token::String:
-          token_width[token_i] = heavy_font.MeasureText(token.str);
-          line_widths.back() += token_width[token_i];
+        case Token::String: {
+          token_width_base[token_i] = heavy_font.MeasureText(token.str);
           break;
+        }
         case Token::RegisterOperand:  // fallthrough
         case Token::FixedRegister:
-          token_width[token_i] = kRegisterTokenWidth;
-          line_widths.back() += token_width[token_i];
+          token_width_base[token_i] = kRegisterTokenWidth;
           break;
         case Token::ImmediateOperand:
-          token_width[token_i] = kImmediateTokenWidth;
-          line_widths.back() += token_width[token_i];
+          token_width_base[token_i] = kImmediateTokenWidth;
           break;
         case Token::FixedFlag:
-          token_width[token_i] = kFixedFlagWidth;
-          line_widths.back() += token_width[token_i];
+          token_width_base[token_i] = kFixedFlagWidth;
           break;
         case Token::ConditionCode:  // fallthrough
         case Token::FixedCondition:
-          token_width[token_i] = kConditionCodeTokenWidth;
-          line_widths.back() += token_width[token_i];
+          token_width_base[token_i] = kConditionCodeTokenWidth;
           break;
         default:
           break;
       }
+      if (token.tag == Token::String) {
+        token_width_min[token_i] = token_width_base[token_i] * kMinTextScale;
+        token_width_max[token_i] = token_width_base[token_i] * kMaxTextScale;
+      } else {
+        token_width_min[token_i] = token_width_max[token_i] = token_width_base[token_i];
+      }
+      line_widths_min.back() += token_width_min[token_i];
+      line_widths_max.back() += token_width_max[token_i];
     }
-    int n_lines = line_widths.size();
+    int n_lines = line_widths_min.size();
 
     // Place tokens
     Vec2 token_position[tokens.size()];
+    float string_width_scale[tokens.size()];
     float scale = 1;
     constexpr float x_min = kInstructionRect.left + Widget::kBorderMargin * 2;
     constexpr float x_max = kInstructionRect.right - Widget::kBorderMargin * 2;
@@ -2512,35 +2524,49 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
     constexpr float y_center = (y_max + y_min) / 2;
     constexpr float line_height = 11_mm;
     {
-      float max_line_width = 0;
+      float longest_line_width = 0;
       for (int line = 0; line < n_lines; ++line) {
-        max_line_width = std::max(max_line_width, line_widths[line]);
+        longest_line_width = std::max(longest_line_width, line_widths_min[line]);
       }
       // Figure out maximum scale
       Rect natural_size = {
-          /* left */ x_center - max_line_width / 2,
-          /* bottom */ y_center - line_height * ((int)line_widths.size()) / 2,
-          /* right */ x_center + max_line_width / 2,
-          /* top */ y_center + line_height * ((int)line_widths.size()) / 2,
+          /* left */ x_center - longest_line_width / 2,
+          /* bottom */ y_center - line_height * ((int)line_widths_min.size()) / 2,
+          /* right */ x_center + longest_line_width / 2,
+          /* top */ y_center + line_height * ((int)line_widths_min.size()) / 2,
       };
 
       scale = std::min((y_center - y_min) / (y_center - natural_size.bottom),
                        (y_max - y_center) / (natural_size.top - y_center));
       scale = std::min(scale, x_range / natural_size.Width());
 
+      float line_width_f[n_lines];
+      for (int line = 0; line < n_lines; ++line) {
+        float line_width_min = line_widths_min[line] * scale;
+        float line_width_max = line_widths_max[line] * scale;
+        line_width_f[line] =
+            Saturate((x_range - line_width_min) / (line_width_max - line_width_min));
+      }
+
       int line = 0;
-      float x = x_center - line_widths[line] / 2;
-      float y = y_center - kHeavyFontSize / 2 + line_height * ((int)line_widths.size() - 1) / 2;
+      float x =
+          x_center - lerp(line_widths_min[line], line_widths_max[line], line_width_f[line]) / 2;
+      float y = y_center - kHeavyFontSize / 2 + line_height * (n_lines - 1) / 2;
       for (int token_i = 0; token_i < tokens.size(); ++token_i) {
         auto& token = tokens[token_i];
         if (token.tag == Token::BreakLine) {
           line++;
-          x = x_center - line_widths[line] / 2;
+          x = x_center - lerp(line_widths_min[line], line_widths_max[line], line_width_f[line]) / 2;
           y -= line_height;
           continue;
         }
         token_position[token_i] = Vec2{x, y};
-        x += token_width[token_i];
+        string_width_scale[token_i] = lerp(kMinTextScale, kMaxTextScale, line_width_f[line]);
+        if (token.tag == Token::String) {
+          x += lerp(token_width_min[token_i], token_width_max[token_i], line_width_f[line]);
+        } else {
+          x += token_width_min[token_i];
+        }
       }
     }
 
@@ -2563,6 +2589,7 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
       switch (token.tag) {
         case Token::String: {
           canvas.translate(token_position[token_i].x, token_position[token_i].y);
+          canvas.scale(string_width_scale[token_i], 1);
           heavy_font.DrawText(canvas, token.str, text_paint);
           break;
         }

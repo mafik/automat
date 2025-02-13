@@ -2454,7 +2454,6 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
 
     auto tokens = PrintInstruction(inst);
     auto& heavy_font = HeavyFont();
-    constexpr float kSpaceWidth = kHeavyFontSize / 4;
 
     constexpr float kRegisterTokenWidth = kRegisterIconWidth;
     constexpr float kRegisterIconScale = kRegisterTokenWidth / kRegisterIconWidth;
@@ -2502,14 +2501,33 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
 
     // Place tokens
     Vec2 token_position[tokens.size()];
+    float scale = 1;
+    constexpr float x_min = kInstructionRect.left + Widget::kBorderMargin * 2;
+    constexpr float x_max = kInstructionRect.right - Widget::kBorderMargin * 2;
+    constexpr float x_range = x_max - x_min;
+    constexpr float x_center = (x_max + x_min) / 2;
+    constexpr float y_max = kInstructionRect.top - Widget::kBorderMargin * 2;
+    constexpr float y_min = kInstructionRect.bottom + Widget::kBorderMargin * 2;
+    constexpr float y_range = y_max - y_min;
+    constexpr float y_center = (y_max + y_min) / 2;
+    constexpr float line_height = 11_mm;
     {
-      constexpr float x_min = kInstructionRect.left + Widget::kBorderMargin;
-      constexpr float x_max = kInstructionRect.right - Widget::kBorderMargin;
-      constexpr float x_center = (x_max + x_min) / 2;
-      constexpr float y_max = kInstructionRect.top - Widget::kBorderMargin;
-      constexpr float y_min = kInstructionRect.bottom + Widget::kBorderMargin;
-      constexpr float y_center = (y_max + y_min) / 2;
-      constexpr float line_height = 11_mm;
+      float max_line_width = 0;
+      for (int line = 0; line < n_lines; ++line) {
+        max_line_width = std::max(max_line_width, line_widths[line]);
+      }
+      // Figure out maximum scale
+      Rect natural_size = {
+          /* left */ x_center - max_line_width / 2,
+          /* bottom */ y_center - line_height * ((int)line_widths.size()) / 2,
+          /* right */ x_center + max_line_width / 2,
+          /* top */ y_center + line_height * ((int)line_widths.size()) / 2,
+      };
+
+      scale = std::min((y_center - y_min) / (y_center - natural_size.bottom),
+                       (y_max - y_center) / (natural_size.top - y_center));
+      scale = std::min(scale, x_range / natural_size.Width());
+
       int line = 0;
       float x = x_center - line_widths[line] / 2;
       float y = y_center - kHeavyFontSize / 2 + line_height * ((int)line_widths.size() - 1) / 2;
@@ -2532,14 +2550,20 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
 
     auto& assembler = LLVM_Assembler::Get();
 
+    canvas.translate(x_center, y_center);
+    canvas.scale(scale, scale);
+    canvas.translate(-x_center, -y_center);
+    auto mat = canvas.getLocalToDevice();
+
     for (int token_i = 0; token_i < tokens.size(); ++token_i) {
       auto& token = tokens[token_i];
+      if (token_i) {
+        canvas.setMatrix(mat);
+      }
       switch (token.tag) {
         case Token::String: {
-          auto mat = canvas.getLocalToDevice();
           canvas.translate(token_position[token_i].x, token_position[token_i].y);
           heavy_font.DrawText(canvas, token.str, text_paint);
-          canvas.setMatrix(mat);
           break;
         }
         case Token::ImmediateOperand: {
@@ -2556,11 +2580,9 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
           canvas.drawRoundRect(immediate_rect, 1_mm, 1_mm, immediate_bg_paint);
           canvas.translate(1_mm, 0);
           heavy_font.DrawText(canvas, immediate_str, text_paint);
-          canvas.setMatrix(mat);
           break;
         }
         case Token::FixedRegister: {
-          auto mat = canvas.getLocalToDevice();
           canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           canvas.scale(kRegisterIconScale, kRegisterIconScale);
           for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
@@ -2591,11 +2613,9 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
                              token_position[token_i].y - 2_mm - kSubscriptFontSize / 2);
             subscript_font.DrawText(canvas, text, text_paint);
           }
-          canvas.setMatrix(mat);
           break;
         }
         case Token::RegisterOperand: {
-          auto mat = canvas.getLocalToDevice();
           canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           canvas.scale(kRegisterIconScale, kRegisterIconScale);
           for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
@@ -2617,28 +2637,21 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
                              token_position[token_i].y - 2_mm - kSubscriptFontSize / 2);
             subscript_font.DrawText(canvas, text, text_paint);
           }
-          canvas.setMatrix(mat);
           break;
         }
         case Token::FixedFlag: {
-          auto mat = canvas.getLocalToDevice();
           canvas.translate(token_position[token_i].x + 1_mm, token_position[token_i].y - 2_mm);
           DrawFlag(canvas, token.flag);
-          canvas.setMatrix(mat);
           break;
         }
         case Token::ConditionCode: {
-          auto mat = canvas.getLocalToDevice();
           canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           DrawConditionCode(canvas, (X86::CondCode)inst.getOperand(token.cond_code).getImm());
-          canvas.setMatrix(mat);
           break;
         }
         case Token::FixedCondition: {
-          auto mat = canvas.getLocalToDevice();
           canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           DrawConditionCode(canvas, token.fixed_cond);
-          canvas.setMatrix(mat);
           break;
         }
         default:

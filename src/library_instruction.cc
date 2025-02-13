@@ -187,10 +187,10 @@ static gui::Font& SubscriptFont() {
   return *font;
 }
 
-static const SkRect kInstructionRect =
-    SkRect::MakeWH(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
+static constexpr Rect kInstructionRect =
+    Rect::Make<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
-static const SkRRect kInstructionRRect = SkRRect::MakeRectXY(kInstructionRect, 3_mm, 3_mm);
+static const SkRRect kInstructionRRect = SkRRect::MakeRectXY(kInstructionRect.sk, 3_mm, 3_mm);
 
 static const SkPath kInstructionShape = SkPath::RRect(kInstructionRRect);
 
@@ -203,7 +203,7 @@ PersistentImage paper_texture = PersistentImage::MakeFromAsset(
     PersistentImage::MakeArgs{.tile_x = SkTileMode::kRepeat, .tile_y = SkTileMode::kRepeat});
 
 struct Token {
-  enum Tag {
+  enum Tag : uint8_t {
     String,
     RegisterOperand,
     ImmediateOperand,
@@ -211,6 +211,7 @@ struct Token {
     FixedFlag,
     ConditionCode,
     FixedCondition,
+    BreakLine,
   } tag;
   union {
     const char* str;
@@ -232,10 +233,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
-    case X86::XOR64i32:
-    case X86::XOR32i32:
-    case X86::XOR16i16:
-    case X86::XOR8i8: {
+    case X86::XOR64i32: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
@@ -243,6 +241,33 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "xor"},
           {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::XOR32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "xor"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::XOR16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "xor"}, {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::XOR8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "xor"}, {.tag = Token::ImmediateOperand, .imm = 0},
       };
       return tokens;
     }
@@ -292,9 +317,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ANDN64rr:
     case X86::ANDN32rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"},   {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to ¬("}, {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "and"},   {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},  {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "¬("},  {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "and"}, {.tag = Token::RegisterOperand, .reg = 2},
           {.tag = Token::String, .str = ")"},
       };
       return tokens;
@@ -308,20 +334,55 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::AND8rr:
     case X86::AND8rr_REV: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "and"}, {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "Set"},      {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},       {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1}, {.tag = Token::String, .str = "and"},
+          {.tag = Token::RegisterOperand, .reg = 2},
       };
       return tokens;
     }
-    case X86::AND8i8:
-    case X86::AND16i16:
-    case X86::AND32i32:
+    case X86::AND8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::AND16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::AND32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
     case X86::AND64i32: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "and"},
           {.tag = Token::ImmediateOperand, .imm = 0},
@@ -337,21 +398,56 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::AND32ri:
     case X86::AND16ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "and"}, {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "Set"},       {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},        {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},  {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 2},
       };
       return tokens;
     }
 
-    case X86::OR8i8:
-    case X86::OR32i32:
-    case X86::OR16i16:
+    case X86::OR8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "or"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::OR16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "or"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::OR32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "or"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
     case X86::OR64i32: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "or"},
           {.tag = Token::ImmediateOperand, .imm = 0},
@@ -367,9 +463,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::OR16ri8:
     case X86::OR8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "or"},  {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "Set"},       {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},        {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},  {.tag = Token::String, .str = "or"},
+          {.tag = Token::ImmediateOperand, .imm = 2},
       };
       return tokens;
     }
@@ -383,9 +480,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::OR8rr:
     case X86::OR8rr_REV: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "or"},  {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "Set"},      {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},       {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1}, {.tag = Token::String, .str = "or"},
+          {.tag = Token::RegisterOperand, .reg = 2},
       };
       return tokens;
     }
@@ -412,15 +510,55 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       return tokens;
     }
 
-    case X86::ADC64i32:
-    case X86::ADC32i32:
-    case X86::ADC16i16:
-    case X86::ADC8i8: {
+    case X86::ADC64i32: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+    case X86::ADC32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+    case X86::ADC16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+    case X86::ADC8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
           {.tag = Token::String, .str = "+"},
           {.tag = Token::ImmediateOperand, .imm = 0},
           {.tag = Token::String, .str = "+"},
@@ -437,10 +575,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ADC16ri8:
     case X86::ADC8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "Set"},        {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},         {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},   {.tag = Token::String, .str = "+"},
+          {.tag = Token::ImmediateOperand, .imm = 2},  {.tag = Token::String, .str = "+"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
       };
       return tokens;
     }
@@ -454,23 +593,58 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ADC8rr:
     case X86::ADC8rr_REV: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::RegisterOperand, .reg = 2},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "Set"},        {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},         {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},   {.tag = Token::String, .str = "+"},
+          {.tag = Token::RegisterOperand, .reg = 2},   {.tag = Token::String, .str = "+"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
       };
       return tokens;
     }
 
-    case X86::ADD64i32:
-    case X86::ADD32i32:
-    case X86::ADD16i16:
-    case X86::ADD8i8: {
+    case X86::ADD64i32: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::ADD32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::ADD16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "+"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::ADD8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
           {.tag = Token::String, .str = "+"},
           {.tag = Token::ImmediateOperand, .imm = 0},
       };
@@ -485,9 +659,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ADD16ri8:
     case X86::ADD8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "Set"},       {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},        {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},  {.tag = Token::String, .str = "+"},
+          {.tag = Token::ImmediateOperand, .imm = 2},
       };
       return tokens;
     }
@@ -501,9 +676,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ADD8rr:
     case X86::ADD8rr_REV: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "Set"},      {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},       {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1}, {.tag = Token::String, .str = "+"},
+          {.tag = Token::RegisterOperand, .reg = 2},
       };
       return tokens;
     }
@@ -511,10 +687,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ADCX32rr:
     case X86::ADCX64rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::RegisterOperand, .reg = 2},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "Set"},        {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},         {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},   {.tag = Token::String, .str = "+"},
+          {.tag = Token::RegisterOperand, .reg = 2},   {.tag = Token::String, .str = "+"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
       };
       return tokens;
     }
@@ -522,23 +699,64 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ADOX32rr:
     case X86::ADOX64rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::RegisterOperand, .reg = 2},
-          {.tag = Token::String, .str = "+"},   {.tag = Token::FixedFlag, .flag = Flag::OF},
+          {.tag = Token::String, .str = "Set"},        {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},         {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},   {.tag = Token::String, .str = "+"},
+          {.tag = Token::RegisterOperand, .reg = 2},   {.tag = Token::String, .str = "+"},
+          {.tag = Token::FixedFlag, .flag = Flag::OF},
       };
       return tokens;
     }
 
-    case X86::SBB32i32:
-    case X86::SBB64i32:
-    case X86::SBB16i16:
-    case X86::SBB8i8: {
+    case X86::SBB64i32: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+    case X86::SBB32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+    case X86::SBB16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+      };
+      return tokens;
+    }
+    case X86::SBB8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
           {.tag = Token::String, .str = "-"},
           {.tag = Token::ImmediateOperand, .imm = 0},
           {.tag = Token::String, .str = "-"},
@@ -555,10 +773,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SBB16ri8:
     case X86::SBB8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "-"},   {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = "-"},   {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "Set"},        {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},         {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},   {.tag = Token::String, .str = "-"},
+          {.tag = Token::ImmediateOperand, .imm = 2},  {.tag = Token::String, .str = "-"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
       };
       return tokens;
     }
@@ -572,23 +791,58 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SBB8rr:
     case X86::SBB8rr_REV: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "-"},   {.tag = Token::RegisterOperand, .reg = 2},
-          {.tag = Token::String, .str = "-"},   {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "Set"},        {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},         {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},   {.tag = Token::String, .str = "-"},
+          {.tag = Token::RegisterOperand, .reg = 2},   {.tag = Token::String, .str = "-"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
       };
       return tokens;
     }
 
-    case X86::SUB64i32:
-    case X86::SUB32i32:
-    case X86::SUB16i16:
-    case X86::SUB8i8: {
+    case X86::SUB64i32: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::SUB32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::SUB16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "-"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::SUB8i8: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
           {.tag = Token::String, .str = "-"},
           {.tag = Token::ImmediateOperand, .imm = 0},
       };
@@ -603,9 +857,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SUB16ri8:
     case X86::SUB8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "-"},   {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "Set"},       {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},        {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},  {.tag = Token::String, .str = "-"},
+          {.tag = Token::ImmediateOperand, .imm = 2},
       };
       return tokens;
     }
@@ -619,9 +874,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SUB8rr:
     case X86::SUB8rr_REV: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "-"},   {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "Set"},      {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},       {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1}, {.tag = Token::String, .str = "-"},
+          {.tag = Token::RegisterOperand, .reg = 2},
       };
       return tokens;
     }
@@ -630,10 +886,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RCL32r1:
     case X86::RCL16r1:
     case X86::RCL8r1: {
-      constexpr static Token tokens[] = {{.tag = Token::String, .str = "Rotate"},
-                                         {.tag = Token::FixedFlag, .flag = Flag::CF},
-                                         {.tag = Token::RegisterOperand, .reg = 0},
-                                         {.tag = Token::String, .str = "once left"}};
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "left"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "once"},
+      };
       return tokens;
     }
 
@@ -641,12 +901,15 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RCL32rCL:
     case X86::RCL16rCL:
     case X86::RCL8rCL: {
-      constexpr static Token tokens[] = {{.tag = Token::String, .str = "Rotate"},
-                                         {.tag = Token::FixedFlag, .flag = Flag::CF},
-                                         {.tag = Token::RegisterOperand, .reg = 0},
-                                         {.tag = Token::String, .str = "left"},
-                                         {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
-                                         {.tag = Token::String, .str = "times"}};
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "left"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
+          {.tag = Token::String, .str = "times"},
+      };
       return tokens;
     }
 
@@ -655,9 +918,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RCL16ri:
     case X86::RCL8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"},    {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::RegisterOperand, .reg = 0},  {.tag = Token::String, .str = "left"},
-          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = "times"}};
+          {.tag = Token::String, .str = "Rotate"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "left"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "times"},
+      };
       return tokens;
     }
 
@@ -665,10 +933,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RCR32r1:
     case X86::RCR16r1:
     case X86::RCR8r1: {
-      constexpr static Token tokens[] = {{.tag = Token::String, .str = "Rotate"},
-                                         {.tag = Token::FixedFlag, .flag = Flag::CF},
-                                         {.tag = Token::RegisterOperand, .reg = 0},
-                                         {.tag = Token::String, .str = "once right"}};
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "right"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "once"},
+      };
       return tokens;
     }
 
@@ -676,12 +948,15 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RCR32rCL:
     case X86::RCR16rCL:
     case X86::RCR8rCL: {
-      constexpr static Token tokens[] = {{.tag = Token::String, .str = "Rotate"},
-                                         {.tag = Token::FixedFlag, .flag = Flag::CF},
-                                         {.tag = Token::RegisterOperand, .reg = 0},
-                                         {.tag = Token::String, .str = "right"},
-                                         {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
-                                         {.tag = Token::String, .str = "times"}};
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Rotate"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "right"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
+          {.tag = Token::String, .str = "times"},
+      };
       return tokens;
     }
 
@@ -690,9 +965,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RCR64ri:
     case X86::RCR8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"},    {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::RegisterOperand, .reg = 0},  {.tag = Token::String, .str = "right"},
-          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = "times"}};
+          {.tag = Token::String, .str = "Rotate"},
+          {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "right"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "times"},
+      };
       return tokens;
     }
 
@@ -701,9 +981,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ROL32r1:
     case X86::ROL16r1: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "once left"},
+          {.tag = Token::String, .str = "Rotate"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "left"},   {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "once"},
       };
       return tokens;
     }
@@ -713,9 +993,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ROL16ri:
     case X86::ROL8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "left"},   {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = "times"},
+          {.tag = Token::String, .str = "Rotate"},    {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "left"},      {.tag = Token::BreakLine},
+          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = "times"},
       };
       return tokens;
     }
@@ -728,6 +1008,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::String, .str = "Rotate"},
           {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "left"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
           {.tag = Token::String, .str = "times"},
       };
@@ -739,9 +1020,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::ROR64r1:
     case X86::ROR8r1: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "once right"},
+          {.tag = Token::String, .str = "Rotate"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "right"},  {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "once"},
       };
       return tokens;
     }
@@ -754,6 +1035,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::String, .str = "Rotate"},
           {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "right"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
           {.tag = Token::String, .str = "times"},
       };
@@ -767,9 +1049,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RORX32ri:
     case X86::RORX64ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "right"},  {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = "times"},
+          {.tag = Token::String, .str = "Rotate"},    {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "right"},     {.tag = Token::BreakLine},
+          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = "times"},
       };
       return tokens;
     }
@@ -780,7 +1062,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to # of trailing zeroes in "},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "# of trailing zeroes in"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -792,7 +1076,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to # of flags in "},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "# of flags in"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -804,7 +1090,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to # of leading zeroes in "},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "# of leading zeroes in"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -814,10 +1102,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::BTC32rr:
     case X86::BTC16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Store bit"},   {.tag = Token::RegisterOperand, .reg = 2},
-          {.tag = Token::String, .str = "of"},          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "in"},          {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::String, .str = "and flip it"},
+          {.tag = Token::String, .str = "Flip bit"},
+          {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "of"},
+          {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
     }
@@ -826,10 +1114,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::BTC32ri8:
     case X86::BTC16ri8: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Store bit"},   {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = "of"},          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "in"},          {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::String, .str = "and flip it"},
+          {.tag = Token::String, .str = "Flip bit"},
+          {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "of"},
+          {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
     }
@@ -838,13 +1126,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::BTR32rr:
     case X86::BTR16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Store bit"},
+          {.tag = Token::String, .str = "Lower bit"},
           {.tag = Token::RegisterOperand, .reg = 2},
           {.tag = Token::String, .str = "of"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "in"},
-          {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::String, .str = "and lower it"},
       };
       return tokens;
     }
@@ -853,13 +1138,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::BTS32rr:
     case X86::BTS16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Store bit"},
+          {.tag = Token::String, .str = "Raise bit"},
           {.tag = Token::RegisterOperand, .reg = 2},
           {.tag = Token::String, .str = "of"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "in"},
-          {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::String, .str = "and raise it"},
       };
       return tokens;
     }
@@ -868,9 +1150,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::BT32rr:
     case X86::BT16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Store bit"}, {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "of"},        {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "in"},        {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "Test bit"},
+          {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::String, .str = "of"},
+          {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
     }
@@ -879,9 +1162,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::BT32ri8:
     case X86::BT16ri8: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Store bit"}, {.tag = Token::ImmediateOperand, .imm = 1},
-          {.tag = Token::String, .str = "of"},        {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "in"},        {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::String, .str = "Test bit"},
+          {.tag = Token::ImmediateOperand, .imm = 1},
+          {.tag = Token::String, .str = "of"},
+          {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
     }
@@ -890,13 +1174,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::BTR32ri8:
     case X86::BTR64ri8: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Store bit"},
+          {.tag = Token::String, .str = "Lower bit"},
           {.tag = Token::ImmediateOperand, .imm = 2},
           {.tag = Token::String, .str = "of"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "in"},
-          {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::String, .str = "and lower it"},
       };
       return tokens;
     }
@@ -905,13 +1186,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::BTS32ri8:
     case X86::BTS64ri8: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Store bit"},
+          {.tag = Token::String, .str = "Raise bit"},
           {.tag = Token::ImmediateOperand, .imm = 2},
           {.tag = Token::String, .str = "of"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "in"},
-          {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::String, .str = "and raise it"},
       };
       return tokens;
     }
@@ -921,8 +1199,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to bitfield extract of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "bitfield extract of"},
           {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "using length & start from"},
           {.tag = Token::RegisterOperand, .reg = 2},
       };
@@ -937,7 +1218,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to (lowest raised bit) of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "(lowest raised bit) of"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -949,7 +1232,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to (all bits up to lowest raised bit) of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "(all bits up to lowest raised bit)"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "of"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -961,7 +1248,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set "},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to (lowering lowest set bit) of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "(lowering lowest set bit) of"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -973,7 +1262,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to position of lowest raised bit in"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "position of lowest raised bit"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "of"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -985,7 +1278,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to position of highest raised bit in"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "position of highest raised bit"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "of"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -1005,8 +1302,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to bits of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "bits of"},
           {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "below position"},
           {.tag = Token::RegisterOperand, .reg = 2},
       };
@@ -1018,8 +1318,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to parallel deposit of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "parallel deposit of"},
           {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "using mask"},
           {.tag = Token::RegisterOperand, .reg = 2},
       };
@@ -1031,8 +1334,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to parallel extract of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "parallel extract of"},
           {.tag = Token::RegisterOperand, .reg = 1},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "using mask"},
           {.tag = Token::RegisterOperand, .reg = 2},
       };
@@ -1128,13 +1434,29 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
 
       // --- Exchange AX with some other register ---
 
-    case X86::XCHG64ar:
-    case X86::XCHG32ar:
-    case X86::XCHG16ar: {
+    case X86::XCHG64ar: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Swap"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
-          {.tag = Token::String, .str = "with"},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::XCHG32ar: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Swap"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+      };
+      return tokens;
+    }
+    case X86::XCHG16ar: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Swap"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "and"},
           {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
@@ -1144,20 +1466,49 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::CMOV32rr:
     case X86::CMOV16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "If"},       {.tag = Token::ConditionCode, .cond_code = 3},
-          {.tag = Token::String, .str = "then set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},       {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "If"},   {.tag = Token::ConditionCode, .cond_code = 3},
+          {.tag = Token::String, .str = "then"}, {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Set"},  {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},   {.tag = Token::RegisterOperand, .reg = 2},
       };
       return tokens;
     }
 
-    case X86::CMP64i32:
-    case X86::CMP32i32:
-    case X86::CMP16i16:
+    case X86::CMP64i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Compare"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "with"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::CMP32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Compare"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "with"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::CMP16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Compare"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "with"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
     case X86::CMP8i8: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Compare"},
-          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
           {.tag = Token::String, .str = "with"},
           {.tag = Token::ImmediateOperand, .imm = 0},
       };
@@ -1172,9 +1523,8 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::CMP16ri:
     case X86::CMP8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Compare"},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "with"},
+          {.tag = Token::String, .str = "Compare"},   {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 0},  {.tag = Token::String, .str = "with"},
           {.tag = Token::ImmediateOperand, .imm = 1},
       };
       return tokens;
@@ -1189,22 +1539,49 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::CMP8rr:
     case X86::CMP8rr_REV: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Compare"},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "with"},
+          {.tag = Token::String, .str = "Compare"},  {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 0}, {.tag = Token::String, .str = "with"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
     }
 
     // --- TEST Instructions ---
-    case X86::TEST64i32:
-    case X86::TEST32i32:
-    case X86::TEST16i16:
+    case X86::TEST64i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Test"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::TEST32i32: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Test"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
+    case X86::TEST16i16: {
+      constexpr static Token tokens[] = {
+          {.tag = Token::String, .str = "Test"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "and"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
+      };
+      return tokens;
+    }
     case X86::TEST8i8: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Test"},
-          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
           {.tag = Token::String, .str = "and"},
           {.tag = Token::ImmediateOperand, .imm = 0},
       };
@@ -1216,9 +1593,8 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::TEST16ri:
     case X86::TEST8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Test"},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "and"},
+          {.tag = Token::String, .str = "Test"},      {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 0},  {.tag = Token::String, .str = "and"},
           {.tag = Token::ImmediateOperand, .imm = 1},
       };
       return tokens;
@@ -1230,9 +1606,8 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::TEST16rr:
     case X86::TEST8rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Test"},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "and"},
+          {.tag = Token::String, .str = "Test"},     {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 0}, {.tag = Token::String, .str = "and"},
           {.tag = Token::RegisterOperand, .reg = 1},
       };
       return tokens;
@@ -1242,11 +1617,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
           {.tag = Token::String, .str = "-1"},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "If"},
           {.tag = Token::FixedCondition, .fixed_cond = X86::CondCode::COND_NE},
           {.tag = Token::String, .str = "and"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
-          {.tag = Token::String, .str = "=0 then jump"},
+          {.tag = Token::String, .str = "=0"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Then jump"},
       };
       return tokens;
     }
@@ -1255,11 +1633,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
           {.tag = Token::String, .str = "-1"},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "If"},
           {.tag = Token::FixedCondition, .fixed_cond = X86::CondCode::COND_E},
           {.tag = Token::String, .str = "and"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
-          {.tag = Token::String, .str = "=0 then jump"},
+          {.tag = Token::String, .str = "=0"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Then jump"},
       };
       return tokens;
     }
@@ -1268,9 +1649,12 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
           {.tag = Token::String, .str = "-1"},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "If"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
-          {.tag = Token::String, .str = "=0 then jump"},
+          {.tag = Token::String, .str = "=0"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Then jump"},
       };
       return tokens;
     }
@@ -1279,7 +1663,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "If"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
-          {.tag = Token::String, .str = "=0 then jump"},
+          {.tag = Token::String, .str = "=0"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Then jump"},
       };
       return tokens;
     }
@@ -1288,7 +1674,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "If"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::ECX},
-          {.tag = Token::String, .str = "=0 then jump"},
+          {.tag = Token::String, .str = "=0"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Then jump"},
       };
       return tokens;
     }
@@ -1297,14 +1685,16 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::JCC_4: {
       constexpr static Token tokens[] = {{.tag = Token::String, .str = "If"},
                                          {.tag = Token::ConditionCode, .cond_code = 1},
-                                         {.tag = Token::String, .str = "then jump"}};
+                                         {.tag = Token::BreakLine},
+                                         {.tag = Token::String, .str = "Then jump"}};
       return tokens;
     }
 
     case X86::SETCCr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "If"},       {.tag = Token::ConditionCode, .cond_code = 1},
-          {.tag = Token::String, .str = "then set"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "If"},   {.tag = Token::ConditionCode, .cond_code = 1},
+          {.tag = Token::String, .str = "then"}, {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Set"},  {.tag = Token::RegisterOperand, .reg = 0},
           {.tag = Token::String, .str = "to 1"},
       };
       return tokens;
@@ -1337,9 +1727,11 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::RDTSC: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
-          {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
-          {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
-          {.tag = Token::String, .str = "to current time"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Current time"},
       };
       return tokens;
     }
@@ -1350,6 +1742,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Randomize"},
           {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "(slow!)"},
       };
       return tokens;
@@ -1383,9 +1776,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SHL16ri:
     case X86::SHL8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Multiply"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2,"},    {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = "times"},
+          {.tag = Token::String, .str = "Multiply"},  {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2"},      {.tag = Token::BreakLine},
+          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = "times"},
       };
       return tokens;
     }
@@ -1398,7 +1791,8 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Multiply"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2,"},
+          {.tag = Token::String, .str = "by 2"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
           {.tag = Token::String, .str = "times"},
       };
@@ -1424,9 +1818,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SHR16ri:
     case X86::SHR8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Divide"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2,"},  {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = "times"},
+          {.tag = Token::String, .str = "Divide"},    {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2"},      {.tag = Token::BreakLine},
+          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = "times"},
       };
       return tokens;
     }
@@ -1439,7 +1833,8 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Divide"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2,"},
+          {.tag = Token::String, .str = "by 2"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
           {.tag = Token::String, .str = "times"},
       };
@@ -1465,7 +1860,8 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Divide ±"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2,"},
+          {.tag = Token::String, .str = "by 2"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::CL},
           {.tag = Token::String, .str = "times"},
       };
@@ -1477,9 +1873,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::SAR16ri:
     case X86::SAR8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Divide ±"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2,"},    {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = "times"},
+          {.tag = Token::String, .str = "Divide ±"},  {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2"},      {.tag = Token::BreakLine},
+          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = "times"},
       };
       return tokens;
     }
@@ -1500,12 +1896,19 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::IDIV8r:
     case X86::DIV8r: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
-          {.tag = Token::String, .str = "÷"},   {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AH},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
-          {.tag = Token::String, .str = "mod"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "÷"},
+          {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AH},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "mod"},
+          {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
     }
@@ -1513,13 +1916,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::DIV16r: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
           {.tag = Token::String, .str = "to"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
           {.tag = Token::String, .str = "÷"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
           {.tag = Token::String, .str = "to"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
@@ -1533,13 +1937,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::DIV32r: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
           {.tag = Token::String, .str = "to"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
           {.tag = Token::String, .str = "÷"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
           {.tag = Token::String, .str = "to"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
@@ -1553,13 +1958,14 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::DIV64r: {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "÷"},
           {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
           {.tag = Token::String, .str = "to"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
@@ -1572,9 +1978,13 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
 
     case X86::MUL8r: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
-          {.tag = Token::String, .str = "×"},   {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
     }
@@ -1584,6 +1994,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
           {.tag = Token::String, .str = "×"},
           {.tag = Token::RegisterOperand, .reg = 0},
@@ -1596,6 +2007,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
           {.tag = Token::String, .str = "×"},
           {.tag = Token::RegisterOperand, .reg = 0},
@@ -1608,6 +2020,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "×"},
           {.tag = Token::RegisterOperand, .reg = 0},
@@ -1617,9 +2030,13 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
 
     case X86::IMUL8r: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
-          {.tag = Token::String, .str = "×"},   {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 0},
       };
       return tokens;
     }
@@ -1629,6 +2046,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
           {.tag = Token::String, .str = "×"},
           {.tag = Token::RegisterOperand, .reg = 0},
@@ -1641,6 +2059,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
           {.tag = Token::String, .str = "×"},
           {.tag = Token::RegisterOperand, .reg = 0},
@@ -1653,6 +2072,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "×"},
           {.tag = Token::RegisterOperand, .reg = 0},
@@ -1664,9 +2084,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::IMUL32rr:
     case X86::IMUL16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "×"},   {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "Set"},      {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},       {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1}, {.tag = Token::String, .str = "×"},
+          {.tag = Token::RegisterOperand, .reg = 2},
       };
       return tokens;
     }
@@ -1678,9 +2099,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::IMUL16rri:
     case X86::IMUL16rri8: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "×"},   {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "Set"},       {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},        {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},  {.tag = Token::String, .str = "×"},
+          {.tag = Token::ImmediateOperand, .imm = 2},
       };
       return tokens;
     }
@@ -1689,7 +2111,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RDX},
-          {.tag = Token::String, .str = "to sign of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Sign of"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
       };
       return tokens;
@@ -1698,7 +2122,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EDX},
-          {.tag = Token::String, .str = "to sign of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Sign of"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
       };
       return tokens;
@@ -1707,7 +2133,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::DX},
-          {.tag = Token::String, .str = "to sign of"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Sign of"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
       };
       return tokens;
@@ -1716,7 +2144,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
-          {.tag = Token::String, .str = "to (signed)"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Sign-extended"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
       };
       return tokens;
@@ -1725,7 +2155,9 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
-          {.tag = Token::String, .str = "to (signed)"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Sign-extended"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
       };
       return tokens;
@@ -1734,19 +2166,30 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
       constexpr static Token tokens[] = {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
-          {.tag = Token::String, .str = "to (signed)"},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::String, .str = "Sign-extended"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
       };
       return tokens;
     }
 
     default: {
-      static std::set<unsigned> warned_opcodes;
-      if (warned_opcodes.insert(inst.getOpcode()).second) {
-        LOG << "Unhandled opcode "
-            << LLVM_Assembler::Get().mc_instr_info->getName(inst.getOpcode());
+      static std::mutex unknown_tokens_mutex;
+      static std::map<unsigned, std::vector<Token>> unknown_tokens;
+      std::lock_guard<std::mutex> lock(unknown_tokens_mutex);
+      auto it = unknown_tokens.find(inst.getOpcode());
+      if (it == unknown_tokens.end()) {
+        auto name = LLVM_Assembler::Get().mc_instr_info->getName(inst.getOpcode()).data();
+        it = unknown_tokens
+                 .emplace(inst.getOpcode(),
+                          std::vector<Token>{
+                              Token{.tag = Token::String, .str = name},
+                          })
+                 .first;
+        LOG << "Warning: PrintInstruction() is missing a case for X86::" << name;
       }
-      return {};
+      return it->second;
     }
   }
 }
@@ -1989,6 +2432,9 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
   }
 
   {  // Contents
+
+    // TODO: the layout might be precomputed / cached
+
     auto tokens = PrintInstruction(inst);
     auto& heavy_font = HeavyFont();
     constexpr float kSpaceWidth = kHeavyFontSize / 4;
@@ -1996,57 +2442,98 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
     constexpr float kRegisterTokenWidth = kRegisterIconWidth;
     constexpr float kRegisterIconScale = kRegisterTokenWidth / kRegisterIconWidth;
     constexpr float kImmediateTokenWidth = 10_mm;
-    float total_width = 0;
-    // TODO: this might be cached
-    // Wrap & scale down to fit
-    for (auto& token : tokens) {
+    constexpr float kFixedFlagWidth = 6_mm;
+
+    // Measure the lines
+    float token_width[tokens.size()];
+    SmallVector<float, 6> line_widths;
+    line_widths.emplace_back(0);
+    for (int token_i = 0; token_i < tokens.size(); ++token_i) {
+      auto& token = tokens[token_i];
+      if (token.tag == Token::BreakLine) {
+        line_widths.emplace_back(0);
+        continue;
+      }
       switch (token.tag) {
         case Token::String:
-          total_width += heavy_font.MeasureText(token.str);
+          token_width[token_i] = heavy_font.MeasureText(token.str);
+          line_widths.back() += token_width[token_i];
           break;
         case Token::RegisterOperand:  // fallthrough
         case Token::FixedRegister:
-          total_width += kRegisterTokenWidth;
+          token_width[token_i] = kRegisterTokenWidth;
+          line_widths.back() += token_width[token_i];
           break;
         case Token::ImmediateOperand:
-          total_width += kImmediateTokenWidth;
+          token_width[token_i] = kImmediateTokenWidth;
+          line_widths.back() += token_width[token_i];
           break;
         case Token::FixedFlag:
-          total_width += 6_mm;
+          token_width[token_i] = kFixedFlagWidth;
+          line_widths.back() += token_width[token_i];
           break;
         case Token::ConditionCode:  // fallthrough
         case Token::FixedCondition:
-          total_width += kConditionCodeTokenWidth;
+          token_width[token_i] = kConditionCodeTokenWidth;
+          line_widths.back() += token_width[token_i];
           break;
         default:
           break;
       }
-      total_width += kSpaceWidth;
+      if (token_i < tokens.size() - 1 && tokens[token_i + 1].tag != Token::BreakLine) {
+        line_widths.back() += kSpaceWidth;
+      }
+    }
+    int n_lines = line_widths.size();
+
+    // Place tokens
+    Vec2 token_position[tokens.size()];
+    {
+      constexpr float x_min = kInstructionRect.left + Widget::kBorderMargin;
+      constexpr float x_max = kInstructionRect.right - Widget::kBorderMargin;
+      constexpr float x_center = (x_max + x_min) / 2;
+      constexpr float y_max = kInstructionRect.top - Widget::kBorderMargin;
+      constexpr float y_min = kInstructionRect.bottom + Widget::kBorderMargin;
+      constexpr float y_center = (y_max + y_min) / 2;
+      constexpr float line_height = 10_mm;
+      int line = 0;
+      float x = x_center - line_widths[line] / 2;
+      float y = y_center - kHeavyFontSize / 2 + line_height * ((int)line_widths.size() - 1) / 2;
+      for (int token_i = 0; token_i < tokens.size(); ++token_i) {
+        auto& token = tokens[token_i];
+        if (token.tag == Token::BreakLine) {
+          line++;
+          x = x_center - line_widths[line] / 2;
+          y -= line_height;
+          continue;
+        }
+        token_position[token_i] = Vec2{x, y};
+        x += token_width[token_i];
+        if (token_i < tokens.size() - 1 && tokens[token_i + 1].tag != Token::BreakLine) {
+          x += kSpaceWidth;
+        }
+      }
     }
 
     SkPaint text_paint;
     text_paint.setColor("#000000"_color);
     text_paint.setAntiAlias(true);
 
-    float x_min = kInstructionRect.left() + Widget::kBorderMargin;
-    float x_max = kInstructionRect.right() - Widget::kBorderMargin;
-    float x_center = (x_max + x_min) / 2;
-    float x = x_center - total_width / 2;
-    float y = kInstructionRect.centerY() - kHeavyFontSize / 2;
-
     auto& assembler = LLVM_Assembler::Get();
 
-    for (auto& token : tokens) {
+    for (int token_i = 0; token_i < tokens.size(); ++token_i) {
+      auto& token = tokens[token_i];
       switch (token.tag) {
-        case Token::String:
-          canvas.translate(x, y);
+        case Token::String: {
+          auto mat = canvas.getLocalToDevice();
+          canvas.translate(token_position[token_i].x, token_position[token_i].y);
           heavy_font.DrawText(canvas, token.str, text_paint);
-          canvas.translate(-x, -y);
-          x += heavy_font.MeasureText(token.str);
+          canvas.setMatrix(mat);
           break;
+        }
         case Token::ImmediateOperand: {
-          canvas.save();
-          canvas.translate(x, y);
+          auto mat = canvas.getLocalToDevice();
+          canvas.translate(token_position[token_i].x, token_position[token_i].y);
           int64_t immediate_value = inst.getOperand(token.imm).getImm();
           std::string immediate_str = std::to_string(immediate_value);
           Rect immediate_rect = Rect::MakeCornerZero(kImmediateTokenWidth, kHeavyFontSize);
@@ -2058,12 +2545,12 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
           canvas.drawRoundRect(immediate_rect, 1_mm, 1_mm, immediate_bg_paint);
           canvas.translate(1_mm, 0);
           heavy_font.DrawText(canvas, immediate_str, text_paint);
-          canvas.restore();
-          x += kImmediateTokenWidth;
+          canvas.setMatrix(mat);
           break;
         }
-        case Token::FixedRegister:
-          canvas.translate(x, y - 2_mm);
+        case Token::FixedRegister: {
+          auto mat = canvas.getLocalToDevice();
+          canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           canvas.scale(kRegisterIconScale, kRegisterIconScale);
           for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
             bool found =
@@ -2073,13 +2560,12 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
               break;
             }
           }
-          canvas.scale(1 / kRegisterIconScale, 1 / kRegisterIconScale);
-          canvas.translate(-x, -y + 2_mm);
-          x += kRegisterIconWidth;
+          canvas.setMatrix(mat);
           break;
-        case Token::RegisterOperand:
-          canvas.save();
-          canvas.translate(x, y - 2_mm);
+        }
+        case Token::RegisterOperand: {
+          auto mat = canvas.getLocalToDevice();
+          canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           canvas.scale(kRegisterIconScale, kRegisterIconScale);
           for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
             bool found = assembler.mc_reg_info->isSubRegisterEq(
@@ -2089,44 +2575,44 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
               break;
             }
           }
-          canvas.restore();
-          canvas.save();
-
+          canvas.setMatrix(mat);
           {
             auto& instr_info = assembler.mc_instr_info->get(inst.getOpcode());
             auto reg_class = instr_info.operands()[token.reg].RegClass;
             auto& class_info = assembler.mc_reg_info->getRegClass(reg_class);
             auto text = std::to_string(class_info.RegSizeInBits);
             auto text_width = subscript_font.MeasureText(text);
-            canvas.translate(x + kRegisterIconWidth / 2 - text_width / 2,
-                             y - 2_mm - kSubscriptFontSize / 2);
+            canvas.translate(token_position[token_i].x + kRegisterIconWidth / 2 - text_width / 2,
+                             token_position[token_i].y - 2_mm - kSubscriptFontSize / 2);
             subscript_font.DrawText(canvas, text, text_paint);
           }
-          canvas.restore();
-          x += kRegisterIconWidth;
+          canvas.setMatrix(mat);
           break;
-        case Token::FixedFlag:
-          canvas.translate(x, y - 2_mm);
+        }
+        case Token::FixedFlag: {
+          auto mat = canvas.getLocalToDevice();
+          canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           DrawFlag(canvas, token.flag);
-          canvas.translate(-x, -y + 2_mm);
-          x += 6_mm;
+          canvas.setMatrix(mat);
           break;
-        case Token::ConditionCode:
-          canvas.translate(x, y - 2_mm);
+        }
+        case Token::ConditionCode: {
+          auto mat = canvas.getLocalToDevice();
+          canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           DrawConditionCode(canvas, (X86::CondCode)inst.getOperand(token.cond_code).getImm());
-          canvas.translate(-x, -y + 2_mm);
-          x += kConditionCodeTokenWidth;
+          canvas.setMatrix(mat);
           break;
-        case Token::FixedCondition:
-          canvas.translate(x, y - 2_mm);
+        }
+        case Token::FixedCondition: {
+          auto mat = canvas.getLocalToDevice();
+          canvas.translate(token_position[token_i].x, token_position[token_i].y - 2_mm);
           DrawConditionCode(canvas, token.fixed_cond);
-          canvas.translate(-x, -y + 2_mm);
-          x += kConditionCodeTokenWidth;
+          canvas.setMatrix(mat);
           break;
+        }
         default:
           break;
       }
-      x += kSpaceWidth;
     }
   }
 }

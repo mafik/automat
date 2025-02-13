@@ -18,6 +18,7 @@
 #include <cmath>
 
 #include "automat.hh"
+#include "color.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "library_assembler.hh"
@@ -238,6 +239,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RAX},
           {.tag = Token::String, .str = "xor"},
           {.tag = Token::ImmediateOperand, .imm = 0},
@@ -249,6 +251,7 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
           {.tag = Token::String, .str = "Set"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
           {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
           {.tag = Token::FixedRegister, .fixed_reg = X86::EAX},
           {.tag = Token::String, .str = "xor"},
           {.tag = Token::ImmediateOperand, .imm = 0},
@@ -257,17 +260,25 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     }
     case X86::XOR16i16: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
-          {.tag = Token::String, .str = "xor"}, {.tag = Token::ImmediateOperand, .imm = 0},
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AX},
+          {.tag = Token::String, .str = "xor"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
       };
       return tokens;
     }
     case X86::XOR8i8: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
-          {.tag = Token::String, .str = "xor"}, {.tag = Token::ImmediateOperand, .imm = 0},
+          {.tag = Token::String, .str = "Set"},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "to"},
+          {.tag = Token::BreakLine},
+          {.tag = Token::FixedRegister, .fixed_reg = X86::AL},
+          {.tag = Token::String, .str = "xor"},
+          {.tag = Token::ImmediateOperand, .imm = 0},
       };
       return tokens;
     }
@@ -280,9 +291,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::XOR16ri:
     case X86::XOR8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "xor"}, {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = "Set"},       {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},        {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1},  {.tag = Token::String, .str = "xor"},
+          {.tag = Token::ImmediateOperand, .imm = 2},
       };
       return tokens;
     }
@@ -297,9 +309,10 @@ std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
     case X86::XOR16rr_REV:
     case X86::XOR16rr: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"}, {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to"},  {.tag = Token::RegisterOperand, .reg = 1},
-          {.tag = Token::String, .str = "xor"}, {.tag = Token::RegisterOperand, .reg = 2},
+          {.tag = Token::String, .str = "Set"},      {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},       {.tag = Token::BreakLine},
+          {.tag = Token::RegisterOperand, .reg = 1}, {.tag = Token::String, .str = "xor"},
+          {.tag = Token::RegisterOperand, .reg = 2},
       };
       return tokens;
     }
@@ -2495,7 +2508,7 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
       constexpr float y_max = kInstructionRect.top - Widget::kBorderMargin;
       constexpr float y_min = kInstructionRect.bottom + Widget::kBorderMargin;
       constexpr float y_center = (y_max + y_min) / 2;
-      constexpr float line_height = 10_mm;
+      constexpr float line_height = 11_mm;
       int line = 0;
       float x = x_center - line_widths[line] / 2;
       float y = y_center - kHeavyFontSize / 2 + line_height * ((int)line_widths.size() - 1) / 2;
@@ -2556,9 +2569,29 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
             bool found =
                 assembler.mc_reg_info->isSubRegisterEq(kRegisters[i].llvm_reg, token.fixed_reg);
             if (found) {
+              static sk_sp<SkColorFilter> filter = color::MakeTintFilter("#3d9bd1"_color, 40);
+              kRegisters[i].image.paint.setColorFilter(filter);
+              // kRegisters[i].image.paint.setColorFilter(color::DesaturateFilter());
               kRegisters[i].image.draw(canvas);
+              kRegisters[i].image.paint.setColorFilter(nullptr);
               break;
             }
+          }
+          canvas.setMatrix(mat);
+          {
+            std::string text;
+            for (int reg_class_i = 0; reg_class_i < assembler.mc_reg_info->getNumRegClasses();
+                 ++reg_class_i) {
+              auto& reg_class = assembler.mc_reg_info->getRegClass(reg_class_i);
+              if (reg_class.contains(token.fixed_reg)) {
+                text = std::to_string(reg_class.RegSizeInBits);
+                break;
+              }
+            }
+            auto text_width = subscript_font.MeasureText(text);
+            canvas.translate(token_position[token_i].x + kRegisterIconWidth / 2 - text_width / 2,
+                             token_position[token_i].y - 2_mm - kSubscriptFontSize / 2);
+            subscript_font.DrawText(canvas, text, text_paint);
           }
           canvas.setMatrix(mat);
           break;

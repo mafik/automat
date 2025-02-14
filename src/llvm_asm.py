@@ -129,6 +129,37 @@ def gen_x86_hh(x86_json, x86_hh):
       self.opcodes = {}
       for regexp in regexps:
         select_opcodes_by_regex(self.opcodes, regexp)
+      
+    def sort_opcodes(self):
+      # Sort opcodes by name without digits, then by numeric parts
+      def sort_key(opcode_name):
+        # Split into text and numeric parts
+        parts = []
+        current = ''
+        for c in opcode_name:
+          if c.isdigit() != bool(current and current[-1].isdigit()):
+            if current:
+              parts.append(current)
+            current = c
+          else:
+            current += c
+        if current:
+          parts.append(current)
+
+        # Move numbers to the end
+        parts.sort(key=lambda x: int(x[0].isdigit()))
+
+        # Convert numeric parts to integers for proper sorting
+        key_parts = []
+        for part in parts:
+          if part.isdigit():
+            key_parts.append(('', int(part)))
+          else:
+            key_parts.append((part, 0))
+        return tuple(key_parts)
+
+      # Sort by creating new dict with sorted items
+      return list(sorted(self.opcodes.keys(), key=lambda x: sort_key(x)))
 
   Group('LLVM sanitizers', ['^UBSAN', '^ASAN'])
   Group('LLVM internals', ['^ADJCALLSTACK', '^CMOV_', '^CATCHRET', '^CLEANUPRET', '^DYN_ALLOCA_64', '^EH_', '^Int_', '^KCFI_CHECK', '^PROBED_ALLOCA', '^SEG_ALLOCA', '^PTDPBF16PS', '^REP_', '^CMOV_'])
@@ -341,7 +372,7 @@ struct Category {{
   for group_name in supported_group_names:
     group_obj = groups[group_name]
     sanitized_group = sanitize(group_obj.name)
-    opcodes = sorted(group_obj.opcodes.keys())
+    opcodes = group_obj.sort_opcodes()
     opcode_list = ', '.join(f'{opcode}' for opcode in opcodes)
     output_lines.append(f'constexpr unsigned k{sanitized_group}Opcodes[] = {{{opcode_list}}};')
   output_lines.append('')

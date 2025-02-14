@@ -246,6 +246,22 @@ void Deserializer::Get(int& result, Status& status) {
     RecoverParser(*this);
   }
 }
+void Deserializer::Get(int64_t& result, Status& status) {
+  FillToken(*this);
+  if (token.type == JsonToken::kInt64TokenType) {
+    token.type = kNoTokenType;
+    result = token.value.i64;
+  } else if (token.type == JsonToken::kIntTokenType) {
+    token.type = kNoTokenType;
+    result = token.value.i;
+  } else if (token.type == JsonToken::kUintTokenType) {
+    token.type = kNoTokenType;
+    result = token.value.u;
+  } else {
+    AppendErrorMessage(status) += "Expected an integer but got " + ToStr(token.type);
+    RecoverParser(*this);
+  }
+}
 void Deserializer::Get(bool& result, Status& status) {
   FillToken(*this);
   if (token.type == JsonToken::kBooleanTokenType) {

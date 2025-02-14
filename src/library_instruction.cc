@@ -9,6 +9,7 @@
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkBlenders.h>
 #include <include/effects/SkGradientShader.h>
+#include <llvm/ADT/StringMap.h>
 #include <llvm/MC/MCInstBuilder.h>
 #include <llvm/MC/MCInstPrinter.h>
 #include <llvm/MC/TargetRegistry.h>
@@ -17,13 +18,10 @@
 
 #include <cmath>
 
-#include "automat.hh"
 #include "color.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "library_assembler.hh"
-#include "library_instruction_library.hh"
-#include "llvm/ADT/StringMap.h"
 #include "llvm_asm.hh"
 #include "svg.hh"
 #include "textures.hh"
@@ -2227,6 +2225,7 @@ void DrawFlag(SkCanvas& canvas, Flag flag) {
       img = &cf_image;
       break;
     }
+    default:  // fallthrough
     case Flag::OF: {
       static PersistentImage of_image =
           PersistentImage::MakeFromAsset(embedded::assets_flag_of_webp, PersistentImage::MakeArgs{
@@ -2707,6 +2706,21 @@ void Instruction::SerializeState(Serializer& writer, const char* key) const {
   writer.Key("opcode");
   auto opcode_name = assembler.mc_instr_info->getName(mc_inst.getOpcode());
   writer.String(opcode_name.data(), opcode_name.size());
+  if (mc_inst.getNumOperands() > 0) {
+    writer.Key("operands");
+    writer.StartArray();
+    for (int i = 0; i < mc_inst.getNumOperands(); ++i) {
+      auto& operand = mc_inst.getOperand(i);
+      if (operand.isImm()) {
+        writer.Int64(operand.getImm());
+      } else if (operand.isReg()) {
+        writer.String(assembler.mc_reg_info->getName(operand.getReg()));
+      } else {
+        writer.Null();
+      }
+    }
+    writer.EndArray();
+  }
   writer.EndObject();
 }
 
@@ -2716,6 +2730,14 @@ void Instruction::DeserializeState(Location& l, Deserializer& d) {
     StringMap<unsigned> map;
     for (int i = 0; i < assembler.mc_instr_info->getNumOpcodes(); ++i) {
       map[assembler.mc_instr_info->getName(i)] = i;
+    }
+    return map;
+  }();
+  static StringMap<unsigned> reg_map = []() {
+    auto& assembler = LLVM_Assembler::Get();
+    StringMap<unsigned> map;
+    for (int i = 0; i < assembler.mc_reg_info->getNumRegs(); ++i) {
+      map[assembler.mc_reg_info->getName(i)] = i;
     }
     return map;
   }();
@@ -2736,6 +2758,54 @@ void Instruction::DeserializeState(Location& l, Deserializer& d) {
         break;
       }
       mc_inst.setOpcode(opcode_i->second);
+    } else if (key == "operands") {
+      auto& instr_info = assembler.mc_instr_info->get(mc_inst.getOpcode());
+      for (auto operand_i : ArrayView(d, status)) {
+        if (operand_i >= instr_info.getNumOperands()) {
+          auto& msg = AppendErrorMessage(status);
+          msg += "Too many operands for ";
+          msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+          break;
+        }
+        auto& operand = instr_info.operands()[operand_i];
+        if (operand.OperandType == MCOI::OPERAND_REGISTER) {
+          // Recover register index from string
+          Str reg_name;
+          d.Get(reg_name, status);
+          if (!OK(status)) {
+            auto& msg = AppendErrorMessage(status);
+            msg += "Operand ";
+            msg += std::to_string(operand_i);
+            msg += " must be a valid x86 LLVM register name";
+            // TODO: fill with a generic register
+            break;
+          }
+          auto reg_i = reg_map.find(reg_name);
+          if (reg_i == reg_map.end()) {
+            auto& msg = AppendErrorMessage(status);
+            msg += "Operand ";
+            msg += std::to_string(operand_i);
+            msg += " must be a valid x86 LLVM register name";
+            // TODO: fill with a generic register
+            break;
+          }
+          mc_inst.addOperand(MCOperand::createReg(reg_i->second));
+        } else {
+          // Immediate
+          int64_t immediate;
+          d.Get(immediate, status);
+          if (!OK(status)) {
+            auto& msg = AppendErrorMessage(status);
+            msg += "Operand ";
+            msg += std::to_string(operand_i);
+            msg += " of ";
+            msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+            msg += " must be an integer";
+            break;
+          }
+          mc_inst.addOperand(MCOperand::createImm(immediate));
+        }
+      }
     }
   }
   if (!OK(status)) {

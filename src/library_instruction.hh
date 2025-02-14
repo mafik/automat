@@ -44,8 +44,6 @@ struct Instruction : LiveObject, Runnable {
 
   LongRunning* OnRun(Location& here) override;
 
-  static void SetupDevelopmentScenario();
-
   struct Widget : gui::Widget {
     constexpr static float kWidth = 63.5_mm;
     constexpr static float kHeight = 44.5_mm;
@@ -66,6 +64,9 @@ struct Instruction : LiveObject, Runnable {
   static void DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst);
 
   std::shared_ptr<gui::Widget> MakeWidget() override { return std::make_shared<Widget>(WeakPtr()); }
+
+  void SerializeState(Serializer& writer, const char* key = "value") const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
 };
 
 }  // namespace automat::library

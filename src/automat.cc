@@ -270,12 +270,6 @@ int Main() {
     ERROR << "Couldn't load saved state: " << status;
   }
 
-  ////////////////////DEVELOPMENT CODE////////////////////
-
-  library::Instruction::SetupDevelopmentScenario();
-
-  ////////////////END OF DEVELOPMENT CODE/////////////////
-
   anim.LoadingCompleted();
 
   root_widget->window->MainLoop();

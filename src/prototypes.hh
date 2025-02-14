@@ -9,6 +9,7 @@
 #include "optional.hh"
 #include "str.hh"
 #include "string_multimap.hh"
+#include "vec.hh"
 
 namespace automat {
 
@@ -28,6 +29,7 @@ struct PrototypeLibrary {
 
   std::unordered_map<std::type_index, std::shared_ptr<Object>> type_index;
   string_map<std::shared_ptr<Object>> name_index;
+  maf::Vec<std::shared_ptr<Object>> default_toolbar;
 };
 
 extern maf::Optional<PrototypeLibrary> prototypes;

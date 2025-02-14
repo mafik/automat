@@ -20,14 +20,22 @@ namespace automat {
 
 maf::Optional<PrototypeLibrary> prototypes;
 
+enum ToolbarVisibility {
+  ShowInToolbar,
+  HideInToolbar,
+};
+
 struct IndexHelper {
   PrototypeLibrary& lib;
   IndexHelper(PrototypeLibrary& lib) : lib(lib) {}
-  template <typename T, typename... Args>
+  template <typename T, ToolbarVisibility show_in_toolbar = ShowInToolbar, typename... Args>
   void Register(Args&&... args) {
     auto proto = std::make_shared<T>(std::forward<Args>(args)...);
     lib.type_index[typeid(T)] = proto;
     lib.name_index[Str(proto->Name())] = proto;
+    if (show_in_toolbar == ShowInToolbar) {
+      lib.default_toolbar.push_back(proto);
+    }
   }
 };
 
@@ -46,6 +54,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Number>();
   index.Register<Timeline>();
   index.Register<InstructionLibrary>();
+  index.Register<Instruction, HideInToolbar>();
 }
 
 PrototypeLibrary::~PrototypeLibrary() {

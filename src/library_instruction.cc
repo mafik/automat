@@ -23,6 +23,7 @@
 #include "font.hh"
 #include "library_assembler.hh"
 #include "library_instruction_library.hh"
+#include "llvm/ADT/StringMap.h"
 #include "llvm_asm.hh"
 #include "svg.hh"
 #include "textures.hh"
@@ -121,15 +122,6 @@ void Instruction::ConnectionRemoved(Location& here, Connection& connection) {
 
 string_view Instruction::Name() const { return "Instruction"; }
 shared_ptr<Object> Instruction::Clone() const { return make_shared<Instruction>(*this); }
-
-void Instruction::SetupDevelopmentScenario() {
-  auto proto = InstructionLibrary();
-  auto& new_inst = root_machine->Create(proto);
-  // Instruction& inst = *new_inst.As<Instruction>();
-  // inst.mc_inst =
-  // MCInstBuilder(X86::ADD64rr).addReg(X86::RAX).addReg(X86::RAX).addReg(X86::RBX);
-  // inst.mc_inst = MCInstBuilder(X86::MOV8ri).addReg(X86::AL).addImm(10);
-}
 
 LongRunning* Instruction::OnRun(Location& here) {
   auto assembler = assembler_arg.FindOrCreateObject<Assembler>(here);
@@ -2706,6 +2698,49 @@ std::unique_ptr<Action> Instruction::Widget::FindAction(gui::Pointer& p, gui::Ac
     }
   }
   return nullptr;
+}
+
+void Instruction::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+  auto& assembler = LLVM_Assembler::Get();
+  writer.Key("opcode");
+  auto opcode_name = assembler.mc_instr_info->getName(mc_inst.getOpcode());
+  writer.String(opcode_name.data(), opcode_name.size());
+  writer.EndObject();
+}
+
+void Instruction::DeserializeState(Location& l, Deserializer& d) {
+  static StringMap<unsigned> opcode_map = []() {
+    auto& assembler = LLVM_Assembler::Get();
+    StringMap<unsigned> map;
+    for (int i = 0; i < assembler.mc_instr_info->getNumOpcodes(); ++i) {
+      map[assembler.mc_instr_info->getName(i)] = i;
+    }
+    return map;
+  }();
+
+  auto& assembler = LLVM_Assembler::Get();
+  Status status;
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "opcode") {
+      Str opcode_name;
+      d.Get(opcode_name, status);
+      if (!OK(status)) {
+        AppendErrorMessage(status) += "Opcode name must be a string";
+        break;
+      }
+      auto opcode_i = opcode_map.find(opcode_name);
+      if (opcode_i == opcode_map.end()) {
+        AppendErrorMessage(status) += "Opcode name is not a valid x86 LLVM opcode name";
+        break;
+      }
+      mc_inst.setOpcode(opcode_i->second);
+    }
+  }
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+  }
 }
 
 }  // namespace automat::library

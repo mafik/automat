@@ -10,7 +10,6 @@
 #include "automat.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
-#include "font.hh"
 #include "gui_connection_widget.hh"
 #include "math.hh"
 #include "pointer.hh"
@@ -36,7 +35,7 @@ RootWidget::~RootWidget() {
 void RootWidget::InitToolbar() {
   toolbar = std::make_shared<Toolbar>();
   toolbar->parent = SharedPtr();
-  for (auto& [_, proto] : prototypes->name_index) {
+  for (auto& proto : prototypes->default_toolbar) {
     toolbar->AddObjectPrototype(proto);
   }
 }

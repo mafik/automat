@@ -188,10 +188,8 @@ static gui::Font& SubscriptFont() {
   return *font;
 }
 
-static constexpr Rect kInstructionRect =
-    Rect::MakeAtZero<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
-
-static const SkRRect kInstructionRRect = SkRRect::MakeRectXY(kInstructionRect.sk, 3_mm, 3_mm);
+static const SkRRect kInstructionRRect =
+    SkRRect::MakeRectXY(Instruction::Widget::kRect.sk, 3_mm, 3_mm);
 
 static const SkPath kInstructionShape = SkPath::RRect(kInstructionRRect);
 
@@ -2514,12 +2512,12 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
     Vec2 token_position[tokens.size()];
     float string_width_scale[tokens.size()];
     float scale = 1;
-    constexpr float x_min = kInstructionRect.left + Widget::kBorderMargin * 2;
-    constexpr float x_max = kInstructionRect.right - Widget::kBorderMargin * 2;
+    constexpr float x_min = Widget::kRect.left + Widget::kBorderMargin * 2;
+    constexpr float x_max = Widget::kRect.right - Widget::kBorderMargin * 2;
     constexpr float x_range = x_max - x_min;
     constexpr float x_center = (x_max + x_min) / 2;
-    constexpr float y_max = kInstructionRect.top - Widget::kBorderMargin * 2;
-    constexpr float y_min = kInstructionRect.bottom + Widget::kBorderMargin * 2;
+    constexpr float y_max = Widget::kRect.top - Widget::kBorderMargin * 2;
+    constexpr float y_min = Widget::kRect.bottom + Widget::kBorderMargin * 2;
     constexpr float y_range = y_max - y_min;
     constexpr float y_center = (y_max + y_min) / 2;
     constexpr float line_height = 11_mm;

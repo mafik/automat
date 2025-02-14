@@ -51,6 +51,8 @@ struct Instruction : LiveObject, Runnable {
     constexpr static float kHeight = 44.5_mm;
     constexpr static float kBorderMargin = 4_mm;
     constexpr static float kDiagonal = Sqrt(kWidth * kWidth + kHeight * kHeight);
+    constexpr static Rect kRect =
+        Rect::MakeAtZero<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
     std::weak_ptr<Object> object;
     Widget(std::weak_ptr<Object> object);

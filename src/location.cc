@@ -626,6 +626,7 @@ std::shared_ptr<Object> Location::InsertHere(std::shared_ptr<Object>&& object) {
   this->object->Relocate(this);
   auto object_widget = WidgetForObject();
   object_widget->parent = this->SharedPtr();
+  FixParents();
   return object;
 }
 std::shared_ptr<Object> Location::Create(const Object& prototype) {

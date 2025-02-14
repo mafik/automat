@@ -16,6 +16,7 @@
 #include <ranges>
 
 #include "animation.hh"
+#include "automat.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "library_instruction.hh"
@@ -170,6 +171,8 @@ constexpr float kRoseFanDegrees = 180;
 constexpr float kStartDist = Instruction::Widget::kHeight / 2;
 constexpr float kCornerDist = Instruction::Widget::kDiagonal / 2;
 constexpr float kRoseDist = 8_cm;
+constexpr static Rect kFrontInstructionRect =
+    Instruction::Widget::kRect.MoveBy(-Instruction::Widget::kRect.Size() / 2);
 
 static SkPathMeasure CategoryPathMeasure(int i, int n) {
   float branch_dir =
@@ -891,6 +894,9 @@ void InstructionLibrary::Widget::PointerMove(gui::Pointer& p, Vec2 position) {
   }
 
   bool new_wobble_cards = Length(local_position) < kCornerDist;
+  if (kFrontInstructionRect.Contains(local_position)) {
+    new_wobble_cards = false;
+  }
   if (wobble_cards != new_wobble_cards) {
     wobble_cards = new_wobble_cards;
     WakeAnimation();
@@ -1082,6 +1088,22 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
                                                                gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
     auto contact_point = p.PositionWithin(*this);
+
+    if (kFrontInstructionRect.Contains(contact_point)) {
+      auto loc = std::make_shared<Location>();
+      loc->parent_location = root_location;
+      loc->parent = root_machine;
+
+      auto proto = std::make_shared<Instruction>();
+      proto->mc_inst = instruction_helix.front().mc_inst;
+
+      loc->InsertHere(std::move(proto));
+      audio::Play(embedded::assets_SFX_toolbar_pick_wav);
+      loc->position = loc->animation_state.position = p.PositionWithinRootMachine() - contact_point;
+      auto drag_action = std::make_unique<DragLocationAction>(p, std::move(loc));
+      drag_action->contact_point = contact_point - kFrontInstructionRect.BottomLeftCorner();
+      return drag_action;
+    }
 
     if (Length(contact_point) < kCornerDist) {
       return std::make_unique<ScrollDeckAction>(p, SharedPtr<Widget>(), object.lock());

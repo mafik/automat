@@ -308,11 +308,11 @@ union Rect {
     ExpandToInclude(other.BottomRightCorner());
   }
 
-  [[nodiscard]] constexpr Rect Outset(float amount) {
+  [[nodiscard]] constexpr Rect Outset(float amount) const {
     return {left - amount, bottom - amount, right + amount, top + amount};
   }
 
-  [[nodiscard]] constexpr Rect MoveBy(Vec2 offset) {
+  [[nodiscard]] constexpr Rect MoveBy(Vec2 offset) const {
     return {left + offset.x, bottom + offset.y, right + offset.x, top + offset.y};
   }
 

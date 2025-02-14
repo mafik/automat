@@ -215,7 +215,7 @@ union Rect {
       : left(left), bottom(bottom), right(right), top(top) {}
 
   template <typename AnchorX = ::CenterX, typename AnchorY = ::CenterY>
-  static constexpr Rect Make(float width, float height) {
+  static constexpr Rect MakeAtZero(float width, float height) {
     Rect r{0, 0, width, height};
     return r.MoveBy({-AnchorX{}(r), -AnchorY{}(r)});
   }

@@ -189,7 +189,7 @@ static gui::Font& SubscriptFont() {
 }
 
 static constexpr Rect kInstructionRect =
-    Rect::Make<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
+    Rect::MakeAtZero<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
 static const SkRRect kInstructionRRect = SkRRect::MakeRectXY(kInstructionRect.sk, 3_mm, 3_mm);
 
@@ -2258,7 +2258,7 @@ constexpr float kConditionCodeTokenWidth = 8_mm;
 constexpr float kConditionCodeTokenHeight = 8_mm;
 
 constexpr Rect kConditionCodeRect =
-    Rect::Make<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
+    Rect::MakeAtZero<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
 
 void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
   SkPaint bg_paint;

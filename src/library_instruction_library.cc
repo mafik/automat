@@ -511,7 +511,7 @@ constexpr float kTableMarginTop = -kCornerDist - kTableCellSize;
 constexpr int kTableCols = 1 + size(kRegisters);
 constexpr int kTableRows = 2;
 constexpr Rect kRegisterTableRect =
-    Rect::Make<CenterX, TopY>(kTableCols * kTableCellSize, kTableRows* kTableCellSize)
+    Rect::MakeAtZero<CenterX, TopY>(kTableCols * kTableCellSize, kTableRows* kTableCellSize)
         .MoveBy({0, kTableMarginTop});
 
 void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
@@ -715,7 +715,7 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     pressed_paint.setAntiAlias(true);
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
       if (read_from[i].hovered_animation > 0 || read_from[i].pressed_animation > 0) {
-        Rect rect_read = Rect::Make<LeftX, TopY>(kTableCellSize, kTableCellSize)
+        Rect rect_read = Rect::MakeAtZero<LeftX, TopY>(kTableCellSize, kTableCellSize)
                              .MoveBy({kRegisterTableRect.left + kTableCellSize * (i + 1),
                                       kRegisterTableRect.top});
 
@@ -730,7 +730,7 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
         }
       }
       if (write_to[i].hovered_animation > 0 || write_to[i].pressed_animation > 0) {
-        Rect rect_write = Rect::Make<LeftX, BottomY>(kTableCellSize, kTableCellSize)
+        Rect rect_write = Rect::MakeAtZero<LeftX, BottomY>(kTableCellSize, kTableCellSize)
                               .MoveBy({kRegisterTableRect.left + kTableCellSize * (i + 1),
                                        kRegisterTableRect.bottom});
         if (write_to[i].hovered_animation > 0) {

@@ -12,7 +12,7 @@
 #include "object.hh"
 #include "status.hh"
 
-namespace automat {
+namespace automat::library {
 
 constexpr size_t kMachineCodeSize = 1024 * 4;
 
@@ -30,11 +30,11 @@ struct Assembler : LiveObject {
 
   std::unique_ptr<Regs> regs;
 
-  vector<library::Instruction*> instructions;
-
   std::shared_ptr<Object> Clone() const override;
 
-  void (*prologue_fn)(void*) = nullptr;
+  using PrologueFn = uintptr_t (*)(void*);
+
+  PrologueFn prologue_fn = nullptr;
 
   Assembler(maf::Status&);
   ~Assembler();
@@ -52,4 +52,4 @@ struct Assembler : LiveObject {
   std::shared_ptr<gui::Widget> MakeWidget() override { return std::make_shared<Widget>(WeakPtr()); }
 };
 
-}  // namespace automat
+}  // namespace automat::library

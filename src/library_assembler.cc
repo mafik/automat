@@ -27,7 +27,7 @@ using namespace llvm;
 using namespace std;
 using namespace maf;
 
-namespace automat {
+namespace automat::library {
 
 #if defined __linux__
 void AssemblerSignalHandler(int sig, siginfo_t* si, struct ucontext_t* context) {
@@ -217,6 +217,9 @@ void Assembler::UpdateMachineCode() {
 #undef SAVE
   // MOVrm(X86::RSP, X86::RAX, offsetof(Regs, original_RSP));
 
+  // Store the 64-bit address of the exit point in
+  POPr(X86::RAX);
+
   // Restore callee-saved registers
   POPr(X86::R15);
   POPr(X86::R14);
@@ -257,8 +260,8 @@ void Assembler::UpdateMachineCode() {
 
   auto prologue_size = epilogue_prologue.size() - epilogue_size;
 
-  prologue_fn = reinterpret_cast<void (*)(void*)>(reinterpret_cast<intptr_t>(machine_code.get()) +
-                                                  kMachineCodeSize - prologue_size);
+  prologue_fn = reinterpret_cast<PrologueFn>(reinterpret_cast<intptr_t>(machine_code.get()) +
+                                             kMachineCodeSize - prologue_size);
 
   // Copy epilogue/prologue at the end of machine_code.
   void* epilogue_prologue_dest = reinterpret_cast<void*>(
@@ -266,63 +269,177 @@ void Assembler::UpdateMachineCode() {
   memcpy(epilogue_prologue_dest, epilogue_prologue.data(), epilogue_size + prologue_size);
   int64_t epilogue_prologue_addr = reinterpret_cast<int64_t>(epilogue_prologue_dest);
 
-  // Go over all instructions. For each one:
-  // - Emit machine code at the first available position in machine_code.
-  // - TODO: Follow up with all the subsequent instructions (basic block).
-  // - TODO: If the last instruction wasn't an unconditional jump, emit a jump to EPILOGUE.
-  for (auto inst : instructions) {
-    SmallVector<char, 128> code_bytes;
-    SmallVector<MCFixup, 4> fixups;
-    mc_code_emitter->encodeInstruction(inst->mc_inst, code_bytes, fixups, *mc_subtarget_info);
+  // Find all the x86 instructions
+  auto here_ptr = here.lock();
+  auto [begin, end] = here_ptr->incoming.equal_range(&assembler_arg);
+  struct InstructionEntry {
+    Location* loc;
+    Instruction* inst;
+    Connection* conn;
+    Vec2 position;
+  };
+  Vec<InstructionEntry> instructions;
+  for (auto it = begin; it != end; ++it) {
+    auto& conn = *it;
+    auto& inst_loc = conn->from;
+    auto inst = inst_loc.As<Instruction>();
+    instructions.push_back({&inst_loc, inst, conn, inst_loc.position});
+  }
 
-    auto inst_size = code_bytes.size();
+  for (auto& entry : instructions) {
+    entry.inst->address = nullptr;
+  }
 
-    if (!fixups.empty()) {
-      ERROR << "Fixups not supported!";
-    }
-    fixups.clear();
+  struct Fixup {
+    size_t end_offset;  // place in machine_code where the fixup ends
+    Instruction* target = nullptr;
+    MCFixupKind kind = MCFixupKind::FK_PCRel_4;
+  };
 
-    // Temprorarily emit JMP to epilogue unconditionally.
-    mc_code_emitter->encodeInstruction(MCInstBuilder(X86::JMP_4).addImm(0), code_bytes, fixups,
+  Vec<Fixup> machine_code_fixups;
+
+  auto EmitInstruction = [&](Location& loc, Instruction& inst) {
+    SmallVector<char, 32> instruction_bytes;
+    SmallVector<MCFixup, 4> instruction_fixups;
+    mc_code_emitter->encodeInstruction(inst.mc_inst, instruction_bytes, instruction_fixups,
                                        *mc_subtarget_info);
 
-    int jmp_base = machine_code_offset + code_bytes.size();
-    int jmp_target = kMachineCodeSize - epilogue_prologue.size();
-    int jmp_pcrel = jmp_target - jmp_base;
-    code_bytes.pop_back();
-    code_bytes.pop_back();
-    code_bytes.pop_back();
-    code_bytes.pop_back();
-    code_bytes.push_back(jmp_pcrel & 0xFF);
-    code_bytes.push_back((jmp_pcrel >> 8) & 0xFF);
-    code_bytes.push_back((jmp_pcrel >> 16) & 0xFF);
-    code_bytes.push_back((jmp_pcrel >> 24) & 0xFF);
+    auto inst_size = instruction_bytes.size();
 
     void* dest = reinterpret_cast<void*>(reinterpret_cast<intptr_t>(machine_code.get()) +
                                          machine_code_offset);
-    inst->address = dest;
-    inst->size = inst_size;
-    memcpy(dest, code_bytes.data(), code_bytes.size());
-    machine_code_offset += code_bytes.size();
+    memcpy(dest, instruction_bytes.data(), instruction_bytes.size());
+    machine_code_offset += instruction_bytes.size();
+
+    if (instruction_fixups.size() > 1) {
+      ERROR << "Instructions with more than one fixup not supported!";
+    } else if (instruction_fixups.size() == 1) {
+      auto& fixup = instruction_fixups[0];
+
+      Instruction* jump_inst = nullptr;
+      if (auto it = loc.outgoing.find(&jump_arg); it != loc.outgoing.end()) {
+        jump_inst = (*it)->to.As<Instruction>();
+      }
+      // We assume that the fixup is at the end of the instruction.
+      machine_code_fixups.push_back({machine_code_offset, jump_inst, fixup.getKind()});
+    }
+  };
+
+  auto Fixup1 = [&](size_t fixup_end, size_t target_offset) {
+    ssize_t pcrel = (ssize_t)(target_offset) - (ssize_t)(fixup_end);
+    char* code = machine_code.get();
+    code[fixup_end - 1] = (pcrel & 0xFF);
+  };
+
+  auto Fixup4 = [&](size_t fixup_end, size_t target_offset) {
+    ssize_t pcrel = (ssize_t)(target_offset) - (ssize_t)(fixup_end);
+    char* code = machine_code.get();
+    code[fixup_end - 4] = (pcrel & 0xFF);
+    code[fixup_end - 3] = ((pcrel >> 8) & 0xFF);
+    code[fixup_end - 2] = ((pcrel >> 16) & 0xFF);
+    code[fixup_end - 1] = ((pcrel >> 24) & 0xFF);
+  };
+
+  auto EmitJump = [&](size_t target_offset) {
+    SmallVector<char, 32> instruction_bytes;
+    SmallVector<MCFixup, 4> instruction_fixups;
+    // Save the current RIP and jump to epilogue
+    mc_code_emitter->encodeInstruction(MCInstBuilder(X86::JMP_4).addImm(0), instruction_bytes,
+                                       instruction_fixups, *mc_subtarget_info);
+    void* dest = reinterpret_cast<void*>(reinterpret_cast<intptr_t>(machine_code.get()) +
+                                         machine_code_offset);
+    memcpy(dest, instruction_bytes.data(), instruction_bytes.size());
+    machine_code_offset += instruction_bytes.size();
+    Fixup4(machine_code_offset, target_offset);
+  };
+
+  auto EmitExitPoint = [&]() {
+    SmallVector<char, 32> instruction_bytes;
+    SmallVector<MCFixup, 4> instruction_fixups;
+    // Save the current RIP and jump to epilogue
+    mc_code_emitter->encodeInstruction(MCInstBuilder(X86::CALL64pcrel32).addImm(0),
+                                       instruction_bytes, instruction_fixups, *mc_subtarget_info);
+    void* dest = reinterpret_cast<void*>(reinterpret_cast<intptr_t>(machine_code.get()) +
+                                         machine_code_offset);
+    memcpy(dest, instruction_bytes.data(), instruction_bytes.size());
+    machine_code_offset += instruction_bytes.size();
+    size_t jmp_target = kMachineCodeSize - epilogue_prologue.size();
+    Fixup4(machine_code_offset, jmp_target);
+  };
+
+  for (auto& entry : instructions) {
+    Location* loc = entry.loc;
+    Instruction* inst = entry.inst;
+    if (inst->address) {
+      continue;
+    }
+
+    while (inst) {
+      if (inst->address) {
+        // current instruction was already emitted - jump to it instead
+        EmitJump(reinterpret_cast<size_t>(inst->address) -
+                 reinterpret_cast<size_t>(machine_code.get()));
+        break;
+      }
+      inst->address = reinterpret_cast<void*>(reinterpret_cast<intptr_t>(machine_code.get()) +
+                                              machine_code_offset);
+      EmitInstruction(*loc, *inst);
+
+      if (auto it = loc->outgoing.find(&next_arg); it != loc->outgoing.end()) {
+        loc = &(*it)->to;
+        inst = loc->As<Instruction>();
+      } else {
+        loc = nullptr;
+        inst = nullptr;
+      }
+    }
+    // TODO: don't emit the final exit point if the last instruction is a terminator
+    EmitExitPoint();
+
+    for (int fixup_i = 0; fixup_i < machine_code_fixups.size(); ++fixup_i) {
+      auto& fixup = machine_code_fixups[fixup_i];
+      size_t target_offset = 0;
+      if (fixup.target) {                        // target is an instruction
+        if (fixup.target->address == nullptr) {  // it wasn't emitted yet - keep the fixup around
+          continue;
+        }
+        target_offset = reinterpret_cast<size_t>(fixup.target->address);
+      } else {  // target is not an instruction - create a new exit point and jump there
+        target_offset = machine_code_offset;
+        EmitExitPoint();
+      }
+      if (fixup.kind == MCFixupKind::FK_PCRel_4) {
+        Fixup4(fixup.end_offset, target_offset);
+      } else if (fixup.kind == MCFixupKind::FK_PCRel_1) {
+        Fixup1(fixup.end_offset, target_offset);
+      } else {
+        ERROR << "Unsupported fixup kind: " << fixup.kind;
+      }
+      machine_code_fixups.EraseIndex(fixup_i);
+      --fixup_i;
+    }
   }
 
-  // string machine_code_str;
-  // for (int i = 0; i < machine_code_offset; i++) {
-  //   machine_code_str += f("%02x ", machine_code.get()[i]);
-  //   if (i % 16 == 15) {
-  //     machine_code_str += "\n";
-  //   }
-  // }
-  // LOG << machine_code_str;
+  if (!machine_code_fixups.empty()) {
+    ERROR << "Not all fixups were resolved!";
+  }
+  string machine_code_str;
+  for (int i = 0; i < machine_code_offset; i++) {
+    machine_code_str += f("%02x ", machine_code.get()[i]);
+    if (i % 16 == 15) {
+      machine_code_str += "\n";
+    }
+  }
+  LOG << machine_code_str;
 
-  // string epilogue_prologue_str;
-  // for (int i = 0; i < epilogue_prologue.size(); i++) {
-  //   epilogue_prologue_str += f("%02x ", epilogue_prologue[i]);
-  //   if (i % 16 == 15) {
-  //     epilogue_prologue_str += "\n";
-  //   }
-  // }
-  // LOG << epilogue_prologue_str;
+  string epilogue_prologue_str;
+  for (int i = 0; i < epilogue_prologue.size(); i++) {
+    epilogue_prologue_str += f("%02x ", epilogue_prologue[i]);
+    if (i % 16 == 15) {
+      epilogue_prologue_str += "\n";
+    }
+  }
+  LOG << epilogue_prologue_str;
 
 #if defined __linux__
   mprotect(machine_code.get(), kMachineCodeSize, PROT_READ | PROT_EXEC);
@@ -348,7 +465,7 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
   stack.resize(STACK_SIZE);
   pid_t v;
   struct ThreadArg {
-    void (*prologue_fn)(void*);
+    PrologueFn prologue_fn;
     void* entry_point;
   };
   auto Thread = [](void* void_arg) {
@@ -384,4 +501,4 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
   // TODO: Implement on Windows
 #endif  // __linux__
 }
-}  // namespace automat
+}  // namespace automat::library

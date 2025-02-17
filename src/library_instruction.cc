@@ -18,11 +18,14 @@
 
 #include <cmath>
 
+#include "argument.hh"
 #include "color.hh"
+#include "drawable.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "library_assembler.hh"
 #include "llvm_asm.hh"
+#include "math.hh"
 #include "svg.hh"
 #include "textures.hh"
 
@@ -71,6 +74,24 @@ RegisterPresentation kRegisters[kGeneralPurposeRegisterCount] = {
     },
 };
 
+static const SkPath kJumpPath = PathFromSVG(
+    "m.7-2.7a.5.5 0 000 1 .5.5 0 000-1m-2.6 2a.1.1 0 01-.1-.5l1.2-.3 1.4 0 1.1.6 1 0a.1.1 0 010 "
+    ".5l-1.1 0-.7-.3-.5 1.1 1.3-0 .9 1a.1.1 0 01-.4.4l-.7-.8-1.8 0-.9.9-1.1 0a.1.1 0 010-.6l.8 0 "
+    ".9-1 .5-1.3-.7-0z",
+    SVGUnit_Millimeters);
+
+struct JumpDrawable : PaintDrawable {
+  void onDraw(SkCanvas* canvas) override { canvas->drawPath(kJumpPath, paint); }
+};
+
+static JumpDrawable jump_icon;
+
+JumpArgument::JumpArgument() : Argument("Jump") {}
+
+PaintDrawable& JumpArgument::Icon() { return jump_icon; }
+
+JumpArgument jump_arg;
+
 Argument assembler_arg = []() {
   Argument arg("Assembler", Argument::kRequiresObject);
   arg.RequireInstanceOf<Assembler>();
@@ -86,7 +107,19 @@ static Assembler* FindOrCreateAssembler(Location& here) {
   return assembler;
 }
 
-void Instruction::Args(std::function<void(Argument&)> cb) { cb(assembler_arg); }
+void Instruction::Args(std::function<void(Argument&)> cb) {
+  auto opcode = mc_inst.getOpcode();
+  if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {
+    cb(next_arg);
+  }
+  cb(assembler_arg);
+  auto& assembler = LLVM_Assembler::Get();
+  auto& info = assembler.mc_instr_info->get(opcode);
+  if (info.isBranch()) {
+    cb(jump_arg);
+  }
+}
+
 std::shared_ptr<Object> Instruction::ArgPrototype(const Argument& arg) {
   if (&arg == &assembler_arg) {
     Status status;
@@ -101,7 +134,6 @@ std::shared_ptr<Object> Instruction::ArgPrototype(const Argument& arg) {
 void Instruction::ConnectionAdded(Location& here, Connection& connection) {
   if (&connection.argument == &assembler_arg) {
     if (auto assembler = connection.to.As<Assembler>()) {
-      assembler->instructions.push_back(this);
       assembler->UpdateMachineCode();
     }
   }
@@ -110,9 +142,6 @@ void Instruction::ConnectionAdded(Location& here, Connection& connection) {
 void Instruction::ConnectionRemoved(Location& here, Connection& connection) {
   if (&connection.argument == &assembler_arg) {
     if (auto assembler = connection.to.As<Assembler>()) {
-      assembler->instructions.erase(
-          std::remove(assembler->instructions.begin(), assembler->instructions.end(), this),
-          assembler->instructions.end());
       assembler->UpdateMachineCode();
     }
   }
@@ -122,9 +151,13 @@ string_view Instruction::Name() const { return "Instruction"; }
 shared_ptr<Object> Instruction::Clone() const { return make_shared<Instruction>(*this); }
 
 LongRunning* Instruction::OnRun(Location& here) {
-  auto assembler = assembler_arg.FindOrCreateObject<Assembler>(here);
+  auto assembler = FindOrCreateAssembler(here);
   assembler->RunMachineCode(this);
-  return nullptr;
+  return this;
+}
+
+void Instruction::Cancel() {
+  // do nothing for now
 }
 
 static std::string AssemblyText(const llvm::MCInst& mc_inst) {
@@ -2697,6 +2730,13 @@ std::unique_ptr<Action> Instruction::Widget::FindAction(gui::Pointer& p, gui::Ac
     }
   }
   return nullptr;
+}
+
+Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
+  if (&arg == &jump_arg) {
+    return Vec2AndDir{.pos = kRect.RightCenter(), .dir = 0_deg};
+  }
+  return gui::Widget::ArgStart(arg);
 }
 
 void Instruction::SerializeState(Serializer& writer, const char* key) const {

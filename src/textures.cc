@@ -65,6 +65,7 @@ float PersistentImage::height() { return heightPx() * scale; }
 void PersistentImage::draw(SkCanvas& canvas) {
   if (!image) {
     ERROR << "Attempt to draw an uninitialized PersistentImage";
+    return;
   }
 
   Rect rect = Rect(0, 0, width(), height());

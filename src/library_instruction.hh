@@ -28,10 +28,18 @@ enum class Flag {
   SF,
 };
 
-struct Instruction : LiveObject, Runnable {
+struct JumpArgument : Argument {
+  JumpArgument();
+
+  PaintDrawable& Icon() override;
+};
+
+extern Argument assembler_arg;
+extern JumpArgument jump_arg;
+
+struct Instruction : LiveObject, Runnable, LongRunning {
   llvm::MCInst mc_inst;
   void* address = nullptr;
-  uint8_t size = 0;
 
   void Args(std::function<void(Argument&)> cb) override;
   std::shared_ptr<Object> ArgPrototype(const Argument&) override;
@@ -43,6 +51,7 @@ struct Instruction : LiveObject, Runnable {
   std::shared_ptr<Object> Clone() const override;
 
   LongRunning* OnRun(Location& here) override;
+  void Cancel() override;
 
   struct Widget : gui::Widget {
     constexpr static float kWidth = 63.5_mm;
@@ -59,6 +68,7 @@ struct Instruction : LiveObject, Runnable {
     SkPath Shape() const override;
     void Draw(SkCanvas&) const override;
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+    Vec2AndDir ArgStart(const Argument&) override;
   };
 
   static void DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst);

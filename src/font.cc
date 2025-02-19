@@ -81,6 +81,16 @@ sk_sp<SkTypeface> Font::GetGrenzeSemiBold() {
   return grenze_semi_bold;
 }
 
+sk_sp<SkTypeface> Font::GetSilkscreen() {
+  static sk_sp<SkTypeface> silkscreen = LoadTypeface(maf::embedded::assets_slkscr_ttf);
+  return silkscreen;
+}
+
+sk_sp<SkTypeface> Font::GetHeavyData() {
+  static sk_sp<SkTypeface> heavy_data = LoadTypeface(maf::embedded::assets_heavy_data_ttf);
+  return heavy_data;
+}
+
 sk_sp<SkTypeface> Font::MakeWeightVariation(sk_sp<SkTypeface> base, float weight) {
   SkFontArguments::VariationPosition::Coordinate coordinates[1];
   coordinates[0].axis = kFontWeightTag;

@@ -24,6 +24,8 @@ struct Font {
   static sk_sp<SkTypeface> GetGrenzeLight();
   static sk_sp<SkTypeface> GetGrenzeRegular();
   static sk_sp<SkTypeface> GetGrenzeSemiBold();
+  static sk_sp<SkTypeface> GetSilkscreen();
+  static sk_sp<SkTypeface> GetHeavyData();
   static sk_sp<SkTypeface> MakeWeightVariation(sk_sp<SkTypeface> base, float weight);
   static std::unique_ptr<Font> MakeV2(sk_sp<SkTypeface> typeface, float letter_size);
 

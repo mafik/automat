@@ -70,6 +70,8 @@ Do your own due dilligence and check the licenses of the dependencies you use!
 - Paper texture -- [Krita](https://krita.org/)
 - Grenze font -- [Omnibus-Type](https://www.omnibus-type.com/fonts/grenze/)
 - Noto Sans font -- [Google Fonts](https://fonts.google.com/noto)
+- Silkscreen font -- [Jason Kottke](https://kottke.org/plus/type/silkscreen/)
+- Heavy Data font -- [Vic Fieger](https://www.vicfieger.com/) (website seems to be offline)
 
 ## Sounds
 

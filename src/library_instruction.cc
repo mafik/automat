@@ -97,7 +97,7 @@ Argument assembler_arg = []() {
   arg.RequireInstanceOf<Assembler>();
   arg.autoconnect_radius = INFINITY;
   arg.tint = "#ff0000"_color;
-  arg.style = Argument::Style::Cable;
+  arg.style = Argument::Style::Invisible;
   return arg;
 }();
 

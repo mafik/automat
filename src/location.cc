@@ -620,6 +620,7 @@ void Location::UpdateChildTransform() {
   transform.postScale(s, s, scale_pivot.x, scale_pivot.y);
   transform.postTranslate(animation_state.position.value.x, animation_state.position.value.y);
   object_widget->local_to_parent = SkM44(transform);
+  object_widget->TransformUpdated();
 }
 std::shared_ptr<Object> Location::InsertHere(std::shared_ptr<Object>&& object) {
   this->object.swap(object);

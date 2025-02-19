@@ -1,0 +1,62 @@
+// kind=shader
+
+uniform mat3 uv_to_pixel;
+
+const float kGridSize = 50.0;
+const float kPixelSizeInGrid = 1.0 / kGridSize;
+
+// Convert a 2D position to a pseudo-random value in [0,1)^2.
+vec2 random2(vec2 st) {
+    st = vec2(dot(st, vec2(127.1, 311.7)),
+    dot(st, vec2(269.5, 183.3)));
+    return fract(sin(st) * 43758.5453123);
+}
+
+// Draw a field of stars.
+// For each grid cell (after scaling pixel coordinates),
+// we choose one star whose center lies at cell + 2*random,
+// meaning the star center will lie randomly within a 2x2 square.
+// We then add contributions from candidate cells: if the pixel lies
+// within the star radius (with a one-pixel soft edge for anti-aliasing),
+// it lights up completely white.
+//
+// The uniform "uv_to_pixel" converts uv (likely in [0,1]) into pixel positions.
+vec4 main(vec2 uv) {
+    // Set the background (a dark gray)
+    vec4 color = vec4(0.14, 0.14, 0.14, 1.0);
+
+    // Compute the pixel coordinate.
+    vec2 pixel = (uv_to_pixel * vec3(uv, 1)).xy;
+    // Scale down so that one "grid cell" spans 100 pixels.
+    vec2 pixel_scaled = pixel / kGridSize;
+    // Identify the "base" grid cell that contains the pixel.
+    vec2 grid = floor(pixel_scaled);
+
+    // We'll add star contributions from each candidate cell.
+
+    for (int j = 0;
+    j < 2;
+    j++) {
+        for (int i = 0;
+        i < 2;
+        i++) {
+            // Actual grid cell we are considering.
+            vec2 cell = grid - vec2(float(i), float(j));
+            // Get a pseudo-random value for this cell
+            vec2 rnd = random2(cell);
+            float star_radius = rnd.y * 0.03 + 0.05;  // 1..4 pixels
+            // Star center is placed randomly within a 2x2 box.
+            vec2 star_center = cell + (2.0 - star_radius) * rnd;
+            // Calculate distance from our (scaled) pixel to the star center.
+            const float kExponent = 0.8;
+            float d = pow(pow(abs(pixel_scaled.x - star_center.x), kExponent) +
+            pow(abs(pixel_scaled.y - star_center.y), kExponent), 1 / kExponent);
+            // Use smoothstep to create a one-pixel soft edge:
+            float intensity = 1.0 - smoothstep(star_radius - kPixelSizeInGrid * 2, star_radius, d);
+            // Add the star's contribution to our color.
+            color.rgb += vec3(intensity);
+        }
+    }
+
+    return color;
+}

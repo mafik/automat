@@ -12,6 +12,7 @@ std::string Rect::ToStr() const {
   return f("Rect(t=%f, r=%f, b=%f, l=%f)", top, right, bottom, left);
 }
 
+std::string ToStrMetric(float x) { return f("%4.1fcm", x * 100); }
 std::string Vec2::ToStrMetric() const { return f("(%4.1fcm, %4.1fcm)", x * 100, y * 100); }
 
 std::string Rect::ToStrMetric() const {

@@ -339,6 +339,7 @@ struct BottomY {
   constexpr float operator()(const Rect& r) const { return r.bottom; }
 };
 
+std::string ToStrMetric(float);
 std::string ToStrMetric(SkPoint);
 std::string ToStrPx(SkPoint);
 std::string ToStrPx(SkRect);
@@ -348,9 +349,46 @@ union RRect {
   SkRRect sk;
   struct {
     Rect rect;
-    Vec2 radii[4];  // LL, LR, UR, UL
+    Vec2 radii[4];  // LowerLeft, LowerRight, UpperRight, UpperLeft
     SkRRect::Type type;
   };
+
+  // Make an RRect with non-zero width and height with equal radii.
+  constexpr static RRect MakeSimple(Rect rect, float radius) {
+    return {
+        .rect = rect, .radii{radius, radius, radius, radius}, .type = SkRRect::Type::kSimple_Type};
+  }
+
+  [[nodiscard]] constexpr RRect Outset(float amount) const {
+    auto AdjustRadius = [amount](Vec2 r) {
+      return Vec2(std::max(0.f, r.x + amount), std::max(0.f, r.y + amount));
+    };
+    RRect ret = {.rect = rect.Outset(amount),
+                 .radii =
+                     {
+                         AdjustRadius(radii[0]),
+                         AdjustRadius(radii[1]),
+                         AdjustRadius(radii[2]),
+                         AdjustRadius(radii[3]),
+                     },
+                 .type = type};
+    if (ret.rect.Width() == 0 && ret.rect.Height() == 0) {
+      ret.type = SkRRect::Type::kEmpty_Type;
+    } else if (ret.radii[0] == ret.radii[1] && ret.radii[1] == ret.radii[2] &&
+               ret.radii[2] == ret.radii[3] && ret.radii[0] == kZeroVec2) {
+      ret.type = SkRRect::Type::kSimple_Type;
+    } else if (ret.radii[0] == ret.radii[1] && ret.radii[1] == ret.radii[2] &&
+               ret.radii[2] == ret.radii[3] && (ret.radii[0].x >= (ret.rect.Width() / 2)) &&
+               (ret.radii[0].y >= (ret.rect.Height() / 2))) {
+      ret.type = SkRRect::Type::kOval_Type;
+    } else if (ret.radii[0].y == ret.radii[1].y && ret.radii[2].y == ret.radii[3].y &&
+               ret.radii[0].x == ret.radii[3].x && ret.radii[1].x == ret.radii[2].x) {
+      ret.type = SkRRect::Type::kNinePatch_Type;
+    } else {
+      ret.type = SkRRect::Type::kComplex_Type;
+    }
+    return ret;
+  }
 
   // Left end of the upper line.
   Vec2 LineEndUpperLeft() const { return {rect.left + radii[3].x, rect.top}; }

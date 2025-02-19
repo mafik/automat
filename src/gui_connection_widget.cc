@@ -174,6 +174,9 @@ void ConnectionWidget::FromMoved() {
 }
 
 animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
+  if (arg.style == Argument::Style::Invisible) {
+    return animation::Finished;
+  }
   auto& from_animation_state = from.GetAnimationState();
   SkPath from_shape = from.WidgetForObject()->Shape();
   if (arg.field) {
@@ -290,6 +293,9 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 }
 
 void ConnectionWidget::Draw(SkCanvas& canvas) const {
+  if (arg.style == Argument::Style::Invisible) {
+    return;
+  }
   auto& from_animation_state = from.GetAnimationState();
   auto from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget->Shape();

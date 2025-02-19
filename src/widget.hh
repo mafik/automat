@@ -138,6 +138,19 @@ struct Widget : public virtual SharedBase {
   virtual void PointerOver(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}
 
+  // Called when the widget's total transform (any of the `local_to_parent` in its ancestry) has
+  // changed.
+  //
+  // This may be used by some widgets to trigger re-rendering.
+  virtual void TransformUpdated() {}
+
+  void RecursiveTransformUpdated() {
+    TransformUpdated();
+    for (auto& child : Children()) {
+      child->RecursiveTransformUpdated();
+    }
+  }
+
   virtual void PreDraw(SkCanvas&) const {}
   void DrawCached(SkCanvas&) const;
   virtual void WakeAnimation() const;

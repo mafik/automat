@@ -164,9 +164,12 @@ void Pointer::ButtonDown(PointerButton btn) {
 
   if (action == nullptr && hover) {
     // TODO: process this similarly to keyboard shortcuts
-    // decide whether it's better to only use the final object for the action vs also its
-    // ancestors
     action = hover->FindAction(*this, btn);
+    std::shared_ptr<Widget>* curr = &hover;
+    while (action == nullptr && (*curr)->parent) {
+      curr = &(*curr)->parent;
+      action = (*curr)->FindAction(*this, btn);
+    }
     if (action) {
       action->Begin();
       UpdatePath();

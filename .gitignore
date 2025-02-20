@@ -42,12 +42,14 @@ __pycache__
 *~
 
 build
+third_party/googletest
 third_party/PipeWire
 third_party/FlameGraph
 third_party/LLVM
 third_party/Skia
 third_party/depot_tools
 third_party/*.tar.xz
+third_party/*.tar.gz
 third_party/libXau-*
 third_party/libxcb-*
 third_party/util-macros-*

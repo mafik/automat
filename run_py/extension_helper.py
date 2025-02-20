@@ -14,6 +14,30 @@ from make import Popen
 from pathlib import Path
 from typing import Callable
 
+def download_from_url(url : str, filename : Path):
+    import os
+    import urllib.request
+    
+    # Create parent directory if it doesn't exist
+    os.makedirs(filename.parent, exist_ok=True)
+    
+    # Download the file from url
+    urllib.request.urlretrieve(url, filename)
+
+def extract_tar_gz(archive : Path, output : Path):
+  import tarfile
+  import os
+  import shutil
+  
+  os.makedirs(output.parent, exist_ok=True)
+
+  tar = tarfile.open(archive, 'r:gz')
+  root = tar.next()
+  tar.extractall(output.parent)
+  shutil.move(output.parent / root.name, output)
+
+  
+
 class ExtensionHelper:
   '''
   Helper for extensions that build third party libraries.
@@ -44,6 +68,7 @@ class ExtensionHelper:
     self.install_bins = set()
     self.compile_args = []
     self.link_args = []
+    self.run_args = []
     self.outputs = dict()
     # beam is a list of files that are required for the next step in the build
     # it's used to conditionally inject steps in the build graph
@@ -54,6 +79,9 @@ class ExtensionHelper:
     self.src_dir = self.checkout_dir
     self.git_url = None
     self.git_tag = None
+    self.fetch_url = None
+    self.fetch_filename = None
+    self.include_regex = None
 
   def _hook_recipe(self, recipe):
 
@@ -64,6 +92,26 @@ class ExtensionHelper:
           inputs=[],
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
+      self.beam[''] = [self.checkout_dir]
+
+    elif self.fetch_url:
+      archive = fs_utils.third_party_dir / self.fetch_filename
+      recipe.add_step(
+          partial(download_from_url, self.fetch_url, archive),
+          outputs=[archive],
+          inputs=[],
+          desc = f'Downloading {self.name}',
+          shortcut=f'get {self.name}')
+      
+      if archive.name.endswith('.tar.gz'):
+        recipe.add_step(
+            partial(extract_tar_gz, archive, self.checkout_dir),
+            outputs=[self.checkout_dir],
+            inputs=[archive],
+            desc = f'Extracting {self.name}',
+            shortcut=f'extract {self.name}')
+      else:
+        raise ValueError(f'Unknown archive format for {archive} (supported: .tar.gz)')
       self.beam[''] = [self.checkout_dir]
 
     if self.patch_sources_func:
@@ -82,7 +130,7 @@ class ExtensionHelper:
         cmake_args = cmake.CMakeArgs(build_type, self.configure_opts)
         recipe.add_step(
             partial(Popen, cmake_args +
-                              ['-S', self.src_dir, '-B', build_dir]),
+                              ['-S', str(self.src_dir).replace('\\', '/'), '-B', str(build_dir).replace('\\', '/')]),
             outputs=[build_dir / 'build.ninja'],
             inputs=self.beam[''] + [self.module_globals['__file__']],
             desc=f'Configuring {self.name} {build_type}'.strip(),
@@ -125,6 +173,8 @@ class ExtensionHelper:
         self.beam[build_type.name] = [marker]
 
   def _hook_srcs(self, srcs : dict[str, src.File], recipe):
+    if not self.include_regex:
+      return
     for src in srcs.values():
       if any(self.include_regex.match(inc) for inc in src.system_includes):
         self.install_srcs.add(src)
@@ -140,13 +190,27 @@ class ExtensionHelper:
       if self.install_objs.intersection(bin.objects):
         self.install_bins.add(bin)
         bin.link_args += self.link_args
+        bin.run_args += self.run_args
     
 
   def FetchFromGit(self, git_url, git_tag):
     if self.git_url:
       raise ValueError(f'{self.name} already has git URL set')
+    if self.fetch_url:
+      raise ValueError(f'{self.name} already has fetch URL set')
     self.git_url = git_url
     self.git_tag = git_tag
+
+  def FetchFromURL(self, fetch_url, fetch_filename=None):
+    if self.git_url:
+      raise ValueError(f'{self.name} already has git URL set')
+    if self.fetch_url:
+      raise ValueError(f'{self.name} already has fetch URL set')
+    self.fetch_url = fetch_url
+    if fetch_filename:
+      self.fetch_filename = fetch_filename
+    else:
+      self.fetch_filename = fetch_url.split('/')[-1]
 
   def ConfigureWithCMake(self, src_dir, output):
     '''
@@ -181,7 +245,7 @@ class ExtensionHelper:
       self.ConfigureOption(name, value)
 
   def InstallWhenIncluded(self, include_regex):
-    if hasattr(self, 'include_regex'):
+    if self.include_regex:
       raise ValueError(f'{self.name} was already configured with include regex')
     self.include_regex = re.compile(include_regex)
 
@@ -200,6 +264,13 @@ class ExtensionHelper:
   def AddLinkArgs(self, *link_args):
     for link_arg in link_args:
       self.AddLinkArg(link_arg)
+
+  def AddRunArg(self, run_arg):
+    self.run_args.append(run_arg)
+
+  def AddRunArgs(self, run_args):
+    for run_arg in run_args:
+      self.AddRunArg(run_arg)
 
   def PatchSources(self, func : Callable[[Path], None]):
     if self.patch_sources_func:

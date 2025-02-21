@@ -22,11 +22,11 @@
       "preLaunchTask": "link automat",
     },
     {
-      "name": "LLDB debug_sincos_test",
+      "name": "LLDB debug_llvm_asm_test",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/debug_sincos_test",
-      "preLaunchTask": "link debug_sincos",
+      "program": "${workspaceFolder}/build/debug_llvm_asm_test",
+      "preLaunchTask": "link debug_llvm_asm_test",
     },
     {
       "name": "GDB debug_automat",

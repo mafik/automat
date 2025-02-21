@@ -39,7 +39,6 @@ extern JumpArgument jump_arg;
 
 struct Instruction : LiveObject, Runnable, LongRunning {
   llvm::MCInst mc_inst;
-  void* address = nullptr;
 
   void Args(std::function<void(Argument&)> cb) override;
   std::shared_ptr<Object> ArgPrototype(const Argument&) override;

@@ -4,9 +4,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "link debug_sincos",
+      "label": "link debug_llvm_asm_test",
       "type": "shell",
-      "command": "./run.py 'link debug_sincos_test'",
+      "command": "./run.py 'link debug_llvm_asm_test'",
       "presentation": {
         "reveal": "silent"
       }

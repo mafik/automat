@@ -326,7 +326,8 @@ int main() { return automat::Main(); }
 #pragma comment(lib, "xcb")
 #pragma comment(lib, "xcb-xinput")
 
-int main(int argc, char* argv[]) {
+// Unit tests have their own main(), defined in gtest.cc
+__attribute__((weak)) int main(int argc, char* argv[]) {
   automat::argc = argc;
   automat::argv = argv;
   return automat::Main();

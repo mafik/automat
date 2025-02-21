@@ -179,7 +179,7 @@ class ExtensionHelper:
       if any(self.include_regex.match(inc) for inc in src.system_includes):
         self.install_srcs.add(src)
 
-  def _hook_plan(self, srcs, objs, bins, recipe):
+  def _hook_plan(self, srcs, objs : list[build.ObjectFile], bins, recipe):
     for obj in objs:
       if obj.deps.intersection(self.install_srcs):
         self.install_objs.add(obj)

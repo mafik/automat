@@ -146,8 +146,8 @@ std::shared_ptr<MockInstruction> MakeInstruction(const MCInst& mc_inst) {
   return inst;
 }
 
-// Checks that a simple instruction can be executed
-TEST(LLVMAsm, SetRAX) {
+// Checks that a single instruction can be executed correctly
+TEST(LLVMAsm, SingleInstruction) {
   std::mutex mutex;
   std::condition_variable cv;
   bool exited = false;
@@ -183,7 +183,11 @@ TEST(LLVMAsm, SetRAX) {
   ASSERT_EQ(exited, true);
   EXPECT_EQ(exit_instr.lock(), inst);
   EXPECT_EQ(exit_point, ExitPoint::Next);
+
+  controller.GetState(state);
+  EXPECT_EQ(state.regs.RAX, 1337);
 }
 
 // TODO: test case for a sequence of instructions
 // TODO: test case for a jump exit
+// TODO: test case for a GetStatus during a loop

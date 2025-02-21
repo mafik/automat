@@ -11,7 +11,6 @@ hook.FetchFromURL('https://github.com/google/googletest/releases/download/v1.16.
 hook.ConfigureOption('CMAKE_CXX_STANDARD', '20')
 hook.ConfigureWithCMake(src_dir=hook.checkout_dir, output=googletest_header)
 hook.InstallWhenIncluded(r'(gmock/gmock.h|gtest/gtest.h)')
-hook.AddRunArg('--gtest_color=yes')
 
 # Shortcut recipe for running all tests (default build type)
 # def hook_final(srcs, objs, bins, recipe):

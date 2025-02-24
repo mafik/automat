@@ -622,20 +622,19 @@ void Location::UpdateChildTransform() {
   object_widget->local_to_parent = SkM44(transform);
   object_widget->TransformUpdated();
 }
-std::shared_ptr<Object> Location::InsertHere(std::shared_ptr<Object>&& object) {
+std::shared_ptr<Object> Location::InsertHereNoWidget(std::shared_ptr<Object>&& object) {
   this->object.swap(object);
   this->object->Relocate(this);
+  return object;
+}
+std::shared_ptr<Object> Location::InsertHere(std::shared_ptr<Object>&& object) {
+  object = InsertHereNoWidget(std::move(object));
   auto object_widget = WidgetForObject();
   object_widget->parent = this->SharedPtr();
   FixParents();
   return object;
 }
 std::shared_ptr<Object> Location::Create(const Object& prototype) {
-  object = prototype.Clone();
-  object->Relocate(this);
-  auto object_widget = WidgetForObject();
-  object_widget->parent = this->SharedPtr();
-  FixParents();
-  return object;
+  return InsertHere(prototype.Clone());
 }
 }  // namespace automat

@@ -99,7 +99,8 @@ struct Location : public gui::Widget {
     }
   }
 
-  // Shortcut for Widget::ForObject(location.object, location);
+  // Find (or create if needed) the Widget for this location's object.
+  // Shortcut for Widget::ForObject(location.object, location)
   std::shared_ptr<Widget>& WidgetForObject() const {
     if (!object_widget) {
       if (object) {
@@ -108,6 +109,12 @@ struct Location : public gui::Widget {
     }
     return object_widget;
   }
+
+  // A version of InsertHere that doesn't create a Widget for the object.
+  //
+  // TODO: Remove InsertHere and switch to this one. Take care to find and fix all places which
+  // depend on implicitly created widgets.
+  std::shared_ptr<Object> InsertHereNoWidget(std::shared_ptr<Object>&& object);
 
   std::shared_ptr<Object> InsertHere(std::shared_ptr<Object>&& object);
 

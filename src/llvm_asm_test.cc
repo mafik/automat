@@ -3,6 +3,11 @@
 
 #include <csignal>
 #include <thread>
+
+#include "argument.hh"
+#include "base.hh"
+#include "status.hh"
+
 #if defined __linux__
 #include <signal.h>
 #include <sys/mman.h>  // For mmap related functions and constants
@@ -29,6 +34,8 @@
 using namespace std::chrono_literals;
 
 using AutomatInstruction = automat::library::Instruction;
+
+constexpr bool kDebugCodeController = false;
 
 // Note that RSP is not preserved!
 #define REGS(CB) \
@@ -65,20 +72,36 @@ enum class CodeType : uint8_t {
   Jump,
 };
 
+struct CodePoint {
+  std::weak_ptr<AutomatInstruction>* instruction;
+  CodeType code_type;
+};
+
 // Controls the execution of machine code.
 //
 // Uses two threads internally - a worker thread, which executes the actual machine code and control
 // thread, which functions as a debugger.
 struct PtraceMachineCodeController {
-  using ExitCallback = std::function<void(std::weak_ptr<AutomatInstruction>&, CodeType)>;
+  using ExitCallback = std::function<void(CodePoint)>;
 
   // ExitCallback is called on _some_ thread when the machine code reaches an exit point.
   PtraceMachineCodeController(ExitCallback exit_callback)
-      : exit_callback(exit_callback), control_thread([this] { this->ControlThread(); }) {}
+      : exit_callback(exit_callback), control_thread([this] { this->ControlThread(); }) {
+    // wait for control to stop the worker thread
+    worker_set_up.wait(false);
+  }
 
   ~PtraceMachineCodeController() {
+    if constexpr (kDebugCodeController) {
+      LOG << "User thread: Destroying PtraceMachineCodeController";
+    }
     kill(pid, SIGKILL);
-    control_commands.enqueue([this]() { this->controller_running = false; });
+    control_commands.enqueue([this]() {
+      if constexpr (kDebugCodeController) {
+        LOG << "Control thread: Setting controller_running to false";
+      }
+      this->controller_running = false;
+    });
   }
 
   // Convert the given instructions into machine code, hot-reloading if necessary.
@@ -163,13 +186,19 @@ struct PtraceMachineCodeController {
         new_code[fixup_end - 1] = ((pcrel >> 24) & 0xFF);
       };
 
-      auto EmitJump = [&](uint32_t target_offset) {
+      auto EmitJump = [&](int instr_index, uint32_t target_offset) {
         llvm::SmallVector<char, 32> instruction_bytes;
         llvm::SmallVector<llvm::MCFixup, 2> instruction_fixups;
         // Save the current RIP and jump to epilogue
         mc_code_emitter->encodeInstruction(llvm::MCInstBuilder(llvm::X86::JMP_4).addImm(0),
                                            instruction_bytes, instruction_fixups,
                                            mc_subtarget_info);
+        new_map.push_back({
+            .begin = (uint32_t)new_code.size(),
+            .size = (uint8_t)instruction_bytes.size(),
+            .code_type = CodeType::Next,
+            .instruction = (uint16_t)instr_index,
+        });
         new_code.append(instruction_bytes.data(), instruction_bytes.size());
         Fixup4(new_code.size(), target_offset);
       };
@@ -193,7 +222,7 @@ struct PtraceMachineCodeController {
         return UINT32_MAX;
       };
 
-      // TODO: maybe accelerate this with a hash map
+      // TODO: accelerate this with a hash map
       auto OffsetOfInstruction = [&](automat::library::Instruction* inst) -> uint32_t {
         for (auto& map_entry : new_map) {
           if (map_entry.instruction == UINT16_MAX) {
@@ -246,7 +275,7 @@ struct PtraceMachineCodeController {
             inst_i = IndexOfInstruction(inst);
             uint32_t existing_offset = OffsetOfInstructionIndex(inst_i);
             if (existing_offset != UINT32_MAX) {
-              EmitJump(existing_offset);
+              EmitJump(last_inst_i, existing_offset);
               break;
             }
           }
@@ -274,7 +303,7 @@ struct PtraceMachineCodeController {
         machine_code_fixups.pop_back();
       }
 
-      if constexpr (false) {
+      if constexpr (kDebugCodeController) {
         std::string machine_code_str;
         for (int i = 0; i < new_code.size(); i++) {
           machine_code_str += maf::f("%02x ", new_code[i]);
@@ -282,7 +311,7 @@ struct PtraceMachineCodeController {
             machine_code_str += "\n";
           }
         }
-        LOG << machine_code_str;
+        LOG << "New code: " << machine_code_str;
       }
     }
 
@@ -294,15 +323,52 @@ struct PtraceMachineCodeController {
     }
 
     {  // Replace the code, map & instructions on the control thread.
+      std::atomic<bool> done = false;
       control_commands.enqueue([this, new_code = std::move(new_code), new_map = std::move(new_map),
-                                new_instructions = std::move(new_instructions)]() {
-      // TODO: handle the case where machine code is currently executing (worker_stopped == false)
+                                new_instructions = std::move(new_instructions), &done]() {
+        if constexpr (kDebugCodeController) {
+          LOG << "Control thread: Replacing code, map & instructions";
+        }
+        assert(worker_stopped);
 
-      // TODO: grow code if necessary
+        {  // Update RIP to keep the currently executing instruction active
+          user_regs_struct user_regs;
+          if (ptrace(PTRACE_GETREGS, pid, 0, &user_regs) == -1) {
+            ERROR << "While reloading the code, PTRACE_GETREGS failed: " << strerror(errno);
+            return;
+          }
+
+          // Note that code_point.instruction is only valid as long as current `instructions` vector
+          // is not modified!!
+          auto code_point = InstructionPointerToCodePoint(user_regs.rip, false);
+
+          user_regs.rip = 0;
+          if (code_point.instruction) {
+            // TODO: there is a subtle bug here - if we pause at an implicitly inserted jmp
+            // instruction, then instead of updating the RIP to the next instruction, we'll update
+            // it to the instruction prior to the jmp. This will cause it to be executed again.
+            auto& old_instr = *code_point.instruction;
+            for (auto& map_entry : new_map) {
+              auto& new_instr = new_instructions[map_entry.instruction];
+              if (!new_instr.owner_before(old_instr) && !old_instr.owner_before(new_instr)) {
+                user_regs.rip = (uint64_t)code.data() + map_entry.begin;
+                break;
+              }
+            }
+          }
+          // TODO: maybe call exit_callback if the new rip is 0?
+
+          if (ptrace(PTRACE_SETREGS, pid, 0, &user_regs) == -1) {
+            ERROR << "Couldn't reset RIP after code reload - PTRACE_SETREGS failed: "
+                  << strerror(errno);
+          }
+        }
+
+        // TODO: grow code if necessary
 #if defined __linux__
         mprotect(code.data(), code.size(), PROT_READ | PROT_WRITE);
 #else
-      // TODO: Implement on Windows
+        // TODO: Implement on Windows
 #endif  // __linux__
 
         memcpy(code.data(), new_code.data(), new_code.size());
@@ -316,9 +382,11 @@ struct PtraceMachineCodeController {
 
         map = std::move(new_map);
         instructions = std::move(new_instructions);
+        done = true;
+        done.notify_all();
       });
-      LOG << "UpdateCode: Sending SIGUSR1 to worker thread " << pid;
-      kill(pid, SIGUSR1);
+      WakeControlThread();
+      done.wait(false);
     }
   }
 
@@ -331,6 +399,9 @@ struct PtraceMachineCodeController {
   // SignalMachineCodeController) may execute the code in a blocking manner, on the current thread.
   void Execute(std::weak_ptr<AutomatInstruction> instr) {
     control_commands.enqueue([this, instr = std::move(instr)]() {
+      if constexpr (kDebugCodeController) {
+        LOG << "Control thread: Executing instruction";
+      }
       int instruction_index = -1;
       for (int i = 0; i < instructions.size(); ++i) {
         if (!instructions[i].owner_before(instr) && !instr.owner_before(instructions[i])) {
@@ -383,11 +454,12 @@ struct PtraceMachineCodeController {
         ERROR << "PTRACE_CONT failed: " << strerror(errno);
         return;
       }
-      LOG << "Executing instruction at " << maf::f("%p", instruction_addr);
+      if constexpr (kDebugCodeController) {
+        LOG << "Executing instruction at " << maf::f("%p", instruction_addr);
+      }
       worker_stopped = false;
     });
-    LOG << "Execute: Sending SIGUSR1 to worker thread " << pid;
-    kill(pid, SIGUSR1);
+    WakeControlThread();
   }
 
   struct State {
@@ -398,45 +470,31 @@ struct PtraceMachineCodeController {
     Regs regs;
   };
 
-  // Thread-safe
+  // Thread-safe (except for the control thread)
   void GetState(State& state) {
     std::atomic<bool> done = false;
-
     control_commands.enqueue([&]() {
-      LOG << "Getting registers...";
-      int ret;
-      user_regs_struct user_regs;
-      ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
-      if (ret == -1) {
-        ERROR << "GetState: PTRACE_GETREGS failed: " << strerror(errno);
-        done = true;
-        done.notify_all();
-        return;
+      if constexpr (kDebugCodeController) {
+        LOG << "Control thread: Getting the state";
       }
+      assert(worker_stopped);
       state.current_instruction.reset();
-      state.regs.RAX = user_regs.rax;
-      state.regs.RBX = user_regs.rbx;
-      state.regs.RCX = user_regs.rcx;
-      state.regs.RDX = user_regs.rdx;
-      state.regs.RBP = user_regs.rbp;
-      state.regs.RSI = user_regs.rsi;
-      state.regs.RDI = user_regs.rdi;
-      state.regs.R8 = user_regs.r8;
-      state.regs.R9 = user_regs.r9;
-      state.regs.R10 = user_regs.r10;
-      state.regs.R11 = user_regs.r11;
-      state.regs.R12 = user_regs.r12;
-      state.regs.R13 = user_regs.r13;
-      state.regs.R14 = user_regs.r14;
-      state.regs.R15 = user_regs.r15;
+      maf::Status status;
+      uint64_t rip;
+      GetRegs(state.regs, rip, status);
+      if (!OK(status)) {
+        ERROR << status;
+      }
+
+      auto code_point = InstructionPointerToCodePoint(rip, false);
+      if (code_point.instruction) {
+        state.current_instruction = *code_point.instruction;
+      }
       done = true;
       done.notify_all();
     });
-    kill(pid, SIGUSR1);
-
-    LOG << "Waiting for done...";
+    WakeControlThread();
     done.wait(false);
-    LOG << "Done!";
   }
 
  private:
@@ -474,12 +532,136 @@ struct PtraceMachineCodeController {
 
   std::vector<MapEntry> map;
 
+  CodePoint InstructionPointerToCodePoint(uint64_t rip, bool trap) {
+    if (rip < (uint64_t)code.data() || rip >= (uint64_t)(code.data() + code.size())) {
+      return {nullptr, CodeType::InstructionBody};
+    }
+    uint64_t code_offset = rip - (uint64_t)code.data();
+    for (auto& map_entry : map) {
+      if (trap) {
+        if (map_entry.begin + map_entry.size == code_offset) {
+          return {&instructions[map_entry.instruction], map_entry.code_type};
+        }
+      } else {
+        if (map_entry.begin <= code_offset && map_entry.begin + map_entry.size > code_offset) {
+          return {&instructions[map_entry.instruction], map_entry.code_type};
+        }
+      }
+    }
+    return {nullptr, CodeType::InstructionBody};
+  }
+
   // Holds commands to be executed on the control thread.
   moodycamel::BlockingConcurrentQueue<std::function<void()>> control_commands;
 
   ExitCallback exit_callback;
   std::jthread control_thread;
   bool controller_running = true;
+  std::atomic<bool> worker_set_up = false;
+
+  // std::optional < std::weak_ptr<AutomatInstruction>, CodeType >> nthueo;
+
+  // This should only be called from the control thread.
+  void PrintMap() {
+    LOG << "Code map:";
+    for (auto& map_entry : map) {
+      std::string code_type_str;
+      switch (map_entry.code_type) {
+        case CodeType::InstructionBody:
+          code_type_str = "InstructionBody";
+          break;
+        case CodeType::Next:
+          code_type_str = "Next";
+          break;
+        case CodeType::Jump:
+          code_type_str = "Jump";
+          break;
+        default:
+          code_type_str = "Unknown";
+          break;
+      }
+      LOG << "  " << maf::f("%d", map_entry.begin) << "-"
+          << maf::f("%d", map_entry.begin + map_entry.size) << " " << code_type_str
+          << " inst=" << map_entry.instruction;
+    }
+  }
+
+  void WakeControlThread() {
+    if (pid) {
+      if constexpr (kDebugCodeController) {
+        LOG << "Sending SIGUSR1 to control thread " << pid;
+      }
+      kill(pid, SIGUSR1);
+    }
+  }
+
+  // This should only be called from the control thread.
+  void GetRegs(Regs& regs, uint64_t& rip, maf::Status& status) {
+    user_regs_struct user_regs;
+    int ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
+    if (ret == -1) {
+      maf::AppendErrorMessage(status) += "PTRACE_GETREGS(" + maf::f("%d", pid) + ") failed";
+      return;
+    }
+    regs.RAX = user_regs.rax;
+    regs.RBX = user_regs.rbx;
+    regs.RCX = user_regs.rcx;
+    regs.RDX = user_regs.rdx;
+    regs.RBP = user_regs.rbp;
+    regs.RSI = user_regs.rsi;
+    regs.RDI = user_regs.rdi;
+    regs.R8 = user_regs.r8;
+    regs.R9 = user_regs.r9;
+    regs.R10 = user_regs.r10;
+    regs.R11 = user_regs.r11;
+    regs.R12 = user_regs.r12;
+    regs.R13 = user_regs.r13;
+    regs.R14 = user_regs.r14;
+    regs.R15 = user_regs.r15;
+    rip = user_regs.rip;
+  }
+
+  // This should only be called from the control thread.
+  void SetRegs(Regs& regs, maf::Status& status) {
+    user_regs_struct user_regs;
+    if (ptrace(PTRACE_GETREGS, pid, 0, &user_regs) == -1) {
+      maf::AppendErrorMessage(status) +=
+          "SetRegs - PTRACE_GETREGS(" + maf::f("%d", pid) + ") failed";
+      return;
+    }
+    user_regs.rax = regs.RAX;
+    user_regs.rbx = regs.RBX;
+    user_regs.rcx = regs.RCX;
+    user_regs.rdx = regs.RDX;
+    user_regs.rbp = regs.RBP;
+    user_regs.rsi = regs.RSI;
+    user_regs.rdi = regs.RDI;
+    user_regs.r8 = regs.R8;
+    user_regs.r9 = regs.R9;
+    user_regs.r10 = regs.R10;
+    user_regs.r11 = regs.R11;
+    user_regs.r12 = regs.R12;
+    user_regs.r13 = regs.R13;
+    user_regs.r14 = regs.R14;
+    user_regs.r15 = regs.R15;
+    if (ptrace(PTRACE_SETREGS, pid, 0, &user_regs) == -1) {
+      maf::AppendErrorMessage(status) += "PTRACE_SETREGS failed";
+    }
+  }
+
+  // This should only be called from the control thread.
+  void ResumeWorker(maf::Status& status) {
+    if (!worker_stopped) {
+      maf::AppendErrorMessage(status) += "Worker already running";
+      return;
+    }
+    int ret = ptrace(PTRACE_CONT, pid, 0, 0);
+    if (ret == -1) {
+      maf::AppendErrorMessage(status) += "PTRACE_CONT failed";
+      return;
+    }
+    worker_stopped = false;
+  }
 
   void ControlThread() {
     SetThreadName("Machine Code Control");
@@ -509,7 +691,9 @@ struct PtraceMachineCodeController {
         ERROR << "failed to start machine code worker thread: " << strerror(errno);
         return;
       }
-      LOG << "Started worker with PID " << pid;
+      if constexpr (kDebugCodeController) {
+        LOG << "Started worker with PID " << pid;
+      }
 
       int ret = ptrace(PTRACE_SEIZE, pid, 0, PTRACE_O_TRACESYSGOOD | PTRACE_O_EXITKILL);
       if (ret == -1) {
@@ -522,63 +706,124 @@ struct PtraceMachineCodeController {
 #endif  // __linux__
     }
 
+    bool initial_registers_set = false;
+
     while (controller_running) {
       int status;
       std::function<void()> command;
       if (control_commands.try_dequeue(command)) {
+        if constexpr (kDebugCodeController) {
+          LOG << "Control thread: Found command to execute, worker_stopped=" << worker_stopped;
+        }
         command();
       } else if (worker_stopped) {
-        LOG << "Waiting for a new command...";
+        if constexpr (kDebugCodeController) {
+          LOG << "Control thread: Worker is stopped, waiting for command";
+        }
         control_commands.wait_dequeue(command);
+        if constexpr (kDebugCodeController) {
+          LOG << "Control thread: Executing command";
+        }
         command();
       } else {
-        LOG << "Waiting in waitpid...";
+        if constexpr (kDebugCodeController) {
+          LOG << "Control thread: Worker is running, blocking in waitpid";
+        }
         int ret = waitpid(pid, &status, __WALL);
         if (ret == -1) {
           ERROR << "waitpid failed: " << strerror(errno);
           return;
         }
         if (WIFEXITED(status)) {
-          LOG << "Worker thread exited status=" << WEXITSTATUS(status);
+          if constexpr (kDebugCodeController) {
+            LOG << "Control thread: Worker thread exited status=" << WEXITSTATUS(status);
+          }
           break;
         } else if (WIFSIGNALED(status)) {
-          LOG << "Worker thread killed by signal=" << WTERMSIG(status);
+          if constexpr (kDebugCodeController) {
+            LOG << "Control thread: Worker thread killed by signal=" << WTERMSIG(status);
+          }
           break;
         } else if (WIFSTOPPED(status)) {
+          worker_stopped = true;
           int sig = WSTOPSIG(status);
           if (sig == SIGSTOP) {
-            worker_stopped = true;
             bool group_stop = status >> 16 == PTRACE_EVENT_STOP;
             if (!group_stop) {  // signal-delivery-stop
               // This happens immediately after the worker thread is started.
               // We change this stop state into a group-stop by re-injecting the stop signal.
-              LOG << "Signal delivery stop - cool, let's keep it stopped";
-              // ret = ptrace(PTRACE_CONT, pid, 0, sig);
-              // if (ret == -1) {
-              //   ERROR << "PTRACE_CONT failed: " << strerror(errno);
-              //   return;
-              // }
+              if constexpr (kDebugCodeController) {
+                LOG << "Control thread: Signal delivery stop - cool, let's keep it stopped";
+              }
             } else {  // group-stop
                       // Keep the worker stopped, but listen for other waitpid events.
-
-              LOG << "Group-stop for SIGSTOP - little weird but also cool";
+              if constexpr (kDebugCodeController) {
+                LOG << "Control thread: Group-stop for SIGSTOP - little weird but also cool";
+              }
+            }
+            if (!initial_registers_set) {
+              initial_registers_set = true;
+              Regs regs = {};
+              maf::Status status;
+              uint64_t rip;
+              GetRegs(regs, rip, status);
+              if (!OK(status)) {
+                ERROR << "Couldn't read initial registers: " << status;
+                continue;
+              }
+              regs.RAX = 0;
+              regs.RBX = 0;
+              regs.RCX = 0;
+              regs.RDX = 0;
+              regs.RBP = 0;
+              regs.RSI = 0;
+              regs.RDI = 0;
+              regs.R8 = 0;
+              regs.R9 = 0;
+              regs.R10 = 0;
+              regs.R11 = 0;
+              regs.R12 = 0;
+              regs.R13 = 0;
+              regs.R14 = 0;
+              regs.R15 = 0;
+              SetRegs(regs, status);
+              if (!OK(status)) {
+                ERROR << "Couldn't initialize starting registers: " << status;
+                continue;
+              }
+              if constexpr (kDebugCodeController) {
+                LOG << "Worker thread set up";
+              }
+              worker_set_up = true;
+              worker_set_up.notify_all();
             }
           } else if (sig == SIGUSR1) {
-            int ret = ptrace(PTRACE_CONT, pid, 0, 0);
-            if (ret == -1) {
-              ERROR << "PTRACE_CONT after SIGUSR1 failed: " << strerror(errno);
+            if constexpr (kDebugCodeController) {
+              LOG << "Control thread: Received SIGUSR1 - processing commands";
+            }
+            // SIGUSR1 means that we probably have some commands to execute.
+            // They typically involve stopping the worker thread so instead of resuming the worker
+            // and processing the commands while worker is running (which would involve stopping it
+            // again), we try to process them immediately here.
+            while (control_commands.try_dequeue(command)) {
+              command();
+            }
+            maf::Status status;
+            ResumeWorker(status);
+            if (!OK(status)) {
+              ERROR << "Couldn't resume worker thread: " << status;
+              continue;
             }
           } else if (sig == SIGTRAP) {
-            worker_stopped = true;
-            LOG << "Received SIGTRAP - calling exit_callback";
+            if constexpr (kDebugCodeController) {
+              LOG << "Received SIGTRAP - calling exit_callback";
+            }
             if (exit_callback == nullptr) {
               continue;
             }
 
-            int ret;
             user_regs_struct user_regs;
-            ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
-            if (ret == -1) {
+            if (ptrace(PTRACE_GETREGS, pid, 0, &user_regs) == -1) {
               ERROR << "PTRACE_GETREGS failed: " << strerror(errno);
               return;
             }
@@ -592,58 +837,28 @@ struct PtraceMachineCodeController {
               continue;
             }
 
-            uint64_t code_offset = user_regs.rip - (uint64_t)code.data();
-            MapEntry* found_map_entry = nullptr;
-            for (auto& map_entry : map) {
-              // It seems that traps cause the instruction pointer to advance to the next
-              // instruction.
-              if ((map_entry.code_type == CodeType::Jump ||
-                   map_entry.code_type == CodeType::Next) &&
-                  (map_entry.begin + map_entry.size == code_offset)) {
-                found_map_entry = &map_entry;
-                break;
-              }
-              if (map_entry.begin <= code_offset &&
-                  code_offset < map_entry.begin + map_entry.size) {
-                found_map_entry = &map_entry;
-                break;
-              }
+            auto code_point = InstructionPointerToCodePoint(user_regs.rip, true);
+
+            user_regs.rip = 0;
+            if (ptrace(PTRACE_SETREGS, pid, 0, &user_regs) == -1) {
+              ERROR << "Couldn't reset RIP after trap exit - PTRACE_SETREGS failed: "
+                    << strerror(errno);
             }
-            if (found_map_entry) {
-              CodeType exit_point = CodeType::InstructionBody;
-              if (found_map_entry->code_type == CodeType::Next) {
-                exit_point = CodeType::Next;
-              } else if (found_map_entry->code_type == CodeType::Jump) {
-                exit_point = CodeType::Jump;
-              }
-              exit_callback(instructions[found_map_entry->instruction], exit_point);
-            } else {
-              ERROR << "No map entry found for the instruction at RIP="
-                    << maf::f("%p", user_regs.rip);
-              LOG << "Map entries:";
-              for (auto& map_entry : map) {
-                std::string code_type_str;
-                switch (map_entry.code_type) {
-                  case CodeType::InstructionBody:
-                    code_type_str = "InstructionBody";
-                    break;
-                  case CodeType::Next:
-                    code_type_str = "Next";
-                    break;
-                  case CodeType::Jump:
-                    code_type_str = "Jump";
-                    break;
-                  default:
-                    code_type_str = "Unknown";
-                    break;
-                }
-                LOG << "  " << maf::f("%p", map_entry.begin) << "-"
-                    << maf::f("%p", map_entry.begin + map_entry.size) << " " << code_type_str << " "
-                    << map_entry.instruction;
-              }
+
+            exit_callback(code_point);
+          } else if (sig == SIGSEGV) {
+            siginfo_t siginfo;
+            if (ptrace(PTRACE_GETSIGINFO, pid, 0, &siginfo) == -1) {
+              ERROR << "PTRACE_GETSIGINFO failed: " << strerror(errno);
+              continue;
             }
+            ERROR << "Worker thread received SIGSEGV while accessing memory at "
+                  << maf::f("%p", siginfo.si_addr);
+            continue;
           } else {
-            LOG << "Worker thread stopped signal=" << WSTOPSIG(status);
+            if constexpr (kDebugCodeController) {
+              LOG << "Worker thread stopped signal=" << WSTOPSIG(status);
+            }
           }
         } else if (WIFCONTINUED(status)) {
           LOG << "Worker thread continued";
@@ -659,63 +874,204 @@ struct PtraceMachineCodeController {
 
   static int WorkerThread(void* arg) {
     SetThreadName("Machine Code");
-    LOG << "Worker thread started";
+    if constexpr (kDebugCodeController) {
+      LOG << "Worker thread: Raising SIGSTOP";
+    }
     raise(SIGSTOP);
-    LOG << "Worker thread exiting";
+    if constexpr (kDebugCodeController) {
+      LOG << "Worker thread: ERROR - resumed at original entry point - quitting";
+    }
     return 0;
   }
 };
 
-std::shared_ptr<AutomatInstruction> MakeInstruction(const llvm::MCInst& mc_inst) {
-  auto inst = std::make_shared<AutomatInstruction>();
-  inst->mc_inst = mc_inst;
-  return inst;
-}
+class PtraceMachineCodeControllerTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    root = std::make_shared<automat::Machine>();
+    auto ExitCallback = [this](CodePoint code_point) {
+      std::unique_lock<std::mutex> lock(mutex);
+      exit_instr = *code_point.instruction;  // copy the weak_ptr
+      exit_point = code_point.code_type;
+      exited = true;
+      cv.notify_all();
+    };
+    controller = std::make_unique<PtraceMachineCodeController>(ExitCallback);
+  }
 
-// Checks that a single instruction can be executed correctly
-TEST(PtraceMachineCodeController, SingleInstruction) {
+  void TearDown() override {
+    // Ensure any previous controller is destroyed before starting a new test
+    controller.reset();
+  }
+
+  void StartExecution(std::weak_ptr<AutomatInstruction> instr) {
+    exited = false;
+    exit_instr = {};
+    exit_point = CodeType::InstructionBody;
+    controller->Execute(instr);
+  }
+
+  // Waits for machine code execution to complete, with timeout
+  // Returns true if execution completed, false if timeout occurred
+  bool WaitForExecution(std::chrono::milliseconds timeout = 100ms) {
+    std::unique_lock<std::mutex> lock(mutex);
+    if (!exited) {
+      return cv.wait_for(lock, timeout, [this]() { return exited; });
+    }
+    return true;
+  }
+
+  void ExpectWeakPtrsEqual(std::weak_ptr<AutomatInstruction> expected,
+                           std::weak_ptr<AutomatInstruction> actual, const std::string& name) {
+    auto expected_shared = expected.lock();
+    auto actual_shared = actual.lock();
+    auto expected_ptr = expected_shared.get();
+    auto actual_ptr = actual_shared.get();
+    EXPECT_EQ(expected_ptr, actual_ptr) << name << " ptrs not equal";
+  }
+
+  void VerifyState(PtraceMachineCodeController::State expected,
+                   std::weak_ptr<AutomatInstruction> expected_exit_instr = {},
+                   CodeType expected_exit_point = CodeType::InstructionBody) {
+    PtraceMachineCodeController::State state;
+    controller->GetState(state);
+    ExpectWeakPtrsEqual(expected.current_instruction, state.current_instruction,
+                        "current_instruction");
+    EXPECT_EQ(state.regs.RAX, expected.regs.RAX);
+    EXPECT_EQ(state.regs.RBX, expected.regs.RBX);
+    EXPECT_EQ(state.regs.RCX, expected.regs.RCX);
+    EXPECT_EQ(state.regs.RDX, expected.regs.RDX);
+    EXPECT_EQ(state.regs.RBP, expected.regs.RBP);
+    EXPECT_EQ(state.regs.RSI, expected.regs.RSI);
+    EXPECT_EQ(state.regs.RDI, expected.regs.RDI);
+    EXPECT_EQ(state.regs.R8, expected.regs.R8);
+    EXPECT_EQ(state.regs.R9, expected.regs.R9);
+    EXPECT_EQ(state.regs.R10, expected.regs.R10);
+    EXPECT_EQ(state.regs.R11, expected.regs.R11);
+    EXPECT_EQ(state.regs.R12, expected.regs.R12);
+    EXPECT_EQ(state.regs.R13, expected.regs.R13);
+    EXPECT_EQ(state.regs.R14, expected.regs.R14);
+    EXPECT_EQ(state.regs.R15, expected.regs.R15);
+    ExpectWeakPtrsEqual(expected_exit_instr, exit_instr, "exit_instr");
+    EXPECT_EQ(exit_point, expected_exit_point);
+  }
+
+  std::shared_ptr<AutomatInstruction> MakeInstructionRegImm(unsigned opcode, unsigned reg,
+                                                            int64_t imm) {
+    return MakeInstruction(llvm::MCInstBuilder(opcode).addReg(reg).addImm(imm));
+  }
+
+  std::shared_ptr<AutomatInstruction> MakeInstructionImm(unsigned opcode, int64_t imm) {
+    return MakeInstruction(llvm::MCInstBuilder(opcode).addImm(imm));
+  }
+
+  std::shared_ptr<AutomatInstruction> MakeInstruction(const llvm::MCInst& mc_inst) {
+    auto& loc = root->CreateEmpty();
+    auto inst = std::make_shared<AutomatInstruction>();
+    inst->mc_inst = mc_inst;
+    loc.InsertHereNoWidget(std::shared_ptr<AutomatInstruction>(inst));  // copy shared_ptr
+    return inst;
+  }
+
+  automat::Connection* Next(std::shared_ptr<AutomatInstruction>& a,
+                            std::shared_ptr<AutomatInstruction>& b) {
+    return a->here.lock()->ConnectTo(*b->here.lock(), automat::next_arg);
+  }
+
+  std::unique_ptr<PtraceMachineCodeController> controller;
   std::mutex mutex;
   std::condition_variable cv;
   bool exited = false;
-  std::weak_ptr<AutomatInstruction> exit_instr;
-  CodeType exit_point;
-  auto exit_callback = [&](std::weak_ptr<AutomatInstruction>& instr, CodeType point) {
-    LOG << "Exit callback called!!!";
-    std::unique_lock<std::mutex> lock(mutex);
-    exit_instr = instr;
-    exit_point = point;
-    exited = true;
-    cv.notify_all();
-  };
+  std::weak_ptr<AutomatInstruction> exit_instr = {};
+  CodeType exit_point = CodeType::InstructionBody;
+  std::shared_ptr<automat::Machine> root;
+};
 
-  PtraceMachineCodeController controller(exit_callback);
-  PtraceMachineCodeController::State state;
+TEST_F(PtraceMachineCodeControllerTest, InitialState) { VerifyState({.regs = {.RAX = 0}}); }
 
-  auto inst =
-      MakeInstruction(llvm::MCInstBuilder(llvm::X86::MOV64ri).addReg(llvm::X86::RAX).addImm(1337));
+// Checks that a single instruction can be executed correctly
+TEST_F(PtraceMachineCodeControllerTest, SingleInstruction) {
+  auto inst = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RAX, 1337);
   AutomatInstruction* instructions[] = {inst.get()};
-  controller.UpdateCode(instructions);
+  controller->UpdateCode(instructions);
 
-  // Verify initial RAX is 0
-  controller.GetState(state);
-  EXPECT_EQ(state.regs.RAX, 0);
-
-  controller.Execute(inst);
-  {
-    std::unique_lock<std::mutex> lock(mutex);
-    if (!exited) {
-      cv.wait_for(lock, 100ms);
-    }
-  }
-
-  ASSERT_EQ(exited, true);
-  EXPECT_EQ(exit_instr.lock(), inst);
-  EXPECT_EQ(exit_point, CodeType::Next);
-
-  controller.GetState(state);
-  EXPECT_EQ(state.regs.RAX, 1337);
+  StartExecution(inst);
+  ASSERT_TRUE(WaitForExecution());
+  VerifyState({.regs = {.RAX = 1337}}, inst, CodeType::Next);
 }
 
-// TODO: test case for a sequence of instructions
-// TODO: test case for a jump exit
-// TODO: test case for a GetStatus during a loop
+// Two separate instructions, executed one at a time
+TEST_F(PtraceMachineCodeControllerTest, TwoSeparateInstructions) {
+  auto inst1 = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RAX, 1337);
+  auto inst2 = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RBX, 42);
+  AutomatInstruction* instructions[] = {inst1.get(), inst2.get()};
+  controller->UpdateCode(instructions);
+
+  StartExecution(inst2);
+  ASSERT_TRUE(WaitForExecution());
+  VerifyState({.regs = {.RBX = 42}}, inst2, CodeType::Next);
+
+  StartExecution(inst1);
+  ASSERT_TRUE(WaitForExecution());
+  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, inst1, CodeType::Next);
+}
+
+// Two instructions, executed one after the other
+TEST_F(PtraceMachineCodeControllerTest, TwoSequentialInstructions) {
+  auto inst1 = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RAX, 1337);
+  auto inst2 = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RBX, 42);
+  Next(inst1, inst2);
+  AutomatInstruction* instructions[] = {inst1.get(), inst2.get()};
+  controller->UpdateCode(instructions);
+
+  StartExecution(inst1);
+  ASSERT_TRUE(WaitForExecution());
+  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, inst2, CodeType::Next);
+}
+
+TEST_F(PtraceMachineCodeControllerTest, JumpExitInstruction) {
+  // Create a jump instruction not connected to any other instruction.
+  // This should trigger a fixup that generates an exit at a Jump exit point.
+  auto inst = MakeInstructionImm(llvm::X86::JMP_4, 0);
+
+  AutomatInstruction* instructions[] = {inst.get()};
+  controller->UpdateCode(instructions);
+
+  StartExecution(inst);
+  ASSERT_TRUE(WaitForExecution());
+
+  // Expect that registers remain zero and that we exit at a Jump exit point.
+  VerifyState({.regs = {}}, inst, CodeType::Jump);
+}
+
+TEST_F(PtraceMachineCodeControllerTest, InfiniteLoop) {
+  auto inst = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RAX, 42);
+  Next(inst, inst);
+  AutomatInstruction* instructions[] = {inst.get()};
+  controller->UpdateCode(instructions);
+  StartExecution(inst);
+  ASSERT_FALSE(WaitForExecution(10ms));
+
+  VerifyState({.current_instruction = inst, .regs = {.RAX = 42}});
+}
+
+TEST_F(PtraceMachineCodeControllerTest, HotReload) {
+  auto inst1 = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RAX, 1337);
+  auto inst2 = MakeInstructionRegImm(llvm::X86::MOV64ri, llvm::X86::RAX, 42);
+
+  // Start executing inst2 in a loop.
+  auto conn = Next(inst2, inst2);
+  AutomatInstruction* instructions[] = {inst1.get(), inst2.get()};
+  controller->UpdateCode(instructions);
+  StartExecution(inst2);
+  ASSERT_FALSE(WaitForExecution(10ms));
+  VerifyState({.current_instruction = inst2, .regs = {.RAX = 42}});
+
+  // Then break the loop by redirecting inst2 to inst1.
+  delete conn;
+  Next(inst2, inst1);
+  AutomatInstruction* instructions2[] = {inst2.get(), inst1.get()};
+  controller->UpdateCode(instructions2);
+  ASSERT_TRUE(WaitForExecution());
+  VerifyState({.regs = {.RAX = 1337}}, inst1, CodeType::Next);
+}

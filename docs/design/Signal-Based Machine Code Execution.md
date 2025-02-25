@@ -280,3 +280,60 @@ Here is a reference for emitting machine code that takes care of its own registe
   }
 
 ```
+
+And the signal handling code:
+
+```c++
+
+void AssemblerSignalHandler(int sig, siginfo_t* si, struct ucontext_t* context) {
+  // In Automat this handler will actually call Automat code to see what to do.
+  // That code may block the current thread.
+  // Response may be either to restart from scratch (longjmp), retry (return) or exit the thread
+  // (longjmp).
+
+  printf("\n*** Caught signal %d (%s) ***\n", sig, strsignal(sig));
+  printf("Signal originated at address: %p\n", si->si_addr);
+  printf("si_addr_lsb: %d\n", si->si_addr_lsb);
+  __builtin_dump_struct(context, &printf);
+  printf("gregs: ");
+  auto& gregs = context->uc_mcontext.gregs;
+  for (int i = 0; i < sizeof(gregs) / sizeof(gregs[0]); ++i) {
+    printf("%lx ", gregs[i]);
+  }
+  printf("\n");
+
+  // Print additional signal info
+  printf("Signal code: %d\n", si->si_code);
+  printf("Faulting process ID: %d\n", si->si_pid);
+  printf("User ID of sender: %d\n", si->si_uid);
+
+  exit(1);
+}
+
+static bool SetupSignalHandler() {
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(struct sigaction));
+  // sigemptyset(&sa.sa_mask);
+  sigfillset(&sa.sa_mask);
+  sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))AssemblerSignalHandler;
+  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+
+  // if (sigaction(SIGTRAP, &sa, NULL) == -1) {
+  //   ERROR << "Failed to set SIGTRAP handler: " << strerror(errno);
+  //   return false;
+  // }
+  if (sigaction(SIGSEGV, &sa, NULL) == -1) {
+    ERROR << "Failed to set SIGSEGV handler: " << strerror(errno);
+    return false;
+  }
+  if (sigaction(SIGILL, &sa, NULL) == -1) {
+    ERROR << "Failed to set SIGILL handler: " << strerror(errno);
+    return false;
+  }
+  if (sigaction(SIGBUS, &sa, NULL) == -1) {
+    ERROR << "Failed to set SIGBUS handler: " << strerror(errno);
+    return false;
+  }
+  return true;
+}
+```

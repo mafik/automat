@@ -27,7 +27,7 @@ using namespace maf;
 namespace automat::mc {
 
 // Switch this to true to see debug logs.
-constexpr bool kDebugCodeController = true;
+constexpr bool kDebugCodeController = false;
 
 // Uses two threads internally - a worker thread, which executes the actual machine code and control
 // thread, which functions as a debugger.
@@ -344,7 +344,7 @@ struct PtraceController : Controller {
   // Although this will actually be executed on a different thread in this implementation of
   // MachineCodeController, keep in mind that other (hypothetical) implementations (e.g.
   // SignalMachineCodeController) may execute the code in a blocking manner, on the current thread.
-  void Execute(std::weak_ptr<Inst> instr, Status& status) override {
+  void Execute(std::weak_ptr<const Inst> instr, Status& status) override {
     control_commands.enqueue([this, instr = std::move(instr)]() {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Executing instruction";

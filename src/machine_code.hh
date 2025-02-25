@@ -67,7 +67,7 @@ struct Controller {
   // Program must be sorted using std::owner_less.
   virtual void UpdateCode(Program&& program, maf::Status&) = 0;
 
-  virtual void Execute(std::weak_ptr<Inst> instr, maf::Status&) = 0;
+  virtual void Execute(std::weak_ptr<const Inst> instr, maf::Status&) = 0;
 
   struct State {
     // Instruction which is about to be executed.

@@ -9,22 +9,12 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 
-#include "font.hh"
-#include "svg.hh"
-
-#if defined __linux__
-#include <signal.h>
-#include <sys/mman.h>  // For mmap related functions and constants
-#include <sys/prctl.h>
-#include <sys/ptrace.h>
-#include <sys/user.h>
-#include <sys/wait.h>
-#endif  // __linux__
-
 #include "embedded.hh"
+#include "font.hh"
 #include "global_resources.hh"
 #include "library_instruction.hh"
 #include "status.hh"
+#include "svg.hh"
 
 #if defined _WIN32
 #pragma comment(lib, "ntdll.lib")
@@ -36,112 +26,13 @@ using namespace maf;
 
 namespace automat::library {
 
-#if defined __linux__
-void AssemblerSignalHandler(int sig, siginfo_t* si, struct ucontext_t* context) {
-  // In Automat this handler will actually call Automat code to see what to do.
-  // That code may block the current thread.
-  // Response may be either to restart from scratch (longjmp), retry (return) or exit the thread
-  // (longjmp).
-
-  printf("\n*** Caught signal %d (%s) ***\n", sig, strsignal(sig));
-  printf("Signal originated at address: %p\n", si->si_addr);
-  printf("si_addr_lsb: %d\n", si->si_addr_lsb);
-  __builtin_dump_struct(context, &printf);
-  printf("gregs: ");
-  auto& gregs = context->uc_mcontext.gregs;
-  for (int i = 0; i < sizeof(gregs) / sizeof(gregs[0]); ++i) {
-    printf("%lx ", gregs[i]);
-  }
-  printf("\n");
-
-  // Print additional signal info
-  printf("Signal code: %d\n", si->si_code);
-  printf("Faulting process ID: %d\n", si->si_pid);
-  printf("User ID of sender: %d\n", si->si_uid);
-
-  exit(1);
-}
-
-static bool SetupSignalHandler() {
-  struct sigaction sa;
-  memset(&sa, 0, sizeof(struct sigaction));
-  // sigemptyset(&sa.sa_mask);
-  sigfillset(&sa.sa_mask);
-  sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))AssemblerSignalHandler;
-  sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
-
-  // if (sigaction(SIGTRAP, &sa, NULL) == -1) {
-  //   ERROR << "Failed to set SIGTRAP handler: " << strerror(errno);
-  //   return false;
-  // }
-  if (sigaction(SIGSEGV, &sa, NULL) == -1) {
-    ERROR << "Failed to set SIGSEGV handler: " << strerror(errno);
-    return false;
-  }
-  if (sigaction(SIGILL, &sa, NULL) == -1) {
-    ERROR << "Failed to set SIGILL handler: " << strerror(errno);
-    return false;
-  }
-  if (sigaction(SIGBUS, &sa, NULL) == -1) {
-    ERROR << "Failed to set SIGBUS handler: " << strerror(errno);
-    return false;
-  }
-  return true;
-}
-
-#else
-
-// TODO: Implement signal handler on Windows
-static bool SetupSignalHandler() { return true; }
-#endif  // __linux__
-
-// Note: We're not preserving RSP!
-// CB(RSP)
-#define REGS(CB) \
-  CB(RBX)        \
-  CB(RCX)        \
-  CB(RDX)        \
-  CB(RBP)        \
-  CB(RSI)        \
-  CB(RDI)        \
-  CB(R8)         \
-  CB(R9)         \
-  CB(R10)        \
-  CB(R11)        \
-  CB(R12)        \
-  CB(R13)        \
-  CB(R14)        \
-  CB(R15)
-
-#define ALL_REGS(CB) \
-  CB(RAX)            \
-  REGS(CB)
-
-struct Regs {
-#define CB(reg) uint64_t reg = 0;
-  ALL_REGS(CB);
-  // CB(original_RSP);
-#undef CB
-  uint64_t operator[](int index) { return reinterpret_cast<uint64_t*>(this)[index]; }
-};
-
 Assembler::Assembler(Status& status) {
-  static bool signal_handler_initialized =
-      SetupSignalHandler();  // unused, ensures that initialization happens once
-
-#if defined __linux__
-  machine_code.reset((char*)mmap((void*)0x10000, kMachineCodeSize, PROT_READ | PROT_EXEC,
-                                 MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
-#else
-  // TODO: Implement on Windows
-  machine_code.reset(new char[kMachineCodeSize]);
-#endif  // __linux__
-
-  regs = std::make_unique<Regs>();
-  regs->RAX = 0x123456789abcdef0ull;  // dummy value for debuggin
+  mc_controller = mc::Controller::Make(std::bind_front(&Assembler::ExitCallback, this));
 }
 
 Assembler::~Assembler() {}
+
+void Assembler::ExitCallback(mc::CodePoint code_point) { LOG << "Assembler::ExitCallback"; }
 
 std::shared_ptr<Object> Assembler::Clone() const {
   Status status;
@@ -152,18 +43,79 @@ std::shared_ptr<Object> Assembler::Clone() const {
   return nullptr;
 }
 
-void DeleteWithMunmap::operator()(void* ptr) const {
-#if defined __linux__
-  munmap(ptr, kMachineCodeSize);
-#else
-  // TODO: Implement on Windows
-  delete[] (char*)ptr;
-#endif  // __linux__
+void UpdateCode(automat::mc::Controller& controller,
+                std::vector<std::shared_ptr<automat::library::Instruction>>&& instructions,
+                maf::Status& status) {
+  // Sorting allows us to more efficiently search for instructions.
+  using comp = std::owner_less<std::shared_ptr<automat::library::Instruction>>;
+  std::sort(instructions.begin(), instructions.end(), comp{});
+
+  int n = instructions.size();
+
+  automat::mc::Program program;
+  program.resize(n);
+
+  for (int i = 0; i < n; ++i) {
+    automat::library::Instruction* obj_raw = instructions[i].get();
+    const automat::mc::Inst* inst_raw = &obj_raw->mc_inst;
+    auto* loc = obj_raw->here.lock().get();
+    int next = -1;
+    int jump = -1;
+    if (loc) {
+      auto FindInstruction = [loc, &instructions, n](const automat::Argument& arg) -> int {
+        if (auto it = loc->outgoing.find(&arg); it != loc->outgoing.end()) {
+          automat::Location* to_loc = &(*it)->to;
+          if (auto to_inst = to_loc->As<automat::library::Instruction>()) {
+            auto it = std::lower_bound(instructions.begin(), instructions.end(), to_loc->object,
+                                       std::owner_less{});
+            if (it != instructions.end()) {
+              return std::distance(instructions.begin(), it);
+            }
+          }
+        }
+        return -1;
+      };
+      next = FindInstruction(automat::next_arg);
+      jump = FindInstruction(automat::library::jump_arg);
+    }
+    program[i].next = next;
+    program[i].jump = jump;
+  }
+  for (int i = 0; i < n; ++i) {
+    automat::library::Instruction* obj_raw = instructions[i].get();
+    const automat::mc::Inst* inst_raw = &obj_raw->mc_inst;
+    program[i].inst =
+        std::shared_ptr<const automat::mc::Inst>(std::move(instructions[i]), inst_raw);
+  }
+
+  controller.UpdateCode(std::move(program), status);
 }
 
-void Assembler::UpdateMachineCode() {}
+void Assembler::UpdateMachineCode() {
+  auto here_ptr = here.lock();
+  if (!here_ptr) {
+    return;
+  }
+  auto [begin, end] = here_ptr->incoming.equal_range(&assembler_arg);
+  std::vector<std::shared_ptr<Instruction>> instructions;
+  for (auto it = begin; it != end; ++it) {
+    auto& conn = *it;
+    auto& inst_loc = conn->from;
+    auto inst = inst_loc.As<Instruction>();
+    if (!inst) {
+      continue;
+    }
+    instructions.push_back(inst->SharedPtr());
+  }
+  Status status;
+  library::UpdateCode(*mc_controller, std::move(instructions), status);
+}
 
-void Assembler::RunMachineCode(library::Instruction* entry_point) {}
+void Assembler::RunMachineCode(library::Instruction* entry_point) {
+  Status status;
+  mc_controller->Execute(
+      std::shared_ptr<const mc::Inst>(entry_point->SharedPtr(), &entry_point->mc_inst), status);
+}
 
 AssemblerWidget::AssemblerWidget(std::weak_ptr<Object> object) {
   this->object = object;
@@ -257,7 +209,11 @@ static constexpr float kBitPositionFontShiftUp =
 void RegisterWidget::Draw(SkCanvas& canvas) const {
   auto object_shared = object.lock();
   auto assembler = static_cast<Assembler*>(object_shared.get());
-  uint64_t reg_value = (*assembler->regs)[register_index];
+
+  Status status;
+  mc::Controller::State state;
+  assembler->mc_controller->GetState(state, status);
+  uint64_t reg_value = state.regs[register_index];
 
   SkPaint dark_paint;
   dark_paint.setColor("#dcca85"_color);

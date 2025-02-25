@@ -13,65 +13,12 @@
 #include "argument.hh"
 #include "base.hh"
 #include "gtest.hh"
+#include "library_assembler.hh"
 #include "library_instruction.hh"
 #include "machine_code.hh"
 #include "status.hh"
 
 using namespace std::chrono_literals;
-
-// Convenience function for updating the code with a vector of automat::library::Instruction.
-//
-// The main purpose is to allow Controller to store the instruction pointers without
-// having to know about the automat::Instruction type. This is achieved using the _aliasing_
-// feature of std::shared_ptr. The shared_ptr used by the controller points to mc_inst field of
-// automat::Instruction, while owning the whole object.
-void UpdateCode(automat::mc::Controller& controller,
-                std::vector<std::shared_ptr<automat::library::Instruction>>&& instructions,
-                maf::Status& status) {
-  // Sorting allows us to more efficiently search for instructions.
-  using comp = std::owner_less<std::shared_ptr<automat::library::Instruction>>;
-  std::sort(instructions.begin(), instructions.end(), comp{});
-
-  int n = instructions.size();
-
-  automat::mc::Program program;
-  program.resize(n);
-
-  for (int i = 0; i < n; ++i) {
-    automat::library::Instruction* obj_raw = instructions[i].get();
-    const automat::mc::Inst* inst_raw = &obj_raw->mc_inst;
-    auto* loc = obj_raw->here.lock().get();
-    int next = -1;
-    int jump = -1;
-    if (loc) {
-      auto FindInstruction = [loc, &instructions, n](const automat::Argument& arg) -> int {
-        if (auto it = loc->outgoing.find(&arg); it != loc->outgoing.end()) {
-          automat::Location* to_loc = &(*it)->to;
-          if (auto to_inst = to_loc->As<automat::library::Instruction>()) {
-            auto it = std::lower_bound(instructions.begin(), instructions.end(), to_loc->object,
-                                       std::owner_less{});
-            if (it != instructions.end()) {
-              return std::distance(instructions.begin(), it);
-            }
-          }
-        }
-        return -1;
-      };
-      next = FindInstruction(automat::next_arg);
-      jump = FindInstruction(automat::library::jump_arg);
-    }
-    program[i].next = next;
-    program[i].jump = jump;
-  }
-  for (int i = 0; i < n; ++i) {
-    automat::library::Instruction* obj_raw = instructions[i].get();
-    const automat::mc::Inst* inst_raw = &obj_raw->mc_inst;
-    program[i].inst =
-        std::shared_ptr<const automat::mc::Inst>(std::move(instructions[i]), inst_raw);
-  }
-
-  controller.UpdateCode(std::move(program), status);
-}
 
 std::weak_ptr<automat::mc::Inst> ToMC(automat::library::Instruction& instr) {
   auto* mc_inst = &instr.mc_inst;

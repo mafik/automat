@@ -9,6 +9,7 @@
 #include <llvm/Target/TargetMachine.h>
 
 #include "library_instruction.hh"
+#include "machine_code.hh"
 #include "object.hh"
 #include "status.hh"
 
@@ -68,20 +69,14 @@ struct AssemblerWidget : gui::Widget {
 struct Assembler : LiveObject {
   using PrologueFn = uintptr_t (*)(void*);
 
-  std::unique_ptr<char, DeleteWithMunmap> machine_code;
-  std::unique_ptr<Regs> regs;
-  PrologueFn prologue_fn = nullptr;
-#if defined __linux__
-
-  std::atomic<bool> is_running = false;
-  pid_t pid = 0;  // int actually
-
-#endif  // __linux__
-
   std::shared_ptr<Object> Clone() const override;
 
   Assembler(maf::Status&);
   ~Assembler();
+
+  void ExitCallback(mc::CodePoint code_point);
+
+  std::unique_ptr<mc::Controller> mc_controller;
 
   void UpdateMachineCode();
 
@@ -91,5 +86,14 @@ struct Assembler : LiveObject {
     return std::make_shared<AssemblerWidget>(WeakPtr());
   }
 };
+
+// Convenience function for updating the code with a vector of automat::library::Instruction.
+//
+// The main purpose is to allow Controller to store the instruction pointers without
+// having to know about the automat::Instruction type. This is achieved using the _aliasing_
+// feature of std::shared_ptr. The shared_ptr used by the controller points to mc_inst field of
+// automat::Instruction, while owning the whole object.
+void UpdateCode(mc::Controller& controller,
+                std::vector<std::shared_ptr<Instruction>>&& instructions, maf::Status& status);
 
 }  // namespace automat::library

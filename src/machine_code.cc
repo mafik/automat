@@ -57,24 +57,22 @@ struct PtraceController : Controller {
   void UpdateCode(Program&& program, maf::Status& status) override {
     auto& llvm_asm = automat::LLVM_Assembler::Get();
 
-    // TODO: verify program in debug mode
-    // - sorted by inst.owner_less
-    // - link indexes are valid
+#ifndef NDEBUG
+    // Verify that the program is sorted by inst.owner_less
+    for (int i = 1; i < program.size(); ++i) {
+      if (program[i].inst.owner_before(program[i - 1].inst)) {
+        AppendErrorMessage(status) += "Instructions are not sorted according to std::owner_less!";
+        return;
+      }
+    }
+#endif
+
     if constexpr (kDebugCodeController) {
       LOG << "New instructions:";
       for (int i = 0; i < program.size(); ++i) {
-        if (i > 0) {
-          using Order = std::owner_less<std::shared_ptr<const Inst>>;
-          if (Order{}(program[i].inst, program[i - 1].inst)) {
-            AppendErrorMessage(status) +=
-                "Instructions are not sorted according to std::owner_less!";
-            return;
-          }
-        }
         auto& inst = program[i];
         std::string str;
         llvm::raw_string_ostream os(str);
-
         llvm_asm.mc_inst_printer->printInst(inst.inst.get(), 0, "", *llvm_asm.mc_subtarget_info,
                                             os);
         if (inst.next >= 0 && inst.next < program.size()) {

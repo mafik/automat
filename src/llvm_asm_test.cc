@@ -20,11 +20,6 @@
 
 using namespace std::chrono_literals;
 
-std::weak_ptr<automat::mc::Inst> ToMC(automat::library::Instruction& instr) {
-  auto* mc_inst = &instr.mc_inst;
-  return std::shared_ptr<automat::mc::Inst>(std::move(instr.SharedPtr()), mc_inst);
-}
-
 class MachineCodeControllerTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -49,7 +44,7 @@ class MachineCodeControllerTest : public ::testing::Test {
     exit_instr = {};
     exit_point = automat::mc::CodeType::InstructionBody;
     maf::Status status;
-    std::weak_ptr<automat::mc::Inst> mc_instr = ToMC(*instr.lock());
+    std::weak_ptr<automat::mc::Inst> mc_instr = instr.lock()->ToMC();
     controller->Execute(mc_instr, status);
     ASSERT_TRUE(OK(status));
   }
@@ -154,7 +149,7 @@ TEST_F(MachineCodeControllerTest, SingleInstruction) {
 
   StartExecution(inst);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RAX = 1337}}, ToMC(*inst), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RAX = 1337}}, inst->ToMC(), automat::mc::CodeType::Next);
 }
 
 // Two separate instructions, executed one at a time
@@ -166,11 +161,11 @@ TEST_F(MachineCodeControllerTest, TwoSeparateInstructions) {
 
   StartExecution(inst2);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RBX = 42}}, ToMC(*inst2), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RBX = 42}}, inst2->ToMC(), automat::mc::CodeType::Next);
 
   StartExecution(inst1);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, ToMC(*inst1), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, inst1->ToMC(), automat::mc::CodeType::Next);
 }
 
 // Two instructions, executed one after the other
@@ -183,7 +178,7 @@ TEST_F(MachineCodeControllerTest, TwoSequentialInstructions) {
 
   StartExecution(inst1);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, ToMC(*inst2), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, inst2->ToMC(), automat::mc::CodeType::Next);
 }
 
 TEST_F(MachineCodeControllerTest, JumpExitInstruction) {
@@ -198,7 +193,7 @@ TEST_F(MachineCodeControllerTest, JumpExitInstruction) {
   ASSERT_TRUE(WaitForExecution());
 
   // Expect that registers remain zero and that we exit at a Jump exit point.
-  VerifyState({.regs = {}}, ToMC(*inst), automat::mc::CodeType::Jump);
+  VerifyState({.regs = {}}, inst->ToMC(), automat::mc::CodeType::Jump);
 }
 
 TEST_F(MachineCodeControllerTest, InfiniteLoop) {
@@ -209,7 +204,7 @@ TEST_F(MachineCodeControllerTest, InfiniteLoop) {
   StartExecution(inst);
   ASSERT_FALSE(WaitForExecution(10ms));
 
-  VerifyState({.current_instruction = ToMC(*inst), .regs = {.RAX = 42}});
+  VerifyState({.current_instruction = inst->ToMC(), .regs = {.RAX = 42}});
 }
 
 TEST_F(MachineCodeControllerTest, HotReload) {
@@ -222,7 +217,7 @@ TEST_F(MachineCodeControllerTest, HotReload) {
   TestUpdateCode(instructions);
   StartExecution(inst2);
   ASSERT_FALSE(WaitForExecution(10ms));
-  VerifyState({.current_instruction = ToMC(*inst2), .regs = {.RAX = 42}});
+  VerifyState({.current_instruction = inst2->ToMC(), .regs = {.RAX = 42}});
 
   // Then break the loop by redirecting inst2 to inst1.
   delete conn;
@@ -230,5 +225,5 @@ TEST_F(MachineCodeControllerTest, HotReload) {
   automat::library::Instruction* instructions2[] = {inst2.get(), inst1.get()};
   TestUpdateCode(instructions2);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RAX = 1337}}, ToMC(*inst1), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RAX = 1337}}, inst1->ToMC(), automat::mc::CodeType::Next);
 }

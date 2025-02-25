@@ -75,17 +75,16 @@ void UpdateCode(automat::mc::Controller& controller,
         }
         return -1;
       };
-      next = FindInstruction(automat::next_arg);
-      jump = FindInstruction(automat::library::jump_arg);
+      next = FindInstruction(next_arg);
+      jump = FindInstruction(library::jump_arg);
     }
     program[i].next = next;
     program[i].jump = jump;
   }
   for (int i = 0; i < n; ++i) {
-    automat::library::Instruction* obj_raw = instructions[i].get();
-    const automat::mc::Inst* inst_raw = &obj_raw->mc_inst;
-    program[i].inst =
-        std::shared_ptr<const automat::mc::Inst>(std::move(instructions[i]), inst_raw);
+    Instruction* obj_raw = instructions[i].get();
+    const mc::Inst* inst_raw = &obj_raw->mc_inst;
+    program[i].inst = std::shared_ptr<const mc::Inst>(std::move(instructions[i]), inst_raw);
   }
 
   controller.UpdateCode(std::move(program), status);
@@ -113,8 +112,7 @@ void Assembler::UpdateMachineCode() {
 
 void Assembler::RunMachineCode(library::Instruction* entry_point) {
   Status status;
-  mc_controller->Execute(
-      std::shared_ptr<const mc::Inst>(entry_point->SharedPtr(), &entry_point->mc_inst), status);
+  mc_controller->Execute(entry_point->ToMC(), status);
 }
 
 AssemblerWidget::AssemblerWidget(std::weak_ptr<Object> object) {

@@ -160,7 +160,7 @@ void Instruction::Cancel() {
   // do nothing for now
 }
 
-static std::string AssemblyText(const llvm::MCInst& mc_inst) {
+static std::string AssemblyText(const mc::Inst& mc_inst) {
   // Nicely formatted assembly:
   std::string str;
   raw_string_ostream os(str);
@@ -182,7 +182,7 @@ static std::string AssemblyText(const llvm::MCInst& mc_inst) {
   return str;
 }
 
-static std::string MachineText(const llvm::MCInst& mc_inst) {
+static std::string MachineText(const mc::Inst& mc_inst) {
   auto& llvm_asm = LLVM_Assembler::Get();
   SmallVector<char, 128> buffer;
   SmallVector<MCFixup, 1> fixups;
@@ -246,7 +246,7 @@ struct Token {
   };
 };
 
-std::span<const Token> PrintInstruction(const llvm::MCInst& inst) {
+std::span<const Token> PrintInstruction(const mc::Inst& inst) {
   switch (inst.getOpcode()) {
     case X86::JMP_1:
     case X86::JMP_2:
@@ -2360,7 +2360,7 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
   canvas.translate(-kConditionCodeTokenWidth / 2, -kConditionCodeTokenHeight / 2);
 }
 
-void Instruction::DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst) {
+void Instruction::DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
   SkRRect rrect = kInstructionRRect;
 
   // Paper fill

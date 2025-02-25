@@ -5,6 +5,7 @@
 #include <llvm/MC/MCInst.h>
 
 #include "base.hh"
+#include "machine_code.hh"
 #include "textures.hh"
 
 namespace automat::library {
@@ -38,7 +39,7 @@ extern Argument assembler_arg;
 extern JumpArgument jump_arg;
 
 struct Instruction : LiveObject, Runnable, LongRunning {
-  llvm::MCInst mc_inst;
+  mc::Inst mc_inst;
 
   void Args(std::function<void(Argument&)> cb) override;
   std::shared_ptr<Object> ArgPrototype(const Argument&) override;
@@ -70,7 +71,9 @@ struct Instruction : LiveObject, Runnable, LongRunning {
     Vec2AndDir ArgStart(const Argument&) override;
   };
 
-  static void DrawInstruction(SkCanvas& canvas, const llvm::MCInst& inst);
+  static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst);
+
+  std::weak_ptr<mc::Inst> ToMC() { return std::shared_ptr<mc::Inst>(SharedPtr(), &mc_inst); }
 
   std::shared_ptr<gui::Widget> MakeWidget() override { return std::make_shared<Widget>(WeakPtr()); }
 

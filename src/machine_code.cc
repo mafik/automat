@@ -27,7 +27,7 @@ using namespace maf;
 namespace automat::mc {
 
 // Switch this to true to see debug logs.
-constexpr bool kDebugCodeController = true;
+constexpr bool kDebugCodeController = false;
 
 // Uses two threads internally - a worker thread, which executes the actual machine code and control
 // thread, which functions as a debugger.
@@ -90,6 +90,8 @@ struct PtraceController : Controller {
     std::string new_code;
     std::vector<MapEntry> new_map;
     std::vector<std::weak_ptr<const Inst>> new_instructions;
+    std::vector<int> new_instruction_offsets;
+    new_instruction_offsets.resize(program.size(), -1);
 
     {  // Fill new_code & new_map
       auto& mc_code_emitter = llvm_asm.mc_code_emitter;
@@ -110,6 +112,8 @@ struct PtraceController : Controller {
         llvm::SmallVector<llvm::MCFixup, 2> instruction_fixups;
         mc_code_emitter->encodeInstruction(*program[instruction_index].inst, instruction_bytes,
                                            instruction_fixups, mc_subtarget_info);
+
+        new_instruction_offsets[instruction_index] = new_code.size();
 
         new_map.push_back({.begin = (uint32_t)new_code.size(),
                            .size = (uint8_t)instruction_bytes.size(),
@@ -133,7 +137,7 @@ struct PtraceController : Controller {
         new_code[fixup_end - 1] = (pcrel & 0xFF);
       };
 
-      auto Fixup4 = [&](size_t fixup_end, size_t target_offset) {
+      auto Fixup4 = [&](size_t fixup_end, int target_offset) {
         ssize_t pcrel = (ssize_t)(target_offset) - (ssize_t)(fixup_end);
         new_code[fixup_end - 4] = (pcrel & 0xFF);
         new_code[fixup_end - 3] = ((pcrel >> 8) & 0xFF);
@@ -166,23 +170,12 @@ struct PtraceController : Controller {
         new_code.append("\xcc");
       };
 
-      // TODO: accelerate this by putting the instruction body index in the `instructions` vector
-      auto OffsetOfInstructionIndex = [&](int instruction_index) -> uint32_t {
-        for (auto& map_entry : new_map) {
-          if ((map_entry.code_type == CodeType::InstructionBody) &&
-              (map_entry.instruction == instruction_index)) {
-            return map_entry.begin;
-          }
-        }
-        return UINT32_MAX;
-      };
-
       for (int start_i = 0; start_i < program.size(); ++start_i) {
         // Emit a sequence of instructions starting at index `start_i` and following the `next`
         // links.
         auto& entry = program[start_i];
 
-        if (OffsetOfInstructionIndex(start_i) != UINT32_MAX) {
+        if (new_instruction_offsets[start_i] >= 0) {
           continue;
         }
 
@@ -196,8 +189,8 @@ struct PtraceController : Controller {
           last_inst_i = inst_i;
           inst_i = program[inst_i].next;
           if (inst_i >= 0 && inst_i < program.size()) {
-            uint32_t existing_offset = OffsetOfInstructionIndex(inst_i);
-            if (existing_offset != UINT32_MAX) {
+            int existing_offset = new_instruction_offsets[inst_i];
+            if (existing_offset >= 0) {
               EmitJump(last_inst_i, existing_offset);
               break;
             }
@@ -209,10 +202,10 @@ struct PtraceController : Controller {
 
       while (!machine_code_fixups.empty()) {
         auto& fixup = machine_code_fixups.back();
-        size_t target_offset = 0;
+        int target_offset;
         if (fixup.target_index >= 0 &&
             fixup.target_index < program.size()) {  // target is an instruction
-          target_offset = OffsetOfInstructionIndex(fixup.target_index);
+          target_offset = new_instruction_offsets[fixup.target_index];
         } else {  // target is not an instruction - create a new exit point and jump there
           target_offset = new_code.size();
           EmitExitPoint(fixup.source_index, fixup.code_type);
@@ -249,7 +242,9 @@ struct PtraceController : Controller {
     {  // Replace the code, map & instructions on the control thread.
       std::atomic<bool> done = false;
       control_commands.enqueue([this, new_code = std::move(new_code), new_map = std::move(new_map),
-                                new_instructions = std::move(new_instructions), &done]() {
+                                new_instructions = std::move(new_instructions),
+                                new_instruction_offsets = std::move(new_instruction_offsets),
+                                &done]() {
         if constexpr (kDebugCodeController) {
           LOG << "Control thread: Replacing code, map & instructions";
         }
@@ -306,6 +301,7 @@ struct PtraceController : Controller {
 
         map = std::move(new_map);
         instructions = std::move(new_instructions);
+        instruction_offsets = std::move(new_instruction_offsets);
         done = true;
         done.notify_all();
       });
@@ -334,20 +330,8 @@ struct PtraceController : Controller {
         return;
       }
       int instruction_index = std::distance(instructions.begin(), instr_it);
-      int map_index = -1;
-      for (int i = 0; i < map.size(); ++i) {
-        if (map[i].instruction == instruction_index &&
-            map[i].code_type == CodeType::InstructionBody) {
-          map_index = i;
-          break;
-        }
-      }
-      if (map_index == -1) {
-        ERROR << "Instruction not found in the code map";
-        return;
-      }
 
-      char* instruction_addr = code.data() + map[map_index].begin;
+      char* instruction_addr = code.data() + instruction_offsets[instruction_index];
 
       // TODO: handle the case where the code is executing (worker_stopped == false)
 
@@ -427,6 +411,7 @@ struct PtraceController : Controller {
   Regs regs = {};
 
   std::vector<std::weak_ptr<const Inst>> instructions;  // ordered by std::owner_less
+  std::vector<int> instruction_offsets;
 
   // Describes a section of code
   struct MapEntry {

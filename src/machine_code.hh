@@ -14,13 +14,14 @@ namespace automat::mc {
 using Inst = llvm::MCInst;
 using InstBuilder = llvm::MCInstBuilder;
 
-struct InstNode {
+// Represents a single instruction within a larger program.
+struct ProgramInst {
   std::shared_ptr<const Inst> inst;
   int next;  // index of the next instruction within the program
   int jump;  // index of the jump target within the program
 };
 
-using Program = std::vector<InstNode>;
+using Program = std::vector<ProgramInst>;
 
 struct Regs {
   uint64_t RAX = 0;

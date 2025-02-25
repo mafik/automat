@@ -27,7 +27,7 @@ using namespace maf;
 namespace automat::mc {
 
 // Switch this to true to see debug logs.
-constexpr bool kDebugCodeController = false;
+constexpr bool kDebugCodeController = true;
 
 // Uses two threads internally - a worker thread, which executes the actual machine code and control
 // thread, which functions as a debugger.
@@ -54,7 +54,7 @@ struct PtraceController : Controller {
     });
   }
 
-  void UpdateCode(Program&& new_instructions_raw, maf::Status& status) override {
+  void UpdateCode(Program&& program, maf::Status& status) override {
     auto& llvm_asm = automat::LLVM_Assembler::Get();
 
     // TODO: verify program in debug mode
@@ -62,25 +62,25 @@ struct PtraceController : Controller {
     // - link indexes are valid
     if constexpr (kDebugCodeController) {
       LOG << "New instructions:";
-      for (int i = 0; i < new_instructions_raw.size(); ++i) {
+      for (int i = 0; i < program.size(); ++i) {
         if (i > 0) {
           using Order = std::owner_less<std::shared_ptr<const Inst>>;
-          if (Order{}(new_instructions_raw[i].inst, new_instructions_raw[i - 1].inst)) {
+          if (Order{}(program[i].inst, program[i - 1].inst)) {
             AppendErrorMessage(status) +=
                 "Instructions are not sorted according to std::owner_less!";
             return;
           }
         }
-        auto& inst = new_instructions_raw[i];
+        auto& inst = program[i];
         std::string str;
         llvm::raw_string_ostream os(str);
 
         llvm_asm.mc_inst_printer->printInst(inst.inst.get(), 0, "", *llvm_asm.mc_subtarget_info,
                                             os);
-        if (inst.next >= 0 && inst.next < new_instructions_raw.size()) {
+        if (inst.next >= 0 && inst.next < program.size()) {
           str += "; next:" + std::to_string(inst.next);
         }
-        if (inst.jump >= 0 && inst.jump < new_instructions_raw.size()) {
+        if (inst.jump >= 0 && inst.jump < program.size()) {
           str += "; jump:" + std::to_string(inst.jump);
         }
         LOG << "  " << i << ": " << str;
@@ -108,9 +108,8 @@ struct PtraceController : Controller {
       auto EmitInstruction = [&](int instruction_index) {
         llvm::SmallVector<char, 32> instruction_bytes;
         llvm::SmallVector<llvm::MCFixup, 2> instruction_fixups;
-        mc_code_emitter->encodeInstruction(*new_instructions_raw[instruction_index].inst,
-                                           instruction_bytes, instruction_fixups,
-                                           mc_subtarget_info);
+        mc_code_emitter->encodeInstruction(*program[instruction_index].inst, instruction_bytes,
+                                           instruction_fixups, mc_subtarget_info);
 
         new_map.push_back({.begin = (uint32_t)new_code.size(),
                            .size = (uint8_t)instruction_bytes.size(),
@@ -124,8 +123,7 @@ struct PtraceController : Controller {
         } else if (instruction_fixups.size() == 1) {
           auto& fixup = instruction_fixups[0];
 
-          machine_code_fixups.push_back({new_code.size(),
-                                         new_instructions_raw[instruction_index].jump,
+          machine_code_fixups.push_back({new_code.size(), program[instruction_index].jump,
                                          fixup.getKind(), instruction_index, CodeType::Jump});
         }
       };
@@ -179,33 +177,10 @@ struct PtraceController : Controller {
         return UINT32_MAX;
       };
 
-      // TODO: accelerate this with a hash map
-      // auto OffsetOfInstruction = [&](automat::library::Instruction* inst) -> uint32_t {
-      //   for (auto& map_entry : new_map) {
-      //     if (map_entry.instruction == UINT16_MAX) {
-      //       continue;
-      //     }
-      //     if ((map_entry.code_type == CodeType::InstructionBody) &&
-      //         (new_instructions_raw[map_entry.instruction] == inst)) {
-      //       return map_entry.begin;
-      //     }
-      //   }
-      //   return UINT32_MAX;
-      // };
-
-      // auto IndexOfInstruction = [&](automat::library::Instruction* inst) -> int {
-      //   for (int i = 0; i < new_instructions_raw.size(); ++i) {
-      //     if (new_instructions_raw[i] == inst) {
-      //       return i;
-      //     }
-      //   }
-      //   return -1;
-      // };
-
-      for (int start_i = 0; start_i < new_instructions_raw.size(); ++start_i) {
+      for (int start_i = 0; start_i < program.size(); ++start_i) {
         // Emit a sequence of instructions starting at index `start_i` and following the `next`
         // links.
-        auto& entry = new_instructions_raw[start_i];
+        auto& entry = program[start_i];
 
         if (OffsetOfInstructionIndex(start_i) != UINT32_MAX) {
           continue;
@@ -214,13 +189,13 @@ struct PtraceController : Controller {
         int inst_i = start_i;
         int last_inst_i = inst_i;
 
-        while (inst_i >= 0 && inst_i < new_instructions_raw.size()) {
+        while (inst_i >= 0 && inst_i < program.size()) {
           EmitInstruction(inst_i);
 
           // Follow the "next" connection.
           last_inst_i = inst_i;
-          inst_i = new_instructions_raw[inst_i].next;
-          if (inst_i >= 0 && inst_i < new_instructions_raw.size()) {
+          inst_i = program[inst_i].next;
+          if (inst_i >= 0 && inst_i < program.size()) {
             uint32_t existing_offset = OffsetOfInstructionIndex(inst_i);
             if (existing_offset != UINT32_MAX) {
               EmitJump(last_inst_i, existing_offset);
@@ -236,7 +211,7 @@ struct PtraceController : Controller {
         auto& fixup = machine_code_fixups.back();
         size_t target_offset = 0;
         if (fixup.target_index >= 0 &&
-            fixup.target_index < new_instructions_raw.size()) {  // target is an instruction
+            fixup.target_index < program.size()) {  // target is an instruction
           target_offset = OffsetOfInstructionIndex(fixup.target_index);
         } else {  // target is not an instruction - create a new exit point and jump there
           target_offset = new_code.size();
@@ -265,8 +240,8 @@ struct PtraceController : Controller {
     }
 
     {  // Fill new_instructions
-      new_instructions.reserve(new_instructions_raw.size());
-      for (auto node : new_instructions_raw) {
+      new_instructions.reserve(program.size());
+      for (auto node : program) {
         new_instructions.emplace_back(node.inst);
       }
     }
@@ -351,17 +326,14 @@ struct PtraceController : Controller {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Executing instruction";
       }
-      int instruction_index = -1;
-      for (int i = 0; i < instructions.size(); ++i) {
-        if (!instructions[i].owner_before(instr) && !instr.owner_before(instructions[i])) {
-          instruction_index = i;
-          break;
-        }
-      }
-      if (instruction_index == -1) {
+      auto instr_it =
+          std::lower_bound(instructions.begin(), instructions.end(), instr, std::owner_less{});
+      if (instr_it == instructions.end() || instr_it->owner_before(instr) ||
+          instr.owner_before(*instr_it)) {
         ERROR << "Instruction not found";
         return;
       }
+      int instruction_index = std::distance(instructions.begin(), instr_it);
       int map_index = -1;
       for (int i = 0; i < map.size(); ++i) {
         if (map[i].instruction == instruction_index &&

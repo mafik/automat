@@ -27,7 +27,7 @@ using namespace maf;
 namespace automat::mc {
 
 // Switch this to true to see debug logs.
-constexpr bool kDebugCodeController = false;
+constexpr bool kDebugCodeController = true;
 
 // Uses two threads internally - a worker thread, which executes the actual machine code and control
 // thread, which functions as a debugger.
@@ -168,13 +168,9 @@ struct PtraceController : Controller {
         new_code.append("\xcc");
       };
 
-      for (int start_i = 0; start_i < program.size(); ++start_i) {
-        // Emit a sequence of instructions starting at index `start_i` and following the `next`
-        // links.
-        auto& entry = program[start_i];
-
+      auto EmitInstructionSequence = [&](int start_i) {
         if (new_instruction_offsets[start_i] >= 0) {
-          continue;
+          return;
         }
 
         int inst_i = start_i;
@@ -190,12 +186,21 @@ struct PtraceController : Controller {
             int existing_offset = new_instruction_offsets[inst_i];
             if (existing_offset >= 0) {
               EmitJump(last_inst_i, existing_offset);
-              break;
+              return;
             }
           }
         }
-        // TODO: don't emit the final exit point if the last instruction is a terminator
-        EmitExitPoint(last_inst_i, CodeType::Next);
+
+        auto& last_inst_info = llvm_asm.mc_instr_info->get(program[last_inst_i].inst->getOpcode());
+        if (!last_inst_info.isTerminator()) {
+          EmitExitPoint(last_inst_i, CodeType::Next);
+        }
+      };
+
+      for (int start_i = 0; start_i < program.size(); ++start_i) {
+        // Emit a sequence of instructions starting at index `start_i` and following the `next`
+        // links.
+        EmitInstructionSequence(start_i);
       }
 
       while (!machine_code_fixups.empty()) {

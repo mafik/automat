@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "log.hh"
 
+#include <unistd.h>
+
 #include "format.hh"
 
 namespace maf {
@@ -56,7 +58,8 @@ void DefaultLogger(const LogEntry& e) {
     EM_ASM({ console.log(UTF8ToString($0)); }, e.buffer.c_str());
   }
 #else
-  printf("%s\n", e.buffer.c_str());
+  auto line = e.buffer + '\n';
+  (void)write(STDOUT_FILENO, line.c_str(), line.size());
 #endif
 }
 

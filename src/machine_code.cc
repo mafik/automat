@@ -88,8 +88,7 @@ struct PtraceController : Controller {
     std::string new_code;
     std::vector<MapEntry> new_map;
     std::vector<std::weak_ptr<const Inst>> new_instructions;
-    std::vector<int> new_instruction_offsets;
-    new_instruction_offsets.resize(program.size(), -1);
+    std::vector<int> new_instruction_offsets(program.size(), -1);
 
     {  // Fill new_code & new_map
       auto& mc_code_emitter = llvm_asm.mc_code_emitter;
@@ -197,13 +196,38 @@ struct PtraceController : Controller {
         }
       };
 
-      for (int start_i = 0; start_i < program.size(); ++start_i) {
-        // Emit a sequence of instructions starting at index `start_i` and following the `next`
-        // links.
-        EmitInstructionSequence(start_i);
+      {  // Emit instruction sequences
+        std::vector<int> in_degree(program.size(), 0);
+        for (int i = 0; i < program.size(); ++i) {
+          if (program[i].next >= 0 && program[i].next < program.size()) {
+            in_degree[program[i].next]++;
+          }
+          if (program[i].jump >= 0 && program[i].jump < program.size()) {
+            in_degree[program[i].jump]++;
+          }
+        }
+
+        std::vector<int> root_indices;
+        for (int i = 0; i < program.size(); ++i) {
+          if (in_degree[i] == 0) {
+            root_indices.push_back(i);
+          }
+        }
+
+        // First try to emit instruction sequences that have a well-defined starting point.
+        for (int root_i : root_indices) {
+          EmitInstructionSequence(root_i);
+        }
+
+        // Then emit the rest (essentially loops).
+        for (int start_i = 0; start_i < program.size(); ++start_i) {
+          // Emit a sequence of instructions starting at index `start_i` and following the `next`
+          // links.
+          EmitInstructionSequence(start_i);
+        }
       }
 
-      while (!machine_code_fixups.empty()) {
+      while (!machine_code_fixups.empty()) {  // Fill fixups
         auto& fixup = machine_code_fixups.back();
         int target_offset;
         if (fixup.target_index >= 0 &&

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <span>
 #include <string>
 
 #include "math_constants.hh"  // IWYU pragma: export
@@ -406,6 +407,9 @@ union RRect {
   Vec2 LineEndRightUpper() const { return {rect.right, rect.top - radii[2].y}; }
   // Lower end of the right line.
   Vec2 LineEndRightLower() const { return {rect.right, rect.bottom + radii[1].y}; }
+
+  // At the moment only supports simple RRects.
+  void EquidistantPoints(std::span<Vec2> points) const;
 
   constexpr Vec2 Center() const { return rect.Center(); }
 

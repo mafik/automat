@@ -154,6 +154,7 @@ std::string_view AssemblerWidget::Name() const { return "Assembler"; }
 SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect.sk); }
 
 static constexpr float kFlatBorderWidth = 3_mm;
+static constexpr RRect kBorderLightsRRect = AssemblerWidget::kRRect.Outset(-kFlatBorderWidth / 2);
 static constexpr RRect kBorderMidRRect = AssemblerWidget::kRRect.Outset(-kFlatBorderWidth);
 static constexpr RRect kInnerRRect = kBorderMidRRect.Outset(-kFlatBorderWidth);
 
@@ -295,6 +296,7 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
                  "#d86355"_color);
 
   canvas.drawDRRect(kBorderMidRRect.sk, kInnerRRect.sk, bevel_border_paint);
+
   SkPaint bg_paint = [&]() {
     static auto builder =
         resources::RuntimeEffectBuilder(embedded::assets_assembler_stars_rt_sksl.content);
@@ -312,6 +314,46 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   canvas.clipRRect(kInnerRRect.sk);
 
   DrawChildren(canvas);
+  canvas.restore();
+
+  constexpr int kNumLights = 4 * 6;
+  Vec2 light_positions[kNumLights];
+  kBorderLightsRRect.EquidistantPoints(light_positions);
+  Vec2 center{};
+  constexpr float kLightRange = 5_mm;
+  constexpr float kLightRadius = 1_mm;
+
+  SkColor bulb_colors[] = {
+      "#ffffa2"_color,  // light center
+      "#ffff70"_color,  // light mid
+      "#ffff93"_color,  // outer light edge (faint yellow)
+  };
+  SkPaint bulb_paint;
+  bulb_paint.setShader(SkGradientShader::MakeRadial(center, kLightRadius, bulb_colors, nullptr, 3,
+                                                    SkTileMode::kClamp));
+
+  SkColor glow_colors[] = {
+      "#5b0e00"_color,    // shadow
+      "#5b0e00"_color,    // shadow
+      "#ec4329"_color,    // warm red
+      "#ec432980"_color,  // half-transparent warm red
+      "#ec432900"_color,  // transparent warm red
+  };
+  SkPaint glow_paint;
+  float glow_positions[] = {0, kLightRadius / kLightRange, kLightRadius * 1.1 / kLightRange,
+                            kLightRadius * 2 / kLightRange, 1};
+  glow_paint.setShader(SkGradientShader::MakeRadial(center, kLightRange, glow_colors,
+                                                    glow_positions, 5, SkTileMode::kClamp));
+  canvas.save();
+  canvas.clipRRect(kRRect.sk);
+  canvas.clipRRect(kBorderMidRRect.sk, SkClipOp::kDifference);
+  for (int i = 0; i < kNumLights; ++i) {
+    canvas.save();
+    canvas.translate(light_positions[i].x, light_positions[i].y);
+    canvas.drawCircle(0, 0, kLightRange, glow_paint);
+    canvas.drawCircle(0, 0, kLightRadius, bulb_paint);
+    canvas.restore();
+  }
   canvas.restore();
 }
 

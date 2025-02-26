@@ -9,6 +9,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 
+#include "animation.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "global_resources.hh"
@@ -152,6 +153,10 @@ AssemblerWidget::AssemblerWidget(std::weak_ptr<Assembler> assembler_weak)
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
 SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect.sk); }
 
+static constexpr float kFlatBorderWidth = 3_mm;
+static constexpr RRect kBorderMidRRect = AssemblerWidget::kRRect.Outset(-kFlatBorderWidth);
+static constexpr RRect kInnerRRect = kBorderMidRRect.Outset(-kFlatBorderWidth);
+
 animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   auto assembler = assembler_weak.lock();
   if (!assembler) {
@@ -179,6 +184,12 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     if (register_widgets[i] == nullptr) {
       children.push_back(std::make_shared<RegisterWidget>(i));
       register_widgets[i] = static_cast<RegisterWidget*>(children.back().get());
+      children.back()->local_to_parent = SkM44::Translate(0, 10_cm);
+      std::sort(children.begin(), children.end(), [](const auto& a, const auto& b) {
+        auto* a_register_widget = static_cast<RegisterWidget*>(a.get());
+        auto* b_register_widget = static_cast<RegisterWidget*>(b.get());
+        return a_register_widget->register_index < b_register_widget->register_index;
+      });
     }
     auto child = register_widgets[i];
     if (child->reg_value != new_value) {
@@ -186,13 +197,62 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
       child->WakeAnimation();
     }
   }
-  return animation::Finished;
+  int n = children.size();
+  int columns = std::ceil(std::sqrt(n));
+  int rows = (n + columns - 1) / columns;
+  int total_cells = columns * rows;
+  int empty_cells_in_first_row = total_cells - n;
+
+  constexpr float kMargin = 1_cm;
+
+  constexpr float kCellMarginWidth = RegisterWidget::kBaseRect.Width() + kMargin;
+
+  float total_width = RegisterWidget::kBaseRect.Width() * columns + kMargin * (columns + 1);
+  float available_width = kInnerRRect.rect.Width();
+  float target_scale = available_width / total_width;
+
+  animation::Phase phase;
+
+  for (int child_i = 0; child_i < n; ++child_i) {
+    auto* child = static_cast<RegisterWidget*>(children[child_i].get());
+
+    int effective_i = child_i + empty_cells_in_first_row;
+    int row = effective_i / columns;
+    int column;
+    int columns_in_row;
+    if (row == 0) {
+      column = child_i;
+      columns_in_row = columns - empty_cells_in_first_row;
+    } else {
+      column = effective_i % columns;
+      columns_in_row = columns;
+    }
+    float x = column * (RegisterWidget::kBaseRect.Width() + kMargin) -
+              ((columns_in_row - 1) / 2.f) * (RegisterWidget::kBaseRect.Width() + kMargin);
+    float y = -row * (RegisterWidget::kBaseRect.Height() + kMargin) +
+              ((rows - 1) / 2.f) * (RegisterWidget::kBaseRect.Height() + kMargin);
+
+    SkMatrix child_mat = child->local_to_parent.asM33();
+
+    SkMatrix target_mat = SkMatrix::Scale(target_scale, target_scale);
+    target_mat.preTranslate(x, y);
+
+    phase |=
+        animation::ExponentialApproach(target_scale, timer.d, 0.2, child_mat[SkMatrix::kMScaleX]);
+    phase |=
+        animation::ExponentialApproach(target_scale, timer.d, 0.2, child_mat[SkMatrix::kMScaleY]);
+    phase |= animation::ExponentialApproach(target_mat[SkMatrix::kMTransX], timer.d, 0.2,
+                                            child_mat[SkMatrix::kMTransX]);
+    phase |= animation::ExponentialApproach(target_mat[SkMatrix::kMTransY], timer.d, 0.2,
+                                            child_mat[SkMatrix::kMTransY]);
+
+    child->local_to_parent = SkM44(child_mat);
+  }
+
+  return phase;
 }
 
 void AssemblerWidget::Draw(SkCanvas& canvas) const {
-  static constexpr float kFlatBorderWidth = 3_mm;
-  static constexpr RRect kBorderMidRRect = kRRect.Outset(-kFlatBorderWidth);
-  static constexpr RRect kInnerRRect = kBorderMidRRect.Outset(-kFlatBorderWidth);
   float one_pixel = 1.0f / canvas.getTotalMatrix().getScaleX();
   SkPaint flat_border_paint;
   flat_border_paint.setColor("#9b252a"_color);
@@ -213,7 +273,11 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   }();
   canvas.drawRRect(kInnerRRect.Outset(one_pixel).sk, bg_paint);
 
+  canvas.save();
+  canvas.clipRRect(kInnerRRect.sk);
+
   DrawChildren(canvas);
+  canvas.restore();
 }
 
 void AssemblerWidget::FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) {

@@ -1662,7 +1662,7 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
           {.tag = Token::FixedCondition, .fixed_cond = X86::CondCode::COND_NE},
           {.tag = Token::String, .str = " and"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
-          {.tag = Token::String, .str = "=0"},
+          {.tag = Token::String, .str = "≠0"},
           {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "Then jump"},
       };
@@ -1678,7 +1678,7 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
           {.tag = Token::FixedCondition, .fixed_cond = X86::CondCode::COND_E},
           {.tag = Token::String, .str = " and"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
-          {.tag = Token::String, .str = "=0"},
+          {.tag = Token::String, .str = "≠0"},
           {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "Then jump"},
       };
@@ -1692,7 +1692,7 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
           {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "If"},
           {.tag = Token::FixedRegister, .fixed_reg = X86::RCX},
-          {.tag = Token::String, .str = "=0"},
+          {.tag = Token::String, .str = "≠0"},
           {.tag = Token::BreakLine},
           {.tag = Token::String, .str = "Then jump"},
       };

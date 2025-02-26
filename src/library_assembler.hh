@@ -23,9 +23,12 @@ struct DeleteWithMunmap {
 
 struct Regs;
 
+struct Assembler;
+struct AssemblerWidget;
+
 struct RegisterWidget : gui::Widget {
-  std::weak_ptr<Object> object;  // assembler
   int register_index;
+  uint64_t reg_value;
   constexpr static Rect kBaseRect = Rect::MakeAtZero<CenterX, CenterY>(3_cm, 3_cm);
   constexpr static Rect kBoundingRect = []() {
     auto rect = kBaseRect;
@@ -37,8 +40,7 @@ struct RegisterWidget : gui::Widget {
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(std::weak_ptr<Object> object, int register_index)
-      : object(object), register_index(register_index) {}
+  RegisterWidget(int register_index) : register_index(register_index) {}
   std::string_view Name() const override;
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
@@ -51,13 +53,15 @@ struct AssemblerWidget : gui::Widget {
   constexpr static RRect kRRect =
       RRect::MakeSimple(Rect::MakeAtZero<CenterX, CenterY>(kWidth, kHeight), kRadius);
 
-  std::weak_ptr<Object> object;
+  std::weak_ptr<Assembler> assembler_weak;
   maf::Vec<std::shared_ptr<gui::Widget>> children;
+  mc::Controller::State state;
 
-  AssemblerWidget(std::weak_ptr<Object> object);
+  AssemblerWidget(std::weak_ptr<Assembler>);
   std::string_view Name() const override;
   void FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) override;
   SkPath Shape() const override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
   void TransformUpdated() override;

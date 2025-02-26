@@ -191,7 +191,7 @@ struct PtraceController : Controller {
         }
 
         auto& last_inst_info = llvm_asm.mc_instr_info->get(program[last_inst_i].inst->getOpcode());
-        if (!last_inst_info.isTerminator()) {
+        if (!last_inst_info.isUnconditionalBranch()) {
           EmitExitPoint(last_inst_i, CodeType::Next);
         }
       };

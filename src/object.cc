@@ -11,6 +11,7 @@
 #include "font.hh"
 #include "gui_constants.hh"
 #include "location.hh"
+#include "root_widget.hh"
 #include "sincos.hh"
 
 using namespace maf;
@@ -131,5 +132,17 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 }
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
+
+void Object::WakeWidgetsAnimation() {
+  auto weak = WeakPtr();
+  for (auto* root_widget : gui::root_widgets) {
+    auto it = root_widget->widgets.container.find(weak);
+    if (it != root_widget->widgets.container.end()) {
+      if (auto widget = it->second.lock()) {
+        widget->WakeAnimation();
+      }
+    }
+  }
+}
 
 }  // namespace automat

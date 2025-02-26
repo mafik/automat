@@ -96,6 +96,8 @@ struct Object : public virtual SharedBase {
     w->object = WeakPtr();
     return w;
   }
+
+  void WakeWidgetsAnimation();
 };
 
 }  // namespace automat

@@ -38,12 +38,8 @@ extern std::shared_ptr<RootWidget> root_widget;
 // TODO: introduce `WidgetMaker` interface, so that widgets can be created for non-Objects
 // TODO: delete widgets after some time
 struct WidgetStore {
-  struct WeakPtrCmp {
-    bool operator()(const std::weak_ptr<Object>& a, const std::weak_ptr<Object>& b) const {
-      return a.owner_before(b);
-    }
-  };
-  std::map<std::weak_ptr<Object>, std::weak_ptr<Widget>, WeakPtrCmp> container;
+  std::map<std::weak_ptr<Object>, std::weak_ptr<Widget>, std::owner_less<std::weak_ptr<Object>>>
+      container;
 
   std::shared_ptr<Widget> For(Object& object, const Widget& parent) {
     auto weak = object.WeakPtr();

@@ -29,6 +29,7 @@ struct Regs {
   uint64_t RCX = 0;
   uint64_t RDX = 0;
   uint64_t RBP = 0;
+  // Note that RSP is not included
   uint64_t RSI = 0;
   uint64_t RDI = 0;
   uint64_t R8 = 0;
@@ -39,6 +40,8 @@ struct Regs {
   uint64_t R13 = 0;
   uint64_t R14 = 0;
   uint64_t R15 = 0;
+
+  static constexpr int kNumRegisters = 15;
 
   uint64_t& operator[](int index) { return reinterpret_cast<uint64_t*>(this)[index]; }
 };

@@ -62,6 +62,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
       ScheduleArgumentTargets(*exit_inst->here.lock(), jump_arg);
     }
   }
+  WakeWidgetsAnimation();
 }
 
 std::shared_ptr<Object> Assembler::Clone() const {
@@ -145,13 +146,48 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
   mc_controller->Execute(entry_point->ToMC(), status);
 }
 
-AssemblerWidget::AssemblerWidget(std::weak_ptr<Object> object) {
-  this->object = object;
-  children.emplace_back(std::make_shared<RegisterWidget>(object, 0));
-}
+AssemblerWidget::AssemblerWidget(std::weak_ptr<Assembler> assembler_weak)
+    : assembler_weak(assembler_weak) {}
 
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
 SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect.sk); }
+
+animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
+  auto assembler = assembler_weak.lock();
+  if (!assembler) {
+    return animation::Finished;
+  }
+  Status status;
+  assembler->mc_controller->GetState(state, status);
+  if (!OK(status)) {
+    ERROR << "Failed to get Assembler state: " << status;
+    return animation::Finished;
+  }
+  if (state.current_instruction.lock()) {
+    return animation::Animating;
+  }
+  std::array<RegisterWidget*, mc::Regs::kNumRegisters> register_widgets = {};
+  for (int i = 0; i < children.size(); ++i) {
+    auto* register_widget = static_cast<RegisterWidget*>(children[i].get());
+    register_widgets[register_widget->register_index] = register_widget;
+  }
+  for (int i = 0; i < mc::Regs::kNumRegisters; ++i) {
+    auto new_value = state.regs[i];
+    if (new_value == 0 && register_widgets[i] == nullptr) {
+      continue;
+    }
+    if (register_widgets[i] == nullptr) {
+      children.push_back(std::make_shared<RegisterWidget>(i));
+      register_widgets[i] = static_cast<RegisterWidget*>(children.back().get());
+    }
+    auto child = register_widgets[i];
+    if (child->reg_value != new_value) {
+      child->reg_value = new_value;
+      child->WakeAnimation();
+    }
+  }
+  return animation::Finished;
+}
 
 void AssemblerWidget::Draw(SkCanvas& canvas) const {
   static constexpr float kFlatBorderWidth = 3_mm;
@@ -181,9 +217,7 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
 }
 
 void AssemblerWidget::FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) {
-  for (auto& child : this->children) {
-    children.push_back(child);
-  }
+  children = this->children;  // expensive copy of a bunch of shared_ptrs
 }
 
 std::unique_ptr<Action> AssemblerWidget::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
@@ -235,14 +269,6 @@ static constexpr float kBitPositionFontShiftUp =
     RegisterWidget::kCellHeight / 2 - kBitPositionFontSize;
 
 void RegisterWidget::Draw(SkCanvas& canvas) const {
-  auto object_shared = object.lock();
-  auto assembler = static_cast<Assembler*>(object_shared.get());
-
-  Status status;
-  mc::Controller::State state;
-  assembler->mc_controller->GetState(state, status);
-  uint64_t reg_value = state.regs[register_index];
-
   SkPaint dark_paint;
   dark_paint.setColor("#dcca85"_color);
   canvas.drawRect(kBaseRect.sk, dark_paint);

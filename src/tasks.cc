@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 #include "tasks.hh"
 
+#include "argument.hh"
 #include "audio.hh"
 #include "automat.hh"
 #include "base.hh"
 #include "time.hh"
-
 
 using namespace maf;
 
@@ -54,7 +54,10 @@ void Task::Schedule() {
   if (log_executed_tasks) {
     LOG << "Scheduling " << Format();
   }
-  assert(!scheduled);
+  if (scheduled) {
+    ERROR << "Task for " << *target.lock() << " already scheduled!";
+    return;
+  }
   scheduled = true;
   EnqueueTask(this);
 }
@@ -101,13 +104,15 @@ std::string Task::Format() { return "Task()"; }
 
 std::string RunTask::Format() { return f("RunTask(%s)", TargetName().c_str()); }
 
-void ScheduleNext(Location& source) {
+void ScheduleNext(Location& source) { ScheduleArgumentTargets(source, next_arg); }
+
+void ScheduleArgumentTargets(Location& source, Argument& arg) {
   audio::Play(source.object->NextSound());
   source.last_finished = time::SteadyClock::now();
   // TODO: maybe there is a better way to do this...
-  next_arg.InvalidateConnectionWidgets(source);  // so that the "next" connection flashes
+  arg.InvalidateConnectionWidgets(source);  // so that the "next" connection flashes
 
-  next_arg.LoopLocations<bool>(source, [](Location& next) {
+  arg.LoopLocations<bool>(source, [](Location& next) {
     next.ScheduleRun();
     return false;
   });

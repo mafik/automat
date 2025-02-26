@@ -73,6 +73,8 @@ struct Instruction : LiveObject, Runnable, LongRunning {
 
   static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst);
 
+  maf::Str ToAsmStr() const;
+
   std::weak_ptr<mc::Inst> ToMC() { return std::shared_ptr<mc::Inst>(SharedPtr(), &mc_inst); }
 
   std::shared_ptr<gui::Widget> MakeWidget() override { return std::make_shared<Widget>(WeakPtr()); }

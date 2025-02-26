@@ -10,9 +10,11 @@
 namespace automat {
 
 struct Location;
+struct Argument;
 
 // Schedules all of the Locations pointed by the "next" argument from the "source" Location.
 void ScheduleNext(Location& source);
+void ScheduleArgumentTargets(Location& source, Argument&);
 
 struct Task {
   std::weak_ptr<Location> target;

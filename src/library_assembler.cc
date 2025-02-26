@@ -13,6 +13,7 @@
 #include "font.hh"
 #include "global_resources.hh"
 #include "library_instruction.hh"
+#include "machine_code.hh"
 #include "status.hh"
 #include "svg.hh"
 
@@ -32,7 +33,36 @@ Assembler::Assembler(Status& status) {
 
 Assembler::~Assembler() {}
 
-void Assembler::ExitCallback(mc::CodePoint code_point) { LOG << "Assembler::ExitCallback"; }
+void Assembler::ExitCallback(mc::CodePoint code_point) {
+  Instruction* exit_inst = nullptr;
+  if (code_point.instruction) {
+    auto exit_mc_inst = code_point.instruction->lock();
+    if (exit_mc_inst) {
+      mc::Inst* exit_mc_inst_raw = const_cast<mc::Inst*>(exit_mc_inst.get());
+      constexpr int mc_inst_offset = offsetof(Instruction, mc_inst);
+      exit_inst = reinterpret_cast<Instruction*>(reinterpret_cast<char*>(exit_mc_inst_raw) -
+                                                 mc_inst_offset);
+    }
+  }
+  auto* loc = here.lock().get();
+  auto [begin, end] = loc->incoming.equal_range(&assembler_arg);
+  for (auto it = begin; it != end; ++it) {
+    auto& conn = *it;
+    auto& inst_loc = conn->from;
+    if (auto inst = inst_loc.As<Instruction>()) {
+      inst_loc.long_running = nullptr;
+    }
+  }
+  if (exit_inst) {
+    if (code_point.code_type == mc::CodeType::Next) {
+      LOG << "Exiting through " << exit_inst->ToAsmStr() << "->next";
+      ScheduleNext(*exit_inst->here.lock());
+    } else if (code_point.code_type == mc::CodeType::Jump) {
+      LOG << "Exiting through " << exit_inst->ToAsmStr() << "->jump";
+      ScheduleArgumentTargets(*exit_inst->here.lock(), jump_arg);
+    }
+  }
+}
 
 std::shared_ptr<Object> Assembler::Clone() const {
   Status status;

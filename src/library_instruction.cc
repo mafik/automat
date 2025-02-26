@@ -182,6 +182,8 @@ static std::string AssemblyText(const mc::Inst& mc_inst) {
   return str;
 }
 
+maf::Str Instruction::ToAsmStr() const { return AssemblyText(mc_inst); }
+
 static std::string MachineText(const mc::Inst& mc_inst) {
   auto& llvm_asm = LLVM_Assembler::Get();
   SmallVector<char, 128> buffer;

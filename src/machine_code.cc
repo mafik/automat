@@ -345,9 +345,13 @@ struct PtraceController : Controller {
   // MachineCodeController, keep in mind that other (hypothetical) implementations (e.g.
   // SignalMachineCodeController) may execute the code in a blocking manner, on the current thread.
   void Execute(std::weak_ptr<const Inst> instr, Status& status) override {
-    control_commands.enqueue([this, instr = std::move(instr)]() {
+    control_commands.enqueue([this, instr = std::move(instr), &status]() {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Executing instruction";
+      }
+      if (worker_should_run) {
+        AppendErrorMessage(status) += "Code is already executing";
+        return;
       }
       auto instr_it =
           std::lower_bound(instructions.begin(), instructions.end(), instr, std::owner_less{});
@@ -360,14 +364,9 @@ struct PtraceController : Controller {
 
       char* instruction_addr = code.data() + instruction_offsets[instruction_index];
 
-      // TODO: handle the case where the code is executing (worker_running == true)
+      // TODO: handle the case where the code already was scheduled for execution
+      // (worker_should_run == true)
 
-      // int status;
-      // int ret = waitpid(pid, &status, 0);
-      // if (ret == -1) {
-      //   ERROR << "waitpid failed: " << strerror(errno);
-      //   return;
-      // }
       int ret;
       user_regs_struct user_regs;
       ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
@@ -381,15 +380,11 @@ struct PtraceController : Controller {
         ERROR << "PTRACE_SETREGS failed: " << strerror(errno);
         return;
       }
-      ret = ptrace(PTRACE_CONT, pid, 0, 0);
-      if (ret == -1) {
-        ERROR << "PTRACE_CONT failed: " << strerror(errno);
-        return;
-      }
       if constexpr (kDebugCodeController) {
         LOG << "Executing instruction at " << maf::f("%p", instruction_addr);
       }
-      worker_running = true;
+      worker_should_run = true;
+      ResumeWorker(status);
     });
     WakeControlThread();
   }
@@ -426,6 +421,7 @@ struct PtraceController : Controller {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Cancelling";
       }
+      worker_should_run = false;
     });
     WakeControlThread();
   }
@@ -441,9 +437,15 @@ struct PtraceController : Controller {
   // PID of the worker thread.
   pid_t pid = 0;
 
-  bool worker_running = true;
+  // Keeps track of the OS state of the worker thread.
+  // It's possible that we pause the worker to do some ptrace operation.
+  bool worker_running = false;
 
-  // bool worker_should_be_stopped = false;
+  // Keeps track of the desired state of the assembler thread.
+  // It should be true during:
+  // - initialization of the worker thread
+  // - between calls to Execute() and [Cancel() or ExitCallback]
+  bool worker_should_run = true;
 
   // Saved state of registers
   Regs regs = {};
@@ -702,6 +704,7 @@ struct PtraceController : Controller {
             }
             if (!initial_registers_set) {
               initial_registers_set = true;
+              worker_should_run = false;
               Regs regs = {};
               maf::Status status;
               uint64_t rip;
@@ -747,16 +750,19 @@ struct PtraceController : Controller {
             while (control_commands.try_dequeue(command)) {
               command();
             }
-            maf::Status status;
-            ResumeWorker(status);
-            if (!OK(status)) {
-              ERROR << "Couldn't resume worker thread: " << status;
-              continue;
+            if (worker_should_run) {
+              maf::Status status;
+              ResumeWorker(status);
+              if (!OK(status)) {
+                ERROR << "Couldn't resume worker thread: " << status;
+                continue;
+              }
             }
           } else if (sig == SIGTRAP) {
             if constexpr (kDebugCodeController) {
               LOG << "Received SIGTRAP - calling exit_callback";
             }
+            worker_should_run = false;
             if (exit_callback == nullptr) {
               continue;
             }

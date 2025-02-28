@@ -167,9 +167,28 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
 
   Status status;
   mc_controller->Execute(entry_point->ToMC(), status);
+  if (!OK(status)) {
+    ERROR << "Failed to execute Assembler: " << status;
+  }
 }
 
-void Assembler::Cancel() { LOG << "Assembler::Cancel()"; }
+void Assembler::Cancel() {
+  Status status;
+  mc_controller->Cancel(status);
+  if (!OK(status)) {
+    ERROR << "Failed to cancel Assembler: " << status;
+    return;
+  }
+  auto* loc = here.lock().get();
+  auto [begin, end] = loc->incoming.equal_range(&assembler_arg);
+  for (auto it = begin; it != end; ++it) {
+    auto& conn = *it;
+    auto& inst_loc = conn->from;
+    if (auto inst = inst_loc.As<Instruction>()) {
+      inst_loc.long_running = nullptr;
+    }
+  }
+}
 
 AssemblerWidget::AssemblerWidget(std::weak_ptr<Assembler> assembler_weak)
     : assembler_weak(assembler_weak) {}

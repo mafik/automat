@@ -136,6 +136,9 @@ void Instruction::ConnectionAdded(Location& here, Connection& connection) {
     if (auto assembler = connection.to.As<Assembler>()) {
       assembler->UpdateMachineCode();
     }
+  } else if (&connection.argument == &jump_arg || &connection.argument == &next_arg) {
+    auto assembler = FindOrCreateAssembler(here);
+    assembler->UpdateMachineCode();
   }
 }
 
@@ -144,6 +147,9 @@ void Instruction::ConnectionRemoved(Location& here, Connection& connection) {
     if (auto assembler = connection.to.As<Assembler>()) {
       assembler->UpdateMachineCode();
     }
+  } else if (&connection.argument == &jump_arg || &connection.argument == &next_arg) {
+    auto assembler = FindOrCreateAssembler(here);
+    assembler->UpdateMachineCode();
   }
 }
 

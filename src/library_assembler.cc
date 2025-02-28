@@ -146,6 +146,9 @@ void Assembler::UpdateMachineCode() {
   auto instructions = FindInstructions(*here_ptr);
   Status status;
   library::UpdateCode(*mc_controller, std::move(instructions), status);
+  if (!OK(status)) {
+    ERROR << "Failed to update Assembler: " << status;
+  }
 }
 
 void Assembler::RunMachineCode(library::Instruction* entry_point) {

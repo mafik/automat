@@ -10,7 +10,6 @@ using namespace automat::gui;
 
 namespace automat {
 Connection::~Connection() {
-  from.object->ConnectionRemoved(from, *this);
   auto [begin, end] = from.outgoing.equal_range(this);
   for (auto it = begin; it != end; ++it) {
     if (*it == this) {
@@ -33,6 +32,7 @@ Connection::~Connection() {
       }
     }
   }
+  from.object->ConnectionRemoved(from, *this);
 }
 
 Connection::Connection(Argument& arg, Location& from, Location& to,

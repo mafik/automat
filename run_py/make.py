@@ -44,7 +44,6 @@ def Popen(args, **kwargs):
     p.stderr = f
     return p
 
-
 def hexdigest(path):
     path = Path(path)
     if path.exists():
@@ -290,6 +289,9 @@ class Recipe:
                         self.interrupt()
                         return False
                     break
+                if pid not in self.pid_to_step:
+                    print('Warning: unregistered child process has finished. PID=', pid, ', exit status=', status, '. Make sure that all the steps in the build graph properly return their PIDs! You can use the `./run_.py/moniter_new_pids.py` while this command is running to identify extra processes.')
+                    continue
                 step = self.pid_to_step[pid]
                 if status:
                     print(f'{step.desc} finished with an error:\n')

@@ -75,6 +75,7 @@ class ExtensionHelper:
     self.beam = defaultdict(list)
     self.patch_sources_func = None
     self.post_install = None
+    self.post_install_outputs = defaultdict(list)
     self.checkout_dir = fs_utils.third_party_dir / self.name
     self.src_dir = self.checkout_dir
     self.git_url = None
@@ -164,13 +165,12 @@ class ExtensionHelper:
       self.beam[build_type.name] = [self.outputs[build_type.name]]
     
       if self.post_install:
-        marker = build_type.BASE() / f'{self.name}.install_patched'
-        recipe.add_step(partial(self.post_install, build_type, marker),
-                        outputs=[marker],
+        recipe.add_step(partial(self.post_install, build_type, *self.post_install_outputs[build_type]),
+                        outputs=self.post_install_outputs[build_type],
                         inputs=self.beam[build_type.name],
-                        desc=f'Patching installed {self.name} {build_type}'.strip(),
-                        shortcut=f'patch {self.name} {build_type}'.strip())
-        self.beam[build_type.name] = [marker]
+                        desc=f'Post-install hook for {self.name} {build_type}'.strip(),
+                        shortcut=f'post-install {self.name} {build_type}'.strip())
+        self.beam[build_type.name] = self.post_install_outputs[build_type]
 
   def _hook_srcs(self, srcs : dict[str, src.File], recipe):
     if not self.include_regex:
@@ -277,10 +277,20 @@ class ExtensionHelper:
       raise ValueError(f'{self.name} was already configured with patch sources hook')
     self.patch_sources_func = func
 
-  def PatchInstallation(self, func : Callable[[build.BuildType, Path], None]):
+  def PostInstallStep(self, func : Callable[[build.BuildType, Path], None], outputs_func : Callable[[build.BuildType], list[Path]] = None):
     '''
-    Run the given function after installation. `func` takes the build type and a marker that should be touched after patching.
+    Run the given function after installation.
+    
+    The post-install function must produce some files to mark its completion. They can be provided through the `outputs` function.
+    If no outputs_func is provided, a default marker file will be used.
+    
+    `func` takes the build type and a list (as varargs) of output files.
     '''
     if self.post_install:
       raise ValueError(f'{self.name} was already configured with post-install hook')
     self.post_install = func
+    for build_type in build.types:
+      if outputs_func:
+        self.post_install_outputs[build_type] = outputs_func(build_type)
+      else:
+        self.post_install_outputs[build_type] = [build_type.BASE() / f'{self.name}.install_patched']

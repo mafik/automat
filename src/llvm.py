@@ -4,38 +4,64 @@
 import subprocess
 import build
 import extension_helper
+from multiprocessing import Process
 
 hook = extension_helper.ExtensionHelper('LLVM', globals())
 
-def llvm_config_path(build_type : build.BuildType):
-  return (build_type.PREFIX() / 'bin' / 'llvm-config').with_suffix(build.binary_extension)
+def llvm_config_path_for_prefix(PREFIX):
+  return (PREFIX / 'bin' / 'llvm-config').with_suffix(build.binary_extension)
 
-def llvm_config(build_type : build.BuildType, args):
-  '''Runs llvm-config for the given build_type and returns the output as a list of strings'''
-  if '"' in args or "'" in args or '\\' in args:
-    raise ValueError("TODO: handle potential shell escaping in llvm-config output")
-  llvm_config = llvm_config_path(build_type)
-  if not llvm_config.exists():
-    return []
-  stdout_bytes = subprocess.Popen([llvm_config] + args, stdout=subprocess.PIPE).stdout.read()
-  return stdout_bytes.decode().split()
+def llvm_config_path(build_type : build.BuildType):
+  return llvm_config_path_for_prefix(build_type.PREFIX())
 
 def llvm_cxxflags(build_type : build.BuildType):
-  flags = llvm_config(build_type, ['--cxxflags'])
-  flags = [f for f in flags if not f.startswith('-std=')]
-  x86_include = build_type.BASE() / 'LLVM' / 'lib' / 'Target' / 'X86'
-  flags.append(f'-I{x86_include}')
-  return flags
+  path = build_type.BASE() / 'LLVM.cxxflags'
+  if path.exists():
+    return path.read_text().split()
+  return []
 
 def llvm_ldflags(build_type : build.BuildType):
-  return llvm_config(build_type, ['--ldflags', '--libs']) + (['-lz', '-lzstd'] if build.platform != 'win32' else ['-lntdll'])
+  path = build_type.BASE() / 'LLVM.ldflags'
+  if path.exists():
+    return path.read_text().split()
+  return []
 
-def post_install(build_type : build.BuildType, marker):
-  llvm_lib = build_type.PREFIX() / 'include' / 'llvm' / 'lib'
+def PostInstallProcess(BASE, PREFIX, checkout_dir):
+  from pathlib import Path
+
+  BASE = Path(BASE)
+  PREFIX = Path(PREFIX)
+  checkout_dir = Path(checkout_dir)
+
+  llvm_lib = PREFIX / 'include' / 'llvm' / 'lib'
   if llvm_lib.exists() and llvm_lib.is_symlink():
     llvm_lib.unlink()
-  llvm_lib.symlink_to(hook.checkout_dir / 'llvm' / 'lib')
-  marker.touch()
+  llvm_lib.symlink_to(checkout_dir / 'llvm' / 'lib')
+
+  ldflags_path = BASE / 'LLVM.ldflags'
+  cxxflags_path = BASE / 'LLVM.cxxflags'
+
+  llvm_config = llvm_config_path_for_prefix(PREFIX)
+  llvm_config_ldflags = subprocess.Popen([llvm_config, '--ldflags', '--libs'], stdout=ldflags_path.open('w'))
+  llvm_config_cxxflags = subprocess.Popen([llvm_config, '--cxxflags'], stdout=cxxflags_path.open('w'))
+  llvm_config_ldflags.wait()
+  llvm_config_cxxflags.wait()
+
+  with ldflags_path.open('a') as f:
+    if build.platform == 'win32':
+      f.write('-lntdll')
+    else:
+      f.write('-lz -lzstd')
+
+  cxxflags = cxxflags_path.read_text().split()
+  cxxflags = [f for f in cxxflags if not f.startswith('-std=')]
+  cxxflags.append(f'-I{BASE / 'LLVM' / 'lib' / 'Target' / 'X86'}')
+  cxxflags_path.write_text(' '.join(cxxflags))
+
+def post_install(build_type : build.BuildType, *outputs):
+  p = Process(target=PostInstallProcess, args=(build_type.BASE(), build_type.PREFIX(), hook.checkout_dir))
+  p.start()
+  return p
 
 hook.FetchFromGit('https://github.com/llvm/llvm-project.git', 'llvmorg-19.1.6')
 hook.ConfigureWithCMake(src_dir=hook.checkout_dir / 'llvm', output=llvm_config_path)
@@ -55,4 +81,10 @@ hook.ConfigureOption('CMAKE_CXX_STANDARD', '20')
 hook.InstallWhenIncluded(r'llvm/.*\.h')
 hook.AddCompileArg(llvm_cxxflags)
 hook.AddLinkArg(llvm_ldflags)
-hook.PatchInstallation(post_install)
+
+def post_install_outputs(build_type : build.BuildType):
+  ldflags_path = build_type.BASE() / 'LLVM.ldflags'
+  cxxflags_path = build_type.BASE() / 'LLVM.cxxflags'
+  return [ldflags_path, cxxflags_path]
+
+hook.PostInstallStep(post_install, post_install_outputs)

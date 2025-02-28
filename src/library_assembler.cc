@@ -472,7 +472,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
     int byte_value = (reg_value >> (row * 8)) & 0xFF;
     canvas.save();
     canvas.translate(kBaseRect.right + 0.5_mm, bottom + kByteValueFontShiftUp);
-    auto byte_value_str = f("%X", byte_value);
+    auto byte_value_str = f("%02X", byte_value);
     byte_value_font.DrawText(canvas, byte_value_str, dark_paint);
     canvas.restore();
     for (int bit = 0; bit < 8; ++bit) {

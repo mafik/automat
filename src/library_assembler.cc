@@ -163,6 +163,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   if (!assembler) {
     return animation::Finished;
   }
+  animation::Phase phase;
   Status status;
   assembler->mc_controller->GetState(state, status);
   if (!OK(status)) {
@@ -170,7 +171,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
   if (state.current_instruction.lock()) {
-    return animation::Animating;
+    phase |= animation::Animating;
   }
   std::array<RegisterWidget*, mc::Regs::kNumRegisters> register_widgets = {};
   for (int i = 0; i < children.size(); ++i) {
@@ -213,8 +214,6 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   float total_width = RegisterWidget::kBaseRect.Width() * columns + kMargin * (columns + 1);
   float available_width = kInnerRRect.rect.Width();
   float target_scale = available_width / total_width;
-
-  animation::Phase phase;
 
   for (int child_i = 0; child_i < children.size(); ++child_i) {
     auto* child = static_cast<RegisterWidget*>(children[child_i].get());

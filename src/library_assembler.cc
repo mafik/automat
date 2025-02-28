@@ -184,6 +184,8 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     }
     if (register_widgets[i] == nullptr) {
       children.push_back(std::make_shared<RegisterWidget>(i));
+      children.back()->parent = SharedPtr();
+      children.back()->FixParents();
       register_widgets[i] = static_cast<RegisterWidget*>(children.back().get());
       children.back()->local_to_parent = SkM44::Translate(0, 10_cm);
       std::sort(children.begin(), children.end(), [](const auto& a, const auto& b) {
@@ -200,7 +202,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   }
   int n = children.size();
   int columns = std::ceil(std::sqrt(n));
-  int rows = (n + columns - 1) / columns;
+  int rows = n ? (n + columns - 1) / columns : 0;
   int total_cells = columns * rows;
   int empty_cells_in_first_row = total_cells - n;
 
@@ -214,7 +216,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
 
   animation::Phase phase;
 
-  for (int child_i = 0; child_i < n; ++child_i) {
+  for (int child_i = 0; child_i < children.size(); ++child_i) {
     auto* child = static_cast<RegisterWidget*>(children[child_i].get());
 
     int effective_i = child_i + empty_cells_in_first_row;

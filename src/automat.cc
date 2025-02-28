@@ -317,7 +317,7 @@ int Main() {
 #if defined(_WIN32)
 #pragma region WIN32
 
-int main() { return automat::Main(); }
+__attribute__((weak)) int main() { return automat::Main(); }
 
 #elif defined(__linux__)
 #pragma region Linux

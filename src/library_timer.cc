@@ -715,11 +715,11 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
   cb(next_arg);
 }
 
-LongRunning* TimerDelay::OnRun(Location& here) {
+void TimerDelay::OnRun(Location& here) {
   start_time = time::SteadyClock::now();
   ScheduleAt(here, start_time + duration.value);
   WakeAnimation();
-  return this;
+  here.long_running = this;
 }
 
 void TimerDelay::Cancel() {

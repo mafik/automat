@@ -261,14 +261,14 @@ void MacroRecorder::ConnectionRemoved(Location& here, Connection& c) {
     }
   }
 }
-LongRunning* MacroRecorder::OnRun(Location& here) {
+void MacroRecorder::OnRun(Location& here) {
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);
     timeline->BeginRecording();
     audio::Play(embedded::assets_SFX_macro_start_wav);
     keylogging = &gui::keyboard->BeginKeylogging(*this);
   }
-  return this;
+  here.long_running = this;
 }
 void MacroRecorder::Cancel() {
   if (keylogging) {
@@ -470,7 +470,7 @@ void MacroRecorder::KeyloggerKeyDown(gui::Key key) { RecordKeyEvent(*this, key.p
 void MacroRecorder::KeyloggerKeyUp(gui::Key key) { RecordKeyEvent(*this, key.physical, false); }
 
 bool MacroRecorder::IsOn() const { return keylogging != nullptr; }
-void MacroRecorder::On() { here.lock()->long_running = OnRun(*here.lock()); }
+void MacroRecorder::On() { OnRun(*here.lock()); }
 void MacroRecorder::Off() {
   Cancel();
   here.lock()->long_running = nullptr;

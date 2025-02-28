@@ -28,8 +28,12 @@ using namespace maf;
 
 namespace automat::library {
 
-Assembler::Assembler(Status& status) {
+Assembler::Assembler() {
+  Status status;
   mc_controller = mc::Controller::Make(std::bind_front(&Assembler::ExitCallback, this));
+  if (!OK(status)) {
+    ERROR << "Failed to create Assembler: " << status;
+  }
 }
 
 Assembler::~Assembler() {}
@@ -56,24 +60,21 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
   }
   if (exit_inst) {
     if (code_point.stop_type == mc::StopType::Next) {
-      LOG << "Exiting through " << exit_inst->ToAsmStr() << "->next";
+      // LOG << "Exiting through " << exit_inst->ToAsmStr() << "->next";
       ScheduleNext(*exit_inst->here.lock());
     } else if (code_point.stop_type == mc::StopType::Jump) {
-      LOG << "Exiting through " << exit_inst->ToAsmStr() << "->jump";
+      // LOG << "Exiting through " << exit_inst->ToAsmStr() << "->jump";
       ScheduleArgumentTargets(*exit_inst->here.lock(), jump_arg);
+    } else {
+      ERROR << "Exiting through " << exit_inst->ToAsmStr() << "->instruction body (?!)";
     }
+  } else {
+    ERROR << "Exiting through unknown instruction??";
   }
   WakeWidgetsAnimation();
 }
 
-std::shared_ptr<Object> Assembler::Clone() const {
-  Status status;
-  auto obj = std::make_shared<Assembler>(status);
-  if (OK(status)) {
-    return obj;
-  }
-  return nullptr;
-}
+std::shared_ptr<Object> Assembler::Clone() const { return std::make_shared<Assembler>(); }
 
 void UpdateCode(automat::mc::Controller& controller,
                 std::vector<std::shared_ptr<automat::library::Instruction>>&& instructions,

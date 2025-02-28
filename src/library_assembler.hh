@@ -75,7 +75,7 @@ struct Assembler : LiveObject, LongRunning {
 
   std::shared_ptr<Object> Clone() const override;
 
-  Assembler(maf::Status&);
+  Assembler();
   ~Assembler();
 
   void ExitCallback(mc::CodePoint code_point);

@@ -11,7 +11,7 @@ struct Increment : Object, gui::Widget, Runnable {
   string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
   void Args(std::function<void(Argument&)> cb) override { cb(target_arg); }
-  LongRunning* OnRun(Location& h) override;
+  void OnRun(Location& h) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
 };

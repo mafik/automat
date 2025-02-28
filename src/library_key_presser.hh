@@ -47,7 +47,7 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::KeyboardGrabber, Runnab
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
-  LongRunning* OnRun(Location& here) override;
+  void OnRun(Location& here) override;
   void Cancel() override;
 
   void SerializeState(Serializer& writer, const char* key) const override;

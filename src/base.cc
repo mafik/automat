@@ -74,7 +74,7 @@ void Runnable::Run(Location& here) {
   if (here.long_running) {
     return;
   }
-  here.long_running = OnRun(here);
+  OnRun(here);
   if (here.long_running == nullptr) {
     DoneRunning(here);
   }

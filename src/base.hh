@@ -63,12 +63,9 @@ struct LongRunning {
 struct Runnable {
   // Derived classes should override this method to implement their behavior.
   //
-  // If an object executes immediately, it should return nullptr. Otherwise it should return a
-  // pointer to a LongRunning interface.
-  //
-  // TODO: Instead of returning a pointer, there should be an API to attach a LongRunning instance
-  // to any object, at any time.
-  virtual LongRunning* OnRun(Location& here) = 0;
+  // If an object represents a long running process, it should mark itself by setting the
+  // here.long_running pointer.
+  virtual void OnRun(Location& here) = 0;
 
   // Kicks off the execution of the object.
   void Run(Location& here);

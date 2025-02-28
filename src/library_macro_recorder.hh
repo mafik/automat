@@ -65,7 +65,7 @@ struct MacroRecorder : LiveObject,
   void ConnectionAdded(Location& here, Connection&) override;
   void ConnectionRemoved(Location& here, Connection&) override;
 
-  LongRunning* OnRun(Location& here) override;
+  void OnRun(Location& here) override;
   void Cancel() override;
   void KeyloggerKeyDown(gui::Key) override;
   void KeyloggerKeyUp(gui::Key) override;

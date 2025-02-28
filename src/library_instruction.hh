@@ -50,7 +50,7 @@ struct Instruction : LiveObject, Runnable {
   std::string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
 
-  LongRunning* OnRun(Location& here) override;
+  void OnRun(Location& here) override;
 
   struct Widget : gui::Widget {
     constexpr static float kWidth = 63.5_mm;

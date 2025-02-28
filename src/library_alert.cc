@@ -16,7 +16,7 @@ namespace automat {
 
 Argument Alert::message_arg("message", Argument::kRequiresObject);
 
-LongRunning* Alert::OnRun(Location& here) {
+void Alert::OnRun(Location& here) {
   auto message = message_arg.GetObject(here);
   if (message.ok) {
     string text = message.object->GetText();
@@ -31,7 +31,6 @@ LongRunning* Alert::OnRun(Location& here) {
 #endif
     }
   }
-  return nullptr;
 }
 
 }  // namespace automat

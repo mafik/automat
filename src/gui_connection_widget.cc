@@ -28,7 +28,7 @@ using namespace maf;
 namespace automat::gui {
 
 struct DummyRunnable : Object, Runnable {
-  LongRunning* OnRun(Location& here) override { return nullptr; }
+  void OnRun(Location& here) override { return; }
   std::shared_ptr<Object> Clone() const override { return std::make_shared<DummyRunnable>(); }
 } kDummyRunnable;
 

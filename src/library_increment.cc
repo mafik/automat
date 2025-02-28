@@ -22,14 +22,13 @@ string_view Increment::Name() const { return "Increment"; }
 
 std::shared_ptr<Object> Increment::Clone() const { return std::make_shared<Increment>(); }
 
-LongRunning* Increment::OnRun(Location& h) {
+void Increment::OnRun(Location& h) {
   auto integer = target_arg.GetTyped<Number>(h);
   if (!integer.ok) {
-    return nullptr;
+    return;
   }
   integer.typed->value += 1;
   integer.location->ScheduleUpdate();
-  return nullptr;
 }
 
 namespace {

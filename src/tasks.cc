@@ -107,7 +107,7 @@ std::string RunTask::Format() { return f("RunTask(%s)", TargetName().c_str()); }
 void ScheduleNext(Location& source) { ScheduleArgumentTargets(source, next_arg); }
 
 void ScheduleArgumentTargets(Location& source, Argument& arg) {
-  audio::Play(source.object->NextSound());
+  // audio::Play(source.object->NextSound());
   source.last_finished = time::SteadyClock::now();
   // TODO: maybe there is a better way to do this...
   arg.InvalidateConnectionWidgets(source);  // so that the "next" connection flashes

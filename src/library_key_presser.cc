@@ -184,12 +184,12 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
   }
 }
 
-LongRunning* KeyPresser::OnRun(Location& here) {
+void KeyPresser::OnRun(Location& here) {
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
   key_pressed = true;
   WakeAnimation();
-  return this;
+  here.long_running = this;
 }
 
 void KeyPresser::Cancel() {

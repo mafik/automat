@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "prototypes.hh"
 
+#include "library_assembler.hh"
 #include "library_flip_flop.hh"
 #include "library_hotkey.hh"
 #include "library_instruction_library.hh"
@@ -55,6 +56,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Timeline>();
   index.Register<InstructionLibrary>();
   index.Register<Instruction, HideInToolbar>();
+  index.Register<Assembler, HideInToolbar>();
 }
 
 PrototypeLibrary::~PrototypeLibrary() {

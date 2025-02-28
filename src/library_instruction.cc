@@ -101,6 +101,12 @@ Argument assembler_arg = []() {
   return arg;
 }();
 
+static Assembler* FindAssembler(Location& here) {
+  Assembler* assembler =
+      assembler_arg.FindObject<Assembler>(here, {.if_missing = Argument::IfMissing::ReturnNull});
+  return assembler;
+}
+
 static Assembler* FindOrCreateAssembler(Location& here) {
   Assembler* assembler = assembler_arg.FindObject<Assembler>(
       here, {.if_missing = Argument::IfMissing::CreateFromPrototype});
@@ -122,11 +128,7 @@ void Instruction::Args(std::function<void(Argument&)> cb) {
 
 std::shared_ptr<Object> Instruction::ArgPrototype(const Argument& arg) {
   if (&arg == &assembler_arg) {
-    Status status;
-    auto obj = std::make_shared<Assembler>(status);
-    if (OK(status)) {
-      return obj;
-    }
+    return std::make_shared<Assembler>();
   }
   return nullptr;
 }
@@ -137,8 +139,9 @@ void Instruction::ConnectionAdded(Location& here, Connection& connection) {
       assembler->UpdateMachineCode();
     }
   } else if (&connection.argument == &jump_arg || &connection.argument == &next_arg) {
-    auto assembler = FindOrCreateAssembler(here);
-    assembler->UpdateMachineCode();
+    if (auto assembler = FindAssembler(here)) {
+      assembler->UpdateMachineCode();
+    }
   }
 }
 
@@ -148,18 +151,18 @@ void Instruction::ConnectionRemoved(Location& here, Connection& connection) {
       assembler->UpdateMachineCode();
     }
   } else if (&connection.argument == &jump_arg || &connection.argument == &next_arg) {
-    auto assembler = FindOrCreateAssembler(here);
-    assembler->UpdateMachineCode();
+    if (auto assembler = FindAssembler(here)) {
+      assembler->UpdateMachineCode();
+    }
   }
 }
 
 string_view Instruction::Name() const { return "Instruction"; }
 shared_ptr<Object> Instruction::Clone() const { return make_shared<Instruction>(*this); }
 
-LongRunning* Instruction::OnRun(Location& here) {
+void Instruction::OnRun(Location& here) {
   auto assembler = FindOrCreateAssembler(here);
   assembler->RunMachineCode(this);
-  return assembler;  // Important! Assembler also tweaks the long_running pointer.
 }
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {

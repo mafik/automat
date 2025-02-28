@@ -157,7 +157,7 @@ void FlipFlop::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
   children.push_back(button);
 }
 
-LongRunning* FlipFlop::OnRun(Location& here) {
+void FlipFlop::OnRun(Location& here) {
   current_state = !current_state;
   WakeAnimation();
   button->WakeAnimation();
@@ -177,8 +177,6 @@ LongRunning* FlipFlop::OnRun(Location& here) {
       return false;
     });
   }
-
-  return nullptr;
 }
 
 void YingYangIcon::Draw(SkCanvas& canvas) const {

@@ -135,7 +135,7 @@ struct Timeline : LiveObject,
   Vec2AndDir ArgStart(const Argument&) override;
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
-  LongRunning* OnRun(Location& here) override;
+  void OnRun(Location& here) override;
   void Cancel() override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(maf::StrView name);

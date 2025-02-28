@@ -1312,10 +1312,10 @@ void Timeline::Cancel() {
   }
 }
 
-LongRunning* Timeline::OnRun(Location& here) {
+void Timeline::OnRun(Location& here) {
   LOG << "Timeline::OnRun";
   if (state != kPaused) {
-    return nullptr;
+    return;
   }
   if (paused.playback_offset >= MaxTrackLength()) {
     paused.playback_offset = 0;
@@ -1327,7 +1327,7 @@ LongRunning* Timeline::OnRun(Location& here) {
   TimelineScheduleAt(*this, now);
   run_button->WakeAnimation();
   WakeAnimation();
-  return this;
+  here.long_running = this;
 }
 
 void Timeline::BeginRecording() {

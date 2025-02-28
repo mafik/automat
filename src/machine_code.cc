@@ -814,6 +814,18 @@ struct PtraceController : Controller {
 
   static int WorkerThread(void* arg) {
     SetThreadName("Machine Code");
+
+    {  // Mask SIGWINCH
+       // When the size of terminal changes, it may send a SIGWINCH to the running program.
+       // For some reason this signal seems to be delivered to the worker thread.
+       // It would unnecessarily stop the execution of the worker (if it was running) and would
+       // require us to resume it again immediately. So instead we block the signal altogether.
+      sigset_t mask;
+      sigemptyset(&mask);
+      sigaddset(&mask, SIGWINCH);
+      pthread_sigmask(SIG_BLOCK, &mask, nullptr);
+    }
+
     if constexpr (kDebugCodeController) {
       LOG << "Worker thread: Raising SIGSTOP";
     }

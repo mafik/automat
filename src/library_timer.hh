@@ -53,7 +53,7 @@ struct TimerDelay : LiveObject,
   SkPath FieldShape(Object&) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   void Args(std::function<void(Argument&)> cb) override;
-  LongRunning* OnRun(Location& here) override;
+  void OnRun(Location& here) override;
   void Cancel() override;
   void Updated(Location& here, Location& updated) override;
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;

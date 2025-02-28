@@ -133,7 +133,7 @@ audio::Sound& MouseClick::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-LongRunning* MouseClick::OnRun(Location& location) {
+void MouseClick::OnRun(Location& location) {
 #if defined(_WIN32)
   INPUT input;
   input.type = INPUT_MOUSE;
@@ -151,7 +151,7 @@ LongRunning* MouseClick::OnRun(Location& location) {
       input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
       break;
     default:
-      return nullptr;
+      return;
   }
   SendInput(1, &input, sizeof(INPUT));
 #endif
@@ -161,7 +161,6 @@ LongRunning* MouseClick::OnRun(Location& location) {
   xcb_test_fake_input(xcb::connection, type, detail, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
   xcb_flush(xcb::connection);
 #endif
-  return nullptr;
 }
 
 }  // namespace automat::library

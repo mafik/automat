@@ -13,7 +13,7 @@ struct Alert : Object, Runnable {
   string_view Name() const override { return "Alert"; }
   std::shared_ptr<Object> Clone() const override { return std::make_shared<Alert>(); }
   void Args(std::function<void(Argument&)> cb) override { cb(message_arg); }
-  LongRunning* OnRun(Location& here) override;
+  void OnRun(Location& here) override;
 };
 
 }  // namespace automat

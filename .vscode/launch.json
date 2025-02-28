@@ -16,7 +16,7 @@
       "type": "lldb",
       "request": "launch",
       "env": {
-        "DISPLAY": ":0"
+        "DISPLAY": ":1"
       },
       "program": "${workspaceFolder}/build/automat",
       "preLaunchTask": "link automat",

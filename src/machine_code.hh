@@ -82,6 +82,9 @@ struct Controller {
 
   virtual void GetState(State&, maf::Status&) = 0;
 
+  // Status will contain an error if the thread was already cancelled.
+  virtual void Cancel(maf::Status&) = 0;
+
   // ExitCallback is going to be called when the machine code exits or crashes.
   static std::unique_ptr<Controller> Make(ExitCallback&& exit_callback);
 

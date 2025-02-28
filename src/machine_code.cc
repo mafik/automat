@@ -275,7 +275,7 @@ struct PtraceController : Controller {
         if constexpr (kDebugCodeController) {
           LOG << "Control thread: Replacing code, map & instructions";
         }
-        assert(worker_stopped);
+        assert(!worker_running);
 
         {  // Update RIP to keep the currently executing instruction active
           user_regs_struct user_regs;
@@ -360,7 +360,7 @@ struct PtraceController : Controller {
 
       char* instruction_addr = code.data() + instruction_offsets[instruction_index];
 
-      // TODO: handle the case where the code is executing (worker_stopped == false)
+      // TODO: handle the case where the code is executing (worker_running == true)
 
       // int status;
       // int ret = waitpid(pid, &status, 0);
@@ -389,7 +389,7 @@ struct PtraceController : Controller {
       if constexpr (kDebugCodeController) {
         LOG << "Executing instruction at " << maf::f("%p", instruction_addr);
       }
-      worker_stopped = false;
+      worker_running = true;
     });
     WakeControlThread();
   }
@@ -401,7 +401,7 @@ struct PtraceController : Controller {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Getting the state";
       }
-      assert(worker_stopped);
+      assert(!worker_running);
       state.current_instruction.reset();
       maf::Status status;
       uint64_t rip;
@@ -421,6 +421,15 @@ struct PtraceController : Controller {
     done.wait(false);
   }
 
+  void Cancel(maf::Status&) override {
+    control_commands.enqueue([this]() {
+      if constexpr (kDebugCodeController) {
+        LOG << "Control thread: Cancelling";
+      }
+    });
+    WakeControlThread();
+  }
+
  private:
   // Prologue can be called using the following C signature. It enters code at a given `start_addr`.
   // Return value is the address right after the exit point.
@@ -432,7 +441,9 @@ struct PtraceController : Controller {
   // PID of the worker thread.
   pid_t pid = 0;
 
-  bool worker_stopped = false;
+  bool worker_running = true;
+
+  // bool worker_should_be_stopped = false;
 
   // Saved state of registers
   Regs regs = {};
@@ -575,7 +586,7 @@ struct PtraceController : Controller {
 
   // This should only be called from the control thread.
   void ResumeWorker(maf::Status& status) {
-    if (!worker_stopped) {
+    if (worker_running) {
       maf::AppendErrorMessage(status) += "Worker already running";
       return;
     }
@@ -584,7 +595,7 @@ struct PtraceController : Controller {
       maf::AppendErrorMessage(status) += "PTRACE_CONT failed";
       return;
     }
-    worker_stopped = false;
+    worker_running = true;
   }
 
   void ControlThread() {
@@ -624,7 +635,7 @@ struct PtraceController : Controller {
         ERROR << "PTRACE_SEIZE failed: " << strerror(errno);
         return;
       }
-      worker_stopped = false;
+      worker_running = true;
 #else
        // TODO: Implement on Windows
 #endif  // __linux__
@@ -637,10 +648,10 @@ struct PtraceController : Controller {
       std::function<void()> command;
       if (control_commands.try_dequeue(command)) {
         if constexpr (kDebugCodeController) {
-          LOG << "Control thread: Found command to execute, worker_stopped=" << worker_stopped;
+          LOG << "Control thread: Found command to execute, worker_running=" << worker_running;
         }
         command();
-      } else if (worker_stopped) {
+      } else if (!worker_running) {
         if constexpr (kDebugCodeController) {
           LOG << "Control thread: Worker is stopped, waiting for command";
         }
@@ -673,7 +684,7 @@ struct PtraceController : Controller {
           }
           break;
         } else if (WIFSTOPPED(status)) {
-          worker_stopped = true;
+          worker_running = false;
           int sig = WSTOPSIG(status);
           if (sig == SIGSTOP) {
             bool group_stop = status >> 16 == PTRACE_EVENT_STOP;

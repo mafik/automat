@@ -172,6 +172,7 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
         AnimateGrowFrom(here,
                         l);  // this must go before UpdateAutoconnectArgs because of animation_state
         l.UpdateAutoconnectArgs();
+        l.WakeAnimation();
       }
     }
   }

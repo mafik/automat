@@ -3,9 +3,9 @@
 
 import subprocess
 import build
+import sys
 import extension_helper
-from multiprocessing import Process
-
+import fs_utils
 hook = extension_helper.ExtensionHelper('LLVM', globals())
 
 def llvm_config_path_for_prefix(PREFIX):
@@ -28,6 +28,8 @@ def llvm_ldflags(build_type : build.BuildType):
 
 def PostInstallProcess(BASE, PREFIX, checkout_dir):
   from pathlib import Path
+  import subprocess
+  import fs_utils
 
   BASE = Path(BASE)
   PREFIX = Path(PREFIX)
@@ -41,27 +43,46 @@ def PostInstallProcess(BASE, PREFIX, checkout_dir):
   ldflags_path = BASE / 'LLVM.ldflags'
   cxxflags_path = BASE / 'LLVM.cxxflags'
 
-  llvm_config = llvm_config_path_for_prefix(PREFIX)
+  llvm_config = (PREFIX / 'bin' / 'llvm-config').with_suffix(fs_utils.binary_extension)
   llvm_config_ldflags = subprocess.Popen([llvm_config, '--ldflags', '--libs'], stdout=ldflags_path.open('w'))
   llvm_config_cxxflags = subprocess.Popen([llvm_config, '--cxxflags'], stdout=cxxflags_path.open('w'))
   llvm_config_ldflags.wait()
   llvm_config_cxxflags.wait()
 
   with ldflags_path.open('a') as f:
-    if build.platform == 'win32':
+    if fs_utils.platform == 'win32':
       f.write('-lntdll')
     else:
       f.write('-lz -lzstd')
 
   cxxflags = cxxflags_path.read_text().split()
   cxxflags = [f for f in cxxflags if not f.startswith('-std=')]
-  cxxflags.append(f'-I{BASE / 'LLVM' / 'lib' / 'Target' / 'X86'}')
+  extra_dir = BASE / 'LLVM' / 'lib' / 'Target' / 'X86'
+  cxxflags.append(f'-I{extra_dir}')
   cxxflags_path.write_text(' '.join(cxxflags))
 
-def post_install(build_type : build.BuildType, *outputs):
-  p = Process(target=PostInstallProcess, args=(build_type.BASE(), build_type.PREFIX(), hook.checkout_dir))
-  p.start()
+# We need this in order to isolate the build system from extra
+# processes (llvm-config) required to find the LLVM arguments.
+#
+# This was originally done with multiprocessing bit it had issues
+# on Windows.
+def RunFunctionAsProcess(func, *args):
+  import inspect
+  source = inspect.getsource(func)
+
+  script = source
+  script += '\n\n'
+  script += func.__name__ + '(' + ', '.join([repr(arg) for arg in args]) + ')'
+  p = subprocess.Popen([sys.executable], stdin=subprocess.PIPE, env={ 'PYTHONPATH': str(fs_utils.run_py_dir) })
+  p.stdin.write(script.encode('utf-8'))
+  p.stdin.close()
   return p
+
+def post_install(build_type : build.BuildType, *outputs):
+  return RunFunctionAsProcess(PostInstallProcess,
+                              str(build_type.BASE()),
+                              str(build_type.PREFIX()),
+                              str(hook.checkout_dir))
 
 hook.FetchFromGit('https://github.com/llvm/llvm-project.git', 'llvmorg-19.1.6')
 hook.ConfigureWithCMake(src_dir=hook.checkout_dir / 'llvm', output=llvm_config_path)

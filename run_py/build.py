@@ -205,7 +205,8 @@ def obj_path(src_path: Path, build_type: BuildType = default) -> Path:
 def libname(name):
     return f'{name}.lib' if platform == 'win32' else f'lib{name}.a'
 
-binary_extension = '.exe' if platform == 'win32' else ''
+# TODO: replace all usages with fs_utils.binary_extension
+binary_extension = fs_utils.binary_extension
 
 def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
 

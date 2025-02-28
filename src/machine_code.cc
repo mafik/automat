@@ -29,6 +29,8 @@ namespace automat::mc {
 // Switch this to true to see debug logs.
 constexpr bool kDebugCodeController = false;
 
+#if defined __linux__
+
 // Uses two threads internally - a worker thread, which executes the actual machine code and control
 // thread, which functions as a debugger.
 struct PtraceController : Controller {
@@ -837,9 +839,16 @@ struct PtraceController : Controller {
   }
 };
 
+#endif  // __linux__
+
 std::unique_ptr<Controller> Controller::Make(ExitCallback&& exit_callback) {
+#if defined __linux__
   PtraceController* controller = new PtraceController(std::move(exit_callback));
   return std::unique_ptr<Controller>((Controller*)controller);
+#else
+  // TODO: Implement on Windows
+  return nullptr;
+#endif  // __linux__
 }
 
 }  // namespace automat::mc

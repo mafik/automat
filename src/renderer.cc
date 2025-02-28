@@ -545,13 +545,19 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       if (widget->rendering_to_screen == false) {
         // Find the closest ancestor that can be rendered to texture.
         Widget* ancestor_with_texture = widget->parent.get();
-        while (!ancestor_with_texture->pack_frame_texture_bounds.has_value()) {
+        while (ancestor_with_texture &&
+               !ancestor_with_texture->pack_frame_texture_bounds.has_value()) {
           // RootWidget can always be rendered to texture so we don't need any extra stop
           // condition here.
           ancestor_with_texture = ancestor_with_texture->parent.get();
         }
-        ancestor_with_texture->wake_time =
-            min(ancestor_with_texture->wake_time, widget->last_tick_time);
+        if (ancestor_with_texture == nullptr) {
+          ERROR << "Widget " << widget->Name()
+                << " (which just finished background rendering) has no parent to wake up!";
+        } else {
+          ancestor_with_texture->wake_time =
+              min(ancestor_with_texture->wake_time, widget->last_tick_time);
+        }
       }
 
       widget->rendering = false;

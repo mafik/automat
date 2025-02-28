@@ -648,12 +648,7 @@ struct PtraceController : Controller {
     while (controller_running) {
       int status;
       std::function<void()> command;
-      if (control_commands.try_dequeue(command)) {
-        if constexpr (kDebugCodeController) {
-          LOG << "Control thread: Found command to execute, worker_running=" << worker_running;
-        }
-        command();
-      } else if (!worker_running) {
+      if (!worker_running) {
         if constexpr (kDebugCodeController) {
           LOG << "Control thread: Worker is stopped, waiting for command";
         }

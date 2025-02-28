@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: MIT
 #include "log.hh"
 
+#if defined(__linux__)
 #include <unistd.h>
+#elif defined(_WIN32)
+#include <io.h>
+#endif
 
 #include "format.hh"
 
@@ -57,9 +61,14 @@ void DefaultLogger(const LogEntry& e) {
   } else {
     EM_ASM({ console.log(UTF8ToString($0)); }, e.buffer.c_str());
   }
-#else
+#elif defined(__linux__)
   auto line = e.buffer + '\n';
   (void)write(STDOUT_FILENO, line.c_str(), line.size());
+#elif defined(_WIN32)
+  auto line = e.buffer + '\n';
+  _write(1, line.c_str(), line.size());
+#else
+  printf("%s\n", e.buffer.c_str());
 #endif
 }
 

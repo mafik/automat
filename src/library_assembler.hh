@@ -70,7 +70,7 @@ struct AssemblerWidget : gui::Widget {
 // Combines functions of Assembler and Thread.
 // Assembler part takes care of emitting machine code to an executable memory region.
 // Thread part maintains register state across executions.
-struct Assembler : LiveObject {
+struct Assembler : LiveObject, LongRunning {
   using PrologueFn = uintptr_t (*)(void*);
 
   std::shared_ptr<Object> Clone() const override;
@@ -85,6 +85,8 @@ struct Assembler : LiveObject {
   void UpdateMachineCode();
 
   void RunMachineCode(library::Instruction* entry_point);
+
+  void Cancel() override;
 
   std::shared_ptr<gui::Widget> MakeWidget() override {
     return std::make_shared<AssemblerWidget>(WeakPtr());

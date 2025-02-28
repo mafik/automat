@@ -153,11 +153,7 @@ shared_ptr<Object> Instruction::Clone() const { return make_shared<Instruction>(
 LongRunning* Instruction::OnRun(Location& here) {
   auto assembler = FindOrCreateAssembler(here);
   assembler->RunMachineCode(this);
-  return this;
-}
-
-void Instruction::Cancel() {
-  // do nothing for now
+  return assembler;  // Important! Assembler also tweaks the long_running pointer.
 }
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {

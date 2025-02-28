@@ -38,7 +38,7 @@ struct JumpArgument : Argument {
 extern Argument assembler_arg;
 extern JumpArgument jump_arg;
 
-struct Instruction : LiveObject, Runnable, LongRunning {
+struct Instruction : LiveObject, Runnable {
   mc::Inst mc_inst;
 
   void Args(std::function<void(Argument&)> cb) override;
@@ -51,7 +51,6 @@ struct Instruction : LiveObject, Runnable, LongRunning {
   std::shared_ptr<Object> Clone() const override;
 
   LongRunning* OnRun(Location& here) override;
-  void Cancel() override;
 
   struct Widget : gui::Widget {
     constexpr static float kWidth = 63.5_mm;

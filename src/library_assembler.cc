@@ -122,12 +122,9 @@ void UpdateCode(automat::mc::Controller& controller,
   controller.UpdateCode(std::move(program), status);
 }
 
-void Assembler::UpdateMachineCode() {
-  auto here_ptr = here.lock();
-  if (!here_ptr) {
-    return;
-  }
-  auto [begin, end] = here_ptr->incoming.equal_range(&assembler_arg);
+// Returning arrays of shared_ptrs is really bad but it seems to be necessary here.
+std::vector<std::shared_ptr<Instruction>> FindInstructions(Location& assembler_loc) {
+  auto [begin, end] = assembler_loc.incoming.equal_range(&assembler_arg);
   std::vector<std::shared_ptr<Instruction>> instructions;
   for (auto it = begin; it != end; ++it) {
     auto& conn = *it;
@@ -138,14 +135,41 @@ void Assembler::UpdateMachineCode() {
     }
     instructions.push_back(inst->SharedPtr());
   }
+  return instructions;
+}
+
+void Assembler::UpdateMachineCode() {
+  auto here_ptr = here.lock();
+  if (!here_ptr) {
+    return;
+  }
+  auto instructions = FindInstructions(*here_ptr);
   Status status;
   library::UpdateCode(*mc_controller, std::move(instructions), status);
 }
 
 void Assembler::RunMachineCode(library::Instruction* entry_point) {
+  {  // Mark instructions as "long running", using the assembler as the LongRunning object.
+    auto here_ptr = here.lock();
+    if (here_ptr) {
+      auto [begin, end] = here_ptr->incoming.equal_range(&assembler_arg);
+      for (auto it = begin; it != end; ++it) {
+        auto& conn = *it;
+        auto& inst_loc = conn->from;
+        auto inst = inst_loc.As<Instruction>();
+        if (!inst) {
+          continue;
+        }
+        inst_loc.long_running = this;
+      }
+    }
+  }
+
   Status status;
   mc_controller->Execute(entry_point->ToMC(), status);
 }
+
+void Assembler::Cancel() { LOG << "Assembler::Cancel()"; }
 
 AssemblerWidget::AssemblerWidget(std::weak_ptr<Assembler> assembler_weak)
     : assembler_weak(assembler_weak) {}

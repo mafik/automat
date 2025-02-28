@@ -46,7 +46,7 @@ struct Regs {
   uint64_t& operator[](int index) { return reinterpret_cast<uint64_t*>(this)[index]; }
 };
 
-enum class CodeType : uint8_t {
+enum class StopType : uint8_t {
   InstructionBody,
   Next,
   Jump,
@@ -54,7 +54,7 @@ enum class CodeType : uint8_t {
 
 struct CodePoint {
   std::weak_ptr<const Inst>* instruction;  // valid until next code update
-  CodeType code_type;
+  StopType stop_type;
 };
 
 using ExitCallback = std::function<void(CodePoint)>;

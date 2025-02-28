@@ -99,7 +99,7 @@ struct PtraceController : Controller {
         int target_index;   // index of the target instruction
         llvm::MCFixupKind kind = llvm::MCFixupKind::FK_PCRel_4;
         int source_index;  // index of the source instruction
-        CodeType code_type;
+        StopType code_type;
       };
 
       std::vector<Fixup> machine_code_fixups;
@@ -114,7 +114,7 @@ struct PtraceController : Controller {
 
         new_map.push_back({.begin = (uint32_t)new_code.size(),
                            .size = (uint8_t)instruction_bytes.size(),
-                           .code_type = CodeType::InstructionBody,
+                           .code_type = StopType::InstructionBody,
                            .instruction = (uint16_t)instruction_index});
 
         new_code.append(instruction_bytes.data(), instruction_bytes.size());
@@ -125,7 +125,7 @@ struct PtraceController : Controller {
           auto& fixup = instruction_fixups[0];
 
           machine_code_fixups.push_back({new_code.size(), program[instruction_index].jump,
-                                         fixup.getKind(), instruction_index, CodeType::Jump});
+                                         fixup.getKind(), instruction_index, StopType::Jump});
         }
       };
 
@@ -152,14 +152,14 @@ struct PtraceController : Controller {
         new_map.push_back({
             .begin = (uint32_t)new_code.size(),
             .size = (uint8_t)instruction_bytes.size(),
-            .code_type = CodeType::Next,
+            .code_type = StopType::Next,
             .instruction = (uint16_t)instr_index,
         });
         new_code.append(instruction_bytes.data(), instruction_bytes.size());
         Fixup4(new_code.size(), target_offset);
       };
 
-      auto EmitExitPoint = [&](int instr_index, CodeType exit_point) {
+      auto EmitExitPoint = [&](int instr_index, StopType exit_point) {
         new_map.push_back({.begin = (uint32_t)new_code.size(),
                            .size = 1,
                            .code_type = exit_point,
@@ -192,7 +192,7 @@ struct PtraceController : Controller {
 
         auto& last_inst_info = llvm_asm.mc_instr_info->get(program[last_inst_i].inst->getOpcode());
         if (!last_inst_info.isUnconditionalBranch()) {
-          EmitExitPoint(last_inst_i, CodeType::Next);
+          EmitExitPoint(last_inst_i, StopType::Next);
         }
       };
 
@@ -448,7 +448,7 @@ struct PtraceController : Controller {
 
     // Indicates whether this entry describes the instruction body or rather one of its exit
     // points.
-    CodeType code_type;
+    StopType code_type;
 
     // The Instruction that this section of code belongs to.
     // 0xffff indicates that it's part of the prologue/epilogue.
@@ -459,7 +459,7 @@ struct PtraceController : Controller {
 
   CodePoint InstructionPointerToCodePoint(uint64_t rip, bool trap) {
     if (rip < (uint64_t)code.data() || rip >= (uint64_t)(code.data() + code.size())) {
-      return {nullptr, CodeType::InstructionBody};
+      return {nullptr, StopType::InstructionBody};
     }
     uint64_t code_offset = rip - (uint64_t)code.data();
     for (auto& map_entry : map) {
@@ -473,7 +473,7 @@ struct PtraceController : Controller {
         }
       }
     }
-    return {nullptr, CodeType::InstructionBody};
+    return {nullptr, StopType::InstructionBody};
   }
 
   // Holds commands to be executed on the control thread.
@@ -491,13 +491,13 @@ struct PtraceController : Controller {
     for (auto& map_entry : map) {
       std::string code_type_str;
       switch (map_entry.code_type) {
-        case CodeType::InstructionBody:
+        case StopType::InstructionBody:
           code_type_str = "InstructionBody";
           break;
-        case CodeType::Next:
+        case StopType::Next:
           code_type_str = "Next";
           break;
-        case CodeType::Jump:
+        case StopType::Jump:
           code_type_str = "Jump";
           break;
         default:

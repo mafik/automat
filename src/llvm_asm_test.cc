@@ -27,7 +27,7 @@ class MachineCodeControllerTest : public ::testing::Test {
     auto ExitCallback = [this](automat::mc::CodePoint code_point) {
       std::unique_lock<std::mutex> lock(mutex);
       exit_instr = *code_point.instruction;  // copy the weak_ptr
-      exit_point = code_point.code_type;
+      exit_point = code_point.stop_type;
       exited = true;
       cv.notify_all();
     };
@@ -42,7 +42,7 @@ class MachineCodeControllerTest : public ::testing::Test {
   void StartExecution(std::weak_ptr<automat::library::Instruction> instr) {
     exited = false;
     exit_instr = {};
-    exit_point = automat::mc::CodeType::InstructionBody;
+    exit_point = automat::mc::StopType::InstructionBody;
     maf::Status status;
     std::weak_ptr<automat::mc::Inst> mc_instr = instr.lock()->ToMC();
     controller->Execute(mc_instr, status);
@@ -71,7 +71,7 @@ class MachineCodeControllerTest : public ::testing::Test {
   void VerifyState(
       automat::mc::Controller::State expected,
       std::weak_ptr<automat::mc::Inst> expected_exit_instr = {},
-      automat::mc::CodeType expected_exit_point = automat::mc::CodeType::InstructionBody) {
+      automat::mc::StopType expected_exit_point = automat::mc::StopType::InstructionBody) {
     automat::mc::Controller::State state;
     maf::Status status;
     controller->GetState(state, status);
@@ -135,7 +135,7 @@ class MachineCodeControllerTest : public ::testing::Test {
   std::condition_variable cv;
   bool exited = false;
   std::weak_ptr<const automat::mc::Inst> exit_instr = {};
-  automat::mc::CodeType exit_point = automat::mc::CodeType::InstructionBody;
+  automat::mc::StopType exit_point = automat::mc::StopType::InstructionBody;
   std::shared_ptr<automat::Machine> root;
 };
 
@@ -149,7 +149,7 @@ TEST_F(MachineCodeControllerTest, SingleInstruction) {
 
   StartExecution(inst);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RAX = 1337}}, inst->ToMC(), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RAX = 1337}}, inst->ToMC(), automat::mc::StopType::Next);
 }
 
 // Two separate instructions, executed one at a time
@@ -161,11 +161,11 @@ TEST_F(MachineCodeControllerTest, TwoSeparateInstructions) {
 
   StartExecution(inst2);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RBX = 42}}, inst2->ToMC(), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RBX = 42}}, inst2->ToMC(), automat::mc::StopType::Next);
 
   StartExecution(inst1);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, inst1->ToMC(), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, inst1->ToMC(), automat::mc::StopType::Next);
 }
 
 // Two instructions, executed one after the other
@@ -178,7 +178,7 @@ TEST_F(MachineCodeControllerTest, TwoSequentialInstructions) {
 
   StartExecution(inst1);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, inst2->ToMC(), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RAX = 1337, .RBX = 42}}, inst2->ToMC(), automat::mc::StopType::Next);
 }
 
 TEST_F(MachineCodeControllerTest, JumpExitInstruction) {
@@ -193,7 +193,7 @@ TEST_F(MachineCodeControllerTest, JumpExitInstruction) {
   ASSERT_TRUE(WaitForExecution());
 
   // Expect that registers remain zero and that we exit at a Jump exit point.
-  VerifyState({.regs = {}}, inst->ToMC(), automat::mc::CodeType::Jump);
+  VerifyState({.regs = {}}, inst->ToMC(), automat::mc::StopType::Jump);
 }
 
 TEST_F(MachineCodeControllerTest, InfiniteLoop) {
@@ -225,5 +225,5 @@ TEST_F(MachineCodeControllerTest, HotReload) {
   automat::library::Instruction* instructions2[] = {inst2.get(), inst1.get()};
   TestUpdateCode(instructions2);
   ASSERT_TRUE(WaitForExecution());
-  VerifyState({.regs = {.RAX = 1337}}, inst1->ToMC(), automat::mc::CodeType::Next);
+  VerifyState({.regs = {.RAX = 1337}}, inst1->ToMC(), automat::mc::StopType::Next);
 }

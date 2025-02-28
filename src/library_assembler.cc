@@ -55,10 +55,10 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
     }
   }
   if (exit_inst) {
-    if (code_point.code_type == mc::CodeType::Next) {
+    if (code_point.stop_type == mc::StopType::Next) {
       LOG << "Exiting through " << exit_inst->ToAsmStr() << "->next";
       ScheduleNext(*exit_inst->here.lock());
-    } else if (code_point.code_type == mc::CodeType::Jump) {
+    } else if (code_point.stop_type == mc::StopType::Jump) {
       LOG << "Exiting through " << exit_inst->ToAsmStr() << "->jump";
       ScheduleArgumentTargets(*exit_inst->here.lock(), jump_arg);
     }

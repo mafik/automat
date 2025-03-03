@@ -171,14 +171,15 @@ animation::Phase Location::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
   auto& state = GetAnimationState();
-  if (state.Tick(timer.d, position, scale) == animation::Animating) {
-    phase = animation::Animating;
+  phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.transparency);
+  phase |= state.Tick(timer.d, position, scale);
+  if (phase == animation::Animating) {
+    // Connection widgets rely on position, scale & transparency so make sure they're updated.
     InvalidateConnectionWidgets(true, false);
   }
   UpdateChildTransform();
 
   phase |= animation::ExponentialApproach(state.highlight_target, timer.d, 0.1, state.highlight);
-  phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.transparency);
   if (state.highlight > 0.01f) {
     phase = animation::Animating;
     state.time_seconds = timer.NowSeconds();
@@ -210,13 +211,9 @@ void Location::Draw(SkCanvas& canvas) const {
     my_shape = Shape();
   }
   SkRect bounds = my_shape.getBounds();
-  auto& state = GetAnimationState();
+  object_widget->local_to_parent.asM33().mapRect(&bounds);
 
-  bool using_layer = false;
-  if (state.transparency > 0.01) {
-    using_layer = true;
-    canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
-  }
+  auto& state = GetAnimationState();
 
   if (state.highlight > 0.01f) {  // Draw dashed highlight outline
     SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
@@ -240,6 +237,12 @@ void Location::Draw(SkCanvas& canvas) const {
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));
     canvas.drawPath(outset_shape, dash_paint);
     canvas.restore();
+  }
+
+  bool using_layer = false;
+  if (state.transparency > 0.01) {
+    using_layer = true;
+    canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
   }
 
   if constexpr (false) {  // Gray frame
@@ -467,6 +470,7 @@ void Location::PreDraw(SkCanvas& canvas) const {
           elevation / 10, elevation / 10,
           SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),
                                       nullptr))));
+  shadow_paint.setAlphaf(anim.transparency);
   canvas.saveLayer(nullptr, &shadow_paint);
   canvas.concat(child_widget->local_to_parent);
   canvas.drawDrawable(child_widget->sk_drawable.get());

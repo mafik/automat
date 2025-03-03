@@ -390,17 +390,21 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
         Rect offset_bounds = surface_bounds_local.sk.makeOffset(delta);
         new_anchor_bounds.ExpandToInclude(offset_bounds);
       }
-      SkMatrix flip = SkMatrix::I();
-      flip.preScale(1, -1, 0, surface_bounds_local.CenterY());
-      canvas->concat(flip);
       canvas->drawRect(new_anchor_bounds.sk, paint);
 
       if constexpr (kDebugRendering) {
-        SkPaint anchor_paint;
-        anchor_paint.setStyle(SkPaint::kFill_Style);
-        anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-        for (auto& anchor : fresh_texture_anchors) {
-          canvas->drawCircle(anchor.sk, 1_mm, anchor_paint);
+        SkPaint old_anchor_paint;
+        old_anchor_paint.setStyle(SkPaint::kStroke_Style);
+        old_anchor_paint.setColor(SkColorSetARGB(128, 128, 0, 0));
+        SkPaint new_anchor_paint;
+        new_anchor_paint.setStyle(SkPaint::kStroke_Style);
+        new_anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 128));
+
+        for (int i = 0; i < anchor_count; ++i) {
+          canvas->drawCircle(draw_texture_anchors[i].sk, 1_mm, old_anchor_paint);
+          canvas->drawCircle(fresh_texture_anchors[i].sk, 1_mm, new_anchor_paint);
+          canvas->drawLine(draw_texture_anchors[i].sk, fresh_texture_anchors[i].sk,
+                           new_anchor_paint);
         }
       }
     } else {

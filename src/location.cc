@@ -441,6 +441,10 @@ void Location::PreDraw(SkCanvas& canvas) const {
   constexpr float kElevationRange = 8_mm;
 
   auto child_widget = WidgetForObject();
+
+  if (!child_widget->pack_frame_texture_bounds) {
+    return;  // no shadow for non-cached widgets
+  }
   auto bounds = child_widget->CoarseBounds();
   auto& anim = GetAnimationState();
   Vec2 position = anim.position.value + bounds.rect.BottomCenter();
@@ -465,7 +469,7 @@ void Location::PreDraw(SkCanvas& canvas) const {
                                       nullptr))));
   canvas.saveLayer(nullptr, &shadow_paint);
   canvas.concat(child_widget->local_to_parent);
-  child_widget->DrawCached(canvas);
+  canvas.drawDrawable(child_widget->sk_drawable.get());
   canvas.restore();
 }
 

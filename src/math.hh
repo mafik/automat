@@ -119,6 +119,8 @@ inline Vec2 Normalize(Vec2 v) {
   return v / len;
 }
 
+inline Vec2 Round(Vec2 v) { return {roundf(v.x), roundf(v.y)}; }
+
 inline Vec2 Rotate90DegreesClockwise(Vec2 v) { return {v.y, -v.x}; }
 inline Vec2 Rotate90DegreesCounterClockwise(Vec2 v) { return {-v.y, v.x}; }
 
@@ -219,6 +221,11 @@ union Rect {
   static constexpr Rect MakeAtZero(float width, float height) {
     Rect r{0, 0, width, height};
     return r.MoveBy({-AnchorX{}(r), -AnchorY{}(r)});
+  }
+
+  template <typename AnchorX = ::CenterX, typename AnchorY = ::CenterY>
+  static constexpr Rect MakeAtZero(Vec2 size) {
+    return MakeAtZero<AnchorX, AnchorY>(size.x, size.y);
   }
 
   // Construct a zero-sized rectangle at the given point.

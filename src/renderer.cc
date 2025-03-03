@@ -485,9 +485,9 @@ struct PackedFrame {
 void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   root_widget->timer.Tick();
   auto now = root_widget->timer.now;
-  auto root_widget_bounds_px =
-      SkRect::MakeWH(round(root_widget->size.width * root_widget->display_pixels_per_meter),
-                     round(root_widget->size.height * root_widget->display_pixels_per_meter));
+  auto root_widget_bounds_px = Rect::MakeAtZero<LeftX, BottomY>(
+                                   Round(root_widget->size * root_widget->display_pixels_per_meter))
+                                   .Outset(64);  // 64px margin around screen
 
   enum class Verdict {
     Unknown = 0,

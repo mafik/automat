@@ -596,6 +596,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         node.wants_to_draw = true;
         auto true_d = root_widget->timer.d;
         auto fake_d = min(1.0, (now - widget->last_tick_time).count());
+        if (widget->wake_time == time::SteadyPoint::min()) {
+          // This is the first time this widget is being rendered - use `true_d` to animate it.
+          fake_d = true_d;
+        }
         root_widget->timer.d = fake_d;
         auto animation_phase = widget->Tick(root_widget->timer);
         root_widget->timer.d = true_d;

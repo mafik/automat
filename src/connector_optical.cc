@@ -683,13 +683,6 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
 
 void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filter,
                CableTexture texture, float start_width, float end_width, float* length_cache) {
-  Rect clip = canvas.getLocalClipBounds();
-  float max_width = std::max(start_width, end_width);
-  Rect path_bounds = path.getBounds().makeOutset(max_width / 2, max_width / 2);
-  if (!clip.sk.intersects(path_bounds.sk)) {
-    return;
-  }
-
   float cached_length = 100_mm;
   if (length_cache) {
     cached_length = *length_cache;

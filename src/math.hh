@@ -383,7 +383,7 @@ union RRect {
     if (ret.rect.Width() == 0 && ret.rect.Height() == 0) {
       ret.type = SkRRect::Type::kEmpty_Type;
     } else if (ret.radii[0] == ret.radii[1] && ret.radii[1] == ret.radii[2] &&
-               ret.radii[2] == ret.radii[3] && ret.radii[0] == kZeroVec2) {
+               ret.radii[2] == ret.radii[3]) {
       ret.type = SkRRect::Type::kSimple_Type;
     } else if (ret.radii[0] == ret.radii[1] && ret.radii[1] == ret.radii[2] &&
                ret.radii[2] == ret.radii[3] && (ret.radii[0].x >= (ret.rect.Width() / 2)) &&

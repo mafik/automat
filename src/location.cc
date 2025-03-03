@@ -12,6 +12,7 @@
 #include <include/core/SkSurface.h>
 #include <include/effects/SkDashPathEffect.h>
 #include <include/effects/SkGradientShader.h>
+#include <include/effects/SkImageFilters.h>
 #include <include/pathops/SkPathOps.h>
 #include <include/utils/SkShadowUtils.h>
 
@@ -436,40 +437,35 @@ void Location::PreDraw(SkCanvas& canvas) const {
   if (object == nullptr) {
     return;
   }
+  constexpr float kMinElevation = 1_mm;
+  constexpr float kElevationRange = 8_mm;
+
+  auto child_widget = WidgetForObject();
+  auto bounds = child_widget->CoarseBounds();
   auto& anim = GetAnimationState();
-  auto object_widget = WidgetForObject();
-  auto shape = object_widget->Shape();
-
-  // Instead of using the Shape in its original (metric) coordinates, we transform it into pixel
-  // coords. This is necessary because ShadowUtils make some assumptions about shape coordinates
-  // equal to pixels.
-  shape.setIsVolatile(true);
-  auto local_to_device =
-      canvas.getLocalToDevice().preConcat(object_widget->local_to_parent).asM33();
-  canvas.resetMatrix();
-  shape.transform(local_to_device);
-
+  Vec2 position = anim.position.value + bounds.rect.BottomCenter();
+  SkV4 screen_position_px = canvas.getLocalToDevice().map(position.x, position.y, 0, 1);
   auto& root_widget = FindRootWidget();
   auto window_size_px = root_widget.size * root_widget.display_pixels_per_meter;
-  float s = local_to_device.getScaleX();
-  float min_elevation = 1_mm;
-  SkPoint3 z_plane_params = {0, 0, (min_elevation + anim.elevation * 8_mm) * s};
-  SkPoint3 light_pos = {window_size_px.width / 2.f, 0, (float)window_size_px.height};
-  float light_radius = window_size_px.width / 2.f;
-  uint32_t flags =
-      SkShadowFlags::kTransparentOccluder_ShadowFlag | SkShadowFlags::kConcaveBlurOnly_ShadowFlag;
+  float elevation = kMinElevation + anim.elevation * kElevationRange;
+
+  float dx = (screen_position_px.x - window_size_px.width / 2) / window_size_px.width * elevation;
+  float dy = -screen_position_px.y / window_size_px.height * elevation;
+
+  float shadow_sigma = elevation / 2;
+
   SkPaint shadow_paint;
-  shadow_paint.setBlendMode(SkBlendMode::kMultiply);
-  SkRect shadow_bounds;
-  SkShadowUtils::GetLocalBounds(SkMatrix::I(), shape, z_plane_params, light_pos, light_radius,
-                                flags, &shadow_bounds);
-  canvas.saveLayer(&shadow_bounds, &shadow_paint);
-  // Z plane params are parameters for the height function. h(x, y, z) = param_X * x + param_Y * y +
-  // param_Z The height seems to be computed only for the center of the shape.
-  // All of the light parameters (position, radius) are specified in pixel coordinates and ignore
-  // current canvas transform.
-  SkShadowUtils::DrawShadow(&canvas, shape, z_plane_params, light_pos, light_radius,
-                            "#c9ced6"_color, "#ada4b0"_color, flags);
+  // Simulate shadow & ambient occlusion.
+  shadow_paint.setImageFilter(SkImageFilters::Merge(
+      SkImageFilters::DropShadowOnly(dx, dy, shadow_sigma, shadow_sigma, "#09000c5b"_color,
+                                     nullptr),
+      SkImageFilters::Blur(
+          elevation / 10, elevation / 10,
+          SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),
+                                      nullptr))));
+  canvas.saveLayer(nullptr, &shadow_paint);
+  canvas.concat(child_widget->local_to_parent);
+  child_widget->DrawCached(canvas);
   canvas.restore();
 }
 

@@ -470,7 +470,7 @@ void Location::PreDraw(SkCanvas& canvas) const {
           elevation / 10, elevation / 10,
           SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),
                                       nullptr))));
-  shadow_paint.setAlphaf(anim.transparency);
+  shadow_paint.setAlphaf(1.f - anim.transparency);
   canvas.saveLayer(nullptr, &shadow_paint);
   canvas.concat(child_widget->local_to_parent);
   canvas.drawDrawable(child_widget->sk_drawable.get());

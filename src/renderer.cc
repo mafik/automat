@@ -432,7 +432,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       builder->uniform("time") = time;
       SkSamplingOptions sampling;
       builder->child("surface") = SkSurfaces::AsImage(surface)->makeShader(
-          SkTileMode::kMirror, SkTileMode::kMirror, sampling);
+          SkTileMode::kClamp, SkTileMode::kClamp, sampling);
       auto shader = builder->makeShader();
       SkPaint paint;
       paint.setShader(shader);

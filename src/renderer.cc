@@ -391,32 +391,16 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
         new_anchor_bounds.ExpandToInclude(offset_bounds);
       }
       canvas->drawRect(new_anchor_bounds.sk, paint);
-
-      if constexpr (kDebugRendering) {
-        SkPaint old_anchor_paint;
-        old_anchor_paint.setStyle(SkPaint::kStroke_Style);
-        old_anchor_paint.setColor(SkColorSetARGB(128, 128, 0, 0));
-        SkPaint new_anchor_paint;
-        new_anchor_paint.setStyle(SkPaint::kStroke_Style);
-        new_anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 128));
-
-        for (int i = 0; i < anchor_count; ++i) {
-          canvas->drawCircle(draw_texture_anchors[i].sk, 1_mm, old_anchor_paint);
-          canvas->drawCircle(fresh_texture_anchors[i].sk, 1_mm, new_anchor_paint);
-          canvas->drawLine(draw_texture_anchors[i].sk, fresh_texture_anchors[i].sk,
-                           new_anchor_paint);
-        }
-      }
     } else {
       canvas->save();
 
+      SkRect draw_bounds = surface_bounds_local.sk;
+
       // Maps from the local coordinates to surface UV
-      SkMatrix surface_transform;
       Rect unit = Rect::MakeCornerZero(1, 1);
-      surface_transform.postConcat(SkMatrix::RectToRect(surface_bounds_local.sk, unit));
+      SkMatrix surface_transform = SkMatrix::RectToRect(surface_bounds_local.sk, unit);
       // Skia puts the origin at the top left corner (going down), but we use bottom left (going
       // up). This flip makes all the textures composite in our coordinate system correctly.
-      surface_transform.preScale(1, -1, 0, surface_bounds_local.CenterY());
       if (anchor_count) {
         SkMatrix anchor_mapping;
         // Apply the inverse transform to the surface mapping - we want to get the original texture
@@ -425,6 +409,11 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
         if (anchor_mapping.setPolyToPoly(&fresh_texture_anchors[0].sk, &draw_texture_anchors[0].sk,
                                          anchor_count)) {
           surface_transform.preConcat(anchor_mapping);
+          SkMatrix inverse;
+          (void)anchor_mapping.invert(&inverse);
+          SkPoint dst[4];
+          inverse.mapRectToQuad(dst, draw_bounds);
+          draw_bounds.setBounds(dst, 4);
         }
       }
 
@@ -440,7 +429,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       auto shader = builder->makeShader();
       SkPaint paint;
       paint.setShader(shader);
-      canvas->drawRect(*pack_frame_texture_bounds, paint);
+      canvas->drawRect(draw_bounds, paint);
 
       if constexpr (kDebugRendering) {
         SkPaint surface_bounds_paint;
@@ -464,6 +453,24 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
         canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
       }
       canvas->restore();
+    }
+
+    if constexpr (kDebugRendering) {
+      SkPaint old_anchor_paint;
+      old_anchor_paint.setStyle(SkPaint::kStroke_Style);
+      old_anchor_paint.setColor(SkColorSetARGB(128, 128, 0, 0));
+      SkPaint new_anchor_paint;
+      new_anchor_paint.setStyle(SkPaint::kStroke_Style);
+      new_anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 128));
+      SkPaint bounds_paint;
+      bounds_paint.setStyle(SkPaint::kStroke_Style);
+      bounds_paint.setColor(SkColorSetARGB(128, 0, 128, 0));
+
+      for (int i = 0; i < anchor_count; ++i) {
+        canvas->drawCircle(draw_texture_anchors[i].sk, 1_mm, old_anchor_paint);
+        canvas->drawCircle(fresh_texture_anchors[i].sk, 1_mm, new_anchor_paint);
+        canvas->drawLine(draw_texture_anchors[i].sk, fresh_texture_anchors[i].sk, new_anchor_paint);
+      }
     }
 
     if constexpr (kDebugRendering) {
@@ -618,7 +625,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       (void)node.local_to_window.invert(&node.window_to_local);
 
       widget->pack_frame_texture_bounds = widget->TextureBounds();
-      node.pack_frame_texture_anchors = widget->TextureAnchors();
       bool visible = true;
       if (widget->pack_frame_texture_bounds.has_value()) {
         // Compute the bounds of the widget - in local & root coordinates
@@ -653,9 +659,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         }
       }
     }
+
+    // Record anchor positions, after all animations have "Tick"-ed.
+    for (auto& node : tree) {
+      node.pack_frame_texture_anchors = node.widget->TextureAnchors();
+    }
   }
 
-  if constexpr (kDebugRendering) {
+  if constexpr (kDebugRendering && kDebugRenderEvents) {
     // Debug print the tree every 10 seconds
     static time::SteadyPoint last_print = time::SteadyPoint::min();
     if (now - last_print > 10s) {

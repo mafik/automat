@@ -468,46 +468,23 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
 
 Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   Vec<Vec2> anchors;
-  if constexpr (false) {  // approach 1
-    Rect r = *pack_frame_texture_bounds;
-    anchors.push_back(r.TopRightCorner());
-    anchors.push_back(r.TopLeftCorner());
-    anchors.push_back(r.BottomRightCorner());
-    anchors.push_back(r.BottomLeftCorner());
-  } else if (true) {  // approach 2 - perspective
-    auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
-    anchors.push_back(pos_dir.pos);
-    Optional<Vec2> end_pos;
-    if (manual_position.has_value()) {
-      end_pos = *manual_position;
-    } else if (auto to = arg.FindLocation(from)) {
-      Vec<Vec2AndDir> to_points;  // machine coords
-      auto to_widget = to->WidgetForObject();
-      to_widget->ConnectionPositions(to_points);
-      SkMatrix m = TransformBetween(*to_widget, *root_machine);
-      for (auto& to_point : to_points) {
-        to_point.pos = m.mapPoint(to_point.pos);
-      }
-      end_pos = to_points.front().pos;
+  auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
+  anchors.push_back(pos_dir.pos);
+  Optional<Vec2> end_pos;
+  if (manual_position.has_value()) {
+    end_pos = *manual_position;
+  } else if (auto to = arg.FindLocation(from)) {
+    Vec<Vec2AndDir> to_points;  // machine coords
+    auto to_widget = to->WidgetForObject();
+    to_widget->ConnectionPositions(to_points);
+    SkMatrix m = TransformBetween(*to_widget, *root_machine);
+    for (auto& to_point : to_points) {
+      to_point.pos = m.mapPoint(to_point.pos);
     }
-    if (end_pos) {
-      anchors.push_back(*end_pos);
-    }
-  } else if (true) {
-    auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
-    anchors.push_back(pos_dir.pos);
-    if (auto to = arg.FindLocation(from)) {
-      Vec<Vec2AndDir> to_points;  // machine coords
-      auto to_widget = to->WidgetForObject();
-      to_widget->ConnectionPositions(to_points);
-      SkMatrix m = TransformBetween(*to_widget, *root_machine);
-      for (auto& to_point : to_points) {
-        to_point.pos = m.mapPoint(to_point.pos);
-      }
-      anchors.push_back(to_points.front().pos + Vec2(4_mm, 0));
-      anchors.push_back(to_points.front().pos + Vec2(-4_mm, 0));
-      anchors.push_back(to_points.front().pos + Vec2(0, 10_cm));
-    }
+    end_pos = to_points.front().pos;
+  }
+  if (end_pos) {
+    anchors.push_back(*end_pos);
   }
   return anchors;
 }

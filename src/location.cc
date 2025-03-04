@@ -173,11 +173,9 @@ animation::Phase Location::Tick(time::Timer& timer) {
   auto& state = GetAnimationState();
   phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.transparency);
   phase |= state.Tick(timer.d, position, scale);
-  if (phase == animation::Animating) {
-    // Connection widgets rely on position, scale & transparency so make sure they're updated.
-    InvalidateConnectionWidgets(true, false);
-  }
+  // Connection widgets rely on position, scale & transparency so make sure they're updated.
   UpdateChildTransform();
+  InvalidateConnectionWidgets(true, false);
 
   phase |= animation::ExponentialApproach(state.highlight_target, timer.d, 0.1, state.highlight);
   if (state.highlight > 0.01f) {

@@ -157,13 +157,11 @@ SkPath Outset(const SkPath& path, float distance) {
     rrect.outset(distance, distance);
     return SkPath::RRect(rrect);
   } else {
-    SkPaint outset_paint;
-    outset_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-    outset_paint.setStrokeWidth(distance);
-    SkPath outset_path;
-    skpathutils::FillPathWithPaint(path, outset_paint, &outset_path);
-    Simplify(outset_path, &outset_path);
-    return outset_path;
+    SkPath combined_path;
+    bool simplified = Simplify(path, &combined_path);
+    ArcLine arcline = ArcLine::MakeFromPath(simplified ? combined_path : path);
+    arcline.Outset(distance);
+    return arcline.ToPath();
   }
 }
 
@@ -214,7 +212,7 @@ void Location::Draw(SkCanvas& canvas) const {
   auto& state = GetAnimationState();
 
   if (state.highlight > 0.01f) {  // Draw dashed highlight outline
-    SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
+    SkPath outset_shape = Outset(my_shape, .5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();
     canvas.concat(object_widget->local_to_parent);

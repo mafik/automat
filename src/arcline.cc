@@ -4,11 +4,95 @@
 
 #include <cmath>
 
+#include "log.hh"
 #include "sincos.hh"
 
 namespace maf {
 
 ArcLine::ArcLine(Vec2 start, SinCos start_angle) : start(start), start_angle(start_angle) {}
+
+ArcLine ArcLine::MakeFromPath(const SkPath& path) {
+  LOG << "Converting path to ArcLine...";
+  LOG_Indent();
+  SkPath::Iter iter(path, true);
+  Vec2 pts[4];
+  Vec2 arcline_end = {0, 0};
+  SinCos arcline_end_dir = 0_deg;
+  ArcLine arcline(arcline_end, arcline_end_dir);
+  while (true) {
+    auto verb = iter.next(&pts[0].sk);
+    switch (verb) {
+      case SkPath::kMove_Verb:
+        if (!arcline.segments.empty()) {
+          ERROR << "Multi-contour path cannot be (yet) converted to ArcLine";
+        }
+        LOG << "Move to " << pts[0].ToStrMetric();
+        arcline.types.clear();
+        arcline.segments.clear();
+        break;
+      case SkPath::kLine_Verb: {
+        LOG << "Line from " << pts[0].ToStrMetric() << " to " << pts[1].ToStrMetric();
+        if (arcline.segments.empty()) {
+          arcline.start = pts[0];
+          Vec2 delta = pts[1] - pts[0];
+          arcline.start_angle = SinCos::FromVec2(delta);
+          arcline.types.push_back(Type::Line);
+          arcline.segments.emplace_back(Line{.length = Length(delta)});
+          arcline_end = pts[1];
+          arcline_end_dir = arcline.start_angle;
+        } else {
+          Vec2 delta = pts[1] - pts[0];
+          SinCos dir = SinCos::FromVec2(delta);
+          if (arcline_end_dir != dir) {
+            arcline.TurnConvex(dir - arcline_end_dir, 0);
+            arcline_end_dir = dir;
+          }
+          arcline.MoveBy(Length(delta));
+          arcline_end = pts[1];
+        }
+        break;
+      }
+      case SkPath::kQuad_Verb:
+        LOG << "Unsupported verb: Quad";
+        break;
+      case SkPath::kCubic_Verb:
+        LOG << "Unsupported verb: Cubic";
+        break;
+      case SkPath::kClose_Verb:
+        LOG << "Close";
+        if (arcline_end_dir != arcline.start_angle) {
+          arcline.TurnConvex(arcline.start_angle - arcline_end_dir, 0);
+          arcline_end_dir = arcline.start_angle;
+        }
+        break;
+      case SkPath::kConic_Verb: {
+        // Note: we only support sections of a circle - not arbitrary conics!
+        float weight = iter.conicWeight();
+        float angle_rad = acosf(weight) * 2;
+        float radius = sqrt(LengthSquared(pts[0] - pts[2]) / (2 - 2 * cos(angle_rad)));
+        LOG << "Conic from " << pts[0].ToStrMetric() << " to " << pts[2].ToStrMetric();
+        SinCos arc_start_angle = SinCos::FromVec2(pts[1] - pts[0]);
+        if (arcline.segments.empty()) {
+          arcline.start = pts[0];
+          arcline.start_angle = arc_start_angle;
+          arcline_end = arcline.start;
+          arcline_end_dir = arcline.start_angle;
+        }
+        if (arc_start_angle != arcline_end_dir) {
+          arcline.TurnConvex(arc_start_angle - arcline_end_dir, 0);
+          arcline_end_dir = arc_start_angle;
+        }
+        arcline.TurnConvex(SinCos::FromRadians(angle_rad), radius);
+        arcline_end = pts[2];
+        arcline_end_dir = SinCos::FromVec2(pts[2] - pts[1]);
+        break;
+      }
+      case SkPath::kDone_Verb:
+        LOG_Unindent();
+        return arcline;
+    }
+  }
+}
 
 ArcLine& ArcLine::MoveBy(float length) {
   if (!types.empty() && types.back() == Type::Line) {
@@ -38,6 +122,10 @@ ArcLine& ArcLine::TurnBy(SinCos sweep_angle, float radius) {
   if (sweep_angle == 0_deg) {
     return *this;
   }
+  if (!types.empty() && types.back() == Type::Arc && segments.back().arc.radius == radius) {
+    segments.back().arc.sweep_angle = segments.back().arc.sweep_angle + sweep_angle;
+    return *this;
+  }
   types.push_back(Type::Arc);
   segments.emplace_back(Arc{.radius = radius, .sweep_angle = sweep_angle});
   return *this;
@@ -50,7 +138,7 @@ ArcLine& ArcLine::Outset(float offset) {
       auto& arc = segments[i].arc;
       bool sign = std::signbit(arc.radius);
       arc.radius += offset;
-      if (std::signbit(arc.radius) != sign) {  // shift the sharp corner
+      if (std::signbit(arc.radius) != sign) {  // outset shortens the nearby segments
         float s = arc.radius;
         arc.radius = sign ? -0.f : 0.f;
         float angle = (M_PI - fabsf(sign ? arc.sweep_angle.ToRadiansNegative()
@@ -65,6 +153,7 @@ ArcLine& ArcLine::Outset(float offset) {
         }
         int next_i = (i + 1) % types.size();
         if (types[next_i] == Type::Line) {
+          LOG << "Changing the length of the next line segment by " << delta_length;
           segments[next_i].line.length += delta_length;
           if (next_i == 0) {
             start -= Vec2::Polar(start_angle, delta_length);

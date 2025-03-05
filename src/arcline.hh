@@ -10,10 +10,8 @@
 
 namespace maf {
 
-// TODO: move the turn direction to the `radius` sign bit (from the `sweep_angle` sign)
-// TODO: update those docs!
-//
-// ArcLine describes a shape composed of lines and arcs.
+// ArcLine describes a shape composed of lines and arcs. It's optimized towards fast parallel offset
+// (outset) operation.
 //
 // The basic functionality to outset the shape is implemented, but it is not perfect. A couple
 // edge-cases are still not handled:
@@ -56,6 +54,8 @@ struct ArcLine {
 
   ArcLine(Vec2 start, SinCos start_angle);
   ArcLine(const ArcLine& copy) = default;
+
+  static ArcLine MakeFromPath(const SkPath& path);
 
   ArcLine& MoveBy(float length);
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "arcline.hh"
 
+#include <cavc/polylineoffset.hpp>
 #include <cmath>
 
 #include "log.hh"
@@ -122,16 +123,92 @@ ArcLine& ArcLine::TurnBy(SinCos sweep_angle, float radius) {
   if (sweep_angle == 0_deg) {
     return *this;
   }
-  if (!types.empty() && types.back() == Type::Arc && segments.back().arc.radius == radius) {
-    segments.back().arc.sweep_angle = segments.back().arc.sweep_angle + sweep_angle;
-    return *this;
-  }
+  // TODO: collapse turns with the same radius, but not when they exceed 180°
+  // if (!types.empty() && types.back() == Type::Arc && segments.back().arc.radius == radius) {
+  //   auto new_sweep_angle = segments.back().arc.sweep_angle + sweep_angle;
+  //   segments.back().arc.sweep_angle = new_sweep_angle;
+  //   return *this;
+  // }
   types.push_back(Type::Arc);
   segments.emplace_back(Arc{.radius = radius, .sweep_angle = sweep_angle});
   return *this;
 }
 
 ArcLine& ArcLine::Outset(float offset) {
+  cavc::Polyline<float> pline;
+  Vec2 p = start;
+  SinCos current_alpha = start_angle;
+  pline.addVertex(p.x, p.y, 0);
+  for (int i = 0; i < types.size(); ++i) {
+    if (types[i] == Type::Line) {
+      p += Vec2::Polar(current_alpha, segments[i].line.length);
+      pline.addVertex(p.x, p.y, 0);
+    } else if (types[i] == Type::Arc) {
+      auto& arc = segments[i].arc;
+      auto p0 = p;
+      Turn(p, current_alpha, arc.sweep_angle, arc.radius);
+      if (fabsf(arc.radius) > 0) {
+        float bulge = tanf(arc.sweep_angle.ToRadians() / 4);
+        pline.vertexes().back().bulge() = bulge;
+        pline.addVertex(p.x, p.y, 0);
+      }
+    }
+  }
+  // Last vertex is always in the same place as the start, so we can remove it.
+  pline.vertexes().pop_back();
+  pline.isClosed() = true;
+  auto result = cavc::parallelOffset(pline, -offset);
+
+  segments.clear();
+  types.clear();
+  if (result.empty()) {
+    return *this;
+  }
+  auto& result0 = result[0];
+  auto& first_vertex = result0.vertexes().front();
+  auto& second_vertex_ref = result0.vertexes()[1];
+  Vec2 second_vertex = Vec2(second_vertex_ref.x(), second_vertex_ref.y());
+  start = Vec2(first_vertex.x(), first_vertex.y());
+  start_angle = SinCos::FromVec2(second_vertex - start);
+  if (!first_vertex.bulgeIsZero()) {
+    start_angle = start_angle - SinCos::FromRadians(atanf(first_vertex.bulge()) * 2);
+  }
+  Vec2 p0 = start;
+  SinCos p0_angle = start_angle;
+  for (int i = 1; i <= result0.vertexes().size(); ++i) {
+    auto& p0_ref = result0.vertexes()[i - 1];
+    auto& p1_ref = result0.vertexes()[i % result0.vertexes().size()];
+
+    Vec2 p1(p1_ref.x(), p1_ref.y());
+    float bulge = p0_ref.bulge();
+    bool bulge_is_zero = p0_ref.bulgeIsZero();
+    SinCos bulge_angle = bulge_is_zero ? 0_deg : SinCos::FromRadians(atanf(bulge) * 2);
+    Vec2 delta = p1 - p0;
+    float length = Length(delta);
+    SinCos p1_angle = SinCos::FromVec2(delta, length);
+    SinCos new_p0_angle = p1_angle - bulge_angle;
+    if (new_p0_angle != p0_angle) {
+      TurnConvex(new_p0_angle - p0_angle, 0);
+    }
+    if (bulge_is_zero) {
+      MoveBy(length);
+    } else {
+      float sin = (float)bulge_angle.sin;
+      float radius = sin == 0 ? length / 2 : length / (2 * sin);
+      TurnConvex(bulge_angle * 2, radius);
+    }
+    p0_angle = p1_angle + bulge_angle;
+    p0 = p1;
+  }
+  if (p0_angle != start_angle) {
+    TurnConvex(start_angle - p0_angle, 0);
+  }
+
+  return *this;
+
+  // Old code
+  // Keeping this around since it's fairly efficient for convex shapes
+
   start += Vec2::Polar(start_angle - 90_deg, offset);
   for (int i = 0; i < types.size(); ++i) {
     if (types[i] == Type::Arc) {
@@ -163,6 +240,23 @@ ArcLine& ArcLine::Outset(float offset) {
     }
   }
   return *this;
+}
+
+std::string ArcLine::ToStr() const {
+  std::stringstream ss;
+  ss << "ArcLine(" << start.ToStr() << ", " << start_angle.ToStr();
+  for (int i = 0; i < types.size(); ++i) {
+    if (types[i] == Type::Line) {
+      ss << ", move by " << segments[i].line.length;
+    } else {
+      ss << ", turn by " << segments[i].arc.sweep_angle.ToDegrees() << "°";
+      if (segments[i].arc.radius != 0) {
+        ss << " with radius " << segments[i].arc.radius;
+      }
+    }
+  }
+  ss << ")";
+  return ss.str();
 }
 
 SkPath ArcLine::ToPath(bool close, float length_limit) const {

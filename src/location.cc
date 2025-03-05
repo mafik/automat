@@ -212,7 +212,7 @@ void Location::Draw(SkCanvas& canvas) const {
   auto& state = GetAnimationState();
 
   if (state.highlight > 0.01f) {  // Draw dashed highlight outline
-    SkPath outset_shape = Outset(my_shape, .5_mm * state.highlight);
+    SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();
     canvas.concat(object_widget->local_to_parent);

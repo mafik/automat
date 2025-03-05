@@ -83,6 +83,7 @@ class ExtensionHelper:
     self.fetch_url = None
     self.fetch_filename = None
     self.include_regex = None
+    self.skip_configure = False
 
   def _hook_recipe(self, recipe):
 
@@ -124,6 +125,11 @@ class ExtensionHelper:
           desc = f'Patching {self.name}',
           shortcut=f'patch {self.name}')
       self.beam[''] = [marker]
+
+    if self.skip_configure:
+      for build_type in build.types:
+        self.beam[build_type.name] = self.beam['']
+      return
 
     for build_type in build.types:
       build_dir = build_type.BASE() / self.name
@@ -211,6 +217,9 @@ class ExtensionHelper:
       self.fetch_filename = fetch_filename
     else:
       self.fetch_filename = fetch_url.split('/')[-1]
+
+  def SkipConfigure(self):
+    self.skip_configure = True
 
   def ConfigureWithCMake(self, src_dir, output):
     '''

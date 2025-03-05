@@ -73,6 +73,8 @@ struct ArcLine {
   SkPath ToPath(bool close = true, float length_limit = HUGE_VALF) const;
   Rect Bounds() const;
 
+  std::string ToStr() const;
+
   struct Iterator {
     const ArcLine& arcline;
     I32 i;

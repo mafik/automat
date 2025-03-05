@@ -22,7 +22,8 @@ class ArcLineTest : public ::testing::Test {
     EXPECT_EQ(expected.segments.size(), actual.segments.size()) << actual.ToStr();
     if (!HasFailure()) {
       for (int i = 0; i < expected.segments.size(); i++) {
-        EXPECT_EQ(expected.types[i], actual.types[i]);
+        EXPECT_EQ(expected.types[i], actual.types[i])
+            << "Expected: " << expected.ToStr() << "\nActual: " << actual.ToStr();
         if (HasFailure()) {
           break;
         }
@@ -81,7 +82,7 @@ class ArcLineTest : public ::testing::Test {
       canvas->drawCircle(actual.start, 5 / scale, actual_paint);
       SkPixmap pixmap;
       canvas->peekPixels(&pixmap);
-      SkFILEWStream stream("test.webp");
+      SkFILEWStream stream("tmp/test.webp");
       SkWebpEncoder::Encode(&stream, pixmap, SkWebpEncoder::Options());
     }
   }

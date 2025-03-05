@@ -135,29 +135,40 @@ ArcLine& ArcLine::TurnBy(SinCos sweep_angle, float radius) {
 }
 
 ArcLine& ArcLine::Outset(float offset) {
+  constexpr float kScale = 32.f;
   cavc::Polyline<float> pline;
   Vec2 p = start;
   SinCos current_alpha = start_angle;
-  pline.addVertex(p.x, p.y, 0);
+  // LOG << "addVertex(" << p << ") (start)";
+  pline.addVertex(p.x * kScale, p.y * kScale, 0);
   for (int i = 0; i < types.size(); ++i) {
     if (types[i] == Type::Line) {
       p += Vec2::Polar(current_alpha, segments[i].line.length);
-      pline.addVertex(p.x, p.y, 0);
+      // LOG << "addVertex(" << p << ") (line)";
+      pline.addVertex(p.x * kScale, p.y * kScale, 0);
     } else if (types[i] == Type::Arc) {
       auto& arc = segments[i].arc;
       auto p0 = p;
       Turn(p, current_alpha, arc.sweep_angle, arc.radius);
       if (fabsf(arc.radius) > 0) {
-        float bulge = tanf(arc.sweep_angle.ToRadians() / 4);
+        // float bulge = tanf(arc.sweep_angle.ToRadians() / 4);
+        // Another way to calculate the bulge, reducing the floating point error
+        float bulge = (M_SQRT2f - sqrtf(1.f + (float)arc.sweep_angle.cos)) /
+                      sqrtf(1 - (float)arc.sweep_angle.cos);
+        if (arc.sweep_angle.sin < 0) {
+          bulge = -bulge;
+        }
         pline.vertexes().back().bulge() = bulge;
-        pline.addVertex(p.x, p.y, 0);
+        // LOG << "addVertex(" << p << ") (arc) (last bulge=" << bulge << ")";
+        pline.addVertex(p.x * kScale, p.y * kScale, 0);
       }
     }
   }
   // Last vertex is always in the same place as the start, so we can remove it.
   pline.vertexes().pop_back();
   pline.isClosed() = true;
-  auto result = cavc::parallelOffset(pline, -offset);
+
+  auto result = cavc::parallelOffset(pline, -offset * kScale);
 
   segments.clear();
   types.clear();
@@ -167,8 +178,8 @@ ArcLine& ArcLine::Outset(float offset) {
   auto& result0 = result[0];
   auto& first_vertex = result0.vertexes().front();
   auto& second_vertex_ref = result0.vertexes()[1];
-  Vec2 second_vertex = Vec2(second_vertex_ref.x(), second_vertex_ref.y());
-  start = Vec2(first_vertex.x(), first_vertex.y());
+  Vec2 second_vertex = Vec2(second_vertex_ref.x() / kScale, second_vertex_ref.y() / kScale);
+  start = Vec2(first_vertex.x() / kScale, first_vertex.y() / kScale);
   start_angle = SinCos::FromVec2(second_vertex - start);
   if (!first_vertex.bulgeIsZero()) {
     start_angle = start_angle - SinCos::FromRadians(atanf(first_vertex.bulge()) * 2);
@@ -179,10 +190,21 @@ ArcLine& ArcLine::Outset(float offset) {
     auto& p0_ref = result0.vertexes()[i - 1];
     auto& p1_ref = result0.vertexes()[i % result0.vertexes().size()];
 
-    Vec2 p1(p1_ref.x(), p1_ref.y());
+    Vec2 p1(p1_ref.x() / kScale, p1_ref.y() / kScale);
     float bulge = p0_ref.bulge();
     bool bulge_is_zero = p0_ref.bulgeIsZero();
-    SinCos bulge_angle = bulge_is_zero ? 0_deg : SinCos::FromRadians(atanf(bulge) * 2);
+
+    // There are two ways to calculate the bulge angle.
+    // This approach produces lower floating point error:
+    float bulge2 = bulge * bulge;
+    float denom = 1.f + bulge2;
+    float bulge_cos = (1.f - bulge2) / denom;
+    float bulge_sin = 2 * bulge / denom;
+    SinCos bulge_angle = SinCos(bulge_sin, bulge_cos);
+
+    // Another approach, using inverse trigonometric functions:
+    // SinCos bulge_angle = bulge_is_zero ? 0_deg : SinCos::FromRadians(atanf(bulge) * 2);
+
     Vec2 delta = p1 - p0;
     float length = Length(delta);
     SinCos p1_angle = SinCos::FromVec2(delta, length);

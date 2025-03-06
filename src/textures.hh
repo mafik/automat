@@ -60,6 +60,9 @@ sk_sp<SkImage> DecodeImage(maf::fs::VFile& asset);
 constexpr static SkSamplingOptions kDefaultSamplingOptions =
     SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);
 
+constexpr static SkSamplingOptions kFastSamplingOptions =
+    SkSamplingOptions(SkFilterMode::kNearest, SkMipmapMode::kNone);
+
 struct AutomatImageProvider : public skgpu::graphite::ImageProvider {
   std::unordered_map<uint32_t, sk_sp<SkImage>> cache;
   sk_sp<SkImage> findOrCreate(skgpu::graphite::Recorder* recorder, const SkImage* image,

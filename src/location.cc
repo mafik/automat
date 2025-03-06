@@ -29,6 +29,7 @@
 #include "gui_constants.hh"
 #include "math.hh"
 #include "root_widget.hh"
+#include "textures.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
 
@@ -444,24 +445,38 @@ void Location::PreDraw(SkCanvas& canvas) const {
   if (!child_widget->pack_frame_texture_bounds) {
     return;  // no shadow for non-cached widgets
   }
-  auto bounds = child_widget->CoarseBounds();
   auto& anim = GetAnimationState();
-  Vec2 position = anim.position.value + bounds.rect.BottomCenter();
-  SkV4 screen_position_px = canvas.getLocalToDevice().map(position.x, position.y, 0, 1);
   auto& root_widget = FindRootWidget();
   auto window_size_px = root_widget.size * root_widget.display_pixels_per_meter;
   float elevation = kMinElevation + anim.elevation * kElevationRange;
-
-  float dx = (screen_position_px.x - window_size_px.width / 2) / window_size_px.width * elevation;
-  float dy = -screen_position_px.y / window_size_px.height * elevation;
-
   float shadow_sigma = elevation / 2;
+
+  SkMatrix local_to_device = canvas.getLocalToDeviceAs3x3();
+  SkMatrix device_to_local;
+  (void)local_to_device.invert(&device_to_local);
+
+  // Place some control points on the screen
+  Vec2 control_points[2] = {
+      Vec2{window_size_px.width / 2, 0},                     // top
+      Vec2{window_size_px.width / 2, window_size_px.height}  // bottom
+  };
+  // Move them into local coordinates
+  device_to_local.mapPoints(&control_points[0].sk, 2);
+  // Keep the top point in place, move the bottom point down to follow the shadow
+  Vec2 dst[2] = {control_points[0], control_points[1] - Vec2{0, elevation}};
+
+  SkMatrix matrix;
+  if (!matrix.setPolyToPoly(&control_points[0].sk, &dst[0].sk, 2)) {
+    matrix = SkMatrix::I();
+  }
 
   SkPaint shadow_paint;
   // Simulate shadow & ambient occlusion.
   shadow_paint.setImageFilter(SkImageFilters::Merge(
-      SkImageFilters::DropShadowOnly(dx, dy, shadow_sigma, shadow_sigma, "#09000c5b"_color,
-                                     nullptr),
+      SkImageFilters::MatrixTransform(
+          matrix, kFastSamplingOptions,
+          SkImageFilters::DropShadowOnly(0, 0, shadow_sigma, shadow_sigma, "#09000c5b"_color,
+                                         nullptr)),
       SkImageFilters::Blur(
           elevation / 10, elevation / 10,
           SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),

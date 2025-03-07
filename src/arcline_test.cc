@@ -60,6 +60,7 @@ class ArcLineTest : public ::testing::Test {
       base_paint.setStrokeWidth(3 / scale);
       base_paint.setAntiAlias(true);
       canvas->drawPath(base_path, base_paint);
+      canvas->drawCircle(base.start, 5 / scale, base_paint);
 
       SkPaint expected_paint;
       expected_paint.setColor(SK_ColorRED);
@@ -128,15 +129,15 @@ TEST_F(ArcLineTest, OutsetInsideOutSquare) {
   // Create an "inside-out" square
   ArcLine outset = ArcLine(base).Outset(0.1);
 
-  ArcLine expected = ArcLine(Vec2(0.1, -0.1), 0_deg)
-                         .MoveBy(0.8)
-                         .TurnConvex(-90_deg, 0)
-                         .MoveBy(0.8)
-                         .TurnConvex(-90_deg, 0)
-                         .MoveBy(0.8)
-                         .TurnConvex(-90_deg, 0)
-                         .MoveBy(0.8)
-                         .TurnConvex(-90_deg, 0);
+  ArcLine expected = ArcLine(Vec2(-0, 0.1), 0_deg)
+                         .MoveBy(1)
+                         .TurnConvex(90_deg, 0.1)
+                         .MoveBy(1)
+                         .TurnConvex(90_deg, 0.1)
+                         .MoveBy(1)
+                         .TurnConvex(90_deg, 0.1)
+                         .MoveBy(1)
+                         .TurnConvex(90_deg, 0.1);
 
   AssertArcLinesEqual(expected, outset, base);
 }

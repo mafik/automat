@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "arcline.hh"
 
+#include <cavc/polyline.hpp>
 #include <cavc/polylineoffset.hpp>
 #include <cmath>
 
@@ -10,11 +11,16 @@
 
 namespace maf {
 
+constexpr bool kDebugOutset = false;
+constexpr bool kDebugMakeFromPath = false;
+
 ArcLine::ArcLine(Vec2 start, SinCos start_angle) : start(start), start_angle(start_angle) {}
 
 ArcLine ArcLine::MakeFromPath(const SkPath& path) {
-  LOG << "Converting path to ArcLine...";
-  LOG_Indent();
+  if constexpr (kDebugMakeFromPath) {
+    LOG << "Converting path to ArcLine...";
+    LOG_Indent();
+  }
   SkPath::Iter iter(path, true);
   Vec2 pts[4];
   Vec2 &p0 = pts[0], &p1 = pts[1], &p2 = pts[2], &p3 = pts[3];
@@ -40,12 +46,16 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
         if (!arcline.segments.empty()) {
           ERROR << "Multi-contour path cannot be (yet) converted to ArcLine";
         }
-        LOG << "Move to " << p0.ToStrMetric();
+        if constexpr (kDebugMakeFromPath) {
+          LOG << "Move to " << p0.ToStrMetric();
+        }
         arcline.types.clear();
         arcline.segments.clear();
         break;
       case SkPath::kLine_Verb: {
-        LOG << "Line from " << p0.ToStrMetric() << " to " << p1.ToStrMetric();
+        if constexpr (kDebugMakeFromPath) {
+          LOG << "Line from " << p0.ToStrMetric() << " to " << p1.ToStrMetric();
+        }
         if (arcline.segments.empty()) {
           arcline.start = p0;
           Vec2 delta = p1 - p0;
@@ -60,13 +70,17 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
         break;
       }
       case SkPath::kQuad_Verb: {
-        LOG << "Quadratic from " << p0.ToStrMetric() << " to " << p2.ToStrMetric();
+        if constexpr (kDebugMakeFromPath) {
+          LOG << "Quadratic from " << p0.ToStrMetric() << " to " << p2.ToStrMetric();
+        }
         LineTo(EvalBezierAtFixedT<0.5f>(p0, p1, p2));
         LineTo(p2);
         break;
       }
       case SkPath::kCubic_Verb: {
-        LOG << "Cubic from " << p0.ToStrMetric() << " to " << p3.ToStrMetric();
+        if constexpr (kDebugMakeFromPath) {
+          LOG << "Cubic from " << p0.ToStrMetric() << " to " << p3.ToStrMetric();
+        }
         LineTo(EvalBezierAtFixedT<0.25f>(p0, p1, p2, p3));
         LineTo(EvalBezierAtFixedT<0.5f>(p0, p1, p2, p3));
         LineTo(EvalBezierAtFixedT<0.75f>(p0, p1, p2, p3));
@@ -74,7 +88,9 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
         break;
       }
       case SkPath::kClose_Verb:
-        LOG << "Close";
+        if constexpr (kDebugMakeFromPath) {
+          LOG << "Close";
+        }
         if (arcline_end_dir != arcline.start_angle) {
           arcline.TurnConvex(arcline.start_angle - arcline_end_dir, 0);
           arcline_end_dir = arcline.start_angle;
@@ -82,11 +98,13 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
         break;
       case SkPath::kConic_Verb: {
         // Note: we only support sections of a circle - not arbitrary conics!
-        float weight = iter.conicWeight();
-        float angle_rad = acosf(weight) * 2;
-        float radius = sqrt(LengthSquared(p0 - p2) / (2 - 2 * cos(angle_rad)));
-        LOG << "Conic from " << p0.ToStrMetric() << " to " << p2.ToStrMetric();
         SinCos arc_start_angle = SinCos::FromVec2(p1 - p0);
+        SinCos arc_end_angle = SinCos::FromVec2(p2 - p1);
+        SinCos sweep_angle = arc_end_angle - arc_start_angle;
+        float radius = sqrt(LengthSquared(p0 - p2) / (2 - 2 * (float)sweep_angle.cos));
+        if constexpr (kDebugMakeFromPath) {
+          LOG << "Conic from " << p0.ToStrMetric() << " to " << p2.ToStrMetric();
+        }
         if (arcline.segments.empty()) {
           arcline.start = p0;
           arcline.start_angle = arc_start_angle;
@@ -97,13 +115,15 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
           arcline.TurnConvex(arc_start_angle - arcline_end_dir, 0);
           arcline_end_dir = arc_start_angle;
         }
-        arcline.TurnConvex(SinCos::FromRadians(angle_rad), radius);
+        arcline.TurnConvex(sweep_angle, radius);
         arcline_end = p2;
-        arcline_end_dir = SinCos::FromVec2(p2 - p1);
+        arcline_end_dir = arc_end_angle;
         break;
       }
       case SkPath::kDone_Verb:
-        LOG_Unindent();
+        if constexpr (kDebugMakeFromPath) {
+          LOG_Unindent();
+        }
         return arcline;
     }
   }
@@ -153,17 +173,44 @@ ArcLine& ArcLine::Outset(float offset) {
   cavc::Polyline<float> pline;
   Vec2 p = start;
   SinCos current_alpha = start_angle;
-  // LOG << "addVertex(" << p << ") (start)";
+  int turn_count = 0;
+  if constexpr (kDebugOutset) {
+    LOG << "Outset by " << offset;
+    LOG_Indent();
+    LOG << "Start at " << p;
+  }
   pline.addVertex(p.x * kScale, p.y * kScale, 0);
   for (int i = 0; i < types.size(); ++i) {
     if (types[i] == Type::Line) {
+      if constexpr (kDebugOutset) {
+        LOG << "Move by " << segments[i].line.length;
+      }
       p += Vec2::Polar(current_alpha, segments[i].line.length);
-      // LOG << "addVertex(" << p << ") (line)";
       pline.addVertex(p.x * kScale, p.y * kScale, 0);
     } else if (types[i] == Type::Arc) {
+      if constexpr (kDebugOutset) {
+        LOG << "Turn by " << segments[i].arc.sweep_angle.ToDegrees() << "°";
+      }
       auto& arc = segments[i].arc;
       auto p0 = p;
+      bool sin_was_positive = current_alpha.sin >= 0;
       Turn(p, current_alpha, arc.sweep_angle, arc.radius);
+      bool sin_is_positive = current_alpha.sin >= 0;
+      if (arc.sweep_angle.sin >= 0) {
+        if (!sin_was_positive && sin_is_positive) {
+          if constexpr (kDebugOutset) {
+            LOG << "CCW turn completed";
+          }
+          ++turn_count;
+        }
+      } else {
+        if (sin_was_positive && !sin_is_positive) {
+          if constexpr (kDebugOutset) {
+            LOG << "CW turn completed";
+          }
+          --turn_count;
+        }
+      }
       if (fabsf(arc.radius) > 0) {
         // float bulge = tanf(arc.sweep_angle.ToRadians() / 4);
         // Another way to calculate the bulge, reducing the floating point error
@@ -173,19 +220,44 @@ ArcLine& ArcLine::Outset(float offset) {
           bulge = -bulge;
         }
         pline.vertexes().back().bulge() = bulge;
-        // LOG << "addVertex(" << p << ") (arc) (last bulge=" << bulge << ")";
         pline.addVertex(p.x * kScale, p.y * kScale, 0);
       }
     }
+  }
+  bool sin_was_positive = current_alpha.sin >= 0;
+  bool sin_is_positive = start_angle.sin >= 0;
+  SinCos final_sweep = start_angle - current_alpha;
+  if (sin_was_positive != sin_is_positive) {
+    if (final_sweep.sin >= 0) {
+      if constexpr (kDebugOutset) {
+        LOG << "Leftover CCW turn completed";
+      }
+      ++turn_count;
+    } else {
+      if constexpr (kDebugOutset) {
+        LOG << "Leftover CW turn completed";
+      }
+      --turn_count;
+    }
+  }
+  if constexpr (kDebugOutset) {
+    LOG << "Turn count: " << turn_count;
   }
   // Last vertex is always in the same place as the start, so we can remove it.
   pline.vertexes().pop_back();
   pline.isClosed() = true;
 
+  if (turn_count < 0) {
+    cavc::invertDirection(pline);
+  }
+
   auto result = cavc::parallelOffset(pline, -offset * kScale);
 
   segments.clear();
   types.clear();
+  if constexpr (kDebugOutset) {
+    LOG_Unindent();
+  }
   if (result.empty()) {
     return *this;
   }
@@ -292,6 +364,22 @@ std::string ArcLine::ToStr() const {
     }
   }
   ss << ")";
+  return ss.str();
+}
+
+std::string ArcLine::ToStrCpp() const {
+  std::stringstream ss;
+  ss << "ArcLine(Vec2(" << start.x * 1000 << "_mm, " << start.y * 1000 << "_mm), "
+     << start_angle.ToDegrees() << "_deg)";
+  for (int i = 0; i < types.size(); ++i) {
+    if (types[i] == Type::Line) {
+      ss << ".MoveBy(" << segments[i].line.length * 1000 << "_mm)";
+    } else {
+      ss << ".TurnBy(" << segments[i].arc.sweep_angle.ToDegrees() << "_deg, "
+         << segments[i].arc.radius * 1000 << "_mm)";
+    }
+  }
+  ss << ";";
   return ss.str();
 }
 

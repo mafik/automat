@@ -75,6 +75,8 @@ struct ArcLine {
 
   std::string ToStr() const;
 
+  std::string ToStrCpp() const;
+
   struct Iterator {
     const ArcLine& arcline;
     I32 i;

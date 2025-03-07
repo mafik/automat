@@ -228,7 +228,6 @@ void Location::Draw(SkCanvas& canvas) const {
     SkPaint dash_paint(kHighlightPaint);
     dash_paint.setAlphaf(state.highlight);
     float intervals[] = {0.0035, 0.0015};
-    double ignore;
     float period_seconds = 200;
     float phase = std::fmod(state.time_seconds, period_seconds) / period_seconds;
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));

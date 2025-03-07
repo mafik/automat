@@ -30,7 +30,7 @@ struct ObjectAnimationState {
   float transparency = 0;
   float highlight = 0;
   float highlight_target = 0;
-  float time_seconds = 0;  // used to animate dashed line
+  time::T time_seconds = 0;  // used to animate dashed line
   animation::SpringV2<float> elevation;
 
   ObjectAnimationState();

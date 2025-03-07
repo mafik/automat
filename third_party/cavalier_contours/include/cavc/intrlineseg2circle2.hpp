@@ -45,7 +45,7 @@ IntrLineSeg2Circle2Result<Real> intrLineSeg2Circle2(Vector2<Real> const &p0,
     Real b = Real(2) * (dx * (p0.x() - h) + dy * (p0.y() - k));
     Real c = (p0.x() * p0.x() - 2.0 * h * p0.x() + h * h) +
              (p0.y() * p0.y() - 2.0 * k * p0.y() + k * k) - radius * radius;
-    Real discr = b * b - 4.0 * a * c;
+    Real discr = b * b - Real(4) * a * c;
 
     if (std::abs(discr) < utils::realThreshold<Real>()) {
       // 1 solution (tangent line)

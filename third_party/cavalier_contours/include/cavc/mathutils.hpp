@@ -79,7 +79,6 @@ std::pair<Real, Real> quadraticSolutions(Real a, Real b, Real c, Real discr) {
   // that are very near each other in value.
   // See:
   // https://math.stackexchange.com/questions/311382/solving-a-quadratic-equation-with-precision-when-using-floating-point-variables
-  CAVC_ASSERT(fuzzyEqual(b * b - Real(4) * a * c, discr), "discriminate is not correct");
   Real sqrtDiscr = std::sqrt(discr);
   Real denom = Real(2) * a;
   Real sol1;

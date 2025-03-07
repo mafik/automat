@@ -130,6 +130,16 @@ constexpr float Cross(Vec2 a, Vec2 b) { return a.x * b.y - a.y * b.x; }
 constexpr Vec3 Cross(Vec3 a, Vec3 b) {
   return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 }
+template <float T>
+constexpr Vec2 EvalBezierAtFixedT(Vec2 p0, Vec2 p1, Vec2 p2) {
+  return p0 * (1 - T) * (1 - T) + p1 * 2 * T * (1 - T) + p2 * T * T;
+}
+template <float T>
+constexpr Vec2 EvalBezierAtFixedT(Vec2 p0, Vec2 p1, Vec2 p2, Vec2 p3) {
+  constexpr float t = T;
+  return p0 * (1 - t) * (1 - t) * (1 - t) + p1 * 3 * t * (1 - t) * (1 - t) +
+         p2 * 3 * t * t * (1 - t) + p3 * t * t * t;
+}
 
 // Project vector p onto vector dir.
 template <typename T>

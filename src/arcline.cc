@@ -17,48 +17,62 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
   LOG_Indent();
   SkPath::Iter iter(path, true);
   Vec2 pts[4];
+  Vec2 &p0 = pts[0], &p1 = pts[1], &p2 = pts[2], &p3 = pts[3];
   Vec2 arcline_end = {0, 0};
   SinCos arcline_end_dir = 0_deg;
   ArcLine arcline(arcline_end, arcline_end_dir);
+
+  auto LineTo = [&arcline_end, &arcline_end_dir, &arcline](Vec2 to) {
+    Vec2 delta = to - arcline_end;
+    float length = Length(delta);
+    SinCos dir = SinCos::FromVec2(delta, length);
+    if (arcline_end_dir != dir) {
+      arcline.TurnConvex(dir - arcline_end_dir, 0);
+      arcline_end_dir = dir;
+    }
+    arcline.MoveBy(length);
+    arcline_end = to;
+  };
   while (true) {
-    auto verb = iter.next(&pts[0].sk);
+    auto verb = iter.next(&p0.sk);
     switch (verb) {
       case SkPath::kMove_Verb:
         if (!arcline.segments.empty()) {
           ERROR << "Multi-contour path cannot be (yet) converted to ArcLine";
         }
-        LOG << "Move to " << pts[0].ToStrMetric();
+        LOG << "Move to " << p0.ToStrMetric();
         arcline.types.clear();
         arcline.segments.clear();
         break;
       case SkPath::kLine_Verb: {
-        LOG << "Line from " << pts[0].ToStrMetric() << " to " << pts[1].ToStrMetric();
+        LOG << "Line from " << p0.ToStrMetric() << " to " << p1.ToStrMetric();
         if (arcline.segments.empty()) {
-          arcline.start = pts[0];
-          Vec2 delta = pts[1] - pts[0];
+          arcline.start = p0;
+          Vec2 delta = p1 - p0;
           arcline.start_angle = SinCos::FromVec2(delta);
           arcline.types.push_back(Type::Line);
           arcline.segments.emplace_back(Line{.length = Length(delta)});
-          arcline_end = pts[1];
+          arcline_end = p1;
           arcline_end_dir = arcline.start_angle;
         } else {
-          Vec2 delta = pts[1] - pts[0];
-          SinCos dir = SinCos::FromVec2(delta);
-          if (arcline_end_dir != dir) {
-            arcline.TurnConvex(dir - arcline_end_dir, 0);
-            arcline_end_dir = dir;
-          }
-          arcline.MoveBy(Length(delta));
-          arcline_end = pts[1];
+          LineTo(p1);
         }
         break;
       }
-      case SkPath::kQuad_Verb:
-        LOG << "Unsupported verb: Quad";
+      case SkPath::kQuad_Verb: {
+        LOG << "Quadratic from " << p0.ToStrMetric() << " to " << p2.ToStrMetric();
+        LineTo(EvalBezierAtFixedT<0.5f>(p0, p1, p2));
+        LineTo(p2);
         break;
-      case SkPath::kCubic_Verb:
-        LOG << "Unsupported verb: Cubic";
+      }
+      case SkPath::kCubic_Verb: {
+        LOG << "Cubic from " << p0.ToStrMetric() << " to " << p3.ToStrMetric();
+        LineTo(EvalBezierAtFixedT<0.25f>(p0, p1, p2, p3));
+        LineTo(EvalBezierAtFixedT<0.5f>(p0, p1, p2, p3));
+        LineTo(EvalBezierAtFixedT<0.75f>(p0, p1, p2, p3));
+        LineTo(p3);
         break;
+      }
       case SkPath::kClose_Verb:
         LOG << "Close";
         if (arcline_end_dir != arcline.start_angle) {
@@ -70,11 +84,11 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
         // Note: we only support sections of a circle - not arbitrary conics!
         float weight = iter.conicWeight();
         float angle_rad = acosf(weight) * 2;
-        float radius = sqrt(LengthSquared(pts[0] - pts[2]) / (2 - 2 * cos(angle_rad)));
-        LOG << "Conic from " << pts[0].ToStrMetric() << " to " << pts[2].ToStrMetric();
-        SinCos arc_start_angle = SinCos::FromVec2(pts[1] - pts[0]);
+        float radius = sqrt(LengthSquared(p0 - p2) / (2 - 2 * cos(angle_rad)));
+        LOG << "Conic from " << p0.ToStrMetric() << " to " << p2.ToStrMetric();
+        SinCos arc_start_angle = SinCos::FromVec2(p1 - p0);
         if (arcline.segments.empty()) {
-          arcline.start = pts[0];
+          arcline.start = p0;
           arcline.start_angle = arc_start_angle;
           arcline_end = arcline.start;
           arcline_end_dir = arcline.start_angle;
@@ -84,8 +98,8 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
           arcline_end_dir = arc_start_angle;
         }
         arcline.TurnConvex(SinCos::FromRadians(angle_rad), radius);
-        arcline_end = pts[2];
-        arcline_end_dir = SinCos::FromVec2(pts[2] - pts[1]);
+        arcline_end = p2;
+        arcline_end_dir = SinCos::FromVec2(p2 - p1);
         break;
       }
       case SkPath::kDone_Verb:

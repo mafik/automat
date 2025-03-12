@@ -153,6 +153,11 @@ std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& 
     return nullptr;
   }
   auto window = std::unique_ptr<XCBWindow>(new XCBWindow(root));
+
+  if (xcb_cursor_context_new(connection, screen, std::out_ptr(window->cursor_context)) < 0) {
+    ERROR << "Error: Failed to create cursor context";
+  }
+
   float pixels_per_meter = DisplayPxPerMeter();
   window->client_width = root.size.x * pixels_per_meter;
   window->client_height = root.size.y * pixels_per_meter;
@@ -270,10 +275,57 @@ XCBWindow::~XCBWindow() {
   }
 }
 
+struct XCBPointer : automat::gui::Pointer {
+  XCBWindow& xcb_window;
+
+  static const char* GetCursorName(automat::gui::Pointer::IconType icon) {
+    switch (icon) {
+      case automat::gui::Pointer::kIconArrow:
+        return "left_ptr";
+      case automat::gui::Pointer::kIconHand:
+        return "hand1";
+      case automat::gui::Pointer::kIconIBeam:
+        return "xterm";
+      default:
+        return "left_ptr";
+    }
+  }
+
+  XCBPointer(automat::gui::RootWidget& root, Vec2 position, XCBWindow& xcb_window)
+      : automat::gui::Pointer(root, position), xcb_window(xcb_window) {}
+  void PushIcon(automat::gui::Pointer::IconType icon) override {
+    auto prev = Icon();
+    automat::gui::Pointer::PushIcon(icon);
+    auto curr = Icon();
+    if (prev != curr) {
+      UpdateCursor(curr);
+    }
+  }
+
+  void PopIcon() override {
+    auto prev = Icon();
+    automat::gui::Pointer::PopIcon();
+    auto curr = Icon();
+    if (prev != curr) {
+      UpdateCursor(curr);
+    }
+  }
+
+  void UpdateCursor(automat::gui::Pointer::IconType icon) {
+    xcb_cursor_t cursor =
+        xcb_cursor_load_cursor(xcb_window.cursor_context.get(), GetCursorName(icon));
+    if (cursor != XCB_NONE) {
+      uint32_t cursor_value = cursor;
+      xcb_change_window_attributes(connection, xcb_window.xcb_window, XCB_CW_CURSOR, &cursor_value);
+      xcb_free_cursor(connection, cursor);
+      xcb_flush(connection);
+    }
+  }
+};
+
 automat::gui::Pointer& XCBWindow::GetMouse() {
   if (!mouse) {
-    mouse =
-        std::make_unique<automat::gui::Pointer>(root, ScreenToWindowPx(mouse_position_on_screen));
+    mouse = std::make_unique<XCBPointer>(root, ScreenToWindowPx(mouse_position_on_screen), *this);
   }
   return *mouse;
 }

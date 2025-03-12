@@ -30,7 +30,37 @@ struct PointerMoveCallback {
   void StopWatching(Pointer& p);
 };
 
-struct Pointer final {
+struct PointerGrab;
+
+// Base class for objects that can grab pointer input.
+struct PointerGrabber {
+  virtual ~PointerGrabber() = default;
+
+  // Called by the Pointer infrastructure to make the PointerGrabber release all resources related
+  // to this grab.
+  virtual void ReleaseGrab(PointerGrab&) = 0;
+
+  // Called by the Pointer infrastructure to get the widget that is grabbing the pointer.
+  virtual Widget* GrabWidget() = 0;
+
+  virtual void PointerGrabberMove(PointerGrab&, Vec2) {}
+  virtual void PointerGrabberButtonDown(PointerGrab&, PointerButton) {}
+  virtual void PointerGrabberButtonUp(PointerGrab&, PointerButton) {}
+  virtual void PointerGrabberWheel(PointerGrab&, float) {}
+};
+
+// Represents a pointer grab. Can be used to manipulate it.
+struct PointerGrab final {
+  Pointer& pointer;
+  PointerGrabber& grabber;
+  PointerGrab(Pointer& pointer, PointerGrabber& grabber) : pointer(pointer), grabber(grabber) {}
+
+  // This will also call `ReleaseGrab` of its PointerGrabber.
+  // This means that the pointers in the PointerGrabber will be invalid (nullptr) after this call!
+  void Release();
+};
+
+struct Pointer {
   Pointer(RootWidget&, Vec2 position);
   ~Pointer();
   void Move(Vec2 position);
@@ -48,8 +78,8 @@ struct Pointer final {
   enum IconType { kIconArrow, kIconHand, kIconIBeam };
 
   IconType Icon() const;
-  void PushIcon(IconType);
-  void PopIcon();
+  virtual void PushIcon(IconType);
+  virtual void PopIcon();
 
   void UpdatePath();
 
@@ -57,6 +87,11 @@ struct Pointer final {
   Vec2 PositionWithinRootMachine() const;
 
   maf::Str ToStr() const;
+
+  // Called by a PointerGrabber that wants to grab all pointer events.
+  PointerGrab& RequestGrab(PointerGrabber&);
+
+  std::unique_ptr<PointerGrab> grab;
 
   RootWidget& root_widget;
   // The main keyboard associated with this pointer device. May be null!

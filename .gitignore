@@ -55,6 +55,7 @@ third_party/libxcb-*
 third_party/util-macros-*
 third_party/xcb-proto-*
 third_party/xorgproto-*
+third_party/xcb-util-cursor-*
 third_party/*.patched
 
 tmp

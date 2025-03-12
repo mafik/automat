@@ -8,6 +8,7 @@
 #include "drawing.hh"
 #include "gui_button.hh"
 #include "gui_shape_widget.hh"
+#include "pointer.hh"
 #include "svg.hh"
 
 namespace automat::library {
@@ -33,6 +34,8 @@ struct PickButton : gui::Button {
         .sk;
   }
   SkColor BackgroundColor() const override { return "#d0d0d0"_color; }
+
+  void Activate(gui::Pointer& p) override { WakeAnimation(); }
 };
 
 struct WindowWidget : gui::Widget {

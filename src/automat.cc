@@ -325,6 +325,7 @@ __attribute__((weak)) int main() { return automat::Main(); }
 #pragma comment(lib, "freetype2")
 #pragma comment(lib, "xcb")
 #pragma comment(lib, "xcb-xinput")
+#pragma comment(lib, "xcb-cursor")
 
 // Unit tests have their own main(), defined in gtest.cc
 __attribute__((weak)) int main(int argc, char* argv[]) {

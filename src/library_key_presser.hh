@@ -40,7 +40,6 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::KeyboardGrabber, Runnab
 
   void KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key) override;
   void ReleaseGrab(gui::KeyboardGrab&) override;
-  Widget* GrabWidget() override { return this; }
 
   void SetKey(gui::AnsiKey);
 

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "xcb_window.hh"
 
+#include <xcb/xinput.h>
+
 #include <stop_token>
 
 #include "automat.hh"
@@ -98,7 +100,6 @@ struct WM_STATE {
 float fp1616_to_float(xcb_input_fp1616_t fp) { return fp / 65536.0f; }
 double fp3232_to_double(xcb_input_fp3232_t fp) { return fp.integral + fp.frac / 4294967296.0; }
 
-// TODO: rename
 static void ScanDevices(XCBWindow& window) {
   window.vertical_scroll.reset();
   if (auto reply = xcb::input_xi_query_device(XCB_INPUT_DEVICE_ALL_MASTER)) {
@@ -106,6 +107,11 @@ static void ScanDevices(XCBWindow& window) {
     auto it_device = xcb_input_xi_query_device_infos_iterator(reply.get());
     for (int i_device = 0; i_device < n_devices; ++i_device) {
       xcb_input_device_id_t deviceid = it_device.data->deviceid;
+      if (it_device.data->type == XCB_INPUT_DEVICE_TYPE_MASTER_POINTER) {
+        window.master_pointer_device_id = deviceid;
+      } else if (it_device.data->type == XCB_INPUT_DEVICE_TYPE_MASTER_KEYBOARD) {
+        window.master_keyboard_device_id = deviceid;
+      }
       int n_classes = xcb_input_xi_device_info_classes_length(it_device.data);
       auto it_classes = xcb_input_xi_device_info_classes_iterator(it_device.data);
 
@@ -275,6 +281,47 @@ XCBWindow::~XCBWindow() {
   }
 }
 
+struct XCBPointerGrab : automat::gui::PointerGrab {
+  XCBWindow& xcb_window;
+  XCBPointerGrab(automat::gui::Pointer& pointer, automat::gui::PointerGrabber& grabber,
+                 XCBWindow& xcb_window)
+      : automat::gui::PointerGrab(pointer, grabber), xcb_window(xcb_window) {
+    xcb_cursor_t cursor = xcb_cursor_load_cursor(xcb_window.cursor_context.get(), "crosshair");
+
+    uint32_t mask = XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS | XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE |
+                    XCB_INPUT_XI_EVENT_MASK_MOTION;
+    auto cookie = xcb_input_xi_grab_device(
+        connection, screen->root, XCB_CURRENT_TIME, cursor, xcb_window.master_pointer_device_id,
+        XCB_INPUT_GRAB_MODE_22_ASYNC, XCB_INPUT_GRAB_MODE_22_ASYNC, false, 1, &mask);
+
+    std::unique_ptr<xcb_generic_error_t, FreeDeleter> error;
+
+    std::unique_ptr<xcb_input_xi_grab_device_reply_t, FreeDeleter> reply(
+        xcb_input_xi_grab_device_reply(connection, cookie, std::out_ptr(error)));
+    if (reply) {
+      if (reply->status != XCB_GRAB_STATUS_SUCCESS) {
+        ERROR << "Failed to grab the pointer: " << reply->status;
+      }
+    }
+
+    if (error) {
+      ERROR << "Error while attempting to grab pointer: " << dump_struct(*error);
+    }
+
+    if (cursor != XCB_NONE) {
+      xcb_free_cursor(connection, cursor);
+    }
+  }
+  void Release() override {
+    xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(connection, XCB_CURRENT_TIME,
+                                                          xcb_window.master_pointer_device_id);
+    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
+      ERROR << "Failed to ungrab the pointer";
+    }
+    automat::gui::PointerGrab::Release();  // deletes this
+  }
+};
+
 struct XCBPointer : automat::gui::Pointer {
   XCBWindow& xcb_window;
 
@@ -320,6 +367,14 @@ struct XCBPointer : automat::gui::Pointer {
       xcb_free_cursor(connection, cursor);
       xcb_flush(connection);
     }
+  }
+
+  automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
+    if (grab) {
+      grab->Release();
+    }
+    grab.reset(new XCBPointerGrab(*this, grabber, xcb_window));
+    return *grab;
   }
 };
 
@@ -495,16 +550,6 @@ void XCBWindow::MainLoop() {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
-                // auto cookie =
-                //     xcb_grab_pointer(connection, 0, xcb_window,
-                //                      XCB_EVENT_MASK_BUTTON_RELEASE |
-                //                      XCB_EVENT_MASK_BUTTON_MOTION
-                //                      |
-                //                          XCB_EVENT_MASK_POINTER_MOTION_HINT,
-                //                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_WINDOW_NONE,
-                //                      XCB_CURSOR_NONE, XCB_CURRENT_TIME);
-                // xcb_flush(connection);
-                // xcb_request_check(connection, cookie)
                 auto lock = Lock();
                 GetMouse().ButtonDown(EventDetailToButton(ev->detail));
                 break;

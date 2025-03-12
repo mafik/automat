@@ -26,7 +26,10 @@ constexpr static float kContentMargin = 0.5_mm;  // margin between the border an
 constexpr static float kTitleHeight = 8_mm;      // height of the title bar
 constexpr static float kTitleButtonSize = kTitleHeight - 2 * kContentMargin;
 
+struct WindowWidget;
+
 struct PickButton : gui::Button {
+  std::function<void(gui::Pointer&)> on_activate;
   PickButton() : gui::Button(gui::MakeShapeWidget(kPickSVG, "#000000"_color, &kCenterPickIcon)) {}
   SkRRect RRect() const override {
     return RRect::MakeSimple(
@@ -35,10 +38,13 @@ struct PickButton : gui::Button {
   }
   SkColor BackgroundColor() const override { return "#d0d0d0"_color; }
 
-  void Activate(gui::Pointer& p) override { WakeAnimation(); }
+  void Activate(gui::Pointer& p) override {
+    WakeAnimation();
+    on_activate(p);
+  }
 };
 
-struct WindowWidget : gui::Widget {
+struct WindowWidget : gui::Widget, gui::PointerGrabber {
   std::weak_ptr<Window> window;
 
   constexpr static float kWidth = 5_cm;
@@ -47,10 +53,11 @@ struct WindowWidget : gui::Widget {
 
   float height = kDefaultHeight;
 
-  std::shared_ptr<gui::Button> pick_button;
+  std::shared_ptr<PickButton> pick_button;
 
   WindowWidget(std::weak_ptr<Window>&& window) : window(std::move(window)) {
     pick_button = std::make_shared<PickButton>();
+    pick_button->on_activate = [this](gui::Pointer& p) { p.RequestGlobalGrab(*this); };
     auto content_bounds = CoarseBounds().Outset(-kBorderWidth - kContentMargin);
     auto title_bounds = Rect(content_bounds.rect.left, content_bounds.rect.top - kTitleHeight,
                              content_bounds.rect.right, content_bounds.rect.top);
@@ -107,6 +114,8 @@ struct WindowWidget : gui::Widget {
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
     children.push_back(pick_button);
   }
+
+  void ReleaseGrab(gui::PointerGrab&) override {}
 };
 
 std::shared_ptr<gui::Widget> Window::MakeWidget() {

@@ -120,6 +120,11 @@ void Pointer::UpdatePath() {
 }
 
 void Pointer::Move(Vec2 position) {
+  if (grab) {
+    grab->grabber.PointerGrabberMove(*grab, position);
+    return;
+  }
+
   Vec2 old_mouse_pos = pointer_position;
   pointer_position = position;
   auto px2canvas = TransformDown(*root_machine);
@@ -140,6 +145,11 @@ void Pointer::Move(Vec2 position) {
   }
 }
 void Pointer::Wheel(float delta) {
+  if (grab) {
+    grab->grabber.PointerGrabberWheel(*grab, delta);
+    return;
+  }
+
   float factor = exp(delta / 4);
   root_widget.zoom_target *= factor;
   auto position_metric = TransformDown(root_widget).mapPoint(pointer_position);
@@ -160,6 +170,12 @@ void Pointer::ButtonDown(PointerButton btn) {
   if (btn == PointerButton::Unknown || btn >= PointerButton::Count) return;
   button_down_position[static_cast<int>(btn)] = pointer_position;
   button_down_time[static_cast<int>(btn)] = time::SystemNow();
+
+  if (grab) {
+    grab->grabber.PointerGrabberButtonDown(*grab, btn);
+    return;
+  }
+
   UpdatePath();
 
   if (action == nullptr && hover) {
@@ -179,6 +195,11 @@ void Pointer::ButtonDown(PointerButton btn) {
 
 void Pointer::ButtonUp(PointerButton btn) {
   if (btn == PointerButton::Unknown || btn >= PointerButton::Count) return;
+
+  if (grab) {
+    grab->grabber.PointerGrabberButtonUp(*grab, btn);
+    return;
+  }
 
   if (btn == PointerButton::Left) {
     if (action) {
@@ -231,6 +252,19 @@ Str Pointer::ToStr() const {
     ret += PositionWithin(*w.lock()).ToStrMetric();
   }
   return ret;
+}
+
+void PointerGrab::Release() {
+  grabber.ReleaseGrab(*this);
+  pointer.grab.reset();  // PointerGrab deletes itself here!
+}
+
+PointerGrab& Pointer::RequestGlobalGrab(PointerGrabber& grabber) {
+  if (grab) {
+    grab->Release();
+  }
+  grab.reset(new PointerGrab(*this, grabber));
+  return *grab;
 }
 
 }  // namespace automat::gui

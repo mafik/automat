@@ -40,9 +40,6 @@ struct PointerGrabber {
   // to this grab.
   virtual void ReleaseGrab(PointerGrab&) = 0;
 
-  // Called by the Pointer infrastructure to get the widget that is grabbing the pointer.
-  virtual Widget* GrabWidget() = 0;
-
   virtual void PointerGrabberMove(PointerGrab&, Vec2) {}
   virtual void PointerGrabberButtonDown(PointerGrab&, PointerButton) {}
   virtual void PointerGrabberButtonUp(PointerGrab&, PointerButton) {}
@@ -50,14 +47,15 @@ struct PointerGrabber {
 };
 
 // Represents a pointer grab. Can be used to manipulate it.
-struct PointerGrab final {
+struct PointerGrab {
   Pointer& pointer;
   PointerGrabber& grabber;
   PointerGrab(Pointer& pointer, PointerGrabber& grabber) : pointer(pointer), grabber(grabber) {}
+  virtual ~PointerGrab() = default;
 
   // This will also call `ReleaseGrab` of its PointerGrabber.
   // This means that the pointers in the PointerGrabber will be invalid (nullptr) after this call!
-  void Release();
+  virtual void Release();
 };
 
 struct Pointer {
@@ -88,8 +86,11 @@ struct Pointer {
 
   maf::Str ToStr() const;
 
-  // Called by a PointerGrabber that wants to grab all pointer events.
-  PointerGrab& RequestGrab(PointerGrabber&);
+  // Called by a PointerGrabber that wants to grab all pointer events, even when Automat is in the
+  // background.
+  //
+  // Should be overridden by platform-specific implementations to actually grab the pointer.
+  virtual PointerGrab& RequestGlobalGrab(PointerGrabber&);
 
   std::unique_ptr<PointerGrab> grab;
 

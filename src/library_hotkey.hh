@@ -45,7 +45,6 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::KeyboardGrabber,
 
   void ReleaseGrab(gui::KeyboardGrab&) override;
   void ReleaseKeyGrab(gui::KeyGrab&) override;
-  Widget* GrabWidget() override { return this; }
 
   void KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key) override;
 

@@ -70,9 +70,6 @@ struct KeyboardGrabber {
   // to this grab.
   virtual void ReleaseGrab(KeyboardGrab&) = 0;
 
-  // Called by the Keyboard infrastructure to get the widget that is grabbing the keyboard.
-  virtual Widget* GrabWidget() = 0;
-
   virtual void KeyboardGrabberKeyDown(KeyboardGrab&, Key) {}
   virtual void KeyboardGrabberKeyUp(KeyboardGrab&, Key) {}
 };

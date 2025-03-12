@@ -168,7 +168,7 @@ InstructionLibrary::Widget::Widget(std::weak_ptr<Object> object) : object(object
 SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 10_cm); }
 
 constexpr float kRoseFanDegrees = 180;
-constexpr float kStartDist = Instruction::Widget::kHeight / 2;
+constexpr float kStartDist = 0;  // distance from the center, at which stalk starts
 constexpr float kCornerDist = Instruction::Widget::kDiagonal / 2;
 constexpr float kRoseDist = 8_cm;
 constexpr static Rect kFrontInstructionRect =
@@ -487,6 +487,10 @@ PersistentImage stalk = PersistentImage::MakeFromAsset(maf::embedded::assets_sta
 PersistentImage leaf = PersistentImage::MakeFromAsset(maf::embedded::assets_leaf_webp,
                                                       PersistentImage::MakeArgs{.width = 1.2_cm});
 
+PersistentImage venus = PersistentImage::MakeFromAsset(
+    maf::embedded::assets_venus_webp,
+    PersistentImage::MakeArgs{.height = Instruction::Widget::kHeight});
+
 static gui::Font& HeavyFont() {
   static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeSemiBold(), kCategoryLetterSize);
   return *font;
@@ -697,6 +701,13 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     if constexpr (kDebugRoseDrawing) {
       canvas.drawCircle(category_name_position, category_radius, debug_paint);
     }
+  }
+
+  {  // Venus
+    canvas.save();
+    canvas.translate(-venus.width() / 2 - 0.7_cm, -venus.height() / 2);
+    venus.draw(canvas);
+    canvas.restore();
   }
 
   {  // Draw Register Table

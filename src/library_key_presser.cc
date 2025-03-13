@@ -56,7 +56,8 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
     if (key_selector) {
       key_selector->Release();
     } else {
-      key_selector = &pointer.keyboard->RequestCaret(*this, SharedPtr(), Vec2{0, 0});
+      Vec2 caret_position = shortcut_button->child->TextureBounds()->TopLeftCorner();
+      key_selector = &pointer.keyboard->RequestCaret(*this, shortcut_button->child, caret_position);
     }
     WakeAnimation();
     shortcut_button->WakeAnimation();

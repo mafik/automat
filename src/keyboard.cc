@@ -70,6 +70,7 @@ void Caret::PlaceIBeam(Vec2 position) {
 
 void Caret::Release() {
   if (owner) {
+    owner->ReleaseCaret(*this);
     if (auto it = std::find(owner->carets.begin(), owner->carets.end(), this);
         it != owner->carets.end()) {
       owner->carets.erase(it);
@@ -78,7 +79,7 @@ void Caret::Release() {
   }
   for (auto it = keyboard.carets.begin(); it != keyboard.carets.end(); ++it) {
     if (it->get() == this) {
-      keyboard.carets.erase(it);
+      keyboard.carets.erase(it);  // deletes this
       break;
     }
   }
@@ -384,6 +385,27 @@ void Keyboard::KeyUp(xcb_key_press_event_t& ev) {
 }
 #endif  // __linux__
 
+// Helper for safely iterating over a list of carets. The list may be modified by the callback.
+template <typename T>
+void DeleteSafeForEach(std::set<std::unique_ptr<Caret>>& carets, const T& cb) {
+  std::vector<Caret*> carets_copy;
+  carets_copy.reserve(carets.size());
+  for (auto& caret : carets) {
+    carets_copy.push_back(caret.get());
+  }
+  // Then we iterate over this list of carets.
+  for (auto* caret : carets_copy) {
+    // For each caret we check if it's still in the list of carets.
+    for (auto& c : carets) {
+      if (c.get() == caret) {
+        // Only if the caret is still present, we notify the CaretOwner.
+        cb(*caret);
+        break;
+      }
+    }
+  }
+}
+
 void Keyboard::KeyDown(Key key) {
   // Quit on Ctrl + Q
   if (key.ctrl && key.physical == AnsiKey::Q) {
@@ -402,14 +424,12 @@ void Keyboard::KeyDown(Key key) {
     grab->grabber.KeyboardGrabberKeyDown(*grab, key);
   } else if (key.physical == AnsiKey::Escape) {
     // Release the carets when Escape is pressed
-    for (auto& caret : carets) {
-      caret->owner->ReleaseCaret(*caret);
-    }
+    DeleteSafeForEach(carets, [](Caret& caret) { caret.owner->ReleaseCaret(caret); });
     carets.clear();
   } else if (!carets.empty()) {
-    for (auto& caret : carets) {
-      caret->owner->KeyDown(*caret, key);
-    }
+    // The list of carets may be modified by the KeyDown. Because of that we have to iterate over
+    // the list of carets in a very careful way.
+    DeleteSafeForEach(carets, [key](Caret& caret) { caret.owner->KeyDown(caret, key); });
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i] == nullptr && pointer && pointer->hover) {
@@ -433,11 +453,7 @@ void Keyboard::KeyUp(Key key) {
   if (grab) {
     grab->grabber.KeyboardGrabberKeyUp(*grab, key);
   } else if (!carets.empty()) {
-    for (auto& caret : carets) {
-      if (caret->owner) {
-        caret->owner->KeyUp(*caret, key);
-      }
-    }
+    DeleteSafeForEach(carets, [key](Caret& caret) { caret.owner->KeyUp(caret, key); });
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i]) {

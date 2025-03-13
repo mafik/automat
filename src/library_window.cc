@@ -8,6 +8,7 @@
 #include "drawing.hh"
 #include "gui_button.hh"
 #include "gui_shape_widget.hh"
+#include "key.hh"
 #include "pointer.hh"
 #include "svg.hh"
 
@@ -44,7 +45,7 @@ struct PickButton : gui::Button {
   }
 };
 
-struct WindowWidget : gui::Widget, gui::PointerGrabber {
+struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   std::weak_ptr<Window> window;
 
   constexpr static float kWidth = 5_cm;
@@ -52,12 +53,22 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber {
   constexpr static float kDefaultHeight = 5_cm;
 
   float height = kDefaultHeight;
+  gui::PointerGrab* pointer_grab = nullptr;
+  gui::KeyGrab* key_grab = nullptr;
 
   std::shared_ptr<PickButton> pick_button;
 
   WindowWidget(std::weak_ptr<Window>&& window) : window(std::move(window)) {
     pick_button = std::make_shared<PickButton>();
-    pick_button->on_activate = [this](gui::Pointer& p) { p.RequestGlobalGrab(*this); };
+    pick_button->on_activate = [this](gui::Pointer& p) {
+      p.EndAction();
+      pointer_grab = &p.RequestGlobalGrab(*this);
+      key_grab = &p.keyboard->RequestKeyGrab(*this, gui::AnsiKey::Escape, false, false, false,
+                                             false, [this](maf::Status& status) {
+                                               if (pointer_grab) pointer_grab->Release();
+                                               if (key_grab) key_grab->Release();
+                                             });
+    };
     auto content_bounds = CoarseBounds().Outset(-kBorderWidth - kContentMargin);
     auto title_bounds = Rect(content_bounds.rect.left, content_bounds.rect.top - kTitleHeight,
                              content_bounds.rect.right, content_bounds.rect.top);
@@ -115,7 +126,12 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber {
     children.push_back(pick_button);
   }
 
-  void ReleaseGrab(gui::PointerGrab&) override {}
+  void ReleaseGrab(gui::PointerGrab&) override { pointer_grab = nullptr; }
+  void ReleaseKeyGrab(gui::KeyGrab&) override { key_grab = nullptr; }
+  void KeyGrabberKeyDown(gui::KeyGrab&) override {
+    if (pointer_grab) pointer_grab->Release();
+    if (key_grab) key_grab->Release();
+  }
 };
 
 std::shared_ptr<gui::Widget> Window::MakeWidget() {

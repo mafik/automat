@@ -246,8 +246,8 @@ struct ButtonAction : public Action {
 
   void Begin() override {
     audio::Play(embedded::assets_SFX_button_down_wav);
-    button.Activate(pointer);
     button.press_action_count++;
+    button.Activate(pointer);  // This may immediately end the action.
   }
 
   void Update() override {}

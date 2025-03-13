@@ -92,6 +92,8 @@ struct Pointer {
   // Should be overridden by platform-specific implementations to actually grab the pointer.
   virtual PointerGrab& RequestGlobalGrab(PointerGrabber&);
 
+  void EndAction();
+
   std::unique_ptr<PointerGrab> grab;
 
   RootWidget& root_widget;

@@ -202,11 +202,7 @@ void Pointer::ButtonUp(PointerButton btn) {
   }
 
   if (btn == PointerButton::Left) {
-    if (action) {
-      action->End();
-      action.reset();
-      UpdatePath();
-    }
+    EndAction();
   }
   if (btn == PointerButton::Middle) {
     time::Duration down_duration =
@@ -252,6 +248,14 @@ Str Pointer::ToStr() const {
     ret += PositionWithin(*w.lock()).ToStrMetric();
   }
   return ret;
+}
+
+void Pointer::EndAction() {
+  if (action) {
+    action->End();
+    action.reset();
+    UpdatePath();
+  }
 }
 
 void PointerGrab::Release() {

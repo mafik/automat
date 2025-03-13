@@ -5,7 +5,7 @@
 #include "base.hh"
 #include "str.hh"
 
-#if defined(__linux__)
+#ifdef __linux__
 #include <xcb/xcb.h>
 #endif
 
@@ -14,7 +14,7 @@ namespace automat::library {
 struct Window : public Object {
   maf::Str title = "";
 
-#if defined(__linux__)
+#ifdef __linux__
   xcb_window_t xcb_window = 0;
 #endif
 

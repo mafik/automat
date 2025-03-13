@@ -56,8 +56,10 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
     if (key_selector) {
       key_selector->Release();
     } else {
-      key_selector = &pointer.keyboard->RequestGrab(*this);
+      key_selector = &pointer.keyboard->RequestCaret(*this, SharedPtr(), Vec2{0, 0});
     }
+    WakeAnimation();
+    shortcut_button->WakeAnimation();
   };
 }
 KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
@@ -107,10 +109,16 @@ void KeyPresser::SetKey(gui::AnsiKey k) {
   shortcut_button->SetLabel(ToStr(k));
 }
 
-void KeyPresser::ReleaseGrab(gui::KeyboardGrab&) { key_selector = nullptr; }
-void KeyPresser::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key k) {
+void KeyPresser::ReleaseCaret(gui::Caret&) {
+  key_selector = nullptr;
+  WakeAnimation();
+  shortcut_button->WakeAnimation();
+}
+void KeyPresser::KeyDown(gui::Caret&, gui::Key k) {
   key_selector->Release();
   SetKey(k.physical);
+  WakeAnimation();
+  shortcut_button->WakeAnimation();
 }
 
 void KeyPresser::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {

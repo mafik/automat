@@ -18,13 +18,13 @@ struct KeyPresserButton : KeyButton {
   float PressRatio() const override;
 };
 
-struct KeyPresser : Object, Object::FallbackWidget, gui::KeyboardGrabber, Runnable, LongRunning {
+struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, LongRunning {
   gui::AnsiKey key = gui::AnsiKey::F;
 
   mutable std::shared_ptr<KeyPresserButton> shortcut_button;
 
   // This is used to select the pressed key
-  gui::KeyboardGrab* key_selector = nullptr;
+  gui::Caret* key_selector = nullptr;
   bool key_pressed = false;
 
   KeyPresser(gui::AnsiKey);
@@ -38,8 +38,8 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::KeyboardGrabber, Runnab
   void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 
-  void KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key) override;
-  void ReleaseGrab(gui::KeyboardGrab&) override;
+  void KeyDown(gui::Caret&, gui::Key) override;
+  void ReleaseCaret(gui::Caret&) override;
 
   void SetKey(gui::AnsiKey);
 

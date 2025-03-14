@@ -212,10 +212,11 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
 
     if (shm_capture.has_value()) {
       auto& capture = shm_capture.value();
-      auto data = SkData::MakeWithoutCopy(capture.data.data(), capture.data.size());
       auto image_info = SkImageInfo::Make(capture_width, capture_height, kBGRA_8888_SkColorType,
                                           SkAlphaType::kPremul_SkAlphaType);
-      auto image = SkImages::RasterFromData(image_info, data, capture_width * 4);
+      SkPixmap pixmap(image_info, capture.data.data(), capture_width * 4);
+      auto image = SkImages::RasterFromPixmap(
+          pixmap, [](const void* pixels, SkImages::ReleaseContext) {}, nullptr);
       canvas.save();
       SkRect image_rect = SkRect::Make(image->bounds());
       auto m = SkMatrix::RectToRect(image_rect, contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);

@@ -141,6 +141,7 @@ void RenderThread(std::stop_token stop_token) {
   SetThreadName("Render Thread");
   while (!stop_token.stop_requested()) {
     VulkanPaint();
+    static_cast<AutomatImageProvider*>(image_provider.get())->TickCache();
   }
 }
 

@@ -220,7 +220,7 @@ void WidgetDrawable::UpdateState(const Update& update) {
   last_tick_time = update.last_tick_time;
 
   if (update.recording_drawable) {
-    recording = update.recording_drawable;
+    recording = std::move(update.recording_drawable);
   } else {
     SkDeserialProcs deserial_procs{};
     auto data = update.recording_data;

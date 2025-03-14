@@ -9,6 +9,7 @@
 
 #include "log.hh"
 #include "math.hh"
+#include "time.hh"
 
 namespace automat {
 
@@ -83,7 +84,32 @@ sk_sp<SkImage> AutomatImageProvider::findOrCreate(skgpu::graphite::Recorder* rec
     auto [it2, _] = cache.emplace(image->uniqueID(), texture);
     it = it2;
   }
-  return it->second;
+  it->second.last_used = last_tick;
+  return it->second.image;
+}
+
+void AutomatImageProvider::TickCache() {
+  size_t total_size = 0;
+  for (auto& [id, entry] : cache) {
+    total_size += entry.image->textureSize();
+  }
+  if (total_size > 1024 * 1024 * 1024) {
+    std::vector<uint32_t> unused_ids_by_age;
+    for (auto& [id, entry] : cache) {
+      if (entry.last_used < last_tick) {
+        unused_ids_by_age.push_back(id);
+      }
+    }
+    std::sort(unused_ids_by_age.begin(), unused_ids_by_age.end(),
+              [&](uint32_t a, uint32_t b) { return cache[a].last_used > cache[b].last_used; });
+    while (!unused_ids_by_age.empty() && total_size > 1024 * 1024 * 1024) {
+      auto id = unused_ids_by_age.back();
+      unused_ids_by_age.pop_back();
+      total_size -= cache[id].image->textureSize();
+      cache.erase(id);
+    }
+  }
+  last_tick = time::SteadyNow();
 }
 
 }  // namespace automat

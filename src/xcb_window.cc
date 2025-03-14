@@ -38,12 +38,10 @@ struct WM_STATE {
   static WM_STATE Get(xcb_window_t xcb_window) {
     using namespace atom;
     WM_STATE state;
-    xcb_get_property_reply_t* reply = xcb_get_property_reply(
-        connection, xcb_get_property(connection, 0, xcb_window, _NET_WM_STATE, XCB_ATOM_ANY, 0, 32),
-        nullptr);
+    auto reply = xcb::get_property(xcb_window, _NET_WM_STATE, XCB_ATOM_ANY, 0, 32);
     if (reply) {
-      xcb_atom_t* atoms = (xcb_atom_t*)xcb_get_property_value(reply);
-      int n_atoms = xcb_get_property_value_length(reply) / sizeof(xcb_atom_t);
+      xcb_atom_t* atoms = (xcb_atom_t*)xcb_get_property_value(reply.get());
+      int n_atoms = xcb_get_property_value_length(reply.get()) / sizeof(xcb_atom_t);
       std::map<xcb_atom_t, Fn<void()>> callbacks = {
           {_NET_WM_STATE_MODAL, [&] { state.MODAL = true; }},
           {_NET_WM_STATE_STICKY, [&] { state.STICKY = true; }},
@@ -63,7 +61,6 @@ struct WM_STATE {
           cb->second();
         }
       }
-      free(reply);
     }
     return state;
   }

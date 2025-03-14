@@ -83,4 +83,23 @@ void Connect(Status& status) {
   xi_opcode = xinput_data->major_opcode;
 }
 
+std::string GetPropertyString(xcb_window_t window, xcb_atom_t property) {
+  auto reply = get_property(window, property, XCB_ATOM_STRING, 0, 100 / 4);
+  if (!reply) {
+    return "";
+  }
+  if (reply->bytes_after == 0) {
+    return std::string((char*)xcb_get_property_value(reply.get()),
+                       (size_t)xcb_get_property_value_length(reply.get()));
+  }
+  auto proper_type = reply->type;
+  auto proper_size = reply->bytes_after + reply->value_len;
+  reply = get_property(window, property, proper_type, 0, (proper_size + 3) / 4);
+  if (!reply) {
+    return "";
+  }
+  return std::string((char*)xcb_get_property_value(reply.get()),
+                     (size_t)xcb_get_property_value_length(reply.get()));
+}
+
 }  // namespace xcb

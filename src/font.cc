@@ -120,7 +120,7 @@ std::unique_ptr<Font> Font::MakeV2(sk_sp<SkTypeface> typeface, float letter_size
   // The `fCapHeight` is the height of the capital letters.
   float font_scale = letter_size / metrics.fCapHeight;
   float line_thickness = metrics.fUnderlineThickness * font_scale;
-  return std::make_unique<Font>(sk_font, font_scale, line_thickness);
+  return std::make_unique<Font>(sk_font, font_scale, line_thickness, letter_size);
 }
 
 struct LineRunHandler : public SkShaper::RunHandler {

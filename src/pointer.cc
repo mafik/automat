@@ -120,13 +120,13 @@ void Pointer::UpdatePath() {
 }
 
 void Pointer::Move(Vec2 position) {
+  Vec2 old_mouse_pos = pointer_position;
+  pointer_position = position;
   if (grab) {
     grab->grabber.PointerGrabberMove(*grab, position);
     return;
   }
 
-  Vec2 old_mouse_pos = pointer_position;
-  pointer_position = position;
   auto px2canvas = TransformDown(*root_machine);
 
   if (button_down_time[static_cast<int>(PointerButton::Middle)] > time::kZero) {

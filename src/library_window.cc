@@ -162,18 +162,36 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       return animation::Finished;
     }
 
+    I16 x = 0;
+    I16 y = 0;
     capture_width = geometry_reply->width;
     capture_height = geometry_reply->height;
+
+    auto gtk_frame_extents_reply =
+        xcb::get_property(xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
+    if (gtk_frame_extents_reply->value_len == 4) {
+      auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
+      x += extents[0];
+      y += extents[2];
+      capture_width -= extents[0] + extents[1];
+      capture_height -= extents[2] + extents[3];
+    }
+
     auto cookie =
-        xcb_shm_get_image(xcb::connection, xcb_window, 0, 0, capture_width, capture_height, ~0,
+        xcb_shm_get_image(xcb::connection, xcb_window, x, y, capture_width, capture_height, ~0,
                           XCB_IMAGE_FORMAT_Z_PIXMAP, shm_capture->shmseg, 0);
 
     std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
         xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
 
-    int n = capture_width * capture_height;
-    for (int i = 0; i < n; ++i) {
-      shm_capture->data[i * 4 + 3] = 0xff;
+    bool center_pixel_transparent =
+        shm_capture->data[(capture_height / 2 * capture_width + capture_width / 2) * 4 + 3] == 0;
+
+    if (center_pixel_transparent) {
+      int n = capture_width * capture_height;
+      for (int i = 0; i < n; ++i) {
+        shm_capture->data[i * 4 + 3] = 0xff;
+      }
     }
 
     return animation::Animating;

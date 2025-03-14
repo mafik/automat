@@ -16,23 +16,24 @@ extern uint8_t xi_opcode;
 
 namespace atom {
 
-#define ATOMS(MACRO)                  \
-  MACRO(WM_STATE)                     \
-  MACRO(WM_PROTOCOLS)                 \
-  MACRO(WM_DELETE_WINDOW)             \
-  MACRO(_NET_WM_STATE)                \
-  MACRO(_NET_WM_STATE_MODAL)          \
-  MACRO(_NET_WM_STATE_STICKY)         \
-  MACRO(_NET_WM_STATE_MAXIMIZED_VERT) \
-  MACRO(_NET_WM_STATE_MAXIMIZED_HORZ) \
-  MACRO(_NET_WM_STATE_SHADED)         \
-  MACRO(_NET_WM_STATE_SKIP_TASKBAR)   \
-  MACRO(_NET_WM_STATE_SKIP_PAGER)     \
-  MACRO(_NET_WM_STATE_HIDDEN)         \
-  MACRO(_NET_WM_STATE_FULLSCREEN)     \
-  MACRO(_NET_WM_STATE_ABOVE)          \
-  MACRO(_NET_WM_STATE_BELOW)          \
-  MACRO(_NET_WM_STATE_DEMANDS_ATTENTION)
+#define ATOMS(MACRO)                     \
+  MACRO(WM_STATE)                        \
+  MACRO(WM_PROTOCOLS)                    \
+  MACRO(WM_DELETE_WINDOW)                \
+  MACRO(_NET_WM_STATE)                   \
+  MACRO(_NET_WM_STATE_MODAL)             \
+  MACRO(_NET_WM_STATE_STICKY)            \
+  MACRO(_NET_WM_STATE_MAXIMIZED_VERT)    \
+  MACRO(_NET_WM_STATE_MAXIMIZED_HORZ)    \
+  MACRO(_NET_WM_STATE_SHADED)            \
+  MACRO(_NET_WM_STATE_SKIP_TASKBAR)      \
+  MACRO(_NET_WM_STATE_SKIP_PAGER)        \
+  MACRO(_NET_WM_STATE_HIDDEN)            \
+  MACRO(_NET_WM_STATE_FULLSCREEN)        \
+  MACRO(_NET_WM_STATE_ABOVE)             \
+  MACRO(_NET_WM_STATE_BELOW)             \
+  MACRO(_NET_WM_STATE_DEMANDS_ATTENTION) \
+  MACRO(_GTK_FRAME_EXTENTS)
 
 #define DECLARE_ATOM(name) extern xcb_atom_t name;
 ATOMS(DECLARE_ATOM)

@@ -5,14 +5,26 @@
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <ranges>
+
 #include "drawing.hh"
+#include "font.hh"
 #include "gui_button.hh"
 #include "gui_shape_widget.hh"
 #include "key.hh"
 #include "pointer.hh"
+#include "root_widget.hh"
 #include "svg.hh"
 
+#ifdef __linux__
+#include "xcb.hh"
+#endif
+
+using namespace maf;
+
 namespace automat::library {
+
+constexpr bool kDebugWindowPicking = false;
 
 Window::Window() {}
 
@@ -46,7 +58,7 @@ struct PickButton : gui::Button {
 };
 
 struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
-  std::weak_ptr<Window> window;
+  std::weak_ptr<Window> window_weak;
 
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
@@ -57,8 +69,9 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   gui::KeyGrab* key_grab = nullptr;
 
   std::shared_ptr<PickButton> pick_button;
+  std::string window_name;
 
-  WindowWidget(std::weak_ptr<Window>&& window) : window(std::move(window)) {
+  WindowWidget(std::weak_ptr<Window>&& window) : window_weak(std::move(window)) {
     pick_button = std::make_shared<PickButton>();
     pick_button->on_activate = [this](gui::Pointer& p) {
       p.EndAction();
@@ -105,6 +118,17 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
         SkGradientShader::MakeLinear(title_points, title_colors, nullptr, 2, SkTileMode::kClamp));
     canvas.drawRect(title_rect.sk, title_paint);
 
+    auto& font = gui::GetFont();
+    SkPaint title_text_paint;
+    title_text_paint.setColor("#ffffff"_color);
+    canvas.save();
+    auto title_text_pos = title_rect.LeftCenter();
+    title_text_pos.x += kContentMargin;
+    title_text_pos.y -= font.letter_height / 2;
+    canvas.translate(title_text_pos.x, title_text_pos.y);
+    font.DrawText(canvas, window_name, title_text_paint);
+    canvas.restore();
+
     DrawChildren(canvas);
   }
 
@@ -131,6 +155,75 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   void KeyGrabberKeyDown(gui::KeyGrab&) override {
     if (pointer_grab) pointer_grab->Release();
     if (key_grab) key_grab->Release();
+  }
+  void PointerGrabberButtonDown(gui::PointerGrab& grab, gui::PointerButton) override {
+#ifdef __linux__
+    grab.Release();
+
+    xcb_window_t picked_window = XCB_WINDOW_NONE;
+    {
+      auto query_pointer_reply = xcb::query_pointer();
+      picked_window = query_pointer_reply->child;
+    }
+
+    if (kDebugWindowPicking) {
+      LOG << "Picked window: " << f("%x", picked_window);
+      LOG_Indent();
+    }
+
+    // Find the first window that has WM_STATE
+    xcb_window_t found_window = XCB_WINDOW_NONE;
+    std::deque<xcb_window_t> search_list;
+    search_list.push_back(picked_window);
+    while (!search_list.empty()) {
+      // Pick the front window, search its children and if none of them has WM_STATE, add them to
+      // the queue.
+      auto curr = search_list.front();
+      search_list.pop_front();
+      if (curr == XCB_WINDOW_NONE) {
+        continue;
+      }
+
+      if (kDebugWindowPicking) {
+        LOG << "Checking for WM_STATE: " << f("%x", curr);
+      }
+      auto property_reply = xcb::get_property(curr, xcb::atom::_NET_WM_STATE, XCB_ATOM_ANY, 0, 0);
+      if (property_reply->type != XCB_ATOM_NONE) {
+        found_window = curr;
+        if (kDebugWindowPicking) {
+          LOG << "Found!";
+        }
+        break;
+      }
+      auto query_tree_reply = xcb::query_tree(curr);
+      if (kDebugWindowPicking) {
+        LOG << "Contains " << query_tree_reply->children_len << " children";
+        LOG_Indent();
+      }
+      for (auto child : std::ranges::reverse_view(xcb::query_tree_children(*query_tree_reply))) {
+        search_list.push_back(child);
+      }
+      if (kDebugWindowPicking) {
+        LOG_Unindent();
+      }
+    }
+    if (kDebugWindowPicking) {
+      if (found_window != XCB_WINDOW_NONE) {
+        auto name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
+        LOG << "Found window: " << f("%x", found_window) << " " << name;
+      } else {
+        LOG << "No window found";
+      }
+      LOG_Unindent();
+    }
+    window_name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
+    WakeAnimation();
+    if (auto window = window_weak.lock()) {
+      window->xcb_window = found_window;
+    }
+#else
+    grab.Release();
+#endif
   }
 };
 

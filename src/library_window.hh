@@ -15,7 +15,7 @@ struct Window : public Object {
   maf::Str title = "";
 
 #ifdef __linux__
-  xcb_window_t xcb_window = 0;
+  xcb_window_t xcb_window = XCB_WINDOW_NONE;
 #endif
 
   Window();

@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "library_window.hh"
 
+#include <include/core/SkColorType.h>
+#include <include/core/SkImage.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradientShader.h>
 
@@ -15,9 +17,15 @@
 #include "pointer.hh"
 #include "root_widget.hh"
 #include "svg.hh"
+#include "textures.hh"
 
 #ifdef __linux__
+#include <sys/shm.h>
+#include <xcb/shm.h>
+
 #include "xcb.hh"
+
+#pragma comment(lib, "xcb-shm")
 #endif
 
 using namespace maf;
@@ -57,6 +65,38 @@ struct PickButton : gui::Button {
   }
 };
 
+struct XSHMCapture {
+  xcb_shm_seg_t shmseg = -1;
+  int shmid = -1;
+  std::span<char> data;
+
+  XSHMCapture() {
+    shmseg = xcb_generate_id(xcb::connection);
+    int w = xcb::screen->width_in_pixels;
+    int h = xcb::screen->height_in_pixels;
+    int size = w * h * 4;
+    shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
+
+    xcb_shm_attach(xcb::connection, shmseg, shmid, false);
+    data = std::span<char>(static_cast<char*>(shmat(shmid, nullptr, 0)), size);
+  }
+
+  ~XSHMCapture() {
+    if (shmseg != -1) {
+      xcb_shm_detach(xcb::connection, shmseg);
+      shmseg = -1;
+    }
+    if (data.data()) {
+      shmdt(data.data());
+      data = {};
+    }
+    if (shmid != -1) {
+      shmctl(shmid, IPC_RMID, NULL);
+      shmid = -1;
+    }
+  }
+};
+
 struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   std::weak_ptr<Window> window_weak;
 
@@ -70,6 +110,9 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
 
   std::shared_ptr<PickButton> pick_button;
   std::string window_name;
+  std::optional<XSHMCapture> shm_capture;
+  int capture_width = 0;
+  int capture_height = 0;
 
   WindowWidget(std::weak_ptr<Window>&& window) : window_weak(std::move(window)) {
     pick_button = std::make_shared<PickButton>();
@@ -98,6 +141,44 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
 
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds().sk); }
 
+  animation::Phase Tick(time::Timer&) override {
+    xcb_window_t xcb_window = XCB_WINDOW_NONE;
+    if (auto window = window_weak.lock()) {
+      xcb_window = window->xcb_window;
+    }
+    if (xcb_window == XCB_WINDOW_NONE) {
+      shm_capture.reset();
+      return animation::Finished;
+    }
+
+    if (!shm_capture.has_value()) {
+      shm_capture.emplace();
+    }
+
+    xcb_get_geometry_cookie_t geometry_cookie = xcb_get_geometry(xcb::connection, xcb_window);
+    std::unique_ptr<xcb_get_geometry_reply_t, xcb::FreeDeleter> geometry_reply(
+        xcb_get_geometry_reply(xcb::connection, geometry_cookie, nullptr));
+    if (!geometry_reply) {
+      return animation::Finished;
+    }
+
+    capture_width = geometry_reply->width;
+    capture_height = geometry_reply->height;
+    auto cookie =
+        xcb_shm_get_image(xcb::connection, xcb_window, 0, 0, capture_width, capture_height, ~0,
+                          XCB_IMAGE_FORMAT_Z_PIXMAP, shm_capture->shmseg, 0);
+
+    std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
+        xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
+
+    int n = capture_width * capture_height;
+    for (int i = 0; i < n; ++i) {
+      shm_capture->data[i * 4 + 3] = 0xff;
+    }
+
+    return animation::Animating;
+  }
+
   void Draw(SkCanvas& canvas) const override {
     auto outer_rrect = CoarseBounds();
     auto border_inner = outer_rrect.Outset(-kBorderWidth);
@@ -109,8 +190,8 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     canvas.drawDRRect(outer_rrect.sk, border_inner.sk, border_paint);
 
     auto contents_rrect = border_inner.Outset(-kContentMargin);
-    Rect title_rect = Rect(contents_rrect.rect.left, contents_rrect.rect.top - kTitleHeight,
-                           contents_rrect.rect.right, contents_rrect.rect.top);
+    Rect title_rect = contents_rrect.rect.CutTop(kTitleHeight);
+    contents_rrect.rect.top -= kContentMargin;
     SkPaint title_paint;
     SkColor title_colors[] = {"#0654cb"_color, "#030058"_color};
     SkPoint title_points[] = {title_rect.TopLeftCorner(), title_rect.TopRightCorner()};
@@ -128,6 +209,23 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     canvas.translate(title_text_pos.x, title_text_pos.y);
     font.DrawText(canvas, window_name, title_text_paint);
     canvas.restore();
+
+    if (shm_capture.has_value()) {
+      auto& capture = shm_capture.value();
+      auto data = SkData::MakeWithoutCopy(capture.data.data(), capture.data.size());
+      auto image_info = SkImageInfo::Make(capture_width, capture_height, kBGRA_8888_SkColorType,
+                                          SkAlphaType::kPremul_SkAlphaType);
+      auto image = SkImages::RasterFromData(image_info, data, capture_width * 4);
+      canvas.save();
+      SkRect image_rect = SkRect::Make(image->bounds());
+      auto m = SkMatrix::RectToRect(image_rect, contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
+      m.preTranslate(0, capture_height / 2.f);
+      m.preScale(1, -1);
+      m.preTranslate(0, -capture_height / 2.f);
+      canvas.concat(m);
+      canvas.drawImage(image, 0, 0, kFastSamplingOptions, nullptr);
+      canvas.restore();
+    }
 
     DrawChildren(canvas);
   }
@@ -187,7 +285,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       if (kDebugWindowPicking) {
         LOG << "Checking for WM_STATE: " << f("%x", curr);
       }
-      auto property_reply = xcb::get_property(curr, xcb::atom::_NET_WM_STATE, XCB_ATOM_ANY, 0, 0);
+      auto property_reply = xcb::get_property(curr, xcb::atom::WM_STATE, XCB_ATOM_ANY, 0, 0);
       if (property_reply->type != XCB_ATOM_NONE) {
         found_window = curr;
         if (kDebugWindowPicking) {

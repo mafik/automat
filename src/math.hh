@@ -314,6 +314,14 @@ union Rect {
     return point.x >= left && point.x <= right && point.y >= bottom && point.y <= top;
   }
 
+  // Cut off and return the top of the rectangle.
+  constexpr Rect CutTop(float height) {
+    Rect ret = *this;
+    top -= height;
+    ret.bottom = top;
+    return ret;
+  }
+
   void ExpandToInclude(Vec2 point) {
     left = std::min(left, point.x);
     right = std::max(right, point.x);

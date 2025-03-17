@@ -185,8 +185,12 @@ std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& 
                       XCB_ATOM_STRING, 8, sizeof(automat::gui::kWindowName),
                       automat::gui::kWindowName);
 
-  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, atom::WM_PROTOCOLS, 4,
-                      32, 1, &atom::WM_DELETE_WINDOW);
+  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, atom::WM_PROTOCOLS,
+                      XCB_ATOM_ATOM, 32, 1, &atom::WM_DELETE_WINDOW);
+
+  // Setting user time to 0 indicates that the window wasn't created as a result of a user action
+  // and prevents window activation.
+  ReplaceProperty32(window->xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, 0);
 
   xcb_map_window(connection, window->xcb_window);
 
@@ -450,9 +454,7 @@ void XCBWindow::MainLoop() {
           // window manager are correct. Querying the position from geometry also returns the
           // wrong position. The only way to get the correct on-screen position that was found to
           // be reliable was to translate the point 0, 0 to root window coordinates.
-          xcb_translate_coordinates_reply_t* reply = xcb_translate_coordinates_reply(
-              connection, xcb_translate_coordinates(connection, xcb_window, screen->root, 0, 0),
-              nullptr);
+          auto reply = xcb::translate_coordinates(xcb_window, screen->root, 0, 0);
           window_position_on_screen.x = reply->dst_x;
           window_position_on_screen.y = reply->dst_y;
 
@@ -531,7 +533,9 @@ void XCBWindow::MainLoop() {
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
-                automat::gui::keyboard->KeyDown(*(xcb_input_key_press_event_t*)event);
+                auto ev = (xcb_input_key_press_event_t*)event;
+                ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
+                automat::gui::keyboard->KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_RAW_KEY_RELEASE: {
@@ -548,6 +552,7 @@ void XCBWindow::MainLoop() {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
+                ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
                 auto lock = Lock();
                 GetMouse().ButtonDown(EventDetailToButton(ev->detail));
                 break;
@@ -698,6 +703,11 @@ void XCBWindow::MainLoop() {
               automat::gui::keyboard->KeyUp(*(xcb_input_key_release_event_t*)event);
             }
           }
+          break;
+        }
+        case 0: {
+          xcb_generic_error_t* error = (xcb_generic_error_t*)event;
+          LOG << "XCB Error: " << dump_struct(*error);
           break;
         }
         default:

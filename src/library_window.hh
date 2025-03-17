@@ -18,6 +18,11 @@ struct Window : public Object {
   xcb_window_t xcb_window = XCB_WINDOW_NONE;
 #endif
 
+  float x_min_ratio = 0.25f;
+  float x_max_ratio = 0.75f;
+  float y_min_ratio = 0.25f;
+  float y_max_ratio = 0.75f;
+
   Window();
 
   std::string_view Name() const override;

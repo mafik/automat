@@ -60,6 +60,11 @@ union Vec2 {
   constexpr Vec2 operator/(float rhs) const { return Vec2(x / rhs, y / rhs); }
   constexpr Vec2 operator*(Vec2 other) const { return Vec2(x * other.x, y * other.y); }
   constexpr Vec2 operator/(Vec2 other) const { return Vec2(x / other.x, y / other.y); }
+  constexpr Vec2& operator/=(Vec2 other) {
+    x /= other.x;
+    y /= other.y;
+    return *this;
+  }
   constexpr operator SkPoint() const { return sk; }
   constexpr bool operator==(const Vec2& rhs) const { return x == rhs.x && y == rhs.y; }
   constexpr bool operator!=(const Vec2& rhs) const { return !(*this == rhs); }

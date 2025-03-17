@@ -102,9 +102,8 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
 
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
-  constexpr static float kDefaultHeight = 5_cm;
+  constexpr static float kHeight = 5_cm;
 
-  float height = kDefaultHeight;
   gui::PointerGrab* pointer_grab = nullptr;
   gui::KeyGrab* key_grab = nullptr;
 
@@ -135,9 +134,12 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     pick_button->local_to_parent = SkM44::Translate(pos.x, pos.y);
   }
 
-  RRect CoarseBounds() const override {
-    return RRect::MakeSimple(Rect::MakeAtZero({kWidth, height}), kCornerRadius);
-  }
+  constexpr static RRect kCoarseBounds =
+      RRect::MakeSimple(Rect::MakeAtZero({kWidth, kHeight}), kCornerRadius);
+  constexpr static RRect kBorderInner = kCoarseBounds.Outset(-kBorderWidth);
+  constexpr static float kRegionStrokeWidth = 1_mm;
+
+  RRect CoarseBounds() const override { return kCoarseBounds; }
 
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds().sk); }
 
@@ -195,31 +197,64 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     return animation::Animating;
   }
 
+  struct LayoutData {
+    RRect contents_rrect;
+    Rect title_rect;
+    Rect full_region_rect;
+    Rect region_rect;
+    SkMatrix image_matrix;
+  };
+
+  LayoutData Layout() const {
+    LayoutData l = {};
+    l.contents_rrect = kBorderInner.Outset(-kContentMargin);
+    l.title_rect = l.contents_rrect.rect.CutTop(kTitleHeight);
+    l.contents_rrect.rect.top -= kContentMargin;
+    if (capture_height > 0 || capture_width > 0) {
+      SkRect image_rect = SkRect::Make(SkISize{capture_width, capture_height});
+      l.image_matrix =
+          SkMatrix::RectToRect(image_rect, l.contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
+      l.image_matrix.preTranslate(0, capture_height / 2.f);
+      l.image_matrix.preScale(1, -1);
+      l.image_matrix.preTranslate(0, -capture_height / 2.f);
+      l.full_region_rect = image_rect;
+      l.image_matrix.mapRect(&l.full_region_rect.sk);
+    } else {
+      l.full_region_rect = l.contents_rrect.rect;
+    }
+    if (auto window = window_weak.lock()) {
+      l.region_rect =
+          Rect(lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_min_ratio),
+               lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_min_ratio),
+               lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_max_ratio),
+               lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_max_ratio));
+    }
+    l.region_rect = l.region_rect.Outset(kRegionStrokeWidth / 2);
+    return l;
+  }
+
   void Draw(SkCanvas& canvas) const override {
-    auto outer_rrect = CoarseBounds();
-    auto border_inner = outer_rrect.Outset(-kBorderWidth);
     SkPaint inner_paint;
     inner_paint.setColor("#c0c0c0"_color);
-    canvas.drawRRect(border_inner.sk, inner_paint);
+    canvas.drawRRect(kBorderInner.sk, inner_paint);
     SkPaint border_paint;
-    SetRRectShader(border_paint, border_inner, "#e7e5e2"_color, "#9b9b9b"_color, "#3b3b3b"_color);
-    canvas.drawDRRect(outer_rrect.sk, border_inner.sk, border_paint);
+    SetRRectShader(border_paint, kBorderInner, "#e7e5e2"_color, "#9b9b9b"_color, "#3b3b3b"_color);
+    canvas.drawDRRect(kCoarseBounds.sk, kBorderInner.sk, border_paint);
 
-    auto contents_rrect = border_inner.Outset(-kContentMargin);
-    Rect title_rect = contents_rrect.rect.CutTop(kTitleHeight);
-    contents_rrect.rect.top -= kContentMargin;
+    auto layout = Layout();
     SkPaint title_paint;
     SkColor title_colors[] = {"#0654cb"_color, "#030058"_color};
-    SkPoint title_points[] = {title_rect.TopLeftCorner(), title_rect.TopRightCorner()};
+    SkPoint title_points[] = {layout.title_rect.TopLeftCorner(),
+                              layout.title_rect.TopRightCorner()};
     title_paint.setShader(
         SkGradientShader::MakeLinear(title_points, title_colors, nullptr, 2, SkTileMode::kClamp));
-    canvas.drawRect(title_rect.sk, title_paint);
+    canvas.drawRect(layout.title_rect.sk, title_paint);
 
     auto& font = gui::GetFont();
     SkPaint title_text_paint;
     title_text_paint.setColor("#ffffff"_color);
     canvas.save();
-    auto title_text_pos = title_rect.LeftCenter();
+    auto title_text_pos = layout.title_rect.LeftCenter();
     title_text_pos.x += kContentMargin;
     title_text_pos.y -= font.letter_height / 2;
     canvas.translate(title_text_pos.x, title_text_pos.y);
@@ -234,25 +269,155 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       auto image = SkImages::RasterFromPixmap(
           pixmap, [](const void* pixels, SkImages::ReleaseContext) {}, nullptr);
       canvas.save();
-      SkRect image_rect = SkRect::Make(image->bounds());
-      auto m = SkMatrix::RectToRect(image_rect, contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
-      m.preTranslate(0, capture_height / 2.f);
-      m.preScale(1, -1);
-      m.preTranslate(0, -capture_height / 2.f);
-      canvas.concat(m);
+      canvas.concat(layout.image_matrix);
       canvas.drawImage(image, 0, 0, kFastSamplingOptions, nullptr);
       canvas.restore();
     }
 
+    SkPaint region_paint;
+    region_paint.setColor("#ff0000"_color);
+    region_paint.setStyle(SkPaint::kStroke_Style);
+    region_paint.setStrokeWidth(kRegionStrokeWidth);
+    region_paint.setAntiAlias(true);
+    region_paint.setAlphaf(0.5f);
+
+    canvas.drawRect(layout.region_rect.sk, region_paint);
+
     DrawChildren(canvas);
   }
 
+  enum DragRegionPart {
+    kDragRegionPart_XMin = 1 << 0,
+    kDragRegionPart_XMax = 1 << 1,
+    kDragRegionPart_YMin = 1 << 2,
+    kDragRegionPart_YMax = 1 << 3,
+    kDragRegionPart_X = kDragRegionPart_XMin | kDragRegionPart_XMax,
+    kDragRegionPart_Y = kDragRegionPart_YMin | kDragRegionPart_YMax,
+  };
+
+  // Drags the whole region around
+  struct DragRegionAction : Action {
+    std::shared_ptr<WindowWidget> widget;
+    Vec2 contact_point;
+    uint32_t drag_region_mask = 0;
+    DragRegionAction(gui::Pointer& pointer, std::shared_ptr<WindowWidget>&& widget)
+        : Action(pointer), widget(std::move(widget)) {}
+    virtual ~DragRegionAction() = default;
+    virtual void Begin() {
+      contact_point = pointer.PositionWithin(*widget);
+      auto layout = widget->Layout();
+      auto inner_region_rect = layout.region_rect.Outset(-kRegionStrokeWidth / 2);
+      if (contact_point.x < inner_region_rect.right) {
+        drag_region_mask |= kDragRegionPart_XMin;
+      }
+      if (contact_point.x > inner_region_rect.left) {
+        drag_region_mask |= kDragRegionPart_XMax;
+      }
+      if (contact_point.y < inner_region_rect.top) {
+        drag_region_mask |= kDragRegionPart_YMin;
+      }
+      if (contact_point.y > inner_region_rect.bottom) {
+        drag_region_mask |= kDragRegionPart_YMax;
+      }
+      // Dragging on the border produces a weird mask that affects three coordinates.
+      // When this happens, we disable the drag on the axis where both are enabled and turn this
+      // into a resize.
+      if (std::popcount(drag_region_mask) == 3) {
+        if ((drag_region_mask & kDragRegionPart_X) == kDragRegionPart_X) {
+          drag_region_mask &= ~kDragRegionPart_X;
+        }
+        if ((drag_region_mask & kDragRegionPart_Y) == kDragRegionPart_Y) {
+          drag_region_mask &= ~kDragRegionPart_Y;
+        }
+      }
+    }
+    virtual void Update() {
+      Vec2 new_position = pointer.PositionWithin(*widget);
+      Vec2 d = new_position - contact_point;
+      contact_point = new_position;
+      auto layout = widget->Layout();
+      d /= layout.full_region_rect.Size();
+
+      if (auto window = widget->window_weak.lock()) {
+        // Shift X
+        if (drag_region_mask & kDragRegionPart_XMin) {
+          window->x_min_ratio += d.x;
+        }
+        if (drag_region_mask & kDragRegionPart_XMax) {
+          window->x_max_ratio += d.x;
+        }
+        // Enforce x_min <= x_max
+        if (window->x_min_ratio > window->x_max_ratio) {
+          if (drag_region_mask & kDragRegionPart_XMin) {
+            window->x_min_ratio = window->x_max_ratio;
+          } else {
+            window->x_max_ratio = window->x_min_ratio;
+          }
+        }
+        // Enforce x_max <= 1
+        if (window->x_max_ratio > 1) {
+          if (drag_region_mask & kDragRegionPart_XMin) {
+            window->x_min_ratio -= window->x_max_ratio - 1;
+          }
+          window->x_max_ratio = 1;
+        }
+        // Enforce x_min >= 0
+        if (window->x_min_ratio < 0) {
+          if (drag_region_mask & kDragRegionPart_XMax) {
+            window->x_max_ratio -= window->x_min_ratio;
+          }
+          window->x_min_ratio = 0;
+        }
+
+        // Shift Y
+        if (drag_region_mask & kDragRegionPart_YMin) {
+          window->y_min_ratio += d.y;
+        }
+        if (drag_region_mask & kDragRegionPart_YMax) {
+          window->y_max_ratio += d.y;
+        }
+        // Enforce y_min <= y_max
+        if (window->y_min_ratio > window->y_max_ratio) {
+          if (drag_region_mask & kDragRegionPart_YMin) {
+            window->y_min_ratio = window->y_max_ratio;
+          } else {
+            window->y_max_ratio = window->y_min_ratio;
+          }
+        }
+        // Enforce y_max <= 1
+        if (window->y_max_ratio > 1) {
+          if (drag_region_mask & kDragRegionPart_YMin) {
+            window->y_min_ratio -= window->y_max_ratio - 1;
+          }
+          window->y_max_ratio = 1;
+        }
+        // Enforce y_min >= 0
+        if (window->y_min_ratio < 0) {
+          if (drag_region_mask & kDragRegionPart_YMax) {
+            window->y_max_ratio -= window->y_min_ratio;
+          }
+          window->y_min_ratio = 0;
+        }
+      }
+      widget->WakeAnimation();
+    }
+    virtual void End() {}
+    virtual gui::Widget* Widget() { return nullptr; }
+  };
+
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override {
     if (btn == gui::PointerButton::Left) {
+      auto contact_point = p.PositionWithin(*this);
+
+      auto layout = Layout();
+      auto outer_region_rect = layout.region_rect.Outset(kRegionStrokeWidth / 2);
+      if (outer_region_rect.Contains(contact_point)) {
+        return std::make_unique<DragRegionAction>(p, SharedPtr());
+      }
+
       auto* location = Closest<Location>(*p.hover);
       auto* machine = Closest<Machine>(*p.hover);
       if (location && machine) {
-        auto contact_point = p.PositionWithin(*this);
         auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
         a->contact_point = contact_point;
         return a;

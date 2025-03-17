@@ -28,15 +28,22 @@ def extract_tar_gz(archive : Path, output : Path):
   import tarfile
   import os
   import shutil
-  
-  os.makedirs(output.parent, exist_ok=True)
+
+  tmp_dir = output / 'tmp'
+  os.makedirs(tmp_dir, exist_ok=True)
 
   tar = tarfile.open(archive, 'r:gz')
-  root = tar.next()
-  tar.extractall(output.parent)
-  shutil.move(output.parent / root.name, output)
+  tar.extractall(tmp_dir)
+  children = list(tmp_dir.iterdir())
 
-  
+  # if the archive contained a single directory, move its contents to the output
+  if len(children) == 1 and children[0].is_dir():
+    children = list(children[0].iterdir())
+  for child in children:
+    shutil.move(child, output)
+
+  shutil.rmtree(tmp_dir)
+
 
 class ExtensionHelper:
   '''

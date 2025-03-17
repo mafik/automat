@@ -155,9 +155,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       shm_capture.emplace();
     }
 
-    xcb_get_geometry_cookie_t geometry_cookie = xcb_get_geometry(xcb::connection, xcb_window);
-    std::unique_ptr<xcb_get_geometry_reply_t, xcb::FreeDeleter> geometry_reply(
-        xcb_get_geometry_reply(xcb::connection, geometry_cookie, nullptr));
+    auto geometry_reply = xcb::get_geometry(xcb_window);
     if (!geometry_reply) {
       return animation::Finished;
     }

@@ -158,8 +158,8 @@ void MouseClick::OnRun(Location& location) {
 #if defined(__linux__)
   U8 type = down ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE;
   U8 detail = button == gui::PointerButton::Left ? 1 : 3;
-  xcb_test_fake_input(xcb::connection, type, detail, XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0);
-  xcb_flush(xcb::connection);
+  xcb_test_fake_input(xcb::connection, type, detail, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
+  xcb::flush();
 #endif
 }
 

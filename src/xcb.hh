@@ -20,6 +20,8 @@ namespace atom {
   MACRO(WM_STATE)                        \
   MACRO(WM_PROTOCOLS)                    \
   MACRO(WM_DELETE_WINDOW)                \
+  MACRO(_NET_ACTIVE_WINDOW)              \
+  MACRO(_NET_WM_USER_TIME)               \
   MACRO(_NET_WM_STATE)                   \
   MACRO(_NET_WM_STATE_MODAL)             \
   MACRO(_NET_WM_STATE_STICKY)            \
@@ -48,6 +50,8 @@ void Connect(maf::Status& status);
 struct FreeDeleter {
   void operator()(void* p) const { free(p); }
 };
+
+inline void flush() { xcb_flush(connection); }
 
 inline std::unique_ptr<xcb_input_xi_query_device_reply_t, FreeDeleter> input_xi_query_device(
     xcb_input_device_id_t deviceid) {
@@ -93,5 +97,42 @@ inline std::unique_ptr<xcb_get_property_reply_t, FreeDeleter> get_property(xcb_w
 // A helper for reading properties that can be encoded as arbitrary types and could have arbitrary
 // lengths.
 std::string GetPropertyString(xcb_window_t window, xcb_atom_t property);
+
+inline std::unique_ptr<xcb_get_geometry_reply_t, xcb::FreeDeleter> get_geometry(
+    xcb_window_t window) {
+  return std::unique_ptr<xcb_get_geometry_reply_t, xcb::FreeDeleter>(
+      xcb_get_geometry_reply(connection, xcb_get_geometry(connection, window), nullptr));
+}
+
+inline std::unique_ptr<xcb_translate_coordinates_reply_t, xcb::FreeDeleter> translate_coordinates(
+    xcb_window_t src_window, xcb_window_t dst_window, int16_t src_x, int16_t src_y) {
+  return std::unique_ptr<xcb_translate_coordinates_reply_t, xcb::FreeDeleter>(
+      xcb_translate_coordinates_reply(
+          connection, xcb_translate_coordinates(connection, src_window, dst_window, src_x, src_y),
+          nullptr));
+}
+
+inline std::unique_ptr<xcb_get_window_attributes_reply_t, xcb::FreeDeleter> get_window_attributes(
+    xcb_window_t window) {
+  return std::unique_ptr<xcb_get_window_attributes_reply_t, xcb::FreeDeleter>(
+      xcb_get_window_attributes_reply(connection, xcb_get_window_attributes(connection, window),
+                                      nullptr));
+}
+
+inline std::unique_ptr<xcb_get_input_focus_reply_t, xcb::FreeDeleter> get_input_focus() {
+  return std::unique_ptr<xcb_get_input_focus_reply_t, xcb::FreeDeleter>(
+      xcb_get_input_focus_reply(connection, xcb_get_input_focus(connection), nullptr));
+}
+
+void ReplaceProperty32(xcb_window_t window, xcb_atom_t property, xcb_atom_t type, uint32_t value);
+
+namespace freedesktop {
+
+// Activate the target `window` by sending a _NET_ACTIVE_WINDOW event to the root window.
+//
+// If `active_window` is provided, it will be used as the active window in the event. This may
+// make the window manager more compliant.
+void ActivateWindow(xcb_window_t window, xcb_window_t active_window = XCB_WINDOW_NONE);
+}  // namespace freedesktop
 
 }  // namespace xcb

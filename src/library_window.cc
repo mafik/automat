@@ -6,16 +6,21 @@
 #include <include/core/SkImage.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradientShader.h>
+#include <leptonica/allheaders.h>
+#include <leptonica/pix.h>
+#include <tesseract/baseapi.h>
 
 #include <ranges>
 
 #include "drawing.hh"
+#include "embedded.hh"
 #include "font.hh"
 #include "gui_button.hh"
 #include "gui_shape_widget.hh"
 #include "key.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
+#include "str.hh"
 #include "svg.hh"
 #include "textures.hh"
 
@@ -113,6 +118,9 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   int capture_width = 0;
   int capture_height = 0;
 
+  std::unique_ptr<tesseract::TessBaseAPI> tesseract;
+  std::string tesseract_text;
+
   WindowWidget(std::weak_ptr<Window>&& window) : window_weak(std::move(window)) {
     pick_button = std::make_shared<PickButton>();
     pick_button->on_activate = [this](gui::Pointer& p) {
@@ -132,6 +140,13 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     pos.x -= kTitleButtonSize + kContentMargin;
     pos.y -= kTitleButtonSize / 2;
     pick_button->local_to_parent = SkM44::Translate(pos.x, pos.y);
+
+    tesseract = std::make_unique<tesseract::TessBaseAPI>();
+    auto eng_traineddata = embedded::assets_eng_traineddata.content;
+    if (tesseract->Init(eng_traineddata.data(), eng_traineddata.size(), "eng",
+                        tesseract::OEM_LSTM_ONLY, nullptr, 0, nullptr, nullptr, true, nullptr)) {
+      LOG << "Tesseract init failed";
+    }
   }
 
   constexpr static RRect kCoarseBounds =
@@ -145,6 +160,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
 
   animation::Phase Tick(time::Timer&) override {
     xcb_window_t xcb_window = XCB_WINDOW_NONE;
+    tesseract_text.clear();
     if (auto window = window_weak.lock()) {
       xcb_window = window->xcb_window;
     }
@@ -192,6 +208,47 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       for (int i = 0; i < n; ++i) {
         shm_capture->data[i * 4 + 3] = 0xff;
       }
+    }
+
+    if (capture_height > 0 && capture_width > 0) {
+      auto pix = pixCreate(capture_width, capture_height, 32);
+      uint32_t* data = pixGetData(pix);
+      int n = capture_width * capture_height;
+      for (int i = 0; i < n; ++i) {
+        data[i] = (shm_capture->data[i * 4] << 8) | (shm_capture->data[i * 4 + 1] << 16) |
+                  (shm_capture->data[i * 4 + 2] << 24) | (shm_capture->data[i * 4 + 3]);
+      }
+
+      int left = 0, top = 0, width = 0, height = 0;
+      if (auto window = window_weak.lock()) {
+        left = window->x_min_ratio * capture_width;
+        top = (1 - window->y_max_ratio) * capture_height;
+        width = capture_width * (window->x_max_ratio - window->x_min_ratio);
+        height = capture_height * (window->y_max_ratio - window->y_min_ratio);
+      }
+
+      if (width > 0 && height > 0) {
+        tesseract->SetImage(pix);
+        tesseract->SetRectangle(left, top, width, height);  // SetRectangle must come after SetImage
+        int recognize_status = tesseract->Recognize(nullptr);
+        if (recognize_status) {
+          LOG << "Tesseract recognize failed: " << recognize_status;
+        }
+        tesseract_text = tesseract->GetUTF8Text();
+        StripTrailingWhitespace(tesseract_text);
+
+        if constexpr (false) {  // write to "out.bmp"
+          std::unique_ptr<uint8_t[], xcb::FreeDeleter> bmp;
+          size_t size;
+          pixWriteMemBmp(std::out_ptr(bmp), &size, pix);
+
+          FILE* f = fopen("out.bmp", "wb");
+          fwrite(bmp.get(), 1, size, f);
+          fclose(f);
+        }
+      }
+
+      pixDestroy(&pix);
     }
 
     return animation::Animating;
@@ -282,6 +339,29 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     region_paint.setAlphaf(0.5f);
 
     canvas.drawRect(layout.region_rect.sk, region_paint);
+
+    float text_width = font.MeasureText(tesseract_text);
+    float scale_x = 1;
+    if (text_width > layout.contents_rrect.rect.Width()) {
+      scale_x = layout.contents_rrect.rect.Width() / text_width;
+    }
+    canvas.save();
+    auto text_pos = layout.contents_rrect.rect.TopLeftCorner();
+    text_pos.x += kContentMargin;
+    text_pos.y -= kContentMargin + font.letter_height;
+    canvas.translate(text_pos.x, text_pos.y);
+    if (scale_x != 1) {
+      canvas.scale(scale_x, 1);
+    }
+
+    SkPaint outline_paint;
+    outline_paint.setColor("#000000"_color);
+    outline_paint.setStyle(SkPaint::kStroke_Style);
+    outline_paint.setStrokeWidth(1_mm / font.font_scale);
+    font.DrawText(canvas, tesseract_text, outline_paint);
+    font.DrawText(canvas, tesseract_text, title_text_paint);
+
+    canvas.restore();
 
     DrawChildren(canvas);
   }

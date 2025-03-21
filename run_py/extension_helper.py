@@ -91,6 +91,7 @@ class ExtensionHelper:
     self.fetch_filename = None
     self.include_regex = None
     self.skip_configure = False
+    self.configure_input_func = None
 
   def _hook_recipe(self, recipe):
 
@@ -140,13 +141,22 @@ class ExtensionHelper:
 
     for build_type in build.types:
       build_dir = build_type.BASE() / self.name
+
+      extra_configure_inputs = [self.module_globals['__file__']]
+      if self.configure_input_func:
+        extra = self.configure_input_func(build_type)
+        if isinstance(extra, list):
+          extra_configure_inputs += extra
+        else:
+          extra_configure_inputs.append(extra)
+
       if self.configure == 'cmake':
         cmake_args = cmake.CMakeArgs(build_type, self.configure_opts)
         recipe.add_step(
             partial(Popen, cmake_args +
                               ['-S', str(self.src_dir).replace('\\', '/'), '-B', str(build_dir).replace('\\', '/')]),
             outputs=[build_dir / 'build.ninja'],
-            inputs=self.beam[''] + [self.module_globals['__file__']],
+            inputs=self.beam[''] + extra_configure_inputs,
             desc=f'Configuring {self.name} {build_type}'.strip(),
             shortcut=f'configure {self.name} {build_type}'.strip())
         
@@ -162,7 +172,7 @@ class ExtensionHelper:
         recipe.add_step(
           partial(Popen, meson_args),
           outputs=[build_dir / 'build.ninja'],
-          inputs=self.beam[''],
+          inputs=self.beam[''] + extra_configure_inputs,
           desc=f'Configuring {self.name} {build_type}',
           shortcut=f'configure {self.name} {build_type}')
       else:
@@ -204,7 +214,12 @@ class ExtensionHelper:
         self.install_bins.add(bin)
         bin.link_args += self.link_args
         bin.run_args += self.run_args
-    
+
+  '''Can be used to delay the configure step until some other files are ready.
+  
+  depends_on_func is a function that takes a BuildType and returns a list of files to wait for'''
+  def ConfigureDependsOn(self, depends_on_func):
+    self.configure_input_func = depends_on_func
 
   def FetchFromGit(self, git_url, git_tag):
     if self.git_url:

@@ -33,7 +33,6 @@ struct Button : Widget {
   animation::Phase Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
-  float Height() const;
   virtual SkRRect RRect() const;
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;

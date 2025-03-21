@@ -42,17 +42,6 @@ constexpr float kRadius = kMinimalTouchableSize / 2;
 
 }  // namespace
 
-float Button::Height() const {
-  SkRect child_bounds = ChildBounds();
-  if (child->CenteredAtZero()) {
-    return std::max(
-        kMinimalTouchableSize,
-        std::max(abs(child_bounds.bottom()), abs(child_bounds.top())) * 2 + 2 * kMargin);
-  } else {
-    return std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
-  }
-}
-
 SkRRect Button::RRect() const {
   SkRect child_bounds = ChildBounds();
   float w, h;
@@ -279,6 +268,6 @@ void Button::UpdateChildTransform() {
   if (!child->CenteredAtZero()) {
     offset -= ChildBounds().center();
   }
-  child->local_to_parent = SkM44::Translate(offset.x, offset.y);
+  child->local_to_parent.preConcat(SkM44::Translate(offset.x, offset.y));
 }
 }  // namespace automat::gui

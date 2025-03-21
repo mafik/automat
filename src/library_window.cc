@@ -23,6 +23,7 @@
 #include "str.hh"
 #include "svg.hh"
 #include "textures.hh"
+#include "theme_xp.hh"
 
 #ifdef __linux__
 #include <sys/shm.h>
@@ -45,21 +46,25 @@ std::string_view Window::Name() const { return "Window"; }
 
 std::shared_ptr<Object> Window::Clone() const { return std::make_shared<Window>(*this); }
 
-const SkMatrix kCenterPickIcon = SkMatrix::Translate(-1_mm, 0);
+const SkMatrix kCenterPickIcon = SkMatrix::Translate(-2.5_mm, -1_mm);
 
-constexpr static float kBorderWidth = 0.5_mm;    // width of the border
-constexpr static float kContentMargin = 0.5_mm;  // margin between the border and the content
-constexpr static float kTitleHeight = 8_mm;      // height of the title bar
+constexpr static float kBorderWidth = theme::xp::kBorderWidth;  // width of the border
+constexpr static float kContentMargin =
+    theme::xp::kBorderWidth;  // margin between the border and the content
+constexpr static float kTitleHeight = theme::xp::kTitleBarHeight;  // height of the title bar
 constexpr static float kTitleButtonSize = kTitleHeight - 2 * kContentMargin;
 
 struct WindowWidget;
 
 struct PickButton : gui::Button {
   std::function<void(gui::Pointer&)> on_activate;
-  PickButton() : gui::Button(gui::MakeShapeWidget(kPickSVG, "#000000"_color, &kCenterPickIcon)) {}
+  PickButton() : gui::Button(gui::MakeShapeWidget(kPickSVG, "#000000"_color, &kCenterPickIcon)) {
+    child->local_to_parent.preTranslate(-0.2_mm, -0.2_mm);
+  }
+  // float Height() const override { return kTitleButtonSize; }
   SkRRect RRect() const override {
     return RRect::MakeSimple(
-               Rect::MakeAtZero<::LeftX, ::BottomY>({kTitleButtonSize, kTitleButtonSize}), 1_mm)
+               Rect::MakeAtZero<::LeftX, ::BottomY>({kTitleButtonSize, kTitleButtonSize}), 2_mm)
         .sk;
   }
   SkColor BackgroundColor() const override { return "#d0d0d0"_color; }
@@ -132,9 +137,9 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
                                                if (key_grab) key_grab->Release();
                                              });
     };
-    auto content_bounds = CoarseBounds().Outset(-kBorderWidth - kContentMargin);
-    auto title_bounds = Rect(content_bounds.rect.left, content_bounds.rect.top - kTitleHeight,
-                             content_bounds.rect.right, content_bounds.rect.top);
+    auto content_bounds = kCoarseBounds.Outset(-kBorderWidth - kContentMargin);
+    auto title_bounds = Rect(kCoarseBounds.rect.left, kCoarseBounds.rect.top - kTitleHeight,
+                             kCoarseBounds.rect.right, kCoarseBounds.rect.top);
 
     auto pos = title_bounds.RightCenter();
     pos.x -= kTitleButtonSize + kContentMargin;
@@ -264,9 +269,10 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
 
   LayoutData Layout() const {
     LayoutData l = {};
+    l.title_rect = Rect(kCoarseBounds.rect.left, kCoarseBounds.rect.top - kTitleHeight,
+                        kCoarseBounds.rect.right, kCoarseBounds.rect.top);
     l.contents_rrect = kBorderInner.Outset(-kContentMargin);
-    l.title_rect = l.contents_rrect.rect.CutTop(kTitleHeight);
-    l.contents_rrect.rect.top -= kContentMargin;
+    l.contents_rrect.rect.top = l.title_rect.bottom - kContentMargin;
     if (capture_height > 0 || capture_width > 0) {
       SkRect image_rect = SkRect::Make(SkISize{capture_width, capture_height});
       l.image_matrix =
@@ -291,21 +297,10 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    SkPaint inner_paint;
-    inner_paint.setColor("#c0c0c0"_color);
-    canvas.drawRRect(kBorderInner.sk, inner_paint);
-    SkPaint border_paint;
-    SetRRectShader(border_paint, kBorderInner, "#e7e5e2"_color, "#9b9b9b"_color, "#3b3b3b"_color);
-    canvas.drawDRRect(kCoarseBounds.sk, kBorderInner.sk, border_paint);
-
     auto layout = Layout();
-    SkPaint title_paint;
-    SkColor title_colors[] = {"#0654cb"_color, "#030058"_color};
-    SkPoint title_points[] = {layout.title_rect.TopLeftCorner(),
-                              layout.title_rect.TopRightCorner()};
-    title_paint.setShader(
-        SkGradientShader::MakeLinear(title_points, title_colors, nullptr, 2, SkTileMode::kClamp));
-    canvas.drawRect(layout.title_rect.sk, title_paint);
+
+    auto vertices = theme::xp::WindowBorder(kCoarseBounds.rect);
+    canvas.drawVertices(vertices, SkBlendMode::kDst, SkPaint());
 
     auto& font = gui::GetFont();
     SkPaint title_text_paint;

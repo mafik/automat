@@ -271,8 +271,8 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     LayoutData l = {};
     l.title_rect = Rect(kCoarseBounds.rect.left, kCoarseBounds.rect.top - kTitleHeight,
                         kCoarseBounds.rect.right, kCoarseBounds.rect.top);
-    l.contents_rrect = kBorderInner.Outset(-kContentMargin);
-    l.contents_rrect.rect.top = l.title_rect.bottom - kContentMargin;
+    l.contents_rrect = kBorderInner;
+    l.contents_rrect.rect.top = l.title_rect.bottom;
     if (capture_height > 0 || capture_width > 0) {
       SkRect image_rect = SkRect::Make(SkISize{capture_width, capture_height});
       l.image_matrix =

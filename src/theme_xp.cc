@@ -3,10 +3,14 @@
 
 #include "theme_xp.hh"
 
+#include <include/core/SkBlurTypes.h>
+#include <include/core/SkColor.h>
+#include <include/effects/SkGradientShader.h>
+
 #include <algorithm>
 
 #include "color.hh"
-#include "include/core/SkColor.h"
+#include "math.hh"
 
 using namespace maf;
 namespace automat::theme::xp {
@@ -377,4 +381,45 @@ sk_sp<SkVertices> WindowBorder(Rect outer) {
   return builder.detach();
 }
 
+void TitleButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
+  union RRect oval = {.sk = RRect()};
+  float press_shift_y = PressRatio() * -kPressOffset;
+  auto pressed_oval = oval.sk.makeOffset(0, press_shift_y);
+  float lightness_adjust = animation_state.highlight * 5;
+  Vec2 gradient_center = oval.rect.TopCenter() + Vec2(0, -0.5_mm);
+  float gradient_radius = oval.rect.Height();
+
+  {  // gradient
+    SkPaint paint;
+    SkColor colors[2] = {color::AdjustLightness(bg, lightness_adjust + 10),   // top
+                         color::AdjustLightness(bg, lightness_adjust - 10)};  // bottom
+    sk_sp<SkShader> gradient = SkGradientShader::MakeRadial(gradient_center, gradient_radius,
+                                                            colors, nullptr, 2, SkTileMode::kClamp);
+    paint.setShader(gradient);
+    canvas.drawRRect(pressed_oval, paint);
+  }
+
+  {  // soft shadow around the edges
+    SkPaint paint;
+    paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 0.5_mm));
+    SkColor colors[2] = {color::AdjustLightness(bg, lightness_adjust + 40),   // top
+                         color::AdjustLightness(bg, lightness_adjust - 30)};  // bottom
+    sk_sp<SkShader> gradient = SkGradientShader::MakeRadial(gradient_center, gradient_radius,
+                                                            colors, nullptr, 2, SkTileMode::kClamp);
+    paint.setShader(gradient);
+
+    SkPath path = SkPath::RRect(pressed_oval);
+    path.toggleInverseFillType();
+    canvas.drawPath(path, paint);
+  }
+
+  {  // white border
+    SkPaint paint;
+    paint.setColor(SK_ColorWHITE);
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setAntiAlias(true);
+    paint.setStrokeWidth(0);
+    canvas.drawRRect(pressed_oval, paint);
+  }
+}
 }  // namespace automat::theme::xp

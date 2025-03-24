@@ -41,7 +41,7 @@ struct Button : Widget {
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
 
-  void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
+  virtual void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const;
 
   maf::Optional<Rect> TextureBounds() const override;

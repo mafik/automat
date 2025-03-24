@@ -46,7 +46,7 @@ std::string_view Window::Name() const { return "Window"; }
 
 std::shared_ptr<Object> Window::Clone() const { return std::make_shared<Window>(*this); }
 
-const SkMatrix kCenterPickIcon = SkMatrix::Translate(-2.5_mm, -1_mm);
+const SkMatrix kCenterPickIcon = SkMatrix::Translate(-1.4_mm, -0.2_mm).preScale(0.9, 0.9);
 
 constexpr static float kBorderWidth = theme::xp::kBorderWidth;  // width of the border
 constexpr static float kContentMargin =
@@ -56,9 +56,10 @@ constexpr static float kTitleButtonSize = kTitleHeight - 2 * kContentMargin;
 
 struct WindowWidget;
 
-struct PickButton : gui::Button {
+struct PickButton : theme::xp::TitleButton {
   std::function<void(gui::Pointer&)> on_activate;
-  PickButton() : gui::Button(gui::MakeShapeWidget(kPickSVG, "#000000"_color, &kCenterPickIcon)) {
+  PickButton()
+      : theme::xp::TitleButton(gui::MakeShapeWidget(kPickSVG, "#000000"_color, &kCenterPickIcon)) {
     child->local_to_parent.preTranslate(-0.2_mm, -0.2_mm);
   }
   // float Height() const override { return kTitleButtonSize; }
@@ -67,7 +68,6 @@ struct PickButton : gui::Button {
                Rect::MakeAtZero<::LeftX, ::BottomY>({kTitleButtonSize, kTitleButtonSize}), 2_mm)
         .sk;
   }
-  SkColor BackgroundColor() const override { return "#d0d0d0"_color; }
 
   void Activate(gui::Pointer& p) override {
     WakeAnimation();

@@ -268,6 +268,6 @@ void Button::UpdateChildTransform() {
   if (!child->CenteredAtZero()) {
     offset -= ChildBounds().center();
   }
-  child->local_to_parent.preConcat(SkM44::Translate(offset.x, offset.y));
+  child->local_to_parent = SkM44::Translate(offset.x, offset.y);
 }
 }  // namespace automat::gui

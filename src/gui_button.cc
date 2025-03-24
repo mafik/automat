@@ -231,9 +231,7 @@ SkPath Button::Shape() const { return SkPath::RRect(RRect()); }
 
 struct ButtonAction : public Action {
   Button& button;
-  ButtonAction(Pointer& pointer, Button& button) : Action(pointer), button(button) {}
-
-  void Begin() override {
+  ButtonAction(Pointer& pointer, Button& button) : Action(pointer), button(button) {
     audio::Play(embedded::assets_SFX_button_down_wav);
     button.press_action_count++;
     button.Activate(pointer);  // This may immediately end the action.

@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <memory>
+
+#include "str.hh"
+
 namespace automat {
 
 namespace gui {
@@ -9,12 +13,19 @@ struct Pointer;
 struct Widget;
 }  // namespace gui
 
-// TODO: maybe merge Begin & End into constructor & destructor
+struct Action;
+
+struct Option {
+  virtual ~Option() = default;
+  virtual maf::StrView Name() const = 0;
+  virtual std::unique_ptr<Action> Activate(gui::Pointer& pointer) const = 0;
+};
+
 struct Action {
   gui::Pointer& pointer;
   Action(gui::Pointer& pointer) : pointer(pointer) {}
   virtual ~Action() = default;
-  virtual void Begin() = 0;
+
   virtual void Update() = 0;
   virtual void End() = 0;
   virtual gui::Widget* Widget() { return nullptr; }
@@ -23,7 +34,6 @@ struct Action {
 /* Keeping this around for copy-pasting
 struct MinimalActionTemplate : Action {
   MinimalActionTemplate(gui::Pointer& pointer) : Action(pointer) {}
-  void Begin() override {}
   void Update() override {}
   void End() override {}
 };

@@ -360,30 +360,18 @@ std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTri
   return nullptr;
 }
 
-DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)
-    : Action(pointer),
-      widget(widget),
-      effect(audio::MakeBeginLoopEndEffect(embedded::assets_SFX_cable_start_wav,
-                                           embedded::assets_SFX_cable_loop_wav,
-                                           embedded::assets_SFX_cable_end_wav)) {}
-
-DragConnectionAction::~DragConnectionAction() {
-  widget.manual_position.reset();
-  if (Machine* m = widget.from.ParentAs<Machine>()) {
-    for (auto& l : m->locations) {
-      l->animation_state.highlight_target = 0;
-      l->WakeAnimation();
-    }
-  }
-}
-
 bool CanConnect(Location& from, Location& to, Argument& arg) {
   std::string error;
   arg.CheckRequirements(from, &to, to.object.get(), error);
   return error.empty();
 }
 
-void DragConnectionAction::Begin() {
+DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)
+    : Action(pointer),
+      widget(widget),
+      effect(audio::MakeBeginLoopEndEffect(embedded::assets_SFX_cable_start_wav,
+                                           embedded::assets_SFX_cable_loop_wav,
+                                           embedded::assets_SFX_cable_end_wav)) {
   if (auto it = widget.from.outgoing.find(&widget.arg); it != widget.from.outgoing.end()) {
     delete *it;
   }
@@ -411,6 +399,16 @@ void DragConnectionAction::Begin() {
     }
   }
   widget.WakeAnimation();
+}
+
+DragConnectionAction::~DragConnectionAction() {
+  widget.manual_position.reset();
+  if (Machine* m = widget.from.ParentAs<Machine>()) {
+    for (auto& l : m->locations) {
+      l->animation_state.highlight_target = 0;
+      l->WakeAnimation();
+    }
+  }
 }
 
 void DragConnectionAction::Update() {

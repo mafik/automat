@@ -593,7 +593,6 @@ struct DragDurationHandleAction : Action {
   TimerDelay& timer;
   DragDurationHandleAction(gui::Pointer& pointer, TimerDelay& timer)
       : Action(pointer), timer(timer) {}
-  virtual void Begin() {}
   virtual void Update() {
     auto pos = pointer.PositionWithin(timer);
     auto tick_count = TickCount(timer.range);
@@ -640,7 +639,6 @@ struct DragHandAction : Action {
       : Action(pointer), timer_weak(timer) {
     ++timer->hand_draggers;
   }
-  virtual void Begin() {}
   virtual void Update() {
     auto timer_shared = timer_weak.lock();
     if (!timer_shared) {

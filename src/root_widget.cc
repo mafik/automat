@@ -258,13 +258,12 @@ struct MoveCameraAction : Action {
   RootWidget& root;
   Vec2 delta;
   MoveCameraAction(Pointer& pointer, RootWidget& root, Vec2 delta)
-      : Action(pointer), root(root), delta(delta) {}
-  ~MoveCameraAction() {
-    root.move_velocity -= delta;
+      : Action(pointer), root(root), delta(delta) {
+    root.move_velocity += delta;
     root.WakeAnimation();
   }
-  void Begin() override {
-    root.move_velocity += delta;
+  ~MoveCameraAction() {
+    root.move_velocity -= delta;
     root.WakeAnimation();
   }
   void Update() override {}

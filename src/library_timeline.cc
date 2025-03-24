@@ -616,28 +616,28 @@ struct DragBridgeAction : Action {
   float press_offset_x;
   Timeline& timeline;
   DragBridgeAction(gui::Pointer& pointer, Timeline& timeline)
-      : Action(pointer), timeline(timeline) {}
-  virtual void Begin() {
+      : Action(pointer), timeline(timeline) {
     float initial_x = pointer.PositionWithin(timeline).x;
     float initial_pos_ratio = CurrentPosRatio(timeline);
     float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
     press_offset_x = initial_x - initial_bridge_x;
   }
-  virtual void Update() {
+  void Update() override {
     float x = pointer.PositionWithin(timeline).x;
     float new_bridge_x = x - press_offset_x;
     SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x), pointer.root_widget.timer.now);
   }
-  virtual void End() {}
+  void End() override {}
 };
 
 struct DragTimelineAction : Action {
   Timeline& timeline;
   float last_x;
   DragTimelineAction(gui::Pointer& pointer, Timeline& timeline)
-      : Action(pointer), timeline(timeline) {}
-  virtual void Begin() { last_x = pointer.PositionWithin(timeline).x; }
-  virtual void Update() {
+      : Action(pointer), timeline(timeline) {
+    last_x = pointer.PositionWithin(timeline).x;
+  }
+  void Update() override {
     float x = pointer.PositionWithin(timeline).x;
     float delta_x = x - last_x;
     last_x = x;
@@ -654,7 +654,7 @@ struct DragTimelineAction : Action {
     }
     OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.root_widget.timer.now);
   }
-  virtual void End() {}
+  void End() override {}
 };
 
 constexpr float kZoomTresholdsS[] = {
@@ -700,9 +700,10 @@ static float PreviousZoomTick(float zoom) {
 struct DragZoomAction : Action {
   Timeline& timeline;
   float last_x;
-  DragZoomAction(gui::Pointer& pointer, Timeline& timeline) : Action(pointer), timeline(timeline) {}
-  virtual void Begin() { last_x = pointer.PositionWithin(timeline).x; }
-  virtual void Update() {
+  DragZoomAction(gui::Pointer& pointer, Timeline& timeline) : Action(pointer), timeline(timeline) {
+    last_x = pointer.PositionWithin(timeline).x;
+  }
+  void Update() override {
     float x = pointer.PositionWithin(timeline).x;
     float delta_x = x - last_x;
     last_x = x;
@@ -716,7 +717,7 @@ struct DragZoomAction : Action {
       track->WakeAnimation();
     }
   }
-  virtual void End() {
+  void End() override {
     timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
     timeline.WakeAnimation();
     for (auto& track : timeline.tracks) {

@@ -23,7 +23,6 @@ struct DragConnectionAction : Action {
   Vec2 grab_offset;
   DragConnectionAction(Pointer&, ConnectionWidget&);
   ~DragConnectionAction() override;
-  void Begin() override;
   void Update() override;
   void End() override;
 };

@@ -460,7 +460,6 @@ void Keyboard::KeyDown(Key key) {
         current = current->parent;
       } while (actions[i] == nullptr && current);
       if (actions[i]) {
-        actions[i]->Begin();
         pointer->UpdatePath();
       }
     }

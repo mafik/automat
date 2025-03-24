@@ -187,7 +187,6 @@ void Pointer::ButtonDown(PointerButton btn) {
       action = (*curr)->FindAction(*this, btn);
     }
     if (action) {
-      action->Begin();
       UpdatePath();
     }
   }

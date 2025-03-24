@@ -151,7 +151,25 @@ struct TextSelectAction : Action {
   std::optional<DragConnectionAction> drag;
 
   TextSelectAction(Pointer& pointer, TextField& text_field)
-      : Action(pointer), text_field(text_field) {}
+      : Action(pointer), text_field(text_field) {
+    if (text_field.argument.has_value()) {
+      Location* location = Closest<Location>(*pointer.hover);
+
+      for (auto& connection_widget : root_widget->connection_widgets) {
+        if (&connection_widget->arg == text_field.argument &&
+            &connection_widget->from == location) {
+          drag.emplace(pointer, *connection_widget);
+          break;
+        }
+      }
+    }
+
+    Vec2 local = pointer.PositionWithin(text_field);
+    int index = text_field.IndexFromPosition(local.x);
+    Vec2 pos = text_field.PositionFromIndex(index);
+    caret = &pointer.keyboard->RequestCaret(text_field, pointer.hover, pos);
+    text_field.caret_positions[caret] = {.index = index};
+  }
 
   void UpdateCaretFromPointer(Pointer& pointer) {
     auto it = text_field.caret_positions.find(caret);
@@ -178,26 +196,6 @@ struct TextSelectAction : Action {
     }
   }
 
-  void Begin() override {
-    if (text_field.argument.has_value()) {
-      Location* location = Closest<Location>(*pointer.hover);
-
-      for (auto& connection_widget : root_widget->connection_widgets) {
-        if (&connection_widget->arg == text_field.argument &&
-            &connection_widget->from == location) {
-          drag.emplace(pointer, *connection_widget);
-          drag->Begin();
-          break;
-        }
-      }
-    }
-
-    Vec2 local = pointer.PositionWithin(text_field);
-    int index = text_field.IndexFromPosition(local.x);
-    Vec2 pos = text_field.PositionFromIndex(index);
-    caret = &pointer.keyboard->RequestCaret(text_field, pointer.hover, pos);
-    text_field.caret_positions[caret] = {.index = index};
-  }
   void Update() override { UpdateCaretFromPointer(pointer); }
   void End() override {
     if (drag.has_value() && !selecting_text) {

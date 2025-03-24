@@ -12,10 +12,8 @@
 
 #include <ranges>
 
-#include "drawing.hh"
 #include "embedded.hh"
 #include "font.hh"
-#include "gui_button.hh"
 #include "gui_shape_widget.hh"
 #include "key.hh"
 #include "pointer.hh"
@@ -375,10 +373,8 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     std::shared_ptr<WindowWidget> widget;
     Vec2 contact_point;
     uint32_t drag_region_mask = 0;
-    DragRegionAction(gui::Pointer& pointer, std::shared_ptr<WindowWidget>&& widget)
-        : Action(pointer), widget(std::move(widget)) {}
-    virtual ~DragRegionAction() = default;
-    virtual void Begin() {
+    DragRegionAction(gui::Pointer& pointer, std::shared_ptr<WindowWidget>&& widget_arg)
+        : Action(pointer), widget(std::move(widget_arg)) {
       contact_point = pointer.PositionWithin(*widget);
       auto layout = widget->Layout();
       auto inner_region_rect = layout.region_rect.Outset(-kRegionStrokeWidth / 2);
@@ -406,6 +402,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
         }
       }
     }
+    virtual ~DragRegionAction() = default;
     virtual void Update() {
       Vec2 new_position = pointer.PositionWithin(*widget);
       Vec2 d = new_position - contact_point;
@@ -493,9 +490,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       auto* location = Closest<Location>(*p.hover);
       auto* machine = Closest<Machine>(*p.hover);
       if (location && machine) {
-        auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
-        a->contact_point = contact_point;
-        return a;
+        return std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
       }
     }
     return nullptr;

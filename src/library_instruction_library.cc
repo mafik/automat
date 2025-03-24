@@ -986,8 +986,7 @@ struct ScrollDeckAction : Action {
         widget(widget),
         object(object),
         library_widget(dynamic_cast<InstructionLibrary::Widget&>(*widget)),
-        library(dynamic_cast<InstructionLibrary&>(*object)) {}
-  void Begin() override {
+        library(dynamic_cast<InstructionLibrary&>(*object)) {
     auto pos = pointer.PositionWithin(*widget);
     angle = SinCos::FromVec2(pos);
     library_widget.new_cards_dir_deg = (angle + 180_deg).ToDegrees();
@@ -1111,9 +1110,8 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
       loc->InsertHere(std::move(proto));
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
       loc->position = loc->animation_state.position = p.PositionWithinRootMachine() - contact_point;
-      auto drag_action = std::make_unique<DragLocationAction>(p, std::move(loc));
-      drag_action->contact_point = contact_point - kFrontInstructionRect.BottomLeftCorner();
-      return drag_action;
+      return std::make_unique<DragLocationAction>(
+          p, std::move(loc), contact_point - kFrontInstructionRect.BottomLeftCorner());
     }
 
     if (Length(contact_point) < kCornerDist) {
@@ -1194,9 +1192,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
     auto* location = Closest<Location>(*p.hover);
     auto* machine = Closest<Machine>(*p.hover);
     if (location && machine) {
-      auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
-      a->contact_point = contact_point;
-      return a;
+      return std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
     }
   }
   return nullptr;

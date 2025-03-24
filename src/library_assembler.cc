@@ -384,9 +384,7 @@ std::unique_ptr<Action> AssemblerWidget::FindAction(gui::Pointer& p, gui::Action
     auto* machine = Closest<Machine>(*p.hover);
     if (location && machine) {
       auto contact_point = p.PositionWithin(*this);
-      auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
-      a->contact_point = contact_point;
-      return a;
+      return std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
     }
   }
   return nullptr;

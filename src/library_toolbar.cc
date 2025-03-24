@@ -33,9 +33,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   auto contact_point = pointer.PositionWithin(*this);
   loc->position = loc->animation_state.position =
       pointer.PositionWithinRootMachine() - contact_point;
-  auto drag_action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
-  drag_action->contact_point = contact_point;
-  return drag_action;
+  return std::make_unique<DragLocationAction>(pointer, std::move(loc), contact_point);
 }
 
 // std::shared_ptr<Object> Toolbar::Clone() const {

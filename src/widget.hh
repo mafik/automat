@@ -190,7 +190,7 @@ struct Widget : public virtual SharedBase {
   // their bounds.
   virtual bool CenteredAtZero() const { return false; }
 
-  virtual std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) { return nullptr; }
+  virtual std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger);
 
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }

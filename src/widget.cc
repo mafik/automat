@@ -206,4 +206,12 @@ RootWidget& Widget::FindRootWidget() const {
   return *root;
 }
 
+std::unique_ptr<Action> Widget::FindAction(Pointer& pointer, ActionTrigger btn) {
+  if (btn == PointerButton::Right) {
+    LOG << "Right click on " << Name();
+    return nullptr;
+  }
+  return nullptr;
+}
+
 }  // namespace automat::gui

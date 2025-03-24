@@ -222,6 +222,21 @@ void RootWidget::Draw(SkCanvas& canvas) const {
   canvas.clear(background_color);
 
   DrawChildren(canvas);
+
+  {  // Outline for the hovered widget
+    auto old_matrix = canvas.getTotalMatrix();
+    for (auto& pointer : pointers) {
+      if (pointer->hover) {
+        SkPaint outline_paint;
+        outline_paint.setStyle(SkPaint::kStroke_Style);
+        auto* hover = pointer->hover.get();
+        canvas.setMatrix(TransformUp(*hover));
+        canvas.drawPath(hover->Shape(), outline_paint);
+      }
+    }
+    canvas.setMatrix(old_matrix);
+  }
+
   canvas.concat(CanvasToWindow());
 
   // Draw target root_widget size when zooming in with middle mouse button

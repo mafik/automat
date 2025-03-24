@@ -57,7 +57,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Timeline>();
   index.Register<InstructionLibrary>();
   index.Register<Instruction, HideInToolbar>();
-  index.Register<Assembler, HideInToolbar>();
+  index.Register<Assembler>();
   index.Register<Window>();
 }
 

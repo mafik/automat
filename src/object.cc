@@ -103,7 +103,7 @@ std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
       return a;
     }
   }
-  return nullptr;
+  return Widget::FindAction(p, btn);
 }
 
 void Object::Updated(Location& here, Location& updated) {

@@ -627,7 +627,6 @@ struct DragBridgeAction : Action {
     float new_bridge_x = x - press_offset_x;
     SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x), pointer.root_widget.timer.now);
   }
-  void End() override {}
 };
 
 struct DragTimelineAction : Action {
@@ -654,7 +653,6 @@ struct DragTimelineAction : Action {
     }
     OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.root_widget.timer.now);
   }
-  void End() override {}
 };
 
 constexpr float kZoomTresholdsS[] = {
@@ -703,6 +701,13 @@ struct DragZoomAction : Action {
   DragZoomAction(gui::Pointer& pointer, Timeline& timeline) : Action(pointer), timeline(timeline) {
     last_x = pointer.PositionWithin(timeline).x;
   }
+  ~DragZoomAction() override {
+    timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
+    timeline.WakeAnimation();
+    for (auto& track : timeline.tracks) {
+      track->WakeAnimation();
+    }
+  }
   void Update() override {
     float x = pointer.PositionWithin(timeline).x;
     float delta_x = x - last_x;
@@ -712,13 +717,6 @@ struct DragZoomAction : Action {
     timeline.zoom.target *= factor;
     timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
     timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
-    timeline.WakeAnimation();
-    for (auto& track : timeline.tracks) {
-      track->WakeAnimation();
-    }
-  }
-  void End() override {
-    timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
     timeline.WakeAnimation();
     for (auto& track : timeline.tracks) {
       track->WakeAnimation();

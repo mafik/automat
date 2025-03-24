@@ -402,8 +402,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
         }
       }
     }
-    virtual ~DragRegionAction() = default;
-    virtual void Update() {
+    void Update() override {
       Vec2 new_position = pointer.PositionWithin(*widget);
       Vec2 d = new_position - contact_point;
       contact_point = new_position;
@@ -473,8 +472,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       }
       widget->WakeAnimation();
     }
-    virtual void End() {}
-    virtual gui::Widget* Widget() { return nullptr; }
+    gui::Widget* Widget() override { return nullptr; }
   };
 
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override {

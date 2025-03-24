@@ -74,14 +74,6 @@ void DragLocationAction::Update() {
 
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
-void DragLocationAction::End() {
-  gui::DropTarget* drop_target = FindDropTarget(*this);
-  if (drop_target) {
-    location->WakeAnimation();
-    drop_target->DropLocation(std::move(location));
-  }
-}
-
 DragLocationAction::DragLocationAction(gui::Pointer& pointer,
                                        std::shared_ptr<Location>&& location_arg, Vec2 contact_point)
     : Action(pointer),
@@ -114,6 +106,12 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
 }
 
 DragLocationAction::~DragLocationAction() {
+  gui::DropTarget* drop_target = FindDropTarget(*this);
+  if (drop_target) {
+    location->WakeAnimation();
+    drop_target->DropLocation(std::move(location));
+  }
+
   pointer.root_widget.drag_action_count--;
   for (auto& connection_widget : gui::root_widget->connection_widgets) {
     connection_widget->animation_state.radar_alpha_target = 0;

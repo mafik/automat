@@ -49,7 +49,6 @@ struct DragLocationAction : Action {
   ~DragLocationAction() override;
 
   void Update() override;
-  void End() override;
   gui::Widget* Widget() override { return widget.get(); }
 };
 

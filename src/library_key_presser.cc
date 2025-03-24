@@ -139,19 +139,14 @@ struct DragAndClickAction : Action {
         click_option(std::move(click_option)) {
     press_time = pointer.button_down_time[static_cast<int>(btn)];
   }
+  ~DragAndClickAction() override {
+    if (click_option && (time::SystemNow() - press_time < 0.2s)) {
+      auto click_action = click_option->Activate(pointer);
+    }
+  }
   void Update() override {
     if (drag_action) {
       drag_action->Update();
-    }
-  }
-  void End() override {
-    if (drag_action) {
-      drag_action->End();
-      drag_action.reset();
-    }
-    if (click_option && (time::SystemNow() - press_time < 0.2s)) {
-      auto click_action = click_option->Activate(pointer);
-      click_action->End();
     }
   }
   gui::Widget* Widget() override {
@@ -173,7 +168,6 @@ struct RunAction : Action {
     }
   }
   void Update() override {}
-  void End() override {}
 };
 
 struct RunOption : Option {

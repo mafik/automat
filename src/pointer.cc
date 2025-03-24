@@ -251,7 +251,6 @@ Str Pointer::ToStr() const {
 
 void Pointer::EndAction() {
   if (action) {
-    action->End();
     action.reset();
     UpdatePath();
   }

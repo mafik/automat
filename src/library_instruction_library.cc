@@ -992,6 +992,11 @@ struct ScrollDeckAction : Action {
     library_widget.new_cards_dir_deg = (angle + 180_deg).ToDegrees();
     widget->WakeAnimation();
   }
+  ~ScrollDeckAction() override {
+    library_widget.rotation_offset_t_target = 0;
+    library_widget.new_cards_dir_deg = NAN;
+    library_widget.WakeAnimation();
+  }
   void Update() override {
     auto pos = pointer.PositionWithin(*widget);
     auto new_angle = SinCos::FromVec2(pos);
@@ -1037,11 +1042,6 @@ struct ScrollDeckAction : Action {
     }
     library_widget.rotation_offset_t = library_widget.rotation_offset_t_target =
         -diff_deg / step_deg;
-    library_widget.WakeAnimation();
-  }
-  void End() override {
-    library_widget.rotation_offset_t_target = 0;
-    library_widget.new_cards_dir_deg = NAN;
     library_widget.WakeAnimation();
   }
 };

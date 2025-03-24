@@ -239,12 +239,11 @@ struct ButtonAction : public Action {
 
   void Update() override {}
 
-  void End() override {
+  ~ButtonAction() override {
     button.press_action_count--;
     button.WakeAnimation();
+    audio::Play(embedded::assets_SFX_button_up_wav);
   }
-
-  ~ButtonAction() override { audio::Play(embedded::assets_SFX_button_up_wav); }
 };
 
 std::unique_ptr<Action> Button::FindAction(Pointer& pointer, ActionTrigger pointer_button) {

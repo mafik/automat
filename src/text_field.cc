@@ -197,11 +197,6 @@ struct TextSelectAction : Action {
   }
 
   void Update() override { UpdateCaretFromPointer(pointer); }
-  void End() override {
-    if (drag.has_value() && !selecting_text) {
-      drag->End();
-    }
-  }
   gui::Widget* Widget() override {
     if (drag.has_value() && !selecting_text) {
       drag->Widget();

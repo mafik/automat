@@ -25,9 +25,7 @@ struct Action {
   gui::Pointer& pointer;
   Action(gui::Pointer& pointer) : pointer(pointer) {}
   virtual ~Action() = default;
-
   virtual void Update() = 0;
-  virtual void End() = 0;
   virtual gui::Widget* Widget() { return nullptr; }
 };
 
@@ -35,7 +33,6 @@ struct Action {
 struct MinimalActionTemplate : Action {
   MinimalActionTemplate(gui::Pointer& pointer) : Action(pointer) {}
   void Update() override {}
-  void End() override {}
 };
 */
 

@@ -24,7 +24,6 @@ struct DragConnectionAction : Action {
   DragConnectionAction(Pointer&, ConnectionWidget&);
   ~DragConnectionAction() override;
   void Update() override;
-  void End() override;
 };
 
 // ConnectionWidget can function in three different modes, depending on how the argument is set to

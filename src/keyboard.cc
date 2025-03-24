@@ -477,7 +477,6 @@ void Keyboard::KeyUp(Key key) {
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i]) {
-      actions[i]->End();
       actions[i].reset();
       pointer->UpdatePath();
     }

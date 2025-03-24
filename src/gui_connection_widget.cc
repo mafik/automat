@@ -402,22 +402,6 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
 }
 
 DragConnectionAction::~DragConnectionAction() {
-  widget.manual_position.reset();
-  if (Machine* m = widget.from.ParentAs<Machine>()) {
-    for (auto& l : m->locations) {
-      l->animation_state.highlight_target = 0;
-      l->WakeAnimation();
-    }
-  }
-}
-
-void DragConnectionAction::Update() {
-  Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
-  widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
-  widget.WakeAnimation();
-}
-
-void DragConnectionAction::End() {
   Machine* m = widget.from.ParentAs<Machine>();
   Vec2 pos;
   if (widget.state) {
@@ -431,6 +415,20 @@ void DragConnectionAction::End() {
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
     widget.from.ConnectTo(*to, widget.arg);
   }
+  widget.WakeAnimation();
+
+  widget.manual_position.reset();
+  if (Machine* m = widget.from.ParentAs<Machine>()) {
+    for (auto& l : m->locations) {
+      l->animation_state.highlight_target = 0;
+      l->WakeAnimation();
+    }
+  }
+}
+
+void DragConnectionAction::Update() {
+  Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
+  widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
   widget.WakeAnimation();
 }
 

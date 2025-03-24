@@ -267,7 +267,6 @@ struct MoveCameraAction : Action {
     root.WakeAnimation();
   }
   void Update() override {}
-  void End() override {}
 };
 
 std::unique_ptr<Action> RootWidget::FindAction(Pointer& p, ActionTrigger trigger) {

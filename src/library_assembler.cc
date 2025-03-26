@@ -19,6 +19,8 @@
 #include "root_widget.hh"
 #include "status.hh"
 #include "svg.hh"
+#include "textures.hh"
+#include "time.hh"
 #include "widget.hh"
 
 #if defined _WIN32
@@ -45,12 +47,38 @@ struct ShowRegisterOption : Option {
   }
 };
 
+PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox_webp);
+
 struct MenuWidget : gui::Widget {
+  animation::SpringV2<float> size = 0;
+  animation::Phase Tick(time::Timer& timer) override {
+    size.SpringTowards(2_cm, timer.d, 0.2, 0.05);
+    return animation::Animating;
+  }
   void Draw(SkCanvas& canvas) const override {
     auto shape = Shape();
-    canvas.drawPath(shape, SkPaint());
+
+    SkPaint paint = [&]() {
+      static auto builder =
+          resources::RuntimeEffectBuilder(embedded::assets_bubble_menu_rt_sksl.content);
+
+      auto& image = *kSkyBox.image;
+      auto dimensions = image->dimensions();
+
+      builder->uniform("time") = (float)fmod(time::SteadyNow().time_since_epoch().count(), 1000.0);
+      builder->uniform("bubble_radius") = size.value;
+      builder->child("environment") = image->makeShader(kDefaultSamplingOptions);
+      builder->uniform("environment_size") = SkPoint(dimensions.width(), dimensions.height());
+
+      auto shader = builder->makeShader();
+      SkPaint paint;
+      paint.setShader(shader);
+      return paint;
+    }();
+    // paint.
+    canvas.drawPath(shape, paint);
   }
-  SkPath Shape() const override { return SkPath::Circle(0, 0, 2_cm); }
+  SkPath Shape() const override { return SkPath::Circle(0, 0, size.value); }
 };
 
 struct MenuAction : Action {
@@ -58,6 +86,7 @@ struct MenuAction : Action {
   MenuAction(gui::Pointer& pointer) : Action(pointer), menu_widget(std::make_shared<MenuWidget>()) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
+    menu_widget->WakeAnimation();
   }
   void Update() override {}
   gui::Widget* Widget() override { return menu_widget.get(); }

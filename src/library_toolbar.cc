@@ -67,7 +67,7 @@ animation::Phase Toolbar::Tick(time::Timer& timer) {
   auto& root_widget = FindRootWidget();
 
   for (auto* pointer : root_widget.pointers) {
-    if (pointer->action) {
+    if (pointer->actions[static_cast<int>(PointerButton::Left)]) {
       continue;
     }
     Vec2 pointer_position = my_transform.mapPoint(pointer->pointer_position);

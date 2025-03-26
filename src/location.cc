@@ -185,7 +185,7 @@ animation::Phase Location::Tick(time::Timer& timer) {
     float target_elevation = 0;
     for (auto* root_widget : root_widgets) {
       for (auto* pointer : root_widget->pointers) {
-        if (auto& action = pointer->action) {
+        for (auto& action : pointer->actions) {
           if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
             if (drag_action->location.get() == this) {
               target_elevation = 1;

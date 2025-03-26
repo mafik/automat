@@ -3,8 +3,7 @@
 #pragma once
 
 #include <memory>
-
-#include "str.hh"
+#include <string>
 
 namespace automat {
 
@@ -18,7 +17,7 @@ struct Action;
 // Option represents a potential action. It's the core of the menu system.
 struct Option {
   virtual ~Option() = default;
-  virtual maf::StrView Name() const = 0;
+  virtual std::string Name() const = 0;
   virtual std::unique_ptr<Action> Activate(gui::Pointer& pointer) const = 0;
 };
 
@@ -44,11 +43,9 @@ struct Action {
   virtual gui::Widget* Widget() { return nullptr; }
 };
 
-/* Keeping this around for copy-pasting
-struct ActionTemplate : Action {
-  ActionTemplate(gui::Pointer& pointer) : Action(pointer) {}
+struct EmptyAction : Action {
+  EmptyAction(gui::Pointer& pointer) : Action(pointer) {}
   void Update() override {}
 };
-*/
 
 }  // namespace automat

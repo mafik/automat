@@ -197,12 +197,6 @@ struct TextSelectAction : Action {
   }
 
   void Update() override { UpdateCaretFromPointer(pointer); }
-  gui::Widget* Widget() override {
-    if (drag.has_value() && !selecting_text) {
-      drag->Widget();
-    }
-    return nullptr;
-  }
 };
 
 std::unique_ptr<Action> TextField::FindAction(Pointer& pointer, ActionTrigger btn) {

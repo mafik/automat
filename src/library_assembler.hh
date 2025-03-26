@@ -46,7 +46,7 @@ struct RegisterWidget : gui::Widget {
   void Draw(SkCanvas&) const override;
 };
 
-struct AssemblerWidget : gui::Widget {
+struct AssemblerWidget : Object::FallbackWidget {
   constexpr static float kWidth = 8_cm;
   constexpr static float kHeight = 8_cm;
   constexpr static float kRadius = 1_cm;
@@ -81,6 +81,7 @@ struct Assembler : LiveObject, LongRunning {
   void ExitCallback(mc::CodePoint code_point);
 
   std::unique_ptr<mc::Controller> mc_controller;
+  std::array<bool, kGeneralPurposeRegisterCount> reg_visible;
 
   void UpdateMachineCode();
 

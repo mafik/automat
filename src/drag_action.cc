@@ -101,7 +101,6 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
   gui::root_widget->WakeAnimation();
 
   last_position = current_position = pointer.PositionWithinRootMachine();
-  widget->local_to_parent = SkM44(root_widget->CanvasToWindow());
   Update();
 }
 

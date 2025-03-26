@@ -58,6 +58,8 @@ struct PointerGrab {
   virtual void Release();
 };
 
+struct PointerWidget;
+
 struct Pointer {
   Pointer(RootWidget&, Vec2 position);
   ~Pointer();
@@ -66,12 +68,7 @@ struct Pointer {
   void ButtonDown(PointerButton);
   void ButtonUp(PointerButton);
 
-  Widget* GetWidget() {
-    if (action) {
-      return action->Widget();
-    }
-    return nullptr;
-  }
+  Widget* GetWidget();
 
   enum IconType { kIconArrow, kIconHand, kIconIBeam };
 
@@ -92,7 +89,7 @@ struct Pointer {
   // Should be overridden by platform-specific implementations to actually grab the pointer.
   virtual PointerGrab& RequestGlobalGrab(PointerGrabber&);
 
-  void EndAction();
+  void EndAllActions();
 
   std::unique_ptr<PointerGrab> grab;
 
@@ -108,10 +105,29 @@ struct Pointer {
 
   maf::Vec<PointerMoveCallback*> move_callbacks;
 
-  std::unique_ptr<Action> action;
+  std::unique_ptr<Action> actions[static_cast<int>(PointerButton::Count)];
   std::shared_ptr<Widget> hover;
 
   maf::Vec<std::weak_ptr<Widget>> path;
+
+  std::shared_ptr<PointerWidget> pointer_widget;
+};
+
+struct PointerWidget : Widget {
+  Pointer& pointer;
+  PointerWidget(Pointer& pointer) : pointer(pointer) {}
+  SkPath Shape() const override { return SkPath(); }
+  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
+    for (auto& action : pointer.actions) {
+      if (action == nullptr) {
+        continue;
+      }
+      if (auto widget = action->Widget()) {
+        children.push_back(widget->SharedPtr());
+      }
+    }
+  }
+  maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
 };
 
 }  // namespace automat::gui

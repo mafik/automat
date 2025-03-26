@@ -34,7 +34,8 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
     : root_widget(root_widget),
       pointer_position(position),
       button_down_position(),
-      button_down_time() {
+      button_down_time(),
+      pointer_widget(std::make_shared<PointerWidget>(*this)) {
   root_widget.pointers.push_back(this);
   assert(!root_widget.keyboards.empty());
   if (root_widget.keyboards.empty()) {
@@ -43,6 +44,7 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
     keyboard = root_widget.keyboards.front().get();
     keyboard->pointer = this;
   }
+  pointer_widget->local_to_parent = SkM44(root_widget.CanvasToWindow());
 }
 Pointer::~Pointer() {
   if (hover) {
@@ -136,8 +138,10 @@ void Pointer::Move(Vec2 position) {
     root_widget.inertia = false;
     root_widget.WakeAnimation();
   }
-  if (action) {
-    action->Update();
+  for (auto& action : actions) {
+    if (action) {
+      action->Update();
+    }
   }
   UpdatePath();
   for (auto* cb : move_callbacks) {
@@ -170,6 +174,7 @@ void Pointer::ButtonDown(PointerButton btn) {
   if (btn == PointerButton::Unknown || btn >= PointerButton::Count) return;
   button_down_position[static_cast<int>(btn)] = pointer_position;
   button_down_time[static_cast<int>(btn)] = time::SystemNow();
+  auto& action = actions[static_cast<int>(btn)];
 
   if (grab) {
     grab->grabber.PointerGrabberButtonDown(*grab, btn);
@@ -200,8 +205,9 @@ void Pointer::ButtonUp(PointerButton btn) {
     return;
   }
 
-  if (btn == PointerButton::Left) {
-    EndAction();
+  if (actions[static_cast<int>(btn)]) {
+    actions[static_cast<int>(btn)].reset();
+    UpdatePath();
   }
   if (btn == PointerButton::Middle) {
     time::Duration down_duration =
@@ -249,11 +255,11 @@ Str Pointer::ToStr() const {
   return ret;
 }
 
-void Pointer::EndAction() {
-  if (action) {
+void Pointer::EndAllActions() {
+  for (auto& action : actions) {
     action.reset();
-    UpdatePath();
   }
+  UpdatePath();
 }
 
 void PointerGrab::Release() {
@@ -269,4 +275,5 @@ PointerGrab& Pointer::RequestGlobalGrab(PointerGrabber& grabber) {
   return *grab;
 }
 
+Widget* Pointer::GetWidget() { return pointer_widget.get(); }
 }  // namespace automat::gui

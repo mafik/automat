@@ -127,7 +127,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   WindowWidget(std::weak_ptr<Window>&& window) : window_weak(std::move(window)) {
     pick_button = std::make_shared<PickButton>();
     pick_button->on_activate = [this](gui::Pointer& p) {
-      p.EndAction();
+      p.EndAllActions();
       pointer_grab = &p.RequestGlobalGrab(*this);
       key_grab = &p.keyboard->RequestKeyGrab(*this, gui::AnsiKey::Escape, false, false, false,
                                              false, [this](maf::Status& status) {
@@ -472,7 +472,6 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       }
       widget->WakeAnimation();
     }
-    gui::Widget* Widget() override { return nullptr; }
   };
 
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override {

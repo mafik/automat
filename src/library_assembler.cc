@@ -16,8 +16,10 @@
 #include "global_resources.hh"
 #include "library_instruction.hh"
 #include "machine_code.hh"
+#include "root_widget.hh"
 #include "status.hh"
 #include "svg.hh"
+#include "widget.hh"
 
 #if defined _WIN32
 #pragma comment(lib, "ntdll.lib")
@@ -28,6 +30,47 @@ using namespace std;
 using namespace maf;
 
 namespace automat::library {
+
+struct ShowRegisterOption : Option {
+  std::weak_ptr<Assembler> weak;
+  int register_index;  // Must be < kGeneralPurposeRegisterCount
+
+  ShowRegisterOption(int register_index) : register_index(register_index) {}
+  std::string Name() const override { return "Show"; }
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    if (auto assembler = weak.lock()) {
+      assembler->reg_visible[register_index] = true;
+    }
+    return nullptr;
+  }
+};
+
+struct MenuWidget : gui::Widget {
+  void Draw(SkCanvas& canvas) const override {
+    auto shape = Shape();
+    canvas.drawPath(shape, SkPaint());
+  }
+  SkPath Shape() const override { return SkPath::Circle(0, 0, 2_cm); }
+};
+
+struct MenuAction : Action {
+  std::shared_ptr<MenuWidget> menu_widget;
+  MenuAction(gui::Pointer& pointer) : Action(pointer), menu_widget(std::make_shared<MenuWidget>()) {
+    auto pos = pointer.PositionWithin(*pointer.GetWidget());
+    menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
+  }
+  void Update() override {}
+  gui::Widget* Widget() override { return menu_widget.get(); }
+};
+
+struct RegistersMenuOption : Option {
+  std::weak_ptr<Assembler> weak;
+  RegistersMenuOption(std::weak_ptr<Assembler> weak) : weak(weak) {}
+  std::string Name() const override { return "Registers"; }
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    return std::make_unique<MenuAction>(pointer);
+  }
+};
 
 Assembler::Assembler() {
   Status status;
@@ -379,15 +422,11 @@ void AssemblerWidget::FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& child
 }
 
 std::unique_ptr<Action> AssemblerWidget::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::Left) {
-    auto* location = Closest<Location>(*p.hover);
-    auto* machine = Closest<Machine>(*p.hover);
-    if (location && machine) {
-      auto contact_point = p.PositionWithin(*this);
-      return std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
-    }
+  if (btn == gui::PointerButton::Right) {
+    auto registers_option = std::make_unique<RegistersMenuOption>(assembler_weak);
+    return registers_option->Activate(p);
   }
-  return nullptr;
+  return FallbackWidget::FindAction(p, btn);
 }
 
 void AssemblerWidget::TransformUpdated() { WakeAnimation(); }

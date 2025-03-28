@@ -33,6 +33,7 @@
 #endif
 
 using namespace maf;
+using namespace std;
 
 namespace automat::library {
 
@@ -73,6 +74,7 @@ struct PickButton : theme::xp::TitleButton {
   }
 };
 
+#ifdef __linux__
 struct XSHMCapture {
   xcb_shm_seg_t shmseg = -1;
   int shmid = -1;
@@ -104,6 +106,7 @@ struct XSHMCapture {
     }
   }
 };
+#endif
 
 struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   std::weak_ptr<Window> window_weak;
@@ -117,7 +120,9 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
 
   std::shared_ptr<PickButton> pick_button;
   std::string window_name;
+#ifdef __linux__
   std::optional<XSHMCapture> shm_capture;
+#endif
   int capture_width = 0;
   int capture_height = 0;
 
@@ -162,6 +167,7 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds().sk); }
 
   animation::Phase Tick(time::Timer&) override {
+#ifdef __linux__
     xcb_window_t xcb_window = XCB_WINDOW_NONE;
     tesseract_text.clear();
     if (auto window = window_weak.lock()) {
@@ -255,6 +261,9 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     }
 
     return animation::Animating;
+#else
+    return animation::Finished;
+#endif
   }
 
   struct LayoutData {
@@ -311,18 +320,20 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
     font.DrawText(canvas, window_name, title_text_paint);
     canvas.restore();
 
+#ifdef __linux__
     if (shm_capture.has_value()) {
       auto& capture = shm_capture.value();
       auto image_info = SkImageInfo::Make(capture_width, capture_height, kBGRA_8888_SkColorType,
                                           SkAlphaType::kPremul_SkAlphaType);
       SkPixmap pixmap(image_info, capture.data.data(), capture_width * 4);
       auto image = SkImages::RasterFromPixmap(
-          pixmap, [](const void* pixels, SkImages::ReleaseContext) {}, nullptr);
+          pixmap, [](const void* pixels, SkImages::ReleaseContext){}, nullptr);
       canvas.save();
       canvas.concat(layout.image_matrix);
       canvas.drawImage(image, 0, 0, kFastSamplingOptions, nullptr);
       canvas.restore();
     }
+#endif
 
     SkPaint region_paint;
     region_paint.setColor("#ff0000"_color);

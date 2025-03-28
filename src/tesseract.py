@@ -10,7 +10,10 @@ leptonica = src.load_extension('leptonica')
 hook = extension_helper.ExtensionHelper('Tesseract', globals())
 
 def tesseract_output(build_type : build.BuildType):
-  return build_type.PREFIX() / 'lib64' / 'libtesseract.a'
+  if sys.platform == 'linux':
+    return build_type.PREFIX() / 'lib64' / 'libtesseract.a'
+  elif sys.platform == 'win32':
+    return build_type.PREFIX() / 'lib' / ('tesseract55d.lib' if build_type == build.debug else 'tesseract55.lib')
 
 hook.FetchFromURL('https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.0.tar.gz', fetch_filename='tesseract-5.5.0.tar.gz')
 hook.ConfigureDependsOn(leptonica.leptonica_output)
@@ -32,5 +35,8 @@ hook.ConfigureOptions(
 if sys.platform == 'win32':
   hook.ConfigureOptions(WIN32_MT_BUILD='ON')
 hook.ConfigureWithCMake(src_dir=hook.checkout_dir, output=tesseract_output)
-hook.AddLinkArg('-ltesseract')
+if sys.platform == 'linux':
+  hook.AddLinkArg('-ltesseract')
+elif sys.platform == 'win32':
+  hook.AddLinkArg(lambda t: ['-ltesseract55' + ('d' if t == build.debug else '')])
 hook.InstallWhenIncluded(r'^tesseract/.*\.h$')

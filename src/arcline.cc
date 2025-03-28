@@ -214,7 +214,7 @@ ArcLine& ArcLine::Outset(float offset) {
       if (fabsf(arc.radius) > 0) {
         // float bulge = tanf(arc.sweep_angle.ToRadians() / 4);
         // Another way to calculate the bulge, reducing the floating point error
-        float bulge = (M_SQRT2f - sqrtf(1.f + (float)arc.sweep_angle.cos)) /
+        float bulge = ((float)M_SQRT2 - sqrtf(1.f + (float)arc.sweep_angle.cos)) /
                       sqrtf(1 - (float)arc.sweep_angle.cos);
         if (arc.sweep_angle.sin < 0) {
           bulge = -bulge;

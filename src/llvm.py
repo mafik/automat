@@ -92,7 +92,14 @@ hook.ConfigureOption('LLVM_USE_LINKER', 'lld')
 hook.ConfigureOption('LLVM_INCLUDE_BENCHMARKS', 'OFF') # not needed
 hook.ConfigureOption('LLVM_INCLUDE_EXAMPLES', 'OFF') # not needed
 hook.ConfigureOption('LLVM_INCLUDE_TESTS', 'OFF') # not needed
-hook.ConfigureOption('LLVM_OPTIMIZED_TABLEGEN', 'ON') # we're not including tablegen in Autmat, it can be always optimized
+
+# Normally this should be always ON, but on Windows CMake cannot properly guess
+# the host triple for the Debug build (specifically the NATIVE sub-build).
+if build.platform == 'win32':
+  hook.ConfigureOption('LLVM_OPTIMIZED_TABLEGEN', 'OFF')
+else:
+  hook.ConfigureOption('LLVM_OPTIMIZED_TABLEGEN', 'ON')
+
 # LTO is disabled because it's using too much memory and is crashing the build
 # hook.ConfigureOption('LLVM_ENABLE_LTO', 'ON')
 hook.ConfigureOption('LLVM_RAM_PER_LINK_JOB', '10000')

@@ -567,6 +567,7 @@ void OnHotKeyDown(int id) {
 #endif
 
 void KeyboardGrab::Release() {
+#ifdef __linux__
   auto& xcb_window = static_cast<xcb::XCBWindow&>(*keyboard.root_widget.window);
   xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(xcb::connection, XCB_CURRENT_TIME,
                                                         xcb_window.master_keyboard_device_id);
@@ -574,6 +575,7 @@ void KeyboardGrab::Release() {
           xcb_request_check(xcb::connection, cookie)}) {
     ERROR << "Failed to ungrab the keyboard";
   }
+#endif
   grabber.ReleaseGrab(*this);
   keyboard.grab.reset();  // KeyboardGrab deletes itself here!
 }

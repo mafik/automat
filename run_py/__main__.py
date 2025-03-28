@@ -4,13 +4,19 @@
 
 '''Run Automat.'''
 
-import build
-import subprocess
-import debian_deps
 from args import args
 from sys import platform, exit
 
+if platform == 'win32':
+    import windows_deps
+    windows_deps.check_and_install()
+
+import build
+import subprocess
+
+import debian_deps
 debian_deps.check_and_install()
+
 
 recipe = build.recipe()
 

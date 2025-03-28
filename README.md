@@ -31,11 +31,17 @@ things are organized. Once you do that, you may try to clone the Automat
 repository and run it (build script should take care of everything for you - if
 not - you can report it as a bug).
 
-The same commands should work on Linux and Windows:
+Once you've downloaded Automat's source code (you can do this by pressing the "Code" button above and selecting the "Download ZIP" option), extract it and enter its directory. Right click and on an empty area and select "Open in Terminal".
+
+First-time users on Windows may then run Automat like so:
+
+```bat
+./run.bat automat
+```
+
+On Linux (and also on Windows - assuming you already have Python installed and associated with `.py` files):
 
 ```sh
-git clone https://github.com/mafik/automat.git
-cd automat
 ./run.py automat
 ```
 

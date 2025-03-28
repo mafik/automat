@@ -62,7 +62,7 @@ if platform == 'win32':
   build.base.compile_args += ['-D_WIN32_WINNT=0x0A00']
   build.base.compile_args += ['-DWINVER=0x0A00']
   default_gn_args += ' clang_win="C:\\Program Files\\LLVM"'
-  default_gn_args += ' clang_win_version=17'
+  default_gn_args += ' clang_win_version=20'
   variants['Debug'].gn_args += ' extra_cflags=["/MTd"]'
   # This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.
   # For more interesting defines, check out:
@@ -101,7 +101,7 @@ def skia_git_sync_with_deps():
   return make.Popen(['python', 'tools/git-sync-deps'], cwd=SKIA_ROOT)
 
 def skia_gn_gen(variant: BuildVariant):
-  args = [GN, 'gen', variant.build_dir, '--args=' + variant.gn_args + ' ' + default_gn_args]
+  args = [GN, 'gen', variant.build_dir, '--script-executable=python', '--args=' + variant.gn_args + ' ' + default_gn_args]
   return make.Popen(args, cwd=SKIA_ROOT)
 
 def skia_compile(variant: BuildVariant):
@@ -128,9 +128,10 @@ def hook_recipe(recipe):
 
   for v in variants.values():
     args_gn = v.build_dir / 'args.gn'
-    recipe.add_step(partial(skia_gn_gen, v), outputs=[args_gn], inputs=[GN, __file__], desc='Generating Skia build files', shortcut='skia gn gen' + v.build_type.rule_suffix())
+    build_ninja = v.build_dir / 'build.ninja'
+    recipe.add_step(partial(skia_gn_gen, v), outputs=[args_gn, build_ninja], inputs=[GN, __file__], desc='Generating Skia build files', shortcut='skia gn gen' + v.build_type.rule_suffix())
 
-    recipe.add_step(partial(skia_compile, v), outputs=[v.build_dir / libname], inputs=[ninja.BIN, args_gn], desc='Compiling Skia', shortcut='skia' + v.build_type.rule_suffix())
+    recipe.add_step(partial(skia_compile, v), outputs=[v.build_dir / libname], inputs=[ninja.BIN, args_gn, build_ninja], desc='Compiling Skia', shortcut='skia' + v.build_type.rule_suffix())
 
 # Libraries offered by Skia
 skia_libs = set(['shshaper', 'skunicode', 'skia', 'skottie', 'svg'])

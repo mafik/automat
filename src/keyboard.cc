@@ -29,7 +29,7 @@
 #include "format.hh"
 #include "x11.hh"
 #include "xcb.hh"
-
+#include "xcb_window.hh"
 #endif
 
 using namespace maf;
@@ -70,6 +70,7 @@ void Caret::PlaceIBeam(Vec2 position) {
 
 void Caret::Release() {
   if (owner) {
+    owner->ReleaseCaret(*this);
     if (auto it = std::find(owner->carets.begin(), owner->carets.end(), this);
         it != owner->carets.end()) {
       owner->carets.erase(it);
@@ -78,7 +79,7 @@ void Caret::Release() {
   }
   for (auto it = keyboard.carets.begin(); it != keyboard.carets.end(); ++it) {
     if (it->get() == this) {
-      keyboard.carets.erase(it);
+      keyboard.carets.erase(it);  // deletes this
       break;
     }
   }
@@ -95,6 +96,27 @@ KeyboardGrab& Keyboard::RequestGrab(KeyboardGrabber& grabber) {
     grab->Release();
   }
   grab.reset(new KeyboardGrab(*this, grabber));
+#ifdef __linux__
+  // TODO: test whether this works
+  auto& xcb_window = static_cast<xcb::XCBWindow&>(*root_widget.window);
+  uint32_t mask = XCB_INPUT_XI_EVENT_MASK_KEY_PRESS | XCB_INPUT_XI_EVENT_MASK_KEY_RELEASE;
+  auto cookie = xcb_input_xi_grab_device(xcb::connection, xcb::screen->root, XCB_CURRENT_TIME,
+                                         XCB_CURSOR_NONE, xcb_window.master_keyboard_device_id,
+                                         XCB_INPUT_GRAB_MODE_22_ASYNC, XCB_INPUT_GRAB_MODE_22_ASYNC,
+                                         false, 1, &mask);
+  std::unique_ptr<xcb_generic_error_t, xcb::FreeDeleter> error;
+  std::unique_ptr<xcb_input_xi_grab_device_reply_t, xcb::FreeDeleter> reply(
+      xcb_input_xi_grab_device_reply(xcb::connection, cookie, std::out_ptr(error)));
+  if (reply) {
+    if (reply->status != XCB_GRAB_STATUS_SUCCESS) {
+      ERROR << "Failed to grab the keyboard: " << reply->status;
+    }
+  }
+
+  if (error) {
+    ERROR << "Error while attempting to grab keyboard: " << dump_struct(*error);
+  }
+#endif
   return *grab;
 }
 
@@ -384,6 +406,27 @@ void Keyboard::KeyUp(xcb_key_press_event_t& ev) {
 }
 #endif  // __linux__
 
+// Helper for safely iterating over a list of carets. The list may be modified by the callback.
+template <typename T>
+void DeleteSafeForEach(std::set<std::unique_ptr<Caret>>& carets, const T& cb) {
+  std::vector<Caret*> carets_copy;
+  carets_copy.reserve(carets.size());
+  for (auto& caret : carets) {
+    carets_copy.push_back(caret.get());
+  }
+  // Then we iterate over this list of carets.
+  for (auto* caret : carets_copy) {
+    // For each caret we check if it's still in the list of carets.
+    for (auto& c : carets) {
+      if (c.get() == caret) {
+        // Only if the caret is still present, we notify the CaretOwner.
+        cb(*caret);
+        break;
+      }
+    }
+  }
+}
+
 void Keyboard::KeyDown(Key key) {
   // Quit on Ctrl + Q
   if (key.ctrl && key.physical == AnsiKey::Q) {
@@ -402,14 +445,12 @@ void Keyboard::KeyDown(Key key) {
     grab->grabber.KeyboardGrabberKeyDown(*grab, key);
   } else if (key.physical == AnsiKey::Escape) {
     // Release the carets when Escape is pressed
-    for (auto& caret : carets) {
-      caret->owner->ReleaseCaret(*caret);
-    }
+    DeleteSafeForEach(carets, [](Caret& caret) { caret.owner->ReleaseCaret(caret); });
     carets.clear();
   } else if (!carets.empty()) {
-    for (auto& caret : carets) {
-      caret->owner->KeyDown(*caret, key);
-    }
+    // The list of carets may be modified by the KeyDown. Because of that we have to iterate over
+    // the list of carets in a very careful way.
+    DeleteSafeForEach(carets, [key](Caret& caret) { caret.owner->KeyDown(caret, key); });
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i] == nullptr && pointer && pointer->hover) {
@@ -419,7 +460,6 @@ void Keyboard::KeyDown(Key key) {
         current = current->parent;
       } while (actions[i] == nullptr && current);
       if (actions[i]) {
-        actions[i]->Begin();
         pointer->UpdatePath();
       }
     }
@@ -433,15 +473,10 @@ void Keyboard::KeyUp(Key key) {
   if (grab) {
     grab->grabber.KeyboardGrabberKeyUp(*grab, key);
   } else if (!carets.empty()) {
-    for (auto& caret : carets) {
-      if (caret->owner) {
-        caret->owner->KeyUp(*caret, key);
-      }
-    }
+    DeleteSafeForEach(carets, [key](Caret& caret) { caret.owner->KeyUp(caret, key); });
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i]) {
-      actions[i]->End();
       actions[i].reset();
       pointer->UpdatePath();
     }
@@ -532,6 +567,13 @@ void OnHotKeyDown(int id) {
 #endif
 
 void KeyboardGrab::Release() {
+  auto& xcb_window = static_cast<xcb::XCBWindow&>(*keyboard.root_widget.window);
+  xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(xcb::connection, XCB_CURRENT_TIME,
+                                                        xcb_window.master_keyboard_device_id);
+  if (std::unique_ptr<xcb_generic_error_t, xcb::FreeDeleter> error{
+          xcb_request_check(xcb::connection, cookie)}) {
+    ERROR << "Failed to ungrab the keyboard";
+  }
   grabber.ReleaseGrab(*this);
   keyboard.grab.reset();  // KeyboardGrab deletes itself here!
 }

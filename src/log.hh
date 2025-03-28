@@ -73,6 +73,13 @@ void LOG_Indent(int n = 2);
 
 void LOG_Unindent(int n = 2);
 
+struct LOG_IndentGuard {
+  LOG_IndentGuard(int n = 2) : n(n) { LOG_Indent(n); }
+  ~LOG_IndentGuard() { LOG_Unindent(n); }
+
+  int n;
+};
+
 #define EVERY_N_SEC(n)                                                                          \
   static std::chrono::steady_clock::time_point last_log_time;                                   \
   if (std::chrono::steady_clock::now() - last_log_time > std::chrono::steady_clock::duration(n) \

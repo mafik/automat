@@ -56,8 +56,11 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
     if (key_selector) {
       key_selector->Release();
     } else {
-      key_selector = &pointer.keyboard->RequestGrab(*this);
+      Vec2 caret_position = shortcut_button->child->TextureBounds()->TopLeftCorner();
+      key_selector = &pointer.keyboard->RequestCaret(*this, shortcut_button->child, caret_position);
     }
+    WakeAnimation();
+    shortcut_button->WakeAnimation();
   };
 }
 KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
@@ -107,10 +110,16 @@ void KeyPresser::SetKey(gui::AnsiKey k) {
   shortcut_button->SetLabel(ToStr(k));
 }
 
-void KeyPresser::ReleaseGrab(gui::KeyboardGrab&) { key_selector = nullptr; }
-void KeyPresser::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key k) {
+void KeyPresser::ReleaseCaret(gui::Caret&) {
+  key_selector = nullptr;
+  WakeAnimation();
+  shortcut_button->WakeAnimation();
+}
+void KeyPresser::KeyDown(gui::Caret&, gui::Key k) {
   key_selector->Release();
   SetKey(k.physical);
+  WakeAnimation();
+  shortcut_button->WakeAnimation();
 }
 
 void KeyPresser::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
@@ -120,31 +129,24 @@ void KeyPresser::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
 struct DragAndClickAction : Action {
   gui::PointerButton btn;
   std::unique_ptr<Action> drag_action;
-  std::unique_ptr<Action> click_action;
+  std::unique_ptr<Option> click_option;
   time::SystemPoint press_time;
   DragAndClickAction(gui::Pointer& pointer, gui::PointerButton btn,
-                     std::unique_ptr<Action>&& drag_action, std::unique_ptr<Action>&& click_action)
+                     std::unique_ptr<Action>&& drag_action, std::unique_ptr<Option>&& click_option)
       : Action(pointer),
         btn(btn),
         drag_action(std::move(drag_action)),
-        click_action(std::move(click_action)) {}
-  void Begin() override {
+        click_option(std::move(click_option)) {
     press_time = pointer.button_down_time[static_cast<int>(btn)];
-    drag_action->Begin();
+  }
+  ~DragAndClickAction() override {
+    if (click_option && (time::SystemNow() - press_time < 0.2s)) {
+      auto click_action = click_option->Activate(pointer);
+    }
   }
   void Update() override {
     if (drag_action) {
       drag_action->Update();
-    }
-  }
-  void End() override {
-    if (drag_action) {
-      drag_action->End();
-      drag_action.reset();
-    }
-    if (click_action && (time::SystemNow() - press_time < 0.2s)) {
-      click_action->Begin();
-      click_action->End();
     }
   }
   gui::Widget* Widget() override {
@@ -157,8 +159,7 @@ struct DragAndClickAction : Action {
 
 struct RunAction : Action {
   Location& location;
-  RunAction(gui::Pointer& pointer, Location& location) : Action(pointer), location(location) {}
-  void Begin() {
+  RunAction(gui::Pointer& pointer, Location& location) : Action(pointer), location(location) {
     if (location.long_running) {
       location.long_running->Cancel();
       location.long_running = nullptr;
@@ -166,8 +167,26 @@ struct RunAction : Action {
       location.ScheduleRun();
     }
   }
-  void Update() {}
-  void End() {}
+  void Update() override {}
+};
+
+struct RunOption : Option {
+  std::shared_ptr<Widget> widget;
+  RunOption(std::shared_ptr<Widget> widget) : widget(widget) {}
+  Str Name() const override { return "Run"; }
+  std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
+    return std::make_unique<RunAction>(p, *Closest<Location>(*widget));
+  }
+};
+
+struct UseObjectOption : Option {
+  std::shared_ptr<Widget> widget;
+
+  UseObjectOption(std::shared_ptr<Widget> widget) : widget(widget) {}
+  Str Name() const override { return "Use"; }
+  std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
+    return widget->FindAction(p, gui::PointerButton::Left);
+  }
 };
 
 std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
@@ -175,12 +194,11 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
   auto hand_shape = GetHandShape();
   auto local_pos = p.PositionWithin(*this);
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
-    return std::make_unique<DragAndClickAction>(
-        p, btn, Object::FallbackWidget::FindAction(p, btn),
-        std::make_unique<RunAction>(p, *Closest<Location>(*p.hover)));
+    return std::make_unique<DragAndClickAction>(p, btn, Object::FallbackWidget::FindAction(p, btn),
+                                                std::make_unique<RunOption>(SharedPtr()));
   } else {
     return std::make_unique<DragAndClickAction>(p, btn, Object::FallbackWidget::FindAction(p, btn),
-                                                shortcut_button->FindAction(p, btn));
+                                                std::make_unique<UseObjectOption>(shortcut_button));
   }
 }
 

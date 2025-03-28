@@ -8,8 +8,9 @@ def hook_recipe(recipe):
   autotools.register_package(recipe, 'https://www.x.org/pub/individual/lib/libXau-1.0.11.tar.xz', ['{PREFIX}/include/X11'], ['{PREFIX}/lib/libXau.a'])
   autotools.register_package(recipe, 'https://xcb.freedesktop.org/dist/xcb-proto-1.17.0.tar.xz', [], ['{PREFIX}/share/pkgconfig/xcb-proto.pc'])
   autotools.register_package(recipe, 'https://xcb.freedesktop.org/dist/libxcb-1.17.0.tar.xz', ['{PREFIX}/share/pkgconfig/xcb-proto.pc', '{PREFIX}/lib/libXau.a'], ['{PREFIX}/lib/libxcb.a', '{PREFIX}/include/xcb'])
+  autotools.register_package(recipe, 'https://xcb.freedesktop.org/dist/xcb-util-cursor-0.1.5.tar.xz', ['{PREFIX}/share/pkgconfig/xcb-proto.pc'], ['{PREFIX}/lib/libxcb-cursor.a'])
 
-xcb_libs = set(['xcb', 'xcb-xinput', 'xcb-xtest'])
+xcb_libs = set(['xcb', 'xcb-xinput', 'xcb-xtest', 'xcb-cursor'])
 
 # Binaries that should link to XCB
 xcb_bins = set()
@@ -42,3 +43,4 @@ def hook_final(srcs, objs, bins, recipe):
         break
     if needs_xcb:
       step.inputs.add(str(build_type.PREFIX() / 'lib' / 'libxcb.a'))
+      step.inputs.add(str(build_type.PREFIX() / 'lib' / 'libxcb-cursor.a'))

@@ -257,9 +257,14 @@ HotKey::HotKey() {
       // Cancel HotKey selection.
       hotkey_selector->Release();  // This will also set itself to nullptr
     } else {
-      hotkey_selector = &pointer.keyboard->RequestGrab(*this);
-      shortcut_button->WakeAnimation();
+      gui::Widget* label = shortcut_button->child.get();
+      auto bounds = *label->TextureBounds();
+      Vec2 caret_position = shortcut_button->RRect().rect().center();
+      caret_position.x += bounds.left;
+      hotkey_selector = &pointer.keyboard->RequestCaret(*this, SharedPtr(), caret_position);
     }
+    WakeAnimation();
+    shortcut_button->WakeAnimation();
   };
 }
 string_view HotKey::Name() const { return "HotKey"; }
@@ -413,7 +418,7 @@ void HotKey::On() {
 }
 
 // This is called when the new HotKey is selected by the user
-void HotKey::KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key key) {
+void HotKey::KeyDown(gui::Caret&, gui::Key key) {
   bool on = IsOn();
   if (on) {
     Off();  // temporarily switch off to ungrab the old key combo
@@ -442,9 +447,9 @@ void HotKey::Off() {
   }
 }
 
-void HotKey::ReleaseGrab(gui::KeyboardGrab&) {
+void HotKey::ReleaseCaret(gui::Caret&) {
   hotkey_selector = nullptr;
-  LOG << "HotKey::ReleaseGrab - invalidating shortcut_button!";
+  WakeAnimation();
   shortcut_button->WakeAnimation();
 }
 void HotKey::ReleaseKeyGrab(gui::KeyGrab&) { hotkey = nullptr; }

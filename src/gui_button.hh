@@ -33,7 +33,6 @@ struct Button : Widget {
   animation::Phase Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
-  float Height() const;
   virtual SkRRect RRect() const;
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
@@ -42,7 +41,7 @@ struct Button : Widget {
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
   virtual float PressRatio() const { return press_action_count ? 1 : 0; }
 
-  void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
+  virtual void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const;
 
   maf::Optional<Rect> TextureBounds() const override;

@@ -21,6 +21,21 @@ SkColor AdjustLightness(SkColor color, float adjust_percent);
 
 SkColor MixColors(SkColor zero, SkColor one, float ratio);
 
+constexpr SkColor FastMix(SkColor zero, SkColor one, float ratio) {
+  float ratio_inv = 1.0f - ratio;
+  return SkColorSetARGB(SkColorGetA(zero) * ratio_inv + SkColorGetA(one) * ratio,
+                        SkColorGetR(zero) * ratio_inv + SkColorGetR(one) * ratio,
+                        SkColorGetG(zero) * ratio_inv + SkColorGetG(one) * ratio,
+                        SkColorGetB(zero) * ratio_inv + SkColorGetB(one) * ratio);
+}
+
+constexpr SkColor ClampedSubtractRGB(SkColor base, SkColor subtract) {
+  return SkColorSetARGB(SkColorGetA(base),
+                        std::max<int>(0, SkColorGetR(base) - SkColorGetR(subtract)),
+                        std::max<int>(0, SkColorGetG(base) - SkColorGetG(subtract)),
+                        std::max<int>(0, SkColorGetB(base) - SkColorGetB(subtract)));
+}
+
 }  // namespace automat::color
 
 namespace automat {

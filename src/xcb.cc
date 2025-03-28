@@ -83,4 +83,50 @@ void Connect(Status& status) {
   xi_opcode = xinput_data->major_opcode;
 }
 
+std::string GetPropertyString(xcb_window_t window, xcb_atom_t property) {
+  auto reply = get_property(window, property, XCB_ATOM_STRING, 0, 100 / 4);
+  if (!reply) {
+    return "";
+  }
+  if (reply->bytes_after == 0) {
+    return std::string((char*)xcb_get_property_value(reply.get()),
+                       (size_t)xcb_get_property_value_length(reply.get()));
+  }
+  auto proper_type = reply->type;
+  auto proper_size = reply->bytes_after + reply->value_len;
+  reply = get_property(window, property, proper_type, 0, (proper_size + 3) / 4);
+  if (!reply) {
+    return "";
+  }
+  return std::string((char*)xcb_get_property_value(reply.get()),
+                     (size_t)xcb_get_property_value_length(reply.get()));
+}
+
+void ReplaceProperty32(xcb_window_t window, xcb_atom_t property, xcb_atom_t type, uint32_t value) {
+  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window, property, type, 32, 1, &value);
+}
+
+namespace freedesktop {
+
+void ActivateWindow(xcb_window_t window, xcb_window_t active_window) {
+  xcb_client_message_event_t event = {
+      .response_type = XCB_CLIENT_MESSAGE,
+      .format = 32,
+      .sequence = 0,
+      .window = window,
+      .type = xcb::atom::_NET_ACTIVE_WINDOW,
+      .data = {.data32 =
+                   {
+                       1,  // source indication - 1 means application
+                       0,  // TODO: time
+                       active_window,
+                   }},
+  };
+
+  xcb_send_event(xcb::connection, 1, xcb::screen->root,
+                 XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY,
+                 (const char*)&event);
+}
+
+}  // namespace freedesktop
 }  // namespace xcb

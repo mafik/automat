@@ -17,6 +17,7 @@ struct Font {
   SkFont sk_font;
   float font_scale;
   float line_thickness;
+  float letter_height;
 
   static sk_sp<SkTypeface> LoadTypeface(maf::fs::VFile& ttf_file);
   static sk_sp<SkTypeface> GetNotoSans();

@@ -44,6 +44,8 @@ struct Caret final {
   SkPath MakeRootShape() const;
 
   // Called by the CaretOwner to release this Caret.
+  //
+  // This also calls CaretOwner::ReleaseCaret and deletes the Caret itself.
   void Release();
 };
 
@@ -54,7 +56,6 @@ struct CaretOwner {
   // Called by the Keyboard infrastructure to make the CaretOwner release all resources related to
   // the caret. This ends the key input coming from this Caret.
   virtual void ReleaseCaret(Caret&) = 0;
-  virtual Widget* CaretWidget() = 0;
 
   virtual void KeyDown(Caret&, Key);
   virtual void KeyUp(Caret&, Key);
@@ -69,9 +70,6 @@ struct KeyboardGrabber {
   // Called by the Keyboard infrastructure to make the KeyboardGrabber release all resources related
   // to this grab.
   virtual void ReleaseGrab(KeyboardGrab&) = 0;
-
-  // Called by the Keyboard infrastructure to get the widget that is grabbing the keyboard.
-  virtual Widget* GrabWidget() = 0;
 
   virtual void KeyboardGrabberKeyDown(KeyboardGrab&, Key) {}
   virtual void KeyboardGrabberKeyUp(KeyboardGrab&, Key) {}

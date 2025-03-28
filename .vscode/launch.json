@@ -8,6 +8,9 @@
       "env": {
         "DISPLAY": ":1"
       },
+      "initCommands": [
+        "settings set target.source-map ${workspaceFolder}/build/Debug/ ${workspaceFolder}/third_party/"
+      ],
       "program": "${workspaceFolder}/build/debug_automat",
       "preLaunchTask": "link debug_automat",
     },

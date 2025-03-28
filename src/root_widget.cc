@@ -205,10 +205,8 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     each_keyboard->local_to_parent = canvas_to_window;
   }
   for (auto& pointer : pointers) {
-    if (auto& action = pointer->action) {
-      if (auto* widget = action->Widget()) {
-        widget->local_to_parent = canvas_to_window;
-      }
+    if (auto* widget = pointer->GetWidget()) {
+      widget->local_to_parent = canvas_to_window;
     }
   }
   for (auto& each_connection_widget : connection_widgets) {
@@ -222,6 +220,21 @@ void RootWidget::Draw(SkCanvas& canvas) const {
   canvas.clear(background_color);
 
   DrawChildren(canvas);
+
+  {  // Outline for the hovered widget
+    auto old_matrix = canvas.getTotalMatrix();
+    for (auto& pointer : pointers) {
+      if (pointer->hover) {
+        SkPaint outline_paint;
+        outline_paint.setStyle(SkPaint::kStroke_Style);
+        auto* hover = pointer->hover.get();
+        canvas.setMatrix(TransformUp(*hover));
+        canvas.drawPath(hover->Shape(), outline_paint);
+      }
+    }
+    canvas.setMatrix(old_matrix);
+  }
+
   canvas.concat(CanvasToWindow());
 
   // Draw target root_widget size when zooming in with middle mouse button
@@ -243,17 +256,15 @@ struct MoveCameraAction : Action {
   RootWidget& root;
   Vec2 delta;
   MoveCameraAction(Pointer& pointer, RootWidget& root, Vec2 delta)
-      : Action(pointer), root(root), delta(delta) {}
+      : Action(pointer), root(root), delta(delta) {
+    root.move_velocity += delta;
+    root.WakeAnimation();
+  }
   ~MoveCameraAction() {
     root.move_velocity -= delta;
     root.WakeAnimation();
   }
-  void Begin() override {
-    root.move_velocity += delta;
-    root.WakeAnimation();
-  }
   void Update() override {}
-  void End() override {}
 };
 
 std::unique_ptr<Action> RootWidget::FindAction(Pointer& p, ActionTrigger trigger) {
@@ -492,7 +503,7 @@ void RootWidget::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
 
   unordered_set<Location*> dragged_locations(pointers.size());
   for (auto* pointer : pointers) {
-    if (auto& action = pointer->action) {
+    for (auto& action : pointer->actions) {
       if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
         dragged_locations.insert(drag_action->location.get());
       }

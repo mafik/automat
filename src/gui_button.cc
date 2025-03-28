@@ -42,17 +42,6 @@ constexpr float kRadius = kMinimalTouchableSize / 2;
 
 }  // namespace
 
-float Button::Height() const {
-  SkRect child_bounds = ChildBounds();
-  if (child->CenteredAtZero()) {
-    return std::max(
-        kMinimalTouchableSize,
-        std::max(abs(child_bounds.bottom()), abs(child_bounds.top())) * 2 + 2 * kMargin);
-  } else {
-    return std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
-  }
-}
-
 SkRRect Button::RRect() const {
   SkRect child_bounds = ChildBounds();
   float w, h;
@@ -176,6 +165,8 @@ void ToggleButton::DrawChildCachced(SkCanvas& canvas, const Widget& child) const
     }
   }
 
+  constexpr float kClipMargin = 0.5_mm;
+
   auto pressed_outer_oval = on_widget->RRect();
   float baseline =
       pressed_outer_oval.rect().fTop * (1 - filling) + pressed_outer_oval.rect().fBottom * filling;
@@ -186,12 +177,12 @@ void ToggleButton::DrawChildCachced(SkCanvas& canvas, const Widget& child) const
   for (int i = 0; i < n_points; ++i) {
     float frac = i / float(n_points - 1);
     float a = (frac * 3 + time_seconds * 1) * 2 * M_PI;
-    points[i].x = frac * pressed_outer_oval.rect().fRight +
-                  (1 - frac) * pressed_outer_oval.rect().fLeft + cos(a) * waving_x;
+    points[i].x = frac * (pressed_outer_oval.rect().fRight + kClipMargin) +
+                  (1 - frac) * (pressed_outer_oval.rect().fLeft - kClipMargin) + cos(a) * waving_x;
     points[i].y = baseline + sin(a) * waving_y;
   }
-  points[0].x = pressed_outer_oval.rect().fLeft;
-  points[n_points - 1].x = pressed_outer_oval.rect().fRight;
+  points[0].x = pressed_outer_oval.rect().fLeft - kClipMargin;
+  points[n_points - 1].x = pressed_outer_oval.rect().fRight + kClipMargin;
   constexpr float wave_width = 2 * waving_x;
   SkPath waves_clip;
   waves_clip.moveTo(points[0].x, points[0].y);
@@ -199,16 +190,29 @@ void ToggleButton::DrawChildCachced(SkCanvas& canvas, const Widget& child) const
     waves_clip.cubicTo(points[i].x + wave_width, points[i].y, points[i + 1].x - wave_width,
                        points[i + 1].y, points[i + 1].x, points[i + 1].y);
   }
-  waves_clip.lineTo(pressed_outer_oval.rect().fRight, pressed_outer_oval.rect().fTop);
-  waves_clip.lineTo(pressed_outer_oval.rect().fLeft, pressed_outer_oval.rect().fTop);
+  waves_clip.lineTo(pressed_outer_oval.rect().fRight + kClipMargin,
+                    pressed_outer_oval.rect().fTop - Button::kPressOffset - kClipMargin);
+  waves_clip.lineTo(pressed_outer_oval.rect().fLeft - kClipMargin,
+                    pressed_outer_oval.rect().fTop - Button::kPressOffset - kClipMargin);
+  waves_clip.close();
 
+  canvas.save();
   if (&child == off.get()) {
     canvas.clipPath(waves_clip, SkClipOp::kDifference, true);
   } else {
-    canvas.clipPath(waves_clip, SkClipOp::kIntersect, true);
+    canvas.clipPath(waves_clip, SkClipOp::kIntersect, false);
+  }
+
+  if constexpr (false) {
+    SkPaint debug_paint;
+    debug_paint.setColor(SK_ColorRED);
+    debug_paint.setStyle(SkPaint::kStroke_Style);
+    canvas.drawPath(waves_clip, debug_paint);
   }
 
   child.DrawCached(canvas);
+
+  canvas.restore();
 }
 
 void ToggleButton::PreDrawChildren(SkCanvas& canvas) const {
@@ -227,22 +231,19 @@ SkPath Button::Shape() const { return SkPath::RRect(RRect()); }
 
 struct ButtonAction : public Action {
   Button& button;
-  ButtonAction(Pointer& pointer, Button& button) : Action(pointer), button(button) {}
-
-  void Begin() override {
+  ButtonAction(Pointer& pointer, Button& button) : Action(pointer), button(button) {
     audio::Play(embedded::assets_SFX_button_down_wav);
-    button.Activate(pointer);
     button.press_action_count++;
+    button.Activate(pointer);  // This may immediately end the action.
   }
 
   void Update() override {}
 
-  void End() override {
+  ~ButtonAction() override {
     button.press_action_count--;
     button.WakeAnimation();
+    audio::Play(embedded::assets_SFX_button_up_wav);
   }
-
-  ~ButtonAction() override { audio::Play(embedded::assets_SFX_button_up_wav); }
 };
 
 std::unique_ptr<Action> Button::FindAction(Pointer& pointer, ActionTrigger pointer_button) {

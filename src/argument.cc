@@ -108,8 +108,11 @@ void Argument::NearbyCandidates(
     std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const {
   // Check the currently dragged object
   for (auto& pointer : gui::root_widget->pointers) {
-    if (auto* action = pointer->action.get()) {
-      if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action)) {
+    for (auto& action : pointer->actions) {
+      if (action == nullptr) {
+        continue;
+      }
+      if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action.get())) {
         auto& location = *drag_location_action->location;
         if (&location == &here) {
           continue;

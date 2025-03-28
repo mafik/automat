@@ -30,6 +30,7 @@ vec4 main(float2 localCoord) {
         uv.y += sin(uv.x * 4 + 2 * time * 2 * 3.14) * x_overshot;
         uv.x += sin(uv.y * 4 + 2 * time * 2 * 3.14) * y_overshot;
     }
+    uv.y = 1 - uv.y;
     vec4 ret = surface.eval(uv * surfaceResolution);
     if (oob) {
         ret *= 0.5;

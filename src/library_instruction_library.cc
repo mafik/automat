@@ -168,7 +168,7 @@ InstructionLibrary::Widget::Widget(std::weak_ptr<Object> object) : object(object
 SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 10_cm); }
 
 constexpr float kRoseFanDegrees = 180;
-constexpr float kStartDist = Instruction::Widget::kHeight / 2;
+constexpr float kStartDist = 0;  // distance from the center, at which stalk starts
 constexpr float kCornerDist = Instruction::Widget::kDiagonal / 2;
 constexpr float kRoseDist = 8_cm;
 constexpr static Rect kFrontInstructionRect =
@@ -487,6 +487,10 @@ PersistentImage stalk = PersistentImage::MakeFromAsset(maf::embedded::assets_sta
 PersistentImage leaf = PersistentImage::MakeFromAsset(maf::embedded::assets_leaf_webp,
                                                       PersistentImage::MakeArgs{.width = 1.2_cm});
 
+PersistentImage venus = PersistentImage::MakeFromAsset(
+    maf::embedded::assets_venus_webp,
+    PersistentImage::MakeArgs{.height = Instruction::Widget::kHeight});
+
 static gui::Font& HeavyFont() {
   static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeSemiBold(), kCategoryLetterSize);
   return *font;
@@ -697,6 +701,13 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     if constexpr (kDebugRoseDrawing) {
       canvas.drawCircle(category_name_position, category_radius, debug_paint);
     }
+  }
+
+  {  // Venus
+    canvas.save();
+    canvas.translate(-venus.width() / 2 - 0.7_cm, -venus.height() / 2);
+    venus.draw(canvas);
+    canvas.restore();
   }
 
   {  // Draw Register Table
@@ -975,12 +986,16 @@ struct ScrollDeckAction : Action {
         widget(widget),
         object(object),
         library_widget(dynamic_cast<InstructionLibrary::Widget&>(*widget)),
-        library(dynamic_cast<InstructionLibrary&>(*object)) {}
-  void Begin() override {
+        library(dynamic_cast<InstructionLibrary&>(*object)) {
     auto pos = pointer.PositionWithin(*widget);
     angle = SinCos::FromVec2(pos);
     library_widget.new_cards_dir_deg = (angle + 180_deg).ToDegrees();
     widget->WakeAnimation();
+  }
+  ~ScrollDeckAction() override {
+    library_widget.rotation_offset_t_target = 0;
+    library_widget.new_cards_dir_deg = NAN;
+    library_widget.WakeAnimation();
   }
   void Update() override {
     auto pos = pointer.PositionWithin(*widget);
@@ -1027,11 +1042,6 @@ struct ScrollDeckAction : Action {
     }
     library_widget.rotation_offset_t = library_widget.rotation_offset_t_target =
         -diff_deg / step_deg;
-    library_widget.WakeAnimation();
-  }
-  void End() override {
-    library_widget.rotation_offset_t_target = 0;
-    library_widget.new_cards_dir_deg = NAN;
     library_widget.WakeAnimation();
   }
 };
@@ -1100,9 +1110,8 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
       loc->InsertHere(std::move(proto));
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
       loc->position = loc->animation_state.position = p.PositionWithinRootMachine() - contact_point;
-      auto drag_action = std::make_unique<DragLocationAction>(p, std::move(loc));
-      drag_action->contact_point = contact_point - kFrontInstructionRect.BottomLeftCorner();
-      return drag_action;
+      return std::make_unique<DragLocationAction>(
+          p, std::move(loc), contact_point - kFrontInstructionRect.BottomLeftCorner());
     }
 
     if (Length(contact_point) < kCornerDist) {
@@ -1183,9 +1192,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
     auto* location = Closest<Location>(*p.hover);
     auto* machine = Closest<Machine>(*p.hover);
     if (location && machine) {
-      auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
-      a->contact_point = contact_point;
-      return a;
+      return std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
     }
   }
   return nullptr;

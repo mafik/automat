@@ -9,6 +9,7 @@
 #include <include/core/SkTileMode.h>
 #include <include/gpu/graphite/ImageProvider.h>
 
+#include "time.hh"
 #include "virtual_fs.hh"
 
 namespace automat {
@@ -60,10 +61,26 @@ sk_sp<SkImage> DecodeImage(maf::fs::VFile& asset);
 constexpr static SkSamplingOptions kDefaultSamplingOptions =
     SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);
 
+constexpr static SkSamplingOptions kFastSamplingOptions =
+    SkSamplingOptions(SkFilterMode::kNearest, SkMipmapMode::kNone);
+
+// Caching strategy:
+// - If an image was used during the last frame, keep it in the cache
+// - Clear the cache until it's below 1GB
+// - Start removing images from the oldest ones
 struct AutomatImageProvider : public skgpu::graphite::ImageProvider {
-  std::unordered_map<uint32_t, sk_sp<SkImage>> cache;
+  struct CacheEntry {
+    sk_sp<SkImage> image;
+    time::SteadyPoint last_used;
+  };
+  std::unordered_map<uint32_t, CacheEntry> cache;
+  time::SteadyPoint last_tick = time::kZeroSteady;
+
   sk_sp<SkImage> findOrCreate(skgpu::graphite::Recorder* recorder, const SkImage* image,
                               SkImage::RequiredProperties) override;
+
+  // Called at the end of each frame to clear unused textures.
+  void TickCache();
 };
 
 extern sk_sp<skgpu::graphite::ImageProvider> image_provider;

@@ -24,12 +24,6 @@ static Vec2 RoundToMilimeters(Vec2 v) {
 
 static Object* DraggedObject(DragLocationAction& a) { return a.location->object.get(); }
 
-void DragLocationAction::Begin() {
-  last_position = current_position = pointer.PositionWithinRootMachine();
-  widget->local_to_parent = SkM44(root_widget->CanvasToWindow());
-  Update();
-}
-
 Vec2 SnapPosition(DragLocationAction& d) {
   return RoundToMilimeters(d.current_position - d.contact_point);
 }
@@ -80,17 +74,10 @@ void DragLocationAction::Update() {
 
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
-void DragLocationAction::End() {
-  gui::DropTarget* drop_target = FindDropTarget(*this);
-  if (drop_target) {
-    location->WakeAnimation();
-    drop_target->DropLocation(std::move(location));
-  }
-}
-
 DragLocationAction::DragLocationAction(gui::Pointer& pointer,
-                                       std::shared_ptr<Location>&& location_arg)
+                                       std::shared_ptr<Location>&& location_arg, Vec2 contact_point)
     : Action(pointer),
+      contact_point(contact_point),
       location(std::move(location_arg)),
       widget(std::make_shared<DragLocationWidget>(*this)) {
   widget->parent = pointer.root_widget.SharedPtr();
@@ -112,9 +99,18 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer,
     }
   }
   gui::root_widget->WakeAnimation();
+
+  last_position = current_position = pointer.PositionWithinRootMachine();
+  Update();
 }
 
 DragLocationAction::~DragLocationAction() {
+  gui::DropTarget* drop_target = FindDropTarget(*this);
+  if (drop_target) {
+    location->WakeAnimation();
+    drop_target->DropLocation(std::move(location));
+  }
+
   pointer.root_widget.drag_action_count--;
   for (auto& connection_widget : gui::root_widget->connection_widgets) {
     connection_widget->animation_state.radar_alpha_target = 0;

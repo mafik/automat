@@ -593,8 +593,7 @@ struct DragDurationHandleAction : Action {
   TimerDelay& timer;
   DragDurationHandleAction(gui::Pointer& pointer, TimerDelay& timer)
       : Action(pointer), timer(timer) {}
-  virtual void Begin() {}
-  virtual void Update() {
+  void Update() override {
     auto pos = pointer.PositionWithin(timer);
     auto tick_count = TickCount(timer.range);
     double angle = atan2(pos.sk.y(), pos.sk.x());
@@ -620,7 +619,6 @@ struct DragDurationHandleAction : Action {
     SetDuration(timer, time::Duration(new_duration));
     PropagateDurationOutwards(timer);
   }
-  virtual void End() {}
 };
 
 void TimerDelay::Updated(Location& here, Location& updated) {
@@ -640,7 +638,6 @@ struct DragHandAction : Action {
       : Action(pointer), timer_weak(timer) {
     ++timer->hand_draggers;
   }
-  virtual void Begin() {}
   virtual void Update() {
     auto timer_shared = timer_weak.lock();
     if (!timer_shared) {
@@ -650,7 +647,6 @@ struct DragHandAction : Action {
     timer_shared->hand_degrees.value = atan(pos) * 180 / M_PI;
     timer_shared->WakeAnimation();
   }
-  virtual void End() {}
   ~DragHandAction() {
     if (auto timer = timer_weak.lock()) {
       --timer->hand_draggers;

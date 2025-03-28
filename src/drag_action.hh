@@ -45,12 +45,10 @@ struct DragLocationAction : Action {
   std::shared_ptr<Location> location;
   std::shared_ptr<DragLocationWidget> widget;
 
-  DragLocationAction(gui::Pointer&, std::shared_ptr<Location>&&);
+  DragLocationAction(gui::Pointer&, std::shared_ptr<Location>&&, Vec2 contact_point);
   ~DragLocationAction() override;
 
-  void Begin() override;
   void Update() override;
-  void End() override;
   gui::Widget* Widget() override { return widget.get(); }
 };
 

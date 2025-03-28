@@ -28,15 +28,22 @@ def extract_tar_gz(archive : Path, output : Path):
   import tarfile
   import os
   import shutil
-  
-  os.makedirs(output.parent, exist_ok=True)
+
+  tmp_dir = output / 'tmp'
+  os.makedirs(tmp_dir, exist_ok=True)
 
   tar = tarfile.open(archive, 'r:gz')
-  root = tar.next()
-  tar.extractall(output.parent)
-  shutil.move(output.parent / root.name, output)
+  tar.extractall(tmp_dir)
+  children = list(tmp_dir.iterdir())
 
-  
+  # if the archive contained a single directory, move its contents to the output
+  if len(children) == 1 and children[0].is_dir():
+    children = list(children[0].iterdir())
+  for child in children:
+    shutil.move(child, output)
+
+  shutil.rmtree(tmp_dir)
+
 
 class ExtensionHelper:
   '''
@@ -83,6 +90,8 @@ class ExtensionHelper:
     self.fetch_url = None
     self.fetch_filename = None
     self.include_regex = None
+    self.skip_configure = False
+    self.configure_input_func = None
 
   def _hook_recipe(self, recipe):
 
@@ -125,15 +134,29 @@ class ExtensionHelper:
           shortcut=f'patch {self.name}')
       self.beam[''] = [marker]
 
+    if self.skip_configure:
+      for build_type in build.types:
+        self.beam[build_type.name] = self.beam['']
+      return
+
     for build_type in build.types:
       build_dir = build_type.BASE() / self.name
+
+      extra_configure_inputs = [self.module_globals['__file__']]
+      if self.configure_input_func:
+        extra = self.configure_input_func(build_type)
+        if isinstance(extra, list):
+          extra_configure_inputs += extra
+        else:
+          extra_configure_inputs.append(extra)
+
       if self.configure == 'cmake':
         cmake_args = cmake.CMakeArgs(build_type, self.configure_opts)
         recipe.add_step(
             partial(Popen, cmake_args +
                               ['-S', str(self.src_dir).replace('\\', '/'), '-B', str(build_dir).replace('\\', '/')]),
             outputs=[build_dir / 'build.ninja'],
-            inputs=self.beam[''] + [self.module_globals['__file__']],
+            inputs=self.beam[''] + extra_configure_inputs,
             desc=f'Configuring {self.name} {build_type}'.strip(),
             shortcut=f'configure {self.name} {build_type}'.strip())
         
@@ -149,7 +172,7 @@ class ExtensionHelper:
         recipe.add_step(
           partial(Popen, meson_args),
           outputs=[build_dir / 'build.ninja'],
-          inputs=self.beam[''],
+          inputs=self.beam[''] + extra_configure_inputs,
           desc=f'Configuring {self.name} {build_type}',
           shortcut=f'configure {self.name} {build_type}')
       else:
@@ -191,7 +214,12 @@ class ExtensionHelper:
         self.install_bins.add(bin)
         bin.link_args += self.link_args
         bin.run_args += self.run_args
-    
+
+  '''Can be used to delay the configure step until some other files are ready.
+  
+  depends_on_func is a function that takes a BuildType and returns a list of files to wait for'''
+  def ConfigureDependsOn(self, depends_on_func):
+    self.configure_input_func = depends_on_func
 
   def FetchFromGit(self, git_url, git_tag):
     if self.git_url:
@@ -211,6 +239,9 @@ class ExtensionHelper:
       self.fetch_filename = fetch_filename
     else:
       self.fetch_filename = fetch_url.split('/')[-1]
+
+  def SkipConfigure(self):
+    self.skip_configure = True
 
   def ConfigureWithCMake(self, src_dir, output):
     '''

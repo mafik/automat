@@ -68,6 +68,7 @@ vec4 main(vec2 uv) {
     if (uv.x < 0. || uv.x > 1. || uv.y < 0. || uv.y > 1.) {
         return vec4(0.);
     }
+    uv.y = 1 - uv.y;
     vec4 ret = surface.eval(uv * surfaceResolution);
     // Debug output: show similarity to some anchors
     // ret.r = similarity[0];

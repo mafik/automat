@@ -12,6 +12,7 @@
 #include "library_number.hh"
 #include "library_timeline.hh"
 #include "library_timer.hh"
+#include "library_window.hh"
 #include "object.hh"
 
 using namespace maf;
@@ -56,7 +57,8 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Timeline>();
   index.Register<InstructionLibrary>();
   index.Register<Instruction, HideInToolbar>();
-  index.Register<Assembler, HideInToolbar>();
+  index.Register<Assembler>();
+  index.Register<Window>();
 }
 
 PrototypeLibrary::~PrototypeLibrary() {

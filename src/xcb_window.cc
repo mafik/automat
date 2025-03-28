@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "xcb_window.hh"
 
+#include <xcb/xinput.h>
+
 #include <stop_token>
 
 #include "automat.hh"
@@ -36,12 +38,10 @@ struct WM_STATE {
   static WM_STATE Get(xcb_window_t xcb_window) {
     using namespace atom;
     WM_STATE state;
-    xcb_get_property_reply_t* reply = xcb_get_property_reply(
-        connection, xcb_get_property(connection, 0, xcb_window, _NET_WM_STATE, XCB_ATOM_ANY, 0, 32),
-        nullptr);
+    auto reply = xcb::get_property(xcb_window, _NET_WM_STATE, XCB_ATOM_ANY, 0, 32);
     if (reply) {
-      xcb_atom_t* atoms = (xcb_atom_t*)xcb_get_property_value(reply);
-      int n_atoms = xcb_get_property_value_length(reply) / sizeof(xcb_atom_t);
+      xcb_atom_t* atoms = (xcb_atom_t*)xcb_get_property_value(reply.get());
+      int n_atoms = xcb_get_property_value_length(reply.get()) / sizeof(xcb_atom_t);
       std::map<xcb_atom_t, Fn<void()>> callbacks = {
           {_NET_WM_STATE_MODAL, [&] { state.MODAL = true; }},
           {_NET_WM_STATE_STICKY, [&] { state.STICKY = true; }},
@@ -61,7 +61,6 @@ struct WM_STATE {
           cb->second();
         }
       }
-      free(reply);
     }
     return state;
   }
@@ -98,7 +97,6 @@ struct WM_STATE {
 float fp1616_to_float(xcb_input_fp1616_t fp) { return fp / 65536.0f; }
 double fp3232_to_double(xcb_input_fp3232_t fp) { return fp.integral + fp.frac / 4294967296.0; }
 
-// TODO: rename
 static void ScanDevices(XCBWindow& window) {
   window.vertical_scroll.reset();
   if (auto reply = xcb::input_xi_query_device(XCB_INPUT_DEVICE_ALL_MASTER)) {
@@ -106,6 +104,11 @@ static void ScanDevices(XCBWindow& window) {
     auto it_device = xcb_input_xi_query_device_infos_iterator(reply.get());
     for (int i_device = 0; i_device < n_devices; ++i_device) {
       xcb_input_device_id_t deviceid = it_device.data->deviceid;
+      if (it_device.data->type == XCB_INPUT_DEVICE_TYPE_MASTER_POINTER) {
+        window.master_pointer_device_id = deviceid;
+      } else if (it_device.data->type == XCB_INPUT_DEVICE_TYPE_MASTER_KEYBOARD) {
+        window.master_keyboard_device_id = deviceid;
+      }
       int n_classes = xcb_input_xi_device_info_classes_length(it_device.data);
       auto it_classes = xcb_input_xi_device_info_classes_iterator(it_device.data);
 
@@ -153,6 +156,11 @@ std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& 
     return nullptr;
   }
   auto window = std::unique_ptr<XCBWindow>(new XCBWindow(root));
+
+  if (xcb_cursor_context_new(connection, screen, std::out_ptr(window->cursor_context)) < 0) {
+    ERROR << "Error: Failed to create cursor context";
+  }
+
   float pixels_per_meter = DisplayPxPerMeter();
   window->client_width = root.size.x * pixels_per_meter;
   window->client_height = root.size.y * pixels_per_meter;
@@ -177,8 +185,12 @@ std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& 
                       XCB_ATOM_STRING, 8, sizeof(automat::gui::kWindowName),
                       automat::gui::kWindowName);
 
-  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, atom::WM_PROTOCOLS, 4,
-                      32, 1, &atom::WM_DELETE_WINDOW);
+  xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, atom::WM_PROTOCOLS,
+                      XCB_ATOM_ATOM, 32, 1, &atom::WM_DELETE_WINDOW);
+
+  // Setting user time to 0 indicates that the window wasn't created as a result of a user action
+  // and prevents window activation.
+  ReplaceProperty32(window->xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, 0);
 
   xcb_map_window(connection, window->xcb_window);
 
@@ -270,10 +282,107 @@ XCBWindow::~XCBWindow() {
   }
 }
 
+struct XCBPointerGrab : automat::gui::PointerGrab {
+  XCBWindow& xcb_window;
+  XCBPointerGrab(automat::gui::Pointer& pointer, automat::gui::PointerGrabber& grabber,
+                 XCBWindow& xcb_window)
+      : automat::gui::PointerGrab(pointer, grabber), xcb_window(xcb_window) {
+    xcb_cursor_t cursor = xcb_cursor_load_cursor(xcb_window.cursor_context.get(), "crosshair");
+
+    uint32_t mask = XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS | XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE |
+                    XCB_INPUT_XI_EVENT_MASK_MOTION;
+    auto cookie = xcb_input_xi_grab_device(
+        connection, screen->root, XCB_CURRENT_TIME, cursor, xcb_window.master_pointer_device_id,
+        XCB_INPUT_GRAB_MODE_22_ASYNC, XCB_INPUT_GRAB_MODE_22_ASYNC, false, 1, &mask);
+
+    std::unique_ptr<xcb_generic_error_t, FreeDeleter> error;
+
+    std::unique_ptr<xcb_input_xi_grab_device_reply_t, FreeDeleter> reply(
+        xcb_input_xi_grab_device_reply(connection, cookie, std::out_ptr(error)));
+    if (reply) {
+      if (reply->status != XCB_GRAB_STATUS_SUCCESS) {
+        ERROR << "Failed to grab the pointer: " << reply->status;
+      }
+    }
+
+    if (error) {
+      ERROR << "Error while attempting to grab pointer: " << dump_struct(*error);
+    }
+
+    if (cursor != XCB_NONE) {
+      xcb_free_cursor(connection, cursor);
+    }
+  }
+  void Release() override {
+    xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(connection, XCB_CURRENT_TIME,
+                                                          xcb_window.master_pointer_device_id);
+    if (std::unique_ptr<xcb_generic_error_t, FreeDeleter> error{
+            xcb_request_check(connection, cookie)}) {
+      ERROR << "Failed to ungrab the pointer";
+    }
+    automat::gui::PointerGrab::Release();  // deletes this
+  }
+};
+
+struct XCBPointer : automat::gui::Pointer {
+  XCBWindow& xcb_window;
+
+  static const char* GetCursorName(automat::gui::Pointer::IconType icon) {
+    switch (icon) {
+      case automat::gui::Pointer::kIconArrow:
+        return "left_ptr";
+      case automat::gui::Pointer::kIconHand:
+        return "hand1";
+      case automat::gui::Pointer::kIconIBeam:
+        return "xterm";
+      default:
+        return "left_ptr";
+    }
+  }
+
+  XCBPointer(automat::gui::RootWidget& root, Vec2 position, XCBWindow& xcb_window)
+      : automat::gui::Pointer(root, position), xcb_window(xcb_window) {}
+  void PushIcon(automat::gui::Pointer::IconType icon) override {
+    auto prev = Icon();
+    automat::gui::Pointer::PushIcon(icon);
+    auto curr = Icon();
+    if (prev != curr) {
+      UpdateCursor(curr);
+    }
+  }
+
+  void PopIcon() override {
+    auto prev = Icon();
+    automat::gui::Pointer::PopIcon();
+    auto curr = Icon();
+    if (prev != curr) {
+      UpdateCursor(curr);
+    }
+  }
+
+  void UpdateCursor(automat::gui::Pointer::IconType icon) {
+    xcb_cursor_t cursor =
+        xcb_cursor_load_cursor(xcb_window.cursor_context.get(), GetCursorName(icon));
+    if (cursor != XCB_NONE) {
+      uint32_t cursor_value = cursor;
+      xcb_change_window_attributes(connection, xcb_window.xcb_window, XCB_CW_CURSOR, &cursor_value);
+      xcb_free_cursor(connection, cursor);
+      xcb_flush(connection);
+    }
+  }
+
+  automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
+    if (grab) {
+      grab->Release();
+    }
+    grab.reset(new XCBPointerGrab(*this, grabber, xcb_window));
+    return *grab;
+  }
+};
+
 automat::gui::Pointer& XCBWindow::GetMouse() {
   if (!mouse) {
-    mouse =
-        std::make_unique<automat::gui::Pointer>(root, ScreenToWindowPx(mouse_position_on_screen));
+    mouse = std::make_unique<XCBPointer>(root, ScreenToWindowPx(mouse_position_on_screen), *this);
   }
   return *mouse;
 }
@@ -345,9 +454,7 @@ void XCBWindow::MainLoop() {
           // window manager are correct. Querying the position from geometry also returns the
           // wrong position. The only way to get the correct on-screen position that was found to
           // be reliable was to translate the point 0, 0 to root window coordinates.
-          xcb_translate_coordinates_reply_t* reply = xcb_translate_coordinates_reply(
-              connection, xcb_translate_coordinates(connection, xcb_window, screen->root, 0, 0),
-              nullptr);
+          auto reply = xcb::translate_coordinates(xcb_window, screen->root, 0, 0);
           window_position_on_screen.x = reply->dst_x;
           window_position_on_screen.y = reply->dst_y;
 
@@ -426,7 +533,9 @@ void XCBWindow::MainLoop() {
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
-                automat::gui::keyboard->KeyDown(*(xcb_input_key_press_event_t*)event);
+                auto ev = (xcb_input_key_press_event_t*)event;
+                ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
+                automat::gui::keyboard->KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_RAW_KEY_RELEASE: {
@@ -443,16 +552,7 @@ void XCBWindow::MainLoop() {
                 if (ev->flags & XCB_INPUT_POINTER_EVENT_FLAGS_POINTER_EMULATED) {
                   break;
                 }
-                // auto cookie =
-                //     xcb_grab_pointer(connection, 0, xcb_window,
-                //                      XCB_EVENT_MASK_BUTTON_RELEASE |
-                //                      XCB_EVENT_MASK_BUTTON_MOTION
-                //                      |
-                //                          XCB_EVENT_MASK_POINTER_MOTION_HINT,
-                //                      XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC, XCB_WINDOW_NONE,
-                //                      XCB_CURSOR_NONE, XCB_CURRENT_TIME);
-                // xcb_flush(connection);
-                // xcb_request_check(connection, cookie)
+                ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
                 auto lock = Lock();
                 GetMouse().ButtonDown(EventDetailToButton(ev->detail));
                 break;
@@ -603,6 +703,11 @@ void XCBWindow::MainLoop() {
               automat::gui::keyboard->KeyUp(*(xcb_input_key_release_event_t*)event);
             }
           }
+          break;
+        }
+        case 0: {
+          xcb_generic_error_t* error = (xcb_generic_error_t*)event;
+          LOG << "XCB Error: " << dump_struct(*error);
           break;
         }
         default:

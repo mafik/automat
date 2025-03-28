@@ -60,6 +60,11 @@ union Vec2 {
   constexpr Vec2 operator/(float rhs) const { return Vec2(x / rhs, y / rhs); }
   constexpr Vec2 operator*(Vec2 other) const { return Vec2(x * other.x, y * other.y); }
   constexpr Vec2 operator/(Vec2 other) const { return Vec2(x / other.x, y / other.y); }
+  constexpr Vec2& operator/=(Vec2 other) {
+    x /= other.x;
+    y /= other.y;
+    return *this;
+  }
   constexpr operator SkPoint() const { return sk; }
   constexpr bool operator==(const Vec2& rhs) const { return x == rhs.x && y == rhs.y; }
   constexpr bool operator!=(const Vec2& rhs) const { return !(*this == rhs); }
@@ -119,6 +124,8 @@ inline Vec2 Normalize(Vec2 v) {
   return v / len;
 }
 
+inline Vec2 Round(Vec2 v) { return {roundf(v.x), roundf(v.y)}; }
+
 inline Vec2 Rotate90DegreesClockwise(Vec2 v) { return {v.y, -v.x}; }
 inline Vec2 Rotate90DegreesCounterClockwise(Vec2 v) { return {-v.y, v.x}; }
 
@@ -127,6 +134,16 @@ constexpr float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; 
 constexpr float Cross(Vec2 a, Vec2 b) { return a.x * b.y - a.y * b.x; }
 constexpr Vec3 Cross(Vec3 a, Vec3 b) {
   return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+}
+template <float T>
+constexpr Vec2 EvalBezierAtFixedT(Vec2 p0, Vec2 p1, Vec2 p2) {
+  return p0 * (1 - T) * (1 - T) + p1 * 2 * T * (1 - T) + p2 * T * T;
+}
+template <float T>
+constexpr Vec2 EvalBezierAtFixedT(Vec2 p0, Vec2 p1, Vec2 p2, Vec2 p3) {
+  constexpr float t = T;
+  return p0 * (1 - t) * (1 - t) * (1 - t) + p1 * 3 * t * (1 - t) * (1 - t) +
+         p2 * 3 * t * t * (1 - t) + p3 * t * t * t;
 }
 
 // Project vector p onto vector dir.
@@ -221,6 +238,11 @@ union Rect {
     return r.MoveBy({-AnchorX{}(r), -AnchorY{}(r)});
   }
 
+  template <typename AnchorX = ::CenterX, typename AnchorY = ::CenterY>
+  static constexpr Rect MakeAtZero(Vec2 size) {
+    return MakeAtZero<AnchorX, AnchorY>(size.x, size.y);
+  }
+
   // Construct a zero-sized rectangle at the given point.
   static constexpr Rect MakeEmptyAt(Vec2 point) { return {point.x, point.y, point.x, point.y}; }
 
@@ -295,6 +317,14 @@ union Rect {
 
   constexpr bool Contains(Vec2 point) const {
     return point.x >= left && point.x <= right && point.y >= bottom && point.y <= top;
+  }
+
+  // Cut off and return the top of the rectangle.
+  constexpr Rect CutTop(float height) {
+    Rect ret = *this;
+    top -= height;
+    ret.bottom = top;
+    return ret;
   }
 
   void ExpandToInclude(Vec2 point) {
@@ -376,7 +406,7 @@ union RRect {
     if (ret.rect.Width() == 0 && ret.rect.Height() == 0) {
       ret.type = SkRRect::Type::kEmpty_Type;
     } else if (ret.radii[0] == ret.radii[1] && ret.radii[1] == ret.radii[2] &&
-               ret.radii[2] == ret.radii[3] && ret.radii[0] == kZeroVec2) {
+               ret.radii[2] == ret.radii[3]) {
       ret.type = SkRRect::Type::kSimple_Type;
     } else if (ret.radii[0] == ret.radii[1] && ret.radii[1] == ret.radii[2] &&
                ret.radii[2] == ret.radii[3] && (ret.radii[0].x >= (ret.rect.Width() / 2)) &&

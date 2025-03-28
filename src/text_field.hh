@@ -49,7 +49,6 @@ struct TextField : Widget, CaretOwner {
   SkPath Shape() const override;
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   void ReleaseCaret(Caret&) override;
-  Widget* CaretWidget() override { return this; }
   void KeyDown(Caret&, Key) override;
   void KeyUp(Caret&, Key) override;
 

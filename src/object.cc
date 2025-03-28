@@ -12,7 +12,6 @@
 #include "gui_constants.hh"
 #include "location.hh"
 #include "root_widget.hh"
-#include "sincos.hh"
 
 using namespace maf;
 
@@ -98,12 +97,11 @@ std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
     auto* machine = Closest<Machine>(*p.hover);
     if (location && machine) {
       auto contact_point = p.PositionWithin(*this);
-      auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location));
-      a->contact_point = contact_point;
+      auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
       return a;
     }
   }
-  return nullptr;
+  return Widget::FindAction(p, btn);
 }
 
 void Object::Updated(Location& here, Location& updated) {

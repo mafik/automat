@@ -11,7 +11,7 @@
 
 namespace automat::library {
 
-struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::KeyboardGrabber, gui::KeyGrabber {
+struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui::KeyGrabber {
   gui::AnsiKey key = gui::AnsiKey::F11;
   bool ctrl = true;
   bool alt = false;
@@ -26,7 +26,7 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::KeyboardGrabber,
   std::shared_ptr<KeyButton> shortcut_button;
 
   // This is used to select the main hotkey
-  gui::KeyboardGrab* hotkey_selector = nullptr;
+  gui::Caret* hotkey_selector = nullptr;
 
   // This is used to get hotkey events
   gui::KeyGrab* hotkey = nullptr;
@@ -43,11 +43,10 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::KeyboardGrabber,
   void On() override;
   void Off() override;
 
-  void ReleaseGrab(gui::KeyboardGrab&) override;
+  void ReleaseCaret(gui::Caret&) override;
   void ReleaseKeyGrab(gui::KeyGrab&) override;
-  Widget* GrabWidget() override { return this; }
 
-  void KeyboardGrabberKeyDown(gui::KeyboardGrab&, gui::Key) override;
+  void KeyDown(gui::Caret&, gui::Key) override;
 
   void KeyGrabberKeyDown(gui::KeyGrab&) override;
   void KeyGrabberKeyUp(gui::KeyGrab&) override;

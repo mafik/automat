@@ -360,30 +360,18 @@ std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTri
   return nullptr;
 }
 
-DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)
-    : Action(pointer),
-      widget(widget),
-      effect(audio::MakeBeginLoopEndEffect(embedded::assets_SFX_cable_start_wav,
-                                           embedded::assets_SFX_cable_loop_wav,
-                                           embedded::assets_SFX_cable_end_wav)) {}
-
-DragConnectionAction::~DragConnectionAction() {
-  widget.manual_position.reset();
-  if (Machine* m = widget.from.ParentAs<Machine>()) {
-    for (auto& l : m->locations) {
-      l->animation_state.highlight_target = 0;
-      l->WakeAnimation();
-    }
-  }
-}
-
 bool CanConnect(Location& from, Location& to, Argument& arg) {
   std::string error;
   arg.CheckRequirements(from, &to, to.object.get(), error);
   return error.empty();
 }
 
-void DragConnectionAction::Begin() {
+DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)
+    : Action(pointer),
+      widget(widget),
+      effect(audio::MakeBeginLoopEndEffect(embedded::assets_SFX_cable_start_wav,
+                                           embedded::assets_SFX_cable_loop_wav,
+                                           embedded::assets_SFX_cable_end_wav)) {
   if (auto it = widget.from.outgoing.find(&widget.arg); it != widget.from.outgoing.end()) {
     delete *it;
   }
@@ -413,13 +401,7 @@ void DragConnectionAction::Begin() {
   widget.WakeAnimation();
 }
 
-void DragConnectionAction::Update() {
-  Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
-  widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
-  widget.WakeAnimation();
-}
-
-void DragConnectionAction::End() {
+DragConnectionAction::~DragConnectionAction() {
   Machine* m = widget.from.ParentAs<Machine>();
   Vec2 pos;
   if (widget.state) {
@@ -433,6 +415,20 @@ void DragConnectionAction::End() {
   if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
     widget.from.ConnectTo(*to, widget.arg);
   }
+  widget.WakeAnimation();
+
+  widget.manual_position.reset();
+  if (Machine* m = widget.from.ParentAs<Machine>()) {
+    for (auto& l : m->locations) {
+      l->animation_state.highlight_target = 0;
+      l->WakeAnimation();
+    }
+  }
+}
+
+void DragConnectionAction::Update() {
+  Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
+  widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
   widget.WakeAnimation();
 }
 
@@ -468,46 +464,23 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
 
 Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   Vec<Vec2> anchors;
-  if constexpr (false) {  // approach 1
-    Rect r = *pack_frame_texture_bounds;
-    anchors.push_back(r.TopRightCorner());
-    anchors.push_back(r.TopLeftCorner());
-    anchors.push_back(r.BottomRightCorner());
-    anchors.push_back(r.BottomLeftCorner());
-  } else if (true) {  // approach 2 - perspective
-    auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
-    anchors.push_back(pos_dir.pos);
-    Optional<Vec2> end_pos;
-    if (manual_position.has_value()) {
-      end_pos = *manual_position;
-    } else if (auto to = arg.FindLocation(from)) {
-      Vec<Vec2AndDir> to_points;  // machine coords
-      auto to_widget = to->WidgetForObject();
-      to_widget->ConnectionPositions(to_points);
-      SkMatrix m = TransformBetween(*to_widget, *root_machine);
-      for (auto& to_point : to_points) {
-        to_point.pos = m.mapPoint(to_point.pos);
-      }
-      end_pos = to_points.front().pos;
+  auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
+  anchors.push_back(pos_dir.pos);
+  Optional<Vec2> end_pos;
+  if (manual_position.has_value()) {
+    end_pos = *manual_position;
+  } else if (auto to = arg.FindLocation(from)) {
+    Vec<Vec2AndDir> to_points;  // machine coords
+    auto to_widget = to->WidgetForObject();
+    to_widget->ConnectionPositions(to_points);
+    SkMatrix m = TransformBetween(*to_widget, *root_machine);
+    for (auto& to_point : to_points) {
+      to_point.pos = m.mapPoint(to_point.pos);
     }
-    if (end_pos) {
-      anchors.push_back(*end_pos);
-    }
-  } else if (true) {
-    auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
-    anchors.push_back(pos_dir.pos);
-    if (auto to = arg.FindLocation(from)) {
-      Vec<Vec2AndDir> to_points;  // machine coords
-      auto to_widget = to->WidgetForObject();
-      to_widget->ConnectionPositions(to_points);
-      SkMatrix m = TransformBetween(*to_widget, *root_machine);
-      for (auto& to_point : to_points) {
-        to_point.pos = m.mapPoint(to_point.pos);
-      }
-      anchors.push_back(to_points.front().pos + Vec2(4_mm, 0));
-      anchors.push_back(to_points.front().pos + Vec2(-4_mm, 0));
-      anchors.push_back(to_points.front().pos + Vec2(0, 10_cm));
-    }
+    end_pos = to_points.front().pos;
+  }
+  if (end_pos) {
+    anchors.push_back(*end_pos);
   }
   return anchors;
 }

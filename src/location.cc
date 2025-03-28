@@ -12,6 +12,7 @@
 #include <include/core/SkSurface.h>
 #include <include/effects/SkDashPathEffect.h>
 #include <include/effects/SkGradientShader.h>
+#include <include/effects/SkImageFilters.h>
 #include <include/pathops/SkPathOps.h>
 #include <include/utils/SkShadowUtils.h>
 
@@ -28,6 +29,7 @@
 #include "gui_constants.hh"
 #include "math.hh"
 #include "root_widget.hh"
+#include "textures.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
 
@@ -156,13 +158,11 @@ SkPath Outset(const SkPath& path, float distance) {
     rrect.outset(distance, distance);
     return SkPath::RRect(rrect);
   } else {
-    SkPaint outset_paint;
-    outset_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-    outset_paint.setStrokeWidth(distance);
-    SkPath outset_path;
-    skpathutils::FillPathWithPaint(path, outset_paint, &outset_path);
-    Simplify(outset_path, &outset_path);
-    return outset_path;
+    SkPath combined_path;
+    bool simplified = Simplify(path, &combined_path);
+    ArcLine arcline = ArcLine::MakeFromPath(simplified ? combined_path : path);
+    arcline.Outset(distance);
+    return arcline.ToPath();
   }
 }
 
@@ -170,14 +170,13 @@ animation::Phase Location::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
   auto& state = GetAnimationState();
-  if (state.Tick(timer.d, position, scale) == animation::Animating) {
-    phase = animation::Animating;
-    InvalidateConnectionWidgets(true, false);
-  }
+  phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.transparency);
+  phase |= state.Tick(timer.d, position, scale);
+  // Connection widgets rely on position, scale & transparency so make sure they're updated.
   UpdateChildTransform();
+  InvalidateConnectionWidgets(true, false);
 
   phase |= animation::ExponentialApproach(state.highlight_target, timer.d, 0.1, state.highlight);
-  phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.transparency);
   if (state.highlight > 0.01f) {
     phase = animation::Animating;
     state.time_seconds = timer.NowSeconds();
@@ -186,7 +185,7 @@ animation::Phase Location::Tick(time::Timer& timer) {
     float target_elevation = 0;
     for (auto* root_widget : root_widgets) {
       for (auto* pointer : root_widget->pointers) {
-        if (auto& action = pointer->action) {
+        for (auto& action : pointer->actions) {
           if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
             if (drag_action->location.get() == this) {
               target_elevation = 1;
@@ -209,13 +208,9 @@ void Location::Draw(SkCanvas& canvas) const {
     my_shape = Shape();
   }
   SkRect bounds = my_shape.getBounds();
-  auto& state = GetAnimationState();
+  object_widget->local_to_parent.asM33().mapRect(&bounds);
 
-  bool using_layer = false;
-  if (state.transparency > 0.01) {
-    using_layer = true;
-    canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
-  }
+  auto& state = GetAnimationState();
 
   if (state.highlight > 0.01f) {  // Draw dashed highlight outline
     SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
@@ -233,12 +228,17 @@ void Location::Draw(SkCanvas& canvas) const {
     SkPaint dash_paint(kHighlightPaint);
     dash_paint.setAlphaf(state.highlight);
     float intervals[] = {0.0035, 0.0015};
-    double ignore;
     float period_seconds = 200;
     float phase = std::fmod(state.time_seconds, period_seconds) / period_seconds;
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));
     canvas.drawPath(outset_shape, dash_paint);
     canvas.restore();
+  }
+
+  bool using_layer = false;
+  if (state.transparency > 0.01) {
+    using_layer = true;
+    canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
   }
 
   if constexpr (false) {  // Gray frame
@@ -436,40 +436,54 @@ void Location::PreDraw(SkCanvas& canvas) const {
   if (object == nullptr) {
     return;
   }
+  constexpr float kMinElevation = 1_mm;
+  constexpr float kElevationRange = 8_mm;
+
+  auto child_widget = WidgetForObject();
+
+  if (!child_widget->pack_frame_texture_bounds) {
+    return;  // no shadow for non-cached widgets
+  }
   auto& anim = GetAnimationState();
-  auto object_widget = WidgetForObject();
-  auto shape = object_widget->Shape();
-
-  // Instead of using the Shape in its original (metric) coordinates, we transform it into pixel
-  // coords. This is necessary because ShadowUtils make some assumptions about shape coordinates
-  // equal to pixels.
-  shape.setIsVolatile(true);
-  auto local_to_device =
-      canvas.getLocalToDevice().preConcat(object_widget->local_to_parent).asM33();
-  canvas.resetMatrix();
-  shape.transform(local_to_device);
-
   auto& root_widget = FindRootWidget();
   auto window_size_px = root_widget.size * root_widget.display_pixels_per_meter;
-  float s = local_to_device.getScaleX();
-  float min_elevation = 1_mm;
-  SkPoint3 z_plane_params = {0, 0, (min_elevation + anim.elevation * 8_mm) * s};
-  SkPoint3 light_pos = {window_size_px.width / 2.f, 0, (float)window_size_px.height};
-  float light_radius = window_size_px.width / 2.f;
-  uint32_t flags =
-      SkShadowFlags::kTransparentOccluder_ShadowFlag | SkShadowFlags::kConcaveBlurOnly_ShadowFlag;
+  float elevation = kMinElevation + anim.elevation * kElevationRange;
+  float shadow_sigma = elevation / 2;
+
+  SkMatrix local_to_device = canvas.getLocalToDeviceAs3x3();
+  SkMatrix device_to_local;
+  (void)local_to_device.invert(&device_to_local);
+
+  // Place some control points on the screen
+  Vec2 control_points[2] = {
+      Vec2{window_size_px.width / 2, 0},                     // top
+      Vec2{window_size_px.width / 2, window_size_px.height}  // bottom
+  };
+  // Move them into local coordinates
+  device_to_local.mapPoints(&control_points[0].sk, 2);
+  // Keep the top point in place, move the bottom point down to follow the shadow
+  Vec2 dst[2] = {control_points[0], control_points[1] - Vec2{0, elevation}};
+
+  SkMatrix matrix;
+  if (!matrix.setPolyToPoly(&control_points[0].sk, &dst[0].sk, 2)) {
+    matrix = SkMatrix::I();
+  }
+
   SkPaint shadow_paint;
-  shadow_paint.setBlendMode(SkBlendMode::kMultiply);
-  SkRect shadow_bounds;
-  SkShadowUtils::GetLocalBounds(SkMatrix::I(), shape, z_plane_params, light_pos, light_radius,
-                                flags, &shadow_bounds);
-  canvas.saveLayer(&shadow_bounds, &shadow_paint);
-  // Z plane params are parameters for the height function. h(x, y, z) = param_X * x + param_Y * y +
-  // param_Z The height seems to be computed only for the center of the shape.
-  // All of the light parameters (position, radius) are specified in pixel coordinates and ignore
-  // current canvas transform.
-  SkShadowUtils::DrawShadow(&canvas, shape, z_plane_params, light_pos, light_radius,
-                            "#c9ced6"_color, "#ada4b0"_color, flags);
+  // Simulate shadow & ambient occlusion.
+  shadow_paint.setImageFilter(SkImageFilters::Merge(
+      SkImageFilters::MatrixTransform(
+          matrix, kFastSamplingOptions,
+          SkImageFilters::DropShadowOnly(0, 0, shadow_sigma, shadow_sigma, "#09000c5b"_color,
+                                         nullptr)),
+      SkImageFilters::Blur(
+          elevation / 10, elevation / 10,
+          SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),
+                                      nullptr))));
+  shadow_paint.setAlphaf(1.f - anim.transparency);
+  canvas.saveLayer(nullptr, &shadow_paint);
+  canvas.concat(child_widget->local_to_parent);
+  canvas.drawDrawable(child_widget->sk_drawable.get());
   canvas.restore();
 }
 

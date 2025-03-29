@@ -15,6 +15,10 @@ struct SkDrawableNoRTTI : SkDrawable {
   void flatten(SkWriteBuffer& buffer) const override { drawable->flatten(buffer); }
 };
 
+SkDrawableRTTI& SkDrawableRTTI::Unwrap(SkDrawable& sk) {
+  return *static_cast<SkDrawableNoRTTI&>(sk).drawable;
+}
+
 sk_sp<SkDrawable> SkDrawableRTTI::Wrap(std::unique_ptr<SkDrawableRTTI> drawable) {
   return sk_sp<SkDrawable>(new SkDrawableNoRTTI(std::move(drawable)));
 }

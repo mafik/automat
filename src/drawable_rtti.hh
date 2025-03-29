@@ -38,6 +38,8 @@ struct SkDrawableRTTI {
     return Wrap(std::unique_ptr<SkDrawableRTTI>(ptr));
   }
 
+  static SkDrawableRTTI& Unwrap(SkDrawable&);
+
  private:
   static sk_sp<SkDrawable> Wrap(std::unique_ptr<SkDrawableRTTI> drawable);
 };

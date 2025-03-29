@@ -20,7 +20,10 @@ except Exception as e:
 
 # On Windows, if launched with double-click, keep
 # the window open until the user presses ENTER.
-if os.name == 'nt' and 'PROMPT' not in os.environ:
-  input('Press ENTER to exit...')
+#
+# Note: Temporarily disabled because it's not working with VSCode tasks.
+#
+# if os.name == 'nt' and 'PROMPT' not in os.environ:
+#   input('Press ENTER to exit...')
 
 sys.exit(exit_code)

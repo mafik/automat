@@ -6,7 +6,7 @@
     {
       "label": "link debug_llvm_asm_test",
       "type": "shell",
-      "command": "./run.py 'link debug_llvm_asm_test'",
+      "command": "python run.py 'link debug_llvm_asm_test'",
       "presentation": {
         "reveal": "silent"
       }
@@ -14,7 +14,7 @@
     {
       "label": "link debug_automat",
       "type": "shell",
-      "command": "./run.py 'link debug_automat'",
+      "command": "python run.py 'link debug_automat'",
       "presentation": {
         "reveal": "silent",
         "close": true
@@ -23,7 +23,7 @@
     {
       "label": "link automat",
       "type": "shell",
-      "command": "./run.py 'link automat'",
+      "command": "python run.py 'link automat'",
       "presentation": {
         "reveal": "silent",
         "close": true
@@ -32,7 +32,7 @@
     {
       "label": "link release_automat",
       "type": "shell",
-      "command": "./run.py 'link release_automat'",
+      "command": "python run.py 'link release_automat'",
       "presentation": {
         "reveal": "silent",
         "close": true

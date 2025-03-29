@@ -63,7 +63,7 @@
       "program": "${workspaceFolder}/build/debug_automat.exe",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${fileDirname}",
+      "cwd": "${workspaceFolder}/build/",
       "environment": [],
       "preLaunchTask": "link debug_automat"
     }

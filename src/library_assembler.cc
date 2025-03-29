@@ -280,7 +280,7 @@ static constexpr RRect kInnerRRect = kBorderMidRRect.Outset(-kFlatBorderWidth);
 
 animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   auto assembler = assembler_weak.lock();
-  if (!assembler) {
+  if (!assembler || assembler->mc_controller == nullptr) {
     return animation::Finished;
   }
   animation::Phase phase;

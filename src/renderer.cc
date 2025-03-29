@@ -627,6 +627,19 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       widget->pack_frame_texture_bounds = widget->TextureBounds();
       bool visible = true;
       if (widget->pack_frame_texture_bounds.has_value()) {
+        // Note: child widgets are drawn using SkCanvas::drawDrawable(WidgetDrawable),
+        // which in turn calls WidgetDrawable::onGetBounds to get the widget's bounds.
+        // This creates a problem on the first animation frame because at this point,
+        // the WidgetDrawable hasn't received the "Update" packet - and doesn't know
+        // where it's bounds are.
+        //
+        // A proper fix may be to call Update right after a Draw call.
+        //
+        // Right now a workaround is to directly update the WidgetDrawable bounds.
+        auto& widget_drawable =
+            static_cast<WidgetDrawable&>(SkDrawableRTTI::Unwrap(*widget->sk_drawable));
+        widget_drawable.pack_frame_texture_bounds = *widget->pack_frame_texture_bounds;
+
         // Compute the bounds of the widget - in local & root coordinates
         SkRect root_bounds;
         node.local_to_window.mapRect(&root_bounds, *widget->pack_frame_texture_bounds);

@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "animation.hh"
 #include "color.hh"
 #include "embedded.hh"
 #include "font.hh"
@@ -28,26 +29,27 @@ PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox
 
 constexpr float kMenuSize = 2_cm;
 
-struct MenuWidget : gui::Widget {
-  Vec<std::unique_ptr<Option>> options;
-  animation::SpringV2<float> size = 0;
+struct MenuAction;
 
-  MenuWidget(Vec<std::unique_ptr<Option>>&& options) : options(std::move(options)) {}
-  animation::Phase Tick(time::Timer& timer) override {
-    size.SpringTowards(kMenuSize, timer.d, 0.2, 0.05);
-    int n_opts = options.size();
-    float s = size.value / kMenuSize;
-    for (int i = 0; i < n_opts; ++i) {
-      auto& opt = options[i];
-      Rect bounds = opt->icon->Shape().getBounds();
-      auto dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
-      float r = size.value * 2 / 3;
-      auto center = Vec2::Polar(dir, r);
-      opt->icon->local_to_parent =
-          SkM44(SkMatrix::Translate(center - bounds.Center()).preScale(s, s));
-    }
-    return animation::Animating;
+struct MenuWidget : gui::Widget {
+  struct OptionAnimation {
+    animation::SpringV2<Vec2> offset;
+  };
+
+  Vec<std::unique_ptr<Option>> options;
+  Vec<OptionAnimation> option_animation;
+  animation::SpringV2<float> size = 0;
+  MenuAction* action;
+  bool first_tick = true;
+
+  MenuWidget(Vec<std::unique_ptr<Option>>&& options, MenuAction* action)
+      : options(std::move(options)), action(action) {
+    option_animation.resize(this->options.size());
   }
+  Optional<Rect> TextureBounds() const override {
+    return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
+  }
+  animation::Phase Tick(time::Timer& timer) override;
   void FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) override {
     for (auto& opt : options) {
       children.emplace_back(opt->icon);
@@ -93,29 +95,85 @@ struct MenuWidget : gui::Widget {
 
 struct MenuAction : Action {
   std::shared_ptr<MenuWidget> menu_widget;
+  int last_index = -1;
+  Vec2 last_pos;
   MenuAction(gui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
-      : Action(pointer), menu_widget(std::make_shared<MenuWidget>(std::move(options))) {
+      : Action(pointer), menu_widget(std::make_shared<MenuWidget>(std::move(options), this)) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
     menu_widget->WakeAnimation();
   }
+  ~MenuAction() override { menu_widget->action = nullptr; }
   void Update() override {
+    int n_opts = menu_widget->options.size();
     auto pos = pointer.PositionWithin(*menu_widget);
     float length = Length(pos);
-    if (length > kMenuSize) {
-      int n_opts = menu_widget->options.size();
-      auto dir = SinCos::FromVec2(pos, length);
-      float index_approx = dir.ToDegreesPositive() / 360.0f * n_opts;
-      int index = std::round(index_approx);
-      if (index >= n_opts) {
-        index = 0;
+    auto dir = SinCos::FromVec2(pos, length);
+    float index_approx = dir.ToDegreesPositive() / 360.0f * n_opts;
+    int index = std::round(index_approx);
+    if (index >= n_opts) {
+      index = 0;
+    }
+    if (last_index != -1) {
+      if (index == last_index && ((n_opts <= 1) || (length > kMenuSize * 2 / 3))) {
+        auto delta = pos - last_pos;
+        menu_widget->option_animation[index].offset.value += delta;
       }
+    }
+    last_index = index;
+    last_pos = pos;
+    if (length > kMenuSize) {
       auto new_action = n_opts == 0 ? nullptr : menu_widget->options[index]->Activate(pointer);
       pointer.ReplaceAction(*this, std::move(new_action));
     }
   }
   gui::Widget* Widget() override { return menu_widget.get(); }
 };
+
+animation::Phase MenuWidget::Tick(time::Timer& timer) {
+  size.SpringTowards(kMenuSize, timer.d, 0.2, 0.05);
+  int n_opts = options.size();
+  if (action) {
+    Vec2 pos = action->pointer.PositionWithin(*this);
+    float length = Length(pos);
+    auto pointer_dir = SinCos::FromVec2(pos, length);
+    float pointer_i_approx = pointer_dir.ToDegreesPositive() / 360.0f * n_opts;
+    int pointer_i = std::round(pointer_i_approx);
+    if (pointer_i >= n_opts) {
+      pointer_i = 0;
+    }
+    for (int i = 0; i < n_opts; ++i) {
+      auto option_dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
+      float r = kMenuSize * 2 / 3;
+      auto center = Vec2::Polar(option_dir, r);
+      Vec2 target;
+      if (i == pointer_i && (n_opts <= 1 || length > kMenuSize * 2 / 3)) {
+        target = pos - center;
+      } else {
+        target = {0, 0};
+      }
+      auto& anim = option_animation[i];
+      if (first_tick) {
+        anim.offset.value = target;
+        anim.offset.velocity = {0, 0};
+      } else {
+        anim.offset.SineTowards(target, timer.d, 0.3);
+      }
+    }
+    first_tick = false;
+  }
+  float s = size.value / kMenuSize;
+  for (int i = 0; i < n_opts; ++i) {
+    auto& opt = options[i];
+    Rect bounds = opt->icon->Shape().getBounds();
+    auto dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
+    float r = kMenuSize * 2 / 3;
+    auto center = Vec2::Polar(dir, r) + option_animation[i].offset.value;
+    opt->icon->local_to_parent =
+        SkM44(SkMatrix::Translate(center - bounds.Center()).postScale(s, s));
+  }
+  return animation::Animating;
+}
 
 maf::Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
   maf::Vec<std::unique_ptr<Option>> options;

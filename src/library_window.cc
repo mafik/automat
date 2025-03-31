@@ -108,7 +108,7 @@ struct XSHMCapture {
 };
 #endif
 
-struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
+struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabber {
   std::weak_ptr<Window> window_weak;
 
   constexpr static float kWidth = 5_cm;
@@ -494,14 +494,8 @@ struct WindowWidget : gui::Widget, gui::PointerGrabber, gui::KeyGrabber {
       if (outer_region_rect.Contains(contact_point)) {
         return std::make_unique<DragRegionAction>(p, SharedPtr());
       }
-
-      auto* location = Closest<Location>(*p.hover);
-      auto* machine = Closest<Machine>(*p.hover);
-      if (location && machine) {
-        return std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
-      }
     }
-    return nullptr;
+    return FallbackWidget::FindAction(p, btn);
   }
 
   void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {

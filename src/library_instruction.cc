@@ -2725,18 +2725,6 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   }
 }
 
-std::unique_ptr<Action> Instruction::Widget::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::Left) {
-    auto* location = Closest<Location>(*p.hover);
-    auto* machine = Closest<Machine>(*p.hover);
-    if (location && machine) {
-      auto contact_point = p.PositionWithin(*this);
-      return std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
-    }
-  }
-  return nullptr;
-}
-
 Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
   if (&arg == &jump_arg) {
     return Vec2AndDir{.pos = kRect.RightCenter(), .dir = 0_deg};

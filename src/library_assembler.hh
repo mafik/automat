@@ -57,13 +57,15 @@ struct AssemblerWidget : Object::FallbackWidget {
   maf::Vec<std::shared_ptr<gui::Widget>> children;
   mc::Controller::State state;
 
+  std::unique_ptr<Option> registers_option;
+
   AssemblerWidget(std::weak_ptr<Assembler>);
   std::string_view Name() const override;
   void FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) override;
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
-  std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+  void VisitOptions(const OptionsVisitor&) const override;
   void TransformUpdated() override;
 };
 

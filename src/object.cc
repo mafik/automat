@@ -11,6 +11,7 @@
 #include "font.hh"
 #include "gui_constants.hh"
 #include "location.hh"
+#include "menu.hh"
 #include "root_widget.hh"
 
 using namespace maf;
@@ -90,6 +91,50 @@ SkPath Object::FallbackWidget::Shape() const {
   return it->second;
 }
 
+struct DeleteOption : Option {
+  std::weak_ptr<Location> weak;
+  DeleteOption(std::weak_ptr<Location> weak) : weak(weak) {}
+  std::string Name() const override { return "Delete"; }
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<DeleteOption>(weak); }
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    if (shared_ptr<Location> loc = weak.lock()) {
+      if (auto parent_machine = loc->ParentAs<Machine>()) {
+        parent_machine->Extract(*loc);
+      }
+      loc->ForgetParents();
+    }
+    return nullptr;
+  }
+};
+
+struct MoveOption : Option {
+  std::weak_ptr<Location> weak;
+  MoveOption(std::weak_ptr<Location> weak) : weak(weak) {}
+  std::string Name() const override { return "Move"; }
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<MoveOption>(weak); }
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    if (shared_ptr<Location> location = weak.lock()) {
+      auto* machine = Closest<Machine>(*location);
+      if (machine && location->object) {
+        auto contact_point = pointer.PositionWithin(*location->WidgetForObject());
+        auto a = std::make_unique<DragLocationAction>(pointer, machine->Extract(*location),
+                                                      contact_point);
+        return a;
+      }
+    }
+    return nullptr;
+  }
+};
+
+void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
+  if (auto loc = std::dynamic_pointer_cast<Location>(this->parent)) {
+    DeleteOption del{loc};
+    visitor(del);
+    MoveOption move{loc};
+    visitor(move);
+  }
+}
+
 std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
                                                            gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
@@ -100,6 +145,8 @@ std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
       auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
       return a;
     }
+  } else if (btn == gui::PointerButton::Right) {
+    return OpenMenu(p, CloneOptions());
   }
   return Widget::FindAction(p, btn);
 }

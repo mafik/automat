@@ -39,6 +39,13 @@ struct ShowRegisterOption : Option {
 
   ShowRegisterOption(int register_index) : register_index(register_index) {}
   std::string Name() const override { return "Show"; }
+
+  std::unique_ptr<Option> Clone() const override {
+    auto clone = std::make_unique<ShowRegisterOption>(register_index);
+    clone->weak = weak;
+    return clone;
+  }
+
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
       assembler->reg_visible[register_index] = true;
@@ -47,59 +54,20 @@ struct ShowRegisterOption : Option {
   }
 };
 
-PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox_webp);
-
-struct MenuWidget : gui::Widget {
-  animation::SpringV2<float> size = 0;
-  animation::Phase Tick(time::Timer& timer) override {
-    size.SpringTowards(2_cm, timer.d, 0.2, 0.05);
-    return animation::Animating;
-  }
-  void Draw(SkCanvas& canvas) const override {
-    auto shape = Shape();
-
-    SkPaint paint = [&]() {
-      static auto builder =
-          resources::RuntimeEffectBuilder(embedded::assets_bubble_menu_rt_sksl.content);
-
-      auto& image = *kSkyBox.image;
-      auto dimensions = image->dimensions();
-
-      builder->uniform("time") = (float)fmod(time::SteadyNow().time_since_epoch().count(), 1000.0);
-      builder->uniform("bubble_radius") = size.value;
-      builder->child("environment") = image->makeShader(kDefaultSamplingOptions);
-      builder->uniform("environment_size") = SkPoint(dimensions.width(), dimensions.height());
-
-      auto shader = builder->makeShader();
-      SkPaint paint;
-      paint.setShader(shader);
-      return paint;
-    }();
-    // paint.
-    canvas.drawPath(shape, paint);
-  }
-  SkPath Shape() const override { return SkPath::Circle(0, 0, size.value); }
-};
-
-struct MenuAction : Action {
-  std::shared_ptr<MenuWidget> menu_widget;
-  MenuAction(gui::Pointer& pointer) : Action(pointer), menu_widget(std::make_shared<MenuWidget>()) {
-    auto pos = pointer.PositionWithin(*pointer.GetWidget());
-    menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
-    menu_widget->WakeAnimation();
-  }
-  void Update() override {}
-  gui::Widget* Widget() override { return menu_widget.get(); }
-};
-
 struct RegistersMenuOption : Option {
   std::weak_ptr<Assembler> weak;
   RegistersMenuOption(std::weak_ptr<Assembler> weak) : weak(weak) {}
   std::string Name() const override { return "Registers"; }
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
-    return std::make_unique<MenuAction>(pointer);
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<RegistersMenuOption>(weak);
   }
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override { return nullptr; }
 };
+
+void AssemblerWidget::VisitOptions(const OptionsVisitor& visitor) const {
+  FallbackWidget::VisitOptions(visitor);
+  // visitor(*registers_option);
+}
 
 Assembler::Assembler() {
   Status status;
@@ -448,14 +416,6 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
 
 void AssemblerWidget::FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) {
   children = this->children;  // expensive copy of a bunch of shared_ptrs
-}
-
-std::unique_ptr<Action> AssemblerWidget::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::Right) {
-    auto registers_option = std::make_unique<RegistersMenuOption>(assembler_weak);
-    return registers_option->Activate(p);
-  }
-  return FallbackWidget::FindAction(p, btn);
 }
 
 void AssemblerWidget::TransformUpdated() { WakeAnimation(); }

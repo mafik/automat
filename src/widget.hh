@@ -190,6 +190,16 @@ struct Widget : public virtual SharedBase {
   // their bounds.
   virtual bool CenteredAtZero() const { return false; }
 
+  using OptionsVisitor = std::function<void(Option&)>;
+
+  virtual void VisitOptions(const OptionsVisitor&) const {}
+
+  maf::Vec<std::unique_ptr<Option>> CloneOptions() const {
+    maf::Vec<std::unique_ptr<Option>> options;
+    VisitOptions([&](Option& opt) { options.push_back(opt.Clone()); });
+    return options;
+  }
+
   virtual std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger);
 
   // Return true if the widget should be highlighted as draggable.

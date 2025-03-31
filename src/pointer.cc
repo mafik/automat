@@ -192,6 +192,7 @@ void Pointer::ButtonDown(PointerButton btn) {
       action = (*curr)->FindAction(*this, btn);
     }
     if (action) {
+      pointer_widget->FixParents();
       UpdatePath();
     }
   }
@@ -260,6 +261,15 @@ void Pointer::EndAllActions() {
     action.reset();
   }
   UpdatePath();
+}
+
+void Pointer::ReplaceAction(Action& old_action, std::unique_ptr<Action>&& new_action) {
+  for (int i = 0; i < static_cast<int>(PointerButton::Count); ++i) {
+    if (actions[i].get() == &old_action) {
+      actions[i] = std::move(new_action);
+      break;
+    }
+  }
 }
 
 void PointerGrab::Release() {

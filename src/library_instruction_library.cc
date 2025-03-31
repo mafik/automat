@@ -1188,14 +1188,8 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
         }
       }
     }
-
-    auto* location = Closest<Location>(*p.hover);
-    auto* machine = Closest<Machine>(*p.hover);
-    if (location && machine) {
-      return std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
-    }
   }
-  return nullptr;
+  return FallbackWidget::FindAction(p, btn);
 }
 
 }  // namespace automat::library

@@ -174,6 +174,7 @@ struct RunOption : Option {
   std::shared_ptr<Widget> widget;
   RunOption(std::shared_ptr<Widget> widget) : widget(widget) {}
   Str Name() const override { return "Run"; }
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(widget); }
   std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
     return std::make_unique<RunAction>(p, *Closest<Location>(*widget));
   }
@@ -184,6 +185,9 @@ struct UseObjectOption : Option {
 
   UseObjectOption(std::shared_ptr<Widget> widget) : widget(widget) {}
   Str Name() const override { return "Use"; }
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<UseObjectOption>(widget);
+  }
   std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
     return widget->FindAction(p, gui::PointerButton::Left);
   }

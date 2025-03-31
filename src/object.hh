@@ -85,6 +85,7 @@ struct Object : public virtual SharedBase {
     virtual std::string Text() const { return std::string(Name()); }
     SkPath Shape() const override;
     void Draw(SkCanvas&) const override;
+    void VisitOptions(const OptionsVisitor&) const override;
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
   };
 

@@ -90,6 +90,7 @@ struct Pointer {
   virtual PointerGrab& RequestGlobalGrab(PointerGrabber&);
 
   void EndAllActions();
+  void ReplaceAction(Action& old_action, std::unique_ptr<Action>&& new_action);
 
   std::unique_ptr<PointerGrab> grab;
 

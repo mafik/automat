@@ -18,6 +18,7 @@ struct Action;
 struct Option {
   virtual ~Option() = default;
   virtual std::string Name() const = 0;
+  virtual std::unique_ptr<Option> Clone() const = 0;
   virtual std::unique_ptr<Action> Activate(gui::Pointer& pointer) const = 0;
 };
 

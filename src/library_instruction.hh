@@ -52,7 +52,7 @@ struct Instruction : LiveObject, Runnable {
 
   void OnRun(Location& here) override;
 
-  struct Widget : gui::Widget {
+  struct Widget : FallbackWidget {
     constexpr static float kWidth = 63.5_mm;
     constexpr static float kHeight = 44.5_mm;
     constexpr static float kBorderMargin = 4_mm;
@@ -66,7 +66,6 @@ struct Instruction : LiveObject, Runnable {
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
     void Draw(SkCanvas&) const override;
-    std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
     Vec2AndDir ArgStart(const Argument&) override;
   };
 

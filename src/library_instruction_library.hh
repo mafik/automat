@@ -48,7 +48,7 @@ struct InstructionLibrary : Object {
   std::string_view Name() const override;
   std::shared_ptr<Object> Clone() const override;
 
-  struct Widget : gui::Widget, gui::PointerMoveCallback {
+  struct Widget : FallbackWidget, gui::PointerMoveCallback {
     std::weak_ptr<Object> object;
 
     struct InstructionCard {

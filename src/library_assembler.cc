@@ -16,6 +16,7 @@
 #include "global_resources.hh"
 #include "library_instruction.hh"
 #include "machine_code.hh"
+#include "math.hh"
 #include "root_widget.hh"
 #include "status.hh"
 #include "svg.hh"
@@ -38,8 +39,7 @@ struct ShowRegisterOption : Option {
   int register_index;  // Must be < kGeneralPurposeRegisterCount
 
   ShowRegisterOption(std::weak_ptr<Assembler> weak, int register_index)
-      : weak(weak), register_index(register_index) {}
-  std::string Name() const override { return "Show"; }
+      : Option("Show"), weak(weak), register_index(register_index) {}
 
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<ShowRegisterOption>(weak, register_index);
@@ -48,9 +48,22 @@ struct ShowRegisterOption : Option {
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
       assembler->reg_visible[register_index] = true;
+      assembler->WakeWidgetsAnimation();
     }
     return nullptr;
   }
+};
+
+struct ImageWidget : gui::Widget {
+  PersistentImage& image;
+  ImageWidget(PersistentImage& image) : image(image) {}
+  Optional<Rect> TextureBounds() const override {
+    return Rect::MakeCornerZero(image.width(), image.height());
+  }
+  SkPath Shape() const override {
+    return SkPath::Rect(SkRect::MakeWH(image.width(), image.height()));
+  }
+  void Draw(SkCanvas& canvas) const override { image.draw(canvas); }
 };
 
 struct RegisterMenuOption : Option, OptionsProvider {
@@ -58,8 +71,9 @@ struct RegisterMenuOption : Option, OptionsProvider {
   int register_index;
 
   RegisterMenuOption(std::weak_ptr<Assembler> weak, int register_index)
-      : weak(weak), register_index(register_index) {}
-  std::string Name() const override { return kRegisters[register_index].name; }
+      : Option(std::make_shared<ImageWidget>(kRegisters[register_index].image)),
+        weak(weak),
+        register_index(register_index) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<RegisterMenuOption>(weak, register_index);
   }
@@ -74,8 +88,7 @@ struct RegisterMenuOption : Option, OptionsProvider {
 
 struct RegistersMenuOption : Option, OptionsProvider {
   std::weak_ptr<Assembler> weak;
-  RegistersMenuOption(std::weak_ptr<Assembler> weak) : weak(weak) {}
-  std::string Name() const override { return "Registers"; }
+  RegistersMenuOption(std::weak_ptr<Assembler> weak) : Option("Registers"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<RegistersMenuOption>(weak);
   }
@@ -293,11 +306,17 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     auto* register_widget = static_cast<RegisterWidget*>(children[i].get());
     register_widgets[register_widget->register_index] = register_widget;
   }
-  for (int i = 0; i < mc::Regs::kNumRegisters; ++i) {
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto new_value = state.regs[i];
-    if (new_value == 0 && register_widgets[i] == nullptr) {
+    if (new_value != 0 && !assembler->reg_visible[i]) {
+      assembler->reg_visible[i] = true;
+    }
+  }
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    if (!assembler->reg_visible[i] && register_widgets[i] == nullptr) {
       continue;
     }
+    auto new_value = state.regs[i];
     if (register_widgets[i] == nullptr) {
       children.push_back(std::make_shared<RegisterWidget>(i));
       children.back()->parent = SharedPtr();

@@ -3,10 +3,17 @@
 
 #include "menu.hh"
 
+#include <include/effects/SkImageFilters.h>
+
+#include <memory>
+
+#include "color.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "global_resources.hh"
+#include "math.hh"
 #include "pointer.hh"
+#include "str.hh"
 #include "textures.hh"
 #include "units.hh"
 #include "widget.hh"
@@ -15,6 +22,8 @@ using namespace maf;
 
 namespace automat {
 
+std::unique_ptr<gui::Font> kHelsinkiFont = gui::Font::MakeV2(gui::Font::GetHelsinki(), 3_mm);
+
 PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox_webp);
 
 constexpr float kMenuSize = 2_cm;
@@ -22,9 +31,27 @@ constexpr float kMenuSize = 2_cm;
 struct MenuWidget : gui::Widget {
   Vec<std::unique_ptr<Option>> options;
   animation::SpringV2<float> size = 0;
+
+  MenuWidget(Vec<std::unique_ptr<Option>>&& options) : options(std::move(options)) {}
   animation::Phase Tick(time::Timer& timer) override {
     size.SpringTowards(kMenuSize, timer.d, 0.2, 0.05);
+    int n_opts = options.size();
+    float s = size.value / kMenuSize;
+    for (int i = 0; i < n_opts; ++i) {
+      auto& opt = options[i];
+      Rect bounds = opt->icon->Shape().getBounds();
+      auto dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
+      float r = size.value * 2 / 3;
+      auto center = Vec2::Polar(dir, r);
+      opt->icon->local_to_parent =
+          SkM44(SkMatrix::Translate(center - bounds.Center()).preScale(s, s));
+    }
     return animation::Animating;
+  }
+  void FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) override {
+    for (auto& opt : options) {
+      children.emplace_back(opt->icon);
+    }
   }
   void Draw(SkCanvas& canvas) const override {
     auto shape = Shape();
@@ -46,30 +73,28 @@ struct MenuWidget : gui::Widget {
       paint.setShader(shader);
       return paint;
     }();
-    // paint.
-    canvas.drawPath(shape, paint);
+    canvas.drawCircle(0, 0, size.value, paint);
 
-    auto& font = gui::GetFont();
-    int n_opts = options.size();
-    for (int i = 0; i < n_opts; ++i) {
-      auto& opt = options[i];
-      auto dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
-      auto name = opt->Name();
-      float w = font.MeasureText(name);
-      float r = size.value * 0.5;
-      auto pos = Vec2::Polar(dir, r) + Vec2(w * -0.5f, font.letter_height * -0.5f);
-      canvas.save();
-      canvas.translate(pos.x, pos.y);
-      font.DrawText(canvas, name, SkPaint());
-      canvas.restore();
+    SkPaint shadow_paint;
+    shadow_paint.setImageFilter(
+        SkImageFilters::DropShadowOnly(0, 0, 0.5_mm, 0.5_mm, "#000000"_color, nullptr));
+    auto saved = canvas.getLocalToDevice();
+    canvas.saveLayer(nullptr, &shadow_paint);
+    for (auto& opt : options) {
+      canvas.setMatrix(saved);
+      canvas.concat(opt->icon->local_to_parent);
+      canvas.drawDrawable(opt->icon->sk_drawable.get());
     }
+    canvas.restore();
+    DrawChildren(canvas);
   }
   SkPath Shape() const override { return SkPath::Circle(0, 0, size.value); }
 };
 
 struct MenuAction : Action {
   std::shared_ptr<MenuWidget> menu_widget;
-  MenuAction(gui::Pointer& pointer) : Action(pointer), menu_widget(std::make_shared<MenuWidget>()) {
+  MenuAction(gui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
+      : Action(pointer), menu_widget(std::make_shared<MenuWidget>(std::move(options))) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
     menu_widget->WakeAnimation();
@@ -99,9 +124,43 @@ maf::Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
 }
 
 std::unique_ptr<Action> OptionsProvider::OpenMenu(gui::Pointer& pointer) const {
-  auto menu = std::make_unique<MenuAction>(pointer);
-  menu->menu_widget->options = CloneOptions();
-  return menu;
+  return std::make_unique<MenuAction>(pointer, CloneOptions());
 }
+
+struct TextWidget : gui::Widget {
+  float width;
+  Str text;
+  TextWidget(Str text) : width(kHelsinkiFont->MeasureText(text)), text(text) {}
+  Optional<Rect> TextureBounds() const override {
+    return Rect(0, -kHelsinkiFont->descent, width, -kHelsinkiFont->ascent);
+  }
+  SkPath Shape() const override { return SkPath::Rect(*TextureBounds()); }
+  void Draw(SkCanvas& canvas) const override {
+    if constexpr (false) {  // outline
+      SkPaint outline;
+      outline.setColor(SK_ColorBLACK);
+      outline.setStyle(SkPaint::kStroke_Style);
+      outline.setStrokeWidth(1_mm / kHelsinkiFont->font_scale);
+      kHelsinkiFont->DrawText(canvas, text, outline);
+    }
+    if constexpr (false) {  // shadow
+      canvas.save();
+      SkPaint shadow;
+      shadow.setColor(SK_ColorBLACK);
+      shadow.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle,
+                                                  0.5_mm / kHelsinkiFont->font_scale));
+      canvas.translate(0, -0.5_mm);
+      kHelsinkiFont->DrawText(canvas, text, shadow);
+      canvas.restore();
+    }
+    SkPaint paint;
+    paint.setColor(SK_ColorWHITE);
+    kHelsinkiFont->DrawText(canvas, text, paint);
+  }
+};
+
+Option::Option(std::shared_ptr<gui::Widget>&& icon) : icon(icon) {}
+
+Option::Option(Str name) : icon(std::make_shared<TextWidget>(name)) {}
 
 }  // namespace automat

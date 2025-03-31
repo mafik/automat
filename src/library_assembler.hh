@@ -81,7 +81,7 @@ struct Assembler : LiveObject, LongRunning {
   void ExitCallback(mc::CodePoint code_point);
 
   std::unique_ptr<mc::Controller> mc_controller;
-  std::array<bool, kGeneralPurposeRegisterCount> reg_visible;
+  std::array<bool, kGeneralPurposeRegisterCount> reg_visible = {};
 
   void UpdateMachineCode();
 

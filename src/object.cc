@@ -93,8 +93,7 @@ SkPath Object::FallbackWidget::Shape() const {
 
 struct DeleteOption : Option {
   std::weak_ptr<Location> weak;
-  DeleteOption(std::weak_ptr<Location> weak) : weak(weak) {}
-  std::string Name() const override { return "Delete"; }
+  DeleteOption(std::weak_ptr<Location> weak) : Option("Delete"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<DeleteOption>(weak); }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (shared_ptr<Location> loc = weak.lock()) {
@@ -109,8 +108,7 @@ struct DeleteOption : Option {
 
 struct MoveOption : Option {
   std::weak_ptr<Location> weak;
-  MoveOption(std::weak_ptr<Location> weak) : weak(weak) {}
-  std::string Name() const override { return "Move"; }
+  MoveOption(std::weak_ptr<Location> weak) : Option("Move"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<MoveOption>(weak); }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (shared_ptr<Location> location = weak.lock()) {
@@ -128,8 +126,7 @@ struct MoveOption : Option {
 
 struct RunOption : Option {
   std::weak_ptr<Location> weak;
-  RunOption(std::weak_ptr<Location> weak) : weak(weak) {}
-  std::string Name() const override { return "Run"; }
+  RunOption(std::weak_ptr<Location> weak) : Option("Run"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(weak); }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (auto loc = weak.lock()) {

@@ -18,6 +18,8 @@ struct Font {
   float font_scale;
   float line_thickness;
   float letter_height;
+  float ascent;   // distance to reserve above baseline, typically negative
+  float descent;  // distance to reserve below baseline, typically positive
 
   static sk_sp<SkTypeface> LoadTypeface(maf::fs::VFile& ttf_file);
   static sk_sp<SkTypeface> GetNotoSans();
@@ -27,6 +29,7 @@ struct Font {
   static sk_sp<SkTypeface> GetGrenzeSemiBold();
   static sk_sp<SkTypeface> GetSilkscreen();
   static sk_sp<SkTypeface> GetHeavyData();
+  static sk_sp<SkTypeface> GetHelsinki();
   static sk_sp<SkTypeface> MakeWeightVariation(sk_sp<SkTypeface> base, float weight);
   static std::unique_ptr<Font> MakeV2(sk_sp<SkTypeface> typeface, float letter_size);
 

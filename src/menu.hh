@@ -12,8 +12,10 @@ namespace automat {
 
 // Option represents a potential action. It's the core of the menu system.
 struct Option {
+  std::shared_ptr<gui::Widget> icon;
+  Option(std::shared_ptr<gui::Widget>&& icon);
+  Option(maf::Str name);
   virtual ~Option() = default;
-  virtual std::string Name() const = 0;
   virtual std::unique_ptr<Option> Clone() const = 0;
   virtual std::unique_ptr<Action> Activate(gui::Pointer& pointer) const = 0;
 };

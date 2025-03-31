@@ -91,6 +91,11 @@ sk_sp<SkTypeface> Font::GetHeavyData() {
   return heavy_data;
 }
 
+sk_sp<SkTypeface> Font::GetHelsinki() {
+  static sk_sp<SkTypeface> helsinki = LoadTypeface(maf::embedded::assets_helsinki_ttf);
+  return helsinki;
+}
+
 sk_sp<SkTypeface> Font::MakeWeightVariation(sk_sp<SkTypeface> base, float weight) {
   SkFontArguments::VariationPosition::Coordinate coordinates[1];
   coordinates[0].axis = kFontWeightTag;
@@ -120,7 +125,9 @@ std::unique_ptr<Font> Font::MakeV2(sk_sp<SkTypeface> typeface, float letter_size
   // The `fCapHeight` is the height of the capital letters.
   float font_scale = letter_size / metrics.fCapHeight;
   float line_thickness = metrics.fUnderlineThickness * font_scale;
-  return std::make_unique<Font>(sk_font, font_scale, line_thickness, letter_size);
+  float ascent = metrics.fAscent * font_scale;
+  float descent = metrics.fDescent * font_scale;
+  return std::make_unique<Font>(sk_font, font_scale, line_thickness, letter_size, ascent, descent);
 }
 
 struct LineRunHandler : public SkShaper::RunHandler {

@@ -17,6 +17,7 @@
 #include "animation.hh"
 #include "control_flow.hh"
 #include "key.hh"
+#include "menu.hh"
 #include "optional.hh"
 #include "shared_base.hh"
 #include "span.hh"
@@ -83,7 +84,7 @@ struct ActionTrigger {
 
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
-struct Widget : public virtual SharedBase {
+struct Widget : public virtual SharedBase, public OptionsProvider {
   Widget();
   virtual ~Widget();
 
@@ -190,16 +191,7 @@ struct Widget : public virtual SharedBase {
   // their bounds.
   virtual bool CenteredAtZero() const { return false; }
 
-  using OptionsVisitor = std::function<void(Option&)>;
-
-  virtual void VisitOptions(const OptionsVisitor&) const {}
-
-  maf::Vec<std::unique_ptr<Option>> CloneOptions() const {
-    maf::Vec<std::unique_ptr<Option>> options;
-    VisitOptions([&](Option& opt) { options.push_back(opt.Clone()); });
-    return options;
-  }
-
+  void VisitOptions(const OptionsVisitor&) const override {}
   virtual std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger);
 
   // Return true if the widget should be highlighted as draggable.

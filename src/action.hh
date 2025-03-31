@@ -2,25 +2,12 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <memory>
-#include <string>
-
 namespace automat {
 
 namespace gui {
 struct Pointer;
 struct Widget;
 }  // namespace gui
-
-struct Action;
-
-// Option represents a potential action. It's the core of the menu system.
-struct Option {
-  virtual ~Option() = default;
-  virtual std::string Name() const = 0;
-  virtual std::unique_ptr<Option> Clone() const = 0;
-  virtual std::unique_ptr<Action> Activate(gui::Pointer& pointer) const = 0;
-};
 
 // Action represents an action/gesture that user can perform by pressing a key / button / touching
 // the screen and then moving the pointer around before releasing it.

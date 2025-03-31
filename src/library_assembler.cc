@@ -37,13 +37,12 @@ struct ShowRegisterOption : Option {
   std::weak_ptr<Assembler> weak;
   int register_index;  // Must be < kGeneralPurposeRegisterCount
 
-  ShowRegisterOption(int register_index) : register_index(register_index) {}
+  ShowRegisterOption(std::weak_ptr<Assembler> weak, int register_index)
+      : weak(weak), register_index(register_index) {}
   std::string Name() const override { return "Show"; }
 
   std::unique_ptr<Option> Clone() const override {
-    auto clone = std::make_unique<ShowRegisterOption>(register_index);
-    clone->weak = weak;
-    return clone;
+    return std::make_unique<ShowRegisterOption>(weak, register_index);
   }
 
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
@@ -54,19 +53,47 @@ struct ShowRegisterOption : Option {
   }
 };
 
-struct RegistersMenuOption : Option {
+struct RegisterMenuOption : Option, OptionsProvider {
+  std::weak_ptr<Assembler> weak;
+  int register_index;
+
+  RegisterMenuOption(std::weak_ptr<Assembler> weak, int register_index)
+      : weak(weak), register_index(register_index) {}
+  std::string Name() const override { return kRegisters[register_index].name; }
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<RegisterMenuOption>(weak, register_index);
+  }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    ShowRegisterOption show{weak, register_index};
+    visitor(show);
+  }
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
+};
+
+struct RegistersMenuOption : Option, OptionsProvider {
   std::weak_ptr<Assembler> weak;
   RegistersMenuOption(std::weak_ptr<Assembler> weak) : weak(weak) {}
   std::string Name() const override { return "Registers"; }
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<RegistersMenuOption>(weak);
   }
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override { return nullptr; }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+      RegisterMenuOption opt{weak, i};
+      visitor(opt);
+    }
+  }
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
 };
 
 void AssemblerWidget::VisitOptions(const OptionsVisitor& visitor) const {
   FallbackWidget::VisitOptions(visitor);
-  // visitor(*registers_option);
+  RegistersMenuOption registers_option{assembler_weak};
+  visitor(registers_option);
 }
 
 Assembler::Assembler() {

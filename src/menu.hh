@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <functional>
 #include <memory>
 
 #include "action.hh"
@@ -9,14 +10,21 @@
 
 namespace automat {
 
-// Options:
-// - Builder
-// - Public type for the menu
+// Option represents a potential action. It's the core of the menu system.
+struct Option {
+  virtual ~Option() = default;
+  virtual std::string Name() const = 0;
+  virtual std::unique_ptr<Option> Clone() const = 0;
+  virtual std::unique_ptr<Action> Activate(gui::Pointer& pointer) const = 0;
+};
 
-// Requirements:
-// - Must be able to create an Action-bound menu (ephemeral, until Action is finished)
+using OptionsVisitor = std::function<void(Option&)>;
 
-std::unique_ptr<Action> OpenMenu(gui::Pointer& pointer,
-                                 maf::Vec<std::unique_ptr<Option>>&& options);
+struct OptionsProvider {
+  virtual void VisitOptions(const OptionsVisitor&) const = 0;
+
+  maf::Vec<std::unique_ptr<Option>> CloneOptions() const;
+  std::unique_ptr<Action> OpenMenu(gui::Pointer& pointer) const;
+};
 
 }  // namespace automat

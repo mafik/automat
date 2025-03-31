@@ -41,36 +41,42 @@ RegisterPresentation kRegisters[kGeneralPurposeRegisterCount] = {
             PersistentImage::MakeFromAsset(maf::embedded::assets_reg_ax_webp,
                                            PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RAX,
+        .name = "RAX",
     },
     RegisterPresentation{
         .image =
             PersistentImage::MakeFromAsset(maf::embedded::assets_reg_bx_webp,
                                            PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RBX,
+        .name = "RBX",
     },
     RegisterPresentation{
         .image =
             PersistentImage::MakeFromAsset(maf::embedded::assets_reg_cx_webp,
                                            PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RCX,
+        .name = "RCX",
     },
     RegisterPresentation{
         .image =
             PersistentImage::MakeFromAsset(maf::embedded::assets_reg_dx_webp,
                                            PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RDX,
+        .name = "RDX",
     },
     RegisterPresentation{
         .image =
             PersistentImage::MakeFromAsset(maf::embedded::assets_reg_si_webp,
                                            PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RSI,
+        .name = "RSI",
     },
     RegisterPresentation{
         .image =
             PersistentImage::MakeFromAsset(maf::embedded::assets_reg_di_webp,
                                            PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RDI,
+        .name = "RDI",
     },
 };
 

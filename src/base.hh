@@ -60,7 +60,7 @@ struct LongRunning {
   void Done(Location& here);
 };
 
-struct Runnable {
+struct Runnable : public virtual SharedBase {
   // Derived classes should override this method to implement their behavior.
   //
   // If an object represents a long running process, it should mark itself by setting the

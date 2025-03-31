@@ -126,12 +126,29 @@ struct MoveOption : Option {
   }
 };
 
+struct RunOption : Option {
+  std::weak_ptr<Location> weak;
+  RunOption(std::weak_ptr<Location> weak) : weak(weak) {}
+  std::string Name() const override { return "Run"; }
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(weak); }
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    if (auto loc = weak.lock()) {
+      loc->ScheduleRun();
+    }
+    return nullptr;
+  }
+};
+
 void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
   if (auto loc = std::dynamic_pointer_cast<Location>(this->parent)) {
     DeleteOption del{loc};
     visitor(del);
     MoveOption move{loc};
     visitor(move);
+    if (auto runnable = loc->As<Runnable>()) {
+      RunOption run{loc};
+      visitor(run);
+    }
   }
 }
 
@@ -146,7 +163,7 @@ std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
       return a;
     }
   } else if (btn == gui::PointerButton::Right) {
-    return OpenMenu(p, CloneOptions());
+    return OpenMenu(p);
   }
   return Widget::FindAction(p, btn);
 }

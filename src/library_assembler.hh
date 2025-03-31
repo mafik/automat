@@ -57,8 +57,6 @@ struct AssemblerWidget : Object::FallbackWidget {
   maf::Vec<std::shared_ptr<gui::Widget>> children;
   mc::Controller::State state;
 
-  std::unique_ptr<Option> registers_option;
-
   AssemblerWidget(std::weak_ptr<Assembler>);
   std::string_view Name() const override;
   void FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) override;

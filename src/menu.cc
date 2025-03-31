@@ -85,16 +85,22 @@ struct MenuAction : Action {
       if (index >= n_opts) {
         index = 0;
       }
-      pointer.ReplaceAction(*this, menu_widget->options[index]->Activate(pointer));
+      auto new_action = n_opts == 0 ? nullptr : menu_widget->options[index]->Activate(pointer);
+      pointer.ReplaceAction(*this, std::move(new_action));
     }
   }
   gui::Widget* Widget() override { return menu_widget.get(); }
 };
 
-std::unique_ptr<Action> OpenMenu(gui::Pointer& pointer,
-                                 maf::Vec<std::unique_ptr<Option>>&& options) {
+maf::Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
+  maf::Vec<std::unique_ptr<Option>> options;
+  VisitOptions([&](Option& opt) { options.push_back(opt.Clone()); });
+  return options;
+}
+
+std::unique_ptr<Action> OptionsProvider::OpenMenu(gui::Pointer& pointer) const {
   auto menu = std::make_unique<MenuAction>(pointer);
-  menu->menu_widget->options = std::move(options);
+  menu->menu_widget->options = CloneOptions();
   return menu;
 }
 

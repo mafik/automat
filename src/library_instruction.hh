@@ -15,6 +15,7 @@ constexpr float kRegisterIconWidth = 12_mm;
 struct RegisterPresentation {
   PersistentImage image;
   unsigned llvm_reg;
+  std::string name;
 };
 
 constexpr static int kGeneralPurposeRegisterCount = 6;

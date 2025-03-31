@@ -221,7 +221,7 @@ void RootWidget::Draw(SkCanvas& canvas) const {
 
   DrawChildren(canvas);
 
-  {  // Outline for the hovered widget
+  if constexpr (false) {  // Outline for the hovered widget
     auto old_matrix = canvas.getTotalMatrix();
     for (auto& pointer : pointers) {
       if (pointer->hover) {

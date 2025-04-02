@@ -47,7 +47,7 @@ struct ShowRegisterOption : Option {
 
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
-      assembler->reg_visible[register_index] = true;
+      assembler->reg_objects_idx[register_index] = std::make_shared<Register>(weak, register_index);
       assembler->WakeWidgetsAnimation();
     }
     return nullptr;
@@ -301,41 +301,59 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   if (state.current_instruction.lock()) {
     phase |= animation::Animating;
   }
-  std::array<RegisterWidget*, mc::Regs::kNumRegisters> register_widgets = {};
-  for (int i = 0; i < children.size(); ++i) {
-    auto* register_widget = static_cast<RegisterWidget*>(children[i].get());
-    register_widgets[register_widget->register_index] = register_widget;
-  }
-  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    auto new_value = state.regs[i];
-    if (new_value != 0 && !assembler->reg_visible[i]) {
-      assembler->reg_visible[i] = true;
+  // Register widgets indexed by register index.
+  std::array<RegisterWidget*, kGeneralPurposeRegisterCount> reg_widgets_idx = {};
+
+  // Index register widgets by register index.
+  // Also remove any register widgets that have been deleted.
+  for (int i = 0; i < reg_widgets.size(); ++i) {
+    auto& reg_widget = reg_widgets[i];
+    auto* register_widget = reg_widget.get();
+    if (auto register_obj = register_widget->register_weak.lock()) {
+      reg_widgets_idx[register_obj->register_index] = register_widget;
+    } else {
+      reg_widgets.EraseIndex(i);
+      --i;
     }
   }
+  // Create new register objects for registers that have non-zero values.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    if (!assembler->reg_visible[i] && register_widgets[i] == nullptr) {
-      continue;
-    }
     auto new_value = state.regs[i];
-    if (register_widgets[i] == nullptr) {
-      children.push_back(std::make_shared<RegisterWidget>(i));
-      children.back()->parent = SharedPtr();
-      children.back()->FixParents();
-      register_widgets[i] = static_cast<RegisterWidget*>(children.back().get());
-      children.back()->local_to_parent = SkM44::Translate(0, 10_cm);
-      std::sort(children.begin(), children.end(), [](const auto& a, const auto& b) {
-        auto* a_register_widget = static_cast<RegisterWidget*>(a.get());
-        auto* b_register_widget = static_cast<RegisterWidget*>(b.get());
-        return a_register_widget->register_index < b_register_widget->register_index;
-      });
-    }
-    auto child = register_widgets[i];
+    if (new_value == 0) continue;
+    if (assembler->reg_objects_idx[i] != nullptr) continue;
+    assembler->reg_objects_idx[i] = std::make_shared<Register>(assembler_weak, i);
+  }
+
+  // Create new register widgets for register objects that don't have a widget.
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    if (assembler->reg_objects_idx[i] == nullptr) continue;
+    if (reg_widgets_idx[i] != nullptr) continue;
+    auto new_value = state.regs[i];
+    auto register_widget =
+        std::make_shared<RegisterWidget>(assembler->reg_objects_idx[i]->WeakPtr());
+    register_widget->parent = SharedPtr();
+    register_widget->FixParents();
+    register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
+    reg_widgets_idx[i] = register_widget.get();
+    reg_widgets.emplace_back(std::move(register_widget));
+    std::sort(reg_widgets.begin(), reg_widgets.end(), [](const auto& a, const auto& b) {
+      auto* a_register_widget = static_cast<RegisterWidget*>(a.get());
+      auto* b_register_widget = static_cast<RegisterWidget*>(b.get());
+      return a_register_widget->register_weak.lock()->register_index <
+             b_register_widget->register_weak.lock()->register_index;
+    });
+  }
+  // Update register widgets where the value has changed.
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    if (reg_widgets_idx[i] == nullptr) continue;
+    auto new_value = state.regs[i];
+    auto child = reg_widgets_idx[i];
     if (child->reg_value != new_value) {
       child->reg_value = new_value;
       child->WakeAnimation();
     }
   }
-  int n = children.size();
+  int n = reg_widgets.size();
   int columns = std::ceil(std::sqrt(n));
   int rows = n ? (n + columns - 1) / columns : 0;
   int total_cells = columns * rows;
@@ -349,8 +367,8 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   float available_width = kInnerRRect.rect.Width();
   float target_scale = available_width / total_width;
 
-  for (int child_i = 0; child_i < children.size(); ++child_i) {
-    auto* child = static_cast<RegisterWidget*>(children[child_i].get());
+  for (int child_i = 0; child_i < reg_widgets.size(); ++child_i) {
+    auto* child = static_cast<RegisterWidget*>(reg_widgets[child_i].get());
 
     int effective_i = child_i + empty_cells_in_first_row;
     int row = effective_i / columns;
@@ -461,7 +479,10 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
 }
 
 void AssemblerWidget::FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) {
-  children = this->children;  // expensive copy of a bunch of shared_ptrs
+  // Expensive copy of a bunch of shared_ptrs :/
+  for (auto& child : reg_widgets) {
+    children.emplace_back(child->SharedPtr());
+  }
 }
 
 void AssemblerWidget::TransformUpdated() { WakeAnimation(); }
@@ -499,6 +520,10 @@ static constexpr float kBitPositionFontShiftUp =
     RegisterWidget::kCellHeight / 2 - kBitPositionFontSize;
 
 void RegisterWidget::Draw(SkCanvas& canvas) const {
+  int register_index = 0;
+  if (auto register_obj = register_weak.lock()) {
+    register_index = register_obj->register_index;
+  }
   SkPaint dark_paint;
   dark_paint.setColor("#dcca85"_color);
   canvas.drawRect(kBaseRect.sk, dark_paint);
@@ -561,4 +586,9 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
+Register::Register(std::weak_ptr<Assembler> assembler_weak, int register_index)
+    : assembler_weak(assembler_weak), register_index(register_index) {}
+std::shared_ptr<Object> Register::Clone() const {
+  return std::make_shared<Register>(assembler_weak, register_index);
+}
 }  // namespace automat::library

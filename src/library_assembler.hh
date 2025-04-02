@@ -22,13 +22,14 @@ struct DeleteWithMunmap {
 };
 
 struct Regs;
-
+struct Register;
 struct Assembler;
 struct AssemblerWidget;
 
 struct RegisterWidget : gui::Widget {
-  int register_index;
+  std::weak_ptr<Register> register_weak;
   uint64_t reg_value;
+
   constexpr static Rect kBaseRect = Rect::MakeAtZero<CenterX, CenterY>(3_cm, 3_cm);
   constexpr static Rect kBoundingRect = []() {
     auto rect = kBaseRect;
@@ -36,11 +37,12 @@ struct RegisterWidget : gui::Widget {
     rect.right += 1_cm;  // space for byte values
     return rect;
   }();
-  constexpr static Rect kInnerRect = kBaseRect.Outset(-1_mm);
+  maf::Vec constexpr static Rect kInnerRect = kBaseRect.Outset(-1_mm);
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(int register_index) : register_index(register_index) {}
+  RegisterWidget(std::weak_ptr<Register> register_weak)
+      : register_weak(register_weak), reg_value(0) {}
   std::string_view Name() const override;
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
@@ -54,7 +56,7 @@ struct AssemblerWidget : Object::FallbackWidget {
       RRect::MakeSimple(Rect::MakeAtZero<CenterX, CenterY>(kWidth, kHeight), kRadius);
 
   std::weak_ptr<Assembler> assembler_weak;
-  maf::Vec<std::shared_ptr<gui::Widget>> children;
+  maf::Vec<std::shared_ptr<RegisterWidget>> reg_widgets;
   mc::Controller::State state;
 
   AssemblerWidget(std::weak_ptr<Assembler>);
@@ -65,6 +67,15 @@ struct AssemblerWidget : Object::FallbackWidget {
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;
   void TransformUpdated() override;
+};
+
+struct Register : LiveObject {
+  std::weak_ptr<Assembler> assembler_weak;
+  int register_index;
+
+  Register(std::weak_ptr<Assembler> assembler_weak, int register_index);
+
+  std::shared_ptr<Object> Clone() const override;
 };
 
 // Combines functions of Assembler and Thread.
@@ -81,7 +92,7 @@ struct Assembler : LiveObject, LongRunning {
   void ExitCallback(mc::CodePoint code_point);
 
   std::unique_ptr<mc::Controller> mc_controller;
-  std::array<bool, kGeneralPurposeRegisterCount> reg_visible = {};
+  std::array<std::shared_ptr<Register>, kGeneralPurposeRegisterCount> reg_objects_idx;
 
   void UpdateMachineCode();
 

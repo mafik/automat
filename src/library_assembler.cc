@@ -54,6 +54,26 @@ struct ShowRegisterOption : Option {
   }
 };
 
+struct HideRegisterOption : Option {
+  std::weak_ptr<Assembler> weak;
+  int register_index;  // Must be < kGeneralPurposeRegisterCount
+
+  HideRegisterOption(std::weak_ptr<Assembler> weak, int register_index)
+      : Option("Hide"), weak(weak), register_index(register_index) {}
+
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<HideRegisterOption>(weak, register_index);
+  }
+
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    if (auto assembler = weak.lock()) {
+      assembler->reg_objects_idx[register_index].reset();
+      assembler->WakeWidgetsAnimation();
+    }
+    return nullptr;
+  }
+};
+
 struct ImageWidget : gui::Widget {
   PersistentImage& image;
   ImageWidget(PersistentImage& image) : image(image) {}
@@ -78,8 +98,14 @@ struct RegisterMenuOption : Option, OptionsProvider {
     return std::make_unique<RegisterMenuOption>(weak, register_index);
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
-    ShowRegisterOption show{weak, register_index};
-    visitor(show);
+    auto assembler = weak.lock();
+    if (assembler->reg_objects_idx[register_index] == nullptr) {
+      ShowRegisterOption show{weak, register_index};
+      visitor(show);
+    } else {
+      HideRegisterOption hide{weak, register_index};
+      visitor(hide);
+    }
   }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     return OpenMenu(pointer);
@@ -584,6 +610,13 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
   canvas.translate(-kRegisterIconWidth / 2, kBaseRect.top - kRegisterIconWidth * 0.15);
   kRegisters[register_index].image.draw(canvas);
   canvas.restore();
+}
+
+void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
+  auto register_obj = register_weak.lock();
+  RegisterMenuOption register_menu_option = {register_obj->assembler_weak,
+                                             register_obj->register_index};
+  register_menu_option.VisitOptions(visitor);
 }
 
 Register::Register(std::weak_ptr<Assembler> assembler_weak, int register_index)

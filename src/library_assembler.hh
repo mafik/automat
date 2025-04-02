@@ -26,7 +26,7 @@ struct Register;
 struct Assembler;
 struct AssemblerWidget;
 
-struct RegisterWidget : gui::Widget {
+struct RegisterWidget : public Object::FallbackWidget {
   std::weak_ptr<Register> register_weak;
   uint64_t reg_value;
 
@@ -46,6 +46,7 @@ struct RegisterWidget : gui::Widget {
   std::string_view Name() const override;
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
+  void VisitOptions(const OptionsVisitor&) const override;
 };
 
 struct AssemblerWidget : Object::FallbackWidget {

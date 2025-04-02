@@ -41,6 +41,15 @@ struct WidgetStore {
   std::map<std::weak_ptr<Object>, std::weak_ptr<Widget>, std::owner_less<std::weak_ptr<Object>>>
       container;
 
+  std::shared_ptr<Widget> Find(Object& object) {
+    auto weak = object.WeakPtr();
+    auto it = container.find(weak);
+    if (it == container.end()) {
+      return nullptr;
+    }
+    return it->second.lock();
+  }
+
   std::shared_ptr<Widget> For(Object& object, const Widget& parent) {
     auto weak = object.WeakPtr();
     auto it = container.find(weak);

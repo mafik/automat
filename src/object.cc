@@ -125,13 +125,36 @@ struct MoveOption : Option {
       LOG << "Object is nullptr";
       return nullptr;
     }
-    // TODO: change after this line
+    if (location->object != object) {
+      if (auto container = location->object->AsContainer()) {
+        Vec2 contact_point{0, 0};
+        auto& root_widget = location->FindRootWidget();
+        auto object_widget = root_widget.widgets.Find(*object);
+        float scale = 1;
+        if (object_widget) {
+          contact_point = pointer.PositionWithin(*object_widget);
+          scale = object_widget->local_to_parent.rc(0, 0);
+        }
+        if (auto extracted = container->Extract(*object)) {
+          extracted->position = pointer.PositionWithinRootMachine() - contact_point;
+          extracted->animation_state.position =
+              pointer.PositionWithinRootMachine() - contact_point * scale;
+          extracted->animation_state.scale = scale;
+          return std::make_unique<DragLocationAction>(pointer, std::move(extracted), contact_point);
+        } else {
+          LOG << "Unable to extract " << object->Name() << " from " << location->object->Name()
+              << " (no location)";
+        }
+      } else {
+        LOG << "Unable to extract " << object->Name() << " from " << location->object->Name()
+            << " (not a Container)";
+      }
+    }
     auto* machine = Closest<Machine>(*location);
     if (machine && location->object) {
       auto contact_point = pointer.PositionWithin(*location->WidgetForObject());
-      auto a =
-          std::make_unique<DragLocationAction>(pointer, machine->Extract(*location), contact_point);
-      return a;
+      return std::make_unique<DragLocationAction>(pointer, machine->Extract(*location),
+                                                  contact_point);
     }
     return nullptr;
   }
@@ -166,13 +189,8 @@ void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
 std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
                                                            gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
-    auto* location = Closest<Location>(*p.hover);
-    auto* machine = Closest<Machine>(*p.hover);
-    if (location && machine) {
-      auto contact_point = p.PositionWithin(*this);
-      auto a = std::make_unique<DragLocationAction>(p, machine->Extract(*location), contact_point);
-      return a;
-    }
+    MoveOption move{Closest<Location>(*p.hover)->WeakPtr(), object};
+    return move.Activate(p);
   } else if (btn == gui::PointerButton::Right) {
     return OpenMenu(p);
   }
@@ -207,13 +225,9 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
 void Object::WakeWidgetsAnimation() {
-  auto weak = WeakPtr();
   for (auto* root_widget : gui::root_widgets) {
-    auto it = root_widget->widgets.container.find(weak);
-    if (it != root_widget->widgets.container.end()) {
-      if (auto widget = it->second.lock()) {
-        widget->WakeAnimation();
-      }
+    if (auto widget = root_widget->widgets.Find(*this)) {
+      widget->WakeAnimation();
     }
   }
 }

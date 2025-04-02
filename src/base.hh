@@ -267,6 +267,13 @@ struct Pointer : LiveObject {
   }
 };
 
+// Interface for objects that can hold other objects within.
+struct Container {
+  // Remove the given `descendant` from this object and return it wrapped in a (possibly newly
+  // created) Location.
+  virtual std::shared_ptr<Location> Extract(Object& descendant) = 0;
+};
+
 // Types of objects that sholud work nicely with data updates:
 //
 // - stateful functions (e.g. X + Y => Z)      Solution: function adds itself to

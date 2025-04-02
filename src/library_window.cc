@@ -127,11 +127,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   std::unique_ptr<tesseract::TessBaseAPI> tesseract;
   std::string tesseract_text;
 
-  std::shared_ptr<Window> LockWindow() const {
-    auto shared = object.lock();
-    auto* window = static_cast<Window*>(shared.get());
-    return std::shared_ptr<Window>(std::move(shared), window);
-  }
+  std::shared_ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
   WindowWidget(std::weak_ptr<Object> window) {
     object = window;

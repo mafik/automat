@@ -15,6 +15,7 @@ namespace automat {
 struct Connection;
 struct Location;
 struct Pointer;
+struct Container;
 struct Argument;
 
 // Objects are interactive pieces of data & behavior.
@@ -48,6 +49,8 @@ struct Object : public virtual SharedBase {
 
   // Pointer-like objects can be followed.
   virtual Pointer* AsPointer() { return nullptr; }
+
+  virtual Container* AsContainer() { return nullptr; }
 
   virtual void Fields(std::function<void(Object&)> cb) {}
 
@@ -87,6 +90,13 @@ struct Object : public virtual SharedBase {
     void Draw(SkCanvas&) const override;
     void VisitOptions(const OptionsVisitor&) const override;
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+
+    template <typename T>
+    std::shared_ptr<T> LockObject() const {
+      auto shared = object.lock();
+      auto* raw = static_cast<T*>(shared.get());
+      return std::shared_ptr<T>(std::move(shared), raw);
+    }
   };
 
   virtual std::shared_ptr<gui::Widget> MakeWidget() {

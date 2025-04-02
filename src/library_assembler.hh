@@ -27,7 +27,6 @@ struct Assembler;
 struct AssemblerWidget;
 
 struct RegisterWidget : public Object::FallbackWidget {
-  std::weak_ptr<Register> register_weak;
   uint64_t reg_value;
 
   constexpr static Rect kBaseRect = Rect::MakeAtZero<CenterX, CenterY>(3_cm, 3_cm);
@@ -41,8 +40,10 @@ struct RegisterWidget : public Object::FallbackWidget {
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(std::weak_ptr<Register> register_weak)
-      : register_weak(register_weak), reg_value(0) {}
+  RegisterWidget(std::weak_ptr<Object> register_weak) : reg_value(0) {
+    object = std::move(register_weak);
+  }
+  std::shared_ptr<Register> LockRegister() const { return LockObject<Register>(); }
   std::string_view Name() const override;
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
@@ -77,12 +78,16 @@ struct Register : LiveObject {
   Register(std::weak_ptr<Assembler> assembler_weak, int register_index);
 
   std::shared_ptr<Object> Clone() const override;
+
+  std::shared_ptr<gui::Widget> MakeWidget() override {
+    return std::make_shared<RegisterWidget>(WeakPtr());
+  }
 };
 
 // Combines functions of Assembler and Thread.
 // Assembler part takes care of emitting machine code to an executable memory region.
 // Thread part maintains register state across executions.
-struct Assembler : LiveObject, LongRunning {
+struct Assembler : LiveObject, LongRunning, Container {
   using PrologueFn = uintptr_t (*)(void*);
 
   std::shared_ptr<Object> Clone() const override;
@@ -104,6 +109,10 @@ struct Assembler : LiveObject, LongRunning {
   std::shared_ptr<gui::Widget> MakeWidget() override {
     return std::make_shared<AssemblerWidget>(WeakPtr());
   }
+
+  Container* AsContainer() override { return this; }
+
+  std::shared_ptr<Location> Extract(Object& descendant) override;
 };
 
 // Convenience function for updating the code with a vector of automat::library::Instruction.

@@ -35,7 +35,6 @@ struct ObjectAnimationState {
 
   ObjectAnimationState();
 
-  SkMatrix GetTransform(Vec2 scale_pivot) const;
   animation::Phase Tick(float delta_time, Vec2 target_position, float target_scale);
 };
 

@@ -10,6 +10,7 @@
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 
 #include "animation.hh"
+#include "automat.hh"
 #include "drawing.hh"
 #include "embedded.hh"
 #include "font.hh"
@@ -301,6 +302,19 @@ void Assembler::Cancel() {
   }
 }
 
+std::shared_ptr<Location> Assembler::Extract(Object& descendant) {
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    if (reg_objects_idx[i].get() != &descendant) continue;
+    auto loc = std::make_shared<Location>();
+    loc->parent_location = root_location;
+    loc->parent = root_machine;
+    loc->InsertHere(std::move(reg_objects_idx[i]));
+    audio::Play(embedded::assets_SFX_toolbar_pick_wav);
+    return loc;
+  }
+  return nullptr;
+}
+
 AssemblerWidget::AssemblerWidget(std::weak_ptr<Assembler> assembler_weak)
     : assembler_weak(assembler_weak) {
   object = assembler_weak.lock();
@@ -333,11 +347,10 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   std::array<RegisterWidget*, kGeneralPurposeRegisterCount> reg_widgets_idx = {};
 
   // Index register widgets by register index.
-  // Also remove any register widgets that have been deleted.
   for (int i = 0; i < reg_widgets.size(); ++i) {
     auto& reg_widget = reg_widgets[i];
     auto* register_widget = reg_widget.get();
-    if (auto register_obj = register_widget->register_weak.lock()) {
+    if (auto register_obj = register_widget->LockRegister()) {
       reg_widgets_idx[register_obj->register_index] = register_widget;
     } else {
       reg_widgets.EraseIndex(i);
@@ -352,24 +365,41 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     assembler->reg_objects_idx[i] = std::make_shared<Register>(assembler_weak, i);
   }
 
-  // Create new register widgets for register objects that don't have a widget.
+  // Create or delete new register widgets for register objects that don't have a widget.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    if (assembler->reg_objects_idx[i] == nullptr) continue;
-    if (reg_widgets_idx[i] != nullptr) continue;
-    auto new_value = state.regs[i];
-    auto register_widget =
-        std::make_shared<RegisterWidget>(assembler->reg_objects_idx[i]->WeakPtr());
-    register_widget->parent = SharedPtr();
-    register_widget->FixParents();
-    register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
-    reg_widgets_idx[i] = register_widget.get();
-    reg_widgets.emplace_back(std::move(register_widget));
-    std::sort(reg_widgets.begin(), reg_widgets.end(), [](const auto& a, const auto& b) {
-      auto* a_register_widget = static_cast<RegisterWidget*>(a.get());
-      auto* b_register_widget = static_cast<RegisterWidget*>(b.get());
-      return a_register_widget->register_weak.lock()->register_index <
-             b_register_widget->register_weak.lock()->register_index;
-    });
+    bool delete_widget = false;
+    if (assembler->reg_objects_idx[i] == nullptr) {
+      delete_widget = true;
+    }
+    if (reg_widgets_idx[i] != nullptr) {
+      auto widgets_ptr = reg_widgets_idx[i]->LockRegister().get();
+      auto assembler_ptr = assembler->reg_objects_idx[i].get();
+      if (widgets_ptr != assembler_ptr) {
+        delete_widget = true;
+      }
+    }
+    if (delete_widget && reg_widgets_idx[i] != nullptr) {
+      reg_widgets_idx[i]->ForgetParents();
+      reg_widgets.EraseIndex(i);
+      reg_widgets_idx[i] = nullptr;
+    }
+    // Now create a widget if needed.
+    if (assembler->reg_objects_idx[i]) {
+      if (reg_widgets_idx[i] != nullptr) continue;
+      auto new_value = state.regs[i];
+      auto register_widget = FindRootWidget().widgets.For(*assembler->reg_objects_idx[i], *this);
+      register_widget->parent = SharedPtr();
+      register_widget->FixParents();
+      register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
+      reg_widgets_idx[i] = static_cast<RegisterWidget*>(register_widget.get());
+      reg_widgets.emplace_back(std::move(register_widget), reg_widgets_idx[i]);
+      std::sort(reg_widgets.begin(), reg_widgets.end(), [](const auto& a, const auto& b) {
+        auto* a_register_widget = static_cast<RegisterWidget*>(a.get());
+        auto* b_register_widget = static_cast<RegisterWidget*>(b.get());
+        return a_register_widget->LockRegister()->register_index <
+               b_register_widget->LockRegister()->register_index;
+      });
+    }
   }
   // Update register widgets where the value has changed.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
@@ -549,7 +579,7 @@ static constexpr float kBitPositionFontShiftUp =
 
 void RegisterWidget::Draw(SkCanvas& canvas) const {
   int register_index = 0;
-  if (auto register_obj = register_weak.lock()) {
+  if (auto register_obj = LockRegister()) {
     register_index = register_obj->register_index;
   }
   SkPaint dark_paint;
@@ -615,7 +645,8 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
 }
 
 void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  auto register_obj = register_weak.lock();
+  FallbackWidget::VisitOptions(visitor);
+  auto register_obj = LockRegister();
   RegisterMenuOption register_menu_option = {register_obj->assembler_weak,
                                              register_obj->register_index};
   register_menu_option.VisitOptions(visitor);
@@ -623,7 +654,9 @@ void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
 
 Register::Register(std::weak_ptr<Assembler> assembler_weak, int register_index)
     : assembler_weak(assembler_weak), register_index(register_index) {}
+
 std::shared_ptr<Object> Register::Clone() const {
   return std::make_shared<Register>(assembler_weak, register_index);
 }
+
 }  // namespace automat::library

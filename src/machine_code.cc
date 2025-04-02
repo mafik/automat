@@ -393,29 +393,32 @@ struct PtraceController : Controller {
 
   // Thread-safe (except for the control thread)
   void GetState(State& state, Status& status) override {
-    std::atomic<bool> done = false;
-    control_commands.enqueue([&]() {
+    auto get_state = [&]() {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Getting the state";
       }
       assert(!worker_running);
       state.current_instruction.reset();
-      maf::Status status;
       uint64_t rip;
       GetRegs(state.regs, rip, status);
-      if (!OK(status)) {
-        ERROR << status;
-      }
 
       CodePoint code_point = InstructionPointerToCodePoint(rip, false);
       if (code_point.instruction) {
         state.current_instruction = *code_point.instruction;
       }
-      done = true;
-      done.notify_all();
-    });
-    WakeControlThread();
-    done.wait(false);
+    };
+    if (control_thread.get_id() == std::this_thread::get_id()) {
+      get_state();
+    } else {
+      std::atomic<bool> done = false;
+      control_commands.enqueue([&]() {
+        get_state();
+        done = true;
+        done.notify_all();
+      });
+      WakeControlThread();
+      done.wait(false);
+    }
   }
 
   void Cancel(maf::Status&) override {

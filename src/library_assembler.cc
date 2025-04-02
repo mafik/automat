@@ -146,7 +146,47 @@ Assembler::Assembler() {
 
 Assembler::~Assembler() {}
 
+static animation::Phase RefreshState(Assembler& assembler, time::T time) {
+  if (time > assembler.last_state_refresh) {
+    auto old_regs = assembler.state.regs;
+    Status ignore;
+    assembler.mc_controller->GetState(assembler.state, ignore);
+    // Wake all registers widgets where values have changed.
+    std::array<bool, kGeneralPurposeRegisterCount> regs_changed = {};
+    for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+      if (old_regs[i] != assembler.state.regs[i]) {
+        if (assembler.reg_objects_idx[i]) {
+          assembler.reg_objects_idx[i]->WakeWidgetsAnimation();
+        }
+        regs_changed[i] = true;
+      }
+    }
+    // TODO: instead of "Nearby" call, Assembler should keep track of its registers using
+    // Connections.
+    if (auto location = assembler.here.lock()) {
+      if (auto machine = location->ParentAs<Machine>()) {
+        machine->Nearby(location->position, 999, [&](Location& other) {
+          if (auto register_obj = other.As<Register>()) {
+            if (regs_changed[register_obj->register_index]) {
+              register_obj->WakeWidgetsAnimation();
+            }
+          }
+          return nullptr;
+        });
+      }
+    }
+    assembler.WakeWidgetsAnimation();
+    assembler.last_state_refresh = time;
+  }
+  if (assembler.state.current_instruction.lock()) {
+    return animation::Animating;
+  } else {
+    return animation::Finished;
+  }
+}
+
 void Assembler::ExitCallback(mc::CodePoint code_point) {
+  RefreshState(*this, time::SteadyNow().time_since_epoch().count());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
     auto exit_mc_inst = code_point.instruction->lock();
@@ -179,7 +219,6 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
   } else {
     ERROR << "Exiting through unknown instruction??";
   }
-  WakeWidgetsAnimation();
 }
 
 std::shared_ptr<Object> Assembler::Clone() const { return std::make_shared<Assembler>(); }
@@ -282,6 +321,7 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
   if (!OK(status)) {
     ERROR << "Failed to execute Assembler: " << status;
   }
+  RefreshState(*this, time::SteadyNow().time_since_epoch().count());
 }
 
 void Assembler::Cancel() {
@@ -333,16 +373,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   if (!assembler || assembler->mc_controller == nullptr) {
     return animation::Finished;
   }
-  animation::Phase phase;
-  Status status;
-  assembler->mc_controller->GetState(state, status);
-  if (!OK(status)) {
-    ERROR << "Failed to get Assembler state: " << status;
-    return animation::Finished;
-  }
-  if (state.current_instruction.lock()) {
-    phase |= animation::Animating;
-  }
+  animation::Phase phase = RefreshState(*assembler, timer.NowSeconds());
   // Register widgets indexed by register index.
   std::array<RegisterWidget*, kGeneralPurposeRegisterCount> reg_widgets_idx = {};
 
@@ -359,8 +390,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   }
   // Create new register objects for registers that have non-zero values.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    auto new_value = state.regs[i];
-    if (new_value == 0) continue;
+    if (assembler->state.regs[i] == 0) continue;
     if (assembler->reg_objects_idx[i] != nullptr) continue;
     assembler->reg_objects_idx[i] = std::make_shared<Register>(assembler_weak, i);
   }
@@ -386,7 +416,6 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     // Now create a widget if needed.
     if (assembler->reg_objects_idx[i]) {
       if (reg_widgets_idx[i] != nullptr) continue;
-      auto new_value = state.regs[i];
       auto register_widget = FindRootWidget().widgets.For(*assembler->reg_objects_idx[i], *this);
       register_widget->parent = SharedPtr();
       register_widget->FixParents();
@@ -399,16 +428,6 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
         return a_register_widget->LockRegister()->register_index <
                b_register_widget->LockRegister()->register_index;
       });
-    }
-  }
-  // Update register widgets where the value has changed.
-  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    if (reg_widgets_idx[i] == nullptr) continue;
-    auto new_value = state.regs[i];
-    auto child = reg_widgets_idx[i];
-    if (child->reg_value != new_value) {
-      child->reg_value = new_value;
-      child->WakeAnimation();
     }
   }
   int n = reg_widgets.size();
@@ -577,10 +596,26 @@ static constexpr float kByteValueFontShiftUp =
 static constexpr float kBitPositionFontShiftUp =
     RegisterWidget::kCellHeight / 2 - kBitPositionFontSize;
 
+animation::Phase RegisterWidget::Tick(time::Timer& timer) {
+  animation::Phase phase = animation::Finished;
+  if (auto register_obj = LockRegister()) {
+    auto register_index = register_obj->register_index;
+    if (auto assembler = register_obj->assembler_weak.lock()) {
+      phase = RefreshState(*assembler, timer.NowSeconds());
+      auto reg_value = assembler->state.regs[register_index];
+    }
+  }
+  return phase;
+}
+
 void RegisterWidget::Draw(SkCanvas& canvas) const {
   int register_index = 0;
+  uint64_t reg_value = 0;
   if (auto register_obj = LockRegister()) {
     register_index = register_obj->register_index;
+    if (auto assembler = register_obj->assembler_weak.lock()) {
+      reg_value = assembler->state.regs[register_index];
+    }
   }
   SkPaint dark_paint;
   dark_paint.setColor("#dcca85"_color);

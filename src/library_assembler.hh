@@ -27,8 +27,6 @@ struct Assembler;
 struct AssemblerWidget;
 
 struct RegisterWidget : public Object::FallbackWidget {
-  uint64_t reg_value;
-
   constexpr static Rect kBaseRect = Rect::MakeAtZero<CenterX, CenterY>(3_cm, 3_cm);
   constexpr static Rect kBoundingRect = []() {
     auto rect = kBaseRect;
@@ -40,12 +38,11 @@ struct RegisterWidget : public Object::FallbackWidget {
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(std::weak_ptr<Object> register_weak) : reg_value(0) {
-    object = std::move(register_weak);
-  }
+  RegisterWidget(std::weak_ptr<Object> register_weak) { object = std::move(register_weak); }
   std::shared_ptr<Register> LockRegister() const { return LockObject<Register>(); }
   std::string_view Name() const override;
   SkPath Shape() const override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;
 };
@@ -59,7 +56,6 @@ struct AssemblerWidget : Object::FallbackWidget {
 
   std::weak_ptr<Assembler> assembler_weak;
   maf::Vec<std::shared_ptr<RegisterWidget>> reg_widgets;
-  mc::Controller::State state;
 
   AssemblerWidget(std::weak_ptr<Assembler>);
   std::string_view Name() const override;
@@ -98,6 +94,8 @@ struct Assembler : LiveObject, LongRunning, Container {
   void ExitCallback(mc::CodePoint code_point);
 
   std::unique_ptr<mc::Controller> mc_controller;
+  time::T last_state_refresh = 0;
+  mc::Controller::State state;
   std::array<std::shared_ptr<Register>, kGeneralPurposeRegisterCount> reg_objects_idx;
 
   void UpdateMachineCode();

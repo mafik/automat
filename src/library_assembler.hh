@@ -37,7 +37,7 @@ struct RegisterWidget : gui::Widget {
     rect.right += 1_cm;  // space for byte values
     return rect;
   }();
-  maf::Vec constexpr static Rect kInnerRect = kBaseRect.Outset(-1_mm);
+  constexpr static Rect kInnerRect = kBaseRect.Outset(-1_mm);
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 

@@ -109,8 +109,6 @@ struct XSHMCapture {
 #endif
 
 struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabber {
-  std::weak_ptr<Window> window_weak;
-
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
   constexpr static float kHeight = 5_cm;
@@ -129,7 +127,14 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   std::unique_ptr<tesseract::TessBaseAPI> tesseract;
   std::string tesseract_text;
 
-  WindowWidget(std::weak_ptr<Window>&& window) : window_weak(std::move(window)) {
+  std::shared_ptr<Window> LockWindow() const {
+    auto shared = object.lock();
+    auto* window = static_cast<Window*>(shared.get());
+    return std::shared_ptr<Window>(std::move(shared), window);
+  }
+
+  WindowWidget(std::weak_ptr<Object> window) {
+    object = window;
     pick_button = std::make_shared<PickButton>();
     pick_button->on_activate = [this](gui::Pointer& p) {
       p.EndAllActions();
@@ -170,7 +175,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 #ifdef __linux__
     xcb_window_t xcb_window = XCB_WINDOW_NONE;
     tesseract_text.clear();
-    if (auto window = window_weak.lock()) {
+    if (auto window = LockWindow()) {
       xcb_window = window->xcb_window;
     }
     if (xcb_window == XCB_WINDOW_NONE) {
@@ -229,7 +234,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       }
 
       int left = 0, top = 0, width = 0, height = 0;
-      if (auto window = window_weak.lock()) {
+      if (auto window = LockWindow()) {
         left = window->x_min_ratio * capture_width;
         top = (1 - window->y_max_ratio) * capture_height;
         width = capture_width * (window->x_max_ratio - window->x_min_ratio);
@@ -292,7 +297,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     } else {
       l.full_region_rect = l.contents_rrect.rect;
     }
-    if (auto window = window_weak.lock()) {
+    if (auto window = LockWindow()) {
       l.region_rect =
           Rect(lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_min_ratio),
                lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_min_ratio),
@@ -420,7 +425,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       auto layout = widget->Layout();
       d /= layout.full_region_rect.Size();
 
-      if (auto window = widget->window_weak.lock()) {
+      if (auto window = widget->LockWindow()) {
         // Shift X
         if (drag_region_mask & kDragRegionPart_XMin) {
           window->x_min_ratio += d.x;
@@ -570,7 +575,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
     window_name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
     WakeAnimation();
-    if (auto window = window_weak.lock()) {
+    if (auto window = LockWindow()) {
       window->xcb_window = found_window;
     }
 #else

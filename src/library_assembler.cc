@@ -302,7 +302,9 @@ void Assembler::Cancel() {
 }
 
 AssemblerWidget::AssemblerWidget(std::weak_ptr<Assembler> assembler_weak)
-    : assembler_weak(assembler_weak) {}
+    : assembler_weak(assembler_weak) {
+  object = assembler_weak.lock();
+}
 
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
 SkPath AssemblerWidget::Shape() const { return SkPath::RRect(kRRect.sk); }

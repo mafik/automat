@@ -49,8 +49,6 @@ struct InstructionLibrary : Object {
   std::shared_ptr<Object> Clone() const override;
 
   struct Widget : FallbackWidget, gui::PointerMoveCallback {
-    std::weak_ptr<Object> object;
-
     struct InstructionCard {
       llvm::MCInst mc_inst;
       float angle = 0;

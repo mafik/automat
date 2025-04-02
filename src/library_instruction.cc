@@ -229,7 +229,7 @@ static const SkRRect kInstructionRRect =
 
 static const SkPath kInstructionShape = SkPath::RRect(kInstructionRRect);
 
-Instruction::Widget::Widget(std::weak_ptr<Object> object) { this->object = object; }
+Instruction::Widget::Widget(std::weak_ptr<Object> object) { this->object = std::move(object); }
 
 SkPath Instruction::Widget::Shape() const { return kInstructionShape; }
 

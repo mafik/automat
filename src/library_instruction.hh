@@ -61,7 +61,6 @@ struct Instruction : LiveObject, Runnable {
     constexpr static Rect kRect =
         Rect::MakeAtZero<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
-    std::weak_ptr<Object> object;
     Widget(std::weak_ptr<Object> object);
 
     std::string_view Name() const override { return "Instruction Widget"; }

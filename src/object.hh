@@ -91,6 +91,10 @@ struct Object : public virtual SharedBase {
 
   virtual std::shared_ptr<gui::Widget> MakeWidget() {
     if (auto w = dynamic_cast<gui::Widget*>(this)) {
+      // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
+      if (auto fallback_widget = dynamic_cast<FallbackWidget*>(this)) {
+        fallback_widget->object = WeakPtr();
+      }
       return w->SharedPtr();
     }
     auto w = std::make_shared<FallbackWidget>();

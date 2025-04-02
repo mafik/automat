@@ -164,7 +164,9 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 shared_ptr<Object> InstructionLibrary::Clone() const { return make_shared<InstructionLibrary>(); }
 
-InstructionLibrary::Widget::Widget(std::weak_ptr<Object> object) : object(object) {}
+InstructionLibrary::Widget::Widget(std::weak_ptr<Object> object) {
+  this->object = std::move(object);
+}
 SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 10_cm); }
 
 constexpr float kRoseFanDegrees = 180;

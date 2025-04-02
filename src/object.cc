@@ -107,18 +107,31 @@ struct DeleteOption : Option {
 };
 
 struct MoveOption : Option {
-  std::weak_ptr<Location> weak;
-  MoveOption(std::weak_ptr<Location> weak) : Option("Move"), weak(weak) {}
-  std::unique_ptr<Option> Clone() const override { return std::make_unique<MoveOption>(weak); }
+  std::weak_ptr<Location> location_weak;
+  std::weak_ptr<Object> object_weak;
+
+  MoveOption(std::weak_ptr<Location> location_weak, std::weak_ptr<Object> object_weak)
+      : Option("Move"), location_weak(location_weak), object_weak(object_weak) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<MoveOption>(location_weak, object_weak);
+  }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
-    if (shared_ptr<Location> location = weak.lock()) {
-      auto* machine = Closest<Machine>(*location);
-      if (machine && location->object) {
-        auto contact_point = pointer.PositionWithin(*location->WidgetForObject());
-        auto a = std::make_unique<DragLocationAction>(pointer, machine->Extract(*location),
-                                                      contact_point);
-        return a;
-      }
+    auto location = location_weak.lock();
+    if (location == nullptr) {
+      return nullptr;
+    }
+    auto object = object_weak.lock();
+    if (object == nullptr) {
+      LOG << "Object is nullptr";
+      return nullptr;
+    }
+    // TODO: change after this line
+    auto* machine = Closest<Machine>(*location);
+    if (machine && location->object) {
+      auto contact_point = pointer.PositionWithin(*location->WidgetForObject());
+      auto a =
+          std::make_unique<DragLocationAction>(pointer, machine->Extract(*location), contact_point);
+      return a;
     }
     return nullptr;
   }
@@ -137,13 +150,14 @@ struct RunOption : Option {
 };
 
 void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  if (auto loc = std::dynamic_pointer_cast<Location>(this->parent)) {
-    DeleteOption del{loc};
+  if (auto loc = gui::Closest<Location>(const_cast<FallbackWidget&>(*this))) {
+    auto loc_weak = loc->WeakPtr();
+    DeleteOption del{loc_weak};
     visitor(del);
-    MoveOption move{loc};
+    MoveOption move{loc_weak, object};
     visitor(move);
     if (auto runnable = loc->As<Runnable>()) {
-      RunOption run{loc};
+      RunOption run{loc_weak};
       visitor(run);
     }
   }

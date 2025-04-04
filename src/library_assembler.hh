@@ -11,6 +11,7 @@
 #include "library_instruction.hh"
 #include "machine_code.hh"
 #include "object.hh"
+#include "shared_or_weak.hh"
 #include "status.hh"
 
 namespace automat::library {
@@ -96,7 +97,7 @@ struct Assembler : LiveObject, LongRunning, Container {
   std::unique_ptr<mc::Controller> mc_controller;
   time::T last_state_refresh = 0;
   mc::Controller::State state;
-  std::array<std::shared_ptr<Register>, kGeneralPurposeRegisterCount> reg_objects_idx;
+  std::array<SharedOrWeakPtr<Register>, kGeneralPurposeRegisterCount> reg_objects_idx;
 
   void UpdateMachineCode();
 

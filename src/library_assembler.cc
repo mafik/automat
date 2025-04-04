@@ -100,12 +100,15 @@ struct RegisterMenuOption : Option, OptionsProvider {
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
     auto assembler = weak.lock();
-    if (assembler->reg_objects_idx[register_index] == nullptr) {
-      ShowRegisterOption show{weak, register_index};
-      visitor(show);
-    } else {
-      HideRegisterOption hide{weak, register_index};
-      visitor(hide);
+    auto& reg = assembler->reg_objects_idx[register_index];
+    if (reg.is_shared || reg.weak.expired()) {
+      if (assembler->reg_objects_idx[register_index] == nullptr) {
+        ShowRegisterOption show{weak, register_index};
+        visitor(show);
+      } else {
+        HideRegisterOption hide{weak, register_index};
+        visitor(hide);
+      }
     }
   }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
@@ -152,27 +155,11 @@ static animation::Phase RefreshState(Assembler& assembler, time::T time) {
     Status ignore;
     assembler.mc_controller->GetState(assembler.state, ignore);
     // Wake all registers widgets where values have changed.
-    std::array<bool, kGeneralPurposeRegisterCount> regs_changed = {};
     for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
       if (old_regs[i] != assembler.state.regs[i]) {
-        if (assembler.reg_objects_idx[i]) {
-          assembler.reg_objects_idx[i]->WakeWidgetsAnimation();
+        if (auto reg = assembler.reg_objects_idx[i].lock()) {
+          reg->WakeWidgetsAnimation();
         }
-        regs_changed[i] = true;
-      }
-    }
-    // TODO: instead of "Nearby" call, Assembler should keep track of its registers using
-    // Connections.
-    if (auto location = assembler.here.lock()) {
-      if (auto machine = location->ParentAs<Machine>()) {
-        machine->Nearby(location->position, 999, [&](Location& other) {
-          if (auto register_obj = other.As<Register>()) {
-            if (regs_changed[register_obj->register_index]) {
-              register_obj->WakeWidgetsAnimation();
-            }
-          }
-          return nullptr;
-        });
       }
     }
     assembler.WakeWidgetsAnimation();
@@ -344,12 +331,14 @@ void Assembler::Cancel() {
 
 std::shared_ptr<Location> Assembler::Extract(Object& descendant) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    if (reg_objects_idx[i].get() != &descendant) continue;
+    auto* reg = reg_objects_idx[i].get();
+    if (reg != &descendant) continue;
     auto loc = std::make_shared<Location>();
     loc->parent_location = root_location;
     loc->parent = root_machine;
-    loc->InsertHere(std::move(reg_objects_idx[i]));
+    loc->InsertHere(reg_objects_idx[i].borrow());
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
+    WakeWidgetsAnimation();
     return loc;
   }
   return nullptr;
@@ -397,26 +386,18 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
 
   // Create or delete new register widgets for register objects that don't have a widget.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    bool delete_widget = false;
-    if (assembler->reg_objects_idx[i] == nullptr) {
-      delete_widget = true;
-    }
+    auto assembler_reg = assembler->reg_objects_idx[i].get();
     if (reg_widgets_idx[i] != nullptr) {
-      auto widgets_ptr = reg_widgets_idx[i]->LockRegister().get();
-      auto assembler_ptr = assembler->reg_objects_idx[i].get();
-      if (widgets_ptr != assembler_ptr) {
-        delete_widget = true;
+      if (assembler_reg == nullptr) {
+        reg_widgets_idx[i]->ForgetParents();
+        reg_widgets.EraseIndex(i);
+        reg_widgets_idx[i] = nullptr;
       }
     }
-    if (delete_widget && reg_widgets_idx[i] != nullptr) {
-      reg_widgets_idx[i]->ForgetParents();
-      reg_widgets.EraseIndex(i);
-      reg_widgets_idx[i] = nullptr;
-    }
     // Now create a widget if needed.
-    if (assembler->reg_objects_idx[i]) {
+    if (assembler_reg) {
       if (reg_widgets_idx[i] != nullptr) continue;
-      auto register_widget = FindRootWidget().widgets.For(*assembler->reg_objects_idx[i], *this);
+      auto register_widget = FindRootWidget().widgets.For(*assembler_reg, *this);
       register_widget->parent = SharedPtr();
       register_widget->FixParents();
       register_widget->local_to_parent = SkM44::Translate(0, 10_cm);

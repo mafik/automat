@@ -6,6 +6,7 @@
 #include <include/core/SkRRect.h>
 #include <include/core/SkRSXform.h>
 #include <include/core/SkTextBlob.h>
+#include <include/core/SkVertices.h>
 #include <include/effects/SkGradientShader.h>
 
 #include <optional>
@@ -17,6 +18,7 @@
 #include "base.hh"
 #include "connector_optical.hh"
 #include "font.hh"
+#include "include/core/SkTileMode.h"
 #include "location.hh"
 #include "math.hh"
 #include "object.hh"
@@ -54,6 +56,43 @@ SkPath ConnectionWidget::Shape() const {
 }
 
 void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
+  if (arg.style == Argument::Style::Spotlight) {
+    auto target_bounds = from.WidgetForObject()->CoarseBounds();
+    Vec2 target = from.position;  //  + target_bounds.Center();
+    float radius = target_bounds.rect.Hypotenuse() / 2;
+
+    {  // Circle around the target
+      SkPaint circle_paint;
+      SkColor colors[] = {
+          "#ffffff"_color,
+          "#ffffbe00"_color,
+      };
+      float pos[] = {0.5, 1};
+      circle_paint.setShader(
+          SkGradientShader::MakeRadial(target, radius, colors, pos, 2, SkTileMode::kClamp));
+      canvas.drawCircle(target, radius, circle_paint);
+    }
+
+    {  // Ray from the source to the target
+      Vec2 source = arg.GetLocation(from).location->position;
+      Vec2 diff = target - source;
+      float dist = Length(diff);
+      auto angle = SinCos::FromVec2(diff, dist);
+      SkPath path;
+      path.moveTo(source);
+      path.lineTo(target + Vec2::Polar((angle + 90_deg), radius));
+      path.lineTo(target + Vec2::Polar((angle - 90_deg), radius));
+      SkColor ray_colors[] = {"#ffffbe"_color, "#ffffbe00"_color};
+      Vec2 ray_positions[] = {source, target};
+      SkPaint ray_paint;
+      ray_paint.setShader(
+          SkGradientShader::MakeLinear(&ray_positions[0].sk, ray_colors, 0, 2, SkTileMode::kClamp));
+      ray_paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, 1_mm));
+      canvas.drawPath(path, ray_paint);
+    }
+
+    return;
+  }
   auto anim = &animation_state;
   if (anim->radar_alpha >= 0.01f) {
     auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
@@ -174,7 +213,7 @@ void ConnectionWidget::FromMoved() {
 }
 
 animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
-  if (arg.style == Argument::Style::Invisible) {
+  if (arg.style == Argument::Style::Invisible || arg.style == Argument::Style::Spotlight) {
     return animation::Finished;
   }
   auto& from_animation_state = from.GetAnimationState();
@@ -293,7 +332,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 }
 
 void ConnectionWidget::Draw(SkCanvas& canvas) const {
-  if (arg.style == Argument::Style::Invisible) {
+  if (arg.style == Argument::Style::Invisible || arg.style == Argument::Style::Spotlight) {
     return;
   }
   auto& from_animation_state = from.GetAnimationState();

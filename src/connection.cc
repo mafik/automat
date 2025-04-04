@@ -32,7 +32,9 @@ Connection::~Connection() {
       }
     }
   }
-  from.object->ConnectionRemoved(from, *this);
+  if (from.object) {
+    from.object->ConnectionRemoved(from, *this);
+  }
 }
 
 Connection::Connection(Argument& arg, Location& from, Location& to,

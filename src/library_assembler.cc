@@ -739,4 +739,15 @@ std::shared_ptr<Object> Register::Clone() const {
   return std::make_shared<Register>(assembler_weak, register_index);
 }
 
+Argument register_assembler_arg = []() {
+  Argument arg("Reg's Assembler", Argument::kRequiresObject);
+  arg.RequireInstanceOf<Assembler>();
+  arg.autoconnect_radius = INFINITY;
+  arg.tint = "#ff0000"_color;
+  arg.style = Argument::Style::Spotlight;
+  return arg;
+}();
+
+void Register::Args(std::function<void(Argument&)> cb) { cb(register_assembler_arg); }
+
 }  // namespace automat::library

@@ -309,7 +309,8 @@ union Rect {
     float dy = std::max(0.f, std::max(bottom - point.y, point.y - top));
     return dx * dx + dy * dy;
   }
-  constexpr float Discance(Vec2 point) { return sqrtf(DistanceSquared(point)); }
+  constexpr float Distance(Vec2 point) { return sqrtf(DistanceSquared(point)); }
+  constexpr float Hypotenuse() const { return sqrtf(Width() * Width() + Height() * Height()); }
 
   constexpr bool Contains(const Rect& other) const {
     return left <= other.left && right >= other.right && bottom <= other.bottom && top >= other.top;

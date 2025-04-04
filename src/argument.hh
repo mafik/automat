@@ -58,7 +58,7 @@ struct Argument {
   SkColor light = "#ef9f37"_color;
   float autoconnect_radius = 0_cm;
 
-  enum class Style { Arrow, Cable, Invisible } style = Style::Arrow;
+  enum class Style { Arrow, Cable, Spotlight, Invisible } style = Style::Arrow;
 
   // TODO: get rid of this property, the parent should instead provide the "field" object based on
   // Argument.

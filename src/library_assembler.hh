@@ -84,6 +84,8 @@ struct Register : LiveObject {
   std::shared_ptr<gui::Widget> MakeWidget() override {
     return std::make_shared<RegisterWidget>(WeakPtr());
   }
+
+  void Args(std::function<void(Argument&)> cb) override;
 };
 
 // Combines functions of Assembler and Thread.

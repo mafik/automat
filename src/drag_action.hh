@@ -15,7 +15,10 @@ namespace automat {
 struct Location;
 
 namespace gui {
+
+// Interface for widgets that can receive locations being dropped on them.
 struct DropTarget {
+  virtual bool CanDrop(Location&) const = 0;
   virtual void SnapPosition(Vec2& position, float& scale, Location&,
                             Vec2* fixed_point = nullptr) = 0;
 

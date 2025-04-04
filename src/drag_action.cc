@@ -37,8 +37,10 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
   Vec2 point = a.pointer.PositionWithin(widget);
   if ((widget.pack_frame_texture_bounds == std::nullopt) ||
       widget.Shape().contains(point.x, point.y)) {
-    if (auto drop_target = widget.CanDrop()) {
-      return drop_target;
+    if (auto drop_target = widget.AsDropTarget()) {
+      if (drop_target->CanDrop(*a.location)) {
+        return drop_target;
+      }
     }
   }
   return nullptr;

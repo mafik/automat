@@ -112,6 +112,8 @@ struct Object : public virtual SharedBase {
     return w;
   }
 
+  void ForEachWidget(std::function<void(gui::RootWidget&, gui::Widget&)> cb);
+
   void WakeWidgetsAnimation();
 };
 

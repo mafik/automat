@@ -139,7 +139,8 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
   void Draw(SkCanvas& canvas) const override { Widget::Draw(canvas); }
   void PreDraw(SkCanvas&) const override;
-  gui::DropTarget* CanDrop() override { return this; }
+  gui::DropTarget* AsDropTarget() override { return this; }
+  bool CanDrop(Location&) const override { return true; }
   void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
   void DropLocation(std::shared_ptr<Location>&&) override;
 

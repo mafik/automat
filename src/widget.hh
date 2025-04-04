@@ -197,7 +197,7 @@ struct Widget : public virtual SharedBase, public OptionsProvider {
   // Return true if the widget should be highlighted as draggable.
   virtual bool CanDrag() { return false; }
 
-  virtual DropTarget* CanDrop() { return nullptr; }
+  virtual DropTarget* AsDropTarget() { return nullptr; }
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
   virtual maf::Optional<Rect> TextureBounds() const { return Shape().getBounds(); }

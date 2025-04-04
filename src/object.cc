@@ -224,12 +224,16 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
-void Object::WakeWidgetsAnimation() {
+void Object::ForEachWidget(std::function<void(gui::RootWidget&, gui::Widget&)> cb) {
   for (auto* root_widget : gui::root_widgets) {
     if (auto widget = root_widget->widgets.Find(*this)) {
-      widget->WakeAnimation();
+      cb(*root_widget, *widget);
     }
   }
+}
+
+void Object::WakeWidgetsAnimation() {
+  ForEachWidget([](gui::RootWidget&, gui::Widget& widget) { widget.WakeAnimation(); });
 }
 
 }  // namespace automat

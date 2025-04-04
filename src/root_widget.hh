@@ -81,7 +81,8 @@ struct RootWidget final : Widget, DropTarget {
 
   std::string_view Name() const override { return "Window"; }
 
-  DropTarget* CanDrop() override { return this; }
+  DropTarget* AsDropTarget() override { return this; }
+  bool CanDrop(Location&) const override { return true; }
   void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
   void DropLocation(std::shared_ptr<Location>&&) override;
 

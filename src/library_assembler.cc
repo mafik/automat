@@ -330,6 +330,7 @@ void Assembler::Cancel() {
 }
 
 std::shared_ptr<Location> Assembler::Extract(Object& descendant) {
+  auto lock = std::lock_guard(mutex);
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto* reg = reg_objects_idx[i].get();
     if (reg != &descendant) continue;
@@ -359,6 +360,7 @@ static constexpr RRect kInnerRRect = kBorderMidRRect.Outset(-kFlatBorderWidth);
 
 animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   auto assembler = assembler_weak.lock();
+  auto lock = std::lock_guard(assembler->mutex);
   if (!assembler || assembler->mc_controller == nullptr) {
     return animation::Finished;
   }
@@ -366,15 +368,25 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   // Register widgets indexed by register index.
   std::array<RegisterWidget*, kGeneralPurposeRegisterCount> reg_widgets_idx = {};
 
-  // Index register widgets by register index.
+  // Index register widgets by register index. Delete them if their register object is gone or if
+  // they're no longer owned by the assembler.
   for (int i = 0; i < reg_widgets.size(); ++i) {
     auto& reg_widget = reg_widgets[i];
-    auto* register_widget = reg_widget.get();
-    if (auto register_obj = register_widget->LockRegister()) {
-      reg_widgets_idx[register_obj->register_index] = register_widget;
-    } else {
+    auto register_obj = reg_widget->LockRegister();
+    int register_index = -1;
+    if (register_obj != nullptr) {
+      register_index = register_obj->register_index;
+      auto assembler_reg = assembler->reg_objects_idx[register_index].get();
+      if (assembler_reg == nullptr) {
+        register_index = -1;
+      }
+    }
+    if (register_index == -1) {
+      reg_widgets[i]->ForgetParents();
       reg_widgets.EraseIndex(i);
       --i;
+    } else {
+      reg_widgets_idx[register_index] = reg_widget.get();
     }
   }
   // Create new register objects for registers that have non-zero values.
@@ -384,23 +396,19 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     assembler->reg_objects_idx[i] = std::make_shared<Register>(assembler_weak, i);
   }
 
-  // Create or delete new register widgets for register objects that don't have a widget.
+  // Create new register widgets for register objects that don't have a widget.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto assembler_reg = assembler->reg_objects_idx[i].get();
-    if (reg_widgets_idx[i] != nullptr) {
-      if (assembler_reg == nullptr) {
-        reg_widgets_idx[i]->ForgetParents();
-        reg_widgets.EraseIndex(i);
-        reg_widgets_idx[i] = nullptr;
-      }
-    }
     // Now create a widget if needed.
     if (assembler_reg) {
       if (reg_widgets_idx[i] != nullptr) continue;
-      auto register_widget = FindRootWidget().widgets.For(*assembler_reg, *this);
+      auto register_widget = FindRootWidget().widgets.Find(*assembler_reg);
+      if (register_widget == nullptr) {
+        register_widget = FindRootWidget().widgets.For(*assembler_reg, *this);
+        register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
+      }
       register_widget->parent = SharedPtr();
       register_widget->FixParents();
-      register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
       reg_widgets_idx[i] = static_cast<RegisterWidget*>(register_widget.get());
       reg_widgets.emplace_back(std::move(register_widget), reg_widgets_idx[i]);
       std::sort(reg_widgets.begin(), reg_widgets.end(), [](const auto& a, const auto& b) {
@@ -544,6 +552,62 @@ void AssemblerWidget::FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& child
 }
 
 void AssemblerWidget::TransformUpdated() { WakeAnimation(); }
+
+bool AssemblerWidget::CanDrop(Location& loc) const {
+  if (auto reg = loc.As<Register>()) {
+    if (auto my_assembler = this->assembler_weak.lock()) {
+      if (auto my_reg = my_assembler->reg_objects_idx[reg->register_index].lock()) {
+        return my_reg.get() == reg;
+      }
+    }
+  }
+  return false;
+}
+
+template <typename T, typename O>
+std::shared_ptr<T> Downcast(std::shared_ptr<O>&& obj) {
+  T* raw = static_cast<T*>(obj.get());
+  return std::shared_ptr<T>(std::move(obj), raw);
+}
+
+void AssemblerWidget::DropLocation(std::shared_ptr<Location>&& loc) {
+  if (auto reg = loc->As<Register>()) {
+    if (auto my_assembler = this->assembler_weak.lock()) {
+      auto lock = std::lock_guard(my_assembler->mutex);
+      loc->object->ForEachWidget(
+          [&](gui::RootWidget& root_widget, gui::Widget& reg_widget_generic) {
+            RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
+            if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
+              auto asm_widget = Downcast<AssemblerWidget>(std::move(asm_widget_generic));
+              reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
+              asm_widget->reg_widgets.emplace_back(reg_widget.SharedPtr());
+              reg_widget.parent = asm_widget;
+            }
+          });
+      my_assembler->reg_objects_idx[reg->register_index] = Downcast<Register>(loc->Take());
+      my_assembler->WakeWidgetsAnimation();
+    }
+  }
+}
+void AssemblerWidget::SnapPosition(Vec2& position, float& scale, Location& location,
+                                   Vec2* fixed_point) {
+  auto local_to_machine = TransformBetween(*this, *root_machine);
+  auto my_rect = kRRect.rect.Outset(-2 * kFlatBorderWidth);
+  local_to_machine.mapRect(&my_rect.sk);
+  Rect rect = location.WidgetForObject()->Shape().getBounds();
+  if (position.x + rect.left < my_rect.left) {
+    position.x += my_rect.left - (position.x + rect.left);
+  }
+  if (position.x + rect.right > my_rect.right) {
+    position.x += my_rect.right - (position.x + rect.right);
+  }
+  if (position.y + rect.bottom < my_rect.bottom) {
+    position.y += my_rect.bottom - (position.y + rect.bottom);
+  }
+  if (position.y + rect.top > my_rect.top) {
+    position.y += my_rect.top - (position.y + rect.top);
+  }
+}
 
 SkPath RegisterWidget::Shape() const { return SkPath::Rect(kBoundingRect.sk); }
 std::string_view RegisterWidget::Name() const { return "Register"; }

@@ -48,7 +48,7 @@ struct RegisterWidget : public Object::FallbackWidget {
   void VisitOptions(const OptionsVisitor&) const override;
 };
 
-struct AssemblerWidget : Object::FallbackWidget {
+struct AssemblerWidget : Object::FallbackWidget, gui::DropTarget {
   constexpr static float kWidth = 8_cm;
   constexpr static float kHeight = 8_cm;
   constexpr static float kRadius = 1_cm;
@@ -66,6 +66,11 @@ struct AssemblerWidget : Object::FallbackWidget {
   void Draw(SkCanvas&) const override;
   void VisitOptions(const OptionsVisitor&) const override;
   void TransformUpdated() override;
+
+  DropTarget* AsDropTarget() override { return this; }
+  bool CanDrop(Location&) const override;
+  void DropLocation(std::shared_ptr<Location>&&) override;
+  void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point = nullptr) override;
 };
 
 struct Register : LiveObject {
@@ -94,6 +99,7 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void ExitCallback(mc::CodePoint code_point);
 
+  std::mutex mutex;
   std::unique_ptr<mc::Controller> mc_controller;
   time::T last_state_refresh = 0;
   mc::Controller::State state;

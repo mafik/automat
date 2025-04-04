@@ -114,8 +114,8 @@ struct MenuAction : Action {
     if (index >= n_opts) {
       index = 0;
     }
-    if (last_index != -1) {
-      if (index == last_index && ((n_opts <= 1) || (length > kMenuSize * 2 / 3))) {
+    if (last_index != -1 && n_opts > 0) {
+      if (index == last_index && ((n_opts == 1) || (length > kMenuSize * 2 / 3))) {
         auto delta = pos - last_pos;
         menu_widget->option_animation[index].offset.value += delta;
       }

@@ -6,6 +6,7 @@
 #include <include/core/SkRRect.h>
 #include <include/core/SkRSXform.h>
 #include <include/core/SkTextBlob.h>
+#include <include/core/SkTileMode.h>
 #include <include/core/SkVertices.h>
 #include <include/effects/SkGradientShader.h>
 
@@ -18,7 +19,6 @@
 #include "base.hh"
 #include "connector_optical.hh"
 #include "font.hh"
-#include "include/core/SkTileMode.h"
 #include "location.hh"
 #include "math.hh"
 #include "object.hh"

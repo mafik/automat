@@ -83,16 +83,16 @@ struct [[clang::trivial_abi]] Ptr {
   constexpr Ptr(std::nullptr_t) : obj(nullptr) {}
 
   // Duplicate `that` Ptr (incrementing its ref count).
-  Ptr(const Ptr<T>& that) : obj(SafeIncrementOwningRefs(that.get())) {}
+  Ptr(const Ptr<T>& that) : obj(SafeIncrementOwningRefs(that.Get())) {}
   template <typename U,
             typename = typename std::enable_if<std::is_convertible<U*, T*>::value>::type>
-  Ptr(const Ptr<U>& that) : obj(SafeIncrementOwningRefs(that.get())) {}
+  Ptr(const Ptr<U>& that) : obj(SafeIncrementOwningRefs(that.Get())) {}
 
   // Adopt the underlying object from another Ptr (clearing it).
-  Ptr(Ptr<T>&& that) : obj(that.release()) {}
+  Ptr(Ptr<T>&& that) : obj(that.Release()) {}
   template <typename U,
             typename = typename std::enable_if<std::is_convertible<U*, T*>::value>::type>
-  Ptr(Ptr<U>&& that) : obj(that.release()) {}
+  Ptr(Ptr<U>&& that) : obj(that.Release()) {}
 
   // Adopt the bare pointer into the newly created Ptr.
   explicit Ptr(T*&& obj) : obj(obj) {}
@@ -100,7 +100,7 @@ struct [[clang::trivial_abi]] Ptr {
   ~Ptr() { SafeDecrementOwningRefs(obj); }
 
   Ptr<T>& operator=(std::nullptr_t) {
-    this->reset();
+    this->Reset();
     return *this;
   }
 
@@ -111,14 +111,14 @@ struct [[clang::trivial_abi]] Ptr {
    */
   Ptr<T>& operator=(const Ptr<T>& that) {
     if (this != &that) {
-      this->reset(SafeIncrementOwningRefs(that.get()));
+      this->Reset(SafeIncrementOwningRefs(that.Get()));
     }
     return *this;
   }
   template <typename U,
             typename = typename std::enable_if<std::is_convertible<U*, T*>::value>::type>
   Ptr<T>& operator=(const Ptr<U>& that) {
-    this->reset(SafeIncrementOwningRefs(that.get()));
+    this->Reset(SafeIncrementOwningRefs(that.Get()));
     return *this;
   }
 
@@ -128,31 +128,31 @@ struct [[clang::trivial_abi]] Ptr {
    *  will be made.
    */
   Ptr<T>& operator=(Ptr<T>&& that) {
-    this->reset(that.release());
+    this->Reset(that.Release());
     return *this;
   }
   template <typename U,
             typename = typename std::enable_if<std::is_convertible<U*, T*>::value>::type>
   Ptr<T>& operator=(Ptr<U>&& that) {
-    this->reset(that.release());
+    this->Reset(that.Release());
     return *this;
   }
 
   T& operator*() const {
-    assert(this->get() != nullptr);
-    return *this->get();
+    assert(this->Get() != nullptr);
+    return *this->Get();
   }
 
-  explicit operator bool() const { return this->get() != nullptr; }
+  explicit operator bool() const { return this->Get() != nullptr; }
 
-  T* get() const { return obj; }
+  T* Get() const { return obj; }
   T* operator->() const { return obj; }
 
   /**
    *  Adopt the new bare pointer, and call unref() on any previously held object (if not null).
    *  No call to ref() will be made.
    */
-  void reset(T* ptr = nullptr) {
+  void Reset(T* ptr = nullptr) {
     // Calling fPtr->unref() may call this->~() or this->reset(T*).
     // http://wg21.cmeerw.net/lwg/issue998
     // http://wg21.cmeerw.net/lwg/issue2262
@@ -166,13 +166,13 @@ struct [[clang::trivial_abi]] Ptr {
    *  The caller must assume ownership of the object, and manage its reference count directly.
    *  No call to unref() will be made.
    */
-  [[nodiscard]] T* release() {
-    T* ptr = ptr;
-    ptr = nullptr;
+  [[nodiscard]] T* Release() {
+    T* ptr = obj;
+    obj = nullptr;
     return ptr;
   }
 
-  void swap(Ptr<T>& that) /*noexcept*/ {
+  void Swap(Ptr<T>& that) /*noexcept*/ {
     using std::swap;
     swap(obj, that.obj);
   }
@@ -183,12 +183,12 @@ struct [[clang::trivial_abi]] Ptr {
 
 template <typename T>
 inline void swap(Ptr<T>& a, Ptr<T>& b) /*noexcept*/ {
-  a.swap(b);
+  a.Swap(b);
 }
 
 template <typename T, typename U>
 inline bool operator==(const Ptr<T>& a, const Ptr<U>& b) {
-  return a.get() == b.get();
+  return a.Get() == b.Get();
 }
 template <typename T>
 inline bool operator==(const Ptr<T>& a, std::nullptr_t) /*noexcept*/ {
@@ -201,7 +201,7 @@ inline bool operator==(std::nullptr_t, const Ptr<T>& b) /*noexcept*/ {
 
 template <typename T, typename U>
 inline bool operator!=(const Ptr<T>& a, const Ptr<U>& b) {
-  return a.get() != b.get();
+  return a.Get() != b.Get();
 }
 template <typename T>
 inline bool operator!=(const Ptr<T>& a, std::nullptr_t) /*noexcept*/ {
@@ -213,8 +213,8 @@ inline bool operator!=(std::nullptr_t, const Ptr<T>& b) /*noexcept*/ {
 }
 
 template <typename C, typename CT, typename T>
-auto operator<<(std::basic_ostream<C, CT>& os, const Ptr<T>& sp) -> decltype(os << sp.get()) {
-  return os << sp.get();
+auto operator<<(std::basic_ostream<C, CT>& os, const Ptr<T>& sp) -> decltype(os << sp.Get()) {
+  return os << sp.Get();
 }
 
 template <typename T>
@@ -241,14 +241,34 @@ Ptr<T> DupPtr(const T* obj) {
   return Ptr<T>(const_cast<T*>(SafeIncrementOwningRefs(obj)));
 }
 
+// Add std::hash specialization for Ptr
+namespace std {
 template <typename T>
-struct WeakPtr {
+struct hash<Ptr<T>> {
+  size_t operator()(const Ptr<T>& ptr) const { return std::hash<T*>()(ptr.Get()); }
+};
+}  // namespace std
+
+// WeakPtr can holds a reference to a reference-counted object while also allowing that object to be
+// destroyed. In order to use WeakPtr, it should first be converted to Ptr using `Lock().
+template <typename T>
+struct [[clang::trivial_abi]] WeakPtr {
   T* obj;
 
-  WeakPtr(const Ptr<T>& ptr) : obj(SafeIncrementWeakRefs(ptr.get())) {}
+  WeakPtr(const Ptr<T>& ptr) : obj(SafeIncrementWeakRefs(ptr.Get())) {}
   WeakPtr(T* obj) : obj(SafeIncrementWeakRefs(obj)) {}
+  WeakPtr(const WeakPtr<T>& that) : obj(SafeIncrementWeakRefs(that.obj)) {}
+  WeakPtr(WeakPtr<T>&& that) : obj(that.ReleaseWeak()) {}
 
   ~WeakPtr() { SafeDecrementWeakRefs(obj); }
+
+  // Clears this pointer and returns it's existing value. It's up to the caller to take care of
+  // decrementing the weak reference count on the released pointer.
+  [[nodiscard]] T* ReleaseWeak() {
+    T* ptr = obj;
+    obj = nullptr;
+    return ptr;
+  }
 
   bool IsExpired() const {
     if (obj) {
@@ -258,9 +278,31 @@ struct WeakPtr {
   }
 
   Ptr<T> Lock() const {
-    if (obj->IncrementOwningRefsNonZero()) {
+    if (obj && obj->IncrementOwningRefsNonZero()) {
       return Ptr<T>(obj);
     }
     return Ptr<T>();
+  }
+
+  WeakPtr<T>& operator=(const WeakPtr<T>& that) {
+    if (this != &that) {
+      T* oldObj = obj;
+      obj = SafeIncrementWeakRefs(that.obj);
+      SafeDecrementWeakRefs(oldObj);
+    }
+    return *this;
+  }
+
+  WeakPtr<T>& operator=(WeakPtr<T>&& that) {
+    T* oldObj = obj;
+    obj = that.ReleaseWeak();
+    SafeDecrementWeakRefs(oldObj);
+    return *this;
+  }
+
+  void Reset(T* ptr = nullptr) {
+    T* oldObj = obj;
+    obj = SafeIncrementWeakRefs(ptr);
+    SafeDecrementWeakRefs(oldObj);
   }
 };

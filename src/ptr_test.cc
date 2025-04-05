@@ -42,14 +42,14 @@ struct PtrTest : testing::Test {
 TEST_F(PtrTest, KeyEvents) {
   EXPECT_LOG();
   auto ptr = MakePtr<Entity>();
-  auto raw = ptr.get();
+  auto raw = ptr.Get();
   EXPECT_LOG(Allocate, Construct);
   EXPECT_REF_COUNT(raw, 1, 1);
   {
     auto weak = WeakPtr<Entity>(ptr);
     EXPECT_REF_COUNT(raw, 1, 2);
     EXPECT_LOG(Allocate, Construct);
-    ptr.reset();
+    ptr.Reset();
     EXPECT_REF_COUNT(raw, 0, 1);
     EXPECT_LOG(Allocate, Construct, Destruct);
   }

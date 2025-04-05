@@ -95,7 +95,7 @@ struct [[clang::trivial_abi]] Ptr {
   Ptr(Ptr<U>&& that) : obj(that.Release()) {}
 
   // Adopt the bare pointer into the newly created Ptr.
-  explicit Ptr(T*&& obj) : obj(obj) {}
+  explicit Ptr(T* obj) : obj(obj) {}
 
   ~Ptr() { SafeDecrementOwningRefs(obj); }
 
@@ -161,11 +161,8 @@ struct [[clang::trivial_abi]] Ptr {
     SafeDecrementOwningRefs(oldObj);
   }
 
-  /**
-   *  Return the bare pointer, and set the internal object pointer to nullptr.
-   *  The caller must assume ownership of the object, and manage its reference count directly.
-   *  No call to unref() will be made.
-   */
+  // Reset & return the stored pointer. It's up to the caller to decrement the owning reference
+  // count on the returned pointer.
   [[nodiscard]] T* Release() {
     T* ptr = obj;
     obj = nullptr;

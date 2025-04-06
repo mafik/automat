@@ -31,7 +31,7 @@ constexpr Rect WindowBorderInner(Rect outer) {
 sk_sp<SkVertices> WindowBorder(Rect outer);
 
 struct TitleButton : gui::Button {
-  TitleButton(std::shared_ptr<Widget> child) : gui::Button(child) {}
+  TitleButton(Ptr<Widget> child) : gui::Button(child) {}
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const override {}
   void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;

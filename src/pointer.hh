@@ -107,18 +107,18 @@ struct Pointer {
   maf::Vec<PointerMoveCallback*> move_callbacks;
 
   std::unique_ptr<Action> actions[static_cast<int>(PointerButton::Count)];
-  std::shared_ptr<Widget> hover;
+  Ptr<Widget> hover;
 
-  maf::Vec<std::weak_ptr<Widget>> path;
+  maf::Vec<WeakPtr<Widget>> path;
 
-  std::shared_ptr<PointerWidget> pointer_widget;
+  Ptr<PointerWidget> pointer_widget;
 };
 
 struct PointerWidget : Widget {
   Pointer& pointer;
   PointerWidget(Pointer& pointer) : pointer(pointer) {}
   SkPath Shape() const override { return SkPath(); }
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override {
     for (auto& action : pointer.actions) {
       if (action == nullptr) {
         continue;

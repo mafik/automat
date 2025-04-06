@@ -280,19 +280,19 @@ SkColor SideButton::BackgroundColor() const { return kTimelineButtonBackground; 
 
 TimelineRunButton::TimelineRunButton(Timeline* timeline)
     : gui::ToggleButton(
-          make_shared<ColoredButton>(
+          MakePtr<ColoredButton>(
               GetPausedPath(),
               ColoredButtonArgs{.fg = kTimelineButtonBackground,
                                 .bg = kOrange,
                                 .radius = kPlayButtonRadius,
                                 .on_click = [this](gui::Pointer& p) { Activate(p); }}),
-          make_shared<ColoredButton>(
+          MakePtr<ColoredButton>(
               kPlayShape, ColoredButtonArgs{.fg = kOrange,
                                             .bg = kTimelineButtonBackground,
                                             .radius = kPlayButtonRadius,
                                             .on_click = [this](gui::Pointer& p) { Activate(p); }})),
       timeline(timeline),
-      rec_button(make_shared<ColoredButton>(
+      rec_button(MakePtr<ColoredButton>(
           GetRecPath(), ColoredButtonArgs{.fg = kTimelineButtonBackground,
                                           .bg = color::kParrotRed,
                                           .radius = kPlayButtonRadius,
@@ -335,7 +335,7 @@ void TimelineRunButton::ForgetParents() {
   off->ForgetParents();
 }
 
-shared_ptr<gui::Button>& TimelineRunButton::OnWidget() {
+Ptr<gui::Button>& TimelineRunButton::OnWidget() {
   if (timeline->state == Timeline::kRecording) {
     last_on_widget = &rec_button;
   } else if (timeline->state == Timeline::kPlaying) {
@@ -355,9 +355,9 @@ bool TimelineRunButton::Filled() const {
 }
 
 Timeline::Timeline()
-    : run_button(make_shared<TimelineRunButton>(this)),
-      prev_button(make_shared<PrevButton>()),
-      next_button(make_shared<NextButton>()),
+    : run_button(MakePtr<TimelineRunButton>(this)),
+      prev_button(MakePtr<PrevButton>()),
+      next_button(MakePtr<NextButton>()),
       state(kPaused),
       paused{.playback_offset = 0},
       zoom(10) {
@@ -395,7 +395,7 @@ static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
 }
 
 OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
-  auto track = make_shared<OnOffTrack>();
+  auto track = MakePtr<OnOffTrack>();
   track->timeline = this;
   track->parent = this->SharedPtr();
   tracks.emplace_back(std::move(track));
@@ -410,7 +410,7 @@ OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
 Timeline::Timeline(const Timeline& other) : Timeline() {
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
-    tracks.emplace_back(dynamic_pointer_cast<TrackBase>(track->Clone()));
+    tracks.emplace_back(track->Clone().Cast<TrackBase>());
   }
   track_args.reserve(other.track_args.size());
   for (int i = 0; i < other.track_args.size(); ++i) {
@@ -421,7 +421,7 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
 
 string_view Timeline::Name() const { return "Timeline"; }
 
-shared_ptr<Object> Timeline::Clone() const { return make_shared<Timeline>(*this); }
+Ptr<Object> Timeline::Clone() const { return MakePtr<Timeline>(*this); }
 
 constexpr float kLcdFontSize = 1.5_mm;
 static Font& LcdFont() {
@@ -1024,7 +1024,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
     }
   }
 
-  shared_ptr<Widget> tracks_arr[tracks.size()];  // TODO: awful, fix this
+  Ptr<Widget> tracks_arr[tracks.size()];  // TODO: awful, fix this
   for (size_t i = 0; i < tracks.size(); ++i) {
     tracks_arr[i] = tracks[i];
   }
@@ -1065,7 +1065,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
   DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
             kPlasticTop - kScrewMargin - kScrewRadius);
 
-  shared_ptr<Widget> arr[] = {run_button, prev_button, next_button};
+  Ptr<Widget> arr[] = {run_button, prev_button, next_button};
   DrawChildrenSpan(canvas, arr);
 
   canvas.save();
@@ -1219,7 +1219,7 @@ Vec2AndDir Timeline::ArgStart(const Argument& arg) {
   return Object::FallbackWidget::ArgStart(arg);
 }
 
-void Timeline::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void Timeline::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   children.reserve(3 + tracks.size());
   children.push_back(run_button);
   children.push_back(prev_button);

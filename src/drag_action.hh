@@ -25,7 +25,7 @@ struct DropTarget {
   // When a location is being dragged around, its still owned by its original Machine. Only when
   // this method is called, the location may be re-parented into the new drop target.
   // The drop target is responsible for re-parenting the location!
-  virtual void DropLocation(std::shared_ptr<Location>&&) = 0;
+  virtual void DropLocation(Ptr<Location>&&) = 0;
 };
 }  // namespace gui
 
@@ -35,7 +35,7 @@ struct DragLocationWidget : gui::Widget {
   DragLocationAction& action;
   DragLocationWidget(DragLocationAction& action) : action(action) {}
   SkPath Shape() const override;
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
   maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
 };
 
@@ -45,10 +45,10 @@ struct DragLocationAction : Action {
   Vec2 current_position;       // root machine coordinates
   Vec2 last_snapped_position;  // root machine coordinates
   time::SteadyPoint last_update;
-  std::shared_ptr<Location> location;
-  std::shared_ptr<DragLocationWidget> widget;
+  Ptr<Location> location;
+  Ptr<DragLocationWidget> widget;
 
-  DragLocationAction(gui::Pointer&, std::shared_ptr<Location>&&, Vec2 contact_point);
+  DragLocationAction(gui::Pointer&, Ptr<Location>&&, Vec2 contact_point);
   ~DragLocationAction() override;
 
   void Update() override;

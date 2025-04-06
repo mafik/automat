@@ -39,8 +39,8 @@ using namespace automat::gui;
 namespace automat {
 
 std::stop_source stop_source;
-std::shared_ptr<Location> root_location;
-std::shared_ptr<Machine> root_machine;
+Ptr<Location> root_location;
+Ptr<Machine> root_machine;
 std::jthread automat_thread;
 std::atomic_bool automat_thread_finished = false;
 
@@ -224,13 +224,13 @@ int Main() {
 
   prototypes.emplace();
 
-  root_widget = std::make_shared<RootWidget>();
+  root_widget = MakePtr<RootWidget>();
   root_widget->InitToolbar();
-  gui::keyboard = std::make_shared<gui::Keyboard>(*root_widget);
+  gui::keyboard = MakePtr<gui::Keyboard>(*root_widget);
   root_widget->keyboards.emplace_back(gui::keyboard);
   gui::keyboard->parent = root_widget;
 
-  root_location = std::make_shared<Location>();
+  root_location = MakePtr<Location>();
   root_location->name = "Root location";
   root_location->parent = gui::root_widget;
   root_machine = root_location->Create<Machine>();

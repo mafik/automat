@@ -23,7 +23,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
     return nullptr;
   }
   auto matrix = TransformBetween(*pointer.hover, *root_machine);
-  auto loc = std::make_shared<Location>();
+  auto loc = MakePtr<Location>();
   loc->parent_location = root_location;
   loc->parent = root_machine;
 
@@ -36,8 +36,8 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
   return std::make_unique<DragLocationAction>(pointer, std::move(loc), contact_point);
 }
 
-// std::shared_ptr<Object> Toolbar::Clone() const {
-//   auto new_toolbar = std::make_shared<Toolbar>();
+// Ptr<Object> Toolbar::Clone() const {
+//   auto new_toolbar = MakePtr<Toolbar>();
 //   for (const auto& prototype : prototypes) {
 //     new_toolbar->AddObjectPrototype(prototype);
 //   }
@@ -145,16 +145,16 @@ void Toolbar::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void Toolbar::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void Toolbar::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   children.reserve(buttons.size());
   for (size_t i = 0; i < buttons.size(); ++i) {
     children.push_back(buttons[i]);
   }
 }
 
-void Toolbar::AddObjectPrototype(const std::shared_ptr<Object>& new_proto) {
+void Toolbar::AddObjectPrototype(const Ptr<Object>& new_proto) {
   prototypes.push_back(new_proto->Clone());
-  buttons.emplace_back(std::make_shared<gui::PrototypeButton>(prototypes.back()));
+  buttons.emplace_back(MakePtr<gui::PrototypeButton>(prototypes.back()));
   buttons.back()->Init(SharedPtr());
 }
 

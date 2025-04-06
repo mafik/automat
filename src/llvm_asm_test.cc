@@ -23,7 +23,7 @@ using namespace std::chrono_literals;
 class MachineCodeControllerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    root = std::make_shared<automat::Machine>();
+    root = MakePtr<automat::Machine>();
     auto ExitCallback = [this](automat::mc::CodePoint code_point) {
       std::unique_lock<std::mutex> lock(mutex);
       exit_instr = *code_point.instruction;  // copy the weak_ptr
@@ -39,12 +39,12 @@ class MachineCodeControllerTest : public ::testing::Test {
     controller.reset();
   }
 
-  void StartExecution(std::weak_ptr<automat::library::Instruction> instr) {
+  void StartExecution(WeakPtr<automat::library::Instruction> instr) {
     exited = false;
     exit_instr = {};
     exit_point = automat::mc::StopType::InstructionBody;
     maf::Status status;
-    std::weak_ptr<automat::mc::Inst> mc_instr = instr.lock()->ToMC();
+    WeakPtr<automat::mc::Inst> mc_instr = instr.lock()->ToMC();
     controller->Execute(mc_instr, status);
     ASSERT_TRUE(OK(status));
   }
@@ -59,8 +59,8 @@ class MachineCodeControllerTest : public ::testing::Test {
     return true;
   }
 
-  void ExpectWeakPtrsEqual(std::weak_ptr<const automat::mc::Inst> expected,
-                           std::weak_ptr<const automat::mc::Inst> actual, const std::string& name) {
+  void ExpectWeakPtrsEqual(WeakPtr<const automat::mc::Inst> expected,
+                           WeakPtr<const automat::mc::Inst> actual, const std::string& name) {
     auto expected_shared = expected.lock();
     auto actual_shared = actual.lock();
     auto expected_ptr = expected_shared.get();
@@ -69,8 +69,7 @@ class MachineCodeControllerTest : public ::testing::Test {
   }
 
   void VerifyState(
-      automat::mc::Controller::State expected,
-      std::weak_ptr<automat::mc::Inst> expected_exit_instr = {},
+      automat::mc::Controller::State expected, WeakPtr<automat::mc::Inst> expected_exit_instr = {},
       automat::mc::StopType expected_exit_point = automat::mc::StopType::InstructionBody) {
     automat::mc::Controller::State state;
     maf::Status status;
@@ -96,32 +95,31 @@ class MachineCodeControllerTest : public ::testing::Test {
     EXPECT_EQ(exit_point, expected_exit_point);
   }
 
-  std::shared_ptr<automat::library::Instruction> MakeInstructionRegImm(unsigned opcode,
-                                                                       unsigned reg, int64_t imm) {
+  Ptr<automat::library::Instruction> MakeInstructionRegImm(unsigned opcode, unsigned reg,
+                                                           int64_t imm) {
     return MakeInstruction(llvm::MCInstBuilder(opcode).addReg(reg).addImm(imm));
   }
 
-  std::shared_ptr<automat::library::Instruction> MakeInstructionImm(unsigned opcode, int64_t imm) {
+  Ptr<automat::library::Instruction> MakeInstructionImm(unsigned opcode, int64_t imm) {
     return MakeInstruction(llvm::MCInstBuilder(opcode).addImm(imm));
   }
 
-  std::shared_ptr<automat::library::Instruction> MakeInstruction(const llvm::MCInst& mc_inst) {
+  Ptr<automat::library::Instruction> MakeInstruction(const llvm::MCInst& mc_inst) {
     auto& loc = root->CreateEmpty();
-    auto inst = std::make_shared<automat::library::Instruction>();
+    auto inst = MakePtr<automat::library::Instruction>();
     inst->mc_inst = mc_inst;
     inst->mc_inst.setLoc(llvm::SMLoc::getFromPointer((const char*)inst.get()));
-    loc.InsertHereNoWidget(
-        std::shared_ptr<automat::library::Instruction>(inst));  // copy shared_ptr
+    loc.InsertHereNoWidget(Ptr<automat::library::Instruction>(inst));  // copy Ptr
     return inst;
   }
 
-  automat::Connection* Next(std::shared_ptr<automat::library::Instruction>& a,
-                            std::shared_ptr<automat::library::Instruction>& b) {
+  automat::Connection* Next(Ptr<automat::library::Instruction>& a,
+                            Ptr<automat::library::Instruction>& b) {
     return a->here.lock()->ConnectTo(*b->here.lock(), automat::next_arg);
   }
 
   void TestUpdateCode(std::span<automat::library::Instruction*> instructions) {
-    std::vector<std::shared_ptr<automat::library::Instruction>> instructions_objs;
+    std::vector<Ptr<automat::library::Instruction>> instructions_objs;
     for (auto* inst : instructions) {
       instructions_objs.push_back(inst->SharedPtr());
     }
@@ -134,9 +132,9 @@ class MachineCodeControllerTest : public ::testing::Test {
   std::mutex mutex;
   std::condition_variable cv;
   bool exited = false;
-  std::weak_ptr<const automat::mc::Inst> exit_instr = {};
+  WeakPtr<const automat::mc::Inst> exit_instr = {};
   automat::mc::StopType exit_point = automat::mc::StopType::InstructionBody;
-  std::shared_ptr<automat::Machine> root;
+  Ptr<automat::Machine> root;
 };
 
 TEST_F(MachineCodeControllerTest, InitialState) { VerifyState({.regs = {.RAX = 0}}); }

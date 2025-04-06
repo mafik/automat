@@ -199,7 +199,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
 
 Machine::Machine() {}
 
-void Machine::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void Machine::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   int i = 0;
   Size n = locations.size();
   children.reserve(n);
@@ -286,7 +286,7 @@ void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec
   position = Vec2(roundf(position.x * 1000) / 1000., roundf(position.y * 1000) / 1000.);
 }
 
-void Machine::DropLocation(std::shared_ptr<Location>&& l) {
+void Machine::DropLocation(Ptr<Location>&& l) {
   l->parent = SharedPtr<Widget>();
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
@@ -294,10 +294,9 @@ void Machine::DropLocation(std::shared_ptr<Location>&& l) {
   WakeAnimation();
 }
 
-std::shared_ptr<Location> Machine::Extract(Location& location) {
-  auto it =
-      std::find_if(locations.begin(), locations.end(),
-                   [&location](const shared_ptr<Location>& l) { return l.get() == &location; });
+Ptr<Location> Machine::Extract(Location& location) {
+  auto it = std::find_if(locations.begin(), locations.end(),
+                         [&location](const Ptr<Location>& l) { return l.get() == &location; });
   if (it != locations.end()) {
     auto result = std::move(*it);
     locations.erase(it);
@@ -331,7 +330,7 @@ void LiveObject::Relocate(Location* new_here) {
 }
 
 Location& Machine::CreateEmpty(const string& name) {
-  auto& it = locations.emplace_front(std::make_shared<Location>(here));
+  auto& it = locations.emplace_front(MakePtr<Location>(here));
   Location* h = it.get();
   h->name = name;
   h->parent = this->SharedPtr();

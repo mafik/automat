@@ -29,7 +29,7 @@ struct Object : public virtual SharedBase {
   // Subclasses of Object should have a static `proto` field, holding their own
   // prototype instance. This prototype will be cloned when new objects are
   // created. See the `Machine::Create` function for details.
-  virtual std::shared_ptr<Object> Clone() const = 0;
+  virtual Ptr<Object> Clone() const = 0;
 
   virtual void Relocate(Location* new_here) {}
 
@@ -56,7 +56,7 @@ struct Object : public virtual SharedBase {
 
   virtual void Args(std::function<void(Argument&)> cb) {}
 
-  virtual std::shared_ptr<Object> ArgPrototype(const Argument&) { return nullptr; }
+  virtual Ptr<Object> ArgPrototype(const Argument&) { return nullptr; }
 
   virtual void Updated(Location& here, Location& updated);
   virtual void Errored(Location& here, Location& errored) {}
@@ -76,7 +76,7 @@ struct Object : public virtual SharedBase {
 
   // Green box with a name of the object.
   struct FallbackWidget : gui::Widget {
-    std::weak_ptr<Object> object;
+    WeakPtr<Object> object;
 
     // FallbackWidget doesn't have a constructor that takes weak_ptr<Object> because it's sometimes
     // used as a base class for Object/Widget hybrids (which should be refactored BTW). When an
@@ -92,23 +92,21 @@ struct Object : public virtual SharedBase {
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 
     template <typename T>
-    std::shared_ptr<T> LockObject() const {
-      auto shared = object.lock();
-      auto* raw = static_cast<T*>(shared.get());
-      return std::shared_ptr<T>(std::move(shared), raw);
+    Ptr<T> LockObject() const {
+      return object.Lock().Cast<T>();
     }
   };
 
-  virtual std::shared_ptr<gui::Widget> MakeWidget() {
+  virtual Ptr<gui::Widget> MakeWidget() {
     if (auto w = dynamic_cast<gui::Widget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto fallback_widget = dynamic_cast<FallbackWidget*>(this)) {
-        fallback_widget->object = WeakPtr();
+        fallback_widget->object = MakeWeakPtr();
       }
       return w->SharedPtr();
     }
-    auto w = std::make_shared<FallbackWidget>();
-    w->object = WeakPtr();
+    auto w = MakePtr<FallbackWidget>();
+    w->object = MakeWeakPtr();
     return w;
   }
 

@@ -3,9 +3,10 @@
 #pragma once
 
 #include <functional>
-#include <memory>
 #include <string>
 #include <vector>
+
+#include "ptr.hh"
 
 namespace automat {
 
@@ -17,11 +18,11 @@ void ScheduleNext(Location& source);
 void ScheduleArgumentTargets(Location& source, Argument&);
 
 struct Task {
-  std::weak_ptr<Location> target;
+  WeakPtr<Location> target;
   std::vector<Task*> predecessors;
   std::vector<Task*> successors;
   bool scheduled = false;
-  Task(std::weak_ptr<Location> target);
+  Task(WeakPtr<Location> target);
   virtual ~Task() {}
   // Add this task to the task queue.
   void Schedule();
@@ -33,20 +34,20 @@ struct Task {
 };
 
 struct RunTask : Task {
-  RunTask(std::weak_ptr<Location> target) : Task(target) {}
+  RunTask(WeakPtr<Location> target) : Task(target) {}
   std::string Format() override;
   void Execute() override;
 };
 
 struct CancelTask : Task {
-  CancelTask(std::weak_ptr<Location> target) : Task(target) {}
+  CancelTask(WeakPtr<Location> target) : Task(target) {}
   std::string Format() override;
   void Execute() override;
 };
 
 struct UpdateTask : Task {
-  std::weak_ptr<Location> updated;
-  UpdateTask(std::weak_ptr<Location> target, std::weak_ptr<Location> updated)
+  WeakPtr<Location> updated;
+  UpdateTask(WeakPtr<Location> target, WeakPtr<Location> updated)
       : Task(target), updated(updated) {}
   std::string Format() override;
   void Execute() override;
@@ -54,15 +55,15 @@ struct UpdateTask : Task {
 
 struct FunctionTask : Task {
   std::function<void(Location&)> function;
-  FunctionTask(std::weak_ptr<Location> target, std::function<void(Location&)> function)
+  FunctionTask(WeakPtr<Location> target, std::function<void(Location&)> function)
       : Task(target), function(function) {}
   std::string Format() override;
   void Execute() override;
 };
 
 struct ErroredTask : Task {
-  std::weak_ptr<Location> errored;
-  ErroredTask(std::weak_ptr<Location> target, std::weak_ptr<Location> errored)
+  WeakPtr<Location> errored;
+  ErroredTask(WeakPtr<Location> target, WeakPtr<Location> errored)
       : Task(target), errored(errored) {}
   std::string Format() override;
   void Execute() override;

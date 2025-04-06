@@ -18,12 +18,12 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   bool shift = false;
   bool windows = false;
 
-  std::shared_ptr<PowerButton> power_button;
-  std::shared_ptr<KeyButton> ctrl_button;
-  std::shared_ptr<KeyButton> alt_button;
-  std::shared_ptr<KeyButton> shift_button;
-  std::shared_ptr<KeyButton> windows_button;
-  std::shared_ptr<KeyButton> shortcut_button;
+  Ptr<PowerButton> power_button;
+  Ptr<KeyButton> ctrl_button;
+  Ptr<KeyButton> alt_button;
+  Ptr<KeyButton> shift_button;
+  Ptr<KeyButton> windows_button;
+  Ptr<KeyButton> shortcut_button;
 
   // This is used to select the main hotkey
   gui::Caret* hotkey_selector = nullptr;
@@ -33,7 +33,7 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
 
   HotKey();
   string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
@@ -51,7 +51,7 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   void KeyGrabberKeyDown(gui::KeyGrab&) override;
   void KeyGrabberKeyUp(gui::KeyGrab&) override;
 
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

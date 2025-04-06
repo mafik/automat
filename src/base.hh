@@ -11,7 +11,6 @@
 #include <cassert>
 #include <deque>
 #include <functional>
-#include <memory>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -37,7 +36,6 @@ namespace automat {
 using std::deque;
 using std::function;
 using std::hash;
-using std::shared_ptr;
 using std::string;
 using std::string_view;
 using std::unordered_multimap;
@@ -72,7 +70,7 @@ struct Runnable : public virtual SharedBase {
 };
 
 struct LiveObject : Object {
-  std::weak_ptr<Location> here = {};
+  WeakPtr<Location> here = {};
 
   void Relocate(Location* new_here) override;
   void ConnectionAdded(Location& here, Connection& connection) override {
@@ -94,11 +92,11 @@ bool IsRunning(const T& object) {
 struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   Machine();
   string name = "";
-  deque<shared_ptr<Location>> locations;
+  deque<Ptr<Location>> locations;
   vector<Location*> front;
   vector<Location*> children_with_errors;
 
-  std::shared_ptr<Location> Extract(Location& location);
+  Ptr<Location> Extract(Location& location);
 
   Location& CreateEmpty(const string& name = "");
 
@@ -128,8 +126,8 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   void* Nearby(Vec2 center, float radius, std::function<void*(Location&)> callback);
 
   string_view Name() const override { return name; }
-  std::shared_ptr<Object> Clone() const override {
-    auto m = std::make_shared<Machine>();
+  Ptr<Object> Clone() const override {
+    auto m = MakePtr<Machine>();
     for (auto& my_it : locations) {
       auto& other_h = m->CreateEmpty(my_it->name);
       other_h.Create(*my_it->object);
@@ -142,11 +140,11 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   gui::DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override { return true; }
   void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
-  void DropLocation(std::shared_ptr<Location>&&) override;
+  void DropLocation(Ptr<Location>&&) override;
 
   SkPath Shape() const override;
 
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
   void Relocate(Location* parent) override;
 
   string ToStr() const { return maf::f("Machine(%s)", name.c_str()); }
@@ -226,8 +224,8 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
 struct Pointer : LiveObject {
   virtual Object* Next(Location& error_context) const = 0;
-  virtual void PutNext(Location& error_context, std::shared_ptr<Object> obj) = 0;
-  virtual std::shared_ptr<Object> TakeNext(Location& error_context) = 0;
+  virtual void PutNext(Location& error_context, Ptr<Object> obj) = 0;
+  virtual Ptr<Object> TakeNext(Location& error_context) = 0;
 
   std::pair<Pointer&, Object*> FollowPointers(Location& error_context) const {
     const Pointer* ptr = this;
@@ -243,10 +241,10 @@ struct Pointer : LiveObject {
     return {*const_cast<Pointer*>(ptr), next};
   }
   Object* Follow(Location& error_context) const { return FollowPointers(error_context).second; }
-  void Put(Location& error_context, std::shared_ptr<Object> obj) {
+  void Put(Location& error_context, Ptr<Object> obj) {
     FollowPointers(error_context).first.PutNext(error_context, std::move(obj));
   }
-  std::shared_ptr<Object> Take(Location& error_context) {
+  Ptr<Object> Take(Location& error_context) {
     return FollowPointers(error_context).first.TakeNext(error_context);
   }
 
@@ -272,7 +270,7 @@ struct Pointer : LiveObject {
 struct Container {
   // Remove the given `descendant` from this object and return it wrapped in a (possibly newly
   // created) Location.
-  virtual std::shared_ptr<Location> Extract(Object& descendant) = 0;
+  virtual Ptr<Location> Extract(Object& descendant) = 0;
 };
 
 // Types of objects that sholud work nicely with data updates:

@@ -46,7 +46,7 @@ struct InstructionLibrary : Object {
   void Filter();
 
   std::string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
 
   struct Widget : FallbackWidget, gui::PointerMoveCallback {
     struct InstructionCard {
@@ -103,7 +103,7 @@ struct InstructionLibrary : Object {
 
     std::vector<CategoryState> category_states;
 
-    Widget(std::weak_ptr<Object> object);
+    Widget(WeakPtr<Object> object);
 
     std::string_view Name() const override { return "Instruction Library Widget"; }
     SkPath Shape() const override;
@@ -116,7 +116,7 @@ struct InstructionLibrary : Object {
     void PointerLeave(gui::Pointer&) override;
   };
 
-  std::shared_ptr<gui::Widget> MakeWidget() override { return std::make_shared<Widget>(WeakPtr()); }
+  Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(MakeWeakPtr<Object>()); }
 };
 
 }  // namespace automat::library

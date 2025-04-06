@@ -66,7 +66,7 @@ void Widget::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
   canvas.restore();
 }
 
-void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<shared_ptr<Widget>> widgets) const {
+void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<Ptr<Widget>> widgets) const {
   std::ranges::reverse_view rv{widgets};
   for (auto& widget : rv) {
     DrawChildCachced(canvas, *widget);
@@ -102,7 +102,7 @@ SkMatrix TransformBetween(const Widget& from, const Widget& to) {
   return SkMatrix::Concat(down, up);
 }
 
-Str ToStr(shared_ptr<Widget> widget) {
+Str ToStr(Ptr<Widget> widget) {
   Str ret;
   while (widget) {
     ret = Str(widget->Name()) + (ret.empty() ? "" : " -> " + ret);
@@ -167,7 +167,7 @@ void Widget::ForgetParents() {
   }
 }
 
-std::shared_ptr<Widget> Widget::ForObject(Object& object, const Widget& parent) {
+Ptr<Widget> Widget::ForObject(Object& object, const Widget& parent) {
   return parent.FindRootWidget().widgets.For(object, parent);
 }
 

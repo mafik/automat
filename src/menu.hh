@@ -6,14 +6,15 @@
 #include <memory>
 
 #include "action.hh"
+#include "ptr.hh"
 #include "vec.hh"
 
 namespace automat {
 
 // Option represents a potential action. It's the core of the menu system.
 struct Option {
-  std::shared_ptr<gui::Widget> icon;
-  Option(std::shared_ptr<gui::Widget>&& icon);
+  Ptr<gui::Widget> icon;
+  Option(Ptr<gui::Widget>&& icon);
   Option(maf::Str name);
   virtual ~Option() = default;
   virtual std::unique_ptr<Option> Clone() const = 0;

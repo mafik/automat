@@ -11,14 +11,14 @@ namespace automat::gui {
 constexpr float kToolbarIconSize = gui::kMinimalTouchableSize * 2;
 
 struct PrototypeButton : Widget {
-  std::shared_ptr<Object> proto;
-  std::shared_ptr<Widget> proto_widget;
+  Ptr<Object> proto;
+  Ptr<Widget> proto_widget;
   float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
 
-  PrototypeButton(std::shared_ptr<Object>& proto) : proto(proto) {}
+  PrototypeButton(Ptr<Object>& proto) : proto(proto) {}
 
-  void Init(std::shared_ptr<Widget> parent) {
+  void Init(Ptr<Widget> parent) {
     this->parent = std::move(parent);
     proto_widget = Widget::ForObject(*proto, *this);
     auto rect = proto_widget->CoarseBounds().rect;
@@ -29,9 +29,7 @@ struct PrototypeButton : Widget {
 
   SkPath Shape() const override { return proto_widget->Shape(); }
 
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
-    children.push_back(proto_widget);
-  }
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(proto_widget); }
 
   void PointerOver(Pointer& pointer) override { pointer.PushIcon(Pointer::kIconHand); }
 
@@ -45,19 +43,19 @@ struct PrototypeButton : Widget {
 };
 
 struct Toolbar : gui::Widget, gui::PointerMoveCallback {
-  maf::Vec<shared_ptr<Object>> prototypes;
-  maf::Vec<shared_ptr<gui::PrototypeButton>> buttons;
+  maf::Vec<Ptr<Object>> prototypes;
+  maf::Vec<Ptr<gui::PrototypeButton>> buttons;
 
   mutable int hovered_button = -1;
 
   // This will clone the provided object and add it to the toolbar.
-  void AddObjectPrototype(const std::shared_ptr<Object>&);
+  void AddObjectPrototype(const Ptr<Object>&);
 
   maf::StrView Name() const override;
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
   void UpdateChildTransform();
   float CalculateWidth() const;
 

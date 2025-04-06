@@ -19,9 +19,9 @@ struct TimerDelay : LiveObject,
                     Runnable,
                     LongRunning,
                     TimerNotificationReceiver {
-  struct MyDuration : Object {
+  struct MyDuration : public Object {
     time::Duration value = 10s;
-    std::shared_ptr<Object> Clone() const override { return std::make_shared<MyDuration>(*this); }
+    Ptr<Object> Clone() const override { return MakePtr<MyDuration>(*this); }
   } duration;
   DurationArgument duration_arg;
   time::SteadyPoint start_time;
@@ -33,7 +33,7 @@ struct TimerDelay : LiveObject,
   // Controls the current range (milliseconds, seconds, etc.)
   animation::SpringV2<float> range_dial;
   float duration_handle_rotation = 0;
-  std::shared_ptr<gui::NumberTextField> text_field;
+  Ptr<gui::NumberTextField> text_field;
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
     Seconds,       // 0 - 60 s
@@ -45,7 +45,7 @@ struct TimerDelay : LiveObject,
   TimerDelay();
   TimerDelay(const TimerDelay&);
   string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
@@ -56,7 +56,7 @@ struct TimerDelay : LiveObject,
   void OnRun(Location& here) override;
   void Cancel() override;
   void Updated(Location& here, Location& updated) override;
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;

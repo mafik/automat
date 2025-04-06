@@ -12,13 +12,12 @@ SkPath ShapeWidget::Shape() const { return path; }
 
 void ShapeWidget::Draw(SkCanvas& canvas) const { canvas.drawPath(path, paint); }
 
-std::shared_ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color,
-                                        const SkMatrix* transform) {
+Ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color, const SkMatrix* transform) {
   SkPath path = PathFromSVG(svg_path);
   if (transform) {
     path.transform(*transform);
   }
-  auto ret = std::make_shared<ShapeWidget>(path);
+  auto ret = MakePtr<ShapeWidget>(path);
   ret->paint.setAntiAlias(true);
   ret->paint.setColor(fill_color);
   return ret;

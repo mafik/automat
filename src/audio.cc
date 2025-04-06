@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MIT
 #include "audio.hh"
 
-#include "thread_name.hh"
-
 #ifdef __linux__
 #include <math.h>
 #include <pipewire/main-loop.h>
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
+
+#include "thread_name.hh"
 
 #pragma maf add link argument "-latomic"
 #else
@@ -30,6 +30,7 @@
 
 #include "concurrentqueue.hh"
 #include "log.hh"
+#include "ptr.hh"
 #include "span.hh"
 #include "str.hh"
 
@@ -46,20 +47,21 @@ constexpr int kDefaultChannels = 1;
 
 using Frame = I16;
 
-struct Clip {
+struct Clip : public ReferenceCounted {
   Span<Frame> remaining;
   Span<Frame> all;
-  atomic<shared_ptr<Clip>> next = {};
+  std::mutex mutex;
+  Ptr<Clip> next = {};
   Clip(Span<Frame> frames) : remaining(frames), all(frames) {}
 };
 
-Vec<shared_ptr<Clip>> playing;
+Vec<Ptr<Clip>> playing;
 
-moodycamel::ConcurrentQueue<shared_ptr<Clip>> to_play;
+moodycamel::ConcurrentQueue<Ptr<Clip>> to_play;
 
 // Called from the audio thread to receive new clips from other threads.
 static void ReceiveClips() {
-  shared_ptr<Clip> to_play_clip = nullptr;
+  Ptr<Clip> to_play_clip = nullptr;
   while (to_play.try_dequeue(to_play_clip)) {
     playing.emplace_back(std::move(to_play_clip));
   }
@@ -98,7 +100,12 @@ static void MixPlayingClips(char* buffer, int n_channels, int n_frames) {
     auto dst2 = dst;
     while (!dst2.empty()) {
       if (clip->remaining.empty()) {
-        clip = clip->next;
+        Ptr<Clip> next;
+        {
+          auto lock = std::lock_guard(clip->mutex);
+          next = clip->next;
+        }
+        clip = next;
         if (clip == nullptr) {
           break;
         }
@@ -385,7 +392,7 @@ struct WAV_Header {
   I32 data_size;
 };
 
-shared_ptr<Clip> MakeClipFromWAV(maf::fs::VFile& file) {
+Ptr<Clip> MakeClipFromWAV(maf::fs::VFile& file) {
   Span<> content = file.content;
   WAV_Header& header = content.Consume<WAV_Header>();
 
@@ -402,10 +409,10 @@ shared_ptr<Clip> MakeClipFromWAV(maf::fs::VFile& file) {
   assert(header.rate == kDefaultRate);
   assert(header.channels == kDefaultChannels);
   assert(content.size_bytes() == header.data_size);
-  return make_shared<Clip>(content.AsSpanOf<Frame>());
+  return MakePtr<Clip>(content.AsSpanOf<Frame>());
 }
 
-void ScheduleClip(shared_ptr<Clip> clip) {
+void ScheduleClip(Ptr<Clip> clip) {
   if (!running) {
     return;
   }
@@ -415,8 +422,8 @@ void ScheduleClip(shared_ptr<Clip> clip) {
 void Play(maf::fs::VFile& file) { ScheduleClip(MakeClipFromWAV(file)); }
 
 struct BeginLoopEndEffect : Effect {
-  shared_ptr<Clip> loop;
-  shared_ptr<Clip> end;
+  Ptr<Clip> loop;
+  Ptr<Clip> end;
 
   BeginLoopEndEffect(maf::fs::VFile& begin_file, maf::fs::VFile& loop_file,
                      maf::fs::VFile& end_file)
@@ -427,7 +434,10 @@ struct BeginLoopEndEffect : Effect {
     ScheduleClip(begin);
   }
 
-  ~BeginLoopEndEffect() override { loop->next = end; }
+  ~BeginLoopEndEffect() override {
+    auto lock = std::lock_guard(loop->mutex);
+    loop->next = end;
+  }
 };
 
 std::unique_ptr<Effect> MakeBeginLoopEndEffect(maf::fs::VFile& begin_file,

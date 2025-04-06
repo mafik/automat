@@ -50,8 +50,8 @@ float KeyPresserButton::PressRatio() const {
 
 KeyPresser::KeyPresser(gui::AnsiKey key)
     : key(key),
-      shortcut_button(make_shared<KeyPresserButton>(this, MakeKeyLabelWidget(ToStr(key)),
-                                                    KeyColor(false), kBaseKeyWidth)) {
+      shortcut_button(MakePtr<KeyPresserButton>(this, MakeKeyLabelWidget(ToStr(key)),
+                                                KeyColor(false), kBaseKeyWidth)) {
   shortcut_button->activate = [this](gui::Pointer& pointer) {
     if (key_selector) {
       key_selector->Release();
@@ -65,7 +65,7 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
 }
 KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
-std::shared_ptr<Object> KeyPresser::Clone() const { return std::make_shared<KeyPresser>(key); }
+Ptr<Object> KeyPresser::Clone() const { return MakePtr<KeyPresser>(key); }
 animation::Phase KeyPresser::Tick(time::Timer&) {
   shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
   return animation::Finished;
@@ -122,7 +122,7 @@ void KeyPresser::KeyDown(gui::Caret&, gui::Key k) {
   shortcut_button->WakeAnimation();
 }
 
-void KeyPresser::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void KeyPresser::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   children.push_back(shortcut_button);
 }
 
@@ -171,8 +171,8 @@ struct RunAction : Action {
 };
 
 struct RunOption : Option {
-  std::shared_ptr<Widget> widget;
-  RunOption(std::shared_ptr<Widget> widget) : Option("Run"), widget(widget) {}
+  Ptr<Widget> widget;
+  RunOption(Ptr<Widget> widget) : Option("Run"), widget(widget) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(widget); }
   std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
     return std::make_unique<RunAction>(p, *Closest<Location>(*widget));
@@ -180,9 +180,9 @@ struct RunOption : Option {
 };
 
 struct UseObjectOption : Option {
-  std::shared_ptr<Widget> widget;
+  Ptr<Widget> widget;
 
-  UseObjectOption(std::shared_ptr<Widget> widget) : Option("Use"), widget(widget) {}
+  UseObjectOption(Ptr<Widget> widget) : Option("Use"), widget(widget) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<UseObjectOption>(widget);
   }

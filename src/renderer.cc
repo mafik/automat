@@ -272,7 +272,7 @@ void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas) {
     insert_recording_info.fNumWaitSemaphores = wait_list.size();
   }
 
-  struct FinishedContext {
+  struct FinishedContext : public ReferenceCounted {
     uint32_t id;
     time::SteadyPoint gpu_started;
     float cpu_time;
@@ -280,21 +280,21 @@ void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas) {
     mutex mutex;
   };
 
-  auto finished_context = make_shared<FinishedContext>();
+  auto finished_context = MakePtr<FinishedContext>();
   finished_context->id = id;
   finished_context->gpu_started = time::SteadyPoint::min();
   finished_context->cpu_time = 0;
   finished_context->name = name;
 
-  // Note that we're creating a dynamically allocated shared_ptr here. This is needed because we
+  // Note that we're creating a dynamically allocated Ptr here. This is needed because we
   // must store it inside `void* fFinishedContext`.
-  insert_recording_info.fFinishedContext = new shared_ptr<FinishedContext>(finished_context);
+  insert_recording_info.fFinishedContext = new Ptr<FinishedContext>(finished_context);
   insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
                                            skgpu::CallbackResult) {
-    auto* finished_context_ptr = static_cast<shared_ptr<FinishedContext>*>(context);
+    auto* finished_context_ptr = static_cast<Ptr<FinishedContext>*>(context);
     auto finished_context =
-        std::move(*finished_context_ptr);  // create a stack-based copy of the shared_ptr
-    delete finished_context_ptr;           // free the heap allocated shared_ptr
+        std::move(*finished_context_ptr);  // create a stack-based copy of the Ptr
+    delete finished_context_ptr;           // free the heap allocated Ptr
 
     auto lock = lock_guard(finished_context->mutex);
     float gpu_time;
@@ -509,7 +509,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   };
 
   struct WidgetTree {
-    shared_ptr<Widget> widget;
+    Ptr<Widget> widget;
     Verdict verdict = Verdict::Unknown;
     int parent;
     int prev_job = -1;
@@ -580,7 +580,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
   {  // Step 2 - flatten the widget tree for analysis.
     // Queue with (parent index, widget) pairs.
-    vector<pair<int, shared_ptr<Widget>>> q;
+    vector<pair<int, Ptr<Widget>>> q;
     q.push_back(make_pair(0, root_widget));
     while (!q.empty()) {
       auto [parent, widget] = std::move(q.back());

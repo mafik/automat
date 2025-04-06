@@ -5,6 +5,8 @@
 
 #include "gtest.hh"
 
+using namespace automat;
+
 enum Event {
   Allocate,
   Deallocate,
@@ -15,7 +17,7 @@ enum Event {
 std::vector<Event> event_log;
 
 struct PtrTest : testing::Test {
-  struct Entity : ReferenceCounted<Entity> {
+  struct Entity : ReferenceCounted {
     Entity() { event_log.push_back(Construct); }
     ~Entity() { event_log.push_back(Destruct); }
 

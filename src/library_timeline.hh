@@ -18,7 +18,7 @@ namespace automat::library {
 
 struct SideButton : gui::Button {
   using gui::Button::Button;
-  SideButton(std::shared_ptr<Widget> child) : gui::Button(child) {}
+  SideButton(Ptr<Widget> child) : gui::Button(child) {}
   SkColor ForegroundColor() const override;
   SkColor BackgroundColor() const override;
   SkRRect RRect() const override;
@@ -39,11 +39,11 @@ struct Timeline;
 struct TimelineRunButton : gui::ToggleButton {
   Timeline* timeline;
 
-  std::shared_ptr<gui::Button> rec_button;
-  mutable std::shared_ptr<gui::Button>* last_on_widget = nullptr;
+  Ptr<gui::Button> rec_button;
+  mutable Ptr<gui::Button>* last_on_widget = nullptr;
 
   TimelineRunButton(Timeline* timeline);
-  std::shared_ptr<gui::Button>& OnWidget() override;
+  Ptr<gui::Button>& OnWidget() override;
   bool Filled() const override;
   void Activate(gui::Pointer&);
   void FixParents() override;
@@ -67,7 +67,7 @@ struct TrackBase : Object, Object::FallbackWidget {
 struct OnOffTrack : TrackBase, OnOff {
   time::T on_at = NAN;
   string_view Name() const override { return "On/Off Track"; }
-  std::shared_ptr<Object> Clone() const override { return std::make_shared<OnOffTrack>(*this); }
+  Ptr<Object> Clone() const override { return MakePtr<OnOffTrack>(*this); }
   void Draw(SkCanvas&) const override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -89,11 +89,11 @@ struct Timeline : LiveObject,
                   Runnable,
                   LongRunning,
                   TimerNotificationReceiver {
-  std::shared_ptr<TimelineRunButton> run_button;
-  std::shared_ptr<PrevButton> prev_button;
-  std::shared_ptr<NextButton> next_button;
+  Ptr<TimelineRunButton> run_button;
+  Ptr<PrevButton> prev_button;
+  Ptr<NextButton> next_button;
 
-  maf::Vec<std::shared_ptr<TrackBase>> tracks;
+  maf::Vec<Ptr<TrackBase>> tracks;
   maf::Vec<std::unique_ptr<Argument>> track_args;
 
   mutable animation::Approach<> zoom;  // stores the time in seconds
@@ -127,13 +127,13 @@ struct Timeline : LiveObject,
   Timeline(const Timeline&);
   void UpdateChildTransform();
   string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
   Vec2AndDir ArgStart(const Argument&) override;
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   void OnRun(Location& here) override;
   void Cancel() override;

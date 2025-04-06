@@ -10,8 +10,6 @@
 #include <leptonica/pix.h>
 #include <tesseract/baseapi.h>
 
-#include <ranges>
-
 #include "embedded.hh"
 #include "font.hh"
 #include "gui_shape_widget.hh"
@@ -20,7 +18,6 @@
 #include "root_widget.hh"
 #include "str.hh"
 #include "svg.hh"
-#include "textures.hh"
 #include "theme_xp.hh"
 
 #ifdef __linux__
@@ -43,7 +40,7 @@ Window::Window() {}
 
 std::string_view Window::Name() const { return "Window"; }
 
-std::shared_ptr<Object> Window::Clone() const { return std::make_shared<Window>(*this); }
+Ptr<Object> Window::Clone() const { return MakePtr<Window>(*this); }
 
 const SkMatrix kCenterPickIcon = SkMatrix::Translate(-1.4_mm, -0.2_mm).preScale(0.9, 0.9);
 
@@ -116,7 +113,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   gui::PointerGrab* pointer_grab = nullptr;
   gui::KeyGrab* key_grab = nullptr;
 
-  std::shared_ptr<PickButton> pick_button;
+  Ptr<PickButton> pick_button;
   std::string window_name;
 #ifdef __linux__
   std::optional<XSHMCapture> shm_capture;
@@ -127,11 +124,11 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   std::unique_ptr<tesseract::TessBaseAPI> tesseract;
   std::string tesseract_text;
 
-  std::shared_ptr<Window> LockWindow() const { return LockObject<Window>(); }
+  Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
-  WindowWidget(std::weak_ptr<Object> window) {
+  WindowWidget(WeakPtr<Object> window) {
     object = window;
-    pick_button = std::make_shared<PickButton>();
+    pick_button = MakePtr<PickButton>();
     pick_button->on_activate = [this](gui::Pointer& p) {
       p.EndAllActions();
       pointer_grab = &p.RequestGlobalGrab(*this);
@@ -382,10 +379,10 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   // Drags the whole region around
   struct DragRegionAction : Action {
-    std::shared_ptr<WindowWidget> widget;
+    Ptr<WindowWidget> widget;
     Vec2 contact_point;
     uint32_t drag_region_mask = 0;
-    DragRegionAction(gui::Pointer& pointer, std::shared_ptr<WindowWidget>&& widget_arg)
+    DragRegionAction(gui::Pointer& pointer, Ptr<WindowWidget>&& widget_arg)
         : Action(pointer), widget(std::move(widget_arg)) {
       contact_point = pointer.PositionWithin(*widget);
       auto layout = widget->Layout();
@@ -499,9 +496,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     return FallbackWidget::FindAction(p, btn);
   }
 
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
-    children.push_back(pick_button);
-  }
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(pick_button); }
 
   void ReleaseGrab(gui::PointerGrab&) override { pointer_grab = nullptr; }
   void ReleaseKeyGrab(gui::KeyGrab&) override { key_grab = nullptr; }
@@ -580,8 +575,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   }
 };
 
-std::shared_ptr<gui::Widget> Window::MakeWidget() {
-  return std::make_shared<WindowWidget>(WeakPtr());
-}
+Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(MakeWeakPtr<Object>()); }
 
 }  // namespace automat::library

@@ -100,9 +100,7 @@ string_view MouseClick::Name() const {
       return "Mouse Unknown Click"sv;
   }
 }
-std::shared_ptr<Object> MouseClick::Clone() const {
-  return std::make_shared<MouseClick>(button, down);
-}
+Ptr<Object> MouseClick::Clone() const { return MakePtr<MouseClick>(button, down); }
 void MouseClick::Draw(SkCanvas& canvas) const {
   static PersistentImage images[(long)gui::PointerButton::Count][2] = {
       [(long)gui::PointerButton::Left] =

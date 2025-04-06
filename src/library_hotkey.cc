@@ -173,16 +173,13 @@ vec4 main(in vec2 fragCoord) {
 // }
 
 HotKey::HotKey() {
-  power_button = std::make_shared<PowerButton>(this);
-  ctrl_button =
-      std::make_shared<KeyButton>(MakeKeyLabelWidget("Ctrl"), KeyColor(ctrl), kCtrlKeyWidth);
-  alt_button = std::make_shared<KeyButton>(MakeKeyLabelWidget("Alt"), KeyColor(alt), kAltKeyWidth);
-  shift_button =
-      std::make_shared<KeyButton>(MakeKeyLabelWidget("Shift"), KeyColor(shift), kShiftKeyWidth);
+  power_button = MakePtr<PowerButton>(this);
+  ctrl_button = MakePtr<KeyButton>(MakeKeyLabelWidget("Ctrl"), KeyColor(ctrl), kCtrlKeyWidth);
+  alt_button = MakePtr<KeyButton>(MakeKeyLabelWidget("Alt"), KeyColor(alt), kAltKeyWidth);
+  shift_button = MakePtr<KeyButton>(MakeKeyLabelWidget("Shift"), KeyColor(shift), kShiftKeyWidth);
   windows_button =
-      std::make_shared<KeyButton>(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth);
-  shortcut_button =
-      std::make_shared<KeyButton>(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth);
+      MakePtr<KeyButton>(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth);
+  shortcut_button = MakePtr<KeyButton>(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth);
 
   power_button->local_to_parent =
       SkM44::Translate(kWidth / 2 - kFrameWidth - kMinimalTouchableSize + kBorderWidth,
@@ -268,8 +265,8 @@ HotKey::HotKey() {
   };
 }
 string_view HotKey::Name() const { return "HotKey"; }
-std::shared_ptr<Object> HotKey::Clone() const {
-  auto ret = std::make_shared<HotKey>();
+Ptr<Object> HotKey::Clone() const {
+  auto ret = MakePtr<HotKey>();
   ret->key = key;
   ret->ctrl = ctrl;
   ret->alt = alt;
@@ -391,7 +388,7 @@ void HotKey::Draw(SkCanvas& canvas) const {
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
-void HotKey::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void HotKey::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   children.push_back(power_button);
   children.push_back(ctrl_button);
   children.push_back(alt_button);

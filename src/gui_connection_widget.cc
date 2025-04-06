@@ -31,7 +31,7 @@ namespace automat::gui {
 
 struct DummyRunnable : Object, Runnable {
   void OnRun(Location& here) override { return; }
-  std::shared_ptr<Object> Clone() const override { return std::make_shared<DummyRunnable>(); }
+  Ptr<Object> Clone() const override { return MakePtr<DummyRunnable>(); }
 } kDummyRunnable;
 
 static bool IsArgumentOptical(Location& from, Argument& arg) {

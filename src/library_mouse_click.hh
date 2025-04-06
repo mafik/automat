@@ -11,7 +11,7 @@ struct MouseClick : Object, Object::FallbackWidget, Runnable {
   bool down;
   MouseClick(gui::PointerButton, bool down);
   string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;

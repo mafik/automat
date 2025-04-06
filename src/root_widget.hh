@@ -30,7 +30,7 @@ struct Keyboard;
 struct Pointer;
 
 extern std::vector<RootWidget*> root_widgets;
-extern std::shared_ptr<RootWidget> root_widget;
+extern Ptr<RootWidget> root_widget;
 
 // Objects can create many widgets, to display themselves simultaneously in multiple contexts.
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
@@ -38,11 +38,10 @@ extern std::shared_ptr<RootWidget> root_widget;
 // TODO: introduce `WidgetMaker` interface, so that widgets can be created for non-Objects
 // TODO: delete widgets after some time
 struct WidgetStore {
-  std::map<std::weak_ptr<Object>, std::weak_ptr<Widget>, std::owner_less<std::weak_ptr<Object>>>
-      container;
+  std::map<WeakPtr<Object>, WeakPtr<Widget>> container;
 
-  std::shared_ptr<Widget> Find(Object& object) {
-    auto weak = object.WeakPtr();
+  Ptr<Widget> Find(Object& object) {
+    auto weak = object.MakeWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
       return nullptr;
@@ -50,8 +49,8 @@ struct WidgetStore {
     return it->second.lock();
   }
 
-  std::shared_ptr<Widget> For(Object& object, const Widget& parent) {
-    auto weak = object.WeakPtr();
+  Ptr<Widget> For(Object& object, const Widget& parent) {
+    auto weak = object.MakeWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
       auto widget = object.MakeWidget();
@@ -84,7 +83,7 @@ struct RootWidget final : Widget, DropTarget {
   DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override { return true; }
   void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
-  void DropLocation(std::shared_ptr<Location>&&) override;
+  void DropLocation(Ptr<Location>&&) override;
 
   // Return the shape of the trash zone in the corner of the window (in Machine coordinates).
   SkPath TrashShape() const;
@@ -134,7 +133,7 @@ struct RootWidget final : Widget, DropTarget {
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
 
   void Zoom(float delta);
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 
   // Called when closing Automat to persist state across restarts.
@@ -156,8 +155,8 @@ struct RootWidget final : Widget, DropTarget {
 
   // TODO: Remove (use window.px_per_meter instead)
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
-  std::shared_ptr<Toolbar> toolbar;
-  std::vector<std::shared_ptr<gui::ConnectionWidget>> connection_widgets;
+  Ptr<Toolbar> toolbar;
+  std::vector<Ptr<gui::ConnectionWidget>> connection_widgets;
 
   float zoom = 1;
   float zoom_target = 1;
@@ -178,7 +177,7 @@ struct RootWidget final : Widget, DropTarget {
   std::deque<float> fps_history;
 
   std::vector<Pointer*> pointers;
-  std::vector<std::shared_ptr<Keyboard>> keyboards;
+  std::vector<Ptr<Keyboard>> keyboards;
 
   std::mutex mutex;
 };

@@ -25,9 +25,9 @@ struct Button : Widget {
 
   mutable AnimationState animation_state;
   int press_action_count = 0;
-  std::shared_ptr<Widget> child;
+  Ptr<Widget> child;
 
-  Button(std::shared_ptr<Widget> child);
+  Button(Ptr<Widget> child);
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
   animation::Phase Tick(time::Timer&) override;
@@ -48,9 +48,7 @@ struct Button : Widget {
 
   SkRect ChildBounds() const;
 
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
-    children.push_back(child);
-  }
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(child); }
 
   void UpdateChildTransform();
 
@@ -69,7 +67,7 @@ struct ColoredButton : Button {
   float radius;
   std::function<void(gui::Pointer&)> on_click;
 
-  ColoredButton(std::shared_ptr<Widget> child, ColoredButtonArgs args = {})
+  ColoredButton(Ptr<Widget> child, ColoredButtonArgs args = {})
       : Button(child), fg(args.fg), bg(args.bg), radius(args.radius), on_click(args.on_click) {
     UpdateChildTransform();
   }
@@ -80,7 +78,7 @@ struct ColoredButton : Button {
   }
 
   ColoredButton(SkPath path, ColoredButtonArgs args = {})
-      : ColoredButton(std::make_shared<ShapeWidget>(path), args) {
+      : ColoredButton(MakePtr<ShapeWidget>(path), args) {
     UpdateChildTransform();
   }
 
@@ -100,15 +98,15 @@ struct ColoredButton : Button {
 };
 
 struct ToggleButton : Widget {
-  std::shared_ptr<Button> on;
-  std::shared_ptr<Button> off;
+  Ptr<Button> on;
+  Ptr<Button> off;
 
   float filling = 0;
   float time_seconds;  // used for waving animation
 
-  ToggleButton(std::shared_ptr<Button> on, std::shared_ptr<Button> off) : on(on), off(off) {}
+  ToggleButton(Ptr<Button> on, Ptr<Button> off) : on(on), off(off) {}
 
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override {
     children.push_back(OnWidget());
     children.push_back(off);
   }
@@ -120,7 +118,7 @@ struct ToggleButton : Widget {
     }
   }
 
-  virtual std::shared_ptr<Button>& OnWidget() { return on; }
+  virtual Ptr<Button>& OnWidget() { return on; }
   animation::Phase Tick(time::Timer&) override;
   void PreDrawChildren(SkCanvas&) const override;
   void DrawChildCachced(SkCanvas&, const Widget& child) const override;

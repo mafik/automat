@@ -26,8 +26,8 @@ struct Window : public Object {
   Window();
 
   std::string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
-  std::shared_ptr<gui::Widget> MakeWidget() override;
+  Ptr<Object> Clone() const override;
+  Ptr<gui::Widget> MakeWidget() override;
 };
 
 }  // namespace automat::library

@@ -92,11 +92,11 @@ SkPath Object::FallbackWidget::Shape() const {
 }
 
 struct DeleteOption : Option {
-  std::weak_ptr<Location> weak;
-  DeleteOption(std::weak_ptr<Location> weak) : Option("Delete"), weak(weak) {}
+  WeakPtr<Location> weak;
+  DeleteOption(WeakPtr<Location> weak) : Option("Delete"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<DeleteOption>(weak); }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
-    if (shared_ptr<Location> loc = weak.lock()) {
+    if (Ptr<Location> loc = weak.lock()) {
       if (auto parent_machine = loc->ParentAs<Machine>()) {
         parent_machine->Extract(*loc);
       }
@@ -107,10 +107,10 @@ struct DeleteOption : Option {
 };
 
 struct MoveOption : Option {
-  std::weak_ptr<Location> location_weak;
-  std::weak_ptr<Object> object_weak;
+  WeakPtr<Location> location_weak;
+  WeakPtr<Object> object_weak;
 
-  MoveOption(std::weak_ptr<Location> location_weak, std::weak_ptr<Object> object_weak)
+  MoveOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
       : Option("Move"), location_weak(location_weak), object_weak(object_weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<MoveOption>(location_weak, object_weak);
@@ -161,8 +161,8 @@ struct MoveOption : Option {
 };
 
 struct RunOption : Option {
-  std::weak_ptr<Location> weak;
-  RunOption(std::weak_ptr<Location> weak) : Option("Run"), weak(weak) {}
+  WeakPtr<Location> weak;
+  RunOption(WeakPtr<Location> weak) : Option("Run"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(weak); }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (auto loc = weak.lock()) {
@@ -174,7 +174,7 @@ struct RunOption : Option {
 
 void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
   if (auto loc = gui::Closest<Location>(const_cast<FallbackWidget&>(*this))) {
-    auto loc_weak = loc->WeakPtr();
+    auto loc_weak = loc->MakeWeakPtr();
     DeleteOption del{loc_weak};
     visitor(del);
     MoveOption move{loc_weak, object};
@@ -189,7 +189,7 @@ void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
 std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
                                                            gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
-    MoveOption move{Closest<Location>(*p.hover)->WeakPtr(), object};
+    MoveOption move{Closest<Location>(*p.hover)->MakeWeakPtr(), object};
     return move.Activate(p);
   } else if (btn == gui::PointerButton::Right) {
     return OpenMenu(p);

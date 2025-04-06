@@ -58,10 +58,10 @@ struct Location : public gui::Widget {
 
   mutable ObjectAnimationState animation_state;
 
-  std::weak_ptr<Location> parent_location;
+  WeakPtr<Location> parent_location;
 
-  std::shared_ptr<Object> object;
-  mutable std::shared_ptr<Widget> object_widget;
+  Ptr<Object> object;
+  mutable Ptr<Widget> object_widget;
 
   // Name of this Location.
   std::string name;
@@ -87,7 +87,7 @@ struct Location : public gui::Widget {
   std::unique_ptr<RunTask> run_task;
   LongRunning* long_running = nullptr;
 
-  Location(std::weak_ptr<Location> parent = {});
+  Location(WeakPtr<Location> parent = {});
   ~Location();
 
   std::string_view Name() const override {
@@ -100,7 +100,7 @@ struct Location : public gui::Widget {
 
   // Find (or create if needed) the Widget for this location's object.
   // Shortcut for Widget::ForObject(location.object, location)
-  std::shared_ptr<Widget>& WidgetForObject() const {
+  Ptr<Widget>& WidgetForObject() const {
     if (!object_widget) {
       if (object) {
         object_widget = Widget::ForObject(*object, *this);
@@ -113,15 +113,15 @@ struct Location : public gui::Widget {
   //
   // TODO: Remove InsertHere and switch to this one. Take care to find and fix all places which
   // depend on implicitly created widgets.
-  std::shared_ptr<Object> InsertHereNoWidget(std::shared_ptr<Object>&& object);
+  Ptr<Object> InsertHereNoWidget(Ptr<Object>&& object);
 
-  std::shared_ptr<Object> InsertHere(std::shared_ptr<Object>&& object);
+  Ptr<Object> InsertHere(Ptr<Object>&& object);
 
-  std::shared_ptr<Object> Create(const Object& prototype);
+  Ptr<Object> Create(const Object& prototype);
 
   template <typename T>
-  std::shared_ptr<T> Create() {
-    auto typed = std::make_shared<T>();
+  Ptr<T> Create() {
+    auto typed = MakePtr<T>();
     object = typed;
     object->Relocate(this);
     auto object_widget = WidgetForObject();
@@ -151,8 +151,8 @@ struct Location : public gui::Widget {
   ////////////////////////////
 
   Object* Follow();
-  void Put(std::shared_ptr<Object> obj);
-  std::shared_ptr<Object> Take();
+  void Put(Ptr<Object> obj);
+  Ptr<Object> Take();
 
   ////////////////////////////
   // Task queue interface.
@@ -287,7 +287,7 @@ struct Location : public gui::Widget {
   // argument should start.
   // TODO: replace with Argument::Start
   Vec2AndDir ArgStart(Argument&);
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
   maf::Optional<Rect> TextureBounds() const override;
 
   ////////////////////////////

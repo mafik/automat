@@ -61,8 +61,8 @@ bool FlipFlopButton::Filled() const { return (flip_flop && flip_flop->current_st
 // SkColor FlipFlopButton::BackgroundColor() const { return "#eae9e8"_color; }
 FlipFlopButton::FlipFlopButton()
     : gui::ToggleButton(
-          make_shared<gui::ColoredButton>(
-              make_shared<YingYangIcon>(),
+          MakePtr<gui::ColoredButton>(
+              MakePtr<YingYangIcon>(),
               gui::ColoredButtonArgs{.fg = "#eae9e8"_color,
                                      .bg = "#1d1d1d"_color,
                                      .radius = kYingYangButtonRadius,
@@ -72,8 +72,8 @@ FlipFlopButton::FlipFlopButton()
                                              h->ScheduleRun();
                                            }
                                          }}),
-          make_shared<gui::ColoredButton>(
-              make_shared<YingYangIcon>(),
+          MakePtr<gui::ColoredButton>(
+              MakePtr<YingYangIcon>(),
               gui::ColoredButtonArgs{.fg = "#1d1d1d"_color,
                                      .bg = "#eae9e8"_color,
                                      .radius = kYingYangButtonRadius,
@@ -94,15 +94,15 @@ Rect FlipFlopRect() {
 }
 SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
 
-FlipFlop::FlipFlop() : button(make_shared<FlipFlopButton>()) {
+FlipFlop::FlipFlop() : button(MakePtr<FlipFlopButton>()) {
   button->flip_flop = this;
   auto rect = FlipFlopRect();
   button->local_to_parent = SkM44::Translate(rect.CenterX() - kYingYangButtonRadius,
                                              rect.CenterY() - kYingYangButtonRadius);
 }
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
-std::shared_ptr<Object> FlipFlop::Clone() const {
-  auto ret = std::make_shared<FlipFlop>();
+Ptr<Object> FlipFlop::Clone() const {
+  auto ret = MakePtr<FlipFlop>();
   ret->current_state = current_state;
   return ret;
 }
@@ -153,9 +153,7 @@ void FlipFlop::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void FlipFlop::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
-  children.push_back(button);
-}
+void FlipFlop::FillChildren(maf::Vec<Ptr<Widget>>& children) { children.push_back(button); }
 
 void FlipFlop::OnRun(Location& here) {
   current_state = !current_state;

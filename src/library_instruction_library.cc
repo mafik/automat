@@ -162,11 +162,9 @@ void InstructionLibrary::Filter() {
 
 string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
-shared_ptr<Object> InstructionLibrary::Clone() const { return make_shared<InstructionLibrary>(); }
+Ptr<Object> InstructionLibrary::Clone() const { return MakePtr<InstructionLibrary>(); }
 
-InstructionLibrary::Widget::Widget(std::weak_ptr<Object> object) {
-  this->object = std::move(object);
-}
+InstructionLibrary::Widget::Widget(WeakPtr<Object> object) { this->object = std::move(object); }
 SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 10_cm); }
 
 constexpr float kRoseFanDegrees = 180;
@@ -272,10 +270,10 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
         animation::LinearApproach(write_to[i].pressed, timer.d, 5, write_to[i].pressed_animation);
   }
 
-  auto object_shared_ptr = object.lock();
-  if (!object_shared_ptr) return animation::Finished;
+  auto object_Ptr = object.lock();
+  if (!object_Ptr) return animation::Finished;
 
-  auto* library = dynamic_cast<InstructionLibrary*>(object_shared_ptr.get());
+  auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
   if (!library) return animation::Finished;
 
   lock_guard lock(library->mutex);
@@ -976,14 +974,13 @@ void InstructionLibrary::Widget::PointerLeave(gui::Pointer& p) {
 
 struct ScrollDeckAction : Action {
   SinCos angle;
-  std::shared_ptr<gui::Widget> widget;
-  std::shared_ptr<Object> object;
+  Ptr<gui::Widget> widget;
+  Ptr<Object> object;
 
   InstructionLibrary::Widget& library_widget;  // same as widget
   InstructionLibrary& library;
 
-  ScrollDeckAction(gui::Pointer& pointer, std::shared_ptr<gui::Widget> widget,
-                   std::shared_ptr<Object> object)
+  ScrollDeckAction(gui::Pointer& pointer, Ptr<gui::Widget> widget, Ptr<Object> object)
       : Action(pointer),
         widget(widget),
         object(object),
@@ -1102,11 +1099,11 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
     auto contact_point = p.PositionWithin(*this);
 
     if (kFrontInstructionRect.Contains(contact_point)) {
-      auto loc = std::make_shared<Location>();
+      auto loc = MakePtr<Location>();
       loc->parent_location = root_location;
       loc->parent = root_machine;
 
-      auto proto = std::make_shared<Instruction>();
+      auto proto = MakePtr<Instruction>();
       proto->mc_inst = instruction_helix.front().mc_inst;
 
       loc->InsertHere(std::move(proto));
@@ -1121,10 +1118,10 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
     }
 
     if (auto reg_btn = FindRegisterFilterButton(contact_point)) {
-      auto object_shared_ptr = object.lock();
-      if (!object_shared_ptr) return nullptr;
+      auto object_Ptr = object.lock();
+      if (!object_Ptr) return nullptr;
 
-      auto* library = dynamic_cast<InstructionLibrary*>(object_shared_ptr.get());
+      auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
       if (!library) return nullptr;
 
       lock_guard lock(library->mutex);
@@ -1145,10 +1142,10 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
       auto& category_state = category_states[i];
       float distance = Length(category_state.position - contact_point);
       if (distance < category_state.radius) {
-        auto object_shared_ptr = object.lock();
-        if (!object_shared_ptr) return nullptr;
+        auto object_Ptr = object.lock();
+        if (!object_Ptr) return nullptr;
 
-        auto* library = dynamic_cast<InstructionLibrary*>(object_shared_ptr.get());
+        auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
         if (!library) return nullptr;
 
         lock_guard lock(library->mutex);
@@ -1169,10 +1166,10 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
         auto& leaf_state = category_state.leaves[j];
         float distance = Length(leaf_state.position - contact_point);
         if (distance < leaf_state.radius) {
-          auto object_shared_ptr = object.lock();
-          if (!object_shared_ptr) return nullptr;
+          auto object_Ptr = object.lock();
+          if (!object_Ptr) return nullptr;
 
-          auto* library = dynamic_cast<InstructionLibrary*>(object_shared_ptr.get());
+          auto* library = dynamic_cast<InstructionLibrary*>(object_Ptr.get());
           if (!library) return nullptr;
 
           lock_guard lock(library->mutex);

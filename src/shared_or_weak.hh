@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <memory>
+#include "ptr.hh"
 
 namespace automat {
 
@@ -10,27 +10,27 @@ template <typename T>
 struct SharedOrWeakPtr {
   bool is_shared;  // this is using 8 bytes :(
   union {
-    std::shared_ptr<T> shared;
-    std::weak_ptr<T> weak;
+    Ptr<T> shared;
+    WeakPtr<T> weak;
   };
 
   SharedOrWeakPtr() : is_shared(true), shared() {}
-  SharedOrWeakPtr(std::shared_ptr<T>&& shared) : is_shared(true), shared(std::move(shared)) {}
+  SharedOrWeakPtr(Ptr<T>&& shared) : is_shared(true), shared(std::move(shared)) {}
   ~SharedOrWeakPtr() { reset(); }
 
-  SharedOrWeakPtr& operator=(std::shared_ptr<T>&& new_shared) {
+  SharedOrWeakPtr& operator=(Ptr<T>&& new_shared) {
     if (!is_shared) {
-      weak.reset();
+      weak.Reset();
       is_shared = true;
     }
     shared = std::move(new_shared);
     return *this;
   }
 
-  SharedOrWeakPtr& operator=(std::weak_ptr<T>&& new_weak) {
+  SharedOrWeakPtr& operator=(WeakPtr<T>&& new_weak) {
     if (is_shared) {
       is_shared = false;
-      shared.reset();
+      shared.Reset();
     }
     weak = std::move(new_weak);
     return *this;
@@ -41,14 +41,14 @@ struct SharedOrWeakPtr {
   // Use `lock()` to get the pointer value if you need to access it through the weak pointer.
   T* get() const {
     if (is_shared) {
-      return shared.get();
+      return shared.Get();
     } else {
       return nullptr;
     }
   }
 
   // Convert the SharedOrWeakPtr to a weak pointer and return the shared pointer.
-  std::shared_ptr<T> borrow() {
+  Ptr<T> borrow() {
     if (is_shared) {
       auto ret = std::move(shared);
       weak = ret;
@@ -59,19 +59,19 @@ struct SharedOrWeakPtr {
     }
   }
 
-  std::shared_ptr<T> lock() const {
+  Ptr<T> lock() const {
     if (is_shared) {
       return shared;
     } else {
-      return weak.lock();
+      return weak.Lock();
     }
   }
 
   void reset() {
     if (is_shared) {
-      shared.reset();
+      shared.Reset();
     } else {
-      weak.reset();
+      weak.Reset();
     }
   }
 
@@ -79,7 +79,7 @@ struct SharedOrWeakPtr {
     if (is_shared) {
       return shared == nullptr;
     } else {
-      return weak.expired();
+      return weak.IsExpired();
     }
   }
 };

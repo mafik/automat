@@ -35,7 +35,7 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
       pointer_position(position),
       button_down_position(),
       button_down_time(),
-      pointer_widget(std::make_shared<PointerWidget>(*this)) {
+      pointer_widget(MakePtr<PointerWidget>(*this)) {
   root_widget.pointers.push_back(this);
   assert(!root_widget.keyboards.empty());
   if (root_widget.keyboards.empty()) {
@@ -60,7 +60,7 @@ Pointer::~Pointer() {
 }
 
 static bool FillPath(Pointer& p, Widget& w) {
-  p.path.push_back(w.WeakPtr());
+  p.path.push_back(w.MakeWeakPtr());
   Vec2 point = TransformDown(w).mapPoint(p.pointer_position);
   auto shape = w.Shape();
   bool p_inside_w = shape.contains(point.x, point.y);
@@ -96,13 +96,13 @@ void Pointer::UpdatePath() {
 
   // Try to get references to all widgets in the path - during last & this frame.
   // This allows us to notify them about pointer enter/leave events.
-  Vec<shared_ptr<Widget>> old_path_shared;
+  Vec<Ptr<Widget>> old_path_shared;
   for (auto& w : old_path) {
     if (auto s = w.lock()) {
       old_path_shared.push_back(s);
     }
   }
-  Vec<shared_ptr<Widget>> new_path_shared;
+  Vec<Ptr<Widget>> new_path_shared;
   for (auto& w : path) {
     if (auto s = w.lock()) {
       new_path_shared.push_back(s);
@@ -186,7 +186,7 @@ void Pointer::ButtonDown(PointerButton btn) {
   if (action == nullptr && hover) {
     // TODO: process this similarly to keyboard shortcuts
     action = hover->FindAction(*this, btn);
-    std::shared_ptr<Widget>* curr = &hover;
+    Ptr<Widget>* curr = &hover;
     while (action == nullptr && (*curr)->parent) {
       curr = &(*curr)->parent;
       action = (*curr)->FindAction(*this, btn);

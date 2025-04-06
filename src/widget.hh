@@ -36,9 +36,9 @@ namespace automat::gui {
 struct Widget;
 struct RootWidget;
 
-maf::Str ToStr(std::shared_ptr<Widget> widget);
+maf::Str ToStr(Ptr<Widget> widget);
 
-using Visitor = std::function<ControlFlow(maf::Span<std::shared_ptr<Widget>>)>;
+using Visitor = std::function<ControlFlow(maf::Span<Ptr<Widget>>)>;
 
 // Transform from the RootWidget coordinates to the local coordinates of the widget.
 SkMatrix TransformDown(const Widget& to);
@@ -93,7 +93,7 @@ struct Widget : public virtual SharedBase, public OptionsProvider {
   uint32_t ID() const;
   static Widget* Find(uint32_t id);
 
-  std::shared_ptr<Widget> parent;
+  Ptr<Widget> parent;
   SkM44 local_to_parent = SkM44();
 
   // The time when the animation should wake up.
@@ -125,14 +125,14 @@ struct Widget : public virtual SharedBase, public OptionsProvider {
   RootWidget& FindRootWidget() const;
 
   // Each widget needs to have a pointer to its parent.
-  // Because widgets share inheritance hierarchy with Objects (and objects must use shared_ptr), the
-  // widgets also must use shared_ptr for their references.
-  // While an object is constructed using `make_shared`, it doesn't know its own shared_ptr. This is
+  // Because widgets share inheritance hierarchy with Objects (and objects must use Ptr), the
+  // widgets also must use Ptr for their references.
+  // While an object is constructed using `MakePtr`, it doesn't know its own Ptr. This is
   // a limitation of enable_shared_from_this - its inner pointer is initialized only after
   // construction.
   // In order to properly initialize the parents we currently use this workaround, that should be
   // called after a widget hierarchy is constructed.
-  // Once Widget & Object classes are separated, and Widgets no longer use shared_ptr, this should
+  // Once Widget & Object classes are separated, and Widgets no longer use Ptr, this should
   // be replaced with a proper `parent` initialization in the Widget constructor.
   virtual void FixParents();
 
@@ -207,16 +207,16 @@ struct Widget : public virtual SharedBase, public OptionsProvider {
 
   virtual void PreDrawChildren(SkCanvas&) const;
 
-  void DrawChildrenSpan(SkCanvas&, maf::Span<std::shared_ptr<Widget>> widgets) const;
+  void DrawChildrenSpan(SkCanvas&, maf::Span<Ptr<Widget>> widgets) const;
 
   void DrawChildren(SkCanvas&) const;
 
   // Used to obtain references to the child widgets in a generic fashion.
   // Widgets are stored in front-to-back order.
-  virtual void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {}
+  virtual void FillChildren(maf::Vec<Ptr<Widget>>& children) {}
 
-  maf::Vec<std::shared_ptr<Widget>> Children() const {
-    maf::Vec<std::shared_ptr<Widget>> children;
+  maf::Vec<Ptr<Widget>> Children() const {
+    maf::Vec<Ptr<Widget>> children;
     const_cast<Widget*>(this)->FillChildren(children);
     return children;
   }
@@ -225,19 +225,19 @@ struct Widget : public virtual SharedBase, public OptionsProvider {
   virtual bool AllowChildPointerEvents(Widget& child) const { return true; }
 
   struct ParentsView {
-    std::shared_ptr<Widget> start;
+    Ptr<Widget> start;
 
     struct end_iterator {};
 
     struct iterator {
-      std::shared_ptr<Widget> widget;
-      iterator(std::shared_ptr<Widget> widget) : widget(widget) {}
-      std::shared_ptr<Widget>& operator*() { return widget; }
+      Ptr<Widget> widget;
+      iterator(Ptr<Widget> widget) : widget(widget) {}
+      Ptr<Widget>& operator*() { return widget; }
       iterator& operator++() {
         widget = widget->parent;
         return *this;
       }
-      bool operator!=(const end_iterator&) { return widget.get() != nullptr; }
+      bool operator!=(const end_iterator&) { return widget != nullptr; }
     };
 
     iterator begin() { return iterator(start); }
@@ -246,7 +246,7 @@ struct Widget : public virtual SharedBase, public OptionsProvider {
   ParentsView Parents() const { return ParentsView{SharedPtr<Widget>()}; }
 
   // Widgets share the same base class with Objects (which must be always allocated using
-  // make_shared) so they also must be allocated using make_shared. This creates issues because
+  // MakePtr) so they also must be allocated using MakePtr. This creates issues because
   // widget's keep references to their parents and those references keep them alive, even after they
   // are no longer reachable from the RootWidget.
   //
@@ -269,7 +269,7 @@ struct Widget : public virtual SharedBase, public OptionsProvider {
   // Local (metric) coordinates.
   virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;
 
-  static std::shared_ptr<Widget> ForObject(Object&, const Widget& parent);
+  static Ptr<Widget> ForObject(Object&, const Widget& parent);
 };
 
 template <typename T>
@@ -279,7 +279,7 @@ T* Closest(Widget& widget) {
     if (auto* result = dynamic_cast<T*>(w)) {
       return result;
     }
-    w = w->parent.get();
+    w = w->parent.Get();
   }
   return nullptr;
 }

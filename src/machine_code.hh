@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "ptr.hh"
 #include "status.hh"
 
 // Namespace for Machine Code related functions
@@ -16,7 +17,8 @@ using InstBuilder = llvm::MCInstBuilder;
 
 // Represents a single instruction within a larger program.
 struct ProgramInst {
-  std::shared_ptr<const Inst> inst;
+  Ptr<ReferenceCounted> inst;
+  const Inst* actual_inst;
   int next;  // index of the next instruction within the program
   int jump;  // index of the jump target within the program
 };
@@ -53,7 +55,8 @@ enum class StopType : uint8_t {
 };
 
 struct CodePoint {
-  std::weak_ptr<const Inst>* instruction;  // valid until next code update
+  WeakPtr<ReferenceCounted>* instruction;  // valid until next code update
+  const Inst* actual_inst;
   StopType stop_type;
 };
 
@@ -70,11 +73,12 @@ struct Controller {
   // Program must be sorted using std::owner_less.
   virtual void UpdateCode(Program&& program, maf::Status&) = 0;
 
-  virtual void Execute(std::weak_ptr<const Inst> instr, maf::Status&) = 0;
+  virtual void Execute(WeakPtr<ReferenceCounted> instr, const Inst* actual_inst, maf::Status&) = 0;
 
   struct State {
     // Instruction which is about to be executed.
-    std::weak_ptr<const Inst> current_instruction;
+    WeakPtr<ReferenceCounted> current_instruction;
+    const Inst* actual_inst;
 
     // State of registers prior to the current instruction.
     Regs regs;

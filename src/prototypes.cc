@@ -32,7 +32,7 @@ struct IndexHelper {
   IndexHelper(PrototypeLibrary& lib) : lib(lib) {}
   template <typename T, ToolbarVisibility show_in_toolbar = ShowInToolbar, typename... Args>
   void Register(Args&&... args) {
-    auto proto = std::make_shared<T>(std::forward<Args>(args)...);
+    auto proto = MakePtr<T>(std::forward<Args>(args)...);
     lib.type_index[typeid(T)] = proto;
     lib.name_index[Str(proto->Name())] = proto;
     if (show_in_toolbar == ShowInToolbar) {

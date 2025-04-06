@@ -20,7 +20,7 @@ Argument Increment::target_arg =
 
 string_view Increment::Name() const { return "Increment"; }
 
-std::shared_ptr<Object> Increment::Clone() const { return std::make_shared<Increment>(); }
+Ptr<Object> Increment::Clone() const { return MakePtr<Increment>(); }
 
 void Increment::OnRun(Location& h) {
   auto integer = target_arg.GetTyped<Number>(h);

@@ -3,24 +3,25 @@
 #include "machine_code.hh"
 
 #include <llvm/Support/raw_ostream.h>
-#include <llvm/lib/Target/X86/X86Subtarget.h>
-
-#include <thread>
 
 #if defined __linux__
+#include <llvm/lib/Target/X86/X86Subtarget.h>
 #include <signal.h>
 #include <sys/mman.h>  // For mmap related functions and constants
 #include <sys/prctl.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
 #include <sys/wait.h>
-#endif  // __linux__
+
+#include <thread>
 
 #include "blockingconcurrentqueue.hh"
 #include "format.hh"
 #include "llvm_asm.hh"
 #include "log.hh"
 #include "thread_name.hh"
+
+#endif  // __linux__
 
 using namespace maf;
 
@@ -89,7 +90,7 @@ struct PtraceController : Controller {
 
     std::string new_code;
     std::vector<MapEntry> new_map;
-    std::vector<std::weak_ptr<const Inst>> new_instructions;
+    std::vector<WeakPtr<const Inst>> new_instructions;
     std::vector<int> new_instruction_offsets(program.size(), -1);
 
     {  // Fill new_code & new_map
@@ -346,7 +347,7 @@ struct PtraceController : Controller {
   // Although this will actually be executed on a different thread in this implementation of
   // MachineCodeController, keep in mind that other (hypothetical) implementations (e.g.
   // SignalMachineCodeController) may execute the code in a blocking manner, on the current thread.
-  void Execute(std::weak_ptr<const Inst> instr, Status& status) override {
+  void Execute(WeakPtr<const Inst> instr, Status& status) override {
     control_commands.enqueue([this, instr = std::move(instr), &status]() {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Executing instruction";
@@ -455,7 +456,7 @@ struct PtraceController : Controller {
   // Saved state of registers
   Regs regs = {};
 
-  std::vector<std::weak_ptr<const Inst>> instructions;  // ordered by std::owner_less
+  std::vector<WeakPtr<const Inst>> instructions;  // ordered by std::owner_less
   std::vector<int> instruction_offsets;
 
   // Describes a section of code
@@ -501,7 +502,7 @@ struct PtraceController : Controller {
   bool controller_running = true;
   std::atomic<bool> worker_set_up = false;
 
-  // std::optional < std::weak_ptr<AutomatInstruction>, CodeType >> nthueo;
+  // std::optional < WeakPtr<AutomatInstruction>, CodeType >> nthueo;
 
   // This should only be called from the control thread.
   void PrintMap() {

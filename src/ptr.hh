@@ -4,15 +4,22 @@
 
 #include <atomic>
 #include <cassert>
+#include <compare>
 #include <memory>  // IWYU pragma: keep
 
+namespace automat {
+
 template <typename T>
+concept HasOperatorDelete = requires { T::operator delete((void*)nullptr); };
+
 struct ReferenceCounted {
   using AtomicCounter = std::atomic<uint32_t>;
 
   mutable AtomicCounter owning_refs = 1;
   mutable AtomicCounter weak_refs = 1;  // weak_refs = #weak + (1 if owning_refs > 0 else 0)
 
+  ReferenceCounted() = default;
+  ReferenceCounted(const ReferenceCounted&) : owning_refs(1), weak_refs(1) {}
   virtual ~ReferenceCounted() = default;
 
   [[nodiscard]] bool IncrementOwningRefsNonZero() const {
@@ -27,16 +34,23 @@ struct ReferenceCounted {
   }
   void IncrementOwningRefs() const { owning_refs.fetch_add(1, std::memory_order_relaxed); }
   void IncrementWeakRefs() const { weak_refs.fetch_add(1, std::memory_order_relaxed); }
-  void DecrementOwningRefs() const {
-    if (owning_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-      this->~ReferenceCounted();  // call destructor without releasing memory
-      DecrementWeakRefs();
+
+  template <class Self>
+  void DecrementOwningRefs(this const Self& self) {
+    if (self.owning_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      self.~ReferenceCounted();  // call destructor without releasing memory
+      self.DecrementWeakRefs();
     }
   }
-  void DecrementWeakRefs() const {
-    if (weak_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+  template <class Self>
+  void DecrementWeakRefs(this const Self& self) {
+    if (self.weak_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
       // release memory without calling destructor
-      T::operator delete((void*)this);
+      if constexpr (HasOperatorDelete<Self>) {
+        Self::operator delete((void*)&self);
+      } else {
+        operator delete((void*)&self);
+      }
     }
   }
 };
@@ -145,8 +159,12 @@ struct [[clang::trivial_abi]] Ptr {
 
   explicit operator bool() const { return this->Get() != nullptr; }
 
+  T* get() const { return obj; }
   T* Get() const { return obj; }
   T* operator->() const { return obj; }
+
+  std::strong_ordering operator<=>(const Ptr<T>& that) const { return obj <=> that.obj; }
+  bool operator==(const Ptr<T>& that) const { return obj == that.obj; }
 
   /**
    *  Adopt the new bare pointer, and call unref() on any previously held object (if not null).
@@ -160,6 +178,7 @@ struct [[clang::trivial_abi]] Ptr {
     obj = ptr;
     SafeDecrementOwningRefs(oldObj);
   }
+  void reset(T* ptr = nullptr) { Reset(ptr); }
 
   // Reset & return the stored pointer. It's up to the caller to decrement the owning reference
   // count on the returned pointer.
@@ -167,6 +186,11 @@ struct [[clang::trivial_abi]] Ptr {
     T* ptr = obj;
     obj = nullptr;
     return ptr;
+  }
+
+  template <typename U>
+  [[nodiscard]] Ptr<U> Cast() && {
+    return Ptr<U>(static_cast<U*>(Release()));
   }
 
   void Swap(Ptr<T>& that) /*noexcept*/ {
@@ -238,20 +262,13 @@ Ptr<T> DupPtr(const T* obj) {
   return Ptr<T>(const_cast<T*>(SafeIncrementOwningRefs(obj)));
 }
 
-// Add std::hash specialization for Ptr
-namespace std {
-template <typename T>
-struct hash<Ptr<T>> {
-  size_t operator()(const Ptr<T>& ptr) const { return std::hash<T*>()(ptr.Get()); }
-};
-}  // namespace std
-
 // WeakPtr can holds a reference to a reference-counted object while also allowing that object to be
 // destroyed. In order to use WeakPtr, it should first be converted to Ptr using `Lock().
 template <typename T>
 struct [[clang::trivial_abi]] WeakPtr {
   T* obj;
 
+  WeakPtr() : obj(nullptr) {}
   WeakPtr(const Ptr<T>& ptr) : obj(SafeIncrementWeakRefs(ptr.Get())) {}
   WeakPtr(T* obj) : obj(SafeIncrementWeakRefs(obj)) {}
   WeakPtr(const WeakPtr<T>& that) : obj(SafeIncrementWeakRefs(that.obj)) {}
@@ -280,6 +297,7 @@ struct [[clang::trivial_abi]] WeakPtr {
     }
     return Ptr<T>();
   }
+  Ptr<T> lock() const { return Lock(); }  // alias for better compatibility with std::weak_ptr
 
   WeakPtr<T>& operator=(const WeakPtr<T>& that) {
     if (this != &that) {
@@ -297,9 +315,27 @@ struct [[clang::trivial_abi]] WeakPtr {
     return *this;
   }
 
+  template <typename U>
+  [[nodiscard]] WeakPtr<U> Cast() && {
+    return WeakPtr<U>(static_cast<U*>(ReleaseWeak()));
+  }
+
+  std::strong_ordering operator<=>(const WeakPtr<T>& that) const { return obj <=> that.obj; }
+  bool operator==(const WeakPtr<T>& that) const { return obj == that.obj; }
+
   void Reset(T* ptr = nullptr) {
     T* oldObj = obj;
     obj = SafeIncrementWeakRefs(ptr);
     SafeDecrementWeakRefs(oldObj);
   }
 };
+
+}  // namespace automat
+
+// Add std::hash specialization for Ptr
+namespace std {
+template <typename T>
+struct hash<automat::Ptr<T>> {
+  size_t operator()(const automat::Ptr<T>& ptr) const { return std::hash<T*>()(ptr.Get()); }
+};
+}  // namespace std

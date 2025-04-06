@@ -144,7 +144,7 @@ constexpr int kIterations = 100'000'000;
 struct Object;
 
 using WeakPtr = weak_ptr<Object>;
-using SharedPtr = shared_ptr<Object>;
+using SharedPtr = Ptr<Object>;
 
 struct Task {
   WeakPtr target;
@@ -157,16 +157,14 @@ struct Object : enable_shared_from_this<Object> {
   atomic<weak_ptr<Object>> next;
   virtual ~Object() {}
 
-  virtual unique_ptr<Task> Call(shared_ptr<Object> self, weak_ptr<Object> caller) {
-    return nullptr;
-  }
-  virtual unique_ptr<Task> Return(shared_ptr<Object> self, shared_ptr<Object> from) {
+  virtual unique_ptr<Task> Call(Ptr<Object> self, weak_ptr<Object> caller) { return nullptr; }
+  virtual unique_ptr<Task> Return(Ptr<Object> self, Ptr<Object> from) {
     from->next = WeakPtr();
     from->next.notify_one();
     return nullptr;
   }
 
-  virtual unique_ptr<Task> Run(shared_ptr<Object> self) { return nullptr; }
+  virtual unique_ptr<Task> Run(Ptr<Object> self) { return nullptr; }
 };
 
 struct RunTask : Task {
@@ -246,7 +244,7 @@ struct Squarer : Object {
     // This should execute the processing loop and execute it
     // until the squerer computes its result.
     // Then it should return.
-    auto dummy_object = make_shared<Object>();
+    auto dummy_object = MakePtr<Object>();
     RunMainLine(make_unique<CallTask>(weak_from_this(), dummy_object));
     // dummy_object::Return should be called now
     auto ret = result;
@@ -254,7 +252,7 @@ struct Squarer : Object {
     return ret;
   }
 
-  unique_ptr<Task> Return(shared_ptr<Object> self, shared_ptr<Object> from) override {
+  unique_ptr<Task> Return(Ptr<Object> self, Ptr<Object> from) override {
     auto squarer = dynamic_cast<Squarer*>(from.get());
     int i = squarer->result;
     {
@@ -269,7 +267,7 @@ struct Squarer : Object {
     return make_unique<ReturnTask>(next, self);
   }
 
-  unique_ptr<Task> Call(shared_ptr<Object> self, weak_ptr<Object> caller) override {
+  unique_ptr<Task> Call(Ptr<Object> self, weak_ptr<Object> caller) override {
     {  // Wait for `next` to be nullptr & change it to `caller`
       while (true) {
         auto next_copy = next.load();
@@ -284,7 +282,7 @@ struct Squarer : Object {
       }
     }
     // TODO: could we somehow merge this with Run?
-    shared_ptr<Object> n_ptr;
+    Ptr<Object> n_ptr;
     {
       auto l = shared_lock(m);
       n_ptr = number.lock();
@@ -311,7 +309,7 @@ struct Incrementer : Object {
   shared_mutex m;
   weak_ptr<Object> integer;
 
-  unique_ptr<Task> Run(shared_ptr<Object> self) override {
+  unique_ptr<Task> Run(Ptr<Object> self) override {
     auto l1 = shared_lock(m);
     if (auto i_ptr = integer.lock()) {
       auto integer = static_cast<Integer*>(i_ptr.get());
@@ -327,11 +325,11 @@ struct Incrementer : Object {
 };
 
 double IncrementTest(int n_threads = 1) {
-  auto ints = vector<shared_ptr<Integer>>();
-  auto incs = vector<shared_ptr<Incrementer>>();
+  auto ints = vector<Ptr<Integer>>();
+  auto incs = vector<Ptr<Incrementer>>();
   for (int i = 0; i < n_threads; ++i) {
-    ints.emplace_back(make_shared<Integer>(-kIterations));
-    incs.emplace_back(make_shared<Incrementer>());
+    ints.emplace_back(MakePtr<Integer>(-kIterations));
+    incs.emplace_back(MakePtr<Incrementer>());
     incs.back()->integer = ints.back();
     incs.back()->next = incs.back();
   }
@@ -366,14 +364,14 @@ void IncrementTestSuite() {
 void CallTest() {
   // Once the correctness test is passing, we could switch to
   // API improvements.
-  auto integer = make_shared<Integer>(2);
-  auto squarer = make_shared<Squarer>();
+  auto integer = MakePtr<Integer>(2);
+  auto squarer = MakePtr<Squarer>();
   squarer->number = integer;
-  vector<shared_ptr<Squarer>> squarers;
+  vector<Ptr<Squarer>> squarers;
   vector<weak_ptr<Object>> leaf_squarers;
   function<void(int, weak_ptr<Object>)> Split = [&](int levels, weak_ptr<Object> number) {
-    auto a = make_shared<Squarer>();
-    auto b = make_shared<Squarer>();
+    auto a = MakePtr<Squarer>();
+    auto b = MakePtr<Squarer>();
     a->number = number;
     b->number = number;
     squarers.push_back(a);

@@ -37,7 +37,7 @@ struct Caret final {
   Keyboard& keyboard;
   CaretOwner* owner = nullptr;
   SkPath shape;
-  std::shared_ptr<Widget> widget;
+  Ptr<Widget> widget;
   Caret(Keyboard& keyboard);
   ~Caret() = default;
   void PlaceIBeam(Vec2 position);
@@ -192,7 +192,7 @@ struct Keyboard final : Widget {
   Keyboard(RootWidget&);
 
   // Called by a CaretOwner that wants to start receiving keyboard input.
-  Caret& RequestCaret(CaretOwner&, const std::shared_ptr<Widget>& widget, Vec2 position);
+  Caret& RequestCaret(CaretOwner&, const Ptr<Widget>& widget, Vec2 position);
 
   // Called by a KeyboardGrabber that wants to grab all keyboard events.
   KeyboardGrab& RequestGrab(KeyboardGrabber&);
@@ -232,6 +232,6 @@ struct Keyboard final : Widget {
   void LogKeyUp(Key);
 };
 
-extern std::shared_ptr<gui::Keyboard> keyboard;
+extern Ptr<gui::Keyboard> keyboard;
 
 }  // namespace automat::gui

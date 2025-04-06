@@ -41,7 +41,7 @@ namespace automat {
 
 constexpr float kFrameCornerRadius = 0.001;
 
-Location::Location(std::weak_ptr<Location> parent) : parent_location(parent) {}
+Location::Location(WeakPtr<Location> parent) : parent_location(parent) {}
 
 bool Location::HasError() {
   if (error != nullptr) return true;
@@ -77,7 +77,7 @@ Object* Location::Follow() {
   return object.get();
 }
 
-void Location::Put(shared_ptr<Object> obj) {
+void Location::Put(Ptr<Object> obj) {
   if (object == nullptr) {
     object = std::move(obj);
     return;
@@ -89,7 +89,7 @@ void Location::Put(shared_ptr<Object> obj) {
   }
 }
 
-shared_ptr<Object> Location::Take() {
+Ptr<Object> Location::Take() {
   if (Pointer* ptr = object->AsPointer()) {
     return ptr->Take(*this);
   }
@@ -144,7 +144,7 @@ SkPath Location::FieldShape(Object& field) const {
   return SkPath();
 }
 
-void Location::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void Location::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   if (object) {
     children.push_back(WidgetForObject());
   }
@@ -636,19 +636,17 @@ void Location::UpdateChildTransform() {
   object_widget->local_to_parent = SkM44(transform);
   object_widget->TransformUpdated();
 }
-std::shared_ptr<Object> Location::InsertHereNoWidget(std::shared_ptr<Object>&& object) {
-  this->object.swap(object);
+Ptr<Object> Location::InsertHereNoWidget(Ptr<Object>&& object) {
+  this->object.Swap(object);
   this->object->Relocate(this);
   return object;
 }
-std::shared_ptr<Object> Location::InsertHere(std::shared_ptr<Object>&& object) {
+Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   object = InsertHereNoWidget(std::move(object));
   auto object_widget = WidgetForObject();
   object_widget->parent = this->SharedPtr();
   FixParents();
   return object;
 }
-std::shared_ptr<Object> Location::Create(const Object& prototype) {
-  return InsertHere(prototype.Clone());
-}
+Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(prototype.Clone()); }
 }  // namespace automat

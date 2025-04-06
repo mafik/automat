@@ -38,21 +38,19 @@ struct MacroRecorder : LiveObject,
 
   mutable AnimationState animation_state;
   gui::Keylogging* keylogging = nullptr;
-  std::shared_ptr<gui::Widget> record_button;
+  Ptr<gui::Widget> record_button;
 
   MacroRecorder();
   ~MacroRecorder();
   string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer& timer) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override {
-    children.push_back(record_button);
-  }
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(record_button); }
 
   void Args(std::function<void(Argument&)> cb) override;
-  std::shared_ptr<Object> ArgPrototype(const Argument&) override;
+  Ptr<Object> ArgPrototype(const Argument&) override;
 
   bool IsOn() const override;
   void On() override;

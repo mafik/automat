@@ -76,12 +76,12 @@ void DragLocationAction::Update() {
 
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
-DragLocationAction::DragLocationAction(gui::Pointer& pointer,
-                                       std::shared_ptr<Location>&& location_arg, Vec2 contact_point)
+DragLocationAction::DragLocationAction(gui::Pointer& pointer, Ptr<Location>&& location_arg,
+                                       Vec2 contact_point)
     : Action(pointer),
       contact_point(contact_point),
       location(std::move(location_arg)),
-      widget(std::make_shared<DragLocationWidget>(*this)) {
+      widget(MakePtr<DragLocationWidget>(*this)) {
   widget->parent = pointer.root_widget.SharedPtr();
   pointer.root_widget.drag_action_count++;
   location->parent = widget;
@@ -122,7 +122,7 @@ DragLocationAction::~DragLocationAction() {
   }
   gui::root_widget->WakeAnimation();
 }
-void DragLocationWidget::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void DragLocationWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   children.push_back(action.location);
 }
 

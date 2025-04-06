@@ -158,7 +158,7 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
   }
 }
 
-TimerDelay::TimerDelay() : text_field(std::make_shared<gui::NumberTextField>(kTextWidth)) {
+TimerDelay::TimerDelay() : text_field(MakePtr<gui::NumberTextField>(kTextWidth)) {
   text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
   range_dial.velocity = 0;
   range_dial.value = 1;
@@ -179,7 +179,7 @@ TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay() {
 
 string_view TimerDelay::Name() const { return "Delay"; }
 
-std::shared_ptr<Object> TimerDelay::Clone() const { return std::make_shared<TimerDelay>(*this); }
+Ptr<Object> TimerDelay::Clone() const { return MakePtr<TimerDelay>(*this); }
 
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
@@ -554,9 +554,7 @@ void TimerDelay::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void TimerDelay::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
-  children.push_back(text_field);
-}
+void TimerDelay::FillChildren(maf::Vec<Ptr<Widget>>& children) { children.push_back(text_field); }
 
 SkPath TimerDelay::FieldShape(Object& field) const {
   if (&field == &duration) {
@@ -633,8 +631,8 @@ void TimerDelay::Updated(Location& here, Location& updated) {
 }
 
 struct DragHandAction : Action {
-  std::weak_ptr<TimerDelay> timer_weak;
-  DragHandAction(gui::Pointer& pointer, std::shared_ptr<TimerDelay> timer)
+  WeakPtr<TimerDelay> timer_weak;
+  DragHandAction(gui::Pointer& pointer, Ptr<TimerDelay> timer)
       : Action(pointer), timer_weak(timer) {
     ++timer->hand_draggers;
   }

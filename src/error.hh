@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <memory>
 #include <source_location>
 #include <string>
+
+#include "ptr.hh"
 
 namespace automat {
 
@@ -45,7 +46,7 @@ the error upwards. Top-level Machines print their errors to the console.
 struct Error {
   std::string text;
   Location* source;
-  std::shared_ptr<Object> saved_object;
+  Ptr<Object> saved_object;
   std::source_location source_location;
 
   Error(std::string_view text,

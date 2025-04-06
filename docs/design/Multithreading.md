@@ -15,7 +15,7 @@ Automat's object may be accessed from any thread and therefore are responsible f
 
 Internally objects may use their own concurrency strategy.
 
-Objects must be able to produce a Widget to draw them. Widgets don't need to be thread safe because they are owned by the Automat's rendering layer and their usage is protected by a "client mutex". Whenever Widgets refer back to Objects that created them, they should use `std::weak_ptr` since their originating objects are owned by external threads and may be deleted at any point.
+Objects must be able to produce a Widget to draw them. Widgets don't need to be thread safe because they are owned by the Automat's rendering layer and their usage is protected by a "client mutex". Whenever Widgets refer back to Objects that created them, they should use `WeakPtr` since their originating objects are owned by external threads and may be deleted at any point.
 
 ## Widgets
 

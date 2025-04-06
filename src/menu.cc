@@ -50,7 +50,7 @@ struct MenuWidget : gui::Widget {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
   animation::Phase Tick(time::Timer& timer) override;
-  void FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) override {
+  void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override {
     for (auto& opt : options) {
       children.emplace_back(opt->icon);
     }
@@ -94,11 +94,11 @@ struct MenuWidget : gui::Widget {
 };
 
 struct MenuAction : Action {
-  std::shared_ptr<MenuWidget> menu_widget;
+  Ptr<MenuWidget> menu_widget;
   int last_index = -1;
   Vec2 last_pos;
   MenuAction(gui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
-      : Action(pointer), menu_widget(std::make_shared<MenuWidget>(std::move(options), this)) {
+      : Action(pointer), menu_widget(MakePtr<MenuWidget>(std::move(options), this)) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
     menu_widget->WakeAnimation();
@@ -217,8 +217,8 @@ struct TextWidget : gui::Widget {
   }
 };
 
-Option::Option(std::shared_ptr<gui::Widget>&& icon) : icon(icon) {}
+Option::Option(Ptr<gui::Widget>&& icon) : icon(icon) {}
 
-Option::Option(Str name) : icon(std::make_shared<TextWidget>(name)) {}
+Option::Option(Str name) : icon(MakePtr<TextWidget>(name)) {}
 
 }  // namespace automat

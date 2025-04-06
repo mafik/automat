@@ -14,7 +14,7 @@ using namespace std;
 
 namespace automat::library {
 
-KeyButton::KeyButton(std::shared_ptr<Widget> child, SkColor color, float width)
+KeyButton::KeyButton(Ptr<Widget> child, SkColor color, float width)
     : Button(child), width(width), fg(color) {
   SkRect child_bounds = ChildBounds();
   SkRRect key_base = RRect();
@@ -142,9 +142,7 @@ struct KeyLabelWidget : Widget, LabelMixin {
   }
 };
 
-std::shared_ptr<Widget> MakeKeyLabelWidget(StrView label) {
-  return std::make_shared<KeyLabelWidget>(label);
-}
+Ptr<Widget> MakeKeyLabelWidget(StrView label) { return MakePtr<KeyLabelWidget>(label); }
 
 void KeyButton::SetLabel(maf::StrView new_label) {
   dynamic_cast<LabelMixin*>(child.get())->SetLabel(new_label);

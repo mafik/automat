@@ -14,11 +14,11 @@ namespace automat::gui {
 
 PowerButton::PowerButton(OnOff* target, SkColor fg, SkColor bg)
     : ToggleButton(
-          make_shared<ColoredButton>(
+          MakePtr<ColoredButton>(
               kPowerSVG,
               ColoredButtonArgs{
                   .fg = bg, .bg = fg, .on_click = [this](gui::Pointer& p) { Activate(p); }}),
-          make_shared<ColoredButton>(
+          MakePtr<ColoredButton>(
               kPowerSVG,
               ColoredButtonArgs{
                   .fg = fg, .bg = bg, .on_click = [this](gui::Pointer& p) { Activate(p); }})),

@@ -3,7 +3,6 @@
 #include "tasks.hh"
 
 #include "argument.hh"
-#include "audio.hh"
 #include "automat.hh"
 #include "base.hh"
 #include "time.hh"
@@ -40,7 +39,7 @@ static bool NoScheduling(Location* location) {
   return no_scheduling.find(location) != no_scheduling.end();
 }
 
-Task::Task(std::weak_ptr<Location> target)
+Task::Task(WeakPtr<Location> target)
     : target(target), predecessors(), successors(global_successors) {
   for (Task* successor : successors) {
     successor->predecessors.push_back(this);

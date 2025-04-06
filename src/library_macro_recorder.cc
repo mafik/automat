@@ -65,7 +65,7 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
   return dom;
 }
 
-MacroRecorder::MacroRecorder() : record_button(make_shared<GlassRunButton>(this)) {
+MacroRecorder::MacroRecorder() : record_button(MakePtr<GlassRunButton>(this)) {
   record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
 }
 MacroRecorder::~MacroRecorder() {
@@ -88,7 +88,7 @@ Argument timeline_arg = []() {
 }();
 
 void MacroRecorder::Args(std::function<void(Argument&)> cb) { cb(timeline_arg); }
-std::shared_ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
+Ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
   if (&arg == &timeline_arg) {
     return prototypes->Find<Timeline>()->SharedPtr<Object>();
   }
@@ -96,8 +96,8 @@ std::shared_ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
 }
 
 string_view MacroRecorder::Name() const { return "Macro Recorder"sv; }
-std::shared_ptr<Object> MacroRecorder::Clone() const {
-  auto clone = std::make_shared<MacroRecorder>();
+Ptr<Object> MacroRecorder::Clone() const {
+  auto clone = MakePtr<MacroRecorder>();
   clone->animation_state = animation_state;
   clone->animation_state.pointers_over = 0;
   return clone;

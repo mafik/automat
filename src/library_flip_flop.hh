@@ -25,7 +25,7 @@ struct FlipFlopButton : gui::ToggleButton {
 };
 
 struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
-  std::shared_ptr<FlipFlopButton> button;
+  Ptr<FlipFlopButton> button;
 
   bool current_state = false;
   struct AnimationState {
@@ -35,7 +35,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
 
   FlipFlop();
   string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer& timer) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
@@ -43,7 +43,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
 
   void SetKey(gui::AnsiKey);
 
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
 
   void OnRun(Location& here) override;
   void SerializeState(Serializer& writer, const char* key) const override;

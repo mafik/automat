@@ -258,7 +258,7 @@ SkRect Button::ChildBounds() const {
   return SkRect::MakeEmpty();
 }
 
-Button::Button(std::shared_ptr<Widget> child) : child(child) { UpdateChildTransform(); }
+Button::Button(Ptr<Widget> child) : child(child) { UpdateChildTransform(); }
 
 void Button::UpdateChildTransform() {
   Vec2 offset = RRect().rect().center();

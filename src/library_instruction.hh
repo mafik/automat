@@ -43,13 +43,13 @@ struct Instruction : LiveObject, Runnable {
   mc::Inst mc_inst;
 
   void Args(std::function<void(Argument&)> cb) override;
-  std::shared_ptr<Object> ArgPrototype(const Argument&) override;
+  Ptr<Object> ArgPrototype(const Argument&) override;
 
   void ConnectionAdded(Location& here, Connection&) override;
   void ConnectionRemoved(Location& here, Connection&) override;
 
   std::string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
 
   void OnRun(Location& here) override;
 
@@ -61,7 +61,7 @@ struct Instruction : LiveObject, Runnable {
     constexpr static Rect kRect =
         Rect::MakeAtZero<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
-    Widget(std::weak_ptr<Object> object);
+    Widget(WeakPtr<Object> object);
 
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
@@ -73,9 +73,11 @@ struct Instruction : LiveObject, Runnable {
 
   maf::Str ToAsmStr() const;
 
-  std::weak_ptr<mc::Inst> ToMC() { return std::shared_ptr<mc::Inst>(SharedPtr(), &mc_inst); }
+  std::pair<WeakPtr<ReferenceCounted>, mc::Inst*> ToMC() {
+    return std::make_pair(MakeWeakPtr<ReferenceCounted>(), &mc_inst);
+  }
 
-  std::shared_ptr<gui::Widget> MakeWidget() override { return std::make_shared<Widget>(WeakPtr()); }
+  Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(MakeWeakPtr<Object>()); }
 
   void SerializeState(Serializer& writer, const char* key = "value") const override;
   void DeserializeState(Location& l, Deserializer& d) override;

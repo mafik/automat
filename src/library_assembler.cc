@@ -36,10 +36,10 @@ using namespace maf;
 namespace automat::library {
 
 struct ShowRegisterOption : Option {
-  std::weak_ptr<Assembler> weak;
+  WeakPtr<Assembler> weak;
   int register_index;  // Must be < kGeneralPurposeRegisterCount
 
-  ShowRegisterOption(std::weak_ptr<Assembler> weak, int register_index)
+  ShowRegisterOption(WeakPtr<Assembler> weak, int register_index)
       : Option("Show"), weak(weak), register_index(register_index) {}
 
   std::unique_ptr<Option> Clone() const override {
@@ -48,7 +48,7 @@ struct ShowRegisterOption : Option {
 
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
-      assembler->reg_objects_idx[register_index] = std::make_shared<Register>(weak, register_index);
+      assembler->reg_objects_idx[register_index] = MakePtr<Register>(weak, register_index);
       assembler->WakeWidgetsAnimation();
     }
     return nullptr;
@@ -56,10 +56,10 @@ struct ShowRegisterOption : Option {
 };
 
 struct HideRegisterOption : Option {
-  std::weak_ptr<Assembler> weak;
+  WeakPtr<Assembler> weak;
   int register_index;  // Must be < kGeneralPurposeRegisterCount
 
-  HideRegisterOption(std::weak_ptr<Assembler> weak, int register_index)
+  HideRegisterOption(WeakPtr<Assembler> weak, int register_index)
       : Option("Hide"), weak(weak), register_index(register_index) {}
 
   std::unique_ptr<Option> Clone() const override {
@@ -88,11 +88,11 @@ struct ImageWidget : gui::Widget {
 };
 
 struct RegisterMenuOption : Option, OptionsProvider {
-  std::weak_ptr<Assembler> weak;
+  WeakPtr<Assembler> weak;
   int register_index;
 
-  RegisterMenuOption(std::weak_ptr<Assembler> weak, int register_index)
-      : Option(std::make_shared<ImageWidget>(kRegisters[register_index].image)),
+  RegisterMenuOption(WeakPtr<Assembler> weak, int register_index)
+      : Option(MakePtr<ImageWidget>(kRegisters[register_index].image)),
         weak(weak),
         register_index(register_index) {}
   std::unique_ptr<Option> Clone() const override {
@@ -101,7 +101,7 @@ struct RegisterMenuOption : Option, OptionsProvider {
   void VisitOptions(const OptionsVisitor& visitor) const override {
     auto assembler = weak.lock();
     auto& reg = assembler->reg_objects_idx[register_index];
-    if (reg.is_shared || reg.weak.expired()) {
+    if (reg.is_shared || reg.weak.IsExpired()) {
       if (assembler->reg_objects_idx[register_index] == nullptr) {
         ShowRegisterOption show{weak, register_index};
         visitor(show);
@@ -117,8 +117,8 @@ struct RegisterMenuOption : Option, OptionsProvider {
 };
 
 struct RegistersMenuOption : Option, OptionsProvider {
-  std::weak_ptr<Assembler> weak;
-  RegistersMenuOption(std::weak_ptr<Assembler> weak) : Option("Registers"), weak(weak) {}
+  WeakPtr<Assembler> weak;
+  RegistersMenuOption(WeakPtr<Assembler> weak) : Option("Registers"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<RegistersMenuOption>(weak);
   }
@@ -178,7 +178,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
   if (code_point.instruction) {
     auto exit_mc_inst = code_point.instruction->lock();
     if (exit_mc_inst) {
-      mc::Inst* exit_mc_inst_raw = const_cast<mc::Inst*>(exit_mc_inst.get());
+      mc::Inst* exit_mc_inst_raw = const_cast<mc::Inst*>(code_point.actual_inst);
       constexpr int mc_inst_offset = offsetof(Instruction, mc_inst);
       exit_inst = reinterpret_cast<Instruction*>(reinterpret_cast<char*>(exit_mc_inst_raw) -
                                                  mc_inst_offset);
@@ -208,14 +208,13 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
   }
 }
 
-std::shared_ptr<Object> Assembler::Clone() const { return std::make_shared<Assembler>(); }
+Ptr<Object> Assembler::Clone() const { return MakePtr<Assembler>(); }
 
 void UpdateCode(automat::mc::Controller& controller,
-                std::vector<std::shared_ptr<automat::library::Instruction>>&& instructions,
+                std::vector<Ptr<automat::library::Instruction>>&& instructions,
                 maf::Status& status) {
   // Sorting allows us to more efficiently search for instructions.
-  using comp = std::owner_less<std::shared_ptr<automat::library::Instruction>>;
-  std::sort(instructions.begin(), instructions.end(), comp{});
+  std::sort(instructions.begin(), instructions.end());
 
   int n = instructions.size();
 
@@ -233,8 +232,7 @@ void UpdateCode(automat::mc::Controller& controller,
         if (auto it = loc->outgoing.find(&arg); it != loc->outgoing.end()) {
           automat::Location* to_loc = &(*it)->to;
           if (auto to_inst = to_loc->As<automat::library::Instruction>()) {
-            auto it = std::lower_bound(instructions.begin(), instructions.end(), to_loc->object,
-                                       std::owner_less{});
+            auto it = std::lower_bound(instructions.begin(), instructions.end(), to_loc->object);
             if (it != instructions.end()) {
               return std::distance(instructions.begin(), it);
             }
@@ -251,16 +249,17 @@ void UpdateCode(automat::mc::Controller& controller,
   for (int i = 0; i < n; ++i) {
     Instruction* obj_raw = instructions[i].get();
     const mc::Inst* inst_raw = &obj_raw->mc_inst;
-    program[i].inst = std::shared_ptr<const mc::Inst>(std::move(instructions[i]), inst_raw);
+    program[i].actual_inst = inst_raw;
+    program[i].inst = std::move(instructions[i]).Cast<ReferenceCounted>();
   }
 
   controller.UpdateCode(std::move(program), status);
 }
 
-// Returning arrays of shared_ptrs is really bad but it seems to be necessary here.
-std::vector<std::shared_ptr<Instruction>> FindInstructions(Location& assembler_loc) {
+// Returning arrays of Ptrs is really bad but it seems to be necessary here.
+std::vector<Ptr<Instruction>> FindInstructions(Location& assembler_loc) {
   auto [begin, end] = assembler_loc.incoming.equal_range(&assembler_arg);
-  std::vector<std::shared_ptr<Instruction>> instructions;
+  std::vector<Ptr<Instruction>> instructions;
   for (auto it = begin; it != end; ++it) {
     auto& conn = *it;
     auto& inst_loc = conn->from;
@@ -304,7 +303,8 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
   }
 
   Status status;
-  mc_controller->Execute(entry_point->ToMC(), status);
+  auto [inst, actual_inst] = entry_point->ToMC();
+  mc_controller->Execute(inst, actual_inst, status);
   if (!OK(status)) {
     ERROR << "Failed to execute Assembler: " << status;
   }
@@ -329,12 +329,12 @@ void Assembler::Cancel() {
   }
 }
 
-std::shared_ptr<Location> Assembler::Extract(Object& descendant) {
+Ptr<Location> Assembler::Extract(Object& descendant) {
   auto lock = std::lock_guard(mutex);
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto* reg = reg_objects_idx[i].get();
     if (reg != &descendant) continue;
-    auto loc = std::make_shared<Location>();
+    auto loc = MakePtr<Location>();
     loc->parent_location = root_location;
     loc->parent = root_machine;
     loc->InsertHere(reg_objects_idx[i].borrow());
@@ -345,9 +345,9 @@ std::shared_ptr<Location> Assembler::Extract(Object& descendant) {
   return nullptr;
 }
 
-AssemblerWidget::AssemblerWidget(std::weak_ptr<Assembler> assembler_weak)
+AssemblerWidget::AssemblerWidget(WeakPtr<Assembler> assembler_weak)
     : assembler_weak(assembler_weak) {
-  object = assembler_weak.lock();
+  object = std::move(assembler_weak).Cast<Object>();
 }
 
 std::string_view AssemblerWidget::Name() const { return "Assembler"; }
@@ -393,7 +393,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     if (assembler->state.regs[i] == 0) continue;
     if (assembler->reg_objects_idx[i] != nullptr) continue;
-    assembler->reg_objects_idx[i] = std::make_shared<Register>(assembler_weak, i);
+    assembler->reg_objects_idx[i] = MakePtr<Register>(assembler_weak, i);
   }
 
   // Create new register widgets for register objects that don't have a widget.
@@ -410,7 +410,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
       register_widget->parent = SharedPtr();
       register_widget->FixParents();
       reg_widgets_idx[i] = static_cast<RegisterWidget*>(register_widget.get());
-      reg_widgets.emplace_back(std::move(register_widget), reg_widgets_idx[i]);
+      reg_widgets.emplace_back(std::move(register_widget).Cast<RegisterWidget>());
       std::sort(reg_widgets.begin(), reg_widgets.end(), [](const auto& a, const auto& b) {
         auto* a_register_widget = static_cast<RegisterWidget*>(a.get());
         auto* b_register_widget = static_cast<RegisterWidget*>(b.get());
@@ -544,8 +544,8 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void AssemblerWidget::FillChildren(maf::Vec<std::shared_ptr<gui::Widget>>& children) {
-  // Expensive copy of a bunch of shared_ptrs :/
+void AssemblerWidget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {
+  // Expensive copy of a bunch of Ptrs :/
   for (auto& child : reg_widgets) {
     children.emplace_back(child->SharedPtr());
   }
@@ -564,13 +564,7 @@ bool AssemblerWidget::CanDrop(Location& loc) const {
   return false;
 }
 
-template <typename T, typename O>
-std::shared_ptr<T> Downcast(std::shared_ptr<O>&& obj) {
-  T* raw = static_cast<T*>(obj.get());
-  return std::shared_ptr<T>(std::move(obj), raw);
-}
-
-void AssemblerWidget::DropLocation(std::shared_ptr<Location>&& loc) {
+void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   if (auto reg = loc->As<Register>()) {
     if (auto my_assembler = this->assembler_weak.lock()) {
       auto lock = std::lock_guard(my_assembler->mutex);
@@ -578,13 +572,13 @@ void AssemblerWidget::DropLocation(std::shared_ptr<Location>&& loc) {
           [&](gui::RootWidget& root_widget, gui::Widget& reg_widget_generic) {
             RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
             if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
-              auto asm_widget = Downcast<AssemblerWidget>(std::move(asm_widget_generic));
+              auto asm_widget = std::move(asm_widget_generic).Cast<AssemblerWidget>();
               reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
               asm_widget->reg_widgets.emplace_back(reg_widget.SharedPtr());
               reg_widget.parent = asm_widget;
             }
           });
-      my_assembler->reg_objects_idx[reg->register_index] = Downcast<Register>(loc->Take());
+      my_assembler->reg_objects_idx[reg->register_index] = loc->Take().Cast<Register>();
       my_assembler->WakeWidgetsAnimation();
     }
   }
@@ -732,12 +726,10 @@ void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
   register_menu_option.VisitOptions(visitor);
 }
 
-Register::Register(std::weak_ptr<Assembler> assembler_weak, int register_index)
+Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
     : assembler_weak(assembler_weak), register_index(register_index) {}
 
-std::shared_ptr<Object> Register::Clone() const {
-  return std::make_shared<Register>(assembler_weak, register_index);
-}
+Ptr<Object> Register::Clone() const { return MakePtr<Register>(assembler_weak, register_index); }
 
 Argument register_assembler_arg = []() {
   Argument arg("Reg's Assembler", Argument::kRequiresObject);

@@ -12,7 +12,7 @@ struct Number;
 
 struct NumberButton : gui::Button {
   std::function<void(Location&)> activate;
-  NumberButton(std::shared_ptr<Widget> child);
+  NumberButton(Ptr<Widget> child);
   NumberButton(std::string text);
   void Activate(gui::Pointer&) override;
   maf::StrView Name() const override { return "NumberButton"; }
@@ -21,18 +21,18 @@ struct NumberButton : gui::Button {
 
 struct Number : Object, Object::FallbackWidget {
   double value;
-  std::shared_ptr<NumberButton> digits[10];
-  std::shared_ptr<NumberButton> dot;
-  std::shared_ptr<NumberButton> backspace;
-  std::shared_ptr<gui::NumberTextField> text_field;
+  Ptr<NumberButton> digits[10];
+  Ptr<NumberButton> dot;
+  Ptr<NumberButton> backspace;
+  Ptr<gui::NumberTextField> text_field;
   Number(double x = 0);
   string_view Name() const override;
-  std::shared_ptr<Object> Clone() const override;
+  Ptr<Object> Clone() const override;
   string GetText() const override;
   void SetText(Location& error_context, string_view text) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  void FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

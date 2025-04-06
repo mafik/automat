@@ -11,8 +11,8 @@
 namespace automat {
 
 extern std::stop_source stop_source;
-extern std::shared_ptr<Location> root_location;
-extern std::shared_ptr<Machine> root_machine;
+extern Ptr<Location> root_location;
+extern Ptr<Machine> root_machine;
 extern std::jthread automat_thread;
 extern std::atomic_bool automat_thread_finished;
 

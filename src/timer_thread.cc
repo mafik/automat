@@ -78,7 +78,7 @@ static void TimerFinished(Location& here, SteadyPoint scheduled_time) {
 
 struct TimerFinishedTask : Task {
   time::SteadyPoint scheduled_time;
-  TimerFinishedTask(std::weak_ptr<Location> target, time::SteadyPoint scheduled_time)
+  TimerFinishedTask(WeakPtr<Location> target, time::SteadyPoint scheduled_time)
       : Task(target), scheduled_time(scheduled_time) {}
   std::string Format() override { return "TimerFinishedTask"; }
   void Execute() override {

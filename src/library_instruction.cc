@@ -132,9 +132,9 @@ void Instruction::Args(std::function<void(Argument&)> cb) {
   }
 }
 
-std::shared_ptr<Object> Instruction::ArgPrototype(const Argument& arg) {
+Ptr<Object> Instruction::ArgPrototype(const Argument& arg) {
   if (&arg == &assembler_arg) {
-    return std::make_shared<Assembler>();
+    return MakePtr<Assembler>();
   }
   return nullptr;
 }
@@ -164,7 +164,7 @@ void Instruction::ConnectionRemoved(Location& here, Connection& connection) {
 }
 
 string_view Instruction::Name() const { return "Instruction"; }
-shared_ptr<Object> Instruction::Clone() const { return make_shared<Instruction>(*this); }
+Ptr<Object> Instruction::Clone() const { return MakePtr<Instruction>(*this); }
 
 void Instruction::OnRun(Location& here) {
   auto assembler = FindOrCreateAssembler(here);
@@ -229,7 +229,7 @@ static const SkRRect kInstructionRRect =
 
 static const SkPath kInstructionShape = SkPath::RRect(kInstructionRRect);
 
-Instruction::Widget::Widget(std::weak_ptr<Object> object) { this->object = std::move(object); }
+Instruction::Widget::Widget(WeakPtr<Object> object) { this->object = std::move(object); }
 
 SkPath Instruction::Widget::Shape() const { return kInstructionShape; }
 

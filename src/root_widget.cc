@@ -22,7 +22,7 @@ using namespace std;
 namespace automat::gui {
 
 std::vector<RootWidget*> root_widgets;
-std::shared_ptr<RootWidget> root_widget;
+Ptr<RootWidget> root_widget;
 
 RootWidget::RootWidget() { root_widgets.push_back(this); }
 RootWidget::~RootWidget() {
@@ -33,7 +33,7 @@ RootWidget::~RootWidget() {
 }
 
 void RootWidget::InitToolbar() {
-  toolbar = std::make_shared<Toolbar>();
+  toolbar = MakePtr<Toolbar>();
   toolbar->parent = SharedPtr();
   for (auto& proto : prototypes->default_toolbar) {
     toolbar->AddObjectPrototype(proto);
@@ -458,7 +458,7 @@ void RootWidget::SnapPosition(Vec2& position, float& scale, Location& location, 
   }
 }
 
-void RootWidget::DropLocation(std::shared_ptr<Location>&& location) {
+void RootWidget::DropLocation(Ptr<Location>&& location) {
   // do nothing - location will be deleted by unique_ptr
   audio::Play(embedded::assets_SFX_trash_wav);
 }
@@ -493,7 +493,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
   }
 }
 
-void RootWidget::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void RootWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   UpdateConnectionWidgets(*this);
   children.reserve(2 + keyboards.size() + pointers.size() + connection_widgets.size());
 
@@ -509,7 +509,7 @@ void RootWidget::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
       }
     }
   }
-  Vec<shared_ptr<Widget>> connection_widgets_below;
+  Vec<Ptr<Widget>> connection_widgets_below;
   connection_widgets_below.reserve(connection_widgets.size());
   for (auto& it : connection_widgets) {
     if (it->manual_position.has_value() || dragged_locations.count(&it->from)) {

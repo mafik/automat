@@ -494,7 +494,7 @@ void Keyboard::LogKeyUp(Key key) {
   }
 }
 
-std::shared_ptr<gui::Keyboard> keyboard;
+Ptr<gui::Keyboard> keyboard;
 
 void SendKeyEvent(AnsiKey physical, bool down) {
 #if defined(_WIN32)
@@ -520,8 +520,7 @@ CaretOwner::~CaretOwner() {
   }
 }
 
-Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const std::shared_ptr<Widget>& widget,
-                              Vec2 position) {
+Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const Ptr<Widget>& widget, Vec2 position) {
   std::set<std::unique_ptr<Caret>>::iterator it;
   if (carets.empty()) {
     it = carets.emplace(std::make_unique<Caret>(*this)).first;

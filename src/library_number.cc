@@ -8,7 +8,6 @@
 #include <rapidjson/rapidjson.h>
 
 #include <charconv>
-#include <memory>
 
 #include "drag_action.hh"
 #include "gui_button.hh"
@@ -53,9 +52,9 @@ static constexpr char kBackspaceShape[] =
 
 using gui::Text;
 
-NumberButton::NumberButton(std::shared_ptr<Widget> child) : Button(child) {}
+NumberButton::NumberButton(Ptr<Widget> child) : Button(child) {}
 
-NumberButton::NumberButton(std::string text) : NumberButton(std::make_shared<Text>(text)) {}
+NumberButton::NumberButton(std::string text) : NumberButton(MakePtr<Text>(text)) {}
 
 SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
 
@@ -71,12 +70,11 @@ void NumberButton::Activate(gui::Pointer& pointer) {
 }
 
 Number::Number(double x) : value(x) {
-  text_field =
-      std::make_shared<gui::NumberTextField>(kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
-  dot = std::make_shared<NumberButton>(".");
-  backspace = std::make_shared<NumberButton>(gui::MakeShapeWidget(kBackspaceShape, 0xff000000));
+  text_field = MakePtr<gui::NumberTextField>(kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
+  dot = MakePtr<NumberButton>(".");
+  backspace = MakePtr<NumberButton>(gui::MakeShapeWidget(kBackspaceShape, 0xff000000));
   for (int i = 0; i < 10; ++i) {
-    digits[i] = make_shared<NumberButton>(std::to_string(i));
+    digits[i] = MakePtr<NumberButton>(std::to_string(i));
     digits[i]->activate = [this, i](Location& l) {
       if (text_field->text.empty() || text_field->text == "0") {
         text_field->text = std::to_string(i);
@@ -141,7 +139,7 @@ Number::Number(double x) : value(x) {
 
 string_view Number::Name() const { return "Number"; }
 
-std::shared_ptr<Object> Number::Clone() const { return std::make_shared<Number>(value); }
+Ptr<Object> Number::Clone() const { return MakePtr<Number>(value); }
 
 string Number::GetText() const {
   char buffer[100];
@@ -198,7 +196,7 @@ void Number::Draw(SkCanvas& canvas) const {
 
 SkPath Number::Shape() const { return kNumberShape; }
 
-void Number::FillChildren(maf::Vec<std::shared_ptr<Widget>>& children) {
+void Number::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   children.reserve(13);
   children.push_back(dot);
   children.push_back(backspace);

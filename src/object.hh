@@ -7,7 +7,7 @@
 
 #include "audio.hh"
 #include "deserializer.hh"
-#include "shared_base.hh"
+#include "ptr.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -21,7 +21,7 @@ struct Argument;
 // Objects are interactive pieces of data & behavior.
 //
 // Instances of this class provide custom logic & appearance.
-struct Object : public virtual SharedBase {
+struct Object : public virtual ReferenceCounted {
   Object() {}
 
   // Create a copy of this object.
@@ -101,12 +101,12 @@ struct Object : public virtual SharedBase {
     if (auto w = dynamic_cast<gui::Widget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto fallback_widget = dynamic_cast<FallbackWidget*>(this)) {
-        fallback_widget->object = MakeWeakPtr();
+        fallback_widget->object = AcquireWeakPtr();
       }
-      return w->SharedPtr();
+      return w->AcquirePtr();
     }
     auto w = MakePtr<FallbackWidget>();
-    w->object = MakeWeakPtr();
+    w->object = AcquireWeakPtr();
     return w;
   }
 

@@ -81,7 +81,9 @@ struct Register : LiveObject {
 
   Ptr<Object> Clone() const override;
 
-  Ptr<gui::Widget> MakeWidget() override { return MakePtr<RegisterWidget>(MakeWeakPtr<Object>()); }
+  Ptr<gui::Widget> MakeWidget() override {
+    return MakePtr<RegisterWidget>(AcquireWeakPtr<Object>());
+  }
 
   void Args(std::function<void(Argument&)> cb) override;
 };
@@ -111,7 +113,7 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void Cancel() override;
 
-  Ptr<gui::Widget> MakeWidget() override { return MakePtr<AssemblerWidget>(MakeWeakPtr()); }
+  Ptr<gui::Widget> MakeWidget() override { return MakePtr<AssemblerWidget>(AcquireWeakPtr()); }
 
   Container* AsContainer() override { return this; }
 

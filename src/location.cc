@@ -114,17 +114,17 @@ Connection* Location::ConnectTo(Location& other, Argument& arg,
 
 void Location::ScheduleRun() {
   if (run_task == nullptr) {
-    run_task = make_unique<RunTask>(SharedPtr<Location>());
+    run_task = make_unique<RunTask>(AcquirePtr<Location>());
   }
   run_task->Schedule();
 }
 
 void Location::ScheduleLocalUpdate(Location& updated) {
-  (new UpdateTask(SharedPtr<Location>(), updated.SharedPtr<Location>()))->Schedule();
+  (new UpdateTask(AcquirePtr<Location>(), updated.AcquirePtr<Location>()))->Schedule();
 }
 
 void Location::ScheduleErrored(Location& errored) {
-  (new ErroredTask(SharedPtr<Location>(), errored.SharedPtr<Location>()))->Schedule();
+  (new ErroredTask(AcquirePtr<Location>(), errored.AcquirePtr<Location>()))->Schedule();
 }
 
 SkPath Location::Shape() const {
@@ -644,7 +644,7 @@ Ptr<Object> Location::InsertHereNoWidget(Ptr<Object>&& object) {
 Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   object = InsertHereNoWidget(std::move(object));
   auto object_widget = WidgetForObject();
-  object_widget->parent = this->SharedPtr();
+  object_widget->parent = this->AcquirePtr();
   FixParents();
   return object;
 }

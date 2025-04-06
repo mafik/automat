@@ -19,7 +19,7 @@
 #include "key.hh"
 #include "menu.hh"
 #include "optional.hh"
-#include "shared_base.hh"
+#include "ptr.hh"
 #include "span.hh"
 #include "str.hh"
 #include "time.hh"
@@ -84,7 +84,7 @@ struct ActionTrigger {
 
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
-struct Widget : public virtual SharedBase, public OptionsProvider {
+struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   Widget();
   virtual ~Widget();
 
@@ -243,7 +243,7 @@ struct Widget : public virtual SharedBase, public OptionsProvider {
     iterator begin() { return iterator(start); }
   };
 
-  ParentsView Parents() const { return ParentsView{SharedPtr<Widget>()}; }
+  ParentsView Parents() const { return ParentsView{AcquirePtr<Widget>()}; }
 
   // Widgets share the same base class with Objects (which must be always allocated using
   // MakePtr) so they also must be allocated using MakePtr. This creates issues because

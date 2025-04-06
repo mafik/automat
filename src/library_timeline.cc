@@ -322,7 +322,7 @@ void TimelineRunButton::Activate(gui::Pointer& p) {
 }
 
 void TimelineRunButton::FixParents() {
-  rec_button->parent = off->parent = on->parent = SharedPtr();
+  rec_button->parent = off->parent = on->parent = AcquirePtr();
   on->FixParents();
   off->FixParents();
   rec_button->FixParents();
@@ -397,7 +397,7 @@ static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
 OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
   auto track = MakePtr<OnOffTrack>();
   track->timeline = this;
-  track->parent = this->SharedPtr();
+  track->parent = this->AcquirePtr();
   tracks.emplace_back(std::move(track));
   AddTrackArg(*this, tracks.size() - 1, name);
   if (auto h = here.lock()) {

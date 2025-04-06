@@ -82,7 +82,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Ptr<Location>&& lo
       contact_point(contact_point),
       location(std::move(location_arg)),
       widget(MakePtr<DragLocationWidget>(*this)) {
-  widget->parent = pointer.root_widget.SharedPtr();
+  widget->parent = pointer.root_widget.AcquirePtr();
   pointer.root_widget.drag_action_count++;
   location->parent = widget;
   widget->FixParents();

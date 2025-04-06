@@ -197,7 +197,7 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
   auto local_pos = p.PositionWithin(*this);
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
     return std::make_unique<DragAndClickAction>(p, btn, Object::FallbackWidget::FindAction(p, btn),
-                                                std::make_unique<RunOption>(SharedPtr()));
+                                                std::make_unique<RunOption>(AcquirePtr()));
   } else {
     return std::make_unique<DragAndClickAction>(p, btn, Object::FallbackWidget::FindAction(p, btn),
                                                 std::make_unique<UseObjectOption>(shortcut_button));

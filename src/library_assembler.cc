@@ -267,7 +267,7 @@ std::vector<Ptr<Instruction>> FindInstructions(Location& assembler_loc) {
     if (!inst) {
       continue;
     }
-    instructions.push_back(inst->SharedPtr());
+    instructions.push_back(inst->AcquirePtr());
   }
   return instructions;
 }
@@ -407,7 +407,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
         register_widget = FindRootWidget().widgets.For(*assembler_reg, *this);
         register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
       }
-      register_widget->parent = SharedPtr();
+      register_widget->parent = AcquirePtr();
       register_widget->FixParents();
       reg_widgets_idx[i] = static_cast<RegisterWidget*>(register_widget.get());
       reg_widgets.emplace_back(std::move(register_widget).Cast<RegisterWidget>());
@@ -547,7 +547,7 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
 void AssemblerWidget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {
   // Expensive copy of a bunch of Ptrs :/
   for (auto& child : reg_widgets) {
-    children.emplace_back(child->SharedPtr());
+    children.emplace_back(child->AcquirePtr());
   }
 }
 
@@ -574,7 +574,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
             if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
               auto asm_widget = std::move(asm_widget_generic).Cast<AssemblerWidget>();
               reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
-              asm_widget->reg_widgets.emplace_back(reg_widget.SharedPtr());
+              asm_widget->reg_widgets.emplace_back(reg_widget.AcquirePtr());
               reg_widget.parent = asm_widget;
             }
           });

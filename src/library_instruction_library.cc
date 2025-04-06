@@ -1114,7 +1114,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
     }
 
     if (Length(contact_point) < kCornerDist) {
-      return std::make_unique<ScrollDeckAction>(p, SharedPtr<Widget>(), object.lock());
+      return std::make_unique<ScrollDeckAction>(p, AcquirePtr<Widget>(), object.lock());
     }
 
     if (auto reg_btn = FindRegisterFilterButton(contact_point)) {

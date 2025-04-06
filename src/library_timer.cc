@@ -696,7 +696,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
     SkPath hand_outline;  // Hand is just a straight line so we have to "widen" it
     skpathutils::FillPathWithPaint(hand_path, kHandPaint, &hand_outline);
     if (hand_outline.contains(pos.x, pos.y)) {
-      return std::make_unique<DragHandAction>(pointer, SharedPtr<TimerDelay>());
+      return std::make_unique<DragHandAction>(pointer, AcquirePtr<TimerDelay>());
     }
   }
   return Object::FallbackWidget::FindAction(pointer, btn);

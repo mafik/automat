@@ -74,10 +74,10 @@ struct Instruction : LiveObject, Runnable {
   maf::Str ToAsmStr() const;
 
   std::pair<WeakPtr<ReferenceCounted>, mc::Inst*> ToMC() {
-    return std::make_pair(MakeWeakPtr<ReferenceCounted>(), &mc_inst);
+    return std::make_pair(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
   }
 
-  Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(MakeWeakPtr<Object>()); }
+  Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(AcquireWeakPtr<Object>()); }
 
   void SerializeState(Serializer& writer, const char* key = "value") const override;
   void DeserializeState(Location& l, Deserializer& d) override;

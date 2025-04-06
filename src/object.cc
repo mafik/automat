@@ -174,7 +174,7 @@ struct RunOption : Option {
 
 void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
   if (auto loc = gui::Closest<Location>(const_cast<FallbackWidget&>(*this))) {
-    auto loc_weak = loc->MakeWeakPtr();
+    auto loc_weak = loc->AcquireWeakPtr();
     DeleteOption del{loc_weak};
     visitor(del);
     MoveOption move{loc_weak, object};
@@ -189,7 +189,7 @@ void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
 std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
                                                            gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
-    MoveOption move{Closest<Location>(*p.hover)->MakeWeakPtr(), object};
+    MoveOption move{Closest<Location>(*p.hover)->AcquireWeakPtr(), object};
     return move.Activate(p);
   } else if (btn == gui::PointerButton::Right) {
     return OpenMenu(p);

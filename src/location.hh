@@ -125,7 +125,7 @@ struct Location : public gui::Widget {
     object = typed;
     object->Relocate(this);
     auto object_widget = WidgetForObject();
-    object_widget->parent = this->SharedPtr();
+    object_widget->parent = this->AcquirePtr();
     FixParents();
     return typed;
   }

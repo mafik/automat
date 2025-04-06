@@ -490,7 +490,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       auto layout = Layout();
       auto outer_region_rect = layout.region_rect.Outset(kRegionStrokeWidth / 2);
       if (outer_region_rect.Contains(contact_point)) {
-        return std::make_unique<DragRegionAction>(p, SharedPtr());
+        return std::make_unique<DragRegionAction>(p, AcquirePtr());
       }
     }
     return FallbackWidget::FindAction(p, btn);
@@ -575,6 +575,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   }
 };
 
-Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(MakeWeakPtr<Object>()); }
+Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(AcquireWeakPtr<Object>()); }
 
 }  // namespace automat::library

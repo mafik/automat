@@ -258,7 +258,7 @@ HotKey::HotKey() {
       auto bounds = *label->TextureBounds();
       Vec2 caret_position = shortcut_button->RRect().rect().center();
       caret_position.x += bounds.left;
-      hotkey_selector = &pointer.keyboard->RequestCaret(*this, SharedPtr(), caret_position);
+      hotkey_selector = &pointer.keyboard->RequestCaret(*this, AcquirePtr(), caret_position);
     }
     WakeAnimation();
     shortcut_button->WakeAnimation();

@@ -60,7 +60,7 @@ Pointer::~Pointer() {
 }
 
 static bool FillPath(Pointer& p, Widget& w) {
-  p.path.push_back(w.MakeWeakPtr());
+  p.path.push_back(w.AcquireWeakPtr());
   Vec2 point = TransformDown(w).mapPoint(p.pointer_position);
   auto shape = w.Shape();
   bool p_inside_w = shape.contains(point.x, point.y);

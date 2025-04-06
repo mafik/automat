@@ -90,7 +90,7 @@ Argument timeline_arg = []() {
 void MacroRecorder::Args(std::function<void(Argument&)> cb) { cb(timeline_arg); }
 Ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
   if (&arg == &timeline_arg) {
-    return prototypes->Find<Timeline>()->SharedPtr<Object>();
+    return prototypes->Find<Timeline>()->AcquirePtr<Object>();
   }
   return nullptr;
 }
@@ -537,7 +537,7 @@ void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
         if (value) {
           l.ScheduleRun();
         } else {
-          (new CancelTask(l.SharedPtr<Location>()))
+          (new CancelTask(l.AcquirePtr<Location>()))
               ->Schedule();  // TODO: memory leak if NoScheduling is active
         }
       }

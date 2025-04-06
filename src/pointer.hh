@@ -124,7 +124,7 @@ struct PointerWidget : Widget {
         continue;
       }
       if (auto widget = action->Widget()) {
-        children.push_back(widget->SharedPtr());
+        children.push_back(widget->AcquirePtr());
       }
     }
   }

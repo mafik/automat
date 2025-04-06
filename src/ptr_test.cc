@@ -140,22 +140,6 @@ TEST_F(PtrTest, NullptrAssignment) {
   EXPECT_EQ(ptr.Get(), nullptr);
 }
 
-TEST_F(PtrTest, DupPtr) {
-  EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
-  auto raw = ptr1.Get();
-  EXPECT_LOG(Allocate, Construct);
-  EXPECT_REF_COUNT(raw, 1, 1);
-
-  // Test DupPtr
-  auto ptr2 = DupPtr(raw);
-  EXPECT_REF_COUNT(raw, 2, 1);
-  EXPECT_LOG(Allocate, Construct);
-
-  // Both pointers should point to the same object
-  EXPECT_EQ(ptr1.Get(), ptr2.Get());
-}
-
 TEST_F(PtrTest, SwapFunction) {
   EXPECT_LOG();
   auto ptr1 = MakePtr<Entity>();

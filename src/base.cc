@@ -287,7 +287,7 @@ void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec
 }
 
 void Machine::DropLocation(Ptr<Location>&& l) {
-  l->parent = SharedPtr<Widget>();
+  l->parent = AcquirePtr<Widget>();
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
@@ -326,21 +326,21 @@ void LiveObject::Relocate(Location* new_here) {
       live_arg->Relocate(old_here.lock().get(), new_here);
     }
   });
-  here = new_here->SharedPtr<Location>();
+  here = new_here->AcquirePtr<Location>();
 }
 
 Location& Machine::CreateEmpty(const string& name) {
   auto& it = locations.emplace_front(MakePtr<Location>(here));
   Location* h = it.get();
   h->name = name;
-  h->parent = this->SharedPtr();
+  h->parent = this->AcquirePtr();
   return *h;
 }
 void Machine::Relocate(Location* parent) {
   LiveObject::Relocate(parent);
   for (auto& it : locations) {
     it->parent_location = here;
-    it->parent = SharedPtr<Widget>();
+    it->parent = AcquirePtr<Widget>();
   }
 }
 }  // namespace automat

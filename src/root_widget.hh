@@ -41,7 +41,7 @@ struct WidgetStore {
   std::map<WeakPtr<Object>, WeakPtr<Widget>> container;
 
   Ptr<Widget> Find(Object& object) {
-    auto weak = object.MakeWeakPtr();
+    auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
       return nullptr;
@@ -50,18 +50,18 @@ struct WidgetStore {
   }
 
   Ptr<Widget> For(Object& object, const Widget& parent) {
-    auto weak = object.MakeWeakPtr();
+    auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
       auto widget = object.MakeWidget();
-      widget->parent = parent.SharedPtr();
+      widget->parent = parent.AcquirePtr();
       container.emplace(weak, widget);
       return widget;
     } else if (auto strong_ref = it->second.lock()) {
       return strong_ref;
     } else {
       auto widget = object.MakeWidget();
-      widget->parent = parent.SharedPtr();
+      widget->parent = parent.AcquirePtr();
       it->second = widget;
       return widget;
     }

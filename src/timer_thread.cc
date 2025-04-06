@@ -90,7 +90,7 @@ struct TimerFinishedTask : Task {
 
 void ScheduleAt(Location& here, SteadyPoint time) {
   std::unique_lock<std::mutex> lck(mtx);
-  tasks.emplace(time, new TimerFinishedTask(here.SharedPtr<Location>(), time));
+  tasks.emplace(time, new TimerFinishedTask(here.AcquirePtr<Location>(), time));
   cv.notify_all();
 }
 
@@ -131,7 +131,7 @@ void RescheduleAt(Location& here, SteadyPoint old_time, SteadyPoint new_time) {
     cv.notify_all();
     TimerFinished(here, new_time);
   } else {
-    tasks.emplace(new_time, new TimerFinishedTask(here.SharedPtr<Location>(), new_time));
+    tasks.emplace(new_time, new TimerFinishedTask(here.AcquirePtr<Location>(), new_time));
     cv.notify_all();
   }
 }

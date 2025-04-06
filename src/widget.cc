@@ -155,7 +155,7 @@ void Widget::FixParents() {
       // TODO: uncomment this and fix all instances of this error
       // ERROR << "Widget " << child->Name() << " has parent " << f("%p", child->parent.get())
       //       << " but should have " << this->Name() << f(" (%p)", this);
-      child->parent = this->SharedPtr();
+      child->parent = this->AcquirePtr();
     }
     child->FixParents();
   }

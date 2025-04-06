@@ -34,7 +34,7 @@ RootWidget::~RootWidget() {
 
 void RootWidget::InitToolbar() {
   toolbar = MakePtr<Toolbar>();
-  toolbar->parent = SharedPtr();
+  toolbar->parent = AcquirePtr();
   for (auto& proto : prototypes->default_toolbar) {
     toolbar->AddObjectPrototype(proto);
   }
@@ -483,7 +483,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
         }
         // Create a new widget.
         root_widget.connection_widgets.emplace_back(new gui::ConnectionWidget(*loc, arg));
-        root_widget.connection_widgets.back()->parent = root_widget.SharedPtr();
+        root_widget.connection_widgets.back()->parent = root_widget.AcquirePtr();
       });
     }
   }
@@ -520,7 +520,7 @@ void RootWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   }
   for (auto& pointer : pointers) {
     if (auto widget = pointer->GetWidget()) {
-      children.push_back(widget->SharedPtr<Widget>());
+      children.push_back(widget->AcquirePtr<Widget>());
     }
   }
   children.push_back(toolbar);

@@ -116,7 +116,7 @@ struct InstructionLibrary : Object {
     void PointerLeave(gui::Pointer&) override;
   };
 
-  Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(MakeWeakPtr<Object>()); }
+  Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(AcquireWeakPtr<Object>()); }
 };
 
 }  // namespace automat::library

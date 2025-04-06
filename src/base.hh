@@ -27,6 +27,7 @@
 #include "log.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
+#include "ptr.hh"
 #include "run_button.hh"
 #include "tasks.hh"
 #include "widget.hh"
@@ -58,7 +59,7 @@ struct LongRunning {
   void Done(Location& here);
 };
 
-struct Runnable : public virtual SharedBase {
+struct Runnable {
   // Derived classes should override this method to implement their behavior.
   //
   // If an object represents a long running process, it should mark itself by setting the

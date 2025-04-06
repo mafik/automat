@@ -155,7 +155,7 @@ void Toolbar::FillChildren(maf::Vec<Ptr<Widget>>& children) {
 void Toolbar::AddObjectPrototype(const Ptr<Object>& new_proto) {
   prototypes.push_back(new_proto->Clone());
   buttons.emplace_back(MakePtr<gui::PrototypeButton>(prototypes.back()));
-  buttons.back()->Init(SharedPtr());
+  buttons.back()->Init(AcquirePtr());
 }
 
 void Toolbar::UpdateChildTransform() {

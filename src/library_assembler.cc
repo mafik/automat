@@ -742,4 +742,24 @@ Argument register_assembler_arg = []() {
 
 void Register::Args(std::function<void(Argument&)> cb) { cb(register_assembler_arg); }
 
+void Register::SetText(Location& error_context, std::string_view text) {
+  auto assembler = assembler_weak.Lock();
+  if (assembler == nullptr) {
+    error_context.ReportError("Register is not connected to an assembler");
+    return;
+  }
+  Status status;
+  assembler->mc_controller->ChangeState(
+      [&](mc::Controller::State& state) {
+        uint64_t reg_value = 0;
+        memcpy(&reg_value, text.data(), std::min(text.size(), sizeof(reg_value)));
+        state.regs[register_index] = reg_value;
+      },
+      status);
+  if (!OK(status)) {
+    error_context.ReportError(status.ToStr());
+    return;
+  }
+}
+
 }  // namespace automat::library

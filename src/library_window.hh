@@ -11,7 +11,7 @@
 
 namespace automat::library {
 
-struct Window : public Object {
+struct Window : public Object, Runnable {
   maf::Str title = "";
 
 #ifdef __linux__
@@ -28,6 +28,9 @@ struct Window : public Object {
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
   Ptr<gui::Widget> MakeWidget() override;
+
+  void Args(std::function<void(Argument&)> cb) override;
+  void OnRun(Location& here) override;
 };
 
 }  // namespace automat::library

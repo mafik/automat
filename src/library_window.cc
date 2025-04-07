@@ -10,8 +10,10 @@
 #include <leptonica/pix.h>
 #include <tesseract/baseapi.h>
 
+#include "argument.hh"
 #include "embedded.hh"
 #include "font.hh"
+#include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "key.hh"
 #include "pointer.hh"
@@ -107,6 +109,18 @@ struct XSHMCapture {
   }
 };
 #endif
+
+struct TextArgument : Argument {
+  TextDrawable icon;
+  TextArgument() : Argument("text", kRequiresObject), icon("T", gui::kLetterSize, gui::GetFont()) {
+    requirements.push_back([](Location* location, Object* object, std::string& error) {
+      return;  // noop for now
+    });
+  }
+  PaintDrawable& Icon() override { return icon; }
+};
+
+TextArgument text_arg;
 
 struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabber {
   constexpr static float kWidth = 5_cm;
@@ -576,8 +590,28 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     grab.Release();
 #endif
   }
+  Vec2AndDir ArgStart(const Argument& arg) override {
+    if (&arg == &text_arg) {
+      return Vec2AndDir{kCoarseBounds.rect.LeftCenter(), 180_deg};
+    }
+    return FallbackWidget::ArgStart(arg);
+  }
 };
 
 Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(AcquireWeakPtr<Object>()); }
+
+void Window::Args(std::function<void(Argument&)> cb) {
+  cb(text_arg);
+  cb(next_arg);
+}
+
+void Window::OnRun(Location& here) {
+  auto out = text_arg.FindObject(here);
+  if (!out) {
+    here.ReportError("Needs to be connected to a text output");
+    return;
+  }
+  out->SetText(here, "123456789");
+}
 
 }  // namespace automat::library

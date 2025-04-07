@@ -374,6 +374,7 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
   bool operator==(const NestedWeakPtr<T>& that) const {
     return this->weak_ptr == that.weak_ptr && this->obj == that.obj;
   }
+  explicit operator bool() const { return obj != nullptr; }
   void Reset() {
     weak_ptr.Reset();
     obj = nullptr;

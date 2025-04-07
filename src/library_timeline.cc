@@ -368,21 +368,10 @@ Timeline::Timeline()
       kPlasticWidth / 2 - kSideButtonMargin - kSideButtonDiameter, -kSideButtonRadius);
 }
 
-struct TextDrawable : PaintDrawable {
-  Str text;
-  float width;
-  constexpr static float kLetterSize = kKeyLetterSize;
-  TextDrawable(StrView text) : text(text) { width = KeyFont().MeasureText(text); }
-
-  void onDraw(SkCanvas* canvas) override {
-    canvas->translate(-width / 2, -kLetterSize / 2);
-    KeyFont().DrawText(*canvas, text, paint);
-  }
-};
-
 struct TrackArgument : Argument {
   TextDrawable icon;
-  TrackArgument(StrView name) : Argument(name, Argument::kOptional), icon(name) {}
+  TrackArgument(StrView name)
+      : Argument(name, Argument::kOptional), icon(name, kKeyLetterSize, KeyFont()) {}
   PaintDrawable& Icon() override { return icon; }
 };
 

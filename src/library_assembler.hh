@@ -86,6 +86,7 @@ struct Register : LiveObject {
   }
 
   void Args(std::function<void(Argument&)> cb) override;
+  void SetText(Location& error_context, std::string_view text) override;
 };
 
 // Combines functions of Assembler and Thread.

@@ -5,6 +5,9 @@
 #include <include/core/SkCanvas.h>
 #include <include/core/SkPaint.h>
 
+#include "font.hh"
+#include "str.hh"
+
 namespace automat {
 
 // A minimal alternative to SkDrawable, for internal use in Automat.
@@ -17,6 +20,16 @@ struct Drawable {
 // A base class for Drawables that may be drawn with arbitrary SkPaint.
 struct PaintDrawable : Drawable {
   SkPaint paint;
+};
+
+struct TextDrawable : PaintDrawable {
+  maf::Str text;
+  float width;
+  float letter_size;
+  gui::Font& font;
+  TextDrawable(maf::StrView text, float letter_size, gui::Font& font);
+
+  void onDraw(SkCanvas* canvas) override;
 };
 
 }  // namespace automat

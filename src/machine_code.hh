@@ -81,7 +81,10 @@ struct Controller {
     Regs regs;
   };
 
+  using StateVisitor = std::function<void(State&)>;
+
   virtual void GetState(State&, maf::Status&) = 0;
+  virtual void ChangeState(StateVisitor, maf::Status&) = 0;
 
   // Status will contain an error if the thread was already cancelled.
   virtual void Cancel(maf::Status&) = 0;

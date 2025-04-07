@@ -4,6 +4,8 @@
 
 #include <llvm/Support/raw_ostream.h>
 
+#include "ptr.hh"
+
 #if defined __linux__
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 #include <signal.h>
@@ -356,14 +358,7 @@ struct PtraceController : Controller {
         AppendErrorMessage(status) += "Code is already executing";
         return;
       }
-      auto instr_it = std::lower_bound(instructions.begin(), instructions.end(), instr);
-      if (instr_it == instructions.end() || (*instr_it != instr)) {
-        ERROR << "Instruction not found";
-        return;
-      }
-      int instruction_index = std::distance(instructions.begin(), instr_it);
-
-      char* instruction_addr = code.data() + instruction_offsets[instruction_index];
+      auto instruction_addr = InstToInstructionPointer(instr);
 
       // TODO: handle the case where the code already was scheduled for execution
       // (worker_should_run == true)
@@ -375,7 +370,7 @@ struct PtraceController : Controller {
         ERROR << "PTRACE_GETREGS failed: " << strerror(errno);
         return;
       }
-      user_regs.rip = (uint64_t)instruction_addr;
+      user_regs.rip = instruction_addr;
       ret = ptrace(PTRACE_SETREGS, pid, 0, &user_regs);
       if (ret == -1) {
         ERROR << "PTRACE_SETREGS failed: " << strerror(errno);
@@ -390,34 +385,102 @@ struct PtraceController : Controller {
     WakeControlThread();
   }
 
-  // Thread-safe (except for the control thread)
-  void GetState(State& state, Status& status) override {
-    auto get_state = [&]() {
-      if constexpr (kDebugCodeController) {
-        LOG << "Control thread: Getting the state";
-      }
-      assert(!worker_running);
-      state.current_instruction.Reset();
-      uint64_t rip;
-      GetRegs(state.regs, rip, status);
-
-      CodePoint code_point = InstructionPointerToCodePoint(rip, false);
-      if (code_point.instruction) {
-        state.current_instruction = *code_point.instruction;
-      }
-    };
+  template <typename Lambda>
+  void RunOnControlThread(Lambda&& lambda) {
     if (control_thread.get_id() == std::this_thread::get_id()) {
-      get_state();
+      lambda();
     } else {
       std::atomic<bool> done = false;
       control_commands.enqueue([&]() {
-        get_state();
+        lambda();
         done = true;
         done.notify_all();
       });
       WakeControlThread();
       done.wait(false);
     }
+  }
+
+  // Thread-safe
+  void GetState(State& state, Status& status) override {
+    auto get_state = [&]() {
+      if constexpr (kDebugCodeController) {
+        LOG << "Control thread: Getting the state";
+      }
+      assert(!worker_running);
+      uint64_t rip;
+      GetRegs(state.regs, rip, status);
+      CodePoint code_point = InstructionPointerToCodePoint(rip, false);
+      if (code_point.instruction) {
+        state.current_instruction = *code_point.instruction;
+      } else {
+        state.current_instruction.Reset();
+      }
+    };
+    RunOnControlThread(get_state);
+  }
+
+  void ChangeState(StateVisitor visitor, maf::Status& status) override {
+    RunOnControlThread([this, visitor = std::move(visitor), &status]() {
+      if constexpr (kDebugCodeController) {
+        LOG << "Control thread: Changing the state";
+      }
+      assert(!worker_running);
+      State state;
+      uint64_t rip;
+      user_regs_struct user_regs;
+      int ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
+      if (ret == -1) {
+        maf::AppendErrorMessage(status) += "PTRACE_GETREGS(" + maf::f("%d", pid) + ") failed";
+        return;
+      }
+      state.regs.RAX = user_regs.rax;
+      state.regs.RBX = user_regs.rbx;
+      state.regs.RCX = user_regs.rcx;
+      state.regs.RDX = user_regs.rdx;
+      state.regs.RBP = user_regs.rbp;
+      state.regs.RSI = user_regs.rsi;
+      state.regs.RDI = user_regs.rdi;
+      state.regs.R8 = user_regs.r8;
+      state.regs.R9 = user_regs.r9;
+      state.regs.R10 = user_regs.r10;
+      state.regs.R11 = user_regs.r11;
+      state.regs.R12 = user_regs.r12;
+      state.regs.R13 = user_regs.r13;
+      state.regs.R14 = user_regs.r14;
+      state.regs.R15 = user_regs.r15;
+      CodePoint code_point = InstructionPointerToCodePoint(user_regs.rip, false);
+      if (code_point.instruction) {
+        state.current_instruction = *code_point.instruction;
+      }
+
+      visitor(state);
+
+      user_regs.rax = state.regs.RAX;
+      user_regs.rbx = state.regs.RBX;
+      user_regs.rcx = state.regs.RCX;
+      user_regs.rdx = state.regs.RDX;
+      user_regs.rbp = state.regs.RBP;
+      user_regs.rsi = state.regs.RSI;
+      user_regs.rdi = state.regs.RDI;
+      user_regs.r8 = state.regs.R8;
+      user_regs.r9 = state.regs.R9;
+      user_regs.r10 = state.regs.R10;
+      user_regs.r11 = state.regs.R11;
+      user_regs.r12 = state.regs.R12;
+      user_regs.r13 = state.regs.R13;
+      user_regs.r14 = state.regs.R14;
+      user_regs.r15 = state.regs.R15;
+      if (state.current_instruction) {
+        user_regs.rip = InstToInstructionPointer(state.current_instruction);
+        worker_should_run = true;
+      } else {
+        worker_should_run = false;
+      }
+      if (ptrace(PTRACE_SETREGS, pid, 0, &user_regs) == -1) {
+        maf::AppendErrorMessage(status) += "PTRACE_SETREGS failed";
+      }
+    });
   }
 
   void Cancel(maf::Status&) override {
@@ -491,6 +554,16 @@ struct PtraceController : Controller {
       }
     }
     return {nullptr, StopType::InstructionBody};
+  }
+
+  uint64_t InstToInstructionPointer(NestedWeakPtr<const Inst> inst) {
+    auto it = std::lower_bound(instructions.begin(), instructions.end(), inst);
+    if (it == instructions.end() || (*it != inst)) {
+      return 0;
+    }
+    int i = std::distance(instructions.begin(), it);
+    char* addr = code.data() + instruction_offsets[i];
+    return (uint64_t)addr;
   }
 
   // Holds commands to be executed on the control thread.

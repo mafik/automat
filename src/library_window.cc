@@ -76,40 +76,6 @@ struct PickButton : theme::xp::TitleButton {
   }
 };
 
-#ifdef __linux__
-struct XSHMCapture {
-  xcb_shm_seg_t shmseg = -1;
-  int shmid = -1;
-  std::span<char> data;
-
-  XSHMCapture() {
-    shmseg = xcb_generate_id(xcb::connection);
-    int w = xcb::screen->width_in_pixels;
-    int h = xcb::screen->height_in_pixels;
-    int size = w * h * 4;
-    shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
-
-    xcb_shm_attach(xcb::connection, shmseg, shmid, false);
-    data = std::span<char>(static_cast<char*>(shmat(shmid, nullptr, 0)), size);
-  }
-
-  ~XSHMCapture() {
-    if (shmseg != -1) {
-      xcb_shm_detach(xcb::connection, shmseg);
-      shmseg = -1;
-    }
-    if (data.data()) {
-      shmdt(data.data());
-      data = {};
-    }
-    if (shmid != -1) {
-      shmctl(shmid, IPC_RMID, NULL);
-      shmid = -1;
-    }
-  }
-};
-#endif
-
 struct TextArgument : Argument {
   TextDrawable icon;
   TextArgument() : Argument("text", kRequiresObject), icon("T", gui::kLetterSize, gui::GetFont()) {
@@ -132,11 +98,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   Ptr<PickButton> pick_button;
   std::string window_name;
-#ifdef __linux__
-  std::optional<XSHMCapture> shm_capture;
-#endif
-  int capture_width = 0;
-  int capture_height = 0;
 
   std::unique_ptr<tesseract::TessBaseAPI> tesseract;
   std::string tesseract_text;
@@ -183,77 +144,41 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   animation::Phase Tick(time::Timer&) override {
 #ifdef __linux__
-    xcb_window_t xcb_window = XCB_WINDOW_NONE;
     tesseract_text.clear();
-    if (auto window = LockWindow()) {
-      xcb_window = window->xcb_window;
-    }
-    if (xcb_window == XCB_WINDOW_NONE) {
-      shm_capture.reset();
+    auto window = LockWindow();
+    if (window->xcb_window == XCB_WINDOW_NONE) {
+      window->capture.reset();
       return animation::Finished;
     }
 
-    if (!shm_capture.has_value()) {
-      shm_capture.emplace();
+    if (!window->capture.has_value()) {
+      window->capture.emplace();
     }
 
-    auto geometry_reply = xcb::get_geometry(xcb_window);
-    if (!geometry_reply) {
-      return animation::Finished;
-    }
+    window->capture->Capture(window->xcb_window);
 
-    I16 x = 0;
-    I16 y = 0;
-    capture_width = geometry_reply->width;
-    capture_height = geometry_reply->height;
-
-    auto gtk_frame_extents_reply =
-        xcb::get_property(xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
-    if (gtk_frame_extents_reply->value_len == 4) {
-      auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
-      x += extents[0];
-      y += extents[2];
-      capture_width -= extents[0] + extents[1];
-      capture_height -= extents[2] + extents[3];
-    }
-
-    auto cookie =
-        xcb_shm_get_image(xcb::connection, xcb_window, x, y, capture_width, capture_height, ~0,
-                          XCB_IMAGE_FORMAT_Z_PIXMAP, shm_capture->shmseg, 0);
-
-    std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
-        xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
-
-    bool center_pixel_transparent =
-        shm_capture->data[(capture_height / 2 * capture_width + capture_width / 2) * 4 + 3] == 0;
-
-    if (center_pixel_transparent) {
-      int n = capture_width * capture_height;
+    if (window->capture->width > 0 && window->capture->height > 0) {
+      auto pix = pixCreate(window->capture->width, window->capture->height, 32);
+      uint32_t* pix_data = pixGetData(pix);
+      int n = window->capture->width * window->capture->height;
+      auto data = window->capture->data;
       for (int i = 0; i < n; ++i) {
-        shm_capture->data[i * 4 + 3] = 0xff;
-      }
-    }
-
-    if (capture_height > 0 && capture_width > 0) {
-      auto pix = pixCreate(capture_width, capture_height, 32);
-      uint32_t* data = pixGetData(pix);
-      int n = capture_width * capture_height;
-      for (int i = 0; i < n; ++i) {
-        data[i] = (shm_capture->data[i * 4] << 8) | (shm_capture->data[i * 4 + 1] << 16) |
-                  (shm_capture->data[i * 4 + 2] << 24) | (shm_capture->data[i * 4 + 3]);
+        pix_data[i] = (data[i * 4] << 8) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 24) |
+                      (data[i * 4 + 3]);
       }
 
-      int left = 0, top = 0, width = 0, height = 0;
+      int ocr_left = 0, ocr_top = 0, ocr_width = 0, ocr_height = 0;
       if (auto window = LockWindow()) {
-        left = window->x_min_ratio * capture_width;
-        top = (1 - window->y_max_ratio) * capture_height;
-        width = capture_width * (window->x_max_ratio - window->x_min_ratio);
-        height = capture_height * (window->y_max_ratio - window->y_min_ratio);
+        ocr_left = window->x_min_ratio * window->capture->width;
+        ocr_top = (1 - window->y_max_ratio) * window->capture->height;
+        ocr_width = window->capture->width * (window->x_max_ratio - window->x_min_ratio);
+        ocr_height = window->capture->height * (window->y_max_ratio - window->y_min_ratio);
       }
 
-      if (width > 0 && height > 0) {
+      if (ocr_width > 0 && ocr_height > 0) {
         tesseract->SetImage(pix);
-        tesseract->SetRectangle(left, top, width, height);  // SetRectangle must come after SetImage
+        tesseract->SetRectangle(ocr_left, ocr_top, ocr_width,
+                                ocr_height);  // SetRectangle must come after SetImage
         int recognize_status = tesseract->Recognize(nullptr);
         if (recognize_status) {
           LOG << "Tesseract recognize failed: " << recognize_status;
@@ -295,19 +220,20 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
                         kCoarseBounds.rect.right, kCoarseBounds.rect.top);
     l.contents_rrect = kBorderInner;
     l.contents_rrect.rect.top = l.title_rect.bottom;
-    if (capture_height > 0 || capture_width > 0) {
-      SkRect image_rect = SkRect::Make(SkISize{capture_width, capture_height});
-      l.image_matrix =
-          SkMatrix::RectToRect(image_rect, l.contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
-      l.image_matrix.preTranslate(0, capture_height / 2.f);
-      l.image_matrix.preScale(1, -1);
-      l.image_matrix.preTranslate(0, -capture_height / 2.f);
-      l.full_region_rect = image_rect;
-      l.image_matrix.mapRect(&l.full_region_rect.sk);
-    } else {
-      l.full_region_rect = l.contents_rrect.rect;
-    }
     if (auto window = LockWindow()) {
+      if (window->capture.has_value() &&
+          (window->capture->height > 0 || window->capture->width > 0)) {
+        SkRect image_rect = SkRect::Make(SkISize{window->capture->width, window->capture->height});
+        l.image_matrix =
+            SkMatrix::RectToRect(image_rect, l.contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
+        l.image_matrix.preTranslate(0, window->capture->height / 2.f);
+        l.image_matrix.preScale(1, -1);
+        l.image_matrix.preTranslate(0, -window->capture->height / 2.f);
+        l.full_region_rect = image_rect;
+        l.image_matrix.mapRect(&l.full_region_rect.sk);
+      } else {
+        l.full_region_rect = l.contents_rrect.rect;
+      }
       l.region_rect =
           Rect(lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_min_ratio),
                lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_min_ratio),
@@ -336,17 +262,20 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     canvas.restore();
 
 #ifdef __linux__
-    if (shm_capture.has_value()) {
-      auto& capture = shm_capture.value();
-      auto image_info = SkImageInfo::Make(capture_width, capture_height, kBGRA_8888_SkColorType,
-                                          SkAlphaType::kPremul_SkAlphaType);
-      SkPixmap pixmap(image_info, capture.data.data(), capture_width * 4);
-      auto image = SkImages::RasterFromPixmap(
-          pixmap, [](const void* pixels, SkImages::ReleaseContext){}, nullptr);
-      canvas.save();
-      canvas.concat(layout.image_matrix);
-      canvas.drawImage(image, 0, 0, kFastSamplingOptions, nullptr);
-      canvas.restore();
+    if (auto window = LockWindow()) {
+      if (window->capture.has_value()) {
+        auto& capture = *window->capture;
+        auto image_info =
+            SkImageInfo::Make(window->capture->width, window->capture->height,
+                              kBGRA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
+        SkPixmap pixmap(image_info, capture.data.data(), window->capture->width * 4);
+        auto image = SkImages::RasterFromPixmap(
+            pixmap, [](const void* pixels, SkImages::ReleaseContext){}, nullptr);
+        canvas.save();
+        canvas.concat(layout.image_matrix);
+        canvas.drawImage(image, 0, 0, kFastSamplingOptions, nullptr);
+        canvas.restore();
+      }
     }
 #endif
 
@@ -614,4 +543,68 @@ void Window::OnRun(Location& here) {
   out->SetText(here, "123456789");
 }
 
+#ifdef __linux__
+Window::XSHMCapture::XSHMCapture() {
+  shmseg = xcb_generate_id(xcb::connection);
+  int w = xcb::screen->width_in_pixels;
+  int h = xcb::screen->height_in_pixels;
+  int size = w * h * 4;
+  shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
+
+  xcb_shm_attach(xcb::connection, shmseg, shmid, false);
+  data = std::span<char>(static_cast<char*>(shmat(shmid, nullptr, 0)), size);
+}
+
+Window::XSHMCapture::~XSHMCapture() {
+  if (shmseg != -1) {
+    xcb_shm_detach(xcb::connection, shmseg);
+    shmseg = -1;
+  }
+  if (data.data()) {
+    shmdt(data.data());
+    data = {};
+  }
+  if (shmid != -1) {
+    shmctl(shmid, IPC_RMID, NULL);
+    shmid = -1;
+  }
+}
+
+void Window::XSHMCapture::Capture(xcb_window_t xcb_window) {
+  auto geometry_reply = xcb::get_geometry(xcb_window);
+  if (!geometry_reply) {
+    return;
+  }
+
+  I16 x = 0;
+  I16 y = 0;
+  width = geometry_reply->width;
+  height = geometry_reply->height;
+
+  auto gtk_frame_extents_reply =
+      xcb::get_property(xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
+  if (gtk_frame_extents_reply->value_len == 4) {
+    auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
+    x += extents[0];
+    y += extents[2];
+    width -= extents[0] + extents[1];
+    height -= extents[2] + extents[3];
+  }
+
+  auto cookie = xcb_shm_get_image(xcb::connection, xcb_window, x, y, width, height, ~0,
+                                  XCB_IMAGE_FORMAT_Z_PIXMAP, shmseg, 0);
+
+  std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
+      xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
+
+  bool center_pixel_transparent = data[(height / 2 * width + width / 2) * 4 + 3] == 0;
+
+  int n = width * height;
+  if (center_pixel_transparent) {
+    for (int i = 0; i < n; ++i) {
+      data[i * 4 + 3] = 0xff;
+    }
+  }
+}
+#endif
 }  // namespace automat::library

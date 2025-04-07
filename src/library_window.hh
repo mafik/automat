@@ -6,6 +6,8 @@
 #include "str.hh"
 
 #ifdef __linux__
+#include <sys/shm.h>
+#include <xcb/shm.h>
 #include <xcb/xcb.h>
 #endif
 
@@ -16,6 +18,20 @@ struct Window : public Object, Runnable {
 
 #ifdef __linux__
   xcb_window_t xcb_window = XCB_WINDOW_NONE;
+
+  struct XSHMCapture {
+    xcb_shm_seg_t shmseg = -1;
+    int shmid = -1;
+    std::span<char> data;
+    int width = 0;
+    int height = 0;
+
+    XSHMCapture();
+    ~XSHMCapture();
+    void Capture(xcb_window_t xcb_window);
+  };
+
+  std::optional<XSHMCapture> capture;
 #endif
 
   float x_min_ratio = 0.25f;

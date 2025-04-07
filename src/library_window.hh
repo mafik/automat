@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <tesseract/baseapi.h>
+
 #include "base.hh"
 #include "str.hh"
 
@@ -14,6 +16,7 @@
 namespace automat::library {
 
 struct Window : public Object, Runnable {
+  std::mutex mutex;
   maf::Str title = "";
 
 #ifdef __linux__
@@ -34,6 +37,8 @@ struct Window : public Object, Runnable {
   std::optional<XSHMCapture> capture;
 #endif
 
+  tesseract::TessBaseAPI tesseract;
+
   float x_min_ratio = 0.25f;
   float x_max_ratio = 0.75f;
   float y_min_ratio = 0.25f;
@@ -44,6 +49,9 @@ struct Window : public Object, Runnable {
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
   Ptr<gui::Widget> MakeWidget() override;
+
+  // Run OCR on the currently captured window
+  std::string RunOCR();
 
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here) override;

@@ -8,7 +8,6 @@
 #include <include/effects/SkGradientShader.h>
 #include <leptonica/allheaders.h>
 #include <leptonica/pix.h>
-#include <tesseract/baseapi.h>
 
 #include "argument.hh"
 #include "embedded.hh"
@@ -41,11 +40,25 @@ namespace automat::library {
 
 constexpr bool kDebugWindowPicking = false;
 
-Window::Window() {}
+Window::Window() {
+  auto eng_traineddata = embedded::assets_eng_traineddata.content;
+  if (tesseract.Init(eng_traineddata.data(), eng_traineddata.size(), "eng",
+                     tesseract::OEM_LSTM_ONLY, nullptr, 0, nullptr, nullptr, true, nullptr)) {
+    LOG << "Tesseract init failed";
+  }
+}
 
 std::string_view Window::Name() const { return "Window"; }
 
-Ptr<Object> Window::Clone() const { return MakePtr<Window>(*this); }
+Ptr<Object> Window::Clone() const {
+  auto ret = MakePtr<Window>();
+  ret->x_min_ratio = x_min_ratio;
+  ret->x_max_ratio = x_max_ratio;
+  ret->y_min_ratio = y_min_ratio;
+  ret->y_max_ratio = y_max_ratio;
+  ret->xcb_window = xcb_window;
+  return ret;
+}
 
 const SkMatrix kCenterPickIcon = SkMatrix::Translate(-1.4_mm, -0.2_mm).preScale(0.9, 0.9);
 
@@ -88,6 +101,51 @@ struct TextArgument : Argument {
 
 TextArgument text_arg;
 
+std::string Window::RunOCR() {
+  if (!capture.has_value()) return "";
+  if (capture->width == 0 || capture->height == 0) return "";
+  std::string utf8_text = "";
+  auto pix = pixCreate(capture->width, capture->height, 32);
+  uint32_t* pix_data = pixGetData(pix);
+  int n = capture->width * capture->height;
+  auto data = capture->data;
+  for (int i = 0; i < n; ++i) {
+    pix_data[i] =
+        (data[i * 4] << 8) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 24) | (data[i * 4 + 3]);
+  }
+
+  int ocr_left = 0, ocr_top = 0, ocr_width = 0, ocr_height = 0;
+  ocr_left = x_min_ratio * capture->width;
+  ocr_top = (1 - y_max_ratio) * capture->height;
+  ocr_width = capture->width * (x_max_ratio - x_min_ratio);
+  ocr_height = capture->height * (y_max_ratio - y_min_ratio);
+
+  if (ocr_width > 0 && ocr_height > 0) {
+    tesseract.SetImage(pix);
+    tesseract.SetRectangle(ocr_left, ocr_top, ocr_width,
+                           ocr_height);  // SetRectangle must come after SetImage
+    int recognize_status = tesseract.Recognize(nullptr);
+    if (recognize_status) {
+      LOG << "Tesseract recognize failed: " << recognize_status;
+    }
+    utf8_text = tesseract.GetUTF8Text();
+    StripTrailingWhitespace(utf8_text);
+
+    if constexpr (false) {  // write to "out.bmp"
+      std::unique_ptr<uint8_t[], xcb::FreeDeleter> bmp;
+      size_t size;
+      pixWriteMemBmp(std::out_ptr(bmp), &size, pix);
+
+      FILE* f = fopen("out.bmp", "wb");
+      fwrite(bmp.get(), 1, size, f);
+      fclose(f);
+    }
+  }
+
+  pixDestroy(&pix);
+  return utf8_text;
+}
+
 struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabber {
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
@@ -99,7 +157,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   Ptr<PickButton> pick_button;
   std::string window_name;
 
-  std::unique_ptr<tesseract::TessBaseAPI> tesseract;
   std::string tesseract_text;
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
@@ -124,13 +181,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     pos.x -= kTitleButtonSize + kContentMargin;
     pos.y -= kTitleButtonSize / 2;
     pick_button->local_to_parent = SkM44::Translate(pos.x, pos.y);
-
-    tesseract = std::make_unique<tesseract::TessBaseAPI>();
-    auto eng_traineddata = embedded::assets_eng_traineddata.content;
-    if (tesseract->Init(eng_traineddata.data(), eng_traineddata.size(), "eng",
-                        tesseract::OEM_LSTM_ONLY, nullptr, 0, nullptr, nullptr, true, nullptr)) {
-      LOG << "Tesseract init failed";
-    }
   }
 
   constexpr static RRect kCoarseBounds =
@@ -146,6 +196,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 #ifdef __linux__
     tesseract_text.clear();
     auto window = LockWindow();
+    auto lock = std::lock_guard(window->mutex);
     if (window->xcb_window == XCB_WINDOW_NONE) {
       window->capture.reset();
       return animation::Finished;
@@ -156,49 +207,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
 
     window->capture->Capture(window->xcb_window);
-
-    if (window->capture->width > 0 && window->capture->height > 0) {
-      auto pix = pixCreate(window->capture->width, window->capture->height, 32);
-      uint32_t* pix_data = pixGetData(pix);
-      int n = window->capture->width * window->capture->height;
-      auto data = window->capture->data;
-      for (int i = 0; i < n; ++i) {
-        pix_data[i] = (data[i * 4] << 8) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 24) |
-                      (data[i * 4 + 3]);
-      }
-
-      int ocr_left = 0, ocr_top = 0, ocr_width = 0, ocr_height = 0;
-      if (auto window = LockWindow()) {
-        ocr_left = window->x_min_ratio * window->capture->width;
-        ocr_top = (1 - window->y_max_ratio) * window->capture->height;
-        ocr_width = window->capture->width * (window->x_max_ratio - window->x_min_ratio);
-        ocr_height = window->capture->height * (window->y_max_ratio - window->y_min_ratio);
-      }
-
-      if (ocr_width > 0 && ocr_height > 0) {
-        tesseract->SetImage(pix);
-        tesseract->SetRectangle(ocr_left, ocr_top, ocr_width,
-                                ocr_height);  // SetRectangle must come after SetImage
-        int recognize_status = tesseract->Recognize(nullptr);
-        if (recognize_status) {
-          LOG << "Tesseract recognize failed: " << recognize_status;
-        }
-        tesseract_text = tesseract->GetUTF8Text();
-        StripTrailingWhitespace(tesseract_text);
-
-        if constexpr (false) {  // write to "out.bmp"
-          std::unique_ptr<uint8_t[], xcb::FreeDeleter> bmp;
-          size_t size;
-          pixWriteMemBmp(std::out_ptr(bmp), &size, pix);
-
-          FILE* f = fopen("out.bmp", "wb");
-          fwrite(bmp.get(), 1, size, f);
-          fclose(f);
-        }
-      }
-
-      pixDestroy(&pix);
-    }
+    tesseract_text = window->RunOCR();
 
     return animation::Animating;
 #else
@@ -514,6 +523,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     WakeAnimation();
     if (auto window = LockWindow()) {
       window->xcb_window = found_window;
+      window->title = window_name;
     }
 #else
     grab.Release();
@@ -540,7 +550,17 @@ void Window::OnRun(Location& here) {
     here.ReportError("Needs to be connected to a text output");
     return;
   }
-  out->SetText(here, "123456789");
+  auto lock = std::lock_guard(mutex);
+  if (xcb_window == XCB_WINDOW_NONE) {
+    here.ReportError("No window selected");
+    return;
+  }
+  if (!capture.has_value()) {
+    capture.emplace();
+  }
+  capture->Capture(xcb_window);
+  std::string utf8_text = RunOCR();
+  out->SetText(here, utf8_text);
 }
 
 #ifdef __linux__

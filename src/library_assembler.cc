@@ -760,6 +760,7 @@ void Register::SetText(Location& error_context, std::string_view text) {
     error_context.ReportError(status.ToStr());
     return;
   }
+  WakeWidgetsAnimation();
 }
 
 }  // namespace automat::library

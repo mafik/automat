@@ -63,7 +63,7 @@ struct PtraceController : Controller {
 #ifndef NDEBUG
     // Verify that the program is sorted by inst.owner_less
     for (int i = 1; i < program.size(); ++i) {
-      if (program[i].inst.owner_before(program[i - 1].inst)) {
+      if (program[i].inst < program[i - 1].inst) {
         AppendErrorMessage(status) += "Instructions are not sorted according to std::owner_less!";
         return;
       }
@@ -76,7 +76,7 @@ struct PtraceController : Controller {
         auto& inst = program[i];
         std::string str;
         llvm::raw_string_ostream os(str);
-        llvm_asm.mc_inst_printer->printInst(inst.inst.get(), 0, "", *llvm_asm.mc_subtarget_info,
+        llvm_asm.mc_inst_printer->printInst(inst.inst.Get(), 0, "", *llvm_asm.mc_subtarget_info,
                                             os);
         if (inst.next >= 0 && inst.next < program.size()) {
           str += "; next:" + std::to_string(inst.next);
@@ -90,7 +90,7 @@ struct PtraceController : Controller {
 
     std::string new_code;
     std::vector<MapEntry> new_map;
-    std::vector<WeakPtr<const Inst>> new_instructions;
+    std::vector<NestedWeakPtr<const Inst>> new_instructions;
     std::vector<int> new_instruction_offsets(program.size(), -1);
 
     {  // Fill new_code & new_map
@@ -299,7 +299,7 @@ struct PtraceController : Controller {
             auto& old_instr = *code_point.instruction;
             for (auto& map_entry : new_map) {
               auto& new_instr = new_instructions[map_entry.instruction];
-              if (!new_instr.owner_before(old_instr) && !old_instr.owner_before(new_instr)) {
+              if (new_instr == old_instr) {
                 user_regs.rip = (uint64_t)code.data() + map_entry.begin;
                 break;
               }
@@ -347,7 +347,7 @@ struct PtraceController : Controller {
   // Although this will actually be executed on a different thread in this implementation of
   // MachineCodeController, keep in mind that other (hypothetical) implementations (e.g.
   // SignalMachineCodeController) may execute the code in a blocking manner, on the current thread.
-  void Execute(WeakPtr<const Inst> instr, Status& status) override {
+  void Execute(NestedWeakPtr<const Inst> instr, Status& status) override {
     control_commands.enqueue([this, instr = std::move(instr), &status]() {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Executing instruction";
@@ -356,10 +356,8 @@ struct PtraceController : Controller {
         AppendErrorMessage(status) += "Code is already executing";
         return;
       }
-      auto instr_it =
-          std::lower_bound(instructions.begin(), instructions.end(), instr, std::owner_less{});
-      if (instr_it == instructions.end() || instr_it->owner_before(instr) ||
-          instr.owner_before(*instr_it)) {
+      auto instr_it = std::lower_bound(instructions.begin(), instructions.end(), instr);
+      if (instr_it == instructions.end() || (*instr_it != instr)) {
         ERROR << "Instruction not found";
         return;
       }
@@ -399,7 +397,7 @@ struct PtraceController : Controller {
         LOG << "Control thread: Getting the state";
       }
       assert(!worker_running);
-      state.current_instruction.reset();
+      state.current_instruction.Reset();
       uint64_t rip;
       GetRegs(state.regs, rip, status);
 
@@ -456,7 +454,7 @@ struct PtraceController : Controller {
   // Saved state of registers
   Regs regs = {};
 
-  std::vector<WeakPtr<const Inst>> instructions;  // ordered by std::owner_less
+  std::vector<NestedWeakPtr<const Inst>> instructions;  // ordered by std::owner_less
   std::vector<int> instruction_offsets;
 
   // Describes a section of code

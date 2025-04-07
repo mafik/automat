@@ -17,8 +17,7 @@ using InstBuilder = llvm::MCInstBuilder;
 
 // Represents a single instruction within a larger program.
 struct ProgramInst {
-  Ptr<ReferenceCounted> inst;
-  const Inst* actual_inst;
+  NestedPtr<const Inst> inst;
   int next;  // index of the next instruction within the program
   int jump;  // index of the jump target within the program
 };
@@ -55,8 +54,7 @@ enum class StopType : uint8_t {
 };
 
 struct CodePoint {
-  WeakPtr<ReferenceCounted>* instruction;  // valid until next code update
-  const Inst* actual_inst;
+  NestedWeakPtr<const Inst>* instruction;  // valid until next code update
   StopType stop_type;
 };
 
@@ -73,12 +71,11 @@ struct Controller {
   // Program must be sorted using std::owner_less.
   virtual void UpdateCode(Program&& program, maf::Status&) = 0;
 
-  virtual void Execute(WeakPtr<ReferenceCounted> instr, const Inst* actual_inst, maf::Status&) = 0;
+  virtual void Execute(NestedWeakPtr<const Inst> inst, maf::Status&) = 0;
 
   struct State {
     // Instruction which is about to be executed.
-    WeakPtr<ReferenceCounted> current_instruction;
-    const Inst* actual_inst;
+    NestedWeakPtr<const Inst> current_instruction;
 
     // State of registers prior to the current instruction.
     Regs regs;

@@ -205,6 +205,10 @@ struct [[clang::trivial_abi]] Ptr : PtrBase<T> {
   T* get() const { return Get(); }
   T* Get() const { return this->obj; }
   T* operator->() const { return this->obj; }
+  template <typename U>
+  U* GetCast() const {
+    return static_cast<U*>(this->Get());
+  }
 
   std::strong_ordering operator<=>(const Ptr<T>& that) const { return this->obj <=> that.obj; }
 
@@ -228,8 +232,8 @@ struct [[clang::trivial_abi]] Ptr : PtrBase<T> {
   }
 
   template <typename U>
-  [[nodiscard]] Ptr<U> Cast() && {
-    return Ptr<U>(static_cast<U*>(this->Release()));
+  [[nodiscard]] Ptr<U> Cast(this auto&& self) {
+    return Ptr<U>(static_cast<U*>(self.Release()));
   }
 };
 
@@ -326,6 +330,64 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
     this->obj = SafeIncrementWeakRefs(ptr);
     SafeDecrementWeakRefs(oldObj);
   }
+};
+
+template <typename T>
+struct [[clang::trivial_abi]] NestedWeakPtr;
+
+template <typename T>
+struct [[clang::trivial_abi]] NestedPtr {
+  NestedPtr() : ptr{}, obj(nullptr) {}
+  NestedPtr(Ptr<ReferenceCounted>&& ptr, T* obj) : ptr(std::move(ptr)), obj(obj) {}
+
+  std::strong_ordering operator<=>(const NestedPtr<T>& that) const {
+    return this->ptr <=> that.ptr;
+  }
+  T& operator*() const { return *obj; }
+  T* operator->() const { return obj; }
+  explicit operator bool() const { return obj != nullptr; }
+  template <typename U>
+  U* GetOwner() {
+    return this->ptr.GetCast<U>();
+  }
+  T* Get() const { return obj; }
+  void Reset() {
+    ptr.Reset();
+    obj = nullptr;
+  }
+
+ private:
+  friend class NestedWeakPtr<T>;
+  Ptr<ReferenceCounted> ptr;
+  T* obj;
+};
+
+template <typename T>
+struct [[clang::trivial_abi]] NestedWeakPtr {
+  NestedWeakPtr() : weak_ptr{}, obj(nullptr) {}
+  NestedWeakPtr(const NestedPtr<T>& ptr) : weak_ptr(ptr.ptr), obj(ptr.obj) {}
+  NestedWeakPtr(WeakPtr<ReferenceCounted>&& ptr, T* obj) : weak_ptr(std::move(ptr)), obj(obj) {}
+
+  std::strong_ordering operator<=>(const NestedWeakPtr<T>& that) const {
+    return this->weak_ptr <=> that.weak_ptr;
+  }
+  bool operator==(const NestedWeakPtr<T>& that) const {
+    return this->weak_ptr == that.weak_ptr && this->obj == that.obj;
+  }
+  void Reset() {
+    weak_ptr.Reset();
+    obj = nullptr;
+  }
+  NestedPtr<T> Lock() const {
+    if (auto new_ptr = weak_ptr.Lock()) {
+      return NestedPtr<T>{std::move(new_ptr), obj};
+    }
+    return NestedPtr<T>();
+  }
+
+ private:
+  WeakPtr<ReferenceCounted> weak_ptr;
+  T* obj;
 };
 
 }  // namespace automat

@@ -165,7 +165,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::T time) {
     assembler.WakeWidgetsAnimation();
     assembler.last_state_refresh = time;
   }
-  if (assembler.state.current_instruction.lock()) {
+  if (assembler.state.current_instruction.Lock()) {
     return animation::Animating;
   } else {
     return animation::Finished;
@@ -176,9 +176,9 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
   RefreshState(*this, time::SteadyNow().time_since_epoch().count());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
-    auto exit_mc_inst = code_point.instruction->lock();
+    auto exit_mc_inst = code_point.instruction->Lock();
     if (exit_mc_inst) {
-      mc::Inst* exit_mc_inst_raw = const_cast<mc::Inst*>(code_point.actual_inst);
+      mc::Inst* exit_mc_inst_raw = const_cast<mc::Inst*>(exit_mc_inst.Get());
       constexpr int mc_inst_offset = offsetof(Instruction, mc_inst);
       exit_inst = reinterpret_cast<Instruction*>(reinterpret_cast<char*>(exit_mc_inst_raw) -
                                                  mc_inst_offset);
@@ -249,8 +249,8 @@ void UpdateCode(automat::mc::Controller& controller,
   for (int i = 0; i < n; ++i) {
     Instruction* obj_raw = instructions[i].get();
     const mc::Inst* inst_raw = &obj_raw->mc_inst;
-    program[i].actual_inst = inst_raw;
-    program[i].inst = std::move(instructions[i]).Cast<ReferenceCounted>();
+    program[i].inst =
+        NestedPtr<const mc::Inst>(std::move(instructions[i]).Cast<ReferenceCounted>(), inst_raw);
   }
 
   controller.UpdateCode(std::move(program), status);
@@ -303,8 +303,8 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
   }
 
   Status status;
-  auto [inst, actual_inst] = entry_point->ToMC();
-  mc_controller->Execute(inst, actual_inst, status);
+  auto inst = entry_point->ToMC();
+  mc_controller->Execute(inst, status);
   if (!OK(status)) {
     ERROR << "Failed to execute Assembler: " << status;
   }

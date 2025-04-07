@@ -73,8 +73,8 @@ struct Instruction : LiveObject, Runnable {
 
   maf::Str ToAsmStr() const;
 
-  std::pair<WeakPtr<ReferenceCounted>, mc::Inst*> ToMC() {
-    return std::make_pair(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
+  NestedWeakPtr<const mc::Inst> ToMC() {
+    return NestedWeakPtr<const mc::Inst>(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
   }
 
   Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(AcquireWeakPtr<Object>()); }

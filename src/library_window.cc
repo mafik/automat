@@ -24,6 +24,9 @@
 #include <sys/shm.h>
 #include <xcb/shm.h>
 
+#include <ranges>
+
+#include "textures.hh"
 #include "xcb.hh"
 
 #pragma comment(lib, "xcb-shm")

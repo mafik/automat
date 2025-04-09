@@ -95,7 +95,6 @@ struct WidgetDrawable : SkDrawableRTTI {
   SkIRect surface_bounds_root;
   sk_sp<SkDrawable> recording = nullptr;
   SkMatrix window_to_local;
-  Rect surface_bounds_local;
 
   maf::Optional<SkRect> pack_frame_texture_bounds;
   maf::Vec<Vec2> pack_frame_texture_anchors;
@@ -335,7 +334,6 @@ void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas) {
     debug_render_events += ") ";
   }
 
-  window_to_local.mapRect(&surface_bounds_local.sk, SkRect::Make(surface_bounds_root));
   draw_texture_anchors = pack_frame_texture_anchors;
   draw_texture_bounds = *pack_frame_texture_bounds;
 }
@@ -527,6 +525,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     SkMatrix local_to_window;     // copied over to Widget, if drawn
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
     maf::Vec<Vec2> pack_frame_texture_anchors;
+    // Bounds (in local coords) which are rendered to the surface.
+    Rect new_visible_bounds;
   };
   vector<WidgetTree> tree;
 
@@ -661,10 +661,14 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
         root_bounds.roundOut(&node.surface_bounds_root);
 
-        Rect new_visible_bounds;
-        node.window_to_local.mapRect(&new_visible_bounds.sk, root_bounds);
-        Rect& old_rendered_bounds = widget->surface_bounds_local;
-        node.surface_reusable = old_rendered_bounds.Contains(new_visible_bounds);
+        // TODO: this is overestimating the visible area when window_to_local contains a rotation!
+        node.window_to_local.mapRect(&node.new_visible_bounds.sk, root_bounds);
+        if (widget->rendered_bounds.has_value()) {
+          Rect& old_rendered_bounds = *widget->rendered_bounds;
+          node.surface_reusable = old_rendered_bounds.Contains(node.new_visible_bounds);
+        } else {
+          node.surface_reusable = false;
+        }
       } else {
         node.verdict = Verdict::Skip_NoTexture;
       }
@@ -906,6 +910,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
     widget.rendering = true;
     widget.rendering_to_screen = packed;
+    widget.rendered_bounds = node.new_visible_bounds;
     if (packed) {
       pack.frame.push_back(update);
     } else {
@@ -976,17 +981,6 @@ void RenderFrame(SkCanvas& canvas) {
     if constexpr (kDebugRendering && kDebugRenderEvents) {
       LOG << "Render events: " << debug_render_events;
       debug_render_events.clear();
-    }
-
-    // TODO: remove this
-    // (Temporary) copy back some of the properties from WidgetRenderState to their original
-    // Widgets.
-    for (auto& result : request.render_results) {
-      if (auto widget = Widget::Find(result.id)) {
-        if (auto cached_widget_drawable = WidgetDrawable::Find(result.id)) {
-          widget->surface_bounds_local = cached_widget_drawable->surface_bounds_local;
-        }
-      }
     }
 
     PackFrame(request, pack);

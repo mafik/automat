@@ -31,7 +31,7 @@
 // TODO: use correct bounds in SkPictureRecorder::beginRecording
 // TODO: render using a job system (tree of Semaphores)
 
-constexpr bool kDebugRendering = false;
+constexpr bool kDebugRendering = true;
 constexpr bool kDebugRenderEvents = false;
 
 using namespace automat::gui;
@@ -370,8 +370,8 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       static auto builder =
           resources::RuntimeEffectBuilder(embedded::assets_anchor_warp_rt_sksl.content);
 
-      builder->uniform("surfaceOrigin") = Rect(surface_bounds_local).BottomLeftCorner();
-      builder->uniform("surfaceSize") = Rect(surface_bounds_local).Size();
+      builder->uniform("surfaceOrigin") = draw_texture_bounds.BottomLeftCorner();
+      builder->uniform("surfaceSize") = draw_texture_bounds.Size();
       builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
       builder->uniform("anchorsLast").set(&draw_texture_anchors[0], anchor_count);
       builder->uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);
@@ -387,18 +387,26 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       Rect new_anchor_bounds = Rect::MakeEmptyAt(fresh_texture_anchors[0]);
       for (int i = 0; i < anchor_count; ++i) {
         Vec2 delta = fresh_texture_anchors[i] - draw_texture_anchors[i];
-        Rect offset_bounds = surface_bounds_local.sk.makeOffset(delta);
+        Rect offset_bounds = draw_texture_bounds.MoveBy(delta);
         new_anchor_bounds.ExpandToInclude(offset_bounds);
       }
       canvas->drawRect(new_anchor_bounds.sk, paint);
     } else {
       canvas->save();
 
-      SkRect draw_bounds = surface_bounds_local.sk;
+      SkRect draw_bounds = draw_texture_bounds.sk;
 
       // Maps from the local coordinates to surface UV
-      Rect unit = Rect::MakeCornerZero(1, 1);
-      SkMatrix surface_transform = SkMatrix::RectToRect(surface_bounds_local.sk, unit);
+      SkMatrix surface_transform;
+      // First go from local space (metric) to window space (pixels)
+      (void)window_to_local.invert(&surface_transform);
+      // Now our surface is axis-aligned.
+      // Map the surface bounds to unit square.
+      surface_transform.postConcat(
+          SkMatrix::RectToRect(SkRect::Make(surface_bounds_root), SkRect::MakeWH(1, 1)));
+      // Finally flip the y-axis (Skia uses bottom-left origin, but we use top-left)
+      surface_transform.postScale(1, -1, 0, 0.5);
+
       // Skia puts the origin at the top left corner (going down), but we use bottom left (going
       // up). This flip makes all the textures composite in our coordinate system correctly.
       if (anchor_count) {
@@ -411,9 +419,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
           surface_transform.preConcat(anchor_mapping);
           SkMatrix inverse;
           (void)anchor_mapping.invert(&inverse);
-          SkPoint dst[4];
-          inverse.mapRectToQuad(dst, draw_bounds);
-          draw_bounds.setBounds(dst, 4);
+          inverse.mapRectScaleTranslate(&draw_bounds, draw_bounds);
         }
       }
 
@@ -449,7 +455,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
                                         kNumColors, 0, &shader_matrix));
         surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
         surface_bounds_paint.setStrokeWidth(2.0f);
-        canvas->concat(SkMatrix::RectToRect(surface_size, surface_bounds_local.sk));
+        canvas->concat(SkMatrix::RectToRect(surface_size, draw_texture_bounds.sk));
         canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
       }
       canvas->restore();

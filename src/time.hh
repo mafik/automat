@@ -3,6 +3,7 @@
 #pragma once
 
 #include <chrono>
+#include <cmath>
 
 namespace automat::time {
 
@@ -18,6 +19,13 @@ constexpr SteadyPoint kZeroSteady = {};
 
 inline SystemPoint SystemNow() { return SystemClock::now(); }
 inline SteadyPoint SteadyNow() { return SteadyClock::now(); }
+
+// Sawtooth wave [0, 1).
+template <auto Period>
+T SteadySaw() {
+  T t = SteadyNow().time_since_epoch().count();
+  return std::fmod(t / Period, 1);
+}
 
 SystemPoint SystemFromSteady(SteadyPoint steady);
 SteadyPoint SteadyFromSystem(SystemPoint system);

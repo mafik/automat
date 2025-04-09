@@ -50,6 +50,7 @@ struct InstructionLibrary : Object {
 
   struct Widget : FallbackWidget, gui::PointerMoveCallback {
     struct InstructionCard {
+      Ptr<Instruction::Widget> widget;
       llvm::MCInst mc_inst;
       float angle = 0;
       int library_index = -1;
@@ -110,6 +111,8 @@ struct InstructionLibrary : Object {
     animation::Phase Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+
+    void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override;
 
     void PointerMove(gui::Pointer&, Vec2 position) override;
     void PointerOver(gui::Pointer&) override;

@@ -255,6 +255,19 @@ static float CardAngleDeg(float i, int visible_instructions) {
   return CosineInterpolate(90, -90, 0.5 + t / 2);
 }
 
+void InstructionLibrary::Widget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {
+  for (auto& card : instruction_helix) {
+    if (card.throw_t < 0.5) {
+      children.push_back(card.widget);
+    }
+  }
+  for (auto& card : std::ranges::reverse_view(instruction_helix)) {
+    if (card.throw_t >= 0.5) {
+      children.push_back(card.widget);
+    }
+  }
+}
+
 animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
   animation::Phase phase = animation::Finished;
 
@@ -315,8 +328,10 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       }
     }
     if (!found) {
-      auto it =
-          instruction_helix.insert(instruction_helix.begin() + insert_index, InstructionCard{inst});
+      auto it = instruction_helix.insert(instruction_helix.begin() + insert_index,
+                                         InstructionCard{nullptr, inst});
+      it->widget = MakePtr<Instruction::Widget>(inst);
+      it->widget->parent = AcquirePtr();
       it->angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
       it->library_index = i;
       if (insert_index == 0) {
@@ -450,6 +465,26 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     category_state.radius = 5_mm + 5_mm * category_state.growth;
   }
 
+  for (auto& card : instruction_helix) {
+    SkMatrix transform;
+    float rotation_deg = card.angle;
+    float throw_t = 0;
+    if (!isnan(card.throw_direction_deg)) {
+      throw_t = card.throw_t;
+      float throw_distance = sin(throw_t * M_PI) * kThrowEndDistance;
+      Vec2 throw_vec = Vec2::Polar(SinCos::FromDegrees(card.throw_direction_deg), throw_distance);
+      transform.preTranslate(throw_vec.x, throw_vec.y);
+      rotation_deg = CosineInterpolate(rotation_deg, -90, throw_t);
+      float scale = std::cos(throw_t * M_PI);
+      transform.preRotate(card.throw_direction_deg);
+      transform.preScale(scale, 1);
+      transform.preRotate(-card.throw_direction_deg);
+    }
+    transform.preRotate(rotation_deg);
+    transform.preTranslate(-Instruction::Widget::kWidth / 2, -Instruction::Widget::kHeight / 2);
+    card.widget->local_to_parent = SkM44(transform);
+  }
+
   return phase;
 }
 
@@ -473,11 +508,6 @@ PersistentImage rose5 = PersistentImage::MakeFromAsset(maf::embedded::assets_ros
 
 PersistentImage rose6 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_6_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
-
-PersistentImage reverse = PersistentImage::MakeFromAsset(
-    maf::embedded::assets_card_reverse_webp,
-    PersistentImage::MakeArgs{.width = Instruction::Widget::kWidth -
-                                       Instruction::Widget::kBorderMargin * 2});
 
 PersistentImage* rose_images[] = {&rose0, &rose1, &rose2, &rose3, &rose4, &rose5, &rose6};
 
@@ -822,48 +852,7 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     }
   }
 
-  auto DrawCard = [&](const InstructionCard& card) {
-    canvas.save();
-    float rotation_deg = card.angle;
-    float throw_t = 0;
-    if (!isnan(card.throw_direction_deg)) {
-      throw_t = card.throw_t;
-      float throw_distance = sin(throw_t * M_PI) * kThrowEndDistance;
-      Vec2 throw_vec = Vec2::Polar(SinCos::FromDegrees(card.throw_direction_deg), throw_distance);
-      canvas.translate(throw_vec.x, throw_vec.y);
-      rotation_deg = CosineInterpolate(rotation_deg, -90, throw_t);
-      float scale = std::cos(throw_t * M_PI);
-      scale *= scale;
-      canvas.rotate(card.throw_direction_deg);
-      canvas.scale(scale, 1);
-      canvas.rotate(-card.throw_direction_deg);
-    }
-    canvas.rotate(rotation_deg);
-    canvas.translate(-Instruction::Widget::kWidth / 2, -Instruction::Widget::kHeight / 2);
-    if (throw_t > 0.5) {
-      MCInst fake_inst;
-      fake_inst.setOpcode(X86::INSTRUCTION_LIST_END);
-      Instruction::DrawInstruction(canvas, fake_inst);
-      canvas.translate(Instruction::Widget::kWidth / 2, Instruction::Widget::kHeight / 2);
-      canvas.translate(-reverse.width() / 2, -reverse.height() / 2);
-      reverse.draw(canvas);
-    } else {
-      Instruction::DrawInstruction(canvas, card.mc_inst);
-    }
-    canvas.restore();
-  };
-
-  for (auto& card : instruction_helix) {
-    if (card.throw_t >= 0.5) {
-      DrawCard(card);
-    }
-  }
-
-  for (auto& card : std::ranges::reverse_view(instruction_helix)) {
-    if (card.throw_t < 0.5) {
-      DrawCard(card);
-    }
-  }
+  DrawChildren(canvas);
 }
 
 struct RegisterFilterButton {
@@ -1108,9 +1097,9 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
 
       loc->InsertHere(std::move(proto));
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
+      contact_point -= kFrontInstructionRect.BottomLeftCorner();
       loc->position = loc->animation_state.position = p.PositionWithinRootMachine() - contact_point;
-      return std::make_unique<DragLocationAction>(
-          p, std::move(loc), contact_point - kFrontInstructionRect.BottomLeftCorner());
+      return std::make_unique<DragLocationAction>(p, std::move(loc), contact_point);
     }
 
     if (Length(contact_point) < kCornerDist) {

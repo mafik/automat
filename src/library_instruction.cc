@@ -231,6 +231,8 @@ static const SkPath kInstructionShape = SkPath::RRect(kInstructionRRect);
 
 Instruction::Widget::Widget(WeakPtr<Object> object) { this->object = std::move(object); }
 
+Instruction::Widget::Widget(const llvm::MCInst& mc_inst) : mc_inst(mc_inst) {};
+
 SkPath Instruction::Widget::Shape() const { return kInstructionShape; }
 
 PersistentImage paper_texture = PersistentImage::MakeFromAsset(
@@ -2373,7 +2375,15 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
   canvas.translate(-kConditionCodeTokenWidth / 2, -kConditionCodeTokenHeight / 2);
 }
 
-void Instruction::DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
+PersistentImage reverse = PersistentImage::MakeFromAsset(
+    maf::embedded::assets_card_reverse_webp,
+    PersistentImage::MakeArgs{.width = Instruction::Widget::kWidth -
+                                       Instruction::Widget::kBorderMargin * 2});
+
+static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
+  auto mat = canvas.getLocalToDeviceAs3x3();
+  float det = mat.rc(0, 0) * mat.rc(1, 1) - mat.rc(0, 1) * mat.rc(1, 0);
+  bool is_flipped = det > 0;
   SkRRect rrect = kInstructionRRect;
 
   // Paper fill
@@ -2422,7 +2432,10 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
   inset_rrect.inset(bevel_width / 2, bevel_width / 2);
   canvas.drawRRect(inset_rrect, bevel_paint);
 
-  if (inst.getOpcode() == X86::INSTRUCTION_LIST_END) {
+  if (is_flipped) {
+    canvas.translate(Instruction::Widget::kWidth / 2, Instruction::Widget::kHeight / 2);
+    canvas.translate(-reverse.width() / 2, -reverse.height() / 2);
+    reverse.draw(canvas);
     return;
   }
 
@@ -2430,6 +2443,7 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
   // Assembly text
   auto assembly_text = AssemblyText(inst);
   auto& fine_font = FineFont();
+  using Widget = Instruction::Widget;
   auto assembly_text_width = fine_font.MeasureText(assembly_text);
   Vec2 assembly_text_offset = Vec2{Widget::kBorderMargin - kFineFontSize / 2,
                                    kHeight - kFineFontSize / 2 - Widget::kBorderMargin};
@@ -2724,10 +2738,10 @@ void Instruction::DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
 }
 
 void Instruction::Widget::Draw(SkCanvas& canvas) const {
-  if (auto obj = object.lock()) {
-    if (auto inst = dynamic_cast<Instruction*>(obj.get())) {
-      DrawInstruction(canvas, inst->mc_inst);
-    }
+  if (auto inst = this->LockObject<Instruction>()) {
+    DrawInstruction(canvas, inst->mc_inst);
+  } else if (mc_inst.has_value()) {
+    DrawInstruction(canvas, *mc_inst);
   }
 }
 

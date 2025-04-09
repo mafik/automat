@@ -61,15 +61,16 @@ struct Instruction : LiveObject, Runnable {
     constexpr static Rect kRect =
         Rect::MakeAtZero<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
+    std::optional<llvm::MCInst> mc_inst = std::nullopt;
+
     Widget(WeakPtr<Object> object);
+    Widget(const llvm::MCInst&);
 
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
     void Draw(SkCanvas&) const override;
     Vec2AndDir ArgStart(const Argument&) override;
   };
-
-  static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst);
 
   maf::Str ToAsmStr() const;
 

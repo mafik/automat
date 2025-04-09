@@ -31,7 +31,7 @@
 // TODO: use correct bounds in SkPictureRecorder::beginRecording
 // TODO: render using a job system (tree of Semaphores)
 
-constexpr bool kDebugRendering = true;
+constexpr bool kDebugRendering = false;
 constexpr bool kDebugRenderEvents = false;
 
 using namespace automat::gui;
@@ -92,9 +92,12 @@ struct WidgetDrawable : SkDrawableRTTI {
   maf::Str name;
 
   // Rendering
-  SkIRect surface_bounds_root;
+  SkIRect update_surface_bounds_root;
+  SkIRect render_surface_bounds_root;
   sk_sp<SkDrawable> recording = nullptr;
-  SkMatrix window_to_local;
+  SkMatrix fresh_matrix;     // the most recent transform
+  SkMatrix update_matrix;    // transform at the time of the last UpdateState
+  SkMatrix rendered_matrix;  // transform at the time of the last RenderToSurface
 
   maf::Optional<SkRect> pack_frame_texture_bounds;
   maf::Vec<Vec2> pack_frame_texture_anchors;
@@ -135,7 +138,6 @@ struct WidgetDrawable : SkDrawableRTTI {
     sk_sp<SkDrawable> recording_drawable;
     sk_sp<SkData> recording_data;
 
-    SkMatrix window_to_local;  // TODO: remove (while fixing surface_bounds_local)
     maf::Optional<SkRect> pack_frame_texture_bounds;
     maf::Vec<Vec2> pack_frame_texture_anchors;
   };
@@ -213,7 +215,7 @@ sk_sp<SkFlattenable> WidgetDrawable::CreateProc(SkReadBuffer& buffer) {
 
 void WidgetDrawable::UpdateState(const Update& update) {
   average_draw_millis = update.average_draw_millis;
-  surface_bounds_root = update.surface_bounds_root;
+  update_surface_bounds_root = update.surface_bounds_root;
 
   name = update.name;
   last_tick_time = update.last_tick_time;
@@ -230,25 +232,30 @@ void WidgetDrawable::UpdateState(const Update& update) {
     recording = sk_sp<SkDrawable>(static_cast<SkDrawable*>(deserialized_recording.release()));
   }
 
-  window_to_local = update.window_to_local;
+  update_matrix = fresh_matrix;
   pack_frame_texture_bounds = update.pack_frame_texture_bounds;
   pack_frame_texture_anchors = update.pack_frame_texture_anchors;
 }
 
 void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas) {
+  rendered_matrix = update_matrix;
+  render_surface_bounds_root = update_surface_bounds_root;
+  draw_texture_anchors = pack_frame_texture_anchors;
+  draw_texture_bounds = *pack_frame_texture_bounds;
+
   skgpu::graphite::RecorderOptions options;
   options.fImageProvider = image_provider;
   auto recorder = vk::graphite_context->makeRecorder(options);
   auto cpu_started = time::SteadyNow();
   auto root_surface = root_canvas.getSurface();
-  auto image_info = root_surface->imageInfo().makeDimensions(surface_bounds_root.size());
+  auto image_info = root_surface->imageInfo().makeDimensions(render_surface_bounds_root.size());
 
   surface = SkSurfaces::RenderTarget(recorder.get(), image_info, skgpu::Mipmapped::kNo,
                                      &root_surface->props(), name);
 
   auto graphite_canvas = surface->getCanvas();
   graphite_canvas->clear(SK_ColorTRANSPARENT);
-  graphite_canvas->translate(-surface_bounds_root.left(), -surface_bounds_root.top());
+  graphite_canvas->translate(-render_surface_bounds_root.left(), -render_surface_bounds_root.top());
   // Remove all Drawables by converting the commands into SkPicture
   recording->makePictureSnapshot()->playback(graphite_canvas);
 
@@ -333,9 +340,6 @@ void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas) {
     debug_render_events += name;
     debug_render_events += ") ";
   }
-
-  draw_texture_anchors = pack_frame_texture_anchors;
-  draw_texture_bounds = *pack_frame_texture_bounds;
 }
 
 void WidgetDrawable::onDraw(SkCanvas* canvas) {
@@ -349,16 +353,6 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
   if (surface == nullptr) {
     // LOG << "Missing surface for " << Name();
   } else {
-    // Inside entry we have a cached surface that was renderd with old matrix. Now we want to
-    // draw this surface using canvas.getTotalMatrix(). We do this by appending the inverse of
-    // the old matrix to the current canvas. When the surface is drawn, its hardcoded matrix
-    // will cancel the inverse and leave us with canvas.getTotalMatrix().
-    // SkMatrix old_inverse;
-    // (void)entry->draw_matrix.invert(&old_inverse);
-    // canvas->concat(old_inverse);
-    // entry->surface->draw(canvas, 0, 0);
-
-    // Alternative approach, where we map the old texture to the new bounds:
     SkRect surface_size = SkRect::MakeWH(surface->width(), surface->height());
 
     auto anchor_count = min<int>(draw_texture_anchors.size(), fresh_texture_anchors.size());
@@ -392,16 +386,29 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     } else {
       canvas->save();
 
+      // TODO: use `fresh_matrix` to draw the object at its most recent position.
+      // Here is the "classic" approach to do it:
+      // SkMatrix inverse;
+      // (void)rendered_matrix.invert(&inverse);
+      // canvas->concat(inverse);
+      // canvas->concat(fresh_matrix);
+      // Unfortunately this doesn't work because `rendered_matrix` and `fresh_matrix` include the
+      // whole chain of transforms of parent widgets. This causes complex jittering that changes
+      // its behavior depending on which widgets are rendered to textures and whether they've been
+      // packed or sent to overflow.
+      // Proper solution would probably require some careful test cases.
+
       SkRect draw_bounds = draw_texture_bounds.sk;
 
-      // Maps from the local coordinates to surface UV
-      SkMatrix surface_transform;
+      /////////////////////////////////////////////////
+      // Map from the local coordinates to surface UV
+      /////////////////////////////////////////////////
       // First go from local space (metric) to window space (pixels)
-      (void)window_to_local.invert(&surface_transform);
+      SkMatrix surface_transform = rendered_matrix;
       // Now our surface is axis-aligned.
       // Map the surface bounds to unit square.
       surface_transform.postConcat(
-          SkMatrix::RectToRect(SkRect::Make(surface_bounds_root), SkRect::MakeWH(1, 1)));
+          SkMatrix::RectToRect(SkRect::Make(render_surface_bounds_root), SkRect::MakeWH(1, 1)));
       // Finally flip the y-axis (Skia uses bottom-left origin, but we use top-left)
       surface_transform.postScale(1, -1, 0, 0.5);
 
@@ -494,6 +501,7 @@ struct PackedFrame {
   vector<WidgetDrawable::Update> frame;
   vector<WidgetDrawable::Update> overflow;
   map<uint32_t, Vec<Vec2>> fresh_texture_anchors;
+  map<uint32_t, SkMatrix> fresh_matrices;
   animation::Phase animation_phase;
 };
 
@@ -730,10 +738,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
       auto& widget = *node.widget;
-      node.same_scale = (node.window_to_local.getScaleX() == widget.window_to_local.getScaleX() &&
-                         node.window_to_local.getScaleY() == widget.window_to_local.getScaleY() &&
-                         node.window_to_local.getSkewX() == widget.window_to_local.getSkewX() &&
-                         node.window_to_local.getSkewY() == widget.window_to_local.getSkewY());
+      node.same_scale = (node.local_to_window.getScaleX() == widget.rendered_matrix.getScaleX() &&
+                         node.local_to_window.getScaleY() == widget.rendered_matrix.getScaleY() &&
+                         node.local_to_window.getSkewX() == widget.rendered_matrix.getSkewX() &&
+                         node.local_to_window.getSkewY() == widget.rendered_matrix.getSkewY());
     }
 
     // Propagate `wants_to_draw` of textureless widgets to their parents.
@@ -903,18 +911,34 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       update.recording_drawable = recorder.finishRecordingAsDrawable();
     }
 
-    update.window_to_local = node.window_to_local;
-    widget.window_to_local = node.window_to_local;
     update.pack_frame_texture_bounds = widget.pack_frame_texture_bounds;
     update.pack_frame_texture_anchors = node.pack_frame_texture_anchors;
 
     widget.rendering = true;
     widget.rendering_to_screen = packed;
+    widget.rendered_matrix = node.local_to_window;
     widget.rendered_bounds = node.new_visible_bounds;
     if (packed) {
       pack.frame.push_back(update);
     } else {
       pack.overflow.push_back(update);
+    }
+  }
+
+  {  // Update Pack::fresh_matrices
+    for (int i = 0; i < tree.size(); ++i) {
+      auto& node = tree[i];
+      bool include = false;
+      include |= node.verdict == Verdict::Pack;
+      include |= node.verdict == Verdict::Overflow;
+      if (node.parent != i) {
+        auto& parent = tree[node.parent];
+        include |= parent.verdict == Verdict::Pack;
+        include |= parent.verdict == Verdict::Overflow;
+      }
+      if (include) {
+        pack.fresh_matrices[node.widget->ID()] = node.local_to_window;
+      }
     }
   }
 
@@ -987,14 +1011,19 @@ void RenderFrame(SkCanvas& canvas) {
   }
 
   // Update all WidgetRenderStates
-  for (auto& update : Concat(pack.frame, pack.overflow)) {
-    WidgetDrawableHolder& ref = WidgetDrawable::Make(update.id);
-    ref.widget_drawable->UpdateState(update);
-  }
   for (auto& [id, fresh_texture_anchors] : pack.fresh_texture_anchors) {
     if (auto* cached_widget_drawable = WidgetDrawable::Find(id)) {
       cached_widget_drawable->fresh_texture_anchors = fresh_texture_anchors;
     }
+  }
+  for (auto& [id, matrix] : pack.fresh_matrices) {
+    if (auto* cached_widget_drawable = WidgetDrawable::Find(id)) {
+      cached_widget_drawable->fresh_matrix = matrix;
+    }
+  }
+  for (auto& update : Concat(pack.frame, pack.overflow)) {
+    WidgetDrawableHolder& ref = WidgetDrawable::Make(update.id);
+    ref.widget_drawable->UpdateState(update);
   }
   for (auto& update : pack.frame) {
     auto widget_drawable = WidgetDrawable::Find(update.id);

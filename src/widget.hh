@@ -109,12 +109,12 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   float average_draw_millis = FP_NAN;
 
   // TODO: remove / clean up
-  SkMatrix window_to_local;
   maf::Optional<SkRect> pack_frame_texture_bounds;
 
   // Whenever PackFrame decides to render a widget, it stores the rendered bounds in this field.
   // This is then used later to check if the old surface can be reused.
   maf::Optional<Rect> rendered_bounds;
+  SkMatrix rendered_matrix;
   bool rendering = false;  // Whether the widget is currently being rendered by the client.
   bool rendering_to_screen = false;  // Whether the current render job is going to be presented.
 

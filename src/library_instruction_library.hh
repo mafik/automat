@@ -51,7 +51,7 @@ struct InstructionLibrary : Object {
   struct Widget : FallbackWidget, gui::PointerMoveCallback {
     struct InstructionCard {
       Ptr<Instruction::Widget> widget;
-      llvm::MCInst mc_inst;
+      Ptr<Instruction> instruction;
       float angle = 0;
       int library_index = -1;
       float throw_direction_deg = NAN;
@@ -113,6 +113,7 @@ struct InstructionLibrary : Object {
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 
     void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override;
+    bool AllowChildPointerEvents(gui::Widget& child) const override { return false; }
 
     void PointerMove(gui::Pointer&, Vec2 position) override;
     void PointerOver(gui::Pointer&) override;

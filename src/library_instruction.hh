@@ -5,6 +5,7 @@
 #include <llvm/MC/MCInst.h>
 
 #include "base.hh"
+#include "gui_small_buffer_widget.hh"
 #include "machine_code.hh"
 #include "textures.hh"
 
@@ -39,7 +40,7 @@ struct JumpArgument : Argument {
 extern Argument assembler_arg;
 extern JumpArgument jump_arg;
 
-struct Instruction : LiveObject, Runnable {
+struct Instruction : LiveObject, Runnable, Buffer {
   mc::Inst mc_inst;
 
   void Args(std::function<void(Argument&)> cb) override;
@@ -53,6 +54,13 @@ struct Instruction : LiveObject, Runnable {
 
   void OnRun(Location& here) override;
 
+  Buffer::Type imm_type;
+
+  void BufferVisit(const BufferVisitor&) override;
+  Type GetBufferType() override { return imm_type; };
+  bool IsBufferTypeMutable() override { return true; }
+  void SetBufferType(Type new_type) override { imm_type = new_type; }
+
   struct Widget : FallbackWidget {
     constexpr static float kWidth = 63.5_mm;
     constexpr static float kHeight = 44.5_mm;
@@ -61,15 +69,15 @@ struct Instruction : LiveObject, Runnable {
     constexpr static Rect kRect =
         Rect::MakeAtZero<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
-    std::optional<llvm::MCInst> mc_inst = std::nullopt;
+    Ptr<gui::SmallBufferWidget> imm_widget;
 
     Widget(WeakPtr<Object> object);
-    Widget(const llvm::MCInst&);
 
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
     void Draw(SkCanvas&) const override;
     Vec2AndDir ArgStart(const Argument&) override;
+    void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override;
   };
 
   maf::Str ToAsmStr() const;

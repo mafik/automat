@@ -314,13 +314,13 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     bool found = false;
     for (int j = 0; j < instruction_helix.size(); ++j) {
       auto& card = instruction_helix[j];
-      if (card.mc_inst.getOpcode() == inst.getOpcode()) {
+      if (card.instruction->mc_inst.getOpcode() == inst.getOpcode()) {
         if (isnan(card.throw_direction_deg) || (j == i)) {
           // Only update the rotation if the card is not being animated
           card.angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
         }
         card.library_index = i;
-        card.mc_inst = inst;
+        card.instruction->mc_inst = inst;
         found = true;
         // New cards should be inserted after the card that matches InstructionLibrary deck.
         insert_index = j + 1;
@@ -328,10 +328,12 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       }
     }
     if (!found) {
+      auto instruction = MakePtr<Instruction>();
+      instruction->mc_inst = inst;
+      auto widget = MakePtr<Instruction::Widget>(instruction->AcquireWeakPtr<Object>());
+      widget->parent = AcquirePtr();
       auto it = instruction_helix.insert(instruction_helix.begin() + insert_index,
-                                         InstructionCard{nullptr, inst});
-      it->widget = MakePtr<Instruction::Widget>(inst);
-      it->widget->parent = AcquirePtr();
+                                         InstructionCard{widget, instruction});
       it->angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
       it->library_index = i;
       if (insert_index == 0) {
@@ -1006,7 +1008,7 @@ struct ScrollDeckAction : Action {
         auto& mc_inst = library.instructions.front();
         for (int j = 0; j < library_widget.instruction_helix.size(); ++j) {
           auto& card = library_widget.instruction_helix[j];
-          if (card.mc_inst.getOpcode() == mc_inst.getOpcode()) {
+          if (card.instruction->mc_inst.getOpcode() == mc_inst.getOpcode()) {
             card.throw_direction_deg = (new_angle + 180_deg).ToDegrees();
             break;
           }
@@ -1017,7 +1019,7 @@ struct ScrollDeckAction : Action {
         auto& mc_inst = library.instructions.back();
         for (int j = 0; j < library_widget.instruction_helix.size(); ++j) {
           auto& card = library_widget.instruction_helix[j];
-          if (card.mc_inst.getOpcode() == mc_inst.getOpcode()) {
+          if (card.instruction->mc_inst.getOpcode() == mc_inst.getOpcode()) {
             card.throw_direction_deg = (new_angle + 180_deg).ToDegrees();
             card.throw_t = 1;
             break;
@@ -1092,10 +1094,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
       loc->parent_location = root_location;
       loc->parent = root_machine;
 
-      auto proto = MakePtr<Instruction>();
-      proto->mc_inst = instruction_helix.front().mc_inst;
-
-      loc->InsertHere(std::move(proto));
+      loc->InsertHere(instruction_helix.front().instruction->Clone());
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
       contact_point -= kFrontInstructionRect.BottomLeftCorner();
       loc->position = loc->animation_state.position = p.PositionWithinRootMachine() - contact_point;

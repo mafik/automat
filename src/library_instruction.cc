@@ -26,6 +26,7 @@
 #include "library_assembler.hh"
 #include "llvm_asm.hh"
 #include "math.hh"
+#include "ptr.hh"
 #include "svg.hh"
 #include "textures.hh"
 
@@ -166,6 +167,23 @@ void Instruction::ConnectionRemoved(Location& here, Connection& connection) {
 string_view Instruction::Name() const { return "Instruction"; }
 Ptr<Object> Instruction::Clone() const { return MakePtr<Instruction>(*this); }
 
+void Instruction::BufferVisit(const BufferVisitor& visitor) {
+  unsigned n = mc_inst.getNumOperands();
+  for (unsigned i = 0; i < n; ++i) {
+    auto& operand = mc_inst.getOperand(i);
+    if (operand.isImm()) {
+      int64_t imm = operand.getImm();
+      span<char> span = {reinterpret_cast<char*>(&imm), sizeof(imm)};
+      bool changed = visitor(span);
+      if (changed) {
+        operand.setImm(imm);
+      }
+      return;
+    }
+  }
+  visitor(span<char>{});
+}
+
 void Instruction::OnRun(Location& here) {
   auto assembler = FindOrCreateAssembler(here);
   assembler->RunMachineCode(this);
@@ -229,9 +247,16 @@ static const SkRRect kInstructionRRect =
 
 static const SkPath kInstructionShape = SkPath::RRect(kInstructionRRect);
 
-Instruction::Widget::Widget(WeakPtr<Object> object) { this->object = std::move(object); }
-
-Instruction::Widget::Widget(const llvm::MCInst& mc_inst) : mc_inst(mc_inst) {};
+Instruction::Widget::Widget(WeakPtr<Object> object) {
+  this->object = std::move(object);
+  auto instruction = LockObject<Instruction>();
+  if (instruction->BufferSize() > 0) {
+    imm_widget = MakePtr<gui::SmallBufferWidget>(
+        NestedWeakPtr<Buffer>(instruction->AcquireWeakPtr<ReferenceCounted>(), instruction.Get()));
+    imm_widget->parent = AcquirePtr();
+    imm_widget->local_to_parent.setIdentity();
+  }
+}
 
 SkPath Instruction::Widget::Shape() const { return kInstructionShape; }
 
@@ -2380,7 +2405,10 @@ PersistentImage reverse = PersistentImage::MakeFromAsset(
     PersistentImage::MakeArgs{.width = Instruction::Widget::kWidth -
                                        Instruction::Widget::kBorderMargin * 2});
 
-static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
+void Instruction::Widget::Draw(SkCanvas& canvas) const {
+  auto instruction = this->LockObject<Instruction>();
+  auto& inst = instruction->mc_inst;
+
   auto mat = canvas.getLocalToDeviceAs3x3();
   float det = mat.rc(0, 0) * mat.rc(1, 1) - mat.rc(0, 1) * mat.rc(1, 0);
   bool is_flipped = det > 0;
@@ -2497,7 +2525,8 @@ static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
     canvas.restore();
   }
 
-  {  // Contents
+  {
+    // Contents
 
     // TODO: the layout might be precomputed / cached
 
@@ -2559,6 +2588,8 @@ static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
     }
     int n_lines = line_widths_min.size();
 
+    canvas.save();
+
     // Place tokens
     Vec2 token_position[tokens.size()];
     float string_width_scale[tokens.size()];
@@ -2579,7 +2610,8 @@ static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
       }
       // Figure out maximum scale
       Rect natural_size = {
-          /* left */ x_center - longest_line_width / 2,
+          /* left */
+          x_center - longest_line_width / 2,
           /* bottom */ y_center - line_height * ((int)line_widths_min.size()) / 2,
           /* right */ x_center + longest_line_width / 2,
           /* top */ y_center + line_height * ((int)line_widths_min.size()) / 2,
@@ -2735,14 +2767,10 @@ static void DrawInstruction(SkCanvas& canvas, const mc::Inst& inst) {
       }
     }
   }
-}
 
-void Instruction::Widget::Draw(SkCanvas& canvas) const {
-  if (auto inst = this->LockObject<Instruction>()) {
-    DrawInstruction(canvas, inst->mc_inst);
-  } else if (mc_inst.has_value()) {
-    DrawInstruction(canvas, *mc_inst);
-  }
+  canvas.restore();
+
+  DrawChildren(canvas);
 }
 
 Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
@@ -2750,6 +2778,12 @@ Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
     return Vec2AndDir{.pos = kRect.RightCenter(), .dir = 0_deg};
   }
   return gui::Widget::ArgStart(arg);
+}
+
+void Instruction::Widget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {
+  if (imm_widget) {
+    children.emplace_back(imm_widget);
+  }
 }
 
 void Instruction::SerializeState(Serializer& writer, const char* key) const {

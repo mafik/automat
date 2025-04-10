@@ -140,6 +140,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
       for (int i : ArrayView(d, status)) {
         auto& l = CreateEmpty();
         location_idx.push_back(&l);
+        Ptr<Object> object;
         for (auto& field : ObjectView(d, status)) {
           if (field == "name") {
             d.Get(l.name, status);
@@ -152,12 +153,12 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
                 l.ReportError(f("Unknown object type: %s", type.c_str()));
                 // try to continue parsing
               } else {
-                l.Create(*proto);
+                object = proto->Clone();
               }
             }
           } else if (field == "value") {
-            if (l.object) {
-              l.object->DeserializeState(l, d);
+            if (object) {
+              object->DeserializeState(l, d);
             }
           } else if (field == "x") {
             d.Get(l.position.x, status);
@@ -172,6 +173,11 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
               }
             }
           }
+        }
+        // Objects are inserted into the location only after their state has been deserialized -
+        // this allows
+        if (object) {
+          l.InsertHere(std::move(object));
         }
       }
       for (auto& connection_record : connections) {

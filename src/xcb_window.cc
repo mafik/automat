@@ -3,6 +3,7 @@
 #include "xcb_window.hh"
 
 #include <xcb/xinput.h>
+#include <xkbcommon/xkbcommon-x11.h>
 
 #include <stop_token>
 

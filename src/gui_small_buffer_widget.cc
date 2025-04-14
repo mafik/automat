@@ -79,20 +79,27 @@ Font& SmallBufferWidget::GetFont(Buffer::Type type) const {
   }
 }
 
-animation::Phase SmallBufferWidget::Tick(time::Timer&) {
-  auto buf = buffer_weak.Lock();
-  type = buf->GetBufferType();
-
+static void RefreshText(SmallBufferWidget& widget) {
+  auto buf = widget.buffer_weak.Lock();
+  if (!buf) {
+    return;
+  }
+  widget.type = buf->GetBufferType();
+  auto& text = widget.text;
   text = buf->BufferRead();
-  if (type != Buffer::Type::Text) {
+  if (widget.type != Buffer::Type::Text) {
     int64_t value = 0;
     memcpy(&value, text.data(), text.size());
-    if (type == Buffer::Type::Integer) {
+    if (widget.type == Buffer::Type::Integer) {
       text = maf::f("%d", value);
-    } else if (type == Buffer::Type::Hexadecimal) {
+    } else if (widget.type == Buffer::Type::Hexadecimal) {
       text = maf::f("%x", value);
     }
   }
+}
+
+animation::Phase SmallBufferWidget::Tick(time::Timer&) {
+  RefreshText(*this);
   return animation::Finished;
 }
 
@@ -139,6 +146,13 @@ void SmallBufferWidget::TextVisit(const TextVisitor& visitor) {
       } else if (type == Buffer::Type::Integer) {
         int64_t value = 0;
         std::from_chars(text.data(), text.data() + text.size(), value);
+        if (span.size() == 1 && value > 0xff) {
+          value = 0xff;
+        } else if (span.size() == 2 && value > 0xffff) {
+          value = 0xffff;
+        } else if (span.size() == 4 && value > 0xffffffff) {
+          value = 0xffffffff;
+        }
         memcpy(span.data(), &value, span.size());
       } else if (type == Buffer::Type::Hexadecimal) {
         uint64_t value = 0;
@@ -147,9 +161,10 @@ void SmallBufferWidget::TextVisit(const TextVisitor& visitor) {
       } else {
         ERROR << "Unsupported buffer type " << (int)type;
       }
-
       return true;
     });
+    RefreshText(*this);
+    WakeAnimation();
   }
 }
 

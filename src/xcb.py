@@ -94,3 +94,14 @@ xcb_util_cursor.AddLinkArgs('-Wl,--export-dynamic',
                             '-Wl,--no-whole-archive',
                             '-Wl,--no-export-dynamic')
 xcb_util_cursor.InstallWhenIncluded(r'^xcb/xcb_cursor\.h$')
+
+xcb_util_errors = extension_helper.ExtensionHelper('xcb-util-errors', globals())
+xcb_util_errors.FetchFromURL('https://www.x.org/archive/individual/xcb/xcb-util-errors-1.0.1.tar.gz')
+xcb_util_errors.ConfigureDependsOn(xcb_proto, libxcb)
+xcb_util_errors.ConfigureWithAutotools('{PREFIX}/lib64/libxcb-errors.a')
+xcb_util_errors.InstallWhenIncluded(r'^xcb/xcb_errors\.h$')
+xcb_util_errors.AddLinkArgs('-Wl,--export-dynamic',
+                            '-Wl,--whole-archive',
+                            '-l:libxcb-errors.a',
+                            '-Wl,--no-whole-archive',
+                            '-Wl,--no-export-dynamic')

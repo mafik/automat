@@ -22,15 +22,11 @@
 #endif
 
 #if defined(__linux__)
-#include <xkbcommon/xkbcommon-x11.h>
-#include <xkbcommon/xkbcommon.h>
-
-#define explicit dont_use_cxx_explicit
-#include <xcb/xkb.h>
-#undef explicit
 #include <xcb/xinput.h>
 #include <xcb/xproto.h>
 #include <xcb/xtest.h>
+#include <xkbcommon/xkbcommon-x11.h>
+#include <xkbcommon/xkbcommon.h>
 
 #include "format.hh"
 #include "x11.hh"
@@ -376,28 +372,16 @@ void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
       .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
       .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
   };
-  LOG << "Got key down";
   xkb_context* ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-  xkb_context_set_log_verbosity(ctx, 10);
-  xkb_context_set_log_level(ctx, xkb_log_level::XKB_LOG_LEVEL_INFO);
-  LOG << "XKB context = " << f("%p", ctx);
   int32_t device_id = ev.deviceid;
-  LOG << "Device ID = " << device_id;
   xkb_keymap* keymap =
       xkb_x11_keymap_new_from_device(ctx, xcb::connection, device_id, XKB_KEYMAP_COMPILE_NO_FLAGS);
-  LOG << "Keymap = " << f("%p", keymap);
   xkb_state* state = xkb_x11_state_new_from_device(keymap, xcb::connection, device_id);
-  LOG << "State = " << f("%p", state);
 
-  char dummy_buffer;
-  LOG << "A";
-  int size = xkb_state_key_get_utf8(state, ev.detail, &dummy_buffer, 1);
-  LOG << "B";
-  key.text.resize(size);
-  LOG << "C";
-  xkb_state_key_get_utf8(state, ev.detail, key.text.data(), size + 1);
+  char buffer[32];
+  int size = xkb_state_key_get_utf8(state, ev.detail, buffer, sizeof(buffer));
+  key.text.assign(buffer, size);
 
-  LOG << "Releasing memory";
   xkb_keymap_unref(keymap);
   xkb_state_unref(state);
   xkb_context_unref(ctx);

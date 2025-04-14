@@ -275,11 +275,18 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
       std::string clean = FilterControlCharacters(k.text);
       if (!clean.empty()) {
         LOG << "Inserting " << clean << " at " << caret_positions[&caret].index;
+        ssize_t old_size;
         TextVisit([&](std::string& text) {
+          old_size = text.size();
           text.insert(caret_positions[&caret].index, clean);
-          return true;
+          return true;  // because text is changed
         });
-        caret_positions[&caret].index += clean.size();
+        ssize_t new_size = old_size;
+        TextVisit([&](std::string& text) {
+          new_size = text.size();
+          return false;  // because text is not changed
+        });
+        caret_positions[&caret].index += new_size - old_size;
         UpdateCaret(*this, caret);
       }
     }

@@ -3,6 +3,8 @@
 
 #include "xcb.hh"
 
+#include <xkbcommon/xkbcommon-x11.h>
+
 #include <cstring>
 #include <map>
 
@@ -81,6 +83,10 @@ void Connect(Status& status) {
     return;
   }
   xi_opcode = xinput_data->major_opcode;
+
+  xkb_x11_setup_xkb_extension(xcb::connection, XKB_X11_MIN_MAJOR_XKB_VERSION,
+                              XKB_X11_MIN_MINOR_XKB_VERSION, XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS,
+                              nullptr, nullptr, nullptr, nullptr);
 }
 
 std::string GetPropertyString(xcb_window_t window, xcb_atom_t property) {

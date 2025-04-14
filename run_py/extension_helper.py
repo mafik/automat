@@ -9,6 +9,8 @@ import re
 import src
 import os
 import fs_utils
+import sys
+import subprocess
 from collections import defaultdict
 from functools import partial
 from make import Popen
@@ -359,10 +361,32 @@ class ExtensionHelper:
     for run_arg in run_args:
       self.AddRunArg(run_arg)
 
-  def PatchSources(self, func : Callable[[Path], None]):
+  def PatchSources(self, patch : str | Callable[[Path], None]):
     if self.patch_sources_func:
       raise ValueError(f'{self.name} was already configured with patch sources hook')
-    self.patch_sources_func = func
+    if callable(patch):
+      self.patch_sources_func = patch
+    elif isinstance(patch, str):
+      def Patcher(token : Path):
+        try:
+          subprocess.run(
+              ['patch', '-p0'],
+              input=patch,
+              text=True,
+              check=True,
+              capture_output=True,
+              cwd=self.src_dir
+          )
+          print(f"Successfully patched {self.name}")
+          token.touch()
+        except FileNotFoundError:
+          print("Error: 'patch' command not found. Please ensure it's installed and in your PATH.", file=sys.stderr)
+          sys.exit(1)
+        except subprocess.CalledProcessError as e:
+          print(f"Error applying patch to {self.name}:", file=sys.stderr)
+          print(e.stderr, file=sys.stderr)
+          sys.exit(1)
+      self.patch_sources_func = Patcher
 
   def PostInstallStep(self, func : Callable[[build.BuildType, Path], None], outputs_func : Callable[[build.BuildType], list[Path]] = None):
     '''

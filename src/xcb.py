@@ -68,34 +68,7 @@ xcb_util.ConfigureWithAutotools('{PREFIX}/lib64/libxcb-util.a')
 xcb_util_image = extension_helper.ExtensionHelper('xcb-util-image', globals())
 xcb_util_image.FetchFromURL('https://www.x.org/archive/individual/xcb/xcb-util-image-0.4.1.tar.xz')
 xcb_util_image.ConfigureDependsOn(xcb_util)
-
-def ApplyPatch(path : Path, diff : str):
-  if not path.exists():
-    print(f"Error: File to patch does not exist: {path}", file=sys.stderr)
-    sys.exit(1)
-
-  try:
-    process = subprocess.run(
-        ['patch', '-p0'],
-        input=diff,
-        text=True,
-        check=True,
-        capture_output=True,
-        cwd=path
-    )
-    print(f"Successfully patched {path}")
-    print(process.stdout)
-  except FileNotFoundError:
-    print("Error: 'patch' command not found. Please ensure it's installed and in your PATH.", file=sys.stderr)
-    sys.exit(1)
-  except subprocess.CalledProcessError as e:
-    print(f"Error applying patch to {path}:", file=sys.stderr)
-    print(e.stderr, file=sys.stderr)
-    sys.exit(1)
-
-def PatchXcbUtilImage(token : Path):
-  # Apply the patch to xcb_bitops.h within the extracted source directory
-  ApplyPatch(xcb_util_image.src_dir, '''\
+xcb_util_image.PatchSources('''\
 --- "image/xcb_bitops.h"
 +++ "image/xcb_bitops.h"
 @@ -207,6 +207,7 @@
@@ -106,8 +79,6 @@ def PatchXcbUtilImage(token : Path):
  }
  
  #endif /* __XCB_BITOPS_H__ */''')
-  token.touch()
-xcb_util_image.PatchSources(PatchXcbUtilImage)
 xcb_util_image.ConfigureWithAutotools('{PREFIX}/lib64/libxcb-image.a')
 
 xcb_util_cursor = extension_helper.ExtensionHelper('xcb-util-cursor', globals())

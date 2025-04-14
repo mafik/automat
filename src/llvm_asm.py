@@ -109,6 +109,25 @@ def gen_x86_hh(x86_json, x86_hh):
 
   import re
 
+  # Returns one of: Imm16, Imm16PCRel, Imm32, Imm32PCRel, Imm32S, Imm64, Imm8, Imm8PCRel, Imm8Reg, NoImm.
+  def get_opcode_imm(opcode_name):
+    return x[opcode_name]['ImmT']['def']
+  
+  opcode_imm_sizes = {
+    'Imm16': 2,
+    'Imm16PCRel': 2,
+    'Imm32': 4,
+    'Imm32PCRel': 4,
+    'Imm32S': 4,
+    'Imm64': 8,
+    'Imm8': 1,
+    'Imm8PCRel': 1,
+    'Imm8Reg': 1,
+    'NoImm': 0,
+  }
+  def get_opcode_imm_size(opcode_name):
+    return opcode_imm_sizes[get_opcode_imm(opcode_name)]
+
   def select_opcodes_by_regex(group, opcode_name_regexp):
     selected = {opcode_name: opcode for opcode_name, opcode in x.items() if re.match(opcode_name_regexp, opcode_name)}
     group.update(selected)
@@ -359,6 +378,17 @@ struct Category {{
 
   output_lines = []
 
+  output_lines.append('inline int ImmediateSize(unsigned opcode) {')
+  output_lines.append('  switch (opcode) {')
+  for opcode in grouped_opcodes:
+    imm_size = get_opcode_imm_size(opcode)
+    if imm_size == 0: continue
+    output_lines.append(f'    case {opcode}: return {imm_size};')
+  output_lines.append('    default: return 0;')
+  output_lines.append('  }')
+  output_lines.append('}')
+  output_lines.append('')
+
   # Only include groups referenced by supported categories.
   supported_group_names = []
   for cat in categories.values():
@@ -424,7 +454,7 @@ def hook_recipe(r: make.Recipe):
 
     r.add_step(partial(gen_x86_hh, x86_json, x86_hh),
                outputs=[x86_hh],
-               inputs=[x86_json, __file__],
+               inputs=[x86_json, __file__] + llvm.hook.beam[build_type],
                desc='Generating x86.hh',
                shortcut='x86.hh ' +  build_type.name)
     

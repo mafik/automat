@@ -15,6 +15,8 @@ namespace automat::mc {
 using Inst = llvm::MCInst;
 using InstBuilder = llvm::MCInstBuilder;
 
+int ImmediateSize(const Inst&);
+
 // Represents a single instruction within a larger program.
 struct ProgramInst {
   NestedPtr<const Inst> inst;

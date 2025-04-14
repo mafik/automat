@@ -29,8 +29,6 @@
 
 #include "textures.hh"
 #include "xcb.hh"
-
-#pragma comment(lib, "xcb-shm")
 #endif
 
 using namespace maf;

@@ -4,7 +4,6 @@
 
 #include <include/core/SkRRect.h>
 
-#include "animation.hh"
 #include "gui_constants.hh"
 #include "keyboard.hh"
 #include "widget.hh"
@@ -24,38 +23,42 @@ struct CaretPosition {
   int index;  // byte offset within UTF-8 string
 };
 
-struct TextField : Widget, CaretOwner {
+// Returns true if the value has been modified
+using TextVisitor = std::function<bool(std::string&)>;
+
+struct TextFieldBase : Widget, CaretOwner {
+  std::unordered_map<Caret*, CaretPosition> caret_positions;
+  std::optional<Argument*> argument;
+
+  void PointerOver(Pointer&) override;
+  void PointerLeave(Pointer&) override;
+
+  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
+
+  void ReleaseCaret(Caret&) override;
+  void KeyDown(Caret&, Key) override;
+  void KeyUp(Caret&, Key) override;
+
+  virtual void TextVisit(const TextVisitor&) = 0;
+  virtual int IndexFromPosition(float x) const = 0;
+  virtual Vec2 PositionFromIndex(int index) const = 0;
+};
+
+struct TextField : TextFieldBase {
   static constexpr float kHeight =
       std::max(kLetterSize + 2 * kMargin + 2 * kBorderWidth, kMinimalTouchableSize);
 
   std::string* text;
   float width;
 
-  std::unordered_map<Caret*, CaretPosition> caret_positions;
-  struct HoverState {
-    int hovering_pointers = 0;
-    float animation = 0;
-    void Increment() { hovering_pointers++; }
-    void Decrement() { hovering_pointers--; }
-  };
-  mutable HoverState hover;
-  std::optional<Argument*> argument;
-
   TextField(std::string* text, float width) : text(text), width(width) {}
-  void PointerOver(Pointer&) override;
-  void PointerLeave(Pointer&) override;
-  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
-  void ReleaseCaret(Caret&) override;
-  void KeyDown(Caret&, Key) override;
-  void KeyUp(Caret&, Key) override;
-
-  int IndexFromPosition(float x) const;
-  Vec2 PositionFromIndex(int index) const;
 
   virtual Vec2 GetTextPos() const;
+  void TextVisit(const TextVisitor&) override;
+  int IndexFromPosition(float x) const override;
+  Vec2 PositionFromIndex(int index) const override;
 
   // Internal method used to draw the background of the text field.
   //

@@ -34,7 +34,7 @@ hook.ConfigureOptions(
   INSTALL_CONFIGS='OFF')
 if sys.platform == 'win32':
   hook.ConfigureOptions(WIN32_MT_BUILD='ON')
-hook.ConfigureWithCMake(src_dir=hook.checkout_dir, output=tesseract_output)
+hook.ConfigureWithCMake(tesseract_output)
 if sys.platform == 'linux':
   hook.AddLinkArg('-ltesseract')
 elif sys.platform == 'win32':

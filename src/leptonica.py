@@ -23,7 +23,7 @@ hook.ConfigureOptions(SW_BUILD='OFF',
                       ENABLE_WEBP='OFF',
                       ENABLE_OPENJPEG='OFF',
                       CMAKE_C_FLAGS='-DNO_CONSOLE_IO=1')
-hook.ConfigureWithCMake(src_dir=hook.checkout_dir, output=leptonica_output)
+hook.ConfigureWithCMake(leptonica_output)
 hook.AddLinkArg('-lleptonica')
 if sys.platform == 'win32':
   hook.AddLinkArg(lambda t: ['-lmsvcrt' + ('d' if t == build.debug else '')])

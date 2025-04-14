@@ -31,7 +31,7 @@
 // TODO: use correct bounds in SkPictureRecorder::beginRecording
 // TODO: render using a job system (tree of Semaphores)
 
-constexpr bool kDebugRendering = true;
+constexpr bool kDebugRendering = false;
 constexpr bool kDebugRenderEvents = false;
 
 using namespace automat::gui;

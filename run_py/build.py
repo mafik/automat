@@ -89,7 +89,7 @@ base = BuildType('Base', is_default=True)
 base.compile_args += ['-static', '-std=gnu++26', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-plt', '-fno-strict-aliasing', '-fno-exceptions',
-    '-D_FORTIFY_SOURCE=2', '-Wformat', '-Wchanges-meaning', '-Wno-c99-designator',
+    '-D_FORTIFY_SOURCE=2', '-Wformat', '-Wno-c99-designator',
     '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type',
     '-gsplit-dwarf']
 

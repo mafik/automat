@@ -12,8 +12,6 @@
 
 #if defined(__linux__)
 #include <xcb/xtest.h>
-
-#pragma comment(lib, "xcb-xtest")
 #endif
 
 #include <include/core/SkAlphaType.h>

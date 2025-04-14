@@ -173,7 +173,8 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
     auto& operand = mc_inst.getOperand(i);
     if (operand.isImm()) {
       int64_t imm = operand.getImm();
-      span<char> span = {reinterpret_cast<char*>(&imm), sizeof(imm)};
+      size_t size = mc::ImmediateSize(mc_inst);
+      span<char> span = {reinterpret_cast<char*>(&imm), size};
       bool changed = visitor(span);
       if (changed) {
         operand.setImm(imm);
@@ -251,10 +252,15 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
   this->object = std::move(object);
   auto instruction = LockObject<Instruction>();
   if (instruction->BufferSize() > 0) {
-    imm_widget = MakePtr<gui::SmallBufferWidget>(
-        NestedWeakPtr<Buffer>(instruction->AcquireWeakPtr<ReferenceCounted>(), instruction.Get()));
+    auto buffer_ptr =
+        NestedWeakPtr<Buffer>(instruction->AcquireWeakPtr<ReferenceCounted>(), instruction.Get());
+    imm_widget = MakePtr<gui::SmallBufferWidget>(std::move(buffer_ptr));
     imm_widget->parent = AcquirePtr();
     imm_widget->local_to_parent.setIdentity();
+    imm_widget->fonts[(int)Buffer::Type::Text] = &HeavyFont();
+    imm_widget->fonts[(int)Buffer::Type::Integer] = &HeavyFont();
+    imm_widget->fonts[(int)Buffer::Type::Hexadecimal] = &HeavyFont();
+    imm_widget->Measure();
   }
 }
 
@@ -992,13 +998,9 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::RCL16ri:
     case X86::RCL8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"},
-          {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "left"},
-          {.tag = Token::BreakLine},
-          {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = " times"},
+          {.tag = Token::String, .str = "Rotate"},    {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::RegisterOperand, .reg = 0},  {.tag = Token::String, .str = "left "},
+          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = " times"},
       };
       return tokens;
     }
@@ -1039,13 +1041,9 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::RCR64ri:
     case X86::RCR8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"},
-          {.tag = Token::FixedFlag, .flag = Flag::CF},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "right"},
-          {.tag = Token::BreakLine},
-          {.tag = Token::ImmediateOperand, .imm = 2},
-          {.tag = Token::String, .str = " times"},
+          {.tag = Token::String, .str = "Rotate"},    {.tag = Token::FixedFlag, .flag = Flag::CF},
+          {.tag = Token::RegisterOperand, .reg = 0},  {.tag = Token::String, .str = "right "},
+          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = " times"},
       };
       return tokens;
     }
@@ -1067,9 +1065,9 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::ROL16ri:
     case X86::ROL8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"},    {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "left"},      {.tag = Token::BreakLine},
-          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = " times"},
+          {.tag = Token::String, .str = "Rotate"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "left "},  {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = " times"},
       };
       return tokens;
     }
@@ -1123,9 +1121,9 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::RORX32ri:
     case X86::RORX64ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Rotate"},    {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "right"},     {.tag = Token::BreakLine},
-          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = " times"},
+          {.tag = Token::String, .str = "Rotate"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "right "}, {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = " times"},
       };
       return tokens;
     }
@@ -1448,9 +1446,8 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::MOV32ri:
     case X86::MOV32ri_alt: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Set"},
-          {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "to "},
+          {.tag = Token::String, .str = "Set"},       {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "to"},        {.tag = Token::BreakLine},
           {.tag = Token::ImmediateOperand, .imm = 1},
       };
       return tokens;
@@ -1854,9 +1851,9 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::SHL16ri:
     case X86::SHL8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Multiply"},  {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2"},      {.tag = Token::BreakLine},
-          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = " times"},
+          {.tag = Token::String, .str = "Multiply"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2 "},    {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = " times"},
       };
       return tokens;
     }
@@ -1896,9 +1893,9 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::SHR16ri:
     case X86::SHR8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Divide"},    {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2"},      {.tag = Token::BreakLine},
-          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = " times"},
+          {.tag = Token::String, .str = "Divide"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2 "},  {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = " times"},
       };
       return tokens;
     }
@@ -1951,9 +1948,9 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
     case X86::SAR16ri:
     case X86::SAR8ri: {
       constexpr static Token tokens[] = {
-          {.tag = Token::String, .str = "Divide ±"},  {.tag = Token::RegisterOperand, .reg = 0},
-          {.tag = Token::String, .str = "by 2"},      {.tag = Token::BreakLine},
-          {.tag = Token::ImmediateOperand, .imm = 2}, {.tag = Token::String, .str = " times"},
+          {.tag = Token::String, .str = "Divide ±"}, {.tag = Token::RegisterOperand, .reg = 0},
+          {.tag = Token::String, .str = "by 2 "},    {.tag = Token::ImmediateOperand, .imm = 2},
+          {.tag = Token::String, .str = " times"},
       };
       return tokens;
     }
@@ -2405,6 +2402,119 @@ PersistentImage reverse = PersistentImage::MakeFromAsset(
     PersistentImage::MakeArgs{.width = Instruction::Widget::kWidth -
                                        Instruction::Widget::kBorderMargin * 2});
 
+animation::Phase Instruction::Widget::Tick(time::Timer& timer) {
+  auto instruction = this->LockObject<Instruction>();
+  auto& inst = instruction->mc_inst;
+
+  auto tokens = PrintInstruction(inst);
+  auto& heavy_font = HeavyFont();
+
+  // Measure the lines
+  float token_width_min[tokens.size()];
+  float token_width_max[tokens.size()];
+  float token_width_base[tokens.size()];
+  SmallVector<float, 6> line_widths_min;
+  SmallVector<float, 6> line_widths_max;
+  line_widths_min.emplace_back(0);
+  line_widths_max.emplace_back(0);
+  for (int token_i = 0; token_i < tokens.size(); ++token_i) {
+    auto& token = tokens[token_i];
+    if (token.tag == Token::BreakLine) {
+      line_widths_min.emplace_back(0);
+      line_widths_max.emplace_back(0);
+      continue;
+    }
+    switch (token.tag) {
+      case Token::String: {
+        token_width_base[token_i] = heavy_font.MeasureText(token.str);
+        break;
+      }
+      case Token::RegisterOperand:  // fallthrough
+      case Token::FixedRegister:
+        token_width_base[token_i] = kRegisterTokenWidth;
+        break;
+      case Token::ImmediateOperand:
+        token_width_base[token_i] = imm_widget->width;
+        break;
+      case Token::FixedFlag:
+        token_width_base[token_i] = kFixedFlagWidth;
+        break;
+      case Token::ConditionCode:  // fallthrough
+      case Token::FixedCondition:
+        token_width_base[token_i] = kConditionCodeTokenWidth;
+        break;
+      default:
+        break;
+    }
+    if (token.tag == Token::String) {
+      token_width_min[token_i] = token_width_base[token_i] * kMinTextScale;
+      token_width_max[token_i] = token_width_base[token_i] * kMaxTextScale;
+    } else {
+      token_width_min[token_i] = token_width_max[token_i] = token_width_base[token_i];
+    }
+    line_widths_min.back() += token_width_min[token_i];
+    line_widths_max.back() += token_width_max[token_i];
+  }
+  int n_lines = line_widths_min.size();
+
+  // Place tokens
+  token_position.resize(tokens.size());
+  string_width_scale.resize(tokens.size());
+  scale = 1;
+  {
+    float longest_line_width = 0;
+    for (int line = 0; line < n_lines; ++line) {
+      longest_line_width = std::max(longest_line_width, line_widths_min[line]);
+    }
+    // Figure out maximum scale
+    Rect natural_size = {
+        /* left */
+        kXCenter - longest_line_width / 2,
+        /* bottom */ kYCenter - kLineHeight * ((int)line_widths_min.size()) / 2,
+        /* right */ kXCenter + longest_line_width / 2,
+        /* top */ kYCenter + kLineHeight * ((int)line_widths_min.size()) / 2,
+    };
+
+    scale = std::min((kYCenter - kYMin) / (kYCenter - natural_size.bottom),
+                     (kYMax - kYCenter) / (natural_size.top - kYCenter));
+    scale = std::min(scale, kXRange / natural_size.Width());
+
+    float line_width_f[n_lines];
+    for (int line = 0; line < n_lines; ++line) {
+      float line_width_min = line_widths_min[line] * scale;
+      float line_width_max = line_widths_max[line] * scale;
+      line_width_f[line] = Saturate((kXRange - line_width_min) / (line_width_max - line_width_min));
+    }
+
+    int line = 0;
+    float x = kXCenter - lerp(line_widths_min[line], line_widths_max[line], line_width_f[line]) / 2;
+    float y = kYCenter - kHeavyFontSize / 2 + kLineHeight * (n_lines - 1) / 2;
+    for (int token_i = 0; token_i < tokens.size(); ++token_i) {
+      auto& token = tokens[token_i];
+      if (token.tag == Token::BreakLine) {
+        line++;
+        x = kXCenter - lerp(line_widths_min[line], line_widths_max[line], line_width_f[line]) / 2;
+        y -= kLineHeight;
+        continue;
+      } else if (token.tag == Token::ImmediateOperand) {
+        SkMatrix mat = SkMatrix::I();
+        mat.preScale(scale, scale, kXCenter, kYCenter);
+        mat.preTranslate(x, y);
+        imm_widget->local_to_parent = SkM44(mat);
+      }
+      token_position[token_i] = Vec2{x, y};
+      string_width_scale[token_i] = lerp(kMinTextScale, kMaxTextScale, line_width_f[line]);
+      if (token.tag == Token::String) {
+        x += lerp(token_width_min[token_i], token_width_max[token_i], line_width_f[line]);
+      } else {
+        x += token_width_min[token_i];
+      }
+    }
+  }
+
+  return animation::Finished;
+}
+
 void Instruction::Widget::Draw(SkCanvas& canvas) const {
   auto instruction = this->LockObject<Instruction>();
   auto& inst = instruction->mc_inst;
@@ -2528,128 +2638,8 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   {
     // Contents
 
-    // TODO: the layout might be precomputed / cached
-
     auto tokens = PrintInstruction(inst);
     auto& heavy_font = HeavyFont();
-
-    constexpr float kRegisterTokenWidth = kRegisterIconWidth;
-    constexpr float kRegisterIconScale = kRegisterTokenWidth / kRegisterIconWidth;
-    constexpr float kImmediateTokenWidth = 10_mm;
-    constexpr float kFixedFlagWidth = 6_mm;
-    constexpr float kMinTextScale = 0.9;
-    constexpr float kMaxTextScale = 1.1;
-
-    // Measure the lines
-    float token_width_min[tokens.size()];
-    float token_width_max[tokens.size()];
-    float token_width_base[tokens.size()];
-    SmallVector<float, 6> line_widths_min;
-    SmallVector<float, 6> line_widths_max;
-    line_widths_min.emplace_back(0);
-    line_widths_max.emplace_back(0);
-    for (int token_i = 0; token_i < tokens.size(); ++token_i) {
-      auto& token = tokens[token_i];
-      if (token.tag == Token::BreakLine) {
-        line_widths_min.emplace_back(0);
-        line_widths_max.emplace_back(0);
-        continue;
-      }
-      switch (token.tag) {
-        case Token::String: {
-          token_width_base[token_i] = heavy_font.MeasureText(token.str);
-          break;
-        }
-        case Token::RegisterOperand:  // fallthrough
-        case Token::FixedRegister:
-          token_width_base[token_i] = kRegisterTokenWidth;
-          break;
-        case Token::ImmediateOperand:
-          token_width_base[token_i] = kImmediateTokenWidth;
-          break;
-        case Token::FixedFlag:
-          token_width_base[token_i] = kFixedFlagWidth;
-          break;
-        case Token::ConditionCode:  // fallthrough
-        case Token::FixedCondition:
-          token_width_base[token_i] = kConditionCodeTokenWidth;
-          break;
-        default:
-          break;
-      }
-      if (token.tag == Token::String) {
-        token_width_min[token_i] = token_width_base[token_i] * kMinTextScale;
-        token_width_max[token_i] = token_width_base[token_i] * kMaxTextScale;
-      } else {
-        token_width_min[token_i] = token_width_max[token_i] = token_width_base[token_i];
-      }
-      line_widths_min.back() += token_width_min[token_i];
-      line_widths_max.back() += token_width_max[token_i];
-    }
-    int n_lines = line_widths_min.size();
-
-    canvas.save();
-
-    // Place tokens
-    Vec2 token_position[tokens.size()];
-    float string_width_scale[tokens.size()];
-    float scale = 1;
-    constexpr float x_min = Widget::kRect.left + Widget::kBorderMargin * 2;
-    constexpr float x_max = Widget::kRect.right - Widget::kBorderMargin * 2;
-    constexpr float x_range = x_max - x_min;
-    constexpr float x_center = (x_max + x_min) / 2;
-    constexpr float y_max = Widget::kRect.top - Widget::kBorderMargin * 2;
-    constexpr float y_min = Widget::kRect.bottom + Widget::kBorderMargin * 2;
-    constexpr float y_range = y_max - y_min;
-    constexpr float y_center = (y_max + y_min) / 2;
-    constexpr float line_height = 11_mm;
-    {
-      float longest_line_width = 0;
-      for (int line = 0; line < n_lines; ++line) {
-        longest_line_width = std::max(longest_line_width, line_widths_min[line]);
-      }
-      // Figure out maximum scale
-      Rect natural_size = {
-          /* left */
-          x_center - longest_line_width / 2,
-          /* bottom */ y_center - line_height * ((int)line_widths_min.size()) / 2,
-          /* right */ x_center + longest_line_width / 2,
-          /* top */ y_center + line_height * ((int)line_widths_min.size()) / 2,
-      };
-
-      scale = std::min((y_center - y_min) / (y_center - natural_size.bottom),
-                       (y_max - y_center) / (natural_size.top - y_center));
-      scale = std::min(scale, x_range / natural_size.Width());
-
-      float line_width_f[n_lines];
-      for (int line = 0; line < n_lines; ++line) {
-        float line_width_min = line_widths_min[line] * scale;
-        float line_width_max = line_widths_max[line] * scale;
-        line_width_f[line] =
-            Saturate((x_range - line_width_min) / (line_width_max - line_width_min));
-      }
-
-      int line = 0;
-      float x =
-          x_center - lerp(line_widths_min[line], line_widths_max[line], line_width_f[line]) / 2;
-      float y = y_center - kHeavyFontSize / 2 + line_height * (n_lines - 1) / 2;
-      for (int token_i = 0; token_i < tokens.size(); ++token_i) {
-        auto& token = tokens[token_i];
-        if (token.tag == Token::BreakLine) {
-          line++;
-          x = x_center - lerp(line_widths_min[line], line_widths_max[line], line_width_f[line]) / 2;
-          y -= line_height;
-          continue;
-        }
-        token_position[token_i] = Vec2{x, y};
-        string_width_scale[token_i] = lerp(kMinTextScale, kMaxTextScale, line_width_f[line]);
-        if (token.tag == Token::String) {
-          x += lerp(token_width_min[token_i], token_width_max[token_i], line_width_f[line]);
-        } else {
-          x += token_width_min[token_i];
-        }
-      }
-    }
 
     SkPaint text_paint;
     text_paint.setColor("#000000"_color);
@@ -2657,16 +2647,17 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
 
     auto& assembler = LLVM_Assembler::Get();
 
-    canvas.translate(x_center, y_center);
-    canvas.scale(scale, scale);
-    canvas.translate(-x_center, -y_center);
-    auto mat = canvas.getLocalToDevice();
+    auto default_mat = canvas.getLocalToDevice();
+    auto mat = default_mat.asM33();
+    mat.preScale(scale, scale, kXCenter, kYCenter);
 
     for (int token_i = 0; token_i < tokens.size(); ++token_i) {
       auto& token = tokens[token_i];
-      if (token_i) {
-        canvas.setMatrix(mat);
+      if (token_i >= token_position.size()) {
+        LOG << "Token " << token_i << " is out of bounds";
+        continue;
       }
+      canvas.setMatrix(mat);
       switch (token.tag) {
         case Token::String: {
           canvas.translate(token_position[token_i].x, token_position[token_i].y);
@@ -2675,19 +2666,7 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
           break;
         }
         case Token::ImmediateOperand: {
-          auto mat = canvas.getLocalToDevice();
-          canvas.translate(token_position[token_i].x, token_position[token_i].y);
-          int64_t immediate_value = inst.getOperand(token.imm).getImm();
-          std::string immediate_str = std::to_string(immediate_value);
-          Rect immediate_rect = Rect::MakeCornerZero(kImmediateTokenWidth, kHeavyFontSize);
-          immediate_rect.bottom -= 2_mm;
-          immediate_rect.top += 2_mm;
-          SkPaint immediate_bg_paint;
-          immediate_bg_paint.setColor("#ffffff"_color);
-          immediate_bg_paint.setAntiAlias(true);
-          canvas.drawRoundRect(immediate_rect, 1_mm, 1_mm, immediate_bg_paint);
-          canvas.translate(1_mm, 0);
-          heavy_font.DrawText(canvas, immediate_str, text_paint);
+          // Drawn as a widget
           break;
         }
         case Token::FixedRegister: {
@@ -2766,9 +2745,8 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
           break;
       }
     }
+    canvas.setMatrix(default_mat);
   }
-
-  canvas.restore();
 
   DrawChildren(canvas);
 }

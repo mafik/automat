@@ -4,6 +4,8 @@
 
 #include <llvm/Support/raw_ostream.h>
 
+#include <automat/x86.hh>
+
 #include "ptr.hh"
 
 #if defined __linux__
@@ -31,6 +33,8 @@ namespace automat::mc {
 
 // Switch this to true to see debug logs.
 constexpr bool kDebugCodeController = false;
+
+int ImmediateSize(const Inst& inst) { return ::automat::x86::ImmediateSize(inst.getOpcode()); }
 
 #if defined __linux__
 

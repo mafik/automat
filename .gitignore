@@ -42,23 +42,9 @@ __pycache__
 *~
 
 build
-third_party/googletest
-third_party/PipeWire
-third_party/FlameGraph
-third_party/LLVM
-third_party/Skia
-third_party/Tesseract
-third_party/Leptonica
-third_party/depot_tools
-third_party/*.tar.xz
-third_party/*.tar.gz
-third_party/libXau-*
-third_party/libxcb-*
-third_party/util-macros-*
-third_party/xcb-proto-*
-third_party/xorgproto-*
-third_party/xcb-util-cursor-*
-third_party/*.patched
+third_party/*
+!third_party/FastTrigo
+!third_party/cavalier_contours
 
 tmp
 

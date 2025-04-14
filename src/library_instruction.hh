@@ -54,7 +54,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
 
   void OnRun(Location& here) override;
 
-  Buffer::Type imm_type;
+  Buffer::Type imm_type = Buffer::Type::Integer;
 
   void BufferVisit(const BufferVisitor&) override;
   Type GetBufferType() override { return imm_type; };
@@ -69,12 +69,36 @@ struct Instruction : LiveObject, Runnable, Buffer {
     constexpr static Rect kRect =
         Rect::MakeAtZero<LeftX, BottomY>(Instruction::Widget::kWidth, Instruction::Widget::kHeight);
 
+    constexpr static float kRegisterTokenWidth = kRegisterIconWidth;
+    constexpr static float kRegisterIconScale = kRegisterTokenWidth / kRegisterIconWidth;
+    constexpr static float kFixedFlagWidth = 6_mm;
+    constexpr static float kMinTextScale = 0.9;
+    constexpr static float kMaxTextScale = 1.1;
+
+    constexpr static float kXMin =
+        Instruction::Widget::kRect.left + Instruction::Widget::kBorderMargin * 2;
+    constexpr static float kXMax =
+        Instruction::Widget::kRect.right - Instruction::Widget::kBorderMargin * 2;
+    constexpr static float kXRange = kXMax - kXMin;
+    constexpr static float kXCenter = (kXMax + kXMin) / 2;
+    constexpr static float kYMax =
+        Instruction::Widget::kRect.top - Instruction::Widget::kBorderMargin * 2;
+    constexpr static float kYMin =
+        Instruction::Widget::kRect.bottom + Instruction::Widget::kBorderMargin * 2;
+    constexpr static float kYRange = kYMax - kYMin;
+    constexpr static float kYCenter = (kYMax + kYMin) / 2;
+    constexpr static float kLineHeight = 11_mm;
+
     Ptr<gui::SmallBufferWidget> imm_widget;
+    float scale = 1;
+    llvm::SmallVector<Vec2, 10> token_position;
+    llvm::SmallVector<float, 10> string_width_scale;
 
     Widget(WeakPtr<Object> object);
 
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
+    animation::Phase Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
     Vec2AndDir ArgStart(const Argument&) override;
     void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override;

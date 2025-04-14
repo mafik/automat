@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include "gui_constants.hh"
-#include "widget.hh"
+#include "font.hh"
+#include "text_field.hh"
 
 namespace automat {
 
@@ -44,6 +44,7 @@ struct Buffer {
     Text,
     Integer,
     Hexadecimal,
+    TypeCount,
   };
 
   virtual Type GetBufferType() { return Type::Text; };
@@ -60,19 +61,32 @@ namespace automat::gui {
 
 // Can be used to edit a short string of bytes as a decimal number / hexadecimal number / short
 // UTF-8 string.
-struct SmallBufferWidget : Widget {
-  static constexpr float kHeight = std::max(kLetterSize + 2 * kMargin, kMinimalTouchableSize);
-  static constexpr float kCornerRadius = kHeight / 2;
+struct SmallBufferWidget : TextFieldBase {
+  NestedWeakPtr<Buffer> buffer_weak;
 
-  NestedWeakPtr<Buffer> buffer;
+  gui::Font* fonts[(int)Buffer::Type::TypeCount] = {};
 
+  float vertical_margin;
   float width;
+  float height;
+  Buffer::Type type = Buffer::Type::Integer;
+  std::string text;
 
   SmallBufferWidget(NestedWeakPtr<Buffer> buffer);
 
+  // Call this after setting the fonts to calculate the size of the widget.
+  void Measure();
+
+  Font& GetFont(Buffer::Type) const;
+
   RRect CoarseBounds() const override;
   SkPath Shape() const override;
+  animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
+
+  void TextVisit(const TextVisitor&) override;
+  int IndexFromPosition(float x) const override;
+  Vec2 PositionFromIndex(int index) const override;
 };
 
 }  // namespace automat::gui

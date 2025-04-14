@@ -1,46 +1,125 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
-import autotools, re, build, src
+import extension_helper
+from pathlib import Path
+import subprocess
+import sys
 
-def hook_recipe(recipe):
-  autotools.register_package(recipe, 'https://www.x.org/archive/individual/util/util-macros-1.20.1.tar.xz', [], ['{PREFIX}/share/pkgconfig/xorg-macros.pc'])
-  autotools.register_package(recipe, 'https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2024.1.tar.xz', ['{PREFIX}/share/pkgconfig/xorg-macros.pc'], ['{PREFIX}/include/X11'])
-  autotools.register_package(recipe, 'https://www.x.org/pub/individual/lib/libXau-1.0.11.tar.xz', ['{PREFIX}/include/X11'], ['{PREFIX}/lib/libXau.a'])
-  autotools.register_package(recipe, 'https://xcb.freedesktop.org/dist/xcb-proto-1.17.0.tar.xz', [], ['{PREFIX}/share/pkgconfig/xcb-proto.pc'])
-  autotools.register_package(recipe, 'https://xcb.freedesktop.org/dist/libxcb-1.17.0.tar.xz', ['{PREFIX}/share/pkgconfig/xcb-proto.pc', '{PREFIX}/lib/libXau.a'], ['{PREFIX}/lib/libxcb.a', '{PREFIX}/include/xcb'])
-  autotools.register_package(recipe, 'https://xcb.freedesktop.org/dist/xcb-util-cursor-0.1.5.tar.xz', ['{PREFIX}/share/pkgconfig/xcb-proto.pc'], ['{PREFIX}/lib/libxcb-cursor.a'])
+util_macros = extension_helper.ExtensionHelper('util-macros', globals())
+util_macros.FetchFromURL('https://www.x.org/archive/individual/util/util-macros-1.20.1.tar.xz')
+util_macros.ConfigureWithAutotools('{PREFIX}/share/pkgconfig/xorg-macros.pc')
 
-xcb_libs = set(['xcb', 'xcb-xinput', 'xcb-xtest', 'xcb-cursor'])
+xorgproto = extension_helper.ExtensionHelper('xorgproto', globals())
+xorgproto.FetchFromURL('https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2024.1.tar.xz')
+xorgproto.ConfigureDependsOn(util_macros)
+xorgproto.ConfigureWithAutotools('{PREFIX}/include/X11')
 
-# Binaries that should link to XCB
-xcb_bins = set()
+libXau = extension_helper.ExtensionHelper('libXau', globals())
+libXau.FetchFromURL('https://www.x.org/pub/individual/lib/libXau-1.0.11.tar.xz')
+libXau.ConfigureDependsOn(xorgproto)
+libXau.ConfigureWithAutotools('{PREFIX}/lib64/libXau.a')
 
-def hook_srcs(srcs : dict[str, src.File], recipe):
-  for src in srcs.values():
-    if xcb_libs.intersection(src.comment_libs):
-      src.link_args[''] += ['-lXau']
+libXdmcp = extension_helper.ExtensionHelper('libXdmcp', globals())
+libXdmcp.FetchFromURL('https://www.x.org/archive/individual/lib/libXdmcp-1.1.5.tar.xz')
+libXdmcp.ConfigureDependsOn(xorgproto)
+libXdmcp.ConfigureWithAutotools('{PREFIX}/lib64/libXdmcp.a')
 
+xcb_proto = extension_helper.ExtensionHelper('xcb-proto', globals())
+xcb_proto.FetchFromURL('https://xcb.freedesktop.org/dist/xcb-proto-1.17.0.tar.xz')
+xcb_proto.ConfigureDependsOn(xorgproto)
+xcb_proto.ConfigureWithAutotools('{PREFIX}/share/pkgconfig/xcb-proto.pc')
 
-def hook_plan(srcs, objs : list[build.ObjectFile], bins, recipe):
-  for obj in objs:
-    if any(re.match(r'xcb/.*', inc) for inc in obj.source.system_includes):
-      obj.deps.add(str(obj.build_type.PREFIX() / 'include' / 'xcb'))
+libX11 = extension_helper.ExtensionHelper('libX11', globals())
+libX11.FetchFromURL('https://www.x.org/archive/individual/lib/libX11-1.8.tar.xz')
+libX11.ConfigureDependsOn(xorgproto)
+libX11.ConfigureWithAutotools('{PREFIX}/lib64/libX11.a')
 
-  for bin in bins:
-    for obj in bin.objects:
-      if xcb_libs.intersection(obj.source.comment_libs):
-        xcb_bins.add(bin)
+libXext = extension_helper.ExtensionHelper('libXext', globals())
+libXext.FetchFromURL('https://www.x.org/archive/individual/lib/libXext-1.3.6.tar.xz')
+libXext.ConfigureDependsOn(xorgproto)
+libXext.ConfigureWithAutotools('{PREFIX}/lib64/libXext.a')
 
+libxcb = extension_helper.ExtensionHelper('libxcb', globals())
+libxcb.FetchFromURL('https://xcb.freedesktop.org/dist/libxcb-1.17.0.tar.xz')
+libxcb.ConfigureDependsOn(xcb_proto, libXau, libXdmcp, libXext, libX11)
+libxcb.ConfigureWithAutotools('{PREFIX}/lib64/libxcb.a', '{PREFIX}/include/xcb')
+# '-l:libxcb-glx.a', '-l:libxcb-randr.a', '-l:libxcb-dri3.a', '-l:libX11.a', '-l:libX11-xcb.a', '-l:libXext.a', '-l:libXau.a', '-l:libXdmcp.a'
+libxcb.AddLinkArgs('-l:libxcb.so',
+                   '-Wl,--export-dynamic',
+                   '-Wl,--whole-archive',
+                   '-l:libxcb-xtest.a',
+                   '-l:libxcb-xinput.a',
+                   '-l:libxcb-shm.a',
+                   '-l:libxcb-render.a',
+                   '-Wl,--no-whole-archive',
+                   '-Wl,--no-export-dynamic')
+libxcb.InstallWhenIncluded(r'^xcb/.+\.h')
 
-def hook_final(srcs, objs, bins, recipe):
-  for step in recipe.steps:
-    needs_xcb = False
-    build_type = None
-    for bin in xcb_bins:
-      if str(bin.path) in step.outputs:
-        needs_xcb = True
-        build_type = bin.build_type
-        break
-    if needs_xcb:
-      step.inputs.add(str(build_type.PREFIX() / 'lib' / 'libxcb.a'))
-      step.inputs.add(str(build_type.PREFIX() / 'lib' / 'libxcb-cursor.a'))
+xcb_util_renderutil = extension_helper.ExtensionHelper('xcb-util-renderutil', globals())
+xcb_util_renderutil.FetchFromURL('https://www.x.org/archive/individual/xcb/xcb-util-renderutil-0.3.10.tar.xz')
+xcb_util_renderutil.ConfigureDependsOn(libxcb)
+xcb_util_renderutil.ConfigureWithAutotools('{PREFIX}/lib64/libxcb-render-util.a')
+
+xcb_util = extension_helper.ExtensionHelper('xcb-util', globals())
+xcb_util.FetchFromURL('https://www.x.org/archive/individual/xcb/xcb-util-0.4.1.tar.xz')
+xcb_util.ConfigureDependsOn(xcb_proto, libxcb)
+xcb_util.ConfigureWithAutotools('{PREFIX}/lib64/libxcb-util.a')
+
+xcb_util_image = extension_helper.ExtensionHelper('xcb-util-image', globals())
+xcb_util_image.FetchFromURL('https://www.x.org/archive/individual/xcb/xcb-util-image-0.4.1.tar.xz')
+xcb_util_image.ConfigureDependsOn(xcb_util)
+
+def ApplyPatch(path : Path, diff : str):
+  if not path.exists():
+    print(f"Error: File to patch does not exist: {path}", file=sys.stderr)
+    sys.exit(1)
+
+  try:
+    process = subprocess.run(
+        ['patch', '-p0'],
+        input=diff,
+        text=True,
+        check=True,
+        capture_output=True,
+        cwd=path
+    )
+    print(f"Successfully patched {path}")
+    print(process.stdout)
+  except FileNotFoundError:
+    print("Error: 'patch' command not found. Please ensure it's installed and in your PATH.", file=sys.stderr)
+    sys.exit(1)
+  except subprocess.CalledProcessError as e:
+    print(f"Error applying patch to {path}:", file=sys.stderr)
+    print(e.stderr, file=sys.stderr)
+    sys.exit(1)
+
+def PatchXcbUtilImage(token : Path):
+  # Apply the patch to xcb_bitops.h within the extracted source directory
+  ApplyPatch(xcb_util_image.src_dir, '''\
+--- "image/xcb_bitops.h"
++++ "image/xcb_bitops.h"
+@@ -207,6 +207,7 @@
+       return XCB_IMAGE_ORDER_LSB_FIRST;
+   }
+   assert(0);
++  return XCB_IMAGE_ORDER_LSB_FIRST;
+ }
+ 
+ #endif /* __XCB_BITOPS_H__ */''')
+  token.touch()
+xcb_util_image.PatchSources(PatchXcbUtilImage)
+xcb_util_image.ConfigureWithAutotools('{PREFIX}/lib64/libxcb-image.a')
+
+xcb_util_cursor = extension_helper.ExtensionHelper('xcb-util-cursor', globals())
+xcb_util_cursor.FetchFromURL('https://xcb.freedesktop.org/dist/xcb-util-cursor-0.1.5.tar.xz')
+xcb_util_cursor.ConfigureDependsOn(xcb_proto, xcb_util_image, xcb_util_renderutil)
+xcb_util_cursor.ConfigureWithAutotools('{PREFIX}/lib64/libxcb-cursor.a')
+xcb_util_cursor.AddLinkArgs('-Wl,--export-dynamic',
+                            '-Wl,--whole-archive',
+                            '-l:libxcb-cursor.a',
+                            '-l:libxcb-util.a',
+                            '-l:libxcb-image.a',
+                            '-l:libxcb-render-util.a',
+                            '-Wl,--no-whole-archive',
+                            '-Wl,--no-export-dynamic')
+xcb_util_cursor.InstallWhenIncluded(r'^xcb/xcb_cursor\.h$')

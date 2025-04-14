@@ -18,7 +18,7 @@ def patch_meson_build(marker):
   marker.touch()
 
 hook.PatchSources(patch_meson_build)
-hook.ConfigureWithMeson(output=lambda build_type: build_type.PREFIX() / 'lib64' / 'libpipewire-0.3.a')
+hook.ConfigureWithMeson('{PREFIX}/lib64/libpipewire-0.3.a')
 hook.ConfigureOptions(**{
   'spa-plugins': 'disabled',
   'alsa': 'disabled',

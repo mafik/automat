@@ -85,7 +85,8 @@ def post_install(build_type : build.BuildType, *outputs):
                               str(hook.checkout_dir))
 
 hook.FetchFromGit('https://github.com/llvm/llvm-project.git', 'llvmorg-19.1.6')
-hook.ConfigureWithCMake(src_dir=hook.checkout_dir / 'llvm', output=llvm_config_path)
+hook.SetSrcDir(hook.checkout_dir / 'llvm')
+hook.ConfigureWithCMake(llvm_config_path)
 hook.ConfigureOption('LLVM_ENABLE_RTTI', 'ON')
 hook.ConfigureOption('LLVM_TARGETS_TO_BUILD', 'X86')
 hook.ConfigureOption('LLVM_USE_LINKER', 'lld')

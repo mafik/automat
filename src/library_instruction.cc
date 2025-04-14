@@ -178,6 +178,11 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
       bool changed = visitor(span);
       if (changed) {
         operand.setImm(imm);
+        if (auto here_ptr = here.Lock()) {
+          if (auto assembler = FindAssembler(*here_ptr)) {
+            assembler->UpdateMachineCode();
+          }
+        }
       }
       return;
     }

@@ -133,7 +133,6 @@ Vec2 SmallBufferWidget::PositionFromIndex(int index) const {
 
 void SmallBufferWidget::TextVisit(const TextVisitor& visitor) {
   if (visitor(text)) {
-    LOG << "Setting text to [" << text << "]";
     // text has been modified - update the buffer
     auto buf = buffer_weak.Lock();
     buf->BufferVisit([&](std::span<char> span) {

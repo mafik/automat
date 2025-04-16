@@ -6,6 +6,7 @@
 
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
+#include "log.hh"
 #include "svg.hh"
 
 namespace automat::gui {

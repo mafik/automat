@@ -37,7 +37,7 @@ SmallBufferWidget::SmallBufferWidget(NestedWeakPtr<Buffer> buffer)
   tb->on_click = [this]() {
     auto buffer = buffer_weak.Lock();
     auto old_type = buffer->GetBufferType();
-    auto new_type = (Buffer::Type)(((int)type + 1) % (int)Buffer::Type::TypeCount);
+    auto new_type = (Buffer::Type)(((int)old_type + 1) % (int)Buffer::Type::TypeCount);
     buffer->SetBufferType(new_type);
     WakeAnimation();
   };
@@ -121,8 +121,58 @@ static void RefreshText(SmallBufferWidget& widget) {
   }
   auto old_type = widget.type;
   auto new_type = buf->GetBufferType();
-  if (old_type != new_type) {
-    widget.type = buf->GetBufferType();
+  bool type_changed = old_type != new_type;
+  auto& text = widget.text;
+  auto old_size = text.size();
+  auto bytes = buf->BufferRead();
+  if (new_type == Buffer::Type::Text) {
+    text = bytes;
+    while (text.ends_with('\0')) {
+      text.pop_back();
+    }
+  } else {
+    if (new_type == Buffer::Type::Signed) {
+      if (bytes.size() == 1) {
+        text = maf::f("%hhd", *(int8_t*)&bytes[0]);
+      } else if (bytes.size() == 2) {
+        text = maf::f("%hd", *(int16_t*)&bytes[0]);
+      } else if (bytes.size() == 4) {
+        text = maf::f("%d", *(int32_t*)&bytes[0]);
+      } else if (bytes.size() == 8) {
+        text = maf::f("%lld", *(int64_t*)&bytes[0]);
+      } else {
+        text = maf::f("%lld (size=%d)", *(int64_t*)&bytes[0], (int)bytes.size());
+      }
+    } else if (new_type == Buffer::Type::Unsigned) {
+      if (bytes.size() == 1) {
+        text = maf::f("%hhu", *(uint8_t*)&bytes[0]);
+      } else if (bytes.size() == 2) {
+        text = maf::f("%hu", *(uint16_t*)&bytes[0]);
+      } else if (bytes.size() == 4) {
+        text = maf::f("%u", *(uint32_t*)&bytes[0]);
+      } else if (bytes.size() == 8) {
+        text = maf::f("%llu", *(uint64_t*)&bytes[0]);
+      } else {
+        text = maf::f("%llu (size=%d)", *(uint64_t*)&bytes[0], (int)bytes.size());
+      }
+    } else if (new_type == Buffer::Type::Hexadecimal) {
+      if (bytes.size() == 1) {
+        text = maf::f("%hhx", (uint8_t)bytes[0]);
+      } else if (bytes.size() == 2) {
+        text = maf::f("%hx", *(uint16_t*)&bytes[0]);
+      } else if (bytes.size() == 4) {
+        text = maf::f("%x", *(uint32_t*)&bytes[0]);
+      } else if (bytes.size() == 8) {
+        text = maf::f("%llx", *(uint64_t*)&bytes[0]);
+      } else {
+        text = maf::f("%llx (size=%d)", *(uint64_t*)&bytes[0], (int)bytes.size());
+      }
+    } else {
+      text = maf::f("(type=%d?)", (int)new_type);
+    }
+  }
+  if (type_changed) {
+    widget.type = new_type;
     auto shape_widget = widget.type_button->child.GetCast<ShapeWidget>();
     switch (new_type) {
       case Buffer::Type::Unsigned:
@@ -141,19 +191,11 @@ static void RefreshText(SmallBufferWidget& widget) {
         break;
     }
     shape_widget->WakeAnimation();
-  }
-  auto& text = widget.text;
-  text = buf->BufferRead();
-  if (widget.type != Buffer::Type::Text) {
-    int64_t value = 0;
-    memcpy(&value, text.data(), text.size());
-
-    if (widget.type == Buffer::Type::Signed) {
-      text = maf::f("%lld", value);
-    } else if (widget.type == Buffer::Type::Unsigned) {
-      text = maf::f("%llu", value);
-    } else if (widget.type == Buffer::Type::Hexadecimal) {
-      text = maf::f("%llx", value);
+    for (auto& [caret, pos] : widget.caret_positions) {
+      if (pos.index > text.size() || pos.index == old_size) {
+        pos.index = text.size();
+      }
+      widget.UpdateCaret(*caret);
     }
   }
 }
@@ -164,7 +206,7 @@ animation::Phase SmallBufferWidget::Tick(time::Timer&) {
   auto bounds = shape.getBounds();
 
   type_button->local_to_parent =
-      SkM44::Translate(bounds.right() - 4_mm, bounds.centerY()).preScale(0.5, 0.5);
+      SkM44::Translate(bounds.right() - 4_mm, bounds.centerY()).preScale(0.666, 0.666);
   return animation::Finished;
 }
 
@@ -181,12 +223,6 @@ void SmallBufferWidget::Draw(SkCanvas& canvas) const {
   font.DrawText(canvas, text, text_paint);
   canvas.setMatrix(default_matrix);
   DrawChildren(canvas);
-  auto btn_shape = type_button->Shape();
-  btn_shape.transform(type_button->local_to_parent.asM33());
-  SkPaint outline_paint;
-  outline_paint.setColor(SK_ColorRED);
-  outline_paint.setStyle(SkPaint::kStroke_Style);
-  canvas.drawPath(btn_shape, outline_paint);
 }
 
 void SmallBufferWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {

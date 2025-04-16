@@ -120,9 +120,9 @@ Vec2 TextField::GetTextPos() const {
 
 SkPath TextField::Shape() const { return SkPath::RRect(ShapeRRect()); }
 
-void UpdateCaret(TextFieldBase& text_field, Caret& caret) {
-  int index = text_field.caret_positions[&caret].index;
-  Vec2 caret_pos = text_field.PositionFromIndex(index);
+void TextFieldBase::UpdateCaret(Caret& caret) {
+  int index = caret_positions[&caret].index;
+  Vec2 caret_pos = PositionFromIndex(index);
   caret.PlaceIBeam(caret_pos);
 }
 
@@ -174,7 +174,7 @@ struct TextSelectAction : Action {
       int index = text_field.IndexFromPosition(local.x);
       if (index != it->second.index) {
         it->second.index = index;
-        UpdateCaret(text_field, *caret);
+        text_field.UpdateCaret(*caret);
       }
     } else {
       drag->Update();
@@ -238,7 +238,7 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
           return false;
         });
         caret_positions[&caret].index += new_size - old_size;
-        UpdateCaret(*this, caret);
+        UpdateCaret(caret);
       }
       break;
     }
@@ -249,7 +249,7 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
           i_ref = GetFont().PrevIndex(text, i_ref);
           return false;
         });
-        UpdateCaret(*this, caret);
+        UpdateCaret(caret);
       }
       break;
     }
@@ -258,7 +258,7 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
       TextVisit([&](std::string& text) {
         if (i_ref < text.size()) {
           i_ref = GetFont().NextIndex(text, i_ref);
-          UpdateCaret(*this, caret);
+          UpdateCaret(caret);
         }
         return false;
       });
@@ -266,7 +266,7 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
     }
     case AnsiKey::Home: {
       caret_positions[&caret].index = 0;
-      UpdateCaret(*this, caret);
+      UpdateCaret(caret);
       break;
     }
     case AnsiKey::End: {
@@ -274,7 +274,7 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
         caret_positions[&caret].index = text.size();
         return false;
       });
-      UpdateCaret(*this, caret);
+      UpdateCaret(caret);
       break;
     }
     default: {
@@ -292,7 +292,7 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
           return false;  // because text is not changed
         });
         caret_positions[&caret].index += new_size - old_size;
-        UpdateCaret(*this, caret);
+        UpdateCaret(caret);
       }
     }
   }

@@ -35,6 +35,9 @@ struct TextFieldBase : Widget, CaretOwner {
 
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
 
+  // Update the given caret to its current position from `caret_positions`.
+  void UpdateCaret(Caret& caret);
+
   void ReleaseCaret(Caret&) override;
   void KeyDown(Caret&, Key) override;
   void KeyUp(Caret&, Key) override;

@@ -72,7 +72,7 @@ struct SmallBufferWidget : TextFieldBase {
   float vertical_margin;
   float width;
   float height;
-  Buffer::Type type = Buffer::Type::Unsigned;
+  Buffer::Type type = Buffer::Type::Hexadecimal;
   std::string text;
 
   SmallBufferWidget(NestedWeakPtr<Buffer> buffer);

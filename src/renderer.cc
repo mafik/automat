@@ -1120,14 +1120,6 @@ void RenderFrame(SkCanvas& canvas) {
       canvas.setMatrix(window_transform);
     }
   }
-
-  auto& font = GetFont();
-  canvas.save();
-  canvas.translate(0, root_widget->size.height - 1_cm);
-  canvas.scale(2.7, 2.7);
-  auto fps_text = f("%.1fms", root_widget->timer.d * 1000);
-  font.DrawText(canvas, fps_text, SkPaint());
-  canvas.restore();
 }
 
 void RenderOverflow(SkCanvas& root_canvas) {

@@ -131,7 +131,27 @@ std::unique_ptr<Font> Font::MakeV2(sk_sp<SkTypeface> typeface, float letter_size
 }
 
 struct LineRunHandler : public SkShaper::RunHandler {
-  LineRunHandler(std::string_view utf8_text) : utf8_text(utf8_text), offset() {}
+  std::string fixed_text;
+  LineRunHandler(std::string_view utf8_text) : fixed_text(), utf8_text(utf8_text), offset() {
+    auto glyphs = SkUTF::CountUTF8(utf8_text.data(), utf8_text.size());
+    if (glyphs == -1) {
+      const char* start = utf8_text.data();
+      const char* end = start + utf8_text.size();
+      while (start < end) {
+        auto start_backup = start;
+        auto glyph = SkUTF::NextUTF8WithReplacement(&start, end);
+        char glyph_utf8[SkUTF::kMaxBytesInUTF8Sequence];
+        auto glyph_bytes = SkUTF::ToUTF8(glyph, glyph_utf8);
+        fixed_text.append(glyph_utf8, glyph_bytes);
+        if (glyph == 0xFFFD) {
+          start = start_backup + 1;
+          continue;
+        }
+      }
+      glyphs = SkUTF::CountUTF8(fixed_text.data(), fixed_text.size());
+      this->utf8_text = fixed_text;
+    }
+  }
   sk_sp<SkTextBlob> makeBlob() { return builder.make(); }
 
   void beginLine() override {}
@@ -205,6 +225,9 @@ struct MeasureLineRunHandler : public LineRunHandler {
         return utf8_indices[i - 1];
       }
     }
+    if (utf8_indices.empty()) {
+      return 0;
+    }
     return utf8_indices.back();
   }
 };
@@ -227,6 +250,7 @@ int Font::PrevIndex(std::string_view text, int index) {
   }
   SkShaper& shaper = GetShaper();
   MeasureLineRunHandler run_handler(text);
+  text = run_handler.utf8_text;
   shaper.shape(text.data(), index, sk_font, true, 0, &run_handler);
   if (run_handler.utf8_indices.size() > 1) {
     return run_handler.utf8_indices[run_handler.utf8_indices.size() - 2];
@@ -241,7 +265,8 @@ int Font::NextIndex(std::string_view text, int index) {
   SkShaper& shaper = GetShaper();
   text = text.substr(index);
   MeasureLineRunHandler run_handler(text);
-  shaper.shape(text.data(), text.size(), sk_font, true, 0, &run_handler);
+  text = run_handler.utf8_text;
+  shaper.shape(text.data(), run_handler.utf8_text.size(), sk_font, true, 0, &run_handler);
   if (run_handler.utf8_indices.size() > 1) {
     return index + run_handler.utf8_indices[1];
   }
@@ -254,22 +279,30 @@ float Font::PositionFromIndex(std::string_view text, int index) {
   }
   SkShaper& shaper = GetShaper();
   LineRunHandler run_handler(text);
+  text = run_handler.utf8_text;
+  if (index >= text.size()) {
+    index = text.size();
+  }
   shaper.shape(text.data(), index, sk_font, true, 0, &run_handler);
   return run_handler.offset.x * font_scale;
 }
 
 int Font::IndexFromPosition(std::string_view text, float x) {
+  // LOG << "IndexFromPosition " << x << " text=[" << text << "] " << text.size() << "B";
   x /= font_scale;
   SkShaper& shaper = GetShaper();
   MeasureLineRunHandler run_handler(text);
+  text = run_handler.utf8_text;
   shaper.shape(text.data(), text.size(), sk_font, true, 0, &run_handler);
   return run_handler.IndexFromPosition(x);
 }
 
 void Font::DrawText(SkCanvas& canvas, std::string_view text, const SkPaint& paint) {
+  // LOG << "Drawing " << text.size() << " characters: [" << text << "]";
   canvas.scale(font_scale, -font_scale);
   SkShaper& shaper = GetShaper();
   LineRunHandler run_handler(text);
+  text = run_handler.utf8_text;
   shaper.shape(text.data(), text.size(), sk_font, true, 0, &run_handler);
 
   sk_sp<SkTextBlob> text_blob = run_handler.makeBlob();

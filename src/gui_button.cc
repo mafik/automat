@@ -24,16 +24,20 @@ using namespace std;
 
 namespace automat::gui {
 
-void Button::PointerOver(Pointer& pointer) {
-  animation_state.pointers_over++;
+void Clickable::PointerOver(Pointer& pointer) {
+  pointers_over++;
   pointer.PushIcon(Pointer::kIconHand);
   WakeAnimation();
 }
 
-void Button::PointerLeave(Pointer& pointer) {
-  animation_state.pointers_over--;
+void Clickable::PointerLeave(Pointer& pointer) {
+  pointers_over--;
   pointer.PopIcon();
   WakeAnimation();
+}
+
+animation::Phase Clickable::Tick(time::Timer& timer) {
+  return animation::LinearApproach(pointers_over ? 1 : 0, timer.d, 10, highlight);
 }
 
 namespace {
@@ -41,6 +45,44 @@ namespace {
 constexpr float kRadius = kMinimalTouchableSize / 2;
 
 }  // namespace
+
+SkRect Clickable::ChildBounds() const {
+  if (child) return child->Shape().getBounds();
+  return SkRect::MakeEmpty();
+}
+void Clickable::Draw(SkCanvas& canvas) const { DrawChildren(canvas); }
+
+SkPath Clickable::Shape() const { return SkPath::RRect(RRect()); }
+
+static float ShadowOffset(SkRRect& bounds) {
+  return -Button::kPressOffset - (bounds.height() - kMinimalTouchableSize) / 4;
+}
+
+SkRRect Clickable::RRect() const { return SkRRect::MakeRect(ChildBounds()); }
+
+struct ClickAction : public Action {
+  Clickable& clickable;
+  ClickAction(Pointer& pointer, Clickable& clickable) : Action(pointer), clickable(clickable) {
+    audio::Play(embedded::assets_SFX_button_down_wav);
+    clickable.pointers_pressing++;
+    clickable.Activate(pointer);  // This may immediately end the action.
+  }
+
+  void Update() override {}
+
+  ~ClickAction() override {
+    clickable.pointers_pressing--;
+    clickable.WakeAnimation();
+    audio::Play(embedded::assets_SFX_button_up_wav);
+  }
+};
+
+std::unique_ptr<Action> Clickable::FindAction(Pointer& pointer, ActionTrigger pointer_button) {
+  if (pointer_button == PointerButton::Left) {
+    return std::make_unique<ClickAction>(pointer, *this);
+  }
+  return nullptr;
+}
 
 SkRRect Button::RRect() const {
   SkRect child_bounds = ChildBounds();
@@ -55,10 +97,6 @@ SkRRect Button::RRect() const {
     h = std::max(kMinimalTouchableSize, child_bounds.height() + 2 * kMargin);
   }
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, w, h), kRadius, kRadius);
-}
-
-static float ShadowOffset(SkRRect& bounds) {
-  return -Button::kPressOffset - (bounds.height() - kMinimalTouchableSize) / 4;
 }
 
 static float ShadowSigma(SkRRect& bounds) { return bounds.width() / 20; }
@@ -88,7 +126,7 @@ void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
   float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
-  float lightness_adjust = animation_state.highlight * 10;
+  float lightness_adjust = highlight * 10;
 
   SkPaint paint;
   SkPoint pts[2] = {{0, oval.rect().bottom()}, {0, oval.rect().top()}};
@@ -112,8 +150,7 @@ void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
 }
 
 animation::Phase Button::Tick(time::Timer& timer) {
-  auto phase = animation::LinearApproach(animation_state.pointers_over ? 1 : 0, timer.d, 10,
-                                         animation_state.highlight);
+  animation::Phase phase = Clickable::Tick(timer);
 
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
@@ -227,38 +264,7 @@ void ToggleButton::PreDrawChildren(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-SkPath Button::Shape() const { return SkPath::RRect(RRect()); }
-
-struct ButtonAction : public Action {
-  Button& button;
-  ButtonAction(Pointer& pointer, Button& button) : Action(pointer), button(button) {
-    audio::Play(embedded::assets_SFX_button_down_wav);
-    button.press_action_count++;
-    button.Activate(pointer);  // This may immediately end the action.
-  }
-
-  void Update() override {}
-
-  ~ButtonAction() override {
-    button.press_action_count--;
-    button.WakeAnimation();
-    audio::Play(embedded::assets_SFX_button_up_wav);
-  }
-};
-
-std::unique_ptr<Action> Button::FindAction(Pointer& pointer, ActionTrigger pointer_button) {
-  if (pointer_button == PointerButton::Left) {
-    return std::make_unique<ButtonAction>(pointer, *this);
-  }
-  return nullptr;
-}
-
-SkRect Button::ChildBounds() const {
-  if (child) return child->Shape().getBounds();
-  return SkRect::MakeEmpty();
-}
-
-Button::Button(Ptr<Widget> child) : child(child) { UpdateChildTransform(); }
+Button::Button(Ptr<Widget> child) : Clickable(child) { UpdateChildTransform(); }
 
 void Button::UpdateChildTransform() {
   Vec2 offset = RRect().rect().center();

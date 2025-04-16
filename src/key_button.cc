@@ -83,7 +83,7 @@ void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
                        key_base.rect().right() - kKeySide, key_base.rect().bottom() - kKeyTopSide),
       kKeyFaceRadius, kKeyFaceRadius);
 
-  float lightness_adjust = animation_state.highlight * 10;
+  float lightness_adjust = highlight * 10;
 
   SkPaint face_paint;
   SkPoint face_pts[] = {{0, key_face.rect().bottom()}, {0, key_face.rect().top()}};

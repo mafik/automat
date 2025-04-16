@@ -15,40 +15,45 @@
 
 namespace automat::gui {
 
-struct Button : Widget {
-  constexpr static float kPressOffset = 0.2_mm;
-
-  struct AnimationState {
-    int pointers_over = 0;
-    float highlight = 0;
-  };
-
-  mutable AnimationState animation_state;
-  int press_action_count = 0;
+// Base class for things that can be clicked. Takes care of changing the pointer icon and animating
+// a `highlight` value.
+struct Clickable : Widget {
   Ptr<Widget> child;
 
-  Button(Ptr<Widget> child);
+  int pointers_over = 0;
+  int pointers_pressing = 0;
+  float highlight = 0;
+
+  Clickable(Ptr<Widget> child) : child(child) {}
+
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(child); }
+  virtual SkRRect RRect() const;
+  void Draw(SkCanvas&) const override;
+  SkPath Shape() const override;
+  SkRect ChildBounds() const;
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
   animation::Phase Tick(time::Timer&) override;
+  virtual void Activate(gui::Pointer&) { WakeAnimation(); }
+  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
+};
+
+struct Button : Clickable {
+  constexpr static float kPressOffset = 0.2_mm;
+
+  Button(Ptr<Widget> child);
+  animation::Phase Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
-  virtual SkRRect RRect() const;
-  SkPath Shape() const override;
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
-  virtual void Activate(gui::Pointer&) { WakeAnimation(); }
-  virtual SkColor ForegroundColor() const { return SK_ColorBLACK; }  // "#d69d00"_color
+  SkRRect RRect() const override;
+  virtual SkColor ForegroundColor() const { return SK_ColorBLACK; }
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
-  virtual float PressRatio() const { return press_action_count ? 1 : 0; }
+  virtual float PressRatio() const { return pointers_pressing ? 1 : 0; }
 
   virtual void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const;
 
   maf::Optional<Rect> TextureBounds() const override;
-
-  SkRect ChildBounds() const;
-
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(child); }
 
   void UpdateChildTransform();
 

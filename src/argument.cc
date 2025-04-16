@@ -72,12 +72,6 @@ Argument::ObjectResult Argument::GetObject(Location& here,
   return result;
 }
 
-struct DrawableSkPath : PaintDrawable {
-  SkPath path;
-  DrawableSkPath(SkPath path) : path(std::move(path)) {}
-  void onDraw(SkCanvas* c) override { c->drawPath(path, paint); }
-};
-
 PaintDrawable& Argument::Icon() {
   static DrawableSkPath default_icon = []() {
     SkPath path = PathFromSVG(kNextShape);

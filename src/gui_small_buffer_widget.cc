@@ -5,11 +5,42 @@
 #include <include/core/SkPath.h>
 
 #include "gui_constants.hh"
-#include "log.hh"
+#include "gui_shape_widget.hh"
+#include "svg.hh"
 
 namespace automat::gui {
 
-SmallBufferWidget::SmallBufferWidget(NestedWeakPtr<Buffer> buffer) : buffer_weak(buffer) {}
+static const SkPath kTypeUnsignedPath = PathFromSVG(kTypeUnsignedSVG, SVGUnit_Millimeters);
+static const SkPath kTypeSignedPath = PathFromSVG(kTypeSignedSVG, SVGUnit_Millimeters);
+static const SkPath kTypeHexPath = PathFromSVG(kTypeHexSVG, SVGUnit_Millimeters);
+static const SkPath kTypeTextPath = PathFromSVG(kTypeTextSVG, SVGUnit_Millimeters);
+
+struct TypeButton : Clickable {
+  std::function<void()> on_click;
+  SkRRect RRect() const override {
+    return SkRRect::MakeOval(SkRect::MakeXYWH(-4_mm, -4_mm, 8_mm, 8_mm));
+  }
+
+  TypeButton(SkPath path) : Clickable(MakePtr<ShapeWidget>(path)) {}
+
+  void Activate(gui::Pointer&) override {
+    if (on_click) {
+      on_click();
+    }
+  }
+};
+
+SmallBufferWidget::SmallBufferWidget(NestedWeakPtr<Buffer> buffer)
+    : buffer_weak(buffer), type_button(MakePtr<TypeButton>(kTypeTextPath)) {
+  auto tb = type_button.GetCast<TypeButton>();
+  tb->on_click = [this]() {
+    auto buffer = buffer_weak.Lock();
+    auto old_type = buffer->GetBufferType();
+    auto new_type = (Buffer::Type)(((int)type + 1) % (int)Buffer::Type::TypeCount);
+    buffer->SetBufferType(new_type);
+    WakeAnimation();
+  };
+}
 
 void SmallBufferWidget::Measure() {
   width = kMinimalTouchableSize;
@@ -25,7 +56,8 @@ void SmallBufferWidget::Measure() {
       case Buffer::Type::Text:
         sample_text = std::string(bytes, 'W');
         break;
-      case Buffer::Type::Integer: {
+      case Buffer::Type::Signed:
+      case Buffer::Type::Unsigned: {
         uint64_t value = 0;
         for (int i = 0; i < bytes; i++) {
           value = (value << 8) | 0xff;
@@ -70,7 +102,9 @@ Font& SmallBufferWidget::GetFont(Buffer::Type type) const {
   switch (type) {
     case Buffer::Type::Text:
       return gui::GetFont();
-    case Buffer::Type::Integer:
+    case Buffer::Type::Signed:
+      return gui::GetFont();
+    case Buffer::Type::Unsigned:
       return gui::GetFont();
     case Buffer::Type::Hexadecimal:
       return gui::GetFont();
@@ -84,34 +118,78 @@ static void RefreshText(SmallBufferWidget& widget) {
   if (!buf) {
     return;
   }
-  widget.type = buf->GetBufferType();
+  auto old_type = widget.type;
+  auto new_type = buf->GetBufferType();
+  if (old_type != new_type) {
+    widget.type = buf->GetBufferType();
+    auto shape_widget = widget.type_button->child.GetCast<ShapeWidget>();
+    switch (new_type) {
+      case Buffer::Type::Unsigned:
+        shape_widget->path = kTypeUnsignedPath;
+        break;
+      case Buffer::Type::Signed:
+        shape_widget->path = kTypeSignedPath;
+        break;
+      case Buffer::Type::Hexadecimal:
+        shape_widget->path = kTypeHexPath;
+        break;
+      case Buffer::Type::Text:
+        shape_widget->path = kTypeTextPath;
+        break;
+      default:
+        break;
+    }
+    shape_widget->WakeAnimation();
+  }
   auto& text = widget.text;
   text = buf->BufferRead();
   if (widget.type != Buffer::Type::Text) {
     int64_t value = 0;
     memcpy(&value, text.data(), text.size());
-    if (widget.type == Buffer::Type::Integer) {
-      text = maf::f("%d", value);
+
+    if (widget.type == Buffer::Type::Signed) {
+      text = maf::f("%lld", value);
+    } else if (widget.type == Buffer::Type::Unsigned) {
+      text = maf::f("%llu", value);
     } else if (widget.type == Buffer::Type::Hexadecimal) {
-      text = maf::f("%x", value);
+      text = maf::f("%llx", value);
     }
   }
 }
 
 animation::Phase SmallBufferWidget::Tick(time::Timer&) {
   RefreshText(*this);
+  auto shape = Shape();
+  auto bounds = shape.getBounds();
+
+  type_button->local_to_parent =
+      SkM44::Translate(bounds.right() - 4_mm, bounds.centerY()).preScale(0.5, 0.5);
   return animation::Finished;
 }
 
 void SmallBufferWidget::Draw(SkCanvas& canvas) const {
+  auto default_matrix = canvas.getLocalToDevice();
   SkPaint background_paint;
   background_paint.setColor(SK_ColorWHITE);
-  canvas.drawPath(Shape(), background_paint);
+  auto shape = Shape();
+  canvas.drawPath(shape, background_paint);
   SkPaint text_paint;
   text_paint.setColor(SK_ColorBLACK);
   auto& font = GetFont(type);
   canvas.translate(kMargin, 0);
   font.DrawText(canvas, text, text_paint);
+  canvas.setMatrix(default_matrix);
+  DrawChildren(canvas);
+  auto btn_shape = type_button->Shape();
+  btn_shape.transform(type_button->local_to_parent.asM33());
+  SkPaint outline_paint;
+  outline_paint.setColor(SK_ColorRED);
+  outline_paint.setStyle(SkPaint::kStroke_Style);
+  canvas.drawPath(btn_shape, outline_paint);
+}
+
+void SmallBufferWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+  children.push_back(type_button);
 }
 
 RRect SmallBufferWidget::CoarseBounds() const {
@@ -142,7 +220,24 @@ void SmallBufferWidget::TextVisit(const TextVisitor& visitor) {
         if (n < span.size()) {
           memset(span.data() + n, 0, span.size() - n);
         }
-      } else if (type == Buffer::Type::Integer) {
+      } else if (type == Buffer::Type::Signed) {
+        int64_t value = 0;
+        std::from_chars(text.data(), text.data() + text.size(), value);
+        if (span.size() == 1 && value > 0x7f) {
+          value = 0x7f;
+        } else if (span.size() == 2 && value > 0x7fff) {
+          value = 0x7fff;
+        } else if (span.size() == 4 && value > 0x7fffffff) {
+          value = 0x7fffffff;
+        } else if (span.size() == 1 && value < -0x80) {
+          value = -0x80;
+        } else if (span.size() == 2 && value < -0x8000) {
+          value = -0x8000;
+        } else if (span.size() == 4 && value < -0x80000000) {
+          value = -0x80000000;
+        }
+        memcpy(span.data(), &value, span.size());
+      } else if (type == Buffer::Type::Unsigned) {
         int64_t value = 0;
         std::from_chars(text.data(), text.data() + text.size(), value);
         if (span.size() == 1 && value > 0xff) {

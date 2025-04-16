@@ -263,7 +263,8 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
     imm_widget->parent = AcquirePtr();
     imm_widget->local_to_parent.setIdentity();
     imm_widget->fonts[(int)Buffer::Type::Text] = &HeavyFont();
-    imm_widget->fonts[(int)Buffer::Type::Integer] = &HeavyFont();
+    imm_widget->fonts[(int)Buffer::Type::Unsigned] = &HeavyFont();
+    imm_widget->fonts[(int)Buffer::Type::Signed] = &HeavyFont();
     imm_widget->fonts[(int)Buffer::Type::Hexadecimal] = &HeavyFont();
     imm_widget->Measure();
   }

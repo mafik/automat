@@ -54,7 +54,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
 
   void OnRun(Location& here) override;
 
-  Buffer::Type imm_type = Buffer::Type::Integer;
+  Buffer::Type imm_type = Buffer::Type::Unsigned;
 
   void BufferVisit(const BufferVisitor&) override;
   Type GetBufferType() override { return imm_type; };

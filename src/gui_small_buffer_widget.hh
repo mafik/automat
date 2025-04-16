@@ -3,6 +3,7 @@
 #pragma once
 
 #include "font.hh"
+#include "gui_button.hh"
 #include "text_field.hh"
 
 namespace automat {
@@ -42,7 +43,8 @@ struct Buffer {
 
   enum class Type {
     Text,
-    Integer,
+    Unsigned,
+    Signed,
     Hexadecimal,
     TypeCount,
   };
@@ -63,13 +65,14 @@ namespace automat::gui {
 // UTF-8 string.
 struct SmallBufferWidget : TextFieldBase {
   NestedWeakPtr<Buffer> buffer_weak;
+  Ptr<Clickable> type_button;
 
   gui::Font* fonts[(int)Buffer::Type::TypeCount] = {};
 
   float vertical_margin;
   float width;
   float height;
-  Buffer::Type type = Buffer::Type::Integer;
+  Buffer::Type type = Buffer::Type::Unsigned;
   std::string text;
 
   SmallBufferWidget(NestedWeakPtr<Buffer> buffer);
@@ -83,6 +86,8 @@ struct SmallBufferWidget : TextFieldBase {
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
+
+  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
 
   void TextVisit(const TextVisitor&) override;
   int IndexFromPosition(float x) const override;

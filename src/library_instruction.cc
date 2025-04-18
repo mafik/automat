@@ -4,7 +4,9 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkFontTypes.h>
 #include <include/core/SkMaskFilter.h>
+#include <include/core/SkPaint.h>
 #include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkBlenders.h>
@@ -2325,17 +2327,299 @@ constexpr float kConditionCodeTokenHeight = 8_mm;
 constexpr Rect kConditionCodeRect =
     Rect::MakeAtZero<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
 
-void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
-  SkPaint bg_paint;
-  bg_paint.setColor("#2e542a"_color);
-  canvas.drawRoundRect(kConditionCodeRect.sk, 2_mm, 4_mm, bg_paint);
-  SkPaint outline_paint;
-  outline_paint.setColor("#000000"_color);
-  outline_paint.setStyle(SkPaint::kStroke_Style);
-  outline_paint.setStrokeWidth(0.4_mm);
-  canvas.drawRoundRect(kConditionCodeRect.sk, 2_mm, 4_mm, outline_paint);
+constexpr float CircleY(float radius, float x) { return sqrtf(radius * radius - x * x); }
 
-  SkPath path;
+void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
+  canvas.save();
+  canvas.translate(kConditionCodeTokenWidth / 2, kConditionCodeTokenHeight / 2);
+
+  constexpr float kBorderWidth = 0.5_mm;
+  constexpr float kHalfWidth = kBorderWidth / 2;
+  constexpr float kDialRadius = 4_mm;
+  constexpr float kInnerRadius = kDialRadius - kBorderWidth;
+  constexpr Rect kInnerOval = Rect::MakeAtZero(kInnerRadius * 2, kInnerRadius * 2);
+
+  // Constants describing the arrow around the condition symbol
+  constexpr float kMiddleR = (kInnerRadius + 2_mm) / 2;
+  constexpr float kNearMiddleR = kMiddleR - kHalfWidth;
+  constexpr float kFarMiddleR = kMiddleR + kHalfWidth;
+  constexpr Rect kFarOval = Rect::MakeAtZero(kFarMiddleR * 2, kFarMiddleR * 2);
+  constexpr Rect kNearOval = Rect::MakeAtZero(kNearMiddleR * 2, kNearMiddleR * 2);
+
+  SkPath dial;    // black arrow
+  SkPath symbol;  // white symbol to draw in the center of the condition
+  SkPath highlight_region;
+  SkPaint highlight_paint;
+  bool draw_zero_boundaries = false;
+
+  auto Triangle = [=](SkPath& path, SinCos angle, bool ccw = false) {
+    path.lineTo(Vec2::Polar(angle, kInnerRadius));
+    path.lineTo(Vec2::Polar(angle, kMiddleR) +
+                Vec2::Polar(angle + (ccw ? -90_deg : 90_deg), (kInnerRadius - 2_mm) * sqrt(3) / 2));
+    path.lineTo(Vec2::Polar(angle, 2_mm));
+  };
+  // Switch the symbol
+  switch (cond_code) {
+    case X86::CondCode::COND_O: {  // overflow
+      static const SkPath kOverflowDial = [&]() {
+        SkPath path;
+        // path.addCircle(-kMiddleR, 0, (kInnerRadius - 2_mm) / 2);
+        path.arcTo(kFarOval.sk, 135, 90, true);
+        Triangle(path, 225_deg, false);
+        path.arcTo(kNearOval.sk, 225, -90, false);
+        Triangle(path, 135_deg, true);
+        path.close();
+        return path;
+      }();
+      dial = kOverflowDial;
+      static const SkPath kOverflowSymbol = PathFromSVG(
+          "m-2.25-4.5a1.8 1.8 90 00-.5256.0612 1.8 1.8 90 00-1.2708 2.2032 1.8 1.8 90 002.2032 "
+          "1.2744 1.8 1.8 90 00.7488-.414l0 0 .0108-.0072a1.8 1.8 90 "
+          "00.0864-.0864l2.16-2.16-2.8908-.774a1.8 1.8 90 00-.522-.0972zm5 2-1.4976 2.592a1.8 1.8 "
+          "90 00-.306 1.0008 1.8 1.8 90 001.8 1.8 1.8 1.8 90 001.8-1.8 1.8 1.8 90 "
+          "00-.2052-.8316l.0036 0-.0072-.0108a1.8 1.8 90 00-.0612-.1044l-1.5264-2.646zm-3 2-2.592 "
+          "1.494a1.8 1.8 90 00-.7668.7128 1.8 1.8 90 00.6588 2.4624 1.8 1.8 90 002.4588-.6624 1.8 "
+          "1.8 90 00.2412-.8208l0 0 0-.0108a1.8 1.8 90 000-.1224l0-3.0528z");
+      symbol = kOverflowSymbol;
+      break;
+    }
+    case X86::CondCode::COND_NO: {  // no overflow
+      static const SkPath kNoOverflowDial = [&]() {
+        SkPath path;
+        // path.addCircle(-kMiddleR, 0, (kInnerRadius - 2_mm) / 2);
+        path.arcTo(kFarOval.sk, 135, -270, true);
+        Triangle(path, 225_deg, true);
+        path.arcTo(kNearOval.sk, 225, 270, false);
+        Triangle(path, 135_deg, false);
+        path.close();
+        return path;
+      }();
+      dial = kNoOverflowDial;
+      static const SkPath kNoOverflowSymbol = PathFromSVG(
+          "m2.7-1.17c-.198-.0135-.441.135-.81.549-.9855 1.098-1.125 "
+          "1.17-1.962.3285-.8415-.8415-.8775-.5985-1.5525.054-.6795.657-.945.9765-1.791.018-.4905-."
+          "558-.864-.8775-1.3005-.693a4.8375 4.8375 90 00-.0945.891 4.8375 4.8375 90 004.8375 "
+          "4.8375 4.8375 4.8375 90 004.8375-4.8375 4.8375 4.8375 90 "
+          "000-.036c-.3645.324-.63.27-1.17-.216-.459-.4185-.666-.8775-.9945-.8955z");
+      symbol = kNoOverflowSymbol;
+      break;
+    }
+    case X86::CondCode::COND_L:  // fallthrough
+    case X86::CondCode::COND_B: {
+      static const SkPath static_path =
+          PathFromSVG("m-4-.4 0 .8 7.6 3.6.4-.8-6.8-3.2 6.8-3.2-.4-.8z");
+      symbol = static_path;
+      static const SkPath kDialDown = [=]() {
+        SkPath path;
+        constexpr float kStartAngle = -10;
+        constexpr float kSweepAngle = -80;
+        constexpr float kFinalAngle = kStartAngle + kSweepAngle;
+        path.arcTo(kFarOval.sk, kStartAngle, kSweepAngle, true);
+        Triangle(path, SinCos::FromDegrees(kFinalAngle), true);
+        path.arcTo(kNearOval.sk, kFinalAngle, -kSweepAngle, false);
+        path.close();
+
+        return path;
+      }();
+      dial = kDialDown;
+      break;
+    }
+    case X86::CondCode::COND_GE:  // fallthrough
+    case X86::CondCode::COND_AE: {
+      static const SkPath static_path =
+          PathFromSVG("m4-1.2 0 .8-7.6 3.6-.4-.8 6.8-3.2-6.8-3.2.4-.8zm0 1.6-8 4 .4.8 7.6-3.8z");
+      symbol = static_path;
+      static const SkPath kDialZeroUp = [=]() {
+        SkPath path;
+        constexpr float kStartAngle = -10;
+        constexpr float kSweepAngle = 100;
+        constexpr float kFinalAngle = kStartAngle + kSweepAngle;
+        path.arcTo(kFarOval.sk, kStartAngle, kSweepAngle, true);
+        Triangle(path, SinCos::FromDegrees(kFinalAngle), false);
+        path.arcTo(kNearOval.sk, kFinalAngle, -kSweepAngle, false);
+        path.close();
+
+        return path;
+      }();
+      dial = kDialZeroUp;
+      break;
+    }
+    case X86::CondCode::COND_E: {
+      static const SkPath static_path = PathFromSVG("m-4-.8 0-.8 8 0 0 .8zm0 1.6 8 0 0 .8-8 0z");
+      symbol = static_path;
+      static const SkPath kDialZero = []() {
+        SkPath path;
+        float x = CircleY(2_mm, kBorderWidth);
+        path.moveTo(kInnerRadius, 0);
+        path.lineTo(x, kBorderWidth);
+        path.lineTo(x, -kBorderWidth);
+        path.close();
+        return path;
+      }();
+      dial = kDialZero;
+      break;
+    }
+    case X86::CondCode::COND_NE: {
+      static const SkPath static_path =
+          PathFromSVG("m-4-.8 0-.8 8 0 0 .8zm0 1.6 8 0 0 .8-8 0zm5.6-3.8-2.8 6.4-.8-.4 2.8-6.4z");
+      symbol = static_path;
+      break;
+    }
+    case X86::CondCode::COND_LE:  // fallthrough
+    case X86::CondCode::COND_BE: {
+      static const SkPath static_path =
+          PathFromSVG("m-4-1.2 0 .8 7.6 3.6.4-.8-6.8-3.2 6.8-3.2-.4-.8zm0 1.6 8 4-.4.8-7.6-3.8z");
+      symbol = static_path;
+      static const SkPath kDialZeroDown = [=]() {
+        SkPath path;
+        constexpr float kStartAngle = 10;
+        constexpr float kSweepAngle = -100;
+        constexpr float kFinalAngle = kStartAngle + kSweepAngle;
+        path.arcTo(kFarOval.sk, kStartAngle, kSweepAngle, true);
+        Triangle(path, SinCos::FromDegrees(kFinalAngle), true);
+        path.arcTo(kNearOval.sk, kFinalAngle, -kSweepAngle, false);
+        path.close();
+
+        return path;
+      }();
+      dial = kDialZeroDown;
+      break;
+    }
+    case X86::CondCode::COND_G:  // fallthrough
+    case X86::CondCode::COND_A: {
+      static const SkPath static_path = PathFromSVG("m10-1 0 2-19 9-1-2 17-8-17-8 1-2z");
+      symbol = static_path.makeTransform(SkMatrix::Scale(0.4, 0.4));
+      static const SkPath kDialUp = [=]() {
+        SkPath path;
+        constexpr float kStartAngle = 10;
+        constexpr float kSweepAngle = 80;
+        constexpr float kFinalAngle = kStartAngle + kSweepAngle;
+        path.arcTo(kFarOval.sk, kStartAngle, kSweepAngle, true);
+        Triangle(path, SinCos::FromDegrees(kFinalAngle), false);
+        path.arcTo(kNearOval.sk, kFinalAngle, -kSweepAngle, false);
+        path.close();
+
+        return path;
+      }();
+      dial = kDialUp;
+      break;
+    }
+    case X86::CondCode::COND_S: {  // sign / negative
+      static const SkPath kSignSymbol =
+          PathFromSVG("m-4.5-1c.1-.1 8.9-.1 9 0 .1.1.1 1.9 0 2-.1.1-8.9.1-9 0-.1-.1-.1-1.9 0-2z");
+      symbol = kSignSymbol;
+      break;
+    }
+    case X86::CondCode::COND_NS: {  // not sign / positive
+      static const SkPath kNoSignSymbol = PathFromSVG(
+          "m-4.5-1c.1-.1 8.9-.1 9 0 .1.1.1 1.9 0 2-.1.1-8.9.1-9 0-.1-.1-.1-1.9 0-2zm3.5-3.5c.1-.1 "
+          "1.9-.1 2 0 .1.1.1 8.9 0 9-.1.1-1.9.1-2 0-.1-.1-.1-8.9 0-9z");
+      symbol = kNoSignSymbol;
+      break;
+    }
+    case X86::CondCode::COND_P:     // fallthrough
+    case X86::CondCode::COND_NP: {  // number of bits in the lowest byte
+      static const SkPath kFlagSymbol = PathFromSVG(
+          "M-3-4C-3.1-3.6-3.4-3.3-3.6-3-3.4-3-3.3-3-3.2-3.1-3.1-3-3.1-2.9-3.1-2.8-3.2-2.8-3.3-2.8-"
+          "3.3-2.8c-.1 1.2 0 2.4.2 3.6 0 0 .1 0 .2 0C-2.5 4.6-2.5 4.7-2.5 4.8L-1.6 4.8C-2 3.3-2.2 "
+          "2.1-2.3.8-2.1.8-1.9.7-1.7.6-1.1.4-.7-.2-.1-.4.3-.5.8-.1 1.2-.2 1.9-.4 2.3-1.2 2.9-1.5 "
+          "3.9-2 6.3-2.3 6.3-2.3 6.3-2.3 4.4-2.8 3.5-2.8 2.8-2.7 2.1-2.2 "
+          "1.4-2.2.8-2.3.5-2.9-.1-2.9-.6-3-1.1-2.5-1.7-2.5-2-2.5-2.5-2.6-2.8-2.7-2.9-2.9-2.9-3-2.9-"
+          "3.1-2.7-3-2.6-3-2.4-3-2.7-3.3-2.9-3.6-3-4Z");
+      static const SkPath kParityDial = [&]() {
+        SkPath path;
+        auto font = gui::Font::MakeV2(gui::Font::GetSilkscreen(), 1.4_mm);
+        SkGlyphID glyphs[9];
+        SkRect bounds[9];
+        font->sk_font.textToGlyphs("012345678", 9, SkTextEncoding::kUTF8, glyphs, 9);
+        font->sk_font.getBounds(glyphs, 9, bounds, nullptr);
+        for (int i = 0; i < 9; ++i) {
+          SkPath glyph_path;
+          font->sk_font.getPath(glyphs[i], &glyph_path);
+          bounds[i] = glyph_path.getBounds();
+          glyph_path.transform(SkMatrix::Translate(-bounds[i].centerX(), -bounds[i].centerY()));
+          glyph_path.transform(SkMatrix::Scale(font->font_scale, -font->font_scale));
+          auto dir = SinCos::FromDegrees(i * 360.f / 9);
+          glyph_path.transform(SkMatrix::Translate(Vec2::Polar(dir, kMiddleR)));
+          path.addPath(glyph_path);
+        }
+        return path;
+      }();
+      symbol = kFlagSymbol;
+      dial = kParityDial;
+      // somehow signal that we're only using lowest byte
+      // somehow signal that we're counting bits (not the value)
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+
+  // Switch fill based on signed-ness of the condition
+  switch (cond_code) {
+    // Signed
+    case X86::CondCode::COND_S:
+    case X86::CondCode::COND_NS:
+    case X86::CondCode::COND_L:
+    case X86::CondCode::COND_LE:
+    case X86::CondCode::COND_G:
+    case X86::CondCode::COND_GE:
+    case X86::CondCode::COND_O:
+    case X86::CondCode::COND_NO: {
+      static auto signed_shader = []() {
+        SkColor colors[3] = {"#00ccff"_color, "#916f8a"_color, "#c83737"_color};
+        SkMatrix mat = SkMatrix::RotateDeg(180);
+        return SkGradientShader::MakeSweep(0, 0, colors, nullptr, 3, SkTileMode::kClamp, 0, 360, 0,
+                                           &mat);
+      }();
+      highlight_paint.setShader(signed_shader);
+      break;
+    }
+    // Unsigned
+    case X86::CondCode::COND_A:
+    case X86::CondCode::COND_AE:
+    case X86::CondCode::COND_B:
+    case X86::CondCode::COND_BE: {
+      static auto unsigned_shader = []() {
+        SkColor colors[2] = {"#916f8a"_color, "#ff0000"_color};
+        return SkGradientShader::MakeSweep(0, -kBorderWidth, colors, nullptr, 2, SkTileMode::kClamp,
+                                           0, 360, 0, nullptr);
+      }();
+      highlight_paint.setShader(unsigned_shader);
+      break;
+    }
+    // Sign-neutral
+    case X86::CondCode::COND_E:
+    case X86::CondCode::COND_NE:
+    case X86::CondCode::COND_P:
+    case X86::CondCode::COND_NP:
+    default: {
+      highlight_paint.setColor("#916f8a"_color);
+      break;
+    }
+  }
+
+  // Switch region based on the condition
+  static const SkPath kNoZeroRegion = []() {
+    SkPath path;
+    Rect inner = Rect::MakeAtZero(kInnerRadius * 2 + kHalfWidth, kInnerRadius * 2 + kHalfWidth);
+    Rect near = Rect::MakeAtZero(4_mm - kHalfWidth, 4_mm - kHalfWidth);
+    path.arcTo(inner.sk, 10, 340, true);
+    path.arcTo(near.sk, 350, -340, false);
+    path.close();
+    return path;
+  }();
+  static const SkPath kZeroRegion = []() {
+    SkPath path;
+    path.moveTo(0, -kBorderWidth);
+    path.lineTo(kInnerRadius + kHalfWidth, -kBorderWidth);
+    path.lineTo(kInnerRadius + kHalfWidth, kBorderWidth);
+    path.lineTo(0, kBorderWidth);
+    path.close();
+    return path;
+  }();
+  highlight_region = SkPath::Circle(0, 0, 4_mm);
   switch (cond_code) {
     case X86::CondCode::COND_O: {  // overflow
       break;
@@ -2345,62 +2629,127 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
     }
     case X86::CondCode::COND_L:  // fallthrough
     case X86::CondCode::COND_B: {
-      static const SkPath static_path = PathFromSVG("m-10-1 0 2 19 9 1-2-17-8 17-8-1-2z");
-      path = static_path;
+      highlight_region = kNoZeroRegion;
+      draw_zero_boundaries = true;
       break;
     }
     case X86::CondCode::COND_GE:  // fallthrough
     case X86::CondCode::COND_AE: {
-      static const SkPath static_path =
-          PathFromSVG("m10-1 0 2-19 9-1-2 17-8-17-8 1-2zm0 4-20 10 1 2 19-9.5z");
-      path = static_path;
+      draw_zero_boundaries = true;
       break;
     }
     case X86::CondCode::COND_E: {
-      static const SkPath static_path = PathFromSVG("m-10-2 0-2 20 0 0 2zm0 4 20 0 0 2-20 0z");
-      path = static_path;
       break;
     }
     case X86::CondCode::COND_NE: {
-      static const SkPath static_path =
-          PathFromSVG("m-10-2 0-2 20 0 0 2zm0 4 20 0 0 2-20 0zm14-9.5-7 16-2-1 7-16z");
-      path = static_path;
+      highlight_region = kNoZeroRegion;
+      draw_zero_boundaries = true;
       break;
     }
     case X86::CondCode::COND_LE:  // fallthrough
     case X86::CondCode::COND_BE: {
-      static const SkPath static_path =
-          PathFromSVG("m-10-1 0 2 19 9 1-2-17-8 17-8-1-2zm0 4 20 10-1 2-19-9.5z");
-      path = static_path;
+      draw_zero_boundaries = true;
       break;
     }
     case X86::CondCode::COND_G:  // fallthrough
     case X86::CondCode::COND_A: {
-      static const SkPath static_path = PathFromSVG("m10-1 0 2-19 9-1-2 17-8-17-8 1-2z");
-      path = static_path;
+      highlight_region = kNoZeroRegion;
+      draw_zero_boundaries = true;
       break;
     }
     case X86::CondCode::COND_S: {  // sign / negative
+      static const SkPath kNegativeRegion = [&]() {
+        auto oval = kInnerOval.Outset(kHalfWidth);
+        SkPath path;
+        path.moveTo(0, -kBorderWidth);
+        path.arcTo(oval.sk, -10, -170, true);
+        path.lineTo(0, 0);
+        path.close();
+        return path;
+      }();
+      highlight_region = kNegativeRegion;
+      draw_zero_boundaries = true;
       break;
     }
     case X86::CondCode::COND_NS: {  // not sign / positive
+      static const SkPath kNegativeRegion = [&]() {
+        auto oval = kInnerOval.Outset(kHalfWidth);
+        SkPath path;
+        path.moveTo(0, -kBorderWidth);
+        path.arcTo(oval.sk, -10, 190, true);
+        path.lineTo(0, 0);
+        path.close();
+        return path;
+      }();
+      highlight_region = kNegativeRegion;
+      draw_zero_boundaries = true;
+
       break;
     }
     case X86::CondCode::COND_P: {  // even number of bits in the lowest byte
+      static const SkPath kEvenParityRegion = [&]() {
+        SkPath path;
+        auto outer_oval = kInnerOval.Outset(kHalfWidth);
+        for (int i = 0; i < 9; ++i) {
+          if ((i & 1) == 1) continue;
+          SinCos start = SinCos::FromDegrees((i - 0.5f) * 360 / 9);
+          path.arcTo(outer_oval, start.ToDegrees(), 360.f / 9, true);
+          path.lineTo(0, 0);
+        }
+        return path;
+      }();
+      highlight_region = kEvenParityRegion;
       break;
     }
     case X86::CondCode::COND_NP: {  // odd number of bits in the lowest byte
+      static const SkPath kOddParityRegion = [&]() {
+        SkPath path;
+        auto outer_oval = kInnerOval.Outset(kHalfWidth);
+        for (int i = 0; i < 9; ++i) {
+          if ((i & 1) != 1) continue;
+          SinCos start = SinCos::FromDegrees((i - 0.5f) * 360 / 9);
+          path.arcTo(outer_oval, start.ToDegrees(), 360.f / 9, true);
+          path.lineTo(0, 0);
+        }
+        return path;
+      }();
+      highlight_region = kOddParityRegion;
       break;
     }
     default: {
       break;
     }
   }
+
+  SkPaint bg_paint;
+  bg_paint.setColor("#dddddd"_color);
+  canvas.drawCircle({0, 0}, 4_mm - kBorderWidth / 2, bg_paint);
+
+  canvas.drawPath(highlight_region, highlight_paint);
+  SkPaint outline_paint;
+  outline_paint.setColor("#000000"_color);
+  outline_paint.setStyle(SkPaint::kStroke_Style);
+  outline_paint.setStrokeWidth(kBorderWidth);
+  outline_paint.setStrokeCap(SkPaint::kButt_Cap);
+  canvas.drawCircle({0, 0}, 4_mm - kBorderWidth / 2, outline_paint);
+
+  if (draw_zero_boundaries) {  // Draw the zero indicator
+    // find the line length
+    float diagonal = 4_mm - kBorderWidth / 2;
+    float y = kBorderWidth;
+    float x = sqrtf(diagonal * diagonal - y * y);
+    canvas.drawLine(Vec2(0, kBorderWidth), Vec2(x, kBorderWidth), outline_paint);
+    canvas.drawLine(Vec2(0, -kBorderWidth), Vec2(x, -kBorderWidth), outline_paint);
+  }
+
+  SkPaint black_paint;
+  canvas.drawCircle({0, 0}, 2_mm, black_paint);
+  canvas.drawPath(dial, black_paint);
+
   SkPaint symbol_paint;
   symbol_paint.setColor("#ffffff"_color);
-  canvas.translate(kConditionCodeTokenWidth / 2, kConditionCodeTokenHeight / 2);
-  canvas.drawPath(path, symbol_paint);
-  canvas.translate(-kConditionCodeTokenWidth / 2, -kConditionCodeTokenHeight / 2);
+  canvas.drawPath(symbol, symbol_paint);
+  canvas.restore();
 }
 
 PersistentImage reverse = PersistentImage::MakeFromAsset(

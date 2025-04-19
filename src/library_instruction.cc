@@ -25,6 +25,7 @@
 #include "drawable.hh"
 #include "embedded.hh"
 #include "font.hh"
+#include "include/core/SkBlendMode.h"
 #include "library_assembler.hh"
 #include "llvm_asm.hh"
 #include "math.hh"
@@ -2327,8 +2328,6 @@ constexpr float kConditionCodeTokenHeight = 8_mm;
 constexpr Rect kConditionCodeRect =
     Rect::MakeAtZero<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
 
-constexpr float OtherLeg(float radius, float x) { return sqrtf(radius * radius - x * x); }
-
 void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
   canvas.save();
   canvas.translate(kConditionCodeTokenWidth / 2, kConditionCodeTokenHeight / 2);
@@ -2498,10 +2497,14 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
     }
     static const SkPaint white_overlay = []() {
       SkPaint paint;
-      SkColor fade_colors[2] = {"#eeeeeeff"_color, "#ffffff00"_color};
-      float fade_pos[2] = {kRegionStartRadius / kRegionEndRadius, 1};
-      paint.setShader(SkGradientShader::MakeRadial(Vec2(), kRegionEndRadius, fade_colors, fade_pos,
-                                                   2, SkTileMode::kClamp));
+      SkColor mask_colors[] = {"#ffffff"_color, "#ffffff00"_color};
+      float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
+      auto mask = SkGradientShader::MakeRadial(Vec2(), kRegionEndRadius, mask_colors, mask_pos,
+                                               std::size(mask_colors), SkTileMode::kClamp);
+      SkColor colors[] = {"#dddddd"_color, "#bbbbbb"_color};
+      auto color = SkGradientShader::MakeRadial(Vec2(0, kMiddleR), kGaugeRadius + kMiddleR, colors,
+                                                nullptr, std::size(colors), SkTileMode::kClamp);
+      paint.setShader(SkShaders::Blend(SkBlendMode::kSrcIn, mask, color));
       return paint;
     }();
     canvas.drawCircle(Vec2(), kRegionEndRadius, white_overlay);
@@ -2512,7 +2515,7 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
 
   SkPaint symbol_fill;
   SkPaint dial_fill;
-  dial_fill.setColor("#bbbbbb"_color);
+  dial_fill.setColor("#00000044"_color);
   SkPaint dial_stroke = dial_fill;
   dial_stroke.setStyle(SkPaint::kStroke_Style);
   dial_stroke.setStrokeWidth(kBorderHalf);
@@ -2578,7 +2581,8 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
     case X86::CondCode::COND_L:  // fallthrough
     case X86::CondCode::COND_B: {
       static const SkPath static_path =
-          PathFromSVG("m-4-.4 0 .8 7.6 3.6.4-.8-6.8-3.2 6.8-3.2-.4-.8z");
+          PathFromSVG("M-2.7-1.1V1.2L2.4 2.5 2.7 1.2-1.8 0l4.5-1.2-.3-1.4Z", SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
       symbol = static_path;
       Arc(-90, 90 - kCircleAngleAdjust);
       Triangle(-90_deg, true);
@@ -2587,8 +2591,11 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
     }
     case X86::CondCode::COND_GE:  // fallthrough
     case X86::CondCode::COND_AE: {
-      static const SkPath static_path =
-          PathFromSVG("m4-1.2 0 .8-7.6 3.6-.4-.8 6.8-3.2-6.8-3.2.4-.8zm0 1.6-8 4 .4.8 7.6-3.8z");
+      static const SkPath static_path = PathFromSVG(
+                                            "M-2.4-3.2-2.8-2 1.8-1-2.7 0l.3 1.1L2.7 "
+                                            "0V-1.9L-2.4-3.2ZM2.7.7-2.6 1.9l.4 1.3L2.7 2V.7Z",
+                                            SVGUnit_Millimeters)
+                                            .makeScale(0.5, 0.5);
       symbol = static_path;
       Triangle(90_deg, false);
       FillCircle(0);
@@ -2596,14 +2603,30 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
       break;
     }
     case X86::CondCode::COND_E: {
-      static const SkPath static_path = PathFromSVG("m-4-.8 0-.8 8 0 0 .8zm0 1.6 8 0 0 .8-8 0z");
+      static const SkPath static_path =
+          PathFromSVG(
+              "m-.45-2.08c-1.13 0-2.14.03-2.21.11-.17.17-.15 1.12 0 1.26.14.17 5.26.15 5.38 0 "
+              ".12-.08.05-1.2 0-1.26-.08-.06-1.72-.11-3.17-.11zm0 2.66c-1.13 "
+              "0-2.14.03-2.21.1-.17.17-.15 1.12 0 1.26.14.17 5.26.15 5.38 0 .12-.08.05-1.2 "
+              "0-1.26C2.64.62 1 .57-.45.58z",
+              SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
       symbol = static_path;
       FillCircle(0);
       break;
     }
     case X86::CondCode::COND_NE: {
       static const SkPath static_path =
-          PathFromSVG("m-4-.8 0-.8 8 0 0 .8zm0 1.6 8 0 0 .8-8 0zm5.6-3.8-2.8 6.4-.8-.4 2.8-6.4z");
+          PathFromSVG(
+              "m1.08-2.74-2.89 5 .77.45 2.89-5zm-1.53.67c-1.13 0-2.14.03-2.21.1-.17.17-.15 1.12 0 "
+              "1.26.05.06.78.1 1.68.11l.85-1.48c-.11 0-.22 0-.32 0zM2.51-2a.71.71 0 "
+              "01-.03.06L1.71-.61c.57-.02.98-.05 1.01-.09.12-.08.05-1.2 "
+              "0-1.26-.01-.01-.1-.02-.21-.03zM1.02.59.17 2.07c1.27 0 2.49-.05 "
+              "2.55-.12.12-.08.05-1.2 "
+              "0-1.26C2.67.65 1.93.62 1.02.6zm-2.68 0c-.56.02-.96.04-1 .09-.17.17-.15 1.12 0 "
+              "1.26.01.02.09.03.21.05a.71.71 0 01.04-.09z",
+              SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
       symbol = static_path;
       StrokeCircle(0);
       Arc(kCircleAngleAdjust, 360 - kCircleAngleAdjust * 2);
@@ -2612,7 +2635,11 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
     case X86::CondCode::COND_LE:  // fallthrough
     case X86::CondCode::COND_BE: {
       static const SkPath static_path =
-          PathFromSVG("m-4-1.2 0 .8 7.6 3.6.4-.8-6.8-3.2 6.8-3.2-.4-.8zm0 1.6 8 4-.4.8-7.6-3.8z");
+          PathFromSVG(
+              "M-2.7.7V2L2.2 3.2 2.6 1.9-2.7.7ZM2.4-3.2-2.7-1.9V0L2.4 1.1 2.7 0-1.8-1 2.8-2 "
+              "2.4-3.2Z",
+              SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
       symbol = static_path;
       Arc(0, -90);
       FillCircle(0);
@@ -2621,8 +2648,10 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
     }
     case X86::CondCode::COND_G:  // fallthrough
     case X86::CondCode::COND_A: {
-      static const SkPath static_path = PathFromSVG("m10-1 0 2-19 9-1-2 17-8-17-8 1-2z");
-      symbol = static_path.makeTransform(SkMatrix::Scale(0.4, 0.4));
+      static const SkPath static_path =
+          PathFromSVG("M2.7-1.1V1.2L-2.4 2.5-2.7 1.2 1.8 0-2.7-1.2l.3-1.4Z", SVGUnit_Millimeters)
+              .makeScale(0.5, 0.5);
+      symbol = static_path;
       Arc(90, -90 + kCircleAngleAdjust);
       StrokeCircle(0);
       Triangle(90_deg, false);
@@ -2650,12 +2679,14 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
     case X86::CondCode::COND_P:     // fallthrough
     case X86::CondCode::COND_NP: {  // number of bits in the lowest byte
       static const SkPath kFlagSymbol = PathFromSVG(
-          "M-3-4C-3.1-3.6-3.4-3.3-3.6-3-3.4-3-3.3-3-3.2-3.1-3.1-3-3.1-2.9-3.1-2.8-3.2-2.8-3.3-2.8-"
-          "3.3-2.8c-.1 1.2 0 2.4.2 3.6 0 0 .1 0 .2 0C-2.5 4.6-2.5 4.7-2.5 4.8L-1.6 4.8C-2 3.3-2.2 "
-          "2.1-2.3.8-2.1.8-1.9.7-1.7.6-1.1.4-.7-.2-.1-.4.3-.5.8-.1 1.2-.2 1.9-.4 2.3-1.2 2.9-1.5 "
-          "3.9-2 6.3-2.3 6.3-2.3 6.3-2.3 4.4-2.8 3.5-2.8 2.8-2.7 2.1-2.2 "
-          "1.4-2.2.8-2.3.5-2.9-.1-2.9-.6-3-1.1-2.5-1.7-2.5-2-2.5-2.5-2.6-2.8-2.7-2.9-2.9-2.9-3-2.9-"
-          "3.1-2.7-3-2.6-3-2.4-3-2.7-3.3-2.9-3.6-3-4Z");
+          "M-1.22-1.42c.08.14.12.23.28.34-.06 0-.11-.02-.15-.04 0 .06 0 .11 0 "
+          ".18.09.02.18.05.25.04.19 0 "
+          ".36-.16.54-.14.18.01.3.21.48.22.23.02.45-.16.68-.17.31-.02.93.14.93.14S1.01-.74.67-.57C."
+          "46-.47.35-.22.13-.16-.01-.12-.17-.24-.32-.21-.51-.16-.64.04-.82.11-.85.12-.89.13-.93."
+          "14c.14.68.31 1.31.34 1.33 0 .06-.49.06-.5 0-.03-.13-.09-.7-.15-1.28-.04 "
+          "0-.06-.01-.07-.02C-1.35-.23-1.39-.6-1.37-1c0-.01.01-.01.02-.02 0-.03 0-.06 "
+          "0-.09-.05.02-.08.02-.16.02.14-.11.22-.2.29-.33Z",
+          SVGUnit_Millimeters);
       static const SkPath kParityDial = [&]() {
         SkPath path;
         auto font = gui::Font::MakeV2(gui::Font::GetSilkscreen(), 1.4_mm);
@@ -2688,6 +2719,49 @@ void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
   canvas.drawPath(dial, dial_fill);
 
   canvas.drawPath(symbol, symbol_fill);
+
+  {    // Glass effects
+    {  // shadow
+      SkPaint paint;
+      paint.setColor("#00000080"_color);
+      paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, kBorderWidth));
+      canvas.save();
+      RRect clip = RRect::MakeSimple(kGaugeOval, kGaugeRadius);
+      canvas.clipRRect(clip.sk);
+      SkPath path;
+      path.addCircle(0, -kBorderWidth * 2, kGaugeRadius);
+      path.toggleInverseFillType();
+      canvas.drawPath(path, paint);
+      canvas.restore();
+    }
+
+    {  // sky reflection
+      SkPaint paint;
+      SkColor colors[] = {"#ffffffaa"_color, "#ffffff30"_color, "#ffffff00"_color};
+      paint.setShader(SkGradientShader::MakeRadial(Vec2(0, kMiddleR), kGaugeRadius * 1.5, colors,
+                                                   nullptr, std::size(colors), SkTileMode::kClamp));
+      canvas.save();
+      RRect clip = RRect::MakeSimple(kInnerOval, kInnerRadius);
+      canvas.clipRRect(clip.sk);
+      canvas.drawCircle(Vec2(0, kGaugeRadius * 2), hypotf(kGaugeRadius * 2, kGaugeRadius), paint);
+      canvas.restore();
+    }
+
+    {  // light edge
+      SkPaint paint;
+      SkPoint pts[] = {Vec2(-kGaugeRadius, 0), Vec2(kGaugeRadius, 0)};
+      SkColor colors[] = {"#ffffff20"_color, "#ffffffdd"_color, "#ffffff20"_color};
+      paint.setShader(SkGradientShader::MakeLinear(pts, colors, nullptr, std::size(colors),
+                                                   SkTileMode::kClamp));
+      paint.setStyle(SkPaint::kStroke_Style);
+      paint.setStrokeWidth(kBorderWidth);
+      paint.setMaskFilter(
+          SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, kBorderHalf / 3));
+      paint.setAntiAlias(true);
+      paint.setBlendMode(SkBlendMode::kOverlay);
+      canvas.drawCircle(0, 0, kGaugeRadius - kBorderHalf, paint);
+    }
+  }
   canvas.restore();
 }
 

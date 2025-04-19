@@ -284,6 +284,11 @@ sk_sp<SkColorFilter> DesaturateFilter() {
   return filter;
 }
 
+SkColor HSLuv(float h, float s, float l, float a) {
+  auto hsluv = HSLuvToRGB(h, s, l);
+  return SkColorSetARGB(a * 255 / 100, hsluv.r * 255, hsluv.g * 255, hsluv.b * 255);
+}
+
 }  // namespace automat::color
 
 Str automat::ToStr(SkColor color) {

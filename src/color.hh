@@ -36,6 +36,8 @@ constexpr SkColor ClampedSubtractRGB(SkColor base, SkColor subtract) {
                         std::max<int>(0, SkColorGetB(base) - SkColorGetB(subtract)));
 }
 
+SkColor HSLuv(float h360, float s100, float l100, float a100 = 100.f);
+
 }  // namespace automat::color
 
 namespace automat {

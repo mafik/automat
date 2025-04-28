@@ -634,7 +634,7 @@ void Location::UpdateChildTransform() {
   transform.postScale(s, s, scale_pivot.x, scale_pivot.y);
   transform.postTranslate(animation_state.position.value.x, animation_state.position.value.y);
   object_widget->local_to_parent = SkM44(transform);
-  object_widget->TransformUpdated();
+  object_widget->RecursiveTransformUpdated();
 }
 Ptr<Object> Location::InsertHereNoWidget(Ptr<Object>&& object) {
   this->object.Swap(object);

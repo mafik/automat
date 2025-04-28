@@ -23,6 +23,7 @@
 
 #include "animation.hh"
 #include "argument.hh"
+#include "automat.hh"
 #include "color.hh"
 #include "drawable.hh"
 #include "embedded.hh"
@@ -2316,15 +2317,104 @@ constexpr Rect kConditionCodeRect =
 struct ConditionCodeWidget : gui::Widget {
   std::function<X86::CondCode()> getter;
   std::optional<Wave1D> wave;
+  std::optional<Vec2> root_position;
+  float last_vx = 0;
   ConditionCodeWidget() {}
   SkPath Shape() const override { return SkPath::Circle(0, 0, kConditionCodeTokenWidth / 2); }
+  void TransformUpdated() override { WakeAnimation(); }
+
+  static constexpr float kBorderWidth = 0.5_mm;
+  static constexpr float kBorderHalf = kBorderWidth / 2;
+  static constexpr float kGaugeRadius = 4_mm;
+  static constexpr Rect kGaugeOval = Rect::MakeAtZero(kGaugeRadius * 2, kGaugeRadius * 2);
+  static constexpr float kInnerRadius = kGaugeRadius - kBorderWidth;
+  static constexpr Rect kInnerOval = Rect::MakeAtZero(kInnerRadius * 2, kInnerRadius * 2);
+  static constexpr float kSymbolRadius = 2_mm;
+  static constexpr Rect kSymbolOval = Rect::MakeAtZero(kSymbolRadius * 2, kSymbolRadius * 2);
+
+  // Constants describing the arrow around the condition symbol
+  static constexpr float kMiddleR = (kInnerRadius + kSymbolRadius) / 2;
+  static constexpr Rect kMiddleOval = Rect::MakeAtZero(kMiddleR * 2, kMiddleR * 2);
+  static constexpr Rect kFarOval = kMiddleOval.Outset(kBorderHalf);
+  static constexpr Rect kNearOval = kMiddleOval.Outset(-kBorderHalf);
+
   animation::Phase Tick(time::Timer& timer) override {
     auto phase = animation::Finished;
     auto cond_code = getter();
     if (cond_code == X86::CondCode::COND_NO && !wave.has_value()) {
       wave = Wave1D(30, 0.5, 0.005, 1);
+      root_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
     }
     if (wave) {
+      Vec2 new_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
+      auto delta = new_position - *root_position;
+      root_position = new_position;
+
+      float vx = delta.x / timer.d;
+      float ax = (vx - last_vx) / timer.d;
+      last_vx = vx;
+
+      float dvx = ax * timer.d;
+      float dx = dvx * timer.d;
+
+      if (abs(dx) > 0.001_mm) {
+        float column_width = kSymbolRadius * 2 / wave->n;
+
+        auto new_heights = std::vector<float>(wave->n);
+        auto new_velocity = std::vector<float>(wave->n);
+        auto amplitude = wave->Amplitude();
+        auto velocity = wave->Velocity();
+        for (int i = 0; i < wave->n; ++i) {
+          // Take the current column height and distribute it to target columns A & B
+          float target_i = std::clamp<float>(i - dx / column_width, 0, wave->n - 1);
+          float target_floor = floorf(target_i);
+          float target_ceil = ceilf(target_i);
+
+          float x = 2 * (i + 0.5f) / wave->n - 1;
+          float y = sqrtf(1 - x * x);
+
+          float t = target_i - target_floor;
+          float h = (amplitude[i] + 1) * y;
+          float v = velocity[i];
+          new_heights[target_floor] += h * (1 - t);
+          new_heights[target_ceil] += h * t;
+          new_velocity[target_floor] += v * (1 - t);
+          new_velocity[target_ceil] += v * t;
+        }
+        for (int i = 0; i < wave->n - 1; ++i) {
+          float x = (i + 0.5f) / wave->n * 2 - 1;
+          float y = sqrtf(1 - x * x);
+          float max_volume = y * 2;
+          if (new_heights[i] > max_volume) {  // carry forward
+            new_heights[i + 1] += new_heights[i] - max_volume;
+            new_heights[i] = max_volume;
+          }
+        }
+        for (int i = wave->n - 1; i > 0; --i) {
+          float x = (i + 0.5f) / wave->n * 2 - 1;
+          float y = sqrtf(1 - x * x);
+          float max_volume = y * 2;
+          if (new_heights[i] > max_volume) {  // carry backward
+            new_heights[i - 1] += new_heights[i] - max_volume;
+            new_heights[i] = max_volume;
+          }
+        }
+        for (int i = 0; i < wave->n; ++i) {
+          float x = (i + 0.5f) / wave->n * 2 - 1;
+          float y = sqrtf(1 - x * x);
+          float max_volume = y * 2;
+
+          amplitude[i] = std::clamp<float>((new_heights[i] / y - 1), -1, 1);
+          velocity[i] = new_velocity[i];
+        }
+
+        for (int i = 0; i < wave->n; ++i) {
+          if (amplitude[i] >= 1 || amplitude[i] <= 0) {
+            velocity[i] = 0;
+          }
+        }
+      }
+
       phase |= wave->Tick(timer);
       wave->ZeroMeanAmplitude();
       if (phase == animation::Finished) {
@@ -2339,21 +2429,6 @@ struct ConditionCodeWidget : gui::Widget {
   }
   void Draw(SkCanvas& canvas) const override {
     auto cond_code = getter();
-
-    constexpr float kBorderWidth = 0.5_mm;
-    constexpr float kBorderHalf = kBorderWidth / 2;
-    constexpr float kGaugeRadius = 4_mm;
-    constexpr Rect kGaugeOval = Rect::MakeAtZero(kGaugeRadius * 2, kGaugeRadius * 2);
-    constexpr float kInnerRadius = kGaugeRadius - kBorderWidth;
-    constexpr Rect kInnerOval = Rect::MakeAtZero(kInnerRadius * 2, kInnerRadius * 2);
-    constexpr float kSymbolRadius = 2_mm;
-    constexpr Rect kSymbolOval = Rect::MakeAtZero(kSymbolRadius * 2, kSymbolRadius * 2);
-
-    // Constants describing the arrow around the condition symbol
-    static constexpr float kMiddleR = (kInnerRadius + kSymbolRadius) / 2;
-    static constexpr Rect kMiddleOval = Rect::MakeAtZero(kMiddleR * 2, kMiddleR * 2);
-    static constexpr Rect kFarOval = kMiddleOval.Outset(kBorderHalf);
-    static constexpr Rect kNearOval = kMiddleOval.Outset(-kBorderHalf);
 
     {  // Draw region
       constexpr static float kRegionEndRadius = kGaugeRadius;
@@ -2599,22 +2674,26 @@ struct ConditionCodeWidget : gui::Widget {
           float x = i * kSymbolOval.Width() / (wave->n - 1) + kSymbolOval.left;
           float y = wave->state[i] * kSymbolRadius + kSymbolOval.CenterY();
           float d = hypotf(x, y);
-          if (d > kSymbolRadius) {
-            x *= kSymbolRadius / d;
-            y *= kSymbolRadius / d;
-            d = kSymbolRadius;
+          float max_d =
+              i * (i - wave->n + 1.f) / wave->n / wave->n * kSymbolRadius / 8 + kSymbolRadius;
+          if (d > max_d) {
+            x *= max_d / d;
+            y *= max_d / d;
+            d = max_d;
           }
           if (i == 0) {
             angle_0 = SinCos::FromVec2({x, y}, d);
             symbol.moveTo(x, y);
           } else {
-            angle_n = SinCos::FromVec2({x, y}, d);
             symbol.lineTo(x, y);
+          }
+          if (i == wave->n - 1) {
+            angle_n = SinCos::FromVec2({x, y}, d);
           }
         }
         float start_deg = angle_n.ToDegrees();
         float sweep_deg = (angle_0 - angle_n).ToDegreesNegative();
-        symbol.arcTo(kSymbolOval.sk, start_deg, sweep_deg, true);
+        symbol.arcTo(kSymbolOval.sk, start_deg, sweep_deg, false);
         symbol.close();
         break;
       }

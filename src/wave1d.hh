@@ -19,9 +19,9 @@ struct Wave1D final {
   animation::Phase Tick(time::Timer& timer);
 
   std::span<const float> Amplitudes() const;
-  std::span<float> Amplitudes();
+  std::span<float> Amplitude();
   std::span<float> Velocity();
-  float& operator[](int i) { return Amplitudes()[i]; }
+  float& operator[](int i) { return Amplitude()[i]; }
 
   void ZeroMeanAmplitude();
 };

@@ -43,7 +43,7 @@ animation::Phase Wave1D::Tick(time::Timer& timer) {
 
   // Note that the `height` & `velocity` vectors have size n, but all the calculations use n+2
   // columns!
-  auto height = Amplitudes();
+  auto height = Amplitude();
   auto velocity = Velocity();
 
   // Copy of the initial amplitude, so that it can be used to take the steps according to
@@ -185,11 +185,11 @@ animation::Phase Wave1D::Tick(time::Timer& timer) {
 }
 
 std::span<const float> Wave1D::Amplitudes() const { return std::span(state).subspan(0, n); }
-std::span<float> Wave1D::Amplitudes() { return std::span(state).subspan(0, n); }
+std::span<float> Wave1D::Amplitude() { return std::span(state).subspan(0, n); }
 std::span<float> Wave1D::Velocity() { return std::span(state).subspan(n); }
 
 void Wave1D::ZeroMeanAmplitude() {
-  auto amplitude = Amplitudes();
+  auto amplitude = Amplitude();
   float sum = 0;
   for (int i = 0; i < n; ++i) {
     sum += amplitude[i];

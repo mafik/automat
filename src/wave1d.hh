@@ -3,22 +3,27 @@
 #include <span>
 #include <vector>
 
+#include "animation.hh"
+
 namespace automat {
 
 struct Wave1D final {
   int n;
   float wave_speed;
   float column_spacing;
+  float damping_half_time;
   std::vector<float> state;
 
-  Wave1D(int n, float wave_speed, float column_spacing);
+  Wave1D(int n, float wave_speed, float column_spacing, float damping_half_time = 0);
 
-  void Step(float dt);
+  animation::Phase Tick(time::Timer& timer);
 
   std::span<const float> Amplitudes() const;
   std::span<float> Amplitudes();
   std::span<float> Velocity();
   float& operator[](int i) { return Amplitudes()[i]; }
+
+  void ZeroMeanAmplitude();
 };
 
 }  // namespace automat

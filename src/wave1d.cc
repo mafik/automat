@@ -1,9 +1,15 @@
 #include "wave1d.hh"
 
+#include "math_constants.hh"
+
 namespace automat {
 
-Wave1D::Wave1D(int n, float wave_speed, float column_spacing)
-    : n(n), wave_speed(wave_speed), column_spacing(column_spacing), state(n * 2) {}
+Wave1D::Wave1D(int n, float wave_speed, float column_spacing, float damping_half_time)
+    : n(n),
+      wave_speed(wave_speed),
+      column_spacing(column_spacing),
+      damping_half_time(damping_half_time),
+      state(n * 2) {}
 
 // See https://en.wikipedia.org/wiki/Tridiagonal_matrix_algorithm
 static void Thomas(const int X, float x[X], const float a[X], const float b[X], const float c[X]) {
@@ -32,7 +38,7 @@ static void Thomas(const int X, float x[X], const float a[X], const float b[X], 
   for (int ix = X - 2; ix >= 0; ix--) x[ix] -= scratch[ix] * x[ix + 1];
 }
 
-void Wave1D::Step(float dt) {
+animation::Phase Wave1D::Tick(time::Timer& timer) {
   const int kColumnCount = n + 2;
 
   // Note that the `height` & `velocity` vectors have size n, but all the calculations use n+2
@@ -121,6 +127,8 @@ void Wave1D::Step(float dt) {
     }
   };
 
+  float dt = timer.d;
+
   // 1st step of RK
   for (int i = 0; i < kColumnCount; ++i) {  // velocity_star is just the velocity.
     velocity_star[i] = velocity_prev[i];
@@ -146,10 +154,50 @@ void Wave1D::Step(float dt) {
   EstimateHeightStar(dt);
   EstimateAccelStar(dt);
   AccumulateEstimate(dt / 6.0);
+
+  if (damping_half_time > 0) {
+    float damping_factor = expf(-dt / damping_half_time * kLog2e);
+    for (int i = 0; i < n; ++i) {
+      velocity[i] *= damping_factor;
+    }
+  }
+
+  constexpr float kVelocityEpsilon = 0.001;
+  float velocity_magnitude = 0;
+  for (int i = 0; i < n; ++i) {
+    velocity_magnitude += velocity[i] * velocity[i];
+  }
+  if (velocity_magnitude < kVelocityEpsilon * kVelocityEpsilon) {
+    for (int i = 0; i < n; ++i) {
+      velocity[i] = 0;
+    }
+    float height_sum = 0;
+    for (int i = 0; i < n; ++i) {
+      height_sum += height[i];
+    }
+    height_sum /= n;
+    for (int i = 0; i < n; ++i) {
+      height[i] = height_sum;
+    }
+    return animation::Finished;
+  }
+  return animation::Animating;
 }
 
 std::span<const float> Wave1D::Amplitudes() const { return std::span(state).subspan(0, n); }
 std::span<float> Wave1D::Amplitudes() { return std::span(state).subspan(0, n); }
 std::span<float> Wave1D::Velocity() { return std::span(state).subspan(n); }
+
+void Wave1D::ZeroMeanAmplitude() {
+  auto amplitude = Amplitudes();
+  float sum = 0;
+  for (int i = 0; i < n; ++i) {
+    sum += amplitude[i];
+  }
+  sum /= n;
+  for (int i = 0; i < n; ++i) {
+    amplitude[i] -= sum;
+  }
+}
 
 }  // namespace automat

@@ -90,6 +90,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
     constexpr static float kLineHeight = 11_mm;
 
     Ptr<gui::SmallBufferWidget> imm_widget;
+    Ptr<gui::Widget> condition_code_widget;
     float scale = 1;
     llvm::SmallVector<Vec2, 10> token_position;
     llvm::SmallVector<float, 10> string_width_scale;

@@ -107,6 +107,18 @@ struct Fixed1 {
   constexpr Fixed1(int32_t i) : value(i) {}
 };
 
+constexpr Fixed1 kOne = Fixed1(1.0f);
+constexpr Fixed1 kMinusOne = Fixed1(-1.0f);
+
+constexpr Fixed1 ClampFixed1(Fixed1 value) {
+  if (value > kOne) {
+    return kOne;
+  } else if (value < kMinusOne) {
+    return kMinusOne;
+  }
+  return value;
+}
+
 // Return the angle in the range [0, 360).
 inline float NormalizeDegrees360(float degrees) {
   if ((degrees < 0.f) || (degrees >= 360.f)) {
@@ -189,10 +201,12 @@ struct SinCos {
     return angle <= -kPi ? angle + kPi * 2 : angle;
   }
   constexpr SinCos operator+(const SinCos& other) const {
-    return SinCos(sin * other.cos + cos * other.sin, cos * other.cos - sin * other.sin);
+    return SinCos(ClampFixed1(sin * other.cos + cos * other.sin),
+                  ClampFixed1(cos * other.cos - sin * other.sin));
   }
   constexpr SinCos operator-(const SinCos& other) const {
-    return SinCos(sin * other.cos - cos * other.sin, cos * other.cos + sin * other.sin);
+    return SinCos(ClampFixed1(sin * other.cos - cos * other.sin),
+                  ClampFixed1(cos * other.cos + sin * other.sin));
   }
   constexpr SinCos operator-() const { return SinCos(-sin, cos); }
   constexpr SinCos Opposite() const { return SinCos(-sin, -cos); }

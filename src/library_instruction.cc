@@ -6,8 +6,10 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkFontTypes.h>
+#include <include/core/SkImage.h>
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPictureRecorder.h>
 #include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkBlenders.h>
@@ -2332,6 +2334,9 @@ struct ConditionCodeWidget : gui::Widget {
   static constexpr float kSymbolRadius = 2_mm;
   static constexpr Rect kSymbolOval = Rect::MakeAtZero(kSymbolRadius * 2, kSymbolRadius * 2);
 
+  static constexpr auto& kWaterOval = kInnerOval;
+  static constexpr float kWaterRadius = kWaterOval.Height() / 2;
+
   // Constants describing the arrow around the condition symbol
   static constexpr float kMiddleR = (kInnerRadius + kSymbolRadius) / 2;
   static constexpr Rect kMiddleOval = Rect::MakeAtZero(kMiddleR * 2, kMiddleR * 2);
@@ -2358,7 +2363,7 @@ struct ConditionCodeWidget : gui::Widget {
       float dx = dvx * timer.d;
 
       if (abs(dx) > 0.001_mm) {
-        float column_width = kSymbolRadius * 2 / wave->n;
+        float column_width = kWaterRadius * 2 / wave->n;
 
         auto new_heights = std::vector<float>(wave->n);
         auto new_velocity = std::vector<float>(wave->n);
@@ -2417,13 +2422,6 @@ struct ConditionCodeWidget : gui::Widget {
 
       phase |= wave->Tick(timer);
       wave->ZeroMeanAmplitude();
-      if (phase == animation::Finished) {
-        auto a = wave->Velocity();
-        for (int i = 0; i < wave->n; ++i) {
-          a[i] = sin(i * 2 * M_PI / wave->n * 2) * 10;
-        }
-        phase = animation::Animating;
-      }
     }
     return phase;
   }
@@ -2504,9 +2502,9 @@ struct ConditionCodeWidget : gui::Widget {
           color::HSLuv(40, 100, 62),   // 32b
           color::HSLuv(21, 100, 57),   // 63b
           color::HSLuv(12, 95, 53),    // 64b
-          color::HSLuv(8, 90, 52),     // 32b
-          color::HSLuv(4, 85, 51),     // 16b
-          color::HSLuv(0, 80, 50),     // 8b
+          color::HSLuv(12, 95, 53),    // 32b
+          color::HSLuv(12, 95, 53),    // 16b
+          color::HSLuv(12, 95, 53),    // 8b
       };
       static const SkColor kSignedColors[] = {
           kUnsignedColors[0],          // 0b
@@ -2517,7 +2515,7 @@ struct ConditionCodeWidget : gui::Widget {
           kUnsignedColors[5],          // 31b
           kUnsignedColors[6],          // 32b
           kUnsignedColors[7],          // 63b
-          color::HSLuv(257, 100, 26),  // 64b
+          color::HSLuv(250, 100, 46),  // 64b
           color::HSLuv(240, 100, 50),  // 32b
           color::HSLuv(226, 100, 73),  // 16b
           color::HSLuv(176, 100, 65),  // 8b
@@ -2599,23 +2597,35 @@ struct ConditionCodeWidget : gui::Widget {
     SkPath symbol;  // symbol drawn in the center
 
     SkPaint symbol_fill;
+    symbol_fill.setAntiAlias(true);
     SkPaint dial_fill;
     dial_fill.setColor("#00000044"_color);
-    SkPaint dial_stroke = dial_fill;
-    dial_stroke.setStyle(SkPaint::kStroke_Style);
-    dial_stroke.setStrokeWidth(kBorderHalf);
 
     auto FillCircle = [&](float degrees) {
-      canvas.drawCircle(Vec2::Polar(degrees / 180 * M_PI, kMiddleR), kBorderWidth * 0.75,
-                        dial_fill);
+      auto center = Vec2::Polar(degrees / 180 * M_PI, kMiddleR);
+      dial.addCircle(center.x, center.y, kBorderWidth * 0.75, SkPathDirection::kCW);
     };
     auto StrokeCircle = [&](float degrees) {
-      canvas.drawCircle(Vec2::Polar(degrees / 180 * M_PI, kMiddleR), kBorderWidth * 0.75,
-                        dial_stroke);
+      auto center = Vec2::Polar(degrees / 180 * M_PI, kMiddleR);
+      dial.addCircle(center.x, center.y, kBorderWidth, SkPathDirection::kCW);
+      dial.addCircle(center.x, center.y, kBorderHalf, SkPathDirection::kCCW);
     };
-    static const float kCircleAngleAdjust = asin(kBorderWidth / kMiddleR) * 180 / M_PI;
+    static const float kCircleAngleAdjust = asin(kBorderWidth * 0.75 / kMiddleR) * 180 / M_PI;
     auto Arc = [&](float start_deg, float sweep_deg) {
-      canvas.drawArc(kMiddleOval.sk, start_deg, sweep_deg, false, dial_stroke);
+      if (sweep_deg < 0) {
+        start_deg += sweep_deg;
+        sweep_deg = -sweep_deg;
+      }
+      static const SkRect kArcOuterRect =
+          kMiddleOval.sk.makeOutset(kBorderHalf / 2, kBorderHalf / 2);
+      static const SkRect kArcInnerRect =
+          kMiddleOval.sk.makeOutset(-kBorderHalf / 2, -kBorderHalf / 2);
+      Vec2 inner_point =
+          Vec2::Polar((start_deg + sweep_deg) / 180 * M_PI, kMiddleR - kBorderHalf / 2);
+      dial.arcTo(kArcOuterRect, start_deg, sweep_deg, true);
+      dial.lineTo(inner_point);
+      dial.arcTo(kArcInnerRect, start_deg + sweep_deg, -sweep_deg, false);
+      dial.close();
     };
     auto Triangle = [&](SinCos angle, bool ccw = false) {
       constexpr static float kSide = kInnerRadius - kSymbolRadius;
@@ -2626,32 +2636,33 @@ struct ConditionCodeWidget : gui::Widget {
       auto c = ab + Vec2::Polar(angle + (ccw ? -90_deg : 90_deg), kHeight);
       auto ca = (a + c) / 2;
       auto bc = (b + c) / 2;
-      SkPath path;
-      path.moveTo(ab);
-      path.arcTo(b, bc, kBorderHalf);
-      path.arcTo(c, ca, 0);
-      path.arcTo(a, ab, kBorderHalf);
-      path.close();
-      canvas.drawPath(path, dial_fill);
+      dial.moveTo(ab);
+      dial.arcTo(b, bc, kBorderHalf);
+      dial.arcTo(c, ca, 0);
+      dial.arcTo(a, ab, kBorderHalf);
+      dial.close();
     };
     // Switch the symbol
     switch (cond_code) {
       case X86::CondCode::COND_O: {  // overflow
-        Arc(135, 90);
         Triangle(225_deg, false);
         Triangle(135_deg, true);
+        Arc(135, 90);
+        static const SkPath kSpill = PathFromSVG(
+            "M-3.69-3.13c-.01 0-.03 0-.05 0-.43.05-.35.89-.75 "
+            "1.05-.24.09-.51-.25-.75-.15-.27.11-.09.61-.5.73-.32.08.1.71.06 "
+            "1.06-.05.3-.34.56-.29.85.04.27.42.39.5.65.06.18-.1.39-.04.58.08.21.25.43.46.51.2.08."
+            "43-.12.63-.06.24.08.34.43.59.49.14.04.31-.01.44-.08.07-.04.12-.1.15-.17 0 0 0 0 0 0A4 "
+            "4 0 01-4 0a4 4 0 01.93-2.56s0 0 0 0c-.11-.25-.35-.56-.62-.57z",
+            SVGUnit_Millimeters);
         static const SkPath kOverflowSymbol = PathFromSVG(
-            "m-2.25-4.5a1.8 1.8 90 00-.5256.0612 1.8 1.8 90 00-1.2708 2.2032 1.8 1.8 90 002.2032 "
-            "1.2744 1.8 1.8 90 00.7488-.414l0 0 .0108-.0072a1.8 1.8 90 "
-            "00.0864-.0864l2.16-2.16-2.8908-.774a1.8 1.8 90 00-.522-.0972zm5 2-1.4976 2.592a1.8 "
-            "1.8 "
-            "90 00-.306 1.0008 1.8 1.8 90 001.8 1.8 1.8 1.8 90 001.8-1.8 1.8 1.8 90 "
-            "00-.2052-.8316l.0036 0-.0072-.0108a1.8 1.8 90 00-.0612-.1044l-1.5264-2.646zm-3 "
-            "2-2.592 "
-            "1.494a1.8 1.8 90 00-.7668.7128 1.8 1.8 90 00.6588 2.4624 1.8 1.8 90 002.4588-.6624 "
-            "1.8 "
-            "1.8 90 00.2412-.8208l0 0 0-.0108a1.8 1.8 90 000-.1224l0-3.0528z");
+            "m-2.62-1.33-.26.3.01.42-.19.38.09.08.74-.16.63.32-.61.03-.66.3L-3.31.13-3.61.32-3.15."
+            "79l.46-.04-.48.32-.75-.32A4 4 0 01-4 0a4 4 0 "
+            "01.01-.2l.61-.16.3-.36-.04-.37.5-.24ZM0-1.57.9-.01c.1.16.15.35.15.53C1.05 1.1.58 1.57 "
+            "0 1.57S-1.05 1.1-1.05.52c0-.18.05-.37.15-.53L0-1.57Z",
+            SVGUnit_Millimeters);
         symbol = kOverflowSymbol;
+        dial.addPath(kSpill);
         break;
       }
       case X86::CondCode::COND_NO: {  // no overflow
@@ -2659,42 +2670,11 @@ struct ConditionCodeWidget : gui::Widget {
         Triangle(225_deg, true);
         Triangle(135_deg, false);
         static const SkPath kNoOverflowSymbol = PathFromSVG(
-            "m2.7-1.17c-.198-.0135-.441.135-.81.549-.9855 1.098-1.125 "
-            "1.17-1.962.3285-.8415-.8415-.8775-.5985-1.5525.054-.6795.657-.945.9765-1.791.018-."
-            "4905-."
-            "558-.864-.8775-1.3005-.693a4.8375 4.8375 90 00-.0945.891 4.8375 4.8375 90 004.8375 "
-            "4.8375 4.8375 4.8375 90 004.8375-4.8375 4.8375 4.8375 90 "
-            "000-.036c-.3645.324-.63.27-1.17-.216-.459-.4185-.666-.8775-.9945-.8955z");
-        // symbol = kNoOverflowSymbol;
-
-        // symbol.moveTo(kSymbolOval.left, kSymbolOval.bottom);
-        SinCos angle_0;
-        SinCos angle_n;
-        for (int i = 0; i < wave->n; ++i) {
-          float x = i * kSymbolOval.Width() / (wave->n - 1) + kSymbolOval.left;
-          float y = wave->state[i] * kSymbolRadius + kSymbolOval.CenterY();
-          float d = hypotf(x, y);
-          float max_d =
-              i * (i - wave->n + 1.f) / wave->n / wave->n * kSymbolRadius / 8 + kSymbolRadius;
-          if (d > max_d) {
-            x *= max_d / d;
-            y *= max_d / d;
-            d = max_d;
-          }
-          if (i == 0) {
-            angle_0 = SinCos::FromVec2({x, y}, d);
-            symbol.moveTo(x, y);
-          } else {
-            symbol.lineTo(x, y);
-          }
-          if (i == wave->n - 1) {
-            angle_n = SinCos::FromVec2({x, y}, d);
-          }
-        }
-        float start_deg = angle_n.ToDegrees();
-        float sweep_deg = (angle_0 - angle_n).ToDegreesNegative();
-        symbol.arcTo(kSymbolOval.sk, start_deg, sweep_deg, false);
-        symbol.close();
+            "M.92.03c.09.15.13.33.13.5C1.05 1.11.58 1.58 0 1.58c-.18 "
+            "0-.35-.05-.5-.13L.92.03ZM1.14-.62-.9 1.42-1.21 "
+            "1.1.83-.94ZM.39-.91-1.04.52c0-.19.05-.37.14-.53L0-1.57Z",
+            SVGUnit_Millimeters);
+        symbol = kNoOverflowSymbol;
         break;
       }
       case X86::CondCode::COND_L:  // fallthrough
@@ -2809,6 +2789,14 @@ struct ConditionCodeWidget : gui::Widget {
             "0-.06-.01-.07-.02C-1.35-.23-1.39-.6-1.37-1c0-.01.01-.01.02-.02 0-.03 0-.06 "
             "0-.09-.05.02-.08.02-.16.02.14-.11.22-.2.29-.33Z",
             SVGUnit_Millimeters);
+        static const SkPath kTwoFlagsSymbol = []() {
+          SkPath path;
+          path.addPath(kFlagSymbol.makeTransform(
+              SkMatrix::RotateDeg(-5).preTranslate(0.7_mm, -0.5_mm).preScale(0.6, 0.6)));
+          path.addPath(kFlagSymbol.makeTransform(SkMatrix::RotateDeg(5).preTranslate(0, 0.3_mm)));
+          // path.setFillType(SkPathFillType::kEvenOdd);
+          return path;
+        }();
         static const SkPath kParityDial = [&]() {
           SkPath path;
           auto font = gui::Font::MakeV2(gui::Font::GetSilkscreen(), 1.4_mm);
@@ -2829,7 +2817,11 @@ struct ConditionCodeWidget : gui::Widget {
           }
           return path;
         }();
-        symbol = kFlagSymbol;
+        if (cond_code == X86::CondCode::COND_P) {
+          symbol = kTwoFlagsSymbol;
+        } else {
+          symbol = kFlagSymbol;
+        }
         dial = kParityDial;
         break;
       }
@@ -2839,8 +2831,61 @@ struct ConditionCodeWidget : gui::Widget {
     }
 
     canvas.drawPath(dial, dial_fill);
-
     canvas.drawPath(symbol, symbol_fill);
+
+    if (wave.has_value()) {
+      SkPath water;
+      SinCos angle_0;
+      SinCos angle_n;
+      for (int i = 0; i < wave->n; ++i) {
+        float x = i * kWaterOval.Width() / (wave->n - 1) + kWaterOval.left;
+        float y = wave->state[i] * kWaterRadius + kWaterOval.CenterY();
+        float d = hypotf(x, y);
+        float max_d = i * (i - wave->n + 1.f) / wave->n / wave->n * kWaterRadius / 8 + kWaterRadius;
+        if (d > max_d) {
+          x *= max_d / d;
+          y *= max_d / d;
+          d = max_d;
+        }
+        if (i == 0) {
+          angle_0 = SinCos::FromVec2({x, y}, d);
+          water.moveTo(x, y);
+        } else {
+          water.lineTo(x, y);
+        }
+        if (i == wave->n - 1) {
+          angle_n = SinCos::FromVec2({x, y}, d);
+        }
+      }
+      float start_deg = angle_n.ToDegrees();
+      float sweep_deg = (angle_0 - angle_n).ToDegreesNegative();
+      water.arcTo(kWaterOval.sk, start_deg, sweep_deg, false);
+      water.close();
+      water.toggleInverseFillType();
+
+      SkPaint displacement_paint;
+      displacement_paint.setImageFilter(SkImageFilters::Magnifier(
+          kWaterOval.sk, 1.5, kWaterRadius * 0.9, kDefaultSamplingOptions, nullptr));
+
+      SkCanvas::SaveLayerRec mask_rec(&kWaterOval.sk, nullptr,
+                                      SkCanvas::kInitWithPrevious_SaveLayerFlag);
+      SkCanvas::SaveLayerRec displacement_rec(&kWaterOval.sk, &displacement_paint,
+                                              SkCanvas::kInitWithPrevious_SaveLayerFlag);
+      canvas.saveLayer(mask_rec);
+      canvas.saveLayer(displacement_rec);
+      canvas.restore();
+      SkPaint clear_paint;
+      clear_paint.setBlendMode(SkBlendMode::kClear);
+      canvas.drawPath(water, clear_paint);
+      SkPaint inner_shadow_paint;
+      inner_shadow_paint.setColor("#a3b8c6"_color);
+      // inner_shadow_paint.setColor("#def3ffd5"_color);
+      inner_shadow_paint.setBlendMode(SkBlendMode::kMultiply);
+      inner_shadow_paint.setMaskFilter(
+          SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, kWaterRadius * 0.1f, true));
+      canvas.drawPath(water, inner_shadow_paint);
+      canvas.restore();
+    }
 
     {    // Glass effects
       {  // shadow
@@ -2885,6 +2930,12 @@ struct ConditionCodeWidget : gui::Widget {
         canvas.drawCircle(0, 0, kGaugeRadius - kBorderHalf, paint);
       }
     }
+  }
+
+  maf::Optional<Rect> TextureBounds() const override {
+    auto bounds = kGaugeOval;
+    bounds.left -= 2_mm;
+    return bounds;
   }
 };
 

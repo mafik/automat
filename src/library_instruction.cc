@@ -2891,8 +2891,6 @@ struct ConditionCodeWidget : gui::Widget {
       canvas.restore();
     }
 
-    static constexpr bool kDebugKnob = true;
-
     if constexpr (kDebugKnob) {
       SkPaint circle_paint;
       circle_paint.setColor("#ff0000"_color);
@@ -2978,8 +2976,10 @@ struct ConditionCodeWidget : gui::Widget {
       Vec2 pos = pointer.PositionWithin(*widget);
       knob.Update(pos);
       widget->knob = knob;
-      LOG << "tangent: " << knob.tangent.ToDegreesPositive() << " radius: " << knob.radius
-          << " center: " << knob.center;
+      if constexpr (kDebugKnob) {
+        LOG << "tangent: " << knob.tangent.ToDegreesPositive() << " radius: " << knob.radius
+            << " center: " << knob.center << " value: " << knob.value;
+      }
       widget->WakeAnimation();
     }
   };

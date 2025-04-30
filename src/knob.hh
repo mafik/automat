@@ -8,6 +8,8 @@
 
 namespace automat {
 
+static constexpr bool kDebugKnob = true;
+
 // Turns a gesture into a continuous value.
 //
 // Allows scrolling and turning in any direction.

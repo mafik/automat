@@ -7,46 +7,282 @@
 
 using namespace maf;
 
+// See: https://people.cas.uab.edu/~mosya/cl/CPPcircle.html
 namespace automat {
 
-// Helper function to solve 3x3 linear system Ax = Y using Cramer's rule / Adjugate Matrix
-// Returns true if successful, false if matrix is singular.
-// A is a 3x3 matrix (row-major)
-// Y is a 3x1 vector
-// X is the 3x1 solution vector (output)
-static bool Solve3x3(const float A[3][3], const float Y[3], float X[3]) {
-  // Calculate determinant
-  float det = A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) -
-              A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
-              A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+using reals = float;
 
-  // Check for singularity (use a small epsilon)
-  constexpr float kDeterminantEpsilon = 1e-9f;
-  if (std::abs(det) < kDeterminantEpsilon) {
-    return false;  // Matrix is singular or near-singular
+// Class for Data
+// A data has 5 fields:
+//       n (of type int), the number of data points
+//       X and Y (arrays of type reals), arrays of x- and y-coordinates
+//       meanX and meanY (of type reals), coordinates of the centroid (x and y sample means)
+
+class Data {
+ public:
+  int n;
+  reals* X;  // space is allocated in the constructors
+  reals* Y;  // space is allocated in the constructors
+  reals meanX, meanY;
+
+  // constructors
+  Data() {
+    n = 0;
+    X = new reals[n];
+    Y = new reals[n];
+    for (int i = 0; i < n; i++) {
+      X[i] = 0.;
+      Y[i] = 0.;
+    }
+  }
+  Data(int N) {
+    n = N;
+    X = new reals[n];
+    Y = new reals[n];
+
+    for (int i = 0; i < n; i++) {
+      X[i] = 0.;
+      Y[i] = 0.;
+    }
+  }
+  Data(int N, reals dataX[], reals dataY[]) {
+    n = N;
+    X = new reals[n];
+    Y = new reals[n];
+
+    for (int i = 0; i < n; i++) {
+      X[i] = dataX[i];
+      Y[i] = dataY[i];
+    }
   }
 
-  float inv_det = 1.0f / det;
+  // Routine that computes the x- and y- sample means (the coordinates of the centeroid)
+  void means(void) {
+    meanX = 0.;
+    meanY = 0.;
 
-  // Calculate cofactors (transposed for adjugate)
-  // adj(A)[i][j] = Cofactor(A)[j][i]
-  float C[3][3];
-  C[0][0] = (A[1][1] * A[2][2] - A[1][2] * A[2][1]);
-  C[1][0] = -(A[0][1] * A[2][2] - A[0][2] * A[2][1]);
-  C[2][0] = (A[0][1] * A[1][2] - A[0][2] * A[1][1]);
-  C[0][1] = -(A[1][0] * A[2][2] - A[1][2] * A[2][0]);
-  C[1][1] = (A[0][0] * A[2][2] - A[0][2] * A[2][0]);
-  C[2][1] = -(A[0][0] * A[1][2] - A[0][2] * A[1][0]);
-  C[0][2] = (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
-  C[1][2] = -(A[0][0] * A[2][1] - A[0][1] * A[2][0]);
-  C[2][2] = (A[0][0] * A[1][1] - A[0][1] * A[1][0]);
+    for (int i = 0; i < n; i++) {
+      meanX += X[i];
+      meanY += Y[i];
+    }
+    meanX /= n;
+    meanY /= n;
+  }
 
-  // Calculate solution X = A^-1 * Y = (1/det) * adj(A) * Y
-  X[0] = inv_det * (C[0][0] * Y[0] + C[1][0] * Y[1] + C[2][0] * Y[2]);
-  X[1] = inv_det * (C[0][1] * Y[0] + C[1][1] * Y[1] + C[2][1] * Y[2]);
-  X[2] = inv_det * (C[0][2] * Y[0] + C[1][2] * Y[1] + C[2][2] * Y[2]);
+  // Routine that centers the data set (shifts the coordinates to the centeroid)
+  void center(void) {
+    reals sX = 0., sY = 0.;
+    int i;
 
-  return true;
+    for (i = 0; i < n; i++) {
+      sX += X[i];
+      sY += Y[i];
+    }
+    sX /= n;
+    sY /= n;
+
+    for (i = 0; i < n; i++) {
+      X[i] -= sX;
+      Y[i] -= sY;
+    }
+    meanX = 0.;
+    meanY = 0.;
+  }
+  // Routine that scales the coordinates (makes them of order one)
+  void scale(void) {
+    reals sXX = 0., sYY = 0., scaling;
+    int i;
+
+    for (i = 0; i < n; i++) {
+      sXX += X[i] * X[i];
+      sYY += Y[i] * Y[i];
+    }
+    scaling = sqrt((sXX + sYY) / n / 2);
+
+    for (i = 0; i < n; i++) {
+      X[i] /= scaling;
+      Y[i] /= scaling;
+    }
+  }
+
+  // destructors
+  ~Data() {
+    delete[] X;
+    delete[] Y;
+  }
+};
+
+// Class for Circle
+// A circle has 7 fields:
+//     a, b, r (of type reals), the circle parameters
+//     s (of type reals), the estimate of sigma (standard deviation)
+//     g (of type reals), the norm of the gradient of the objective function
+//     i and j (of type int), the iteration counters (outer and inner, respectively)
+class Circle {
+ public:
+  // The fields of a Circle
+  reals a, b, r, s, g, Gx, Gy;
+  int i, j;
+
+  // constructors
+  Circle() {
+    a = 0.;
+    b = 0.;
+    r = 1.;
+    s = 0.;
+    i = 0;
+    j = 0;
+  }
+  Circle(reals aa, reals bb, reals rr);
+
+  // routines
+  void print(void);
+
+  // no destructor we didn't allocate memory by hand.
+};
+
+// Constructor with assignment of the circle parameters only
+
+Circle::Circle(reals aa, reals bb, reals rr) {
+  a = aa;
+  b = bb;
+  r = rr;
+}
+
+template <typename T>
+inline T SQR(T t) {
+  return t * t;
+};
+
+reals Sigma(Data& data, Circle& circle) {
+  reals sum = 0., dx, dy;
+
+  for (int i = 0; i < data.n; i++) {
+    dx = data.X[i] - circle.a;
+    dy = data.Y[i] - circle.b;
+    sum += SQR(sqrt(dx * dx + dy * dy) - circle.r);
+  }
+  return sqrt(sum / data.n);
+}
+
+/*
+      Circle fit to a given set of data points (in 2D)
+
+      This is an algebraic fit based on the journal article
+
+      A. Al-Sharadqah and N. Chernov, "Error analysis for circle fitting algorithms",
+      Electronic Journal of Statistics, Vol. 3, pages 886-911, (2009)
+
+      It is an algebraic circle fit with "hyperaccuracy" (with zero essential bias).
+      The term "hyperaccuracy" first appeared in papers by Kenichi Kanatani around 2006
+
+      Input:  data     - the class of data (contains the given points):
+
+              data.n   - the number of data points
+              data.X[] - the array of X-coordinates
+              data.Y[] - the array of Y-coordinates
+
+     Output:
+               circle - parameters of the fitting circle:
+
+               circle.a - the X-coordinate of the center of the fitting circle
+               circle.b - the Y-coordinate of the center of the fitting circle
+               circle.r - the radius of the fitting circle
+               circle.s - the root mean square error (the estimate of sigma)
+               circle.j - the total number of iterations
+
+     This method combines the Pratt and Taubin fits to eliminate the essential bias.
+
+     It works well whether data points are sampled along an entire circle or
+     along a small arc.
+
+     Its statistical accuracy is theoretically higher than that of the Pratt fit
+     and Taubin fit, but practically they all return almost identical circles
+     (unlike the Kasa fit that may be grossly inaccurate).
+
+     It provides a very good initial guess for a subsequent geometric fit.
+
+       Nikolai Chernov  (September 2012)
+
+*/
+Circle CircleFitByHyper(Data& data) {
+  int i, iter, IterMAX = 99;
+
+  float Xi, Yi, Zi;
+  float Mz, Mxy, Mxx, Myy, Mxz, Myz, Mzz, Cov_xy, Var_z;
+  float A0, A1, A2, A22;
+  float Dy, xnew, x, ynew, y;
+  float DET, Xcenter, Ycenter;
+
+  Circle circle;
+
+  data.means();  // Compute x- and y- sample means (via a function in the class "data")
+
+  //     computing moments
+
+  Mxx = Myy = Mxy = Mxz = Myz = Mzz = 0.;
+
+  for (i = 0; i < data.n; i++) {
+    Xi = data.X[i] - data.meanX;  //  centered x-coordinates
+    Yi = data.Y[i] - data.meanY;  //  centered y-coordinates
+    Zi = Xi * Xi + Yi * Yi;
+
+    Mxy += Xi * Yi;
+    Mxx += Xi * Xi;
+    Myy += Yi * Yi;
+    Mxz += Xi * Zi;
+    Myz += Yi * Zi;
+    Mzz += Zi * Zi;
+  }
+  Mxx /= data.n;
+  Myy /= data.n;
+  Mxy /= data.n;
+  Mxz /= data.n;
+  Myz /= data.n;
+  Mzz /= data.n;
+
+  //    computing the coefficients of the characteristic polynomial
+
+  Mz = Mxx + Myy;
+  Cov_xy = Mxx * Myy - Mxy * Mxy;
+  Var_z = Mzz - Mz * Mz;
+
+  A2 = 4 * Cov_xy - 3 * Mz * Mz - Mzz;
+  A1 = Var_z * Mz + 4 * Cov_xy * Mz - Mxz * Mxz - Myz * Myz;
+  A0 = Mxz * (Mxz * Myy - Myz * Mxy) + Myz * (Myz * Mxx - Mxz * Mxy) - Var_z * Cov_xy;
+  A22 = A2 + A2;
+
+  //    finding the root of the characteristic polynomial
+  //    using Newton's method starting at x=0
+  //     (it is guaranteed to converge to the right root)
+
+  for (x = 0., y = A0, iter = 0; iter < IterMAX; iter++)  // usually, 4-6 iterations are enough
+  {
+    Dy = A1 + x * (A22 + 16. * x * x);
+    xnew = x - y / Dy;
+    if ((xnew == x) || (!isfinite(xnew))) break;
+    ynew = A0 + xnew * (A1 + xnew * (A2 + 4 * xnew * xnew));
+    if (abs(ynew) >= abs(y)) break;
+    x = xnew;
+    y = ynew;
+  }
+
+  //    computing paramters of the fitting circle
+
+  DET = x * x - x * Mz + Cov_xy;
+  Xcenter = (Mxz * (Myy - x) - Myz * Mxy) / DET / 2;
+  Ycenter = (Myz * (Mxx - x) - Mxz * Mxy) / DET / 2;
+
+  //       assembling the output
+
+  circle.a = Xcenter + data.meanX;
+  circle.b = Ycenter + data.meanY;
+  circle.r = sqrt(Xcenter * Xcenter + Ycenter * Ycenter + Mz - x - x);
+  circle.s = Sigma(data, circle);
+  circle.i = 0;
+  circle.j = iter;  //  return the number of iterations, too
+
+  return circle;
 }
 
 // Fit a section of a circle to the given sequence of points. Output `tangent`, `radius` & `center`.
@@ -55,99 +291,25 @@ static bool Solve3x3(const float A[3][3], const float Y[3], float X[3]) {
 static void FitArc(const std::deque<Vec2>& points, SinCos& tangent, float& radius, Vec2& center) {
   size_t n = points.size();
 
-  // --- Handle Degenerate Cases ---
-  if (n < 2) {
-    // Not enough points to define direction or curvature
-    tangent = 0_deg;  // Default tangent (rightwards)
-    radius = std::numeric_limits<float>::infinity();
-    return;
+  Data data(n);
+  for (size_t i = 0; i < n; ++i) {
+    data.X[i] = points[i].x;
+    data.Y[i] = points[i].y;
   }
-
-  Vec2 p_last = points.back();
-  Vec2 p_prev = points[n - 2];
-  Vec2 last_segment = p_last - p_prev;
-  float last_segment_len_sq = LengthSquared(last_segment);
-  constexpr float kMinLenSq = 1e-9f;  // Threshold for coincident points
-
-  if (n == 2) {
-    // Only two points: treat as a straight line
-    tangent = SinCos::FromVec2(last_segment, sqrtf(last_segment_len_sq));
-    radius = std::numeric_limits<float>::infinity();
-    return;
-  }
-
-  // --- n >= 3: Least-Squares Circle Fit (Kåsa method) ---
-  // We want to fit (x - xc)^2 + (y - yc)^2 = r^2
-  // Rearranging: 2*xc*x + 2*yc*y + (r^2 - xc^2 - yc^2) = x^2 + y^2
-  // Let a = 2*xc, b = 2*yc, c = r^2 - xc^2 - yc^2
-  // Solve the linear system: a*x + b*y + c = x^2 + y^2 for a, b, c
-
-  // Use double for sums to improve numerical stability
-  double sum_x = 0, sum_y = 0, sum_x2 = 0, sum_y2 = 0, sum_xy = 0;
-  double sum_x_r2 = 0, sum_y_r2 = 0, sum_r2 = 0;
-
-  for (const auto& p : points) {
-    double x = p.x;
-    double y = p.y;
-    double x2 = x * x;
-    double y2 = y * y;
-    double r_sq_term = x2 + y2;  // x^2 + y^2 term
-
-    sum_x += x;
-    sum_y += y;
-    sum_x2 += x2;
-    sum_y2 += y2;
-    sum_xy += x * y;
-    sum_x_r2 += x * r_sq_term;
-    sum_y_r2 += y * r_sq_term;
-    sum_r2 += r_sq_term;
-  }
-
-  // Set up the matrix A for the system A * [a, b, c]^T = Y
-  float A[3][3] = {{(float)sum_x2, (float)sum_xy, (float)sum_x},
-                   {(float)sum_xy, (float)sum_y2, (float)sum_y},
-                   {(float)sum_x, (float)sum_y, (float)n}};
-
-  // Set up the vector Y
-  float Y[3] = {(float)sum_x_r2, (float)sum_y_r2, (float)sum_r2};
-
-  float solution[3];  // Solution [a, b, c]
-
-  // --- Solve the System and Handle Collinear Case ---
-  bool solved = Solve3x3(A, Y, solution);
-
-  if (solved) {
-    float a = solution[0];
-    float b = solution[1];
-    float c_param = solution[2];  // Renamed from 'c' to avoid conflict
-
-    float xc = a / 2.0f;
-    float yc = b / 2.0f;
-    float r_sq = c_param + xc * xc + yc * yc;
-
-    // Check for valid radius (non-negative and not excessively large)
-    constexpr float kMinRadiusSq = 1e-12f;  // Min radius^2 to avoid huge curvature/division by zero
-    constexpr float kMaxRadius = 1e6f;      // Max radius before treating as linear
-
-    if (r_sq < kMinRadiusSq || std::isinf(r_sq) || std::isnan(r_sq)) {
-      radius = std::numeric_limits<float>::infinity();
-    } else {
-      radius = sqrtf(r_sq);
-      if (radius > kMaxRadius) {
-        radius = std::numeric_limits<float>::infinity();
-      } else {
-        center = {xc, yc};
-      }
-    }
-  } else {
-    radius = std::numeric_limits<float>::infinity();
-  }
+  Circle circle = CircleFitByHyper(data);
+  center.x = circle.a;
+  center.y = circle.b;
+  radius = circle.r;
 
   // --- Determine Tangent ---
-  if (isinf(radius)) {
-    tangent = SinCos::FromVec2(p_last - points.front());
+  if (isinf(radius) || isnanf(radius) || fabsf(radius) < 0.5_mm) {
+    tangent = SinCos::FromVec2(points.back() - points.front());
+    radius = std::numeric_limits<float>::infinity();
   } else {
-    tangent = SinCos::FromVec2(p_last - center) + 90_deg;
+    auto curr_dir = SinCos::FromVec2(points.back() - center);
+    auto prev_dir = SinCos::FromVec2(points[points.size() - 2] - center);
+    auto dir_diff = curr_dir - prev_dir;
+    tangent = curr_dir + 90_deg;
   }
 }
 
@@ -161,8 +323,9 @@ void Knob::Update(Vec2 position) {
   }
 
   // How much history do we want to keep to track the gesture?
-  float min_values = 3;
+  float min_values = 5;
   float min_length = min_values * unit_distance;
+  bool reverse_winding = false;
 
   if (history.size() >= 2) {
     SinCos new_tangent;
@@ -173,11 +336,13 @@ void Knob::Update(Vec2 position) {
       float min_arc_length = 2 * M_PI * radius;
       min_length = std::min(min_length, min_arc_length);
     }
-    float a = std::min(1.0f, history_length / min_length);
-    a = 1;
-    tangent = new_tangent * a;
-    radius = new_radius * a;
-    center = new_center * a;
+    if ((tangent - new_tangent).cos < 0) {
+      new_tangent = new_tangent.Opposite();
+      reverse_winding = true;
+    }
+    tangent = new_tangent;
+    radius = new_radius;
+    center = new_center;
   }
 
   // Advance the `value` according to the last two points and current `tangent` and `curvature`.
@@ -188,13 +353,17 @@ void Knob::Update(Vec2 position) {
     Vec2 vec_unit = Vec2::Polar(tangent, unit_distance);
     float value_diff = VectorProjection(vec_unit, vec_diff);
     if (!isinf(radius)) {
-      SinCos angle_curr = SinCos::FromVec2(curr - center, radius);
-      SinCos angle_prev = SinCos::FromVec2(prev - center, radius);
+      SinCos angle_curr = SinCos::FromVec2(curr - center);
+      SinCos angle_prev = SinCos::FromVec2(prev - center);
       SinCos angle_diff = angle_curr - angle_prev;
-      float angle_diff_rad = angle_diff.ToRadiansPositive();
+      float angle_diff_rad = angle_diff.ToRadians();
       float angle_diff_value = angle_diff_rad / unit_angle.ToRadiansPositive();
       if (fabs(angle_diff_value) > fabs(value_diff)) {
-        value_diff = angle_diff_value;
+        if (reverse_winding) {
+          value_diff = -angle_diff_value;
+        } else {
+          value_diff = angle_diff_value;
+        }
       }
     }
     value += value_diff;

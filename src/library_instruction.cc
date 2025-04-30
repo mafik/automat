@@ -30,6 +30,7 @@
 #include "drawable.hh"
 #include "embedded.hh"
 #include "font.hh"
+#include "knob.hh"
 #include "library_assembler.hh"
 #include "llvm_asm.hh"
 #include "math.hh"
@@ -37,6 +38,7 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "wave1d.hh"
+#include "widget.hh"
 
 using namespace std;
 using namespace llvm;
@@ -2321,6 +2323,8 @@ struct ConditionCodeWidget : gui::Widget {
   std::optional<Wave1D> wave;
   std::optional<Vec2> root_position;
   float last_vx = 0;
+  Knob knob;
+
   ConditionCodeWidget() {}
   SkPath Shape() const override { return SkPath::Circle(0, 0, kConditionCodeTokenWidth / 2); }
   void TransformUpdated() override { WakeAnimation(); }
@@ -2887,6 +2891,26 @@ struct ConditionCodeWidget : gui::Widget {
       canvas.restore();
     }
 
+    static constexpr bool kDebugKnob = true;
+
+    if constexpr (kDebugKnob) {
+      SkPaint circle_paint;
+      circle_paint.setColor("#ff0000"_color);
+      circle_paint.setStyle(SkPaint::kStroke_Style);
+      if (isinf(knob.radius)) {  // line
+        Vec2 a = Vec2::Polar(knob.tangent, -10_mm);
+        Vec2 b = Vec2::Polar(knob.tangent, 10_mm);
+        canvas.drawLine(a.sk, b.sk, circle_paint);
+      } else {
+        canvas.drawCircle(knob.center, knob.radius, circle_paint);
+      }
+      SkPaint history_paint;
+      history_paint.setColor("#00ff00"_color);
+      for (auto& point : knob.history) {
+        canvas.drawCircle(point, 0.1_mm, history_paint);
+      }
+    }
+
     {    // Glass effects
       {  // shadow
         SkPaint paint;
@@ -2933,9 +2957,38 @@ struct ConditionCodeWidget : gui::Widget {
   }
 
   maf::Optional<Rect> TextureBounds() const override {
+    return std::nullopt;
     auto bounds = kGaugeOval;
     bounds.left -= 2_mm;
     return bounds;
+  }
+
+  struct ChangeConditionCodeAction : public Action {
+    WeakPtr<ConditionCodeWidget> widget_weak;
+    Knob knob;
+
+    ChangeConditionCodeAction(gui::Pointer& pointer, WeakPtr<ConditionCodeWidget> widget_weak)
+        : Action(pointer), widget_weak(widget_weak) {}
+    void Update() override {
+      auto widget = widget_weak.Lock();
+      if (widget == nullptr) {
+        pointer.ReplaceAction(*this, nullptr);
+        return;
+      }
+      Vec2 pos = pointer.PositionWithin(*widget);
+      knob.Update(pos);
+      widget->knob = knob;
+      LOG << "tangent: " << knob.tangent.ToDegreesPositive() << " radius: " << knob.radius
+          << " center: " << knob.center;
+      widget->WakeAnimation();
+    }
+  };
+
+  std::unique_ptr<Action> FindAction(gui::Pointer& pointer, gui::ActionTrigger trigger) override {
+    if (trigger == gui::PointerButton::Left) {
+      return std::make_unique<ChangeConditionCodeAction>(pointer, AcquireWeakPtr());
+    }
+    return nullptr;
   }
 };
 

@@ -30,7 +30,8 @@ struct Knob {
   // Use this to read out the current curvature of the values.
   //
   // Initially the values are placed in a straight line.
-  float curvature = 0;
+  float radius = std::numeric_limits<float>::infinity();
+  Vec2 center = {0, 0};
 
   void Update(Vec2 position);
 };

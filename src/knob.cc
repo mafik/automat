@@ -7,7 +7,9 @@ using namespace maf;
 namespace automat {
 
 // Fit a section of a circle to the given sequence of points. Output `tangent` and `curvature`.
-void FitArc(const std::deque<Vec2>& points, SinCos& tangent, float& curvature) {}
+void FitArc(const std::deque<Vec2>& points, SinCos& tangent, float& curvature) {
+  // TODO: Implement this.
+}
 
 void Knob::Update(Vec2 position) {
   history.push_back(position);
@@ -30,6 +32,12 @@ void Knob::Update(Vec2 position) {
     SinCos new_tangent;
     float new_curvature;
     FitArc(history, new_tangent, new_curvature);
+    float a = history_length / min_length;
+    if (a < 1) {
+      tangent = new_tangent * a;
+    } else {
+      tangent = new_tangent;
+    }
   }
 
   // Advance the `value` according to the last two points and current `tangent` and `curvature`.

@@ -2320,12 +2320,18 @@ constexpr Rect kConditionCodeRect =
 
 struct ConditionCodeWidget : gui::Widget {
   std::function<X86::CondCode()> getter;
+  std::function<void(X86::CondCode)> setter;
   std::optional<Wave1D> wave;
   std::optional<Vec2> root_position;
   float last_vx = 0;
   Knob knob;
+  bool is_dragging = false;
+  float cond_code_float = 0;
 
-  ConditionCodeWidget() {}
+  ConditionCodeWidget() {
+    knob.unit_angle = 60_deg;
+    knob.unit_distance = kGaugeRadius * 2;
+  }
   SkPath Shape() const override { return SkPath::Circle(0, 0, kConditionCodeTokenWidth / 2); }
   void TransformUpdated() override { WakeAnimation(); }
 
@@ -2350,6 +2356,29 @@ struct ConditionCodeWidget : gui::Widget {
   animation::Phase Tick(time::Timer& timer) override {
     auto phase = animation::Finished;
     auto cond_code = getter();
+    if (isnan(knob.value) || isinf(knob.value)) {
+      knob.value = 0;
+    }
+    while (knob.value >= 0.5) {
+      knob.value -= 1;
+      if (cond_code == X86::LAST_VALID_COND) {
+        cond_code = (X86::CondCode)0;
+      } else {
+        cond_code = (X86::CondCode)(cond_code + 1);
+      }
+      setter(cond_code);
+    }
+    while (knob.value < -0.5) {
+      knob.value += 1;
+      if ((int)cond_code == 0) {
+        cond_code = X86::LAST_VALID_COND;
+      } else {
+        cond_code = (X86::CondCode)(cond_code - 1);
+      }
+      setter(cond_code);
+    }
+    cond_code_float = (float)cond_code + knob.value;
+
     if (cond_code == X86::CondCode::COND_NO && !wave.has_value()) {
       wave = Wave1D(30, 0.5, 0.005, 1);
       root_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
@@ -2427,11 +2456,13 @@ struct ConditionCodeWidget : gui::Widget {
       phase |= wave->Tick(timer);
       wave->ZeroMeanAmplitude();
     }
+    if (!is_dragging) {
+      phase |= animation::ExponentialApproach(0, timer.d, 0.1, knob.value);
+    }
     return phase;
   }
-  void Draw(SkCanvas& canvas) const override {
-    auto cond_code = getter();
 
+  static void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
     {  // Draw region
       constexpr static float kRegionEndRadius = kGaugeRadius;
       constexpr static float kRegionStartRadius = kInnerRadius;
@@ -2836,6 +2867,43 @@ struct ConditionCodeWidget : gui::Widget {
 
     canvas.drawPath(dial, dial_fill);
     canvas.drawPath(symbol, symbol_fill);
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    float cond_code_floor = floorf(cond_code_float);
+    float cond_code_ceil = ceilf(cond_code_float);
+    float cond_code_t = cond_code_float - cond_code_floor;  // how far towards ceil we are currently
+    if (cond_code_floor < 0) {
+      cond_code_floor = X86::CondCode::LAST_VALID_COND;
+    }
+    if (cond_code_ceil > (int)X86::CondCode::LAST_VALID_COND) {
+      cond_code_ceil = 0;
+    }
+
+    canvas.save();
+    float radius = std::max(kGaugeRadius * 2, knob.radius);
+    Vec2 delta;
+    Vec2 center;
+    float angle;
+    if (isinf(radius)) {
+      delta = Vec2::Polar(knob.tangent, kGaugeRadius * 2);
+      canvas.translate(delta.x * cond_code_t, delta.y * cond_code_t);
+    } else {
+      center = Vec2::Polar(knob.tangent - 90_deg, radius);
+      angle = asinf(kGaugeRadius / radius) * 2 * 180 / M_PI;
+      canvas.rotate(-angle * cond_code_t, center.x, center.y);
+    }
+
+    DrawConditionCode(canvas, (X86::CondCode)cond_code_floor);
+    if (cond_code_ceil != cond_code_floor) {
+      if (isinf(radius)) {
+        canvas.translate(-delta.x, -delta.y);
+      } else {
+        canvas.rotate(angle, center.x, center.y);
+      }
+      DrawConditionCode(canvas, (X86::CondCode)cond_code_ceil);
+    }
+    canvas.restore();
 
     if (wave.has_value()) {
       SkPath water;
@@ -2963,10 +3031,24 @@ struct ConditionCodeWidget : gui::Widget {
 
   struct ChangeConditionCodeAction : public Action {
     WeakPtr<ConditionCodeWidget> widget_weak;
-    Knob knob;
 
     ChangeConditionCodeAction(gui::Pointer& pointer, WeakPtr<ConditionCodeWidget> widget_weak)
-        : Action(pointer), widget_weak(widget_weak) {}
+        : Action(pointer), widget_weak(widget_weak) {
+      auto widget = widget_weak.Lock();
+      if (widget) {
+        widget->is_dragging = true;
+        auto& history = widget->knob.history;
+        if (!history.empty()) {
+          Vec2 pos = pointer.PositionWithin(*widget);
+          Vec2 shift = pos - history.back();
+          for (auto& point : history) {
+            point += shift;
+          }
+          // widget->knob.history.clear();
+        }
+      }
+      pointer.PushIcon(gui::Pointer::kIconAllScroll);
+    }
     void Update() override {
       auto widget = widget_weak.Lock();
       if (widget == nullptr) {
@@ -2974,13 +3056,18 @@ struct ConditionCodeWidget : gui::Widget {
         return;
       }
       Vec2 pos = pointer.PositionWithin(*widget);
-      knob.Update(pos);
-      widget->knob = knob;
-      if constexpr (kDebugKnob) {
-        LOG << "tangent: " << knob.tangent.ToDegreesPositive() << " radius: " << knob.radius
-            << " center: " << knob.center << " value: " << knob.value;
-      }
+      widget->knob.Update(pos);
       widget->WakeAnimation();
+    }
+
+    ~ChangeConditionCodeAction() {
+      auto widget = widget_weak.Lock();
+      if (widget == nullptr) {
+        return;
+      }
+      widget->is_dragging = false;
+      widget->WakeAnimation();
+      pointer.PopIcon();
     }
   };
 
@@ -3018,6 +3105,10 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
         cond_widget->getter = [token_i, instruction_weak = this->object]() {
           auto instruction = instruction_weak.Lock().Cast<Instruction>();
           return (X86::CondCode)instruction->mc_inst.getOperand(token_i).getImm();
+        };
+        cond_widget->setter = [token_i, instruction_weak = this->object](X86::CondCode cond) {
+          auto instruction = instruction_weak.Lock().Cast<Instruction>();
+          instruction->mc_inst.getOperand(token_i).setImm(cond);
         };
       } else {
         cond_widget->getter = [cond = token.fixed_cond]() { return cond; };

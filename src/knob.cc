@@ -323,7 +323,7 @@ void Knob::Update(Vec2 position) {
   }
 
   // How much history do we want to keep to track the gesture?
-  float min_values = 5;
+  float min_values = 3;
   float min_length = min_values * unit_distance;
   bool reverse_winding = false;
 

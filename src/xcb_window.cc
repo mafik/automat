@@ -336,6 +336,8 @@ struct XCBPointer : automat::gui::Pointer {
         return "hand1";
       case automat::gui::Pointer::kIconIBeam:
         return "xterm";
+      case automat::gui::Pointer::kIconAllScroll:
+        return "all-scroll";
       default:
         return "left_ptr";
     }

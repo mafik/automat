@@ -108,6 +108,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           case gui::Pointer::kIconIBeam:
             SetCursor(LoadCursor(nullptr, IDC_IBEAM));
             break;
+          case gui::Pointer::kIconAllScroll:
+            SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
+            break;
         }
         return TRUE;
       }

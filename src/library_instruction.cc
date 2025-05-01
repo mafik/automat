@@ -37,6 +37,7 @@
 #include "ptr.hh"
 #include "svg.hh"
 #include "textures.hh"
+#include "time.hh"
 #include "wave1d.hh"
 #include "widget.hh"
 
@@ -2327,6 +2328,10 @@ struct ConditionCodeWidget : gui::Widget {
   std::optional<Vec2> root_position;
   float last_vx = 0;
   Knob knob;
+
+  constexpr static float kClickWigglePeriod = 0.5;
+  constexpr static float kClickWiggleHalfTime = 0.1;
+  animation::SpringV2<float> click_wiggle = {};
   bool is_dragging = false;
   float cond_code_float = 0;
 
@@ -2344,6 +2349,7 @@ struct ConditionCodeWidget : gui::Widget {
       knob.history.push_back({-x - perp, -x + perp});
     }
     knob.Update({0, 0});
+    knob.value = 0;
   }
   SkPath Shape() const override { return SkPath::Circle(0, 0, kConditionCodeTokenWidth / 2); }
   void TransformUpdated() override { WakeAnimation(); }
@@ -2390,10 +2396,11 @@ struct ConditionCodeWidget : gui::Widget {
       }
       setter(cond_code);
     }
-    cond_code_float = (float)cond_code + knob.value;
     phase |= water_level.SineTowards((float)(cond_code == X86::CondCode::COND_O), timer.d, 2);
     phase |= spill_tween.SineTowards((water_level == 1) || (water_level > 0 && spill_tween == 1),
                                      timer.d, 5);
+    phase |= click_wiggle.SpringTowards(0, timer.d, kClickWigglePeriod, kClickWiggleHalfTime);
+    cond_code_float = (float)cond_code + knob.value + click_wiggle.value;
 
     if (water_level > 0 && !wave.has_value()) {
       wave = Wave1D(30, 0.5, 0.005, 1);
@@ -2473,9 +2480,6 @@ struct ConditionCodeWidget : gui::Widget {
 
       phase |= wave->Tick(timer);
       wave->ZeroMeanAmplitude();
-    }
-    if (!is_dragging) {
-      phase |= animation::ExponentialApproach(0, timer.d, 0.1, knob.value);
     }
     return phase;
   }
@@ -3083,6 +3087,7 @@ struct ConditionCodeWidget : gui::Widget {
 
   struct ChangeConditionCodeAction : public Action {
     WeakPtr<ConditionCodeWidget> widget_weak;
+    time::SteadyPoint start_time;
 
     ChangeConditionCodeAction(gui::Pointer& pointer, WeakPtr<ConditionCodeWidget> widget_weak)
         : Action(pointer), widget_weak(widget_weak) {
@@ -3096,8 +3101,10 @@ struct ConditionCodeWidget : gui::Widget {
           for (auto& point : history) {
             point += shift;
           }
-          // widget->knob.history.clear();
         }
+        widget->click_wiggle.velocity += 5;
+        start_time = time::SteadyNow();
+        widget->WakeAnimation();
       }
       pointer.PushIcon(gui::Pointer::kIconAllScroll);
     }
@@ -3116,6 +3123,13 @@ struct ConditionCodeWidget : gui::Widget {
       auto widget = widget_weak.Lock();
       if (widget == nullptr) {
         return;
+      }
+      widget->click_wiggle.value += widget->knob.value;
+      widget->knob.value = 0;
+
+      if ((time::SteadyNow() - start_time).count() < kClickWigglePeriod / 4) {
+        widget->knob.value += 1;
+        widget->click_wiggle.value -= 1;
       }
       widget->is_dragging = false;
       widget->WakeAnimation();

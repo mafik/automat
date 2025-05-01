@@ -8,7 +8,7 @@
 
 namespace automat {
 
-static constexpr bool kDebugKnob = true;
+static constexpr bool kDebugKnob = false;
 
 // Turns a gesture into a continuous value.
 //

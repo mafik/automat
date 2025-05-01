@@ -2333,6 +2333,17 @@ struct ConditionCodeWidget : gui::Widget {
   ConditionCodeWidget() {
     knob.unit_angle = 60_deg;
     knob.unit_distance = kGaugeRadius * 2;
+
+    // Add some initial history to make the initial direction more stable.
+    constexpr static int kInitialHistory = 40;
+    for (int i = 0; i < kInitialHistory; ++i) {
+      float a = i * M_PI * 2 / kInitialHistory;
+      float x = knob.unit_distance * 2 * (kInitialHistory - i) / kInitialHistory;
+      float amp = kGaugeRadius * 0.25;
+      float perp = sinf(a * 2) * amp;
+      knob.history.push_back({-x - perp, -x + perp});
+    }
+    knob.Update({0, 0});
   }
   SkPath Shape() const override { return SkPath::Circle(0, 0, kConditionCodeTokenWidth / 2); }
   void TransformUpdated() override { WakeAnimation(); }
@@ -2567,6 +2578,9 @@ struct ConditionCodeWidget : gui::Widget {
       return paint;
     }();
 
+    SkPaint white_paint;
+    white_paint.setColor("#ffffff"_color);
+    canvas.drawCircle(Vec2(), kRegionEndRadius, white_paint);
     // Switch fill based on signed-ness of the condition
     switch (cond_code) {
       // Signed
@@ -2897,7 +2911,7 @@ struct ConditionCodeWidget : gui::Widget {
     canvas.save();
     SkRRect clip = SkRRect::MakeOval(kInnerOval.sk);
     canvas.clipRRect(clip);
-    float radius = std::max(kGaugeRadius * 2, knob.radius);
+    float radius = std::clamp(knob.radius, kGaugeRadius * 2, kGaugeRadius * 9);
     Vec2 delta;
     Vec2 center;
     float angle;
@@ -3059,7 +3073,9 @@ struct ConditionCodeWidget : gui::Widget {
   }
 
   maf::Optional<Rect> TextureBounds() const override {
-    return std::nullopt;
+    if (kDebugKnob || is_dragging) {
+      return std::nullopt;
+    }
     auto bounds = kGaugeOval;
     bounds.left -= 2_mm;
     return bounds;

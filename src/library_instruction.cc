@@ -2469,172 +2469,170 @@ struct ConditionCodeWidget : gui::Widget {
     return phase;
   }
 
-  static void DrawConditionCode(SkCanvas& canvas, X86::CondCode cond_code) {
-    {  // Draw region
-      constexpr static float kRegionEndRadius = kGaugeRadius;
-      constexpr static float kRegionStartRadius = kInnerRadius;
-      constexpr static float kRegionWidth = kRegionEndRadius - kRegionStartRadius;
-      constexpr static Rect kRegionOuter =
-          Rect::MakeAtZero(2 * kRegionEndRadius, 2 * kRegionEndRadius);
-      constexpr static Rect kRegionInner =
-          Rect::MakeAtZero(2 * kRegionStartRadius, 2 * kRegionStartRadius);
-      constexpr static float kRegionMargin = kBorderWidth / 2;
-      static float kRegionOuterAngleAdjust =
-          asin(kRegionMargin / 2 / kRegionEndRadius) * 180 / M_PI;
-      static float kRegionInnerAngleAdjust =
-          asin(kRegionMargin / 2 / kRegionStartRadius) * 180 / M_PI;
-      static const auto RegionPath = [](float start_deg, float end_deg) {
-        SkPath path;
-        float sweep = end_deg - start_deg;
-        path.arcTo(kRegionOuter.sk, start_deg + kRegionOuterAngleAdjust,
-                   sweep - 2 * kRegionOuterAngleAdjust, true);
-        path.arcTo(kRegionInner.sk, end_deg - kRegionInnerAngleAdjust,
-                   -sweep + 2 * kRegionInnerAngleAdjust, false);
-        path.close();
-        return path;
-      };
-      static constexpr float kParityRegionSweep = 360.f / 9;
-      static const SkPath kEvenParityRegion = [&]() {
-        SkPath path;
-        for (int i = 0; i < 9; ++i) {
-          if ((i & 1) == 1) continue;
-          float start_deg = (i - 0.5f) * 360 / 9;
-          path.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
-          path.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
-          path.lineTo(0, 0);
-        }
-        return path;
-      }();
-      static const SkPath kOddParityRegion = [&]() {
-        SkPath path;
-        for (int i = 0; i < 9; ++i) {
-          if ((i & 1) != 1) continue;
-          float start_deg = (i - 0.5f) * 360 / 9;
-          path.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
-          path.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
-        }
-        return path;
-      }();
-
-      static constexpr float kZeroAngle = 12;
-      static const SkPath kRegion0b = RegionPath(-kZeroAngle / 2, kZeroAngle / 2);
-      static const SkPath kRegion7b = RegionPath(kZeroAngle / 2, 45);
-      static const SkPath kRegion8b = RegionPath(45, 67.5);
-      static const SkPath kRegion15b = RegionPath(67.5, 90);
-      static const SkPath kRegion16b = RegionPath(90, 112.5);
-      static const SkPath kRegion31b = RegionPath(112.5, 135);
-      static const SkPath kRegion32b = RegionPath(135, 157.5);
-      static const SkPath kRegion63b = RegionPath(157.5, 180);
-      static const SkPath kRegionSigned64b = RegionPath(180, 225);
-      static const SkPath kRegionSigned32b = RegionPath(225, 270);
-      static const SkPath kRegionSigned16b = RegionPath(270, 315);
-      static const SkPath kRegionSigned8b = RegionPath(315, 360 - kZeroAngle / 2);
-
-      static const SkPath kRegionsArr[] = {kRegion0b,        kRegion7b,        kRegion8b,
-                                           kRegion15b,       kRegion16b,       kRegion31b,
-                                           kRegion32b,       kRegion63b,       kRegionSigned64b,
-                                           kRegionSigned32b, kRegionSigned16b, kRegionSigned8b};
-      static const SkColor kUnsignedColors[] = {
-          color::HSLuv(0, 0, 57),      // 0b
-          color::HSLuv(128, 100, 60),  // 7b
-          color::HSLuv(121, 100, 62),  // 8b
-          color::HSLuv(99, 100, 65),   // 15b
-          color::HSLuv(91, 100, 70),   // 16b
-          color::HSLuv(65, 100, 69),   // 31b
-          color::HSLuv(40, 100, 62),   // 32b
-          color::HSLuv(21, 100, 57),   // 63b
-          color::HSLuv(12, 95, 53),    // 64b
-          color::HSLuv(12, 95, 53),    // 32b
-          color::HSLuv(12, 95, 53),    // 16b
-          color::HSLuv(12, 95, 53),    // 8b
-      };
-      static const SkColor kSignedColors[] = {
-          kUnsignedColors[0],          // 0b
-          kUnsignedColors[1],          // 7b
-          kUnsignedColors[2],          // 8b
-          kUnsignedColors[3],          // 15b
-          kUnsignedColors[4],          // 16b
-          kUnsignedColors[5],          // 31b
-          kUnsignedColors[6],          // 32b
-          kUnsignedColors[7],          // 63b
-          color::HSLuv(250, 100, 46),  // 64b
-          color::HSLuv(240, 100, 50),  // 32b
-          color::HSLuv(226, 100, 73),  // 16b
-          color::HSLuv(176, 100, 65),  // 8b
-      };
-
-      static const SkPaint neutral_paint = []() {
-        SkPaint paint;
-        paint.setColor(color::HSLuv(283, 100, 57));
-        return paint;
-      }();
-
-      // Switch fill based on signed-ness of the condition
-      switch (cond_code) {
-        // Signed
-        case X86::CondCode::COND_S:
-        case X86::CondCode::COND_NS:
-        case X86::CondCode::COND_L:
-        case X86::CondCode::COND_LE:
-        case X86::CondCode::COND_G:
-        case X86::CondCode::COND_GE:
-        case X86::CondCode::COND_O:
-        case X86::CondCode::COND_NO: {
-          for (int i = 0; i < std::size(kRegionsArr); ++i) {
-            SkPaint paint;
-            paint.setColor(kSignedColors[i]);
-            canvas.drawPath(kRegionsArr[i], paint);
-          }
-          break;
-        }
-        // Unsigned
-        case X86::CondCode::COND_A:
-        case X86::CondCode::COND_AE:
-        case X86::CondCode::COND_B:
-        case X86::CondCode::COND_BE: {
-          for (int i = 0; i < std::size(kRegionsArr); ++i) {
-            SkPaint paint;
-            paint.setColor(kUnsignedColors[i]);
-            canvas.drawPath(kRegionsArr[i], paint);
-          }
-          break;
-        }
-        // Sign-neutral
-        case X86::CondCode::COND_E:
-        case X86::CondCode::COND_NE: {
-          for (int i = 0; i < std::size(kRegionsArr); ++i) {
-            canvas.drawPath(kRegionsArr[i], neutral_paint);
-          }
-          break;
-        }
-        case X86::CondCode::COND_P: {  // even number of bits in the lowest byte
-          canvas.drawPath(kEvenParityRegion, neutral_paint);
-          break;
-        }
-        case X86::CondCode::COND_NP: {  // odd number of bits in the lowest byte
-          canvas.drawPath(kOddParityRegion, neutral_paint);
-          break;
-        }
-        default: {
-          break;
-        }
+  static void DrawConditionCodeBackground(SkCanvas& canvas, X86::CondCode cond_code) {
+    constexpr static float kRegionEndRadius = kGaugeRadius;
+    constexpr static float kRegionStartRadius = kInnerRadius;
+    constexpr static float kRegionWidth = kRegionEndRadius - kRegionStartRadius;
+    constexpr static Rect kRegionOuter =
+        Rect::MakeAtZero(2 * kRegionEndRadius, 2 * kRegionEndRadius);
+    constexpr static Rect kRegionInner =
+        Rect::MakeAtZero(2 * kRegionStartRadius, 2 * kRegionStartRadius);
+    constexpr static float kRegionMargin = kBorderWidth / 2;
+    static float kRegionOuterAngleAdjust = asin(kRegionMargin / 2 / kRegionEndRadius) * 180 / M_PI;
+    static float kRegionInnerAngleAdjust =
+        asin(kRegionMargin / 2 / kRegionStartRadius) * 180 / M_PI;
+    static const auto RegionPath = [](float start_deg, float end_deg) {
+      SkPath path;
+      float sweep = end_deg - start_deg;
+      path.arcTo(kRegionOuter.sk, start_deg + kRegionOuterAngleAdjust,
+                 sweep - 2 * kRegionOuterAngleAdjust, true);
+      path.arcTo(kRegionInner.sk, end_deg - kRegionInnerAngleAdjust,
+                 -sweep + 2 * kRegionInnerAngleAdjust, false);
+      path.close();
+      return path;
+    };
+    static constexpr float kParityRegionSweep = 360.f / 9;
+    static const SkPath kEvenParityRegion = [&]() {
+      SkPath path;
+      for (int i = 0; i < 9; ++i) {
+        if ((i & 1) == 1) continue;
+        float start_deg = (i - 0.5f) * 360 / 9;
+        path.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
+        path.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
+        path.lineTo(0, 0);
       }
-      static const SkPaint white_overlay = []() {
-        SkPaint paint;
-        SkColor mask_colors[] = {"#ffffff"_color, "#ffffff00"_color};
-        float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
-        auto mask = SkGradientShader::MakeRadial(Vec2(), kRegionEndRadius, mask_colors, mask_pos,
-                                                 std::size(mask_colors), SkTileMode::kClamp);
-        SkColor colors[] = {"#dddddd"_color, "#bbbbbb"_color};
-        auto color =
-            SkGradientShader::MakeRadial(Vec2(0, kMiddleR), kGaugeRadius + kMiddleR, colors,
-                                         nullptr, std::size(colors), SkTileMode::kClamp);
-        paint.setShader(SkShaders::Blend(SkBlendMode::kSrcIn, mask, color));
-        return paint;
-      }();
-      canvas.drawCircle(Vec2(), kRegionEndRadius, white_overlay);
-    }
+      return path;
+    }();
+    static const SkPath kOddParityRegion = [&]() {
+      SkPath path;
+      for (int i = 0; i < 9; ++i) {
+        if ((i & 1) != 1) continue;
+        float start_deg = (i - 0.5f) * 360 / 9;
+        path.arcTo(kRegionOuter.sk, start_deg, kParityRegionSweep, true);
+        path.arcTo(kRegionInner.sk, start_deg + kParityRegionSweep, -kParityRegionSweep, false);
+      }
+      return path;
+    }();
 
+    static constexpr float kZeroAngle = 12;
+    static const SkPath kRegion0b = RegionPath(-kZeroAngle / 2, kZeroAngle / 2);
+    static const SkPath kRegion7b = RegionPath(kZeroAngle / 2, 45);
+    static const SkPath kRegion8b = RegionPath(45, 67.5);
+    static const SkPath kRegion15b = RegionPath(67.5, 90);
+    static const SkPath kRegion16b = RegionPath(90, 112.5);
+    static const SkPath kRegion31b = RegionPath(112.5, 135);
+    static const SkPath kRegion32b = RegionPath(135, 157.5);
+    static const SkPath kRegion63b = RegionPath(157.5, 180);
+    static const SkPath kRegionSigned64b = RegionPath(180, 225);
+    static const SkPath kRegionSigned32b = RegionPath(225, 270);
+    static const SkPath kRegionSigned16b = RegionPath(270, 315);
+    static const SkPath kRegionSigned8b = RegionPath(315, 360 - kZeroAngle / 2);
+
+    static const SkPath kRegionsArr[] = {kRegion0b,        kRegion7b,        kRegion8b,
+                                         kRegion15b,       kRegion16b,       kRegion31b,
+                                         kRegion32b,       kRegion63b,       kRegionSigned64b,
+                                         kRegionSigned32b, kRegionSigned16b, kRegionSigned8b};
+    static const SkColor kUnsignedColors[] = {
+        color::HSLuv(0, 0, 57),      // 0b
+        color::HSLuv(128, 100, 60),  // 7b
+        color::HSLuv(121, 100, 62),  // 8b
+        color::HSLuv(99, 100, 65),   // 15b
+        color::HSLuv(91, 100, 70),   // 16b
+        color::HSLuv(65, 100, 69),   // 31b
+        color::HSLuv(40, 100, 62),   // 32b
+        color::HSLuv(21, 100, 57),   // 63b
+        color::HSLuv(12, 95, 53),    // 64b
+        color::HSLuv(12, 95, 53),    // 32b
+        color::HSLuv(12, 95, 53),    // 16b
+        color::HSLuv(12, 95, 53),    // 8b
+    };
+    static const SkColor kSignedColors[] = {
+        kUnsignedColors[0],          // 0b
+        kUnsignedColors[1],          // 7b
+        kUnsignedColors[2],          // 8b
+        kUnsignedColors[3],          // 15b
+        kUnsignedColors[4],          // 16b
+        kUnsignedColors[5],          // 31b
+        kUnsignedColors[6],          // 32b
+        kUnsignedColors[7],          // 63b
+        color::HSLuv(250, 100, 46),  // 64b
+        color::HSLuv(240, 100, 50),  // 32b
+        color::HSLuv(226, 100, 73),  // 16b
+        color::HSLuv(176, 100, 65),  // 8b
+    };
+
+    static const SkPaint neutral_paint = []() {
+      SkPaint paint;
+      paint.setColor(color::HSLuv(283, 100, 57));
+      return paint;
+    }();
+
+    // Switch fill based on signed-ness of the condition
+    switch (cond_code) {
+      // Signed
+      case X86::CondCode::COND_S:
+      case X86::CondCode::COND_NS:
+      case X86::CondCode::COND_L:
+      case X86::CondCode::COND_LE:
+      case X86::CondCode::COND_G:
+      case X86::CondCode::COND_GE:
+      case X86::CondCode::COND_O:
+      case X86::CondCode::COND_NO: {
+        for (int i = 0; i < std::size(kRegionsArr); ++i) {
+          SkPaint paint;
+          paint.setColor(kSignedColors[i]);
+          canvas.drawPath(kRegionsArr[i], paint);
+        }
+        break;
+      }
+      // Unsigned
+      case X86::CondCode::COND_A:
+      case X86::CondCode::COND_AE:
+      case X86::CondCode::COND_B:
+      case X86::CondCode::COND_BE: {
+        for (int i = 0; i < std::size(kRegionsArr); ++i) {
+          SkPaint paint;
+          paint.setColor(kUnsignedColors[i]);
+          canvas.drawPath(kRegionsArr[i], paint);
+        }
+        break;
+      }
+      // Sign-neutral
+      case X86::CondCode::COND_E:
+      case X86::CondCode::COND_NE: {
+        for (int i = 0; i < std::size(kRegionsArr); ++i) {
+          canvas.drawPath(kRegionsArr[i], neutral_paint);
+        }
+        break;
+      }
+      case X86::CondCode::COND_P: {  // even number of bits in the lowest byte
+        canvas.drawPath(kEvenParityRegion, neutral_paint);
+        break;
+      }
+      case X86::CondCode::COND_NP: {  // odd number of bits in the lowest byte
+        canvas.drawPath(kOddParityRegion, neutral_paint);
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+    static const SkPaint white_overlay = []() {
+      SkPaint paint;
+      SkColor mask_colors[] = {"#ffffff"_color, "#ffffff00"_color};
+      float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
+      auto mask = SkGradientShader::MakeRadial(Vec2(), kRegionEndRadius, mask_colors, mask_pos,
+                                               std::size(mask_colors), SkTileMode::kClamp);
+      SkColor colors[] = {"#dddddd"_color, "#bbbbbb"_color};
+      auto color = SkGradientShader::MakeRadial(Vec2(0, kMiddleR), kGaugeRadius + kMiddleR, colors,
+                                                nullptr, std::size(colors), SkTileMode::kClamp);
+      paint.setShader(SkShaders::Blend(SkBlendMode::kSrcIn, mask, color));
+      return paint;
+    }();
+    canvas.drawCircle(Vec2(), kRegionEndRadius, white_overlay);
+  }
+
+  static void DrawConditionCodeSymbol(SkCanvas& canvas, X86::CondCode cond_code) {
     SkPath dial;    // black arrow
     SkPath symbol;  // symbol drawn in the center
 
@@ -2846,7 +2844,7 @@ struct ConditionCodeWidget : gui::Widget {
             glyph_path.transform(SkMatrix::Scale(font->font_scale, -font->font_scale));
             auto dir = SinCos::FromDegrees(i * 360.f / 9);
             glyph_path.transform(
-                SkMatrix::Translate(Vec2::Polar(dir, (kGaugeRadius + kSymbolRadius) / 2)));
+                SkMatrix::Translate(Vec2::Polar(dir, (kInnerRadius + kSymbolRadius) / 2)));
             path.addPath(glyph_path);
           }
           return path;
@@ -2896,7 +2894,11 @@ struct ConditionCodeWidget : gui::Widget {
       canvas.restore();
     }
 
+    DrawConditionCodeBackground(canvas, (X86::CondCode)roundf(cond_code_float));
+
     canvas.save();
+    SkRRect clip = SkRRect::MakeOval(kInnerOval.sk);
+    canvas.clipRRect(clip);
     float radius = std::max(kGaugeRadius * 2, knob.radius);
     Vec2 delta;
     Vec2 center;
@@ -2910,14 +2912,14 @@ struct ConditionCodeWidget : gui::Widget {
       canvas.rotate(-angle * cond_code_t, center.x, center.y);
     }
 
-    DrawConditionCode(canvas, (X86::CondCode)cond_code_floor);
+    DrawConditionCodeSymbol(canvas, (X86::CondCode)cond_code_floor);
     if (cond_code_ceil != cond_code_floor) {
       if (isinf(radius)) {
         canvas.translate(-delta.x, -delta.y);
       } else {
         canvas.rotate(angle, center.x, center.y);
       }
-      DrawConditionCode(canvas, (X86::CondCode)cond_code_ceil);
+      DrawConditionCodeSymbol(canvas, (X86::CondCode)cond_code_ceil);
     }
     canvas.restore();
 

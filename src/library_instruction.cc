@@ -2322,6 +2322,8 @@ struct ConditionCodeWidget : gui::Widget {
   std::function<X86::CondCode()> getter;
   std::function<void(X86::CondCode)> setter;
   std::optional<Wave1D> wave;
+  animation::SpringV2<float> water_level;
+  animation::SpringV2<float> spill_tween;
   std::optional<Vec2> root_position;
   float last_vx = 0;
   Knob knob;
@@ -2378,10 +2380,15 @@ struct ConditionCodeWidget : gui::Widget {
       setter(cond_code);
     }
     cond_code_float = (float)cond_code + knob.value;
+    phase |= water_level.SineTowards((float)(cond_code == X86::CondCode::COND_O), timer.d, 2);
+    phase |= spill_tween.SineTowards((water_level == 1) || (water_level > 0 && spill_tween == 1),
+                                     timer.d, 5);
 
-    if (cond_code == X86::CondCode::COND_NO && !wave.has_value()) {
+    if (water_level > 0 && !wave.has_value()) {
       wave = Wave1D(30, 0.5, 0.005, 1);
       root_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
+    } else if (water_level == 0 && wave.has_value()) {
+      wave.reset();
     }
     if (wave) {
       Vec2 new_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
@@ -2683,13 +2690,6 @@ struct ConditionCodeWidget : gui::Widget {
         Triangle(225_deg, false);
         Triangle(135_deg, true);
         Arc(135, 90);
-        static const SkPath kSpill = PathFromSVG(
-            "M-3.69-3.13c-.01 0-.03 0-.05 0-.43.05-.35.89-.75 "
-            "1.05-.24.09-.51-.25-.75-.15-.27.11-.09.61-.5.73-.32.08.1.71.06 "
-            "1.06-.05.3-.34.56-.29.85.04.27.42.39.5.65.06.18-.1.39-.04.58.08.21.25.43.46.51.2.08."
-            "43-.12.63-.06.24.08.34.43.59.49.14.04.31-.01.44-.08.07-.04.12-.1.15-.17 0 0 0 0 0 0A4 "
-            "4 0 01-4 0a4 4 0 01.93-2.56s0 0 0 0c-.11-.25-.35-.56-.62-.57z",
-            SVGUnit_Millimeters);
         static const SkPath kOverflowSymbol = PathFromSVG(
             "m-2.62-1.33-.26.3.01.42-.19.38.09.08.74-.16.63.32-.61.03-.66.3L-3.31.13-3.61.32-3.15."
             "79l.46-.04-.48.32-.75-.32A4 4 0 01-4 0a4 4 0 "
@@ -2697,7 +2697,6 @@ struct ConditionCodeWidget : gui::Widget {
             "0 1.57S-1.05 1.1-1.05.52c0-.18.05-.37.15-.53L0-1.57Z",
             SVGUnit_Millimeters);
         symbol = kOverflowSymbol;
-        dial.addPath(kSpill);
         break;
       }
       case X86::CondCode::COND_NO: {  // no overflow
@@ -2880,6 +2879,23 @@ struct ConditionCodeWidget : gui::Widget {
       cond_code_ceil = 0;
     }
 
+    if (spill_tween > 0) {
+      static const SkPath kSpill = PathFromSVG(
+          "M-3.69-3.13c-.01 0-.03 0-.05 0-.43.05-.35.89-.75 "
+          "1.05-.24.09-.51-.25-.75-.15-.27.11-.09.61-.5.73-.32.08.1.71.06 "
+          "1.06-.05.3-.34.56-.29.85.04.27.42.39.5.65.06.18-.1.39-.04.58.08.21.25.43.46.51.2.08."
+          "43-.12.63-.06.24.08.34.43.59.49.14.04.31-.01.44-.08.07-.04.12-.1.15-.17 0 0 0 0 0 0A4 "
+          "4 0 01-4 0a4 4 0 01.93-2.56s0 0 0 0c-.11-.25-.35-.56-.62-.57z",
+          SVGUnit_Millimeters);
+      SkPaint spill_fill;
+      spill_fill.setAlphaf(spill_tween * 0.25);
+      canvas.save();
+      float spill_scale = lerp(0.7f, 1, spill_tween);
+      canvas.scale(spill_scale, spill_scale);
+      canvas.drawPath(kSpill, spill_fill);
+      canvas.restore();
+    }
+
     canvas.save();
     float radius = std::max(kGaugeRadius * 2, knob.radius);
     Vec2 delta;
@@ -2911,7 +2927,8 @@ struct ConditionCodeWidget : gui::Widget {
       SinCos angle_n;
       for (int i = 0; i < wave->n; ++i) {
         float x = i * kWaterOval.Width() / (wave->n - 1) + kWaterOval.left;
-        float y = wave->state[i] * kWaterRadius + kWaterOval.CenterY();
+        float y = wave->state[i] * kWaterRadius +
+                  std::lerp(kWaterOval.bottom, kWaterOval.CenterY(), water_level);
         float d = hypotf(x, y);
         float max_d = i * (i - wave->n + 1.f) / wave->n / wave->n * kWaterRadius / 8 + kWaterRadius;
         if (d > max_d) {

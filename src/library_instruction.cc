@@ -2689,10 +2689,8 @@ struct ConditionCodeWidget : gui::Widget {
         Triangle(135_deg, true);
         Arc(135, 90);
         static const SkPath kOverflowSymbol = PathFromSVG(
-            "m-2.62-1.33-.26.3.01.42-.19.38.09.08.74-.16.63.32-.61.03-.66.3L-3.31.13-3.61.32-3.15."
-            "79l.46-.04-.48.32-.75-.32A4 4 0 01-4 0a4 4 0 "
-            "01.01-.2l.61-.16.3-.36-.04-.37.5-.24ZM0-1.57.9-.01c.1.16.15.35.15.53C1.05 1.1.58 1.57 "
-            "0 1.57S-1.05 1.1-1.05.52c0-.18.05-.37.15-.53L0-1.57Z",
+            "M.9-.01c.1.16.15.35.15.53C1.05 1.1.58 1.57 0 1.57S-1.05 "
+            "1.1-1.05.52c0-.18.05-.37.15-.53L0-1.57Z",
             SVGUnit_Millimeters);
         symbol = kOverflowSymbol;
         break;
@@ -3038,6 +3036,25 @@ struct ConditionCodeWidget : gui::Widget {
         paint.setBlendMode(SkBlendMode::kOverlay);
         canvas.drawCircle(0, 0, kGaugeRadius - kBorderHalf, paint);
       }
+    }
+
+    if (water_level > 0) {
+      static const SkPath kCracks[] = {
+          PathFromSVG("m-4.01.02.01.27.27-.23.37-.17z", SVGUnit_Millimeters),
+          PathFromSVG("m-4-.06c-.01.2 0 .26.02.48l.28-.26.36-.16.48.08-.2-.19-.3-.1z",
+                      SVGUnit_Millimeters),
+          PathFromSVG(
+              "m-3.38-.32-.62.17c-.02.2.01.5.04.72l.3-.29.35-.19.44.16.72-.41-.79.07-.13-.13z",
+              SVGUnit_Millimeters),
+          PathFromSVG("M-3.06-.23-2.97-.15-2.23-.31-1.6.01-2.21.04-2.87.34-3.31.13-3.61.32-3.92."
+                      "75C-3.97.5-4 "
+                      ".25-4 0-4-.07-4-.13-3.99-.2L-3.38-.36Z",
+                      SVGUnit_Millimeters),
+      };
+      SkPaint crack_fill;
+      float crack_tween = lerp(0, std::size(kCracks) - 1, clamp<float>(water_level * 4, 0, 1));
+      int crack_i = roundf(crack_tween);
+      canvas.drawPath(kCracks[crack_i], crack_fill);
     }
   }
 

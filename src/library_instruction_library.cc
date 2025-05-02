@@ -250,9 +250,12 @@ static int VisibleInstructions(InstructionLibrary& library) {
   return std::min<int>(library.instructions.size(), kMaxInstructions);
 }
 
-static float CardAngleDeg(float i, int visible_instructions) {
+// Return a value from 0 (i=0) to -90 (i=visible_instructions-1) following a nice curve.
+static float CardAngleDeg(float i, int visible_instructions, float helix_tween) {
   float t = i / std::max<int>(1, visible_instructions - 1);
-  return CosineInterpolate(90, -90, 0.5 + t / 2);
+  float ret = CosineInterpolate(90, -90, 0.5 + t / 2);  // curve when helix is not hovered
+  float ret2 = lerp(0, -90, t);                         // linear curve when helix is hovered
+  return lerp(ret, ret2, helix_tween * 0.7);            // blend between the two curves
 }
 
 void InstructionLibrary::Widget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {
@@ -305,8 +308,8 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     card.library_index = -1;
   }
 
-  float wobble_target = (wobble_cards && isnan(new_cards_dir_deg)) ? -0.2 : 0;
-  phase |= wobble.SineTowards(wobble_target, timer.d, 0.1);
+  float helix_tween_target = (helix_hovered && isnan(new_cards_dir_deg)) ? 1 : 0;
+  phase |= helix_hover_tween.SineTowards(helix_tween_target, timer.d, 0.5);
 
   for (int i = 0; i < n; ++i) {
     llvm::MCInst& inst = library->instructions[i];
@@ -317,7 +320,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       if (card.instruction->mc_inst.getOpcode() == inst.getOpcode()) {
         if (isnan(card.throw_direction_deg) || (j == i)) {
           // Only update the rotation if the card is not being animated
-          card.angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
+          card.angle = CardAngleDeg(i + rotation_offset_t, n, helix_hover_tween);
         }
         card.library_index = i;
         card.instruction->mc_inst = inst;
@@ -334,7 +337,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       widget->parent = AcquirePtr();
       auto it = instruction_helix.insert(instruction_helix.begin() + insert_index,
                                          InstructionCard{widget, instruction});
-      it->angle = CardAngleDeg(i + rotation_offset_t + wobble, n);
+      it->angle = CardAngleDeg(i + rotation_offset_t, n, helix_hover_tween);
       it->library_index = i;
       if (insert_index == 0) {
         if (isnan(new_cards_dir_deg)) {
@@ -395,7 +398,8 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     bool move_up = card.library_index >= 0 && card.library_index < j && card.throw_t < 0.5;
     if (move_down || move_up) {
       auto card_copy = card;
-      card_copy.angle = CardAngleDeg(card_copy.library_index + rotation_offset_t + wobble, n);
+      card_copy.angle =
+          CardAngleDeg(card_copy.library_index + rotation_offset_t, n, helix_hover_tween);
       instruction_helix.erase(instruction_helix.begin() + j);
       instruction_helix.insert(instruction_helix.begin() + card_copy.library_index, card_copy);
       if (move_down) {
@@ -899,8 +903,8 @@ void InstructionLibrary::Widget::PointerMove(gui::Pointer& p, Vec2 position) {
   if (kFrontInstructionRect.Contains(local_position)) {
     new_wobble_cards = false;
   }
-  if (wobble_cards != new_wobble_cards) {
-    wobble_cards = new_wobble_cards;
+  if (helix_hovered != new_wobble_cards) {
+    helix_hovered = new_wobble_cards;
     WakeAnimation();
   }
 
@@ -943,8 +947,8 @@ void InstructionLibrary::Widget::PointerLeave(gui::Pointer& p) {
   StopWatching(p);
   animation::Phase phase = animation::Finished;
 
-  if (wobble_cards) {
-    wobble_cards = false;
+  if (helix_hovered) {
+    helix_hovered = false;
     phase |= animation::Animating;
   }
 
@@ -995,8 +999,8 @@ struct ScrollDeckAction : Action {
     auto diff_deg = diff.ToDegrees();
     lock_guard lock(library.mutex);
     int n = VisibleInstructions(library);
-    float card0_deg = CardAngleDeg(0, n);
-    float card1_deg = CardAngleDeg(1, n);
+    float card0_deg = CardAngleDeg(0, n, library_widget.helix_hover_tween);
+    float card1_deg = CardAngleDeg(1, n, library_widget.helix_hover_tween);
     float step_deg = card0_deg - card1_deg;
     if (abs(diff_deg) > step_deg / 2) {
       bool twist_left = diff_deg > 0;

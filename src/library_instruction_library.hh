@@ -62,8 +62,8 @@ struct InstructionLibrary : Object {
     maf::XorShift32 rng;
     animation::SpringV2<float> rotation_offset_t = 0;
     float rotation_offset_t_target = 0;
-    bool wobble_cards = false;  // true when helix is hovered
-    animation::SpringV2<float> wobble = 0;
+    bool helix_hovered = false;
+    animation::SpringV2<float> helix_hover_tween = 0;
     float new_cards_dir_deg = NAN;
 
     // True if the button is pressed

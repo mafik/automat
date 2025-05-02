@@ -101,6 +101,10 @@ struct WidgetDrawable : SkDrawableRTTI {
 
   maf::Optional<SkRect> pack_frame_texture_bounds;
   maf::Vec<Vec2> pack_frame_texture_anchors;
+
+  // Bounds of the widget's texture (without any clipping) in its local coordinate space.
+  // Note that surface have different dimensions. It may be larger (to account for rounding to full
+  // pixels) or smaller (due too clipping).
   Rect draw_texture_bounds;
   maf::Vec<Vec2> draw_texture_anchors;
   maf::Vec<Vec2> fresh_texture_anchors;
@@ -362,8 +366,12 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       static auto builder =
           resources::RuntimeEffectBuilder(embedded::assets_anchor_warp_rt_sksl.content);
 
-      builder->uniform("surfaceOrigin") = draw_texture_bounds.BottomLeftCorner();
-      builder->uniform("surfaceSize") = draw_texture_bounds.Size();
+      SkMatrix root_to_local;
+      (void)rendered_matrix.invert(&root_to_local);
+      Rect local_surface_bounds = SkRect::Make(render_surface_bounds_root);
+      root_to_local.mapRect(&local_surface_bounds.sk);
+      builder->uniform("surfaceOrigin") = local_surface_bounds.BottomLeftCorner();
+      builder->uniform("surfaceSize") = local_surface_bounds.Size();
       builder->uniform("surfaceResolution") = Vec2(surface->width(), surface->height());
       builder->uniform("anchorsLast").set(&draw_texture_anchors[0], anchor_count);
       builder->uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);

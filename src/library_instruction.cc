@@ -2320,12 +2320,6 @@ constexpr Rect kConditionCodeRect =
     Rect::MakeAtZero<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
 
 struct EnumKnobWidget : gui::Widget {
-  std::function<int()> getter;
-  std::function<void(int)> setter;
-  std::optional<Wave1D> wave;
-  animation::SpringV2<float> water_level;
-  animation::SpringV2<float> spill_tween;
-  std::optional<Vec2> root_position;
   float last_vx = 0;
   Knob knob;
 
@@ -2335,6 +2329,8 @@ struct EnumKnobWidget : gui::Widget {
   bool is_dragging = false;
   float cond_code_float = 0;
   int n_options;
+
+  int value = 0;  // ground-truth value, obtained from the getter in Tick
 
   EnumKnobWidget(int n_options) : n_options(n_options) {
     knob.unit_angle = 60_deg;
@@ -2381,115 +2377,38 @@ struct EnumKnobWidget : gui::Widget {
       Rect::MakeAtZero(2 * kRegionStartRadius, 2 * kRegionStartRadius);
   constexpr static float kRegionMargin = kBorderWidth / 2;
 
+  virtual int KnobGet() const = 0;
+  virtual void KnobSet(int value) = 0;
+
   animation::Phase Tick(time::Timer& timer) override {
     auto phase = animation::Finished;
-    auto cond_code = getter();
+    value = KnobGet();
+    auto old_value = value;
     if (isnan(knob.value) || isinf(knob.value)) {
       knob.value = 0;
     }
     while (knob.value >= 0.5) {
       knob.value -= 1;
-      if (cond_code >= n_options - 1) {
-        cond_code = 0;
+      if (value >= n_options - 1) {
+        value = 0;
       } else {
-        cond_code = cond_code + 1;
+        value = value + 1;
       }
-      setter(cond_code);
     }
     while (knob.value < -0.5) {
       knob.value += 1;
-      if (cond_code == 0) {
-        cond_code = n_options - 1;
+      if (value <= 0) {
+        value = n_options - 1;
       } else {
-        cond_code = cond_code - 1;
+        value = value - 1;
       }
-      setter(cond_code);
     }
-    phase |= water_level.SineTowards((float)(cond_code == X86::CondCode::COND_O), timer.d, 2);
-    phase |= spill_tween.SineTowards((water_level == 1) || (water_level > 0 && spill_tween == 1),
-                                     timer.d, 5);
+    if (value != old_value) {
+      KnobSet(value);
+    }
     phase |= click_wiggle.SpringTowards(0, timer.d, kClickWigglePeriod, kClickWiggleHalfTime);
-    cond_code_float = (float)cond_code + knob.value + click_wiggle.value;
+    cond_code_float = (float)value + knob.value + click_wiggle.value;
 
-    if (water_level > 0 && !wave.has_value()) {
-      wave = Wave1D(30, 0.5, 0.005, 1);
-      root_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
-    } else if (water_level == 0 && wave.has_value()) {
-      wave.reset();
-    }
-    if (wave) {
-      Vec2 new_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
-      auto delta = new_position - *root_position;
-      root_position = new_position;
-
-      float vx = delta.x / timer.d;
-      float ax = (vx - last_vx) / timer.d;
-      last_vx = vx;
-
-      float dvx = ax * timer.d;
-      float dx = dvx * timer.d;
-
-      if (abs(dx) > 0.001_mm) {
-        float column_width = kWaterRadius * 2 / wave->n;
-
-        auto new_heights = std::vector<float>(wave->n);
-        auto new_velocity = std::vector<float>(wave->n);
-        auto amplitude = wave->Amplitude();
-        auto velocity = wave->Velocity();
-        for (int i = 0; i < wave->n; ++i) {
-          // Take the current column height and distribute it to target columns A & B
-          float target_i = std::clamp<float>(i - dx / column_width, 0, wave->n - 1);
-          float target_floor = floorf(target_i);
-          float target_ceil = ceilf(target_i);
-
-          float x = 2 * (i + 0.5f) / wave->n - 1;
-          float y = sqrtf(1 - x * x);
-
-          float t = target_i - target_floor;
-          float h = (amplitude[i] + 1) * y;
-          float v = velocity[i];
-          new_heights[target_floor] += h * (1 - t);
-          new_heights[target_ceil] += h * t;
-          new_velocity[target_floor] += v * (1 - t);
-          new_velocity[target_ceil] += v * t;
-        }
-        for (int i = 0; i < wave->n - 1; ++i) {
-          float x = (i + 0.5f) / wave->n * 2 - 1;
-          float y = sqrtf(1 - x * x);
-          float max_volume = y * 2;
-          if (new_heights[i] > max_volume) {  // carry forward
-            new_heights[i + 1] += new_heights[i] - max_volume;
-            new_heights[i] = max_volume;
-          }
-        }
-        for (int i = wave->n - 1; i > 0; --i) {
-          float x = (i + 0.5f) / wave->n * 2 - 1;
-          float y = sqrtf(1 - x * x);
-          float max_volume = y * 2;
-          if (new_heights[i] > max_volume) {  // carry backward
-            new_heights[i - 1] += new_heights[i] - max_volume;
-            new_heights[i] = max_volume;
-          }
-        }
-        for (int i = 0; i < wave->n; ++i) {
-          float x = (i + 0.5f) / wave->n * 2 - 1;
-          float y = sqrtf(1 - x * x);
-          float max_volume = y * 2;
-
-          amplitude[i] = std::clamp<float>((new_heights[i] / y - 1), -1, 1);
-          velocity[i] = new_velocity[i];
-        }
-
-        for (int i = 0; i < wave->n; ++i) {
-          if (amplitude[i] >= 1 || amplitude[i] <= 0) {
-            velocity[i] = 0;
-          }
-        }
-      }
-
-      phase |= wave->Tick(timer);
-      wave->ZeroMeanAmplitude();
-    }
     return phase;
   }
 
@@ -2890,6 +2809,12 @@ struct EnumKnobWidget : gui::Widget {
 
   virtual void DrawKnobSymbol(SkCanvas& canvas, int cond_code) const = 0;
 
+  // Allows derived classes to draw something under the glass
+  virtual void DrawKnobBelowGlass(SkCanvas& canvas) const {}
+
+  // Allows derived classes to draw something over the glass
+  virtual void DrawKnobOverGlass(SkCanvas& canvas) const {}
+
   void Draw(SkCanvas& canvas) const override {
     float cond_code_floor = floorf(cond_code_float);
     float cond_code_ceil = ceilf(cond_code_float);
@@ -2899,23 +2824,6 @@ struct EnumKnobWidget : gui::Widget {
     }
     if (cond_code_ceil >= n_options) {
       cond_code_ceil = 0;
-    }
-
-    if (spill_tween > 0) {
-      static const SkPath kSpill = PathFromSVG(
-          "M-3.69-3.13c-.01 0-.03 0-.05 0-.43.05-.35.89-.75 "
-          "1.05-.24.09-.51-.25-.75-.15-.27.11-.09.61-.5.73-.32.08.1.71.06 "
-          "1.06-.05.3-.34.56-.29.85.04.27.42.39.5.65.06.18-.1.39-.04.58.08.21.25.43.46.51.2.08."
-          "43-.12.63-.06.24.08.34.43.59.49.14.04.31-.01.44-.08.07-.04.12-.1.15-.17 0 0 0 0 0 0A4 "
-          "4 0 01-4 0a4 4 0 01.93-2.56s0 0 0 0c-.11-.25-.35-.56-.62-.57z",
-          SVGUnit_Millimeters);
-      SkPaint spill_fill;
-      spill_fill.setAlphaf(spill_tween * 0.25);
-      canvas.save();
-      float spill_scale = lerp(0.7f, 1, spill_tween);
-      canvas.scale(spill_scale, spill_scale);
-      canvas.drawPath(kSpill, spill_fill);
-      canvas.restore();
     }
 
     DrawKnobBackground(canvas, (X86::CondCode)roundf(cond_code_float));
@@ -2947,60 +2855,7 @@ struct EnumKnobWidget : gui::Widget {
     }
     canvas.restore();
 
-    if (wave.has_value()) {
-      SkPath water;
-      SinCos angle_0;
-      SinCos angle_n;
-      for (int i = 0; i < wave->n; ++i) {
-        float x = i * kWaterOval.Width() / (wave->n - 1) + kWaterOval.left;
-        float y = wave->state[i] * kWaterRadius +
-                  std::lerp(kWaterOval.bottom, kWaterOval.CenterY(), water_level);
-        float d = hypotf(x, y);
-        float max_d = i * (i - wave->n + 1.f) / wave->n / wave->n * kWaterRadius / 8 + kWaterRadius;
-        if (d > max_d) {
-          x *= max_d / d;
-          y *= max_d / d;
-          d = max_d;
-        }
-        if (i == 0) {
-          angle_0 = SinCos::FromVec2({x, y}, d);
-          water.moveTo(x, y);
-        } else {
-          water.lineTo(x, y);
-        }
-        if (i == wave->n - 1) {
-          angle_n = SinCos::FromVec2({x, y}, d);
-        }
-      }
-      float start_deg = angle_n.ToDegrees();
-      float sweep_deg = (angle_0 - angle_n).ToDegreesNegative();
-      water.arcTo(kWaterOval.sk, start_deg, sweep_deg, false);
-      water.close();
-      water.toggleInverseFillType();
-
-      SkPaint displacement_paint;
-      displacement_paint.setImageFilter(SkImageFilters::Magnifier(
-          kWaterOval.sk, 1.5, kWaterRadius * 0.9, kDefaultSamplingOptions, nullptr));
-
-      SkCanvas::SaveLayerRec mask_rec(&kWaterOval.sk, nullptr,
-                                      SkCanvas::kInitWithPrevious_SaveLayerFlag);
-      SkCanvas::SaveLayerRec displacement_rec(&kWaterOval.sk, &displacement_paint,
-                                              SkCanvas::kInitWithPrevious_SaveLayerFlag);
-      canvas.saveLayer(mask_rec);
-      canvas.saveLayer(displacement_rec);
-      canvas.restore();
-      SkPaint clear_paint;
-      clear_paint.setBlendMode(SkBlendMode::kClear);
-      canvas.drawPath(water, clear_paint);
-      SkPaint inner_shadow_paint;
-      inner_shadow_paint.setColor("#a3b8c6"_color);
-      // inner_shadow_paint.setColor("#def3ffd5"_color);
-      inner_shadow_paint.setBlendMode(SkBlendMode::kMultiply);
-      inner_shadow_paint.setMaskFilter(
-          SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, kWaterRadius * 0.1f, true));
-      canvas.drawPath(water, inner_shadow_paint);
-      canvas.restore();
-    }
+    DrawKnobBelowGlass(canvas);
 
     if constexpr (kDebugKnob) {
       SkPaint circle_paint;
@@ -3064,24 +2919,7 @@ struct EnumKnobWidget : gui::Widget {
       }
     }
 
-    if (water_level > 0) {
-      static const SkPath kCracks[] = {
-          PathFromSVG("m-4.01.02.01.27.27-.23.37-.17z", SVGUnit_Millimeters),
-          PathFromSVG("m-4-.06c-.01.2 0 .26.02.48l.28-.26.36-.16.48.08-.2-.19-.3-.1z",
-                      SVGUnit_Millimeters),
-          PathFromSVG(
-              "m-3.38-.32-.62.17c-.02.2.01.5.04.72l.3-.29.35-.19.44.16.72-.41-.79.07-.13-.13z",
-              SVGUnit_Millimeters),
-          PathFromSVG("M-3.06-.23-2.97-.15-2.23-.31-1.6.01-2.21.04-2.87.34-3.31.13-3.61.32-3.92."
-                      "75C-3.97.5-4 "
-                      ".25-4 0-4-.07-4-.13-3.99-.2L-3.38-.36Z",
-                      SVGUnit_Millimeters),
-      };
-      SkPaint crack_fill;
-      float crack_tween = lerp(0, std::size(kCracks) - 1, clamp<float>(water_level * 4, 0, 1));
-      int crack_i = roundf(crack_tween);
-      canvas.drawPath(kCracks[crack_i], crack_fill);
-    }
+    DrawKnobOverGlass(canvas);
   }
 
   maf::Optional<Rect> TextureBounds() const override {
@@ -3154,9 +2992,134 @@ struct EnumKnobWidget : gui::Widget {
 };
 
 struct ConditionCodeWidget : public EnumKnobWidget {
-  ConditionCodeWidget() : EnumKnobWidget(X86::CondCode::LAST_VALID_COND + 1) {}
+  WeakPtr<Instruction> instruction_weak;
+  int token_i;
+
+  std::optional<Wave1D> wave;
+  animation::SpringV2<float> water_level;
+  animation::SpringV2<float> spill_tween;
+  std::optional<Vec2> root_position;
+
+  ConditionCodeWidget(WeakPtr<Instruction> instruction_weak, int token_i)
+      : EnumKnobWidget(X86::CondCode::LAST_VALID_COND + 1),
+        instruction_weak(instruction_weak),
+        token_i(token_i) {}
+
+  int KnobGet() const override {
+    auto instruction = instruction_weak.Lock().Cast<Instruction>();
+    return (X86::CondCode)instruction->mc_inst.getOperand(token_i).getImm();
+  }
+
+  void KnobSet(int new_value) override {
+    auto instruction = instruction_weak.Lock().Cast<Instruction>();
+    instruction->mc_inst.getOperand(token_i).setImm(new_value);
+  }
+
+  animation::Phase Tick(time::Timer& timer) override {
+    auto phase = EnumKnobWidget::Tick(timer);
+
+    phase |= water_level.SineTowards((float)(value == X86::CondCode::COND_O), timer.d, 2);
+    phase |= spill_tween.SineTowards((water_level == 1) || (water_level > 0 && spill_tween == 1),
+                                     timer.d, 5);
+    if (water_level > 0 && !wave.has_value()) {
+      wave = Wave1D(30, 0.5, 0.005, 1);
+      root_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
+    } else if (water_level == 0 && wave.has_value()) {
+      wave.reset();
+    }
+    if (wave) {
+      Vec2 new_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
+      auto delta = new_position - *root_position;
+      root_position = new_position;
+
+      float vx = delta.x / timer.d;
+      float ax = (vx - last_vx) / timer.d;
+      last_vx = vx;
+
+      float dvx = ax * timer.d;
+      float dx = dvx * timer.d;
+
+      if (abs(dx) > 0.001_mm) {
+        float column_width = kWaterRadius * 2 / wave->n;
+
+        auto new_heights = std::vector<float>(wave->n);
+        auto new_velocity = std::vector<float>(wave->n);
+        auto amplitude = wave->Amplitude();
+        auto velocity = wave->Velocity();
+        for (int i = 0; i < wave->n; ++i) {
+          // Take the current column height and distribute it to target columns A & B
+          float target_i = std::clamp<float>(i - dx / column_width, 0, wave->n - 1);
+          float target_floor = floorf(target_i);
+          float target_ceil = ceilf(target_i);
+
+          float x = 2 * (i + 0.5f) / wave->n - 1;
+          float y = sqrtf(1 - x * x);
+
+          float t = target_i - target_floor;
+          float h = (amplitude[i] + 1) * y;
+          float v = velocity[i];
+          new_heights[target_floor] += h * (1 - t);
+          new_heights[target_ceil] += h * t;
+          new_velocity[target_floor] += v * (1 - t);
+          new_velocity[target_ceil] += v * t;
+        }
+        for (int i = 0; i < wave->n - 1; ++i) {
+          float x = (i + 0.5f) / wave->n * 2 - 1;
+          float y = sqrtf(1 - x * x);
+          float max_volume = y * 2;
+          if (new_heights[i] > max_volume) {  // carry forward
+            new_heights[i + 1] += new_heights[i] - max_volume;
+            new_heights[i] = max_volume;
+          }
+        }
+        for (int i = wave->n - 1; i > 0; --i) {
+          float x = (i + 0.5f) / wave->n * 2 - 1;
+          float y = sqrtf(1 - x * x);
+          float max_volume = y * 2;
+          if (new_heights[i] > max_volume) {  // carry backward
+            new_heights[i - 1] += new_heights[i] - max_volume;
+            new_heights[i] = max_volume;
+          }
+        }
+        for (int i = 0; i < wave->n; ++i) {
+          float x = (i + 0.5f) / wave->n * 2 - 1;
+          float y = sqrtf(1 - x * x);
+          float max_volume = y * 2;
+
+          amplitude[i] = std::clamp<float>((new_heights[i] / y - 1), -1, 1);
+          velocity[i] = new_velocity[i];
+        }
+
+        for (int i = 0; i < wave->n; ++i) {
+          if (amplitude[i] >= 1 || amplitude[i] <= 0) {
+            velocity[i] = 0;
+          }
+        }
+      }
+
+      phase |= wave->Tick(timer);
+      wave->ZeroMeanAmplitude();
+    }
+    return phase;
+  }
 
   void DrawKnobBackground(SkCanvas& canvas, int val) const override {
+    if (spill_tween > 0) {
+      static const SkPath kSpill = PathFromSVG(
+          "M-3.69-3.13c-.01 0-.03 0-.05 0-.43.05-.35.89-.75 "
+          "1.05-.24.09-.51-.25-.75-.15-.27.11-.09.61-.5.73-.32.08.1.71.06 "
+          "1.06-.05.3-.34.56-.29.85.04.27.42.39.5.65.06.18-.1.39-.04.58.08.21.25.43.46.51.2.08."
+          "43-.12.63-.06.24.08.34.43.59.49.14.04.31-.01.44-.08.07-.04.12-.1.15-.17 0 0 0 0 0 0A4 "
+          "4 0 01-4 0a4 4 0 01.93-2.56s0 0 0 0c-.11-.25-.35-.56-.62-.57z",
+          SVGUnit_Millimeters);
+      SkPaint spill_fill;
+      spill_fill.setAlphaf(spill_tween * 0.25);
+      canvas.save();
+      float spill_scale = lerp(0.7f, 1, spill_tween);
+      canvas.scale(spill_scale, spill_scale);
+      canvas.drawPath(kSpill, spill_fill);
+      canvas.restore();
+    }
     EnumKnobWidget::DrawKnobBackground(canvas, val);
     DrawConditionCodeBackground(canvas, (X86::CondCode)val);
   }
@@ -3164,10 +3127,113 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   void DrawKnobSymbol(SkCanvas& canvas, int val) const override {
     DrawConditionCodeSymbol(canvas, (X86::CondCode)val);
   }
+
+  // Draws the waving water
+  void DrawKnobBelowGlass(SkCanvas& canvas) const override {
+    if (!wave.has_value()) return;
+    SkPath water;
+    SinCos angle_0;
+    SinCos angle_n;
+    for (int i = 0; i < wave->n; ++i) {
+      float x = i * kWaterOval.Width() / (wave->n - 1) + kWaterOval.left;
+      float y = wave->state[i] * kWaterRadius +
+                std::lerp(kWaterOval.bottom, kWaterOval.CenterY(), water_level);
+      float d = hypotf(x, y);
+      float max_d = i * (i - wave->n + 1.f) / wave->n / wave->n * kWaterRadius / 8 + kWaterRadius;
+      if (d > max_d) {
+        x *= max_d / d;
+        y *= max_d / d;
+        d = max_d;
+      }
+      if (i == 0) {
+        angle_0 = SinCos::FromVec2({x, y}, d);
+        water.moveTo(x, y);
+      } else {
+        water.lineTo(x, y);
+      }
+      if (i == wave->n - 1) {
+        angle_n = SinCos::FromVec2({x, y}, d);
+      }
+    }
+    float start_deg = angle_n.ToDegrees();
+    float sweep_deg = (angle_0 - angle_n).ToDegreesNegative();
+    water.arcTo(kWaterOval.sk, start_deg, sweep_deg, false);
+    water.close();
+    water.toggleInverseFillType();
+
+    SkPaint displacement_paint;
+    displacement_paint.setImageFilter(SkImageFilters::Magnifier(
+        kWaterOval.sk, 1.5, kWaterRadius * 0.9, kDefaultSamplingOptions, nullptr));
+
+    SkCanvas::SaveLayerRec mask_rec(&kWaterOval.sk, nullptr,
+                                    SkCanvas::kInitWithPrevious_SaveLayerFlag);
+    SkCanvas::SaveLayerRec displacement_rec(&kWaterOval.sk, &displacement_paint,
+                                            SkCanvas::kInitWithPrevious_SaveLayerFlag);
+    canvas.saveLayer(mask_rec);
+    canvas.saveLayer(displacement_rec);
+    canvas.restore();
+    SkPaint clear_paint;
+    clear_paint.setBlendMode(SkBlendMode::kClear);
+    canvas.drawPath(water, clear_paint);
+    SkPaint inner_shadow_paint;
+    inner_shadow_paint.setColor("#a3b8c6"_color);
+    // inner_shadow_paint.setColor("#def3ffd5"_color);
+    inner_shadow_paint.setBlendMode(SkBlendMode::kMultiply);
+    inner_shadow_paint.setMaskFilter(
+        SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, kWaterRadius * 0.1f, true));
+    canvas.drawPath(water, inner_shadow_paint);
+    canvas.restore();
+  }
+
+  // Draws the glass crack
+  void DrawKnobOverGlass(SkCanvas& canvas) const override {
+    if (water_level == 0) return;
+    static const SkPath kCracks[] = {
+        PathFromSVG("m-4.01.02.01.27.27-.23.37-.17z", SVGUnit_Millimeters),
+        PathFromSVG("m-4-.06c-.01.2 0 .26.02.48l.28-.26.36-.16.48.08-.2-.19-.3-.1z",
+                    SVGUnit_Millimeters),
+        PathFromSVG(
+            "m-3.38-.32-.62.17c-.02.2.01.5.04.72l.3-.29.35-.19.44.16.72-.41-.79.07-.13-.13z",
+            SVGUnit_Millimeters),
+        PathFromSVG("M-3.06-.23-2.97-.15-2.23-.31-1.6.01-2.21.04-2.87.34-3.31.13-3.61.32-3.92."
+                    "75C-3.97.5-4 "
+                    ".25-4 0-4-.07-4-.13-3.99-.2L-3.38-.36Z",
+                    SVGUnit_Millimeters),
+    };
+    SkPaint crack_fill;
+    float crack_tween = lerp(0, std::size(kCracks) - 1, clamp<float>(water_level * 4, 0, 1));
+    int crack_i = roundf(crack_tween);
+    canvas.drawPath(kCracks[crack_i], crack_fill);
+  }
 };
 
 struct LoopConditionCodeWidget : public EnumKnobWidget {
-  LoopConditionCodeWidget() : EnumKnobWidget(2) {}
+  WeakPtr<Instruction> instruction_weak;
+
+  LoopConditionCodeWidget(WeakPtr<Instruction> instruction_weak)
+      : EnumKnobWidget(2), instruction_weak(instruction_weak) {}
+
+  int KnobGet() const override {
+    auto instruction = instruction_weak.Lock().Cast<Instruction>();
+    auto opcode = instruction->mc_inst.getOpcode();
+    if (opcode == X86::LOOPE) {
+      return 0;
+    } else {
+      return 1;
+    }
+  }
+
+  void KnobSet(int new_value) override {
+    auto instruction = instruction_weak.Lock().Cast<Instruction>();
+    auto opcode = instruction->mc_inst.getOpcode();
+    if (new_value == 1 && opcode == X86::LOOPE) {
+      instruction->mc_inst.setOpcode(X86::LOOPNE);
+    } else if (new_value == 0 && opcode == X86::LOOPNE) {
+      instruction->mc_inst.setOpcode(X86::LOOPE);
+    } else {
+      LOG << "Can't set condition code for loop instruction";
+    }
+  }
 
   void DrawKnobBackground(SkCanvas& canvas, int val) const override {
     EnumKnobWidget::DrawKnobBackground(canvas, val);
@@ -3202,49 +3268,12 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
       auto opcode = instruction->mc_inst.getOpcode();
       Ptr<EnumKnobWidget> cond_widget;
       if (opcode == X86::LOOPE || opcode == X86::LOOPNE) {
-        cond_widget = MakePtr<LoopConditionCodeWidget>();
+        cond_widget = MakePtr<LoopConditionCodeWidget>(instruction->AcquireWeakPtr());
       } else {
-        cond_widget = MakePtr<ConditionCodeWidget>();
+        cond_widget = MakePtr<ConditionCodeWidget>(instruction->AcquireWeakPtr(), token_i);
       }
       cond_widget->parent = AcquirePtr();
       cond_widget->local_to_parent.setIdentity();
-      if (token.tag == Token::ConditionCode) {
-        cond_widget->getter = [token_i, instruction_weak = this->object]() {
-          auto instruction = instruction_weak.Lock().Cast<Instruction>();
-          return (X86::CondCode)instruction->mc_inst.getOperand(token_i).getImm();
-        };
-        cond_widget->setter = [token_i, instruction_weak = this->object](int cond) {
-          auto instruction = instruction_weak.Lock().Cast<Instruction>();
-          instruction->mc_inst.getOperand(token_i).setImm(cond);
-        };
-      } else {
-        cond_widget->getter = [cond = token.fixed_cond, instruction_weak = this->object]() {
-          auto instruction = instruction_weak.Lock().Cast<Instruction>();
-          auto opcode = instruction->mc_inst.getOpcode();
-          if (opcode == X86::LOOPE) {
-            return 0;
-          } else if (opcode == X86::LOOPNE) {
-            return 1;
-          } else {
-            return (int)cond;
-          }
-        };
-        cond_widget->setter = [](int ignore) {};
-        if (opcode == X86::LOOPE || opcode == X86::LOOPNE) {
-          cond_widget->setter = [instruction_weak = this->object](int val) {
-            auto instruction = instruction_weak.Lock().Cast<Instruction>();
-            auto opcode = instruction->mc_inst.getOpcode();
-            if (val == 1 && opcode == X86::LOOPE) {
-              instruction->mc_inst.setOpcode(X86::LOOPNE);
-            } else if (val == 0 && opcode == X86::LOOPNE) {
-              instruction->mc_inst.setOpcode(X86::LOOPE);
-            } else {
-              LOG << "Can't set condition code for loop instruction";
-            }
-            instruction->WakeWidgetsAnimation();
-          };
-        }
-      }
       condition_code_widget = std::move(cond_widget);
     }
   }

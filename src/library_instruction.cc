@@ -2974,9 +2974,9 @@ struct EnumKnobWidget : gui::Widget {
       widget->click_wiggle.value += widget->knob.value;
       widget->knob.value = 0;
 
-      if ((time::SteadyNow() - start_time).count() < kClickWigglePeriod / 4) {
-        widget->knob.value += 1;
-        widget->click_wiggle.value -= 1;
+      if ((time::SteadyNow() - start_time).count() < kClickWigglePeriod / 2) {
+        widget->knob.value -= 1;
+        widget->click_wiggle.value += 1;
       }
       widget->is_dragging = false;
       widget->WakeAnimation();

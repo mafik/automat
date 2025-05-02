@@ -115,13 +115,13 @@ def gen_x86_hh(x86_json, x86_hh):
   
   opcode_imm_sizes = {
     'Imm16': 2,
-    'Imm16PCRel': 2,
+    'Imm16PCRel': 0, # 2
     'Imm32': 4,
-    'Imm32PCRel': 4,
+    'Imm32PCRel': 0, # 4
     'Imm32S': 4,
     'Imm64': 8,
     'Imm8': 1,
-    'Imm8PCRel': 1,
+    'Imm8PCRel': 0, # 1
     'Imm8Reg': 1,
     'NoImm': 0,
   }

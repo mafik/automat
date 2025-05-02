@@ -30,6 +30,7 @@
 #include "drawable.hh"
 #include "embedded.hh"
 #include "font.hh"
+#include "hex.hh"
 #include "knob.hh"
 #include "library_assembler.hh"
 #include "llvm_asm.hh"
@@ -3654,13 +3655,51 @@ void Instruction::SerializeState(Serializer& writer, const char* key) const {
   writer.Key("opcode");
   auto opcode_name = assembler.mc_instr_info->getName(mc_inst.getOpcode());
   writer.String(opcode_name.data(), opcode_name.size());
+  auto this_mut = const_cast<Instruction*>(this);
+  auto imm_bytes = this_mut->BufferRead();
+  if (!imm_bytes.empty()) {
+    writer.Key("immediate_mode");
+    switch (imm_type) {
+      case Buffer::Type::Signed:
+        writer.String("signed");
+        break;
+      case Buffer::Type::Unsigned:
+        writer.String("unsigned");
+        break;
+      case Buffer::Type::Hexadecimal:
+        writer.String("hexadecimal");
+        break;
+      case Buffer::Type::Text:
+        writer.String("text");
+        break;
+      default:
+        ERROR << "Can't serialize unknown immediate operand";
+        writer.Null();
+        break;
+    }
+  }
   if (mc_inst.getNumOperands() > 0) {
     writer.Key("operands");
     writer.StartArray();
+    bool has_imm = false;
     for (int i = 0; i < mc_inst.getNumOperands(); ++i) {
       auto& operand = mc_inst.getOperand(i);
       if (operand.isImm()) {
-        writer.Int64(operand.getImm());
+        has_imm = true;
+        if (imm_type == Buffer::Type::Signed) {
+          writer.Int64(operand.getImm());
+        } else if (imm_type == Buffer::Type::Unsigned) {
+          writer.Uint64(operand.getImm());
+        } else if (imm_type == Buffer::Type::Hexadecimal) {
+          while (imm_bytes.size() < 8) {
+            imm_bytes += '\0';
+          }
+          uint64_t value = *reinterpret_cast<uint64_t*>(imm_bytes.data());
+          auto str = f("%lx", value);
+          writer.String(str.data(), str.size());
+        } else if (imm_type == Buffer::Type::Text) {
+          writer.String(imm_bytes.data(), imm_bytes.size());
+        }
       } else if (operand.isReg()) {
         writer.String(assembler.mc_reg_info->getName(operand.getReg()));
       } else {
@@ -3706,6 +3745,25 @@ void Instruction::DeserializeState(Location& l, Deserializer& d) {
         break;
       }
       mc_inst.setOpcode(opcode_i->second);
+    } else if (key == "immediate_mode") {
+      maf::Str mode_name;
+      d.Get(mode_name, status);
+      if (!OK(status)) {
+        AppendErrorMessage(status) += "Immediate mode must be a string";
+        break;
+      }
+      if (mode_name == "signed") {
+        imm_type = Buffer::Type::Signed;
+      } else if (mode_name == "unsigned") {
+        imm_type = Buffer::Type::Unsigned;
+      } else if (mode_name == "hexadecimal") {
+        imm_type = Buffer::Type::Hexadecimal;
+      } else if (mode_name == "text") {
+        imm_type = Buffer::Type::Text;
+      } else {
+        AppendErrorMessage(status) += "Unknown immediate mode";
+        break;
+      }
     } else if (key == "operands") {
       auto& instr_info = assembler.mc_instr_info->get(mc_inst.getOpcode());
       for (auto operand_i : ArrayView(d, status)) {
@@ -3740,18 +3798,56 @@ void Instruction::DeserializeState(Location& l, Deserializer& d) {
           mc_inst.addOperand(MCOperand::createReg(reg_i->second));
         } else {
           // Immediate
-          int64_t immediate;
-          d.Get(immediate, status);
-          if (!OK(status)) {
-            auto& msg = AppendErrorMessage(status);
-            msg += "Operand ";
-            msg += std::to_string(operand_i);
-            msg += " of ";
-            msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
-            msg += " must be an integer";
-            break;
+          if (imm_type == Buffer::Type::Signed) {
+            int64_t immediate;
+            d.Get(immediate, status);
+            if (!OK(status)) {
+              auto& msg = AppendErrorMessage(status);
+              msg += "Operand ";
+              msg += std::to_string(operand_i);
+              msg += " of ";
+              msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+              msg += " must be an integer";
+              break;
+            }
+            mc_inst.addOperand(MCOperand::createImm(immediate));
+          } else if (imm_type == Buffer::Type::Unsigned) {
+            uint64_t immediate;
+            d.Get(immediate, status);
+            if (!OK(status)) {
+              auto& msg = AppendErrorMessage(status);
+              msg += "Operand ";
+              msg += std::to_string(operand_i);
+              msg += " of ";
+              msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+              msg += " must be an unsigned integer";
+              break;
+            }
+            mc_inst.addOperand(MCOperand::createImm(immediate));
+          } else if (imm_type == Buffer::Type::Hexadecimal || imm_type == Buffer::Type::Text) {
+            Str str;
+            d.Get(str, status);
+            if (!OK(status)) {
+              auto& msg = AppendErrorMessage(status);
+              msg += "Operand ";
+              msg += std::to_string(operand_i);
+              msg += " of ";
+              msg += assembler.mc_instr_info->getName(mc_inst.getOpcode());
+              msg += " must be a string";
+              break;
+            }
+            if (imm_type == Buffer::Type::Hexadecimal) {
+              uint64_t value = 0;
+              sscanf(str.data(), "%lx", &value);
+              mc_inst.addOperand(MCOperand::createImm(value));
+            } else {
+              while (str.size() < 8) {
+                str += '\0';
+              }
+              int64_t value = *reinterpret_cast<int64_t*>(str.data());
+              mc_inst.addOperand(MCOperand::createImm(value));
+            }
           }
-          mc_inst.addOperand(MCOperand::createImm(immediate));
         }
       }
     }

@@ -56,6 +56,7 @@ struct Deserializer {
   void Get(float&, maf::Status&);
   void Get(int&, maf::Status&);
   void Get(int64_t&, maf::Status&);
+  void Get(uint64_t&, maf::Status&);
   void Get(bool&, maf::Status&);
   void Skip();
 

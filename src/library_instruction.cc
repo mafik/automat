@@ -2319,9 +2319,9 @@ constexpr float kConditionCodeTokenHeight = 8_mm;
 constexpr Rect kConditionCodeRect =
     Rect::MakeAtZero<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
 
-struct ConditionCodeWidget : gui::Widget {
-  std::function<X86::CondCode()> getter;
-  std::function<void(X86::CondCode)> setter;
+struct EnumKnobWidget : gui::Widget {
+  std::function<int()> getter;
+  std::function<void(int)> setter;
   std::optional<Wave1D> wave;
   animation::SpringV2<float> water_level;
   animation::SpringV2<float> spill_tween;
@@ -2334,8 +2334,9 @@ struct ConditionCodeWidget : gui::Widget {
   animation::SpringV2<float> click_wiggle = {};
   bool is_dragging = false;
   float cond_code_float = 0;
+  int n_options;
 
-  ConditionCodeWidget() {
+  EnumKnobWidget(int n_options) : n_options(n_options) {
     knob.unit_angle = 60_deg;
     knob.unit_distance = kGaugeRadius * 2;
 
@@ -2372,6 +2373,14 @@ struct ConditionCodeWidget : gui::Widget {
   static constexpr Rect kFarOval = kMiddleOval.Outset(kBorderHalf);
   static constexpr Rect kNearOval = kMiddleOval.Outset(-kBorderHalf);
 
+  constexpr static float kRegionEndRadius = kGaugeRadius;
+  constexpr static float kRegionStartRadius = kInnerRadius;
+  constexpr static float kRegionWidth = kRegionEndRadius - kRegionStartRadius;
+  constexpr static Rect kRegionOuter = Rect::MakeAtZero(2 * kRegionEndRadius, 2 * kRegionEndRadius);
+  constexpr static Rect kRegionInner =
+      Rect::MakeAtZero(2 * kRegionStartRadius, 2 * kRegionStartRadius);
+  constexpr static float kRegionMargin = kBorderWidth / 2;
+
   animation::Phase Tick(time::Timer& timer) override {
     auto phase = animation::Finished;
     auto cond_code = getter();
@@ -2380,19 +2389,19 @@ struct ConditionCodeWidget : gui::Widget {
     }
     while (knob.value >= 0.5) {
       knob.value -= 1;
-      if (cond_code == X86::LAST_VALID_COND) {
-        cond_code = (X86::CondCode)0;
+      if (cond_code >= n_options - 1) {
+        cond_code = 0;
       } else {
-        cond_code = (X86::CondCode)(cond_code + 1);
+        cond_code = cond_code + 1;
       }
       setter(cond_code);
     }
     while (knob.value < -0.5) {
       knob.value += 1;
-      if ((int)cond_code == 0) {
-        cond_code = X86::LAST_VALID_COND;
+      if (cond_code == 0) {
+        cond_code = n_options - 1;
       } else {
-        cond_code = (X86::CondCode)(cond_code - 1);
+        cond_code = cond_code - 1;
       }
       setter(cond_code);
     }
@@ -2484,28 +2493,22 @@ struct ConditionCodeWidget : gui::Widget {
     return phase;
   }
 
-  static void DrawConditionCodeBackground(SkCanvas& canvas, X86::CondCode cond_code) {
-    constexpr static float kRegionEndRadius = kGaugeRadius;
-    constexpr static float kRegionStartRadius = kInnerRadius;
-    constexpr static float kRegionWidth = kRegionEndRadius - kRegionStartRadius;
-    constexpr static Rect kRegionOuter =
-        Rect::MakeAtZero(2 * kRegionEndRadius, 2 * kRegionEndRadius);
-    constexpr static Rect kRegionInner =
-        Rect::MakeAtZero(2 * kRegionStartRadius, 2 * kRegionStartRadius);
-    constexpr static float kRegionMargin = kBorderWidth / 2;
-    static float kRegionOuterAngleAdjust = asin(kRegionMargin / 2 / kRegionEndRadius) * 180 / M_PI;
-    static float kRegionInnerAngleAdjust =
+  static SkPath RegionPath(float start_deg, float end_deg) {
+    const static float kRegionOuterAngleAdjust =
+        asin(kRegionMargin / 2 / kRegionEndRadius) * 180 / M_PI;
+    const static float kRegionInnerAngleAdjust =
         asin(kRegionMargin / 2 / kRegionStartRadius) * 180 / M_PI;
-    static const auto RegionPath = [](float start_deg, float end_deg) {
-      SkPath path;
-      float sweep = end_deg - start_deg;
-      path.arcTo(kRegionOuter.sk, start_deg + kRegionOuterAngleAdjust,
-                 sweep - 2 * kRegionOuterAngleAdjust, true);
-      path.arcTo(kRegionInner.sk, end_deg - kRegionInnerAngleAdjust,
-                 -sweep + 2 * kRegionInnerAngleAdjust, false);
-      path.close();
-      return path;
-    };
+    SkPath path;
+    float sweep = end_deg - start_deg;
+    path.arcTo(kRegionOuter.sk, start_deg + kRegionOuterAngleAdjust,
+               sweep - 2 * kRegionOuterAngleAdjust, true);
+    path.arcTo(kRegionInner.sk, end_deg - kRegionInnerAngleAdjust,
+               -sweep + 2 * kRegionInnerAngleAdjust, false);
+    path.close();
+    return path;
+  };
+
+  static void DrawConditionCodeBackground(SkCanvas& canvas, X86::CondCode cond_code) {
     static constexpr float kParityRegionSweep = 360.f / 9;
     static const SkPath kEvenParityRegion = [&]() {
       SkPath path;
@@ -2582,9 +2585,6 @@ struct ConditionCodeWidget : gui::Widget {
       return paint;
     }();
 
-    SkPaint white_paint;
-    white_paint.setColor("#ffffff"_color);
-    canvas.drawCircle(Vec2(), kRegionEndRadius, white_paint);
     // Switch fill based on signed-ness of the condition
     switch (cond_code) {
       // Signed
@@ -2882,14 +2882,22 @@ struct ConditionCodeWidget : gui::Widget {
     canvas.drawPath(symbol, symbol_fill);
   }
 
+  virtual void DrawKnobBackground(SkCanvas& canvas, int cond_code) const {
+    SkPaint white_paint;
+    white_paint.setColor("#ffffff"_color);
+    canvas.drawCircle(Vec2(), kRegionEndRadius, white_paint);
+  }
+
+  virtual void DrawKnobSymbol(SkCanvas& canvas, int cond_code) const = 0;
+
   void Draw(SkCanvas& canvas) const override {
     float cond_code_floor = floorf(cond_code_float);
     float cond_code_ceil = ceilf(cond_code_float);
     float cond_code_t = cond_code_float - cond_code_floor;  // how far towards ceil we are currently
     if (cond_code_floor < 0) {
-      cond_code_floor = X86::CondCode::LAST_VALID_COND;
+      cond_code_floor = n_options - 1;
     }
-    if (cond_code_ceil > (int)X86::CondCode::LAST_VALID_COND) {
+    if (cond_code_ceil >= n_options) {
       cond_code_ceil = 0;
     }
 
@@ -2910,7 +2918,7 @@ struct ConditionCodeWidget : gui::Widget {
       canvas.restore();
     }
 
-    DrawConditionCodeBackground(canvas, (X86::CondCode)roundf(cond_code_float));
+    DrawKnobBackground(canvas, (X86::CondCode)roundf(cond_code_float));
 
     canvas.save();
     SkRRect clip = SkRRect::MakeOval(kInnerOval.sk);
@@ -2928,14 +2936,14 @@ struct ConditionCodeWidget : gui::Widget {
       canvas.rotate(-angle * cond_code_t, center.x, center.y);
     }
 
-    DrawConditionCodeSymbol(canvas, (X86::CondCode)cond_code_floor);
+    DrawKnobSymbol(canvas, (X86::CondCode)cond_code_floor);
     if (cond_code_ceil != cond_code_floor) {
       if (isinf(radius)) {
         canvas.translate(-delta.x, -delta.y);
       } else {
         canvas.rotate(angle, center.x, center.y);
       }
-      DrawConditionCodeSymbol(canvas, (X86::CondCode)cond_code_ceil);
+      DrawKnobSymbol(canvas, (X86::CondCode)cond_code_ceil);
     }
     canvas.restore();
 
@@ -3085,11 +3093,11 @@ struct ConditionCodeWidget : gui::Widget {
     return bounds;
   }
 
-  struct ChangeConditionCodeAction : public Action {
-    WeakPtr<ConditionCodeWidget> widget_weak;
+  struct ChangeEnumKnobAction : public Action {
+    WeakPtr<EnumKnobWidget> widget_weak;
     time::SteadyPoint start_time;
 
-    ChangeConditionCodeAction(gui::Pointer& pointer, WeakPtr<ConditionCodeWidget> widget_weak)
+    ChangeEnumKnobAction(gui::Pointer& pointer, WeakPtr<EnumKnobWidget> widget_weak)
         : Action(pointer), widget_weak(widget_weak) {
       auto widget = widget_weak.Lock();
       if (widget) {
@@ -3119,7 +3127,7 @@ struct ConditionCodeWidget : gui::Widget {
       widget->WakeAnimation();
     }
 
-    ~ChangeConditionCodeAction() {
+    ~ChangeEnumKnobAction() {
       auto widget = widget_weak.Lock();
       if (widget == nullptr) {
         return;
@@ -3139,9 +3147,36 @@ struct ConditionCodeWidget : gui::Widget {
 
   std::unique_ptr<Action> FindAction(gui::Pointer& pointer, gui::ActionTrigger trigger) override {
     if (trigger == gui::PointerButton::Left) {
-      return std::make_unique<ChangeConditionCodeAction>(pointer, AcquireWeakPtr());
+      return std::make_unique<ChangeEnumKnobAction>(pointer, AcquireWeakPtr());
     }
     return nullptr;
+  }
+};
+
+struct ConditionCodeWidget : public EnumKnobWidget {
+  ConditionCodeWidget() : EnumKnobWidget(X86::CondCode::LAST_VALID_COND + 1) {}
+
+  void DrawKnobBackground(SkCanvas& canvas, int val) const override {
+    EnumKnobWidget::DrawKnobBackground(canvas, val);
+    DrawConditionCodeBackground(canvas, (X86::CondCode)val);
+  }
+
+  void DrawKnobSymbol(SkCanvas& canvas, int val) const override {
+    DrawConditionCodeSymbol(canvas, (X86::CondCode)val);
+  }
+};
+
+struct LoopConditionCodeWidget : public EnumKnobWidget {
+  LoopConditionCodeWidget() : EnumKnobWidget(2) {}
+
+  void DrawKnobBackground(SkCanvas& canvas, int val) const override {
+    EnumKnobWidget::DrawKnobBackground(canvas, val);
+    DrawConditionCodeBackground(canvas, X86::CondCode::COND_E);
+  }
+
+  void DrawKnobSymbol(SkCanvas& canvas, int val) const override {
+    X86::CondCode cond = val == 0 ? X86::CondCode::COND_E : X86::CondCode::COND_NE;
+    DrawConditionCodeSymbol(canvas, cond);
   }
 };
 
@@ -3164,7 +3199,13 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
   for (int token_i = 0; token_i < tokens.size(); ++token_i) {
     auto& token = tokens[token_i];
     if (token.tag == Token::ConditionCode || token.tag == Token::FixedCondition) {
-      auto cond_widget = MakePtr<ConditionCodeWidget>();
+      auto opcode = instruction->mc_inst.getOpcode();
+      Ptr<EnumKnobWidget> cond_widget;
+      if (opcode == X86::LOOPE || opcode == X86::LOOPNE) {
+        cond_widget = MakePtr<LoopConditionCodeWidget>();
+      } else {
+        cond_widget = MakePtr<ConditionCodeWidget>();
+      }
       cond_widget->parent = AcquirePtr();
       cond_widget->local_to_parent.setIdentity();
       if (token.tag == Token::ConditionCode) {
@@ -3172,7 +3213,7 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
           auto instruction = instruction_weak.Lock().Cast<Instruction>();
           return (X86::CondCode)instruction->mc_inst.getOperand(token_i).getImm();
         };
-        cond_widget->setter = [token_i, instruction_weak = this->object](X86::CondCode cond) {
+        cond_widget->setter = [token_i, instruction_weak = this->object](int cond) {
           auto instruction = instruction_weak.Lock().Cast<Instruction>();
           instruction->mc_inst.getOperand(token_i).setImm(cond);
         };
@@ -3181,22 +3222,21 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
           auto instruction = instruction_weak.Lock().Cast<Instruction>();
           auto opcode = instruction->mc_inst.getOpcode();
           if (opcode == X86::LOOPE) {
-            return X86::CondCode::COND_E;
+            return 0;
           } else if (opcode == X86::LOOPNE) {
-            return X86::CondCode::COND_NE;
+            return 1;
           } else {
-            return cond;
+            return (int)cond;
           }
         };
-        cond_widget->setter = [](X86::CondCode ignore) {};
-        auto opcode = instruction->mc_inst.getOpcode();
+        cond_widget->setter = [](int ignore) {};
         if (opcode == X86::LOOPE || opcode == X86::LOOPNE) {
-          cond_widget->setter = [instruction_weak = this->object](X86::CondCode cond) {
+          cond_widget->setter = [instruction_weak = this->object](int val) {
             auto instruction = instruction_weak.Lock().Cast<Instruction>();
             auto opcode = instruction->mc_inst.getOpcode();
-            if (cond == X86::CondCode::COND_NE && opcode == X86::LOOPE) {
+            if (val == 1 && opcode == X86::LOOPE) {
               instruction->mc_inst.setOpcode(X86::LOOPNE);
-            } else if (cond == X86::CondCode::COND_E && opcode == X86::LOOPNE) {
+            } else if (val == 0 && opcode == X86::LOOPNE) {
               instruction->mc_inst.setOpcode(X86::LOOPE);
             } else {
               LOG << "Can't set condition code for loop instruction";

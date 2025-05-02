@@ -3177,7 +3177,33 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
           instruction->mc_inst.getOperand(token_i).setImm(cond);
         };
       } else {
-        cond_widget->getter = [cond = token.fixed_cond]() { return cond; };
+        cond_widget->getter = [cond = token.fixed_cond, instruction_weak = this->object]() {
+          auto instruction = instruction_weak.Lock().Cast<Instruction>();
+          auto opcode = instruction->mc_inst.getOpcode();
+          if (opcode == X86::LOOPE) {
+            return X86::CondCode::COND_E;
+          } else if (opcode == X86::LOOPNE) {
+            return X86::CondCode::COND_NE;
+          } else {
+            return cond;
+          }
+        };
+        cond_widget->setter = [](X86::CondCode ignore) {};
+        auto opcode = instruction->mc_inst.getOpcode();
+        if (opcode == X86::LOOPE || opcode == X86::LOOPNE) {
+          cond_widget->setter = [instruction_weak = this->object](X86::CondCode cond) {
+            auto instruction = instruction_weak.Lock().Cast<Instruction>();
+            auto opcode = instruction->mc_inst.getOpcode();
+            if (cond == X86::CondCode::COND_NE && opcode == X86::LOOPE) {
+              instruction->mc_inst.setOpcode(X86::LOOPNE);
+            } else if (cond == X86::CondCode::COND_E && opcode == X86::LOOPNE) {
+              instruction->mc_inst.setOpcode(X86::LOOPE);
+            } else {
+              LOG << "Can't set condition code for loop instruction";
+            }
+            instruction->WakeWidgetsAnimation();
+          };
+        }
       }
       condition_code_widget = std::move(cond_widget);
     }

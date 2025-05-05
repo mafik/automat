@@ -77,12 +77,12 @@ constexpr float kTrackHeight = 1_cm;
 constexpr float kTrackWidth = kWindowWidth - 2 * kTrackMargin;
 
 constexpr float kZoomRadius = 3_cm;
-constexpr float kZoomVisible = kRulerHeight + kMarginAroundTracks / 2;
+constexpr float kZoomVisible = (kWindowWidth - kRulerLength) / 2 - kTrackMargin;
 
 constexpr SkColor kOrange = "#e24e1f"_color;
 
 static constexpr Vec2 ZoomDialCenter(float window_height) {
-  return {kWindowWidth / 4, -window_height - kZoomRadius + kZoomVisible};
+  return {kWindowWidth / 2 + kZoomRadius - kZoomVisible, -window_height / 2};
 }
 
 static constexpr float WindowHeight(int num_tracks) {
@@ -686,9 +686,9 @@ static float PreviousZoomTick(float zoom) {
 
 struct DragZoomAction : Action {
   Timeline& timeline;
-  float last_x;
+  float last_y;
   DragZoomAction(gui::Pointer& pointer, Timeline& timeline) : Action(pointer), timeline(timeline) {
-    last_x = pointer.PositionWithin(timeline).x;
+    last_y = pointer.PositionWithin(timeline).y;
   }
   ~DragZoomAction() override {
     timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
@@ -698,10 +698,10 @@ struct DragZoomAction : Action {
     }
   }
   void Update() override {
-    float x = pointer.PositionWithin(timeline).x;
-    float delta_x = x - last_x;
-    last_x = x;
-    float factor = expf(delta_x * -30);
+    float y = pointer.PositionWithin(timeline).y;
+    float delta_y = y - last_y;
+    last_y = y;
+    float factor = expf(delta_y * 60);
     timeline.zoom.value *= factor;
     timeline.zoom.target *= factor;
     timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
@@ -1105,31 +1105,10 @@ void Timeline::Draw(SkCanvas& canvas) const {
     canvas.restore();
   }
   {  // Zoom dial
-    auto zoom_center = ZoomDialCenter(window_height);
-    canvas.drawCircle(zoom_center, kZoomRadius, kZoomPaint);
-    canvas.save();
-    float zoom_text_width = lcd_font.MeasureText("ZOOM");
-    canvas.translate(zoom_center.x - zoom_text_width / 2, -window_height + kMarginAroundTracks / 2);
-    lcd_font.DrawText(canvas, "ZOOM", kZoomTextPaint);
-    canvas.restore();
 
-    auto DrawZoomText = [&](float angle_degrees, Str text) {
-      float text_width = lcd_font.MeasureText(text);
-      canvas.save();
-      canvas.translate(zoom_center.x - text_width / 2, -window_height - kZoomRadius + kZoomVisible);
-      canvas.rotate(angle_degrees);
-      canvas.translate(0, kZoomRadius - kLcdFontSize - 2_mm);
-      lcd_font.DrawText(canvas, text, kZoomTextPaint);
-      canvas.restore();
+    auto TickAngle = [](float tick0, float tick1) {
+      return ((tick1 - tick0) / (tick1 + tick0)) * .5f;
     };
-
-    Str current_zoom_text;
-    if (zoom < 1) {
-      current_zoom_text = f("%d ms", (int)roundf(zoom.value * 1000));
-    } else {
-      current_zoom_text = f("%.1f s", zoom.value);
-    }
-    DrawZoomText(0, current_zoom_text);
 
     float nearest_tick = NearestZoomTick(zoom.value);
     float next_tick, previous_tick;
@@ -1140,13 +1119,33 @@ void Timeline::Draw(SkCanvas& canvas) const {
       next_tick = NextZoomTick(nearest_tick);
       previous_tick = nearest_tick;
     }
-
-    auto tick_angle = [](float tick0, float tick1) {
-      return ((tick1 - tick0) / (tick1 + tick0)) * .5f;
-    };
-
     float ratio = (zoom.value - previous_tick) / (next_tick - previous_tick);
-    float angle0 = lerp(0, tick_angle(previous_tick, next_tick), ratio) + numbers::pi / 2;
+    float zero_dir = numbers::pi;
+    float angle0 = lerp(0, -TickAngle(previous_tick, next_tick), ratio) + zero_dir;
+
+    auto zoom_center = ZoomDialCenter(window_height);
+    canvas.drawCircle(zoom_center, kZoomRadius, kZoomPaint);
+    canvas.save();
+    float zoom_text_width = lcd_font.MeasureText("ZOOM");
+    Vec2 zoom_text_pos =
+        Vec2::Polar(zero_dir, kZoomRadius - 0.5_mm - kZoomVisible / 2) + zoom_center;
+    canvas.translate(zoom_text_pos.x - zoom_text_width / 2, zoom_text_pos.y);
+    lcd_font.DrawText(canvas, "ZOOM", kZoomTextPaint);
+    canvas.restore();
+
+    Str current_zoom_text;
+    if (zoom < 1) {
+      current_zoom_text = f("%d ms", (int)roundf(zoom.value * 1000));
+    } else {
+      current_zoom_text = f("%.1f s", zoom.value);
+    }
+    {
+      float text_width = lcd_font.MeasureText(current_zoom_text);
+      canvas.save();
+      canvas.translate(zoom_text_pos.x - text_width / 2, zoom_text_pos.y - kLcdFontSize - 1_mm);
+      lcd_font.DrawText(canvas, current_zoom_text, kZoomTextPaint);
+      canvas.restore();
+    }
 
     float line_start = kZoomRadius - 1_mm;
     float line_end = kZoomRadius;
@@ -1157,12 +1156,12 @@ void Timeline::Draw(SkCanvas& canvas) const {
     while (tick <= 3600) {
       Vec2 p0 = Vec2::Polar(angle, line_start) + zoom_center;
       Vec2 p1 = Vec2::Polar(angle, line_end) + zoom_center;
-      if (p1.y < -window_height) {
+      if (p1.y < -window_height || p1.x > kWindowWidth / 2) {
         break;
       }
       canvas.drawLine(p0.x, p0.y, p1.x, p1.y, kZoomTickPaint);
       float next = NextZoomTick(tick);
-      angle -= tick_angle(tick, next);
+      angle += TickAngle(tick, next);
       tick = next;
     }
     angle = angle0;
@@ -1170,12 +1169,12 @@ void Timeline::Draw(SkCanvas& canvas) const {
     while (angle >= 0.001) {
       Vec2 p0 = Vec2::Polar(angle, line_start) + zoom_center;
       Vec2 p1 = Vec2::Polar(angle, line_end) + zoom_center;
-      if (p1.y < -window_height) {
+      if (p1.y < -window_height || p1.x > kWindowWidth / 2) {
         break;
       }
       canvas.drawLine(p0.x, p0.y, p1.x, p1.y, kZoomTickPaint);
       float prev = PreviousZoomTick(tick);
-      angle += tick_angle(prev, tick);
+      angle -= TickAngle(prev, tick);
       tick = prev;
     }
   }

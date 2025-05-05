@@ -83,6 +83,7 @@ struct OnOffTrack : TrackBase, OnOff {
 struct SpliceAction : Action {
   Timeline& timeline;
   time::T splice_to;
+  bool snapped = false;
   SpliceAction(gui::Pointer& pointer, Timeline& timeline);
   ~SpliceAction();
   void Update() override;
@@ -107,6 +108,7 @@ struct Timeline : LiveObject,
   maf::Vec<std::unique_ptr<Argument>> track_args;
 
   mutable animation::Approach<> zoom;  // stores the time in seconds
+  mutable animation::SpringV2<float> splice_wiggle;
 
   enum State { kPaused, kPlaying, kRecording } state;
   time::T timeline_length = 0;

@@ -92,6 +92,12 @@ static constexpr float WindowHeight(int num_tracks) {
          num_tracks * kTrackHeight;
 }
 
+// May return values outside of [0, num_tracks]!
+static constexpr int TrackIndexFromY(float y) {
+  return (-y - kRulerHeight - kMarginAroundTracks + kTrackMargin / 2) /
+         (kTrackHeight + kTrackMargin);
+}
+
 constexpr float kPlasticBottom = kDisplayMargin;
 
 static Rect PlasticRect(const Timeline& t) {
@@ -785,6 +791,8 @@ SpliceAction::SpliceAction(gui::Pointer& pointer, Timeline& timeline)
   timeline.splice_action = this;
   pointer.PushIcon(gui::Pointer::kIconResizeHorizontal);
   splice_to = TimeAtX(timeline, pointer.PositionWithin(timeline).x);
+  timeline.splice_wiggle.velocity -= 0.1;
+  timeline.WakeAnimation();
 }
 SpliceAction::~SpliceAction() {
   pointer.PopIcon();
@@ -793,7 +801,68 @@ SpliceAction::~SpliceAction() {
 }
 
 void SpliceAction::Update() {
-  splice_to = TimeAtX(timeline, pointer.PositionWithin(timeline).x);
+  auto pos = pointer.PositionWithin(timeline);
+  int num_tracks = timeline.tracks.size();
+  float current_pos_ratio = CurrentPosRatio(timeline);
+  float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
+  float new_splice_to;
+  bool new_snapped = false;
+  if (SplicerShape(num_tracks, current_pos_ratio).contains(pos.x, pos.y)) {
+    new_splice_to = TimeAtX(timeline, bridge_offset_x);
+    new_snapped = true;
+  } else {
+    new_splice_to = TimeAtX(timeline, pos.x);
+    if (pos.x < bridge_offset_x) {
+      auto track_index = TrackIndexFromY(pos.y);
+      if (track_index >= 0 && track_index < num_tracks) {
+        auto& track = timeline.tracks[track_index];
+        auto& timestamps = track->timestamps;
+        auto [first, last] = equal_range(timestamps.begin(), timestamps.end(), new_splice_to);
+        int right_i = last - timestamps.begin();
+        float closest_x = NAN, closest_dist = INFINITY;
+        time::T closest_t = NAN;
+        if (right_i >= 0 && right_i < timestamps.size()) {
+          float right_x = XAtTime(timeline, timestamps[right_i]);
+          float right_dist = fabsf(pos.x - right_x);
+          if (right_dist < closest_dist) {
+            closest_x = right_x;
+            closest_dist = right_dist;
+            closest_t = timestamps[right_i];
+          }
+        }
+        int left_i = right_i - 1;
+        if (left_i >= 0 && left_i < timestamps.size()) {
+          float left_x = XAtTime(timeline, timestamps[left_i]);
+          float left_dist = fabsf(pos.x - left_x);
+          if (left_dist < closest_dist) {
+            closest_x = left_x;
+            closest_dist = left_dist;
+            closest_t = timestamps[left_i];
+          }
+        }
+        if (closest_dist < 1_mm) {
+          new_splice_to = closest_t;
+          new_snapped = true;
+        }
+      }
+    }
+    float window_height = WindowHeight(num_tracks);
+    if (pos.y > -window_height && pos.y < -window_height + kRulerHeight) {
+      float zoom = timeline.zoom.target;
+      float zoom_log = log10f(zoom / 200);
+      float tick_mult = powf(10, ceilf(zoom_log));
+      new_splice_to = roundf(new_splice_to / tick_mult) * tick_mult;
+      new_snapped = true;
+    }
+    new_splice_to = max<float>(0, new_splice_to);
+  }
+
+  if (new_snapped || snapped) {
+    float distance_to_seconds = DistanceToSeconds(timeline);
+    timeline.splice_wiggle.value += (splice_to - new_splice_to) / distance_to_seconds;
+  }
+  snapped = new_snapped;
+  splice_to = new_splice_to;
   timeline.WakeAnimation();
 }
 
@@ -839,6 +908,7 @@ animation::Phase Timeline::Tick(time::Timer& timer) {
   if (splice_action) {
     phase |= animation::Animating;
   }
+  splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
   return phase;
 }
 
@@ -1071,7 +1141,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
   bool draw_bridge_hairline = true;
 
   if (splice_action) {
-    float splice_x = XAtTime(*this, splice_action->splice_to);
+    float splice_x = XAtTime(*this, splice_action->splice_to) + splice_wiggle.value;
     auto rect = Rect(splice_x, -window_height + kRulerHeight + kMarginAroundTracks, bridge_offset_x,
                      -kRulerHeight - kMarginAroundTracks);
     if (splice_x < bridge_offset_x) {

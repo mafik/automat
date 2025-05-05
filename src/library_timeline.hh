@@ -56,6 +56,7 @@ struct TrackBase : Object, Object::FallbackWidget {
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
+  virtual void Splice(time::T current_offset, time::T splice_to) = 0;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
                             time::SteadyPoint now) = 0;
 
@@ -69,6 +70,7 @@ struct OnOffTrack : TrackBase, OnOff {
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MakePtr<OnOffTrack>(*this); }
   void Draw(SkCanvas&) const override;
+  void Splice(time::T current_offset, time::T splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   bool IsOn() const override;

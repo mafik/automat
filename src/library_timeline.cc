@@ -795,8 +795,22 @@ SpliceAction::SpliceAction(gui::Pointer& pointer, Timeline& timeline)
   timeline.WakeAnimation();
 }
 SpliceAction::~SpliceAction() {
+  auto now = time::SteadyNow();
   pointer.PopIcon();
   timeline.splice_action = nullptr;
+  auto current_offset = CurrentOffset(timeline, now);
+
+  // Delete stuff between splice_to and current_offset
+  int num_tracks = timeline.tracks.size();
+  for (int i = 0; i < num_tracks; ++i) {
+    auto& track = timeline.tracks[i];
+    track->Splice(current_offset, splice_to);
+    track->WakeAnimation();
+  }
+  if (splice_to < current_offset) {
+    timeline.timeline_length -= current_offset - splice_to;
+    OffsetPosRatio(timeline, splice_to - current_offset, now);
+  }
   timeline.WakeAnimation();
 }
 
@@ -805,7 +819,7 @@ void SpliceAction::Update() {
   int num_tracks = timeline.tracks.size();
   float current_pos_ratio = CurrentPosRatio(timeline);
   float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
-  float new_splice_to;
+  time::T new_splice_to;
   bool new_snapped = false;
   if (SplicerShape(num_tracks, current_pos_ratio).contains(pos.x, pos.y)) {
     new_splice_to = TimeAtX(timeline, bridge_offset_x);
@@ -819,13 +833,12 @@ void SpliceAction::Update() {
         auto& timestamps = track->timestamps;
         auto [first, last] = equal_range(timestamps.begin(), timestamps.end(), new_splice_to);
         int right_i = last - timestamps.begin();
-        float closest_x = NAN, closest_dist = INFINITY;
+        float closest_dist = INFINITY;
         time::T closest_t = NAN;
         if (right_i >= 0 && right_i < timestamps.size()) {
           float right_x = XAtTime(timeline, timestamps[right_i]);
           float right_dist = fabsf(pos.x - right_x);
           if (right_dist < closest_dist) {
-            closest_x = right_x;
             closest_dist = right_dist;
             closest_t = timestamps[right_i];
           }
@@ -835,7 +848,6 @@ void SpliceAction::Update() {
           float left_x = XAtTime(timeline, timestamps[left_i]);
           float left_dist = fabsf(pos.x - left_x);
           if (left_dist < closest_dist) {
-            closest_x = left_x;
             closest_dist = left_dist;
             closest_t = timestamps[left_i];
           }
@@ -854,7 +866,7 @@ void SpliceAction::Update() {
       new_splice_to = roundf(new_splice_to / tick_mult) * tick_mult;
       new_snapped = true;
     }
-    new_splice_to = max<float>(0, new_splice_to);
+    new_splice_to = max<time::T>(0, new_splice_to);
   }
 
   if (new_snapped || snapped) {
@@ -1585,6 +1597,27 @@ void Timeline::StopRecording() {
   state = Timeline::kPaused;
   run_button->WakeAnimation();
   WakeAnimation();
+}
+
+void OnOffTrack::Splice(time::T current_offset, time::T splice_to) {
+  double delta = splice_to - current_offset;
+  if (delta < 0) {
+    auto [current_offset_ge, current_offset_g] =
+        equal_range(timestamps.begin(), timestamps.end(), current_offset);
+    auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
+    int begin = splice_to_ge - timestamps.begin();
+    int end = current_offset_g - timestamps.begin();
+    int count = end - begin;
+    if (count & 1) {
+      timestamps[begin] = splice_to;
+      begin += 1;
+      count &= ~1;
+    }
+    for (int i = begin; i < timestamps.size() - count; ++i) {
+      timestamps[i] = timestamps[i + count] + delta;
+    }
+    timestamps.resize(timestamps.size() - count);
+  }
 }
 
 void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,

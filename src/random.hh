@@ -34,6 +34,10 @@ struct XorShift32 {
   float RollFloat(float min, float max) { return min + (max - min) * Roll() / 4294967296.0f; }
 };
 
+static float SeededFloat(float min, float max, double seed) {
+  return min + (max - min) * fmod(fabs(sin(seed)) * 43758.5453, 1.0);
+}
+
 // This function may block if there is not enough entropy available.
 //
 // See `man 2 getrandom` for more information.

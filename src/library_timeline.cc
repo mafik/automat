@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "library_timeline.hh"
 
+#include <include/core/SkBlendMode.h>
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
@@ -29,6 +30,7 @@
 #include "math.hh"
 #include "number_text_field.hh"
 #include "pointer.hh"
+#include "random.hh"
 #include "root_widget.hh"
 #include "sincos.hh"
 #include "status.hh"
@@ -563,6 +565,27 @@ time::T TimeAtX(const Timeline& timeline, float x) {
   return center_t + x * distance_to_seconds;
 }
 
+static float XAtTime(const Timeline& timeline, time::T t) {
+  float distance_to_seconds = DistanceToSeconds(timeline);
+  float current_pos_ratio = CurrentPosRatio(timeline);
+  float track_width = timeline.MaxTrackLength();
+
+  float center_t0 = kRulerLength / 2 * distance_to_seconds;
+  float center_t1 = track_width - kRulerLength / 2 * distance_to_seconds;
+  float center_t = lerp(center_t0, center_t1, current_pos_ratio);
+
+  return (t - center_t) / distance_to_seconds;
+}
+
+SkPath SplicerShape(int num_tracks, float current_pos_ratio) {
+  float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
+
+  float bottom_y = -(kMarginAroundTracks * 2 + kTrackHeight * num_tracks +
+                     kTrackMargin * max(0, num_tracks - 1) + kRulerHeight);
+
+  return SkPath::Circle(bridge_offset_x, bottom_y, 4_mm);
+}
+
 SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
   float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
 
@@ -756,24 +779,46 @@ SkPath WindowShape(int num_tracks) {
   return window.ToPath(true);
 }
 
+SpliceAction::SpliceAction(gui::Pointer& pointer, Timeline& timeline)
+    : Action(pointer), timeline(timeline) {
+  assert(timeline.splice_action == nullptr);
+  timeline.splice_action = this;
+  pointer.PushIcon(gui::Pointer::kIconResizeHorizontal);
+  splice_to = TimeAtX(timeline, pointer.PositionWithin(timeline).x);
+}
+SpliceAction::~SpliceAction() {
+  pointer.PopIcon();
+  timeline.splice_action = nullptr;
+  timeline.WakeAnimation();
+}
+
+void SpliceAction::Update() {
+  splice_to = TimeAtX(timeline, pointer.PositionWithin(timeline).x);
+  timeline.WakeAnimation();
+}
+
 unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) {
   if (btn == gui::PointerButton::Left) {
-    auto bridge_shape = BridgeShape(tracks.size(), CurrentPosRatio(*this));
-    auto window_shape = WindowShape(tracks.size());
+    float current_pos_ratio = CurrentPosRatio(*this);
+    int n = tracks.size();
+    auto splicer_shape = SplicerShape(n, current_pos_ratio);
+    auto bridge_shape = BridgeShape(n, current_pos_ratio);
+    auto window_shape = WindowShape(n);
     auto pos = ptr.PositionWithin(*this);
-    if (bridge_shape.contains(pos.x, pos.y)) {
-      return unique_ptr<Action>(new DragBridgeAction(ptr, *this));
+    if (splicer_shape.contains(pos.x, pos.y) && splice_action == nullptr) {
+      return make_unique<SpliceAction>(ptr, *this);
+    } else if (bridge_shape.contains(pos.x, pos.y)) {
+      return make_unique<DragBridgeAction>(ptr, *this);
     } else if (window_shape.contains(pos.x, pos.y)) {
       if (pos.y < -kRulerHeight) {
-        if (LengthSquared(pos - ZoomDialCenter(WindowHeight(tracks.size()))) <
-            kZoomRadius * kZoomRadius) {
-          return unique_ptr<Action>(new DragZoomAction(ptr, *this));
+        if (LengthSquared(pos - ZoomDialCenter(WindowHeight(n))) < kZoomRadius * kZoomRadius) {
+          return make_unique<DragZoomAction>(ptr, *this);
         } else {
-          return unique_ptr<Action>(new DragTimelineAction(ptr, *this));
+          return make_unique<DragTimelineAction>(ptr, *this);
         }
       } else {
         SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.root_widget.timer.now);
-        return unique_ptr<Action>(new DragBridgeAction(ptr, *this));
+        return make_unique<DragBridgeAction>(ptr, *this);
       }
     }
   }
@@ -791,6 +836,9 @@ animation::Phase Timeline::Tick(time::Timer& timer) {
   }
   phase |= zoom.Tick(timer);
   UpdateChildTransform();
+  if (splice_action) {
+    phase |= animation::Animating;
+  }
   return phase;
 }
 
@@ -1017,7 +1065,117 @@ void Timeline::Draw(SkCanvas& canvas) const {
   for (size_t i = 0; i < tracks.size(); ++i) {
     tracks_arr[i] = tracks[i];
   }
+
   DrawChildrenSpan(canvas, SpanOfArr(tracks_arr, tracks.size()));
+
+  bool draw_bridge_hairline = true;
+
+  if (splice_action) {
+    float splice_x = XAtTime(*this, splice_action->splice_to);
+    auto rect = Rect(splice_x, -window_height + kRulerHeight + kMarginAroundTracks, bridge_offset_x,
+                     -kRulerHeight - kMarginAroundTracks);
+    if (splice_x < bridge_offset_x) {
+      // deleting
+      SkPaint delete_paint;
+      SkPoint pts[2] = {rect.TopLeftCorner(), rect.TopRightCorner()};
+      constexpr int n = 10;
+      SkColor colors[n] = {};
+      float pos[n] = {};
+      float w = rect.Width();
+      float cx = w / 2;
+      float r = 1_cm;
+      SkColor shadow_color = "#801010"_color;
+      for (int i = 0; i < n; ++i) {
+        float a1 = i / (n - 1.f) * 2;
+        float a2 = (n - 1 - i) / (n - 1.f) * 2;
+        float a = min(a1, a2);
+        colors[i] = SkColorSetA(shadow_color, lerp(255, 128, a));
+        float t = i / (n - 1.f);
+        // Don't try to unterstand this - it doesn't make sense - but looks ok.
+        if (i <= n / 2) {
+          pos[i] = t - (1 - a1) * r / w;
+        } else {
+          pos[i] = t + (1 - a2) * r / w;
+        }
+        pos[i] = clamp<float>(pos[i], 0, 1);
+      }
+      delete_paint.setShader(SkGradientShader::MakeLinear(pts, colors, pos, n, SkTileMode::kClamp));
+      delete_paint.setBlendMode(SkBlendMode::kColorBurn);
+
+      canvas.drawRect(rect, delete_paint);
+
+      canvas.save();
+      canvas.clipRect(rect);
+
+      {  // Draw dust being sucked in
+        time::T current_time = time::SteadyNow().time_since_epoch().count();
+        int n_particles = 10;
+        float particle_lifetime_s = 1;
+
+        auto particle_absolute = current_time * n_particles;
+        for (int i = 0; i < n_particles; ++i) {
+          auto particle_i = floor(particle_absolute) - i;
+          auto particle_start = particle_i / n_particles;
+          auto particle_end = particle_start + particle_lifetime_s;
+          auto particle_a = (current_time - particle_start) / particle_lifetime_s;
+
+          // Fast fade in/out, slow in the middle
+          particle_a = acos(1 - 2 * particle_a) / numbers::pi;
+
+          float y = maf::SeededFloat(rect.top, rect.bottom, particle_i);
+          SkPaint paint;
+          paint.setColor("#ffffff"_color);
+          paint.setAlphaf(lerp(1, 0, particle_a));
+          paint.setStrokeWidth(1_mm);
+          paint.setStyle(SkPaint::kStrokeAndFill_Style);
+          float x0;
+          float x1;
+          if ((uint64_t)particle_i & 1) {
+            x0 = rect.left;
+            x1 = rect.left + particle_a * w / 2;
+          } else {
+            x0 = rect.right;
+            x1 = rect.right - particle_a * w / 2;
+          }
+          canvas.drawLine(x0, y, x1, y, paint);
+        }
+      }
+
+      canvas.restore();
+
+      // Two black vertical lines around the deleted region
+      SkPaint delete_line_paint;
+      delete_line_paint.setStyle(SkPaint::kStroke_Style);
+      delete_line_paint.setStrokeWidth(0.2_mm);
+      canvas.drawLine(rect.TopLeftCorner(), rect.BottomLeftCorner(), delete_line_paint);
+      canvas.drawLine(rect.TopRightCorner(), rect.BottomRightCorner(), delete_line_paint);
+      draw_bridge_hairline = false;
+    } else {
+      // Stretch the right part of the timeline
+      rect.left = bridge_offset_x;
+      rect.right = splice_x;
+      Rect save_rect =
+          Rect(bridge_offset_x, -window_height + kRulerHeight, kWindowWidth / 2, -kRulerHeight);
+      SkPaint stretch_paint;
+      stretch_paint.setImageFilter(SkImageFilters::MatrixTransform(
+          SkMatrix::Translate(splice_x - bridge_offset_x, 0), kDefaultSamplingOptions,
+          SkImageFilters::Crop(save_rect.sk, SkTileMode::kClamp, nullptr)));
+      stretch_paint.setColor("#808080"_color);
+
+      auto rec = SkCanvas::SaveLayerRec(&save_rect.sk, &stretch_paint,
+                                        SkCanvas::kInitWithPrevious_SaveLayerFlag);
+      canvas.save();
+      canvas.clipRect(save_rect);
+      canvas.saveLayer(rec);
+      canvas.restore();
+      canvas.restore();
+
+      SkPaint new_paint;
+      new_paint.setColor("#d1ffd1"_color);
+      new_paint.setAlphaf(0.5);
+      canvas.drawRect(rect, new_paint);
+    }
+  }
 
   canvas.restore();  // unclip
 
@@ -1070,12 +1228,13 @@ void Timeline::Draw(SkCanvas& canvas) const {
     float x = BridgeOffsetX(current_pos_ratio);
     float bottom_y = -(kMarginAroundTracks * 2 + kTrackHeight * tracks.size() +
                        kTrackMargin * max(0, (int)tracks.size() - 1));
-
-    SkPaint hairline;
-    hairline.setColor(kBridgeLinePaint.getColor());
-    hairline.setStyle(SkPaint::kStroke_Style);
-    hairline.setAntiAlias(true);
-    canvas.drawLine({x, -kRulerHeight}, {x, bottom_y - kRulerHeight}, hairline);
+    if (draw_bridge_hairline) {
+      SkPaint hairline;
+      hairline.setColor(kBridgeLinePaint.getColor());
+      hairline.setStyle(SkPaint::kStroke_Style);
+      hairline.setAntiAlias(true);
+      canvas.drawLine({x, -kRulerHeight}, {x, bottom_y - kRulerHeight}, hairline);
+    }
 
     auto bridge_shape = BridgeShape(tracks.size(), current_pos_ratio);
 
@@ -1178,6 +1337,15 @@ void Timeline::Draw(SkCanvas& canvas) const {
       tick = prev;
     }
   }
+
+  const static SkPaint kSplicerPaint = []() {
+    SkPaint paint;
+    paint.setColor("#fbf9f3"_color);
+    return paint;
+  }();
+  auto splicer_shape = SplicerShape(tracks.size(), current_pos_ratio);
+  canvas.drawPath(splicer_shape, kSplicerPaint);
+
   canvas.restore();  // unclip
 }
 

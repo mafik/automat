@@ -80,6 +80,14 @@ struct OnOffTrack : TrackBase, OnOff {
   bool TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name) override;
 };
 
+struct SpliceAction : Action {
+  Timeline& timeline;
+  time::T splice_to;
+  SpliceAction(gui::Pointer& pointer, Timeline& timeline);
+  ~SpliceAction();
+  void Update() override;
+};
+
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
@@ -92,6 +100,8 @@ struct Timeline : LiveObject,
   Ptr<TimelineRunButton> run_button;
   Ptr<PrevButton> prev_button;
   Ptr<NextButton> next_button;
+
+  SpliceAction* splice_action = nullptr;
 
   maf::Vec<Ptr<TrackBase>> tracks;
   maf::Vec<std::unique_ptr<Argument>> track_args;

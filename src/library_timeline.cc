@@ -94,8 +94,8 @@ static constexpr float WindowHeight(int num_tracks) {
 
 // May return values outside of [0, num_tracks]!
 static constexpr int TrackIndexFromY(float y) {
-  return (-y - kRulerHeight - kMarginAroundTracks + kTrackMargin / 2) /
-         (kTrackHeight + kTrackMargin);
+  return floorf((-y - kRulerHeight - kMarginAroundTracks + kTrackMargin / 2) /
+                (kTrackHeight + kTrackMargin));
 }
 
 constexpr float kPlasticBottom = kDisplayMargin;
@@ -937,7 +937,7 @@ SpliceAction::SpliceAction(gui::Pointer& pointer, Timeline& timeline)
   assert(timeline.splice_action == nullptr);
   timeline.splice_action = this;
   pointer.PushIcon(gui::Pointer::kIconResizeHorizontal);
-  splice_to = TimeAtX(timeline, pointer.PositionWithin(timeline).x);
+  splice_to = CurrentOffset(timeline, time::SteadyNow());
   timeline.splice_wiggle.velocity -= 0.1;
   timeline.WakeAnimation();
 }

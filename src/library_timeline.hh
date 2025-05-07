@@ -54,6 +54,7 @@ struct TrackBase : Object, Object::FallbackWidget {
   Timeline* timeline = nullptr;
   maf::Vec<time::T> timestamps;
   SkPath Shape() const override;
+  maf::Optional<Rect> TextureBounds() const override;
   void Draw(SkCanvas&) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   virtual void Splice(time::T current_offset, time::T splice_to) = 0;
@@ -92,6 +93,8 @@ struct SpliceAction : Action {
   void Update() override;
 };
 
+struct DragZoomAction;
+
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
@@ -106,6 +109,7 @@ struct Timeline : LiveObject,
   Ptr<NextButton> next_button;
 
   SpliceAction* splice_action = nullptr;
+  DragZoomAction* drag_zoom_action = nullptr;
 
   maf::Vec<Ptr<TrackBase>> tracks;
   maf::Vec<std::unique_ptr<Argument>> track_args;

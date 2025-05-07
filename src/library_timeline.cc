@@ -863,31 +863,37 @@ static float PreviousZoomTick(float zoom) {
 struct DragZoomAction : Action {
   Timeline& timeline;
   float last_y;
-  DragZoomAction(gui::Pointer& pointer, Timeline& timeline) : Action(pointer), timeline(timeline) {
-    last_y = pointer.PositionWithin(timeline).y;
-  }
-  ~DragZoomAction() override {
-    timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
-    timeline.WakeAnimation();
-    for (auto& track : timeline.tracks) {
-      track->WakeAnimation();
-    }
-  }
-  void Update() override {
-    float y = pointer.PositionWithin(timeline).y;
-    float delta_y = y - last_y;
-    last_y = y;
-    float factor = expf(delta_y * 60);
-    timeline.zoom.value *= factor;
-    timeline.zoom.target *= factor;
-    timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
-    timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
-    timeline.WakeAnimation();
-    for (auto& track : timeline.tracks) {
-      track->WakeAnimation();
-    }
-  }
+  DragZoomAction(gui::Pointer& pointer, Timeline& timeline);
+  ~DragZoomAction() override;
+  void Update() override;
 };
+DragZoomAction::DragZoomAction(gui::Pointer& pointer, Timeline& timeline)
+    : Action(pointer), timeline(timeline) {
+  timeline.drag_zoom_action = this;
+  last_y = pointer.PositionWithin(timeline).y;
+}
+DragZoomAction::~DragZoomAction() {
+  timeline.drag_zoom_action = nullptr;
+  timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
+  timeline.WakeAnimation();
+  for (auto& track : timeline.tracks) {
+    track->WakeAnimation();
+  }
+}
+void DragZoomAction::Update() {
+  float y = pointer.PositionWithin(timeline).y;
+  float delta_y = y - last_y;
+  last_y = y;
+  float factor = expf(delta_y * 60);
+  timeline.zoom.value *= factor;
+  timeline.zoom.target *= factor;
+  timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
+  timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
+  timeline.WakeAnimation();
+  for (auto& track : timeline.tracks) {
+    track->WakeAnimation();
+  }
+}
 
 SkPath WindowShape(int num_tracks) {
   ArcLine window = ArcLine({0, 0}, 0_deg);
@@ -1040,7 +1046,7 @@ animation::Phase Timeline::Tick(time::Timer& timer) {
   if (splice_action) {
     phase |= animation::Animating;
   }
-  splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
+  phase |= splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
   return phase;
 }
 
@@ -1657,6 +1663,14 @@ SkPath TrackBase::Shape() const {
   }
   return SkPath::Rect(rect.sk);
 }
+
+maf::Optional<Rect> TrackBase::TextureBounds() const {
+  if (timeline == nullptr || timeline->drag_zoom_action == nullptr) {
+    return FallbackWidget::TextureBounds();
+  }
+  return nullopt;
+}
+
 void TrackBase::Draw(SkCanvas& canvas) const { canvas.drawPath(Shape(), kTrackPaint); }
 
 void OnOffTrack::Draw(SkCanvas& canvas) const {

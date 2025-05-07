@@ -1601,9 +1601,9 @@ void Timeline::StopRecording() {
 
 void OnOffTrack::Splice(time::T current_offset, time::T splice_to) {
   double delta = splice_to - current_offset;
+  auto [current_offset_ge, current_offset_g] =
+      equal_range(timestamps.begin(), timestamps.end(), current_offset);
   if (delta < 0) {
-    auto [current_offset_ge, current_offset_g] =
-        equal_range(timestamps.begin(), timestamps.end(), current_offset);
     auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
     int begin = splice_to_ge - timestamps.begin();
     int end = current_offset_g - timestamps.begin();
@@ -1617,6 +1617,10 @@ void OnOffTrack::Splice(time::T current_offset, time::T splice_to) {
       timestamps[i] = timestamps[i + count] + delta;
     }
     timestamps.resize(timestamps.size() - count);
+  } else if (delta > 0) {
+    for (auto it = current_offset_ge; it != timestamps.end(); ++it) {
+      *it += delta;
+    }
   }
 }
 

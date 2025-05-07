@@ -1138,7 +1138,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
       t -= minutes * 60;
       int seconds = t;
       t -= seconds;
-      int milliseconds = t * 1000;
+      int milliseconds = round(t * 1000);
       return f("%02d:%02d:%02d.%03d s", hours, minutes, seconds, milliseconds);
     };
   } else if (max_track_length > 60) {
@@ -1147,21 +1147,21 @@ void Timeline::Draw(SkCanvas& canvas) const {
       t -= minutes * 60;
       int seconds = t;
       t -= seconds;
-      int milliseconds = t * 1000;
+      int milliseconds = round(t * 1000);
       return f("%02d:%02d.%03d s", minutes, seconds, milliseconds);
     };
   } else if (max_track_length >= 10) {
     format_time = [](time::T t) {
       int seconds = t;
       t -= seconds;
-      int milliseconds = t * 1000;
+      int milliseconds = round(t * 1000);
       return f("%02d.%03d s", seconds, milliseconds);
     };
   } else {
     format_time = [](time::T t) {
       int seconds = t;
       t -= seconds;
-      int milliseconds = t * 1000;
+      int milliseconds = round(t * 1000);
       return f("%d.%03d s", seconds, milliseconds);
     };
   }

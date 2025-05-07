@@ -86,6 +86,7 @@ struct SpliceAction : Action {
   Timeline& timeline;
   time::T splice_to;
   bool snapped = false;
+  bool cancel = true;
   SpliceAction(gui::Pointer& pointer, Timeline& timeline);
   ~SpliceAction();
   void Update() override;

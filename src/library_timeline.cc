@@ -584,13 +584,77 @@ static float XAtTime(const Timeline& timeline, time::T t) {
 }
 
 SkPath SplicerShape(int num_tracks, float current_pos_ratio) {
-  float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
+  static const SkPath splicer_shape = []() {
+    float height = 5_mm;
+    float width = 8_mm;
 
-  float bottom_y = -(kMarginAroundTracks * 2 + kTrackHeight * num_tracks +
-                     kTrackMargin * max(0, num_tracks - 1) + kRulerHeight);
+    float bottom = -height / 2;
+    float top = height / 2;
+    float middle_offset = width * 0.3f;
+    float edge_offset = width * 0.5f;
 
-  return SkPath::Circle(bridge_offset_x, bottom_y, 4_mm);
+    Vec2 bottom_center = {0, bottom};
+    Vec2 top_center = {0, top};
+    Vec2 left = {-middle_offset, 0};
+    Vec2 right = {middle_offset, 0};
+    Vec2 bottom_left = {-edge_offset, bottom};
+    Vec2 bottom_right = {edge_offset, bottom};
+    Vec2 top_left = {-edge_offset, top};
+    Vec2 top_right = {edge_offset, top};
+    float radius = 0.5_mm;
+
+    SkPath path;
+    // Start at bottom center
+    path.moveTo(bottom_center);
+    path.arcTo(bottom_right, (bottom_right + right) / 2, radius);
+    path.arcTo(right, (right + top_right) / 2, radius);
+    path.arcTo(top_right, top_center, radius);
+    path.arcTo(top_left, (top_left + left) / 2, radius);
+    path.arcTo(left, (left + bottom_left) / 2, radius);
+    path.arcTo(bottom_left, bottom_center, radius);
+    path.close();
+
+    return path;
+  }();
+
+  float x = BridgeOffsetX(current_pos_ratio);
+
+  float y = -(kMarginAroundTracks * 2 + kTrackHeight * num_tracks +
+              kTrackMargin * max(0, num_tracks - 1) + kRulerHeight);
+  return splicer_shape.makeTransform(SkMatrix::Translate(x, y));
 }
+
+SkPath kScissorsIcon = PathFromSVG(
+    "m1.72 1.2a.96.65 52.31 00-.34.1.96.65 52.31 00.07 1.16.96.65 52.31 001.11.36.96.65 52.31 "
+    "00-.07-1.16.96.65 52.31 00-.77-.46zm-3.44-.05a.65.96 37.69 00-.77.46.65.96 37.69 00-.07 "
+    "1.16.65.96 37.69 001.11-.36.65.96 37.69 00.07-1.16.65.96 37.69 00-.34-.1zm4.18-5.06C2.34-2.78 "
+    "1.5-.77.81.28c.41.03.97-.18 1.93.81a1.78 1.22 52.31 01.09.1c.01.01.02.02.03.03l.01.02a1.78 "
+    "1.22 52.31 01.07.09 1.78 1.22 52.31 01.12 2.15A1.78 1.22 52.31 011 2.82a1.78 1.22 52.31 "
+    "01-.06-.09l-.96-1.3-.92 1.25a1.22 1.78 37.69 01-.06.09 1.22 1.78 37.69 01-2.06.66 1.22 1.78 "
+    "37.69 01.12-2.15 1.22 1.78 37.69 01.07-.1l.01-.01c.01-.02.02-.02.03-.03a1.22 1.78 37.69 "
+    "01.09-.1c.91-.95 1.46-.8 1.86-.8-.67-1.08-1.47-3.01-1.58-4.1L-.02-.51l2.48-3.4z",
+    SVGUnit_Millimeters);
+
+SkPath kCancelIcon = PathFromSVG(
+    "m-2.68-1.7c0 .1.7.85 1.55 1.7-.84.86-1.54 1.62-1.55 1.69-.01.18.76.98.98.98.09 0 .84-.72 "
+    "1.69-1.56.87.84 1.63 1.56 1.7 1.56.18.01.99-.76.98-.98 0-.09-.72-.85-1.57-1.7.84-.86 "
+    "1.55-1.61 1.57-1.69.05-.2-.73-.98-.98-.98-.1 0-.86.71-1.71 "
+    "1.56-.85-.83-1.6-1.54-1.76-1.55-.16-.01-.89.73-.89.97z",
+    SVGUnit_Millimeters);
+
+SkPath kPlusIcon = PathFromSVG(
+    "M-.6859-3.0901C-.5162-3.2598.5233-3.2668.6293-3.1466.7354-3.0264.7637-1.994.7778-.8061c1.2021-"
+    "0 2.2415.0354 2.3122.1061.1768.1768.1768 1.2799 0 1.3859C3.0193.7283 "
+    "1.987.7566.7849.7707.7849 1.9728.7566 3.0193.693 3.083c-.1485.1626-1.2657.1344-1.3859 "
+    "0C-.7425 3.0335-.7707 "
+    "1.987-.792.7778-1.987.7707-3.0264.7495-3.0901.6859-3.2456.5303-3.2244-.5798-3.0901-.7-3.0335-."
+    "7425-2.0011-.7849-.799-.799c-0-1.2021.0354-2.2274.1061-2.2981Z",
+    SVGUnit_Millimeters);
+
+SkPath kMinusIcon = PathFromSVG(
+    "M-3.09.69C-3.26.52-3.27-.52-3.15-.63S-1.99-.76.77-.78c1.2 0 2.25.02 2.31.09.17.15.14 1.26 0 "
+    "1.38C3.03.74 1.99.77-.8.8-2 .8-3.03.76-3.1.69Z",
+    SVGUnit_Millimeters);
 
 SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
   float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
@@ -800,16 +864,18 @@ SpliceAction::~SpliceAction() {
   timeline.splice_action = nullptr;
   auto current_offset = CurrentOffset(timeline, now);
 
-  // Delete stuff between splice_to and current_offset
-  int num_tracks = timeline.tracks.size();
-  for (int i = 0; i < num_tracks; ++i) {
-    auto& track = timeline.tracks[i];
-    track->Splice(current_offset, splice_to);
-    track->WakeAnimation();
-  }
-  if (splice_to < current_offset) {
-    timeline.timeline_length -= current_offset - splice_to;
-    OffsetPosRatio(timeline, splice_to - current_offset, now);
+  if (!cancel) {
+    // Delete stuff between splice_to and current_offset
+    int num_tracks = timeline.tracks.size();
+    for (int i = 0; i < num_tracks; ++i) {
+      auto& track = timeline.tracks[i];
+      track->Splice(current_offset, splice_to);
+      track->WakeAnimation();
+    }
+    if (splice_to < current_offset) {
+      timeline.timeline_length -= current_offset - splice_to;
+      OffsetPosRatio(timeline, splice_to - current_offset, now);
+    }
   }
   timeline.WakeAnimation();
 }
@@ -824,7 +890,9 @@ void SpliceAction::Update() {
   if (SplicerShape(num_tracks, current_pos_ratio).contains(pos.x, pos.y)) {
     new_splice_to = TimeAtX(timeline, bridge_offset_x);
     new_snapped = true;
+    cancel = true;
   } else {
+    cancel = false;
     new_splice_to = TimeAtX(timeline, pos.x);
     if (pos.x < bridge_offset_x) {
       auto track_index = TrackIndexFromY(pos.y);
@@ -1306,7 +1374,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
     window_path.toggleInverseFillType();
     canvas.drawPath(window_path, paint);
   }
-  {
+  {  // Bridge
     float x = BridgeOffsetX(current_pos_ratio);
     float bottom_y = -(kMarginAroundTracks * 2 + kTrackHeight * tracks.size() +
                        kTrackMargin * max(0, (int)tracks.size() - 1));
@@ -1343,6 +1411,49 @@ void Timeline::Draw(SkCanvas& canvas) const {
 
     canvas.drawPath(bridge_shape, bridge_stroke_paint);
 
+    canvas.restore();
+  }
+  {  // Splicer
+    canvas.save();
+    const static SkPaint kSplicerPaint = []() {
+      SkPaint paint = kBridgeHandlePaint;
+      // paint.setColor("#5d1e0a"_color);
+      paint.setImageFilter(
+          SkImageFilters::DropShadow(0, 0, 0.2_mm, 0.2_mm, "#000000"_color, nullptr));
+      return paint;
+    }();
+    auto splicer_shape = SplicerShape(tracks.size(), current_pos_ratio);
+    canvas.drawPath(splicer_shape, kSplicerPaint);
+
+    canvas.clipPath(splicer_shape);
+
+    SkPaint splicer_stroke_paint;
+    splicer_stroke_paint.setColor("#5d1e0a"_color);
+    splicer_stroke_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
+    splicer_shape.toggleInverseFillType();
+    canvas.drawPath(splicer_shape, splicer_stroke_paint);
+
+    canvas.restore();
+
+    SkPaint icon_paint;
+    icon_paint.setColor("#ffffff"_color);
+    canvas.save();
+    canvas.translate(bridge_offset_x, -window_height + kRulerHeight);
+    canvas.scale(0.5, 0.5);
+    auto icon = kScissorsIcon;
+    if (splice_action) {
+      if (splice_action->cancel) {
+        icon = kCancelIcon;
+      } else {
+        auto true_splice_x = XAtTime(*this, splice_action->splice_to);
+        if (true_splice_x > bridge_offset_x) {
+          icon = kPlusIcon;
+        } else {
+          icon = kMinusIcon;
+        }
+      }
+    }
+    canvas.drawPath(icon, icon_paint);
     canvas.restore();
   }
   {  // Zoom dial
@@ -1419,14 +1530,6 @@ void Timeline::Draw(SkCanvas& canvas) const {
       tick = prev;
     }
   }
-
-  const static SkPaint kSplicerPaint = []() {
-    SkPaint paint;
-    paint.setColor("#fbf9f3"_color);
-    return paint;
-  }();
-  auto splicer_shape = SplicerShape(tracks.size(), current_pos_ratio);
-  canvas.drawPath(splicer_shape, kSplicerPaint);
 
   canvas.restore();  // unclip
 }

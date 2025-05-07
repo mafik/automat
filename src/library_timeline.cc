@@ -743,6 +743,19 @@ static Optional<time::T> SnapToTrack(Timeline& timeline, Vec2 pos) {
   return nullopt;
 }
 
+static Optional<time::T> SnapToBottomRuler(Timeline& timeline, Vec2 pos) {
+  int num_tracks = timeline.tracks.size();
+  float window_height = WindowHeight(num_tracks);
+  if (pos.y > -window_height && pos.y < -window_height + kRulerHeight) {
+    float zoom = timeline.zoom.target;
+    double zoom_log = log10(zoom / 200.0);
+    double tick_mult = pow(10, ceil(zoom_log));
+    auto time_at_x = TimeAtX(timeline, pos.x);
+    return roundf(time_at_x / tick_mult) * tick_mult;
+  }
+  return nullopt;
+}
+
 struct DragBridgeAction : Action {
   float press_offset_x;
   Timeline& timeline;
@@ -756,8 +769,9 @@ struct DragBridgeAction : Action {
   void Update() override {
     Vec2 pos = pointer.PositionWithin(timeline);
     pos.x -= press_offset_x;
-    auto snapped_time = SnapToTrack(timeline, pos);
-    if (snapped_time) {
+    if (auto snapped_time = SnapToTrack(timeline, pos)) {
+      SetOffset(timeline, *snapped_time, pointer.root_widget.timer.now);
+    } else if (auto snapped_time = SnapToBottomRuler(timeline, pos)) {
       SetOffset(timeline, *snapped_time, pointer.root_widget.timer.now);
     } else {
       SetPosRatio(timeline, PosRatioFromBridgeOffsetX(pos.x), pointer.root_widget.timer.now);
@@ -950,18 +964,13 @@ void SpliceAction::Update() {
 
     new_splice_to = TimeAtX(timeline, pos.x);
     if (pos.x < bridge_offset_x) {
-      auto snapped_time = SnapToTrack(timeline, pos);
-      if (snapped_time) {
+      if (auto snapped_time = SnapToTrack(timeline, pos)) {
         new_splice_to = *snapped_time;
         new_snapped = true;
       }
     }
-    float window_height = WindowHeight(num_tracks);
-    if (pos.y > -window_height && pos.y < -window_height + kRulerHeight) {
-      float zoom = timeline.zoom.target;
-      float zoom_log = log10f(zoom / 200);
-      float tick_mult = powf(10, ceilf(zoom_log));
-      new_splice_to = roundf(new_splice_to / tick_mult) * tick_mult;
+    if (auto snapped_time = SnapToBottomRuler(timeline, pos)) {
+      new_splice_to = *snapped_time;
       new_snapped = true;
     }
     new_splice_to = max<time::T>(0, new_splice_to);

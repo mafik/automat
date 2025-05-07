@@ -1132,6 +1132,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
   function<Str(time::T)> format_time;
   if (max_track_length > 3600) {
     format_time = [](time::T t) {
+      t = round(t * 1000) / 1000;
       int hours = t / 3600;
       t -= hours * 3600;
       int minutes = t / 60;
@@ -1143,6 +1144,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
     };
   } else if (max_track_length > 60) {
     format_time = [](time::T t) {
+      t = round(t * 1000) / 1000;
       int minutes = t / 60;
       t -= minutes * 60;
       int seconds = t;
@@ -1152,6 +1154,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
     };
   } else if (max_track_length >= 10) {
     format_time = [](time::T t) {
+      t = round(t * 1000) / 1000;
       int seconds = t;
       t -= seconds;
       int milliseconds = round(t * 1000);
@@ -1159,6 +1162,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
     };
   } else {
     format_time = [](time::T t) {
+      t = round(t * 1000) / 1000;
       int seconds = t;
       t -= seconds;
       int milliseconds = round(t * 1000);

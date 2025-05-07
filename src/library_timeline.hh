@@ -116,6 +116,8 @@ struct Timeline : LiveObject,
 
   mutable animation::Approach<> zoom;  // stores the time in seconds
   mutable animation::SpringV2<float> splice_wiggle;
+  mutable float bridge_wiggle_s;
+  bool bridge_snapped = false;
 
   enum State { kPaused, kPlaying, kRecording } state;
   time::T timeline_length = 0;
@@ -144,7 +146,7 @@ struct Timeline : LiveObject,
 
   Timeline();
   Timeline(const Timeline&);
-  void UpdateChildTransform();
+  void UpdateChildTransform(time::SteadyPoint now);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;

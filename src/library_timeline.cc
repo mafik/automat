@@ -400,7 +400,7 @@ OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
   if (auto h = here.lock()) {
     h->InvalidateConnectionWidgets(true, true);
   }
-  UpdateChildTransform();
+  UpdateChildTransform(time::SteadyNow());
   return *dynamic_cast<OnOffTrack*>(tracks.back().get());
 }
 
@@ -413,7 +413,7 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
   for (int i = 0; i < other.track_args.size(); ++i) {
     AddTrackArg(*this, i, other.track_args[i]->name);
   }
-  UpdateChildTransform();
+  UpdateChildTransform(time::SteadyNow());
 }
 
 string_view Timeline::Name() const { return "Timeline"; }
@@ -757,7 +757,9 @@ static Optional<time::T> SnapToBottomRuler(Timeline& timeline, Vec2 pos, time::T
     if (isnan(time_at_x)) {
       time_at_x = TimeAtX(timeline, pos.x);
     }
-    return round(time_at_x / tick_mult) * tick_mult;
+    if (time_at_x >= 0 && time_at_x < timeline.timeline_length) {
+      return round(time_at_x / tick_mult) * tick_mult;
+    }
   }
   return nullopt;
 }
@@ -771,17 +773,30 @@ struct DragBridgeAction : Action {
     float initial_pos_ratio = CurrentPosRatio(timeline);
     float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
     press_offset_x = initial_x - initial_bridge_x;
+    timeline.bridge_snapped = false;
   }
+  ~DragBridgeAction() override { timeline.bridge_snapped = false; }
   void Update() override {
+    auto now = pointer.root_widget.timer.now;
     Vec2 pos = pointer.PositionWithin(timeline);
     pos.x -= press_offset_x;
-    if (auto snapped_time = SnapToTrack(timeline, pos)) {
-      SetOffset(timeline, *snapped_time, pointer.root_widget.timer.now);
-    } else if (auto snapped_time = SnapToBottomRuler(timeline, pos)) {
-      SetOffset(timeline, *snapped_time, pointer.root_widget.timer.now);
+    auto current_offset = CurrentOffset(timeline, now);
+    auto time_at_x = PosRatioFromBridgeOffsetX(pos.x) * timeline.MaxTrackLength();
+    if (auto snapped_time = SnapToTrack(timeline, pos, time_at_x)) {
+      timeline.bridge_wiggle_s += current_offset - *snapped_time;
+      timeline.bridge_snapped = true;
+      time_at_x = *snapped_time;
+    } else if (auto snapped_time = SnapToBottomRuler(timeline, pos, time_at_x)) {
+      timeline.bridge_wiggle_s += current_offset - *snapped_time;
+      timeline.bridge_snapped = true;
+      time_at_x = *snapped_time;
     } else {
-      SetPosRatio(timeline, PosRatioFromBridgeOffsetX(pos.x), pointer.root_widget.timer.now);
+      if (timeline.bridge_snapped) {
+        timeline.bridge_wiggle_s += current_offset - time_at_x;
+      }
+      timeline.bridge_snapped = false;
     }
+    SetOffset(timeline, time_at_x, now);
   }
 };
 
@@ -794,8 +809,11 @@ struct DragTimelineAction : Action {
     Vec2 pos = pointer.PositionWithin(timeline);
     initial_bridge_offset = CurrentOffset(timeline, pointer.root_widget.timer.now);
     initial_x = pos.x;
+    timeline.bridge_snapped = false;
   }
+  ~DragTimelineAction() override { timeline.bridge_snapped = false; }
   void Update() override {
+    auto now = pointer.root_widget.timer.now;
     Vec2 pos = pointer.PositionWithin(timeline);
     float x = pos.x;
     float distance_to_seconds = DistanceToSeconds(timeline);
@@ -811,12 +829,22 @@ struct DragTimelineAction : Action {
     }
 
     auto time_at_x = initial_bridge_offset - (x - initial_x) * scaling_factor;
+    auto current_offset = CurrentOffset(timeline, now);
     if (auto snapped_time = SnapToTrack(timeline, pos, time_at_x, distance_to_seconds)) {
       time_at_x = *snapped_time;
+      timeline.bridge_wiggle_s += current_offset - *snapped_time;
+      timeline.bridge_snapped = true;
     } else if (auto snapped_time = SnapToBottomRuler(timeline, pos, time_at_x)) {
       time_at_x = *snapped_time;
+      timeline.bridge_wiggle_s += current_offset - *snapped_time;
+      timeline.bridge_snapped = true;
+    } else {
+      if (timeline.bridge_snapped) {
+        timeline.bridge_wiggle_s += current_offset - time_at_x;
+      }
+      timeline.bridge_snapped = false;
     }
-    SetOffset(timeline, time_at_x, pointer.root_widget.timer.now);
+    SetOffset(timeline, time_at_x, now);
   }
 };
 
@@ -1042,11 +1070,12 @@ animation::Phase Timeline::Tick(time::Timer& timer) {
     phase |= animation::Animating;
   }
   phase |= zoom.Tick(timer);
-  UpdateChildTransform();
   if (splice_action) {
     phase |= animation::Animating;
   }
   phase |= splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
+  phase |= animation::ExponentialApproach(0, timer.d, 0.05, bridge_wiggle_s);
+  UpdateChildTransform(timer.now);
   return phase;
 }
 
@@ -1096,8 +1125,9 @@ void Timeline::Draw(SkCanvas& canvas) const {
   constexpr float PI = numbers::pi;
 
   time::T max_track_length = MaxTrackLength();
-  time::T current_offset = CurrentOffset(*this, time::SteadyNow());
-  float current_pos_ratio = CurrentPosRatio(*this);
+  time::T current_offset = clamp<time::T>(CurrentOffset(*this, time::SteadyNow()) + bridge_wiggle_s,
+                                          0, max_track_length);
+  float current_pos_ratio = current_offset / max_track_length;
 
   function<Str(time::T)> format_time;
   if (max_track_length > 3600) {
@@ -1629,11 +1659,13 @@ void Timeline::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   }
 }
 
-void Timeline::UpdateChildTransform() {
+void Timeline::UpdateChildTransform(time::SteadyPoint now) {
   float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
-  float track_width = MaxTrackLength() / distance_to_seconds;
+  auto max_track_length = MaxTrackLength();
+  float track_width = max_track_length / distance_to_seconds;
 
-  float current_pos_ratio = CurrentPosRatio(*this);
+  float current_pos_ratio =
+      clamp<time::T>((CurrentOffset(*this, now) + bridge_wiggle_s) / max_track_length, 0, 1);
 
   float track_offset_x0 = kRulerLength / 2;
   float track_offset_x1 = track_width - kRulerLength / 2;

@@ -709,19 +709,21 @@ SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
   return bridge_handle;
 }
 
-static Optional<time::T> SnapToTrack(Timeline& timeline, Vec2 pos) {
+static Optional<time::T> SnapToTrack(Timeline& timeline, Vec2 pos, time::T time_at_x = NAN,
+                                     float distance_to_seconds = NAN) {
   auto track_index = TrackIndexFromY(pos.y);
   if (track_index >= 0 && track_index < timeline.tracks.size()) {
     auto& track = timeline.tracks[track_index];
     auto& timestamps = track->timestamps;
-    auto time_at_x = TimeAtX(timeline, pos.x);
+    if (isnan(time_at_x)) {
+      time_at_x = TimeAtX(timeline, pos.x);
+    }
     auto last = upper_bound(timestamps.begin(), timestamps.end(), time_at_x);
     int right_i = last - timestamps.begin();
-    float closest_dist = INFINITY;
+    time::T closest_dist = INFINITY;
     time::T closest_t = NAN;
     if (right_i >= 0 && right_i < timestamps.size()) {
-      float right_x = XAtTime(timeline, timestamps[right_i]);
-      float right_dist = fabsf(pos.x - right_x);
+      time::T right_dist = fabs(time_at_x - timestamps[right_i]);
       if (right_dist < closest_dist) {
         closest_dist = right_dist;
         closest_t = timestamps[right_i];
@@ -729,29 +731,33 @@ static Optional<time::T> SnapToTrack(Timeline& timeline, Vec2 pos) {
     }
     int left_i = right_i - 1;
     if (left_i >= 0 && left_i < timestamps.size()) {
-      float left_x = XAtTime(timeline, timestamps[left_i]);
-      float left_dist = fabsf(pos.x - left_x);
+      time::T left_dist = fabs(time_at_x - timestamps[left_i]);
       if (left_dist < closest_dist) {
         closest_dist = left_dist;
         closest_t = timestamps[left_i];
       }
     }
-    if (closest_dist < 1_mm) {
+    if (isnan(distance_to_seconds)) {
+      distance_to_seconds = DistanceToSeconds(timeline);
+    }
+    if (closest_dist < 1_mm * distance_to_seconds) {
       return closest_t;
     }
   }
   return nullopt;
 }
 
-static Optional<time::T> SnapToBottomRuler(Timeline& timeline, Vec2 pos) {
+static Optional<time::T> SnapToBottomRuler(Timeline& timeline, Vec2 pos, time::T time_at_x = NAN) {
   int num_tracks = timeline.tracks.size();
   float window_height = WindowHeight(num_tracks);
   if (pos.y > -window_height && pos.y < -window_height + kRulerHeight) {
     float zoom = timeline.zoom.target;
     double zoom_log = log10(zoom / 200.0);
     double tick_mult = pow(10, ceil(zoom_log));
-    auto time_at_x = TimeAtX(timeline, pos.x);
-    return roundf(time_at_x / tick_mult) * tick_mult;
+    if (isnan(time_at_x)) {
+      time_at_x = TimeAtX(timeline, pos.x);
+    }
+    return round(time_at_x / tick_mult) * tick_mult;
   }
   return nullopt;
 }
@@ -781,15 +787,17 @@ struct DragBridgeAction : Action {
 
 struct DragTimelineAction : Action {
   Timeline& timeline;
-  float last_x;
+  time::T initial_bridge_offset;
+  float initial_x;
   DragTimelineAction(gui::Pointer& pointer, Timeline& timeline)
       : Action(pointer), timeline(timeline) {
-    last_x = pointer.PositionWithin(timeline).x;
+    Vec2 pos = pointer.PositionWithin(timeline);
+    initial_bridge_offset = CurrentOffset(timeline, pointer.root_widget.timer.now);
+    initial_x = pos.x;
   }
   void Update() override {
-    float x = pointer.PositionWithin(timeline).x;
-    float delta_x = x - last_x;
-    last_x = x;
+    Vec2 pos = pointer.PositionWithin(timeline);
+    float x = pos.x;
     float distance_to_seconds = DistanceToSeconds(timeline);
     float max_track_length = timeline.MaxTrackLength();
     float denominator = max_track_length - kRulerLength * distance_to_seconds;
@@ -801,7 +809,14 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    AdjustOffset(timeline, -delta_x * scaling_factor, pointer.root_widget.timer.now);
+
+    auto time_at_x = initial_bridge_offset - (x - initial_x) * scaling_factor;
+    if (auto snapped_time = SnapToTrack(timeline, pos, time_at_x, distance_to_seconds)) {
+      time_at_x = *snapped_time;
+    } else if (auto snapped_time = SnapToBottomRuler(timeline, pos, time_at_x)) {
+      time_at_x = *snapped_time;
+    }
+    SetOffset(timeline, time_at_x, pointer.root_widget.timer.now);
   }
 };
 
@@ -964,7 +979,7 @@ void SpliceAction::Update() {
 
     new_splice_to = TimeAtX(timeline, pos.x);
     if (pos.x < bridge_offset_x) {
-      if (auto snapped_time = SnapToTrack(timeline, pos)) {
+      if (auto snapped_time = SnapToTrack(timeline, pos, new_splice_to)) {
         new_splice_to = *snapped_time;
         new_snapped = true;
       }

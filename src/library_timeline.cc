@@ -501,7 +501,22 @@ static time::T CurrentOffset(Timeline& timeline, time::SteadyPoint now) {
   }
 }
 
-void OffsetPosRatio(Timeline& timeline, time::T offset, time::SteadyPoint now) {
+static void SetOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
+  offset = clamp<time::T>(offset, 0, timeline.MaxTrackLength());
+  if (timeline.state == Timeline::kPlaying) {
+    TimelineCancelScheduledAt(timeline);
+    timeline.playing.started_at = now - time::Duration(offset);
+    if (auto h = timeline.here.lock()) {
+      TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
+    }
+    TimelineScheduleAt(timeline, now);
+  } else if (timeline.state == Timeline::kPaused) {
+    timeline.paused.playback_offset = offset;
+  }
+  timeline.WakeAnimation();
+}
+
+void AdjustOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
   if (timeline.state == Timeline::kPlaying) {
     TimelineCancelScheduledAt(timeline);
     timeline.playing.started_at -= time::Duration(offset);
@@ -694,6 +709,40 @@ SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
   return bridge_handle;
 }
 
+static Optional<time::T> SnapToTrack(Timeline& timeline, Vec2 pos) {
+  auto track_index = TrackIndexFromY(pos.y);
+  if (track_index >= 0 && track_index < timeline.tracks.size()) {
+    auto& track = timeline.tracks[track_index];
+    auto& timestamps = track->timestamps;
+    auto time_at_x = TimeAtX(timeline, pos.x);
+    auto last = upper_bound(timestamps.begin(), timestamps.end(), time_at_x);
+    int right_i = last - timestamps.begin();
+    float closest_dist = INFINITY;
+    time::T closest_t = NAN;
+    if (right_i >= 0 && right_i < timestamps.size()) {
+      float right_x = XAtTime(timeline, timestamps[right_i]);
+      float right_dist = fabsf(pos.x - right_x);
+      if (right_dist < closest_dist) {
+        closest_dist = right_dist;
+        closest_t = timestamps[right_i];
+      }
+    }
+    int left_i = right_i - 1;
+    if (left_i >= 0 && left_i < timestamps.size()) {
+      float left_x = XAtTime(timeline, timestamps[left_i]);
+      float left_dist = fabsf(pos.x - left_x);
+      if (left_dist < closest_dist) {
+        closest_dist = left_dist;
+        closest_t = timestamps[left_i];
+      }
+    }
+    if (closest_dist < 1_mm) {
+      return closest_t;
+    }
+  }
+  return nullopt;
+}
+
 struct DragBridgeAction : Action {
   float press_offset_x;
   Timeline& timeline;
@@ -705,9 +754,14 @@ struct DragBridgeAction : Action {
     press_offset_x = initial_x - initial_bridge_x;
   }
   void Update() override {
-    float x = pointer.PositionWithin(timeline).x;
-    float new_bridge_x = x - press_offset_x;
-    SetPosRatio(timeline, PosRatioFromBridgeOffsetX(new_bridge_x), pointer.root_widget.timer.now);
+    Vec2 pos = pointer.PositionWithin(timeline);
+    pos.x -= press_offset_x;
+    auto snapped_time = SnapToTrack(timeline, pos);
+    if (snapped_time) {
+      SetOffset(timeline, *snapped_time, pointer.root_widget.timer.now);
+    } else {
+      SetPosRatio(timeline, PosRatioFromBridgeOffsetX(pos.x), pointer.root_widget.timer.now);
+    }
   }
 };
 
@@ -733,7 +787,7 @@ struct DragTimelineAction : Action {
     } else {
       scaling_factor = 0;
     }
-    OffsetPosRatio(timeline, -delta_x * scaling_factor, pointer.root_widget.timer.now);
+    AdjustOffset(timeline, -delta_x * scaling_factor, pointer.root_widget.timer.now);
   }
 };
 
@@ -874,7 +928,7 @@ SpliceAction::~SpliceAction() {
     }
     if (splice_to < current_offset) {
       timeline.timeline_length -= current_offset - splice_to;
-      OffsetPosRatio(timeline, splice_to - current_offset, now);
+      AdjustOffset(timeline, splice_to - current_offset, now);
     }
   }
   timeline.WakeAnimation();
@@ -893,37 +947,13 @@ void SpliceAction::Update() {
     cancel = true;
   } else {
     cancel = false;
+
     new_splice_to = TimeAtX(timeline, pos.x);
     if (pos.x < bridge_offset_x) {
-      auto track_index = TrackIndexFromY(pos.y);
-      if (track_index >= 0 && track_index < num_tracks) {
-        auto& track = timeline.tracks[track_index];
-        auto& timestamps = track->timestamps;
-        auto [first, last] = equal_range(timestamps.begin(), timestamps.end(), new_splice_to);
-        int right_i = last - timestamps.begin();
-        float closest_dist = INFINITY;
-        time::T closest_t = NAN;
-        if (right_i >= 0 && right_i < timestamps.size()) {
-          float right_x = XAtTime(timeline, timestamps[right_i]);
-          float right_dist = fabsf(pos.x - right_x);
-          if (right_dist < closest_dist) {
-            closest_dist = right_dist;
-            closest_t = timestamps[right_i];
-          }
-        }
-        int left_i = right_i - 1;
-        if (left_i >= 0 && left_i < timestamps.size()) {
-          float left_x = XAtTime(timeline, timestamps[left_i]);
-          float left_dist = fabsf(pos.x - left_x);
-          if (left_dist < closest_dist) {
-            closest_dist = left_dist;
-            closest_t = timestamps[left_i];
-          }
-        }
-        if (closest_dist < 1_mm) {
-          new_splice_to = closest_t;
-          new_snapped = true;
-        }
+      auto snapped_time = SnapToTrack(timeline, pos);
+      if (snapped_time) {
+        new_splice_to = *snapped_time;
+        new_snapped = true;
       }
     }
     float window_height = WindowHeight(num_tracks);

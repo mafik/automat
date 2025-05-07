@@ -490,7 +490,7 @@ static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint
   }
 }
 
-static time::T CurrentOffset(Timeline& timeline, time::SteadyPoint now) {
+static time::T CurrentOffset(const Timeline& timeline, time::SteadyPoint now) {
   switch (timeline.state) {
     case Timeline::kPlaying:
       return (now - timeline.playing.started_at).count();
@@ -1092,6 +1092,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
   constexpr float PI = numbers::pi;
 
   time::T max_track_length = MaxTrackLength();
+  time::T current_offset = CurrentOffset(*this, time::SteadyNow());
   float current_pos_ratio = CurrentPosRatio(*this);
 
   function<Str(time::T)> format_time;
@@ -1132,8 +1133,8 @@ void Timeline::Draw(SkCanvas& canvas) const {
   }
 
   Str total_text = format_time(max_track_length);
-  Str current_text = format_time(current_pos_ratio * max_track_length);
-  Str remaining_text = format_time((1 - current_pos_ratio) * max_track_length);
+  Str current_text = format_time(current_offset);
+  Str remaining_text = format_time(max_track_length - current_offset);
 
   auto& lcd_font = LcdFont();
   auto& font = GetFont();

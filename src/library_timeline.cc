@@ -955,10 +955,8 @@ SpliceAction::~SpliceAction() {
       track->Splice(current_offset, splice_to);
       track->WakeAnimation();
     }
-    if (splice_to < current_offset) {
-      timeline.timeline_length -= current_offset - splice_to;
-      AdjustOffset(timeline, splice_to - current_offset, now);
-    }
+    timeline.timeline_length += splice_to - current_offset;
+    AdjustOffset(timeline, splice_to - current_offset, now);
   }
   timeline.WakeAnimation();
 }

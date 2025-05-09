@@ -47,6 +47,9 @@ struct Regs {
   static constexpr int kNumRegisters = 15;
 
   uint64_t& operator[](int index) { return reinterpret_cast<uint64_t*>(this)[index]; }
+  const uint64_t& operator[](int index) const {
+    return reinterpret_cast<const uint64_t*>(this)[index];
+  }
 };
 
 enum class StopType : uint8_t {

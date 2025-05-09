@@ -2004,7 +2004,7 @@ void OnOffTrack::DeserializeState(Location& l, Deserializer& d) {
 
 void Timeline::DeserializeState(Location& l, Deserializer& d) {
   Status status;
-  for (auto key : ObjectView(d, status)) {
+  for (auto& key : ObjectView(d, status)) {
     if (key == "tracks") {
       for (auto elem : ArrayView(d, status)) {
         Str track_name = "";

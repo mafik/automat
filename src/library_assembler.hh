@@ -125,6 +125,9 @@ struct Assembler : LiveObject, LongRunning, Container {
   Container* AsContainer() override { return this; }
 
   Ptr<Location> Extract(Object& descendant) override;
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
 };
 
 // Convenience function for updating the code with a vector of automat::library::Instruction.

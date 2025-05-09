@@ -149,6 +149,7 @@ Assembler::Assembler() {
 
 Assembler::~Assembler() {}
 
+// Should be called with Assembler's mutex held.
 static animation::Phase RefreshState(Assembler& assembler, time::T time) {
   if (assembler.mc_controller == nullptr) {
     return animation::Finished;
@@ -176,6 +177,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::T time) {
 }
 
 void Assembler::ExitCallback(mc::CodePoint code_point) {
+  auto lock = std::lock_guard(mutex);
   RefreshState(*this, time::SteadyNow().time_since_epoch().count());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
@@ -293,6 +295,7 @@ void Assembler::UpdateMachineCode() {
 }
 
 void Assembler::RunMachineCode(library::Instruction* entry_point) {
+  auto lock = std::lock_guard(mutex);
   {  // Mark instructions as "long running", using the assembler as the LongRunning object.
     auto here_ptr = here.lock();
     if (here_ptr) {
@@ -350,6 +353,62 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
     return loc;
   }
   return nullptr;
+}
+
+void Assembler::SerializeState(Serializer& writer, const char* key) const {
+  mc::Controller::State mc_state = {};
+  {
+    auto mut_this = const_cast<Assembler*>(this);
+    auto lock = std::lock_guard(mut_this->mutex);
+    Status ignore;
+    mc_controller->GetState(mc_state, ignore);
+  }
+  writer.Key(key);
+  writer.StartObject();
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    auto& reg = kRegisters[i];
+    if (mc_state.regs[i] == 0) continue;
+    writer.Key(reg.name.data(), reg.name.size());
+    auto hex_value = ValToHex(mc_state.regs[i]);
+    writer.String(hex_value.data(), hex_value.size());
+  }
+  // TODO: store currently executing instruction
+  writer.EndObject();
+}
+
+void Assembler::DeserializeState(Location& l, Deserializer& d) {
+  auto lock = std::lock_guard(mutex);
+  Status status;
+  for (auto& key : ObjectView(d, status)) {
+    bool found = false;
+    for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+      auto& reg = kRegisters[i];
+      if (key == reg.name) {
+        found = true;
+        Str hex_value;
+        d.Get(hex_value, status);
+        if (hex_value.size() != 16) {
+          AppendErrorMessage(status) += "Registers should have 16 hex digits";
+          continue;
+        }
+        static_assert(sizeof(state.regs[i]) == 8);
+        HexToBytesUnchecked(hex_value, (char*)&state.regs[i]);
+      }
+    }
+    if (!found) {
+      AppendErrorMessage(status) += "Unknown register name: " + key;
+    }
+  }
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+    return;
+  }
+
+  mc_controller->ChangeState([&](mc::Controller::State& mc_state) { mc_state = state; }, status);
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+    return;
+  }
 }
 
 AssemblerWidget::AssemblerWidget(WeakPtr<Assembler> assembler_weak)
@@ -647,6 +706,7 @@ animation::Phase RegisterWidget::Tick(time::Timer& timer) {
   if (auto register_obj = LockRegister()) {
     auto register_index = register_obj->register_index;
     if (auto assembler = register_obj->assembler_weak.lock()) {
+      auto lock = std::lock_guard(assembler->mutex);
       phase = RefreshState(*assembler, timer.NowSeconds());
       auto reg_value = assembler->state.regs[register_index];
     }

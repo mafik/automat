@@ -271,7 +271,7 @@ PersistentImage paper_texture = PersistentImage::MakeFromAsset(
     maf::embedded::assets_04_paper_C_grain_webp,
     PersistentImage::MakeArgs{.tile_x = SkTileMode::kRepeat, .tile_y = SkTileMode::kRepeat});
 
-struct Token {
+struct Instruction::Widget::Token {
   enum Tag : uint8_t {
     String,
     RegisterOperand,
@@ -292,6 +292,8 @@ struct Token {
     X86::CondCode fixed_cond;
   };
 };
+
+using Token = Instruction::Widget::Token;
 
 std::span<const Token> PrintInstruction(const mc::Inst& inst) {
   switch (inst.getOpcode()) {
@@ -3289,7 +3291,7 @@ animation::Phase Instruction::Widget::Tick(time::Timer& timer) {
   auto instruction = this->LockObject<Instruction>();
   auto& inst = instruction->mc_inst;
 
-  auto tokens = PrintInstruction(inst);
+  tokens = PrintInstruction(inst);
   auto& heavy_font = HeavyFont();
 
   // Measure the lines
@@ -3527,7 +3529,6 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   {
     // Contents
 
-    auto tokens = PrintInstruction(inst);
     auto& heavy_font = HeavyFont();
 
     SkPaint text_paint;

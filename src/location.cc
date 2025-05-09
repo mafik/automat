@@ -71,6 +71,9 @@ void Location::ClearError() {
 }
 
 Object* Location::Follow() {
+  if (object == nullptr) {
+    return nullptr;
+  }
   if (Pointer* ptr = object->AsPointer()) {
     return ptr->Follow(*this);
   }
@@ -200,6 +203,9 @@ animation::Phase Location::Tick(time::Timer& timer) {
 }
 
 void Location::Draw(SkCanvas& canvas) const {
+  if (object == nullptr) {
+    return;  // TODO: Draw a placeholder, we should support empty locations
+  }
   SkPath my_shape;
   auto object_widget = WidgetForObject();
   if (object) {

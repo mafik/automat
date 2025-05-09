@@ -150,6 +150,9 @@ Assembler::Assembler() {
 Assembler::~Assembler() {}
 
 static animation::Phase RefreshState(Assembler& assembler, time::T time) {
+  if (assembler.mc_controller == nullptr) {
+    return animation::Finished;
+  }
   if (time > assembler.last_state_refresh) {
     auto old_regs = assembler.state.regs;
     Status ignore;
@@ -279,6 +282,10 @@ void Assembler::UpdateMachineCode() {
   }
   auto instructions = FindInstructions(*here_ptr);
   Status status;
+  if (mc_controller == nullptr) {
+    ERROR_ONCE << "Unable to update Assembler: no mc_controller";
+    return;
+  }
   library::UpdateCode(*mc_controller, std::move(instructions), status);
   if (!OK(status)) {
     ERROR << "Failed to update Assembler: " << status;
@@ -748,6 +755,10 @@ void Register::SetText(Location& error_context, std::string_view text) {
     error_context.ReportError("Register is not connected to an assembler");
     return;
   }
+  if (assembler->mc_controller == nullptr) {
+    error_context.ReportError("Assembler is not connected to a mc_controller");
+    return;
+  }
   Status status;
   assembler->mc_controller->ChangeState(
       [&](mc::Controller::State& state) {
@@ -761,6 +772,22 @@ void Register::SetText(Location& error_context, std::string_view text) {
     return;
   }
   WakeWidgetsAnimation();
+}
+
+void Register::ConnectionAdded(Location& here, Connection& connection) {
+  if (&connection.argument == &register_assembler_arg) {
+    if (auto assembler = connection.to.As<Assembler>()) {
+      assembler_weak = assembler;
+    }
+  }
+  LiveObject::ConnectionAdded(here, connection);
+}
+
+void Register::ConnectionRemoved(Location& here, Connection& connection) {
+  if (&connection.argument == &register_assembler_arg) {
+    assembler_weak = {};
+  }
+  LiveObject::ConnectionRemoved(here, connection);
 }
 
 }  // namespace automat::library

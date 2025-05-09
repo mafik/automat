@@ -307,23 +307,19 @@ TimelineRunButton::TimelineRunButton(Timeline* timeline)
                                           .on_click = [this](gui::Pointer& p) { Activate(p); }})) {}
 
 void TimelineRunButton::Activate(gui::Pointer& p) {
-  LOG << "TimelineRunButton::Activate";
   switch (timeline->state) {
     case Timeline::kPlaying:
-      LOG << "Timeline is playing - Cancelling it!";
       timeline->Cancel();
       if (auto h = timeline->here.lock()) {
         h->long_running = nullptr;
       }
       break;
     case Timeline::kPaused:
-      LOG << "Timeline is paused - Scheduling it!";
       if (auto h = timeline->here.lock()) {
         h->ScheduleRun();
       }
       break;
     case Timeline::kRecording:
-      LOG << "Timeline is recording - Stopping!";
       timeline->StopRecording();
       break;
   }
@@ -1127,7 +1123,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
   time::T max_track_length = MaxTrackLength();
   time::T current_offset = clamp<time::T>(CurrentOffset(*this, time::SteadyNow()) + bridge_wiggle_s,
                                           0, max_track_length);
-  float current_pos_ratio = current_offset / max_track_length;
+  float current_pos_ratio = max_track_length == 0 ? 1 : current_offset / max_track_length;
 
   function<Str(time::T)> format_time;
   if (max_track_length > 3600) {
@@ -1756,7 +1752,6 @@ void Timeline::Cancel() {
 }
 
 void Timeline::OnRun(Location& here) {
-  LOG << "Timeline::OnRun";
   if (state != kPaused) {
     return;
   }

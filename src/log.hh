@@ -62,6 +62,12 @@ extern std::vector<Logger> loggers;
 #define ERROR maf::LogEntry(maf::LogLevel::Error, std::source_location::current())
 #define FATAL maf::LogEntry(maf::LogLevel::Fatal, std::source_location::current())
 
+#define ERROR_ONCE                                                                     \
+  static bool LOG_##__COUNTER__ = true;                                                \
+  maf::LogEntry((LOG_##__COUNTER__ ? (LOG_##__COUNTER__ = false, maf::LogLevel::Error) \
+                                   : maf::LogLevel::Ignore),                           \
+                std::source_location::current())
+
 const LogEntry& operator<<(const LogEntry&, StrView);
 const LogEntry& operator<<(const LogEntry&, Status& status);
 

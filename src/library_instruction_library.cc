@@ -164,7 +164,21 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 Ptr<Object> InstructionLibrary::Clone() const { return MakePtr<InstructionLibrary>(); }
 
-InstructionLibrary::Widget::Widget(WeakPtr<Object> object) { this->object = std::move(object); }
+InstructionLibrary::Widget::Widget(WeakPtr<Object> object) {
+  this->object = std::move(object);
+  for (int i = 0; i < std::size(x86::kCategories); ++i) {
+    if (category_states.size() <= i) {
+      category_states.push_back(CategoryState{
+          .growth = 0,
+      });
+      for (int j = 0; j < x86::kCategories[i].groups.size(); ++j) {
+        category_states.back().leaves.push_back(CategoryState::LeafState{
+            .growth = 0,
+        });
+      }
+    }
+  }
+}
 SkPath InstructionLibrary::Widget::Shape() const { return SkPath::Circle(0, 0, 10_cm); }
 
 constexpr float kRoseFanDegrees = 180;
@@ -409,19 +423,6 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
   }
 
   phase |= rotation_offset_t.SineTowards(rotation_offset_t_target, timer.d, 0.2);
-
-  for (int i = 0; i < std::size(x86::kCategories); ++i) {
-    if (category_states.size() <= i) {
-      category_states.push_back(CategoryState{
-          .growth = 0,
-      });
-      for (int j = 0; j < x86::kCategories[i].groups.size(); ++j) {
-        category_states.back().leaves.push_back(CategoryState::LeafState{
-            .growth = 0,
-        });
-      }
-    }
-  }
 
   for (int i = 0; i < category_states.size(); ++i) {
     auto& category = x86::kCategories[i];

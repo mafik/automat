@@ -94,6 +94,9 @@ struct Instruction : LiveObject, Runnable, Buffer {
     float scale = 1;
     llvm::SmallVector<Vec2, 10> token_position;
     llvm::SmallVector<float, 10> string_width_scale;
+    struct Token;
+
+    std::span<const Token> tokens;
 
     Widget(WeakPtr<Object> object);
 

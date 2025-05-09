@@ -10,6 +10,7 @@
 #include <leptonica/pix.h>
 
 #include "argument.hh"
+#include "control_flow.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "gui_constants.hh"
@@ -144,6 +145,37 @@ std::string Window::RunOCR() {
   return utf8_text;
 }
 
+#ifdef __linux__
+using WindowVisitor = std::function<ControlFlow(xcb_window_t window, xcb_window_t parent)>;
+static bool HasWMState(xcb_window_t window) {
+  auto property_reply = xcb::get_property(window, xcb::atom::WM_STATE, XCB_ATOM_ANY, 0, 0);
+  return property_reply->type != XCB_ATOM_NONE;
+}
+static void SearchWindows(xcb_window_t start, WindowVisitor visitor) {
+  std::deque<std::pair<xcb_window_t, xcb_window_t>> search_list;
+  search_list.push_back({start, XCB_WINDOW_NONE});
+  while (!search_list.empty()) {
+    // Pick the front window, search its children and if none of them has WM_STATE, add them to
+    // the queue.
+    auto curr = search_list.front();
+    search_list.pop_front();
+    if (curr.first == XCB_WINDOW_NONE) {
+      continue;
+    }
+    auto control_flow = visitor(curr.first, curr.second);
+    if (control_flow == ControlFlow::StopSearching) {
+      break;
+    } else if (control_flow == ControlFlow::SkipChildren) {
+      continue;
+    }
+    auto query_tree_reply = xcb::query_tree(curr.first);
+    for (auto child : std::ranges::reverse_view(xcb::query_tree_children(*query_tree_reply))) {
+      search_list.push_back({child, curr.first});
+    }
+  }
+}
+#endif
+
 struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabber {
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
@@ -195,6 +227,9 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     tesseract_text.clear();
     auto window = LockWindow();
     auto lock = std::lock_guard(window->mutex);
+    if (window_name != window->title) {
+      window_name = window->title;
+    }
     if (window->xcb_window == XCB_WINDOW_NONE) {
       window->capture.reset();
       return animation::Finished;
@@ -474,40 +509,19 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
     // Find the first window that has WM_STATE
     xcb_window_t found_window = XCB_WINDOW_NONE;
-    std::deque<xcb_window_t> search_list;
-    search_list.push_back(picked_window);
-    while (!search_list.empty()) {
-      // Pick the front window, search its children and if none of them has WM_STATE, add them to
-      // the queue.
-      auto curr = search_list.front();
-      search_list.pop_front();
-      if (curr == XCB_WINDOW_NONE) {
-        continue;
-      }
-
+    SearchWindows(picked_window, [&](xcb_window_t window, xcb_window_t parent) {
       if (kDebugWindowPicking) {
-        LOG << "Checking for WM_STATE: " << f("%x", curr);
+        LOG << "Checking for WM_STATE: " << f("%x", window);
       }
-      auto property_reply = xcb::get_property(curr, xcb::atom::WM_STATE, XCB_ATOM_ANY, 0, 0);
-      if (property_reply->type != XCB_ATOM_NONE) {
-        found_window = curr;
+      if (HasWMState(window)) {
         if (kDebugWindowPicking) {
           LOG << "Found!";
         }
-        break;
+        found_window = window;
+        return ControlFlow::StopSearching;
       }
-      auto query_tree_reply = xcb::query_tree(curr);
-      if (kDebugWindowPicking) {
-        LOG << "Contains " << query_tree_reply->children_len << " children";
-        LOG_Indent();
-      }
-      for (auto child : std::ranges::reverse_view(xcb::query_tree_children(*query_tree_reply))) {
-        search_list.push_back(child);
-      }
-      if (kDebugWindowPicking) {
-        LOG_Unindent();
-      }
-    }
+      return ControlFlow::VisitChildren;
+    });
     if (kDebugWindowPicking) {
       if (found_window != XCB_WINDOW_NONE) {
         auto name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
@@ -625,4 +639,65 @@ void Window::XSHMCapture::Capture(xcb_window_t xcb_window) {
   }
 }
 #endif
+
+void Window::AttachToTitle() {
+#ifdef __linux__
+  SearchWindows(xcb::screen->root, [&](xcb_window_t window, xcb_window_t parent) {
+    if (window == xcb::screen->root) {
+      return ControlFlow::VisitChildren;
+    }
+    auto name = xcb::GetPropertyString(window, xcb::atom::WM_NAME);
+    if (name != title) {
+      return ControlFlow::SkipChildren;
+    }
+    if (HasWMState(window)) {
+      xcb_window = window;
+      return ControlFlow::StopSearching;
+    }
+    return ControlFlow::VisitChildren;
+  });
+#endif
+}
+
+void Window::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+
+  writer.Key("title");
+  writer.String(title.data(), title.size());
+  writer.Key("x_min_ratio");
+  writer.Double(x_min_ratio);
+  writer.Key("x_max_ratio");
+  writer.Double(x_max_ratio);
+  writer.Key("y_min_ratio");
+  writer.Double(y_min_ratio);
+  writer.Key("y_max_ratio");
+  writer.Double(y_max_ratio);
+
+  writer.EndObject();
+}
+
+void Window::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  for (auto key : ObjectView(d, status)) {
+    if (key == "title") {
+      d.Get(title, status);
+    } else if (key == "x_min_ratio") {
+      d.Get(x_min_ratio, status);
+    } else if (key == "x_max_ratio") {
+      d.Get(x_max_ratio, status);
+    } else if (key == "y_min_ratio") {
+      d.Get(y_min_ratio, status);
+    } else if (key == "y_max_ratio") {
+      d.Get(y_max_ratio, status);
+    }
+  }
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+  }
+  if (!title.empty()) {
+    AttachToTitle();
+  }
+}
+
 }  // namespace automat::library

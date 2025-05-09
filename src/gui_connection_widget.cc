@@ -74,21 +74,24 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     }
 
     {  // Ray from the source to the target
-      Vec2 source = arg.GetLocation(from).location->position;
-      Vec2 diff = target - source;
-      float dist = Length(diff);
-      auto angle = SinCos::FromVec2(diff, dist);
-      SkPath path;
-      path.moveTo(source);
-      path.lineTo(target + Vec2::Polar((angle + 90_deg), radius));
-      path.lineTo(target + Vec2::Polar((angle - 90_deg), radius));
-      SkColor ray_colors[] = {"#ffffbe"_color, "#ffffbe00"_color};
-      Vec2 ray_positions[] = {source, target};
-      SkPaint ray_paint;
-      ray_paint.setShader(
-          SkGradientShader::MakeLinear(&ray_positions[0].sk, ray_colors, 0, 2, SkTileMode::kClamp));
-      ray_paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, 1_mm));
-      canvas.drawPath(path, ray_paint);
+      auto location_result = arg.GetLocation(from);
+      if (location_result.location) {
+        Vec2 source = location_result.location->position;
+        Vec2 diff = target - source;
+        float dist = Length(diff);
+        auto angle = SinCos::FromVec2(diff, dist);
+        SkPath path;
+        path.moveTo(source);
+        path.lineTo(target + Vec2::Polar((angle + 90_deg), radius));
+        path.lineTo(target + Vec2::Polar((angle - 90_deg), radius));
+        SkColor ray_colors[] = {"#ffffbe"_color, "#ffffbe00"_color};
+        Vec2 ray_positions[] = {source, target};
+        SkPaint ray_paint;
+        ray_paint.setShader(SkGradientShader::MakeLinear(&ray_positions[0].sk, ray_colors, 0, 2,
+                                                         SkTileMode::kClamp));
+        ray_paint.setMaskFilter(SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, 1_mm));
+        canvas.drawPath(path, ray_paint);
+      }
     }
 
     return;

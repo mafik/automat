@@ -55,6 +55,13 @@ struct Window : public Object, Runnable {
 
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here) override;
+
+  // Called after deserialization. Makes the window object attach its native handle to the window
+  // with the current title.
+  void AttachToTitle();
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
 };
 
 }  // namespace automat::library

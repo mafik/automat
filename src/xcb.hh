@@ -20,6 +20,7 @@ namespace atom {
   MACRO(WM_STATE)                        \
   MACRO(WM_PROTOCOLS)                    \
   MACRO(WM_DELETE_WINDOW)                \
+  MACRO(WM_NAME)                         \
   MACRO(_NET_ACTIVE_WINDOW)              \
   MACRO(_NET_WM_USER_TIME)               \
   MACRO(_NET_WM_STATE)                   \

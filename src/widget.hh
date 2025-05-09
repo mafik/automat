@@ -10,12 +10,10 @@
 #include <src/core/SkWriteBuffer.h>
 
 #include <cmath>
-#include <functional>
 #include <memory>
 
 #include "action.hh"
 #include "animation.hh"
-#include "control_flow.hh"
 #include "key.hh"
 #include "menu.hh"
 #include "optional.hh"
@@ -37,8 +35,6 @@ struct Widget;
 struct RootWidget;
 
 maf::Str ToStr(Ptr<Widget> widget);
-
-using Visitor = std::function<ControlFlow(maf::Span<Ptr<Widget>>)>;
 
 // Transform from the RootWidget coordinates to the local coordinates of the widget.
 SkMatrix TransformDown(const Widget& to);

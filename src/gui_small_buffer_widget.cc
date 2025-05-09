@@ -96,6 +96,9 @@ void SmallBufferWidget::Measure() {
 }
 
 Font& SmallBufferWidget::GetFont(Buffer::Type type) const {
+  if (type == Buffer::Type::TypeCount) {
+    return gui::GetFont();
+  }
   int i = (int)type;
   if (fonts[i] != nullptr) {
     return *fonts[i];

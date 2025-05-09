@@ -90,6 +90,9 @@ struct Register : LiveObject {
 
   void ConnectionAdded(Location& here, Connection& connection) override;
   void ConnectionRemoved(Location& here, Connection& connection) override;
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
 };
 
 // Combines functions of Assembler and Thread.

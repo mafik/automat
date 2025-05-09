@@ -790,4 +790,29 @@ void Register::ConnectionRemoved(Location& here, Connection& connection) {
   LiveObject::ConnectionRemoved(here, connection);
 }
 
+void Register::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  auto& reg = kRegisters[register_index];
+  writer.String(reg.name.data(), reg.name.size());
+}
+
+void Register::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  std::string reg_name;
+  d.Get(reg_name, status);
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+    register_index = 0;
+    return;
+  }
+  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+    if (kRegisters[i].name == reg_name) {
+      register_index = i;
+      return;
+    }
+  }
+  l.ReportError(f("Unknown register name: %s", reg_name.c_str()));
+  register_index = 0;
+}
+
 }  // namespace automat::library

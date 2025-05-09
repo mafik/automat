@@ -201,6 +201,10 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
   if (!OK(status)) {
     l.ReportError(status.ToStr());
   }
+  // Objects may have been rendered in their incomplete state - re-render them all.
+  for (auto& loc : locations) {
+    loc->WakeAnimation();
+  }
 }
 
 Machine::Machine() {}

@@ -302,7 +302,7 @@ static void FitArc(const std::deque<Vec2>& points, SinCos& tangent, float& radiu
   radius = circle.r;
 
   // --- Determine Tangent ---
-  if (isinf(radius) || isnanf(radius) || fabsf(radius) < 0.5_mm) {
+  if (isinf(radius) || std::isnan(radius) || fabsf(radius) < 0.5_mm) {
     tangent = SinCos::FromVec2(points.back() - points.front());
     radius = std::numeric_limits<float>::infinity();
   } else {

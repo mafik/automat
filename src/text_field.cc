@@ -225,14 +225,14 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
     case AnsiKey::Backspace: {
       int end = caret_positions[&caret].index;
       if (end > 0) {
-        ssize_t old_size;
+        I64 old_size;
         TextVisit([&](std::string& text) {
           old_size = text.size();
           int start = GetFont().PrevIndex(text, end);
           text.erase(start, end - start);
           return true;
         });
-        ssize_t new_size = old_size;
+        I64 new_size = old_size;
         TextVisit([&](std::string& text) {
           new_size = text.size();
           return false;
@@ -280,13 +280,13 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
     default: {
       std::string clean = FilterControlCharacters(k.text);
       if (!clean.empty()) {
-        ssize_t old_size;
+        I64 old_size;
         TextVisit([&](std::string& text) {
           old_size = text.size();
           text.insert(caret_positions[&caret].index, clean);
           return true;  // because text is changed
         });
-        ssize_t new_size = old_size;
+        I64 new_size = old_size;
         TextVisit([&](std::string& text) {
           new_size = text.size();
           return false;  // because text is not changed

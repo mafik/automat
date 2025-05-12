@@ -344,7 +344,7 @@ def gen_x86_hh(x86_json, x86_hh):
       print()
 
   # --- Generate x86.hh below ---
-  f = x86_hh.open('w')
+  f = x86_hh.open('w', encoding='utf-8')
   # First, emit the header and struct definitions.
   print(f'''#pragma once
 

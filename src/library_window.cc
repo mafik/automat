@@ -10,7 +10,6 @@
 #include <leptonica/pix.h>
 
 #include "argument.hh"
-#include "control_flow.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "gui_constants.hh"
@@ -28,6 +27,7 @@
 
 #include <ranges>
 
+#include "control_flow.hh"
 #include "textures.hh"
 #include "xcb.hh"
 #endif
@@ -55,7 +55,9 @@ Ptr<Object> Window::Clone() const {
   ret->x_max_ratio = x_max_ratio;
   ret->y_min_ratio = y_min_ratio;
   ret->y_max_ratio = y_max_ratio;
+#ifdef __linux__
   ret->xcb_window = xcb_window;
+#endif
   return ret;
 }
 
@@ -101,6 +103,7 @@ struct TextArgument : Argument {
 TextArgument text_arg;
 
 std::string Window::RunOCR() {
+#ifdef __linux__
   if (!capture.has_value()) return "";
   if (capture->width == 0 || capture->height == 0) return "";
   std::string utf8_text = "";
@@ -129,20 +132,13 @@ std::string Window::RunOCR() {
     }
     utf8_text = tesseract.GetUTF8Text();
     StripTrailingWhitespace(utf8_text);
-
-    if constexpr (false) {  // write to "out.bmp"
-      std::unique_ptr<uint8_t[], xcb::FreeDeleter> bmp;
-      size_t size;
-      pixWriteMemBmp(std::out_ptr(bmp), &size, pix);
-
-      FILE* f = fopen("out.bmp", "wb");
-      fwrite(bmp.get(), 1, size, f);
-      fclose(f);
-    }
   }
 
   pixDestroy(&pix);
   return utf8_text;
+#else
+  return "";
+#endif
 }
 
 #ifdef __linux__
@@ -263,6 +259,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     l.contents_rrect = kBorderInner;
     l.contents_rrect.rect.top = l.title_rect.bottom;
     if (auto window = LockWindow()) {
+#ifdef __linux__
       if (window->capture.has_value() &&
           (window->capture->height > 0 || window->capture->width > 0)) {
         SkRect image_rect = SkRect::Make(SkISize{window->capture->width, window->capture->height});
@@ -281,6 +278,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
                lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_min_ratio),
                lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_max_ratio),
                lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_max_ratio));
+#endif
     }
     l.region_rect = l.region_rect.Outset(kRegionStrokeWidth / 2);
     return l;
@@ -563,6 +561,7 @@ void Window::OnRun(Location& here) {
     return;
   }
   auto lock = std::lock_guard(mutex);
+#ifdef __linux__
   if (xcb_window == XCB_WINDOW_NONE) {
     here.ReportError("No window selected");
     return;
@@ -571,6 +570,7 @@ void Window::OnRun(Location& here) {
     capture.emplace();
   }
   capture->Capture(xcb_window);
+#endif
   std::string utf8_text = RunOCR();
   out->SetText(here, utf8_text);
 }

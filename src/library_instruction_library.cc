@@ -269,7 +269,7 @@ static float CardAngleDeg(float i, int visible_instructions, float helix_tween) 
   float t = i / std::max<int>(1, visible_instructions - 1);
   float ret = CosineInterpolate(90, -90, 0.5 + t / 2);  // curve when helix is not hovered
   float ret2 = lerp(0, -90, t);                         // linear curve when helix is hovered
-  return lerp(ret, ret2, helix_tween * 0.7);            // blend between the two curves
+  return lerp(ret, ret2, helix_tween * 0.7f);           // blend between the two curves
 }
 
 void InstructionLibrary::Widget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {

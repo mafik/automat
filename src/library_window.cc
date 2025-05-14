@@ -555,7 +555,7 @@ void Window::Args(std::function<void(Argument&)> cb) {
 }
 
 void Window::OnRun(Location& here) {
-  auto out = text_arg.FindObject(here);
+  auto out = text_arg.FindObject(here, {});
   if (!out) {
     here.ReportError("Needs to be connected to a text output");
     return;

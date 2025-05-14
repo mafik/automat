@@ -196,17 +196,7 @@ struct Argument {
 
   struct FindConfig {
     IfMissing if_missing = IfMissing::ReturnNull;
-    maf::Optional<float> search_radius;  // overrides autoconnect_radius
-  };
-
-  static constexpr FindConfig kDefaultFindConfig = {
-      .if_missing = IfMissing::ReturnNull,
-      .search_radius = std::nullopt,
-  };
-
-  static constexpr FindConfig kFindOrCreateConfig = {
-      .if_missing = IfMissing::CreateFromPrototype,
-      .search_radius = std::nullopt,
+    maf::Optional<float> search_radius = std::nullopt;  // overrides autoconnect_radius
   };
 
   // Return the position and direction of this argument in the given Widget's coordinate
@@ -223,17 +213,12 @@ struct Argument {
       Location& here, float radius,
       std::function<void(Location&, maf::Vec<Vec2AndDir>& to_points)> callback) const;
 
-  Location* FindLocation(Location& here, const FindConfig& = kDefaultFindConfig) const;
+  Location* FindLocation(Location& here, const FindConfig&) const;
 
-  Object* FindObject(Location& here, const FindConfig& = kDefaultFindConfig) const;
-
-  template <typename T>
-  T* FindObject(Location& here, const FindConfig& cfg = kDefaultFindConfig) const {
-    return dynamic_cast<T*>(FindObject(here, cfg));
-  }
+  Object* FindObject(Location& here, const FindConfig&) const;
 
   template <typename T>
-  T* FindOrCreateObject(Location& here, const FindConfig& cfg = kFindOrCreateConfig) const {
+  T* FindObject(Location& here, const FindConfig& cfg) const {
     return dynamic_cast<T*>(FindObject(here, cfg));
   }
 

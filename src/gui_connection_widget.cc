@@ -234,7 +234,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
   auto pos_dir = arg.Start(*from.WidgetForObject(), *parent_machine);
 
-  if ((to = arg.FindLocation(from))) {
+  if ((to = arg.FindLocation(from, {}))) {
     auto to_widget = to->WidgetForObject();
     to_shape = to_widget->Shape();
     to_widget->ConnectionPositions(to_points);
@@ -327,7 +327,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
 
     float prototype_alpha_target = anim.prototype_alpha_target;
-    if (arg.FindLocation(from)) {
+    if (arg.FindLocation(from, {})) {
       prototype_alpha_target = 0;
     }
     phase |= animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
@@ -491,7 +491,7 @@ maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
   } else {
     auto pos_dir = arg.Start(*from.WidgetForObject(), *root_machine);
     Vec<Vec2AndDir> to_points;  // machine coords
-    if (auto to = arg.FindLocation(from)) {
+    if (auto to = arg.FindLocation(from, {})) {
       auto to_widget = to->WidgetForObject();
       to_widget->ConnectionPositions(to_points);
       SkMatrix m = TransformBetween(*to_widget, *root_machine);
@@ -512,7 +512,7 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   Optional<Vec2> end_pos;
   if (manual_position.has_value()) {
     end_pos = *manual_position;
-  } else if (auto to = arg.FindLocation(from)) {
+  } else if (auto to = arg.FindLocation(from, {})) {
     Vec<Vec2AndDir> to_points;  // machine coords
     auto to_widget = to->WidgetForObject();
     to_widget->ConnectionPositions(to_points);

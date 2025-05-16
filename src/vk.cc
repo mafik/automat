@@ -690,12 +690,14 @@ SkCanvas* Swapchain::GetBackbufferCanvas() {
     // need to figure out how to create a new vkSurface without the
     // platformData* maybe use attach somehow? but need a Window
     vkDestroySemaphore(device, wait_semaphore, nullptr);
+    wait_semaphore = VK_NULL_HANDLE;
     return nullptr;
   }
   if (VK_ERROR_OUT_OF_DATE_KHR == res) {
     // tear swapchain down and try again
     if (!Create(-1, -1)) {
       vkDestroySemaphore(device, wait_semaphore, nullptr);
+      wait_semaphore = VK_NULL_HANDLE;
       return nullptr;
     }
     backbuffer = GetAvailableBackbuffer();
@@ -705,6 +707,7 @@ SkCanvas* Swapchain::GetBackbufferCanvas() {
 
     if (VK_SUCCESS != res) {
       vkDestroySemaphore(device, wait_semaphore, nullptr);
+      wait_semaphore = VK_NULL_HANDLE;
       return nullptr;
     }
   }

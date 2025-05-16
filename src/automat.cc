@@ -128,6 +128,11 @@ void VulkanPaint() {
   }
 
   SkCanvas* canvas = vk::GetBackbufferCanvas();
+  // When window is resized continously, vulkan may return VK_ERROR_OUT_OF_DATE_KHR and it may be
+  // hard to obtain a valid surface. When this happens, we just skip the paint for this frame.
+  if (canvas == nullptr) {
+    return;
+  }
   if (anim) {
     anim.OnPaint(*canvas, RenderFrame);
   } else {

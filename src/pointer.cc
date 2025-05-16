@@ -37,7 +37,6 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
       button_down_time(),
       pointer_widget(MakePtr<PointerWidget>(*this)) {
   root_widget.pointers.push_back(this);
-  assert(!root_widget.keyboards.empty());
   if (root_widget.keyboards.empty()) {
     keyboard = nullptr;
   } else {
@@ -129,15 +128,6 @@ void Pointer::Move(Vec2 position) {
     return;
   }
 
-  auto px2canvas = TransformDown(*root_machine);
-
-  if (button_down_time[static_cast<int>(PointerButton::Middle)] > time::kZero) {
-    Vec2 delta = px2canvas.mapPoint(position) - px2canvas.mapPoint(old_mouse_pos);
-    root_widget.camera_target -= delta;
-    root_widget.camera_pos -= delta;
-    root_widget.inertia = false;
-    root_widget.WakeAnimation();
-  }
   for (auto& action : actions) {
     if (action) {
       action->Update();
@@ -209,19 +199,6 @@ void Pointer::ButtonUp(PointerButton btn) {
   if (actions[static_cast<int>(btn)]) {
     actions[static_cast<int>(btn)].reset();
     UpdatePath();
-  }
-  if (btn == PointerButton::Middle) {
-    time::Duration down_duration =
-        time::SystemNow() - button_down_time[static_cast<int>(PointerButton::Middle)];
-    Vec2 delta = pointer_position - button_down_position[static_cast<int>(PointerButton::Middle)];
-    float delta_m = Length(delta);
-    if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
-      Vec2 canvas_pos = TransformDown(*root_machine).mapPoint(pointer_position);
-      root_widget.camera_target = canvas_pos;
-      root_widget.zoom_target = 1;
-      root_widget.inertia = false;
-      root_widget.WakeAnimation();
-    }
   }
   button_down_position[static_cast<int>(btn)] = Vec2(0, 0);
   button_down_time[static_cast<int>(btn)] = time::kZero;

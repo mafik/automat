@@ -200,7 +200,9 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 
   auto canvas_to_window = SkM44(CanvasToWindow());
 
-  root_machine->local_to_parent = canvas_to_window;
+  if (root_machine) {
+    root_machine->local_to_parent = canvas_to_window;
+  }
   for (auto& each_keyboard : keyboards) {
     each_keyboard->local_to_parent = canvas_to_window;
   }
@@ -267,6 +269,43 @@ struct MoveCameraAction : Action {
   void Update() override {}
 };
 
+struct DragCameraAction : Action {
+  RootWidget& root;
+  Vec2 prev_pos;
+  DragCameraAction(Pointer& pointer, RootWidget& root) : Action(pointer), root(root) {
+    prev_pos = pointer.pointer_position;
+  }
+  SkMatrix PointerToCanvas() {
+    auto px2canvas = TransformDown(root);
+    px2canvas.postConcat(root.WindowToCanvas());
+    return px2canvas;
+  }
+  void Update() override {
+    Vec2 curr_pos = pointer.pointer_position;
+    auto px2canvas = PointerToCanvas();
+    Vec2 delta = px2canvas.mapPoint(curr_pos) - px2canvas.mapPoint(prev_pos);
+    root.camera_target -= delta;
+    root.camera_pos -= delta;
+    root.inertia = false;
+    root.WakeAnimation();
+    prev_pos = curr_pos;
+  }
+  ~DragCameraAction() {
+    time::Duration down_duration =
+        time::SystemNow() - pointer.button_down_time[static_cast<int>(PointerButton::Middle)];
+    Vec2 delta = pointer.pointer_position -
+                 pointer.button_down_position[static_cast<int>(PointerButton::Middle)];
+    float delta_m = Length(delta);
+    if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
+      Vec2 canvas_pos = PointerToCanvas().mapPoint(pointer.pointer_position);
+      root.camera_target = canvas_pos;
+      root.zoom_target = 1;
+      root.inertia = false;
+      root.WakeAnimation();
+    }
+  }
+};
+
 std::unique_ptr<Action> RootWidget::FindAction(Pointer& p, ActionTrigger trigger) {
   if (trigger == AnsiKey::W) {
     return std::make_unique<MoveCameraAction>(p, *this, Vec2(0, 0.1));
@@ -276,6 +315,8 @@ std::unique_ptr<Action> RootWidget::FindAction(Pointer& p, ActionTrigger trigger
     return std::make_unique<MoveCameraAction>(p, *this, Vec2(-0.1, 0));
   } else if (trigger == AnsiKey::D) {
     return std::make_unique<MoveCameraAction>(p, *this, Vec2(0.1, 0));
+  } else if (trigger == PointerButton::Middle) {
+    return std::make_unique<DragCameraAction>(p, *this);
   }
   return nullptr;
 }
@@ -464,6 +505,9 @@ void RootWidget::DropLocation(Ptr<Location>&& location) {
 }
 
 static void UpdateConnectionWidgets(RootWidget& root_widget) {
+  if (root_machine == nullptr) {
+    return;
+  }
   for (auto& loc : root_machine->locations) {
     if (loc->object) {
       loc->object->Args([&](Argument& arg) {
@@ -493,12 +537,14 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
   }
 }
 
-void RootWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void RootWidget::FillChildren(maf::Vec<Ptr<Widget>>& out_children) {
   UpdateConnectionWidgets(*this);
-  children.reserve(2 + keyboards.size() + pointers.size() + connection_widgets.size());
+  out_children.reserve(2 + keyboards.size() + pointers.size() + connection_widgets.size());
+
+  out_children.insert(out_children.end(), children.begin(), children.end());
 
   for (auto& keyboard : keyboards) {
-    children.push_back(keyboard);
+    out_children.push_back(keyboard);
   }
 
   unordered_set<Location*> dragged_locations(pointers.size());
@@ -513,21 +559,25 @@ void RootWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   connection_widgets_below.reserve(connection_widgets.size());
   for (auto& it : connection_widgets) {
     if (it->manual_position.has_value() || dragged_locations.count(&it->from)) {
-      children.push_back(it);
+      out_children.push_back(it);
     } else {
       connection_widgets_below.push_back(it);
     }
   }
   for (auto& pointer : pointers) {
     if (auto widget = pointer->GetWidget()) {
-      children.push_back(widget->AcquirePtr<Widget>());
+      out_children.push_back(widget->AcquirePtr<Widget>());
     }
   }
-  children.push_back(toolbar);
-  for (auto w : connection_widgets_below) {
-    children.push_back(w);
+  if (toolbar) {
+    out_children.push_back(toolbar);
   }
-  children.push_back(root_machine);
+  for (auto w : connection_widgets_below) {
+    out_children.push_back(w);
+  }
+  if (root_machine) {
+    out_children.push_back(root_machine);
+  }
 }
 
 static void UpdateLocalToParent(RootWidget& root_widget) {
@@ -544,7 +594,9 @@ void RootWidget::DisplayPixelDensity(float pixels_per_meter) {
 void RootWidget::Resized(Vec2 size) {
   this->size = size;
   UpdateLocalToParent(*this);
-  toolbar->local_to_parent = SkM44(SkMatrix::Translate(size.x / 2, 0));
+  if (toolbar) {
+    toolbar->local_to_parent = SkM44(SkMatrix::Translate(size.x / 2, 0));
+  }
 }
 
 }  // namespace automat::gui

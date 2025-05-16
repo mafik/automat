@@ -133,7 +133,7 @@ struct RootWidget final : Widget, DropTarget {
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
 
   void Zoom(float delta);
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(maf::Vec<Ptr<Widget>>& out_children) override;
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 
   // Called when closing Automat to persist state across restarts.
@@ -178,6 +178,11 @@ struct RootWidget final : Widget, DropTarget {
 
   std::vector<Pointer*> pointers;
   std::vector<Ptr<Keyboard>> keyboards;
+
+  // Child widgets, stored in front-to-back order.
+  //
+  // TODO: move all children into this vector
+  maf::Vec<Ptr<Widget>> children;
 
   std::mutex mutex;
 };

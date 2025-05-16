@@ -80,6 +80,7 @@ struct WidgetDrawableHolder {
   WidgetDrawable* widget_drawable;
 };
 
+// Map used by the client to keep track of resources needed to render widgets.
 // TODO: replace with a set
 map<uint32_t, WidgetDrawableHolder> cached_widget_drawables;
 
@@ -177,6 +178,8 @@ sk_sp<SkDrawable> MakeWidgetDrawable(Widget& widget) {
 }
 
 void RendererInit() { SkFlattenable::Register("WidgetDrawable", WidgetDrawable::CreateProc); }
+
+void RendererShutdown() { cached_widget_drawables.clear(); }
 
 // In order for remote rendering to work, the bandwidth of rendering commands must fit the
 // capabilities of the network. Automat aspires to render itself over a typical home Wi-Fi -

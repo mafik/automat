@@ -6,7 +6,7 @@
       "type": "lldb",
       "request": "launch",
       "env": {
-        "DISPLAY": ":1"
+        "DISPLAY": ":0"
       },
       "initCommands": [
         "settings set target.source-map ${workspaceFolder}/build/Debug/ ${workspaceFolder}/third_party/"
@@ -19,17 +19,20 @@
       "type": "lldb",
       "request": "launch",
       "env": {
-        "DISPLAY": ":1"
+        "DISPLAY": ":0"
       },
+      "initCommands": [
+        "settings set target.source-map ${workspaceFolder}/build/Debug/ ${workspaceFolder}/third_party/"
+      ],
       "program": "${workspaceFolder}/build/automat",
       "preLaunchTask": "link automat",
     },
     {
-      "name": "LLDB debug_llvm_asm_test",
+      "name": "LLDB Current File",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/debug_llvm_asm_test",
-      "preLaunchTask": "link debug_llvm_asm_test",
+      "program": "${workspaceFolder}/build/${fileBasenameNoExtension}",
+      "preLaunchTask": "link current file",
     },
     {
       "name": "GDB debug_automat",

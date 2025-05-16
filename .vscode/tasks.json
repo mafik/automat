@@ -4,9 +4,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "link debug_llvm_asm_test",
+      "label": "link current file",
       "type": "shell",
-      "command": "python run.py 'link debug_llvm_asm_test'",
+      "command": "python run.py 'link ${fileBasenameNoExtension}'",
       "presentation": {
         "reveal": "silent"
       }
@@ -24,15 +24,6 @@
       "label": "link automat",
       "type": "shell",
       "command": "python run.py 'link automat'",
-      "presentation": {
-        "reveal": "silent",
-        "close": true
-      }
-    },
-    {
-      "label": "link release_automat",
-      "type": "shell",
-      "command": "python run.py 'link release_automat'",
       "presentation": {
         "reveal": "silent",
         "close": true

@@ -301,6 +301,7 @@ int Main() {
 
   resources::Release();
   image_provider.reset();
+  RendererShutdown();
 
   Widget::CheckAllWidgetsReleased();
 

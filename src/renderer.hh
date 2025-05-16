@@ -30,6 +30,9 @@ extern PackFrameRequest next_frame_request;
 
 void RendererInit();
 
+// Releases resources used by the renderer.
+void RendererShutdown();
+
 // Call this first, to render the picture to the given canvas.
 //
 // Right after this call, make sure to present the canvas to the screen.

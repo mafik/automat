@@ -55,7 +55,7 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
   shortcut_button->activate = [this](gui::Pointer& pointer) {
     if (key_selector) {
       key_selector->Release();
-    } else {
+    } else if (pointer.keyboard) {
       Vec2 caret_position = shortcut_button->child->TextureBounds()->TopLeftCorner();
       key_selector = &pointer.keyboard->RequestCaret(*this, shortcut_button->child, caret_position);
     }

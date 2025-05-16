@@ -253,7 +253,7 @@ HotKey::HotKey() {
     if (hotkey_selector) {
       // Cancel HotKey selection.
       hotkey_selector->Release();  // This will also set itself to nullptr
-    } else {
+    } else if (pointer.keyboard) {
       gui::Widget* label = shortcut_button->child.get();
       auto bounds = *label->TextureBounds();
       Vec2 caret_position = shortcut_button->RRect().rect().center();

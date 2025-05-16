@@ -193,11 +193,13 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     pick_button->on_activate = [this](gui::Pointer& p) {
       p.EndAllActions();
       pointer_grab = &p.RequestGlobalGrab(*this);
-      key_grab = &p.keyboard->RequestKeyGrab(*this, gui::AnsiKey::Escape, false, false, false,
-                                             false, [this](maf::Status& status) {
-                                               if (pointer_grab) pointer_grab->Release();
-                                               if (key_grab) key_grab->Release();
-                                             });
+      if (p.keyboard) {
+        key_grab = &p.keyboard->RequestKeyGrab(*this, gui::AnsiKey::Escape, false, false, false,
+                                               false, [this](maf::Status& status) {
+                                                 if (pointer_grab) pointer_grab->Release();
+                                                 if (key_grab) key_grab->Release();
+                                               });
+      }
     };
     auto content_bounds = kCoarseBounds.Outset(-kBorderWidth - kContentMargin);
     auto title_bounds = Rect(kCoarseBounds.rect.left, kCoarseBounds.rect.top - kTitleHeight,

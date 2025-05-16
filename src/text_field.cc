@@ -149,11 +149,13 @@ struct TextSelectAction : Action {
       }
     }
 
-    Vec2 local = pointer.PositionWithin(text_field);
-    int index = text_field.IndexFromPosition(local.x);
-    Vec2 pos = text_field.PositionFromIndex(index);
-    caret = &pointer.keyboard->RequestCaret(text_field, pointer.hover, pos);
-    text_field.caret_positions[caret] = {.index = index};
+    if (pointer.keyboard) {
+      Vec2 local = pointer.PositionWithin(text_field);
+      int index = text_field.IndexFromPosition(local.x);
+      Vec2 pos = text_field.PositionFromIndex(index);
+      caret = &pointer.keyboard->RequestCaret(text_field, pointer.hover, pos);
+      text_field.caret_positions[caret] = {.index = index};
+    }
   }
 
   void UpdateCaretFromPointer(Pointer& pointer) {

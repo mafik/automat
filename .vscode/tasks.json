@@ -12,6 +12,14 @@
       }
     },
     {
+      "label": "link current file debug",
+      "type": "shell",
+      "command": "python run.py 'link debug_${fileBasenameNoExtension}'",
+      "presentation": {
+        "reveal": "silent"
+      }
+    },
+    {
       "label": "link debug_automat",
       "type": "shell",
       "command": "python run.py 'link debug_automat'",
@@ -29,5 +37,5 @@
         "close": true
       }
     },
-  ]
+  ],
 }

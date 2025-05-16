@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "LLDB debug_automat",
+      "name": "debug_automat (LLDB)",
       "type": "lldb",
       "request": "launch",
       "env": {
@@ -15,7 +15,7 @@
       "preLaunchTask": "link debug_automat",
     },
     {
-      "name": "LLDB automat",
+      "name": "automat (LLDB)",
       "type": "lldb",
       "request": "launch",
       "env": {
@@ -28,14 +28,21 @@
       "preLaunchTask": "link automat",
     },
     {
-      "name": "LLDB Current File",
+      "name": "Fast Current File (LLDB)",
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/build/${fileBasenameNoExtension}",
       "preLaunchTask": "link current file",
     },
     {
-      "name": "GDB debug_automat",
+      "name": "Debug Current File (LLDB)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/${fileBasenameNoExtension}",
+      "preLaunchTask": "link current file debug",
+    },
+    {
+      "name": "debug_automat (GDB)",
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/debug_automat",
@@ -60,7 +67,7 @@
       ]
     },
     {
-      "name": "VSDbg debug_automat",
+      "name": "debug_automat (VSDbg)",
       "type": "cppvsdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/debug_automat.exe",

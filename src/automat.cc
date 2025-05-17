@@ -138,8 +138,6 @@ void VulkanPaint() {
   } else {
     RenderFrame(*canvas);
   }
-  vk::Present();
-  RenderOverflow(*canvas);
 }
 
 void RenderThread(std::stop_token stop_token) {

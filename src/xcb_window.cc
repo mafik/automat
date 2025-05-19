@@ -534,20 +534,24 @@ void XCBWindow::MainLoop() {
                 break;
               }
               case XCB_INPUT_RAW_KEY_PRESS: {
+                if (automat::gui::keyboard == nullptr) break;
                 automat::gui::keyboard->KeyDown(*(xcb_input_raw_key_press_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
+                if (automat::gui::keyboard == nullptr) break;
                 auto ev = (xcb_input_key_press_event_t*)event;
                 ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
                 automat::gui::keyboard->KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_RAW_KEY_RELEASE: {
+                if (automat::gui::keyboard == nullptr) break;
                 automat::gui::keyboard->KeyUp(*(xcb_input_raw_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
+                if (automat::gui::keyboard == nullptr) break;
                 automat::gui::keyboard->KeyUp(*(xcb_input_key_release_event_t*)event);
                 break;
               }
@@ -657,6 +661,7 @@ void XCBWindow::MainLoop() {
         }
         case XCB_KEY_PRESS:  // fallthrough
         case XCB_KEY_RELEASE: {
+          if (automat::gui::keyboard == nullptr) break;
           // This is only called by registered hotkeys
           xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
           auto key = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail);

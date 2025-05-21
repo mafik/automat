@@ -4,140 +4,158 @@
 
 #include <include/core/SkCanvas.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
-#include <include/effects/SkRuntimeEffect.h>
-#include <src/core/SkRuntimeEffectPriv.h>
+#include <include/core/SkTileMode.h>
+#include <include/effects/SkGradientShader.h>
 
-#include "log.hh"
+#include "color.hh"
+#include "random.hh"
 #include "root_widget.hh"
+#include "time.hh"
+
+using namespace maf;
 
 namespace automat {
 
 HypnoRect anim;
 
-void LoadingAnimation::OnPaint(SkCanvas& canvas, std::function<void(SkCanvas&)> paint) {
-  last = now;
-  now = std::chrono::system_clock::now();
-  t = now - start;
-  dt = now - last;
-  PrePaint(canvas);
-  paint(canvas);
-  PostPaint(canvas);
-}
-
-SkColor SkColorFromLittleEndian(uint32_t little_endian_rgb) {
-  return SkColorSetRGB((little_endian_rgb >> 16) & 0xff, (little_endian_rgb >> 8) & 0xff,
-                       (little_endian_rgb >> 0) & 0xff);
-}
-
 HypnoRect::HypnoRect() {
   paint.setColor(SK_ColorBLACK);
   paint.setStroke(true);
   paint.setAntiAlias(true);
-  paint.setStrokeWidth(1);
-  SkRuntimeEffect::Options options;
-  SkRuntimeEffectPriv::AllowPrivateAccess(&options);
-  auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl), options);
-  if (!err.isEmpty()) {
-    LOG << err.c_str();
-  }
-  shader_builder.reset(new SkRuntimeShaderBuilder(effect));
-  shader_builder->uniform("top_color") = SkColor4f::FromColor(kTopColor);
-  shader_builder->uniform("bottom_color") = SkColor4f::FromColor(kBottomColor);
+  paint.setStrokeWidth(0.8_mm);
+
+  auto rng = XorShift32::MakeFromCurrentTime();
+
+  float hue_primary = rng.RollFloat(0, 360);
+  float hue_secondary = fmodf(hue_primary + 120, 360);
+  float hue_bg = fmodf(hue_primary + 60, 360);
+  float lightness_fg = rng.RollFloat(0, 100);
+  float lightness_bg = fmodf(lightness_fg + 50, 100);
+  float fg_sat = lightness_fg > lightness_bg ? 80 : 10;
+  float bg_sat = lightness_fg > lightness_bg ? 10 : 80;
+  top_color = color::HSLuv(hue_primary, fg_sat, lightness_fg);
+  bottom_color = color::HSLuv(hue_secondary, fg_sat, lightness_fg);
+  background_color = color::HSLuv(hue_bg, bg_sat, lightness_bg);
 }
 
-float HypnoRect::Twist(SkCanvas& canvas, float factor) {
-  float scale = pow(kScalePerTwist, unfold * factor);
-  canvas.rotate(kDegreesPerTwist * unfold * factor);
-  canvas.scale(scale, scale);
+static float Twist(HypnoRect& a, SkMatrix& transform, float factor) {
+  float scale = pow(HypnoRect::kScalePerTwist, a.unfold * factor);
+  transform.preRotate(HypnoRect::kDegreesPerTwist * a.unfold * factor);
+  transform.preScale(scale, scale);
   return scale;
 }
 
-void HypnoRect::PrePaint(SkCanvas& canvas) {
-  if (state == kDone) {
-    return;
-  }
-
-  int client_width = gui::root_widget->window->client_width;
-  int client_height = gui::root_widget->window->client_height;
-
-  shader_builder->uniform("resolution") = SkV2(client_width, client_height);
-  paint.setShader(shader_builder->makeShader());
-
-  canvas.clear(kBackgroundColor);
-
-  int cx = client_width / 2;
-  int cy = client_height / 2;
-
-  SkPath clip_path = SkPath::Rect(rect);
-  float rect_side = rect.width() - paint.getStrokeWidth();
-
-  canvas.save();
-  canvas.translate(cx, cy);
-
-  float base_rotation = -t.count() * 10;
-  canvas.rotate(base_rotation);
-
-  float base_scale = 1 + cos(t.count()) * 0.2;
-  canvas.scale(base_scale, base_scale);
+animation::Phase HypnoRect::Tick(time::Timer& timer) {
+  t = (time::SteadyNow() - start).count();
 
   if (state == kPostLoading) {
-    canvas.save();
-    base_twist_v += 0.0005 * dt.count();
-    base_twist_v *= exp(dt.count() * 5);
+    base_twist_v += 0.0005 * timer.d;
+    base_twist_v *= exp(timer.d * 5);
     base_twist += base_twist_v;
-    Twist(canvas, base_twist);
-    clip_path.transform(canvas.getTotalMatrix());
-    canvas.drawRect(rect, paint);
-    canvas.restore();
-  } else {
-    clip_path.transform(canvas.getTotalMatrix());
-    canvas.drawRect(rect, paint);
   }
 
-  unfold += (1 - unfold) * -(expm1f(-dt.count() * 2));
+  unfold += (1 - unfold) * -(expm1f(-timer.d * 2));
+  base_scale = 1 + cos(t) * 0.2;
+
+  client_width = gui::root_widget->window->client_width;
+  client_height = gui::root_widget->window->client_height;
+  float rect_side = rect.Width() - paint.getStrokeWidth();
 
   float outer_rect_side = rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
-  float window_diag = sqrt(client_width * client_width + client_height * client_height);
-  if (outer_rect_side > window_diag) {
+  client_diag = sqrt(client_width * client_width + client_height * client_height);
+  if (outer_rect_side > client_diag) {
     if (state == kPreLoading) {
       state = kLoading;
     }
-    first_twist_v += (2 - first_twist_v) * -(expm1f(-dt.count()));
+    first_twist_v += (2 - first_twist_v) * -(expm1f(-timer.d));
   }
-  first_twist += first_twist_v * dt.count();
+  first_twist += first_twist_v * timer.d;
   if (first_twist > 1) {
     first_twist -= 1;
   }
 
-  Twist(canvas, first_twist);
+  if (state == kPostLoading && base_twist > 25) {
+    state = kDone;
+  }
+  return LoadingAnimation::Tick(timer);
+}
+
+void HypnoRect::PreDraw(SkCanvas& canvas) {
+  if (state == kDone) {
+    return;
+  }
+
+  {
+    SkPoint pts[2] = {
+        rect.TopCenter(),
+        rect.BottomCenter(),
+    };
+    SkColor colors[2] = {top_color, bottom_color};
+    auto matrix = canvas.getLocalToDeviceAs3x3();
+    paint.setShader(
+        SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp, 0, nullptr));
+  }
+
+  canvas.clear(background_color);
+
+  float rect_side = rect.Width() - paint.getStrokeWidth();
+
+  SkMatrix base_transform;
+  float base_rotation = -t * 10;
+  base_transform.preTranslate(gui::root_widget->size.width / 2, gui::root_widget->size.height / 2);
+  base_transform.preRotate(base_rotation);
+  base_transform.preScale(base_scale, base_scale);
+
+  SkMatrix clip_transform = base_transform;
+
+  canvas.save();
+  canvas.concat(base_transform);
+
+  if (state == kPostLoading) {
+    SkMatrix transform;
+    Twist(*this, transform, base_twist);
+    canvas.save();
+    canvas.concat(transform);
+    clip_transform.preConcat(transform);
+    canvas.drawRect(rect, paint);
+    canvas.restore();
+  } else {
+    canvas.drawRect(rect, paint);
+  }
+
+  SkPath clip_path = SkPath::Rect(rect);
+  clip_path.transform(clip_transform);
+
+  SkMatrix transform2;
+  Twist(*this, transform2, first_twist);
+  canvas.concat(transform2);
   if (first_twist > base_twist) {
     canvas.drawRect(rect, paint);
   }
 
   for (int i = 0; i < 25; ++i) {
     canvas.save();
-    float twist_scale = Twist(canvas, i);
+    SkMatrix transform;
+    float twist_scale = Twist(*this, transform, i);
+    canvas.concat(transform);
     if (i > base_twist) {
       canvas.drawRect(rect, paint);
     }
     canvas.restore();
     float rect_side_scaled = rect_side * base_scale * twist_scale;
-    if (rect_side_scaled > window_diag) {
+    if (rect_side_scaled > client_diag) {
       break;
     }
   }
 
-  if (state == kPostLoading && base_twist > 25) {
-    state = kDone;
-  }
-
   canvas.restore();
   SkRect bounds = clip_path.computeTightBounds();
-  canvas.saveLayer(&bounds, nullptr);
+  canvas.saveLayer(nullptr, nullptr);
   canvas.clipPath(clip_path);
 }
 
-void HypnoRect::PostPaint(SkCanvas& canvas) { canvas.restore(); }
+void HypnoRect::PostDraw(SkCanvas& canvas) { canvas.restore(); }
 
 }  // namespace automat

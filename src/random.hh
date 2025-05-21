@@ -22,6 +22,8 @@ struct XorShift32 {
   // The state must be initialized to non-zero
   U32 state = 123456789;
 
+  static XorShift32 MakeFromCurrentTime();
+
   U32 Roll() {
     U32 x = state;
     x ^= x << 13;

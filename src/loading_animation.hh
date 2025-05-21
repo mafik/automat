@@ -6,38 +6,49 @@
 #include <include/core/SkColor.h>
 #include <include/effects/SkRuntimeEffect.h>
 
-#include <chrono>
-#include <functional>
+#include "animation.hh"
+#include "color.hh"
+#include "time.hh"
+#include "units.hh"
 
 namespace automat {
 
 struct LoadingAnimation {
-  using duration = std::chrono::duration<double>;
-  using time_point = std::chrono::time_point<std::chrono::system_clock, duration>;
-  time_point start = std::chrono::system_clock::now();
-  time_point now = start;
-  time_point last = start;
-  duration t = duration(0);
-  duration dt = duration(0);
+  time::SteadyPoint start = time::SteadyNow();
 
-  enum State { kPreLoading, kLoading, kPostLoading, kDone } state = kPreLoading;
+  // Each loading animation can be in a number of states.
+  enum State {
+    kPreLoading,   // Initial sequence, happens only once when animation starts up
+    kLoading,      // Continuous loading animation
+    kPostLoading,  // Loading has finished and the animation is disappearing
+    kDone          // Animation has completely disappeared
+  } state = kPreLoading;
 
   void LoadingCompleted() { state = kPostLoading; }
 
   operator bool() { return state != kDone; }
 
-  void OnPaint(SkCanvas& canvas, std::function<void(SkCanvas&)> paint);
+  virtual animation::Phase Tick(time::Timer& timer) {
+    return state == kDone ? animation::Finished : animation::Animating;
+  }
+  virtual void PreDraw(SkCanvas& canvas) { canvas.saveLayer(nullptr, nullptr); }
+  virtual void PostDraw(SkCanvas& canvas) { canvas.restore(); }
 
-  virtual void PrePaint(SkCanvas& canvas) { canvas.saveLayer(nullptr, nullptr); }
+  struct DrawGuard {
+    SkCanvas& canvas;
+    LoadingAnimation& anim;
+    DrawGuard(SkCanvas& canvas, LoadingAnimation& anim) : canvas(canvas), anim(anim) {
+      anim.PreDraw(canvas);
+    }
+    ~DrawGuard() { anim.PostDraw(canvas); }
+  };
 
-  virtual void PostPaint(SkCanvas& canvas) { canvas.restore(); }
+  DrawGuard WrapDrawing(SkCanvas& canvas) { return DrawGuard(canvas, *this); }
 };
-
-SkColor SkColorFromLittleEndian(uint32_t little_endian_rgb);
 
 struct HypnoRect : public LoadingAnimation {
   SkPaint paint;
-  SkRect rect = SkRect::MakeXYWH(-10, -10, 20, 20);
+  Rect rect = Rect::MakeAtZero(1_cm, 1_cm);
 
   float unfold = 0;
   float first_twist = 0;
@@ -46,31 +57,26 @@ struct HypnoRect : public LoadingAnimation {
   float base_twist = 0;
   float base_twist_v = 0;
 
-  const float kScalePerTwist = 1.20f;
-  const float kDegreesPerTwist = 19;
+  float base_scale = 1;
+  time::T t = 0;
+  int client_width = 100;   // px
+  int client_height = 100;  // px
+  float client_diag = 144;  // px
 
-  const char* sksl = R"(
-    uniform float2 resolution;
-    uniform float4 top_color;
-    uniform float4 bottom_color;
-    half4 main(vec2 fragcoord) {
-      float2 uv = sk_FragCoord.xy / resolution;
-      return mix(bottom_color, top_color, 1 - uv.y);
-    }
-  )";
-  std::unique_ptr<SkRuntimeShaderBuilder> shader_builder;
+  constexpr static float kScalePerTwist = 1.20f;
+  constexpr static float kDegreesPerTwist = 19;
 
-  SkColor kTopColor = SkColorFromLittleEndian(0x16389d);
-  SkColor kBottomColor = SkColorFromLittleEndian(0x142261);
-  SkColor kBackgroundColor = SkColorFromLittleEndian(0x111616);
+  // SkColor kTopColor = "#16389d"_color;
+  // SkColor kBottomColor = "#142261"_color;
+  SkColor top_color = "#ff389d"_color;
+  SkColor bottom_color = "#14ff10"_color;
+  SkColor background_color = "#111616"_color;
 
   HypnoRect();
 
-  float Twist(SkCanvas& canvas, float factor);
-
-  void PrePaint(SkCanvas& canvas) override;
-
-  void PostPaint(SkCanvas& canvas) override;
+  animation::Phase Tick(time::Timer&) override;
+  void PreDraw(SkCanvas&) override;
+  void PostDraw(SkCanvas&) override;
 };
 
 extern HypnoRect anim;

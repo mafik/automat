@@ -11,6 +11,7 @@
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "gui_connection_widget.hh"
+#include "loading_animation.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
@@ -45,6 +46,8 @@ constexpr float kTrashRadius = 3_cm;
 
 animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
+
+  phase |= anim.Tick(timer);
 
   // Record camera movement timeline. This is used to create inertia effect.
   camera_timeline.emplace_back(Vec3(camera_pos, zoom));
@@ -219,6 +222,8 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 }
 
 void RootWidget::Draw(SkCanvas& canvas) const {
+  auto anim_guard = anim.WrapDrawing(canvas);
+
   canvas.clear(background_color);
 
   DrawChildren(canvas);

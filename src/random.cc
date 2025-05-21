@@ -4,6 +4,7 @@
 
 #include "int.hh"
 #include "log.hh"
+#include "time.hh"
 
 #ifdef __linux__
 #include <sys/random.h>
@@ -38,4 +39,8 @@ void RandomBytesSecure(Span<> out) {
 #endif
 }
 
+XorShift32 XorShift32::MakeFromCurrentTime() {
+  auto now = automat::time::SteadyNow().time_since_epoch().count();
+  return XorShift32{reinterpret_cast<U32*>(&now)[0] ^ reinterpret_cast<U32*>(&now)[1] ^ 0xdeadbeef};
+}
 }  // namespace maf

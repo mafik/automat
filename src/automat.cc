@@ -133,11 +133,7 @@ void VulkanPaint() {
   if (canvas == nullptr) {
     return;
   }
-  if (anim) {
-    anim.OnPaint(*canvas, RenderFrame);
-  } else {
-    RenderFrame(*canvas);
-  }
+  RenderFrame(*canvas);
 }
 
 void RenderThread(std::stop_token stop_token) {

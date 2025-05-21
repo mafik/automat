@@ -2909,15 +2909,13 @@ struct EnumKnobWidget : gui::Widget {
       {  // light edge
         SkPaint paint;
         SkPoint pts[] = {Vec2(-kGaugeRadius, 0), Vec2(kGaugeRadius, 0)};
-        SkColor colors[] = {"#ffffff20"_color, "#ffffffdd"_color, "#ffffff20"_color};
+        SkColor colors[] = {"#ffffff20"_color, "#ffffffaa"_color, "#ffffff20"_color};
         paint.setShader(SkGradientShader::MakeLinear(pts, colors, nullptr, std::size(colors),
                                                      SkTileMode::kClamp));
         paint.setStyle(SkPaint::kStroke_Style);
         paint.setStrokeWidth(kBorderWidth);
         paint.setMaskFilter(
             SkMaskFilter::MakeBlur(SkBlurStyle::kNormal_SkBlurStyle, kBorderHalf / 3));
-        paint.setAntiAlias(true);
-        paint.setBlendMode(SkBlendMode::kOverlay);
         canvas.drawCircle(0, 0, kGaugeRadius - kBorderHalf, paint);
       }
     }
@@ -3435,7 +3433,6 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
     vignette_paint.setShader(
         SkGradientShader::MakeRadial(SkPoint::Make(Instruction::Widget::kWidth / 2, kHeight / 2), r,
                                      colors, nullptr, 2, SkTileMode::kClamp));
-    vignette_paint.setBlendMode(SkBlendMode::kMultiply);
     canvas.drawRRect(kInstructionRRect, vignette_paint);
   }
 

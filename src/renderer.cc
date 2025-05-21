@@ -323,6 +323,11 @@ void RendererInit() {
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
     skgpu::graphite::RecorderOptions options;
     options.fImageProvider = image_provider;
+    // Recordings which are part of the current frame might be recorded with
+    // "fRequireOrderedRecordings" set to true.
+    // This would require us to set up separate recorders for `frame` & `overflow` widgets.
+    // The performance gain doesn't justify this split just yet.
+    options.fRequireOrderedRecordings = false;
     auto recorder = vk::graphite_context->makeRecorder(options);
     vk_recorder_threads[i] = std::jthread(VkRecorderThread, i, std::move(recorder));
   }

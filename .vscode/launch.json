@@ -38,7 +38,7 @@
       "name": "Debug Current File (LLDB)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/${fileBasenameNoExtension}",
+      "program": "${workspaceFolder}/build/debug_${fileBasenameNoExtension}",
       "preLaunchTask": "link current file debug",
     },
     {

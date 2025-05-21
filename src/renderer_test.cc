@@ -132,13 +132,13 @@ struct SlowWidget : Widget {
 // 4. All of the subsequent frames should be fast
 TEST(Renderer, Construction) {
   SkGraphics::Init();
-  RendererInit();
   root_widget = MakePtr<RootWidget>();
   Status status;
   root_widget->window = xcb::XCBWindow::Make(*root_widget, status);
   if (auto err = vk::Init(); !err.empty()) {
     FATAL << "Failed to initialize Vulkan: " << err;
   }
+  RendererInit();
   std::stop_source stop_source;
   root_widget->children.push_back(MakePtr<SlowWidget>());
   test_start = time::SteadyNow();

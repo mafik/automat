@@ -404,7 +404,9 @@ void Assembler::DeserializeState(Location& l, Deserializer& d) {
     return;
   }
 
-  mc_controller->ChangeState([&](mc::Controller::State& mc_state) { mc_state = state; }, status);
+  if (mc_controller) {
+    mc_controller->ChangeState([&](mc::Controller::State& mc_state) { mc_state = state; }, status);
+  }
   if (!OK(status)) {
     l.ReportError(status.ToStr());
     return;
@@ -551,12 +553,12 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   canvas.drawDRRect(kBorderMidRRect.sk, kInnerRRect.sk, bevel_border_paint);
 
   SkPaint bg_paint = [&]() {
-    static auto builder =
-        resources::RuntimeEffectBuilder(embedded::assets_assembler_stars_rt_sksl.content);
-
-    builder->uniform("uv_to_pixel") = canvas.getTotalMatrix();
-
-    auto shader = builder->makeShader();
+    Status status;
+    static auto effect = resources::CompileShader(embedded::assets_assembler_stars_rt_sksl, status);
+    assert(effect);
+    SkRuntimeEffectBuilder builder(effect);
+    builder.uniform("uv_to_pixel") = canvas.getTotalMatrix();
+    auto shader = builder.makeShader();
     SkPaint paint;
     paint.setShader(shader);
     return paint;

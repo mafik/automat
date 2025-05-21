@@ -17,7 +17,6 @@ constexpr bool cfg_DisableVsync = true;
 
 extern bool initialized;
 extern std::unique_ptr<skgpu::graphite::Context> graphite_context;
-extern std::mutex context_mutex;
 
 std::string Init();
 void Destroy();

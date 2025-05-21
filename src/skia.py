@@ -12,7 +12,7 @@ import make
 import ninja
 import git
 
-TAG = 'chrome/m130'
+TAG = 'chrome/m137'
 DEPOT_TOOLS_ROOT = fs_utils.third_party_dir / 'depot_tools'
 SKIA_ROOT = fs_utils.third_party_dir / 'Skia'
 GN = (SKIA_ROOT / 'bin' / 'gn').with_suffix(build.binary_extension).absolute()

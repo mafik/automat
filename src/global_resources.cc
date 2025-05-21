@@ -3,7 +3,7 @@
 
 #include "global_resources.hh"
 
-#include "log.hh"
+#include "path.hh"
 
 namespace automat::resources {
 
@@ -22,31 +22,27 @@ sk_sp<SkShader>& Hold(sk_sp<SkShader> shader) {
   return *reinterpret_cast<sk_sp<SkShader>*>(sk_ref_cnt_objects.back().get());
 }
 
-std::vector<RuntimeEffectBuilder*> runtime_effect_builders;
-
-RuntimeEffectBuilder::RuntimeEffectBuilder(maf::StrView sksl) {
-  auto fs = SkString(sksl);
-  auto result = SkRuntimeEffect::MakeForShader(fs);
-  if (!result.errorText.isEmpty()) {
-    ERROR << "Failed to compile shader: " << result.errorText.c_str();
-    return;
-  }
-  builder.emplace(result.effect);
-  runtime_effect_builders.push_back(this);
-}
-
-RuntimeEffectBuilder::~RuntimeEffectBuilder() {
-  runtime_effect_builders.erase(
-      std::remove(runtime_effect_builders.begin(), runtime_effect_builders.end(), this),
-      runtime_effect_builders.end());
+template <>
+sk_sp<SkRuntimeEffect>& Hold(sk_sp<SkRuntimeEffect> shader) {
+  sk_ref_cnt_objects.emplace_back(std::make_unique<sk_sp<SkRefCnt>>(shader));
+  return *reinterpret_cast<sk_sp<SkRuntimeEffect>*>(sk_ref_cnt_objects.back().get());
 }
 
 void Release() {
   mesh_specifications.clear();
   sk_ref_cnt_objects.clear();
-  for (auto* builder : runtime_effect_builders) {
-    builder->builder.reset();
-  }
 }
 
+sk_sp<SkRuntimeEffect> CompileShader(maf::fs::VFile sksl_file, maf::Status& status) {
+  auto fs = SkString(sksl_file.content);
+  SkRuntimeEffect::Options options;
+  auto name = maf::Path(sksl_file.path).Stem();
+  options.fName = name;
+  auto result = SkRuntimeEffect::MakeForShader(fs, options);
+  if (!result.errorText.isEmpty()) {
+    maf::AppendErrorMessage(status) += result.errorText.c_str();
+    return nullptr;
+  }
+  return Hold(std::move(result.effect));  // creates a copy of sk_sp (it's fine)
+}
 }  // namespace automat::resources

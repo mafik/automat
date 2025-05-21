@@ -15,11 +15,9 @@
 #include <include/gpu/graphite/Surface.h>
 #include <include/gpu/graphite/vk/VulkanGraphiteTypes.h>
 #include <include/gpu/graphite/vk/VulkanGraphiteUtils.h>
-#include <include/gpu/vk/GrVkTypes.h>
 #include <include/gpu/vk/VulkanBackendContext.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
-#include <src/gpu/graphite/vk/VulkanGraphiteUtilsPriv.h>
 #include <vulkan/vulkan.h>
 
 #include "root_widget.hh"
@@ -126,7 +124,6 @@ void DestroySemaphore(const skgpu::graphite::BackendSemaphore& backend_semaphore
 }
 
 std::unique_ptr<skgpu::graphite::Context> graphite_context;
-extern std::mutex context_mutex;
 
 std::unique_ptr<skgpu::graphite::Recorder> graphite_recorder;
 VkSemaphore wait_semaphore = VK_NULL_HANDLE;
@@ -566,7 +563,6 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   VkColorSpaceKHR colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
   for (uint32_t i = 0; i < surfaceFormatCount; ++i) {
     VkFormat format = surfaceFormats[i].format;
-    if (!skgpu::graphite::vkFormatIsSupported(format)) continue;
     surfaceFormat = format;
     colorSpace = surfaceFormats[i].colorSpace;
     break;

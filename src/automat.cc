@@ -223,8 +223,6 @@ int Main() {
 #endif
   SkGraphics::Init();
 
-  RendererInit();
-
   prototypes.emplace();
 
   root_widget = MakePtr<RootWidget>();
@@ -264,8 +262,8 @@ int Main() {
     FATAL << "Failed to initialize Vulkan: " << err;
   }
 #endif
-
   image_provider.reset(new AutomatImageProvider());
+  RendererInit();
 
   render_thread = std::jthread(RenderThread, stop_source.get_token());
 

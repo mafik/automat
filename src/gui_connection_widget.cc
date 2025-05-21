@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "gui_connection_widget.hh"
 
+#include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkRRect.h>
 #include <include/core/SkRSXform.h>

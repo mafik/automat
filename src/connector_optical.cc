@@ -681,6 +681,21 @@ static SkPoint conic_tangent(SkPoint p0, SkPoint p1, SkPoint p2, float w, float 
   return {p0.x() * w0 + p1.x() * w1 + p2.x() * w2, p0.y() * w0 + p1.y() * w1 + p2.y() * w2};
 }
 
+struct OptionsHack {
+  bool forceUnoptimized = false;
+  std::string_view fName;
+  bool allowPrivateAccess = false;
+  uint32_t fStableKey = 0;
+  SkSL::Version maxVersionAllowed = SkSL::Version::k300;
+  operator const SkRuntimeEffect::Options&() const {
+    return *reinterpret_cast<const SkRuntimeEffect::Options*>(this);
+  }
+};
+
+const OptionsHack kOptionsHack;
+
+static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
+
 void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filter,
                CableTexture texture, float start_width, float end_width, float* length_cache) {
   float cached_length = 100_mm;
@@ -697,22 +712,8 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
 
   SkPaint paint;
 
-  struct OptionsHack {
-    bool forceUnoptimized = false;
-    bool allowPrivateAccess = false;
-    uint32_t fStableKey = 0;
-    SkSL::Version maxVersionAllowed = SkSL::Version::k300;
-    operator SkRuntimeEffect::Options&() {
-      return *reinterpret_cast<SkRuntimeEffect::Options*>(this);
-    }
-  };
-
-  static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
-
-  OptionsHack options;
-
-  auto [effect, err] =
-      SkRuntimeEffect::MakeForShader(SkString(embedded::assets_cable_rt_sksl.content), options);
+  auto [effect, err] = SkRuntimeEffect::MakeForShader(
+      SkString(embedded::assets_cable_rt_sksl.content), kOptionsHack);
   if (!err.isEmpty()) {
     FATAL << err.c_str();
   }
@@ -916,22 +917,9 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     tex_coords[3] = SkPoint::Make(1, 1);
 
     SkPaint paint;
-    struct OptionsHack {
-      bool forceUnoptimized = false;
-      bool allowPrivateAccess = false;
-      uint32_t fStableKey = 0;
-      SkSL::Version maxVersionAllowed = SkSL::Version::k300;
-      operator SkRuntimeEffect::Options&() {
-        return *reinterpret_cast<SkRuntimeEffect::Options*>(this);
-      }
-    };
-
-    static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
-
-    OptionsHack options;
 
     auto [effect, err] = SkRuntimeEffect::MakeForShader(
-        SkString(embedded::assets_connector_insert_rt_sksl.content), options);
+        SkString(embedded::assets_connector_insert_rt_sksl.content), kOptionsHack);
     if (!err.isEmpty()) {
       FATAL << err.c_str();
     }
@@ -961,22 +949,8 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
 
     SkPaint paint;
 
-    struct OptionsHack {
-      bool forceUnoptimized = false;
-      bool allowPrivateAccess = false;
-      uint32_t fStableKey = 0;
-      SkSL::Version maxVersionAllowed = SkSL::Version::k300;
-      operator SkRuntimeEffect::Options&() {
-        return *reinterpret_cast<SkRuntimeEffect::Options*>(this);
-      }
-    };
-
-    static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
-
-    OptionsHack options;
-
     auto [effect, err] = SkRuntimeEffect::MakeForShader(
-        SkString(embedded::assets_connector_case_rt_sksl.content), options);
+        SkString(embedded::assets_connector_case_rt_sksl.content), kOptionsHack);
     if (!err.isEmpty()) {
       FATAL << err.c_str();
     }
@@ -1147,23 +1121,8 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
     };
 
     SkPaint paint;
-
-    struct OptionsHack {
-      bool forceUnoptimized = false;
-      bool allowPrivateAccess = false;
-      uint32_t fStableKey = 0;
-      SkSL::Version maxVersionAllowed = SkSL::Version::k300;
-      operator SkRuntimeEffect::Options&() {
-        return *reinterpret_cast<SkRuntimeEffect::Options*>(this);
-      }
-    };
-
-    static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
-
-    OptionsHack options;
-
     auto [effect, err] = SkRuntimeEffect::MakeForShader(
-        SkString(embedded::assets_connector_rubber_rt_sksl.content), options);
+        SkString(embedded::assets_connector_rubber_rt_sksl.content), kOptionsHack);
     if (!err.isEmpty()) {
       FATAL << err.c_str();
     }

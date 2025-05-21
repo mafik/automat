@@ -3,6 +3,7 @@
 
 #include "menu.hh"
 
+#include <include/core/SkBlurTypes.h>
 #include <include/effects/SkImageFilters.h>
 
 #include <memory>
@@ -59,18 +60,20 @@ struct MenuWidget : gui::Widget {
     auto shape = Shape();
 
     SkPaint paint = [&]() {
-      static auto builder =
-          resources::RuntimeEffectBuilder(embedded::assets_bubble_menu_rt_sksl.content);
+      Status status;
+      static auto effect = resources::CompileShader(embedded::assets_bubble_menu_rt_sksl, status);
+      assert(effect);
 
       auto& image = *kSkyBox.image;
       auto dimensions = image->dimensions();
 
-      builder->uniform("time") = (float)fmod(time::SteadyNow().time_since_epoch().count(), 1000.0);
-      builder->uniform("bubble_radius") = size.value;
-      builder->child("environment") = image->makeShader(kDefaultSamplingOptions);
-      builder->uniform("environment_size") = SkPoint(dimensions.width(), dimensions.height());
+      SkRuntimeEffectBuilder builder(effect);
+      builder.uniform("time") = (float)fmod(time::SteadyNow().time_since_epoch().count(), 1000.0);
+      builder.uniform("bubble_radius") = size.value;
+      builder.child("environment") = image->makeShader(kDefaultSamplingOptions);
+      builder.uniform("environment_size") = SkPoint(dimensions.width(), dimensions.height());
 
-      auto shader = builder->makeShader();
+      auto shader = builder.makeShader();
       SkPaint paint;
       paint.setShader(shader);
       return paint;

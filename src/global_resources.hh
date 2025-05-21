@@ -4,8 +4,10 @@
 
 #include <include/core/SkMesh.h>
 #include <include/core/SkRefCnt.h>
+#include <include/effects/SkRuntimeEffect.h>
 
-#include "str.hh"
+#include "status.hh"
+#include "virtual_fs.hh"
 
 namespace automat::resources {
 
@@ -23,14 +25,10 @@ sk_sp<SkMeshSpecification>& Hold(sk_sp<SkMeshSpecification>);
 template <>
 sk_sp<SkShader>& Hold(sk_sp<SkShader>);
 
-struct RuntimeEffectBuilder {
-  std::optional<SkRuntimeEffectBuilder> builder;
+template <>
+sk_sp<SkRuntimeEffect>& Hold(sk_sp<SkRuntimeEffect>);
 
-  RuntimeEffectBuilder(maf::StrView sksl);
-  ~RuntimeEffectBuilder();
-
-  SkRuntimeEffectBuilder* operator->() { return &*builder; }
-};
+sk_sp<SkRuntimeEffect> CompileShader(maf::fs::VFile sksl_file, maf::Status& status);
 
 void Release();
 

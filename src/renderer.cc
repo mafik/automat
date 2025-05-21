@@ -3,26 +3,36 @@
 #include "renderer.hh"
 
 #include <include/core/SkColor.h>
+#include <include/core/SkColorType.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPathTypes.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkStream.h>
 #include <include/effects/SkGradientShader.h>
+#include <include/effects/SkRuntimeEffect.h>
 #include <include/encode/SkWebpEncoder.h>
+#include <include/gpu/GpuTypes.h>
 #include <include/gpu/graphite/BackendSemaphore.h>
+#include <include/gpu/graphite/BackendTexture.h>
 #include <include/gpu/graphite/GraphiteTypes.h>
 #include <include/gpu/graphite/Surface.h>
+#include <include/gpu/graphite/TextureInfo.h>
+#include <include/gpu/graphite/vk/VulkanGraphiteTypes.h>
+#include <src/gpu/graphite/Surface_Graphite.h>
+#include <vulkan/vulkan_core.h>
 
 #include <cmath>
 #include <map>
 
 #include "../build/generated/embedded.hh"
+#include "blockingconcurrentqueue.hh"
 #include "drawable_rtti.hh"
 #include "font.hh"
 #include "global_resources.hh"
 #include "log.hh"
 #include "root_widget.hh"
 #include "textures.hh"
+#include "thread_name.hh"
 #include "vk.hh"
 #include "widget.hh"
 
@@ -106,15 +116,43 @@ struct WidgetDrawable : SkDrawableRTTI {
 
   // RenderToSurface results
   struct Rendered {
+    skgpu::graphite::BackendTexture texture;
     sk_sp<SkSurface> surface = nullptr;
     SkMatrix matrix;  // transform at the time of the last RenderToSurface
+
+    // TODO: size part of this is already stored in `image_info`. Maybe only store the top/left
+    // position?
     SkIRect surface_bounds_root;
     maf::Vec<Vec2> texture_anchors;
     // Bounds of the widget's texture (without any clipping) in its local coordinate space.
     // Note that surface have different dimensions. It may be larger (to account for rounding to
     // full pixels) or smaller (due too clipping).
     Rect surface_bounds_local;
-  } rendered, in_progress;
+    SkImageInfo image_info;
+    time::Duration cpu_time;
+  } frame_a, frame_b;
+
+  // These values should be set before the image is sent to VkRecorderThread.
+  bool frame_a_is_rendered = true;
+  bool render_in_background = false;
+
+  Rendered& rendered() { return frame_a_is_rendered ? frame_a : frame_b; }
+  Rendered& in_progress() {
+    if (render_in_background) {
+      return frame_a_is_rendered ? frame_b : frame_a;
+    } else {
+      return frame_a_is_rendered ? frame_a : frame_b;
+    }
+  }
+
+  void Present() {
+    if (render_in_background) {
+      frame_a_is_rendered = !frame_a_is_rendered;
+    }
+  }
+
+  std::unique_ptr<skgpu::graphite::Recording> graphite_recording;
+  void InsertRecording();
 
   // Synchronization
   skgpu::graphite::BackendSemaphore semaphore;
@@ -152,11 +190,6 @@ struct WidgetDrawable : SkDrawableRTTI {
 
   void UpdateState(const Update&);
 
-  // `root_canvas` is only used to create new surface.
-  // `render_in_background` swaps the surface only after GPU confirms that rendering has
-  // finished. This is a little like manual, widget-level double-buffering.
-  void RenderToSurface(SkCanvas& root_canvas, bool render_in_background = false);
-
   SkRect onGetBounds() override;
   void onDraw(SkCanvas* canvas) override;
   const char* getTypeName() const override { return "WidgetDrawable"; }
@@ -182,11 +215,6 @@ sk_sp<SkDrawable> MakeWidgetDrawable(Widget& widget) {
   auto& drawable_holder = WidgetDrawable::Make(widget.ID());
   return drawable_holder.sk_drawable;
 }
-
-void RendererInit() { SkFlattenable::Register("WidgetDrawable", WidgetDrawable::CreateProc); }
-
-void RendererShutdown() { cached_widget_drawables.clear(); }
-
 // In order for remote rendering to work, the bandwidth of rendering commands must fit the
 // capabilities of the network. Automat aspires to render itself over a typical home Wi-Fi -
 // targetting 10 Mbps LAN connections. While it may seem conservative, even the sophisticated Wi-Fi
@@ -250,39 +278,67 @@ void WidgetDrawable::UpdateState(const Update& update) {
   pack_frame_texture_anchors = update.pack_frame_texture_anchors;
 }
 
-void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas, bool render_in_background) {
-  in_progress.matrix = update_matrix;
-  in_progress.surface_bounds_root = update_surface_bounds_root;
-  in_progress.surface_bounds_local = *pack_frame_texture_bounds;
-  in_progress.texture_anchors = pack_frame_texture_anchors;
+const skgpu::graphite::TextureInfo kTextureInfo = []() {
+  skgpu::graphite::VulkanTextureInfo vulkan_texture_info{};
+  vulkan_texture_info.fFormat = VK_FORMAT_B8G8R8A8_UNORM;
+  vulkan_texture_info.fImageUsageFlags |=
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  return skgpu::graphite::TextureInfos::MakeVulkan(vulkan_texture_info);
+}();
 
-  skgpu::graphite::RecorderOptions options;
-  options.fImageProvider = image_provider;
-  auto recorder = vk::graphite_context->makeRecorder(options);
-  auto cpu_started = time::SteadyNow();
-  auto root_surface = root_canvas.getSurface();
-  auto image_info =
-      root_surface->imageInfo().makeDimensions(in_progress.surface_bounds_root.size());
+moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recording_queue;
+moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recorded_queue;
 
-  in_progress.surface = SkSurfaces::RenderTarget(recorder.get(), image_info, skgpu::Mipmapped::kNo,
-                                                 &root_surface->props(), name);
+void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> recorder) {
+  SetThreadName("VkRecorder" + std::to_string(thread_id));
 
-  auto graphite_canvas = in_progress.surface->getCanvas();
-  graphite_canvas->clear(SK_ColorTRANSPARENT);
-  graphite_canvas->translate(-in_progress.surface_bounds_root.left(),
-                             -in_progress.surface_bounds_root.top());
-  // Remove all Drawables by converting the commands into SkPicture
-  // This line calls the onDraw methods of all the CHILD widgets.
-  recording->makePictureSnapshot()->playback(graphite_canvas);
+  while (true) {
+    WidgetDrawable* w = nullptr;
+    recording_queue.wait_dequeue(w);
+    if (w == nullptr) break;
 
-  if constexpr (kDebugRendering && kDebugRenderEvents) {
-    debug_render_events += "BeginFlush(";
-    debug_render_events += name;
-    debug_render_events += ") ";
+    auto cpu_started = time::SteadyNow();
+    auto& frame = w->in_progress();
+    auto graphite_canvas = recorder->makeDeferredCanvas(frame.image_info, kTextureInfo);
+    graphite_canvas->clear(SK_ColorTRANSPARENT);
+    graphite_canvas->translate(-frame.surface_bounds_root.left(), -frame.surface_bounds_root.top());
+    // Remove all Drawables by converting the commands into SkPicture
+    // This line calls the onDraw methods of all the CHILD widgets.
+    w->recording->makePictureSnapshot()->playback(graphite_canvas);
+    w->graphite_recording = recorder->snap();
+    frame.cpu_time = (time::SteadyNow() - cpu_started);
+
+    recorded_queue.enqueue(w);
   }
-  auto graphite_recording = recorder->snap();
+}
+
+constexpr int kNumVkRecorderThreads = 4;
+
+std::jthread vk_recorder_threads[kNumVkRecorderThreads];
+
+void RendererInit() {
+  SkFlattenable::Register("WidgetDrawable", WidgetDrawable::CreateProc);
+  for (int i = 0; i < kNumVkRecorderThreads; ++i) {
+    skgpu::graphite::RecorderOptions options;
+    options.fImageProvider = image_provider;
+    auto recorder = vk::graphite_context->makeRecorder(options);
+    vk_recorder_threads[i] = std::jthread(VkRecorderThread, i, std::move(recorder));
+  }
+}
+
+void RendererShutdown() {
+  cached_widget_drawables.clear();
+  for (int i = 0; i < kNumVkRecorderThreads; ++i) {
+    recording_queue.enqueue(nullptr);
+  }
+}
+
+void WidgetDrawable::InsertRecording() {
   skgpu::graphite::InsertRecordingInfo insert_recording_info;
   insert_recording_info.fRecording = graphite_recording.get();
+  insert_recording_info.fTargetSurface = in_progress().surface.get();
 
   if (signal_semaphore) {
     insert_recording_info.fSignalSemaphores = &semaphore;
@@ -294,72 +350,33 @@ void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas, bool render_in_backg
     insert_recording_info.fNumWaitSemaphores = wait_list.size();
   }
 
-  struct FinishedContext : public ReferenceCounted {
-    uint32_t id;
-    float cpu_time;
-    time::SteadyPoint gpu_started;
-    string name;
-    mutex mutex;
-    bool render_in_background;
-  };
-
-  auto finished_context = MakePtr<FinishedContext>();
-  finished_context->id = id;
-  finished_context->gpu_started = time::SteadyPoint::min();
-  finished_context->cpu_time = 0;
-  finished_context->name = name;
-  finished_context->render_in_background = render_in_background;
-
-  // Note that we're creating a dynamically allocated Ptr here. This is needed because we
-  // must store it inside `void* fFinishedContext`.
-  insert_recording_info.fFinishedContext = new Ptr<FinishedContext>(finished_context);
+  // insert_recording_info.fGpuStatsFlags = skgpu::GpuStatsFlags::kElapsedTime;
+  insert_recording_info.fFinishedContext = this;
+  // insert_recording_info.fFinishedWithStatsProc
   insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
-                                           skgpu::CallbackResult) {
-    auto* finished_context_ptr = static_cast<Ptr<FinishedContext>*>(context);
-    auto finished_context =
-        std::move(*finished_context_ptr);  // create a stack-based copy of the Ptr
-    delete finished_context_ptr;           // free the heap allocated Ptr
+                                           skgpu::CallbackResult result) {
+    auto* w = static_cast<WidgetDrawable*>(context);
 
-    auto lock = lock_guard(finished_context->mutex);
-    float gpu_time;
-    if (finished_context->gpu_started == time::SteadyPoint::min()) {
-      gpu_time = 0;
-    } else {
-      gpu_time = (float)(time::SteadyNow() - finished_context->gpu_started).count();
+    // LOG << "GPU time: " << stats.elapsedTime << " (" << (bool)result << ")";
+    float gpu_time = 0;  // stats.elapsedTime / 1000000.0f;
+    float render_time = max<float>(gpu_time, w->in_progress().cpu_time.count());
+    if (gpu_time > 1) {
+      LOG << "Widget " << w->name << " took " << gpu_time << "s to render";
     }
-    float render_time = max(gpu_time, finished_context->cpu_time);
-    if (render_time > 1) {
-      LOG << "Widget " << finished_context->name << " took " << render_time << "s to render";
-    }
-    if (finished_context->render_in_background) {
-      if (auto widget_drawable = WidgetDrawable::Find(finished_context->id)) {
-        widget_drawable->rendered = std::move(widget_drawable->in_progress);
-      }
-    }
-    next_frame_request.render_results.push_back({finished_context->id, render_time});
+    w->Present();
+    next_frame_request.render_results.emplace_back(RenderResult{w->id, render_time});
     if constexpr (kDebugRendering && kDebugRenderEvents) {
       debug_render_events += "Finished(";
-      debug_render_events += finished_context->name;
+      debug_render_events += w->name;
       debug_render_events += ") ";
     }
   };
-  if (!render_in_background) {
-    rendered = std::move(in_progress);
-  }
 
   vk::graphite_context->insertRecording(insert_recording_info);
+  vk::graphite_context->submit();  // necessary to send the semaphores to the GPU
 
   wait_list.clear();
   signal_semaphore = false;
-
-  vk::graphite_context->submit();
-
-  {
-    auto lock = lock_guard(finished_context->mutex);
-    auto now = time::SteadyNow();
-    finished_context->gpu_started = now;
-    finished_context->cpu_time = (now - cpu_started).count();
-  }
 
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "EndFlush(";
@@ -369,38 +386,40 @@ void WidgetDrawable::RenderToSurface(SkCanvas& root_canvas, bool render_in_backg
 }
 
 void WidgetDrawable::onDraw(SkCanvas* canvas) {
+  const auto& frame = rendered();
   if constexpr (kDebugRendering) {
     SkPaint texture_bounds_paint;  // translucent black
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
     texture_bounds_paint.setColor(SkColorSetARGB(128, 0, 0, 0));
-    canvas->drawRect(rendered.surface_bounds_local.sk, texture_bounds_paint);
+    canvas->drawRect(frame.surface_bounds_local.sk, texture_bounds_paint);
   }
 
-  if (rendered.surface == nullptr) {
-    // LOG << "Missing surface for " << Name();
+  if (frame.surface == nullptr) {
+    LOG << "Missing surface for " << name << " (" << id << ")";
   } else {
-    SkRect surface_size = SkRect::MakeWH(rendered.surface->width(), rendered.surface->height());
+    SkRect surface_size = SkRect::MakeWH(frame.surface->width(), frame.surface->height());
 
-    auto anchor_count = min<int>(rendered.texture_anchors.size(), fresh_texture_anchors.size());
+    auto anchor_count = min<int>(frame.texture_anchors.size(), fresh_texture_anchors.size());
 
     if (anchor_count == 2) {
       SkSamplingOptions sampling;
-      static auto builder =
-          resources::RuntimeEffectBuilder(embedded::assets_anchor_warp_rt_sksl.content);
+      Status status;
+      static auto effect = resources::CompileShader(embedded::assets_anchor_warp_rt_sksl, status);
+      assert(effect);
+      SkRuntimeEffectBuilder builder(effect);
 
       SkMatrix root_to_local;
-      (void)rendered.matrix.invert(&root_to_local);
-      Rect local_surface_bounds = SkRect::Make(rendered.surface_bounds_root);
+      (void)frame.matrix.invert(&root_to_local);
+      Rect local_surface_bounds = SkRect::Make(frame.surface_bounds_root);
       root_to_local.mapRect(&local_surface_bounds.sk);
-      builder->uniform("surfaceOrigin") = local_surface_bounds.BottomLeftCorner();
-      builder->uniform("surfaceSize") = local_surface_bounds.Size();
-      builder->uniform("surfaceResolution") =
-          Vec2(rendered.surface->width(), rendered.surface->height());
-      builder->uniform("anchorsLast").set(&rendered.texture_anchors[0], anchor_count);
-      builder->uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);
-      builder->child("surface") = SkSurfaces::AsImage(rendered.surface)->makeShader(sampling);
+      builder.uniform("surfaceOrigin") = local_surface_bounds.BottomLeftCorner();
+      builder.uniform("surfaceSize") = local_surface_bounds.Size();
+      builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
+      builder.uniform("anchorsLast").set(&frame.texture_anchors[0], anchor_count);
+      builder.uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);
+      builder.child("surface") = SkSurfaces::AsImage(frame.surface)->makeShader(sampling);
 
-      auto shader = builder->makeShader();
+      auto shader = builder.makeShader();
       SkPaint paint;
       paint.setShader(shader);
 
@@ -409,8 +428,8 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       // - compute a union of all the moved bounds
       Rect new_anchor_bounds = Rect::MakeEmptyAt(fresh_texture_anchors[0]);
       for (int i = 0; i < anchor_count; ++i) {
-        Vec2 delta = fresh_texture_anchors[i] - rendered.texture_anchors[i];
-        Rect offset_bounds = rendered.surface_bounds_local.MoveBy(delta);
+        Vec2 delta = fresh_texture_anchors[i] - frame.texture_anchors[i];
+        Rect offset_bounds = frame.surface_bounds_local.MoveBy(delta);
         new_anchor_bounds.ExpandToInclude(offset_bounds);
       }
       canvas->drawRect(new_anchor_bounds.sk, paint);
@@ -429,17 +448,17 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       // packed or sent to overflow.
       // Proper solution would probably require some careful test cases.
 
-      SkRect draw_bounds = rendered.surface_bounds_local.sk;
+      SkRect draw_bounds = frame.surface_bounds_local.sk;
 
       /////////////////////////////////////////////////
       // Map from the local coordinates to surface UV
       /////////////////////////////////////////////////
       // First go from local space (metric) to window space (pixels)
-      SkMatrix surface_transform = rendered.matrix;
+      SkMatrix surface_transform = frame.matrix;
       // Now our surface is axis-aligned.
       // Map the surface bounds to unit square.
       surface_transform.postConcat(
-          SkMatrix::RectToRect(SkRect::Make(rendered.surface_bounds_root), SkRect::MakeWH(1, 1)));
+          SkMatrix::RectToRect(SkRect::Make(frame.surface_bounds_root), SkRect::MakeWH(1, 1)));
       // Finally flip the y-axis (Skia uses bottom-left origin, but we use top-left)
       surface_transform.postScale(1, -1, 0, 0.5);
 
@@ -450,8 +469,8 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
         // Apply the inverse transform to the surface mapping - we want to get the original texture
         // position. Note that this transform uses `draw_texture_anchors` which have been saved
         // during the last RenderToSurface.
-        if (anchor_mapping.setPolyToPoly(&fresh_texture_anchors[0].sk,
-                                         &rendered.texture_anchors[0].sk, anchor_count)) {
+        if (anchor_mapping.setPolyToPoly(&fresh_texture_anchors[0].sk, &frame.texture_anchors[0].sk,
+                                         anchor_count)) {
           surface_transform.preConcat(anchor_mapping);
           SkMatrix inverse;
           (void)anchor_mapping.invert(&inverse);
@@ -459,18 +478,19 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
         }
       }
 
-      static auto builder =
-          resources::RuntimeEffectBuilder(embedded::assets_glitch_rt_sksl.content);
-      builder->uniform("surfaceResolution") =
-          Vec2(rendered.surface->width(), rendered.surface->height());
-      builder->uniform("surfaceTransform") = surface_transform;
+      Status status;
+      static auto effect = resources::CompileShader(embedded::assets_glitch_rt_sksl, status);
+      assert(effect);
+
+      SkRuntimeEffectBuilder builder(effect);
+      builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
+      builder.uniform("surfaceTransform") = surface_transform;
       float time = fmod(time::SteadyNow().time_since_epoch().count(), 1.0);
-      builder->uniform("time") = time;
+      builder.uniform("time") = time;
       SkSamplingOptions sampling;
-      builder->child("surface") =
-          SkSurfaces::AsImage(rendered.surface)
-              ->makeShader(SkTileMode::kClamp, SkTileMode::kClamp, sampling);
-      auto shader = builder->makeShader();
+      builder.child("surface") = SkSurfaces::AsImage(frame.surface)
+                                     ->makeShader(SkTileMode::kClamp, SkTileMode::kClamp, sampling);
+      auto shader = builder.makeShader();
       SkPaint paint;
       paint.setShader(shader);
       canvas->drawRect(draw_bounds, paint);
@@ -493,7 +513,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
                                         kNumColors, 0, &shader_matrix));
         surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
         surface_bounds_paint.setStrokeWidth(2.0f);
-        canvas->concat(SkMatrix::RectToRect(surface_size, rendered.surface_bounds_local.sk));
+        canvas->concat(SkMatrix::RectToRect(surface_size, frame.surface_bounds_local.sk));
         canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
       }
       canvas->restore();
@@ -511,9 +531,9 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       bounds_paint.setColor(SkColorSetARGB(128, 0, 128, 0));
 
       for (int i = 0; i < anchor_count; ++i) {
-        canvas->drawCircle(rendered.texture_anchors[i].sk, 1_mm, old_anchor_paint);
+        canvas->drawCircle(frame.texture_anchors[i].sk, 1_mm, old_anchor_paint);
         canvas->drawCircle(fresh_texture_anchors[i].sk, 1_mm, new_anchor_paint);
-        canvas->drawLine(rendered.texture_anchors[i].sk, fresh_texture_anchors[i].sk,
+        canvas->drawLine(frame.texture_anchors[i].sk, fresh_texture_anchors[i].sk,
                          new_anchor_paint);
       }
     }
@@ -1057,12 +1077,10 @@ void RenderFrame(SkCanvas& canvas) {
       cached_widget_drawable->fresh_matrix = matrix;
     }
   }
-  for (auto& update : Concat(pack.frame, pack.overflow)) {
-    WidgetDrawableHolder& ref = WidgetDrawable::Make(update.id);
-    ref.widget_drawable->UpdateState(update);
-  }
+
   for (auto& update : pack.frame) {
     auto widget_drawable = WidgetDrawable::Find(update.id);
+    widget_drawable->render_in_background = false;
     frame.push_back(widget_drawable);
 
     if (update.parent_id) {
@@ -1079,12 +1097,54 @@ void RenderFrame(SkCanvas& canvas) {
     }
   }
   for (auto& update : pack.overflow) {
-    overflow_queue.push_back(WidgetDrawable::Find(update.id));
+    auto widget_drawable = WidgetDrawable::Find(update.id);
+    widget_drawable->render_in_background = true;
+    overflow_queue.push_back(widget_drawable);
+  }
+
+  auto props = canvas.getBaseProps();
+
+  for (auto& update : Concat(pack.frame, pack.overflow)) {
+    WidgetDrawableHolder& ref = WidgetDrawable::Make(update.id);
+    auto* w = ref.widget_drawable;
+    w->UpdateState(update);
+
+    auto& frame = w->in_progress();
+    frame.matrix = w->update_matrix;
+    frame.surface_bounds_root = w->update_surface_bounds_root;
+    frame.surface_bounds_local = *w->pack_frame_texture_bounds;
+    frame.texture_anchors = w->pack_frame_texture_anchors;
+    frame.image_info = canvas.imageInfo().makeDimensions(frame.surface_bounds_root.size());
+    if (frame.texture.isValid() && frame.texture.dimensions() == frame.image_info.dimensions()) {
+      // Reusing existing texture.
+    } else {
+      if (frame.texture.isValid()) {
+        canvas.recorder()->deleteBackendTexture(frame.texture);
+      }
+      frame.texture =
+          canvas.recorder()->createBackendTexture(frame.image_info.dimensions(), kTextureInfo);
+      frame.surface = SkSurfaces::WrapBackendTexture(canvas.recorder(), frame.texture,
+                                                     kBGRA_8888_SkColorType, nullptr, &props);
+    }
+  }
+
+  int pending_recordings = 0;
+  for (auto& update : Concat(pack.frame, pack.overflow)) {
+    auto w = WidgetDrawable::Find(update.id);
+    recording_queue.enqueue(w);
+    ++pending_recordings;
+  }
+
+  // Wait for all of the WidgetDrawables with their recordings to be ready.
+  while (pending_recordings) {
+    WidgetDrawable* w = nullptr;
+    recorded_queue.wait_dequeue(w);
+    --pending_recordings;
   }
 
   // Render the PackedFrame
   for (auto widget_drawable : frame) {
-    widget_drawable->RenderToSurface(canvas, false);
+    widget_drawable->InsertRecording();
   }
 
   if constexpr (kDebugRendering) {
@@ -1099,15 +1159,17 @@ void RenderFrame(SkCanvas& canvas) {
 
         maf::Path("build/debug_widgets/").MakeDirs(nullptr);
 
+        auto surface = state->rendered().surface;
+
         auto read_pixels_context = new ReadPixelsContext{
             .webp_path = f("build/debug_widgets/widget_%03d_%*s.webp", state->id,
                            state->name.size(), state->name.data()),
-            .image_info = state->rendered.surface->imageInfo(),
+            .image_info = surface->imageInfo(),
         };
         vk::graphite_context->asyncRescaleAndReadPixels(
-            state->rendered.surface.get(), state->rendered.surface->imageInfo(),
-            SkIRect::MakeSize(state->rendered.surface->imageInfo().dimensions()),
-            SkImage::RescaleGamma::kLinear, SkImage::RescaleMode::kNearest,
+            surface.get(), surface->imageInfo(),
+            SkIRect::MakeSize(surface->imageInfo().dimensions()), SkImage::RescaleGamma::kLinear,
+            SkImage::RescaleMode::kNearest,
             [](SkImage::ReadPixelsContext context_arg,
                unique_ptr<const SkImage::AsyncReadResult> result) {
               auto context =
@@ -1125,14 +1187,14 @@ void RenderFrame(SkCanvas& canvas) {
   canvas.setMatrix(root_widget->local_to_parent);
 
   // Final widget in the frame is the RootWidget
-  auto root_widget_copy = frame.back();
-  root_widget_copy->onDraw(&canvas);
+  auto* top_level_widget = frame.back();
+  top_level_widget->onDraw(&canvas);
 
   {  // Render overflow widgets
     // Render at least one widget from the overflow queue.
     if (!overflow_queue.empty()) {
       auto cached_widget_drawable = overflow_queue.front();
-      cached_widget_drawable->RenderToSurface(canvas, true);
+      cached_widget_drawable->InsertRecording();
       overflow_queue.pop_front();
     }
     for (int i = 0; i < overflow_queue.size(); ++i) {
@@ -1143,7 +1205,7 @@ void RenderFrame(SkCanvas& canvas) {
       if (expected_total_paint_time > 16.6ms) {
         continue;
       }
-      cached_widget_drawable->RenderToSurface(canvas, true);
+      cached_widget_drawable->InsertRecording();
       overflow_queue.erase(overflow_queue.begin() + i);
       --i;
     }
@@ -1178,7 +1240,9 @@ void RenderFrame(SkCanvas& canvas) {
     }
   }
 
+  // TODO: present should wait for a semaphore from the top_level_widget
   vk::Present();
+  vk::graphite_context->submit();
 }
 
 }  // namespace automat

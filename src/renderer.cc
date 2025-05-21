@@ -387,6 +387,10 @@ void WidgetDrawable::InsertRecording() {
 
 void WidgetDrawable::onDraw(SkCanvas* canvas) {
   const auto& frame = rendered();
+  if (frame.surface == nullptr) {
+    // This widget wasn't included by frame packing - there is no need to draw anything.
+    return;
+  }
   if constexpr (kDebugRendering) {
     SkPaint texture_bounds_paint;  // translucent black
     texture_bounds_paint.setStyle(SkPaint::kStroke_Style);
@@ -394,158 +398,153 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     canvas->drawRect(frame.surface_bounds_local.sk, texture_bounds_paint);
   }
 
-  if (frame.surface == nullptr) {
-    LOG << "Missing surface for " << name << " (" << id << ")";
+  SkRect surface_size = SkRect::MakeWH(frame.surface->width(), frame.surface->height());
+
+  auto anchor_count = min<int>(frame.texture_anchors.size(), fresh_texture_anchors.size());
+
+  if (anchor_count == 2) {
+    SkSamplingOptions sampling;
+    Status status;
+    static auto effect = resources::CompileShader(embedded::assets_anchor_warp_rt_sksl, status);
+    assert(effect);
+    SkRuntimeEffectBuilder builder(effect);
+
+    SkMatrix root_to_local;
+    (void)frame.matrix.invert(&root_to_local);
+    Rect local_surface_bounds = SkRect::Make(frame.surface_bounds_root);
+    root_to_local.mapRect(&local_surface_bounds.sk);
+    builder.uniform("surfaceOrigin") = local_surface_bounds.BottomLeftCorner();
+    builder.uniform("surfaceSize") = local_surface_bounds.Size();
+    builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
+    builder.uniform("anchorsLast").set(&frame.texture_anchors[0], anchor_count);
+    builder.uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);
+    builder.child("surface") = SkSurfaces::AsImage(frame.surface)->makeShader(sampling);
+
+    auto shader = builder.makeShader();
+    SkPaint paint;
+    paint.setShader(shader);
+
+    // Heuristic for finding same texture bounds (guaranteed to contain the whole widget):
+    // - for every anchor move the old texture bounds by its displacement
+    // - compute a union of all the moved bounds
+    Rect new_anchor_bounds = Rect::MakeEmptyAt(fresh_texture_anchors[0]);
+    for (int i = 0; i < anchor_count; ++i) {
+      Vec2 delta = fresh_texture_anchors[i] - frame.texture_anchors[i];
+      Rect offset_bounds = frame.surface_bounds_local.MoveBy(delta);
+      new_anchor_bounds.ExpandToInclude(offset_bounds);
+    }
+    canvas->drawRect(new_anchor_bounds.sk, paint);
   } else {
-    SkRect surface_size = SkRect::MakeWH(frame.surface->width(), frame.surface->height());
+    canvas->save();
 
-    auto anchor_count = min<int>(frame.texture_anchors.size(), fresh_texture_anchors.size());
+    // TODO: use `fresh_matrix` to draw the object at its most recent position.
+    // Here is the "classic" approach to do it:
+    // SkMatrix inverse;
+    // (void)rendered_matrix.invert(&inverse);
+    // canvas->concat(inverse);
+    // canvas->concat(fresh_matrix);
+    // Unfortunately this doesn't work because `rendered_matrix` and `fresh_matrix` include the
+    // whole chain of transforms of parent widgets. This causes complex jittering that changes
+    // its behavior depending on which widgets are rendered to textures and whether they've been
+    // packed or sent to overflow.
+    // Proper solution would probably require some careful test cases.
 
-    if (anchor_count == 2) {
-      SkSamplingOptions sampling;
-      Status status;
-      static auto effect = resources::CompileShader(embedded::assets_anchor_warp_rt_sksl, status);
-      assert(effect);
-      SkRuntimeEffectBuilder builder(effect);
+    SkRect draw_bounds = frame.surface_bounds_local.sk;
 
-      SkMatrix root_to_local;
-      (void)frame.matrix.invert(&root_to_local);
-      Rect local_surface_bounds = SkRect::Make(frame.surface_bounds_root);
-      root_to_local.mapRect(&local_surface_bounds.sk);
-      builder.uniform("surfaceOrigin") = local_surface_bounds.BottomLeftCorner();
-      builder.uniform("surfaceSize") = local_surface_bounds.Size();
-      builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
-      builder.uniform("anchorsLast").set(&frame.texture_anchors[0], anchor_count);
-      builder.uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);
-      builder.child("surface") = SkSurfaces::AsImage(frame.surface)->makeShader(sampling);
+    /////////////////////////////////////////////////
+    // Map from the local coordinates to surface UV
+    /////////////////////////////////////////////////
+    // First go from local space (metric) to window space (pixels)
+    SkMatrix surface_transform = frame.matrix;
+    // Now our surface is axis-aligned.
+    // Map the surface bounds to unit square.
+    surface_transform.postConcat(
+        SkMatrix::RectToRect(SkRect::Make(frame.surface_bounds_root), SkRect::MakeWH(1, 1)));
+    // Finally flip the y-axis (Skia uses bottom-left origin, but we use top-left)
+    surface_transform.postScale(1, -1, 0, 0.5);
 
-      auto shader = builder.makeShader();
-      SkPaint paint;
-      paint.setShader(shader);
-
-      // Heuristic for finding same texture bounds (guaranteed to contain the whole widget):
-      // - for every anchor move the old texture bounds by its displacement
-      // - compute a union of all the moved bounds
-      Rect new_anchor_bounds = Rect::MakeEmptyAt(fresh_texture_anchors[0]);
-      for (int i = 0; i < anchor_count; ++i) {
-        Vec2 delta = fresh_texture_anchors[i] - frame.texture_anchors[i];
-        Rect offset_bounds = frame.surface_bounds_local.MoveBy(delta);
-        new_anchor_bounds.ExpandToInclude(offset_bounds);
+    // Skia puts the origin at the top left corner (going down), but we use bottom left (going
+    // up). This flip makes all the textures composite in our coordinate system correctly.
+    if (anchor_count) {
+      SkMatrix anchor_mapping;
+      // Apply the inverse transform to the surface mapping - we want to get the original texture
+      // position. Note that this transform uses `draw_texture_anchors` which have been saved
+      // during the last RenderToSurface.
+      if (anchor_mapping.setPolyToPoly(&fresh_texture_anchors[0].sk, &frame.texture_anchors[0].sk,
+                                       anchor_count)) {
+        surface_transform.preConcat(anchor_mapping);
+        SkMatrix inverse;
+        (void)anchor_mapping.invert(&inverse);
+        inverse.mapRectScaleTranslate(&draw_bounds, draw_bounds);
       }
-      canvas->drawRect(new_anchor_bounds.sk, paint);
-    } else {
-      canvas->save();
-
-      // TODO: use `fresh_matrix` to draw the object at its most recent position.
-      // Here is the "classic" approach to do it:
-      // SkMatrix inverse;
-      // (void)rendered_matrix.invert(&inverse);
-      // canvas->concat(inverse);
-      // canvas->concat(fresh_matrix);
-      // Unfortunately this doesn't work because `rendered_matrix` and `fresh_matrix` include the
-      // whole chain of transforms of parent widgets. This causes complex jittering that changes
-      // its behavior depending on which widgets are rendered to textures and whether they've been
-      // packed or sent to overflow.
-      // Proper solution would probably require some careful test cases.
-
-      SkRect draw_bounds = frame.surface_bounds_local.sk;
-
-      /////////////////////////////////////////////////
-      // Map from the local coordinates to surface UV
-      /////////////////////////////////////////////////
-      // First go from local space (metric) to window space (pixels)
-      SkMatrix surface_transform = frame.matrix;
-      // Now our surface is axis-aligned.
-      // Map the surface bounds to unit square.
-      surface_transform.postConcat(
-          SkMatrix::RectToRect(SkRect::Make(frame.surface_bounds_root), SkRect::MakeWH(1, 1)));
-      // Finally flip the y-axis (Skia uses bottom-left origin, but we use top-left)
-      surface_transform.postScale(1, -1, 0, 0.5);
-
-      // Skia puts the origin at the top left corner (going down), but we use bottom left (going
-      // up). This flip makes all the textures composite in our coordinate system correctly.
-      if (anchor_count) {
-        SkMatrix anchor_mapping;
-        // Apply the inverse transform to the surface mapping - we want to get the original texture
-        // position. Note that this transform uses `draw_texture_anchors` which have been saved
-        // during the last RenderToSurface.
-        if (anchor_mapping.setPolyToPoly(&fresh_texture_anchors[0].sk, &frame.texture_anchors[0].sk,
-                                         anchor_count)) {
-          surface_transform.preConcat(anchor_mapping);
-          SkMatrix inverse;
-          (void)anchor_mapping.invert(&inverse);
-          inverse.mapRectScaleTranslate(&draw_bounds, draw_bounds);
-        }
-      }
-
-      Status status;
-      static auto effect = resources::CompileShader(embedded::assets_glitch_rt_sksl, status);
-      assert(effect);
-
-      SkRuntimeEffectBuilder builder(effect);
-      builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
-      builder.uniform("surfaceTransform") = surface_transform;
-      float time = fmod(time::SteadyNow().time_since_epoch().count(), 1.0);
-      builder.uniform("time") = time;
-      SkSamplingOptions sampling;
-      builder.child("surface") = SkSurfaces::AsImage(frame.surface)
-                                     ->makeShader(SkTileMode::kClamp, SkTileMode::kClamp, sampling);
-      auto shader = builder.makeShader();
-      SkPaint paint;
-      paint.setShader(shader);
-      canvas->drawRect(draw_bounds, paint);
-
-      if constexpr (kDebugRendering) {
-        SkPaint surface_bounds_paint;
-        constexpr int kNumColors = 10;
-        SkColor colors[kNumColors];
-        float pos[kNumColors];
-        double integer_ignored;
-        double fraction = modf(last_tick_time.time_since_epoch().count() / 4, &integer_ignored);
-        SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
-        for (int i = 0; i < kNumColors; ++i) {
-          float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
-          colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
-          pos[i] = (float)i / (kNumColors - 1);
-        }
-        surface_bounds_paint.setShader(
-            SkGradientShader::MakeSweep(surface_size.centerX(), surface_size.centerY(), colors, pos,
-                                        kNumColors, 0, &shader_matrix));
-        surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
-        surface_bounds_paint.setStrokeWidth(2.0f);
-        canvas->concat(SkMatrix::RectToRect(surface_size, frame.surface_bounds_local.sk));
-        canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
-      }
-      canvas->restore();
     }
+
+    Status status;
+    static auto effect = resources::CompileShader(embedded::assets_glitch_rt_sksl, status);
+    assert(effect);
+
+    SkRuntimeEffectBuilder builder(effect);
+    builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
+    builder.uniform("surfaceTransform") = surface_transform;
+    float time = fmod(time::SteadyNow().time_since_epoch().count(), 1.0);
+    builder.uniform("time") = time;
+    SkSamplingOptions sampling;
+    builder.child("surface") = SkSurfaces::AsImage(frame.surface)
+                                   ->makeShader(SkTileMode::kClamp, SkTileMode::kClamp, sampling);
+    auto shader = builder.makeShader();
+    SkPaint paint;
+    paint.setShader(shader);
+    canvas->drawRect(draw_bounds, paint);
 
     if constexpr (kDebugRendering) {
-      SkPaint old_anchor_paint;
-      old_anchor_paint.setStyle(SkPaint::kStroke_Style);
-      old_anchor_paint.setColor(SkColorSetARGB(128, 128, 0, 0));
-      SkPaint new_anchor_paint;
-      new_anchor_paint.setStyle(SkPaint::kStroke_Style);
-      new_anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 128));
-      SkPaint bounds_paint;
-      bounds_paint.setStyle(SkPaint::kStroke_Style);
-      bounds_paint.setColor(SkColorSetARGB(128, 0, 128, 0));
-
-      for (int i = 0; i < anchor_count; ++i) {
-        canvas->drawCircle(frame.texture_anchors[i].sk, 1_mm, old_anchor_paint);
-        canvas->drawCircle(fresh_texture_anchors[i].sk, 1_mm, new_anchor_paint);
-        canvas->drawLine(frame.texture_anchors[i].sk, fresh_texture_anchors[i].sk,
-                         new_anchor_paint);
+      SkPaint surface_bounds_paint;
+      constexpr int kNumColors = 10;
+      SkColor colors[kNumColors];
+      float pos[kNumColors];
+      double integer_ignored;
+      double fraction = modf(last_tick_time.time_since_epoch().count() / 4, &integer_ignored);
+      SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
+      for (int i = 0; i < kNumColors; ++i) {
+        float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
+        colors[i] = SkHSVToColor((kNumColors - i) * 255 / kNumColors, hsv);
+        pos[i] = (float)i / (kNumColors - 1);
       }
+      surface_bounds_paint.setShader(
+          SkGradientShader::MakeSweep(surface_size.centerX(), surface_size.centerY(), colors, pos,
+                                      kNumColors, 0, &shader_matrix));
+      surface_bounds_paint.setStyle(SkPaint::kStroke_Style);
+      surface_bounds_paint.setStrokeWidth(2.0f);
+      canvas->concat(SkMatrix::RectToRect(surface_size, frame.surface_bounds_local.sk));
+      canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
     }
+    canvas->restore();
+  }
 
-    if constexpr (kDebugRendering) {
-      auto& font = GetFont();
-      SkPaint text_paint;
-      canvas->translate(pack_frame_texture_bounds->left(),
-                        min(pack_frame_texture_bounds->top(), pack_frame_texture_bounds->bottom()));
-      auto text = f("%.1f", average_draw_millis);
-      font.DrawText(*canvas, text, text_paint);
+  if constexpr (kDebugRendering) {
+    SkPaint old_anchor_paint;
+    old_anchor_paint.setStyle(SkPaint::kStroke_Style);
+    old_anchor_paint.setColor(SkColorSetARGB(128, 128, 0, 0));
+    SkPaint new_anchor_paint;
+    new_anchor_paint.setStyle(SkPaint::kStroke_Style);
+    new_anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 128));
+    SkPaint bounds_paint;
+    bounds_paint.setStyle(SkPaint::kStroke_Style);
+    bounds_paint.setColor(SkColorSetARGB(128, 0, 128, 0));
+
+    for (int i = 0; i < anchor_count; ++i) {
+      canvas->drawCircle(frame.texture_anchors[i].sk, 1_mm, old_anchor_paint);
+      canvas->drawCircle(fresh_texture_anchors[i].sk, 1_mm, new_anchor_paint);
+      canvas->drawLine(frame.texture_anchors[i].sk, fresh_texture_anchors[i].sk, new_anchor_paint);
     }
+  }
+
+  if constexpr (kDebugRendering) {
+    auto& font = GetFont();
+    SkPaint text_paint;
+    canvas->translate(pack_frame_texture_bounds->left(),
+                      min(pack_frame_texture_bounds->top(), pack_frame_texture_bounds->bottom()));
+    auto text = f("%.1f", average_draw_millis);
+    font.DrawText(*canvas, text, text_paint);
   }
 }
 

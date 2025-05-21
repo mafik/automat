@@ -78,7 +78,7 @@ struct RootWidget final : Widget, DropTarget {
 
   WidgetStore widgets;
 
-  std::string_view Name() const override { return "Window"; }
+  std::string_view Name() const override { return "RootWidget"; }
 
   DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override { return true; }

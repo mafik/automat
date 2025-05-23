@@ -222,6 +222,7 @@ int Main() {
   prototypes.emplace();
 
   root_widget = MakePtr<RootWidget>();
+  root_widget->loading_animation = std::make_unique<HypnoRect>();
   root_widget->InitToolbar();
   gui::keyboard = MakePtr<gui::Keyboard>(*root_widget);
   root_widget->keyboards.emplace_back(gui::keyboard);
@@ -268,7 +269,7 @@ int Main() {
     ERROR << "Couldn't load saved state: " << status;
   }
 
-  anim.LoadingCompleted();
+  root_widget->loading_animation->LoadingCompleted();
 
   root_widget->window->MainLoop();
 

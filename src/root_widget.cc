@@ -47,7 +47,9 @@ constexpr float kTrashRadius = 3_cm;
 animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
-  phase |= anim.Tick(timer);
+  if (loading_animation) {
+    phase |= loading_animation->Tick(timer);
+  }
 
   // Record camera movement timeline. This is used to create inertia effect.
   camera_timeline.emplace_back(Vec3(camera_pos, zoom));
@@ -222,7 +224,10 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 }
 
 void RootWidget::Draw(SkCanvas& canvas) const {
-  auto anim_guard = anim.WrapDrawing(canvas);
+  Optional<LoadingAnimation::DrawGuard> anim_guard;
+  if (loading_animation) {
+    anim_guard = std::move(loading_animation->WrapDrawing(canvas));
+  }
 
   canvas.clear(background_color);
 

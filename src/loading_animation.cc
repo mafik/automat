@@ -18,8 +18,6 @@ using namespace maf;
 
 namespace automat {
 
-HypnoRect anim;
-
 HypnoRect::HypnoRect() {
   paint.setColor(SK_ColorBLACK);
   paint.setStroke(true);

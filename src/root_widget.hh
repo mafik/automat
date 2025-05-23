@@ -12,6 +12,7 @@
 #include "drag_action.hh"
 #include "keyboard.hh"
 #include "library_toolbar.hh"
+#include "loading_animation.hh"
 #include "math.hh"
 #include "time.hh"
 #include "widget.hh"
@@ -73,6 +74,7 @@ struct RootWidget final : Widget, DropTarget {
   ~RootWidget();
 
   std::unique_ptr<Window> window;
+  std::unique_ptr<LoadingAnimation> loading_animation;
 
   void InitToolbar();
 

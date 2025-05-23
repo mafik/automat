@@ -35,12 +35,24 @@ struct LoadingAnimation {
   virtual void PostDraw(SkCanvas& canvas) { canvas.restore(); }
 
   struct DrawGuard {
-    SkCanvas& canvas;
-    LoadingAnimation& anim;
-    DrawGuard(SkCanvas& canvas, LoadingAnimation& anim) : canvas(canvas), anim(anim) {
+    SkCanvas* canvas;
+    LoadingAnimation* anim;
+    DrawGuard(SkCanvas& canvas, LoadingAnimation& anim) : canvas(&canvas), anim(&anim) {
       anim.PreDraw(canvas);
     }
-    ~DrawGuard() { anim.PostDraw(canvas); }
+    DrawGuard(DrawGuard&& other) : canvas(other.canvas), anim(other.anim) { other.anim = nullptr; }
+    DrawGuard& operator=(DrawGuard&& other) {
+      canvas = other.canvas;
+      anim = other.anim;
+      other.anim = nullptr;
+      return *this;
+    }
+
+    ~DrawGuard() {
+      if (anim) {
+        anim->PostDraw(*canvas);
+      }
+    }
   };
 
   DrawGuard WrapDrawing(SkCanvas& canvas) { return DrawGuard(canvas, *this); }
@@ -78,7 +90,5 @@ struct HypnoRect : public LoadingAnimation {
   void PreDraw(SkCanvas&) override;
   void PostDraw(SkCanvas&) override;
 };
-
-extern HypnoRect anim;
 
 }  // namespace automat

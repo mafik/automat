@@ -89,10 +89,11 @@ std::jthread render_thread;
 
 time::SteadyPoint test_start;
 
-std::string FormatTime(time::Timer& timer) {
-  auto d = timer.now - test_start;
-  return maf::f("%.3fs", d.count());
-}
+std::string FormatTime(time::T d) { return maf::f("%.3fs", d); }
+
+std::string FormatTime(time::Duration d) { return FormatTime(d.count()); }
+
+std::string FormatTime(time::Timer& timer) { return FormatTime(timer.now - test_start); }
 
 struct SlowDrawable : SkDrawableRTTI {
   SkRect onGetBounds() override { return SkRect::MakeWH(100, 100); }
@@ -106,17 +107,54 @@ struct SlowDrawable : SkDrawableRTTI {
 
 struct SlowWidget : Widget {
   sk_sp<SkDrawable> drawable;
-  SlowWidget() : drawable(SkDrawableRTTI::Make<SlowDrawable>()) {}
+  sk_sp<SkRuntimeEffect> runtime_effect;
+  SkPaint paint;
+  SlowWidget() : drawable(SkDrawableRTTI::Make<SlowDrawable>()) {
+    Status status;
+    runtime_effect = resources::CompileShader(
+        maf::fs::VFile{
+            .path = "slow_shader.sksl",
+            .content = R"(// kind=shader
+uniform float iTime;
+
+
+float hash(float n) {
+    return fract(sin(n + iTime) * 43758.5453);
+}
+
+vec4 main( float2 fragCoord ) {
+
+    float3 col = float3(hash(fragCoord.x), hash(fragCoord.y), hash(iTime));
+
+    for (int i = 0; i < 1000; ++i) {
+      for (int j = 0; j < 2000; ++j) {
+        col = float3(hash(col.y), hash(col.z), hash(col.x));
+      }
+    }
+
+    return vec4(col, 1.0);
+}
+)",
+        },
+        status);
+    if (!OK(status)) {
+      FATAL << "Failed to compile shader: " << status;
+    }
+  }
   animation::Phase Tick(time::Timer& timer) override {
-    LOG << FormatTime(timer) << " SlowWidget::Tick";
+    LOG << FormatTime(timer.d) << " SlowWidget::Tick";
     local_to_parent =
-        SkM44(SkMatrix::RotateDeg(timer.NowSeconds() * 360 / 5, root_widget->size / 2));
+        SkM44(SkMatrix::RotateDeg(fmod(timer.NowSeconds() * 360 / 5, 360), root_widget->size / 2));
+
+    float time = (timer.now - test_start).count();
+    auto uniforms = SkData::MakeWithCopy(&time, sizeof(time));
+    paint.setShader(runtime_effect->makeShader(uniforms, nullptr, 0));
     return animation::Animating;
   }
   void Draw(SkCanvas& canvas) const override {
     auto shape = Shape();
-    canvas.drawPath(shape, SkPaint());
-    canvas.drawDrawable(drawable.get());
+    canvas.drawPath(shape, paint);
+    // canvas.drawDrawable(drawable.get());
   }
   SkPath Shape() const override {
     auto r =

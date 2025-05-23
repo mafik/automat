@@ -44,6 +44,7 @@ PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR GetPhysicalDeviceSurfaceCapabiliti
 PFN_vkGetPhysicalDeviceSurfaceFormatsKHR GetPhysicalDeviceSurfaceFormatsKHR;
 PFN_vkGetPhysicalDeviceSurfacePresentModesKHR GetPhysicalDeviceSurfacePresentModesKHR;
 
+PFN_vkGetDeviceQueue vkGetDeviceQueue;
 PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR;
 PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR;
 PFN_vkGetSwapchainImagesKHR vkGetSwapchainImagesKHR;
@@ -97,10 +98,12 @@ struct Device : vkb::Device {
   void Destroy();
   PFN_vkVoidFunction GetProc(const char* proc_name) { return GetDeviceProcAddr(device, proc_name); }
 
+  // Index within the physical device queue family list
   uint32_t graphics_queue_index;
-  VkQueue graphics_queue;
   uint32_t present_queue_index;
-  VkQueue present_queue;
+  VkQueue graphics_queue = nullptr;
+  VkQueue background_queue = nullptr;
+  VkQueue present_queue = nullptr;
   skgpu::VulkanExtensions extensions;
   VkPhysicalDeviceFeatures2 features = {};
   std::string error = "";
@@ -123,7 +126,7 @@ void DestroySemaphore(const skgpu::graphite::BackendSemaphore& backend_semaphore
   vkDestroySemaphore(device, semaphore, nullptr);
 }
 
-std::unique_ptr<skgpu::graphite::Context> graphite_context;
+std::unique_ptr<skgpu::graphite::Context> graphite_context, background_context;
 
 std::unique_ptr<skgpu::graphite::Recorder> graphite_recorder;
 VkSemaphore wait_semaphore = VK_NULL_HANDLE;
@@ -328,6 +331,26 @@ void Device::Init() {
 
   vkb::DeviceBuilder device_builder(vk::physical_device);
 
+  std::vector<vkb::CustomQueueDescription> queue_descriptions;
+
+  auto queue_families = vk::physical_device.get_queue_families();
+  graphics_queue_index = -1;
+  present_queue_index = -1;
+  int graphics_queue_count = 0;
+  for (uint32_t i = 0; i < (uint32_t)queue_families.size(); i++) {
+    if (queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+      graphics_queue_index = i;
+      // TODO: check for presentation support
+      present_queue_index = i;
+      graphics_queue_count = queue_families[i].queueCount;
+      auto priorities = std::vector<float>(queue_families[i].queueCount, 1.0f);
+      priorities.back() = 0.0f;
+      queue_descriptions.push_back(vkb::CustomQueueDescription(i, priorities));
+    }
+  }
+
+  device_builder.custom_queue_setup(queue_descriptions);
+
   // If we set the pNext of the VkDeviceCreateInfo to our
   // VkPhysicalDeviceFeatures2 struct, the device creation will use that
   // instead of the ppEnabledFeatures.
@@ -339,33 +362,10 @@ void Device::Init() {
   }
   *(vkb::Device*)this = dev_ret.value();
 
-  auto gq_result = get_queue(vkb::QueueType::graphics);
-  if (!gq_result) {
-    error = gq_result.error().message();
-    return;
-  }
-  graphics_queue = gq_result.value();
-
-  auto gqi_result = get_queue_index(vkb::QueueType::graphics);
-  if (!gqi_result) {
-    error = gqi_result.error().message();
-    return;
-  }
-  graphics_queue_index = gqi_result.value();
-
-  auto pq_result = get_queue(vkb::QueueType::present);
-  if (!pq_result) {
-    error = pq_result.error().message();
-    return;
-  }
-  present_queue = pq_result.value();
-
-  auto pqi_result = get_queue_index(vkb::QueueType::present);
-  if (!pqi_result) {
-    error = pqi_result.error().message();
-    return;
-  }
-  present_queue_index = pqi_result.value();
+  vkGetDeviceQueue = (PFN_vkGetDeviceQueue)GetProc("vkGetDeviceQueue");
+  vkGetDeviceQueue(device, graphics_queue_index, 0, &graphics_queue);
+  vkGetDeviceQueue(device, graphics_queue_index, graphics_queue_count - 1, &background_queue);
+  vkGetDeviceQueue(device, present_queue_index, 0, &present_queue);
 }
 void Device::Destroy() {
   if (device != VK_NULL_HANDLE) {
@@ -377,7 +377,7 @@ void Device::Destroy() {
   error = "";
 }
 void InitGrContext() {
-  skgpu::VulkanBackendContext backend = {
+  skgpu::VulkanBackendContext foreground_backend = {
       .fInstance = instance,
       .fPhysicalDevice = physical_device,
       .fDevice = device,
@@ -388,10 +388,22 @@ void InitGrContext() {
       .fDeviceFeatures2 = &device.features,
       .fGetProc = GetProc,
   };
+  skgpu::VulkanBackendContext background_backend = {
+      .fInstance = instance,
+      .fPhysicalDevice = physical_device,
+      .fDevice = device,
+      .fQueue = device.background_queue,
+      .fGraphicsQueueIndex = device.graphics_queue_index,
+      .fMaxAPIVersion = instance.api_version,
+      .fVkExtensions = &device.extensions,
+      .fDeviceFeatures2 = &device.features,
+      .fGetProc = GetProc,
+  };
 
   skgpu::graphite::ContextOptions options{};
 
-  graphite_context = skgpu::graphite::ContextFactory::MakeVulkan(backend, options);
+  graphite_context = skgpu::graphite::ContextFactory::MakeVulkan(foreground_backend, options);
+  background_context = skgpu::graphite::ContextFactory::MakeVulkan(background_backend, options);
   graphite_recorder = graphite_context->makeRecorder();
 }
 void InitFunctions() {

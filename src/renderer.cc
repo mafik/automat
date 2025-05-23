@@ -130,6 +130,7 @@ struct WidgetDrawable : SkDrawableRTTI {
     Rect surface_bounds_local;
     SkImageInfo image_info;
     time::Duration cpu_time;
+    time::SteadyPoint gpu_start;
   } frame_a, frame_b;
 
   // These values should be set before the image is sent to VkRecorderThread.
@@ -291,7 +292,8 @@ const skgpu::graphite::TextureInfo kTextureInfo = []() {
 moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recording_queue;
 moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recorded_queue;
 
-void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> recorder) {
+void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> fg_recorder,
+                      std::unique_ptr<skgpu::graphite::Recorder> bg_recorder) {
   SetThreadName("VkRecorder" + std::to_string(thread_id));
 
   while (true) {
@@ -299,6 +301,7 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
     recording_queue.wait_dequeue(w);
     if (w == nullptr) break;
 
+    auto* recorder = w->render_in_background ? bg_recorder.get() : fg_recorder.get();
     auto cpu_started = time::SteadyNow();
     auto& frame = w->in_progress();
     auto graphite_canvas = recorder->makeDeferredCanvas(frame.image_info, kTextureInfo);
@@ -318,32 +321,45 @@ constexpr int kNumVkRecorderThreads = 4;
 
 std::jthread vk_recorder_threads[kNumVkRecorderThreads];
 
+std::unique_ptr<skgpu::graphite::Recorder> global_foreground_recorder;
+std::unique_ptr<skgpu::graphite::Recorder> global_background_recorder;
+
 void RendererInit() {
   SkFlattenable::Register("WidgetDrawable", WidgetDrawable::CreateProc);
+  skgpu::graphite::RecorderOptions options;
+  options.fImageProvider = image_provider;
+  // Recordings which are part of the current frame might be recorded with
+  // "fRequireOrderedRecordings" set to true.
+  // This would require us to set up separate recorders for `frame` & `overflow` widgets.
+  // The performance gain doesn't justify this split just yet.
+  options.fRequireOrderedRecordings = false;
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
-    skgpu::graphite::RecorderOptions options;
-    options.fImageProvider = image_provider;
-    // Recordings which are part of the current frame might be recorded with
-    // "fRequireOrderedRecordings" set to true.
-    // This would require us to set up separate recorders for `frame` & `overflow` widgets.
-    // The performance gain doesn't justify this split just yet.
-    options.fRequireOrderedRecordings = false;
-    auto recorder = vk::graphite_context->makeRecorder(options);
-    vk_recorder_threads[i] = std::jthread(VkRecorderThread, i, std::move(recorder));
+    auto fg_recorder = vk::graphite_context->makeRecorder(options);
+    auto bg_recorder = vk::background_context->makeRecorder(options);
+    vk_recorder_threads[i] =
+        std::jthread(VkRecorderThread, i, std::move(fg_recorder), std::move(bg_recorder));
   }
+  global_foreground_recorder = vk::graphite_context->makeRecorder(options);
+  global_background_recorder = vk::background_context->makeRecorder(options);
 }
 
 void RendererShutdown() {
   cached_widget_drawables.clear();
+  global_foreground_recorder.reset();
+  global_background_recorder.reset();
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
     recording_queue.enqueue(nullptr);
   }
 }
 
+int foreground_rendering_jobs = 0;
+int background_rendering_jobs = 0;
+
 void WidgetDrawable::InsertRecording() {
+  auto& frame = in_progress();
   skgpu::graphite::InsertRecordingInfo insert_recording_info;
   insert_recording_info.fRecording = graphite_recording.get();
-  insert_recording_info.fTargetSurface = in_progress().surface.get();
+  insert_recording_info.fTargetSurface = frame.surface.get();
 
   if (signal_semaphore) {
     insert_recording_info.fSignalSemaphores = &semaphore;
@@ -361,33 +377,45 @@ void WidgetDrawable::InsertRecording() {
   insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
                                            skgpu::CallbackResult result) {
     auto* w = static_cast<WidgetDrawable*>(context);
+    auto& frame = w->in_progress();
 
     // LOG << "GPU time: " << stats.elapsedTime << " (" << (bool)result << ")";
-    float gpu_time = 0;  // stats.elapsedTime / 1000000.0f;
-    float render_time = max<float>(gpu_time, w->in_progress().cpu_time.count());
+    float gpu_time = (time::SteadyNow() - frame.gpu_start).count();
+    float render_time = max<float>(gpu_time, frame.cpu_time.count());
     if (gpu_time > 1) {
       LOG << "Widget " << w->name << " took " << gpu_time << "s to render";
     }
     w->Present();
     next_frame_request.render_results.emplace_back(RenderResult{w->id, render_time});
+    if (w->render_in_background) {
+      --background_rendering_jobs;
+    } else {
+      --foreground_rendering_jobs;
+    }
     if constexpr (kDebugRendering && kDebugRenderEvents) {
       debug_render_events += "Finished(";
       debug_render_events += w->name;
       debug_render_events += ") ";
     }
   };
-
-  vk::graphite_context->insertRecording(insert_recording_info);
-  vk::graphite_context->submit();  // necessary to send the semaphores to the GPU
-
-  wait_list.clear();
-  signal_semaphore = false;
+  if (render_in_background) {
+    ++background_rendering_jobs;
+  } else {
+    ++foreground_rendering_jobs;
+  }
+  frame.gpu_start = time::SteadyNow();
+  auto* context = render_in_background ? vk::background_context.get() : vk::graphite_context.get();
+  context->insertRecording(insert_recording_info);
+  context->submit();  // necessary to send the semaphores to the GPU
 
   if constexpr (kDebugRendering && kDebugRenderEvents) {
-    debug_render_events += "EndFlush(";
+    debug_render_events += "InsertRecording(";
     debug_render_events += name;
     debug_render_events += ") ";
   }
+
+  wait_list.clear();
+  signal_semaphore = false;
 }
 
 void WidgetDrawable::onDraw(SkCanvas* canvas) {
@@ -1046,13 +1074,22 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
 void RenderFrame(SkCanvas& canvas) {
   if constexpr (kDebugRendering && kDebugRenderEvents) {
-    debug_render_events += "BeginSubmit(synced) ";
+    debug_render_events += "WaitingStart(";
+    debug_render_events += to_string(foreground_rendering_jobs);
+    debug_render_events += "/";
+    debug_render_events += to_string(background_rendering_jobs);
+    debug_render_events += " fg/bg jobs) ";
   }
   // Spinlock on this:
-  // vk::graphite_context->checkAsyncWorkCompletion();
-  vk::graphite_context->submit(skgpu::graphite::SyncToCpu::kYes);
+
+  while (foreground_rendering_jobs) {
+    vk::graphite_context->checkAsyncWorkCompletion();
+  }
+  vk::background_context->checkAsyncWorkCompletion();
   if constexpr (kDebugRendering && kDebugRenderEvents) {
-    debug_render_events += "EndSubmit(synced) ";
+    debug_render_events += "WaitingEnd(";
+    debug_render_events += to_string(background_rendering_jobs);
+    debug_render_events += " bg jobs) ";
   }
   paint_start = time::SteadyNow();
 
@@ -1063,10 +1100,12 @@ void RenderFrame(SkCanvas& canvas) {
     lock_guard lock(root_widget->mutex);
     request = std::move(next_frame_request);
     if constexpr (kDebugRendering && kDebugRenderEvents) {
+      static int frame_number = 0;
+      ++frame_number;
+      LOG << "====== FRAME " << frame_number << " ======";
       LOG << "Render events: " << debug_render_events;
       debug_render_events.clear();
     }
-
     PackFrame(request, pack);
   }
 
@@ -1123,11 +1162,12 @@ void RenderFrame(SkCanvas& canvas) {
       // Reusing existing texture.
     } else {
       if (frame.texture.isValid()) {
-        canvas.recorder()->deleteBackendTexture(frame.texture);
+        frame.surface->recorder()->deleteBackendTexture(frame.texture);
       }
-      frame.texture =
-          canvas.recorder()->createBackendTexture(frame.image_info.dimensions(), kTextureInfo);
-      frame.surface = SkSurfaces::WrapBackendTexture(canvas.recorder(), frame.texture,
+      auto* recorder = w->render_in_background ? global_background_recorder.get()
+                                               : global_foreground_recorder.get();
+      frame.texture = recorder->createBackendTexture(frame.image_info.dimensions(), kTextureInfo);
+      frame.surface = SkSurfaces::WrapBackendTexture(recorder, frame.texture,
                                                      kBGRA_8888_SkColorType, nullptr, &props);
     }
   }
@@ -1246,7 +1286,6 @@ void RenderFrame(SkCanvas& canvas) {
 
   // TODO: present should wait for a semaphore from the top_level_widget
   vk::Present();
-  vk::graphite_context->submit();
 }
 
 }  // namespace automat

@@ -16,7 +16,7 @@ constexpr int cfg_MSAASampleCount = 1;
 constexpr bool cfg_DisableVsync = true;
 
 extern bool initialized;
-extern std::unique_ptr<skgpu::graphite::Context> graphite_context;
+extern std::unique_ptr<skgpu::graphite::Context> graphite_context, background_context;
 
 std::string Init();
 void Destroy();

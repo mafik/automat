@@ -40,7 +40,6 @@
 
 using namespace automat::gui;
 using namespace std;
-using namespace maf;
 
 namespace automat::library {
 
@@ -1361,7 +1360,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
           // Fast fade in/out, slow in the middle
           particle_a = acos(1 - 2 * particle_a) / numbers::pi;
 
-          float y = maf::SeededFloat(rect.top, rect.bottom, particle_i);
+          float y = SeededFloat(rect.top, rect.bottom, particle_i);
           SkPaint paint;
           paint.setColor("#ffffff"_color);
           paint.setAlphaf(lerp(1, 0, particle_a));
@@ -1649,7 +1648,7 @@ Vec2AndDir Timeline::ArgStart(const Argument& arg) {
   return Object::FallbackWidget::ArgStart(arg);
 }
 
-void Timeline::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void Timeline::FillChildren(Vec<Ptr<Widget>>& children) {
   children.reserve(3 + tracks.size());
   children.push_back(run_button);
   children.push_back(prev_button);
@@ -1696,7 +1695,7 @@ SkPath TrackBase::Shape() const {
   return SkPath::Rect(rect.sk);
 }
 
-maf::Optional<Rect> TrackBase::TextureBounds() const {
+Optional<Rect> TrackBase::TextureBounds() const {
   if (timeline == nullptr || timeline->drag_zoom_action == nullptr) {
     return FallbackWidget::TextureBounds();
   }
@@ -1964,7 +1963,7 @@ void Timeline::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name) {
+bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
   if (field_name == "timestamps") {
     timestamps.clear();
     Status status;
@@ -1982,7 +1981,7 @@ bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, maf::Str& fiel
   }
   return false;
 }
-bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name) {
+bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
   if (field_name == "on_at") {
     Status status;
     d.Get(on_at, status);

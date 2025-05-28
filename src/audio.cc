@@ -34,7 +34,6 @@
 #include "span.hh"
 #include "str.hh"
 
-using namespace maf;
 using namespace std;
 
 namespace automat::audio {
@@ -392,7 +391,7 @@ struct WAV_Header {
   I32 data_size;
 };
 
-Ptr<Clip> MakeClipFromWAV(maf::fs::VFile& file) {
+Ptr<Clip> MakeClipFromWAV(fs::VFile& file) {
   Span<> content = file.content;
   WAV_Header& header = content.Consume<WAV_Header>();
 
@@ -419,14 +418,13 @@ void ScheduleClip(Ptr<Clip> clip) {
   to_play.enqueue(std::move(clip));
 }
 
-void Play(maf::fs::VFile& file) { ScheduleClip(MakeClipFromWAV(file)); }
+void Play(fs::VFile& file) { ScheduleClip(MakeClipFromWAV(file)); }
 
 struct BeginLoopEndEffect : Effect {
   Ptr<Clip> loop;
   Ptr<Clip> end;
 
-  BeginLoopEndEffect(maf::fs::VFile& begin_file, maf::fs::VFile& loop_file,
-                     maf::fs::VFile& end_file)
+  BeginLoopEndEffect(fs::VFile& begin_file, fs::VFile& loop_file, fs::VFile& end_file)
       : loop(MakeClipFromWAV(loop_file)), end(MakeClipFromWAV(end_file)) {
     auto begin = MakeClipFromWAV(begin_file);
     begin->next = loop;
@@ -440,9 +438,8 @@ struct BeginLoopEndEffect : Effect {
   }
 };
 
-std::unique_ptr<Effect> MakeBeginLoopEndEffect(maf::fs::VFile& begin_file,
-                                               maf::fs::VFile& loop_file,
-                                               maf::fs::VFile& end_file) {
+std::unique_ptr<Effect> MakeBeginLoopEndEffect(fs::VFile& begin_file, fs::VFile& loop_file,
+                                               fs::VFile& end_file) {
   return make_unique<BeginLoopEndEffect>(begin_file, loop_file, end_file);
 }
 

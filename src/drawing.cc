@@ -4,8 +4,6 @@
 
 #include "sincos.hh"
 
-using namespace maf;
-
 namespace automat {
 
 void SetRRectShader(SkPaint& paint, const RRect& rrect, SkColor top, SkColor middle,

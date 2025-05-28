@@ -17,7 +17,6 @@
 #include "prototypes.hh"
 #include "touchpad.hh"
 
-using namespace maf;
 using namespace std;
 
 namespace automat::gui {
@@ -547,7 +546,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
   }
 }
 
-void RootWidget::FillChildren(maf::Vec<Ptr<Widget>>& out_children) {
+void RootWidget::FillChildren(Vec<Ptr<Widget>>& out_children) {
   UpdateConnectionWidgets(*this);
   out_children.reserve(2 + keyboards.size() + pointers.size() + connection_widgets.size());
 

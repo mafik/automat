@@ -287,8 +287,8 @@ struct Location : public gui::Widget {
   // argument should start.
   // TODO: replace with Argument::Start
   Vec2AndDir ArgStart(Argument&);
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
-  maf::Optional<Rect> TextureBounds() const override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  Optional<Rect> TextureBounds() const override;
 
   ////////////////////////////
   // Error reporting

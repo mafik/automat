@@ -25,7 +25,6 @@
 #include "timer_thread.hh"
 
 using namespace std;
-using namespace maf;
 
 namespace automat {
 
@@ -209,7 +208,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
 
 Machine::Machine() {}
 
-void Machine::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void Machine::FillChildren(Vec<Ptr<Widget>>& children) {
   int i = 0;
   Size n = locations.size();
   children.reserve(n);

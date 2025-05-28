@@ -8,8 +8,6 @@
 #include "format.hh"
 #include "log.hh"
 
-using namespace maf;
-
 namespace automat::hid {
 
 const char* UsagePageToString(UsagePage usage_page) {

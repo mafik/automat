@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT
 #include <array>
 
-namespace maf {
+namespace automat {
 
 template <typename T, std::size_t N>
 using Arr = std::array<T, N>;
 
-}  // namespace maf
+}  // namespace automat

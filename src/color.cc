@@ -11,8 +11,6 @@
 #include "log.hh"
 #include "math.hh"
 
-using namespace maf;
-
 namespace automat::color {
 
 namespace {
@@ -291,7 +289,9 @@ SkColor HSLuv(float h, float s, float l, float a) {
 
 }  // namespace automat::color
 
-Str automat::ToStr(SkColor color) {
+namespace automat {
+Str ToStrColor(SkColor color) {
   return f("#%02x%02x%02x%02x", SkColorGetA(color), SkColorGetR(color), SkColorGetG(color),
            SkColorGetB(color));
 }
+}  // namespace automat

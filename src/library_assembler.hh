@@ -56,11 +56,11 @@ struct AssemblerWidget : Object::FallbackWidget, gui::DropTarget {
       RRect::MakeSimple(Rect::MakeAtZero<CenterX, CenterY>(kWidth, kHeight), kRadius);
 
   WeakPtr<Assembler> assembler_weak;
-  maf::Vec<Ptr<RegisterWidget>> reg_widgets;
+  Vec<Ptr<RegisterWidget>> reg_widgets;
 
   AssemblerWidget(WeakPtr<Assembler>);
   std::string_view Name() const override;
-  void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override;
+  void FillChildren(Vec<Ptr<gui::Widget>>& children) override;
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
@@ -137,6 +137,6 @@ struct Assembler : LiveObject, LongRunning, Container {
 // feature of Ptr. The Ptr used by the controller points to mc_inst field of
 // automat::Instruction, while owning the whole object.
 void UpdateCode(mc::Controller& controller, std::vector<Ptr<Instruction>>&& instructions,
-                maf::Status& status);
+                Status& status);
 
 }  // namespace automat::library

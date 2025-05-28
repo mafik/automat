@@ -15,7 +15,7 @@ struct NumberButton : gui::Button {
   NumberButton(Ptr<Widget> child);
   NumberButton(std::string text);
   void Activate(gui::Pointer&) override;
-  maf::StrView Name() const override { return "NumberButton"; }
+  StrView Name() const override { return "NumberButton"; }
   SkColor BackgroundColor() const override;
 };
 
@@ -32,7 +32,7 @@ struct Number : Object, Object::FallbackWidget {
   void SetText(Location& error_context, string_view text) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

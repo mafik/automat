@@ -8,7 +8,7 @@
 #include "log.hh"
 
 using automat::gui::AnsiKey;
-using namespace maf;
+using namespace automat;
 
 // Source:
 // https://handmade.network/forums/t/2011-keyboard_inputs_-_scancodes,_raw_input,_text_input,_key_names

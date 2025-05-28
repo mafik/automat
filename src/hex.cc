@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "hex.hh"
 
-namespace maf {
+namespace automat {
 
 void HexToBytesUnchecked(StrView hex, char* bytes) {
   bool high = true;
@@ -92,4 +92,4 @@ Str HexDump(StrView bytes) {
 
 Str HexDump(Span<> bytes) { return HexDump(StrViewOf(bytes)); }
 
-}  // namespace maf
+}  // namespace automat

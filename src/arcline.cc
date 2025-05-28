@@ -9,7 +9,7 @@
 #include "log.hh"
 #include "sincos.hh"
 
-namespace maf {
+namespace automat {
 
 constexpr bool kDebugOutset = false;
 constexpr bool kDebugMakeFromPath = false;
@@ -590,4 +590,4 @@ float ArcLine::Iterator::AdvanceToEnd() {
   i_fract = 1;
   return distance;
 }
-}  // namespace maf
+}  // namespace automat

@@ -15,7 +15,7 @@
 
 union Vec2;
 
-namespace maf {
+namespace automat {
 
 // A number in the range [-1, 1], with 23 bits of precision and fast conversion to float.
 struct Fixed1 {
@@ -260,4 +260,4 @@ constexpr SinCos operator""_deg(unsigned long long degrees) { return SinCos::Fro
 constexpr SinCos operator""_rad(long double radians) { return SinCos::FromRadians(radians); }
 constexpr SinCos operator""_rad(unsigned long long radians) { return SinCos::FromRadians(radians); }
 
-}  // namespace maf
+}  // namespace automat

@@ -43,7 +43,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
 
   void SetKey(gui::AnsiKey);
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
 
   void OnRun(Location& here) override;
   void SerializeState(Serializer& writer, const char* key) const override;

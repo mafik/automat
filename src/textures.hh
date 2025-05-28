@@ -51,12 +51,12 @@ struct PersistentImage {
 
   static PersistentImage MakeFromSkImage(sk_sp<SkImage> image, MakeArgs = kDefaultArgs);
 
-  static PersistentImage MakeFromAsset(maf::fs::VFile& asset, MakeArgs = kDefaultArgs);
+  static PersistentImage MakeFromAsset(fs::VFile& asset, MakeArgs = kDefaultArgs);
 
   void draw(SkCanvas&);
 };
 
-sk_sp<SkImage> DecodeImage(maf::fs::VFile& asset);
+sk_sp<SkImage> DecodeImage(fs::VFile& asset);
 
 constexpr static SkSamplingOptions kDefaultSamplingOptions =
     SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);

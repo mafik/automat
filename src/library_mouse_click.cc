@@ -33,7 +33,7 @@
 #include "xcb.hh"
 #endif
 
-using namespace maf;
+using namespace automat;
 
 namespace automat::library {
 

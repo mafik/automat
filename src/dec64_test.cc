@@ -9,7 +9,7 @@
 #include "gtest.hh"
 
 using namespace testing;
-using namespace maf;
+using namespace automat;
 
 TEST(DEC64Test, MakeRaw) {
   DEC64 x;

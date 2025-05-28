@@ -40,11 +40,11 @@ struct KeyButton : gui::Button {
   SkRRect RRect() const override;
   SkColor ForegroundColor() const override { return fg; }
   void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;
-  maf::StrView Name() const override { return "KeyButton"; }
-  void SetLabel(maf::StrView new_label);
+  StrView Name() const override { return "KeyButton"; }
+  void SetLabel(StrView new_label);
 };
 
-Ptr<Widget> MakeKeyLabelWidget(maf::StrView label);
+Ptr<Widget> MakeKeyLabelWidget(StrView label);
 
 static constexpr SkColor kKeyEnabledColor = "#f3a75b"_color;
 static constexpr SkColor kKeyDisabledColor = "#f4efea"_color;

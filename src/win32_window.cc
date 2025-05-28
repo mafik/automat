@@ -16,7 +16,6 @@
 using namespace automat;
 using namespace automat::gui;
 using namespace automat::win32;
-using namespace maf;
 using namespace std;
 
 map<HWND, Win32Window*> hwnd_to_window;

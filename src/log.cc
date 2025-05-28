@@ -10,7 +10,7 @@
 
 #include "format.hh"
 
-namespace maf {
+namespace automat {
 
 std::vector<Logger> loggers;
 
@@ -85,4 +85,4 @@ const LogEntry& operator<<(const LogEntry& logger, Status& status) {
   return logger;
 }
 
-}  // namespace maf
+}  // namespace automat

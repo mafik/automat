@@ -15,12 +15,11 @@
 #include "library_window.hh"
 #include "object.hh"
 
-using namespace maf;
 using namespace automat::library;
 
 namespace automat {
 
-maf::Optional<PrototypeLibrary> prototypes;
+Optional<PrototypeLibrary> prototypes;
 
 enum ToolbarVisibility {
   ShowInToolbar,
@@ -80,7 +79,7 @@ Object* PrototypeLibrary::Find(const std::type_info& type) {
   return nullptr;
 }
 
-Object* PrototypeLibrary::Find(maf::StrView name) {
+Object* PrototypeLibrary::Find(StrView name) {
   auto it = name_index.find(name);
   if (it != name_index.end()) {
     return it->second.get();

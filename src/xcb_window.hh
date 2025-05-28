@@ -42,10 +42,10 @@ struct XCBWindow : automat::gui::Window {
   automat::gui::Pointer& GetMouse() override;
   Vec2 ScreenToWindowPx(Vec2 screen) override;
   Vec2 WindowPxToScreen(Vec2 window) override;
-  maf::Optional<Vec2> MousePositionScreenPx() override;
+  automat::Optional<Vec2> MousePositionScreenPx() override;
   void RequestResize(Vec2 new_size) override;
   void RequestMaximize(bool horizontally, bool vertically) override;
-  static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, maf::Status&);
+  static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, automat::Status&);
 
  protected:
   XCBWindow(automat::gui::RootWidget& root) : automat::gui::Window(root) {}

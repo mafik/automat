@@ -38,29 +38,29 @@ struct JsonToken {
     int64_t i64;
     uint64_t u64;
     double d;
-    maf::StrView raw_number;
-    maf::StrView string;
-    maf::StrView key;
+    StrView raw_number;
+    StrView string;
+    StrView key;
   } value;
 
   JsonToken() : type(kNoTokenType) {}
 };
 
-maf::Str ToStr(JsonToken::TokenType);
-maf::Str ToStr(const JsonToken&);
+Str ToStr(JsonToken::TokenType);
+Str ToStr(const JsonToken&);
 
 struct Deserializer {
   Deserializer(rapidjson::InsituStringStream&);
-  void Get(maf::Str&, maf::Status&);
-  void Get(double&, maf::Status&);
-  void Get(float&, maf::Status&);
-  void Get(int&, maf::Status&);
-  void Get(int64_t&, maf::Status&);
-  void Get(uint64_t&, maf::Status&);
-  void Get(bool&, maf::Status&);
+  void Get(Str&, Status&);
+  void Get(double&, Status&);
+  void Get(float&, Status&);
+  void Get(int&, Status&);
+  void Get(int64_t&, Status&);
+  void Get(uint64_t&, Status&);
+  void Get(bool&, Status&);
   void Skip();
 
-  maf::Str ErrorContext();
+  Str ErrorContext();
 
   rapidjson::InsituStringStream& stream;
   rapidjson::Reader reader;
@@ -69,7 +69,7 @@ struct Deserializer {
   char debug_path[256] = {};
   int debug_path_size = 0;
 
-  maf::Str DebugPath() const { return maf::Str(debug_path, debug_path_size); }
+  Str DebugPath() const { return Str(debug_path, debug_path_size); }
   void DebugPut(char c) {
     if (debug_path_size < sizeof(debug_path)) {
       debug_path[debug_path_size++] = c;
@@ -96,10 +96,10 @@ struct ObjectView {
       return *this;
     }
     bool operator!=(EndIterator) const { return !view.finished; }
-    maf::Str& operator*() { return view.key; }
+    Str& operator*() { return view.key; }
   };
 
-  ObjectView(Deserializer&, maf::Status&);
+  ObjectView(Deserializer&, Status&);
 
   // Return `this` as an iterator for less verbose code.
   Iterator begin() { return *this; }
@@ -107,11 +107,11 @@ struct ObjectView {
 
   void ReadKey();
 
-  maf::Str key;
+  Str key;
   Deserializer& deserializer;
   bool finished = false;
-  maf::Status& status;
-  maf::Status first_issue;
+  Status& status;
+  Status first_issue;
   int debug_json_path_size;
 };
 
@@ -129,7 +129,7 @@ struct ArrayView {
     int operator*() { return view.i; }
   };
 
-  ArrayView(Deserializer&, maf::Status&);
+  ArrayView(Deserializer&, Status&);
 
   Iterator begin() { return *this; }
   EndIterator end() { return {}; }
@@ -139,8 +139,8 @@ struct ArrayView {
   Deserializer& deserializer;
   int i = 0;
   bool finished = false;
-  maf::Status& status;
-  maf::Status first_issue;
+  Status& status;
+  Status first_issue;
   int debug_json_path_size;
 };
 

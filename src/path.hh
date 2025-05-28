@@ -7,7 +7,7 @@
 #include "status.hh"
 #include "str.hh"
 
-namespace maf {
+namespace automat {
 
 struct Path {
 #if defined(_WIN32)
@@ -59,4 +59,4 @@ struct Path {
   const char* c_str() const { return str.c_str(); }
 };
 
-}  // namespace maf
+}  // namespace automat

@@ -135,14 +135,14 @@ struct RootWidget final : Widget, DropTarget {
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
 
   void Zoom(float delta);
-  void FillChildren(maf::Vec<Ptr<Widget>>& out_children) override;
+  void FillChildren(Vec<Ptr<Widget>>& out_children) override;
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 
   // Called when closing Automat to persist state across restarts.
   void SerializeState(Serializer&) const;
 
   // Restores state when Automat is restarted.
-  void DeserializeState(Deserializer&, maf::Status&);
+  void DeserializeState(Deserializer&, Status&);
 
   Vec2 size = Vec2(10_cm, 10_cm);
   bool maximized_vertically = false;
@@ -184,7 +184,7 @@ struct RootWidget final : Widget, DropTarget {
   // Child widgets, stored in front-to-back order.
   //
   // TODO: move all children into this vector
-  maf::Vec<Ptr<Widget>> children;
+  Vec<Ptr<Widget>> children;
 
   std::mutex mutex;
 };

@@ -6,7 +6,7 @@
 
 namespace automat::audio {
 
-using Sound = maf::fs::VFile;
+using Sound = fs::VFile;
 
 #ifdef __linux__
 void Init(int* argc, char*** argv);

@@ -4,8 +4,6 @@
 
 #include <optional>
 
-using namespace maf;
-
 namespace automat::touchpad {
 
 std::mutex touchpads_mutex;
@@ -27,7 +25,6 @@ std::vector<TouchPad*> touchpads;
 #include "optional.hh"
 #include "root_widget.hh"
 #include "time.hh"
-
 
 // Description of HID protocol:
 // https://www.usb.org/sites/default/files/hid1_11.pdf

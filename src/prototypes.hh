@@ -20,7 +20,7 @@ struct PrototypeLibrary {
   ~PrototypeLibrary();
 
   Object* Find(const std::type_info&);
-  Object* Find(maf::StrView name);
+  Object* Find(StrView name);
 
   template <typename T>
   T* Find() {
@@ -29,9 +29,9 @@ struct PrototypeLibrary {
 
   std::unordered_map<std::type_index, Ptr<Object>> type_index;
   string_map<Ptr<Object>> name_index;
-  maf::Vec<Ptr<Object>> default_toolbar;
+  Vec<Ptr<Object>> default_toolbar;
 };
 
-extern maf::Optional<PrototypeLibrary> prototypes;
+extern Optional<PrototypeLibrary> prototypes;
 
 }  // namespace automat

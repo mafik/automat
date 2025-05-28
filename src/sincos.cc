@@ -5,7 +5,7 @@
 #include "format.hh"
 #include "math.hh"
 
-namespace maf {
+namespace automat {
 
 void SinCos::PreRotate(SkMatrix& m) const { m.preConcat(ToMatrix()); }
 
@@ -31,4 +31,4 @@ SkMatrix SinCos::ToMatrix(Vec2 pivot) const {
 }
 
 Str SinCos::ToStr() const { return f("SinCos(%f, %f)", (float)sin, (float)cos); }
-}  // namespace maf
+}  // namespace automat

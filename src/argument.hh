@@ -80,13 +80,12 @@ struct Argument {
 
   template <typename T>
   Argument& RequireInstanceOf() {
-    requirements.emplace_back([name = name](Location* location, Object* object,
-                                            std::string& error) {
-      if (dynamic_cast<T*>(object) == nullptr) {
-        error =
-            maf::f("The %s argument must be an instance of %s.", name.c_str(), typeid(T).name());
-      }
-    });
+    requirements.emplace_back(
+        [name = name](Location* location, Object* object, std::string& error) {
+          if (dynamic_cast<T*>(object) == nullptr) {
+            error = f("The %s argument must be an instance of %s.", name.c_str(), typeid(T).name());
+          }
+        });
     return *this;
   }
 
@@ -138,7 +137,7 @@ struct Argument {
       result.typed = dynamic_cast<T*>(result.object);
       if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
         here.ReportError(
-            maf::f("The %s argument is not an instance of %s.", name.c_str(), typeid(T).name()),
+            f("The %s argument is not an instance of %s.", name.c_str(), typeid(T).name()),
             source_location);
         result.ok = false;
       }
@@ -196,7 +195,7 @@ struct Argument {
 
   struct FindConfig {
     IfMissing if_missing = IfMissing::ReturnNull;
-    maf::Optional<float> search_radius = std::nullopt;  // overrides autoconnect_radius
+    Optional<float> search_radius = std::nullopt;  // overrides autoconnect_radius
   };
 
   // Return the position and direction of this argument in the given Widget's coordinate
@@ -209,9 +208,8 @@ struct Argument {
   Vec2AndDir Start(gui::Widget& object_widget, gui::Widget& coordinate_space) const;
 
   // The returned "to_points" use the target object's local coordinate space.
-  void NearbyCandidates(
-      Location& here, float radius,
-      std::function<void(Location&, maf::Vec<Vec2AndDir>& to_points)> callback) const;
+  void NearbyCandidates(Location& here, float radius,
+                        std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const;
 
   Location* FindLocation(Location& here, const FindConfig&) const;
 

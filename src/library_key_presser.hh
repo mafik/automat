@@ -34,7 +34,7 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, L
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const override;
+  void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 
   void KeyDown(gui::Caret&, gui::Key) override;
@@ -42,7 +42,7 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, L
 
   void SetKey(gui::AnsiKey);
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
   void OnRun(Location& here) override;

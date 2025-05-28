@@ -14,8 +14,6 @@
 #include "root_widget.hh"
 #include "time.hh"
 
-using namespace maf;
-
 namespace automat {
 
 HypnoRect::HypnoRect() {

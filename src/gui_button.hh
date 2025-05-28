@@ -26,7 +26,7 @@ struct Clickable : Widget {
 
   Clickable(Ptr<Widget> child) : child(child) {}
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(child); }
+  void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(child); }
   virtual SkRRect RRect() const;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
@@ -53,7 +53,7 @@ struct Button : Clickable {
   virtual void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const;
 
-  maf::Optional<Rect> TextureBounds() const override;
+  Optional<Rect> TextureBounds() const override;
 
   void UpdateChildTransform();
 
@@ -111,7 +111,7 @@ struct ToggleButton : Widget {
 
   ToggleButton(Ptr<Button> on, Ptr<Button> off) : on(on), off(off) {}
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override {
+  void FillChildren(Vec<Ptr<Widget>>& children) override {
     children.push_back(OnWidget());
     children.push_back(off);
   }
@@ -129,7 +129,7 @@ struct ToggleButton : Widget {
   void DrawChildCachced(SkCanvas&, const Widget& child) const override;
   SkRRect RRect() const { return off->RRect(); }
   SkPath Shape() const override { return off->Shape(); }
-  maf::Optional<Rect> TextureBounds() const override { return off->TextureBounds(); }
+  Optional<Rect> TextureBounds() const override { return off->TextureBounds(); }
 
   virtual bool Filled() const { return false; }
 };

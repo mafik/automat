@@ -26,7 +26,7 @@
 #include "root_widget.hh"
 #include "widget.hh"
 
-using namespace maf;
+using namespace automat;
 
 namespace automat::gui {
 
@@ -476,7 +476,7 @@ void DragConnectionAction::Update() {
   widget.WakeAnimation();
 }
 
-maf::Optional<Rect> ConnectionWidget::TextureBounds() const {
+Optional<Rect> ConnectionWidget::TextureBounds() const {
   if (transparency >= 0.99f) {
     return std::nullopt;
   }

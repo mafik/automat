@@ -17,7 +17,7 @@
 #include "int.hh"
 #include "status.hh"
 
-namespace maf {
+namespace automat {
 
 #if defined(__linux__)
 Path Path::ExpandUser() const {
@@ -185,4 +185,4 @@ Path Path::WithStem(StrView stem) const {
   return Path(str.substr(0, stem_begin) + Str(stem) + str.substr(stem_end));
 }
 
-}  // namespace maf
+}  // namespace automat

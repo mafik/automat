@@ -43,7 +43,7 @@ class MachineCodeControllerTest : public ::testing::Test {
     exited = false;
     exit_instr = {};
     exit_point = automat::mc::StopType::InstructionBody;
-    maf::Status status;
+    Status status;
     WeakPtr<automat::mc::Inst> mc_instr = instr.lock()->ToMC();
     controller->Execute(mc_instr, status);
     ASSERT_TRUE(OK(status));
@@ -72,7 +72,7 @@ class MachineCodeControllerTest : public ::testing::Test {
       automat::mc::Controller::State expected, WeakPtr<automat::mc::Inst> expected_exit_instr = {},
       automat::mc::StopType expected_exit_point = automat::mc::StopType::InstructionBody) {
     automat::mc::Controller::State state;
-    maf::Status status;
+    Status status;
     controller->GetState(state, status);
     ExpectWeakPtrsEqual(expected.current_instruction, state.current_instruction,
                         "current_instruction");
@@ -123,7 +123,7 @@ class MachineCodeControllerTest : public ::testing::Test {
     for (auto* inst : instructions) {
       instructions_objs.push_back(inst->SharedPtr());
     }
-    maf::Status status;
+    Status status;
     UpdateCode(*controller, std::move(instructions_objs), status);
     ASSERT_TRUE(OK(status)) << status.ToStr();
   }

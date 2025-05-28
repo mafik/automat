@@ -27,8 +27,6 @@
 
 #endif  // __linux__
 
-using namespace maf;
-
 namespace automat::mc {
 
 // Switch this to true to see debug logs.
@@ -63,7 +61,7 @@ struct PtraceController : Controller {
     });
   }
 
-  void UpdateCode(Program&& program, maf::Status& status) override {
+  void UpdateCode(Program&& program, Status& status) override {
     auto& llvm_asm = automat::LLVM_Assembler::Get();
 
 #ifndef NDEBUG
@@ -259,7 +257,7 @@ struct PtraceController : Controller {
       if constexpr (kDebugCodeController) {
         std::string machine_code_str;
         for (int i = 0; i < new_code.size(); i++) {
-          machine_code_str += maf::f("%02x ", new_code[i]);
+          machine_code_str += f("%02x ", new_code[i]);
           if (i % 16 == 15) {
             machine_code_str += "\n";
           }
@@ -381,7 +379,7 @@ struct PtraceController : Controller {
         return;
       }
       if constexpr (kDebugCodeController) {
-        LOG << "Executing instruction at " << maf::f("%p", instruction_addr);
+        LOG << "Executing instruction at " << f("%p", instruction_addr);
       }
       worker_should_run = true;
       ResumeWorker(status);
@@ -424,7 +422,7 @@ struct PtraceController : Controller {
     RunOnControlThread(get_state);
   }
 
-  void ChangeState(StateVisitor visitor, maf::Status& status) override {
+  void ChangeState(StateVisitor visitor, Status& status) override {
     RunOnControlThread([this, visitor = std::move(visitor), &status]() {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Changing the state";
@@ -435,7 +433,7 @@ struct PtraceController : Controller {
       user_regs_struct user_regs;
       int ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
       if (ret == -1) {
-        maf::AppendErrorMessage(status) += "PTRACE_GETREGS(" + maf::f("%d", pid) + ") failed";
+        AppendErrorMessage(status) += "PTRACE_GETREGS(" + f("%d", pid) + ") failed";
         return;
       }
       state.regs.RAX = user_regs.rax;
@@ -482,12 +480,12 @@ struct PtraceController : Controller {
         worker_should_run = false;
       }
       if (ptrace(PTRACE_SETREGS, pid, 0, &user_regs) == -1) {
-        maf::AppendErrorMessage(status) += "PTRACE_SETREGS failed";
+        AppendErrorMessage(status) += "PTRACE_SETREGS failed";
       }
     });
   }
 
-  void Cancel(maf::Status&) override {
+  void Cancel(Status&) override {
     control_commands.enqueue([this]() {
       if constexpr (kDebugCodeController) {
         LOG << "Control thread: Cancelling";
@@ -598,9 +596,8 @@ struct PtraceController : Controller {
           code_type_str = "Unknown";
           break;
       }
-      LOG << "  " << maf::f("%d", map_entry.begin) << "-"
-          << maf::f("%d", map_entry.begin + map_entry.size) << " " << code_type_str
-          << " inst=" << map_entry.instruction;
+      LOG << "  " << f("%d", map_entry.begin) << "-" << f("%d", map_entry.begin + map_entry.size)
+          << " " << code_type_str << " inst=" << map_entry.instruction;
     }
   }
 
@@ -614,11 +611,11 @@ struct PtraceController : Controller {
   }
 
   // This should only be called from the control thread.
-  void GetRegs(Regs& regs, uint64_t& rip, maf::Status& status) {
+  void GetRegs(Regs& regs, uint64_t& rip, Status& status) {
     user_regs_struct user_regs;
     int ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
     if (ret == -1) {
-      maf::AppendErrorMessage(status) += "PTRACE_GETREGS(" + maf::f("%d", pid) + ") failed";
+      AppendErrorMessage(status) += "PTRACE_GETREGS(" + f("%d", pid) + ") failed";
       return;
     }
     regs.RAX = user_regs.rax;
@@ -640,11 +637,10 @@ struct PtraceController : Controller {
   }
 
   // This should only be called from the control thread.
-  void SetRegs(Regs& regs, maf::Status& status) {
+  void SetRegs(Regs& regs, Status& status) {
     user_regs_struct user_regs;
     if (ptrace(PTRACE_GETREGS, pid, 0, &user_regs) == -1) {
-      maf::AppendErrorMessage(status) +=
-          "SetRegs - PTRACE_GETREGS(" + maf::f("%d", pid) + ") failed";
+      AppendErrorMessage(status) += "SetRegs - PTRACE_GETREGS(" + f("%d", pid) + ") failed";
       return;
     }
     user_regs.rax = regs.RAX;
@@ -663,19 +659,19 @@ struct PtraceController : Controller {
     user_regs.r14 = regs.R14;
     user_regs.r15 = regs.R15;
     if (ptrace(PTRACE_SETREGS, pid, 0, &user_regs) == -1) {
-      maf::AppendErrorMessage(status) += "PTRACE_SETREGS failed";
+      AppendErrorMessage(status) += "PTRACE_SETREGS failed";
     }
   }
 
   // This should only be called from the control thread.
-  void ResumeWorker(maf::Status& status) {
+  void ResumeWorker(Status& status) {
     if (worker_running) {
-      maf::AppendErrorMessage(status) += "Worker already running";
+      AppendErrorMessage(status) += "Worker already running";
       return;
     }
     int ret = ptrace(PTRACE_CONT, pid, 0, 0);
     if (ret == -1) {
-      maf::AppendErrorMessage(status) += "PTRACE_CONT failed";
+      AppendErrorMessage(status) += "PTRACE_CONT failed";
       return;
     }
     worker_running = true;
@@ -782,7 +778,7 @@ struct PtraceController : Controller {
               initial_registers_set = true;
               worker_should_run = false;
               Regs regs = {};
-              maf::Status status;
+              Status status;
               uint64_t rip;
               GetRegs(regs, rip, status);
               if (!OK(status)) {
@@ -827,7 +823,7 @@ struct PtraceController : Controller {
               command();
             }
             if (worker_should_run) {
-              maf::Status status;
+              Status status;
               ResumeWorker(status);
               if (!OK(status)) {
                 ERROR << "Couldn't resume worker thread: " << status;
@@ -874,7 +870,7 @@ struct PtraceController : Controller {
               continue;
             }
             ERROR << "Worker thread received SIGSEGV while accessing memory at "
-                  << maf::f("%p", siginfo.si_addr);
+                  << f("%p", siginfo.si_addr);
             continue;
           } else {
             if constexpr (kDebugCodeController) {

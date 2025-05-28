@@ -33,7 +33,7 @@ struct Window {
   // In pixel coordinates the origin is at the top left and Y goes down.
   virtual Vec2 WindowPxToScreen(Vec2 window) = 0;
 
-  virtual maf::Optional<Vec2> MousePositionScreenPx() = 0;
+  virtual Optional<Vec2> MousePositionScreenPx() = 0;
 
   virtual void RequestResize(Vec2 new_size) = 0;
   virtual void RequestMaximize(bool maximize_horizontally, bool maximize_vertically) = 0;

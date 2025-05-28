@@ -5,7 +5,7 @@
 #include <cstdarg>
 #include <cstdio>
 
-namespace maf {
+namespace automat {
 
 std::string f(const char* fmt, ...) {
   va_list args;
@@ -108,4 +108,4 @@ std::string_view CleanTypeName(std::string_view mangled) {
   return mangled;
 #endif
 }
-}  // namespace maf
+}  // namespace automat

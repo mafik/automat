@@ -36,25 +36,25 @@ def gen(embedded_paths):
 
 #include "../../src/virtual_fs.hh"
 
-namespace maf::embedded {{
+namespace automat::embedded {{
 
-extern std::unordered_map<maf::StrView, maf::fs::VFile*> index;
+extern std::unordered_map<StrView, fs::VFile*> index;
 ''',
               file=hh)
         for path in embedded_paths:
             slug = slug_from_path(path)
-            print(f'extern maf::fs::VFile {slug};', file=hh)
+            print(f'extern fs::VFile {slug};', file=hh)
         print(f'''
-}}  // namespace maf::embedded''', file=hh)
+}}  // namespace automat::embedded''', file=hh)
 
     with cc_path.open('w') as cc:
         print(f'''#include "embedded.hh"
 
 using namespace std::string_literals;
-using namespace maf;
-using namespace maf::fs;
+using namespace automat;
+using namespace automat::fs;
 
-namespace maf::embedded {{''',
+namespace automat::embedded {{''',
               file=cc)
         for path in embedded_paths:
             slug = slug_from_path(path)
@@ -79,7 +79,7 @@ VFile {slug} = {{
             slug = slug_from_path(path)
             print(f'  {{ {slug}.path, &{slug} }},', file=cc)
         print('};', file=cc)
-        print('\n}  // namespace maf::embedded', file=cc)
+        print('\n}  // namespace automat::embedded', file=cc)
 
 
 def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):

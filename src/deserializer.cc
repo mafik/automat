@@ -6,7 +6,6 @@
 #include "log.hh"
 #include "status.hh"
 
-using namespace maf;
 using namespace rapidjson;
 
 namespace automat {

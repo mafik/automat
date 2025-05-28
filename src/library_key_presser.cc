@@ -16,7 +16,6 @@
 #include "textures.hh"
 #include "time.hh"
 
-using namespace maf;
 using namespace std;
 
 namespace automat::library {
@@ -95,7 +94,7 @@ SkPath KeyPresser::Shape() const {
   }();
   return shape;
 }
-void KeyPresser::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
+void KeyPresser::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   auto button_shape = shortcut_button->Shape();
   SkRRect rrect;
   if (button_shape.isRRect(&rrect)) {
@@ -122,9 +121,7 @@ void KeyPresser::KeyDown(gui::Caret&, gui::Key k) {
   shortcut_button->WakeAnimation();
 }
 
-void KeyPresser::FillChildren(maf::Vec<Ptr<Widget>>& children) {
-  children.push_back(shortcut_button);
-}
+void KeyPresser::FillChildren(Vec<Ptr<Widget>>& children) { children.push_back(shortcut_button); }
 
 struct DragAndClickAction : Action {
   gui::PointerButton btn;

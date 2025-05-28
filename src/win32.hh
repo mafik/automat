@@ -17,7 +17,7 @@ namespace automat::win32 {
 void ProcessSetup();
 
 HINSTANCE GetInstance();
-maf::Str GetLastErrorStr();
+Str GetLastErrorStr();
 
 bool IsMaximized(HWND hWnd);
 

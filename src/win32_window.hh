@@ -18,13 +18,13 @@ struct Win32Window : automat::gui::Window {
 
   ~Win32Window();
 
-  static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, maf::Status&);
+  static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, Status&);
 
   void MainLoop() override;
   automat::gui::Pointer& GetMouse() override;
   Vec2 ScreenToWindowPx(Vec2 screen) override;
   Vec2 WindowPxToScreen(Vec2 window) override;
-  maf::Optional<Vec2> MousePositionScreenPx() override;
+  Optional<Vec2> MousePositionScreenPx() override;
   void RequestResize(Vec2 size) override;
   void RequestMaximize(bool horizontal, bool vertical) override;
 

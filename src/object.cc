@@ -14,8 +14,6 @@
 #include "menu.hh"
 #include "root_widget.hh"
 
-using namespace maf;
-
 namespace automat {
 
 std::string_view Object::FallbackWidget::Name() const {
@@ -122,7 +120,6 @@ struct MoveOption : Option {
     }
     auto object = object_weak.lock();
     if (object == nullptr) {
-      LOG << "Object is nullptr";
       return nullptr;
     }
     if (location->object != object) {
@@ -212,7 +209,7 @@ void Object::SerializeState(Serializer& writer, const char* key) const {
 }
 
 void Object::DeserializeState(Location& l, Deserializer& d) {
-  maf::Status status;
+  Status status;
   Str value;
   d.Get(value, status);
   if (!OK(status)) {

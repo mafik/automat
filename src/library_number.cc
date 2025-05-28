@@ -17,7 +17,6 @@
 #include "widget.hh"
 
 using namespace automat::gui;
-using namespace maf;
 
 namespace automat::library {
 
@@ -196,7 +195,7 @@ void Number::Draw(SkCanvas& canvas) const {
 
 SkPath Number::Shape() const { return kNumberShape; }
 
-void Number::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void Number::FillChildren(Vec<Ptr<Widget>>& children) {
   children.reserve(13);
   children.push_back(dot);
   children.push_back(backspace);

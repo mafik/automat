@@ -16,8 +16,6 @@
 #include "gui_connection_widget.hh"
 #include "root_widget.hh"
 
-using namespace maf;
-
 namespace automat::gui {
 
 void TextFieldBase::PointerOver(Pointer& pointer) {

@@ -12,7 +12,6 @@
 #include "color.hh"
 #include "math.hh"
 
-using namespace maf;
 namespace automat::theme::xp {
 
 sk_sp<SkVertices> WindowBorder(Rect outer) {
@@ -171,7 +170,7 @@ sk_sp<SkVertices> WindowBorder(Rect outer) {
   int title_left_corner_center_i =
       kTitleLeftCornerBase + (kTitleGridCornerBeams + 1) * kTitleGridCornerCells;
   for (int beam = 0; beam <= kTitleGridCornerBeams; ++beam) {
-    auto angle = maf::SinCos::FromDegrees(180 - 90.f * beam / kTitleGridCornerBeams);
+    auto angle = SinCos::FromDegrees(180 - 90.f * beam / kTitleGridCornerBeams);
     for (int cell = 0; cell < kTitleGridCornerCells; ++cell) {
       int i = TitleLeftCornerI(beam, cell);
       float length = kTitleGridCornerRadius * (cell + 1) / kTitleGridCornerCells;
@@ -230,7 +229,7 @@ sk_sp<SkVertices> WindowBorder(Rect outer) {
   int title_right_corner_center_i =
       kTitleRightCornerBase + (kTitleGridCornerBeams + 1) * kTitleGridCornerCells;
   for (int beam = 0; beam <= kTitleGridCornerBeams; ++beam) {
-    auto angle = maf::SinCos::FromDegrees(90.f * beam / kTitleGridCornerBeams);
+    auto angle = SinCos::FromDegrees(90.f * beam / kTitleGridCornerBeams);
     for (int cell = 0; cell < kTitleGridCornerCells; ++cell) {
       int i = TitleRightCornerI(beam, cell);
       float length = kTitleGridCornerRadius * (cell + 1) / kTitleGridCornerCells;

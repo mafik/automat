@@ -132,7 +132,7 @@
 #include "log.hh"
 
 using namespace std;
-using namespace maf;
+using namespace automat;
 
 // Whether to simulate slow tasks or near-instant ones.
 constexpr bool kSlowIncrement = true;

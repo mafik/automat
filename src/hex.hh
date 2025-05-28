@@ -7,7 +7,7 @@
 #include "str.hh"
 #include "vec.hh"
 
-namespace maf {
+namespace automat {
 
 void HexToBytesUnchecked(StrView hex, char* out_bytes);
 
@@ -31,8 +31,8 @@ inline Str ValToHex(const T& val) {
   return BytesToHex(Span<>((char*)(&val), sizeof(T)));
 }
 
-inline Vec<> operator""_HexVec(const char* str, size_t len) {
-  Vec buf;
+inline automat::Vec<> operator""_HexVec(const char* str, size_t len) {
+  automat::Vec buf;
   buf.resize(len / 2);
   HexToBytesUnchecked({str, len}, buf.data());
   return buf;
@@ -53,4 +53,4 @@ constexpr Arr<char, (N - 1) / 2> HexArr(const char (&str)[N]) {
 Str HexDump(StrView bytes);
 Str HexDump(Span<> bytes);
 
-}  // namespace maf
+}  // namespace automat

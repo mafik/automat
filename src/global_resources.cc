@@ -33,14 +33,14 @@ void Release() {
   sk_ref_cnt_objects.clear();
 }
 
-sk_sp<SkRuntimeEffect> CompileShader(maf::fs::VFile sksl_file, maf::Status& status) {
+sk_sp<SkRuntimeEffect> CompileShader(fs::VFile sksl_file, Status& status) {
   auto fs = SkString(sksl_file.content);
   SkRuntimeEffect::Options options;
-  auto name = maf::Path(sksl_file.path).Stem();
+  auto name = Path(sksl_file.path).Stem();
   options.fName = name;
   auto result = SkRuntimeEffect::MakeForShader(fs, options);
   if (!result.errorText.isEmpty()) {
-    maf::AppendErrorMessage(status) += result.errorText.c_str();
+    AppendErrorMessage(status) += result.errorText.c_str();
     return nullptr;
   }
   return Hold(std::move(result.effect));  // creates a copy of sk_sp (it's fine)

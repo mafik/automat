@@ -18,7 +18,7 @@
 std::random_device rand_dev;
 std::mt19937 generator(rand_dev());
 
-namespace maf {
+namespace automat {
 
 void RandomBytesSecure(Span<> out) {
 #ifdef __linux__
@@ -43,4 +43,4 @@ XorShift32 XorShift32::MakeFromCurrentTime() {
   auto now = automat::time::SteadyNow().time_since_epoch().count();
   return XorShift32{reinterpret_cast<U32*>(&now)[0] ^ reinterpret_cast<U32*>(&now)[1] ^ 0xdeadbeef};
 }
-}  // namespace maf
+}  // namespace automat

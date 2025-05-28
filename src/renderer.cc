@@ -46,7 +46,6 @@ constexpr bool kDebugRenderEvents = false;
 
 using namespace automat::gui;
 using namespace std;
-using namespace maf;
 
 template <typename T>
 struct Concat {
@@ -100,7 +99,7 @@ struct WidgetDrawable : SkDrawableRTTI {
 
   // Debugging
   float average_draw_millis = FP_NAN;
-  maf::Str name;
+  Str name;
 
   // Rendering
   SkIRect update_surface_bounds_root;
@@ -108,10 +107,10 @@ struct WidgetDrawable : SkDrawableRTTI {
   SkMatrix fresh_matrix;   // the most recent transform
   SkMatrix update_matrix;  // transform at the time of the last UpdateState
 
-  maf::Optional<SkRect> pack_frame_texture_bounds;
-  maf::Vec<Vec2> pack_frame_texture_anchors;
+  Optional<SkRect> pack_frame_texture_bounds;
+  Vec<Vec2> pack_frame_texture_anchors;
 
-  maf::Vec<Vec2> fresh_texture_anchors;
+  Vec<Vec2> fresh_texture_anchors;
   time::SteadyPoint last_tick_time;
 
   // RenderToSurface results
@@ -123,7 +122,7 @@ struct WidgetDrawable : SkDrawableRTTI {
     // TODO: size part of this is already stored in `image_info`. Maybe only store the top/left
     // position?
     SkIRect surface_bounds_root;
-    maf::Vec<Vec2> texture_anchors;
+    Vec<Vec2> texture_anchors;
     // Bounds of the widget's texture (without any clipping) in its local coordinate space.
     // Note that surface have different dimensions. It may be larger (to account for rounding to
     // full pixels) or smaller (due too clipping).
@@ -174,7 +173,7 @@ struct WidgetDrawable : SkDrawableRTTI {
 
     // Debugging
     float average_draw_millis;
-    maf::Str name;
+    Str name;
     time::SteadyPoint last_tick_time;
 
     // Rendering
@@ -185,8 +184,8 @@ struct WidgetDrawable : SkDrawableRTTI {
     sk_sp<SkDrawable> recording_drawable;
     sk_sp<SkData> recording_data;
 
-    maf::Optional<SkRect> pack_frame_texture_bounds;
-    maf::Vec<Vec2> pack_frame_texture_anchors;
+    Optional<SkRect> pack_frame_texture_bounds;
+    Vec<Vec2> pack_frame_texture_anchors;
   };
 
   void UpdateState(const Update&);
@@ -618,7 +617,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     SkMatrix window_to_local;
     SkMatrix local_to_window;     // copied over to Widget, if drawn
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
-    maf::Vec<Vec2> pack_frame_texture_anchors;
+    Vec<Vec2> pack_frame_texture_anchors;
     // Bounds (in local coords) which are rendered to the surface.
     Rect new_visible_bounds;
   };
@@ -1201,7 +1200,7 @@ void RenderFrame(SkCanvas& canvas) {
           SkImageInfo image_info;
         };
 
-        maf::Path("build/debug_widgets/").MakeDirs(nullptr);
+        Path("build/debug_widgets/").MakeDirs(nullptr);
 
         auto surface = state->rendered().surface;
 

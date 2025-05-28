@@ -8,7 +8,7 @@
 #include "str.hh"
 #include "vec.hh"
 
-namespace maf::fs {
+namespace automat::fs {
 
 using Mode = U32;
 
@@ -91,4 +91,4 @@ struct VFile {
 
 void CopyFile(const Path& from, const Path& to, Status&, Mode = RW_R__R__);
 
-}  // namespace maf::fs
+}  // namespace automat::fs

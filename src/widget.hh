@@ -34,7 +34,7 @@ namespace automat::gui {
 struct Widget;
 struct RootWidget;
 
-maf::Str ToStr(Ptr<Widget> widget);
+Str ToStr(Ptr<Widget> widget);
 
 // Transform from the RootWidget coordinates to the local coordinates of the widget.
 SkMatrix TransformDown(const Widget& to);
@@ -105,20 +105,20 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   float average_draw_millis = FP_NAN;
 
   // TODO: remove / clean up
-  maf::Optional<SkRect> pack_frame_texture_bounds;
+  Optional<SkRect> pack_frame_texture_bounds;
 
   // Whenever PackFrame decides to render a widget, it stores the rendered bounds in this field.
   // This is then used later to check if the old surface can be reused.
-  maf::Optional<Rect> rendered_bounds;
+  Optional<Rect> rendered_bounds;
   SkMatrix rendered_matrix;
   bool rendering = false;  // Whether the widget is currently being rendered by the client.
   bool rendering_to_screen = false;  // Whether the current render job is going to be presented.
 
   // The name for objects of this type. English proper noun, UTF-8, capitalized.
   // For example: "Text Editor".
-  virtual maf::StrView Name() const {
+  virtual StrView Name() const {
     const std::type_info& info = typeid(*this);
-    return maf::CleanTypeName(info.name());
+    return CleanTypeName(info.name());
   }
 
   RootWidget& FindRootWidget() const;
@@ -199,23 +199,23 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   virtual DropTarget* AsDropTarget() { return nullptr; }
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  virtual maf::Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
-  virtual maf::Vec<Vec2> TextureAnchors() const { return {}; }
+  virtual Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
+  virtual Vec<Vec2> TextureAnchors() const { return {}; }
 
   virtual void DrawChildCachced(SkCanvas&, const Widget& child) const;
 
   virtual void PreDrawChildren(SkCanvas&) const;
 
-  void DrawChildrenSpan(SkCanvas&, maf::Span<Ptr<Widget>> widgets) const;
+  void DrawChildrenSpan(SkCanvas&, Span<Ptr<Widget>> widgets) const;
 
   void DrawChildren(SkCanvas&) const;
 
   // Used to obtain references to the child widgets in a generic fashion.
   // Widgets are stored in front-to-back order.
-  virtual void FillChildren(maf::Vec<Ptr<Widget>>& children) {}
+  virtual void FillChildren(Vec<Ptr<Widget>>& children) {}
 
-  maf::Vec<Ptr<Widget>> Children() const {
-    maf::Vec<Ptr<Widget>> children;
+  Vec<Ptr<Widget>> Children() const {
+    Vec<Ptr<Widget>> children;
     const_cast<Widget*>(this)->FillChildren(children);
     return children;
   }
@@ -266,7 +266,7 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
 
   // Places where the connections to this widget may terminate.
   // Local (metric) coordinates.
-  virtual void ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const;
+  virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const;
 
   static Ptr<Widget> ForObject(Object&, const Widget& parent);
 };
@@ -284,7 +284,7 @@ T* Closest(Widget& widget) {
 }
 
 struct LabelMixin {
-  virtual void SetLabel(maf::StrView label) = 0;
+  virtual void SetLabel(StrView label) = 0;
 };
 
 struct PaintMixin {

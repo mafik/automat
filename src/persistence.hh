@@ -11,9 +11,9 @@ namespace gui {
 struct RootWidget;
 }  // namespace gui
 
-maf::Path StatePath();
+Path StatePath();
 
-void SaveState(gui::RootWidget&, maf::Status&);
-void LoadState(gui::RootWidget&, maf::Status&);
+void SaveState(gui::RootWidget&, Status&);
+void LoadState(gui::RootWidget&, Status&);
 
 }  // namespace automat

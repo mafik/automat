@@ -6,8 +6,6 @@
 
 #include "str.hh"
 
-using namespace maf;
-
 namespace automat::gui {
 
 StrView ToStr(AnsiKey k) noexcept {
@@ -226,7 +224,7 @@ StrView ToStr(AnsiKey k) noexcept {
   }
 }
 
-AnsiKey AnsiKeyFromStr(maf::StrView str) noexcept {
+AnsiKey AnsiKeyFromStr(StrView str) noexcept {
   static std::map<StrView, AnsiKey> map = []() {
     std::map<StrView, AnsiKey> map;
     for (AnsiKey key = (AnsiKey)0; key < AnsiKey::Count; key = (AnsiKey)((int)key + 1)) {

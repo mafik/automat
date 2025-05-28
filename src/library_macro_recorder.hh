@@ -17,7 +17,7 @@ struct GlassRunButton : gui::PowerButton {
   GlassRunButton(OnOff* on_off) : gui::PowerButton(on_off, color::kParrotRed, "#eeeeee"_color) {}
   void PointerOver(gui::Pointer&) override;
   void PointerLeave(gui::Pointer&) override;
-  maf::StrView Name() const override { return "GlassRunButton"; }
+  StrView Name() const override { return "GlassRunButton"; }
 };
 
 struct MacroRecorder : LiveObject,
@@ -47,7 +47,7 @@ struct MacroRecorder : LiveObject,
   animation::Phase Tick(time::Timer& timer) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(record_button); }
+  void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(record_button); }
 
   void Args(std::function<void(Argument&)> cb) override;
   Ptr<Object> ArgPrototype(const Argument&) override;

@@ -28,7 +28,7 @@ sk_sp<SkShader>& Hold(sk_sp<SkShader>);
 template <>
 sk_sp<SkRuntimeEffect>& Hold(sk_sp<SkRuntimeEffect>);
 
-sk_sp<SkRuntimeEffect> CompileShader(maf::fs::VFile sksl_file, maf::Status& status);
+sk_sp<SkRuntimeEffect> CompileShader(fs::VFile sksl_file, Status& status);
 
 void Release();
 

@@ -22,7 +22,6 @@
 using namespace automat;
 using namespace automat::gui;
 using namespace std;
-using namespace maf;
 
 constexpr bool kPowersave = true;
 time::SystemPoint next_frame;
@@ -89,7 +88,7 @@ std::jthread render_thread;
 
 time::SteadyPoint test_start;
 
-std::string FormatTime(time::T d) { return maf::f("%.3fs", d); }
+std::string FormatTime(time::T d) { return f("%.3fs", d); }
 
 std::string FormatTime(time::Duration d) { return FormatTime(d.count()); }
 
@@ -112,7 +111,7 @@ struct SlowWidget : Widget {
   SlowWidget() : drawable(SkDrawableRTTI::Make<SlowDrawable>()) {
     Status status;
     runtime_effect = resources::CompileShader(
-        maf::fs::VFile{
+        fs::VFile{
             .path = "slow_shader.sksl",
             .content = R"(// kind=shader
 uniform float iTime;

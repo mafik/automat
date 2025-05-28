@@ -31,7 +31,6 @@
 
 using namespace llvm;
 using namespace std;
-using namespace maf;
 
 namespace automat::library {
 
@@ -216,8 +215,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
 Ptr<Object> Assembler::Clone() const { return MakePtr<Assembler>(); }
 
 void UpdateCode(automat::mc::Controller& controller,
-                std::vector<Ptr<automat::library::Instruction>>&& instructions,
-                maf::Status& status) {
+                std::vector<Ptr<automat::library::Instruction>>&& instructions, Status& status) {
   // Sorting allows us to more efficiently search for instructions.
   std::sort(instructions.begin(), instructions.end());
 
@@ -612,7 +610,7 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void AssemblerWidget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {
+void AssemblerWidget::FillChildren(Vec<Ptr<gui::Widget>>& children) {
   // Expensive copy of a bunch of Ptrs :/
   for (auto& child : reg_widgets) {
     children.emplace_back(child->AcquirePtr());

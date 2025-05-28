@@ -11,8 +11,6 @@
 #include "svg.hh"
 #include "widget.hh"
 
-using namespace maf;
-
 namespace automat {
 
 Argument next_arg("next", Argument::kOptional);

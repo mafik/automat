@@ -8,7 +8,7 @@
 #include "sincos.hh"
 #include "vec.hh"
 
-namespace maf {
+namespace automat {
 
 // ArcLine describes a shape composed of lines and arcs. It's optimized towards fast parallel offset
 // (outset) operation.
@@ -150,4 +150,4 @@ struct ArcLine {
   };
 };
 
-}  // namespace maf
+}  // namespace automat

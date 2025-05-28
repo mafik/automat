@@ -4,7 +4,7 @@
 
 #include "int.hh"
 
-namespace maf {
+namespace automat {
 
 // Helper for user-defined string literals.
 //
@@ -24,4 +24,4 @@ struct TemplateStringArg {
   }
 };
 
-}  // namespace maf
+}  // namespace automat

@@ -8,7 +8,7 @@
 #include <typeinfo>
 #endif
 
-namespace maf {
+namespace automat {
 
 // TODO: replace this with std::format when it's available
 Str f(const char* fmt, ...);
@@ -48,4 +48,4 @@ std::string dump_struct(const T& t) {
   return s;
 }
 
-}  // namespace maf
+}  // namespace automat

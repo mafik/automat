@@ -6,7 +6,7 @@
 
 #include "int.hh"
 
-namespace maf {
+namespace automat {
 
 // https://stackoverflow.com/questions/3418231/replace-part-of-a-string-with-another-string
 void ReplaceAll(Str& s, const Str& from, const Str& to) {
@@ -54,4 +54,4 @@ Str Indent(StrView view, int spaces) {
   return ret;
 }
 
-}  // namespace maf
+}  // namespace automat

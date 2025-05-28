@@ -4,9 +4,9 @@
 
 #include <optional>
 
-namespace maf {
+namespace automat {
 
 template <typename T>
 using Optional = std::optional<T>;
 
-}  // namespace maf
+}  // namespace automat

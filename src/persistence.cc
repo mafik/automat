@@ -10,8 +10,6 @@
 #include "status.hh"
 #include "virtual_fs.hh"
 
-using namespace maf;
-
 namespace automat {
 
 Path StatePath() { return Path::ExecutablePath().Parent() / "automat_state.json"; }

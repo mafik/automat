@@ -11,8 +11,8 @@ struct Text : Widget, PaintMixin {
   Text(std::string_view text = "");
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
-  maf::StrView Name() const override { return "Text"; }
-  maf::Optional<Rect> TextureBounds() const override;
+  StrView Name() const override { return "Text"; }
+  Optional<Rect> TextureBounds() const override;
 };
 
 }  // namespace automat::gui

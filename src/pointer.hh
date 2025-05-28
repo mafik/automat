@@ -23,7 +23,7 @@ struct Widget;
 struct RootWidget;
 
 struct PointerMoveCallback {
-  maf::Vec<Pointer*> pointers;
+  Vec<Pointer*> pointers;
   virtual ~PointerMoveCallback();
   virtual void PointerMove(Pointer&, Vec2 position) = 0;
   void StartWatching(Pointer& p);
@@ -81,7 +81,7 @@ struct Pointer {
   Vec2 PositionWithin(const Widget&) const;
   Vec2 PositionWithinRootMachine() const;
 
-  maf::Str ToStr() const;
+  Str ToStr() const;
 
   // Called by a PointerGrabber that wants to grab all pointer events, even when Automat is in the
   // background.
@@ -104,12 +104,12 @@ struct Pointer {
   Vec2 button_down_position[static_cast<int>(PointerButton::Count)];
   time::SystemPoint button_down_time[static_cast<int>(PointerButton::Count)];
 
-  maf::Vec<PointerMoveCallback*> move_callbacks;
+  Vec<PointerMoveCallback*> move_callbacks;
 
   std::unique_ptr<Action> actions[static_cast<int>(PointerButton::Count)];
   Ptr<Widget> hover;
 
-  maf::Vec<WeakPtr<Widget>> path;
+  Vec<WeakPtr<Widget>> path;
 
   Ptr<PointerWidget> pointer_widget;
 };
@@ -118,7 +118,7 @@ struct PointerWidget : Widget {
   Pointer& pointer;
   PointerWidget(Pointer& pointer) : pointer(pointer) {}
   SkPath Shape() const override { return SkPath(); }
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override {
+  void FillChildren(Vec<Ptr<Widget>>& children) override {
     for (auto& action : pointer.actions) {
       if (action == nullptr) {
         continue;
@@ -128,7 +128,7 @@ struct PointerWidget : Widget {
       }
     }
   }
-  maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  Optional<Rect> TextureBounds() const override { return std::nullopt; }
 };
 
 }  // namespace automat::gui

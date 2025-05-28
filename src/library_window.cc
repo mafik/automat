@@ -32,7 +32,6 @@
 #include "xcb.hh"
 #endif
 
-using namespace maf;
 using namespace std;
 
 namespace automat::library {
@@ -195,7 +194,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       pointer_grab = &p.RequestGlobalGrab(*this);
       if (p.keyboard) {
         key_grab = &p.keyboard->RequestKeyGrab(*this, gui::AnsiKey::Escape, false, false, false,
-                                               false, [this](maf::Status& status) {
+                                               false, [this](Status& status) {
                                                  if (pointer_grab) pointer_grab->Release();
                                                  if (key_grab) key_grab->Release();
                                                });
@@ -484,7 +483,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     return FallbackWidget::FindAction(p, btn);
   }
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(pick_button); }
+  void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(pick_button); }
 
   void ReleaseGrab(gui::PointerGrab&) override { pointer_grab = nullptr; }
   void ReleaseKeyGrab(gui::KeyGrab&) override { key_grab = nullptr; }

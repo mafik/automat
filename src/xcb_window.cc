@@ -14,7 +14,7 @@
 #include "x11.hh"
 #include "xcb.hh"
 
-using namespace maf;
+using namespace automat;
 
 namespace xcb {
 
@@ -151,7 +151,7 @@ static void ScanDevices(XCBWindow& window) {
 }
 
 std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& root,
-                                                      maf::Status& status) {
+                                                      Status& status) {
   xcb::Connect(status);
   if (!OK(status)) {
     return nullptr;
@@ -731,8 +731,8 @@ void XCBWindow::MainLoop() {
   }
 }
 
-maf::Optional<Vec2> XCBWindow::MousePositionScreenPx() {
-  return maf::Optional<Vec2>(mouse_position_on_screen);
+Optional<Vec2> XCBWindow::MousePositionScreenPx() {
+  return Optional<Vec2>(mouse_position_on_screen);
 }
 
 }  // namespace xcb

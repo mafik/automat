@@ -15,7 +15,7 @@ namespace automat {
 struct Option {
   Ptr<gui::Widget> icon;
   Option(Ptr<gui::Widget>&& icon);
-  Option(maf::Str name);
+  Option(Str name);
   virtual ~Option() = default;
   virtual std::unique_ptr<Option> Clone() const = 0;
   virtual std::unique_ptr<Action> Activate(gui::Pointer& pointer) const = 0;
@@ -26,7 +26,7 @@ using OptionsVisitor = std::function<void(Option&)>;
 struct OptionsProvider {
   virtual void VisitOptions(const OptionsVisitor&) const = 0;
 
-  maf::Vec<std::unique_ptr<Option>> CloneOptions() const;
+  Vec<std::unique_ptr<Option>> CloneOptions() const;
   std::unique_ptr<Action> OpenMenu(gui::Pointer& pointer) const;
 };
 

@@ -128,10 +128,10 @@ struct KeyGrab {
   // RegisterHotKey can only be called from the main windows thread.
   // This structure allows us to safely call it and return its status code.
   struct RegistrationCallback {
-    KeyGrab* grab;                   // if null, the grab is cancelled, only used on Automat thread
-    maf::Fn<void(maf::Status&)> fn;  // Windows thread schedules this on Automat thread
-    maf::Status status;              // set on Windows thread, read on Automat thread
-    RegistrationCallback(KeyGrab* grab, maf::Fn<void(maf::Status&)>&& fn) : grab(grab), fn(fn) {}
+    KeyGrab* grab;         // if null, the grab is cancelled, only used on Automat thread
+    Fn<void(Status&)> fn;  // Windows thread schedules this on Automat thread
+    Status status;         // set on Windows thread, read on Automat thread
+    RegistrationCallback(KeyGrab* grab, Fn<void(Status&)>&& fn) : grab(grab), fn(fn) {}
   };
 
   RegistrationCallback* cb = nullptr;  // only used on Automat thread
@@ -202,14 +202,14 @@ struct Keyboard final : Widget {
   // Callback is called with a Status object that contains the result of the grab request. It may be
   // called later, (after this function returns) depending on the OS load.
   KeyGrab& RequestKeyGrab(KeyGrabber&, AnsiKey key, bool ctrl, bool alt, bool shift, bool windows,
-                          maf::Fn<void(maf::Status&)> cb);
+                          Fn<void(Status&)> cb);
 
   Keylogging& BeginKeylogging(Keylogger&);
 
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  Optional<Rect> TextureBounds() const override { return std::nullopt; }
 
 #if defined(__linux__)
   // TODO: refactor this

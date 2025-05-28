@@ -31,8 +31,6 @@
 #pragma comment(lib, "Advapi32")
 #endif
 
-using namespace maf;
-
 namespace automat::gui {
 
 constexpr static SkFourByteTag kFontWeightTag = SkSetFourByteTag('w', 'g', 'h', 't');
@@ -48,7 +46,7 @@ sk_sp<SkFontMgr> GetFontMgr() {
   return font_mgr;
 }
 
-sk_sp<SkTypeface> Font::LoadTypeface(maf::fs::VFile& ttf_file) {
+sk_sp<SkTypeface> Font::LoadTypeface(fs::VFile& ttf_file) {
   auto& ttf_content = ttf_file.content;
   sk_sp<SkData> data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
   sk_sp<SkFontMgr> font_mgr = GetFontMgr();
@@ -56,43 +54,42 @@ sk_sp<SkTypeface> Font::LoadTypeface(maf::fs::VFile& ttf_file) {
 }
 
 sk_sp<SkTypeface> Font::GetNotoSans() {
-  static sk_sp<SkTypeface> noto_sans = LoadTypeface(maf::embedded::assets_NotoSans_wght__ttf);
+  static sk_sp<SkTypeface> noto_sans = LoadTypeface(embedded::assets_NotoSans_wght__ttf);
   return noto_sans;
 }
 
 sk_sp<SkTypeface> Font::GetGrenzeThin() {
-  static sk_sp<SkTypeface> grenze_thin = LoadTypeface(maf::embedded::assets_Grenze_Thin_ttf);
+  static sk_sp<SkTypeface> grenze_thin = LoadTypeface(embedded::assets_Grenze_Thin_ttf);
   return grenze_thin;
 }
 
 sk_sp<SkTypeface> Font::GetGrenzeLight() {
-  static sk_sp<SkTypeface> grenze_light = LoadTypeface(maf::embedded::assets_Grenze_Light_ttf);
+  static sk_sp<SkTypeface> grenze_light = LoadTypeface(embedded::assets_Grenze_Light_ttf);
   return grenze_light;
 }
 
 sk_sp<SkTypeface> Font::GetGrenzeRegular() {
-  static sk_sp<SkTypeface> grenze_regular = LoadTypeface(maf::embedded::assets_Grenze_Regular_ttf);
+  static sk_sp<SkTypeface> grenze_regular = LoadTypeface(embedded::assets_Grenze_Regular_ttf);
   return grenze_regular;
 }
 
 sk_sp<SkTypeface> Font::GetGrenzeSemiBold() {
-  static sk_sp<SkTypeface> grenze_semi_bold =
-      LoadTypeface(maf::embedded::assets_Grenze_SemiBold_ttf);
+  static sk_sp<SkTypeface> grenze_semi_bold = LoadTypeface(embedded::assets_Grenze_SemiBold_ttf);
   return grenze_semi_bold;
 }
 
 sk_sp<SkTypeface> Font::GetSilkscreen() {
-  static sk_sp<SkTypeface> silkscreen = LoadTypeface(maf::embedded::assets_slkscr_ttf);
+  static sk_sp<SkTypeface> silkscreen = LoadTypeface(embedded::assets_slkscr_ttf);
   return silkscreen;
 }
 
 sk_sp<SkTypeface> Font::GetHeavyData() {
-  static sk_sp<SkTypeface> heavy_data = LoadTypeface(maf::embedded::assets_heavy_data_ttf);
+  static sk_sp<SkTypeface> heavy_data = LoadTypeface(embedded::assets_heavy_data_ttf);
   return heavy_data;
 }
 
 sk_sp<SkTypeface> Font::GetHelsinki() {
-  static sk_sp<SkTypeface> helsinki = LoadTypeface(maf::embedded::assets_helsinki_ttf);
+  static sk_sp<SkTypeface> helsinki = LoadTypeface(embedded::assets_helsinki_ttf);
   return helsinki;
 }
 
@@ -236,7 +233,7 @@ SkShaper& GetShaper() {
   thread_local std::unique_ptr<SkShaper> shaper = []() {
 #if defined(_WIN32)
     Status status;
-    fs::Copy(fs::real, "C:\\Windows\\Globalization\\ICU\\icudtl.dat", maf::fs::real,
+    fs::Copy(fs::real, "C:\\Windows\\Globalization\\ICU\\icudtl.dat", fs::real,
              Path::ExecutablePath().Parent() / "icudtl.dat", status);
 #endif  // defined(_WIN32)
     return SkShapers::HB::ShapeDontWrapOrReorder(SkUnicodes::ICU::Make(), GetFontMgr());

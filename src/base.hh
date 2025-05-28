@@ -145,10 +145,10 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
   SkPath Shape() const override;
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
   void Relocate(Location* parent) override;
 
-  string ToStr() const { return maf::f("Machine(%s)", name.c_str()); }
+  string ToStr() const { return f("Machine(%s)", name.c_str()); }
 
   Location* Front(const string& name) {
     for (int i = 0; i < front.size(); ++i) {
@@ -203,7 +203,7 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
         parent_location->ScheduleErrored(here);
       } else {
         Error* error = errored.GetError();
-        maf::LogEntry(maf::LogLevel::Error, error->source_location) << error->text;
+        LogEntry(LogLevel::Error, error->source_location) << error->text;
       }
     }
   }

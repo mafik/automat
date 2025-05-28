@@ -26,8 +26,6 @@
 #include "root_widget.hh"
 #include "time.hh"
 
-using namespace automat;
-using namespace maf;
 using namespace std;
 
 namespace automat::gui {
@@ -171,7 +169,7 @@ Ptr<Widget> Widget::ForObject(Object& object, const Widget& parent) {
   return parent.FindRootWidget().widgets.For(object, parent);
 }
 
-void Widget::ConnectionPositions(maf::Vec<Vec2AndDir>& out_positions) const {
+void Widget::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   // By default just one position on the top of the bounding box.
   auto shape = Shape();
   Rect bounds = shape.getBounds();

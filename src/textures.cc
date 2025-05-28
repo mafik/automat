@@ -13,7 +13,7 @@
 
 namespace automat {
 
-sk_sp<SkImage> DecodeImage(maf::fs::VFile& asset) {
+sk_sp<SkImage> DecodeImage(fs::VFile& asset) {
   auto& content = asset.content;
   auto data = SkData::MakeWithoutCopy(content.data(), content.size());
   return SkImages::DeferredFromEncodedData(data);
@@ -53,7 +53,7 @@ PersistentImage PersistentImage::MakeFromSkImage(sk_sp<SkImage> image, MakeArgs 
   };
 }
 
-PersistentImage PersistentImage::MakeFromAsset(maf::fs::VFile& asset, MakeArgs args) {
+PersistentImage PersistentImage::MakeFromAsset(fs::VFile& asset, MakeArgs args) {
   return MakeFromSkImage(DecodeImage(asset), args);
 }
 

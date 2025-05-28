@@ -12,7 +12,7 @@
 #include "status.hh"
 #include "str.hh"
 
-namespace maf {
+namespace automat {
 
 constexpr Size DynamicExtent = std::dynamic_extent;
 
@@ -156,11 +156,11 @@ inline Span<T, DynamicExtent> SpanOfArr(T* arr, Size n) {
   return Span<T, DynamicExtent>(arr, n);
 }
 
-}  // namespace maf
+}  // namespace automat
 
 template <>
-struct std::hash<maf::Span<>> {
-  std::size_t operator()(maf::Span<> span) const {
-    return std::hash<std::string_view>()(StrViewOf(span));
+struct std::hash<automat::Span<>> {
+  std::size_t operator()(automat::Span<> span) const {
+    return std::hash<std::string_view>()(automat::StrViewOf(span));
   }
 };

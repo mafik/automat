@@ -4,7 +4,7 @@
 
 namespace automat {
 
-TextDrawable::TextDrawable(maf::StrView text, float letter_size, gui::Font& font)
+TextDrawable::TextDrawable(StrView text, float letter_size, gui::Font& font)
     : text(text), letter_size(letter_size), font(font) {
   width = font.MeasureText(text);
 }

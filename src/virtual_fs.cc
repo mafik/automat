@@ -15,7 +15,7 @@
 
 #include "../build/generated/embedded.hh"
 
-namespace maf::fs {
+namespace automat::fs {
 
 EmbeddedFS embedded;
 RealFS real;
@@ -27,8 +27,8 @@ __attribute__((constructor)) void InitFS() {
 }
 
 void EmbeddedFS::Map(const Path& path, Fn<void(StrView)> callback, Status& status) {
-  auto it = maf::embedded::index.find(path);
-  if (it == maf::embedded::index.end()) {
+  auto it = embedded::index.find(path);
+  if (it == embedded::index.end()) {
     status() += "Embedded file not found: " + Str(path);
   } else {
     callback(it->second->content);
@@ -36,8 +36,8 @@ void EmbeddedFS::Map(const Path& path, Fn<void(StrView)> callback, Status& statu
 }
 
 Str EmbeddedFS::Read(const Path& path, Status& status) {
-  auto it = maf::embedded::index.find(path);
-  if (it == maf::embedded::index.end()) {
+  auto it = embedded::index.find(path);
+  if (it == embedded::index.end()) {
     status() += "Embedded file not found: " + Str(path);
     return "";
   } else {
@@ -300,4 +300,4 @@ void Copy(VirtualFS& from_fs, const Path& from, VirtualFS& to_fs, const Path& to
   return;
 }
 
-}  // namespace maf::fs
+}  // namespace automat::fs

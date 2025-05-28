@@ -22,7 +22,6 @@
 #include "sincos.hh"
 #include "textures.hh"
 
-using namespace maf;
 using namespace std;
 
 namespace automat::library {
@@ -153,7 +152,7 @@ void FlipFlop::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void FlipFlop::FillChildren(maf::Vec<Ptr<Widget>>& children) { children.push_back(button); }
+void FlipFlop::FillChildren(Vec<Ptr<Widget>>& children) { children.push_back(button); }
 
 void FlipFlop::OnRun(Location& here) {
   current_state = !current_state;

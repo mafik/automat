@@ -5,8 +5,6 @@
 
 #include "math.hh"
 
-using namespace maf;
-
 // See: https://people.cas.uab.edu/~mosya/cl/CPPcircle.html
 namespace automat {
 

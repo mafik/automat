@@ -71,6 +71,6 @@ enum SVGUnit {
 // Scaling assumes 96 DPI and converts coordinates to meters.
 SkPath PathFromSVG(const char svg[], SVGUnit unit = SVGUnit_Pixels96DPI);
 
-sk_sp<SkSVGDOM> SVGFromAsset(maf::StrView svg_contents);
+sk_sp<SkSVGDOM> SVGFromAsset(StrView svg_contents);
 
 }  // namespace automat

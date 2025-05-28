@@ -18,7 +18,7 @@ extern std::atomic_bool automat_thread_finished;
 
 extern std::thread::id main_thread_id;
 
-void StopAutomat(maf::Status&);
+void StopAutomat(Status&);
 
 void EnqueueTask(Task* task);
 void RunOnAutomatThread(std::function<void()>);

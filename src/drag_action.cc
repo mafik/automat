@@ -13,7 +13,6 @@
 #include "pointer.hh"
 #include "root_widget.hh"
 
-using namespace maf;
 using namespace automat::gui;
 
 namespace automat {
@@ -122,7 +121,7 @@ DragLocationAction::~DragLocationAction() {
   }
   gui::root_widget->WakeAnimation();
 }
-void DragLocationWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void DragLocationWidget::FillChildren(Vec<Ptr<Widget>>& children) {
   children.push_back(action.location);
 }
 

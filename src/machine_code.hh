@@ -74,9 +74,9 @@ struct Controller {
   // Convert the given instructions into machine code, hot-reloading if necessary. Thread-safe.
   //
   // Program must be sorted using std::owner_less.
-  virtual void UpdateCode(Program&& program, maf::Status&) = 0;
+  virtual void UpdateCode(Program&& program, Status&) = 0;
 
-  virtual void Execute(NestedWeakPtr<const Inst> inst, maf::Status&) = 0;
+  virtual void Execute(NestedWeakPtr<const Inst> inst, Status&) = 0;
 
   struct State {
     // Instruction which is about to be executed.
@@ -88,11 +88,11 @@ struct Controller {
 
   using StateVisitor = std::function<void(State&)>;
 
-  virtual void GetState(State&, maf::Status&) = 0;
-  virtual void ChangeState(StateVisitor, maf::Status&) = 0;
+  virtual void GetState(State&, Status&) = 0;
+  virtual void ChangeState(StateVisitor, Status&) = 0;
 
   // Status will contain an error if the thread was already cancelled.
-  virtual void Cancel(maf::Status&) = 0;
+  virtual void Cancel(Status&) = 0;
 
   // ExitCallback is going to be called when the machine code exits or crashes.
   static std::unique_ptr<Controller> Make(ExitCallback&& exit_callback);

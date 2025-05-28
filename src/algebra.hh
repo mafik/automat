@@ -45,7 +45,7 @@ struct Equation : Statement {
   }
 
   std::string GetText() const override {
-    return maf::f("%s = %s", lhs->GetText().c_str(), rhs->GetText().c_str());
+    return f("%s = %s", lhs->GetText().c_str(), rhs->GetText().c_str());
   }
 
   void Children(std::function<void(Statement*)> callback) const override {

@@ -29,7 +29,7 @@ struct PrototypeButton : Widget {
 
   SkPath Shape() const override { return proto_widget->Shape(); }
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override { children.push_back(proto_widget); }
+  void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(proto_widget); }
 
   void PointerOver(Pointer& pointer) override { pointer.PushIcon(Pointer::kIconHand); }
 
@@ -39,28 +39,28 @@ struct PrototypeButton : Widget {
 
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger btn) override;
 
-  maf::StrView Name() const override { return "PrototypeButton"; }
+  StrView Name() const override { return "PrototypeButton"; }
 };
 
 struct Toolbar : gui::Widget, gui::PointerMoveCallback {
-  maf::Vec<Ptr<Object>> prototypes;
-  maf::Vec<Ptr<gui::PrototypeButton>> buttons;
+  Vec<Ptr<Object>> prototypes;
+  Vec<Ptr<gui::PrototypeButton>> buttons;
 
   mutable int hovered_button = -1;
 
   // This will clone the provided object and add it to the toolbar.
   void AddObjectPrototype(const Ptr<Object>&);
 
-  maf::StrView Name() const override;
+  StrView Name() const override;
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
   void UpdateChildTransform();
   float CalculateWidth() const;
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
-  maf::Optional<Rect> TextureBounds() const override;
+  Optional<Rect> TextureBounds() const override;
 
   void PointerOver(gui::Pointer& pointer) override { StartWatching(pointer); }
 

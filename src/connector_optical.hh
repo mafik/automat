@@ -24,24 +24,24 @@ struct CablePhysicsSimulation {
     Vec2 vel;
     Vec2 acc;
 
-    maf::SinCos dir;  // Direction of the cable at this point. This is calculated from the previous
-                      // and next points.
-    maf::SinCos
+    SinCos dir;  // Direction of the cable at this point. This is calculated from the previous
+                 // and next points.
+    SinCos
         true_dir_offset;  // Difference between the "true" dir (coming from the arcline) and `dir`.
 
     // Distance to the next element
     float distance;
 
-    maf::SinCos next_dir_delta;                                  // 0 when the cable is straight
-    maf::SinCos prev_dir_delta = maf::SinCos::FromDegrees(180);  // M_PI when the cable is straight
+    SinCos next_dir_delta;                             // 0 when the cable is straight
+    SinCos prev_dir_delta = SinCos::FromDegrees(180);  // M_PI when the cable is straight
   };
 
-  maf::Vec<CableSection> sections;
-  maf::Optional<maf::ArcLine> arcline;
+  Vec<CableSection> sections;
+  Optional<ArcLine> arcline;
 
   bool stabilized = false;
   Vec2 stabilized_start;
-  maf::Optional<Vec2> stabilized_end;
+  Optional<Vec2> stabilized_end;
 
   // The length of the cable calculated during the last DrawCable call.
   mutable float approx_length = 0;
@@ -64,11 +64,10 @@ struct CablePhysicsSimulation {
   SkMatrix ConnectorMatrix() const;
 };
 
-maf::ArcLine RouteCable(Vec2AndDir start, maf::Span<const Vec2AndDir> ends,
-                        SkCanvas* debug_canvas = nullptr);
+ArcLine RouteCable(Vec2AndDir start, Span<const Vec2AndDir> ends, SkCanvas* debug_canvas = nullptr);
 
 animation::Phase SimulateCablePhysics(time::Timer&, CablePhysicsSimulation&, Vec2AndDir start,
-                                      maf::Span<Vec2AndDir> end_candidates);
+                                      Span<Vec2AndDir> end_candidates);
 
 void DrawOpticalConnector(SkCanvas&, const CablePhysicsSimulation&, PaintDrawable& icon);
 

@@ -18,7 +18,7 @@ struct Knob {
   std::deque<Vec2> history;
 
   // Use these to parametrize the knob.
-  maf::SinCos unit_angle = maf::SinCos::FromDegrees(45);
+  SinCos unit_angle = SinCos::FromDegrees(45);
   float unit_distance = 5_mm;
 
   // Use this to read out the current value of the knob.
@@ -27,7 +27,7 @@ struct Knob {
   // Use this to read out the current direction of the values.
   //
   // Initially the values increase towards the right.
-  maf::SinCos tangent = maf::SinCos::FromDegrees(0);
+  SinCos tangent = SinCos::FromDegrees(0);
 
   // Use this to read out the current curvature of the values.
   //

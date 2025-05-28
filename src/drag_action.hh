@@ -35,8 +35,8 @@ struct DragLocationWidget : gui::Widget {
   DragLocationAction& action;
   DragLocationWidget(DragLocationAction& action) : action(action) {}
   SkPath Shape() const override;
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
-  maf::Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  Optional<Rect> TextureBounds() const override { return std::nullopt; }
 };
 
 struct DragLocationAction : Action {

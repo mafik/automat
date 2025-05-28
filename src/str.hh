@@ -4,7 +4,7 @@
 
 #include <string>
 
-namespace maf {
+namespace automat {
 
 using Str = std::string;
 using StrView = std::string_view;
@@ -56,4 +56,4 @@ concept Stringer = requires(T t) {
   { ToStr(t) } -> std::same_as<Str>;
 };
 
-}  // namespace maf
+}  // namespace automat

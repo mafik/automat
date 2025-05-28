@@ -67,7 +67,7 @@ void SmallBufferWidget::Measure() {
       } break;
       case Buffer::Type::Hexadecimal: {
         for (int i = 0; i < bytes; i++) {
-          sample_text += maf::f("%02x", (uint8_t)0xff);
+          sample_text += f("%02x", (uint8_t)0xff);
         }
         break;
       }
@@ -136,42 +136,42 @@ static void RefreshText(SmallBufferWidget& widget) {
   } else {
     if (new_type == Buffer::Type::Signed) {
       if (bytes.size() == 1) {
-        text = maf::f("%hhd", *(int8_t*)&bytes[0]);
+        text = f("%hhd", *(int8_t*)&bytes[0]);
       } else if (bytes.size() == 2) {
-        text = maf::f("%hd", *(int16_t*)&bytes[0]);
+        text = f("%hd", *(int16_t*)&bytes[0]);
       } else if (bytes.size() == 4) {
-        text = maf::f("%d", *(int32_t*)&bytes[0]);
+        text = f("%d", *(int32_t*)&bytes[0]);
       } else if (bytes.size() == 8) {
-        text = maf::f("%lld", *(int64_t*)&bytes[0]);
+        text = f("%lld", *(int64_t*)&bytes[0]);
       } else {
-        text = maf::f("%lld (size=%d)", *(int64_t*)&bytes[0], (int)bytes.size());
+        text = f("%lld (size=%d)", *(int64_t*)&bytes[0], (int)bytes.size());
       }
     } else if (new_type == Buffer::Type::Unsigned) {
       if (bytes.size() == 1) {
-        text = maf::f("%hhu", *(uint8_t*)&bytes[0]);
+        text = f("%hhu", *(uint8_t*)&bytes[0]);
       } else if (bytes.size() == 2) {
-        text = maf::f("%hu", *(uint16_t*)&bytes[0]);
+        text = f("%hu", *(uint16_t*)&bytes[0]);
       } else if (bytes.size() == 4) {
-        text = maf::f("%u", *(uint32_t*)&bytes[0]);
+        text = f("%u", *(uint32_t*)&bytes[0]);
       } else if (bytes.size() == 8) {
-        text = maf::f("%llu", *(uint64_t*)&bytes[0]);
+        text = f("%llu", *(uint64_t*)&bytes[0]);
       } else {
-        text = maf::f("%llu (size=%d)", *(uint64_t*)&bytes[0], (int)bytes.size());
+        text = f("%llu (size=%d)", *(uint64_t*)&bytes[0], (int)bytes.size());
       }
     } else if (new_type == Buffer::Type::Hexadecimal) {
       if (bytes.size() == 1) {
-        text = maf::f("%hhx", (uint8_t)bytes[0]);
+        text = f("%hhx", (uint8_t)bytes[0]);
       } else if (bytes.size() == 2) {
-        text = maf::f("%hx", *(uint16_t*)&bytes[0]);
+        text = f("%hx", *(uint16_t*)&bytes[0]);
       } else if (bytes.size() == 4) {
-        text = maf::f("%x", *(uint32_t*)&bytes[0]);
+        text = f("%x", *(uint32_t*)&bytes[0]);
       } else if (bytes.size() == 8) {
-        text = maf::f("%llx", *(uint64_t*)&bytes[0]);
+        text = f("%llx", *(uint64_t*)&bytes[0]);
       } else {
-        text = maf::f("%llx (size=%d)", *(uint64_t*)&bytes[0], (int)bytes.size());
+        text = f("%llx (size=%d)", *(uint64_t*)&bytes[0], (int)bytes.size());
       }
     } else {
-      text = maf::f("(type=%d?)", (int)new_type);
+      text = f("(type=%d?)", (int)new_type);
     }
   }
   if (type_changed) {
@@ -228,7 +228,7 @@ void SmallBufferWidget::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void SmallBufferWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void SmallBufferWidget::FillChildren(Vec<Ptr<Widget>>& children) {
   children.push_back(type_button);
 }
 

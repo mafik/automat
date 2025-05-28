@@ -15,7 +15,6 @@
 #include "widget.hh"
 
 using namespace std::literals;
-using namespace maf;
 
 namespace automat::gui {
 std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
@@ -145,7 +144,7 @@ void Toolbar::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void Toolbar::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void Toolbar::FillChildren(Vec<Ptr<Widget>>& children) {
   children.reserve(buttons.size());
   for (size_t i = 0; i < buttons.size(); ++i) {
     children.push_back(buttons[i]);
@@ -183,8 +182,8 @@ float Toolbar::CalculateWidth() const {
   }
   return width;
 }
-maf::StrView Toolbar::Name() const { return "Toolbar"sv; }
-maf::Optional<Rect> Toolbar::TextureBounds() const {
+StrView Toolbar::Name() const { return "Toolbar"sv; }
+Optional<Rect> Toolbar::TextureBounds() const {
   float width = CalculateWidth();
   return Rect(-width / 2, 0, width / 2, kToolbarHeight * 2);
 }

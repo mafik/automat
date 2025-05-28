@@ -6,7 +6,7 @@
 
 #include "format.hh"
 
-namespace maf {
+namespace automat {
 
 Status::Status() : errsv(0) {}
 
@@ -55,4 +55,4 @@ void Status::Reset() {
   entry.reset();
 }
 
-}  // namespace maf
+}  // namespace automat

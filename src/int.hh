@@ -6,7 +6,7 @@
 
 #include <type_traits>
 
-namespace maf {
+namespace automat {
 
 using I8 = signed char;
 using I16 = signed short;
@@ -41,12 +41,12 @@ using U128 = unsigned __int128;  // _BitInt(128);
 using Size = size_t;
 using SSize = I64;
 
-}  // namespace maf
+}  // namespace automat
 
 namespace std {
 
 template <>
-struct is_integral<maf::U24> {
+struct is_integral<automat::U24> {
   static constexpr bool value = true;
 };
 

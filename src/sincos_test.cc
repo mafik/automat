@@ -9,7 +9,7 @@
 #include "format.hh"
 #include "gtest.hh"
 
-using namespace maf;
+using namespace automat;
 
 namespace testing {
 template <>

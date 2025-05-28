@@ -32,7 +32,7 @@ union Vec2 {
   constexpr Vec2(float xy) : x(xy), y(xy) {}
   constexpr Vec2(float x, float y) : x(x), y(y) {}
   constexpr Vec2(SkPoint p) : sk(p) {}
-  constexpr static Vec2 Polar(maf::SinCos angle, float length) {
+  constexpr static Vec2 Polar(automat::SinCos angle, float length) {
     return Vec2((float)angle.cos * length, (float)angle.sin * length);
   }
   constexpr static Vec2 Polar(float angle, float length) {
@@ -460,7 +460,7 @@ union RRect {
 
 struct Vec2AndDir {
   Vec2 pos;
-  maf::SinCos dir;
+  automat::SinCos dir;
 };
 
 inline float atan(Vec2 v) { return atan2f(v.y, v.x); }

@@ -32,8 +32,6 @@
 #include "textures.hh"
 #include "time.hh"
 
-using namespace maf;
-
 namespace automat::gui {
 
 constexpr bool kDebugCable = false;
@@ -227,7 +225,7 @@ static ArcLine RouteCableOneEnd(Vec2AndDir start, Vec2AndDir end,
   }
 }
 
-ArcLine RouteCable(Vec2AndDir start, const maf::Span<const Vec2AndDir> cable_ends,
+ArcLine RouteCable(Vec2AndDir start, const Span<const Vec2AndDir> cable_ends,
                    SkCanvas* debug_canvas) {
   float best_total_length = HUGE_VALF;
   ArcLine best_route = ArcLine(start.pos, start.dir);
@@ -335,7 +333,7 @@ static bool SimulateDispenser(CablePhysicsSimulation& state, float dt, Size anch
 }
 
 animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation& state,
-                                      Vec2AndDir dispenser, maf::Span<Vec2AndDir> end_candidates) {
+                                      Vec2AndDir dispenser, Span<Vec2AndDir> end_candidates) {
   SkCanvas* debug_canvas = nullptr;
   if constexpr (kDebugCable) {
     // TODO: actually display this recording

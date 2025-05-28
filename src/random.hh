@@ -15,7 +15,7 @@ T random() {
   return distr(generator);
 }
 
-namespace maf {
+namespace automat {
 
 // Algorithm "xor" from p. 4 of Marsaglia, "Xorshift RNGs"
 struct XorShift32 {
@@ -64,4 +64,4 @@ int RandomInt(Generator& gen) {
   return min_inclusive + n % (max_exclusive - min_inclusive);
 }
 
-}  // namespace maf
+}  // namespace automat

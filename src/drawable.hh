@@ -24,11 +24,11 @@ struct PaintDrawable : Drawable {
 };
 
 struct TextDrawable : PaintDrawable {
-  maf::Str text;
+  Str text;
   float width;
   float letter_size;
   gui::Font& font;
-  TextDrawable(maf::StrView text, float letter_size, gui::Font& font);
+  TextDrawable(StrView text, float letter_size, gui::Font& font);
 
   void onDraw(SkCanvas* canvas) override;
 };

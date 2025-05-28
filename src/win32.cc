@@ -15,7 +15,7 @@
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "shlwapi.lib")
 
-using namespace maf;
+using namespace automat;
 
 namespace automat::win32 {
 
@@ -37,14 +37,14 @@ HINSTANCE GetInstance() {
   return instance;
 }
 
-maf::Str GetLastErrorStr() {
+Str GetLastErrorStr() {
   DWORD error = GetLastError();
   if (error == 0) return "No error";
   LPSTR messageBuffer = nullptr;
   size_t size = FormatMessageA(
       FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
       nullptr, error, 0, (LPSTR)&messageBuffer, 0, nullptr);
-  maf::Str message(messageBuffer, size);
+  Str message(messageBuffer, size);
   LocalFree(messageBuffer);
   return message;
 }

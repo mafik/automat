@@ -11,7 +11,7 @@
 
 #include "gtest.hh"
 
-using namespace maf;
+using namespace automat;
 using namespace ::testing;
 
 #pragma comment(lib, "skia")

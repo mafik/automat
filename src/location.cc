@@ -34,7 +34,6 @@
 #include "widget.hh"
 
 using namespace automat::gui;
-using namespace maf;
 using namespace std;
 
 namespace automat {
@@ -147,7 +146,7 @@ SkPath Location::FieldShape(Object& field) const {
   return SkPath();
 }
 
-void Location::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void Location::FillChildren(Vec<Ptr<Widget>>& children) {
   if (object) {
     children.push_back(WidgetForObject());
   }
@@ -518,7 +517,7 @@ void Location::UpdateAutoconnectArgs() {
     float new_dist2 = arg.autoconnect_radius * arg.autoconnect_radius;
     Location* new_target = nullptr;
     arg.NearbyCandidates(
-        *this, arg.autoconnect_radius, [&](Location& other, maf::Vec<Vec2AndDir>& to_points) {
+        *this, arg.autoconnect_radius, [&](Location& other, Vec<Vec2AndDir>& to_points) {
           auto other_up = TransformBetween(*other.WidgetForObject(), *parent_machine);
           for (auto& to : to_points) {
             Vec2 to_pos = other_up.mapPoint(to.pos);

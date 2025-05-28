@@ -20,8 +20,6 @@
 #include "units.hh"
 #include "widget.hh"
 
-using namespace maf;
-
 namespace automat {
 
 std::unique_ptr<gui::Font> kHelsinkiFont = gui::Font::MakeV2(gui::Font::GetHelsinki(), 3_mm);
@@ -51,7 +49,7 @@ struct MenuWidget : gui::Widget {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
   animation::Phase Tick(time::Timer& timer) override;
-  void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override {
+  void FillChildren(Vec<Ptr<gui::Widget>>& children) override {
     for (auto& opt : options) {
       children.emplace_back(opt->icon);
     }
@@ -178,8 +176,8 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
   return animation::Animating;
 }
 
-maf::Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
-  maf::Vec<std::unique_ptr<Option>> options;
+Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
+  Vec<std::unique_ptr<Option>> options;
   VisitOptions([&](Option& opt) { options.push_back(opt.Clone()); });
   return options;
 }

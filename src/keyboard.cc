@@ -35,8 +35,6 @@
 
 #endif
 
-using namespace maf;
-
 namespace automat::gui {
 
 static SkPath PointerIBeam(const Keyboard& keyboard) {
@@ -124,7 +122,7 @@ KeyboardGrab& Keyboard::RequestGrab(KeyboardGrabber& grabber) {
 }
 
 KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctrl, bool alt,
-                                  bool shift, bool windows, maf::Fn<void(maf::Status&)> cb) {
+                                  bool shift, bool windows, Fn<void(Status&)> cb) {
   auto key_grab = std::make_unique<KeyGrab>(*this, key_grabber, key, ctrl, alt, shift, windows);
 #if defined(_WIN32)
   // See https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey

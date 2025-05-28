@@ -19,7 +19,6 @@
 #include "pointer.hh"
 #include "widget.hh"
 
-using namespace maf;
 using namespace std;
 
 namespace automat::gui {
@@ -112,7 +111,7 @@ void Button::DrawButtonShadow(SkCanvas& canvas, SkColor bg) const {
   canvas.drawRRect(oval, shadow_paint);
 }
 
-maf::Optional<Rect> Button::TextureBounds() const {
+Optional<Rect> Button::TextureBounds() const {
   auto rrect = RRect();
   float offset = ShadowOffset(rrect), sigma = ShadowSigma(rrect);
   Rect base_rect = rrect.rect();

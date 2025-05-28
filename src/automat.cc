@@ -32,7 +32,6 @@
 #include "timer_thread.hh"
 #include "vk.hh"
 
-using namespace maf;
 using namespace automat::gui;
 
 #pragma region Main
@@ -189,7 +188,7 @@ void RunOnAutomatThreadSynchronous(std::function<void()> f) {
   done.wait(false);
 }
 
-void StopAutomat(maf::Status&) {
+void StopAutomat(Status&) {
   {
     std::unique_lock lk(automat_threads_mutex);
     stop_source.request_stop();

@@ -44,50 +44,44 @@
 
 using namespace std;
 using namespace llvm;
-using namespace maf;
+using namespace automat;
 
 namespace automat::library {
 
 RegisterPresentation kRegisters[kGeneralPurposeRegisterCount] = {
     RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_ax_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .image = PersistentImage::MakeFromAsset(
+            embedded::assets_reg_ax_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RAX,
         .name = "RAX",
     },
     RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_bx_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .image = PersistentImage::MakeFromAsset(
+            embedded::assets_reg_bx_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RBX,
         .name = "RBX",
     },
     RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_cx_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .image = PersistentImage::MakeFromAsset(
+            embedded::assets_reg_cx_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RCX,
         .name = "RCX",
     },
     RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_dx_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .image = PersistentImage::MakeFromAsset(
+            embedded::assets_reg_dx_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RDX,
         .name = "RDX",
     },
     RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_si_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .image = PersistentImage::MakeFromAsset(
+            embedded::assets_reg_si_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RSI,
         .name = "RSI",
     },
     RegisterPresentation{
-        .image =
-            PersistentImage::MakeFromAsset(maf::embedded::assets_reg_di_webp,
-                                           PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
+        .image = PersistentImage::MakeFromAsset(
+            embedded::assets_reg_di_webp, PersistentImage::MakeArgs{.width = kRegisterIconWidth}),
         .llvm_reg = X86::RDI,
         .name = "RDI",
     },
@@ -229,7 +223,7 @@ static std::string AssemblyText(const mc::Inst& mc_inst) {
   return str;
 }
 
-maf::Str Instruction::ToAsmStr() const { return AssemblyText(mc_inst); }
+Str Instruction::ToAsmStr() const { return AssemblyText(mc_inst); }
 
 static std::string MachineText(const mc::Inst& mc_inst) {
   auto& llvm_asm = LLVM_Assembler::Get();
@@ -268,7 +262,7 @@ static const SkPath kInstructionShape = SkPath::RRect(kInstructionRRect);
 SkPath Instruction::Widget::Shape() const { return kInstructionShape; }
 
 PersistentImage paper_texture = PersistentImage::MakeFromAsset(
-    maf::embedded::assets_04_paper_C_grain_webp,
+    embedded::assets_04_paper_C_grain_webp,
     PersistentImage::MakeArgs{.tile_x = SkTileMode::kRepeat, .tile_y = SkTileMode::kRepeat});
 
 struct Instruction::Widget::Token {
@@ -2923,7 +2917,7 @@ struct EnumKnobWidget : gui::Widget {
     DrawKnobOverGlass(canvas);
   }
 
-  maf::Optional<Rect> TextureBounds() const override {
+  Optional<Rect> TextureBounds() const override {
     if (kDebugKnob || is_dragging) {
       return std::nullopt;
     }
@@ -3281,7 +3275,7 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
 }
 
 PersistentImage reverse = PersistentImage::MakeFromAsset(
-    maf::embedded::assets_card_reverse_webp,
+    embedded::assets_card_reverse_webp,
     PersistentImage::MakeArgs{.width = Instruction::Widget::kWidth -
                                        Instruction::Widget::kBorderMargin * 2});
 
@@ -3637,7 +3631,7 @@ Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
   return gui::Widget::ArgStart(arg);
 }
 
-void Instruction::Widget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {
+void Instruction::Widget::FillChildren(Vec<Ptr<gui::Widget>>& children) {
   if (imm_widget) {
     children.emplace_back(imm_widget);
   }
@@ -3744,7 +3738,7 @@ void Instruction::DeserializeState(Location& l, Deserializer& d) {
       }
       mc_inst.setOpcode(opcode_i->second);
     } else if (key == "immediate_mode") {
-      maf::Str mode_name;
+      Str mode_name;
       d.Get(mode_name, status);
       if (!OK(status)) {
         AppendErrorMessage(status) += "Immediate mode must be a string";

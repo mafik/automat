@@ -30,7 +30,7 @@ SkPath PathFromSVG(const char svg[], SVGUnit unit) {
   return path;
 }
 
-sk_sp<SkSVGDOM> SVGFromAsset(maf::StrView svg_contents) {
+sk_sp<SkSVGDOM> SVGFromAsset(StrView svg_contents) {
   SkMemoryStream stream = SkMemoryStream(svg_contents.data(), svg_contents.size());
 
   // Viewer should have already registered the codecs necessary for DataURIResourceProviderProxy

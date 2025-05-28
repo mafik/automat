@@ -21,7 +21,7 @@ struct Font {
   float ascent;   // distance to reserve above baseline, typically negative
   float descent;  // distance to reserve below baseline, typically positive
 
-  static sk_sp<SkTypeface> LoadTypeface(maf::fs::VFile& ttf_file);
+  static sk_sp<SkTypeface> LoadTypeface(fs::VFile& ttf_file);
   static sk_sp<SkTypeface> GetNotoSans();
   static sk_sp<SkTypeface> GetGrenzeThin();
   static sk_sp<SkTypeface> GetGrenzeLight();

@@ -18,5 +18,5 @@ SkPath Text::Shape() const {
 
 void Text::Draw(SkCanvas& canvas) const { GetFont().DrawText(canvas, text, paint); }
 
-maf::Optional<Rect> Text::TextureBounds() const { return nullopt; }
+Optional<Rect> Text::TextureBounds() const { return nullopt; }
 }  // namespace automat::gui

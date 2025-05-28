@@ -27,8 +27,6 @@
 #include "tasks.hh"
 #include "time.hh"
 
-using namespace maf;
-
 namespace automat::library {
 
 using time::Duration;
@@ -554,7 +552,7 @@ void TimerDelay::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void TimerDelay::FillChildren(maf::Vec<Ptr<Widget>>& children) { children.push_back(text_field); }
+void TimerDelay::FillChildren(Vec<Ptr<Widget>>& children) { children.push_back(text_field); }
 
 SkPath TimerDelay::FieldShape(Object& field) const {
   if (&field == &duration) {

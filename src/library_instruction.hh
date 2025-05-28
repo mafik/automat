@@ -105,10 +105,10 @@ struct Instruction : LiveObject, Runnable, Buffer {
     animation::Phase Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
     Vec2AndDir ArgStart(const Argument&) override;
-    void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override;
+    void FillChildren(Vec<Ptr<gui::Widget>>& children) override;
   };
 
-  maf::Str ToAsmStr() const;
+  Str ToAsmStr() const;
 
   NestedWeakPtr<const mc::Inst> ToMC() {
     return NestedWeakPtr<const mc::Inst>(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);

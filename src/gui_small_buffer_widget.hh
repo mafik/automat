@@ -87,7 +87,7 @@ struct SmallBufferWidget : TextFieldBase {
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
 
   void TextVisit(const TextVisitor&) override;
   int IndexFromPosition(float x) const override;

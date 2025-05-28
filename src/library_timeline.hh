@@ -52,9 +52,9 @@ struct TimelineRunButton : gui::ToggleButton {
 
 struct TrackBase : Object, Object::FallbackWidget {
   Timeline* timeline = nullptr;
-  maf::Vec<time::T> timestamps;
+  Vec<time::T> timestamps;
   SkPath Shape() const override;
-  maf::Optional<Rect> TextureBounds() const override;
+  Optional<Rect> TextureBounds() const override;
   void Draw(SkCanvas&) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   virtual void Splice(time::T current_offset, time::T splice_to) = 0;
@@ -63,7 +63,7 @@ struct TrackBase : Object, Object::FallbackWidget {
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
-  virtual bool TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name);
+  virtual bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name);
 };
 
 struct OnOffTrack : TrackBase, OnOff {
@@ -80,7 +80,7 @@ struct OnOffTrack : TrackBase, OnOff {
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
-  bool TryDeserializeField(Location& l, Deserializer& d, maf::Str& field_name) override;
+  bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
 };
 
 struct SpliceAction : Action {
@@ -111,8 +111,8 @@ struct Timeline : LiveObject,
   SpliceAction* splice_action = nullptr;
   DragZoomAction* drag_zoom_action = nullptr;
 
-  maf::Vec<Ptr<TrackBase>> tracks;
-  maf::Vec<std::unique_ptr<Argument>> track_args;
+  Vec<Ptr<TrackBase>> tracks;
+  Vec<std::unique_ptr<Argument>> track_args;
 
   mutable animation::Approach<> zoom;  // stores the time in seconds
   mutable animation::SpringV2<float> splice_wiggle;
@@ -154,12 +154,12 @@ struct Timeline : LiveObject,
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
   Vec2AndDir ArgStart(const Argument&) override;
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   void OnRun(Location& here) override;
   void Cancel() override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
-  OnOffTrack& AddOnOffTrack(maf::StrView name);
+  OnOffTrack& AddOnOffTrack(StrView name);
 
   void BeginRecording();
   void StopRecording();

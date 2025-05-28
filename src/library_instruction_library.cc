@@ -28,7 +28,6 @@
 
 using namespace std;
 using namespace llvm;
-using namespace maf;
 
 namespace automat::library {
 
@@ -272,7 +271,7 @@ static float CardAngleDeg(float i, int visible_instructions, float helix_tween) 
   return lerp(ret, ret2, helix_tween * 0.7f);           // blend between the two curves
 }
 
-void InstructionLibrary::Widget::FillChildren(maf::Vec<Ptr<gui::Widget>>& children) {
+void InstructionLibrary::Widget::FillChildren(Vec<Ptr<gui::Widget>>& children) {
   for (auto& card : instruction_helix) {
     if (card.throw_t < 0.5) {
       children.push_back(card.widget);
@@ -495,38 +494,37 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
   return phase;
 }
 
-PersistentImage rose0 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_0_webp,
+PersistentImage rose0 = PersistentImage::MakeFromAsset(embedded::assets_rose_0_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
-PersistentImage rose1 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_1_webp,
+PersistentImage rose1 = PersistentImage::MakeFromAsset(embedded::assets_rose_1_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
-PersistentImage rose2 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_2_webp,
+PersistentImage rose2 = PersistentImage::MakeFromAsset(embedded::assets_rose_2_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
-PersistentImage rose3 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_3_webp,
+PersistentImage rose3 = PersistentImage::MakeFromAsset(embedded::assets_rose_3_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
-PersistentImage rose4 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_4_webp,
+PersistentImage rose4 = PersistentImage::MakeFromAsset(embedded::assets_rose_4_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
-PersistentImage rose5 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_5_webp,
+PersistentImage rose5 = PersistentImage::MakeFromAsset(embedded::assets_rose_5_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
-PersistentImage rose6 = PersistentImage::MakeFromAsset(maf::embedded::assets_rose_6_webp,
+PersistentImage rose6 = PersistentImage::MakeFromAsset(embedded::assets_rose_6_webp,
                                                        PersistentImage::MakeArgs{.width = 3_cm});
 
 PersistentImage* rose_images[] = {&rose0, &rose1, &rose2, &rose3, &rose4, &rose5, &rose6};
 
-PersistentImage stalk = PersistentImage::MakeFromAsset(maf::embedded::assets_stalk_png,
+PersistentImage stalk = PersistentImage::MakeFromAsset(embedded::assets_stalk_png,
                                                        PersistentImage::MakeArgs{.width = 1_cm});
 
-PersistentImage leaf = PersistentImage::MakeFromAsset(maf::embedded::assets_leaf_webp,
+PersistentImage leaf = PersistentImage::MakeFromAsset(embedded::assets_leaf_webp,
                                                       PersistentImage::MakeArgs{.width = 1.2_cm});
 
 PersistentImage venus = PersistentImage::MakeFromAsset(
-    maf::embedded::assets_venus_webp,
-    PersistentImage::MakeArgs{.height = Instruction::Widget::kHeight});
+    embedded::assets_venus_webp, PersistentImage::MakeArgs{.height = Instruction::Widget::kHeight});
 
 static gui::Font& HeavyFont() {
   static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeSemiBold(), kCategoryLetterSize);
@@ -543,10 +541,10 @@ static gui::Font& LightFont() {
   return *font;
 }
 
-auto read_icon = PersistentImage::MakeFromAsset(maf::embedded::assets_reg_read_webp,
+auto read_icon = PersistentImage::MakeFromAsset(embedded::assets_reg_read_webp,
                                                 PersistentImage::MakeArgs{.width = 9_mm});
 
-auto write_icon = PersistentImage::MakeFromAsset(maf::embedded::assets_reg_write_webp,
+auto write_icon = PersistentImage::MakeFromAsset(embedded::assets_reg_write_webp,
                                                  PersistentImage::MakeArgs{.width = 9_mm});
 
 constexpr float kTableCellSize = 8_mm;

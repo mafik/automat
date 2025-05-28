@@ -42,19 +42,18 @@ SkColor HSLuv(float h360, float s100, float l100, float a100 = 100.f);
 
 namespace automat {
 
-maf::Str ToStr(SkColor color);
+Str ToStrColor(SkColor color);
 
-template <maf::TemplateStringArg S>
+template <TemplateStringArg S>
 consteval SkColor operator""_color() {
   static_assert(S.c_str[0] == '#', "Color must start with #");
   static_assert(S.c_str[S.size() - 1] == '\0', "Color must end with \\0");
 
   if constexpr (S.size() == 8) {  // RGB
-    return SkColorSetARGB(0xff, maf::HexToU8(S.c_str + 1), maf::HexToU8(S.c_str + 3),
-                          maf::HexToU8(S.c_str + 5));
+    return SkColorSetARGB(0xff, HexToU8(S.c_str + 1), HexToU8(S.c_str + 3), HexToU8(S.c_str + 5));
   } else if constexpr (S.size() == 10) {  // RGBA
-    return SkColorSetARGB(maf::HexToU8(S.c_str + 7), maf::HexToU8(S.c_str + 1),
-                          maf::HexToU8(S.c_str + 3), maf::HexToU8(S.c_str + 5));
+    return SkColorSetARGB(HexToU8(S.c_str + 7), HexToU8(S.c_str + 1), HexToU8(S.c_str + 3),
+                          HexToU8(S.c_str + 5));
   } else {
     static_assert(S.size() == 0, "Hex color must be 6 or 8 characters long");
   }

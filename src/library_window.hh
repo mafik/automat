@@ -17,7 +17,7 @@ namespace automat::library {
 
 struct Window : public Object, Runnable {
   std::mutex mutex;
-  maf::Str title = "";
+  Str title = "";
 
 #ifdef __linux__
   xcb_window_t xcb_window = XCB_WINDOW_NONE;

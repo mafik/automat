@@ -42,11 +42,11 @@ namespace atom {
 ATOMS(DECLARE_ATOM)
 #undef DECLARE_ATOM
 
-maf::Str ToStr(xcb_atom_t);
+automat::Str ToStr(xcb_atom_t);
 
 }  // namespace atom
 
-void Connect(maf::Status& status);
+void Connect(automat::Status& status);
 
 struct FreeDeleter {
   void operator()(void* p) const { free(p); }

@@ -6,7 +6,7 @@
 
 #include "span.hh"
 
-namespace maf {
+namespace automat {
 
 template <typename T = char>
 struct Vec : std::vector<T> {
@@ -54,4 +54,4 @@ struct Vec : std::vector<T> {
   iterator EraseIndex(int i) { return this->erase(this->begin() + i); }
 };
 
-}  // namespace maf
+}  // namespace automat

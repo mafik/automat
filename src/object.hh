@@ -71,7 +71,7 @@ struct Object : public virtual ReferenceCounted {
   // For example: "Text Editor".
   virtual std::string_view Name() const {
     const std::type_info& info = typeid(*this);
-    return maf::CleanTypeName(info.name());
+    return CleanTypeName(info.name());
   }
 
   // Green box with a name of the object.

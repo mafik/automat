@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "dec64.hh"
 
-namespace maf {
+namespace automat {
 
 DEC64 DEC64::operator+(const DEC64& rhs) const {
   if (IsNaN() || rhs.IsNaN()) {
@@ -81,4 +81,4 @@ add_coefficients:
   }
 }
 
-}  // namespace maf
+}  // namespace automat

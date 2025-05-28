@@ -59,7 +59,7 @@ struct InstructionLibrary : Object {
     };
 
     std::deque<InstructionCard> instruction_helix;
-    maf::XorShift32 rng;
+    XorShift32 rng;
     animation::SpringV2<float> rotation_offset_t = 0;
     float rotation_offset_t_target = 0;
     bool helix_hovered = false;
@@ -112,7 +112,7 @@ struct InstructionLibrary : Object {
     void Draw(SkCanvas&) const override;
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 
-    void FillChildren(maf::Vec<Ptr<gui::Widget>>& children) override;
+    void FillChildren(Vec<Ptr<gui::Widget>>& children) override;
     bool AllowChildPointerEvents(gui::Widget& child) const override { return false; }
 
     void PointerMove(gui::Pointer&, Vec2 position) override;

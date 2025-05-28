@@ -28,7 +28,6 @@
 #endif
 
 using namespace automat::gui;
-using namespace maf;
 
 namespace automat::library {
 
@@ -388,7 +387,7 @@ void HotKey::Draw(SkCanvas& canvas) const {
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
-void HotKey::FillChildren(maf::Vec<Ptr<Widget>>& children) {
+void HotKey::FillChildren(Vec<Ptr<Widget>>& children) {
   children.push_back(power_button);
   children.push_back(ctrl_button);
   children.push_back(alt_button);

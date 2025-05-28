@@ -7,7 +7,7 @@
 
 #include "str.hh"
 
-namespace maf {
+namespace automat {
 
 struct Status {
   struct Entry {
@@ -50,4 +50,4 @@ void AppendErrorAdvice(Status&, StrView advice);
     return value;                               \
   }
 
-}  // namespace maf
+}  // namespace automat

@@ -7,7 +7,7 @@
 #include "log.hh"
 #include "str.hh"
 
-namespace maf {
+namespace automat {
 
 // See https://www.crockford.com/dec64.html
 union DEC64 {
@@ -120,4 +120,4 @@ constexpr static DEC64 DEC64_Max = {0x7fffffffffffff'7f};
 constexpr static DEC64 DEC64_Min = {0x80000000000000'7f};
 constexpr static DEC64 DEC64_Zero = {0x00000000000000'00};
 
-}  // namespace maf
+}  // namespace automat

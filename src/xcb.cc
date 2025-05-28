@@ -8,7 +8,7 @@
 #include <cstring>
 #include <map>
 
-using namespace maf;
+using namespace automat;
 
 namespace xcb {
 
@@ -28,10 +28,10 @@ ATOMS(DEFINE_ATOM)
 
 std::map<xcb_atom_t, Str> atom_names;
 
-void Initialize() {
+void Initialize(){
 #define REQUEST_ATOM(name) \
   auto name##_request = xcb_intern_atom(connection, 0, strlen(#name), #name);
-  ATOMS(REQUEST_ATOM)
+    ATOMS(REQUEST_ATOM)
 #undef REQUEST_ATOM
 
 #define ATOM_REPLY(name)                                                         \
@@ -39,7 +39,7 @@ void Initialize() {
       xcb_intern_atom_reply(connection, name##_request, nullptr), free);         \
   name = name##_reply->atom;                                                     \
   atom_names[name] = #name;
-  ATOMS(ATOM_REPLY)
+        ATOMS(ATOM_REPLY)
 #undef ATOM_REPLY
 }
 

@@ -51,7 +51,7 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   void KeyGrabberKeyDown(gui::KeyGrab&) override;
   void KeyGrabberKeyUp(gui::KeyGrab&) override;
 
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

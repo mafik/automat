@@ -56,14 +56,14 @@ struct TimerDelay : LiveObject,
   void OnRun(Location& here) override;
   void Cancel() override;
   void Updated(Location& here, Location& updated) override;
-  void FillChildren(maf::Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Ptr<Widget>>& children) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
 };
 
-maf::StrView ToStr(TimerDelay::Range);
-TimerDelay::Range TimerRangeFromStr(maf::StrView, maf::Status&);
+StrView ToStr(TimerDelay::Range);
+TimerDelay::Range TimerRangeFromStr(StrView, Status&);
 
 }  // namespace automat::library

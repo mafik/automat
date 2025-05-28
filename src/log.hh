@@ -33,7 +33,7 @@
 #include "status.hh"
 #include "str.hh"
 
-namespace maf {
+namespace automat {
 
 enum class LogLevel { Ignore, Info, Error, Fatal };
 
@@ -57,16 +57,15 @@ void DefaultLogger(const LogEntry& e);
 // Emscripten).
 extern std::vector<Logger> loggers;
 
-#define LOG maf::LogEntry(maf::LogLevel::Info, std::source_location::current())
+#define LOG LogEntry(LogLevel::Info, std::source_location::current())
 
-#define ERROR maf::LogEntry(maf::LogLevel::Error, std::source_location::current())
-#define FATAL maf::LogEntry(maf::LogLevel::Fatal, std::source_location::current())
+#define ERROR LogEntry(LogLevel::Error, std::source_location::current())
+#define FATAL LogEntry(LogLevel::Fatal, std::source_location::current())
 
-#define ERROR_ONCE                                                                     \
-  static bool LOG_##__COUNTER__ = true;                                                \
-  maf::LogEntry((LOG_##__COUNTER__ ? (LOG_##__COUNTER__ = false, maf::LogLevel::Error) \
-                                   : maf::LogLevel::Ignore),                           \
-                std::source_location::current())
+#define ERROR_ONCE                                                                                \
+  static bool LOG_##__COUNTER__ = true;                                                           \
+  LogEntry((LOG_##__COUNTER__ ? (LOG_##__COUNTER__ = false, LogLevel::Error) : LogLevel::Ignore), \
+           std::source_location::current())
 
 const LogEntry& operator<<(const LogEntry&, StrView);
 const LogEntry& operator<<(const LogEntry&, Status& status);
@@ -92,4 +91,4 @@ struct LOG_IndentGuard {
           ? (last_log_time = std::chrono::steady_clock::now(), true)                            \
           : false)
 
-}  // namespace maf
+}  // namespace automat

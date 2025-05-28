@@ -5,7 +5,7 @@
 #include <functional>
 
 // Shortcut for std::function
-namespace maf {
+namespace automat {
 
 template <typename T>
 using Fn = std::function<T>;
@@ -21,4 +21,4 @@ struct FnIs {
   }
 };
 
-}  // namespace maf
+}  // namespace automat

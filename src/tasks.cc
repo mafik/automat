@@ -7,8 +7,6 @@
 #include "base.hh"
 #include "time.hh"
 
-using namespace maf;
-
 namespace automat {
 
 int log_executed_tasks = 0;

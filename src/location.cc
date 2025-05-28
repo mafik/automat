@@ -643,4 +643,15 @@ Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   return object;
 }
 Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(prototype.Clone()); }
+
+Vec2 Location::ScalePivot() const {
+  if (animation_state.scale_pivot.has_value()) {
+    return animation_state.scale_pivot.value();
+  }
+  if (object_widget) {
+    return object_widget->ScalePivot();
+  }
+  return Vec2();
+}
+
 }  // namespace automat

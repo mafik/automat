@@ -54,9 +54,10 @@ void DragLocationAction::Update() {
   Vec2 position = current_position - contact_point;
   float scale = 1;
   auto& base = *locations.back();
+  Vec2 base_pivot = base.ScalePivot();
 
   if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
-    drop_target->SnapPosition(position, scale, base, &contact_point);
+    drop_target->SnapPosition(position, scale, base, &base_pivot);
   }
 
   auto old_position = base.position;
@@ -64,8 +65,6 @@ void DragLocationAction::Update() {
 
   base.position = position;
   base.scale = scale;
-
-  Vec2 base_pivot = base.ScalePivot();
 
   for (int i = locations.size() - 2; i >= 0; --i) {
     auto& atop = *locations[i];
@@ -105,6 +104,10 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>
   pointer.root_widget.drag_action_count++;
   for (auto& location : locations) {
     location->parent = widget;
+    if (location->object_widget) {
+      location->animation_state.scale_pivot =
+          contact_point + locations.back()->position - location->position;
+    }
   }
   widget->FixParents();
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
@@ -139,6 +142,7 @@ DragLocationAction::~DragLocationAction() {
   if (drop_target) {
     for (auto& location : std::ranges::reverse_view(locations)) {
       location->WakeAnimation();
+      location->animation_state.scale_pivot.reset();
       drop_target->DropLocation(std::move(location));
     }
   }

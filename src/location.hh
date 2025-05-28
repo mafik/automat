@@ -32,6 +32,7 @@ struct ObjectAnimationState {
   float highlight_target = 0;
   time::T time_seconds = 0;  // used to animate dashed line
   animation::SpringV2<float> elevation;
+  Optional<Vec2> scale_pivot;
 
   ObjectAnimationState();
 
@@ -109,12 +110,7 @@ struct Location : public gui::Widget {
     return object_widget;
   }
 
-  Vec2 ScalePivot() const override {
-    if (object_widget) {
-      return object_widget->ScalePivot();
-    }
-    return Vec2();
-  }
+  Vec2 ScalePivot() const override;
 
   // A version of InsertHere that doesn't create a Widget for the object.
   //

@@ -458,35 +458,26 @@ void RootWidget::SnapPosition(Vec2& position, float& scale, Location& location, 
   float scale1 = 0.5;
   Vec2 position1 = position;
   {  // Find a snap position outside of the canvas
-    auto object_bounds_machine = object_bounds.MoveBy(position);
-    SkMatrix machine_scale_mat_fixed =
-        SkMatrix::Translate(-position)
-            .postScale(scale1, scale1, fixed_point->x, fixed_point->y)
-            .postTranslate(position.x, position.y);
+    SkMatrix mat = SkMatrix()
+                       .postScale(scale1, scale1, fixed_point->x, fixed_point->y)
+                       .postTranslate(position.x, position.y);
 
-    Rect scaled_object_bounds = machine_scale_mat_fixed.mapRect(object_bounds_machine);
-    Vec2 true_object_origin = machine_scale_mat_fixed.mapPoint(position);
+    Rect scaled_object_bounds = mat.mapRect(object_bounds);
     if (machine_bounds.sk.intersects(scaled_object_bounds)) {
       float move_up = fabsf(machine_bounds.top - scaled_object_bounds.bottom);
       float move_down = fabsf(scaled_object_bounds.top - machine_bounds.bottom);
       float move_left = fabsf(machine_bounds.left - scaled_object_bounds.right);
       float move_right = fabsf(scaled_object_bounds.left - machine_bounds.right);
       if (move_up < move_down && move_up < move_left && move_up < move_right) {
-        true_object_origin.y += move_up;
-        scaled_object_bounds = scaled_object_bounds.MoveBy({0, move_up});
+        position1.y += move_up;
       } else if (move_down < move_up && move_down < move_left && move_down < move_right) {
-        true_object_origin.y -= move_down;
-        scaled_object_bounds = scaled_object_bounds.MoveBy({0, -move_down});
+        position1.y -= move_down;
       } else if (move_left < move_up && move_left < move_down && move_left < move_right) {
-        true_object_origin.x -= move_left;
-        scaled_object_bounds = scaled_object_bounds.MoveBy({-move_left, 0});
+        position1.x -= move_left;
       } else {
-        true_object_origin.x += move_right;
-        scaled_object_bounds = scaled_object_bounds.MoveBy({move_right, 0});
+        position1.x += move_right;
       }
     }
-    position1 =
-        (true_object_origin - scaled_object_bounds.Center()) * 2 + scaled_object_bounds.Center();
   }
 
   Vec2 window_pos = (position - camera_pos) * zoom + size / 2;
@@ -494,11 +485,15 @@ void RootWidget::SnapPosition(Vec2& position, float& scale, Location& location, 
       LengthSquared(window_pos - Vec2(size.width, size.height)) < trash_radius * trash_radius;
   Vec2 box_size = Vec2(object_bounds.Width(), object_bounds.Height());
   float diagonal = Length(box_size);
-  SkMatrix mat = WindowToCanvas();
-  Vec2 position2 =
-      mat.mapPoint(size - box_size / diagonal * trash_radius / 2) - object_bounds.Center();
-  float scale2 = mat.mapRadius(trash_radius) / diagonal * 0.9f;
+  SkMatrix window2canvas = WindowToCanvas();
+  float scale2 = window2canvas.mapRadius(trash_radius) / diagonal * 0.9f;
   scale2 = std::clamp<float>(scale2, 0.1, 0.5);
+
+  Vec2 target_center = window2canvas.mapPoint(size - box_size / diagonal * trash_radius / 2);
+
+  Vec2 position2 =
+      target_center - ((object_bounds.Center() - *fixed_point) * scale2 + *fixed_point);
+
   if (LengthSquared(position1 - position) < LengthSquared(position2 - position)) {
     position = position1;
     scale = scale1;

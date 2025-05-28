@@ -55,4 +55,6 @@ struct DragLocationAction : Action {
   gui::Widget* Widget() override { return widget.get(); }
 };
 
+bool IsDragged(const Location& location);
+
 }  // namespace automat

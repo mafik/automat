@@ -557,18 +557,10 @@ void RootWidget::FillChildren(maf::Vec<Ptr<Widget>>& out_children) {
     out_children.push_back(keyboard);
   }
 
-  unordered_set<Location*> dragged_locations(pointers.size());
-  for (auto* pointer : pointers) {
-    for (auto& action : pointer->actions) {
-      if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
-        dragged_locations.insert(drag_action->location.get());
-      }
-    }
-  }
   Vec<Ptr<Widget>> connection_widgets_below;
   connection_widgets_below.reserve(connection_widgets.size());
   for (auto& it : connection_widgets) {
-    if (it->manual_position.has_value() || dragged_locations.count(&it->from)) {
+    if (it->manual_position.has_value() || IsDragged(it->from)) {
       out_children.push_back(it);
     } else {
       connection_widgets_below.push_back(it);

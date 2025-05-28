@@ -185,18 +185,7 @@ animation::Phase Location::Tick(time::Timer& timer) {
     state.time_seconds = timer.NowSeconds();
   }
   {
-    float target_elevation = 0;
-    for (auto* root_widget : root_widgets) {
-      for (auto* pointer : root_widget->pointers) {
-        for (auto& action : pointer->actions) {
-          if (auto* drag_action = dynamic_cast<DragLocationAction*>(action.get())) {
-            if (drag_action->location.get() == this) {
-              target_elevation = 1;
-            }
-          }
-        }
-      }
-    }
+    float target_elevation = IsDragged(*this) ? 1 : 0;
     phase |= state.elevation.SineTowards(target_elevation, timer.d, 0.2);
   }
   return phase;

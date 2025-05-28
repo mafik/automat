@@ -126,4 +126,8 @@ void DragLocationWidget::FillChildren(maf::Vec<Ptr<Widget>>& children) {
   children.push_back(action.location);
 }
 
+bool IsDragged(const Location& location) {
+  return dynamic_cast<const DragLocationWidget*>(location.parent.get()) != nullptr;
+}
+
 }  // namespace automat

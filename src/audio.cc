@@ -51,7 +51,8 @@ struct Clip : public ReferenceCounted {
   Span<Frame> all;
   std::mutex mutex;
   Ptr<Clip> next = {};
-  Clip(Span<Frame> frames) : remaining(frames), all(frames) {}
+  StrView name;  // names are used to prevent the same clip from playing over and over
+  Clip(Span<Frame> frames, StrView name) : remaining(frames), all(frames), name(name) {}
 };
 
 Vec<Ptr<Clip>> playing;
@@ -62,6 +63,18 @@ moodycamel::ConcurrentQueue<Ptr<Clip>> to_play;
 static void ReceiveClips() {
   Ptr<Clip> to_play_clip = nullptr;
   while (to_play.try_dequeue(to_play_clip)) {
+    bool skip = false;
+    for (auto& playing_clip : playing) {
+      if (playing_clip->name == to_play_clip->name &&
+          playing_clip->remaining.size() == to_play_clip->remaining.size()) {
+        // same sound would overlap, skip
+        skip = true;
+        break;
+      }
+    }
+    if (skip) {
+      continue;
+    }
     playing.emplace_back(std::move(to_play_clip));
   }
 }
@@ -408,7 +421,7 @@ Ptr<Clip> MakeClipFromWAV(fs::VFile& file) {
   assert(header.rate == kDefaultRate);
   assert(header.channels == kDefaultChannels);
   assert(content.size_bytes() == header.data_size);
-  return MakePtr<Clip>(content.AsSpanOf<Frame>());
+  return MakePtr<Clip>(content.AsSpanOf<Frame>(), file.path);
 }
 
 void ScheduleClip(Ptr<Clip> clip) {

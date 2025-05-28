@@ -150,7 +150,7 @@ struct MoveOption : Option {
     auto* machine = Closest<Machine>(*location);
     if (machine && location->object) {
       auto contact_point = pointer.PositionWithin(*location->WidgetForObject());
-      return std::make_unique<DragLocationAction>(pointer, machine->Extract(*location),
+      return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location),
                                                   contact_point);
     }
     return nullptr;

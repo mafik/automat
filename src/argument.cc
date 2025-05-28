@@ -105,23 +105,24 @@ void Argument::NearbyCandidates(
         continue;
       }
       if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action.get())) {
-        auto& location = *drag_location_action->location;
-        if (&location == &here) {
-          continue;
-        }
-        std::string error;
-        for (auto& req : requirements) {
-          req(&location, location.object.get(), error);
-          if (!error.empty()) {
-            break;
+        for (auto& location : drag_location_action->locations) {
+          if (location.get() == &here) {
+            continue;
           }
+          std::string error;
+          for (auto& req : requirements) {
+            req(location.get(), location->object.get(), error);
+            if (!error.empty()) {
+              break;
+            }
+          }
+          if (!error.empty()) {
+            continue;
+          }
+          Vec<Vec2AndDir> to_points;
+          location->WidgetForObject()->ConnectionPositions(to_points);
+          callback(*location, to_points);
         }
-        if (!error.empty()) {
-          continue;
-        }
-        Vec<Vec2AndDir> to_points;
-        location.WidgetForObject()->ConnectionPositions(to_points);
-        callback(location, to_points);
       }
     }
   }

@@ -23,6 +23,7 @@
 #include "root_widget.hh"
 #include "tasks.hh"
 #include "timer_thread.hh"
+#include "widget.hh"
 
 using namespace std;
 
@@ -301,6 +302,55 @@ void Machine::DropLocation(Ptr<Location>&& l) {
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
   WakeAnimation();
+}
+
+Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
+  auto base_it = std::find_if(locations.begin(), locations.end(),
+                              [&base](const Ptr<Location>& l) { return l.get() == &base; });
+  if (base_it != locations.end()) {
+    int base_index = std::distance(locations.begin(), base_it);
+    SkPath base_shape = base.GetShapeRecursive();
+    base_shape.transform(gui::TransformUp(base));  // top-level coordinates
+
+    Vec<Ptr<Location>> result;
+    result.push_back(std::move(*base_it));
+    locations.erase(base_it);
+
+    // Move all the objects that are on top of the `base_shape`.
+    for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
+      Location& atop = *locations[atop_index];
+      SkPath atop_shape = atop.GetShapeRecursive();
+      atop_shape.transform(gui::TransformUp(atop));  // top-level coordinates
+      SkPath intersection;
+      bool op_success = Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection);
+      if (op_success && intersection.countVerbs() > 0) {
+        result.insert(result.begin(), std::move(locations[atop_index]));
+        locations.erase(locations.begin() + atop_index);
+        // Expand the base shape to include the atop shape.
+        Op(base_shape, atop_shape, kUnion_SkPathOp, &base_shape);
+      }
+    }
+
+    for (int i = 0; i < front.size(); ++i) {
+      for (auto& r : result) {
+        if (front[i] == r.get()) {
+          front.erase(front.begin() + i);
+        }
+      }
+    }
+    for (int i = 0; i < children_with_errors.size(); ++i) {
+      for (auto& r : result) {
+        if (children_with_errors[i] == r.get()) {
+          children_with_errors.erase(children_with_errors.begin() + i);
+        }
+      }
+    }
+    WakeAnimation();
+    audio::Play(embedded::assets_SFX_canvas_pick_wav);
+    return result;
+  } else {
+    return {};
+  }
 }
 
 Ptr<Location> Machine::Extract(Location& location) {

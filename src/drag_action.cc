@@ -5,6 +5,7 @@
 #include <include/core/SkPath.h>
 
 #include <cmath>
+#include <ranges>
 
 #include "action.hh"
 #include "animation.hh"
@@ -21,8 +22,6 @@ static Vec2 RoundToMilimeters(Vec2 v) {
   return Vec2(roundf(v.x * 1000) / 1000., roundf(v.y * 1000) / 1000.);
 }
 
-static Object* DraggedObject(DragLocationAction& a) { return a.location->object.get(); }
-
 Vec2 SnapPosition(DragLocationAction& d) {
   return RoundToMilimeters(d.current_position - d.contact_point);
 }
@@ -37,7 +36,7 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
   if ((widget.pack_frame_texture_bounds == std::nullopt) ||
       widget.Shape().contains(point.x, point.y)) {
     if (auto drop_target = widget.AsDropTarget()) {
-      if (drop_target->CanDrop(*a.location)) {
+      if (drop_target->CanDrop(*a.locations.back())) {
         return drop_target;
       }
     }
@@ -54,20 +53,41 @@ void DragLocationAction::Update() {
 
   Vec2 position = current_position - contact_point;
   float scale = 1;
+  auto& base = *locations.back();
 
   if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
-    drop_target->SnapPosition(position, scale, *location, &contact_point);
+    drop_target->SnapPosition(position, scale, base, &contact_point);
   }
 
-  location->scale = scale;
-  location->position = position;
+  auto old_position = base.position;
+  auto old_scale = base.scale;
+
+  base.position = position;
+  base.scale = scale;
+
+  Vec2 base_pivot = base.ScalePivot();
+
+  for (int i = locations.size() - 2; i >= 0; --i) {
+    auto& atop = *locations[i];
+    Vec2 atop_pivot = atop.ScalePivot();
+    Vec2 old_delta = atop.position + atop_pivot - old_position - base_pivot;
+    Vec2 new_delta = old_delta / old_scale * scale;
+    atop.position = position + base_pivot + new_delta - atop_pivot;
+    atop.scale = scale;
+  }
 
   if (last_snapped_position != position) {
     last_snapped_position = position;
-    location->animation_state.position.value += current_position - last_position;
-    location->UpdateAutoconnectArgs();
-    location->WakeAnimation();
-    location->InvalidateConnectionWidgets(true, false);
+    for (auto& location : locations) {
+      location->animation_state.position.value += current_position - last_position;
+    }
+    for (auto& location : locations) {
+      location->UpdateAutoconnectArgs();
+    }
+    for (auto& location : locations) {
+      location->WakeAnimation();
+      location->InvalidateConnectionWidgets(true, false);
+    }
   }
 
   last_position = current_position;
@@ -75,27 +95,32 @@ void DragLocationAction::Update() {
 
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
-DragLocationAction::DragLocationAction(gui::Pointer& pointer, Ptr<Location>&& location_arg,
+DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg,
                                        Vec2 contact_point)
     : Action(pointer),
       contact_point(contact_point),
-      location(std::move(location_arg)),
+      locations(std::move(locations_arg)),
       widget(MakePtr<DragLocationWidget>(*this)) {
   widget->parent = pointer.root_widget.AcquirePtr();
   pointer.root_widget.drag_action_count++;
-  location->parent = widget;
+  for (auto& location : locations) {
+    location->parent = widget;
+  }
   widget->FixParents();
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
   for (auto& connection_widget : gui::root_widget->connection_widgets) {
-    if (&connection_widget->from == location.get()) {
-      connection_widget->animation_state.radar_alpha_target = 1;
-    } else {
-      string error;
-      connection_widget->arg.CheckRequirements(connection_widget->from, location.get(),
-                                               DraggedObject(*this), error);
-      if (error.empty()) {
+    // Do this for every dragged location
+    for (auto& location : locations) {
+      if (&connection_widget->from == location.get()) {
         connection_widget->animation_state.radar_alpha_target = 1;
+      } else {
+        string error;
+        connection_widget->arg.CheckRequirements(connection_widget->from, location.get(),
+                                                 location->object.get(), error);
+        if (error.empty()) {
+          connection_widget->animation_state.radar_alpha_target = 1;
+        }
       }
     }
   }
@@ -105,24 +130,34 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Ptr<Location>&& lo
   Update();
 }
 
+DragLocationAction::DragLocationAction(gui::Pointer& pointer, Ptr<Location>&& location_arg,
+                                       Vec2 contact_point)
+    : DragLocationAction(pointer, Vec<Ptr<Location>>{std::move(location_arg)}, contact_point) {}
+
 DragLocationAction::~DragLocationAction() {
   gui::DropTarget* drop_target = FindDropTarget(*this);
   if (drop_target) {
-    location->WakeAnimation();
-    drop_target->DropLocation(std::move(location));
+    for (auto& location : std::ranges::reverse_view(locations)) {
+      location->WakeAnimation();
+      drop_target->DropLocation(std::move(location));
+    }
   }
 
   pointer.root_widget.drag_action_count--;
   for (auto& connection_widget : gui::root_widget->connection_widgets) {
     connection_widget->animation_state.radar_alpha_target = 0;
   }
-  if (location) {
-    location->ForgetParents();
+  for (auto& location : locations) {
+    if (location) {
+      location->ForgetParents();
+    }
   }
   gui::root_widget->WakeAnimation();
 }
 void DragLocationWidget::FillChildren(Vec<Ptr<Widget>>& children) {
-  children.push_back(action.location);
+  for (auto& location : action.locations) {
+    children.push_back(location);
+  }
 }
 
 bool IsDragged(const Location& location) {

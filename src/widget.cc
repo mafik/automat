@@ -18,6 +18,7 @@
 #include <include/effects/SkRuntimeEffect.h>
 #include <include/gpu/graphite/Context.h>
 #include <include/gpu/graphite/Surface.h>
+#include <include/pathops/SkPathOps.h>
 
 #include <ranges>
 
@@ -167,6 +168,27 @@ void Widget::ForgetParents() {
 
 Ptr<Widget> Widget::ForObject(Object& object, const Widget& parent) {
   return parent.FindRootWidget().widgets.For(object, parent);
+}
+
+SkPath Widget::GetShapeRecursive() const {
+  SkPath shape = Shape();
+  if (shape.isEmpty()) {  // only descend into children if the parent widget has no shape
+    for (auto& child : Children()) {
+      SkPath child_shape = child->GetShapeRecursive();
+      child_shape.transform(child->local_to_parent.asM33());
+      shape.addPath(child_shape);
+    }
+  }
+  return shape;
+}
+
+bool Widget::Intersects(const Widget& a, const Widget& b) {
+  SkPath a_shape = a.GetShapeRecursive();
+  SkPath b_shape = b.GetShapeRecursive();
+  a_shape.transform(TransformBetween(a, b));
+  SkPath intersection;
+  bool result = Op(a_shape, b_shape, kIntersect_SkPathOp, &intersection);
+  return result && intersection.countVerbs() > 0;
 }
 
 void Widget::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {

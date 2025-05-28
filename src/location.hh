@@ -109,6 +109,13 @@ struct Location : public gui::Widget {
     return object_widget;
   }
 
+  Vec2 ScalePivot() const override {
+    if (object_widget) {
+      return object_widget->ScalePivot();
+    }
+    return Vec2();
+  }
+
   // A version of InsertHere that doesn't create a Widget for the object.
   //
   // TODO: Remove InsertHere and switch to this one. Take care to find and fix all places which

@@ -98,6 +98,7 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   vector<Location*> children_with_errors;
 
   Ptr<Location> Extract(Location& location);
+  Vec<Ptr<Location>> ExtractStack(Location& base);
 
   Location& CreateEmpty(const string& name = "");
 

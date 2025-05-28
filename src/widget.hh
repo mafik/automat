@@ -190,6 +190,13 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   // their bounds.
   virtual bool CenteredAtZero() const { return false; }
 
+  virtual Vec2 ScalePivot() const {
+    if (CenteredAtZero()) {
+      return Vec2(0, 0);
+    }
+    return CoarseBounds().Center();
+  }
+
   void VisitOptions(const OptionsVisitor&) const override {}
   virtual std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger);
 
@@ -269,6 +276,13 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const;
 
   static Ptr<Widget> ForObject(Object&, const Widget& parent);
+
+  // Find the shape of this widget. If it's shape is empty, combine its children's shapes.
+  SkPath GetShapeRecursive() const;
+
+  // Checks if the two widgets intersect (their shapes). This is accurate but also very slow so
+  // avoid it if possible.
+  static bool Intersects(const Widget& a, const Widget& b);
 };
 
 template <typename T>

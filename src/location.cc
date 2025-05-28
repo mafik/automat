@@ -622,7 +622,7 @@ void Location::UpdateChildTransform() {
   if (object_widget == nullptr) {
     return;
   }
-  Vec2 scale_pivot = object_widget->Shape().getBounds().center();
+  Vec2 scale_pivot = ScalePivot();
   SkMatrix transform = SkMatrix::I();
   float s = std::max<float>(animation_state.scale, 0.00001f);
   transform.postScale(s, s, scale_pivot.x, scale_pivot.y);

@@ -45,10 +45,11 @@ struct DragLocationAction : Action {
   Vec2 current_position;       // root machine coordinates
   Vec2 last_snapped_position;  // root machine coordinates
   time::SteadyPoint last_update;
-  Ptr<Location> location;
+  Vec<Ptr<Location>> locations;
   Ptr<DragLocationWidget> widget;
 
   DragLocationAction(gui::Pointer&, Ptr<Location>&&, Vec2 contact_point);
+  DragLocationAction(gui::Pointer&, Vec<Ptr<Location>>&&, Vec2 contact_point);
   ~DragLocationAction() override;
 
   void Update() override;

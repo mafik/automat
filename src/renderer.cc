@@ -384,6 +384,9 @@ void WidgetDrawable::InsertRecording() {
   insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext context,
                                            skgpu::CallbackResult result) {
     auto* w = static_cast<WidgetDrawable*>(context);
+    if (result == skgpu::CallbackResult::kFailed) {
+      ERROR << "Failed to insert recording for " << w->name;
+    }
     auto& frame = w->in_progress();
 
     // LOG << "GPU time: " << stats.elapsedTime << " (" << (bool)result << ")";
@@ -405,13 +408,15 @@ void WidgetDrawable::InsertRecording() {
       debug_render_events += ") ";
     }
   };
+  skgpu::graphite::Context* context;
   if (render_in_background) {
     ++background_rendering_jobs;
+    context = vk::background_context.get();
   } else {
     ++foreground_rendering_jobs;
+    context = vk::graphite_context.get();
   }
   frame.gpu_start = time::SteadyNow();
-  auto* context = render_in_background ? vk::background_context.get() : vk::graphite_context.get();
   context->insertRecording(insert_recording_info);
   context->submit();  // necessary to send the semaphores to the GPU
 
@@ -601,6 +606,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   auto root_widget_bounds_px = Rect::MakeAtZero<LeftX, BottomY>(
                                    Round(root_widget->size * root_widget->display_pixels_per_meter))
                                    .Outset(64);  // 64px margin around screen
+  root_widget->FixParents();
 
   enum class Verdict {
     Unknown = 0,
@@ -608,12 +614,18 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     Overflow = 2,
     Skip_Clipped = 3,
     Skip_NoTexture = 4,
+    Skip_Rendering = 5,  // either this widget or one of its ancestors is still rendering
+  };
+
+  static constexpr const char* kVerdictNames[] = {
+      "Unknown", "Pack", "Overflow", "Skip_Clipped", "Skip_NoTexture", "Skip_Rendering",
   };
 
   struct WidgetTree {
     Ptr<Widget> widget;
     Verdict verdict = Verdict::Unknown;
     int parent;
+    int parent_with_texture;
     int prev_job = -1;
     int next_job = -1;
     bool same_scale;
@@ -625,6 +637,16 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     Vec<Vec2> pack_frame_texture_anchors;
     // Bounds (in local coords) which are rendered to the surface.
     Rect new_visible_bounds;
+    const RenderResult* render_result = nullptr;
+    void SetVerdict(Verdict v) {
+      if constexpr (kDebugRendering) {
+        if (verdict != Verdict::Unknown) {
+          ERROR << "Widget " << widget->Name() << " had verdict " << kVerdictNames[(int)verdict]
+                << " and was changed to " << kVerdictNames[(int)v];
+        }
+      }
+      verdict = v;
+    }
   };
   vector<WidgetTree> tree;
 
@@ -670,8 +692,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
           ERROR << "Widget " << widget->Name()
                 << " (which just finished background rendering) has no parent to wake up!";
         } else {
-          ancestor_with_texture->wake_time =
-              min(ancestor_with_texture->wake_time, widget->last_tick_time);
+          ancestor_with_texture->needs_draw = true;
         }
       }
 
@@ -684,8 +705,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     FATAL << "Root widget wasn't rendered during the last frame.";
   }
 
-  root_widget->FixParents();
-
   {  // Step 2 - flatten the widget tree for analysis.
     // Queue with (parent index, widget) pairs.
     vector<pair<int, Ptr<Widget>>> q;
@@ -697,13 +716,22 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       tree.push_back(WidgetTree{
           .widget = widget,
           .parent = parent,
+          .parent_with_texture = parent,
       });
       int i = tree.size() - 1;
 
       auto& node = tree.back();
 
+      while (tree[node.parent_with_texture].verdict == Verdict::Skip_NoTexture) {
+        node.parent_with_texture = tree[node.parent_with_texture].parent_with_texture;
+      }
+
+      if (widget->rendering || tree[node.parent_with_texture].verdict == Verdict::Skip_Rendering) {
+        node.SetVerdict(Verdict::Skip_Rendering);
+      }
+
       // UPDATE
-      if (!widget->rendering && widget->wake_time != time::SteadyPoint::max()) {
+      if (node.verdict == Verdict::Unknown && widget->wake_time != time::SteadyPoint::max()) {
         node.wants_to_draw = true;
         auto true_d = root_widget->timer.d;
         auto fake_d = min(1.0, (now - widget->last_tick_time).count());
@@ -720,6 +748,11 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         } else {
           widget->wake_time = now;
         }
+      }
+
+      if (node.verdict == Verdict::Unknown && widget->needs_draw) {
+        node.wants_to_draw = true;
+        widget->needs_draw = false;
       }
 
       node.local_to_window = widget->local_to_parent.asM33();
@@ -767,13 +800,18 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         } else {
           node.surface_reusable = false;
         }
-      } else {
-        node.verdict = Verdict::Skip_NoTexture;
+      } else if (node.verdict == Verdict::Unknown) {
+        node.SetVerdict(Verdict::Skip_NoTexture);
       }
 
       // Advance the parent to current widget & visit its children.
       if (!visible) {
-        node.verdict = Verdict::Skip_Clipped;
+        // Skip_Clipped is more important as it signals that widget's children are not included in
+        // the widget tree.
+        if (node.verdict == Verdict::Skip_Rendering) {
+          node.verdict = Verdict::Unknown;
+        }
+        node.SetVerdict(Verdict::Skip_Clipped);
       } else {
         for (auto& child : widget->Children()) {
           q.push_back(make_pair(i, child));
@@ -840,7 +878,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     for (int i = tree.size() - 1; i >= 0; --i) {
       auto& node = tree[i];
       if (node.verdict == Verdict::Skip_NoTexture && node.wants_to_draw) {
-        tree[node.parent].wants_to_draw = true;
+        tree[node.parent_with_texture].wants_to_draw = true;
       }
     }
 
@@ -853,7 +891,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       if (node.verdict == Verdict::Skip_Clipped) {
         continue;
       }
-      if (widget.rendering) {
+      if (node.verdict == Verdict::Skip_Rendering) {
         continue;
       }
       if (node.same_scale && node.surface_reusable && !node.wants_to_draw) {
@@ -880,7 +918,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
           continue;
         }
         render_time += GetRenderTime(tree[i]);
-        tree[i].verdict = Verdict::Pack;
+        tree[i].SetVerdict(Verdict::Pack);
         if (tree[i].prev_job != -1) {
           tree[tree[i].prev_job].next_job = tree[i].next_job;
         } else if (i == first_job) {
@@ -934,7 +972,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         total_render_time = max(total_render_time, 0.000001f);
 
         if (ancestor_rendering || total_render_time > remaining_time) {
-          tree[i].verdict = Verdict::Overflow;
+          tree[i].SetVerdict(Verdict::Overflow);
           if (tree[i].prev_job != -1) {
             tree[tree[i].prev_job].next_job = tree[i].next_job;
           } else {
@@ -982,14 +1020,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     WidgetDrawable::Update update = {};
 
     update.id = widget.ID();
-    if (node.parent != i) {
-      // When communicating dependencies between rendering, only include the widgets that have
-      // textures.
-      int parent_i = node.parent;
-      while (tree[parent_i].verdict == Verdict::Skip_NoTexture) {
-        parent_i = tree[parent_i].parent;
-      }
-      update.parent_id = tree[parent_i].widget->ID();
+    if (node.parent_with_texture != i) {
+      update.parent_id = tree[node.parent_with_texture].widget->ID();
     }
 
     update.average_draw_millis = widget.average_draw_millis;

@@ -98,6 +98,11 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   mutable time::SteadyPoint wake_time = time::SteadyPoint::min();
   mutable time::SteadyPoint last_tick_time;
 
+  // Set to true if the widget should be redrawn (without the need for animation `Tick`).
+  // This may be the case when its children are changed but its animation state is otherwise
+  // unaffected.
+  bool needs_draw = false;
+
   // Things updated in PackFrame (& Draw)
 
   sk_sp<SkDrawable> sk_drawable;  // holds a WidgetDrawable

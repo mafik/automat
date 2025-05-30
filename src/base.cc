@@ -297,6 +297,7 @@ void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec
 }
 
 void Machine::DropLocation(Ptr<Location>&& l) {
+  ForEachWidget([](gui::RootWidget&, gui::Widget& w) { w.RedrawThisFrame(); });
   l->parent = AcquirePtr<Widget>();
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));

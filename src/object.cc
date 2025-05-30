@@ -150,6 +150,7 @@ struct MoveOption : Option {
     auto* machine = Closest<Machine>(*location);
     if (machine && location->object) {
       auto contact_point = pointer.PositionWithin(*location->WidgetForObject());
+      machine->ForEachWidget([](gui::RootWidget&, gui::Widget& w) { w.RedrawThisFrame(); });
       return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location),
                                                   contact_point);
     }

@@ -755,6 +755,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         widget->needs_draw = false;
       }
 
+      if (node.verdict == Verdict::Unknown && widget->redraw_this_frame) {
+        node.wants_to_draw = true;
+      }
+
       node.local_to_window = widget->local_to_parent.asM33();
       if (parent != i) {
         node.local_to_window.postConcat(tree[parent].local_to_window);
@@ -935,6 +939,13 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     };
 
     Pack(0);
+
+    for (int i = first_job; i != -1; i = tree[i].next_job) {
+      if (tree[i].widget->redraw_this_frame) {
+        tree[i].widget->redraw_this_frame = false;
+        Pack(i);
+      }
+    }
 
     while (first_job != -1) {
       int best_i = -1;

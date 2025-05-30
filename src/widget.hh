@@ -103,6 +103,15 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   // unaffected.
   bool needs_draw = false;
 
+  bool redraw_this_frame = false;
+
+  // Force the widget to be redrawn ASAP (without offscreen rendering).
+  //
+  // This will not call `Tick`. Also call `WakeAnimation` if you want to wake up the animation.
+  //
+  // Sets force_packing to true on either this widget or (if it has no texture) its children.
+  void RedrawThisFrame();
+
   // Things updated in PackFrame (& Draw)
 
   sk_sp<SkDrawable> sk_drawable;  // holds a WidgetDrawable

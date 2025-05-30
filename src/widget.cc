@@ -132,6 +132,16 @@ void Widget::CheckAllWidgetsReleased() {
   }
 }
 
+void Widget::RedrawThisFrame() {
+  if (pack_frame_texture_bounds) {
+    redraw_this_frame = true;
+  } else {
+    for (auto& child : Children()) {
+      child->RedrawThisFrame();
+    }
+  }
+}
+
 uint32_t Widget::ID() const {
   static atomic<uint32_t> id_counter = 0;
   if (id == 0) {

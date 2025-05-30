@@ -1206,7 +1206,6 @@ void RenderFrame(SkCanvas& canvas) {
       overflow_queue.pop_front();
     }
     for (int i = 0; i < overflow_queue.size(); ++i) {
-      LOG << "i=" << i;
       auto cached_widget_drawable = overflow_queue[i];
       auto expected_total_paint_time =
           time::SteadyNow() - paint_start +

@@ -157,8 +157,11 @@ struct WidgetDrawable : SkDrawableRTTI {
   // Synchronization
   skgpu::graphite::BackendSemaphore semaphore;
   bool signal_semaphore = false;  // only signal semaphore if there is a parent that waits for it
-  vector<skgpu::graphite::BackendSemaphore>
+  vector<WidgetDrawable*>
       wait_list;  // child widgets that must be rendered first, cleared after every frame
+  vector<WidgetDrawable*>
+      then_list;       // parent widgets that must render after this one, cleared after every frame
+  int wait_count = 0;  // number of children that must be rendered first, cleared after every frame
 
   WidgetDrawable(uint32_t id);
   ~WidgetDrawable() {
@@ -365,9 +368,14 @@ void WidgetDrawable::InsertRecording() {
     insert_recording_info.fNumSignalSemaphores = 1;
   }
 
+  vector<skgpu::graphite::BackendSemaphore> wait_list_vec;
   if (!wait_list.empty()) {
-    insert_recording_info.fWaitSemaphores = wait_list.data();
-    insert_recording_info.fNumWaitSemaphores = wait_list.size();
+    wait_list_vec.reserve(wait_list.size());
+    for (auto* dep : wait_list) {
+      wait_list_vec.emplace_back(dep->semaphore);
+    }
+    insert_recording_info.fWaitSemaphores = wait_list_vec.data();
+    insert_recording_info.fNumWaitSemaphores = wait_list_vec.size();
   }
 
   // insert_recording_info.fGpuStatsFlags = skgpu::GpuStatsFlags::kElapsedTime;
@@ -412,9 +420,6 @@ void WidgetDrawable::InsertRecording() {
     debug_render_events += name;
     debug_render_events += ") ";
   }
-
-  wait_list.clear();
-  signal_semaphore = false;
 }
 
 void WidgetDrawable::onDraw(SkCanvas* canvas) {
@@ -675,6 +680,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     }
   }
 
+  if (root_widget->rendering) {
+    FATAL << "Root widget wasn't rendered during the last frame.";
+  }
+
   root_widget->FixParents();
 
   {  // Step 2 - flatten the widget tree for analysis.
@@ -685,10 +694,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       auto [parent, widget] = std::move(q.back());
       q.pop_back();
 
-      if (widget->rendering) {
-        continue;
-      }
-
       tree.push_back(WidgetTree{
           .widget = widget,
           .parent = parent,
@@ -698,7 +703,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       auto& node = tree.back();
 
       // UPDATE
-      if (widget->wake_time != time::SteadyPoint::max()) {
+      if (!widget->rendering && widget->wake_time != time::SteadyPoint::max()) {
         node.wants_to_draw = true;
         auto true_d = root_widget->timer.d;
         auto fake_d = min(1.0, (now - widget->last_tick_time).count());
@@ -848,6 +853,9 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       if (node.verdict == Verdict::Skip_Clipped) {
         continue;
       }
+      if (widget.rendering) {
+        continue;
+      }
       if (node.same_scale && node.surface_reusable && !node.wants_to_draw) {
         continue;
       }
@@ -900,14 +908,17 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
         float total_lag = self_lag;
         float total_render_time = self_render_time;
-        bool ancestor_overflowed = false;
+        bool ancestor_rendering = false;
 
         for (int i_parent = tree[i].parent; true; i_parent = tree[i_parent].parent) {
           if (tree[i_parent].verdict == Verdict::Pack) {
             break;
           }
-          if (tree[i_parent].verdict == Verdict::Overflow) {
-            ancestor_overflowed = true;
+          if (tree[i_parent].verdict == Verdict::Overflow || tree[i_parent].widget->rendering) {
+            // An ancestor widget may be already rendering in background - if that's the case
+            // then we'll render a child widget in background as well and once it's finished,
+            // ask the parent widget to composite it (by re-rendering itself).
+            ancestor_rendering = true;
             break;
           }
           if (tree[i_parent].verdict == Verdict::Skip_NoTexture) {
@@ -922,7 +933,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
         total_render_time = max(total_render_time, 0.000001f);
 
-        if (ancestor_overflowed || total_render_time > remaining_time) {
+        if (ancestor_rendering || total_render_time > remaining_time) {
           tree[i].verdict = Verdict::Overflow;
           if (tree[i].prev_job != -1) {
             tree[tree[i].prev_job].next_job = tree[i].next_job;
@@ -972,7 +983,13 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
     update.id = widget.ID();
     if (node.parent != i) {
-      update.parent_id = tree[node.parent].widget->ID();
+      // When communicating dependencies between rendering, only include the widgets that have
+      // textures.
+      int parent_i = node.parent;
+      while (tree[parent_i].verdict == Verdict::Skip_NoTexture) {
+        parent_i = tree[parent_i].parent;
+      }
+      update.parent_id = tree[parent_i].widget->ID();
     }
 
     update.average_draw_millis = widget.average_draw_millis;
@@ -1049,12 +1066,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     LOG << "Frame packing:";
     LOG_Indent();
-    Str finished_widgets;
-    for (auto result : request.render_results) {
-      finished_widgets += Widget::Find(result.id)->Name();
-      finished_widgets += " ";
-    }
-    LOG << "Finished since last frame: " << finished_widgets;
     Str packed_widgets;
     for (auto& update : pack.frame) {
       packed_widgets += update.name;
@@ -1103,6 +1114,12 @@ void RenderFrame(SkCanvas& canvas) {
       ++frame_number;
       LOG << "====== FRAME " << frame_number << " ======";
       LOG << "Render events: " << debug_render_events;
+      Str finished_widgets;
+      for (auto result : request.render_results) {
+        finished_widgets += Widget::Find(result.id)->Name();
+        finished_widgets += " ";
+      }
+      LOG << "Finished since last frame: " << finished_widgets;
       debug_render_events.clear();
     }
     PackFrame(request, pack);
@@ -1126,6 +1143,7 @@ void RenderFrame(SkCanvas& canvas) {
     frame.push_back(widget_drawable);
 
     if (update.parent_id) {
+      auto* parent = WidgetDrawable::Find(update.parent_id);
       // Make sure the widget has a semaphore.
       if (!widget_drawable->semaphore.isValid()) {
         widget_drawable->semaphore = vk::CreateSemaphore();
@@ -1135,7 +1153,9 @@ void RenderFrame(SkCanvas& canvas) {
       widget_drawable->signal_semaphore = true;
 
       // Make the parent wait for the child semaphore before rendering.
-      WidgetDrawable::Find(update.parent_id)->wait_list.push_back(widget_drawable->semaphore);
+      widget_drawable->then_list.push_back(parent);
+      parent->wait_list.push_back(widget_drawable);
+      parent->wait_count++;
     }
   }
   for (auto& update : pack.overflow) {
@@ -1172,22 +1192,60 @@ void RenderFrame(SkCanvas& canvas) {
   }
 
   int pending_recordings = 0;
-  for (auto& update : Concat(pack.frame, pack.overflow)) {
+  for (auto& update : pack.frame) {
     auto w = WidgetDrawable::Find(update.id);
     recording_queue.enqueue(w);
     ++pending_recordings;
   }
 
+  {  // Render overflow widgets
+    // Render at least one widget from the overflow queue.
+    if (!overflow_queue.empty()) {
+      recording_queue.enqueue(overflow_queue.front());
+      ++pending_recordings;
+      overflow_queue.pop_front();
+    }
+    for (int i = 0; i < overflow_queue.size(); ++i) {
+      LOG << "i=" << i;
+      auto cached_widget_drawable = overflow_queue[i];
+      auto expected_total_paint_time =
+          time::SteadyNow() - paint_start +
+          time::Duration(cached_widget_drawable->average_draw_millis / 1000);
+      if (expected_total_paint_time > 16.6ms) {
+        continue;
+      }
+      recording_queue.enqueue(cached_widget_drawable);
+      ++pending_recordings;
+      overflow_queue.erase(overflow_queue.begin() + i);
+      --i;
+    }
+  }
+
   // Wait for all of the WidgetDrawables with their recordings to be ready.
+  // Send them to GPU for rendering in topological order.
+  std::vector<WidgetDrawable*> ready_for_gpu;
   while (pending_recordings) {
     WidgetDrawable* w = nullptr;
     recorded_queue.wait_dequeue(w);
     --pending_recordings;
+    if (w->wait_count == 0) {
+      ready_for_gpu.push_back(w);
+    }
   }
 
-  // Render the PackedFrame
-  for (auto widget_drawable : frame) {
-    widget_drawable->InsertRecording();
+  while (!ready_for_gpu.empty()) {
+    auto* w = ready_for_gpu.back();
+    assert(w->wait_count == 0);
+    ready_for_gpu.pop_back();
+    w->InsertRecording();
+    for (auto* then : w->then_list) {
+      if ((--then->wait_count) == 0) {
+        ready_for_gpu.push_back(then);
+      }
+    }
+    w->then_list.clear();
+    w->wait_list.clear();
+    w->signal_semaphore = false;
   }
 
   if constexpr (kDebugRendering) {
@@ -1232,27 +1290,6 @@ void RenderFrame(SkCanvas& canvas) {
   // Final widget in the frame is the RootWidget
   auto* top_level_widget = frame.back();
   top_level_widget->onDraw(&canvas);
-
-  {  // Render overflow widgets
-    // Render at least one widget from the overflow queue.
-    if (!overflow_queue.empty()) {
-      auto cached_widget_drawable = overflow_queue.front();
-      cached_widget_drawable->InsertRecording();
-      overflow_queue.pop_front();
-    }
-    for (int i = 0; i < overflow_queue.size(); ++i) {
-      auto cached_widget_drawable = overflow_queue[i];
-      auto expected_total_paint_time =
-          time::SteadyNow() - paint_start +
-          time::Duration(cached_widget_drawable->average_draw_millis / 1000);
-      if (expected_total_paint_time > 16.6ms) {
-        continue;
-      }
-      cached_widget_drawable->InsertRecording();
-      overflow_queue.erase(overflow_queue.begin() + i);
-      --i;
-    }
-  }
 
   if constexpr (kDebugRendering) {  // bullseye for latency visualisation
     lock_guard lock(root_widget->mutex);

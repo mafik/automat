@@ -22,7 +22,7 @@ void SaveState(gui::RootWidget& root_widget, Status& status) {
   writer.SetMaxDecimalPlaces(6);
   writer.StartObject();
   writer.Key("version");
-  writer.Uint(1);
+  writer.Uint(2);
   writer.Key("window");
   root_widget.SerializeState(writer);
   root_machine->SerializeState(writer, "root");
@@ -50,7 +50,7 @@ void LoadState(gui::RootWidget& root_widget, Status& status) {
     if (key == "version") {
       int version;
       d.Get(version, status);
-      if (OK(status) && version != 1) {
+      if (OK(status) && version != 2) {
         AppendErrorMessage(status) += "Unsupported version: " + std::to_string(version);
       }
     } else if (key == "window") {

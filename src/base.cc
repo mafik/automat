@@ -87,12 +87,26 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
   writer.String(name.data(), name.size());
   if (!locations.empty()) {
     writer.Key("locations");
-    writer.StartArray();
-    std::unordered_map<Location*, int> location_ids;
+    writer.StartObject();
+
+    // Pick unique names for locations.
+    std::unordered_set<Str> assigned_names;
+    std::unordered_map<Location*, Str> location_ids;
     for (auto& location : locations) {
-      location_ids.emplace(location.get(), location_ids.size());
+      auto base_name = Str(location->object->Name());
+      auto name = base_name;
+      int i = 2;
+      while (assigned_names.count(name)) {
+        name = f("%s #%d", base_name.c_str(), i++);
+      }
+      location_ids.emplace(location.get(), name);
+      assigned_names.insert(name);
     }
+
+    // Serialize the locations.
     for (auto& location : locations) {
+      auto& name = location_ids.at(location.get());
+      writer.Key(name.data(), name.size());
       writer.StartObject();
       if (!location->name.empty()) {
         writer.Key("name");
@@ -114,13 +128,14 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
         writer.StartObject();
         for (auto* conn : location->outgoing) {
           writer.Key(conn->argument.name.data(), conn->argument.name.size());
-          writer.Int(location_ids.at(&conn->to));
+          auto& to_name = location_ids.at(&conn->to);
+          writer.String(to_name.data(), to_name.size());
         }
         writer.EndObject();
       }
       writer.EndObject();
     }
-    writer.EndArray();
+    writer.EndObject();
   }
   writer.EndObject();
 }
@@ -130,16 +145,16 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
     if (key == "name") {
       d.Get(name, status);
     } else if (key == "locations") {
-      Vec<Location*> location_idx;
+      std::unordered_map<Str, Location*> location_idx;
       struct ConnectionRecord {
         Str label;
-        int from;
-        int to;
+        Location* from;
+        Str to_name;
       };
       Vec<ConnectionRecord> connections;
-      for (int i : ArrayView(d, status)) {
+      for (auto& location_name : ObjectView(d, status)) {
         auto& l = CreateEmpty();
-        location_idx.push_back(&l);
+        location_idx.emplace(location_name, &l);
         Ptr<Object> object;
         for (auto& field : ObjectView(d, status)) {
           if (field == "name") {
@@ -166,10 +181,10 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
             d.Get(l.position.y, status);
           } else if (field == "connections") {
             for (auto& connection_label : ObjectView(d, status)) {
-              int target;
-              d.Get(target, status);
+              Str to_name;
+              d.Get(to_name, status);
               if (OK(status)) {
-                connections.push_back({connection_label, i, target});
+                connections.push_back({connection_label, &l, to_name});
               }
             }
           }
@@ -181,19 +196,18 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
         }
       }
       for (auto& connection_record : connections) {
-        if (connection_record.from < 0 || connection_record.from >= location_idx.size()) {
-          l.ReportError(f("Invalid connection source index: %d", connection_record.from));
-          continue;
-        } else if (connection_record.to < 0 || connection_record.to >= location_idx.size()) {
-          l.ReportError(f("Invalid connection target index: %d", connection_record.to));
+        auto to_it = location_idx.find(connection_record.to_name);
+        if (to_it == location_idx.end()) {
+          l.ReportError(f("Missing connection target: %s", connection_record.to_name.c_str()));
           continue;
         }
-        Location* from = location_idx[connection_record.from];
+        Location* from = connection_record.from;
+        Location* to = to_it->second;
         from->object->Args([&](Argument& arg) {
           if (arg.name != connection_record.label) {
             return;
           }
-          from->ConnectTo(*location_idx[connection_record.to], arg);
+          from->ConnectTo(*to, arg);
         });
       }
     }

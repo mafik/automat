@@ -317,19 +317,7 @@ std::unique_ptr<Action> Location::FindAction(gui::Pointer& p, gui::ActionTrigger
 
 void Location::SetNumber(double number) { SetText(f("%g", number)); }
 
-std::string Location::ToStr() const {
-  std::string_view object_name = object->Name();
-  if (name.empty()) {
-    if (object_name.empty()) {
-      auto& o = *object;
-      return typeid(o).name();
-    } else {
-      return std::string(object_name);
-    }
-  } else {
-    return f("%*s \"%s\"", object_name.size(), object_name.data(), name.c_str());
-  }
-}
+std::string Location::ToStr() const { return Str(object->Name()); }
 
 void Location::ReportMissing(std::string_view property) {
   auto error_message =

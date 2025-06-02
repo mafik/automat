@@ -108,10 +108,6 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
       auto& name = location_ids.at(location.get());
       writer.Key(name.data(), name.size());
       writer.StartObject();
-      if (!location->name.empty()) {
-        writer.Key("name");
-        writer.String(location->name.data(), location->name.size());
-      }
       if (location->object) {
         writer.Key("type");
         auto type = location->object->Name();
@@ -157,9 +153,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
         location_idx.emplace(location_name, &l);
         Ptr<Object> object;
         for (auto& field : ObjectView(d, status)) {
-          if (field == "name") {
-            d.Get(l.name, status);
-          } else if (field == "type") {
+          if (field == "type") {
             Str type;
             d.Get(type, status);
             if (OK(status)) {
@@ -403,10 +397,9 @@ void LiveObject::Relocate(Location* new_here) {
   here = new_here->AcquirePtr<Location>();
 }
 
-Location& Machine::CreateEmpty(const string& name) {
+Location& Machine::CreateEmpty() {
   auto& it = locations.emplace_front(MakePtr<Location>(here));
   Location* h = it.get();
-  h->name = name;
   h->parent = this->AcquirePtr();
   return *h;
 }

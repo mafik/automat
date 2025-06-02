@@ -228,7 +228,6 @@ int Main() {
   gui::keyboard->parent = root_widget;
 
   root_location = MakePtr<Location>();
-  root_location->name = "Root location";
   root_location->parent = gui::root_widget;
   root_machine = root_location->Create<Machine>();
   root_machine->parent = gui::root_widget;

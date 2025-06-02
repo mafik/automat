@@ -26,9 +26,9 @@ TEST(CounterTest, Count) {
   Location& i = counter.Create<Number>();
   Location& inc = counter.Create<Increment>();
   inc.ConnectTo(i, Increment::target_arg);
-  Location& txt = counter.Create<Text>("Count");
+  Location& txt = counter.Create<Text>();
   txt.ConnectTo(i, Text::target_arg);
-  Location& btn = counter.Create<automat::Button>("Increment");
+  Location& btn = counter.Create<automat::Button>();
   btn.ConnectTo(inc, next_arg);
 
   counter.AddToFrontPanel(txt);
@@ -36,20 +36,21 @@ TEST(CounterTest, Count) {
 
   // Verify that the front panel contains two widgets
   ASSERT_EQ(counter.front.size(), 2);
-  EXPECT_EQ(counter.front[0], &txt);
-  EXPECT_EQ(counter.front[1], &btn);
 
-  ASSERT_EQ(counter["Count"], &txt);
-  ASSERT_EQ(counter["Increment"], &btn);
+  int count_idx = 0;
+  int increment_idx = 1;
+
+  ASSERT_EQ(counter[count_idx], &txt);
+  ASSERT_EQ(counter[increment_idx], &btn);
 
   RunLoop();
 
-  EXPECT_EQ(counter["Count"]->GetText(), "0");
+  EXPECT_EQ(counter[count_idx]->GetText(), "0");
 
-  counter["Increment"]->ScheduleRun();
+  counter[increment_idx]->ScheduleRun();
   RunLoop();
 
-  EXPECT_EQ(counter["Count"]->GetText(), "1");
+  EXPECT_EQ(counter[count_idx]->GetText(), "1");
 }
 
 void ExpectHealthy(Machine& m) {

@@ -32,16 +32,6 @@ Argument::LocationResult Argument::GetLocation(Location& here,
     auto* c = *conn_it;
     result.location = &c->to;
     result.follow_pointers = c->pointer_behavior == Connection::kFollowPointers;
-  } else {  // otherwise, search for other locations in this machine
-    if (auto machine = here.ParentAs<Machine>()) {
-      result.location = reinterpret_cast<Location*>(
-          machine->Nearby(here.position, HUGE_VALF, [&](Location& other) -> void* {
-            if (other.name == name) {
-              return &other;
-            }
-            return nullptr;
-          }));
-    }
   }
   if (result.location == nullptr && precondition >= kRequiresLocation) {
     here.ReportError(
@@ -188,17 +178,6 @@ void LiveArgument::Detach(Location& here) {
     auto& connection = *it;
     here.StopObservingUpdates(connection->to);
   }
-  // If there were no connections, try to find nearby objects instead.
-  if (auto machine = here.ParentAs<Machine>()) {
-    if (connections.first == here.outgoing.end()) {
-      machine->Nearby(here.position, HUGE_VALF, [&](Location& other) {
-        if (other.name == name) {
-          here.StopObservingUpdates(other);
-        }
-        return nullptr;
-      });
-    }
-  }
 }
 
 void LiveArgument::Attach(Location& here) {
@@ -206,17 +185,6 @@ void LiveArgument::Attach(Location& here) {
   for (auto it = connections.first; it != connections.second; ++it) {
     auto* connection = *it;
     here.ObserveUpdates(connection->to);
-  }
-  // If there were no connections, try to find nearby objects instead.
-  if (connections.first == here.outgoing.end()) {
-    if (auto machine = here.ParentAs<Machine>()) {
-      machine->Nearby(here.position, HUGE_VALF, [&](Location& other) {
-        if (other.name == name) {
-          here.ObserveUpdates(other);
-        }
-        return nullptr;
-      });
-    }
   }
 }
 

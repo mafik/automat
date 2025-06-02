@@ -100,10 +100,10 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   Ptr<Location> Extract(Location& location);
   Vec<Ptr<Location>> ExtractStack(Location& base);
 
-  Location& CreateEmpty(const string& name = "");
+  Location& CreateEmpty();
 
-  Location& Create(const Object& prototype, const string& name = "") {
-    auto& h = CreateEmpty(name);
+  Location& Create(const Object& prototype) {
+    auto& h = CreateEmpty();
     h.Create(prototype);
     return h;
   }
@@ -112,8 +112,8 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   //
   // The new instance is created from a prototype instance found in `prototypes`.
   template <typename T>
-  Location& Create(const string& name = "") {
-    return Create(*prototypes->Find<T>(), name);
+  Location& Create() {
+    return Create(*prototypes->Find<T>());
   }
 
   void SerializeState(Serializer& writer, const char* key) const override;
@@ -131,7 +131,7 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   Ptr<Object> Clone() const override {
     auto m = MakePtr<Machine>();
     for (auto& my_it : locations) {
-      auto& other_h = m->CreateEmpty(my_it->name);
+      auto& other_h = m->CreateEmpty();
       other_h.Create(*my_it->object);
     }
     return m;
@@ -151,19 +151,17 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
   string ToStr() const { return f("Machine(%s)", name.c_str()); }
 
-  Location* Front(const string& name) {
-    for (int i = 0; i < front.size(); ++i) {
-      if (front[i]->name == name) {
-        return front[i];
-      }
+  Location* Front(int i) {
+    if (i < 0 || i >= front.size()) {
+      return nullptr;
     }
-    return nullptr;
+    return front[i];
   }
 
-  Location* operator[](const string& name) {
-    auto h = Front(name);
+  Location* operator[](int i) {
+    auto h = Front(i);
     if (h == nullptr) {
-      ERROR << "Component \"" << name << "\" of " << this->name << " is null!";
+      ERROR << "Component \"" << i << "\" of " << this->name << " is null!";
     }
     return h;
   }

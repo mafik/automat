@@ -1,0 +1,3 @@
+# Why don't Automat objects have UUIDs?
+
+This is because mutable objects are fuzzy (their boundaries can change, their identity is often defined by their context) and numerous. Tracking object identity involves a lot of work and creates many problems for pretty little gain. Instead of UUIDs, Automat objects are identified by their address in memory. When serialized, they're assigned short unique identifiers meant to identify them only within the context of their parent machine. Objects can also have names assigned by the user - they are very different and worth accurate tracking.

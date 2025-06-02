@@ -64,9 +64,6 @@ struct Location : public gui::Widget {
   Ptr<Object> object;
   mutable Ptr<Widget> object_widget;
 
-  // Name of this Location.
-  std::string name;
-
   Vec2 position = {0, 0};
   float scale = 1.f;
 
@@ -90,14 +87,6 @@ struct Location : public gui::Widget {
 
   Location(WeakPtr<Location> parent = {});
   ~Location();
-
-  std::string_view Name() const override {
-    if (name.empty()) {
-      return "Location";
-    } else {
-      return name;
-    }
-  }
 
   // Find (or create if needed) the Widget for this location's object.
   // Shortcut for Widget::ForObject(location.object, location)
@@ -238,11 +227,6 @@ struct Location : public gui::Widget {
 
   // Immediately execute this object's Errored function.
   void Errored(Location& errored) { object->Errored(*this, errored); }
-
-  Location* Rename(std::string_view new_name) {
-    name = new_name;
-    return this;
-  }
 
   template <typename T>
   T* ThisAs() {

@@ -1135,13 +1135,17 @@ struct BlackboardUpdater : LiveObject {
     // LOG << "MathEngine::Updated(" << here.HumanReadableName() << ", " <<
     // updated.HumanReadableName() << ")";
     NoSchedulingGuard guard(here);
+
+    // FIXME: Find the name that the user assigned to the updated object!
+    Str updated_name = updated.ToStr();  // placeholder just to make it compile
+
     if (double num = updated.GetNumber(); !std::isnan(num)) {
       // The list of variables that have changed in response could be
       // precomputed.
       for (auto& [name, expr] : formulas) {
         vector<algebra::Variable*> independent_variables = algebra::ExtractVariables(expr.get());
         for (algebra::Variable* independent_var : independent_variables) {
-          if (independent_var->name == updated.name) {
+          if (independent_var->name == updated_name) {
             AlgebraContext context{&here};
             auto arg_it = independent_variable_args.find(name);
             if (arg_it == independent_variable_args.end()) {

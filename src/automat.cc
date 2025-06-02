@@ -267,6 +267,7 @@ int Main() {
   if (!OK(status)) {
     ERROR << "Couldn't load saved state: " << status;
   }
+  status.Reset();
 
   root_widget->loading_animation->LoadingCompleted();
 

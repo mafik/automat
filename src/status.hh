@@ -27,6 +27,8 @@ struct Status {
 
   bool Ok() const;
   Str ToStr() const;
+
+  // Clears the recorded error and sets the status to "OK".
   void Reset();
 } __attribute__((packed));
 

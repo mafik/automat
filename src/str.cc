@@ -4,9 +4,12 @@
 
 #include <algorithm>
 
+#include "format.hh"
 #include "int.hh"
 
 namespace automat {
+
+Str ToStrPtr(void* ptr) { return f("%p", ptr); }
 
 // https://stackoverflow.com/questions/3418231/replace-part-of-a-string-with-another-string
 void ReplaceAll(Str& s, const Str& from, const Str& to) {

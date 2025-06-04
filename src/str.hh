@@ -43,6 +43,8 @@ inline Str ToStr(float val) { return std::to_string(val); }
 inline Str ToStr(double val) { return std::to_string(val); }
 inline Str ToStr(long double val) { return std::to_string(val); }
 
+Str ToStrPtr(void* ptr);
+
 template <typename T>
   requires requires(T t) {
     { t.ToStr() } -> std::same_as<Str>;

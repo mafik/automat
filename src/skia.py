@@ -12,7 +12,19 @@ import make
 import ninja
 import git
 
-TAG = 'chrome/m137'
+# TODO: milestone 137 includes a change that requires all Ganesh window surfaces to support VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT.
+# https://source.chromium.org/chromium/_/skia/skia/+/6627deb65939ee886c774d290d91269c6968eaf9
+# This feature is not supported by Windows Intel GPUs so we're sticking with milestone 136 for now (until the issue gets fixed).
+# To see if Skia is fixed, configure it with:
+# > bin\gn gen out/Static --args="skia_use_vulkan=true skia_enable_ganesh=true skia_enable_graphite=true skia_enable_tools=true"
+# then build the viewer:
+# > ninja -C out\Static viewer
+# and run it (vulkan mode):
+# > out\Static\viewer -b vk
+# Finally, switch to the Graphite mode by typing '/' and changing the backend to 'graphite'.
+# The viewer should not crash with:
+# [graphite] ** ERROR ** validate_backend_texture failed: backendTex.info = Vulkan(viewFormat=BGRA8,flags=0x00000000,imageTiling=0,imageUsageFlags=0x00000017,sharingMode=0,aspectMask=1,bpp=4,sampleCount=1,mipmapped=0,protected=0); colorType = 6
+TAG = 'chrome/m136'
 DEPOT_TOOLS_ROOT = fs_utils.third_party_dir / 'depot_tools'
 SKIA_ROOT = fs_utils.third_party_dir / 'Skia'
 GN = (SKIA_ROOT / 'bin' / 'gn').with_suffix(build.binary_extension).absolute()

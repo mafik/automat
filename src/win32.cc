@@ -24,6 +24,8 @@ DisplayCaps caps;
 void ProcessSetup() {
   // Switch to UTF-8
   setlocale(LC_CTYPE, ".utf8");
+  // This should allow us to write to console even though target subsystem is "windows".
+  AttachConsole(ATTACH_PARENT_PROCESS);
   SetConsoleCP(CP_UTF8);
   SetConsoleOutputCP(CP_UTF8);
   // This makes std::this_thread::sleep_until() more accurate.

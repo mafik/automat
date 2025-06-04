@@ -12,7 +12,14 @@
 
 namespace automat {
 
-std::vector<Logger> loggers;
+std::vector<Logger>& GetLoggers() {
+  static std::vector<Logger> loggers = []() {
+    std::vector<Logger> loggers;
+    loggers.emplace_back(DefaultLogger);
+    return loggers;
+  }();
+  return loggers;
+}
 
 static int indent = 0;
 
@@ -41,6 +48,7 @@ LogEntry::~LogEntry() {
                 location.function_name());
   }
 
+  auto& loggers = GetLoggers();
   for (auto& logger : loggers) {
     logger(*this);
   }
@@ -66,13 +74,11 @@ void DefaultLogger(const LogEntry& e) {
   (void)write(STDOUT_FILENO, line.c_str(), line.size());
 #elif defined(_WIN32)
   auto line = e.buffer + '\n';
-  _write(1, line.c_str(), line.size());
+  _write(1, line.c_str(), (unsigned int)line.size());
 #else
   printf("%s\n", e.buffer.c_str());
 #endif
 }
-
-void __attribute__((__constructor__)) InitDefaultLoggers() { loggers.emplace_back(DefaultLogger); }
 
 const LogEntry& operator<<(const LogEntry& logger, StrView s) {
   logger.buffer += s;

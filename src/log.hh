@@ -55,7 +55,7 @@ void DefaultLogger(const LogEntry& e);
 
 // The default logger prints to stdout (or JavaScript console when running under
 // Emscripten).
-extern std::vector<Logger> loggers;
+std::vector<Logger>& GetLoggers();
 
 #define LOG LogEntry(LogLevel::Info, std::source_location::current())
 

@@ -344,7 +344,9 @@ void Device::Init() {
       present_queue_index = i;
       graphics_queue_count = queue_families[i].queueCount;
       auto priorities = std::vector<float>(queue_families[i].queueCount, 1.0f);
-      priorities.back() = 0.0f;
+      if (queue_families[i].queueCount > 1) {
+        priorities.back() = 0.0f;
+      }
       queue_descriptions.push_back(vkb::CustomQueueDescription(i, priorities));
     }
   }

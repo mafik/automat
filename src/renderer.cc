@@ -98,7 +98,7 @@ struct WidgetDrawable : SkDrawableRTTI {
   const uint32_t id = 0;
 
   // Debugging
-  float average_draw_millis = FP_NAN;
+  float average_draw_millis = NAN;
   Str name;
 
   // Rendering
@@ -417,14 +417,13 @@ void WidgetDrawable::InsertRecording() {
     context = vk::graphite_context.get();
   }
   frame.gpu_start = time::SteadyNow();
-  context->insertRecording(insert_recording_info);
-  context->submit();  // necessary to send the semaphores to the GPU
-
   if constexpr (kDebugRendering && kDebugRenderEvents) {
     debug_render_events += "InsertRecording(";
     debug_render_events += name;
     debug_render_events += ") ";
   }
+  context->insertRecording(insert_recording_info);
+  context->submit();  // necessary to send the semaphores to the GPU
 }
 
 void WidgetDrawable::onDraw(SkCanvas* canvas) {

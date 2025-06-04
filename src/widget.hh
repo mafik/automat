@@ -116,7 +116,7 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
 
   sk_sp<SkDrawable> sk_drawable;  // holds a WidgetDrawable
   mutable uint32_t id = 0;
-  float average_draw_millis = FP_NAN;
+  float average_draw_millis = NAN;
 
   // TODO: remove / clean up
   Optional<SkRect> pack_frame_texture_bounds;

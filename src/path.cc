@@ -149,7 +149,12 @@ void Path::MakeDirs(Status* status) const {
 }
 
 Str Path::Name() const {
-  auto slash_pos = str.rfind("/");
+#if defined(_WIN32)
+  constexpr char kSeparator = '\\';
+#else
+  constexpr char kSeparator = '/';
+#endif
+  auto slash_pos = str.rfind(kSeparator);
   if (slash_pos == StrView::npos) {
     return str;
   } else {

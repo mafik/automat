@@ -1,5 +1,5 @@
 {
-    "version": 1,
+    "version": 2,
     "window": {
         "maximized": {
             "horizontally": false,
@@ -17,76 +17,6 @@
     },
     "root": {
         "name": "Root machine",
-        "locations": [
-            {
-                "type": "Flip-Flop",
-                "value": false,
-                "x": 0.029998,
-                "y": 0.017999,
-                "connections": {
-                    "flip": 4
-                }
-            },
-            {
-                "type": "Flip-Flop",
-                "value": false,
-                "x": -0.054999,
-                "y": 0.027,
-                "connections": {
-                    "flip": 5
-                }
-            },
-            {
-                "type": "HotKey",
-                "value": {
-                    "key": "F4",
-                    "ctrl": false,
-                    "alt": false,
-                    "shift": false,
-                    "windows": false,
-                    "active": false
-                },
-                "x": -0.004,
-                "y": 0.043,
-                "connections": {
-                    "next": 0
-                }
-            },
-            {
-                "type": "HotKey",
-                "value": {
-                    "key": "F3",
-                    "ctrl": false,
-                    "alt": false,
-                    "shift": false,
-                    "windows": false,
-                    "active": false
-                },
-                "x": -0.093998,
-                "y": 0.041,
-                "connections": {
-                    "next": 1
-                }
-            },
-            {
-                "type": "Timeline",
-                "value": {
-                    "tracks": [],
-                    "zoom": 10.0,
-                    "length": 0.0,
-                    "paused": 0.0
-                },
-                "x": 0.039,
-                "y": -0.014
-            },
-            {
-                "type": "Macro Recorder",
-                "value": {
-                    "recording": false
-                },
-                "x": -0.068,
-                "y": -0.035
-            }
-        ]
+        "locations": {}
     }
 }

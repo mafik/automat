@@ -110,6 +110,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           case gui::Pointer::kIconAllScroll:
             SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
             break;
+          case gui::Pointer::kIconResizeHorizontal:
+            SetCursor(LoadCursor(nullptr, IDC_SIZEWE));
+            break;
         }
         return TRUE;
       }

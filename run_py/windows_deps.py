@@ -128,9 +128,10 @@ def CheckCommand(command: str, installer: Callable[[], None]):
     installer()
     RefreshPath()
 
+msvc_tools_dir = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\'
+
 def EnsureVisualStudioBuildToolsInstalled():
-  dir = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools'
-  if os.path.exists(dir):
+  if os.path.exists(msvc_tools_dir):
     return
   url = 'https://aka.ms/vs/16/release/vs_buildtools.exe'
   fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
@@ -153,16 +154,31 @@ def EnsureVisualStudioBuildToolsInstalled():
        '--norestart',
        '--wait'])
   
-def SetupVcvarsall():
-  vcvarsall_path = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat'
-  vars = check_output([vcvarsall_path, 'amd64', '10.0.26100.0', '-vcvars_ver=14.29', '>nul', '&&', 'set'], shell=True)
-  # TODO: cache this somewhere (it can lead to weird issues but speedup may be worth it)
-  for line in vars.decode('utf-8').split('\n'):
-    var, _, value = line.strip().partition('=')
-    # print(f'Setting "{var}" to "{value}"')
-    if var == '':
-      continue
-    os.environ[var] = value
+def SetupEnvironment():
+  # See: https://clang.llvm.org/docs/UsersManual.html#windows-system-headers-and-library-lookup
+  # Environment variables obtained from:
+  # C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat amd64 10.0.26100.0 -vcvars_ver=14.29
+  # and then running `set`.
+
+  windows_sdk_dir = 'C:\\Program Files (x86)\\Windows Kits\\10\\'
+  windows_sdk_version = '10.0.26100.0'
+  windows_sdk_include_dir = windows_sdk_dir + 'include\\' + windows_sdk_version + '\\'
+  windows_sdk_lib_dir = windows_sdk_dir + 'lib\\' + windows_sdk_version + '\\'
+
+  os.environ['INCLUDE'] = ';'.join(
+    [msvc_tools_dir + 'include',
+     windows_sdk_include_dir + 'ucrt',
+     windows_sdk_include_dir + 'shared',
+     windows_sdk_include_dir + 'um',
+     windows_sdk_include_dir + 'winrt',
+     windows_sdk_include_dir + 'cppwinrt'])
+  
+  os.environ['LIB'] = ';'.join(
+    [msvc_tools_dir + 'lib\\x64',
+     windows_sdk_lib_dir + 'ucrt\\x64',
+     windows_sdk_lib_dir + 'um\\x64'])
+  
+  os.environ['VCToolsInstallDir'] = msvc_tools_dir
 
 
 def check_and_install():
@@ -172,6 +188,4 @@ def check_and_install():
     CheckCommand(command, installer)
 
   EnsureVisualStudioBuildToolsInstalled()
-  SetupVcvarsall()
-  # Run this and grab the variables
-  # C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat amd64 10.0.26100.0 -vcvars_ver=14.29
+  SetupEnvironment()

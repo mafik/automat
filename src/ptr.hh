@@ -348,7 +348,7 @@ struct [[clang::trivial_abi]] NestedPtr {
   explicit operator bool() const { return obj != nullptr; }
   template <typename U>
   U* GetOwner() {
-    return this->ptr.GetCast<U>();
+    return this->ptr.template GetCast<U>();
   }
   T* Get() const { return obj; }
   void Reset() {

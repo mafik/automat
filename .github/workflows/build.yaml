@@ -20,8 +20,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            build/skia
-            build/vk-bootstrap
+            build/Release/Skia
+            build/Release/vk-bootstrap
             build/vulkan-headers
             build/rapidjson
             build/depot_tools
@@ -36,8 +36,8 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: |
-            build/skia
-            build/vk-bootstrap
+            build/Release/Skia
+            build/Release/vk-bootstrap
             build/vulkan-headers
             build/rapidjson
             build/depot_tools

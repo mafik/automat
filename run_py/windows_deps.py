@@ -60,8 +60,8 @@ def Download(name, url, output_path, expected_sha256):
     os.unlink(output_path)
   print(f'Downloading {name} to {output_path}...')
   urllib.request.urlretrieve(url, output_path)
-  if SHA256(output_path) != expected_sha256:
-    raise Exception(f'{name} download failed.')
+  if expected_sha256 and SHA256(output_path) != expected_sha256:
+    raise Exception(f'{name} has a wrong SHA-256 hash.')
 
 
 def InstallGit():
@@ -135,10 +135,14 @@ def EnsureVisualStudioBuildToolsInstalled():
   url = 'https://aka.ms/vs/16/release/vs_buildtools.exe'
   fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
   filename = fs_utils.build_dir / 'vs_BuildTools.exe'
+  # Microsoft seems to be changing the installer hash every now and then.
+  # 2024-10: 6d2322a49b1666a95d3ba7fa4947b8b689e8c378296a99b78e01d945040d45f9
+  # 2025-06-06: 1d9a29c9b731030bc077f384ad2d7580747906576d1d0d2bc6b33bf6fcb483bc
+  # As we don't really care about reproducibility ATM, we can accept Microsoft's decision and
+  # use whatever they serve.
   Download('Visual Studio 2019 Build Tools',
            url,
-           filename,
-           '6d2322a49b1666a95d3ba7fa4947b8b689e8c378296a99b78e01d945040d45f9')
+           filename, expected_sha256=None)
   print('Installing Visual Studio 2019 Build Tools...')
   run([filename,
        '--passive', # show progress window during install

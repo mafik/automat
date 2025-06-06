@@ -6,6 +6,7 @@
 
 #include "automat.hh"
 #include "hid.hh"
+#include "key.hh"
 #include "log.hh"
 #include "root_widget.hh"
 #include "status.hh"
@@ -156,6 +157,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         ERROR << "Received WM_INPUT event with type other than RIM_TYPEKEYBOARD";
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
       }
+      // Key Mapping:
+      // Ignore the VKey provided by the OS.
+      // Take the MakeCode, append the E0/E11 prefix (if present) and translate to physical key
+      // locally.
+      // Also ignore the Message field and instead check for the RI_KEY_BREAK to detect if key is
+      // down or up.
       RAWKEYBOARD& ev = raw_input->data.keyboard;
       U32 scan_code = ev.MakeCode;
       if (ev.Flags & RI_KEY_E0) {
@@ -171,7 +178,16 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       key.physical = physical;
       key.logical = VirtualKeyToKey(virtual_key);
 
-      if (ev.Message == WM_KEYDOWN) {
+      if (key.logical == AnsiKey::AltRight && ev.VKey == VK_CONTROL) {
+        // Right Alt sends key double events for VKey set to (first) Control & (second) Alt.
+        // We ignore the ones with VKey set to VK_CONTROL.
+        return DefWindowProc(hWnd, uMsg, wParam, lParam);
+      }
+
+      bool down = !(ev.Flags & RI_KEY_BREAK);
+
+      if (down) {
+        // LOG << "Pressed " << gui::ToStr(key.logical);
         if (key_state[virtual_key] == 0) {
           key_state[virtual_key] = 0x80;
           key.ctrl = IsCtrlDown();
@@ -194,13 +210,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             }
           }
         }
-      } else if (ev.Message == WM_KEYUP) {
+      } else {
+        // LOG << "Released " << gui::ToStr(key.logical);
         key_state[virtual_key] = 0;
-        // Right Alt sends WM_KEYDOWN for Control & Alt, but WM_KEYUP for Alt only.
-        // This is a workaround for that.
-        if (virtual_key == 0x12) {
-          key_state[0x11] = 0;
-        }
         key.ctrl = IsCtrlDown();
         auto lock = window.Lock();
         if (gui::keyboard) {
@@ -211,10 +223,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             gui::keyboard->KeyUp(key);
           }
         }
-      } else if (ev.Message == WM_SYSKEYDOWN) {
-        // ignore
-      } else {
-        LOG << "Unknown WM_INPUT Message: " << dump_struct(ev);
       }
       return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }

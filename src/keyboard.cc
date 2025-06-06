@@ -516,7 +516,14 @@ void SendKeyEvent(AnsiKey physical, bool down) {
   INPUT input = {};
   input.type = INPUT_KEYBOARD;
   input.ki.wScan = KeyToScanCode(physical);
-  input.ki.dwFlags = KEYEVENTF_SCANCODE | (down ? 0 : KEYEVENTF_KEYUP);
+  input.ki.dwFlags = KEYEVENTF_SCANCODE;
+  if (!down) {
+    input.ki.dwFlags |= KEYEVENTF_KEYUP;
+  }
+  if (input.ki.wScan & 0xff00) {
+    input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+    input.ki.wScan &= 0x00ff;  // not sure if it's necessary
+  }
   SendInput(1, &input, sizeof(INPUT));
 #endif
 #if defined(__linux__)

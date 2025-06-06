@@ -254,7 +254,8 @@ class ExtensionHelper:
     for obj in objs:
       if obj.deps.intersection(self.install_srcs):
         self.install_objs.add(obj)
-        obj.deps.update(self.beam[obj.build_type.name])
+        obj.deps.update(self.beam[obj.build_type.name]) # variant-specific dependencies
+        obj.deps.update(self.beam['']) # general dependencies
         obj.compile_args += self.compile_args
 
     for bin in bins:

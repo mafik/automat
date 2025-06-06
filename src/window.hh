@@ -3,6 +3,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 
 #include "math.hh"
 #include "pointer.hh"

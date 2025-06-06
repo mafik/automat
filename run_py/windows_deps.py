@@ -4,7 +4,7 @@
 
 import os, shutil, fs_utils
 from typing import Callable
-from subprocess import run
+from subprocess import run, check_output
 from pathlib import Path
 
 def WinRegGetSystemEnv(name):
@@ -152,6 +152,17 @@ def EnsureVisualStudioBuildToolsInstalled():
        '--includeRecommended', # unknown if needed
        '--norestart',
        '--wait'])
+  
+def SetupVcvarsall():
+  vcvarsall_path = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Auxiliary\\Build\\vcvarsall.bat'
+  vars = check_output([vcvarsall_path, 'amd64', '10.0.26100.0', '-vcvars_ver=14.29', '>nul', '&&', 'set'], shell=True)
+  # TODO: cache this somewhere (it can lead to weird issues but speedup may be worth it)
+  for line in vars.decode('utf-8').split('\n'):
+    var, _, value = line.strip().partition('=')
+    # print(f'Setting "{var}" to "{value}"')
+    if var == '':
+      continue
+    os.environ[var] = value
 
 
 def check_and_install():
@@ -161,3 +172,6 @@ def check_and_install():
     CheckCommand(command, installer)
 
   EnsureVisualStudioBuildToolsInstalled()
+  SetupVcvarsall()
+  # Run this and grab the variables
+  # C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat amd64 10.0.26100.0 -vcvars_ver=14.29

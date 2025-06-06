@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 from pathlib import Path
 from itertools import product
+import clang
 import src
 import fs_utils
 import make
@@ -260,8 +261,8 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
     return list(objs.values()), binaries
 
 
-compiler = os.environ['CXX'] = os.environ['CXX'] if 'CXX' in os.environ else 'clang++'
-compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else 'clang'
+compiler = os.environ['CXX'] = os.environ['CXX'] if 'CXX' in os.environ else clang.executable
+compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else clang.executable
 
 if platform == 'win32':
     base.compile_args += ['-D_USE_MATH_DEFINES', '-DNODRAWTEXT']

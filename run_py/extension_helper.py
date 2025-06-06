@@ -403,11 +403,7 @@ class ExtensionHelper:
     self.post_install = func
     
     if outputs_func:
-      if self.name == 'LLVM':
-        print('Setting post-install outputs')
       as_build_type_to_path_dict(outputs_func, self.post_install_outputs)
-      if self.name == 'LLVM':
-        print('Post-install outputs', self.post_install_outputs)
     else:
       for build_type in build.types:
         self.post_install_outputs[build_type.name] = [build_type.BASE() / f'{self.name}.install_patched']

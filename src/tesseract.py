@@ -13,10 +13,11 @@ def tesseract_output(build_type : build.BuildType):
   if sys.platform == 'linux':
     return build_type.PREFIX() / 'lib64' / 'libtesseract.a'
   elif sys.platform == 'win32':
-    return build_type.PREFIX() / 'lib' / ('tesseract55d.lib' if build_type == build.debug else 'tesseract55.lib')
+    return build_type.PREFIX() / 'lib64' / ('tesseract55d.lib' if build_type == build.debug else 'tesseract55.lib')
 
 hook.FetchFromURL('https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.0.tar.gz', fetch_filename='tesseract-5.5.0.tar.gz')
 hook.ConfigureDependsOn(leptonica.leptonica_output)
+
 hook.ConfigureOptions(
   SW_BUILD='OFF',
   OPENMP_BUILD='OFF',
@@ -34,6 +35,15 @@ hook.ConfigureOptions(
   INSTALL_CONFIGS='OFF')
 if sys.platform == 'win32':
   hook.ConfigureOptions(WIN32_MT_BUILD='ON')
+  # Windows SDK 10.0.26100.0 from May 2025 introduces a dependency from wchar.h to intrin.h (provided by Clang).
+  # Clang seems to define its intrinsics using vector types, which don't work in MS-compatibility mode.
+  # See: https://clang.llvm.org/docs/MSVCCompatibility.html#simd-vector-types
+  # To work around this issue, we disable MS compatibility mode. This creates another issue with isascii, which
+  # is defined in ctype.h (but only in MS-compatibility mode). We work around this one by defining it ourselves.
+  #
+  # The following line can be removed once Clang fixes its intrin.h. After removing, test it by building Automat
+  # on GitHub Actions worker!
+  hook.ConfigureOptions(CMAKE_CXX_FLAGS='-fno-ms-compatibility -Disascii=__isascii')
 hook.ConfigureWithCMake(tesseract_output)
 if sys.platform == 'linux':
   hook.AddLinkArg('-ltesseract')

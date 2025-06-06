@@ -232,12 +232,12 @@ class ExtensionHelper:
       self.beam[build_type.name] = self.outputs[build_type.name]
     
       if self.post_install:
-        recipe.add_step(partial(self.post_install, build_type, *self.post_install_outputs[build_type]),
-                        outputs=self.post_install_outputs[build_type],
+        recipe.add_step(partial(self.post_install, build_type, *self.post_install_outputs[build_type.name]),
+                        outputs=self.post_install_outputs[build_type.name],
                         inputs=self.beam[build_type.name],
                         desc=f'Post-install hook for {self.name} {build_type}'.strip(),
                         shortcut=f'post-install {self.name} {build_type}'.strip())
-        self.beam[build_type.name] = self.post_install_outputs[build_type]
+        self.beam[build_type.name] = self.post_install_outputs[build_type.name]
 
   def _hook_srcs(self, srcs : dict[str, src.File], recipe):
     if self.old_hook_srcs:
@@ -403,10 +403,14 @@ class ExtensionHelper:
     self.post_install = func
     
     if outputs_func:
+      if self.name == 'LLVM':
+        print('Setting post-install outputs')
       as_build_type_to_path_dict(outputs_func, self.post_install_outputs)
+      if self.name == 'LLVM':
+        print('Post-install outputs', self.post_install_outputs)
     else:
       for build_type in build.types:
-        self.post_install_outputs[build_type] = [build_type.BASE() / f'{self.name}.install_patched']
+        self.post_install_outputs[build_type.name] = [build_type.BASE() / f'{self.name}.install_patched']
 
 
 def as_build_type_to_path_dict(arg, dict_to_fill=defaultdict(list)):

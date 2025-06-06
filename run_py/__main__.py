@@ -20,17 +20,12 @@ debian_deps.check_and_install()
 
 recipe = build.recipe()
 
-def print_step(step):
-    print(' Step', step.shortcut)
-    print('  Inputs:')
-    for inp in sorted(str(x) for x in step.inputs):
-        print('    ', inp)
-    print('  Outputs: ', step.outputs)
 
 if args.verbose:
-    print('Build graph')
-    for step in recipe.steps:
-        print_step(step)
+    import fs_utils
+    import graph_printer
+    graph_printer.print_graph(recipe, fs_utils.build_dir / 'graph.html')
+    print('Build graph written to build/graph.html')
 
 if args.fresh:
     print('Cleaning old build results:')

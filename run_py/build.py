@@ -41,9 +41,9 @@ class BuildType:
         elif args.verbose:
             print(f'{self.name} build using system-provided GCC. Build `gcc{self.rule_suffix()}` to create a custom GCC installation.')
 
-        self.compile_args += [f'-I{self.PREFIX()}/include']
-        self.link_args += [f'-L{self.PREFIX()}/lib']
-        self.link_args += [f'-L{self.PREFIX()}/lib64']
+        self.compile_args += ['-I', str(self.PREFIX() / 'include')]
+        self.link_args += ['-L', str(self.PREFIX() / 'lib')]
+        self.link_args += ['-L', str(self.PREFIX() / 'lib64')]
         self.PREFIX().mkdir(parents=True, exist_ok=True)
         (self.PREFIX() / 'bin').mkdir(parents=True, exist_ok=True)
 

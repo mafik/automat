@@ -11,12 +11,14 @@ def natural_sort(l):
     return sorted(l, key=alphanum_key)
 
 if shutil.which('clang'):
-    executable = 'clang'
+    executable = 'clang++'
+    executable_c = 'clang'
 else:
     clang_binaries = glob('/usr/lib/llvm/*/bin/clang')
     if clang_binaries:
         clang_binaries = natural_sort(clang_binaries)
-        executable = clang_binaries[-1]
+        executable = clang_binaries[-1] + '++'
+        executable_c = clang_binaries[-1]
     else:
         raise FileNotFoundError('Couldn\'t find `clang` program. Searched $PATH and `/usr/lib/llvm/*/bin/`.')
 

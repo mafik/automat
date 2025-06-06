@@ -262,7 +262,7 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
 
 
 compiler = os.environ['CXX'] = os.environ['CXX'] if 'CXX' in os.environ else clang.executable
-compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else clang.executable
+compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else clang.executable_c
 
 if platform == 'win32':
     base.compile_args += ['-D_USE_MATH_DEFINES', '-DNODRAWTEXT']

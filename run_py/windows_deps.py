@@ -65,6 +65,7 @@ def Download(name, url, output_path, expected_sha256):
 
 
 def InstallGit():
+  fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
   filename = fs_utils.build_dir / 'Git-2.49.0-64-bit.exe'
   Download('Git',
            'https://github.com/git-for-windows/git/releases/download/v2.49.0.windows.1/Git-2.49.0-64-bit.exe',
@@ -82,6 +83,7 @@ def InstallGit():
   print('Git installed.')
 
 def InstallCMake():
+  fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
   filename = fs_utils.build_dir / 'cmake-3.31.6-windows-x86_64.msi'
   Download('CMake',
            'https://github.com/Kitware/CMake/releases/download/v3.31.6/cmake-3.31.6-windows-x86_64.msi',
@@ -93,6 +95,7 @@ def InstallCMake():
 
 def InstallClang():
   launcher = fs_utils.third_party_dir / 'WinElevator' / 'launcher.exe'
+  fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
   filename = fs_utils.build_dir / 'LLVM-20.1.1-win64.exe'
   Download('LLVM',
            'https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.1/LLVM-20.1.1-win64.exe',
@@ -130,6 +133,7 @@ def EnsureVisualStudioBuildToolsInstalled():
   if os.path.exists(dir):
     return
   url = 'https://aka.ms/vs/16/release/vs_buildtools.exe'
+  fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
   filename = fs_utils.build_dir / 'vs_BuildTools.exe'
   Download('Visual Studio 2019 Build Tools',
            url,

@@ -68,7 +68,7 @@ jobs:
       - name: Build
         run: python run.py 'link release_automat'
 
-      - name: Start uptern session on failure
+      - name: Start upterm session on failure
         uses: lhotari/action-upterm@v1
         if: ${{ failure() }}
         with:

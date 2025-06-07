@@ -68,6 +68,12 @@ jobs:
       - name: Build
         run: python run.py 'link release_automat'
 
+      - name: Start uptern session on failure
+        uses: lhotari/action-upterm@v1
+        if: ${{ failure() }}
+        with:
+          wait-timeout-minutes: 10
+
       - name: Cache dependencies
         id: cache-save
         if: always()

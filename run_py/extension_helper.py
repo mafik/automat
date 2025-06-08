@@ -198,7 +198,7 @@ class ExtensionHelper:
       elif self.configure == 'autotools':
         makefile = build_dir / 'Makefile'
 
-        def configure(build_type=build_type, build_dir=build_dir):
+        def configure(build_type=build_type, build_dir=build_dir, env=env):
           build_dir.mkdir(parents=True, exist_ok=True)
           prefix = build_type.PREFIX()
           return Popen([(self.src_dir / 'configure').absolute(), f'--prefix={prefix}', f'--libdir={prefix}/lib64', '--disable-shared'], env=env, cwd=build_dir)

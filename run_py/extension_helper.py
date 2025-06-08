@@ -158,12 +158,18 @@ class ExtensionHelper:
       configure_inputs = [self.module_globals['__file__'], __file__] + self.beam[''] + self.configure_inputs[build_type.name]
       makefile = None
 
+      env = os.environ.copy()
+      env['PKG_CONFIG_PATH'] = build_type.PKG_CONFIG_PATH
+      env['CC'] = build.compiler_c
+      env['CXX'] = build.compiler
+      # env['CFLAGS'] = ' '.join(f for f in build_type.CFLAGS() if not f.startswith('-Werror'))
+
       if self.configure == 'cmake':
         cmake_args = cmake.CMakeArgs(build_type, self.configure_opts)
         makefile = build_dir / 'build.ninja'
         recipe.add_step(
             partial(Popen, cmake_args +
-                              ['-S', str(self.src_dir).replace('\\', '/'), '-B', str(build_dir).replace('\\', '/')]),
+                              ['-S', str(self.src_dir).replace('\\', '/'), '-B', str(build_dir).replace('\\', '/')], env=env),
             outputs=[makefile],
             inputs=configure_inputs,
             desc=f'Configuring {self.name} {build_type}'.strip(),
@@ -179,11 +185,11 @@ class ExtensionHelper:
           meson_args += ['--buildtype=debug']
         elif build_type.is_subtype_of(build.release):
           meson_args += ['--buildtype=release']
-        meson_args += ['--default-library=both', '--prefix', build_type.PREFIX(), '--libdir', 'lib64', build_dir, self.src_dir]
-        makefile = build_dir / 'build.ninja'
+        meson_args += ['--default-library=static', '-Dprefer_static=true', '--prefix', build_type.PREFIX(), '--libdir', 'lib64', build_dir, self.src_dir]
+        makefile = build_dir / 'meson-info' / 'meson-info.json'
 
         recipe.add_step(
-          partial(Popen, meson_args),
+          partial(Popen, meson_args, env=env),
           outputs=[makefile],
           inputs=configure_inputs,
           desc=f'Configuring {self.name} {build_type}',
@@ -195,11 +201,6 @@ class ExtensionHelper:
         def configure(build_type=build_type, build_dir=build_dir):
           build_dir.mkdir(parents=True, exist_ok=True)
           prefix = build_type.PREFIX()
-          env = os.environ.copy()
-          env['PKG_CONFIG_PATH'] = f'{prefix}/share/pkgconfig:{prefix}/lib64/pkgconfig'
-          env['CC'] = build.compiler_c
-          env['CFLAGS'] = ' '.join(f for f in build_type.CFLAGS() if not f.startswith('-Werror'))
-          print('Flags', env['CFLAGS'])
           return Popen([(self.src_dir / 'configure').absolute(), f'--prefix={prefix}', f'--libdir={prefix}/lib64', '--disable-shared'], env=env, cwd=build_dir)
     
         recipe.add_step(
@@ -216,16 +217,23 @@ class ExtensionHelper:
         recipe.add_step(
           partial(Popen, [ninja.BIN, '-C', build_dir, 'install']),
           outputs=self.outputs[build_type.name],
-          inputs=[build_dir / 'build.ninja', ninja.BIN],
+          inputs=[makefile, ninja.BIN],
           desc=f'Installing {self.name} {build_type}',
           shortcut=f'install {self.name} {build_type}')
       elif makefile.name == 'Makefile':
         recipe.add_step(
             partial(Popen, ['make', 'install', '-j', '8'], cwd=build_dir),
             outputs=self.outputs[build_type.name],
-            inputs=[build_dir / 'Makefile'],
+            inputs=[makefile],
             desc=f'Installing {self.name} {build_type}',
             shortcut=f'install {self.name} {build_type}')
+      elif makefile.name == 'meson-info.json':
+        recipe.add_step(
+          partial(Popen, ['meson', 'install', '-C', build_dir, '--tags', 'devel']),
+          outputs=self.outputs[build_type.name],
+          inputs=[makefile, ninja.BIN],
+          desc=f'Installing {self.name} {build_type}',
+          shortcut=f'install {self.name} {build_type}')
       else:
         raise ValueError(f'Unknown build system for {self.name} {build_type}')
 

@@ -46,6 +46,11 @@ class BuildType:
         self.link_args += ['-L', str(self.PREFIX() / 'lib64')]
         self.PREFIX().mkdir(parents=True, exist_ok=True)
         (self.PREFIX() / 'bin').mkdir(parents=True, exist_ok=True)
+        sep = ';' if platform == 'win32' else ':'
+        self.PKG_CONFIG_PATH = sep.join(str(x) for x in (
+            self.PREFIX() / 'lib64' / 'pkgconfig',
+            self.PREFIX() / 'lib' / 'pkgconfig',
+            self.PREFIX() / 'share' / 'pkgconfig',))
 
     def is_subtype_of(self, other):
         if self == other:
@@ -99,6 +104,8 @@ if platform != 'win32':
     base.compile_args += ['-fno-semantic-interposition']
     # We don't want PLT in our ELF binary
     base.compile_args += ['-fno-plt']
+    base.compile_args += ['-pthread']
+    base.link_args += ['-pthread']
 
 
 if 'CXXFLAGS' in os.environ:

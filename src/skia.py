@@ -93,7 +93,7 @@ elif platform == 'linux':
   # For the time being we disable static linking on Linux and instead statically link everything except libm & libc (they seem to be coupled).
   build.base.compile_args = [x for x in build.base.compile_args if x != '-static']
   build.base.link_args = [x for x in build.base.link_args if x != '-static']
-  build.base.link_args += ['-static-libstdc++', '-static-libgcc', '-lpthread', '-ldl']
+  build.base.link_args += ['-static-libstdc++', '-static-libgcc', '-ldl']
   default_gn_args += ' skia_use_system_freetype2=false'
 
 build.base.compile_args += ['-I', SKIA_ROOT]

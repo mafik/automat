@@ -49,7 +49,7 @@ def register_package(recipe, url, inputs=[], outputs=[]):
       build_dir.mkdir(parents=True, exist_ok=True)
 
       env = os.environ.copy()
-      env['PKG_CONFIG_PATH'] = f'{prefix}/share/pkgconfig:{prefix}/lib64/pkgconfig'
+      env['PKG_CONFIG_PATH'] = build_type.PKG_CONFIG_PATH
       env['CC'] = build.compiler_c
       env['CFLAGS'] = ' '.join(build_type.CFLAGS())
       return Popen([(source_dir / 'configure').absolute(), '--prefix', prefix, f'--libdir={prefix}/lib64'], env=env, cwd=build_dir)

@@ -13,6 +13,7 @@ if sys.platform == 'linux':
   hook.ConfigureWithMeson('{PREFIX}/lib64/libxkbcommon.a')
   hook.ConfigureOption('enable-x11', 'true')
   hook.ConfigureOption('enable-tools', 'false')
+  hook.ConfigureOption('enable-xkbregistry', 'false')
   hook.ConfigureDependsOn(xcb.libxcb)
   hook.AddLinkArgs('-l:libxkbcommon.a', '-l:libxkbcommon-x11.a', '-l:libxcb-xkb.a')
   hook.InstallWhenIncluded(r'^xkbcommon/.*\.h$')

@@ -42,6 +42,8 @@ def Popen(args, **kwargs):
                          stderr=f,
                          **kwargs)
     p.stderr = f
+    if 'env' in kwargs:
+        p.env = kwargs['env']
     return p
 
 def hexdigest(path):
@@ -296,8 +298,13 @@ class Recipe:
                 if status:
                     print(f'{step.desc} finished with an error:\n')
                     if hasattr(step.builder, 'args'):
+                        env = ''
+                        if hasattr(step.builder, 'env'):
+                            for k, v in step.builder.env.items():
+                                env += f'   {k}={v}\n'
+                            env = env.strip() + '\n   '
                         orig_command = ' > \033[90m' + \
-                            ' '.join(step.builder.args) + '\033[0m\n'
+                            env + ' '.join(step.builder.args) + '\033[0m\n'
                         print(orig_command)
                     if step.builder.stderr:
                         step.builder.stderr.seek(0)

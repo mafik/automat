@@ -81,6 +81,7 @@ class ExtensionHelper:
     self.module_globals['hook_plan'] = self._hook_plan
     self.configure = None
     self.configure_opts = dict()
+    self.configure_env_replacements = dict()
     self.install_srcs = set()
     self.install_objs = set()
     self.install_bins = set()
@@ -162,9 +163,7 @@ class ExtensionHelper:
       env['PKG_CONFIG_PATH'] = build_type.PKG_CONFIG_PATH
       env['CC'] = build.compiler_c
       env['CXX'] = build.compiler
-      # Some projects (libxkbcommon) mix C & statically-built C++ dependencies.
-      # This confuses Meson. Here we explicitly tell it to link in the C++ stdlib.
-      env['LDFLAGS'] = '-lstdc++'
+      env.update(self.configure_env_replacements)
       # env['CFLAGS'] = ' '.join(f for f in build_type.CFLAGS() if not f.startswith('-Werror'))
 
       if self.configure == 'cmake':
@@ -330,6 +329,13 @@ class ExtensionHelper:
       raise ValueError(f'{self.name} was already configured')
     self.configure = 'autotools'
     as_build_type_to_path_dict(outputs, self.outputs)
+
+  def ConfigureEnvReplace(self, name:str, value:str):
+    self.configure_env_replacements[name] = value
+
+  def ConfigureEnvReplaces(self, **kwargs):
+    for name, value in kwargs.items():
+      self.ConfigureEnvReplace(name, value)
 
   def ConfigureOption(self, name:str, value:str):
     '''

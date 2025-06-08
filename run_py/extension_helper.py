@@ -160,7 +160,10 @@ class ExtensionHelper:
 
       env = os.environ.copy()
       env['PKG_CONFIG_PATH'] = build_type.PKG_CONFIG_PATH
-      env['CC'] = build.compiler_c
+      # C projects may attempt to use C compiler for the final link.
+      # This will miss the C++ stdlib which may be required by referenced static libraries.
+      # Since C & C++ may be mixed, we use the C++ compiler for both.
+      env['CC'] = build.compiler
       env['CXX'] = build.compiler
       # env['CFLAGS'] = ' '.join(f for f in build_type.CFLAGS() if not f.startswith('-Werror'))
 

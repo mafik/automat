@@ -119,6 +119,9 @@ class Step:
         updated_inputs = []
         for inp in self.inputs:
             p = Path(inp)
+            # Prevent infinite rebuild loops when outputting to an input directory.
+            if p.is_dir() and any(Path(out).is_relative_to(p) and Path(out).exists() for out in self.outputs):
+                continue
             if p.exists() and p.stat().st_mtime < build_time:
                 continue
             if not p.exists():
@@ -145,12 +148,18 @@ class Step:
     def build_if_needed(self):
         if len(self.inputs) == 0 and any(not Path(out).exists()
                                          for out in self.outputs):
+            if cmdline_args.args.verbose:
+                print(f'Running "{self.shortcut}" because some of the outputs don\'t exist')
+            return self.build_and_log([])
+        if len(self.outputs) == 0:
+            if cmdline_args.args.verbose:
+                print(f'Running "{self.shortcut}" because it has no outputs (phony target)')
             return self.build_and_log([])
         updated_inputs = self.dirty_inputs()
         if len(updated_inputs) > 0:
+            if cmdline_args.args.verbose:
+                print(f'Running "{self.shortcut}" because {str(updated_inputs)} changed')
             return self.build_and_log(updated_inputs)
-        if len(self.outputs) == 0:
-            return self.build_and_log([])
 
 
 class Recipe:

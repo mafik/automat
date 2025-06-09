@@ -25,9 +25,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const height = 600;
     const nodeRadius = 3;
 
-    // Create SVG container anchored to upper right corner
-    const svg = d3.select('body')
+    // Create container div anchored to upper right corner
+    const graphContainer = d3.select('body')
       .append('div')
+      .attr('id', 'graph-container')
       .style('position', 'fixed')
       .style('top', '20px')
       .style('right', '20px')
@@ -36,10 +37,83 @@ document.addEventListener('DOMContentLoaded', function () {
       .style('border', '1px solid #ccc')
       .style('border-radius', '5px')
       .style('padding', '10px')
-      .style('box-shadow', '0 2px 10px rgba(0,0,0,0.1)')
+      .style('box-shadow', '0 2px 10px rgba(0,0,0,0.1)');
+
+    // Add close button (X) to the container
+    const closeButton = graphContainer
+      .append('div')
+      .style('position', 'absolute')
+      .style('top', '5px')
+      .style('right', '5px')
+      .style('width', '20px')
+      .style('height', '20px')
+      .style('background', 'rgba(255, 255, 255, 0.8)')
+      .style('border', '1px solid #ccc')
+      .style('border-radius', '50%')
+      .style('cursor', 'pointer')
+      .style('display', 'flex')
+      .style('align-items', 'center')
+      .style('justify-content', 'center')
+      .style('font-size', '12px')
+      .style('font-weight', 'bold')
+      .style('color', '#666')
+      .style('user-select', 'none')
+      .text('×')
+      .on('mouseover', function () {
+        d3.select(this).style('background', 'rgba(255, 0, 0, 0.1)').style('color', '#ff0000');
+      })
+      .on('mouseout', function () {
+        d3.select(this).style('background', 'rgba(255, 255, 255, 0.8)').style('color', '#666');
+      })
+      .on('click', function () {
+        hideGraph();
+      });
+
+    // Create SVG element
+    const svg = graphContainer
       .append('svg')
       .attr('width', width)
       .attr('height', height);
+
+    // Create show button (initially hidden)
+    const showButton = d3.select('body')
+      .append('div')
+      .attr('id', 'graph-show-button')
+      .style('position', 'fixed')
+      .style('top', '20px')
+      .style('right', '20px')
+      .style('z-index', '1000')
+      .style('background', 'rgba(255, 255, 255, 0.9)')
+      .style('border', '1px solid #ccc')
+      .style('border-radius', '5px')
+      .style('padding', '10px 15px')
+      .style('box-shadow', '0 2px 10px rgba(0,0,0,0.1)')
+      .style('cursor', 'pointer')
+      .style('font-size', '14px')
+      .style('color', '#666')
+      .style('user-select', 'none')
+      .style('display', 'none')
+      .text('Show Map')
+      .on('mouseover', function () {
+        d3.select(this).style('background', 'rgba(240, 240, 240, 0.9)');
+      })
+      .on('mouseout', function () {
+        d3.select(this).style('background', 'rgba(255, 255, 255, 0.9)');
+      })
+      .on('click', function () {
+        showGraph();
+      });
+
+    // Toggle functions
+    function hideGraph() {
+      graphContainer.style('display', 'none');
+      showButton.style('display', 'block');
+    }
+
+    function showGraph() {
+      graphContainer.style('display', 'block');
+      showButton.style('display', 'none');
+    }
 
     // Create a group element for all graph elements that can be transformed
     const graphGroup = svg.append('g')
@@ -144,8 +218,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const simulation = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id(d => d.id).distance(10).strength(0.02))
       .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('vertical', verticalForce) // Add custom vertical force
-    // .force('collision', d3.forceCollide().radius(nodeRadius + 2));
+      .force('vertical', verticalForce); // Add custom vertical force
 
     // Create links (edges) - now added to the graphGroup
     const link = graphGroup.append('g')

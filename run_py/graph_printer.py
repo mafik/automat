@@ -39,7 +39,7 @@ def print_graph(recipe, html_path):
     for output in step.outputs:
       file_to_step[output] = step
   with open(html_path, 'w') as f:
-    f.write('<html><body>\n')
+    f.write('<html><meta charset="utf-8"><body>\n')
     for step in recipe.steps:
       f.write(f'<h2 id="{step.id}">{step.shortcut}</h2>\n')
       f.write(f'<p>{step.desc}</p>\n')

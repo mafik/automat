@@ -81,11 +81,89 @@ document.addEventListener('DOMContentLoaded', function () {
       });
     });
 
+    // Calculate hierarchy levels for vertical positioning
+    function calculateHierarchyLevels(nodes, links) {
+      const nodeMap = new Map(nodes.map(n => [n.id, n]));
+      const incomingCount = new Map(nodes.map(n => [n.id, 0]));
+      const levels = new Map();
+
+      // Count incoming links for each node
+      links.forEach(link => {
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        incomingCount.set(targetId, incomingCount.get(targetId) + 1);
+      });
+
+      // Start with nodes that have no incoming links (root nodes)
+      const queue = [];
+      nodes.forEach(node => {
+        if (incomingCount.get(node.id) === 0) {
+          levels.set(node.id, 0);
+          queue.push(node.id);
+        }
+      });
+
+      // Process nodes level by level
+      while (queue.length > 0) {
+        const currentId = queue.shift();
+        const currentLevel = levels.get(currentId);
+
+        // Find all nodes that depend on this node (outgoing links)
+        links.forEach(link => {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+
+          if (sourceId === currentId) {
+            const newLevel = currentLevel + 1;
+            const existingLevel = levels.get(targetId);
+
+            // Set level to the maximum of current and new level
+            if (existingLevel === undefined || newLevel > existingLevel) {
+              levels.set(targetId, newLevel);
+
+              // Add to queue if not already processed at this level
+              if (!queue.includes(targetId)) {
+                queue.push(targetId);
+              }
+            }
+          }
+        });
+      }
+
+      // Assign level 0 to any remaining nodes without levels
+      nodes.forEach(node => {
+        if (!levels.has(node.id)) {
+          levels.set(node.id, 0);
+        }
+      });
+
+      return levels;
+    }
+
+    // Custom vertical hierarchy force
+    function forceVerticalHierarchy(levels, alpha = 0.1) {
+      const maxLevel = Math.max(...levels.values());
+      const levelHeight = height / (maxLevel + 2); // +2 for padding
+
+      return function (alpha) {
+        nodes.forEach(node => {
+          const level = levels.get(node.id) || 0;
+          const targetY = levelHeight * (level + 1); // +1 for top padding
+          const dy = targetY - node.y;
+          node.vy += dy * alpha * 0.3; // Apply vertical force
+        });
+      };
+    }
+
+    // Calculate levels and create hierarchy force
+    const hierarchyLevels = calculateHierarchyLevels(nodes, links);
+    const verticalForce = forceVerticalHierarchy(hierarchyLevels);
+
     // Create force simulation
     const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id(d => d.id).distance(10).iterations(10))
-      .force('charge', d3.forceManyBody().strength(-50).distanceMax(100))
-      .force('center', d3.forceCenter(width / 2, height / 2).strength(1))
+      .force('link', d3.forceLink(links).id(d => d.id).distance(40).iterations(10))
+      .force('charge', d3.forceManyBody().strength(-100).distanceMax(150))
+      .force('center', d3.forceCenter(width / 2, height / 2).strength(0.1)) // Reduced center force
+      .force('vertical', verticalForce) // Add custom vertical force
       .tick(100);
     // .force('collision', d3.forceCollide().radius(nodeRadius + 2));
 

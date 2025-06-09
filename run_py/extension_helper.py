@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: MIT
 
 import build
-import build_variant
+import shutil
 import cmake
 import git
 import ninja
+import depot_tools
 import re
 import src
 import os
@@ -98,6 +99,7 @@ class ExtensionHelper:
     self.post_install_outputs = []
     self.checkout_dir = fs_utils.third_party_dir / self.name
     self.src_dir = self.checkout_dir
+    self.build_dir = build.BASE / self.name
     self.git_url = None
     self.git_tag = None
     self.fetch_url = None
@@ -105,6 +107,7 @@ class ExtensionHelper:
     self.include_regex = None
     self.skip_configure = False
     self.configure_inputs = []
+    self.ninja_target = 'install'
 
   def _hook_recipe(self, recipe):
     if self.old_hook_recipe:
@@ -152,7 +155,7 @@ class ExtensionHelper:
     if self.skip_configure:
       return
 
-    build_dir = build.BASE / self.name
+    build_dir = self.build_dir
 
     configure_inputs = [self.module_globals['__file__'], __file__] + self.beam + self.configure_inputs
     makefile = None
@@ -208,13 +211,25 @@ class ExtensionHelper:
           inputs=configure_inputs,
           desc=f'Configuring {self.name}',
           shortcut=f'configure {self.name}')
+      
+    elif self.configure == 'gn':
+      makefile = build_dir / 'build.ninja'
+      gn_args = ''
+      for key, value in self.configure_opts.items():
+        gn_args += f'{key}={value} '
+      recipe.add_step(
+          partial(Popen, [depot_tools.GN, 'gen', build_dir, '--script-executable=python', '--args=' + gn_args], cwd=self.src_dir, env=env),
+          outputs=[makefile],
+          inputs=configure_inputs + [depot_tools.GN],
+          desc=f'Configuring {self.name}',
+          shortcut=f'configure {self.name}')
 
     else:
       raise ValueError(f'{self.name} is not configured')
     
     if makefile.name == 'build.ninja':
       recipe.add_step(
-        partial(Popen, [ninja.BIN, '-C', build_dir, 'install']),
+        partial(Popen, [ninja.BIN, '-C', build_dir, self.ninja_target]),
         outputs=self.outputs,
         inputs=[makefile, ninja.BIN],
         desc=f'Installing {self.name}',
@@ -327,6 +342,12 @@ class ExtensionHelper:
     self.configure = 'autotools'
     as_path_list(outputs, self.outputs)
 
+  def ConfigureWithGN(self, *outputs):
+    if self.configure:
+      raise ValueError(f'{self.name} was already configured')
+    self.configure = 'gn'
+    as_path_list(outputs, self.outputs)
+
   def ConfigureEnvReplace(self, name:str, value:str):
     self.configure_env_replacements[name] = value
 
@@ -376,6 +397,8 @@ class ExtensionHelper:
     for run_arg in run_args:
       self.AddRunArg(run_arg)
 
+  # Make sure that the patch directories are relative to the src_dir.
+  # This may mean stripping the "a/" or "b/" prefixes (produced by git diff).
   def PatchSources(self, patch : str | Callable[[Path], None]):
     if self.patch_sources_func:
       raise ValueError(f'{self.name} was already configured with patch sources hook')
@@ -384,8 +407,14 @@ class ExtensionHelper:
     elif isinstance(patch, str):
       def Patcher(token : Path):
         try:
-          subprocess.run(
-              ['patch', '-p0'],
+          patch_executable = shutil.which('patch')
+          if patch_executable is None:
+            candidates = [Path('C:\\Program Files\\Git\\usr\\bin\\patch.exe')]
+            patch_executable = next((c for c in candidates if c.exists()), None)
+          if patch_executable is None:
+            raise FileNotFoundError(f"patch executable not found. Try installing Git for Windows (it should put it in {candidates[0]})")
+          patch_popen = subprocess.run(
+              [patch_executable, '-p0'],
               input=patch,
               text=True,
               check=True,
@@ -400,6 +429,7 @@ class ExtensionHelper:
         except subprocess.CalledProcessError as e:
           print(f"Error applying patch to {self.name}:", file=sys.stderr)
           print(e.stderr, file=sys.stderr)
+          print(e.stdout, file=sys.stderr)
           sys.exit(1)
       self.patch_sources_func = Patcher
 

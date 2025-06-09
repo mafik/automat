@@ -1,18 +1,8 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
-from dataclasses import dataclass
-from functools import partial
-from pathlib import Path
-from sys import platform
-import fs_utils
-import os
 import build
-import build_variant
-import re
-import make
-import ninja
-import git
-import depot_tools
+from extension_helper import ExtensionHelper
+from sys import platform
 
 # TODO: milestone 137 includes a change that requires all Ganesh window surfaces to support VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT.
 # https://source.chromium.org/chromium/_/skia/skia/+/6627deb65939ee886c774d290d91269c6968eaf9
@@ -26,32 +16,31 @@ import depot_tools
 # Finally, switch to the Graphite mode by typing '/' and changing the backend to 'graphite'.
 # The viewer should not crash with:
 # [graphite] ** ERROR ** validate_backend_texture failed: backendTex.info = Vulkan(viewFormat=BGRA8,flags=0x00000000,imageTiling=0,imageUsageFlags=0x00000017,sharingMode=0,aspectMask=1,bpp=4,sampleCount=1,mipmapped=0,protected=0); colorType = 6
-TAG = 'chrome/m136'
-SKIA_ROOT = fs_utils.third_party_dir / 'Skia'
-GN = (SKIA_ROOT / 'bin' / 'gn').with_suffix(fs_utils.binary_extension).absolute()
-
-gn_args = 'skia_use_vulkan=true skia_use_vma=true'
-
-gn_args += ' skia_use_system_expat=false'
-gn_args += ' skia_use_system_icu=false'
-gn_args += ' skia_use_system_libjpeg_turbo=false'
-gn_args += ' skia_use_system_libpng=false'
-gn_args += ' skia_use_system_libwebp=false'
-gn_args += ' skia_use_system_zlib=false'
-gn_args += ' skia_use_system_harfbuzz=false'
-gn_args += ' skia_enable_ganesh=false'
-gn_args += ' skia_enable_graphite=true'
-
-build_dir = build.BASE / 'Skia'
+skia = ExtensionHelper('Skia', globals())
+skia.FetchFromGit('https://skia.googlesource.com/skia.git', 'chrome/m136')
+skia.ConfigureWithGN(skia.build_dir / build.libname('skia'))
+skia.ninja_target = 'all'
+skia.ConfigureOptions(
+  skia_use_vulkan='true',
+  skia_use_vma='true',
+  skia_use_system_expat='false',
+  skia_use_system_icu='false',
+  skia_use_system_libjpeg_turbo='false',
+  skia_use_system_libpng='false',
+  skia_use_system_libwebp='false',
+  skia_use_system_zlib='false',
+  skia_use_system_harfbuzz='false',
+  skia_enable_ganesh='false',
+  skia_enable_graphite='true')
 
 if build.fast:
-  gn_args += ' is_debug=false is_official_build=true'
+  skia.ConfigureOptions(is_debug='false', is_official_build='true')
   build.compile_args += ['-DSK_RELEASE']
 elif build.debug:
-  gn_args += ' is_debug=true extra_cflags_cc=["-frtti"]'
+  skia.ConfigureOptions(is_debug='true', extra_cflags_cc='["-frtti"]')
   build.compile_args += ['-DSK_DEBUG']
 elif build.release:
-  gn_args += ' is_debug=false is_official_build=true'
+  skia.ConfigureOptions(is_debug='false', is_official_build='true')
   build.compile_args += ['-DSK_RELEASE']
 
 if platform == 'win32':
@@ -70,10 +59,9 @@ if platform == 'win32':
   # Set Windows version to Windows 10.
   build.compile_args += ['-D_WIN32_WINNT=0x0A00']
   build.compile_args += ['-DWINVER=0x0A00']
-  gn_args += ' clang_win="C:\\Program Files\\LLVM"'
-  gn_args += ' clang_win_version=20'
+  skia.ConfigureOptions(clang_win='"C:\\Program Files\\LLVM"', clang_win_version='20')
   if build.debug:
-    gn_args += ' extra_cflags=["/MTd"]'
+    skia.ConfigureOptions(extra_cflags='["/MTd"]')
     # This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.
     # For more interesting defines, check out:
     # https://github.com/google/skia/blob/main/include/config/SkUserConfig.h
@@ -92,70 +80,36 @@ elif platform == 'linux':
   build.compile_args = [x for x in build.compile_args if x != '-static']
   build.link_args = [x for x in build.link_args if x != '-static']
   build.link_args += ['-static-libstdc++', '-static-libgcc', '-ldl']
-  gn_args += ' skia_use_system_freetype2=false'
+  skia.ConfigureOptions(skia_use_system_freetype2='false')
 
-build.compile_args += ['-I', SKIA_ROOT]
+build.compile_args += ['-I', skia.src_dir]
 build.compile_args += ['-DSK_GRAPHITE']
 build.compile_args += ['-DSK_VULKAN']
 build.compile_args += ['-DSK_USE_VMA']
 build.compile_args += ['-DSK_SHAPER_HARFBUZZ_AVAILABLE']
 
+skia.InstallWhenIncluded(r'(include|src)/.*Sk.*\.h')
+skia.AddLinkArgs('-L', skia.build_dir)
 
-libname = build.libname('skia')
+skia.PatchSources('''\
+--- include/gpu/graphite/PrecompileContext.h
++++ include/gpu/graphite/PrecompileContext.h
+@@ -13,6 +13,7 @@
 
-def skia_git_sync_with_deps():
-  return make.Popen(['python', 'tools/git-sync-deps'], cwd=SKIA_ROOT)
+ #include <chrono>
+ #include <memory>
++#include <string>
 
-def skia_gn_gen():
-  args = [GN, 'gen', build_dir, '--script-executable=python', '--args=' + gn_args]
-  return make.Popen(args, cwd=SKIA_ROOT)
+ class SkData;
 
-def skia_compile():
-  args = [ninja.BIN, '-C', build_dir]
-  return make.Popen(args)
+''')
 
-def hook_recipe(recipe):
-  recipe.add_step(
-    git.clone('https://skia.googlesource.com/skia.git', SKIA_ROOT, TAG),
-    outputs=[SKIA_ROOT],
-    inputs=[],
-    desc='Downloading Skia',
-    shortcut='get skia')
-  
-  recipe.add_step(skia_git_sync_with_deps, outputs=[GN], inputs=[SKIA_ROOT, depot_tools.ROOT], desc='Syncing Skia git deps', shortcut='skia git sync with deps')
-
-  args_gn = build_dir / 'args.gn'
-  build_ninja = build_dir / 'build.ninja'
-  recipe.add_step(skia_gn_gen, outputs=[args_gn, build_ninja], inputs=[GN, __file__], desc='Generating Skia build files', shortcut='skia gn gen')
-  recipe.add_step(skia_compile, outputs=[build_dir / libname], inputs=[ninja.BIN, args_gn, build_ninja], desc='Compiling Skia', shortcut='skia')
-
-# Libraries offered by Skia
-skia_libs = set(['shshaper', 'skunicode', 'skia', 'skottie', 'svg'])
-
-# Binaries that should link to Skia
-skia_bins = set()
-
-def hook_plan(srcs, objs, bins, recipe):
-  for obj in objs:
-    if any(re.match(r'(include|src)/.*Sk.*\.h', inc) for inc in obj.source.system_includes):
-      obj.deps.add(SKIA_ROOT)
-
-  for bin in bins:
-    needs_skia = False
-    for obj in bin.objects:
-      if skia_libs.intersection(obj.source.comment_libs):
-        needs_skia = True
-        skia_bins.add(bin)
-    if needs_skia:
-      bin.link_args.append('-L' + str(build_dir))
-        
-
-def hook_final(srcs, objs, bins, recipe):
-  for step in recipe.steps:
-    needs_skia = False
-    for bin in skia_bins:
-      if str(bin.path) in step.outputs:
-        needs_skia = True
-        break
-    if needs_skia:
-      step.inputs.add(str(build_dir / libname))
+# TODO: if Automat builds on all platforms without this, remove this commented code
+# def skia_git_sync_with_deps():
+#   return make.Popen(['python', 'tools/git-sync-deps'], cwd=SKIA_ROOT)
+# def hook_recipe(recipe):
+#   recipe.add_step(skia_git_sync_with_deps, outputs=[GN], inputs=[SKIA_ROOT, depot_tools.ROOT], desc='Syncing Skia git deps', shortcut='skia git sync with deps')
+#   args_gn = build_dir / 'args.gn'
+#   build_ninja = build_dir / 'build.ninja'
+#   recipe.add_step(skia_gn_gen, outputs=[args_gn, build_ninja], inputs=[GN, __file__], desc='Generating Skia build files', shortcut='skia gn gen')
+#   recipe.add_step(skia_compile, outputs=[build_dir / libname], inputs=[ninja.BIN, args_gn, build_ninja], desc='Compiling Skia', shortcut='skia')

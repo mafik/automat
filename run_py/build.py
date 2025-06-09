@@ -23,6 +23,10 @@ TRIPLE = 'x86_64-pc-linux-gnu'
 compile_args = []
 link_args = []
 
+if platform == 'win32':
+    # Windows batch scripts don't expand environment variables in the PATH variable.
+    os.environ['PATH'] = os.path.expandvars(os.environ['PATH'])
+
 platform_sep = ';' if platform == 'win32' else ':'
 
 def ExpandEnv(name:str, *extra_args:str, sep:str=platform_sep, prepend=False):

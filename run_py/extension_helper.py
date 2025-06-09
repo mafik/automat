@@ -200,15 +200,17 @@ class ExtensionHelper:
     elif self.configure == 'autotools':
       makefile = build_dir / 'Makefile'
 
-      def configure():
-        build_dir.mkdir(parents=True, exist_ok=True)
-        prefix = build.PREFIX
-        return Popen([(self.src_dir / 'configure').absolute(), f'--prefix={prefix}', f'--libdir={prefix}/lib64', '--disable-shared'], env=env, cwd=build_dir)
+      recipe.add_step(
+        partial(build_dir.mkdir, parents=True, exist_ok=True),
+        outputs=[build_dir],
+        inputs=[],
+        desc=f'Creating build directory for {self.name}',
+        shortcut=f'mkdir {self.name}')
   
       recipe.add_step(
-          configure,
+          partial(Popen, [(self.src_dir / 'configure').absolute(), f'--prefix={build.PREFIX}', f'--libdir={build.PREFIX}/lib64', '--disable-shared'], env=env, cwd=build_dir),
           outputs=[makefile],
-          inputs=configure_inputs,
+          inputs=configure_inputs + [build_dir],
           desc=f'Configuring {self.name}',
           shortcut=f'configure {self.name}')
       

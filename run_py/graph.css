@@ -1,0 +1,63 @@
+html {
+  font-family: Optima, Candara, 'Noto Sans', source-sans-pro, sans-serif;
+  font-weight: normal;
+}
+
+h2>a {
+  text-decoration: none;
+  display: none;
+  color: blue;
+}
+
+h2:hover>a {
+  display: inline;
+}
+
+pre,
+code {
+  white-space: break-spaces;
+  border-width: 1px;
+  border-radius: 4px;
+  padding: 4px;
+}
+
+details {
+  border-radius: 8px;
+  padding: 4px;
+  background-color: #d7dfea;
+}
+
+summary {
+  cursor: pointer;
+  background: linear-gradient(to bottom, #d7dfea, #9ba4b0);
+  border: 1px solid #777e86;
+  border-radius: 4px;
+  padding: 4px;
+}
+
+pre.shell::before {
+  content: '$ ';
+}
+
+pre.cwd,
+code.cwd {
+  display: inline-block;
+  background-color: #d7dfea;
+  color: rgb(0, 0, 0);
+}
+
+pre.env {
+  background-color: #002152;
+  color: rgb(162, 181, 255);
+}
+
+pre.shell {
+  background-color: #09180f;
+  color: #00ff00;
+}
+
+pre.python {
+  background-color: #793560;
+  color: #fee3fe;
+
+}

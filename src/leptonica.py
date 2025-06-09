@@ -22,5 +22,5 @@ hook.ConfigureOptions(SW_BUILD='OFF',
 hook.ConfigureWithCMake(leptonica_output)
 hook.AddLinkArg('-lleptonica')
 if sys.platform == 'win32':
-  hook.AddLinkArg('-lmsvcrt' + ('d' if build.Debug else ''))
+  hook.AddLinkArg('-lmsvcrt' + ('d' if build.debug else ''))
 hook.InstallWhenIncluded(r'^leptonica/.*\.h$')

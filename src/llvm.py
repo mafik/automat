@@ -92,7 +92,7 @@ hook.ConfigureOption('LLVM_INCLUDE_EXAMPLES', 'OFF') # not needed
 hook.ConfigureOption('LLVM_INCLUDE_TESTS', 'OFF') # not needed
 
 # Normally this should be always ON, but on Windows CMake cannot properly guess
-# the host triple for the Debug build (specifically the NATIVE sub-build).
+# the host triple for the debug build (specifically the NATIVE sub-build).
 if build.platform == 'win32':
   hook.ConfigureOption('LLVM_OPTIMIZED_TABLEGEN', 'OFF')
 else:

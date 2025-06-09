@@ -20,8 +20,8 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            build/Release/Skia
-            build/Release/vk-bootstrap
+            build/release/Skia
+            build/release/vk-bootstrap
             build/vulkan-headers
             build/rapidjson
             build/depot_tools
@@ -29,7 +29,7 @@ jobs:
           key: ${{ runner.os }}-deps
 
       - name: Build
-        run: python run.py 'link release_automat'
+        run: python run.py 'link automat' --variant=release
 
       - name: Cache dependencies
         id: cache-save
@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Windows Executable
-          path: build/Release/automat.exe
+          path: build/release/automat.exe
           if-no-files-found: error
 
   linux_release:
@@ -66,7 +66,7 @@ jobs:
           key: ${{ runner.os }}-deps
 
       - name: Build
-        run: python run.py 'link release_automat'
+        run: python run.py 'link automat' --variant=release
 
       - name: Start upterm session on failure
         uses: lhotari/action-upterm@v1
@@ -87,5 +87,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Linux Executable
-          path: build/Release/automat
+          path: build/release/automat
           if-no-files-found: error

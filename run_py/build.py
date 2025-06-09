@@ -14,7 +14,7 @@ import build_variant
 from args import args
 from dataclasses import dataclass
 from sys import platform
-from build_variant import Release, Fast, Debug, BASE, PREFIX, BuildVariant, current
+from build_variant import release, fast, debug, BASE, PREFIX, BuildVariant, current
 
 TRIPLE = 'x86_64-pc-linux-gnu'
 
@@ -98,24 +98,24 @@ if 'LDFLAGS' in os.environ:
         link_args.append(f'-Wl,{flag}')
 
 # Build type optimized for fast incremental builds
-if Fast:
+if fast:
     compile_args += ['-O1', '-g']
 
 # Build type intended for practical usage (slow to build but very high performance)
-if Release:
+if release:
     compile_args += ['-O3', '-DNDEBUG', '-flto', '-fstack-protector', '-fno-trapping-math']
     link_args += ['-flto']
 
 # Build type intended for debugging
-if Debug:
+if debug:
     compile_args += ['-O0', '-g', '-D_DEBUG', '-fno-omit-frame-pointer']
 
 if platform == 'linux':
-    if build_variant.ASan:
+    if build_variant.asan:
         compile_args += ['-fsanitize=address', '-fsanitize-address-use-after-return=always']
         link_args += ['-fsanitize=address']
 
-    if build_variant.TSan:
+    if build_variant.tsan:
         # As of 2024-09-30, libnvidia-glcore.so bypasses pthread initialization which breaks
         # tsan. One workaround might be to disable GPU rendering and try CPU-based rendering.
         # https://github.com/google/sanitizers/issues/1647
@@ -129,7 +129,7 @@ if platform == 'linux':
     #     compile_args += ['-fsanitize=memory', '-fsanitize-memory-track-origins']
     #     link_args += ['-fsanitize=memory']
 
-    if build_variant.UBSan:
+    if build_variant.ubsan:
         compile_args += ['-fsanitize=undefined']
         link_args += ['-fsanitize=undefined']
 
@@ -193,9 +193,9 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
         # to depend on the specific compile_args that were used?
         f_obj.deps.add(__file__)
         f_obj.source = src_file
-        f_obj.compile_args += src_file.build_compile_args(build_variant.name_lower)
+        f_obj.compile_args += src_file.build_compile_args(build_variant.name)
         for inc in src_file.transitive_includes:
-            f_obj.compile_args += inc.build_compile_args(build_variant.name_lower)
+            f_obj.compile_args += inc.build_compile_args(build_variant.name)
 
     binaries: list[Binary] = []
     main_sources = [f for f in sources if f.main]
@@ -214,8 +214,8 @@ def plan(srcs) -> tuple[list[ObjectFile], list[Binary]]:
             if f in visited:
                 continue
             visited.add(f)
-            bin_file.link_args += f.build_link_args(build_variant.name_lower)
-            bin_file.run_args += f.build_run_args(build_variant.name_lower)
+            bin_file.link_args += f.build_link_args(build_variant.name)
+            bin_file.run_args += f.build_run_args(build_variant.name)
             if f_obj := objs.get(str(obj_path(f.path)), None):
                 if f_obj not in bin_file.objects:
                     bin_file.objects.append(f_obj)
@@ -232,11 +232,11 @@ compiler_c = os.environ['CC'] = os.environ['CC'] if 'CC' in os.environ else clan
 if platform == 'win32':
     compile_args += ['-D_USE_MATH_DEFINES', '-DNODRAWTEXT']
     link_args += ['-Wl,/opt:ref', '-Wl,/opt:icf']
-    if Debug:
+    if debug:
         link_args += ['-Wl,/debug']
 else:
     link_args += ['-Wl,--gc-sections', '-Wl,--build-id=none', '-Wl,-z,relro', '-Wl,-z,now']
-    if Release:
+    if release:
         link_args += ['-Wl,--strip-all']
 
 

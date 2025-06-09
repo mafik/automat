@@ -178,11 +178,11 @@ class ExtensionHelper:
       meson_args = ['meson', 'setup']
       for key, value in self.configure_opts.items():
         meson_args.append(f'-D{key}={value}')
-      if build.Fast:
+      if build.fast:
         meson_args += ['--buildtype=debugoptimized']
-      elif build.Debug:
+      elif build.debug:
         meson_args += ['--buildtype=debug']
-      elif build.Release:
+      elif build.release:
         meson_args += ['--buildtype=release']
       meson_args += ['--default-library=static', '-Dprefer_static=true', '--prefix', build.PREFIX, '--libdir', 'lib64', build_dir, self.src_dir]
       makefile = build_dir / 'meson-info' / 'meson-info.json'

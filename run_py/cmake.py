@@ -3,13 +3,13 @@
 import build
 import ninja
 
-if build.Fast:
+if build.fast:
   CMAKE_BUILD_TYPE = 'RelWithDebInfo'
   CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreaded'
-elif build.Release:
+elif build.release:
   CMAKE_BUILD_TYPE = 'Release'
   CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreaded'
-elif build.Debug:
+elif build.debug:
   CMAKE_BUILD_TYPE = 'Debug'
   CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreadedDebug'
 

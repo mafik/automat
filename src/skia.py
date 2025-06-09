@@ -44,13 +44,13 @@ gn_args += ' skia_enable_graphite=true'
 
 build_dir = build.BASE / 'Skia'
 
-if build.Fast:
+if build.fast:
   gn_args += ' is_debug=false is_official_build=true'
   build.compile_args += ['-DSK_RELEASE']
-elif build.Debug:
+elif build.debug:
   gn_args += ' is_debug=true extra_cflags_cc=["-frtti"]'
   build.compile_args += ['-DSK_DEBUG']
-elif build.Release:
+elif build.release:
   gn_args += ' is_debug=false is_official_build=true'
   build.compile_args += ['-DSK_RELEASE']
 
@@ -72,7 +72,7 @@ if platform == 'win32':
   build.compile_args += ['-DWINVER=0x0A00']
   gn_args += ' clang_win="C:\\Program Files\\LLVM"'
   gn_args += ' clang_win_version=20'
-  if build.Debug:
+  if build.debug:
     gn_args += ' extra_cflags=["/MTd"]'
     # This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.
     # For more interesting defines, check out:

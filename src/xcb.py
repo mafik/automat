@@ -40,7 +40,7 @@ libXext.ConfigureWithAutotools(build.PREFIX / 'lib64' / 'libXext.a')
 libxcb = extension_helper.ExtensionHelper('libxcb', globals())
 libxcb.FetchFromURL('https://xcb.freedesktop.org/dist/libxcb-1.17.0.tar.xz')
 libxcb.ConfigureDependsOn(xcb_proto, libXau, libXdmcp, libXext, libX11)
-libxcb.ConfigureWithAutotools(build.PREFIX / 'lib64' / 'libxcb.a', build.PREFIX / 'include' / 'xcb')
+libxcb.ConfigureWithAutotools(build.PREFIX / 'lib64' / 'libxcb.a')
 # '-l:libxcb-glx.a', '-l:libxcb-randr.a', '-l:libxcb-dri3.a', '-l:libX11.a', '-l:libX11-xcb.a', '-l:libXext.a', '-l:libXau.a', '-l:libXdmcp.a'
 libxcb.AddLinkArgs('-l:libxcb.so',
                    '-Wl,--export-dynamic',

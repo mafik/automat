@@ -41,6 +41,19 @@ document.addEventListener('DOMContentLoaded', function () {
       .attr('width', width)
       .attr('height', height);
 
+    // Create a group element for all graph elements that can be transformed
+    const graphGroup = svg.append('g')
+      .attr('class', 'graph-group');
+
+    // Add zoom/pan behavior to the SVG
+    const zoom = d3.zoom()
+      .scaleExtent([0.5, 3]) // Allow some zooming as well as panning
+      .on('zoom', function (event) {
+        graphGroup.attr('transform', event.transform);
+      });
+
+    svg.call(zoom);
+
     // Create arrow marker for edges
     svg.append('defs').append('marker')
       .attr('id', 'arrowhead')
@@ -70,13 +83,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Create force simulation
     const simulation = d3.forceSimulation(nodes)
-      .force('link', d3.forceLink(links).id(d => d.id).distance(10))
-      .force('charge', d3.forceManyBody().strength(-30))
-      .force('center', d3.forceCenter(width / 2, height / 2));
+      .force('link', d3.forceLink(links).id(d => d.id).distance(10).iterations(10))
+      .force('charge', d3.forceManyBody().strength(-50).distanceMax(100))
+      .force('center', d3.forceCenter(width / 2, height / 2).strength(1))
+      .tick(100);
     // .force('collision', d3.forceCollide().radius(nodeRadius + 2));
 
-    // Create links (edges)
-    const link = svg.append('g')
+    // Create links (edges) - now added to the graphGroup
+    const link = graphGroup.append('g')
       .attr('class', 'links')
       .selectAll('line')
       .data(links)
@@ -85,8 +99,8 @@ document.addEventListener('DOMContentLoaded', function () {
       .attr('stroke-width', 1.5)
       .attr('marker-end', 'url(#arrowhead)');
 
-    // Create nodes
-    const node = svg.append('g')
+    // Create nodes - now added to the graphGroup
+    const node = graphGroup.append('g')
       .attr('class', 'nodes')
       .selectAll('circle')
       .data(nodes)
@@ -101,6 +115,8 @@ document.addEventListener('DOMContentLoaded', function () {
         .on('drag', dragged)
         .on('end', dragended))
       .on('click', function (event, d) {
+        // Prevent the click from triggering pan behavior
+        event.stopPropagation();
         // Scroll to the corresponding page fragment
         const element = document.getElementById(d.id.toString());
         if (element) {
@@ -136,10 +152,10 @@ document.addEventListener('DOMContentLoaded', function () {
     // Update positions on simulation tick
     simulation.on('tick', function () {
       // Constrain nodes to stay within SVG bounds
-      // node.each(function (d) {
-      //   d.x = Math.max(nodeRadius, Math.min(width - nodeRadius, d.x));
-      //   d.y = Math.max(nodeRadius, Math.min(height - nodeRadius, d.y));
-      // });
+      node.each(function (d) {
+        d.x = Math.max(nodeRadius, Math.min(width - nodeRadius, d.x));
+        d.y = Math.max(nodeRadius, Math.min(height - nodeRadius, d.y));
+      });
 
       link
         .attr('x1', d => d.source.x)
@@ -152,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function () {
         .attr('cy', d => d.y);
     });
 
-    // Drag functions
+    // Drag functions for individual nodes
     function dragstarted(event, d) {
       if (!event.active) simulation.alphaTarget(0.3).restart();
       d.fx = d.x;
@@ -170,8 +186,8 @@ document.addEventListener('DOMContentLoaded', function () {
       d.fy = null;
     }
 
-    // Add a title to the graph
-    svg.append('text')
+    // Add a title to the graph - now added to the graphGroup
+    graphGroup.append('text')
       .attr('x', width / 2)
       .attr('y', 15)
       .attr('text-anchor', 'middle')

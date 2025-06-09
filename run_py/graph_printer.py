@@ -76,10 +76,21 @@ def print_graph(recipe, html_path):
           f.write('</pre>\n')
         else:
           # Python function
-          f.write(f'<pre class="python">{func.__name__}(')
-          f.write(', '.join(repr(x) for x in args))
+          f.write(f'<pre class="python">')
+          if hasattr(func, '__self__'):
+            f.write(f'{repr(func.__self__)}.')
+          f.write(f'{func.__name__}(')
+          first = True
+          for x in args:
+            if not first:
+              f.write(', ')
+            first = False
+            f.write(repr(x))
           for k, v in kwargs.items():
-            f.write(f', {k}={repr(v)}')
+            if not first:
+              f.write(', ')
+            first = False
+            f.write(f'{k}={repr(v)}')
           f.write(')</pre>\n')
       f.write(f'<p>Message: <em>{step.desc}</em></p>\n')
       if step.inputs:

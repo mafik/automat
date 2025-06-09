@@ -17,10 +17,7 @@ def to_json(recipe):
       file_to_step[output] = step
     obj.append({
         'id': step.id,
-        'shortcut': step.shortcut,
-        'desc': step.desc,
-        'inputs': [short_path(x) for x in step.inputs],
-        'outputs': [short_path(x) for x in step.outputs],
+        'name': step.shortcut,
         'steps_before': set(),
         'steps_after': set(),
     })
@@ -66,4 +63,5 @@ def print_graph(recipe, html_path):
     f.write(to_json(recipe))
     f.write(';\n')
     f.write('</script>\n')
+    f.write('<script src="../run_py/graph.js"></script>')
     f.write('</body></html>')

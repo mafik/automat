@@ -12,6 +12,7 @@ import re
 import make
 import ninja
 import git
+import depot_tools
 
 # TODO: milestone 137 includes a change that requires all Ganesh window surfaces to support VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT.
 # https://source.chromium.org/chromium/_/skia/skia/+/6627deb65939ee886c774d290d91269c6968eaf9
@@ -26,7 +27,6 @@ import git
 # The viewer should not crash with:
 # [graphite] ** ERROR ** validate_backend_texture failed: backendTex.info = Vulkan(viewFormat=BGRA8,flags=0x00000000,imageTiling=0,imageUsageFlags=0x00000017,sharingMode=0,aspectMask=1,bpp=4,sampleCount=1,mipmapped=0,protected=0); colorType = 6
 TAG = 'chrome/m136'
-DEPOT_TOOLS_ROOT = fs_utils.third_party_dir / 'depot_tools'
 SKIA_ROOT = fs_utils.third_party_dir / 'Skia'
 GN = (SKIA_ROOT / 'bin' / 'gn').with_suffix(fs_utils.binary_extension).absolute()
 
@@ -116,21 +116,13 @@ def skia_compile():
 
 def hook_recipe(recipe):
   recipe.add_step(
-    git.clone('https://chromium.googlesource.com/chromium/tools/depot_tools.git', DEPOT_TOOLS_ROOT, 'main'),
-    outputs=[DEPOT_TOOLS_ROOT],
-    inputs=[],
-    desc='Downloading depot_tools',
-    shortcut='get depot_tools')
-  os.environ['PATH'] = str(DEPOT_TOOLS_ROOT) + ':' + os.environ['PATH']
-
-  recipe.add_step(
     git.clone('https://skia.googlesource.com/skia.git', SKIA_ROOT, TAG),
     outputs=[SKIA_ROOT],
     inputs=[],
     desc='Downloading Skia',
     shortcut='get skia')
   
-  recipe.add_step(skia_git_sync_with_deps, outputs=[GN], inputs=[SKIA_ROOT, DEPOT_TOOLS_ROOT], desc='Syncing Skia git deps', shortcut='skia git sync with deps')
+  recipe.add_step(skia_git_sync_with_deps, outputs=[GN], inputs=[SKIA_ROOT, depot_tools.ROOT], desc='Syncing Skia git deps', shortcut='skia git sync with deps')
 
   args_gn = build_dir / 'args.gn'
   build_ninja = build_dir / 'build.ninja'

@@ -271,6 +271,8 @@ def recipe() -> make.Recipe:
 
     import ninja
     ninja.hook_recipe(r)
+    import depot_tools
+    depot_tools.hook_recipe(r)
 
     srcs = src.scan()
 

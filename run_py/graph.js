@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Graph dimensions and settings
     const width = 600;
     const height = 600;
-    const nodeRadius = 3;
+    const nodeRadius = 4;
 
     // Track currently selected node
     let selectedNodeId = null;

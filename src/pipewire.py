@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
 
-import re
 import extension_helper
+import build
 
 hook = extension_helper.ExtensionHelper('PipeWire', globals())
 
@@ -28,5 +28,5 @@ hook.ConfigureOptions(**{
   'session-managers': '[]',
 })
 hook.InstallWhenIncluded(r'pipewire/pipewire\.h')
-hook.AddCompileArg(lambda build_type: [f'-I{build_type.PREFIX()}/include/pipewire-0.3', f'-I{build_type.PREFIX()}/include/spa-0.2'])
+hook.AddCompileArgs(f'-I{build.PREFIX / "include" / "pipewire-0.3"}', f'-I{build.PREFIX / "include" / "spa-0.2"}')
 hook.AddLinkArgs('-ldl', '-lm', '-lpipewire-0.3')

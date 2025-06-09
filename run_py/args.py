@@ -7,6 +7,7 @@
 import __main__
 import argparse
 import sys
+import build_variant
 
 sys.argv[0] = 'run'
 
@@ -16,6 +17,9 @@ parser.add_argument('--fresh', action='store_true')
 parser.add_argument('--live', action='store_true')
 parser.add_argument('--verbose', action='store_true')
 parser.add_argument('target')
+parser.add_argument('--variant', choices=build_variant.index.keys(), default='fast')
 parser.add_argument('-x', action='append',
                     help='argument passed to the target', dest='extra_args', default=[])
 args = parser.parse_args()
+
+build_variant.index[args.variant].set_as_current()

@@ -6,22 +6,19 @@ import build
 import sys
 import extension_helper
 import fs_utils
+
 hook = extension_helper.ExtensionHelper('LLVM', globals())
 
-def llvm_config_path_for_prefix(PREFIX):
-  return (PREFIX / 'bin' / 'llvm-config').with_suffix(build.binary_extension)
+llvm_config_path = (build.PREFIX / 'bin' / 'llvm-config').with_suffix(fs_utils.binary_extension)
 
-def llvm_config_path(build_type : build.BuildType):
-  return llvm_config_path_for_prefix(build_type.PREFIX())
-
-def llvm_cxxflags(build_type : build.BuildType):
-  path = build_type.BASE() / 'LLVM.cxxflags'
+def llvm_cxxflags():
+  path = build.BASE / 'LLVM.cxxflags'
   if path.exists():
     return path.read_text().split()
   return []
 
-def llvm_ldflags(build_type : build.BuildType):
-  path = build_type.BASE() / 'LLVM.ldflags'
+def llvm_ldflags():
+  path = build.BASE / 'LLVM.ldflags'
   if path.exists():
     return path.read_text().split()
   return []
@@ -78,10 +75,10 @@ def RunFunctionAsProcess(func, *args):
   p.stdin.close()
   return p
 
-def post_install(build_type : build.BuildType, *outputs):
+def post_install(*outputs):
   return RunFunctionAsProcess(PostInstallProcess,
-                              str(build_type.BASE()),
-                              str(build_type.PREFIX()),
+                              str(build.BASE),
+                              str(build.PREFIX),
                               str(hook.checkout_dir))
 
 hook.FetchFromGit('https://github.com/llvm/llvm-project.git', 'llvmorg-19.1.6')
@@ -111,9 +108,6 @@ hook.InstallWhenIncluded(r'llvm/.*\.h')
 hook.AddCompileArg(llvm_cxxflags)
 hook.AddLinkArg(llvm_ldflags)
 
-def post_install_outputs(build_type : build.BuildType):
-  ldflags_path = build_type.BASE() / 'LLVM.ldflags'
-  cxxflags_path = build_type.BASE() / 'LLVM.cxxflags'
-  return [ldflags_path, cxxflags_path]
-
-hook.PostInstallStep(post_install, post_install_outputs)
+hook.PostInstallStep(post_install,
+                     [build.BASE / 'LLVM.ldflags',
+                      build.BASE / 'LLVM.cxxflags'])

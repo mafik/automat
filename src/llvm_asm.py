@@ -21,11 +21,11 @@ import json
 import re
 from functools import partial
 from pathlib import Path
+import fs_utils
 
 llvm = src.load_extension('llvm')
 
-def llvm_tblgen_path(build_type : build.BuildType):
-  return (build_type.PREFIX() / 'bin' / 'llvm-tblgen').with_suffix(build.binary_extension)
+tblgen = (build.PREFIX / 'bin' / 'llvm-tblgen').with_suffix(fs_utils.binary_extension)
 
 UNSUPPORTED_REGISTER_CLASSES = set([
   'FR16X', 'FR32X', 'FR64X',
@@ -49,7 +49,12 @@ IRRELEVANT_FIELDS = ['!anonymous', '!fields', '!name', 'AddedComplexity', 'ExeDo
                      'OpPrefixBits', 'OpSizeBits', 'Opcode', 'TSFlags', 'VectSize',
                      'explicitOpPrefix', 'explicitOpPrefixBits', 'AsmMatchConverter']
 
-def gen_x86_hh(x86_json, x86_hh):
+# x86.hh is generated to PREFIX rather than `build/generated` because it depends on llvm-tblgen,
+# which exists in three different PREFIX-es.
+x86_hh = build.PREFIX / 'include' / 'automat' / 'x86.hh'
+x86_json = build.BASE / 'x86.json'
+
+def gen_x86_hh():
   x86_hh.parent.mkdir(parents=True, exist_ok=True)
 
   x = json.load(x86_json.open())
@@ -434,29 +439,22 @@ struct Category {{
   print("\n".join(output_lines), file=f)
 
 def hook_recipe(r: make.Recipe):
-  for build_type in build.types:
-    x86_td = llvm.hook.src_dir / 'lib' / 'Target' / 'X86' / 'X86.td'
-    x86_json = build_type.BASE() / 'x86.json'
-    tblgen = llvm_tblgen_path(build_type)
-    args = [tblgen, '--dump-json', x86_td,
-            '-I', build_type.PREFIX() / 'include',
-            '-I', x86_td.parent,
-            '-o', x86_json]
-    r.add_step(partial(make.Popen, args),
-               outputs=[x86_json],
-               inputs=[llvm.llvm_config_path(build_type)],
-               desc='Generating x86.json',
-               shortcut='x86.json ' +  build_type.name)
+  x86_td = llvm.hook.src_dir / 'lib' / 'Target' / 'X86' / 'X86.td'
+  args = [tblgen, '--dump-json', x86_td,
+          '-I', build.PREFIX / 'include',
+          '-I', x86_td.parent,
+          '-o', x86_json]
+  r.add_step(partial(make.Popen, args),
+              outputs=[x86_json],
+              inputs=[llvm.llvm_config_path],
+              desc='Generating x86.json',
+              shortcut='x86.json')
 
-    # x86.hh is generated to PREFIX rather than `build/generated` because it depends on llvm-tblgen,
-    # which exists in three different PREFIX-es.
-    x86_hh = build_type.PREFIX() / 'include' / 'automat' / 'x86.hh'
-
-    r.add_step(partial(gen_x86_hh, x86_json, x86_hh),
-               outputs=[x86_hh],
-               inputs=[x86_json, __file__] + llvm.hook.beam[build_type],
-               desc='Generating x86.hh',
-               shortcut='x86.hh ' +  build_type.name)
+  r.add_step(gen_x86_hh,
+              outputs=[x86_hh],
+              inputs=[x86_json, __file__] + llvm.hook.beam,
+              desc='Generating x86.hh',
+              shortcut='x86.hh')
     
 # Hook x86.hh into the build graph
 
@@ -470,5 +468,4 @@ def hook_srcs(srcs: dict[str, src.File], r: make.Recipe):
 def hook_plan(srcs: dict[str, src.File], objs: list[build.ObjectFile], bins: list[build.Binary], r: make.Recipe):
   for obj in objs:
     if obj.source in files_using_x86_hh:
-      x86_hh = obj.build_type.PREFIX() / 'include' / 'automat' / 'x86.hh'
       obj.deps.add(x86_hh)

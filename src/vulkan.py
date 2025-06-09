@@ -9,7 +9,7 @@ VK_ROOT = fs_utils.build_dir / 'vulkan-headers'
 VK_INCLUDE = VK_ROOT / 'include'
 TAG = 'vulkan-sdk-1.3.290.0' # must match TAG in vk_bootstrap.py
 
-build.base.compile_args += ['-I', VK_INCLUDE]
+build.compile_args += ['-I', VK_INCLUDE]
 
 def hook_recipe(recipe):
   recipe.add_step(

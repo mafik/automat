@@ -1,9 +1,6 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
 import extension_helper
-from pathlib import Path
-import subprocess
-import sys
 
 util_macros = extension_helper.ExtensionHelper('util-macros', globals())
 util_macros.FetchFromURL('https://www.x.org/archive/individual/util/util-macros-1.20.1.tar.xz')
@@ -12,7 +9,7 @@ util_macros.ConfigureWithAutotools('{PREFIX}/share/pkgconfig/xorg-macros.pc')
 xorgproto = extension_helper.ExtensionHelper('xorgproto', globals())
 xorgproto.FetchFromURL('https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2024.1.tar.xz')
 xorgproto.ConfigureDependsOn(util_macros)
-xorgproto.ConfigureWithAutotools('{PREFIX}/include/X11')
+xorgproto.ConfigureWithAutotools('{PREFIX}/share/pkgconfig/xproto.pc')
 
 libXau = extension_helper.ExtensionHelper('libXau', globals())
 libXau.FetchFromURL('https://www.x.org/pub/individual/lib/libXau-1.0.11.tar.xz')

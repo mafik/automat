@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import build
+import build_variant
 import cmake
 import git
 import ninja
@@ -88,13 +89,13 @@ class ExtensionHelper:
     self.compile_args = []
     self.link_args = []
     self.run_args = []
-    self.outputs = defaultdict(list) # holds a list of outputs for each build type
+    self.outputs = [] # holds a list of outputs of this ExtensionHelper
     # beam is a list of files that are required for the next step in the build
     # it's used to conditionally inject steps in the build graph
-    self.beam = defaultdict(list)
+    self.beam = []
     self.patch_sources_func = None
     self.post_install = None
-    self.post_install_outputs = defaultdict(list)
+    self.post_install_outputs = []
     self.checkout_dir = fs_utils.third_party_dir / self.name
     self.src_dir = self.checkout_dir
     self.git_url = None
@@ -103,7 +104,7 @@ class ExtensionHelper:
     self.fetch_filename = None
     self.include_regex = None
     self.skip_configure = False
-    self.configure_inputs = defaultdict(list)
+    self.configure_inputs = []
 
   def _hook_recipe(self, recipe):
     if self.old_hook_recipe:
@@ -116,7 +117,7 @@ class ExtensionHelper:
           inputs=[],
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
-      self.beam[''] = [self.checkout_dir]
+      self.beam = [self.checkout_dir]
 
     elif self.fetch_url:
       archive = fs_utils.third_party_dir / self.fetch_filename
@@ -136,118 +137,114 @@ class ExtensionHelper:
             shortcut=f'extract {self.name}')
       else:
         raise ValueError(f'Unknown archive format for {archive} (supported: .tar.gz, .tar.xz)')
-      self.beam[''] = [self.checkout_dir]
+      self.beam = [self.checkout_dir]
 
     if self.patch_sources_func:
       marker = fs_utils.third_party_dir / f'{self.name}.patched'
       recipe.add_step(
           partial(self.patch_sources_func, marker),
           outputs=[marker],
-          inputs=self.beam[''],
+          inputs=self.beam,
           desc = f'Patching {self.name}',
           shortcut=f'patch {self.name}')
-      self.beam[''] = [marker]
+      self.beam = [marker]
 
     if self.skip_configure:
-      for build_type in build.types:
-        self.beam[build_type.name] = self.beam['']
       return
 
-    for build_type in build.types:
-      build_dir = build_type.BASE() / self.name
+    build_dir = build.BASE / self.name
 
-      configure_inputs = [self.module_globals['__file__'], __file__] + self.beam[''] + self.configure_inputs[build_type.name]
-      makefile = None
+    configure_inputs = [self.module_globals['__file__'], __file__] + self.beam + self.configure_inputs
+    makefile = None
 
-      env = os.environ.copy()
-      env['PKG_CONFIG_PATH'] = build_type.PKG_CONFIG_PATH
-      env['CC'] = build.compiler_c
-      env['CXX'] = build.compiler
-      env.update(self.configure_env_replacements)
-      # env['CFLAGS'] = ' '.join(f for f in build_type.CFLAGS() if not f.startswith('-Werror'))
+    env = os.environ.copy()
+    env['CC'] = build.compiler_c
+    env['CXX'] = build.compiler
+    env.update(self.configure_env_replacements)
+    # env['CFLAGS'] = ' '.join(f for f in build.CFLAGS() if not f.startswith('-Werror'))
 
-      if self.configure == 'cmake':
-        cmake_args = cmake.CMakeArgs(build_type, self.configure_opts)
-        makefile = build_dir / 'build.ninja'
-        recipe.add_step(
-            partial(Popen, cmake_args +
-                              ['-S', str(self.src_dir).replace('\\', '/'), '-B', str(build_dir).replace('\\', '/')], env=env),
-            outputs=[makefile],
-            inputs=configure_inputs,
-            desc=f'Configuring {self.name} {build_type}'.strip(),
-            shortcut=f'configure {self.name} {build_type}'.strip())
-    
-      elif self.configure == 'meson':
-        meson_args = ['meson', 'setup']
-        for key, value in self.configure_opts.items():
-          meson_args.append(f'-D{key}={value}')
-        if build_type.is_subtype_of(build.fast):
-          meson_args += ['--buildtype=debugoptimized']
-        elif build_type.is_subtype_of(build.debug):
-          meson_args += ['--buildtype=debug']
-        elif build_type.is_subtype_of(build.release):
-          meson_args += ['--buildtype=release']
-        meson_args += ['--default-library=static', '-Dprefer_static=true', '--prefix', build_type.PREFIX(), '--libdir', 'lib64', build_dir, self.src_dir]
-        makefile = build_dir / 'meson-info' / 'meson-info.json'
-
-        recipe.add_step(
-          partial(Popen, meson_args, env=env),
+    if self.configure == 'cmake':
+      cmake_args = cmake.CMakeArgs(self.configure_opts)
+      makefile = build_dir / 'build.ninja'
+      recipe.add_step(
+          partial(Popen, cmake_args +
+                            ['-S', str(self.src_dir).replace('\\', '/'), '-B', str(build_dir).replace('\\', '/')], env=env),
           outputs=[makefile],
           inputs=configure_inputs,
-          desc=f'Configuring {self.name} {build_type}',
-          shortcut=f'configure {self.name} {build_type}')
-      
-      elif self.configure == 'autotools':
-        makefile = build_dir / 'Makefile'
+          desc=f'Configuring {self.name}',
+          shortcut=f'configure {self.name}')
+  
+    elif self.configure == 'meson':
+      meson_args = ['meson', 'setup']
+      for key, value in self.configure_opts.items():
+        meson_args.append(f'-D{key}={value}')
+      if build.Fast:
+        meson_args += ['--buildtype=debugoptimized']
+      elif build.Debug:
+        meson_args += ['--buildtype=debug']
+      elif build.Release:
+        meson_args += ['--buildtype=release']
+      meson_args += ['--default-library=static', '-Dprefer_static=true', '--prefix', build.PREFIX, '--libdir', 'lib64', build_dir, self.src_dir]
+      makefile = build_dir / 'meson-info' / 'meson-info.json'
 
-        def configure(build_type=build_type, build_dir=build_dir, env=env):
-          build_dir.mkdir(parents=True, exist_ok=True)
-          prefix = build_type.PREFIX()
-          return Popen([(self.src_dir / 'configure').absolute(), f'--prefix={prefix}', f'--libdir={prefix}/lib64', '--disable-shared'], env=env, cwd=build_dir)
+      recipe.add_step(
+        partial(Popen, meson_args, env=env),
+        outputs=[makefile],
+        inputs=configure_inputs,
+        desc=f'Configuring {self.name}',
+        shortcut=f'configure {self.name}')
     
-        recipe.add_step(
-            configure,
-            outputs=[makefile],
-            inputs=configure_inputs,
-            desc=f'Configuring {self.name} {build_type}',
-            shortcut=f'configure {self.name} {build_type}')
+    elif self.configure == 'autotools':
+      makefile = build_dir / 'Makefile'
 
-      else:
-        raise ValueError(f'{self.name} is not configured')
-      
-      if makefile.name == 'build.ninja':
-        recipe.add_step(
-          partial(Popen, [ninja.BIN, '-C', build_dir, 'install']),
-          outputs=self.outputs[build_type.name],
-          inputs=[makefile, ninja.BIN],
-          desc=f'Installing {self.name} {build_type}',
-          shortcut=f'install {self.name} {build_type}')
-      elif makefile.name == 'Makefile':
-        recipe.add_step(
-            partial(Popen, ['make', 'install', '-j', '8'], cwd=build_dir),
-            outputs=self.outputs[build_type.name],
-            inputs=[makefile],
-            desc=f'Installing {self.name} {build_type}',
-            shortcut=f'install {self.name} {build_type}')
-      elif makefile.name == 'meson-info.json':
-        recipe.add_step(
-          partial(Popen, ['meson', 'install', '-C', build_dir, '--tags', 'devel']),
-          outputs=self.outputs[build_type.name],
-          inputs=[makefile, ninja.BIN],
-          desc=f'Installing {self.name} {build_type}',
-          shortcut=f'install {self.name} {build_type}')
-      else:
-        raise ValueError(f'Unknown build system for {self.name} {build_type}')
+      def configure():
+        build_dir.mkdir(parents=True, exist_ok=True)
+        prefix = build.PREFIX
+        return Popen([(self.src_dir / 'configure').absolute(), f'--prefix={prefix}', f'--libdir={prefix}/lib64', '--disable-shared'], env=env, cwd=build_dir)
+  
+      recipe.add_step(
+          configure,
+          outputs=[makefile],
+          inputs=configure_inputs,
+          desc=f'Configuring {self.name}',
+          shortcut=f'configure {self.name}')
 
-      self.beam[build_type.name] = self.outputs[build_type.name]
+    else:
+      raise ValueError(f'{self.name} is not configured')
     
-      if self.post_install:
-        recipe.add_step(partial(self.post_install, build_type, *self.post_install_outputs[build_type.name]),
-                        outputs=self.post_install_outputs[build_type.name],
-                        inputs=self.beam[build_type.name],
-                        desc=f'Post-install hook for {self.name} {build_type}'.strip(),
-                        shortcut=f'post-install {self.name} {build_type}'.strip())
-        self.beam[build_type.name] = self.post_install_outputs[build_type.name]
+    if makefile.name == 'build.ninja':
+      recipe.add_step(
+        partial(Popen, [ninja.BIN, '-C', build_dir, 'install']),
+        outputs=self.outputs,
+        inputs=[makefile, ninja.BIN],
+        desc=f'Installing {self.name}',
+        shortcut=f'install {self.name}')
+    elif makefile.name == 'Makefile':
+      recipe.add_step(
+          partial(Popen, ['make', 'install', '-j', '8'], cwd=build_dir),
+          outputs=self.outputs,
+          inputs=[makefile],
+          desc=f'Installing {self.name}',
+          shortcut=f'install {self.name}')
+    elif makefile.name == 'meson-info.json':
+      recipe.add_step(
+        partial(Popen, ['meson', 'install', '-C', build_dir, '--tags', 'devel']),
+        outputs=self.outputs,
+        inputs=[makefile, ninja.BIN],
+        desc=f'Installing {self.name}',
+        shortcut=f'install {self.name}')
+    else:
+      raise ValueError(f'Unknown build system for {self.name}')
+
+    self.beam = self.outputs
+  
+    if self.post_install:
+      recipe.add_step(partial(self.post_install, *self.post_install_outputs),
+                      outputs=self.post_install_outputs,
+                      inputs=self.beam,
+                      desc=f'Post-install hook for {self.name}'.strip(),
+                      shortcut=f'post-install {self.name}'.strip())
+      self.beam = self.post_install_outputs
 
   def _hook_srcs(self, srcs : dict[str, src.File], recipe):
     if self.old_hook_srcs:
@@ -264,8 +261,7 @@ class ExtensionHelper:
     for obj in objs:
       if obj.deps.intersection(self.install_srcs):
         self.install_objs.add(obj)
-        obj.deps.update(self.beam[obj.build_type.name]) # variant-specific dependencies
-        obj.deps.update(self.beam['']) # general dependencies
+        obj.deps.update(self.beam) # variant-specific dependencies
         obj.compile_args += self.compile_args
 
     for bin in bins:
@@ -282,7 +278,7 @@ class ExtensionHelper:
    - another ExtensionHelper'''
   def ConfigureDependsOn(self, *deps):
     for dep in deps:
-      as_build_type_to_path_dict(dep, self.configure_inputs)
+      as_path_list(dep, self.configure_inputs)
 
   def FetchFromGit(self, git_url, git_tag):
     if self.git_url:
@@ -316,19 +312,19 @@ class ExtensionHelper:
     if self.configure:
       raise ValueError(f'{self.name} was already configured')
     self.configure = 'cmake'
-    as_build_type_to_path_dict(outputs, self.outputs)
+    as_path_list(outputs, self.outputs)
   
   def ConfigureWithMeson(self, *outputs):
     if self.configure:
       raise ValueError(f'{self.name} was already configured')
     self.configure = 'meson'
-    as_build_type_to_path_dict(outputs, self.outputs)
+    as_path_list(outputs, self.outputs)
 
   def ConfigureWithAutotools(self, *outputs):
     if self.configure:
       raise ValueError(f'{self.name} was already configured')
     self.configure = 'autotools'
-    as_build_type_to_path_dict(outputs, self.outputs)
+    as_path_list(outputs, self.outputs)
 
   def ConfigureEnvReplace(self, name:str, value:str):
     self.configure_env_replacements[name] = value
@@ -406,7 +402,7 @@ class ExtensionHelper:
           sys.exit(1)
       self.patch_sources_func = Patcher
 
-  def PostInstallStep(self, func : Callable[[build.BuildType, Path], None], outputs_func : Callable[[build.BuildType], list[Path]] = None):
+  def PostInstallStep(self, func : Callable[[Path], None], outputs_func : Callable[[], list[Path]] = None):
     '''
     Run the given function after installation.
     
@@ -420,39 +416,34 @@ class ExtensionHelper:
     self.post_install = func
     
     if outputs_func:
-      as_build_type_to_path_dict(outputs_func, self.post_install_outputs)
+      as_path_list(outputs_func, self.post_install_outputs)
     else:
-      for build_type in build.types:
-        self.post_install_outputs[build_type.name] = [build_type.BASE() / f'{self.name}.install_patched']
+      self.post_install_outputs = [build.BASE / f'{self.name}.install_patched']
 
 
-def as_build_type_to_path_dict(arg, dict_to_fill=defaultdict(list)):
-  '''Converts a function / string / list / ExtensionHelper to a dict that maps BuildType to Path'''
+def as_path_list(arg, path_list=defaultdict(list)):
+  '''Converts a function / string / list / ExtensionHelper to a list of paths'''
   
   if isinstance(arg, list) or isinstance(arg, tuple):
-    for a in arg:
-      as_build_type_to_path_dict(a, dict_to_fill)
+    for arg_elem in arg:
+      as_path_list(arg_elem, path_list)
   elif callable(arg):
-    for build_type in build.types:
-      ret = arg(build_type)
-      if isinstance(ret, list):
-        dict_to_fill[build_type.name] += ret
-      elif isinstance(ret, Path) or isinstance(ret, str):
-        dict_to_fill[build_type.name].append(ret)
-      else:
-        raise ValueError(f'Function {arg} returned {type(ret)} but expected Path or str (or list of those)')
+    ret = arg()
+    if isinstance(ret, list):
+      path_list += ret
+    elif isinstance(ret, Path) or isinstance(ret, str):
+      path_list.append(ret)
+    else:
+      raise ValueError(f'Function {arg} returned {type(ret)} but expected Path or str (or list of those)')
   elif isinstance(arg, str):
-    for build_type in build.types:
-      dict_to_fill[build_type.name].append(arg.format(PREFIX=build_type.PREFIX()))
-  elif isinstance(arg, dict):
-    for k, v in arg.items():
-      dict_to_fill[k] += v
+    path_list.append(arg.format(PREFIX=build.PREFIX))
+  elif isinstance(arg, Path):
+    path_list.append(str(arg))
   elif isinstance(arg, ExtensionHelper):
-    source_dict = arg.outputs
     if arg.post_install:
-      source_dict = arg.post_install_outputs
-    for k, v in source_dict.items():
-      dict_to_fill[k] += v
+      path_list += arg.post_install_outputs
+    else:
+      path_list += arg.outputs
   else:
     raise ValueError(f'Unknown output type: {type(arg)}')
-  return dict_to_fill
+  return path_list

@@ -3,17 +3,18 @@
 import build
 import ninja
 
-build.fast.CMAKE_BUILD_TYPE = 'RelWithDebInfo'
-build.release.CMAKE_BUILD_TYPE = 'Release'
-build.debug.CMAKE_BUILD_TYPE = 'Debug'
+if build.Fast:
+  CMAKE_BUILD_TYPE = 'RelWithDebInfo'
+  CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreaded'
+elif build.Release:
+  CMAKE_BUILD_TYPE = 'Release'
+  CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreaded'
+elif build.Debug:
+  CMAKE_BUILD_TYPE = 'Debug'
+  CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreadedDebug'
 
-build.fast.CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreaded'
-build.release.CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreaded'
-build.debug.CMAKE_MSVC_RUNTIME_LIBRARY = 'MultiThreadedDebug'
 
-def CMakeArgs(build_type: build.BuildType, extra_defines: dict[str, str] = {}):
-    CMAKE_BUILD_TYPE = build_type.CMAKE_BUILD_TYPE
-    CMAKE_MSVC_RUNTIME_LIBRARY = build_type.CMAKE_MSVC_RUNTIME_LIBRARY
+def CMakeArgs(extra_defines: dict[str, str] = {}):
     CMAKE_MAKE_PROGRAM = str(ninja.BIN)
     CMAKE_INSTALL_LIBDIR = 'lib64'
 
@@ -21,7 +22,7 @@ def CMakeArgs(build_type: build.BuildType, extra_defines: dict[str, str] = {}):
                   f'-DCMAKE_C_COMPILER={build.compiler_c}', f'-DCMAKE_CXX_COMPILER={build.compiler}',
                   f'-D{CMAKE_MSVC_RUNTIME_LIBRARY=}', f'-D{CMAKE_INSTALL_LIBDIR=}']
 
-    cmake_args += ['-DCMAKE_INSTALL_PREFIX=' + str(build_type.PREFIX())]
+    cmake_args += ['-DCMAKE_INSTALL_PREFIX=' + str(build.PREFIX)]
 
     for name, value in extra_defines.items():
       cmake_args += ['-D' + name + '=' + value]

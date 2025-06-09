@@ -48,7 +48,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Windows Executable
-          path: build/release_automat.exe
+          path: build/Release/automat.exe
           if-no-files-found: error
 
   linux_release:
@@ -87,5 +87,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Linux Executable
-          path: build/release_automat
+          path: build/Release/automat
           if-no-files-found: error

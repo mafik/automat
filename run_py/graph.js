@@ -127,7 +127,13 @@ document.addEventListener('DOMContentLoaded', function () {
           return '#FF8C00'; // Orange for selected node
         }
         return '#4A90E2'; // Default blue
-      });
+      })
+        .attr('stroke', function (d) {
+          if (d.id === selectedNodeId) {
+            return '#CC6600'; // Darker orange for selected node stroke
+          }
+          return '#2E5C8A'; // Default dark blue stroke
+        });
     }
 
     // Listen for hash changes (when clicking <a href="#id"> links)
@@ -141,7 +147,8 @@ document.addEventListener('DOMContentLoaded', function () {
       } else {
         // No hash, clear selection
         selectedNodeId = null;
-        node.attr('fill', '#4A90E2');
+        node.attr('fill', '#4A90E2')
+          .attr('stroke', '#2E5C8A');
       }
     }
 
@@ -354,9 +361,11 @@ document.addEventListener('DOMContentLoaded', function () {
         .style('top', (event.pageY - 10) + 'px');
     })
       .on('mouseout', function (event, d) {
-        // Restore original color: orange for selected node, blue for others
+        // Restore original colors: orange for selected node, blue for others
         const originalColor = (d.id === selectedNodeId) ? '#FF8C00' : '#4A90E2';
-        d3.select(this).attr('fill', originalColor);
+        const originalStroke = (d.id === selectedNodeId) ? '#CC6600' : '#2E5C8A';
+        d3.select(this).attr('fill', originalColor)
+          .attr('stroke', originalStroke);
 
         // Reset all links to original style
         link.style('stroke', 'rgba(0,0,0,0.2)')

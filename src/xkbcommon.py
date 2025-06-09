@@ -10,7 +10,7 @@ if sys.platform == 'linux':
   xcb = src.load_extension('xcb')
   hook = extension_helper.ExtensionHelper('xkbcommon', globals())
   hook.FetchFromURL('https://github.com/xkbcommon/libxkbcommon/archive/refs/tags/xkbcommon-1.8.1.tar.gz')
-  hook.ConfigureWithMeson('{PREFIX}/lib64/libxkbcommon.a')
+  hook.ConfigureWithMeson(build.PREFIX / 'lib64' / 'libxkbcommon.a')
   # libxkbcommon mixes C & statically-built C++ dependencies.
   # This confuses Meson. Here we explicitly tell it to link in the C++ stdlib.
   hook.ConfigureEnvReplaces(LDFLAGS='-lstdc++')

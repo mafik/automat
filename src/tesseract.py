@@ -47,5 +47,5 @@ hook.ConfigureWithCMake(tesseract_output)
 if sys.platform == 'linux':
   hook.AddLinkArg('-ltesseract')
 elif sys.platform == 'win32':
-  hook.AddLinkArg(lambda t: ['-ltesseract55' + ('d' if t == build.debug else '')])
+  hook.AddLinkArg('-ltesseract55' + ('d' if build.Debug else ''))
 hook.InstallWhenIncluded(r'^tesseract/.*\.h$')

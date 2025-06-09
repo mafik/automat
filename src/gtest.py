@@ -6,7 +6,7 @@ from extension_helper import ExtensionHelper
 hook = ExtensionHelper('googletest', globals())
 hook.FetchFromURL('https://github.com/google/googletest/releases/download/v1.16.0/googletest-1.16.0.tar.gz')
 hook.ConfigureOption('CMAKE_CXX_STANDARD', '20')
-hook.ConfigureWithCMake('{PREFIX}/include/gtest/gtest.h')
+hook.ConfigureWithCMake(build.PREFIX / 'include' / 'gtest' / 'gtest.h')
 hook.InstallWhenIncluded(r'(gmock/gmock.h|gtest/gtest.h)')
 
 # Shortcut recipe for running all tests (default build type)

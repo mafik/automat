@@ -273,7 +273,8 @@ class ExtensionHelper:
   '''Can be used to delay the configure step until some other files are ready.
   
   `dep` can be a:
-   - string with a {PREFIX} placeholder
+   - string
+   - Path
    - function that takes a BuildType and returns a list of files to wait for
    - another ExtensionHelper'''
   def ConfigureDependsOn(self, *deps):
@@ -436,7 +437,7 @@ def as_path_list(arg, path_list=defaultdict(list)):
     else:
       raise ValueError(f'Function {arg} returned {type(ret)} but expected Path or str (or list of those)')
   elif isinstance(arg, str):
-    path_list.append(arg.format(PREFIX=build.PREFIX))
+    path_list.append(arg)
   elif isinstance(arg, Path):
     path_list.append(str(arg))
   elif isinstance(arg, ExtensionHelper):

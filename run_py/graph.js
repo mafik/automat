@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Track currently selected node
     let selectedNodeId = null;
 
+    // Track simulation ticks for saving positions
+    let tickCount = 0;
+
     // Create container div anchored to upper right corner
     const graphContainer = d3.select('body')
       .append('div')
@@ -155,6 +158,33 @@ document.addEventListener('DOMContentLoaded', function () {
     // Add hash change listener
     window.addEventListener('hashchange', handleHashChange);
 
+    // Functions for saving/loading positions
+    function savePositions() {
+      try {
+        const positions = {};
+        nodes.forEach(node => {
+          positions[node.name] = {
+            x: node.x,
+            y: node.y
+          };
+        });
+        localStorage.setItem('graph-node-positions', JSON.stringify(positions));
+        console.log('Node positions saved to localStorage');
+      } catch (error) {
+        console.warn('Could not save positions to localStorage:', error);
+      }
+    }
+
+    function getSavedPositions() {
+      try {
+        const saved = localStorage.getItem('graph-node-positions');
+        return saved ? JSON.parse(saved) : null;
+      } catch (error) {
+        console.warn('Could not load positions from localStorage:', error);
+        return null;
+      }
+    }
+
     // Create a group element for all graph elements that can be transformed
     const graphGroup = svg.append('g')
       .attr('class', 'graph-group');
@@ -200,6 +230,18 @@ document.addEventListener('DOMContentLoaded', function () {
     // Process graph data to create nodes and links
     const nodes = graph.map(d => ({ ...d }));
     const links = [];
+
+    // Try to load saved positions from localStorage
+    const savedPositions = getSavedPositions();
+    if (savedPositions) {
+      nodes.forEach(node => {
+        const saved = savedPositions[node.name];
+        if (saved) {
+          node.x = saved.x;
+          node.y = saved.y;
+        }
+      });
+    }
 
     // Create links from steps_after relationships
     graph.forEach(source => {
@@ -380,6 +422,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Update positions on simulation tick
     simulation.on('tick', function () {
+      tickCount++;
+
+      // Save positions every 1000 ticks
+      if (tickCount >= 1000) {
+        savePositions();
+        tickCount = 0;
+      }
+
       link
         .attr('x1', d => d.source.x)
         .attr('y1', d => d.source.y)
@@ -392,7 +442,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     simulation.alphaTarget(1).restart();
-    simulation.tick(5000);
 
     // Drag functions for individual nodes
     function dragstarted(event, d) {

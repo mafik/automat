@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const height = 600;
     const nodeRadius = 3;
 
+    // Track currently selected node
+    let selectedNodeId = null;
+
     // Create container div anchored to upper right corner
     const graphContainer = d3.select('body')
       .append('div')
@@ -114,6 +117,36 @@ document.addEventListener('DOMContentLoaded', function () {
       graphContainer.style('display', 'block');
       showButton.style('display', 'none');
     }
+
+    // Function to update selected node styling
+    function updateSelectedNode(nodeId) {
+      selectedNodeId = nodeId;
+      // Update all nodes to reflect selection state
+      node.attr('fill', function (d) {
+        if (d.id === selectedNodeId) {
+          return '#FF8C00'; // Orange for selected node
+        }
+        return '#4A90E2'; // Default blue
+      });
+    }
+
+    // Listen for hash changes (when clicking <a href="#id"> links)
+    function handleHashChange() {
+      const hash = window.location.hash.substring(1); // Remove the '#'
+      if (hash) {
+        const nodeExists = nodes.some(n => n.id.toString() === hash);
+        if (nodeExists) {
+          updateSelectedNode(Number(hash));
+        }
+      } else {
+        // No hash, clear selection
+        selectedNodeId = null;
+        node.attr('fill', '#4A90E2');
+      }
+    }
+
+    // Add hash change listener
+    window.addEventListener('hashchange', handleHashChange);
 
     // Create a group element for all graph elements that can be transformed
     const graphGroup = svg.append('g')
@@ -264,6 +297,10 @@ document.addEventListener('DOMContentLoaded', function () {
       .on('click', function (event, d) {
         // Prevent the click from triggering pan behavior
         event.stopPropagation();
+        // Update selected node
+        updateSelectedNode(d.id);
+        // Update URL hash
+        window.location.hash = d.id.toString();
         // Scroll to the corresponding page fragment
         const element = document.getElementById(d.id.toString());
         if (element) {
@@ -273,11 +310,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Add hover effects
     node.on('mouseover', function (event, d) {
-      d3.select(this).attr('fill', '#6BB6FF');
+      // Raise the hovered node to front and apply hover color
+      // Preserve orange color for selected node, otherwise use blue hover color
+      const hoverColor = (d.id === selectedNodeId) ? '#FF8C00' : '#6BB6FF';
+      d3.select(this).raise().attr('fill', hoverColor);
 
-      // Highlight connected links
+      // Highlight connected links and raise them to front
       link.style('stroke', function (linkData) {
         if (linkData.source.id === d.id || linkData.target.id === d.id) {
+          // Raise connected links to front
+          d3.select(this).raise();
           return '#6BB6FF'; // Highlight connected links
         }
         return 'rgba(0,0,0,0.2)'; // Keep other links dimmed
@@ -311,8 +353,10 @@ document.addEventListener('DOMContentLoaded', function () {
       tooltip.style('left', (event.pageX + 10) + 'px')
         .style('top', (event.pageY - 10) + 'px');
     })
-      .on('mouseout', function () {
-        d3.select(this).attr('fill', '#4A90E2');
+      .on('mouseout', function (event, d) {
+        // Restore original color: orange for selected node, blue for others
+        const originalColor = (d.id === selectedNodeId) ? '#FF8C00' : '#4A90E2';
+        d3.select(this).attr('fill', originalColor);
 
         // Reset all links to original style
         link.style('stroke', 'rgba(0,0,0,0.2)')
@@ -321,6 +365,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         d3.selectAll('.graph-tooltip').remove();
       });
+
+    // Check initial hash on load (after nodes are created)
+    handleHashChange();
 
     // Update positions on simulation tick
     simulation.on('tick', function () {

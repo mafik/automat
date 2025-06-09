@@ -128,8 +128,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     svg.call(zoom);
 
-    // Create arrow marker for edges
-    svg.append('defs').append('marker')
+    // Create arrow markers for edges
+    const defs = svg.append('defs');
+
+    // Normal arrow marker
+    defs.append('marker')
       .attr('id', 'arrowhead')
       .attr('viewBox', '0 -5 10 10')
       .attr('refX', 10 + nodeRadius + 1)
@@ -140,6 +143,19 @@ document.addEventListener('DOMContentLoaded', function () {
       .append('path')
       .attr('d', 'M0,-5L10,0L0,5')
       .attr('fill', 'rgba(0,0,0,0.2)');
+
+    // Highlighted arrow marker
+    defs.append('marker')
+      .attr('id', 'arrowhead-highlighted')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 10 + nodeRadius + 1)
+      .attr('refY', 0)
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .attr('fill', '#6BB6FF');
 
     // Process graph data to create nodes and links
     const nodes = graph.map(d => ({ ...d }));
@@ -259,6 +275,26 @@ document.addEventListener('DOMContentLoaded', function () {
     node.on('mouseover', function (event, d) {
       d3.select(this).attr('fill', '#6BB6FF');
 
+      // Highlight connected links
+      link.style('stroke', function (linkData) {
+        if (linkData.source.id === d.id || linkData.target.id === d.id) {
+          return '#6BB6FF'; // Highlight connected links
+        }
+        return 'rgba(0,0,0,0.2)'; // Keep other links dimmed
+      })
+        .style('stroke-width', function (linkData) {
+          if (linkData.source.id === d.id || linkData.target.id === d.id) {
+            return 2; // Make connected links thicker
+          }
+          return 1.5; // Keep other links normal width
+        })
+        .attr('marker-end', function (linkData) {
+          if (linkData.source.id === d.id || linkData.target.id === d.id) {
+            return 'url(#arrowhead-highlighted)'; // Use highlighted arrow
+          }
+          return 'url(#arrowhead)'; // Keep normal arrow
+        });
+
       // Show tooltip
       const tooltip = d3.select('body').append('div')
         .attr('class', 'graph-tooltip')
@@ -277,6 +313,12 @@ document.addEventListener('DOMContentLoaded', function () {
     })
       .on('mouseout', function () {
         d3.select(this).attr('fill', '#4A90E2');
+
+        // Reset all links to original style
+        link.style('stroke', 'rgba(0,0,0,0.2)')
+          .style('stroke-width', 1.5)
+          .attr('marker-end', 'url(#arrowhead)');
+
         d3.selectAll('.graph-tooltip').remove();
       });
 

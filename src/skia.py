@@ -3,6 +3,7 @@
 import build
 from extension_helper import ExtensionHelper
 from sys import platform
+import subprocess
 
 # TODO: milestone 137 includes a change that requires all Ganesh window surfaces to support VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT.
 # https://source.chromium.org/chromium/_/skia/skia/+/6627deb65939ee886c774d290d91269c6968eaf9
@@ -103,13 +104,7 @@ skia.PatchSources('''\
  class SkData;
 
 ''')
-
-# TODO: if Automat builds on all platforms without this, remove this commented code
-# def skia_git_sync_with_deps():
-#   return make.Popen(['python', 'tools/git-sync-deps'], cwd=SKIA_ROOT)
-# def hook_recipe(recipe):
-#   recipe.add_step(skia_git_sync_with_deps, outputs=[GN], inputs=[SKIA_ROOT, depot_tools.ROOT], desc='Syncing Skia git deps', shortcut='skia git sync with deps')
-#   args_gn = build_dir / 'args.gn'
-#   build_ninja = build_dir / 'build.ninja'
-#   recipe.add_step(skia_gn_gen, outputs=[args_gn, build_ninja], inputs=[GN, __file__], desc='Generating Skia build files', shortcut='skia gn gen')
-#   recipe.add_step(skia_compile, outputs=[build_dir / libname], inputs=[ninja.BIN, args_gn, build_ninja], desc='Compiling Skia', shortcut='skia')
+def skia_git_sync_with_deps(marker):
+  subprocess.run(['python', 'tools/git-sync-deps'], cwd=skia.src_dir, check=True)
+  marker.touch()
+skia.PatchSources(skia_git_sync_with_deps)

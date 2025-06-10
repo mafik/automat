@@ -94,7 +94,7 @@ class ExtensionHelper:
     # beam is a list of files that are required for the next step in the build
     # it's used to conditionally inject steps in the build graph
     self.beam = []
-    self.patch_sources_func = None
+    self.patch_sources_funcs = []
     self.post_install = None
     self.post_install_outputs = []
     self.checkout_dir = fs_utils.third_party_dir / self.name
@@ -142,14 +142,14 @@ class ExtensionHelper:
         raise ValueError(f'Unknown archive format for {archive} (supported: .tar.gz, .tar.xz)')
       self.beam = [self.checkout_dir]
 
-    if self.patch_sources_func:
-      marker = fs_utils.third_party_dir / f'{self.name}.patched'
+    for i, patch_func in enumerate(self.patch_sources_funcs):
+      marker = self.checkout_dir / f'patch{i}.marker'
       recipe.add_step(
-          partial(self.patch_sources_func, marker),
+          partial(patch_func, marker),
           outputs=[marker],
           inputs=self.beam,
-          desc = f'Patching {self.name}',
-          shortcut=f'patch {self.name}')
+          desc = f'Patching {self.name} {i}',
+          shortcut=f'patch {self.name} {i}')
       self.beam = [marker]
 
     if self.skip_configure:
@@ -402,10 +402,8 @@ class ExtensionHelper:
   # Make sure that the patch directories are relative to the src_dir.
   # This may mean stripping the "a/" or "b/" prefixes (produced by git diff).
   def PatchSources(self, patch : str | Callable[[Path], None]):
-    if self.patch_sources_func:
-      raise ValueError(f'{self.name} was already configured with patch sources hook')
     if callable(patch):
-      self.patch_sources_func = patch
+      self.patch_sources_funcs.append(patch)
     elif isinstance(patch, str):
       def Patcher(token : Path):
         try:
@@ -433,7 +431,7 @@ class ExtensionHelper:
           print(e.stderr, file=sys.stderr)
           print(e.stdout, file=sys.stderr)
           sys.exit(1)
-      self.patch_sources_func = Patcher
+      self.patch_sources_funcs.append(Patcher)
 
   def PostInstallStep(self, func : Callable[[Path], None], outputs_func : Callable[[], list[Path]] = None):
     '''

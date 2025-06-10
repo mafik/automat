@@ -3,6 +3,7 @@ import json
 import make
 from pathlib import Path
 from subprocess import Popen
+from collections import defaultdict
 
 def short_path(path_str):
   path = Path(path_str)
@@ -22,6 +23,7 @@ def to_json(recipe):
         'name': step.shortcut,
         'steps_before': set(),
         'steps_after': set(),
+        'group': [step.id],
     })
   for step in recipe.steps:
     for inp in step.inputs:
@@ -32,7 +34,29 @@ def to_json(recipe):
   for step in obj:
     step['steps_before'] = list(sorted(step['steps_before']))
     step['steps_after'] = list(sorted(step['steps_after']))
-  return json.dumps(obj, indent=2)
+  # combine steps with the same steps_before and steps_after
+  groups = defaultdict(list) # maps key (steps_before, steps_after) to list of step ids
+  for step in obj:
+    if len(step['steps_before']) + len(step['steps_after']) == 0:
+      continue
+    key = ','.join(str(x) for x in step['steps_before']) + ' => ' + ','.join(str(x) for x in step['steps_after'])
+    groups[key].append(step['id'])
+  for key, steps in groups.items():
+    leader_id = steps[0]
+    for id in steps[1:]:
+      obj[leader_id]['name'] += f'\n{obj[id]["name"]}'
+      obj[leader_id]['group'].append(id)
+      for other_step_id in obj[id]['steps_before']:
+        other_step = obj[other_step_id]
+        other_step['steps_after'].remove(id)
+      obj[id]['steps_before'].clear()
+      for other_step_id in obj[id]['steps_after']:
+        other_step = obj[other_step_id]
+        other_step['steps_before'].remove(id)
+      obj[id]['steps_after'].clear()
+      obj[id] = None
+  obj = {x['id']: x for x in obj if x is not None}
+  return json.dumps(obj)
 
 def print_graph(recipe, html_path):
   fs_utils.build_dir.mkdir(parents=True, exist_ok=True)

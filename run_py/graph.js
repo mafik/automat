@@ -126,13 +126,13 @@ document.addEventListener('DOMContentLoaded', function () {
       selectedNodeId = nodeId;
       // Update all nodes to reflect selection state
       node.attr('fill', function (d) {
-        if (d.id === selectedNodeId) {
+        if (d.group.includes(selectedNodeId)) {
           return '#FF8C00'; // Orange for selected node
         }
         return '#4A90E2'; // Default blue
       })
         .attr('stroke', function (d) {
-          if (d.id === selectedNodeId) {
+          if (d.group.includes(selectedNodeId)) {
             return '#CC6600'; // Darker orange for selected node stroke
           }
           return '#2E5C8A'; // Default dark blue stroke
@@ -143,9 +143,9 @@ document.addEventListener('DOMContentLoaded', function () {
     function handleHashChange() {
       const hash = window.location.hash.substring(1); // Remove the '#'
       if (hash) {
-        const nodeExists = nodes.some(n => n.id.toString() === hash);
-        if (nodeExists) {
-          updateSelectedNode(Number(hash));
+        const id = Number.parseInt(hash);
+        if (!Number.isNaN(id)) {
+          updateSelectedNode(id);
         }
       } else {
         // No hash, clear selection
@@ -162,7 +162,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function savePositions() {
       try {
         const positions = {};
-        nodes.forEach(node => {
+        Object.values(graph).forEach(node => {
           positions[node.name] = {
             x: node.x,
             y: node.y
@@ -228,13 +228,12 @@ document.addEventListener('DOMContentLoaded', function () {
       .attr('fill', '#6BB6FF');
 
     // Process graph data to create nodes and links
-    const nodes = graph.map(d => ({ ...d }));
     const links = [];
 
     // Try to load saved positions from localStorage
     const savedPositions = getSavedPositions();
     if (savedPositions) {
-      nodes.forEach(node => {
+      Object.values(graph).forEach(node => {
         const saved = savedPositions[node.name];
         if (saved) {
           node.x = saved.x;
@@ -244,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Create links from steps_after relationships
-    graph.forEach(source => {
+    Object.values(graph).forEach(source => {
       source.steps_after.forEach(targetId => {
         links.push({
           source: source.id,
@@ -256,12 +255,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Custom vertical neighbor force
     function forceVerticalNeighbors() {
-      const nodeMap = new Map(nodes.map(n => [n.id, n]));
       const minSeparation = 30; // Minimum vertical separation between connected nodes
 
       return function (alpha) {
-        nodes.forEach(node => {
-          nodes.forEach(otherNode => {
+        Object.values(graph).forEach(node => {
+          Object.values(graph).forEach(otherNode => {
             if (node.id === otherNode.id) return;
             const dx = node.x - otherNode.x;
             const dy = node.y - otherNode.y;
@@ -295,7 +293,7 @@ document.addEventListener('DOMContentLoaded', function () {
           // Push down from steps_before nodes (nodes that should be above this one)
           const befores = graph[node.id].steps_before;
           befores.forEach(before => {
-            const beforeNode = nodeMap.get(before);
+            const beforeNode = graph[before];
             if (beforeNode) {
               const dy = node.y - beforeNode.y;
               if (dy < minSeparation) {
@@ -313,7 +311,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const verticalForce = forceVerticalNeighbors();
 
     // Create force simulation
-    const simulation = d3.forceSimulation(nodes)
+    const simulation = d3.forceSimulation(Object.values(graph))
       .force('link', d3.forceLink(links).id(d => d.id).distance(10).strength(0.02))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('vertical', verticalForce); // Add custom vertical force
@@ -329,15 +327,32 @@ document.addEventListener('DOMContentLoaded', function () {
       .attr('marker-end', 'url(#arrowhead)');
 
     // Create nodes - now added to the graphGroup
+    const circumference = 2 * Math.PI * nodeRadius;
+    function nodeDashArray(d) {
+      if (d.group.length == 1) {
+        return String(circumference);
+      }
+      const segmentLength = circumference / (d.group.length * 2);
+      const dashArray = [];
+      for (let i = 0; i < d.group.length; i++) {
+        // +/-1 to account for round line caps
+        dashArray.push(segmentLength - 1, segmentLength + 1);
+      }
+      return dashArray.join(',');
+
+    }
+
     const node = graphGroup.append('g')
       .attr('class', 'nodes')
       .selectAll('circle')
-      .data(nodes)
+      .data(Object.values(graph))
       .enter().append('circle')
       .attr('r', nodeRadius)
+      .attr('stroke-dasharray', nodeDashArray)
       .attr('fill', '#4A90E2')
       .attr('stroke', '#2E5C8A')
       .attr('stroke-width', 2)
+      .attr('stroke-linecap', 'round')
       .style('cursor', 'pointer')
       .call(d3.drag()
         .on('start', dragstarted)
@@ -346,12 +361,16 @@ document.addEventListener('DOMContentLoaded', function () {
       .on('click', function (event, d) {
         // Prevent the click from triggering pan behavior
         event.stopPropagation();
+
+        if (selectedNodeId == d.group[0]) {
+          d.group.push(d.group.shift());
+        }
         // Update selected node
-        updateSelectedNode(d.id);
+        updateSelectedNode(d.group[0]);
         // Update URL hash
-        window.location.hash = d.id.toString();
+        window.location.hash = d.group[0].toString();
         // Scroll to the corresponding page fragment
-        const element = document.getElementById(d.id.toString());
+        const element = document.getElementById(d.group[0].toString());
         if (element) {
           element.scrollIntoView({ behavior: 'smooth' });
         }
@@ -361,7 +380,7 @@ document.addEventListener('DOMContentLoaded', function () {
     node.on('mouseover', function (event, d) {
       // Raise the hovered node to front and apply hover color
       // Preserve orange color for selected node, otherwise use blue hover color
-      const hoverColor = (d.id === selectedNodeId) ? '#FF8C00' : '#6BB6FF';
+      const hoverColor = (d.group.includes(selectedNodeId)) ? '#FF8C00' : '#6BB6FF';
       d3.select(this).raise().attr('fill', hoverColor);
 
       // Highlight connected links and raise them to front
@@ -404,8 +423,8 @@ document.addEventListener('DOMContentLoaded', function () {
     })
       .on('mouseout', function (event, d) {
         // Restore original colors: orange for selected node, blue for others
-        const originalColor = (d.id === selectedNodeId) ? '#FF8C00' : '#4A90E2';
-        const originalStroke = (d.id === selectedNodeId) ? '#CC6600' : '#2E5C8A';
+        const originalColor = (d.group.includes(selectedNodeId)) ? '#FF8C00' : '#4A90E2';
+        const originalStroke = (d.group.includes(selectedNodeId)) ? '#CC6600' : '#2E5C8A';
         d3.select(this).attr('fill', originalColor)
           .attr('stroke', originalStroke);
 

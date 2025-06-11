@@ -25,13 +25,7 @@ dashboard.start()
 if dashboard.exception:
   print(f"Dashboard failed to start: {dashboard.exception}")
 else:
-  print(f"Dashboard running at: http://localhost:{dashboard.port}/build/graph.html")
-
-if args.verbose:
-    import fs_utils
-    import graph_printer
-    graph_printer.print_graph(recipe, fs_utils.build_dir / 'graph.html')
-    print('Build graph written to build/graph.html')
+  print(f"Dashboard running at: http://localhost:{dashboard.port}/")
 
 if args.fresh:
     print('Cleaning old build results:')

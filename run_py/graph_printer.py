@@ -11,7 +11,7 @@ def short_path(path_str):
     return str(path.relative_to(fs_utils.project_root))
   else:
     return path_str
-  
+
 def to_json(recipe):
   file_to_step = {}
   obj = []
@@ -58,85 +58,88 @@ def to_json(recipe):
   obj = {x['id']: x for x in obj if x is not None}
   return json.dumps(obj)
 
-def print_graph(recipe, html_path):
+def print_graph(recipe):
   fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
   file_to_step = {}
   for step in recipe.steps:
     for output in step.outputs:
       file_to_step[output] = step
-  with open(html_path, 'w') as f:
-    f.write('<html><meta charset="utf-8"><link rel="stylesheet" href="../run_py/graph.css"><body>\n')
-    for step in recipe.steps:
-      f.write(f'<h2 id="{step.id}">{step.shortcut} <a href="#{step.id}">#</a></h2>\n')
+  html = ''
+  html += '<html><meta charset="utf-8"><link rel="stylesheet" href="../run_py/graph.css"><body>\n'
+  for step in recipe.steps:
+    html += f'<h2 id="{step.id}">{step.shortcut} <a href="#{step.id}">#</a></h2>\n'
 
-      if hasattr(step.build, 'func'):
-        func = step.build.func
-      elif callable(step.build):
-        func = step.build
+    if hasattr(step.build, 'func'):
+      func = step.build.func
+    elif callable(step.build):
+      func = step.build
+    else:
+      func = None
 
-      if hasattr(step.build, 'args'):
-        args = step.build.args
+    if hasattr(step.build, 'args'):
+      args = step.build.args
+    else:
+      args = []
+
+    if hasattr(step.build, 'keywords'):
+      kwargs = step.build.keywords
+    else:
+      kwargs = {}
+
+    if func:
+
+      if 'env' in kwargs:
+        html += '<details><summary>env</summary><pre class="env">'
+        for k, v in kwargs['env'].items():
+          html += f'{k}={v}\n'
+        html += '</pre></details>\n'
+      if 'cwd' in kwargs:
+        html += f'<p>Working directory: <code class="cwd">{kwargs["cwd"]}</code></p>\n'
+      if func is make.Popen:
+        html += f'<pre class="shell">'
+        for arg in args[0]:
+          html += f'{str(arg)} '
+        html += '</pre>\n'
       else:
-        args = []
-
-      if hasattr(step.build, 'keywords'):
-        kwargs = step.build.keywords
-      else:
-        kwargs = {}
-
-      if func:
-        
-        if 'env' in kwargs:
-          f.write('<details><summary>env</summary><pre class="env">')
-          for k, v in kwargs['env'].items():
-            f.write(f'{k}={v}\n')
-          f.write('</pre></details>\n')
-        if 'cwd' in kwargs:
-          f.write(f'<p>Working directory: <code class="cwd">{kwargs["cwd"]}</code></p>\n')
-        if func is make.Popen:
-          f.write(f'<pre class="shell">')
-          for arg in args[0]:
-            f.write(f'{str(arg)} ')
-          f.write('</pre>\n')
+        # Python function
+        html += f'<pre class="python">'
+        if hasattr(func, '__self__'):
+          html += f'{repr(func.__self__)}.'
+        html += f'{func.__name__}('
+        first = True
+        for x in args:
+          if not first:
+            html += ', '
+          first = False
+          html += repr(x)
+        for k, v in kwargs.items():
+          if not first:
+            html += ', '
+          first = False
+          html += f'{k}={repr(v)}'
+        html += ')</pre>\n'
+    html += f'<p>Message: <em>{step.desc}</em></p>\n'
+    if step.inputs:
+      html += '<p>Inputs: '
+      for inp in sorted(str(x) for x in step.inputs):
+        inp_short = short_path(inp)
+        if inp in file_to_step:
+          input_step = file_to_step[inp]
+          html += f'<a href="#{input_step.id}">{inp_short}</a>'
         else:
-          # Python function
-          f.write(f'<pre class="python">')
-          if hasattr(func, '__self__'):
-            f.write(f'{repr(func.__self__)}.')
-          f.write(f'{func.__name__}(')
-          first = True
-          for x in args:
-            if not first:
-              f.write(', ')
-            first = False
-            f.write(repr(x))
-          for k, v in kwargs.items():
-            if not first:
-              f.write(', ')
-            first = False
-            f.write(f'{k}={repr(v)}')
-          f.write(')</pre>\n')
-      f.write(f'<p>Message: <em>{step.desc}</em></p>\n')
-      if step.inputs:
-        f.write('<p>Inputs: ')
-        for inp in sorted(str(x) for x in step.inputs):
-          inp_short = short_path(inp)
-          if inp in file_to_step:
-            input_step = file_to_step[inp]
-            f.write(f'<a href="#{input_step.id}">{inp_short}</a>')
-          else:
-            f.write(inp_short)
-          f.write(', ')
-        f.write('</p>\n')
-      f.write('<p>Outputs: ')
-      for out in sorted(str(x) for x in step.outputs):
-        f.write(short_path(out))
-        f.write(', ')
-      f.write('</p>\n')
-    f.write('<script>\n')
-    f.write('const graph = ')
-    f.write(to_json(recipe))
-    f.write(';\n')
-    f.write('</script>\n')
-    f.write('<script src="../run_py/graph.js"></script>')
-    f.write('</body></html>')
+          html += inp_short
+        html += ', '
+      html += '</p>\n'
+    html += '<p>Outputs: '
+    for out in sorted(str(x) for x in step.outputs):
+      html += short_path(out)
+      html += ', '
+    html += '</p>\n'
+  html += '<script>\n'
+  html += 'const graph = '
+  html += to_json(recipe)
+  html += ';\n'
+  html += '</script>\n'
+  html += '<script src="../run_py/graph.js"></script>'
+  html += '</body></html>'
+  return html

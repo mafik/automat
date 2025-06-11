@@ -29,4 +29,4 @@ hook.ConfigureOptions(**{
 })
 hook.InstallWhenIncluded(r'pipewire/pipewire\.h')
 hook.AddCompileArgs(f'-I{build.PREFIX / "include" / "pipewire-0.3"}', f'-I{build.PREFIX / "include" / "spa-0.2"}')
-hook.AddLinkArgs('-ldl', '-lm', '-l:libpipewire-0.3.a')
+hook.AddLinkArgs('-ldl', '-lm', f'-Wl,-rpath,{build.PREFIX / "lib64"}', '-lpipewire-0.3')

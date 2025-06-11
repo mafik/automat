@@ -22,10 +22,10 @@ from typing import Callable
 def download_from_url(url : str, filename : Path):
     import os
     import urllib.request
-    
+
     # Create parent directory if it doesn't exist
     os.makedirs(filename.parent, exist_ok=True)
-    
+
     # Download the file from url
     urllib.request.urlretrieve(url, filename)
 
@@ -58,7 +58,7 @@ def extract_tar(archive : Path, output : Path):
 class ExtensionHelper:
   '''
   Helper for extensions that build third party libraries.
-  
+
   Adds the steps to build the library and modifyies the Automat compilation
   graph to link the library correctly.
   '''
@@ -130,7 +130,7 @@ class ExtensionHelper:
           inputs=[],
           desc = f'Downloading {self.name}',
           shortcut=f'get {self.name}')
-      
+
       if archive.name.endswith('.tar.gz') or archive.name.endswith('.tar.xz'):
         recipe.add_step(
             partial(extract_tar, archive, self.checkout_dir),
@@ -176,7 +176,7 @@ class ExtensionHelper:
           inputs=configure_inputs,
           desc=f'Configuring {self.name}',
           shortcut=f'configure {self.name}')
-  
+
     elif self.configure == 'meson':
       meson_args = ['meson', 'setup']
       for key, value in self.configure_opts.items():
@@ -196,7 +196,7 @@ class ExtensionHelper:
         inputs=configure_inputs,
         desc=f'Configuring {self.name}',
         shortcut=f'configure {self.name}')
-    
+
     elif self.configure == 'autotools':
       makefile = build_dir / 'Makefile'
 
@@ -206,14 +206,14 @@ class ExtensionHelper:
         inputs=[],
         desc=f'Creating build directory for {self.name}',
         shortcut=f'mkdir {self.name}')
-  
+
       recipe.add_step(
           partial(Popen, [(self.src_dir / 'configure').absolute(), f'--prefix={build.PREFIX}', f'--libdir={build.PREFIX}/lib64', '--disable-shared'], env=env, cwd=build_dir),
           outputs=[makefile],
           inputs=configure_inputs + [build_dir],
           desc=f'Configuring {self.name}',
           shortcut=f'configure {self.name}')
-      
+
     elif self.configure == 'gn':
       makefile = build_dir / 'build.ninja'
       gn_args = ''
@@ -228,7 +228,7 @@ class ExtensionHelper:
 
     else:
       raise ValueError(f'{self.name} is not configured')
-    
+
     if makefile.name == 'build.ninja':
       recipe.add_step(
         partial(Popen, [ninja.BIN, '-C', build_dir, self.ninja_target]),
@@ -245,7 +245,7 @@ class ExtensionHelper:
           shortcut=f'install {self.name}')
     elif makefile.name == 'meson-info.json':
       recipe.add_step(
-        partial(Popen, ['meson', 'install', '-C', build_dir, '--tags', 'devel']),
+        partial(Popen, ['meson', 'install', '-C', build_dir, '--tags', 'devel,runtime']),
         outputs=self.outputs,
         inputs=[makefile, ninja.BIN],
         desc=f'Installing {self.name}',
@@ -254,7 +254,7 @@ class ExtensionHelper:
       raise ValueError(f'Unknown build system for {self.name}')
 
     self.beam = self.outputs
-  
+
     if self.post_install:
       recipe.add_step(partial(self.post_install, *self.post_install_outputs),
                       outputs=self.post_install_outputs,
@@ -288,7 +288,7 @@ class ExtensionHelper:
         bin.run_args += self.run_args
 
   '''Can be used to delay the configure step until some other files are ready.
-  
+
   `dep` can be a:
    - string
    - Path
@@ -331,7 +331,7 @@ class ExtensionHelper:
       raise ValueError(f'{self.name} was already configured')
     self.configure = 'cmake'
     as_path_list(outputs, self.outputs)
-  
+
   def ConfigureWithMeson(self, *outputs):
     if self.configure:
       raise ValueError(f'{self.name} was already configured')
@@ -436,16 +436,16 @@ class ExtensionHelper:
   def PostInstallStep(self, func : Callable[[Path], None], outputs_func : Callable[[], list[Path]] = None):
     '''
     Run the given function after installation.
-    
+
     The post-install function must produce some files to mark its completion. They can be provided through the `outputs` function.
     If no outputs_func is provided, a default marker file will be used.
-    
+
     `func` takes the build type and a list (as varargs) of output files.
     '''
     if self.post_install:
       raise ValueError(f'{self.name} was already configured with post-install hook')
     self.post_install = func
-    
+
     if outputs_func:
       as_path_list(outputs_func, self.post_install_outputs)
     else:
@@ -454,7 +454,7 @@ class ExtensionHelper:
 
 def as_path_list(arg, path_list=defaultdict(list)):
   '''Converts a function / string / list / ExtensionHelper to a list of paths'''
-  
+
   if isinstance(arg, list) or isinstance(arg, tuple):
     for arg_elem in arg:
       as_path_list(arg_elem, path_list)

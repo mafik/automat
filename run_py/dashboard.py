@@ -53,8 +53,6 @@ class AutomatRequestHandler(http.server.SimpleHTTPRequestHandler):
       self.wfile.write(self.html.encode('utf-8'))
     except Exception as e:
       self.send_error(500, f"Error generating graph: {str(e)}")
-      print(e)
-      raise e
 
   def serve_static_file(self):
     """Serve static files from the run_py directory."""

@@ -17,9 +17,15 @@ import subprocess
 import debian_deps
 debian_deps.check_and_install()
 
-
 recipe = build.recipe()
 
+from dashboard import Dashboard
+dashboard = Dashboard(recipe)
+dashboard.start()
+if dashboard.exception:
+  print(f"Dashboard failed to start: {dashboard.exception}")
+else:
+  print(f"Dashboard running at: http://localhost:{dashboard.port}/build/graph.html")
 
 if args.verbose:
     import fs_utils

@@ -1,5 +1,10 @@
 {
   "tab_size": 2,
+  "languages": {
+    "Python": {
+      "language_servers": ["pyright"]
+    }
+  },
   "lsp": {
     "pyright": {
       "settings": {

@@ -65,7 +65,7 @@ PrototypeLibrary::~PrototypeLibrary() {
   // Some Objects are also Widgets and they need to have `ForgetParents()` called on them to release
   // all their resources.
   for (auto& [name, proto] : name_index) {
-    if (auto widget = dynamic_cast<Widget*>(proto.get())) {
+    if (auto widget = dynamic_cast<gui::Widget*>(proto.get())) {
       widget->ForgetParents();
     }
   }

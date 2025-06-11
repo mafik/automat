@@ -2,16 +2,12 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <memory>
-
 #include "color.hh"
 #include "font.hh"
 #include "gui_button.hh"
 #include "gui_constants.hh"
 
 namespace automat::library {
-
-using namespace automat::gui;
 
 static constexpr float kKeyHeight = gui::kMinimalTouchableSize;
 static constexpr float kBaseKeyWidth = kKeyHeight;
@@ -44,7 +40,7 @@ struct KeyButton : gui::Button {
   void SetLabel(StrView new_label);
 };
 
-Ptr<Widget> MakeKeyLabelWidget(StrView label);
+Ptr<gui::Widget> MakeKeyLabelWidget(StrView label);
 
 static constexpr SkColor kKeyEnabledColor = "#f3a75b"_color;
 static constexpr SkColor kKeyDisabledColor = "#f4efea"_color;

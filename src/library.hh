@@ -140,7 +140,6 @@ struct Timer : Object, Runnable {
     return other;
   }
   void ScheduleNextRun(Location& here) {
-    using namespace std::chrono_literals;
     if (fake_time) {
       fake_time->RunAfter(1ms, here);
     } else {
@@ -148,13 +147,11 @@ struct Timer : Object, Runnable {
     }
   }
   string GetText() const override {
-    using namespace std::chrono_literals;
     time::SteadyPoint now = GetNow();
     time::Duration elapsed = now - start;
     return f("%.3lf", elapsed.count());
   }
   void OnRun(Location& here) override {
-    using namespace std::chrono_literals;
     time::SteadyPoint now = GetNow();
     if (now - last_tick >= 1ms) {
       last_tick = now;

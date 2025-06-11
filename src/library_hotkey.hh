@@ -18,7 +18,7 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   bool shift = false;
   bool windows = false;
 
-  Ptr<PowerButton> power_button;
+  Ptr<gui::PowerButton> power_button;
   Ptr<KeyButton> ctrl_button;
   Ptr<KeyButton> alt_button;
   Ptr<KeyButton> shift_button;

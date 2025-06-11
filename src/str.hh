@@ -9,7 +9,8 @@ namespace automat {
 using Str = std::string;
 using StrView = std::string_view;
 
-using namespace std::literals;
+using std::literals::string_literals::operator""s;
+using std::literals::string_view_literals::operator""sv;
 
 void ReplaceAll(Str& s, const Str& from, const Str& to);
 void StripLeadingWhitespace(Str&);

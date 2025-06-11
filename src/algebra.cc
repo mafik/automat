@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "algebra.hh"
 
+#include "tree_algorithms.hh"
+
 namespace algebra {
 
 bool ParseToken(std::string token, std::string_view& text) {
@@ -165,7 +167,7 @@ std::unique_ptr<Statement> ParseStatement(std::string_view& text) {
 }
 std::vector<algebra::Variable*> ExtractVariables(algebra::Statement* statement) {
   std::vector<algebra::Variable*> variables;
-  WalkDFS<algebra::Statement>(statement, [&](algebra::Statement* statement) {
+  automat::WalkDFS<algebra::Statement>(statement, [&](algebra::Statement* statement) {
     if (algebra::Variable* variable = dynamic_cast<algebra::Variable*>(statement)) {
       variables.push_back(variable);
     }

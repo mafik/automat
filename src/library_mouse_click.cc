@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 #include "library_mouse_click.hh"
+#include <string_view>
 
 #include "audio.hh"
 #include "base.hh"

@@ -7,8 +7,6 @@
 #include "math.hh"
 #include "time.hh"
 
-using namespace std::chrono_literals;
-
 namespace automat::gui {
 struct RootWidget;
 }  // namespace automat::gui
@@ -105,8 +103,8 @@ inline Phase LinearApproach(float target, float delta_time, float speed, float& 
 template <typename T>
 struct Spring : Base<T> {
   T velocity = {};
-  time::Duration period = 0.1s;     // how long does it take for one oscillation
-  time::Duration half_life = 0.1s;  // how long does it take for the amplitude to decrease by half
+  time::Duration period = 100ms;     // how long does it take for one oscillation
+  time::Duration half_life = 100ms;  // how long does it take for the amplitude to decrease by half
   time::SteadyPoint last_tick;
   Spring() : last_tick(time::SteadyNow()) {}
   Spring(T initial_value) : Spring() {

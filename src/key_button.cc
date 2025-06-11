@@ -10,6 +10,7 @@
 #include "widget.hh"
 
 using namespace std;
+using namespace automat::gui;
 
 namespace automat::library {
 

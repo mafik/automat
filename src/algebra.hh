@@ -10,10 +10,6 @@
 #include <vector>
 
 #include "format.hh"
-#include "log.hh"
-#include "tree_algorithms.hh"
-
-using namespace automat;
 
 namespace algebra {
 
@@ -45,7 +41,7 @@ struct Equation : Statement {
   }
 
   std::string GetText() const override {
-    return f("%s = %s", lhs->GetText().c_str(), rhs->GetText().c_str());
+    return automat::f("%s = %s", lhs->GetText().c_str(), rhs->GetText().c_str());
   }
 
   void Children(std::function<void(Statement*)> callback) const override {

@@ -5,6 +5,13 @@
 #include <chrono>
 #include <cmath>
 
+namespace automat {
+  using std::literals::chrono_literals::operator""ms;
+  using std::literals::chrono_literals::operator""s;
+  using std::literals::chrono_literals::operator""min;
+  using std::literals::chrono_literals::operator""h;
+}
+
 namespace automat::time {
 
 using T = double;

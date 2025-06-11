@@ -17,6 +17,7 @@
 #include "time.hh"
 
 using namespace std;
+using namespace automat;
 
 namespace automat::library {
 
@@ -62,7 +63,7 @@ KeyPresser::KeyPresser(gui::AnsiKey key)
     shortcut_button->WakeAnimation();
   };
 }
-KeyPresser::KeyPresser() : KeyPresser(AnsiKey::F) {}
+KeyPresser::KeyPresser() : KeyPresser(gui::AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 Ptr<Object> KeyPresser::Clone() const { return MakePtr<KeyPresser>(key); }
 animation::Phase KeyPresser::Tick(time::Timer&) {
@@ -168,8 +169,8 @@ struct RunAction : Action {
 };
 
 struct RunOption : Option {
-  Ptr<Widget> widget;
-  RunOption(Ptr<Widget> widget) : Option("Run"), widget(widget) {}
+  Ptr<gui::Widget> widget;
+  RunOption(Ptr<gui::Widget> widget) : Option("Run"), widget(widget) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(widget); }
   std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
     return std::make_unique<RunAction>(p, *Closest<Location>(*widget));
@@ -177,9 +178,9 @@ struct RunOption : Option {
 };
 
 struct UseObjectOption : Option {
-  Ptr<Widget> widget;
+  Ptr<gui::Widget> widget;
 
-  UseObjectOption(Ptr<Widget> widget) : Option("Use"), widget(widget) {}
+  UseObjectOption(Ptr<gui::Widget> widget) : Option("Use"), widget(widget) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<UseObjectOption>(widget);
   }
@@ -231,7 +232,7 @@ void KeyPresser::DeserializeState(Location& l, Deserializer& d) {
       Str value;
       d.Get(value, status);
       if (OK(status)) {
-        SetKey(AnsiKeyFromStr(value));
+        SetKey(gui::AnsiKeyFromStr(value));
       }
     }
   }

@@ -37,6 +37,8 @@ def Popen(args, **kwargs):
         print(' $ \033[90m' + ' '.join(str_args) + '\033[0m')
     if 'stdout' in kwargs and isinstance(kwargs['stdout'], Path):
         kwargs['stdout'] = kwargs['stdout'].open('w')
+    elif not cmdline_args.args.verbose:
+        kwargs['stdout'] = f
     p = subprocess.Popen(str_args,
                          stdin=subprocess.DEVNULL,
                          stderr=f,

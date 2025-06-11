@@ -34,7 +34,10 @@ if args.fresh:
 active_recipe = None
 
 while True:
-    recipe.set_target(args.target)
+    extra_targets = []
+    if args.compile_commands:
+        extra_targets.append('compile_commands.json')
+    recipe.set_target(args.target, *extra_targets)
     if args.live:
         watcher = subprocess.Popen(
             ['python', 'run_py/inotify.py', 'src/', 'assets/'], stdout=subprocess.DEVNULL)

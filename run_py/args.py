@@ -15,6 +15,7 @@ parser = argparse.ArgumentParser(
     description=__main__.__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 parser.add_argument('--fresh', action='store_true')
 parser.add_argument('--live', action='store_true')
+parser.add_argument('--no-compile-commands', action='store_false', dest='compile_commands', help='Disable generation of compile_commands.json')
 parser.add_argument('--verbose', action='store_true')
 parser.add_argument('target')
 parser.add_argument('--variant', choices=build_variant.index.keys(), default='fast')

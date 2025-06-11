@@ -191,12 +191,12 @@ class Recipe:
         self.steps.append(Step(*args, id=len(self.steps), **kwargs))
 
     # prunes the list of steps and only leaves the steps that are required for some target
-    def set_target(self, target):
+    def set_target(self, target, *extra_targets):
         out_index = defaultdict(list)
         new_steps = set()
         q = []
         for step in self.steps:
-            if step.shortcut == target:
+            if step.shortcut == target or step.shortcut in extra_targets:
                 q.append(step)
             for output in step.outputs:
                 out_index[output].append(step)

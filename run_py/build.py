@@ -75,7 +75,7 @@ def CFLAGS():
 
 def LDFLAGS():
     return [str(x) for x in link_args]
-    
+
 compile_args += ['-static', '-std=gnu++26', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-strict-aliasing', '-fno-exceptions',
@@ -293,7 +293,6 @@ def recipe() -> make.Recipe:
         if hasattr(ext, 'hook_plan'):
             ext.hook_plan(srcs, objs, bins, r)
 
-    COMPILE_COMMANDS_PATH = fs_utils.project_root / 'compile_commands.json'
     compilation_db = []
     for obj in objs:
         if obj.source.path.name.endswith('.c'):
@@ -308,7 +307,7 @@ def recipe() -> make.Recipe:
         builder = functools.partial(make.Popen, pargs)
         r.add_step(builder,
                    outputs=[obj.path],
-                   inputs=obj.deps | set([str(COMPILE_COMMANDS_PATH)]),
+                   inputs=obj.deps,
                    desc=f'Compiling {obj.path.name}',
                    shortcut=obj.path.name)
         r.generated.add(str(obj.path))
@@ -351,6 +350,8 @@ def recipe() -> make.Recipe:
         if hasattr(ext, 'hook_final'):
             ext.hook_final(srcs, objs, bins, r)
 
+    COMPILE_COMMANDS_PATH = fs_utils.project_root / 'compile_commands.json'
+
     def compile_commands():
         jsons = []
         for entry in compilation_db:
@@ -366,7 +367,7 @@ def recipe() -> make.Recipe:
         with COMPILE_COMMANDS_PATH.open('w') as f:
             print('[' + ', '.join(jsons) + ']', file=f)
 
-    r.add_step(compile_commands, [COMPILE_COMMANDS_PATH], [],
+    r.add_step(compile_commands, [COMPILE_COMMANDS_PATH], [__file__],
                desc='Writing JSON Compilation Database',
                shortcut='compile_commands.json')
     r.generated.add(str(COMPILE_COMMANDS_PATH))

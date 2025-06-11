@@ -198,7 +198,7 @@ class Recipe:
         new_steps = set()
         q = []
         for step in self.steps:
-            if step.shortcut == target or step.shortcut in extra_targets:
+            if step.shortcut == target:
                 q.append(step)
             for output in step.outputs:
                 out_index[output].append(step)
@@ -222,6 +222,11 @@ class Recipe:
                 raise Exception(
                     f'{target} is not a valid target. Valid targets: {targets}.'
                 )
+
+        # Only add extra_targets after the main one was found
+        for step in self.steps:
+            if step.shortcut in extra_targets:
+                q.append(step)
 
         while q:
             step = q.pop()

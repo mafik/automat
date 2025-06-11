@@ -20,12 +20,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: |
-            build/release/Skia
-            build/release/vk-bootstrap
-            build/vulkan-headers
-            build/rapidjson
-            build/depot_tools
-            build/FastTrigo
+            build/
           key: ${{ runner.os }}-deps
 
       - name: Build
@@ -33,15 +28,11 @@ jobs:
 
       - name: Cache dependencies
         id: cache-save
+        if: always()
         uses: actions/cache/save@v4
         with:
           path: |
-            build/Release/Skia
-            build/Release/vk-bootstrap
-            build/vulkan-headers
-            build/rapidjson
-            build/depot_tools
-            build/FastTrigo
+            build/
           key: ${{ steps.cache-restore.outputs.cache-primary-key }}
 
       - name: Upload

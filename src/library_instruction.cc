@@ -3687,7 +3687,7 @@ void Instruction::SerializeState(Serializer& writer, const char* key) const {
             imm_bytes += '\0';
           }
           uint64_t value = *reinterpret_cast<uint64_t*>(imm_bytes.data());
-          auto str = f("%lx", value);
+          auto str = f("{:x}", value);
           writer.String(str.data(), str.size());
         } else if (imm_type == Buffer::Type::Text) {
           writer.String(imm_bytes.data(), imm_bytes.size());

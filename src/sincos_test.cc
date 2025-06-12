@@ -14,7 +14,7 @@ using namespace automat;
 namespace testing {
 template <>
 ::std::string PrintToString(const SinCos& value) {
-  return f("SinCos(sin=%f, cos=%f)", (float)value.sin, (float)value.cos);
+  return f("SinCos(sin={}, cos={})", (float)value.sin, (float)value.cos);
 }
 }  // namespace testing
 

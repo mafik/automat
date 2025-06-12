@@ -50,7 +50,7 @@ std::string UTF16ToUTF8(const wchar_t* utf16) {
 std::string HexDump(uint8_t* ptr, size_t size) {
   std::string hex_dump;
   for (int i = 0; i < size; i++) {
-    hex_dump += f("%02X ", ptr[i]);
+    hex_dump += f("{:02X} ", ptr[i]);
     if (i % 16 == 15) {
       hex_dump += '\n';
     }
@@ -63,36 +63,36 @@ struct ReportAccessor {
   Optional<hid::Accessor> touch_valid, tip_switch, button1, contact_identifier, contact_count, x, y,
       scan_time;
   void ProcessInput(uint8_t* report, size_t report_bytes) {
-    std::string log_message = "Touchpad report " + f("0x%02X", report_id);
+    std::string log_message = "Touchpad report " + f("{:#02X}", report_id);
     bool is_touch_valid = true;
     if (touch_valid) {  // Palm rejection
       is_touch_valid = touch_valid->Read<bool>(report, report_bytes);
-      log_message += " touch_valid=" + f("%d", is_touch_valid);
+      log_message += " touch_valid=" + f("{}", is_touch_valid);
     }
     bool is_tip_switch = true;
     if (tip_switch) {  // Finger not touching
       is_tip_switch = tip_switch->Read<bool>(report, report_bytes);
-      log_message += " tip_switch=" + f("%d", is_tip_switch);
+      log_message += " tip_switch=" + f("{}", is_tip_switch);
     }
     if (contact_identifier) {
       log_message += " contact_identifier=" +
-                     f("%d", contact_identifier->Read<uint32_t>(report, report_bytes));
+                     f("{}", contact_identifier->Read<uint32_t>(report, report_bytes));
     }
     if (contact_count) {
       log_message +=
-          " contact_count=" + f("%d", contact_count->Read<uint32_t>(report, report_bytes));
+          " contact_count=" + f("{}", contact_count->Read<uint32_t>(report, report_bytes));
     }
     if (x) {
-      log_message += " x=" + f("%f", x->Read<double>(report, report_bytes));
+      log_message += " x=" + f("{}", x->Read<double>(report, report_bytes));
     }
     if (y) {
-      log_message += " y=" + f("%f", y->Read<double>(report, report_bytes));
+      log_message += " y=" + f("{}", y->Read<double>(report, report_bytes));
     }
     if (scan_time) {
-      log_message += " scan_time=" + f("%f", scan_time->Read<double>(report, report_bytes));
+      log_message += " scan_time=" + f("{}", scan_time->Read<double>(report, report_bytes));
     }
     if (button1) {
-      log_message += " button1=" + f("%d", button1->Read<bool>(report, report_bytes));
+      log_message += " button1=" + f("{}", button1->Read<bool>(report, report_bytes));
     }
     LOG << log_message;
   }
@@ -190,7 +190,7 @@ struct TouchPadImpl {
             target_field->emplace(accessor);
           } else {
             LOG << "Unknown HID input. Usage Page: " << UsagePageToString(accessor.usage_page)
-                << f(" (0x%04X)", accessor.usage_page)
+                << f(" ({:#04X})", accessor.usage_page)
                 << " Usage: " << UsageToString(accessor.usage_page, accessor.usage);
           }
         });

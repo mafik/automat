@@ -44,7 +44,7 @@ LogEntry::~LogEntry() {
   }
 
   if (log_level == LogLevel::Fatal) {
-    buffer += f(". Crashing in %s:%d [%s].", location.file_name(), location.line(),
+    buffer += f(". Crashing in {}:{} [{}].", location.file_name(), location.line(),
                 location.function_name());
   }
 

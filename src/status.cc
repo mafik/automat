@@ -38,7 +38,7 @@ Str Status::ToStr() const {
       ret += " ";
     }
     auto& location = i->location;
-    ret += f("(%s:%d).", location.file_name(), location.line());
+    ret += f("({}:{}).", location.file_name(), location.line());
   }
   if (errsv) {
     if (!ret.empty()) {

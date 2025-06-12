@@ -60,7 +60,7 @@ struct Span : std::span<T, Extent> {
   U& As(Status& status) {
     if (this->size() < sizeof(U)) {
       AppendErrorMessage(status) +=
-          f("Span too small to contain %s (%x vs %x)", typeid(U).name(), this->size(), sizeof(U));
+          f("Span too small to contain {} ({:x} vs {:x})", typeid(U).name(), this->size(), sizeof(U));
       // TODO: return nullptr
     }
     return *(U*)this->data();
@@ -84,7 +84,7 @@ struct Span : std::span<T, Extent> {
     U& ret = *(U*)this->data();
     if (this->size() < sizeof(U)) {
       AppendErrorMessage(status) +=
-          f("Span too small to contain %s (%x vs %x)", typeid(U).name(), this->size(), sizeof(U));
+          f("Span too small to contain {} ({:x} vs {:x})", typeid(U).name(), this->size(), sizeof(U));
       this->RemovePrefix(this->size());
       // TODO: return nullptr
     } else {
@@ -113,7 +113,7 @@ struct Span : std::span<T, Extent> {
   Span<> ConsumeSpan(Size n, Status& status) {
     Span<> ret = this->first(n);
     if (this->size() < n) {
-      AppendErrorMessage(status) += f("Span too small (%x vs %x)", this->size(), n);
+      AppendErrorMessage(status) += f("Span too small ({:x} vs {:x})", this->size(), n);
       this->RemovePrefix(this->size());
     } else {
       this->RemovePrefix(n);

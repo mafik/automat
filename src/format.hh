@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <fmt/format.h>
+
 #include "str.hh"
 
 #if !__has_builtin(__builtin_dump_struct)
@@ -10,8 +12,11 @@
 
 namespace automat {
 
-// TODO: replace this with std::format when it's available
-Str f(const char* fmt, ...);
+// Format strings using fmt library
+template <typename... Args>
+Str f(fmt::format_string<Args...> fmt, Args&&... args) {
+  return fmt::format(fmt, std::forward<Args>(args)...);
+}
 
 // Prefix each line with `spaces` spaces.
 std::string IndentString(std::string in, int spaces = 2);
@@ -21,10 +26,18 @@ std::string Slugify(std::string in);
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-security"
 constexpr void constexpr_sprintf(std::string& out, const char* format, auto... args) {
-  int n = snprintf(nullptr, 0, format, args...) + 1;
-  char buf[n];
-  snprintf(buf, n, format, args...);
-  out += buf;
+  // Convert arguments to handle pointer formatting issues with fmt
+  auto convert_arg = [](auto&& arg) {
+    using T = std::decay_t<decltype(arg)>;
+    if constexpr (std::is_pointer_v<T> && !std::is_same_v<T, const char*> &&
+                  !std::is_same_v<T, char*>) {
+      return reinterpret_cast<void*>(
+          const_cast<std::remove_const_t<std::remove_pointer_t<T>>*>(arg));
+    } else {
+      return arg;
+    }
+  };
+  out += fmt::format(fmt::runtime(format), convert_arg(args)...);
 }
 #pragma clang diagnostic pop
 
@@ -42,7 +55,7 @@ std::string dump_struct(const T& t) {
   s += ' ';
 #endif
   for (int i = 0; i < sizeof(T); ++i) {
-    constexpr_sprintf(s, "%02x ", ((unsigned char*)&t)[i]);
+    s += fmt::format("{:02x} ", ((unsigned char*)&t)[i]);
   }
 #endif
   return s;

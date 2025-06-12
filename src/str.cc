@@ -9,7 +9,7 @@
 
 namespace automat {
 
-Str ToStrPtr(void* ptr) { return f("%p", ptr); }
+Str ToStrPtr(void* ptr) { return f("{}", ptr); }
 
 // https://stackoverflow.com/questions/3418231/replace-part-of-a-string-with-another-string
 void ReplaceAll(Str& s, const Str& from, const Str& to) {

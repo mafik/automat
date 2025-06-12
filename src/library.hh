@@ -78,7 +78,7 @@ struct Date : Object {
   Date(int year = 0, int month = 0, int day = 0) : year(year), month(month), day(day) {}
   string_view Name() const override { return "Date"; }
   Ptr<Object> Clone() const override { return MakePtr<Date>(year, month, day); }
-  string GetText() const override { return f("%04d-%02d-%02d", year, month, day); }
+  string GetText() const override { return f("{:04d}-{:02d}-{:02d}", year, month, day); }
   void SetText(Location& error_context, string_view text) override {
     std::regex re(R"((\d{4})-(\d{2})-(\d{2}))");
     std::match_results<string_view::const_iterator> match;
@@ -149,7 +149,7 @@ struct Timer : Object, Runnable {
   string GetText() const override {
     time::SteadyPoint now = GetNow();
     time::Duration elapsed = now - start;
-    return f("%.3lf", elapsed.count());
+    return f("{:.3f}", elapsed.count());
   }
   void OnRun(Location& here) override {
     time::SteadyPoint now = GetNow();
@@ -842,7 +842,7 @@ struct Text : LiveObject {
                               if (arg.ok) {
                                 buffer += arg.object->GetText();
                               } else {
-                                buffer += f("{%s}", ref.arg.name.c_str());
+                                buffer += f("{{{}}}", ref.arg.name);
                               }
                             }},
                  chunk);
@@ -906,7 +906,7 @@ struct ComboBox : LiveObject {
       return nullptr;
     });
     if (selected == nullptr) {
-      error_context.ReportError(f("No option named %*s", new_text.size(), new_text.data()));
+      error_context.ReportError(f("No option named {}", std::string(new_text.data(), new_text.size())));
     }
   }
   void ConnectionAdded(Location& here, Connection& connection) override {

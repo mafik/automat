@@ -584,7 +584,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     SkPaint text_paint;
     canvas->translate(pack_frame_texture_bounds->left(),
                       min(pack_frame_texture_bounds->top(), pack_frame_texture_bounds->bottom()));
-    auto text = f("%.1f", average_draw_millis);
+    auto text = f("{:.1f}", average_draw_millis);
     font.DrawText(*canvas, text, text_paint);
   }
 }
@@ -1304,8 +1304,8 @@ void RenderFrame(SkCanvas& canvas) {
         auto surface = state->rendered().surface;
 
         auto read_pixels_context = new ReadPixelsContext{
-            .webp_path = f("build/debug_widgets/widget_%03d_%*s.webp", state->id,
-                           state->name.size(), state->name.data()),
+            .webp_path = f("build/debug_widgets/widget_{:03d}_{}.webp", state->id,
+                           std::string(state->name.data(), state->name.size())),
             .image_info = surface->imageInfo(),
         };
         vk::graphite_context->asyncRescaleAndReadPixels(

@@ -149,7 +149,7 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
   void FillChildren(Vec<Ptr<Widget>>& children) override;
   void Relocate(Location* parent) override;
 
-  string ToStr() const { return f("Machine(%s)", name.c_str()); }
+  string ToStr() const { return f("Machine({})", name); }
 
   Location* Front(int i) {
     if (i < 0 || i >= front.size()) {

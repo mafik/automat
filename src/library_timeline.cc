@@ -1135,7 +1135,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
       int seconds = t;
       t -= seconds;
       int milliseconds = round(t * 1000);
-      return f("%02d:%02d:%02d.%03d s", hours, minutes, seconds, milliseconds);
+      return f("{:02d}:{:02d}:{:02d}.{:03d} s", hours, minutes, seconds, milliseconds);
     };
   } else if (max_track_length > 60) {
     format_time = [](time::T t) {
@@ -1145,7 +1145,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
       int seconds = t;
       t -= seconds;
       int milliseconds = round(t * 1000);
-      return f("%02d:%02d.%03d s", minutes, seconds, milliseconds);
+      return f("{:02d}:{:02d}.{:03d} s", minutes, seconds, milliseconds);
     };
   } else if (max_track_length >= 10) {
     format_time = [](time::T t) {
@@ -1153,7 +1153,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
       int seconds = t;
       t -= seconds;
       int milliseconds = round(t * 1000);
-      return f("%02d.%03d s", seconds, milliseconds);
+      return f("{:02d}.{:03d} s", seconds, milliseconds);
     };
   } else {
     format_time = [](time::T t) {
@@ -1161,7 +1161,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
       int seconds = t;
       t -= seconds;
       int milliseconds = round(t * 1000);
-      return f("%d.%03d s", seconds, milliseconds);
+      return f("{}.{:03d} s", seconds, milliseconds);
     };
   }
 
@@ -1575,9 +1575,9 @@ void Timeline::Draw(SkCanvas& canvas) const {
 
     Str current_zoom_text;
     if (zoom < 1) {
-      current_zoom_text = f("%d ms", (int)roundf(zoom.value * 1000));
+      current_zoom_text = f("{} ms", (int)roundf(zoom.value * 1000));
     } else {
-      current_zoom_text = f("%.1f s", zoom.value);
+      current_zoom_text = f("{:.1f} s", zoom.value);
     }
     {
       float text_width = lcd_font.MeasureText(current_zoom_text);
@@ -2019,7 +2019,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
               if (track_type == "on/off") {
                 track = &AddOnOffTrack(track_name);
               } else {
-                AppendErrorMessage(status) += f("Unknown track type: %s", track_type.c_str());
+                AppendErrorMessage(status) += f("Unknown track type: {}", track_type);
               }
             }
             if (track) {

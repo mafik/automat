@@ -99,7 +99,7 @@ std::string Task::TargetName() {
 
 std::string Task::Format() { return "Task()"; }
 
-std::string RunTask::Format() { return f("RunTask(%s)", TargetName().c_str()); }
+std::string RunTask::Format() { return f("RunTask({})", TargetName()); }
 
 void ScheduleNext(Location& source) { ScheduleArgumentTargets(source, next_arg); }
 
@@ -123,7 +123,7 @@ void RunTask::Execute() {
   PostExecute();
 }
 
-std::string CancelTask::Format() { return f("CancelTask(%s)", TargetName().c_str()); }
+std::string CancelTask::Format() { return f("CancelTask({})", TargetName()); }
 
 void CancelTask::Execute() {
   if (auto s = target.lock()) {
@@ -137,7 +137,7 @@ void CancelTask::Execute() {
 
 std::string UpdateTask::Format() {
   std::string updated_str = updated.lock() ? updated.lock()->ToStr() : "Invalid";
-  return f("UpdateTask(%s, %s)", TargetName().c_str(), updated_str.c_str());
+  return f("UpdateTask({}, {})", TargetName(), updated_str);
 }
 
 void UpdateTask::Execute() {
@@ -151,7 +151,7 @@ void UpdateTask::Execute() {
   delete this;
 }
 
-std::string FunctionTask::Format() { return f("FunctionTask(%s)", TargetName().c_str()); }
+std::string FunctionTask::Format() { return f("FunctionTask({})", TargetName()); }
 
 void FunctionTask::Execute() {
   PreExecute();
@@ -164,7 +164,7 @@ void FunctionTask::Execute() {
 
 std::string ErroredTask::Format() {
   std::string errored_str = errored.lock() ? errored.lock()->ToStr() : "Invalid";
-  return f("ErroredTask(%s, %s)", TargetName().c_str(), errored_str.c_str());
+  return f("ErroredTask({}, {})", TargetName(), errored_str);
 }
 
 void ErroredTask::Execute() {

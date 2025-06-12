@@ -291,7 +291,7 @@ SkColor HSLuv(float h, float s, float l, float a) {
 
 namespace automat {
 Str ToStrColor(SkColor color) {
-  return f("#%02x%02x%02x%02x", SkColorGetA(color), SkColorGetR(color), SkColorGetG(color),
+  return f("#{:02x}{:02x}{:02x}{:02x}", SkColorGetA(color), SkColorGetR(color), SkColorGetG(color),
            SkColorGetB(color));
 }
 }  // namespace automat

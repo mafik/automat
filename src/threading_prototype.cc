@@ -188,7 +188,7 @@ void RunMainLine(unique_ptr<Task> t) {
   while (auto shared = t->target.lock()) {
     auto ptr = shared.get();
     if constexpr (kPrintTasks) {
-      LOG << "<" << typeid(*t).name() << "> => " << typeid(*ptr).name() << "@" << f("%p", ptr);
+      LOG << "<" << typeid(*t).name() << "> => " << typeid(*ptr).name() << "@" << f("{}", static_cast<void*>(ptr));
     }
     t = t->Execute(std::move(shared));
     if (t == nullptr) {

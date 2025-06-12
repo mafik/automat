@@ -247,7 +247,7 @@ std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& 
   xcb_void_cookie_t cookie =
       xcb_input_xi_select_events_checked(connection, window->xcb_window, 1, &event_mask.header);
   if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(connection, cookie)}) {
-    AppendErrorMessage(status) += f("Failed to select events: %d", error->error_code);
+    AppendErrorMessage(status) += f("Failed to select events: {}", error->error_code);
     return nullptr;
   }
 

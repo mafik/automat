@@ -83,7 +83,7 @@ struct Argument {
     requirements.emplace_back(
         [name = name](Location* location, Object* object, std::string& error) {
           if (dynamic_cast<T*>(object) == nullptr) {
-            error = f("The %s argument must be an instance of %s.", name.c_str(), typeid(T).name());
+            error = f("The {} argument must be an instance of {}.", name, typeid(T).name());
           }
         });
     return *this;
@@ -137,7 +137,7 @@ struct Argument {
       result.typed = dynamic_cast<T*>(result.object);
       if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
         here.ReportError(
-            f("The %s argument is not an instance of %s.", name.c_str(), typeid(T).name()),
+            f("The {} argument is not an instance of {}.", name, typeid(T).name()),
             source_location);
         result.ok = false;
       }

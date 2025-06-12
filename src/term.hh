@@ -82,7 +82,7 @@ int ColorIndex256(int r, int g, int b) {
   return 16 + b + g * 6 + r * 36;
 }
 
-std::string CodeFg256(int index) { return f("\033[38;5;%dm", index); }
+std::string CodeFg256(int index) { return f("\033[38;5;{}m", index); }
 
 struct Fg256 {
   int index;

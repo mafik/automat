@@ -88,7 +88,7 @@ std::jthread render_thread;
 
 time::SteadyPoint test_start;
 
-std::string FormatTime(time::T d) { return f("%.3fs", d); }
+std::string FormatTime(time::T d) { return f("{:.3f}s", d); }
 
 std::string FormatTime(time::Duration d) { return FormatTime(d.count()); }
 

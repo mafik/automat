@@ -213,7 +213,7 @@ Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
         xcb::connection, xcb::screen->root, 1, &event_mask.header);
 
     if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(xcb::connection, cookie)}) {
-      ERROR << f("Couldn't select X11 events for keylogging: %d", error->error_code);
+      ERROR << f("Couldn't select X11 events for keylogging: {}", error->error_code);
     }
 #endif  // __linux__
 #ifdef _WIN32
@@ -656,7 +656,7 @@ void Keylogging::Release() {
         xcb::connection, xcb::screen->root, 1, &event_mask.header);
 
     if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(xcb::connection, cookie)}) {
-      ERROR << f("Couldn't release X11 event selection: %d", error->error_code);
+      ERROR << f("Couldn't release X11 event selection: {}", error->error_code);
     }
 #endif  // __linux__
 #ifdef _WIN32

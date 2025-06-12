@@ -257,7 +257,7 @@ struct PtraceController : Controller {
       if constexpr (kDebugCodeController) {
         std::string machine_code_str;
         for (int i = 0; i < new_code.size(); i++) {
-          machine_code_str += f("%02x ", new_code[i]);
+          machine_code_str += f("{:02x} ", new_code[i]);
           if (i % 16 == 15) {
             machine_code_str += "\n";
           }
@@ -379,7 +379,7 @@ struct PtraceController : Controller {
         return;
       }
       if constexpr (kDebugCodeController) {
-        LOG << "Executing instruction at " << f("%p", instruction_addr);
+        LOG << "Executing instruction at " << f("{}", reinterpret_cast<void*>(instruction_addr));
       }
       worker_should_run = true;
       ResumeWorker(status);
@@ -433,7 +433,7 @@ struct PtraceController : Controller {
       user_regs_struct user_regs;
       int ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
       if (ret == -1) {
-        AppendErrorMessage(status) += "PTRACE_GETREGS(" + f("%d", pid) + ") failed";
+        AppendErrorMessage(status) += "PTRACE_GETREGS(" + f("{}", pid) + ") failed";
         return;
       }
       state.regs.RAX = user_regs.rax;
@@ -596,7 +596,7 @@ struct PtraceController : Controller {
           code_type_str = "Unknown";
           break;
       }
-      LOG << "  " << f("%d", map_entry.begin) << "-" << f("%d", map_entry.begin + map_entry.size)
+      LOG << "  " << f("{}", map_entry.begin) << "-" << f("{}", map_entry.begin + map_entry.size)
           << " " << code_type_str << " inst=" << map_entry.instruction;
     }
   }
@@ -615,7 +615,7 @@ struct PtraceController : Controller {
     user_regs_struct user_regs;
     int ret = ptrace(PTRACE_GETREGS, pid, 0, &user_regs);
     if (ret == -1) {
-      AppendErrorMessage(status) += "PTRACE_GETREGS(" + f("%d", pid) + ") failed";
+      AppendErrorMessage(status) += "PTRACE_GETREGS(" + f("{}", pid) + ") failed";
       return;
     }
     regs.RAX = user_regs.rax;
@@ -640,7 +640,7 @@ struct PtraceController : Controller {
   void SetRegs(Regs& regs, Status& status) {
     user_regs_struct user_regs;
     if (ptrace(PTRACE_GETREGS, pid, 0, &user_regs) == -1) {
-      AppendErrorMessage(status) += "SetRegs - PTRACE_GETREGS(" + f("%d", pid) + ") failed";
+      AppendErrorMessage(status) += "SetRegs - PTRACE_GETREGS(" + f("{}", pid) + ") failed";
       return;
     }
     user_regs.rax = regs.RAX;
@@ -870,7 +870,7 @@ struct PtraceController : Controller {
               continue;
             }
             ERROR << "Worker thread received SIGSEGV while accessing memory at "
-                  << f("%p", siginfo.si_addr);
+                  << f("{}", siginfo.si_addr);
             continue;
           } else {
             if constexpr (kDebugCodeController) {

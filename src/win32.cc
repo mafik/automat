@@ -103,7 +103,7 @@ DisplayCaps DisplayCaps::Query() {
             float diag = sqrt(caps.screen_height_m() * caps.screen_height_m() +
                               caps.screen_width_m() * caps.screen_width_m()) /
                          0.0254f;
-            LOG << "Display: " << f("%.1f", diag) << "″ " << int(caps.screen_width_m() * 1000)
+            LOG << "Display: " << f("{:.1f}", diag) << "″ " << int(caps.screen_width_m() * 1000)
                 << "x" << int(caps.screen_height_m() * 1000) << "mm (" << caps.screen_width_px
                 << "x" << caps.screen_height_px << "px) " << caps.screen_refresh_rate << "Hz";
           }

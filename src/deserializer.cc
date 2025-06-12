@@ -53,15 +53,15 @@ Str ToStr(const JsonToken& token) {
     case JsonToken::kBooleanTokenType:
       return token.value.b ? "true" : "false";
     case JsonToken::kIntTokenType:
-      return f("%d", token.value.i);
+      return f("{}", token.value.i);
     case JsonToken::kUintTokenType:
-      return f("%u", token.value.u);
+      return f("{}", token.value.u);
     case JsonToken::kInt64TokenType:
-      return f("%" PRId64, token.value.i64);
+      return f("{}", token.value.i64);
     case JsonToken::kUint64TokenType:
-      return f("%" PRIu64, token.value.u64);
+      return f("{}", token.value.u64);
     case JsonToken::kDoubleTokenType:
-      return f("%f", token.value.d);
+      return f("{}", token.value.d);
     case JsonToken::kRawNumberTokenType:
       value = token.value.raw_number;
       break;
@@ -74,7 +74,7 @@ Str ToStr(const JsonToken& token) {
       value = "??";
       break;
   }
-  return f("%s(%s)", ToStr(token.type).c_str(), value.c_str());
+  return f("{}({})", ToStr(token.type), value);
 }
 
 using enum JsonToken::TokenType;
@@ -404,6 +404,6 @@ Str Deserializer::ErrorContext() {
   int n_lines = std::count(prefix.begin(), prefix.end(), '\n') + 1;
   auto last_newline = prefix.rfind('\n');
   int col = last_newline == Str::npos ? 0 : pos - last_newline;
-  return f("line %d, column %d", n_lines, col);
+  return f("line {}, column {}", n_lines, col);
 }
 }  // namespace automat

@@ -315,7 +315,7 @@ std::unique_ptr<Action> Location::FindAction(gui::Pointer& p, gui::ActionTrigger
   return nullptr;
 }
 
-void Location::SetNumber(double number) { SetText(f("%g", number)); }
+void Location::SetNumber(double number) { SetText(f("{:g}", number)); }
 
 std::string Location::ToStr() const { return Str(object->Name()); }
 

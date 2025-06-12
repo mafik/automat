@@ -35,7 +35,7 @@ Argument::LocationResult Argument::GetLocation(Location& here,
   }
   if (result.location == nullptr && precondition >= kRequiresLocation) {
     here.ReportError(
-        f("The %s argument of %s is not connected.", name.c_str(), here.ToStr().c_str()),
+        f("The {} argument of {} is not connected.", name, here.ToStr()),
         source_location);
     result.ok = false;
   }
@@ -52,7 +52,7 @@ Argument::ObjectResult Argument::GetObject(Location& here,
       result.object = result.location->object.get();
     }
     if (result.object == nullptr && precondition >= kRequiresObject) {
-      here.ReportError(f("The %s argument of %s is empty.", name.c_str(), here.ToStr().c_str()),
+      here.ReportError(f("The {} argument of {} is empty.", name, here.ToStr()),
                        source_location);
       result.ok = false;
     }

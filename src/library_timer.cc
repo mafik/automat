@@ -410,7 +410,7 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
     canvas.rotate(360.f * a);
     canvas.drawRect(major_tick, tick_paint);
     canvas.restore();
-    auto text = f("%d", i * range_max / major_tick_count);
+    auto text = f("{}", i * range_max / major_tick_count);
     canvas.save();
     float s = sin(a * M_PI * 2);
     float w = font->MeasureText(text);

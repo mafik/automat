@@ -12,7 +12,7 @@ const Logger& operator<<(const Logger& logger, SkMatrix& m) {
     out += "\n";
     for (int j = 0; j < 3; ++j) {
       int index = i * 3 + j;
-      out += f("%.4f", m.get(index));
+      out += f("{:.4f}", m.get(index));
       if (j < 2) {
         out += ", ";
       }

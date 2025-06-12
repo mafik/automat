@@ -30,5 +30,5 @@ SkMatrix SinCos::ToMatrix(Vec2 pivot) const {
   return m;
 }
 
-Str SinCos::ToStr() const { return f("SinCos(%f, %f)", (float)sin, (float)cos); }
+Str SinCos::ToStr() const { return f("SinCos({}, {})", (float)sin, (float)cos); }
 }  // namespace automat

@@ -56,10 +56,10 @@ union DEC64 {
   DEC64 operator+(const DEC64& rhs) const;
 
   Str ToStr() const {
-    Str ret = f("%lld", GetCoefficient());
+    Str ret = f("{}", GetCoefficient());
     if (GetExponent()) {
       ret += "×10";
-      Str exp = f("%d", GetExponent());
+      Str exp = f("{}", GetExponent());
       for (auto c : exp) {
         switch (c) {
           case '-':

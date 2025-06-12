@@ -502,7 +502,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
 
     if (kDebugWindowPicking) {
-      LOG << "Picked window: " << f("%x", picked_window);
+      LOG << "Picked window: " << f("{:x}", picked_window);
       LOG_Indent();
     }
 
@@ -510,7 +510,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     xcb_window_t found_window = XCB_WINDOW_NONE;
     SearchWindows(picked_window, [&](xcb_window_t window, xcb_window_t parent) {
       if (kDebugWindowPicking) {
-        LOG << "Checking for WM_STATE: " << f("%x", window);
+        LOG << "Checking for WM_STATE: " << f("{:x}", window);
       }
       if (HasWMState(window)) {
         if (kDebugWindowPicking) {
@@ -524,7 +524,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     if (kDebugWindowPicking) {
       if (found_window != XCB_WINDOW_NONE) {
         auto name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
-        LOG << "Found window: " << f("%x", found_window) << " " << name;
+        LOG << "Found window: " << f("{:x}", found_window) << " " << name;
       } else {
         LOG << "No window found";
       }

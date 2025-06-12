@@ -97,7 +97,7 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
       auto name = base_name;
       int i = 2;
       while (assigned_names.count(name)) {
-        name = f("%s #%d", base_name.c_str(), i++);
+        name = f("{} #{}", base_name, i++);
       }
       location_ids.emplace(location.get(), name);
       assigned_names.insert(name);
@@ -159,7 +159,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
             if (OK(status)) {
               auto proto = prototypes->Find(type);
               if (proto == nullptr) {
-                l.ReportError(f("Unknown object type: %s", type.c_str()));
+                l.ReportError(f("Unknown object type: {}", type));
                 // try to continue parsing
               } else {
                 object = proto->Clone();
@@ -192,7 +192,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
       for (auto& connection_record : connections) {
         auto to_it = location_idx.find(connection_record.to_name);
         if (to_it == location_idx.end()) {
-          l.ReportError(f("Missing connection target: %s", connection_record.to_name.c_str()));
+          l.ReportError(f("Missing connection target: {}", connection_record.to_name));
           continue;
         }
         Location* from = connection_record.from;

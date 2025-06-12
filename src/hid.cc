@@ -634,7 +634,7 @@ double Accessor::Read<double>(const uint8_t* report, size_t report_bytes) const 
 static std::string HexDump(const uint8_t* ptr, size_t size) {
   std::string hex_dump;
   for (int i = 0; i < size; i++) {
-    hex_dump += f("%02X ", ptr[i]);
+    hex_dump += f("{:02X} ", ptr[i]);
     if (i % 16 == 15) {
       hex_dump += '\n';
     }
@@ -810,7 +810,7 @@ void ParseReportDescriptor(const uint8_t* report_descriptor, size_t report_descr
         default:
           // Push & Pop are not implemented because I couldn't find any
           // reference devices that would use them.
-          ERROR << "Unknown global tag: " << f("0x%02x", bTag)
+          ERROR << "Unknown global tag: " << f("{:#02x}", bTag)
                 << ". See \"Global items\" in "
                    "https://www.usb.org/sites/default/files/hid1_11.pdf";
       }

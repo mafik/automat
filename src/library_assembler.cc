@@ -737,7 +737,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
     int byte_value = (reg_value >> (row * 8)) & 0xFF;
     canvas.save();
     canvas.translate(kBaseRect.right + 0.5_mm, bottom + kByteValueFontShiftUp);
-    auto byte_value_str = f("%02X", byte_value);
+    auto byte_value_str = f("{:02X}", byte_value);
     byte_value_font.DrawText(canvas, byte_value_str, dark_paint);
     canvas.restore();
     for (int bit = 0; bit < 8; ++bit) {
@@ -751,7 +751,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
       }
 
       int position = row * 8 + bit;
-      std::string position_str = f("%d", position);
+      std::string position_str = f("{}", position);
       float position_text_width = bit_position_font.MeasureText(position_str);
       canvas.save();
       canvas.translate(left + (kCellWidth - position_text_width) * 0.5,
@@ -871,7 +871,7 @@ void Register::DeserializeState(Location& l, Deserializer& d) {
       return;
     }
   }
-  l.ReportError(f("Unknown register name: %s", reg_name.c_str()));
+  l.ReportError(f("Unknown register name: {}", reg_name));
   register_index = 0;
 }
 

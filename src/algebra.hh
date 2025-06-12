@@ -41,7 +41,7 @@ struct Equation : Statement {
   }
 
   std::string GetText() const override {
-    return automat::f("%s = %s", lhs->GetText().c_str(), rhs->GetText().c_str());
+    return automat::f("{} = {}", lhs->GetText(), rhs->GetText());
   }
 
   void Children(std::function<void(Statement*)> callback) const override {

@@ -16,7 +16,7 @@ class File:
     path: Path
     system_includes: list[str]
     comment_libs: list[str]
-    direct_includes: list[str]
+    direct_includes: list[str] # absolute paths as strings
     transitive_includes: set['File']
     link_args: dict[str, list[str]]
     compile_args: dict[str, list[str]]

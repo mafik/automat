@@ -21,6 +21,189 @@ using namespace std;
 
 map<HWND, Win32Window*> hwnd_to_window;
 
+// Forward declaration for the struct
+struct Win32PointerGrab;
+
+// Forward declaration for the hook procedure
+static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam);
+
+// Global hook handle and pointer grab reference
+static HHOOK global_mouse_hook = nullptr;
+static std::vector<Win32PointerGrab*> active_pointer_grabs;
+
+struct Win32PointerGrab : automat::gui::PointerGrab {
+  Win32Window& win32_window;
+
+  Win32PointerGrab(automat::gui::Pointer& pointer, automat::gui::PointerGrabber& grabber,
+                   Win32Window& win32_window)
+      : automat::gui::PointerGrab(pointer, grabber), win32_window(win32_window) {
+    if (active_pointer_grabs.size() == 0) {
+      global_mouse_hook =
+          SetWindowsHookExA(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandle(nullptr), 0);
+      if (!global_mouse_hook) {
+        ERROR << "Failed to install global mouse hook: " << GetLastError();
+        return;
+      }
+    }
+
+    if (global_mouse_hook) {
+      active_pointer_grabs.push_back(this);
+    }
+  }
+
+  void Release() override {
+    if (auto it = std::find(active_pointer_grabs.begin(), active_pointer_grabs.end(), this);
+        it != active_pointer_grabs.end()) {
+      active_pointer_grabs.erase(it);
+    }
+    if (active_pointer_grabs.size() == 0 && global_mouse_hook) {
+      UnhookWindowsHookEx(global_mouse_hook);
+      global_mouse_hook = nullptr;
+    }
+    automat::gui::PointerGrab::Release();  // deletes this
+  }
+};
+
+// Low-level mouse hook procedure
+static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+  if (nCode >= 0) {
+    MSLLHOOKSTRUCT* mouse_struct = (MSLLHOOKSTRUCT*)lParam;
+
+    // Convert screen coordinates to window coordinates
+    POINT screen_point = {mouse_struct->pt.x, mouse_struct->pt.y};
+
+    // Handle different mouse messages
+    switch (wParam) {
+      case WM_MOUSEMOVE: {
+        SetCursorPos(screen_point.x, screen_point.y);
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          auto& window = grab->win32_window;
+          auto lock = window.Lock();
+          window.mouse_position.x = screen_point.x;
+          window.mouse_position.y = screen_point.y;
+          grab->pointer.Move(window.ScreenToWindowPx(window.mouse_position));
+        }
+        break;
+      }
+      case WM_LBUTTONDOWN: {
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.ButtonDown(gui::PointerButton::Left);
+        }
+        break;
+      }
+      case WM_LBUTTONUP: {
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.ButtonUp(gui::PointerButton::Left);
+        }
+        break;
+      }
+      case WM_RBUTTONDOWN: {
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.ButtonDown(gui::PointerButton::Right);
+        }
+        break;
+      }
+      case WM_RBUTTONUP: {
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.ButtonUp(gui::PointerButton::Right);
+        }
+        break;
+      }
+      case WM_MBUTTONDOWN: {
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.ButtonDown(gui::PointerButton::Middle);
+        }
+        break;
+      }
+      case WM_MBUTTONUP: {
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.ButtonUp(gui::PointerButton::Middle);
+        }
+        break;
+      }
+      case WM_MOUSEWHEEL: {
+        int delta = GET_WHEEL_DELTA_WPARAM(mouse_struct->mouseData);
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.Wheel(delta / 120.0f);
+        }
+        break;
+      }
+    }
+
+    // Prevent the event from reaching other applications
+    return 1;
+  }
+
+  // Call next hook
+  return CallNextHookEx(global_mouse_hook, nCode, wParam, lParam);
+}
+
+struct Win32Pointer : automat::gui::Pointer {
+  Win32Window& win32_window;
+
+  Win32Pointer(automat::gui::RootWidget& root, Vec2 position, Win32Window& win32_window)
+      : automat::gui::Pointer(root, position), win32_window(win32_window) {}
+
+  void PushIcon(automat::gui::Pointer::IconType icon) override {
+    auto prev = Icon();
+    automat::gui::Pointer::PushIcon(icon);
+    auto curr = Icon();
+    if (prev != curr) {
+      UpdateCursor(curr);
+    }
+  }
+
+  void PopIcon() override {
+    auto prev = Icon();
+    automat::gui::Pointer::PopIcon();
+    auto curr = Icon();
+    if (prev != curr) {
+      UpdateCursor(curr);
+    }
+  }
+
+  void UpdateCursor(automat::gui::Pointer::IconType icon) {
+    HCURSOR cursor;
+    switch (icon) {
+      case automat::gui::Pointer::kIconArrow:
+        cursor = LoadCursor(nullptr, IDC_ARROW);
+        break;
+      case automat::gui::Pointer::kIconHand:
+        cursor = LoadCursor(nullptr, IDC_HAND);
+        break;
+      case automat::gui::Pointer::kIconIBeam:
+        cursor = LoadCursor(nullptr, IDC_IBEAM);
+        break;
+      case automat::gui::Pointer::kIconAllScroll:
+        cursor = LoadCursor(nullptr, IDC_SIZEALL);
+        break;
+      case automat::gui::Pointer::kIconResizeHorizontal:
+        cursor = LoadCursor(nullptr, IDC_SIZEWE);
+        break;
+      default:
+        cursor = LoadCursor(nullptr, IDC_ARROW);
+        break;
+    }
+    SetCursor(cursor);
+  }
+
+  automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
+    if (grab) {
+      grab->Release();
+    }
+    grab.reset(new Win32PointerGrab(*this, grabber, win32_window));
+    return *grab;
+  }
+};
+
 Win32Window::Win32Window(automat::gui::RootWidget& root) : automat::gui::Window(root) {}
 
 Win32Window::~Win32Window() {
@@ -258,17 +441,15 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       break;
     }
     case WM_MOUSEMOVE: {
+      auto lock = window.Lock();
       int16_t x = lParam & 0xFFFF;
       int16_t y = (lParam >> 16) & 0xFFFF;
       window.mouse_position.x = x + window.client_x;
       window.mouse_position.y = y + window.client_y;
-      auto lock = window.Lock();
       window.GetMouse().Move(window.ScreenToWindowPx(window.mouse_position));
       break;
     }
     case WM_MOUSELEAVE: {
-      auto lock = window.Lock();
-      window.mouse.reset();
       break;
     }
     case WM_MOUSEWHEEL: {
@@ -338,8 +519,8 @@ unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
     AppendErrorMessage(status) += "Failed to register window class.";
     return nullptr;
   }
-  // Save the window size and position - those values may be overwritten by WndProc when the window
-  // is created.
+  // Save the window size and position - those values may be overwritten by WndProc when the
+  // window is created.
   auto desired_size = root.size;
   Vec2 desired_pos = Vec2(root.output_device_x, root.output_device_y);
   bool maximized = root.maximized_horizontally || root.maximized_vertically;
@@ -415,7 +596,7 @@ void Win32Window::PostToMainLoop(function<void()> f) {
 
 gui::Pointer& Win32Window::GetMouse() {
   if (!mouse) {
-    mouse = std::make_unique<gui::Pointer>(*root_widget, ScreenToWindowPx(mouse_position));
+    mouse = std::make_unique<Win32Pointer>(*root_widget, ScreenToWindowPx(mouse_position), *this);
     TRACKMOUSEEVENT track_mouse_event = {
         .cbSize = sizeof(TRACKMOUSEEVENT),
         .dwFlags = TME_LEAVE,

@@ -19,4 +19,4 @@ hook.ConfigureOptions(**{
 })
 hook.InstallWhenIncluded(r'fmt/.*\.h')
 hook.AddCompileArgs('-I' + str(build.PREFIX / 'include'))
-hook.AddLinkArgs('-lfmt')
+hook.AddLinkArgs('-lfmt' + build.debug_suffix)

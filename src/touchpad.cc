@@ -190,7 +190,7 @@ struct TouchPadImpl {
             target_field->emplace(accessor);
           } else {
             LOG << "Unknown HID input. Usage Page: " << UsagePageToString(accessor.usage_page)
-                << f(" ({:#04X})", accessor.usage_page)
+                << f(" ({:#04X})", (uint32_t)accessor.usage_page)
                 << " Usage: " << UsageToString(accessor.usage_page, accessor.usage);
           }
         });

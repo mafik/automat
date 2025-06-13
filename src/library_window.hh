@@ -37,6 +37,13 @@ struct Window : public Object, Runnable {
   std::optional<XSHMCapture> capture;
 #endif
 
+#ifdef _WIN32
+  struct Impl;
+
+  // Private implementation because we don't want to pollute header with windows.h defines.
+  std::unique_ptr<Impl> impl;
+#endif
+
   tesseract::TessBaseAPI tesseract;
 
   float x_min_ratio = 0.25f;

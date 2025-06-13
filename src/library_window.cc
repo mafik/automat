@@ -32,6 +32,47 @@
 #include "xcb.hh"
 #endif
 
+#ifdef _WIN32
+#undef NOGDI
+#include <dwmapi.h>
+#include <windows.h>
+
+#include <vector>
+#pragma comment(lib, "dwmapi.lib")
+#pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "user32.lib")
+
+// Windows helper functions
+static std::string GetWindowTitle(HWND hwnd) {
+  int length = GetWindowTextLengthA(hwnd);
+  if (length == 0) return "";
+
+  std::string title(length, '\0');
+  GetWindowTextA(hwnd, title.data(), length + 1);
+  return title;
+}
+
+static bool IsValidWindow(HWND hwnd) {
+  if (!IsWindow(hwnd)) return false;
+  if (!IsWindowVisible(hwnd)) return false;
+
+  // Skip windows with no title
+  if (GetWindowTitle(hwnd).empty()) return false;
+
+  // Skip certain window classes
+  char className[256];
+  if (GetClassNameA(hwnd, className, sizeof(className))) {
+    std::string classStr(className);
+    if (classStr == "Shell_TrayWnd" || classStr == "DV2ControlHost" ||
+        classStr == "MsgrIMEWindowClass" || classStr == "SysShadow") {
+      return false;
+    }
+  }
+
+  return true;
+}
+#endif
+
 using namespace std;
 
 namespace automat::library {
@@ -44,9 +85,28 @@ Window::Window() {
                      tesseract::OEM_LSTM_ONLY, nullptr, 0, nullptr, nullptr, true, nullptr)) {
     LOG << "Tesseract init failed";
   }
+#ifdef _WIN32
+  impl = std::make_unique<Impl>();
+#endif
 }
 
 std::string_view Window::Name() const { return "Window"; }
+
+struct Window::Impl {
+  HWND hwnd = nullptr;
+
+  struct Win32Capture {
+    std::vector<char> data;
+    int width = 0;
+    int height = 0;
+
+    Win32Capture() = default;
+    ~Win32Capture() = default;
+    void Capture(HWND hwnd);
+  };
+
+  std::optional<Win32Capture> capture;
+};
 
 Ptr<Object> Window::Clone() const {
   auto ret = MakePtr<Window>();
@@ -56,6 +116,10 @@ Ptr<Object> Window::Clone() const {
   ret->y_max_ratio = y_max_ratio;
 #ifdef __linux__
   ret->xcb_window = xcb_window;
+#endif
+#ifdef _WIN32
+  ret->impl = std::make_unique<Impl>();
+  ret->impl->hwnd = impl->hwnd;
 #endif
   return ret;
 }
@@ -195,8 +259,10 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       if (p.keyboard) {
         key_grab = &p.keyboard->RequestKeyGrab(*this, gui::AnsiKey::Escape, false, false, false,
                                                false, [this](Status& status) {
-                                                 if (pointer_grab) pointer_grab->Release();
-                                                 if (key_grab) key_grab->Release();
+                                                 if (!OK(status)) {
+                                                   LOG << "Couldn't grab the escape key:" << status;
+                                                   ReleaseGrabs();
+                                                 }
                                                });
       }
     };
@@ -240,6 +306,26 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     tesseract_text = window->RunOCR();
 
     return animation::Animating;
+#elif defined(_WIN32)
+    tesseract_text.clear();
+    auto window = LockWindow();
+    auto lock = std::lock_guard(window->mutex);
+    if (window_name != window->title) {
+      window_name = window->title;
+    }
+    if (window->impl->hwnd == nullptr) {
+      window->impl->capture.reset();
+      return animation::Finished;
+    }
+
+    if (!window->impl->capture.has_value()) {
+      window->impl->capture.emplace();
+    }
+
+    window->impl->capture->Capture(window->impl->hwnd);
+    tesseract_text = window->RunOCR();
+
+    return animation::Animating;
 #else
     return animation::Finished;
 #endif
@@ -274,12 +360,26 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       } else {
         l.full_region_rect = l.contents_rrect.rect;
       }
+#elif defined(_WIN32)
+      if (window->impl->capture.has_value() &&
+          (window->impl->capture->height > 0 || window->impl->capture->width > 0)) {
+        SkRect image_rect =
+            SkRect::Make(SkISize{window->impl->capture->width, window->impl->capture->height});
+        l.image_matrix =
+            SkMatrix::RectToRect(image_rect, l.contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
+        l.full_region_rect = image_rect;
+        l.image_matrix.mapRect(&l.full_region_rect.sk);
+      } else {
+        l.full_region_rect = l.contents_rrect.rect;
+      }
+#else
+      l.full_region_rect = l.contents_rrect.rect;
+#endif
       l.region_rect =
           Rect(lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_min_ratio),
                lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_min_ratio),
                lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_max_ratio),
                lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_max_ratio));
-#endif
     }
     l.region_rect = l.region_rect.Outset(kRegionStrokeWidth / 2);
     return l;
@@ -315,6 +415,22 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
         canvas.save();
         canvas.concat(layout.image_matrix);
         canvas.drawImage(image, 0, 0, kFastSamplingOptions, nullptr);
+        canvas.restore();
+      }
+    }
+#elif defined(_WIN32)
+    if (auto window = LockWindow()) {
+      if (window->impl->capture.has_value()) {
+        auto& capture = *window->impl->capture;
+        auto image_info =
+            SkImageInfo::Make(window->impl->capture->width, window->impl->capture->height,
+                              kRGBA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
+        SkPixmap pixmap(image_info, capture.data.data(), window->impl->capture->width * 4);
+        auto image = SkImages::RasterFromPixmap(
+            pixmap, [](const void* pixels, SkImages::ReleaseContext){}, nullptr);
+        canvas.save();
+        canvas.concat(layout.image_matrix);
+        canvas.drawImage(image, 0, 0, SkSamplingOptions(), nullptr);
         canvas.restore();
       }
     }
@@ -485,15 +601,16 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(pick_button); }
 
-  void ReleaseGrab(gui::PointerGrab&) override { pointer_grab = nullptr; }
-  void ReleaseKeyGrab(gui::KeyGrab&) override { key_grab = nullptr; }
-  void KeyGrabberKeyDown(gui::KeyGrab&) override {
+  void ReleaseGrabs() {
     if (pointer_grab) pointer_grab->Release();
     if (key_grab) key_grab->Release();
   }
+  void ReleaseGrab(gui::PointerGrab&) override { pointer_grab = nullptr; }
+  void ReleaseKeyGrab(gui::KeyGrab&) override { key_grab = nullptr; }
+  void KeyGrabberKeyDown(gui::KeyGrab&) override { ReleaseGrabs(); }
   void PointerGrabberButtonDown(gui::PointerGrab& grab, gui::PointerButton) override {
+    ReleaseGrabs();
 #ifdef __linux__
-    grab.Release();
 
     xcb_window_t picked_window = XCB_WINDOW_NONE;
     {
@@ -536,6 +653,44 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       window->xcb_window = found_window;
       window->title = window_name;
     }
+#elif defined(_WIN32)
+    POINT cursor_pos;
+    if (!GetCursorPos(&cursor_pos)) {
+      return;
+    }
+
+    HWND picked_window = WindowFromPoint(cursor_pos);
+    if (kDebugWindowPicking) {
+      LOG << "Picked window: " << f("{:x}", reinterpret_cast<uintptr_t>(picked_window));
+    }
+
+    // Find the top-level window
+    HWND found_window = picked_window;
+    while (found_window) {
+      HWND parent = GetParent(found_window);
+      if (!parent) break;
+      found_window = parent;
+    }
+
+    // Ensure it's a valid window
+    if (!IsValidWindow(found_window)) {
+      if (kDebugWindowPicking) {
+        LOG << "Invalid window selected";
+      }
+      return;
+    }
+
+    window_name = GetWindowTitle(found_window);
+    if (kDebugWindowPicking) {
+      LOG << "Found window: " << f("{:x}", reinterpret_cast<uintptr_t>(found_window)) << " "
+          << window_name;
+    }
+
+    WakeAnimation();
+    if (auto window = LockWindow()) {
+      window->impl->hwnd = found_window;
+      window->title = window_name;
+    }
 #else
     grab.Release();
 #endif
@@ -571,6 +726,15 @@ void Window::OnRun(Location& here) {
     capture.emplace();
   }
   capture->Capture(xcb_window);
+#elif defined(_WIN32)
+  if (impl->hwnd == nullptr) {
+    here.ReportError("No window selected");
+    return;
+  }
+  if (!impl->capture.has_value()) {
+    impl->capture.emplace();
+  }
+  impl->capture->Capture(impl->hwnd);
 #endif
   std::string utf8_text = RunOCR();
   out->SetText(here, utf8_text);
@@ -641,6 +805,95 @@ void Window::XSHMCapture::Capture(xcb_window_t xcb_window) {
 }
 #endif
 
+#ifdef _WIN32
+void Window::Impl::Win32Capture::Capture(HWND hwnd) {
+  if (!hwnd || !IsWindow(hwnd)) {
+    width = height = 0;
+    data.clear();
+    return;
+  }
+
+  RECT rect;
+  if (!GetWindowRect(hwnd, &rect)) {
+    width = height = 0;
+    data.clear();
+    return;
+  }
+
+  width = rect.right - rect.left;
+  height = rect.bottom - rect.top;
+
+  if (width <= 0 || height <= 0) {
+    width = height = 0;
+    data.clear();
+    return;
+  }
+
+  HDC hdcWindow = GetDC(hwnd);
+  HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
+
+  if (!hdcMemDC) {
+    ReleaseDC(hwnd, hdcWindow);
+    width = height = 0;
+    data.clear();
+    return;
+  }
+
+  HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
+  if (!hbmScreen) {
+    DeleteDC(hdcMemDC);
+    ReleaseDC(hwnd, hdcWindow);
+    width = height = 0;
+    data.clear();
+    return;
+  }
+
+  SelectObject(hdcMemDC, hbmScreen);
+
+  // Try PrintWindow first (works better for some windows)
+  BOOL printResult = PrintWindow(hwnd, hdcMemDC, PW_RENDERFULLCONTENT);
+
+  if (!printResult) {
+    // Fallback to BitBlt
+    BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
+  }
+
+  // Get bitmap data
+  BITMAPINFOHEADER bi = {};
+  bi.biSize = sizeof(BITMAPINFOHEADER);
+  bi.biWidth = width;
+  bi.biHeight = -height;  // Negative for top-down DIB
+  bi.biPlanes = 1;
+  bi.biBitCount = 32;
+  bi.biCompression = BI_RGB;
+
+  data.resize(width * height * 4);
+
+  GetDIBits(hdcWindow, hbmScreen, 0, height, data.data(), reinterpret_cast<BITMAPINFO*>(&bi),
+            DIB_RGB_COLORS);
+
+  // Convert BGRA to RGBA and premultiply alpha
+  for (int i = 0; i < width * height; ++i) {
+    uint8_t b = data[i * 4];
+    uint8_t g = data[i * 4 + 1];
+    uint8_t r = data[i * 4 + 2];
+    uint8_t a = data[i * 4 + 3];
+
+    // If alpha is 0, make it opaque
+    if (a == 0) a = 255;
+
+    data[i * 4] = r;      // R
+    data[i * 4 + 1] = g;  // G
+    data[i * 4 + 2] = b;  // B
+    data[i * 4 + 3] = a;  // A
+  }
+
+  DeleteObject(hbmScreen);
+  DeleteDC(hdcMemDC);
+  ReleaseDC(hwnd, hdcWindow);
+}
+#endif
+
 void Window::AttachToTitle() {
 #ifdef __linux__
   SearchWindows(xcb::screen->root, [&](xcb_window_t window, xcb_window_t parent) {
@@ -657,6 +910,12 @@ void Window::AttachToTitle() {
     }
     return ControlFlow::VisitChildren;
   });
+#elif defined(_WIN32)
+  // Find window by title
+  impl->hwnd = FindWindowA(nullptr, title.c_str());
+  if (impl->hwnd && !IsValidWindow(impl->hwnd)) {
+    impl->hwnd = nullptr;
+  }
 #endif
 }
 

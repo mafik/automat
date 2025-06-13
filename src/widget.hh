@@ -96,6 +96,7 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   // Initially this is set to 0 (meaning it should wake up immediately).
   // When the widget's animation finishes, set this to max value.
   mutable time::SteadyPoint wake_time = time::SteadyPoint::min();
+  // The time when the Tick was last called. Updated right after Tick.
   mutable time::SteadyPoint last_tick_time;
 
   // Set to true if the widget should be redrawn (without the need for animation `Tick`).

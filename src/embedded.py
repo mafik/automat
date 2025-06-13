@@ -102,4 +102,6 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
     hh_file = src.File(hh_path)
     srcs[str(hh_path)] = hh_file
     cc_file = src.File(cc_path)
+    # Help with dependency tracking by informing the build system that we're including virtual_fs.hh
+    cc_file.direct_includes.append(str(fs_utils.src_dir / 'virtual_fs.hh'))
     srcs[str(cc_path)] = cc_file

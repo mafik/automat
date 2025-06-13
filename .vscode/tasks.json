@@ -14,15 +14,15 @@
     {
       "label": "link current file debug",
       "type": "shell",
-      "command": "python run.py 'link debug_${fileBasenameNoExtension}'",
+      "command": "python run.py 'link ${fileBasenameNoExtension}' --variant=debug",
       "presentation": {
         "reveal": "silent"
       }
     },
     {
-      "label": "link debug_automat",
+      "label": "link debug automat",
       "type": "shell",
-      "command": "python run.py 'link debug_automat'",
+      "command": "python run.py 'link automat' --variant=debug",
       "presentation": {
         "reveal": "silent",
         "close": true

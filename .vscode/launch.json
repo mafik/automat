@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "debug_automat (LLDB)",
+      "name": "debug automat (LLDB)",
       "type": "lldb",
       "request": "launch",
       "env": {
@@ -11,8 +11,8 @@
       "initCommands": [
         "settings set target.source-map ${workspaceFolder}/build/Debug/ ${workspaceFolder}/third_party/"
       ],
-      "program": "${workspaceFolder}/build/debug_automat",
-      "preLaunchTask": "link debug_automat",
+      "program": "${workspaceFolder}/build/debug/automat",
+      "preLaunchTask": "link debug automat",
     },
     {
       "name": "automat (LLDB)",
@@ -38,21 +38,21 @@
       "name": "Debug Current File (LLDB)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/debug_${fileBasenameNoExtension}",
+      "program": "${workspaceFolder}/build/debug/${fileBasenameNoExtension}",
       "preLaunchTask": "link current file debug",
     },
     {
-      "name": "debug_automat (GDB)",
+      "name": "debug automat (GDB)",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/debug_automat",
+      "program": "${workspaceFolder}/build/debug/automat",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",
       "environment": [],
       "externalConsole": false,
       "MIMode": "gdb",
-      "preLaunchTask": "link debug_automat",
+      "preLaunchTask": "link debug automat",
       "setupCommands": [
         {
           "description": "Włącz formatowanie kodu dla gdb",
@@ -67,15 +67,15 @@
       ]
     },
     {
-      "name": "debug_automat (VSDbg)",
+      "name": "debug automat (VSDbg)",
       "type": "cppvsdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/debug_automat.exe",
+      "program": "${workspaceFolder}/build/debug/automat.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}/build/",
       "environment": [],
-      "preLaunchTask": "link debug_automat"
+      "preLaunchTask": "link debug automat"
     }
   ]
 }

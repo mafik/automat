@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 # SPDX-License-Identifier: MIT
 from pathlib import Path
-from itertools import product
 import clang
 import src
 import fs_utils
@@ -339,7 +338,7 @@ def recipe() -> make.Recipe:
         #     mt_runner = functools.partial(Popen, [MT, '-manifest', 'src\win32.manifest', '-outputresource:{path}'])
         #     r.add_step(mt_runner, outputs=[path], inputs=[path, 'src/win32.manifest'], name=f'mt {binary_name}')
 
-        runner = functools.partial(make.Popen, [bin.path] + bin.run_args)
+        runner = functools.partial(make.Popen, [bin.path] + bin.run_args, stdout=None)
         r.add_step(runner,
                    outputs=[],
                    inputs=[bin.path],

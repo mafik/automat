@@ -340,6 +340,8 @@ struct XCBPointer : automat::gui::Pointer {
         return "all-scroll";
       case automat::gui::Pointer::kIconResizeHorizontal:
         return "size_hor";
+      case automat::gui::Pointer::kIconCrosshair:
+        return "crosshair";
       default:
         return "left_ptr";
     }

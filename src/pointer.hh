@@ -70,7 +70,14 @@ struct Pointer {
 
   Widget* GetWidget();
 
-  enum IconType { kIconArrow, kIconHand, kIconIBeam, kIconAllScroll, kIconResizeHorizontal };
+  enum IconType {
+    kIconArrow,
+    kIconHand,
+    kIconIBeam,
+    kIconAllScroll,
+    kIconResizeHorizontal,
+    kIconCrosshair,
+  };
 
   IconType Icon() const;
   virtual void PushIcon(IconType);

@@ -44,6 +44,7 @@ struct Win32PointerGrab : automat::gui::PointerGrab {
         ERROR << "Failed to install global mouse hook: " << GetLastError();
         return;
       }
+      pointer.PushIcon(gui::Pointer::kIconCrosshair);
     }
 
     if (global_mouse_hook) {
@@ -59,30 +60,102 @@ struct Win32PointerGrab : automat::gui::PointerGrab {
     if (active_pointer_grabs.size() == 0 && global_mouse_hook) {
       UnhookWindowsHookEx(global_mouse_hook);
       global_mouse_hook = nullptr;
+      pointer.PopIcon();
     }
     automat::gui::PointerGrab::Release();  // deletes this
   }
 };
 
+struct Win32Pointer : automat::gui::Pointer {
+  Win32Window& win32_window;
+
+  Win32Pointer(automat::gui::RootWidget& root, Vec2 position, Win32Window& win32_window)
+      : automat::gui::Pointer(root, position), win32_window(win32_window) {}
+
+  void PushIcon(automat::gui::Pointer::IconType icon) override {
+    auto prev = Icon();
+    automat::gui::Pointer::PushIcon(icon);
+    auto curr = Icon();
+    if (prev != curr) {
+      UpdateCursor(curr);
+    }
+  }
+
+  void PopIcon() override {
+    auto prev = Icon();
+    automat::gui::Pointer::PopIcon();
+    auto curr = Icon();
+    if (prev != curr) {
+      UpdateCursor(curr);
+    }
+  }
+
+  void UpdateCursor(automat::gui::Pointer::IconType icon) {
+    HCURSOR cursor;
+    switch (icon) {
+      case automat::gui::Pointer::kIconArrow:
+        cursor = LoadCursor(nullptr, IDC_ARROW);
+        break;
+      case automat::gui::Pointer::kIconHand:
+        cursor = LoadCursor(nullptr, IDC_HAND);
+        break;
+      case automat::gui::Pointer::kIconIBeam:
+        cursor = LoadCursor(nullptr, IDC_IBEAM);
+        break;
+      case automat::gui::Pointer::kIconAllScroll:
+        cursor = LoadCursor(nullptr, IDC_SIZEALL);
+        break;
+      case automat::gui::Pointer::kIconResizeHorizontal:
+        cursor = LoadCursor(nullptr, IDC_SIZEWE);
+        break;
+      case automat::gui::Pointer::kIconCrosshair:
+        cursor = LoadCursor(nullptr, IDC_CROSS);
+        break;
+      default:
+        cursor = LoadCursor(nullptr, IDC_ARROW);
+        break;
+    }
+    SetCursor(cursor);
+  }
+
+  automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
+    if (grab) {
+      grab->Release();
+    }
+    grab.reset(new Win32PointerGrab(*this, grabber, win32_window));
+    return *grab;
+  }
+};
+
+void SetCursorTimer(HWND hwnd, UINT unnamedParam2, UINT_PTR unnamedParam3, DWORD unnamedParam4) {
+  SendMessageA(hwnd, WM_SETCURSOR, 0, HTCLIENT);
+}
+
 // Low-level mouse hook procedure
 static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
   if (nCode >= 0) {
     MSLLHOOKSTRUCT* mouse_struct = (MSLLHOOKSTRUCT*)lParam;
-
-    // Convert screen coordinates to window coordinates
-    POINT screen_point = {mouse_struct->pt.x, mouse_struct->pt.y};
-
     // Handle different mouse messages
     switch (wParam) {
       case WM_MOUSEMOVE: {
-        SetCursorPos(screen_point.x, screen_point.y);
+        SetCursorPos(mouse_struct->pt.x, mouse_struct->pt.y);
         for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
           auto* grab = active_pointer_grabs[i];
           auto& window = grab->win32_window;
           auto lock = window.Lock();
-          window.mouse_position.x = screen_point.x;
-          window.mouse_position.y = screen_point.y;
+          window.mouse_position.x = mouse_struct->pt.x;
+          window.mouse_position.y = mouse_struct->pt.y;
           grab->pointer.Move(window.ScreenToWindowPx(window.mouse_position));
+          if (i == 0) {
+            auto hwnd = grab->win32_window.hwnd;
+            // Change the cursor immediately
+            static_cast<Win32Pointer&>(grab->pointer).UpdateCursor(grab->pointer.Icon());
+            // First timer helps restoring the cursor when the OS changes the cursor back to arrow
+            // in the first 10ms
+            SetTimer(hwnd, 1, 10, SetCursorTimer);
+            // Sometimes the OS is late to change the cursor back to arrow, so we set a second timer
+            SetTimer(hwnd, 2, 50, SetCursorTimer);
+          }
         }
         break;
       }
@@ -145,64 +218,6 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
   // Call next hook
   return CallNextHookEx(global_mouse_hook, nCode, wParam, lParam);
 }
-
-struct Win32Pointer : automat::gui::Pointer {
-  Win32Window& win32_window;
-
-  Win32Pointer(automat::gui::RootWidget& root, Vec2 position, Win32Window& win32_window)
-      : automat::gui::Pointer(root, position), win32_window(win32_window) {}
-
-  void PushIcon(automat::gui::Pointer::IconType icon) override {
-    auto prev = Icon();
-    automat::gui::Pointer::PushIcon(icon);
-    auto curr = Icon();
-    if (prev != curr) {
-      UpdateCursor(curr);
-    }
-  }
-
-  void PopIcon() override {
-    auto prev = Icon();
-    automat::gui::Pointer::PopIcon();
-    auto curr = Icon();
-    if (prev != curr) {
-      UpdateCursor(curr);
-    }
-  }
-
-  void UpdateCursor(automat::gui::Pointer::IconType icon) {
-    HCURSOR cursor;
-    switch (icon) {
-      case automat::gui::Pointer::kIconArrow:
-        cursor = LoadCursor(nullptr, IDC_ARROW);
-        break;
-      case automat::gui::Pointer::kIconHand:
-        cursor = LoadCursor(nullptr, IDC_HAND);
-        break;
-      case automat::gui::Pointer::kIconIBeam:
-        cursor = LoadCursor(nullptr, IDC_IBEAM);
-        break;
-      case automat::gui::Pointer::kIconAllScroll:
-        cursor = LoadCursor(nullptr, IDC_SIZEALL);
-        break;
-      case automat::gui::Pointer::kIconResizeHorizontal:
-        cursor = LoadCursor(nullptr, IDC_SIZEWE);
-        break;
-      default:
-        cursor = LoadCursor(nullptr, IDC_ARROW);
-        break;
-    }
-    SetCursor(cursor);
-  }
-
-  automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
-    if (grab) {
-      grab->Release();
-    }
-    grab.reset(new Win32PointerGrab(*this, grabber, win32_window));
-    return *grab;
-  }
-};
 
 Win32Window::Win32Window(automat::gui::RootWidget& root) : automat::gui::Window(root) {}
 
@@ -279,24 +294,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         gui::Pointer::IconType icon;
         {
           auto lock = window.Lock();
-          icon = window.GetMouse().Icon();
-        }
-        switch (icon) {
-          case gui::Pointer::kIconArrow:
-            SetCursor(LoadCursor(nullptr, IDC_ARROW));
-            break;
-          case gui::Pointer::kIconHand:
-            SetCursor(LoadCursor(nullptr, IDC_HAND));
-            break;
-          case gui::Pointer::kIconIBeam:
-            SetCursor(LoadCursor(nullptr, IDC_IBEAM));
-            break;
-          case gui::Pointer::kIconAllScroll:
-            SetCursor(LoadCursor(nullptr, IDC_SIZEALL));
-            break;
-          case gui::Pointer::kIconResizeHorizontal:
-            SetCursor(LoadCursor(nullptr, IDC_SIZEWE));
-            break;
+          auto& mouse = static_cast<Win32Pointer&>(window.GetMouse());
+          icon = mouse.Icon();
+          mouse.UpdateCursor(icon);
         }
         return TRUE;
       }

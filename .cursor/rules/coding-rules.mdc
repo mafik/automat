@@ -1,5 +1,6 @@
 ---
 description: Coding standards, patterns, and best practices for Automat C++/Python development
+globs: 
 alwaysApply: true
 ---
 
@@ -11,6 +12,7 @@ All source files must start with SPDX license headers:
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 ```
+SPDX copyright year is the year file was first created
 
 ## Header Guards
 Use `#pragma once` instead of traditional header guards:
@@ -25,6 +27,11 @@ Use `#pragma once` instead of traditional header guards:
 - Based on Google C++ Style Guide
 - Pointer alignment to the left: `Type* variable`
 - Use clang-format for automatic formatting
+
+### OOP Style
+- Prefer `struct` over `class`
+- Don't hide private information behind `private:` or `protected:`
+- Don't prefix or suffix private members with `_`
 
 ### Naming Conventions
 - **Classes/Structs**: PascalCase (`Object`, `Widget`, `Machine`, `LiveObject`)
@@ -292,8 +299,8 @@ struct Win32Window : PlatformWindow {
 
 ### Memory Management
 - DON'T use raw pointers for ownership
-- DON'T manually delete objects managed by Ptr<>
 - DON'T store Ptr<> to self (use WeakPtr<> instead)
+- Only use Ptr<> if object can be accessed from multiple threads
 
 ### Object Lifecycle
 - DON'T access objects after they've been relocated

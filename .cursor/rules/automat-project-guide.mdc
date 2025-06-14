@@ -78,10 +78,6 @@ Automat is a C++/Python hybrid project designed to semi-autonomously play games 
 - Pointer alignment to the left (`Type* variable`)
 - Use `#pragma once` for header guards
 
-### Copyright
-- SPDX license headers required
-- SPDX copyright year is the year file was first created
-
 ### File Organization
 - Headers in `.hh` files
 - Implementation in `.cc` files

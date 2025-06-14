@@ -1,5 +1,6 @@
 ---
 description: Comprehensive architectural guide for the Automat project including core concepts, directory structure, and development patterns
+globs: 
 alwaysApply: true
 ---
 
@@ -9,34 +10,6 @@ alwaysApply: true
 Automat is a C++/Python hybrid project designed to semi-autonomously play games and provide a general environment for interacting with computers. Currently focused on keyboard macro recording & playback, but has ambitious goals for general computer interaction automation.
 
 ## Architecture
-
-### High-Level Structure
-```mermaid
-block-beta
-columns 4
-  block:Clients:4
-    XCB
-    Win32
-    HTML
-    MacOS
-  end
-  space:4
-  block:UI:2
-    Widgets
-  end
-  space
-  Skia
-  space:4
-  block:Logic:4
-    Objects
-  end
-  space:4
-  block:Base:4
-    libs["OS libraries"]
-    libpython
-    LLVM
-  end
-```
 
 ### Core Layers
 1. **Base Layer**: OS libraries, foreign entities, sophisticated libraries (GStreamer, GEGL, ffmpeg, LLVM, libpython)
@@ -104,7 +77,10 @@ columns 4
 - 100 character line limit
 - Pointer alignment to the left (`Type* variable`)
 - Use `#pragma once` for header guards
+
+### Copyright
 - SPDX license headers required
+- SPDX copyright year is the year file was first created
 
 ### File Organization
 - Headers in `.hh` files
@@ -244,17 +220,9 @@ void DeserializeState(Location& l, Deserializer& d) override;
 
 ## Development Workflow
 
-### Getting Started
-1. Clone repository
-2. Run `./run.py automat` (or `./run.bat automat` on Windows)
-3. Build system handles dependencies automatically
-4. Live development with `./run.py --live automat`
-
-### Common Commands
-- `./run.py automat` - Build and run
-- `./run.py --fresh automat` - Clean build
-- `./run.py --compile-commands automat` - Generate compile_commands.json
-- Dashboard available at http://localhost:PORT/ during development
+### Third party dependencies
+- Dependencies are defined as build system plugins, located in `src/*.py`
+- Build system handles dependencies automatically based on `InstallWhenIncluded` regexp
 
 ### Debugging
 - LSP support for code completion/navigation

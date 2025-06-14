@@ -286,13 +286,13 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds().sk); }
 
   animation::Phase Tick(time::Timer&) override {
-#ifdef __linux__
     tesseract_text.clear();
     auto window = LockWindow();
     auto lock = std::lock_guard(window->mutex);
     if (window_name != window->title) {
       window_name = window->title;
     }
+#ifdef __linux__
     if (window->xcb_window == XCB_WINDOW_NONE) {
       window->capture.reset();
       return animation::Finished;
@@ -303,16 +303,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
 
     window->capture->Capture(window->xcb_window);
-    tesseract_text = window->RunOCR();
-
-    return animation::Animating;
 #elif defined(_WIN32)
-    tesseract_text.clear();
-    auto window = LockWindow();
-    auto lock = std::lock_guard(window->mutex);
-    if (window_name != window->title) {
-      window_name = window->title;
-    }
     if (window->impl->hwnd == nullptr) {
       window->impl->capture.reset();
       return animation::Finished;
@@ -323,12 +314,9 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
 
     window->impl->capture->Capture(window->impl->hwnd);
-    tesseract_text = window->RunOCR();
-
-    return animation::Animating;
-#else
-    return animation::Finished;
 #endif
+    tesseract_text = window->RunOCR();
+    return animation::Animating;
   }
 
   struct LayoutData {

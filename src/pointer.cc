@@ -208,8 +208,28 @@ Pointer::IconType Pointer::Icon() const {
   }
   return icons.back();
 }
-void Pointer::PushIcon(IconType icon) { icons.push_back(icon); }
-void Pointer::PopIcon() { icons.pop_back(); }
+
+Pointer::IconOverride::IconOverride(Pointer& pointer, IconType icon) : pointer(pointer) {
+  IconType old_icon = pointer.Icon();
+  it = pointer.icons.insert(pointer.icons.end(), icon);
+  IconType new_icon = pointer.Icon();
+  if (old_icon != new_icon) {
+    pointer.OnIconChanged(old_icon, new_icon);
+  }
+}
+
+Pointer::IconOverride::~IconOverride() {
+  if (it == pointer.icons.end()) {
+    return;
+  }
+  IconType old_icon = pointer.Icon();
+  pointer.icons.erase(it);
+  IconType new_icon = pointer.Icon();
+  if (old_icon != new_icon) {
+    pointer.OnIconChanged(old_icon, new_icon);
+  }
+}
+
 Vec2 Pointer::PositionWithin(const Widget& widget) const {
   SkMatrix transform_down = TransformDown(widget);
   return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));

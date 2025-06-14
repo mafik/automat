@@ -2929,9 +2929,12 @@ struct EnumKnobWidget : gui::Widget {
   struct ChangeEnumKnobAction : public Action {
     WeakPtr<EnumKnobWidget> widget_weak;
     time::SteadyPoint start_time;
+    gui::Pointer::IconOverride scroll_icon;
 
     ChangeEnumKnobAction(gui::Pointer& pointer, WeakPtr<EnumKnobWidget> widget_weak)
-        : Action(pointer), widget_weak(widget_weak) {
+        : Action(pointer),
+          widget_weak(widget_weak),
+          scroll_icon(pointer, gui::Pointer::kIconAllScroll) {
       auto widget = widget_weak.Lock();
       if (widget) {
         widget->is_dragging = true;
@@ -2947,7 +2950,6 @@ struct EnumKnobWidget : gui::Widget {
         start_time = time::SteadyNow();
         widget->WakeAnimation();
       }
-      pointer.PushIcon(gui::Pointer::kIconAllScroll);
     }
     void Update() override {
       auto widget = widget_weak.Lock();
@@ -2974,7 +2976,6 @@ struct EnumKnobWidget : gui::Widget {
       }
       widget->is_dragging = false;
       widget->WakeAnimation();
-      pointer.PopIcon();
     }
   };
 

@@ -25,13 +25,13 @@ namespace automat::gui {
 
 void Clickable::PointerOver(Pointer& pointer) {
   pointers_over++;
-  pointer.PushIcon(Pointer::kIconHand);
+  hand_icon.emplace(pointer, Pointer::kIconHand);
   WakeAnimation();
 }
 
 void Clickable::PointerLeave(Pointer& pointer) {
   pointers_over--;
-  pointer.PopIcon();
+  hand_icon.reset();  // Reset Optional to release icon
   WakeAnimation();
 }
 

@@ -23,6 +23,7 @@ struct Clickable : Widget {
   int pointers_over = 0;
   int pointers_pressing = 0;
   float highlight = 0;
+  Optional<Pointer::IconOverride> hand_icon;
 
   Clickable(Ptr<Widget> child) : child(child) {}
 

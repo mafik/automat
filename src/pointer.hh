@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <vector>
+#include <list>
 
 #include "action.hh"
 #include "math.hh"
@@ -79,9 +79,22 @@ struct Pointer {
     kIconCrosshair,
   };
 
+  // RAII wrapper for icon lifetime management
+  struct IconOverride {
+    IconOverride(Pointer&, IconType);
+    ~IconOverride();
+
+    // Non-copyable and non-movable
+    IconOverride(const IconOverride&) = delete;
+    IconOverride(IconOverride&&) = delete;
+    IconOverride& operator=(const IconOverride&) = delete;
+    IconOverride& operator=(IconOverride&&) = delete;
+
+    Pointer& pointer;
+    std::list<IconType>::iterator it;
+  };
+
   IconType Icon() const;
-  virtual void PushIcon(IconType);
-  virtual void PopIcon();
 
   void UpdatePath();
 
@@ -106,7 +119,7 @@ struct Pointer {
   Keyboard* keyboard;
 
   Vec2 pointer_position;
-  std::vector<Pointer::IconType> icons;
+  std::list<Pointer::IconType> icons;
 
   Vec2 button_down_position[static_cast<int>(PointerButton::Count)];
   time::SystemPoint button_down_time[static_cast<int>(PointerButton::Count)];
@@ -119,6 +132,9 @@ struct Pointer {
   Vec<WeakPtr<Widget>> path;
 
   Ptr<PointerWidget> pointer_widget;
+
+  // Called when icon state changes (for platform-specific cursor updates)
+  virtual void OnIconChanged(IconType old_icon, IconType new_icon) {}
 };
 
 struct PointerWidget : Widget {

@@ -4,6 +4,7 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "pointer.hh"
 #include "vec.hh"
 
 namespace automat::gui {
@@ -15,6 +16,7 @@ struct PrototypeButton : Widget {
   Ptr<Widget> proto_widget;
   float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
+  Optional<Pointer::IconOverride> hand_icon;
 
   PrototypeButton(Ptr<Object>& proto) : proto(proto) {}
 
@@ -31,9 +33,9 @@ struct PrototypeButton : Widget {
 
   void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(proto_widget); }
 
-  void PointerOver(Pointer& pointer) override { pointer.PushIcon(Pointer::kIconHand); }
+  void PointerOver(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }
 
-  void PointerLeave(Pointer& pointer) override { pointer.PopIcon(); }
+  void PointerLeave(Pointer& pointer) override { hand_icon.reset(); }
 
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 

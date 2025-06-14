@@ -19,12 +19,12 @@
 namespace automat::gui {
 
 void TextFieldBase::PointerOver(Pointer& pointer) {
-  pointer.PushIcon(Pointer::kIconIBeam);
+  ibeam_icon.emplace(pointer, Pointer::kIconIBeam);
   WakeAnimation();
 }
 
 void TextFieldBase::PointerLeave(Pointer& pointer) {
-  pointer.PopIcon();
+  ibeam_icon.reset();  // Reset Optional to release icon
   WakeAnimation();
 }
 

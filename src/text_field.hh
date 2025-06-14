@@ -6,6 +6,7 @@
 
 #include "gui_constants.hh"
 #include "keyboard.hh"
+#include "pointer.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -29,6 +30,7 @@ using TextVisitor = std::function<bool(std::string&)>;
 struct TextFieldBase : Widget, CaretOwner {
   std::unordered_map<Caret*, CaretPosition> caret_positions;
   std::optional<Argument*> argument;
+  Optional<Pointer::IconOverride> ibeam_icon;
 
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;

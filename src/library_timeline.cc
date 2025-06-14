@@ -962,17 +962,17 @@ SkPath WindowShape(int num_tracks) {
 }
 
 SpliceAction::SpliceAction(gui::Pointer& pointer, Timeline& timeline)
-    : Action(pointer), timeline(timeline) {
+    : Action(pointer),
+      timeline(timeline),
+      resize_icon(pointer, gui::Pointer::kIconResizeHorizontal) {
   assert(timeline.splice_action == nullptr);
   timeline.splice_action = this;
-  pointer.PushIcon(gui::Pointer::kIconResizeHorizontal);
   splice_to = CurrentOffset(timeline, time::SteadyNow());
   timeline.splice_wiggle.velocity -= 0.1;
   timeline.WakeAnimation();
 }
 SpliceAction::~SpliceAction() {
   auto now = time::SteadyNow();
-  pointer.PopIcon();
   timeline.splice_action = nullptr;
   auto current_offset = CurrentOffset(timeline, now);
 

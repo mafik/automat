@@ -349,22 +349,10 @@ struct XCBPointer : automat::gui::Pointer {
 
   XCBPointer(automat::gui::RootWidget& root, Vec2 position, XCBWindow& xcb_window)
       : automat::gui::Pointer(root, position), xcb_window(xcb_window) {}
-  void PushIcon(automat::gui::Pointer::IconType icon) override {
-    auto prev = Icon();
-    automat::gui::Pointer::PushIcon(icon);
-    auto curr = Icon();
-    if (prev != curr) {
-      UpdateCursor(curr);
-    }
-  }
 
-  void PopIcon() override {
-    auto prev = Icon();
-    automat::gui::Pointer::PopIcon();
-    auto curr = Icon();
-    if (prev != curr) {
-      UpdateCursor(curr);
-    }
+  void OnIconChanged(automat::gui::Pointer::IconType old_icon,
+                     automat::gui::Pointer::IconType new_icon) override {
+    UpdateCursor(new_icon);
   }
 
   void UpdateCursor(automat::gui::Pointer::IconType icon) {

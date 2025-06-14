@@ -9,6 +9,7 @@
 #include "base.hh"
 #include "gui_button.hh"
 #include "on_off.hh"
+#include "pointer.hh"
 #include "run_button.hh"
 #include "time.hh"
 #include "timer_thread.hh"
@@ -88,6 +89,7 @@ struct SpliceAction : Action {
   time::T splice_to;
   bool snapped = false;
   bool cancel = true;
+  gui::Pointer::IconOverride resize_icon;
   SpliceAction(gui::Pointer& pointer, Timeline& timeline);
   ~SpliceAction();
   void Update() override;

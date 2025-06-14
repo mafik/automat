@@ -8,6 +8,7 @@
 #include "hid.hh"
 #include "key.hh"
 #include "log.hh"
+#include "optional.hh"
 #include "root_widget.hh"
 #include "status.hh"
 #include "touchpad.hh"
@@ -33,6 +34,7 @@ static std::vector<Win32PointerGrab*> active_pointer_grabs;
 
 struct Win32PointerGrab : automat::gui::PointerGrab {
   Win32Window& win32_window;
+  Optional<automat::gui::Pointer::IconOverride> crosshair_icon;
 
   Win32PointerGrab(automat::gui::Pointer& pointer, automat::gui::PointerGrabber& grabber,
                    Win32Window& win32_window)
@@ -44,7 +46,7 @@ struct Win32PointerGrab : automat::gui::PointerGrab {
         ERROR << "Failed to install global mouse hook: " << GetLastError();
         return;
       }
-      pointer.PushIcon(gui::Pointer::kIconCrosshair);
+      crosshair_icon.emplace(pointer, gui::Pointer::kIconCrosshair);
     }
 
     if (global_mouse_hook) {
@@ -60,7 +62,7 @@ struct Win32PointerGrab : automat::gui::PointerGrab {
     if (active_pointer_grabs.size() == 0 && global_mouse_hook) {
       UnhookWindowsHookEx(global_mouse_hook);
       global_mouse_hook = nullptr;
-      pointer.PopIcon();
+      crosshair_icon.reset();
     }
     automat::gui::PointerGrab::Release();  // deletes this
   }
@@ -72,22 +74,9 @@ struct Win32Pointer : automat::gui::Pointer {
   Win32Pointer(automat::gui::RootWidget& root, Vec2 position, Win32Window& win32_window)
       : automat::gui::Pointer(root, position), win32_window(win32_window) {}
 
-  void PushIcon(automat::gui::Pointer::IconType icon) override {
-    auto prev = Icon();
-    automat::gui::Pointer::PushIcon(icon);
-    auto curr = Icon();
-    if (prev != curr) {
-      UpdateCursor(curr);
-    }
-  }
-
-  void PopIcon() override {
-    auto prev = Icon();
-    automat::gui::Pointer::PopIcon();
-    auto curr = Icon();
-    if (prev != curr) {
-      UpdateCursor(curr);
-    }
+  void OnIconChanged(automat::gui::Pointer::IconType old_icon,
+                     automat::gui::Pointer::IconType new_icon) override {
+    UpdateCursor(new_icon);
   }
 
   void UpdateCursor(automat::gui::Pointer::IconType icon) {

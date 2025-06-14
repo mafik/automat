@@ -18,6 +18,7 @@ namespace automat::library {
 struct Window : public Object, Runnable {
   std::mutex mutex;
   Str title = "";
+  Str ocr_text = "";
 
 #ifdef __linux__
   xcb_window_t xcb_window = XCB_WINDOW_NONE;

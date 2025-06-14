@@ -19,6 +19,7 @@
 #include "root_widget.hh"
 #include "str.hh"
 #include "svg.hh"
+#include "textures.hh"
 #include "theme_xp.hh"
 
 #ifdef __linux__
@@ -28,7 +29,6 @@
 #include <ranges>
 
 #include "control_flow.hh"
-#include "textures.hh"
 #include "xcb.hh"
 #endif
 
@@ -247,6 +247,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   std::string window_name;
 
   std::string tesseract_text;
+  sk_sp<SkImage> captured_image;  // Local copy of the captured bitmap
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
@@ -287,36 +288,33 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   animation::Phase Tick(time::Timer&) override {
     tesseract_text.clear();
+    captured_image.reset();  // Clear previous image
     auto window = LockWindow();
     auto lock = std::lock_guard(window->mutex);
     if (window_name != window->title) {
       window_name = window->title;
     }
 #ifdef __linux__
-    if (window->xcb_window == XCB_WINDOW_NONE) {
-      window->capture.reset();
-      return animation::Finished;
+    // Create local copy of the captured image
+    if (window->capture.has_value() && window->capture->width > 0 && window->capture->height > 0) {
+      auto& capture = *window->capture;
+      auto image_info = SkImageInfo::Make(capture.width, capture.height, kBGRA_8888_SkColorType,
+                                          SkAlphaType::kPremul_SkAlphaType);
+      SkPixmap pixmap(image_info, capture.data.data(), capture.width * 4);
+      captured_image = SkImages::RasterFromPixmapCopy(pixmap);
     }
-
-    if (!window->capture.has_value()) {
-      window->capture.emplace();
-    }
-
-    window->capture->Capture(window->xcb_window);
 #elif defined(_WIN32)
-    if (window->impl->hwnd == nullptr) {
-      window->impl->capture.reset();
-      return animation::Finished;
+    // Create local copy of the captured image
+    if (window->impl->capture.has_value() && window->impl->capture->width > 0 &&
+        window->impl->capture->height > 0) {
+      auto& capture = *window->impl->capture;
+      auto image_info = SkImageInfo::Make(capture.width, capture.height, kRGBA_8888_SkColorType,
+                                          SkAlphaType::kPremul_SkAlphaType);
+      SkPixmap pixmap(image_info, capture.data.data(), capture.width * 4);
+      captured_image = SkImages::RasterFromPixmapCopy(pixmap);
     }
-
-    if (!window->impl->capture.has_value()) {
-      window->impl->capture.emplace();
-    }
-
-    window->impl->capture->Capture(window->impl->hwnd);
 #endif
-    tesseract_text = window->RunOCR();
-    return animation::Animating;
+    return animation::Finished;
   }
 
   struct LayoutData {
@@ -333,36 +331,19 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
                         kCoarseBounds.rect.right, kCoarseBounds.rect.top);
     l.contents_rrect = kBorderInner;
     l.contents_rrect.rect.top = l.title_rect.bottom;
-    if (auto window = LockWindow()) {
-#ifdef __linux__
-      if (window->capture.has_value() &&
-          (window->capture->height > 0 || window->capture->width > 0)) {
-        SkRect image_rect = SkRect::Make(SkISize{window->capture->width, window->capture->height});
-        l.image_matrix =
-            SkMatrix::RectToRect(image_rect, l.contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
-        l.image_matrix.preTranslate(0, window->capture->height / 2.f);
-        l.image_matrix.preScale(1, -1);
-        l.image_matrix.preTranslate(0, -window->capture->height / 2.f);
-        l.full_region_rect = image_rect;
-        l.image_matrix.mapRect(&l.full_region_rect.sk);
-      } else {
-        l.full_region_rect = l.contents_rrect.rect;
-      }
-#elif defined(_WIN32)
-      if (window->impl->capture.has_value() &&
-          (window->impl->capture->height > 0 || window->impl->capture->width > 0)) {
-        SkRect image_rect =
-            SkRect::Make(SkISize{window->impl->capture->width, window->impl->capture->height});
-        l.image_matrix =
-            SkMatrix::RectToRect(image_rect, l.contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
-        l.full_region_rect = image_rect;
-        l.image_matrix.mapRect(&l.full_region_rect.sk);
-      } else {
-        l.full_region_rect = l.contents_rrect.rect;
-      }
-#else
+    if (captured_image) {
+      SkRect image_rect = SkRect::Make(captured_image->dimensions());
+      l.image_matrix =
+          SkMatrix::RectToRect(image_rect, l.contents_rrect.rect, SkMatrix::kCenter_ScaleToFit);
+      l.image_matrix.preTranslate(0, captured_image->height() / 2.f);
+      l.image_matrix.preScale(1, -1);
+      l.image_matrix.preTranslate(0, -captured_image->height() / 2.f);
+      l.full_region_rect = image_rect;
+      l.image_matrix.mapRect(&l.full_region_rect.sk);
+    } else {
       l.full_region_rect = l.contents_rrect.rect;
-#endif
+    }
+    if (auto window = LockWindow()) {
       l.region_rect =
           Rect(lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_min_ratio),
                lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_min_ratio),
@@ -390,39 +371,13 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     font.DrawText(canvas, window_name, title_text_paint);
     canvas.restore();
 
-#ifdef __linux__
-    if (auto window = LockWindow()) {
-      if (window->capture.has_value()) {
-        auto& capture = *window->capture;
-        auto image_info =
-            SkImageInfo::Make(window->capture->width, window->capture->height,
-                              kBGRA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
-        SkPixmap pixmap(image_info, capture.data.data(), window->capture->width * 4);
-        auto image = SkImages::RasterFromPixmap(
-            pixmap, [](const void* pixels, SkImages::ReleaseContext){}, nullptr);
-        canvas.save();
-        canvas.concat(layout.image_matrix);
-        canvas.drawImage(image, 0, 0, kFastSamplingOptions, nullptr);
-        canvas.restore();
-      }
+    // Draw the locally cached image
+    if (captured_image) {
+      canvas.save();
+      canvas.concat(layout.image_matrix);
+      canvas.drawImage(captured_image, 0, 0, kFastSamplingOptions, nullptr);
+      canvas.restore();
     }
-#elif defined(_WIN32)
-    if (auto window = LockWindow()) {
-      if (window->impl->capture.has_value()) {
-        auto& capture = *window->impl->capture;
-        auto image_info =
-            SkImageInfo::Make(window->impl->capture->width, window->impl->capture->height,
-                              kRGBA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
-        SkPixmap pixmap(image_info, capture.data.data(), window->impl->capture->width * 4);
-        auto image = SkImages::RasterFromPixmap(
-            pixmap, [](const void* pixels, SkImages::ReleaseContext){}, nullptr);
-        canvas.save();
-        canvas.concat(layout.image_matrix);
-        canvas.drawImage(image, 0, 0, SkSamplingOptions(), nullptr);
-        canvas.restore();
-      }
-    }
-#endif
 
     SkPaint region_paint;
     region_paint.setColor("#ff0000"_color);
@@ -698,10 +653,6 @@ void Window::Args(std::function<void(Argument&)> cb) {
 
 void Window::OnRun(Location& here) {
   auto out = text_arg.FindObject(here, {});
-  if (!out) {
-    here.ReportError("Needs to be connected to a text output");
-    return;
-  }
   auto lock = std::lock_guard(mutex);
 #ifdef __linux__
   if (xcb_window == XCB_WINDOW_NONE) {
@@ -722,8 +673,11 @@ void Window::OnRun(Location& here) {
   }
   impl->capture->Capture(impl->hwnd);
 #endif
-  std::string utf8_text = RunOCR();
-  out->SetText(here, utf8_text);
+  ocr_text = RunOCR();
+  if (out) {
+    out->SetText(here, ocr_text);
+  }
+  WakeWidgetsAnimation();
 }
 
 #ifdef __linux__

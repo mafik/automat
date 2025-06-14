@@ -426,6 +426,16 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       window.GetMouse().ButtonUp(gui::PointerButton::Middle);
       break;
     }
+    case WM_RBUTTONDOWN: {
+      auto lock = window.Lock();
+      window.GetMouse().ButtonDown(gui::PointerButton::Right);
+      break;
+    }
+    case WM_RBUTTONUP: {
+      auto lock = window.Lock();
+      window.GetMouse().ButtonUp(gui::PointerButton::Right);
+      break;
+    }
     case WM_MOUSEMOVE: {
       auto lock = window.Lock();
       int16_t x = lParam & 0xFFFF;

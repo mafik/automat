@@ -79,6 +79,46 @@ namespace automat::library {
 
 constexpr bool kDebugWindowPicking = false;
 
+struct EnableContinuousRunOption : Option {
+  WeakPtr<Window> weak;
+
+  EnableContinuousRunOption(WeakPtr<Window> weak) : Option("Enable"), weak(weak) {}
+
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<EnableContinuousRunOption>(weak);
+  }
+
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    if (auto window = weak.lock()) {
+      auto lock = std::lock_guard(window->mutex);
+      window->run_continuously = true;
+      // Start continuous execution
+      if (auto here_ptr = window->here.lock()) {
+        here_ptr->ScheduleRun();
+      }
+    }
+    return nullptr;
+  }
+};
+
+struct DisableContinuousRunOption : Option {
+  WeakPtr<Window> weak;
+
+  DisableContinuousRunOption(WeakPtr<Window> weak) : Option("Disable"), weak(weak) {}
+
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<DisableContinuousRunOption>(weak);
+  }
+
+  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+    if (auto window = weak.lock()) {
+      auto lock = std::lock_guard(window->mutex);
+      window->run_continuously = false;
+    }
+    return nullptr;
+  }
+};
+
 Window::Window() {
   auto eng_traineddata = embedded::assets_eng_traineddata.content;
   if (tesseract.Init(eng_traineddata.data(), eng_traineddata.size(), "eng",
@@ -110,6 +150,7 @@ struct Window::Impl {
 
 Ptr<Object> Window::Clone() const {
   auto ret = MakePtr<Window>();
+  ret->run_continuously = run_continuously;
   ret->x_min_ratio = x_min_ratio;
   ret->x_max_ratio = x_max_ratio;
   ret->y_min_ratio = y_min_ratio;
@@ -642,6 +683,20 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
     return FallbackWidget::ArgStart(arg);
   }
+
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    FallbackWidget::VisitOptions(visitor);
+    if (auto window = LockWindow()) {
+      auto lock = std::lock_guard(window->mutex);
+      if (window->run_continuously) {
+        DisableContinuousRunOption disable{window};
+        visitor(disable);
+      } else {
+        EnableContinuousRunOption enable{window};
+        visitor(enable);
+      }
+    }
+  }
 };
 
 Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(AcquireWeakPtr<Object>()); }
@@ -678,6 +733,11 @@ void Window::OnRun(Location& here) {
     out->SetText(here, ocr_text);
   }
   WakeWidgetsAnimation();
+
+  // Re-schedule execution if continuous run is enabled
+  if (run_continuously) {
+    here.ScheduleRun();
+  }
 }
 
 #ifdef __linux__
@@ -834,6 +894,13 @@ void Window::Impl::Win32Capture::Capture(HWND hwnd) {
 }
 #endif
 
+void Window::Relocate(Location* new_here) {
+  LiveObject::Relocate(new_here);
+  if (run_continuously && new_here) {
+    new_here->ScheduleRun();
+  }
+}
+
 void Window::AttachToTitle() {
 #ifdef __linux__
   SearchWindows(xcb::screen->root, [&](xcb_window_t window, xcb_window_t parent) {
@@ -865,6 +932,8 @@ void Window::SerializeState(Serializer& writer, const char* key) const {
 
   writer.Key("title");
   writer.String(title.data(), title.size());
+  writer.Key("run_continuously");
+  writer.Bool(run_continuously);
   writer.Key("x_min_ratio");
   writer.Double(x_min_ratio);
   writer.Key("x_max_ratio");
@@ -882,6 +951,8 @@ void Window::DeserializeState(Location& l, Deserializer& d) {
   for (auto key : ObjectView(d, status)) {
     if (key == "title") {
       d.Get(title, status);
+    } else if (key == "run_continuously") {
+      d.Get(run_continuously, status);
     } else if (key == "x_min_ratio") {
       d.Get(x_min_ratio, status);
     } else if (key == "x_max_ratio") {

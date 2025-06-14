@@ -15,10 +15,11 @@
 
 namespace automat::library {
 
-struct Window : public Object, Runnable {
+struct Window : public LiveObject, Runnable {
   std::mutex mutex;
   Str title = "";
   Str ocr_text = "";
+  bool run_continuously = true;
 
 #ifdef __linux__
   xcb_window_t xcb_window = XCB_WINDOW_NONE;
@@ -67,6 +68,8 @@ struct Window : public Object, Runnable {
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.
   void AttachToTitle();
+
+  void Relocate(Location* new_here) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

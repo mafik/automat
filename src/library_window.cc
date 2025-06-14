@@ -691,8 +691,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       window->impl->hwnd = found_window;
       window->title = window_name;
     }
-#else
-    grab.Release();
 #endif
   }
   Vec2AndDir ArgStart(const Argument& arg) override {

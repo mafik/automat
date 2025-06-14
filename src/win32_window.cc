@@ -54,7 +54,7 @@ struct Win32PointerGrab : automat::gui::PointerGrab {
     }
   }
 
-  void Release() override {
+  ~Win32PointerGrab() {
     if (auto it = std::find(active_pointer_grabs.begin(), active_pointer_grabs.end(), this);
         it != active_pointer_grabs.end()) {
       active_pointer_grabs.erase(it);
@@ -64,7 +64,6 @@ struct Win32PointerGrab : automat::gui::PointerGrab {
       global_mouse_hook = nullptr;
       crosshair_icon.reset();
     }
-    automat::gui::PointerGrab::Release();  // deletes this
   }
 };
 
@@ -108,16 +107,14 @@ struct Win32Pointer : automat::gui::Pointer {
   }
 
   automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
-    if (grab) {
-      grab->Release();
-    }
     grab.reset(new Win32PointerGrab(*this, grabber, win32_window));
     return *grab;
   }
 };
 
-void SetCursorTimer(HWND hwnd, UINT unnamedParam2, UINT_PTR unnamedParam3, DWORD unnamedParam4) {
+void SetCursorTimer(HWND hwnd, UINT message_wm_timer, UINT_PTR timer_id, DWORD time) {
   SendMessageA(hwnd, WM_SETCURSOR, 0, HTCLIENT);
+  KillTimer(hwnd, timer_id);
 }
 
 // Low-level mouse hook procedure

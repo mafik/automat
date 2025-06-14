@@ -269,15 +269,11 @@ void Pointer::ReplaceAction(Action& old_action, std::unique_ptr<Action>&& new_ac
   }
 }
 
-void PointerGrab::Release() {
-  grabber.ReleaseGrab(*this);
-  pointer.grab.reset();  // PointerGrab deletes itself here!
-}
+PointerGrab::~PointerGrab() { grabber.ReleaseGrab(*this); }
+
+void PointerGrab::Release() { pointer.grab.reset(); }
 
 PointerGrab& Pointer::RequestGlobalGrab(PointerGrabber& grabber) {
-  if (grab) {
-    grab->Release();
-  }
   grab.reset(new PointerGrab(*this, grabber));
   return *grab;
 }

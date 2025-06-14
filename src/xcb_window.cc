@@ -314,14 +314,13 @@ struct XCBPointerGrab : automat::gui::PointerGrab {
       xcb_free_cursor(connection, cursor);
     }
   }
-  void Release() override {
+  ~XCBPointerGrab() {
     xcb_void_cookie_t cookie = xcb_input_xi_ungrab_device(connection, XCB_CURRENT_TIME,
                                                           xcb_window.master_pointer_device_id);
     if (std::unique_ptr<xcb_generic_error_t, FreeDeleter> error{
             xcb_request_check(connection, cookie)}) {
       ERROR << "Failed to ungrab the pointer";
     }
-    automat::gui::PointerGrab::Release();  // deletes this
   }
 };
 
@@ -367,9 +366,6 @@ struct XCBPointer : automat::gui::Pointer {
   }
 
   automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
-    if (grab) {
-      grab->Release();
-    }
     grab.reset(new XCBPointerGrab(*this, grabber, xcb_window));
     return *grab;
   }

@@ -51,11 +51,10 @@ struct PointerGrab {
   Pointer& pointer;
   PointerGrabber& grabber;
   PointerGrab(Pointer& pointer, PointerGrabber& grabber) : pointer(pointer), grabber(grabber) {}
-  virtual ~PointerGrab() = default;
+  virtual ~PointerGrab();
 
   // This will also call `ReleaseGrab` of its PointerGrabber.
-  // This means that the pointers in the PointerGrabber will be invalid (nullptr) after this call!
-  virtual void Release();
+  void Release();
 };
 
 struct PointerWidget;

@@ -134,36 +134,32 @@ struct Window::Impl {
 #ifdef __linux__
   xcb_window_t xcb_window = XCB_WINDOW_NONE;
 
-  struct XSHMCapture {
-    xcb_shm_seg_t shmseg = -1;
-    int shmid = -1;
-    std::span<char> data;
-    int width = 0;
-    int height = 0;
+  // XSHMCapture members inlined
+  xcb_shm_seg_t shmseg = -1;
+  int shmid = -1;
+  std::span<char> data;
+  int width = 0;
+  int height = 0;
+  bool capture_initialized = false;
 
-    XSHMCapture();
-    ~XSHMCapture();
-    void Capture(xcb_window_t xcb_window);
-  };
-
-  std::optional<XSHMCapture> capture;
+  void InitializeCapture();
+  void CleanupCapture();
+  void Capture(xcb_window_t xcb_window);
 #endif
 
 #ifdef _WIN32
   HWND hwnd = nullptr;
 
-  struct Win32Capture {
-    std::vector<char> data;
-    int width = 0;
-    int height = 0;
+  // Win32Capture members inlined
+  std::vector<char> data;
+  int width = 0;
+  int height = 0;
 
-    Win32Capture() = default;
-    ~Win32Capture() = default;
-    void Capture(HWND hwnd);
-  };
-
-  std::optional<Win32Capture> capture;
+  void Capture(HWND hwnd);
 #endif
+
+  Impl();
+  ~Impl();
 };
 
 Ptr<Object> Window::Clone() const {
@@ -225,23 +221,22 @@ TextArgument text_arg;
 
 std::string Window::RunOCR() {
 #ifdef __linux__
-  if (!impl->capture.has_value()) return "";
-  if (impl->capture->width == 0 || impl->capture->height == 0) return "";
+  if (impl->width == 0 || impl->height == 0) return "";
   std::string utf8_text = "";
-  auto pix = pixCreate(impl->capture->width, impl->capture->height, 32);
+  auto pix = pixCreate(impl->width, impl->height, 32);
   uint32_t* pix_data = pixGetData(pix);
-  int n = impl->capture->width * impl->capture->height;
-  auto data = impl->capture->data;
+  int n = impl->width * impl->height;
+  auto data = impl->data;
   for (int i = 0; i < n; ++i) {
     pix_data[i] =
         (data[i * 4] << 8) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 24) | (data[i * 4 + 3]);
   }
 
   int ocr_left = 0, ocr_top = 0, ocr_width = 0, ocr_height = 0;
-  ocr_left = x_min_ratio * impl->capture->width;
-  ocr_top = (1 - y_max_ratio) * impl->capture->height;
-  ocr_width = impl->capture->width * (x_max_ratio - x_min_ratio);
-  ocr_height = impl->capture->height * (y_max_ratio - y_min_ratio);
+  ocr_left = x_min_ratio * impl->width;
+  ocr_top = (1 - y_max_ratio) * impl->height;
+  ocr_width = impl->width * (x_max_ratio - x_min_ratio);
+  ocr_height = impl->height * (y_max_ratio - y_min_ratio);
 
   if (ocr_width > 0 && ocr_height > 0) {
     tesseract.SetImage(pix);
@@ -354,22 +349,18 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
 #ifdef __linux__
     // Create local copy of the captured image
-    if (window->impl->capture.has_value() && window->impl->capture->width > 0 &&
-        window->impl->capture->height > 0) {
-      auto& capture = *window->impl->capture;
-      auto image_info = SkImageInfo::Make(capture.width, capture.height, kBGRA_8888_SkColorType,
-                                          SkAlphaType::kPremul_SkAlphaType);
-      SkPixmap pixmap(image_info, capture.data.data(), capture.width * 4);
+    if (window->impl->width > 0 && window->impl->height > 0) {
+      auto image_info = SkImageInfo::Make(window->impl->width, window->impl->height,
+                                          kBGRA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
+      SkPixmap pixmap(image_info, window->impl->data.data(), window->impl->width * 4);
       captured_image = SkImages::RasterFromPixmapCopy(pixmap);
     }
 #elif defined(_WIN32)
     // Create local copy of the captured image
-    if (window->impl->capture.has_value() && window->impl->capture->width > 0 &&
-        window->impl->capture->height > 0) {
-      auto& capture = *window->impl->capture;
-      auto image_info = SkImageInfo::Make(capture.width, capture.height, kRGBA_8888_SkColorType,
-                                          SkAlphaType::kPremul_SkAlphaType);
-      SkPixmap pixmap(image_info, capture.data.data(), capture.width * 4);
+    if (window->impl->width > 0 && window->impl->height > 0) {
+      auto image_info = SkImageInfo::Make(window->impl->width, window->impl->height,
+                                          kRGBA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
+      SkPixmap pixmap(image_info, window->impl->data.data(), window->impl->width * 4);
       captured_image = SkImages::RasterFromPixmapCopy(pixmap);
     }
 #endif
@@ -732,19 +723,16 @@ void Window::OnRun(Location& here) {
     here.ReportError("No window selected");
     return;
   }
-  if (!impl->capture.has_value()) {
-    impl->capture.emplace();
+  if (!impl->capture_initialized) {
+    impl->InitializeCapture();
   }
-  impl->capture->Capture(impl->xcb_window);
+  impl->Capture(impl->xcb_window);
 #elif defined(_WIN32)
   if (impl->hwnd == nullptr) {
     here.ReportError("No window selected");
     return;
   }
-  if (!impl->capture.has_value()) {
-    impl->capture.emplace();
-  }
-  impl->capture->Capture(impl->hwnd);
+  impl->Capture(impl->hwnd);
 #endif
   ocr_text = RunOCR();
   if (out) {
@@ -758,8 +746,22 @@ void Window::OnRun(Location& here) {
   }
 }
 
+Window::Impl::Impl() {
 #ifdef __linux__
-Window::Impl::XSHMCapture::XSHMCapture() {
+  // Initialize capture variables but don't allocate until needed
+#endif
+}
+
+Window::Impl::~Impl() {
+#ifdef __linux__
+  CleanupCapture();
+#endif
+}
+
+#ifdef __linux__
+void Window::Impl::InitializeCapture() {
+  if (capture_initialized) return;
+
   shmseg = xcb_generate_id(xcb::connection);
   int w = xcb::screen->width_in_pixels;
   int h = xcb::screen->height_in_pixels;
@@ -768,9 +770,12 @@ Window::Impl::XSHMCapture::XSHMCapture() {
 
   xcb_shm_attach(xcb::connection, shmseg, shmid, false);
   data = std::span<char>(static_cast<char*>(shmat(shmid, nullptr, 0)), size);
+  capture_initialized = true;
 }
 
-Window::Impl::XSHMCapture::~XSHMCapture() {
+void Window::Impl::CleanupCapture() {
+  if (!capture_initialized) return;
+
   if (shmseg != -1) {
     xcb_shm_detach(xcb::connection, shmseg);
     shmseg = -1;
@@ -783,9 +788,10 @@ Window::Impl::XSHMCapture::~XSHMCapture() {
     shmctl(shmid, IPC_RMID, NULL);
     shmid = -1;
   }
+  capture_initialized = false;
 }
 
-void Window::Impl::XSHMCapture::Capture(xcb_window_t xcb_window) {
+void Window::Impl::Capture(xcb_window_t xcb_window) {
   auto geometry_reply = xcb::get_geometry(xcb_window);
   if (!geometry_reply) {
     return;
@@ -824,7 +830,7 @@ void Window::Impl::XSHMCapture::Capture(xcb_window_t xcb_window) {
 #endif
 
 #ifdef _WIN32
-void Window::Impl::Win32Capture::Capture(HWND hwnd) {
+void Window::Impl::Capture(HWND hwnd) {
   if (!hwnd || !IsWindow(hwnd)) {
     width = height = 0;
     data.clear();

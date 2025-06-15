@@ -140,10 +140,7 @@ struct Window::Impl {
   std::span<char> data;
   int width = 0;
   int height = 0;
-  bool capture_initialized = false;
 
-  void InitializeCapture();
-  void CleanupCapture();
   void Capture(xcb_window_t xcb_window);
 #endif
 
@@ -723,9 +720,6 @@ void Window::OnRun(Location& here) {
     here.ReportError("No window selected");
     return;
   }
-  if (!impl->capture_initialized) {
-    impl->InitializeCapture();
-  }
   impl->Capture(impl->xcb_window);
 #elif defined(_WIN32)
   if (impl->hwnd == nullptr) {
@@ -754,44 +748,34 @@ Window::Impl::Impl() {
 
 Window::Impl::~Impl() {
 #ifdef __linux__
-  CleanupCapture();
+  if (shmseg != -1) {  // Only cleanup if initialized
+    xcb_shm_detach(xcb::connection, shmseg);
+
+    if (data.data()) {
+      shmdt(data.data());
+    }
+    if (shmid != -1) {
+      shmctl(shmid, IPC_RMID, NULL);
+    }
+  }
 #endif
 }
 
 #ifdef __linux__
-void Window::Impl::InitializeCapture() {
-  if (capture_initialized) return;
-
-  shmseg = xcb_generate_id(xcb::connection);
-  int w = xcb::screen->width_in_pixels;
-  int h = xcb::screen->height_in_pixels;
-  int size = w * h * 4;
-  shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
-
-  xcb_shm_attach(xcb::connection, shmseg, shmid, false);
-  data = std::span<char>(static_cast<char*>(shmat(shmid, nullptr, 0)), size);
-  capture_initialized = true;
-}
-
-void Window::Impl::CleanupCapture() {
-  if (!capture_initialized) return;
-
-  if (shmseg != -1) {
-    xcb_shm_detach(xcb::connection, shmseg);
-    shmseg = -1;
-  }
-  if (data.data()) {
-    shmdt(data.data());
-    data = {};
-  }
-  if (shmid != -1) {
-    shmctl(shmid, IPC_RMID, NULL);
-    shmid = -1;
-  }
-  capture_initialized = false;
-}
-
 void Window::Impl::Capture(xcb_window_t xcb_window) {
+  // Initialize capture if not already done
+  if (data.empty()) {
+    if (shmseg == -1) {
+      shmseg = xcb_generate_id(xcb::connection);
+    }
+    int size = xcb::screen->width_in_pixels * xcb::screen->height_in_pixels * 4;
+    if (shmid == -1) {
+      shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
+      xcb_shm_attach(xcb::connection, shmseg, shmid, false);
+    }
+    data = std::span<char>(static_cast<char*>(shmat(shmid, nullptr, 0)), size);
+  }
+
   auto geometry_reply = xcb::get_geometry(xcb_window);
   if (!geometry_reply) {
     return;

@@ -125,14 +125,31 @@ Window::Window() {
                      tesseract::OEM_LSTM_ONLY, nullptr, 0, nullptr, nullptr, true, nullptr)) {
     LOG << "Tesseract init failed";
   }
-#ifdef _WIN32
   impl = std::make_unique<Impl>();
-#endif
 }
 
 std::string_view Window::Name() const { return "Window"; }
 
 struct Window::Impl {
+#ifdef __linux__
+  xcb_window_t xcb_window = XCB_WINDOW_NONE;
+
+  struct XSHMCapture {
+    xcb_shm_seg_t shmseg = -1;
+    int shmid = -1;
+    std::span<char> data;
+    int width = 0;
+    int height = 0;
+
+    XSHMCapture();
+    ~XSHMCapture();
+    void Capture(xcb_window_t xcb_window);
+  };
+
+  std::optional<XSHMCapture> capture;
+#endif
+
+#ifdef _WIN32
   HWND hwnd = nullptr;
 
   struct Win32Capture {
@@ -146,6 +163,7 @@ struct Window::Impl {
   };
 
   std::optional<Win32Capture> capture;
+#endif
 };
 
 Ptr<Object> Window::Clone() const {
@@ -156,10 +174,9 @@ Ptr<Object> Window::Clone() const {
   ret->y_min_ratio = y_min_ratio;
   ret->y_max_ratio = y_max_ratio;
 #ifdef __linux__
-  ret->xcb_window = xcb_window;
+  ret->impl->xcb_window = impl->xcb_window;
 #endif
 #ifdef _WIN32
-  ret->impl = std::make_unique<Impl>();
   ret->impl->hwnd = impl->hwnd;
 #endif
   return ret;
@@ -208,23 +225,23 @@ TextArgument text_arg;
 
 std::string Window::RunOCR() {
 #ifdef __linux__
-  if (!capture.has_value()) return "";
-  if (capture->width == 0 || capture->height == 0) return "";
+  if (!impl->capture.has_value()) return "";
+  if (impl->capture->width == 0 || impl->capture->height == 0) return "";
   std::string utf8_text = "";
-  auto pix = pixCreate(capture->width, capture->height, 32);
+  auto pix = pixCreate(impl->capture->width, impl->capture->height, 32);
   uint32_t* pix_data = pixGetData(pix);
-  int n = capture->width * capture->height;
-  auto data = capture->data;
+  int n = impl->capture->width * impl->capture->height;
+  auto data = impl->capture->data;
   for (int i = 0; i < n; ++i) {
     pix_data[i] =
         (data[i * 4] << 8) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 24) | (data[i * 4 + 3]);
   }
 
   int ocr_left = 0, ocr_top = 0, ocr_width = 0, ocr_height = 0;
-  ocr_left = x_min_ratio * capture->width;
-  ocr_top = (1 - y_max_ratio) * capture->height;
-  ocr_width = capture->width * (x_max_ratio - x_min_ratio);
-  ocr_height = capture->height * (y_max_ratio - y_min_ratio);
+  ocr_left = x_min_ratio * impl->capture->width;
+  ocr_top = (1 - y_max_ratio) * impl->capture->height;
+  ocr_width = impl->capture->width * (x_max_ratio - x_min_ratio);
+  ocr_height = impl->capture->height * (y_max_ratio - y_min_ratio);
 
   if (ocr_width > 0 && ocr_height > 0) {
     tesseract.SetImage(pix);
@@ -337,8 +354,9 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
 #ifdef __linux__
     // Create local copy of the captured image
-    if (window->capture.has_value() && window->capture->width > 0 && window->capture->height > 0) {
-      auto& capture = *window->capture;
+    if (window->impl->capture.has_value() && window->impl->capture->width > 0 &&
+        window->impl->capture->height > 0) {
+      auto& capture = *window->impl->capture;
       auto image_info = SkImageInfo::Make(capture.width, capture.height, kBGRA_8888_SkColorType,
                                           SkAlphaType::kPremul_SkAlphaType);
       SkPixmap pixmap(image_info, capture.data.data(), capture.width * 4);
@@ -634,7 +652,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     window_name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
     WakeAnimation();
     if (auto window = LockWindow()) {
-      window->xcb_window = found_window;
+      window->impl->xcb_window = found_window;
       window->title = window_name;
     }
 #elif defined(_WIN32)
@@ -710,14 +728,14 @@ void Window::OnRun(Location& here) {
   auto out = text_arg.FindObject(here, {});
   auto lock = std::lock_guard(mutex);
 #ifdef __linux__
-  if (xcb_window == XCB_WINDOW_NONE) {
+  if (impl->xcb_window == XCB_WINDOW_NONE) {
     here.ReportError("No window selected");
     return;
   }
-  if (!capture.has_value()) {
-    capture.emplace();
+  if (!impl->capture.has_value()) {
+    impl->capture.emplace();
   }
-  capture->Capture(xcb_window);
+  impl->capture->Capture(impl->xcb_window);
 #elif defined(_WIN32)
   if (impl->hwnd == nullptr) {
     here.ReportError("No window selected");
@@ -741,7 +759,7 @@ void Window::OnRun(Location& here) {
 }
 
 #ifdef __linux__
-Window::XSHMCapture::XSHMCapture() {
+Window::Impl::XSHMCapture::XSHMCapture() {
   shmseg = xcb_generate_id(xcb::connection);
   int w = xcb::screen->width_in_pixels;
   int h = xcb::screen->height_in_pixels;
@@ -752,7 +770,7 @@ Window::XSHMCapture::XSHMCapture() {
   data = std::span<char>(static_cast<char*>(shmat(shmid, nullptr, 0)), size);
 }
 
-Window::XSHMCapture::~XSHMCapture() {
+Window::Impl::XSHMCapture::~XSHMCapture() {
   if (shmseg != -1) {
     xcb_shm_detach(xcb::connection, shmseg);
     shmseg = -1;
@@ -767,7 +785,7 @@ Window::XSHMCapture::~XSHMCapture() {
   }
 }
 
-void Window::XSHMCapture::Capture(xcb_window_t xcb_window) {
+void Window::Impl::XSHMCapture::Capture(xcb_window_t xcb_window) {
   auto geometry_reply = xcb::get_geometry(xcb_window);
   if (!geometry_reply) {
     return;
@@ -912,7 +930,7 @@ void Window::AttachToTitle() {
       return ControlFlow::SkipChildren;
     }
     if (HasWMState(window)) {
-      xcb_window = window;
+      impl->xcb_window = window;
       return ControlFlow::StopSearching;
     }
     return ControlFlow::VisitChildren;

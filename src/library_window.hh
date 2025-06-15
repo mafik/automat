@@ -7,12 +7,6 @@
 #include "base.hh"
 #include "str.hh"
 
-#ifdef __linux__
-#include <sys/shm.h>
-#include <xcb/shm.h>
-#include <xcb/xcb.h>
-#endif
-
 namespace automat::library {
 
 struct Window : public LiveObject, Runnable {
@@ -21,30 +15,9 @@ struct Window : public LiveObject, Runnable {
   Str ocr_text = "";
   bool run_continuously = true;
 
-#ifdef __linux__
-  xcb_window_t xcb_window = XCB_WINDOW_NONE;
-
-  struct XSHMCapture {
-    xcb_shm_seg_t shmseg = -1;
-    int shmid = -1;
-    std::span<char> data;
-    int width = 0;
-    int height = 0;
-
-    XSHMCapture();
-    ~XSHMCapture();
-    void Capture(xcb_window_t xcb_window);
-  };
-
-  std::optional<XSHMCapture> capture;
-#endif
-
-#ifdef _WIN32
   struct Impl;
-
-  // Private implementation because we don't want to pollute header with windows.h defines.
+  // Private implementation to avoid polluting header with platform-specific defines.
   std::unique_ptr<Impl> impl;
-#endif
 
   tesseract::TessBaseAPI tesseract;
 

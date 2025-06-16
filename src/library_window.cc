@@ -85,7 +85,7 @@ constexpr bool kDebugWindowPicking = false;
 struct EnableContinuousRunOption : Option {
   WeakPtr<Window> weak;
 
-  EnableContinuousRunOption(WeakPtr<Window> weak) : Option("Enable"), weak(weak) {}
+  EnableContinuousRunOption(WeakPtr<Window> weak) : Option("Start"), weak(weak) {}
 
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<EnableContinuousRunOption>(weak);
@@ -107,7 +107,7 @@ struct EnableContinuousRunOption : Option {
 struct DisableContinuousRunOption : Option {
   WeakPtr<Window> weak;
 
-  DisableContinuousRunOption(WeakPtr<Window> weak) : Option("Disable"), weak(weak) {}
+  DisableContinuousRunOption(WeakPtr<Window> weak) : Option("Stop"), weak(weak) {}
 
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<DisableContinuousRunOption>(weak);

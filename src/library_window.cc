@@ -134,29 +134,35 @@ struct Window::Impl {
 #ifdef __linux__
   xcb_window_t xcb_window = XCB_WINDOW_NONE;
 
-  // XSHMCapture members inlined
   xcb_shm_seg_t shmseg = -1;
   int shmid = -1;
   std::span<char> data;
   int width = 0;
   int height = 0;
 
-  void Capture(xcb_window_t xcb_window);
+  ~Impl() {
+    if (shmseg != -1) {  // Only cleanup if initialized
+      xcb_shm_detach(xcb::connection, shmseg);
+
+      if (data.data()) {
+        shmdt(data.data());
+      }
+      if (shmid != -1) {
+        shmctl(shmid, IPC_RMID, NULL);
+      }
+    }
+  }
 #endif
 
 #ifdef _WIN32
   HWND hwnd = nullptr;
 
-  // Win32Capture members inlined
   std::vector<char> data;
   int width = 0;
   int height = 0;
-
-  void Capture(HWND hwnd);
 #endif
 
-  Impl();
-  ~Impl();
+  Impl() {}
 };
 
 Ptr<Object> Window::Clone() const {
@@ -720,13 +726,145 @@ void Window::OnRun(Location& here) {
     here.ReportError("No window selected");
     return;
   }
-  impl->Capture(impl->xcb_window);
+
+  // Initialize capture if not already done
+  if (impl->data.empty()) {
+    if (impl->shmseg == -1) {
+      impl->shmseg = xcb_generate_id(xcb::connection);
+    }
+    int size = xcb::screen->width_in_pixels * xcb::screen->height_in_pixels * 4;
+    if (impl->shmid == -1) {
+      impl->shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
+      xcb_shm_attach(xcb::connection, impl->shmseg, impl->shmid, false);
+    }
+    impl->data = std::span<char>(static_cast<char*>(shmat(impl->shmid, nullptr, 0)), size);
+  }
+
+  auto geometry_reply = xcb::get_geometry(impl->xcb_window);
+  if (!geometry_reply) {
+    return;
+  }
+
+  I16 x = 0;
+  I16 y = 0;
+  impl->width = geometry_reply->width;
+  impl->height = geometry_reply->height;
+
+  auto gtk_frame_extents_reply =
+      xcb::get_property(impl->xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
+  if (gtk_frame_extents_reply->value_len == 4) {
+    auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
+    x += extents[0];
+    y += extents[2];
+    impl->width -= extents[0] + extents[1];
+    impl->height -= extents[2] + extents[3];
+  }
+
+  auto cookie = xcb_shm_get_image(xcb::connection, impl->xcb_window, x, y, impl->width,
+                                  impl->height, ~0, XCB_IMAGE_FORMAT_Z_PIXMAP, impl->shmseg, 0);
+
+  std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
+      xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
+
+  bool center_pixel_transparent =
+      impl->data[(impl->height / 2 * impl->width + impl->width / 2) * 4 + 3] == 0;
+
+  int n = impl->width * impl->height;
+  if (center_pixel_transparent) {
+    for (int i = 0; i < n; ++i) {
+      impl->data[i * 4 + 3] = 0xff;
+    }
+  }
 #elif defined(_WIN32)
   if (impl->hwnd == nullptr) {
     here.ReportError("No window selected");
     return;
   }
-  impl->Capture(impl->hwnd);
+
+  if (!impl->hwnd || !IsWindow(impl->hwnd)) {
+    impl->width = impl->height = 0;
+    impl->data.clear();
+    return;
+  }
+
+  RECT rect;
+  if (!GetWindowRect(impl->hwnd, &rect)) {
+    impl->width = impl->height = 0;
+    impl->data.clear();
+    return;
+  }
+
+  impl->width = rect.right - rect.left;
+  impl->height = rect.bottom - rect.top;
+
+  if (impl->width <= 0 || impl->height <= 0) {
+    impl->width = impl->height = 0;
+    impl->data.clear();
+    return;
+  }
+
+  HDC hdcWindow = GetDC(impl->hwnd);
+  HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
+
+  if (!hdcMemDC) {
+    ReleaseDC(impl->hwnd, hdcWindow);
+    impl->width = impl->height = 0;
+    impl->data.clear();
+    return;
+  }
+
+  HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, impl->width, impl->height);
+  if (!hbmScreen) {
+    DeleteDC(hdcMemDC);
+    ReleaseDC(impl->hwnd, hdcWindow);
+    impl->width = impl->height = 0;
+    impl->data.clear();
+    return;
+  }
+
+  SelectObject(hdcMemDC, hbmScreen);
+
+  // Try PrintWindow first (works better for some windows)
+  BOOL printResult = PrintWindow(impl->hwnd, hdcMemDC, PW_RENDERFULLCONTENT);
+
+  if (!printResult) {
+    // Fallback to BitBlt
+    BitBlt(hdcMemDC, 0, 0, impl->width, impl->height, hdcWindow, 0, 0, SRCCOPY);
+  }
+
+  // Get bitmap data
+  BITMAPINFOHEADER bi = {};
+  bi.biSize = sizeof(BITMAPINFOHEADER);
+  bi.biWidth = impl->width;
+  bi.biHeight = -impl->height;  // Negative for top-down DIB
+  bi.biPlanes = 1;
+  bi.biBitCount = 32;
+  bi.biCompression = BI_RGB;
+
+  impl->data.resize(impl->width * impl->height * 4);
+
+  GetDIBits(hdcWindow, hbmScreen, 0, impl->height, impl->data.data(),
+            reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS);
+
+  // Convert BGRA to RGBA and premultiply alpha
+  for (int i = 0; i < impl->width * impl->height; ++i) {
+    uint8_t b = impl->data[i * 4];
+    uint8_t g = impl->data[i * 4 + 1];
+    uint8_t r = impl->data[i * 4 + 2];
+    uint8_t a = impl->data[i * 4 + 3];
+
+    // If alpha is 0, make it opaque
+    if (a == 0) a = 255;
+
+    impl->data[i * 4] = r;      // R
+    impl->data[i * 4 + 1] = g;  // G
+    impl->data[i * 4 + 2] = b;  // B
+    impl->data[i * 4 + 3] = a;  // A
+  }
+
+  DeleteObject(hbmScreen);
+  DeleteDC(hdcMemDC);
+  ReleaseDC(impl->hwnd, hdcWindow);
 #endif
   ocr_text = RunOCR();
   if (out) {
@@ -739,168 +877,6 @@ void Window::OnRun(Location& here) {
     here.ScheduleRun();
   }
 }
-
-Window::Impl::Impl() {
-#ifdef __linux__
-  // Initialize capture variables but don't allocate until needed
-#endif
-}
-
-Window::Impl::~Impl() {
-#ifdef __linux__
-  if (shmseg != -1) {  // Only cleanup if initialized
-    xcb_shm_detach(xcb::connection, shmseg);
-
-    if (data.data()) {
-      shmdt(data.data());
-    }
-    if (shmid != -1) {
-      shmctl(shmid, IPC_RMID, NULL);
-    }
-  }
-#endif
-}
-
-#ifdef __linux__
-void Window::Impl::Capture(xcb_window_t xcb_window) {
-  // Initialize capture if not already done
-  if (data.empty()) {
-    if (shmseg == -1) {
-      shmseg = xcb_generate_id(xcb::connection);
-    }
-    int size = xcb::screen->width_in_pixels * xcb::screen->height_in_pixels * 4;
-    if (shmid == -1) {
-      shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
-      xcb_shm_attach(xcb::connection, shmseg, shmid, false);
-    }
-    data = std::span<char>(static_cast<char*>(shmat(shmid, nullptr, 0)), size);
-  }
-
-  auto geometry_reply = xcb::get_geometry(xcb_window);
-  if (!geometry_reply) {
-    return;
-  }
-
-  I16 x = 0;
-  I16 y = 0;
-  width = geometry_reply->width;
-  height = geometry_reply->height;
-
-  auto gtk_frame_extents_reply =
-      xcb::get_property(xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
-  if (gtk_frame_extents_reply->value_len == 4) {
-    auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
-    x += extents[0];
-    y += extents[2];
-    width -= extents[0] + extents[1];
-    height -= extents[2] + extents[3];
-  }
-
-  auto cookie = xcb_shm_get_image(xcb::connection, xcb_window, x, y, width, height, ~0,
-                                  XCB_IMAGE_FORMAT_Z_PIXMAP, shmseg, 0);
-
-  std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
-      xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
-
-  bool center_pixel_transparent = data[(height / 2 * width + width / 2) * 4 + 3] == 0;
-
-  int n = width * height;
-  if (center_pixel_transparent) {
-    for (int i = 0; i < n; ++i) {
-      data[i * 4 + 3] = 0xff;
-    }
-  }
-}
-#endif
-
-#ifdef _WIN32
-void Window::Impl::Capture(HWND hwnd) {
-  if (!hwnd || !IsWindow(hwnd)) {
-    width = height = 0;
-    data.clear();
-    return;
-  }
-
-  RECT rect;
-  if (!GetWindowRect(hwnd, &rect)) {
-    width = height = 0;
-    data.clear();
-    return;
-  }
-
-  width = rect.right - rect.left;
-  height = rect.bottom - rect.top;
-
-  if (width <= 0 || height <= 0) {
-    width = height = 0;
-    data.clear();
-    return;
-  }
-
-  HDC hdcWindow = GetDC(hwnd);
-  HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
-
-  if (!hdcMemDC) {
-    ReleaseDC(hwnd, hdcWindow);
-    width = height = 0;
-    data.clear();
-    return;
-  }
-
-  HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
-  if (!hbmScreen) {
-    DeleteDC(hdcMemDC);
-    ReleaseDC(hwnd, hdcWindow);
-    width = height = 0;
-    data.clear();
-    return;
-  }
-
-  SelectObject(hdcMemDC, hbmScreen);
-
-  // Try PrintWindow first (works better for some windows)
-  BOOL printResult = PrintWindow(hwnd, hdcMemDC, PW_RENDERFULLCONTENT);
-
-  if (!printResult) {
-    // Fallback to BitBlt
-    BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
-  }
-
-  // Get bitmap data
-  BITMAPINFOHEADER bi = {};
-  bi.biSize = sizeof(BITMAPINFOHEADER);
-  bi.biWidth = width;
-  bi.biHeight = -height;  // Negative for top-down DIB
-  bi.biPlanes = 1;
-  bi.biBitCount = 32;
-  bi.biCompression = BI_RGB;
-
-  data.resize(width * height * 4);
-
-  GetDIBits(hdcWindow, hbmScreen, 0, height, data.data(), reinterpret_cast<BITMAPINFO*>(&bi),
-            DIB_RGB_COLORS);
-
-  // Convert BGRA to RGBA and premultiply alpha
-  for (int i = 0; i < width * height; ++i) {
-    uint8_t b = data[i * 4];
-    uint8_t g = data[i * 4 + 1];
-    uint8_t r = data[i * 4 + 2];
-    uint8_t a = data[i * 4 + 3];
-
-    // If alpha is 0, make it opaque
-    if (a == 0) a = 255;
-
-    data[i * 4] = r;      // R
-    data[i * 4 + 1] = g;  // G
-    data[i * 4 + 2] = b;  // B
-    data[i * 4 + 3] = a;  // A
-  }
-
-  DeleteObject(hbmScreen);
-  DeleteDC(hdcMemDC);
-  ReleaseDC(hwnd, hdcWindow);
-}
-#endif
 
 void Window::Relocate(Location* new_here) {
   LiveObject::Relocate(new_here);

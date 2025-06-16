@@ -34,8 +34,8 @@ struct Window : public LiveObject, Runnable {
   Ptr<Object> Clone() const override;
   Ptr<gui::Widget> MakeWidget() override;
 
-  // Run OCR on the currently captured window
-  std::string RunOCR();
+  // Run OCR on the provided image data
+  std::string RunOCR(int width, int height, std::span<char> data);
 
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here) override;

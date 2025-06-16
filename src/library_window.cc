@@ -137,8 +137,6 @@ struct Window::Impl {
   xcb_shm_seg_t shmseg = -1;
   int shmid = -1;
   std::span<char> data;
-  int width = 0;
-  int height = 0;
 
   ~Impl() {
     if (shmseg != -1) {  // Only cleanup if initialized
@@ -156,10 +154,6 @@ struct Window::Impl {
 
 #ifdef _WIN32
   HWND hwnd = nullptr;
-
-  std::vector<char> data;
-  int width = 0;
-  int height = 0;
 #endif
 
   Impl() {}
@@ -223,24 +217,23 @@ struct TextArgument : Argument {
 
 TextArgument text_arg;
 
-std::string Window::RunOCR() {
+std::string Window::RunOCR(int width, int height, std::span<char> data) {
 #ifdef __linux__
-  if (impl->width == 0 || impl->height == 0) return "";
+  if (width == 0 || height == 0) return "";
   std::string utf8_text = "";
-  auto pix = pixCreate(impl->width, impl->height, 32);
+  auto pix = pixCreate(width, height, 32);
   uint32_t* pix_data = pixGetData(pix);
-  int n = impl->width * impl->height;
-  auto data = impl->data;
+  int n = width * height;
   for (int i = 0; i < n; ++i) {
     pix_data[i] =
         (data[i * 4] << 8) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 24) | (data[i * 4 + 3]);
   }
 
   int ocr_left = 0, ocr_top = 0, ocr_width = 0, ocr_height = 0;
-  ocr_left = x_min_ratio * impl->width;
-  ocr_top = (1 - y_max_ratio) * impl->height;
-  ocr_width = impl->width * (x_max_ratio - x_min_ratio);
-  ocr_height = impl->height * (y_max_ratio - y_min_ratio);
+  ocr_left = x_min_ratio * width;
+  ocr_top = (1 - y_max_ratio) * height;
+  ocr_width = width * (x_max_ratio - x_min_ratio);
+  ocr_height = height * (y_max_ratio - y_min_ratio);
 
   if (ocr_width > 0 && ocr_height > 0) {
     tesseract.SetImage(pix);
@@ -732,8 +725,8 @@ void Window::OnRun(Location& here) {
 
   I16 x = 0;
   I16 y = 0;
-  impl->width = geometry_reply->width;
-  impl->height = geometry_reply->height;
+  int width = geometry_reply->width;
+  int height = geometry_reply->height;
 
   auto gtk_frame_extents_reply =
       xcb::get_property(impl->xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
@@ -741,20 +734,19 @@ void Window::OnRun(Location& here) {
     auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
     x += extents[0];
     y += extents[2];
-    impl->width -= extents[0] + extents[1];
-    impl->height -= extents[2] + extents[3];
+    width -= extents[0] + extents[1];
+    height -= extents[2] + extents[3];
   }
 
-  auto cookie = xcb_shm_get_image(xcb::connection, impl->xcb_window, x, y, impl->width,
-                                  impl->height, ~0, XCB_IMAGE_FORMAT_Z_PIXMAP, impl->shmseg, 0);
+  auto cookie = xcb_shm_get_image(xcb::connection, impl->xcb_window, x, y, width, height, ~0,
+                                  XCB_IMAGE_FORMAT_Z_PIXMAP, impl->shmseg, 0);
 
   std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
       xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
 
-  bool center_pixel_transparent =
-      impl->data[(impl->height / 2 * impl->width + impl->width / 2) * 4 + 3] == 0;
+  bool center_pixel_transparent = impl->data[(height / 2 * width + width / 2) * 4 + 3] == 0;
 
-  int n = impl->width * impl->height;
+  int n = width * height;
   if (center_pixel_transparent) {
     for (int i = 0; i < n; ++i) {
       impl->data[i * 4 + 3] = 0xff;
@@ -773,17 +765,13 @@ void Window::OnRun(Location& here) {
 
   RECT rect;
   if (!GetWindowRect(impl->hwnd, &rect)) {
-    impl->width = impl->height = 0;
-    impl->data.clear();
     return;
   }
 
-  impl->width = rect.right - rect.left;
-  impl->height = rect.bottom - rect.top;
+  int width = rect.right - rect.left;
+  int height = rect.bottom - rect.top;
 
-  if (impl->width <= 0 || impl->height <= 0) {
-    impl->width = impl->height = 0;
-    impl->data.clear();
+  if (width <= 0 || height <= 0) {
     return;
   }
 
@@ -792,17 +780,13 @@ void Window::OnRun(Location& here) {
 
   if (!hdcMemDC) {
     ReleaseDC(impl->hwnd, hdcWindow);
-    impl->width = impl->height = 0;
-    impl->data.clear();
     return;
   }
 
-  HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, impl->width, impl->height);
+  HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
   if (!hbmScreen) {
     DeleteDC(hdcMemDC);
     ReleaseDC(impl->hwnd, hdcWindow);
-    impl->width = impl->height = 0;
-    impl->data.clear();
     return;
   }
 
@@ -813,37 +797,37 @@ void Window::OnRun(Location& here) {
 
   if (!printResult) {
     // Fallback to BitBlt
-    BitBlt(hdcMemDC, 0, 0, impl->width, impl->height, hdcWindow, 0, 0, SRCCOPY);
+    BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
   }
 
   // Get bitmap data
   BITMAPINFOHEADER bi = {};
   bi.biSize = sizeof(BITMAPINFOHEADER);
-  bi.biWidth = impl->width;
-  bi.biHeight = -impl->height;  // Negative for top-down DIB
+  bi.biWidth = width;
+  bi.biHeight = -height;  // Negative for top-down DIB
   bi.biPlanes = 1;
   bi.biBitCount = 32;
   bi.biCompression = BI_RGB;
 
-  impl->data.resize(impl->width * impl->height * 4);
+  std::vector<char> data(width * height * 4);
 
-  GetDIBits(hdcWindow, hbmScreen, 0, impl->height, impl->data.data(),
-            reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS);
+  GetDIBits(hdcWindow, hbmScreen, 0, height, data.data(), reinterpret_cast<BITMAPINFO*>(&bi),
+            DIB_RGB_COLORS);
 
   // Convert BGRA to RGBA and premultiply alpha
-  for (int i = 0; i < impl->width * impl->height; ++i) {
-    uint8_t b = impl->data[i * 4];
-    uint8_t g = impl->data[i * 4 + 1];
-    uint8_t r = impl->data[i * 4 + 2];
-    uint8_t a = impl->data[i * 4 + 3];
+  for (int i = 0; i < width * height; ++i) {
+    uint8_t b = data[i * 4];
+    uint8_t g = data[i * 4 + 1];
+    uint8_t r = data[i * 4 + 2];
+    uint8_t a = data[i * 4 + 3];
 
     // If alpha is 0, make it opaque
     if (a == 0) a = 255;
 
-    impl->data[i * 4] = r;      // R
-    impl->data[i * 4 + 1] = g;  // G
-    impl->data[i * 4 + 2] = b;  // B
-    impl->data[i * 4 + 3] = a;  // A
+    data[i * 4] = r;      // R
+    data[i * 4 + 1] = g;  // G
+    data[i * 4 + 2] = b;  // B
+    data[i * 4 + 3] = a;  // A
   }
 
   DeleteObject(hbmScreen);
@@ -851,22 +835,24 @@ void Window::OnRun(Location& here) {
   ReleaseDC(impl->hwnd, hdcWindow);
 #endif
   // Create and store the captured image
-  if (impl->width > 0 && impl->height > 0) {
+  if (width > 0 && height > 0) {
     SkColorType ct;
 #ifdef __linux__
     ct = kBGRA_8888_SkColorType;
+    std::span<char> data_span = impl->data;
 #else
     ct = kRGBA_8888_SkColorType;
+    std::span<char> data_span{data.data(), data.size()};
 #endif
-    auto image_info =
-        SkImageInfo::Make(impl->width, impl->height, ct, SkAlphaType::kPremul_SkAlphaType);
-    SkPixmap pixmap(image_info, impl->data.data(), impl->width * 4);
+    auto image_info = SkImageInfo::Make(width, height, ct, SkAlphaType::kPremul_SkAlphaType);
+    SkPixmap pixmap(image_info, data_span.data(), width * 4);
     captured_image = SkImages::RasterFromPixmapCopy(pixmap);
+
+    ocr_text = RunOCR(width, height, data_span);
   } else {
     captured_image.reset();
+    ocr_text = "";
   }
-
-  ocr_text = RunOCR();
   if (out) {
     out->SetText(here, ocr_text);
   }

@@ -198,15 +198,15 @@ static constexpr Vec3 LUVToRGB(float l, float u, float v) {
   return XYZToRGB(xyz.x, xyz.y, xyz.z);
 }
 
+static constexpr Vec3 RGBToLUV(float r, float g, float b) {
+  Vec3 xyz = RGBToXYZ(r, g, b);
+  return XYZToLUV(xyz.x, xyz.y, xyz.z);
+}
+
 static constexpr Vec3 HSLuvToRGB(float h, float s, float l) {
   Vec3 lch = HSLuvToLCH(h, s, l);
   Vec3 luv = LCHToLUV(lch.x, lch.y, lch.z);
   return LUVToRGB(luv.x, luv.y, luv.z);
-}
-
-static constexpr Vec3 RGBToLUV(float r, float g, float b) {
-  Vec3 xyz = RGBToXYZ(r, g, b);
-  return XYZToLUV(xyz.x, xyz.y, xyz.z);
 }
 
 static constexpr Vec3 RGBToHSLuv(float r, float g, float b) {
@@ -216,6 +216,11 @@ static constexpr Vec3 RGBToHSLuv(float r, float g, float b) {
 }
 
 }  // namespace
+
+Vec3 ToHSLuv(SkColor color) {
+  return RGBToHSLuv(SkColorGetR(color) / 255.0, SkColorGetG(color) / 255.0,
+                    SkColorGetB(color) / 255.0);
+}
 
 SkColor SetAlpha(SkColor color, uint8_t alpha) {
   return SkColorSetARGB(alpha, SkColorGetR(color), SkColorGetG(color), SkColorGetB(color));

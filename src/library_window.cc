@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "library_window.hh"
 
+#include <include/core/SkColor.h>
 #include <include/core/SkColorType.h>
 #include <include/core/SkImage.h>
 #include <include/core/SkTileMode.h>
@@ -10,6 +11,7 @@
 #include <leptonica/pix.h>
 
 #include "argument.hh"
+#include "color.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "gui_constants.hh"
@@ -21,6 +23,7 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "theme_xp.hh"
+#include "time.hh"
 
 #ifdef __linux__
 #include <sys/shm.h>
@@ -167,6 +170,7 @@ Ptr<Object> Window::Clone() const {
   ret->y_min_ratio = y_min_ratio;
   ret->y_max_ratio = y_max_ratio;
   ret->captured_image = captured_image;
+  ret->capture_time = capture_time;
 #ifdef __linux__
   ret->impl->xcb_window = impl->xcb_window;
 #endif
@@ -298,6 +302,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   std::string tesseract_text;
   sk_sp<SkImage> captured_image;  // Local copy of the captured bitmap
+  SkColor title_bar_color = "#0066ff"_color;
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
@@ -336,7 +341,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds().sk); }
 
-  animation::Phase Tick(time::Timer&) override {
+  animation::Phase Tick(time::Timer& timer) override {
     tesseract_text.clear();
     auto window = LockWindow();
     auto lock = std::lock_guard(window->mutex);
@@ -345,6 +350,22 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
     // Copy the captured image from the Window object
     captured_image = window->captured_image;
+
+    // Compute title bar color decay from blue to silver
+    float t =
+        std::clamp<float>((timer.NowSeconds() - window->capture_time - timer.d * 2) / 0.3, 0, 1);
+
+    // Interpolate from blue (#0078d4) to silver (#c0c0c0)
+    SkColor blue = "#0066ff"_color;
+    SkColor silver = "#bbbccc"_color;
+
+    title_bar_color = color::MixColors(blue, silver, t);
+
+    // Continue animation if not fully decayed
+    if (t < 1.0f) {
+      return animation::Animating;
+    }
+
     return animation::Finished;
   }
 
@@ -388,7 +409,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   void Draw(SkCanvas& canvas) const override {
     auto layout = Layout();
 
-    auto vertices = theme::xp::WindowBorder(kCoarseBounds.rect);
+    auto vertices = theme::xp::WindowBorder(kCoarseBounds.rect, title_bar_color);
     canvas.drawVertices(vertices, SkBlendMode::kDst, SkPaint());
 
     auto& font = gui::GetFont();
@@ -757,6 +778,7 @@ void Window::OnRun(Location& here) {
                                         SkAlphaType::kUnpremul_SkAlphaType);
     auto pixmap = SkPixmap(image_info, impl->data.data(), width * 4);
     captured_image = SkImages::RasterFromPixmapCopy(pixmap);
+    capture_time = time::SteadyNow();
   }
 #elif defined(_WIN32)
   {
@@ -837,6 +859,7 @@ void Window::OnRun(Location& here) {
     {
       auto lock = std::lock_guard(mutex);
       captured_image = std::move(result);
+      capture_time = time::SteadyNow().time_since_epoch().count();
     }
   }
 #endif
@@ -900,6 +923,8 @@ void Window::SerializeState(Serializer& writer, const char* key) const {
   writer.Double(y_min_ratio);
   writer.Key("y_max_ratio");
   writer.Double(y_max_ratio);
+  writer.Key("capture_time");
+  writer.Double(capture_time);
 
   writer.EndObject();
 }
@@ -919,6 +944,8 @@ void Window::DeserializeState(Location& l, Deserializer& d) {
       d.Get(y_min_ratio, status);
     } else if (key == "y_max_ratio") {
       d.Get(y_max_ratio, status);
+    } else if (key == "capture_time") {
+      d.Get(capture_time, status);
     }
   }
   if (!OK(status)) {

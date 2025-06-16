@@ -14,8 +14,19 @@
 
 namespace automat::theme::xp {
 
-sk_sp<SkVertices> WindowBorder(Rect outer) {
-  // Manually create the buffer.
+sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color) {
+  constexpr SkColor kFillColor = "#ece9d8"_color;
+  // constexpr SkColor kBrightColor = "#3399ff"_color;
+  // constexpr SkColor kMainColor = "#0066ff"_color;  // a beautiful electric blue
+  // constexpr SkColor kDarkColor = "#0033cc"_color;
+  // constexpr SkColor kDarkerColor = "#003399"_color;
+
+  Vec3 hsluv = color::ToHSLuv(title_color);
+
+  // Create darker and brighter variants for the borders
+  SkColor title_dark = color::AdjustLightness(title_color, -15);
+  SkColor title_medium = color::AdjustLightness(title_color, -5);
+  SkColor title_bright = color::AdjustLightness(title_color, 5);
 
   // Names for the vertices of the top left & top right of the window border.
   enum TopBorder { TopBorder_Outer, TopBorder_Middle, TopBorder_Inner, TopBorder_Count };
@@ -91,9 +102,10 @@ sk_sp<SkVertices> WindowBorder(Rect outer) {
   pos[kTopLeftBorderBase + TopBorder_Outer] = top_left + Vec2(0, -kTitleBarHeight);
   pos[kTopLeftBorderBase + TopBorder_Middle] = top_left + Vec2(w / 2, -kTitleBarHeight);
   pos[kTopLeftBorderBase + TopBorder_Inner] = top_left + Vec2(w, -kTitleBarHeight);
-  colors[kTopLeftBorderBase + TopBorder_Outer] = kDarkColor;
-  colors[kTopLeftBorderBase + TopBorder_Middle] = "#176cec"_color;
-  colors[kTopLeftBorderBase + TopBorder_Inner] = kMainColor;
+
+  colors[kTopLeftBorderBase + TopBorder_Outer] = title_dark;
+  colors[kTopLeftBorderBase + TopBorder_Middle] = title_medium;
+  colors[kTopLeftBorderBase + TopBorder_Inner] = title_color;
 
   constexpr int kBottomLeftBorderBase = kTopLeftBorderBase + TopBorder_Count;
   pos[kBottomLeftBorderBase + BottomCorner_TopOuter] = bottom_left + Vec2(0, w);
@@ -101,11 +113,11 @@ sk_sp<SkVertices> WindowBorder(Rect outer) {
   pos[kBottomLeftBorderBase + BottomCorner_TopInner] = bottom_left + Vec2(w, w);
   pos[kBottomLeftBorderBase + BottomCorner_Center] = bottom_left + Vec2(w / 2, w / 2);
   pos[kBottomLeftBorderBase + BottomCorner_BottomOuter] = bottom_left;
-  colors[kBottomLeftBorderBase + BottomCorner_TopOuter] = kDarkColor;
-  colors[kBottomLeftBorderBase + BottomCorner_TopMiddle] = "#176cec"_color;
-  colors[kBottomLeftBorderBase + BottomCorner_TopInner] = kMainColor;
-  colors[kBottomLeftBorderBase + BottomCorner_Center] = kDarkColor;
-  colors[kBottomLeftBorderBase + BottomCorner_BottomOuter] = kDarkColor;
+  colors[kBottomLeftBorderBase + BottomCorner_TopOuter] = title_dark;
+  colors[kBottomLeftBorderBase + BottomCorner_TopMiddle] = title_medium;
+  colors[kBottomLeftBorderBase + BottomCorner_TopInner] = title_color;
+  colors[kBottomLeftBorderBase + BottomCorner_Center] = title_dark;
+  colors[kBottomLeftBorderBase + BottomCorner_BottomOuter] = title_dark;
 
   constexpr int kBottomRightBorderBase = kBottomLeftBorderBase + BottomCorner_Count;
   pos[kBottomRightBorderBase + BottomCorner_TopOuter] = bottom_right + Vec2(0, w);
@@ -113,44 +125,45 @@ sk_sp<SkVertices> WindowBorder(Rect outer) {
   pos[kBottomRightBorderBase + BottomCorner_TopInner] = bottom_right + Vec2(-w, w);
   pos[kBottomRightBorderBase + BottomCorner_Center] = bottom_right + Vec2(-w / 2, w / 2);
   pos[kBottomRightBorderBase + BottomCorner_BottomOuter] = bottom_right;
-  colors[kBottomRightBorderBase + BottomCorner_TopOuter] = kDarkColor;
-  colors[kBottomRightBorderBase + BottomCorner_TopMiddle] = "#176cec"_color;
-  colors[kBottomRightBorderBase + BottomCorner_TopInner] = kMainColor;
-  colors[kBottomRightBorderBase + BottomCorner_Center] = kDarkColor;
-  colors[kBottomRightBorderBase + BottomCorner_BottomOuter] = kDarkColor;
+  colors[kBottomRightBorderBase + BottomCorner_TopOuter] = title_dark;
+  colors[kBottomRightBorderBase + BottomCorner_TopMiddle] = title_medium;
+  colors[kBottomRightBorderBase + BottomCorner_TopInner] = title_color;
+  colors[kBottomRightBorderBase + BottomCorner_Center] = title_dark;
+  colors[kBottomRightBorderBase + BottomCorner_BottomOuter] = title_dark;
 
   constexpr int kTopRightBorderBase = kBottomRightBorderBase + BottomCorner_Count;
   pos[kTopRightBorderBase + TopBorder_Outer] = top_right + Vec2(0, -kTitleBarHeight);
   pos[kTopRightBorderBase + TopBorder_Middle] = top_right + Vec2(-w / 2, -kTitleBarHeight);
   pos[kTopRightBorderBase + TopBorder_Inner] = top_right + Vec2(-w, -kTitleBarHeight);
-  colors[kTopRightBorderBase + TopBorder_Outer] = kDarkColor;
-  colors[kTopRightBorderBase + TopBorder_Middle] = "#176cec"_color;
-  colors[kTopRightBorderBase + TopBorder_Inner] = kMainColor;
+  colors[kTopRightBorderBase + TopBorder_Outer] = title_dark;
+  colors[kTopRightBorderBase + TopBorder_Middle] = title_medium;
+  colors[kTopRightBorderBase + TopBorder_Inner] = title_color;
 
   auto TitleShader = [&](SinCos edge_dir, float edge_dist, float horiz_edge_dist,
                          float vert_edge_dist) {
     // Debug view shader parameters
     // return SkColorSetRGB((float)edge_dir.sin * 255 / 100, horiz_edge_dist / 3_cm * 255,
     //                      vert_edge_dist / kTitleBarHeight * 255);
-    SkColor edge_color = color::FastMix(kDarkColor, kBrightColor, (float)edge_dir.sin);
-    SkColor base_color = kMainColor;
+
+    SkColor edge_color = color::FastMix(title_dark, title_bright, (float)edge_dir.sin);
+    SkColor base_color = title_color;
 
     // Subtle shade in the top half of the title bar
     float middle_inset =
         sinf(std::clamp(vert_edge_dist * 2 / kTitleBarHeight - 0.3f, 0.f, 1.f) * M_PI);
     middle_inset = middle_inset * 0.5f + 0.5f;
-    base_color = color::FastMix(base_color, kDarkColor, middle_inset * 0.6f);
+    base_color = color::FastMix(base_color, title_dark, middle_inset * 0.6f);
 
     // Subtle highlight on the bottom half of the title bar
     float middle_outset =
         sinf(std::clamp(vert_edge_dist * 2 / kTitleBarHeight - 0.8f, 0.f, 1.f) * M_PI);
-    base_color = color::FastMix(base_color, kMainColor, middle_outset * 0.4f);
+    base_color = color::FastMix(base_color, title_bright, middle_outset * 0.4f);
 
     // Flat region near the horizontal edge
     float edge_flatten =
         cosf(std::clamp<float>(horiz_edge_dist / kTitleGridWidth, 0.f, 1.f) * M_PI);
     edge_flatten = edge_flatten * 0.5f + 0.5f;
-    base_color = color::FastMix(base_color, kMainColor, edge_flatten * 0.7f);
+    base_color = color::FastMix(base_color, title_color, edge_flatten * 0.7f);
 
     // Highlight / Shadow on the edges
     if (edge_dist <= 1_mm) {
@@ -158,7 +171,7 @@ sk_sp<SkVertices> WindowBorder(Rect outer) {
     }
     float bottom_edge_dist = kTitleBarHeight - vert_edge_dist;
     if (bottom_edge_dist <= 1_mm) {
-      base_color = color::FastMix(kDarkColor, base_color, bottom_edge_dist / 1_mm);
+      base_color = color::FastMix(title_dark, base_color, bottom_edge_dist / 1_mm);
     }
     return base_color;
   };

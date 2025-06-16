@@ -7,6 +7,7 @@
 
 #include "base.hh"
 #include "str.hh"
+#include "time.hh"
 
 namespace automat::library {
 
@@ -27,6 +28,8 @@ struct Window : public LiveObject, Runnable {
   float x_max_ratio = 0.75f;
   float y_min_ratio = 0.25f;
   float y_max_ratio = 0.75f;
+
+  time::T capture_time = 0;
 
   Window();
 

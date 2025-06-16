@@ -17,18 +17,12 @@ namespace automat::theme::xp {
 constexpr float kTitleBarHeight = 8_mm;
 constexpr float kBorderWidth = 1_mm;
 
-constexpr SkColor kFillColor = "#ece9d8"_color;
-constexpr SkColor kBrightColor = "#3399ff"_color;
-constexpr SkColor kMainColor = "#0066ff"_color;  // a beautiful electric blue
-constexpr SkColor kDarkColor = "#0033cc"_color;
-constexpr SkColor kDarkerColor = "#003399"_color;
-
 constexpr Rect WindowBorderInner(Rect outer) {
   return Rect(outer.left + kBorderWidth, outer.bottom + kBorderWidth, outer.right - kBorderWidth,
               outer.top - kTitleBarHeight);
 }
 
-sk_sp<SkVertices> WindowBorder(Rect outer);
+sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color = "#0066ff"_color);
 
 struct TitleButton : gui::Button {
   TitleButton(Ptr<Widget> child) : gui::Button(child) {}

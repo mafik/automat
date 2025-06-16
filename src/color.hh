@@ -38,6 +38,8 @@ constexpr SkColor ClampedSubtractRGB(SkColor base, SkColor subtract) {
 
 SkColor HSLuv(float h360, float s100, float l100, float a100 = 100.f);
 
+Vec3 ToHSLuv(SkColor);
+
 }  // namespace automat::color
 
 namespace automat {

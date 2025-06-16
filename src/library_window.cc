@@ -217,18 +217,21 @@ struct TextArgument : Argument {
 
 TextArgument text_arg;
 
-std::string Window::RunOCR(int width, int height, std::span<char> data) {
-#ifdef __linux__
+std::string Window::RunOCR() {
+  auto lock = std::lock_guard(mutex);
+  int width = captured_image->width();
+  int height = captured_image->height();
   if (width == 0 || height == 0) return "";
   std::string utf8_text = "";
   auto pix = pixCreate(width, height, 32);
   uint32_t* pix_data = pixGetData(pix);
-  int n = width * height;
-  for (int i = 0; i < n; ++i) {
-    pix_data[i] =
-        (data[i * 4] << 8) | (data[i * 4 + 1] << 16) | (data[i * 4 + 2] << 24) | (data[i * 4 + 3]);
+  SkPixmap pixmap;
+  if (!captured_image->peekPixels(&pixmap)) {
+    return "peekPixels failed";
   }
-
+  auto pixInfo =
+      SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, SkAlphaType::kUnpremul_SkAlphaType);
+  pixmap.readPixels(pixInfo, pix_data, width * 4);
   int ocr_left = 0, ocr_top = 0, ocr_width = 0, ocr_height = 0;
   ocr_left = x_min_ratio * width;
   ocr_top = (1 - y_max_ratio) * height;
@@ -249,9 +252,6 @@ std::string Window::RunOCR(int width, int height, std::span<char> data) {
 
   pixDestroy(&pix);
   return utf8_text;
-#else
-  return "";
-#endif
 }
 
 #ifdef __linux__
@@ -698,161 +698,148 @@ void Window::Args(std::function<void(Argument&)> cb) {
 
 void Window::OnRun(Location& here) {
   auto out = text_arg.FindObject(here, {});
-  auto lock = std::lock_guard(mutex);
 #ifdef __linux__
-  if (impl->xcb_window == XCB_WINDOW_NONE) {
-    here.ReportError("No window selected");
-    return;
-  }
-
-  // Initialize capture if not already done
-  if (impl->data.empty()) {
-    if (impl->shmseg == -1) {
-      impl->shmseg = xcb_generate_id(xcb::connection);
+  {
+    auto lock = std::lock_guard(mutex);
+    if (impl->xcb_window == XCB_WINDOW_NONE) {
+      here.ReportError("No window selected");
+      return;
     }
-    int size = xcb::screen->width_in_pixels * xcb::screen->height_in_pixels * 4;
-    if (impl->shmid == -1) {
-      impl->shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
-      xcb_shm_attach(xcb::connection, impl->shmseg, impl->shmid, false);
+
+    // Initialize capture if not already done
+    if (impl->data.empty()) {
+      if (impl->shmseg == -1) {
+        impl->shmseg = xcb_generate_id(xcb::connection);
+      }
+      int size = xcb::screen->width_in_pixels * xcb::screen->height_in_pixels * 4;
+      if (impl->shmid == -1) {
+        impl->shmid = shmget(IPC_PRIVATE, size, IPC_CREAT | 0777);
+        xcb_shm_attach(xcb::connection, impl->shmseg, impl->shmid, false);
+      }
+      impl->data = std::span<char>(static_cast<char*>(shmat(impl->shmid, nullptr, 0)), size);
     }
-    impl->data = std::span<char>(static_cast<char*>(shmat(impl->shmid, nullptr, 0)), size);
-  }
 
-  auto geometry_reply = xcb::get_geometry(impl->xcb_window);
-  if (!geometry_reply) {
-    return;
-  }
-
-  I16 x = 0;
-  I16 y = 0;
-  int width = geometry_reply->width;
-  int height = geometry_reply->height;
-
-  auto gtk_frame_extents_reply =
-      xcb::get_property(impl->xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
-  if (gtk_frame_extents_reply->value_len == 4) {
-    auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
-    x += extents[0];
-    y += extents[2];
-    width -= extents[0] + extents[1];
-    height -= extents[2] + extents[3];
-  }
-
-  auto cookie = xcb_shm_get_image(xcb::connection, impl->xcb_window, x, y, width, height, ~0,
-                                  XCB_IMAGE_FORMAT_Z_PIXMAP, impl->shmseg, 0);
-
-  std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
-      xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
-
-  bool center_pixel_transparent = impl->data[(height / 2 * width + width / 2) * 4 + 3] == 0;
-
-  int n = width * height;
-  if (center_pixel_transparent) {
-    for (int i = 0; i < n; ++i) {
-      impl->data[i * 4 + 3] = 0xff;
+    auto geometry_reply = xcb::get_geometry(impl->xcb_window);
+    if (!geometry_reply) {
+      return;
     }
+
+    I16 x = 0;
+    I16 y = 0;
+    width = geometry_reply->width;
+    height = geometry_reply->height;
+
+    auto gtk_frame_extents_reply =
+        xcb::get_property(impl->xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
+    if (gtk_frame_extents_reply->value_len == 4) {
+      auto extents = (U32*)xcb_get_property_value(gtk_frame_extents_reply.get());
+      x += extents[0];
+      y += extents[2];
+      width -= extents[0] + extents[1];
+      height -= extents[2] + extents[3];
+    }
+
+    auto cookie = xcb_shm_get_image(xcb::connection, impl->xcb_window, x, y, width, height, ~0,
+                                    XCB_IMAGE_FORMAT_Z_PIXMAP, impl->shmseg, 0);
+
+    std::unique_ptr<xcb_shm_get_image_reply_t, xcb::FreeDeleter> reply(
+        xcb_shm_get_image_reply(xcb::connection, cookie, nullptr));
+
+    bool center_pixel_transparent = impl->data[(height / 2 * width + width / 2) * 4 + 3] == 0;
+
+    int n = width * height;
+    if (center_pixel_transparent) {
+      for (int i = 0; i < n; ++i) {
+        impl->data[i * 4 + 3] = 0xff;
+      }
+    }
+    auto image_info = SkImageInfo::Make(width, height, kBGRA_8888_SkColorType,
+                                        SkAlphaType::kUnpremul_SkAlphaType);
+    auto pixmap = SkPixmap(image_info, impl->data.data(), width * 4);
+    captured_image = SkImages::RasterFromPixmapCopy(pixmap);
   }
 #elif defined(_WIN32)
-  if (impl->hwnd == nullptr) {
-    here.ReportError("No window selected");
-    return;
-  }
+  {
+    HWND hwnd;
+    {
+      auto lock = std::lock_guard(mutex);
+      hwnd = impl->hwnd;
+    }
+    if (hwnd == nullptr) {
+      here.ReportError("No window selected");
+      return;
+    }
 
-  if (!IsWindow(impl->hwnd)) {
-    here.ReportError("Invalid window selected");
-    return;
-  }
+    if (!IsWindow(hwnd)) {
+      here.ReportError("Invalid window selected");
+      return;
+    }
 
-  RECT rect;
-  if (!GetWindowRect(impl->hwnd, &rect)) {
-    return;
-  }
+    RECT rect;
+    if (!GetWindowRect(hwnd, &rect)) {
+      return;
+    }
 
-  int width = rect.right - rect.left;
-  int height = rect.bottom - rect.top;
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
 
-  if (width <= 0 || height <= 0) {
-    return;
-  }
+    if (width <= 0 || height <= 0) {
+      return;
+    }
 
-  HDC hdcWindow = GetDC(impl->hwnd);
-  HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
+    HDC hdcWindow = GetDC(hwnd);
+    HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
 
-  if (!hdcMemDC) {
-    ReleaseDC(impl->hwnd, hdcWindow);
-    return;
-  }
+    if (!hdcMemDC) {
+      ReleaseDC(hwnd, hdcWindow);
+      return;
+    }
 
-  HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
-  if (!hbmScreen) {
+    HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
+    if (!hbmScreen) {
+      DeleteDC(hdcMemDC);
+      ReleaseDC(hwnd, hdcWindow);
+      return;
+    }
+
+    SelectObject(hdcMemDC, hbmScreen);
+
+    // Try PrintWindow first (works better for some windows)
+    BOOL printResult = PrintWindow(hwnd, hdcMemDC, PW_RENDERFULLCONTENT);
+
+    if (!printResult) {
+      // Fallback to BitBlt
+      BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
+    }
+
+    // Get bitmap data
+    BITMAPINFOHEADER bi = {};
+    bi.biSize = sizeof(BITMAPINFOHEADER);
+    bi.biWidth = width;
+    bi.biHeight = -height;  // Negative for top-down DIB
+    bi.biPlanes = 1;
+    bi.biBitCount = 32;
+    bi.biCompression = BI_RGB;
+
+    sk_sp<SkData> pixels = SkData::MakeUninitialized(width * height * 4);
+
+    GetDIBits(hdcWindow, hbmScreen, 0, height, pixels->writable_data(),
+              reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS);
+
+    DeleteObject(hbmScreen);
     DeleteDC(hdcMemDC);
-    ReleaseDC(impl->hwnd, hdcWindow);
-    return;
+    ReleaseDC(hwnd, hdcWindow);
+
+    auto image_info = SkImageInfo::Make(width, height, kBGRA_8888_SkColorType,
+                                        SkAlphaType::kUnpremul_SkAlphaType);
+    auto result = SkImages::RasterFromData(image_info, pixels, width * 4);
+    {
+      auto lock = std::lock_guard(mutex);
+      captured_image = std::move(result);
+    }
   }
-
-  SelectObject(hdcMemDC, hbmScreen);
-
-  // Try PrintWindow first (works better for some windows)
-  BOOL printResult = PrintWindow(impl->hwnd, hdcMemDC, PW_RENDERFULLCONTENT);
-
-  if (!printResult) {
-    // Fallback to BitBlt
-    BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
-  }
-
-  // Get bitmap data
-  BITMAPINFOHEADER bi = {};
-  bi.biSize = sizeof(BITMAPINFOHEADER);
-  bi.biWidth = width;
-  bi.biHeight = -height;  // Negative for top-down DIB
-  bi.biPlanes = 1;
-  bi.biBitCount = 32;
-  bi.biCompression = BI_RGB;
-
-  std::vector<char> data(width * height * 4);
-
-  GetDIBits(hdcWindow, hbmScreen, 0, height, data.data(), reinterpret_cast<BITMAPINFO*>(&bi),
-            DIB_RGB_COLORS);
-
-  // Convert BGRA to RGBA and premultiply alpha
-  for (int i = 0; i < width * height; ++i) {
-    uint8_t b = data[i * 4];
-    uint8_t g = data[i * 4 + 1];
-    uint8_t r = data[i * 4 + 2];
-    uint8_t a = data[i * 4 + 3];
-
-    // If alpha is 0, make it opaque
-    if (a == 0) a = 255;
-
-    data[i * 4] = r;      // R
-    data[i * 4 + 1] = g;  // G
-    data[i * 4 + 2] = b;  // B
-    data[i * 4 + 3] = a;  // A
-  }
-
-  DeleteObject(hbmScreen);
-  DeleteDC(hdcMemDC);
-  ReleaseDC(impl->hwnd, hdcWindow);
 #endif
-  // Create and store the captured image
-  if (width > 0 && height > 0) {
-    SkColorType ct;
-#ifdef __linux__
-    ct = kBGRA_8888_SkColorType;
-    std::span<char> data_span = impl->data;
-#else
-    ct = kRGBA_8888_SkColorType;
-    std::span<char> data_span{data.data(), data.size()};
-#endif
-    auto image_info = SkImageInfo::Make(width, height, ct, SkAlphaType::kPremul_SkAlphaType);
-    SkPixmap pixmap(image_info, data_span.data(), width * 4);
-    captured_image = SkImages::RasterFromPixmapCopy(pixmap);
-
-    ocr_text = RunOCR(width, height, data_span);
-  } else {
-    captured_image.reset();
-    ocr_text = "";
-  }
+  ocr_text = RunOCR();
   if (out) {
     out->SetText(here, ocr_text);
   }

@@ -35,7 +35,7 @@ struct Window : public LiveObject, Runnable {
   Ptr<gui::Widget> MakeWidget() override;
 
   // Run OCR on the provided image data
-  std::string RunOCR(int width, int height, std::span<char> data);
+  std::string RunOCR();
 
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here) override;

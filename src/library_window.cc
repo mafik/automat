@@ -787,29 +787,12 @@ void Window::OnRun(Location& here) {
       return;
     }
 
-    HDC hdcWindow = GetDC(hwnd);
-    HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
+    HDC hdc_remote = GetDC(hwnd);
+    HDC hdc_mem = CreateCompatibleDC(hdc_remote);
 
-    if (!hdcMemDC) {
-      ReleaseDC(hwnd, hdcWindow);
+    if (!hdc_mem) {
+      ReleaseDC(hwnd, hdc_remote);
       return;
-    }
-
-    HBITMAP hbmScreen = CreateCompatibleBitmap(hdcWindow, width, height);
-    if (!hbmScreen) {
-      DeleteDC(hdcMemDC);
-      ReleaseDC(hwnd, hdcWindow);
-      return;
-    }
-
-    SelectObject(hdcMemDC, hbmScreen);
-
-    // Try PrintWindow first (works better for some windows)
-    BOOL printResult = PrintWindow(hwnd, hdcMemDC, PW_RENDERFULLCONTENT);
-
-    if (!printResult) {
-      // Fallback to BitBlt
-      BitBlt(hdcMemDC, 0, 0, width, height, hdcWindow, 0, 0, SRCCOPY);
     }
 
     // Get bitmap data
@@ -821,17 +804,35 @@ void Window::OnRun(Location& here) {
     bi.biBitCount = 32;
     bi.biCompression = BI_RGB;
 
-    sk_sp<SkData> pixels = SkData::MakeUninitialized(width * height * 4);
+    void* bits;
 
-    GetDIBits(hdcWindow, hbmScreen, 0, height, pixels->writable_data(),
-              reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS);
+    HBITMAP hbitmap =
+        CreateDIBSection(hdc_mem, (BITMAPINFO*)&bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!hbitmap) {
+      DeleteDC(hdc_mem);
+      ReleaseDC(hwnd, hdc_remote);
+      return;
+    }
 
-    DeleteObject(hbmScreen);
-    DeleteDC(hdcMemDC);
-    ReleaseDC(hwnd, hdcWindow);
+    sk_sp<SkData> pixels = SkData::MakeWithProc(
+        bits, width * height * 4, [](const void* bits, void* ctx) { DeleteObject((HBITMAP)ctx); },
+        hbitmap);
 
-    auto image_info = SkImageInfo::Make(width, height, kBGRA_8888_SkColorType,
-                                        SkAlphaType::kUnpremul_SkAlphaType);
+    SelectObject(hdc_mem, hbitmap);
+
+    // Try PrintWindow first (works better for some windows)
+    BOOL printResult = PrintWindow(hwnd, hdc_mem, PW_RENDERFULLCONTENT);
+    if (!printResult) {
+      // Fallback to BitBlt
+      LOG << "PrintWindow failed, falling back to BitBlt";
+      BitBlt(hdc_mem, 0, 0, width, height, hdc_remote, 0, 0, SRCCOPY);
+    }
+
+    DeleteDC(hdc_mem);
+    ReleaseDC(hwnd, hdc_remote);
+
+    auto image_info =
+        SkImageInfo::Make(width, height, kBGRA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
     auto result = SkImages::RasterFromData(image_info, pixels, width * 4);
     {
       auto lock = std::lock_guard(mutex);

@@ -350,23 +350,19 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     if (window_name != window->title) {
       window_name = window->title;
     }
+    // Create local copy of the captured image
+    if (window->impl->width > 0 && window->impl->height > 0) {
+      SkColorType ct;
 #ifdef __linux__
-    // Create local copy of the captured image
-    if (window->impl->width > 0 && window->impl->height > 0) {
-      auto image_info = SkImageInfo::Make(window->impl->width, window->impl->height,
-                                          kBGRA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
-      SkPixmap pixmap(image_info, window->impl->data.data(), window->impl->width * 4);
-      captured_image = SkImages::RasterFromPixmapCopy(pixmap);
-    }
-#elif defined(_WIN32)
-    // Create local copy of the captured image
-    if (window->impl->width > 0 && window->impl->height > 0) {
-      auto image_info = SkImageInfo::Make(window->impl->width, window->impl->height,
-                                          kRGBA_8888_SkColorType, SkAlphaType::kPremul_SkAlphaType);
-      SkPixmap pixmap(image_info, window->impl->data.data(), window->impl->width * 4);
-      captured_image = SkImages::RasterFromPixmapCopy(pixmap);
-    }
+      ct = kBGRA_8888_SkColorType;
+#else
+      ct = kRGBA_8888_SkColorType;
 #endif
+      auto image_info = SkImageInfo::Make(window->impl->width, window->impl->height, ct,
+                                          SkAlphaType::kPremul_SkAlphaType);
+      SkPixmap pixmap(image_info, window->impl->data.data(), window->impl->width * 4);
+      captured_image = SkImages::RasterFromPixmapCopy(pixmap);
+    }
     return animation::Finished;
   }
 
@@ -781,9 +777,8 @@ void Window::OnRun(Location& here) {
     return;
   }
 
-  if (!impl->hwnd || !IsWindow(impl->hwnd)) {
-    impl->width = impl->height = 0;
-    impl->data.clear();
+  if (!IsWindow(impl->hwnd)) {
+    here.ReportError("Invalid window selected");
     return;
   }
 

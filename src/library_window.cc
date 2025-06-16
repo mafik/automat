@@ -172,6 +172,7 @@ Ptr<Object> Window::Clone() const {
   ret->x_max_ratio = x_max_ratio;
   ret->y_min_ratio = y_min_ratio;
   ret->y_max_ratio = y_max_ratio;
+  ret->captured_image = captured_image;
 #ifdef __linux__
   ret->impl->xcb_window = impl->xcb_window;
 #endif
@@ -344,25 +345,13 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   animation::Phase Tick(time::Timer&) override {
     tesseract_text.clear();
-    captured_image.reset();  // Clear previous image
     auto window = LockWindow();
     auto lock = std::lock_guard(window->mutex);
     if (window_name != window->title) {
       window_name = window->title;
     }
-    // Create local copy of the captured image
-    if (window->impl->width > 0 && window->impl->height > 0) {
-      SkColorType ct;
-#ifdef __linux__
-      ct = kBGRA_8888_SkColorType;
-#else
-      ct = kRGBA_8888_SkColorType;
-#endif
-      auto image_info = SkImageInfo::Make(window->impl->width, window->impl->height, ct,
-                                          SkAlphaType::kPremul_SkAlphaType);
-      SkPixmap pixmap(image_info, window->impl->data.data(), window->impl->width * 4);
-      captured_image = SkImages::RasterFromPixmapCopy(pixmap);
-    }
+    // Copy the captured image from the Window object
+    captured_image = window->captured_image;
     return animation::Finished;
   }
 
@@ -861,6 +850,22 @@ void Window::OnRun(Location& here) {
   DeleteDC(hdcMemDC);
   ReleaseDC(impl->hwnd, hdcWindow);
 #endif
+  // Create and store the captured image
+  if (impl->width > 0 && impl->height > 0) {
+    SkColorType ct;
+#ifdef __linux__
+    ct = kBGRA_8888_SkColorType;
+#else
+    ct = kRGBA_8888_SkColorType;
+#endif
+    auto image_info =
+        SkImageInfo::Make(impl->width, impl->height, ct, SkAlphaType::kPremul_SkAlphaType);
+    SkPixmap pixmap(image_info, impl->data.data(), impl->width * 4);
+    captured_image = SkImages::RasterFromPixmapCopy(pixmap);
+  } else {
+    captured_image.reset();
+  }
+
   ocr_text = RunOCR();
   if (out) {
     out->SetText(here, ocr_text);

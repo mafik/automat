@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <include/core/SkImage.h>
 #include <tesseract/baseapi.h>
 
 #include "base.hh"
@@ -14,6 +15,7 @@ struct Window : public LiveObject, Runnable {
   Str title = "";
   Str ocr_text = "";
   bool run_continuously = true;
+  sk_sp<SkImage> captured_image;  // Captured window image
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.

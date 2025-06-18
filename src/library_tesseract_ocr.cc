@@ -7,13 +7,17 @@
 #include <include/core/SkColorFilter.h>
 #include <include/core/SkColorType.h>
 #include <include/core/SkMaskFilter.h>
+#include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkShader.h>
 #include <include/core/SkVertices.h>
+#include <include/effects/SkTrimPathEffect.h>
 #include <leptonica/allheaders.h>
 #include <leptonica/pix.h>
+#include <tesseract/ocrclass.h>
 
 #include "action.hh"
+#include "animation.hh"
 #include "argument.hh"
 #include "color.hh"
 #include "connector_optical.hh"
@@ -119,7 +123,13 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   Rect region_rect;
   std::string ocr_text;
   Optional<gui::Pointer::IconOverride> icon_override;
-  float aspect_ratio = 1.0f;  // width / height
+  animation::SpringV2<float> aspect_ratio = 1.618f;
+  Rect status_rect;
+  Optional<float> status_progress_ratio;
+
+  // Number from 0 to 1, used to highlight a section of wireframe while OCR is running
+  float laser_phase = 0.0f;
+  float laser_alpha = 0.0f;
 
   enum AxisX {
     Left = 0,
@@ -247,13 +257,27 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   }
 
   animation::Phase Tick(time::Timer& timer) override {
+    auto phase = animation::Finished;
     // Copy source image from connected image provider
     if (auto tesseract = LockTesseract()) {
+      if (tesseract->status_mutex.try_lock()) {
+        status_rect = tesseract->status_rect;
+        status_progress_ratio = tesseract->status_progress_ratio;
+        tesseract->status_mutex.unlock();
+      }
+      if (status_progress_ratio.has_value()) {
+        phase |= animation::Animating;
+        laser_phase = fmod(timer.NowSeconds(), 1.0f);
+        laser_alpha = 1.0f;
+      } else {
+        phase |= animation::LinearApproach(0, timer.d, 2, laser_alpha);
+      }
       region_rect.left = tesseract->x_min_ratio;
       region_rect.right = tesseract->x_max_ratio;
       region_rect.bottom = tesseract->y_min_ratio;
       region_rect.top = tesseract->y_max_ratio;
       ocr_text = tesseract->ocr_text;
+      float target_aspect_ratio = 1.618f;
       if (auto here_ptr = tesseract->here.lock()) {
         auto image_obj = image_arg.FindObject(*here_ptr, {});
         if (image_obj) {
@@ -273,11 +297,13 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
               }
               float width = image_width + kEdgeWidth + kOuterSidesWidth * 2;
               float height = image_height + kEdgeWidth + kOuterSidesWidth * 2;
-              aspect_ratio = width / height;
+              target_aspect_ratio = width / height;
             }
           }
         }
       }
+
+      phase |= aspect_ratio.SpringTowards(target_aspect_ratio, timer.d, 0.3, 0.15);
 
       auto outer_front = OuterRect();
       outer_front = outer_front.Outset(-kEdgeWidth / 2);
@@ -305,7 +331,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       points[Left, Top, Front, Inner] = inner_front.TopLeftCorner();
       points[Right, Top, Front, Inner] = inner_front.TopRightCorner();
     }
-    return animation::Finished;
+    return phase;
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -317,9 +343,9 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       image_size.y = source_image->height();
       image_shader = source_image->makeShader(kFastSamplingOptions, nullptr);
     } else {
-      image_size.x = 1_cm;
-      image_size.y = 1_cm;
-      image_shader = SkShaders::Color(SK_ColorCYAN);
+      image_size.x = 1;
+      image_size.y = 1;
+      image_shader = SkShaders::Color("#808080"_color);
     }
 
     {  // blurry background
@@ -342,21 +368,27 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       pos[10] = pos[6];
       pos[11] = pos[7];
 
+      constexpr static SkColor kBaseWallColor = "#00a3ff"_color;
+      auto brighter = color::AdjustLightness(kBaseWallColor, 10);
+      auto darker = color::AdjustLightness(kBaseWallColor, -20);
+      auto darkest = color::AdjustLightness(kBaseWallColor, -50);
+      auto darker_transparent = SkColorSetA(darker, 0x80);
+
       auto colors = builder.colors();
-      colors[0] = "#4b3d2680"_color;
-      colors[1] = "#4b3d2680"_color;
-      colors[2] = "#4b3d2680"_color;
-      colors[3] = "#4b3d2680"_color;
+      colors[0] = darker_transparent;
+      colors[1] = darker_transparent;
+      colors[2] = darker_transparent;
+      colors[3] = darker_transparent;
 
-      colors[4] = "#2c2416ff"_color;
-      colors[5] = "#2c2416ff"_color;
-      colors[6] = "#b7955eff"_color;
-      colors[7] = "#b7955eff"_color;
+      colors[4] = darkest;
+      colors[5] = darkest;
+      colors[6] = brighter;
+      colors[7] = brighter;
 
-      colors[8] = "#4b3d26ff"_color;
-      colors[9] = "#4b3d26ff"_color;
-      colors[10] = "#57472cff"_color;
-      colors[11] = "#57472cff"_color;
+      colors[8] = darker;
+      colors[9] = darker;
+      colors[10] = kBaseWallColor;
+      colors[11] = kBaseWallColor;
 
       auto tex_coords = builder.texCoords();
       tex_coords[0] = SkPoint::Make(0, 0);
@@ -406,9 +438,12 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       border_path.close();
       return border_path;
     };
-    auto color_outer = color::MakeTintFilter("#b7955e"_color, 20);
-    auto color_inner = color::MakeTintFilter("#ee7857"_color, 20);
-    auto color_inner_outer = color::MakeTintFilter("#676767"_color, 20);
+    static constexpr SkColor kInnerColor = "#ee7857"_color;
+    auto color_outer = color::MakeTintFilter("#333333"_color, 80);
+    auto color_outer_back = color::MakeTintFilter("#111111"_color, 20);
+    auto color_inner = color::MakeTintFilter(kInnerColor, 20);
+    auto color_inner_back = color::MakeTintFilter(kInnerColor, 10);
+    auto color_inner_outer = color::MakeTintFilter("#111111"_color, 20);
 
     {  // sharp center
       auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
@@ -433,6 +468,18 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       bg_paint.setShader(image_shader);
       auto vertices = builder.detach();
       canvas.drawVertices(vertices.get(), SkBlendMode::kSrc, bg_paint);
+
+      Rect focus_rect;
+      float w = image_size.x * region_rect.Width();
+      float h = image_size.y * region_rect.Height();
+      focus_rect.left = lerp(pos[0].x(), pos[1].x(), status_rect.left / w);
+      focus_rect.right = lerp(pos[0].x(), pos[1].x(), status_rect.right / w);
+      focus_rect.top = lerp(pos[2].y(), pos[0].y(), status_rect.top / h);
+      focus_rect.bottom = lerp(pos[2].y(), pos[0].y(), status_rect.bottom / h);
+      SkPaint paint;
+      paint.setColor(kInnerColor);
+      paint.setAlphaf(0.5);
+      canvas.drawRect(focus_rect, paint);
     }
 
     for (int i = 0; i < 2; ++i) {
@@ -486,13 +533,13 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     auto outer_back =
         RectPath(points[Left, Top, Back, Outer], points[Right, Top, Back, Outer],
                  points[Right, Bottom, Back, Outer], points[Left, Bottom, Back, Outer]);
-    gui::DrawCable(canvas, outer_back, color_outer, CableTexture::Smooth, kEdgeWidth * 0.5,
+    gui::DrawCable(canvas, outer_back, color_outer_back, CableTexture::Smooth, kEdgeWidth * 0.5,
                    kEdgeWidth * 0.5, nullptr);
 
     auto inner_back =
         RectPath(points[Left, Top, Back, Inner], points[Right, Top, Back, Inner],
                  points[Right, Bottom, Back, Inner], points[Left, Bottom, Back, Inner]);
-    gui::DrawCable(canvas, inner_back, color_inner, CableTexture::Smooth, kEdgeWidth * 0.5,
+    gui::DrawCable(canvas, inner_back, color_inner_back, CableTexture::Smooth, kEdgeWidth * 0.5,
                    kEdgeWidth * 0.5, nullptr);
 
     for (int k = 0; k < 2; ++k) {
@@ -527,6 +574,74 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
                  points[Right, Bottom, Front, Outer], points[Left, Bottom, Front, Outer]);
     gui::DrawCable(canvas, outer_front, color_outer, CableTexture::Smooth, kEdgeWidth, kEdgeWidth,
                    nullptr);
+
+    if (laser_alpha > 0.0f) {
+      SkPath path;
+      path.moveTo(points[Left, Top, Front, Outer]);
+      path.lineTo(points[Right, Top, Front, Outer]);
+      path.lineTo(points[Right, Top, Front, Inner]);
+      path.lineTo(points[Right, Bottom, Front, Inner]);
+      path.lineTo(points[Right, Bottom, Back, Inner]);
+      path.lineTo(points[Left, Bottom, Back, Inner]);
+      path.lineTo(points[Left, Bottom, Back, Outer]);
+      path.lineTo(points[Left, Top, Back, Outer]);
+      path.lineTo(points[Left, Top, Front, Outer]);
+      path.lineTo(points[Left, Top, Front, Inner]);
+      path.lineTo(points[Left, Top, Back, Inner]);
+      path.lineTo(points[Right, Top, Back, Inner]);
+      path.lineTo(points[Right, Top, Back, Outer]);
+      path.lineTo(points[Right, Bottom, Back, Outer]);
+      path.lineTo(points[Right, Bottom, Front, Outer]);
+      path.lineTo(points[Left, Bottom, Front, Outer]);
+      path.lineTo(points[Left, Bottom, Front, Inner]);
+      path.lineTo(points[Left, Bottom, Back, Inner]);
+      path.lineTo(points[Left, Top, Back, Inner]);
+      path.lineTo(points[Left, Top, Back, Outer]);
+      path.lineTo(points[Right, Top, Back, Outer]);
+      path.lineTo(points[Right, Top, Front, Outer]);
+      path.lineTo(points[Right, Bottom, Front, Outer]);
+      path.lineTo(points[Right, Bottom, Front, Inner]);
+      path.lineTo(points[Left, Bottom, Front, Inner]);
+      path.lineTo(points[Left, Top, Front, Inner]);
+      path.lineTo(points[Right, Top, Front, Inner]);
+      path.lineTo(points[Right, Top, Back, Inner]);
+      path.lineTo(points[Right, Bottom, Back, Inner]);
+      path.lineTo(points[Right, Bottom, Back, Outer]);
+      path.lineTo(points[Left, Bottom, Back, Outer]);
+      path.lineTo(points[Left, Bottom, Front, Outer]);
+      path.lineTo(points[Left, Top, Front, Outer]);
+      path.close();
+      float laser_width = status_progress_ratio.value_or(1.0f);
+      float laser_start = laser_phase;
+      float laser_end = laser_start + laser_width;
+      auto mode = SkTrimPathEffect::Mode::kNormal;
+      if (laser_end > 1.0f) {
+        float tmp = laser_start;
+        laser_start = laser_end - 1.0f;
+        laser_end = tmp;
+        mode = SkTrimPathEffect::Mode::kInverted;
+      }
+      auto effect = SkTrimPathEffect::Make(laser_start, laser_end, mode);
+      SkPaint paint;
+      paint.setStyle(SkPaint::kStroke_Style);
+      paint.setStrokeWidth(kEdgeWidth * 0.5);
+      paint.setStrokeJoin(SkPaint::kRound_Join);
+      paint.setAntiAlias(true);
+      paint.setPathEffect(effect);
+
+      // glow
+      paint.setColor(kInnerColor);
+      paint.setAlphaf(laser_alpha);
+      paint.setMaskFilter(
+          SkMaskFilter::MakeBlur(SkBlurStyle::kOuter_SkBlurStyle, kEdgeWidth * 0.5f));
+      canvas.drawPath(path, paint);
+
+      // white core
+      paint.setColor("#ffffff"_color);
+      paint.setAlphaf(laser_alpha);
+      paint.setMaskFilter(nullptr);
+      canvas.drawPath(path, paint);
+    }
 
     return;
 
@@ -763,9 +878,33 @@ void TesseractOCR::OnRun(Location& here) {
   if (ocr_width > 0 && ocr_height > 0) {
     tesseract.SetImage(pix);
     tesseract.SetRectangle(ocr_left, ocr_top, ocr_width, ocr_height);
-    int recognize_status = tesseract.Recognize(nullptr);
+
+    tesseract::ETEXT_DESC monitor;
+    monitor.cancel_this = this;
+    monitor.progress_callback2 = [](tesseract::ETEXT_DESC* etext, int left, int right, int top,
+                                    int bottom) {
+      auto self = (TesseractOCR*)etext->cancel_this;
+      if (self->status_mutex.try_lock()) {
+        self->status_rect = Rect(left, bottom, right, top);
+        self->status_progress_ratio = etext->progress / 100.0f;
+        self->status_mutex.unlock();
+        self->WakeWidgetsAnimation();
+      }
+      return false;
+    };
+    {
+      auto lock = std::lock_guard(status_mutex);
+      status_rect = Rect(0, 0, 0, 0);
+      status_progress_ratio = 0.0f;
+    }
+    int recognize_status = tesseract.Recognize(&monitor);
     if (recognize_status) {
       LOG << "Tesseract recognize failed: " << recognize_status;
+    }
+    {
+      auto lock = std::lock_guard(status_mutex);
+      status_rect = Rect(0, 0, 0, 0);
+      status_progress_ratio.reset();
     }
     utf8_text = tesseract.GetUTF8Text();
     StripTrailingWhitespace(utf8_text);

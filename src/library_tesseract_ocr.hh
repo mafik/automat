@@ -14,6 +14,13 @@ struct TesseractOCR : public LiveObject, Runnable {
   mutable std::mutex mutex;
   Str ocr_text = "";
 
+  // Guards access to the status variables
+  std::mutex status_mutex;
+  // Area which is currently being OCRed
+  Rect status_rect;
+  // Progress ratio of the OCR (0.0 to 1.0)
+  Optional<float> status_progress_ratio = std::nullopt;
+
   tesseract::TessBaseAPI tesseract;
 
   float x_min_ratio = 0.25f;

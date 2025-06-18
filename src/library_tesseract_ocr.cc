@@ -265,9 +265,9 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         status_progress_ratio = tesseract->status_progress_ratio;
         tesseract->status_mutex.unlock();
       }
+      laser_phase = fmod(timer.NowSeconds(), 1.0f);
       if (status_progress_ratio.has_value()) {
         phase |= animation::Animating;
-        laser_phase = fmod(timer.NowSeconds(), 1.0f);
         laser_alpha = 1.0f;
       } else {
         phase |= animation::LinearApproach(0, timer.d, 2, laser_alpha);
@@ -611,7 +611,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       path.lineTo(points[Left, Bottom, Front, Outer]);
       path.lineTo(points[Left, Top, Front, Outer]);
       path.close();
-      float laser_width = status_progress_ratio.value_or(1.0f);
+      float laser_width = status_progress_ratio.value_or(4.0f) / 4.f;
       float laser_start = laser_phase;
       float laser_end = laser_start + laser_width;
       auto mode = SkTrimPathEffect::Mode::kNormal;

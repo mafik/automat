@@ -17,6 +17,7 @@ struct Location;
 struct Pointer;
 struct Container;
 struct Argument;
+struct ImageProvider;
 
 // Objects are interactive pieces of data & behavior.
 //
@@ -51,6 +52,9 @@ struct Object : public virtual ReferenceCounted {
   virtual Pointer* AsPointer() { return nullptr; }
 
   virtual Container* AsContainer() { return nullptr; }
+
+  // Image-like objects can provide image data.
+  virtual ImageProvider* AsImageProvider() { return nullptr; }
 
   virtual void Fields(std::function<void(Object&)> cb) {}
 

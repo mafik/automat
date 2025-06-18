@@ -2,32 +2,22 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <include/core/SkImage.h>
-#include <tesseract/baseapi.h>
-
 #include "base.hh"
+#include "image_provider.hh"
 #include "str.hh"
 #include "time.hh"
 
 namespace automat::library {
 
-struct Window : public LiveObject, Runnable {
+struct Window : public LiveObject, Runnable, ImageProvider {
   std::mutex mutex;
   Str title = "";
-  Str ocr_text = "";
   bool run_continuously = true;
   sk_sp<SkImage> captured_image;  // Captured window image
 
   struct Impl;
   // Private implementation to avoid polluting header with platform-specific defines.
   std::unique_ptr<Impl> impl;
-
-  tesseract::TessBaseAPI tesseract;
-
-  float x_min_ratio = 0.25f;
-  float x_max_ratio = 0.75f;
-  float y_min_ratio = 0.25f;
-  float y_max_ratio = 0.75f;
 
   time::T capture_time = 0;
 
@@ -36,9 +26,6 @@ struct Window : public LiveObject, Runnable {
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
   Ptr<gui::Widget> MakeWidget() override;
-
-  // Run OCR on the provided image data
-  std::string RunOCR();
 
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here) override;
@@ -51,6 +38,10 @@ struct Window : public LiveObject, Runnable {
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
+
+  // ImageProvider interface
+  sk_sp<SkImage> GetImage() override;
+  ImageProvider* AsImageProvider() override;
 };
 
 }  // namespace automat::library

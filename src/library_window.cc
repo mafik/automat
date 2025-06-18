@@ -7,12 +7,9 @@
 #include <include/core/SkImage.h>
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradientShader.h>
-#include <leptonica/allheaders.h>
-#include <leptonica/pix.h>
 
 #include "argument.hh"
 #include "color.hh"
-#include "embedded.hh"
 #include "font.hh"
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
@@ -122,14 +119,7 @@ struct DisableContinuousRunOption : Option {
   }
 };
 
-Window::Window() {
-  auto eng_traineddata = embedded::assets_eng_traineddata.content;
-  if (tesseract.Init(eng_traineddata.data(), eng_traineddata.size(), "eng",
-                     tesseract::OEM_LSTM_ONLY, nullptr, 0, nullptr, nullptr, true, nullptr)) {
-    LOG << "Tesseract init failed";
-  }
-  impl = std::make_unique<Impl>();
-}
+Window::Window() { impl = std::make_unique<Impl>(); }
 
 std::string_view Window::Name() const { return "Window"; }
 
@@ -165,10 +155,6 @@ struct Window::Impl {
 Ptr<Object> Window::Clone() const {
   auto ret = MakePtr<Window>();
   ret->run_continuously = run_continuously;
-  ret->x_min_ratio = x_min_ratio;
-  ret->x_max_ratio = x_max_ratio;
-  ret->y_min_ratio = y_min_ratio;
-  ret->y_max_ratio = y_max_ratio;
   ret->captured_image = captured_image;
   ret->capture_time = capture_time;
 #ifdef __linux__
@@ -208,55 +194,6 @@ struct PickButton : theme::xp::TitleButton {
     on_activate(p);
   }
 };
-
-struct TextArgument : Argument {
-  TextDrawable icon;
-  TextArgument() : Argument("text", kRequiresObject), icon("T", gui::kLetterSize, gui::GetFont()) {
-    requirements.push_back([](Location* location, Object* object, std::string& error) {
-      return;  // noop for now
-    });
-  }
-  PaintDrawable& Icon() override { return icon; }
-};
-
-TextArgument text_arg;
-
-std::string Window::RunOCR() {
-  auto lock = std::lock_guard(mutex);
-  int width = captured_image->width();
-  int height = captured_image->height();
-  if (width == 0 || height == 0) return "";
-  std::string utf8_text = "";
-  auto pix = pixCreate(width, height, 32);
-  uint32_t* pix_data = pixGetData(pix);
-  SkPixmap pixmap;
-  if (!captured_image->peekPixels(&pixmap)) {
-    return "peekPixels failed";
-  }
-  auto pixInfo =
-      SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, SkAlphaType::kUnpremul_SkAlphaType);
-  pixmap.readPixels(pixInfo, pix_data, width * 4);
-  int ocr_left = 0, ocr_top = 0, ocr_width = 0, ocr_height = 0;
-  ocr_left = x_min_ratio * width;
-  ocr_top = (1 - y_max_ratio) * height;
-  ocr_width = width * (x_max_ratio - x_min_ratio);
-  ocr_height = height * (y_max_ratio - y_min_ratio);
-
-  if (ocr_width > 0 && ocr_height > 0) {
-    tesseract.SetImage(pix);
-    tesseract.SetRectangle(ocr_left, ocr_top, ocr_width,
-                           ocr_height);  // SetRectangle must come after SetImage
-    int recognize_status = tesseract.Recognize(nullptr);
-    if (recognize_status) {
-      LOG << "Tesseract recognize failed: " << recognize_status;
-    }
-    utf8_text = tesseract.GetUTF8Text();
-    StripTrailingWhitespace(utf8_text);
-  }
-
-  pixDestroy(&pix);
-  return utf8_text;
-}
 
 #ifdef __linux__
 using WindowVisitor = std::function<ControlFlow(xcb_window_t window, xcb_window_t parent)>;
@@ -300,7 +237,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   Ptr<PickButton> pick_button;
   std::string window_name;
 
-  std::string tesseract_text;
   sk_sp<SkImage> captured_image;  // Local copy of the captured bitmap
   SkColor title_bar_color = "#0066ff"_color;
 
@@ -342,7 +278,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   SkPath Shape() const override { return SkPath::RRect(CoarseBounds().sk); }
 
   animation::Phase Tick(time::Timer& timer) override {
-    tesseract_text.clear();
     auto window = LockWindow();
     auto lock = std::lock_guard(window->mutex);
     if (window_name != window->title) {
@@ -373,7 +308,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     RRect contents_rrect;
     Rect title_rect;
     Rect full_region_rect;
-    Rect region_rect;
     SkMatrix image_matrix;
   };
 
@@ -395,14 +329,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     } else {
       l.full_region_rect = l.contents_rrect.rect;
     }
-    if (auto window = LockWindow()) {
-      l.region_rect =
-          Rect(lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_min_ratio),
-               lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_min_ratio),
-               lerp(l.full_region_rect.left, l.full_region_rect.right, window->x_max_ratio),
-               lerp(l.full_region_rect.bottom, l.full_region_rect.top, window->y_max_ratio));
-    }
-    l.region_rect = l.region_rect.Outset(kRegionStrokeWidth / 2);
     return l;
   }
 
@@ -431,167 +357,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
       canvas.restore();
     }
 
-    SkPaint region_paint;
-    region_paint.setColor("#ff0000"_color);
-    region_paint.setStyle(SkPaint::kStroke_Style);
-    region_paint.setStrokeWidth(kRegionStrokeWidth);
-    region_paint.setAntiAlias(true);
-    region_paint.setAlphaf(0.5f);
-
-    canvas.drawRect(layout.region_rect.sk, region_paint);
-
-    float text_width = font.MeasureText(tesseract_text);
-    float scale_x = 1;
-    if (text_width > layout.contents_rrect.rect.Width()) {
-      scale_x = layout.contents_rrect.rect.Width() / text_width;
-    }
-    canvas.save();
-    auto text_pos = layout.contents_rrect.rect.TopLeftCorner();
-    text_pos.x += kContentMargin;
-    text_pos.y -= kContentMargin + font.letter_height;
-    canvas.translate(text_pos.x, text_pos.y);
-    if (scale_x != 1) {
-      canvas.scale(scale_x, 1);
-    }
-
-    SkPaint outline_paint;
-    outline_paint.setColor("#000000"_color);
-    outline_paint.setStyle(SkPaint::kStroke_Style);
-    outline_paint.setStrokeWidth(1_mm / font.font_scale);
-    font.DrawText(canvas, tesseract_text, outline_paint);
-    font.DrawText(canvas, tesseract_text, title_text_paint);
-
-    canvas.restore();
-
     DrawChildren(canvas);
-  }
-
-  enum DragRegionPart {
-    kDragRegionPart_XMin = 1 << 0,
-    kDragRegionPart_XMax = 1 << 1,
-    kDragRegionPart_YMin = 1 << 2,
-    kDragRegionPart_YMax = 1 << 3,
-    kDragRegionPart_X = kDragRegionPart_XMin | kDragRegionPart_XMax,
-    kDragRegionPart_Y = kDragRegionPart_YMin | kDragRegionPart_YMax,
-  };
-
-  // Drags the whole region around
-  struct DragRegionAction : Action {
-    Ptr<WindowWidget> widget;
-    Vec2 contact_point;
-    uint32_t drag_region_mask = 0;
-    DragRegionAction(gui::Pointer& pointer, Ptr<WindowWidget>&& widget_arg)
-        : Action(pointer), widget(std::move(widget_arg)) {
-      contact_point = pointer.PositionWithin(*widget);
-      auto layout = widget->Layout();
-      auto inner_region_rect = layout.region_rect.Outset(-kRegionStrokeWidth / 2);
-      if (contact_point.x < inner_region_rect.right) {
-        drag_region_mask |= kDragRegionPart_XMin;
-      }
-      if (contact_point.x > inner_region_rect.left) {
-        drag_region_mask |= kDragRegionPart_XMax;
-      }
-      if (contact_point.y < inner_region_rect.top) {
-        drag_region_mask |= kDragRegionPart_YMin;
-      }
-      if (contact_point.y > inner_region_rect.bottom) {
-        drag_region_mask |= kDragRegionPart_YMax;
-      }
-      // Dragging on the border produces a weird mask that affects three coordinates.
-      // When this happens, we disable the drag on the axis where both are enabled and turn this
-      // into a resize.
-      if (std::popcount(drag_region_mask) == 3) {
-        if ((drag_region_mask & kDragRegionPart_X) == kDragRegionPart_X) {
-          drag_region_mask &= ~kDragRegionPart_X;
-        }
-        if ((drag_region_mask & kDragRegionPart_Y) == kDragRegionPart_Y) {
-          drag_region_mask &= ~kDragRegionPart_Y;
-        }
-      }
-    }
-    void Update() override {
-      Vec2 new_position = pointer.PositionWithin(*widget);
-      Vec2 d = new_position - contact_point;
-      contact_point = new_position;
-      auto layout = widget->Layout();
-      d /= layout.full_region_rect.Size();
-
-      if (auto window = widget->LockWindow()) {
-        // Shift X
-        if (drag_region_mask & kDragRegionPart_XMin) {
-          window->x_min_ratio += d.x;
-        }
-        if (drag_region_mask & kDragRegionPart_XMax) {
-          window->x_max_ratio += d.x;
-        }
-        // Enforce x_min <= x_max
-        if (window->x_min_ratio > window->x_max_ratio) {
-          if (drag_region_mask & kDragRegionPart_XMin) {
-            window->x_min_ratio = window->x_max_ratio;
-          } else {
-            window->x_max_ratio = window->x_min_ratio;
-          }
-        }
-        // Enforce x_max <= 1
-        if (window->x_max_ratio > 1) {
-          if (drag_region_mask & kDragRegionPart_XMin) {
-            window->x_min_ratio -= window->x_max_ratio - 1;
-          }
-          window->x_max_ratio = 1;
-        }
-        // Enforce x_min >= 0
-        if (window->x_min_ratio < 0) {
-          if (drag_region_mask & kDragRegionPart_XMax) {
-            window->x_max_ratio -= window->x_min_ratio;
-          }
-          window->x_min_ratio = 0;
-        }
-
-        // Shift Y
-        if (drag_region_mask & kDragRegionPart_YMin) {
-          window->y_min_ratio += d.y;
-        }
-        if (drag_region_mask & kDragRegionPart_YMax) {
-          window->y_max_ratio += d.y;
-        }
-        // Enforce y_min <= y_max
-        if (window->y_min_ratio > window->y_max_ratio) {
-          if (drag_region_mask & kDragRegionPart_YMin) {
-            window->y_min_ratio = window->y_max_ratio;
-          } else {
-            window->y_max_ratio = window->y_min_ratio;
-          }
-        }
-        // Enforce y_max <= 1
-        if (window->y_max_ratio > 1) {
-          if (drag_region_mask & kDragRegionPart_YMin) {
-            window->y_min_ratio -= window->y_max_ratio - 1;
-          }
-          window->y_max_ratio = 1;
-        }
-        // Enforce y_min >= 0
-        if (window->y_min_ratio < 0) {
-          if (drag_region_mask & kDragRegionPart_YMax) {
-            window->y_max_ratio -= window->y_min_ratio;
-          }
-          window->y_min_ratio = 0;
-        }
-      }
-      widget->WakeAnimation();
-    }
-  };
-
-  std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override {
-    if (btn == gui::PointerButton::Left) {
-      auto contact_point = p.PositionWithin(*this);
-
-      auto layout = Layout();
-      auto outer_region_rect = layout.region_rect.Outset(kRegionStrokeWidth / 2);
-      if (outer_region_rect.Contains(contact_point)) {
-        return std::make_unique<DragRegionAction>(p, AcquirePtr());
-      }
-    }
-    return FallbackWidget::FindAction(p, btn);
   }
 
   void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(pick_button); }
@@ -688,12 +454,6 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     }
 #endif
   }
-  Vec2AndDir ArgStart(const Argument& arg) override {
-    if (&arg == &text_arg) {
-      return Vec2AndDir{kCoarseBounds.rect.LeftCenter(), 180_deg};
-    }
-    return FallbackWidget::ArgStart(arg);
-  }
 
   void VisitOptions(const OptionsVisitor& visitor) const override {
     FallbackWidget::VisitOptions(visitor);
@@ -712,13 +472,9 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
 Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(AcquireWeakPtr<Object>()); }
 
-void Window::Args(std::function<void(Argument&)> cb) {
-  cb(text_arg);
-  cb(next_arg);
-}
+void Window::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 void Window::OnRun(Location& here) {
-  auto out = text_arg.FindObject(here, {});
 #ifdef __linux__
   {
     auto lock = std::lock_guard(mutex);
@@ -863,10 +619,6 @@ void Window::OnRun(Location& here) {
     }
   }
 #endif
-  ocr_text = RunOCR();
-  if (out) {
-    out->SetText(here, ocr_text);
-  }
   WakeWidgetsAnimation();
 
   // Re-schedule execution if continuous run is enabled
@@ -915,14 +667,6 @@ void Window::SerializeState(Serializer& writer, const char* key) const {
   writer.String(title.data(), title.size());
   writer.Key("run_continuously");
   writer.Bool(run_continuously);
-  writer.Key("x_min_ratio");
-  writer.Double(x_min_ratio);
-  writer.Key("x_max_ratio");
-  writer.Double(x_max_ratio);
-  writer.Key("y_min_ratio");
-  writer.Double(y_min_ratio);
-  writer.Key("y_max_ratio");
-  writer.Double(y_max_ratio);
   writer.Key("capture_time");
   writer.Double(capture_time);
 
@@ -936,17 +680,10 @@ void Window::DeserializeState(Location& l, Deserializer& d) {
       d.Get(title, status);
     } else if (key == "run_continuously") {
       d.Get(run_continuously, status);
-    } else if (key == "x_min_ratio") {
-      d.Get(x_min_ratio, status);
-    } else if (key == "x_max_ratio") {
-      d.Get(x_max_ratio, status);
-    } else if (key == "y_min_ratio") {
-      d.Get(y_min_ratio, status);
-    } else if (key == "y_max_ratio") {
-      d.Get(y_max_ratio, status);
     } else if (key == "capture_time") {
       d.Get(capture_time, status);
     }
+    // Skip deprecated ratio fields for backward compatibility
   }
   if (!OK(status)) {
     l.ReportError(status.ToStr());
@@ -955,5 +692,13 @@ void Window::DeserializeState(Location& l, Deserializer& d) {
     AttachToTitle();
   }
 }
+
+// ImageProvider interface implementation
+sk_sp<SkImage> Window::GetImage() {
+  auto lock = std::lock_guard(mutex);
+  return captured_image;
+}
+
+ImageProvider* Window::AsImageProvider() { return this; }
 
 }  // namespace automat::library

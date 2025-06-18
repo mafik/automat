@@ -1,0 +1,837 @@
+// SPDX-FileCopyrightText: Copyright 2025 Automat Authors
+// SPDX-License-Identifier: MIT
+#include "library_tesseract_ocr.hh"
+
+#include <include/core/SkBlurTypes.h>
+#include <include/core/SkColor.h>
+#include <include/core/SkColorFilter.h>
+#include <include/core/SkColorType.h>
+#include <include/core/SkMaskFilter.h>
+#include <include/core/SkPath.h>
+#include <include/core/SkShader.h>
+#include <include/core/SkVertices.h>
+#include <leptonica/allheaders.h>
+#include <leptonica/pix.h>
+
+#include "action.hh"
+#include "argument.hh"
+#include "color.hh"
+#include "connector_optical.hh"
+#include "embedded.hh"
+#include "font.hh"
+#include "gui_constants.hh"
+#include "image_provider.hh"
+#include "log.hh"
+#include "str.hh"
+#include "textures.hh"
+#include "time.hh"
+
+using namespace std;
+
+namespace automat::library {
+
+struct ImageArgument : Argument {
+  TextDrawable icon;
+  ImageArgument()
+      : Argument("image", kRequiresObject), icon("IMG", gui::kLetterSize, gui::GetFont()) {
+    requirements.push_back([](Location* location, Object* object, std::string& error) {
+      // if (!object->AsImageProvider()) {
+      //   error = "Object must provide images";
+      //   return false;
+      // }
+      return true;
+    });
+  }
+  PaintDrawable& Icon() override { return icon; }
+};
+
+struct TextArgument : Argument {
+  TextDrawable icon;
+  TextArgument() : Argument("text", kRequiresObject), icon("T", gui::kLetterSize, gui::GetFont()) {
+    requirements.push_back([](Location* location, Object* object, std::string& error) {
+      return true;  // Any object can receive text
+    });
+  }
+  PaintDrawable& Icon() override { return icon; }
+};
+
+static ImageArgument image_arg;
+static TextArgument text_arg;
+
+struct TesseractWidget;
+
+// Forward declaration for drag action
+struct RegionDragAction : Action {
+  TesseractWidget& widget;
+  int mode;  // Using int to avoid forward declaration issues
+  Vec2 start_pos;
+
+  RegionDragAction(gui::Pointer& pointer, TesseractWidget& widget, int mode);
+  void Update() override;
+};
+
+TesseractOCR::TesseractOCR() {
+  auto eng_traineddata = embedded::assets_eng_traineddata.content;
+  if (tesseract.Init(eng_traineddata.data(), eng_traineddata.size(), "eng",
+                     tesseract::OEM_LSTM_ONLY, nullptr, 0, nullptr, nullptr, true, nullptr)) {
+    LOG << "Tesseract init failed";
+  }
+}
+
+std::string_view TesseractOCR::Name() const { return "Tesseract OCR"; }
+
+Ptr<Object> TesseractOCR::Clone() const {
+  auto ret = MakePtr<TesseractOCR>();
+  ret->x_min_ratio = x_min_ratio;
+  ret->x_max_ratio = x_max_ratio;
+  ret->y_min_ratio = y_min_ratio;
+  ret->y_max_ratio = y_max_ratio;
+  ret->ocr_text = ocr_text;
+  return ret;
+}
+
+struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
+  constexpr static float kSize = 5_cm;
+  constexpr static float kRegionStrokeWidth = 1_mm;
+  constexpr static float kHandleSize = 3_mm;
+  constexpr static float kEdgeWidth = 1_mm;
+  constexpr static float kOuterSidesWidth = 5_mm;
+
+  sk_sp<SkImage> source_image;  // Local copy of the source image
+
+  enum class DragMode {
+    None,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+    Top,
+    Bottom,
+    Left,
+    Right,
+    Move
+  };
+
+  mutable DragMode hover_mode = DragMode::None;
+  DragMode drag_mode = DragMode::None;
+  Vec2 drag_start_pos;
+  float drag_start_x_min, drag_start_x_max, drag_start_y_min, drag_start_y_max;
+  Rect region_rect;
+  std::string ocr_text;
+  Optional<gui::Pointer::IconOverride> icon_override;
+  float aspect_ratio = 1.0f;  // width / height
+
+  enum AxisX {
+    Left = 0,
+    Right = 1,
+  };
+  enum AxisY {
+    Bottom = 0,
+    Top = 1,
+  };
+  enum AxisZ {
+    Back = 0,
+    Front = 1,
+  };
+  enum AxisW {
+    Inner = 0,
+    Outer = 1,
+  };
+  struct TesseractPoints {
+    Vec2 vertices[16];
+    Vec2& operator[](AxisX x, AxisY y, AxisZ z, AxisW w) {
+      return vertices[x * 8 + y * 4 + z * 2 + w];
+    }
+    const Vec2& operator[](AxisX x, AxisY y, AxisZ z, AxisW w) const {
+      return vertices[x * 8 + y * 4 + z * 2 + w];
+    }
+  } points;
+
+  Ptr<TesseractOCR> LockTesseract() const { return LockObject<TesseractOCR>(); }
+
+  TesseractWidget(WeakPtr<Object> tesseract) { object = tesseract; }
+
+  constexpr static RRect kBounds = RRect::MakeSimple(Rect::MakeAtZero({kSize, kSize}), 0);
+
+  RRect CoarseBounds() const override { return kBounds; }
+  Rect OuterRect() const {
+    float width, height;
+    if (aspect_ratio == 1) {
+      width = height = kSize;
+    } else if (aspect_ratio > 1) {
+      width = kSize;
+      height = width / aspect_ratio;
+    } else {
+      height = kSize;
+      width = height * aspect_ratio;
+    }
+    return Rect::MakeAtZero({width, height});
+  }
+  SkPath Shape() const override { return SkPath::Rect(OuterRect()); }
+
+  DragMode GetDragModeAt(Vec2 pos) const {
+    SkRect region = region_rect.sk;
+    if (region.isEmpty()) return DragMode::None;
+
+    float half_handle = kHandleSize / 2;
+
+    // Check corners first
+    if (SkRect::MakeXYWH(region.left() - half_handle, region.top() - half_handle, kHandleSize,
+                         kHandleSize)
+            .contains(pos.x, pos.y)) {
+      return DragMode::TopLeft;
+    }
+    if (SkRect::MakeXYWH(region.right() - half_handle, region.top() - half_handle, kHandleSize,
+                         kHandleSize)
+            .contains(pos.x, pos.y)) {
+      return DragMode::TopRight;
+    }
+    if (SkRect::MakeXYWH(region.left() - half_handle, region.bottom() - half_handle, kHandleSize,
+                         kHandleSize)
+            .contains(pos.x, pos.y)) {
+      return DragMode::BottomLeft;
+    }
+    if (SkRect::MakeXYWH(region.right() - half_handle, region.bottom() - half_handle, kHandleSize,
+                         kHandleSize)
+            .contains(pos.x, pos.y)) {
+      return DragMode::BottomRight;
+    }
+
+    // Check edges
+    if (SkRect::MakeXYWH(region.left() - half_handle, region.top() + half_handle, kHandleSize,
+                         region.height() - kHandleSize)
+            .contains(pos.x, pos.y)) {
+      return DragMode::Left;
+    }
+    if (SkRect::MakeXYWH(region.right() - half_handle, region.top() + half_handle, kHandleSize,
+                         region.height() - kHandleSize)
+            .contains(pos.x, pos.y)) {
+      return DragMode::Right;
+    }
+    if (SkRect::MakeXYWH(region.left() + half_handle, region.top() - half_handle,
+                         region.width() - kHandleSize, kHandleSize)
+            .contains(pos.x, pos.y)) {
+      return DragMode::Top;
+    }
+    if (SkRect::MakeXYWH(region.left() + half_handle, region.bottom() - half_handle,
+                         region.width() - kHandleSize, kHandleSize)
+            .contains(pos.x, pos.y)) {
+      return DragMode::Bottom;
+    }
+
+    // Check inside region for move
+    if (region.contains(pos.x, pos.y)) {
+      return DragMode::Move;
+    }
+
+    return DragMode::None;
+  }
+
+  gui::Pointer::IconType GetCursorForMode(DragMode mode) const {
+    switch (mode) {
+      case DragMode::TopLeft:
+      case DragMode::BottomRight:
+      case DragMode::TopRight:
+      case DragMode::BottomLeft:
+        return gui::Pointer::kIconCrosshair;  // Use crosshair for corner resize
+      case DragMode::Top:
+      case DragMode::Bottom:
+      case DragMode::Left:
+      case DragMode::Right:
+        return gui::Pointer::kIconResizeHorizontal;  // Use horizontal resize for all edges
+      case DragMode::Move:
+        return gui::Pointer::kIconAllScroll;
+      default:
+        return gui::Pointer::kIconArrow;
+    }
+  }
+
+  animation::Phase Tick(time::Timer& timer) override {
+    // Copy source image from connected image provider
+    if (auto tesseract = LockTesseract()) {
+      region_rect.left = tesseract->x_min_ratio;
+      region_rect.right = tesseract->x_max_ratio;
+      region_rect.bottom = tesseract->y_min_ratio;
+      region_rect.top = tesseract->y_max_ratio;
+      ocr_text = tesseract->ocr_text;
+      if (auto here_ptr = tesseract->here.lock()) {
+        auto image_obj = image_arg.FindObject(*here_ptr, {});
+        if (image_obj) {
+          auto image_provider = image_obj->AsImageProvider();
+          if (image_provider) {
+            source_image = image_provider->GetImage();
+            if (source_image) {
+              float image_width = source_image->width();
+              float image_height = source_image->height();
+              constexpr static float kMaxImageDimension = kSize - kEdgeWidth - kOuterSidesWidth * 2;
+              if (image_width > image_height) {
+                image_height = kMaxImageDimension * image_height / image_width;
+                image_width = kMaxImageDimension;
+              } else {
+                image_width = kMaxImageDimension * image_width / image_height;
+                image_height = kMaxImageDimension;
+              }
+              float width = image_width + kEdgeWidth + kOuterSidesWidth * 2;
+              float height = image_height + kEdgeWidth + kOuterSidesWidth * 2;
+              aspect_ratio = width / height;
+            }
+          }
+        }
+      }
+
+      auto outer_front = OuterRect();
+      outer_front = outer_front.Outset(-kEdgeWidth / 2);
+      points[Left, Bottom, Front, Outer] = outer_front.BottomLeftCorner();
+      points[Right, Bottom, Front, Outer] = outer_front.BottomRightCorner();
+      points[Left, Top, Front, Outer] = outer_front.TopLeftCorner();
+      points[Right, Top, Front, Outer] = outer_front.TopRightCorner();
+      auto outer_back = outer_front.Outset(-kOuterSidesWidth);
+      points[Left, Bottom, Back, Outer] = outer_back.BottomLeftCorner();
+      points[Right, Bottom, Back, Outer] = outer_back.BottomRightCorner();
+      points[Left, Top, Back, Outer] = outer_back.TopLeftCorner();
+      points[Right, Top, Back, Outer] = outer_back.TopRightCorner();
+
+      auto inner_back = Rect(lerp(outer_back.left, outer_back.right, region_rect.left),
+                             lerp(outer_back.bottom, outer_back.top, region_rect.bottom),
+                             lerp(outer_back.left, outer_back.right, region_rect.right),
+                             lerp(outer_back.bottom, outer_back.top, region_rect.top));
+      points[Left, Bottom, Back, Inner] = inner_back.BottomLeftCorner();
+      points[Right, Bottom, Back, Inner] = inner_back.BottomRightCorner();
+      points[Left, Top, Back, Inner] = inner_back.TopLeftCorner();
+      points[Right, Top, Back, Inner] = inner_back.TopRightCorner();
+      auto inner_front = inner_back.Outset(3_mm);
+      points[Left, Bottom, Front, Inner] = inner_front.BottomLeftCorner();
+      points[Right, Bottom, Front, Inner] = inner_front.BottomRightCorner();
+      points[Left, Top, Front, Inner] = inner_front.TopLeftCorner();
+      points[Right, Top, Front, Inner] = inner_front.TopRightCorner();
+    }
+    return animation::Finished;
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    Vec2 image_size;
+    sk_sp<SkShader> image_shader;
+    // Draw background image if available
+    if (source_image) {
+      image_size.x = source_image->width();
+      image_size.y = source_image->height();
+      image_shader = source_image->makeShader(kFastSamplingOptions, nullptr);
+    } else {
+      image_size.x = 1_cm;
+      image_size.y = 1_cm;
+      image_shader = SkShaders::Color(SK_ColorCYAN);
+    }
+
+    {  // blurry background
+      auto builder = SkVertices::Builder(
+          SkVertices::kTriangles_VertexMode, 12, 30,
+          SkVertices::kHasTexCoords_BuilderFlag | SkVertices::kHasColors_BuilderFlag);
+      auto pos = builder.positions();
+      pos[0] = points[Left, Top, Back, Outer];
+      pos[1] = points[Right, Top, Back, Outer];
+      pos[2] = points[Left, Bottom, Back, Outer];
+      pos[3] = points[Right, Bottom, Back, Outer];
+
+      pos[4] = points[Left, Top, Front, Outer];
+      pos[5] = points[Right, Top, Front, Outer];
+      pos[6] = points[Left, Bottom, Front, Outer];
+      pos[7] = points[Right, Bottom, Front, Outer];
+
+      pos[8] = pos[4];
+      pos[9] = pos[5];
+      pos[10] = pos[6];
+      pos[11] = pos[7];
+
+      auto colors = builder.colors();
+      colors[0] = "#4b3d2680"_color;
+      colors[1] = "#4b3d2680"_color;
+      colors[2] = "#4b3d2680"_color;
+      colors[3] = "#4b3d2680"_color;
+
+      colors[4] = "#2c2416ff"_color;
+      colors[5] = "#2c2416ff"_color;
+      colors[6] = "#b7955eff"_color;
+      colors[7] = "#b7955eff"_color;
+
+      colors[8] = "#4b3d26ff"_color;
+      colors[9] = "#4b3d26ff"_color;
+      colors[10] = "#57472cff"_color;
+      colors[11] = "#57472cff"_color;
+
+      auto tex_coords = builder.texCoords();
+      tex_coords[0] = SkPoint::Make(0, 0);
+      tex_coords[1] = SkPoint::Make(image_size.x, 0);
+      tex_coords[2] = SkPoint::Make(0, image_size.y);
+      tex_coords[3] = SkPoint::Make(image_size.x, image_size.y);
+
+      tex_coords[4] = tex_coords[2];
+      tex_coords[5] = tex_coords[3];
+      tex_coords[6] = tex_coords[0];
+      tex_coords[7] = tex_coords[1];
+
+      tex_coords[8] = tex_coords[1];
+      tex_coords[9] = tex_coords[0];
+      tex_coords[10] = tex_coords[3];
+      tex_coords[11] = tex_coords[2];
+
+      auto ind = builder.indices();
+      auto Face = [&](int start_index, int a, int b, int c, int d) {
+        ind[start_index] = a;
+        ind[start_index + 1] = b;
+        ind[start_index + 2] = c;
+        ind[start_index + 3] = b;
+        ind[start_index + 4] = c;
+        ind[start_index + 5] = d;
+      };
+      Face(0, 0, 1, 2, 3);    // back face
+      Face(6, 0, 1, 4, 5);    // top face
+      Face(12, 0, 2, 8, 10);  // left face
+      Face(18, 1, 3, 9, 11);  // right face
+      Face(24, 2, 3, 6, 7);   // bottom face
+
+      SkPaint bg_paint;
+      bg_paint.setImageFilter(SkImageFilters::Blur(0.25_mm, 0.25_mm, nullptr));
+      bg_paint.setShader(image_shader);
+      auto vertices = builder.detach();
+      canvas.drawVertices(vertices.get(), SkBlendMode::kDstOver, bg_paint);
+    }
+
+    auto RectPath = [&](Vec2 p1, Vec2 p2, Vec2 p3, Vec2 p4) {
+      SkPath border_path;
+      border_path.moveTo((p1 + p2) / 2);
+      border_path.arcTo(p2, (p2 + p3) / 2, kEdgeWidth / 2);
+      border_path.arcTo(p3, (p4 + p3) / 2, kEdgeWidth / 2);
+      border_path.arcTo(p4, (p1 + p4) / 2, kEdgeWidth / 2);
+      border_path.arcTo(p1, (p1 + p2) / 2, kEdgeWidth / 2);
+      border_path.close();
+      return border_path;
+    };
+    auto color_outer = color::MakeTintFilter("#b7955e"_color, 20);
+    auto color_inner = color::MakeTintFilter("#ee7857"_color, 20);
+    auto color_inner_outer = color::MakeTintFilter("#676767"_color, 20);
+
+    {  // sharp center
+      auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
+                                         SkVertices::kHasTexCoords_BuilderFlag);
+      auto pos = builder.positions();
+      pos[0] = points[Left, Top, Back, Inner];
+      pos[1] = points[Right, Top, Back, Inner];
+      pos[2] = points[Left, Bottom, Back, Inner];
+      pos[3] = points[Right, Bottom, Back, Inner];
+
+      auto tex_coords = builder.texCoords();
+      tex_coords[0] =
+          SkPoint::Make(region_rect.left * image_size.x, region_rect.bottom * image_size.y);
+      tex_coords[1] =
+          SkPoint::Make(region_rect.right * image_size.x, region_rect.bottom * image_size.y);
+      tex_coords[2] =
+          SkPoint::Make(region_rect.left * image_size.x, region_rect.top * image_size.y);
+      tex_coords[3] =
+          SkPoint::Make(region_rect.right * image_size.x, region_rect.top * image_size.y);
+
+      SkPaint bg_paint;
+      bg_paint.setShader(image_shader);
+      auto vertices = builder.detach();
+      canvas.drawVertices(vertices.get(), SkBlendMode::kSrc, bg_paint);
+    }
+
+    for (int i = 0; i < 2; ++i) {
+      for (int j = 0; j < 2; ++j) {
+        SkPath inner_outer;
+        inner_outer.moveTo(points[(AxisX)i, (AxisY)j, Back, Inner]);
+        inner_outer.lineTo(points[(AxisX)i, (AxisY)j, Back, Outer]);
+        gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Smooth,
+                       kEdgeWidth * 0.5, kEdgeWidth * 0.5, nullptr);
+      }
+    }
+    {    // sides of the inner cube
+      {  // top
+        SkPath path;
+        path.moveTo(points[Left, Top, Back, Inner]);
+        path.lineTo(points[Right, Top, Back, Inner]);
+        path.lineTo(points[Right, Top, Front, Inner]);
+        path.lineTo(points[Left, Top, Front, Inner]);
+        path.close();
+        SkPaint paint;
+        paint.setColor("#6c2f1b"_color);
+        paint.setAlphaf(0.5);
+        canvas.drawPath(path, paint);
+      }
+      for (int i = 0; i < 2; ++i) {  // left & right
+        SkPath path;
+        path.moveTo(points[(AxisX)i, Top, Back, Inner]);
+        path.lineTo(points[(AxisX)i, Top, Front, Inner]);
+        path.lineTo(points[(AxisX)i, Bottom, Front, Inner]);
+        path.lineTo(points[(AxisX)i, Bottom, Back, Inner]);
+        path.close();
+        SkPaint paint;
+        paint.setColor("#a54b2f"_color);
+        paint.setAlphaf(0.5);
+        canvas.drawPath(path, paint);
+      }
+      {  // bottom
+        SkPath path;
+        path.moveTo(points[Left, Bottom, Back, Inner]);
+        path.lineTo(points[Right, Bottom, Back, Inner]);
+        path.lineTo(points[Right, Bottom, Front, Inner]);
+        path.lineTo(points[Left, Bottom, Front, Inner]);
+        path.close();
+        SkPaint paint;
+        paint.setColor("#ee7857"_color);
+        paint.setAlphaf(0.5);
+        canvas.drawPath(path, paint);
+      }
+    }
+
+    auto outer_back =
+        RectPath(points[Left, Top, Back, Outer], points[Right, Top, Back, Outer],
+                 points[Right, Bottom, Back, Outer], points[Left, Bottom, Back, Outer]);
+    gui::DrawCable(canvas, outer_back, color_outer, CableTexture::Smooth, kEdgeWidth * 0.5,
+                   kEdgeWidth * 0.5, nullptr);
+
+    auto inner_back =
+        RectPath(points[Left, Top, Back, Inner], points[Right, Top, Back, Inner],
+                 points[Right, Bottom, Back, Inner], points[Left, Bottom, Back, Inner]);
+    gui::DrawCable(canvas, inner_back, color_inner, CableTexture::Smooth, kEdgeWidth * 0.5,
+                   kEdgeWidth * 0.5, nullptr);
+
+    for (int k = 0; k < 2; ++k) {
+      for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+          SkPath front_back;
+          front_back.moveTo(points[(AxisX)i, (AxisY)j, Back, (AxisW)k]);
+          front_back.lineTo(points[(AxisX)i, (AxisY)j, Front, (AxisW)k]);
+          gui::DrawCable(canvas, front_back, k == Inner ? color_inner : color_outer,
+                         CableTexture::Smooth, kEdgeWidth * 0.5, kEdgeWidth, nullptr);
+        }
+      }
+    }
+    for (int i = 0; i < 2; ++i) {
+      for (int j = 0; j < 2; ++j) {
+        SkPath inner_outer;
+        inner_outer.moveTo(points[(AxisX)i, (AxisY)j, Front, Inner]);
+        inner_outer.lineTo(points[(AxisX)i, (AxisY)j, Front, Outer]);
+        gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Smooth,
+                       kEdgeWidth * 0.75, kEdgeWidth, nullptr);
+      }
+    }
+
+    auto inner_front =
+        RectPath(points[Left, Top, Front, Inner], points[Right, Top, Front, Inner],
+                 points[Right, Bottom, Front, Inner], points[Left, Bottom, Front, Inner]);
+    gui::DrawCable(canvas, inner_front, color_inner, CableTexture::Smooth, kEdgeWidth * 0.75,
+                   kEdgeWidth * 0.75, nullptr);
+
+    auto outer_front =
+        RectPath(points[Left, Top, Front, Outer], points[Right, Top, Front, Outer],
+                 points[Right, Bottom, Front, Outer], points[Left, Bottom, Front, Outer]);
+    gui::DrawCable(canvas, outer_front, color_outer, CableTexture::Smooth, kEdgeWidth, kEdgeWidth,
+                   nullptr);
+
+    return;
+
+    SkPaint edge_paint;
+    edge_paint.setStyle(SkPaint::kStroke_Style);
+    edge_paint.setStrokeWidth(kEdgeWidth);
+    edge_paint.setAntiAlias(true);
+
+    for (int i = 0; i < 2; ++i) {
+      for (int j = 0; j < 2; ++j) {
+        for (int k = 0; k < 2; ++k) {
+          canvas.drawLine(points[(AxisX)i, (AxisY)j, (AxisZ)k, Inner],
+                          points[(AxisX)i, (AxisY)j, (AxisZ)k, Outer], edge_paint);
+          canvas.drawLine(points[(AxisX)i, (AxisY)j, Back, (AxisW)k],
+                          points[(AxisX)i, (AxisY)j, Front, (AxisW)k], edge_paint);
+          canvas.drawLine(points[(AxisX)i, Top, (AxisZ)j, (AxisW)k],
+                          points[(AxisX)i, Bottom, (AxisZ)j, (AxisW)k], edge_paint);
+          canvas.drawLine(points[Left, (AxisY)i, (AxisZ)j, (AxisW)k],
+                          points[Right, (AxisY)i, (AxisZ)j, (AxisW)k], edge_paint);
+        }
+      }
+    }
+
+    // Draw OCR text if available
+    if (!ocr_text.empty()) {
+      auto& font = gui::GetFont();
+      SkPaint text_paint;
+      text_paint.setColor("#333333"_color);
+
+      canvas.save();
+      auto text_pos = kBounds.rect.BottomLeftCorner();
+      text_pos.y += font.letter_height + 2_mm;
+      canvas.translate(text_pos.x, text_pos.y);
+
+      // Scale text to fit
+      float text_width = font.MeasureText(ocr_text);
+      float scale_x = std::min(1.0f, kSize / text_width);
+      if (scale_x < 1.0f) {
+        canvas.scale(scale_x, 1.0f);
+      }
+
+      font.DrawText(canvas, ocr_text, text_paint);
+      canvas.restore();
+    }
+
+    DrawChildren(canvas);
+  }
+
+  void PointerOver(gui::Pointer& pointer) override {
+    Vec2 pos = pointer.PositionWithin(*this);
+    hover_mode = GetDragModeAt(pos);
+    icon_override.emplace(pointer, GetCursorForMode(hover_mode));
+    StartWatching(pointer);  // Start watching pointer movement
+  }
+
+  void PointerLeave(gui::Pointer& pointer) override {
+    hover_mode = DragMode::None;
+    icon_override.reset();  // Release the icon override
+    StopWatching(pointer);  // Stop watching pointer movement
+  }
+
+  // PointerMoveCallback implementation
+  void PointerMove(gui::Pointer& pointer, Vec2 position) override {
+    Vec2 pos = pointer.PositionWithin(*this);
+    DragMode new_mode = GetDragModeAt(pos);
+
+    if (new_mode != hover_mode) {
+      hover_mode = new_mode;
+      // Update icon override with new cursor
+      icon_override.emplace(pointer, GetCursorForMode(hover_mode));
+    }
+  }
+
+  std::unique_ptr<Action> FindAction(gui::Pointer& pointer, gui::ActionTrigger trigger) override {
+    if (trigger == gui::PointerButton::Left) {
+      Vec2 pos = pointer.PositionWithin(*this);
+      DragMode mode = GetDragModeAt(pos);
+      if (mode != DragMode::None) {
+        return std::make_unique<RegionDragAction>(pointer, *this, static_cast<int>(mode));
+      }
+    }
+    return FallbackWidget::FindAction(pointer, trigger);
+  }
+
+  void UpdateRegion(DragMode mode, Vec2 current_pos, Vec2 start_pos) {
+    if (auto tesseract = LockTesseract()) {
+      auto lock = std::lock_guard(tesseract->mutex);
+
+      Vec2 delta = current_pos - start_pos;
+      float dx_ratio = delta.x / kSize;
+      float dy_ratio = delta.y / kSize;
+
+      float new_x_min = drag_start_x_min;
+      float new_x_max = drag_start_x_max;
+      float new_y_min = drag_start_y_min;
+      float new_y_max = drag_start_y_max;
+
+      switch (mode) {
+        case DragMode::TopLeft:
+          new_x_min = std::clamp(drag_start_x_min + dx_ratio, 0.0f, new_x_max - 0.01f);
+          new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f, new_y_max - 0.01f);
+          break;
+        case DragMode::TopRight:
+          new_x_max = std::clamp(drag_start_x_max + dx_ratio, new_x_min + 0.01f, 1.0f);
+          new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f, new_y_max - 0.01f);
+          break;
+        case DragMode::BottomLeft:
+          new_x_min = std::clamp(drag_start_x_min + dx_ratio, 0.0f, new_x_max - 0.01f);
+          new_y_max = std::clamp(drag_start_y_max + dy_ratio, new_y_min + 0.01f, 1.0f);
+          break;
+        case DragMode::BottomRight:
+          new_x_max = std::clamp(drag_start_x_max + dx_ratio, new_x_min + 0.01f, 1.0f);
+          new_y_max = std::clamp(drag_start_y_max + dy_ratio, new_y_min + 0.01f, 1.0f);
+          break;
+        case DragMode::Top:
+          new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f, new_y_max - 0.01f);
+          break;
+        case DragMode::Bottom:
+          new_y_max = std::clamp(drag_start_y_max + dy_ratio, new_y_min + 0.01f, 1.0f);
+          break;
+        case DragMode::Left:
+          new_x_min = std::clamp(drag_start_x_min + dx_ratio, 0.0f, new_x_max - 0.01f);
+          break;
+        case DragMode::Right:
+          new_x_max = std::clamp(drag_start_x_max + dx_ratio, new_x_min + 0.01f, 1.0f);
+          break;
+        case DragMode::Move:
+          new_x_min = std::clamp(drag_start_x_min + dx_ratio, 0.0f,
+                                 1.0f - (drag_start_x_max - drag_start_x_min));
+          new_x_max =
+              std::clamp(drag_start_x_max + dx_ratio, (drag_start_x_max - drag_start_x_min), 1.0f);
+          new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f,
+                                 1.0f - (drag_start_y_max - drag_start_y_min));
+          new_y_max =
+              std::clamp(drag_start_y_max + dy_ratio, (drag_start_y_max - drag_start_y_min), 1.0f);
+          break;
+        default:
+          return;
+      }
+
+      tesseract->x_min_ratio = new_x_min;
+      tesseract->x_max_ratio = new_x_max;
+      tesseract->y_min_ratio = new_y_min;
+      tesseract->y_max_ratio = new_y_max;
+
+      tesseract->WakeWidgetsAnimation();
+    }
+  }
+
+  Vec2AndDir ArgStart(const Argument& arg) override {
+    if (&arg == &image_arg) {
+      return Vec2AndDir{kBounds.rect.RightCenter(), 0_deg};
+    }
+    if (&arg == &text_arg) {
+      return Vec2AndDir{kBounds.rect.LeftCenter(), 180_deg};
+    }
+    return FallbackWidget::ArgStart(arg);
+  }
+};
+
+// Implementation of RegionDragAction
+RegionDragAction::RegionDragAction(gui::Pointer& pointer, TesseractWidget& widget, int mode)
+    : Action(pointer), widget(widget), mode(mode) {
+  start_pos = pointer.PositionWithin(widget);
+
+  // Store initial region values
+  if (auto tesseract = widget.LockTesseract()) {
+    auto lock = std::lock_guard(tesseract->mutex);
+    widget.drag_start_x_min = tesseract->x_min_ratio;
+    widget.drag_start_x_max = tesseract->x_max_ratio;
+    widget.drag_start_y_min = tesseract->y_min_ratio;
+    widget.drag_start_y_max = tesseract->y_max_ratio;
+  }
+}
+
+void RegionDragAction::Update() {
+  Vec2 current_pos = pointer.PositionWithin(widget);
+  widget.UpdateRegion(static_cast<TesseractWidget::DragMode>(mode), current_pos, start_pos);
+}
+
+Ptr<gui::Widget> TesseractOCR::MakeWidget() {
+  return MakePtr<TesseractWidget>(AcquireWeakPtr<Object>());
+}
+
+void TesseractOCR::Args(std::function<void(Argument&)> cb) {
+  cb(image_arg);
+  cb(text_arg);
+  cb(next_arg);
+}
+
+void TesseractOCR::OnRun(Location& here) {
+  auto image_obj = image_arg.FindObject(here, {});
+  auto text_obj = text_arg.FindObject(here, {});
+
+  if (!image_obj) {
+    here.ReportError("No image source connected");
+    return;
+  }
+
+  auto image_provider = image_obj->AsImageProvider();
+  if (!image_provider) {
+    here.ReportError("Connected object doesn't provide images");
+    return;
+  }
+
+  auto image = image_provider->GetImage();
+  if (!image) {
+    here.ReportError("No image available from source");
+    return;
+  }
+
+  int width = image->width();
+  int height = image->height();
+  if (width == 0 || height == 0) return;
+
+  std::string utf8_text = "";
+  auto pix = pixCreate(width, height, 32);
+  uint32_t* pix_data = pixGetData(pix);
+  SkPixmap pixmap;
+  if (!image->peekPixels(&pixmap)) {
+    pixDestroy(&pix);
+    return;
+  }
+
+  auto pixInfo =
+      SkImageInfo::Make(width, height, kRGBA_8888_SkColorType, SkAlphaType::kUnpremul_SkAlphaType);
+  pixmap.readPixels(pixInfo, pix_data, width * 4);
+
+  int ocr_left = x_min_ratio * width;
+  int ocr_top = (1 - y_max_ratio) * height;
+  int ocr_width = width * (x_max_ratio - x_min_ratio);
+  int ocr_height = height * (y_max_ratio - y_min_ratio);
+
+  if (ocr_width > 0 && ocr_height > 0) {
+    tesseract.SetImage(pix);
+    tesseract.SetRectangle(ocr_left, ocr_top, ocr_width, ocr_height);
+    int recognize_status = tesseract.Recognize(nullptr);
+    if (recognize_status) {
+      LOG << "Tesseract recognize failed: " << recognize_status;
+    }
+    utf8_text = tesseract.GetUTF8Text();
+    StripTrailingWhitespace(utf8_text);
+  }
+
+  pixDestroy(&pix);
+
+  {
+    auto lock = std::lock_guard(mutex);
+    ocr_text = utf8_text;
+  }
+
+  if (text_obj) {
+    text_obj->SetText(here, utf8_text);
+  }
+
+  WakeWidgetsAnimation();
+}
+
+void TesseractOCR::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+
+  writer.Key("ocr_text");
+  writer.String(ocr_text.data(), ocr_text.size());
+  writer.Key("x_min_ratio");
+  writer.Double(x_min_ratio);
+  writer.Key("x_max_ratio");
+  writer.Double(x_max_ratio);
+  writer.Key("y_min_ratio");
+  writer.Double(y_min_ratio);
+  writer.Key("y_max_ratio");
+  writer.Double(y_max_ratio);
+
+  writer.EndObject();
+}
+
+void TesseractOCR::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  for (auto key : ObjectView(d, status)) {
+    if (key == "ocr_text") {
+      d.Get(ocr_text, status);
+    } else if (key == "x_min_ratio") {
+      d.Get(x_min_ratio, status);
+    } else if (key == "x_max_ratio") {
+      d.Get(x_max_ratio, status);
+    } else if (key == "y_min_ratio") {
+      d.Get(y_min_ratio, status);
+    } else if (key == "y_max_ratio") {
+      d.Get(y_max_ratio, status);
+    }
+  }
+  if (!OK(status)) {
+    l.ReportError(status.ToStr());
+  }
+}
+
+std::string TesseractOCR::GetText() const {
+  auto lock = std::lock_guard(mutex);
+  return ocr_text;
+}
+
+void TesseractOCR::SetText(Location& error_context, std::string_view text) {
+  auto lock = std::lock_guard(mutex);
+  ocr_text = text;
+  WakeWidgetsAnimation();
+}
+
+}  // namespace automat::library

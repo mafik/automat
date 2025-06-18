@@ -12,6 +12,7 @@
 #include <include/core/SkMaskFilter.h>
 #include <include/core/SkMesh.h>
 #include <include/core/SkPaint.h>
+#include <include/core/SkPathMeasure.h>
 #include <include/core/SkPictureRecorder.h>
 #include <include/core/SkSamplingOptions.h>
 #include <include/core/SkVertices.h>
@@ -699,6 +700,9 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
   float cached_length = 100_mm;
   if (length_cache) {
     cached_length = *length_cache;
+  } else {
+    SkPathMeasure measure(path, false);
+    cached_length = measure.getLength();
   }
   auto GetWidth = [start_width, end_width, cached_length](float length) {
     if (start_width == end_width) {

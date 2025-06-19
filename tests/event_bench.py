@@ -15,22 +15,45 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   root = Path(__file__).parent.parent.resolve()
-  build_path = root / 'build'
+  build_path = root / 'build' / 'release'
   state_path = build_path / 'automat_state.json'
 
   if not args.skip_run:
     print('DO NOT take away the focus from the Automat window!')
     run_path = root / 'run.py'
-    automat_path = build_path / 'release_automat'
+    automat_path = build_path / 'automat'
     test_state_path = root / 'tests' / 'event_bench.json'
 
-    subprocess.run(['python', str(run_path), 'link release_automat'])
+    # Build Automat first
+    build_result = subprocess.run(['python', str(run_path), 'link automat', '--variant=release'], 
+                                 capture_output=True, text=True)
+    if build_result.returncode != 0:
+      print(f'Build failed with return code {build_result.returncode}')
+      print(f'stdout: {build_result.stdout}')
+      print(f'stderr: {build_result.stderr}')
+      exit(1)
+    
+    # Copy test state
     shutil.copy(test_state_path, state_path)
 
-    p = subprocess.Popen([str(automat_path)])
-    p.wait()
-
-    print('Done!')
+    # Run Automat and wait for completion
+    print('Starting Automat...')
+    p = subprocess.Popen([str(automat_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+      stdout, stderr = p.communicate(timeout=30)
+    except subprocess.TimeoutExpired:
+      print('Automat did not complete within 30 seconds. Terminating...')
+      p.kill()
+      stdout, stderr = p.communicate()
+      exit(1)
+    
+    if p.returncode != 0:
+      print(f'Automat failed with return code {p.returncode}')
+      print(f'stdout: {stdout}')
+      print(f'stderr: {stderr}')
+      exit(1)
+    
+    print('Automat completed successfully!')
 
   import json
 
@@ -39,7 +62,7 @@ if __name__ == '__main__':
   def ms(t):
     return f'{t * 1000:.1f}ms'
 
-  for loc in state['root']['locations']:
+  for i, loc in state['root']['locations'].items():
     if loc['type'] != 'Timeline':
       continue
     timestamps = None

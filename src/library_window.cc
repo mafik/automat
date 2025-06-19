@@ -119,8 +119,6 @@ struct DisableContinuousRunOption : Option {
   }
 };
 
-Window::Window() { impl = std::make_unique<Impl>(); }
-
 std::string_view Window::Name() const { return "Window"; }
 
 struct Window::Impl {
@@ -151,6 +149,8 @@ struct Window::Impl {
 
   Impl() {}
 };
+
+Window::Window() { impl = std::make_unique<Impl>(); }
 
 Ptr<Object> Window::Clone() const {
   auto ret = MakePtr<Window>();
@@ -503,8 +503,8 @@ void Window::OnRun(Location& here) {
 
     I16 x = 0;
     I16 y = 0;
-    width = geometry_reply->width;
-    height = geometry_reply->height;
+    U16 width = geometry_reply->width;
+    U16 height = geometry_reply->height;
 
     auto gtk_frame_extents_reply =
         xcb::get_property(impl->xcb_window, xcb::atom::_GTK_FRAME_EXTENTS, XCB_ATOM_CARDINAL, 0, 4);
@@ -534,7 +534,7 @@ void Window::OnRun(Location& here) {
                                         SkAlphaType::kUnpremul_SkAlphaType);
     auto pixmap = SkPixmap(image_info, impl->data.data(), width * 4);
     captured_image = SkImages::RasterFromPixmapCopy(pixmap);
-    capture_time = time::SteadyNow();
+    capture_time = time::SteadyNow().time_since_epoch().count();
   }
 #elif defined(_WIN32)
   {

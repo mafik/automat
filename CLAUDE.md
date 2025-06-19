@@ -19,8 +19,14 @@ Note: Test files include `gtest.hh` which provides the main function. Files endi
 ### Development Tools
 - `python run.py --compile-commands` - Generate `compile_commands.json` for LSP support
 - `python run.py screenshot` - Take a screenshot of running automat (saved to `build/{variant}/screenshot.png`)
+- `python run.py "link automat"` - Build automat binary without running it (for testing compilation)
 - Build dashboard available at http://localhost:8000/ when running build commands
 - Custom build system written in Python, located in `run_py/` directory
+
+### Important Notes
+- **To test builds**: Use `python run.py "link automat"` to verify compilation without running
+- **To test runtime**: Use `python run.py screenshot` which safely runs automat and automatically stops it
+- **Avoid running automat directly**: The `python run.py automat` command runs automat indefinitely and must be manually stopped
 
 ## Architecture Overview
 

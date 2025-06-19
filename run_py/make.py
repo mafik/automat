@@ -19,7 +19,12 @@ import args as cmdline_args
 if platform == 'win32':
     import windows
 
-HASH_DIR = fs_utils.build_dir / 'hashes'
+# Hash directory for the current build variant
+import build_variant
+if build_variant.current:
+    HASH_DIR = build_variant.current.BASE / 'hashes'
+else:
+    HASH_DIR = fs_utils.build_dir / 'hashes'
 HASH_DIR.mkdir(parents=True, exist_ok=True)
 
 

@@ -16,6 +16,8 @@
 #include <leptonica/pix.h>
 #include <tesseract/ocrclass.h>
 
+#include <cmath>
+
 #include "action.hh"
 #include "animation.hh"
 #include "argument.hh"
@@ -103,18 +105,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
 
   sk_sp<SkImage> source_image;  // Local copy of the source image
 
-  enum class DragMode {
-    None,
-    TopLeft,
-    TopRight,
-    BottomLeft,
-    BottomRight,
-    Top,
-    Bottom,
-    Left,
-    Right,
-    Move
-  };
+  enum class DragMode { None, Top, Bottom, Left, Right, Move };
 
   mutable DragMode hover_mode = DragMode::None;
   DragMode drag_mode = DragMode::None;
@@ -131,21 +122,24 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   float laser_phase = 0.0f;
   float laser_alpha = 0.0f;
 
-  enum AxisX {
+  enum AxisX : U8 {
     Left = 0,
     Right = 1,
   };
-  enum AxisY {
+  enum AxisY : U8 {
     Bottom = 0,
     Top = 1,
   };
-  enum AxisZ {
+  enum AxisZ : U8 {
     Back = 0,
     Front = 1,
   };
-  enum AxisW {
+  enum AxisW : U8 {
     Inner = 0,
     Outer = 1,
+  };
+  enum AxisBoth {
+    Both = 0,
   };
   struct TesseractPoints {
     Vec2 vertices[16];
@@ -155,6 +149,45 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     const Vec2& operator[](AxisX x, AxisY y, AxisZ z, AxisW w) const {
       return vertices[x * 8 + y * 4 + z * 2 + w];
     }
+    template <typename WallSubtype>
+    struct WallBase {
+      const TesseractPoints& points;
+      bool Contains(Vec2 x) const {
+        auto& wall = static_cast<const WallSubtype&>(*this);
+        U8 cross_signs = 0;
+        for (U8 i = 0; i < 4; ++i) {
+          auto& a = wall[i];
+          auto& b = wall[(i + 1) & 3];
+          cross_signs |= signbit(Cross(b - a, x - a)) << i;
+        }
+        return cross_signs == 0b1111 || cross_signs == 0b0000;
+      }
+    };
+    // Describes a wall orthogonal to the Y axis
+    struct WallY : WallBase<WallY> {
+      AxisY y;
+      AxisW w;
+      const Vec2& operator[](U8 i) const {
+        return points[(AxisX)(__builtin_parity(i)), y, (AxisZ)((i >> 1) & 1), w];
+      }
+    };
+    struct WallX : WallBase<WallX> {
+      AxisX x;
+      AxisW w;
+      const Vec2& operator[](U8 i) const {
+        return points[x, (AxisY)(__builtin_parity(i)), (AxisZ)((i >> 1) & 1), w];
+      }
+    };
+    struct WallZ : WallBase<WallZ> {
+      AxisZ z;
+      AxisW w;
+      const Vec2& operator[](U8 i) const {
+        return points[(AxisX)(__builtin_parity(i)), (AxisY)((i >> 1) & 1), z, w];
+      }
+    };
+    WallX Wall(AxisX x, AxisW w) const { return WallX{*this, x, w}; }
+    WallY Wall(AxisY y, AxisW w) const { return WallY{*this, y, w}; }
+    WallZ Wall(AxisZ z, AxisW w) const { return WallZ{*this, z, w}; }
   } points;
 
   Ptr<TesseractOCR> LockTesseract() const { return LockObject<TesseractOCR>(); }
@@ -180,75 +213,22 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   SkPath Shape() const override { return SkPath::Rect(OuterRect()); }
 
   DragMode GetDragModeAt(Vec2 pos) const {
-    SkRect region = region_rect.sk;
-    if (region.isEmpty()) return DragMode::None;
-
-    float half_handle = kHandleSize / 2;
-
-    // Check corners first
-    if (SkRect::MakeXYWH(region.left() - half_handle, region.top() - half_handle, kHandleSize,
-                         kHandleSize)
-            .contains(pos.x, pos.y)) {
-      return DragMode::TopLeft;
-    }
-    if (SkRect::MakeXYWH(region.right() - half_handle, region.top() - half_handle, kHandleSize,
-                         kHandleSize)
-            .contains(pos.x, pos.y)) {
-      return DragMode::TopRight;
-    }
-    if (SkRect::MakeXYWH(region.left() - half_handle, region.bottom() - half_handle, kHandleSize,
-                         kHandleSize)
-            .contains(pos.x, pos.y)) {
-      return DragMode::BottomLeft;
-    }
-    if (SkRect::MakeXYWH(region.right() - half_handle, region.bottom() - half_handle, kHandleSize,
-                         kHandleSize)
-            .contains(pos.x, pos.y)) {
-      return DragMode::BottomRight;
-    }
-
-    // Check edges
-    if (SkRect::MakeXYWH(region.left() - half_handle, region.top() + half_handle, kHandleSize,
-                         region.height() - kHandleSize)
-            .contains(pos.x, pos.y)) {
-      return DragMode::Left;
-    }
-    if (SkRect::MakeXYWH(region.right() - half_handle, region.top() + half_handle, kHandleSize,
-                         region.height() - kHandleSize)
-            .contains(pos.x, pos.y)) {
-      return DragMode::Right;
-    }
-    if (SkRect::MakeXYWH(region.left() + half_handle, region.top() - half_handle,
-                         region.width() - kHandleSize, kHandleSize)
-            .contains(pos.x, pos.y)) {
-      return DragMode::Top;
-    }
-    if (SkRect::MakeXYWH(region.left() + half_handle, region.bottom() - half_handle,
-                         region.width() - kHandleSize, kHandleSize)
-            .contains(pos.x, pos.y)) {
-      return DragMode::Bottom;
-    }
-
-    // Check inside region for move
-    if (region.contains(pos.x, pos.y)) {
-      return DragMode::Move;
-    }
-
+    if (points.Wall(Top, Inner).Contains(pos)) return DragMode::Top;
+    if (points.Wall(Bottom, Inner).Contains(pos)) return DragMode::Bottom;
+    if (points.Wall(Left, Inner).Contains(pos)) return DragMode::Left;
+    if (points.Wall(Right, Inner).Contains(pos)) return DragMode::Right;
+    if (points.Wall(Back, Inner).Contains(pos)) return DragMode::Move;
     return DragMode::None;
   }
 
   gui::Pointer::IconType GetCursorForMode(DragMode mode) const {
     switch (mode) {
-      case DragMode::TopLeft:
-      case DragMode::BottomRight:
-      case DragMode::TopRight:
-      case DragMode::BottomLeft:
-        return gui::Pointer::kIconCrosshair;  // Use crosshair for corner resize
       case DragMode::Top:
       case DragMode::Bottom:
+        return gui::Pointer::kIconResizeVertical;
       case DragMode::Left:
       case DragMode::Right:
-        return gui::Pointer::kIconResizeHorizontal;  // Use horizontal resize for all edges
+        return gui::Pointer::kIconResizeHorizontal;
       case DragMode::Move:
         return gui::Pointer::kIconAllScroll;
       default:
@@ -740,22 +720,6 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       float new_y_max = drag_start_y_max;
 
       switch (mode) {
-        case DragMode::TopLeft:
-          new_x_min = std::clamp(drag_start_x_min + dx_ratio, 0.0f, new_x_max - 0.01f);
-          new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f, new_y_max - 0.01f);
-          break;
-        case DragMode::TopRight:
-          new_x_max = std::clamp(drag_start_x_max + dx_ratio, new_x_min + 0.01f, 1.0f);
-          new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f, new_y_max - 0.01f);
-          break;
-        case DragMode::BottomLeft:
-          new_x_min = std::clamp(drag_start_x_min + dx_ratio, 0.0f, new_x_max - 0.01f);
-          new_y_max = std::clamp(drag_start_y_max + dy_ratio, new_y_min + 0.01f, 1.0f);
-          break;
-        case DragMode::BottomRight:
-          new_x_max = std::clamp(drag_start_x_max + dx_ratio, new_x_min + 0.01f, 1.0f);
-          new_y_max = std::clamp(drag_start_y_max + dy_ratio, new_y_min + 0.01f, 1.0f);
-          break;
         case DragMode::Top:
           new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f, new_y_max - 0.01f);
           break;

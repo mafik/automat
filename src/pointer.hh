@@ -75,6 +75,7 @@ struct Pointer {
     kIconIBeam,
     kIconAllScroll,
     kIconResizeHorizontal,
+    kIconResizeVertical,
     kIconCrosshair,
   };
 

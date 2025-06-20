@@ -96,6 +96,9 @@ struct Win32Pointer : automat::gui::Pointer {
       case automat::gui::Pointer::kIconResizeHorizontal:
         cursor = LoadCursor(nullptr, IDC_SIZEWE);
         break;
+      case automat::gui::Pointer::kIconResizeVertical:
+        cursor = LoadCursor(nullptr, IDC_SIZENS);
+        break;
       case automat::gui::Pointer::kIconCrosshair:
         cursor = LoadCursor(nullptr, IDC_CROSS);
         break;

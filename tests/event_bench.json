@@ -1,5 +1,5 @@
 {
-    "version": 1,
+    "version": 2,
     "window": {
         "maximized": {
             "horizontally": false,
@@ -17,8 +17,8 @@
     },
     "root": {
         "name": "Root machine",
-        "locations": [
-            {
+        "locations": {
+            "0": {
                 "type": "Macro Recorder",
                 "value": {
                     "recording": true
@@ -26,10 +26,10 @@
                 "x": 0.213,
                 "y": -0.029,
                 "connections": {
-                    "Timeline": 1
+                    "Timeline": "1"
                 }
             },
-            {
+            "1": {
                 "type": "Timeline",
                 "value": {
                     "tracks": [
@@ -46,7 +46,7 @@
                 "x": 0.235,
                 "y": -0.05
             },
-            {
+            "2": {
                 "type": "Delay",
                 "value": {
                     "range": "seconds",
@@ -56,10 +56,10 @@
                 "x": -0.021,
                 "y": 0.016,
                 "connections": {
-                    "next": 3
+                    "next": "3"
                 }
             },
-            {
+            "3": {
                 "type": "Timeline",
                 "value": {
                     "tracks": [
@@ -87,11 +87,11 @@
                 "x": -0.021,
                 "y": -0.062,
                 "connections": {
-                    "next": 3,
-                    "Space": 4
+                    "next": "3",
+                    "Space": "4"
                 }
             },
-            {
+            "4": {
                 "type": "Key Presser",
                 "value": {
                     "key": "Space"
@@ -99,7 +99,7 @@
                 "x": 0.029,
                 "y": -0.079
             },
-            {
+            "5": {
                 "type": "Timeline",
                 "value": {
                     "tracks": [
@@ -127,11 +127,11 @@
                 "x": 0.089,
                 "y": -0.062,
                 "connections": {
-                    "Ctrl": 6,
-                    "Q": 7
+                    "Ctrl": "6",
+                    "Q": "7"
                 }
             },
-            {
+            "6": {
                 "type": "Key Presser",
                 "value": {
                     "key": "Left Control"
@@ -139,7 +139,7 @@
                 "x": 0.129,
                 "y": -0.079
             },
-            {
+            "7": {
                 "type": "Key Presser",
                 "value": {
                     "key": "Q"
@@ -147,7 +147,7 @@
                 "x": 0.129,
                 "y": -0.089
             },
-            {
+            "8": {
                 "type": "Delay",
                 "value": {
                     "range": "milliseconds",
@@ -157,10 +157,10 @@
                 "x": -0.121,
                 "y": 0.016,
                 "connections": {
-                    "next": 8
+                    "next": "8"
                 }
             },
-            {
+            "9": {
                 "type": "Delay",
                 "value": {
                     "range": "milliseconds",
@@ -170,9 +170,9 @@
                 "x": -0.121,
                 "y": -0.084,
                 "connections": {
-                    "next": 9
+                    "next": "9"
                 }
             }
-        ]
+        }
     }
 }

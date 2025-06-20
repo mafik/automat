@@ -16,10 +16,17 @@ struct TesseractOCR : public LiveObject, Runnable {
 
   // Guards access to the status variables
   std::mutex status_mutex;
-  // Area which is currently being OCRed
+  // Area which is currently being OCRed in pixels (within the OCR window)
   Rect status_rect;
   // Progress ratio of the OCR (0.0 to 1.0)
   Optional<float> status_progress_ratio = std::nullopt;
+
+  struct RecognitionResult {
+    Rect rect;  // In pixels (within the image)
+    Str text;
+  };
+
+  Vec<RecognitionResult> status_results;
 
   tesseract::TessBaseAPI tesseract;
 

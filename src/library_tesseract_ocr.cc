@@ -7,6 +7,7 @@
 #include <include/core/SkColorFilter.h>
 #include <include/core/SkColorType.h>
 #include <include/core/SkMaskFilter.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkShader.h>
@@ -15,6 +16,7 @@
 #include <leptonica/allheaders.h>
 #include <leptonica/pix.h>
 #include <tesseract/ocrclass.h>
+#include <tesseract/resultiterator.h>
 
 #include <cmath>
 
@@ -92,6 +94,8 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   constexpr static float kHandleSize = 3_mm;
   constexpr static float kEdgeWidth = 1_mm;
   constexpr static float kOuterSidesWidth = 5_mm;
+  constexpr static SkColor kInnerColor = "#ee7857"_color;
+  constexpr static SkColor kBaseWallColor = "#00a3ff"_color;
 
   sk_sp<SkImage> source_image;  // Local copy of the source image
 
@@ -107,6 +111,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   animation::SpringV2<float> aspect_ratio = 1.618f;
   Rect status_rect;
   Optional<float> status_progress_ratio;
+  Vec<TesseractOCR::RecognitionResult> status_results;
 
   // Number from 0 to 1, used to highlight a section of wireframe while OCR is running
   float laser_phase = 0.0f;
@@ -233,6 +238,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       if (tesseract->status_mutex.try_lock()) {
         status_rect = tesseract->status_rect;
         status_progress_ratio = tesseract->status_progress_ratio;
+        status_results = tesseract->status_results;
         tesseract->status_mutex.unlock();
       }
       laser_phase = fmod(timer.NowSeconds(), 1.0f);
@@ -338,7 +344,6 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       pos[10] = pos[6];
       pos[11] = pos[7];
 
-      constexpr static SkColor kBaseWallColor = "#00a3ff"_color;
       auto brighter = color::AdjustLightness(kBaseWallColor, 10);
       auto darker = color::AdjustLightness(kBaseWallColor, -20);
       auto darkest = color::AdjustLightness(kBaseWallColor, -50);
@@ -408,7 +413,6 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       border_path.close();
       return border_path;
     };
-    static constexpr SkColor kInnerColor = "#ee7857"_color;
     auto color_outer = color::MakeTintFilter("#333333"_color, 80);
     auto color_outer_back = color::MakeTintFilter("#111111"_color, 20);
     auto color_inner = color::MakeTintFilter(kInnerColor, 20);
@@ -450,6 +454,40 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       paint.setColor(kInnerColor);
       paint.setAlphaf(0.5);
       canvas.drawRect(focus_rect, paint);
+    }
+
+    if (status_results.size() > 0) {  // draw results
+      auto& font = gui::GetFont();
+      SkPaint paint_bg;
+      paint_bg.setColor(color::FastMix("#00000080"_color, "#00000000"_color, laser_alpha));
+      SkPaint paint;
+      paint.setColor(color::FastMix(kInnerColor, SK_ColorWHITE, laser_alpha));
+      // paint.setAlphaf(0.5f);
+      auto matrix = canvas.getLocalToDevice();
+      auto min_corner = points[Left, Bottom, Back, Outer];
+      auto max_corner = points[Right, Top, Back, Outer];
+      auto size = max_corner - min_corner;
+      canvas.save();
+      auto min_clip = points[Left, Bottom, Back, Inner];
+      auto max_clip = points[Right, Top, Back, Inner];
+      canvas.clipRect(Rect(min_clip.x, min_clip.y, max_clip.x, max_clip.y));
+      for (auto& result : status_results) {
+        float width = font.MeasureText(result.text);
+        float left = min_corner.x + size.x * (result.rect.left / image_size.x);
+        float right = min_corner.x + size.x * (result.rect.right / image_size.x);
+        float bottom = min_corner.y + size.y * (1 - result.rect.bottom / image_size.y);
+        float top = min_corner.y + size.y * (1 - result.rect.top / image_size.y);
+        auto text_matrix = matrix;
+        auto src_rect = Rect(0, -font.descent, width, font.letter_height);
+        auto dst_rect = Rect(left, bottom, right, top);
+        text_matrix.preConcat(
+            SkMatrix::MakeRectToRect(src_rect, dst_rect, SkMatrix::kFill_ScaleToFit));
+        canvas.setMatrix(matrix);
+        canvas.drawRect(dst_rect, paint_bg);
+        canvas.setMatrix(text_matrix);
+        font.DrawText(canvas, result.text, paint);
+      }
+      canvas.restore();
     }
 
     for (int i = 0; i < 2; ++i) {
@@ -864,8 +902,23 @@ void TesseractOCR::OnRun(Location& here) {
       auto lock = std::lock_guard(status_mutex);
       status_rect = Rect(0, 0, 0, 0);
       status_progress_ratio.reset();
+      std::unique_ptr<tesseract::ResultIterator> it(tesseract.GetIterator());
+      constexpr auto level = tesseract::RIL_TEXTLINE;
+      status_results.clear();
+      if (it && !it->Empty(level)) {
+        do {
+          int left, top, right, bottom;
+          it->BoundingBox(level, &left, &top, &right, &bottom);
+          std::unique_ptr<char[]> text(it->GetUTF8Text(level));
+          status_results.push_back({Rect(left, bottom, right, top), text.get()});
+          // LOG << "Bounding box: " << left << ", " << top << ", " << right << ", " << bottom << "
+          // - "
+          //     << text.get();
+        } while (it->Next(level));
+      }
     }
-    utf8_text = tesseract.GetUTF8Text();
+    std::unique_ptr<char[]> text(tesseract.GetUTF8Text());
+    utf8_text = text.get();
     StripTrailingWhitespace(utf8_text);
   }
 

@@ -66,16 +66,6 @@ static TextArgument text_arg;
 
 struct TesseractWidget;
 
-// Forward declaration for drag action
-struct RegionDragAction : Action {
-  TesseractWidget& widget;
-  int mode;  // Using int to avoid forward declaration issues
-  Vec2 start_pos;
-
-  RegionDragAction(gui::Pointer& pointer, TesseractWidget& widget, int mode);
-  void Update() override;
-};
-
 TesseractOCR::TesseractOCR() {
   auto eng_traineddata = embedded::assets_eng_traineddata.content;
   if (tesseract.Init(eng_traineddata.data(), eng_traineddata.size(), "eng",
@@ -135,8 +125,8 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     Front = 1,
   };
   enum AxisW : U8 {
-    Inner = 0,
-    Outer = 1,
+    Outer = 0,
+    Inner = 1,
   };
   enum AxisBoth {
     Both = 0,
@@ -436,13 +426,13 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
 
       auto tex_coords = builder.texCoords();
       tex_coords[0] =
-          SkPoint::Make(region_rect.left * image_size.x, region_rect.bottom * image_size.y);
+          SkPoint::Make(region_rect.left * image_size.x, (1 - region_rect.top) * image_size.y);
       tex_coords[1] =
-          SkPoint::Make(region_rect.right * image_size.x, region_rect.bottom * image_size.y);
+          SkPoint::Make(region_rect.right * image_size.x, (1 - region_rect.top) * image_size.y);
       tex_coords[2] =
-          SkPoint::Make(region_rect.left * image_size.x, region_rect.top * image_size.y);
+          SkPoint::Make(region_rect.left * image_size.x, (1 - region_rect.bottom) * image_size.y);
       tex_coords[3] =
-          SkPoint::Make(region_rect.right * image_size.x, region_rect.top * image_size.y);
+          SkPoint::Make(region_rect.right * image_size.x, (1 - region_rect.bottom) * image_size.y);
 
       SkPaint bg_paint;
       bg_paint.setShader(image_shader);
@@ -695,64 +685,89 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     }
   }
 
+  // Forward declaration for drag action
+  struct RegionDragAction : Action {
+    TesseractWidget& widget;
+    DragMode mode;
+    Vec2 last_pos;
+
+    RegionDragAction(gui::Pointer& pointer, TesseractWidget& widget, DragMode mode)
+        : Action(pointer), widget(widget), mode(mode) {
+      last_pos = pointer.pointer_position;
+    }
+    void Update() override {
+      auto min_corner = widget.points[Left, Bottom, Back, Outer];
+      auto max_corner = widget.points[Right, Top, Back, Outer];
+      Vec2 size = max_corner - min_corner;
+      auto transform = TransformDown(widget);
+      Vec2 old_pos = transform.mapPoint(last_pos);
+      Vec2 new_pos = transform.mapPoint(pointer.pointer_position);
+      last_pos = pointer.pointer_position;
+      Vec2 delta = (new_pos - old_pos) / size;
+      if (auto tesseract = widget.LockTesseract()) {
+        {
+          auto lock = std::lock_guard(tesseract->mutex);
+          switch (mode) {
+            case DragMode::Top:
+              tesseract->y_max_ratio =
+                  std::clamp(tesseract->y_max_ratio + delta.y, tesseract->y_min_ratio, 1.0f);
+              break;
+            case DragMode::Bottom:
+              tesseract->y_min_ratio =
+                  std::clamp(tesseract->y_min_ratio + delta.y, 0.0f, tesseract->y_max_ratio);
+              break;
+            case DragMode::Left:
+              tesseract->x_min_ratio =
+                  std::clamp(tesseract->x_min_ratio + delta.x, 0.0f, tesseract->x_max_ratio);
+              break;
+            case DragMode::Right:
+              tesseract->x_max_ratio =
+                  std::clamp(tesseract->x_max_ratio + delta.x, tesseract->x_min_ratio, 1.0f);
+              break;
+            case DragMode::Move:
+              tesseract->y_max_ratio += delta.y;
+              tesseract->y_min_ratio += delta.y;
+              tesseract->x_min_ratio += delta.x;
+              tesseract->x_max_ratio += delta.x;
+              if (tesseract->y_max_ratio > 1.0f) {
+                tesseract->y_min_ratio += 1.0f - tesseract->y_max_ratio;
+                tesseract->y_max_ratio = 1.0f;
+              }
+              if (tesseract->y_min_ratio < 0.0f) {
+                tesseract->y_max_ratio -= tesseract->y_min_ratio;
+                tesseract->y_min_ratio = 0.0f;
+              }
+              if (tesseract->x_max_ratio > 1.0f) {
+                tesseract->x_min_ratio += 1.0f - tesseract->x_max_ratio;
+                tesseract->x_max_ratio = 1.0f;
+              }
+              if (tesseract->x_min_ratio < 0.0f) {
+                tesseract->x_max_ratio -= tesseract->x_min_ratio;
+                tesseract->x_min_ratio = 0.0f;
+              }
+              break;
+            default:
+              return;
+          }
+        }
+        // tesseract->WakeWidgetsAnimation();
+        tesseract->ForEachWidget([](gui::RootWidget&, gui::Widget& w) {
+          w.WakeAnimation();
+          w.RedrawThisFrame();
+        });
+      }
+    }
+  };
+
   std::unique_ptr<Action> FindAction(gui::Pointer& pointer, gui::ActionTrigger trigger) override {
     if (trigger == gui::PointerButton::Left) {
       Vec2 pos = pointer.PositionWithin(*this);
       DragMode mode = GetDragModeAt(pos);
       if (mode != DragMode::None) {
-        return std::make_unique<RegionDragAction>(pointer, *this, static_cast<int>(mode));
+        return std::make_unique<RegionDragAction>(pointer, *this, mode);
       }
     }
     return FallbackWidget::FindAction(pointer, trigger);
-  }
-
-  void UpdateRegion(DragMode mode, Vec2 current_pos, Vec2 start_pos) {
-    if (auto tesseract = LockTesseract()) {
-      auto lock = std::lock_guard(tesseract->mutex);
-
-      Vec2 delta = current_pos - start_pos;
-      float dx_ratio = delta.x / kSize;
-      float dy_ratio = delta.y / kSize;
-
-      float new_x_min = drag_start_x_min;
-      float new_x_max = drag_start_x_max;
-      float new_y_min = drag_start_y_min;
-      float new_y_max = drag_start_y_max;
-
-      switch (mode) {
-        case DragMode::Top:
-          new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f, new_y_max - 0.01f);
-          break;
-        case DragMode::Bottom:
-          new_y_max = std::clamp(drag_start_y_max + dy_ratio, new_y_min + 0.01f, 1.0f);
-          break;
-        case DragMode::Left:
-          new_x_min = std::clamp(drag_start_x_min + dx_ratio, 0.0f, new_x_max - 0.01f);
-          break;
-        case DragMode::Right:
-          new_x_max = std::clamp(drag_start_x_max + dx_ratio, new_x_min + 0.01f, 1.0f);
-          break;
-        case DragMode::Move:
-          new_x_min = std::clamp(drag_start_x_min + dx_ratio, 0.0f,
-                                 1.0f - (drag_start_x_max - drag_start_x_min));
-          new_x_max =
-              std::clamp(drag_start_x_max + dx_ratio, (drag_start_x_max - drag_start_x_min), 1.0f);
-          new_y_min = std::clamp(drag_start_y_min + dy_ratio, 0.0f,
-                                 1.0f - (drag_start_y_max - drag_start_y_min));
-          new_y_max =
-              std::clamp(drag_start_y_max + dy_ratio, (drag_start_y_max - drag_start_y_min), 1.0f);
-          break;
-        default:
-          return;
-      }
-
-      tesseract->x_min_ratio = new_x_min;
-      tesseract->x_max_ratio = new_x_max;
-      tesseract->y_min_ratio = new_y_min;
-      tesseract->y_max_ratio = new_y_max;
-
-      tesseract->WakeWidgetsAnimation();
-    }
   }
 
   Vec2AndDir ArgStart(const Argument& arg) override {
@@ -765,26 +780,6 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     return FallbackWidget::ArgStart(arg);
   }
 };
-
-// Implementation of RegionDragAction
-RegionDragAction::RegionDragAction(gui::Pointer& pointer, TesseractWidget& widget, int mode)
-    : Action(pointer), widget(widget), mode(mode) {
-  start_pos = pointer.PositionWithin(widget);
-
-  // Store initial region values
-  if (auto tesseract = widget.LockTesseract()) {
-    auto lock = std::lock_guard(tesseract->mutex);
-    widget.drag_start_x_min = tesseract->x_min_ratio;
-    widget.drag_start_x_max = tesseract->x_max_ratio;
-    widget.drag_start_y_min = tesseract->y_min_ratio;
-    widget.drag_start_y_max = tesseract->y_max_ratio;
-  }
-}
-
-void RegionDragAction::Update() {
-  Vec2 current_pos = pointer.PositionWithin(widget);
-  widget.UpdateRegion(static_cast<TesseractWidget::DragMode>(mode), current_pos, start_pos);
-}
 
 Ptr<gui::Widget> TesseractOCR::MakeWidget() {
   return MakePtr<TesseractWidget>(AcquireWeakPtr<Object>());

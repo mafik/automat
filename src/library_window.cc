@@ -621,6 +621,7 @@ void Window::OnRun(Location& here) {
 #endif
   WakeWidgetsAnimation();
 
+  here.ScheduleUpdate();
   // Re-schedule execution if continuous run is enabled
   if (run_continuously) {
     here.ScheduleRun();

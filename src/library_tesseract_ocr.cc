@@ -38,10 +38,10 @@ using namespace std;
 
 namespace automat::library {
 
-struct ImageArgument : Argument {
+struct ImageArgument : LiveArgument {
   TextDrawable icon;
   ImageArgument()
-      : Argument("image", kRequiresObject), icon("IMG", gui::kLetterSize, gui::GetFont()) {
+      : LiveArgument("image", kRequiresObject), icon("IMG", gui::kLetterSize, gui::GetFont()) {
     requirements.push_back([](Location* location, Object* object, std::string& error) {
       // if (!object->AsImageProvider()) {
       //   error = "Object must provide images";
@@ -984,5 +984,7 @@ void TesseractOCR::SetText(Location& error_context, std::string_view text) {
   ocr_text = text;
   WakeWidgetsAnimation();
 }
+
+void TesseractOCR::Updated(Location& here, Location& updated) { WakeWidgetsAnimation(); }
 
 }  // namespace automat::library

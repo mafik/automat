@@ -42,6 +42,7 @@ struct TesseractOCR : public LiveObject, Runnable {
   Ptr<gui::Widget> MakeWidget() override;
 
   void Args(std::function<void(Argument&)> cb) override;
+  void Updated(Location& here, Location& updated) override;
   void OnRun(Location& here) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;

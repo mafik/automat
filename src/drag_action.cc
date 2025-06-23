@@ -100,7 +100,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>
       contact_point(contact_point),
       locations(std::move(locations_arg)),
       widget(MakePtr<DragLocationWidget>(*this)) {
-  widget->parent = pointer.root_widget.AcquirePtr();
+  widget->parent = pointer.GetWidget()->AcquirePtr();
   pointer.root_widget.drag_action_count++;
   for (auto& location : locations) {
     location->parent = widget;

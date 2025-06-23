@@ -262,6 +262,7 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
     };
 
     iterator begin() { return iterator(start); }
+    end_iterator end() { return end_iterator(); }
   };
 
   ParentsView Parents() const { return ParentsView{AcquirePtr<Widget>()}; }

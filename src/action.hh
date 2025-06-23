@@ -18,11 +18,11 @@ struct Action {
 
   // Each action must be bound to a pointer. A reference to the pointer is stored internally to keep
   // track of its position.
-  Action(gui::Pointer& pointer) : pointer(pointer) {}
+  Action(gui::Pointer& pointer);
 
   // Action is destroyed when the pointer is released. This typically corresponds to the button
   // release or key up.
-  virtual ~Action() = default;
+  virtual ~Action();
 
   // Update is called when the pointer moves (although spurious calls are also possible). This
   // function may be called hundreds of times per second.

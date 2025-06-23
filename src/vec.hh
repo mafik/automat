@@ -54,4 +54,13 @@ struct Vec : std::vector<T> {
   iterator EraseIndex(int i) { return this->erase(this->begin() + i); }
 };
 
+template <typename T>
+void FastRemove(std::vector<T>& vec, const T& value) {
+  auto it = std::find(vec.begin(), vec.end(), value);
+  if (it != vec.end()) {
+    *it = std::move(vec.back());
+    vec.pop_back();
+  }
+}
+
 }  // namespace automat

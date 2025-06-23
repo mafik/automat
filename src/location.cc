@@ -582,8 +582,8 @@ void Location::UpdateAutoconnectArgs() {
       }
 
       // Find the new distance & target
-      float new_dist2 = arg.autoconnect_radius * arg.autoconnect_radius;
-      Location* new_target = nullptr;
+      float new_dist2 = std::min(arg.autoconnect_radius * arg.autoconnect_radius, old_dist2);
+      Location* new_target = old_target;
       for (auto& to : to_points) {
         float dist2 = LengthSquared(start.pos - to.pos);
         if (dist2 <= new_dist2) {

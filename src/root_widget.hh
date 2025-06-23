@@ -79,6 +79,7 @@ struct RootWidget final : Widget, DropTarget {
   void InitToolbar();
 
   WidgetStore widgets;
+  std::vector<Action*> active_actions;
 
   std::string_view Name() const override { return "RootWidget"; }
 

@@ -4,6 +4,7 @@
 
 #include <cmath>
 
+#include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
 #include "gui_connection_widget.hh"
@@ -34,9 +35,8 @@ Argument::LocationResult Argument::GetLocation(Location& here,
     result.follow_pointers = c->pointer_behavior == Connection::kFollowPointers;
   }
   if (result.location == nullptr && precondition >= kRequiresLocation) {
-    here.ReportError(
-        f("The {} argument of {} is not connected.", name, here.ToStr()),
-        source_location);
+    here.ReportError(f("The {} argument of {} is not connected.", name, here.ToStr()),
+                     source_location);
     result.ok = false;
   }
   return result;
@@ -52,8 +52,7 @@ Argument::ObjectResult Argument::GetObject(Location& here,
       result.object = result.location->object.get();
     }
     if (result.object == nullptr && precondition >= kRequiresObject) {
-      here.ReportError(f("The {} argument of {} is empty.", name, here.ToStr()),
-                       source_location);
+      here.ReportError(f("The {} argument of {} is empty.", name, here.ToStr()), source_location);
       result.ok = false;
     }
   }
@@ -89,53 +88,48 @@ void Argument::NearbyCandidates(
     Location& here, float radius,
     std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const {
   // Check the currently dragged object
-  for (auto& pointer : gui::root_widget->pointers) {
-    for (auto& action : pointer->actions) {
-      if (action == nullptr) {
-        continue;
-      }
-      if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action.get())) {
-        for (auto& location : drag_location_action->locations) {
-          if (location.get() == &here) {
-            continue;
-          }
-          std::string error;
-          for (auto& req : requirements) {
-            req(location.get(), location->object.get(), error);
-            if (!error.empty()) {
-              break;
-            }
-          }
-          if (!error.empty()) {
-            continue;
-          }
-          Vec<Vec2AndDir> to_points;
-          location->WidgetForObject()->ConnectionPositions(to_points);
-          callback(*location, to_points);
+  auto& root_widget = here.FindRootWidget();
+  for (auto* action : root_widget.active_actions) {
+    if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action)) {
+      for (auto& location : drag_location_action->locations) {
+        if (location.get() == &here) {
+          continue;
         }
+        std::string error;
+        for (auto& req : requirements) {
+          req(location.get(), location->object.get(), error);
+          if (!error.empty()) {
+            break;
+          }
+        }
+        if (!error.empty()) {
+          continue;
+        }
+        Vec<Vec2AndDir> to_points;
+        location->WidgetForObject()->ConnectionPositions(to_points);
+        callback(*location, to_points);
       }
     }
   }
   // Query nearby objects in the parent machine
-  if (auto parent_machine = here.ParentAs<Machine>()) {
-    Vec2 center = this->Start(*here.WidgetForObject(), *parent_machine).pos;
-    parent_machine->Nearby(center, radius, [&](Location& other) -> void* {
-      if (&other == &here) {
+
+  Vec2 center = this->Start(*here.WidgetForObject(), *root_machine).pos;
+  root_machine->Nearby(center, radius, [&](Location& other) -> void* {
+    if (&other == &here) {
+      return nullptr;
+    }
+    for (auto& req : requirements) {
+      std::string error;
+      req(&other, other.object.get(), error);
+      if (!error.empty()) {
         return nullptr;
       }
-      for (auto& req : requirements) {
-        std::string error;
-        req(&other, other.object.get(), error);
-        if (!error.empty()) {
-          return nullptr;
-        }
-      }
-      Vec<Vec2AndDir> to_points;
-      other.WidgetForObject()->ConnectionPositions(to_points);
-      callback(other, to_points);
-      return nullptr;
-    });
-  }
+    }
+    Vec<Vec2AndDir> to_points;
+    other.WidgetForObject()->ConnectionPositions(to_points);
+    callback(other, to_points);
+    return nullptr;
+  });
 }
 
 Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {

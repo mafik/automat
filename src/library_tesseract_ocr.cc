@@ -43,14 +43,24 @@ struct ImageArgument : LiveArgument {
   ImageArgument()
       : LiveArgument("image", kRequiresObject), icon("IMG", gui::kLetterSize, gui::GetFont()) {
     requirements.push_back([](Location* location, Object* object, std::string& error) {
-      // if (!object->AsImageProvider()) {
-      //   error = "Object must provide images";
-      //   return false;
-      // }
+      if (!object->AsImageProvider()) {
+        error = "Object must provide images";
+        return false;
+      }
       return true;
     });
+    autoconnect_radius = 20_cm;
+    style = Style::Invisible;
   }
   PaintDrawable& Icon() override { return icon; }
+  void ConnectionAdded(Location& here, Connection& connection) override {
+    LOG << "ImageArgument::ConnectionAdded";
+    LiveArgument::ConnectionAdded(here, connection);
+  }
+  void ConnectionRemoved(Location& here, Connection& connection) override {
+    LOG << "ImageArgument::ConnectionRemoved";
+    LiveArgument::ConnectionRemoved(here, connection);
+  }
 };
 
 struct TextArgument : Argument {
@@ -282,29 +292,36 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       region_rect.top = tesseract->y_max_ratio;
       ocr_text = tesseract->ocr_text;
       float target_aspect_ratio = 1.618f;
-      if (auto here_ptr = tesseract->here.lock()) {
-        auto image_obj = image_arg.FindObject(*here_ptr, {});
-        if (image_obj) {
-          auto image_provider = image_obj->AsImageProvider();
-          if (image_provider) {
-            source_image = image_provider->GetImage();
-            if (source_image) {
-              float image_width = source_image->width();
-              float image_height = source_image->height();
-              constexpr static float kMaxImageDimension = kSize - kEdgeWidth - kOuterSidesWidth * 2;
-              if (image_width > image_height) {
-                image_height = kMaxImageDimension * image_height / image_width;
-                image_width = kMaxImageDimension;
-              } else {
-                image_width = kMaxImageDimension * image_width / image_height;
-                image_height = kMaxImageDimension;
-              }
-              float width = image_width + kEdgeWidth + kOuterSidesWidth * 2;
-              float height = image_height + kEdgeWidth + kOuterSidesWidth * 2;
-              target_aspect_ratio = width / height;
+      {  // Update `source_image`
+        sk_sp<SkImage> new_image = nullptr;
+        if (auto here_ptr = tesseract->here.lock()) {
+          auto image_obj = image_arg.FindObject(*here_ptr, {});
+          if (image_obj) {
+            auto image_provider = image_obj->AsImageProvider();
+            if (image_provider) {
+              new_image = image_provider->GetImage();
             }
           }
         }
+        source_image = std::move(new_image);
+      }
+
+      if (source_image) {  // Update `aspect_ratio`
+        float image_width = source_image->width();
+        float image_height = source_image->height();
+        constexpr static float kMaxImageDimension = kSize - kEdgeWidth - kOuterSidesWidth * 2;
+        if (image_width > image_height) {
+          image_height = kMaxImageDimension * image_height / image_width;
+          image_width = kMaxImageDimension;
+        } else {
+          image_width = kMaxImageDimension * image_width / image_height;
+          image_height = kMaxImageDimension;
+        }
+        float width = image_width + kEdgeWidth + kOuterSidesWidth * 2;
+        float height = image_height + kEdgeWidth + kOuterSidesWidth * 2;
+        target_aspect_ratio = width / height;
+      } else {
+        target_aspect_ratio = 1.618f;
       }
 
       phase |= aspect_ratio.SpringTowards(target_aspect_ratio, timer.d, 0.3, 0.15);
@@ -847,7 +864,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
 
   Vec2AndDir ArgStart(const Argument& arg) override {
     if (&arg == &image_arg) {
-      return Vec2AndDir{kBounds.rect.RightCenter(), 0_deg};
+      return Vec2AndDir{kBounds.rect.TopCenter(), 90_deg};
     }
     if (&arg == &text_arg) {
       return Vec2AndDir{kBounds.rect.LeftCenter(), 180_deg};

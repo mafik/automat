@@ -136,9 +136,8 @@ struct Argument {
     if (result.object) {
       result.typed = dynamic_cast<T*>(result.object);
       if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
-        here.ReportError(
-            f("The {} argument is not an instance of {}.", name, typeid(T).name()),
-            source_location);
+        here.ReportError(f("The {} argument is not an instance of {}.", name, typeid(T).name()),
+                         source_location);
         result.ok = false;
       }
     }
@@ -243,11 +242,12 @@ struct LiveArgument : Argument {
       Attach(*new_here);
     }
   }
-  void ConnectionAdded(Location& here, Connection& connection) {
-    // TODO: handle the case where `here` is observing nearby objects (without
-    // connections) and a connection is added.
-    // TODO: handle ConnectionRemoved
+  virtual void ConnectionAdded(Location& here, Connection& connection) {
     here.ObserveUpdates(connection.to);
+    here.ScheduleLocalUpdate(connection.to);
+  }
+  virtual void ConnectionRemoved(Location& here, Connection& connection) {
+    here.StopObservingUpdates(connection.to);
     here.ScheduleLocalUpdate(connection.to);
   }
   void Rename(Location& here, std::string_view new_name) {

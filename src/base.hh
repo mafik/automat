@@ -79,6 +79,11 @@ struct LiveObject : Object {
       live_arg->ConnectionAdded(here, connection);
     }
   }
+  void ConnectionRemoved(Location& here, Connection& connection) override {
+    if (auto live_arg = dynamic_cast<LiveArgument*>(&connection.argument)) {
+      live_arg->ConnectionRemoved(here, connection);
+    }
+  }
 };
 
 template <typename T>

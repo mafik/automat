@@ -95,7 +95,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   constexpr static float kEdgeWidth = 1_mm;
   constexpr static float kOuterSidesWidth = 5_mm;
   constexpr static SkColor kInnerColor = "#ee7857"_color;
-  constexpr static SkColor kBaseWallColor = "#00a3ff"_color;
+  constexpr static SkColor kBaseWallColor = "#356570"_color;
 
   sk_sp<SkImage> source_image;  // Local copy of the source image
 
@@ -191,7 +191,35 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
 
   constexpr static RRect kBounds = RRect::MakeSimple(Rect::MakeAtZero({kSize, kSize}), 0);
 
-  RRect CoarseBounds() const override { return kBounds; }
+  RRect CoarseBounds() const override {
+    auto r = OuterRect().Outset(1_mm);
+    r.top += EyeImage().height() / 2;
+    return RRect::MakeSimple(r, 0);
+  }
+
+  static PersistentImage& BorderImage() {
+    static auto image =
+        PersistentImage::MakeFromAsset(embedded::assets_ocr_border_webp, {.width = kSize});
+    return image;
+  }
+
+  static PersistentImage& EyeImage() {
+    static auto image =
+        PersistentImage::MakeFromAsset(embedded::assets_ocr_eye_webp, {.width = kSize / 5});
+    return image;
+  }
+
+  static PersistentImage& BoxImage() {
+    static auto image =
+        PersistentImage::MakeFromAsset(embedded::assets_ocr_box_webp, {.width = 1287});
+    return image;
+  }
+
+  Optional<Rect> TextureBounds() const override {
+    auto r = OuterRect().Outset(1_mm);
+    r.top += EyeImage().height() / 2;
+    return r;
+  }
   Rect OuterRect() const {
     float width, height;
     if (aspect_ratio == 1) {
@@ -321,65 +349,122 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     } else {
       image_size.x = 1;
       image_size.y = 1;
-      image_shader = SkShaders::Color("#808080"_color);
+      image_shader = SkShaders::Color("#80808000"_color);
+    }
+
+    auto& box_image = BoxImage();
+    auto box_back = Rect(214, 127, 1082, 654);
+    auto DrawQuad = [&](Vec2 pts[4], Vec2 tex_pts[4]) {
+      SkMatrix m;
+      m.setPolyToPoly((SkPoint*)tex_pts, (SkPoint*)pts, 4);
+      auto builder = SkVertices::Builder(SkVertices::kTriangleFan_VertexMode, 4, 0, 0);
+      auto pos = builder.positions();
+      for (int i = 0; i < 4; ++i) {
+        pos[i] = tex_pts[i];
+      }
+      SkPaint paint;
+      paint.setShader(*box_image.shader);
+      canvas.save();
+      canvas.concat(m);
+      canvas.drawVertices(builder.detach(), SkBlendMode::kSrc, paint);
+      canvas.restore();
+    };
+
+    {  // left wall
+      auto left_wall = points.Wall(Left, Outer);
+      Vec2 tex_pts[4] = {
+          Vec2(0, 0),
+          box_back.BottomLeftCorner(),
+          box_back.TopLeftCorner(),
+          Vec2(0, box_image.height()),
+      };
+      Vec2 pts[4] = {
+          left_wall[3],
+          left_wall[0],
+          left_wall[1],
+          left_wall[2],
+      };
+      DrawQuad(pts, tex_pts);
+    }
+    {  // right wall
+      auto right_wall = points.Wall(Right, Outer);
+      Vec2 tex_pts[4] = {
+          Vec2(box_image.width(), 0),
+          box_back.BottomRightCorner(),
+          box_back.TopRightCorner(),
+          Vec2(box_image.width(), box_image.height()),
+      };
+      Vec2 pts[4] = {
+          right_wall[3],
+          right_wall[0],
+          right_wall[1],
+          right_wall[2],
+      };
+      DrawQuad(pts, tex_pts);
+    }
+    {  // bottom wall
+      auto bottom_wall = points.Wall(Bottom, Outer);
+      Vec2 tex_pts[4] = {
+          Vec2(0, 0),
+          box_back.BottomLeftCorner(),
+          box_back.BottomRightCorner(),
+          Vec2(box_image.width(), 0),
+      };
+      Vec2 pts[4] = {
+          bottom_wall[3],
+          bottom_wall[0],
+          bottom_wall[1],
+          bottom_wall[2],
+      };
+      DrawQuad(pts, tex_pts);
+    }
+    {  // top wall
+      auto top_wall = points.Wall(Top, Outer);
+      Vec2 tex_pts[4] = {
+          Vec2(0, box_image.height()),
+          box_back.TopLeftCorner(),
+          box_back.TopRightCorner(),
+          Vec2(box_image.width(), box_image.height()),
+      };
+      Vec2 pts[4] = {
+          top_wall[3],
+          top_wall[0],
+          top_wall[1],
+          top_wall[2],
+      };
+      DrawQuad(pts, tex_pts);
+    }
+    {  // back wall
+      auto back_wall = points.Wall(Back, Outer);
+      Vec2 tex_pts[4] = {
+          box_back.TopLeftCorner(),
+          box_back.BottomLeftCorner(),
+          box_back.BottomRightCorner(),
+          box_back.TopRightCorner(),
+      };
+      Vec2 pts[4] = {
+          back_wall[3],
+          back_wall[0],
+          back_wall[1],
+          back_wall[2],
+      };
+      DrawQuad(pts, tex_pts);
     }
 
     {  // blurry background
-      auto builder = SkVertices::Builder(
-          SkVertices::kTriangles_VertexMode, 12, 30,
-          SkVertices::kHasTexCoords_BuilderFlag | SkVertices::kHasColors_BuilderFlag);
+      auto builder = SkVertices::Builder(SkVertices::kTriangles_VertexMode, 4, 6,
+                                         SkVertices::kHasTexCoords_BuilderFlag);
       auto pos = builder.positions();
       pos[0] = points[Left, Top, Back, Outer];
       pos[1] = points[Right, Top, Back, Outer];
       pos[2] = points[Left, Bottom, Back, Outer];
       pos[3] = points[Right, Bottom, Back, Outer];
 
-      pos[4] = points[Left, Top, Front, Outer];
-      pos[5] = points[Right, Top, Front, Outer];
-      pos[6] = points[Left, Bottom, Front, Outer];
-      pos[7] = points[Right, Bottom, Front, Outer];
-
-      pos[8] = pos[4];
-      pos[9] = pos[5];
-      pos[10] = pos[6];
-      pos[11] = pos[7];
-
-      auto brighter = color::AdjustLightness(kBaseWallColor, 10);
-      auto darker = color::AdjustLightness(kBaseWallColor, -20);
-      auto darkest = color::AdjustLightness(kBaseWallColor, -50);
-      auto darker_transparent = SkColorSetA(darker, 0x80);
-
-      auto colors = builder.colors();
-      colors[0] = darker_transparent;
-      colors[1] = darker_transparent;
-      colors[2] = darker_transparent;
-      colors[3] = darker_transparent;
-
-      colors[4] = darkest;
-      colors[5] = darkest;
-      colors[6] = brighter;
-      colors[7] = brighter;
-
-      colors[8] = darker;
-      colors[9] = darker;
-      colors[10] = kBaseWallColor;
-      colors[11] = kBaseWallColor;
-
       auto tex_coords = builder.texCoords();
       tex_coords[0] = SkPoint::Make(0, 0);
       tex_coords[1] = SkPoint::Make(image_size.x, 0);
       tex_coords[2] = SkPoint::Make(0, image_size.y);
       tex_coords[3] = SkPoint::Make(image_size.x, image_size.y);
-
-      tex_coords[4] = tex_coords[2];
-      tex_coords[5] = tex_coords[3];
-      tex_coords[6] = tex_coords[0];
-      tex_coords[7] = tex_coords[1];
-
-      tex_coords[8] = tex_coords[1];
-      tex_coords[9] = tex_coords[0];
-      tex_coords[10] = tex_coords[3];
-      tex_coords[11] = tex_coords[2];
 
       auto ind = builder.indices();
       auto Face = [&](int start_index, int a, int b, int c, int d) {
@@ -390,14 +475,11 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         ind[start_index + 4] = c;
         ind[start_index + 5] = d;
       };
-      Face(0, 0, 1, 2, 3);    // back face
-      Face(6, 0, 1, 4, 5);    // top face
-      Face(12, 0, 2, 8, 10);  // left face
-      Face(18, 1, 3, 9, 11);  // right face
-      Face(24, 2, 3, 6, 7);   // bottom face
+      Face(0, 0, 1, 2, 3);  // back face
 
       SkPaint bg_paint;
       bg_paint.setImageFilter(SkImageFilters::Blur(0.25_mm, 0.25_mm, nullptr));
+      bg_paint.setColorFilter(color::MakeTintFilter(kBaseWallColor, 30));
       bg_paint.setShader(image_shader);
       auto vertices = builder.detach();
       canvas.drawVertices(vertices.get(), SkBlendMode::kDstOver, bg_paint);
@@ -538,27 +620,19 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       }
     }
 
-    auto outer_back =
-        RectPath(points[Left, Top, Back, Outer], points[Right, Top, Back, Outer],
-                 points[Right, Bottom, Back, Outer], points[Left, Bottom, Back, Outer]);
-    gui::DrawCable(canvas, outer_back, color_outer_back, CableTexture::Smooth, kEdgeWidth * 0.5,
-                   kEdgeWidth * 0.5, nullptr);
-
     auto inner_back =
         RectPath(points[Left, Top, Back, Inner], points[Right, Top, Back, Inner],
                  points[Right, Bottom, Back, Inner], points[Left, Bottom, Back, Inner]);
     gui::DrawCable(canvas, inner_back, color_inner_back, CableTexture::Smooth, kEdgeWidth * 0.5,
                    kEdgeWidth * 0.5, nullptr);
 
-    for (int k = 0; k < 2; ++k) {
-      for (int i = 0; i < 2; ++i) {
-        for (int j = 0; j < 2; ++j) {
-          SkPath front_back;
-          front_back.moveTo(points[(AxisX)i, (AxisY)j, Back, (AxisW)k]);
-          front_back.lineTo(points[(AxisX)i, (AxisY)j, Front, (AxisW)k]);
-          gui::DrawCable(canvas, front_back, k == Inner ? color_inner : color_outer,
-                         CableTexture::Smooth, kEdgeWidth * 0.5, kEdgeWidth, nullptr);
-        }
+    for (int i = 0; i < 2; ++i) {
+      for (int j = 0; j < 2; ++j) {
+        SkPath front_back;
+        front_back.moveTo(points[(AxisX)i, (AxisY)j, Back, Inner]);
+        front_back.lineTo(points[(AxisX)i, (AxisY)j, Front, Inner]);
+        gui::DrawCable(canvas, front_back, color_inner, CableTexture::Smooth, kEdgeWidth * 0.5,
+                       kEdgeWidth, nullptr);
       }
     }
     for (int i = 0; i < 2; ++i) {
@@ -577,11 +651,20 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     gui::DrawCable(canvas, inner_front, color_inner, CableTexture::Smooth, kEdgeWidth * 0.75,
                    kEdgeWidth * 0.75, nullptr);
 
-    auto outer_front =
-        RectPath(points[Left, Top, Front, Outer], points[Right, Top, Front, Outer],
-                 points[Right, Bottom, Front, Outer], points[Left, Bottom, Front, Outer]);
-    gui::DrawCable(canvas, outer_front, color_outer, CableTexture::Smooth, kEdgeWidth, kEdgeWidth,
-                   nullptr);
+    auto outer_rect = OuterRect();
+
+    auto& border_image = BorderImage();
+    canvas.save();
+    canvas.concat(SkMatrix::MakeRectToRect(Rect(0, 0, border_image.width(), border_image.height()),
+                                           outer_rect.Outset(1_mm), SkMatrix::kFill_ScaleToFit));
+    border_image.draw(canvas);
+    canvas.restore();
+
+    auto& eye_image = EyeImage();
+    canvas.save();
+    canvas.translate(-eye_image.width() / 2, -eye_image.height() / 2 + outer_rect.top + 0.5_mm);
+    eye_image.draw(canvas);
+    canvas.restore();
 
     if (laser_alpha > 0.0f) {
       SkPath path;
@@ -650,52 +733,6 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       paint.setMaskFilter(nullptr);
       canvas.drawPath(path, paint);
     }
-
-    return;
-
-    SkPaint edge_paint;
-    edge_paint.setStyle(SkPaint::kStroke_Style);
-    edge_paint.setStrokeWidth(kEdgeWidth);
-    edge_paint.setAntiAlias(true);
-
-    for (int i = 0; i < 2; ++i) {
-      for (int j = 0; j < 2; ++j) {
-        for (int k = 0; k < 2; ++k) {
-          canvas.drawLine(points[(AxisX)i, (AxisY)j, (AxisZ)k, Inner],
-                          points[(AxisX)i, (AxisY)j, (AxisZ)k, Outer], edge_paint);
-          canvas.drawLine(points[(AxisX)i, (AxisY)j, Back, (AxisW)k],
-                          points[(AxisX)i, (AxisY)j, Front, (AxisW)k], edge_paint);
-          canvas.drawLine(points[(AxisX)i, Top, (AxisZ)j, (AxisW)k],
-                          points[(AxisX)i, Bottom, (AxisZ)j, (AxisW)k], edge_paint);
-          canvas.drawLine(points[Left, (AxisY)i, (AxisZ)j, (AxisW)k],
-                          points[Right, (AxisY)i, (AxisZ)j, (AxisW)k], edge_paint);
-        }
-      }
-    }
-
-    // Draw OCR text if available
-    if (!ocr_text.empty()) {
-      auto& font = gui::GetFont();
-      SkPaint text_paint;
-      text_paint.setColor("#333333"_color);
-
-      canvas.save();
-      auto text_pos = kBounds.rect.BottomLeftCorner();
-      text_pos.y += font.letter_height + 2_mm;
-      canvas.translate(text_pos.x, text_pos.y);
-
-      // Scale text to fit
-      float text_width = font.MeasureText(ocr_text);
-      float scale_x = std::min(1.0f, kSize / text_width);
-      if (scale_x < 1.0f) {
-        canvas.scale(scale_x, 1.0f);
-      }
-
-      font.DrawText(canvas, ocr_text, text_paint);
-      canvas.restore();
-    }
-
-    DrawChildren(canvas);
   }
 
   void PointerOver(gui::Pointer& pointer) override {

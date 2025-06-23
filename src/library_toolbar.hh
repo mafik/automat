@@ -31,6 +31,10 @@ struct PrototypeButton : Widget {
 
   SkPath Shape() const override { return proto_widget->Shape(); }
 
+  RRect CoarseBounds() const override { return proto_widget->CoarseBounds(); }
+
+  Optional<Rect> TextureBounds() const override { return proto_widget->TextureBounds(); }
+
   void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(proto_widget); }
 
   void PointerOver(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }

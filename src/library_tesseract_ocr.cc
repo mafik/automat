@@ -514,9 +514,9 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     };
     auto color_outer = color::MakeTintFilter("#333333"_color, 80);
     auto color_outer_back = color::MakeTintFilter("#111111"_color, 20);
-    auto color_inner = color::MakeTintFilter(kInnerColor, 20);
-    auto color_inner_back = color::MakeTintFilter(kInnerColor, 10);
-    auto color_inner_outer = color::MakeTintFilter("#111111"_color, 20);
+    auto color_inner = color::MakeTintFilter(kInnerColor, 40);
+    auto color_inner_back = color::MakeTintFilter(kInnerColor, 20);
+    auto color_inner_outer = color::MakeTintFilter("#444444"_color, 20);
 
     {  // sharp center
       auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
@@ -594,7 +594,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         SkPath inner_outer;
         inner_outer.moveTo(points[(AxisX)i, (AxisY)j, Back, Inner]);
         inner_outer.lineTo(points[(AxisX)i, (AxisY)j, Back, Outer]);
-        gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Smooth,
+        gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
                        kEdgeWidth * 0.5, kEdgeWidth * 0.5, nullptr);
       }
     }
@@ -657,7 +657,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         SkPath inner_outer;
         inner_outer.moveTo(points[(AxisX)i, (AxisY)j, Front, Inner]);
         inner_outer.lineTo(points[(AxisX)i, (AxisY)j, Front, Outer]);
-        gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Smooth,
+        gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
                        kEdgeWidth * 0.75, kEdgeWidth, nullptr);
       }
     }

@@ -23,6 +23,7 @@
 #include "action.hh"
 #include "animation.hh"
 #include "argument.hh"
+#include "automat.hh"
 #include "color.hh"
 #include "connector_optical.hh"
 #include "embedded.hh"
@@ -31,12 +32,15 @@
 #include "image_provider.hh"
 #include "log.hh"
 #include "str.hh"
+#include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
 
 using namespace std;
 
 namespace automat::library {
+
+constexpr bool kDebugEyeShape = false;
 
 struct ImageArgument : LiveArgument {
   TextDrawable icon;
@@ -53,14 +57,6 @@ struct ImageArgument : LiveArgument {
     style = Style::Invisible;
   }
   PaintDrawable& Icon() override { return icon; }
-  void ConnectionAdded(Location& here, Connection& connection) override {
-    LOG << "ImageArgument::ConnectionAdded";
-    LiveArgument::ConnectionAdded(here, connection);
-  }
-  void ConnectionRemoved(Location& here, Connection& connection) override {
-    LOG << "ImageArgument::ConnectionRemoved";
-    LiveArgument::ConnectionRemoved(here, connection);
-  }
 };
 
 struct TextArgument : Argument {
@@ -116,6 +112,8 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   Vec2 drag_start_pos;
   float drag_start_x_min, drag_start_x_max, drag_start_y_min, drag_start_y_max;
   Rect region_rect;
+  Optional<Vec2> iris_target;  // Where the eye is pointing (machine coords)
+  animation::SpringV2<Vec2> iris_dir;
   std::string ocr_text;
   Optional<gui::Pointer::IconOverride> icon_override;
   animation::SpringV2<float> aspect_ratio = 1.618f;
@@ -219,6 +217,18 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     return image;
   }
 
+  static PersistentImage& IrisImage() {
+    static auto image =
+        PersistentImage::MakeFromAsset(embedded::assets_ocr_iris_webp, {.width = kSize / 14});
+    return image;
+  }
+
+  static constexpr char kEyeShapeSVG[] =
+      "M-13.6025.7-12.1917-1.6769-9.2847-4.259-6.0956-5.8322-2.0343-6.7556 2.5143-6.5504 "
+      "4.9339-6.0203 7.3365-5.2166 8.8584-3.994 10.9103-2.0104 12.1074-.326 12.5263.871 10.9531 "
+      "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
+      "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z";
+
   static PersistentImage& BoxImage() {
     static auto image =
         PersistentImage::MakeFromAsset(embedded::assets_ocr_box_webp, {.width = 1287});
@@ -269,6 +279,8 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     }
   }
 
+  void TransformUpdated() override { WakeAnimation(); }
+
   animation::Phase Tick(time::Timer& timer) override {
     auto phase = animation::Finished;
     // Copy source image from connected image provider
@@ -292,18 +304,30 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       region_rect.top = tesseract->y_max_ratio;
       ocr_text = tesseract->ocr_text;
       float target_aspect_ratio = 1.618f;
+      iris_target.reset();
       {  // Update `source_image`
         sk_sp<SkImage> new_image = nullptr;
         if (auto here_ptr = tesseract->here.lock()) {
-          auto image_obj = image_arg.FindObject(*here_ptr, {});
+          auto image_loc = image_arg.FindLocation(*here_ptr, {});
+          auto image_obj = image_loc ? image_loc->object.get() : nullptr;
           if (image_obj) {
             auto image_provider = image_obj->AsImageProvider();
             if (image_provider) {
               new_image = image_provider->GetImage();
+              iris_target = image_loc->position;
             }
+          }
+
+          if (status_progress_ratio.has_value()) {
+            iris_target = here_ptr->position;
           }
         }
         source_image = std::move(new_image);
+      }
+
+      if (pointers.size() > 0) {
+        auto pointer_pos = pointers.front()->PositionWithin(*root_machine);
+        iris_target = pointer_pos;
       }
 
       if (source_image) {  // Update `aspect_ratio`
@@ -351,6 +375,26 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       points[Right, Bottom, Front, Inner] = inner_front.BottomRightCorner();
       points[Left, Top, Front, Inner] = inner_front.TopLeftCorner();
       points[Right, Top, Front, Inner] = inner_front.TopRightCorner();
+
+      {  // animate iris
+        Vec2 eye_delta;
+        if (iris_target.has_value()) {
+          auto matrix = TransformBetween(*root_machine, *this);
+          eye_delta = matrix.mapPoint(iris_target->sk) - Vec2(0, outer_front.top + 0.5_mm);
+        } else {
+          eye_delta = Vec2(0, 0);
+        }
+
+        auto eye_dir = Normalize(eye_delta);
+        float z = 2_cm;
+        auto eye_dist_3d = Length(Vec3(eye_delta.x, eye_delta.y, z));
+        auto eye_dist_2d = Length(eye_delta);
+
+        float dist = eye_dist_2d / eye_dist_3d;
+
+        Vec2 iris_dir_target = Vec2(eye_dir.x * dist, eye_dir.y * dist);
+        phase |= iris_dir.SineTowards(iris_dir_target, timer.d, 0.1);
+      }
     }
     return phase;
   }
@@ -677,11 +721,58 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     border_image.draw(canvas);
     canvas.restore();
 
+    SkPath eye_path = PathFromSVG(kEyeShapeSVG);
+    eye_path.transform(SkMatrix::Translate(0, outer_rect.top + 0.5_mm));
+
     auto& eye_image = EyeImage();
     canvas.save();
+    eye_path.toggleInverseFillType();
+    canvas.clipPath(eye_path);
+    eye_path.toggleInverseFillType();
     canvas.translate(-eye_image.width() / 2, -eye_image.height() / 2 + outer_rect.top + 0.5_mm);
     eye_image.draw(canvas);
     canvas.restore();
+
+    auto& iris_image = IrisImage();
+    {
+      canvas.save();
+      canvas.clipPath(eye_path);
+      canvas.drawColor(SK_ColorWHITE);
+      canvas.translate(0, outer_rect.top + 0.5_mm);
+      {
+        canvas.save();
+
+        Vec2 iris_pos = iris_dir.value * Vec2(2_mm, 1_mm);
+
+        float degrees = atan(iris_pos) * 180 / M_PI;
+        canvas.translate(iris_pos.x, iris_pos.y);
+        float squeeze_3d = 1 - Length(iris_dir) / 4;
+        canvas.rotate(degrees);
+        canvas.scale(squeeze_3d, 1);
+        canvas.rotate(-degrees);
+
+        canvas.translate(-iris_image.width() / 2, -iris_image.height() / 2);
+        iris_image.draw(canvas);
+        canvas.restore();
+      }
+      {
+        canvas.save();
+        canvas.translate(-eye_image.width() / 2, -eye_image.height() / 2);
+        SkPaint paint = eye_image.paint;
+        paint.setBlendMode(SkBlendMode::kModulate);
+        Rect rect = Rect(0, 0, eye_image.width(), eye_image.height());
+        canvas.drawRect(rect, paint);
+        canvas.restore();
+      }
+      canvas.restore();
+    }
+
+    if constexpr (kDebugEyeShape) {
+      SkPaint eye_paint;
+      eye_paint.setStyle(SkPaint::kStroke_Style);
+      eye_paint.setColor("#ff0000"_color);
+      canvas.drawPath(eye_path, eye_paint);
+    }
 
     if (laser_alpha > 0.0f) {
       SkPath path;
@@ -775,6 +866,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       // Update icon override with new cursor
       icon_override.emplace(pointer, GetCursorForMode(hover_mode));
     }
+    WakeAnimation();
   }
 
   // Forward declaration for drag action

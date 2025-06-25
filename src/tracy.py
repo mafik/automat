@@ -14,7 +14,7 @@ tracy.FetchFromGit('https://github.com/wolfpld/tracy.git', 'v0.12.1')
 meson_output = build.PREFIX / 'lib64' / 'libtracy.a'
 desired_output = meson_output.with_name(build.libname('tracy'))
 tracy.ConfigureWithMeson(meson_output)
-tracy.ConfigureOptions(on_demand='true', no_broadcast='true', only_localhost='true')
+tracy.ConfigureOptions(on_demand='true')
 
 if meson_output.name != desired_output.name:
   def AliasTracyLib(token):
@@ -24,5 +24,10 @@ if meson_output.name != desired_output.name:
   tracy.PostInstallStep(AliasTracyLib)
 
 tracy.InstallWhenIncluded(r'tracy/Tracy\.hpp')
-tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND', '-DTRACY_NO_BROADCAST', '-DTRACY_ONLY_LOCALHOST')
+tracy.AddCompileArgs('-I', build.PREFIX / 'include' / 'tracy')
+tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND')
 tracy.AddLinkArg('-ltracy')
+
+if build.release:
+  tracy.ConfigureOptions(only_localhost='true', no_broadcast='true')
+  tracy.AddCompileArgs('-DTRACY_ONLY_LOCALHOST', '-DTRACY_NO_BROADCAST')

@@ -178,7 +178,8 @@ class ExtensionHelper:
           shortcut=f'configure {self.name}')
 
     elif self.configure == 'meson':
-      meson_args = ['meson', 'setup']
+      import meson
+      meson_args = meson.ARGS + ['setup']
       for key, value in self.configure_opts.items():
         meson_args.append(f'-D{key}={value}')
       if build.fast:
@@ -193,7 +194,7 @@ class ExtensionHelper:
       recipe.add_step(
         partial(Popen, meson_args, env=env),
         outputs=[makefile],
-        inputs=configure_inputs,
+        inputs=configure_inputs + [meson.BIN],
         desc=f'Configuring {self.name}',
         shortcut=f'configure {self.name}')
 
@@ -244,10 +245,11 @@ class ExtensionHelper:
           desc=f'Installing {self.name}',
           shortcut=f'install {self.name}')
     elif makefile.name == 'meson-info.json':
+      import meson
       recipe.add_step(
-        partial(Popen, ['meson', 'install', '-C', build_dir, '--tags', 'devel,runtime']),
+        partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--tags', 'devel,runtime']),
         outputs=self.outputs,
-        inputs=[makefile, ninja.BIN],
+        inputs=configure_inputs + [makefile, ninja.BIN],
         desc=f'Installing {self.name}',
         shortcut=f'install {self.name}')
     else:

@@ -16,6 +16,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <thread>
+#include <tracy/Tracy.hpp>
 
 #include "automat.hh"
 #include "backtrace.hh"
@@ -87,10 +88,12 @@ static void RunThread(std::stop_token stop_token) {
 }
 
 void VulkanPaint() {
+  ZoneScoped;
   if (!vk::initialized) {
     return;
   }
   if (kPowersave) {
+    ZoneScopedN("Powersave");
     time::SystemPoint now = time::SystemNow();
     // TODO: Adjust next_frame to minimize input latency
     // VK_EXT_present_timing
@@ -113,6 +116,7 @@ void VulkanPaint() {
   }
 
   {
+    ZoneScopedN("Resize");
     auto lock = root_widget->window->Lock();
     Vec2 size_px = Vec2(root_widget->window->client_width, root_widget->window->client_height);
     if (root_widget->window->vk_size != size_px) {
@@ -132,14 +136,21 @@ void VulkanPaint() {
   if (canvas == nullptr) {
     return;
   }
-  RenderFrame(*canvas);
+  {
+    ZoneScopedN("RenderFrame");
+    RenderFrame(*canvas);
+  }
+  FrameMark;
 }
 
 void RenderThread(std::stop_token stop_token) {
   SetThreadName("Render Thread");
   while (!stop_token.stop_requested()) {
     VulkanPaint();
-    static_cast<AutomatImageProvider*>(image_provider.get())->TickCache();
+    {
+      ZoneScopedN("ImageProvider TickCache");
+      static_cast<AutomatImageProvider*>(image_provider.get())->TickCache();
+    }
   }
 }
 

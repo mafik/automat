@@ -1035,10 +1035,10 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
 
   Vec2AndDir ArgStart(const Argument& arg) override {
     if (&arg == &image_arg) {
-      return Vec2AndDir{kBounds.rect.TopCenter(), 90_deg};
+      return Vec2AndDir{layout.eye_center, 90_deg};
     }
     if (&arg == &text_arg) {
-      return Vec2AndDir{kBounds.rect.LeftCenter(), 180_deg};
+      return Vec2AndDir{layout.border_outer.LeftCenter(), 180_deg};
     }
     return FallbackWidget::ArgStart(arg);
   }

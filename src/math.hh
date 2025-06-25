@@ -344,6 +344,8 @@ union Rect {
     return {left - amount, bottom - amount, right + amount, top + amount};
   }
 
+  [[nodiscard]] constexpr Rect Inset(float amount) const { return Outset(-amount); }
+
   [[nodiscard]] constexpr Rect MoveBy(Vec2 offset) const {
     return {left + offset.x, bottom + offset.y, right + offset.x, top + offset.y};
   }

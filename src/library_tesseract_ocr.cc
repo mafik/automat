@@ -13,6 +13,7 @@
 #include <include/core/SkShader.h>
 #include <include/core/SkVertices.h>
 #include <include/effects/SkTrimPathEffect.h>
+#include <include/pathops/SkPathOps.h>
 #include <leptonica/allheaders.h>
 #include <leptonica/pix.h>
 #include <tesseract/ocrclass.h>
@@ -191,7 +192,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     WallX Wall(AxisX x, AxisW w) const { return WallX{*this, x, w}; }
     WallY Wall(AxisY y, AxisW w) const { return WallY{*this, y, w}; }
     WallZ Wall(AxisZ z, AxisW w) const { return WallZ{*this, z, w}; }
-  } points;
+  };
 
   Ptr<TesseractOCR> LockTesseract() const { return LockObject<TesseractOCR>(); }
 
@@ -200,7 +201,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   constexpr static RRect kBounds = RRect::MakeSimple(Rect::MakeAtZero({kSize, kSize}), 0);
 
   RRect CoarseBounds() const override {
-    auto r = OuterRect().Outset(1_mm);
+    auto r = layout.border_outer;
     r.top += EyeImage().height() / 2;
     return RRect::MakeSimple(r, 0);
   }
@@ -223,11 +224,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     return image;
   }
 
-  static constexpr char kEyeShapeSVG[] =
-      "M-13.6025.7-12.1917-1.6769-9.2847-4.259-6.0956-5.8322-2.0343-6.7556 2.5143-6.5504 "
-      "4.9339-6.0203 7.3365-5.2166 8.8584-3.994 10.9103-2.0104 12.1074-.326 12.5263.871 10.9531 "
-      "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
-      "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z";
+  static const SkPath kEyeShape;
 
   static PersistentImage& BoxImage() {
     static auto image =
@@ -236,31 +233,93 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   }
 
   Optional<Rect> TextureBounds() const override {
-    auto r = OuterRect().Outset(1_mm);
+    auto r = layout.border_outer;
     r.top += EyeImage().height() / 2;
     return r;
   }
-  Rect OuterRect() const {
-    float width, height;
-    if (aspect_ratio == 1) {
-      width = height = kSize;
-    } else if (aspect_ratio > 1) {
-      width = kSize;
-      height = width / aspect_ratio;
-    } else {
-      height = kSize;
-      width = height * aspect_ratio;
+  struct Layout {
+    float aspect_ratio;
+    Rect region_rect;
+
+    // Computed values:
+    mutable Rect border_outer;  // a rectangle that fully contains the tesseract's outer border
+    mutable Rect border_inner;
+    mutable SkPath shape;
+    mutable Vec2 eye_center;
+    mutable TesseractPoints points;
+
+    Layout() : Layout(1.618f, Rect(0.25, 0.25, 0.75, 0.75)) {}
+    Layout(float aspect_ratio, Rect region_rect)
+        : aspect_ratio(aspect_ratio), region_rect(region_rect) {
+      {  // border_outer, border_inner
+        float width, height;
+        if (aspect_ratio == 1) {
+          width = height = kSize;
+        } else if (aspect_ratio > 1) {
+          width = kSize;
+          height = width / aspect_ratio;
+        } else {
+          height = kSize;
+          width = height * aspect_ratio;
+        }
+        border_outer = Rect::MakeAtZero({width, height});
+        border_inner = border_outer.Inset(kEdgeWidth);
+      }
+      {  // points, eye_center
+        Rect outer_front = border_outer.Inset(kEdgeWidth / 2);
+        Rect outer_back = outer_front.Outset(-kOuterSidesWidth);
+        eye_center = outer_front.TopCenter();
+
+        points[Left, Bottom, Front, Outer] = outer_front.BottomLeftCorner();
+        points[Right, Bottom, Front, Outer] = outer_front.BottomRightCorner();
+        points[Left, Top, Front, Outer] = outer_front.TopLeftCorner();
+        points[Right, Top, Front, Outer] = outer_front.TopRightCorner();
+        points[Left, Bottom, Back, Outer] = outer_back.BottomLeftCorner();
+        points[Right, Bottom, Back, Outer] = outer_back.BottomRightCorner();
+        points[Left, Top, Back, Outer] = outer_back.TopLeftCorner();
+        points[Right, Top, Back, Outer] = outer_back.TopRightCorner();
+
+        auto inner_back = Rect(lerp(outer_back.left, outer_back.right, region_rect.left),
+                               lerp(outer_back.bottom, outer_back.top, region_rect.bottom),
+                               lerp(outer_back.left, outer_back.right, region_rect.right),
+                               lerp(outer_back.bottom, outer_back.top, region_rect.top));
+        points[Left, Bottom, Back, Inner] = inner_back.BottomLeftCorner();
+        points[Right, Bottom, Back, Inner] = inner_back.BottomRightCorner();
+        points[Left, Top, Back, Inner] = inner_back.TopLeftCorner();
+        points[Right, Top, Back, Inner] = inner_back.TopRightCorner();
+        auto inner_front = inner_back.Outset(3_mm);
+        points[Left, Bottom, Front, Inner] = inner_front.BottomLeftCorner();
+        points[Right, Bottom, Front, Inner] = inner_front.BottomRightCorner();
+        points[Left, Top, Front, Inner] = inner_front.TopLeftCorner();
+        points[Right, Top, Front, Inner] = inner_front.TopRightCorner();
+      }
+      auto rect_shape = SkPath::Rect(border_outer);
+      auto eye_shape = kEyeShape.makeTransform(SkMatrix::Translate(eye_center).preScale(1.5, 1.5));
+      Op(rect_shape, eye_shape, kUnion_SkPathOp, &shape);
     }
-    return Rect::MakeAtZero({width, height});
-  }
-  SkPath Shape() const override { return SkPath::Rect(OuterRect()); }
+
+    TesseractPoints::WallX Wall(AxisX x, AxisW w) const {
+      return TesseractPoints::WallX{points, x, w};
+    }
+    TesseractPoints::WallY Wall(AxisY y, AxisW w) const {
+      return TesseractPoints::WallY{points, y, w};
+    }
+    TesseractPoints::WallZ Wall(AxisZ z, AxisW w) const {
+      return TesseractPoints::WallZ{points, z, w};
+    }
+    const Vec2& operator[](AxisX x, AxisY y, AxisZ z, AxisW w) const { return points[x, y, z, w]; }
+  };
+
+  Layout layout;
+
+  SkPath Shape() const override { return layout.shape; }
 
   DragMode GetDragModeAt(Vec2 pos) const {
-    if (points.Wall(Top, Inner).Contains(pos)) return DragMode::Top;
-    if (points.Wall(Bottom, Inner).Contains(pos)) return DragMode::Bottom;
-    if (points.Wall(Left, Inner).Contains(pos)) return DragMode::Left;
-    if (points.Wall(Right, Inner).Contains(pos)) return DragMode::Right;
-    if (points.Wall(Back, Inner).Contains(pos)) return DragMode::Move;
+    if (layout.Wall(Top, Inner).Contains(pos)) return DragMode::Top;
+    if (layout.Wall(Bottom, Inner).Contains(pos)) return DragMode::Bottom;
+    if (layout.Wall(Left, Inner).Contains(pos)) return DragMode::Left;
+    if (layout.Wall(Right, Inner).Contains(pos)) return DragMode::Right;
+    if (layout.Wall(Back, Inner).Contains(pos)) return DragMode::Move;
     return DragMode::None;
   }
 
@@ -348,39 +407,15 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         target_aspect_ratio = 1.618f;
       }
 
-      phase |= aspect_ratio.SpringTowards(target_aspect_ratio, timer.d, 0.3, 0.15);
+      phase |= aspect_ratio.SineTowards(target_aspect_ratio, timer.d, 0.3);
 
-      auto outer_front = OuterRect();
-      outer_front = outer_front.Outset(-kEdgeWidth / 2);
-      points[Left, Bottom, Front, Outer] = outer_front.BottomLeftCorner();
-      points[Right, Bottom, Front, Outer] = outer_front.BottomRightCorner();
-      points[Left, Top, Front, Outer] = outer_front.TopLeftCorner();
-      points[Right, Top, Front, Outer] = outer_front.TopRightCorner();
-      auto outer_back = outer_front.Outset(-kOuterSidesWidth);
-      points[Left, Bottom, Back, Outer] = outer_back.BottomLeftCorner();
-      points[Right, Bottom, Back, Outer] = outer_back.BottomRightCorner();
-      points[Left, Top, Back, Outer] = outer_back.TopLeftCorner();
-      points[Right, Top, Back, Outer] = outer_back.TopRightCorner();
-
-      auto inner_back = Rect(lerp(outer_back.left, outer_back.right, region_rect.left),
-                             lerp(outer_back.bottom, outer_back.top, region_rect.bottom),
-                             lerp(outer_back.left, outer_back.right, region_rect.right),
-                             lerp(outer_back.bottom, outer_back.top, region_rect.top));
-      points[Left, Bottom, Back, Inner] = inner_back.BottomLeftCorner();
-      points[Right, Bottom, Back, Inner] = inner_back.BottomRightCorner();
-      points[Left, Top, Back, Inner] = inner_back.TopLeftCorner();
-      points[Right, Top, Back, Inner] = inner_back.TopRightCorner();
-      auto inner_front = inner_back.Outset(3_mm);
-      points[Left, Bottom, Front, Inner] = inner_front.BottomLeftCorner();
-      points[Right, Bottom, Front, Inner] = inner_front.BottomRightCorner();
-      points[Left, Top, Front, Inner] = inner_front.TopLeftCorner();
-      points[Right, Top, Front, Inner] = inner_front.TopRightCorner();
+      layout = Layout(aspect_ratio, region_rect);
 
       {  // animate iris
         Vec2 eye_delta;
         if (iris_target.has_value()) {
           auto matrix = TransformBetween(*root_machine, *this);
-          eye_delta = matrix.mapPoint(iris_target->sk) - Vec2(0, outer_front.top + 0.5_mm);
+          eye_delta = matrix.mapPoint(iris_target->sk) - layout.eye_center;
         } else {
           eye_delta = Vec2(0, 0);
         }
@@ -432,7 +467,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     };
 
     {  // left wall
-      auto left_wall = points.Wall(Left, Outer);
+      auto left_wall = layout.Wall(Left, Outer);
       Vec2 tex_pts[4] = {
           Vec2(0, 0),
           box_back.BottomLeftCorner(),
@@ -448,7 +483,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       DrawQuad(pts, tex_pts);
     }
     {  // right wall
-      auto right_wall = points.Wall(Right, Outer);
+      auto right_wall = layout.Wall(Right, Outer);
       Vec2 tex_pts[4] = {
           Vec2(box_image.width(), 0),
           box_back.BottomRightCorner(),
@@ -464,7 +499,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       DrawQuad(pts, tex_pts);
     }
     {  // bottom wall
-      auto bottom_wall = points.Wall(Bottom, Outer);
+      auto bottom_wall = layout.Wall(Bottom, Outer);
       Vec2 tex_pts[4] = {
           Vec2(0, 0),
           box_back.BottomLeftCorner(),
@@ -480,7 +515,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       DrawQuad(pts, tex_pts);
     }
     {  // top wall
-      auto top_wall = points.Wall(Top, Outer);
+      auto top_wall = layout.Wall(Top, Outer);
       Vec2 tex_pts[4] = {
           Vec2(0, box_image.height()),
           box_back.TopLeftCorner(),
@@ -496,7 +531,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       DrawQuad(pts, tex_pts);
     }
     {  // back wall
-      auto back_wall = points.Wall(Back, Outer);
+      auto back_wall = layout.Wall(Back, Outer);
       Vec2 tex_pts[4] = {
           box_back.TopLeftCorner(),
           box_back.BottomLeftCorner(),
@@ -516,10 +551,10 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       auto builder = SkVertices::Builder(SkVertices::kTriangles_VertexMode, 4, 6,
                                          SkVertices::kHasTexCoords_BuilderFlag);
       auto pos = builder.positions();
-      pos[0] = points[Left, Top, Back, Outer];
-      pos[1] = points[Right, Top, Back, Outer];
-      pos[2] = points[Left, Bottom, Back, Outer];
-      pos[3] = points[Right, Bottom, Back, Outer];
+      pos[0] = layout[Left, Top, Back, Outer];
+      pos[1] = layout[Right, Top, Back, Outer];
+      pos[2] = layout[Left, Bottom, Back, Outer];
+      pos[3] = layout[Right, Bottom, Back, Outer];
 
       auto tex_coords = builder.texCoords();
       tex_coords[0] = SkPoint::Make(0, 0);
@@ -546,13 +581,20 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       canvas.drawVertices(vertices.get(), SkBlendMode::kDstOver, bg_paint);
     }
 
-    auto RectPath = [&](Vec2 p1, Vec2 p2, Vec2 p3, Vec2 p4) {
+    auto RectPath = [&](Vec2 p1, Vec2 p2, Vec2 p3, Vec2 p4, float radius = kEdgeWidth / 2) {
       SkPath border_path;
       border_path.moveTo((p1 + p2) / 2);
-      border_path.arcTo(p2, (p2 + p3) / 2, kEdgeWidth / 2);
-      border_path.arcTo(p3, (p4 + p3) / 2, kEdgeWidth / 2);
-      border_path.arcTo(p4, (p1 + p4) / 2, kEdgeWidth / 2);
-      border_path.arcTo(p1, (p1 + p2) / 2, kEdgeWidth / 2);
+      if (radius > 0) {
+        border_path.arcTo(p2, (p2 + p3) / 2, radius);
+        border_path.arcTo(p3, (p4 + p3) / 2, radius);
+        border_path.arcTo(p4, (p1 + p4) / 2, radius);
+        border_path.arcTo(p1, (p1 + p2) / 2, radius);
+      } else {
+        border_path.lineTo(p2);
+        border_path.lineTo(p3);
+        border_path.lineTo(p4);
+        border_path.lineTo(p1);
+      }
       border_path.close();
       return border_path;
     };
@@ -566,10 +608,10 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       auto builder = SkVertices::Builder(SkVertices::kTriangleStrip_VertexMode, 4, 0,
                                          SkVertices::kHasTexCoords_BuilderFlag);
       auto pos = builder.positions();
-      pos[0] = points[Left, Top, Back, Inner];
-      pos[1] = points[Right, Top, Back, Inner];
-      pos[2] = points[Left, Bottom, Back, Inner];
-      pos[3] = points[Right, Bottom, Back, Inner];
+      pos[0] = layout[Left, Top, Back, Inner];
+      pos[1] = layout[Right, Top, Back, Inner];
+      pos[2] = layout[Left, Bottom, Back, Inner];
+      pos[3] = layout[Right, Bottom, Back, Inner];
 
       auto tex_coords = builder.texCoords();
       tex_coords[0] =
@@ -607,12 +649,12 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       paint.setColor(color::FastMix(kInnerColor, SK_ColorWHITE, laser_alpha));
       // paint.setAlphaf(0.5f);
       auto matrix = canvas.getLocalToDevice();
-      auto min_corner = points[Left, Bottom, Back, Outer];
-      auto max_corner = points[Right, Top, Back, Outer];
+      auto min_corner = layout[Left, Bottom, Back, Outer];
+      auto max_corner = layout[Right, Top, Back, Outer];
       auto size = max_corner - min_corner;
       canvas.save();
-      auto min_clip = points[Left, Bottom, Back, Inner];
-      auto max_clip = points[Right, Top, Back, Inner];
+      auto min_clip = layout[Left, Bottom, Back, Inner];
+      auto max_clip = layout[Right, Top, Back, Inner];
       canvas.clipRect(Rect(min_clip.x, min_clip.y, max_clip.x, max_clip.y));
       for (auto& result : status_results) {
         float width = font.MeasureText(result.text);
@@ -633,11 +675,14 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       canvas.restore();
     }
 
+    canvas.save();
+    canvas.clipRect(layout.border_inner);
+
     for (int i = 0; i < 2; ++i) {
       for (int j = 0; j < 2; ++j) {
         SkPath inner_outer;
-        inner_outer.moveTo(points[(AxisX)i, (AxisY)j, Back, Inner]);
-        inner_outer.lineTo(points[(AxisX)i, (AxisY)j, Back, Outer]);
+        inner_outer.moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner]);
+        inner_outer.lineTo(layout[(AxisX)i, (AxisY)j, Back, Outer]);
         gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
                        kEdgeWidth * 0.5, kEdgeWidth * 0.5, nullptr);
       }
@@ -645,10 +690,10 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     {    // sides of the inner cube
       {  // top
         SkPath path;
-        path.moveTo(points[Left, Top, Back, Inner]);
-        path.lineTo(points[Right, Top, Back, Inner]);
-        path.lineTo(points[Right, Top, Front, Inner]);
-        path.lineTo(points[Left, Top, Front, Inner]);
+        path.moveTo(layout[Left, Top, Back, Inner]);
+        path.lineTo(layout[Right, Top, Back, Inner]);
+        path.lineTo(layout[Right, Top, Front, Inner]);
+        path.lineTo(layout[Left, Top, Front, Inner]);
         path.close();
         SkPaint paint;
         paint.setColor("#6c2f1b"_color);
@@ -657,10 +702,10 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       }
       for (int i = 0; i < 2; ++i) {  // left & right
         SkPath path;
-        path.moveTo(points[(AxisX)i, Top, Back, Inner]);
-        path.lineTo(points[(AxisX)i, Top, Front, Inner]);
-        path.lineTo(points[(AxisX)i, Bottom, Front, Inner]);
-        path.lineTo(points[(AxisX)i, Bottom, Back, Inner]);
+        path.moveTo(layout[(AxisX)i, Top, Back, Inner]);
+        path.lineTo(layout[(AxisX)i, Top, Front, Inner]);
+        path.lineTo(layout[(AxisX)i, Bottom, Front, Inner]);
+        path.lineTo(layout[(AxisX)i, Bottom, Back, Inner]);
         path.close();
         SkPaint paint;
         paint.setColor("#a54b2f"_color);
@@ -669,10 +714,10 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       }
       {  // bottom
         SkPath path;
-        path.moveTo(points[Left, Bottom, Back, Inner]);
-        path.lineTo(points[Right, Bottom, Back, Inner]);
-        path.lineTo(points[Right, Bottom, Front, Inner]);
-        path.lineTo(points[Left, Bottom, Front, Inner]);
+        path.moveTo(layout[Left, Bottom, Back, Inner]);
+        path.lineTo(layout[Right, Bottom, Back, Inner]);
+        path.lineTo(layout[Right, Bottom, Front, Inner]);
+        path.lineTo(layout[Left, Bottom, Front, Inner]);
         path.close();
         SkPaint paint;
         paint.setColor("#ee7857"_color);
@@ -682,16 +727,19 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     }
 
     auto inner_back =
-        RectPath(points[Left, Top, Back, Inner], points[Right, Top, Back, Inner],
-                 points[Right, Bottom, Back, Inner], points[Left, Bottom, Back, Inner]);
+        RectPath(layout[Left, Top, Back, Inner], layout[Right, Top, Back, Inner],
+                 layout[Right, Bottom, Back, Inner], layout[Left, Bottom, Back, Inner], 0);
+    auto inner_back_arcline = ArcLine::MakeFromPath(inner_back);
+    inner_back_arcline.Outset(kEdgeWidth * 0.25);
+    inner_back = inner_back_arcline.ToPath();
     gui::DrawCable(canvas, inner_back, color_inner_back, CableTexture::Smooth, kEdgeWidth * 0.5,
                    kEdgeWidth * 0.5, nullptr);
 
     for (int i = 0; i < 2; ++i) {
       for (int j = 0; j < 2; ++j) {
         SkPath front_back;
-        front_back.moveTo(points[(AxisX)i, (AxisY)j, Back, Inner]);
-        front_back.lineTo(points[(AxisX)i, (AxisY)j, Front, Inner]);
+        front_back.moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner]);
+        front_back.lineTo(layout[(AxisX)i, (AxisY)j, Front, Inner]);
         gui::DrawCable(canvas, front_back, color_inner, CableTexture::Smooth, kEdgeWidth * 0.5,
                        kEdgeWidth, nullptr);
       }
@@ -699,37 +747,35 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     for (int i = 0; i < 2; ++i) {
       for (int j = 0; j < 2; ++j) {
         SkPath inner_outer;
-        inner_outer.moveTo(points[(AxisX)i, (AxisY)j, Front, Inner]);
-        inner_outer.lineTo(points[(AxisX)i, (AxisY)j, Front, Outer]);
+        inner_outer.moveTo(layout[(AxisX)i, (AxisY)j, Front, Inner]);
+        inner_outer.lineTo(layout[(AxisX)i, (AxisY)j, Front, Outer]);
         gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
                        kEdgeWidth * 0.75, kEdgeWidth, nullptr);
       }
     }
+    canvas.restore();
 
     auto inner_front =
-        RectPath(points[Left, Top, Front, Inner], points[Right, Top, Front, Inner],
-                 points[Right, Bottom, Front, Inner], points[Left, Bottom, Front, Inner]);
+        RectPath(layout[Left, Top, Front, Inner], layout[Right, Top, Front, Inner],
+                 layout[Right, Bottom, Front, Inner], layout[Left, Bottom, Front, Inner]);
     gui::DrawCable(canvas, inner_front, color_inner, CableTexture::Smooth, kEdgeWidth * 0.75,
                    kEdgeWidth * 0.75, nullptr);
-
-    auto outer_rect = OuterRect();
 
     auto& border_image = BorderImage();
     canvas.save();
     canvas.concat(SkMatrix::MakeRectToRect(Rect(0, 0, border_image.width(), border_image.height()),
-                                           outer_rect.Outset(1_mm), SkMatrix::kFill_ScaleToFit));
+                                           layout.border_outer, SkMatrix::kFill_ScaleToFit));
     border_image.draw(canvas);
     canvas.restore();
 
-    SkPath eye_path = PathFromSVG(kEyeShapeSVG);
-    eye_path.transform(SkMatrix::Translate(0, outer_rect.top + 0.5_mm));
+    auto eye_path = kEyeShape.makeTransform(SkMatrix::Translate(layout.eye_center));
 
     auto& eye_image = EyeImage();
     canvas.save();
     eye_path.toggleInverseFillType();
     canvas.clipPath(eye_path);
     eye_path.toggleInverseFillType();
-    canvas.translate(-eye_image.width() / 2, -eye_image.height() / 2 + outer_rect.top + 0.5_mm);
+    canvas.translate(-eye_image.width() / 2, -eye_image.height() / 2 + layout.eye_center.y);
     eye_image.draw(canvas);
     canvas.restore();
 
@@ -738,7 +784,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       canvas.save();
       canvas.clipPath(eye_path);
       canvas.drawColor(SK_ColorWHITE);
-      canvas.translate(0, outer_rect.top + 0.5_mm);
+      canvas.translate(0, layout.eye_center.y);
       {
         canvas.save();
 
@@ -776,39 +822,39 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
 
     if (laser_alpha > 0.0f) {
       SkPath path;
-      path.moveTo(points[Left, Top, Front, Outer]);
-      path.lineTo(points[Right, Top, Front, Outer]);
-      path.lineTo(points[Right, Top, Front, Inner]);
-      path.lineTo(points[Right, Bottom, Front, Inner]);
-      path.lineTo(points[Right, Bottom, Back, Inner]);
-      path.lineTo(points[Left, Bottom, Back, Inner]);
-      path.lineTo(points[Left, Bottom, Back, Outer]);
-      path.lineTo(points[Left, Top, Back, Outer]);
-      path.lineTo(points[Left, Top, Front, Outer]);
-      path.lineTo(points[Left, Top, Front, Inner]);
-      path.lineTo(points[Left, Top, Back, Inner]);
-      path.lineTo(points[Right, Top, Back, Inner]);
-      path.lineTo(points[Right, Top, Back, Outer]);
-      path.lineTo(points[Right, Bottom, Back, Outer]);
-      path.lineTo(points[Right, Bottom, Front, Outer]);
-      path.lineTo(points[Left, Bottom, Front, Outer]);
-      path.lineTo(points[Left, Bottom, Front, Inner]);
-      path.lineTo(points[Left, Bottom, Back, Inner]);
-      path.lineTo(points[Left, Top, Back, Inner]);
-      path.lineTo(points[Left, Top, Back, Outer]);
-      path.lineTo(points[Right, Top, Back, Outer]);
-      path.lineTo(points[Right, Top, Front, Outer]);
-      path.lineTo(points[Right, Bottom, Front, Outer]);
-      path.lineTo(points[Right, Bottom, Front, Inner]);
-      path.lineTo(points[Left, Bottom, Front, Inner]);
-      path.lineTo(points[Left, Top, Front, Inner]);
-      path.lineTo(points[Right, Top, Front, Inner]);
-      path.lineTo(points[Right, Top, Back, Inner]);
-      path.lineTo(points[Right, Bottom, Back, Inner]);
-      path.lineTo(points[Right, Bottom, Back, Outer]);
-      path.lineTo(points[Left, Bottom, Back, Outer]);
-      path.lineTo(points[Left, Bottom, Front, Outer]);
-      path.lineTo(points[Left, Top, Front, Outer]);
+      path.moveTo(layout[Left, Top, Front, Outer]);
+      path.lineTo(layout[Right, Top, Front, Outer]);
+      path.lineTo(layout[Right, Top, Front, Inner]);
+      path.lineTo(layout[Right, Bottom, Front, Inner]);
+      path.lineTo(layout[Right, Bottom, Back, Inner]);
+      path.lineTo(layout[Left, Bottom, Back, Inner]);
+      path.lineTo(layout[Left, Bottom, Back, Outer]);
+      path.lineTo(layout[Left, Top, Back, Outer]);
+      path.lineTo(layout[Left, Top, Front, Outer]);
+      path.lineTo(layout[Left, Top, Front, Inner]);
+      path.lineTo(layout[Left, Top, Back, Inner]);
+      path.lineTo(layout[Right, Top, Back, Inner]);
+      path.lineTo(layout[Right, Top, Back, Outer]);
+      path.lineTo(layout[Right, Bottom, Back, Outer]);
+      path.lineTo(layout[Right, Bottom, Front, Outer]);
+      path.lineTo(layout[Left, Bottom, Front, Outer]);
+      path.lineTo(layout[Left, Bottom, Front, Inner]);
+      path.lineTo(layout[Left, Bottom, Back, Inner]);
+      path.lineTo(layout[Left, Top, Back, Inner]);
+      path.lineTo(layout[Left, Top, Back, Outer]);
+      path.lineTo(layout[Right, Top, Back, Outer]);
+      path.lineTo(layout[Right, Top, Front, Outer]);
+      path.lineTo(layout[Right, Bottom, Front, Outer]);
+      path.lineTo(layout[Right, Bottom, Front, Inner]);
+      path.lineTo(layout[Left, Bottom, Front, Inner]);
+      path.lineTo(layout[Left, Top, Front, Inner]);
+      path.lineTo(layout[Right, Top, Front, Inner]);
+      path.lineTo(layout[Right, Top, Back, Inner]);
+      path.lineTo(layout[Right, Bottom, Back, Inner]);
+      path.lineTo(layout[Right, Bottom, Back, Outer]);
+      path.lineTo(layout[Left, Bottom, Back, Outer]);
+      path.lineTo(layout[Left, Bottom, Front, Outer]);
+      path.lineTo(layout[Left, Top, Front, Outer]);
       path.close();
       float laser_width = status_progress_ratio.value_or(4.0f) / 4.f;
       float laser_start = laser_phase;
@@ -880,8 +926,8 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       last_pos = pointer.pointer_position;
     }
     void Update() override {
-      auto min_corner = widget.points[Left, Bottom, Back, Outer];
-      auto max_corner = widget.points[Right, Top, Back, Outer];
+      auto min_corner = widget.layout[Left, Bottom, Back, Outer];
+      auto max_corner = widget.layout[Right, Top, Back, Outer];
       Vec2 size = max_corner - min_corner;
       auto transform = TransformDown(widget);
       Vec2 old_pos = transform.mapPoint(last_pos);
@@ -964,6 +1010,12 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     return FallbackWidget::ArgStart(arg);
   }
 };
+
+const SkPath TesseractWidget::kEyeShape = PathFromSVG(
+    "M-13.6025.7-12.1917-1.6769-9.2847-4.259-6.0956-5.8322-2.0343-6.7556 2.5143-6.5504 "
+    "4.9339-6.0203 7.3365-5.2166 8.8584-3.994 10.9103-2.0104 12.1074-.326 12.5263.871 10.9531 "
+    "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
+    "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
 
 Ptr<gui::Widget> TesseractOCR::MakeWidget() {
   return MakePtr<TesseractWidget>(AcquireWeakPtr<Object>());

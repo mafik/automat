@@ -920,6 +920,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     TesseractWidget& widget;
     DragMode mode;
     Vec2 last_pos;
+    Vec2 delta_remainder;
 
     RegionDragAction(gui::Pointer& pointer, TesseractWidget& widget, DragMode mode)
         : Action(pointer), widget(widget), mode(mode) {
@@ -933,28 +934,61 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
       Vec2 old_pos = transform.mapPoint(last_pos);
       Vec2 new_pos = transform.mapPoint(pointer.pointer_position);
       last_pos = pointer.pointer_position;
-      Vec2 delta = (new_pos - old_pos) / size;
+      Vec2 delta = (new_pos - old_pos) / size + delta_remainder;
       if (auto tesseract = widget.LockTesseract()) {
         {
+          auto Round = [](float& value, float steps, float* remainder) {
+            float rounded = roundf(value * steps) / steps;
+            if (remainder) {
+              *remainder = value - rounded;
+            }
+            value = rounded;
+          };
           auto lock = std::lock_guard(tesseract->mutex);
           switch (mode) {
-            case DragMode::Top:
+            case DragMode::Top: {
+              tesseract->y_max_ratio += delta.y;
+              if (widget.source_image) {
+                Round(tesseract->y_max_ratio, widget.source_image->height(), &delta_remainder.y);
+              }
               tesseract->y_max_ratio =
-                  std::clamp(tesseract->y_max_ratio + delta.y, tesseract->y_min_ratio, 1.0f);
+                  std::clamp(tesseract->y_max_ratio, tesseract->y_min_ratio, 1.0f);
               break;
+            }
             case DragMode::Bottom:
+              tesseract->y_min_ratio += delta.y;
+              if (widget.source_image) {
+                Round(tesseract->y_min_ratio, widget.source_image->height(), &delta_remainder.y);
+              }
               tesseract->y_min_ratio =
-                  std::clamp(tesseract->y_min_ratio + delta.y, 0.0f, tesseract->y_max_ratio);
+                  std::clamp(tesseract->y_min_ratio, 0.0f, tesseract->y_max_ratio);
               break;
             case DragMode::Left:
+              tesseract->x_min_ratio += delta.x;
+              if (widget.source_image) {
+                Round(tesseract->x_min_ratio, widget.source_image->width(), &delta_remainder.x);
+              }
               tesseract->x_min_ratio =
-                  std::clamp(tesseract->x_min_ratio + delta.x, 0.0f, tesseract->x_max_ratio);
+                  std::clamp(tesseract->x_min_ratio, 0.0f, tesseract->x_max_ratio);
               break;
             case DragMode::Right:
+              tesseract->x_max_ratio += delta.x;
+              if (widget.source_image) {
+                Round(tesseract->x_max_ratio, widget.source_image->width(), &delta_remainder.x);
+              }
               tesseract->x_max_ratio =
-                  std::clamp(tesseract->x_max_ratio + delta.x, tesseract->x_min_ratio, 1.0f);
+                  std::clamp(tesseract->x_max_ratio, tesseract->x_min_ratio, 1.0f);
               break;
             case DragMode::Move:
+              if (widget.source_image) {
+                delta_remainder = delta;
+                auto scale = Vec2(widget.source_image->width(), widget.source_image->height());
+                delta = delta * scale;
+                delta.x = truncf(delta.x);
+                delta.y = truncf(delta.y);
+                delta = delta / scale;
+                delta_remainder -= delta;
+              }
               tesseract->y_max_ratio += delta.y;
               tesseract->y_min_ratio += delta.y;
               tesseract->x_min_ratio += delta.x;
@@ -980,7 +1014,6 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
               return;
           }
         }
-        // tesseract->WakeWidgetsAnimation();
         tesseract->ForEachWidget([](gui::RootWidget&, gui::Widget& w) {
           w.WakeAnimation();
           w.RedrawThisFrame();

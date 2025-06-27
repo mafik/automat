@@ -10,13 +10,17 @@
 
 #if defined __linux__
 #include <llvm/lib/Target/X86/X86Subtarget.h>
+#include <setjmp.h>
 #include <signal.h>
 #include <sys/mman.h>  // For mmap related functions and constants
 #include <sys/prctl.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
 #include <sys/wait.h>
+#include <ucontext.h>
 
+#include <chrono>
+#include <mutex>
 #include <thread>
 
 #include "blockingconcurrentqueue.hh"
@@ -30,11 +34,196 @@
 namespace automat::mc {
 
 // Switch this to true to see debug logs.
-constexpr bool kDebugCodeController = false;
+constexpr bool kDebugCodeController = true;
 
 int ImmediateSize(const Inst& inst) { return ::automat::x86::ImmediateSize(inst.getOpcode()); }
 
 #if defined __linux__
+
+struct SignalController;
+thread_local SignalController* active_signal_controller = nullptr;
+
+static void SignalHandler(int sig, siginfo_t* si, void* vcontext);
+
+struct SignalController : Controller {
+  std::mutex mutex;
+  pid_t executing_thread_tid{0};
+  struct sigaction old_usr1;
+  Regs regs;
+
+  std::span<char> code;
+
+  std::atomic<ucontext_t*> context{nullptr};
+
+  SignalController(ExitCallback&& exit_callback) : Controller(std::move(exit_callback)) {
+    constexpr size_t kDefaultMachineCodeSize = PAGE_SIZE;
+    auto mem = (char*)mmap((void*)0x10000, kDefaultMachineCodeSize, PROT_READ | PROT_EXEC,
+                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (mem == MAP_FAILED) {
+      return;
+    }
+    code = std::span(mem, kDefaultMachineCodeSize);
+  }
+
+  ~SignalController() { munmap(code.data(), code.size()); }
+
+  void InstallSignalHandlers() {
+    struct sigaction sa = {};
+    sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))SignalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGUSR1, &sa, &old_usr1) == -1) {
+      perror("sigaction");
+    }
+  }
+
+  void UninstallSignalHandlers() { sigaction(SIGUSR1, &old_usr1, nullptr); }
+
+  void OnSignal(int signal, siginfo_t* si, ucontext_t* context) {
+    this->context.store(context);
+    this->context.notify_one();
+    this->context.wait(context);
+  }
+
+  void UpdateCode(Program&& program, Status& status) override {
+    std::lock_guard<std::mutex> lock(mutex);
+
+    if (executing_thread_tid) {
+      syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
+      this->context.wait(nullptr);  // wait until assembly thread puts its context
+    }
+
+    // TODO: Use the RIP to find the current instruction
+    // TODO: Generate the new code
+    // TODO: Set RIP to the the address of that instruction
+
+    if (executing_thread_tid) {
+      this->context = nullptr;
+      this->context.notify_one();
+    }
+  }
+
+  void Execute(NestedWeakPtr<const Inst> inst, Status& status) override {
+    {  // Pre-entering machine code section
+      std::lock_guard<std::mutex> lock(mutex);
+      if (executing_thread_tid) {
+        // If another thread is already executing, there are multiple potential strategies:
+        // 1. Execute in parallel which will totally mess up the state
+        // 2. Wait for the other Execute to finish & then execute
+        // 3. Cancel the other Execute & then execute ourselves
+        // 4. Return an error and let the user decide
+        // For now we'll return an error. Eventually we might add options to follow some of the
+        // other strategies.
+        AppendErrorMessage(status) += "Another thread is already executing";
+        return;
+      }
+      executing_thread_tid = gettid();
+      // TODO: Use the map to find the "inst" address
+      InstallSignalHandlers();
+    }
+    // Machine code section
+    // TODO: Jump to that address
+    {  // Post-exiting machine code section
+      std::lock_guard<std::mutex> lock(mutex);
+      UninstallSignalHandlers();
+      executing_thread_tid = 0;
+    }
+  }
+
+  void GetStateInner(State& state) {
+    if (executing_thread_tid) {
+      syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
+      this->context.wait(nullptr);  // wait until assembly thread puts its context
+      auto* context = this->context.load();
+      state.regs.RAX = context->uc_mcontext.gregs[REG_RAX];
+      state.regs.RBX = context->uc_mcontext.gregs[REG_RBX];
+      state.regs.RCX = context->uc_mcontext.gregs[REG_RCX];
+      state.regs.RDX = context->uc_mcontext.gregs[REG_RDX];
+      state.regs.RBP = context->uc_mcontext.gregs[REG_RBP];
+      state.regs.RSI = context->uc_mcontext.gregs[REG_RSI];
+      state.regs.RDI = context->uc_mcontext.gregs[REG_RDI];
+      state.regs.R8 = context->uc_mcontext.gregs[REG_R8];
+      state.regs.R9 = context->uc_mcontext.gregs[REG_R9];
+      state.regs.R10 = context->uc_mcontext.gregs[REG_R10];
+      state.regs.R11 = context->uc_mcontext.gregs[REG_R11];
+      state.regs.R12 = context->uc_mcontext.gregs[REG_R12];
+      state.regs.R13 = context->uc_mcontext.gregs[REG_R13];
+      state.regs.R14 = context->uc_mcontext.gregs[REG_R14];
+      state.regs.R15 = context->uc_mcontext.gregs[REG_R15];
+      greg_t rip = context->uc_mcontext.gregs[REG_RIP];
+      this->context = nullptr;
+      this->context.notify_one();
+      // TODO: Find the instruction that corresponds to the RIP
+    } else {
+      state.current_instruction.Reset();
+      state.regs = regs;
+    }
+  }
+
+  void SetStateInner(const State& state, Status& status) {
+    if (executing_thread_tid) {
+      greg_t rip;
+      if (state.current_instruction) {
+        // TODO: Set rip to the current instruction address
+      } else {
+        // TODO: Set rip to epilogue address
+      }
+      syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
+      this->context.wait(nullptr);  // wait until assembly thread puts its context
+      auto* context = this->context.load();
+      context->uc_mcontext.gregs[REG_RAX] = state.regs.RAX;
+      context->uc_mcontext.gregs[REG_RBX] = state.regs.RBX;
+      context->uc_mcontext.gregs[REG_RCX] = state.regs.RCX;
+      context->uc_mcontext.gregs[REG_RDX] = state.regs.RDX;
+      context->uc_mcontext.gregs[REG_RBP] = state.regs.RBP;
+      context->uc_mcontext.gregs[REG_RSI] = state.regs.RSI;
+      context->uc_mcontext.gregs[REG_RDI] = state.regs.RDI;
+      context->uc_mcontext.gregs[REG_R8] = state.regs.R8;
+      context->uc_mcontext.gregs[REG_R9] = state.regs.R9;
+      context->uc_mcontext.gregs[REG_R10] = state.regs.R10;
+      context->uc_mcontext.gregs[REG_R11] = state.regs.R11;
+      context->uc_mcontext.gregs[REG_R12] = state.regs.R12;
+      context->uc_mcontext.gregs[REG_R13] = state.regs.R13;
+      context->uc_mcontext.gregs[REG_R14] = state.regs.R14;
+      context->uc_mcontext.gregs[REG_R15] = state.regs.R15;
+      context->uc_mcontext.gregs[REG_RIP] = rip;
+      this->context = nullptr;
+      this->context.notify_one();
+    } else {
+      regs = state.regs;
+      if (state.current_instruction) {
+        // Not supported yet
+        AppendErrorMessage(status) +=
+            "ChangeState cannot be used to start assembly execution - this would block!";
+      }
+    }
+  }
+
+  void GetState(State& state, Status& status) override {
+    std::lock_guard<std::mutex> lock(mutex);
+    GetStateInner(state);
+  }
+
+  void ChangeState(StateVisitor visitor, Status& status) override {
+    std::lock_guard<std::mutex> lock(mutex);
+    State state;
+    GetStateInner(state);
+    visitor(state);
+    SetStateInner(state, status);
+  }
+
+  void Cancel(Status& status) override {
+    ChangeState([](State& state) { state.current_instruction.Reset(); }, status);
+  }
+};
+
+static void SignalHandler(int sig, siginfo_t* si, void* vcontext) {
+  if (active_signal_controller == nullptr) {
+    LOG << "SignalHandler: No active signal controller";
+    return;
+  }
+  active_signal_controller->OnSignal(sig, si, (ucontext_t*)vcontext);
+}
 
 // Uses two threads internally - a worker thread, which executes the actual machine code and control
 // thread, which functions as a debugger.
@@ -918,8 +1107,11 @@ struct PtraceController : Controller {
 
 std::unique_ptr<Controller> Controller::Make(ExitCallback&& exit_callback) {
 #if defined __linux__
-  PtraceController* controller = new PtraceController(std::move(exit_callback));
-  return std::unique_ptr<Controller>((Controller*)controller);
+  return std::make_unique<SignalController>(std::move(exit_callback));
+
+  // Old code:
+  // PtraceController* ptrace_controller = new PtraceController(std::move(exit_callback));
+  // return std::unique_ptr<Controller>((Controller*)ptrace_controller);
 #else
   // TODO: Implement on Windows
   return nullptr;

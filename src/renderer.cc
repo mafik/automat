@@ -296,7 +296,7 @@ moodycamel::BlockingConcurrentQueue<WidgetDrawable*> recorded_queue;
 
 void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> fg_recorder,
                       std::unique_ptr<skgpu::graphite::Recorder> bg_recorder) {
-  SetThreadName("VkRecorder" + std::to_string(thread_id));
+  SetThreadName("VkRecorder" + std::to_string(thread_id), 1);
 
   while (true) {
     WidgetDrawable* w = nullptr;

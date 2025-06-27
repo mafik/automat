@@ -4,4 +4,4 @@
 
 #include <string_view>
 
-void SetThreadName(std::string_view);
+void SetThreadName(std::string_view, int group_hint = 0);

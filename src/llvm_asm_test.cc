@@ -46,14 +46,18 @@ class MachineCodeControllerTest : public ::testing::Test {
     exit_point = mc::StopType::InstructionBody;
     Status status;
     NestedWeakPtr<const mc::Inst> mc_instr = instr.lock()->ToMC();
+    std::atomic<bool> ready = false;
     auto Execute = [&]() {
       LOG << "Pre-execute";
+      ready = true;
+      ready.notify_one();
       controller->Execute(mc_instr, status);
       LOG << "Post-execute";
     };
     if (background_thread) {
       std::thread thread(Execute);
       thread.detach();
+      ready.wait(false);
     } else {
       Execute();
       ASSERT_TRUE(OK(status));

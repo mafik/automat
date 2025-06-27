@@ -40,14 +40,24 @@ class MachineCodeControllerTest : public ::testing::Test {
     controller.reset();
   }
 
-  void StartExecution(WeakPtr<library::Instruction> instr) {
+  void StartExecution(WeakPtr<library::Instruction> instr, bool background_thread = false) {
     exited = false;
     exit_instr = {};
     exit_point = mc::StopType::InstructionBody;
     Status status;
     NestedWeakPtr<const mc::Inst> mc_instr = instr.lock()->ToMC();
-    controller->Execute(mc_instr, status);
-    ASSERT_TRUE(OK(status));
+    auto Execute = [&]() {
+      LOG << "Pre-execute";
+      controller->Execute(mc_instr, status);
+      LOG << "Post-execute";
+    };
+    if (background_thread) {
+      std::thread thread(Execute);
+      thread.detach();
+    } else {
+      Execute();
+      ASSERT_TRUE(OK(status));
+    }
   }
 
   // Waits for machine code execution to complete, with timeout
@@ -212,7 +222,7 @@ TEST_F(MachineCodeControllerTest, HotReload) {
   auto conn = Next(inst2, inst2);
   library::Instruction* instructions[] = {inst1.get(), inst2.get()};
   TestUpdateCode(instructions);
-  StartExecution(inst2);
+  StartExecution(inst2, true);
   ASSERT_FALSE(WaitForExecution(10ms));
   VerifyState({.current_instruction = inst2->ToMC(), .regs = {.RAX = 42}});
 

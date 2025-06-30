@@ -108,7 +108,6 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void ExitCallback(mc::CodePoint code_point);
 
-  std::mutex mutex;
   std::unique_ptr<mc::Controller> mc_controller;
   time::T last_state_refresh = 0;
   mc::Controller::State state;

@@ -8,6 +8,7 @@
 #include <csignal>
 #include <mutex>
 #include <span>
+#include <thread>
 #include <vector>
 
 #include "argument.hh"
@@ -48,15 +49,12 @@ class MachineCodeControllerTest : public ::testing::Test {
     NestedWeakPtr<const mc::Inst> mc_instr = instr.lock()->ToMC();
     std::atomic<bool> ready = false;
     auto Execute = [&]() {
-      LOG << "Pre-execute";
       ready = true;
       ready.notify_one();
       controller->Execute(mc_instr, status);
-      LOG << "Post-execute";
     };
     if (background_thread) {
-      std::thread thread(Execute);
-      thread.detach();
+      thread = std::jthread(Execute);
       ready.wait(false);
     } else {
       Execute();
@@ -148,6 +146,7 @@ class MachineCodeControllerTest : public ::testing::Test {
   NestedWeakPtr<const mc::Inst> exit_instr = {};
   mc::StopType exit_point = mc::StopType::InstructionBody;
   Ptr<Machine> root;
+  std::jthread thread;
 };
 
 TEST_F(MachineCodeControllerTest, InitialState) { VerifyState({.regs = {.RAX = 0}}); }
@@ -212,10 +211,13 @@ TEST_F(MachineCodeControllerTest, InfiniteLoop) {
   Next(inst, inst);
   library::Instruction* instructions[] = {inst.get()};
   TestUpdateCode(instructions);
-  StartExecution(inst);
+  StartExecution(inst, true);
   ASSERT_FALSE(WaitForExecution(10ms));
 
   VerifyState({.current_instruction = inst->ToMC(), .regs = {.RAX = 42}});
+  Status status;
+  controller->Cancel(status);
+  ASSERT_TRUE(WaitForExecution());
 }
 
 TEST_F(MachineCodeControllerTest, HotReload) {

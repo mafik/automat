@@ -3,13 +3,16 @@
 #include "machine_code.hh"
 
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/lib/Target/X86/X86Subtarget.h>
 
 #include <automat/x86.hh>
 
+#include "format.hh"
+#include "llvm_asm.hh"
+#include "log.hh"
 #include "ptr.hh"
 
 #if defined __linux__
-#include <llvm/lib/Target/X86/X86Subtarget.h>
 #include <signal.h>
 #include <sys/mman.h>  // For mmap related functions and constants
 #include <sys/prctl.h>
@@ -22,12 +25,11 @@
 #include <thread>
 
 #include "blockingconcurrentqueue.hh"
-#include "format.hh"
-#include "llvm_asm.hh"
-#include "log.hh"
 #include "thread_name.hh"
 
-#endif  // __linux__
+#elif defined _WIN32
+#include <windows.h>
+#endif
 
 namespace automat::mc {
 
@@ -36,25 +38,91 @@ constexpr bool kDebugCodeController = false;
 
 int ImmediateSize(const Inst& inst) { return ::automat::x86::ImmediateSize(inst.getOpcode()); }
 
-#if defined __linux__
-
 struct SignalController;
 thread_local SignalController* active_signal_controller = nullptr;
 
+#if defined __linux__
 static void SignalHandler(int sig, siginfo_t* si, void* vcontext);
+#endif  // __linux__
 
 struct SignalController : Controller {
   std::mutex mutex;
-  pid_t executing_thread_tid{0};
+
+#if defined __linux__
+  using ThreadHandle = pid_t;
+  using NativeContext = ucontext_t;
   struct sigaction old_usr1;
+  std::atomic<ucontext_t*> context{nullptr};
+
+  void InstallSignalHandlers() {
+    struct sigaction sa = {};
+    sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))SignalHandler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGUSR1, &sa, &old_usr1) == -1) {
+      perror("sigaction");
+    }
+  }
+
+  void UninstallSignalHandlers() { sigaction(SIGUSR1, &old_usr1, nullptr); }
+
+#define REG(context, reg) context.uc_mcontext.gregs[REG_##reg]
+#define NATIVE_RIP(context) REG(context, RIP)
+#define NATIVE_RSP(context) REG(context, RSP)
+
+#define FOR_EACH_REG(X) \
+  X(RAX, RAX);          \
+  X(RBX, RBX);          \
+  X(RCX, RCX);          \
+  X(RDX, RDX);          \
+  X(RBP, RBP);          \
+  X(RSI, RSI);          \
+  X(RDI, RDI);          \
+  X(R8, R8);            \
+  X(R9, R9);            \
+  X(R10, R10);          \
+  X(R11, R11);          \
+  X(R12, R12);          \
+  X(R13, R13);          \
+  X(R14, R14);          \
+  X(R15, R15);
+
+#elif defined _WIN32
+  using ThreadHandle = HANDLE;
+  using NativeContext = CONTEXT;
+
+#define REG(context, reg) context.reg
+#define NATIVE_RIP(context) REG(context, Rip)
+#define NATIVE_RSP(context) REG(context, Rsp)
+
+#define FOR_EACH_REG(X) \
+  X(RAX, Rax);          \
+  X(RBX, Rbx);          \
+  X(RCX, Rcx);          \
+  X(RDX, Rdx);          \
+  X(RBP, Rbp);          \
+  X(RSI, Rsi);          \
+  X(RDI, Rdi);          \
+  X(R8, R8);            \
+  X(R9, R9);            \
+  X(R10, R10);          \
+  X(R11, R11);          \
+  X(R12, R12);          \
+  X(R13, R13);          \
+  X(R14, R14);          \
+  X(R15, R15);
+
+#endif  // __linux__
+
+  ThreadHandle executing_thread_tid{0};
+
   Regs regs;
 
   std::span<char> code;
-  using PrologueFn = uint64_t (*)(uint64_t);
+  // Note: maybe a better calling ABI would be used for assembly? For example preserve_none.
+  using PrologueFn = __attribute__((sysv_abi)) uint64_t (*)(uint64_t);
   PrologueFn prologue_fn;
   uint64_t epilogue_address;
-
-  std::atomic<ucontext_t*> context{nullptr};
 
   std::vector<NestedWeakPtr<const Inst>> instructions;  // ordered by std::owner_less
   std::vector<int> instruction_offsets;
@@ -106,42 +174,56 @@ struct SignalController : Controller {
   }
 
   SignalController(ExitCallback&& exit_callback) : Controller(std::move(exit_callback)) {
-    constexpr size_t kDefaultMachineCodeSize = PAGE_SIZE;
+    constexpr size_t kDefaultMachineCodeSize = 4096;
+
+#if defined __linux__
     auto mem = (char*)mmap((void*)0x10000, kDefaultMachineCodeSize, PROT_READ | PROT_EXEC,
                            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mem == MAP_FAILED) {
       return;
     }
+#elif _WIN32
+    auto mem = (char*)VirtualAlloc(NULL, kDefaultMachineCodeSize, MEM_COMMIT | MEM_RESERVE,
+                                   PAGE_EXECUTE_READWRITE);
+    if (mem == NULL) {
+      return;
+    }
+#endif  // __linux__
+
     code = std::span(mem, kDefaultMachineCodeSize);
   }
 
   ~SignalController() {
     Status status_ignored;
     Cancel(status_ignored);
+#if defined __linux__
     munmap(code.data(), code.size());
+#elif _WIN32
+    VirtualFree(code.data(), code.size(), MEM_RELEASE);
+#endif  // __linux__
   }
-
-  void InstallSignalHandlers() {
-    struct sigaction sa = {};
-    sa.sa_sigaction = (void (*)(int, siginfo_t*, void*))SignalHandler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGUSR1, &sa, &old_usr1) == -1) {
-      perror("sigaction");
-    }
-  }
-
-  void UninstallSignalHandlers() { sigaction(SIGUSR1, &old_usr1, nullptr); }
 
   void UpdateCode(Program&& program, Status& status) override {
     std::lock_guard<std::mutex> lock(mutex);
 
     NestedWeakPtr<const Inst> current_instruction;
+#if defined _WIN32
+    CONTEXT context;
+    context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL;
+#endif
+    NativeContext* ctx_ptr = nullptr;
     if (executing_thread_tid) {
+#if defined __linux__
       syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
       this->context.wait(nullptr);  // wait until assembly thread puts its context
-      ucontext_t* ctx = context.load();
-      greg_t rip = ctx->uc_mcontext.gregs[REG_RIP];
+      ctx_ptr = context.load();
+#elif defined _WIN32
+      SuspendThread(executing_thread_tid);
+      GetThreadContext(executing_thread_tid, &context);
+      ctx_ptr = &context;
+#endif
+      auto& ctx_ref = *ctx_ptr;
+      auto rip = NATIVE_RIP(ctx_ref);
       auto code_point = InstructionPointerToCodePoint(rip, false);
       if (code_point.instruction) {
         current_instruction = *code_point.instruction;
@@ -151,9 +233,8 @@ struct SignalController : Controller {
     // TODO: grow code if necessary
 #if defined __linux__
     mprotect(code.data(), code.size(), PROT_READ | PROT_WRITE);
-#else
-    // TODO: Implement on Windows
 #endif  // __linux__
+    // On Windows we keep the code as RWX
 
     memset(code.data(), 0x90, code.size());
 
@@ -482,15 +563,18 @@ struct SignalController : Controller {
 
 #if defined __linux__
     mprotect(code.data(), code.size(), PROT_READ | PROT_EXEC);
-#else
-    // TODO: Implement on Windows
 #endif  // __linux__
 
     if (executing_thread_tid) {
-      auto ctx = context.load();
-      ctx->uc_mcontext.gregs[REG_RIP] = InstToInstructionPointer(current_instruction);
+      auto& ctx_ref = *ctx_ptr;
+      NATIVE_RIP(ctx_ref) = InstToInstructionPointer(current_instruction);
+#if defined __linux__
       this->context = nullptr;
       this->context.notify_one();
+#elif defined _WIN32
+      SetThreadContext(executing_thread_tid, ctx_ptr);
+      ResumeThread(executing_thread_tid);
+#endif
     }
   }
 
@@ -514,15 +598,24 @@ struct SignalController : Controller {
         AppendErrorMessage(status) += "Instruction not found in code";
         return;
       }
-      executing_thread_tid = gettid();
       active_signal_controller = this;
+#if defined __linux__
+      executing_thread_tid = gettid();
       InstallSignalHandlers();
+#elif defined _WIN32
+      DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
+                      &executing_thread_tid, 0, TRUE, DUPLICATE_SAME_ACCESS);
+#endif
     }
     // Machine code section
     auto exit_ptr = prologue_fn(rip);
     {  // Post-exiting machine code section
       std::lock_guard<std::mutex> lock(mutex);
+#if defined __linux__
       UninstallSignalHandlers();
+#elif defined _WIN32
+      CloseHandle(executing_thread_tid);
+#endif
       active_signal_controller = nullptr;
       executing_thread_tid = 0;
     }
@@ -530,32 +623,56 @@ struct SignalController : Controller {
     exit_callback(code_point);
   }
 
+  uint64_t StateFromNative(State& state, const NativeContext& context) {
+#define X(reg, name) state.regs.reg = REG(context, name);
+    FOR_EACH_REG(X);
+#undef X
+    uint64_t rip = NATIVE_RIP(context);
+    auto code_point = InstructionPointerToCodePoint(rip, false);
+    if (code_point.instruction) {
+      state.current_instruction = *code_point.instruction;
+    } else {
+      state.current_instruction.Reset();
+    }
+    return rip;
+  }
+
+  void StateToNative(NativeContext& context, const State& state, uint64_t rip) {
+#define X(reg, name) REG(context, name) = state.regs.reg;
+    FOR_EACH_REG(X);
+#undef X
+    NATIVE_RIP(context) = rip;
+  }
+
   void GetState(State& state, Status& status) override {
     std::lock_guard<std::mutex> lock(mutex);
     if (executing_thread_tid) {
+#if defined __linux__
       syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
       this->context.wait(nullptr);  // wait until assembly thread puts its context
-      auto* context = this->context.load();
-      state.regs.RAX = context->uc_mcontext.gregs[REG_RAX];
-      state.regs.RBX = context->uc_mcontext.gregs[REG_RBX];
-      state.regs.RCX = context->uc_mcontext.gregs[REG_RCX];
-      state.regs.RDX = context->uc_mcontext.gregs[REG_RDX];
-      state.regs.RBP = context->uc_mcontext.gregs[REG_RBP];
-      state.regs.RSI = context->uc_mcontext.gregs[REG_RSI];
-      state.regs.RDI = context->uc_mcontext.gregs[REG_RDI];
-      state.regs.R8 = context->uc_mcontext.gregs[REG_R8];
-      state.regs.R9 = context->uc_mcontext.gregs[REG_R9];
-      state.regs.R10 = context->uc_mcontext.gregs[REG_R10];
-      state.regs.R11 = context->uc_mcontext.gregs[REG_R11];
-      state.regs.R12 = context->uc_mcontext.gregs[REG_R12];
-      state.regs.R13 = context->uc_mcontext.gregs[REG_R13];
-      state.regs.R14 = context->uc_mcontext.gregs[REG_R14];
-      state.regs.R15 = context->uc_mcontext.gregs[REG_R15];
-      greg_t rip = context->uc_mcontext.gregs[REG_RIP];
+      auto& context = *this->context.load();
+#elif defined _WIN32
+      int previous_suspend_count = SuspendThread(executing_thread_tid);
+      if (previous_suspend_count) {
+        AppendErrorMessage(status) +=
+            f("Failed to suspend thread {}. Previous suspend count was {}", executing_thread_tid,
+              previous_suspend_count);
+      }
+      CONTEXT context;
+      context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL;
+      bool got_context = GetThreadContext(executing_thread_tid, &context);
+      if (!got_context) {
+        AppendErrorMessage(status) += f("Failed to get thread context for thread {}: {}",
+                                        executing_thread_tid, GetLastError());
+      }
+#endif
+      StateFromNative(state, context);
+#if defined __linux__
       this->context = nullptr;
       this->context.notify_one();
-      auto code_point = InstructionPointerToCodePoint(rip, false);
-      state.current_instruction = *code_point.instruction;
+#elif defined _WIN32
+      ResumeThread(executing_thread_tid);
+#endif
     } else {
       state.current_instruction.Reset();
       state.regs = regs;
@@ -566,56 +683,34 @@ struct SignalController : Controller {
     std::lock_guard<std::mutex> lock(mutex);
     State state;
     if (executing_thread_tid) {
+#if defined __linux__
       syscall(SYS_tgkill, getpid(), executing_thread_tid, SIGUSR1);
       this->context.wait(nullptr);  // wait until assembly thread puts its context
-      auto* context = this->context.load();
-      state.regs.RAX = context->uc_mcontext.gregs[REG_RAX];
-      state.regs.RBX = context->uc_mcontext.gregs[REG_RBX];
-      state.regs.RCX = context->uc_mcontext.gregs[REG_RCX];
-      state.regs.RDX = context->uc_mcontext.gregs[REG_RDX];
-      state.regs.RBP = context->uc_mcontext.gregs[REG_RBP];
-      state.regs.RSI = context->uc_mcontext.gregs[REG_RSI];
-      state.regs.RDI = context->uc_mcontext.gregs[REG_RDI];
-      state.regs.R8 = context->uc_mcontext.gregs[REG_R8];
-      state.regs.R9 = context->uc_mcontext.gregs[REG_R9];
-      state.regs.R10 = context->uc_mcontext.gregs[REG_R10];
-      state.regs.R11 = context->uc_mcontext.gregs[REG_R11];
-      state.regs.R12 = context->uc_mcontext.gregs[REG_R12];
-      state.regs.R13 = context->uc_mcontext.gregs[REG_R13];
-      state.regs.R14 = context->uc_mcontext.gregs[REG_R14];
-      state.regs.R15 = context->uc_mcontext.gregs[REG_R15];
-      greg_t old_rip = context->uc_mcontext.gregs[REG_RIP];
-      auto code_point = InstructionPointerToCodePoint(old_rip, false);
-      state.current_instruction = *code_point.instruction;
-
+      auto& context = *this->context.load();
+#elif defined _WIN32
+      SuspendThread(executing_thread_tid);
+      CONTEXT context;
+      context.ContextFlags = CONTEXT_INTEGER | CONTEXT_CONTROL;
+      GetThreadContext(executing_thread_tid, &context);
+#endif
+      auto old_rip = StateFromNative(state, context);
       visitor(state);
-
-      greg_t rip;
+      uint64_t rip;
       if (state.current_instruction) {
         rip = InstToInstructionPointer(state.current_instruction);
       } else {
-        context->uc_mcontext.gregs[REG_RSP] -= 8;
-        *(uint64_t*)context->uc_mcontext.gregs[REG_RSP] = old_rip;
+        NATIVE_RSP(context) -= 8;
+        *(uint64_t*)NATIVE_RSP(context) = old_rip;
         rip = epilogue_address;
       }
-      context->uc_mcontext.gregs[REG_RIP] = rip;
-      context->uc_mcontext.gregs[REG_RAX] = state.regs.RAX;
-      context->uc_mcontext.gregs[REG_RBX] = state.regs.RBX;
-      context->uc_mcontext.gregs[REG_RCX] = state.regs.RCX;
-      context->uc_mcontext.gregs[REG_RDX] = state.regs.RDX;
-      context->uc_mcontext.gregs[REG_RBP] = state.regs.RBP;
-      context->uc_mcontext.gregs[REG_RSI] = state.regs.RSI;
-      context->uc_mcontext.gregs[REG_RDI] = state.regs.RDI;
-      context->uc_mcontext.gregs[REG_R8] = state.regs.R8;
-      context->uc_mcontext.gregs[REG_R9] = state.regs.R9;
-      context->uc_mcontext.gregs[REG_R10] = state.regs.R10;
-      context->uc_mcontext.gregs[REG_R11] = state.regs.R11;
-      context->uc_mcontext.gregs[REG_R12] = state.regs.R12;
-      context->uc_mcontext.gregs[REG_R13] = state.regs.R13;
-      context->uc_mcontext.gregs[REG_R14] = state.regs.R14;
-      context->uc_mcontext.gregs[REG_R15] = state.regs.R15;
+      StateToNative(context, state, rip);
+#if defined __linux__
       this->context = nullptr;
       this->context.notify_one();
+#elif defined _WIN32
+      SetThreadContext(executing_thread_tid, &context);
+      ResumeThread(executing_thread_tid);
+#endif
     } else {
       state.regs = regs;
       visitor(state);
@@ -633,6 +728,7 @@ struct SignalController : Controller {
   }
 };
 
+#if defined __linux__
 static void SignalHandler(int sig, siginfo_t* si, void* vcontext) {
   auto* controller = active_signal_controller;
   if (controller == nullptr) {
@@ -643,6 +739,9 @@ static void SignalHandler(int sig, siginfo_t* si, void* vcontext) {
   controller->context.notify_one();
   controller->context.wait((ucontext_t*)vcontext);
 }
+#endif  // __linux__
+
+#if defined __linux__
 
 // Uses two threads internally - a worker thread, which executes the actual machine code and control
 // thread, which functions as a debugger.
@@ -1525,16 +1624,10 @@ struct PtraceController : Controller {
 #endif  // __linux__
 
 std::unique_ptr<Controller> Controller::Make(ExitCallback&& exit_callback) {
-#if defined __linux__
   return std::make_unique<SignalController>(std::move(exit_callback));
-
   // Old code:
   // PtraceController* ptrace_controller = new PtraceController(std::move(exit_callback));
   // return std::unique_ptr<Controller>((Controller*)ptrace_controller);
-#else
-  // TODO: Implement on Windows
-  return nullptr;
-#endif  // __linux__
 }
 
 }  // namespace automat::mc

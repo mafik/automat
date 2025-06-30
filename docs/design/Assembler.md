@@ -16,7 +16,7 @@ There are many potential solutions to this problem:
 	* tools for interfacing with GUI applications, using keyboard input and screenshots
 * many, many more...
 
-Automat follows a philosophy of choosing the best tool for the job. Each specific situation may call for a different approach so each of them must eventually be made available. Limited development capacity of Automat necessitates however for some of these approaches to be prioritized over the others.
+Each specific situation may call for a different approach so each of them must eventually be made available. Limited development capacity necessitates for some of these approaches to be prioritized over the others.
 
 ## Evaluation criteria
 
@@ -51,8 +51,8 @@ The Assembler object will wrap assembly in a modern (Scratch-like) user interfac
 * support for all LLVM target instruction sets (including extensions)
 * import/export into traditional assembly (Intel syntax)
 * ability to read values from other Automat objects
-* ability to write into other Automat objects and send signals
-* executed either on a dedicated thread (safe) or directly on the current thread
+* ability to write and send signals to other Automat objects
+* executed either on a dedicated thread (safer) or directly on the current thread
 
 Usage of stack will be discouraged (due to lack of good visualization), but still supported.
 

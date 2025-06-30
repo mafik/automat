@@ -31,6 +31,7 @@
 #include "textures.hh"
 #include "thread_name.hh"
 #include "timer_thread.hh"
+#include "tracy_client.hh"
 #include "vk.hh"
 
 using namespace automat::gui;

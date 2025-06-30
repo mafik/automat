@@ -428,7 +428,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         float dist = eye_dist_2d / eye_dist_3d;
 
         Vec2 iris_dir_target = Vec2(eye_dir.x * dist, eye_dir.y * dist);
-        phase |= iris_dir.SineTowards(iris_dir_target, timer.d, 0.1);
+        phase |= iris_dir.SineTowards(iris_dir_target, timer.d, 1);
       }
     }
     return phase;

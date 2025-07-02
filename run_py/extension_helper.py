@@ -207,9 +207,20 @@ class ExtensionHelper:
         inputs=[],
         desc=f'Creating build directory for {self.name}',
         shortcut=f'mkdir {self.name}')
+      
+      configure_args = [
+        (self.src_dir / 'configure').absolute(),
+        f'--prefix={build.PREFIX}',
+        f'--libdir={build.PREFIX}/lib64',
+        '--disable-shared']
+      for key, value in self.configure_opts.items():
+        if value:
+          configure_args.append(f'--{key}={value}')
+        else:
+          configure_args.append(f'--{key}')
 
       recipe.add_step(
-          partial(Popen, [(self.src_dir / 'configure').absolute(), f'--prefix={build.PREFIX}', f'--libdir={build.PREFIX}/lib64', '--disable-shared'], env=env, cwd=build_dir),
+          partial(Popen, configure_args, env=env, cwd=build_dir),
           outputs=[makefile],
           inputs=configure_inputs + [build_dir],
           desc=f'Configuring {self.name}',

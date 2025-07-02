@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 from extension_helper import ExtensionHelper
+from sys import platform
 import build
 
 tracy = ExtensionHelper('tracy', globals())
@@ -15,6 +16,10 @@ tracy.InstallWhenIncluded(r'^(tracy/.*|TracyClient\.cpp)')
 tracy.AddCompileArgs('-I', build.PREFIX / 'include' / 'tracy')
 tracy.AddCompileArgs('-I', tracy.src_dir / 'public')
 tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND')
+
+
+if platform == 'linux':
+  tracy.AddCompileArgs('-DTRACY_LIBUNWIND_BACKTRACE')
 
 if build.release:
   tracy.ConfigureOptions(only_localhost='true', no_broadcast='true')

@@ -19,7 +19,6 @@
 #include <tracy/Tracy.hpp>
 
 #include "automat.hh"
-#include "backtrace.hh"
 #include "concurrentqueue.hh"
 #include "global_resources.hh"
 #include "library.hh"  // IWYU pragma: keep
@@ -31,7 +30,7 @@
 #include "textures.hh"
 #include "thread_name.hh"
 #include "timer_thread.hh"
-#include "tracy_client.hh"
+#include "tracy_client.hh"  // IWYU pragma: keep
 #include "vk.hh"
 
 using namespace automat::gui;
@@ -210,13 +209,10 @@ void StopAutomat(Status&) {
 
 int Main() {
   // Process setup
-#if not defined(NDEBUG)  // disable in "Release" builds
-  EnableBacktraceOnSIGSEGV();
-#endif
   // Thread name of the main thread is also used as a process name so instead of "Main" (which would
   // be more accurate in the context of Automat's thread) we use "automat" (which is more helpful
   // for the user, checking the process list)
-  SetThreadName("automat");
+  SetThreadName("Main");
   main_thread_id = std::this_thread::get_id();
 
 #if defined(_WIN32)

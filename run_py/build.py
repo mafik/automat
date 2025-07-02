@@ -77,12 +77,12 @@ def CFLAGS():
 def LDFLAGS():
     return [str(x) for x in link_args]
 
+# As of 2025-07-02, libunwind doesn't support -gsplit-dwarf.
 compile_args += ['-static', '-std=gnu++26', '-fcolor-diagnostics', '-ffunction-sections',
     '-fdata-sections', '-funsigned-char', '-fno-signed-zeros',
     '-fno-strict-aliasing', '-fno-exceptions',
     '-D_FORTIFY_SOURCE=2', '-Wformat', '-Wno-c99-designator',
-    '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type',
-    '-gsplit-dwarf']
+    '-Wformat-security', '-Werror=format-security', '-Wno-vla-extension', '-Wno-trigraphs', '-Werror=return-type']
 
 if platform != 'win32':
     # On PE/COFF, functions cannot be interposed (https://maskray.me/blog/2021-05-09-fno-semantic-interposition)
@@ -106,7 +106,7 @@ if 'LDFLAGS' in os.environ:
 if fast:
     compile_args += ['-O1', '-g']
 
-# Build type intended for practical usage (slow to build but very high performance)
+# Build type intended for practical usage (slow to build but fast to run)
 if release:
     compile_args += ['-O3', '-DNDEBUG', '-flto', '-fstack-protector', '-fno-trapping-math']
     link_args += ['-flto']

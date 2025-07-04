@@ -103,7 +103,7 @@ else:
 hook.ConfigureOption('LLVM_RAM_PER_LINK_JOB', '10000')
 if build.platform == 'win32':
   hook.ConfigureOption('LLVM_HOST_TRIPLE', 'x86_64-pc-windows') # needed to build on Windows
-hook.ConfigureOption('CMAKE_CXX_STANDARD', '20')
+hook.ConfigureOption('CMAKE_CXX_STANDARD', '17')
 hook.InstallWhenIncluded(r'llvm/.*\.h')
 hook.AddCompileArg(llvm_cxxflags)
 hook.AddLinkArg(llvm_ldflags)

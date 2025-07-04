@@ -3,6 +3,7 @@
 #pragma once
 
 #include <fmt/format.h>
+#include <fmt/printf.h>
 
 #include "str.hh"
 
@@ -37,7 +38,7 @@ constexpr void constexpr_sprintf(std::string& out, const char* format, auto... a
       return arg;
     }
   };
-  out += fmt::format(fmt::runtime(format), convert_arg(args)...);
+  out += fmt::sprintf(format, convert_arg(args)...);
 }
 #pragma clang diagnostic pop
 

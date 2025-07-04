@@ -25,6 +25,6 @@ void RunOnAutomatThread(std::function<void()>);
 void RunOnAutomatThreadSynchronous(std::function<void()>);
 void AssertAutomatThread();
 
-void RunLoop(const int max_iterations = -1);
+void RunLoop();
 
 }  // namespace automat

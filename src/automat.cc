@@ -57,20 +57,7 @@ constexpr bool kPowersave = true;
 static int argc;
 static char** argv;
 
-// TODO: Merge this RunThread
-void RunLoop(const int max_iterations) {
-  int iterations = 0;
-  while (max_iterations < 0 || iterations < max_iterations) {
-    Task* task;
-    if (!queue.try_dequeue(task)) {
-      break;
-    }
-    task->Execute();
-    ++iterations;
-  }
-}
-
-static void RunThread(std::stop_token stop_token) {
+static void AutomatLoop(std::stop_token stop_token) {
   SetThreadName("Automat Loop");
   while (!stop_token.stop_requested()) {
     Task* task;
@@ -85,6 +72,11 @@ static void RunThread(std::stop_token stop_token) {
   }
   automat_thread_finished = true;
   automat_thread_finished.notify_all();
+}
+
+void RunLoop() {
+  std::stop_token stop_token;
+  AutomatLoop(stop_token);
 }
 
 void VulkanPaint() {
@@ -242,7 +234,7 @@ int Main() {
   root_machine->name = "Root machine";
   StartTimeThread(stop_source.get_token());
 
-  automat_thread = std::jthread(RunThread, stop_source.get_token());
+  automat_thread = std::jthread(AutomatLoop, stop_source.get_token());
   RunOnAutomatThread([&] {
     // nothing to do here - just make sure that memory allocated in main thread is synchronized to
     // automat thread

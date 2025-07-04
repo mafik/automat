@@ -3015,6 +3015,10 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   void KnobSet(int new_value) override {
     auto instruction = instruction_weak.Lock().Cast<Instruction>();
     instruction->mc_inst.getOperand(token_i).setImm(new_value);
+    auto instruction_location = instruction->here.Lock();
+    if (auto assembler = FindAssembler(*instruction_location)) {
+      assembler->UpdateMachineCode();
+    }
   }
 
   animation::Phase Tick(time::Timer& timer) override {
@@ -3234,6 +3238,10 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
       instruction->mc_inst.setOpcode(X86::LOOPE);
     } else {
       LOG << "Can't set condition code for loop instruction";
+    }
+    auto instruction_location = instruction->here.Lock();
+    if (auto assembler = FindAssembler(*instruction_location)) {
+      assembler->UpdateMachineCode();
     }
   }
 

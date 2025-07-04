@@ -2,17 +2,14 @@
 // SPDX-License-Identifier: MIT
 #include "tasks.hh"
 
+#include <tracy/Tracy.hpp>
+
 #include "argument.hh"
 #include "automat.hh"
 #include "base.hh"
 #include "gui_connection_widget.hh"
 
 namespace automat {
-
-int log_executed_tasks = 0;
-
-LogTasksGuard::LogTasksGuard() { ++log_executed_tasks; }
-LogTasksGuard::~LogTasksGuard() { --log_executed_tasks; }
 
 std::vector<Task*> global_successors;
 
@@ -45,11 +42,9 @@ Task::Task(WeakPtr<Location> target)
 }
 
 void Task::Schedule() {
+  ZoneScopedN("Schedule");
   if (NoScheduling(target.lock().get())) {
     return;
-  }
-  if (log_executed_tasks) {
-    LOG << "Scheduling " << Format();
   }
   if (scheduled) {
     ERROR << "Task for " << *target.lock() << " already scheduled!";
@@ -59,18 +54,13 @@ void Task::Schedule() {
   EnqueueTask(this);
 }
 
-void Task::PreExecute() {
+void Task::Execute() {
+  ZoneScopedN("Execute");
   scheduled = false;
-  if (log_executed_tasks) {
-    LOG << Format();
-    LOG_Indent();
-  }
   if (!successors.empty()) {
     global_successors = successors;
   }
-}
-
-void Task::PostExecute() {
+  OnExecute();
   if (!global_successors.empty()) {
     assert(global_successors == successors);
     global_successors.clear();
@@ -84,8 +74,8 @@ void Task::PostExecute() {
       }
     }
   }
-  if (log_executed_tasks) {
-    LOG_Unindent();
+  if (!keep_alive) {
+    delete this;
   }
 }
 
@@ -119,26 +109,25 @@ void ScheduleArgumentTargets(Location& source, Argument& arg) {
   });
 }
 
-void RunTask::Execute() {
-  PreExecute();
+void RunTask::OnExecute() {
+  ZoneScopedN("RunTask");
   schedule_next = true;
   if (auto s = target.lock()) {
     if (Runnable* runnable = s->As<Runnable>()) {
       runnable->Run(*s, *this);
     }
   }
-  PostExecute();
 }
 
 std::string CancelTask::Format() { return f("CancelTask({})", TargetName()); }
 
-void CancelTask::Execute() {
+void CancelTask::OnExecute() {
+  ZoneScopedN("CancelTask");
   if (auto s = target.lock()) {
     if (LongRunning* long_running = s->object->AsLongRunning()) {
       long_running->Cancel();
     }
   }
-  delete this;
 }
 
 std::string UpdateTask::Format() {
@@ -146,26 +135,22 @@ std::string UpdateTask::Format() {
   return f("UpdateTask({}, {})", TargetName(), updated_str);
 }
 
-void UpdateTask::Execute() {
-  PreExecute();
+void UpdateTask::OnExecute() {
+  ZoneScopedN("UpdateTask");
   if (auto t = target.lock()) {
     if (auto u = updated.lock()) {
       t->Updated(*u);
     }
   }
-  PostExecute();
-  delete this;
 }
 
 std::string FunctionTask::Format() { return f("FunctionTask({})", TargetName()); }
 
-void FunctionTask::Execute() {
-  PreExecute();
+void FunctionTask::OnExecute() {
+  ZoneScopedN("FunctionTask");
   if (auto t = target.lock()) {
     function(*t);
   }
-  PostExecute();
-  delete this;
 }
 
 std::string ErroredTask::Format() {
@@ -173,15 +158,13 @@ std::string ErroredTask::Format() {
   return f("ErroredTask({}, {})", TargetName(), errored_str);
 }
 
-void ErroredTask::Execute() {
-  PreExecute();
+void ErroredTask::OnExecute() {
+  ZoneScopedN("ErroredTask");
   if (auto t = target.lock()) {
     if (auto e = errored.lock()) {
       t->Errored(*e);
     }
   }
-  PostExecute();
-  delete this;
 }
 
 NoSchedulingGuard::NoSchedulingGuard(Location& location) : location(location) {

@@ -22,14 +22,14 @@ struct Task {
   std::vector<Task*> predecessors;
   std::vector<Task*> successors;
   bool scheduled = false;
+  bool keep_alive = false;
   Task(WeakPtr<Location> target);
   virtual ~Task() {}
   // Add this task to the task queue.
   void Schedule();
-  void PreExecute();
-  void PostExecute();
   virtual std::string Format();
-  virtual void Execute() = 0;
+  virtual void OnExecute() = 0;
+  void Execute();
   std::string TargetName();
 };
 
@@ -37,13 +37,13 @@ struct RunTask : Task {
   bool schedule_next;
   RunTask(WeakPtr<Location> target) : Task(target) {}
   std::string Format() override;
-  void Execute() override;
+  void OnExecute() override;
 };
 
 struct CancelTask : Task {
   CancelTask(WeakPtr<Location> target) : Task(target) {}
   std::string Format() override;
-  void Execute() override;
+  void OnExecute() override;
 };
 
 struct UpdateTask : Task {
@@ -51,7 +51,7 @@ struct UpdateTask : Task {
   UpdateTask(WeakPtr<Location> target, WeakPtr<Location> updated)
       : Task(target), updated(updated) {}
   std::string Format() override;
-  void Execute() override;
+  void OnExecute() override;
 };
 
 struct FunctionTask : Task {
@@ -59,7 +59,7 @@ struct FunctionTask : Task {
   FunctionTask(WeakPtr<Location> target, std::function<void(Location&)> function)
       : Task(target), function(function) {}
   std::string Format() override;
-  void Execute() override;
+  void OnExecute() override;
 };
 
 struct ErroredTask : Task {
@@ -67,7 +67,7 @@ struct ErroredTask : Task {
   ErroredTask(WeakPtr<Location> target, WeakPtr<Location> errored)
       : Task(target), errored(errored) {}
   std::string Format() override;
-  void Execute() override;
+  void OnExecute() override;
 };
 
 struct NextGuard {
@@ -84,11 +84,6 @@ struct NoSchedulingGuard {
   Location& location;
   NoSchedulingGuard(Location& location);
   ~NoSchedulingGuard();
-};
-
-struct LogTasksGuard {
-  LogTasksGuard();
-  ~LogTasksGuard();
 };
 
 }  // namespace automat

@@ -20,6 +20,7 @@
 #include <tesseract/resultiterator.h>
 
 #include <cmath>
+#include <tracy/Tracy.hpp>
 
 #include "action.hh"
 #include "animation.hh"
@@ -1061,6 +1062,7 @@ void TesseractOCR::Args(std::function<void(Argument&)> cb) {
 }
 
 void TesseractOCR::OnRun(Location& here, RunTask&) {
+  ZoneScopedN("TesseractOCR");
   auto image_obj = image_arg.FindObject(here, {});
   auto text_obj = text_arg.FindObject(here, {});
 

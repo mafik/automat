@@ -8,6 +8,8 @@
 #include <include/effects/SkGradientShader.h>
 #include <modules/svg/include/SkSVGDOM.h>
 
+#include <tracy/Tracy.hpp>
+
 #include "animation.hh"
 #include "argument.hh"
 #include "audio.hh"
@@ -264,6 +266,7 @@ void MacroRecorder::ConnectionRemoved(Location& here, Connection& c) {
   }
 }
 void MacroRecorder::OnRun(Location& here, RunTask& run_task) {
+  ZoneScopedN("MacroRecorder");
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);
     timeline->BeginRecording();

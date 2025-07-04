@@ -3,6 +3,7 @@
 #include "library_mouse_click.hh"
 
 #include <string_view>
+#include <tracy/Tracy.hpp>
 
 #include "audio.hh"
 #include "base.hh"
@@ -132,6 +133,7 @@ audio::Sound& MouseClick::NextSound() {
 }
 
 void MouseClick::OnRun(Location& location, RunTask&) {
+  ZoneScopedN("MouseClick");
 #if defined(_WIN32)
   INPUT input;
   input.type = INPUT_MOUSE;

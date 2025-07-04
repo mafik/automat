@@ -8,6 +8,8 @@
 #include <include/core/SkTileMode.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <tracy/Tracy.hpp>
+
 #include "argument.hh"
 #include "color.hh"
 #include "font.hh"
@@ -474,6 +476,7 @@ Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(AcquireWeak
 void Window::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 void Window::OnRun(Location& here, RunTask&) {
+  ZoneScopedN("Window");
 #ifdef __linux__
   {
     auto lock = std::lock_guard(mutex);

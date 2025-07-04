@@ -5,6 +5,8 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <tracy/Tracy.hpp>
+
 #include "base.hh"
 #include "color.hh"
 #include "font.hh"
@@ -23,6 +25,7 @@ string_view Increment::Name() const { return "Increment"; }
 Ptr<Object> Increment::Clone() const { return MakePtr<Increment>(); }
 
 void Increment::OnRun(Location& h, RunTask&) {
+  ZoneScopedN("Increment");
   auto integer = target_arg.GetTyped<Number>(h);
   if (!integer.ok) {
     return;

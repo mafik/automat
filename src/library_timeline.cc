@@ -15,6 +15,7 @@
 #include <cmath>
 #include <memory>
 #include <numbers>
+#include <tracy/Tracy.hpp>
 
 #include "../build/generated/embedded.hh"
 #include "animation.hh"
@@ -1748,6 +1749,7 @@ void Timeline::OnCancel() {
 }
 
 void Timeline::OnRun(Location& here, RunTask& run_task) {
+  ZoneScopedN("Timeline");
   if (state != kPaused) {
     return;
   }

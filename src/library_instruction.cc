@@ -22,6 +22,7 @@
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 
 #include <cmath>
+#include <tracy/Tracy.hpp>
 
 #include "animation.hh"
 #include "argument.hh"
@@ -197,6 +198,7 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
 }
 
 void Instruction::OnRun(Location& here, RunTask& run_task) {
+  ZoneScopedN("Instruction");
   run_task.schedule_next = false;
   auto assembler = FindOrCreateAssembler(here);
   assembler->RunMachineCode(this);

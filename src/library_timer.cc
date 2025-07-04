@@ -14,6 +14,7 @@
 
 #include <cmath>
 #include <memory>
+#include <tracy/Tracy.hpp>
 
 #include "animation.hh"
 #include "argument.hh"
@@ -707,6 +708,7 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
 }
 
 void TimerDelay::OnRun(Location& here, RunTask& run_task) {
+  ZoneScopedN("TimerDelay");
   start_time = time::SteadyClock::now();
   ScheduleAt(here, start_time + duration.value);
   WakeAnimation();

@@ -11,6 +11,8 @@
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
 
+#include <tracy/Tracy.hpp>
+
 #include "../build/generated/embedded.hh"
 #include "animation.hh"
 #include "arcline.hh"
@@ -153,6 +155,7 @@ void FlipFlop::Draw(SkCanvas& canvas) const {
 void FlipFlop::FillChildren(Vec<Ptr<Widget>>& children) { children.push_back(button); }
 
 void FlipFlop::OnRun(Location& here, RunTask&) {
+  ZoneScopedN("FlipFlop");
   current_state = !current_state;
   WakeAnimation();
   button->WakeAnimation();

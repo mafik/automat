@@ -6,6 +6,7 @@
 #include <include/pathops/SkPathOps.h>
 
 #include <memory>
+#include <tracy/Tracy.hpp>
 
 #include "../build/generated/embedded.hh"
 #include "key_button.hh"
@@ -202,6 +203,7 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
 }
 
 void KeyPresser::OnRun(Location& here, RunTask& run_task) {
+  ZoneScopedN("KeyPresser");
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
   key_pressed = true;

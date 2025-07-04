@@ -630,6 +630,7 @@ Vec2 Location::ScalePivot() const {
 RunTask& Location::GetRunTask() {
   if (run_task == nullptr) {
     run_task = make_unique<RunTask>(AcquirePtr<Location>());
+    run_task->keep_alive = true;
   }
   return *run_task;
 }

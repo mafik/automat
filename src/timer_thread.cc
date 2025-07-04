@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <map>
 #include <thread>
+#include <tracy/Tracy.hpp>
 
 #include "base.hh"
 #include "tasks.hh"
@@ -81,10 +82,9 @@ struct TimerFinishedTask : Task {
   TimerFinishedTask(WeakPtr<Location> target, time::SteadyPoint scheduled_time)
       : Task(target), scheduled_time(scheduled_time) {}
   std::string Format() override { return "TimerFinishedTask"; }
-  void Execute() override {
-    PreExecute();
+  void OnExecute() override {
+    ZoneScopedN("TimerFinishedTask");
     TimerFinished(*target.lock(), scheduled_time);
-    PostExecute();
   }
 };
 

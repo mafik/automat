@@ -61,11 +61,16 @@ static void AutomatLoop(std::stop_token stop_token) {
   SetThreadName("Automat Loop");
   while (!stop_token.stop_requested()) {
     Task* task;
-    if (!queue.try_dequeue(task)) {
-      std::unique_lock lk(automat_threads_mutex);
+    {
+      ZoneScopedN("Dequeue");
+    woken:
       if (!queue.try_dequeue(task)) {
-        automat_threads_cv.wait(lk);
-        continue;
+        std::unique_lock lk(automat_threads_mutex);
+        if (!queue.try_dequeue(task)) {
+          ZoneScopedN("Wait");
+          automat_threads_cv.wait(lk);
+          goto woken;
+        }
       }
     }
     task->Execute();

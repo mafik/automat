@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: MIT
 #include "library_alert.hh"
 
+#include <tracy/Tracy.hpp>
+
 #include "base.hh"
 
 #ifdef _WIN32
@@ -17,6 +19,7 @@ namespace automat {
 Argument Alert::message_arg("message", Argument::kRequiresObject);
 
 void Alert::OnRun(Location& here, RunTask&) {
+  ZoneScopedN("Alert");
   auto message = message_arg.GetObject(here);
   if (message.ok) {
     string text = message.object->GetText();

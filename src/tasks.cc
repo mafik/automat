@@ -5,7 +5,7 @@
 #include "argument.hh"
 #include "automat.hh"
 #include "base.hh"
-#include "time.hh"
+#include "gui_connection_widget.hh"
 
 namespace automat {
 
@@ -105,9 +105,13 @@ void ScheduleNext(Location& source) { ScheduleArgumentTargets(source, next_arg);
 
 void ScheduleArgumentTargets(Location& source, Argument& arg) {
   // audio::Play(source.object->NextSound());
-  source.last_finished = time::SteadyClock::now();
-  // TODO: maybe there is a better way to do this...
-  arg.InvalidateConnectionWidgets(source);  // so that the "next" connection flashes
+  for (auto& w : gui::ConnectionWidgetRange(source, arg)) {
+    if (w.state) {
+      w.state->stabilized = false;
+      w.state->lightness_pct = 100;
+    }
+    w.WakeAnimation();
+  }
 
   arg.LoopLocations<bool>(source, [](Location& next) {
     next.ScheduleRun();

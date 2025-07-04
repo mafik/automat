@@ -183,12 +183,10 @@ void LiveArgument::Attach(Location& here) {
 }
 
 void Argument::InvalidateConnectionWidgets(Location& here) const {
-  for (auto& w : gui::root_widget->connection_widgets) {
-    if (&w->from == &here && &w->arg == this) {  // updates all outgoing connection widgets
-      w->WakeAnimation();
-      if (w->state) {
-        w->state->stabilized = false;
-      }
+  for (auto& w : gui::ConnectionWidgetRange(here, *this)) {
+    w.WakeAnimation();
+    if (w.state) {
+      w.state->stabilized = false;
     }
   }
 }

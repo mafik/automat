@@ -358,12 +358,10 @@ animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation
 
   animation::Phase phase = animation::Finished;
   float dt = timer.d;
-  if (&state.arg == &next_arg) {
-    state.lightness_pct = 100;
-    phase |= animation::ExponentialApproach(0, (timer.now - state.location.last_finished).count(),
-                                            0.1, state.lightness_pct);
-  } else {
+  if (state.arg.field) {
     state.lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
+  } else {
+    phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.lightness_pct);
   }
 
   for (auto& end : end_candidates) {

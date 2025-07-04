@@ -78,8 +78,6 @@ struct Location : public gui::Widget {
   std::unordered_set<Location*> error_observers;
   std::unordered_set<Location*> observing_errors;
 
-  time::SteadyPoint last_finished;
-
   // Retained to make it possible to check if the task is scheduled & cancel it.
   // Initialized lazily (may be nullptr).
   std::unique_ptr<RunTask> run_task;

@@ -196,9 +196,15 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
   visitor(span<char>{});
 }
 
-void Instruction::OnRun(Location& here) {
+void Instruction::OnRun(Location& here, RunTask& run_task) {
+  run_task.schedule_next = false;
   auto assembler = FindOrCreateAssembler(here);
   assembler->RunMachineCode(this);
+}
+
+LongRunning* Instruction::AsLongRunning() {
+  auto here_ptr = here.Lock();
+  return FindAssembler(*here_ptr);
 }
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {
@@ -3849,5 +3855,4 @@ void Instruction::DeserializeState(Location& l, Deserializer& d) {
     l.ReportError(status.ToStr());
   }
 }
-
 }  // namespace automat::library

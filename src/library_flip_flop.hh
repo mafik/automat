@@ -45,7 +45,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
 
   void FillChildren(Vec<Ptr<Widget>>& children) override;
 
-  void OnRun(Location& here) override;
+  void OnRun(Location& here, RunTask&) override;
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
 };

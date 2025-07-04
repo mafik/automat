@@ -11,7 +11,6 @@
 #include "argument.hh"
 #include "color.hh"
 #include "font.hh"
-#include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "key.hh"
 #include "pointer.hh"
@@ -474,7 +473,7 @@ Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(AcquireWeak
 
 void Window::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
-void Window::OnRun(Location& here) {
+void Window::OnRun(Location& here, RunTask&) {
 #ifdef __linux__
   {
     auto lock = std::lock_guard(mutex);

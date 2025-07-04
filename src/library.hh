@@ -46,7 +46,7 @@ struct Delete : Object, Runnable {
   static Argument target_arg;
   string_view Name() const override { return "Delete"; }
   Ptr<Object> Clone() const override { return MakePtr<Delete>(); }
-  void OnRun(Location& here) override {
+  void OnRun(Location& here, RunTask&) override {
     auto target = target_arg.GetLocation(here);
     if (!target.ok) {
       return;
@@ -60,7 +60,7 @@ struct Set : Object, Runnable {
   static Argument target_arg;
   string_view Name() const override { return "Set"; }
   Ptr<Object> Clone() const override { return MakePtr<Set>(); }
-  void OnRun(Location& here) override {
+  void OnRun(Location& here, RunTask&) override {
     auto value = value_arg.GetObject(here);
     auto target = target_arg.GetLocation(here);
     if (!value.ok || !target.ok) {
@@ -151,7 +151,7 @@ struct Timer : Object, Runnable {
     time::Duration elapsed = now - start;
     return f("{:.3f}", elapsed.count());
   }
-  void OnRun(Location& here) override {
+  void OnRun(Location& here, RunTask&) override {
     time::SteadyPoint now = GetNow();
     if (now - last_tick >= 1ms) {
       last_tick = now;
@@ -178,7 +178,7 @@ struct TimerReset : Object, Runnable {
   static Argument timer_arg;
   string_view Name() const override { return "TimerReset"; }
   Ptr<Object> Clone() const override { return MakePtr<TimerReset>(); }
-  void OnRun(Location& here) override {
+  void OnRun(Location& here, RunTask&) override {
     auto timer = timer_arg.GetTyped<Timer>(here);
     if (!timer.ok) {
       return;
@@ -458,7 +458,7 @@ struct Append : Object, Runnable {
   static Argument what_arg;
   string_view Name() const override { return "Append"; }
   Ptr<Object> Clone() const override { return MakePtr<Append>(); }
-  void OnRun(Location& here) override {
+  void OnRun(Location& here, RunTask&) override {
     auto to = to_arg.GetTyped<AbstractList>(here);
     if (!to.ok) {
       return;
@@ -559,7 +559,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
     cb(element_arg);
     cb(test_arg);
   }
-  void OnRun(Location& here) override {
+  void OnRun(Location& here, RunTask&) override {
     if (phase == Phase::kSequential) {
       // Check the value of test, possibly copying element from list to output.
       // Then increment index and schedule another iteration.
@@ -881,7 +881,7 @@ struct Button : Object, Runnable {
   }
   string GetText() const override { return label; }
   void SetText(Location& error_context, string_view new_label) override { label = new_label; }
-  void OnRun(Location& h) override {
+  void OnRun(Location& h, RunTask&) override {
     auto enabled = enabled_arg.GetObject(h);
     if (enabled.object && enabled.object->GetText() == "false") {
       h.ReportError("Button is disabled.");
@@ -906,7 +906,8 @@ struct ComboBox : LiveObject {
       return nullptr;
     });
     if (selected == nullptr) {
-      error_context.ReportError(f("No option named {}", std::string(new_text.data(), new_text.size())));
+      error_context.ReportError(
+          f("No option named {}", std::string(new_text.data(), new_text.size())));
     }
   }
   void ConnectionAdded(Location& here, Connection& connection) override {

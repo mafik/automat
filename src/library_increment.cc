@@ -22,7 +22,7 @@ string_view Increment::Name() const { return "Increment"; }
 
 Ptr<Object> Increment::Clone() const { return MakePtr<Increment>(); }
 
-void Increment::OnRun(Location& h) {
+void Increment::OnRun(Location& h, RunTask&) {
   auto integer = target_arg.GetTyped<Number>(h);
   if (!integer.ok) {
     return;

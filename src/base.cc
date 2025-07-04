@@ -59,25 +59,44 @@ void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> 
   return nullptr;
 }
 
-static void DoneRunning(Location& here) {
-  if (!here.HasError()) {
+static void DoneRunning(Location& here, RunTask& run_task) {
+  if (run_task.schedule_next && !here.HasError()) {
     ScheduleNext(here);
   }
 }
 
 void LongRunning::Done(Location& here) {
-  here.long_running = nullptr;
-  DoneRunning(here);
+  if (long_running_task == nullptr) {
+    FATAL << "LongRunning::Done called without a long_running_task";
+  }
+  DoneRunning(here, *long_running_task);
+  long_running_task = nullptr;
 }
 
-void Runnable::Run(Location& here) {
-  if (here.long_running) {
+void LongRunning::BeginLongRunning(Location& here, RunTask& run_task) {
+  this->long_running_task = &run_task;
+}
+
+void LongRunning::On() {
+  auto live_object = dynamic_cast<LiveObject*>(this);
+  if (live_object == nullptr) {
+    ERROR << "LongRunning::On called on a non-LiveObject";
     return;
   }
-  OnRun(here);
-  if (here.long_running == nullptr) {
-    DoneRunning(here);
+  auto location = live_object->here.Lock();
+  BeginLongRunning(*location, location->GetRunTask());
+}
+
+void Runnable::Run(Location& here, RunTask& run_task) {
+  LongRunning* long_running = here.object->AsLongRunning();
+  if (long_running && long_running->IsRunning()) {
+    return;
   }
+  OnRun(here, run_task);
+  if (long_running && long_running->IsRunning()) {
+    return;
+  }
+  DoneRunning(here, run_task);
 }
 
 void Machine::SerializeState(Serializer& writer, const char* key) const {

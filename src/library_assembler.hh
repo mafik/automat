@@ -117,7 +117,7 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void RunMachineCode(library::Instruction* entry_point);
 
-  void Cancel() override;
+  void OnCancel() override;
 
   Ptr<gui::Widget> MakeWidget() override { return MakePtr<AssemblerWidget>(AcquireWeakPtr()); }
 

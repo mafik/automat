@@ -158,9 +158,8 @@ struct DragAndClickAction : Action {
 struct RunAction : Action {
   Location& location;
   RunAction(gui::Pointer& pointer, Location& location) : Action(pointer), location(location) {
-    if (location.long_running) {
-      location.long_running->Cancel();
-      location.long_running = nullptr;
+    if (auto long_running = location.object->AsLongRunning(); long_running->IsRunning()) {
+      long_running->Cancel();
     } else {
       location.ScheduleRun();
     }
@@ -202,15 +201,15 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
   }
 }
 
-void KeyPresser::OnRun(Location& here) {
+void KeyPresser::OnRun(Location& here, RunTask& run_task) {
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
   key_pressed = true;
   WakeAnimation();
-  here.long_running = this;
+  BeginLongRunning(here, run_task);
 }
 
-void KeyPresser::Cancel() {
+void KeyPresser::OnCancel() {
   audio::Play(embedded::assets_SFX_key_up_wav);
   SendKeyEvent(key, false);
   key_pressed = false;

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 #include "library_mouse_click.hh"
+
 #include <string_view>
 
 #include "audio.hh"
@@ -130,7 +131,7 @@ audio::Sound& MouseClick::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-void MouseClick::OnRun(Location& location) {
+void MouseClick::OnRun(Location& location, RunTask&) {
 #if defined(_WIN32)
   INPUT input;
   input.type = INPUT_MOUSE;

@@ -11,8 +11,6 @@
 #include <include/effects/SkGradientShader.h>
 #include <include/pathops/SkPathOps.h>
 
-#include <memory>
-
 #include "../build/generated/embedded.hh"
 #include "animation.hh"
 #include "arcline.hh"
@@ -154,7 +152,7 @@ void FlipFlop::Draw(SkCanvas& canvas) const {
 
 void FlipFlop::FillChildren(Vec<Ptr<Widget>>& children) { children.push_back(button); }
 
-void FlipFlop::OnRun(Location& here) {
+void FlipFlop::OnRun(Location& here, RunTask&) {
   current_state = !current_state;
   WakeAnimation();
   button->WakeAnimation();
@@ -167,9 +165,8 @@ void FlipFlop::OnRun(Location& here) {
     });
   } else {
     flip_arg.LoopLocations<bool>(here, [](Location& other) {
-      if (other.long_running) {
-        other.long_running->Cancel();
-        other.long_running = nullptr;
+      if (auto long_running = other.object->AsLongRunning(); long_running->IsRunning()) {
+        long_running->Cancel();
       }
       return false;
     });

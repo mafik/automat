@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <memory>
-
 #include "base.hh"
 #include "key_button.hh"
 #include "keyboard.hh"

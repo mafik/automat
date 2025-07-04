@@ -18,6 +18,7 @@ struct Pointer;
 struct Container;
 struct Argument;
 struct ImageProvider;
+struct LongRunning;
 
 // Objects are interactive pieces of data & behavior.
 //
@@ -55,6 +56,8 @@ struct Object : public virtual ReferenceCounted {
 
   // Image-like objects can provide image data.
   virtual ImageProvider* AsImageProvider() { return nullptr; }
+
+  virtual LongRunning* AsLongRunning() { return nullptr; }
 
   virtual void Fields(std::function<void(Object&)> cb) {}
 

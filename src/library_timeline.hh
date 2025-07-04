@@ -158,8 +158,9 @@ struct Timeline : LiveObject,
   Vec2AndDir ArgStart(const Argument&) override;
   void FillChildren(Vec<Ptr<Widget>>& children) override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
-  void OnRun(Location& here) override;
-  void Cancel() override;
+  void OnRun(Location& here, RunTask&) override;
+  void OnCancel() override;
+  LongRunning* AsLongRunning() override { return this; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
 

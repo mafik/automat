@@ -83,7 +83,8 @@ struct Location : public gui::Widget {
   // Retained to make it possible to check if the task is scheduled & cancel it.
   // Initialized lazily (may be nullptr).
   std::unique_ptr<RunTask> run_task;
-  LongRunning* long_running = nullptr;
+
+  RunTask& GetRunTask();
 
   Location(WeakPtr<Location> parent = {});
   ~Location();
@@ -221,9 +222,6 @@ struct Location : public gui::Widget {
     return follow->GetText();
   }
   double GetNumber() { return std::stod(GetText()); }
-
-  // Immediately execute this object's Run function.
-  void Run();
 
   // Immediately execute this object's Errored function.
   void Errored(Location& errored) { object->Errored(*this, errored); }

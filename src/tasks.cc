@@ -117,8 +117,11 @@ void ScheduleArgumentTargets(Location& source, Argument& arg) {
 
 void RunTask::Execute() {
   PreExecute();
+  schedule_next = true;
   if (auto s = target.lock()) {
-    s->Run();
+    if (Runnable* runnable = s->As<Runnable>()) {
+      runnable->Run(*s, *this);
+    }
   }
   PostExecute();
 }
@@ -127,9 +130,8 @@ std::string CancelTask::Format() { return f("CancelTask({})", TargetName()); }
 
 void CancelTask::Execute() {
   if (auto s = target.lock()) {
-    if (s->long_running) {
-      s->long_running->Cancel();
-      s->long_running = nullptr;
+    if (LongRunning* long_running = s->object->AsLongRunning()) {
+      long_running->Cancel();
     }
   }
   delete this;

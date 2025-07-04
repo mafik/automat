@@ -114,12 +114,7 @@ Connection* Location::ConnectTo(Location& other, Argument& arg,
   return c;
 }
 
-void Location::ScheduleRun() {
-  if (run_task == nullptr) {
-    run_task = make_unique<RunTask>(AcquirePtr<Location>());
-  }
-  run_task->Schedule();
-}
+void Location::ScheduleRun() { GetRunTask().Schedule(); }
 
 void Location::ScheduleLocalUpdate(Location& updated) {
   (new UpdateTask(AcquirePtr<Location>(), updated.AcquirePtr<Location>()))->Schedule();
@@ -327,12 +322,6 @@ void Location::ReportMissing(std::string_view property) {
   ReportError(error_message);
 }
 
-void Location::Run() {
-  if (Runnable* runnable = As<Runnable>()) {
-    runnable->Run(*this);
-  }
-}
-
 Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(*WidgetForObject(), *parent); }
 
 animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_position,
@@ -346,10 +335,6 @@ animation::Phase ObjectAnimationState::Tick(float delta_time, Vec2 target_positi
 ObjectAnimationState::ObjectAnimationState() : scale(1), position(Vec2{}), elevation(0) {}
 ObjectAnimationState& Location::GetAnimationState() const { return animation_state; }
 Location::~Location() {
-  if (long_running) {
-    long_running->Cancel();
-    long_running = nullptr;
-  }
   // Location can only be destroyed by its parent so we don't have to do anything there.
   parent_location = {};
   while (not incoming.empty()) {
@@ -642,4 +627,10 @@ Vec2 Location::ScalePivot() const {
   return Vec2();
 }
 
+RunTask& Location::GetRunTask() {
+  if (run_task == nullptr) {
+    run_task = make_unique<RunTask>(AcquirePtr<Location>());
+  }
+  return *run_task;
+}
 }  // namespace automat

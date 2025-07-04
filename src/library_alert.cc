@@ -16,7 +16,7 @@ namespace automat {
 
 Argument Alert::message_arg("message", Argument::kRequiresObject);
 
-void Alert::OnRun(Location& here) {
+void Alert::OnRun(Location& here, RunTask&) {
   auto message = message_arg.GetObject(here);
   if (message.ok) {
     string text = message.object->GetText();

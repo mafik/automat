@@ -45,8 +45,9 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, L
   void FillChildren(Vec<Ptr<Widget>>& children) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
-  void OnRun(Location& here) override;
-  void Cancel() override;
+  void OnRun(Location& here, RunTask& run_task) override;
+  void OnCancel() override;
+  LongRunning* AsLongRunning() override { return this; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

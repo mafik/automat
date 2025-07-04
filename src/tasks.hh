@@ -34,6 +34,7 @@ struct Task {
 };
 
 struct RunTask : Task {
+  bool schedule_next;
   RunTask(WeakPtr<Location> target) : Task(target) {}
   std::string Format() override;
   void Execute() override;

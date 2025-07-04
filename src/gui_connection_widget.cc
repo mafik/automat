@@ -31,7 +31,7 @@ using namespace automat;
 namespace automat::gui {
 
 struct DummyRunnable : Object, Runnable {
-  void OnRun(Location& here) override { return; }
+  void OnRun(Location& here, RunTask&) override { return; }
   Ptr<Object> Clone() const override { return MakePtr<DummyRunnable>(); }
 } kDummyRunnable;
 

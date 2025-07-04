@@ -197,7 +197,7 @@ std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
 
 void Object::Updated(Location& here, Location& updated) {
   if (Runnable* runnable = dynamic_cast<Runnable*>(this)) {
-    runnable->Run(here);
+    runnable->Run(here, here.GetRunTask());
   }
 }
 

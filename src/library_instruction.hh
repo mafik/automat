@@ -52,7 +52,9 @@ struct Instruction : LiveObject, Runnable, Buffer {
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
 
-  void OnRun(Location& here) override;
+  LongRunning* AsLongRunning() override;
+
+  void OnRun(Location& here, RunTask&) override;
 
   Buffer::Type imm_type = Buffer::Type::Unsigned;
 

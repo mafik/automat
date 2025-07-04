@@ -309,9 +309,6 @@ void TimelineRunButton::Activate(gui::Pointer& p) {
   switch (timeline->state) {
     case Timeline::kPlaying:
       timeline->Cancel();
-      if (auto h = timeline->here.lock()) {
-        h->long_running = nullptr;
-      }
       break;
     case Timeline::kPaused:
       if (auto h = timeline->here.lock()) {
@@ -350,9 +347,9 @@ Ptr<gui::Button>& TimelineRunButton::OnWidget() {
 }
 
 bool TimelineRunButton::Filled() const {
-  bool filled = timeline->state == Timeline::kRecording;
+  bool filled = timeline->state == Timeline::kRecording || timeline->IsRunning();
   if (auto h = timeline->here.lock()) {
-    filled |= (h->run_task && h->run_task->scheduled) || (h->long_running != nullptr);
+    filled |= (h->run_task && h->run_task->scheduled);
   }
   return filled;
 }
@@ -1737,7 +1734,7 @@ void OnOffTrack::Draw(SkCanvas& canvas) const {
   }
 }
 
-void Timeline::Cancel() {
+void Timeline::OnCancel() {
   if (state == kPlaying) {
     TimelineCancelScheduledAt(*this);
     state = kPaused;
@@ -1750,7 +1747,7 @@ void Timeline::Cancel() {
   }
 }
 
-void Timeline::OnRun(Location& here) {
+void Timeline::OnRun(Location& here, RunTask& run_task) {
   if (state != kPaused) {
     return;
   }
@@ -1764,7 +1761,7 @@ void Timeline::OnRun(Location& here) {
   TimelineScheduleAt(*this, now);
   run_button->WakeAnimation();
   WakeAnimation();
-  here.long_running = this;
+  BeginLongRunning(here, run_task);
 }
 
 void Timeline::BeginRecording() {
@@ -1841,9 +1838,8 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
     if (on) {
       target.ScheduleRun();
     } else {
-      if (target.long_running) {
-        target.long_running->Cancel();
-        target.long_running = nullptr;
+      if (auto long_running = target.object->AsLongRunning(); long_running->IsRunning()) {
+        long_running->Cancel();
       }
     }
   } else {
@@ -2045,7 +2041,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       // We're not updating the outputs because they should be deserialized in a proper state
       // TimelineUpdateOutputs(l, *this, playing.started_at, now);
       TimelineScheduleAt(*this, now);
-      l.long_running = this;
+      BeginLongRunning(l, l.GetRunTask());
     } else if (key == "recording") {
       state = kRecording;
       double value = 0;

@@ -25,6 +25,7 @@
 #include "format.hh"
 #include "location.hh"
 #include "log.hh"
+#include "on_off.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
 #include "ptr.hh"
@@ -48,26 +49,54 @@ struct Object;
 struct Location;
 struct Machine;
 
-struct LongRunning {
-  // Called from Automat thread when user wants to cancel the execution.
-  virtual void Cancel() = 0;
+struct LongRunning : OnOff {
+  RunTask* long_running_task = nullptr;
+
+  virtual ~LongRunning() {
+    if (IsRunning()) {
+      Cancel();
+    }
+  }
+
+  // Implement this to implement cancellation of long running jobs.
+  //
+  // May be called from arbitrary thread.
+  virtual void OnCancel() = 0;
+
+  // Call this to cancel the long running job.
+  void Cancel() {
+    if (long_running_task == nullptr) {
+      FATAL << "LongRunning::Cancel called without a long_running_task";
+    }
+    OnCancel();
+    long_running_task = nullptr;
+  }
+
+  bool IsRunning() const { return long_running_task != nullptr; }
 
   // Called from arbitrary thread by the object when it finishes execution.
   //
   // After this call, the object is free to release the memory related to this LongRunning instance
   // because its not going to be used again.
   void Done(Location& here);
+
+  void BeginLongRunning(Location& here, RunTask& run_task);
+
+  bool IsOn() const override { return IsRunning(); }
+  void On() override;
+  void Off() override { Cancel(); }
 };
 
 struct Runnable {
   // Derived classes should override this method to implement their behavior.
   //
-  // If an object represents a long running process, it should mark itself by setting the
-  // here.long_running pointer.
-  virtual void OnRun(Location& here) = 0;
+  // If an object must use the CPU for some computation it can stay busy as long as it needs to.
+  // However if it's doing something in the background (like waiting for external resource) then it
+  // should call BeginLongRunning with the run_task. Once it's done it should call Done.
+  virtual void OnRun(Location& here, RunTask& run_task) = 0;
 
   // Kicks off the execution of the object.
-  void Run(Location& here);
+  void Run(Location& here, RunTask& run_task);
 };
 
 struct LiveObject : Object {
@@ -85,14 +114,6 @@ struct LiveObject : Object {
     }
   }
 };
-
-template <typename T>
-bool IsRunning(const T& object) {
-  if (auto h = object.here.lock()) {
-    return h->long_running;
-  }
-  return false;
-}
 
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Machine : LiveObject, gui::Widget, gui::DropTarget {

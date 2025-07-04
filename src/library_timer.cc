@@ -134,7 +134,7 @@ static void UpdateTextField(TimerDelay& timer) {
 }
 
 static void SetDuration(TimerDelay& timer, Duration new_duration) {
-  if (IsRunning(timer)) {
+  if (timer.IsRunning()) {
     if (auto h = timer.here.lock()) {
       RescheduleAt(*h, timer.start_time + timer.duration.value, timer.start_time + new_duration);
     }
@@ -231,7 +231,7 @@ constexpr static float kHandWidth = 0.0004;
 constexpr static float kHandLength = r4 * 0.8;
 
 static float HandBaseDegrees(const TimerDelay& timer) {
-  if (IsRunning(timer)) {
+  if (timer.IsRunning()) {
     Duration elapsed = SteadyClock::now() - timer.start_time;
     return 90 - 360 * elapsed.count() / RangeDuration(timer.range).count();
   } else {
@@ -437,7 +437,7 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
 }
 
 animation::Phase TimerDelay::Tick(time::Timer& timer) {
-  auto phase = IsRunning(*this) ? animation::Animating : animation::Finished;
+  auto phase = IsRunning() ? animation::Animating : animation::Finished;
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, start_pusher_depression);
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, left_pusher_depression);
   phase |= animation::ExponentialApproach(0, timer.d, 0.2, right_pusher_depression);
@@ -457,7 +457,7 @@ animation::Phase TimerDelay::Tick(time::Timer& timer) {
     // do nothing...
   } else {
     float hand_target;
-    if (IsRunning(*this)) {
+    if (IsRunning()) {
       auto base_degrees = HandBaseDegrees(*this);
       hand_target = base_degrees;
     } else {
@@ -662,9 +662,8 @@ std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::Actio
       start_pusher_depression = 1;
       WakeAnimation();
       if (auto h = here.lock()) {
-        if (IsRunning(*this)) {
+        if (IsRunning()) {
           Cancel();
-          h->long_running = nullptr;
         } else {
           h->ScheduleRun();
         }
@@ -707,14 +706,14 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
   cb(next_arg);
 }
 
-void TimerDelay::OnRun(Location& here) {
+void TimerDelay::OnRun(Location& here, RunTask& run_task) {
   start_time = time::SteadyClock::now();
   ScheduleAt(here, start_time + duration.value);
   WakeAnimation();
-  here.long_running = this;
+  BeginLongRunning(here, run_task);
 }
 
-void TimerDelay::Cancel() {
+void TimerDelay::OnCancel() {
   if (auto h = here.lock()) {
     CancelScheduledAt(*h, start_time + duration.value);
   }
@@ -772,7 +771,7 @@ void TimerDelay::SerializeState(Serializer& writer, const char* key) const {
   writer.String(range_str.data(), range_str.size());
   writer.Key("duration_seconds");
   writer.Double(duration.value.count());
-  if (IsRunning(*this)) {
+  if (this->IsRunning()) {
     writer.Key("running");
     writer.Double((time::SteadyNow() - start_time).count());
   }
@@ -785,7 +784,7 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
     if (key == "running") {
       double value = 0;
       d.Get(value, status);
-      l.long_running = this;
+      BeginLongRunning(l, l.GetRunTask());
       start_time = time::SteadyNow() - Duration(value);
     } else if (key == "duration_seconds") {
       double value;
@@ -802,7 +801,7 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   UpdateTextField(*this);
-  if (l.long_running) {
+  if (this->IsRunning()) {
     ScheduleAt(l, start_time + duration.value);
   }
 

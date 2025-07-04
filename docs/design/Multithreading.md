@@ -29,9 +29,19 @@ The render thread is responsible for smooth *rendering* of the UI. This is done 
 
 ## Worker threads (TODO)
 
-Objects execute their code directly on the thread that they have been invoked on. They may also follow with the execution of the next object, reusing their current thread. Any side tasks should be put on the task queue, to be executed by helper threads. This avoids the use of extra threads for simple jobs and makes their execution more deterministic. The control of when to execute the next task immediately vs when to defer it to task queue should be controlled by the user (although specifics of how this may happen are not designed yet).
+Objects execute their code directly on the thread that they have been invoked on. They may also follow with the execution of the next object, reusing their current thread. Any side tasks should be put on the task queue, to be executed by worker threads. This avoids the use of extra threads for simple jobs and makes their execution more deterministic. The control of when to execute the next task immediately vs when to defer it to task queue should be controlled by the user (although specifics of how this may happen are not designed yet).
 
 Currently Automat uses only one worker thread (called "Automat Loop") and doesn't exploit thread reuse. This is temporary and will change eventually as the need for more accurate thread control comes up.
+
+## Tasks (TODO)
+
+The main unit of work is based on the "Task" class. The goal of this class is to allow flexible tracking of work done on multiple threads and proper sequencing. Tasks are the main way of "waking up" objects from external threads and are executed on the worker threads.
+
+Task lifetime is managed by the task itself. Two examples of Task lifetime management are:
+- RunTask - it's allocated lazily for each Location. It's lifetime is bound to Location
+- other tasks - they're allocated whenever they're needed. They delete themselves after calling Execute
+
+Because of their irregular lifetimes, Tasks are managed through raw pointers and require more attention.
 
 ## Timer thread
 

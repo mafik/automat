@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <memory>
-
 #include "animation.hh"
 #include "base.hh"
 #include "color.hh"
@@ -25,7 +23,6 @@ struct MacroRecorder : LiveObject,
                        Runnable,
                        LongRunning,
                        gui::Keylogger,
-                       OnOff,
                        gui::PointerMoveCallback {
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
@@ -52,10 +49,6 @@ struct MacroRecorder : LiveObject,
   void Args(std::function<void(Argument&)> cb) override;
   Ptr<Object> ArgPrototype(const Argument&) override;
 
-  bool IsOn() const override;
-  void On() override;
-  void Off() override;
-
   void PointerOver(gui::Pointer&) override;
   void PointerLeave(gui::Pointer&) override;
   void PointerMove(gui::Pointer&, Vec2 position) override;
@@ -63,8 +56,9 @@ struct MacroRecorder : LiveObject,
   void ConnectionAdded(Location& here, Connection&) override;
   void ConnectionRemoved(Location& here, Connection&) override;
 
-  void OnRun(Location& here) override;
-  void Cancel() override;
+  void OnRun(Location& here, RunTask&) override;
+  void OnCancel() override;
+  LongRunning* AsLongRunning() override { return this; }
   void KeyloggerKeyDown(gui::Key) override;
   void KeyloggerKeyUp(gui::Key) override;
 

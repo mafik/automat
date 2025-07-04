@@ -15,7 +15,7 @@ struct MouseClick : Object, Object::FallbackWidget, Runnable {
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
-  void OnRun(Location&) override;
+  void OnRun(Location&, RunTask&) override;
   audio::Sound& NextSound() override;
 };
 

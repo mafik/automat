@@ -8,7 +8,6 @@
 #include <source_location>
 
 #include "argument.hh"
-#include "backtrace.hh"
 #include "base.hh"
 #include "library.hh"
 #include "log.hh"

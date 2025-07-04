@@ -175,6 +175,8 @@ static animation::Phase RefreshState(Assembler& assembler, time::T time) {
 }
 
 void Assembler::ExitCallback(mc::CodePoint code_point) {
+  auto here_ptr = here.Lock();
+  Done(*here_ptr);
   RefreshState(*this, time::SteadyNow().time_since_epoch().count());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
@@ -184,15 +186,6 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
       constexpr int mc_inst_offset = offsetof(Instruction, mc_inst);
       exit_inst = reinterpret_cast<Instruction*>(reinterpret_cast<char*>(exit_mc_inst_raw) -
                                                  mc_inst_offset);
-    }
-  }
-  auto* loc = here.lock().get();
-  auto [begin, end] = loc->incoming.equal_range(&assembler_arg);
-  for (auto it = begin; it != end; ++it) {
-    auto& conn = *it;
-    auto& inst_loc = conn->from;
-    if (auto inst = inst_loc.As<Instruction>()) {
-      inst_loc.long_running = nullptr;
     }
   }
   if (exit_inst) {
@@ -291,21 +284,9 @@ void Assembler::UpdateMachineCode() {
 }
 
 void Assembler::RunMachineCode(library::Instruction* entry_point) {
-  {  // Mark instructions as "long running", using the assembler as the LongRunning object.
-    auto here_ptr = here.lock();
-    if (here_ptr) {
-      auto [begin, end] = here_ptr->incoming.equal_range(&assembler_arg);
-      for (auto it = begin; it != end; ++it) {
-        auto& conn = *it;
-        auto& inst_loc = conn->from;
-        auto inst = inst_loc.As<Instruction>();
-        if (!inst) {
-          continue;
-        }
-        inst_loc.long_running = this;
-      }
-    }
-  }
+  auto here_ptr = here.lock();
+  BeginLongRunning(*here_ptr, here_ptr->GetRunTask());
+  long_running_task->schedule_next = false;
 
   Status status;
   auto inst = entry_point->ToMC();
@@ -316,21 +297,12 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
   RefreshState(*this, time::SteadyNow().time_since_epoch().count());
 }
 
-void Assembler::Cancel() {
+void Assembler::OnCancel() {
   Status status;
   mc_controller->Cancel(status);
   if (!OK(status)) {
     ERROR << "Failed to cancel Assembler: " << status;
     return;
-  }
-  auto* loc = here.lock().get();
-  auto [begin, end] = loc->incoming.equal_range(&assembler_arg);
-  for (auto it = begin; it != end; ++it) {
-    auto& conn = *it;
-    auto& inst_loc = conn->from;
-    if (auto inst = inst_loc.As<Instruction>()) {
-      inst_loc.long_running = nullptr;
-    }
   }
 }
 

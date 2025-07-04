@@ -54,7 +54,7 @@ struct CablePhysicsSimulation {
   bool hidden = false;
 
   float cable_width = 2_mm;
-  float lightness_pct;
+  float lightness_pct = 0;
 
   CablePhysicsSimulation(Location&, Argument& arg, Vec2AndDir start);
   ~CablePhysicsSimulation();

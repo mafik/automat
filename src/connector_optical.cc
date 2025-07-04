@@ -358,8 +358,8 @@ animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation
 
   animation::Phase phase = animation::Finished;
   float dt = timer.d;
-  if (state.arg.field) {
-    state.lightness_pct = state.arg.IsOn(state.location) ? 100 : 0;
+  if (state.arg.IsOn(state.location)) {
+    state.lightness_pct = 100;
   } else {
     phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.lightness_pct);
   }

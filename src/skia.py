@@ -35,7 +35,7 @@ skia.ConfigureOptions(
   skia_enable_graphite='true')
 
 if build.fast:
-  skia.ConfigureOptions(is_debug='false', is_official_build='true')
+  skia.ConfigureOptions(is_debug='false', is_official_build='true', extra_cflags='["-fno-omit-frame-pointer", "-g"]')
   build.compile_args += ['-DSK_RELEASE']
 elif build.debug:
   skia.ConfigureOptions(is_debug='true', extra_cflags_cc='["-frtti"]')

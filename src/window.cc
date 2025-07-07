@@ -25,7 +25,7 @@ void Window::BeginLogging(Keylogger* keylogger, Keylogging** keylogging,
 }
 
 void Window::RegisterInput() {
-  OnRegisterInput(!keyboard->keyloggings.empty(), !mouse->loggings.empty());
+  OnRegisterInput(keyboard && !keyboard->keyloggings.empty(), mouse && !mouse->loggings.empty());
 }
 
 }  // namespace automat::gui

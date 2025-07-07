@@ -3,6 +3,7 @@
 #include "win32_window.hh"
 
 #include <src/base/SkUTF.h>
+#include <winuser.h>
 
 #include "automat.hh"
 #include "hid.hh"
@@ -12,6 +13,7 @@
 #include "root_widget.hh"
 #include "status.hh"
 #include "touchpad.hh"
+#include "widget.hh"
 #include "win32.hh"
 #include "win_key.hh"
 
@@ -325,76 +327,116 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         ERROR << "Error when retrieving buffer. Size=" << size << " Error code: " << GetLastError();
         return DefWindowProc(hWnd, uMsg, wParam, lParam);
       }
-      if (raw_input->header.dwType != RIM_TYPEKEYBOARD) {
-        ERROR << "Received WM_INPUT event with type other than RIM_TYPEKEYBOARD";
-        return DefWindowProc(hWnd, uMsg, wParam, lParam);
-      }
-      // Key Mapping:
-      // Ignore the VKey provided by the OS.
-      // Take the MakeCode, append the E0/E11 prefix (if present) and translate to physical key
-      // locally.
-      // Also ignore the Message field and instead check for the RI_KEY_BREAK to detect if key is
-      // down or up.
-      RAWKEYBOARD& ev = raw_input->data.keyboard;
-      U32 scan_code = ev.MakeCode;
-      if (ev.Flags & RI_KEY_E0) {
-        scan_code |= 0xE000;
-      }
-      if (ev.Flags & RI_KEY_E1) {
-        scan_code |= 0xE11D00;
-      }
-      auto physical = ScanCodeToKey(scan_code);
-      auto virtual_key = KeyToVirtualKey(physical);  // layout-dependent key code
+      if (raw_input->header.dwType == RIM_TYPEKEYBOARD) {
+        // Key Mapping:
+        // Ignore the VKey provided by the OS.
+        // Take the MakeCode, append the E0/E11 prefix (if present) and translate to physical key
+        // locally.
+        // Also ignore the Message field and instead check for the RI_KEY_BREAK to detect if key is
+        // down or up.
+        RAWKEYBOARD& ev = raw_input->data.keyboard;
+        U32 scan_code = ev.MakeCode;
+        if (ev.Flags & RI_KEY_E0) {
+          scan_code |= 0xE000;
+        }
+        if (ev.Flags & RI_KEY_E1) {
+          scan_code |= 0xE11D00;
+        }
+        auto physical = ScanCodeToKey(scan_code);
+        auto virtual_key = KeyToVirtualKey(physical);  // layout-dependent key code
 
-      gui::Key key;
-      key.physical = physical;
-      key.logical = VirtualKeyToKey(virtual_key);
+        gui::Key key;
+        key.physical = physical;
+        key.logical = VirtualKeyToKey(virtual_key);
 
-      if (key.logical == AnsiKey::AltRight && ev.VKey == VK_CONTROL) {
-        // Right Alt sends key double events for VKey set to (first) Control & (second) Alt.
-        // We ignore the ones with VKey set to VK_CONTROL.
-        return DefWindowProc(hWnd, uMsg, wParam, lParam);
-      }
+        if (key.logical == AnsiKey::AltRight && ev.VKey == VK_CONTROL) {
+          // Right Alt sends key double events for VKey set to (first) Control & (second) Alt.
+          // We ignore the ones with VKey set to VK_CONTROL.
+          return DefWindowProc(hWnd, uMsg, wParam, lParam);
+        }
 
-      bool down = !(ev.Flags & RI_KEY_BREAK);
+        bool down = !(ev.Flags & RI_KEY_BREAK);
 
-      if (down) {
-        // LOG << "Pressed " << gui::ToStr(key.logical);
-        if (key_state[virtual_key] == 0) {
-          key_state[virtual_key] = 0x80;
-          key.ctrl = IsCtrlDown();
-          std::array<wchar_t, 16> utf16_buffer;
-          int utf16_len = ToUnicode(virtual_key, scan_code, key_state, utf16_buffer.data(),
-                                    utf16_buffer.size(), 0);
-          if (utf16_len) {
-            std::array<char, 32> utf8_buffer = {};
-            int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
-                                              (uint16_t*)utf16_buffer.data(), utf16_len);
-            key.text = std::string(utf8_buffer.data(), utf8_len);
+        if (down) {
+          // LOG << "Pressed " << gui::ToStr(key.logical);
+          if (key_state[virtual_key] == 0) {
+            key_state[virtual_key] = 0x80;
+            key.ctrl = IsCtrlDown();
+            std::array<wchar_t, 16> utf16_buffer;
+            int utf16_len = ToUnicode(virtual_key, scan_code, key_state, utf16_buffer.data(),
+                                      utf16_buffer.size(), 0);
+            if (utf16_len) {
+              std::array<char, 32> utf8_buffer = {};
+              int utf8_len = SkUTF::UTF16ToUTF8(utf8_buffer.data(), utf8_buffer.size(),
+                                                (uint16_t*)utf16_buffer.data(), utf16_len);
+              key.text = std::string(utf8_buffer.data(), utf8_len);
+            }
+            auto lock = window.Lock();
+            if (gui::keyboard) {
+              if (window.keylogging_enabled) {
+                gui::keyboard->LogKeyDown(key);
+              }
+              if (window.window_active) {
+                gui::keyboard->KeyDown(key);
+              }
+            }
           }
+        } else {
+          // LOG << "Released " << gui::ToStr(key.logical);
+          key_state[virtual_key] = 0;
+          key.ctrl = IsCtrlDown();
           auto lock = window.Lock();
           if (gui::keyboard) {
             if (window.keylogging_enabled) {
-              gui::keyboard->LogKeyDown(key);
+              gui::keyboard->LogKeyUp(key);
             }
             if (window.window_active) {
-              gui::keyboard->KeyDown(key);
+              gui::keyboard->KeyUp(key);
             }
+          }
+        }
+      } else if (raw_input->header.dwType == RIM_TYPEMOUSE) {
+        // Raw mouse events are used for monitoring mouse from the background.
+        // The events are to be sent to Pointer::Loggers
+        RAWMOUSE& ev = raw_input->data.mouse;
+        auto lock = window.Lock();
+        auto& mouse = window.GetMouse();
+        // LOG << "Mouse event: " << dump_struct(ev);
+        auto Btn = [&](bool down, gui::PointerButton button) {
+          for (auto& logging : mouse.loggings) {
+            if (down) {
+              logging->logger.PointerLoggerButtonDown(*logging, button);
+            } else {
+              logging->logger.PointerLoggerButtonUp(*logging, button);
+            }
+          }
+        };
+        if (ev.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) {
+          Btn(true, gui::PointerButton::Left);
+        }
+        if (ev.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) {
+          Btn(false, gui::PointerButton::Left);
+        }
+        if (ev.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) {
+          Btn(true, gui::PointerButton::Right);
+        }
+        if (ev.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) {
+          Btn(false, gui::PointerButton::Right);
+        }
+        if (ev.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN) {
+          Btn(true, gui::PointerButton::Middle);
+        }
+        if (ev.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP) {
+          Btn(false, gui::PointerButton::Middle);
+        }
+        if (ev.lLastX != 0 || ev.lLastY != 0) {
+          for (auto& logging : mouse.loggings) {
+            logging->logger.PointerLoggerMove(*logging, {(float)ev.lLastX, (float)ev.lLastY});
           }
         }
       } else {
-        // LOG << "Released " << gui::ToStr(key.logical);
-        key_state[virtual_key] = 0;
-        key.ctrl = IsCtrlDown();
-        auto lock = window.Lock();
-        if (gui::keyboard) {
-          if (window.keylogging_enabled) {
-            gui::keyboard->LogKeyUp(key);
-          }
-          if (window.window_active) {
-            gui::keyboard->KeyUp(key);
-          }
-        }
+        ERROR << "Received WM_INPUT event with type other than RIM_TYPEKEYBOARD & RIM_TYPEMOUSE";
+        return DefWindowProc(hWnd, uMsg, wParam, lParam);
       }
       return DefWindowProc(hWnd, uMsg, wParam, lParam);
     }
@@ -560,7 +602,7 @@ unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
     root.Resized(desired_size);
   }
 
-  window->RegisterRawInput();
+  window->RegisterInput();
   return window;
 }
 
@@ -627,15 +669,24 @@ void Win32Window::OnRegisterInput(bool keylogging, bool pointerlogging) {
           RIDEV_NOLEGACY,            // adds keyboard and also ignores legacy keyboard messages
       .hwndTarget = hwnd,
   });
-  rids.emplace_back(RAWINPUTDEVICE{
-      .usUsagePage = hid::UsagePage_GenericDesktop,
-      .usUsage = hid::Usage_GenericDesktop_Pointer,
-      .dwFlags = (pointerlogging ? RIDEV_INPUTSINK : (DWORD)0) | RIDEV_NOLEGACY,
-      .hwndTarget = hwnd,
-  });
+  if (pointerlogging) {
+    rids.emplace_back(RAWINPUTDEVICE{
+        .usUsagePage = hid::UsagePage_GenericDesktop,
+        .usUsage = hid::Usage_GenericDesktop_Mouse,
+        .dwFlags = RIDEV_INPUTSINK,
+        .hwndTarget = hwnd,
+    });
+  } else {
+    rids.emplace_back(RAWINPUTDEVICE{
+        .usUsagePage = hid::UsagePage_GenericDesktop,
+        .usUsage = hid::Usage_GenericDesktop_Mouse,
+        .dwFlags = RIDEV_REMOVE,
+        .hwndTarget = nullptr,
+    });
+  }
   BOOL register_result = RegisterRawInputDevices(rids.data(), rids.size(), sizeof(RAWINPUTDEVICE));
   if (!register_result) {
-    ERROR << "Failed to register raw input device";
+    ERROR << "Failed to register raw input device: " << GetLastErrorStr();
   }
   keylogging_enabled = keylogging;
 }

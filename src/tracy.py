@@ -6,7 +6,7 @@ from sys import platform
 import build
 
 tracy = ExtensionHelper('tracy', globals())
-tracy.FetchFromGit('https://github.com/wolfpld/tracy.git', 'v0.12.1')
+tracy.FetchFromGit('https://github.com/wolfpld/tracy.git', 'v0.12.2')
 tracy.SkipConfigure()
 
 # Warning: Tracy likes to pick a wrong MSVC runtime library (dynamic instead of

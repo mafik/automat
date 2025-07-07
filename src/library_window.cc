@@ -483,6 +483,9 @@ void Window::OnRun(Location& here, RunTask&) {
     if (impl->xcb_window == XCB_WINDOW_NONE) {
       here.ReportError("No window selected");
       return;
+    } else if (here.error && here.error->text == "No window selected") {
+      // Ad-hoc error clearing. Maybe there is a better way to do this.
+      here.ClearError();
     }
 
     // Initialize capture if not already done

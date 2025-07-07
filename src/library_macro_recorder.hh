@@ -23,6 +23,7 @@ struct MacroRecorder : LiveObject,
                        Runnable,
                        LongRunning,
                        gui::Keylogger,
+                       gui::Pointer::Logger,
                        gui::PointerMoveCallback {
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
@@ -35,6 +36,7 @@ struct MacroRecorder : LiveObject,
 
   mutable AnimationState animation_state;
   gui::Keylogging* keylogging = nullptr;
+  gui::Pointer::Logging* pointer_logging = nullptr;
   Ptr<gui::Widget> record_button;
 
   MacroRecorder();
@@ -61,6 +63,11 @@ struct MacroRecorder : LiveObject,
   LongRunning* AsLongRunning() override { return this; }
   void KeyloggerKeyDown(gui::Key) override;
   void KeyloggerKeyUp(gui::Key) override;
+
+  void PointerLoggerButtonDown(gui::Pointer::Logging&, gui::PointerButton) override;
+  void PointerLoggerButtonUp(gui::Pointer::Logging&, gui::PointerButton) override;
+  void PointerLoggerWheel(gui::Pointer::Logging&, float) override;
+  void PointerLoggerMove(gui::Pointer::Logging&, Vec2) override;
 
   Vec2AndDir ArgStart(const Argument&) override;
 

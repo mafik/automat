@@ -136,12 +136,15 @@ struct Pointer {
   // Called when icon state changes (for platform-specific cursor updates)
   virtual void OnIconChanged(IconType old_icon, IconType new_icon) {}
 
+  struct Logging;
+
   struct Logger {
     virtual ~Logger() = default;
-    virtual void ButtonDown(PointerButton) = 0;
-    virtual void ButtonUp(PointerButton) = 0;
-    virtual void Wheel(float) = 0;
-    virtual void Move(Vec2) = 0;
+    virtual void PointerLoggerButtonDown(Logging&, PointerButton) {}
+    virtual void PointerLoggerButtonUp(Logging&, PointerButton) {}
+    virtual void PointerLoggerWheel(Logging&, float) {}
+    // `relative_px` uses OS coords (so Y axis is increasing downwards).
+    virtual void PointerLoggerMove(Logging&, Vec2 relative_px) {}
   };
 
   struct Logging {

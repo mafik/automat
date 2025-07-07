@@ -279,4 +279,20 @@ PointerGrab& Pointer::RequestGlobalGrab(PointerGrabber& grabber) {
 }
 
 Widget* Pointer::GetWidget() { return pointer_widget.get(); }
+
+void Pointer::Logging::Release() {
+  int my_index = -1;
+  for (int i = 0; i < pointer.loggings.size(); ++i) {
+    if (pointer.loggings[i].get() == this) {
+      my_index = i;
+      break;
+    }
+  }
+  if (my_index == -1) {
+    return;
+  }
+  auto& window = *pointer.root_widget.window;
+  pointer.loggings.EraseIndex(my_index);
+  window.RegisterInput();
+}
 }  // namespace automat::gui

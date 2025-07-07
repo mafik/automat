@@ -74,6 +74,10 @@ MacroRecorder::~MacroRecorder() {
     keylogging->Release();
     keylogging = nullptr;
   }
+  if (pointer_logging) {
+    pointer_logging->Release();
+    pointer_logging = nullptr;
+  }
 }
 
 // We will provide a prototype of the Timeline - to be created if no timeline can be found.
@@ -271,18 +275,22 @@ void MacroRecorder::OnRun(Location& here, RunTask& run_task) {
     auto timeline = FindOrCreateTimeline(*this);
     timeline->BeginRecording();
     audio::Play(embedded::assets_SFX_macro_start_wav);
-    FindRootWidget().window->BeginLogging(this, &keylogging, nullptr, nullptr);
+    FindRootWidget().window->BeginLogging(this, &keylogging, this, &pointer_logging);
   }
   BeginLongRunning(here, run_task);
 }
 void MacroRecorder::OnCancel() {
+  if (auto timeline = FindTimeline(*this)) {
+    timeline->StopRecording();
+  }
+  audio::Play(embedded::assets_SFX_macro_stop_wav);
   if (keylogging) {
-    if (auto timeline = FindTimeline(*this)) {
-      timeline->StopRecording();
-    }
-    audio::Play(embedded::assets_SFX_macro_stop_wav);
     keylogging->Release();
     keylogging = nullptr;
+  }
+  if (pointer_logging) {
+    pointer_logging->Release();
+    pointer_logging = nullptr;
   }
 }
 
@@ -473,6 +481,19 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
 
 void MacroRecorder::KeyloggerKeyDown(gui::Key key) { RecordKeyEvent(*this, key.physical, true); }
 void MacroRecorder::KeyloggerKeyUp(gui::Key key) { RecordKeyEvent(*this, key.physical, false); }
+
+void MacroRecorder::PointerLoggerButtonDown(gui::Pointer::Logging&, gui::PointerButton btn) {
+  LOG << "Button down: " << (int)btn;
+}
+void MacroRecorder::PointerLoggerButtonUp(gui::Pointer::Logging&, gui::PointerButton btn) {
+  LOG << "Button up: " << (int)btn;
+}
+void MacroRecorder::PointerLoggerWheel(gui::Pointer::Logging&, float delta) {
+  LOG << "Wheel: " << delta;
+}
+void MacroRecorder::PointerLoggerMove(gui::Pointer::Logging&, Vec2 pos) {
+  LOG << "Move: " << pos.ToStr();
+}
 
 void MacroRecorder::PointerOver(gui::Pointer& p) {
   animation_state.pointers_over++;

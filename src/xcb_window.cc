@@ -5,6 +5,7 @@
 #include <xcb/xinput.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
+#include <bit>
 #include <stop_token>
 
 #include "automat.hh"
@@ -98,13 +99,33 @@ struct WM_STATE {
 float fp1616_to_float(xcb_input_fp1616_t fp) { return fp / 65536.0f; }
 double fp3232_to_double(xcb_input_fp3232_t fp) { return fp.integral + fp.frac / 4294967296.0; }
 
+struct XcbDevice {
+  struct VerticalScroll {
+    uint16_t valuator_number;
+    double increment;
+    double last_value;
+  };
+
+  std::optional<VerticalScroll> vertical_scroll;
+
+  struct Valuator {
+    uint16_t number;
+  };
+
+  std::optional<Valuator> relative_x;
+  std::optional<Valuator> relative_y;
+};
+
+std::map<xcb_input_device_id_t, XcbDevice> devices;
+
 static void ScanDevices(XCBWindow& window) {
-  window.vertical_scroll.reset();
+  devices.clear();
   if (auto reply = xcb::input_xi_query_device(XCB_INPUT_DEVICE_ALL_MASTER)) {
     int n_devices = xcb_input_xi_query_device_infos_length(reply.get());
     auto it_device = xcb_input_xi_query_device_infos_iterator(reply.get());
     for (int i_device = 0; i_device < n_devices; ++i_device) {
       xcb_input_device_id_t deviceid = it_device.data->deviceid;
+      XcbDevice& device = devices[deviceid];
       if (it_device.data->type == XCB_INPUT_DEVICE_TYPE_MASTER_POINTER) {
         window.master_pointer_device_id = deviceid;
       } else if (it_device.data->type == XCB_INPUT_DEVICE_TYPE_MASTER_KEYBOARD) {
@@ -121,6 +142,14 @@ static void ScanDevices(XCBWindow& window) {
             xcb_input_valuator_class_t* valuator_class =
                 (xcb_input_valuator_class_t*)it_classes.data;
             valuator_by_number[valuator_class->number] = valuator_class;
+            auto label = atom::ToStr(valuator_class->label);
+            if (label == "Rel X") {
+              device.relative_x.emplace(XcbDevice::Valuator{.number = valuator_class->number});
+            } else if (label == "Rel Y") {
+              device.relative_y.emplace(XcbDevice::Valuator{.number = valuator_class->number});
+            }
+            // LOG << "Valuator " << dump_struct(*valuator_class);
+            // LOG << "Label: " << label;
             break;
           }
           case XCB_INPUT_DEVICE_CLASS_TYPE_SCROLL: {
@@ -130,7 +159,7 @@ static void ScanDevices(XCBWindow& window) {
                                           : "horizontal";
             std::string increment = std::to_string(fp3232_to_double(scroll_class->increment));
             if (scroll_class->scroll_type == XCB_INPUT_SCROLL_TYPE_VERTICAL) {
-              window.vertical_scroll.emplace(deviceid, scroll_class->number,
+              device.vertical_scroll.emplace(scroll_class->number,
                                              fp3232_to_double(scroll_class->increment), 0.0);
             }
             break;
@@ -139,10 +168,10 @@ static void ScanDevices(XCBWindow& window) {
         xcb_input_device_class_next(&it_classes);
       }
 
-      if (window.vertical_scroll && window.vertical_scroll->device_id == deviceid) {
+      if (device.vertical_scroll) {
         xcb_input_valuator_class_t* valuator =
-            valuator_by_number[window.vertical_scroll->valuator_number];
-        window.vertical_scroll->last_value = fp3232_to_double(valuator->value);
+            valuator_by_number[device.vertical_scroll->valuator_number];
+        device.vertical_scroll->last_value = fp3232_to_double(valuator->value);
       }
 
       xcb_input_xi_device_info_next(&it_device);
@@ -291,8 +320,9 @@ void XCBWindow::OnRegisterInput(bool keylogging, bool pointerlogging) {
   }
 
   if (pointerlogging) {
-    event_mask.mask |= XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS |
-                       XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE | XCB_INPUT_XI_EVENT_MASK_MOTION;
+    event_mask.mask |= XCB_INPUT_XI_EVENT_MASK_RAW_BUTTON_PRESS |
+                       XCB_INPUT_XI_EVENT_MASK_RAW_BUTTON_RELEASE |
+                       XCB_INPUT_XI_EVENT_MASK_RAW_MOTION;
   }
 
   xcb_void_cookie_t cookie =
@@ -422,6 +452,129 @@ static automat::gui::PointerButton EventDetailToButton(uint32_t detail) {
   }
 }
 
+template <typename EventT>
+struct Valuators {
+  using MaskFn = uint32_t* (*)(const EventT*);
+  using MaskLengthFn = int (*)(const EventT*);
+  using AxisValuesFn = xcb_input_fp3232_t* (*)(const EventT*);
+
+  const EventT& ev;
+  uint32_t* mask;
+  int mask_len;
+  xcb_input_fp3232_t* axisvalues;
+
+  Valuators(const EventT& ev, MaskFn mask_fn, MaskLengthFn mask_length_fn,
+            AxisValuesFn axisvalues_fn)
+      : ev(ev) {
+    mask = mask_fn(&ev);
+    mask_len = mask_length_fn(&ev);
+    axisvalues = axisvalues_fn(&ev);
+  }
+
+  Valuators(const EventT& ev);
+
+  bool HasValuator(int number) {
+    int i = number / 32;
+    int rem = number % 32;
+    if (i >= mask_len) {
+      return false;
+    }
+    return mask[i] & (1 << rem);
+  }
+
+  double GetValuator(int number) {
+    int i = number / 32;
+    int rem = number % 32;
+    if (i >= mask_len) {
+      return 0;
+    }
+    // Each event may report many valuators. Here we count how many valuators have to be skipped.
+    int valuator_idx = 0;
+    for (int k = 0; k < i; ++k) {
+      valuator_idx += std::popcount(mask[k]);
+    }
+    valuator_idx += std::popcount(mask[i] & ((1 << rem) - 1));
+    return fp3232_to_double(axisvalues[valuator_idx]);
+  }
+
+  XcbDevice* GetDevice() {
+    auto device_it = devices.find(ev.deviceid);
+    if (device_it == devices.end()) {
+      ERROR_ONCE << "XInput device " << ev.deviceid
+                 << " not found. Plug & play support is not implemented yet.";
+      return nullptr;
+    }
+    return &device_it->second;
+  }
+
+  // Some events contain relative valuse, other contain absolute. Set the `absolute` parameter
+  // appropriately.
+  Optional<double> GetVerticalScrollDelta(bool absolute) {
+    auto device = GetDevice();
+    if (!device) {
+      return std::nullopt;
+    }
+    if (!device->vertical_scroll.has_value()) {
+      return std::nullopt;
+    }
+    XcbDevice::VerticalScroll& vertical_scroll = device->vertical_scroll.value();
+    if (!HasValuator(vertical_scroll.valuator_number)) {
+      return std::nullopt;
+    }
+    double delta;
+    if (absolute) {
+      double new_value = GetValuator(vertical_scroll.valuator_number);
+      delta = new_value - vertical_scroll.last_value;
+      vertical_scroll.last_value = new_value;
+      if (abs(delta) > 1000000) {
+        // http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
+        delta = (delta > 0 ? 1 : -1) * vertical_scroll.increment;
+      }
+    } else {
+      delta = GetValuator(vertical_scroll.valuator_number);
+    }
+    return -delta / vertical_scroll.increment;
+  }
+
+  Optional<Vec2> GetRelativeXY() {
+    auto device = GetDevice();
+    if (!device) {
+      return std::nullopt;
+    }
+    if (!device->relative_x.has_value() && !device->relative_y.has_value()) {
+      return std::nullopt;
+    }
+    auto x_valuator_number = device->relative_x->number;
+    auto y_valuator_number = device->relative_y->number;
+    auto has_x = HasValuator(x_valuator_number);
+    auto has_y = HasValuator(y_valuator_number);
+    if (!has_x && !has_y) {
+      return std::nullopt;
+    }
+    if (has_x && has_y) {
+      return Vec2(GetValuator(x_valuator_number), GetValuator(y_valuator_number));
+    } else if (has_x) {
+      return Vec2(GetValuator(x_valuator_number), 0);
+    } else {
+      return Vec2(0, GetValuator(y_valuator_number));
+    }
+  }
+};
+
+static Valuators<xcb_input_raw_button_press_event_t> RawButtonValuators(
+    const xcb_input_raw_button_press_event_t& ev) {
+  return Valuators<xcb_input_raw_button_press_event_t>(
+      ev, xcb_input_raw_button_press_valuator_mask, xcb_input_raw_button_press_valuator_mask_length,
+      xcb_input_raw_button_press_axisvalues);
+}
+
+static Valuators<xcb_input_button_press_event_t> ButtonValuators(
+    const xcb_input_button_press_event_t& ev) {
+  return Valuators<xcb_input_button_press_event_t>(ev, xcb_input_button_press_valuator_mask,
+                                                   xcb_input_button_press_valuator_mask_length,
+                                                   xcb_input_button_press_axisvalues);
+}
+
 void XCBWindow::MainLoop() {
   std::atomic_bool running = true;
   // TODO: maybe use unique_ptr here
@@ -524,7 +677,9 @@ void XCBWindow::MainLoop() {
                 // We should update the scroll valua based on the valuator from the
                 // current slave.
                 xcb_input_device_changed_event_t* ev = (xcb_input_device_changed_event_t*)event;
-                if (vertical_scroll && ev->deviceid == vertical_scroll->device_id) {
+                auto device_it = devices.find(ev->deviceid);
+                if (device_it != devices.end() && device_it->second.vertical_scroll) {
+                  auto& vertical_scroll = device_it->second.vertical_scroll.value();
                   if (ev->reason == XCB_INPUT_CHANGE_REASON_SLAVE_SWITCH) {
                     xcb_input_device_class_iterator_t it =
                         xcb_input_device_changed_classes_iterator(ev);
@@ -533,8 +688,8 @@ void XCBWindow::MainLoop() {
                       if (it_class->type == XCB_INPUT_DEVICE_CLASS_TYPE_VALUATOR) {
                         xcb_input_valuator_class_t* valuator_class =
                             (xcb_input_valuator_class_t*)it_class;
-                        if (valuator_class->number == vertical_scroll->valuator_number) {
-                          vertical_scroll->last_value = fp3232_to_double(valuator_class->value);
+                        if (valuator_class->number == vertical_scroll.valuator_number) {
+                          vertical_scroll.last_value = fp3232_to_double(valuator_class->value);
                         }
                       }
                       xcb_input_device_class_next(&it);
@@ -589,37 +744,55 @@ void XCBWindow::MainLoop() {
                 GetMouse().ButtonUp(EventDetailToButton(ev->detail));
                 break;
               }
+              case XCB_INPUT_RAW_BUTTON_PRESS: {
+                xcb_input_raw_button_press_event_t* ev = (xcb_input_raw_button_press_event_t*)event;
+                auto& pointer = GetMouse();
+                auto btn = EventDetailToButton(ev->detail);
+                if (btn == automat::gui::PointerButton::Unknown) {
+                  break;
+                }
+                for (auto& logging : pointer.loggings) {
+                  logging->logger.PointerLoggerButtonDown(*logging, btn);
+                }
+                break;
+              }
+              case XCB_INPUT_RAW_BUTTON_RELEASE: {
+                xcb_input_raw_button_release_event_t* ev =
+                    (xcb_input_raw_button_release_event_t*)event;
+                auto& pointer = GetMouse();
+                auto btn = EventDetailToButton(ev->detail);
+                if (btn == automat::gui::PointerButton::Unknown) {
+                  break;
+                }
+                for (auto& logging : pointer.loggings) {
+                  logging->logger.PointerLoggerButtonUp(*logging, btn);
+                }
+                break;
+              }
+              case XCB_INPUT_RAW_MOTION: {
+                xcb_input_raw_motion_event_t* ev = (xcb_input_raw_motion_event_t*)event;
+                auto& pointer = GetMouse();
+                auto valuators = RawButtonValuators(*ev);
+                if (auto delta = valuators.GetVerticalScrollDelta(false)) {
+                  for (auto& logging : pointer.loggings) {
+                    logging->logger.PointerLoggerWheel(*logging, *delta);
+                  }
+                }
+                if (auto xy = valuators.GetRelativeXY()) {
+                  for (auto& logging : pointer.loggings) {
+                    logging->logger.PointerLoggerMove(*logging, *xy);
+                  }
+                }
+                break;
+              }
+
               case XCB_INPUT_MOTION: {
                 xcb_input_motion_event_t* ev = (xcb_input_motion_event_t*)event;
 
-                if (vertical_scroll && ev->deviceid == vertical_scroll->device_id) {
-                  xcb_input_fp3232_t* axisvalues = xcb_input_button_press_axisvalues(ev);
-                  int n_axisvalues = xcb_input_button_press_axisvalues_length(ev);
-                  uint32_t* valuator_mask = xcb_input_button_press_valuator_mask(ev);
-                  int mask_len = xcb_input_button_press_valuator_mask_length(ev);
-                  int i_axis = 0;
-                  int i_valuator = 0;
-                  for (int i_mask = 0; i_mask < mask_len; ++i_mask) {
-                    uint32_t mask = valuator_mask[i_mask];
-                    while (mask) {
-                      if (mask & 1) {
-                        if (i_valuator == vertical_scroll->valuator_number) {
-                          double new_value = fp3232_to_double(axisvalues[i_axis]);
-                          double delta = new_value - vertical_scroll->last_value;
-                          vertical_scroll->last_value = new_value;
-                          if (abs(delta) > 1000000) {
-                            // http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
-                            delta = (delta > 0 ? 1 : -1) * vertical_scroll->increment;
-                          }
-                          auto lock = Lock();
-                          GetMouse().Wheel(-delta / vertical_scroll->increment);
-                        }
-                        ++i_axis;
-                      }
-                      mask >>= 1;
-                      ++i_valuator;
-                    }
-                  }
+                auto valuators = ButtonValuators(*ev);
+                if (auto delta = valuators.GetVerticalScrollDelta(true)) {
+                  auto lock = Lock();
+                  GetMouse().Wheel(*delta);
                 }
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);
@@ -628,14 +801,11 @@ void XCBWindow::MainLoop() {
                 break;
               }
               case XCB_INPUT_ENTER: {
-                if (vertical_scroll) {
-                  // See
-                  // http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
-                  // Instead of ignoring the first update, we're refreshing the
-                  // last_scroll. It's a bit more expensive than the GTK approach,
-                  // but gives better UX.
-                  ScanDevices(*this);
-                }
+                // See http://who-t.blogspot.com/2012/06/xi-21-protocol-design-issues.html
+                // Instead of ignoring the first update, we're refreshing the
+                // last_scroll. It's a bit more expensive than the GTK approach,
+                // but gives better UX.
+                ScanDevices(*this);
                 xcb_input_enter_event_t* ev = (xcb_input_enter_event_t*)event;
                 mouse_position_on_screen.x = fp1616_to_float(ev->root_x);
                 mouse_position_on_screen.y = fp1616_to_float(ev->root_y);

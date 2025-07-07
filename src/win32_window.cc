@@ -615,7 +615,7 @@ Vec2 Win32Window::WindowPxToScreen(Vec2 window) { return window + Vec2(client_x,
 
 Optional<Vec2> Win32Window::MousePositionScreenPx() { return mouse_position; }
 
-void Win32Window::RegisterRawInput(bool keylogging) {
+void Win32Window::OnRegisterInput(bool keylogging, bool pointerlogging) {
   vector<RAWINPUTDEVICE> rids;
   rids.emplace_back(touchpad::GetRAWINPUTDEVICE(hwnd));
   rids.emplace_back(RAWINPUTDEVICE{
@@ -625,6 +625,12 @@ void Win32Window::RegisterRawInput(bool keylogging) {
           (keylogging ? RIDEV_INPUTSINK
                       : (DWORD)0) |  // captures input even when the window is not in the foreground
           RIDEV_NOLEGACY,            // adds keyboard and also ignores legacy keyboard messages
+      .hwndTarget = hwnd,
+  });
+  rids.emplace_back(RAWINPUTDEVICE{
+      .usUsagePage = hid::UsagePage_GenericDesktop,
+      .usUsage = hid::Usage_GenericDesktop_Pointer,
+      .dwFlags = (pointerlogging ? RIDEV_INPUTSINK : (DWORD)0) | RIDEV_NOLEGACY,
       .hwndTarget = hwnd,
   });
   BOOL register_result = RegisterRawInputDevices(rids.data(), rids.size(), sizeof(RAWINPUTDEVICE));

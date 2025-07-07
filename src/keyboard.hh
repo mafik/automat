@@ -204,8 +204,6 @@ struct Keyboard final : Widget {
   KeyGrab& RequestKeyGrab(KeyGrabber&, AnsiKey key, bool ctrl, bool alt, bool shift, bool windows,
                           Fn<void(Status&)> cb);
 
-  Keylogging& BeginKeylogging(Keylogger&);
-
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;

@@ -45,6 +45,8 @@ struct XCBWindow : automat::gui::Window {
   automat::Optional<Vec2> MousePositionScreenPx() override;
   void RequestResize(Vec2 new_size) override;
   void RequestMaximize(bool horizontally, bool vertically) override;
+  void OnRegisterInput(bool keylogging, bool pointerlogging) override;
+
   static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, automat::Status&);
 
  protected:

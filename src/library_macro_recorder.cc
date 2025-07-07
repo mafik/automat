@@ -271,7 +271,7 @@ void MacroRecorder::OnRun(Location& here, RunTask& run_task) {
     auto timeline = FindOrCreateTimeline(*this);
     timeline->BeginRecording();
     audio::Play(embedded::assets_SFX_macro_start_wav);
-    keylogging = &gui::keyboard->BeginKeylogging(*this);
+    FindRootWidget().window->BeginLogging(this, &keylogging, nullptr, nullptr);
   }
   BeginLongRunning(here, run_task);
 }

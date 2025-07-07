@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 
+#include "keyboard.hh"
 #include "math.hh"
 #include "pointer.hh"
 
@@ -40,6 +41,14 @@ struct Window {
   virtual void RequestMaximize(bool maximize_horizontally, bool maximize_vertically) = 0;
 
   std::lock_guard<std::mutex> Lock();
+
+  // Ask the OS to deliver the right input events.
+  virtual void OnRegisterInput(bool keylogging, bool pointerlogging) = 0;
+
+  void RegisterInput();
+
+  void BeginLogging(Keylogger* keylogger, Keylogging** keylogging, Pointer::Logger* pointer_logger,
+                    Pointer::Logging** pointer_logging);
 
  protected:
   Window(RootWidget& root) : root(root) {}

@@ -197,33 +197,6 @@ KeyGrab& Keyboard::RequestKeyGrab(KeyGrabber& key_grabber, AnsiKey key, bool ctr
   return *key_grabs.back().get();
 }
 
-Keylogging& Keyboard::BeginKeylogging(Keylogger& keylogger) {
-  if (keyloggings.empty()) {
-#ifdef __linux__
-    struct input_event_mask {
-      xcb_input_event_mask_t header = {
-          .deviceid = XCB_INPUT_DEVICE_ALL_MASTER,
-          .mask_len = 1,
-      };
-      uint32_t mask =
-          XCB_INPUT_XI_EVENT_MASK_RAW_KEY_PRESS | XCB_INPUT_XI_EVENT_MASK_RAW_KEY_RELEASE;
-    } event_mask;
-
-    xcb_void_cookie_t cookie = xcb_input_xi_select_events_checked(
-        xcb::connection, xcb::screen->root, 1, &event_mask.header);
-
-    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(xcb::connection, cookie)}) {
-      ERROR << f("Couldn't select X11 events for keylogging: {}", error->error_code);
-    }
-#endif  // __linux__
-#ifdef _WIN32
-    auto& win32_window = dynamic_cast<Win32Window&>(*root_widget.window);
-    win32_window.RegisterRawInput(true);
-#endif
-  }
-  return *keyloggings.emplace_back(new Keylogging(*this, keylogger));
-}
-
 enum class CaretAnimAction { Keep, Delete };
 
 static CaretAnimAction UpdateCaret(time::Timer& timer, CaretAnimation& anim, Caret* caret) {
@@ -642,29 +615,9 @@ void Keylogging::Release() {
   if (it == keyboard.keyloggings.end()) {
     return;
   }
-  if (keyboard.keyloggings.size() == 1) {
-#ifdef __linux__
-    struct input_event_mask {
-      xcb_input_event_mask_t header = {
-          .deviceid = XCB_INPUT_DEVICE_ALL_MASTER,
-          .mask_len = 1,
-      };
-      uint32_t mask = 0;
-    } event_mask;
-
-    xcb_void_cookie_t cookie = xcb_input_xi_select_events_checked(
-        xcb::connection, xcb::screen->root, 1, &event_mask.header);
-
-    if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(xcb::connection, cookie)}) {
-      ERROR << f("Couldn't release X11 event selection: {}", error->error_code);
-    }
-#endif  // __linux__
-#ifdef _WIN32
-    auto& win32_window = dynamic_cast<Win32Window&>(*keyboard.root_widget.window);
-    win32_window.RegisterRawInput(false);
-#endif
-  }
+  auto& window = *keyboard.root_widget.window;
   keyboard.keyloggings.erase(it);  // After this line `this` is deleted!
+  window.RegisterInput();
 }
 
 }  // namespace automat::gui

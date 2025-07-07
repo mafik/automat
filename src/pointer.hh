@@ -135,6 +135,23 @@ struct Pointer {
 
   // Called when icon state changes (for platform-specific cursor updates)
   virtual void OnIconChanged(IconType old_icon, IconType new_icon) {}
+
+  struct Logger {
+    virtual ~Logger() = default;
+    virtual void ButtonDown(PointerButton) = 0;
+    virtual void ButtonUp(PointerButton) = 0;
+    virtual void Wheel(float) = 0;
+    virtual void Move(Vec2) = 0;
+  };
+
+  struct Logging {
+    Pointer& pointer;
+    Logger& logger;
+    Logging(Pointer& pointer, Logger& logger) : pointer(pointer), logger(logger) {}
+    void Release();
+  };
+
+  Vec<std::unique_ptr<Logging>> loggings;
 };
 
 struct PointerWidget : Widget {

@@ -31,7 +31,7 @@ struct Win32Window : automat::gui::Window {
   // Windows-specific functions
 
   void PostToMainLoop(std::function<void()>);
-  void RegisterRawInput(bool keylogging = false);
+  void OnRegisterInput(bool keylogging, bool pointerlogging) override;
 
  private:
   Win32Window(automat::gui::RootWidget& root);

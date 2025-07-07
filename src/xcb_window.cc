@@ -276,6 +276,33 @@ void XCBWindow::RequestMaximize(bool horizontally, bool vertically) {
   root.Maximized(horizontally, vertically);
 }
 
+void XCBWindow::OnRegisterInput(bool keylogging, bool pointerlogging) {
+  struct input_event_mask {
+    xcb_input_event_mask_t header = {
+        .deviceid = XCB_INPUT_DEVICE_ALL_MASTER,
+        .mask_len = 1,
+    };
+    uint32_t mask = 0;
+  } event_mask;
+
+  if (keylogging) {
+    event_mask.mask |=
+        XCB_INPUT_XI_EVENT_MASK_RAW_KEY_PRESS | XCB_INPUT_XI_EVENT_MASK_RAW_KEY_RELEASE;
+  }
+
+  if (pointerlogging) {
+    event_mask.mask |= XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS |
+                       XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE | XCB_INPUT_XI_EVENT_MASK_MOTION;
+  }
+
+  xcb_void_cookie_t cookie =
+      xcb_input_xi_select_events_checked(xcb::connection, xcb::screen->root, 1, &event_mask.header);
+
+  if (std::unique_ptr<xcb_generic_error_t> error{xcb_request_check(xcb::connection, cookie)}) {
+    ERROR << f("Couldn't select X11 events for keylogging: {}", error->error_code);
+  }
+}
+
 XCBWindow::~XCBWindow() {
   if (xcb_window) {
     xcb_destroy_window(xcb::connection, xcb_window);

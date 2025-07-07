@@ -84,6 +84,21 @@ struct OnOffTrack : TrackBase, OnOff {
   bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
 };
 
+// A track that holds a sequence of relative values.
+struct Vec2Track : TrackBase {
+  Vec<Vec2> values;
+
+  string_view Name() const override { return "Vec2 Track"; }
+  Ptr<Object> Clone() const override { return MakePtr<Vec2Track>(*this); }
+  void Draw(SkCanvas&) const override;
+  void Splice(time::T current_offset, time::T splice_to) override;
+  void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
+  bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
+};
+
 struct SpliceAction : Action {
   Timeline& timeline;
   time::T splice_to;
@@ -163,6 +178,9 @@ struct Timeline : LiveObject,
   LongRunning* AsLongRunning() override { return this; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
+  Vec2Track& AddVec2Track(StrView name);
+
+  void AddTrack(Ptr<TrackBase>&& track, StrView name);
 
   void BeginRecording();
   void StopRecording();

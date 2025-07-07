@@ -771,6 +771,7 @@ void XCBWindow::MainLoop() {
               }
               case XCB_INPUT_RAW_MOTION: {
                 xcb_input_raw_motion_event_t* ev = (xcb_input_raw_motion_event_t*)event;
+                auto lock = Lock();
                 auto& pointer = GetMouse();
                 auto valuators = RawButtonValuators(*ev);
                 if (auto delta = valuators.GetVerticalScrollDelta(false)) {

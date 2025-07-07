@@ -385,7 +385,20 @@ static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
 }
 
 OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
-  auto track = MakePtr<OnOffTrack>();
+  auto track_ptr = MakePtr<OnOffTrack>();
+  auto& track = *track_ptr;
+  AddTrack(std::move(track_ptr), name);
+  return track;
+}
+
+Vec2Track& Timeline::AddVec2Track(StrView name) {
+  auto track_ptr = MakePtr<Vec2Track>();
+  auto& track = *track_ptr;
+  AddTrack(std::move(track_ptr), name);
+  return track;
+}
+
+void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   track->timeline = this;
   track->parent = this->AcquirePtr();
   tracks.emplace_back(std::move(track));
@@ -394,7 +407,6 @@ OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
     h->InvalidateConnectionWidgets(true, true);
   }
   UpdateChildTransform(time::SteadyNow());
-  return *dynamic_cast<OnOffTrack*>(tracks.back().get());
 }
 
 Timeline::Timeline(const Timeline& other) : Timeline() {
@@ -1734,6 +1746,92 @@ void OnOffTrack::Draw(SkCanvas& canvas) const {
     }
   }
 }
+
+void Vec2Track::Draw(SkCanvas& canvas) const {
+  TrackBase::Draw(canvas);
+  auto shape = Shape();
+  Rect rect;
+  shape.isRect(&rect.sk);
+  float s_per_m = DistanceToSeconds(*timeline);  // s / m
+  auto left_t = rect.left * s_per_m;
+  auto right_t = rect.right * s_per_m;
+  auto left_i = lower_bound(timestamps.begin(), timestamps.end(), left_t) - timestamps.begin();
+  auto right_i = upper_bound(timestamps.begin(), timestamps.end(), right_t) - timestamps.begin();
+
+  float px_per_meter = canvas.getLocalToDeviceAs3x3().mapVector(1, 0).length();  // px / m
+  float m_per_px = 1.f / px_per_meter;                                           // m / px
+  float pixel_t = s_per_m * m_per_px;                                            // s / px
+  int i = left_i;
+  int segments = 0;
+  // Draw the timestamps as horizontal lines (segments). Each timestamp is a 1-pixel long segment.
+  // Multiple timestamps whose segments overlap are combined into a single segment.
+  while (i < right_i) {
+    int start_i = i;
+    float start_t = timestamps[i];    // start time of a line segment
+    float end_t = start_t + pixel_t;  // end time of a line segment
+    // keep expanding end_t until a gap of at least one pixel is found
+    while (true) {
+      // find the first timestep that's outside of the current [start_t, end_t] segment
+      int leftmost_i_outside_segment =
+          upper_bound(timestamps.begin() + i, timestamps.begin() + right_i, end_t) -
+          timestamps.begin();
+      if (leftmost_i_outside_segment >= right_i) {
+        i = right_i;
+        end_t = std::min(end_t, right_t);
+        break;
+      }
+      // take one step back to get the last timestamp that's within the current end_t
+      int rightmost_i_inside_segment = leftmost_i_outside_segment - 1;
+      if (rightmost_i_inside_segment == i) {
+        // one-pixel gap found, exit to draw the segment (and also advance i for next iteration)
+        ++i;
+        break;
+      }
+      i = rightmost_i_inside_segment;
+      end_t = timestamps[i] + pixel_t;
+    }
+    ++segments;
+    canvas.drawLine(start_t / s_per_m, 0, end_t / s_per_m, 0, kOnOffPaint);
+  }
+  // LOG << "Drawn " << segments << " segments showing " << right_i - left_i << " / "
+  //     << timestamps.size() << " points";
+}
+void Vec2Track::Splice(time::T current_offset, time::T splice_to) {
+  double delta = splice_to - current_offset;
+  auto [current_offset_ge, current_offset_g] =
+      equal_range(timestamps.begin(), timestamps.end(), current_offset);
+  if (delta < 0) {
+    auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
+    int begin = splice_to_ge - timestamps.begin();
+    int end = current_offset_g - timestamps.begin();
+    // Fold the motion into a single event.
+    for (int i = begin + 1; i < end; ++i) {
+      values[begin] += values[i];
+    }
+    if (begin < values.size()) {
+      timestamps[begin] = splice_to;
+    }
+    int count = end - begin - 1;
+    if (count > 0) {
+      for (int i = begin + 1; i < timestamps.size() - count; ++i) {
+        timestamps[i] = timestamps[i + count] + delta;
+        values[i] = values[i + count] + delta;
+      }
+      timestamps.resize(timestamps.size() - count);
+      values.resize(values.size() - count);
+    }
+  } else if (delta > 0) {
+    for (auto it = current_offset_ge; it != timestamps.end(); ++it) {
+      *it += delta;
+    }
+  }
+}
+void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
+                             time::SteadyPoint now) {}
+
+void Vec2Track::SerializeState(Serializer& writer, const char* key) const {}
+void Vec2Track::DeserializeState(Location& l, Deserializer& d) {}
+bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) { return true; }
 
 void Timeline::OnCancel() {
   if (state == kPlaying) {

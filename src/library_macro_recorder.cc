@@ -491,8 +491,31 @@ void MacroRecorder::PointerLoggerButtonUp(gui::Pointer::Logging&, gui::PointerBu
 void MacroRecorder::PointerLoggerWheel(gui::Pointer::Logging&, float delta) {
   LOG << "Wheel: " << delta;
 }
-void MacroRecorder::PointerLoggerMove(gui::Pointer::Logging&, Vec2 pos) {
-  LOG << "Move: " << pos.ToStr();
+void MacroRecorder::PointerLoggerMove(gui::Pointer::Logging&, Vec2 relative_px) {
+  auto timeline = FindOrCreateTimeline(*this);
+
+  int track_index = -1;
+  const Str track_name = "Mouse Position";
+  for (int i = 0; i < timeline->tracks.size(); i++) {
+    if (timeline->track_args[i]->name == track_name) {
+      track_index = i;
+      break;
+    }
+  }
+
+  if (track_index == -1) {
+    auto& new_track = timeline->AddVec2Track(track_name);
+    track_index = timeline->tracks.size() - 1;
+  }
+
+  Vec2Track* track = dynamic_cast<Vec2Track*>(timeline->tracks[track_index].get());
+  if (track == nullptr) {
+    ERROR << "Track is not a Vec2Track";
+    return;
+  }
+  time::T t = (time::SteadyNow() - timeline->recording.started_at).count();
+  track->timestamps.push_back(t);
+  track->values.push_back(relative_px);
 }
 
 void MacroRecorder::PointerOver(gui::Pointer& p) {

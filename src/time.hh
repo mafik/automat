@@ -6,16 +6,16 @@
 #include <cmath>
 
 namespace automat {
-  using std::literals::chrono_literals::operator""ms;
-  using std::literals::chrono_literals::operator""s;
-  using std::literals::chrono_literals::operator""min;
-  using std::literals::chrono_literals::operator""h;
-}
+using std::literals::chrono_literals::operator""ms;
+using std::literals::chrono_literals::operator""s;
+using std::literals::chrono_literals::operator""min;
+using std::literals::chrono_literals::operator""h;
+}  // namespace automat
 
 namespace automat::time {
 
-using T = double;
-using Duration = std::chrono::duration<T>;
+using T = double;                           // TODO: switch to int64_t
+using Duration = std::chrono::duration<T>;  // , std::ratio<1, 1000000000>
 using SystemClock = std::chrono::system_clock;
 using SteadyClock = std::chrono::steady_clock;
 using SystemPoint = std::chrono::time_point<SystemClock, Duration>;

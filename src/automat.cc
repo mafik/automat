@@ -57,13 +57,17 @@ constexpr bool kPowersave = true;
 static int argc;
 static char** argv;
 
+// TODO: consider using `queue` to stop worker thread(s)
 static void AutomatLoop(std::stop_token stop_token) {
   SetThreadName("Automat Loop");
-  while (!stop_token.stop_requested()) {
+  while (true) {
     Task* task;
     {
       ZoneScopedN("Dequeue");
     woken:
+      if (stop_token.stop_requested()) {
+        break;
+      }
       if (!queue.try_dequeue(task)) {
         std::unique_lock lk(automat_threads_mutex);
         if (!queue.try_dequeue(task)) {

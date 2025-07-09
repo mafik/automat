@@ -312,6 +312,12 @@ struct Location : public gui::Widget {
 };
 
 void PositionBelow(Location& origin, Location& below);
+
+// Place the given `target` location ahead of the `origin`s `arg`.
+//
+// This uses the arg's position & direction within `origin`.
+void PositionAhead(Location& origin, Argument& arg, Location& target);
+
 void AnimateGrowFrom(Location& source, Location& grown);
 
 }  // namespace automat

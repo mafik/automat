@@ -39,10 +39,9 @@ PersistentImage PersistentImage::MakeFromSkImage(sk_sp<SkImage> image, MakeArgs 
     height = image->height() * scale;
   }
   auto matrix = SkMatrix::Scale(scale, -scale).postTranslate(0, height);
-  auto shader =
-      args.raw_shader
-          ? image->makeRawShader(args.tile_x, args.tile_y, kDefaultSamplingOptions, matrix)
-          : image->makeShader(args.tile_x, args.tile_y, kDefaultSamplingOptions, matrix);
+  auto shader = args.raw_shader
+                    ? image->makeRawShader(args.tile_x, args.tile_y, args.sampling_options, matrix)
+                    : image->makeShader(args.tile_x, args.tile_y, args.sampling_options, matrix);
   SkPaint paint;
   paint.setShader(shader);
   return PersistentImage{

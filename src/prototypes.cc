@@ -9,6 +9,7 @@
 #include "library_key_presser.hh"
 #include "library_macro_recorder.hh"
 #include "library_mouse_click.hh"
+#include "library_mouse_move.hh"
 #include "library_number.hh"
 #include "library_tesseract_ocr.hh"
 #include "library_timeline.hh"
@@ -53,6 +54,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<MouseClick>(gui::PointerButton::Left, false);
   index.Register<MouseClick>(gui::PointerButton::Right, true);
   index.Register<MouseClick>(gui::PointerButton::Right, false);
+  index.Register<MouseMove>();
   index.Register<Number>();
   index.Register<Timeline>();
   index.Register<InstructionLibrary>();

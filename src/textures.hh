@@ -14,6 +14,15 @@
 
 namespace automat {
 
+constexpr static SkSamplingOptions kDefaultSamplingOptions =
+    SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);
+
+constexpr static SkSamplingOptions kFastSamplingOptions =
+    SkSamplingOptions(SkFilterMode::kNearest, SkMipmapMode::kNone);
+
+constexpr static SkSamplingOptions kNearestMipmapSamplingOptions =
+    SkSamplingOptions(SkFilterMode::kNearest, SkMipmapMode::kLinear);
+
 // Solves the SkImage destruction problem by releasing the image at Automat's shutdown.
 struct PersistentImage {
   std::optional<sk_sp<SkImage>> image;
@@ -40,6 +49,7 @@ struct PersistentImage {
     SkTileMode tile_x = SkTileMode::kClamp;
     SkTileMode tile_y = SkTileMode::kClamp;
     bool raw_shader = false;  // raw shaders don't apply gamma correction
+    SkSamplingOptions sampling_options = kDefaultSamplingOptions;
   };
 
   constexpr static MakeArgs kDefaultArgs = {.width = 0,
@@ -47,7 +57,8 @@ struct PersistentImage {
                                             .scale = 0,
                                             .tile_x = SkTileMode::kClamp,
                                             .tile_y = SkTileMode::kClamp,
-                                            .raw_shader = false};
+                                            .raw_shader = false,
+                                            .sampling_options = kDefaultSamplingOptions};
 
   static PersistentImage MakeFromSkImage(sk_sp<SkImage> image, MakeArgs = kDefaultArgs);
 
@@ -57,12 +68,6 @@ struct PersistentImage {
 };
 
 sk_sp<SkImage> DecodeImage(fs::VFile& asset);
-
-constexpr static SkSamplingOptions kDefaultSamplingOptions =
-    SkSamplingOptions(SkFilterMode::kLinear, SkMipmapMode::kLinear);
-
-constexpr static SkSamplingOptions kFastSamplingOptions =
-    SkSamplingOptions(SkFilterMode::kNearest, SkMipmapMode::kNone);
 
 // Caching strategy:
 // - If an image was used during the last frame, keep it in the cache

@@ -284,6 +284,10 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
   WeakPtr(const WeakPtr<T>& that) : PtrBase<T>(SafeIncrementWeakRefs(that.obj)) {}
   WeakPtr(WeakPtr<T>&& that) : PtrBase<T>(that.Release()) {}
 
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  WeakPtr(WeakPtr<U>&& that) : PtrBase<T>(that.Release()) {}
+
   ~WeakPtr() { SafeDecrementWeakRefs(this->obj); }
 
   bool IsExpired() const {

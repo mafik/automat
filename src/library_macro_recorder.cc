@@ -18,6 +18,7 @@
 #include "gui_connection_widget.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
+#include "library_mouse_move.hh"
 #include "library_timeline.hh"
 #include "log.hh"
 #include "math.hh"
@@ -328,23 +329,10 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     Location& key_presser_loc = machine->Create<KeyPresser>();
     KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();
     key_presser->SetKey(key);
-    Rect key_presser_shape = key_presser_loc.WidgetForObject()->Shape().getBounds();
     Argument& track_arg = *timeline->track_args.back();
-    Vec2AndDir arg_start = track_arg.Start(*timeline, *timeline->parent);
+    auto timeline_loc = timeline->here.Lock();
 
-    // Pick the position that allows the cable to come in most horizontally (left to right).
-    Vec2 best_connector_pos = key_presser_shape.TopCenter();
-    SinCos best_connector_angle = 90_deg;
-    Vec<Vec2AndDir> connector_positions;
-    key_presser->ConnectionPositions(connector_positions);
-    for (auto& pos : connector_positions) {
-      if (fabs(pos.dir.ToRadians()) < fabs(best_connector_angle.ToRadians())) {
-        best_connector_pos = pos.pos;
-        best_connector_angle = pos.dir;
-      }
-    }
-
-    key_presser_loc.position = arg_start.pos + Vec2(3_cm, 0) - best_connector_pos;
+    PositionAhead(*timeline_loc, track_arg, key_presser_loc);
     AnimateGrowFrom(*macro_recorder.here.lock(), key_presser_loc);
     timeline->here.lock()->ConnectTo(key_presser_loc, track_arg);
   }
@@ -506,6 +494,18 @@ void MacroRecorder::PointerLoggerMove(gui::Pointer::Logging&, Vec2 relative_px) 
   if (track_index == -1) {
     auto& new_track = timeline->AddVec2Track(track_name);
     track_index = timeline->tracks.size() - 1;
+    auto machine = here.lock()->ParentAs<Machine>();
+    if (machine == nullptr) {
+      FATAL << "MacroRecorder must be a child of a Machine";
+      return;
+    }
+    Location& mouse_move_loc = machine->Create<MouseMove>();
+    Argument& track_arg = *timeline->track_args.back();
+    auto timeline_loc = timeline->here.Lock();
+
+    PositionAhead(*timeline_loc, track_arg, mouse_move_loc);
+    AnimateGrowFrom(*here.lock(), mouse_move_loc);
+    timeline->here.lock()->ConnectTo(mouse_move_loc, track_arg);
   }
 
   Vec2Track* track = dynamic_cast<Vec2Track*>(timeline->tracks[track_index].get());

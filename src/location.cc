@@ -389,6 +389,26 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
+void PositionAhead(Location& origin, Argument& arg, Location& target) {
+  auto origin_widget = origin.WidgetForObject();
+  Vec2AndDir arg_start = arg.Start(*origin_widget, origin);
+
+  // Pick the position that allows the cable to come in most horizontally (left to right).
+  Vec2 best_connector_pos = Vec2(0, 0);
+  float best_angle_diff = 100;
+  Vec<Vec2AndDir> connector_positions;
+  target.WidgetForObject()->ConnectionPositions(connector_positions);
+  for (auto& pos : connector_positions) {
+    float angle_diff = (pos.dir - arg_start.dir - 180_deg).ToRadians();
+    if (fabs(angle_diff) < fabs(best_angle_diff)) {
+      best_connector_pos = pos.pos;
+      best_angle_diff = angle_diff;
+    }
+  }
+
+  target.position = arg_start.pos + Vec2(3_cm, 0) - best_connector_pos;
+}
+
 void AnimateGrowFrom(Location& source, Location& grown) {
   auto& animation_state = grown.GetAnimationState();
   animation_state.scale.value = 0.5;

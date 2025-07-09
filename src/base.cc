@@ -78,13 +78,14 @@ void LongRunning::BeginLongRunning(Location& here, RunTask& run_task) {
 }
 
 void LongRunning::On() {
+  LOG << "Calling LongRunning::On";
   auto live_object = dynamic_cast<LiveObject*>(this);
   if (live_object == nullptr) {
     ERROR << "LongRunning::On called on a non-LiveObject";
     return;
   }
   auto location = live_object->here.Lock();
-  BeginLongRunning(*location, location->GetRunTask());
+  location->ScheduleRun();
 }
 
 void Runnable::Run(Location& here, RunTask& run_task) {

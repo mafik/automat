@@ -4,10 +4,20 @@
 
 #include <include/core/SkBlendMode.h>
 
+#include "xcb/xproto.h"
+
+#if defined(__linux__)
+#include <xcb/xtest.h>
+#endif
+
 #include "embedded.hh"
 #include "math.hh"
 #include "textures.hh"
 #include "widget.hh"
+
+#if defined(__linux__)
+#include "xcb.hh"
+#endif
 
 using namespace automat::gui;
 
@@ -61,5 +71,20 @@ struct MouseMoveWidget : Object::FallbackWidget {
 };
 
 Ptr<gui::Widget> MouseMove::MakeWidget() { return MakePtr<MouseMoveWidget>(AcquireWeakPtr()); }
+
+Vec2 mouse_move_accumulator;
+
+void MouseMove::OnMouseMove(Vec2 vec) {
+  mouse_move_accumulator += vec;
+  vec = Vec2(truncf(mouse_move_accumulator.x), truncf(mouse_move_accumulator.y));
+  mouse_move_accumulator -= vec;
+#if defined(__linux__)
+  if (vec.x != 0 || vec.y != 0) {
+    xcb_test_fake_input(xcb::connection, XCB_MOTION_NOTIFY, true, XCB_CURRENT_TIME, XCB_WINDOW_NONE,
+                        vec.x, vec.y, 0);
+    xcb::flush();
+  }
+#endif
+}
 
 }  // namespace automat::library

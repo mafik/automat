@@ -28,6 +28,7 @@
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "key_button.hh"
+#include "library_mouse_move.hh"
 #include "math.hh"
 #include "number_text_field.hh"
 #include "pointer.hh"
@@ -1848,7 +1849,10 @@ void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (next_update_at != now) {
     return;
   }
-  LOG << "Sending " << values[next_update_i].ToStr();
+  auto* mouse_move = target.As<MouseMove>();
+  if (mouse_move) {
+    mouse_move->OnMouseMove(values[next_update_i]);
+  }
 }
 
 void Vec2Track::SerializeState(Serializer& writer, const char* key) const {}

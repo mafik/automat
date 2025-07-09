@@ -461,22 +461,30 @@ static float CurrentPosRatio(const Timeline& timeline) {
   }
 }
 
-void TimelineCancelScheduledAt(Timeline& t) {
+void TimelineCancelScheduled(Timeline& t) {
   if (auto h = t.here.lock()) {
     CancelScheduledAt(*h);
   }
 }
 
-void TimelineScheduleAt(Timeline& t, time::SteadyPoint now) {
+// Schedule the timeline at the next timestamp AFTER `now`.
+void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
+  auto started_at = t.playing.started_at;
   time::SteadyPoint next_update = t.playing.started_at + time::Duration(t.MaxTrackLength());
+  // We're not subtracting `started_at` from `now` because due to floating point accuracy
+  // that might result in a timestamp before the current one (leading to infinite loop) or
+  // after the next one (leading to skipped values).
+  auto cmp = [started_at](time::SteadyPoint now, time::T timestamp) {
+    return started_at + time::Duration(timestamp) > now;
+  };
   for (const auto& track : t.tracks) {
-    for (time::T timestamp : track->timestamps) {
-      auto timestamp_abs = t.playing.started_at + time::Duration(timestamp);
-      if (timestamp_abs <= now) {
-        continue;
-      }
-      next_update = min(next_update, timestamp_abs);
-      break;
+    int next_update_i =
+        std::upper_bound(track->timestamps.begin(), track->timestamps.end(), now, cmp) -
+        track->timestamps.begin();
+    if (next_update_i < track->timestamps.size()) {
+      auto next_update_point =
+          t.playing.started_at + time::Duration(track->timestamps[next_update_i]);
+      next_update = min(next_update, next_update_point);
     }
   }
   if (auto h = t.here.lock()) {
@@ -509,12 +517,12 @@ static time::T CurrentOffset(const Timeline& timeline, time::SteadyPoint now) {
 static void SetOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
   offset = clamp<time::T>(offset, 0, timeline.MaxTrackLength());
   if (timeline.state == Timeline::kPlaying) {
-    TimelineCancelScheduledAt(timeline);
+    TimelineCancelScheduled(timeline);
     timeline.playing.started_at = now - time::Duration(offset);
     if (auto h = timeline.here.lock()) {
       TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
     }
-    TimelineScheduleAt(timeline, now);
+    TimelineScheduleNextAfter(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = offset;
   }
@@ -523,13 +531,13 @@ static void SetOffset(Timeline& timeline, time::T offset, time::SteadyPoint now)
 
 void AdjustOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
   if (timeline.state == Timeline::kPlaying) {
-    TimelineCancelScheduledAt(timeline);
+    TimelineCancelScheduled(timeline);
     timeline.playing.started_at -= time::Duration(offset);
     timeline.playing.started_at = min(timeline.playing.started_at, now);
     if (auto h = timeline.here.lock()) {
       TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
     }
-    TimelineScheduleAt(timeline, now);
+    TimelineScheduleNextAfter(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset =
         clamp<time::T>(timeline.paused.playback_offset + offset, 0, timeline.MaxTrackLength());
@@ -541,12 +549,12 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   pos_ratio = clamp(pos_ratio, 0.0f, 1.0f);
   time::T max_track_length = timeline.MaxTrackLength();
   if (timeline.state == Timeline::kPlaying) {
-    TimelineCancelScheduledAt(timeline);
-    timeline.playing.started_at = now - time::Duration(pos_ratio * max_track_length);
+    TimelineCancelScheduled(timeline);
+    timeline.playing.started_at = now - time::Duration((time::T)(pos_ratio * max_track_length));
     if (auto h = timeline.here.lock()) {
       TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
     }
-    TimelineScheduleAt(timeline, now);
+    TimelineScheduleNextAfter(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = pos_ratio * max_track_length;
   }
@@ -1827,7 +1835,21 @@ void Vec2Track::Splice(time::T current_offset, time::T splice_to) {
   }
 }
 void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
-                             time::SteadyPoint now) {}
+                             time::SteadyPoint now) {
+  auto cmp = [started_at](time::T timestamp, time::SteadyPoint now) {
+    return started_at + time::Duration(timestamp) < now;
+  };
+  int next_update_i =
+      std::lower_bound(timestamps.begin(), timestamps.end(), now, cmp) - timestamps.begin();
+  if (next_update_i == timestamps.size()) {
+    return;
+  }
+  auto next_update_at = started_at + time::Duration(timestamps[next_update_i]);
+  if (next_update_at != now) {
+    return;
+  }
+  LOG << "Sending " << values[next_update_i].ToStr();
+}
 
 void Vec2Track::SerializeState(Serializer& writer, const char* key) const {}
 void Vec2Track::DeserializeState(Location& l, Deserializer& d) {}
@@ -1835,7 +1857,7 @@ bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_nam
 
 void Timeline::OnCancel() {
   if (state == kPlaying) {
-    TimelineCancelScheduledAt(*this);
+    TimelineCancelScheduled(*this);
     state = kPaused;
     paused = {.playback_offset = (time::SteadyNow() - playing.started_at).count()};
     if (auto h = here.lock()) {
@@ -1858,7 +1880,7 @@ void Timeline::OnRun(Location& here, RunTask& run_task) {
   time::SteadyPoint now = time::SteadyNow();
   playing = {.started_at = now - time::Duration(paused.playback_offset)};
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
-  TimelineScheduleAt(*this, now);
+  TimelineScheduleNextAfter(*this, now);
   run_button->WakeAnimation();
   WakeAnimation();
   BeginLongRunning(here, run_task);
@@ -1957,7 +1979,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   }
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   if (now < end_at) {
-    TimelineScheduleAt(*this, now);
+    TimelineScheduleNextAfter(*this, now);
   }
 }
 
@@ -2134,17 +2156,17 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       d.Get(paused.playback_offset, status);
     } else if (key == "playing") {
       state = kPlaying;
-      double value = 0;
+      time::T value = 0;
       d.Get(value, status);
       time::SteadyPoint now = time::SteadyNow();
       playing.started_at = now - time::Duration(value);
       // We're not updating the outputs because they should be deserialized in a proper state
       // TimelineUpdateOutputs(l, *this, playing.started_at, now);
-      TimelineScheduleAt(*this, now);
+      TimelineScheduleNextAfter(*this, now);
       BeginLongRunning(l, l.GetRunTask());
     } else if (key == "recording") {
       state = kRecording;
-      double value = 0;
+      time::T value = 0;
       d.Get(value, status);
       recording.started_at = time::SteadyNow() - time::Duration(value);
     }

@@ -167,7 +167,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::T time) {
     assembler.WakeWidgetsAnimation();
     assembler.last_state_refresh = time;
   }
-  if (assembler.state.current_instruction.Lock()) {
+  if (assembler.IsRunning()) {
     return animation::Animating;
   } else {
     return animation::Finished;
@@ -290,11 +290,11 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
 
   Status status;
   auto inst = entry_point->ToMC();
+  RefreshState(*this, time::SteadyNow().time_since_epoch().count());
   mc_controller->Execute(inst, status);
   if (!OK(status)) {
     ERROR << "Failed to execute Assembler: " << status;
   }
-  RefreshState(*this, time::SteadyNow().time_since_epoch().count());
 }
 
 void Assembler::OnCancel() {
@@ -582,7 +582,10 @@ void AssemblerWidget::FillChildren(Vec<Ptr<gui::Widget>>& children) {
   }
 }
 
-void AssemblerWidget::TransformUpdated() { WakeAnimation(); }
+void AssemblerWidget::TransformUpdated() {
+  WakeAnimation();
+  RedrawThisFrame();
+}
 
 bool AssemblerWidget::CanDrop(Location& loc) const {
   if (auto reg = loc.As<Register>()) {

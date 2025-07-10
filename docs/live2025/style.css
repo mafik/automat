@@ -1,0 +1,303 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Andika', sans-serif;
+    line-height: 1.6;
+    color: #333;
+    background-color: #fdfdfd;
+    padding: 20px;
+}
+
+/* Article container */
+article {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    padding: 60px;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+/* Typography */
+h1 {
+    font-size: 2.2em;
+    font-weight: bold;
+    margin-bottom: 25px;
+    color: #2c3e50;
+    border-bottom: 3px solid #3498db;
+    padding-bottom: 15px;
+}
+
+h2 {
+    font-size: 2em;
+    font-weight: 600;
+    margin-top: 40px;
+    margin-bottom: 20px;
+    color: #34495e;
+}
+
+h3 {
+    font-size: 1.5em;
+    font-weight: 600;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    color: #34495e;
+}
+
+p {
+    margin-bottom: 20px;
+    font-size: 1.1em;
+    text-align: justify;
+}
+
+/* First paragraph after headings shouldn't be indented */
+h1+p,
+h2+p,
+h3+p {
+    text-indent: 0;
+}
+
+/* Lists */
+ul {
+    margin-bottom: 20px;
+    padding-left: 40px;
+}
+
+li {
+    margin-bottom: 8px;
+    font-size: 1.1em;
+}
+
+.horizontal-scroll-box {
+    overflow-x: auto;
+    max-width: calc(100% + 40px);
+    margin-left: -20px;
+    margin-right: -20px;
+    padding: 0 20px;
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 30px 0;
+    font-size: 1em;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    word-break: normal;
+}
+
+th,
+td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #3498db;
+    color: white;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+tr:hover {
+    background-color: #e8f4f8;
+}
+
+/* Special table for bash example */
+.bash-example {
+    background-color: #f4f4f4;
+    border: 1px solid #ddd;
+    margin: 20px 0;
+}
+
+.bash-example td {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    padding: 15px;
+    background-color: #f8f8f8;
+    border: none;
+}
+
+[data-footnote] {
+    text-decoration: underline dotted;
+    cursor: pointer;
+}
+
+[data-footnote]:after {
+    content: ' 💬';
+}
+
+.footnote {
+    font-size: .8em;
+    background-color: #fff4a4;
+    box-shadow: 0 5px 10px rgba(100, 100, 0, 0.2);
+    padding: .5em 1em;
+    margin-left: 10%;
+    margin-right: 10%;
+    text-indent: 0;
+    display: none;
+    transform-origin: top;
+    transition: opacity .3s ease, display .3s ease allow-discrete, transform .3s ease;
+
+    &.open {
+        display: block;
+        transform: scaleY(1);
+
+        @starting-style {
+            opacity: 0;
+            transform: scaleY(0);
+        }
+    }
+
+    &:not(.open) {
+        display: none;
+        transform: scaleY(0);
+        opacity: 0;
+
+        @starting-style {
+            opacity: 1;
+            transform: scaleY(1);
+        }
+    }
+}
+
+/* Code blocks */
+code {
+    background-color: #f4f4f4;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #d63384;
+}
+
+/* Block quotes */
+blockquote {
+    border-left: 4px solid #3498db;
+    padding-left: 20px;
+    margin: 30px 0;
+    font-style: italic;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-radius: 0 4px 4px 0;
+}
+
+blockquote p {
+    margin-bottom: 0;
+    text-align: center;
+    color: #2c3e50;
+    text-indent: 0;
+}
+
+/* Example placeholders */
+.example-placeholder {
+    background-color: #fff3cd;
+    border: 1px dashed #ffc107;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 4px;
+    font-style: italic;
+    color: #856404;
+    text-align: center;
+    text-indent: 0;
+}
+
+/* Emphasis */
+em {
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+/* Links */
+a {
+    color: #3498db;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-bottom-color 0.2s;
+}
+
+a:hover {
+    border-bottom-color: #3498db;
+}
+
+.figure {
+    max-width: 100%;
+    max-height: 90vh;
+    text-align: center;
+    display: block;
+    margin: 0 auto;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 2px 18px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive design */
+@media (max-width: 900px) {
+    article {
+        padding: 40px;
+    }
+}
+
+@media (max-width: 600px) {
+    body {
+        padding: 10px;
+    }
+
+    article {
+        padding: 20px;
+    }
+
+    h1 {
+        font-size: 2em;
+    }
+
+    h2 {
+        font-size: 1.5em;
+    }
+
+    h3 {
+        font-size: 1.2em;
+    }
+
+    p,
+    li {
+        font-size: 1em;
+    }
+
+    table {
+        font-size: 0.9em;
+    }
+
+    th,
+    td {
+        padding: 8px 10px;
+    }
+}
+
+/* Print styles */
+@media print {
+    body {
+        background: white;
+        padding: 0;
+    }
+
+    article {
+        box-shadow: none;
+        padding: 0;
+    }
+
+    .example-placeholder {
+        border: 1px solid #ccc;
+        background: #f9f9f9;
+    }
+}

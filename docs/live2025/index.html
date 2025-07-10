@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automat: Objects As Syntax Not Data</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Andika:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <article>
+        <h1>Automat: Objects As Syntax Not Data</h1>
+        <h2>Abstract</h2>
+        <p>Automat is a skeuomorphic desktop automation tool (similar in function to AutoHotKey) with the end-goal of
+            evolving into a fast & intuitive general purpose computing environment. This article aims to give an
+            overview of Automat, focusing on it's distinguishing approach to OOP:</p>
+
+        <div class="horizontal-scroll-box">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 20%"></th>
+                        <th style="width: 40%">OOP Objects</th>
+                        <th style="width: 40%">Automat's Objects</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Role</td>
+                        <td>Encapsulate data & behavior</td>
+                        <td>Programmer interface</td>
+                    </tr>
+                    <tr>
+                        <td>Lifetime</td>
+                        <td>Dynamic throughout execution</td>
+                        <td>Static throughout execution</td>
+                    </tr>
+                    <tr>
+                        <td>User interface</td>
+                        <td>Formal specification</td>
+                        <td>Direct manipulation</td>
+                    </tr>
+                    <tr>
+                        <td>Implementation</td>
+                        <td>Abstracted as much as possible</td>
+                        <td>Exposed as much as possible</td>
+                    </tr>
+                    <tr>
+                        <td>Designed towards</td>
+                        <td>Problem modelling</td>
+                        <td>Ergonomics</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <p>Automat's objects (called Programmer Interface Objects) should be applicable to other programming
+            environments and should become a valuable tool for programming language researchers and software
+            engineers.</p>
+
+        <h2>Introduction to Automat</h2>
+        <p>Computers have a potential to greatly improve people's lives. By automating repeatable work. By providing
+            access to the humanity's combined knowledge & culture. By amplifying human creativity with innovative
+            digital tools.</p>
+
+        <p>Yet existing software ecosystem largely fails to realize this potential. Forces that surround software
+            engineering seem to eventually separate users & programmers, locking out a large portion of the population
+            from commanding computers. One source of these forces lies in poor, inconsistent or obsolete decisions made
+            when the foundational technologies have been designed. Another source, maybe the more important out of the
+            two, lies in social barriers that limit the access to knowledge, often in subtle and hard to see ways.</p>
+
+        <p>Luckily we're seeing continued progress on both fronts. Growth of internet, smartphones and LLMs in the last
+            few decades inspire great optimism in more egalitarian access to technology in the future.</p>
+
+        <p>This work aims to further this goal by reducing the formalism required to control computers. It introduces an
+            environment called Automat - an interface offering a skeuomorphic representation of objects in computer
+            memory.</p>
+
+        <style>
+            .caption {
+                font-size: .9em;
+                margin-top: 0;
+                margin-bottom: 20px;
+                text-align: center;
+            }
+        </style>
+
+        <video class="figure" controls autoplay loop muted>
+            <source src="example1.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+
+        <div class="caption">A stack of three objects - Window Capture, Tesseract OCR and a Timer</div>
+
+        <p>Metaphorical interface allows a wider audience of users to compose complex behaviors. People who see
+            themselves as "non-technical" are not alienated by formal appearance. People who are not familiar with
+            computer terminology can guess the function and composition rules of on-screen elements. It invites playful
+            experimentation.</p>
+
+        <p>Initial goal of Automat is set on the problem of game automation. Playing games is a necessary component of
+            human psychology that adds depth to social life and helps in skill development. Unfortunately many modern
+            games, particularly the ones driven by ROI, adopt a range of techniques that produce addiction and
+            incentivise
+            recurring payments. Mechanisms such as virtual hoarding, lotteries & player conditioning are a common
+            element of many games.</p>
+
+        <p>The opportunity that Automat sees in this environment is that game automation can be used as a mechanism for
+            the human mind to escape the addictive gameplay loops while at the same time adding more depth to the
+            automated game.</p>
+
+        <p>From the perspective of Automat's development, the variety of games creates a smooth complexity gradient -
+            which makes it usable very early in its development as a macro playback utility with incremental additions
+            expanding its use to more use-cases. Eventually, the same techniques that can be used for game automation
+            may potentially be used to solve real-world problems, transitioning Automat into a general purpose computing
+            environment.</p>
+
+        <p>Learning from programming languages which are in broad use today, Automat's development is not being done
+            with expectation of profit. Monetization efforts tend to compromise the design of computing environments by
+            introducing competing objectives. As a result commercial programming systems have had a history of
+            difficulties in attracting user trust. Instead, Automat's development is driven by a small community
+            following hacker culture & hacker ethics. The goal of this article is to encourage readers to join this
+            community and push the frontier of visual programming <span data-footnote="gang-note">together</span>.</p>
+
+        <p id="gang-note" class="footnote">Automat's development happens on <a href="https://github.com/mafik/automat">github.com/mafik/automat</a>.<br>Its community can be accessed
+            at
+            <a href="https://automat.org/gang">automat.org/gang</a>.
+        </p>
+
+        <p>Just like many tools in the physical world are designed with two "ends" in mind - one meant for being
+            comfortable in human hand - and one efficient at doing the work. Automat's design has three "ends".</p>
+
+        <ul>
+            <li>One
+                meant for interfacing with the person using the system,</li>
+            <li>one meant for interfacing with other tools and</li>
+            <li>one meant
+                for effectively interfacing with the computing hardware.</li>
+        </ul>
+
+        <p>This article focuses on the first of the three.</p>
+
+        <h2>Objects As Syntax Not Data</h2>
+        <p>Object abstraction is a double-edged sword. On one hand it brings regularity and compartmentalization of
+            complexity but it also comes with non-trivial performance drawbacks - more pronounced the higher the number
+            of objects in a system. This poses a challenge when representing basic concepts such as numbers, strings or
+            characters in object-oriented fashion. Presence of objects increases complexity of optimization and/or
+            execution of a program. Objects have to be created & destroyed as the program executes which adds extra work
+            for the CPU. Because this extra work involves object lifetimes it's also sync-heavy, preventing CPU cores
+            from executing in parallel and instead having to continuously coordinate with one another.</p>
+
+        <p>The handling of objects is doubly important for visual computing environments as it's often connected to
+            their main limiting factor - visual complexity. A problem summarized in a hyperbole called the Deutsch
+            limit:</p>
+
+        <blockquote>
+            <p>"The problem with visual programming is that you can't have more than 50 visual primitives on the screen
+                at the same time."</p>
+        </blockquote>
+
+        <p>Many practical OO programming systems (for example Java) limit the number of managed objects using primitive
+            types - a layer in their abstraction hierarchy below which objects are substituted by machine-level data
+            types, like an integer or a boolean. The machine-level types lack the OO machinery that enables garbage
+            collection or dynamic dispatch but they're also simple enough to be optimized into efficient machine code.
+            The idea here is to make the system as object-oriented as possible, and only switch to primitive types for
+            the simplest and most basic operations. Even then the primitive types can still be "boxed" (using Java
+            terminology) into objects if the programmer decides OO features to be beneficial.</p>
+
+        <p>Another branch of OO programming systems (for example C++) gravitates towards machine-friendly defaults and
+            only enables OO features when they're explicitly requested by the programmer. In such systems, objects are
+            rare and deliberate. Some OO features, like generics, may be completely optimized out at compile time
+            leading to no runtime overhead.</p>
+
+        <p>Non-performance-critical programming systems may completely encapsulate machine code within objects and
+            simply accept the lower performance. This is often justified by the objectives of such systems and has
+            little practical consequence. Exponential improvements in hardware performance and specialized optimization
+            techniques made such systems practical for many use-cases. Great examples of such systems might be the
+            JavaScript and Python interpreters.</p>
+
+        <style>
+            .no {
+                background-color: rgb(255, 137, 137)
+            }
+
+            .yes {
+                background-color: rgb(145, 255, 137)
+            }
+
+            .maybe {
+                background-color: rgb(253, 255, 137)
+            }
+
+            .center {
+                background-color: rgb(122, 122, 122);
+                border-bottom: 1px solid rgb(209, 209, 209);
+            }
+
+            .yes,
+            .no,
+            .maybe,
+            .center {
+                text-align: center;
+            }
+        </style>
+
+        <p>A common theme in all of those text-based OO programming systems is that the purpose of objects is to steer
+            the execution of the program in some particular way. Objects are not used directly by programmers - they are
+            defined by programmers while program is written and used for data processing while the program executes. The
+            goal of an object in
+            such a system is to perform this encapsulation of data & behavior in an efficient manner, rather than to be
+            manipulated by a human. Definition of objects and their relations is done through the syntax of the language
+            instead.</p>
+
+        <table style="table-layout: fixed; margin-bottom: 10px">
+            <tr>
+                <th class="center"></th>
+                <th class="center">Syntax</th>
+                <th class="center">High level</th>
+                <th class="center">Low level</th>
+            </tr>
+            <tr>
+                <td>Java</td>
+                <td class="no">No</td>
+                <td class="yes">Yes</td>
+                <td class="maybe">Maybe</td>
+            </tr>
+            <tr>
+                <td>C++</td>
+                <td class="no">No</td>
+                <td class="maybe">Maybe</td>
+                <td class="maybe">Maybe</td>
+            </tr>
+            <tr>
+                <td>Python</td>
+                <td class="no">No</td>
+                <td class="yes">Yes</td>
+                <td class="yes">Yes</td>
+            </tr>
+        </table>
+        <div class="caption">Presence of object abstraction at different levels of program structure</div>
+
+        <p>This is an important observation for any visual programming system since objects in a visual
+            programming system have entirely different goals. Their purpose is to provide the capabilities that are
+            typically achieved with textual syntax. This
+            may include: defining data layout, control flow, logic, dependencies & relations. We'll call the
+            objects that provide those capabilities <em>Programmer Interface Objects</em> (PIO) and an interface
+            designed around those objects - an <em>Object Oriented Programmer Interface</em> (OOPI).</p>
+
+        <p>In contrast to the three approaches presented earlier (examples of Java, C++, JavaScript & Python), OOPI
+            uses objects primarily to define program structure. Although it's strongly object-oriented from the
+            programmer's perspective, at runtime objects may be completely elliminated, alleviating their overheads.</p>
+
+        <table style="table-layout: fixed;">
+            <tr>
+                <th class="center"></th>
+                <th class="center">Syntax</th>
+                <th class="center">High level</th>
+                <th class="center">Low level</th>
+            </tr>
+            <tr>
+                <td>OOPI</td>
+                <td class="yes">Yes</td>
+                <td class="maybe">Maybe</td>
+                <td class="maybe">Maybe</td>
+            </tr>
+        </table>
+
+        <h3>Definition</h3>
+        <p>Let's start with by defining the category of PIO more precisely. A programmer during work with source code of
+            a program, develops a mental model of the program's structure. This mental model is composed of interacting
+            abstract objects. This usage of "abstract objects" has nothing to do with classic OO terminology. Instead it
+            refers to mental devices that programmers use to build a mental model of a program. Similar abstract objects
+            may exist in the mind of a person examining a mathematical problem or a chess player planning a strategy. In
+            programming these abstract objects typically map to subtrees of AST, or IR subgraphs, or they may exist
+            within the code implicitly as invariants, or imagined results of code execution. We can attempt to translate
+            objects from this abstract mental domain back into a concrete computing environment, where each abstract
+            object is materialized as concrete and composable object on the screen of a computer. The objects produced
+            by this translation are <span data-footnote="pio-note">PIOs</span>.</p>
+
+        <p id="pio-note" class="footnote">Other terms may also seem
+            appropriate for “Programmer Interface Objects”. “User Interface
+            Objects” is one that fits well but fails to capture their intended use by a programmer. Terms rooted in
+            philosophy, related to
+            concepts of “ideas”, “reflections”, “theories” fail to capture the distinction between using objects to
+            model the world and the use of objects to encode the program structure.
+            “Syntax Objects” may be another good term although the relation to language theory is rather remote here.
+        </p>
+
+        <p>Another way to define PIOs is that they are the primary tools that the programmer composes to define the
+            expected behavior of the computer.</p>
+
+        <ul>
+            <li>Just like variables and unlike traditional OO objects, PIOs are not data themselves. Instead they
+                form an interface to data.</li>
+            <li>Just like functions with their call sites and a definition, PI objects are mental primitives (atoms)
+                from the perspective of the programmer solving one specific problem but within the system their behavior
+                may be arbitrarily complex and open for change.</li>
+        </ul>
+
+        <p>Finally, PIO can also be defined as a component of an Object Oriented User Interface (OOUI) intended for
+            programming.</p>
+
+        <p>Out of the three definitions above, the first one is the most important one since it connects the visible
+            interface elements to mental devices that programmers use when designing programs. This mapping is the key
+            to proper design of PIOs. By providing the same affordances as those mental contructs, both experienced
+            and novice programmers can work faster and more intuitively.</p>
+
+        <h3>Examples</h3>
+
+        <p>Every high level programming language includes some form of object composition. While the composition
+            interface is often limited by textual representation, the objects are designed to be composed by a
+            programmer and great attention is paid to their ease of use.</p>
+
+        <img class="figure" src="bash.png" style="max-width: 40em; box-shadow: none">
+        <div class="caption">Programmer Interface Objects in Bash</div>
+
+        <p>Therefore PIOs can be found in every high level programming system. Functions, class definitions, rules in
+            rule-based systems, macros, statements & expressions - they all correspond to fuzzy mental constructs that
+            programmers use to mentally represent & manipulate programs.</p>
+
+        <h3>Properties</h3>
+
+        <p>Since the size of the source code for any problem is constant, regardless of the size of the processed data,
+            then a word-for-word translation of any textual program into a visual programming system should produce a
+            constant number of PIOs. The observation that the number of PIOs is constant goes against the practice of
+            representing data processed by programs as objects. PIOs are typically not automatically constructed &
+            destroyed <span data-footnote="macros">during program execution</span>.</p>
+
+        <p id="macros" class="footnote">One exception to this property are programs that employ macro expansion or
+            rule-based substitutions during evaluation - for those programs the number of PIOs may vary during
+            execution.</p>
+
+        <p>Similarly to program source code, PIOs may either perform their work through interpretation or be translated
+            into a more efficient form through compilation. PIOs can hold or refer to data (just like variables),
+            but they're not data themselves - they're
+            an interface to data, used by programmers and
+            therefore should be optimized towards being comfortably used by programmers.</p>
+
+        <h3>Design Criteria</h3>
+
+        <p>Instead of encapsulating data, the role of PIOs is to describe the behavior of the program in a readable way.
+            The appearance of objects should help programmer understand their behavior and help in object composition.
+            They are the area within programming where <span data-footnote="design">careful design</span> is most
+            needed.</p>
+
+        <p id="design" class="footnote">A brief introduction to the role of design can be found in <a href="https://www.andrewcoyle.com/blog/beauty-is-objective">Beauty Is Objective by Andrew Coyle</a>.
+            Although written
+            with website design in mind, this introduction is very applicable to OOPI environments. In fact it is worth
+            interrupting this lecture to read that article now.</p>
+
+        <p>We can outline some objectives for a well designed PIO:</p>
+
+        <p><em>Faithful</em>. A PIO should allow the same types of transforms that programmers perform when thinking
+            about a program.</p>
+
+        <p><em>Discoverable</em>. When a programmer needs a specific PIO but is not aware of its existence, it should be
+            easy to find it.</p>
+
+        <p><em>Skimmable</em>. Programmers (including programmers without formal education) should be able to
+            intuitively guess the function of a PIO in the first seconds of seeing it for the first time.</p>
+
+        <p><em>Easy to master</em>. Fully understanding the behavior of a PIO should require as little effert as
+            possible.</p>
+
+        <p><em>Fast to use</em>. Time needed to perform a task using a given PIO should be minimized.</p>
+
+        <p><em>Robust</em>. PIO should be tolerant to errors - both coming from programmer and its environment.</p>
+
+        <p><em>Zero-cost</em>. Usage of PIO shouldn't incur any performance overheads compared to alternative approaches
+            of achieving the same goal.</p>
+
+        <p><em>Interoperable</em>. PIO should be composable with other PIOs & usable in many contexts.</p>
+
+        <p>Many other valuable design objectives could be listed here but only the ones related to the "programming
+            interface" aspect have been deemed relevant. Nota bene the difference in design criteria for PIOs &
+            traditional OO
+            objects (for example SOLID princiles).</p>
+
+        <h2>Objects In Automat</h2>
+        <p>Automat uses the idea of PIO to enable its users to perform tasks typically reserved to professional
+            programmers.</p>
+
+        <h3>Machine Code Scripting</h3>
+        <p>An example of this approach is a scripting mechanism used by Automat. Automat's scripts use a metaphor of
+            playing cards with instructions written on them, similar to many collectible card games. Each card
+            corresponds roughly to one machine instruction and can be composed with other cards to form a program. CPU
+            registers are presented visually as checkerboards governed by an icon. Iconic representation helps avoid
+            jargon and makes the representation more welcoming. The instruction cards don't fully hide their low-level
+            nature - they still show the assembly mnemonic & machine code in the corners of the card - but they do so in
+            a way that passes as visual ornament rather than the main interface.</p>
+
+        <img class="figure" src="instruction.png" style="max-width: 40em; box-shadow: none">
+        <div class="caption">Instruction cards in Automat</div>
+
+        <p>While this representation can be used by non-technical users, it also produces scripts that execute with the
+            performance of hand-crafted assembly.</p>
+
+        <p>Thanks to closeness of mapping, this representation also enables hot code reloading where the user may freely
+            change the code while it's executing.</p>
+
+        <video class="figure" controls autoplay loop muted>
+            <source src="machine_code.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+
+        <div class="caption">Machine code instructions in Automat</div>
+
+        <h3>Programming By Demonstration</h3>
+        <p>The basic function of Automat is recording & replaying input macros. A simple macro can be created by
+            creating a chain of simple commands & delays:</p>
+
+        <video class="figure" controls autoplay loop muted>
+            <source src="simple_macro.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+
+        <div class="caption">"Imperative" macro for sending "left mouse down" and "left mouse up" events with controllable delays</div>
+
+        <p>While it's fairly easy for simple cases, this approach fails for more complex sequences of keystrokes.
+            Programming them manually would be prohibitively slow. To help with that, Automat offers several helpers:
+        </p>
+
+        <ul>
+            <li>a Macro Recorder object that records keystrokes,</li>
+            <li>a Hotkey object that triggers execution of other objects when a hotkey is pressed and</li>
+            <li>a Timeline object that can drive execution of other objects according to its tracks.</li>
+        </ul>
+
+        <p>Together they can be used to create an ad-hoc programming-by-demonstration environment:</p>
+
+        <video class="figure" controls autoplay loop muted>
+            <source src="macro_recorder.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+
+        <div class="caption">A typical setup for recording macros in Automat</div>
+
+        <p>Together with other objects present in Automat this enables users to freely mix different programming
+            techniques - procedural programming, reactive programming, programming by demonstration.</p>
+
+        <h2>Summary</h2>
+        <p>We have defined Programmer Interface Objects - a category of objects that form mental primitives for
+            programmers building programs. As opposed to classical OO objects which encapsulate data & behavor, PIOs
+            form the human-computer interface of a programming environment. Data stays as data. PIOs provide interfaces
+            to access it. Because of different goals, PIOs should be designed primarily with ergonomics in mind. An
+            example of the Automat environment demonstrates that carefully designed PIOs can enable non-programmers to
+            perform tasks typically reserved to expert programmers - such as manipulating low-level machine code and
+            freely mixing different programming paradigms.</p>
+    </article>
+
+    <script>
+        function ToggleFootnote(event) {
+            const anchor = event.currentTarget;
+            const noteId = anchor.dataset.footnote;
+            const note = document.getElementById(noteId);
+            note.classList.toggle("open");
+            event.stopPropagation();
+        }
+        document.addEventListener("DOMContentLoaded", () => {
+            const anchors = document.querySelectorAll("[data-footnote]");
+            anchors.forEach(anchor => {
+                anchor.addEventListener("click", ToggleFootnote);
+            });
+        });
+    </script>
+</body>
+
+</html>

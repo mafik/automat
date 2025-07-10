@@ -9,7 +9,8 @@ body {
     font-family: 'Andika', sans-serif;
     line-height: 1.6;
     color: #333;
-    background-color: #fdfdfd;
+    background: linear-gradient(0deg, #e6f7ff, #c4e5fc);
+    background-attachment: fixed;
     padding: 20px;
 }
 
@@ -145,24 +146,31 @@ tr:hover {
     margin-left: 10%;
     margin-right: 10%;
     text-indent: 0;
-    display: none;
+    overflow: hidden;
     transform-origin: top;
-    transition: opacity .3s ease, display .3s ease allow-discrete, transform .3s ease;
+    interpolate-size: allow-keywords;
+    transition: opacity .3s ease, transform .3s ease, max-height .3s ease, margin-top .3s ease, margin-bottom .3s ease;
 
     &.open {
-        display: block;
         transform: scaleY(1);
+        max-height: 20em;
+        margin-top: 0px;
+        margin-bottom: 20px;
 
         @starting-style {
             opacity: 0;
             transform: scaleY(0);
+            max-height: 0em;
+            margin-top: -20px;
         }
     }
 
     &:not(.open) {
-        display: none;
         transform: scaleY(0);
         opacity: 0;
+        max-height: 0em;
+        margin-top: -20px;
+        margin-bottom: 0px;
 
         @starting-style {
             opacity: 1;

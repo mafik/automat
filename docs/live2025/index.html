@@ -7,7 +7,8 @@
     <title>Automat: Objects As Syntax Not Data</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Andika:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Andika:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -48,11 +49,6 @@
                         <td>Implementation</td>
                         <td>Abstracted as much as possible</td>
                         <td>Exposed as much as possible</td>
-                    </tr>
-                    <tr>
-                        <td>Designed towards</td>
-                        <td>Problem modelling</td>
-                        <td>Ergonomics</td>
                     </tr>
                 </tbody>
             </table>
@@ -125,7 +121,8 @@
             following hacker culture & hacker ethics. The goal of this article is to encourage readers to join this
             community and push the frontier of visual programming <span data-footnote="gang-note">together</span>.</p>
 
-        <p id="gang-note" class="footnote">Automat's development happens on <a href="https://github.com/mafik/automat">github.com/mafik/automat</a>.<br>Its community can be accessed
+        <p id="gang-note" class="footnote">Automat's development happens on <a
+                href="https://github.com/mafik/automat">github.com/mafik/automat</a>.<br>Its community can be accessed
             at
             <a href="https://automat.org/gang">automat.org/gang</a>.
         </p>
@@ -314,7 +311,7 @@
             interface is often limited by textual representation, the objects are designed to be composed by a
             programmer and great attention is paid to their ease of use.</p>
 
-        <img class="figure" src="bash.png" style="max-width: 40em; box-shadow: none">
+        <img class="figure" src="bash.png" style="max-width: 100%; box-shadow: none">
         <div class="caption">Programmer Interface Objects in Bash</div>
 
         <p>Therefore PIOs can be found in every high level programming system. Functions, class definitions, rules in
@@ -346,7 +343,8 @@
             They are the area within programming where <span data-footnote="design">careful design</span> is most
             needed.</p>
 
-        <p id="design" class="footnote">A brief introduction to the role of design can be found in <a href="https://www.andrewcoyle.com/blog/beauty-is-objective">Beauty Is Objective by Andrew Coyle</a>.
+        <p id="design" class="footnote">A brief introduction to the role of design can be found in <a
+                href="https://www.andrewcoyle.com/blog/beauty-is-objective">Beauty Is Objective by Andrew Coyle</a>.
             Although written
             with website design in mind, this introduction is very applicable to OOPI environments. In fact it is worth
             interrupting this lecture to read that article now.</p>
@@ -359,6 +357,9 @@
         <p><em>Discoverable</em>. When a programmer needs a specific PIO but is not aware of its existence, it should be
             easy to find it.</p>
 
+        <p><em>Memorable</em>. A programmer who used specific PIO in the past should have an easy time recalling it when
+            needed.</p>
+
         <p><em>Skimmable</em>. Programmers (including programmers without formal education) should be able to
             intuitively guess the function of a PIO in the first seconds of seeing it for the first time.</p>
 
@@ -367,20 +368,13 @@
 
         <p><em>Fast to use</em>. Time needed to perform a task using a given PIO should be minimized.</p>
 
-        <p><em>Robust</em>. PIO should be tolerant to errors - both coming from programmer and its environment.</p>
-
-        <p><em>Zero-cost</em>. Usage of PIO shouldn't incur any performance overheads compared to alternative approaches
-            of achieving the same goal.</p>
-
-        <p><em>Interoperable</em>. PIO should be composable with other PIOs & usable in many contexts.</p>
-
         <p>Many other valuable design objectives could be listed here but only the ones related to the "programming
             interface" aspect have been deemed relevant. Nota bene the difference in design criteria for PIOs &
             traditional OO
             objects (for example SOLID princiles).</p>
 
         <h2>Objects In Automat</h2>
-        <p>Automat uses the idea of PIO to enable its users to perform tasks typically reserved to professional
+        <p>Automat uses careful PIO design to enable its users to perform tasks typically reserved to professional
             programmers.</p>
 
         <h3>Machine Code Scripting</h3>
@@ -392,7 +386,7 @@
             nature - they still show the assembly mnemonic & machine code in the corners of the card - but they do so in
             a way that passes as visual ornament rather than the main interface.</p>
 
-        <img class="figure" src="instruction.png" style="max-width: 40em; box-shadow: none">
+        <img class="figure" src="instruction.png" style="max-width: 100%; box-shadow: none">
         <div class="caption">Instruction cards in Automat</div>
 
         <p>While this representation can be used by non-technical users, it also produces scripts that execute with the
@@ -417,7 +411,8 @@
             Your browser does not support the video tag.
         </video>
 
-        <div class="caption">"Imperative" macro for sending "left mouse down" and "left mouse up" events with controllable delays</div>
+        <div class="caption">"Imperative" macro for sending "left mouse down" and "left mouse up" events with
+            controllable delays</div>
 
         <p>While it's fairly easy for simple cases, this approach fails for more complex sequences of keystrokes.
             Programming them manually would be prohibitively slow. To help with that, Automat offers several helpers:
@@ -442,13 +437,13 @@
             techniques - procedural programming, reactive programming, programming by demonstration.</p>
 
         <h2>Summary</h2>
-        <p>We have defined Programmer Interface Objects - a category of objects that form mental primitives for
-            programmers building programs. As opposed to classical OO objects which encapsulate data & behavor, PIOs
-            form the human-computer interface of a programming environment. Data stays as data. PIOs provide interfaces
-            to access it. Because of different goals, PIOs should be designed primarily with ergonomics in mind. An
-            example of the Automat environment demonstrates that carefully designed PIOs can enable non-programmers to
-            perform tasks typically reserved to expert programmers - such as manipulating low-level machine code and
-            freely mixing different programming paradigms.</p>
+        <p>We have defined Programmer Interface Objects - a category of objects that are used by programmers to
+            construct programs. As opposed to classical OO objects which encapsulate data & behavor during program
+            runtime, PIOs form the human-computer interface of a programming environment. Because of different goals,
+            PIOs should be designed primarily with ergonomics in mind. An example of the Automat environment
+            demonstrates that carefully designed PIOs can enable non-programmers to perform tasks typically reserved to
+            expert programmers - such as manipulating low-level machine code and mixing different programming paradigms.
+        </p>
     </article>
 
     <script>

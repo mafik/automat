@@ -119,12 +119,13 @@
             introducing competing objectives. As a result commercial programming systems have had a history of
             difficulties in attracting user trust. Instead, Automat's development is driven by a small community
             following hacker culture & hacker ethics. The goal of this article is to encourage readers to join this
-            community and push the frontier of visual programming <span data-footnote="gang-note">together</span>.</p>
+            community and push the frontier of visual programming <span data-footnote="invitation">together</span>.</p>
 
-        <p id="gang-note" class="footnote">Automat's development happens on <a
-                href="https://github.com/mafik/automat">github.com/mafik/automat</a>.<br>Its community can be accessed
-            at
-            <a href="https://automat.org/gang">automat.org/gang</a>.
+        <p id="invitation" class="footnote">The easiest way to join is to reach out through real-time chat at <a
+                href="https://automat.org/gang" target="_blank">automat.org/gang</a>. It's perfectly fine to join just
+            to follow project updates. If you'd like to help in any way just introduce yourself, mention your skills or
+            interests. Automat could benefit from nearly all kinds of help - from players who can
+            test-drive it, to foley artists who can give it more life.
         </p>
 
         <p>Just like many tools in the physical world are designed with two "ends" in mind - one meant for being
@@ -302,8 +303,15 @@
 
         <p>Out of the three definitions above, the first one is the most important one since it connects the visible
             interface elements to mental devices that programmers use when designing programs. This mapping is the key
-            to proper design of PIOs. By providing the same affordances as those mental contructs, both experienced
-            and novice programmers can work faster and more intuitively.</p>
+            to proper design of PIOs and is missed by <span data-footnote="naur">behavioral theories of
+                programming</span>. By providing an interface that resembles and supports those mental contructs, both
+            experienced and novice programmers can work faster and more intuitively.</p>
+
+        <p id="naur" class="footnote">For example <a href="https://pages.cs.wisc.edu/~remzi/Naur.pdf">Programming as
+                Theory Building by Peter Naur</a> negates the existance of those mental devices: <q>theory held by a
+                person has no inherent
+                division into parts and no inherent ordering</q>. Instead it defines theory as the ability to answer
+            questions and make changes to the program.</p>
 
         <h3>Examples</h3>
 
@@ -411,7 +419,7 @@
             Your browser does not support the video tag.
         </video>
 
-        <div class="caption">"Imperative" macro for sending "left mouse down" and "left mouse up" events with
+        <div class="caption">Imperative-style macro for sending "left mouse down" and "left mouse up" events with
             controllable delays</div>
 
         <p>While it's fairly easy for simple cases, this approach fails for more complex sequences of keystrokes.
@@ -433,16 +441,18 @@
 
         <div class="caption">A typical setup for recording macros in Automat</div>
 
-        <p>Together with other objects present in Automat this enables users to freely mix different programming
+        <p>Together with other objects present in Automat this enables users to mix different programming
             techniques - procedural programming, reactive programming, programming by demonstration.</p>
 
         <h2>Summary</h2>
         <p>We have defined Programmer Interface Objects - a category of objects that are used by programmers to
             construct programs. As opposed to classical OO objects which encapsulate data & behavor during program
-            runtime, PIOs form the human-computer interface of a programming environment. Because of different goals,
-            PIOs should be designed primarily with ergonomics in mind. An example of the Automat environment
-            demonstrates that carefully designed PIOs can enable non-programmers to perform tasks typically reserved to
-            expert programmers - such as manipulating low-level machine code and mixing different programming paradigms.
+            runtime, PIOs form the human-computer interface of a programming environment. Because of different roles,
+            PIOs should be separated from runtime data structures and designed with different objectives in mind.
+
+            An example of the Automat environment demonstrates that carefully designed PIOs can enable non-programmers
+            to perform tasks typically reserved to
+            expert programmers - such as manipulating low-level machine code and mixing different programming styles.
         </p>
     </article>
 

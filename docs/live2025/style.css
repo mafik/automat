@@ -5,6 +5,10 @@
     box-sizing: border-box;
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 body {
     font-family: 'Andika', sans-serif;
     line-height: 1.6;
@@ -64,7 +68,8 @@ h3+p {
 }
 
 /* Lists */
-ul {
+ul,
+ol {
     margin-bottom: 20px;
     padding-left: 40px;
 }

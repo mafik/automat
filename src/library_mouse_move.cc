@@ -4,9 +4,8 @@
 
 #include <include/core/SkBlendMode.h>
 
-#include "xcb/xproto.h"
-
 #if defined(__linux__)
+#include <xcb/xproto.h>
 #include <xcb/xtest.h>
 #endif
 

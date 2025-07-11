@@ -2045,7 +2045,26 @@ void OnOffTrack::SerializeState(Serializer& writer, const char* key) const {
 }
 
 void Vec2Track::SerializeState(Serializer& writer, const char* key) const {
-  // TODO: implement
+  // Using nullptr as a guard value to reduce JSON nesting
+  if (key != nullptr) {
+    writer.Key(key);
+    writer.StartObject();
+  }
+  writer.Key("type");
+  writer.String("vec2");
+  TrackBase::SerializeState(writer, nullptr);
+  writer.Key("values");
+  writer.StartArray();
+  for (const auto& v : values) {
+    writer.StartArray();
+    writer.Double(v.x);
+    writer.Double(v.y);
+    writer.EndArray();
+  }
+  writer.EndArray();
+  if (key != nullptr) {
+    writer.EndObject();
+  }
 }
 
 void Timeline::SerializeState(Serializer& writer, const char* key) const {
@@ -2115,8 +2134,28 @@ bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, Str& field_na
   return TrackBase::TryDeserializeField(l, d, field_name);
 }
 bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
-  // TODO: implement
-  return true;
+  if (field_name == "values") {
+    values.clear();
+    Status status;
+    for (int i : ArrayView(d, status)) {
+      Vec2 v;
+      for (int i : ArrayView(d, status)) {
+        if (i == 0) {
+          d.Get(v.x, status);
+        } else if (i == 1) {
+          d.Get(v.y, status);
+        }
+      }
+      if (OK(status)) {
+        values.push_back(v);
+      }
+    }
+    if (!OK(status)) {
+      l.ReportError(status.ToStr());
+    }
+    return true;
+  }
+  return TrackBase::TryDeserializeField(l, d, field_name);
 }
 
 void TrackBase::DeserializeState(Location& l, Deserializer& d) {
@@ -2128,7 +2167,7 @@ void OnOffTrack::DeserializeState(Location& l, Deserializer& d) {
 }
 
 void Vec2Track::DeserializeState(Location& l, Deserializer& d) {
-  // TODO: implement
+  ERROR << "Vec2Track::DeserializeState() not implemented";
 }
 
 void Timeline::DeserializeState(Location& l, Deserializer& d) {
@@ -2148,6 +2187,8 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
             if (track == nullptr) {
               if (track_type == "on/off") {
                 track = &AddOnOffTrack(track_name);
+              } else if (track_type == "vec2") {
+                track = &AddVec2Track(track_name);
               } else {
                 AppendErrorMessage(status) += f("Unknown track type: {}", track_type);
               }

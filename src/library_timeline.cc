@@ -1855,10 +1855,6 @@ void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
   }
 }
 
-void Vec2Track::SerializeState(Serializer& writer, const char* key) const {}
-void Vec2Track::DeserializeState(Location& l, Deserializer& d) {}
-bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) { return true; }
-
 void Timeline::OnCancel() {
   if (state == kPlaying) {
     TimelineCancelScheduled(*this);
@@ -2048,6 +2044,10 @@ void OnOffTrack::SerializeState(Serializer& writer, const char* key) const {
   }
 }
 
+void Vec2Track::SerializeState(Serializer& writer, const char* key) const {
+  // TODO: implement
+}
+
 void Timeline::SerializeState(Serializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
@@ -2114,6 +2114,10 @@ bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, Str& field_na
   }
   return TrackBase::TryDeserializeField(l, d, field_name);
 }
+bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
+  // TODO: implement
+  return true;
+}
 
 void TrackBase::DeserializeState(Location& l, Deserializer& d) {
   ERROR << "TrackBase::DeserializeState() not implemented";
@@ -2121,6 +2125,10 @@ void TrackBase::DeserializeState(Location& l, Deserializer& d) {
 
 void OnOffTrack::DeserializeState(Location& l, Deserializer& d) {
   ERROR << "OnOffTrack::DeserializeState() not implemented";
+}
+
+void Vec2Track::DeserializeState(Location& l, Deserializer& d) {
+  // TODO: implement
 }
 
 void Timeline::DeserializeState(Location& l, Deserializer& d) {

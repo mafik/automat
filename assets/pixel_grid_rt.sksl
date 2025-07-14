@@ -1,0 +1,27 @@
+// kind=shader
+
+// SPDX-FileCopyrightText: Copyright 2025 Automat Authors
+// SPDX-License-Identifier: MIT
+
+uniform float2 u_dpdx;
+uniform float2 u_dpdy;
+
+// praise https://iquilezles.org/articles/filterableprocedurals/
+vec2 grid(in float N, in vec2 p) {
+    p /= N;
+    vec2 dpdx = u_dpdx / N;
+    vec2 dpdy = u_dpdy / N;
+    vec2 w = max(abs(dpdx), abs(dpdy));
+    vec2 a = p + 0.5 * w;
+    vec2 b = p - 0.5 * w;
+    vec2 i = (floor(a) + min(fract(a) * N, 1.0) - floor(b) - min(fract(b) * N, 1.0)) / (N * w);
+    return i;
+}
+
+vec4 main(vec2 uv) {
+    uv += 0.5;
+    float2 grid10 = grid(10, uv);
+    float2 grid100 = grid(100, uv);
+
+    return vec4(max(grid100.x, grid10.x * 0.2), max(grid100.y, grid10.y * 0.2), 0, 1);
+}

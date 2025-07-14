@@ -4,12 +4,17 @@
 
 #include <include/core/SkBlendMode.h>
 
+#include <ranges>
+
 #if defined(__linux__)
 #include <xcb/xproto.h>
 #include <xcb/xtest.h>
 #endif
 
+#include "concurrentqueue.hh"
 #include "embedded.hh"
+#include "global_resources.hh"
+#include "library_mouse.hh"
 #include "math.hh"
 #include "textures.hh"
 #include "widget.hh"
@@ -26,43 +31,131 @@ string_view MouseMove::Name() const { return "Mouse Move"; }
 
 Ptr<Object> MouseMove::Clone() const { return MakePtr<MouseMove>(); }
 
-constexpr float kTurtleHeight = 1.2_cm;
-
-PersistentImage turtle = PersistentImage::MakeFromAsset(
-    embedded::assets_turtle_webp, PersistentImage::MakeArgs{.height = kTurtleHeight});
-
-PersistentImage pointer_image = PersistentImage::MakeFromAsset(
-    embedded::assets_pointer_webp,
-    PersistentImage::MakeArgs{.height = kTurtleHeight / 2,
-                              .sampling_options = kNearestMipmapSamplingOptions});
+PersistentImage dpad_image = PersistentImage::MakeFromAsset(
+    embedded::assets_mouse_dpad_webp, PersistentImage::MakeArgs{.scale = mouse::kTextureScale});
 
 // A turtle with a pixelated cursor on its back
 struct MouseMoveWidget : Object::FallbackWidget {
-  MouseMoveWidget(WeakPtr<MouseMove>&& weak_mouse_move) { object = std::move(weak_mouse_move); }
+  moodycamel::ConcurrentQueue<Vec2> trail;
+  moodycamel::ProducerToken trail_token;
+  std::deque<Vec2> trail_draw;
+
+  MouseMoveWidget(WeakPtr<MouseMove>&& weak_mouse_move) : trail(64, 1, 0), trail_token(trail) {
+    object = std::move(weak_mouse_move);
+  }
   SkPath Shape() const override {
-    float turtle_width = turtle.width();
-    Rect bounds = Rect(-turtle_width / 2, -kTurtleHeight / 2, turtle_width / 2, kTurtleHeight / 2);
-    return SkPath::Oval(bounds);
+    Rect bounds = *TextureBounds();
+    float width = bounds.Width();
+    SkRRect rrect;
+    SkVector radii[4] = {
+        {width / 2, width / 2},
+        {width / 2, width / 2},
+        {width / 3, width / 3},
+        {width / 3, width / 3},
+    };
+    rrect.setRectRadii(bounds.sk, radii);
+    return SkPath::RRect(rrect);
+  }
+  animation::Phase Tick(time::Timer& timer) override {
+    auto phase = animation::Finished;
+    size_t dequeued;
+    do {
+      Vec2 buf[32];
+      dequeued = trail.try_dequeue_bulk_from_producer(trail_token, buf, std::size(buf));
+      for (size_t i = 0; i < dequeued; ++i) {
+        trail_draw.push_back(buf[i]);
+      }
+    } while (dequeued);
+    if (dequeued) {
+      phase = animation::Animating;
+    }
+    constexpr auto kMaxTrailPoints = 256;
+    if (trail_draw.size() > kMaxTrailPoints) {
+      trail_draw.erase(trail_draw.begin(),
+                       trail_draw.begin() + trail_draw.size() - kMaxTrailPoints);
+    }
+    return animation::Finished;
   }
   void Draw(SkCanvas& canvas) const override {
+    auto bounds = *TextureBounds();
     canvas.save();
-    canvas.translate(-turtle.width() / 2, -kTurtleHeight / 2);
-    turtle.draw(canvas);
+    canvas.translate(bounds.left, bounds.bottom);
+    float scale = WidgetScale();
+    canvas.scale(scale, scale);
+    mouse::base_texture.draw(canvas);
+    dpad_image.draw(canvas);
     canvas.restore();
+    canvas.save();
+    SkPath path;
+    Vec2 cursor = {0, 0};
+    float trail_scale = 1;
+    path.moveTo(cursor.x, cursor.y);
+    constexpr float kDisplayRadius = 1.6_mm;
+    for (auto& delta : std::ranges::reverse_view(trail_draw)) {
+      cursor += delta;
+      path.lineTo(-cursor.x, cursor.y);
+      float cursor_dist = Length(cursor);
+      float trail_scale_new = kDisplayRadius / cursor_dist;
+      if (trail_scale_new < trail_scale) {
+        trail_scale = trail_scale_new;
+      }
+    }
+    canvas.translate(-0.05_mm, -2.65_mm);  // move the trail end to the center of display
 
-    canvas.save();
-    canvas.translate(-pointer_image.width() / 2, -pointer_image.height() / 2 - 1_mm);
-    pointer_image.paint.setColorFilter(SkColorFilters::Lighting("#A0A0A0"_color, "#303030"_color));
-    pointer_image.paint.setBlendMode(SkBlendMode::kColorDodge);
-    pointer_image.draw(canvas);
-    pointer_image.paint.setBlendMode(SkBlendMode::kMultiply);
-    pointer_image.draw(canvas);
+    static const auto runtime_effect = []() {
+      SkPaint paint;
+      Status status_ignore;
+      auto runtime_effect =
+          resources::CompileShader(embedded::assets_pixel_grid_rt_sksl, status_ignore);
+      if (!OK(status_ignore)) {
+        FATAL << status_ignore;
+      }
+      return runtime_effect;
+    }();
+
+    canvas.scale(trail_scale, trail_scale);
+
+    auto matrix = canvas.getLocalToDeviceAs3x3();
+    SkMatrix inverse;
+    (void)matrix.invert(&inverse);
+
+    SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
+    inverse.mapVectors(dpd, 2);
+    SkPaint display_paint;
+    display_paint.setShader(
+        runtime_effect->makeShader(SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
+
+    canvas.drawCircle(0, 0, kDisplayRadius / trail_scale, display_paint);
+    SkPaint trail_paint;
+    trail_paint.setColor("#CCCCCC"_color);
+    trail_paint.setStyle(SkPaint::kStroke_Style);
+    if (dpd[0].x() < 1) {
+      trail_paint.setStrokeWidth(1);
+    }
+    canvas.drawPath(path, trail_paint);
     canvas.restore();
+  }
+
+  // Mouse Move is supposed to be much smaller than regular mouse widget.
+  //
+  // This function returns the proper scaling factor.
+  static float WidgetScale() {
+    float texture_height = mouse::base_texture.height();
+    float desired_height = 1.2_cm;
+    return desired_height / texture_height;
+  }
+
+  Optional<Rect> TextureBounds() const override {
+    float scale = WidgetScale();
+    float width = mouse::base_texture.width();
+    float height = mouse::base_texture.height();
+    Rect bounds =
+        Rect(-width / 2 * scale, -height / 2 * scale, width / 2 * scale, height / 2 * scale);
+    return bounds;
   }
 
   void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
-    float turtle_width = turtle.width();
-    Rect bounds = Rect(-turtle_width / 2, -kTurtleHeight / 2, turtle_width / 2, kTurtleHeight / 2);
+    Rect bounds = *TextureBounds();
     out_positions.push_back(Vec2AndDir{.pos = bounds.TopCenter(), .dir = -90_deg});
     out_positions.push_back(Vec2AndDir{.pos = bounds.LeftCenter(), .dir = 0_deg});
     out_positions.push_back(Vec2AndDir{.pos = bounds.RightCenter(), .dir = 180_deg});
@@ -84,6 +177,12 @@ void MouseMove::OnMouseMove(Vec2 vec) {
     xcb::flush();
   }
 #endif
+  // TODO: visualize the mouse_move_accumulator
+  ForEachWidget([vec](gui::RootWidget& root, gui::Widget& widget) {
+    MouseMoveWidget& mouse_move_widget = static_cast<MouseMoveWidget&>(widget);
+    mouse_move_widget.trail.try_enqueue(mouse_move_widget.trail_token, vec);
+    widget.WakeAnimation();
+  });
 }
 
 }  // namespace automat::library

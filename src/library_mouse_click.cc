@@ -28,6 +28,7 @@
 #include "../build/generated/embedded.hh"
 #include "argument.hh"
 #include "drag_action.hh"
+#include "library_mouse.hh"
 #include "prototypes.hh"
 #include "svg.hh"
 #include "textures.hh"
@@ -40,10 +41,8 @@ using namespace automat;
 
 namespace automat::library {
 
-constexpr float kScale = 0.00005;
-
 static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
-  auto base = DecodeImage(embedded::assets_mouse_base_webp);
+  auto& base = *mouse::base_texture.image;
   auto mask = button == gui::PointerButton::Left
                   ? DecodeImage(embedded::assets_mouse_lmb_mask_webp)
                   : DecodeImage(embedded::assets_mouse_rmb_mask_webp);
@@ -65,7 +64,8 @@ static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
   }
 
   {  // Draw arrow
-    SkPath path = PathFromSVG(kArrowShape).makeScale(1 / kScale, 1 / kScale);
+    SkPath path =
+        PathFromSVG(kArrowShape).makeScale(1 / mouse::kTextureScale, 1 / mouse::kTextureScale);
     SkPaint paint;
     paint.setBlendMode(SkBlendMode::kMultiply);
     paint.setAlphaf(0.9f);
@@ -107,23 +107,24 @@ void MouseClick::Draw(SkCanvas& canvas) const {
       [(long)gui::PointerButton::Left] =
           {
               PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Left, false),
-                                               {.scale = kScale}),
+                                               {.scale = mouse::kTextureScale}),
               PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Left, true),
-                                               {.scale = kScale}),
+                                               {.scale = mouse::kTextureScale}),
           },
       [(long)gui::PointerButton::Right] =
           {
               PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Right, false),
-                                               {.scale = kScale}),
+                                               {.scale = mouse::kTextureScale}),
               PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Right, true),
-                                               {.scale = kScale}),
+                                               {.scale = mouse::kTextureScale}),
           },
   };
   auto& mouse_image = images[(long)button][down];
   mouse_image.draw(canvas);
 }
 SkPath MouseClick::Shape() const {
-  return SkPath::Rect(SkRect::MakeXYWH(0, 0, 373 * kScale, 624 * kScale));
+  return SkPath::Rect(
+      SkRect::MakeXYWH(0, 0, 373 * mouse::kTextureScale, 624 * mouse::kTextureScale));
 }
 
 void MouseClick::Args(std::function<void(Argument&)> cb) { cb(next_arg); }

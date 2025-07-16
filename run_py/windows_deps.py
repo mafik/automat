@@ -130,8 +130,13 @@ def CheckCommand(command: str, installer: Callable[[], None]):
 
 msvc_tools_dir = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\BuildTools\\VC\\Tools\\MSVC\\14.29.30133\\'
 
+windows_sdk_dir = 'C:\\Program Files (x86)\\Windows Kits\\10\\'
+windows_sdk_version = '10.0.26100.0'
+windows_sdk_include_dir = windows_sdk_dir + 'include\\' + windows_sdk_version + '\\'
+windows_sdk_lib_dir = windows_sdk_dir + 'lib\\' + windows_sdk_version + '\\'
+
 def EnsureVisualStudioBuildToolsInstalled():
-  if os.path.exists(msvc_tools_dir):
+  if os.path.exists(msvc_tools_dir) and os.path.exists(windows_sdk_include_dir) and os.path.exists(windows_sdk_lib_dir):
     return
   url = 'https://aka.ms/vs/16/release/vs_buildtools.exe'
   fs_utils.build_dir.mkdir(parents=True, exist_ok=True)
@@ -149,7 +154,7 @@ def EnsureVisualStudioBuildToolsInstalled():
        '--passive', # show progress window during install
        '--add', 'Microsoft.VisualStudio.Workload.VCTools', # very likely needed
        '--add', 'Microsoft.VisualStudio.Workload.MSBuildTools', # unknown if needed
-       '--add', 'Microsoft.VisualStudio.Component.Windows10SDK', # unknown if needed
+       '--add', 'Microsoft.VisualStudio.Component.Windows10SDK', # very likely needed
        '--includeRecommended', # unknown if needed
        '--norestart',
        '--wait'])
@@ -159,11 +164,6 @@ def SetupEnvironment():
   # Environment variables obtained from:
   # C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvarsall.bat amd64 10.0.26100.0 -vcvars_ver=14.29
   # and then running `set`.
-
-  windows_sdk_dir = 'C:\\Program Files (x86)\\Windows Kits\\10\\'
-  windows_sdk_version = '10.0.26100.0'
-  windows_sdk_include_dir = windows_sdk_dir + 'include\\' + windows_sdk_version + '\\'
-  windows_sdk_lib_dir = windows_sdk_dir + 'lib\\' + windows_sdk_version + '\\'
 
   os.environ['INCLUDE'] = ';'.join(
     [msvc_tools_dir + 'include',

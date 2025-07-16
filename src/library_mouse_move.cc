@@ -4,6 +4,7 @@
 
 #include <include/core/SkBlendMode.h>
 
+#include <atomic>
 #include <ranges>
 
 #if defined(__linux__)
@@ -11,7 +12,6 @@
 #include <xcb/xtest.h>
 #endif
 
-#include "concurrentqueue.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
 #include "library_mouse.hh"
@@ -36,13 +36,11 @@ PersistentImage dpad_image = PersistentImage::MakeFromAsset(
 
 // A turtle with a pixelated cursor on its back
 struct MouseMoveWidget : Object::FallbackWidget {
-  moodycamel::ConcurrentQueue<Vec2> trail;
-  moodycamel::ProducerToken trail_token;
-  std::deque<Vec2> trail_draw;
+  constexpr static size_t kMaxTrailPoints = 256;
+  std::atomic<int> trail_end_idx = 0;
+  std::atomic<Vec2> trail[kMaxTrailPoints] = {};
 
-  MouseMoveWidget(WeakPtr<MouseMove>&& weak_mouse_move) : trail(64, 1, 0), trail_token(trail) {
-    object = std::move(weak_mouse_move);
-  }
+  MouseMoveWidget(WeakPtr<MouseMove>&& weak_mouse_move) { object = std::move(weak_mouse_move); }
   SkPath Shape() const override {
     Rect bounds = *TextureBounds();
     float width = bounds.Width();
@@ -56,26 +54,6 @@ struct MouseMoveWidget : Object::FallbackWidget {
     rrect.setRectRadii(bounds.sk, radii);
     return SkPath::RRect(rrect);
   }
-  animation::Phase Tick(time::Timer& timer) override {
-    auto phase = animation::Finished;
-    size_t dequeued;
-    do {
-      Vec2 buf[32];
-      dequeued = trail.try_dequeue_bulk_from_producer(trail_token, buf, std::size(buf));
-      for (size_t i = 0; i < dequeued; ++i) {
-        trail_draw.push_back(buf[i]);
-      }
-    } while (dequeued);
-    if (dequeued) {
-      phase = animation::Animating;
-    }
-    constexpr auto kMaxTrailPoints = 256;
-    if (trail_draw.size() > kMaxTrailPoints) {
-      trail_draw.erase(trail_draw.begin(),
-                       trail_draw.begin() + trail_draw.size() - kMaxTrailPoints);
-    }
-    return animation::Finished;
-  }
   void Draw(SkCanvas& canvas) const override {
     auto bounds = *TextureBounds();
     canvas.save();
@@ -88,10 +66,13 @@ struct MouseMoveWidget : Object::FallbackWidget {
     canvas.save();
     SkPath path;
     Vec2 cursor = {0, 0};
-    float trail_scale = 1;
-    path.moveTo(cursor.x, cursor.y);
     constexpr float kDisplayRadius = 1.6_mm;
-    for (auto& delta : std::ranges::reverse_view(trail_draw)) {
+    float trail_scale =
+        kDisplayRadius / 15;  // initial scale shows at least 15 pixels (0 and 10 pixel axes)
+    path.moveTo(cursor.x, cursor.y);
+    int end = trail_end_idx.load(std::memory_order_relaxed);
+    for (int i = end + kMaxTrailPoints - 1; i != end; --i) {
+      Vec2 delta = trail[i % kMaxTrailPoints].load(std::memory_order_relaxed);
       cursor += delta;
       path.lineTo(-cursor.x, cursor.y);
       float cursor_dist = Length(cursor);
@@ -131,9 +112,11 @@ struct MouseMoveWidget : Object::FallbackWidget {
     trail_paint.setStyle(SkPaint::kStroke_Style);
     if (dpd[0].x() < 1) {
       trail_paint.setStrokeWidth(1);
+      trail_paint.setStrokeCap(SkPaint::kSquare_Cap);
+      trail_paint.setStrokeJoin(SkPaint::kMiter_Join);
+      trail_paint.setStrokeMiter(2);
     }
     canvas.drawPath(path, trail_paint);
-    canvas.restore();
   }
 
   // Mouse Move is supposed to be much smaller than regular mouse widget.
@@ -177,10 +160,11 @@ void MouseMove::OnMouseMove(Vec2 vec) {
     xcb::flush();
   }
 #endif
-  // TODO: visualize the mouse_move_accumulator
   ForEachWidget([vec](gui::RootWidget& root, gui::Widget& widget) {
     MouseMoveWidget& mouse_move_widget = static_cast<MouseMoveWidget&>(widget);
-    mouse_move_widget.trail.try_enqueue(mouse_move_widget.trail_token, vec);
+    int new_start = mouse_move_widget.trail_end_idx.fetch_add(1, std::memory_order_relaxed);
+    int i = (new_start + MouseMoveWidget::kMaxTrailPoints - 1) % MouseMoveWidget::kMaxTrailPoints;
+    mouse_move_widget.trail[i].store(vec, std::memory_order_relaxed);
     widget.WakeAnimation();
   });
 }

@@ -4,7 +4,8 @@
 
 // This file contains shared code for mouse-related objects.
 
-#include "embedded.hh"
+#include <include/effects/SkRuntimeEffect.h>
+
 #include "textures.hh"
 
 namespace automat::library::mouse {
@@ -12,5 +13,7 @@ namespace automat::library::mouse {
 constexpr float kTextureScale = 0.00005;
 
 extern PersistentImage base_texture;
+
+SkRuntimeEffect& GetPixelGridRuntimeEffect();
 
 }  // namespace automat::library::mouse

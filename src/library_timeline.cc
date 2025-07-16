@@ -28,6 +28,7 @@
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "key_button.hh"
+#include "library_mouse.hh"
 #include "library_mouse_move.hh"
 #include "math.hh"
 #include "number_text_field.hh"
@@ -528,6 +529,10 @@ static void SetOffset(Timeline& timeline, time::T offset, time::SteadyPoint now)
     timeline.paused.playback_offset = offset;
   }
   timeline.WakeAnimation();
+  for (auto& track : timeline.tracks) {
+    track->WakeAnimation();
+    track->RedrawThisFrame();
+  }
 }
 
 void AdjustOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
@@ -544,6 +549,10 @@ void AdjustOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
         clamp<time::T>(timeline.paused.playback_offset + offset, 0, timeline.MaxTrackLength());
   }
   timeline.WakeAnimation();
+  for (auto& track : timeline.tracks) {
+    track->WakeAnimation();
+    track->RedrawThisFrame();
+  }
 }
 
 void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
@@ -560,6 +569,10 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
     timeline.paused.playback_offset = pos_ratio * max_track_length;
   }
   timeline.WakeAnimation();
+  for (auto& track : timeline.tracks) {
+    track->WakeAnimation();
+    track->RedrawThisFrame();
+  }
 }
 
 void NextButton::Activate(gui::Pointer& ptr) {
@@ -920,6 +933,7 @@ DragZoomAction::~DragZoomAction() {
   timeline.WakeAnimation();
   for (auto& track : timeline.tracks) {
     track->WakeAnimation();
+    track->RedrawThisFrame();
   }
 }
 void DragZoomAction::Update() {
@@ -934,6 +948,7 @@ void DragZoomAction::Update() {
   timeline.WakeAnimation();
   for (auto& track : timeline.tracks) {
     track->WakeAnimation();
+    track->RedrawThisFrame();
   }
 }
 
@@ -1002,6 +1017,7 @@ SpliceAction::~SpliceAction() {
       auto& track = timeline.tracks[i];
       track->Splice(current_offset, splice_to);
       track->WakeAnimation();
+      track->RedrawThisFrame();
     }
     timeline.timeline_length += splice_to - current_offset;
     AdjustOffset(timeline, splice_to - current_offset, now);
@@ -1090,6 +1106,12 @@ animation::Phase Timeline::Tick(time::Timer& timer) {
   phase |= splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
   phase |= animation::ExponentialApproach(0, timer.d, 0.05, bridge_wiggle_s);
   UpdateChildTransform(timer.now);
+  if (phase == animation::Animating) {
+    for (auto& track : tracks) {
+      track->WakeAnimation();
+      track->RedrawThisFrame();
+    }
+  }
   return phase;
 }
 
@@ -1764,46 +1786,151 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
   float s_per_m = DistanceToSeconds(*timeline);  // s / m
   auto left_t = rect.left * s_per_m;
   auto right_t = rect.right * s_per_m;
-  auto left_i = lower_bound(timestamps.begin(), timestamps.end(), left_t) - timestamps.begin();
-  auto right_i = upper_bound(timestamps.begin(), timestamps.end(), right_t) - timestamps.begin();
+  auto LowerBound = [&](double t) {
+    return lower_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
+  };
+  auto UpperBound = [&](double t) {
+    return upper_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
+  };
+  auto left_i = LowerBound(left_t);
+  auto right_i = UpperBound(right_t);
 
   float px_per_meter = canvas.getLocalToDeviceAs3x3().mapVector(1, 0).length();  // px / m
   float m_per_px = 1.f / px_per_meter;                                           // m / px
   float pixel_t = s_per_m * m_per_px;                                            // s / px
-  int i = left_i;
-  int segments = 0;
-  // Draw the timestamps as horizontal lines (segments). Each timestamp is a 1-pixel long segment.
-  // Multiple timestamps whose segments overlap are combined into a single segment.
-  while (i < right_i) {
-    int start_i = i;
-    float start_t = timestamps[i];    // start time of a line segment
-    float end_t = start_t + pixel_t;  // end time of a line segment
-    // keep expanding end_t until a gap of at least one pixel is found
-    while (true) {
-      // find the first timestep that's outside of the current [start_t, end_t] segment
-      int leftmost_i_outside_segment =
-          upper_bound(timestamps.begin() + i, timestamps.begin() + right_i, end_t) -
-          timestamps.begin();
-      if (leftmost_i_outside_segment >= right_i) {
-        i = right_i;
-        end_t = std::min(end_t, right_t);
-        break;
+
+  {  // draw horizontal segments
+
+    int i = left_i;
+    int segments = 0;
+    // Draw the timestamps as horizontal lines (segments). Each timestamp is a 1-pixel long segment.
+    // Multiple timestamps whose segments overlap are combined into a single segment.
+    while (i < right_i) {
+      int start_i = i;
+      float start_t = timestamps[i];    // start time of a line segment
+      float end_t = start_t + pixel_t;  // end time of a line segment
+      // keep expanding end_t until a gap of at least one pixel is found
+      while (true) {
+        // find the first timestep that's outside of the current [start_t, end_t] segment
+        int leftmost_i_outside_segment =
+            upper_bound(timestamps.begin() + i, timestamps.begin() + right_i, end_t) -
+            timestamps.begin();
+        if (leftmost_i_outside_segment >= right_i) {
+          i = right_i;
+          end_t = std::min(end_t, right_t);
+          break;
+        }
+        // take one step back to get the last timestamp that's within the current end_t
+        int rightmost_i_inside_segment = leftmost_i_outside_segment - 1;
+        if (rightmost_i_inside_segment == i) {
+          // one-pixel gap found, exit to draw the segment (and also advance i for next iteration)
+          ++i;
+          break;
+        }
+        i = rightmost_i_inside_segment;
+        end_t = timestamps[i] + pixel_t;
       }
-      // take one step back to get the last timestamp that's within the current end_t
-      int rightmost_i_inside_segment = leftmost_i_outside_segment - 1;
-      if (rightmost_i_inside_segment == i) {
-        // one-pixel gap found, exit to draw the segment (and also advance i for next iteration)
-        ++i;
-        break;
-      }
-      i = rightmost_i_inside_segment;
-      end_t = timestamps[i] + pixel_t;
+      ++segments;
+      canvas.drawLine(start_t / s_per_m, kTrackHeight / 2 - 1_mm, end_t / s_per_m,
+                      kTrackHeight / 2 - 1_mm, kOnOffPaint);
     }
-    ++segments;
-    canvas.drawLine(start_t / s_per_m, 0, end_t / s_per_m, 0, kOnOffPaint);
   }
-  // LOG << "Drawn " << segments << " segments showing " << right_i - left_i << " / "
-  //     << timestamps.size() << " points";
+
+  {  // draw displays
+    constexpr float kDisplayMargin = 0.5_mm;
+    constexpr float kDisplayHeight = kTrackHeight - kDisplayMargin * 2;
+    constexpr float kDisplayMinWidth = kDisplayHeight;
+    float display_min_t = kDisplayMinWidth * s_per_m;
+
+    int display_begin = floorf(left_t / display_min_t);
+    int display_end = floorf(right_t / display_min_t) + 1;
+
+    float max_track_length = timeline->MaxTrackLength();
+    time::T current_t = CurrentOffset(*timeline, time::SteadyNow());
+    int current_i = LowerBound(current_t);
+
+    for (int display_i = display_begin; display_i < display_end; ++display_i) {
+      float display_start_t = display_i * display_min_t;
+      float display_end_t = min(max_track_length, display_start_t + display_min_t);
+      if (display_end_t + display_min_t > max_track_length) {
+        display_end_t = max<float>(display_end_t, min<float>(timestamps.back(), max_track_length));
+        display_i = display_end;
+      }
+      int start_i = LowerBound(display_start_t);
+      int end_i = UpperBound(display_end_t);
+
+      float display_duration = display_end_t - display_start_t;
+      float display_width = display_duration / s_per_m;
+      SkPath trail;
+      trail.moveTo(0, 0);
+      Vec2 cursor = {};
+      for (int i = start_i; i < end_i; ++i) {
+        cursor += Vec2(values[i].x, -values[i].y);
+        trail.lineTo(cursor.x, cursor.y);
+      }
+      Rect bounds = trail.getBounds().makeOutset(1, 1);
+
+      auto rect = Rect(display_start_t / s_per_m + kDisplayMargin / 2, -kDisplayHeight / 2,
+                       display_end_t / s_per_m - kDisplayMargin / 2, kDisplayHeight / 2);
+      auto clip = RRect::MakeSimple(rect, kDisplayMargin);
+      if (end_i > start_i) {
+        canvas.save();
+        canvas.clipRRect(clip.sk, true);
+        canvas.translate(rect.CenterX(), rect.CenterY());
+        float display_height_px =
+            canvas.getLocalToDeviceAs3x3().mapVector(kDisplayHeight, 0).length();
+        float scale = 10 * kDisplayHeight / display_height_px;
+        if (auto scale_right = display_width / 2 / bounds.right; scale_right < scale) {
+          scale = scale_right;
+        }
+        if (auto scale_left = -display_width / 2 / bounds.left; scale_left < scale) {
+          scale = scale_left;
+        }
+        if (auto scale_top = kDisplayHeight / 2 / bounds.top; scale_top < scale) {
+          scale = scale_top;
+        }
+        if (auto scale_bottom = -kDisplayHeight / 2 / bounds.bottom; scale_bottom < scale) {
+          scale = scale_bottom;
+        }
+        scale *= 0.9;  // 10% margin
+        canvas.scale(scale, scale);
+
+        auto matrix = canvas.getLocalToDeviceAs3x3();
+        SkMatrix inverse;
+        (void)matrix.invert(&inverse);
+
+        SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
+        inverse.mapVectors(dpd, 2);
+        SkPaint display_paint;
+        display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
+            SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
+        canvas.drawPaint(display_paint);
+        SkPaint trail_paint;
+        trail_paint.setColor("#cccccc"_color);
+        trail_paint.setStyle(SkPaint::kStroke_Style);
+        if (dpd[0].x() < 1) {
+          trail_paint.setStrokeWidth(1);
+          trail_paint.setStrokeCap(SkPaint::kSquare_Cap);
+          trail_paint.setStrokeJoin(SkPaint::kMiter_Join);
+          trail_paint.setStrokeMiter(2);
+        }
+        canvas.drawPath(trail, trail_paint);
+        canvas.restore();
+
+        if (current_i >= start_i && current_i < end_i) {
+          Vec2 current_point = trail.getPoint(current_i - start_i + 1) * scale + rect.Center();
+          SkPaint current_paint;
+          current_paint.setColor(kOrange);
+          if (timestamps[current_i] == current_t) {
+            current_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+          } else {
+            current_paint.setStyle(SkPaint::kStroke_Style);
+          }
+          canvas.drawCircle(current_point.x, current_point.y, 1_mm, current_paint);
+        }
+      }
+    }
+  }
 }
 void Vec2Track::Splice(time::T current_offset, time::T splice_to) {
   double delta = splice_to - current_offset;

@@ -5,7 +5,6 @@
 #include <include/core/SkBlendMode.h>
 
 #include <atomic>
-#include <ranges>
 
 #if defined(__linux__)
 #include <xcb/xproto.h>
@@ -13,7 +12,6 @@
 #endif
 
 #include "embedded.hh"
-#include "global_resources.hh"
 #include "library_mouse.hh"
 #include "math.hh"
 #include "textures.hh"
@@ -83,17 +81,6 @@ struct MouseMoveWidget : Object::FallbackWidget {
     }
     canvas.translate(-0.05_mm, -2.65_mm);  // move the trail end to the center of display
 
-    static const auto runtime_effect = []() {
-      SkPaint paint;
-      Status status_ignore;
-      auto runtime_effect =
-          resources::CompileShader(embedded::assets_pixel_grid_rt_sksl, status_ignore);
-      if (!OK(status_ignore)) {
-        FATAL << status_ignore;
-      }
-      return runtime_effect;
-    }();
-
     canvas.scale(trail_scale, trail_scale);
 
     auto matrix = canvas.getLocalToDeviceAs3x3();
@@ -103,8 +90,8 @@ struct MouseMoveWidget : Object::FallbackWidget {
     SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
     inverse.mapVectors(dpd, 2);
     SkPaint display_paint;
-    display_paint.setShader(
-        runtime_effect->makeShader(SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
+    display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
+        SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
 
     canvas.drawCircle(0, 0, kDisplayRadius / trail_scale, display_paint);
     SkPaint trail_paint;

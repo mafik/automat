@@ -23,5 +23,5 @@ vec4 main(vec2 uv) {
     float2 grid10 = grid(10, uv);
     float2 grid100 = grid(100, uv);
 
-    return vec4(max(grid100.x, grid10.x * 0.2), max(grid100.y, grid10.y * 0.2), 0, 1);
+    return vec4(min(max(grid100.x, grid10.x * 0.2), 0.3), min(max(grid100.y, grid10.y * 0.2), 0.3), 0, 1);
 }

@@ -323,7 +323,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
     if (!down) {
       // If the key is released then we should assume that it was pressed before the recording and
       // the pressed section should start at 0.
-      new_track.timestamps.push_back(0);
+      new_track.timestamps.push_back(0s);
     }
     track_index = timeline->tracks.size() - 1;
     Location& key_presser_loc = machine->Create<KeyPresser>();
@@ -345,7 +345,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
   }
 
   auto& ts = track->timestamps;
-  time::T t = (time::SteadyNow() - timeline->recording.started_at).count();
+  time::Duration t = time::SteadyNow() - timeline->recording.started_at;
 
   size_t next_i = std::lower_bound(ts.begin(), ts.end(), t) - ts.begin();
 
@@ -373,7 +373,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
   } else {
     if (next_i % 2) {
       // filled section
-      if (isnan(track->on_at)) {
+      if (track->on_at == time::kDurationGuard) {
         // This shouldn't happen but in some edge cases it might. We just adjust the end time of
         // the current section to `t`.
         if (next_i < ts.size()) {
@@ -443,11 +443,11 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
         } else {
           ts.push_back(t);
         }
-        track->on_at = NAN;
+        track->on_at = time::kDurationGuard;
       }
     } else {
       // empty section
-      if (isnan(track->on_at)) {
+      if (track->on_at == time::kDurationGuard) {
         // This shouldn't happen but in some edge cases it might. We just adjust the end time of
         // the previous section to `t`.
         if (next_i > 0) {
@@ -461,7 +461,7 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
           ts.erase(first_it, second_it);
         }
         ts.insert(first_it, {track->on_at, t});
-        track->on_at = NAN;
+        track->on_at = time::kDurationGuard;
       }
     }
   }
@@ -513,7 +513,7 @@ void MacroRecorder::PointerLoggerMove(gui::Pointer::Logging&, Vec2 relative_px) 
     ERROR << "Track is not a Vec2Track";
     return;
   }
-  time::T t = (time::SteadyNow() - timeline->recording.started_at).count();
+  time::Duration t = time::SteadyNow() - timeline->recording.started_at;
   track->timestamps.push_back(t);
   track->values.push_back(relative_px);
 }

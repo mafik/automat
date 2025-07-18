@@ -188,7 +188,8 @@ void RunMainLine(unique_ptr<Task> t) {
   while (auto shared = t->target.lock()) {
     auto ptr = shared.get();
     if constexpr (kPrintTasks) {
-      LOG << "<" << typeid(*t).name() << "> => " << typeid(*ptr).name() << "@" << f("{}", static_cast<void*>(ptr));
+      LOG << "<" << typeid(*t).name() << "> => " << typeid(*ptr).name() << "@"
+          << f("{}", static_cast<void*>(ptr));
     }
     t = t->Execute(std::move(shared));
     if (t == nullptr) {
@@ -351,7 +352,7 @@ double IncrementTest(int n_threads = 1) {
     t.join();
   }
   time_point end = chrono::steady_clock::now();
-  return (double)kIterations * n_threads / (end - start).count();
+  return (double)kIterations * n_threads / time::ToSeconds(end - start);
 }
 
 void IncrementTestSuite() {

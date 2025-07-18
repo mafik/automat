@@ -50,8 +50,8 @@ struct ObjectAnimationState {
 // Implementations of this interface would typically extend it with
 // container-specific functions.
 struct Location : public gui::Widget {
-  constexpr static float kPositionSpringPeriod = 0.2s .count();
-  constexpr static float kScaleSpringPeriod = 0.3s .count();
+  constexpr static float kPositionSpringPeriod = 0.2;
+  constexpr static float kScaleSpringPeriod = 0.3;
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
 
   ObjectAnimationState& GetAnimationState() const;

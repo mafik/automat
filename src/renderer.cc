@@ -390,8 +390,8 @@ void WidgetDrawable::InsertRecording() {
     auto& frame = w->in_progress();
 
     // LOG << "GPU time: " << stats.elapsedTime << " (" << (bool)result << ")";
-    float gpu_time = (time::SteadyNow() - frame.gpu_start).count();
-    float render_time = max<float>(gpu_time, frame.cpu_time.count());
+    float gpu_time = time::ToSeconds(time::SteadyNow() - frame.gpu_start);
+    float render_time = max<float>(gpu_time, time::ToSeconds(frame.cpu_time));
     if (gpu_time > 1) {
       LOG << "Widget " << w->name << " took " << gpu_time << "s to render";
     }
@@ -527,7 +527,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     SkRuntimeEffectBuilder builder(effect);
     builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
     builder.uniform("surfaceTransform") = surface_transform;
-    float time = fmod(time::SteadyNow().time_since_epoch().count(), 1.0);
+    float time = time::SteadySaw<1.0>();
     builder.uniform("time") = time;
     SkSamplingOptions sampling;
     builder.child("surface") = SkSurfaces::AsImage(frame.surface)
@@ -542,8 +542,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       constexpr int kNumColors = 10;
       SkColor colors[kNumColors];
       float pos[kNumColors];
-      double integer_ignored;
-      double fraction = modf(last_tick_time.time_since_epoch().count() / 4, &integer_ignored);
+      double fraction = time::ToSeconds(last_tick_time.time_since_epoch() % 4s);
       SkMatrix shader_matrix = SkMatrix::RotateDeg(fraction * -360.0f, surface_size.center());
       for (int i = 0; i < kNumColors; ++i) {
         float hsv[] = {i * 360.0f / kNumColors, 1.0f, 1.0f};
@@ -650,7 +649,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   vector<WidgetTree> tree;
 
   auto GetLag = [now](WidgetTree& tree_entry) -> float {
-    return max(time::Duration(0), now - tree_entry.widget->wake_time).count();
+    return time::ToSeconds(max<time::Duration>(0s, now - tree_entry.widget->wake_time));
   };
 
   auto GetRenderTime = [](WidgetTree& tree_entry) {
@@ -733,7 +732,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
       if (node.verdict == Verdict::Unknown && widget->wake_time != time::SteadyPoint::max()) {
         node.wants_to_draw = true;
         auto true_d = root_widget->timer.d;
-        auto fake_d = min(1.0, (now - widget->last_tick_time).count());
+        auto fake_d = min(1.0, time::ToSeconds(now - widget->last_tick_time));
         if (widget->wake_time == time::SteadyPoint::min()) {
           // This is the first time this widget is being rendered - use `true_d` to animate it.
           fake_d = true_d;
@@ -1251,7 +1250,7 @@ void RenderFrame(SkCanvas& canvas) {
       auto cached_widget_drawable = overflow_queue[i];
       auto expected_total_paint_time =
           time::SteadyNow() - paint_start +
-          time::Duration(cached_widget_drawable->average_draw_millis / 1000);
+          time::FloatDuration(cached_widget_drawable->average_draw_millis / 1000);
       if (expected_total_paint_time > 16.6ms) {
         continue;
       }

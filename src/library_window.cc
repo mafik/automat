@@ -539,7 +539,7 @@ void Window::OnRun(Location& here, RunTask&) {
                                         SkAlphaType::kUnpremul_SkAlphaType);
     auto pixmap = SkPixmap(image_info, impl->data.data(), width * 4);
     captured_image = SkImages::RasterFromPixmapCopy(pixmap);
-    capture_time = time::SteadyNow().time_since_epoch().count();
+    capture_time = time::SecondsSinceEpoch();
   }
 #elif defined(_WIN32)
   {
@@ -620,7 +620,7 @@ void Window::OnRun(Location& here, RunTask&) {
     {
       auto lock = std::lock_guard(mutex);
       captured_image = std::move(result);
-      capture_time = time::SteadyNow().time_since_epoch().count();
+      capture_time = time::SecondsSinceEpoch();
     }
   }
 #endif

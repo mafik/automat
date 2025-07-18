@@ -148,11 +148,11 @@ Assembler::Assembler() {
 
 Assembler::~Assembler() {}
 
-static animation::Phase RefreshState(Assembler& assembler, time::T time) {
+static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now) {
   if (assembler.mc_controller == nullptr) {
     return animation::Finished;
   }
-  if (time > assembler.last_state_refresh) {
+  if (now > assembler.last_state_refresh) {
     auto old_regs = assembler.state.regs;
     Status ignore;
     assembler.mc_controller->GetState(assembler.state, ignore);
@@ -165,7 +165,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::T time) {
       }
     }
     assembler.WakeWidgetsAnimation();
-    assembler.last_state_refresh = time;
+    assembler.last_state_refresh = now;
   }
   if (assembler.IsRunning()) {
     return animation::Animating;
@@ -177,7 +177,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::T time) {
 void Assembler::ExitCallback(mc::CodePoint code_point) {
   auto here_ptr = here.Lock();
   Done(*here_ptr);
-  RefreshState(*this, time::SteadyNow().time_since_epoch().count());
+  RefreshState(*this, time::SteadyNow());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
     auto exit_mc_inst = code_point.instruction->Lock();
@@ -290,7 +290,7 @@ void Assembler::RunMachineCode(library::Instruction* entry_point) {
 
   Status status;
   auto inst = entry_point->ToMC();
-  RefreshState(*this, time::SteadyNow().time_since_epoch().count());
+  RefreshState(*this, time::SteadyNow());
   mc_controller->Execute(inst, status);
   if (!OK(status)) {
     ERROR << "Failed to execute Assembler: " << status;
@@ -395,7 +395,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   if (!assembler || assembler->mc_controller == nullptr) {
     return animation::Finished;
   }
-  animation::Phase phase = RefreshState(*assembler, timer.NowSeconds());
+  animation::Phase phase = RefreshState(*assembler, timer.now);
   // Register widgets indexed by register index.
   std::array<RegisterWidget*, kGeneralPurposeRegisterCount> reg_widgets_idx = {};
 
@@ -673,7 +673,7 @@ animation::Phase RegisterWidget::Tick(time::Timer& timer) {
   if (auto register_obj = LockRegister()) {
     auto register_index = register_obj->register_index;
     if (auto assembler = register_obj->assembler_weak.lock()) {
-      phase = RefreshState(*assembler, timer.NowSeconds());
+      phase = RefreshState(*assembler, timer.now);
       auto reg_value = assembler->state.regs[register_index];
     }
   }

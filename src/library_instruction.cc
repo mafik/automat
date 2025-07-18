@@ -2328,8 +2328,8 @@ struct EnumKnobWidget : gui::Widget {
   float last_vx = 0;
   Knob knob;
 
-  constexpr static float kClickWigglePeriod = 0.5;
-  constexpr static float kClickWiggleHalfTime = 0.1;
+  constexpr static time::FloatDuration kClickWigglePeriod = 0.5s;
+  constexpr static time::FloatDuration kClickWiggleHalfTime = 0.1s;
   animation::SpringV2<float> click_wiggle = {};
   bool is_dragging = false;
   float cond_code_float = 0;
@@ -2411,7 +2411,8 @@ struct EnumKnobWidget : gui::Widget {
     if (value != old_value) {
       KnobSet(value);
     }
-    phase |= click_wiggle.SpringTowards(0, timer.d, kClickWigglePeriod, kClickWiggleHalfTime);
+    phase |= click_wiggle.SpringTowards(0, timer.d, time::ToSeconds(kClickWigglePeriod),
+                                        time::ToSeconds(kClickWiggleHalfTime));
     cond_code_float = (float)value + knob.value + click_wiggle.value;
 
     return phase;
@@ -2978,7 +2979,7 @@ struct EnumKnobWidget : gui::Widget {
       widget->click_wiggle.value += widget->knob.value;
       widget->knob.value = 0;
 
-      if ((time::SteadyNow() - start_time).count() < kClickWigglePeriod / 2) {
+      if ((time::SteadyNow() - start_time) < kClickWigglePeriod / 2) {
         widget->knob.value -= 1;
         widget->click_wiggle.value += 1;
       }

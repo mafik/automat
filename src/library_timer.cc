@@ -55,7 +55,7 @@ constexpr static float kTickOuterRadius = r4 * 0.95;
 constexpr static float kTickMajorLength = r4 * 0.05;
 constexpr static float kTickMinorLength = r4 * 0.025;
 
-static constexpr time::Duration kHandPeriod = 0.1s;
+static constexpr time::Duration kHandPeriod = 100ms;
 
 void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) { Done(here2); }
 
@@ -129,8 +129,8 @@ static const char* RangeName(TimerDelay::Range range) {
 }
 
 static void UpdateTextField(TimerDelay& timer) {
-  auto n =
-      timer.duration.value.count() / RangeDuration(timer.range).count() * TickCount(timer.range);
+  auto n = TickCount(timer.range) * timer.duration.value /
+           time::FloatDuration(RangeDuration(timer.range));
   timer.text_field->SetNumber(n);
 }
 
@@ -151,8 +151,8 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
     NoSchedulingGuard guard(*h);
     auto duration_obj = timer.duration_arg.GetLocation(*h);
     if (duration_obj.ok && duration_obj.location) {
-      duration_obj.location->SetNumber(timer.duration.value.count() * TickCount(timer.range) /
-                                       RangeDuration(timer.range).count());
+      duration_obj.location->SetNumber(timer.duration.value * TickCount(timer.range) /
+                                       time::FloatDuration(RangeDuration(timer.range)));
     }
   }
 }
@@ -234,7 +234,7 @@ constexpr static float kHandLength = r4 * 0.8;
 static float HandBaseDegrees(const TimerDelay& timer) {
   if (timer.IsRunning()) {
     Duration elapsed = SteadyClock::now() - timer.start_time;
-    return 90 - 360 * elapsed.count() / RangeDuration(timer.range).count();
+    return 90 - 360 * elapsed / time::FloatDuration(RangeDuration(timer.range));
   } else {
     return 90;
   }
@@ -385,7 +385,7 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
   int tick_count = TickCount(range);
   int major_tick_count = MajorTickCount(range);
   // Draw duration
-  float duration_angle = -duration.count() / RangeDuration(range).count() * 360;
+  float duration_angle = -duration / time::FloatDuration(RangeDuration(range)) * 360;
   if (duration_angle < -360) {
     duration_angle = -360;
   }
@@ -447,7 +447,8 @@ animation::Phase TimerDelay::Tick(time::Timer& timer) {
   phase |= range_dial.SpringTowards((float)range, timer.d, 0.4, 0.05);
   double circles;
   float duration_handle_rotation_target =
-      M_PI * 2.5 - modf(duration.value.count() / RangeDuration(range).count(), &circles) * 2 * M_PI;
+      M_PI * 2.5 -
+      modf(duration.value / time::FloatDuration(RangeDuration(range)), &circles) * 2 * M_PI;
   duration_handle_rotation_target =
       modf(duration_handle_rotation_target / (2 * M_PI), &circles) * 2 * M_PI;
   animation::WrapModulo(duration_handle_rotation, duration_handle_rotation_target, M_PI * 2);
@@ -465,7 +466,7 @@ animation::Phase TimerDelay::Tick(time::Timer& timer) {
       hand_target = 90;
     }
     animation::WrapModulo(hand_degrees.value, hand_target, 360);
-    phase |= hand_degrees.SpringTowards(hand_target, timer.d, kHandPeriod.count(), 0.05);
+    phase |= hand_degrees.SpringTowards(hand_target, timer.d, time::ToSeconds(kHandPeriod), 0.05);
   }
   return phase;
 }
@@ -611,9 +612,8 @@ struct DragDurationHandleAction : Action {
       new_duration = ceilf(new_duration);
       new_duration /= tick_count;
     }
-    new_duration *= RangeDuration(timer.range).count();
 
-    SetDuration(timer, time::Duration(new_duration));
+    SetDuration(timer, time::Defloat(RangeDuration(timer.range) * new_duration));
     PropagateDurationOutwards(timer);
   }
 };
@@ -625,7 +625,7 @@ void TimerDelay::Updated(Location& here, Location& updated) {
   }
   std::string duration_str = result.object->GetText();
   double n = std::stod(duration_str);
-  Duration d = Duration(n * RangeDuration(range).count() / TickCount(range));
+  Duration d = time::Defloat(RangeDuration(range) * n / TickCount(range));
   SetDuration(*this, d);
 }
 
@@ -772,10 +772,10 @@ void TimerDelay::SerializeState(Serializer& writer, const char* key) const {
   auto range_str = ToStr(range);
   writer.String(range_str.data(), range_str.size());
   writer.Key("duration_seconds");
-  writer.Double(duration.value.count());
+  writer.Double(time::ToSeconds(duration.value));
   if (this->IsRunning()) {
     writer.Key("running");
-    writer.Double((time::SteadyNow() - start_time).count());
+    writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
   }
   writer.EndObject();
 }
@@ -787,12 +787,12 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
       double value = 0;
       d.Get(value, status);
       BeginLongRunning(l, l.GetRunTask());
-      start_time = time::SteadyNow() - Duration(value);
+      start_time = time::SteadyNow() - time::FromSeconds(value);
     } else if (key == "duration_seconds") {
       double value;
       d.Get(value, status);
       if (OK(status)) {
-        duration.value = Duration(value);
+        duration.value = time::FromSeconds(value);
       }
     } else if (key == "range") {
       Str value;

@@ -37,8 +37,8 @@ void VulkanPaint() {
     // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
     if (next_frame <= now) {
       double frame_count =
-          ceil((now - next_frame).count() * root_widget->window->screen_refresh_rate);
-      next_frame += time::Duration(frame_count / root_widget->window->screen_refresh_rate);
+          ceil(time::ToSeconds(now - next_frame) * root_widget->window->screen_refresh_rate);
+      next_frame += time::FromSeconds(frame_count / root_widget->window->screen_refresh_rate);
       constexpr bool kLogSkippedFrames = false;
       if (kLogSkippedFrames && frame_count > 1) {
         LOG << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
@@ -48,7 +48,7 @@ void VulkanPaint() {
       // With timeBeginPeriod(1) it's T + ~1ms.
       // TODO: try condition_variable instead
       std::this_thread::sleep_until(next_frame);
-      next_frame += time::Duration(1.0 / root_widget->window->screen_refresh_rate);
+      next_frame += time::FromSeconds(1.0 / root_widget->window->screen_refresh_rate);
     }
   }
 
@@ -88,9 +88,9 @@ std::jthread render_thread;
 
 time::SteadyPoint test_start;
 
-std::string FormatTime(time::T d) { return f("{:.3f}s", d); }
+std::string FormatTime(double d) { return f("{:.3f}s", d); }
 
-std::string FormatTime(time::Duration d) { return FormatTime(d.count()); }
+std::string FormatTime(time::Duration d) { return FormatTime(time::ToSeconds(d)); }
 
 std::string FormatTime(time::Timer& timer) { return FormatTime(timer.now - test_start); }
 
@@ -145,7 +145,7 @@ vec4 main( float2 fragCoord ) {
     local_to_parent =
         SkM44(SkMatrix::RotateDeg(fmod(timer.NowSeconds() * 360 / 5, 360), root_widget->size / 2));
 
-    float time = (timer.now - test_start).count();
+    float time = time::ToSeconds(timer.now - test_start);
     auto uniforms = SkData::MakeWithCopy(&time, sizeof(time));
     paint.setShader(runtime_effect->makeShader(uniforms, nullptr, 0));
     return animation::Animating;

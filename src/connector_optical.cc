@@ -1309,8 +1309,8 @@ CablePhysicsSimulation::CablePhysicsSimulation(Location& loc, Argument& arg, Vec
       .distance = 0,
       .next_dir_delta = 0_deg,
   });  // dispenser
-  steel_insert_hidden.period = 0.5s;
-  steel_insert_hidden.half_life = 0.2s;
+  steel_insert_hidden.period = 500ms;
+  steel_insert_hidden.half_life = 200ms;
 }
 
 CablePhysicsSimulation::~CablePhysicsSimulation() {}

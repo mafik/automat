@@ -149,7 +149,7 @@ struct Timer : Object, Runnable {
   string GetText() const override {
     time::SteadyPoint now = GetNow();
     time::Duration elapsed = now - start;
-    return f("{}", elapsed.count());
+    return f("{}", time::ToSeconds(elapsed));
   }
   void OnRun(Location& here, RunTask&) override {
     time::SteadyPoint now = GetNow();

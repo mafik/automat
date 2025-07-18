@@ -100,9 +100,9 @@ void VulkanPaint() {
     // VK_EXT_present_timing
     // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
     if (next_frame <= now) {
-      double frame_count =
-          ceil((now - next_frame).count() * root_widget->window->screen_refresh_rate);
-      next_frame += time::Duration(frame_count / root_widget->window->screen_refresh_rate);
+      auto frame_count =
+          (now - next_frame) / std::chrono::seconds(root_widget->window->screen_refresh_rate);
+      next_frame += frame_count * std::chrono::seconds(root_widget->window->screen_refresh_rate);
       constexpr bool kLogSkippedFrames = false;
       if (kLogSkippedFrames && frame_count > 1) {
         LOG << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
@@ -112,7 +112,7 @@ void VulkanPaint() {
       // With timeBeginPeriod(1) it's T + ~1ms.
       // TODO: try condition_variable instead
       std::this_thread::sleep_until(next_frame);
-      next_frame += time::Duration(1.0 / root_widget->window->screen_refresh_rate);
+      next_frame += 1s / root_widget->window->screen_refresh_rate;
     }
   }
 

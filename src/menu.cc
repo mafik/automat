@@ -66,7 +66,7 @@ struct MenuWidget : gui::Widget {
       auto dimensions = image->dimensions();
 
       SkRuntimeEffectBuilder builder(effect);
-      builder.uniform("time") = (float)fmod(time::SteadyNow().time_since_epoch().count(), 1000.0);
+      builder.uniform("time") = (float)fmod(time::SecondsSinceEpoch(), 1000.0);
       builder.uniform("bubble_radius") = size.value;
       builder.child("environment") = image->makeShader(kDefaultSamplingOptions);
       builder.uniform("environment_size") = SkPoint(dimensions.width(), dimensions.height());

@@ -53,7 +53,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   // Record camera movement timeline. This is used to create inertia effect.
   camera_timeline.emplace_back(Vec3(camera_pos, zoom));
   timeline.emplace_back(timer.now);
-  while (timeline.front() < timer.now - time::Duration(0.2)) {
+  while (timeline.front() < timer.now - 200ms) {
     camera_timeline.pop_front();
     timeline.pop_front();
   }
@@ -89,7 +89,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
 
   if (inertia) {
     if (timeline.size() > 1) {
-      auto dt = (timeline.back() - timeline.front()).count();
+      auto dt = time::ToSeconds(timeline.back() - timeline.front());
       auto dx = camera_timeline.back().x - camera_timeline.front().x;
       auto dy = camera_timeline.back().y - camera_timeline.front().y;
       auto dz = camera_timeline.back().z / camera_timeline.front().z;

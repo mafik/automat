@@ -109,7 +109,7 @@ struct Assembler : LiveObject, LongRunning, Container {
   void ExitCallback(mc::CodePoint code_point);
 
   std::unique_ptr<mc::Controller> mc_controller;
-  time::T last_state_refresh = 0;
+  time::SteadyPoint last_state_refresh = {};
   mc::Controller::State state;
   std::array<SharedOrWeakPtr<Register>, kGeneralPurposeRegisterCount> reg_objects_idx;
 

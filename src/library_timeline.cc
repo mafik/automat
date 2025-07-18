@@ -362,7 +362,7 @@ Timeline::Timeline()
       prev_button(MakePtr<PrevButton>()),
       next_button(MakePtr<NextButton>()),
       state(kPaused),
-      paused{.playback_offset = 0},
+      paused{.playback_offset = 0s},
       zoom(10) {
   run_button->local_to_parent = SkM44::Translate(-kPlayButtonRadius, kDisplayMargin);
   prev_button->local_to_parent =
@@ -434,10 +434,10 @@ static Font& LcdFont() {
   return *font.get();
 }
 
-time::T Timeline::MaxTrackLength() const {
-  time::T max_track_length = timeline_length;
+time::Duration Timeline::MaxTrackLength() const {
+  auto max_track_length = timeline_length;
   if (state == kRecording) {
-    max_track_length = max(max_track_length, (time::SteadyNow() - recording.started_at).count());
+    max_track_length = max(max_track_length, time::SteadyNow() - recording.started_at);
   }
   for (const auto& track : tracks) {
     if (track->timestamps.empty()) {
@@ -449,17 +449,17 @@ time::T Timeline::MaxTrackLength() const {
 }
 
 static float CurrentPosRatio(const Timeline& timeline) {
-  time::T max_track_length = timeline.MaxTrackLength();
-  if (max_track_length == 0) {
+  time::FloatDuration max_track_length = timeline.MaxTrackLength();
+  if (max_track_length == 0s) {
     return 1;
   }
   switch (timeline.state) {
     case Timeline::kPlaying:
-      return (timeline.playing.now - timeline.playing.started_at).count() / max_track_length;
+      return (timeline.playing.now - timeline.playing.started_at) / max_track_length;
     case Timeline::kPaused:
       return timeline.paused.playback_offset / max_track_length;
     case Timeline::kRecording:
-      return (timeline.recording.now - timeline.recording.started_at).count() / max_track_length;
+      return (timeline.recording.now - timeline.recording.started_at) / max_track_length;
   }
 }
 
@@ -476,8 +476,8 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
   // We're not subtracting `started_at` from `now` because due to floating point accuracy
   // that might result in a timestamp before the current one (leading to infinite loop) or
   // after the next one (leading to skipped values).
-  auto cmp = [started_at](time::SteadyPoint now, time::T timestamp) {
-    return started_at + time::Duration(timestamp) > now;
+  auto cmp = [started_at](time::SteadyPoint now, time::Duration timestamp) {
+    return started_at + timestamp > now;
   };
   for (const auto& track : t.tracks) {
     int next_update_i =
@@ -505,19 +505,19 @@ static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint
   }
 }
 
-static time::T CurrentOffset(const Timeline& timeline, time::SteadyPoint now) {
+static time::Duration CurrentOffset(const Timeline& timeline, time::SteadyPoint now) {
   switch (timeline.state) {
     case Timeline::kPlaying:
-      return (now - timeline.playing.started_at).count();
+      return now - timeline.playing.started_at;
     case Timeline::kPaused:
       return timeline.paused.playback_offset;
     case Timeline::kRecording:
-      return (now - timeline.recording.started_at).count();
+      return now - timeline.recording.started_at;
   }
 }
 
-static void SetOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
-  offset = clamp<time::T>(offset, 0, timeline.MaxTrackLength());
+static void SetOffset(Timeline& timeline, time::Duration offset, time::SteadyPoint now) {
+  offset = clamp<time::Duration>(offset, 0s, timeline.MaxTrackLength());
   if (timeline.state == Timeline::kPlaying) {
     TimelineCancelScheduled(timeline);
     timeline.playing.started_at = now - time::Duration(offset);
@@ -535,7 +535,7 @@ static void SetOffset(Timeline& timeline, time::T offset, time::SteadyPoint now)
   }
 }
 
-void AdjustOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
+static void AdjustOffset(Timeline& timeline, time::Duration offset, time::SteadyPoint now) {
   if (timeline.state == Timeline::kPlaying) {
     TimelineCancelScheduled(timeline);
     timeline.playing.started_at -= time::Duration(offset);
@@ -545,8 +545,8 @@ void AdjustOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
     }
     TimelineScheduleNextAfter(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
-    timeline.paused.playback_offset =
-        clamp<time::T>(timeline.paused.playback_offset + offset, 0, timeline.MaxTrackLength());
+    timeline.paused.playback_offset = clamp<time::Duration>(
+        timeline.paused.playback_offset + offset, 0s, timeline.MaxTrackLength());
   }
   timeline.WakeAnimation();
   for (auto& track : timeline.tracks) {
@@ -557,16 +557,16 @@ void AdjustOffset(Timeline& timeline, time::T offset, time::SteadyPoint now) {
 
 void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   pos_ratio = clamp(pos_ratio, 0.0f, 1.0f);
-  time::T max_track_length = timeline.MaxTrackLength();
+  auto max_track_length = timeline.MaxTrackLength();
   if (timeline.state == Timeline::kPlaying) {
     TimelineCancelScheduled(timeline);
-    timeline.playing.started_at = now - time::Duration((time::T)(pos_ratio * max_track_length));
+    timeline.playing.started_at = now - time::Defloat(pos_ratio * max_track_length);
     if (auto h = timeline.here.lock()) {
       TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
     }
     TimelineScheduleNextAfter(timeline, now);
   } else if (timeline.state == Timeline::kPaused) {
-    timeline.paused.playback_offset = pos_ratio * max_track_length;
+    timeline.paused.playback_offset = time::Defloat(pos_ratio * max_track_length);
   }
   timeline.WakeAnimation();
   for (auto& track : timeline.tracks) {
@@ -597,32 +597,38 @@ static float PosRatioFromBridgeOffsetX(float bridge_offset_x) {
   return (bridge_offset_x + kRulerLength / 2) / kRulerLength;
 }
 
-static float DistanceToSeconds(const Timeline& timeline) {
-  return timeline.zoom.value / kWindowWidth;
+static time::Duration DistanceToSeconds(const Timeline& timeline) {
+  return time::FromSeconds(timeline.zoom.value / kWindowWidth);
 }
 
-time::T TimeAtX(const Timeline& timeline, float x) {
+static time::Duration TimeAtX(const Timeline& timeline, float x) {
   // Find the time at the center of the timeline
-  float distance_to_seconds = DistanceToSeconds(timeline);
+  auto distance_to_seconds = DistanceToSeconds(timeline);
   float current_pos_ratio = CurrentPosRatio(timeline);
-  float track_width = timeline.MaxTrackLength();
+  auto track_width = timeline.MaxTrackLength();
 
-  float center_t0 = kRulerLength / 2 * distance_to_seconds;
-  float center_t1 = track_width - kRulerLength / 2 * distance_to_seconds;
-  float center_t = lerp(center_t0, center_t1, current_pos_ratio);
-  return center_t + x * distance_to_seconds;
+  auto center_t0 = time::Defloat(kRulerLength * distance_to_seconds) / 2;
+  auto center_t1 = track_width - center_t0;
+  auto center_t = center_t0 + time::Defloat((center_t1 - center_t0) * current_pos_ratio);
+  return center_t + time::Defloat(x * distance_to_seconds);
 }
 
-static float XAtTime(const Timeline& timeline, time::T t) {
-  float distance_to_seconds = DistanceToSeconds(timeline);
+static float XAtTime(const Timeline& timeline, time::Duration t) {
+  auto distance_to_seconds = DistanceToSeconds(timeline);
   float current_pos_ratio = CurrentPosRatio(timeline);
-  float track_width = timeline.MaxTrackLength();
+  auto track_width = timeline.MaxTrackLength();
 
-  float center_t0 = kRulerLength / 2 * distance_to_seconds;
-  float center_t1 = track_width - kRulerLength / 2 * distance_to_seconds;
-  float center_t = lerp(center_t0, center_t1, current_pos_ratio);
+  // The original formula came from finding the time when current_pos_ratio was 0 and 1 and lerp-ing
+  // between them.
+  //
+  // Keeping it around for reference since the math may be hard to decipher otherwise.
+  // auto center_t0 = time::Defloat(kRulerLength * distance_to_seconds) / 2;
+  // auto center_t1 = track_width - center_t0;
+  // auto center_t = center_t0 + time::Defloat((center_t1 - center_t0) * current_pos_ratio);
+  // return (t - center_t) / time::FloatDuration(distance_to_seconds);
 
-  return (t - center_t) / distance_to_seconds;
+  return (t - track_width * current_pos_ratio) / distance_to_seconds +
+         kRulerLength * (current_pos_ratio - 0.5f);
 }
 
 SkPath SplicerShape(int num_tracks, float current_pos_ratio) {
@@ -736,21 +742,22 @@ SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
   return bridge_handle;
 }
 
-static Optional<time::T> SnapToTrack(Timeline& timeline, Vec2 pos, time::T time_at_x = NAN,
-                                     float distance_to_seconds = NAN) {
+static Optional<time::Duration> SnapToTrack(
+    Timeline& timeline, Vec2 pos, time::Duration time_at_x = time::kDurationGuard,
+    time::Duration distance_to_seconds = time::kDurationGuard) {
   auto track_index = TrackIndexFromY(pos.y);
   if (track_index >= 0 && track_index < timeline.tracks.size()) {
     auto& track = timeline.tracks[track_index];
     auto& timestamps = track->timestamps;
-    if (isnan(time_at_x)) {
+    if (time_at_x == time::kDurationGuard) {
       time_at_x = TimeAtX(timeline, pos.x);
     }
     auto last = upper_bound(timestamps.begin(), timestamps.end(), time_at_x);
     int right_i = last - timestamps.begin();
-    time::T closest_dist = INFINITY;
-    time::T closest_t = NAN;
+    auto closest_dist = time::kDurationInfinity;
+    auto closest_t = time::kDurationGuard;
     if (right_i >= 0 && right_i < timestamps.size()) {
-      time::T right_dist = fabs(time_at_x - timestamps[right_i]);
+      auto right_dist = abs(time_at_x - timestamps[right_i]);
       if (right_dist < closest_dist) {
         closest_dist = right_dist;
         closest_t = timestamps[right_i];
@@ -758,13 +765,13 @@ static Optional<time::T> SnapToTrack(Timeline& timeline, Vec2 pos, time::T time_
     }
     int left_i = right_i - 1;
     if (left_i >= 0 && left_i < timestamps.size()) {
-      time::T left_dist = fabs(time_at_x - timestamps[left_i]);
+      auto left_dist = abs(time_at_x - timestamps[left_i]);
       if (left_dist < closest_dist) {
         closest_dist = left_dist;
         closest_t = timestamps[left_i];
       }
     }
-    if (isnan(distance_to_seconds)) {
+    if (distance_to_seconds == time::kDurationGuard) {
       distance_to_seconds = DistanceToSeconds(timeline);
     }
     if (closest_dist < 1_mm * distance_to_seconds) {
@@ -774,18 +781,19 @@ static Optional<time::T> SnapToTrack(Timeline& timeline, Vec2 pos, time::T time_
   return nullopt;
 }
 
-static Optional<time::T> SnapToBottomRuler(Timeline& timeline, Vec2 pos, time::T time_at_x = NAN) {
+static Optional<time::Duration> SnapToBottomRuler(Timeline& timeline, Vec2 pos,
+                                                  time::Duration time_at_x = time::kDurationGuard) {
   int num_tracks = timeline.tracks.size();
   float window_height = WindowHeight(num_tracks);
   if (pos.y > -window_height && pos.y < -window_height + kRulerHeight) {
     float zoom = timeline.zoom.target;
     double zoom_log = log10(zoom / 200.0);
-    double tick_mult = pow(10, ceil(zoom_log));
-    if (isnan(time_at_x)) {
+    auto tick_duration = time::FloatDuration(pow(10, ceil(zoom_log)));
+    if (time_at_x == time::kDurationGuard) {
       time_at_x = TimeAtX(timeline, pos.x);
     }
-    if (time_at_x >= 0 && time_at_x < timeline.timeline_length) {
-      return round(time_at_x / tick_mult) * tick_mult;
+    if (time_at_x >= 0s && time_at_x < timeline.timeline_length) {
+      return time::Defloat(round(time_at_x / tick_duration) * tick_duration);
     }
   }
   return nullopt;
@@ -808,18 +816,18 @@ struct DragBridgeAction : Action {
     Vec2 pos = pointer.PositionWithin(timeline);
     pos.x -= press_offset_x;
     auto current_offset = CurrentOffset(timeline, now);
-    auto time_at_x = PosRatioFromBridgeOffsetX(pos.x) * timeline.MaxTrackLength();
+    auto time_at_x = time::Defloat(PosRatioFromBridgeOffsetX(pos.x) * timeline.MaxTrackLength());
     if (auto snapped_time = SnapToTrack(timeline, pos, time_at_x)) {
-      timeline.bridge_wiggle_s += current_offset - *snapped_time;
+      timeline.bridge_wiggle_s += time::ToSeconds(current_offset - *snapped_time);
       timeline.bridge_snapped = true;
       time_at_x = *snapped_time;
     } else if (auto snapped_time = SnapToBottomRuler(timeline, pos, time_at_x)) {
-      timeline.bridge_wiggle_s += current_offset - *snapped_time;
+      timeline.bridge_wiggle_s += time::ToSeconds(current_offset - *snapped_time);
       timeline.bridge_snapped = true;
       time_at_x = *snapped_time;
     } else {
       if (timeline.bridge_snapped) {
-        timeline.bridge_wiggle_s += current_offset - time_at_x;
+        timeline.bridge_wiggle_s += time::ToSeconds(current_offset - time_at_x);
       }
       timeline.bridge_snapped = false;
     }
@@ -829,7 +837,7 @@ struct DragBridgeAction : Action {
 
 struct DragTimelineAction : Action {
   Timeline& timeline;
-  time::T initial_bridge_offset;
+  time::Duration initial_bridge_offset;
   float initial_x;
   DragTimelineAction(gui::Pointer& pointer, Timeline& timeline)
       : Action(pointer), timeline(timeline) {
@@ -843,31 +851,30 @@ struct DragTimelineAction : Action {
     auto now = pointer.root_widget.timer.now;
     Vec2 pos = pointer.PositionWithin(timeline);
     float x = pos.x;
-    float distance_to_seconds = DistanceToSeconds(timeline);
-    float max_track_length = timeline.MaxTrackLength();
-    float denominator = max_track_length - kRulerLength * distance_to_seconds;
+    auto distance_to_seconds = DistanceToSeconds(timeline);  // [s]
+    auto max_track_length = timeline.MaxTrackLength();
+    auto denominator = max_track_length - kRulerLength * distance_to_seconds;  // [s]
 
-    float scaling_factor;
-    if (fabs(denominator) > 0.0001) {
-      scaling_factor = distance_to_seconds * max_track_length /
-                       (max_track_length - kRulerLength * distance_to_seconds);
+    time::FloatDuration scaling_factor;
+    if (abs(denominator) > 0.0001s) {
+      scaling_factor = distance_to_seconds / denominator * max_track_length;
     } else {
-      scaling_factor = 0;
+      scaling_factor = 0s;
     }
 
-    auto time_at_x = initial_bridge_offset - (x - initial_x) * scaling_factor;
+    auto time_at_x = initial_bridge_offset - time::Defloat((x - initial_x) * scaling_factor);
     auto current_offset = CurrentOffset(timeline, now);
     if (auto snapped_time = SnapToTrack(timeline, pos, time_at_x, distance_to_seconds)) {
       time_at_x = *snapped_time;
-      timeline.bridge_wiggle_s += current_offset - *snapped_time;
+      timeline.bridge_wiggle_s += time::ToSeconds(current_offset - *snapped_time);
       timeline.bridge_snapped = true;
     } else if (auto snapped_time = SnapToBottomRuler(timeline, pos, time_at_x)) {
       time_at_x = *snapped_time;
-      timeline.bridge_wiggle_s += current_offset - *snapped_time;
+      timeline.bridge_wiggle_s += time::ToSeconds(current_offset - *snapped_time);
       timeline.bridge_snapped = true;
     } else {
       if (timeline.bridge_snapped) {
-        timeline.bridge_wiggle_s += current_offset - time_at_x;
+        timeline.bridge_wiggle_s += time::ToSeconds(current_offset - time_at_x);
       }
       timeline.bridge_snapped = false;
     }
@@ -1030,7 +1037,7 @@ void SpliceAction::Update() {
   int num_tracks = timeline.tracks.size();
   float current_pos_ratio = CurrentPosRatio(timeline);
   float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
-  time::T new_splice_to;
+  time::Duration new_splice_to;
   bool new_snapped = false;
   if (SplicerShape(num_tracks, current_pos_ratio).contains(pos.x, pos.y)) {
     new_splice_to = TimeAtX(timeline, bridge_offset_x);
@@ -1040,6 +1047,7 @@ void SpliceAction::Update() {
     cancel = false;
 
     new_splice_to = TimeAtX(timeline, pos.x);
+    LOG << "new_splice_to: " << time::ToSeconds(new_splice_to);
     if (pos.x < bridge_offset_x) {
       if (auto snapped_time = SnapToTrack(timeline, pos, new_splice_to)) {
         new_splice_to = *snapped_time;
@@ -1050,11 +1058,11 @@ void SpliceAction::Update() {
       new_splice_to = *snapped_time;
       new_snapped = true;
     }
-    new_splice_to = max<time::T>(0, new_splice_to);
+    new_splice_to = max<time::Duration>(0s, new_splice_to);
   }
 
   if (new_snapped || snapped) {
-    float distance_to_seconds = DistanceToSeconds(timeline);
+    time::FloatDuration distance_to_seconds = DistanceToSeconds(timeline);
     timeline.splice_wiggle.value += (splice_to - new_splice_to) / distance_to_seconds;
   }
   snapped = new_snapped;
@@ -1160,48 +1168,54 @@ void Timeline::Draw(SkCanvas& canvas) const {
 
   constexpr float PI = numbers::pi;
 
-  time::T max_track_length = MaxTrackLength();
-  time::T current_offset = clamp<time::T>(CurrentOffset(*this, time::SteadyNow()) + bridge_wiggle_s,
-                                          0, max_track_length);
-  float current_pos_ratio = max_track_length == 0 ? 1 : current_offset / max_track_length;
+  auto max_track_length = MaxTrackLength();
+  auto current_offset = clamp<time::Duration>(
+      CurrentOffset(*this, time::SteadyNow()) + time::FromSeconds(bridge_wiggle_s), 0s,
+      max_track_length);
+  float current_pos_ratio =
+      max_track_length == 0s ? 1 : current_offset / time::FloatDuration(max_track_length);
 
-  function<Str(time::T)> format_time;
-  if (max_track_length > 3600) {
-    format_time = [](time::T t) {
-      t = round(t * 1000) / 1000;
-      int hours = t / 3600;
-      t -= hours * 3600;
-      int minutes = t / 60;
-      t -= minutes * 60;
-      int seconds = t;
-      t -= seconds;
-      int milliseconds = round(t * 1000);
+  function<Str(time::Duration)> format_time;
+  if (max_track_length > 1h) {
+    format_time = [](time::Duration t) {
+      double t_s = time::ToSeconds(t);
+      t_s = round(t_s * 1000) / 1000;
+      int hours = t_s / 3600;
+      t_s -= hours * 3600;
+      int minutes = t_s / 60;
+      t_s -= minutes * 60;
+      int seconds = t_s;
+      t_s -= seconds;
+      int milliseconds = round(t_s * 1000);
       return f("{:02d}:{:02d}:{:02d}.{:03d} s", hours, minutes, seconds, milliseconds);
     };
-  } else if (max_track_length > 60) {
-    format_time = [](time::T t) {
-      t = round(t * 1000) / 1000;
-      int minutes = t / 60;
-      t -= minutes * 60;
-      int seconds = t;
-      t -= seconds;
-      int milliseconds = round(t * 1000);
+  } else if (max_track_length > 1min) {
+    format_time = [](time::Duration t) {
+      double t_s = time::ToSeconds(t);
+      t_s = round(t_s * 1000) / 1000;
+      int minutes = t_s / 60;
+      t_s -= minutes * 60;
+      int seconds = t_s;
+      t_s -= seconds;
+      int milliseconds = round(t_s * 1000);
       return f("{:02d}:{:02d}.{:03d} s", minutes, seconds, milliseconds);
     };
-  } else if (max_track_length >= 10) {
-    format_time = [](time::T t) {
-      t = round(t * 1000) / 1000;
-      int seconds = t;
-      t -= seconds;
-      int milliseconds = round(t * 1000);
+  } else if (max_track_length >= 10s) {
+    format_time = [](time::Duration t) {
+      double t_s = time::ToSeconds(t);
+      t_s = round(t_s * 1000) / 1000;
+      int seconds = t_s;
+      t_s -= seconds;
+      int milliseconds = round(t_s * 1000);
       return f("{:02d}.{:03d} s", seconds, milliseconds);
     };
   } else {
-    format_time = [](time::T t) {
-      t = round(t * 1000) / 1000;
-      int seconds = t;
-      t -= seconds;
-      int milliseconds = round(t * 1000);
+    format_time = [](time::Duration t) {
+      double t_s = time::ToSeconds(t);
+      t_s = round(t_s * 1000) / 1000;
+      int seconds = t_s;
+      t_s -= seconds;
+      int milliseconds = round(t_s * 1000);
       return f("{}.{:03d} s", seconds, milliseconds);
     };
   }
@@ -1306,8 +1320,8 @@ void Timeline::Draw(SkCanvas& canvas) const {
 
   // Bottom ticks
   {
-    float distance_to_seconds = DistanceToSeconds(*this);
-    float track_width = MaxTrackLength() / distance_to_seconds;
+    auto distance_to_seconds = DistanceToSeconds(*this);
+    float track_width = MaxTrackLength() / time::FloatDuration(distance_to_seconds);
 
     // at time 0 the first tick is at -kRulerWidth / 2
     // at time 0 the last tick is at -kRulerWidth / 2 + track_width
@@ -1320,8 +1334,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
     float first_tick_x = lerp(first_tick_x0, first_tick_x1, current_pos_ratio);
     float last_tick_x = first_tick_x + track_width;
 
-    float tick_every_s = 0.1;
-    float tick_every_x = tick_every_s / distance_to_seconds;
+    float tick_every_x = 0.1s / time::FloatDuration(distance_to_seconds);
 
     int first_i = (-kWindowWidth / 2 - first_tick_x) / tick_every_x;
     first_i = max(0, first_i);
@@ -1351,6 +1364,8 @@ void Timeline::Draw(SkCanvas& canvas) const {
 
   if (splice_action) {
     float splice_x = XAtTime(*this, splice_action->splice_to) + splice_wiggle.value;
+    LOG << "splice_x: " << ToStrMetric(splice_x);
+
     auto rect = Rect(splice_x, -window_height + kRulerHeight + kMarginAroundTracks, bridge_offset_x,
                      -kRulerHeight - kMarginAroundTracks);
     if (splice_x < bridge_offset_x) {
@@ -1387,7 +1402,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
       canvas.clipRect(rect);
 
       {  // Draw dust being sucked in
-        time::T current_time = time::SteadyNow().time_since_epoch().count();
+        auto current_time = time::SecondsSinceEpoch();
         int n_particles = 10;
         float particle_lifetime_s = 1;
 
@@ -1700,12 +1715,13 @@ void Timeline::FillChildren(Vec<Ptr<Widget>>& children) {
 }
 
 void Timeline::UpdateChildTransform(time::SteadyPoint now) {
-  float distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
-  auto max_track_length = MaxTrackLength();
+  auto distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
+  time::FloatDuration max_track_length = MaxTrackLength();
   float track_width = max_track_length / distance_to_seconds;
 
   float current_pos_ratio =
-      clamp<time::T>((CurrentOffset(*this, now) + bridge_wiggle_s) / max_track_length, 0, 1);
+      clamp((CurrentOffset(*this, now) + time::FloatDuration(bridge_wiggle_s)) / max_track_length,
+            0., 1.);
 
   float track_offset_x0 = kRulerLength / 2;
   float track_offset_x1 = track_width - kRulerLength / 2;
@@ -1720,18 +1736,18 @@ void Timeline::UpdateChildTransform(time::SteadyPoint now) {
 }
 
 SkPath TrackBase::Shape() const {
-  float distance_to_seconds;
+  time::FloatDuration distance_to_seconds;
   if (timeline) {
     distance_to_seconds = DistanceToSeconds(*timeline);
   } else {
-    distance_to_seconds = 100;  // 1 cm = 1 second
+    distance_to_seconds = 100s;  // 1 cm = 1 second
   }
-  time::T end_time = timeline ? timeline->MaxTrackLength() : timestamps.back();
+  auto end_time = timeline ? timeline->MaxTrackLength() : timestamps.back();
   Rect rect = Rect(0, -kTrackHeight / 2, end_time / distance_to_seconds, kTrackHeight / 2);
   if (timeline) {
     // Clip to the width of the timeline window
-    rect.right = min(rect.right, (float)TimeAtX(*timeline, kWindowWidth / 2) / distance_to_seconds);
-    rect.left = max(rect.left, (float)TimeAtX(*timeline, -kWindowWidth / 2) / distance_to_seconds);
+    rect.right = min<float>(rect.right, TimeAtX(*timeline, kWindowWidth / 2) / distance_to_seconds);
+    rect.left = max<float>(rect.left, TimeAtX(*timeline, -kWindowWidth / 2) / distance_to_seconds);
   }
   return SkPath::Rect(rect.sk);
 }
@@ -1750,8 +1766,8 @@ void OnOffTrack::Draw(SkCanvas& canvas) const {
   auto shape = Shape();
   Rect rect;
   shape.isRect(&rect.sk);
-  float distance_to_seconds = DistanceToSeconds(*timeline);
-  auto DrawSegment = [&](time::T start_t, time::T end_t) {
+  time::FloatDuration distance_to_seconds = DistanceToSeconds(*timeline);
+  auto DrawSegment = [&](time::Duration start_t, time::Duration end_t) {
     float start = start_t / distance_to_seconds;
     float end = end_t / distance_to_seconds;
     if (end < rect.left || start > rect.right) {
@@ -1764,10 +1780,10 @@ void OnOffTrack::Draw(SkCanvas& canvas) const {
   for (int i = 0; i + 1 < timestamps.size(); i += 2) {
     DrawSegment(timestamps[i], timestamps[i + 1]);
   }
-  if (!isnan(on_at)) {
+  if (on_at != time::kDurationGuard) {
     switch (timeline->state) {
       case Timeline::kRecording:
-        DrawSegment(on_at, (timeline->recording.now - timeline->recording.started_at).count());
+        DrawSegment(on_at, timeline->recording.now - timeline->recording.started_at);
         break;
       case Timeline::kPlaying:
       case Timeline::kPaused:
@@ -1783,21 +1799,21 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
   auto shape = Shape();
   Rect rect;
   shape.isRect(&rect.sk);
-  float s_per_m = DistanceToSeconds(*timeline);  // s / m
-  auto left_t = rect.left * s_per_m;
-  auto right_t = rect.right * s_per_m;
-  auto LowerBound = [&](double t) {
+  time::FloatDuration s_per_m = DistanceToSeconds(*timeline);  // s / m
+  auto left_t = time::Defloat(rect.left * s_per_m);
+  auto right_t = time::Defloat(rect.right * s_per_m);
+  auto LowerBound = [&](time::Duration t) {
     return lower_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
   };
-  auto UpperBound = [&](double t) {
+  auto UpperBound = [&](time::Duration t) {
     return upper_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
   };
   auto left_i = LowerBound(left_t);
   auto right_i = UpperBound(right_t);
 
-  float px_per_meter = canvas.getLocalToDeviceAs3x3().mapVector(1, 0).length();  // px / m
-  float m_per_px = 1.f / px_per_meter;                                           // m / px
-  float pixel_t = s_per_m * m_per_px;                                            // s / px
+  float px_per_meter = canvas.getLocalToDeviceAs3x3().mapVector(1, 0).length();  // [px / m]
+  float m_per_px = 1.f / px_per_meter;                                           // [m / px]
+  auto pixel_t = time::Defloat(s_per_m * m_per_px);                              // [s / px]
 
   {  // draw horizontal segments
 
@@ -1807,8 +1823,8 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
     // Multiple timestamps whose segments overlap are combined into a single segment.
     while (i < right_i) {
       int start_i = i;
-      float start_t = timestamps[i];    // start time of a line segment
-      float end_t = start_t + pixel_t;  // end time of a line segment
+      auto start_t = timestamps[i];    // start time of a line segment
+      auto end_t = start_t + pixel_t;  // end time of a line segment
       // keep expanding end_t until a gap of at least one pixel is found
       while (true) {
         // find the first timestep that's outside of the current [start_t, end_t] segment
@@ -1840,27 +1856,27 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
     constexpr float kDisplayMargin = 0.5_mm;
     constexpr float kDisplayHeight = kTrackHeight - kDisplayMargin * 2;
     constexpr float kDisplayMinWidth = kDisplayHeight;
-    float display_min_t = kDisplayMinWidth * s_per_m;
+    auto display_min_t = time::Defloat(kDisplayMinWidth * s_per_m);
 
-    int display_begin = floorf(left_t / display_min_t);
-    int display_end = floorf(right_t / display_min_t) + 1;
+    int display_begin = left_t / display_min_t;  // it floors down since it divides integers
+    int display_end = right_t / display_min_t + 1;
 
-    float max_track_length = timeline->MaxTrackLength();
-    time::T current_t = CurrentOffset(*timeline, time::SteadyNow());
+    auto max_track_length = timeline->MaxTrackLength();
+    auto current_t = CurrentOffset(*timeline, time::SteadyNow());
     int current_i = LowerBound(current_t);
 
     for (int display_i = display_begin; display_i < display_end; ++display_i) {
-      float display_start_t = display_i * display_min_t;
-      float display_end_t = min(max_track_length, display_start_t + display_min_t);
+      auto display_start_t = display_i * display_min_t;
+      auto display_end_t = min(max_track_length, display_start_t + display_min_t);
       if (display_end_t + display_min_t > max_track_length) {
-        display_end_t = max<float>(display_end_t, min<float>(timestamps.back(), max_track_length));
+        display_end_t = max(display_end_t, min(timestamps.back(), max_track_length));
         display_i = display_end;
       }
       int start_i = LowerBound(display_start_t);
       int end_i = UpperBound(display_end_t);
 
-      float display_duration = display_end_t - display_start_t;
-      float display_width = display_duration / s_per_m;
+      auto display_duration = display_end_t - display_start_t;
+      float display_width = display_duration / s_per_m;  // division as double (doesn't floor)
       SkPath trail;
       trail.moveTo(0, 0);
       Vec2 cursor = {};
@@ -1932,11 +1948,11 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
     }
   }
 }
-void Vec2Track::Splice(time::T current_offset, time::T splice_to) {
-  double delta = splice_to - current_offset;
+void Vec2Track::Splice(time::Duration current_offset, time::Duration splice_to) {
+  auto delta = splice_to - current_offset;
   auto [current_offset_ge, current_offset_g] =
       equal_range(timestamps.begin(), timestamps.end(), current_offset);
-  if (delta < 0) {
+  if (delta < 0s) {
     auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
     int begin = splice_to_ge - timestamps.begin();
     int end = current_offset_g - timestamps.begin();
@@ -1951,12 +1967,12 @@ void Vec2Track::Splice(time::T current_offset, time::T splice_to) {
     if (count > 0) {
       for (int i = begin + 1; i < timestamps.size() - count; ++i) {
         timestamps[i] = timestamps[i + count] + delta;
-        values[i] = values[i + count] + delta;
+        values[i] = values[i + count];
       }
       timestamps.resize(timestamps.size() - count);
       values.resize(values.size() - count);
     }
-  } else if (delta > 0) {
+  } else if (delta > 0s) {
     for (auto it = current_offset_ge; it != timestamps.end(); ++it) {
       *it += delta;
     }
@@ -1964,8 +1980,8 @@ void Vec2Track::Splice(time::T current_offset, time::T splice_to) {
 }
 void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
                              time::SteadyPoint now) {
-  auto cmp = [started_at](time::T timestamp, time::SteadyPoint now) {
-    return started_at + time::Duration(timestamp) < now;
+  auto cmp = [started_at](time::Duration timestamp, time::SteadyPoint now) {
+    return started_at + timestamp < now;
   };
   int next_update_i =
       std::lower_bound(timestamps.begin(), timestamps.end(), now, cmp) - timestamps.begin();
@@ -1986,7 +2002,7 @@ void Timeline::OnCancel() {
   if (state == kPlaying) {
     TimelineCancelScheduled(*this);
     state = kPaused;
-    paused = {.playback_offset = (time::SteadyNow() - playing.started_at).count()};
+    paused = {.playback_offset = time::SteadyNow() - playing.started_at};
     if (auto h = here.lock()) {
       TimelineUpdateOutputs(*h, *this, time::SteadyPoint{},
                             time::SteadyPoint{} + time::Duration(paused.playback_offset));
@@ -2001,7 +2017,7 @@ void Timeline::OnRun(Location& here, RunTask& run_task) {
     return;
   }
   if (paused.playback_offset >= MaxTrackLength()) {
-    paused.playback_offset = 0;
+    paused.playback_offset = 0s;
   }
   state = kPlaying;
   time::SteadyPoint now = time::SteadyNow();
@@ -2038,18 +2054,17 @@ void Timeline::StopRecording() {
     return;
   }
   timeline_length = MaxTrackLength();
-  paused = {.playback_offset =
-                min((time::SteadyNow() - recording.started_at).count(), timeline_length)};
+  paused = {.playback_offset = min(time::SteadyNow() - recording.started_at, timeline_length)};
   state = Timeline::kPaused;
   run_button->WakeAnimation();
   WakeAnimation();
 }
 
-void OnOffTrack::Splice(time::T current_offset, time::T splice_to) {
-  double delta = splice_to - current_offset;
+void OnOffTrack::Splice(time::Duration current_offset, time::Duration splice_to) {
+  auto delta = splice_to - current_offset;
   auto [current_offset_ge, current_offset_g] =
       equal_range(timestamps.begin(), timestamps.end(), current_offset);
-  if (delta < 0) {
+  if (delta < 0s) {
     auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
     int begin = splice_to_ge - timestamps.begin();
     int end = current_offset_g - timestamps.begin();
@@ -2063,7 +2078,7 @@ void OnOffTrack::Splice(time::T current_offset, time::T splice_to) {
       timestamps[i] = timestamps[i + count] + delta;
     }
     timestamps.resize(timestamps.size() - count);
-  } else if (delta > 0) {
+  } else if (delta > 0s) {
     for (auto it = current_offset_ge; it != timestamps.end(); ++it) {
       *it += delta;
     }
@@ -2145,7 +2160,7 @@ void TrackBase::SerializeState(Serializer& writer, const char* key) const {
   writer.Key("timestamps");
   writer.StartArray();
   for (auto t : timestamps) {
-    writer.Double(t);
+    writer.Double(time::ToSeconds(t));
   }
   writer.EndArray();
   if (key != nullptr) {
@@ -2162,9 +2177,9 @@ void OnOffTrack::SerializeState(Serializer& writer, const char* key) const {
   writer.Key("type");
   writer.String("on/off");
   TrackBase::SerializeState(writer, nullptr);
-  if (!isnan(on_at)) {
+  if (on_at != time::kDurationGuard) {
     writer.Key("on_at");
-    writer.Double(on_at);
+    writer.Double(time::ToSeconds(on_at));
   }
   if (key != nullptr) {
     writer.EndObject();
@@ -2211,20 +2226,20 @@ void Timeline::SerializeState(Serializer& writer, const char* key) const {
   writer.Key("zoom");
   writer.Double(zoom.value);
   writer.Key("length");
-  writer.Double(timeline_length);
+  writer.Double(time::ToSeconds(timeline_length));
 
   switch (state) {
     case kPaused:
       writer.Key("paused");
-      writer.Double(paused.playback_offset);
+      writer.Double(time::ToSeconds(paused.playback_offset));
       break;
     case kPlaying:
       writer.Key("playing");
-      writer.Double((time::SteadyNow() - playing.started_at).count());
+      writer.Double(time::ToSeconds(time::SteadyNow() - playing.started_at));
       break;
     case kRecording:
       writer.Key("recording");
-      writer.Double((time::SteadyNow() - recording.started_at).count());
+      writer.Double(time::ToSeconds(time::SteadyNow() - recording.started_at));
       break;
   }
 
@@ -2239,7 +2254,7 @@ bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, Str& field_nam
       double t;
       d.Get(t, status);
       if (OK(status)) {
-        timestamps.push_back(t);
+        timestamps.push_back(time::FromSeconds(t));
       }
     }
     if (!OK(status)) {
@@ -2252,7 +2267,9 @@ bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, Str& field_nam
 bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
   if (field_name == "on_at") {
     Status status;
-    d.Get(on_at, status);
+    double t;
+    d.Get(t, status);
+    on_at = time::FromSeconds(t);
     if (!OK(status)) {
       l.ReportError(status.ToStr());
     }
@@ -2330,10 +2347,14 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       d.Get(zoom.value, status);
       zoom.target = zoom.value;
     } else if (key == "length") {
-      d.Get(timeline_length, status);
+      double t;
+      d.Get(t, status);
+      timeline_length = time::FromSeconds(t);
     } else if (key == "paused") {
       state = kPaused;
-      d.Get(paused.playback_offset, status);
+      double t;
+      d.Get(t, status);
+      paused.playback_offset = time::FromSeconds(t);
     } else if (key == "playing") {
       state = kPlaying;
       time::T value = 0;

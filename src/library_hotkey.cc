@@ -9,9 +9,6 @@
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
 
-#include <chrono>
-#include <memory>
-
 #include "arcline.hh"
 #include "color.hh"
 #include "gui_constants.hh"
@@ -134,8 +131,8 @@ vec4 main(in vec2 fragCoord) {
     return SkRuntimeShaderBuilder(effect);
   }();
 
-  static auto start = std::chrono::steady_clock::now();
-  float delta = std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
+  static auto start = time::SteadyNow();
+  float delta = time::ToSeconds(time::SteadyNow() - start);
   builder.uniform("iTime") = delta * 3;
   builder.uniform("iLeft") = rect.left;
   builder.uniform("iRight") = rect.right;

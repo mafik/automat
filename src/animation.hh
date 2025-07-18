@@ -41,7 +41,7 @@ struct Approach : Base<T> {
   Approach(T initial = {})
       : Base<T>{.value = initial, .target = initial}, last_tick(time::SteadyNow()) {}
   animation::Phase Tick(time::Timer& timer) {
-    float dt = (timer.now - last_tick).count();
+    float dt = time::ToSeconds(timer.now - last_tick);
     last_tick = timer.now;
     if (dt <= 0) return animation::Finished;
     T delta = (this->target - this->value) * (-expm1f(-dt * speed));
@@ -113,10 +113,10 @@ struct Spring : Base<T> {
   }
 
   Phase TickComponent(float dt, float target, float& value, float& velocity) {
-    float Q = 2 * M_PI / period.count();
+    float Q = 2 * M_PI / time::ToSeconds(period);
     float D = value - target;
     float V = velocity;
-    float H = half_life.count();
+    float H = time::ToSeconds(half_life);
 
     float t;
     float amplitude;
@@ -129,7 +129,7 @@ struct Spring : Base<T> {
         velocity = 0;
         return Finished;
       }
-      t = period.count() / 4;
+      t = time::ToSeconds(period) / 4;
       amplitude = -velocity * powf(2.f, t / H) / Q;
     }
     float t2 = t + dt;
@@ -152,11 +152,11 @@ struct Spring : Base<T> {
   }
 
   Phase Tick(time::Timer& timer) {
-    float dt = (timer.now - last_tick).count();
+    float dt = time::ToSeconds(timer.now - last_tick);
     last_tick = timer.now;
     if (dt <= 0) return Finished;
-    if (half_life.count() <= 0) return Finished;
-    if (period.count() <= 0) return Finished;
+    if (half_life <= 0s) return Finished;
+    if (period <= 0s) return Finished;
 
     return TickComponents<T>(dt);
   }

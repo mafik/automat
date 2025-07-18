@@ -44,7 +44,7 @@ static float Twist(HypnoRect& a, SkMatrix& transform, float factor) {
 }
 
 animation::Phase HypnoRect::Tick(time::Timer& timer) {
-  t = (time::SteadyNow() - start).count();
+  t = time::ToSeconds(time::SteadyNow() - start);
 
   if (state == kPostLoading) {
     base_twist_v += 0.0005 * timer.d;

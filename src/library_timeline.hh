@@ -53,12 +53,12 @@ struct TimelineRunButton : gui::ToggleButton {
 
 struct TrackBase : Object, Object::FallbackWidget {
   Timeline* timeline = nullptr;
-  Vec<time::T> timestamps;
+  Vec<time::Duration> timestamps;
   SkPath Shape() const override;
   Optional<Rect> TextureBounds() const override;
   void Draw(SkCanvas&) const override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
-  virtual void Splice(time::T current_offset, time::T splice_to) = 0;
+  virtual void Splice(time::Duration current_offset, time::Duration splice_to) = 0;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
                             time::SteadyPoint now) = 0;
 
@@ -68,11 +68,11 @@ struct TrackBase : Object, Object::FallbackWidget {
 };
 
 struct OnOffTrack : TrackBase, OnOff {
-  time::T on_at = NAN;
+  time::Duration on_at = time::kDurationGuard;
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MakePtr<OnOffTrack>(*this); }
   void Draw(SkCanvas&) const override;
-  void Splice(time::T current_offset, time::T splice_to) override;
+  void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   bool IsOn() const override;
@@ -91,7 +91,7 @@ struct Vec2Track : TrackBase {
   string_view Name() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MakePtr<Vec2Track>(*this); }
   void Draw(SkCanvas&) const override;
-  void Splice(time::T current_offset, time::T splice_to) override;
+  void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
@@ -101,7 +101,7 @@ struct Vec2Track : TrackBase {
 
 struct SpliceAction : Action {
   Timeline& timeline;
-  time::T splice_to;
+  time::Duration splice_to;
   bool snapped = false;
   bool cancel = true;
   gui::Pointer::IconOverride resize_icon;
@@ -137,10 +137,10 @@ struct Timeline : LiveObject,
   bool bridge_snapped = false;
 
   enum State { kPaused, kPlaying, kRecording } state;
-  time::T timeline_length = 0;
+  time::Duration timeline_length = 0s;
 
   struct Paused {
-    time::T playback_offset;  // Used when playback is paused
+    time::Duration playback_offset;  // Used when playback is paused
   };
 
   struct Playing {
@@ -185,7 +185,7 @@ struct Timeline : LiveObject,
   void BeginRecording();
   void StopRecording();
 
-  time::T MaxTrackLength() const;
+  time::Duration MaxTrackLength() const;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

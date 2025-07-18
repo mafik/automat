@@ -1,16 +1,55 @@
 #include <algorithm>
 #include <bit>
+#include <concepts>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <limits>
 
 namespace automat {
 
+// Concept defining what a segment tree configuration should provide
+template <typename Config>
+concept SegmentTreeConfig = requires {
+  typename Config::value_type;
+  { Config::default_value() } -> std::same_as<typename Config::value_type>;
+  {
+    Config::op(std::declval<typename Config::value_type>(),
+               std::declval<typename Config::value_type>())
+  } -> std::same_as<typename Config::value_type>;
+};
+
+// Configuration for segment tree that finds minimum values
+template <typename T>
+struct SegmentTreeMinConfig {
+  using value_type = T;
+  static constexpr T default_value() {
+    if constexpr (std::numeric_limits<T>::has_infinity) {
+      return std::numeric_limits<T>::infinity();
+    } else {
+      return std::numeric_limits<T>::max();
+    }
+  }
+  static T op(T a, T b) { return std::min(a, b); }
+};
+
+// Configuration for segment tree that finds maximum values
+template <typename T>
+struct SegmentTreeMaxConfig {
+  using value_type = T;
+  static constexpr T default_value() {
+    if constexpr (std::numeric_limits<T>::has_infinity) {
+      return -std::numeric_limits<T>::infinity();
+    } else {
+      return std::numeric_limits<T>::lowest();
+    }
+  }
+  static T op(T a, T b) { return std::max(a, b); }
+};
+
+template <SegmentTreeConfig Config>
 struct SegmentTree {
-  // TODO: Replace with concepts
-  using T = int;
-  static constexpr T kDefualt = T{};
-  static T Op(T a, T b) { return std::max(a, b); }
+  using T = typename Config::value_type;
 
   int leaf_begin;
   // Index 0 is unused so we allocate one element less and shift the `tree`
@@ -20,7 +59,7 @@ struct SegmentTree {
   // Segment tree needs between `n * 2` (for powers of two) and `n * 3` nodes.
   SegmentTree(int n)
       : leaf_begin(1 << std::__bit_width(n - 1)), tree(new T[leaf_begin + n - 1] - 1) {
-    std::fill(tree, tree + leaf_begin + n - 1, kDefualt);
+    std::fill(tree, tree + leaf_begin + n - 1, Config::default_value());
   }
   ~SegmentTree() { delete[] (tree + 1); }
   void Update(int i, T val) {
@@ -30,7 +69,7 @@ struct SegmentTree {
     while (node > 1) {
       int parent = node >> 1;
       int sibling = node ^ 1;
-      tree[parent] = Op(tree[node], tree[sibling]);
+      tree[parent] = Config::op(tree[node], tree[sibling]);
       node = parent;
     }
   }
@@ -46,20 +85,20 @@ struct SegmentTree {
     // following - by adding some loops right before the return statements.
     // Ideally this should only happen if the configuration concept requires it.
     int base = leaf_begin;
-    T result = kDefualt;
+    T result = Config::default_value();
     while (true) {
       // Usually we end with both l and r pointing at the same node - we can use
       // its precomputed value and return.
       if (l == r) {
-        return Op(result, tree[base + l]);
+        return Config::op(result, tree[base + l]);
       }
       // If the l is a right child, add it to the result.
       if (l & 1) {
-        result = Op(result, tree[base + l++]);  // note the "++"!
+        result = Config::op(result, tree[base + l++]);  // note the "++"!
       }
       // If the r is a left child, add it to the result.
       if ((r & 1) == 0) {
-        result = Op(result, tree[base + r--]);  // note the "--"!
+        result = Config::op(result, tree[base + r--]);  // note the "--"!
         // In some cases it's possible to arrive at a "diamond" case where l & r
         // swap places. It's actually good because we can return immediately.
         //      o
@@ -81,5 +120,11 @@ struct SegmentTree {
     }
   }
 };
+
+template <typename T>
+using SegmentTreeMin = SegmentTree<SegmentTreeMinConfig<T>>;
+
+template <typename T>
+using SegmentTreeMax = SegmentTree<SegmentTreeMaxConfig<T>>;
 
 }  // namespace automat

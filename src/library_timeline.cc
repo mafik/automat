@@ -1873,9 +1873,15 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
     // Snap the analysis window to the actual timestamps that exist in the track.
     root.start_t = timestamps[root.start_i];
     root.end_t = timestamps[root.end_i - 1];
-    SegmentTreeMax<time::Duration> timestamp_gaps(timestamps.size() - 1);
+    auto timestamp_gaps = vector<time::Duration>(timestamps.size() - 1);
     for (int i = 0; i < timestamps.size() - 1; ++i) {
-      timestamp_gaps.Update(i, timestamps[i + 1] - timestamps[i]);
+      timestamp_gaps[i] = timestamps[i + 1] - timestamps[i];
+    }
+    auto gap_tree = SegmentTree(timestamp_gaps.size(), [&](int left, int right) {
+      return timestamp_gaps[right] > timestamp_gaps[left];
+    });
+    for (int i = 0; i < timestamps.size() - 1; ++i) {
+      gap_tree.Update(i);
     }
     std::vector<Vec2Display> displays_to_split;
     std::vector<Vec2Display> displays_to_draw;
@@ -1899,7 +1905,8 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
           auto first_point = timestamps[display.start_i];
           auto last_point = timestamps[display.end_i - 1];
           if (last_point - first_point < display_min_t) {
-            auto center = (first_point + last_point) / 2;
+            auto center = clamp((first_point + last_point) / 2, display_min_t / 2,
+                                max_track_length - display_min_t / 2);
             display.start_t = center - display_min_t / 2;
             display.end_t = center + display_min_t / 2;
           }
@@ -1917,8 +1924,8 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
       // the lowest index that must belong to the next display
       int latest_split_i = LowerBound(latest_split_t) - 1;
       if (earliest_split_i < latest_split_i) {
-        gap_i = timestamp_gaps.Query(earliest_split_i, latest_split_i - 1);
-        gap_t = timestamp_gaps.tree[timestamp_gaps.leaf_begin + gap_i];
+        gap_i = gap_tree.Query(earliest_split_i, latest_split_i - 1);
+        gap_t = timestamp_gaps[gap_i];
       }
 
       if (initial_gap_t > gap_t) {

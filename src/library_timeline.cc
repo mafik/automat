@@ -1888,6 +1888,7 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
     if (root.start_i < root.end_i) {
       displays_to_split.push_back(root);
     }
+    constexpr bool kDebugSplitting = false;
     while (!displays_to_split.empty()) {
       auto display = displays_to_split.back();
       displays_to_split.pop_back();
@@ -1905,10 +1906,15 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
           auto first_point = timestamps[display.start_i];
           auto last_point = timestamps[display.end_i - 1];
           if (last_point - first_point < display_min_t) {
-            auto center = clamp((first_point + last_point) / 2, display_min_t / 2,
-                                max_track_length - display_min_t / 2);
-            display.start_t = center - display_min_t / 2;
-            display.end_t = center + display_min_t / 2;
+            if (display_min_t >= max_track_length) {
+              display.start_t = 0s;
+              display.end_t = max_track_length;
+            } else {
+              auto center = clamp((first_point + last_point) / 2, display_min_t / 2,
+                                  max_track_length - display_min_t / 2);
+              display.start_t = center - display_min_t / 2;
+              display.end_t = center + display_min_t / 2;
+            }
           }
         }
         displays_to_draw.push_back(display);
@@ -1918,28 +1924,34 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
       int earliest_split_i = UpperBound(earliest_split_t);
       auto initial_gap_t =
           std::min(latest_split_t, timestamps[earliest_split_i]) - earliest_split_t;
+
       int gap_i = -1;
       time::Duration gap_t = time::kDurationGuard;
 
       // the lowest index that must belong to the next display
       int latest_split_i = LowerBound(latest_split_t) - 1;
+      auto final_gap_t = latest_split_t - timestamps[latest_split_i];
       if (earliest_split_i < latest_split_i) {
         gap_i = gap_tree.Query(earliest_split_i, latest_split_i - 1);
         gap_t = timestamp_gaps[gap_i];
       }
 
-      if (initial_gap_t > gap_t) {
-        Vec2Display left = {.start_t = display.start_t,
-                            .end_t = earliest_split_t,
-                            .start_i = display.start_i,
-                            .end_i = earliest_split_i};
-        Vec2Display right = {.start_t = std::min(latest_split_t, timestamps[earliest_split_i]),
-                             .end_t = display.end_t,
-                             .start_i = earliest_split_i,
-                             .end_i = display.end_i};
-        displays_to_split.push_back(left);
-        displays_to_split.push_back(right);
-      } else {
+      if constexpr (kDebugSplitting) {
+        LOG << "Splitting display from " << time::ToSeconds(display.start_t) << " to "
+            << time::ToSeconds(display.end_t);
+        LOG << "  earliest split at " << time::ToSeconds(earliest_split_t) << " < ["
+            << earliest_split_i << "]=" << time::ToSeconds(timestamps[earliest_split_i]);
+        LOG << "  latest split at " << time::ToSeconds(latest_split_t) << " [" << latest_split_i
+            << "]=" << time::ToSeconds(timestamps[latest_split_i]);
+        LOG << "  found gap with duration " << time::ToSeconds(gap_t) << " [" << gap_i
+            << "]=" << time::ToSeconds(timestamps[gap_i]);
+        LOG << "  initial gap duration " << time::ToSeconds(initial_gap_t) << " ["
+            << earliest_split_i << "]=" << time::ToSeconds(timestamps[earliest_split_i]);
+        LOG << "  final gap duration " << time::ToSeconds(final_gap_t) << " [" << latest_split_i
+            << "]=" << time::ToSeconds(timestamps[latest_split_i]);
+      }
+
+      if (gap_t >= initial_gap_t && gap_t >= final_gap_t) {
         Vec2Display left = {.start_t = display.start_t,
                             .end_t = timestamps[gap_i],
                             .start_i = display.start_i,
@@ -1950,10 +1962,32 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
                              .end_i = display.end_i};
         displays_to_split.push_back(left);
         displays_to_split.push_back(right);
+        if constexpr (kDebugSplitting) LOG << "  chose split at gap";
+      } else if (initial_gap_t > final_gap_t) {
+        Vec2Display left = {.start_t = display.start_t,
+                            .end_t = earliest_split_t,
+                            .start_i = display.start_i,
+                            .end_i = earliest_split_i};
+        Vec2Display right = {.start_t = std::min(latest_split_t, timestamps[earliest_split_i]),
+                             .end_t = display.end_t,
+                             .start_i = earliest_split_i,
+                             .end_i = display.end_i};
+        displays_to_split.push_back(left);
+        displays_to_split.push_back(right);
+        if constexpr (kDebugSplitting) LOG << "  chose split at earliest split";
+      } else {
+        Vec2Display left = {.start_t = display.start_t,
+                            .end_t = timestamps[latest_split_i],
+                            .start_i = display.start_i,
+                            .end_i = latest_split_i + 1};
+        Vec2Display right = {.start_t = latest_split_t,
+                             .end_t = display.end_t,
+                             .start_i = latest_split_i + 1,
+                             .end_i = display.end_i};
+        displays_to_split.push_back(left);
+        displays_to_split.push_back(right);
+        if constexpr (kDebugSplitting) LOG << "  chose split at latest split";
       }
-
-      // LOG << "found gap at " << gap_i << ": "
-      //     << time::ToSeconds(timestamp_gaps.tree[timestamp_gaps.leaf_begin + gap_i]);
     }
 
     for (auto& display : displays_to_draw) {

@@ -64,8 +64,8 @@ struct SegmentTree {
   int* origins;
 
   // Segment tree needs between `n * 2` (for powers of two) and `n * 3` nodes.
-  SegmentTree(int n)
-      : leaf_begin(1 << std::__bit_width(n - 1)),
+  SegmentTree(unsigned n)
+      : leaf_begin(1 << std::bit_width(n - 1)),
         tree(new T[leaf_begin + n + 1] - 1),  // allocating one extra leaf element because it can
                                               // sometimes be accessed during query
         origins(new int[leaf_begin]) {

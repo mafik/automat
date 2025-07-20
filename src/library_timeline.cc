@@ -35,6 +35,7 @@
 #include "pointer.hh"
 #include "random.hh"
 #include "root_widget.hh"
+#include "segment_tree.hh"
 #include "sincos.hh"
 #include "status.hh"
 #include "svg.hh"
@@ -1856,24 +1857,103 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
     constexpr float kDisplayMargin = 0.5_mm;
     constexpr float kDisplayHeight = kTrackHeight - kDisplayMargin * 2;
     constexpr float kDisplayMinWidth = kDisplayHeight;
-    auto display_min_t = time::Defloat(kDisplayMinWidth * s_per_m);
-
-    int display_begin = left_t / display_min_t;  // it floors down since it divides integers
-    int display_end = right_t / display_min_t + 1;
-
     auto max_track_length = timeline->MaxTrackLength();
     auto current_t = CurrentOffset(*timeline, time::SteadyNow());
     int current_i = LowerBound(current_t);
-
-    for (int display_i = display_begin; display_i < display_end; ++display_i) {
-      auto display_start_t = display_i * display_min_t;
-      auto display_end_t = min(max_track_length, display_start_t + display_min_t);
-      if (display_end_t + display_min_t > max_track_length) {
-        display_end_t = max(display_end_t, min(timestamps.back(), max_track_length));
-        display_i = display_end;
+    auto display_min_t = time::Defloat(kDisplayMinWidth * s_per_m);
+    struct Vec2Display {
+      time::Duration start_t, end_t;
+      int start_i, end_i;  // end_i is not inclusive
+    };
+    Vec2Display root;
+    root.start_t = 0s;
+    root.end_t = max_track_length;
+    root.start_i = LowerBound(root.start_t);
+    root.end_i = UpperBound(root.end_t);
+    // Snap the analysis window to the actual timestamps that exist in the track.
+    root.start_t = timestamps[root.start_i];
+    root.end_t = timestamps[root.end_i - 1];
+    SegmentTreeMax<time::Duration> timestamp_gaps(timestamps.size() - 1);
+    for (int i = 0; i < timestamps.size() - 1; ++i) {
+      timestamp_gaps.Update(i, timestamps[i + 1] - timestamps[i]);
+    }
+    std::vector<Vec2Display> displays_to_split;
+    std::vector<Vec2Display> displays_to_draw;
+    if (root.start_i < root.end_i) {
+      displays_to_split.push_back(root);
+    }
+    while (!displays_to_split.empty()) {
+      auto display = displays_to_split.back();
+      displays_to_split.pop_back();
+      if (display.start_t > right_t + display_min_t / 2) {
+        continue;
       }
-      int start_i = LowerBound(display_start_t);
-      int end_i = UpperBound(display_end_t);
+      if (display.end_t < left_t - display_min_t / 2) {
+        continue;
+      }
+
+      auto earliest_split_t = display.start_t + display_min_t;
+      auto latest_split_t = display.end_t - display_min_t;
+      if (earliest_split_t >= latest_split_t) {
+        {  // re-center the displays that contain very few points
+          auto first_point = timestamps[display.start_i];
+          auto last_point = timestamps[display.end_i - 1];
+          if (last_point - first_point < display_min_t) {
+            auto center = (first_point + last_point) / 2;
+            display.start_t = center - display_min_t / 2;
+            display.end_t = center + display_min_t / 2;
+          }
+        }
+        displays_to_draw.push_back(display);
+        continue;
+      }
+      // the lowest index that can be moved into the next display
+      int earliest_split_i = UpperBound(earliest_split_t);
+      auto initial_gap_t =
+          std::min(latest_split_t, timestamps[earliest_split_i]) - earliest_split_t;
+      int gap_i = -1;
+      time::Duration gap_t = time::kDurationGuard;
+
+      // the lowest index that must belong to the next display
+      int latest_split_i = LowerBound(latest_split_t) - 1;
+      if (earliest_split_i < latest_split_i) {
+        gap_i = timestamp_gaps.Query(earliest_split_i, latest_split_i - 1);
+        gap_t = timestamp_gaps.tree[timestamp_gaps.leaf_begin + gap_i];
+      }
+
+      if (initial_gap_t > gap_t) {
+        Vec2Display left = {.start_t = display.start_t,
+                            .end_t = earliest_split_t,
+                            .start_i = display.start_i,
+                            .end_i = earliest_split_i};
+        Vec2Display right = {.start_t = std::min(latest_split_t, timestamps[earliest_split_i]),
+                             .end_t = display.end_t,
+                             .start_i = earliest_split_i,
+                             .end_i = display.end_i};
+        displays_to_split.push_back(left);
+        displays_to_split.push_back(right);
+      } else {
+        Vec2Display left = {.start_t = display.start_t,
+                            .end_t = timestamps[gap_i],
+                            .start_i = display.start_i,
+                            .end_i = gap_i + 1};
+        Vec2Display right = {.start_t = timestamps[gap_i + 1],
+                             .end_t = display.end_t,
+                             .start_i = gap_i + 1,
+                             .end_i = display.end_i};
+        displays_to_split.push_back(left);
+        displays_to_split.push_back(right);
+      }
+
+      // LOG << "found gap at " << gap_i << ": "
+      //     << time::ToSeconds(timestamp_gaps.tree[timestamp_gaps.leaf_begin + gap_i]);
+    }
+
+    for (auto& display : displays_to_draw) {
+      auto display_start_t = display.start_t;
+      auto display_end_t = display.end_t;
+      int start_i = display.start_i;
+      int end_i = display.end_i;
 
       auto display_duration = display_end_t - display_start_t;
       float display_width = display_duration / s_per_m;  // division as double (doesn't floor)

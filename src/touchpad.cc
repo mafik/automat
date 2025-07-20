@@ -119,7 +119,9 @@ void UnlockCursor() {
 
 time::SystemPoint last_pan_time;
 
-bool ShouldIgnoreScrollEvents() { return time::SystemNow() < last_pan_time + time::Duration(1.0); }
+bool ShouldIgnoreScrollEvents() {
+  return time::SystemNow() < last_pan_time + time::FromSeconds(1.0);
+}
 
 struct TouchPadImpl {
   TouchPad touchpad;

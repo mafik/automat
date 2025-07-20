@@ -26,6 +26,7 @@ struct SegmentTree {
   SegmentTree(unsigned n, IsRightBetterFn IsRightBetter = {})
       : n(n), leaf_begin(std::bit_ceil(n)), tree(leaf_begin), IsRightBetter(IsRightBetter) {
     tree[0] = UINT_MAX;
+    // Fill the tree nodes with their left-most leaf indices.
     auto leaf_depth = std::bit_width(leaf_begin);
     for (unsigned node = 1; node < leaf_begin; ++node) {
       auto node_depth = std::bit_width(node);
@@ -84,10 +85,15 @@ struct SegmentTree {
     } else if (r_is_left_child) {
       best = r--;
     } else {
-      best = l;
+      best = l;  // set `best` to some neutral value
     }
 
-    int base = leaf_begin;
+    // This addition converts l & r from the space of data indices to the space of tree node
+    // indices. They point at tree leaves, which are always a sequence of 0..n-1 and are not
+    // actually stored. The subsequent shift operation moves up the tree so that they can be
+    // dereferenced.
+    l += leaf_begin;
+    r += leaf_begin;
     while (true) {
       // At this point l is a left child and r is a right child. We can walk up
       // the tree as long as it's the case. Trailing bit counts allow us to take
@@ -95,22 +101,19 @@ struct SegmentTree {
       unsigned step = std::min(std::countr_zero(l), std::countr_one(r));
       l >>= step;
       r >>= step;
-      base >>= step;
 
       if (l == r) {
-        return ChooseBetter(best, tree[base + l]);
+        return ChooseBetter(best, tree[l]);
       }
 
       l_is_right_child = l & 1;
       r_is_left_child = (r & 1) == 0;
       if (l_is_right_child) {
-        best = ChooseBetter(best, tree[base + l]);
-        ++l;
+        best = ChooseBetter(best, tree[l++]);
       }
       // If the r is a left child, add it to the result.
       if (r_is_left_child) {
-        best = ChooseBetter(best, tree[base + r]);
-        --r;
+        best = ChooseBetter(best, tree[r--]);
         if (l > r) return best;  // diamond case
       }
     }

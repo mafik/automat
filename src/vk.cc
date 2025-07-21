@@ -3,10 +3,12 @@
 #include "vk.hh"
 
 #include <VkBootstrap.h>
+#include <include/core/SkAlphaType.h>
 #include <include/core/SkColorSpace.h>
 #include <include/core/SkColorType.h>
 #include <include/core/SkImageInfo.h>
 #include <include/core/SkSurface.h>
+#include <include/gpu/GpuTypes.h>
 #include <include/gpu/MutableTextureState.h>
 #include <include/gpu/graphite/BackendSemaphore.h>
 #include <include/gpu/graphite/Context.h>
@@ -458,15 +460,24 @@ void Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat 
       sharingMode, VK_IMAGE_ASPECT_COLOR_BIT, skgpu::VulkanYcbcrConversionInfo());
 
   for (uint32_t i = 0; i < image_count; ++i) {
-    SkISize dimensions = {width, height};
-    auto backendTexture = skgpu::graphite::BackendTextures::MakeVulkan(
-        dimensions, texture_info, VK_IMAGE_LAYOUT_UNDEFINED, device.present_queue_index, images[i],
-        skgpu::VulkanAlloc());
-    sk_surfaces[i] = SkSurfaces::WrapBackendTexture(graphite_recorder.get(), backendTexture,
-                                                    colorType, color_space, &surface_props, nullptr,
-                                                    nullptr, "backend_texture");
+    // SkISize dimensions = {width, height};
+    // auto backendTexture = skgpu::graphite::BackendTextures::MakeVulkan(
+    //     dimensions, texture_info, VK_IMAGE_LAYOUT_UNDEFINED, device.present_queue_index,
+    //     images[i], skgpu::VulkanAlloc());
+    // sk_surfaces[i] = SkSurfaces::WrapBackendTexture(graphite_recorder.get(), backendTexture,
+    //                                                 colorType, color_space, &surface_props,
+    //                                                 nullptr, nullptr, "backend_texture");
+    // if (!sk_surfaces[i]) {
+    //   AppendErrorMessage(status) += "SkSurfaces::WrapBackendTexture failed";
+    //   return;
+    // }
+
+    auto image_info = SkImageInfo::Make(width, height, colorType, kOpaque_SkAlphaType, color_space);
+    sk_surfaces[i] =
+        SkSurfaces::RenderTarget(graphite_recorder.get(), image_info, skgpu::Mipmapped::kNo,
+                                 &surface_props, "render_target");
     if (!sk_surfaces[i]) {
-      AppendErrorMessage(status) += "SkSurfaces::WrapBackendTexture failed";
+      AppendErrorMessage(status) += "SkSurfaces::RenderTarget failed";
       return;
     }
   }

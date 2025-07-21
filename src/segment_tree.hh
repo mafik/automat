@@ -4,8 +4,6 @@
 #include <concepts>
 #include <vector>
 
-#include "log.hh"
-
 namespace automat {
 
 template <typename Fn>
@@ -27,11 +25,13 @@ struct SegmentTree {
       : n(n), leaf_begin(std::bit_ceil(n)), tree(leaf_begin), IsRightBetter(IsRightBetter) {
     tree[0] = UINT_MAX;
     // Fill the tree nodes with their left-most leaf indices.
+    // This is an alternative to filling the tree with UINT_MAX that avoids
+    // guard value checks in `ChooseBetter`.
     auto leaf_depth = std::bit_width(leaf_begin);
     for (unsigned node = 1; node < leaf_begin; ++node) {
       auto node_depth = std::bit_width(node);
       auto node_offset = node - std::bit_floor(node);
-      tree[node] = node_offset << (leaf_depth - node_depth);
+      tree[node] = std::min(n - 1, node_offset << (leaf_depth - node_depth));
     }
   }
 

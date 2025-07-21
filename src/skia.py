@@ -63,10 +63,8 @@ if platform == 'win32':
   skia.ConfigureOptions(clang_win='"C:\\Program Files\\LLVM"', clang_win_version='20')
   if build.debug:
     skia.ConfigureOptions(extra_cflags='["/MTd"]')
-    # This subtly affects the Skia ABI and leads to crashes when passing sk_sp across the library boundary.
-    # For more interesting defines, check out:
+    # TODO: Enable SK_TRIVIAL_ABI by patching SkUserConfig.h
     # https://github.com/google/skia/blob/main/include/config/SkUserConfig.h
-    build.compile_args += ['-DSK_TRIVIAL_ABI=[[clang::trivial_abi]]']
 elif platform == 'linux':
   build.compile_args += ['-DVK_USE_PLATFORM_XCB_KHR']
   # Static linking to Vulkan on Linux seems to fail because the dynamically loaded libc / pthread is not properly initialized

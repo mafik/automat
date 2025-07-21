@@ -5,6 +5,7 @@
 #include <include/core/SkData.h>
 #include <include/core/SkFontArguments.h>
 #include <include/core/SkFontMgr.h>
+#include <include/core/SkStream.h>
 #include <include/core/SkTypeface.h>
 #include <modules/skshaper/include/SkShaper.h>
 #include <modules/skshaper/include/SkShaper_harfbuzz.h>
@@ -16,8 +17,6 @@
 #else
 #include <include/ports/SkFontMgr_empty.h>
 #endif
-
-#include <cmath>
 
 #include "../build/generated/embedded.hh"
 #include "gui_constants.hh"
@@ -48,9 +47,9 @@ sk_sp<SkFontMgr> GetFontMgr() {
 
 sk_sp<SkTypeface> Font::LoadTypeface(fs::VFile& ttf_file) {
   auto& ttf_content = ttf_file.content;
-  sk_sp<SkData> data = SkData::MakeWithoutCopy(ttf_content.data(), ttf_content.size());
   sk_sp<SkFontMgr> font_mgr = GetFontMgr();
-  return font_mgr->makeFromData(data);
+  return font_mgr->makeFromStream(
+      SkMemoryStream::MakeDirect(ttf_content.data(), ttf_content.size()));
 }
 
 sk_sp<SkTypeface> Font::GetNotoSans() {

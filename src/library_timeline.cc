@@ -2057,6 +2057,7 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
         display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
             SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
         canvas.drawPaint(display_paint);
+
         SkPaint trail_paint;
         trail_paint.setColor("#131c64"_color);
         trail_paint.setStyle(SkPaint::kStroke_Style);
@@ -2070,20 +2071,35 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
           trail_paint.setStrokeMiter(2);
         }
         canvas.drawPath(trail, trail_paint);
-        canvas.restore();
-        canvas.drawRRect(clip.sk, border_paint);
 
         if (current_i >= start_i && current_i < end_i) {
-          Vec2 current_point = trail.getPoint(current_i - start_i + 1) * scale + rect.Center();
-          SkPaint current_paint;
-          current_paint.setColor(kOrange);
+          Vec2 previous_point = trail.getPoint(current_i - start_i);
+          Vec2 current_point = trail.getPoint(current_i - start_i + 1);
+          auto delta = current_point - previous_point;
+          auto length = Length(delta);
+          float outset = max(1_mm / scale, 1.5f);
+          auto outline_rect =
+              Rect(previous_point.x, previous_point.y, previous_point.x + length, previous_point.y)
+                  .Outset(outset);
+          auto outline_rrect = RRect::MakeSimple(outline_rect, outset);
+          SkMatrix transform;
+          transform.setSinCos(delta.y / length, delta.x / length, previous_point.x,
+                              previous_point.y);
+          auto outline_path = SkPath::RRect(outline_rrect.sk).makeTransform(transform);
+          SkPaint outline_paint;
+          outline_paint.setColor(kOrange);
           if (timestamps[current_i] == current_t) {
-            current_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+            outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+            canvas.drawPath(outline_path, outline_paint);
+            canvas.drawLine(previous_point, current_point, trail_paint);
           } else {
-            current_paint.setStyle(SkPaint::kStroke_Style);
+            outline_paint.setStyle(SkPaint::kStroke_Style);
+            canvas.drawPath(outline_path, outline_paint);
           }
-          canvas.drawCircle(current_point.x, current_point.y, 1_mm, current_paint);
         }
+
+        canvas.restore();
+        canvas.drawRRect(clip.sk, border_paint);
       }
     }
   }

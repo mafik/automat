@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
+
 #include "library_mouse_move.hh"
 
 #include <include/core/SkBlendMode.h>
@@ -88,7 +89,7 @@ struct MouseMoveWidget : Object::FallbackWidget {
     (void)matrix.invert(&inverse);
 
     SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
-    inverse.mapVectors(dpd, 2);
+    inverse.mapVectors(dpd);
     SkPaint display_paint;
     display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
         SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));

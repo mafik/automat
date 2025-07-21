@@ -219,7 +219,7 @@ void Location::Draw(SkCanvas& canvas) const {
     float intervals[] = {0.0035, 0.0015};
     float period_seconds = 200;
     float phase = std::fmod(state.time_seconds, period_seconds) / period_seconds;
-    dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, phase));
+    dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, phase));
     canvas.drawPath(outset_shape, dash_paint);
     canvas.restore();
   }
@@ -447,7 +447,7 @@ void Location::PreDraw(SkCanvas& canvas) const {
       Vec2{window_size_px.width / 2, window_size_px.height}  // bottom
   };
   // Move them into local coordinates
-  device_to_local.mapPoints(&control_points[0].sk, 2);
+  device_to_local.mapPoints(SkSpan<SkPoint>(&control_points[0].sk, 2));
   // Keep the top point in place, move the bottom point down to follow the shadow
   Vec2 dst[2] = {control_points[0], control_points[1] - Vec2{0, elevation}};
 

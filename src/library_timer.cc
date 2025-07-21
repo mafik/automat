@@ -248,7 +248,7 @@ static SkPath HandPath(const TimerDelay& timer) {
 
   if (fabs(twist_degrees) < 1) {
     SkPath path;
-    auto end_point = SkMatrix::RotateDeg(end_degrees).mapXY(kHandLength, 0);
+    auto end_point = SkMatrix::RotateDeg(end_degrees).mapPoint({kHandLength, 0});
     path.lineTo(end_point);
     return path;
   }
@@ -258,7 +258,7 @@ static SkPath HandPath(const TimerDelay& timer) {
   SkPath path;
 
   auto end_point =
-      SkMatrix::Translate(R, 0).postRotate(twist_degrees).postTranslate(-R, 0).mapXY(0, 0);
+      SkMatrix::Translate(R, 0).postRotate(twist_degrees).postTranslate(-R, 0).mapPoint({0, 0});
 
   path.rArcTo(R, R, 0, SkPath::kSmall_ArcSize,
               twist_degrees > 0 ? SkPathDirection::kCW : SkPathDirection::kCCW, end_point.x(),
@@ -537,9 +537,9 @@ void TimerDelay::Draw(SkCanvas& canvas) const {
   duration_path_rotated.getBounds().toQuad(quad);
   quad[1] = ClampLength(quad[1], kTickOuterRadius, kOuterRadius);
   quad[3] = ClampLength(quad[3], kTickOuterRadius, kOuterRadius);
-  duration_handle_paint.setShader(MakeGradient(duration_handle_matrix.mapXY(0, 0),
-                                               duration_handle_matrix.mapXY(0, 0.0005), 0xff404040,
-                                               0xff202020));
+  duration_handle_paint.setShader(MakeGradient(duration_handle_matrix.mapPoint({0, 0}),
+                                               duration_handle_matrix.mapPoint({0, 0.0005}),
+                                               0xff404040, 0xff202020));
 
   SkPaint highlight_paint;
   highlight_paint.setShader(MakeGradient(quad[3], quad[1], 0xff404040, 0xff202020));

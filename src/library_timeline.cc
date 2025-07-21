@@ -1142,7 +1142,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
 
   {  // Wooden case, light & shadow
     canvas.save();
-    canvas.clipRRect(wood_case_rrect);
+    canvas.clipRRect(wood_case_rrect, true);
     canvas.drawPaint(WoodPaint());
 
     SkPaint outer_shadow;
@@ -2052,7 +2052,7 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
         (void)matrix.invert(&inverse);
 
         SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
-        inverse.mapVectors(dpd, 2);
+        inverse.mapVectors(dpd);
         SkPaint display_paint;
         display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
             SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));

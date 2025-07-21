@@ -232,11 +232,11 @@ Pointer::IconOverride::~IconOverride() {
 
 Vec2 Pointer::PositionWithin(const Widget& widget) const {
   SkMatrix transform_down = TransformDown(widget);
-  return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
+  return Vec2(transform_down.mapPoint(pointer_position));
 }
 Vec2 Pointer::PositionWithinRootMachine() const {
   SkMatrix transform_down = TransformDown(*root_machine);
-  return Vec2(transform_down.mapXY(pointer_position.x, pointer_position.y));
+  return Vec2(transform_down.mapPoint(pointer_position));
 }
 
 Str Pointer::ToStr() const {

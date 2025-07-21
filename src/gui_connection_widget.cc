@@ -153,8 +153,9 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
 
       transforms[i] = SkRSXform::MakeFromRadians(font.font_scale, -letter_a, x, y, w / 2, 0);
     }
-    auto text_blob =
-        SkTextBlob::MakeFromRSXform(arg.name.data(), arg.name.size(), transforms, font.sk_font);
+    auto transforms_span = SkSpan<SkRSXform>(transforms, arg.name.size());
+    auto text_blob = SkTextBlob::MakeFromRSXform(arg.name.data(), arg.name.size(), transforms_span,
+                                                 font.sk_font);
     SkPaint text_paint;
     float text_alpha = animation::SinInterp(anim->radar_alpha, 0.5f, 0.0f, 1.f, 1.f);
     text_paint.setColor(SkColorSetA(arg.tint, (int)(text_alpha * 255)));
@@ -427,7 +428,7 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
     auto mat = widget.state->ConnectorMatrix();
     SkMatrix mat_inv;
     if (mat.invert(&mat_inv)) {
-      grab_offset = mat_inv.mapXY(pointer_pos.x, pointer_pos.y);
+      grab_offset = mat_inv.mapPoint(pointer_pos);
     }
     widget.manual_position = pointer_pos - grab_offset * widget.state->connector_scale;
   }

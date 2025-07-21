@@ -2775,8 +2775,8 @@ struct EnumKnobWidget : gui::Widget {
           auto font = gui::Font::MakeV2(gui::Font::GetSilkscreen(), 1.4_mm);
           SkGlyphID glyphs[9];
           SkRect bounds[9];
-          font->sk_font.textToGlyphs("012345678", 9, SkTextEncoding::kUTF8, glyphs, 9);
-          font->sk_font.getBounds(glyphs, 9, bounds, nullptr);
+          font->sk_font.textToGlyphs("012345678", 9, SkTextEncoding::kUTF8, glyphs);
+          font->sk_font.getBounds(glyphs, bounds, nullptr);
           for (int i = 0; i < 9; ++i) {
             SkPath glyph_path;
             font->sk_font.getPath(glyphs[i], &glyph_path);

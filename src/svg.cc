@@ -11,6 +11,7 @@
 #include "log.hh"
 
 #pragma maf add link argument "-lsvg"
+#pragma maf add link argument "-lpathops"
 
 namespace automat {
 

@@ -34,11 +34,13 @@ void DrawDebugTextOutlines(SkCanvas& canvas, std::string* text) {
   Font& font = GetFont();
   int glyph_count = font.sk_font.countText(c_str, byte_length, SkTextEncoding::kUTF8);
   SkGlyphID glyphs[glyph_count];
-  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyphs, glyph_count);
+  auto glyph_span = SkSpan<SkGlyphID>(glyphs, glyph_count);
+  font.sk_font.textToGlyphs(c_str, byte_length, SkTextEncoding::kUTF8, glyph_span);
 
   SkScalar widths[glyph_count];
   SkRect bounds[glyph_count];
-  font.sk_font.getWidthsBounds(glyphs, glyph_count, widths, bounds, nullptr);
+  font.sk_font.getWidthsBounds(glyph_span, SkSpan<SkScalar>(widths, glyph_count),
+                               SkSpan<SkRect>(bounds, glyph_count), nullptr);
 
   // Draw glyph outlines for debugging
   canvas.save();

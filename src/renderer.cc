@@ -23,6 +23,7 @@
 
 #include <cmath>
 #include <map>
+#include <tracy/Tracy.hpp>
 
 #include "../build/generated/embedded.hh"
 #include "blockingconcurrentqueue.hh"
@@ -303,6 +304,9 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
     recording_queue.wait_dequeue(w);
     if (w == nullptr) break;
 
+    ZoneScopedN("Recording");
+    ZoneName(w->name.c_str(), w->name.size());
+
     auto* recorder = w->render_in_background ? bg_recorder.get() : fg_recorder.get();
     auto cpu_started = time::SteadyNow();
     auto& frame = w->in_progress();
@@ -319,7 +323,7 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
   }
 }
 
-constexpr int kNumVkRecorderThreads = 4;
+constexpr int kNumVkRecorderThreads = 12;
 
 std::jthread vk_recorder_threads[kNumVkRecorderThreads];
 

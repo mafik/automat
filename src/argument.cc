@@ -80,7 +80,7 @@ bool Argument::IsOn(Location& here) const {
 Vec2AndDir Argument::Start(gui::Widget& object_widget, gui::Widget& widget) const {
   auto pos_dir = object_widget.ArgStart(*this);
   auto m = TransformBetween(object_widget, widget);
-  m.mapPoints(&pos_dir.pos.sk, 1);
+  pos_dir.pos = m.mapPoint(pos_dir.pos);
   return pos_dir;
 }
 

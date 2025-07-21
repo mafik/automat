@@ -18,7 +18,7 @@ import subprocess
 # The viewer should not crash with:
 # [graphite] ** ERROR ** validate_backend_texture failed: backendTex.info = Vulkan(viewFormat=BGRA8,flags=0x00000000,imageTiling=0,imageUsageFlags=0x00000017,sharingMode=0,aspectMask=1,bpp=4,sampleCount=1,mipmapped=0,protected=0); colorType = 6
 skia = ExtensionHelper('Skia', globals())
-skia.FetchFromGit('https://skia.googlesource.com/skia.git', 'chrome/m136')
+skia.FetchFromGit('https://skia.googlesource.com/skia.git', 'chrome/m139')
 skia.ConfigureWithGN(skia.build_dir / build.libname('skia'))
 skia.ninja_target = 'all'
 skia.ConfigureOptions(
@@ -92,18 +92,6 @@ build.compile_args += ['-DSK_SHAPER_HARFBUZZ_AVAILABLE']
 skia.InstallWhenIncluded(r'(include|src)/.*Sk.*\.h')
 skia.AddLinkArgs('-L', skia.build_dir)
 
-skia.PatchSources('''\
---- include/gpu/graphite/PrecompileContext.h
-+++ include/gpu/graphite/PrecompileContext.h
-@@ -13,6 +13,7 @@
-
- #include <chrono>
- #include <memory>
-+#include <string>
-
- class SkData;
-
-''')
 def skia_git_sync_with_deps(marker):
   subprocess.run(['python', 'tools/git-sync-deps'], cwd=skia.src_dir, check=True)
   marker.touch()

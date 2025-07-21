@@ -237,6 +237,18 @@ const SkPaint kOnOffPaint = []() {
   return p;
 }();
 
+constexpr float kVec2DisplayMargin = 0.5_mm;
+
+const SkPaint kVec2Paint = []() {
+  SkPaint p;
+  p.setColor("#131c64"_color);
+  p.setStyle(SkPaint::kStroke_Style);
+  p.setStrokeWidth(kVec2DisplayMargin);
+  p.setAlpha(0x50);
+  p.setBlendMode(SkBlendMode::kMultiply);
+  return p;
+}();
+
 const SkPaint kZoomPaint = []() {
   SkPaint p;
   p.setColor("#000000"_color);
@@ -1848,14 +1860,17 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
         end_t = timestamps[i] + pixel_t;
       }
       ++segments;
-      canvas.drawLine(start_t / s_per_m, kTrackHeight / 2 - 1_mm, end_t / s_per_m,
-                      kTrackHeight / 2 - 1_mm, kOnOffPaint);
+      canvas.drawLine(start_t / s_per_m, (kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
+                      end_t / s_per_m, (kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
+                      kVec2Paint);
+      canvas.drawLine(start_t / s_per_m, -(kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
+                      end_t / s_per_m, -(kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
+                      kVec2Paint);
     }
   }
 
   {  // draw displays
-    constexpr float kDisplayMargin = 0.5_mm;
-    constexpr float kDisplayHeight = kTrackHeight - kDisplayMargin * 2;
+    constexpr float kDisplayHeight = kTrackHeight - kVec2DisplayMargin * 2;
     constexpr float kDisplayMinWidth = kDisplayHeight;
     auto max_track_length = timeline->MaxTrackLength();
     auto current_t = CurrentOffset(*timeline, time::SteadyNow());
@@ -2007,9 +2022,9 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
       }
       Rect bounds = trail.getBounds().makeOutset(1, 1);
 
-      auto rect = Rect(display_start_t / s_per_m + kDisplayMargin / 2, -kDisplayHeight / 2,
-                       display_end_t / s_per_m - kDisplayMargin / 2, kDisplayHeight / 2);
-      auto clip = RRect::MakeSimple(rect, kDisplayMargin);
+      auto rect = Rect(display_start_t / s_per_m + kVec2DisplayMargin / 2, -kDisplayHeight / 2,
+                       display_end_t / s_per_m - kVec2DisplayMargin / 2, kDisplayHeight / 2);
+      auto clip = RRect::MakeSimple(rect, kVec2DisplayMargin);
       if (end_i > start_i) {
         canvas.save();
         canvas.clipRRect(clip.sk, true);
@@ -2043,8 +2058,11 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
             SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
         canvas.drawPaint(display_paint);
         SkPaint trail_paint;
-        trail_paint.setColor("#cccccc"_color);
+        trail_paint.setColor("#131c64"_color);
         trail_paint.setStyle(SkPaint::kStroke_Style);
+        SkPaint border_paint;
+        border_paint.setColor("#888888"_color);
+        border_paint.setStyle(SkPaint::kStroke_Style);
         if (dpd[0].x() < 1) {
           trail_paint.setStrokeWidth(1);
           trail_paint.setStrokeCap(SkPaint::kSquare_Cap);
@@ -2053,6 +2071,7 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
         }
         canvas.drawPath(trail, trail_paint);
         canvas.restore();
+        canvas.drawRRect(clip.sk, border_paint);
 
         if (current_i >= start_i && current_i < end_i) {
           Vec2 current_point = trail.getPoint(current_i - start_i + 1) * scale + rect.Center();

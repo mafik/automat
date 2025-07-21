@@ -23,5 +23,16 @@ vec4 main(vec2 uv) {
     float2 grid10 = grid(10, uv);
     float2 grid100 = grid(100, uv);
 
-    return vec4(min(max(grid100.x, grid10.x * 0.2), 0.3), min(max(grid100.y, grid10.y * 0.2), 0.3), 0, 1);
+    // old formula (works good on black background)
+    // return vec4(min(max(grid100.x, grid10.x * 0.2), 0.3), min(max(grid100.y, grid10.y * 0.2), 0.3), 0, 1);
+    float2 grid = min(max(grid100, grid10 * 0.2), 0.7);
+
+    vec3 green = vec3(0, 0.4, 0.16);
+    vec3 red = vec3(0.5, 0, 0);
+
+    return vec4(grid.x * green + grid.y * red, max(grid.x, grid.y));
+
+    // float alpha = min(max(max(grid10.x * 0.2, grid10.y * 0.2), max(grid100.x, grid100.y)), 0.3);
+
+    // return vec4(max(grid100.x, grid10.x) * alpha, max(grid100.y, grid10.y) * alpha, 0, 1);
 }

@@ -121,11 +121,11 @@ void VulkanPaint() {
     auto lock = root_widget->window->Lock();
     Vec2 size_px = Vec2(root_widget->window->client_width, root_widget->window->client_height);
     if (root_widget->window->vk_size != size_px) {
-      if (auto err =
-              vk::Resize(root_widget->window->client_width, root_widget->window->client_height);
-          !err.empty()) {
+      Status status;
+      vk::Resize(root_widget->window->client_width, root_widget->window->client_height, status);
+      if (!OK(status)) {
         FATAL << "Couldn't set window size to " << root_widget->window->client_width << "x"
-              << root_widget->window->client_height << ": " << err;
+              << root_widget->window->client_height << ": " << status;
       }
       root_widget->window->vk_size = size_px;
     }
@@ -262,8 +262,9 @@ int Main() {
 #ifdef CPU_RENDERING
   // nothing to do here
 #else
-  if (auto err = vk::Init(); !err.empty()) {
-    FATAL << "Failed to initialize Vulkan: " << err;
+  vk::Init(status);
+  if (!OK(status)) {
+    FATAL << "Failed to initialize Vulkan: " << status;
   }
 #endif
   image_provider.reset(new AutomatImageProvider());

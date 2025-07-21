@@ -21,6 +21,7 @@
 #include <vulkan/vulkan.h>
 
 #include "root_widget.hh"
+#include "status.hh"
 
 #if defined(_WIN32)
 #include "win32.hh"
@@ -57,7 +58,7 @@ PFN_vkCreateSemaphore vkCreateSemaphore;
 PFN_vkDestroySemaphore vkDestroySemaphore;
 
 struct Instance : vkb::Instance {
-  void Init();
+  void Init(Status&);
   void Destroy();
   PFN_vkVoidFunction GetProc(const char* proc_name) {
     return GetInstanceProcAddr(instance, proc_name);
@@ -65,7 +66,6 @@ struct Instance : vkb::Instance {
 
   uint32_t instance_version = VK_MAKE_VERSION(1, 1, 0);
   uint32_t api_version = VK_API_VERSION_1_1;
-  std::string error = "";
   std::vector<const char*> extensions = {
 #if defined(_WIN32)
       "VK_KHR_win32_surface"
@@ -76,25 +76,23 @@ struct Instance : vkb::Instance {
 } instance;
 
 struct Surface {
-  void Init();
+  void Init(Status& status);
   void Destroy();
   operator VkSurfaceKHR() { return surface; }
 
   VkSurfaceKHR surface;
-  std::string error = "";
 } surface;
 
 struct PhysicalDevice : vkb::PhysicalDevice {
-  void Init();
+  void Init(Status& status);
   void Destroy();
 
   std::vector<std::string> extensions_str;
   std::vector<const char*> extensions;
-  std::string error = "";
 } physical_device;
 
 struct Device : vkb::Device {
-  void Init();
+  void Init(Status& status);
   void Destroy();
   PFN_vkVoidFunction GetProc(const char* proc_name) { return GetDeviceProcAddr(device, proc_name); }
 
@@ -106,7 +104,6 @@ struct Device : vkb::Device {
   VkQueue present_queue = nullptr;
   skgpu::VulkanExtensions extensions;
   VkPhysicalDeviceFeatures2 features = {};
-  std::string error = "";
 } device;
 
 skgpu::graphite::BackendSemaphore CreateSemaphore() {
@@ -138,10 +135,10 @@ struct Swapchain {
   };
 
   void DestroyBuffers();
-  bool CreateBuffers(int width, int height, int sample_count, VkFormat format,
-                     VkImageUsageFlags usageFlags, SkColorType colorType,
-                     VkSharingMode sharingMode);
-  bool Create(int widthHint, int heightHint);
+  void CreateBuffers(int width, int height, int sample_count, VkFormat format,
+                     VkImageUsageFlags usageFlags, SkColorType colorType, VkSharingMode sharingMode,
+                     Status& status);
+  void Create(int widthHint, int heightHint, Status& status);
   BackbufferInfo* GetAvailableBackbuffer();
   SkCanvas* GetBackbufferCanvas();
   void SwapBuffers();
@@ -151,7 +148,7 @@ struct Swapchain {
   VkSwapchainKHR swapchain;
   uint32_t image_count;
   VkImage* images;  // images in the swapchain
-  sk_sp<SkSurface>* surfaces;
+  sk_sp<SkSurface>* sk_surfaces;
 
   // Note that there are (image_count + 1) backbuffers. We create one additional
   // backbuffer structure, because we want to give the command buffers they
@@ -160,7 +157,7 @@ struct Swapchain {
   uint32_t current_backbuffer_index;
 } swapchain;
 
-void Instance::Init() {
+void Instance::Init(Status& status) {
   if (instance != VK_NULL_HANDLE) {
     Destroy();
   }
@@ -172,7 +169,8 @@ void Instance::Init() {
   }
   auto result = builder.build();
   if (!result) {
-    error = result.error().message();
+    AppendErrorMessage(status) += result.error().message();
+    return;
   } else {
     (*(vkb::Instance*)this) = result.value();
   }
@@ -183,7 +181,6 @@ void Instance::Destroy() {
   vkb::destroy_instance(*this);
   debug_messenger = VK_NULL_HANDLE;
   instance = VK_NULL_HANDLE;
-  error = "";
 }
 PFN_vkVoidFunction GetProc(const char* proc_name, VkInstance vk_instance, VkDevice device) {
   if (device != VK_NULL_HANDLE) {
@@ -191,9 +188,9 @@ PFN_vkVoidFunction GetProc(const char* proc_name, VkInstance vk_instance, VkDevi
   }
   return GetInstanceProcAddr(vk_instance, proc_name);
 };
-void Surface::Init() {
+void Surface::Init(Status& status) {
   if (surface != VK_NULL_HANDLE) {
-    error = "vk::Surface already initialized.";
+    AppendErrorMessage(status) += "vk::Surface already initialized";
     return;
   }
 
@@ -213,12 +210,12 @@ void Surface::Init() {
 
   VkResult res = vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
   if (VK_SUCCESS != res) {
-    error = "Failure in vkCreateWin32SurfaceKHR.";
+    AppendErrorMessage(status) += "Failure in vkCreateWin32SurfaceKHR";
     return;
   }
 
   if (VK_NULL_HANDLE == surface) {
-    error = "No surface after vkCreateWin32SurfaceKHR";
+    AppendErrorMessage(status) += "No surface after vkCreateWin32SurfaceKHR";
     return;
   }
 
@@ -239,12 +236,12 @@ void Surface::Init() {
 
   VkResult res = vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
   if (VK_SUCCESS != res) {
-    error = "Failure in vkCreateXcbSurfaceKHR.";
+    AppendErrorMessage(status) += "Failure in vkCreateXcbSurfaceKHR.";
     return;
   }
 
   if (VK_NULL_HANDLE == surface) {
-    error = "No surface after vkCreateXcbSurfaceKHR";
+    AppendErrorMessage(status) += "No surface after vkCreateXcbSurfaceKHR";
     return;
   }
 
@@ -253,11 +250,10 @@ void Surface::Init() {
 void Surface::Destroy() {
   vkb::destroy_surface(instance, surface);
   surface = VK_NULL_HANDLE;
-  error = "";
 }
-void PhysicalDevice::Init() {
+void PhysicalDevice::Init(Status& status) {
   if (physical_device != VK_NULL_HANDLE) {
-    error = "vk::PhysicalDevice already initialized.";
+    AppendErrorMessage(status) += "vk::PhysicalDevice already initialized";
     return;
   }
   auto result = vkb::PhysicalDeviceSelector(instance)
@@ -267,7 +263,7 @@ void PhysicalDevice::Init() {
                     .prefer_gpu_device_type()
                     .select();
   if (!result) {
-    error = result.error().message();
+    AppendErrorMessage(status) += result.error().message();
     return;
   }
   *(vkb::PhysicalDevice*)this = result.value();
@@ -280,9 +276,8 @@ void PhysicalDevice::Destroy() {
   physical_device = VK_NULL_HANDLE;
   extensions_str.clear();
   extensions.clear();
-  error = "";
 }
-void Device::Init() {
+void Device::Init(Status& status) {
   extensions.init(vk::GetProc, instance, vk::physical_device, instance.extensions.size(),
                   instance.extensions.data(), vk::physical_device.extensions.size(),
                   vk::physical_device.extensions.data());
@@ -359,7 +354,7 @@ void Device::Init() {
   device_builder.add_pNext(&features);
   auto dev_ret = device_builder.build();
   if (!dev_ret) {
-    error = dev_ret.error().message();
+    AppendErrorMessage(status) += dev_ret.error().message();
     return;
   }
   *(vkb::Device*)this = dev_ret.value();
@@ -376,7 +371,6 @@ void Device::Destroy() {
   device = VK_NULL_HANDLE;
   extensions = {};
   features = {};
-  error = "";
 }
 void InitGrContext() {
   skgpu::VulkanBackendContext foreground_backend = {
@@ -441,20 +435,20 @@ void Swapchain::DestroyBuffers() {
   backbuffers = nullptr;
 
   // Does this actually free the surfaces?
-  delete[] surfaces;
-  surfaces = nullptr;
+  delete[] sk_surfaces;
+  sk_surfaces = nullptr;
   delete[] images;
   images = nullptr;
 }
-bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat format,
+void Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat format,
                               VkImageUsageFlags usageFlags, SkColorType colorType,
-                              VkSharingMode sharingMode) {
+                              VkSharingMode sharingMode, Status& status) {
   vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr);
   SkASSERT(image_count);
   images = new VkImage[image_count];
   vkGetSwapchainImagesKHR(device, swapchain, &image_count, images);
 
-  surfaces = new sk_sp<SkSurface>[image_count]();
+  sk_surfaces = new sk_sp<SkSurface>[image_count]();
 
   static SkSurfaceProps surface_props(0, kRGB_H_SkPixelGeometry);
   static sk_sp<SkColorSpace> color_space = SkColorSpace::MakeSRGB();
@@ -468,11 +462,12 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat 
     auto backendTexture = skgpu::graphite::BackendTextures::MakeVulkan(
         dimensions, texture_info, VK_IMAGE_LAYOUT_UNDEFINED, device.present_queue_index, images[i],
         skgpu::VulkanAlloc());
-    surfaces[i] = SkSurfaces::WrapBackendTexture(graphite_recorder.get(), backendTexture, colorType,
-                                                 color_space, &surface_props, nullptr, nullptr,
-                                                 "backend_texture");
-    if (!surfaces[i]) {
-      return false;
+    sk_surfaces[i] = SkSurfaces::WrapBackendTexture(graphite_recorder.get(), backendTexture,
+                                                    colorType, color_space, &surface_props, nullptr,
+                                                    nullptr, "backend_texture");
+    if (!sk_surfaces[i]) {
+      AppendErrorMessage(status) += "SkSurfaces::WrapBackendTexture failed";
+      return;
     }
   }
 
@@ -491,38 +486,139 @@ bool Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat 
     SkASSERT(result == VK_SUCCESS);
   }
   current_backbuffer_index = image_count;
-  return true;
 }
 
-bool Swapchain::Create(int widthHint, int heightHint) {
+Str ToStr(VkResult res) {
+  switch (res) {
+    case VK_SUCCESS:
+      return "VK_SUCCESS";
+    case VK_NOT_READY:
+      return "VK_NOT_READY";
+    case VK_TIMEOUT:
+      return "VK_TIMEOUT";
+    case VK_EVENT_SET:
+      return "VK_EVENT_SET";
+    case VK_EVENT_RESET:
+      return "VK_EVENT_RESET";
+    case VK_INCOMPLETE:
+      return "VK_INCOMPLETE";
+    case VK_ERROR_OUT_OF_HOST_MEMORY:
+      return "VK_ERROR_OUT_OF_HOST_MEMORY";
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+      return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
+    case VK_ERROR_INITIALIZATION_FAILED:
+      return "VK_ERROR_INITIALIZATION_FAILED";
+    case VK_ERROR_DEVICE_LOST:
+      return "VK_ERROR_DEVICE_LOST";
+    case VK_ERROR_MEMORY_MAP_FAILED:
+      return "VK_ERROR_MEMORY_MAP_FAILED";
+    case VK_ERROR_LAYER_NOT_PRESENT:
+      return "VK_ERROR_LAYER_NOT_PRESENT";
+    case VK_ERROR_EXTENSION_NOT_PRESENT:
+      return "VK_ERROR_EXTENSION_NOT_PRESENT";
+    case VK_ERROR_FEATURE_NOT_PRESENT:
+      return "VK_ERROR_FEATURE_NOT_PRESENT";
+    case VK_ERROR_INCOMPATIBLE_DRIVER:
+      return "VK_ERROR_INCOMPATIBLE_DRIVER";
+    case VK_ERROR_TOO_MANY_OBJECTS:
+      return "VK_ERROR_TOO_MANY_OBJECTS";
+    case VK_ERROR_FORMAT_NOT_SUPPORTED:
+      return "VK_ERROR_FORMAT_NOT_SUPPORTED";
+    case VK_ERROR_FRAGMENTED_POOL:
+      return "VK_ERROR_FRAGMENTED_POOL";
+    case VK_ERROR_UNKNOWN:
+      return "VK_ERROR_UNKNOWN";
+    case VK_ERROR_OUT_OF_POOL_MEMORY:
+      return "VK_ERROR_OUT_OF_POOL_MEMORY";
+    case VK_ERROR_INVALID_EXTERNAL_HANDLE:
+      return "VK_ERROR_INVALID_EXTERNAL_HANDLE";
+    case VK_ERROR_FRAGMENTATION:
+      return "VK_ERROR_FRAGMENTATION";
+    case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS:
+      return "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS";
+    case VK_PIPELINE_COMPILE_REQUIRED:
+      return "VK_PIPELINE_COMPILE_REQUIRED";
+    case VK_ERROR_NOT_PERMITTED:
+      return "VK_ERROR_NOT_PERMITTED";
+    case VK_ERROR_SURFACE_LOST_KHR:
+      return "VK_ERROR_SURFACE_LOST_KHR";
+    case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR:
+      return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
+    case VK_SUBOPTIMAL_KHR:
+      return "VK_SUBOPTIMAL_KHR";
+    case VK_ERROR_OUT_OF_DATE_KHR:
+      return "VK_ERROR_OUT_OF_DATE_KHR";
+    case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR:
+      return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
+    case VK_ERROR_VALIDATION_FAILED_EXT:
+      return "VK_ERROR_VALIDATION_FAILED_EXT";
+    case VK_ERROR_INVALID_SHADER_NV:
+      return "VK_ERROR_INVALID_SHADER_NV";
+    case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR:
+      return "VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR";
+    case VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR:
+      return "VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR";
+    case VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR:
+      return "VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR";
+    case VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR:
+      return "VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR";
+    case VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR:
+      return "VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR";
+    case VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR:
+      return "VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR";
+    case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT:
+      return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
+    case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT:
+      return "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT";
+    case VK_THREAD_IDLE_KHR:
+      return "VK_THREAD_IDLE_KHR";
+    case VK_THREAD_DONE_KHR:
+      return "VK_THREAD_DONE_KHR";
+    case VK_OPERATION_DEFERRED_KHR:
+      return "VK_OPERATION_DEFERRED_KHR";
+    case VK_OPERATION_NOT_DEFERRED_KHR:
+      return "VK_OPERATION_NOT_DEFERRED_KHR";
+    case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR:
+      return "VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR";
+    case VK_ERROR_COMPRESSION_EXHAUSTED_EXT:
+      return "VK_ERROR_COMPRESSION_EXHAUSTED_EXT";
+    case VK_INCOMPATIBLE_SHADER_BINARY_EXT:
+      return "VK_INCOMPATIBLE_SHADER_BINARY_EXT";
+    case VK_PIPELINE_BINARY_MISSING_KHR:
+      return "VK_PIPELINE_BINARY_MISSING_KHR";
+    case VK_ERROR_NOT_ENOUGH_SPACE_KHR:
+      return "VK_ERROR_NOT_ENOUGH_SPACE_KHR";
+    default:
+      return "Unknown error";
+  }
+}
+
+void Swapchain::Create(int widthHint, int heightHint, Status& status) {
+#define CHECK_RESULT(call)                                               \
+  if (auto res = call) {                                                 \
+    AppendErrorMessage(status) += "Failure in " #call ": " + ToStr(res); \
+    return;                                                              \
+  }
+
   // check for capabilities
   VkSurfaceCapabilitiesKHR caps;
-  if (GetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &caps)) {
-    return false;
-  }
+  CHECK_RESULT(GetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &caps));
 
   uint32_t surfaceFormatCount;
-  if (GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount, nullptr)) {
-    return false;
-  }
+  CHECK_RESULT(
+      GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount, nullptr));
 
   VkSurfaceFormatKHR surfaceFormats[surfaceFormatCount];
-  if (GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount,
-                                         surfaceFormats)) {
-    return false;
-  }
+  CHECK_RESULT(GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount,
+                                                  surfaceFormats));
 
   uint32_t presentModeCount;
-  if (GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount,
-                                              nullptr)) {
-    return false;
-  }
+  CHECK_RESULT(GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount,
+                                                       nullptr));
 
   VkPresentModeKHR presentModes[presentModeCount];
-  if (GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount,
-                                              presentModes)) {
-    return false;
-  }
+  CHECK_RESULT(GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount,
+                                                       presentModes));
 
   VkExtent2D extent = caps.currentExtent;
   // use the hints
@@ -583,7 +679,8 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   }
 
   if (VK_FORMAT_UNDEFINED == surfaceFormat) {
-    return false;
+    AppendErrorMessage(status) += "No supported surface format found";
+    return;
   }
 
   SkColorType colorType;
@@ -596,7 +693,8 @@ bool Swapchain::Create(int widthHint, int heightHint) {
       colorType = kBGRA_8888_SkColorType;
       break;
     default:
-      return false;
+      AppendErrorMessage(status) += "Unsupported surface format";
+      return;
   }
 
   // If mailbox mode is available, use it, as it is the lowest-latency non-
@@ -643,9 +741,7 @@ bool Swapchain::Create(int widthHint, int heightHint) {
   swapchainCreateInfo.presentMode = mode;
   swapchainCreateInfo.clipped = true;
   swapchainCreateInfo.oldSwapchain = swapchain;
-  if (vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain)) {
-    return false;
-  }
+  CHECK_RESULT(vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain));
 
   // destroy the old swapchain
   if (swapchainCreateInfo.oldSwapchain != VK_NULL_HANDLE) {
@@ -655,16 +751,14 @@ bool Swapchain::Create(int widthHint, int heightHint) {
     swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
   }
 
-  if (!CreateBuffers(width, height, sample_count, swapchainCreateInfo.imageFormat, usageFlags,
-                     colorType, swapchainCreateInfo.imageSharingMode)) {
+  CreateBuffers(width, height, sample_count, swapchainCreateInfo.imageFormat, usageFlags, colorType,
+                swapchainCreateInfo.imageSharingMode, status);
+  if (!OK(status)) {
     vkDeviceWaitIdle(device);
     DestroyBuffers();
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     swapchain = VK_NULL_HANDLE;
-    return false;
   }
-
-  return true;
 }
 
 Swapchain::BackbufferInfo* Swapchain::GetAvailableBackbuffer() {
@@ -705,7 +799,9 @@ SkCanvas* Swapchain::GetBackbufferCanvas() {
   }
   if (VK_ERROR_OUT_OF_DATE_KHR == res) {
     // tear swapchain down and try again
-    if (!Create(-1, -1)) {
+    Status status;
+    Create(-1, -1, status);
+    if (!OK(status)) {
       vkDestroySemaphore(device, wait_semaphore, nullptr);
       wait_semaphore = VK_NULL_HANDLE;
       return nullptr;
@@ -722,13 +818,13 @@ SkCanvas* Swapchain::GetBackbufferCanvas() {
     }
   }
 
-  SkSurface* surface = surfaces[backbuffer->image_index].get();
+  SkSurface* surface = sk_surfaces[backbuffer->image_index].get();
   return surface->getCanvas();
 }
 
 void Swapchain::SwapBuffers() {
   BackbufferInfo& backbuffer = backbuffers[current_backbuffer_index];
-  SkSurface* surface = surfaces[backbuffer.image_index].get();
+  SkSurface* surface = sk_surfaces[backbuffer.image_index].get();
 
   auto sk_wait_semaphore = skgpu::graphite::BackendSemaphores::MakeVulkan(wait_semaphore);
   auto sk_render_semaphore =
@@ -785,35 +881,40 @@ void Swapchain::WaitAndDestroy() {
   }
 }
 bool initialized = false;
-std::string Init() {
+void Init(Status& status) {
   initialized = true;
-  instance.Init();
-  if (!instance.error.empty()) {
-    return "Failed to create Vulkan instance: " + instance.error;
+  instance.Init(status);
+  if (!OK(status)) {
+    AppendErrorMessage(status) += "Failed to create Vulkan instance";
+    return;
   }
 
-  surface.Init();
-  if (!surface.error.empty()) {
-    return "Failed to create Vulkan surface: " + surface.error;
+  surface.Init(status);
+  if (!OK(status)) {
+    AppendErrorMessage(status) += "Failed to create Vulkan surface";
+    return;
   }
 
-  physical_device.Init();
-  if (!physical_device.error.empty()) {
-    return "Failed to create Vulkan physical device: " + physical_device.error;
+  physical_device.Init(status);
+  if (!OK(status)) {
+    AppendErrorMessage(status) += "Failed to create Vulkan physical device";
+    return;
   }
 
-  device.Init();
-  if (!device.error.empty()) {
-    return "Failed to create Vulkan device: " + device.error;
+  device.Init(status);
+  if (!OK(status)) {
+    AppendErrorMessage(status) += "Failed to create Vulkan device";
+    return;
   }
 
   InitGrContext();
   InitFunctions();
 
-  if (!swapchain.Create(-1, -1)) {
-    return "Failed to create Vulkan swapchain.";
+  swapchain.Create(-1, -1, status);
+  if (!OK(status)) {
+    AppendErrorMessage(status) += "Failed to create Vulkan swapchain";
+    return;
   }
-  return "";
 }
 void Destroy() {
   if (VK_NULL_HANDLE != device) {
@@ -829,14 +930,16 @@ void Destroy() {
   instance.Destroy();
 }
 
-std::string Resize(int width_hint, int height_hint) {
+void Resize(int width_hint, int height_hint, Status& status) {
   if (!initialized) {
-    return "";
+    AppendErrorMessage(status) += "vk::Resize called before initialization";
+    return;
   }
-  if (!vk::swapchain.Create(width_hint, height_hint)) {
-    return "Couldn't create swapchain";
+  swapchain.Create(width_hint, height_hint, status);
+  if (!OK(status)) {
+    AppendErrorMessage(status) += "Couldn't create swapchain";
+    return;
   }
-  return "";
 }
 
 SkCanvas* GetBackbufferCanvas() { return swapchain.GetBackbufferCanvas(); }

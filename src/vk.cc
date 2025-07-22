@@ -47,23 +47,39 @@ PFN_vkGetInstanceProcAddr GetInstanceProcAddr;
 PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
 
 // Initialized in InitFunctions
-PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR GetPhysicalDeviceSurfaceCapabilitiesKHR;
-PFN_vkGetPhysicalDeviceSurfaceFormatsKHR GetPhysicalDeviceSurfaceFormatsKHR;
-PFN_vkGetPhysicalDeviceSurfacePresentModesKHR GetPhysicalDeviceSurfacePresentModesKHR;
+#define EACH_INSTANCE_PROC(X)                \
+  X(GetPhysicalDeviceSurfaceCapabilitiesKHR) \
+  X(GetPhysicalDeviceSurfaceFormatsKHR)      \
+  X(GetPhysicalDeviceSurfacePresentModesKHR)
 
-PFN_vkGetDeviceQueue vkGetDeviceQueue;
-PFN_vkCreateSwapchainKHR vkCreateSwapchainKHR;
-PFN_vkDestroySwapchainKHR vkDestroySwapchainKHR;
-PFN_vkGetSwapchainImagesKHR vkGetSwapchainImagesKHR;
-PFN_vkAcquireNextImageKHR vkAcquireNextImageKHR;
-PFN_vkQueuePresentKHR vkQueuePresentKHR;
-PFN_vkDeviceWaitIdle vkDeviceWaitIdle;
-PFN_vkQueueWaitIdle vkQueueWaitIdle;
-PFN_vkDestroyDevice vkDestroyDevice;
-PFN_vkCreateSemaphore vkCreateSemaphore;
-PFN_vkDestroySemaphore vkDestroySemaphore;
-PFN_vkCreateImage vkCreateImage;
-PFN_vkDestroyImage vkDestroyImage;
+#define EACH_DEVICE_PROC(X) \
+  X(GetDeviceQueue)         \
+  X(CreateSwapchainKHR)     \
+  X(DestroySwapchainKHR)    \
+  X(GetSwapchainImagesKHR)  \
+  X(AcquireNextImageKHR)    \
+  X(QueuePresentKHR)        \
+  X(DeviceWaitIdle)         \
+  X(QueueWaitIdle)          \
+  X(DestroyDevice)          \
+  X(CreateSemaphore)        \
+  X(DestroySemaphore)       \
+  X(CreateImage)            \
+  X(DestroyImage)           \
+  X(CreateCommandPool)      \
+  X(DestroyCommandPool)     \
+  X(AllocateCommandBuffers) \
+  X(BeginCommandBuffer)     \
+  X(EndCommandBuffer)       \
+  X(CmdCopyImage)           \
+  X(QueueSubmit2)           \
+  X(BindImageMemory)        \
+  X(CmdPipelineBarrier2)
+
+#define VULKAN_DECLARE(F) PFN_vk##F vk##F;
+EACH_INSTANCE_PROC(VULKAN_DECLARE)
+EACH_DEVICE_PROC(VULKAN_DECLARE)
+#undef VULKAN_DECLARE
 
 constexpr auto kMinimumVulkanVersion = VK_API_VERSION_1_3;
 
@@ -153,6 +169,12 @@ std::unique_ptr<graphite::Context> graphite_context, background_context;
 
 std::unique_ptr<graphite::Recorder> graphite_recorder;
 
+struct CommandPool {
+  VkCommandPool vk_command_pool = VK_NULL_HANDLE;
+  void Create(Status& status);
+  void Destroy();
+} command_pool;
+
 struct Swapchain {
   void DestroyBuffers();
   void Create(int widthHint, int heightHint, Status& status);
@@ -201,7 +223,9 @@ struct Swapchain {
   // Vulkan(viewFormat=BGRA8,flags=0x00000000,imageTiling=0,imageUsageFlags=0x00000017,sharingMode=0,aspectMask=1,bpp=4,sampleCount=1,mipmapped=0,protected=0);
   // colorType = 6
   struct OffscreenRenderingState {
-    VkImage images[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+    std::array<VkImage, 2> images{VK_NULL_HANDLE, VK_NULL_HANDLE};
+    std::vector<std::array<VkCommandBuffer, 2>> cmd_copy;
+    std::array<Semaphore, 2> sem_copied;
     int current = 0;
   };
   Optional<OffscreenRenderingState> render_offscreen;
@@ -449,28 +473,33 @@ void InitGrContext() {
   graphite_recorder = graphite_context->makeRecorder();
 }
 void InitFunctions() {
-#define INSTANCE_PROC(P) P = (PFN_vk##P)instance.GetProc("vk" #P)
-#define DEVICE_PROC(P) P = (PFN_##P)device.GetProc(#P)
+#define GET_INSTANCE_PROC(P) vk##P = (PFN_vk##P)instance.GetProc("vk" #P);
+#define GET_DEVICE_PROC(P) vk##P = (PFN_vk##P)device.GetProc("vk" #P);
 
-  INSTANCE_PROC(GetPhysicalDeviceSurfaceCapabilitiesKHR);
-  INSTANCE_PROC(GetPhysicalDeviceSurfaceFormatsKHR);
-  INSTANCE_PROC(GetPhysicalDeviceSurfacePresentModesKHR);
-  DEVICE_PROC(vkDeviceWaitIdle);
-  DEVICE_PROC(vkQueueWaitIdle);
-  DEVICE_PROC(vkDestroyDevice);
-  DEVICE_PROC(vkCreateSwapchainKHR);
-  DEVICE_PROC(vkDestroySwapchainKHR);
-  DEVICE_PROC(vkGetSwapchainImagesKHR);
-  DEVICE_PROC(vkAcquireNextImageKHR);
-  DEVICE_PROC(vkQueuePresentKHR);
-  DEVICE_PROC(vkCreateSemaphore);
-  DEVICE_PROC(vkDestroySemaphore);
-  DEVICE_PROC(vkCreateImage);
-  DEVICE_PROC(vkDestroyImage);
+  EACH_INSTANCE_PROC(GET_INSTANCE_PROC);
+  EACH_DEVICE_PROC(GET_DEVICE_PROC);
 
-#undef INSTANCE_PROC
-#undef DEVICE_PROC
+#undef GET_INSTANCE_PROC
+#undef GET_DEVICE_PROC
 }
+
+void CommandPool::Create(Status& status) {
+  const VkCommandPoolCreateInfo create_info = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .queueFamilyIndex = device.graphics_queue_index,
+  };
+  CHECK_RESULT(vkCreateCommandPool(device, &create_info, nullptr, &vk_command_pool));
+}
+
+void CommandPool::Destroy() {
+  if (VK_NULL_HANDLE != vk_command_pool) {
+    vkDestroyCommandPool(device, vk_command_pool, nullptr);
+    vk_command_pool = VK_NULL_HANDLE;
+  }
+}
+
 void Swapchain::DestroyBuffers() {
   canvases.clear();
   images.clear();
@@ -581,6 +610,93 @@ Str ToStr(VkResult res) {
   }
 }
 
+struct StageAccess {
+  VkPipelineStageFlags2 stage;
+  VkAccessFlags2 access;
+
+  StageAccess(VkImageLayout layout) {
+    switch (layout) {
+      case VK_IMAGE_LAYOUT_UNDEFINED:
+        stage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+        access = VK_ACCESS_2_NONE;
+        break;
+      case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+        stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+        access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+        break;
+      case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+        stage = VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT |
+                VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+        access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        break;
+      case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+        stage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                VK_PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS_BIT;
+        access = VK_ACCESS_2_SHADER_READ_BIT;
+        break;
+      case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+        stage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        access = VK_ACCESS_2_TRANSFER_READ_BIT;
+        break;
+      case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+        stage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        break;
+      case VK_IMAGE_LAYOUT_GENERAL:
+        stage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+        access = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT |
+                 VK_ACCESS_2_TRANSFER_WRITE_BIT;
+        break;
+      case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+        stage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT |
+                VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        access = VK_ACCESS_2_NONE | VK_ACCESS_2_SHADER_WRITE_BIT;
+        break;
+      default:
+        ERROR_ONCE << "Unsupported image layout transition: " << layout;
+        stage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        access = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+        break;
+    }
+  }
+};
+
+static void ImageMemBarrier(VkCommandBuffer cmd_buffer, VkImage image, VkFormat format,
+                            VkImageLayout old_layout, VkImageLayout new_layout) {
+  StageAccess src = StageAccess(old_layout);
+  StageAccess dst = StageAccess(new_layout);
+
+  const VkImageMemoryBarrier2 barrier = {
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+      .srcStageMask = src.stage,
+      .srcAccessMask = src.access,
+      .dstStageMask = dst.stage,
+      .dstAccessMask = dst.access,
+      .oldLayout = old_layout,
+      .newLayout = new_layout,
+      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .image = image,
+      .subresourceRange =
+          {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .baseMipLevel = 0,
+              .levelCount = 1,
+              .baseArrayLayer = 0,
+              .layerCount = 1,
+          },
+  };
+
+  const VkDependencyInfo depInfo{
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+      .imageMemoryBarrierCount = 1,
+      .pImageMemoryBarriers = &barrier,
+  };
+
+  vkCmdPipelineBarrier2(cmd_buffer, &depInfo);
+}
+
 void Swapchain::Create(int widthHint, int heightHint, Status& status) {
   sem_acquired.Create(status);
   if (!OK(status)) {
@@ -589,23 +705,23 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
 
   // check for capabilities
   VkSurfaceCapabilitiesKHR caps;
-  CHECK_RESULT(GetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &caps));
+  CHECK_RESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &caps));
 
   uint32_t surfaceFormatCount;
   CHECK_RESULT(
-      GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount, nullptr));
+      vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount, nullptr));
 
   VkSurfaceFormatKHR surfaceFormats[surfaceFormatCount];
-  CHECK_RESULT(GetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount,
-                                                  surfaceFormats));
+  CHECK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &surfaceFormatCount,
+                                                    surfaceFormats));
 
   uint32_t presentModeCount;
-  CHECK_RESULT(GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount,
-                                                       nullptr));
+  CHECK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface,
+                                                         &presentModeCount, nullptr));
 
   VkPresentModeKHR presentModes[presentModeCount];
-  CHECK_RESULT(GetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount,
-                                                       presentModes));
+  CHECK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface,
+                                                         &presentModeCount, presentModes));
 
   VkExtent2D extent = caps.currentExtent;
   // use the hints
@@ -627,7 +743,7 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     extent.height = caps.maxImageExtent.height;
   }
 
-  uint32_t image_count = caps.minImageCount + 1;
+  uint32_t image_count = caps.minImageCount;
   if (caps.maxImageCount > 0 && image_count > caps.maxImageCount) {
     // Application must settle for fewer images than desired:
     image_count = caps.maxImageCount;
@@ -771,9 +887,65 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
         .pQueueFamilyIndices = &device.present_queue_index,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
+
+    const VkCommandBufferAllocateInfo command_buffer_allocate_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = command_pool.vk_command_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 2 * image_count,
+    };
+
+    render_offscreen->cmd_copy.resize(image_count);
+    CHECK_RESULT(vkAllocateCommandBuffers(device, &command_buffer_allocate_info,
+                                          &render_offscreen->cmd_copy[0][0]));
+
     for (int i = 0; i < 2; ++i) {
       CHECK_RESULT(
           vkCreateImage(device, &image_create_info, nullptr, &render_offscreen->images[i]));
+
+      // TODO: bind memory
+      VkDeviceMemory memory;
+      VkDeviceSize memoryOffset = 0;
+
+      CHECK_RESULT(vkBindImageMemory(device, render_offscreen->images[i], memory, memoryOffset));
+
+      ImageMemBarrier(render_offscreen->cmd_copy[i][0], render_offscreen->images[i],
+                      texture_info.fFormat, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+      render_offscreen->sem_copied[i].Create(status);
+      if (!OK(status)) {
+        AppendErrorMessage(status) += "Failed to create semaphore for offscreen rendering";
+      }
+
+      const VkImageCopy image_copy = {
+          .srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                             .mipLevel = 0,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1},
+          .srcOffset = {0, 0, 0},
+          .dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                             .mipLevel = 0,
+                             .baseArrayLayer = 0,
+                             .layerCount = 1},
+          .dstOffset = {0, 0, 0},
+          .extent = {.width = extent.width, .height = extent.height, .depth = 1}};
+
+      for (int j = 0; j < image_count; ++j) {
+        const static VkCommandBufferBeginInfo kCommandBufferBeginInfo = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .pInheritanceInfo = nullptr};
+        auto& cmd_buffer = render_offscreen->cmd_copy[j][i];
+        CHECK_RESULT(vkBeginCommandBuffer(cmd_buffer, &kCommandBufferBeginInfo));
+
+        vkCmdCopyImage(cmd_buffer, render_offscreen->images[i], VK_IMAGE_LAYOUT_GENERAL, images[j],
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
+
+        CHECK_RESULT(vkEndCommandBuffer(cmd_buffer));
+      }
     }
     render_offscreen->current = 0;
     canvas_images = render_offscreen->images;
@@ -799,6 +971,7 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     DestroyBuffers();
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     swapchain = VK_NULL_HANDLE;
+    return;
   }
 }
 
@@ -838,12 +1011,18 @@ void Swapchain::Present() {
 
   graphite::BackendSemaphore sk_sem_acquired = sem_acquired;
   graphite::BackendSemaphore sk_sem_rendered = backbuffer.sem_rendered;
+  VkSemaphore* present_semaphore = &backbuffer.sem_rendered.vk_semaphore;
 
   if (auto recording = graphite_recorder->snap()) {
     graphite::InsertRecordingInfo insert_recording_info;
     insert_recording_info.fRecording = recording.get();
-    insert_recording_info.fWaitSemaphores = &sk_sem_acquired;
-    insert_recording_info.fNumWaitSemaphores = 1;
+    if (render_offscreen) {
+      insert_recording_info.fWaitSemaphores = nullptr;
+      insert_recording_info.fNumWaitSemaphores = 0;
+    } else {
+      insert_recording_info.fWaitSemaphores = &sk_sem_acquired;
+      insert_recording_info.fNumWaitSemaphores = 1;
+    }
     insert_recording_info.fSignalSemaphores = &sk_sem_rendered;
     insert_recording_info.fNumSignalSemaphores = 1;
 
@@ -859,10 +1038,39 @@ void Swapchain::Present() {
     graphite_context->submit();
   }
 
+  if (render_offscreen) {
+    const VkSemaphoreSubmitInfo wait_semaphores[2] = {
+        VkSemaphoreSubmitInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                              .semaphore = sem_acquired},
+        VkSemaphoreSubmitInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+                              .semaphore = backbuffer.sem_rendered.vk_semaphore},
+    };
+    const VkCommandBufferSubmitInfo command_buffer_submit_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .commandBuffer = render_offscreen->cmd_copy[current_image_index][render_offscreen->current],
+    };
+    const VkSemaphoreSubmitInfo signal_semaphore_submit_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = render_offscreen->sem_copied[render_offscreen->current].vk_semaphore,
+    };
+    const VkSubmitInfo2 submit_info = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+                                       .pNext = nullptr,
+                                       .flags = 0,
+                                       .waitSemaphoreInfoCount = 2,
+                                       .pWaitSemaphoreInfos = wait_semaphores,
+                                       .commandBufferInfoCount = 1,
+                                       .pCommandBufferInfos = &command_buffer_submit_info,
+                                       .signalSemaphoreInfoCount = 1,
+                                       .pSignalSemaphoreInfos = &signal_semaphore_submit_info};
+
+    vkQueueSubmit2(device.graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
+    present_semaphore = &render_offscreen->sem_copied[render_offscreen->current].vk_semaphore;
+  }
+
   const VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
                                         nullptr,
                                         1,
-                                        &backbuffer.sem_rendered.vk_semaphore,
+                                        present_semaphore,
                                         1,
                                         &swapchain,
                                         &current_image_index,
@@ -886,6 +1094,7 @@ void Swapchain::WaitAndDestroy() {
     swapchain = VK_NULL_HANDLE;
   }
 }
+
 bool initialized = false;
 void Init(Status& status) {
   initialized = true;
@@ -916,6 +1125,12 @@ void Init(Status& status) {
   InitGrContext();
   InitFunctions();
 
+  command_pool.Create(status);
+  if (!OK(status)) {
+    AppendErrorMessage(status) += "Failed to create Vulkan command pool";
+    return;
+  }
+
   swapchain.Create(-1, -1, status);
   if (!OK(status)) {
     AppendErrorMessage(status) += "Failed to create Vulkan swapchain";
@@ -926,6 +1141,7 @@ void Destroy() {
   if (VK_NULL_HANDLE != device) {
     swapchain.WaitAndDestroy();
     surface.Destroy();
+    command_pool.Destroy();
   }
 
   graphite_recorder.reset();

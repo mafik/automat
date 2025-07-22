@@ -10,6 +10,7 @@
 #include <include/core/SkSurface.h>
 #include <include/gpu/GpuTypes.h>
 #include <include/gpu/MutableTextureState.h>
+#include <include/gpu/ganesh/GrRecordingContext.h>
 #include <include/gpu/graphite/BackendSemaphore.h>
 #include <include/gpu/graphite/Context.h>
 #include <include/gpu/graphite/ContextOptions.h>
@@ -21,6 +22,7 @@
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
 #include <vulkan/vulkan.h>
+#include <vulkan/vulkan_core.h>
 
 #include "root_widget.hh"
 #include "status.hh"
@@ -35,6 +37,8 @@
 #endif
 
 #pragma comment(lib, "vk-bootstrap")
+
+namespace graphite = skgpu::graphite;
 
 namespace automat::vk {
 
@@ -58,6 +62,16 @@ PFN_vkQueueWaitIdle vkQueueWaitIdle;
 PFN_vkDestroyDevice vkDestroyDevice;
 PFN_vkCreateSemaphore vkCreateSemaphore;
 PFN_vkDestroySemaphore vkDestroySemaphore;
+PFN_vkCreateImage vkCreateImage;
+PFN_vkDestroyImage vkDestroyImage;
+
+constexpr auto kMinimumVulkanVersion = VK_API_VERSION_1_3;
+
+#define CHECK_RESULT(call)                                               \
+  if (auto res = call) {                                                 \
+    AppendErrorMessage(status) += "Failure in " #call ": " + ToStr(res); \
+    return;                                                              \
+  }
 
 struct Instance : vkb::Instance {
   void Init(Status&);
@@ -66,8 +80,8 @@ struct Instance : vkb::Instance {
     return GetInstanceProcAddr(instance, proc_name);
   }
 
-  uint32_t instance_version = VK_MAKE_VERSION(1, 1, 0);
-  uint32_t api_version = VK_API_VERSION_1_1;
+  uint32_t instance_version = kMinimumVulkanVersion;
+  uint32_t api_version = kMinimumVulkanVersion;
   std::vector<const char*> extensions = {
 #if defined(_WIN32)
       "VK_KHR_win32_surface"
@@ -108,55 +122,89 @@ struct Device : vkb::Device {
   VkPhysicalDeviceFeatures2 features = {};
 } device;
 
-skgpu::graphite::BackendSemaphore CreateSemaphore() {
-  auto create_info = VkSemaphoreCreateInfo{
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = 0,
-  };
-  VkSemaphore semaphore;
-  SkDEBUGCODE(VkResult result =) vkCreateSemaphore(device, &create_info, nullptr, &semaphore);
-  SkASSERT(result == VK_SUCCESS);
-  return skgpu::graphite::BackendSemaphores::MakeVulkan(semaphore);
+void Semaphore::Create(Status& status) {
+  static const VkSemaphoreCreateInfo kVkSemaphoreCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .pNext = nullptr, .flags = 0};
+  if (vk_semaphore == VK_NULL_HANDLE) {
+    CHECK_RESULT(vkCreateSemaphore(device, &kVkSemaphoreCreateInfo, nullptr, &vk_semaphore));
+  }
+}
+void Semaphore::Destroy() {
+  if (vk_semaphore != VK_NULL_HANDLE) {
+    vkDestroySemaphore(device, vk_semaphore, nullptr);
+    vk_semaphore = VK_NULL_HANDLE;
+  }
 }
 
-void DestroySemaphore(const skgpu::graphite::BackendSemaphore& backend_semaphore) {
-  auto semaphore = skgpu::graphite::BackendSemaphores::GetVkSemaphore(backend_semaphore);
-  vkDestroySemaphore(device, semaphore, nullptr);
+Semaphore::Semaphore(Status& status) { Create(status); }
+Semaphore& Semaphore::operator=(Semaphore&& other) {
+  Destroy();
+  vk_semaphore = other.vk_semaphore;
+  other.vk_semaphore = VK_NULL_HANDLE;
+  return *this;
+}
+Semaphore::~Semaphore() { Destroy(); }
+
+Semaphore::operator graphite::BackendSemaphore() {
+  return graphite::BackendSemaphores::MakeVulkan(vk_semaphore);
 }
 
-std::unique_ptr<skgpu::graphite::Context> graphite_context, background_context;
+std::unique_ptr<graphite::Context> graphite_context, background_context;
 
-std::unique_ptr<skgpu::graphite::Recorder> graphite_recorder;
-VkSemaphore wait_semaphore = VK_NULL_HANDLE;
+std::unique_ptr<graphite::Recorder> graphite_recorder;
 
 struct Swapchain {
-  struct BackbufferInfo {
-    uint32_t image_index;          // image this is associated with
-    VkSemaphore render_semaphore;  // we wait on this for rendering to be done
-  };
-
   void DestroyBuffers();
-  void CreateBuffers(int width, int height, int sample_count, VkFormat format,
-                     VkImageUsageFlags usageFlags, SkColorType colorType, VkSharingMode sharingMode,
-                     Status& status);
   void Create(int widthHint, int heightHint, Status& status);
-  BackbufferInfo* GetAvailableBackbuffer();
-  SkCanvas* GetBackbufferCanvas();
-  void SwapBuffers();
+  SkCanvas* AcquireCanvas();
+  void Present();
   void WaitAndDestroy();
   operator VkSwapchainKHR() { return swapchain; }
 
   VkSwapchainKHR swapchain;
-  uint32_t image_count;
-  VkImage* images;  // images in the swapchain
-  sk_sp<SkSurface>* sk_surfaces;
 
-  // Note that there are (image_count + 1) backbuffers. We create one additional
-  // backbuffer structure, because we want to give the command buffers they
-  // contain a chance to finish before we cycle back.
-  BackbufferInfo* backbuffers;
-  uint32_t current_backbuffer_index;
+  std::vector<VkImage> images;
+
+  struct Canvas {
+    sk_sp<SkSurface> sk_surface;
+    Semaphore sem_rendered;
+  };
+  std::vector<Canvas> canvases;
+
+  uint32_t current_image_index = 0;
+  Semaphore sem_acquired;  // signals image is available for use (vkAcquireNextImageKHR)
+
+  // Skia milestone 137 includes a change that requires all window surfaces to support
+  // VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT.
+  // https://source.chromium.org/chromium/_/skia/skia/+/6627deb65939ee886c774d290d91269c6968eaf9
+  // This feature is not supported by Windows Intel GPUs. As a workaround, we create a separate
+  // target image that Skia can use as a render target and copy the results into the swapchain image
+  // at present time.
+  //
+  // To see if Skia is fixed, configure it with:
+  //
+  // > bin\gn gen out/Static --args="skia_use_vulkan=true
+  //   skia_enable_ganesh=true skia_enable_graphite=true skia_enable_tools=true"
+  //
+  // then build the viewer:
+  //
+  // > ninja -C out\Static viewer
+  //
+  // and run it (vulkan mode):
+  //
+  // > out\Static\viewer -b vk
+  //
+  // Finally, switch to the Graphite mode by typing '/' and changing the backend to 'graphite'. The
+  // viewer should not crash with:
+  //
+  // [graphite] ** ERROR ** validate_backend_texture failed: backendTex.info =
+  // Vulkan(viewFormat=BGRA8,flags=0x00000000,imageTiling=0,imageUsageFlags=0x00000017,sharingMode=0,aspectMask=1,bpp=4,sampleCount=1,mipmapped=0,protected=0);
+  // colorType = 6
+  struct OffscreenRenderingState {
+    VkImage images[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+    int current = 0;
+  };
+  Optional<OffscreenRenderingState> render_offscreen;
 } swapchain;
 
 void Instance::Init(Status& status) {
@@ -164,6 +212,7 @@ void Instance::Init(Status& status) {
     Destroy();
   }
   vkb::InstanceBuilder builder;
+  builder.request_validation_layers();
   builder.set_minimum_instance_version(instance_version);
   builder.require_api_version(api_version);
   for (auto& ext : extensions) {
@@ -285,7 +334,7 @@ void Device::Init(Status& status) {
                   vk::physical_device.extensions.data());
 
   int api_version = vk::physical_device.properties.apiVersion;
-  SkASSERT(api_version >= VK_MAKE_VERSION(1, 1, 0) ||
+  SkASSERT(api_version >= kVulkanVersion ||
            extensions.hasExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, 1));
 
   features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -305,21 +354,16 @@ void Device::Init(Status& status) {
   }
 
   VkPhysicalDeviceSamplerYcbcrConversionFeatures* ycbcrFeature = nullptr;
-  if (api_version >= VK_MAKE_VERSION(1, 1, 0) ||
-      extensions.hasExtension(VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME, 1)) {
-    ycbcrFeature = (VkPhysicalDeviceSamplerYcbcrConversionFeatures*)sk_malloc_throw(
-        sizeof(VkPhysicalDeviceSamplerYcbcrConversionFeatures));
-    ycbcrFeature->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
-    ycbcrFeature->pNext = nullptr;
-    ycbcrFeature->samplerYcbcrConversion = VK_TRUE;
-    *tailPNext = ycbcrFeature;
-    tailPNext = &ycbcrFeature->pNext;
-  }
+  ycbcrFeature = (VkPhysicalDeviceSamplerYcbcrConversionFeatures*)sk_malloc_throw(
+      sizeof(VkPhysicalDeviceSamplerYcbcrConversionFeatures));
+  ycbcrFeature->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
+  ycbcrFeature->pNext = nullptr;
+  ycbcrFeature->samplerYcbcrConversion = VK_TRUE;
+  *tailPNext = ycbcrFeature;
+  tailPNext = &ycbcrFeature->pNext;
 
   PFN_vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceFeatures2 =
-      (PFN_vkGetPhysicalDeviceFeatures2)instance.GetProc(api_version >= VK_MAKE_VERSION(1, 1, 0)
-                                                             ? "vkGetPhysicalDeviceFeatures2"
-                                                             : "vkGetPhysicalDeviceFeatures2KHR");
+      (PFN_vkGetPhysicalDeviceFeatures2)instance.GetProc("vkGetPhysicalDeviceFeatures2");
   vkGetPhysicalDeviceFeatures2(vk::physical_device, &features);
 
   // this looks like it would slow things down,
@@ -398,10 +442,10 @@ void InitGrContext() {
       .fGetProc = GetProc,
   };
 
-  skgpu::graphite::ContextOptions options{};
+  graphite::ContextOptions options{};
 
-  graphite_context = skgpu::graphite::ContextFactory::MakeVulkan(foreground_backend, options);
-  background_context = skgpu::graphite::ContextFactory::MakeVulkan(background_backend, options);
+  graphite_context = graphite::ContextFactory::MakeVulkan(foreground_backend, options);
+  background_context = graphite::ContextFactory::MakeVulkan(background_backend, options);
   graphite_recorder = graphite_context->makeRecorder();
 }
 void InitFunctions() {
@@ -421,82 +465,15 @@ void InitFunctions() {
   DEVICE_PROC(vkQueuePresentKHR);
   DEVICE_PROC(vkCreateSemaphore);
   DEVICE_PROC(vkDestroySemaphore);
+  DEVICE_PROC(vkCreateImage);
+  DEVICE_PROC(vkDestroyImage);
 
 #undef INSTANCE_PROC
 #undef DEVICE_PROC
 }
 void Swapchain::DestroyBuffers() {
-  if (backbuffers) {
-    for (uint32_t i = 0; i < image_count + 1; ++i) {
-      backbuffers[i].image_index = -1;
-      vkDestroySemaphore(device, backbuffers[i].render_semaphore, nullptr);
-    }
-  }
-
-  delete[] backbuffers;
-  backbuffers = nullptr;
-
-  // Does this actually free the surfaces?
-  delete[] sk_surfaces;
-  sk_surfaces = nullptr;
-  delete[] images;
-  images = nullptr;
-}
-void Swapchain::CreateBuffers(int width, int height, int sample_count, VkFormat format,
-                              VkImageUsageFlags usageFlags, SkColorType colorType,
-                              VkSharingMode sharingMode, Status& status) {
-  vkGetSwapchainImagesKHR(device, swapchain, &image_count, nullptr);
-  SkASSERT(image_count);
-  images = new VkImage[image_count];
-  vkGetSwapchainImagesKHR(device, swapchain, &image_count, images);
-
-  sk_surfaces = new sk_sp<SkSurface>[image_count]();
-
-  static SkSurfaceProps surface_props(0, kRGB_H_SkPixelGeometry);
-  static sk_sp<SkColorSpace> color_space = SkColorSpace::MakeSRGB();
-
-  auto texture_info = skgpu::graphite::VulkanTextureInfo(
-      sample_count, skgpu::Mipmapped::kNo, 0, format, VK_IMAGE_TILING_OPTIMAL, usageFlags,
-      sharingMode, VK_IMAGE_ASPECT_COLOR_BIT, skgpu::VulkanYcbcrConversionInfo());
-
-  for (uint32_t i = 0; i < image_count; ++i) {
-    // SkISize dimensions = {width, height};
-    // auto backendTexture = skgpu::graphite::BackendTextures::MakeVulkan(
-    //     dimensions, texture_info, VK_IMAGE_LAYOUT_UNDEFINED, device.present_queue_index,
-    //     images[i], skgpu::VulkanAlloc());
-    // sk_surfaces[i] = SkSurfaces::WrapBackendTexture(graphite_recorder.get(), backendTexture,
-    //                                                 colorType, color_space, &surface_props,
-    //                                                 nullptr, nullptr, "backend_texture");
-    // if (!sk_surfaces[i]) {
-    //   AppendErrorMessage(status) += "SkSurfaces::WrapBackendTexture failed";
-    //   return;
-    // }
-
-    auto image_info = SkImageInfo::Make(width, height, colorType, kOpaque_SkAlphaType, color_space);
-    sk_surfaces[i] =
-        SkSurfaces::RenderTarget(graphite_recorder.get(), image_info, skgpu::Mipmapped::kNo,
-                                 &surface_props, "render_target");
-    if (!sk_surfaces[i]) {
-      AppendErrorMessage(status) += "SkSurfaces::RenderTarget failed";
-      return;
-    }
-  }
-
-  // set up the backbuffers
-  VkSemaphoreCreateInfo semaphoreInfo;
-  memset(&semaphoreInfo, 0, sizeof(VkSemaphoreCreateInfo));
-  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-  semaphoreInfo.pNext = nullptr;
-  semaphoreInfo.flags = 0;
-
-  backbuffers = new BackbufferInfo[image_count + 1];
-  for (uint32_t i = 0; i < image_count + 1; ++i) {
-    backbuffers[i].image_index = -1;
-    SkDEBUGCODE(VkResult result =)
-        vkCreateSemaphore(device, &semaphoreInfo, nullptr, &backbuffers[i].render_semaphore);
-    SkASSERT(result == VK_SUCCESS);
-  }
-  current_backbuffer_index = image_count;
+  canvases.clear();
+  images.clear();
 }
 
 Str ToStr(VkResult res) {
@@ -605,10 +582,9 @@ Str ToStr(VkResult res) {
 }
 
 void Swapchain::Create(int widthHint, int heightHint, Status& status) {
-#define CHECK_RESULT(call)                                               \
-  if (auto res = call) {                                                 \
-    AppendErrorMessage(status) += "Failure in " #call ": " + ToStr(res); \
-    return;                                                              \
+  sem_acquired.Create(status);
+  if (!OK(status)) {
+    return;
   }
 
   // check for capabilities
@@ -651,13 +627,10 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     extent.height = caps.maxImageExtent.height;
   }
 
-  int width = (int)extent.width;
-  int height = (int)extent.height;
-
-  uint32_t imageCount = caps.minImageCount;
-  if (caps.maxImageCount > 0 && imageCount > caps.maxImageCount) {
+  uint32_t image_count = caps.minImageCount + 1;
+  if (caps.maxImageCount > 0 && image_count > caps.maxImageCount) {
     // Application must settle for fewer images than desired:
-    imageCount = caps.maxImageCount;
+    image_count = caps.maxImageCount;
   }
 
   VkImageUsageFlags usageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
@@ -729,7 +702,7 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
   memset(&swapchainCreateInfo, 0, sizeof(VkSwapchainCreateInfoKHR));
   swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
   swapchainCreateInfo.surface = surface;
-  swapchainCreateInfo.minImageCount = imageCount;
+  swapchainCreateInfo.minImageCount = image_count;
   swapchainCreateInfo.imageFormat = surfaceFormat;
   swapchainCreateInfo.imageColorSpace = colorSpace;
   swapchainCreateInfo.imageExtent = extent;
@@ -762,8 +735,65 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
   }
 
-  CreateBuffers(width, height, sample_count, swapchainCreateInfo.imageFormat, usageFlags, colorType,
-                swapchainCreateInfo.imageSharingMode, status);
+  images.resize(image_count);
+  vkGetSwapchainImagesKHR(device, swapchain, &image_count, images.data());
+
+  static SkSurfaceProps surface_props(0, kRGB_H_SkPixelGeometry);
+  static sk_sp<SkColorSpace> color_space = SkColorSpace::MakeSRGB();
+
+  auto texture_info = graphite::VulkanTextureInfo(
+      sample_count, skgpu::Mipmapped::kNo, 0, surfaceFormat, VK_IMAGE_TILING_OPTIMAL, usageFlags,
+      swapchainCreateInfo.imageSharingMode, VK_IMAGE_ASPECT_COLOR_BIT,
+      skgpu::VulkanYcbcrConversionInfo());
+
+  Span<VkImage> canvas_images;
+
+  if (texture_info.fImageUsageFlags & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT) {
+    render_offscreen.reset();
+    canvas_images = images;
+  } else {
+    render_offscreen.emplace();
+    texture_info.fImageUsageFlags |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    VkImageCreateInfo image_create_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = texture_info.fFlags,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = texture_info.fFormat,
+        .extent = {extent.width, extent.height, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = (VkSampleCountFlagBits)texture_info.fSampleCount,
+        .tiling = texture_info.fImageTiling,
+        .usage = texture_info.fImageUsageFlags,
+        .sharingMode = texture_info.fSharingMode,
+        .queueFamilyIndexCount = 1,
+        .pQueueFamilyIndices = &device.present_queue_index,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    };
+    for (int i = 0; i < 2; ++i) {
+      CHECK_RESULT(
+          vkCreateImage(device, &image_create_info, nullptr, &render_offscreen->images[i]));
+    }
+    render_offscreen->current = 0;
+    canvas_images = render_offscreen->images;
+  }
+
+  SkISize dimensions = {(int)extent.width, (int)extent.height};
+  for (auto image : canvas_images) {
+    auto backend_texture = graphite::BackendTextures::MakeVulkan(
+        dimensions, texture_info, VK_IMAGE_LAYOUT_UNDEFINED, device.present_queue_index, image,
+        skgpu::VulkanAlloc());
+    auto sk_surface = SkSurfaces::WrapBackendTexture(graphite_recorder.get(), backend_texture,
+                                                     colorType, color_space, &surface_props,
+                                                     nullptr, nullptr, "backend_texture");
+    if (!sk_surface) {
+      AppendErrorMessage(status) += "SkSurfaces::WrapBackendTexture failed";
+      return;
+    }
+    canvases.push_back({.sk_surface = std::move(sk_surface), .sem_rendered = Semaphore(status)});
+  }
+
   if (!OK(status)) {
     vkDeviceWaitIdle(device);
     DestroyBuffers();
@@ -772,40 +802,12 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
   }
 }
 
-Swapchain::BackbufferInfo* Swapchain::GetAvailableBackbuffer() {
-  SkASSERT(backbuffers);
-
-  ++current_backbuffer_index;
-  if (current_backbuffer_index > image_count) {
-    current_backbuffer_index = 0;
-  }
-
-  BackbufferInfo* backbuffer = backbuffers + current_backbuffer_index;
-  return backbuffer;
-}
-
-SkCanvas* Swapchain::GetBackbufferCanvas() {
-  BackbufferInfo* backbuffer = GetAvailableBackbuffer();
-  SkASSERT(backbuffer);
-
-  SkASSERT(wait_semaphore == VK_NULL_HANDLE);
-  // semaphores should be in unsignaled state
-  VkSemaphoreCreateInfo semaphoreInfo;
-  memset(&semaphoreInfo, 0, sizeof(VkSemaphoreCreateInfo));
-  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-  semaphoreInfo.pNext = nullptr;
-  semaphoreInfo.flags = 0;
-  SkDEBUGCODE(VkResult result =)
-      vkCreateSemaphore(device, &semaphoreInfo, nullptr, &wait_semaphore);
-  SkASSERT(result == VK_SUCCESS);
-
-  VkResult res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, wait_semaphore,
-                                       VK_NULL_HANDLE, &backbuffer->image_index);
+SkCanvas* Swapchain::AcquireCanvas() {
+  VkResult res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, sem_acquired, VK_NULL_HANDLE,
+                                       &current_image_index);
   if (VK_ERROR_SURFACE_LOST_KHR == res) {
     // need to figure out how to create a new vkSurface without the
     // platformData* maybe use attach somehow? but need a Window
-    vkDestroySemaphore(device, wait_semaphore, nullptr);
-    wait_semaphore = VK_NULL_HANDLE;
     return nullptr;
   }
   if (VK_ERROR_OUT_OF_DATE_KHR == res) {
@@ -813,59 +815,45 @@ SkCanvas* Swapchain::GetBackbufferCanvas() {
     Status status;
     Create(-1, -1, status);
     if (!OK(status)) {
-      vkDestroySemaphore(device, wait_semaphore, nullptr);
-      wait_semaphore = VK_NULL_HANDLE;
       return nullptr;
     }
-    backbuffer = GetAvailableBackbuffer();
 
-    res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, wait_semaphore, VK_NULL_HANDLE,
-                                &backbuffer->image_index);
+    res = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, sem_acquired, VK_NULL_HANDLE,
+                                &current_image_index);
 
     if (VK_SUCCESS != res) {
-      vkDestroySemaphore(device, wait_semaphore, nullptr);
-      wait_semaphore = VK_NULL_HANDLE;
       return nullptr;
     }
   }
 
-  SkSurface* surface = sk_surfaces[backbuffer->image_index].get();
-  return surface->getCanvas();
+  int current_backbuffer_index = render_offscreen ? render_offscreen->current : current_image_index;
+
+  return canvases[current_backbuffer_index].sk_surface->getCanvas();
 }
 
-void Swapchain::SwapBuffers() {
-  BackbufferInfo& backbuffer = backbuffers[current_backbuffer_index];
-  SkSurface* surface = sk_surfaces[backbuffer.image_index].get();
+void Swapchain::Present() {
+  const int current_backbuffer_index =
+      render_offscreen ? render_offscreen->current : current_image_index;
+  auto& backbuffer = canvases[current_backbuffer_index];
 
-  auto sk_wait_semaphore = skgpu::graphite::BackendSemaphores::MakeVulkan(wait_semaphore);
-  auto sk_render_semaphore =
-      skgpu::graphite::BackendSemaphores::MakeVulkan(backbuffer.render_semaphore);
+  graphite::BackendSemaphore sk_sem_acquired = sem_acquired;
+  graphite::BackendSemaphore sk_sem_rendered = backbuffer.sem_rendered;
 
   if (auto recording = graphite_recorder->snap()) {
-    skgpu::graphite::InsertRecordingInfo insert_recording_info;
+    graphite::InsertRecordingInfo insert_recording_info;
     insert_recording_info.fRecording = recording.get();
-    insert_recording_info.fWaitSemaphores = &sk_wait_semaphore;
+    insert_recording_info.fWaitSemaphores = &sk_sem_acquired;
     insert_recording_info.fNumWaitSemaphores = 1;
-    insert_recording_info.fSignalSemaphores = &sk_render_semaphore;
+    insert_recording_info.fSignalSemaphores = &sk_sem_rendered;
     insert_recording_info.fNumSignalSemaphores = 1;
 
     skgpu::MutableTextureState presentState = skgpu::MutableTextureStates::MakeVulkan(
         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, device.present_queue_index);
     insert_recording_info.fTargetTextureState = &presentState;
-    insert_recording_info.fTargetSurface = surface;
+    insert_recording_info.fTargetSurface = backbuffer.sk_surface.get();
 
-    struct FinishedContext {
-      VkDevice device;
-      VkSemaphore wait_semaphore;
-    };
-    insert_recording_info.fFinishedContext = new FinishedContext{device, wait_semaphore};
-    insert_recording_info.fFinishedProc = [](skgpu::graphite::GpuFinishedContext c,
-                                             skgpu::CallbackResult status) {
-      const auto* context = reinterpret_cast<const FinishedContext*>(c);
-      vkDestroySemaphore(context->device, context->wait_semaphore, nullptr);
-      delete context;
-    };
-    wait_semaphore = VK_NULL_HANDLE;
+    insert_recording_info.fFinishedContext = nullptr;
+    insert_recording_info.fFinishedProc = nullptr;
 
     graphite_context->insertRecording(insert_recording_info);
     graphite_context->submit();
@@ -874,13 +862,20 @@ void Swapchain::SwapBuffers() {
   const VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
                                         nullptr,
                                         1,
-                                        &backbuffer.render_semaphore,
+                                        &backbuffer.sem_rendered.vk_semaphore,
                                         1,
                                         &swapchain,
-                                        &backbuffer.image_index,
+                                        &current_image_index,
                                         nullptr};
 
   vkQueuePresentKHR(device.present_queue, &presentInfo);
+
+  if (render_offscreen) {
+    ++render_offscreen->current;
+    if (render_offscreen->current >= canvases.size()) {
+      render_offscreen->current = 0;
+    }
+  }
 }
 void Swapchain::WaitAndDestroy() {
   if (VK_NULL_HANDLE != swapchain) {
@@ -953,8 +948,8 @@ void Resize(int width_hint, int height_hint, Status& status) {
   }
 }
 
-SkCanvas* GetBackbufferCanvas() { return swapchain.GetBackbufferCanvas(); }
+SkCanvas* AcquireCanvas() { return swapchain.AcquireCanvas(); }
 
-void Present() { swapchain.SwapBuffers(); }
+void Present() { swapchain.Present(); }
 
 }  // namespace automat::vk

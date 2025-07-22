@@ -7,6 +7,7 @@
 #include <include/core/SkCanvas.h>
 #include <include/gpu/graphite/BackendSemaphore.h>
 #include <include/gpu/graphite/Context.h>
+#include <vulkan/vulkan_core.h>
 
 #include "status.hh"
 
@@ -21,12 +22,39 @@ extern std::unique_ptr<skgpu::graphite::Context> graphite_context, background_co
 void Init(Status&);
 void Destroy();
 
-skgpu::graphite::BackendSemaphore CreateSemaphore();
-void DestroySemaphore(const skgpu::graphite::BackendSemaphore&);
+void Resize(int width_hint, int height_hint, Status&);
 
-void Resize(int width_hint, int height_hint, Status& status);
-
-SkCanvas* GetBackbufferCanvas();
+SkCanvas* AcquireCanvas();
 void Present();
+
+// RAII wrapper for VkSemaphore.
+struct Semaphore {
+  VkSemaphore vk_semaphore = VK_NULL_HANDLE;
+
+  void Create(Status&);
+  void Destroy();
+
+  // Constructs a null semaphore.
+  Semaphore() = default;
+
+  // Constructs & initializes a semaphore.
+  Semaphore(Status&);
+
+  // No copies
+  Semaphore(const Semaphore&) = delete;
+  Semaphore& operator=(const Semaphore&) = delete;
+
+  // Moving is allowed
+  Semaphore(Semaphore&& other) : vk_semaphore(other.vk_semaphore) {
+    other.vk_semaphore = VK_NULL_HANDLE;
+  }
+  Semaphore& operator=(Semaphore&& other);
+
+  ~Semaphore();
+
+  operator bool() { return vk_semaphore != VK_NULL_HANDLE; }
+  operator VkSemaphore() { return vk_semaphore; }
+  operator skgpu::graphite::BackendSemaphore();
+};
 
 }  // namespace automat::vk

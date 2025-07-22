@@ -156,7 +156,8 @@ struct WidgetDrawable : SkDrawableRTTI {
   void InsertRecording();
 
   // Synchronization
-  skgpu::graphite::BackendSemaphore semaphore;
+  vk::Semaphore vk_semaphore;
+  skgpu::graphite::BackendSemaphore sk_semaphore;
   bool signal_semaphore = false;  // only signal semaphore if there is a parent that waits for it
   vector<WidgetDrawable*>
       wait_list;  // child widgets that must be rendered first, cleared after every frame
@@ -165,11 +166,7 @@ struct WidgetDrawable : SkDrawableRTTI {
   int wait_count = 0;  // number of children that must be rendered first, cleared after every frame
 
   WidgetDrawable(uint32_t id);
-  ~WidgetDrawable() {
-    if (semaphore.isValid()) {
-      vk::DestroySemaphore(semaphore);
-    }
-  }
+  ~WidgetDrawable() = default;
 
   struct Update {
     uint32_t id;
@@ -368,7 +365,7 @@ void WidgetDrawable::InsertRecording() {
   insert_recording_info.fTargetSurface = frame.surface.get();
 
   if (signal_semaphore) {
-    insert_recording_info.fSignalSemaphores = &semaphore;
+    insert_recording_info.fSignalSemaphores = &sk_semaphore;
     insert_recording_info.fNumSignalSemaphores = 1;
   }
 
@@ -376,7 +373,7 @@ void WidgetDrawable::InsertRecording() {
   if (!wait_list.empty()) {
     wait_list_vec.reserve(wait_list.size());
     for (auto* dep : wait_list) {
-      wait_list_vec.emplace_back(dep->semaphore);
+      wait_list_vec.emplace_back(dep->sk_semaphore);
     }
     insert_recording_info.fWaitSemaphores = wait_list_vec.data();
     insert_recording_info.fNumWaitSemaphores = wait_list_vec.size();
@@ -1190,8 +1187,10 @@ void RenderFrame(SkCanvas& canvas) {
     if (update.parent_id) {
       auto* parent = WidgetDrawable::Find(update.parent_id);
       // Make sure the widget has a semaphore.
-      if (!widget_drawable->semaphore.isValid()) {
-        widget_drawable->semaphore = vk::CreateSemaphore();
+      if (!widget_drawable->sk_semaphore.isValid()) {
+        Status _;
+        widget_drawable->vk_semaphore.Create(_);
+        widget_drawable->sk_semaphore = widget_drawable->vk_semaphore;
       }
 
       // Make the widget signal its semaphore when rendered.

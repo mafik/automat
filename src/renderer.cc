@@ -320,7 +320,7 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
   }
 }
 
-constexpr int kNumVkRecorderThreads = 12;
+constexpr int kNumVkRecorderThreads = 4;
 
 std::jthread vk_recorder_threads[kNumVkRecorderThreads];
 

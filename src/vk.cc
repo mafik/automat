@@ -22,10 +22,12 @@
 #include <include/gpu/vk/VulkanBackendContext.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
+#include <include/gpu/vk/VulkanPreferredFeatures.h>
 #include <src/gpu/graphite/vk/VulkanGraphiteUtils.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
+#include "log.hh"
 #include "root_widget.hh"
 #include "status.hh"
 
@@ -52,7 +54,9 @@ PFN_vkGetDeviceProcAddr GetDeviceProcAddr;
 #define EACH_INSTANCE_PROC(X)                \
   X(GetPhysicalDeviceSurfaceCapabilitiesKHR) \
   X(GetPhysicalDeviceSurfaceFormatsKHR)      \
-  X(GetPhysicalDeviceSurfacePresentModesKHR)
+  X(GetPhysicalDeviceSurfacePresentModesKHR) \
+  X(EnumerateDeviceExtensionProperties)      \
+  X(GetPhysicalDeviceFeatures2)
 
 #define EACH_DEVICE_PROC(X) \
   X(GetDeviceQueue)         \
@@ -91,15 +95,14 @@ constexpr auto kMinimumVulkanVersion = VK_API_VERSION_1_3;
     return;                                                              \
   }
 
+skgpu::VulkanPreferredFeatures skia_features;
+
 struct Instance : vkb::Instance {
   void Init(Status&);
   void Destroy();
   PFN_vkVoidFunction GetProc(const char* proc_name) {
     return GetInstanceProcAddr(instance, proc_name);
   }
-
-  uint32_t instance_version = kMinimumVulkanVersion;
-  uint32_t api_version = kMinimumVulkanVersion;
   std::vector<const char*> extensions = {
 #if defined(_WIN32)
       "VK_KHR_win32_surface"
@@ -120,9 +123,6 @@ struct Surface {
 struct PhysicalDevice : vkb::PhysicalDevice {
   void Init(Status& status);
   void Destroy();
-
-  std::vector<std::string> extensions_str;
-  std::vector<const char*> extensions;
 } physical_device;
 
 struct Device : vkb::Device {
@@ -242,13 +242,16 @@ void Instance::Init(Status& status) {
   if (instance != VK_NULL_HANDLE) {
     Destroy();
   }
+
+  auto system_info = vkb::SystemInfo::get_system_info().value();
+  skia_features.init(kMinimumVulkanVersion);
+  skia_features.addToInstanceExtensions(system_info.available_extensions.data(),
+                                        system_info.available_extensions.size(), extensions);
+
   vkb::InstanceBuilder builder;
   builder.request_validation_layers();
-  builder.set_minimum_instance_version(instance_version);
-  builder.require_api_version(api_version);
-  for (auto& ext : extensions) {
-    builder.enable_extension(ext);
-  }
+  builder.require_api_version(kMinimumVulkanVersion);
+  builder.enable_extensions(extensions);
   auto result = builder.build();
   if (!result) {
     AppendErrorMessage(status) += result.error().message();
@@ -341,77 +344,32 @@ void PhysicalDevice::Init(Status& status) {
   auto result = vkb::PhysicalDeviceSelector(instance)
                     .set_surface(vk::surface)
                     .add_required_extension(VK_KHR_SWAPCHAIN_EXTENSION_NAME)
-                    .add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME)
                     .prefer_gpu_device_type()
                     .select();
   if (!result) {
     AppendErrorMessage(status) += result.error().message();
     return;
   }
-  *(vkb::PhysicalDevice*)this = result.value();
-  enable_extension_if_present(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
-  extensions_str = get_extensions();
-  for (auto& ext : extensions_str) {
-    extensions.push_back(ext.c_str());
-  }
+  *(vkb::PhysicalDevice*)this = std::move(result.value());
 }
-void PhysicalDevice::Destroy() {
-  physical_device = VK_NULL_HANDLE;
-  extensions_str.clear();
-  extensions.clear();
-}
+void PhysicalDevice::Destroy() { physical_device = VK_NULL_HANDLE; }
+
 void Device::Init(Status& status) {
-  extensions.init(vk::GetProc, instance, vk::physical_device, instance.extensions.size(),
-                  instance.extensions.data(), vk::physical_device.extensions.size(),
-                  vk::physical_device.extensions.data());
-
-  int api_version = vk::physical_device.properties.apiVersion;
-  SkASSERT(api_version >= kMinimumVulkanVersion ||
-           extensions.hasExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, 1));
-
+  uint32_t extension_count = 0;
+  vkEnumerateDeviceExtensionProperties(vk::physical_device, nullptr, &extension_count, nullptr);
+  std::vector<VkExtensionProperties> device_extensions(extension_count);
+  vkEnumerateDeviceExtensionProperties(vk::physical_device, nullptr, &extension_count,
+                                       device_extensions.data());
   features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
   features.pNext = nullptr;
 
-  // Setup all extension feature structs we may want to use.
-  void** tailPNext = &features.pNext;
+  skia_features.addFeaturesToQuery(device_extensions.data(), extension_count, features);
 
-  VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT* blend = nullptr;
-  if (extensions.hasExtension(VK_EXT_BLEND_OPERATION_ADVANCED_EXTENSION_NAME, 2)) {
-    blend = (VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT*)sk_malloc_throw(
-        sizeof(VkPhysicalDeviceBlendOperationAdvancedFeaturesEXT));
-    blend->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BLEND_OPERATION_ADVANCED_FEATURES_EXT;
-    blend->pNext = nullptr;
-    *tailPNext = blend;
-    tailPNext = &blend->pNext;
-  }
-
-  VkPhysicalDeviceSamplerYcbcrConversionFeatures* ycbcrFeature = nullptr;
-  ycbcrFeature = (VkPhysicalDeviceSamplerYcbcrConversionFeatures*)sk_malloc_throw(
-      sizeof(VkPhysicalDeviceSamplerYcbcrConversionFeatures));
-  ycbcrFeature->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES;
-  ycbcrFeature->pNext = nullptr;
-  ycbcrFeature->samplerYcbcrConversion = VK_TRUE;
-  *tailPNext = ycbcrFeature;
-  tailPNext = &ycbcrFeature->pNext;
-
-  VkPhysicalDeviceSynchronization2Features* sync2Feature = nullptr;
-  if (extensions.hasExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, 1)) {
-    sync2Feature = (VkPhysicalDeviceSynchronization2Features*)sk_malloc_throw(
-        sizeof(VkPhysicalDeviceSynchronization2Features));
-    sync2Feature->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
-    sync2Feature->pNext = nullptr;
-    sync2Feature->synchronization2 = VK_TRUE;
-    *tailPNext = sync2Feature;
-    tailPNext = &sync2Feature->pNext;
-  }
-
-  PFN_vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceFeatures2 =
-      (PFN_vkGetPhysicalDeviceFeatures2)instance.GetProc("vkGetPhysicalDeviceFeatures2");
   vkGetPhysicalDeviceFeatures2(vk::physical_device, &features);
 
-  // this looks like it would slow things down,
-  // and we can't depend on it on all platforms
-  features.features.robustBufferAccess = VK_FALSE;
+  std::vector<const char*> app_extensions;
+  skia_features.addFeaturesToEnable(app_extensions, features);
+  vk::physical_device.enable_extensions_if_present(app_extensions);
 
   vkb::DeviceBuilder device_builder(vk::physical_device);
 
@@ -448,6 +406,15 @@ void Device::Init(Status& status) {
   }
   *(vkb::Device*)this = dev_ret.value();
 
+  std::vector<std::string> extensions_str = this->physical_device.get_extensions();
+  std::vector<const char*> extensions_cstr;
+  for (auto& ext : extensions_str) {
+    extensions_cstr.push_back(ext.c_str());
+  }
+
+  extensions.init(vk::GetProc, instance, vk::physical_device, instance.extensions.size(),
+                  instance.extensions.data(), extensions_cstr.size(), extensions_cstr.data());
+
   vkGetDeviceQueue = (PFN_vkGetDeviceQueue)GetProc("vkGetDeviceQueue");
   vkGetDeviceQueue(device, graphics_queue_index, 0, &graphics_queue);
   vkGetDeviceQueue(device, graphics_queue_index, graphics_queue_count - 1, &background_queue);
@@ -468,7 +435,7 @@ void InitGrContext() {
       .fDevice = device,
       .fQueue = device.graphics_queue,
       .fGraphicsQueueIndex = device.graphics_queue_index,
-      .fMaxAPIVersion = instance.api_version,
+      .fMaxAPIVersion = kMinimumVulkanVersion,
       .fVkExtensions = &device.extensions,
       .fDeviceFeatures2 = &device.features,
       .fGetProc = GetProc,
@@ -479,7 +446,7 @@ void InitGrContext() {
       .fDevice = device,
       .fQueue = device.background_queue,
       .fGraphicsQueueIndex = device.graphics_queue_index,
-      .fMaxAPIVersion = instance.api_version,
+      .fMaxAPIVersion = kMinimumVulkanVersion,
       .fVkExtensions = &device.extensions,
       .fDeviceFeatures2 = &device.features,
       .fGetProc = GetProc,
@@ -491,14 +458,15 @@ void InitGrContext() {
   background_context = graphite::ContextFactory::MakeVulkan(background_backend, options);
   graphite_recorder = graphite_context->makeRecorder();
 }
-void InitFunctions() {
+static void InitInstanceFunctions() {
 #define GET_INSTANCE_PROC(P) vk##P = (PFN_vk##P)instance.GetProc("vk" #P);
-#define GET_DEVICE_PROC(P) vk##P = (PFN_vk##P)device.GetProc("vk" #P);
-
   EACH_INSTANCE_PROC(GET_INSTANCE_PROC);
-  EACH_DEVICE_PROC(GET_DEVICE_PROC);
-
 #undef GET_INSTANCE_PROC
+}
+
+static void InitDeviceFunctions() {
+#define GET_DEVICE_PROC(P) vk##P = (PFN_vk##P)device.GetProc("vk" #P);
+  EACH_DEVICE_PROC(GET_DEVICE_PROC);
 #undef GET_DEVICE_PROC
 }
 
@@ -1138,6 +1106,8 @@ void Init(Status& status) {
     return;
   }
 
+  InitInstanceFunctions();
+
   surface.Init(status);
   if (!OK(status)) {
     AppendErrorMessage(status) += "Failed to create Vulkan surface";
@@ -1156,8 +1126,8 @@ void Init(Status& status) {
     return;
   }
 
+  InitDeviceFunctions();
   InitGrContext();
-  InitFunctions();
 
   command_pool.Create(status);
   if (!OK(status)) {

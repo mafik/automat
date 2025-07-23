@@ -11,6 +11,7 @@
 #include <span>
 #include <string>
 
+#include "log.hh"
 #include "math_constants.hh"  // IWYU pragma: export
 #include "sincos.hh"
 
@@ -389,6 +390,12 @@ union RRect {
 
   // Make an RRect with non-zero width and height with equal radii.
   constexpr static RRect MakeSimple(Rect rect, float radius) {
+#ifndef NDEBUG  // debug & fast builds
+    if (radius > rect.Width() / 2 || radius > rect.Height() / 2) {
+      ERROR_ONCE << "RRect radius is too large: " << radius << " > " << rect.Width() / 2 << " or "
+                 << rect.Height() / 2;
+    }
+#endif
     return {
         .rect = rect, .radii{radius, radius, radius, radius}, .type = SkRRect::Type::kSimple_Type};
   }

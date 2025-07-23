@@ -2024,7 +2024,7 @@ void Vec2Track::Draw(SkCanvas& canvas) const {
 
       auto rect = Rect(display_start_t / s_per_m + kVec2DisplayMargin / 2, -kDisplayHeight / 2,
                        display_end_t / s_per_m - kVec2DisplayMargin / 2, kDisplayHeight / 2);
-      auto clip = RRect::MakeSimple(rect, kVec2DisplayMargin);
+      auto clip = RRect::MakeSimple(rect, std::min(kVec2DisplayMargin, rect.Width() / 2));
       if (end_i > start_i) {
         canvas.save();
         canvas.clipRRect(clip.sk, true);

@@ -62,10 +62,11 @@ std::vector<Logger>& GetLoggers();
 #define ERROR LogEntry(LogLevel::Error, std::source_location::current())
 #define FATAL LogEntry(LogLevel::Fatal, std::source_location::current())
 
-#define ERROR_ONCE                                                                                \
-  static bool LOG_##__COUNTER__ = true;                                                           \
-  LogEntry((LOG_##__COUNTER__ ? (LOG_##__COUNTER__ = false, LogLevel::Error) : LogLevel::Ignore), \
-           std::source_location::current())
+#define ERROR_ONCE                                                                             \
+  static bool LOG_##__COUNTER__ = true;                                                        \
+  automat::LogEntry((LOG_##__COUNTER__ ? (LOG_##__COUNTER__ = false, automat::LogLevel::Error) \
+                                       : automat::LogLevel::Ignore),                           \
+                    std::source_location::current())
 
 const LogEntry& operator<<(const LogEntry&, StrView);
 const LogEntry& operator<<(const LogEntry&, Status& status);

@@ -226,14 +226,16 @@ struct Swapchain {
   // colorType = 6
   struct OffscreenRenderingState {
     struct Backbuffer {
-      graphite::BackendTexture texture;
-      VkImage vk_image;
+      graphite::BackendTexture texture = {};
+      VkImage vk_image = VK_NULL_HANDLE;
       // For each swapchain image, we pre-record a command buffer that copies this backbuffer into
       // that swapchain image.
-      std::vector<VkCommandBuffer> vk_command_buffers;
-      Semaphore sem_copied;
-    } backbuffers[2];
+      std::vector<VkCommandBuffer> vk_command_buffers = {};
+      Semaphore sem_copied = {};
+    };
+    std::array<Backbuffer, 2> backbuffers;
     int current = 0;
+    OffscreenRenderingState() {}
   };
   Optional<OffscreenRenderingState> render_offscreen;
 } swapchain;

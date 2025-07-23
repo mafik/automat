@@ -12,6 +12,7 @@
 #include <include/gpu/MutableTextureState.h>
 #include <include/gpu/ganesh/GrRecordingContext.h>
 #include <include/gpu/graphite/BackendSemaphore.h>
+#include <include/gpu/graphite/BackendTexture.h>
 #include <include/gpu/graphite/Context.h>
 #include <include/gpu/graphite/ContextOptions.h>
 #include <include/gpu/graphite/Recorder.h>
@@ -21,6 +22,7 @@
 #include <include/gpu/vk/VulkanBackendContext.h>
 #include <include/gpu/vk/VulkanExtensions.h>
 #include <include/gpu/vk/VulkanMutableTextureState.h>
+#include <src/gpu/graphite/vk/VulkanGraphiteUtils.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 
@@ -223,9 +225,14 @@ struct Swapchain {
   // Vulkan(viewFormat=BGRA8,flags=0x00000000,imageTiling=0,imageUsageFlags=0x00000017,sharingMode=0,aspectMask=1,bpp=4,sampleCount=1,mipmapped=0,protected=0);
   // colorType = 6
   struct OffscreenRenderingState {
-    std::array<VkImage, 2> images{VK_NULL_HANDLE, VK_NULL_HANDLE};
-    std::vector<std::array<VkCommandBuffer, 2>> cmd_copy;
-    std::array<Semaphore, 2> sem_copied;
+    struct Backbuffer {
+      graphite::BackendTexture texture;
+      VkImage vk_image;
+      // For each swapchain image, we pre-record a command buffer that copies this backbuffer into
+      // that swapchain image.
+      std::vector<VkCommandBuffer> vk_command_buffers;
+      Semaphore sem_copied;
+    } backbuffers[2];
     int current = 0;
   };
   Optional<OffscreenRenderingState> render_offscreen;
@@ -342,6 +349,7 @@ void PhysicalDevice::Init(Status& status) {
     return;
   }
   *(vkb::PhysicalDevice*)this = result.value();
+  enable_extension_if_present(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
   extensions_str = get_extensions();
   for (auto& ext : extensions_str) {
     extensions.push_back(ext.c_str());
@@ -358,7 +366,7 @@ void Device::Init(Status& status) {
                   vk::physical_device.extensions.data());
 
   int api_version = vk::physical_device.properties.apiVersion;
-  SkASSERT(api_version >= kVulkanVersion ||
+  SkASSERT(api_version >= kMinimumVulkanVersion ||
            extensions.hasExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, 1));
 
   features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -759,12 +767,26 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     usageFlags |= VK_IMAGE_USAGE_SAMPLED_BIT;
   }
   SkASSERT(caps.supportedTransforms & caps.currentTransform);
-  SkASSERT(caps.supportedCompositeAlpha &
-           (VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR));
-  VkCompositeAlphaFlagBitsKHR composite_alpha =
-      (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)
-          ? VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
-          : VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+  VkCompositeAlphaFlagBitsKHR composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  SkAlphaType alpha_type = kUnknown_SkAlphaType;
+  {  // Decide how our window will be composited with others
+    if (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR) {
+      composite_alpha = VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR;
+      alpha_type = kPremul_SkAlphaType;
+    } else if (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR) {
+      composite_alpha = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
+      alpha_type = kUnpremul_SkAlphaType;
+    } else if (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) {
+      composite_alpha = VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+      alpha_type = kUnpremul_SkAlphaType;  // typically this should be the case
+    } else if (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) {
+      composite_alpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+      alpha_type = kOpaque_SkAlphaType;
+    } else {
+      ERROR_ONCE << "Window surface does not define any valid supportedCompositeAlpha value";
+    }
+  }
 
   int sample_count = std::max(1, cfg_MSAASampleCount);
 
@@ -790,6 +812,7 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
       colorType = kRGBA_8888_SkColorType;
       break;
     case VK_FORMAT_B8G8R8A8_UNORM:  // fall through
+    case VK_FORMAT_B8G8R8A8_SRGB:
       colorType = kBGRA_8888_SkColorType;
       break;
     default:
@@ -857,66 +880,59 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
   static SkSurfaceProps surface_props(0, kRGB_H_SkPixelGeometry);
   static sk_sp<SkColorSpace> color_space = SkColorSpace::MakeSRGB();
 
+  SkISize dimensions = {(int)extent.width, (int)extent.height};
   auto texture_info = graphite::VulkanTextureInfo(
       sample_count, skgpu::Mipmapped::kNo, 0, surfaceFormat, VK_IMAGE_TILING_OPTIMAL, usageFlags,
       swapchainCreateInfo.imageSharingMode, VK_IMAGE_ASPECT_COLOR_BIT,
       skgpu::VulkanYcbcrConversionInfo());
 
-  Span<VkImage> canvas_images;
+  std::vector<graphite::BackendTexture> canvas_textures;
 
   if (texture_info.fImageUsageFlags & VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT) {
     render_offscreen.reset();
-    canvas_images = images;
+    for (VkImage image : images) {
+      auto backend_texture = graphite::BackendTextures::MakeVulkan(
+          dimensions, texture_info, VK_IMAGE_LAYOUT_UNDEFINED, device.graphics_queue_index, image,
+          skgpu::VulkanAlloc());
+      if (!backend_texture.isValid()) {
+        AppendErrorMessage(status) += "Failed wrapping swapchain image as graphite::BackendTexture";
+        return;
+      }
+      canvas_textures.push_back(std::move(backend_texture));
+    }
   } else {
     render_offscreen.emplace();
-    texture_info.fImageUsageFlags |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-    VkImageCreateInfo image_create_info = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = texture_info.fFlags,
-        .imageType = VK_IMAGE_TYPE_2D,
-        .format = texture_info.fFormat,
-        .extent = {extent.width, extent.height, 1},
-        .mipLevels = 1,
-        .arrayLayers = 1,
-        .samples = (VkSampleCountFlagBits)texture_info.fSampleCount,
-        .tiling = texture_info.fImageTiling,
-        .usage = texture_info.fImageUsageFlags,
-        .sharingMode = texture_info.fSharingMode,
-        .queueFamilyIndexCount = 1,
-        .pQueueFamilyIndices = &device.present_queue_index,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    };
+    auto surface = SkSurfaces::RenderTarget(
+        graphite_recorder.get(), SkImageInfo::Make(dimensions, colorType, alpha_type, color_space));
 
     const VkCommandBufferAllocateInfo command_buffer_allocate_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
         .pNext = nullptr,
         .commandPool = command_pool.vk_command_pool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 2 * image_count,
+        .commandBufferCount = image_count,
     };
 
-    render_offscreen->cmd_copy.resize(image_count);
-    CHECK_RESULT(vkAllocateCommandBuffers(device, &command_buffer_allocate_info,
-                                          &render_offscreen->cmd_copy[0][0]));
+    auto texture_info2 = graphite::TextureInfos::MakeVulkan(texture_info);
 
-    for (int i = 0; i < 2; ++i) {
-      CHECK_RESULT(
-          vkCreateImage(device, &image_create_info, nullptr, &render_offscreen->images[i]));
+    for (int i = 0; i < std::size(render_offscreen->backbuffers); ++i) {
+      auto& backbuffer = render_offscreen->backbuffers[i];
+      backbuffer.texture = graphite_recorder->createBackendTexture(dimensions, texture_info2);
+      if (!backbuffer.texture.isValid()) {
+        AppendErrorMessage(status) += "Failed creating backend texture for offscreen rendering";
+        return;
+      }
+      backbuffer.vk_image = graphite::BackendTextures::GetVkImage(backbuffer.texture);
 
-      // TODO: bind memory
-      VkDeviceMemory memory;
-      VkDeviceSize memoryOffset = 0;
+      backbuffer.vk_command_buffers.resize(image_count);
 
-      CHECK_RESULT(vkBindImageMemory(device, render_offscreen->images[i], memory, memoryOffset));
+      CHECK_RESULT(vkAllocateCommandBuffers(device, &command_buffer_allocate_info,
+                                            backbuffer.vk_command_buffers.data()));
 
-      ImageMemBarrier(render_offscreen->cmd_copy[i][0], render_offscreen->images[i],
-                      texture_info.fFormat, VK_IMAGE_LAYOUT_UNDEFINED,
-                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-      render_offscreen->sem_copied[i].Create(status);
+      backbuffer.sem_copied.Create(status);
       if (!OK(status)) {
         AppendErrorMessage(status) += "Failed to create semaphore for offscreen rendering";
+        return;
       }
 
       const VkImageCopy image_copy = {
@@ -938,24 +954,23 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
             .pNext = nullptr,
             .flags = 0,
             .pInheritanceInfo = nullptr};
-        auto& cmd_buffer = render_offscreen->cmd_copy[j][i];
+        auto& cmd_buffer = backbuffer.vk_command_buffers[j];
         CHECK_RESULT(vkBeginCommandBuffer(cmd_buffer, &kCommandBufferBeginInfo));
 
-        vkCmdCopyImage(cmd_buffer, render_offscreen->images[i], VK_IMAGE_LAYOUT_GENERAL, images[j],
-                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
+        vkCmdCopyImage(cmd_buffer, backbuffer.vk_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                       images[j], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
+
+        ImageMemBarrier(cmd_buffer, backbuffer.vk_image, surfaceFormat,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         CHECK_RESULT(vkEndCommandBuffer(cmd_buffer));
       }
+      canvas_textures.push_back(backbuffer.texture);
     }
     render_offscreen->current = 0;
-    canvas_images = render_offscreen->images;
   }
 
-  SkISize dimensions = {(int)extent.width, (int)extent.height};
-  for (auto image : canvas_images) {
-    auto backend_texture = graphite::BackendTextures::MakeVulkan(
-        dimensions, texture_info, VK_IMAGE_LAYOUT_UNDEFINED, device.present_queue_index, image,
-        skgpu::VulkanAlloc());
+  for (auto& backend_texture : canvas_textures) {
     auto sk_surface = SkSurfaces::WrapBackendTexture(graphite_recorder.get(), backend_texture,
                                                      colorType, color_space, &surface_props,
                                                      nullptr, nullptr, "backend_texture");
@@ -1016,19 +1031,22 @@ void Swapchain::Present() {
   if (auto recording = graphite_recorder->snap()) {
     graphite::InsertRecordingInfo insert_recording_info;
     insert_recording_info.fRecording = recording.get();
+
+    skgpu::MutableTextureState target_texture_state;
     if (render_offscreen) {
       insert_recording_info.fWaitSemaphores = nullptr;
       insert_recording_info.fNumWaitSemaphores = 0;
+      target_texture_state = skgpu::MutableTextureStates::MakeVulkan(
+          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, device.graphics_queue_index);
     } else {
       insert_recording_info.fWaitSemaphores = &sk_sem_acquired;
       insert_recording_info.fNumWaitSemaphores = 1;
+      target_texture_state = skgpu::MutableTextureStates::MakeVulkan(
+          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, device.present_queue_index);
     }
     insert_recording_info.fSignalSemaphores = &sk_sem_rendered;
     insert_recording_info.fNumSignalSemaphores = 1;
-
-    skgpu::MutableTextureState presentState = skgpu::MutableTextureStates::MakeVulkan(
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, device.present_queue_index);
-    insert_recording_info.fTargetTextureState = &presentState;
+    insert_recording_info.fTargetTextureState = &target_texture_state;
     insert_recording_info.fTargetSurface = backbuffer.sk_surface.get();
 
     insert_recording_info.fFinishedContext = nullptr;
@@ -1045,13 +1063,14 @@ void Swapchain::Present() {
         VkSemaphoreSubmitInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                               .semaphore = backbuffer.sem_rendered.vk_semaphore},
     };
+    auto& backbuffer = render_offscreen->backbuffers[render_offscreen->current];
     const VkCommandBufferSubmitInfo command_buffer_submit_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-        .commandBuffer = render_offscreen->cmd_copy[current_image_index][render_offscreen->current],
+        .commandBuffer = backbuffer.vk_command_buffers[current_image_index],
     };
     const VkSemaphoreSubmitInfo signal_semaphore_submit_info = {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = render_offscreen->sem_copied[render_offscreen->current].vk_semaphore,
+        .semaphore = backbuffer.sem_copied,
     };
     const VkSubmitInfo2 submit_info = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
                                        .pNext = nullptr,
@@ -1064,7 +1083,7 @@ void Swapchain::Present() {
                                        .pSignalSemaphoreInfos = &signal_semaphore_submit_info};
 
     vkQueueSubmit2(device.graphics_queue, 1, &submit_info, VK_NULL_HANDLE);
-    present_semaphore = &render_offscreen->sem_copied[render_offscreen->current].vk_semaphore;
+    present_semaphore = &backbuffer.sem_copied.vk_semaphore;
   }
 
   const VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,

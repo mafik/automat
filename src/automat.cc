@@ -29,6 +29,7 @@
 #include "root_widget.hh"
 #include "textures.hh"
 #include "thread_name.hh"
+#include "time.hh"
 #include "timer_thread.hh"
 #include "tracy_client.hh"  // IWYU pragma: keep
 #include "vk.hh"
@@ -51,7 +52,7 @@ std::condition_variable automat_threads_cv;
 std::thread::id main_thread_id;
 
 std::jthread render_thread;
-time::SystemPoint next_frame;
+time::SteadyPoint next_frame = time::kZeroSteady;
 constexpr bool kPowersave = true;
 
 static int argc;
@@ -95,14 +96,14 @@ void VulkanPaint() {
   }
   if (kPowersave) {
     ZoneScopedN("Powersave");
-    time::SystemPoint now = time::SystemNow();
+    time::SteadyPoint now = time::SteadyNow();
     // TODO: Adjust next_frame to minimize input latency
     // VK_EXT_present_timing
     // https://github.com/KhronosGroup/Vulkan-Docs/pull/1364
     if (next_frame <= now) {
       auto frame_count =
-          (now - next_frame) / std::chrono::seconds(root_widget->window->screen_refresh_rate);
-      next_frame += frame_count * std::chrono::seconds(root_widget->window->screen_refresh_rate);
+          time::ToSeconds(now - next_frame) / root_widget->window->screen_refresh_rate;
+      next_frame = now + time::Duration(1s) / root_widget->window->screen_refresh_rate;
       constexpr bool kLogSkippedFrames = false;
       if (kLogSkippedFrames && frame_count > 1) {
         LOG << "Skipped " << (uint64_t)(frame_count - 1) << " frames";
@@ -112,7 +113,7 @@ void VulkanPaint() {
       // With timeBeginPeriod(1) it's T + ~1ms.
       // TODO: try condition_variable instead
       std::this_thread::sleep_until(next_frame);
-      next_frame += 1s / root_widget->window->screen_refresh_rate;
+      next_frame += time::Duration(1s) / root_widget->window->screen_refresh_rate;
     }
   }
 

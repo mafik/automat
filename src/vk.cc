@@ -394,6 +394,17 @@ void Device::Init(Status& status) {
   *tailPNext = ycbcrFeature;
   tailPNext = &ycbcrFeature->pNext;
 
+  VkPhysicalDeviceSynchronization2Features* sync2Feature = nullptr;
+  if (extensions.hasExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, 1)) {
+    sync2Feature = (VkPhysicalDeviceSynchronization2Features*)sk_malloc_throw(
+        sizeof(VkPhysicalDeviceSynchronization2Features));
+    sync2Feature->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+    sync2Feature->pNext = nullptr;
+    sync2Feature->synchronization2 = VK_TRUE;
+    *tailPNext = sync2Feature;
+    tailPNext = &sync2Feature->pNext;
+  }
+
   PFN_vkGetPhysicalDeviceFeatures2 vkGetPhysicalDeviceFeatures2 =
       (PFN_vkGetPhysicalDeviceFeatures2)instance.GetProc("vkGetPhysicalDeviceFeatures2");
   vkGetPhysicalDeviceFeatures2(vk::physical_device, &features);
@@ -904,6 +915,7 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
     render_offscreen.emplace();
     auto surface = SkSurfaces::RenderTarget(
         graphite_recorder.get(), SkImageInfo::Make(dimensions, colorType, alpha_type, color_space));
+    texture_info.fImageUsageFlags |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
 
     const VkCommandBufferAllocateInfo command_buffer_allocate_info = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -957,11 +969,14 @@ void Swapchain::Create(int widthHint, int heightHint, Status& status) {
         auto& cmd_buffer = backbuffer.vk_command_buffers[j];
         CHECK_RESULT(vkBeginCommandBuffer(cmd_buffer, &kCommandBufferBeginInfo));
 
+        ImageMemBarrier(cmd_buffer, images[j], surfaceFormat, VK_IMAGE_LAYOUT_UNDEFINED,
+                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
         vkCmdCopyImage(cmd_buffer, backbuffer.vk_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                        images[j], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
 
-        ImageMemBarrier(cmd_buffer, backbuffer.vk_image, surfaceFormat,
-                        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        ImageMemBarrier(cmd_buffer, images[j], surfaceFormat, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         CHECK_RESULT(vkEndCommandBuffer(cmd_buffer));
       }
@@ -1061,7 +1076,7 @@ void Swapchain::Present() {
         VkSemaphoreSubmitInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
                               .semaphore = sem_acquired},
         VkSemaphoreSubmitInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-                              .semaphore = backbuffer.sem_rendered.vk_semaphore},
+                              .semaphore = backbuffer.sem_rendered},
     };
     auto& backbuffer = render_offscreen->backbuffers[render_offscreen->current];
     const VkCommandBufferSubmitInfo command_buffer_submit_info = {

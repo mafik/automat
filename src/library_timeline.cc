@@ -528,13 +528,24 @@ static time::Duration CurrentOffset(const Timeline& timeline, time::SteadyPoint 
   }
 }
 
+static void AddMissingTrackWidgets(const Timeline& timeline) {
+  auto& tracks = timeline.tracks;
+  auto& track_widgets = timeline.track_widgets;
+  for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
+    track_widgets.push_back(tracks[i]->MakeWidget());
+    track_widgets.back()->parent = timeline.AcquirePtr();
+  }
+}
+
 static void WakeAnimationResponsively(Timeline& timeline) {
   timeline.WakeAnimation();
-  for (auto& track : timeline.tracks) {
-    track->ForEachWidget([](gui::RootWidget&, gui::Widget& w) {
-      w.WakeAnimation();
-      w.RedrawThisFrame();
-    });
+  AddMissingTrackWidgets(timeline);
+  for (auto& t : timeline.track_widgets) {
+    t->WakeAnimation();
+  }
+  // Only the children of the current timeline need to be updated responsively.
+  for (auto& w : timeline.track_widgets) {
+    w->RedrawThisFrame();
   }
 }
 
@@ -1118,15 +1129,6 @@ animation::Phase Timeline::Tick(time::Timer& timer) {
     WakeAnimationResponsively(*this);
   }
   return phase;
-}
-
-static void AddMissingTrackWidgets(const Timeline& timeline) {
-  auto& tracks = timeline.tracks;
-  auto& track_widgets = timeline.track_widgets;
-  for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
-    track_widgets.push_back(tracks[i]->MakeWidget());
-    track_widgets.back()->parent = timeline.AcquirePtr();
-  }
 }
 
 void Timeline::Draw(SkCanvas& canvas) const {
@@ -1739,16 +1741,52 @@ void Timeline::UpdateChildTransform(time::SteadyPoint now) {
 }
 
 struct TrackBaseWidget : Object::FallbackWidget {
-  SkPath Shape() const override {
-    auto track = LockObject<TrackBase>();
-    Timeline* timeline = track->timeline;
-    time::FloatDuration distance_to_seconds;
-    if (timeline) {
-      distance_to_seconds = DistanceToSeconds(*timeline);
-    } else {
-      distance_to_seconds = 100s;  // 1 cm = 1 second
+  // Many functions within TrackBaseWidget query the same information. This class:
+  // - caches these results to avoid repeated lookups &
+  // - provides a single place to define lookup logic for code reuse.
+  struct Context {
+    const TrackBaseWidget& widget;
+    Context(const TrackBaseWidget& widget) : widget(widget) {}
+
+    Ptr<TrackBase> track_ptr = nullptr;
+    Ptr<TrackBase>& GetTrackPtr() {
+      if (track_ptr == nullptr) {
+        track_ptr = widget.LockObject<TrackBase>();
+      }
+      return track_ptr;
     }
-    auto end_time = timeline ? timeline->MaxTrackLength() : track->timestamps.back();
+
+    template <typename T>
+    T& GetTrack() {
+      return static_cast<T&>(*GetTrackPtr());
+    }
+
+    Timeline* timeline = nullptr;
+    Timeline* GetTimeline() {
+      if (timeline == nullptr) {
+        timeline = GetTrackPtr()->timeline;
+      }
+      return timeline;
+    }
+
+    Optional<time::FloatDuration> distance_to_seconds = nullopt;
+    time::FloatDuration& GetDistanceToSeconds() {
+      if (!distance_to_seconds) {
+        auto timeline = GetTimeline();
+        distance_to_seconds = timeline ? DistanceToSeconds(*timeline) : 100s;  // 1 cm = 1 second
+      }
+      return *distance_to_seconds;
+    }
+  };
+  SkPath Shape() const override {
+    Context ctx(*this);
+    return Shape(ctx);
+  }
+  SkPath Shape(Context& ctx) const {
+    time::FloatDuration distance_to_seconds = ctx.GetDistanceToSeconds();
+    auto* timeline = ctx.GetTimeline();
+    auto& track = ctx.GetTrack<TrackBase>();
+    auto end_time = timeline ? timeline->MaxTrackLength() : track.timestamps.back();
     Rect rect = Rect(0, -kTrackHeight / 2, end_time / distance_to_seconds, kTrackHeight / 2);
     if (timeline) {
       // Clip to the width of the timeline window
@@ -1760,18 +1798,21 @@ struct TrackBaseWidget : Object::FallbackWidget {
     return SkPath::Rect(rect.sk);
   }
   Optional<Rect> TextureBounds() const override {
-    auto track = LockObject<TrackBase>();
-    Timeline* timeline = track->timeline;
+    Context ctx(*this);
+    Timeline* timeline = ctx.GetTimeline();
     if (timeline == nullptr || timeline->drag_zoom_action == nullptr) {
       return FallbackWidget::TextureBounds();
     }
     return nullopt;
   }
-  void Draw(SkCanvas& canvas) const override { canvas.drawPath(Shape(), kTrackPaint); }
+  void Draw(SkCanvas& canvas) const override {
+    Context ctx(*this);
+    Draw(canvas, ctx);
+  }
+  void Draw(SkCanvas& canvas, Context& ctx) const { canvas.drawPath(Shape(ctx), kTrackPaint); }
   std::unique_ptr<Action> FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) override {
-    auto track = LockObject<TrackBase>();
-    Timeline* timeline = track->timeline;
-    if (timeline) {
+    Context ctx(*this);
+    if (Timeline* timeline = ctx.GetTimeline()) {
       return timeline->FindAction(ptr, btn);
     } else {
       return Object::FallbackWidget::FindAction(ptr, btn);
@@ -1781,15 +1822,15 @@ struct TrackBaseWidget : Object::FallbackWidget {
 
 struct OnOffTrackWidget : TrackBaseWidget {
   void Draw(SkCanvas& canvas) const override {
-    TrackBaseWidget::Draw(canvas);
-    auto track_ptr = LockObject<OnOffTrack>();
-    auto& track = *track_ptr;
+    Context ctx(*this);
+    auto* timeline = ctx.GetTimeline();
+    auto& track = ctx.GetTrack<OnOffTrack>();
     auto& timestamps = track.timestamps;
-    Timeline* timeline = track.timeline;
-    auto shape = Shape();
+    TrackBaseWidget::Draw(canvas, ctx);
+    auto shape = Shape(ctx);
     Rect rect;
     shape.isRect(&rect.sk);
-    time::FloatDuration distance_to_seconds = DistanceToSeconds(*timeline);
+    time::FloatDuration distance_to_seconds = ctx.GetDistanceToSeconds();
     auto DrawSegment = [&](time::Duration start_t, time::Duration end_t) {
       float start = start_t / distance_to_seconds;
       float end = end_t / distance_to_seconds;
@@ -1820,13 +1861,13 @@ struct OnOffTrackWidget : TrackBaseWidget {
 
 struct Vec2TrackWidget : TrackBaseWidget {
   void Draw(SkCanvas& canvas) const override {
-    auto track_ptr = LockObject<Vec2Track>();
-    auto& track = *track_ptr;
+    Context ctx(*this);
+    auto& track = ctx.GetTrack<Vec2Track>();
     auto& timestamps = track.timestamps;
     auto& values = track.values;
-    Timeline* timeline = track.timeline;
-    TrackBaseWidget::Draw(canvas);
-    auto shape = Shape();
+    Timeline* timeline = ctx.GetTimeline();
+    TrackBaseWidget::Draw(canvas, ctx);
+    auto shape = Shape(ctx);
     Rect rect;
     shape.isRect(&rect.sk);
     time::FloatDuration s_per_m = DistanceToSeconds(*timeline);  // s / m

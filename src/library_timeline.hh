@@ -51,16 +51,15 @@ struct TimelineRunButton : gui::ToggleButton {
   void ForgetParents() override;
 };
 
-struct TrackBase : Object, Object::FallbackWidget {
+struct TrackBase : Object {
   Timeline* timeline = nullptr;
   Vec<time::Duration> timestamps;
-  SkPath Shape() const override;
-  Optional<Rect> TextureBounds() const override;
-  void Draw(SkCanvas&) const override;
-  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   virtual void Splice(time::Duration current_offset, time::Duration splice_to) = 0;
   virtual void UpdateOutput(Location& target, time::SteadyPoint started_at,
                             time::SteadyPoint now) = 0;
+
+  // Each subtype must returns its own Widget derived from TrackBaseWidget.
+  Ptr<gui::Widget> MakeWidget() override = 0;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
@@ -71,7 +70,7 @@ struct OnOffTrack : TrackBase, OnOff {
   time::Duration on_at = time::kDurationGuard;
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MakePtr<OnOffTrack>(*this); }
-  void Draw(SkCanvas&) const override;
+  Ptr<gui::Widget> MakeWidget() override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -90,7 +89,7 @@ struct Vec2Track : TrackBase {
 
   string_view Name() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MakePtr<Vec2Track>(*this); }
-  void Draw(SkCanvas&) const override;
+  Ptr<gui::Widget> MakeWidget() override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -130,6 +129,7 @@ struct Timeline : LiveObject,
 
   Vec<Ptr<TrackBase>> tracks;
   Vec<std::unique_ptr<Argument>> track_args;
+  mutable Vec<Ptr<Widget>> track_widgets;
 
   mutable animation::Approach<> zoom;  // stores the time in seconds
   mutable animation::SpringV2<float> splice_wiggle;

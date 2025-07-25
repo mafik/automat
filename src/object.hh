@@ -22,7 +22,8 @@ struct LongRunning;
 
 // Objects are interactive pieces of data & behavior.
 //
-// Instances of this class provide custom logic & appearance.
+// Instances of this class provide their logic.
+// Appearance is delegated to Widgets.
 struct Object : public virtual ReferenceCounted {
   Object() {}
 

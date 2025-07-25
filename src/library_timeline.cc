@@ -415,7 +415,6 @@ Vec2Track& Timeline::AddVec2Track(StrView name) {
 
 void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   track->timeline = this;
-  track->parent = this->AcquirePtr();
   tracks.emplace_back(std::move(track));
   AddTrackArg(*this, tracks.size() - 1, name);
   if (auto h = here.lock()) {
@@ -529,6 +528,16 @@ static time::Duration CurrentOffset(const Timeline& timeline, time::SteadyPoint 
   }
 }
 
+static void WakeAnimationResponsively(Timeline& timeline) {
+  timeline.WakeAnimation();
+  for (auto& track : timeline.tracks) {
+    track->ForEachWidget([](gui::RootWidget&, gui::Widget& w) {
+      w.WakeAnimation();
+      w.RedrawThisFrame();
+    });
+  }
+}
+
 static void SetOffset(Timeline& timeline, time::Duration offset, time::SteadyPoint now) {
   offset = clamp<time::Duration>(offset, 0s, timeline.MaxTrackLength());
   if (timeline.state == Timeline::kPlaying) {
@@ -541,11 +550,7 @@ static void SetOffset(Timeline& timeline, time::Duration offset, time::SteadyPoi
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = offset;
   }
-  timeline.WakeAnimation();
-  for (auto& track : timeline.tracks) {
-    track->WakeAnimation();
-    track->RedrawThisFrame();
-  }
+  WakeAnimationResponsively(timeline);
 }
 
 static void AdjustOffset(Timeline& timeline, time::Duration offset, time::SteadyPoint now) {
@@ -561,11 +566,7 @@ static void AdjustOffset(Timeline& timeline, time::Duration offset, time::Steady
     timeline.paused.playback_offset = clamp<time::Duration>(
         timeline.paused.playback_offset + offset, 0s, timeline.MaxTrackLength());
   }
-  timeline.WakeAnimation();
-  for (auto& track : timeline.tracks) {
-    track->WakeAnimation();
-    track->RedrawThisFrame();
-  }
+  WakeAnimationResponsively(timeline);
 }
 
 void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
@@ -581,11 +582,7 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   } else if (timeline.state == Timeline::kPaused) {
     timeline.paused.playback_offset = time::Defloat(pos_ratio * max_track_length);
   }
-  timeline.WakeAnimation();
-  for (auto& track : timeline.tracks) {
-    track->WakeAnimation();
-    track->RedrawThisFrame();
-  }
+  WakeAnimationResponsively(timeline);
 }
 
 void NextButton::Activate(gui::Pointer& ptr) {
@@ -950,11 +947,7 @@ DragZoomAction::DragZoomAction(gui::Pointer& pointer, Timeline& timeline)
 DragZoomAction::~DragZoomAction() {
   timeline.drag_zoom_action = nullptr;
   timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
-  timeline.WakeAnimation();
-  for (auto& track : timeline.tracks) {
-    track->WakeAnimation();
-    track->RedrawThisFrame();
-  }
+  WakeAnimationResponsively(timeline);
 }
 void DragZoomAction::Update() {
   float y = pointer.PositionWithin(timeline).y;
@@ -965,11 +958,7 @@ void DragZoomAction::Update() {
   timeline.zoom.target *= factor;
   timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
   timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
-  timeline.WakeAnimation();
-  for (auto& track : timeline.tracks) {
-    track->WakeAnimation();
-    track->RedrawThisFrame();
-  }
+  WakeAnimationResponsively(timeline);
 }
 
 SkPath WindowShape(int num_tracks) {
@@ -1036,13 +1025,11 @@ SpliceAction::~SpliceAction() {
     for (int i = 0; i < num_tracks; ++i) {
       auto& track = timeline.tracks[i];
       track->Splice(current_offset, splice_to);
-      track->WakeAnimation();
-      track->RedrawThisFrame();
     }
     timeline.timeline_length += splice_to - current_offset;
     AdjustOffset(timeline, splice_to - current_offset, now);
   }
-  timeline.WakeAnimation();
+  WakeAnimationResponsively(timeline);
 }
 
 void SpliceAction::Update() {
@@ -1128,12 +1115,18 @@ animation::Phase Timeline::Tick(time::Timer& timer) {
   phase |= animation::ExponentialApproach(0, timer.d, 0.05, bridge_wiggle_s);
   UpdateChildTransform(timer.now);
   if (phase == animation::Animating) {
-    for (auto& track : tracks) {
-      track->WakeAnimation();
-      track->RedrawThisFrame();
-    }
+    WakeAnimationResponsively(*this);
   }
   return phase;
+}
+
+static void AddMissingTrackWidgets(const Timeline& timeline) {
+  auto& tracks = timeline.tracks;
+  auto& track_widgets = timeline.track_widgets;
+  for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
+    track_widgets.push_back(tracks[i]->MakeWidget());
+    track_widgets.back()->parent = timeline.AcquirePtr();
+  }
 }
 
 void Timeline::Draw(SkCanvas& canvas) const {
@@ -1366,12 +1359,9 @@ void Timeline::Draw(SkCanvas& canvas) const {
     }
   }
 
-  Ptr<Widget> tracks_arr[tracks.size()];  // TODO: awful, fix this
-  for (size_t i = 0; i < tracks.size(); ++i) {
-    tracks_arr[i] = tracks[i];
-  }
+  AddMissingTrackWidgets(*this);
 
-  DrawChildrenSpan(canvas, SpanOfArr(tracks_arr, tracks.size()));
+  DrawChildrenSpan(canvas, track_widgets);
 
   bool draw_bridge_hairline = true;
 
@@ -1722,9 +1712,8 @@ void Timeline::FillChildren(Vec<Ptr<Widget>>& children) {
   children.push_back(run_button);
   children.push_back(prev_button);
   children.push_back(next_button);
-  for (size_t i = 0; i < tracks.size(); ++i) {
-    children.push_back(tracks[i]);
-  }
+  AddMissingTrackWidgets(*this);
+  children.insert(children.end(), track_widgets.begin(), track_widgets.end());
 }
 
 void Timeline::UpdateChildTransform(time::SteadyPoint now) {
@@ -1741,369 +1730,411 @@ void Timeline::UpdateChildTransform(time::SteadyPoint now) {
 
   float track_offset_x = lerp(track_offset_x0, track_offset_x1, current_pos_ratio);
 
-  for (size_t i = 0; i < tracks.size(); ++i) {
-    tracks[i]->local_to_parent =
+  AddMissingTrackWidgets(*this);
+  for (size_t i = 0; i < track_widgets.size(); ++i) {
+    track_widgets[i]->local_to_parent =
         SkM44::Translate(-track_offset_x, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
                                               i * (kTrackMargin + kTrackHeight));
   }
 }
 
-SkPath TrackBase::Shape() const {
-  time::FloatDuration distance_to_seconds;
-  if (timeline) {
-    distance_to_seconds = DistanceToSeconds(*timeline);
-  } else {
-    distance_to_seconds = 100s;  // 1 cm = 1 second
-  }
-  auto end_time = timeline ? timeline->MaxTrackLength() : timestamps.back();
-  Rect rect = Rect(0, -kTrackHeight / 2, end_time / distance_to_seconds, kTrackHeight / 2);
-  if (timeline) {
-    // Clip to the width of the timeline window
-    rect.right = min<float>(rect.right, TimeAtX(*timeline, kWindowWidth / 2) / distance_to_seconds);
-    rect.left = max<float>(rect.left, TimeAtX(*timeline, -kWindowWidth / 2) / distance_to_seconds);
-  }
-  return SkPath::Rect(rect.sk);
-}
-
-Optional<Rect> TrackBase::TextureBounds() const {
-  if (timeline == nullptr || timeline->drag_zoom_action == nullptr) {
-    return FallbackWidget::TextureBounds();
-  }
-  return nullopt;
-}
-
-void TrackBase::Draw(SkCanvas& canvas) const { canvas.drawPath(Shape(), kTrackPaint); }
-
-void OnOffTrack::Draw(SkCanvas& canvas) const {
-  TrackBase::Draw(canvas);
-  auto shape = Shape();
-  Rect rect;
-  shape.isRect(&rect.sk);
-  time::FloatDuration distance_to_seconds = DistanceToSeconds(*timeline);
-  auto DrawSegment = [&](time::Duration start_t, time::Duration end_t) {
-    float start = start_t / distance_to_seconds;
-    float end = end_t / distance_to_seconds;
-    if (end < rect.left || start > rect.right) {
-      return;
+struct TrackBaseWidget : Object::FallbackWidget {
+  SkPath Shape() const override {
+    auto track = LockObject<TrackBase>();
+    Timeline* timeline = track->timeline;
+    time::FloatDuration distance_to_seconds;
+    if (timeline) {
+      distance_to_seconds = DistanceToSeconds(*timeline);
+    } else {
+      distance_to_seconds = 100s;  // 1 cm = 1 second
     }
-    start = max(start, rect.left);
-    end = min(end, rect.right);
-    canvas.drawLine({start, 0}, {end, 0}, kOnOffPaint);
-  };
-  for (int i = 0; i + 1 < timestamps.size(); i += 2) {
-    DrawSegment(timestamps[i], timestamps[i + 1]);
+    auto end_time = timeline ? timeline->MaxTrackLength() : track->timestamps.back();
+    Rect rect = Rect(0, -kTrackHeight / 2, end_time / distance_to_seconds, kTrackHeight / 2);
+    if (timeline) {
+      // Clip to the width of the timeline window
+      rect.right =
+          min<float>(rect.right, TimeAtX(*timeline, kWindowWidth / 2) / distance_to_seconds);
+      rect.left =
+          max<float>(rect.left, TimeAtX(*timeline, -kWindowWidth / 2) / distance_to_seconds);
+    }
+    return SkPath::Rect(rect.sk);
   }
-  if (on_at != time::kDurationGuard) {
-    switch (timeline->state) {
-      case Timeline::kRecording:
-        DrawSegment(on_at, timeline->recording.now - timeline->recording.started_at);
-        break;
-      case Timeline::kPlaying:
-      case Timeline::kPaused:
-        // segment ends at the right edge of the track
-        DrawSegment(on_at, timeline->MaxTrackLength());
-        break;
+  Optional<Rect> TextureBounds() const override {
+    auto track = LockObject<TrackBase>();
+    Timeline* timeline = track->timeline;
+    if (timeline == nullptr || timeline->drag_zoom_action == nullptr) {
+      return FallbackWidget::TextureBounds();
+    }
+    return nullopt;
+  }
+  void Draw(SkCanvas& canvas) const override { canvas.drawPath(Shape(), kTrackPaint); }
+  std::unique_ptr<Action> FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) override {
+    auto track = LockObject<TrackBase>();
+    Timeline* timeline = track->timeline;
+    if (timeline) {
+      return timeline->FindAction(ptr, btn);
+    } else {
+      return Object::FallbackWidget::FindAction(ptr, btn);
     }
   }
-}
+};
 
-void Vec2Track::Draw(SkCanvas& canvas) const {
-  TrackBase::Draw(canvas);
-  auto shape = Shape();
-  Rect rect;
-  shape.isRect(&rect.sk);
-  time::FloatDuration s_per_m = DistanceToSeconds(*timeline);  // s / m
-  auto left_t = time::Defloat(rect.left * s_per_m);
-  auto right_t = time::Defloat(rect.right * s_per_m);
-  auto LowerBound = [&](time::Duration t) {
-    return lower_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
-  };
-  auto UpperBound = [&](time::Duration t) {
-    return upper_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
-  };
-  auto left_i = LowerBound(left_t);
-  auto right_i = UpperBound(right_t);
-
-  float px_per_meter = canvas.getLocalToDeviceAs3x3().mapVector(1, 0).length();  // [px / m]
-  float m_per_px = 1.f / px_per_meter;                                           // [m / px]
-  auto pixel_t = time::Defloat(s_per_m * m_per_px);                              // [s / px]
-
-  {  // draw horizontal segments
-
-    int i = left_i;
-    int segments = 0;
-    // Draw the timestamps as horizontal lines (segments). Each timestamp is a 1-pixel long segment.
-    // Multiple timestamps whose segments overlap are combined into a single segment.
-    while (i < right_i) {
-      int start_i = i;
-      auto start_t = timestamps[i];    // start time of a line segment
-      auto end_t = start_t + pixel_t;  // end time of a line segment
-      // keep expanding end_t until a gap of at least one pixel is found
-      while (true) {
-        // find the first timestep that's outside of the current [start_t, end_t] segment
-        int leftmost_i_outside_segment =
-            upper_bound(timestamps.begin() + i, timestamps.begin() + right_i, end_t) -
-            timestamps.begin();
-        if (leftmost_i_outside_segment >= right_i) {
-          i = right_i;
-          end_t = std::min(end_t, right_t);
-          break;
-        }
-        // take one step back to get the last timestamp that's within the current end_t
-        int rightmost_i_inside_segment = leftmost_i_outside_segment - 1;
-        if (rightmost_i_inside_segment == i) {
-          // one-pixel gap found, exit to draw the segment (and also advance i for next iteration)
-          ++i;
-          break;
-        }
-        i = rightmost_i_inside_segment;
-        end_t = timestamps[i] + pixel_t;
+struct OnOffTrackWidget : TrackBaseWidget {
+  void Draw(SkCanvas& canvas) const override {
+    TrackBaseWidget::Draw(canvas);
+    auto track_ptr = LockObject<OnOffTrack>();
+    auto& track = *track_ptr;
+    auto& timestamps = track.timestamps;
+    Timeline* timeline = track.timeline;
+    auto shape = Shape();
+    Rect rect;
+    shape.isRect(&rect.sk);
+    time::FloatDuration distance_to_seconds = DistanceToSeconds(*timeline);
+    auto DrawSegment = [&](time::Duration start_t, time::Duration end_t) {
+      float start = start_t / distance_to_seconds;
+      float end = end_t / distance_to_seconds;
+      if (end < rect.left || start > rect.right) {
+        return;
       }
-      ++segments;
-      canvas.drawLine(start_t / s_per_m, (kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
-                      end_t / s_per_m, (kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
-                      kVec2Paint);
-      canvas.drawLine(start_t / s_per_m, -(kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
-                      end_t / s_per_m, -(kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
-                      kVec2Paint);
-    }
-  }
-
-  {  // draw displays
-    constexpr float kDisplayHeight = kTrackHeight - kVec2DisplayMargin * 2;
-    constexpr float kDisplayMinWidth = kDisplayHeight;
-    auto max_track_length = timeline->MaxTrackLength();
-    auto current_t = CurrentOffset(*timeline, time::SteadyNow());
-    int current_i = LowerBound(current_t);
-    auto display_min_t = time::Defloat(kDisplayMinWidth * s_per_m);
-    struct Vec2Display {
-      time::Duration start_t, end_t;
-      int start_i, end_i;  // end_i is not inclusive
+      start = max(start, rect.left);
+      end = min(end, rect.right);
+      canvas.drawLine({start, 0}, {end, 0}, kOnOffPaint);
     };
-    Vec2Display root;
-    root.start_t = 0s;
-    root.end_t = max_track_length;
-    root.start_i = LowerBound(root.start_t);
-    root.end_i = UpperBound(root.end_t);
-    // Snap the analysis window to the actual timestamps that exist in the track.
-    root.start_t = timestamps[root.start_i];
-    root.end_t = timestamps[root.end_i - 1];
-    auto timestamp_gaps = vector<time::Duration>(timestamps.size() - 1);
-    for (int i = 0; i < timestamps.size() - 1; ++i) {
-      timestamp_gaps[i] = timestamps[i + 1] - timestamps[i];
+    for (int i = 0; i + 1 < timestamps.size(); i += 2) {
+      DrawSegment(timestamps[i], timestamps[i + 1]);
     }
-    auto gap_tree = SegmentTree(timestamp_gaps.size(), [&](int left, int right) {
-      return timestamp_gaps[right] > timestamp_gaps[left];
-    });
-    for (int i = 0; i < timestamps.size() - 1; ++i) {
-      gap_tree.Update(i);
-    }
-    std::vector<Vec2Display> displays_to_split;
-    std::vector<Vec2Display> displays_to_draw;
-    if (root.start_i < root.end_i) {
-      displays_to_split.push_back(root);
-    }
-    constexpr bool kDebugSplitting = false;
-    while (!displays_to_split.empty()) {
-      auto display = displays_to_split.back();
-      displays_to_split.pop_back();
-      if (display.start_t > right_t + display_min_t / 2) {
-        continue;
+    if (track.on_at != time::kDurationGuard) {
+      switch (timeline->state) {
+        case Timeline::kRecording:
+          DrawSegment(track.on_at, timeline->recording.now - timeline->recording.started_at);
+          break;
+        case Timeline::kPlaying:
+        case Timeline::kPaused:
+          // segment ends at the right edge of the track
+          DrawSegment(track.on_at, timeline->MaxTrackLength());
+          break;
       }
-      if (display.end_t < left_t - display_min_t / 2) {
-        continue;
-      }
+    }
+  }
+};
 
-      auto earliest_split_t = display.start_t + display_min_t;
-      auto latest_split_t = display.end_t - display_min_t;
-      if (earliest_split_t >= latest_split_t) {
-        {  // re-center the displays that contain very few points
-          auto first_point = timestamps[display.start_i];
-          auto last_point = timestamps[display.end_i - 1];
-          if (last_point - first_point < display_min_t) {
-            if (display_min_t >= max_track_length) {
-              display.start_t = 0s;
-              display.end_t = max_track_length;
-            } else {
-              auto center = clamp((first_point + last_point) / 2, display_min_t / 2,
-                                  max_track_length - display_min_t / 2);
-              display.start_t = center - display_min_t / 2;
-              display.end_t = center + display_min_t / 2;
+struct Vec2TrackWidget : TrackBaseWidget {
+  void Draw(SkCanvas& canvas) const override {
+    auto track_ptr = LockObject<Vec2Track>();
+    auto& track = *track_ptr;
+    auto& timestamps = track.timestamps;
+    auto& values = track.values;
+    Timeline* timeline = track.timeline;
+    TrackBaseWidget::Draw(canvas);
+    auto shape = Shape();
+    Rect rect;
+    shape.isRect(&rect.sk);
+    time::FloatDuration s_per_m = DistanceToSeconds(*timeline);  // s / m
+    auto left_t = time::Defloat(rect.left * s_per_m);
+    auto right_t = time::Defloat(rect.right * s_per_m);
+    auto LowerBound = [&](time::Duration t) {
+      return lower_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
+    };
+    auto UpperBound = [&](time::Duration t) {
+      return upper_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
+    };
+    auto left_i = LowerBound(left_t);
+    auto right_i = UpperBound(right_t);
+
+    float px_per_meter = canvas.getLocalToDeviceAs3x3().mapVector(1, 0).length();  // [px / m]
+    float m_per_px = 1.f / px_per_meter;                                           // [m / px]
+    auto pixel_t = time::Defloat(s_per_m * m_per_px);                              // [s / px]
+
+    {  // draw horizontal segments
+
+      int i = left_i;
+      int segments = 0;
+      // Draw the timestamps as horizontal lines (segments). Each timestamp is a 1-pixel long
+      // segment. Multiple timestamps whose segments overlap are combined into a single segment.
+      while (i < right_i) {
+        int start_i = i;
+        auto start_t = timestamps[i];    // start time of a line segment
+        auto end_t = start_t + pixel_t;  // end time of a line segment
+        // keep expanding end_t until a gap of at least one pixel is found
+        while (true) {
+          // find the first timestep that's outside of the current [start_t, end_t] segment
+          int leftmost_i_outside_segment =
+              upper_bound(timestamps.begin() + i, timestamps.begin() + right_i, end_t) -
+              timestamps.begin();
+          if (leftmost_i_outside_segment >= right_i) {
+            i = right_i;
+            end_t = std::min(end_t, right_t);
+            break;
+          }
+          // take one step back to get the last timestamp that's within the current end_t
+          int rightmost_i_inside_segment = leftmost_i_outside_segment - 1;
+          if (rightmost_i_inside_segment == i) {
+            // one-pixel gap found, exit to draw the segment (and also advance i for next iteration)
+            ++i;
+            break;
+          }
+          i = rightmost_i_inside_segment;
+          end_t = timestamps[i] + pixel_t;
+        }
+        ++segments;
+        canvas.drawLine(start_t / s_per_m, (kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
+                        end_t / s_per_m, (kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
+                        kVec2Paint);
+        canvas.drawLine(start_t / s_per_m, -(kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
+                        end_t / s_per_m, -(kTrackHeight - kVec2Paint.getStrokeWidth()) / 2,
+                        kVec2Paint);
+      }
+    }
+
+    {  // draw displays
+      constexpr float kDisplayHeight = kTrackHeight - kVec2DisplayMargin * 2;
+      constexpr float kDisplayMinWidth = kDisplayHeight;
+      auto max_track_length = timeline->MaxTrackLength();
+      auto current_t = CurrentOffset(*timeline, time::SteadyNow());
+      int current_i = LowerBound(current_t);
+      auto display_min_t = time::Defloat(kDisplayMinWidth * s_per_m);
+      struct Vec2Display {
+        time::Duration start_t, end_t;
+        int start_i, end_i;  // end_i is not inclusive
+      };
+      Vec2Display root;
+      root.start_t = 0s;
+      root.end_t = max_track_length;
+      root.start_i = LowerBound(root.start_t);
+      root.end_i = UpperBound(root.end_t);
+      // Snap the analysis window to the actual timestamps that exist in the track.
+      root.start_t = timestamps[root.start_i];
+      root.end_t = timestamps[root.end_i - 1];
+      auto timestamp_gaps = vector<time::Duration>(timestamps.size() - 1);
+      for (int i = 0; i < timestamps.size() - 1; ++i) {
+        timestamp_gaps[i] = timestamps[i + 1] - timestamps[i];
+      }
+      auto gap_tree = SegmentTree(timestamp_gaps.size(), [&](int left, int right) {
+        return timestamp_gaps[right] > timestamp_gaps[left];
+      });
+      for (int i = 0; i < timestamps.size() - 1; ++i) {
+        gap_tree.Update(i);
+      }
+      std::vector<Vec2Display> displays_to_split;
+      std::vector<Vec2Display> displays_to_draw;
+      if (root.start_i < root.end_i) {
+        displays_to_split.push_back(root);
+      }
+      constexpr bool kDebugSplitting = false;
+      while (!displays_to_split.empty()) {
+        auto display = displays_to_split.back();
+        displays_to_split.pop_back();
+        if (display.start_t > right_t + display_min_t / 2) {
+          continue;
+        }
+        if (display.end_t < left_t - display_min_t / 2) {
+          continue;
+        }
+
+        auto earliest_split_t = display.start_t + display_min_t;
+        auto latest_split_t = display.end_t - display_min_t;
+        if (earliest_split_t >= latest_split_t) {
+          {  // re-center the displays that contain very few points
+            auto first_point = timestamps[display.start_i];
+            auto last_point = timestamps[display.end_i - 1];
+            if (last_point - first_point < display_min_t) {
+              if (display_min_t >= max_track_length) {
+                display.start_t = 0s;
+                display.end_t = max_track_length;
+              } else {
+                auto center = clamp((first_point + last_point) / 2, display_min_t / 2,
+                                    max_track_length - display_min_t / 2);
+                display.start_t = center - display_min_t / 2;
+                display.end_t = center + display_min_t / 2;
+              }
             }
           }
+          displays_to_draw.push_back(display);
+          continue;
         }
-        displays_to_draw.push_back(display);
-        continue;
+        // the lowest index that can be moved into the next display
+        int earliest_split_i = UpperBound(earliest_split_t);
+        auto initial_gap_t =
+            std::min(latest_split_t, timestamps[earliest_split_i]) - earliest_split_t;
+
+        int gap_i = -1;
+        time::Duration gap_t = time::kDurationGuard;
+
+        // the lowest index that must belong to the next display
+        int latest_split_i = LowerBound(latest_split_t) - 1;
+        auto final_gap_t = latest_split_t - timestamps[latest_split_i];
+        if (earliest_split_i < latest_split_i) {
+          gap_i = gap_tree.Query(earliest_split_i, latest_split_i - 1);
+          gap_t = timestamp_gaps[gap_i];
+        }
+
+        if constexpr (kDebugSplitting) {
+          LOG << "Splitting display from " << time::ToSeconds(display.start_t) << " to "
+              << time::ToSeconds(display.end_t);
+          LOG << "  earliest split at " << time::ToSeconds(earliest_split_t) << " < ["
+              << earliest_split_i << "]=" << time::ToSeconds(timestamps[earliest_split_i]);
+          LOG << "  latest split at " << time::ToSeconds(latest_split_t) << " [" << latest_split_i
+              << "]=" << time::ToSeconds(timestamps[latest_split_i]);
+          LOG << "  found gap with duration " << time::ToSeconds(gap_t) << " [" << gap_i
+              << "]=" << time::ToSeconds(timestamps[gap_i]);
+          LOG << "  initial gap duration " << time::ToSeconds(initial_gap_t) << " ["
+              << earliest_split_i << "]=" << time::ToSeconds(timestamps[earliest_split_i]);
+          LOG << "  final gap duration " << time::ToSeconds(final_gap_t) << " [" << latest_split_i
+              << "]=" << time::ToSeconds(timestamps[latest_split_i]);
+        }
+
+        if (gap_t >= initial_gap_t && gap_t >= final_gap_t) {
+          Vec2Display left = {.start_t = display.start_t,
+                              .end_t = timestamps[gap_i],
+                              .start_i = display.start_i,
+                              .end_i = gap_i + 1};
+          Vec2Display right = {.start_t = timestamps[gap_i + 1],
+                               .end_t = display.end_t,
+                               .start_i = gap_i + 1,
+                               .end_i = display.end_i};
+          displays_to_split.push_back(left);
+          displays_to_split.push_back(right);
+          if constexpr (kDebugSplitting) LOG << "  chose split at gap";
+        } else if (initial_gap_t > final_gap_t) {
+          Vec2Display left = {.start_t = display.start_t,
+                              .end_t = earliest_split_t,
+                              .start_i = display.start_i,
+                              .end_i = earliest_split_i};
+          Vec2Display right = {.start_t = std::min(latest_split_t, timestamps[earliest_split_i]),
+                               .end_t = display.end_t,
+                               .start_i = earliest_split_i,
+                               .end_i = display.end_i};
+          displays_to_split.push_back(left);
+          displays_to_split.push_back(right);
+          if constexpr (kDebugSplitting) LOG << "  chose split at earliest split";
+        } else {
+          Vec2Display left = {.start_t = display.start_t,
+                              .end_t = timestamps[latest_split_i],
+                              .start_i = display.start_i,
+                              .end_i = latest_split_i + 1};
+          Vec2Display right = {.start_t = latest_split_t,
+                               .end_t = display.end_t,
+                               .start_i = latest_split_i + 1,
+                               .end_i = display.end_i};
+          displays_to_split.push_back(left);
+          displays_to_split.push_back(right);
+          if constexpr (kDebugSplitting) LOG << "  chose split at latest split";
+        }
       }
-      // the lowest index that can be moved into the next display
-      int earliest_split_i = UpperBound(earliest_split_t);
-      auto initial_gap_t =
-          std::min(latest_split_t, timestamps[earliest_split_i]) - earliest_split_t;
 
-      int gap_i = -1;
-      time::Duration gap_t = time::kDurationGuard;
+      for (auto& display : displays_to_draw) {
+        auto display_start_t = display.start_t;
+        auto display_end_t = display.end_t;
+        int start_i = display.start_i;
+        int end_i = display.end_i;
 
-      // the lowest index that must belong to the next display
-      int latest_split_i = LowerBound(latest_split_t) - 1;
-      auto final_gap_t = latest_split_t - timestamps[latest_split_i];
-      if (earliest_split_i < latest_split_i) {
-        gap_i = gap_tree.Query(earliest_split_i, latest_split_i - 1);
-        gap_t = timestamp_gaps[gap_i];
-      }
-
-      if constexpr (kDebugSplitting) {
-        LOG << "Splitting display from " << time::ToSeconds(display.start_t) << " to "
-            << time::ToSeconds(display.end_t);
-        LOG << "  earliest split at " << time::ToSeconds(earliest_split_t) << " < ["
-            << earliest_split_i << "]=" << time::ToSeconds(timestamps[earliest_split_i]);
-        LOG << "  latest split at " << time::ToSeconds(latest_split_t) << " [" << latest_split_i
-            << "]=" << time::ToSeconds(timestamps[latest_split_i]);
-        LOG << "  found gap with duration " << time::ToSeconds(gap_t) << " [" << gap_i
-            << "]=" << time::ToSeconds(timestamps[gap_i]);
-        LOG << "  initial gap duration " << time::ToSeconds(initial_gap_t) << " ["
-            << earliest_split_i << "]=" << time::ToSeconds(timestamps[earliest_split_i]);
-        LOG << "  final gap duration " << time::ToSeconds(final_gap_t) << " [" << latest_split_i
-            << "]=" << time::ToSeconds(timestamps[latest_split_i]);
-      }
-
-      if (gap_t >= initial_gap_t && gap_t >= final_gap_t) {
-        Vec2Display left = {.start_t = display.start_t,
-                            .end_t = timestamps[gap_i],
-                            .start_i = display.start_i,
-                            .end_i = gap_i + 1};
-        Vec2Display right = {.start_t = timestamps[gap_i + 1],
-                             .end_t = display.end_t,
-                             .start_i = gap_i + 1,
-                             .end_i = display.end_i};
-        displays_to_split.push_back(left);
-        displays_to_split.push_back(right);
-        if constexpr (kDebugSplitting) LOG << "  chose split at gap";
-      } else if (initial_gap_t > final_gap_t) {
-        Vec2Display left = {.start_t = display.start_t,
-                            .end_t = earliest_split_t,
-                            .start_i = display.start_i,
-                            .end_i = earliest_split_i};
-        Vec2Display right = {.start_t = std::min(latest_split_t, timestamps[earliest_split_i]),
-                             .end_t = display.end_t,
-                             .start_i = earliest_split_i,
-                             .end_i = display.end_i};
-        displays_to_split.push_back(left);
-        displays_to_split.push_back(right);
-        if constexpr (kDebugSplitting) LOG << "  chose split at earliest split";
-      } else {
-        Vec2Display left = {.start_t = display.start_t,
-                            .end_t = timestamps[latest_split_i],
-                            .start_i = display.start_i,
-                            .end_i = latest_split_i + 1};
-        Vec2Display right = {.start_t = latest_split_t,
-                             .end_t = display.end_t,
-                             .start_i = latest_split_i + 1,
-                             .end_i = display.end_i};
-        displays_to_split.push_back(left);
-        displays_to_split.push_back(right);
-        if constexpr (kDebugSplitting) LOG << "  chose split at latest split";
-      }
-    }
-
-    for (auto& display : displays_to_draw) {
-      auto display_start_t = display.start_t;
-      auto display_end_t = display.end_t;
-      int start_i = display.start_i;
-      int end_i = display.end_i;
-
-      auto display_duration = display_end_t - display_start_t;
-      float display_width = display_duration / s_per_m;  // division as double (doesn't floor)
-      SkPath trail;
-      trail.moveTo(0, 0);
-      Vec2 cursor = {};
-      for (int i = start_i; i < end_i; ++i) {
-        cursor += Vec2(values[i].x, -values[i].y);
-        trail.lineTo(cursor.x, cursor.y);
-      }
-      Rect bounds = trail.getBounds().makeOutset(1, 1);
-
-      auto rect = Rect(display_start_t / s_per_m + kVec2DisplayMargin / 2, -kDisplayHeight / 2,
-                       display_end_t / s_per_m - kVec2DisplayMargin / 2, kDisplayHeight / 2);
-      auto clip = RRect::MakeSimple(rect, std::min(kVec2DisplayMargin, rect.Width() / 2));
-      if (end_i > start_i) {
-        canvas.save();
-        canvas.clipRRect(clip.sk, true);
-        canvas.translate(rect.CenterX(), rect.CenterY());
-        float display_height_px =
-            canvas.getLocalToDeviceAs3x3().mapVector(kDisplayHeight, 0).length();
-        float scale = 10 * kDisplayHeight / display_height_px;
-        if (auto scale_right = display_width / 2 / bounds.right; scale_right < scale) {
-          scale = scale_right;
+        auto display_duration = display_end_t - display_start_t;
+        float display_width = display_duration / s_per_m;  // division as double (doesn't floor)
+        SkPath trail;
+        trail.moveTo(0, 0);
+        Vec2 cursor = {};
+        for (int i = start_i; i < end_i; ++i) {
+          cursor += Vec2(values[i].x, -values[i].y);
+          trail.lineTo(cursor.x, cursor.y);
         }
-        if (auto scale_left = -display_width / 2 / bounds.left; scale_left < scale) {
-          scale = scale_left;
-        }
-        if (auto scale_top = kDisplayHeight / 2 / bounds.top; scale_top < scale) {
-          scale = scale_top;
-        }
-        if (auto scale_bottom = -kDisplayHeight / 2 / bounds.bottom; scale_bottom < scale) {
-          scale = scale_bottom;
-        }
-        scale *= 0.9;  // 10% margin
-        canvas.scale(scale, scale);
+        Rect bounds = trail.getBounds().makeOutset(1, 1);
 
-        auto matrix = canvas.getLocalToDeviceAs3x3();
-        SkMatrix inverse;
-        (void)matrix.invert(&inverse);
-
-        SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
-        inverse.mapVectors(dpd);
-        SkPaint display_paint;
-        display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
-            SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
-        canvas.drawPaint(display_paint);
-
-        SkPaint trail_paint;
-        trail_paint.setColor("#131c64"_color);
-        trail_paint.setStyle(SkPaint::kStroke_Style);
-        SkPaint border_paint;
-        border_paint.setColor("#888888"_color);
-        border_paint.setStyle(SkPaint::kStroke_Style);
-        if (dpd[0].x() < 1) {
-          trail_paint.setStrokeWidth(1);
-          trail_paint.setStrokeCap(SkPaint::kSquare_Cap);
-          trail_paint.setStrokeJoin(SkPaint::kMiter_Join);
-          trail_paint.setStrokeMiter(2);
-        }
-        canvas.drawPath(trail, trail_paint);
-
-        if (current_i >= start_i && current_i < end_i) {
-          Vec2 previous_point = trail.getPoint(current_i - start_i);
-          Vec2 current_point = trail.getPoint(current_i - start_i + 1);
-          auto delta = current_point - previous_point;
-          auto length = Length(delta);
-          float outset = max(1_mm / scale, 1.5f);
-          auto outline_rect =
-              Rect(previous_point.x, previous_point.y, previous_point.x + length, previous_point.y)
-                  .Outset(outset);
-          auto outline_rrect = RRect::MakeSimple(outline_rect, outset);
-          SkMatrix transform;
-          transform.setSinCos(delta.y / length, delta.x / length, previous_point.x,
-                              previous_point.y);
-          auto outline_path = SkPath::RRect(outline_rrect.sk).makeTransform(transform);
-          SkPaint outline_paint;
-          outline_paint.setColor(kOrange);
-          if (timestamps[current_i] == current_t) {
-            outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
-            canvas.drawPath(outline_path, outline_paint);
-            canvas.drawLine(previous_point, current_point, trail_paint);
-          } else {
-            outline_paint.setStyle(SkPaint::kStroke_Style);
-            canvas.drawPath(outline_path, outline_paint);
+        auto rect = Rect(display_start_t / s_per_m + kVec2DisplayMargin / 2, -kDisplayHeight / 2,
+                         display_end_t / s_per_m - kVec2DisplayMargin / 2, kDisplayHeight / 2);
+        auto clip = RRect::MakeSimple(rect, std::min(kVec2DisplayMargin, rect.Width() / 2));
+        if (end_i > start_i) {
+          canvas.save();
+          canvas.clipRRect(clip.sk, true);
+          canvas.translate(rect.CenterX(), rect.CenterY());
+          float display_height_px =
+              canvas.getLocalToDeviceAs3x3().mapVector(kDisplayHeight, 0).length();
+          float scale = 10 * kDisplayHeight / display_height_px;
+          if (auto scale_right = display_width / 2 / bounds.right; scale_right < scale) {
+            scale = scale_right;
           }
-        }
+          if (auto scale_left = -display_width / 2 / bounds.left; scale_left < scale) {
+            scale = scale_left;
+          }
+          if (auto scale_top = kDisplayHeight / 2 / bounds.top; scale_top < scale) {
+            scale = scale_top;
+          }
+          if (auto scale_bottom = -kDisplayHeight / 2 / bounds.bottom; scale_bottom < scale) {
+            scale = scale_bottom;
+          }
+          scale *= 0.9;  // 10% margin
+          canvas.scale(scale, scale);
 
-        canvas.restore();
-        canvas.drawRRect(clip.sk, border_paint);
+          auto matrix = canvas.getLocalToDeviceAs3x3();
+          SkMatrix inverse;
+          (void)matrix.invert(&inverse);
+
+          SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
+          inverse.mapVectors(dpd);
+          SkPaint display_paint;
+          display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
+              SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
+          canvas.drawPaint(display_paint);
+
+          SkPaint trail_paint;
+          trail_paint.setColor("#131c64"_color);
+          trail_paint.setStyle(SkPaint::kStroke_Style);
+          SkPaint border_paint;
+          border_paint.setColor("#888888"_color);
+          border_paint.setStyle(SkPaint::kStroke_Style);
+          if (dpd[0].x() < 1) {
+            trail_paint.setStrokeWidth(1);
+            trail_paint.setStrokeCap(SkPaint::kSquare_Cap);
+            trail_paint.setStrokeJoin(SkPaint::kMiter_Join);
+            trail_paint.setStrokeMiter(2);
+          }
+          canvas.drawPath(trail, trail_paint);
+
+          if (current_i >= start_i && current_i < end_i) {
+            Vec2 previous_point = trail.getPoint(current_i - start_i);
+            Vec2 current_point = trail.getPoint(current_i - start_i + 1);
+            auto delta = current_point - previous_point;
+            auto length = Length(delta);
+            float outset = max(1_mm / scale, 1.5f);
+            auto outline_rect = Rect(previous_point.x, previous_point.y, previous_point.x + length,
+                                     previous_point.y)
+                                    .Outset(outset);
+            auto outline_rrect = RRect::MakeSimple(outline_rect, outset);
+            SkMatrix transform;
+            transform.setSinCos(delta.y / length, delta.x / length, previous_point.x,
+                                previous_point.y);
+            auto outline_path = SkPath::RRect(outline_rrect.sk).makeTransform(transform);
+            SkPaint outline_paint;
+            outline_paint.setColor(kOrange);
+            if (timestamps[current_i] == current_t) {
+              outline_paint.setStyle(SkPaint::kStrokeAndFill_Style);
+              canvas.drawPath(outline_path, outline_paint);
+              canvas.drawLine(previous_point, current_point, trail_paint);
+            } else {
+              outline_paint.setStyle(SkPaint::kStroke_Style);
+              canvas.drawPath(outline_path, outline_paint);
+            }
+          }
+
+          canvas.restore();
+          canvas.drawRRect(clip.sk, border_paint);
+        }
       }
     }
   }
+};
+
+Ptr<gui::Widget> OnOffTrack::MakeWidget() {
+  auto ret = MakePtr<OnOffTrackWidget>();
+  ret->object = AcquireWeakPtr();
+  return ret;
 }
+
+Ptr<gui::Widget> Vec2Track::MakeWidget() {
+  auto ret = MakePtr<Vec2TrackWidget>();
+  ret->object = AcquireWeakPtr();
+  return ret;
+}
+
 void Vec2Track::Splice(time::Duration current_offset, time::Duration splice_to) {
   auto delta = splice_to - current_offset;
   auto [current_offset_ge, current_offset_g] =
@@ -2278,14 +2309,6 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   if (now < end_at) {
     TimelineScheduleNextAfter(*this, now);
-  }
-}
-
-std::unique_ptr<Action> TrackBase::FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) {
-  if (timeline) {
-    return timeline->FindAction(ptr, btn);
-  } else {
-    return Object::FallbackWidget::FindAction(ptr, btn);
   }
 }
 

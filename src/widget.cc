@@ -128,7 +128,8 @@ void Widget::CheckAllWidgetsReleased() {
   ERROR << "Leaked references to " << widget_index.size() << " widget(s):";
   for (auto& [id, widget] : widget_index) {
     auto name = widget->Name();
-    ERROR << f("  {} with ID {} with name {}", static_cast<void*>(widget), id, std::string(name.data(), name.size()));
+    ERROR << f("  {} with ID {} with name {}", static_cast<void*>(widget), id,
+               std::string(name.data(), name.size()));
   }
 }
 
@@ -162,7 +163,8 @@ void Widget::FixParents() {
   for (auto& child : Children()) {
     if (child->parent.get() != this) {
       // TODO: uncomment this and fix all instances of this error
-      // ERROR << "Widget " << child->Name() << " has parent " << f("{}", static_cast<void*>(child->parent.get()))
+      // ERROR << "Widget " << child->Name() << " has parent " << f("{}",
+      // static_cast<void*>(child->parent.get()))
       //       << " but should have " << this->Name() << f(" ({})", static_cast<void*>(this));
       child->parent = this->AcquirePtr();
     }

@@ -24,7 +24,7 @@ namespace automat::gui {
 std::vector<RootWidget*> root_widgets;
 unique_ptr<RootWidget> root_widget;
 
-RootWidget::RootWidget() : Widget(NoParentTag()) { root_widgets.push_back(this); }
+RootWidget::RootWidget() : Widget(nullptr) { root_widgets.push_back(this); }
 RootWidget::~RootWidget() {
   auto it = std::find(root_widgets.begin(), root_widgets.end(), this);
   if (it != root_widgets.end()) {
@@ -33,7 +33,7 @@ RootWidget::~RootWidget() {
 }
 
 void RootWidget::InitToolbar() {
-  toolbar = make_unique<Toolbar>(*this);
+  toolbar = make_unique<Toolbar>(this);
   for (auto& proto : prototypes->default_toolbar) {
     toolbar->AddObjectPrototype(proto);
   }
@@ -530,7 +530,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
         }
         // Create a new widget.
         root_widget.connection_widgets.emplace_back(
-            new gui::ConnectionWidget(root_widget, *loc, arg));
+            new gui::ConnectionWidget(&root_widget, *loc, arg));
       });
     }
   }

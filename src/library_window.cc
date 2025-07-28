@@ -179,9 +179,9 @@ struct WindowWidget;
 
 struct PickButton : theme::xp::TitleButton {
   std::function<void(gui::Pointer&)> on_activate;
-  PickButton(gui::Widget& parent)
+  PickButton(gui::Widget* parent)
       : theme::xp::TitleButton(
-            parent, gui::MakeShapeWidget(*this, kPickSVG, "#000000"_color, &kCenterPickIcon)) {
+            parent, gui::MakeShapeWidget(this, kPickSVG, "#000000"_color, &kCenterPickIcon)) {
     child->local_to_parent.preTranslate(-0.2_mm, -0.2_mm);
   }
   // float Height() const override { return kTitleButtonSize; }
@@ -244,9 +244,9 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
-  WindowWidget(gui::Widget& parent, WeakPtr<Object> window) : FallbackWidget(parent) {
+  WindowWidget(gui::Widget* parent, WeakPtr<Object> window) : FallbackWidget(parent) {
     object = window;
-    pick_button = std::make_unique<PickButton>(*this);
+    pick_button = std::make_unique<PickButton>(this);
     pick_button->on_activate = [this](gui::Pointer& p) {
       p.EndAllActions();
       pointer_grab = &p.RequestGlobalGrab(*this);
@@ -472,7 +472,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   }
 };
 
-std::unique_ptr<gui::Widget> Window::MakeWidget(gui::Widget& parent) {
+std::unique_ptr<gui::Widget> Window::MakeWidget(gui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, AcquireWeakPtr<Object>());
 }
 

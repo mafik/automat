@@ -12,7 +12,7 @@
 namespace automat::library {
 
 struct GlassRunButton : gui::PowerButton {
-  GlassRunButton(gui::Widget& parent, OnOff* on_off)
+  GlassRunButton(gui::Widget* parent, OnOff* on_off)
       : gui::PowerButton(parent, on_off, color::kParrotRed, "#eeeeee"_color) {}
   void PointerOver(gui::Pointer&) override;
   void PointerLeave(gui::Pointer&) override;
@@ -40,7 +40,7 @@ struct MacroRecorder : LiveObject,
   gui::Pointer::Logging* pointer_logging = nullptr;
   std::unique_ptr<gui::Widget> record_button;
 
-  MacroRecorder(gui::Widget& parent);
+  MacroRecorder(gui::Widget* parent);
   ~MacroRecorder();
   string_view Name() const override;
   Ptr<Object> Clone() const override;

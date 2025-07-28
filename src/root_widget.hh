@@ -50,11 +50,11 @@ struct WidgetStore {
     return it->second.get();
   }
 
-  Widget& For(Object& object, const Widget& parent) {
+  Widget& For(Object& object, const Widget* parent) {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
-      auto widget = object.MakeWidget(const_cast<Widget&>(parent));
+      auto widget = object.MakeWidget(const_cast<Widget*>(parent));
       it = container.emplace(std::move(weak), std::move(widget)).first;
     }
     return *it->second;

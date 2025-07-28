@@ -235,7 +235,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
-Machine::Machine(gui::Widget& parent) : gui::Widget(parent) {}
+Machine::Machine(gui::Widget* parent) : gui::Widget(parent) {}
 
 void Machine::FillChildren(Vec<Widget*>& children) {
   int i = 0;
@@ -418,7 +418,7 @@ void LiveObject::Relocate(Location* new_here) {
 }
 
 Location& Machine::CreateEmpty() {
-  auto& it = locations.emplace_front(new Location(*this, here));
+  auto& it = locations.emplace_front(new Location(this, here));
   Location* h = it.get();
   return *h;
 }

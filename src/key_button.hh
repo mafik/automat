@@ -31,7 +31,7 @@ struct KeyButton : gui::Button {
   float width;
   std::function<void(gui::Pointer&)> activate;
   SkColor fg;
-  KeyButton(Widget& parent, StrView label, SkColor color, float width);
+  KeyButton(Widget* parent, StrView label, SkColor color, float width);
   void Activate(gui::Pointer&) override;
   SkRRect RRect() const override;
   SkColor ForegroundColor() const override { return fg; }

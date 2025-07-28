@@ -52,11 +52,11 @@ static constexpr char kBackspaceShape[] =
 
 using gui::Text;
 
-NumberButton::NumberButton(gui::Widget& parent, SkPath shape)
-    : Button(parent, std::make_unique<ShapeWidget>(*this, shape)) {}
+NumberButton::NumberButton(gui::Widget* parent, SkPath shape)
+    : Button(parent, std::make_unique<ShapeWidget>(this, shape)) {}
 
-NumberButton::NumberButton(gui::Widget& parent, std::string text)
-    : Button(parent, std::make_unique<Text>(*this, text)) {}
+NumberButton::NumberButton(gui::Widget* parent, std::string text)
+    : Button(parent, std::make_unique<Text>(this, text)) {}
 
 SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
 
@@ -71,13 +71,13 @@ void NumberButton::Activate(gui::Pointer& pointer) {
   }
 }
 
-Number::Number(gui::Widget& parent, double x) : FallbackWidget(parent), value(x) {
+Number::Number(gui::Widget* parent, double x) : FallbackWidget(parent), value(x) {
   text_field = std::make_unique<gui::NumberTextField>(
-      *this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
-  dot = std::make_unique<NumberButton>(*this, ".");
-  backspace = std::make_unique<NumberButton>(*this, PathFromSVG(kBackspaceShape));
+      this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
+  dot = std::make_unique<NumberButton>(this, ".");
+  backspace = std::make_unique<NumberButton>(this, PathFromSVG(kBackspaceShape));
   for (int i = 0; i < 10; ++i) {
-    digits[i] = std::make_unique<NumberButton>(*this, std::to_string(i));
+    digits[i] = std::make_unique<NumberButton>(this, std::to_string(i));
     digits[i]->activate = [this, i](Location& l) {
       if (text_field->text.empty() || text_field->text == "0") {
         text_field->text = std::to_string(i);
@@ -142,7 +142,7 @@ Number::Number(gui::Widget& parent, double x) : FallbackWidget(parent), value(x)
 
 string_view Number::Name() const { return "Number"; }
 
-Ptr<Object> Number::Clone() const { return MAKE_PTR(Number, *parent, value); }
+Ptr<Object> Number::Clone() const { return MAKE_PTR(Number, parent, value); }
 
 string Number::GetText() const {
   char buffer[100];

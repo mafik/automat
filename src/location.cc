@@ -40,7 +40,7 @@ namespace automat {
 
 constexpr float kFrameCornerRadius = 0.001;
 
-Location::Location(Widget& parent_widget, WeakPtr<Location> parent_location)
+Location::Location(Widget* parent_widget, WeakPtr<Location> parent_location)
     : Widget(parent_widget), parent_location(std::move(parent_location)) {}
 
 bool Location::HasError() {
@@ -621,15 +621,10 @@ void Location::UpdateChildTransform() {
   object_widget.local_to_parent = SkM44(transform);
   object_widget.RecursiveTransformUpdated();
 }
-Ptr<Object> Location::InsertHereNoWidget(Ptr<Object>&& object) {
+Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
   this->object.Swap(object);
   this->object->Relocate(this);
-  return object;
-}
-Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
-  object = InsertHereNoWidget(std::move(object));
   object_widget = nullptr;
-  auto& _ = WidgetForObject();
   return object;
 }
 Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(prototype.Clone()); }

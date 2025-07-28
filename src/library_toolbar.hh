@@ -18,10 +18,10 @@ struct PrototypeButton : Widget {
   mutable animation::SpringV2<float> width{kToolbarIconSize};
   Optional<Pointer::IconOverride> hand_icon;
 
-  PrototypeButton(Widget& parent, Ptr<Object>& proto) : gui::Widget(parent), proto(proto) {}
+  PrototypeButton(Widget* parent, Ptr<Object>& proto) : gui::Widget(parent), proto(proto) {}
 
   void Init() {
-    proto_widget = &Widget::ForObject(*proto, *this);
+    proto_widget = &Widget::ForObject(*proto, this);
     auto rect = proto_widget->CoarseBounds().rect;
     natural_width =
         std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());
@@ -53,7 +53,7 @@ struct Toolbar : gui::Widget, gui::PointerMoveCallback {
 
   mutable int hovered_button = -1;
 
-  Toolbar(gui::Widget& parent) : gui::Widget(parent) {}
+  Toolbar(gui::Widget* parent) : gui::Widget(parent) {}
 
   // This will clone the provided object and add it to the toolbar.
   void AddObjectPrototype(const Ptr<Object>&);

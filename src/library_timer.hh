@@ -42,7 +42,7 @@ struct TimerDelay : LiveObject,
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
-  TimerDelay(gui::Widget& parent);
+  TimerDelay(gui::Widget* parent);
   TimerDelay(const TimerDelay&);
   string_view Name() const override;
   Ptr<Object> Clone() const override;

@@ -61,7 +61,7 @@ struct ConnectionWidget : Widget {
   float transparency = 1;
   float length = 0;
 
-  ConnectionWidget(Widget& parent, Location&, Argument&);
+  ConnectionWidget(Widget* parent, Location&, Argument&);
 
   StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;

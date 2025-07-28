@@ -22,7 +22,7 @@ struct TypeButton : ShapeWidget {
   //   return SkRRect::MakeOval(SkRect::MakeXYWH(-4_mm, -4_mm, 8_mm, 8_mm));
   // }
 
-  TypeButton(gui::Widget& parent, SkPath path) : ShapeWidget(parent, path), clickable(*this) {}
+  TypeButton(gui::Widget* parent, SkPath path) : ShapeWidget(parent, path), clickable(*this) {}
 
   void PointerOver(Pointer& p) override { clickable.PointerOver(p); }
   void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
@@ -32,10 +32,8 @@ struct TypeButton : ShapeWidget {
   }
 };
 
-SmallBufferWidget::SmallBufferWidget(gui::Widget& parent, NestedWeakPtr<Buffer> buffer)
-    : TextFieldBase(parent),
-      buffer_weak(buffer),
-      type_button(new TypeButton(*this, kTypeTextPath)) {
+SmallBufferWidget::SmallBufferWidget(gui::Widget* parent, NestedWeakPtr<Buffer> buffer)
+    : TextFieldBase(parent), buffer_weak(buffer), type_button(new TypeButton(this, kTypeTextPath)) {
   auto tb = static_cast<TypeButton*>(type_button.get());
   tb->clickable.activate = [this](Pointer&) {
     auto buffer = buffer_weak.Lock();

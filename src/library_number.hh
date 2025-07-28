@@ -12,8 +12,8 @@ struct Number;
 
 struct NumberButton : gui::Button {
   std::function<void(Location&)> activate;
-  NumberButton(gui::Widget& parent, SkPath shape);
-  NumberButton(gui::Widget& parent, std::string text);
+  NumberButton(gui::Widget* parent, SkPath shape);
+  NumberButton(gui::Widget* parent, std::string text);
   void Activate(gui::Pointer&) override;
   StrView Name() const override { return "NumberButton"; }
   SkColor BackgroundColor() const override;
@@ -25,7 +25,7 @@ struct Number : Object, Object::FallbackWidget {
   std::unique_ptr<NumberButton> dot;
   std::unique_ptr<NumberButton> backspace;
   std::unique_ptr<gui::NumberTextField> text_field;
-  Number(gui::Widget& parent, double x = 0);
+  Number(gui::Widget* parent, double x = 0);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   string GetText() const override;

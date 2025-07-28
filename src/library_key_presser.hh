@@ -11,7 +11,7 @@ struct KeyPresser;
 
 struct KeyPresserButton : KeyButton {
   KeyPresser* key_presser;
-  KeyPresserButton(Widget& parent, KeyPresser* key_presser, StrView label, SkColor color,
+  KeyPresserButton(Widget* parent, KeyPresser* key_presser, StrView label, SkColor color,
                    float width)
       : key_presser(key_presser), KeyButton(parent, label, color, width) {}
   using KeyButton::KeyButton;
@@ -27,8 +27,8 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, L
   gui::Caret* key_selector = nullptr;
   bool key_pressed = false;
 
-  KeyPresser(gui::Widget& parent, gui::AnsiKey);
-  KeyPresser(gui::Widget& parent);
+  KeyPresser(gui::Widget* parent, gui::AnsiKey);
+  KeyPresser(gui::Widget* parent);
   ~KeyPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;

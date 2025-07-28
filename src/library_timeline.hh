@@ -19,7 +19,7 @@ namespace automat::library {
 
 struct SideButton : gui::Button {
   using gui::Button::Button;
-  SideButton(Widget& parent, std::unique_ptr<Widget> child)
+  SideButton(Widget* parent, std::unique_ptr<Widget> child)
       : gui::Button(parent, std::move(child)) {}
   SkColor ForegroundColor() const override;
   SkColor BackgroundColor() const override;
@@ -27,12 +27,12 @@ struct SideButton : gui::Button {
 };
 
 struct PrevButton : SideButton {
-  PrevButton(Widget& parent);
+  PrevButton(Widget* parent);
   void Activate(gui::Pointer&) override;
 };
 
 struct NextButton : SideButton {
-  NextButton(Widget& parent);
+  NextButton(Widget* parent);
   void Activate(gui::Pointer&) override;
 };
 
@@ -44,7 +44,7 @@ struct TimelineRunButton : gui::ToggleButton {
   std::unique_ptr<gui::Button> rec_button;
   mutable gui::Button* last_on_widget = nullptr;
 
-  TimelineRunButton(Widget& parent, Timeline* timeline);
+  TimelineRunButton(Widget* parent, Timeline* timeline);
   gui::Button* OnWidget() override;
   bool Filled() const override;
   void Activate(gui::Pointer&);
@@ -60,7 +60,7 @@ struct TrackBase : Object {
                             time::SteadyPoint now) = 0;
 
   // Each subtype must returns its own Widget derived from TrackBaseWidget.
-  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override = 0;
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override = 0;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
@@ -71,7 +71,7 @@ struct OnOffTrack : TrackBase, OnOff {
   time::Duration on_at = time::kDurationGuard;
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
-  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override;
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -90,7 +90,7 @@ struct Vec2Track : TrackBase {
 
   string_view Name() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
-  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override;
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -162,8 +162,8 @@ struct Timeline : LiveObject,
     Recording recording;
   };
 
-  Timeline(gui::Widget& parent);
-  Timeline(gui::Widget& parent, const Timeline&);
+  Timeline(gui::Widget* parent);
+  Timeline(gui::Widget* parent, const Timeline&);
   void UpdateChildTransform(time::SteadyPoint now);
   string_view Name() const override;
   Ptr<Object> Clone() const override;

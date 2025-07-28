@@ -29,7 +29,7 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   // This is used to get hotkey events
   gui::KeyGrab* hotkey = nullptr;
 
-  HotKey(gui::Widget& parent);
+  HotKey(gui::Widget* parent);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;

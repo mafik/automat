@@ -159,7 +159,7 @@ struct Pointer {
 
 struct PointerWidget : Widget {
   Pointer& pointer;
-  PointerWidget(Widget& parent, Pointer& pointer) : Widget(parent), pointer(pointer) {}
+  PointerWidget(Widget* parent, Pointer& pointer) : Widget(parent), pointer(pointer) {}
   SkPath Shape() const override { return SkPath(); }
   void FillChildren(Vec<Widget*>& children) override {
     for (auto& action : pointer.actions) {

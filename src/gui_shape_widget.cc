@@ -6,13 +6,13 @@
 
 namespace automat::gui {
 
-ShapeWidget::ShapeWidget(gui::Widget& parent, SkPath path) : Widget(parent), path(path) {}
+ShapeWidget::ShapeWidget(gui::Widget* parent, SkPath path) : Widget(parent), path(path) {}
 
 SkPath ShapeWidget::Shape() const { return path; }
 
 void ShapeWidget::Draw(SkCanvas& canvas) const { canvas.drawPath(path, paint); }
 
-std::unique_ptr<Widget> MakeShapeWidget(gui::Widget& parent, const char* svg_path,
+std::unique_ptr<Widget> MakeShapeWidget(gui::Widget* parent, const char* svg_path,
                                         SkColor fill_color, const SkMatrix* transform) {
   SkPath path = PathFromSVG(svg_path);
   if (transform) {

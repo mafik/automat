@@ -27,7 +27,7 @@ struct Clickable {
   Optional<Pointer::IconOverride> hand_icon = std::nullopt;
   std::function<void(Pointer&)> activate = nullptr;
 
-  Clickable(Widget& parent) : widget(parent) {}
+  Clickable(Widget& widget) : widget(widget) {}
 
   void PointerOver(Pointer&);
   void PointerLeave(Pointer&);
@@ -40,7 +40,7 @@ struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
   Clickable clickable;
 
-  Button(gui::Widget& parent, std::unique_ptr<Widget> child);
+  Button(gui::Widget* parent, std::unique_ptr<Widget> child);
   animation::Phase Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
@@ -80,7 +80,7 @@ struct ColoredButton : Button {
   float radius;
   std::function<void(gui::Pointer&)> on_click;
 
-  ColoredButton(gui::Widget& parent, std::unique_ptr<Widget>&& child, ColoredButtonArgs args = {})
+  ColoredButton(gui::Widget* parent, std::unique_ptr<Widget>&& child, ColoredButtonArgs args = {})
       : Button(parent, std::move(child)),
         fg(args.fg),
         bg(args.bg),
@@ -89,13 +89,13 @@ struct ColoredButton : Button {
     UpdateChildTransform();
   }
 
-  ColoredButton(gui::Widget& parent, const char* svg_path, ColoredButtonArgs args = {})
-      : ColoredButton(parent, MakeShapeWidget(*this, svg_path, SK_ColorWHITE), args) {
+  ColoredButton(gui::Widget* parent, const char* svg_path, ColoredButtonArgs args = {})
+      : ColoredButton(parent, MakeShapeWidget(this, svg_path, SK_ColorWHITE), args) {
     UpdateChildTransform();
   }
 
-  ColoredButton(gui::Widget& parent, SkPath path, ColoredButtonArgs args = {})
-      : ColoredButton(parent, std::make_unique<ShapeWidget>(*this, path), args) {
+  ColoredButton(gui::Widget* parent, SkPath path, ColoredButtonArgs args = {})
+      : ColoredButton(parent, std::make_unique<ShapeWidget>(this, path), args) {
     UpdateChildTransform();
   }
 
@@ -121,7 +121,7 @@ struct ToggleButton : Widget {
   float filling = 0;
   float time_seconds;  // used for waving animation
 
-  ToggleButton(gui::Widget& parent, std::unique_ptr<Button> on, std::unique_ptr<Button> off)
+  ToggleButton(gui::Widget* parent, std::unique_ptr<Button> on, std::unique_ptr<Button> off)
       : Widget(parent), on(std::move(on)), off(std::move(off)) {}
 
   void FillChildren(Vec<Widget*>& children) override {

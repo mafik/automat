@@ -34,7 +34,7 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
       pointer_position(position),
       button_down_position(),
       button_down_time(),
-      pointer_widget(new PointerWidget(root_widget, *this)) {
+      pointer_widget(new PointerWidget(&root_widget, *this)) {
   root_widget.pointers.push_back(this);
   if (root_widget.keyboards.empty()) {
     keyboard = nullptr;
@@ -58,7 +58,7 @@ Pointer::~Pointer() {
 }
 
 static bool FillPath(Pointer& p, Widget& w) {
-  p.path.push_back(w.AcquireTrackedPtr());
+  p.path.emplace_back(&w);
   Vec2 point = TransformDown(w).mapPoint(p.pointer_position);
 
   auto shape = w.Shape();

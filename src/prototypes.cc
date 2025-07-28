@@ -46,20 +46,20 @@ PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
   // TODO: Remove this once Objects are split from Widgets.
-  gui::Widget* fake_parent = nullptr;
+  gui::Widget* null_parent = nullptr;
 
-  index.Register<FlipFlop>(*fake_parent);
-  index.Register<MacroRecorder>(*fake_parent);
-  index.Register<TimerDelay>(*fake_parent);
-  index.Register<HotKey>(*fake_parent);
-  index.Register<KeyPresser>(*fake_parent);
-  index.Register<MouseClick>(*fake_parent, gui::PointerButton::Left, true);
-  index.Register<MouseClick>(*fake_parent, gui::PointerButton::Left, false);
-  index.Register<MouseClick>(*fake_parent, gui::PointerButton::Right, true);
-  index.Register<MouseClick>(*fake_parent, gui::PointerButton::Right, false);
+  index.Register<FlipFlop>(null_parent);
+  index.Register<MacroRecorder>(null_parent);
+  index.Register<TimerDelay>(null_parent);
+  index.Register<HotKey>(null_parent);
+  index.Register<KeyPresser>(null_parent);
+  index.Register<MouseClick>(null_parent, gui::PointerButton::Left, true);
+  index.Register<MouseClick>(null_parent, gui::PointerButton::Left, false);
+  index.Register<MouseClick>(null_parent, gui::PointerButton::Right, true);
+  index.Register<MouseClick>(null_parent, gui::PointerButton::Right, false);
   index.Register<MouseMove>();
-  index.Register<Number>(*fake_parent);
-  index.Register<Timeline>(*fake_parent);
+  index.Register<Number>(null_parent);
+  index.Register<Timeline>(null_parent);
   index.Register<InstructionLibrary>();
   index.Register<Instruction, HideInToolbar>();
   index.Register<Register, HideInToolbar>(nullptr, 0);

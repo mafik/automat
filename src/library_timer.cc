@@ -157,8 +157,8 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
   }
 }
 
-TimerDelay::TimerDelay(gui::Widget& parent)
-    : FallbackWidget(parent), text_field(new gui::NumberTextField(*this, kTextWidth)) {
+TimerDelay::TimerDelay(gui::Widget* parent)
+    : FallbackWidget(parent), text_field(new gui::NumberTextField(this, kTextWidth)) {
   text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
   range_dial.velocity = 0;
   range_dial.value = 1;
@@ -169,7 +169,7 @@ TimerDelay::TimerDelay(gui::Widget& parent)
   SetDuration(*this, 10s);
 }
 
-TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay(*parent) {
+TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay(other.parent) {
   range_dial.velocity = other.range_dial.velocity;
   range_dial.value = other.range_dial.value;
   hand_degrees.value = other.hand_degrees.value;

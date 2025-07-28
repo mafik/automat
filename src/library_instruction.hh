@@ -100,7 +100,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
 
     std::span<const Token> tokens;
 
-    Widget(gui::Widget& parent, WeakPtr<Object> object);
+    Widget(gui::Widget* parent, WeakPtr<Object> object);
 
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
@@ -116,7 +116,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
     return NestedWeakPtr<const mc::Inst>(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
   }
 
-  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override {
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override {
     return std::make_unique<Widget>(parent, AcquireWeakPtr<Object>());
   }
 

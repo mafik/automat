@@ -2338,7 +2338,7 @@ struct EnumKnobWidget : gui::Widget {
 
   int value = 0;  // ground-truth value, obtained from the getter in Tick
 
-  EnumKnobWidget(gui::Widget& parent, int n_options) : gui::Widget(parent), n_options(n_options) {
+  EnumKnobWidget(gui::Widget* parent, int n_options) : gui::Widget(parent), n_options(n_options) {
     knob.unit_angle = 60_deg;
     knob.unit_distance = kGaugeRadius * 2;
 
@@ -2943,7 +2943,7 @@ struct EnumKnobWidget : gui::Widget {
 
     ChangeEnumKnobAction(gui::Pointer& pointer, EnumKnobWidget& enum_knob_widget)
         : Action(pointer),
-          widget(enum_knob_widget),
+          widget(&enum_knob_widget),
           scroll_icon(pointer, gui::Pointer::kIconAllScroll) {
       if (widget) {
         widget->is_dragging = true;
@@ -3003,7 +3003,7 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   animation::SpringV2<float> spill_tween;
   std::optional<Vec2> root_position;
 
-  ConditionCodeWidget(gui::Widget& parent, WeakPtr<Instruction> instruction_weak, int token_i)
+  ConditionCodeWidget(gui::Widget* parent, WeakPtr<Instruction> instruction_weak, int token_i)
       : EnumKnobWidget(parent, X86::CondCode::LAST_VALID_COND + 1),
         instruction_weak(instruction_weak),
         token_i(token_i) {}
@@ -3217,7 +3217,7 @@ struct ConditionCodeWidget : public EnumKnobWidget {
 struct LoopConditionCodeWidget : public EnumKnobWidget {
   WeakPtr<Instruction> instruction_weak;
 
-  LoopConditionCodeWidget(Widget& parent, WeakPtr<Instruction> instruction_weak)
+  LoopConditionCodeWidget(Widget* parent, WeakPtr<Instruction> instruction_weak)
       : EnumKnobWidget(parent, 2), instruction_weak(instruction_weak) {}
 
   int KnobGet() const override {
@@ -3257,13 +3257,13 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
   }
 };
 
-Instruction::Widget::Widget(gui::Widget& parent, WeakPtr<Object> object) : FallbackWidget(parent) {
+Instruction::Widget::Widget(gui::Widget* parent, WeakPtr<Object> object) : FallbackWidget(parent) {
   this->object = std::move(object);
   auto instruction = LockObject<Instruction>();
   if (instruction->BufferSize() > 0) {
     auto buffer_ptr =
         NestedWeakPtr<Buffer>(instruction->AcquireWeakPtr<ReferenceCounted>(), instruction.Get());
-    imm_widget = std::make_unique<gui::SmallBufferWidget>(*this, std::move(buffer_ptr));
+    imm_widget = std::make_unique<gui::SmallBufferWidget>(this, std::move(buffer_ptr));
     imm_widget->local_to_parent.setIdentity();
     imm_widget->fonts[(int)Buffer::Type::Text] = &HeavyFont();
     imm_widget->fonts[(int)Buffer::Type::Unsigned] = &HeavyFont();
@@ -3278,10 +3278,10 @@ Instruction::Widget::Widget(gui::Widget& parent, WeakPtr<Object> object) : Fallb
       auto opcode = instruction->mc_inst.getOpcode();
       unique_ptr<EnumKnobWidget> cond_widget;
       if (opcode == X86::LOOPE || opcode == X86::LOOPNE) {
-        cond_widget = make_unique<LoopConditionCodeWidget>(*this, instruction->AcquireWeakPtr());
+        cond_widget = make_unique<LoopConditionCodeWidget>(this, instruction->AcquireWeakPtr());
       } else {
         cond_widget =
-            make_unique<ConditionCodeWidget>(*this, instruction->AcquireWeakPtr(), token_i);
+            make_unique<ConditionCodeWidget>(this, instruction->AcquireWeakPtr(), token_i);
       }
       cond_widget->local_to_parent.setIdentity();
       condition_code_widget = std::move(cond_widget);

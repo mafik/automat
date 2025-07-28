@@ -86,7 +86,7 @@ struct Object : public ReferenceCounted {
   struct FallbackWidget : gui::Widget {
     WeakPtr<Object> object;
 
-    FallbackWidget(Widget& parent) : gui::Widget(parent) {}
+    FallbackWidget(Widget* parent) : gui::Widget(parent) {}
 
     std::string_view Name() const override;
     virtual float Width() const;
@@ -102,7 +102,7 @@ struct Object : public ReferenceCounted {
     }
   };
 
-  virtual std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) {
+  virtual std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) {
     if (auto w = dynamic_cast<gui::Widget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto fallback_widget = dynamic_cast<FallbackWidget*>(this)) {
@@ -111,7 +111,7 @@ struct Object : public ReferenceCounted {
       struct HybridAdapter : gui::Widget {
         Ptr<Object> ptr;
         Widget& widget;
-        HybridAdapter(Widget& parent, Object& obj, Widget& widget)
+        HybridAdapter(Widget* parent, Object& obj, Widget& widget)
             : gui::Widget(parent), ptr(obj.AcquirePtr()), widget(widget) {
           widget.parent = this;
         }

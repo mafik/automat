@@ -32,7 +32,7 @@ struct DragLocationAction;
 
 struct DragLocationWidget : gui::Widget {
   DragLocationAction& action;
-  DragLocationWidget(gui::Widget& parent, DragLocationAction& action)
+  DragLocationWidget(gui::Widget* parent, DragLocationAction& action)
       : gui::Widget(parent), action(action) {}
   SkPath Shape() const override;
   void FillChildren(Vec<Widget*>& children) override;

@@ -54,16 +54,15 @@ FlipFlopTarget flip_arg("flip", Argument::kOptional);
 bool FlipFlopButton::Filled() const { return (flip_flop && flip_flop->current_state); }
 
 struct YingYangButton : gui::ColoredButton {
-  YingYangButton(gui::Widget& parent, SkColor fg, SkColor bg)
-      : ColoredButton(parent, make_unique<YingYangIcon>(*this),
+  YingYangButton(gui::Widget* parent, SkColor fg, SkColor bg)
+      : ColoredButton(parent, make_unique<YingYangIcon>(this),
                       gui::ColoredButtonArgs{.fg = fg, .bg = bg, .radius = kYingYangButtonRadius}) {
   }
 };
 
-FlipFlopButton::FlipFlopButton(gui::Widget& parent)
-    : gui::ToggleButton(parent,
-                        make_unique<YingYangButton>(*this, "#eae9e8"_color, "#1d1d1d"_color),
-                        make_unique<YingYangButton>(*this, "#1d1d1d"_color, "#eae9e8"_color)) {
+FlipFlopButton::FlipFlopButton(gui::Widget* parent)
+    : gui::ToggleButton(parent, make_unique<YingYangButton>(this, "#eae9e8"_color, "#1d1d1d"_color),
+                        make_unique<YingYangButton>(this, "#1d1d1d"_color, "#eae9e8"_color)) {
   static_cast<YingYangButton*>(this->off.get())->on_click =
       static_cast<YingYangButton*>(this->on.get())->on_click = [this](gui::Pointer&) {
         if (auto h = this->flip_flop->here.lock()) {
@@ -83,8 +82,7 @@ Rect FlipFlopRect() {
 }
 SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
 
-FlipFlop::FlipFlop(gui::Widget& parent)
-    : FallbackWidget(parent), button(new FlipFlopButton(*this)) {
+FlipFlop::FlipFlop(gui::Widget* parent) : FallbackWidget(parent), button(new FlipFlopButton(this)) {
   button->flip_flop = this;
   auto rect = FlipFlopRect();
   button->local_to_parent = SkM44::Translate(rect.CenterX() - kYingYangButtonRadius,
@@ -92,7 +90,7 @@ FlipFlop::FlipFlop(gui::Widget& parent)
 }
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
 Ptr<Object> FlipFlop::Clone() const {
-  auto ret = MAKE_PTR(FlipFlop, *parent);
+  auto ret = MAKE_PTR(FlipFlop, parent);
   ret->current_state = current_state;
   return ret;
 }

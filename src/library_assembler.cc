@@ -76,7 +76,7 @@ struct HideRegisterOption : TextOption {
 
 struct ImageWidget : gui::Widget {
   PersistentImage& image;
-  ImageWidget(gui::Widget& parent, PersistentImage& image) : gui::Widget(parent), image(image) {}
+  ImageWidget(gui::Widget* parent, PersistentImage& image) : gui::Widget(parent), image(image) {}
   Optional<Rect> TextureBounds() const override {
     return Rect::MakeCornerZero(image.width(), image.height());
   }
@@ -93,7 +93,7 @@ struct RegisterMenuOption : Option, OptionsProvider {
   RegisterMenuOption(WeakPtr<Assembler> weak, int register_index)
       : weak(weak), register_index(register_index) {}
 
-  std::unique_ptr<gui::Widget> MakeIcon(gui::Widget& parent) override {
+  std::unique_ptr<gui::Widget> MakeIcon(gui::Widget* parent) override {
     return std::make_unique<ImageWidget>(parent, kRegisters[register_index].image);
   }
   std::unique_ptr<Option> Clone() const override {
@@ -312,8 +312,20 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto* reg = reg_objects_idx[i].get();
     if (reg != &descendant) continue;
-    auto loc = MAKE_PTR(Location, *root_machine, root_location);
+    auto loc = MAKE_PTR(Location, root_machine.get(), root_location);
     loc->InsertHere(reg_objects_idx[i].borrow());
+    auto* reg_widget_untyped = loc->FindRootWidget().widgets.Find(descendant);
+    if (reg_widget_untyped) {
+      auto* reg_widget = static_cast<RegisterWidget*>(reg_widget_untyped);
+      if (auto* assembler_widget = dynamic_cast<AssemblerWidget*>(reg_widget->parent.get())) {
+        assembler_widget->reg_widgets.Erase(reg_widget);
+        loc->object_widget = reg_widget_untyped;
+        reg_widget->parent = loc->AcquireTrackedPtr();
+      } else {
+        FATAL << "RegisterWidget's parent is not an AssemblerWidget";
+      }
+    }
+
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
     WakeWidgetsAnimation();
     return loc;
@@ -377,7 +389,7 @@ void Assembler::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
-AssemblerWidget::AssemblerWidget(Widget& parent, WeakPtr<Assembler> assembler_weak)
+AssemblerWidget::AssemblerWidget(Widget* parent, WeakPtr<Assembler> assembler_weak)
     : Object::FallbackWidget(parent), assembler_weak(assembler_weak) {
   object = std::move(assembler_weak).Cast<Object>();
 }
@@ -435,7 +447,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
       if (reg_widgets_idx[i] != nullptr) continue;
       auto* register_widget = FindRootWidget().widgets.Find(*assembler_reg);
       if (register_widget == nullptr) {
-        register_widget = &FindRootWidget().widgets.For(*assembler_reg, *this);
+        register_widget = &FindRootWidget().widgets.For(*assembler_reg, this);
         register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
       }
       register_widget->FixParents();

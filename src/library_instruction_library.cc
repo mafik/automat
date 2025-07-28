@@ -163,7 +163,7 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
-InstructionLibrary::Widget::Widget(gui::Widget& parent, WeakPtr<Object> object)
+InstructionLibrary::Widget::Widget(gui::Widget* parent, WeakPtr<Object> object)
     : FallbackWidget(parent) {
   this->object = std::move(object);
   for (int i = 0; i < std::size(x86::kCategories); ++i) {
@@ -347,7 +347,7 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     if (!found) {
       auto instruction = MAKE_PTR(Instruction);
       instruction->mc_inst = inst;
-      auto widget = make_unique<Instruction::Widget>(*this, instruction->AcquireWeakPtr<Object>());
+      auto widget = make_unique<Instruction::Widget>(this, instruction->AcquireWeakPtr<Object>());
       auto it = instruction_helix.insert(instruction_helix.begin() + insert_index,
                                          InstructionCard{std::move(widget), instruction});
       it->angle = CardAngleDeg(i + rotation_offset_t, n, helix_hover_tween);
@@ -976,7 +976,7 @@ struct ScrollDeckAction : Action {
 
   ScrollDeckAction(gui::Pointer& pointer, InstructionLibrary::Widget& widget, Ptr<Object> object)
       : Action(pointer),
-        widget(widget),
+        widget(&widget),
         object(object),
         library(dynamic_cast<InstructionLibrary&>(*object)) {
     auto pos = pointer.PositionWithin(widget);
@@ -1091,7 +1091,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
     auto contact_point = p.PositionWithin(*this);
 
     if (kFrontInstructionRect.Contains(contact_point)) {
-      auto loc = MAKE_PTR(Location, *root_machine, root_location);
+      auto loc = MAKE_PTR(Location, root_machine.get(), root_location);
 
       loc->InsertHere(instruction_helix.front().instruction->Clone());
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);

@@ -121,7 +121,7 @@ class MachineCodeControllerTest : public ::testing::Test {
     auto inst = MAKE_PTR(library::Instruction);
     inst->mc_inst = mc_inst;
     inst->mc_inst.setLoc(llvm::SMLoc::getFromPointer((const char*)inst.get()));
-    loc.InsertHereNoWidget(Ptr<library::Instruction>(inst));  // copy Ptr
+    loc.InsertHere(Ptr<library::Instruction>(inst));  // copy Ptr
     return inst;
   }
 

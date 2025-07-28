@@ -85,9 +85,8 @@ struct ActionTrigger {
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
 struct Widget : Trackable, OptionsProvider {
-  Widget(Widget& parent);
-  struct NoParentTag {};
-  Widget(NoParentTag);
+  Widget(Widget* parent);
+  Widget(const Widget&) = delete;
   virtual ~Widget();
 
   static void CheckAllWidgetsReleased();
@@ -95,7 +94,7 @@ struct Widget : Trackable, OptionsProvider {
   uint32_t ID() const;
   static Widget* Find(uint32_t id);
 
-  Widget* parent;
+  TrackedPtr<Widget> parent;
   SkM44 local_to_parent = SkM44();
 
   // The time when the animation should wake up.
@@ -298,7 +297,7 @@ struct Widget : Trackable, OptionsProvider {
   // Local (metric) coordinates.
   virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const;
 
-  static Widget& ForObject(Object&, const Widget& parent);
+  static Widget& ForObject(Object&, const Widget* parent);
 
   // Find the shape of this widget. If it's shape is empty, combine its children's shapes.
   SkPath GetShapeRecursive() const;

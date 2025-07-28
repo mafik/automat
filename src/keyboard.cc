@@ -539,7 +539,7 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, Widget* widget, Vec2 posi
 void CaretOwner::KeyDown(Caret& caret, Key) {}
 void CaretOwner::KeyUp(Caret& caret, Key) {}
 
-Keyboard::Keyboard(RootWidget& root_widget) : Widget(root_widget), root_widget(root_widget) {}
+Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(root_widget) {}
 
 #if defined(_WIN32)
 

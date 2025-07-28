@@ -99,7 +99,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>
     : Action(pointer),
       contact_point(contact_point),
       locations(std::move(locations_arg)),
-      widget(new DragLocationWidget(*pointer.GetWidget(), *this)) {
+      widget(new DragLocationWidget(pointer.GetWidget(), *this)) {
   pointer.root_widget.drag_action_count++;
   for (auto& location : locations) {
     location->parent = widget.get();
@@ -165,7 +165,7 @@ void DragLocationWidget::FillChildren(Vec<Widget*>& children) {
 }
 
 bool IsDragged(const Location& location) {
-  return dynamic_cast<const DragLocationWidget*>(location.parent) != nullptr;
+  return dynamic_cast<const DragLocationWidget*>(location.parent.get()) != nullptr;
 }
 
 }  // namespace automat

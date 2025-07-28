@@ -22,7 +22,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
     return nullptr;
   }
   auto matrix = TransformBetween(*pointer.hover, *root_machine);
-  auto loc = MAKE_PTR(Location, *root_machine, root_location->AcquireWeakPtr());
+  auto loc = MAKE_PTR(Location, root_machine.get(), root_location->AcquireWeakPtr());
 
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
@@ -151,7 +151,7 @@ void Toolbar::FillChildren(Vec<Widget*>& children) {
 
 void Toolbar::AddObjectPrototype(const Ptr<Object>& new_proto) {
   prototypes.push_back(new_proto->Clone());
-  buttons.emplace_back(std::make_unique<gui::PrototypeButton>(*this, prototypes.back()));
+  buttons.emplace_back(std::make_unique<gui::PrototypeButton>(this, prototypes.back()));
   if (auto widget = dynamic_cast<Widget*>(prototypes.back().Get())) {
     widget->parent = buttons.back().get();
   }

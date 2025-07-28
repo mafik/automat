@@ -115,11 +115,7 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
   return widget_index;
 }
 
-Widget::Widget(NoParentTag) : parent(nullptr) {
-  GetWidgetIndex()[ID()] = this;
-  sk_drawable = MakeWidgetDrawable(*this);
-}
-Widget::Widget(Widget& parent) : parent(&parent) {
+Widget::Widget(Widget* parent) : parent(parent) {
   GetWidgetIndex()[ID()] = this;
   sk_drawable = MakeWidgetDrawable(*this);
 }
@@ -169,7 +165,8 @@ void Widget::FixParents() {
   for (auto* child : Children()) {
     if (child->parent != this) {
       ERROR << "Widget " << child->Name() << " has parent "
-            << f("{}", static_cast<void*>(child->parent)) << " but should have " << this->Name()
+            << (child->parent ? child->parent->Name() : "nullptr")
+            << f(" ({})", static_cast<void*>(child->parent)) << " but should have " << this->Name()
             << f(" ({})", static_cast<void*>(this));
       child->parent = this;
     }
@@ -183,8 +180,8 @@ void Widget::ForgetParents() {
   }
 }
 
-Widget& Widget::ForObject(Object& object, const Widget& parent) {
-  return parent.FindRootWidget().widgets.For(object, parent);
+Widget& Widget::ForObject(Object& object, const Widget* parent) {
+  return parent->FindRootWidget().widgets.For(object, parent);
 }
 
 SkPath Widget::GetShapeRecursive() const {

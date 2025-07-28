@@ -51,11 +51,11 @@ float KeyPresserButton::PressRatio() const {
   return 0;
 }
 
-KeyPresser::KeyPresser(gui::Widget& parent, gui::AnsiKey key)
+KeyPresser::KeyPresser(gui::Widget* parent, gui::AnsiKey key)
     : FallbackWidget(parent),
       key(key),
       shortcut_button(
-          new KeyPresserButton(*this, this, ToStr(key), KeyColor(false), kBaseKeyWidth)) {
+          new KeyPresserButton(this, this, ToStr(key), KeyColor(false), kBaseKeyWidth)) {
   shortcut_button->activate = [this](gui::Pointer& pointer) {
     if (key_selector) {
       key_selector->Release();
@@ -68,9 +68,9 @@ KeyPresser::KeyPresser(gui::Widget& parent, gui::AnsiKey key)
     shortcut_button->WakeAnimation();
   };
 }
-KeyPresser::KeyPresser(gui::Widget& parent) : KeyPresser(parent, gui::AnsiKey::F) {}
+KeyPresser::KeyPresser(gui::Widget* parent) : KeyPresser(parent, gui::AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
-Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, *parent, key); }
+Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, parent, key); }
 animation::Phase KeyPresser::Tick(time::Timer&) {
   shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
   return animation::Finished;

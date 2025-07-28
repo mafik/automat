@@ -84,7 +84,7 @@ struct Location : ReferenceCounted, gui::Widget {
 
   RunTask& GetRunTask();
 
-  Location(Widget& parent_widget, WeakPtr<Location> parent_location = {});
+  Location(Widget* parent_widget, WeakPtr<Location> parent_location = {});
   ~Location();
 
   // Find (or create if needed) the Widget for this location's object.
@@ -92,19 +92,13 @@ struct Location : ReferenceCounted, gui::Widget {
   Widget& WidgetForObject() const {
     if (!object_widget) {
       if (object) {
-        object_widget = &Widget::ForObject(*object, *this);
+        object_widget = &Widget::ForObject(*object, this);
       }
     }
     return *object_widget;
   }
 
   Vec2 ScalePivot() const override;
-
-  // A version of InsertHere that doesn't create a Widget for the object.
-  //
-  // TODO: Remove InsertHere and switch to this one. Take care to find and fix all places which
-  // depend on implicitly created widgets.
-  Ptr<Object> InsertHereNoWidget(Ptr<Object>&& object);
 
   Ptr<Object> InsertHere(Ptr<Object>&& object);
 

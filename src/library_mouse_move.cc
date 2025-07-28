@@ -39,7 +39,7 @@ struct MouseMoveWidget : Object::FallbackWidget {
   std::atomic<int> trail_end_idx = 0;
   std::atomic<Vec2> trail[kMaxTrailPoints] = {};
 
-  MouseMoveWidget(gui::Widget& parent, WeakPtr<MouseMove>&& weak_mouse_move)
+  MouseMoveWidget(gui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move)
       : FallbackWidget(parent) {
     object = std::move(weak_mouse_move);
   }
@@ -136,7 +136,7 @@ struct MouseMoveWidget : Object::FallbackWidget {
   }
 };
 
-std::unique_ptr<gui::Widget> MouseMove::MakeWidget(gui::Widget& parent) {
+std::unique_ptr<gui::Widget> MouseMove::MakeWidget(gui::Widget* parent) {
   return std::make_unique<MouseMoveWidget>(parent, AcquireWeakPtr());
 }
 

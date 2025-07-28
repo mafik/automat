@@ -82,7 +82,7 @@ static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
   return SkImages::RasterFromBitmap(bitmap);
 }
 
-MouseClick::MouseClick(gui::Widget& parent, gui::PointerButton button, bool down)
+MouseClick::MouseClick(gui::Widget* parent, gui::PointerButton button, bool down)
     : FallbackWidget(parent), button(button), down(down) {}
 string_view MouseClick::Name() const {
   switch (button) {
@@ -102,7 +102,7 @@ string_view MouseClick::Name() const {
       return "Mouse Unknown Click"sv;
   }
 }
-Ptr<Object> MouseClick::Clone() const { return MAKE_PTR(MouseClick, *parent, button, down); }
+Ptr<Object> MouseClick::Clone() const { return MAKE_PTR(MouseClick, parent, button, down); }
 void MouseClick::Draw(SkCanvas& canvas) const {
   static PersistentImage images[(long)gui::PointerButton::Count][2] = {
       [(long)gui::PointerButton::Left] =

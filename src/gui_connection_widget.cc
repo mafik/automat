@@ -41,7 +41,7 @@ static bool IsArgumentOptical(Location& from, Argument& arg) {
   return error.empty();
 }
 
-ConnectionWidget::ConnectionWidget(Widget& parent, Location& from, Argument& arg)
+ConnectionWidget::ConnectionWidget(Widget* parent, Location& from, Argument& arg)
     : Widget(parent), from(from), arg(arg) {
   if (IsArgumentOptical(from, arg)) {
     auto pos_dir = from.ArgStart(arg);
@@ -191,7 +191,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
         });
   }
   if (anim->prototype_alpha >= 0.01f) {
-    auto& proto = Widget::ForObject(*from.object->ArgPrototype(arg), *this);
+    auto& proto = Widget::ForObject(*from.object->ArgPrototype(arg), this);
     auto proto_shape = proto.Shape();
     Rect proto_bounds = proto_shape.getBounds();
     canvas.save();

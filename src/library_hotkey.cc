@@ -168,14 +168,14 @@ vec4 main(in vec2 fragCoord) {
 //   }
 // }
 
-HotKey::HotKey(gui::Widget& parent)
+HotKey::HotKey(gui::Widget* parent)
     : FallbackWidget(parent),
-      power_button(new PowerButton(*this, this)),
-      ctrl_button(new KeyButton(*this, "Ctrl", KeyColor(ctrl), kCtrlKeyWidth)),
-      alt_button(new KeyButton(*this, "Alt", KeyColor(alt), kAltKeyWidth)),
-      shift_button(new KeyButton(*this, "Shift", KeyColor(shift), kShiftKeyWidth)),
-      windows_button(new KeyButton(*this, "Super", KeyColor(windows), kSuperKeyWidth)),
-      shortcut_button(new KeyButton(*this, "?", KeyColor(true), kShortcutKeyWidth)) {
+      power_button(new PowerButton(this, this)),
+      ctrl_button(new KeyButton(this, "Ctrl", KeyColor(ctrl), kCtrlKeyWidth)),
+      alt_button(new KeyButton(this, "Alt", KeyColor(alt), kAltKeyWidth)),
+      shift_button(new KeyButton(this, "Shift", KeyColor(shift), kShiftKeyWidth)),
+      windows_button(new KeyButton(this, "Super", KeyColor(windows), kSuperKeyWidth)),
+      shortcut_button(new KeyButton(this, "?", KeyColor(true), kShortcutKeyWidth)) {
   power_button->local_to_parent =
       SkM44::Translate(kWidth / 2 - kFrameWidth - kMinimalTouchableSize + kBorderWidth,
                        kShapeRect.top - kFrameWidth - kMinimalTouchableSize + kBorderWidth);
@@ -261,7 +261,7 @@ HotKey::HotKey(gui::Widget& parent)
 }
 string_view HotKey::Name() const { return "HotKey"; }
 Ptr<Object> HotKey::Clone() const {
-  auto ret = MAKE_PTR(HotKey, *parent);
+  auto ret = MAKE_PTR(HotKey, parent);
   ret->key = key;
   ret->ctrl = ctrl;
   ret->alt = alt;

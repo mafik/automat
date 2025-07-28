@@ -236,8 +236,8 @@ int Main() {
   gui::keyboard = make_unique<gui::Keyboard>(*root_widget);
   root_widget->keyboards.emplace_back(gui::keyboard.get());
 
-  root_location = MAKE_PTR(Location, *root_widget);
-  root_machine = root_location->Create<Machine>(*root_widget);
+  root_location = MAKE_PTR(Location, root_widget.get());
+  root_machine = root_location->Create<Machine>(root_widget.get());
   // We don't want to display the root location. Root machine
   // should be connected directly to the root widget.
   root_machine->parent = root_widget.get();

@@ -26,66 +26,47 @@ struct Trackable {
 
   template <typename Self>
   auto AcquireTrackedPtr(this Self& self) -> TrackedPtr<Self> {
-    return TrackedPtr<Self>(self);
+    return TrackedPtr<Self>(&self);
   }
 };
 
 // Safe (weak) reference to Widget. Automatically set to nullptr when the widget is destroyed.
 struct TrackedPtrBase {
-  TrackedPtrBase* next;
-  Trackable* widget;
-  TrackedPtrBase() : widget(nullptr), next(nullptr) {}
-  TrackedPtrBase(Trackable& widget) : widget(&widget), next(widget.ref_list) {
-    widget.ref_list = this;
-  }
-  TrackedPtrBase(TrackedPtrBase&& other) : TrackedPtrBase() {
-    auto* widget = other.widget;
-    other.Unlink();
-    if (widget) {
-      Link(*widget);
-    }
-  }
-  TrackedPtrBase(const TrackedPtrBase& other) : TrackedPtrBase() {
-    if (other.widget) {
-      Link(*other.widget);
-    }
-  }
-  ~TrackedPtrBase() { Unlink(); }
-  TrackedPtrBase& operator=(const TrackedPtrBase& other) {
-    if (other.widget) {
-      Link(*other.widget);
-    } else {
-      Unlink();
-    }
+  TrackedPtrBase* next = nullptr;
+  Trackable* trackable = nullptr;
+  TrackedPtrBase() {}
+  TrackedPtrBase(Trackable* t) { Reset(t); }
+  TrackedPtrBase(const TrackedPtrBase& other) : TrackedPtrBase() { Reset(other.trackable); }
+  TrackedPtrBase& operator=(const TrackedPtrBase& that) {
+    Reset(that.trackable);
     return *this;
   }
-  void Reset(Trackable* new_widget = nullptr) {
-    if (new_widget) {
-      Link(*new_widget);
-    } else {
-      Unlink();
-    }
-  }
+  ~TrackedPtrBase() { Reset(); }
 
-  operator bool() const { return widget != nullptr; }
-  void Link(Trackable& widget) {
-    Unlink();
-    this->widget = &widget;
-    next = widget.ref_list;
-    widget.ref_list = this;
-  }
-  void Unlink() {
-    if (widget) {
-      if (widget->ref_list == this) {
-        widget->ref_list = next;
+  operator bool() const { return trackable != nullptr; }
+  void Reset(Trackable* new_trackable = nullptr) {
+    if (new_trackable == trackable) {
+      return;
+    }
+    if (trackable) {
+      if (trackable->ref_list == this) {
+        trackable->ref_list = next;
       } else {
-        TrackedPtrBase* prev = widget->ref_list;
+        TrackedPtrBase* prev = trackable->ref_list;
         while (prev->next != this) {
           prev = prev->next;
         }
         prev->next = next;
       }
-      widget = nullptr;
+    }
+    if (new_trackable) {
+      // LOG << "new_trackable: " << f("{}", (void*)new_trackable);
+      // LOG << "trackable: " << f("{}", (void*)trackable);
+      next = new_trackable->ref_list;
+      new_trackable->ref_list = this;
+      trackable = new_trackable;
+    } else {
+      trackable = nullptr;
     }
   }
 };
@@ -93,18 +74,43 @@ struct TrackedPtrBase {
 inline Trackable::~Trackable() {
   TrackedPtrBase* ref = ref_list;
   while (ref) {
-    ref->widget = nullptr;
+    ref->trackable = nullptr;
     ref = ref->next;
   }
 }
 
 template <typename T>
 struct TrackedPtr : TrackedPtrBase {
-  T* operator->() const { return static_cast<T*>(widget); }
-  T& operator*() const { return *static_cast<T*>(widget); }
-  operator T*() const { return static_cast<T*>(widget); }
-  T* Get() const { return static_cast<T*>(widget); }
-  T* get() const { return static_cast<T*>(widget); }
+  TrackedPtr() : TrackedPtrBase() {}
+  TrackedPtr(std::nullptr_t) : TrackedPtrBase() {}
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  TrackedPtr(U* t) : TrackedPtrBase(t) {}
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  TrackedPtr(const TrackedPtr<U>& other) : TrackedPtrBase(other) {}
+
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  TrackedPtr<T>& operator=(const TrackedPtr<U>& that) {
+    Reset(that.trackable);
+    return *this;
+  }
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  TrackedPtr<T>& operator=(U* that) {
+    Reset(that);
+    return *this;
+  }
+  TrackedPtr<T>& operator=(std::nullptr_t) {
+    Reset();
+    return *this;
+  }
+  T* operator->() const { return static_cast<T*>(trackable); }
+  T& operator*() const { return *static_cast<T*>(trackable); }
+  operator T*() const { return static_cast<T*>(trackable); }
+  T* Get() const { return static_cast<T*>(trackable); }
+  T* get() const { return static_cast<T*>(trackable); }
 };
 
 template <typename T>
@@ -371,8 +377,8 @@ auto operator<<(std::basic_ostream<C, CT>& os, const Ptr<T>& sp) -> decltype(os 
 // warnings. For development convenience, it's better to keep it as a macro.
 #define MAKE_PTR(T, ...) Ptr(new T(__VA_ARGS__))
 
-// WeakPtr can holds a reference to a reference-counted object while also allowing that object to be
-// destroyed. In order to use WeakPtr, it should first be converted to Ptr using `Lock().
+// WeakPtr can holds a reference to a reference-counted object while also allowing that object to
+// be destroyed. In order to use WeakPtr, it should first be converted to Ptr using `Lock().
 template <typename T>
 struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
   WeakPtr() : PtrBase<T>(nullptr) {}

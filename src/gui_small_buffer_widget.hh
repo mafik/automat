@@ -75,7 +75,7 @@ struct SmallBufferWidget : TextFieldBase {
   Buffer::Type type = Buffer::Type::TypeCount;  // guard value, forces redraw
   std::string text;
 
-  SmallBufferWidget(gui::Widget& parent, NestedWeakPtr<Buffer> buffer);
+  SmallBufferWidget(gui::Widget* parent, NestedWeakPtr<Buffer> buffer);
 
   // Call this after setting the fonts to calculate the size of the widget.
   void Measure();

@@ -262,7 +262,7 @@ void ToggleButton::PreDrawChildren(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-Button::Button(gui::Widget& parent, std::unique_ptr<Widget> child)
+Button::Button(gui::Widget* parent, std::unique_ptr<Widget> child)
     : Widget(parent), child(std::move(child)), clickable(*this) {
   clickable.activate = [this](Pointer& pointer) { Activate(pointer); };
   UpdateChildTransform();

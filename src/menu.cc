@@ -43,12 +43,12 @@ struct MenuWidget : gui::Widget {
   MenuAction* action;
   bool first_tick = true;
 
-  MenuWidget(gui::Widget& parent, Vec<std::unique_ptr<Option>>&& options, MenuAction* action)
+  MenuWidget(gui::Widget* parent, Vec<std::unique_ptr<Option>>&& options, MenuAction* action)
       : gui::Widget(parent), options(std::move(options)), action(action) {
     option_animation.resize(this->options.size());
     option_widgets.reserve(this->options.size());
     for (auto& opt : this->options) {
-      option_widgets.push_back(opt->MakeIcon(*this));
+      option_widgets.push_back(opt->MakeIcon(this));
     }
   }
   Optional<Rect> TextureBounds() const override {
@@ -107,7 +107,7 @@ struct MenuAction : Action {
   Vec2 last_pos;
   MenuAction(gui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
       : Action(pointer),
-        menu_widget(new MenuWidget(*pointer.pointer_widget, std::move(options), this)) {
+        menu_widget(new MenuWidget(pointer.GetWidget(), std::move(options), this)) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
     menu_widget->WakeAnimation();
@@ -183,20 +183,20 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
   return animation::Animating;
 }
 
-Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions(gui::Widget& parent) const {
+Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
   Vec<std::unique_ptr<Option>> options;
   VisitOptions([&](Option& opt) { options.push_back(opt.Clone()); });
   return options;
 }
 
 std::unique_ptr<Action> OptionsProvider::OpenMenu(gui::Pointer& pointer) const {
-  return std::make_unique<MenuAction>(pointer, CloneOptions(pointer.root_widget));
+  return std::make_unique<MenuAction>(pointer, CloneOptions());
 }
 
 struct TextWidget : gui::Widget {
   float width;
   Str text;
-  TextWidget(gui::Widget& parent, Str text)
+  TextWidget(gui::Widget* parent, Str text)
       : gui::Widget(parent), width(kHelsinkiFont->MeasureText(text)), text(text) {}
   Optional<Rect> TextureBounds() const override {
     return Rect(0, -kHelsinkiFont->descent, width, -kHelsinkiFont->ascent);
@@ -226,7 +226,7 @@ struct TextWidget : gui::Widget {
   }
 };
 
-std::unique_ptr<gui::Widget> TextOption::MakeIcon(gui::Widget& parent) {
+std::unique_ptr<gui::Widget> TextOption::MakeIcon(gui::Widget* parent) {
   return std::make_unique<TextWidget>(parent, text);
 }
 

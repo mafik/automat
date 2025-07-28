@@ -32,7 +32,7 @@ struct TextFieldBase : Widget, CaretOwner {
   std::optional<Argument*> argument;
   Optional<Pointer::IconOverride> ibeam_icon;
 
-  TextFieldBase(gui::Widget& parent) : Widget(parent) {}
+  TextFieldBase(gui::Widget* parent) : Widget(parent) {}
 
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
@@ -58,7 +58,7 @@ struct TextField : TextFieldBase {
   std::string* text;
   float width;
 
-  TextField(gui::Widget& parent, std::string* text, float width)
+  TextField(gui::Widget* parent, std::string* text, float width)
       : TextFieldBase(parent), text(text), width(width) {}
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;

@@ -39,7 +39,7 @@ struct RegisterWidget : public Object::FallbackWidget {
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(Widget& parent, WeakPtr<Object> register_weak) : FallbackWidget(parent) {
+  RegisterWidget(Widget* parent, WeakPtr<Object> register_weak) : FallbackWidget(parent) {
     object = std::move(register_weak);
   }
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
@@ -60,7 +60,7 @@ struct AssemblerWidget : Object::FallbackWidget, gui::DropTarget {
   WeakPtr<Assembler> assembler_weak;
   Vec<RegisterWidget*> reg_widgets;
 
-  AssemblerWidget(Widget& parent, WeakPtr<Assembler>);
+  AssemblerWidget(Widget* parent, WeakPtr<Assembler>);
   std::string_view Name() const override;
   void FillChildren(Vec<gui::Widget*>& children) override;
   SkPath Shape() const override;
@@ -83,7 +83,7 @@ struct Register : LiveObject {
 
   Ptr<Object> Clone() const override;
 
-  unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override {
+  unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override {
     return make_unique<RegisterWidget>(parent, AcquireWeakPtr<Object>());
   }
 
@@ -121,7 +121,7 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void OnCancel() override;
 
-  unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override {
+  unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override {
     return make_unique<AssemblerWidget>(parent, AcquireWeakPtr());
   }
 

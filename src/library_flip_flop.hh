@@ -12,7 +12,7 @@ namespace automat::library {
 struct FlipFlop;
 
 struct YingYangIcon : gui::Widget, gui::PaintMixin {
-  YingYangIcon(gui::Widget& parent) : gui::Widget(parent) {}
+  YingYangIcon(gui::Widget* parent) : gui::Widget(parent) {}
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   bool CenteredAtZero() const override { return true; }
@@ -21,7 +21,7 @@ struct YingYangIcon : gui::Widget, gui::PaintMixin {
 struct FlipFlopButton : gui::ToggleButton {
   FlipFlop* flip_flop;
 
-  FlipFlopButton(gui::Widget& parent);
+  FlipFlopButton(gui::Widget* parent);
   bool Filled() const override;
 };
 
@@ -34,7 +34,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
   };
   AnimationState animation_state;
 
-  FlipFlop(gui::Widget& parent);
+  FlipFlop(gui::Widget* parent);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer& timer) override;

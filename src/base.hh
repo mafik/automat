@@ -117,7 +117,7 @@ struct LiveObject : Object {
 
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Machine : LiveObject, gui::Widget, gui::DropTarget {
-  Machine(gui::Widget& parent);
+  Machine(gui::Widget* parent);
   string name = "";
   deque<Ptr<Location>> locations;
   vector<Location*> front;
@@ -155,7 +155,7 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
   string_view Name() const override { return name; }
   Ptr<Object> Clone() const override {
-    auto m = MAKE_PTR(Machine, *this->parent);
+    auto m = MAKE_PTR(Machine, this->parent);
     for (auto& my_it : locations) {
       auto& other_h = m->CreateEmpty();
       other_h.Create(*my_it->object);

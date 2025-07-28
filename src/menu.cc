@@ -15,6 +15,7 @@
 #include "global_resources.hh"
 #include "math.hh"
 #include "pointer.hh"
+#include "root_widget.hh"
 #include "str.hh"
 #include "textures.hh"
 #include "units.hh"
@@ -37,21 +38,27 @@ struct MenuWidget : gui::Widget {
 
   Vec<std::unique_ptr<Option>> options;
   Vec<OptionAnimation> option_animation;
+  Vec<std::unique_ptr<gui::Widget>> option_widgets;
   animation::SpringV2<float> size = 0;
   MenuAction* action;
   bool first_tick = true;
 
-  MenuWidget(Vec<std::unique_ptr<Option>>&& options, MenuAction* action)
-      : options(std::move(options)), action(action) {
+  MenuWidget(gui::Widget& parent, Vec<std::unique_ptr<Option>>&& options, MenuAction* action)
+      : gui::Widget(parent), options(std::move(options)), action(action) {
     option_animation.resize(this->options.size());
+    option_widgets.reserve(this->options.size());
+    for (auto& opt : this->options) {
+      option_widgets.push_back(opt->MakeIcon(*this));
+    }
   }
   Optional<Rect> TextureBounds() const override {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
   animation::Phase Tick(time::Timer& timer) override;
-  void FillChildren(Vec<Ptr<gui::Widget>>& children) override {
-    for (auto& opt : options) {
-      children.emplace_back(opt->icon);
+  void FillChildren(Vec<gui::Widget*>& children) override {
+    children.reserve(children.size() + option_widgets.size());
+    for (auto& opt : option_widgets) {
+      children.push_back(opt.get());
     }
   }
   void Draw(SkCanvas& canvas) const override {
@@ -83,10 +90,10 @@ struct MenuWidget : gui::Widget {
         SkImageFilters::DropShadowOnly(0, 0, 0.5_mm, 0.5_mm, "#000000"_color, nullptr));
     auto saved = canvas.getLocalToDevice();
     canvas.saveLayer(nullptr, &shadow_paint);
-    for (auto& opt : options) {
+    for (auto& opt : option_widgets) {
       canvas.setMatrix(saved);
-      canvas.concat(opt->icon->local_to_parent);
-      canvas.drawDrawable(opt->icon->sk_drawable.get());
+      canvas.concat(opt->local_to_parent);
+      canvas.drawDrawable(opt->sk_drawable.get());
     }
     canvas.restore();
     DrawChildren(canvas);
@@ -95,11 +102,12 @@ struct MenuWidget : gui::Widget {
 };
 
 struct MenuAction : Action {
-  Ptr<MenuWidget> menu_widget;
+  unique_ptr<MenuWidget> menu_widget;
   int last_index = -1;
   Vec2 last_pos;
   MenuAction(gui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
-      : Action(pointer), menu_widget(MakePtr<MenuWidget>(std::move(options), this)) {
+      : Action(pointer),
+        menu_widget(new MenuWidget(*pointer.pointer_widget, std::move(options), this)) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
     menu_widget->WakeAnimation();
@@ -165,31 +173,31 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
   }
   float s = size.value / kMenuSize;
   for (int i = 0; i < n_opts; ++i) {
-    auto& opt = options[i];
-    Rect bounds = opt->icon->Shape().getBounds();
+    auto& opt = option_widgets[i];
+    Rect bounds = opt->Shape().getBounds();
     auto dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
     float r = kMenuSize * 2 / 3;
     auto center = Vec2::Polar(dir, r) + option_animation[i].offset.value;
-    opt->icon->local_to_parent =
-        SkM44(SkMatrix::Translate(center - bounds.Center()).postScale(s, s));
+    opt->local_to_parent = SkM44(SkMatrix::Translate(center - bounds.Center()).postScale(s, s));
   }
   return animation::Animating;
 }
 
-Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
+Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions(gui::Widget& parent) const {
   Vec<std::unique_ptr<Option>> options;
   VisitOptions([&](Option& opt) { options.push_back(opt.Clone()); });
   return options;
 }
 
 std::unique_ptr<Action> OptionsProvider::OpenMenu(gui::Pointer& pointer) const {
-  return std::make_unique<MenuAction>(pointer, CloneOptions());
+  return std::make_unique<MenuAction>(pointer, CloneOptions(pointer.root_widget));
 }
 
 struct TextWidget : gui::Widget {
   float width;
   Str text;
-  TextWidget(Str text) : width(kHelsinkiFont->MeasureText(text)), text(text) {}
+  TextWidget(gui::Widget& parent, Str text)
+      : gui::Widget(parent), width(kHelsinkiFont->MeasureText(text)), text(text) {}
   Optional<Rect> TextureBounds() const override {
     return Rect(0, -kHelsinkiFont->descent, width, -kHelsinkiFont->ascent);
   }
@@ -218,8 +226,8 @@ struct TextWidget : gui::Widget {
   }
 };
 
-Option::Option(Ptr<gui::Widget>&& icon) : icon(icon) {}
-
-Option::Option(Str name) : icon(MakePtr<TextWidget>(name)) {}
+std::unique_ptr<gui::Widget> TextOption::MakeIcon(gui::Widget& parent) {
+  return std::make_unique<TextWidget>(parent, text);
+}
 
 }  // namespace automat

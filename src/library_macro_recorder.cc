@@ -67,7 +67,8 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
   return dom;
 }
 
-MacroRecorder::MacroRecorder() : record_button(MakePtr<GlassRunButton>(this)) {
+MacroRecorder::MacroRecorder(gui::Widget& parent)
+    : FallbackWidget(parent), record_button(new GlassRunButton(*this, this)) {
   record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
 }
 MacroRecorder::~MacroRecorder() {
@@ -103,7 +104,7 @@ Ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
 
 string_view MacroRecorder::Name() const { return "Macro Recorder"sv; }
 Ptr<Object> MacroRecorder::Clone() const {
-  auto clone = MakePtr<MacroRecorder>();
+  auto clone = MAKE_PTR(MacroRecorder, *parent);
   clone->animation_state = animation_state;
   clone->animation_state.pointers_over = 0;
   return clone;
@@ -580,8 +581,7 @@ void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
         if (value) {
           l.ScheduleRun();
         } else {
-          (new CancelTask(l.AcquirePtr<Location>()))
-              ->Schedule();  // TODO: memory leak if NoScheduling is active
+          (new CancelTask(&l))->Schedule();  // TODO: memory leak if NoScheduling is active
         }
       }
     }

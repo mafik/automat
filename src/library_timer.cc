@@ -157,7 +157,8 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
   }
 }
 
-TimerDelay::TimerDelay() : text_field(MakePtr<gui::NumberTextField>(kTextWidth)) {
+TimerDelay::TimerDelay(gui::Widget& parent)
+    : FallbackWidget(parent), text_field(new gui::NumberTextField(*this, kTextWidth)) {
   text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
   range_dial.velocity = 0;
   range_dial.value = 1;
@@ -168,7 +169,7 @@ TimerDelay::TimerDelay() : text_field(MakePtr<gui::NumberTextField>(kTextWidth))
   SetDuration(*this, 10s);
 }
 
-TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay() {
+TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay(*parent) {
   range_dial.velocity = other.range_dial.velocity;
   range_dial.value = other.range_dial.value;
   hand_degrees.value = other.hand_degrees.value;
@@ -178,7 +179,7 @@ TimerDelay::TimerDelay(const TimerDelay& other) : TimerDelay() {
 
 string_view TimerDelay::Name() const { return "Delay"; }
 
-Ptr<Object> TimerDelay::Clone() const { return MakePtr<TimerDelay>(*this); }
+Ptr<Object> TimerDelay::Clone() const { return MAKE_PTR(TimerDelay, *this); }
 
 static sk_sp<SkShader> MakeGradient(SkPoint a, SkPoint b, SkColor color_a, SkColor color_b) {
   SkPoint pts[2] = {a, b};
@@ -554,7 +555,7 @@ void TimerDelay::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void TimerDelay::FillChildren(Vec<Ptr<Widget>>& children) { children.push_back(text_field); }
+void TimerDelay::FillChildren(Vec<Widget*>& children) { children.push_back(text_field.get()); }
 
 SkPath TimerDelay::FieldShape(Object& field) const {
   if (&field == &duration) {

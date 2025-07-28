@@ -12,14 +12,15 @@ using namespace std;
 
 namespace automat::gui {
 
-PowerButton::PowerButton(OnOff* target, SkColor fg, SkColor bg)
+PowerButton::PowerButton(Widget& parent, OnOff* target, SkColor fg, SkColor bg)
     : ToggleButton(
-          MakePtr<ColoredButton>(
-              kPowerSVG,
+          parent,
+          make_unique<ColoredButton>(
+              *this, kPowerSVG,
               ColoredButtonArgs{
                   .fg = bg, .bg = fg, .on_click = [this](gui::Pointer& p) { Activate(p); }}),
-          MakePtr<ColoredButton>(
-              kPowerSVG,
+          make_unique<ColoredButton>(
+              *this, kPowerSVG,
               ColoredButtonArgs{
                   .fg = fg, .bg = bg, .on_click = [this](gui::Pointer& p) { Activate(p); }})),
       target(target) {}

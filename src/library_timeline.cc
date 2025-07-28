@@ -273,10 +273,11 @@ const SkPaint kZoomTickPaint = []() {
 
 const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
 
-PrevButton::PrevButton()
-    : SideButton(MakeShapeWidget(kNextShape, SK_ColorWHITE, &kHorizontalFlip)) {}
+PrevButton::PrevButton(Widget& parent)
+    : SideButton(parent, MakeShapeWidget(*this, kNextShape, SK_ColorWHITE, &kHorizontalFlip)) {}
 
-NextButton::NextButton() : SideButton(MakeShapeWidget(kNextShape, SK_ColorWHITE)) {}
+NextButton::NextButton(Widget& parent)
+    : SideButton(parent, MakeShapeWidget(*this, kNextShape, SK_ColorWHITE)) {}
 
 static SkPath GetPausedPath() {
   static SkPath path = []() {
@@ -301,25 +302,28 @@ static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 SkColor SideButton::ForegroundColor() const { return "#404040"_color; }
 SkColor SideButton::BackgroundColor() const { return kTimelineButtonBackground; }
 
-TimelineRunButton::TimelineRunButton(Timeline* timeline)
+TimelineRunButton::TimelineRunButton(Widget& parent, Timeline* timeline)
     : gui::ToggleButton(
-          MakePtr<ColoredButton>(
-              GetPausedPath(),
+          parent,
+          std::make_unique<ColoredButton>(
+              *this, GetPausedPath(),
               ColoredButtonArgs{.fg = kTimelineButtonBackground,
                                 .bg = kOrange,
                                 .radius = kPlayButtonRadius,
                                 .on_click = [this](gui::Pointer& p) { Activate(p); }}),
-          MakePtr<ColoredButton>(
-              kPlayShape, ColoredButtonArgs{.fg = kOrange,
-                                            .bg = kTimelineButtonBackground,
-                                            .radius = kPlayButtonRadius,
-                                            .on_click = [this](gui::Pointer& p) { Activate(p); }})),
+          std::make_unique<ColoredButton>(
+              *this, kPlayShape,
+              ColoredButtonArgs{.fg = kOrange,
+                                .bg = kTimelineButtonBackground,
+                                .radius = kPlayButtonRadius,
+                                .on_click = [this](gui::Pointer& p) { Activate(p); }})),
       timeline(timeline),
-      rec_button(MakePtr<ColoredButton>(
-          GetRecPath(), ColoredButtonArgs{.fg = kTimelineButtonBackground,
-                                          .bg = color::kParrotRed,
-                                          .radius = kPlayButtonRadius,
-                                          .on_click = [this](gui::Pointer& p) { Activate(p); }})) {}
+      rec_button(std::make_unique<ColoredButton>(
+          *this, GetRecPath(),
+          ColoredButtonArgs{.fg = kTimelineButtonBackground,
+                            .bg = color::kParrotRed,
+                            .radius = kPlayButtonRadius,
+                            .on_click = [this](gui::Pointer& p) { Activate(p); }})) {}
 
 void TimelineRunButton::Activate(gui::Pointer& p) {
   switch (timeline->state) {
@@ -338,7 +342,7 @@ void TimelineRunButton::Activate(gui::Pointer& p) {
 }
 
 void TimelineRunButton::FixParents() {
-  rec_button->parent = off->parent = on->parent = AcquirePtr();
+  rec_button->parent = off->parent = on->parent = this;
   on->FixParents();
   off->FixParents();
   rec_button->FixParents();
@@ -351,15 +355,15 @@ void TimelineRunButton::ForgetParents() {
   off->ForgetParents();
 }
 
-Ptr<gui::Button>& TimelineRunButton::OnWidget() {
+gui::Button* TimelineRunButton::OnWidget() {
   if (timeline->state == Timeline::kRecording) {
-    last_on_widget = &rec_button;
+    last_on_widget = rec_button.get();
   } else if (timeline->state == Timeline::kPlaying) {
-    last_on_widget = &on;
+    last_on_widget = on.get();
   } else if (last_on_widget == nullptr) {
-    last_on_widget = &on;
+    last_on_widget = on.get();
   }
-  return *last_on_widget;
+  return last_on_widget;
 }
 
 bool TimelineRunButton::Filled() const {
@@ -370,10 +374,11 @@ bool TimelineRunButton::Filled() const {
   return filled;
 }
 
-Timeline::Timeline()
-    : run_button(MakePtr<TimelineRunButton>(this)),
-      prev_button(MakePtr<PrevButton>()),
-      next_button(MakePtr<NextButton>()),
+Timeline::Timeline(gui::Widget& parent)
+    : FallbackWidget(parent),
+      run_button(new TimelineRunButton(*this, this)),
+      prev_button(new PrevButton(*this)),
+      next_button(new NextButton(*this)),
       state(kPaused),
       paused{.playback_offset = 0s},
       zoom(10) {
@@ -400,14 +405,14 @@ static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
 }
 
 OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
-  auto track_ptr = MakePtr<OnOffTrack>();
+  auto track_ptr = MAKE_PTR(OnOffTrack);
   auto& track = *track_ptr;
   AddTrack(std::move(track_ptr), name);
   return track;
 }
 
 Vec2Track& Timeline::AddVec2Track(StrView name) {
-  auto track_ptr = MakePtr<Vec2Track>();
+  auto track_ptr = MAKE_PTR(Vec2Track);
   auto& track = *track_ptr;
   AddTrack(std::move(track_ptr), name);
   return track;
@@ -423,7 +428,7 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   UpdateChildTransform(time::SteadyNow());
 }
 
-Timeline::Timeline(const Timeline& other) : Timeline() {
+Timeline::Timeline(gui::Widget& parent, const Timeline& other) : Timeline(parent) {
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
     tracks.emplace_back(track->Clone().Cast<TrackBase>());
@@ -437,7 +442,7 @@ Timeline::Timeline(const Timeline& other) : Timeline() {
 
 string_view Timeline::Name() const { return "Timeline"; }
 
-Ptr<Object> Timeline::Clone() const { return MakePtr<Timeline>(*this); }
+Ptr<Object> Timeline::Clone() const { return MAKE_PTR(Timeline, *parent, *this); }
 
 constexpr float kLcdFontSize = 1.5_mm;
 static Font& LcdFont() {
@@ -528,12 +533,12 @@ static time::Duration CurrentOffset(const Timeline& timeline, time::SteadyPoint 
   }
 }
 
-static void AddMissingTrackWidgets(const Timeline& timeline) {
+static void AddMissingTrackWidgets(Timeline& timeline) {
   auto& tracks = timeline.tracks;
   auto& track_widgets = timeline.track_widgets;
   for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
-    track_widgets.push_back(tracks[i]->MakeWidget());
-    track_widgets.back()->parent = timeline.AcquirePtr();
+    track_widgets.push_back(tracks[i]->MakeWidget(timeline));
+    track_widgets.back()->parent = &timeline;
   }
 }
 
@@ -1361,9 +1366,9 @@ void Timeline::Draw(SkCanvas& canvas) const {
     }
   }
 
-  AddMissingTrackWidgets(*this);
+  AddMissingTrackWidgets(const_cast<Timeline&>(*this));
 
-  DrawChildrenSpan(canvas, track_widgets);
+  DrawChildrenSpan(canvas, WidgetPtrSpan(track_widgets));
 
   bool draw_bridge_hairline = true;
 
@@ -1511,7 +1516,7 @@ void Timeline::Draw(SkCanvas& canvas) const {
   DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
             kPlasticTop - kScrewMargin - kScrewRadius);
 
-  Ptr<Widget> arr[] = {run_button, prev_button, next_button};
+  Widget* arr[] = {run_button.get(), prev_button.get(), next_button.get()};
   DrawChildrenSpan(canvas, arr);
 
   canvas.save();
@@ -1709,13 +1714,16 @@ Vec2AndDir Timeline::ArgStart(const Argument& arg) {
   return Object::FallbackWidget::ArgStart(arg);
 }
 
-void Timeline::FillChildren(Vec<Ptr<Widget>>& children) {
+void Timeline::FillChildren(Vec<Widget*>& children) {
   children.reserve(3 + tracks.size());
-  children.push_back(run_button);
-  children.push_back(prev_button);
-  children.push_back(next_button);
+  children.push_back(run_button.get());
+  children.push_back(prev_button.get());
+  children.push_back(next_button.get());
   AddMissingTrackWidgets(*this);
-  children.insert(children.end(), track_widgets.begin(), track_widgets.end());
+  children.reserve(children.size() + track_widgets.size());
+  for (auto& track_widget : track_widgets) {
+    children.push_back(track_widget.get());
+  }
 }
 
 void Timeline::UpdateChildTransform(time::SteadyPoint now) {
@@ -1741,6 +1749,8 @@ void Timeline::UpdateChildTransform(time::SteadyPoint now) {
 }
 
 struct TrackBaseWidget : Object::FallbackWidget {
+  using Object::FallbackWidget::FallbackWidget;
+
   // Many functions within TrackBaseWidget query the same information. This class:
   // - caches these results to avoid repeated lookups &
   // - provides a single place to define lookup logic for code reuse.
@@ -1821,6 +1831,7 @@ struct TrackBaseWidget : Object::FallbackWidget {
 };
 
 struct OnOffTrackWidget : TrackBaseWidget {
+  using TrackBaseWidget::TrackBaseWidget;
   void Draw(SkCanvas& canvas) const override {
     Context ctx(*this);
     auto* timeline = ctx.GetTimeline();
@@ -1860,6 +1871,7 @@ struct OnOffTrackWidget : TrackBaseWidget {
 };
 
 struct Vec2TrackWidget : TrackBaseWidget {
+  using TrackBaseWidget::TrackBaseWidget;
   void Draw(SkCanvas& canvas) const override {
     Context ctx(*this);
     auto& track = ctx.GetTrack<Vec2Track>();
@@ -2164,14 +2176,14 @@ struct Vec2TrackWidget : TrackBaseWidget {
   }
 };
 
-Ptr<gui::Widget> OnOffTrack::MakeWidget() {
-  auto ret = MakePtr<OnOffTrackWidget>();
+std::unique_ptr<gui::Widget> OnOffTrack::MakeWidget(gui::Widget& parent) {
+  auto ret = std::make_unique<OnOffTrackWidget>(parent);
   ret->object = AcquireWeakPtr();
   return ret;
 }
 
-Ptr<gui::Widget> Vec2Track::MakeWidget() {
-  auto ret = MakePtr<Vec2TrackWidget>();
+std::unique_ptr<gui::Widget> Vec2Track::MakeWidget(gui::Widget& parent) {
+  auto ret = std::make_unique<Vec2TrackWidget>(parent);
   ret->object = AcquireWeakPtr();
   return ret;
 }

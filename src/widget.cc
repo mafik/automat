@@ -65,7 +65,7 @@ void Widget::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
   canvas.restore();
 }
 
-void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<Ptr<Widget>> widgets) const {
+void Widget::DrawChildrenSpan(SkCanvas& canvas, Span<Widget*> widgets) const {
   std::ranges::reverse_view rv{widgets};
   for (auto& widget : rv) {
     DrawChildCachced(canvas, *widget);
@@ -101,10 +101,11 @@ SkMatrix TransformBetween(const Widget& from, const Widget& to) {
   return SkMatrix::Concat(down, up);
 }
 
-Str ToStr(Ptr<Widget> widget) {
+Str ToStr(Widget* widget) {
   Str ret;
   while (widget) {
     ret = Str(widget->Name()) + (ret.empty() ? "" : " -> " + ret);
+    widget = widget->parent;
   }
   return ret;
 }
@@ -114,10 +115,15 @@ std::map<uint32_t, Widget*>& GetWidgetIndex() {
   return widget_index;
 }
 
-Widget::Widget() {
+Widget::Widget(NoParentTag) : parent(nullptr) {
   GetWidgetIndex()[ID()] = this;
   sk_drawable = MakeWidgetDrawable(*this);
 }
+Widget::Widget(Widget& parent) : parent(&parent) {
+  GetWidgetIndex()[ID()] = this;
+  sk_drawable = MakeWidgetDrawable(*this);
+}
+
 Widget::~Widget() { GetWidgetIndex().erase(ID()); }
 
 void Widget::CheckAllWidgetsReleased() {
@@ -160,13 +166,12 @@ Widget* Widget::Find(uint32_t id) {
 }
 
 void Widget::FixParents() {
-  for (auto& child : Children()) {
-    if (child->parent.get() != this) {
-      // TODO: uncomment this and fix all instances of this error
-      // ERROR << "Widget " << child->Name() << " has parent " << f("{}",
-      // static_cast<void*>(child->parent.get()))
-      //       << " but should have " << this->Name() << f(" ({})", static_cast<void*>(this));
-      child->parent = this->AcquirePtr();
+  for (auto* child : Children()) {
+    if (child->parent != this) {
+      ERROR << "Widget " << child->Name() << " has parent "
+            << f("{}", static_cast<void*>(child->parent)) << " but should have " << this->Name()
+            << f(" ({})", static_cast<void*>(this));
+      child->parent = this;
     }
     child->FixParents();
   }
@@ -178,7 +183,7 @@ void Widget::ForgetParents() {
   }
 }
 
-Ptr<Widget> Widget::ForObject(Object& object, const Widget& parent) {
+Widget& Widget::ForObject(Object& object, const Widget& parent) {
   return parent.FindRootWidget().widgets.For(object, parent);
 }
 
@@ -230,8 +235,8 @@ Vec2AndDir Widget::ArgStart(const Argument& arg) {
 
 RootWidget& Widget::FindRootWidget() const {
   Widget* w = const_cast<Widget*>(this);
-  while (w->parent.get()) {
-    w = w->parent.get();
+  while (w->parent) {
+    w = w->parent;
   }
   auto* root = dynamic_cast<struct RootWidget*>(w);
   assert(root);

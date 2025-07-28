@@ -39,7 +39,9 @@ struct RegisterWidget : public Object::FallbackWidget {
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(WeakPtr<Object> register_weak) { object = std::move(register_weak); }
+  RegisterWidget(Widget& parent, WeakPtr<Object> register_weak) : FallbackWidget(parent) {
+    object = std::move(register_weak);
+  }
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
   std::string_view Name() const override;
   SkPath Shape() const override;
@@ -56,11 +58,11 @@ struct AssemblerWidget : Object::FallbackWidget, gui::DropTarget {
       RRect::MakeSimple(Rect::MakeAtZero<CenterX, CenterY>(kWidth, kHeight), kRadius);
 
   WeakPtr<Assembler> assembler_weak;
-  Vec<Ptr<RegisterWidget>> reg_widgets;
+  Vec<RegisterWidget*> reg_widgets;
 
-  AssemblerWidget(WeakPtr<Assembler>);
+  AssemblerWidget(Widget& parent, WeakPtr<Assembler>);
   std::string_view Name() const override;
-  void FillChildren(Vec<Ptr<gui::Widget>>& children) override;
+  void FillChildren(Vec<gui::Widget*>& children) override;
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
@@ -81,8 +83,8 @@ struct Register : LiveObject {
 
   Ptr<Object> Clone() const override;
 
-  Ptr<gui::Widget> MakeWidget() override {
-    return MakePtr<RegisterWidget>(AcquireWeakPtr<Object>());
+  unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override {
+    return make_unique<RegisterWidget>(parent, AcquireWeakPtr<Object>());
   }
 
   void Args(std::function<void(Argument&)> cb) override;
@@ -119,7 +121,9 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void OnCancel() override;
 
-  Ptr<gui::Widget> MakeWidget() override { return MakePtr<AssemblerWidget>(AcquireWeakPtr()); }
+  unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override {
+    return make_unique<AssemblerWidget>(parent, AcquireWeakPtr());
+  }
 
   Container* AsContainer() override { return this; }
 

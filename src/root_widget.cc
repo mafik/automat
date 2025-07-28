@@ -22,9 +22,9 @@ using namespace std;
 namespace automat::gui {
 
 std::vector<RootWidget*> root_widgets;
-Ptr<RootWidget> root_widget;
+unique_ptr<RootWidget> root_widget;
 
-RootWidget::RootWidget() { root_widgets.push_back(this); }
+RootWidget::RootWidget() : Widget(NoParentTag()) { root_widgets.push_back(this); }
 RootWidget::~RootWidget() {
   auto it = std::find(root_widgets.begin(), root_widgets.end(), this);
   if (it != root_widgets.end()) {
@@ -33,8 +33,7 @@ RootWidget::~RootWidget() {
 }
 
 void RootWidget::InitToolbar() {
-  toolbar = MakePtr<Toolbar>();
-  toolbar->parent = AcquirePtr();
+  toolbar = make_unique<Toolbar>(*this);
   for (auto& proto : prototypes->default_toolbar) {
     toolbar->AddObjectPrototype(proto);
   }
@@ -238,9 +237,9 @@ void RootWidget::Draw(SkCanvas& canvas) const {
       if (pointer->hover) {
         SkPaint outline_paint;
         outline_paint.setStyle(SkPaint::kStroke_Style);
-        auto* hover = pointer->hover.get();
-        canvas.setMatrix(TransformUp(*hover));
-        canvas.drawPath(hover->Shape(), outline_paint);
+        auto& hover = *pointer->hover;
+        canvas.setMatrix(TransformUp(hover));
+        canvas.drawPath(hover.Shape(), outline_paint);
       }
     }
     canvas.setMatrix(old_matrix);
@@ -448,7 +447,7 @@ SkPath RootWidget::TrashShape() const {
 }
 
 void RootWidget::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
-  Rect object_bounds = location.WidgetForObject()->Shape().getBounds();
+  Rect object_bounds = location.WidgetForObject().Shape().getBounds();
   Rect machine_bounds = root_machine->Shape().getBounds();
   Vec2 fake_fixed_point = Vec2(0, 0);
   if (fixed_point == nullptr) {
@@ -530,8 +529,8 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
           return;
         }
         // Create a new widget.
-        root_widget.connection_widgets.emplace_back(new gui::ConnectionWidget(*loc, arg));
-        root_widget.connection_widgets.back()->parent = root_widget.AcquirePtr();
+        root_widget.connection_widgets.emplace_back(
+            new gui::ConnectionWidget(root_widget, *loc, arg));
       });
     }
   }
@@ -541,38 +540,40 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
   }
 }
 
-void RootWidget::FillChildren(Vec<Ptr<Widget>>& out_children) {
+void RootWidget::FillChildren(Vec<Widget*>& out_children) {
   UpdateConnectionWidgets(*this);
   out_children.reserve(2 + keyboards.size() + pointers.size() + connection_widgets.size());
 
-  out_children.insert(out_children.end(), children.begin(), children.end());
+  for (auto& child : children) {
+    out_children.push_back(child.get());
+  }
 
-  for (auto& keyboard : keyboards) {
+  for (auto* keyboard : keyboards) {
     out_children.push_back(keyboard);
   }
 
-  Vec<Ptr<Widget>> connection_widgets_below;
+  Vec<Widget*> connection_widgets_below;
   connection_widgets_below.reserve(connection_widgets.size());
   for (auto& it : connection_widgets) {
     if (it->manual_position.has_value() || IsDragged(it->from)) {
-      out_children.push_back(it);
+      out_children.push_back(it.get());
     } else {
-      connection_widgets_below.push_back(it);
+      connection_widgets_below.push_back(it.get());
     }
   }
   for (auto& pointer : pointers) {
     if (auto widget = pointer->GetWidget()) {
-      out_children.push_back(widget->AcquirePtr<Widget>());
+      out_children.push_back(widget);
     }
   }
   if (toolbar) {
-    out_children.push_back(toolbar);
+    out_children.push_back(toolbar.get());
   }
   for (auto w : connection_widgets_below) {
     out_children.push_back(w);
   }
   if (root_machine) {
-    out_children.push_back(root_machine);
+    out_children.push_back(root_machine.get());
   }
 }
 

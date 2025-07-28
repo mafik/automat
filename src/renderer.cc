@@ -621,7 +621,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   };
 
   struct WidgetTree {
-    Ptr<Widget> widget;
+    Widget* widget;
     Verdict verdict = Verdict::Unknown;
     int parent;
     int parent_with_texture;
@@ -680,12 +680,12 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
       if (widget->rendering_to_screen == false) {
         // Find the closest ancestor that can be rendered to texture.
-        Widget* ancestor_with_texture = widget->parent.get();
+        Widget* ancestor_with_texture = widget->parent;
         while (ancestor_with_texture &&
                !ancestor_with_texture->pack_frame_texture_bounds.has_value()) {
           // RootWidget can always be rendered to texture so we don't need any extra stop
           // condition here.
-          ancestor_with_texture = ancestor_with_texture->parent.get();
+          ancestor_with_texture = ancestor_with_texture->parent;
         }
         if (ancestor_with_texture == nullptr) {
           ERROR << "Widget " << widget->Name()
@@ -706,8 +706,8 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
   {  // Step 2 - flatten the widget tree for analysis.
     // Queue with (parent index, widget) pairs.
-    vector<pair<int, Ptr<Widget>>> q;
-    q.push_back(make_pair(0, root_widget));
+    vector<pair<int, Widget*>> q;
+    q.push_back(make_pair(0, root_widget.get()));
     while (!q.empty()) {
       auto [parent, widget] = std::move(q.back());
       q.pop_back();

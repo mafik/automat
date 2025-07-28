@@ -22,6 +22,7 @@
 #include <llvm/lib/Target/X86/X86Subtarget.h>
 
 #include <cmath>
+#include <memory>
 #include <tracy/Tracy.hpp>
 
 #include "animation.hh"
@@ -142,7 +143,7 @@ void Instruction::Args(std::function<void(Argument&)> cb) {
 
 Ptr<Object> Instruction::ArgPrototype(const Argument& arg) {
   if (&arg == &assembler_arg) {
-    return MakePtr<Assembler>();
+    return MAKE_PTR(Assembler);
   }
   return nullptr;
 }
@@ -172,7 +173,7 @@ void Instruction::ConnectionRemoved(Location& here, Connection& connection) {
 }
 
 string_view Instruction::Name() const { return "Instruction"; }
-Ptr<Object> Instruction::Clone() const { return MakePtr<Instruction>(*this); }
+Ptr<Object> Instruction::Clone() const { return MAKE_PTR(Instruction, *this); }
 
 void Instruction::BufferVisit(const BufferVisitor& visitor) {
   unsigned n = mc_inst.getNumOperands();
@@ -2337,7 +2338,7 @@ struct EnumKnobWidget : gui::Widget {
 
   int value = 0;  // ground-truth value, obtained from the getter in Tick
 
-  EnumKnobWidget(int n_options) : n_options(n_options) {
+  EnumKnobWidget(gui::Widget& parent, int n_options) : gui::Widget(parent), n_options(n_options) {
     knob.unit_angle = 60_deg;
     knob.unit_distance = kGaugeRadius * 2;
 
@@ -2936,15 +2937,14 @@ struct EnumKnobWidget : gui::Widget {
   }
 
   struct ChangeEnumKnobAction : public Action {
-    WeakPtr<EnumKnobWidget> widget_weak;
+    TrackedPtr<EnumKnobWidget> widget;
     time::SteadyPoint start_time;
     gui::Pointer::IconOverride scroll_icon;
 
-    ChangeEnumKnobAction(gui::Pointer& pointer, WeakPtr<EnumKnobWidget> widget_weak)
+    ChangeEnumKnobAction(gui::Pointer& pointer, EnumKnobWidget& enum_knob_widget)
         : Action(pointer),
-          widget_weak(widget_weak),
+          widget(enum_knob_widget),
           scroll_icon(pointer, gui::Pointer::kIconAllScroll) {
-      auto widget = widget_weak.Lock();
       if (widget) {
         widget->is_dragging = true;
         auto& history = widget->knob.history;
@@ -2961,8 +2961,7 @@ struct EnumKnobWidget : gui::Widget {
       }
     }
     void Update() override {
-      auto widget = widget_weak.Lock();
-      if (widget == nullptr) {
+      if (!widget) {
         pointer.ReplaceAction(*this, nullptr);
         return;
       }
@@ -2972,8 +2971,7 @@ struct EnumKnobWidget : gui::Widget {
     }
 
     ~ChangeEnumKnobAction() {
-      auto widget = widget_weak.Lock();
-      if (widget == nullptr) {
+      if (!widget) {
         return;
       }
       widget->click_wiggle.value += widget->knob.value;
@@ -2990,7 +2988,7 @@ struct EnumKnobWidget : gui::Widget {
 
   std::unique_ptr<Action> FindAction(gui::Pointer& pointer, gui::ActionTrigger trigger) override {
     if (trigger == gui::PointerButton::Left) {
-      return std::make_unique<ChangeEnumKnobAction>(pointer, AcquireWeakPtr());
+      return std::make_unique<ChangeEnumKnobAction>(pointer, *this);
     }
     return nullptr;
   }
@@ -3005,8 +3003,8 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   animation::SpringV2<float> spill_tween;
   std::optional<Vec2> root_position;
 
-  ConditionCodeWidget(WeakPtr<Instruction> instruction_weak, int token_i)
-      : EnumKnobWidget(X86::CondCode::LAST_VALID_COND + 1),
+  ConditionCodeWidget(gui::Widget& parent, WeakPtr<Instruction> instruction_weak, int token_i)
+      : EnumKnobWidget(parent, X86::CondCode::LAST_VALID_COND + 1),
         instruction_weak(instruction_weak),
         token_i(token_i) {}
 
@@ -3219,8 +3217,8 @@ struct ConditionCodeWidget : public EnumKnobWidget {
 struct LoopConditionCodeWidget : public EnumKnobWidget {
   WeakPtr<Instruction> instruction_weak;
 
-  LoopConditionCodeWidget(WeakPtr<Instruction> instruction_weak)
-      : EnumKnobWidget(2), instruction_weak(instruction_weak) {}
+  LoopConditionCodeWidget(Widget& parent, WeakPtr<Instruction> instruction_weak)
+      : EnumKnobWidget(parent, 2), instruction_weak(instruction_weak) {}
 
   int KnobGet() const override {
     auto instruction = instruction_weak.Lock().Cast<Instruction>();
@@ -3259,14 +3257,13 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
   }
 };
 
-Instruction::Widget::Widget(WeakPtr<Object> object) {
+Instruction::Widget::Widget(gui::Widget& parent, WeakPtr<Object> object) : FallbackWidget(parent) {
   this->object = std::move(object);
   auto instruction = LockObject<Instruction>();
   if (instruction->BufferSize() > 0) {
     auto buffer_ptr =
         NestedWeakPtr<Buffer>(instruction->AcquireWeakPtr<ReferenceCounted>(), instruction.Get());
-    imm_widget = MakePtr<gui::SmallBufferWidget>(std::move(buffer_ptr));
-    imm_widget->parent = AcquirePtr();
+    imm_widget = std::make_unique<gui::SmallBufferWidget>(*this, std::move(buffer_ptr));
     imm_widget->local_to_parent.setIdentity();
     imm_widget->fonts[(int)Buffer::Type::Text] = &HeavyFont();
     imm_widget->fonts[(int)Buffer::Type::Unsigned] = &HeavyFont();
@@ -3279,13 +3276,13 @@ Instruction::Widget::Widget(WeakPtr<Object> object) {
     auto& token = tokens[token_i];
     if (token.tag == Token::ConditionCode || token.tag == Token::FixedCondition) {
       auto opcode = instruction->mc_inst.getOpcode();
-      Ptr<EnumKnobWidget> cond_widget;
+      unique_ptr<EnumKnobWidget> cond_widget;
       if (opcode == X86::LOOPE || opcode == X86::LOOPNE) {
-        cond_widget = MakePtr<LoopConditionCodeWidget>(instruction->AcquireWeakPtr());
+        cond_widget = make_unique<LoopConditionCodeWidget>(*this, instruction->AcquireWeakPtr());
       } else {
-        cond_widget = MakePtr<ConditionCodeWidget>(instruction->AcquireWeakPtr(), token_i);
+        cond_widget =
+            make_unique<ConditionCodeWidget>(*this, instruction->AcquireWeakPtr(), token_i);
       }
-      cond_widget->parent = AcquirePtr();
       cond_widget->local_to_parent.setIdentity();
       condition_code_widget = std::move(cond_widget);
     }
@@ -3649,12 +3646,12 @@ Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
   return gui::Widget::ArgStart(arg);
 }
 
-void Instruction::Widget::FillChildren(Vec<Ptr<gui::Widget>>& children) {
+void Instruction::Widget::FillChildren(Vec<gui::Widget*>& children) {
   if (imm_widget) {
-    children.emplace_back(imm_widget);
+    children.emplace_back(imm_widget.get());
   }
   if (condition_code_widget) {
-    children.emplace_back(condition_code_widget);
+    children.emplace_back(condition_code_widget.get());
   }
 }
 

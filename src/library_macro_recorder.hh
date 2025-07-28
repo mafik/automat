@@ -12,7 +12,8 @@
 namespace automat::library {
 
 struct GlassRunButton : gui::PowerButton {
-  GlassRunButton(OnOff* on_off) : gui::PowerButton(on_off, color::kParrotRed, "#eeeeee"_color) {}
+  GlassRunButton(gui::Widget& parent, OnOff* on_off)
+      : gui::PowerButton(parent, on_off, color::kParrotRed, "#eeeeee"_color) {}
   void PointerOver(gui::Pointer&) override;
   void PointerLeave(gui::Pointer&) override;
   StrView Name() const override { return "GlassRunButton"; }
@@ -37,16 +38,16 @@ struct MacroRecorder : LiveObject,
   mutable AnimationState animation_state;
   gui::Keylogging* keylogging = nullptr;
   gui::Pointer::Logging* pointer_logging = nullptr;
-  Ptr<gui::Widget> record_button;
+  std::unique_ptr<gui::Widget> record_button;
 
-  MacroRecorder();
+  MacroRecorder(gui::Widget& parent);
   ~MacroRecorder();
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer& timer) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(record_button); }
+  void FillChildren(Vec<Widget*>& children) override { children.push_back(record_button.get()); }
 
   void Args(std::function<void(Argument&)> cb) override;
   Ptr<Object> ArgPrototype(const Argument&) override;

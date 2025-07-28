@@ -13,16 +13,15 @@ constexpr float kToolbarIconSize = gui::kMinimalTouchableSize * 2;
 
 struct PrototypeButton : Widget {
   Ptr<Object> proto;
-  Ptr<Widget> proto_widget;
+  Widget* proto_widget;
   float natural_width;
   mutable animation::SpringV2<float> width{kToolbarIconSize};
   Optional<Pointer::IconOverride> hand_icon;
 
-  PrototypeButton(Ptr<Object>& proto) : proto(proto) {}
+  PrototypeButton(Widget& parent, Ptr<Object>& proto) : gui::Widget(parent), proto(proto) {}
 
-  void Init(Ptr<Widget> parent) {
-    this->parent = std::move(parent);
-    proto_widget = Widget::ForObject(*proto, *this);
+  void Init() {
+    proto_widget = &Widget::ForObject(*proto, *this);
     auto rect = proto_widget->CoarseBounds().rect;
     natural_width =
         std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());
@@ -35,7 +34,7 @@ struct PrototypeButton : Widget {
 
   Optional<Rect> TextureBounds() const override { return proto_widget->TextureBounds(); }
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(proto_widget); }
+  void FillChildren(Vec<Widget*>& children) override { children.push_back(proto_widget); }
 
   void PointerOver(Pointer& pointer) override { hand_icon.emplace(pointer, Pointer::kIconHand); }
 
@@ -50,9 +49,11 @@ struct PrototypeButton : Widget {
 
 struct Toolbar : gui::Widget, gui::PointerMoveCallback {
   Vec<Ptr<Object>> prototypes;
-  Vec<Ptr<gui::PrototypeButton>> buttons;
+  Vec<std::unique_ptr<gui::PrototypeButton>> buttons;
 
   mutable int hovered_button = -1;
+
+  Toolbar(gui::Widget& parent) : gui::Widget(parent) {}
 
   // This will clone the provided object and add it to the toolbar.
   void AddObjectPrototype(const Ptr<Object>&);
@@ -61,7 +62,7 @@ struct Toolbar : gui::Widget, gui::PointerMoveCallback {
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas& canvas) const override;
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
   void UpdateChildTransform();
   float CalculateWidth() const;
 

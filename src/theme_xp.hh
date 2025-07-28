@@ -25,7 +25,8 @@ constexpr Rect WindowBorderInner(Rect outer) {
 sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color = "#0066ff"_color);
 
 struct TitleButton : gui::Button {
-  TitleButton(Ptr<Widget> child) : gui::Button(child) {}
+  TitleButton(gui::Widget& parent, std::unique_ptr<Widget> child)
+      : gui::Button(parent, std::move(child)) {}
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const override {}
   void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;

@@ -3,7 +3,6 @@
 #pragma once
 #include <include/core/SkPath.h>
 
-#include <memory>
 #include <optional>
 
 #include "action.hh"
@@ -33,9 +32,10 @@ struct DragLocationAction;
 
 struct DragLocationWidget : gui::Widget {
   DragLocationAction& action;
-  DragLocationWidget(DragLocationAction& action) : action(action) {}
+  DragLocationWidget(gui::Widget& parent, DragLocationAction& action)
+      : gui::Widget(parent), action(action) {}
   SkPath Shape() const override;
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
 };
 
@@ -46,7 +46,7 @@ struct DragLocationAction : Action {
   Vec2 last_snapped_position;  // root machine coordinates
   time::SteadyPoint last_update;
   Vec<Ptr<Location>> locations;
-  Ptr<DragLocationWidget> widget;
+  unique_ptr<DragLocationWidget> widget;
 
   DragLocationAction(gui::Pointer&, Ptr<Location>&&, Vec2 contact_point);
   DragLocationAction(gui::Pointer&, Vec<Ptr<Location>>&&, Vec2 contact_point);

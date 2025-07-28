@@ -161,9 +161,10 @@ void InstructionLibrary::Filter() {
 
 string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
-Ptr<Object> InstructionLibrary::Clone() const { return MakePtr<InstructionLibrary>(); }
+Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
-InstructionLibrary::Widget::Widget(WeakPtr<Object> object) {
+InstructionLibrary::Widget::Widget(gui::Widget& parent, WeakPtr<Object> object)
+    : FallbackWidget(parent) {
   this->object = std::move(object);
   for (int i = 0; i < std::size(x86::kCategories); ++i) {
     if (category_states.size() <= i) {
@@ -271,15 +272,15 @@ static float CardAngleDeg(float i, int visible_instructions, float helix_tween) 
   return lerp(ret, ret2, helix_tween * 0.7f);           // blend between the two curves
 }
 
-void InstructionLibrary::Widget::FillChildren(Vec<Ptr<gui::Widget>>& children) {
+void InstructionLibrary::Widget::FillChildren(Vec<gui::Widget*>& children) {
   for (auto& card : instruction_helix) {
     if (card.throw_t < 0.5) {
-      children.push_back(card.widget);
+      children.push_back(card.widget.get());
     }
   }
   for (auto& card : std::ranges::reverse_view(instruction_helix)) {
     if (card.throw_t >= 0.5) {
-      children.push_back(card.widget);
+      children.push_back(card.widget.get());
     }
   }
 }
@@ -344,12 +345,11 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
       }
     }
     if (!found) {
-      auto instruction = MakePtr<Instruction>();
+      auto instruction = MAKE_PTR(Instruction);
       instruction->mc_inst = inst;
-      auto widget = MakePtr<Instruction::Widget>(instruction->AcquireWeakPtr<Object>());
-      widget->parent = AcquirePtr();
+      auto widget = make_unique<Instruction::Widget>(*this, instruction->AcquireWeakPtr<Object>());
       auto it = instruction_helix.insert(instruction_helix.begin() + insert_index,
-                                         InstructionCard{widget, instruction});
+                                         InstructionCard{std::move(widget), instruction});
       it->angle = CardAngleDeg(i + rotation_offset_t, n, helix_hover_tween);
       it->library_index = i;
       if (insert_index == 0) {
@@ -410,11 +410,12 @@ animation::Phase InstructionLibrary::Widget::Tick(time::Timer& timer) {
     bool move_down = card.library_index > j && card.throw_t > 0.5;
     bool move_up = card.library_index >= 0 && card.library_index < j && card.throw_t < 0.5;
     if (move_down || move_up) {
-      auto card_copy = card;
+      auto card_copy = std::move(instruction_helix[j]);
+      instruction_helix.erase(instruction_helix.begin() + j);
       card_copy.angle =
           CardAngleDeg(card_copy.library_index + rotation_offset_t, n, helix_hover_tween);
-      instruction_helix.erase(instruction_helix.begin() + j);
-      instruction_helix.insert(instruction_helix.begin() + card_copy.library_index, card_copy);
+      instruction_helix.insert(instruction_helix.begin() + card_copy.library_index,
+                               std::move(card_copy));
       if (move_down) {
         --j;
       }
@@ -968,27 +969,25 @@ void InstructionLibrary::Widget::PointerLeave(gui::Pointer& p) {
 
 struct ScrollDeckAction : Action {
   SinCos angle;
-  Ptr<gui::Widget> widget;
+  TrackedPtr<InstructionLibrary::Widget> widget;
   Ptr<Object> object;
 
-  InstructionLibrary::Widget& library_widget;  // same as widget
   InstructionLibrary& library;
 
-  ScrollDeckAction(gui::Pointer& pointer, Ptr<gui::Widget> widget, Ptr<Object> object)
+  ScrollDeckAction(gui::Pointer& pointer, InstructionLibrary::Widget& widget, Ptr<Object> object)
       : Action(pointer),
         widget(widget),
         object(object),
-        library_widget(dynamic_cast<InstructionLibrary::Widget&>(*widget)),
         library(dynamic_cast<InstructionLibrary&>(*object)) {
-    auto pos = pointer.PositionWithin(*widget);
+    auto pos = pointer.PositionWithin(widget);
     angle = SinCos::FromVec2(pos);
-    library_widget.new_cards_dir_deg = (angle + 180_deg).ToDegrees();
-    widget->WakeAnimation();
+    widget.new_cards_dir_deg = (angle + 180_deg).ToDegrees();
+    widget.WakeAnimation();
   }
   ~ScrollDeckAction() override {
-    library_widget.rotation_offset_t_target = 0;
-    library_widget.new_cards_dir_deg = NAN;
-    library_widget.WakeAnimation();
+    widget->rotation_offset_t_target = 0;
+    widget->new_cards_dir_deg = NAN;
+    widget->WakeAnimation();
   }
   void Update() override {
     auto pos = pointer.PositionWithin(*widget);
@@ -998,8 +997,8 @@ struct ScrollDeckAction : Action {
     auto diff_deg = diff.ToDegrees();
     lock_guard lock(library.mutex);
     int n = VisibleInstructions(library);
-    float card0_deg = CardAngleDeg(0, n, library_widget.helix_hover_tween);
-    float card1_deg = CardAngleDeg(1, n, library_widget.helix_hover_tween);
+    float card0_deg = CardAngleDeg(0, n, widget->helix_hover_tween);
+    float card1_deg = CardAngleDeg(1, n, widget->helix_hover_tween);
     float step_deg = card0_deg - card1_deg;
     if (abs(diff_deg) > step_deg / 2) {
       bool twist_left = diff_deg > 0;
@@ -1009,8 +1008,8 @@ struct ScrollDeckAction : Action {
 
       if (twist_left) {
         auto& mc_inst = library.instructions.front();
-        for (int j = 0; j < library_widget.instruction_helix.size(); ++j) {
-          auto& card = library_widget.instruction_helix[j];
+        for (int j = 0; j < widget->instruction_helix.size(); ++j) {
+          auto& card = widget->instruction_helix[j];
           if (card.instruction->mc_inst.getOpcode() == mc_inst.getOpcode()) {
             card.throw_direction_deg = (new_angle + 180_deg).ToDegrees();
             break;
@@ -1020,22 +1019,21 @@ struct ScrollDeckAction : Action {
         library.instructions.pop_front();
       } else {
         auto& mc_inst = library.instructions.back();
-        for (int j = 0; j < library_widget.instruction_helix.size(); ++j) {
-          auto& card = library_widget.instruction_helix[j];
+        for (int j = 0; j < widget->instruction_helix.size(); ++j) {
+          auto& card = widget->instruction_helix[j];
           if (card.instruction->mc_inst.getOpcode() == mc_inst.getOpcode()) {
             card.throw_direction_deg = (new_angle + 180_deg).ToDegrees();
             card.throw_t = 1;
             break;
           }
         }
-        library_widget.new_cards_dir_deg = (new_angle + 180_deg).ToDegrees();
+        widget->new_cards_dir_deg = (new_angle + 180_deg).ToDegrees();
         library.instructions.push_front(library.instructions.back());
         library.instructions.pop_back();
       }
     }
-    library_widget.rotation_offset_t = library_widget.rotation_offset_t_target =
-        -diff_deg / step_deg;
-    library_widget.WakeAnimation();
+    widget->rotation_offset_t = widget->rotation_offset_t_target = -diff_deg / step_deg;
+    widget->WakeAnimation();
   }
 };
 
@@ -1093,9 +1091,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
     auto contact_point = p.PositionWithin(*this);
 
     if (kFrontInstructionRect.Contains(contact_point)) {
-      auto loc = MakePtr<Location>();
-      loc->parent_location = root_location;
-      loc->parent = root_machine;
+      auto loc = MAKE_PTR(Location, *root_machine, root_location);
 
       loc->InsertHere(instruction_helix.front().instruction->Clone());
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
@@ -1105,7 +1101,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
     }
 
     if (Length(contact_point) < kCornerDist) {
-      return std::make_unique<ScrollDeckAction>(p, AcquirePtr<Widget>(), object.lock());
+      return std::make_unique<ScrollDeckAction>(p, *this, object.lock());
     }
 
     if (auto reg_btn = FindRegisterFilterButton(contact_point)) {

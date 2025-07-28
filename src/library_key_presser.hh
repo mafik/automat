@@ -11,8 +11,9 @@ struct KeyPresser;
 
 struct KeyPresserButton : KeyButton {
   KeyPresser* key_presser;
-  KeyPresserButton(KeyPresser* key_presser, Ptr<Widget> parent, SkColor color, float width)
-      : key_presser(key_presser), KeyButton(parent, color, width) {}
+  KeyPresserButton(Widget& parent, KeyPresser* key_presser, StrView label, SkColor color,
+                   float width)
+      : key_presser(key_presser), KeyButton(parent, label, color, width) {}
   using KeyButton::KeyButton;
   float PressRatio() const override;
 };
@@ -20,14 +21,14 @@ struct KeyPresserButton : KeyButton {
 struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, LongRunning {
   gui::AnsiKey key = gui::AnsiKey::F;
 
-  mutable Ptr<KeyPresserButton> shortcut_button;
+  mutable std::unique_ptr<KeyPresserButton> shortcut_button;
 
   // This is used to select the pressed key
   gui::Caret* key_selector = nullptr;
   bool key_pressed = false;
 
-  KeyPresser(gui::AnsiKey);
-  KeyPresser();
+  KeyPresser(gui::Widget& parent, gui::AnsiKey);
+  KeyPresser(gui::Widget& parent);
   ~KeyPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -42,7 +43,7 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, L
 
   void SetKey(gui::AnsiKey);
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
   void OnRun(Location& here, RunTask& run_task) override;

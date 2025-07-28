@@ -14,6 +14,7 @@
 #include "gui_constants.hh"
 #include "gui_shape_widget.hh"
 #include "gui_text.hh"
+#include "svg.hh"
 #include "widget.hh"
 
 using namespace automat::gui;
@@ -51,9 +52,11 @@ static constexpr char kBackspaceShape[] =
 
 using gui::Text;
 
-NumberButton::NumberButton(Ptr<Widget> child) : Button(child) {}
+NumberButton::NumberButton(gui::Widget& parent, SkPath shape)
+    : Button(parent, std::make_unique<ShapeWidget>(*this, shape)) {}
 
-NumberButton::NumberButton(std::string text) : NumberButton(MakePtr<Text>(text)) {}
+NumberButton::NumberButton(gui::Widget& parent, std::string text)
+    : Button(parent, std::make_unique<Text>(*this, text)) {}
 
 SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
 
@@ -68,12 +71,13 @@ void NumberButton::Activate(gui::Pointer& pointer) {
   }
 }
 
-Number::Number(double x) : value(x) {
-  text_field = MakePtr<gui::NumberTextField>(kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
-  dot = MakePtr<NumberButton>(".");
-  backspace = MakePtr<NumberButton>(gui::MakeShapeWidget(kBackspaceShape, 0xff000000));
+Number::Number(gui::Widget& parent, double x) : FallbackWidget(parent), value(x) {
+  text_field = std::make_unique<gui::NumberTextField>(
+      *this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
+  dot = std::make_unique<NumberButton>(*this, ".");
+  backspace = std::make_unique<NumberButton>(*this, PathFromSVG(kBackspaceShape));
   for (int i = 0; i < 10; ++i) {
-    digits[i] = MakePtr<NumberButton>(std::to_string(i));
+    digits[i] = std::make_unique<NumberButton>(*this, std::to_string(i));
     digits[i]->activate = [this, i](Location& l) {
       if (text_field->text.empty() || text_field->text == "0") {
         text_field->text = std::to_string(i);
@@ -138,7 +142,7 @@ Number::Number(double x) : value(x) {
 
 string_view Number::Name() const { return "Number"; }
 
-Ptr<Object> Number::Clone() const { return MakePtr<Number>(value); }
+Ptr<Object> Number::Clone() const { return MAKE_PTR(Number, *parent, value); }
 
 string Number::GetText() const {
   char buffer[100];
@@ -195,21 +199,14 @@ void Number::Draw(SkCanvas& canvas) const {
 
 SkPath Number::Shape() const { return kNumberShape; }
 
-void Number::FillChildren(Vec<Ptr<Widget>>& children) {
+void Number::FillChildren(Vec<Widget*>& children) {
   children.reserve(13);
-  children.push_back(dot);
-  children.push_back(backspace);
-  children.push_back(digits[0]);
-  children.push_back(digits[1]);
-  children.push_back(digits[2]);
-  children.push_back(digits[3]);
-  children.push_back(digits[4]);
-  children.push_back(digits[5]);
-  children.push_back(digits[6]);
-  children.push_back(digits[7]);
-  children.push_back(digits[8]);
-  children.push_back(digits[9]);
-  children.push_back(text_field);
+  children.push_back(dot.get());
+  children.push_back(backspace.get());
+  for (int i = 0; i < std::size(digits); ++i) {
+    children.push_back(digits[i].get());
+  }
+  children.push_back(text_field.get());
 }
 
 void Number::SerializeState(Serializer& writer, const char* key) const {

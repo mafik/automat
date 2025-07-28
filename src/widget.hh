@@ -36,6 +36,10 @@ struct RootWidget;
 
 Str ToStr(Ptr<Widget> widget);
 
+inline Span<Widget*> WidgetPtrSpan(Span<std::unique_ptr<Widget>> vec) {
+  return {reinterpret_cast<Widget**>(vec.data()), vec.size()};
+}
+
 // Transform from the RootWidget coordinates to the local coordinates of the widget.
 SkMatrix TransformDown(const Widget& to);
 // Transform from the local coordinates of the widget to the RootWidget coordinates.
@@ -80,8 +84,10 @@ struct ActionTrigger {
 
 // Widgets are things that can be drawn to the SkCanvas. They're sometimes produced by Objects
 // which can't draw themselves otherwise.
-struct Widget : public virtual ReferenceCounted, public OptionsProvider {
-  Widget();
+struct Widget : Trackable, OptionsProvider {
+  Widget(Widget& parent);
+  struct NoParentTag {};
+  Widget(NoParentTag);
   virtual ~Widget();
 
   static void CheckAllWidgetsReleased();
@@ -89,7 +95,7 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   uint32_t ID() const;
   static Widget* Find(uint32_t id);
 
-  Ptr<Widget> parent;
+  Widget* parent;
   SkM44 local_to_parent = SkM44();
 
   // The time when the animation should wake up.
@@ -138,6 +144,7 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
 
   RootWidget& FindRootWidget() const;
 
+  // TODO: Remove this.
   // Each widget needs to have a pointer to its parent.
   // Because widgets share inheritance hierarchy with Objects (and objects must use Ptr), the
   // widgets also must use Ptr for their references.
@@ -228,16 +235,16 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
 
   virtual void PreDrawChildren(SkCanvas&) const;
 
-  void DrawChildrenSpan(SkCanvas&, Span<Ptr<Widget>> widgets) const;
+  void DrawChildrenSpan(SkCanvas&, Span<Widget*> widgets) const;
 
   void DrawChildren(SkCanvas&) const;
 
   // Used to obtain references to the child widgets in a generic fashion.
   // Widgets are stored in front-to-back order.
-  virtual void FillChildren(Vec<Ptr<Widget>>& children) {}
+  virtual void FillChildren(Vec<Widget*>& children) {}
 
-  Vec<Ptr<Widget>> Children() const {
-    Vec<Ptr<Widget>> children;
+  Vec<Widget*> Children() const {
+    Vec<Widget*> children;
     const_cast<Widget*>(this)->FillChildren(children);
     return children;
   }
@@ -246,14 +253,14 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   virtual bool AllowChildPointerEvents(Widget& child) const { return true; }
 
   struct ParentsView {
-    Ptr<Widget> start;
+    Widget* start;
 
     struct end_iterator {};
 
     struct iterator {
-      Ptr<Widget> widget;
-      iterator(Ptr<Widget> widget) : widget(widget) {}
-      Ptr<Widget>& operator*() { return widget; }
+      Widget* widget;
+      iterator(Widget* widget) : widget(widget) {}
+      Widget* operator*() { return widget; }
       iterator& operator++() {
         widget = widget->parent;
         return *this;
@@ -265,7 +272,7 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
     end_iterator end() { return end_iterator(); }
   };
 
-  ParentsView Parents() const { return ParentsView{AcquirePtr<Widget>()}; }
+  ParentsView Parents() const { return ParentsView{const_cast<Widget*>(this)}; }
 
   // Widgets share the same base class with Objects (which must be always allocated using
   // MakePtr) so they also must be allocated using MakePtr. This creates issues because
@@ -291,7 +298,7 @@ struct Widget : public virtual ReferenceCounted, public OptionsProvider {
   // Local (metric) coordinates.
   virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const;
 
-  static Ptr<Widget> ForObject(Object&, const Widget& parent);
+  static Widget& ForObject(Object&, const Widget& parent);
 
   // Find the shape of this widget. If it's shape is empty, combine its children's shapes.
   SkPath GetShapeRecursive() const;
@@ -308,7 +315,7 @@ T* Closest(Widget& widget) {
     if (auto* result = dynamic_cast<T*>(w)) {
       return result;
     }
-    w = w->parent.Get();
+    w = w->parent;
   }
   return nullptr;
 }

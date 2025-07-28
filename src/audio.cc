@@ -421,7 +421,7 @@ Ptr<Clip> MakeClipFromWAV(fs::VFile& file) {
   assert(header.rate == kDefaultRate);
   assert(header.channels == kDefaultChannels);
   assert(content.size_bytes() == header.data_size);
-  return MakePtr<Clip>(content.AsSpanOf<Frame>(), file.path);
+  return MAKE_PTR(Clip, content.AsSpanOf<Frame>(), file.path);
 }
 
 void ScheduleClip(Ptr<Clip> clip) {

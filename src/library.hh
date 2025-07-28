@@ -37,7 +37,7 @@ struct Integer : Object {
   int32_t i;
   Integer(int32_t i = 0) : i(i) {}
   string_view Name() const override { return "Integer"; }
-  Ptr<Object> Clone() const override { return MakePtr<Integer>(i); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Integer, i); }
   string GetText() const override { return std::to_string(i); }
   void SetText(Location& error_context, string_view text) override { i = std::stoi(string(text)); }
 };
@@ -45,7 +45,7 @@ struct Integer : Object {
 struct Delete : Object, Runnable {
   static Argument target_arg;
   string_view Name() const override { return "Delete"; }
-  Ptr<Object> Clone() const override { return MakePtr<Delete>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Delete); }
   void OnRun(Location& here, RunTask&) override {
     auto target = target_arg.GetLocation(here);
     if (!target.ok) {
@@ -59,7 +59,7 @@ struct Set : Object, Runnable {
   static Argument value_arg;
   static Argument target_arg;
   string_view Name() const override { return "Set"; }
-  Ptr<Object> Clone() const override { return MakePtr<Set>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Set); }
   void OnRun(Location& here, RunTask&) override {
     auto value = value_arg.GetObject(here);
     auto target = target_arg.GetLocation(here);
@@ -77,7 +77,7 @@ struct Date : Object {
   int day;
   Date(int year = 0, int month = 0, int day = 0) : year(year), month(month), day(day) {}
   string_view Name() const override { return "Date"; }
-  Ptr<Object> Clone() const override { return MakePtr<Date>(year, month, day); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Date, year, month, day); }
   string GetText() const override { return f("{:04d}-{:02d}-{:02d}", year, month, day); }
   void SetText(Location& error_context, string_view text) override {
     std::regex re(R"((\d{4})-(\d{2})-(\d{2}))");
@@ -135,7 +135,7 @@ struct Timer : Object, Runnable {
   FakeTime* fake_time = nullptr;
   string_view Name() const override { return "Timer"; }
   Ptr<Object> Clone() const override {
-    auto other = MakePtr<Timer>();
+    auto other = MAKE_PTR(Timer);
     other->start = start;
     return other;
   }
@@ -177,7 +177,7 @@ struct Timer : Object, Runnable {
 struct TimerReset : Object, Runnable {
   static Argument timer_arg;
   string_view Name() const override { return "TimerReset"; }
-  Ptr<Object> Clone() const override { return MakePtr<TimerReset>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(TimerReset); }
   void OnRun(Location& here, RunTask&) override {
     auto timer = timer_arg.GetTyped<Timer>(here);
     if (!timer.ok) {
@@ -193,7 +193,7 @@ struct EqualityTest : LiveObject {
   EqualityTest() {}
   string_view Name() const override { return "Equality Test"; }
   Ptr<Object> Clone() const override {
-    auto other = MakePtr<EqualityTest>();
+    auto other = MAKE_PTR(EqualityTest);
     other->state = true;
     return other;
   }
@@ -222,7 +222,7 @@ struct LessThanTest : LiveObject {
   bool state = true;
   LessThanTest() {}
   string_view Name() const override { return "Less Than Test"; }
-  Ptr<Object> Clone() const override { return MakePtr<LessThanTest>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(LessThanTest); }
   string GetText() const override { return state ? "true" : "false"; }
   void Args(std::function<void(Argument&)> cb) override {
     cb(less_arg);
@@ -249,7 +249,7 @@ struct StartsWithTest : LiveObject {
   StartsWithTest() {}
   string_view Name() const override { return "Starts With Test"; }
   Ptr<Object> Clone() const override {
-    auto other = MakePtr<StartsWithTest>();
+    auto other = MAKE_PTR(StartsWithTest);
     other->state = state;
     return other;
   }
@@ -279,7 +279,7 @@ struct AllTest : LiveObject {
   bool state = true;
   AllTest() {}
   string_view Name() const override { return "All Test"; }
-  Ptr<Object> Clone() const override { return MakePtr<AllTest>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(AllTest); }
   string GetText() const override { return state ? "true" : "false"; }
   void Args(std::function<void(Argument&)> cb) override { cb(test_arg); }
   void Updated(Location& here, Location& updated) override {
@@ -301,7 +301,7 @@ struct Switch : LiveObject {
   static LiveArgument target_arg;
   LiveArgument case_arg = LiveArgument("case", Argument::kRequiresObject);
   string_view Name() const override { return "Switch"; }
-  Ptr<Object> Clone() const override { return MakePtr<Switch>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Switch); }
   void Args(std::function<void(Argument&)> cb) override {
     cb(target_arg);
     cb(case_arg);
@@ -339,7 +339,7 @@ struct ErrorReporter : LiveObject {
   static LiveArgument test_arg;
   static LiveArgument message_arg;
   string_view Name() const override { return "Error Reporter"; }
-  Ptr<Object> Clone() const override { return MakePtr<ErrorReporter>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(ErrorReporter); }
   void Args(std::function<void(Argument&)> cb) override {
     cb(test_arg);
     cb(message_arg);
@@ -364,7 +364,7 @@ struct ErrorReporter : LiveObject {
 
 struct Parent : Pointer {
   string_view Name() const override { return "Parent"; }
-  Ptr<Object> Clone() const override { return MakePtr<Parent>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Parent); }
   void Args(std::function<void(Argument&)> cb) override {}
   Object* Next(Location& error_context) const override {
     if (auto h = here.lock()) {
@@ -399,7 +399,7 @@ struct HealthTest : Object {
   static Argument target_arg;
   bool state = true;
   HealthTest() {}
-  Ptr<Object> Clone() const override { return MakePtr<HealthTest>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(HealthTest); }
   void UpdateState(Location* here) {
     auto target = target_arg.GetFinalLocation(*here);
     if (target.final_location) {
@@ -426,7 +426,7 @@ struct HealthTest : Object {
 struct ErrorCleaner : Object {
   static Argument target_arg;
   ErrorCleaner() {}
-  Ptr<Object> Clone() const override { return MakePtr<ErrorCleaner>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(ErrorCleaner); }
   void ObserveErrors(Location* here) {
     if (!here) {
       return;
@@ -457,7 +457,7 @@ struct Append : Object, Runnable {
   static Argument to_arg;
   static Argument what_arg;
   string_view Name() const override { return "Append"; }
-  Ptr<Object> Clone() const override { return MakePtr<Append>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Append); }
   void OnRun(Location& here, RunTask&) override {
     auto to = to_arg.GetTyped<AbstractList>(here);
     if (!to.ok) {
@@ -488,7 +488,7 @@ struct List : Object, AbstractList {
   vector<Ptr<Object>> objects;
   string_view Name() const override { return "List"; }
   Ptr<Object> Clone() const override {
-    auto list = MakePtr<List>();
+    auto list = MAKE_PTR(List);
     for (auto& object : objects) {
       list->objects.emplace_back(object->Clone());
     }
@@ -549,7 +549,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
   vector<int> indices;
   string_view Name() const override { return "Filter"; }
   Ptr<Object> Clone() const override {
-    auto filter = MakePtr<Filter>();
+    auto filter = MAKE_PTR(Filter);
     filter->phase = Phase::kDone;
     filter->index = 0;
     return filter;
@@ -671,7 +671,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
 struct CurrentElement : Pointer {
   static LiveArgument of_arg;
   string_view Name() const override { return "Current Element"; }
-  Ptr<Object> Clone() const override { return MakePtr<CurrentElement>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(CurrentElement); }
   void Args(std::function<void(Argument&)> cb) override { cb(of_arg); }
   Object* Next(Location& error_context) const override {
     auto of = of_arg.GetTyped<Iterator>(*here.lock());
@@ -710,7 +710,7 @@ struct Complex : Object {
   std::unordered_map<std::string, Ptr<Object>> objects;
   string_view Name() const override { return "Complex"; }
   Ptr<Object> Clone() const override {
-    auto c = MakePtr<Complex>();
+    auto c = MAKE_PTR(Complex);
     for (auto& [name, obj] : objects) {
       c->objects.emplace(name, obj->Clone());
     }
@@ -722,7 +722,7 @@ struct ComplexField : Pointer {
   static LiveArgument complex_arg;
   static LiveArgument label_arg;
   string_view Name() const override { return "Complex Field"; }
-  Ptr<Object> Clone() const override { return MakePtr<ComplexField>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(ComplexField); }
   void Args(std::function<void(Argument&)> cb) override {
     cb(complex_arg);
     cb(label_arg);
@@ -821,7 +821,7 @@ struct Text : LiveObject {
   static LiveArgument target_arg;
   string_view Name() const override { return "Text Editor"; }
   Ptr<Object> Clone() const override {
-    auto other = MakePtr<Text>();
+    auto other = MAKE_PTR(Text);
     other->chunks = chunks;
     return other;
   }
@@ -875,7 +875,7 @@ struct Button : Object, Runnable {
   static Argument enabled_arg;
   string_view Name() const override { return "Button"; }
   Ptr<Object> Clone() const override {
-    auto other = MakePtr<Button>();
+    auto other = MAKE_PTR(Button);
     other->label = label;
     return other;
   }
@@ -894,7 +894,7 @@ struct ComboBox : LiveObject {
   Location* here = nullptr;
   Location* selected = nullptr;
   string_view Name() const override { return "Combo Box"; }
-  Ptr<Object> Clone() const override { return MakePtr<ComboBox>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(ComboBox); }
   void Args(std::function<void(Argument&)> cb) override { cb(options_arg); }
   void Relocate(Location* here) override { this->here = here; }
   string GetText() const override { return selected->GetText(); }
@@ -925,7 +925,7 @@ struct Slider : LiveObject {
   double value = 0;
   string_view Name() const override { return "Slider"; }
   Ptr<Object> Clone() const override {
-    auto s = MakePtr<Slider>();
+    auto s = MAKE_PTR(Slider);
     s->value = value;
     return s;
   }
@@ -963,9 +963,10 @@ struct Slider : LiveObject {
 };
 
 struct ProgressBar : library::Number {
+  ProgressBar(gui::Widget& parent) : library::Number(parent) {}
   string_view Name() const override { return "Progress Bar"; }
   Ptr<Object> Clone() const override {
-    auto bar = MakePtr<ProgressBar>();
+    auto bar = MAKE_PTR(ProgressBar, *parent);
     bar->value = value;
     return bar;
   }
@@ -978,7 +979,7 @@ struct ListView : Pointer {
   int index = -1;
   string_view Name() const override { return "List View"; }
   Ptr<Object> Clone() const override {
-    Ptr<Object> clone = MakePtr<ListView>();
+    Ptr<Object> clone = MAKE_PTR(ListView);
     dynamic_cast<ListView&>(*clone).index = index;
     return clone;
   }
@@ -1061,7 +1062,7 @@ struct Blackboard : Object {
   std::unique_ptr<algebra::Statement> statement = nullptr;
   string_view Name() const override { return "Formula"; }
   Ptr<Object> Clone() const override {
-    auto other = MakePtr<Blackboard>();
+    auto other = MAKE_PTR(Blackboard);
     if (statement) {
       other->statement = statement->Clone();
     }
@@ -1083,7 +1084,7 @@ struct BlackboardUpdater : LiveObject {
   std::map<string, LiveArgument> independent_variable_args;
   static Argument const_arg;
 
-  Ptr<Object> Clone() const override { return MakePtr<BlackboardUpdater>(); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(BlackboardUpdater); }
   void Args(std::function<void(Argument&)> cb) override {
     for (auto& arg : independent_variable_args) {
       cb(arg.second);

@@ -169,7 +169,7 @@ vec4 main( float2 fragCoord ) {
 // 4. All of the subsequent frames should be fast
 TEST(Renderer, Construction) {
   SkGraphics::Init();
-  root_widget = MakePtr<RootWidget>();
+  root_widget = MAKE_PTR(RootWidget);
   Status status;
   root_widget->window = xcb::XCBWindow::Make(*root_widget, status);
   if (auto err = vk::Init(); !err.empty()) {
@@ -177,7 +177,7 @@ TEST(Renderer, Construction) {
   }
   RendererInit();
   std::stop_source stop_source;
-  root_widget->children.push_back(MakePtr<SlowWidget>());
+  root_widget->children.push_back(MAKE_PTR(SlowWidget));
   test_start = time::SteadyNow();
   render_thread = std::jthread(RenderThread, stop_source.get_token());
   LOG << "Render thread started";

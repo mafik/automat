@@ -39,7 +39,7 @@ struct TesseractOCR : public LiveObject, Runnable {
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
-  Ptr<gui::Widget> MakeWidget() override;
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override;
 
   void Args(std::function<void(Argument&)> cb) override;
   void Updated(Location& here, Location& updated) override;

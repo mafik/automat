@@ -34,7 +34,7 @@ Location* Machine::LocationAtPoint(Vec2 point) {
     Vec2 local_point = (point - loc->position) / loc->scale;
     SkPath shape;
     if (loc->object) {
-      shape = loc->WidgetForObject()->Shape();
+      shape = loc->WidgetForObject().Shape();
     }
     if (shape.contains(local_point.x, local_point.y)) {
       return loc.get();
@@ -46,7 +46,7 @@ Location* Machine::LocationAtPoint(Vec2 point) {
 void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> callback) {
   float radius2 = radius * radius;
   for (auto& loc : locations) {
-    auto dist2 = (loc->object ? loc->WidgetForObject()->CoarseBounds().rect : Rect{})
+    auto dist2 = (loc->object ? loc->WidgetForObject().CoarseBounds().rect : Rect{})
                      .MoveBy(loc->position)
                      .DistanceSquared(start);
     if (dist2 > radius2) {
@@ -235,14 +235,14 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
-Machine::Machine() {}
+Machine::Machine(gui::Widget& parent) : gui::Widget(parent) {}
 
-void Machine::FillChildren(Vec<Ptr<Widget>>& children) {
+void Machine::FillChildren(Vec<Widget*>& children) {
   int i = 0;
   Size n = locations.size();
   children.reserve(n);
-  for (auto& it : locations) {
-    children.push_back(it);
+  for (auto& l : locations) {
+    children.push_back(l.get());
   }
 }
 
@@ -308,7 +308,7 @@ void Machine::PreDraw(SkCanvas& canvas) const {
 void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
   scale = 1.0;
 
-  Rect rect = location.WidgetForObject()->Shape().getBounds();
+  Rect rect = location.WidgetForObject().Shape().getBounds();
   if (position.x + rect.left < -0.5) {
     position.x = -rect.left - 0.5;
   }
@@ -326,7 +326,7 @@ void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec
 
 void Machine::DropLocation(Ptr<Location>&& l) {
   ForEachWidget([](gui::RootWidget&, gui::Widget& w) { w.RedrawThisFrame(); });
-  l->parent = AcquirePtr<Widget>();
+  l->parent = this;
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
@@ -384,7 +384,7 @@ Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
 
 Ptr<Location> Machine::Extract(Location& location) {
   auto it = std::find_if(locations.begin(), locations.end(),
-                         [&location](const Ptr<Location>& l) { return l.get() == &location; });
+                         [&location](const auto& l) { return l.get() == &location; });
   if (it != locations.end()) {
     auto result = std::move(*it);
     locations.erase(it);
@@ -414,20 +414,19 @@ void LiveObject::Relocate(Location* new_here) {
       live_arg->Relocate(old_here.lock().get(), new_here);
     }
   });
-  here = new_here->AcquirePtr<Location>();
+  here = new_here;
 }
 
 Location& Machine::CreateEmpty() {
-  auto& it = locations.emplace_front(MakePtr<Location>(here));
+  auto& it = locations.emplace_front(new Location(*this, here));
   Location* h = it.get();
-  h->parent = this->AcquirePtr();
   return *h;
 }
 void Machine::Relocate(Location* parent) {
   LiveObject::Relocate(parent);
   for (auto& it : locations) {
     it->parent_location = here;
-    it->parent = AcquirePtr<Widget>();
+    it->parent = this;
   }
 }
 }  // namespace automat

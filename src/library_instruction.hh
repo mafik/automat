@@ -91,8 +91,8 @@ struct Instruction : LiveObject, Runnable, Buffer {
     constexpr static float kYCenter = (kYMax + kYMin) / 2;
     constexpr static float kLineHeight = 11_mm;
 
-    Ptr<gui::SmallBufferWidget> imm_widget;
-    Ptr<gui::Widget> condition_code_widget;
+    std::unique_ptr<gui::SmallBufferWidget> imm_widget;
+    std::unique_ptr<gui::Widget> condition_code_widget;
     float scale = 1;
     llvm::SmallVector<Vec2, 10> token_position;
     llvm::SmallVector<float, 10> string_width_scale;
@@ -100,14 +100,14 @@ struct Instruction : LiveObject, Runnable, Buffer {
 
     std::span<const Token> tokens;
 
-    Widget(WeakPtr<Object> object);
+    Widget(gui::Widget& parent, WeakPtr<Object> object);
 
     std::string_view Name() const override { return "Instruction Widget"; }
     SkPath Shape() const override;
     animation::Phase Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
     Vec2AndDir ArgStart(const Argument&) override;
-    void FillChildren(Vec<Ptr<gui::Widget>>& children) override;
+    void FillChildren(Vec<gui::Widget*>& children) override;
   };
 
   Str ToAsmStr() const;
@@ -116,7 +116,9 @@ struct Instruction : LiveObject, Runnable, Buffer {
     return NestedWeakPtr<const mc::Inst>(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
   }
 
-  Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(AcquireWeakPtr<Object>()); }
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override {
+    return std::make_unique<Widget>(parent, AcquireWeakPtr<Object>());
+  }
 
   void SerializeState(Serializer& writer, const char* key = "value") const override;
   void DeserializeState(Location& l, Deserializer& d) override;

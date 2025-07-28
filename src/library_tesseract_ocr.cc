@@ -87,7 +87,7 @@ TesseractOCR::TesseractOCR() {
 std::string_view TesseractOCR::Name() const { return "Tesseract OCR"; }
 
 Ptr<Object> TesseractOCR::Clone() const {
-  auto ret = MakePtr<TesseractOCR>();
+  auto ret = MAKE_PTR(TesseractOCR);
   ret->x_min_ratio = x_min_ratio;
   ret->x_max_ratio = x_max_ratio;
   ret->y_min_ratio = y_min_ratio;
@@ -197,7 +197,9 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
 
   Ptr<TesseractOCR> LockTesseract() const { return LockObject<TesseractOCR>(); }
 
-  TesseractWidget(WeakPtr<Object> tesseract) { object = tesseract; }
+  TesseractWidget(gui::Widget& parent, WeakPtr<Object> tesseract) : FallbackWidget(parent) {
+    object = tesseract;
+  }
 
   constexpr static RRect kBounds = RRect::MakeSimple(Rect::MakeAtZero({kSize, kSize}), 0);
 
@@ -1051,8 +1053,8 @@ const SkPath TesseractWidget::kEyeShape = PathFromSVG(
     "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
     "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
 
-Ptr<gui::Widget> TesseractOCR::MakeWidget() {
-  return MakePtr<TesseractWidget>(AcquireWeakPtr<Object>());
+std::unique_ptr<gui::Widget> TesseractOCR::MakeWidget(gui::Widget& parent) {
+  return std::make_unique<TesseractWidget>(parent, AcquireWeakPtr<Object>());
 }
 
 void TesseractOCR::Args(std::function<void(Argument&)> cb) {

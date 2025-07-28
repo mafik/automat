@@ -16,12 +16,12 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   bool shift = false;
   bool windows = false;
 
-  Ptr<gui::PowerButton> power_button;
-  Ptr<KeyButton> ctrl_button;
-  Ptr<KeyButton> alt_button;
-  Ptr<KeyButton> shift_button;
-  Ptr<KeyButton> windows_button;
-  Ptr<KeyButton> shortcut_button;
+  unique_ptr<gui::PowerButton> power_button;
+  unique_ptr<KeyButton> ctrl_button;
+  unique_ptr<KeyButton> alt_button;
+  unique_ptr<KeyButton> shift_button;
+  unique_ptr<KeyButton> windows_button;
+  unique_ptr<KeyButton> shortcut_button;
 
   // This is used to select the main hotkey
   gui::Caret* hotkey_selector = nullptr;
@@ -29,7 +29,7 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   // This is used to get hotkey events
   gui::KeyGrab* hotkey = nullptr;
 
-  HotKey();
+  HotKey(gui::Widget& parent);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;
@@ -49,7 +49,7 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   void KeyGrabberKeyDown(gui::KeyGrab&) override;
   void KeyGrabberKeyUp(gui::KeyGrab&) override;
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

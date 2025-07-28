@@ -19,19 +19,20 @@ namespace automat::library {
 
 struct SideButton : gui::Button {
   using gui::Button::Button;
-  SideButton(Ptr<Widget> child) : gui::Button(child) {}
+  SideButton(Widget& parent, std::unique_ptr<Widget> child)
+      : gui::Button(parent, std::move(child)) {}
   SkColor ForegroundColor() const override;
   SkColor BackgroundColor() const override;
   SkRRect RRect() const override;
 };
 
 struct PrevButton : SideButton {
-  PrevButton();
+  PrevButton(Widget& parent);
   void Activate(gui::Pointer&) override;
 };
 
 struct NextButton : SideButton {
-  NextButton();
+  NextButton(Widget& parent);
   void Activate(gui::Pointer&) override;
 };
 
@@ -40,11 +41,11 @@ struct Timeline;
 struct TimelineRunButton : gui::ToggleButton {
   Timeline* timeline;
 
-  Ptr<gui::Button> rec_button;
-  mutable Ptr<gui::Button>* last_on_widget = nullptr;
+  std::unique_ptr<gui::Button> rec_button;
+  mutable gui::Button* last_on_widget = nullptr;
 
-  TimelineRunButton(Timeline* timeline);
-  Ptr<gui::Button>& OnWidget() override;
+  TimelineRunButton(Widget& parent, Timeline* timeline);
+  gui::Button* OnWidget() override;
   bool Filled() const override;
   void Activate(gui::Pointer&);
   void FixParents() override;
@@ -59,7 +60,7 @@ struct TrackBase : Object {
                             time::SteadyPoint now) = 0;
 
   // Each subtype must returns its own Widget derived from TrackBaseWidget.
-  Ptr<gui::Widget> MakeWidget() override = 0;
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override = 0;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
@@ -69,8 +70,8 @@ struct TrackBase : Object {
 struct OnOffTrack : TrackBase, OnOff {
   time::Duration on_at = time::kDurationGuard;
   string_view Name() const override { return "On/Off Track"; }
-  Ptr<Object> Clone() const override { return MakePtr<OnOffTrack>(*this); }
-  Ptr<gui::Widget> MakeWidget() override;
+  Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -88,8 +89,8 @@ struct Vec2Track : TrackBase {
   Vec<Vec2> values;
 
   string_view Name() const override { return "Vec2 Track"; }
-  Ptr<Object> Clone() const override { return MakePtr<Vec2Track>(*this); }
-  Ptr<gui::Widget> MakeWidget() override;
+  Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -120,16 +121,16 @@ struct Timeline : LiveObject,
                   Runnable,
                   LongRunning,
                   TimerNotificationReceiver {
-  Ptr<TimelineRunButton> run_button;
-  Ptr<PrevButton> prev_button;
-  Ptr<NextButton> next_button;
+  std::unique_ptr<TimelineRunButton> run_button;
+  std::unique_ptr<PrevButton> prev_button;
+  std::unique_ptr<NextButton> next_button;
 
   SpliceAction* splice_action = nullptr;
   DragZoomAction* drag_zoom_action = nullptr;
 
   Vec<Ptr<TrackBase>> tracks;
   Vec<std::unique_ptr<Argument>> track_args;
-  mutable Vec<Ptr<Widget>> track_widgets;
+  mutable Vec<std::unique_ptr<Widget>> track_widgets;
 
   mutable animation::Approach<> zoom;  // stores the time in seconds
   mutable animation::SpringV2<float> splice_wiggle;
@@ -161,8 +162,8 @@ struct Timeline : LiveObject,
     Recording recording;
   };
 
-  Timeline();
-  Timeline(const Timeline&);
+  Timeline(gui::Widget& parent);
+  Timeline(gui::Widget& parent, const Timeline&);
   void UpdateChildTransform(time::SteadyPoint now);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -171,7 +172,7 @@ struct Timeline : LiveObject,
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
   Vec2AndDir ArgStart(const Argument&) override;
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
   std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
   void OnRun(Location& here, RunTask&) override;
   void OnCancel() override;

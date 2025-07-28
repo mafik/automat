@@ -65,7 +65,7 @@ namespace automat::gui {
 // UTF-8 string.
 struct SmallBufferWidget : TextFieldBase {
   NestedWeakPtr<Buffer> buffer_weak;
-  Ptr<Clickable> type_button;
+  std::unique_ptr<Widget> type_button;
 
   gui::Font* fonts[(int)Buffer::Type::TypeCount] = {};
 
@@ -75,7 +75,7 @@ struct SmallBufferWidget : TextFieldBase {
   Buffer::Type type = Buffer::Type::TypeCount;  // guard value, forces redraw
   std::string text;
 
-  SmallBufferWidget(NestedWeakPtr<Buffer> buffer);
+  SmallBufferWidget(gui::Widget& parent, NestedWeakPtr<Buffer> buffer);
 
   // Call this after setting the fonts to calculate the size of the widget.
   void Measure();
@@ -87,7 +87,7 @@ struct SmallBufferWidget : TextFieldBase {
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
 
   void TextVisit(const TextVisitor&) override;
   int IndexFromPosition(float x) const override;

@@ -34,12 +34,12 @@ using namespace std;
 
 namespace automat::library {
 
-struct ShowRegisterOption : Option {
+struct ShowRegisterOption : TextOption {
   WeakPtr<Assembler> weak;
   int register_index;  // Must be < kGeneralPurposeRegisterCount
 
   ShowRegisterOption(WeakPtr<Assembler> weak, int register_index)
-      : Option("Show"), weak(weak), register_index(register_index) {}
+      : TextOption("Show"), weak(weak), register_index(register_index) {}
 
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<ShowRegisterOption>(weak, register_index);
@@ -47,19 +47,19 @@ struct ShowRegisterOption : Option {
 
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
-      assembler->reg_objects_idx[register_index] = MakePtr<Register>(weak, register_index);
+      assembler->reg_objects_idx[register_index] = MAKE_PTR(Register, weak, register_index);
       assembler->WakeWidgetsAnimation();
     }
     return nullptr;
   }
 };
 
-struct HideRegisterOption : Option {
+struct HideRegisterOption : TextOption {
   WeakPtr<Assembler> weak;
   int register_index;  // Must be < kGeneralPurposeRegisterCount
 
   HideRegisterOption(WeakPtr<Assembler> weak, int register_index)
-      : Option("Hide"), weak(weak), register_index(register_index) {}
+      : TextOption("Hide"), weak(weak), register_index(register_index) {}
 
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<HideRegisterOption>(weak, register_index);
@@ -76,7 +76,7 @@ struct HideRegisterOption : Option {
 
 struct ImageWidget : gui::Widget {
   PersistentImage& image;
-  ImageWidget(PersistentImage& image) : image(image) {}
+  ImageWidget(gui::Widget& parent, PersistentImage& image) : gui::Widget(parent), image(image) {}
   Optional<Rect> TextureBounds() const override {
     return Rect::MakeCornerZero(image.width(), image.height());
   }
@@ -91,9 +91,11 @@ struct RegisterMenuOption : Option, OptionsProvider {
   int register_index;
 
   RegisterMenuOption(WeakPtr<Assembler> weak, int register_index)
-      : Option(MakePtr<ImageWidget>(kRegisters[register_index].image)),
-        weak(weak),
-        register_index(register_index) {}
+      : weak(weak), register_index(register_index) {}
+
+  std::unique_ptr<gui::Widget> MakeIcon(gui::Widget& parent) override {
+    return std::make_unique<ImageWidget>(parent, kRegisters[register_index].image);
+  }
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<RegisterMenuOption>(weak, register_index);
   }
@@ -115,9 +117,9 @@ struct RegisterMenuOption : Option, OptionsProvider {
   }
 };
 
-struct RegistersMenuOption : Option, OptionsProvider {
+struct RegistersMenuOption : TextOption, OptionsProvider {
   WeakPtr<Assembler> weak;
-  RegistersMenuOption(WeakPtr<Assembler> weak) : Option("Registers"), weak(weak) {}
+  RegistersMenuOption(WeakPtr<Assembler> weak) : TextOption("Registers"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<RegistersMenuOption>(weak);
   }
@@ -203,7 +205,7 @@ void Assembler::ExitCallback(mc::CodePoint code_point) {
   }
 }
 
-Ptr<Object> Assembler::Clone() const { return MakePtr<Assembler>(); }
+Ptr<Object> Assembler::Clone() const { return MAKE_PTR(Assembler); }
 
 void UpdateCode(automat::mc::Controller& controller,
                 std::vector<Ptr<automat::library::Instruction>>&& instructions, Status& status) {
@@ -310,9 +312,7 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto* reg = reg_objects_idx[i].get();
     if (reg != &descendant) continue;
-    auto loc = MakePtr<Location>();
-    loc->parent_location = root_location;
-    loc->parent = root_machine;
+    auto loc = MAKE_PTR(Location, *root_machine, root_location);
     loc->InsertHere(reg_objects_idx[i].borrow());
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
     WakeWidgetsAnimation();
@@ -377,8 +377,8 @@ void Assembler::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
-AssemblerWidget::AssemblerWidget(WeakPtr<Assembler> assembler_weak)
-    : assembler_weak(assembler_weak) {
+AssemblerWidget::AssemblerWidget(Widget& parent, WeakPtr<Assembler> assembler_weak)
+    : Object::FallbackWidget(parent), assembler_weak(assembler_weak) {
   object = std::move(assembler_weak).Cast<Object>();
 }
 
@@ -402,7 +402,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   // Index register widgets by register index. Delete them if their register object is gone or if
   // they're no longer owned by the assembler.
   for (int i = 0; i < reg_widgets.size(); ++i) {
-    auto& reg_widget = reg_widgets[i];
+    auto* reg_widget = reg_widgets[i];
     auto register_obj = reg_widget->LockRegister();
     int register_index = -1;
     if (register_obj != nullptr) {
@@ -417,14 +417,14 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
       reg_widgets.EraseIndex(i);
       --i;
     } else {
-      reg_widgets_idx[register_index] = reg_widget.get();
+      reg_widgets_idx[register_index] = reg_widget;
     }
   }
   // Create new register objects for registers that have non-zero values.
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     if (assembler->state.regs[i] == 0) continue;
     if (assembler->reg_objects_idx[i] != nullptr) continue;
-    assembler->reg_objects_idx[i] = MakePtr<Register>(assembler_weak, i);
+    assembler->reg_objects_idx[i] = MAKE_PTR(Register, assembler_weak, i);
   }
 
   // Create new register widgets for register objects that don't have a widget.
@@ -433,20 +433,16 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     // Now create a widget if needed.
     if (assembler_reg) {
       if (reg_widgets_idx[i] != nullptr) continue;
-      auto register_widget = FindRootWidget().widgets.Find(*assembler_reg);
+      auto* register_widget = FindRootWidget().widgets.Find(*assembler_reg);
       if (register_widget == nullptr) {
-        register_widget = FindRootWidget().widgets.For(*assembler_reg, *this);
+        register_widget = &FindRootWidget().widgets.For(*assembler_reg, *this);
         register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
       }
-      register_widget->parent = AcquirePtr();
       register_widget->FixParents();
-      reg_widgets_idx[i] = static_cast<RegisterWidget*>(register_widget.get());
-      reg_widgets.emplace_back(std::move(register_widget).Cast<RegisterWidget>());
-      std::sort(reg_widgets.begin(), reg_widgets.end(), [](const auto& a, const auto& b) {
-        auto* a_register_widget = static_cast<RegisterWidget*>(a.get());
-        auto* b_register_widget = static_cast<RegisterWidget*>(b.get());
-        return a_register_widget->LockRegister()->register_index <
-               b_register_widget->LockRegister()->register_index;
+      reg_widgets_idx[i] = static_cast<RegisterWidget*>(register_widget);
+      reg_widgets.emplace_back(static_cast<RegisterWidget*>(register_widget));
+      std::sort(reg_widgets.begin(), reg_widgets.end(), [](auto* a, auto* b) {
+        return a->LockRegister()->register_index < b->LockRegister()->register_index;
       });
     }
   }
@@ -465,7 +461,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
   float target_scale = available_width / total_width;
 
   for (int child_i = 0; child_i < reg_widgets.size(); ++child_i) {
-    auto* child = static_cast<RegisterWidget*>(reg_widgets[child_i].get());
+    auto* child = reg_widgets[child_i];
 
     int effective_i = child_i + empty_cells_in_first_row;
     int row = effective_i / columns;
@@ -575,10 +571,9 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void AssemblerWidget::FillChildren(Vec<Ptr<gui::Widget>>& children) {
-  // Expensive copy of a bunch of Ptrs :/
-  for (auto& child : reg_widgets) {
-    children.emplace_back(child->AcquirePtr());
+void AssemblerWidget::FillChildren(Vec<gui::Widget*>& children) {
+  for (auto* child : reg_widgets) {
+    children.emplace_back(child);
   }
 }
 
@@ -605,10 +600,9 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
           [&](gui::RootWidget& root_widget, gui::Widget& reg_widget_generic) {
             RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
             if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
-              auto asm_widget = std::move(asm_widget_generic).Cast<AssemblerWidget>();
+              auto* asm_widget = static_cast<AssemblerWidget*>(asm_widget_generic);
               reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
-              asm_widget->reg_widgets.emplace_back(reg_widget.AcquirePtr());
-              reg_widget.parent = asm_widget;
+              asm_widget->reg_widgets.emplace_back(&reg_widget);
             }
           });
       my_assembler->reg_objects_idx[reg->register_index] = loc->Take().Cast<Register>();
@@ -621,7 +615,7 @@ void AssemblerWidget::SnapPosition(Vec2& position, float& scale, Location& locat
   auto local_to_machine = TransformBetween(*this, *root_machine);
   auto my_rect = kRRect.rect.Outset(-2 * kFlatBorderWidth);
   local_to_machine.mapRect(&my_rect.sk);
-  Rect rect = location.WidgetForObject()->Shape().getBounds();
+  Rect rect = location.WidgetForObject().Shape().getBounds();
   if (position.x + rect.left < my_rect.left) {
     position.x += my_rect.left - (position.x + rect.left);
   }
@@ -762,7 +756,7 @@ void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
 Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
     : assembler_weak(assembler_weak), register_index(register_index) {}
 
-Ptr<Object> Register::Clone() const { return MakePtr<Register>(assembler_weak, register_index); }
+Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, register_index); }
 
 Argument register_assembler_arg = []() {
   Argument arg("Reg's Assembler", Argument::kRequiresObject);

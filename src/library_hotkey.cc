@@ -168,15 +168,14 @@ vec4 main(in vec2 fragCoord) {
 //   }
 // }
 
-HotKey::HotKey() {
-  power_button = MakePtr<PowerButton>(this);
-  ctrl_button = MakePtr<KeyButton>(MakeKeyLabelWidget("Ctrl"), KeyColor(ctrl), kCtrlKeyWidth);
-  alt_button = MakePtr<KeyButton>(MakeKeyLabelWidget("Alt"), KeyColor(alt), kAltKeyWidth);
-  shift_button = MakePtr<KeyButton>(MakeKeyLabelWidget("Shift"), KeyColor(shift), kShiftKeyWidth);
-  windows_button =
-      MakePtr<KeyButton>(MakeKeyLabelWidget("Super"), KeyColor(windows), kSuperKeyWidth);
-  shortcut_button = MakePtr<KeyButton>(MakeKeyLabelWidget("?"), KeyColor(true), kShortcutKeyWidth);
-
+HotKey::HotKey(gui::Widget& parent)
+    : FallbackWidget(parent),
+      power_button(new PowerButton(*this, this)),
+      ctrl_button(new KeyButton(*this, "Ctrl", KeyColor(ctrl), kCtrlKeyWidth)),
+      alt_button(new KeyButton(*this, "Alt", KeyColor(alt), kAltKeyWidth)),
+      shift_button(new KeyButton(*this, "Shift", KeyColor(shift), kShiftKeyWidth)),
+      windows_button(new KeyButton(*this, "Super", KeyColor(windows), kSuperKeyWidth)),
+      shortcut_button(new KeyButton(*this, "?", KeyColor(true), kShortcutKeyWidth)) {
   power_button->local_to_parent =
       SkM44::Translate(kWidth / 2 - kFrameWidth - kMinimalTouchableSize + kBorderWidth,
                        kShapeRect.top - kFrameWidth - kMinimalTouchableSize + kBorderWidth);
@@ -254,7 +253,7 @@ HotKey::HotKey() {
       auto bounds = *label->TextureBounds();
       Vec2 caret_position = shortcut_button->RRect().rect().center();
       caret_position.x += bounds.left;
-      hotkey_selector = &pointer.keyboard->RequestCaret(*this, AcquirePtr(), caret_position);
+      hotkey_selector = &pointer.keyboard->RequestCaret(*this, this, caret_position);
     }
     WakeAnimation();
     shortcut_button->WakeAnimation();
@@ -262,7 +261,7 @@ HotKey::HotKey() {
 }
 string_view HotKey::Name() const { return "HotKey"; }
 Ptr<Object> HotKey::Clone() const {
-  auto ret = MakePtr<HotKey>();
+  auto ret = MAKE_PTR(HotKey, *parent);
   ret->key = key;
   ret->ctrl = ctrl;
   ret->alt = alt;
@@ -384,13 +383,13 @@ void HotKey::Draw(SkCanvas& canvas) const {
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
 void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
-void HotKey::FillChildren(Vec<Ptr<Widget>>& children) {
-  children.push_back(power_button);
-  children.push_back(ctrl_button);
-  children.push_back(alt_button);
-  children.push_back(shift_button);
-  children.push_back(windows_button);
-  children.push_back(shortcut_button);
+void HotKey::FillChildren(Vec<Widget*>& children) {
+  children.push_back(power_button.get());
+  children.push_back(ctrl_button.get());
+  children.push_back(alt_button.get());
+  children.push_back(shift_button.get());
+  children.push_back(windows_button.get());
+  children.push_back(shortcut_button.get());
 }
 
 bool HotKey::IsOn() const { return hotkey != nullptr; }

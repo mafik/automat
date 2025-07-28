@@ -442,7 +442,7 @@ void Keyboard::KeyDown(Key key) {
   } else {
     size_t i = static_cast<int>(key.physical);
     if (actions[i] == nullptr && pointer && pointer->hover) {
-      auto current = pointer->hover;
+      Widget* current = pointer->hover;
       do {
         actions[i] = current->FindAction(*pointer, key.physical);
         current = current->parent;
@@ -482,7 +482,7 @@ void Keyboard::LogKeyUp(Key key) {
   }
 }
 
-Ptr<gui::Keyboard> keyboard;
+unique_ptr<gui::Keyboard> keyboard;
 
 void SendKeyEvent(AnsiKey physical, bool down) {
 #if defined(_WIN32)
@@ -515,7 +515,7 @@ CaretOwner::~CaretOwner() {
   }
 }
 
-Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const Ptr<Widget>& widget, Vec2 position) {
+Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, Widget* widget, Vec2 position) {
   std::set<std::unique_ptr<Caret>>::iterator it;
   if (carets.empty()) {
     it = carets.emplace(std::make_unique<Caret>(*this)).first;
@@ -539,7 +539,7 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, const Ptr<Widget>& widget
 void CaretOwner::KeyDown(Caret& caret, Key) {}
 void CaretOwner::KeyUp(Caret& caret, Key) {}
 
-Keyboard::Keyboard(RootWidget& root_widget) : root_widget(root_widget) {}
+Keyboard::Keyboard(RootWidget& root_widget) : Widget(root_widget), root_widget(root_widget) {}
 
 #if defined(_WIN32)
 

@@ -25,7 +25,7 @@ using namespace automat;
 class MachineCodeControllerTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    root = MakePtr<Machine>();
+    root = MAKE_PTR(Machine);
     auto ExitCallback = [this](mc::CodePoint code_point) {
       std::unique_lock<std::mutex> lock(mutex);
       exit_instr = *code_point.instruction;  // copy the weak_ptr
@@ -118,7 +118,7 @@ class MachineCodeControllerTest : public ::testing::Test {
 
   Ptr<library::Instruction> MakeInstruction(const llvm::MCInst& mc_inst) {
     auto& loc = root->CreateEmpty();
-    auto inst = MakePtr<library::Instruction>();
+    auto inst = MAKE_PTR(library::Instruction);
     inst->mc_inst = mc_inst;
     inst->mc_inst.setLoc(llvm::SMLoc::getFromPointer((const char*)inst.get()));
     loc.InsertHereNoWidget(Ptr<library::Instruction>(inst));  // copy Ptr

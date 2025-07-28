@@ -22,7 +22,7 @@ Argument Increment::target_arg =
 
 string_view Increment::Name() const { return "Increment"; }
 
-Ptr<Object> Increment::Clone() const { return MakePtr<Increment>(); }
+Ptr<Object> Increment::Clone() const { return MAKE_PTR(Increment, *parent); }
 
 void Increment::OnRun(Location& h, RunTask&) {
   ZoneScopedN("Increment");

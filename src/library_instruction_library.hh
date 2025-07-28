@@ -50,7 +50,7 @@ struct InstructionLibrary : Object {
 
   struct Widget : FallbackWidget, gui::PointerMoveCallback {
     struct InstructionCard {
-      Ptr<Instruction::Widget> widget;
+      std::unique_ptr<Instruction::Widget> widget;
       Ptr<Instruction> instruction;
       float angle = 0;
       int library_index = -1;
@@ -104,7 +104,7 @@ struct InstructionLibrary : Object {
 
     std::vector<CategoryState> category_states;
 
-    Widget(WeakPtr<Object> object);
+    Widget(gui::Widget& parent, WeakPtr<Object> object);
 
     std::string_view Name() const override { return "Instruction Library Widget"; }
     SkPath Shape() const override;
@@ -112,7 +112,7 @@ struct InstructionLibrary : Object {
     void Draw(SkCanvas&) const override;
     std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
 
-    void FillChildren(Vec<Ptr<gui::Widget>>& children) override;
+    void FillChildren(Vec<gui::Widget*>& children) override;
     bool AllowChildPointerEvents(gui::Widget& child) const override { return false; }
 
     void PointerMove(gui::Pointer&, Vec2 position) override;
@@ -120,7 +120,9 @@ struct InstructionLibrary : Object {
     void PointerLeave(gui::Pointer&) override;
   };
 
-  Ptr<gui::Widget> MakeWidget() override { return MakePtr<Widget>(AcquireWeakPtr<Object>()); }
+  unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override {
+    return make_unique<Widget>(parent, AcquireWeakPtr<Object>());
+  }
 };
 
 }  // namespace automat::library

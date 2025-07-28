@@ -12,13 +12,13 @@ namespace automat::gui {
 struct ShapeWidget : Widget, PaintMixin {
   SkPath path;
 
-  ShapeWidget(SkPath path);
+  ShapeWidget(gui::Widget& parent, SkPath path);
   SkPath Shape() const override;
   void Draw(SkCanvas&) const override;
   bool CenteredAtZero() const override { return true; }
 };
 
-Ptr<Widget> MakeShapeWidget(const char* svg_path, SkColor fill_color,
-                            const SkMatrix* transform = nullptr);
+std::unique_ptr<Widget> MakeShapeWidget(gui::Widget& parent, const char* svg_path,
+                                        SkColor fill_color, const SkMatrix* transform = nullptr);
 
 }  // namespace automat::gui

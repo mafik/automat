@@ -16,25 +16,28 @@ static const SkPath kTypeSignedPath = PathFromSVG(kTypeSignedSVG, SVGUnit_Millim
 static const SkPath kTypeHexPath = PathFromSVG(kTypeHexSVG, SVGUnit_Millimeters);
 static const SkPath kTypeTextPath = PathFromSVG(kTypeTextSVG, SVGUnit_Millimeters);
 
-struct TypeButton : Clickable {
-  std::function<void()> on_click;
-  SkRRect RRect() const override {
-    return SkRRect::MakeOval(SkRect::MakeXYWH(-4_mm, -4_mm, 8_mm, 8_mm));
-  }
+struct TypeButton : ShapeWidget {
+  Clickable clickable;
+  // SkRRect RRect() const override {
+  //   return SkRRect::MakeOval(SkRect::MakeXYWH(-4_mm, -4_mm, 8_mm, 8_mm));
+  // }
 
-  TypeButton(SkPath path) : Clickable(MakePtr<ShapeWidget>(path)) {}
+  TypeButton(gui::Widget& parent, SkPath path) : ShapeWidget(parent, path), clickable(*this) {}
 
-  void Activate(gui::Pointer&) override {
-    if (on_click) {
-      on_click();
-    }
+  void PointerOver(Pointer& p) override { clickable.PointerOver(p); }
+  void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
+  animation::Phase Tick(time::Timer& t) override { return clickable.Tick(t); }
+  std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
+    return clickable.FindAction(p, a);
   }
 };
 
-SmallBufferWidget::SmallBufferWidget(NestedWeakPtr<Buffer> buffer)
-    : buffer_weak(buffer), type_button(MakePtr<TypeButton>(kTypeTextPath)) {
-  auto tb = type_button.GetCast<TypeButton>();
-  tb->on_click = [this]() {
+SmallBufferWidget::SmallBufferWidget(gui::Widget& parent, NestedWeakPtr<Buffer> buffer)
+    : TextFieldBase(parent),
+      buffer_weak(buffer),
+      type_button(new TypeButton(*this, kTypeTextPath)) {
+  auto tb = static_cast<TypeButton*>(type_button.get());
+  tb->clickable.activate = [this](Pointer&) {
     auto buffer = buffer_weak.Lock();
     auto old_type = buffer->GetBufferType();
     auto new_type = (Buffer::Type)(((int)old_type + 1) % (int)Buffer::Type::TypeCount);
@@ -176,24 +179,24 @@ static void RefreshText(SmallBufferWidget& widget) {
   }
   if (type_changed) {
     widget.type = new_type;
-    auto shape_widget = widget.type_button->child.GetCast<ShapeWidget>();
+    auto& shape_widget = static_cast<TypeButton&>(*widget.type_button);
     switch (new_type) {
       case Buffer::Type::Unsigned:
-        shape_widget->path = kTypeUnsignedPath;
+        shape_widget.path = kTypeUnsignedPath;
         break;
       case Buffer::Type::Signed:
-        shape_widget->path = kTypeSignedPath;
+        shape_widget.path = kTypeSignedPath;
         break;
       case Buffer::Type::Hexadecimal:
-        shape_widget->path = kTypeHexPath;
+        shape_widget.path = kTypeHexPath;
         break;
       case Buffer::Type::Text:
-        shape_widget->path = kTypeTextPath;
+        shape_widget.path = kTypeTextPath;
         break;
       default:
         break;
     }
-    shape_widget->WakeAnimation();
+    shape_widget.WakeAnimation();
     for (auto& [caret, pos] : widget.caret_positions) {
       if (pos.index > text.size() || pos.index == old_size) {
         pos.index = text.size();
@@ -228,8 +231,8 @@ void SmallBufferWidget::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void SmallBufferWidget::FillChildren(Vec<Ptr<Widget>>& children) {
-  children.push_back(type_button);
+void SmallBufferWidget::FillChildren(Vec<Widget*>& children) {
+  children.push_back(type_button.get());
 }
 
 RRect SmallBufferWidget::CoarseBounds() const {

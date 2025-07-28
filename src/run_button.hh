@@ -17,7 +17,8 @@ namespace automat::gui {
 struct PowerButton : ToggleButton {
   OnOff* target;
 
-  PowerButton(OnOff* target, SkColor fg = "#fa2305"_color, SkColor bg = SK_ColorWHITE);
+  PowerButton(Widget& parent, OnOff* target, SkColor fg = "#fa2305"_color,
+              SkColor bg = SK_ColorWHITE);
 
   void Activate(gui::Pointer& p);
   bool Filled() const override;

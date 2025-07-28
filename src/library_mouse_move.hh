@@ -9,7 +9,7 @@ namespace automat::library {
 struct MouseMove : Object {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  Ptr<gui::Widget> MakeWidget() override;
+  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) override;
   void OnMouseMove(Vec2);
 };
 

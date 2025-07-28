@@ -21,7 +21,7 @@ struct TimerDelay : LiveObject,
                     TimerNotificationReceiver {
   struct MyDuration : public Object {
     time::Duration value = 10s;
-    Ptr<Object> Clone() const override { return MakePtr<MyDuration>(*this); }
+    Ptr<Object> Clone() const override { return MAKE_PTR(MyDuration, *this); }
   } duration;
   DurationArgument duration_arg;
   time::SteadyPoint start_time;
@@ -33,7 +33,7 @@ struct TimerDelay : LiveObject,
   // Controls the current range (milliseconds, seconds, etc.)
   animation::SpringV2<float> range_dial;
   float duration_handle_rotation = 0;
-  Ptr<gui::NumberTextField> text_field;
+  std::unique_ptr<gui::NumberTextField> text_field;
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
     Seconds,       // 0 - 60 s
@@ -42,7 +42,7 @@ struct TimerDelay : LiveObject,
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
-  TimerDelay();
+  TimerDelay(gui::Widget& parent);
   TimerDelay(const TimerDelay&);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -57,7 +57,7 @@ struct TimerDelay : LiveObject,
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
   void Updated(Location& here, Location& updated) override;
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;

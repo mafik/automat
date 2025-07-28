@@ -33,7 +33,7 @@ struct IndexHelper {
   IndexHelper(PrototypeLibrary& lib) : lib(lib) {}
   template <typename T, ToolbarVisibility show_in_toolbar = ShowInToolbar, typename... Args>
   void Register(Args&&... args) {
-    auto proto = MakePtr<T>(std::forward<Args>(args)...);
+    auto proto = MAKE_PTR(T, std::forward<Args>(args)...);
     lib.type_index[typeid(T)] = proto;
     lib.name_index[Str(proto->Name())] = proto;
     if (show_in_toolbar == ShowInToolbar) {
@@ -45,18 +45,21 @@ struct IndexHelper {
 PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
-  index.Register<FlipFlop>();
-  index.Register<MacroRecorder>();
-  index.Register<TimerDelay>();
-  index.Register<HotKey>();
-  index.Register<KeyPresser>();
-  index.Register<MouseClick>(gui::PointerButton::Left, true);
-  index.Register<MouseClick>(gui::PointerButton::Left, false);
-  index.Register<MouseClick>(gui::PointerButton::Right, true);
-  index.Register<MouseClick>(gui::PointerButton::Right, false);
+  // TODO: Remove this once Objects are split from Widgets.
+  gui::Widget* fake_parent = nullptr;
+
+  index.Register<FlipFlop>(*fake_parent);
+  index.Register<MacroRecorder>(*fake_parent);
+  index.Register<TimerDelay>(*fake_parent);
+  index.Register<HotKey>(*fake_parent);
+  index.Register<KeyPresser>(*fake_parent);
+  index.Register<MouseClick>(*fake_parent, gui::PointerButton::Left, true);
+  index.Register<MouseClick>(*fake_parent, gui::PointerButton::Left, false);
+  index.Register<MouseClick>(*fake_parent, gui::PointerButton::Right, true);
+  index.Register<MouseClick>(*fake_parent, gui::PointerButton::Right, false);
   index.Register<MouseMove>();
-  index.Register<Number>();
-  index.Register<Timeline>();
+  index.Register<Number>(*fake_parent);
+  index.Register<Timeline>(*fake_parent);
   index.Register<InstructionLibrary>();
   index.Register<Instruction, HideInToolbar>();
   index.Register<Register, HideInToolbar>(nullptr, 0);

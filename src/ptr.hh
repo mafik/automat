@@ -12,6 +12,101 @@ namespace automat {
 template <typename T>
 concept HasOperatorDelete = requires { T::operator delete((void*)nullptr); };
 
+struct TrackedPtrBase;
+
+template <typename T>
+struct TrackedPtr;
+
+// Base class for objects that want synchronous single-threaded reference tracking through
+// TrackedPtr<T>.
+struct Trackable {
+  TrackedPtrBase* ref_list = nullptr;
+
+  virtual ~Trackable();
+
+  template <typename Self>
+  auto AcquireTrackedPtr(this Self& self) -> TrackedPtr<Self> {
+    return TrackedPtr<Self>(self);
+  }
+};
+
+// Safe (weak) reference to Widget. Automatically set to nullptr when the widget is destroyed.
+struct TrackedPtrBase {
+  TrackedPtrBase* next;
+  Trackable* widget;
+  TrackedPtrBase() : widget(nullptr), next(nullptr) {}
+  TrackedPtrBase(Trackable& widget) : widget(&widget), next(widget.ref_list) {
+    widget.ref_list = this;
+  }
+  TrackedPtrBase(TrackedPtrBase&& other) : TrackedPtrBase() {
+    auto* widget = other.widget;
+    other.Unlink();
+    if (widget) {
+      Link(*widget);
+    }
+  }
+  TrackedPtrBase(const TrackedPtrBase& other) : TrackedPtrBase() {
+    if (other.widget) {
+      Link(*other.widget);
+    }
+  }
+  ~TrackedPtrBase() { Unlink(); }
+  TrackedPtrBase& operator=(const TrackedPtrBase& other) {
+    if (other.widget) {
+      Link(*other.widget);
+    } else {
+      Unlink();
+    }
+    return *this;
+  }
+  void Reset(Trackable* new_widget = nullptr) {
+    if (new_widget) {
+      Link(*new_widget);
+    } else {
+      Unlink();
+    }
+  }
+
+  operator bool() const { return widget != nullptr; }
+  void Link(Trackable& widget) {
+    Unlink();
+    this->widget = &widget;
+    next = widget.ref_list;
+    widget.ref_list = this;
+  }
+  void Unlink() {
+    if (widget) {
+      if (widget->ref_list == this) {
+        widget->ref_list = next;
+      } else {
+        TrackedPtrBase* prev = widget->ref_list;
+        while (prev->next != this) {
+          prev = prev->next;
+        }
+        prev->next = next;
+      }
+      widget = nullptr;
+    }
+  }
+};
+
+inline Trackable::~Trackable() {
+  TrackedPtrBase* ref = ref_list;
+  while (ref) {
+    ref->widget = nullptr;
+    ref = ref->next;
+  }
+}
+
+template <typename T>
+struct TrackedPtr : TrackedPtrBase {
+  T* operator->() const { return static_cast<T*>(widget); }
+  T& operator*() const { return *static_cast<T*>(widget); }
+  operator T*() const { return static_cast<T*>(widget); }
+  T* Get() const { return static_cast<T*>(widget); }
+  T* get() const { return static_cast<T*>(widget); }
+};
+
 template <typename T>
 struct WeakPtr;
 
@@ -269,10 +364,12 @@ auto operator<<(std::basic_ostream<C, CT>& os, const Ptr<T>& sp) -> decltype(os 
   return os << sp.Get();
 }
 
-template <typename T, typename... Args>
-Ptr<T> MakePtr(Args&&... args) {
-  return Ptr<T>(new T(std::forward<Args>(args)...));
-}
+// Create a new instance of T, wrapped in Ptr<T>.
+//
+// Note: this could be replaced with a "perfect forwarding" wrapper (similar to std::make_shared)
+// but unfortunately it prevents clangd from properly inferring the argument types and producing
+// warnings. For development convenience, it's better to keep it as a macro.
+#define MAKE_PTR(T, ...) Ptr(new T(__VA_ARGS__))
 
 // WeakPtr can holds a reference to a reference-counted object while also allowing that object to be
 // destroyed. In order to use WeakPtr, it should first be converted to Ptr using `Lock().
@@ -394,6 +491,9 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
   WeakPtr<ReferenceCounted> weak_ptr;
   T* obj;
 };
+
+using std::make_unique;
+using std::unique_ptr;
 
 }  // namespace automat
 

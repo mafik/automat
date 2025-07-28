@@ -127,11 +127,11 @@ struct Pointer {
   Vec<PointerMoveCallback*> move_callbacks;
 
   std::unique_ptr<Action> actions[static_cast<int>(PointerButton::Count)];
-  Ptr<Widget> hover;
+  TrackedPtr<Widget> hover;
 
-  Vec<WeakPtr<Widget>> path;
+  Vec<TrackedPtr<Widget>> path;
 
-  Ptr<PointerWidget> pointer_widget;
+  unique_ptr<PointerWidget> pointer_widget;
 
   // Called when icon state changes (for platform-specific cursor updates)
   virtual void OnIconChanged(IconType old_icon, IconType new_icon) {}
@@ -159,15 +159,15 @@ struct Pointer {
 
 struct PointerWidget : Widget {
   Pointer& pointer;
-  PointerWidget(Pointer& pointer) : pointer(pointer) {}
+  PointerWidget(Widget& parent, Pointer& pointer) : Widget(parent), pointer(pointer) {}
   SkPath Shape() const override { return SkPath(); }
-  void FillChildren(Vec<Ptr<Widget>>& children) override {
+  void FillChildren(Vec<Widget*>& children) override {
     for (auto& action : pointer.actions) {
       if (action == nullptr) {
         continue;
       }
       if (auto widget = action->Widget()) {
-        children.push_back(widget->AcquirePtr());
+        children.push_back(widget);
       }
     }
   }

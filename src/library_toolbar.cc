@@ -22,9 +22,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
     return nullptr;
   }
   auto matrix = TransformBetween(*pointer.hover, *root_machine);
-  auto loc = MakePtr<Location>();
-  loc->parent_location = root_location;
-  loc->parent = root_machine;
+  auto loc = MAKE_PTR(Location, *root_machine, root_location->AcquireWeakPtr());
 
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
@@ -36,7 +34,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
 }
 
 // Ptr<Object> Toolbar::Clone() const {
-//   auto new_toolbar = MakePtr<Toolbar>();
+//   auto new_toolbar = MAKE_PTR(Toolbar);
 //   for (const auto& prototype : prototypes) {
 //     new_toolbar->AddObjectPrototype(prototype);
 //   }
@@ -144,17 +142,20 @@ void Toolbar::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-void Toolbar::FillChildren(Vec<Ptr<Widget>>& children) {
+void Toolbar::FillChildren(Vec<Widget*>& children) {
   children.reserve(buttons.size());
   for (size_t i = 0; i < buttons.size(); ++i) {
-    children.push_back(buttons[i]);
+    children.push_back(buttons[i].get());
   }
 }
 
 void Toolbar::AddObjectPrototype(const Ptr<Object>& new_proto) {
   prototypes.push_back(new_proto->Clone());
-  buttons.emplace_back(MakePtr<gui::PrototypeButton>(prototypes.back()));
-  buttons.back()->Init(AcquirePtr());
+  buttons.emplace_back(std::make_unique<gui::PrototypeButton>(*this, prototypes.back()));
+  if (auto widget = dynamic_cast<Widget*>(prototypes.back().Get())) {
+    widget->parent = buttons.back().get();
+  }
+  buttons.back()->Init();
 }
 
 void Toolbar::UpdateChildTransform() {

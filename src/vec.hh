@@ -54,6 +54,14 @@ struct Vec : std::vector<T> {
   iterator EraseIndex(int i) { return this->erase(this->begin() + i); }
 };
 
+template <typename T, typename... Args>
+Vec<T> MakeVec(Args&&... t) {
+  Vec<T> vec;
+  vec.reserve(sizeof...(Args));
+  (vec.emplace_back(std::move(t)), ...);
+  return vec;
+}
+
 template <typename T>
 void FastRemove(std::vector<T>& vec, const T& value) {
   auto it = std::find(vec.begin(), vec.end(), value);

@@ -49,7 +49,7 @@ struct ObjectAnimationState {
 //
 // Implementations of this interface would typically extend it with
 // container-specific functions.
-struct Location : public gui::Widget {
+struct Location : ReferenceCounted, gui::Widget {
   constexpr static float kPositionSpringPeriod = 0.2;
   constexpr static float kScaleSpringPeriod = 0.3;
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
@@ -62,7 +62,7 @@ struct Location : public gui::Widget {
   WeakPtr<Location> parent_location;
 
   Ptr<Object> object;
-  mutable Ptr<Widget> object_widget;
+  mutable Widget* object_widget = nullptr;
 
   Vec2 position = {0, 0};
   float scale = 1.f;
@@ -84,18 +84,18 @@ struct Location : public gui::Widget {
 
   RunTask& GetRunTask();
 
-  Location(WeakPtr<Location> parent = {});
+  Location(Widget& parent_widget, WeakPtr<Location> parent_location = {});
   ~Location();
 
   // Find (or create if needed) the Widget for this location's object.
   // Shortcut for Widget::ForObject(location.object, location)
-  Ptr<Widget>& WidgetForObject() const {
+  Widget& WidgetForObject() const {
     if (!object_widget) {
       if (object) {
-        object_widget = Widget::ForObject(*object, *this);
+        object_widget = &Widget::ForObject(*object, *this);
       }
     }
-    return object_widget;
+    return *object_widget;
   }
 
   Vec2 ScalePivot() const override;
@@ -110,13 +110,12 @@ struct Location : public gui::Widget {
 
   Ptr<Object> Create(const Object& prototype);
 
-  template <typename T>
-  Ptr<T> Create() {
-    auto typed = MakePtr<T>();
+  template <typename T, typename... Args>
+  Ptr<T> Create(Args&&... args) {
+    auto typed = MAKE_PTR(T, std::forward<Args>(args)...);
     object = typed;
     object->Relocate(this);
-    auto object_widget = WidgetForObject();
-    object_widget->parent = this->AcquirePtr();
+    object_widget = &WidgetForObject();
     FixParents();
     return typed;
   }
@@ -270,7 +269,7 @@ struct Location : public gui::Widget {
   // argument should start.
   // TODO: replace with Argument::Start
   Vec2AndDir ArgStart(Argument&);
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
   Optional<Rect> TextureBounds() const override;
 
   ////////////////////////////

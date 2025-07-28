@@ -106,14 +106,14 @@ void Argument::NearbyCandidates(
           continue;
         }
         Vec<Vec2AndDir> to_points;
-        location->WidgetForObject()->ConnectionPositions(to_points);
+        location->WidgetForObject().ConnectionPositions(to_points);
         callback(*location, to_points);
       }
     }
   }
   // Query nearby objects in the parent machine
 
-  Vec2 center = this->Start(*here.WidgetForObject(), *root_machine).pos;
+  Vec2 center = this->Start(here.WidgetForObject(), *root_machine).pos;
   root_machine->Nearby(center, radius, [&](Location& other) -> void* {
     if (&other == &here) {
       return nullptr;
@@ -126,7 +126,7 @@ void Argument::NearbyCandidates(
       }
     }
     Vec<Vec2AndDir> to_points;
-    other.WidgetForObject()->ConnectionPositions(to_points);
+    other.WidgetForObject().ConnectionPositions(to_points);
     callback(other, to_points);
     return nullptr;
   });
@@ -145,9 +145,9 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
       if (auto machine = here.ParentAs<Machine>()) {
         Location& l = machine->Create(*prototype);
         result = &l;
-        Rect object_bounds = l.WidgetForObject()->Shape().getBounds();
+        Rect object_bounds = l.WidgetForObject().Shape().getBounds();
         l.position =
-            here.position + here.WidgetForObject()->ArgStart(*this).pos - object_bounds.TopCenter();
+            here.position + here.WidgetForObject().ArgStart(*this).pos - object_bounds.TopCenter();
         PositionBelow(here, l);
         AnimateGrowFrom(here,
                         l);  // this must go before UpdateAutoconnectArgs because of animation_state

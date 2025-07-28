@@ -11,6 +11,8 @@
 #include "../build/generated/embedded.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
+#include "menu.hh"
+#include "root_widget.hh"
 #include "sincos.hh"
 #include "status.hh"
 #include "svg.hh"
@@ -49,24 +51,26 @@ float KeyPresserButton::PressRatio() const {
   return 0;
 }
 
-KeyPresser::KeyPresser(gui::AnsiKey key)
-    : key(key),
-      shortcut_button(MakePtr<KeyPresserButton>(this, MakeKeyLabelWidget(ToStr(key)),
-                                                KeyColor(false), kBaseKeyWidth)) {
+KeyPresser::KeyPresser(gui::Widget& parent, gui::AnsiKey key)
+    : FallbackWidget(parent),
+      key(key),
+      shortcut_button(
+          new KeyPresserButton(*this, this, ToStr(key), KeyColor(false), kBaseKeyWidth)) {
   shortcut_button->activate = [this](gui::Pointer& pointer) {
     if (key_selector) {
       key_selector->Release();
     } else if (pointer.keyboard) {
       Vec2 caret_position = shortcut_button->child->TextureBounds()->TopLeftCorner();
-      key_selector = &pointer.keyboard->RequestCaret(*this, shortcut_button->child, caret_position);
+      key_selector =
+          &pointer.keyboard->RequestCaret(*this, shortcut_button->child.get(), caret_position);
     }
     WakeAnimation();
     shortcut_button->WakeAnimation();
   };
 }
-KeyPresser::KeyPresser() : KeyPresser(gui::AnsiKey::F) {}
+KeyPresser::KeyPresser(gui::Widget& parent) : KeyPresser(parent, gui::AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
-Ptr<Object> KeyPresser::Clone() const { return MakePtr<KeyPresser>(key); }
+Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, *parent, key); }
 animation::Phase KeyPresser::Tick(time::Timer&) {
   shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
   return animation::Finished;
@@ -123,7 +127,7 @@ void KeyPresser::KeyDown(gui::Caret&, gui::Key k) {
   shortcut_button->WakeAnimation();
 }
 
-void KeyPresser::FillChildren(Vec<Ptr<Widget>>& children) { children.push_back(shortcut_button); }
+void KeyPresser::FillChildren(Vec<Widget*>& children) { children.push_back(shortcut_button.get()); }
 
 struct DragAndClickAction : Action {
   gui::PointerButton btn;
@@ -168,19 +172,19 @@ struct RunAction : Action {
   void Update() override {}
 };
 
-struct RunOption : Option {
-  Ptr<gui::Widget> widget;
-  RunOption(Ptr<gui::Widget> widget) : Option("Run"), widget(widget) {}
+struct RunOption : TextOption {
+  gui::Widget* widget;
+  RunOption(gui::Widget* widget) : TextOption("Run"), widget(widget) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(widget); }
   std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
     return std::make_unique<RunAction>(p, *Closest<Location>(*widget));
   }
 };
 
-struct UseObjectOption : Option {
-  Ptr<gui::Widget> widget;
+struct UseObjectOption : TextOption {
+  gui::Widget* widget;
 
-  UseObjectOption(Ptr<gui::Widget> widget) : Option("Use"), widget(widget) {}
+  UseObjectOption(gui::Widget* widget) : TextOption("Use"), widget(widget) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<UseObjectOption>(widget);
   }
@@ -195,10 +199,11 @@ std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigg
   auto local_pos = p.PositionWithin(*this);
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
     return std::make_unique<DragAndClickAction>(p, btn, Object::FallbackWidget::FindAction(p, btn),
-                                                std::make_unique<RunOption>(AcquirePtr()));
+                                                std::make_unique<RunOption>(this));
   } else {
-    return std::make_unique<DragAndClickAction>(p, btn, Object::FallbackWidget::FindAction(p, btn),
-                                                std::make_unique<UseObjectOption>(shortcut_button));
+    return std::make_unique<DragAndClickAction>(
+        p, btn, Object::FallbackWidget::FindAction(p, btn),
+        std::make_unique<UseObjectOption>(shortcut_button.get()));
   }
 }
 

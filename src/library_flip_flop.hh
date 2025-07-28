@@ -5,13 +5,14 @@
 #include "animation.hh"
 #include "base.hh"
 #include "gui_button.hh"
+#include "widget.hh"
 
 namespace automat::library {
 
 struct FlipFlop;
 
 struct YingYangIcon : gui::Widget, gui::PaintMixin {
-  YingYangIcon() {}
+  YingYangIcon(gui::Widget& parent) : gui::Widget(parent) {}
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   bool CenteredAtZero() const override { return true; }
@@ -20,12 +21,12 @@ struct YingYangIcon : gui::Widget, gui::PaintMixin {
 struct FlipFlopButton : gui::ToggleButton {
   FlipFlop* flip_flop;
 
-  FlipFlopButton();
+  FlipFlopButton(gui::Widget& parent);
   bool Filled() const override;
 };
 
 struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
-  Ptr<FlipFlopButton> button;
+  std::unique_ptr<FlipFlopButton> button;
 
   bool current_state = false;
   struct AnimationState {
@@ -33,7 +34,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
   };
   AnimationState animation_state;
 
-  FlipFlop();
+  FlipFlop(gui::Widget& parent);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer& timer) override;
@@ -43,7 +44,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
 
   void SetKey(gui::AnsiKey);
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
 
   void OnRun(Location& here, RunTask&) override;
   void SerializeState(Serializer& writer, const char* key) const override;

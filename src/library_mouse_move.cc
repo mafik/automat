@@ -28,7 +28,7 @@ namespace automat::library {
 
 string_view MouseMove::Name() const { return "Mouse Move"; }
 
-Ptr<Object> MouseMove::Clone() const { return MakePtr<MouseMove>(); }
+Ptr<Object> MouseMove::Clone() const { return MAKE_PTR(MouseMove); }
 
 PersistentImage dpad_image = PersistentImage::MakeFromAsset(
     embedded::assets_mouse_dpad_webp, PersistentImage::MakeArgs{.scale = mouse::kTextureScale});
@@ -39,7 +39,10 @@ struct MouseMoveWidget : Object::FallbackWidget {
   std::atomic<int> trail_end_idx = 0;
   std::atomic<Vec2> trail[kMaxTrailPoints] = {};
 
-  MouseMoveWidget(WeakPtr<MouseMove>&& weak_mouse_move) { object = std::move(weak_mouse_move); }
+  MouseMoveWidget(gui::Widget& parent, WeakPtr<MouseMove>&& weak_mouse_move)
+      : FallbackWidget(parent) {
+    object = std::move(weak_mouse_move);
+  }
   SkPath Shape() const override {
     Rect bounds = *TextureBounds();
     float width = bounds.Width();
@@ -133,7 +136,9 @@ struct MouseMoveWidget : Object::FallbackWidget {
   }
 };
 
-Ptr<gui::Widget> MouseMove::MakeWidget() { return MakePtr<MouseMoveWidget>(AcquireWeakPtr()); }
+std::unique_ptr<gui::Widget> MouseMove::MakeWidget(gui::Widget& parent) {
+  return std::make_unique<MouseMoveWidget>(parent, AcquireWeakPtr());
+}
 
 Vec2 mouse_move_accumulator;
 

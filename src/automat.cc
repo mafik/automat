@@ -182,7 +182,7 @@ void RunOnAutomatThread(std::function<void()> f) {
     f();
     return;
   }
-  auto task = new FunctionTask(root_location, [f](Location& l) { f(); });
+  auto task = new FunctionTask(root_location.get(), [f](Location& l) { f(); });
   task->Schedule();
 }
 
@@ -230,17 +230,17 @@ int Main() {
 
   prototypes.emplace();
 
-  root_widget = MakePtr<RootWidget>();
+  root_widget = make_unique<RootWidget>();
   root_widget->loading_animation = std::make_unique<HypnoRect>();
   root_widget->InitToolbar();
-  gui::keyboard = MakePtr<gui::Keyboard>(*root_widget);
-  root_widget->keyboards.emplace_back(gui::keyboard);
-  gui::keyboard->parent = root_widget;
+  gui::keyboard = make_unique<gui::Keyboard>(*root_widget);
+  root_widget->keyboards.emplace_back(gui::keyboard.get());
 
-  root_location = MakePtr<Location>();
-  root_location->parent = gui::root_widget;
-  root_machine = root_location->Create<Machine>();
-  root_machine->parent = gui::root_widget;
+  root_location = MAKE_PTR(Location, *root_widget);
+  root_machine = root_location->Create<Machine>(*root_widget);
+  // We don't want to display the root location. Root machine
+  // should be connected directly to the root widget.
+  root_machine->parent = root_widget.get();
   root_machine->name = "Root machine";
   StartTimeThread(stop_source.get_token());
 

@@ -14,8 +14,34 @@ using namespace automat::gui;
 
 namespace automat::library {
 
-KeyButton::KeyButton(Ptr<Widget> child, SkColor color, float width)
-    : Button(child), width(width), fg(color) {
+struct KeyLabelWidget : Widget, LabelMixin {
+  Str label;
+  float width;
+
+  KeyLabelWidget(Widget& parent, StrView label) : Widget(parent) { SetLabel(label); }
+  SkPath Shape() const override {
+    return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
+  }
+  Optional<Rect> TextureBounds() const override {
+    return SkRect::MakeLTRB(-width / 2, 1.5 * kLetterSize, width / 2, -0.5 * kLetterSize);
+  }
+  void Draw(SkCanvas& canvas) const override {
+    SkPaint paint;
+    paint.setAntiAlias(true);
+    paint.setColor("#000000"_color);
+    canvas.translate(-width / 2, -kKeyLetterSize / 2);
+    KeyFont().DrawText(canvas, label, paint);
+    canvas.translate(width / 2, kKeyLetterSize / 2);
+  }
+  void SetLabel(StrView label) override {
+    this->label = label;
+    width = KeyFont().MeasureText(label);
+    WakeAnimation();
+  }
+};
+
+KeyButton::KeyButton(Widget& parent, StrView label, SkColor color, float width)
+    : Button(parent, make_unique<KeyLabelWidget>(*this, label)), width(width), fg(color) {
   SkRect child_bounds = ChildBounds();
   SkRRect key_base = RRect();
   SkRect key_face =
@@ -83,7 +109,7 @@ void KeyButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
                        key_base.rect().right() - kKeySide, key_base.rect().bottom() - kKeyTopSide),
       kKeyFaceRadius, kKeyFaceRadius);
 
-  float lightness_adjust = highlight * 10;
+  float lightness_adjust = clickable.highlight * 10;
 
   SkPaint face_paint;
   SkPoint face_pts[] = {{0, key_face.rect().bottom()}, {0, key_face.rect().top()}};
@@ -115,34 +141,6 @@ Font& KeyFont() {
       Font::MakeV2(Font::MakeWeightVariation(Font::GetNotoSans(), 700), kKeyLetterSize);
   return *font.get();
 }
-
-struct KeyLabelWidget : Widget, LabelMixin {
-  Str label;
-  float width;
-
-  KeyLabelWidget(StrView label) { SetLabel(label); }
-  SkPath Shape() const override {
-    return SkPath::Rect(SkRect::MakeXYWH(-width / 2, -kKeyLetterSize / 2, width, kKeyLetterSize));
-  }
-  Optional<Rect> TextureBounds() const override {
-    return SkRect::MakeLTRB(-width / 2, 1.5 * kLetterSize, width / 2, -0.5 * kLetterSize);
-  }
-  void Draw(SkCanvas& canvas) const override {
-    SkPaint paint;
-    paint.setAntiAlias(true);
-    paint.setColor("#000000"_color);
-    canvas.translate(-width / 2, -kKeyLetterSize / 2);
-    KeyFont().DrawText(canvas, label, paint);
-    canvas.translate(width / 2, kKeyLetterSize / 2);
-  }
-  void SetLabel(StrView label) override {
-    this->label = label;
-    width = KeyFont().MeasureText(label);
-    WakeAnimation();
-  }
-};
-
-Ptr<Widget> MakeKeyLabelWidget(StrView label) { return MakePtr<KeyLabelWidget>(label); }
 
 void KeyButton::SetLabel(StrView new_label) {
   dynamic_cast<LabelMixin*>(child.get())->SetLabel(new_label);

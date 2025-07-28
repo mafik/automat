@@ -43,7 +43,7 @@ struct PtrTest : testing::Test {
 
 TEST_F(PtrTest, KeyEvents) {
   EXPECT_LOG();
-  auto ptr = MakePtr<Entity>();
+  auto ptr = MAKE_PTR(Entity);
   auto raw = ptr.Get();
   EXPECT_LOG(Allocate, Construct);
   EXPECT_REF_COUNT(raw, 1, 1);
@@ -60,7 +60,7 @@ TEST_F(PtrTest, KeyEvents) {
 
 TEST_F(PtrTest, CopyConstructor) {
   EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
   auto raw = ptr1.Get();
   EXPECT_LOG(Allocate, Construct);
   EXPECT_REF_COUNT(raw, 1, 1);
@@ -76,7 +76,7 @@ TEST_F(PtrTest, CopyConstructor) {
 
 TEST_F(PtrTest, MoveConstructor) {
   EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
   auto raw = ptr1.Get();
   EXPECT_LOG(Allocate, Construct);
   EXPECT_REF_COUNT(raw, 1, 1);
@@ -93,8 +93,8 @@ TEST_F(PtrTest, MoveConstructor) {
 
 TEST_F(PtrTest, CopyAssignment) {
   EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
-  auto ptr2 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
+  auto ptr2 = MAKE_PTR(Entity);
   auto raw1 = ptr1.Get();
   auto raw2 = ptr2.Get();
   EXPECT_LOG(Allocate, Construct, Allocate, Construct);
@@ -111,8 +111,8 @@ TEST_F(PtrTest, CopyAssignment) {
 
 TEST_F(PtrTest, MoveAssignment) {
   EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
-  auto ptr2 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
+  auto ptr2 = MAKE_PTR(Entity);
   auto raw1 = ptr1.Get();
   auto raw2 = ptr2.Get();
   EXPECT_LOG(Allocate, Construct, Allocate, Construct);
@@ -128,7 +128,7 @@ TEST_F(PtrTest, MoveAssignment) {
 
 TEST_F(PtrTest, NullptrAssignment) {
   EXPECT_LOG();
-  auto ptr = MakePtr<Entity>();
+  auto ptr = MAKE_PTR(Entity);
   auto raw = ptr.Get();
   EXPECT_LOG(Allocate, Construct);
 
@@ -142,8 +142,8 @@ TEST_F(PtrTest, NullptrAssignment) {
 
 TEST_F(PtrTest, SwapFunction) {
   EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
-  auto ptr2 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
+  auto ptr2 = MAKE_PTR(Entity);
   auto raw1 = ptr1.Get();
   auto raw2 = ptr2.Get();
   EXPECT_LOG(Allocate, Construct, Allocate, Construct);
@@ -159,8 +159,8 @@ TEST_F(PtrTest, SwapFunction) {
 
 TEST_F(PtrTest, SwapMethod) {
   EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
-  auto ptr2 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
+  auto ptr2 = MAKE_PTR(Entity);
   auto raw1 = ptr1.Get();
   auto raw2 = ptr2.Get();
   EXPECT_LOG(Allocate, Construct, Allocate, Construct);
@@ -175,8 +175,8 @@ TEST_F(PtrTest, SwapMethod) {
 }
 
 TEST_F(PtrTest, ComparisonOperators) {
-  auto ptr1 = MakePtr<Entity>();
-  auto ptr2 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
+  auto ptr2 = MAKE_PTR(Entity);
   auto ptr3 = ptr1;
 
   // Equality operators
@@ -201,7 +201,7 @@ TEST_F(PtrTest, ComparisonOperators) {
 
 TEST_F(PtrTest, ReleaseMethod) {
   EXPECT_LOG();
-  auto ptr = MakePtr<Entity>();
+  auto ptr = MAKE_PTR(Entity);
   auto raw = ptr.Get();
   EXPECT_LOG(Allocate, Construct);
 
@@ -224,7 +224,7 @@ TEST_F(PtrTest, WeakPtrExpiredAndLock) {
   WeakPtr<Entity> weak(nullptr);
 
   {
-    auto ptr = MakePtr<Entity>();
+    auto ptr = MAKE_PTR(Entity);
     auto raw = ptr.Get();
     EXPECT_LOG(Allocate, Construct);
 
@@ -252,8 +252,8 @@ TEST_F(PtrTest, WeakPtrExpiredAndLock) {
 
 TEST_F(PtrTest, WeakPtrReset) {
   EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
-  auto ptr2 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
+  auto ptr2 = MAKE_PTR(Entity);
   auto raw1 = ptr1.Get();
   auto raw2 = ptr2.Get();
 
@@ -286,8 +286,8 @@ TEST_F(PtrTest, WeakPtrReset) {
 
 TEST_F(PtrTest, WeakPtrAssignment) {
   EXPECT_LOG();
-  auto ptr1 = MakePtr<Entity>();
-  auto ptr2 = MakePtr<Entity>();
+  auto ptr1 = MAKE_PTR(Entity);
+  auto ptr2 = MAKE_PTR(Entity);
   auto raw1 = ptr1.Get();
   auto raw2 = ptr2.Get();
 
@@ -334,7 +334,7 @@ TEST_F(PtrTest, WeakPtrAssignment) {
 
 TEST_F(PtrTest, BoolConversionOperator) {
   Ptr<Entity> null_ptr;
-  auto valid_ptr = MakePtr<Entity>();
+  auto valid_ptr = MAKE_PTR(Entity);
 
   // Bool conversion operator
   EXPECT_FALSE(static_cast<bool>(null_ptr));
@@ -351,7 +351,7 @@ TEST_F(PtrTest, BoolConversionOperator) {
 }
 
 TEST_F(PtrTest, DereferenceOperators) {
-  auto ptr = MakePtr<Entity>();
+  auto ptr = MAKE_PTR(Entity);
   auto raw = ptr.Get();
 
   // Arrow operator

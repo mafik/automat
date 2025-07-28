@@ -80,10 +80,10 @@ namespace automat::library {
 
 constexpr bool kDebugWindowPicking = false;
 
-struct EnableContinuousRunOption : Option {
+struct EnableContinuousRunOption : TextOption {
   WeakPtr<Window> weak;
 
-  EnableContinuousRunOption(WeakPtr<Window> weak) : Option("Start"), weak(weak) {}
+  EnableContinuousRunOption(WeakPtr<Window> weak) : TextOption("Start"), weak(weak) {}
 
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<EnableContinuousRunOption>(weak);
@@ -102,10 +102,10 @@ struct EnableContinuousRunOption : Option {
   }
 };
 
-struct DisableContinuousRunOption : Option {
+struct DisableContinuousRunOption : TextOption {
   WeakPtr<Window> weak;
 
-  DisableContinuousRunOption(WeakPtr<Window> weak) : Option("Stop"), weak(weak) {}
+  DisableContinuousRunOption(WeakPtr<Window> weak) : TextOption("Stop"), weak(weak) {}
 
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<DisableContinuousRunOption>(weak);
@@ -154,7 +154,7 @@ struct Window::Impl {
 Window::Window() { impl = std::make_unique<Impl>(); }
 
 Ptr<Object> Window::Clone() const {
-  auto ret = MakePtr<Window>();
+  auto ret = MAKE_PTR(Window);
   ret->run_continuously = run_continuously;
   ret->captured_image = captured_image;
   ret->capture_time = capture_time;
@@ -179,8 +179,9 @@ struct WindowWidget;
 
 struct PickButton : theme::xp::TitleButton {
   std::function<void(gui::Pointer&)> on_activate;
-  PickButton()
-      : theme::xp::TitleButton(gui::MakeShapeWidget(kPickSVG, "#000000"_color, &kCenterPickIcon)) {
+  PickButton(gui::Widget& parent)
+      : theme::xp::TitleButton(
+            parent, gui::MakeShapeWidget(*this, kPickSVG, "#000000"_color, &kCenterPickIcon)) {
     child->local_to_parent.preTranslate(-0.2_mm, -0.2_mm);
   }
   // float Height() const override { return kTitleButtonSize; }
@@ -235,7 +236,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   gui::PointerGrab* pointer_grab = nullptr;
   gui::KeyGrab* key_grab = nullptr;
 
-  Ptr<PickButton> pick_button;
+  std::unique_ptr<PickButton> pick_button;
   std::string window_name;
 
   sk_sp<SkImage> captured_image;  // Local copy of the captured bitmap
@@ -243,9 +244,9 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
-  WindowWidget(WeakPtr<Object> window) {
+  WindowWidget(gui::Widget& parent, WeakPtr<Object> window) : FallbackWidget(parent) {
     object = window;
-    pick_button = MakePtr<PickButton>();
+    pick_button = std::make_unique<PickButton>(*this);
     pick_button->on_activate = [this](gui::Pointer& p) {
       p.EndAllActions();
       pointer_grab = &p.RequestGlobalGrab(*this);
@@ -361,7 +362,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     DrawChildren(canvas);
   }
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(pick_button); }
+  void FillChildren(Vec<Widget*>& children) override { children.push_back(pick_button.get()); }
 
   void ReleaseGrabs() {
     if (pointer_grab) pointer_grab->Release();
@@ -471,7 +472,9 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   }
 };
 
-Ptr<gui::Widget> Window::MakeWidget() { return MakePtr<WindowWidget>(AcquireWeakPtr<Object>()); }
+std::unique_ptr<gui::Widget> Window::MakeWidget(gui::Widget& parent) {
+  return std::make_unique<WindowWidget>(parent, AcquireWeakPtr<Object>());
+}
 
 void Window::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 

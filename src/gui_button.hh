@@ -5,6 +5,7 @@
 #include <include/core/SkColor.h>
 
 #include <memory>
+#include <optional>
 
 #include "animation.hh"
 #include "gui_constants.hh"
@@ -15,41 +16,47 @@
 
 namespace automat::gui {
 
-// Base class for things that can be clicked. Takes care of changing the pointer icon and animating
-// a `highlight` value.
-struct Clickable : Widget {
-  Ptr<Widget> child;
-
+// Helper for widgets that can be clicked. Takes care of changing the pointer icon and animating
+// a `highlight` value. Users of this class should make sure to call the `PointerOver`,
+// `PointerLeave`, `Tick` and `FindAction` methods.
+struct Clickable {
+  const Widget& widget;
   int pointers_over = 0;
   int pointers_pressing = 0;
   float highlight = 0;
-  Optional<Pointer::IconOverride> hand_icon;
+  Optional<Pointer::IconOverride> hand_icon = std::nullopt;
+  std::function<void(Pointer&)> activate = nullptr;
 
-  Clickable(Ptr<Widget> child) : child(child) {}
+  Clickable(Widget& parent) : widget(parent) {}
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override { children.push_back(child); }
-  virtual SkRRect RRect() const;
-  void Draw(SkCanvas&) const override;
-  SkPath Shape() const override;
-  SkRect ChildBounds() const;
-  void PointerOver(Pointer&) override;
-  void PointerLeave(Pointer&) override;
-  animation::Phase Tick(time::Timer&) override;
-  virtual void Activate(gui::Pointer&) { WakeAnimation(); }
-  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
+  void PointerOver(Pointer&);
+  void PointerLeave(Pointer&);
+  animation::Phase Tick(time::Timer&);
+  std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger);
 };
 
-struct Button : Clickable {
+struct Button : Widget {
+  std::unique_ptr<Widget> child;
   constexpr static float kPressOffset = 0.2_mm;
+  Clickable clickable;
 
-  Button(Ptr<Widget> child);
+  Button(gui::Widget& parent, std::unique_ptr<Widget> child);
   animation::Phase Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
-  SkRRect RRect() const override;
+  virtual SkRRect RRect() const;
+  void PointerOver(Pointer& p) override { clickable.PointerOver(p); }
+  void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
+  std::unique_ptr<Action> FindAction(Pointer& p, ActionTrigger a) override {
+    return clickable.FindAction(p, a);
+  }
   virtual SkColor ForegroundColor() const { return SK_ColorBLACK; }
   virtual SkColor BackgroundColor() const { return SK_ColorWHITE; }
-  virtual float PressRatio() const { return pointers_pressing ? 1 : 0; }
+  virtual float PressRatio() const { return clickable.pointers_pressing ? 1 : 0; }
+  void FillChildren(Vec<Widget*>& children) override { children.push_back(child.get()); }
+  SkRect ChildBounds() const;
+  SkPath Shape() const override;
+  virtual void Activate(gui::Pointer&) { WakeAnimation(); }
 
   virtual void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const;
@@ -73,18 +80,22 @@ struct ColoredButton : Button {
   float radius;
   std::function<void(gui::Pointer&)> on_click;
 
-  ColoredButton(Ptr<Widget> child, ColoredButtonArgs args = {})
-      : Button(child), fg(args.fg), bg(args.bg), radius(args.radius), on_click(args.on_click) {
+  ColoredButton(gui::Widget& parent, std::unique_ptr<Widget>&& child, ColoredButtonArgs args = {})
+      : Button(parent, std::move(child)),
+        fg(args.fg),
+        bg(args.bg),
+        radius(args.radius),
+        on_click(args.on_click) {
     UpdateChildTransform();
   }
 
-  ColoredButton(const char* svg_path, ColoredButtonArgs args = {})
-      : ColoredButton(MakeShapeWidget(svg_path, SK_ColorWHITE), args) {
+  ColoredButton(gui::Widget& parent, const char* svg_path, ColoredButtonArgs args = {})
+      : ColoredButton(parent, MakeShapeWidget(*this, svg_path, SK_ColorWHITE), args) {
     UpdateChildTransform();
   }
 
-  ColoredButton(SkPath path, ColoredButtonArgs args = {})
-      : ColoredButton(MakePtr<ShapeWidget>(path), args) {
+  ColoredButton(gui::Widget& parent, SkPath path, ColoredButtonArgs args = {})
+      : ColoredButton(parent, std::make_unique<ShapeWidget>(*this, path), args) {
     UpdateChildTransform();
   }
 
@@ -104,27 +115,28 @@ struct ColoredButton : Button {
 };
 
 struct ToggleButton : Widget {
-  Ptr<Button> on;
-  Ptr<Button> off;
+  std::unique_ptr<Button> on;
+  std::unique_ptr<Button> off;
 
   float filling = 0;
   float time_seconds;  // used for waving animation
 
-  ToggleButton(Ptr<Button> on, Ptr<Button> off) : on(on), off(off) {}
+  ToggleButton(gui::Widget& parent, std::unique_ptr<Button> on, std::unique_ptr<Button> off)
+      : Widget(parent), on(std::move(on)), off(std::move(off)) {}
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override {
+  void FillChildren(Vec<Widget*>& children) override {
     children.push_back(OnWidget());
-    children.push_back(off);
+    children.push_back(off.get());
   }
   bool AllowChildPointerEvents(Widget& child) const override {
     if (Filled()) {
-      return &child == const_cast<ToggleButton*>(this)->OnWidget().get();
+      return &child == const_cast<ToggleButton*>(this)->OnWidget();
     } else {
       return &child == off.get();
     }
   }
 
-  virtual Ptr<Button>& OnWidget() { return on; }
+  virtual Button* OnWidget() { return on.get(); }
   animation::Phase Tick(time::Timer&) override;
   void PreDrawChildren(SkCanvas&) const override;
   void DrawChildCachced(SkCanvas&, const Widget& child) const override;

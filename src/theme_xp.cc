@@ -397,7 +397,7 @@ void TitleButton::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const
   union RRect oval = {.sk = RRect()};
   float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.sk.makeOffset(0, press_shift_y);
-  float lightness_adjust = highlight * 5;
+  float lightness_adjust = clickable.highlight * 5;
   Vec2 gradient_center = oval.rect.TopCenter() + Vec2(0, -0.5_mm);
   float gradient_radius = oval.rect.Height();
 

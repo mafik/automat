@@ -99,11 +99,10 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>
     : Action(pointer),
       contact_point(contact_point),
       locations(std::move(locations_arg)),
-      widget(MakePtr<DragLocationWidget>(*this)) {
-  widget->parent = pointer.GetWidget()->AcquirePtr();
+      widget(new DragLocationWidget(*pointer.GetWidget(), *this)) {
   pointer.root_widget.drag_action_count++;
   for (auto& location : locations) {
-    location->parent = widget;
+    location->parent = widget.get();
     if (location->object_widget) {
       location->animation_state.scale_pivot =
           contact_point + locations.back()->position - location->position;
@@ -136,7 +135,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>
 
 DragLocationAction::DragLocationAction(gui::Pointer& pointer, Ptr<Location>&& location_arg,
                                        Vec2 contact_point)
-    : DragLocationAction(pointer, Vec<Ptr<Location>>{std::move(location_arg)}, contact_point) {}
+    : DragLocationAction(pointer, MakeVec<Ptr<Location>>(std::move(location_arg)), contact_point) {}
 
 DragLocationAction::~DragLocationAction() {
   gui::DropTarget* drop_target = FindDropTarget(*this);
@@ -159,14 +158,14 @@ DragLocationAction::~DragLocationAction() {
   }
   gui::root_widget->WakeAnimation();
 }
-void DragLocationWidget::FillChildren(Vec<Ptr<Widget>>& children) {
+void DragLocationWidget::FillChildren(Vec<Widget*>& children) {
   for (auto& location : action.locations) {
-    children.push_back(location);
+    children.push_back(location.get());
   }
 }
 
 bool IsDragged(const Location& location) {
-  return dynamic_cast<const DragLocationWidget*>(location.parent.get()) != nullptr;
+  return dynamic_cast<const DragLocationWidget*>(location.parent) != nullptr;
 }
 
 }  // namespace automat

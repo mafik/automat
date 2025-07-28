@@ -26,13 +26,13 @@ namespace automat::gui {
 void Clickable::PointerOver(Pointer& pointer) {
   pointers_over++;
   hand_icon.emplace(pointer, Pointer::kIconHand);
-  WakeAnimation();
+  widget.WakeAnimation();
 }
 
 void Clickable::PointerLeave(Pointer& pointer) {
   pointers_over--;
   hand_icon.reset();  // Reset Optional to release icon
-  WakeAnimation();
+  widget.WakeAnimation();
 }
 
 animation::Phase Clickable::Tick(time::Timer& timer) {
@@ -45,33 +45,32 @@ constexpr float kRadius = kMinimalTouchableSize / 2;
 
 }  // namespace
 
-SkRect Clickable::ChildBounds() const {
+SkRect Button::ChildBounds() const {
   if (child) return child->Shape().getBounds();
   return SkRect::MakeEmpty();
 }
-void Clickable::Draw(SkCanvas& canvas) const { DrawChildren(canvas); }
 
-SkPath Clickable::Shape() const { return SkPath::RRect(RRect()); }
+SkPath Button::Shape() const { return SkPath::RRect(RRect()); }
 
 static float ShadowOffset(SkRRect& bounds) {
   return -Button::kPressOffset - (bounds.height() - kMinimalTouchableSize) / 4;
 }
-
-SkRRect Clickable::RRect() const { return SkRRect::MakeRect(ChildBounds()); }
 
 struct ClickAction : public Action {
   Clickable& clickable;
   ClickAction(Pointer& pointer, Clickable& clickable) : Action(pointer), clickable(clickable) {
     audio::Play(embedded::assets_SFX_button_down_wav);
     clickable.pointers_pressing++;
-    clickable.Activate(pointer);  // This may immediately end the action.
+    if (clickable.activate) {
+      clickable.activate(pointer);  // This may immediately end the action.
+    }
   }
 
   void Update() override {}
 
   ~ClickAction() override {
     clickable.pointers_pressing--;
-    clickable.WakeAnimation();
+    clickable.widget.WakeAnimation();
     audio::Play(embedded::assets_SFX_button_up_wav);
   }
 };
@@ -125,7 +124,7 @@ void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
   oval.inset(kBorderWidth / 2, kBorderWidth / 2);
   float press_shift_y = PressRatio() * -kPressOffset;
   auto pressed_oval = oval.makeOffset(0, press_shift_y);
-  float lightness_adjust = highlight * 10;
+  float lightness_adjust = clickable.highlight * 10;
 
   SkPaint paint;
   SkPoint pts[2] = {{0, oval.rect().bottom()}, {0, oval.rect().top()}};
@@ -149,13 +148,13 @@ void Button::DrawButtonFace(SkCanvas& canvas, SkColor bg, SkColor fg) const {
 }
 
 animation::Phase Button::Tick(time::Timer& timer) {
-  animation::Phase phase = Clickable::Tick(timer);
+  animation::Phase phase = clickable.Tick(timer);
 
   auto bg = BackgroundColor();
   auto fg = ForegroundColor();
 
   for (auto& child : Children()) {
-    if (auto paint = PaintMixin::Get(child.get())) {
+    if (auto paint = PaintMixin::Get(child)) {
       if (paint->getColor() == fg) {
         continue;
       }
@@ -188,7 +187,7 @@ animation::Phase ToggleButton::Tick(time::Timer& timer) {
 void ToggleButton::DrawChildCachced(SkCanvas& canvas, const Widget& child) const {
   auto on_widget = const_cast<ToggleButton*>(this)->OnWidget();
   if (filling >= 0.999) {
-    if (&child == on_widget.get()) {
+    if (&child == on_widget) {
       return on_widget->DrawCached(canvas);
     } else {
       return;
@@ -263,7 +262,11 @@ void ToggleButton::PreDrawChildren(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-Button::Button(Ptr<Widget> child) : Clickable(child) { UpdateChildTransform(); }
+Button::Button(gui::Widget& parent, std::unique_ptr<Widget> child)
+    : Widget(parent), child(std::move(child)), clickable(*this) {
+  clickable.activate = [this](Pointer& pointer) { Activate(pointer); };
+  UpdateChildTransform();
+}
 
 void Button::UpdateChildTransform() {
   Vec2 offset = RRect().rect().center();

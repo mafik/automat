@@ -245,7 +245,7 @@ struct Squarer : Object {
     // This should execute the processing loop and execute it
     // until the squerer computes its result.
     // Then it should return.
-    auto dummy_object = MakePtr<Object>();
+    auto dummy_object = MAKE_PTR(Object);
     RunMainLine(make_unique<CallTask>(weak_from_this(), dummy_object));
     // dummy_object::Return should be called now
     auto ret = result;
@@ -329,8 +329,8 @@ double IncrementTest(int n_threads = 1) {
   auto ints = vector<Ptr<Integer>>();
   auto incs = vector<Ptr<Incrementer>>();
   for (int i = 0; i < n_threads; ++i) {
-    ints.emplace_back(MakePtr<Integer>(-kIterations));
-    incs.emplace_back(MakePtr<Incrementer>());
+    ints.emplace_back(MAKE_PTR(Integer, -kIterations));
+    incs.emplace_back(MAKE_PTR(Incrementer));
     incs.back()->integer = ints.back();
     incs.back()->next = incs.back();
   }
@@ -365,14 +365,14 @@ void IncrementTestSuite() {
 void CallTest() {
   // Once the correctness test is passing, we could switch to
   // API improvements.
-  auto integer = MakePtr<Integer>(2);
-  auto squarer = MakePtr<Squarer>();
+  auto integer = MAKE_PTR(Integer, 2);
+  auto squarer = MAKE_PTR(Squarer);
   squarer->number = integer;
   vector<Ptr<Squarer>> squarers;
   vector<weak_ptr<Object>> leaf_squarers;
   function<void(int, weak_ptr<Object>)> Split = [&](int levels, weak_ptr<Object> number) {
-    auto a = MakePtr<Squarer>();
-    auto b = MakePtr<Squarer>();
+    auto a = MAKE_PTR(Squarer);
+    auto b = MAKE_PTR(Squarer);
     a->number = number;
     b->number = number;
     squarers.push_back(a);

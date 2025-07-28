@@ -24,7 +24,7 @@ struct LongRunning;
 //
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
-struct Object : public virtual ReferenceCounted {
+struct Object : public ReferenceCounted {
   Object() {}
 
   // Create a copy of this object.
@@ -86,10 +86,7 @@ struct Object : public virtual ReferenceCounted {
   struct FallbackWidget : gui::Widget {
     WeakPtr<Object> object;
 
-    // FallbackWidget doesn't have a constructor that takes weak_ptr<Object> because it's sometimes
-    // used as a base class for Object/Widget hybrids (which should be refactored BTW). When an
-    // object is constructed, its weak_from_this is not available. It's only present after
-    // construction finishes.
+    FallbackWidget(Widget& parent) : gui::Widget(parent) {}
 
     std::string_view Name() const override;
     virtual float Width() const;
@@ -105,15 +102,27 @@ struct Object : public virtual ReferenceCounted {
     }
   };
 
-  virtual Ptr<gui::Widget> MakeWidget() {
+  virtual std::unique_ptr<gui::Widget> MakeWidget(gui::Widget& parent) {
     if (auto w = dynamic_cast<gui::Widget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto fallback_widget = dynamic_cast<FallbackWidget*>(this)) {
         fallback_widget->object = AcquireWeakPtr();
       }
-      return w->AcquirePtr();
+      struct HybridAdapter : gui::Widget {
+        Ptr<Object> ptr;
+        Widget& widget;
+        HybridAdapter(Widget& parent, Object& obj, Widget& widget)
+            : gui::Widget(parent), ptr(obj.AcquirePtr()), widget(widget) {
+          widget.parent = this;
+        }
+        StrView Name() const override { return "HybridAdapter"; }
+        SkPath Shape() const override { return widget.Shape(); }
+        Optional<Rect> TextureBounds() const override { return std::nullopt; }
+        void FillChildren(Vec<Widget*>& children) override { children.push_back(&widget); }
+      };
+      return std::make_unique<HybridAdapter>(parent, *this, *w);
     }
-    auto w = MakePtr<FallbackWidget>();
+    auto w = std::make_unique<FallbackWidget>(parent);
     w->object = AcquireWeakPtr();
     return w;
   }

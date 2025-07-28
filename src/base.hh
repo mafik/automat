@@ -100,7 +100,7 @@ struct Runnable {
 };
 
 struct LiveObject : Object {
-  WeakPtr<Location> here = {};
+  WeakPtr<Location> here;
 
   void Relocate(Location* new_here) override;
   void ConnectionAdded(Location& here, Connection& connection) override {
@@ -117,7 +117,7 @@ struct LiveObject : Object {
 
 // 2D Canvas holding objects & a spaghetti of connections.
 struct Machine : LiveObject, gui::Widget, gui::DropTarget {
-  Machine();
+  Machine(gui::Widget& parent);
   string name = "";
   deque<Ptr<Location>> locations;
   vector<Location*> front;
@@ -155,7 +155,7 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
   string_view Name() const override { return name; }
   Ptr<Object> Clone() const override {
-    auto m = MakePtr<Machine>();
+    auto m = MAKE_PTR(Machine, *this->parent);
     for (auto& my_it : locations) {
       auto& other_h = m->CreateEmpty();
       other_h.Create(*my_it->object);
@@ -172,7 +172,7 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
   SkPath Shape() const override;
 
-  void FillChildren(Vec<Ptr<Widget>>& children) override;
+  void FillChildren(Vec<Widget*>& children) override;
   void Relocate(Location* parent) override;
 
   string ToStr() const { return f("Machine({})", name); }

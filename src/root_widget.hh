@@ -31,7 +31,7 @@ struct Keyboard;
 struct Pointer;
 
 extern std::vector<RootWidget*> root_widgets;
-extern Ptr<RootWidget> root_widget;
+extern unique_ptr<RootWidget> root_widget;
 
 // Objects can create many widgets, to display themselves simultaneously in multiple contexts.
 // Each context which can display widgets must maintain their lifetime. This class helps with that.
@@ -39,33 +39,25 @@ extern Ptr<RootWidget> root_widget;
 // TODO: introduce `WidgetMaker` interface, so that widgets can be created for non-Objects
 // TODO: delete widgets after some time
 struct WidgetStore {
-  std::map<WeakPtr<Object>, WeakPtr<Widget>> container;
+  std::map<WeakPtr<Object>, std::unique_ptr<Widget>> container;
 
-  Ptr<Widget> Find(Object& object) {
+  Widget* Find(Object& object) {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
       return nullptr;
     }
-    return it->second.lock();
+    return it->second.get();
   }
 
-  Ptr<Widget> For(Object& object, const Widget& parent) {
+  Widget& For(Object& object, const Widget& parent) {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
-      auto widget = object.MakeWidget();
-      widget->parent = parent.AcquirePtr();
-      container.emplace(weak, widget);
-      return widget;
-    } else if (auto strong_ref = it->second.lock()) {
-      return strong_ref;
-    } else {
-      auto widget = object.MakeWidget();
-      widget->parent = parent.AcquirePtr();
-      it->second = widget;
-      return widget;
+      auto widget = object.MakeWidget(const_cast<Widget&>(parent));
+      it = container.emplace(std::move(weak), std::move(widget)).first;
     }
+    return *it->second;
   }
 };
 
@@ -136,7 +128,7 @@ struct RootWidget final : Widget, DropTarget {
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
 
   void Zoom(float delta);
-  void FillChildren(Vec<Ptr<Widget>>& out_children) override;
+  void FillChildren(Vec<Widget*>& out_children) override;
   std::unique_ptr<Pointer> MakePointer(Vec2 position);
 
   // Called when closing Automat to persist state across restarts.
@@ -158,8 +150,8 @@ struct RootWidget final : Widget, DropTarget {
 
   // TODO: Remove (use window.px_per_meter instead)
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
-  Ptr<Toolbar> toolbar;
-  std::vector<Ptr<gui::ConnectionWidget>> connection_widgets;
+  unique_ptr<Toolbar> toolbar;
+  std::vector<unique_ptr<gui::ConnectionWidget>> connection_widgets;
 
   float zoom = 1;
   float zoom_target = 1;
@@ -179,13 +171,13 @@ struct RootWidget final : Widget, DropTarget {
 
   std::deque<float> fps_history;
 
-  std::vector<Pointer*> pointers;
-  std::vector<Ptr<Keyboard>> keyboards;
+  Vec<Pointer*> pointers;
+  Vec<Keyboard*> keyboards;
 
   // Child widgets, stored in front-to-back order.
   //
   // TODO: move all children into this vector
-  Vec<Ptr<Widget>> children;
+  Vec<std::unique_ptr<Widget>> children;
 
   std::mutex mutex;
 };

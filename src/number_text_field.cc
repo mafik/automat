@@ -12,7 +12,8 @@
 
 namespace automat::gui {
 
-NumberTextField::NumberTextField(float width) : gui::TextField(&text, width), text("0") {}
+NumberTextField::NumberTextField(Widget& parent, float width)
+    : gui::TextField(parent, &text, width), text("0") {}
 
 SkRRect NumberTextField::ShapeRRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, kHeight), kHeight / 2, kHeight / 2);

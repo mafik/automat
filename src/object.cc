@@ -89,9 +89,9 @@ SkPath Object::FallbackWidget::Shape() const {
   return it->second;
 }
 
-struct DeleteOption : Option {
+struct DeleteOption : TextOption {
   WeakPtr<Location> weak;
-  DeleteOption(WeakPtr<Location> weak) : Option("Delete"), weak(weak) {}
+  DeleteOption(WeakPtr<Location> weak) : TextOption("Delete"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<DeleteOption>(weak); }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (Ptr<Location> loc = weak.lock()) {
@@ -104,12 +104,12 @@ struct DeleteOption : Option {
   }
 };
 
-struct MoveOption : Option {
+struct MoveOption : TextOption {
   WeakPtr<Location> location_weak;
   WeakPtr<Object> object_weak;
 
   MoveOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
-      : Option("Move"), location_weak(location_weak), object_weak(object_weak) {}
+      : TextOption("Move"), location_weak(location_weak), object_weak(object_weak) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<MoveOption>(location_weak, object_weak);
   }
@@ -149,7 +149,7 @@ struct MoveOption : Option {
     }
     auto* machine = Closest<Machine>(*location);
     if (machine && location->object) {
-      auto contact_point = pointer.PositionWithin(*location->WidgetForObject());
+      auto contact_point = pointer.PositionWithin(location->WidgetForObject());
       machine->ForEachWidget([](gui::RootWidget&, gui::Widget& w) { w.RedrawThisFrame(); });
       return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location),
                                                   contact_point);
@@ -158,9 +158,9 @@ struct MoveOption : Option {
   }
 };
 
-struct RunOption : Option {
+struct RunOption : TextOption {
   WeakPtr<Location> weak;
-  RunOption(WeakPtr<Location> weak) : Option("Run"), weak(weak) {}
+  RunOption(WeakPtr<Location> weak) : TextOption("Run"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(weak); }
   std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
     if (auto loc = weak.lock()) {

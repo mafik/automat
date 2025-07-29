@@ -226,13 +226,13 @@ sk_sp<SkDrawable> MakeWidgetDrawable(Widget& widget) {
 // This procedure is meant to warn about widgets that require more than 10kB of rendering commands.
 // (10kB chosen arbitrarily - to leave some space for other widgets).
 static void WarnLargeRecording(StrView name, Size size) {
-#ifndef NDEBUG
-  static Size warning_threshold = 10 * 1024;
-  if (size > warning_threshold) {
-    LOG << "Warning: Widget " << name << " drew a frame of size " << size / 1024 << "kB";
-    warning_threshold = size;  // prevent spamming the log
+  if constexpr (build_variant::NotRelease) {
+    static Size warning_threshold = 10 * 1024;
+    if (size > warning_threshold) {
+      LOG << "Warning: Widget " << name << " drew a frame of size " << size / 1024 << "kB";
+      warning_threshold = size;  // prevent spamming the log
+    }
   }
-#endif
 }
 
 SkRect WidgetDrawable::onGetBounds() { return *pack_frame_texture_bounds; }

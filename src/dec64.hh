@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include "build_variant.hh"
 #include "format.hh"
 #include "int.hh"
 #include "log.hh"
@@ -40,12 +41,13 @@ union DEC64 {
 
   // Initialize from an integer in the range (-0x80000000000000, 0x7fffffffffffff)
   constexpr static DEC64 MakeRaw(I64 coeff, I8 exp = 0) {
-#ifndef NDEBUG
-    if (coeff < -0x80000000000000 || coeff > 0x7fffffffffffff) {
-      FATAL << "DEC64 initialized with " << coeff
+    if constexpr (build_variant::NotRelease) {
+      if (coeff < -0x80000000000000 || coeff > 0x7fffffffffffff) {
+        FATAL
+            << "DEC64 initialized with " << coeff
             << " which is outside of the supported range (-36028797018963968, 36028797018963967).";
+      }
     }
-#endif
     return DEC64{.exp = exp, .coeff = coeff};
   }
 

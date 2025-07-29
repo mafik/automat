@@ -7,6 +7,7 @@
 
 #include <automat/x86.hh>
 
+#include "build_variant.hh"
 #include "format.hh"
 #include "llvm_asm.hh"
 #include "log.hh"
@@ -771,15 +772,15 @@ struct PtraceController : Controller {
   void UpdateCode(Program&& program, Status& status) override {
     auto& llvm_asm = automat::LLVM_Assembler::Get();
 
-#ifndef NDEBUG
-    // Verify that the program is sorted by inst.owner_less
-    for (int i = 1; i < program.size(); ++i) {
-      if (program[i].inst < program[i - 1].inst) {
-        AppendErrorMessage(status) += "Instructions are not sorted according to std::owner_less!";
-        return;
+    if constexpr (build_variant::NotRelease) {
+      // Verify that the program is sorted by inst.owner_less
+      for (int i = 1; i < program.size(); ++i) {
+        if (program[i].inst < program[i - 1].inst) {
+          AppendErrorMessage(status) += "Instructions are not sorted according to std::owner_less!";
+          return;
+        }
       }
     }
-#endif
 
     if constexpr (kDebugCodeController) {
       LOG << "New instructions:";

@@ -82,6 +82,12 @@ Automat is a C++ application for semi-autonomous game automation with a layered 
 - Uses custom smart pointers and containers
 - Files use `#pragma maf` directives for build system integration
 - Static linking preferred for single-binary distribution
+- **Build Variant Detection**: Include `src/build_variant.hh` to access compile-time build variant constants:
+  - `automat::build_variant::Debug` - true for debug builds
+  - `automat::build_variant::Release` - true for release builds  
+  - `automat::build_variant::Fast` - true for fast builds
+  - Also provides `NotDebug`, `NotRelease`, `NotFast` convenience constants
+  - All constants are `constexpr` and suitable for use in `if constexpr` conditions
 
 ### Testing
 - Use Google Test framework for unit tests

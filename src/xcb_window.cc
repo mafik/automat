@@ -702,25 +702,21 @@ void XCBWindow::MainLoop() {
                 break;
               }
               case XCB_INPUT_RAW_KEY_PRESS: {
-                if (!automat::gui::root_widget->keyboard) break;
-                automat::gui::root_widget->keyboard->KeyDown(*(xcb_input_raw_key_press_event_t*)event);
+                automat::gui::root_widget->keyboard.KeyDown(*(xcb_input_raw_key_press_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
-                if (!automat::gui::root_widget->keyboard) break;
                 auto ev = (xcb_input_key_press_event_t*)event;
                 ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
-                automat::gui::root_widget->keyboard->KeyDown(*ev);
+                automat::gui::root_widget->keyboard.KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_RAW_KEY_RELEASE: {
-                if (!automat::gui::root_widget->keyboard) break;
-                automat::gui::root_widget->keyboard->KeyUp(*(xcb_input_raw_key_release_event_t*)event);
+                automat::gui::root_widget->keyboard.KeyUp(*(xcb_input_raw_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
-                if (!automat::gui::root_widget->keyboard) break;
-                automat::gui::root_widget->keyboard->KeyUp(*(xcb_input_key_release_event_t*)event);
+                automat::gui::root_widget->keyboard.KeyUp(*(xcb_input_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_BUTTON_PRESS: {
@@ -845,7 +841,6 @@ void XCBWindow::MainLoop() {
         }
         case XCB_KEY_PRESS:  // fallthrough
         case XCB_KEY_RELEASE: {
-          if (!automat::gui::root_widget->keyboard) break;
           // This is only called by registered hotkeys
           xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
           auto key = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail);
@@ -874,7 +869,7 @@ void XCBWindow::MainLoop() {
               .logical = key,
           };
           bool handled = false;
-          for (auto& key_grab : automat::gui::root_widget->keyboard->key_grabs) {
+          for (auto& key_grab : automat::gui::root_widget->keyboard.key_grabs) {
             if (key_grab->key == key) {
               if (opcode == XCB_KEY_PRESS) {
                 key_grab->grabber.KeyGrabberKeyDown(*key_grab);
@@ -886,15 +881,15 @@ void XCBWindow::MainLoop() {
             }
           }
           if (opcode == XCB_KEY_PRESS) {
-            automat::gui::root_widget->keyboard->LogKeyDown(key_struct);
+            automat::gui::root_widget->keyboard.LogKeyDown(key_struct);
           } else {
-            automat::gui::root_widget->keyboard->LogKeyUp(key_struct);
+            automat::gui::root_widget->keyboard.LogKeyUp(key_struct);
           }
           if (!handled) {
             if (opcode == XCB_KEY_PRESS) {
-              automat::gui::root_widget->keyboard->KeyDown(*(xcb_input_key_press_event_t*)event);
+              automat::gui::root_widget->keyboard.KeyDown(*(xcb_input_key_press_event_t*)event);
             } else {
-              automat::gui::root_widget->keyboard->KeyUp(*(xcb_input_key_release_event_t*)event);
+              automat::gui::root_widget->keyboard.KeyUp(*(xcb_input_key_release_event_t*)event);
             }
           }
           break;

@@ -400,9 +400,8 @@ void HotKey::On() {
     hotkey->Release();
   }
   auto& root_widget = FindRootWidget();
-  if (!root_widget.keyboard) return;
   hotkey =
-      &root_widget.keyboard->RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [&](Status& status) {
+      &root_widget.keyboard.RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [&](Status& status) {
         if (!OK(status)) {
           if (hotkey) {
             hotkey->Release();

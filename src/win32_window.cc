@@ -372,13 +372,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
               key.text = std::string(utf8_buffer.data(), utf8_len);
             }
             auto lock = window.Lock();
-            if (window.root_widget.keyboard) {
-              if (window.keylogging_enabled) {
-                window.root_widget.keyboard->LogKeyDown(key);
-              }
-              if (window.window_active) {
-                window.root_widget.keyboard->KeyDown(key);
-              }
+            if (window.keylogging_enabled) {
+              window.root_widget.keyboard.LogKeyDown(key);
+            }
+            if (window.window_active) {
+              window.root_widget.keyboard.KeyDown(key);
             }
           }
         } else {
@@ -386,13 +384,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           key_state[virtual_key] = 0;
           key.ctrl = IsCtrlDown();
           auto lock = window.Lock();
-          if (window.root_widget.keyboard) {
-            if (window.keylogging_enabled) {
-              window.root_widget.keyboard->LogKeyUp(key);
-            }
-            if (window.window_active) {
-              window.root_widget.keyboard->KeyUp(key);
-            }
+          if (window.keylogging_enabled) {
+            window.root_widget.keyboard.LogKeyUp(key);
+          }
+          if (window.window_active) {
+            window.root_widget.keyboard.KeyUp(key);
           }
         }
       } else if (raw_input->header.dwType == RIM_TYPEMOUSE) {

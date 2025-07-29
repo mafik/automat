@@ -36,12 +36,8 @@ Pointer::Pointer(RootWidget& root_widget, Vec2 position)
       button_down_time(),
       pointer_widget(new PointerWidget(&root_widget, *this)) {
   root_widget.pointers.push_back(this);
-  if (root_widget.keyboard) {
-    keyboard = root_widget.keyboard.get();
-    keyboard->pointer = this;
-  } else {
-    keyboard = nullptr;
-  }
+  keyboard = &root_widget.keyboard;
+  keyboard->pointer = this;
   pointer_widget->local_to_parent = SkM44(root_widget.CanvasToWindow());
 }
 Pointer::~Pointer() {

@@ -233,7 +233,6 @@ int Main() {
   root_widget = make_unique<RootWidget>();
   root_widget->loading_animation = std::make_unique<HypnoRect>();
   root_widget->InitToolbar();
-  root_widget->keyboard = std::make_unique<gui::Keyboard>(*root_widget);
 
   root_location = MAKE_PTR(Location, root_widget.get());
   root_machine = root_location->Create<Machine>(root_widget.get());

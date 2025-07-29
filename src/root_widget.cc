@@ -24,7 +24,7 @@ namespace automat::gui {
 std::vector<RootWidget*> root_widgets;
 unique_ptr<RootWidget> root_widget;
 
-RootWidget::RootWidget() : Widget(nullptr) { root_widgets.push_back(this); }
+RootWidget::RootWidget() : Widget(nullptr), keyboard(*this) { root_widgets.push_back(this); }
 RootWidget::~RootWidget() {
   auto it = std::find(root_widgets.begin(), root_widgets.end(), this);
   if (it != root_widgets.end()) {
@@ -206,9 +206,7 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   if (root_machine) {
     root_machine->local_to_parent = canvas_to_window;
   }
-  if (keyboard) {
-    keyboard->local_to_parent = canvas_to_window;
-  }
+  keyboard.local_to_parent = canvas_to_window;
   for (auto& pointer : pointers) {
     if (auto* widget = pointer->GetWidget()) {
       widget->local_to_parent = canvas_to_window;
@@ -542,15 +540,13 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
 
 void RootWidget::FillChildren(Vec<Widget*>& out_children) {
   UpdateConnectionWidgets(*this);
-  out_children.reserve(2 + (keyboard ? 1 : 0) + pointers.size() + connection_widgets.size());
+  out_children.reserve(3 + pointers.size() + connection_widgets.size());
 
   for (auto& child : children) {
     out_children.push_back(child.get());
   }
 
-  if (keyboard) {
-    out_children.push_back(keyboard.get());
-  }
+  out_children.push_back(&keyboard);
 
   Vec<Widget*> connection_widgets_below;
   connection_widgets_below.reserve(connection_widgets.size());

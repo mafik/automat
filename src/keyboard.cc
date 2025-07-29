@@ -543,9 +543,9 @@ Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(
 #if defined(_WIN32)
 
 void OnHotKeyDown(int id) {
-  if (root_widget && root_widget->keyboard) {
+  if (root_widget) {
     bool handled = false;
-    for (auto& key_grab : root_widget->keyboard->key_grabs) {
+    for (auto& key_grab : root_widget->keyboard.key_grabs) {
       if (key_grab->id == id) {
         key_grab->grabber.KeyGrabberKeyDown(*key_grab);
         key_grab->grabber.KeyGrabberKeyUp(*key_grab);

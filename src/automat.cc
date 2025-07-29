@@ -233,8 +233,7 @@ int Main() {
   root_widget = make_unique<RootWidget>();
   root_widget->loading_animation = std::make_unique<HypnoRect>();
   root_widget->InitToolbar();
-  gui::keyboard = make_unique<gui::Keyboard>(*root_widget);
-  root_widget->keyboards.emplace_back(gui::keyboard.get());
+  root_widget->keyboard = std::make_unique<gui::Keyboard>(*root_widget);
 
   root_location = MAKE_PTR(Location, root_widget.get());
   root_machine = root_location->Create<Machine>(root_widget.get());
@@ -299,7 +298,6 @@ int Main() {
 
   root_machine->locations.clear();
 
-  keyboard.reset();
   root_widget.reset();
   root_machine.reset();
   root_location.reset();

@@ -372,12 +372,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
               key.text = std::string(utf8_buffer.data(), utf8_len);
             }
             auto lock = window.Lock();
-            if (gui::keyboard) {
+            if (window.root_widget.keyboard) {
               if (window.keylogging_enabled) {
-                gui::keyboard->LogKeyDown(key);
+                window.root_widget.keyboard->LogKeyDown(key);
               }
               if (window.window_active) {
-                gui::keyboard->KeyDown(key);
+                window.root_widget.keyboard->KeyDown(key);
               }
             }
           }
@@ -386,12 +386,12 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           key_state[virtual_key] = 0;
           key.ctrl = IsCtrlDown();
           auto lock = window.Lock();
-          if (gui::keyboard) {
+          if (window.root_widget.keyboard) {
             if (window.keylogging_enabled) {
-              gui::keyboard->LogKeyUp(key);
+              window.root_widget.keyboard->LogKeyUp(key);
             }
             if (window.window_active) {
-              gui::keyboard->KeyUp(key);
+              window.root_widget.keyboard->KeyUp(key);
             }
           }
         }

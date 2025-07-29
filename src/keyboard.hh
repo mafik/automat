@@ -230,6 +230,5 @@ struct Keyboard final : Widget {
   void LogKeyUp(Key);
 };
 
-extern unique_ptr<gui::Keyboard> keyboard;
 
 }  // namespace automat::gui

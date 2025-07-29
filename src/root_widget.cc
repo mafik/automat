@@ -206,8 +206,8 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
   if (root_machine) {
     root_machine->local_to_parent = canvas_to_window;
   }
-  for (auto& each_keyboard : keyboards) {
-    each_keyboard->local_to_parent = canvas_to_window;
+  if (keyboard) {
+    keyboard->local_to_parent = canvas_to_window;
   }
   for (auto& pointer : pointers) {
     if (auto* widget = pointer->GetWidget()) {
@@ -542,14 +542,14 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
 
 void RootWidget::FillChildren(Vec<Widget*>& out_children) {
   UpdateConnectionWidgets(*this);
-  out_children.reserve(2 + keyboards.size() + pointers.size() + connection_widgets.size());
+  out_children.reserve(2 + (keyboard ? 1 : 0) + pointers.size() + connection_widgets.size());
 
   for (auto& child : children) {
     out_children.push_back(child.get());
   }
 
-  for (auto* keyboard : keyboards) {
-    out_children.push_back(keyboard);
+  if (keyboard) {
+    out_children.push_back(keyboard.get());
   }
 
   Vec<Widget*> connection_widgets_below;

@@ -172,7 +172,7 @@ struct RootWidget final : Widget, DropTarget {
   std::deque<float> fps_history;
 
   Vec<Pointer*> pointers;
-  Vec<Keyboard*> keyboards;
+  std::unique_ptr<Keyboard> keyboard;
 
   // Child widgets, stored in front-to-back order.
   //

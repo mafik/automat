@@ -183,6 +183,9 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
                 // try to continue parsing
               } else {
                 object = proto->Clone();
+                if (auto widget = dynamic_cast<Widget*>(object.get())) {
+                  widget->parent = &l;
+                }
               }
             }
           } else if (field == "value") {

@@ -15,6 +15,7 @@
 #include "key_button.hh"
 #include "keyboard.hh"
 #include "math.hh"
+#include "root_widget.hh"
 #include "text_field.hh"
 #include "widget.hh"
 
@@ -398,8 +399,10 @@ void HotKey::On() {
   if (hotkey) {  // just a sanity check, we should never get On multiple times in a row
     hotkey->Release();
   }
+  auto& root_widget = FindRootWidget();
+  if (!root_widget.keyboard) return;
   hotkey =
-      &gui::keyboard->RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [&](Status& status) {
+      &root_widget.keyboard->RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [&](Status& status) {
         if (!OK(status)) {
           if (hotkey) {
             hotkey->Release();

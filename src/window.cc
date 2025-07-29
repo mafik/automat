@@ -15,7 +15,11 @@ void Window::BeginLogging(Keylogger* keylogger, Keylogging** keylogging,
   assert((pointer_logger != nullptr) == (pointer_logging != nullptr));
   assert(keylogger != nullptr || pointer_logger != nullptr);
   if (keylogging != nullptr) {
-    *keylogging = keyboard->keyloggings.emplace_back(new Keylogging(*keyboard, *keylogger)).get();
+    if (root.keyboard) {
+      *keylogging = root.keyboard->keyloggings.emplace_back(new Keylogging(*root.keyboard, *keylogger)).get();
+    } else {
+      *keylogging = nullptr;
+    }
   }
   if (pointer_logging != nullptr) {
     *pointer_logging =
@@ -25,7 +29,7 @@ void Window::BeginLogging(Keylogger* keylogger, Keylogging** keylogging,
 }
 
 void Window::RegisterInput() {
-  OnRegisterInput(keyboard && !keyboard->keyloggings.empty(), mouse && !mouse->loggings.empty());
+  OnRegisterInput(root.keyboard && !root.keyboard->keyloggings.empty(), mouse && !mouse->loggings.empty());
 }
 
 }  // namespace automat::gui

@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
@@ -28,7 +28,7 @@
 
 using namespace automat;
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct DummyRunnable : Object, Runnable {
   void OnRun(Location& here, RunTask&) override { return; }
@@ -544,4 +544,4 @@ ConnectionWidget* ConnectionWidget::Find(Location& here, Argument& arg) {
   return nullptr;
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

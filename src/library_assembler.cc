@@ -45,7 +45,7 @@ struct ShowRegisterOption : TextOption {
     return std::make_unique<ShowRegisterOption>(weak, register_index);
   }
 
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
       assembler->reg_objects_idx[register_index] = MAKE_PTR(Register, weak, register_index);
       assembler->WakeWidgetsAnimation();
@@ -65,7 +65,7 @@ struct HideRegisterOption : TextOption {
     return std::make_unique<HideRegisterOption>(weak, register_index);
   }
 
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto assembler = weak.lock()) {
       assembler->reg_objects_idx[register_index].reset();
       assembler->WakeWidgetsAnimation();
@@ -74,9 +74,9 @@ struct HideRegisterOption : TextOption {
   }
 };
 
-struct ImageWidget : gui::Widget {
+struct ImageWidget : ui::Widget {
   PersistentImage& image;
-  ImageWidget(gui::Widget* parent, PersistentImage& image) : gui::Widget(parent), image(image) {}
+  ImageWidget(ui::Widget* parent, PersistentImage& image) : ui::Widget(parent), image(image) {}
   Optional<Rect> TextureBounds() const override {
     return Rect::MakeCornerZero(image.width(), image.height());
   }
@@ -93,7 +93,7 @@ struct RegisterMenuOption : Option, OptionsProvider {
   RegisterMenuOption(WeakPtr<Assembler> weak, int register_index)
       : weak(weak), register_index(register_index) {}
 
-  std::unique_ptr<gui::Widget> MakeIcon(gui::Widget* parent) override {
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
     return std::make_unique<ImageWidget>(parent, kRegisters[register_index].image);
   }
   std::unique_ptr<Option> Clone() const override {
@@ -112,7 +112,7 @@ struct RegisterMenuOption : Option, OptionsProvider {
       }
     }
   }
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     return OpenMenu(pointer);
   }
 };
@@ -129,7 +129,7 @@ struct RegistersMenuOption : TextOption, OptionsProvider {
       visitor(opt);
     }
   }
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     return OpenMenu(pointer);
   }
 };
@@ -582,7 +582,7 @@ void AssemblerWidget::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-void AssemblerWidget::FillChildren(Vec<gui::Widget*>& children) {
+void AssemblerWidget::FillChildren(Vec<ui::Widget*>& children) {
   for (auto* child : reg_widgets) {
     children.emplace_back(child);
   }
@@ -608,7 +608,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   if (auto reg = loc->As<Register>()) {
     if (auto my_assembler = this->assembler_weak.lock()) {
       loc->object->ForEachWidget(
-          [&](gui::RootWidget& root_widget, gui::Widget& reg_widget_generic) {
+          [&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
             RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
             if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
               auto* asm_widget = static_cast<AssemblerWidget*>(asm_widget_generic);
@@ -653,15 +653,15 @@ static const SkPath kFlag = PathFromSVG(
 
 static constexpr float kBitPositionFontSize = RegisterWidget::kCellHeight * 0.42;
 
-static gui::Font& BitPositionFont() {
-  static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeRegular(), kBitPositionFontSize);
+static ui::Font& BitPositionFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeRegular(), kBitPositionFontSize);
   return *font;
 }
 
 static constexpr float kByteValueFontSize = 3_mm;  // RegisterWidget::kCellHeight * 1;
 
-static gui::Font& ByteValueFont() {
-  static auto font = gui::Font::MakeV2(gui::Font::GetHeavyData(), kByteValueFontSize);
+static ui::Font& ByteValueFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetHeavyData(), kByteValueFontSize);
   return *font;
 }
 

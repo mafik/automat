@@ -5,7 +5,7 @@
 #include <include/core/SkVertices.h>
 
 #include "color.hh"
-#include "gui_button.hh"
+#include "ui_button.hh"
 #include "math.hh"
 #include "units.hh"
 
@@ -24,9 +24,9 @@ constexpr Rect WindowBorderInner(Rect outer) {
 
 sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color = "#0066ff"_color);
 
-struct TitleButton : gui::Button {
-  TitleButton(gui::Widget* parent, std::unique_ptr<Widget> child)
-      : gui::Button(parent, std::move(child)) {}
+struct TitleButton : ui::Button {
+  TitleButton(ui::Widget* parent, std::unique_ptr<Widget> child)
+      : ui::Button(parent, std::move(child)) {}
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const override {}
   void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;

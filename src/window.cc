@@ -5,7 +5,7 @@
 
 #include "root_widget.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 std::lock_guard<std::mutex> Window::Lock() { return std::lock_guard(root.mutex); }
 
@@ -28,4 +28,4 @@ void Window::RegisterInput() {
   OnRegisterInput(!root.keyboard.keyloggings.empty(), mouse && !mouse->loggings.empty());
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

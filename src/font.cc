@@ -19,7 +19,7 @@
 #endif
 
 #include "../build/generated/embedded.hh"
-#include "gui_constants.hh"
+#include "ui_constants.hh"
 #include "math.hh"
 #include "virtual_fs.hh"
 
@@ -30,7 +30,7 @@
 #pragma comment(lib, "Advapi32")
 #endif
 
-namespace automat::gui {
+namespace automat::ui {
 
 constexpr static SkFourByteTag kFontWeightTag = SkSetFourByteTag('w', 'g', 'h', 't');
 
@@ -314,4 +314,4 @@ Font& GetFont() {
   return *font;
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

@@ -45,7 +45,7 @@
 constexpr bool kDebugRendering = false;
 constexpr bool kDebugRenderEvents = false;
 
-using namespace automat::gui;
+using namespace automat::ui;
 using namespace std;
 
 template <typename T>

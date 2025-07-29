@@ -3,7 +3,7 @@
 #pragma once
 
 #include "font.hh"
-#include "gui_button.hh"
+#include "ui_button.hh"
 #include "text_field.hh"
 
 namespace automat {
@@ -56,7 +56,7 @@ struct Buffer {
 
 };  // namespace automat
 
-namespace automat::gui {
+namespace automat::ui {
 
 // How to store the "mode" of the widget??
 // It shouold be part of the Object (buffer "controller"?) - because it should be persistent.
@@ -67,7 +67,7 @@ struct SmallBufferWidget : TextFieldBase {
   NestedWeakPtr<Buffer> buffer_weak;
   std::unique_ptr<Widget> type_button;
 
-  gui::Font* fonts[(int)Buffer::Type::TypeCount] = {};
+  ui::Font* fonts[(int)Buffer::Type::TypeCount] = {};
 
   float vertical_margin;
   float width;
@@ -75,7 +75,7 @@ struct SmallBufferWidget : TextFieldBase {
   Buffer::Type type = Buffer::Type::TypeCount;  // guard value, forces redraw
   std::string text;
 
-  SmallBufferWidget(gui::Widget* parent, NestedWeakPtr<Buffer> buffer);
+  SmallBufferWidget(ui::Widget* parent, NestedWeakPtr<Buffer> buffer);
 
   // Call this after setting the fonts to calculate the size of the widget.
   void Measure();
@@ -94,4 +94,4 @@ struct SmallBufferWidget : TextFieldBase {
   Vec2 PositionFromIndex(int index) const override;
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

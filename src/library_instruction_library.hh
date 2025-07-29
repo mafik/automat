@@ -48,7 +48,7 @@ struct InstructionLibrary : Object {
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
 
-  struct Widget : FallbackWidget, gui::PointerMoveCallback {
+  struct Widget : FallbackWidget, ui::PointerMoveCallback {
     struct InstructionCard {
       std::unique_ptr<Instruction::Widget> widget;
       Ptr<Instruction> instruction;
@@ -104,23 +104,23 @@ struct InstructionLibrary : Object {
 
     std::vector<CategoryState> category_states;
 
-    Widget(gui::Widget* parent, WeakPtr<Object> object);
+    Widget(ui::Widget* parent, WeakPtr<Object> object);
 
     std::string_view Name() const override { return "Instruction Library Widget"; }
     SkPath Shape() const override;
     animation::Phase Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
-    std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+    std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 
-    void FillChildren(Vec<gui::Widget*>& children) override;
-    bool AllowChildPointerEvents(gui::Widget& child) const override { return false; }
+    void FillChildren(Vec<ui::Widget*>& children) override;
+    bool AllowChildPointerEvents(ui::Widget& child) const override { return false; }
 
-    void PointerMove(gui::Pointer&, Vec2 position) override;
-    void PointerOver(gui::Pointer&) override;
-    void PointerLeave(gui::Pointer&) override;
+    void PointerMove(ui::Pointer&, Vec2 position) override;
+    void PointerOver(ui::Pointer&) override;
+    void PointerLeave(ui::Pointer&) override;
   };
 
-  unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override {
+  unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override {
     return make_unique<Widget>(parent, AcquireWeakPtr<Object>());
   }
 };

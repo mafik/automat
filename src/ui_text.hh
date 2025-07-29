@@ -4,7 +4,7 @@
 
 #include "widget.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct Text : Widget, PaintMixin {
   std::string text;
@@ -15,4 +15,4 @@ struct Text : Widget, PaintMixin {
   Optional<Rect> TextureBounds() const override;
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

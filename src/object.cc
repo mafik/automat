@@ -9,7 +9,7 @@
 #include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
-#include "gui_constants.hh"
+#include "ui_constants.hh"
 #include "location.hh"
 #include "menu.hh"
 #include "root_widget.hh"
@@ -62,16 +62,16 @@ void Object::FallbackWidget::Draw(SkCanvas& canvas) const {
 
   auto text = Text();
   canvas.save();
-  canvas.translate(path_bounds.width() / 2 - gui::GetFont().MeasureText(text) / 2,
-                   path_bounds.height() / 2 - gui::kLetterSizeMM / 2 / 1000);
-  gui::GetFont().DrawText(canvas, text, text_paint);
+  canvas.translate(path_bounds.width() / 2 - ui::GetFont().MeasureText(text) / 2,
+                   path_bounds.height() / 2 - ui::kLetterSizeMM / 2 / 1000);
+  ui::GetFont().DrawText(canvas, text, text_paint);
   canvas.restore();
 }
 
 float Object::FallbackWidget::Width() const {
   auto text = Text();
   constexpr float kNameMargin = 0.001;
-  float width_text = gui::GetFont().MeasureText(text) + 2 * kNameMargin;
+  float width_text = ui::GetFont().MeasureText(text) + 2 * kNameMargin;
   float width_rounded = ceil(width_text * 1000) / 1000;
   constexpr float kMinWidth = 0.008;
   return std::max(width_rounded, kMinWidth);
@@ -93,7 +93,7 @@ struct DeleteOption : TextOption {
   WeakPtr<Location> weak;
   DeleteOption(WeakPtr<Location> weak) : TextOption("Delete"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<DeleteOption>(weak); }
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (Ptr<Location> loc = weak.lock()) {
       if (auto parent_machine = loc->ParentAs<Machine>()) {
         parent_machine->Extract(*loc);
@@ -112,7 +112,7 @@ struct MoveOption : TextOption {
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<MoveOption>(location_weak, object_weak);
   }
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     auto location = location_weak.lock();
     if (location == nullptr) {
       return nullptr;
@@ -149,7 +149,7 @@ struct MoveOption : TextOption {
     auto* machine = Closest<Machine>(*location);
     if (machine && location->object) {
       auto contact_point = pointer.PositionWithin(location->WidgetForObject());
-      machine->ForEachWidget([](gui::RootWidget&, gui::Widget& w) { w.RedrawThisFrame(); });
+      machine->ForEachWidget([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
       return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location),
                                                   contact_point);
     }
@@ -161,7 +161,7 @@ struct RunOption : TextOption {
   WeakPtr<Location> weak;
   RunOption(WeakPtr<Location> weak) : TextOption("Run"), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(weak); }
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto loc = weak.lock()) {
       loc->ScheduleRun();
     }
@@ -170,7 +170,7 @@ struct RunOption : TextOption {
 };
 
 void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  if (auto loc = gui::Closest<Location>(const_cast<FallbackWidget&>(*this))) {
+  if (auto loc = ui::Closest<Location>(const_cast<FallbackWidget&>(*this))) {
     auto loc_weak = loc->AcquireWeakPtr();
     DeleteOption del{loc_weak};
     visitor(del);
@@ -183,12 +183,12 @@ void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
   }
 }
 
-std::unique_ptr<Action> Object::FallbackWidget::FindAction(gui::Pointer& p,
-                                                           gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::Left) {
+std::unique_ptr<Action> Object::FallbackWidget::FindAction(ui::Pointer& p,
+                                                           ui::ActionTrigger btn) {
+  if (btn == ui::PointerButton::Left) {
     MoveOption move{Closest<Location>(*p.hover)->AcquireWeakPtr(), object};
     return move.Activate(p);
-  } else if (btn == gui::PointerButton::Right) {
+  } else if (btn == ui::PointerButton::Right) {
     return OpenMenu(p);
   }
   return Widget::FindAction(p, btn);
@@ -221,8 +221,8 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
-void Object::ForEachWidget(std::function<void(gui::RootWidget&, gui::Widget&)> cb) {
-  for (auto* root_widget : gui::root_widgets) {
+void Object::ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb) {
+  for (auto* root_widget : ui::root_widgets) {
     if (auto widget = root_widget->widgets.Find(*this)) {
       cb(*root_widget, *widget);
     }
@@ -230,7 +230,7 @@ void Object::ForEachWidget(std::function<void(gui::RootWidget&, gui::Widget&)> c
 }
 
 void Object::WakeWidgetsAnimation() {
-  ForEachWidget([](gui::RootWidget&, gui::Widget& widget) { widget.WakeAnimation(); });
+  ForEachWidget([](ui::RootWidget&, ui::Widget& widget) { widget.WakeAnimation(); });
 }
 
 }  // namespace automat

@@ -30,7 +30,7 @@
 
 using namespace std;
 
-namespace automat::gui {
+namespace automat::ui {
 
 void Widget::PreDrawChildren(SkCanvas& canvas) const {
   for (auto& widget : ranges::reverse_view(Children())) {
@@ -244,4 +244,4 @@ std::unique_ptr<Action> Widget::FindAction(Pointer& pointer, ActionTrigger btn) 
   return nullptr;
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

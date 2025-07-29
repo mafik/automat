@@ -33,7 +33,7 @@ struct TimerDelay : LiveObject,
   // Controls the current range (milliseconds, seconds, etc.)
   animation::SpringV2<float> range_dial;
   float duration_handle_rotation = 0;
-  std::unique_ptr<gui::NumberTextField> text_field;
+  std::unique_ptr<ui::NumberTextField> text_field;
   enum class Range : char {
     Milliseconds,  // 0 - 1000 ms
     Seconds,       // 0 - 60 s
@@ -42,7 +42,7 @@ struct TimerDelay : LiveObject,
     Days,          // 0 - 7 d
     EndGuard,
   } range = Range::Seconds;
-  TimerDelay(gui::Widget* parent);
+  TimerDelay(ui::Widget* parent);
   TimerDelay(const TimerDelay&);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -51,7 +51,7 @@ struct TimerDelay : LiveObject,
   SkPath Shape() const override;
   void Fields(std::function<void(Object&)> cb) override;
   SkPath FieldShape(Object&) const override;
-  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
+  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here, RunTask&) override;
   void OnCancel() override;

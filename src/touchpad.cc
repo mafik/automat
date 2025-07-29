@@ -223,7 +223,7 @@ struct TouchPadImpl {
       Vec2 delta = LengthSquared(d0) < LengthSquared(d1) ? d0 : d1;
       touchpad.pan.x -= delta.x;
       touchpad.pan.y += delta.y;
-      gui::root_widget->WakeAnimation();
+      ui::root_widget->WakeAnimation();
     } else {
       touchpad.panning = false;
       UnlockCursor();

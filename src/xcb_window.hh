@@ -10,7 +10,7 @@
 
 namespace xcb {
 
-struct XCBWindow : automat::gui::Window {
+struct XCBWindow : automat::ui::Window {
   xcb_window_t xcb_window = 0;
 
   Vec2 window_position_on_screen;
@@ -30,7 +30,7 @@ struct XCBWindow : automat::gui::Window {
   ~XCBWindow();
 
   void MainLoop() override;
-  automat::gui::Pointer& GetMouse() override;
+  automat::ui::Pointer& GetMouse() override;
   Vec2 ScreenToWindowPx(Vec2 screen) override;
   Vec2 WindowPxToScreen(Vec2 window) override;
   automat::Optional<Vec2> MousePositionScreenPx() override;
@@ -38,10 +38,10 @@ struct XCBWindow : automat::gui::Window {
   void RequestMaximize(bool horizontally, bool vertically) override;
   void OnRegisterInput(bool keylogging, bool pointerlogging) override;
 
-  static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, automat::Status&);
+  static std::unique_ptr<automat::ui::Window> Make(automat::ui::RootWidget&, automat::Status&);
 
  protected:
-  XCBWindow(automat::gui::RootWidget& root) : automat::gui::Window(root) {}
+  XCBWindow(automat::ui::RootWidget& root) : automat::ui::Window(root) {}
 };
 
 }  // namespace xcb

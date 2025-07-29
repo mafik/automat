@@ -10,14 +10,14 @@
 #include <charconv>
 
 #include "drag_action.hh"
-#include "gui_button.hh"
-#include "gui_constants.hh"
-#include "gui_shape_widget.hh"
-#include "gui_text.hh"
+#include "ui_button.hh"
+#include "ui_constants.hh"
+#include "ui_shape_widget.hh"
+#include "ui_text.hh"
 #include "svg.hh"
 #include "widget.hh"
 
-using namespace automat::gui;
+using namespace automat::ui;
 
 namespace automat::library {
 
@@ -31,7 +31,7 @@ static constexpr float kBelowTextMargin = kMargin * 2;
 
 // Height of the text field
 static constexpr float kTextHeight = std::max(
-    gui::kLetterSize + 2 * kBetweenButtonsMargin + 2 * kBorderWidth, kMinimalTouchableSize);
+    ui::kLetterSize + 2 * kBetweenButtonsMargin + 2 * kBorderWidth, kMinimalTouchableSize);
 static constexpr float kButtonHeight = kMinimalTouchableSize;
 static constexpr float kButtonRows = 4;
 static constexpr float kHeight = 2 * kBorderWidth + kTextHeight + kButtonRows * kButtonHeight +
@@ -50,17 +50,17 @@ static constexpr char kBackspaceShape[] =
     "M-9 0-5.6 5.1A2 2 0 00-4 6H4A2 2 0 006 4V-4A2 2 0 004-6H-4A2 2 0 00-5.6-5.1ZM-3-4 0-1 3-4 4-3 "
     "1 0 4 3 3 4 0 1-3 4-4 3-1 0-4-3Z";
 
-using gui::Text;
+using ui::Text;
 
-NumberButton::NumberButton(gui::Widget* parent, SkPath shape)
+NumberButton::NumberButton(ui::Widget* parent, SkPath shape)
     : Button(parent, std::make_unique<ShapeWidget>(this, shape)) {}
 
-NumberButton::NumberButton(gui::Widget* parent, std::string text)
+NumberButton::NumberButton(ui::Widget* parent, std::string text)
     : Button(parent, std::make_unique<Text>(this, text)) {}
 
 SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
 
-void NumberButton::Activate(gui::Pointer& pointer) {
+void NumberButton::Activate(ui::Pointer& pointer) {
   Button::Activate(pointer);
   if (activate) {
     if (auto l = Closest<Location>(*pointer.hover)) {
@@ -71,8 +71,8 @@ void NumberButton::Activate(gui::Pointer& pointer) {
   }
 }
 
-Number::Number(gui::Widget* parent, double x) : FallbackWidget(parent), value(x) {
-  text_field = std::make_unique<gui::NumberTextField>(
+Number::Number(ui::Widget* parent, double x) : FallbackWidget(parent), value(x) {
+  text_field = std::make_unique<ui::NumberTextField>(
       this, kWidth - 2 * kAroundWidgetMargin - 2 * kBorderWidth);
   dot = std::make_unique<NumberButton>(this, ".");
   backspace = std::make_unique<NumberButton>(this, PathFromSVG(kBackspaceShape));

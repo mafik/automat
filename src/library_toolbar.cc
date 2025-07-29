@@ -16,9 +16,9 @@
 
 using namespace std::literals;
 
-namespace automat::gui {
-std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
-  if (btn != gui::PointerButton::Left) {
+namespace automat::ui {
+std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
+  if (btn != ui::PointerButton::Left) {
     return nullptr;
   }
   auto matrix = TransformBetween(*pointer.hover, *root_machine);
@@ -43,7 +43,7 @@ std::unique_ptr<Action> PrototypeButton::FindAction(gui::Pointer& pointer, gui::
 constexpr float kMarginBetweenIcons = 1_mm;
 constexpr float kMarginAroundIcons = 7_mm;
 constexpr float kMarginAboveIcons = 8_mm;
-constexpr float kToolbarHeight = gui::kToolbarIconSize + kMarginAboveIcons;
+constexpr float kToolbarHeight = ui::kToolbarIconSize + kMarginAboveIcons;
 
 SkPath Toolbar::Shape() const {
   float width = CalculateWidth();
@@ -57,7 +57,7 @@ animation::Phase Toolbar::Tick(time::Timer& timer) {
     width_targets[i] = buttons[i]->natural_width;
   }
 
-  auto my_transform = gui::TransformDown(*this);
+  auto my_transform = ui::TransformDown(*this);
 
   float width = CalculateWidth();
   int new_hovered_button = -1;
@@ -151,7 +151,7 @@ void Toolbar::FillChildren(Vec<Widget*>& children) {
 
 void Toolbar::AddObjectPrototype(const Ptr<Object>& new_proto) {
   prototypes.push_back(new_proto->Clone());
-  buttons.emplace_back(std::make_unique<gui::PrototypeButton>(this, prototypes.back()));
+  buttons.emplace_back(std::make_unique<ui::PrototypeButton>(this, prototypes.back()));
   if (auto widget = dynamic_cast<Widget*>(prototypes.back().Get())) {
     widget->parent = buttons.back().get();
   }
@@ -167,8 +167,8 @@ void Toolbar::UpdateChildTransform() {
     float size = buttons[i]->width;
     float x2 = x + size / 2;
     float scale = buttons[i]->width / buttons[i]->natural_width;
-    Rect dst = Rect::MakeCenterZero(size, gui::kToolbarIconSize * scale)
-                   .MoveBy({x2, gui::kToolbarIconSize * scale / 2});
+    Rect dst = Rect::MakeCenterZero(size, ui::kToolbarIconSize * scale)
+                   .MoveBy({x2, ui::kToolbarIconSize * scale / 2});
     buttons[i]->local_to_parent =
         SkM44(SkMatrix::RectToRect(src, dst, SkMatrix::kCenter_ScaleToFit));
     x += buttons[i]->width + kMarginBetweenIcons;
@@ -189,4 +189,4 @@ Optional<Rect> Toolbar::TextureBounds() const {
   return Rect(-width / 2, 0, width / 2, kToolbarHeight * 2);
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

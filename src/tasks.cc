@@ -7,7 +7,7 @@
 #include "argument.hh"
 #include "automat.hh"
 #include "base.hh"
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 
 namespace automat {
 
@@ -95,7 +95,7 @@ void ScheduleNext(Location& source) { ScheduleArgumentTargets(source, next_arg);
 
 void ScheduleArgumentTargets(Location& source, Argument& arg) {
   // audio::Play(source.object->NextSound());
-  for (auto& w : gui::ConnectionWidgetRange(source, arg)) {
+  for (auto& w : ui::ConnectionWidgetRange(source, arg)) {
     if (w.state) {
       w.state->stabilized = false;
       w.state->lightness_pct = 100;

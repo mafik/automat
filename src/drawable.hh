@@ -27,8 +27,8 @@ struct TextDrawable : PaintDrawable {
   Str text;
   float width;
   float letter_size;
-  gui::Font& font;
-  TextDrawable(StrView text, float letter_size, gui::Font& font);
+  ui::Font& font;
+  TextDrawable(StrView text, float letter_size, ui::Font& font);
 
   void onDraw(SkCanvas* canvas) override;
 };

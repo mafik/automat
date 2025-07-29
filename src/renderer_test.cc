@@ -20,7 +20,7 @@
 #include "xcb_window.hh"
 
 using namespace automat;
-using namespace automat::gui;
+using namespace automat::ui;
 using namespace std;
 
 constexpr bool kPowersave = true;

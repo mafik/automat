@@ -7,7 +7,7 @@
 #include "format.hh"
 #include "log.hh"
 
-using automat::gui::AnsiKey;
+using automat::ui::AnsiKey;
 using namespace automat;
 
 // Source:
@@ -638,7 +638,7 @@ AnsiKey VirtualKeyToKey(uint8_t virtual_key) {
   return Unknown;
 }
 
-uint32_t KeyToScanCode(automat::gui::AnsiKey key) {
+uint32_t KeyToScanCode(automat::ui::AnsiKey key) {
   using enum AnsiKey;
   switch (key) {
     case Unknown:
@@ -856,7 +856,7 @@ uint32_t KeyToScanCode(automat::gui::AnsiKey key) {
   }
 }
 
-uint8_t KeyToVirtualKey(automat::gui::AnsiKey key) {
+uint8_t KeyToVirtualKey(automat::ui::AnsiKey key) {
   uint32_t scan_code = KeyToScanCode(key);
   HKL layout = GetKeyboardLayout(0);
   return MapVirtualKeyExA(scan_code, MAPVK_VSC_TO_VK_EX, layout);

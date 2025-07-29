@@ -963,7 +963,7 @@ struct Slider : LiveObject {
 };
 
 struct ProgressBar : library::Number {
-  ProgressBar(gui::Widget* parent) : library::Number(parent) {}
+  ProgressBar(ui::Widget* parent) : library::Number(parent) {}
   string_view Name() const override { return "Progress Bar"; }
   Ptr<Object> Clone() const override {
     auto bar = MAKE_PTR(ProgressBar, parent);

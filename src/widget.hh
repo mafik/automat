@@ -29,7 +29,7 @@ struct Argument;
 struct Location;
 }  // namespace automat
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct Widget;
 struct RootWidget;
@@ -314,4 +314,4 @@ struct PaintMixin {
   }
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

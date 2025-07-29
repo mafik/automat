@@ -9,7 +9,7 @@
 
 namespace automat {
 
-Action::Action(gui::Pointer& pointer) : pointer(pointer) {
+Action::Action(ui::Pointer& pointer) : pointer(pointer) {
   pointer.root_widget.active_actions.push_back(this);
 }
 

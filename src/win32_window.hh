@@ -8,7 +8,7 @@
 
 #include "window.hh"
 
-struct Win32Window : automat::gui::Window {
+struct Win32Window : automat::ui::Window {
   HWND hwnd = 0;
   bool keylogging_enabled = false;
   bool window_active = false;
@@ -18,10 +18,10 @@ struct Win32Window : automat::gui::Window {
 
   ~Win32Window();
 
-  static std::unique_ptr<automat::gui::Window> Make(automat::gui::RootWidget&, automat::Status&);
+  static std::unique_ptr<automat::ui::Window> Make(automat::ui::RootWidget&, automat::Status&);
 
   void MainLoop() override;
-  automat::gui::Pointer& GetMouse() override;
+  automat::ui::Pointer& GetMouse() override;
   Vec2 ScreenToWindowPx(Vec2 screen) override;
   Vec2 WindowPxToScreen(Vec2 window) override;
   automat::Optional<Vec2> MousePositionScreenPx() override;
@@ -34,5 +34,5 @@ struct Win32Window : automat::gui::Window {
   void OnRegisterInput(bool keylogging, bool pointerlogging) override;
 
  private:
-  Win32Window(automat::gui::RootWidget& root);
+  Win32Window(automat::ui::RootWidget& root);
 };

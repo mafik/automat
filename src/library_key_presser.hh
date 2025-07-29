@@ -18,17 +18,17 @@ struct KeyPresserButton : KeyButton {
   float PressRatio() const override;
 };
 
-struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, LongRunning {
-  gui::AnsiKey key = gui::AnsiKey::F;
+struct KeyPresser : Object, Object::FallbackWidget, ui::CaretOwner, Runnable, LongRunning {
+  ui::AnsiKey key = ui::AnsiKey::F;
 
   mutable std::unique_ptr<KeyPresserButton> shortcut_button;
 
   // This is used to select the pressed key
-  gui::Caret* key_selector = nullptr;
+  ui::Caret* key_selector = nullptr;
   bool key_pressed = false;
 
-  KeyPresser(gui::Widget* parent, gui::AnsiKey);
-  KeyPresser(gui::Widget* parent);
+  KeyPresser(ui::Widget* parent, ui::AnsiKey);
+  KeyPresser(ui::Widget* parent);
   ~KeyPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -36,12 +36,12 @@ struct KeyPresser : Object, Object::FallbackWidget, gui::CaretOwner, Runnable, L
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
-  std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 
-  void KeyDown(gui::Caret&, gui::Key) override;
-  void ReleaseCaret(gui::Caret&) override;
+  void KeyDown(ui::Caret&, ui::Key) override;
+  void ReleaseCaret(ui::Caret&) override;
 
-  void SetKey(gui::AnsiKey);
+  void SetKey(ui::AnsiKey);
 
   void FillChildren(Vec<Widget*>& children) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }

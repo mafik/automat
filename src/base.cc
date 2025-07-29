@@ -18,7 +18,7 @@
 
 #include "drag_action.hh"
 #include "embedded.hh"
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 #include "location.hh"
 #include "root_widget.hh"
 #include "tasks.hh"
@@ -238,7 +238,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
-Machine::Machine(gui::Widget* parent) : gui::Widget(parent) {}
+Machine::Machine(ui::Widget* parent) : ui::Widget(parent) {}
 
 void Machine::FillChildren(Vec<Widget*>& children) {
   int i = 0;
@@ -328,7 +328,7 @@ void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec
 }
 
 void Machine::DropLocation(Ptr<Location>&& l) {
-  ForEachWidget([](gui::RootWidget&, gui::Widget& w) { w.RedrawThisFrame(); });
+  ForEachWidget([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
   l->parent = this;
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
@@ -342,7 +342,7 @@ Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
   if (base_it != locations.end()) {
     int base_index = std::distance(locations.begin(), base_it);
     SkPath base_shape = base.GetShapeRecursive();
-    base_shape.transform(gui::TransformUp(base));  // top-level coordinates
+    base_shape.transform(ui::TransformUp(base));  // top-level coordinates
 
     Vec<Ptr<Location>> result;
     result.push_back(std::move(*base_it));
@@ -352,7 +352,7 @@ Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
     for (int atop_index = base_index - 1; atop_index >= 0; --atop_index) {
       Location& atop = *locations[atop_index];
       SkPath atop_shape = atop.GetShapeRecursive();
-      atop_shape.transform(gui::TransformUp(atop));  // top-level coordinates
+      atop_shape.transform(ui::TransformUp(atop));  // top-level coordinates
       SkPath intersection;
       bool op_success = Op(atop_shape, base_shape, kIntersect_SkPathOp, &intersection);
       if (op_success && intersection.countVerbs() > 0) {

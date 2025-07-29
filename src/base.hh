@@ -116,8 +116,8 @@ struct LiveObject : Object {
 };
 
 // 2D Canvas holding objects & a spaghetti of connections.
-struct Machine : LiveObject, gui::Widget, gui::DropTarget {
-  Machine(gui::Widget* parent);
+struct Machine : LiveObject, ui::Widget, ui::DropTarget {
+  Machine(ui::Widget* parent);
   string name = "";
   deque<Ptr<Location>> locations;
   vector<Location*> front;
@@ -165,7 +165,7 @@ struct Machine : LiveObject, gui::Widget, gui::DropTarget {
 
   void Draw(SkCanvas& canvas) const override { Widget::Draw(canvas); }
   void PreDraw(SkCanvas&) const override;
-  gui::DropTarget* AsDropTarget() override { return this; }
+  ui::DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override { return true; }
   void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
   void DropLocation(Ptr<Location>&&) override;

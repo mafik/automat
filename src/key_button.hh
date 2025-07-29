@@ -4,12 +4,12 @@
 
 #include "color.hh"
 #include "font.hh"
-#include "gui_button.hh"
-#include "gui_constants.hh"
+#include "ui_button.hh"
+#include "ui_constants.hh"
 
 namespace automat::library {
 
-static constexpr float kKeyHeight = gui::kMinimalTouchableSize;
+static constexpr float kKeyHeight = ui::kMinimalTouchableSize;
 static constexpr float kBaseKeyWidth = kKeyHeight;
 
 static constexpr float kKeyLetterSize = 2.4_mm;
@@ -22,17 +22,17 @@ static constexpr float kKeyBottomSide = 1.5_mm;
 static constexpr float kKeyFaceRadius = 1_mm;
 static constexpr float kKeyBaseRadius = kKeyFaceRadius;
 
-gui::Font& KeyFont();
+ui::Font& KeyFont();
 
 // static constexpr float kKeySpareHeight = kKeyHeight - kKeyLetterSize;
 // static constexpr float kKeyFaceHeight = kKeyHeight - kKeyTopSide - kKeyBottomSide;
 
-struct KeyButton : gui::Button {
+struct KeyButton : ui::Button {
   float width;
-  std::function<void(gui::Pointer&)> activate;
+  std::function<void(ui::Pointer&)> activate;
   SkColor fg;
   KeyButton(Widget* parent, StrView label, SkColor color, float width);
-  void Activate(gui::Pointer&) override;
+  void Activate(ui::Pointer&) override;
   SkRRect RRect() const override;
   SkColor ForegroundColor() const override { return fg; }
   void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;

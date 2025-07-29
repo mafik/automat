@@ -38,10 +38,10 @@ sk_sp<SkSVGDOM> SVGFromAsset(StrView svg_contents) {
   auto predecode = skresources::ImageDecodeStrategy::kPreDecode;
   SkString dir = SkString(".");
   auto rp = skresources::DataURIResourceProviderProxy::Make(
-      skresources::FileResourceProvider::Make(dir, predecode), predecode, gui::GetFontMgr());
+      skresources::FileResourceProvider::Make(dir, predecode), predecode, ui::GetFontMgr());
 
   auto dom = SkSVGDOM::Builder()
-                 .setFontManager(gui::GetFontMgr())
+                 .setFontManager(ui::GetFontMgr())
                  .setResourceProvider(std::move(rp))
                  //.setTextShapingFactory(SkShapers::BestAvailable())
                  .make(stream);

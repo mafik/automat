@@ -13,15 +13,15 @@ namespace automat {
 // Option represents a potential action. It's the core of the menu system.
 struct Option {
   virtual ~Option() = default;
-  virtual std::unique_ptr<gui::Widget> MakeIcon(gui::Widget* parent) = 0;
+  virtual std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) = 0;
   virtual std::unique_ptr<Option> Clone() const = 0;
-  virtual std::unique_ptr<Action> Activate(gui::Pointer& pointer) const = 0;
+  virtual std::unique_ptr<Action> Activate(ui::Pointer& pointer) const = 0;
 };
 
 struct TextOption : Option {
   Str text;
   TextOption(Str text) : text(text) {}
-  std::unique_ptr<gui::Widget> MakeIcon(gui::Widget* parent) override;
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
 };
 
 using OptionsVisitor = std::function<void(Option&)>;
@@ -30,7 +30,7 @@ struct OptionsProvider {
   virtual void VisitOptions(const OptionsVisitor&) const = 0;
 
   Vec<std::unique_ptr<Option>> CloneOptions() const;
-  std::unique_ptr<Action> OpenMenu(gui::Pointer& pointer) const;
+  std::unique_ptr<Action> OpenMenu(ui::Pointer& pointer) const;
 };
 
 }  // namespace automat

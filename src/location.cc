@@ -25,15 +25,15 @@
 #include "drag_action.hh"
 #include "font.hh"
 #include "format.hh"
-#include "gui_connection_widget.hh"
-#include "gui_constants.hh"
+#include "ui_connection_widget.hh"
+#include "ui_constants.hh"
 #include "math.hh"
 #include "root_widget.hh"
 #include "textures.hh"
 #include "timer_thread.hh"
 #include "widget.hh"
 
-using namespace automat::gui;
+using namespace automat::ui;
 using namespace std;
 
 namespace automat {
@@ -257,8 +257,8 @@ void Location::Draw(SkCanvas& canvas) const {
   float n_lines = 1;
   float offset_y = bounds.top();
   float offset_x = bounds.left();
-  float line_height = gui::kLetterSize * 1.5;
-  auto& font = gui::GetFont();
+  float line_height = ui::kLetterSize * 1.5;
+  auto& font = ui::GetFont();
 
   if (error) {
     constexpr float b = 0.00025;
@@ -285,7 +285,7 @@ void Location::Draw(SkCanvas& canvas) const {
 void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const {
   // We don't have backlinks to connection widgets so we have to iterate over all connection widgets
   // in root_widget and check if they're connected to this location.
-  for (auto& w : gui::root_widget->connection_widgets) {
+  for (auto& w : ui::root_widget->connection_widgets) {
     if (&w->from == this) {  // updates all outgoing connection widgets
       if (moved && !value_changed) {
         w->FromMoved();
@@ -307,7 +307,7 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
   }
 }
 
-std::unique_ptr<Action> Location::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
+std::unique_ptr<Action> Location::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
   return nullptr;
 }
 

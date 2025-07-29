@@ -163,7 +163,7 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
-InstructionLibrary::Widget::Widget(gui::Widget* parent, WeakPtr<Object> object)
+InstructionLibrary::Widget::Widget(ui::Widget* parent, WeakPtr<Object> object)
     : FallbackWidget(parent) {
   this->object = std::move(object);
   for (int i = 0; i < std::size(x86::kCategories); ++i) {
@@ -272,7 +272,7 @@ static float CardAngleDeg(float i, int visible_instructions, float helix_tween) 
   return lerp(ret, ret2, helix_tween * 0.7f);           // blend between the two curves
 }
 
-void InstructionLibrary::Widget::FillChildren(Vec<gui::Widget*>& children) {
+void InstructionLibrary::Widget::FillChildren(Vec<ui::Widget*>& children) {
   for (auto& card : instruction_helix) {
     if (card.throw_t < 0.5) {
       children.push_back(card.widget.get());
@@ -527,18 +527,18 @@ PersistentImage leaf = PersistentImage::MakeFromAsset(embedded::assets_leaf_webp
 PersistentImage venus = PersistentImage::MakeFromAsset(
     embedded::assets_venus_webp, PersistentImage::MakeArgs{.height = Instruction::Widget::kHeight});
 
-static gui::Font& HeavyFont() {
-  static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeSemiBold(), kCategoryLetterSize);
+static ui::Font& HeavyFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeSemiBold(), kCategoryLetterSize);
   return *font;
 }
 
-static gui::Font& RegularFont() {
-  static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeRegular(), kCategoryLetterSize);
+static ui::Font& RegularFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeRegular(), kCategoryLetterSize);
   return *font;
 }
 
-static gui::Font& LightFont() {
-  static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeLight(), kCategoryLetterSize);
+static ui::Font& LightFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeLight(), kCategoryLetterSize);
   return *font;
 }
 
@@ -571,7 +571,7 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
   debug_paint.setStyle(SkPaint::Style::kStroke_Style);
   debug_paint.setColor("#ff0000"_color);
 
-  gui::Font font = LightFont();
+  ui::Font font = LightFont();
   constexpr int kCategoryCount = std::size(x86::kCategories);
   // For each category draw a rose:
   // 1. Cubic curve with control points along a line from the center to the edge.
@@ -878,7 +878,7 @@ std::optional<RegisterFilterButton> FindRegisterFilterButton(Vec2 contact_point)
   return std::nullopt;
 }
 
-void InstructionLibrary::Widget::PointerMove(gui::Pointer& p, Vec2 position) {
+void InstructionLibrary::Widget::PointerMove(ui::Pointer& p, Vec2 position) {
   Vec2 local_position = TransformDown(*this).mapPoint(position);
 
   bool new_read_from[kGeneralPurposeRegisterCount] = {};
@@ -941,9 +941,9 @@ void InstructionLibrary::Widget::PointerMove(gui::Pointer& p, Vec2 position) {
   }
 }
 
-void InstructionLibrary::Widget::PointerOver(gui::Pointer& p) { StartWatching(p); }
+void InstructionLibrary::Widget::PointerOver(ui::Pointer& p) { StartWatching(p); }
 
-void InstructionLibrary::Widget::PointerLeave(gui::Pointer& p) {
+void InstructionLibrary::Widget::PointerLeave(ui::Pointer& p) {
   StopWatching(p);
   animation::Phase phase = animation::Finished;
 
@@ -974,7 +974,7 @@ struct ScrollDeckAction : Action {
 
   InstructionLibrary& library;
 
-  ScrollDeckAction(gui::Pointer& pointer, InstructionLibrary::Widget& widget, Ptr<Object> object)
+  ScrollDeckAction(ui::Pointer& pointer, InstructionLibrary::Widget& widget, Ptr<Object> object)
       : Action(pointer),
         widget(&widget),
         object(object),
@@ -1085,9 +1085,9 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
   library.Filter();
 }
 
-std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(gui::Pointer& p,
-                                                               gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::Left) {
+std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
+                                                               ui::ActionTrigger btn) {
+  if (btn == ui::PointerButton::Left) {
     auto contact_point = p.PositionWithin(*this);
 
     if (kFrontInstructionRect.Contains(contact_point)) {

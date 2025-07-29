@@ -15,7 +15,7 @@
 #include "audio.hh"
 #include "color.hh"
 #include "embedded.hh"
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
 #include "library_mouse_move.hh"
@@ -31,7 +31,7 @@
 
 namespace automat::library {
 
-using namespace automat::gui;
+using namespace automat::ui;
 using namespace std;
 
 const char kMacroRecorderShapeSVG[] =
@@ -67,7 +67,7 @@ static sk_sp<SkSVGDOM>& SharinganColor() {
   return dom;
 }
 
-MacroRecorder::MacroRecorder(gui::Widget* parent)
+MacroRecorder::MacroRecorder(ui::Widget* parent)
     : FallbackWidget(parent), record_button(new GlassRunButton(this, this)) {
   record_button->local_to_parent = SkM44::Translate(17.5_mm, 3.2_mm);
 }
@@ -136,7 +136,7 @@ animation::Phase MacroRecorder::Tick(time::Timer& timer) {
   auto local_to_window = TransformUp(*this);
   auto& root_widget = FindRootWidget();
   auto main_pointer_screen = *root_widget.window->MousePositionScreenPx();
-  auto top_window = dynamic_cast<gui::RootWidget*>(&FindRootWidget());
+  auto top_window = dynamic_cast<ui::RootWidget*>(&FindRootWidget());
 
   auto UpdateEye = [&](Vec2 center, animation::SpringV2<Vec2>& googly) -> animation::Phase {
     auto eye_window = local_to_window.mapPoint(center.sk);
@@ -468,19 +468,19 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
   }
 }
 
-void MacroRecorder::KeyloggerKeyDown(gui::Key key) { RecordKeyEvent(*this, key.physical, true); }
-void MacroRecorder::KeyloggerKeyUp(gui::Key key) { RecordKeyEvent(*this, key.physical, false); }
+void MacroRecorder::KeyloggerKeyDown(ui::Key key) { RecordKeyEvent(*this, key.physical, true); }
+void MacroRecorder::KeyloggerKeyUp(ui::Key key) { RecordKeyEvent(*this, key.physical, false); }
 
-void MacroRecorder::PointerLoggerButtonDown(gui::Pointer::Logging&, gui::PointerButton btn) {
+void MacroRecorder::PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerButton btn) {
   LOG << "Button down: " << (int)btn;
 }
-void MacroRecorder::PointerLoggerButtonUp(gui::Pointer::Logging&, gui::PointerButton btn) {
+void MacroRecorder::PointerLoggerButtonUp(ui::Pointer::Logging&, ui::PointerButton btn) {
   LOG << "Button up: " << (int)btn;
 }
-void MacroRecorder::PointerLoggerWheel(gui::Pointer::Logging&, float delta) {
+void MacroRecorder::PointerLoggerWheel(ui::Pointer::Logging&, float delta) {
   LOG << "Wheel: " << delta;
 }
-void MacroRecorder::PointerLoggerMove(gui::Pointer::Logging&, Vec2 relative_px) {
+void MacroRecorder::PointerLoggerMove(ui::Pointer::Logging&, Vec2 relative_px) {
   auto timeline = FindOrCreateTimeline(*this);
 
   int track_index = -1;
@@ -519,20 +519,20 @@ void MacroRecorder::PointerLoggerMove(gui::Pointer::Logging&, Vec2 relative_px) 
   track->values.push_back(relative_px);
 }
 
-void MacroRecorder::PointerOver(gui::Pointer& p) {
+void MacroRecorder::PointerOver(ui::Pointer& p) {
   animation_state.pointers_over++;
   StartWatching(p);
   WakeAnimation();
 }
-void MacroRecorder::PointerLeave(gui::Pointer& p) {
+void MacroRecorder::PointerLeave(ui::Pointer& p) {
   animation_state.pointers_over--;
   StopWatching(p);
   p.move_callbacks.Erase(this);
 }
 
-void MacroRecorder::PointerMove(gui::Pointer&, Vec2 position) { WakeAnimation(); }
+void MacroRecorder::PointerMove(ui::Pointer&, Vec2 position) { WakeAnimation(); }
 
-void GlassRunButton::PointerOver(gui::Pointer& p) {
+void GlassRunButton::PointerOver(ui::Pointer& p) {
   ToggleButton::PointerOver(p);
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
   if (auto h = macro_recorder->here.lock()) {
@@ -543,7 +543,7 @@ void GlassRunButton::PointerOver(gui::Pointer& p) {
   }
 }
 
-void GlassRunButton::PointerLeave(gui::Pointer& p) {
+void GlassRunButton::PointerLeave(ui::Pointer& p) {
   ToggleButton::PointerLeave(p);
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
   if (auto h = macro_recorder->here.lock()) {

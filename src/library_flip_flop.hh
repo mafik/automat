@@ -4,24 +4,24 @@
 
 #include "animation.hh"
 #include "base.hh"
-#include "gui_button.hh"
+#include "ui_button.hh"
 #include "widget.hh"
 
 namespace automat::library {
 
 struct FlipFlop;
 
-struct YingYangIcon : gui::Widget, gui::PaintMixin {
-  YingYangIcon(gui::Widget* parent) : gui::Widget(parent) {}
+struct YingYangIcon : ui::Widget, ui::PaintMixin {
+  YingYangIcon(ui::Widget* parent) : ui::Widget(parent) {}
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   bool CenteredAtZero() const override { return true; }
 };
 
-struct FlipFlopButton : gui::ToggleButton {
+struct FlipFlopButton : ui::ToggleButton {
   FlipFlop* flip_flop;
 
-  FlipFlopButton(gui::Widget* parent);
+  FlipFlopButton(ui::Widget* parent);
   bool Filled() const override;
 };
 
@@ -34,7 +34,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
   };
   AnimationState animation_state;
 
-  FlipFlop(gui::Widget* parent);
+  FlipFlop(ui::Widget* parent);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer& timer) override;
@@ -42,7 +42,7 @@ struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
 
-  void SetKey(gui::AnsiKey);
+  void SetKey(ui::AnsiKey);
 
   void FillChildren(Vec<Widget*>& children) override;
 

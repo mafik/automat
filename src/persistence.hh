@@ -7,13 +7,13 @@
 
 namespace automat {
 
-namespace gui {
+namespace ui {
 struct RootWidget;
-}  // namespace gui
+}  // namespace ui
 
 Path StatePath();
 
-void SaveState(gui::RootWidget&, Status&);
-void LoadState(gui::RootWidget&, Status&);
+void SaveState(ui::RootWidget&, Status&);
+void LoadState(ui::RootWidget&, Status&);
 
 }  // namespace automat

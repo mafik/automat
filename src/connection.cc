@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: MIT
 #include "connection.hh"
 
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 #include "location.hh"
 #include "root_widget.hh"
 
-using namespace automat::gui;
+using namespace automat::ui;
 
 namespace automat {
 Connection::~Connection() {

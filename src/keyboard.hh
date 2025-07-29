@@ -23,7 +23,7 @@
 #include <xcb/xinput.h>
 #endif  // defined(__linux__)
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct CaretOwner;
 struct Keyboard;
@@ -231,4 +231,4 @@ struct Keyboard final : Widget {
 };
 
 
-}  // namespace automat::gui
+}  // namespace automat::ui

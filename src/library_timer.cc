@@ -157,9 +157,9 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
   }
 }
 
-TimerDelay::TimerDelay(gui::Widget* parent)
-    : FallbackWidget(parent), text_field(new gui::NumberTextField(this, kTextWidth)) {
-  text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
+TimerDelay::TimerDelay(ui::Widget* parent)
+    : FallbackWidget(parent), text_field(new ui::NumberTextField(this, kTextWidth)) {
+  text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
   range_dial.velocity = 0;
   range_dial.value = 1;
 
@@ -404,7 +404,7 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
                                        major_tick_w, kTickMajorLength);
   SkRect minor_tick = SkRect::MakeXYWH(-minor_tick_w / 2, kTickOuterRadius - kTickMinorLength,
                                        minor_tick_w, kTickMinorLength);
-  static auto font = gui::Font::MakeV2(gui::Font::GetNotoSans(), 2_mm);
+  static auto font = ui::Font::MakeV2(ui::Font::GetNotoSans(), 2_mm);
   float text_r = r4 * 0.8;
   for (int i = 1; i <= major_tick_count; ++i) {
     float a = (float)i / major_tick_count;
@@ -559,7 +559,7 @@ void TimerDelay::FillChildren(Vec<Widget*>& children) { children.push_back(text_
 
 SkPath TimerDelay::FieldShape(Object& field) const {
   if (&field == &duration) {
-    auto transform = SkMatrix::Translate(-kTextWidth / 2, -gui::NumberTextField::kHeight);
+    auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
     return text_field->Shape().makeTransform(transform);
   }
   return SkPath();
@@ -590,7 +590,7 @@ SkPath TimerDelay::Shape() const {
 
 struct DragDurationHandleAction : Action {
   TimerDelay& timer;
-  DragDurationHandleAction(gui::Pointer& pointer, TimerDelay& timer)
+  DragDurationHandleAction(ui::Pointer& pointer, TimerDelay& timer)
       : Action(pointer), timer(timer) {}
   void Update() override {
     auto pos = pointer.PositionWithin(timer);
@@ -632,7 +632,7 @@ void TimerDelay::Updated(Location& here, Location& updated) {
 
 struct DragHandAction : Action {
   WeakPtr<TimerDelay> timer_weak;
-  DragHandAction(gui::Pointer& pointer, Ptr<TimerDelay> timer)
+  DragHandAction(ui::Pointer& pointer, Ptr<TimerDelay> timer)
       : Action(pointer), timer_weak(timer) {
     ++timer->hand_draggers;
   }
@@ -641,7 +641,7 @@ struct DragHandAction : Action {
     if (!timer_shared) {
       return;
     }
-    Vec2 pos = gui::TransformDown(*timer_shared).mapPoint(pointer.pointer_position);
+    Vec2 pos = ui::TransformDown(*timer_shared).mapPoint(pointer.pointer_position);
     timer_shared->hand_degrees.value = atan(pos) * 180 / M_PI;
     timer_shared->WakeAnimation();
   }
@@ -653,8 +653,8 @@ struct DragHandAction : Action {
   }
 };
 
-std::unique_ptr<Action> TimerDelay::FindAction(gui::Pointer& pointer, gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::Left) {
+std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
+  if (btn == ui::PointerButton::Left) {
     auto pos = pointer.PositionWithin(*this);
     auto duration_handle_path = DurationHandlePath(*this);
     if (duration_handle_path.contains(pos.x, pos.y)) {

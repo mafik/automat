@@ -7,7 +7,7 @@
 
 #include "animation.hh"
 #include "base.hh"
-#include "gui_button.hh"
+#include "ui_button.hh"
 #include "on_off.hh"
 #include "pointer.hh"
 #include "run_button.hh"
@@ -17,10 +17,10 @@
 
 namespace automat::library {
 
-struct SideButton : gui::Button {
-  using gui::Button::Button;
+struct SideButton : ui::Button {
+  using ui::Button::Button;
   SideButton(Widget* parent, std::unique_ptr<Widget> child)
-      : gui::Button(parent, std::move(child)) {}
+      : ui::Button(parent, std::move(child)) {}
   SkColor ForegroundColor() const override;
   SkColor BackgroundColor() const override;
   SkRRect RRect() const override;
@@ -28,26 +28,26 @@ struct SideButton : gui::Button {
 
 struct PrevButton : SideButton {
   PrevButton(Widget* parent);
-  void Activate(gui::Pointer&) override;
+  void Activate(ui::Pointer&) override;
 };
 
 struct NextButton : SideButton {
   NextButton(Widget* parent);
-  void Activate(gui::Pointer&) override;
+  void Activate(ui::Pointer&) override;
 };
 
 struct Timeline;
 
-struct TimelineRunButton : gui::ToggleButton {
+struct TimelineRunButton : ui::ToggleButton {
   Timeline* timeline;
 
-  std::unique_ptr<gui::Button> rec_button;
-  mutable gui::Button* last_on_widget = nullptr;
+  std::unique_ptr<ui::Button> rec_button;
+  mutable ui::Button* last_on_widget = nullptr;
 
   TimelineRunButton(Widget* parent, Timeline* timeline);
-  gui::Button* OnWidget() override;
+  ui::Button* OnWidget() override;
   bool Filled() const override;
-  void Activate(gui::Pointer&);
+  void Activate(ui::Pointer&);
 };
 
 struct TrackBase : Object {
@@ -58,7 +58,7 @@ struct TrackBase : Object {
                             time::SteadyPoint now) = 0;
 
   // Each subtype must returns its own Widget derived from TrackBaseWidget.
-  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override = 0;
+  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override = 0;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
@@ -69,7 +69,7 @@ struct OnOffTrack : TrackBase, OnOff {
   time::Duration on_at = time::kDurationGuard;
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
-  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override;
+  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -88,7 +88,7 @@ struct Vec2Track : TrackBase {
 
   string_view Name() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
-  std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override;
+  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -102,8 +102,8 @@ struct SpliceAction : Action {
   time::Duration splice_to;
   bool snapped = false;
   bool cancel = true;
-  gui::Pointer::IconOverride resize_icon;
-  SpliceAction(gui::Pointer& pointer, Timeline& timeline);
+  ui::Pointer::IconOverride resize_icon;
+  SpliceAction(ui::Pointer& pointer, Timeline& timeline);
   ~SpliceAction();
   void Update() override;
 };
@@ -160,8 +160,8 @@ struct Timeline : LiveObject,
     Recording recording;
   };
 
-  Timeline(gui::Widget* parent);
-  Timeline(gui::Widget* parent, const Timeline&);
+  Timeline(ui::Widget* parent);
+  Timeline(ui::Widget* parent, const Timeline&);
   void UpdateChildTransform(time::SteadyPoint now);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -171,7 +171,7 @@ struct Timeline : LiveObject,
   void Args(std::function<void(Argument&)> cb) override;
   Vec2AndDir ArgStart(const Argument&) override;
   void FillChildren(Vec<Widget*>& children) override;
-  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
+  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   void OnRun(Location& here, RunTask&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }

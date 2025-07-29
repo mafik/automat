@@ -30,7 +30,7 @@
 #include "connector_optical.hh"
 #include "embedded.hh"
 #include "font.hh"
-#include "gui_constants.hh"
+#include "ui_constants.hh"
 #include "image_provider.hh"
 #include "log.hh"
 #include "str.hh"
@@ -47,7 +47,7 @@ constexpr bool kDebugEyeShape = false;
 struct ImageArgument : LiveArgument {
   TextDrawable icon;
   ImageArgument()
-      : LiveArgument("image", kRequiresObject), icon("IMG", gui::kLetterSize, gui::GetFont()) {
+      : LiveArgument("image", kRequiresObject), icon("IMG", ui::kLetterSize, ui::GetFont()) {
     requirements.push_back([](Location* location, Object* object, std::string& error) {
       if (!object->AsImageProvider()) {
         error = "Object must provide images";
@@ -63,7 +63,7 @@ struct ImageArgument : LiveArgument {
 
 struct TextArgument : Argument {
   TextDrawable icon;
-  TextArgument() : Argument("text", kRequiresObject), icon("T", gui::kLetterSize, gui::GetFont()) {
+  TextArgument() : Argument("text", kRequiresObject), icon("T", ui::kLetterSize, ui::GetFont()) {
     requirements.push_back([](Location* location, Object* object, std::string& error) {
       return true;  // Any object can receive text
     });
@@ -96,7 +96,7 @@ Ptr<Object> TesseractOCR::Clone() const {
   return ret;
 }
 
-struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
+struct TesseractWidget : Object::FallbackWidget, ui::PointerMoveCallback {
   constexpr static float kSize = 5_cm;
   constexpr static float kRegionStrokeWidth = 1_mm;
   constexpr static float kHandleSize = 3_mm;
@@ -117,7 +117,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
   Optional<Vec2> iris_target;  // Where the eye is pointing (machine coords)
   animation::SpringV2<Vec2> iris_dir;
   std::string ocr_text;
-  Optional<gui::Pointer::IconOverride> icon_override;
+  Optional<ui::Pointer::IconOverride> icon_override;
   animation::SpringV2<float> aspect_ratio = 1.618f;
   Rect status_rect;
   Optional<float> status_progress_ratio;
@@ -197,7 +197,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
 
   Ptr<TesseractOCR> LockTesseract() const { return LockObject<TesseractOCR>(); }
 
-  TesseractWidget(gui::Widget* parent, WeakPtr<Object> tesseract) : FallbackWidget(parent) {
+  TesseractWidget(ui::Widget* parent, WeakPtr<Object> tesseract) : FallbackWidget(parent) {
     object = tesseract;
   }
 
@@ -326,18 +326,18 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     return DragMode::None;
   }
 
-  gui::Pointer::IconType GetCursorForMode(DragMode mode) const {
+  ui::Pointer::IconType GetCursorForMode(DragMode mode) const {
     switch (mode) {
       case DragMode::Top:
       case DragMode::Bottom:
-        return gui::Pointer::kIconResizeVertical;
+        return ui::Pointer::kIconResizeVertical;
       case DragMode::Left:
       case DragMode::Right:
-        return gui::Pointer::kIconResizeHorizontal;
+        return ui::Pointer::kIconResizeHorizontal;
       case DragMode::Move:
-        return gui::Pointer::kIconAllScroll;
+        return ui::Pointer::kIconAllScroll;
       default:
-        return gui::Pointer::kIconArrow;
+        return ui::Pointer::kIconArrow;
     }
   }
 
@@ -645,7 +645,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     }
 
     if (status_results.size() > 0) {  // draw results
-      auto& font = gui::GetFont();
+      auto& font = ui::GetFont();
       SkPaint paint_bg;
       paint_bg.setColor(color::FastMix("#00000080"_color, "#00000000"_color, laser_alpha));
       SkPaint paint;
@@ -686,7 +686,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         SkPath inner_outer;
         inner_outer.moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner]);
         inner_outer.lineTo(layout[(AxisX)i, (AxisY)j, Back, Outer]);
-        gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
+        ui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
                        kEdgeWidth * 0.5, kEdgeWidth * 0.5, nullptr);
       }
     }
@@ -735,7 +735,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     auto inner_back_arcline = ArcLine::MakeFromPath(inner_back);
     inner_back_arcline.Outset(kEdgeWidth * 0.25);
     inner_back = inner_back_arcline.ToPath();
-    gui::DrawCable(canvas, inner_back, color_inner_back, CableTexture::Smooth, kEdgeWidth * 0.5,
+    ui::DrawCable(canvas, inner_back, color_inner_back, CableTexture::Smooth, kEdgeWidth * 0.5,
                    kEdgeWidth * 0.5, nullptr);
 
     for (int i = 0; i < 2; ++i) {
@@ -743,7 +743,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         SkPath front_back;
         front_back.moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner]);
         front_back.lineTo(layout[(AxisX)i, (AxisY)j, Front, Inner]);
-        gui::DrawCable(canvas, front_back, color_inner, CableTexture::Smooth, kEdgeWidth * 0.5,
+        ui::DrawCable(canvas, front_back, color_inner, CableTexture::Smooth, kEdgeWidth * 0.5,
                        kEdgeWidth, nullptr);
       }
     }
@@ -752,7 +752,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
         SkPath inner_outer;
         inner_outer.moveTo(layout[(AxisX)i, (AxisY)j, Front, Inner]);
         inner_outer.lineTo(layout[(AxisX)i, (AxisY)j, Front, Outer]);
-        gui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
+        ui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
                        kEdgeWidth * 0.75, kEdgeWidth, nullptr);
       }
     }
@@ -761,7 +761,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     auto inner_front =
         RectPath(layout[Left, Top, Front, Inner], layout[Right, Top, Front, Inner],
                  layout[Right, Bottom, Front, Inner], layout[Left, Bottom, Front, Inner]);
-    gui::DrawCable(canvas, inner_front, color_inner, CableTexture::Smooth, kEdgeWidth * 0.75,
+    ui::DrawCable(canvas, inner_front, color_inner, CableTexture::Smooth, kEdgeWidth * 0.75,
                    kEdgeWidth * 0.75, nullptr);
 
     auto& border_image = BorderImage();
@@ -892,21 +892,21 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     }
   }
 
-  void PointerOver(gui::Pointer& pointer) override {
+  void PointerOver(ui::Pointer& pointer) override {
     Vec2 pos = pointer.PositionWithin(*this);
     hover_mode = GetDragModeAt(pos);
     icon_override.emplace(pointer, GetCursorForMode(hover_mode));
     StartWatching(pointer);  // Start watching pointer movement
   }
 
-  void PointerLeave(gui::Pointer& pointer) override {
+  void PointerLeave(ui::Pointer& pointer) override {
     hover_mode = DragMode::None;
     icon_override.reset();  // Release the icon override
     StopWatching(pointer);  // Stop watching pointer movement
   }
 
   // PointerMoveCallback implementation
-  void PointerMove(gui::Pointer& pointer, Vec2 position) override {
+  void PointerMove(ui::Pointer& pointer, Vec2 position) override {
     Vec2 pos = pointer.PositionWithin(*this);
     DragMode new_mode = GetDragModeAt(pos);
 
@@ -925,7 +925,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     Vec2 last_pos;
     Vec2 delta_remainder;
 
-    RegionDragAction(gui::Pointer& pointer, TesseractWidget& widget, DragMode mode)
+    RegionDragAction(ui::Pointer& pointer, TesseractWidget& widget, DragMode mode)
         : Action(pointer), widget(widget), mode(mode) {
       last_pos = pointer.pointer_position;
     }
@@ -1017,7 +1017,7 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
               return;
           }
         }
-        tesseract->ForEachWidget([](gui::RootWidget&, gui::Widget& w) {
+        tesseract->ForEachWidget([](ui::RootWidget&, ui::Widget& w) {
           w.WakeAnimation();
           w.RedrawThisFrame();
         });
@@ -1025,8 +1025,8 @@ struct TesseractWidget : Object::FallbackWidget, gui::PointerMoveCallback {
     }
   };
 
-  std::unique_ptr<Action> FindAction(gui::Pointer& pointer, gui::ActionTrigger trigger) override {
-    if (trigger == gui::PointerButton::Left) {
+  std::unique_ptr<Action> FindAction(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    if (trigger == ui::PointerButton::Left) {
       Vec2 pos = pointer.PositionWithin(*this);
       DragMode mode = GetDragModeAt(pos);
       if (mode != DragMode::None) {
@@ -1053,7 +1053,7 @@ const SkPath TesseractWidget::kEyeShape = PathFromSVG(
     "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
     "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
 
-std::unique_ptr<gui::Widget> TesseractOCR::MakeWidget(gui::Widget* parent) {
+std::unique_ptr<ui::Widget> TesseractOCR::MakeWidget(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, AcquireWeakPtr<Object>());
 }
 

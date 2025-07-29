@@ -9,14 +9,14 @@
 
 namespace automat::library {
 
-struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui::KeyGrabber {
-  gui::AnsiKey key = gui::AnsiKey::F11;
+struct HotKey : LiveObject, Object::FallbackWidget, OnOff, ui::CaretOwner, ui::KeyGrabber {
+  ui::AnsiKey key = ui::AnsiKey::F11;
   bool ctrl = true;
   bool alt = false;
   bool shift = false;
   bool windows = false;
 
-  unique_ptr<gui::PowerButton> power_button;
+  unique_ptr<ui::PowerButton> power_button;
   unique_ptr<KeyButton> ctrl_button;
   unique_ptr<KeyButton> alt_button;
   unique_ptr<KeyButton> shift_button;
@@ -24,12 +24,12 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   unique_ptr<KeyButton> shortcut_button;
 
   // This is used to select the main hotkey
-  gui::Caret* hotkey_selector = nullptr;
+  ui::Caret* hotkey_selector = nullptr;
 
   // This is used to get hotkey events
-  gui::KeyGrab* hotkey = nullptr;
+  ui::KeyGrab* hotkey = nullptr;
 
-  HotKey(gui::Widget* parent);
+  HotKey(ui::Widget* parent);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   animation::Phase Tick(time::Timer&) override;
@@ -41,13 +41,13 @@ struct HotKey : LiveObject, Object::FallbackWidget, OnOff, gui::CaretOwner, gui:
   void On() override;
   void Off() override;
 
-  void ReleaseCaret(gui::Caret&) override;
-  void ReleaseKeyGrab(gui::KeyGrab&) override;
+  void ReleaseCaret(ui::Caret&) override;
+  void ReleaseKeyGrab(ui::KeyGrab&) override;
 
-  void KeyDown(gui::Caret&, gui::Key) override;
+  void KeyDown(ui::Caret&, ui::Key) override;
 
-  void KeyGrabberKeyDown(gui::KeyGrab&) override;
-  void KeyGrabberKeyUp(gui::KeyGrab&) override;
+  void KeyGrabberKeyDown(ui::KeyGrab&) override;
+  void KeyGrabberKeyUp(ui::KeyGrab&) override;
 
   void FillChildren(Vec<Widget*>& children) override;
 

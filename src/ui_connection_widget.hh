@@ -13,7 +13,7 @@ struct Location;
 struct Argument;
 }  // namespace automat
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct ConnectionWidget;
 
@@ -94,7 +94,7 @@ struct ConnectionWidgetRange {
     // Function that exits ONLY when the iterator is pointing at a valid connection widget or end of
     // range.
     void Advance() {
-      auto& widgets = gui::root_widget->connection_widgets;
+      auto& widgets = ui::root_widget->connection_widgets;
       auto size = widgets.size();
       while (i < size) {
         ConnectionWidget& w = *widgets[i];
@@ -112,10 +112,10 @@ struct ConnectionWidgetRange {
     }
 
     bool operator==(const end_iterator&) const {
-      return i == gui::root_widget->connection_widgets.size();
+      return i == ui::root_widget->connection_widgets.size();
     }
 
-    ConnectionWidget& operator*() const { return *gui::root_widget->connection_widgets[i]; }
+    ConnectionWidget& operator*() const { return *ui::root_widget->connection_widgets[i]; }
   };
 
   ConnectionWidgetRange(const Location& here, const Argument& arg) : here(here), arg(arg) {}
@@ -125,4 +125,4 @@ struct ConnectionWidgetRange {
   end_iterator end() const { return end_iterator{}; }
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

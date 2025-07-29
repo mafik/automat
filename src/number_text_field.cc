@@ -7,13 +7,13 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "font.hh"
-#include "gui_constants.hh"
+#include "ui_constants.hh"
 #include "text_field.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 NumberTextField::NumberTextField(Widget* parent, float width)
-    : gui::TextField(parent, &text, width), text("0") {}
+    : ui::TextField(parent, &text, width), text("0") {}
 
 SkRRect NumberTextField::ShapeRRect() const {
   return SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, width, kHeight), kHeight / 2, kHeight / 2);
@@ -82,16 +82,16 @@ void NumberTextField::DrawBackground(SkCanvas& canvas) const {
 }
 
 void NumberTextField::DrawText(SkCanvas& canvas) const {
-  gui::Font& font = gui::GetFont();
+  ui::Font& font = ui::GetFont();
   Vec2 text_pos = GetTextPos();
   canvas.translate(text_pos.x, text_pos.y);
   font.DrawText(canvas, text, GetTextPaint());
 }
 
 Vec2 NumberTextField::GetTextPos() const {
-  gui::Font& font = gui::GetFont();
+  ui::Font& font = ui::GetFont();
   // We use the same margin on all sides because it looks nicer with fully rounded corners.
-  float margin = (kHeight - gui::kLetterSize) / 2;
+  float margin = (kHeight - ui::kLetterSize) / 2;
   float text_width = font.MeasureText(text);
   return Vec2(width - text_width - margin, margin);
 }
@@ -155,4 +155,4 @@ void NumberTextField::SetNumber(double x) {
   WakeAnimation();
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

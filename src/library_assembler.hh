@@ -50,7 +50,7 @@ struct RegisterWidget : public Object::FallbackWidget {
   void VisitOptions(const OptionsVisitor&) const override;
 };
 
-struct AssemblerWidget : Object::FallbackWidget, gui::DropTarget {
+struct AssemblerWidget : Object::FallbackWidget, ui::DropTarget {
   constexpr static float kWidth = 8_cm;
   constexpr static float kHeight = 8_cm;
   constexpr static float kRadius = 1_cm;
@@ -62,7 +62,7 @@ struct AssemblerWidget : Object::FallbackWidget, gui::DropTarget {
 
   AssemblerWidget(Widget* parent, WeakPtr<Assembler>);
   std::string_view Name() const override;
-  void FillChildren(Vec<gui::Widget*>& children) override;
+  void FillChildren(Vec<ui::Widget*>& children) override;
   SkPath Shape() const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
@@ -83,7 +83,7 @@ struct Register : LiveObject {
 
   Ptr<Object> Clone() const override;
 
-  unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override {
+  unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override {
     return make_unique<RegisterWidget>(parent, AcquireWeakPtr<Object>());
   }
 
@@ -121,7 +121,7 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void OnCancel() override;
 
-  unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) override {
+  unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override {
     return make_unique<AssemblerWidget>(parent, AcquireWeakPtr());
   }
 

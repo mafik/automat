@@ -13,7 +13,7 @@
 #include "argument.hh"
 #include "color.hh"
 #include "font.hh"
-#include "gui_shape_widget.hh"
+#include "ui_shape_widget.hh"
 #include "key.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
@@ -89,7 +89,7 @@ struct EnableContinuousRunOption : TextOption {
     return std::make_unique<EnableContinuousRunOption>(weak);
   }
 
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto window = weak.lock()) {
       auto lock = std::lock_guard(window->mutex);
       window->run_continuously = true;
@@ -111,7 +111,7 @@ struct DisableContinuousRunOption : TextOption {
     return std::make_unique<DisableContinuousRunOption>(weak);
   }
 
-  std::unique_ptr<Action> Activate(gui::Pointer& pointer) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto window = weak.lock()) {
       auto lock = std::lock_guard(window->mutex);
       window->run_continuously = false;
@@ -178,10 +178,10 @@ constexpr static float kTitleButtonSize = kTitleHeight - 2 * kContentMargin;
 struct WindowWidget;
 
 struct PickButton : theme::xp::TitleButton {
-  std::function<void(gui::Pointer&)> on_activate;
-  PickButton(gui::Widget* parent)
+  std::function<void(ui::Pointer&)> on_activate;
+  PickButton(ui::Widget* parent)
       : theme::xp::TitleButton(
-            parent, gui::MakeShapeWidget(this, kPickSVG, "#000000"_color, &kCenterPickIcon)) {
+            parent, ui::MakeShapeWidget(this, kPickSVG, "#000000"_color, &kCenterPickIcon)) {
     child->local_to_parent.preTranslate(-0.2_mm, -0.2_mm);
   }
   // float Height() const override { return kTitleButtonSize; }
@@ -191,7 +191,7 @@ struct PickButton : theme::xp::TitleButton {
         .sk;
   }
 
-  void Activate(gui::Pointer& p) override {
+  void Activate(ui::Pointer& p) override {
     WakeAnimation();
     on_activate(p);
   }
@@ -228,13 +228,13 @@ static void SearchWindows(xcb_window_t start, WindowVisitor visitor) {
 }
 #endif
 
-struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabber {
+struct WindowWidget : Object::FallbackWidget, ui::PointerGrabber, ui::KeyGrabber {
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
   constexpr static float kHeight = 5_cm;
 
-  gui::PointerGrab* pointer_grab = nullptr;
-  gui::KeyGrab* key_grab = nullptr;
+  ui::PointerGrab* pointer_grab = nullptr;
+  ui::KeyGrab* key_grab = nullptr;
 
   std::unique_ptr<PickButton> pick_button;
   std::string window_name;
@@ -244,14 +244,14 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
-  WindowWidget(gui::Widget* parent, WeakPtr<Object> window) : FallbackWidget(parent) {
+  WindowWidget(ui::Widget* parent, WeakPtr<Object> window) : FallbackWidget(parent) {
     object = window;
     pick_button = std::make_unique<PickButton>(this);
-    pick_button->on_activate = [this](gui::Pointer& p) {
+    pick_button->on_activate = [this](ui::Pointer& p) {
       p.EndAllActions();
       pointer_grab = &p.RequestGlobalGrab(*this);
       if (p.keyboard) {
-        key_grab = &p.keyboard->RequestKeyGrab(*this, gui::AnsiKey::Escape, false, false, false,
+        key_grab = &p.keyboard->RequestKeyGrab(*this, ui::AnsiKey::Escape, false, false, false,
                                                false, [this](Status& status) {
                                                  if (!OK(status)) {
                                                    LOG << "Couldn't grab the escape key:" << status;
@@ -340,7 +340,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     auto vertices = theme::xp::WindowBorder(kCoarseBounds.rect, title_bar_color);
     canvas.drawVertices(vertices, SkBlendMode::kDst, SkPaint());
 
-    auto& font = gui::GetFont();
+    auto& font = ui::GetFont();
     SkPaint title_text_paint;
     title_text_paint.setColor("#ffffff"_color);
     canvas.save();
@@ -368,10 +368,10 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
     if (pointer_grab) pointer_grab->Release();
     if (key_grab) key_grab->Release();
   }
-  void ReleaseGrab(gui::PointerGrab&) override { pointer_grab = nullptr; }
-  void ReleaseKeyGrab(gui::KeyGrab&) override { key_grab = nullptr; }
-  void KeyGrabberKeyDown(gui::KeyGrab&) override { ReleaseGrabs(); }
-  void PointerGrabberButtonDown(gui::PointerGrab& grab, gui::PointerButton) override {
+  void ReleaseGrab(ui::PointerGrab&) override { pointer_grab = nullptr; }
+  void ReleaseKeyGrab(ui::KeyGrab&) override { key_grab = nullptr; }
+  void KeyGrabberKeyDown(ui::KeyGrab&) override { ReleaseGrabs(); }
+  void PointerGrabberButtonDown(ui::PointerGrab& grab, ui::PointerButton) override {
     ReleaseGrabs();
 #ifdef __linux__
 
@@ -472,7 +472,7 @@ struct WindowWidget : Object::FallbackWidget, gui::PointerGrabber, gui::KeyGrabb
   }
 };
 
-std::unique_ptr<gui::Widget> Window::MakeWidget(gui::Widget* parent) {
+std::unique_ptr<ui::Widget> Window::MakeWidget(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, AcquireWeakPtr<Object>());
 }
 

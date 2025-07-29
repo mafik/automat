@@ -1,15 +1,15 @@
 // SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "gui_small_buffer_widget.hh"
+#include "ui_small_buffer_widget.hh"
 
 #include <include/core/SkPath.h>
 
-#include "gui_constants.hh"
-#include "gui_shape_widget.hh"
+#include "ui_constants.hh"
+#include "ui_shape_widget.hh"
 #include "log.hh"
 #include "svg.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 static const SkPath kTypeUnsignedPath = PathFromSVG(kTypeUnsignedSVG, SVGUnit_Millimeters);
 static const SkPath kTypeSignedPath = PathFromSVG(kTypeSignedSVG, SVGUnit_Millimeters);
@@ -22,7 +22,7 @@ struct TypeButton : ShapeWidget {
   //   return SkRRect::MakeOval(SkRect::MakeXYWH(-4_mm, -4_mm, 8_mm, 8_mm));
   // }
 
-  TypeButton(gui::Widget* parent, SkPath path) : ShapeWidget(parent, path), clickable(*this) {}
+  TypeButton(ui::Widget* parent, SkPath path) : ShapeWidget(parent, path), clickable(*this) {}
 
   void PointerOver(Pointer& p) override { clickable.PointerOver(p); }
   void PointerLeave(Pointer& p) override { clickable.PointerLeave(p); }
@@ -32,7 +32,7 @@ struct TypeButton : ShapeWidget {
   }
 };
 
-SmallBufferWidget::SmallBufferWidget(gui::Widget* parent, NestedWeakPtr<Buffer> buffer)
+SmallBufferWidget::SmallBufferWidget(ui::Widget* parent, NestedWeakPtr<Buffer> buffer)
     : TextFieldBase(parent), buffer_weak(buffer), type_button(new TypeButton(this, kTypeTextPath)) {
   auto tb = static_cast<TypeButton*>(type_button.get());
   tb->clickable.activate = [this](Pointer&) {
@@ -98,7 +98,7 @@ void SmallBufferWidget::Measure() {
 
 Font& SmallBufferWidget::GetFont(Buffer::Type type) const {
   if (type == Buffer::Type::TypeCount) {
-    return gui::GetFont();
+    return ui::GetFont();
   }
   int i = (int)type;
   if (fonts[i] != nullptr) {
@@ -106,15 +106,15 @@ Font& SmallBufferWidget::GetFont(Buffer::Type type) const {
   }
   switch (type) {
     case Buffer::Type::Text:
-      return gui::GetFont();
+      return ui::GetFont();
     case Buffer::Type::Signed:
-      return gui::GetFont();
+      return ui::GetFont();
     case Buffer::Type::Unsigned:
-      return gui::GetFont();
+      return ui::GetFont();
     case Buffer::Type::Hexadecimal:
-      return gui::GetFont();
+      return ui::GetFont();
     default:
-      return gui::GetFont();
+      return ui::GetFont();
   }
 }
 
@@ -303,4 +303,4 @@ void SmallBufferWidget::TextVisit(const TextVisitor& visitor) {
   }
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

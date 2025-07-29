@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "gui_button.hh"
+#include "ui_button.hh"
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkClipOp.h>
@@ -15,13 +15,13 @@
 #include "audio.hh"
 #include "color.hh"
 #include "embedded.hh"
-#include "gui_constants.hh"
+#include "ui_constants.hh"
 #include "pointer.hh"
 #include "widget.hh"
 
 using namespace std;
 
-namespace automat::gui {
+namespace automat::ui {
 
 void Clickable::PointerOver(Pointer& pointer) {
   pointers_over++;
@@ -262,7 +262,7 @@ void ToggleButton::PreDrawChildren(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-Button::Button(gui::Widget* parent, std::unique_ptr<Widget> child)
+Button::Button(ui::Widget* parent, std::unique_ptr<Widget> child)
     : Widget(parent), child(std::move(child)), clickable(*this) {
   clickable.activate = [this](Pointer& pointer) { Activate(pointer); };
   UpdateChildTransform();
@@ -275,4 +275,4 @@ void Button::UpdateChildTransform() {
   }
   child->local_to_parent = SkM44::Translate(offset.x, offset.y);
 }
-}  // namespace automat::gui
+}  // namespace automat::ui

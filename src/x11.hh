@@ -176,7 +176,7 @@ constexpr KeyCode kKeyCodesArray[] = {
     KeyCode::SuperLeft,  KeyCode::SuperRight,  KeyCode::Compose,
 };
 
-automat::gui::AnsiKey X11KeyCodeToKey(KeyCode key_code);
-KeyCode KeyToX11KeyCode(automat::gui::AnsiKey key);
+automat::ui::AnsiKey X11KeyCodeToKey(KeyCode key_code);
+KeyCode KeyToX11KeyCode(automat::ui::AnsiKey key);
 
 }  // namespace x11

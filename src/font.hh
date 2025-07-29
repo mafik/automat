@@ -11,7 +11,7 @@
 
 #include "virtual_fs.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct Font {
   SkFont sk_font;
@@ -48,4 +48,4 @@ struct Font {
 sk_sp<SkFontMgr> GetFontMgr();
 Font& GetFont();
 
-}  // namespace automat::gui
+}  // namespace automat::ui

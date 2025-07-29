@@ -16,9 +16,9 @@
 #include "time.hh"
 #include "widget.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 struct ConnectionWidget;
-}  // namespace automat::gui
+}  // namespace automat::ui
 
 namespace automat {
 
@@ -49,7 +49,7 @@ struct ObjectAnimationState {
 //
 // Implementations of this interface would typically extend it with
 // container-specific functions.
-struct Location : ReferenceCounted, gui::Widget {
+struct Location : ReferenceCounted, ui::Widget {
   constexpr static float kPositionSpringPeriod = 0.2;
   constexpr static float kScaleSpringPeriod = 0.3;
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
@@ -249,7 +249,7 @@ struct Location : ReferenceCounted, gui::Widget {
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
-  std::unique_ptr<Action> FindAction(gui::Pointer&, gui::ActionTrigger) override;
+  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   SkPath Shape() const override;
   SkPath FieldShape(Object&) const override;
 

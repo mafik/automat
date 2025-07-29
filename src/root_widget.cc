@@ -10,7 +10,7 @@
 #include "automat.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 #include "loading_animation.hh"
 #include "math.hh"
 #include "pointer.hh"
@@ -19,7 +19,7 @@
 
 using namespace std;
 
-namespace automat::gui {
+namespace automat::ui {
 
 std::vector<RootWidget*> root_widgets;
 unique_ptr<RootWidget> root_widget;
@@ -528,7 +528,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
         }
         // Create a new widget.
         root_widget.connection_widgets.emplace_back(
-            new gui::ConnectionWidget(&root_widget, *loc, arg));
+            new ui::ConnectionWidget(&root_widget, *loc, arg));
       });
     }
   }
@@ -592,4 +592,4 @@ void RootWidget::Resized(Vec2 size) {
   }
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

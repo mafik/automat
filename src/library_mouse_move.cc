@@ -22,7 +22,7 @@
 #include "xcb.hh"
 #endif
 
-using namespace automat::gui;
+using namespace automat::ui;
 
 namespace automat::library {
 
@@ -39,7 +39,7 @@ struct MouseMoveWidget : Object::FallbackWidget {
   std::atomic<int> trail_end_idx = 0;
   std::atomic<Vec2> trail[kMaxTrailPoints] = {};
 
-  MouseMoveWidget(gui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move)
+  MouseMoveWidget(ui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move)
       : FallbackWidget(parent) {
     object = std::move(weak_mouse_move);
   }
@@ -136,7 +136,7 @@ struct MouseMoveWidget : Object::FallbackWidget {
   }
 };
 
-std::unique_ptr<gui::Widget> MouseMove::MakeWidget(gui::Widget* parent) {
+std::unique_ptr<ui::Widget> MouseMove::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseMoveWidget>(parent, AcquireWeakPtr());
 }
 
@@ -153,7 +153,7 @@ void MouseMove::OnMouseMove(Vec2 vec) {
     xcb::flush();
   }
 #endif
-  ForEachWidget([vec](gui::RootWidget& root, gui::Widget& widget) {
+  ForEachWidget([vec](ui::RootWidget& root, ui::Widget& widget) {
     MouseMoveWidget& mouse_move_widget = static_cast<MouseMoveWidget&>(widget);
     int new_start = mouse_move_widget.trail_end_idx.fetch_add(1, std::memory_order_relaxed);
     int i = (new_start + MouseMoveWidget::kMaxTrailPoints - 1) % MouseMoveWidget::kMaxTrailPoints;

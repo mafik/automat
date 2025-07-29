@@ -6,7 +6,7 @@
 
 #include "str.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 enum class AnsiKey : uint8_t {
   Unknown,
@@ -130,4 +130,4 @@ struct Key {
   std::string text;
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

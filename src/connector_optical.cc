@@ -33,7 +33,7 @@
 #include "textures.hh"
 #include "time.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 constexpr bool kDebugCable = false;
 constexpr float kCasingWidth = 8_mm;
@@ -1315,4 +1315,4 @@ CablePhysicsSimulation::CablePhysicsSimulation(Location& loc, Argument& arg, Vec
 
 CablePhysicsSimulation::~CablePhysicsSimulation() {}
 
-}  // namespace automat::gui
+}  // namespace automat::ui

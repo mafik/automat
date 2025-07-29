@@ -7,7 +7,7 @@
 #include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 #include "root_widget.hh"
 #include "svg.hh"
 #include "widget.hh"
@@ -77,7 +77,7 @@ bool Argument::IsOn(Location& here) const {
 
 #pragma region New API
 
-Vec2AndDir Argument::Start(gui::Widget& object_widget, gui::Widget& widget) const {
+Vec2AndDir Argument::Start(ui::Widget& object_widget, ui::Widget& widget) const {
   auto pos_dir = object_widget.ArgStart(*this);
   auto m = TransformBetween(object_widget, widget);
   pos_dir.pos = m.mapPoint(pos_dir.pos);
@@ -183,7 +183,7 @@ void LiveArgument::Attach(Location& here) {
 }
 
 void Argument::InvalidateConnectionWidgets(Location& here) const {
-  for (auto& w : gui::ConnectionWidgetRange(here, *this)) {
+  for (auto& w : ui::ConnectionWidgetRange(here, *this)) {
     w.WakeAnimation();
     if (w.state) {
       w.state->stabilized = false;

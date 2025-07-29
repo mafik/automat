@@ -9,7 +9,7 @@
 #include "math.hh"
 #include "pointer.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct RootWidget;
 
@@ -56,4 +56,4 @@ struct Window {
   // TODO: keep reference to vk::Surface and vk::Swapchain here
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

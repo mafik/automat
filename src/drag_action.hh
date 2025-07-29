@@ -13,7 +13,7 @@ namespace automat {
 
 struct Location;
 
-namespace gui {
+namespace ui {
 
 // Interface for widgets that can receive locations being dropped on them.
 struct DropTarget {
@@ -26,14 +26,14 @@ struct DropTarget {
   // The drop target is responsible for re-parenting the location!
   virtual void DropLocation(Ptr<Location>&&) = 0;
 };
-}  // namespace gui
+}  // namespace ui
 
 struct DragLocationAction;
 
-struct DragLocationWidget : gui::Widget {
+struct DragLocationWidget : ui::Widget {
   DragLocationAction& action;
-  DragLocationWidget(gui::Widget* parent, DragLocationAction& action)
-      : gui::Widget(parent), action(action) {}
+  DragLocationWidget(ui::Widget* parent, DragLocationAction& action)
+      : ui::Widget(parent), action(action) {}
   SkPath Shape() const override;
   void FillChildren(Vec<Widget*>& children) override;
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
@@ -48,12 +48,12 @@ struct DragLocationAction : Action {
   Vec<Ptr<Location>> locations;
   unique_ptr<DragLocationWidget> widget;
 
-  DragLocationAction(gui::Pointer&, Ptr<Location>&&, Vec2 contact_point);
-  DragLocationAction(gui::Pointer&, Vec<Ptr<Location>>&&, Vec2 contact_point);
+  DragLocationAction(ui::Pointer&, Ptr<Location>&&, Vec2 contact_point);
+  DragLocationAction(ui::Pointer&, Vec<Ptr<Location>>&&, Vec2 contact_point);
   ~DragLocationAction() override;
 
   void Update() override;
-  gui::Widget* Widget() override { return widget.get(); }
+  ui::Widget* Widget() override { return widget.get(); }
 };
 
 bool IsDragged(const Location& location);

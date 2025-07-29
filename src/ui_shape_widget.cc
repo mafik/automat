@@ -1,18 +1,18 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
-#include "gui_shape_widget.hh"
+#include "ui_shape_widget.hh"
 
 #include "svg.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
-ShapeWidget::ShapeWidget(gui::Widget* parent, SkPath path) : Widget(parent), path(path) {}
+ShapeWidget::ShapeWidget(ui::Widget* parent, SkPath path) : Widget(parent), path(path) {}
 
 SkPath ShapeWidget::Shape() const { return path; }
 
 void ShapeWidget::Draw(SkCanvas& canvas) const { canvas.drawPath(path, paint); }
 
-std::unique_ptr<Widget> MakeShapeWidget(gui::Widget* parent, const char* svg_path,
+std::unique_ptr<Widget> MakeShapeWidget(ui::Widget* parent, const char* svg_path,
                                         SkColor fill_color, const SkMatrix* transform) {
   SkPath path = PathFromSVG(svg_path);
   if (transform) {
@@ -24,4 +24,4 @@ std::unique_ptr<Widget> MakeShapeWidget(gui::Widget* parent, const char* svg_pat
   return ret;
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

@@ -35,7 +35,7 @@
 
 #endif
 
-namespace automat::gui {
+namespace automat::ui {
 
 static SkPath PointerIBeam(const Keyboard& keyboard) {
   if (keyboard.pointer) {
@@ -335,7 +335,7 @@ SkPath Keyboard::Shape() const {
 #ifdef __linux__
 
 void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
-  gui::Key key = {
+  ui::Key key = {
       .ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
       .alt = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_1),
       .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
@@ -359,14 +359,14 @@ void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
   KeyDown(key);
 }
 void Keyboard::KeyDown(xcb_input_raw_key_press_event_t& ev) {
-  gui::Key key = {
+  ui::Key key = {
       .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
       .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
   };
   LogKeyDown(key);
 }
 void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
-  gui::Key key = {
+  ui::Key key = {
       .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
       .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
   };
@@ -374,7 +374,7 @@ void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
 }
 
 void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
-  gui::Key key = {.ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
+  ui::Key key = {.ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
                   .alt = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_1),
                   .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
                   .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
@@ -383,12 +383,12 @@ void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
   KeyUp(key);
 }
 void Keyboard::KeyUp(xcb_input_raw_key_release_event_t& ev) {
-  gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+  ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                   .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   LogKeyUp(key);
 }
 void Keyboard::KeyUp(xcb_key_press_event_t& ev) {
-  gui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+  ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                   .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   KeyUp(key);
 }
@@ -621,4 +621,4 @@ void Keylogging::Release() {
   window.RegisterInput();
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

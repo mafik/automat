@@ -6,7 +6,7 @@
 
 #include "str.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 StrView ToStr(AnsiKey k) noexcept {
   using enum AnsiKey;
@@ -238,4 +238,4 @@ AnsiKey AnsiKeyFromStr(StrView str) noexcept {
   return AnsiKey::Unknown;
 }
 
-}  // namespace automat::gui
+}  // namespace automat::ui

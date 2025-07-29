@@ -179,7 +179,7 @@ static void ScanDevices(XCBWindow& window) {
   }
 }
 
-std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& root,
+std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& root,
                                                       Status& status) {
   xcb::Connect(status);
   if (!OK(status)) {
@@ -212,8 +212,8 @@ std::unique_ptr<automat::gui::Window> XCBWindow::Make(automat::gui::RootWidget& 
   wm_state.Set(window->xcb_window);
 
   xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, XCB_ATOM_WM_NAME,
-                      XCB_ATOM_STRING, 8, sizeof(automat::gui::kWindowName),
-                      automat::gui::kWindowName);
+                      XCB_ATOM_STRING, 8, sizeof(automat::ui::kWindowName),
+                      automat::ui::kWindowName);
 
   xcb_change_property(connection, XCB_PROP_MODE_REPLACE, window->xcb_window, atom::WM_PROTOCOLS,
                       XCB_ATOM_ATOM, 32, 1, &atom::WM_DELETE_WINDOW);
@@ -340,11 +340,11 @@ XCBWindow::~XCBWindow() {
   }
 }
 
-struct XCBPointerGrab : automat::gui::PointerGrab {
+struct XCBPointerGrab : automat::ui::PointerGrab {
   XCBWindow& xcb_window;
-  XCBPointerGrab(automat::gui::Pointer& pointer, automat::gui::PointerGrabber& grabber,
+  XCBPointerGrab(automat::ui::Pointer& pointer, automat::ui::PointerGrabber& grabber,
                  XCBWindow& xcb_window)
-      : automat::gui::PointerGrab(pointer, grabber), xcb_window(xcb_window) {
+      : automat::ui::PointerGrab(pointer, grabber), xcb_window(xcb_window) {
     xcb_cursor_t cursor = xcb_cursor_load_cursor(xcb_window.cursor_context.get(), "crosshair");
 
     uint32_t mask = XCB_INPUT_XI_EVENT_MASK_BUTTON_PRESS | XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE |
@@ -381,37 +381,37 @@ struct XCBPointerGrab : automat::gui::PointerGrab {
   }
 };
 
-struct XCBPointer : automat::gui::Pointer {
+struct XCBPointer : automat::ui::Pointer {
   XCBWindow& xcb_window;
 
-  static const char* GetCursorName(automat::gui::Pointer::IconType icon) {
+  static const char* GetCursorName(automat::ui::Pointer::IconType icon) {
     switch (icon) {
-      case automat::gui::Pointer::kIconArrow:
+      case automat::ui::Pointer::kIconArrow:
         return "left_ptr";
-      case automat::gui::Pointer::kIconHand:
+      case automat::ui::Pointer::kIconHand:
         return "hand1";
-      case automat::gui::Pointer::kIconIBeam:
+      case automat::ui::Pointer::kIconIBeam:
         return "xterm";
-      case automat::gui::Pointer::kIconAllScroll:
+      case automat::ui::Pointer::kIconAllScroll:
         return "all-scroll";
-      case automat::gui::Pointer::kIconResizeHorizontal:
+      case automat::ui::Pointer::kIconResizeHorizontal:
         return "size_hor";
-      case automat::gui::Pointer::kIconCrosshair:
+      case automat::ui::Pointer::kIconCrosshair:
         return "crosshair";
       default:
         return "left_ptr";
     }
   }
 
-  XCBPointer(automat::gui::RootWidget& root, Vec2 position, XCBWindow& xcb_window)
-      : automat::gui::Pointer(root, position), xcb_window(xcb_window) {}
+  XCBPointer(automat::ui::RootWidget& root, Vec2 position, XCBWindow& xcb_window)
+      : automat::ui::Pointer(root, position), xcb_window(xcb_window) {}
 
-  void OnIconChanged(automat::gui::Pointer::IconType old_icon,
-                     automat::gui::Pointer::IconType new_icon) override {
+  void OnIconChanged(automat::ui::Pointer::IconType old_icon,
+                     automat::ui::Pointer::IconType new_icon) override {
     UpdateCursor(new_icon);
   }
 
-  void UpdateCursor(automat::gui::Pointer::IconType icon) {
+  void UpdateCursor(automat::ui::Pointer::IconType icon) {
     xcb_cursor_t cursor =
         xcb_cursor_load_cursor(xcb_window.cursor_context.get(), GetCursorName(icon));
     if (cursor != XCB_NONE) {
@@ -422,13 +422,13 @@ struct XCBPointer : automat::gui::Pointer {
     }
   }
 
-  automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
+  automat::ui::PointerGrab& RequestGlobalGrab(automat::ui::PointerGrabber& grabber) override {
     grab.reset(new XCBPointerGrab(*this, grabber, xcb_window));
     return *grab;
   }
 };
 
-automat::gui::Pointer& XCBWindow::GetMouse() {
+automat::ui::Pointer& XCBWindow::GetMouse() {
   if (!mouse) {
     mouse = std::make_unique<XCBPointer>(root, ScreenToWindowPx(mouse_position_on_screen), *this);
   }
@@ -439,16 +439,16 @@ Vec2 XCBWindow::ScreenToWindowPx(Vec2 screen) { return screen - window_position_
 
 Vec2 XCBWindow::WindowPxToScreen(Vec2 window) { return window + window_position_on_screen; }
 
-static automat::gui::PointerButton EventDetailToButton(uint32_t detail) {
+static automat::ui::PointerButton EventDetailToButton(uint32_t detail) {
   switch (detail) {
     case 1:
-      return automat::gui::PointerButton::Left;
+      return automat::ui::PointerButton::Left;
     case 2:
-      return automat::gui::PointerButton::Middle;
+      return automat::ui::PointerButton::Middle;
     case 3:
-      return automat::gui::PointerButton::Right;
+      return automat::ui::PointerButton::Right;
     default:
-      return automat::gui::PointerButton::Unknown;
+      return automat::ui::PointerButton::Unknown;
   }
 }
 
@@ -599,7 +599,7 @@ void XCBWindow::MainLoop() {
           // ev-count is the number of expose events that are still in the queue.
           // We only want to do a full redraw on the last expose event.
           if (ev->count == 0) {
-            automat::gui::root_widget->WakeAnimation();
+            automat::ui::root_widget->WakeAnimation();
           }
           break;
         }
@@ -702,21 +702,21 @@ void XCBWindow::MainLoop() {
                 break;
               }
               case XCB_INPUT_RAW_KEY_PRESS: {
-                automat::gui::root_widget->keyboard.KeyDown(*(xcb_input_raw_key_press_event_t*)event);
+                automat::ui::root_widget->keyboard.KeyDown(*(xcb_input_raw_key_press_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
                 auto ev = (xcb_input_key_press_event_t*)event;
                 ReplaceProperty32(xcb_window, atom::_NET_WM_USER_TIME, XCB_ATOM_CARDINAL, ev->time);
-                automat::gui::root_widget->keyboard.KeyDown(*ev);
+                automat::ui::root_widget->keyboard.KeyDown(*ev);
                 break;
               }
               case XCB_INPUT_RAW_KEY_RELEASE: {
-                automat::gui::root_widget->keyboard.KeyUp(*(xcb_input_raw_key_release_event_t*)event);
+                automat::ui::root_widget->keyboard.KeyUp(*(xcb_input_raw_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {
-                automat::gui::root_widget->keyboard.KeyUp(*(xcb_input_key_release_event_t*)event);
+                automat::ui::root_widget->keyboard.KeyUp(*(xcb_input_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_BUTTON_PRESS: {
@@ -744,7 +744,7 @@ void XCBWindow::MainLoop() {
                 xcb_input_raw_button_press_event_t* ev = (xcb_input_raw_button_press_event_t*)event;
                 auto& pointer = GetMouse();
                 auto btn = EventDetailToButton(ev->detail);
-                if (btn == automat::gui::PointerButton::Unknown) {
+                if (btn == automat::ui::PointerButton::Unknown) {
                   break;
                 }
                 for (auto& logging : pointer.loggings) {
@@ -757,7 +757,7 @@ void XCBWindow::MainLoop() {
                     (xcb_input_raw_button_release_event_t*)event;
                 auto& pointer = GetMouse();
                 auto btn = EventDetailToButton(ev->detail);
-                if (btn == automat::gui::PointerButton::Unknown) {
+                if (btn == automat::ui::PointerButton::Unknown) {
                   break;
                 }
                 for (auto& logging : pointer.loggings) {
@@ -844,7 +844,7 @@ void XCBWindow::MainLoop() {
           // This is only called by registered hotkeys
           xcb_key_press_event_t* ev = (xcb_key_press_event_t*)event;
           auto key = x11::X11KeyCodeToKey((x11::KeyCode)ev->detail);
-          // LOG << "Key event: " << dump_struct(*ev) << " " << automat::gui::ToStr(key);
+          // LOG << "Key event: " << dump_struct(*ev) << " " << automat::ui::ToStr(key);
           if (opcode == XCB_KEY_RELEASE) {
             peeked_event = xcb_poll_for_event(connection);
             if (peeked_event && peeked_event->response_type == XCB_KEY_PRESS) {
@@ -864,12 +864,12 @@ void XCBWindow::MainLoop() {
           } else {
             keys_down[ev->detail] = false;
           }
-          automat::gui::Key key_struct = {
+          automat::ui::Key key_struct = {
               .physical = key,
               .logical = key,
           };
           bool handled = false;
-          for (auto& key_grab : automat::gui::root_widget->keyboard.key_grabs) {
+          for (auto& key_grab : automat::ui::root_widget->keyboard.key_grabs) {
             if (key_grab->key == key) {
               if (opcode == XCB_KEY_PRESS) {
                 key_grab->grabber.KeyGrabberKeyDown(*key_grab);
@@ -881,15 +881,15 @@ void XCBWindow::MainLoop() {
             }
           }
           if (opcode == XCB_KEY_PRESS) {
-            automat::gui::root_widget->keyboard.LogKeyDown(key_struct);
+            automat::ui::root_widget->keyboard.LogKeyDown(key_struct);
           } else {
-            automat::gui::root_widget->keyboard.LogKeyUp(key_struct);
+            automat::ui::root_widget->keyboard.LogKeyUp(key_struct);
           }
           if (!handled) {
             if (opcode == XCB_KEY_PRESS) {
-              automat::gui::root_widget->keyboard.KeyDown(*(xcb_input_key_press_event_t*)event);
+              automat::ui::root_widget->keyboard.KeyDown(*(xcb_input_key_press_event_t*)event);
             } else {
-              automat::gui::root_widget->keyboard.KeyUp(*(xcb_input_key_release_event_t*)event);
+              automat::ui::root_widget->keyboard.KeyUp(*(xcb_input_key_release_event_t*)event);
             }
           }
           break;

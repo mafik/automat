@@ -27,7 +27,7 @@ void Alert::OnRun(Location& here, RunTask&) {
       test_interceptor->push_back(text);
     } else {
 #ifdef _WIN32
-      auto& win32_window = dynamic_cast<Win32Window&>(*gui::root_widget->window);
+      auto& win32_window = dynamic_cast<Win32Window&>(*ui::root_widget->window);
       MessageBox(win32_window.hwnd, text.data(), "Alert", MB_OK);
 #else  // not Windows
       LOG << text;

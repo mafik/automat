@@ -5,12 +5,12 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "font.hh"
-#include "gui_button.hh"
-#include "gui_constants.hh"
+#include "ui_button.hh"
+#include "ui_constants.hh"
 #include "widget.hh"
 
 using namespace std;
-using namespace automat::gui;
+using namespace automat::ui;
 
 namespace automat::library {
 
@@ -51,7 +51,7 @@ KeyButton::KeyButton(Widget* parent, StrView label, SkColor color, float width)
   child->local_to_parent = SkM44::Translate(offset.x(), offset.y());
 }
 
-void KeyButton::Activate(gui::Pointer& pointer) {
+void KeyButton::Activate(ui::Pointer& pointer) {
   if (activate) {
     activate(pointer);
   }

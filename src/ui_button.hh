@@ -8,13 +8,13 @@
 #include <optional>
 
 #include "animation.hh"
-#include "gui_constants.hh"
-#include "gui_shape_widget.hh"
+#include "ui_constants.hh"
+#include "ui_shape_widget.hh"
 #include "pointer.hh"
 #include "units.hh"
 #include "widget.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 // Helper for widgets that can be clicked. Takes care of changing the pointer icon and animating
 // a `highlight` value. Users of this class should make sure to call the `PointerOver`,
@@ -40,7 +40,7 @@ struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
   Clickable clickable;
 
-  Button(gui::Widget* parent, std::unique_ptr<Widget> child);
+  Button(ui::Widget* parent, std::unique_ptr<Widget> child);
   animation::Phase Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
@@ -56,7 +56,7 @@ struct Button : Widget {
   void FillChildren(Vec<Widget*>& children) override { children.push_back(child.get()); }
   SkRect ChildBounds() const;
   SkPath Shape() const override;
-  virtual void Activate(gui::Pointer&) { WakeAnimation(); }
+  virtual void Activate(ui::Pointer&) { WakeAnimation(); }
 
   virtual void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const;
   virtual void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const;
@@ -72,15 +72,15 @@ struct Button : Widget {
 struct ColoredButtonArgs {
   SkColor fg = SK_ColorBLACK, bg = SK_ColorWHITE;
   float radius = kMinimalTouchableSize / 2;
-  std::function<void(gui::Pointer&)> on_click = nullptr;
+  std::function<void(ui::Pointer&)> on_click = nullptr;
 };
 
 struct ColoredButton : Button {
   SkColor fg, bg;
   float radius;
-  std::function<void(gui::Pointer&)> on_click;
+  std::function<void(ui::Pointer&)> on_click;
 
-  ColoredButton(gui::Widget* parent, std::unique_ptr<Widget>&& child, ColoredButtonArgs args = {})
+  ColoredButton(ui::Widget* parent, std::unique_ptr<Widget>&& child, ColoredButtonArgs args = {})
       : Button(parent, std::move(child)),
         fg(args.fg),
         bg(args.bg),
@@ -89,19 +89,19 @@ struct ColoredButton : Button {
     UpdateChildTransform();
   }
 
-  ColoredButton(gui::Widget* parent, const char* svg_path, ColoredButtonArgs args = {})
+  ColoredButton(ui::Widget* parent, const char* svg_path, ColoredButtonArgs args = {})
       : ColoredButton(parent, MakeShapeWidget(this, svg_path, SK_ColorWHITE), args) {
     UpdateChildTransform();
   }
 
-  ColoredButton(gui::Widget* parent, SkPath path, ColoredButtonArgs args = {})
+  ColoredButton(ui::Widget* parent, SkPath path, ColoredButtonArgs args = {})
       : ColoredButton(parent, std::make_unique<ShapeWidget>(this, path), args) {
     UpdateChildTransform();
   }
 
   SkColor ForegroundColor() const override { return fg; }
   SkColor BackgroundColor() const override { return bg; }
-  void Activate(gui::Pointer& ptr) override {
+  void Activate(ui::Pointer& ptr) override {
     if (on_click) {
       on_click(ptr);
     }
@@ -121,7 +121,7 @@ struct ToggleButton : Widget {
   float filling = 0;
   float time_seconds;  // used for waving animation
 
-  ToggleButton(gui::Widget* parent, std::unique_ptr<Button> on, std::unique_ptr<Button> off)
+  ToggleButton(ui::Widget* parent, std::unique_ptr<Button> on, std::unique_ptr<Button> off)
       : Widget(parent), on(std::move(on)), off(std::move(off)) {}
 
   void FillChildren(Vec<Widget*>& children) override {
@@ -147,4 +147,4 @@ struct ToggleButton : Widget {
   virtual bool Filled() const { return false; }
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

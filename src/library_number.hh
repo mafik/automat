@@ -3,18 +3,18 @@
 #pragma once
 
 #include "base.hh"
-#include "gui_button.hh"
+#include "ui_button.hh"
 #include "number_text_field.hh"
 
 namespace automat::library {
 
 struct Number;
 
-struct NumberButton : gui::Button {
+struct NumberButton : ui::Button {
   std::function<void(Location&)> activate;
-  NumberButton(gui::Widget* parent, SkPath shape);
-  NumberButton(gui::Widget* parent, std::string text);
-  void Activate(gui::Pointer&) override;
+  NumberButton(ui::Widget* parent, SkPath shape);
+  NumberButton(ui::Widget* parent, std::string text);
+  void Activate(ui::Pointer&) override;
   StrView Name() const override { return "NumberButton"; }
   SkColor BackgroundColor() const override;
 };
@@ -24,8 +24,8 @@ struct Number : Object, Object::FallbackWidget {
   std::unique_ptr<NumberButton> digits[10];
   std::unique_ptr<NumberButton> dot;
   std::unique_ptr<NumberButton> backspace;
-  std::unique_ptr<gui::NumberTextField> text_field;
-  Number(gui::Widget* parent, double x = 0);
+  std::unique_ptr<ui::NumberTextField> text_field;
+  Number(ui::Widget* parent, double x = 0);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   string GetText() const override;

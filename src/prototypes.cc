@@ -46,17 +46,17 @@ PrototypeLibrary::PrototypeLibrary() {
   IndexHelper index(*this);
 
   // TODO: Remove this once Objects are split from Widgets.
-  gui::Widget* null_parent = nullptr;
+  ui::Widget* null_parent = nullptr;
 
   index.Register<FlipFlop>(null_parent);
   index.Register<MacroRecorder>(null_parent);
   index.Register<TimerDelay>(null_parent);
   index.Register<HotKey>(null_parent);
   index.Register<KeyPresser>(null_parent);
-  index.Register<MouseClick>(null_parent, gui::PointerButton::Left, true);
-  index.Register<MouseClick>(null_parent, gui::PointerButton::Left, false);
-  index.Register<MouseClick>(null_parent, gui::PointerButton::Right, true);
-  index.Register<MouseClick>(null_parent, gui::PointerButton::Right, false);
+  index.Register<MouseClick>(null_parent, ui::PointerButton::Left, true);
+  index.Register<MouseClick>(null_parent, ui::PointerButton::Left, false);
+  index.Register<MouseClick>(null_parent, ui::PointerButton::Right, true);
+  index.Register<MouseClick>(null_parent, ui::PointerButton::Right, false);
   index.Register<MouseMove>();
   index.Register<Number>(null_parent);
   index.Register<Timeline>(null_parent);

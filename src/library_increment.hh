@@ -6,9 +6,9 @@
 
 namespace automat::library {
 
-struct Increment : Object, gui::Widget, Runnable {
+struct Increment : Object, ui::Widget, Runnable {
   static Argument target_arg;
-  Increment(Widget* parent) : gui::Widget(parent) {}
+  Increment(Widget* parent) : ui::Widget(parent) {}
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void Args(std::function<void(Argument&)> cb) override { cb(target_arg); }

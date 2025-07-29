@@ -10,10 +10,10 @@
 #include "base.hh"
 #include "color.hh"
 #include "font.hh"
-#include "gui_constants.hh"
+#include "ui_constants.hh"
 #include "library_number.hh"
 
-using namespace automat::gui;
+using namespace automat::ui;
 
 namespace automat::library {
 
@@ -49,7 +49,7 @@ SkColor kBorderBottomColor = color::AdjustLightness(kBackgroundBottomColor, -5);
 
 SkRRect GetShape() {
   static SkRRect shape = []() -> SkRRect {
-    auto& font = gui::GetFont();
+    auto& font = ui::GetFont();
     float text_width = font.MeasureText("x+1");
     float width = text_width + 2 * kMargin;
     float rad = kHeight / 2;
@@ -99,8 +99,8 @@ void Increment::Draw(SkCanvas& canvas) const {
   SkPaint paint;
   paint.setColor(kFontColor);
   canvas.save();
-  canvas.translate(kMargin, kHeight / 2 - gui::kLetterSize / 2);
-  gui::GetFont().DrawText(canvas, "x+1", paint);
+  canvas.translate(kMargin, kHeight / 2 - ui::kLetterSize / 2);
+  ui::GetFont().DrawText(canvas, "x+1", paint);
   canvas.restore();
 }
 

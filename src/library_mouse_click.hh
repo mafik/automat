@@ -7,9 +7,9 @@
 namespace automat::library {
 
 struct MouseClick : Object, Object::FallbackWidget, Runnable {
-  gui::PointerButton button;
+  ui::PointerButton button;
   bool down;
-  MouseClick(Widget* parent, gui::PointerButton, bool down);
+  MouseClick(Widget* parent, ui::PointerButton, bool down);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void Draw(SkCanvas&) const override;

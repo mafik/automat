@@ -14,7 +14,7 @@ namespace automat {
 
 Path StatePath() { return Path::ExecutablePath().Parent() / "automat_state.json"; }
 
-void SaveState(gui::RootWidget& root_widget, Status& status) {
+void SaveState(ui::RootWidget& root_widget, Status& status) {
   // Write window_state to a temp file
   auto state_path = StatePath();
   rapidjson::StringBuffer sb;
@@ -33,7 +33,7 @@ void SaveState(gui::RootWidget& root_widget, Status& status) {
   fs::real.Write(state_path, window_state, status);
 }
 
-void LoadState(gui::RootWidget& root_widget, Status& status) {
+void LoadState(ui::RootWidget& root_widget, Status& status) {
   auto state_path = StatePath();
   auto contents = fs::real.Read(state_path, status);
   if (!OK(status)) {

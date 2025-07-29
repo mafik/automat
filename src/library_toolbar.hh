@@ -7,9 +7,9 @@
 #include "pointer.hh"
 #include "vec.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
-constexpr float kToolbarIconSize = gui::kMinimalTouchableSize * 2;
+constexpr float kToolbarIconSize = ui::kMinimalTouchableSize * 2;
 
 struct PrototypeButton : Widget {
   Ptr<Object> proto;
@@ -18,7 +18,7 @@ struct PrototypeButton : Widget {
   mutable animation::SpringV2<float> width{kToolbarIconSize};
   Optional<Pointer::IconOverride> hand_icon;
 
-  PrototypeButton(Widget* parent, Ptr<Object>& proto) : gui::Widget(parent), proto(proto) {}
+  PrototypeButton(Widget* parent, Ptr<Object>& proto) : ui::Widget(parent), proto(proto) {}
 
   void Init() {
     proto_widget = &Widget::ForObject(*proto, this);
@@ -47,13 +47,13 @@ struct PrototypeButton : Widget {
   StrView Name() const override { return "PrototypeButton"; }
 };
 
-struct Toolbar : gui::Widget, gui::PointerMoveCallback {
+struct Toolbar : ui::Widget, ui::PointerMoveCallback {
   Vec<Ptr<Object>> prototypes;
-  Vec<std::unique_ptr<gui::PrototypeButton>> buttons;
+  Vec<std::unique_ptr<ui::PrototypeButton>> buttons;
 
   mutable int hovered_button = -1;
 
-  Toolbar(gui::Widget* parent) : gui::Widget(parent) {}
+  Toolbar(ui::Widget* parent) : ui::Widget(parent) {}
 
   // This will clone the provided object and add it to the toolbar.
   void AddObjectPrototype(const Ptr<Object>&);
@@ -69,13 +69,13 @@ struct Toolbar : gui::Widget, gui::PointerMoveCallback {
   // If the object should be cached into a texture, return its bounds in local coordinates.
   Optional<Rect> TextureBounds() const override;
 
-  void PointerOver(gui::Pointer& pointer) override { StartWatching(pointer); }
+  void PointerOver(ui::Pointer& pointer) override { StartWatching(pointer); }
 
-  void PointerLeave(gui::Pointer& pointer) override {
+  void PointerLeave(ui::Pointer& pointer) override {
     StopWatching(pointer);
     WakeAnimation();
   }
-  void PointerMove(gui::Pointer&, Vec2 position) override { WakeAnimation(); }
+  void PointerMove(ui::Pointer&, Vec2 position) override { WakeAnimation(); }
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

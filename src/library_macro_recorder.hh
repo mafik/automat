@@ -11,11 +11,11 @@
 
 namespace automat::library {
 
-struct GlassRunButton : gui::PowerButton {
-  GlassRunButton(gui::Widget* parent, OnOff* on_off)
-      : gui::PowerButton(parent, on_off, color::kParrotRed, "#eeeeee"_color) {}
-  void PointerOver(gui::Pointer&) override;
-  void PointerLeave(gui::Pointer&) override;
+struct GlassRunButton : ui::PowerButton {
+  GlassRunButton(ui::Widget* parent, OnOff* on_off)
+      : ui::PowerButton(parent, on_off, color::kParrotRed, "#eeeeee"_color) {}
+  void PointerOver(ui::Pointer&) override;
+  void PointerLeave(ui::Pointer&) override;
   StrView Name() const override { return "GlassRunButton"; }
 };
 
@@ -23,9 +23,9 @@ struct MacroRecorder : LiveObject,
                        Object::FallbackWidget,
                        Runnable,
                        LongRunning,
-                       gui::Keylogger,
-                       gui::Pointer::Logger,
-                       gui::PointerMoveCallback {
+                       ui::Keylogger,
+                       ui::Pointer::Logger,
+                       ui::PointerMoveCallback {
   struct AnimationState {
     animation::SpringV2<Vec2> googly_left;
     animation::SpringV2<Vec2> googly_right;
@@ -36,11 +36,11 @@ struct MacroRecorder : LiveObject,
   };
 
   mutable AnimationState animation_state;
-  gui::Keylogging* keylogging = nullptr;
-  gui::Pointer::Logging* pointer_logging = nullptr;
-  std::unique_ptr<gui::Widget> record_button;
+  ui::Keylogging* keylogging = nullptr;
+  ui::Pointer::Logging* pointer_logging = nullptr;
+  std::unique_ptr<ui::Widget> record_button;
 
-  MacroRecorder(gui::Widget* parent);
+  MacroRecorder(ui::Widget* parent);
   ~MacroRecorder();
   string_view Name() const override;
   Ptr<Object> Clone() const override;
@@ -52,9 +52,9 @@ struct MacroRecorder : LiveObject,
   void Args(std::function<void(Argument&)> cb) override;
   Ptr<Object> ArgPrototype(const Argument&) override;
 
-  void PointerOver(gui::Pointer&) override;
-  void PointerLeave(gui::Pointer&) override;
-  void PointerMove(gui::Pointer&, Vec2 position) override;
+  void PointerOver(ui::Pointer&) override;
+  void PointerLeave(ui::Pointer&) override;
+  void PointerMove(ui::Pointer&, Vec2 position) override;
 
   void ConnectionAdded(Location& here, Connection&) override;
   void ConnectionRemoved(Location& here, Connection&) override;
@@ -62,13 +62,13 @@ struct MacroRecorder : LiveObject,
   void OnRun(Location& here, RunTask&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
-  void KeyloggerKeyDown(gui::Key) override;
-  void KeyloggerKeyUp(gui::Key) override;
+  void KeyloggerKeyDown(ui::Key) override;
+  void KeyloggerKeyUp(ui::Key) override;
 
-  void PointerLoggerButtonDown(gui::Pointer::Logging&, gui::PointerButton) override;
-  void PointerLoggerButtonUp(gui::Pointer::Logging&, gui::PointerButton) override;
-  void PointerLoggerWheel(gui::Pointer::Logging&, float) override;
-  void PointerLoggerMove(gui::Pointer::Logging&, Vec2) override;
+  void PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerButton) override;
+  void PointerLoggerButtonUp(ui::Pointer::Logging&, ui::PointerButton) override;
+  void PointerLoggerWheel(ui::Pointer::Logging&, float) override;
+  void PointerLoggerMove(ui::Pointer::Logging&, Vec2) override;
 
   Vec2AndDir ArgStart(const Argument&) override;
 

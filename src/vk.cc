@@ -286,7 +286,7 @@ void Surface::Init(Status& status) {
   PFN_vkCreateWin32SurfaceKHR vkCreateWin32SurfaceKHR =
       (PFN_vkCreateWin32SurfaceKHR)instance.GetProc("vkCreateWin32SurfaceKHR");
 
-  auto win32_window = dynamic_cast<Win32Window*>(automat::gui::root_widget->window.get());
+  auto win32_window = dynamic_cast<Win32Window*>(automat::ui::root_widget->window.get());
 
   VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
@@ -312,7 +312,7 @@ void Surface::Init(Status& status) {
       (PFN_vkCreateXcbSurfaceKHR)instance.GetProc("vkCreateXcbSurfaceKHR");
 
   auto xcb_window =
-      dynamic_cast<xcb::XCBWindow*>(automat::gui::root_widget->window.get())->xcb_window;
+      dynamic_cast<xcb::XCBWindow*>(automat::ui::root_widget->window.get())->xcb_window;
 
   VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,

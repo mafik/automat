@@ -11,7 +11,7 @@
 
 #include "arcline.hh"
 #include "color.hh"
-#include "gui_constants.hh"
+#include "ui_constants.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
 #include "math.hh"
@@ -25,7 +25,7 @@
 #include <xcb/xproto.h>
 #endif
 
-using namespace automat::gui;
+using namespace automat::ui;
 
 namespace automat::library {
 
@@ -169,7 +169,7 @@ vec4 main(in vec2 fragCoord) {
 //   }
 // }
 
-HotKey::HotKey(gui::Widget* parent)
+HotKey::HotKey(ui::Widget* parent)
     : FallbackWidget(parent),
       power_button(new PowerButton(this, this)),
       ctrl_button(new KeyButton(this, "Ctrl", KeyColor(ctrl), kCtrlKeyWidth)),
@@ -200,7 +200,7 @@ HotKey::HotKey(gui::Widget* parent)
       SkM44::Translate(-kWidth / 2 + kFrameWidth + kKeySpacing * 2 + kShiftKeyWidth,
                        kShapeRect.bottom + kFrameWidth + kKeySpacing * 2 + kKeyHeight);
 
-  ctrl_button->activate = [this](gui::Pointer&) {
+  ctrl_button->activate = [this](ui::Pointer&) {
     bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
@@ -211,7 +211,7 @@ HotKey::HotKey(gui::Widget* parent)
     }
     ctrl_button->fg = KeyColor(ctrl);
   };
-  alt_button->activate = [this](gui::Pointer&) {
+  alt_button->activate = [this](ui::Pointer&) {
     bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
@@ -222,7 +222,7 @@ HotKey::HotKey(gui::Widget* parent)
     }
     alt_button->fg = KeyColor(alt);
   };
-  shift_button->activate = [this](gui::Pointer&) {
+  shift_button->activate = [this](ui::Pointer&) {
     bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
@@ -233,7 +233,7 @@ HotKey::HotKey(gui::Widget* parent)
     }
     shift_button->fg = KeyColor(shift);
   };
-  windows_button->activate = [this](gui::Pointer&) {
+  windows_button->activate = [this](ui::Pointer&) {
     bool on = IsOn();
     if (on) {
       Off();  // temporarily switch off to ungrab the old key combo
@@ -245,12 +245,12 @@ HotKey::HotKey(gui::Widget* parent)
     windows_button->fg = KeyColor(windows);
   };
   shortcut_button->SetLabel(ToStr(key));
-  shortcut_button->activate = [this](gui::Pointer& pointer) {
+  shortcut_button->activate = [this](ui::Pointer& pointer) {
     if (hotkey_selector) {
       // Cancel HotKey selection.
       hotkey_selector->Release();  // This will also set itself to nullptr
     } else if (pointer.keyboard) {
-      gui::Widget* label = shortcut_button->child.get();
+      ui::Widget* label = shortcut_button->child.get();
       auto bounds = *label->TextureBounds();
       Vec2 caret_position = shortcut_button->RRect().rect().center();
       caret_position.x += bounds.left;
@@ -412,7 +412,7 @@ void HotKey::On() {
 }
 
 // This is called when the new HotKey is selected by the user
-void HotKey::KeyDown(gui::Caret&, gui::Key key) {
+void HotKey::KeyDown(ui::Caret&, ui::Key key) {
   bool on = IsOn();
   if (on) {
     Off();  // temporarily switch off to ungrab the old key combo
@@ -426,12 +426,12 @@ void HotKey::KeyDown(gui::Caret&, gui::Key key) {
   }
 }
 
-void HotKey::KeyGrabberKeyDown(gui::KeyGrab&) {
+void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) {
   if (auto h = here.lock()) {
     ScheduleNext(*h);
   }
 }
-void HotKey::KeyGrabberKeyUp(gui::KeyGrab&) {}
+void HotKey::KeyGrabberKeyUp(ui::KeyGrab&) {}
 
 void HotKey::Off() {
   // TODO: think about what happens if the recording starts or stops while the hotkey is active &
@@ -441,12 +441,12 @@ void HotKey::Off() {
   }
 }
 
-void HotKey::ReleaseCaret(gui::Caret&) {
+void HotKey::ReleaseCaret(ui::Caret&) {
   hotkey_selector = nullptr;
   WakeAnimation();
   shortcut_button->WakeAnimation();
 }
-void HotKey::ReleaseKeyGrab(gui::KeyGrab&) { hotkey = nullptr; }
+void HotKey::ReleaseKeyGrab(ui::KeyGrab&) { hotkey = nullptr; }
 
 void HotKey::SerializeState(Serializer& writer, const char* key) const {
   writer.Key(key);

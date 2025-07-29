@@ -4,7 +4,7 @@
 
 #include <include/core/SkRRect.h>
 
-#include "gui_constants.hh"
+#include "ui_constants.hh"
 #include "keyboard.hh"
 #include "pointer.hh"
 #include "widget.hh"
@@ -13,7 +13,7 @@ namespace automat {
 struct Argument;
 }  // namespace automat
 
-namespace automat::gui {
+namespace automat::ui {
 
 constexpr float kTextMargin = 0.001;
 constexpr float kTextCornerRadius = kTextMargin;
@@ -32,7 +32,7 @@ struct TextFieldBase : Widget, CaretOwner {
   std::optional<Argument*> argument;
   Optional<Pointer::IconOverride> ibeam_icon;
 
-  TextFieldBase(gui::Widget* parent) : Widget(parent) {}
+  TextFieldBase(ui::Widget* parent) : Widget(parent) {}
 
   void PointerOver(Pointer&) override;
   void PointerLeave(Pointer&) override;
@@ -58,7 +58,7 @@ struct TextField : TextFieldBase {
   std::string* text;
   float width;
 
-  TextField(gui::Widget* parent, std::string* text, float width)
+  TextField(ui::Widget* parent, std::string* text, float width)
       : TextFieldBase(parent), text(text), width(width) {}
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
@@ -80,4 +80,4 @@ struct TextField : TextFieldBase {
   virtual const SkPaint& GetBackgroundPaint() const;
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

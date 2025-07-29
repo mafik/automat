@@ -7,9 +7,9 @@
 #include "math.hh"
 #include "time.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 struct RootWidget;
-}  // namespace automat::gui
+}  // namespace automat::ui
 
 namespace automat::animation {
 

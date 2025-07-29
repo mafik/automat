@@ -18,7 +18,7 @@
 #include "widget.hh"
 #include "window.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 // Ensures that the 1x1m canvas is at least 1mm on screen.
 constexpr float kMinZoom = 0.001f;
@@ -151,7 +151,7 @@ struct RootWidget final : Widget, DropTarget {
   // TODO: Remove (use window.px_per_meter instead)
   float display_pixels_per_meter = 96 / kMetersPerInch;  // default value assumes 96 DPI
   unique_ptr<Toolbar> toolbar;
-  std::vector<unique_ptr<gui::ConnectionWidget>> connection_widgets;
+  std::vector<unique_ptr<ui::ConnectionWidget>> connection_widgets;
 
   float zoom = 1;
   float zoom_target = 1;
@@ -182,4 +182,4 @@ struct RootWidget final : Widget, DropTarget {
   std::mutex mutex;
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

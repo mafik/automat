@@ -3,7 +3,7 @@
 #pragma once
 
 #include "color.hh"
-#include "gui_button.hh"
+#include "ui_button.hh"
 #include "on_off.hh"
 
 namespace automat {
@@ -12,7 +12,7 @@ struct Location;
 
 }  // namespace automat
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct PowerButton : ToggleButton {
   OnOff* target;
@@ -20,8 +20,8 @@ struct PowerButton : ToggleButton {
   PowerButton(Widget* parent, OnOff* target, SkColor fg = "#fa2305"_color,
               SkColor bg = SK_ColorWHITE);
 
-  void Activate(gui::Pointer& p);
+  void Activate(ui::Pointer& p);
   bool Filled() const override;
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

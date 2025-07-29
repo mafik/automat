@@ -14,7 +14,7 @@
 #include "sincos.hh"
 #include "vec.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct CablePhysicsSimulation {
   float dispenser_v;
@@ -75,4 +75,4 @@ void DrawOpticalConnector(SkCanvas&, const CablePhysicsSimulation&, PaintDrawabl
 void DrawCable(SkCanvas&, SkPath&, sk_sp<SkColorFilter>&, CableTexture, float start_width,
                float end_width, float* length = nullptr);
 
-}  // namespace automat::gui
+}  // namespace automat::ui

@@ -244,22 +244,22 @@ static std::string MachineText(const mc::Inst& mc_inst) {
 
 constexpr float kFineFontSize = 2_mm;
 
-static gui::Font& FineFont() {
-  static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeThin(), kFineFontSize);
+static ui::Font& FineFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeThin(), kFineFontSize);
   return *font;
 }
 
 constexpr float kHeavyFontSize = 4_mm;
 
-static gui::Font& HeavyFont() {
-  static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeSemiBold(), kHeavyFontSize);
+static ui::Font& HeavyFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeSemiBold(), kHeavyFontSize);
   return *font;
 }
 
 constexpr float kSubscriptFontSize = 2_mm;
 
-static gui::Font& SubscriptFont() {
-  static auto font = gui::Font::MakeV2(gui::Font::GetGrenzeSemiBold(), kSubscriptFontSize);
+static ui::Font& SubscriptFont() {
+  static auto font = ui::Font::MakeV2(ui::Font::GetGrenzeSemiBold(), kSubscriptFontSize);
   return *font;
 }
 
@@ -2325,7 +2325,7 @@ constexpr float kConditionCodeTokenHeight = 8_mm;
 constexpr Rect kConditionCodeRect =
     Rect::MakeAtZero<LeftX, BottomY>(kConditionCodeTokenWidth, kConditionCodeTokenHeight);
 
-struct EnumKnobWidget : gui::Widget {
+struct EnumKnobWidget : ui::Widget {
   float last_vx = 0;
   Knob knob;
 
@@ -2338,7 +2338,7 @@ struct EnumKnobWidget : gui::Widget {
 
   int value = 0;  // ground-truth value, obtained from the getter in Tick
 
-  EnumKnobWidget(gui::Widget* parent, int n_options) : gui::Widget(parent), n_options(n_options) {
+  EnumKnobWidget(ui::Widget* parent, int n_options) : ui::Widget(parent), n_options(n_options) {
     knob.unit_angle = 60_deg;
     knob.unit_distance = kGaugeRadius * 2;
 
@@ -2773,7 +2773,7 @@ struct EnumKnobWidget : gui::Widget {
         }();
         static const SkPath kParityDial = [&]() {
           SkPath path;
-          auto font = gui::Font::MakeV2(gui::Font::GetSilkscreen(), 1.4_mm);
+          auto font = ui::Font::MakeV2(ui::Font::GetSilkscreen(), 1.4_mm);
           SkGlyphID glyphs[9];
           SkRect bounds[9];
           font->sk_font.textToGlyphs("012345678", 9, SkTextEncoding::kUTF8, glyphs);
@@ -2939,12 +2939,12 @@ struct EnumKnobWidget : gui::Widget {
   struct ChangeEnumKnobAction : public Action {
     TrackedPtr<EnumKnobWidget> widget;
     time::SteadyPoint start_time;
-    gui::Pointer::IconOverride scroll_icon;
+    ui::Pointer::IconOverride scroll_icon;
 
-    ChangeEnumKnobAction(gui::Pointer& pointer, EnumKnobWidget& enum_knob_widget)
+    ChangeEnumKnobAction(ui::Pointer& pointer, EnumKnobWidget& enum_knob_widget)
         : Action(pointer),
           widget(&enum_knob_widget),
-          scroll_icon(pointer, gui::Pointer::kIconAllScroll) {
+          scroll_icon(pointer, ui::Pointer::kIconAllScroll) {
       if (widget) {
         widget->is_dragging = true;
         auto& history = widget->knob.history;
@@ -2986,8 +2986,8 @@ struct EnumKnobWidget : gui::Widget {
     }
   };
 
-  std::unique_ptr<Action> FindAction(gui::Pointer& pointer, gui::ActionTrigger trigger) override {
-    if (trigger == gui::PointerButton::Left) {
+  std::unique_ptr<Action> FindAction(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
+    if (trigger == ui::PointerButton::Left) {
       return std::make_unique<ChangeEnumKnobAction>(pointer, *this);
     }
     return nullptr;
@@ -3003,7 +3003,7 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   animation::SpringV2<float> spill_tween;
   std::optional<Vec2> root_position;
 
-  ConditionCodeWidget(gui::Widget* parent, WeakPtr<Instruction> instruction_weak, int token_i)
+  ConditionCodeWidget(ui::Widget* parent, WeakPtr<Instruction> instruction_weak, int token_i)
       : EnumKnobWidget(parent, X86::CondCode::LAST_VALID_COND + 1),
         instruction_weak(instruction_weak),
         token_i(token_i) {}
@@ -3030,12 +3030,12 @@ struct ConditionCodeWidget : public EnumKnobWidget {
                                      timer.d, 5);
     if (water_level > 0 && !wave.has_value()) {
       wave = Wave1D(30, 0.5, 0.005, 1);
-      root_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
+      root_position = ui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
     } else if (water_level == 0 && wave.has_value()) {
       wave.reset();
     }
     if (wave) {
-      Vec2 new_position = gui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
+      Vec2 new_position = ui::TransformBetween(*this, *root_machine).mapPoint({0, 0});
       auto delta = new_position - *root_position;
       root_position = new_position;
 
@@ -3257,13 +3257,13 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
   }
 };
 
-Instruction::Widget::Widget(gui::Widget* parent, WeakPtr<Object> object) : FallbackWidget(parent) {
+Instruction::Widget::Widget(ui::Widget* parent, WeakPtr<Object> object) : FallbackWidget(parent) {
   this->object = std::move(object);
   auto instruction = LockObject<Instruction>();
   if (instruction->BufferSize() > 0) {
     auto buffer_ptr =
         NestedWeakPtr<Buffer>(instruction->AcquireWeakPtr<ReferenceCounted>(), instruction.Get());
-    imm_widget = std::make_unique<gui::SmallBufferWidget>(this, std::move(buffer_ptr));
+    imm_widget = std::make_unique<ui::SmallBufferWidget>(this, std::move(buffer_ptr));
     imm_widget->local_to_parent.setIdentity();
     imm_widget->fonts[(int)Buffer::Type::Text] = &HeavyFont();
     imm_widget->fonts[(int)Buffer::Type::Unsigned] = &HeavyFont();
@@ -3643,10 +3643,10 @@ Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
   if (&arg == &jump_arg) {
     return Vec2AndDir{.pos = kRect.RightCenter(), .dir = 0_deg};
   }
-  return gui::Widget::ArgStart(arg);
+  return ui::Widget::ArgStart(arg);
 }
 
-void Instruction::Widget::FillChildren(Vec<gui::Widget*>& children) {
+void Instruction::Widget::FillChildren(Vec<ui::Widget*>& children) {
   if (imm_widget) {
     children.emplace_back(imm_widget.get());
   }

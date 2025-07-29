@@ -41,9 +41,9 @@ using namespace automat;
 
 namespace automat::library {
 
-static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
+static sk_sp<SkImage> RenderMouseImage(ui::PointerButton button, bool down) {
   auto& base = *mouse::base_texture.image;
-  auto mask = button == gui::PointerButton::Left
+  auto mask = button == ui::PointerButton::Left
                   ? DecodeImage(embedded::assets_mouse_lmb_mask_webp)
                   : DecodeImage(embedded::assets_mouse_rmb_mask_webp);
   SkBitmap bitmap;
@@ -69,7 +69,7 @@ static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
     SkPaint paint;
     paint.setBlendMode(SkBlendMode::kMultiply);
     paint.setAlphaf(0.9f);
-    canvas.translate(button == gui::PointerButton::Left ? 85 : 285, 130);
+    canvas.translate(button == ui::PointerButton::Left ? 85 : 285, 130);
     if (down) {
       paint.setColor(SkColorSetARGB(255, 255, 128, 128));
       canvas.scale(1, -1);
@@ -82,17 +82,17 @@ static sk_sp<SkImage> RenderMouseImage(gui::PointerButton button, bool down) {
   return SkImages::RasterFromBitmap(bitmap);
 }
 
-MouseClick::MouseClick(gui::Widget* parent, gui::PointerButton button, bool down)
+MouseClick::MouseClick(ui::Widget* parent, ui::PointerButton button, bool down)
     : FallbackWidget(parent), button(button), down(down) {}
 string_view MouseClick::Name() const {
   switch (button) {
-    case gui::PointerButton::Left:
+    case ui::PointerButton::Left:
       if (down) {
         return "Mouse Left Down"sv;
       } else {
         return "Mouse Left Up"sv;
       }
-    case gui::PointerButton::Right:
+    case ui::PointerButton::Right:
       if (down) {
         return "Mouse Right Down"sv;
       } else {
@@ -104,19 +104,19 @@ string_view MouseClick::Name() const {
 }
 Ptr<Object> MouseClick::Clone() const { return MAKE_PTR(MouseClick, parent, button, down); }
 void MouseClick::Draw(SkCanvas& canvas) const {
-  static PersistentImage images[(long)gui::PointerButton::Count][2] = {
-      [(long)gui::PointerButton::Left] =
+  static PersistentImage images[(long)ui::PointerButton::Count][2] = {
+      [(long)ui::PointerButton::Left] =
           {
-              PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Left, false),
+              PersistentImage::MakeFromSkImage(RenderMouseImage(ui::PointerButton::Left, false),
                                                {.scale = mouse::kTextureScale}),
-              PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Left, true),
+              PersistentImage::MakeFromSkImage(RenderMouseImage(ui::PointerButton::Left, true),
                                                {.scale = mouse::kTextureScale}),
           },
-      [(long)gui::PointerButton::Right] =
+      [(long)ui::PointerButton::Right] =
           {
-              PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Right, false),
+              PersistentImage::MakeFromSkImage(RenderMouseImage(ui::PointerButton::Right, false),
                                                {.scale = mouse::kTextureScale}),
-              PersistentImage::MakeFromSkImage(RenderMouseImage(gui::PointerButton::Right, true),
+              PersistentImage::MakeFromSkImage(RenderMouseImage(ui::PointerButton::Right, true),
                                                {.scale = mouse::kTextureScale}),
           },
   };
@@ -146,10 +146,10 @@ void MouseClick::OnRun(Location& location, RunTask&) {
   input.mi.time = 0;
   input.mi.dwExtraInfo = 0;
   switch (button) {
-    case gui::PointerButton::Left:
+    case ui::PointerButton::Left:
       input.mi.dwFlags |= down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
       break;
-    case gui::PointerButton::Right:
+    case ui::PointerButton::Right:
       input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
       break;
     default:
@@ -159,7 +159,7 @@ void MouseClick::OnRun(Location& location, RunTask&) {
 #endif
 #if defined(__linux__)
   U8 type = down ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE;
-  U8 detail = button == gui::PointerButton::Left ? 1 : 3;
+  U8 detail = button == ui::PointerButton::Left ? 1 : 3;
   xcb_test_fake_input(xcb::connection, type, detail, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
   xcb::flush();
 #endif

@@ -23,7 +23,7 @@
 
 namespace automat {
 
-std::unique_ptr<gui::Font> kHelsinkiFont = gui::Font::MakeV2(gui::Font::GetHelsinki(), 3_mm);
+std::unique_ptr<ui::Font> kHelsinkiFont = ui::Font::MakeV2(ui::Font::GetHelsinki(), 3_mm);
 
 PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox_webp);
 
@@ -31,20 +31,20 @@ constexpr float kMenuSize = 2_cm;
 
 struct MenuAction;
 
-struct MenuWidget : gui::Widget {
+struct MenuWidget : ui::Widget {
   struct OptionAnimation {
     animation::SpringV2<Vec2> offset;
   };
 
   Vec<std::unique_ptr<Option>> options;
   Vec<OptionAnimation> option_animation;
-  Vec<std::unique_ptr<gui::Widget>> option_widgets;
+  Vec<std::unique_ptr<ui::Widget>> option_widgets;
   animation::SpringV2<float> size = 0;
   MenuAction* action;
   bool first_tick = true;
 
-  MenuWidget(gui::Widget* parent, Vec<std::unique_ptr<Option>>&& options, MenuAction* action)
-      : gui::Widget(parent), options(std::move(options)), action(action) {
+  MenuWidget(ui::Widget* parent, Vec<std::unique_ptr<Option>>&& options, MenuAction* action)
+      : ui::Widget(parent), options(std::move(options)), action(action) {
     option_animation.resize(this->options.size());
     option_widgets.reserve(this->options.size());
     for (auto& opt : this->options) {
@@ -55,7 +55,7 @@ struct MenuWidget : gui::Widget {
     return Rect::MakeAtZero(kMenuSize * 3, kMenuSize * 3);
   }
   animation::Phase Tick(time::Timer& timer) override;
-  void FillChildren(Vec<gui::Widget*>& children) override {
+  void FillChildren(Vec<ui::Widget*>& children) override {
     children.reserve(children.size() + option_widgets.size());
     for (auto& opt : option_widgets) {
       children.push_back(opt.get());
@@ -105,7 +105,7 @@ struct MenuAction : Action {
   unique_ptr<MenuWidget> menu_widget;
   int last_index = -1;
   Vec2 last_pos;
-  MenuAction(gui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
+  MenuAction(ui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
       : Action(pointer),
         menu_widget(new MenuWidget(pointer.GetWidget(), std::move(options), this)) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
@@ -136,7 +136,7 @@ struct MenuAction : Action {
       pointer.ReplaceAction(*this, std::move(new_action));
     }
   }
-  gui::Widget* Widget() override { return menu_widget.get(); }
+  ui::Widget* Widget() override { return menu_widget.get(); }
 };
 
 animation::Phase MenuWidget::Tick(time::Timer& timer) {
@@ -189,15 +189,15 @@ Vec<std::unique_ptr<Option>> OptionsProvider::CloneOptions() const {
   return options;
 }
 
-std::unique_ptr<Action> OptionsProvider::OpenMenu(gui::Pointer& pointer) const {
+std::unique_ptr<Action> OptionsProvider::OpenMenu(ui::Pointer& pointer) const {
   return std::make_unique<MenuAction>(pointer, CloneOptions());
 }
 
-struct TextWidget : gui::Widget {
+struct TextWidget : ui::Widget {
   float width;
   Str text;
-  TextWidget(gui::Widget* parent, Str text)
-      : gui::Widget(parent), width(kHelsinkiFont->MeasureText(text)), text(text) {}
+  TextWidget(ui::Widget* parent, Str text)
+      : ui::Widget(parent), width(kHelsinkiFont->MeasureText(text)), text(text) {}
   Optional<Rect> TextureBounds() const override {
     return Rect(0, -kHelsinkiFont->descent, width, -kHelsinkiFont->ascent);
   }
@@ -226,7 +226,7 @@ struct TextWidget : gui::Widget {
   }
 };
 
-std::unique_ptr<gui::Widget> TextOption::MakeIcon(gui::Widget* parent) {
+std::unique_ptr<ui::Widget> TextOption::MakeIcon(ui::Widget* parent) {
   return std::make_unique<TextWidget>(parent, text);
 }
 

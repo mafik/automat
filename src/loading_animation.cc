@@ -55,8 +55,8 @@ animation::Phase HypnoRect::Tick(time::Timer& timer) {
   unfold += (1 - unfold) * -(expm1f(-timer.d * 2));
   base_scale = 1 + cos(t) * 0.2;
 
-  client_width = gui::root_widget->window->client_width;
-  client_height = gui::root_widget->window->client_height;
+  client_width = ui::root_widget->window->client_width;
+  client_height = ui::root_widget->window->client_height;
   float rect_side = rect.Width() - paint.getStrokeWidth();
 
   float outer_rect_side = rect_side * base_scale * pow(kScalePerTwist, unfold * 25);
@@ -100,7 +100,7 @@ void HypnoRect::PreDraw(SkCanvas& canvas) {
 
   SkMatrix base_transform;
   float base_rotation = -t * 10;
-  base_transform.preTranslate(gui::root_widget->size.width / 2, gui::root_widget->size.height / 2);
+  base_transform.preTranslate(ui::root_widget->size.width / 2, ui::root_widget->size.height / 2);
   base_transform.preRotate(base_rotation);
   base_transform.preScale(base_scale, base_scale);
 

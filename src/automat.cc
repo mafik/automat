@@ -34,7 +34,7 @@
 #include "tracy_client.hh"  // IWYU pragma: keep
 #include "vk.hh"
 
-using namespace automat::gui;
+using namespace automat::ui;
 
 #pragma region Main
 namespace automat {

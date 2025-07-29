@@ -18,7 +18,7 @@
 #include "win_key.hh"
 
 using namespace automat;
-using namespace automat::gui;
+using namespace automat::ui;
 using namespace automat::win32;
 using namespace std;
 
@@ -34,13 +34,13 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
 static HHOOK global_mouse_hook = nullptr;
 static std::vector<Win32PointerGrab*> active_pointer_grabs;
 
-struct Win32PointerGrab : automat::gui::PointerGrab {
+struct Win32PointerGrab : automat::ui::PointerGrab {
   Win32Window& win32_window;
-  Optional<automat::gui::Pointer::IconOverride> crosshair_icon;
+  Optional<automat::ui::Pointer::IconOverride> crosshair_icon;
 
-  Win32PointerGrab(automat::gui::Pointer& pointer, automat::gui::PointerGrabber& grabber,
+  Win32PointerGrab(automat::ui::Pointer& pointer, automat::ui::PointerGrabber& grabber,
                    Win32Window& win32_window)
-      : automat::gui::PointerGrab(pointer, grabber), win32_window(win32_window) {
+      : automat::ui::PointerGrab(pointer, grabber), win32_window(win32_window) {
     if (active_pointer_grabs.size() == 0) {
       global_mouse_hook =
           SetWindowsHookExA(WH_MOUSE_LL, LowLevelMouseProc, GetModuleHandle(nullptr), 0);
@@ -48,7 +48,7 @@ struct Win32PointerGrab : automat::gui::PointerGrab {
         ERROR << "Failed to install global mouse hook: " << GetLastError();
         return;
       }
-      crosshair_icon.emplace(pointer, gui::Pointer::kIconCrosshair);
+      crosshair_icon.emplace(pointer, ui::Pointer::kIconCrosshair);
     }
 
     if (global_mouse_hook) {
@@ -69,39 +69,39 @@ struct Win32PointerGrab : automat::gui::PointerGrab {
   }
 };
 
-struct Win32Pointer : automat::gui::Pointer {
+struct Win32Pointer : automat::ui::Pointer {
   Win32Window& win32_window;
 
-  Win32Pointer(automat::gui::RootWidget& root, Vec2 position, Win32Window& win32_window)
-      : automat::gui::Pointer(root, position), win32_window(win32_window) {}
+  Win32Pointer(automat::ui::RootWidget& root, Vec2 position, Win32Window& win32_window)
+      : automat::ui::Pointer(root, position), win32_window(win32_window) {}
 
-  void OnIconChanged(automat::gui::Pointer::IconType old_icon,
-                     automat::gui::Pointer::IconType new_icon) override {
+  void OnIconChanged(automat::ui::Pointer::IconType old_icon,
+                     automat::ui::Pointer::IconType new_icon) override {
     UpdateCursor(new_icon);
   }
 
-  void UpdateCursor(automat::gui::Pointer::IconType icon) {
+  void UpdateCursor(automat::ui::Pointer::IconType icon) {
     HCURSOR cursor;
     switch (icon) {
-      case automat::gui::Pointer::kIconArrow:
+      case automat::ui::Pointer::kIconArrow:
         cursor = LoadCursor(nullptr, IDC_ARROW);
         break;
-      case automat::gui::Pointer::kIconHand:
+      case automat::ui::Pointer::kIconHand:
         cursor = LoadCursor(nullptr, IDC_HAND);
         break;
-      case automat::gui::Pointer::kIconIBeam:
+      case automat::ui::Pointer::kIconIBeam:
         cursor = LoadCursor(nullptr, IDC_IBEAM);
         break;
-      case automat::gui::Pointer::kIconAllScroll:
+      case automat::ui::Pointer::kIconAllScroll:
         cursor = LoadCursor(nullptr, IDC_SIZEALL);
         break;
-      case automat::gui::Pointer::kIconResizeHorizontal:
+      case automat::ui::Pointer::kIconResizeHorizontal:
         cursor = LoadCursor(nullptr, IDC_SIZEWE);
         break;
-      case automat::gui::Pointer::kIconResizeVertical:
+      case automat::ui::Pointer::kIconResizeVertical:
         cursor = LoadCursor(nullptr, IDC_SIZENS);
         break;
-      case automat::gui::Pointer::kIconCrosshair:
+      case automat::ui::Pointer::kIconCrosshair:
         cursor = LoadCursor(nullptr, IDC_CROSS);
         break;
       default:
@@ -111,7 +111,7 @@ struct Win32Pointer : automat::gui::Pointer {
     SetCursor(cursor);
   }
 
-  automat::gui::PointerGrab& RequestGlobalGrab(automat::gui::PointerGrabber& grabber) override {
+  automat::ui::PointerGrab& RequestGlobalGrab(automat::ui::PointerGrabber& grabber) override {
     grab.reset(new Win32PointerGrab(*this, grabber, win32_window));
     return *grab;
   }
@@ -153,42 +153,42 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
       case WM_LBUTTONDOWN: {
         for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
           auto* grab = active_pointer_grabs[i];
-          grab->pointer.ButtonDown(gui::PointerButton::Left);
+          grab->pointer.ButtonDown(ui::PointerButton::Left);
         }
         break;
       }
       case WM_LBUTTONUP: {
         for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
           auto* grab = active_pointer_grabs[i];
-          grab->pointer.ButtonUp(gui::PointerButton::Left);
+          grab->pointer.ButtonUp(ui::PointerButton::Left);
         }
         break;
       }
       case WM_RBUTTONDOWN: {
         for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
           auto* grab = active_pointer_grabs[i];
-          grab->pointer.ButtonDown(gui::PointerButton::Right);
+          grab->pointer.ButtonDown(ui::PointerButton::Right);
         }
         break;
       }
       case WM_RBUTTONUP: {
         for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
           auto* grab = active_pointer_grabs[i];
-          grab->pointer.ButtonUp(gui::PointerButton::Right);
+          grab->pointer.ButtonUp(ui::PointerButton::Right);
         }
         break;
       }
       case WM_MBUTTONDOWN: {
         for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
           auto* grab = active_pointer_grabs[i];
-          grab->pointer.ButtonDown(gui::PointerButton::Middle);
+          grab->pointer.ButtonDown(ui::PointerButton::Middle);
         }
         break;
       }
       case WM_MBUTTONUP: {
         for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
           auto* grab = active_pointer_grabs[i];
-          grab->pointer.ButtonUp(gui::PointerButton::Middle);
+          grab->pointer.ButtonUp(ui::PointerButton::Middle);
         }
         break;
       }
@@ -210,7 +210,7 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
   return CallNextHookEx(global_mouse_hook, nCode, wParam, lParam);
 }
 
-Win32Window::Win32Window(automat::gui::RootWidget& root) : automat::gui::Window(root) {}
+Win32Window::Win32Window(automat::ui::RootWidget& root) : automat::ui::Window(root) {}
 
 Win32Window::~Win32Window() {
   if (hwnd) {
@@ -282,7 +282,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       // Intercept this message to prevent Windows from changing the cursor back
       // to an arrow.
       if (LOWORD(lParam) == HTCLIENT) {
-        gui::Pointer::IconType icon;
+        ui::Pointer::IconType icon;
         {
           auto lock = window.Lock();
           auto& mouse = static_cast<Win32Pointer&>(window.GetMouse());
@@ -345,7 +345,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         auto physical = ScanCodeToKey(scan_code);
         auto virtual_key = KeyToVirtualKey(physical);  // layout-dependent key code
 
-        gui::Key key;
+        ui::Key key;
         key.physical = physical;
         key.logical = VirtualKeyToKey(virtual_key);
 
@@ -358,7 +358,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         bool down = !(ev.Flags & RI_KEY_BREAK);
 
         if (down) {
-          // LOG << "Pressed " << gui::ToStr(key.logical);
+          // LOG << "Pressed " << ui::ToStr(key.logical);
           if (key_state[virtual_key] == 0) {
             key_state[virtual_key] = 0x80;
             key.ctrl = IsCtrlDown();
@@ -380,7 +380,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             }
           }
         } else {
-          // LOG << "Released " << gui::ToStr(key.logical);
+          // LOG << "Released " << ui::ToStr(key.logical);
           key_state[virtual_key] = 0;
           key.ctrl = IsCtrlDown();
           auto lock = window.Lock();
@@ -398,7 +398,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         auto lock = window.Lock();
         auto& mouse = window.GetMouse();
         // LOG << "Mouse event: " << dump_struct(ev);
-        auto Btn = [&](bool down, gui::PointerButton button) {
+        auto Btn = [&](bool down, ui::PointerButton button) {
           for (auto& logging : mouse.loggings) {
             if (down) {
               logging->logger.PointerLoggerButtonDown(*logging, button);
@@ -408,22 +408,22 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           }
         };
         if (ev.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) {
-          Btn(true, gui::PointerButton::Left);
+          Btn(true, ui::PointerButton::Left);
         }
         if (ev.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) {
-          Btn(false, gui::PointerButton::Left);
+          Btn(false, ui::PointerButton::Left);
         }
         if (ev.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) {
-          Btn(true, gui::PointerButton::Right);
+          Btn(true, ui::PointerButton::Right);
         }
         if (ev.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) {
-          Btn(false, gui::PointerButton::Right);
+          Btn(false, ui::PointerButton::Right);
         }
         if (ev.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN) {
-          Btn(true, gui::PointerButton::Middle);
+          Btn(true, ui::PointerButton::Middle);
         }
         if (ev.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP) {
-          Btn(false, gui::PointerButton::Middle);
+          Btn(false, ui::PointerButton::Middle);
         }
         if (ev.lLastX != 0 || ev.lLastY != 0) {
           for (auto& logging : mouse.loggings) {
@@ -444,37 +444,37 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
       int id = wParam;  // discard the upper 32 bits
       // lParam carries the modifiers (first 16 bits) and then the keycode
       auto lock = window.Lock();
-      automat::gui::OnHotKeyDown(id);
+      automat::ui::OnHotKeyDown(id);
       break;
     }
     case WM_LBUTTONDOWN: {
       auto lock = window.Lock();
-      window.GetMouse().ButtonDown(gui::PointerButton::Left);
+      window.GetMouse().ButtonDown(ui::PointerButton::Left);
       break;
     }
     case WM_LBUTTONUP: {
       auto lock = window.Lock();
-      window.GetMouse().ButtonUp(gui::PointerButton::Left);
+      window.GetMouse().ButtonUp(ui::PointerButton::Left);
       break;
     }
     case WM_MBUTTONDOWN: {
       auto lock = window.Lock();
-      window.GetMouse().ButtonDown(gui::PointerButton::Middle);
+      window.GetMouse().ButtonDown(ui::PointerButton::Middle);
       break;
     }
     case WM_MBUTTONUP: {
       auto lock = window.Lock();
-      window.GetMouse().ButtonUp(gui::PointerButton::Middle);
+      window.GetMouse().ButtonUp(ui::PointerButton::Middle);
       break;
     }
     case WM_RBUTTONDOWN: {
       auto lock = window.Lock();
-      window.GetMouse().ButtonDown(gui::PointerButton::Right);
+      window.GetMouse().ButtonDown(ui::PointerButton::Right);
       break;
     }
     case WM_RBUTTONUP: {
       auto lock = window.Lock();
-      window.GetMouse().ButtonUp(gui::PointerButton::Right);
+      window.GetMouse().ButtonUp(ui::PointerButton::Right);
       break;
     }
     case WM_MOUSEMOVE: {
@@ -631,7 +631,7 @@ void Win32Window::PostToMainLoop(function<void()> f) {
   PostMessage(hwnd, WM_USER, 0, (LPARAM) new function<void()>(std::move(f)));
 }
 
-gui::Pointer& Win32Window::GetMouse() {
+ui::Pointer& Win32Window::GetMouse() {
   if (!mouse) {
     mouse = std::make_unique<Win32Pointer>(*root_widget, ScreenToWindowPx(mouse_position), *this);
     TRACKMOUSEEVENT track_mouse_event = {

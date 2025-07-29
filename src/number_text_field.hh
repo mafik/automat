@@ -4,9 +4,9 @@
 
 #include "base.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
-struct NumberTextField : gui::TextField {
+struct NumberTextField : ui::TextField {
   Str text;
   NumberTextField(Widget* parent, float width);
   SkRRect ShapeRRect() const override;
@@ -20,4 +20,4 @@ struct NumberTextField : gui::TextField {
   static void DrawBackground(SkCanvas&, SkRRect rrect);
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

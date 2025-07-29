@@ -4,13 +4,13 @@
 
 #include <include/core/SkColor.h>
 
-#include "gui_button.hh"
+#include "ui_button.hh"
 #include "pointer.hh"
 #include "svg.hh"
 
 using namespace std;
 
-namespace automat::gui {
+namespace automat::ui {
 
 PowerButton::PowerButton(Widget* parent, OnOff* target, SkColor fg, SkColor bg)
     : ToggleButton(
@@ -18,16 +18,16 @@ PowerButton::PowerButton(Widget* parent, OnOff* target, SkColor fg, SkColor bg)
           make_unique<ColoredButton>(
               this, kPowerSVG,
               ColoredButtonArgs{
-                  .fg = bg, .bg = fg, .on_click = [this](gui::Pointer& p) { Activate(p); }}),
+                  .fg = bg, .bg = fg, .on_click = [this](ui::Pointer& p) { Activate(p); }}),
           make_unique<ColoredButton>(
               this, kPowerSVG,
               ColoredButtonArgs{
-                  .fg = fg, .bg = bg, .on_click = [this](gui::Pointer& p) { Activate(p); }})),
+                  .fg = fg, .bg = bg, .on_click = [this](ui::Pointer& p) { Activate(p); }})),
       target(target) {}
 
-void PowerButton::Activate(gui::Pointer& p) {
+void PowerButton::Activate(ui::Pointer& p) {
   target->Toggle();
   WakeAnimation();
 }
 bool PowerButton::Filled() const { return target->IsOn(); }
-}  // namespace automat::gui
+}  // namespace automat::ui

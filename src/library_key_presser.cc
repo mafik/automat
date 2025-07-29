@@ -51,12 +51,12 @@ float KeyPresserButton::PressRatio() const {
   return 0;
 }
 
-KeyPresser::KeyPresser(gui::Widget* parent, gui::AnsiKey key)
+KeyPresser::KeyPresser(ui::Widget* parent, ui::AnsiKey key)
     : FallbackWidget(parent),
       key(key),
       shortcut_button(
           new KeyPresserButton(this, this, ToStr(key), KeyColor(false), kBaseKeyWidth)) {
-  shortcut_button->activate = [this](gui::Pointer& pointer) {
+  shortcut_button->activate = [this](ui::Pointer& pointer) {
     if (key_selector) {
       key_selector->Release();
     } else if (pointer.keyboard) {
@@ -68,7 +68,7 @@ KeyPresser::KeyPresser(gui::Widget* parent, gui::AnsiKey key)
     shortcut_button->WakeAnimation();
   };
 }
-KeyPresser::KeyPresser(gui::Widget* parent) : KeyPresser(parent, gui::AnsiKey::F) {}
+KeyPresser::KeyPresser(ui::Widget* parent) : KeyPresser(parent, ui::AnsiKey::F) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, parent, key); }
 animation::Phase KeyPresser::Tick(time::Timer&) {
@@ -110,17 +110,17 @@ void KeyPresser::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
   }
 }
 
-void KeyPresser::SetKey(gui::AnsiKey k) {
+void KeyPresser::SetKey(ui::AnsiKey k) {
   key = k;
   shortcut_button->SetLabel(ToStr(k));
 }
 
-void KeyPresser::ReleaseCaret(gui::Caret&) {
+void KeyPresser::ReleaseCaret(ui::Caret&) {
   key_selector = nullptr;
   WakeAnimation();
   shortcut_button->WakeAnimation();
 }
-void KeyPresser::KeyDown(gui::Caret&, gui::Key k) {
+void KeyPresser::KeyDown(ui::Caret&, ui::Key k) {
   key_selector->Release();
   SetKey(k.physical);
   WakeAnimation();
@@ -130,11 +130,11 @@ void KeyPresser::KeyDown(gui::Caret&, gui::Key k) {
 void KeyPresser::FillChildren(Vec<Widget*>& children) { children.push_back(shortcut_button.get()); }
 
 struct DragAndClickAction : Action {
-  gui::PointerButton btn;
+  ui::PointerButton btn;
   std::unique_ptr<Action> drag_action;
   std::unique_ptr<Option> click_option;
   time::SystemPoint press_time;
-  DragAndClickAction(gui::Pointer& pointer, gui::PointerButton btn,
+  DragAndClickAction(ui::Pointer& pointer, ui::PointerButton btn,
                      std::unique_ptr<Action>&& drag_action, std::unique_ptr<Option>&& click_option)
       : Action(pointer),
         btn(btn),
@@ -152,7 +152,7 @@ struct DragAndClickAction : Action {
       drag_action->Update();
     }
   }
-  gui::Widget* Widget() override {
+  ui::Widget* Widget() override {
     if (drag_action) {
       return drag_action->Widget();
     }
@@ -162,7 +162,7 @@ struct DragAndClickAction : Action {
 
 struct RunAction : Action {
   Location& location;
-  RunAction(gui::Pointer& pointer, Location& location) : Action(pointer), location(location) {
+  RunAction(ui::Pointer& pointer, Location& location) : Action(pointer), location(location) {
     if (auto long_running = location.object->AsLongRunning(); long_running->IsRunning()) {
       long_running->Cancel();
     } else {
@@ -173,28 +173,28 @@ struct RunAction : Action {
 };
 
 struct RunOption : TextOption {
-  gui::Widget* widget;
-  RunOption(gui::Widget* widget) : TextOption("Run"), widget(widget) {}
+  ui::Widget* widget;
+  RunOption(ui::Widget* widget) : TextOption("Run"), widget(widget) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<RunOption>(widget); }
-  std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
+  std::unique_ptr<Action> Activate(ui::Pointer& p) const override {
     return std::make_unique<RunAction>(p, *Closest<Location>(*widget));
   }
 };
 
 struct UseObjectOption : TextOption {
-  gui::Widget* widget;
+  ui::Widget* widget;
 
-  UseObjectOption(gui::Widget* widget) : TextOption("Use"), widget(widget) {}
+  UseObjectOption(ui::Widget* widget) : TextOption("Use"), widget(widget) {}
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<UseObjectOption>(widget);
   }
-  std::unique_ptr<Action> Activate(gui::Pointer& p) const override {
-    return widget->FindAction(p, gui::PointerButton::Left);
+  std::unique_ptr<Action> Activate(ui::Pointer& p) const override {
+    return widget->FindAction(p, ui::PointerButton::Left);
   }
 };
 
-std::unique_ptr<Action> KeyPresser::FindAction(gui::Pointer& p, gui::ActionTrigger btn) {
-  if (btn != gui::PointerButton::Left) return nullptr;
+std::unique_ptr<Action> KeyPresser::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
+  if (btn != ui::PointerButton::Left) return nullptr;
   auto hand_shape = GetHandShape();
   auto local_pos = p.PositionWithin(*this);
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
@@ -238,7 +238,7 @@ void KeyPresser::DeserializeState(Location& l, Deserializer& d) {
       Str value;
       d.Get(value, status);
       if (OK(status)) {
-        SetKey(gui::AnsiKeyFromStr(value));
+        SetKey(ui::AnsiKeyFromStr(value));
       }
     }
   }

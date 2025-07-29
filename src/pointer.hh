@@ -15,7 +15,7 @@ namespace automat::animation {
 struct Display;
 }  // namespace automat::animation
 
-namespace automat::gui {
+namespace automat::ui {
 
 struct Keyboard;
 struct PointerImpl;
@@ -174,4 +174,4 @@ struct PointerWidget : Widget {
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
 };
 
-}  // namespace automat::gui
+}  // namespace automat::ui

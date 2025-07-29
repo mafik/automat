@@ -4,8 +4,8 @@
 
 namespace x11 {
 
-using automat::gui::AnsiKey;
-using enum automat::gui::AnsiKey;
+using automat::ui::AnsiKey;
+using enum automat::ui::AnsiKey;
 
 AnsiKey X11KeyCodeToKey(KeyCode key_code) {
   switch (key_code) {

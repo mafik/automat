@@ -9,12 +9,12 @@
 
 #include "action.hh"
 #include "animation.hh"
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
 
-using namespace automat::gui;
+using namespace automat::ui;
 
 namespace automat {
 
@@ -26,7 +26,7 @@ Vec2 SnapPosition(DragLocationAction& d) {
   return RoundToMilimeters(d.current_position - d.contact_point);
 }
 
-static gui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
+static ui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
   for (auto& child : widget.Children()) {
     if (auto drop_target = FindDropTarget(a, *child)) {
       return drop_target;
@@ -44,7 +44,7 @@ static gui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
   return nullptr;
 }
 
-static gui::DropTarget* FindDropTarget(DragLocationAction& a) {
+static ui::DropTarget* FindDropTarget(DragLocationAction& a) {
   return FindDropTarget(a, a.pointer.root_widget);
 }
 
@@ -56,7 +56,7 @@ void DragLocationAction::Update() {
   auto& base = *locations.back();
   Vec2 base_pivot = base.ScalePivot();
 
-  if (gui::DropTarget* drop_target = FindDropTarget(*this)) {
+  if (ui::DropTarget* drop_target = FindDropTarget(*this)) {
     drop_target->SnapPosition(position, scale, base, &base_pivot);
   }
 
@@ -94,7 +94,7 @@ void DragLocationAction::Update() {
 
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
-DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg,
+DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg,
                                        Vec2 contact_point)
     : Action(pointer),
       contact_point(contact_point),
@@ -112,7 +112,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>
   widget->RedrawThisFrame();
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
-  for (auto& connection_widget : gui::root_widget->connection_widgets) {
+  for (auto& connection_widget : ui::root_widget->connection_widgets) {
     // Do this for every dragged location
     for (auto& location : locations) {
       if (&connection_widget->from == location.get()) {
@@ -127,18 +127,18 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>
       }
     }
   }
-  gui::root_widget->WakeAnimation();
+  ui::root_widget->WakeAnimation();
 
   last_position = current_position = pointer.PositionWithinRootMachine();
   Update();
 }
 
-DragLocationAction::DragLocationAction(gui::Pointer& pointer, Ptr<Location>&& location_arg,
+DragLocationAction::DragLocationAction(ui::Pointer& pointer, Ptr<Location>&& location_arg,
                                        Vec2 contact_point)
     : DragLocationAction(pointer, MakeVec<Ptr<Location>>(std::move(location_arg)), contact_point) {}
 
 DragLocationAction::~DragLocationAction() {
-  gui::DropTarget* drop_target = FindDropTarget(*this);
+  ui::DropTarget* drop_target = FindDropTarget(*this);
   if (drop_target) {
     for (auto& location : std::ranges::reverse_view(locations)) {
       location->WakeAnimation();
@@ -148,10 +148,10 @@ DragLocationAction::~DragLocationAction() {
   }
 
   pointer.root_widget.drag_action_count--;
-  for (auto& connection_widget : gui::root_widget->connection_widgets) {
+  for (auto& connection_widget : ui::root_widget->connection_widgets) {
     connection_widget->animation_state.radar_alpha_target = 0;
   }
-  gui::root_widget->WakeAnimation();
+  ui::root_widget->WakeAnimation();
 }
 void DragLocationWidget::FillChildren(Vec<Widget*>& children) {
   for (auto& location : action.locations) {

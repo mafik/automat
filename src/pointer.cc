@@ -12,7 +12,7 @@
 
 using namespace std;
 
-namespace automat::gui {
+namespace automat::ui {
 
 PointerMoveCallback::~PointerMoveCallback() {
   for (Pointer* p : pointers) {
@@ -298,4 +298,4 @@ void Pointer::Logging::Release() {
   pointer.loggings.EraseIndex(my_index);
   window.RegisterInput();
 }
-}  // namespace automat::gui
+}  // namespace automat::ui

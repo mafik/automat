@@ -83,10 +83,10 @@ struct Object : public ReferenceCounted {
   }
 
   // Green box with a name of the object.
-  struct FallbackWidget : gui::Widget {
+  struct FallbackWidget : ui::Widget {
     WeakPtr<Object> object;
 
-    FallbackWidget(Widget* parent) : gui::Widget(parent) {}
+    FallbackWidget(Widget* parent) : ui::Widget(parent) {}
 
     std::string_view Name() const override;
     virtual float Width() const;
@@ -94,7 +94,7 @@ struct Object : public ReferenceCounted {
     SkPath Shape() const override;
     void Draw(SkCanvas&) const override;
     void VisitOptions(const OptionsVisitor&) const override;
-    std::unique_ptr<Action> FindAction(gui::Pointer& p, gui::ActionTrigger btn) override;
+    std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 
     template <typename T>
     Ptr<T> LockObject() const {
@@ -102,17 +102,17 @@ struct Object : public ReferenceCounted {
     }
   };
 
-  virtual std::unique_ptr<gui::Widget> MakeWidget(gui::Widget* parent) {
-    if (auto w = dynamic_cast<gui::Widget*>(this)) {
+  virtual std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) {
+    if (auto w = dynamic_cast<ui::Widget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto fallback_widget = dynamic_cast<FallbackWidget*>(this)) {
         fallback_widget->object = AcquireWeakPtr();
       }
-      struct HybridAdapter : gui::Widget {
+      struct HybridAdapter : ui::Widget {
         Ptr<Object> ptr;
         Widget& widget;
         HybridAdapter(Widget* parent, Object& obj, Widget& widget)
-            : gui::Widget(parent), ptr(obj.AcquirePtr()), widget(widget) {
+            : ui::Widget(parent), ptr(obj.AcquirePtr()), widget(widget) {
           widget.parent = this;
         }
         StrView Name() const override { return "HybridAdapter"; }
@@ -127,7 +127,7 @@ struct Object : public ReferenceCounted {
     return w;
   }
 
-  void ForEachWidget(std::function<void(gui::RootWidget&, gui::Widget&)> cb);
+  void ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb);
 
   void WakeWidgetsAnimation();
 };

@@ -8,7 +8,7 @@
 
 namespace automat {
 
-namespace gui {
+namespace ui {
 struct Widget;
 }
 
@@ -24,7 +24,7 @@ struct PackFrameRequest {
 
 // Create a SkDrawable that will draw the given widget. The drawable may cache the rendered widget
 // as a texture to speed up subsequent re-renders.
-sk_sp<SkDrawable> MakeWidgetDrawable(gui::Widget& widget);
+sk_sp<SkDrawable> MakeWidgetDrawable(ui::Widget& widget);
 
 extern PackFrameRequest next_frame_request;
 

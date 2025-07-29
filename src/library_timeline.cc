@@ -24,9 +24,9 @@
 #include "base.hh"
 #include "color.hh"
 #include "font.hh"
-#include "gui_button.hh"
-#include "gui_constants.hh"
-#include "gui_shape_widget.hh"
+#include "ui_button.hh"
+#include "ui_constants.hh"
+#include "ui_shape_widget.hh"
 #include "key_button.hh"
 #include "library_mouse.hh"
 #include "library_mouse_move.hh"
@@ -42,7 +42,7 @@
 #include "textures.hh"
 #include "time.hh"
 
-using namespace automat::gui;
+using namespace automat::ui;
 using namespace std;
 
 namespace automat::library {
@@ -303,29 +303,29 @@ SkColor SideButton::ForegroundColor() const { return "#404040"_color; }
 SkColor SideButton::BackgroundColor() const { return kTimelineButtonBackground; }
 
 TimelineRunButton::TimelineRunButton(Widget* parent, Timeline* timeline)
-    : gui::ToggleButton(
+    : ui::ToggleButton(
           parent,
           std::make_unique<ColoredButton>(
               this, GetPausedPath(),
               ColoredButtonArgs{.fg = kTimelineButtonBackground,
                                 .bg = kOrange,
                                 .radius = kPlayButtonRadius,
-                                .on_click = [this](gui::Pointer& p) { Activate(p); }}),
+                                .on_click = [this](ui::Pointer& p) { Activate(p); }}),
           std::make_unique<ColoredButton>(
               this, kPlayShape,
               ColoredButtonArgs{.fg = kOrange,
                                 .bg = kTimelineButtonBackground,
                                 .radius = kPlayButtonRadius,
-                                .on_click = [this](gui::Pointer& p) { Activate(p); }})),
+                                .on_click = [this](ui::Pointer& p) { Activate(p); }})),
       timeline(timeline),
       rec_button(new ColoredButton(
           this, GetRecPath(),
           ColoredButtonArgs{.fg = kTimelineButtonBackground,
                             .bg = color::kParrotRed,
                             .radius = kPlayButtonRadius,
-                            .on_click = [this](gui::Pointer& p) { Activate(p); }})) {}
+                            .on_click = [this](ui::Pointer& p) { Activate(p); }})) {}
 
-void TimelineRunButton::Activate(gui::Pointer& p) {
+void TimelineRunButton::Activate(ui::Pointer& p) {
   switch (timeline->state) {
     case Timeline::kPlaying:
       timeline->Cancel();
@@ -343,7 +343,7 @@ void TimelineRunButton::Activate(gui::Pointer& p) {
 
 
 
-gui::Button* TimelineRunButton::OnWidget() {
+ui::Button* TimelineRunButton::OnWidget() {
   if (timeline->state == Timeline::kRecording) {
     last_on_widget = rec_button.get();
   } else if (timeline->state == Timeline::kPlaying) {
@@ -362,7 +362,7 @@ bool TimelineRunButton::Filled() const {
   return filled;
 }
 
-Timeline::Timeline(gui::Widget* parent)
+Timeline::Timeline(ui::Widget* parent)
     : FallbackWidget(parent),
       run_button(new TimelineRunButton(this, this)),
       prev_button(new PrevButton(this)),
@@ -416,7 +416,7 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   UpdateChildTransform(time::SteadyNow());
 }
 
-Timeline::Timeline(gui::Widget* parent, const Timeline& other) : Timeline(parent) {
+Timeline::Timeline(ui::Widget* parent, const Timeline& other) : Timeline(parent) {
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
     tracks.emplace_back(track->Clone().Cast<TrackBase>());
@@ -589,14 +589,14 @@ void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
   WakeAnimationResponsively(timeline);
 }
 
-void NextButton::Activate(gui::Pointer& ptr) {
+void NextButton::Activate(ui::Pointer& ptr) {
   Button::Activate(ptr);
   if (auto timeline = Closest<Timeline>(*ptr.hover)) {
     SetPosRatio(*timeline, 1, ptr.root_widget.timer.now);
   }
 }
 
-void PrevButton::Activate(gui::Pointer& ptr) {
+void PrevButton::Activate(ui::Pointer& ptr) {
   Button::Activate(ptr);
   if (Timeline* timeline = Closest<Timeline>(*ptr.hover)) {
     SetPosRatio(*timeline, 0, ptr.root_widget.timer.now);
@@ -816,7 +816,7 @@ static Optional<time::Duration> SnapToBottomRuler(Timeline& timeline, Vec2 pos,
 struct DragBridgeAction : Action {
   float press_offset_x;
   Timeline& timeline;
-  DragBridgeAction(gui::Pointer& pointer, Timeline& timeline)
+  DragBridgeAction(ui::Pointer& pointer, Timeline& timeline)
       : Action(pointer), timeline(timeline) {
     float initial_x = pointer.PositionWithin(timeline).x;
     float initial_pos_ratio = CurrentPosRatio(timeline);
@@ -853,7 +853,7 @@ struct DragTimelineAction : Action {
   Timeline& timeline;
   time::Duration initial_bridge_offset;
   float initial_x;
-  DragTimelineAction(gui::Pointer& pointer, Timeline& timeline)
+  DragTimelineAction(ui::Pointer& pointer, Timeline& timeline)
       : Action(pointer), timeline(timeline) {
     Vec2 pos = pointer.PositionWithin(timeline);
     initial_bridge_offset = CurrentOffset(timeline, pointer.root_widget.timer.now);
@@ -939,11 +939,11 @@ static float PreviousZoomTick(float zoom) {
 struct DragZoomAction : Action {
   Timeline& timeline;
   float last_y;
-  DragZoomAction(gui::Pointer& pointer, Timeline& timeline);
+  DragZoomAction(ui::Pointer& pointer, Timeline& timeline);
   ~DragZoomAction() override;
   void Update() override;
 };
-DragZoomAction::DragZoomAction(gui::Pointer& pointer, Timeline& timeline)
+DragZoomAction::DragZoomAction(ui::Pointer& pointer, Timeline& timeline)
     : Action(pointer), timeline(timeline) {
   timeline.drag_zoom_action = this;
   last_y = pointer.PositionWithin(timeline).y;
@@ -1008,10 +1008,10 @@ SkPath WindowShape(int num_tracks) {
   return window.ToPath(true);
 }
 
-SpliceAction::SpliceAction(gui::Pointer& pointer, Timeline& timeline)
+SpliceAction::SpliceAction(ui::Pointer& pointer, Timeline& timeline)
     : Action(pointer),
       timeline(timeline),
-      resize_icon(pointer, gui::Pointer::kIconResizeHorizontal) {
+      resize_icon(pointer, ui::Pointer::kIconResizeHorizontal) {
   assert(timeline.splice_action == nullptr);
   timeline.splice_action = this;
   splice_to = CurrentOffset(timeline, time::SteadyNow());
@@ -1074,8 +1074,8 @@ void SpliceAction::Update() {
   timeline.WakeAnimation();
 }
 
-unique_ptr<Action> Timeline::FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) {
-  if (btn == gui::PointerButton::Left) {
+unique_ptr<Action> Timeline::FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) {
+  if (btn == ui::PointerButton::Left) {
     float current_pos_ratio = CurrentPosRatio(*this);
     int n = tracks.size();
     auto splicer_shape = SplicerShape(n, current_pos_ratio);
@@ -1808,7 +1808,7 @@ struct TrackBaseWidget : Object::FallbackWidget {
     Draw(canvas, ctx);
   }
   void Draw(SkCanvas& canvas, Context& ctx) const { canvas.drawPath(Shape(ctx), kTrackPaint); }
-  std::unique_ptr<Action> FindAction(gui::Pointer& ptr, gui::ActionTrigger btn) override {
+  std::unique_ptr<Action> FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) override {
     Context ctx(*this);
     if (Timeline* timeline = ctx.GetTimeline()) {
       return timeline->FindAction(ptr, btn);
@@ -2164,13 +2164,13 @@ struct Vec2TrackWidget : TrackBaseWidget {
   }
 };
 
-std::unique_ptr<gui::Widget> OnOffTrack::MakeWidget(gui::Widget* parent) {
+std::unique_ptr<ui::Widget> OnOffTrack::MakeWidget(ui::Widget* parent) {
   auto ret = std::make_unique<OnOffTrackWidget>(parent);
   ret->object = AcquireWeakPtr();
   return ret;
 }
 
-std::unique_ptr<gui::Widget> Vec2Track::MakeWidget(gui::Widget* parent) {
+std::unique_ptr<ui::Widget> Vec2Track::MakeWidget(ui::Widget* parent) {
   auto ret = std::make_unique<Vec2TrackWidget>(parent);
   ret->object = AcquireWeakPtr();
   return ret;

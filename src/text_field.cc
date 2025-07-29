@@ -13,10 +13,10 @@
 #include "animation.hh"
 #include "base.hh"
 #include "font.hh"
-#include "gui_connection_widget.hh"
+#include "ui_connection_widget.hh"
 #include "root_widget.hh"
 
-namespace automat::gui {
+namespace automat::ui {
 
 void TextFieldBase::PointerOver(Pointer& pointer) {
   ibeam_icon.emplace(pointer, Pointer::kIconIBeam);
@@ -302,4 +302,4 @@ void TextFieldBase::KeyDown(Caret& caret, Key k) {
 
 void TextFieldBase::KeyUp(Caret&, Key) {}
 
-}  // namespace automat::gui
+}  // namespace automat::ui

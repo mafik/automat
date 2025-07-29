@@ -17,7 +17,6 @@ struct Object;
 
 struct PrototypeLibrary {
   PrototypeLibrary();
-  ~PrototypeLibrary();
 
   Object* Find(const std::type_info&);
   Object* Find(StrView name);

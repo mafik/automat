@@ -151,11 +151,6 @@ DragLocationAction::~DragLocationAction() {
   for (auto& connection_widget : gui::root_widget->connection_widgets) {
     connection_widget->animation_state.radar_alpha_target = 0;
   }
-  for (auto& location : locations) {
-    if (location) {
-      location->ForgetParents();
-    }
-  }
   gui::root_widget->WakeAnimation();
 }
 void DragLocationWidget::FillChildren(Vec<Widget*>& children) {

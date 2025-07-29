@@ -342,12 +342,6 @@ void TimelineRunButton::Activate(gui::Pointer& p) {
 }
 
 
-void TimelineRunButton::ForgetParents() {
-  parent = nullptr;
-  rec_button->ForgetParents();
-  on->ForgetParents();
-  off->ForgetParents();
-}
 
 gui::Button* TimelineRunButton::OnWidget() {
   if (timeline->state == Timeline::kRecording) {

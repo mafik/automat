@@ -48,7 +48,6 @@ struct TimelineRunButton : gui::ToggleButton {
   gui::Button* OnWidget() override;
   bool Filled() const override;
   void Activate(gui::Pointer&);
-  void ForgetParents() override;
 };
 
 struct TrackBase : Object {

@@ -263,15 +263,6 @@ struct Widget : Trackable, OptionsProvider {
 
   ParentsView Parents() const { return ParentsView{const_cast<Widget*>(this)}; }
 
-  // Widgets share the same base class with Objects (which must be always allocated using
-  // MakePtr) so they also must be allocated using MakePtr. This creates issues because
-  // widget's keep references to their parents and those references keep them alive, even after they
-  // are no longer reachable from the RootWidget.
-  //
-  // In order to properly destroy a Widget we must clear all of the `parent` references from its
-  // children (and we need to do this recursively). This is done by this function.
-  virtual void ForgetParents();
-
   // Methods related to Widgets that represent Objects.
   // TODO: Move them to a separate class (ObjectWidget)
 

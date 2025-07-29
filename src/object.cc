@@ -98,7 +98,6 @@ struct DeleteOption : TextOption {
       if (auto parent_machine = loc->ParentAs<Machine>()) {
         parent_machine->Extract(*loc);
       }
-      loc->ForgetParents();
     }
     return nullptr;
   }

@@ -175,12 +175,6 @@ void Widget::ValidateHierarchy() {
     }
   }
 }
-void Widget::ForgetParents() {
-  parent = nullptr;
-  for (auto& child : Children()) {
-    child->ForgetParents();
-  }
-}
 
 Widget& Widget::ForObject(Object& object, const Widget* parent) {
   return parent->FindRootWidget().widgets.For(object, parent);

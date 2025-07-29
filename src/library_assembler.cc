@@ -425,7 +425,6 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
       }
     }
     if (register_index == -1) {
-      reg_widgets[i]->ForgetParents();
       reg_widgets.EraseIndex(i);
       --i;
     } else {

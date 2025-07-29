@@ -297,7 +297,6 @@ int Main() {
     ERROR << "Failed to save state: " << status;
   }
 
-  root_widget->ForgetParents();
   root_machine->locations.clear();
 
   keyboard.reset();

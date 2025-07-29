@@ -186,7 +186,6 @@ TEST(Renderer, Construction) {
   stop_source.request_stop();
   render_thread.join();
   LOG << "Render thread stopped";
-  root_widget->ForgetParents();
   root_widget.reset();
   resources::Release();
   image_provider.reset();

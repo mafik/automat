@@ -341,12 +341,6 @@ void TimelineRunButton::Activate(gui::Pointer& p) {
   }
 }
 
-void TimelineRunButton::FixParents() {
-  rec_button->parent = off->parent = on->parent = this;
-  on->FixParents();
-  off->FixParents();
-  rec_button->FixParents();
-}
 
 void TimelineRunButton::ForgetParents() {
   parent = nullptr;

@@ -143,18 +143,8 @@ struct Widget : Trackable, OptionsProvider {
 
   RootWidget& FindRootWidget() const;
 
-  // TODO: Remove this.
-  // Each widget needs to have a pointer to its parent.
-  // Because widgets share inheritance hierarchy with Objects (and objects must use Ptr), the
-  // widgets also must use Ptr for their references.
-  // While an object is constructed using `MakePtr`, it doesn't know its own Ptr. This is
-  // a limitation of enable_shared_from_this - its inner pointer is initialized only after
-  // construction.
-  // In order to properly initialize the parents we currently use this workaround, that should be
-  // called after a widget hierarchy is constructed.
-  // Once Widget & Object classes are separated, and Widgets no longer use Ptr, this should
-  // be replaced with a proper `parent` initialization in the Widget constructor.
-  virtual void FixParents();
+  // Validates that the parent/children hierarchy is correctly maintained (in non-release builds).
+  void ValidateHierarchy();
 
   virtual void PointerOver(Pointer&) {}
   virtual void PointerLeave(Pointer&) {}

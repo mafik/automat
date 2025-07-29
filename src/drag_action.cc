@@ -108,7 +108,7 @@ DragLocationAction::DragLocationAction(gui::Pointer& pointer, Vec<Ptr<Location>>
           contact_point + locations.back()->position - location->position;
     }
   }
-  widget->FixParents();
+  widget->ValidateHierarchy();
   widget->RedrawThisFrame();
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1

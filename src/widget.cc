@@ -22,6 +22,7 @@
 
 #include <ranges>
 
+#include "build_variant.hh"
 #include "log.hh"
 #include "renderer.hh"
 #include "root_widget.hh"
@@ -161,16 +162,17 @@ Widget* Widget::Find(uint32_t id) {
   }
 }
 
-void Widget::FixParents() {
-  for (auto* child : Children()) {
-    if (child->parent != this) {
-      ERROR << "Widget " << child->Name() << " has parent "
-            << (child->parent ? child->parent->Name() : "nullptr")
-            << f(" ({})", static_cast<void*>(child->parent)) << " but should have " << this->Name()
-            << f(" ({})", static_cast<void*>(this));
-      child->parent = this;
+void Widget::ValidateHierarchy() {
+  if constexpr (build_variant::NotRelease) {
+    for (auto* child : Children()) {
+      if (child->parent != this) {
+        ERROR << "Widget " << child->Name() << " has parent "
+              << (child->parent ? child->parent->Name() : "nullptr")
+              << f(" ({})", static_cast<void*>(child->parent)) << " but should have "
+              << this->Name() << f(" ({})", static_cast<void*>(this));
+      }
+      child->ValidateHierarchy();
     }
-    child->FixParents();
   }
 }
 void Widget::ForgetParents() {

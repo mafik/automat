@@ -89,7 +89,7 @@ void Pointer::UpdatePath() {
 
   path.clear();
 
-  root_widget.FixParents();
+  root_widget.ValidateHierarchy();
 
   FillPath(*this, root_widget);
 
@@ -188,7 +188,7 @@ void Pointer::ButtonDown(PointerButton btn) {
       action = curr->FindAction(*this, btn);
     }
     if (action) {
-      pointer_widget->FixParents();
+      pointer_widget->ValidateHierarchy();
       UpdatePath();
     }
   }
@@ -270,7 +270,7 @@ void Pointer::ReplaceAction(Action& old_action, std::unique_ptr<Action>&& new_ac
   for (int i = 0; i < static_cast<int>(PointerButton::Count); ++i) {
     if (actions[i].get() == &old_action) {
       actions[i] = std::move(new_action);
-      pointer_widget->FixParents();
+      pointer_widget->ValidateHierarchy();
       break;
     }
   }

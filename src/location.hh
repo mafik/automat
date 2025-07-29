@@ -110,7 +110,7 @@ struct Location : ReferenceCounted, gui::Widget {
     object = typed;
     object->Relocate(this);
     object_widget = &WidgetForObject();
-    FixParents();
+    ValidateHierarchy();
     return typed;
   }
 

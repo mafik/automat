@@ -450,7 +450,7 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
         register_widget = &FindRootWidget().widgets.For(*assembler_reg, this);
         register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
       }
-      register_widget->FixParents();
+      register_widget->ValidateHierarchy();
       reg_widgets_idx[i] = static_cast<RegisterWidget*>(register_widget);
       reg_widgets.emplace_back(static_cast<RegisterWidget*>(register_widget));
       std::sort(reg_widgets.begin(), reg_widgets.end(), [](auto* a, auto* b) {

@@ -605,7 +605,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
   auto root_widget_bounds_px = Rect::MakeAtZero<LeftX, BottomY>(
                                    Round(root_widget->size * root_widget->display_pixels_per_meter))
                                    .Outset(64);  // 64px margin around screen
-  root_widget->FixParents();
+  root_widget->ValidateHierarchy();
 
   enum class Verdict {
     Unknown = 0,

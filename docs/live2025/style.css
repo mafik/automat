@@ -38,7 +38,8 @@ h1 {
     padding-bottom: 15px;
 }
 
-h2 {
+h2,
+.h2 {
     font-size: 2em;
     font-weight: 600;
     margin-top: 40px;

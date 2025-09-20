@@ -47,7 +47,8 @@ h2,
     color: #34495e;
 }
 
-h3 {
+h3,
+.h3 {
     font-size: 1.5em;
     font-weight: 600;
     margin-top: 30px;
@@ -183,6 +184,20 @@ tr:hover {
             transform: scaleY(1);
         }
     }
+}
+
+details {
+    background: #fae5a0;
+    padding: 0 10px;
+    border: 1px solid #d6cf67;
+    margin: 20px 0;
+    border-radius: 10px;
+}
+
+details>summary {
+    margin: 0 0 !important;
+    padding: 10px 0;
+    cursor: pointer;
 }
 
 /* Code blocks */

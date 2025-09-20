@@ -37,7 +37,7 @@
         <p>Luckily we're seeing continued progress on both fronts. Growth of internet, smartphones and large language models
             in the last few decades inspire great optimism in more egalitarian access to technology in the future.</p>
 
-        <p>This work aims to further this goal by reducing the formalism required to control computers. It introduces an
+        <p>This work aims to further this goal by reducing the barriers required to control computers. It introduces an
             environment called Automat - an interface offering a skeuomorphic representation of objects in computer
             memory.</p>
 
@@ -50,7 +50,7 @@
             }
         </style>
 
-        <video class="figure" controls autoplay loop muted>
+        <video id="tesseract" class="figure" controls autoplay loop muted>
             <source src="example1.mp4" type="video/mp4">
             Your browser does not support the video tag.
         </video>
@@ -67,7 +67,7 @@
             experimentation.</p>
 
         <p>Initial goal of Automat is set on the problem of game automation. Games provide entertainment, enrich social life and
-            serve as a powerful tool for learning and sharpening skills. Unfortunately many modern computer
+            serve as a tool for learning and sharpening skills. Unfortunately many modern computer
             games, particularly the ones developed with return on investment in mind, adopt a range of techniques that
             produce addiction and incentivise recurring payments.
             Mechanisms such as virtual resource gathering, randomized rewards, classical conditioning through repetition,
@@ -85,16 +85,10 @@
 
         <p>Learning from programming languages which are in broad use today, Automat's development is not being done
             with expectation of profit. Monetization efforts tend to compromise the design of computing environments by
-            introducing competing objectives. As a result commercial programming systems have had a history of
+            introducing competing objectives. Commercial programming systems have had a history of
             difficulties in attracting user trust. Instead, Automat's development is driven by a small community
             following hacker culture & hacker ethics. The goal of this article is to encourage readers to join this
-            community and push the frontier of visual programming <span data-footnote="invitation">together</span>.</p>
-
-        <p id="invitation" class="footnote">The easiest way to join is to reach out through real-time chat at <a href="https://automat.org/gang" target="_blank">automat.org/gang</a>.
-            Feel free to join our community to follow the project's progress.
-            For those wishing to contribute, we encourage you to introduce yourself along with your relevant skills or interests.
-            Automat welcomes a wide range of expertise, from playtesters to sound designers and everything in between.
-        </p>
+            community and push the frontier of visual programming together.</p>
 
         <p>Just like many tools in the physical world are designed with two "ends" in mind - one meant for being
             comfortable in human hand - and one efficient at doing the work. Automat's design has three "ends".</p>
@@ -121,11 +115,11 @@
         <p>Note that this usage of "abstract objects" has nothing to do with classical OOP terminology. Instead, the term comes from
             philosophical conceptualism, which argues that a thinking mind generalizes knowledge through universals, which exist within
             the mind as abstract objects. While most universals are closely connected to linguistic terms and are easy to communicate,
-            domain experts over time can develop their own set of abstract objects. Think of a mathematician examining a mathematical
+            domain experts over time can develop their own framework of concepts. Think of a mathematician examining a mathematical
             problem or a chess player planning a strategy.</p>
 
-        <p>Within the field of software engineering these abstract objects are commonly called <em>abstractions</em> and are fundamental
-            to high-level programming languages and software architecture.</p>
+        <p>Within the field of software engineering the abstract objects that programmers use to mentally represent programs are
+            commonly called <em>abstractions</em> and are fundamental to high-level programming languages and software architecture.</p>
 
         <p>Abstractions in a computer program typically map to subgraphs of the abstract syntax tree. They may also exist
             within the code implicitly as invariants, or imagined results of code execution at its different stages.</p>
@@ -134,12 +128,12 @@
             the practice of obfuscation makes programs harder to understand by <q>breaking abstractions</q> while preserving program behavior.</p>
 
         <p>We can attempt to translate objects from this abstract mental domain back into a concrete computing environment
-            where each abstract object is materialized as concrete and composable object on the screen of a computer.
+            where each abstract object is materialized as a concrete and composable object on the screen of a computer.
             We will call the objects produced by this translation <em>Syntax Objects</em>.</p>
 
         <h3>Novelty</h3>
 
-        <p>Syntax Objects are a new term for real counterpart of a concept known within software engineering as <em>abstractions</em>.</p>
+        <p>Syntax Objects are a new term for a real counterpart of a concept known within software engineering as <em>abstractions</em>.</p>
 
         <p>Within the context of software engineering, the contribution of this article is that it:</p>
         <ol>
@@ -150,11 +144,14 @@
 
         <h3>Example</h3>
 
+        <p>Although the term Syntax Objects is new, it describes an idea that has been around since the dawn of high level programming languages -
+            an attempt to materialize abstractions as composable bricks for programming.</p>
+
         <img id="bash" class="figure" src="bash.png" style="max-width: 100%; box-shadow: none">
         <div class="caption">Syntax Objects in Bash</div>
 
         <p>Syntax Objects can be found in every high level programming system. Many of them are provided by the programming language
-            through its syntax and standard library but programmers often roll out their own through user-defined functions,
+            through its syntax and standard library. Programmers often roll out their own through user-defined functions,
             classes and macros.</p>
 
         <h3>Properties</h3>
@@ -175,7 +172,7 @@
             from the perspective of the programmer solving one specific problem but within the system their behavior
             may be arbitrarily complex and open for change. This means that the <em>atomicity of Syntax Objects is relative</em>.</p>
 
-        <p>A concrete bound for the number of interacting Syntax Objects may be estimated from the psychological studies of the working memory.
+        <p>A concrete bound for the number of simultaneously interacting Syntax Objects may be estimated from the psychological studies of the working memory.
             <a href="https://en.wikipedia.org/wiki/The_Magical_Number_Seven,_Plus_or_Minus_Two" target="_blank">The Magical Number Seven, Plus or Minus Two</a> by George Miller,
             suggests that a working memory can only hold about 7 distinct chunks of information <span data-footnote="deutsch">at once</span>.
         </p>
@@ -219,56 +216,32 @@
         <p><em>Fast to use</em>. Time needed to perform a task using a given Syntax Object should be minimized.</p>
 
         <p>Many other design objectives could be listed here but only the ones directly related to the
-            programmer have been deemed <span data-footnote="relevant">relevant</span>.</p>
+            programmers efficiency have been deemed <span data-footnote="relevant">relevant</span>.</p>
 
-        <p id="relevant" class="footnote">Syntax Objects can also facilitate interoperability and efficiency but these are not the focus of this article.</p>
+        <p id="relevant" class="footnote">The design of Syntax Objects, just like the choice of right abstractions, can
+            promote interoperability and efficiency, but this article will not discuss these aspects.</p>
 
-        <p><em>Exercise:</em> It's valuable to go back to the <a href="#bash">bash example</a> above. Please take a a
-            look at that
-            example now and try to answer the following questions:</p>
+        <p><em>Exercise:</em> It's valuable to go back to the <a href="#bash">bash example</a> above. Please take a
+            look at that example now and try to answer the following questions:</p>
         <ol>
-            <li>How would you rate the Bash programmer interface in each of the design criteria listed in this section?
-            </li>
+            <li>How would you rate the Bash programmer interface in each of the design criteria listed in this section?</li>
             <li>Try to imagine an alternative interface that would aim to maximize each out of those design criteria.
                 Focus on just one criterion at a time. How could this interface look like?</li>
         </ol>
 
-        <p>Following the first two points should make it clear to the reader how Syntax Objects differ from objects used at
-            program runtime and that they need to be designed with a different mindset.</p>
+        <p>Design criteria listed above should provide a valuable compass for language designers iterating on a language design.</p>
+
+        <p>Software engineers, who often introduce custom abstractions through OOP techniques, could use these design criteria
+            as an alternative to guidelines such as SOLID or GRASP.</p>
 
         <h2>Objects In Automat</h2>
-        <p>Automat uses careful Syntax Object design to enable its users to perform tasks typically reserved to professional
-            programmers.</p>
 
-        <h3>Machine Code Scripting</h3>
-        <p>An example of this approach is a scripting mechanism used by Automat. Automat's scripts use a metaphor of
-            playing cards with instructions written on them, similar to many collectible card games. Each card
-            corresponds roughly to one machine instruction and can be composed with other cards to form a program. CPU
-            registers are presented visually as checkerboards governed by an icon. Iconic representation helps avoid
-            jargon and makes the representation more welcoming. The instruction cards don't fully hide their low-level
-            nature - they still show the assembly mnemonic & machine code in the corners of the card - but they do so in
-            a way that passes as visual ornament rather than the main interface.</p>
+        <p>After having defined Syntax Objects in textual realm, let's now take a look at how they're used in Automat.</p>
 
-        <img class="figure" src="instruction.png" style="max-width: 100%; box-shadow: none">
-        <div class="caption">Instruction cards in Automat</div>
+        <iframe class="figure" width="100%" style="aspect-ratio: 16/9" src="https://www.youtube.com/embed/i6cwIAPNZVA?si=DfIVbnePTL__JOfg&amp;start=206" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <div class="caption">Demonstration of imperative-style macro used for leveling up combat skills in Skyrim</div>
 
-        <p>While this representation can be used by non-technical users, it also produces scripts that execute with the
-            performance of hand-crafted assembly.</p>
-
-        <p>Thanks to closeness of mapping, this representation also enables hot code reloading where the user may freely
-            change the code while it's executing.</p>
-
-        <video class="figure" controls autoplay loop muted>
-            <source src="machine_code.mp4" type="video/mp4">
-            Your browser does not support the video tag.
-        </video>
-
-        <div class="caption">Machine code instructions in Automat</div>
-
-        <h3>Programming By Demonstration</h3>
-        <p>The basic function of Automat is recording & replaying input macros. A simple macro can be created by
-            creating a chain of simple commands & delays:</p>
-
+        <!--
         <video class="figure" controls autoplay loop muted>
             <source src="simple_macro.mp4" type="video/mp4">
             Your browser does not support the video tag.
@@ -276,51 +249,277 @@
 
         <div class="caption">Imperative-style macro for sending "left mouse down" and "left mouse up" events with
             controllable delays</div>
+        -->
 
-        <p>While it's fairly easy for simple cases, this approach fails for more complex sequences of keystrokes.
-            Programming them manually would be prohibitively slow. To help with that, Automat offers several helpers:
-        </p>
+        <p>Let's discuss what can be observed in this demonstration:</p>
 
         <ul>
-            <li>a Macro Recorder object that records keystrokes,</li>
-            <li>a Hotkey object that triggers execution of other objects when a hotkey is pressed and</li>
-            <li>a Timeline object that can drive execution of other objects according to its tracks.</li>
+            <li>The Automat's interface is heavily <em>metaphorical</em>. The sleep function is represented by a timer.
+                The function to press a mouse button is represented by an image of a mouse.
+                The usage of visual metaphors that tie functions to familiar physical objects helps with <em>skimmability</em>.
+            </li>
+            <li>Clicking a mouse is performed using two objects (down & up) as opposed to a single toggleable object.
+                This maps more closely to the OS-level input events and improves the <em>faithfulness</em> of the interface.
+                For example this allows the player to craft physically impossible sequeunces of events
+                (like three "mouse down" events in a row), which can be exploited in some games.</li>
+            <li>Objects that are available to the player are visible in the bottom bar, offering good <em>discoverability</em>.</li>
+            <li>Objects follow unstructured programming style, where control flow is passed explicitly (like in a <code>goto</code> statement) through blinking cables.
+                The unstructured programming style is simple to understand, even more so because of blinking feedback, making it <em>easy to master</em>.
+                Contrast this for example to other programming styles (such as structured, reactive, dataflow, functional or message passing),
+                all of which require a learning phase.</li>
+            <li>Most actions, even including setting the timer durations, are done with a mouse, minimizing the need to move the hand between mouse and a keyboard.
+                Combined with the locality of actions within objects (Fitt's law), this makes
+                the interface <em>fast to use</em>.</li>
         </ul>
 
-        <p>Together they can be used to create an ad-hoc programming-by-demonstration environment:</p>
+        <details>
+            <summary class="h3">Side Note: Game Automation & Fun</summary>
+
+            <p>Let's make a brief digression and consider the impact of game automation on the fun of playing a game.
+                At first sight it might seem like game automation would take it away.</p>
+            <p>We will consider this problem through the lens
+                of <a href="https://en.wikipedia.org/wiki/GNS_theory">Gamism, Narrativism and Simulationism</a> - a game design theory which postulates that
+                players of role-playing games are motivated by three different goals: (1) to win, (2) to create an interesting story and (3) to engage
+                with a world governed by rules.
+            </p>
+
+            <p>Let's consider the Skyrim example from the video above.</p>
+
+            <ul>
+                <li>Regardless of the player's playstyle, the usage of Automat saved about 12 hours of repetitive actions in exchange for about one hour of mentally stimulating design.</li>
+                <li>From the perspective of a gamist, a leveled-up and stronger character is more fun to play.
+                    The player can now engage more powerful enemies and explore more of the game world.</li>
+                <li>Fully levelling a skill brings a sense of accomplishment. Some players level up skills just for the sake of it.
+                    For a simulationists, who seek to exploit rules of the world to solve self-imposed challenges,
+                    achieving this through an intellectually challenging path (rather than simple repetition) makes the sense of accomplishment even greater.</li>
+                <li>From a narrativist's role-playing perspective, the character is more interesting to play since his resilience skills now have an interesting origin story:
+                    they have been developed over ten days of being punched by a mudcrab while being stuck waist-deep in a swamp.
+                    The character may have developed a crab-related PTSD or made mudcrabs his sworn enemy. The specific mudcrab that punched him may reappear later in his story.
+                </li>
+            </ul>
+
+            <p>Even though intuitively game automation should take away the enjoyment of playing a game,
+                in reality this first impression couldn't be further from the truth.</p>
+        </details>
+
+        <details>
+            <summary class="h3">Side Note: Game Automation & Craftsmanship</summary>
+
+            <p>The two videos show subsequent iterations of a macro for leveling up a character in Black Myth: Wukong.</p>
+
+            <iframe class="figure" width="100%" style="aspect-ratio: 16/9" src="https://www.youtube.com/embed/myFNEbdGtDk?si=yagwOw8OAQcdzQjG&start=15&end=120" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            <div class="caption">Second iteration of a macro for leveling up character in Black Myth: Wukong, at a rate of 1 exp/s.<br>Playback clamped to 0:15-2:00.</div>
+
+            <iframe class="figure" width="100%" style="aspect-ratio: 16/9" src="https://www.youtube.com/embed/epWbCzaROUo?si=onnF04uMMDZCUNyZ&start=110&end=335" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            <div class="caption">Third iteration of the macro for Black Myth: Wukong, at a rate of 3.4 exp/s.<br>Playback clamped to 1:50-5:35.</div>
+
+            <p>Optimizing a macro to achieve a higher time efficiency is another, intrinsic source of reward in game automation.</p>
+            <p>It's present in games like Factorio, Satisfactory or Kerbal Space Program.
+                It's the defining feature of the whole category of Zachlike games.</p>
+            <p>Programmers may be familiar with a similar sense of accomplishment stemming from code golfing or performance tuning a piece of code.</p>
+        </details>
+
+        <h3>Programming By Demonstration</h3>
+
+        <p>Some macros require fine timing and coordination over multiple inputs that is hard to achieve with manually placed timers and low-level input events.
+            This problem can be solved with another kind of object - a <em>Timeline</em>.</p>
+
+        <p>Timeline is an abstraction known from multimedia authoring environments (for example Macromedia Flash or Blender), that contains multiple ordered
+            (usually keyed by frame) sequences of values.</p>
+
+        <p>Within Automat a Timeline is keyed by a 64-bit integer - number of nanoseconds and can contain different types of tracks.
+            One kind of track can switch connected objects between on and off states (it's used for controlling keys).
+            Another kind of track represents 2D traces as a series of vectors (it's used for controlling mouse).
+            Timeline is optimized for fast playback of tracks that contain thousands of values each second, to match the polling rate of gaming hardware.</p>
+
+        <p>Timeline is not typically created directly by the player but rather by a <em>Macro Recorder</em> - another object
+            that provides programming-by-demonstration abilities. The example below shows how it's typically used.</p>
 
         <video class="figure" controls autoplay loop muted>
             <source src="macro_recorder.mp4" type="video/mp4">
             Your browser does not support the video tag.
         </video>
-
         <div class="caption">A typical setup for recording macros in Automat</div>
 
-        <p>Together with other objects present in Automat this enables users to mix different programming
-            techniques - procedural programming, reactive programming, programming by demonstration.</p>
+        <p>The next video shows how this setup can be used in practice:</p>
 
-        <h2>Summary</h2>
-        <p>We have defined Programmer Interface Objects - a category of objects that are used by programmers to
-            construct programs. As opposed to classical OO objects which encapsulate data & behavor during program
-            runtime, Syntax Objects form the human-computer interface of a programming environment. Because of their different role,
-            Syntax Objects should be separated from runtime data structures and designed with different objectives in mind.</p>
+        <iframe class="figure" width="100%" style="aspect-ratio: 16/9" src="https://www.youtube.com/embed/TYttF121XhY?si=JNDm3rL8Q_umWA_g&start=11030&end=11290" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <div class="caption">Recording & playback of a potion brewing macro in Kingdom Come: Deliverance II.<br>Playback clamped to 3:03:50-3:08:10.</div>
 
-        <p>An example of the Automat environment demonstrates that carefully designed Syntax Objects can enable non-programmers
-            to perform tasks typically reserved to expert programmers - such as manipulating low-level machine code and
-            mixing different programming styles.</p>
+        <p>The <span data-footnote="glitches">example above</span> shows a lengthy potion brewing mini-game being recorded into a macro & then played back.
+            Once the hotkeys are connected to Macro Recorder & a Timeline the whole process can be executed without leaving the game.
+            Also, once the playback is started, the game can be left unattended. Automat will continue playing the game indefinitely.</p>
 
-        <details style="display: none;">
-            <summary class="h2">
-                Appendix: Relation of Syntax Objects to Object-Oriented Programming
-            </summary>
+        <p id="glitches" class="footnote">Note that some of the video examples used in this article come from development live streams
+            and show in-progress builds of Automat.
+            In those examples graphical glitches (invisible objects, flickering) may be present.</p>
 
-            <p>The relation to OOP is worth discussing in more detail.</p>
+        <p>The visual design of the Macro Recorder imitates a blend of recording device and a parrot.
+            This is meant as a distant metaphor for the ability of some parrots to repeat human voice.
+            The parrot signals its interest by following the mouse cursor with its eyes.
+            To avoid distracting the player with its eyes, the parrot goes to sleep when it's not being used.
+            The eyes also rotate while recorder is active (due to a bug the parrot slept during the recording).</p>
 
-            <p>TODO: OOP is largely concerned with binding code to data which is orthogonal to the idea of syntax objects (syntax objects lifetime is static)</p>
+        <p>One subtle observation from the setup video is that Macro Recorder automatically connects to the nearest Timeline.
+            Some objects auto-connect to the closest neighbor that satisfies some interface.
+            The auto-connect feature makes the environment faster to use.
+            Simply placing objects in the same area is enough to make them function together.
+        </p>
 
-            <p>TODO: HOWEVER, programmers can (and do) define their own SOs using OOP tools. Keep in mind that design objectives for SOs are different from runtime objects (for example SOLID principles).</p>
+        <p>The auto-connect feature is accompanied by a subtle radar scanning animation
+            (not visible on the video) which makes it more discoverable.</p>
 
-        </details>
+        <p>Another mechanism (again, not visible on the video) is that in the case that Macro Recorder lacks a Timeline to record to,
+            it will create a new Timeline and connect to it automatically.
+            This is another mechanism that improves its speed of use.</p>
+
+        <p>The last observation in this example is that Macro Recorder produces a network of objects
+            that can then be manually modified by the player, allowing for further optimization and teaching the player how the objects can be used together.</p>
+
+        <h3>Machine Code Scripting</h3>
+        <p>Another example of Syntax Objects is the scripting mechanism used by Automat. Automat's scripts use a metaphor of
+            playing cards with instructions written on them, similar to many collectible card games.</p>
+
+        <img class="figure" src="instruction.png" style="max-width: 100%; box-shadow: none">
+        <div class="caption">Instruction cards in Automat</div>
+
+        <p>Each card corresponds roughly to one machine instruction and can be composed with other cards to form a program.
+            Programs built in this way are translated into machine code and executed directly on the CPU, making this
+            scripting approach as fast as hand-written assembly.</p>
+
+        <p>Below is a demonstration of machine code scripting:</p>
+
+        <video class="figure" controls autoplay loop muted>
+            <source src="machine_code.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div class="caption">Machine code instructions in Automat</div>
+
+        <p>The video introduces many new elements that should be discussed in more detail.</p>
+
+        <p>First - the video shows an <em>Instruction Library</em> - another object that can be used to select one of thousands of
+            instructions available on x86-64 CPUs.
+            Following the playing card metaphor, Instruction Library is represented as a deck of cards.
+            It groups instructions into categories (Logic, Math, Control Flow, etc.) and allows for filtering instructions based on the registers that they read & write.
+        </p>
+
+        <p>Another new object represents the state of the CPU - a set of registers, also known within OS terminology as task context.
+            It's being shown as a rectangle of broadway-style lights with a starfield inside. It provides a real-time view of the state of registers
+            and allows multiple scripts to coexist.</p>
+
+        <p>Finally, individual registers are shown as checkerboards governed by an icon.
+            Registers can be used by other objects within Automat to communicate with the machine code.
+        </p>
+
+        <p>The general style used throughout machine code objects is loosely based on graphic design of Monty Python's Flying Circus
+            making it more playful and memorable.</p>
+
+        <p>At the same time the representation tries to stay faithful to the underlying x86-64 CPU model - the instructions still show
+            the assembly mnemonic & machine code in the corners of the card - but they do so in a way that passes as visual ornament
+            rather than the main interface.</p>
+
+        <p>Below is a video showing how machine code scripting can be used to create non-trivial macros:</p>
+
+        <video class="figure" controls>
+            <source src="Skyrim Ingredient Farming.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div class="caption">Complex Skyrim macro that scans the shopkeeper's inventory, buying every "Giant's Toe" & "Creep Cluster". When done, performs a Timeline-driven inventory reset glitch & starts over.</div>
+
+        <video class="figure" controls>
+            <source src="Skyrim Ingredient Farming %232.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div class="caption">Step-by-step breakdown of the Skyrim macro.</div>
+
+        <p>What's striking about this example is the sudden increase in its complexity.
+            The number of objects on screen vialates the 7±2 rule.
+            The purpose of many objects is not immediately obvious.
+            Large number of cables makes the overall control flow hard to follow.
+            Even though any programmer would be able to decipher the code after short while,
+            it's far from perfect in the "skimmability" area.</p>
+
+        <p>This example shows the current limitations of Automat.
+            The implementation of many of its systems is not <span data-footnote="wip">complete</span>,
+            they're undergoing design iterations or haven't been designed at all.</p>
+
+        <p id="wip" class="footnote">Machine code subsystem which is the focus of this section still lacks x86 instruction set extensions like AVX, SHA or AES;
+            ModR/M instructions; EFLAGS & RIP registers.</p>
+
+        <p>Especially the area of visual complexity management could benefit from some improvements.
+            Some plans in this area include:</p>
+
+        <ul>
+            <li>an ability to group & minify objects,</li>
+            <li>visual & textual annotations and</li>
+            <li>a better support for DRAKON-style control flow.</li>
+        </ul>
+
+        <p>The game automation area is missing a way to interact with gamepad & possibly other kinds of HID devices.</p>
+
+        <p>This also connects to the question of what's next beyond input automation.</p>
+
+        <h2>Future of Automat</h2>
+
+        <p>The eventual goal of Automat is to become a general purpose computing tool.
+            This can only happen if it's capabilities are expanded out of game automation, into neighboring areas.
+        </p>
+
+        <p>One such area, still somewhat related to game automation might be program manipulation.
+            Most programs are distributed to users as black boxes, with only limited ability to customize their behavior (usually through predefined settings or extension APIs).
+            Automat's objects could enable direct manipulation of entities within the memory of other processes,
+            allowing debugger-like tools for hooking and altering the behavior of other programs.
+            Program modification is an area where very few tools exist and even the best ones are
+            typically reserved for experts (one notable exception being Cheat Engine). Encapsulating the tricks & techniques of those expert
+            users into well designed objects could open this area to a much wider audience.</p>
+
+        <p>Another area might be multimedia processing.
+            The world of software is full of excellent graph-based processing tools, many of which could benefit from better interfaces.
+            Examples of such libraries might include GStreamer, FFmpeg, GEGL, OpenCV, YOLO.
+            Vision is often vital to fine control so it ties well with game automation.
+            Recent versions of Automat already include Tesseract OCR (also visible in <a href="#tesseract">the first video</a> in this article),
+            showing that some work in this direction is already happening.</p>
+
+        <p>Yet another area might be to interface with other programming systems.
+            The ability to embed snippets of code within Automat could certainly help with more complex logic.
+            A solid programming environment (even for small, Godbolt-like code snippets) embedded within Automat could also
+            address the <span data-footnote="setup">difficult setup</span> required by many language ecosystems and make them more accessible.</p>
+
+        <p id="setup" class="footnote">Automat follows a "no installer, single statically-linked binary" distribution model so theoretically it might be a very simple
+            programming environment to set up.</p>
+
+        <p>Some examples of more ambitious directions might be:</p>
+        <ul>
+            <li>to use Automat as a Wayland compositor (turning it into a window manager capable of
+                isolating and concurrently driving multiple apps according to player-defined rules),</li>
+            <li>to split out a core capable of running on an STM32 microcontroller, controllable in real time from a desktop interface
+                (enabling hardware-level input replay, required for automation in more challenging environments, like consoles or mobile devices),</li>
+            <li>to provide more social features, like an ability to "visit" other players by connecting to other Automat instances,</li>
+            <li>last but not least - integration of LLM-based agents with their tool-calling & multimodal capabilities might provide a new,
+                rapid way for automating arbitrary tasks (not necessarily related to gaming),
+                while still allowing to visually inspect, structure and coordinate the work of multiple agents.</li>
+        </ul>
+
+        <p>In addition to expanding its feature set, the core of UX of Automat could also be improved.
+            Established animation techniques such as PBR rendering, skeletal animation or particle systems could be introduced to make objects more expressive.
+            Sound design, a powerful and underutilized tool could be used as another feedback channel to convey the state of the program.
+            The learning curve of Automat could be further flattened with better built-in tutorials and more structured documentation.
+        </p>
+
+        <p>The list of potential directions is long and full of synergies, which leads us to the point of this article.</p>
+
+        <h2>Invitation to Collaboration</h2>
+
+        <p>It is my hope that this article inspires you that with some design & engineering effort, a more ergonomic,
+            more egalitarian and more efficient future of computing is possible.</p>
+        <p>If you agree with this vision, if you subscribe to hacker culture and hacker ethics, and finally if you are willing to put in some effort
+            to make it happen (even just a couple of hours every now and then), then let me invite you to
+            <a href="https://automat.org/gang" target="_blank">Automat's community</a>, where we'll be able to bring this vision to life, together.
+        </p>
+        <p>As Alan Kay once said:</p>
+        <blockquote>
+            <p>The best way to predict the future is to invent it.</p>
+        </blockquote>
 
     </article>
 

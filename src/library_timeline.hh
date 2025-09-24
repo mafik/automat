@@ -5,9 +5,7 @@
 #include <cmath>
 #include <memory>
 
-#include "animation.hh"
 #include "base.hh"
-#include "ui_button.hh"
 #include "on_off.hh"
 #include "pointer.hh"
 #include "run_button.hh"
@@ -17,38 +15,7 @@
 
 namespace automat::library {
 
-struct SideButton : ui::Button {
-  using ui::Button::Button;
-  SideButton(Widget* parent, std::unique_ptr<Widget> child)
-      : ui::Button(parent, std::move(child)) {}
-  SkColor ForegroundColor() const override;
-  SkColor BackgroundColor() const override;
-  SkRRect RRect() const override;
-};
-
-struct PrevButton : SideButton {
-  PrevButton(Widget* parent);
-  void Activate(ui::Pointer&) override;
-};
-
-struct NextButton : SideButton {
-  NextButton(Widget* parent);
-  void Activate(ui::Pointer&) override;
-};
-
 struct Timeline;
-
-struct TimelineRunButton : ui::ToggleButton {
-  Timeline* timeline;
-
-  std::unique_ptr<ui::Button> rec_button;
-  mutable ui::Button* last_on_widget = nullptr;
-
-  TimelineRunButton(Widget* parent, Timeline* timeline);
-  ui::Button* OnWidget() override;
-  bool Filled() const override;
-  void Activate(ui::Pointer&);
-};
 
 struct TrackBase : Object {
   Timeline* timeline = nullptr;
@@ -97,43 +64,16 @@ struct Vec2Track : TrackBase {
   bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
 };
 
-struct SpliceAction : Action {
-  Timeline& timeline;
-  time::Duration splice_to;
-  bool snapped = false;
-  bool cancel = true;
-  ui::Pointer::IconOverride resize_icon;
-  SpliceAction(ui::Pointer& pointer, Timeline& timeline);
-  ~SpliceAction();
-  void Update() override;
-};
-
-struct DragZoomAction;
-
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
 // (or stops).
-struct Timeline : LiveObject,
-                  Object::FallbackWidget,
-                  Runnable,
-                  LongRunning,
-                  TimerNotificationReceiver {
-  std::unique_ptr<TimelineRunButton> run_button;
-  std::unique_ptr<PrevButton> prev_button;
-  std::unique_ptr<NextButton> next_button;
-
-  SpliceAction* splice_action = nullptr;
-  DragZoomAction* drag_zoom_action = nullptr;
-
+struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
+  std::mutex mutex;
   Vec<Ptr<TrackBase>> tracks;
   Vec<std::unique_ptr<Argument>> track_args;
-  mutable Vec<std::unique_ptr<Widget>> track_widgets;
 
-  mutable animation::Approach<> zoom;  // stores the time in seconds
-  mutable animation::SpringV2<float> splice_wiggle;
-  mutable float bridge_wiggle_s;
-  bool bridge_snapped = false;
+  float zoom;  // stores the time in seconds
 
   enum State { kPaused, kPlaying, kRecording } state;
   time::Duration timeline_length = 0s;
@@ -144,12 +84,10 @@ struct Timeline : LiveObject,
 
   struct Playing {
     time::SteadyPoint started_at;  // Used when playback is active
-    time::SteadyPoint now;
   };
 
   struct Recording {
     time::SteadyPoint started_at;  // Used when recording is active
-    time::SteadyPoint now;
     // there is no point in staring the length of the timeline because it's always `now -
     // started_at`
   };
@@ -160,18 +98,12 @@ struct Timeline : LiveObject,
     Recording recording;
   };
 
-  Timeline(ui::Widget* parent);
-  Timeline(ui::Widget* parent, const Timeline&);
-  void UpdateChildTransform(time::SteadyPoint now);
+  Timeline();
+  Timeline(const Timeline&);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  animation::Phase Tick(time::Timer&) override;
-  void Draw(SkCanvas&) const override;
-  SkPath Shape() const override;
+  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override;
   void Args(std::function<void(Argument&)> cb) override;
-  Vec2AndDir ArgStart(const Argument&) override;
-  void FillChildren(Vec<Widget*>& children) override;
-  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   void OnRun(Location& here, RunTask&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
@@ -184,6 +116,7 @@ struct Timeline : LiveObject,
   void BeginRecording();
   void StopRecording();
 
+  time::Duration CurrentOffset(time::SteadyPoint now) const;
   time::Duration MaxTrackLength() const;
 
   void SerializeState(Serializer& writer, const char* key) const override;

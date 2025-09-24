@@ -32,4 +32,6 @@ constexpr bool NotDebug = !Debug;
 constexpr bool NotRelease = !Release;
 constexpr bool NotFast = !Fast;
 
+constexpr bool CanCrash = Debug || Fast;
+
 }  // namespace automat::build_variant

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <memory>
 #include <numbers>
 #include <tracy/Tracy.hpp>
@@ -24,9 +25,6 @@
 #include "base.hh"
 #include "color.hh"
 #include "font.hh"
-#include "ui_button.hh"
-#include "ui_constants.hh"
-#include "ui_shape_widget.hh"
 #include "key_button.hh"
 #include "library_mouse.hh"
 #include "library_mouse_move.hh"
@@ -41,6 +39,9 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
+#include "ui_button.hh"
+#include "ui_constants.hh"
+#include "ui_shape_widget.hh"
 
 using namespace automat::ui;
 using namespace std;
@@ -103,20 +104,20 @@ static constexpr int TrackIndexFromY(float y) {
 
 constexpr float kPlasticBottom = kDisplayMargin;
 
-static Rect PlasticRect(const Timeline& t) {
-  return Rect(-kPlasticWidth / 2, -WindowHeight(t.tracks.size()) - kPlasticBottom,
-              kPlasticWidth / 2, kPlasticTop);
+static Rect PlasticRect(int track_count) {
+  return Rect(-kPlasticWidth / 2, -WindowHeight(track_count) - kPlasticBottom, kPlasticWidth / 2,
+              kPlasticTop);
 }
 
-static Rect WoodenCaseRect(const Timeline& t) { return PlasticRect(t).Outset(kWoodWidth); }
+static Rect WoodenCaseRect(int track_count) { return PlasticRect(track_count).Outset(kWoodWidth); }
 
-static SkRRect WoodenCaseRRect(const Timeline& t) {
-  return SkRRect::MakeRectXY(WoodenCaseRect(t).sk, kWoodenCaseCornerRadius,
+static SkRRect WoodenCaseRRect(int track_count) {
+  return SkRRect::MakeRectXY(WoodenCaseRect(track_count).sk, kWoodenCaseCornerRadius,
                              kWoodenCaseCornerRadius);
 }
 
-static SkRRect PlasticRRect(const Timeline& t) {
-  return SkRRect::MakeRectXY(PlasticRect(t), kPlasticCornerRadius, kPlasticCornerRadius);
+static SkRRect PlasticRRect(int track_count) {
+  return SkRRect::MakeRectXY(PlasticRect(track_count), kPlasticCornerRadius, kPlasticCornerRadius);
 }
 
 constexpr RRect kDisplayRRect = []() {
@@ -273,12 +274,6 @@ const SkPaint kZoomTickPaint = []() {
 
 const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
 
-PrevButton::PrevButton(Widget* parent)
-    : SideButton(parent, MakeShapeWidget(this, kNextShape, SK_ColorWHITE, &kHorizontalFlip)) {}
-
-NextButton::NextButton(Widget* parent)
-    : SideButton(parent, MakeShapeWidget(this, kNextShape, SK_ColorWHITE)) {}
-
 static SkPath GetPausedPath() {
   static SkPath path = []() {
     SkPath path;
@@ -299,83 +294,8 @@ static SkPath GetRecPath() {
 }
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
-SkColor SideButton::ForegroundColor() const { return "#404040"_color; }
-SkColor SideButton::BackgroundColor() const { return kTimelineButtonBackground; }
 
-TimelineRunButton::TimelineRunButton(Widget* parent, Timeline* timeline)
-    : ui::ToggleButton(
-          parent,
-          std::make_unique<ColoredButton>(
-              this, GetPausedPath(),
-              ColoredButtonArgs{.fg = kTimelineButtonBackground,
-                                .bg = kOrange,
-                                .radius = kPlayButtonRadius,
-                                .on_click = [this](ui::Pointer& p) { Activate(p); }}),
-          std::make_unique<ColoredButton>(
-              this, kPlayShape,
-              ColoredButtonArgs{.fg = kOrange,
-                                .bg = kTimelineButtonBackground,
-                                .radius = kPlayButtonRadius,
-                                .on_click = [this](ui::Pointer& p) { Activate(p); }})),
-      timeline(timeline),
-      rec_button(new ColoredButton(
-          this, GetRecPath(),
-          ColoredButtonArgs{.fg = kTimelineButtonBackground,
-                            .bg = color::kParrotRed,
-                            .radius = kPlayButtonRadius,
-                            .on_click = [this](ui::Pointer& p) { Activate(p); }})) {}
-
-void TimelineRunButton::Activate(ui::Pointer& p) {
-  switch (timeline->state) {
-    case Timeline::kPlaying:
-      timeline->Cancel();
-      break;
-    case Timeline::kPaused:
-      if (auto h = timeline->here.lock()) {
-        h->ScheduleRun();
-      }
-      break;
-    case Timeline::kRecording:
-      timeline->StopRecording();
-      break;
-  }
-}
-
-
-
-ui::Button* TimelineRunButton::OnWidget() {
-  if (timeline->state == Timeline::kRecording) {
-    last_on_widget = rec_button.get();
-  } else if (timeline->state == Timeline::kPlaying) {
-    last_on_widget = on.get();
-  } else if (last_on_widget == nullptr) {
-    last_on_widget = on.get();
-  }
-  return last_on_widget;
-}
-
-bool TimelineRunButton::Filled() const {
-  bool filled = timeline->state == Timeline::kRecording || timeline->IsRunning();
-  if (auto h = timeline->here.lock()) {
-    filled |= (h->run_task && h->run_task->scheduled);
-  }
-  return filled;
-}
-
-Timeline::Timeline(ui::Widget* parent)
-    : FallbackWidget(parent),
-      run_button(new TimelineRunButton(this, this)),
-      prev_button(new PrevButton(this)),
-      next_button(new NextButton(this)),
-      state(kPaused),
-      paused{.playback_offset = 0s},
-      zoom(10) {
-  run_button->local_to_parent = SkM44::Translate(-kPlayButtonRadius, kDisplayMargin);
-  prev_button->local_to_parent =
-      SkM44::Translate(-kPlasticWidth / 2 + kSideButtonMargin, -kSideButtonRadius);
-  next_button->local_to_parent = SkM44::Translate(
-      kPlasticWidth / 2 - kSideButtonMargin - kSideButtonDiameter, -kSideButtonRadius);
-}
+Timeline::Timeline() : state(kPaused), paused{.playback_offset = 0s}, zoom(10) {}
 
 struct TrackArgument : Argument {
   TextDrawable icon;
@@ -413,10 +333,10 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   if (auto h = here.lock()) {
     h->InvalidateConnectionWidgets(true, true);
   }
-  UpdateChildTransform(time::SteadyNow());
+  WakeWidgetsAnimation();
 }
 
-Timeline::Timeline(ui::Widget* parent, const Timeline& other) : Timeline(parent) {
+Timeline::Timeline(const Timeline& other) : Timeline() {
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
     tracks.emplace_back(track->Clone().Cast<TrackBase>());
@@ -425,12 +345,12 @@ Timeline::Timeline(ui::Widget* parent, const Timeline& other) : Timeline(parent)
   for (int i = 0; i < other.track_args.size(); ++i) {
     AddTrackArg(*this, i, other.track_args[i]->name);
   }
-  UpdateChildTransform(time::SteadyNow());
+  WakeWidgetsAnimation();
 }
 
 string_view Timeline::Name() const { return "Timeline"; }
 
-Ptr<Object> Timeline::Clone() const { return MAKE_PTR(Timeline, parent, *this); }
+Ptr<Object> Timeline::Clone() const { return MAKE_PTR(Timeline, *this); }
 
 constexpr float kLcdFontSize = 1.5_mm;
 static Font& LcdFont() {
@@ -451,21 +371,6 @@ time::Duration Timeline::MaxTrackLength() const {
     max_track_length = max(max_track_length, track->timestamps.back());
   }
   return max_track_length;
-}
-
-static float CurrentPosRatio(const Timeline& timeline) {
-  time::FloatDuration max_track_length = timeline.MaxTrackLength();
-  if (max_track_length == 0s) {
-    return 1;
-  }
-  switch (timeline.state) {
-    case Timeline::kPlaying:
-      return (timeline.playing.now - timeline.playing.started_at) / max_track_length;
-    case Timeline::kPaused:
-      return timeline.paused.playback_offset / max_track_length;
-    case Timeline::kRecording:
-      return (timeline.recording.now - timeline.recording.started_at) / max_track_length;
-  }
 }
 
 void TimelineCancelScheduled(Timeline& t) {
@@ -510,139 +415,12 @@ static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint
   }
 }
 
-static time::Duration CurrentOffset(const Timeline& timeline, time::SteadyPoint now) {
-  switch (timeline.state) {
-    case Timeline::kPlaying:
-      return now - timeline.playing.started_at;
-    case Timeline::kPaused:
-      return timeline.paused.playback_offset;
-    case Timeline::kRecording:
-      return now - timeline.recording.started_at;
-  }
-}
-
-static void AddMissingTrackWidgets(Timeline& timeline) {
-  auto& tracks = timeline.tracks;
-  auto& track_widgets = timeline.track_widgets;
-  for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
-    track_widgets.push_back(tracks[i]->MakeWidget(&timeline));
-    track_widgets.back()->parent = &timeline;
-  }
-}
-
-static void WakeAnimationResponsively(Timeline& timeline) {
-  timeline.WakeAnimation();
-  AddMissingTrackWidgets(timeline);
-  for (auto& t : timeline.track_widgets) {
-    t->WakeAnimation();
-  }
-  // Only the children of the current timeline need to be updated responsively.
-  for (auto& w : timeline.track_widgets) {
-    w->RedrawThisFrame();
-  }
-}
-
-static void SetOffset(Timeline& timeline, time::Duration offset, time::SteadyPoint now) {
-  offset = clamp<time::Duration>(offset, 0s, timeline.MaxTrackLength());
-  if (timeline.state == Timeline::kPlaying) {
-    TimelineCancelScheduled(timeline);
-    timeline.playing.started_at = now - time::Duration(offset);
-    if (auto h = timeline.here.lock()) {
-      TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
-    }
-    TimelineScheduleNextAfter(timeline, now);
-  } else if (timeline.state == Timeline::kPaused) {
-    timeline.paused.playback_offset = offset;
-  }
-  WakeAnimationResponsively(timeline);
-}
-
-static void AdjustOffset(Timeline& timeline, time::Duration offset, time::SteadyPoint now) {
-  if (timeline.state == Timeline::kPlaying) {
-    TimelineCancelScheduled(timeline);
-    timeline.playing.started_at -= time::Duration(offset);
-    timeline.playing.started_at = min(timeline.playing.started_at, now);
-    if (auto h = timeline.here.lock()) {
-      TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
-    }
-    TimelineScheduleNextAfter(timeline, now);
-  } else if (timeline.state == Timeline::kPaused) {
-    timeline.paused.playback_offset = clamp<time::Duration>(
-        timeline.paused.playback_offset + offset, 0s, timeline.MaxTrackLength());
-  }
-  WakeAnimationResponsively(timeline);
-}
-
-void SetPosRatio(Timeline& timeline, float pos_ratio, time::SteadyPoint now) {
-  pos_ratio = clamp(pos_ratio, 0.0f, 1.0f);
-  auto max_track_length = timeline.MaxTrackLength();
-  if (timeline.state == Timeline::kPlaying) {
-    TimelineCancelScheduled(timeline);
-    timeline.playing.started_at = now - time::Defloat(pos_ratio * max_track_length);
-    if (auto h = timeline.here.lock()) {
-      TimelineUpdateOutputs(*h, timeline, timeline.playing.started_at, now);
-    }
-    TimelineScheduleNextAfter(timeline, now);
-  } else if (timeline.state == Timeline::kPaused) {
-    timeline.paused.playback_offset = time::Defloat(pos_ratio * max_track_length);
-  }
-  WakeAnimationResponsively(timeline);
-}
-
-void NextButton::Activate(ui::Pointer& ptr) {
-  Button::Activate(ptr);
-  if (auto timeline = Closest<Timeline>(*ptr.hover)) {
-    SetPosRatio(*timeline, 1, ptr.root_widget.timer.now);
-  }
-}
-
-void PrevButton::Activate(ui::Pointer& ptr) {
-  Button::Activate(ptr);
-  if (Timeline* timeline = Closest<Timeline>(*ptr.hover)) {
-    SetPosRatio(*timeline, 0, ptr.root_widget.timer.now);
-  }
-}
-
 static float BridgeOffsetX(float current_pos_ratio) {
   return -kRulerLength / 2 + kRulerLength * current_pos_ratio;
 }
 
 static float PosRatioFromBridgeOffsetX(float bridge_offset_x) {
   return (bridge_offset_x + kRulerLength / 2) / kRulerLength;
-}
-
-static time::Duration DistanceToSeconds(const Timeline& timeline) {
-  return time::FromSeconds(timeline.zoom.value / kWindowWidth);
-}
-
-static time::Duration TimeAtX(const Timeline& timeline, float x) {
-  // Find the time at the center of the timeline
-  auto distance_to_seconds = DistanceToSeconds(timeline);
-  float current_pos_ratio = CurrentPosRatio(timeline);
-  auto track_width = timeline.MaxTrackLength();
-
-  auto center_t0 = time::Defloat(kRulerLength * distance_to_seconds) / 2;
-  auto center_t1 = track_width - center_t0;
-  auto center_t = center_t0 + time::Defloat((center_t1 - center_t0) * current_pos_ratio);
-  return center_t + time::Defloat(x * distance_to_seconds);
-}
-
-static float XAtTime(const Timeline& timeline, time::Duration t) {
-  auto distance_to_seconds = DistanceToSeconds(timeline);
-  float current_pos_ratio = CurrentPosRatio(timeline);
-  auto track_width = timeline.MaxTrackLength();
-
-  // The original formula came from finding the time when current_pos_ratio was 0 and 1 and lerp-ing
-  // between them.
-  //
-  // Keeping it around for reference since the math may be hard to decipher otherwise.
-  // auto center_t0 = time::Defloat(kRulerLength * distance_to_seconds) / 2;
-  // auto center_t1 = track_width - center_t0;
-  // auto center_t = center_t0 + time::Defloat((center_t1 - center_t0) * current_pos_ratio);
-  // return (t - center_t) / time::FloatDuration(distance_to_seconds);
-
-  return (t - track_width * current_pos_ratio) / distance_to_seconds +
-         kRulerLength * (current_pos_ratio - 0.5f);
 }
 
 SkPath SplicerShape(int num_tracks, float current_pos_ratio) {
@@ -756,146 +534,6 @@ SkPath BridgeShape(int num_tracks, float current_pos_ratio) {
   return bridge_handle;
 }
 
-static Optional<time::Duration> SnapToTrack(
-    Timeline& timeline, Vec2 pos, time::Duration time_at_x = time::kDurationGuard,
-    time::Duration distance_to_seconds = time::kDurationGuard) {
-  auto track_index = TrackIndexFromY(pos.y);
-  if (track_index >= 0 && track_index < timeline.tracks.size()) {
-    auto& track = timeline.tracks[track_index];
-    auto& timestamps = track->timestamps;
-    if (time_at_x == time::kDurationGuard) {
-      time_at_x = TimeAtX(timeline, pos.x);
-    }
-    auto last = upper_bound(timestamps.begin(), timestamps.end(), time_at_x);
-    int right_i = last - timestamps.begin();
-    auto closest_dist = time::kDurationInfinity;
-    auto closest_t = time::kDurationGuard;
-    if (right_i >= 0 && right_i < timestamps.size()) {
-      auto right_dist = abs(time_at_x - timestamps[right_i]);
-      if (right_dist < closest_dist) {
-        closest_dist = right_dist;
-        closest_t = timestamps[right_i];
-      }
-    }
-    int left_i = right_i - 1;
-    if (left_i >= 0 && left_i < timestamps.size()) {
-      auto left_dist = abs(time_at_x - timestamps[left_i]);
-      if (left_dist < closest_dist) {
-        closest_dist = left_dist;
-        closest_t = timestamps[left_i];
-      }
-    }
-    if (distance_to_seconds == time::kDurationGuard) {
-      distance_to_seconds = DistanceToSeconds(timeline);
-    }
-    if (closest_dist < 1_mm * distance_to_seconds) {
-      return closest_t;
-    }
-  }
-  return nullopt;
-}
-
-static Optional<time::Duration> SnapToBottomRuler(Timeline& timeline, Vec2 pos,
-                                                  time::Duration time_at_x = time::kDurationGuard) {
-  int num_tracks = timeline.tracks.size();
-  float window_height = WindowHeight(num_tracks);
-  if (pos.y > -window_height && pos.y < -window_height + kRulerHeight) {
-    float zoom = timeline.zoom.target;
-    double zoom_log = log10(zoom / 200.0);
-    auto tick_duration = time::FloatDuration(pow(10, ceil(zoom_log)));
-    if (time_at_x == time::kDurationGuard) {
-      time_at_x = TimeAtX(timeline, pos.x);
-    }
-    if (time_at_x >= 0s && time_at_x < timeline.timeline_length) {
-      return time::Defloat(round(time_at_x / tick_duration) * tick_duration);
-    }
-  }
-  return nullopt;
-}
-
-struct DragBridgeAction : Action {
-  float press_offset_x;
-  Timeline& timeline;
-  DragBridgeAction(ui::Pointer& pointer, Timeline& timeline)
-      : Action(pointer), timeline(timeline) {
-    float initial_x = pointer.PositionWithin(timeline).x;
-    float initial_pos_ratio = CurrentPosRatio(timeline);
-    float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
-    press_offset_x = initial_x - initial_bridge_x;
-    timeline.bridge_snapped = false;
-  }
-  ~DragBridgeAction() override { timeline.bridge_snapped = false; }
-  void Update() override {
-    auto now = pointer.root_widget.timer.now;
-    Vec2 pos = pointer.PositionWithin(timeline);
-    pos.x -= press_offset_x;
-    auto current_offset = CurrentOffset(timeline, now);
-    auto time_at_x = time::Defloat(PosRatioFromBridgeOffsetX(pos.x) * timeline.MaxTrackLength());
-    if (auto snapped_time = SnapToTrack(timeline, pos, time_at_x)) {
-      timeline.bridge_wiggle_s += time::ToSeconds(current_offset - *snapped_time);
-      timeline.bridge_snapped = true;
-      time_at_x = *snapped_time;
-    } else if (auto snapped_time = SnapToBottomRuler(timeline, pos, time_at_x)) {
-      timeline.bridge_wiggle_s += time::ToSeconds(current_offset - *snapped_time);
-      timeline.bridge_snapped = true;
-      time_at_x = *snapped_time;
-    } else {
-      if (timeline.bridge_snapped) {
-        timeline.bridge_wiggle_s += time::ToSeconds(current_offset - time_at_x);
-      }
-      timeline.bridge_snapped = false;
-    }
-    SetOffset(timeline, time_at_x, now);
-  }
-};
-
-struct DragTimelineAction : Action {
-  Timeline& timeline;
-  time::Duration initial_bridge_offset;
-  float initial_x;
-  DragTimelineAction(ui::Pointer& pointer, Timeline& timeline)
-      : Action(pointer), timeline(timeline) {
-    Vec2 pos = pointer.PositionWithin(timeline);
-    initial_bridge_offset = CurrentOffset(timeline, pointer.root_widget.timer.now);
-    initial_x = pos.x;
-    timeline.bridge_snapped = false;
-  }
-  ~DragTimelineAction() override { timeline.bridge_snapped = false; }
-  void Update() override {
-    auto now = pointer.root_widget.timer.now;
-    Vec2 pos = pointer.PositionWithin(timeline);
-    float x = pos.x;
-    auto distance_to_seconds = DistanceToSeconds(timeline);  // [s]
-    auto max_track_length = timeline.MaxTrackLength();
-    auto denominator = max_track_length - kRulerLength * distance_to_seconds;  // [s]
-
-    time::FloatDuration scaling_factor;
-    if (abs(denominator) > 0.0001s) {
-      scaling_factor = distance_to_seconds / denominator * max_track_length;
-    } else {
-      scaling_factor = 0s;
-    }
-
-    auto time_at_x = initial_bridge_offset - time::Defloat((x - initial_x) * scaling_factor);
-    auto current_offset = CurrentOffset(timeline, now);
-    if (auto snapped_time = SnapToTrack(timeline, pos, time_at_x, distance_to_seconds)) {
-      time_at_x = *snapped_time;
-      timeline.bridge_wiggle_s += time::ToSeconds(current_offset - *snapped_time);
-      timeline.bridge_snapped = true;
-    } else if (auto snapped_time = SnapToBottomRuler(timeline, pos, time_at_x)) {
-      time_at_x = *snapped_time;
-      timeline.bridge_wiggle_s += time::ToSeconds(current_offset - *snapped_time);
-      timeline.bridge_snapped = true;
-    } else {
-      if (timeline.bridge_snapped) {
-        timeline.bridge_wiggle_s += time::ToSeconds(current_offset - time_at_x);
-      }
-      timeline.bridge_snapped = false;
-    }
-    SetOffset(timeline, time_at_x, now);
-  }
-};
-
 constexpr float kZoomTresholdsS[] = {
     0.001, 0.02, 0.1, 1, 20, 120, 3600,
 };
@@ -934,35 +572,6 @@ static float PreviousZoomTick(float zoom) {
     }
   }
   return zoom - kZoomStepSizeS[kZoomLevelsCount - 1];
-}
-
-struct DragZoomAction : Action {
-  Timeline& timeline;
-  float last_y;
-  DragZoomAction(ui::Pointer& pointer, Timeline& timeline);
-  ~DragZoomAction() override;
-  void Update() override;
-};
-DragZoomAction::DragZoomAction(ui::Pointer& pointer, Timeline& timeline)
-    : Action(pointer), timeline(timeline) {
-  timeline.drag_zoom_action = this;
-  last_y = pointer.PositionWithin(timeline).y;
-}
-DragZoomAction::~DragZoomAction() {
-  timeline.drag_zoom_action = nullptr;
-  timeline.zoom.target = NearestZoomTick(timeline.zoom.target);
-  WakeAnimationResponsively(timeline);
-}
-void DragZoomAction::Update() {
-  float y = pointer.PositionWithin(timeline).y;
-  float delta_y = y - last_y;
-  last_y = y;
-  float factor = expf(delta_y * 60);
-  timeline.zoom.value *= factor;
-  timeline.zoom.target *= factor;
-  timeline.zoom.value = clamp(timeline.zoom.value, 0.001f, 3600.0f);
-  timeline.zoom.target = clamp(timeline.zoom.target, 0.001f, 3600.0f);
-  WakeAnimationResponsively(timeline);
 }
 
 SkPath WindowShape(int num_tracks) {
@@ -1008,57 +617,1151 @@ SkPath WindowShape(int num_tracks) {
   return window.ToPath(true);
 }
 
-SpliceAction::SpliceAction(ui::Pointer& pointer, Timeline& timeline)
-    : Action(pointer),
-      timeline(timeline),
-      resize_icon(pointer, ui::Pointer::kIconResizeHorizontal) {
-  assert(timeline.splice_action == nullptr);
-  timeline.splice_action = this;
-  splice_to = CurrentOffset(timeline, time::SteadyNow());
-  timeline.splice_wiggle.velocity -= 0.1;
-  timeline.WakeAnimation();
-}
-SpliceAction::~SpliceAction() {
-  auto now = time::SteadyNow();
-  timeline.splice_action = nullptr;
-  auto current_offset = CurrentOffset(timeline, now);
+struct TimelineWidget;
 
+struct SideButton : ui::Button {
+  SideButton(TimelineWidget& parent, std::unique_ptr<Widget> child)
+      : Button((Widget*)&parent, std::move(child)) {}
+  TimelineWidget* GetTimelineWidget() { return (TimelineWidget*)(parent.get()); }
+  SkColor ForegroundColor() const override { return "#404040"_color; }
+  SkColor BackgroundColor() const override { return kTimelineButtonBackground; }
+  SkRRect RRect() const override;
+};
+
+struct PrevButton : SideButton {
+  PrevButton(TimelineWidget& parent)
+      : SideButton(parent, MakeShapeWidget(this, kNextShape, SK_ColorWHITE, &kHorizontalFlip)) {}
+  void Activate(ui::Pointer&) override;
+};
+
+struct NextButton : SideButton {
+  NextButton(TimelineWidget& parent)
+      : SideButton(parent, MakeShapeWidget(this, kNextShape, SK_ColorWHITE)) {}
+  void Activate(ui::Pointer&) override;
+};
+
+struct TimelineRunButton : ui::ToggleButton {
+  WeakPtr<Timeline> timeline_weak;
+
+  std::unique_ptr<ui::Button> rec_button;
+  mutable ui::Button* last_on_widget = nullptr;
+
+  TimelineRunButton(Widget* parent, WeakPtr<Timeline> timeline)
+      : ui::ToggleButton(
+            parent,
+            std::make_unique<ColoredButton>(
+                this, GetPausedPath(),
+                ColoredButtonArgs{.fg = kTimelineButtonBackground,
+                                  .bg = kOrange,
+                                  .radius = kPlayButtonRadius,
+                                  .on_click = [this](ui::Pointer& p) { Activate(p); }}),
+            std::make_unique<ColoredButton>(
+                this, kPlayShape,
+                ColoredButtonArgs{.fg = kOrange,
+                                  .bg = kTimelineButtonBackground,
+                                  .radius = kPlayButtonRadius,
+                                  .on_click = [this](ui::Pointer& p) { Activate(p); }})),
+        timeline_weak(std::move(timeline)),
+        rec_button(new ColoredButton(
+            this, GetRecPath(),
+            ColoredButtonArgs{.fg = kTimelineButtonBackground,
+                              .bg = color::kParrotRed,
+                              .radius = kPlayButtonRadius,
+                              .on_click = [this](ui::Pointer& p) { Activate(p); }})) {}
+  ui::Button* OnWidget() override {
+    auto timeline = timeline_weak.Lock();
+    if (timeline) {
+      auto lock = std::lock_guard(timeline->mutex);
+      if (timeline->state == Timeline::kRecording) {
+        last_on_widget = rec_button.get();
+      } else if (timeline->state == Timeline::kPlaying) {
+        last_on_widget = on.get();
+      }
+    }
+    if (last_on_widget == nullptr) {
+      last_on_widget = on.get();
+    }
+    return last_on_widget;
+  }
+  bool Filled() const override {
+    auto timeline = timeline_weak.Lock();
+    if (timeline) {
+      auto lock = std::lock_guard(timeline->mutex);
+      return timeline->IsOn();
+    }
+    return false;
+  }
+  void Activate(ui::Pointer&) {
+    auto timeline = timeline_weak.Lock();
+    if (!timeline) return;
+    auto lock = std::lock_guard(timeline->mutex);
+    switch (timeline->state) {
+      case Timeline::kPlaying:
+        timeline->Cancel();
+        break;
+      case Timeline::kPaused:
+        if (auto h = timeline->here.lock()) {
+          h->ScheduleRun();
+        }
+        break;
+      case Timeline::kRecording:
+        timeline->StopRecording();
+        break;
+    }
+  }
+};
+
+struct DragZoomAction;
+
+struct SpliceAction : Action {
+  TrackedPtr<TimelineWidget> timeline_widget;
+  time::Duration splice_to;
+  bool snapped = false;
+  bool cancel = true;
+  ui::Pointer::IconOverride resize_icon;
+  SpliceAction(ui::Pointer&, TimelineWidget&);
+  ~SpliceAction();
+  void Update() override;
+};
+
+static time::Duration DistanceToSeconds(float zoom) {
+  return time::FromSeconds(zoom / kWindowWidth);
+}
+
+time::Duration Timeline::CurrentOffset(time::SteadyPoint now) const {
+  switch (state) {
+    case Timeline::kPlaying:
+      return now - playing.started_at;
+    case Timeline::kPaused:
+      return paused.playback_offset;
+    case Timeline::kRecording:
+      return now - recording.started_at;
+  }
+}
+
+struct TimelineWidget : Object::FallbackWidget {
+  std::unique_ptr<TimelineRunButton> run_button;
+  std::unique_ptr<PrevButton> prev_button;
+  std::unique_ptr<NextButton> next_button;
+
+  SpliceAction* splice_action = nullptr;
+  DragZoomAction* drag_zoom_action = nullptr;
+
+  Vec<std::unique_ptr<ui::Widget>> track_widgets;
+
+  float zoom = 10;
+  float splice_x = 0;
+  animation::SpringV2<float> splice_wiggle;
+  float bridge_wiggle_s = 0;
+  bool bridge_snapped = false;
+
+  time::Duration max_track_length;     // populated on Tick
+  time::Duration current_offset_raw;   // populated on Tick
+  time::Duration current_offset;       // populated on Tick
+  float current_pos_ratio;             // populated on Tick
+  time::Duration distance_to_seconds;  // populated on Tick
+
+  TimelineWidget(ui::Widget* parent, WeakPtr<Timeline> timeline_weak)
+      : FallbackWidget(parent),
+        run_button(new TimelineRunButton(this, timeline_weak)),
+        prev_button(new PrevButton(*this)),
+        next_button(new NextButton(*this)) {
+    object = std::move(timeline_weak);
+    run_button->local_to_parent = SkM44::Translate(-kPlayButtonRadius, kDisplayMargin);
+    prev_button->local_to_parent =
+        SkM44::Translate(-kPlasticWidth / 2 + kSideButtonMargin, -kSideButtonRadius);
+    next_button->local_to_parent = SkM44::Translate(
+        kPlasticWidth / 2 - kSideButtonMargin - kSideButtonDiameter, -kSideButtonRadius);
+    if (auto timeline = this->LockObject<Timeline>()) {
+      auto lock = std::lock_guard(timeline->mutex);
+      zoom = timeline->zoom;
+    }
+  }
+
+  Optional<time::Duration> SnapToTrack(Timeline& timeline_locked, Vec2 pos,
+                                       time::Duration time_at_x = time::kDurationGuard) const {
+    auto track_index = TrackIndexFromY(pos.y);
+    if (track_index >= 0 && track_index < timeline_locked.tracks.size()) {
+      auto& track = timeline_locked.tracks[track_index];
+      auto& timestamps = track->timestamps;
+      if (time_at_x == time::kDurationGuard) {
+        time_at_x = TimeAtX(pos.x);
+      }
+      auto last = upper_bound(timestamps.begin(), timestamps.end(), time_at_x);
+      int right_i = last - timestamps.begin();
+      auto closest_dist = time::kDurationInfinity;
+      auto closest_t = time::kDurationGuard;
+      if (right_i >= 0 && right_i < timestamps.size()) {
+        auto right_dist = abs(time_at_x - timestamps[right_i]);
+        if (right_dist < closest_dist) {
+          closest_dist = right_dist;
+          closest_t = timestamps[right_i];
+        }
+      }
+      int left_i = right_i - 1;
+      if (left_i >= 0 && left_i < timestamps.size()) {
+        auto left_dist = abs(time_at_x - timestamps[left_i]);
+        if (left_dist < closest_dist) {
+          closest_dist = left_dist;
+          closest_t = timestamps[left_i];
+        }
+      }
+      if (closest_dist < 1_mm * distance_to_seconds) {
+        return closest_t;
+      }
+    }
+    return nullopt;
+  }
+
+  Optional<time::Duration> SnapToBottomRuler(
+      Vec2 pos, time::Duration time_at_x = time::kDurationGuard) const {
+    int num_tracks = track_widgets.size();
+    float window_height = WindowHeight(num_tracks);
+    if (pos.y > -window_height && pos.y < -window_height + kRulerHeight) {
+      double zoom_log = log10(zoom / 200.0);
+      auto tick_duration = time::FloatDuration(pow(10, ceil(zoom_log)));
+      if (time_at_x == time::kDurationGuard) {
+        time_at_x = TimeAtX(pos.x);
+      }
+      if (time_at_x >= 0s && time_at_x < max_track_length) {
+        return time::Defloat(round(time_at_x / tick_duration) * tick_duration);
+      }
+    }
+    return nullopt;
+  }
+
+  time::Duration TimeAtX(float x) const {
+    // Find the time at the center of the timeline
+    auto center_t0 = time::Defloat(kRulerLength * distance_to_seconds) / 2;
+    auto center_t1 = max_track_length - center_t0;
+    auto center_t = center_t0 + time::Defloat((center_t1 - center_t0) * current_pos_ratio);
+    return center_t + time::Defloat(x * distance_to_seconds);
+  }
+
+  float XAtTime(time::Duration t) const {
+    // The original formula came from finding the time when current_pos_ratio was 0 and 1 and
+    // lerp-ing between them.
+    //
+    // Keeping it around for reference since the math may be hard to decipher otherwise.
+    // auto center_t0 = time::Defloat(kRulerLength * distance_to_seconds) / 2;
+    // auto center_t1 = max_track_length - center_t0;
+    // auto center_t = center_t0 + time::Defloat((center_t1 - center_t0) * current_pos_ratio);
+    // return (t - center_t) / time::FloatDuration(distance_to_seconds);
+
+    return (t - max_track_length * current_pos_ratio) / distance_to_seconds +
+           kRulerLength * (current_pos_ratio - 0.5f);
+  }
+
+  void SetPosRatio(Timeline& timeline_locked, float pos_ratio, time::SteadyPoint now) {
+    pos_ratio = clamp(pos_ratio, 0.0f, 1.0f);
+    auto max_track_length = timeline_locked.MaxTrackLength();
+    if (timeline_locked.state == Timeline::kPlaying) {
+      TimelineCancelScheduled(timeline_locked);
+      timeline_locked.playing.started_at = now - time::Defloat(pos_ratio * max_track_length);
+      if (auto h = timeline_locked.here.lock()) {
+        TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
+      }
+      TimelineScheduleNextAfter(timeline_locked, now);
+    } else if (timeline_locked.state == Timeline::kPaused) {
+      timeline_locked.paused.playback_offset = time::Defloat(pos_ratio * max_track_length);
+    }
+    WakeAnimationResponsively(timeline_locked, now);
+  }
+
+  void SetOffset(Timeline& timeline_locked, time::Duration offset, time::SteadyPoint now) {
+    offset = clamp<time::Duration>(offset, 0s, timeline_locked.MaxTrackLength());
+    if (timeline_locked.state == Timeline::kPlaying) {
+      TimelineCancelScheduled(timeline_locked);
+      timeline_locked.playing.started_at = now - time::Duration(offset);
+      if (auto h = timeline_locked.here.lock()) {
+        TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
+      }
+      TimelineScheduleNextAfter(timeline_locked, now);
+    } else if (timeline_locked.state == Timeline::kPaused) {
+      timeline_locked.paused.playback_offset = offset;
+    }
+    WakeAnimationResponsively(timeline_locked, now);
+  }
+
+  void AdjustOffset(Timeline& timeline_locked, time::Duration offset, time::SteadyPoint now) {
+    if (timeline_locked.state == Timeline::kPlaying) {
+      TimelineCancelScheduled(timeline_locked);
+      timeline_locked.playing.started_at -= time::Duration(offset);
+      timeline_locked.playing.started_at = min(timeline_locked.playing.started_at, now);
+      if (auto h = timeline_locked.here.lock()) {
+        TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
+      }
+      TimelineScheduleNextAfter(timeline_locked, now);
+    } else if (timeline_locked.state == Timeline::kPaused) {
+      timeline_locked.paused.playback_offset = clamp<time::Duration>(
+          timeline_locked.paused.playback_offset + offset, 0s, timeline_locked.MaxTrackLength());
+    }
+    WakeAnimationResponsively(timeline_locked, now);
+  }
+
+  void AddMissingTrackWidgets(Timeline& timeline_locked) {
+    auto& tracks = timeline_locked.tracks;
+    for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
+      track_widgets.push_back(tracks[i]->MakeWidget(this));
+    }
+  }
+
+  void PullTimelineState(Timeline& timeline_locked, time::SteadyPoint now) {
+    // update current_offset
+    current_offset_raw = timeline_locked.CurrentOffset(now);
+    current_offset = clamp<time::Duration>(current_offset_raw + time::FromSeconds(bridge_wiggle_s),
+                                           0s, max_track_length);
+    max_track_length = timeline_locked.MaxTrackLength();
+    if (max_track_length == 0s) {
+      current_pos_ratio = 1;
+    } else {
+      current_pos_ratio = current_offset / time::FloatDuration(max_track_length);
+    }
+    distance_to_seconds = DistanceToSeconds(zoom);
+    AddMissingTrackWidgets(timeline_locked);
+    UpdateChildTransform(now);
+  }
+
+  void WakeAnimationResponsively(Timeline& timeline_locked, time::SteadyPoint now) {
+    PullTimelineState(timeline_locked, now);
+    timeline_locked.WakeWidgetsAnimation();  // wakes this & other widgets
+    for (auto& t : track_widgets) {
+      t->WakeAnimation();
+    }
+    // Only the children of the current timeline need to be updated responsively.
+    for (auto& w : track_widgets) {
+      w->RedrawThisFrame();
+    }
+  }
+
+  void UpdateChildTransform(time::SteadyPoint now) {
+    float track_width = max_track_length / time::FloatDuration(distance_to_seconds);
+
+    float track_offset_x0 = kRulerLength / 2;
+    float track_offset_x1 = track_width - kRulerLength / 2;
+
+    float track_offset_x = lerp(track_offset_x0, track_offset_x1, current_pos_ratio);
+
+    for (size_t i = 0; i < track_widgets.size(); ++i) {
+      track_widgets[i]->local_to_parent =
+          SkM44::Translate(-track_offset_x, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
+                                                i * (kTrackMargin + kTrackHeight));
+    }
+  }
+  animation::Phase Tick(time::Timer& timer) override {
+    auto timeline = LockObject<Timeline>();
+    if (!timeline) return animation::Finished;
+    auto lock = std::lock_guard(timeline->mutex);
+
+    auto phase = animation::Finished;
+    if ((timeline->state == Timeline::kPlaying) || (timeline->state == Timeline::kRecording)) {
+      phase |= animation::Animating;
+    }
+    phase |= animation::ExponentialApproach(timeline->zoom, timer.d, 0.1, zoom);
+    phase |= splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
+    if (splice_action) {
+      phase |= animation::Animating;
+      splice_x = XAtTime(splice_action->splice_to) + splice_wiggle.value;
+    }
+    phase |= animation::ExponentialApproach(0, timer.d, 0.05, bridge_wiggle_s);
+
+    if (phase == animation::Animating) {
+      WakeAnimationResponsively(*timeline, timer.now);
+    } else {
+      PullTimelineState(*timeline, timer.now);
+    }
+    return phase;
+  }
+  void Draw(SkCanvas& canvas) const override {
+    int track_count = track_widgets.size();
+    auto wood_case_rrect = WoodenCaseRRect(track_count);
+    SkPath wood_case_path = SkPath::RRect(wood_case_rrect);
+
+    {  // Wooden case, light & shadow
+      canvas.save();
+      canvas.clipRRect(wood_case_rrect, true);
+      canvas.drawPaint(WoodPaint());
+
+      SkPaint outer_shadow;
+      outer_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 1_mm));
+      SkPoint pts[2] = {{0, kPlasticTop + kWoodWidth},
+                        {0, kPlasticTop + kWoodWidth - kWoodenCaseCornerRadius}};
+      SkColor colors[2] = {"#aa6048"_color, "#2d1f1b"_color};
+
+      outer_shadow.setShader(
+          SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp));
+
+      wood_case_path.toggleInverseFillType();
+      canvas.drawPath(wood_case_path, outer_shadow);
+
+      canvas.restore();
+    }
+
+    {  // Inset in the wooden case
+      SkPaint inset_shadow;
+      SkRRect inset_rrect = PlasticRRect(track_count);
+      inset_rrect.outset(0.2_mm, 0.2_mm);
+      inset_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
+      SkPoint pts[2] = {{0, inset_rrect.getBounds().fTop + inset_rrect.getSimpleRadii().y()},
+                        {0, inset_rrect.getBounds().fTop}};
+      SkColor colors[2] = {"#2d1f1b"_color, "#aa6048"_color};
+
+      inset_shadow.setShader(
+          SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp));
+      canvas.drawRRect(inset_rrect, inset_shadow);
+    }
+
+    canvas.drawRRect(PlasticRRect(track_count), kPlasticPaint);
+
+    NumberTextField::DrawBackground(canvas, kDisplayRRect.sk);
+    // canvas.drawRRect(kDisplayRRect.sk, kDisplayPaint);
+
+    constexpr float PI = numbers::pi;
+
+    float current_pos_ratio =
+        max_track_length == 0s ? 1 : current_offset / time::FloatDuration(max_track_length);
+
+    function<Str(time::Duration)> format_time;
+    if (max_track_length > 1h) {
+      format_time = [](time::Duration t) {
+        double t_s = time::ToSeconds(t);
+        t_s = round(t_s * 1000) / 1000;
+        int hours = t_s / 3600;
+        t_s -= hours * 3600;
+        int minutes = t_s / 60;
+        t_s -= minutes * 60;
+        int seconds = t_s;
+        t_s -= seconds;
+        int milliseconds = round(t_s * 1000);
+        return f("{:02d}:{:02d}:{:02d}.{:03d} s", hours, minutes, seconds, milliseconds);
+      };
+    } else if (max_track_length > 1min) {
+      format_time = [](time::Duration t) {
+        double t_s = time::ToSeconds(t);
+        t_s = round(t_s * 1000) / 1000;
+        int minutes = t_s / 60;
+        t_s -= minutes * 60;
+        int seconds = t_s;
+        t_s -= seconds;
+        int milliseconds = round(t_s * 1000);
+        return f("{:02d}:{:02d}.{:03d} s", minutes, seconds, milliseconds);
+      };
+    } else if (max_track_length >= 10s) {
+      format_time = [](time::Duration t) {
+        double t_s = time::ToSeconds(t);
+        t_s = round(t_s * 1000) / 1000;
+        int seconds = t_s;
+        t_s -= seconds;
+        int milliseconds = round(t_s * 1000);
+        return f("{:02d}.{:03d} s", seconds, milliseconds);
+      };
+    } else {
+      format_time = [](time::Duration t) {
+        double t_s = time::ToSeconds(t);
+        t_s = round(t_s * 1000) / 1000;
+        int seconds = t_s;
+        t_s -= seconds;
+        int milliseconds = round(t_s * 1000);
+        return f("{}.{:03d} s", seconds, milliseconds);
+      };
+    }
+
+    Str total_text = format_time(max_track_length);
+    Str current_text = format_time(current_offset);
+    Str remaining_text = format_time(max_track_length - current_offset);
+
+    auto& lcd_font = LcdFont();
+    auto& font = GetFont();
+
+    float left_column_width = lcd_font.MeasureText("Remaining");
+
+    float text_width = left_column_width + 1_mm + font.MeasureText(total_text);
+
+    canvas.save();
+    canvas.translate(-kPlayButtonRadius - kDisplayMargin - kDisplayWidth + 1_mm,
+                     kDisplayMargin + kLetterSize * 2 + 1_mm * 3);
+    canvas.scale((kDisplayWidth - 2_mm) / text_width, 1);
+
+    lcd_font.DrawText(canvas, "Current", kDisplayCurrentPaint);
+
+    canvas.translate(left_column_width + 1_mm, 0);
+    font.DrawText(canvas, current_text, kDisplayCurrentPaint);
+    canvas.translate(-left_column_width - 1_mm, 0);
+
+    canvas.translate(0, -kLetterSize - 1_mm);
+    lcd_font.DrawText(canvas, "Total", kDisplayTotalPaint);
+
+    canvas.translate(left_column_width + 1_mm, 0);
+    font.DrawText(canvas, total_text, kDisplayTotalPaint);
+    canvas.translate(-left_column_width - 1_mm, 0);
+
+    canvas.translate(0, -kLetterSize - 1_mm);
+    lcd_font.DrawText(canvas, "Remaining", kDisplayRemainingPaint);
+
+    canvas.translate(left_column_width + 1_mm, 0);
+    font.DrawText(canvas, remaining_text, kDisplayRemainingPaint);
+    canvas.translate(-left_column_width - 1_mm, 0);
+
+    canvas.restore();
+
+    float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
+
+    ArcLine signal_line = ArcLine({bridge_offset_x, -kRulerHeight}, 90_deg);
+
+    float x_behind_display =
+        -kPlayButtonRadius - kDisplayMargin - kDisplayWidth - kDisplayMargin / 2;
+    auto turn_shift = ArcLine::TurnShift(bridge_offset_x - x_behind_display, kDisplayMargin / 2);
+
+    signal_line.MoveBy(kRulerHeight + kDisplayMargin / 2 - turn_shift.distance_forward / 2);
+    turn_shift.Apply(signal_line);
+    signal_line.MoveBy(kLetterSize * 2 + 1_mm * 3 + kDisplayMargin / 2 -
+                       turn_shift.distance_forward / 2);
+    signal_line.TurnConvex(-90_deg, kDisplayMargin / 2);
+
+    // signal_line.TurnBy(M_PI_2, kDisplayMargin / 2);
+    auto signal_path = signal_line.ToPath(false);
+    canvas.drawPath(signal_path, kSignalPaint);
+
+    float window_height = WindowHeight(track_count);
+    auto window_path = WindowShape(track_count);
+
+    canvas.save();
+    canvas.clipPath(window_path, true);
+
+    // Ruler
+    canvas.drawPaint(kWindowPaint);
+
+    Rect top_bar = Rect(-kWindowWidth / 2, -kRulerHeight, kWindowWidth / 2, 0);
+    canvas.drawRect(top_bar, kRulerPaint);
+
+    float ruler_pixels = canvas.getTotalMatrix().mapRadius(kRulerLength);
+
+    int step;
+    if (ruler_pixels < 20) {
+      step = 10;
+    } else if (ruler_pixels < 200) {
+      step = 5;
+    } else {
+      step = 1;
+    }
+
+    for (int i = 0; i <= 100; i += step) {
+      float x = kRulerLength * i / 100 - kRulerLength / 2;
+      float h;
+      if (i % 10 == 0) {
+        h = kRulerHeight / 2;
+      } else if (i % 5 == 0) {
+        h = kRulerHeight / 3;
+      } else {
+        h = kRulerHeight / 4;
+      }
+      canvas.drawLine(x, -kRulerHeight, x, -kRulerHeight + h, kTickPaint);
+    }
+
+    Rect bottom_bar =
+        Rect(-kWindowWidth / 2, -window_height, kWindowWidth / 2, -window_height + kRulerHeight);
+    canvas.drawRect(bottom_bar, kRulerPaint);
+
+    canvas.drawLine(bridge_offset_x, -kRulerHeight, bridge_offset_x, 0, kSignalPaint);
+
+    // Bottom ticks
+    {
+      float track_width = max_track_length / time::FloatDuration(distance_to_seconds);
+
+      // at time 0 the first tick is at -kRulerWidth / 2
+      // at time 0 the last tick is at -kRulerWidth / 2 + track_width
+      // at time END the first tick is at kRulerWidth / 2 - track_width
+      // at time END the last tick is at kRulerWidth / 2
+
+      float first_tick_x0 = -kRulerLength / 2;
+      float first_tick_x1 = kRulerLength / 2 - track_width;
+
+      float first_tick_x = lerp(first_tick_x0, first_tick_x1, current_pos_ratio);
+      float last_tick_x = first_tick_x + track_width;
+
+      float tick_every_x = 0.1s / time::FloatDuration(distance_to_seconds);
+
+      int first_i = (-kWindowWidth / 2 - first_tick_x) / tick_every_x;
+      first_i = max(0, first_i);
+
+      int last_i = (kWindowWidth / 2 - first_tick_x) / tick_every_x;
+      last_i = min<int>(last_i, (last_tick_x - first_tick_x) / tick_every_x);
+
+      for (int i = first_i; i <= last_i; ++i) {
+        float x = first_tick_x + i * tick_every_x;
+        float h = kRulerHeight / 4;
+        if (i % 10 == 0) {
+          h *= 2;
+        }
+        canvas.drawLine(x, -window_height + kRulerHeight, x, -window_height + kRulerHeight - h,
+                        kTickPaint);
+      }
+    }
+
+    DrawChildrenSpan(canvas,
+                     WidgetPtrSpan(const_cast<Vec<std::unique_ptr<ui::Widget>>&>(track_widgets)));
+
+    bool draw_bridge_hairline = true;
+
+    if (splice_action) {
+      auto rect = Rect(splice_x, -window_height + kRulerHeight + kMarginAroundTracks,
+                       bridge_offset_x, -kRulerHeight - kMarginAroundTracks);
+      if (splice_x < bridge_offset_x) {
+        // deleting
+        SkPaint delete_paint;
+        SkPoint pts[2] = {rect.TopLeftCorner(), rect.TopRightCorner()};
+        constexpr int n = 10;
+        SkColor colors[n] = {};
+        float pos[n] = {};
+        float w = rect.Width();
+        float cx = w / 2;
+        float r = 1_cm;
+        SkColor shadow_color = "#801010"_color;
+        for (int i = 0; i < n; ++i) {
+          float a1 = i / (n - 1.f) * 2;
+          float a2 = (n - 1 - i) / (n - 1.f) * 2;
+          float a = min(a1, a2);
+          colors[i] = SkColorSetA(shadow_color, lerp(255, 128, a));
+          float t = i / (n - 1.f);
+          // Don't try to unterstand this - it doesn't make sense - but looks ok.
+          if (i <= n / 2) {
+            pos[i] = t - (1 - a1) * r / w;
+          } else {
+            pos[i] = t + (1 - a2) * r / w;
+          }
+          pos[i] = clamp<float>(pos[i], 0, 1);
+        }
+        delete_paint.setShader(
+            SkGradientShader::MakeLinear(pts, colors, pos, n, SkTileMode::kClamp));
+        delete_paint.setBlendMode(SkBlendMode::kColorBurn);
+
+        canvas.drawRect(rect, delete_paint);
+
+        canvas.save();
+        canvas.clipRect(rect);
+
+        {  // Draw dust being sucked in
+          auto current_time = time::SecondsSinceEpoch();
+          int n_particles = 10;
+          float particle_lifetime_s = 1;
+
+          auto particle_absolute = current_time * n_particles;
+          for (int i = 0; i < n_particles; ++i) {
+            auto particle_i = floor(particle_absolute) - i;
+            auto particle_start = particle_i / n_particles;
+            auto particle_end = particle_start + particle_lifetime_s;
+            auto particle_a = (current_time - particle_start) / particle_lifetime_s;
+
+            // Fast fade in/out, slow in the middle
+            particle_a = acos(1 - 2 * particle_a) / numbers::pi;
+
+            float y = SeededFloat(rect.top, rect.bottom, particle_i);
+            SkPaint paint;
+            paint.setColor("#ffffff"_color);
+            paint.setAlphaf(lerp(1, 0, particle_a));
+            paint.setStrokeWidth(1_mm);
+            paint.setStyle(SkPaint::kStrokeAndFill_Style);
+            float x0;
+            float x1;
+            if ((uint64_t)particle_i & 1) {
+              x0 = rect.left;
+              x1 = rect.left + particle_a * w / 2;
+            } else {
+              x0 = rect.right;
+              x1 = rect.right - particle_a * w / 2;
+            }
+            canvas.drawLine(x0, y, x1, y, paint);
+          }
+        }
+
+        canvas.restore();
+
+        // Two black vertical lines around the deleted region
+        SkPaint delete_line_paint;
+        delete_line_paint.setStyle(SkPaint::kStroke_Style);
+        delete_line_paint.setStrokeWidth(0.2_mm);
+        canvas.drawLine(rect.TopLeftCorner(), rect.BottomLeftCorner(), delete_line_paint);
+        canvas.drawLine(rect.TopRightCorner(), rect.BottomRightCorner(), delete_line_paint);
+        draw_bridge_hairline = false;
+      } else {
+        // Stretch the right part of the timeline
+        rect.left = bridge_offset_x;
+        rect.right = splice_x;
+        Rect save_rect =
+            Rect(bridge_offset_x, -window_height + kRulerHeight, kWindowWidth / 2, -kRulerHeight);
+        SkPaint stretch_paint;
+        stretch_paint.setImageFilter(SkImageFilters::MatrixTransform(
+            SkMatrix::Translate(splice_x - bridge_offset_x, 0), kDefaultSamplingOptions,
+            SkImageFilters::Crop(save_rect.sk, SkTileMode::kClamp, nullptr)));
+        stretch_paint.setColor("#808080"_color);
+
+        auto rec = SkCanvas::SaveLayerRec(&save_rect.sk, &stretch_paint,
+                                          SkCanvas::kInitWithPrevious_SaveLayerFlag);
+        canvas.save();
+        canvas.clipRect(save_rect);
+        canvas.saveLayer(rec);
+        canvas.restore();
+        canvas.restore();
+
+        SkPaint new_paint;
+        new_paint.setColor("#d1ffd1"_color);
+        new_paint.setAlphaf(0.5);
+        canvas.drawRect(rect, new_paint);
+      }
+    }
+
+    canvas.restore();  // unclip
+
+    // Screws
+    auto DrawScrew = [&](float x, float y) {
+      SkPaint inner_paint;
+      inner_paint.setAntiAlias(true);
+      inner_paint.setStyle(SkPaint::kStroke_Style);
+      inner_paint.setStrokeWidth(0.1_mm);
+      SkPoint pts[2] = {{x, y - kScrewRadius}, {x, y + kScrewRadius}};
+      SkColor colors[2] = {"#615954"_color, "#fbf9f3"_color};
+      auto inner_gradient =
+          SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
+      inner_paint.setShader(inner_gradient);
+
+      SkPaint outer_paint;
+      outer_paint.setAntiAlias(true);
+      outer_paint.setStyle(SkPaint::kStroke_Style);
+      outer_paint.setStrokeWidth(0.1_mm);
+      SkColor outer_colors[2] = {"#fbf9f3"_color, "#615954"_color};
+      auto outer_gradient =
+          SkGradientShader::MakeLinear(pts, outer_colors, nullptr, 2, SkTileMode::kClamp);
+      outer_paint.setShader(outer_gradient);
+
+      canvas.drawCircle(x, y, kScrewRadius - 0.05_mm, inner_paint);
+      canvas.drawCircle(x, y, kScrewRadius + 0.05_mm, outer_paint);
+    };
+
+    DrawScrew(kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
+              -WindowHeight(track_count) - kDisplayMargin + kScrewMargin + kScrewRadius);
+    DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
+              -WindowHeight(track_count) - kDisplayMargin + kScrewMargin + kScrewRadius);
+    DrawScrew(kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
+              kPlasticTop - kScrewMargin - kScrewRadius);
+    DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
+              kPlasticTop - kScrewMargin - kScrewRadius);
+
+    Widget* arr[] = {run_button.get(), prev_button.get(), next_button.get()};
+    DrawChildrenSpan(canvas, arr);
+
+    canvas.save();
+    canvas.clipPath(window_path, true);
+
+    {  // Window shadow
+      SkPaint paint;
+      paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 5_mm));
+      window_path.toggleInverseFillType();
+      canvas.drawPath(window_path, paint);
+    }
+    {  // Bridge
+      float x = BridgeOffsetX(current_pos_ratio);
+      float bottom_y = -(kMarginAroundTracks * 2 + kTrackHeight * track_count +
+                         kTrackMargin * max(0, track_count - 1));
+      if (draw_bridge_hairline) {
+        SkPaint hairline;
+        hairline.setColor(kBridgeLinePaint.getColor());
+        hairline.setStyle(SkPaint::kStroke_Style);
+        hairline.setAntiAlias(true);
+        canvas.drawLine({x, -kRulerHeight}, {x, bottom_y - kRulerHeight}, hairline);
+      }
+
+      auto bridge_shape = BridgeShape(track_count, current_pos_ratio);
+
+      canvas.save();
+
+      canvas.clipPath(bridge_shape);
+      canvas.drawPaint(kBridgeHandlePaint);
+
+      SkPoint pts2[2] = {{x, 0}, {x + 0.4_mm, 0}};
+      SkColor colors2[2] = {"#cb532d"_color, "#809d3312"_color};
+      auto shader2 = SkGradientShader::MakeLinear(pts2, colors2, nullptr, 2, SkTileMode::kMirror);
+      SkPaint wavy_paint;
+      wavy_paint.setShader(shader2);
+      wavy_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.5_mm));
+      Rect wavy_rect = Rect(x - kMinimalTouchableSize / 2, -kRulerHeight - kMarginAroundTracks,
+                            x + kMinimalTouchableSize / 2, -kRulerHeight);
+      wavy_rect = wavy_rect.Outset(-0.5_mm);
+      canvas.drawRect(wavy_rect.sk, wavy_paint);
+
+      SkPaint bridge_stroke_paint;
+      bridge_stroke_paint.setColor("#5d1e0a"_color);
+      bridge_stroke_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
+      bridge_shape.toggleInverseFillType();
+
+      canvas.drawPath(bridge_shape, bridge_stroke_paint);
+
+      canvas.restore();
+    }
+    {  // Splicer
+      canvas.save();
+      const static SkPaint kSplicerPaint = []() {
+        SkPaint paint = kBridgeHandlePaint;
+        // paint.setColor("#5d1e0a"_color);
+        paint.setImageFilter(
+            SkImageFilters::DropShadow(0, 0, 0.2_mm, 0.2_mm, "#000000"_color, nullptr));
+        return paint;
+      }();
+      auto splicer_shape = SplicerShape(track_count, current_pos_ratio);
+      canvas.drawPath(splicer_shape, kSplicerPaint);
+
+      canvas.clipPath(splicer_shape);
+
+      SkPaint splicer_stroke_paint;
+      splicer_stroke_paint.setColor("#5d1e0a"_color);
+      splicer_stroke_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
+      splicer_shape.toggleInverseFillType();
+      canvas.drawPath(splicer_shape, splicer_stroke_paint);
+
+      canvas.restore();
+
+      SkPaint icon_paint;
+      icon_paint.setColor("#ffffff"_color);
+      canvas.save();
+      canvas.translate(bridge_offset_x, -window_height + kRulerHeight);
+      canvas.scale(0.5, 0.5);
+      auto icon = kScissorsIcon;
+      if (splice_action) {
+        if (splice_action->cancel) {
+          icon = kCancelIcon;
+        } else {
+          auto true_splice_x = XAtTime(splice_action->splice_to);
+          if (true_splice_x > bridge_offset_x) {
+            icon = kPlusIcon;
+          } else {
+            icon = kMinusIcon;
+          }
+        }
+      }
+      canvas.drawPath(icon, icon_paint);
+      canvas.restore();
+    }
+    {  // Zoom dial
+
+      auto TickAngle = [](float tick0, float tick1) {
+        return ((tick1 - tick0) / (tick1 + tick0)) * .5f;
+      };
+
+      float nearest_tick = NearestZoomTick(zoom);
+      float next_tick, previous_tick;
+      if (nearest_tick > zoom) {
+        next_tick = nearest_tick;
+        previous_tick = PreviousZoomTick(nearest_tick);
+      } else {
+        next_tick = NextZoomTick(nearest_tick);
+        previous_tick = nearest_tick;
+      }
+      float ratio = (zoom - previous_tick) / (next_tick - previous_tick);
+      float zero_dir = numbers::pi;
+      float angle0 = lerp(0, -TickAngle(previous_tick, next_tick), ratio) + zero_dir;
+
+      auto zoom_center = ZoomDialCenter(window_height);
+      canvas.drawCircle(zoom_center, kZoomRadius, kZoomPaint);
+      canvas.save();
+      float zoom_text_width = lcd_font.MeasureText("ZOOM");
+      Vec2 zoom_text_pos =
+          Vec2::Polar(zero_dir, kZoomRadius - 0.5_mm - kZoomVisible / 2) + zoom_center;
+      canvas.translate(zoom_text_pos.x - zoom_text_width / 2, zoom_text_pos.y);
+      lcd_font.DrawText(canvas, "ZOOM", kZoomTextPaint);
+      canvas.restore();
+
+      Str current_zoom_text;
+      if (zoom < 1) {
+        current_zoom_text = f("{} ms", (int)roundf(zoom * 1000));
+      } else {
+        current_zoom_text = f("{:.1f} s", zoom);
+      }
+      {
+        float text_width = lcd_font.MeasureText(current_zoom_text);
+        canvas.save();
+        canvas.translate(zoom_text_pos.x - text_width / 2, zoom_text_pos.y - kLcdFontSize - 1_mm);
+        lcd_font.DrawText(canvas, current_zoom_text, kZoomTextPaint);
+        canvas.restore();
+      }
+
+      float line_start = kZoomRadius - 1_mm;
+      float line_end = kZoomRadius;
+
+      float angle = angle0;
+      float tick = previous_tick;
+
+      while (tick <= 3600) {
+        Vec2 p0 = Vec2::Polar(angle, line_start) + zoom_center;
+        Vec2 p1 = Vec2::Polar(angle, line_end) + zoom_center;
+        if (p1.y < -window_height || p1.x > kWindowWidth / 2) {
+          break;
+        }
+        canvas.drawLine(p0.x, p0.y, p1.x, p1.y, kZoomTickPaint);
+        float next = NextZoomTick(tick);
+        angle += TickAngle(tick, next);
+        tick = next;
+      }
+      angle = angle0;
+      tick = previous_tick;
+      while (angle >= 0.001) {
+        Vec2 p0 = Vec2::Polar(angle, line_start) + zoom_center;
+        Vec2 p1 = Vec2::Polar(angle, line_end) + zoom_center;
+        if (p1.y < -window_height || p1.x > kWindowWidth / 2) {
+          break;
+        }
+        canvas.drawLine(p0.x, p0.y, p1.x, p1.y, kZoomTickPaint);
+        float prev = PreviousZoomTick(tick);
+        angle -= TickAngle(prev, tick);
+        tick = prev;
+      }
+    }
+
+    canvas.restore();  // unclip
+  }
+  SkPath Shape() const override {
+    auto r = WoodenCaseRRect(track_widgets.size());
+    return SkPath::RRect(r);
+  }
+  void FillChildren(Vec<Widget*>& children) override {
+    children.reserve(3 + track_widgets.size());
+    children.push_back(run_button.get());
+    children.push_back(prev_button.get());
+    children.push_back(next_button.get());
+    children.reserve(children.size() + track_widgets.size());
+    for (auto& track_widget : track_widgets) {
+      children.push_back(track_widget.get());
+    }
+  }
+  std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
+  Vec2AndDir ArgStart(const Argument& arg) override {
+    auto timeline = LockObject<Timeline>();
+    if (timeline) {
+      auto lock = std::lock_guard(timeline->mutex);
+      for (int i = 0; i < timeline->tracks.size(); ++i) {
+        if (timeline->track_args[i].get() == &arg) {
+          return {
+              .pos = {kPlasticWidth / 2, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
+                                             i * (kTrackMargin + kTrackHeight)},
+              .dir = 0_deg,
+          };
+        }
+      }
+    }
+    return Object::FallbackWidget::ArgStart(arg);
+  }
+};
+
+void PrevButton::Activate(ui::Pointer& ptr) {
+  Button::Activate(ptr);
+  if (auto* timeline_widget = GetTimelineWidget()) {
+    if (auto timeline = timeline_widget->LockObject<Timeline>()) {
+      auto lock = std::lock_guard(timeline->mutex);
+      timeline_widget->SetPosRatio(*timeline, 0, ptr.root_widget.timer.now);
+    }
+  }
+}
+
+void NextButton::Activate(ui::Pointer& ptr) {
+  Button::Activate(ptr);
+  if (auto* timeline_widget = GetTimelineWidget()) {
+    if (auto timeline = timeline_widget->LockObject<Timeline>()) {
+      auto lock = std::lock_guard(timeline->mutex);
+      timeline_widget->SetPosRatio(*timeline, 1, ptr.root_widget.timer.now);
+    }
+  }
+}
+
+struct DragBridgeAction : Action {
+  TrackedPtr<TimelineWidget> timeline_widget;
+  float press_offset_x;
+  DragBridgeAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
+      : Action(pointer), timeline_widget(&timeline_widget_ref) {
+    float initial_x = pointer.PositionWithin(timeline_widget_ref).x;
+    float initial_pos_ratio = timeline_widget_ref.current_pos_ratio;
+    float initial_bridge_x = BridgeOffsetX(initial_pos_ratio);
+    press_offset_x = initial_x - initial_bridge_x;
+    timeline_widget_ref.bridge_snapped = false;
+  }
+  ~DragBridgeAction() override {
+    if (timeline_widget) {
+      timeline_widget->bridge_snapped = false;
+    }
+  }
+  void Update() override {
+    if (!timeline_widget) return;
+    auto timeline = timeline_widget->LockObject<Timeline>();
+    if (!timeline) return;
+    auto now = pointer.root_widget.timer.now;
+    Vec2 pos = pointer.PositionWithin(*timeline_widget);
+    pos.x -= press_offset_x;
+    auto current_offset = timeline_widget->current_offset;
+    auto time_at_x =
+        time::Defloat(PosRatioFromBridgeOffsetX(pos.x) * timeline_widget->max_track_length);
+    auto lock = std::lock_guard(timeline->mutex);
+    if (auto snapped_time = timeline_widget->SnapToTrack(*timeline, pos, time_at_x)) {
+      timeline_widget->bridge_wiggle_s = time::ToSeconds(current_offset - *snapped_time);
+      timeline_widget->bridge_snapped = true;
+      time_at_x = *snapped_time;
+    } else if (auto snapped_time = timeline_widget->SnapToBottomRuler(pos, time_at_x)) {
+      timeline_widget->bridge_wiggle_s = time::ToSeconds(current_offset - *snapped_time);
+      timeline_widget->bridge_snapped = true;
+      time_at_x = *snapped_time;
+    } else {
+      if (timeline_widget->bridge_snapped) {
+        timeline_widget->bridge_wiggle_s = time::ToSeconds(current_offset - time_at_x);
+      }
+      timeline_widget->bridge_snapped = false;
+    }
+    timeline_widget->SetOffset(*timeline, time_at_x, now);
+  }
+};
+
+struct DragTimelineAction : Action {
+  TrackedPtr<TimelineWidget> timeline_widget;
+  time::Duration initial_bridge_offset;
+  float initial_x;
+  DragTimelineAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
+      : Action(pointer), timeline_widget(&timeline_widget_ref) {
+    Vec2 pos = pointer.PositionWithin(timeline_widget_ref);
+    initial_bridge_offset = timeline_widget_ref.current_offset;
+    initial_x = pos.x;
+    timeline_widget_ref.bridge_snapped = false;
+  }
+  ~DragTimelineAction() override {
+    if (timeline_widget) {
+      timeline_widget->bridge_snapped = false;
+    }
+  }
+  void Update() override {
+    if (!timeline_widget) return;
+    auto timeline = timeline_widget->LockObject<Timeline>();
+    if (!timeline) return;
+    Vec2 pos = pointer.PositionWithin(*timeline_widget);
+    float x = pos.x;
+    auto distance_to_seconds = timeline_widget->distance_to_seconds;  // [s]
+    auto max_track_length = timeline_widget->max_track_length;
+    auto denominator = max_track_length - kRulerLength * distance_to_seconds;  // [s]
+
+    time::FloatDuration scaling_factor;
+    if (abs(denominator) > 0.0001s) {
+      scaling_factor = distance_to_seconds / denominator * max_track_length;
+    } else {
+      scaling_factor = 0s;
+    }
+
+    auto time_at_x = initial_bridge_offset - time::Defloat((x - initial_x) * scaling_factor);
+    auto current_offset = timeline_widget->current_offset;
+    auto lock = std::lock_guard(timeline->mutex);
+    if (auto snapped_time = timeline_widget->SnapToTrack(*timeline, pos, time_at_x)) {
+      time_at_x = *snapped_time;
+      timeline_widget->bridge_wiggle_s = time::ToSeconds(current_offset - *snapped_time);
+      timeline_widget->bridge_snapped = true;
+    } else if (auto snapped_time = timeline_widget->SnapToBottomRuler(pos, time_at_x)) {
+      time_at_x = *snapped_time;
+      timeline_widget->bridge_wiggle_s = time::ToSeconds(current_offset - *snapped_time);
+      timeline_widget->bridge_snapped = true;
+    } else {
+      if (timeline_widget->bridge_snapped) {
+        timeline_widget->bridge_wiggle_s = time::ToSeconds(current_offset - time_at_x);
+      }
+      timeline_widget->bridge_snapped = false;
+    }
+    timeline_widget->SetOffset(*timeline, time_at_x, pointer.root_widget.timer.now);
+  }
+};
+
+struct DragZoomAction : Action {
+  TrackedPtr<TimelineWidget> timeline_widget;
+  float last_y;
+  DragZoomAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
+      : Action(pointer), timeline_widget(&timeline_widget_ref) {
+    timeline_widget_ref.drag_zoom_action = this;
+    last_y = pointer.PositionWithin(timeline_widget_ref).y;
+  }
+  ~DragZoomAction() override {
+    if (timeline_widget) {
+      timeline_widget->drag_zoom_action = nullptr;
+      auto timeline = timeline_widget->LockObject<Timeline>();
+      if (timeline) {
+        auto lock = std::lock_guard(timeline->mutex);
+        timeline->zoom = NearestZoomTick(timeline->zoom);
+        timeline_widget->WakeAnimationResponsively(*timeline, time::SteadyNow());
+      }
+    }
+  }
+  void Update() override {
+    if (!timeline_widget) return;
+    float y = pointer.PositionWithin(*timeline_widget).y;
+    float delta_y = y - last_y;
+    last_y = y;
+    float factor = expf(delta_y * 60);
+    auto timeline = timeline_widget->LockObject<Timeline>();
+    if (timeline) {
+      timeline->zoom *= factor;
+      timeline_widget->zoom *= factor;
+      timeline->zoom = clamp(timeline->zoom, 0.001f, 3600.0f);
+      timeline_widget->zoom = clamp(timeline_widget->zoom, 0.001f, 3600.0f);
+      timeline_widget->WakeAnimationResponsively(*timeline, pointer.root_widget.timer.now);
+    }
+  }
+};
+
+SpliceAction::SpliceAction(ui::Pointer& pointer, TimelineWidget& timeline_widget_ref)
+    : Action(pointer),
+      timeline_widget(&timeline_widget_ref),
+      resize_icon(pointer, ui::Pointer::kIconResizeHorizontal) {
+  assert(timeline_widget_ref.splice_action == nullptr);
+  timeline_widget_ref.splice_action = this;
+  splice_to = timeline_widget_ref.current_offset;
+  timeline_widget_ref.splice_wiggle.velocity -= 0.1;
+  timeline_widget_ref.WakeAnimation();
+}
+
+SpliceAction::~SpliceAction() {
+  if (!timeline_widget) return;
+  timeline_widget->splice_action = nullptr;
   if (!cancel) {
     // Delete stuff between splice_to and current_offset
-    int num_tracks = timeline.tracks.size();
-    for (int i = 0; i < num_tracks; ++i) {
-      auto& track = timeline.tracks[i];
-      track->Splice(current_offset, splice_to);
+    auto current_offset = timeline_widget->current_offset;
+    auto now = time::SteadyNow();
+    auto timeline = timeline_widget->LockObject<Timeline>();
+    if (timeline) {
+      int num_tracks = timeline->tracks.size();
+      for (int i = 0; i < num_tracks; ++i) {
+        auto& track = timeline->tracks[i];
+        track->Splice(current_offset, splice_to);
+      }
+      timeline->timeline_length += splice_to - current_offset;
+      timeline_widget->AdjustOffset(*timeline, splice_to - current_offset, now);
     }
-    timeline.timeline_length += splice_to - current_offset;
-    AdjustOffset(timeline, splice_to - current_offset, now);
   }
-  WakeAnimationResponsively(timeline);
 }
 
 void SpliceAction::Update() {
-  auto pos = pointer.PositionWithin(timeline);
-  int num_tracks = timeline.tracks.size();
-  float current_pos_ratio = CurrentPosRatio(timeline);
+  if (!timeline_widget) return;
+  auto pos = pointer.PositionWithin(*timeline_widget);
+  int num_tracks = timeline_widget->track_widgets.size();
+  float current_pos_ratio = timeline_widget->current_pos_ratio;
   float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
   time::Duration new_splice_to;
   bool new_snapped = false;
   if (SplicerShape(num_tracks, current_pos_ratio).contains(pos.x, pos.y)) {
-    new_splice_to = TimeAtX(timeline, bridge_offset_x);
+    new_splice_to = timeline_widget->TimeAtX(bridge_offset_x);
     new_snapped = true;
     cancel = true;
   } else {
     cancel = false;
 
-    new_splice_to = TimeAtX(timeline, pos.x);
-    LOG << "new_splice_to: " << time::ToSeconds(new_splice_to);
+    new_splice_to = timeline_widget->TimeAtX(pos.x);
     if (pos.x < bridge_offset_x) {
-      if (auto snapped_time = SnapToTrack(timeline, pos, new_splice_to)) {
-        new_splice_to = *snapped_time;
-        new_snapped = true;
+      if (auto timeline = timeline_widget->LockObject<Timeline>()) {
+        auto lock = std::lock_guard(timeline->mutex);
+        if (auto snapped_time = timeline_widget->SnapToTrack(*timeline, pos, new_splice_to)) {
+          new_splice_to = *snapped_time;
+          new_snapped = true;
+        }
       }
     }
-    if (auto snapped_time = SnapToBottomRuler(timeline, pos)) {
+    if (auto snapped_time = timeline_widget->SnapToBottomRuler(pos)) {
       new_splice_to = *snapped_time;
       new_snapped = true;
     }
@@ -1066,18 +1769,17 @@ void SpliceAction::Update() {
   }
 
   if (new_snapped || snapped) {
-    time::FloatDuration distance_to_seconds = DistanceToSeconds(timeline);
-    timeline.splice_wiggle.value += (splice_to - new_splice_to) / distance_to_seconds;
+    time::FloatDuration distance_to_seconds = timeline_widget->distance_to_seconds;
+    timeline_widget->splice_wiggle.value += (splice_to - new_splice_to) / distance_to_seconds;
   }
   snapped = new_snapped;
   splice_to = new_splice_to;
-  timeline.WakeAnimation();
+  timeline_widget->WakeAnimation();
 }
 
-unique_ptr<Action> Timeline::FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) {
+std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
-    float current_pos_ratio = CurrentPosRatio(*this);
-    int n = tracks.size();
+    int n = track_widgets.size();
     auto splicer_shape = SplicerShape(n, current_pos_ratio);
     auto bridge_shape = BridgeShape(n, current_pos_ratio);
     auto window_shape = WindowShape(n);
@@ -1094,591 +1796,19 @@ unique_ptr<Action> Timeline::FindAction(ui::Pointer& ptr, ui::ActionTrigger btn)
           return make_unique<DragTimelineAction>(ptr, *this);
         }
       } else {
-        SetPosRatio(*this, PosRatioFromBridgeOffsetX(pos.x), ptr.root_widget.timer.now);
-        return make_unique<DragBridgeAction>(ptr, *this);
+        if (auto timeline = LockObject<Timeline>()) {
+          auto lock = std::lock_guard(timeline->mutex);
+          SetPosRatio(*timeline, PosRatioFromBridgeOffsetX(pos.x), ptr.root_widget.timer.now);
+          return make_unique<DragBridgeAction>(ptr, *this);
+        }
       }
     }
   }
   return Object::FallbackWidget::FindAction(ptr, btn);
 }
 
-animation::Phase Timeline::Tick(time::Timer& timer) {
-  auto phase = animation::Finished;
-  if (state == kPlaying) {
-    playing.now = time::SteadyNow();
-    phase |= animation::Animating;
-  } else if (state == kRecording) {
-    recording.now = time::SteadyNow();
-    phase |= animation::Animating;
-  }
-  phase |= zoom.Tick(timer);
-  if (splice_action) {
-    phase |= animation::Animating;
-  }
-  phase |= splice_wiggle.SpringTowards(0, timer.d, 0.3, 0.1);
-  phase |= animation::ExponentialApproach(0, timer.d, 0.05, bridge_wiggle_s);
-  UpdateChildTransform(timer.now);
-  if (phase == animation::Animating) {
-    WakeAnimationResponsively(*this);
-  }
-  return phase;
-}
-
-void Timeline::Draw(SkCanvas& canvas) const {
-  auto wood_case_rrect = WoodenCaseRRect(*this);
-  SkPath wood_case_path = SkPath::RRect(wood_case_rrect);
-
-  {  // Wooden case, light & shadow
-    canvas.save();
-    canvas.clipRRect(wood_case_rrect, true);
-    canvas.drawPaint(WoodPaint());
-
-    SkPaint outer_shadow;
-    outer_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, 1_mm));
-    SkPoint pts[2] = {{0, kPlasticTop + kWoodWidth},
-                      {0, kPlasticTop + kWoodWidth - kWoodenCaseCornerRadius}};
-    SkColor colors[2] = {"#aa6048"_color, "#2d1f1b"_color};
-
-    outer_shadow.setShader(
-        SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp));
-
-    wood_case_path.toggleInverseFillType();
-    canvas.drawPath(wood_case_path, outer_shadow);
-
-    canvas.restore();
-  }
-
-  {  // Inset in the wooden case
-    SkPaint inset_shadow;
-    SkRRect inset_rrect = PlasticRRect(*this);
-    inset_rrect.outset(0.2_mm, 0.2_mm);
-    inset_shadow.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
-    SkPoint pts[2] = {{0, inset_rrect.getBounds().fTop + inset_rrect.getSimpleRadii().y()},
-                      {0, inset_rrect.getBounds().fTop}};
-    SkColor colors[2] = {"#2d1f1b"_color, "#aa6048"_color};
-
-    inset_shadow.setShader(
-        SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp));
-    canvas.drawRRect(inset_rrect, inset_shadow);
-  }
-
-  canvas.drawRRect(PlasticRRect(*this), kPlasticPaint);
-
-  NumberTextField::DrawBackground(canvas, kDisplayRRect.sk);
-  // canvas.drawRRect(kDisplayRRect.sk, kDisplayPaint);
-
-  constexpr float PI = numbers::pi;
-
-  auto max_track_length = MaxTrackLength();
-  auto current_offset = clamp<time::Duration>(
-      CurrentOffset(*this, time::SteadyNow()) + time::FromSeconds(bridge_wiggle_s), 0s,
-      max_track_length);
-  float current_pos_ratio =
-      max_track_length == 0s ? 1 : current_offset / time::FloatDuration(max_track_length);
-
-  function<Str(time::Duration)> format_time;
-  if (max_track_length > 1h) {
-    format_time = [](time::Duration t) {
-      double t_s = time::ToSeconds(t);
-      t_s = round(t_s * 1000) / 1000;
-      int hours = t_s / 3600;
-      t_s -= hours * 3600;
-      int minutes = t_s / 60;
-      t_s -= minutes * 60;
-      int seconds = t_s;
-      t_s -= seconds;
-      int milliseconds = round(t_s * 1000);
-      return f("{:02d}:{:02d}:{:02d}.{:03d} s", hours, minutes, seconds, milliseconds);
-    };
-  } else if (max_track_length > 1min) {
-    format_time = [](time::Duration t) {
-      double t_s = time::ToSeconds(t);
-      t_s = round(t_s * 1000) / 1000;
-      int minutes = t_s / 60;
-      t_s -= minutes * 60;
-      int seconds = t_s;
-      t_s -= seconds;
-      int milliseconds = round(t_s * 1000);
-      return f("{:02d}:{:02d}.{:03d} s", minutes, seconds, milliseconds);
-    };
-  } else if (max_track_length >= 10s) {
-    format_time = [](time::Duration t) {
-      double t_s = time::ToSeconds(t);
-      t_s = round(t_s * 1000) / 1000;
-      int seconds = t_s;
-      t_s -= seconds;
-      int milliseconds = round(t_s * 1000);
-      return f("{:02d}.{:03d} s", seconds, milliseconds);
-    };
-  } else {
-    format_time = [](time::Duration t) {
-      double t_s = time::ToSeconds(t);
-      t_s = round(t_s * 1000) / 1000;
-      int seconds = t_s;
-      t_s -= seconds;
-      int milliseconds = round(t_s * 1000);
-      return f("{}.{:03d} s", seconds, milliseconds);
-    };
-  }
-
-  Str total_text = format_time(max_track_length);
-  Str current_text = format_time(current_offset);
-  Str remaining_text = format_time(max_track_length - current_offset);
-
-  auto& lcd_font = LcdFont();
-  auto& font = GetFont();
-
-  float left_column_width = lcd_font.MeasureText("Remaining");
-
-  float text_width = left_column_width + 1_mm + font.MeasureText(total_text);
-
-  canvas.save();
-  canvas.translate(-kPlayButtonRadius - kDisplayMargin - kDisplayWidth + 1_mm,
-                   kDisplayMargin + kLetterSize * 2 + 1_mm * 3);
-  canvas.scale((kDisplayWidth - 2_mm) / text_width, 1);
-
-  lcd_font.DrawText(canvas, "Current", kDisplayCurrentPaint);
-
-  canvas.translate(left_column_width + 1_mm, 0);
-  font.DrawText(canvas, current_text, kDisplayCurrentPaint);
-  canvas.translate(-left_column_width - 1_mm, 0);
-
-  canvas.translate(0, -kLetterSize - 1_mm);
-  lcd_font.DrawText(canvas, "Total", kDisplayTotalPaint);
-
-  canvas.translate(left_column_width + 1_mm, 0);
-  font.DrawText(canvas, total_text, kDisplayTotalPaint);
-  canvas.translate(-left_column_width - 1_mm, 0);
-
-  canvas.translate(0, -kLetterSize - 1_mm);
-  lcd_font.DrawText(canvas, "Remaining", kDisplayRemainingPaint);
-
-  canvas.translate(left_column_width + 1_mm, 0);
-  font.DrawText(canvas, remaining_text, kDisplayRemainingPaint);
-  canvas.translate(-left_column_width - 1_mm, 0);
-
-  canvas.restore();
-
-  float bridge_offset_x = BridgeOffsetX(current_pos_ratio);
-
-  ArcLine signal_line = ArcLine({bridge_offset_x, -kRulerHeight}, 90_deg);
-
-  float x_behind_display = -kPlayButtonRadius - kDisplayMargin - kDisplayWidth - kDisplayMargin / 2;
-  auto turn_shift = ArcLine::TurnShift(bridge_offset_x - x_behind_display, kDisplayMargin / 2);
-
-  signal_line.MoveBy(kRulerHeight + kDisplayMargin / 2 - turn_shift.distance_forward / 2);
-  turn_shift.Apply(signal_line);
-  signal_line.MoveBy(kLetterSize * 2 + 1_mm * 3 + kDisplayMargin / 2 -
-                     turn_shift.distance_forward / 2);
-  signal_line.TurnConvex(-90_deg, kDisplayMargin / 2);
-
-  // signal_line.TurnBy(M_PI_2, kDisplayMargin / 2);
-  auto signal_path = signal_line.ToPath(false);
-  canvas.drawPath(signal_path, kSignalPaint);
-
-  float window_height = WindowHeight(tracks.size());
-
-  auto window_path = WindowShape(tracks.size());
-
-  canvas.save();
-  canvas.clipPath(window_path, true);
-
-  // Ruler
-  canvas.drawPaint(kWindowPaint);
-
-  Rect top_bar = Rect(-kWindowWidth / 2, -kRulerHeight, kWindowWidth / 2, 0);
-  canvas.drawRect(top_bar, kRulerPaint);
-
-  float ruler_pixels = canvas.getTotalMatrix().mapRadius(kRulerLength);
-
-  int step;
-  if (ruler_pixels < 20) {
-    step = 10;
-  } else if (ruler_pixels < 200) {
-    step = 5;
-  } else {
-    step = 1;
-  }
-
-  for (int i = 0; i <= 100; i += step) {
-    float x = kRulerLength * i / 100 - kRulerLength / 2;
-    float h;
-    if (i % 10 == 0) {
-      h = kRulerHeight / 2;
-    } else if (i % 5 == 0) {
-      h = kRulerHeight / 3;
-    } else {
-      h = kRulerHeight / 4;
-    }
-    canvas.drawLine(x, -kRulerHeight, x, -kRulerHeight + h, kTickPaint);
-  }
-
-  Rect bottom_bar =
-      Rect(-kWindowWidth / 2, -window_height, kWindowWidth / 2, -window_height + kRulerHeight);
-  canvas.drawRect(bottom_bar, kRulerPaint);
-
-  canvas.drawLine(bridge_offset_x, -kRulerHeight, bridge_offset_x, 0, kSignalPaint);
-
-  // Bottom ticks
-  {
-    auto distance_to_seconds = DistanceToSeconds(*this);
-    float track_width = MaxTrackLength() / time::FloatDuration(distance_to_seconds);
-
-    // at time 0 the first tick is at -kRulerWidth / 2
-    // at time 0 the last tick is at -kRulerWidth / 2 + track_width
-    // at time END the first tick is at kRulerWidth / 2 - track_width
-    // at time END the last tick is at kRulerWidth / 2
-
-    float first_tick_x0 = -kRulerLength / 2;
-    float first_tick_x1 = kRulerLength / 2 - track_width;
-
-    float first_tick_x = lerp(first_tick_x0, first_tick_x1, current_pos_ratio);
-    float last_tick_x = first_tick_x + track_width;
-
-    float tick_every_x = 0.1s / time::FloatDuration(distance_to_seconds);
-
-    int first_i = (-kWindowWidth / 2 - first_tick_x) / tick_every_x;
-    first_i = max(0, first_i);
-
-    int last_i = (kWindowWidth / 2 - first_tick_x) / tick_every_x;
-    last_i = min<int>(last_i, (last_tick_x - first_tick_x) / tick_every_x);
-
-    for (int i = first_i; i <= last_i; ++i) {
-      float x = first_tick_x + i * tick_every_x;
-      float h = kRulerHeight / 4;
-      if (i % 10 == 0) {
-        h *= 2;
-      }
-      canvas.drawLine(x, -window_height + kRulerHeight, x, -window_height + kRulerHeight - h,
-                      kTickPaint);
-    }
-  }
-
-  AddMissingTrackWidgets(const_cast<Timeline&>(*this));
-
-  DrawChildrenSpan(canvas, WidgetPtrSpan(track_widgets));
-
-  bool draw_bridge_hairline = true;
-
-  if (splice_action) {
-    float splice_x = XAtTime(*this, splice_action->splice_to) + splice_wiggle.value;
-    LOG << "splice_x: " << ToStrMetric(splice_x);
-
-    auto rect = Rect(splice_x, -window_height + kRulerHeight + kMarginAroundTracks, bridge_offset_x,
-                     -kRulerHeight - kMarginAroundTracks);
-    if (splice_x < bridge_offset_x) {
-      // deleting
-      SkPaint delete_paint;
-      SkPoint pts[2] = {rect.TopLeftCorner(), rect.TopRightCorner()};
-      constexpr int n = 10;
-      SkColor colors[n] = {};
-      float pos[n] = {};
-      float w = rect.Width();
-      float cx = w / 2;
-      float r = 1_cm;
-      SkColor shadow_color = "#801010"_color;
-      for (int i = 0; i < n; ++i) {
-        float a1 = i / (n - 1.f) * 2;
-        float a2 = (n - 1 - i) / (n - 1.f) * 2;
-        float a = min(a1, a2);
-        colors[i] = SkColorSetA(shadow_color, lerp(255, 128, a));
-        float t = i / (n - 1.f);
-        // Don't try to unterstand this - it doesn't make sense - but looks ok.
-        if (i <= n / 2) {
-          pos[i] = t - (1 - a1) * r / w;
-        } else {
-          pos[i] = t + (1 - a2) * r / w;
-        }
-        pos[i] = clamp<float>(pos[i], 0, 1);
-      }
-      delete_paint.setShader(SkGradientShader::MakeLinear(pts, colors, pos, n, SkTileMode::kClamp));
-      delete_paint.setBlendMode(SkBlendMode::kColorBurn);
-
-      canvas.drawRect(rect, delete_paint);
-
-      canvas.save();
-      canvas.clipRect(rect);
-
-      {  // Draw dust being sucked in
-        auto current_time = time::SecondsSinceEpoch();
-        int n_particles = 10;
-        float particle_lifetime_s = 1;
-
-        auto particle_absolute = current_time * n_particles;
-        for (int i = 0; i < n_particles; ++i) {
-          auto particle_i = floor(particle_absolute) - i;
-          auto particle_start = particle_i / n_particles;
-          auto particle_end = particle_start + particle_lifetime_s;
-          auto particle_a = (current_time - particle_start) / particle_lifetime_s;
-
-          // Fast fade in/out, slow in the middle
-          particle_a = acos(1 - 2 * particle_a) / numbers::pi;
-
-          float y = SeededFloat(rect.top, rect.bottom, particle_i);
-          SkPaint paint;
-          paint.setColor("#ffffff"_color);
-          paint.setAlphaf(lerp(1, 0, particle_a));
-          paint.setStrokeWidth(1_mm);
-          paint.setStyle(SkPaint::kStrokeAndFill_Style);
-          float x0;
-          float x1;
-          if ((uint64_t)particle_i & 1) {
-            x0 = rect.left;
-            x1 = rect.left + particle_a * w / 2;
-          } else {
-            x0 = rect.right;
-            x1 = rect.right - particle_a * w / 2;
-          }
-          canvas.drawLine(x0, y, x1, y, paint);
-        }
-      }
-
-      canvas.restore();
-
-      // Two black vertical lines around the deleted region
-      SkPaint delete_line_paint;
-      delete_line_paint.setStyle(SkPaint::kStroke_Style);
-      delete_line_paint.setStrokeWidth(0.2_mm);
-      canvas.drawLine(rect.TopLeftCorner(), rect.BottomLeftCorner(), delete_line_paint);
-      canvas.drawLine(rect.TopRightCorner(), rect.BottomRightCorner(), delete_line_paint);
-      draw_bridge_hairline = false;
-    } else {
-      // Stretch the right part of the timeline
-      rect.left = bridge_offset_x;
-      rect.right = splice_x;
-      Rect save_rect =
-          Rect(bridge_offset_x, -window_height + kRulerHeight, kWindowWidth / 2, -kRulerHeight);
-      SkPaint stretch_paint;
-      stretch_paint.setImageFilter(SkImageFilters::MatrixTransform(
-          SkMatrix::Translate(splice_x - bridge_offset_x, 0), kDefaultSamplingOptions,
-          SkImageFilters::Crop(save_rect.sk, SkTileMode::kClamp, nullptr)));
-      stretch_paint.setColor("#808080"_color);
-
-      auto rec = SkCanvas::SaveLayerRec(&save_rect.sk, &stretch_paint,
-                                        SkCanvas::kInitWithPrevious_SaveLayerFlag);
-      canvas.save();
-      canvas.clipRect(save_rect);
-      canvas.saveLayer(rec);
-      canvas.restore();
-      canvas.restore();
-
-      SkPaint new_paint;
-      new_paint.setColor("#d1ffd1"_color);
-      new_paint.setAlphaf(0.5);
-      canvas.drawRect(rect, new_paint);
-    }
-  }
-
-  canvas.restore();  // unclip
-
-  // Screws
-  auto DrawScrew = [&](float x, float y) {
-    SkPaint inner_paint;
-    inner_paint.setAntiAlias(true);
-    inner_paint.setStyle(SkPaint::kStroke_Style);
-    inner_paint.setStrokeWidth(0.1_mm);
-    SkPoint pts[2] = {{x, y - kScrewRadius}, {x, y + kScrewRadius}};
-    SkColor colors[2] = {"#615954"_color, "#fbf9f3"_color};
-    auto inner_gradient = SkGradientShader::MakeLinear(pts, colors, nullptr, 2, SkTileMode::kClamp);
-    inner_paint.setShader(inner_gradient);
-
-    SkPaint outer_paint;
-    outer_paint.setAntiAlias(true);
-    outer_paint.setStyle(SkPaint::kStroke_Style);
-    outer_paint.setStrokeWidth(0.1_mm);
-    SkColor outer_colors[2] = {"#fbf9f3"_color, "#615954"_color};
-    auto outer_gradient =
-        SkGradientShader::MakeLinear(pts, outer_colors, nullptr, 2, SkTileMode::kClamp);
-    outer_paint.setShader(outer_gradient);
-
-    canvas.drawCircle(x, y, kScrewRadius - 0.05_mm, inner_paint);
-    canvas.drawCircle(x, y, kScrewRadius + 0.05_mm, outer_paint);
-  };
-
-  DrawScrew(kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
-            -WindowHeight(tracks.size()) - kDisplayMargin + kScrewMargin + kScrewRadius);
-  DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
-            -WindowHeight(tracks.size()) - kDisplayMargin + kScrewMargin + kScrewRadius);
-  DrawScrew(kPlasticWidth / 2 - kScrewMargin - kScrewRadius,
-            kPlasticTop - kScrewMargin - kScrewRadius);
-  DrawScrew(-kPlasticWidth / 2 + kScrewMargin + kScrewRadius,
-            kPlasticTop - kScrewMargin - kScrewRadius);
-
-  Widget* arr[] = {run_button.get(), prev_button.get(), next_button.get()};
-  DrawChildrenSpan(canvas, arr);
-
-  canvas.save();
-  canvas.clipPath(window_path, true);
-
-  {  // Window shadow
-    SkPaint paint;
-    paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 5_mm));
-    window_path.toggleInverseFillType();
-    canvas.drawPath(window_path, paint);
-  }
-  {  // Bridge
-    float x = BridgeOffsetX(current_pos_ratio);
-    float bottom_y = -(kMarginAroundTracks * 2 + kTrackHeight * tracks.size() +
-                       kTrackMargin * max(0, (int)tracks.size() - 1));
-    if (draw_bridge_hairline) {
-      SkPaint hairline;
-      hairline.setColor(kBridgeLinePaint.getColor());
-      hairline.setStyle(SkPaint::kStroke_Style);
-      hairline.setAntiAlias(true);
-      canvas.drawLine({x, -kRulerHeight}, {x, bottom_y - kRulerHeight}, hairline);
-    }
-
-    auto bridge_shape = BridgeShape(tracks.size(), current_pos_ratio);
-
-    canvas.save();
-
-    canvas.clipPath(bridge_shape);
-    canvas.drawPaint(kBridgeHandlePaint);
-
-    SkPoint pts2[2] = {{x, 0}, {x + 0.4_mm, 0}};
-    SkColor colors2[2] = {"#cb532d"_color, "#809d3312"_color};
-    auto shader2 = SkGradientShader::MakeLinear(pts2, colors2, nullptr, 2, SkTileMode::kMirror);
-    SkPaint wavy_paint;
-    wavy_paint.setShader(shader2);
-    wavy_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.5_mm));
-    Rect wavy_rect = Rect(x - kMinimalTouchableSize / 2, -kRulerHeight - kMarginAroundTracks,
-                          x + kMinimalTouchableSize / 2, -kRulerHeight);
-    wavy_rect = wavy_rect.Outset(-0.5_mm);
-    canvas.drawRect(wavy_rect.sk, wavy_paint);
-
-    SkPaint bridge_stroke_paint;
-    bridge_stroke_paint.setColor("#5d1e0a"_color);
-    bridge_stroke_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
-    bridge_shape.toggleInverseFillType();
-
-    canvas.drawPath(bridge_shape, bridge_stroke_paint);
-
-    canvas.restore();
-  }
-  {  // Splicer
-    canvas.save();
-    const static SkPaint kSplicerPaint = []() {
-      SkPaint paint = kBridgeHandlePaint;
-      // paint.setColor("#5d1e0a"_color);
-      paint.setImageFilter(
-          SkImageFilters::DropShadow(0, 0, 0.2_mm, 0.2_mm, "#000000"_color, nullptr));
-      return paint;
-    }();
-    auto splicer_shape = SplicerShape(tracks.size(), current_pos_ratio);
-    canvas.drawPath(splicer_shape, kSplicerPaint);
-
-    canvas.clipPath(splicer_shape);
-
-    SkPaint splicer_stroke_paint;
-    splicer_stroke_paint.setColor("#5d1e0a"_color);
-    splicer_stroke_paint.setMaskFilter(SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, 0.2_mm));
-    splicer_shape.toggleInverseFillType();
-    canvas.drawPath(splicer_shape, splicer_stroke_paint);
-
-    canvas.restore();
-
-    SkPaint icon_paint;
-    icon_paint.setColor("#ffffff"_color);
-    canvas.save();
-    canvas.translate(bridge_offset_x, -window_height + kRulerHeight);
-    canvas.scale(0.5, 0.5);
-    auto icon = kScissorsIcon;
-    if (splice_action) {
-      if (splice_action->cancel) {
-        icon = kCancelIcon;
-      } else {
-        auto true_splice_x = XAtTime(*this, splice_action->splice_to);
-        if (true_splice_x > bridge_offset_x) {
-          icon = kPlusIcon;
-        } else {
-          icon = kMinusIcon;
-        }
-      }
-    }
-    canvas.drawPath(icon, icon_paint);
-    canvas.restore();
-  }
-  {  // Zoom dial
-
-    auto TickAngle = [](float tick0, float tick1) {
-      return ((tick1 - tick0) / (tick1 + tick0)) * .5f;
-    };
-
-    float nearest_tick = NearestZoomTick(zoom.value);
-    float next_tick, previous_tick;
-    if (nearest_tick > zoom.value) {
-      next_tick = nearest_tick;
-      previous_tick = PreviousZoomTick(nearest_tick);
-    } else {
-      next_tick = NextZoomTick(nearest_tick);
-      previous_tick = nearest_tick;
-    }
-    float ratio = (zoom.value - previous_tick) / (next_tick - previous_tick);
-    float zero_dir = numbers::pi;
-    float angle0 = lerp(0, -TickAngle(previous_tick, next_tick), ratio) + zero_dir;
-
-    auto zoom_center = ZoomDialCenter(window_height);
-    canvas.drawCircle(zoom_center, kZoomRadius, kZoomPaint);
-    canvas.save();
-    float zoom_text_width = lcd_font.MeasureText("ZOOM");
-    Vec2 zoom_text_pos =
-        Vec2::Polar(zero_dir, kZoomRadius - 0.5_mm - kZoomVisible / 2) + zoom_center;
-    canvas.translate(zoom_text_pos.x - zoom_text_width / 2, zoom_text_pos.y);
-    lcd_font.DrawText(canvas, "ZOOM", kZoomTextPaint);
-    canvas.restore();
-
-    Str current_zoom_text;
-    if (zoom < 1) {
-      current_zoom_text = f("{} ms", (int)roundf(zoom.value * 1000));
-    } else {
-      current_zoom_text = f("{:.1f} s", zoom.value);
-    }
-    {
-      float text_width = lcd_font.MeasureText(current_zoom_text);
-      canvas.save();
-      canvas.translate(zoom_text_pos.x - text_width / 2, zoom_text_pos.y - kLcdFontSize - 1_mm);
-      lcd_font.DrawText(canvas, current_zoom_text, kZoomTextPaint);
-      canvas.restore();
-    }
-
-    float line_start = kZoomRadius - 1_mm;
-    float line_end = kZoomRadius;
-
-    float angle = angle0;
-    float tick = previous_tick;
-
-    while (tick <= 3600) {
-      Vec2 p0 = Vec2::Polar(angle, line_start) + zoom_center;
-      Vec2 p1 = Vec2::Polar(angle, line_end) + zoom_center;
-      if (p1.y < -window_height || p1.x > kWindowWidth / 2) {
-        break;
-      }
-      canvas.drawLine(p0.x, p0.y, p1.x, p1.y, kZoomTickPaint);
-      float next = NextZoomTick(tick);
-      angle += TickAngle(tick, next);
-      tick = next;
-    }
-    angle = angle0;
-    tick = previous_tick;
-    while (angle >= 0.001) {
-      Vec2 p0 = Vec2::Polar(angle, line_start) + zoom_center;
-      Vec2 p1 = Vec2::Polar(angle, line_end) + zoom_center;
-      if (p1.y < -window_height || p1.x > kWindowWidth / 2) {
-        break;
-      }
-      canvas.drawLine(p0.x, p0.y, p1.x, p1.y, kZoomTickPaint);
-      float prev = PreviousZoomTick(tick);
-      angle -= TickAngle(prev, tick);
-      tick = prev;
-    }
-  }
-
-  canvas.restore();  // unclip
-}
-
-SkPath Timeline::Shape() const {
-  auto r = WoodenCaseRRect(*this);
-  return SkPath::RRect(r);
+std::unique_ptr<ui::Widget> Timeline::MakeWidget(ui::Widget* parent) {
+  return std::make_unique<TimelineWidget>(parent, this);
 }
 
 void Timeline::Args(function<void(Argument&)> cb) {
@@ -1686,54 +1816,6 @@ void Timeline::Args(function<void(Argument&)> cb) {
     cb(*track_arg);
   }
   cb(next_arg);
-}
-
-Vec2AndDir Timeline::ArgStart(const Argument& arg) {
-  for (int i = 0; i < tracks.size(); ++i) {
-    if (track_args[i].get() != &arg) {
-      continue;
-    }
-    return {
-        .pos = {kPlasticWidth / 2, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
-                                       i * (kTrackMargin + kTrackHeight)},
-        .dir = 0_deg,
-    };
-  }
-  return Object::FallbackWidget::ArgStart(arg);
-}
-
-void Timeline::FillChildren(Vec<Widget*>& children) {
-  children.reserve(3 + tracks.size());
-  children.push_back(run_button.get());
-  children.push_back(prev_button.get());
-  children.push_back(next_button.get());
-  AddMissingTrackWidgets(*this);
-  children.reserve(children.size() + track_widgets.size());
-  for (auto& track_widget : track_widgets) {
-    children.push_back(track_widget.get());
-  }
-}
-
-void Timeline::UpdateChildTransform(time::SteadyPoint now) {
-  auto distance_to_seconds = DistanceToSeconds(*this);  // 1 cm = 1 second
-  time::FloatDuration max_track_length = MaxTrackLength();
-  float track_width = max_track_length / distance_to_seconds;
-
-  float current_pos_ratio =
-      clamp((CurrentOffset(*this, now) + time::FloatDuration(bridge_wiggle_s)) / max_track_length,
-            0., 1.);
-
-  float track_offset_x0 = kRulerLength / 2;
-  float track_offset_x1 = track_width - kRulerLength / 2;
-
-  float track_offset_x = lerp(track_offset_x0, track_offset_x1, current_pos_ratio);
-
-  AddMissingTrackWidgets(*this);
-  for (size_t i = 0; i < track_widgets.size(); ++i) {
-    track_widgets[i]->local_to_parent =
-        SkM44::Translate(-track_offset_x, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
-                                              i * (kTrackMargin + kTrackHeight));
-  }
 }
 
 struct TrackBaseWidget : Object::FallbackWidget {
@@ -1767,11 +1849,22 @@ struct TrackBaseWidget : Object::FallbackWidget {
       return timeline;
     }
 
+    Optional<TimelineWidget*> timeline_widget = nullopt;
+    TimelineWidget* GetTimelineWidget() {
+      if (!timeline_widget) {
+        timeline_widget = static_cast<TimelineWidget*>(widget.parent.get());
+      }
+      return *timeline_widget;
+    }
+
     Optional<time::FloatDuration> distance_to_seconds = nullopt;
     time::FloatDuration& GetDistanceToSeconds() {
       if (!distance_to_seconds) {
-        auto timeline = GetTimeline();
-        distance_to_seconds = timeline ? DistanceToSeconds(*timeline) : 100s;  // 1 cm = 1 second
+        if (auto timeline_widget = GetTimelineWidget()) {
+          distance_to_seconds = timeline_widget->distance_to_seconds;
+        } else {
+          distance_to_seconds = 100s;  // 1 cm = 1 second
+        }
       }
       return *distance_to_seconds;
     }
@@ -1782,23 +1875,25 @@ struct TrackBaseWidget : Object::FallbackWidget {
   }
   SkPath Shape(Context& ctx) const {
     time::FloatDuration distance_to_seconds = ctx.GetDistanceToSeconds();
+    auto* timeline_widget = ctx.GetTimelineWidget();
     auto* timeline = ctx.GetTimeline();
+    auto lock = std::lock_guard(timeline->mutex);
     auto& track = ctx.GetTrack<TrackBase>();
-    auto end_time = timeline ? timeline->MaxTrackLength() : track.timestamps.back();
+    auto end_time = timeline ? timeline_widget->max_track_length : track.timestamps.back();
     Rect rect = Rect(0, -kTrackHeight / 2, end_time / distance_to_seconds, kTrackHeight / 2);
     if (timeline) {
       // Clip to the width of the timeline window
       rect.right =
-          min<float>(rect.right, TimeAtX(*timeline, kWindowWidth / 2) / distance_to_seconds);
+          min<float>(rect.right, timeline_widget->TimeAtX(kWindowWidth / 2) / distance_to_seconds);
       rect.left =
-          max<float>(rect.left, TimeAtX(*timeline, -kWindowWidth / 2) / distance_to_seconds);
+          max<float>(rect.left, timeline_widget->TimeAtX(-kWindowWidth / 2) / distance_to_seconds);
     }
     return SkPath::Rect(rect.sk);
   }
   Optional<Rect> TextureBounds() const override {
     Context ctx(*this);
-    Timeline* timeline = ctx.GetTimeline();
-    if (timeline == nullptr || timeline->drag_zoom_action == nullptr) {
+    auto* timeline_widget = ctx.GetTimelineWidget();
+    if (timeline_widget == nullptr || timeline_widget->drag_zoom_action == nullptr) {
       return FallbackWidget::TextureBounds();
     }
     return nullopt;
@@ -1810,8 +1905,8 @@ struct TrackBaseWidget : Object::FallbackWidget {
   void Draw(SkCanvas& canvas, Context& ctx) const { canvas.drawPath(Shape(ctx), kTrackPaint); }
   std::unique_ptr<Action> FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) override {
     Context ctx(*this);
-    if (Timeline* timeline = ctx.GetTimeline()) {
-      return timeline->FindAction(ptr, btn);
+    if (auto* timeline_widget = ctx.GetTimelineWidget()) {
+      return timeline_widget->FindAction(ptr, btn);
     } else {
       return Object::FallbackWidget::FindAction(ptr, btn);
     }
@@ -1822,6 +1917,7 @@ struct OnOffTrackWidget : TrackBaseWidget {
   using TrackBaseWidget::TrackBaseWidget;
   void Draw(SkCanvas& canvas) const override {
     Context ctx(*this);
+    auto* timeline_widget = ctx.GetTimelineWidget();
     auto* timeline = ctx.GetTimeline();
     auto& track = ctx.GetTrack<OnOffTrack>();
     auto& timestamps = track.timestamps;
@@ -1846,7 +1942,7 @@ struct OnOffTrackWidget : TrackBaseWidget {
     if (track.on_at != time::kDurationGuard) {
       switch (timeline->state) {
         case Timeline::kRecording:
-          DrawSegment(track.on_at, timeline->recording.now - timeline->recording.started_at);
+          DrawSegment(track.on_at, timeline_widget->current_offset);
           break;
         case Timeline::kPlaying:
         case Timeline::kPaused:
@@ -1865,12 +1961,13 @@ struct Vec2TrackWidget : TrackBaseWidget {
     auto& track = ctx.GetTrack<Vec2Track>();
     auto& timestamps = track.timestamps;
     auto& values = track.values;
-    Timeline* timeline = ctx.GetTimeline();
+    auto* timeline_widget = ctx.GetTimelineWidget();
+    auto* timeline = ctx.GetTimeline();
     TrackBaseWidget::Draw(canvas, ctx);
     auto shape = Shape(ctx);
     Rect rect;
     shape.isRect(&rect.sk);
-    time::FloatDuration s_per_m = DistanceToSeconds(*timeline);  // s / m
+    time::FloatDuration s_per_m = timeline_widget->distance_to_seconds;  // s / m
     auto left_t = time::Defloat(rect.left * s_per_m);
     auto right_t = time::Defloat(rect.right * s_per_m);
     auto LowerBound = [&](time::Duration t) {
@@ -1931,7 +2028,7 @@ struct Vec2TrackWidget : TrackBaseWidget {
       constexpr float kDisplayHeight = kTrackHeight - kVec2DisplayMargin * 2;
       constexpr float kDisplayMinWidth = kDisplayHeight;
       auto max_track_length = timeline->MaxTrackLength();
-      auto current_t = CurrentOffset(*timeline, time::SteadyNow());
+      auto current_t = timeline_widget->current_offset_raw;
       int current_i = LowerBound(current_t);
       auto display_min_t = time::Defloat(kDisplayMinWidth * s_per_m);
       struct Vec2Display {
@@ -2226,6 +2323,13 @@ void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
   }
 }
 
+static void WakeRunButton(Timeline& timeline) {
+  timeline.ForEachWidget([](ui::RootWidget& root_widget, ui::Widget& widget) {
+    TimelineWidget& timeline_widget = static_cast<TimelineWidget&>(widget);
+    timeline_widget.run_button->WakeAnimation();
+  });
+}
+
 void Timeline::OnCancel() {
   if (state == kPlaying) {
     TimelineCancelScheduled(*this);
@@ -2235,7 +2339,7 @@ void Timeline::OnCancel() {
       TimelineUpdateOutputs(*h, *this, time::SteadyPoint{},
                             time::SteadyPoint{} + time::Duration(paused.playback_offset));
     }
-    run_button->WakeAnimation();
+    WakeRunButton(*this);
   }
 }
 
@@ -2252,8 +2356,8 @@ void Timeline::OnRun(Location& here, RunTask& run_task) {
   playing = {.started_at = now - time::Duration(paused.playback_offset)};
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   TimelineScheduleNextAfter(*this, now);
-  run_button->WakeAnimation();
-  WakeAnimation();
+  WakeRunButton(*this);
+  WakeWidgetsAnimation();
   BeginLongRunning(here, run_task);
 }
 
@@ -2261,8 +2365,7 @@ void Timeline::BeginRecording() {
   switch (state) {
     case Timeline::kPaused:
       state = Timeline::kRecording;
-      recording.now = time::SteadyNow();
-      recording.started_at = recording.now - time::Duration(paused.playback_offset);
+      recording.started_at = time::SteadyNow() - time::Duration(paused.playback_offset);
       break;
     case Timeline::kRecording:
       // WTF? Maybe show an error?
@@ -2270,11 +2373,10 @@ void Timeline::BeginRecording() {
     case Timeline::kPlaying:
       state = Timeline::kRecording;
       recording.started_at = playing.started_at;
-      recording.now = playing.now;
       break;
   }
-  run_button->WakeAnimation();
-  WakeAnimation();
+  WakeRunButton(*this);
+  WakeWidgetsAnimation();
 }
 
 void Timeline::StopRecording() {
@@ -2284,8 +2386,8 @@ void Timeline::StopRecording() {
   timeline_length = MaxTrackLength();
   paused = {.playback_offset = min(time::SteadyNow() - recording.started_at, timeline_length)};
   state = Timeline::kPaused;
-  run_button->WakeAnimation();
-  WakeAnimation();
+  WakeRunButton(*this);
+  WakeWidgetsAnimation();
 }
 
 void OnOffTrack::Splice(time::Duration current_offset, time::Duration splice_to) {
@@ -2345,7 +2447,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
     state = kPaused;
     paused = {.playback_offset = MaxTrackLength()};
     Done(here);
-    run_button->WakeAnimation();
+    WakeRunButton(*this);
   }
   TimelineUpdateOutputs(here, *this, playing.started_at, now);
   if (now < end_at) {
@@ -2358,7 +2460,7 @@ bool OnOffTrack::IsOn() const {
     return false;
   }
   auto now = time::SteadyNow();
-  auto current_offset = CurrentOffset(*timeline, now);
+  auto current_offset = timeline->CurrentOffset(now);
 
   int i = 0;
   for (; i < timestamps.size(); ++i) {
@@ -2444,7 +2546,7 @@ void Timeline::SerializeState(Serializer& writer, const char* key) const {
   }
   writer.EndArray();
   writer.Key("zoom");
-  writer.Double(zoom.value);
+  writer.Double(zoom);
   writer.Key("length");
   writer.Double(time::ToSeconds(timeline_length));
 
@@ -2564,8 +2666,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
         }
       }
     } else if (key == "zoom") {
-      d.Get(zoom.value, status);
-      zoom.target = zoom.value;
+      d.Get(zoom, status);
     } else if (key == "length") {
       double t;
       d.Get(t, status);

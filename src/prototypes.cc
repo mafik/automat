@@ -59,7 +59,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<MouseClick>(null_parent, ui::PointerButton::Right, false);
   index.Register<MouseMove>();
   index.Register<Number>(null_parent);
-  index.Register<Timeline>(null_parent);
+  index.Register<Timeline>();
   index.Register<InstructionLibrary>();
   index.Register<Instruction, HideInToolbar>();
   index.Register<Register, HideInToolbar>(nullptr, 0);

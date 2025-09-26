@@ -108,6 +108,8 @@ struct Object : public ReferenceCounted {
       if (auto fallback_widget = dynamic_cast<FallbackWidget*>(this)) {
         fallback_widget->object = AcquireWeakPtr();
       }
+      // Proxy object that can be lifetime-managed by the UI infrastructure (without
+      // affecting the original object's lifetime).
       struct HybridAdapter : ui::Widget {
         Ptr<Object> ptr;
         Widget& widget;
@@ -119,6 +121,9 @@ struct Object : public ReferenceCounted {
         SkPath Shape() const override { return widget.Shape(); }
         Optional<Rect> TextureBounds() const override { return std::nullopt; }
         void FillChildren(Vec<Widget*>& children) override { children.push_back(&widget); }
+        void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
+          widget.ConnectionPositions(out_positions);
+        }
       };
       return std::make_unique<HybridAdapter>(parent, *this, *w);
     }

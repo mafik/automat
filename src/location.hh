@@ -309,7 +309,12 @@ void PositionBelow(Location& origin, Location& below);
 // Place the given `target` location ahead of the `origin`s `arg`.
 //
 // This uses the arg's position & direction within `origin`.
-void PositionAhead(Location& origin, const Argument& arg, Location& target);
+//
+// This version just returns the recommended position for the target_widget.
+Vec2 PositionAhead(const Location& origin, const Argument& arg, const ui::Widget& target_widget);
+
+// Similar to the above, but also sets the target's position.
+void PositionAhead(const Location& origin, const Argument& arg, Location& target);
 
 void AnimateGrowFrom(Location& source, Location& grown);
 

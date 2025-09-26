@@ -391,7 +391,7 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-void PositionAhead(Location& origin, const Argument& arg, Location& target) {
+Vec2 PositionAhead(const Location& origin, const Argument& arg, const ui::Widget& target_widget) {
   auto& origin_widget = origin.WidgetForObject();
   auto origin_shape = origin_widget.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_widget.ArgStart(arg);  // origin's local coordinates
@@ -415,7 +415,6 @@ void PositionAhead(Location& origin, const Argument& arg, Location& target) {
   Vec2 best_connector_pos = Vec2(0, 0);
   float best_angle_diff = 100;
   Vec<Vec2AndDir> connector_positions;
-  auto& target_widget = target.WidgetForObject();
   target_widget.ConnectionPositions(connector_positions);
   for (auto& pos : connector_positions) {
     float angle_diff = (pos.dir - arg_start.dir).ToRadians();
@@ -425,7 +424,11 @@ void PositionAhead(Location& origin, const Argument& arg, Location& target) {
     }
   }
 
-  target.position = Round((drop_point - best_connector_pos) * 1000) / 1000;
+  return Round((drop_point - best_connector_pos) * 1000) / 1000;
+}
+
+void PositionAhead(const Location& origin, const Argument& arg, Location& target) {
+  target.position = PositionAhead(origin, arg, target.WidgetForObject());
 }
 
 void AnimateGrowFrom(Location& source, Location& grown) {

@@ -195,10 +195,9 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     auto proto_shape = proto.Shape();
     Rect proto_bounds = proto_shape.getBounds();
     canvas.save();
-    Vec2 offset = from.position + Rect::BottomCenter(from.WidgetForObject().Shape().getBounds()) -
-                  proto_bounds.TopCenter();
-    canvas.translate(offset.x, offset.y);
-    canvas.saveLayerAlphaf(&proto_shape.getBounds(), anim->prototype_alpha * 0.4f);
+    Vec2 prototype_position = PositionAhead(from, arg, proto);
+    canvas.translate(prototype_position.x, prototype_position.y);
+    canvas.saveLayerAlphaf(&proto_bounds.sk, anim->prototype_alpha * 0.4f);
     proto.Draw(canvas);
     canvas.restore();
     canvas.restore();

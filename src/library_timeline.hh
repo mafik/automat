@@ -76,7 +76,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   float zoom;  // stores the time in seconds
 
   enum State { kPaused, kPlaying, kRecording } state;
-  time::Duration timeline_length = 0s;
+  time::Duration timeline_length;
 
   struct Paused {
     time::Duration playback_offset;  // Used when playback is paused

@@ -13,7 +13,6 @@
 #include "argument.hh"
 #include "color.hh"
 #include "font.hh"
-#include "ui_shape_widget.hh"
 #include "key.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
@@ -22,6 +21,7 @@
 #include "textures.hh"
 #include "theme_xp.hh"
 #include "time.hh"
+#include "ui_shape_widget.hh"
 
 #ifdef __linux__
 #include <sys/shm.h>
@@ -179,9 +179,9 @@ struct WindowWidget;
 
 struct PickButton : theme::xp::TitleButton {
   std::function<void(ui::Pointer&)> on_activate;
-  PickButton(ui::Widget* parent)
-      : theme::xp::TitleButton(
-            parent, ui::MakeShapeWidget(this, kPickSVG, "#000000"_color, &kCenterPickIcon)) {
+  PickButton(ui::Widget* parent) : theme::xp::TitleButton(parent) {
+    child = ui::MakeShapeWidget(this, kPickSVG, "#000000"_color, &kCenterPickIcon);
+    UpdateChildTransform();
     child->local_to_parent.preTranslate(-0.2_mm, -0.2_mm);
   }
   // float Height() const override { return kTitleButtonSize; }

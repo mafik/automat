@@ -295,7 +295,8 @@ static SkPath GetRecPath() {
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
-Timeline::Timeline() : state(kPaused), paused{.playback_offset = 0s}, zoom(10) {}
+Timeline::Timeline()
+    : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
 
 struct TrackArgument : Argument {
   TextDrawable icon;
@@ -620,8 +621,7 @@ SkPath WindowShape(int num_tracks) {
 struct TimelineWidget;
 
 struct SideButton : ui::Button {
-  SideButton(TimelineWidget& parent, std::unique_ptr<Widget> child)
-      : Button((Widget*)&parent, std::move(child)) {}
+  SideButton(TimelineWidget& parent) : Button((Widget*)&parent) {}
   TimelineWidget* GetTimelineWidget() { return (TimelineWidget*)(parent.get()); }
   SkColor ForegroundColor() const override { return "#404040"_color; }
   SkColor BackgroundColor() const override { return kTimelineButtonBackground; }
@@ -629,15 +629,21 @@ struct SideButton : ui::Button {
 };
 
 struct PrevButton : SideButton {
-  PrevButton(TimelineWidget& parent)
-      : SideButton(parent, MakeShapeWidget(this, kNextShape, SK_ColorWHITE, &kHorizontalFlip)) {}
+  PrevButton(TimelineWidget& parent) : SideButton(parent) {
+    child = MakeShapeWidget(this, kNextShape, SK_ColorWHITE, &kHorizontalFlip);
+    UpdateChildTransform();
+  }
   void Activate(ui::Pointer&) override;
+  StrView Name() const override { return "Prev Button"; }
 };
 
 struct NextButton : SideButton {
-  NextButton(TimelineWidget& parent)
-      : SideButton(parent, MakeShapeWidget(this, kNextShape, SK_ColorWHITE)) {}
+  NextButton(TimelineWidget& parent) : SideButton(parent) {
+    child = MakeShapeWidget(this, kNextShape, SK_ColorWHITE);
+    UpdateChildTransform();
+  }
   void Activate(ui::Pointer&) override;
+  StrView Name() const override { return "Next Button"; }
 };
 
 struct TimelineRunButton : ui::ToggleButton {
@@ -647,27 +653,26 @@ struct TimelineRunButton : ui::ToggleButton {
   mutable ui::Button* last_on_widget = nullptr;
 
   TimelineRunButton(Widget* parent, WeakPtr<Timeline> timeline)
-      : ui::ToggleButton(
-            parent,
-            std::make_unique<ColoredButton>(
-                this, GetPausedPath(),
-                ColoredButtonArgs{.fg = kTimelineButtonBackground,
-                                  .bg = kOrange,
-                                  .radius = kPlayButtonRadius,
-                                  .on_click = [this](ui::Pointer& p) { Activate(p); }}),
-            std::make_unique<ColoredButton>(
-                this, kPlayShape,
-                ColoredButtonArgs{.fg = kOrange,
-                                  .bg = kTimelineButtonBackground,
-                                  .radius = kPlayButtonRadius,
-                                  .on_click = [this](ui::Pointer& p) { Activate(p); }})),
-        timeline_weak(std::move(timeline)),
-        rec_button(new ColoredButton(
-            this, GetRecPath(),
-            ColoredButtonArgs{.fg = kTimelineButtonBackground,
-                              .bg = color::kParrotRed,
-                              .radius = kPlayButtonRadius,
-                              .on_click = [this](ui::Pointer& p) { Activate(p); }})) {}
+      : ui::ToggleButton(parent), timeline_weak(std::move(timeline)) {
+    on = std::make_unique<ColoredButton>(
+        this, GetPausedPath(),
+        ColoredButtonArgs{.fg = kTimelineButtonBackground,
+                          .bg = kOrange,
+                          .radius = kPlayButtonRadius,
+                          .on_click = [this](ui::Pointer& p) { Activate(p); }});
+    off = std::make_unique<ColoredButton>(
+        this, kPlayShape,
+        ColoredButtonArgs{.fg = kOrange,
+                          .bg = kTimelineButtonBackground,
+                          .radius = kPlayButtonRadius,
+                          .on_click = [this](ui::Pointer& p) { Activate(p); }});
+    rec_button = std::make_unique<ColoredButton>(
+        this, GetRecPath(),
+        ColoredButtonArgs{.fg = kTimelineButtonBackground,
+                          .bg = color::kParrotRed,
+                          .radius = kPlayButtonRadius,
+                          .on_click = [this](ui::Pointer& p) { Activate(p); }});
+  }
   ui::Button* OnWidget() override {
     auto timeline = timeline_weak.Lock();
     if (timeline) {
@@ -709,6 +714,7 @@ struct TimelineRunButton : ui::ToggleButton {
         break;
     }
   }
+  StrView Name() const override { return "Timeline Run Button"; }
 };
 
 struct DragZoomAction;

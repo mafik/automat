@@ -8,9 +8,9 @@
 #include <optional>
 
 #include "animation.hh"
+#include "pointer.hh"
 #include "ui_constants.hh"
 #include "ui_shape_widget.hh"
-#include "pointer.hh"
 #include "units.hh"
 #include "widget.hh"
 
@@ -40,7 +40,7 @@ struct Button : Widget {
   constexpr static float kPressOffset = 0.2_mm;
   Clickable clickable;
 
-  Button(ui::Widget* parent, std::unique_ptr<Widget> child);
+  Button(ui::Widget* parent);
   animation::Phase Tick(time::Timer&) override;
   void PreDraw(SkCanvas&) const override;
   void Draw(SkCanvas&) const override;
@@ -80,22 +80,18 @@ struct ColoredButton : Button {
   float radius;
   std::function<void(ui::Pointer&)> on_click;
 
-  ColoredButton(ui::Widget* parent, std::unique_ptr<Widget>&& child, ColoredButtonArgs args = {})
-      : Button(parent, std::move(child)),
-        fg(args.fg),
-        bg(args.bg),
-        radius(args.radius),
-        on_click(args.on_click) {
-    UpdateChildTransform();
-  }
+  ColoredButton(ui::Widget* parent, ColoredButtonArgs args = {})
+      : Button(parent), fg(args.fg), bg(args.bg), radius(args.radius), on_click(args.on_click) {}
 
   ColoredButton(ui::Widget* parent, const char* svg_path, ColoredButtonArgs args = {})
-      : ColoredButton(parent, MakeShapeWidget(this, svg_path, SK_ColorWHITE), args) {
+      : ColoredButton(parent, args) {
+    child = MakeShapeWidget(this, svg_path, SK_ColorWHITE);
     UpdateChildTransform();
   }
 
   ColoredButton(ui::Widget* parent, SkPath path, ColoredButtonArgs args = {})
-      : ColoredButton(parent, std::make_unique<ShapeWidget>(this, path), args) {
+      : ColoredButton(parent, args) {
+    child = std::make_unique<ShapeWidget>(this, path);
     UpdateChildTransform();
   }
 
@@ -121,8 +117,7 @@ struct ToggleButton : Widget {
   float filling = 0;
   float time_seconds;  // used for waving animation
 
-  ToggleButton(ui::Widget* parent, std::unique_ptr<Button> on, std::unique_ptr<Button> off)
-      : Widget(parent), on(std::move(on)), off(std::move(off)) {}
+  ToggleButton(ui::Widget* parent) : Widget(parent) {}
 
   void FillChildren(Vec<Widget*>& children) override {
     children.push_back(OnWidget());

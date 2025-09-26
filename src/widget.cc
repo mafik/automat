@@ -244,4 +244,31 @@ std::unique_ptr<Action> Widget::FindAction(Pointer& pointer, ActionTrigger btn) 
   return nullptr;
 }
 
+void DebugCheckParents(Widget& widget) {
+  if (Widget* parent = widget.parent) {
+    TrackedPtrBase* ref = parent->ref_list;
+    bool found = false;
+    while (ref) {
+      if (ref == &widget.parent) {
+        found = true;
+        break;
+      }
+      ref = ref->next;
+    }
+    if (!found) {
+      ERROR << widget.Name() << " is not known by its parent!";
+      LOG << "  Widget 'parent' ptr is located at: " << f("{}", (void*)&widget.parent);
+      LOG << "  Parent's ref list:";
+      TrackedPtrBase* ref = parent->ref_list;
+      while (ref) {
+        LOG << "    " << f("{}", (void*)ref);
+        ref = ref->next;
+      }
+    }
+  }
+  for (auto* child : widget.Children()) {
+    DebugCheckParents(*child);
+  }
+}
+
 }  // namespace automat::ui

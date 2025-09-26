@@ -60,6 +60,7 @@ struct ConnectionWidget : Widget {
   Location* to = nullptr;
   float transparency = 1;
   float length = 0;
+  mutable std::unique_ptr<Widget> prototype_widget;
 
   ConnectionWidget(Widget* parent, Location&, Argument&);
 

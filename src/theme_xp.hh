@@ -5,8 +5,8 @@
 #include <include/core/SkVertices.h>
 
 #include "color.hh"
-#include "ui_button.hh"
 #include "math.hh"
+#include "ui_button.hh"
 #include "units.hh"
 
 // Utilities for creating Windows XP-style feel (a.k.a. "Luna").
@@ -25,8 +25,7 @@ constexpr Rect WindowBorderInner(Rect outer) {
 sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color = "#0066ff"_color);
 
 struct TitleButton : ui::Button {
-  TitleButton(ui::Widget* parent, std::unique_ptr<Widget> child)
-      : ui::Button(parent, std::move(child)) {}
+  TitleButton(ui::Widget* parent) : ui::Button(parent) {}
 
   void DrawButtonShadow(SkCanvas& canvas, SkColor bg) const override {}
   void DrawButtonFace(SkCanvas&, SkColor bg, SkColor fg) const override;

@@ -190,15 +190,14 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
           canvas.drawCircle(end_point, 1_mm, stroke_paint);
         });
   }
-  if (anim->prototype_alpha >= 0.01f) {
-    auto& proto = Widget::ForObject(*from.object->ArgPrototype(arg), this);
-    auto proto_shape = proto.Shape();
+  if (anim->prototype_alpha >= 0.01f && prototype_widget) {
+    auto proto_shape = prototype_widget->Shape();
     Rect proto_bounds = proto_shape.getBounds();
     canvas.save();
-    Vec2 prototype_position = PositionAhead(from, arg, proto);
+    Vec2 prototype_position = PositionAhead(from, arg, *prototype_widget);
     canvas.translate(prototype_position.x, prototype_position.y);
     canvas.saveLayerAlphaf(&proto_bounds.sk, anim->prototype_alpha * 0.4f);
-    proto.Draw(canvas);
+    prototype_widget->Draw(canvas);
     canvas.restore();
     canvas.restore();
   }
@@ -333,6 +332,13 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
       prototype_alpha_target = 0;
     }
     phase |= animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
+    if (anim.prototype_alpha > 0) {
+      if (!prototype_widget) {
+        prototype_widget =
+            from.object->ArgPrototype(arg)->MakeWidget(const_cast<ConnectionWidget*>(this));
+      }
+      phase |= prototype_widget->Tick(timer);
+    }
   }
   return phase;
 }

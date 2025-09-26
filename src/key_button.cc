@@ -41,7 +41,9 @@ struct KeyLabelWidget : Widget, LabelMixin {
 };
 
 KeyButton::KeyButton(Widget* parent, StrView label, SkColor color, float width)
-    : Button(parent, make_unique<KeyLabelWidget>(this, label)), width(width), fg(color) {
+    : Button(parent), width(width), fg(color) {
+  child = make_unique<KeyLabelWidget>(this, label);
+  UpdateChildTransform();
   SkRect child_bounds = ChildBounds();
   SkRRect key_base = RRect();
   SkRect key_face =

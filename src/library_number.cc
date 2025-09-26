@@ -10,11 +10,11 @@
 #include <charconv>
 
 #include "drag_action.hh"
+#include "svg.hh"
 #include "ui_button.hh"
 #include "ui_constants.hh"
 #include "ui_shape_widget.hh"
 #include "ui_text.hh"
-#include "svg.hh"
 #include "widget.hh"
 
 using namespace automat::ui;
@@ -30,8 +30,8 @@ static constexpr float kAroundWidgetMargin = kMargin * 2;
 static constexpr float kBelowTextMargin = kMargin * 2;
 
 // Height of the text field
-static constexpr float kTextHeight = std::max(
-    ui::kLetterSize + 2 * kBetweenButtonsMargin + 2 * kBorderWidth, kMinimalTouchableSize);
+static constexpr float kTextHeight =
+    std::max(ui::kLetterSize + 2 * kBetweenButtonsMargin + 2 * kBorderWidth, kMinimalTouchableSize);
 static constexpr float kButtonHeight = kMinimalTouchableSize;
 static constexpr float kButtonRows = 4;
 static constexpr float kHeight = 2 * kBorderWidth + kTextHeight + kButtonRows * kButtonHeight +
@@ -52,11 +52,15 @@ static constexpr char kBackspaceShape[] =
 
 using ui::Text;
 
-NumberButton::NumberButton(ui::Widget* parent, SkPath shape)
-    : Button(parent, std::make_unique<ShapeWidget>(this, shape)) {}
+NumberButton::NumberButton(ui::Widget* parent, SkPath shape) : Button(parent) {
+  child = std::make_unique<ShapeWidget>(this, shape);
+  UpdateChildTransform();
+}
 
-NumberButton::NumberButton(ui::Widget* parent, std::string text)
-    : Button(parent, std::make_unique<Text>(this, text)) {}
+NumberButton::NumberButton(ui::Widget* parent, std::string text) : Button(parent) {
+  child = std::make_unique<Text>(this, text);
+  UpdateChildTransform();
+}
 
 SkColor NumberButton::BackgroundColor() const { return "#c8c4b7"_color; }
 

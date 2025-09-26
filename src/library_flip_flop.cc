@@ -18,9 +18,9 @@
 #include "arcline.hh"
 #include "argument.hh"
 #include "color.hh"
-#include "ui_button.hh"
 #include "sincos.hh"
 #include "textures.hh"
+#include "ui_button.hh"
 #include "widget.hh"
 
 using namespace std;
@@ -55,14 +55,16 @@ bool FlipFlopButton::Filled() const { return (flip_flop && flip_flop->current_st
 
 struct YingYangButton : ui::ColoredButton {
   YingYangButton(ui::Widget* parent, SkColor fg, SkColor bg)
-      : ColoredButton(parent, make_unique<YingYangIcon>(this),
+      : ColoredButton(parent,
                       ui::ColoredButtonArgs{.fg = fg, .bg = bg, .radius = kYingYangButtonRadius}) {
+    child = make_unique<YingYangIcon>(this);
+    UpdateChildTransform();
   }
 };
 
-FlipFlopButton::FlipFlopButton(ui::Widget* parent)
-    : ui::ToggleButton(parent, make_unique<YingYangButton>(this, "#eae9e8"_color, "#1d1d1d"_color),
-                        make_unique<YingYangButton>(this, "#1d1d1d"_color, "#eae9e8"_color)) {
+FlipFlopButton::FlipFlopButton(ui::Widget* parent) : ui::ToggleButton(parent) {
+  on = make_unique<YingYangButton>(this, "#eae9e8"_color, "#1d1d1d"_color);
+  off = make_unique<YingYangButton>(this, "#1d1d1d"_color, "#eae9e8"_color);
   static_cast<YingYangButton*>(this->off.get())->on_click =
       static_cast<YingYangButton*>(this->on.get())->on_click = [this](ui::Pointer&) {
         if (auto h = this->flip_flop->here.lock()) {

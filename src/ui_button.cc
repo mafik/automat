@@ -15,8 +15,8 @@
 #include "audio.hh"
 #include "color.hh"
 #include "embedded.hh"
-#include "ui_constants.hh"
 #include "pointer.hh"
+#include "ui_constants.hh"
 #include "widget.hh"
 
 using namespace std;
@@ -262,10 +262,8 @@ void ToggleButton::PreDrawChildren(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-Button::Button(ui::Widget* parent, std::unique_ptr<Widget> child)
-    : Widget(parent), child(std::move(child)), clickable(*this) {
+Button::Button(ui::Widget* parent) : Widget(parent), clickable(*this) {
   clickable.activate = [this](Pointer& pointer) { Activate(pointer); };
-  UpdateChildTransform();
 }
 
 void Button::UpdateChildTransform() {

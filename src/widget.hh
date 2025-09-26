@@ -320,4 +320,8 @@ struct PaintMixin {
   }
 };
 
+// Use this function if the Widget hierarchy enters an invalid state (for example a widget's parent
+// pointer points to invalid memory or widget destruction fails somewhere in TrackedPtr).
+void DebugCheckParents(Widget& widget);
+
 }  // namespace automat::ui

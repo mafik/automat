@@ -25,12 +25,12 @@
 #include "drag_action.hh"
 #include "font.hh"
 #include "format.hh"
-#include "ui_connection_widget.hh"
-#include "ui_constants.hh"
 #include "math.hh"
 #include "root_widget.hh"
 #include "textures.hh"
 #include "timer_thread.hh"
+#include "ui_connection_widget.hh"
+#include "ui_constants.hh"
 #include "widget.hh"
 
 using namespace automat::ui;

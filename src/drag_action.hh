@@ -18,6 +18,10 @@ namespace ui {
 // Interface for widgets that can receive locations being dropped on them.
 struct DropTarget {
   virtual bool CanDrop(Location&) const = 0;
+
+  // Snap the location & scale of the given location, which is hovered over this drop target.
+  // Optionally respecting a "fixed point", held by the pointer.
+  // TODO: maybe make this func work in local coords?
   virtual void SnapPosition(Vec2& position, float& scale, Location&,
                             Vec2* fixed_point = nullptr) = 0;
 

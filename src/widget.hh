@@ -173,6 +173,12 @@ struct Widget : Trackable, OptionsProvider {
   virtual animation::Phase Tick(time::Timer&) { return animation::Finished; }
 
   virtual void Draw(SkCanvas& canvas) const { return DrawChildren(canvas); }
+
+  // Each Widget has a shape that defines its region of reactivity.
+  // The Shape of a widget is used to constrain the search process.
+  // If children extend beyond the shape of their parent, they are not traversed.
+  // Widgets with empty shape do not react themselves but are still traversed, allowing their
+  // children to extend to arbitrary shapes.
   virtual SkPath Shape() const = 0;
 
   // Can be overridden to provide a more efficient alternative to `Shape()->getBounds()`.

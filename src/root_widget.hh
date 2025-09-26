@@ -8,6 +8,7 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "black_hole.hh"
 #include "deserializer.hh"
 #include "drag_action.hh"
 #include "keyboard.hh"
@@ -67,6 +68,7 @@ struct RootWidget final : Widget, DropTarget {
 
   std::unique_ptr<Window> window;
   std::unique_ptr<LoadingAnimation> loading_animation;
+  BlackHole black_hole;
 
   void InitToolbar();
 
@@ -158,7 +160,6 @@ struct RootWidget final : Widget, DropTarget {
   Vec2 camera_pos = Vec2(0, 0);
   Vec2 camera_target = Vec2(0, 0);
   float trash_radius = 0;
-  float trash_radius_target = 0;
   int drag_action_count = 0;
   bool panning_during_last_frame = false;
   bool inertia = false;

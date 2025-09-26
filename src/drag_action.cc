@@ -9,10 +9,10 @@
 
 #include "action.hh"
 #include "animation.hh"
-#include "ui_connection_widget.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
+#include "ui_connection_widget.hh"
 
 using namespace automat::ui;
 
@@ -33,8 +33,8 @@ static ui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
     }
   }
   Vec2 point = a.pointer.PositionWithin(widget);
-  if ((widget.pack_frame_texture_bounds == std::nullopt) ||
-      widget.Shape().contains(point.x, point.y)) {
+  auto shape = widget.Shape();
+  if (shape.isEmpty() || shape.contains(point.x, point.y)) {
     if (auto drop_target = widget.AsDropTarget()) {
       if (drop_target->CanDrop(*a.locations.back())) {
         return drop_target;
@@ -101,6 +101,9 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
       locations(std::move(locations_arg)),
       widget(new DragLocationWidget(pointer.GetWidget(), *this)) {
   pointer.root_widget.drag_action_count++;
+  if (pointer.root_widget.drag_action_count == 1) {
+    pointer.root_widget.black_hole.WakeAnimation();
+  }
   for (auto& location : locations) {
     location->parent = widget.get();
     if (location->object_widget) {

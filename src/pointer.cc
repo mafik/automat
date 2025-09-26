@@ -59,7 +59,7 @@ static bool FillPath(Pointer& p, Widget& w) {
 
   auto shape = w.Shape();
   bool p_inside_w = shape.contains(point.x, point.y);
-  bool w_is_unbounded = w.pack_frame_texture_bounds == std::nullopt;
+  bool w_is_unbounded = shape.isEmpty();
 
   if (p_inside_w || w_is_unbounded) {
     for (auto* child : w.Children()) {

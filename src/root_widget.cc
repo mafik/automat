@@ -8,14 +8,15 @@
 
 #include "animation.hh"
 #include "automat.hh"
+#include "black_hole.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
-#include "ui_connection_widget.hh"
 #include "loading_animation.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
 #include "touchpad.hh"
+#include "ui_connection_widget.hh"
 
 using namespace std;
 
@@ -24,7 +25,9 @@ namespace automat::ui {
 std::vector<RootWidget*> root_widgets;
 unique_ptr<RootWidget> root_widget;
 
-RootWidget::RootWidget() : Widget(nullptr), keyboard(*this) { root_widgets.push_back(this); }
+RootWidget::RootWidget() : Widget(nullptr), keyboard(*this), black_hole(this) {
+  root_widgets.push_back(this);
+}
 RootWidget::~RootWidget() {
   auto it = std::find(root_widgets.begin(), root_widgets.end(), this);
   if (it != root_widgets.end()) {
@@ -40,7 +43,6 @@ void RootWidget::InitToolbar() {
 }
 
 static SkColor background_color = SkColorSetRGB(0x80, 0x80, 0x80);
-constexpr float kTrashRadius = 3_cm;
 
 animation::Phase RootWidget::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
@@ -186,11 +188,6 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
       camera_pos.y += shift_y;
       camera_target.y += shift_y;
     }
-  }
-
-  {  // Animate trash area
-    trash_radius_target = drag_action_count ? kTrashRadius : 0;
-    phase |= animation::ExponentialApproach(trash_radius_target, timer.d, 0.1, trash_radius);
   }
 
   if (phase == animation::Animating) {
@@ -447,16 +444,11 @@ SkPath RootWidget::TrashShape() const {
 void RootWidget::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
   Rect object_bounds = location.WidgetForObject().Shape().getBounds();
   Rect machine_bounds = root_machine->Shape().getBounds();
-  Vec2 fake_fixed_point = Vec2(0, 0);
-  if (fixed_point == nullptr) {
-    fixed_point = &fake_fixed_point;
-  }
 
-  float scale1 = 0.5;
-  Vec2 position1 = position;
+  scale = 0.5;
   {  // Find a snap position outside of the canvas
     SkMatrix mat = SkMatrix()
-                       .postScale(scale1, scale1, fixed_point->x, fixed_point->y)
+                       .postScale(scale, scale, fixed_point->x, fixed_point->y)
                        .postTranslate(position.x, position.y);
 
     Rect scaled_object_bounds = mat.mapRect(object_bounds);
@@ -466,37 +458,15 @@ void RootWidget::SnapPosition(Vec2& position, float& scale, Location& location, 
       float move_left = fabsf(machine_bounds.left - scaled_object_bounds.right);
       float move_right = fabsf(scaled_object_bounds.left - machine_bounds.right);
       if (move_up < move_down && move_up < move_left && move_up < move_right) {
-        position1.y += move_up;
+        position.y += move_up;
       } else if (move_down < move_up && move_down < move_left && move_down < move_right) {
-        position1.y -= move_down;
+        position.y -= move_down;
       } else if (move_left < move_up && move_left < move_down && move_left < move_right) {
-        position1.x -= move_left;
+        position.x -= move_left;
       } else {
-        position1.x += move_right;
+        position.x += move_right;
       }
     }
-  }
-
-  Vec2 window_pos = (position - camera_pos) * zoom + size / 2;
-  bool is_over_trash =
-      LengthSquared(window_pos - Vec2(size.width, size.height)) < trash_radius * trash_radius;
-  Vec2 box_size = Vec2(object_bounds.Width(), object_bounds.Height());
-  float diagonal = Length(box_size);
-  SkMatrix window2canvas = WindowToCanvas();
-  float scale2 = window2canvas.mapRadius(trash_radius) / diagonal * 0.9f;
-  scale2 = std::clamp<float>(scale2, 0.1, 0.5);
-
-  Vec2 target_center = window2canvas.mapPoint(size - box_size / diagonal * trash_radius / 2);
-
-  Vec2 position2 =
-      target_center - ((object_bounds.Center() - *fixed_point) * scale2 + *fixed_point);
-
-  if (LengthSquared(position1 - position) < LengthSquared(position2 - position)) {
-    position = position1;
-    scale = scale1;
-  } else {
-    position = position2;
-    scale = scale2;
   }
 }
 
@@ -562,6 +532,7 @@ void RootWidget::FillChildren(Vec<Widget*>& out_children) {
       out_children.push_back(widget);
     }
   }
+  out_children.push_back(&black_hole);
   if (toolbar) {
     out_children.push_back(toolbar.get());
   }

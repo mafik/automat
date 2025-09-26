@@ -42,6 +42,7 @@ constexpr SteadyPoint kZeroSteady = {};
 inline SystemPoint SystemNow() { return SystemClock::now(); }
 inline SteadyPoint SteadyNow() { return SteadyClock::now(); }
 
+// TODO: rename because "epoch" is misleading here (it's boot time)
 inline double SecondsSinceEpoch() { return ToSeconds(SteadyNow().time_since_epoch()); }
 
 // Sawtooth wave [0, 1).

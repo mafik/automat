@@ -7,9 +7,9 @@
 #include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
-#include "ui_connection_widget.hh"
 #include "root_widget.hh"
 #include "svg.hh"
+#include "ui_connection_widget.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -145,10 +145,8 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
       if (auto machine = here.ParentAs<Machine>()) {
         Location& l = machine->Create(*prototype);
         result = &l;
-        Rect object_bounds = l.WidgetForObject().Shape().getBounds();
-        l.position =
-            here.position + here.WidgetForObject().ArgStart(*this).pos - object_bounds.TopCenter();
-        PositionBelow(here, l);
+        PositionAhead(here, *this, l);
+        PositionBelow(l, here);
         AnimateGrowFrom(here,
                         l);  // this must go before UpdateAutoconnectArgs because of animation_state
         l.UpdateAutoconnectArgs();

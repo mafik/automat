@@ -26,6 +26,7 @@
 #include "font.hh"
 #include "format.hh"
 #include "math.hh"
+#include "raycast.hh"
 #include "root_widget.hh"
 #include "textures.hh"
 #include "timer_thread.hh"
@@ -390,24 +391,41 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-void PositionAhead(Location& origin, Argument& arg, Location& target) {
+void PositionAhead(Location& origin, const Argument& arg, Location& target) {
   auto& origin_widget = origin.WidgetForObject();
-  Vec2AndDir arg_start = arg.Start(origin_widget, origin);
+  auto origin_shape = origin_widget.Shape();           // origin's local coordinates
+  Vec2AndDir arg_start = origin_widget.ArgStart(arg);  // origin's local coordinates
+  Vec2 drop_point;
+
+  // Construct a matrix that transforms from the origin's local coordinates to the canvas
+  // coordinates. Normally this could be done with TransformUp but that would include the animation.
+  // We don't want to include the animation when placing objects around.
+  SkMatrix m = SkMatrix::I();
+  m.postScale(origin.scale, origin.scale);
+  m.postTranslate(origin.position.x, origin.position.y);
+  if (auto intersection = Raycast(origin_shape, arg_start)) {
+    // Try to drop the target location so that it overlaps with the origin shape by 1mm.
+    drop_point = m.mapPoint(*intersection - Vec2::Polar(arg_start.dir, 1_mm));
+  } else {
+    // Otherwise put it 3cm ahead of the argument start point.
+    drop_point = m.mapPoint(arg_start.pos + Vec2::Polar(arg_start.dir, 3_cm));
+  }
 
   // Pick the position that allows the cable to come in most horizontally (left to right).
   Vec2 best_connector_pos = Vec2(0, 0);
   float best_angle_diff = 100;
   Vec<Vec2AndDir> connector_positions;
-  target.WidgetForObject().ConnectionPositions(connector_positions);
+  auto& target_widget = target.WidgetForObject();
+  target_widget.ConnectionPositions(connector_positions);
   for (auto& pos : connector_positions) {
-    float angle_diff = (pos.dir - arg_start.dir - 180_deg).ToRadians();
+    float angle_diff = (pos.dir - arg_start.dir).ToRadians();
     if (fabs(angle_diff) < fabs(best_angle_diff)) {
       best_connector_pos = pos.pos;
       best_angle_diff = angle_diff;
     }
   }
 
-  target.position = arg_start.pos + Vec2(3_cm, 0) - best_connector_pos;
+  target.position = Round((drop_point - best_connector_pos) * 1000) / 1000;
 }
 
 void AnimateGrowFrom(Location& source, Location& grown) {

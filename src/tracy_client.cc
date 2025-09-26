@@ -8,4 +8,4 @@
 #endif
 
 //  Compile TracyClient.cpp using the same flags as the rest of the project
-#include <TracyClient.cpp>
+#include <tracy/../TracyClient.cpp>

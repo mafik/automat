@@ -12,8 +12,7 @@ tracy.SkipConfigure()
 # Warning: Tracy likes to pick a wrong MSVC runtime library (dynamic instead of
 # static or release instead of debug) when built with CMake or Meson.
 
-tracy.InstallWhenIncluded(r'^(tracy/.*|TracyClient\.cpp)')
-tracy.AddCompileArgs('-I', build.PREFIX / 'include' / 'tracy')
+tracy.InstallWhenIncluded(r'^tracy/.*')
 tracy.AddCompileArgs('-I', tracy.src_dir / 'public')
 tracy.AddCompileArgs('-DTRACY_ENABLE', '-DTRACY_ON_DEMAND')
 

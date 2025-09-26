@@ -1,26 +1,23 @@
 // kind=shader
 
-uniform shader iChannel0;
-uniform mat3 mPxToLocal;
-uniform float2 iResolution;
+uniform shader iBackground;
+uniform float2 iCenterPx;
 uniform float iTime;
-uniform float radius;
-
-float kMaxRadius = 0.03;
+uniform float iRadiusPx;
+uniform float iMaxRadiusPx;
 
 vec4 main(vec2 px) {
-    vec2 local = (mPxToLocal * vec3(px, 1)).xy;
-    vec2 U = (local - iResolution) / kMaxRadius;  // normalized distance from the corner (1 is max radius)
+    vec2 U = (px - iCenterPx) / iMaxRadiusPx;  // normalized distance from the corner (1 is max radius)
     float r = length(U);
     if (r > 2) {
         return vec4(0);
     }
     float a = atan(U.y, U.x);
-    float t = radius / kMaxRadius;
+    float t = iRadiusPx / iMaxRadiusPx;
     float phase = a * 16 * t + r * 20 * t - iTime * 2;
     vec2 wave = vec2(sin(phase), cos(phase));
 
-    vec4 O = iChannel0.eval(px + wave * 10 * smoothstep(2, 1, sqrt(r * 2)) * t);
+    vec4 O = iBackground.eval(px + wave * 10 * smoothstep(2, 1, sqrt(r * 2)) * t);
     float density = max(abs(wave.x) * 0.8 - r / t * 6 + 8.0, 0);
     vec3 color = density - vec3(0.9, 1.5, 0.4);
     O = mix(O, vec4(max(color, vec3(0)), 1), density);  // accreation disc, note that alpha may be > 1 leading to cool effects

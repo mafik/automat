@@ -36,8 +36,6 @@ void BlackHole::Draw(SkCanvas& canvas) const {
   }
 
   auto localToPx = canvas.getLocalToDeviceAs3x3();
-  SkMatrix pxToLocal;
-  (void)localToPx.invert(&pxToLocal);
 
   canvas.save();
   canvas.resetMatrix();
@@ -50,12 +48,12 @@ void BlackHole::Draw(SkCanvas& canvas) const {
     FATAL << status;
   }
   auto builder = SkRuntimeEffectBuilder(effect);
+  builder.uniform("iCenterPx") = localToPx.mapPoint(root_widget.size);
   builder.uniform("iTime") = (float)time::SecondsSinceEpoch();
-  builder.uniform("mPxToLocal") = pxToLocal;
-  builder.uniform("iResolution") = root_widget.size;
-  builder.uniform("radius") = radius;
+  builder.uniform("iRadiusPx") = localToPx.mapRadius(radius);
+  builder.uniform("iMaxRadiusPx") = localToPx.mapRadius(kMaxRadius);
 
-  auto runtime_shader_filter = SkImageFilters::RuntimeShader(builder, "iChannel0", nullptr);
+  auto runtime_shader_filter = SkImageFilters::RuntimeShader(builder, "iBackground", nullptr);
 
   auto save_layer_rec = SkCanvas::SaveLayerRec(nullptr, nullptr, runtime_shader_filter.get(),
                                                SkCanvas::kInitWithPrevious_SaveLayerFlag);

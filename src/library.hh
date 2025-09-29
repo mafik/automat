@@ -25,7 +25,7 @@
 #include "library_instruction.hh"     // IWYU pragma: keep
 #include "library_key_presser.hh"     // IWYU pragma: keep
 #include "library_macro_recorder.hh"  // IWYU pragma: keep
-#include "library_mouse_click.hh"     // IWYU pragma: keep
+#include "library_mouse.hh"           // IWYU pragma: keep
 #include "library_number.hh"          // IWYU pragma: keep
 #include "library_timeline.hh"        // IWYU pragma: keep
 #include "library_timer.hh"           // IWYU pragma: keep

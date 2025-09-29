@@ -27,7 +27,6 @@
 #include "font.hh"
 #include "key_button.hh"
 #include "library_mouse.hh"
-#include "library_mouse_move.hh"
 #include "math.hh"
 #include "number_text_field.hh"
 #include "pointer.hh"

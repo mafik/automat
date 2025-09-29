@@ -8,8 +8,7 @@
 #include "library_instruction_library.hh"
 #include "library_key_presser.hh"
 #include "library_macro_recorder.hh"
-#include "library_mouse_click.hh"
-#include "library_mouse_move.hh"
+#include "library_mouse.hh"
 #include "library_number.hh"
 #include "library_tesseract_ocr.hh"
 #include "library_timeline.hh"
@@ -53,11 +52,9 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<TimerDelay>(null_parent);
   index.Register<HotKey>(null_parent);
   index.Register<KeyPresser>(null_parent);
-  index.Register<MouseClick>(null_parent, ui::PointerButton::Left, true);
-  index.Register<MouseClick>(null_parent, ui::PointerButton::Left, false);
-  index.Register<MouseClick>(null_parent, ui::PointerButton::Right, true);
-  index.Register<MouseClick>(null_parent, ui::PointerButton::Right, false);
-  index.Register<MouseMove>();
+  index.Register<Mouse>();
+  index.Register<MouseMove, HideInToolbar>();
+  index.Register<MouseButtonEvent, HideInToolbar>(ui::PointerButton::Unknown, false);
   index.Register<Number>(null_parent);
   index.Register<Timeline>();
   index.Register<InstructionLibrary>();

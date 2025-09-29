@@ -15,10 +15,9 @@
 #include "audio.hh"
 #include "color.hh"
 #include "embedded.hh"
-#include "ui_connection_widget.hh"
 #include "keyboard.hh"
 #include "library_key_presser.hh"
-#include "library_mouse_move.hh"
+#include "library_mouse.hh"
 #include "library_timeline.hh"
 #include "log.hh"
 #include "math.hh"
@@ -27,6 +26,7 @@
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
+#include "ui_connection_widget.hh"
 #include "widget.hh"
 
 namespace automat::library {

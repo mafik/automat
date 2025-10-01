@@ -45,7 +45,7 @@ static SkPath GetHandShape() {
 }
 
 float KeyPresserButton::PressRatio() const {
-  if (key_presser->key_selector || key_presser->key_pressed) {
+  if (key_presser->key_selector || key_presser->IsRunning()) {
     return 1;
   }
   return 0;
@@ -78,12 +78,7 @@ animation::Phase KeyPresser::Tick(time::Timer&) {
 void KeyPresser::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 
-  static auto pointing_hand_color =
-      PersistentImage::MakeFromAsset(embedded::assets_pointing_hand_color_webp, {.height = 8.8_mm});
-  static auto pressing_hand_color =
-      PersistentImage::MakeFromAsset(embedded::assets_pressing_hand_color_webp, {.height = 8.8_mm});
-
-  auto& img = key_pressed ? pressing_hand_color : pointing_hand_color;
+  auto& img = IsRunning() ? textures::PressingHandColor() : textures::PointingHandColor();
   canvas.save();
   canvas.translate(4.5_mm, -6.8_mm);
   canvas.rotate(15);
@@ -211,7 +206,6 @@ void KeyPresser::OnRun(Location& here, RunTask& run_task) {
   ZoneScopedN("KeyPresser");
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
-  key_pressed = true;
   WakeAnimation();
   BeginLongRunning(here, run_task);
 }
@@ -219,7 +213,6 @@ void KeyPresser::OnRun(Location& here, RunTask& run_task) {
 void KeyPresser::OnCancel() {
   audio::Play(embedded::assets_SFX_key_up_wav);
   SendKeyEvent(key, false);
-  key_pressed = false;
   WakeAnimation();
 }
 
@@ -247,9 +240,5 @@ void KeyPresser::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
-KeyPresser::~KeyPresser() {
-  if (key_pressed) {
-    Cancel();
-  }
-}
+KeyPresser::~KeyPresser() { OnLongRunningDestruct(); }
 }  // namespace automat::library

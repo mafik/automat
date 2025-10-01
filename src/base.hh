@@ -49,10 +49,21 @@ struct Object;
 struct Location;
 struct Machine;
 
+// Interface for objects that can run long running jobs.
+//
+// Destructors of derived classes should call OnLongRunningDestruct() to ensure that the long
+// running job is cancelled. This must be done by the derived class because ~LongRunning shouldn't
+// invoke abstract virtual functions (because derived class data has already been destroyed).
 struct LongRunning : OnOff {
   RunTask* long_running_task = nullptr;
 
   virtual ~LongRunning() {
+    if (IsRunning()) {
+      ERROR << "Instance of the LongRunning interface didn't call OnLongRunningDestruct()";
+    }
+  }
+
+  void OnLongRunningDestruct() {
     if (IsRunning()) {
       Cancel();
     }

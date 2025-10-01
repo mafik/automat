@@ -90,4 +90,11 @@ struct AutomatImageProvider : public skgpu::graphite::ImageProvider {
 
 extern sk_sp<skgpu::graphite::ImageProvider> image_provider;
 
+namespace textures {
+
+PersistentImage& PointingHandColor();
+PersistentImage& PressingHandColor();
+
+}  // namespace textures
+
 }  // namespace automat

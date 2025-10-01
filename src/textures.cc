@@ -7,9 +7,11 @@
 #include <include/core/SkShader.h>
 #include <include/gpu/graphite/Image.h>
 
+#include "embedded.hh"
 #include "log.hh"
 #include "math.hh"
 #include "time.hh"
+#include "units.hh"
 
 namespace automat {
 
@@ -110,5 +112,21 @@ void AutomatImageProvider::TickCache() {
   }
   last_tick = time::SteadyNow();
 }
+
+namespace textures {
+
+PersistentImage& PointingHandColor() {
+  static auto pointing_hand_color =
+      PersistentImage::MakeFromAsset(embedded::assets_pointing_hand_color_webp, {.height = 8.8_mm});
+  return pointing_hand_color;
+}
+
+PersistentImage& PressingHandColor() {
+  static auto pressing_hand_color =
+      PersistentImage::MakeFromAsset(embedded::assets_pressing_hand_color_webp, {.height = 8.8_mm});
+  return pressing_hand_color;
+}
+
+}  // namespace textures
 
 }  // namespace automat

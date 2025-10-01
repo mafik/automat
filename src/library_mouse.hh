@@ -46,4 +46,22 @@ struct MouseMove : Object {
   void OnMouseMove(Vec2);
 };
 
+struct MouseButtonPresser : Object, Runnable, LongRunning {
+  ui::PointerButton button;
+
+  MouseButtonPresser(ui::PointerButton button);
+  MouseButtonPresser();
+  ~MouseButtonPresser() override;
+  string_view Name() const override;
+  Ptr<Object> Clone() const override;
+  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override;
+
+  void OnRun(Location& here, RunTask& run_task) override;
+  void OnCancel() override;
+  LongRunning* AsLongRunning() override { return this; }
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
+};
+
 }  // namespace automat::library

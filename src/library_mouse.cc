@@ -161,10 +161,18 @@ struct MouseWidget : Object::FallbackWidget {
     static MakeObjectOption rmb_up_option = []() {
       return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Right, false));
     }();
+    static MakeObjectOption lmb_presser_option = []() {
+      return MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::Left));
+    }();
+    static MakeObjectOption rmb_presser_option = []() {
+      return MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::Right));
+    }();
     options_visitor(lmb_down_option);
     options_visitor(lmb_up_option);
     options_visitor(rmb_down_option);
     options_visitor(rmb_up_option);
+    options_visitor(lmb_presser_option);
+    options_visitor(rmb_presser_option);
   }
 };
 
@@ -214,12 +222,7 @@ struct MouseButtonEventWidget : MouseWidget {
   }
 };
 
-string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
-
-Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
-void MouseButtonEvent::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
-void MouseButtonEvent::OnRun(Location&, RunTask&) {
-  ZoneScopedN("MouseClick");
+static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
 #if defined(_WIN32)
   INPUT input;
   input.type = INPUT_MOUSE;
@@ -247,6 +250,15 @@ void MouseButtonEvent::OnRun(Location&, RunTask&) {
   xcb_test_fake_input(xcb::connection, type, detail, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
   xcb::flush();
 #endif
+}
+
+string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
+
+Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
+void MouseButtonEvent::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
+void MouseButtonEvent::OnRun(Location&, RunTask&) {
+  ZoneScopedN("MouseClick");
+  SendMouseButtonEvent(button, down);
 }
 audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
@@ -452,4 +464,114 @@ std::unique_ptr<ui::Widget> Mouse::MakeWidget(ui::Widget* parent) {
 }
 
 Ptr<Object> Mouse::Clone() const { return MAKE_PTR(Mouse); }
+
+struct MouseButtonPresserWidget : MouseWidget {
+  MouseButtonPresserWidget(ui::Widget* parent, WeakPtr<Object>&& object)
+      : MouseWidget(parent, std::move(object)) {}
+
+  void VisitOptions(const OptionsVisitor& options_visitor) const override {
+    // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
+    // other objects from here.
+    FallbackWidget::VisitOptions(options_visitor);
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    MouseWidget::Draw(canvas);
+    ui::PointerButton button;
+    bool pressed;
+    {
+      Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
+      button = object->button;
+      pressed = object->IsRunning();
+    }
+
+    auto& mask =
+        button == ui::PointerButton::Left ? mouse::lmb_mask_texture : mouse::rmb_mask_texture;
+    {  // Highlight the button in ivory
+      SkPaint layer_paint;
+      layer_paint.setBlendMode(SkBlendMode::kScreen);
+      canvas.saveLayer(nullptr, &layer_paint);
+      mouse::base_texture.draw(canvas);
+      mask.paint.setBlendMode(SkBlendMode::kSrcIn);
+      mask.draw(canvas);
+      canvas.drawColor("#9f8100"_color, SkBlendMode::kSrcIn);  // Ivory color
+      canvas.restore();
+    }
+
+    auto& img = pressed ? textures::PressingHandColor() : textures::PointingHandColor();
+    if (button == ui::PointerButton::Left) {
+      canvas.translate(0_mm, 16_mm);
+    } else {
+      canvas.translate(10_mm, 16_mm);
+    }
+    img.draw(canvas);
+  }
+};
+
+MouseButtonPresser::MouseButtonPresser(ui::PointerButton button) : button(button) {}
+MouseButtonPresser::MouseButtonPresser() : button(ui::PointerButton::Unknown) {}
+
+string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; }
+
+Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
+
+std::unique_ptr<ui::Widget> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
+  return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());
+}
+
+void MouseButtonPresser::OnRun(Location& here, RunTask& run_task) {
+  ZoneScopedN("MouseButtonPresser");
+  audio::Play(embedded::assets_SFX_mouse_down_wav);
+  SendMouseButtonEvent(button, true);
+  BeginLongRunning(here, run_task);
+  WakeWidgetsAnimation();
+}
+
+void MouseButtonPresser::OnCancel() {
+  audio::Play(embedded::assets_SFX_mouse_up_wav);
+  SendMouseButtonEvent(button, false);
+  WakeWidgetsAnimation();
+}
+
+void MouseButtonPresser::SerializeState(Serializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+  writer.Key("button");
+  switch (button) {
+    case ui::PointerButton::Left:
+      writer.String("left");
+      break;
+    case ui::PointerButton::Right:
+      writer.String("right");
+      break;
+    default:
+      writer.String("unknown");
+      break;
+  }
+  writer.EndObject();
+}
+
+void MouseButtonPresser::DeserializeState(Location& l, Deserializer& d) {
+  Status status;
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "button") {
+      Str button_name;
+      d.Get(button_name, status);
+      if (button_name == "left") {
+        button = ui::PointerButton::Left;
+      } else if (button_name == "right") {
+        button = ui::PointerButton::Right;
+      } else {
+        AppendErrorMessage(status) += "Unknown button name: " + button_name;
+        button = ui::PointerButton::Unknown;
+      }
+    }
+  }
+  if (!OK(status)) {
+    l.ReportError("Failed to deserialize MouseButtonPresser. " + status.ToStr());
+  }
+}
+
+MouseButtonPresser::~MouseButtonPresser() { OnLongRunningDestruct(); }
+
 }  // namespace automat::library

@@ -284,8 +284,6 @@ struct Widget : Trackable, OptionsProvider {
   // Local (metric) coordinates.
   virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const;
 
-  static Widget& ForObject(Object&, const Widget* parent);
-
   // Find the shape of this widget. If it's shape is empty, combine its children's shapes.
   SkPath GetShapeRecursive() const;
 

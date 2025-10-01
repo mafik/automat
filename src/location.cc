@@ -667,4 +667,33 @@ RunTask& Location::GetRunTask() {
   }
   return *run_task;
 }
+
+float Location::GetBaseScale() const {
+  if (iconified && object_widget && !object_widget->CustomIconification()) {
+    auto bounds = object_widget->CoarseBounds().rect;
+    return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
+  }
+  return 1;
+}
+
+void Location::Iconify() {
+  iconified = true;
+  if (object_widget && object_widget->CustomIconification()) {
+    object_widget->WakeAnimation();
+  } else {
+    scale = GetBaseScale();
+    WakeAnimation();
+  }
+}
+
+void Location::Deiconify() {
+  iconified = false;
+  if (object_widget && object_widget->CustomIconification()) {
+    object_widget->WakeAnimation();
+  } else {
+    scale = GetBaseScale();
+    WakeAnimation();
+  }
+}
+
 }  // namespace automat

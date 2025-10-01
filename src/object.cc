@@ -9,10 +9,10 @@
 #include "base.hh"
 #include "drag_action.hh"
 #include "font.hh"
-#include "ui_constants.hh"
 #include "location.hh"
 #include "menu.hh"
 #include "root_widget.hh"
+#include "ui_constants.hh"
 
 namespace automat {
 
@@ -121,6 +121,8 @@ struct MoveOption : TextOption {
     if (object == nullptr) {
       return nullptr;
     }
+    // Sometimes we may want to pick an object that's stored within another object.
+    // This branch handles such cases.
     if (location->object != object) {
       if (auto container = location->object->AsContainer()) {
         Vec2 contact_point{0, 0};
@@ -169,6 +171,30 @@ struct RunOption : TextOption {
   }
 };
 
+struct IconifyOption : TextOption {
+  WeakPtr<Location> weak;
+  IconifyOption(WeakPtr<Location> weak) : TextOption("Iconify"), weak(weak) {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<IconifyOption>(weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    if (auto loc = weak.lock()) {
+      loc->Iconify();
+    }
+    return nullptr;
+  }
+};
+
+struct DeiconifyOption : TextOption {
+  WeakPtr<Location> weak;
+  DeiconifyOption(WeakPtr<Location> weak) : TextOption("Deiconify"), weak(weak) {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<DeiconifyOption>(weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    if (auto loc = weak.lock()) {
+      loc->Deiconify();
+    }
+    return nullptr;
+  }
+};
+
 void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
   if (auto loc = ui::Closest<Location>(const_cast<WidgetBase&>(*this))) {
     auto loc_weak = loc->AcquireWeakPtr();
@@ -180,11 +206,17 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
       RunOption run{loc_weak};
       visitor(run);
     }
+    if (loc->iconified) {
+      DeiconifyOption deiconify{loc_weak};
+      visitor(deiconify);
+    } else {
+      IconifyOption iconify{loc_weak};
+      visitor(iconify);
+    }
   }
 }
 
-std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p,
-                                                       ui::ActionTrigger btn) {
+std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
     MoveOption move{Closest<Location>(*p.hover)->AcquireWeakPtr(), object};
     return move.Activate(p);
@@ -221,6 +253,10 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
+Object::WidgetBase& Object::FindWidget(const ui::Widget* parent) {
+  return parent->FindRootWidget().widgets.For(*this, parent);
+}
+
 void Object::ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb) {
   for (auto* root_widget : ui::root_widgets) {
     if (auto widget = root_widget->widgets.Find(*this)) {
@@ -231,6 +267,13 @@ void Object::ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb)
 
 void Object::WakeWidgetsAnimation() {
   ForEachWidget([](ui::RootWidget&, ui::Widget& widget) { widget.WakeAnimation(); });
+}
+
+bool Object::WidgetBase::IsIconified() const {
+  if (auto loc = ui::Closest<Location>(const_cast<WidgetBase&>(*this))) {
+    return loc->iconified;
+  }
+  return false;
 }
 
 }  // namespace automat

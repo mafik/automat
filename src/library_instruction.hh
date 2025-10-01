@@ -5,9 +5,9 @@
 #include <llvm/MC/MCInst.h>
 
 #include "base.hh"
-#include "ui_small_buffer_widget.hh"
 #include "machine_code.hh"
 #include "textures.hh"
+#include "ui_small_buffer_widget.hh"
 
 namespace automat::library {
 
@@ -116,7 +116,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
     return NestedWeakPtr<const mc::Inst>(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
   }
 
-  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override {
+  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override {
     return std::make_unique<Widget>(parent, AcquireWeakPtr<Object>());
   }
 

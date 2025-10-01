@@ -30,13 +30,14 @@
 #include "connector_optical.hh"
 #include "embedded.hh"
 #include "font.hh"
-#include "ui_constants.hh"
 #include "image_provider.hh"
 #include "log.hh"
 #include "str.hh"
 #include "svg.hh"
 #include "textures.hh"
 #include "time.hh"
+#include "ui_constants.hh"
+
 
 using namespace std;
 
@@ -687,7 +688,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
         inner_outer.moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner]);
         inner_outer.lineTo(layout[(AxisX)i, (AxisY)j, Back, Outer]);
         ui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
-                       kEdgeWidth * 0.5, kEdgeWidth * 0.5, nullptr);
+                      kEdgeWidth * 0.5, kEdgeWidth * 0.5, nullptr);
       }
     }
     {    // sides of the inner cube
@@ -736,7 +737,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
     inner_back_arcline.Outset(kEdgeWidth * 0.25);
     inner_back = inner_back_arcline.ToPath();
     ui::DrawCable(canvas, inner_back, color_inner_back, CableTexture::Smooth, kEdgeWidth * 0.5,
-                   kEdgeWidth * 0.5, nullptr);
+                  kEdgeWidth * 0.5, nullptr);
 
     for (int i = 0; i < 2; ++i) {
       for (int j = 0; j < 2; ++j) {
@@ -744,7 +745,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
         front_back.moveTo(layout[(AxisX)i, (AxisY)j, Back, Inner]);
         front_back.lineTo(layout[(AxisX)i, (AxisY)j, Front, Inner]);
         ui::DrawCable(canvas, front_back, color_inner, CableTexture::Smooth, kEdgeWidth * 0.5,
-                       kEdgeWidth, nullptr);
+                      kEdgeWidth, nullptr);
       }
     }
     for (int i = 0; i < 2; ++i) {
@@ -753,7 +754,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
         inner_outer.moveTo(layout[(AxisX)i, (AxisY)j, Front, Inner]);
         inner_outer.lineTo(layout[(AxisX)i, (AxisY)j, Front, Outer]);
         ui::DrawCable(canvas, inner_outer, color_inner_outer, CableTexture::Braided,
-                       kEdgeWidth * 0.75, kEdgeWidth, nullptr);
+                      kEdgeWidth * 0.75, kEdgeWidth, nullptr);
       }
     }
     canvas.restore();
@@ -762,7 +763,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
         RectPath(layout[Left, Top, Front, Inner], layout[Right, Top, Front, Inner],
                  layout[Right, Bottom, Front, Inner], layout[Left, Bottom, Front, Inner]);
     ui::DrawCable(canvas, inner_front, color_inner, CableTexture::Smooth, kEdgeWidth * 0.75,
-                   kEdgeWidth * 0.75, nullptr);
+                  kEdgeWidth * 0.75, nullptr);
 
     auto& border_image = BorderImage();
     canvas.save();
@@ -1053,7 +1054,7 @@ const SkPath TesseractWidget::kEyeShape = PathFromSVG(
     "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
     "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
 
-std::unique_ptr<ui::Widget> TesseractOCR::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetBase> TesseractOCR::MakeWidget(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, AcquireWeakPtr<Object>());
 }
 

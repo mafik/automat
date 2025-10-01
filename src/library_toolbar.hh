@@ -21,7 +21,7 @@ struct PrototypeButton : Widget {
   PrototypeButton(Widget* parent, Ptr<Object>& proto) : ui::Widget(parent), proto(proto) {}
 
   void Init() {
-    proto_widget = &Widget::ForObject(*proto, this);
+    proto_widget = &proto->FindWidget(this);
     auto rect = proto_widget->CoarseBounds().rect;
     natural_width =
         std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());

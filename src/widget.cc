@@ -176,10 +176,6 @@ void Widget::ValidateHierarchy() {
   }
 }
 
-Widget& Widget::ForObject(Object& object, const Widget* parent) {
-  return parent->FindRootWidget().widgets.For(object, parent);
-}
-
 SkPath Widget::GetShapeRecursive() const {
   SkPath shape = Shape();
   if (shape.isEmpty()) {  // only descend into children if the parent widget has no shape

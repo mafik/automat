@@ -100,9 +100,24 @@ struct Object : public ReferenceCounted {
     Ptr<T> LockObject() const {
       return object.Lock().Cast<T>();
     }
+
+    // Objects in Automat can be fairly large. Iconification is a mechanism that allows players to
+    // shrink them so that they fit in a 1x1cm square.
+    //
+    // Iconification state is being tracked by Location::iconified bool.
+    //
+    // Usually Location will take care of iconification by animating the object's widget scale to
+    // make it fit in 1x1cm square. Sometimes an Object may provide its own animation instead. If
+    // that's the case then it should return true from CustomIconification() and check IsIconified()
+    // within its Tick() function.
+    virtual bool CustomIconification() { return false; }
+    bool IsIconified() const;
   };
 
-  virtual std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) {
+  // Find or create a widget for this object, under the given parent.
+  WidgetBase& FindWidget(const ui::Widget* parent);
+
+  virtual std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) {
     if (auto w = dynamic_cast<ui::Widget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto widget_base = dynamic_cast<WidgetBase*>(this)) {
@@ -110,12 +125,13 @@ struct Object : public ReferenceCounted {
       }
       // Proxy object that can be lifetime-managed by the UI infrastructure (without
       // affecting the original object's lifetime).
-      struct HybridAdapter : ui::Widget {
+      struct HybridAdapter : WidgetBase {
         Ptr<Object> ptr;
         Widget& widget;
         HybridAdapter(Widget* parent, Object& obj, Widget& widget)
-            : ui::Widget(parent), ptr(obj.AcquirePtr()), widget(widget) {
+            : WidgetBase(parent), ptr(obj.AcquirePtr()), widget(widget) {
           widget.parent = this;
+          object = ptr;
         }
         StrView Name() const override { return "HybridAdapter"; }
         SkPath Shape() const override { return widget.Shape(); }
@@ -123,6 +139,10 @@ struct Object : public ReferenceCounted {
         void FillChildren(Vec<Widget*>& children) override { children.push_back(&widget); }
         void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
           widget.ConnectionPositions(out_positions);
+        }
+        void Draw(SkCanvas& canvas) const override {
+          // We don't want the default green fill for the object.
+          Widget::Draw(canvas);
         }
       };
       return std::make_unique<HybridAdapter>(parent, *this, *w);

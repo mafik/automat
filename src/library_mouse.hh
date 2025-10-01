@@ -21,7 +21,7 @@ namespace automat::library {
 struct Mouse : Object {
   string_view Name() const override { return "Mouse"; }
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override;
 };
 
 struct MouseButtonEvent : Object, Runnable {
@@ -33,7 +33,7 @@ struct MouseButtonEvent : Object, Runnable {
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location&, RunTask&) override;
   audio::Sound& NextSound() override;
-  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override;
 
   void SerializeState(Serializer& writer, const char* key = "value") const override;
   void DeserializeState(Location& l, Deserializer& d) override;
@@ -42,7 +42,7 @@ struct MouseButtonEvent : Object, Runnable {
 struct MouseMove : Object {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override;
   void OnMouseMove(Vec2);
 };
 
@@ -54,7 +54,7 @@ struct MouseButtonPresser : Object, Runnable, LongRunning {
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override;
 
   void OnRun(Location& here, RunTask& run_task) override;
   void OnCancel() override;

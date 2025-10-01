@@ -52,8 +52,8 @@ void DragLocationAction::Update() {
   current_position = pointer.PositionWithinRootMachine();
 
   Vec2 position = current_position - contact_point;
-  float scale = 1;
-  auto& base = *locations.back();
+  Location& base = *locations.back();
+  float scale = base.GetBaseScale();
   Vec2 base_pivot = base.ScalePivot();
 
   if (ui::DropTarget* drop_target = FindDropTarget(*this)) {

@@ -18,11 +18,11 @@
 
 #include "drag_action.hh"
 #include "embedded.hh"
-#include "ui_connection_widget.hh"
 #include "location.hh"
 #include "root_widget.hh"
 #include "tasks.hh"
 #include "timer_thread.hh"
+#include "ui_connection_widget.hh"
 #include "widget.hh"
 
 using namespace std;
@@ -309,21 +309,21 @@ void Machine::PreDraw(SkCanvas& canvas) const {
 }
 
 void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
-  scale = 1.0;
-
   Rect rect = location.WidgetForObject().Shape().getBounds();
-  if (position.x + rect.left < -0.5) {
-    position.x = -rect.left - 0.5;
+  if (scale != 1) {
+    if (fixed_point) {
+      rect = rect.MoveBy(-*fixed_point);
+    }
+    rect.left *= scale;
+    rect.right *= scale;
+    rect.bottom *= scale;
+    rect.top *= scale;
+    if (fixed_point) {
+      rect = rect.MoveBy(*fixed_point);
+    }
   }
-  if (position.x + rect.right > 0.5) {
-    position.x = -rect.right + 0.5;
-  }
-  if (position.y + rect.bottom < -0.5) {
-    position.y = -rect.bottom - 0.5;
-  }
-  if (position.y + rect.top > 0.5) {
-    position.y = -rect.top + 0.5;
-  }
+  position.x = clamp(position.x, -rect.left - 50_cm, -rect.right + 50_cm);
+  position.y = clamp(position.y, -rect.bottom - 50_cm, -rect.top + 50_cm);
   position = Vec2(roundf(position.x * 1000) / 1000., roundf(position.y * 1000) / 1000.);
 }
 

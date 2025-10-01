@@ -62,10 +62,18 @@ struct Location : ReferenceCounted, ui::Widget {
   WeakPtr<Location> parent_location;
 
   Ptr<Object> object;
-  mutable Widget* object_widget = nullptr;
+  mutable Object::WidgetBase* object_widget = nullptr;
 
   Vec2 position = {0, 0};
   float scale = 1.f;
+  bool iconified = false;
+
+  void Iconify();
+  void Deiconify();
+
+  // Get the default scale that this location would like to have.
+  // Usually it's 1 but when it's iconified, it may want to shrink itself.
+  float GetBaseScale() const;
 
   // Connections of this Location.
   // Connection is owned by both incoming & outgoing locations.
@@ -89,10 +97,10 @@ struct Location : ReferenceCounted, ui::Widget {
 
   // Find (or create if needed) the Widget for this location's object.
   // Shortcut for Widget::ForObject(location.object, location)
-  Widget& WidgetForObject() const {
+  Object::WidgetBase& WidgetForObject() const {
     if (!object_widget) {
       if (object) {
-        object_widget = &Widget::ForObject(*object, this);
+        object_widget = &object->FindWidget(this);
       }
     }
     return *object_widget;

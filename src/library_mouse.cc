@@ -63,7 +63,7 @@ SkRuntimeEffect& GetPixelGridRuntimeEffect() {
 namespace automat::library {
 
 struct ObjectIcon : ui::Widget {
-  std::unique_ptr<ui::Widget> object_widget;
+  std::unique_ptr<Object::WidgetBase> object_widget;
   ObjectIcon(ui::Widget* parent) : ui::Widget(parent) {}
   SkPath Shape() const override { return SkPath(); }
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
@@ -264,7 +264,7 @@ audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-std::unique_ptr<ui::Widget> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetBase> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonEventWidget>(parent, AcquireWeakPtr());
 }
 
@@ -336,8 +336,7 @@ struct MouseMoveWidget : Object::WidgetBase {
   std::atomic<int> trail_end_idx = 0;
   std::atomic<Vec2> trail[kMaxTrailPoints] = {};
 
-  MouseMoveWidget(ui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move)
-      : WidgetBase(parent) {
+  MouseMoveWidget(ui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move) : WidgetBase(parent) {
     object = std::move(weak_mouse_move);
   }
   SkPath Shape() const override {
@@ -433,7 +432,7 @@ struct MouseMoveWidget : Object::WidgetBase {
   }
 };
 
-std::unique_ptr<ui::Widget> MouseMove::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetBase> MouseMove::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseMoveWidget>(parent, AcquireWeakPtr());
 }
 
@@ -459,7 +458,7 @@ void MouseMove::OnMouseMove(Vec2 vec) {
   });
 }
 
-std::unique_ptr<ui::Widget> Mouse::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetBase> Mouse::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseWidget>(parent, AcquireWeakPtr());
 }
 
@@ -515,7 +514,7 @@ string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; 
 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
 
-std::unique_ptr<ui::Widget> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetBase> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());
 }
 

@@ -83,10 +83,10 @@ struct Object : public ReferenceCounted {
   }
 
   // Green box with a name of the object.
-  struct FallbackWidget : ui::Widget {
+  struct WidgetBase : ui::Widget {
     WeakPtr<Object> object;
 
-    FallbackWidget(Widget* parent) : ui::Widget(parent) {}
+    WidgetBase(Widget* parent) : ui::Widget(parent) {}
 
     std::string_view Name() const override;
     virtual float Width() const;
@@ -105,8 +105,8 @@ struct Object : public ReferenceCounted {
   virtual std::unique_ptr<ui::Widget> MakeWidget(ui::Widget* parent) {
     if (auto w = dynamic_cast<ui::Widget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
-      if (auto fallback_widget = dynamic_cast<FallbackWidget*>(this)) {
-        fallback_widget->object = AcquireWeakPtr();
+      if (auto widget_base = dynamic_cast<WidgetBase*>(this)) {
+        widget_base->object = AcquireWeakPtr();
       }
       // Proxy object that can be lifetime-managed by the UI infrastructure (without
       // affecting the original object's lifetime).
@@ -127,7 +127,7 @@ struct Object : public ReferenceCounted {
       };
       return std::make_unique<HybridAdapter>(parent, *this, *w);
     }
-    auto w = std::make_unique<FallbackWidget>(parent);
+    auto w = std::make_unique<WidgetBase>(parent);
     w->object = AcquireWeakPtr();
     return w;
   }

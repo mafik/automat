@@ -27,7 +27,7 @@ struct Register;
 struct Assembler;
 struct AssemblerWidget;
 
-struct RegisterWidget : public Object::FallbackWidget {
+struct RegisterWidget : public Object::WidgetBase {
   constexpr static Rect kBaseRect = Rect::MakeAtZero<CenterX, CenterY>(3_cm, 3_cm);
   constexpr static Rect kBoundingRect = []() {
     auto rect = kBaseRect;
@@ -39,7 +39,7 @@ struct RegisterWidget : public Object::FallbackWidget {
   constexpr static float kCellHeight = kInnerRect.Height() / 8;
   constexpr static float kCellWidth = kInnerRect.Width() / 8;
 
-  RegisterWidget(Widget* parent, WeakPtr<Object> register_weak) : FallbackWidget(parent) {
+  RegisterWidget(Widget* parent, WeakPtr<Object> register_weak) : WidgetBase(parent) {
     object = std::move(register_weak);
   }
   Ptr<Register> LockRegister() const { return LockObject<Register>(); }
@@ -50,7 +50,7 @@ struct RegisterWidget : public Object::FallbackWidget {
   void VisitOptions(const OptionsVisitor&) const override;
 };
 
-struct AssemblerWidget : Object::FallbackWidget, ui::DropTarget {
+struct AssemblerWidget : Object::WidgetBase, ui::DropTarget {
   constexpr static float kWidth = 8_cm;
   constexpr static float kHeight = 8_cm;
   constexpr static float kRadius = 1_cm;

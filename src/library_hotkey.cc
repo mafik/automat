@@ -170,7 +170,7 @@ vec4 main(in vec2 fragCoord) {
 // }
 
 HotKey::HotKey(ui::Widget* parent)
-    : FallbackWidget(parent),
+    : WidgetBase(parent),
       power_button(new PowerButton(this, this)),
       ctrl_button(new KeyButton(this, "Ctrl", KeyColor(ctrl), kCtrlKeyWidth)),
       alt_button(new KeyButton(this, "Alt", KeyColor(alt), kAltKeyWidth)),

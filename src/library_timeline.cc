@@ -744,7 +744,7 @@ time::Duration Timeline::CurrentOffset(time::SteadyPoint now) const {
   }
 }
 
-struct TimelineWidget : Object::FallbackWidget {
+struct TimelineWidget : Object::WidgetBase {
   std::unique_ptr<TimelineRunButton> run_button;
   std::unique_ptr<PrevButton> prev_button;
   std::unique_ptr<NextButton> next_button;
@@ -767,7 +767,7 @@ struct TimelineWidget : Object::FallbackWidget {
   time::Duration distance_to_seconds;  // populated on Tick
 
   TimelineWidget(ui::Widget* parent, WeakPtr<Timeline> timeline_weak)
-      : FallbackWidget(parent),
+      : WidgetBase(parent),
         run_button(new TimelineRunButton(this, timeline_weak)),
         prev_button(new PrevButton(*this)),
         next_button(new NextButton(*this)) {
@@ -1551,7 +1551,7 @@ struct TimelineWidget : Object::FallbackWidget {
         }
       }
     }
-    return Object::FallbackWidget::ArgStart(arg);
+    return WidgetBase::ArgStart(arg);
   }
 };
 
@@ -1809,7 +1809,7 @@ std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionT
       }
     }
   }
-  return Object::FallbackWidget::FindAction(ptr, btn);
+  return Object::WidgetBase::FindAction(ptr, btn);
 }
 
 std::unique_ptr<ui::Widget> Timeline::MakeWidget(ui::Widget* parent) {
@@ -1823,8 +1823,8 @@ void Timeline::Args(function<void(Argument&)> cb) {
   cb(next_arg);
 }
 
-struct TrackBaseWidget : Object::FallbackWidget {
-  using Object::FallbackWidget::FallbackWidget;
+struct TrackBaseWidget : Object::WidgetBase {
+  using WidgetBase::WidgetBase;
 
   // Many functions within TrackBaseWidget query the same information. This class:
   // - caches these results to avoid repeated lookups &
@@ -1899,7 +1899,7 @@ struct TrackBaseWidget : Object::FallbackWidget {
     Context ctx(*this);
     auto* timeline_widget = ctx.GetTimelineWidget();
     if (timeline_widget == nullptr || timeline_widget->drag_zoom_action == nullptr) {
-      return FallbackWidget::TextureBounds();
+      return WidgetBase::TextureBounds();
     }
     return nullopt;
   }
@@ -1913,7 +1913,7 @@ struct TrackBaseWidget : Object::FallbackWidget {
     if (auto* timeline_widget = ctx.GetTimelineWidget()) {
       return timeline_widget->FindAction(ptr, btn);
     } else {
-      return Object::FallbackWidget::FindAction(ptr, btn);
+      return Object::WidgetBase::FindAction(ptr, btn);
     }
   }
 };

@@ -164,7 +164,7 @@ string_view InstructionLibrary::Name() const { return "Instruction Library"; }
 Ptr<Object> InstructionLibrary::Clone() const { return MAKE_PTR(InstructionLibrary); }
 
 InstructionLibrary::Widget::Widget(ui::Widget* parent, WeakPtr<Object> object)
-    : FallbackWidget(parent) {
+    : WidgetBase(parent) {
   this->object = std::move(object);
   for (int i = 0; i < std::size(x86::kCategories); ++i) {
     if (category_states.size() <= i) {
@@ -1175,7 +1175,7 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
       }
     }
   }
-  return FallbackWidget::FindAction(p, btn);
+  return WidgetBase::FindAction(p, btn);
 }
 
 }  // namespace automat::library

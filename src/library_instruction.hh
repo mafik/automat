@@ -63,7 +63,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
   bool IsBufferTypeMutable() override { return true; }
   void SetBufferType(Type new_type) override { imm_type = new_type; }
 
-  struct Widget : FallbackWidget {
+  struct Widget : WidgetBase {
     constexpr static float kWidth = 63.5_mm;
     constexpr static float kHeight = 44.5_mm;
     constexpr static float kBorderMargin = 4_mm;

@@ -103,8 +103,8 @@ struct MakeObjectOption : Option {
   }
 };
 
-struct MouseWidget : Object::FallbackWidget {
-  MouseWidget(ui::Widget* parent, WeakPtr<Object>&& object) : FallbackWidget(parent) {
+struct MouseWidget : Object::WidgetBase {
+  MouseWidget(ui::Widget* parent, WeakPtr<Object>&& object) : WidgetBase(parent) {
     this->object = std::move(object);
   }
 
@@ -148,7 +148,7 @@ struct MouseWidget : Object::FallbackWidget {
   }
 
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
-    Object::FallbackWidget::VisitOptions(options_visitor);
+    Object::WidgetBase::VisitOptions(options_visitor);
     static MakeObjectOption lmb_down_option = []() {
       return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Left, true));
     }();
@@ -183,7 +183,7 @@ struct MouseButtonEventWidget : MouseWidget {
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
     // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
     // other objects from here.
-    FallbackWidget::VisitOptions(options_visitor);
+    WidgetBase::VisitOptions(options_visitor);
   }
 
   void Draw(SkCanvas& canvas) const override {
@@ -331,13 +331,13 @@ PersistentImage dpad_image = PersistentImage::MakeFromAsset(
     embedded::assets_mouse_dpad_webp, PersistentImage::MakeArgs{.scale = mouse::kTextureScale});
 
 // A turtle with a pixelated cursor on its back
-struct MouseMoveWidget : Object::FallbackWidget {
+struct MouseMoveWidget : Object::WidgetBase {
   constexpr static size_t kMaxTrailPoints = 256;
   std::atomic<int> trail_end_idx = 0;
   std::atomic<Vec2> trail[kMaxTrailPoints] = {};
 
   MouseMoveWidget(ui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move)
-      : FallbackWidget(parent) {
+      : WidgetBase(parent) {
     object = std::move(weak_mouse_move);
   }
   SkPath Shape() const override {
@@ -472,7 +472,7 @@ struct MouseButtonPresserWidget : MouseWidget {
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
     // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
     // other objects from here.
-    FallbackWidget::VisitOptions(options_visitor);
+    WidgetBase::VisitOptions(options_visitor);
   }
 
   void Draw(SkCanvas& canvas) const override {

@@ -25,7 +25,7 @@ struct FlipFlopButton : ui::ToggleButton {
   bool Filled() const override;
 };
 
-struct FlipFlop : LiveObject, Object::FallbackWidget, Runnable {
+struct FlipFlop : LiveObject, Object::WidgetBase, Runnable {
   std::unique_ptr<FlipFlopButton> button;
 
   bool current_state = false;

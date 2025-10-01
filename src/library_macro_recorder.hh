@@ -20,7 +20,7 @@ struct GlassRunButton : ui::PowerButton {
 };
 
 struct MacroRecorder : LiveObject,
-                       Object::FallbackWidget,
+                       Object::WidgetBase,
                        Runnable,
                        LongRunning,
                        ui::Keylogger,

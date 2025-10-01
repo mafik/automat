@@ -970,8 +970,8 @@ struct ProgressBar : library::Number {
     bar->value = value;
     return bar;
   }
-  void Draw(SkCanvas& canvas) const override { Object::FallbackWidget::Draw(canvas); }
-  SkPath Shape() const override { return Object::FallbackWidget::Shape(); }
+  void Draw(SkCanvas& canvas) const override { WidgetBase::Draw(canvas); }
+  SkPath Shape() const override { return WidgetBase::Shape(); }
 };
 
 struct ListView : Pointer {

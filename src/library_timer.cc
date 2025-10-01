@@ -158,7 +158,7 @@ static void PropagateDurationOutwards(TimerDelay& timer) {
 }
 
 TimerDelay::TimerDelay(ui::Widget* parent)
-    : FallbackWidget(parent), text_field(new ui::NumberTextField(this, kTextWidth)) {
+    : WidgetBase(parent), text_field(new ui::NumberTextField(this, kTextWidth)) {
   text_field->local_to_parent = SkM44::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
   range_dial.velocity = 0;
   range_dial.value = 1;
@@ -632,8 +632,7 @@ void TimerDelay::Updated(Location& here, Location& updated) {
 
 struct DragHandAction : Action {
   WeakPtr<TimerDelay> timer_weak;
-  DragHandAction(ui::Pointer& pointer, Ptr<TimerDelay> timer)
-      : Action(pointer), timer_weak(timer) {
+  DragHandAction(ui::Pointer& pointer, Ptr<TimerDelay> timer) : Action(pointer), timer_weak(timer) {
     ++timer->hand_draggers;
   }
   virtual void Update() {
@@ -698,7 +697,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionT
       return std::make_unique<DragHandAction>(pointer, AcquirePtr<TimerDelay>());
     }
   }
-  return Object::FallbackWidget::FindAction(pointer, btn);
+  return WidgetBase::FindAction(pointer, btn);
 }
 
 void TimerDelay::Fields(std::function<void(Object&)> cb) { cb(duration); }

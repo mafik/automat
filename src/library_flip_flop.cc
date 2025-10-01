@@ -84,7 +84,7 @@ Rect FlipFlopRect() {
 }
 SkPath FlipFlop::Shape() const { return SkPath::Rect(FlipFlopRect()); }
 
-FlipFlop::FlipFlop(ui::Widget* parent) : FallbackWidget(parent), button(new FlipFlopButton(this)) {
+FlipFlop::FlipFlop(ui::Widget* parent) : WidgetBase(parent), button(new FlipFlopButton(this)) {
   button->flip_flop = this;
   auto rect = FlipFlopRect();
   button->local_to_parent = SkM44::Translate(rect.CenterX() - kYingYangButtonRadius,

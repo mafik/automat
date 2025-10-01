@@ -48,7 +48,7 @@ struct InstructionLibrary : Object {
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;
 
-  struct Widget : FallbackWidget, ui::PointerMoveCallback {
+  struct Widget : WidgetBase, ui::PointerMoveCallback {
     struct InstructionCard {
       std::unique_ptr<Instruction::Widget> widget;
       Ptr<Instruction> instruction;

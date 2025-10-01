@@ -19,7 +19,7 @@ struct NumberButton : ui::Button {
   SkColor BackgroundColor() const override;
 };
 
-struct Number : Object, Object::FallbackWidget {
+struct Number : Object, Object::WidgetBase {
   double value;
   std::unique_ptr<NumberButton> digits[10];
   std::unique_ptr<NumberButton> dot;

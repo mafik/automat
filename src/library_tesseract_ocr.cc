@@ -96,7 +96,7 @@ Ptr<Object> TesseractOCR::Clone() const {
   return ret;
 }
 
-struct TesseractWidget : Object::FallbackWidget, ui::PointerMoveCallback {
+struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
   constexpr static float kSize = 5_cm;
   constexpr static float kRegionStrokeWidth = 1_mm;
   constexpr static float kHandleSize = 3_mm;
@@ -197,7 +197,7 @@ struct TesseractWidget : Object::FallbackWidget, ui::PointerMoveCallback {
 
   Ptr<TesseractOCR> LockTesseract() const { return LockObject<TesseractOCR>(); }
 
-  TesseractWidget(ui::Widget* parent, WeakPtr<Object> tesseract) : FallbackWidget(parent) {
+  TesseractWidget(ui::Widget* parent, WeakPtr<Object> tesseract) : WidgetBase(parent) {
     object = tesseract;
   }
 
@@ -1033,7 +1033,7 @@ struct TesseractWidget : Object::FallbackWidget, ui::PointerMoveCallback {
         return std::make_unique<RegionDragAction>(pointer, *this, mode);
       }
     }
-    return FallbackWidget::FindAction(pointer, trigger);
+    return WidgetBase::FindAction(pointer, trigger);
   }
 
   Vec2AndDir ArgStart(const Argument& arg) override {
@@ -1043,7 +1043,7 @@ struct TesseractWidget : Object::FallbackWidget, ui::PointerMoveCallback {
     if (&arg == &text_arg) {
       return Vec2AndDir{layout.border_outer.LeftCenter(), 180_deg};
     }
-    return FallbackWidget::ArgStart(arg);
+    return WidgetBase::ArgStart(arg);
   }
 };
 

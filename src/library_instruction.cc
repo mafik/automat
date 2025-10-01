@@ -3257,7 +3257,7 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
   }
 };
 
-Instruction::Widget::Widget(ui::Widget* parent, WeakPtr<Object> object) : FallbackWidget(parent) {
+Instruction::Widget::Widget(ui::Widget* parent, WeakPtr<Object> object) : WidgetBase(parent) {
   this->object = std::move(object);
   auto instruction = LockObject<Instruction>();
   if (instruction->BufferSize() > 0) {

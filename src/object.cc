@@ -16,7 +16,7 @@
 
 namespace automat {
 
-std::string_view Object::FallbackWidget::Name() const {
+std::string_view Object::WidgetBase::Name() const {
   StrView name;
   if (auto obj = object.lock()) {
     name = obj->Name();
@@ -26,7 +26,7 @@ std::string_view Object::FallbackWidget::Name() const {
   return name;
 }
 
-void Object::FallbackWidget::Draw(SkCanvas& canvas) const {
+void Object::WidgetBase::Draw(SkCanvas& canvas) const {
   SkPath path = Shape();
 
   SkPaint paint;
@@ -68,7 +68,7 @@ void Object::FallbackWidget::Draw(SkCanvas& canvas) const {
   canvas.restore();
 }
 
-float Object::FallbackWidget::Width() const {
+float Object::WidgetBase::Width() const {
   auto text = Text();
   constexpr float kNameMargin = 0.001;
   float width_text = ui::GetFont().MeasureText(text) + 2 * kNameMargin;
@@ -77,7 +77,7 @@ float Object::FallbackWidget::Width() const {
   return std::max(width_rounded, kMinWidth);
 }
 
-SkPath Object::FallbackWidget::Shape() const {
+SkPath Object::WidgetBase::Shape() const {
   static std::unordered_map<float, SkPath> basic_shapes;
   float width = Width();
   auto it = basic_shapes.find(width);
@@ -169,8 +169,8 @@ struct RunOption : TextOption {
   }
 };
 
-void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  if (auto loc = ui::Closest<Location>(const_cast<FallbackWidget&>(*this))) {
+void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
+  if (auto loc = ui::Closest<Location>(const_cast<WidgetBase&>(*this))) {
     auto loc_weak = loc->AcquireWeakPtr();
     DeleteOption del{loc_weak};
     visitor(del);
@@ -183,8 +183,8 @@ void Object::FallbackWidget::VisitOptions(const OptionsVisitor& visitor) const {
   }
 }
 
-std::unique_ptr<Action> Object::FallbackWidget::FindAction(ui::Pointer& p,
-                                                           ui::ActionTrigger btn) {
+std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p,
+                                                       ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
     MoveOption move{Closest<Location>(*p.hover)->AcquireWeakPtr(), object};
     return move.Activate(p);

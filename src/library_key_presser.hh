@@ -18,7 +18,7 @@ struct KeyPresserButton : KeyButton {
   float PressRatio() const override;
 };
 
-struct KeyPresser : Object, Object::FallbackWidget, ui::CaretOwner, Runnable, LongRunning {
+struct KeyPresser : Object, Object::WidgetBase, ui::CaretOwner, Runnable, LongRunning {
   ui::AnsiKey key = ui::AnsiKey::F;
 
   mutable std::unique_ptr<KeyPresserButton> shortcut_button;

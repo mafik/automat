@@ -15,7 +15,7 @@ struct DurationArgument : LiveArgument {
 };
 
 struct TimerDelay : LiveObject,
-                    Object::FallbackWidget,
+                    Object::WidgetBase,
                     Runnable,
                     LongRunning,
                     TimerNotificationReceiver {

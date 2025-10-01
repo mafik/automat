@@ -135,7 +135,7 @@ struct RegistersMenuOption : TextOption, OptionsProvider {
 };
 
 void AssemblerWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  FallbackWidget::VisitOptions(visitor);
+  WidgetBase::VisitOptions(visitor);
   RegistersMenuOption registers_option{assembler_weak};
   visitor(registers_option);
 }
@@ -390,7 +390,7 @@ void Assembler::DeserializeState(Location& l, Deserializer& d) {
 }
 
 AssemblerWidget::AssemblerWidget(Widget* parent, WeakPtr<Assembler> assembler_weak)
-    : Object::FallbackWidget(parent), assembler_weak(assembler_weak) {
+    : WidgetBase(parent), assembler_weak(assembler_weak) {
   object = std::move(assembler_weak).Cast<Object>();
 }
 
@@ -607,15 +607,14 @@ bool AssemblerWidget::CanDrop(Location& loc) const {
 void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
   if (auto reg = loc->As<Register>()) {
     if (auto my_assembler = this->assembler_weak.lock()) {
-      loc->object->ForEachWidget(
-          [&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
-            RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
-            if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
-              auto* asm_widget = static_cast<AssemblerWidget*>(asm_widget_generic);
-              reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
-              asm_widget->reg_widgets.emplace_back(&reg_widget);
-            }
-          });
+      loc->object->ForEachWidget([&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
+        RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
+        if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
+          auto* asm_widget = static_cast<AssemblerWidget*>(asm_widget_generic);
+          reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
+          asm_widget->reg_widgets.emplace_back(&reg_widget);
+        }
+      });
       my_assembler->reg_objects_idx[reg->register_index] = loc->Take().Cast<Register>();
       my_assembler->WakeWidgetsAnimation();
     }
@@ -757,7 +756,7 @@ void RegisterWidget::Draw(SkCanvas& canvas) const {
 }
 
 void RegisterWidget::VisitOptions(const OptionsVisitor& visitor) const {
-  FallbackWidget::VisitOptions(visitor);
+  WidgetBase::VisitOptions(visitor);
   auto register_obj = LockRegister();
   RegisterMenuOption register_menu_option = {register_obj->assembler_weak,
                                              register_obj->register_index};

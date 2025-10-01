@@ -228,7 +228,7 @@ static void SearchWindows(xcb_window_t start, WindowVisitor visitor) {
 }
 #endif
 
-struct WindowWidget : Object::FallbackWidget, ui::PointerGrabber, ui::KeyGrabber {
+struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
   constexpr static float kWidth = 5_cm;
   constexpr static float kCornerRadius = 1_mm;
   constexpr static float kHeight = 5_cm;
@@ -244,7 +244,7 @@ struct WindowWidget : Object::FallbackWidget, ui::PointerGrabber, ui::KeyGrabber
 
   Ptr<Window> LockWindow() const { return LockObject<Window>(); }
 
-  WindowWidget(ui::Widget* parent, WeakPtr<Object> window) : FallbackWidget(parent) {
+  WindowWidget(ui::Widget* parent, WeakPtr<Object> window) : WidgetBase(parent) {
     object = window;
     pick_button = std::make_unique<PickButton>(this);
     pick_button->on_activate = [this](ui::Pointer& p) {
@@ -458,7 +458,7 @@ struct WindowWidget : Object::FallbackWidget, ui::PointerGrabber, ui::KeyGrabber
   }
 
   void VisitOptions(const OptionsVisitor& visitor) const override {
-    FallbackWidget::VisitOptions(visitor);
+    WidgetBase::VisitOptions(visitor);
     if (auto window = LockWindow()) {
       auto lock = std::lock_guard(window->mutex);
       if (window->run_continuously) {

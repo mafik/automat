@@ -9,7 +9,7 @@
 
 namespace automat::library {
 
-struct HotKey : LiveObject, Object::FallbackWidget, OnOff, ui::CaretOwner, ui::KeyGrabber {
+struct HotKey : LiveObject, Object::WidgetBase, OnOff, ui::CaretOwner, ui::KeyGrabber {
   ui::AnsiKey key = ui::AnsiKey::F11;
   bool ctrl = true;
   bool alt = false;

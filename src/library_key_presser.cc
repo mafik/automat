@@ -52,7 +52,7 @@ float KeyPresserButton::PressRatio() const {
 }
 
 KeyPresser::KeyPresser(ui::Widget* parent, ui::AnsiKey key)
-    : FallbackWidget(parent),
+    : WidgetBase(parent),
       key(key),
       shortcut_button(
           new KeyPresserButton(this, this, ToStr(key), KeyColor(false), kBaseKeyWidth)) {
@@ -193,11 +193,11 @@ std::unique_ptr<Action> KeyPresser::FindAction(ui::Pointer& p, ui::ActionTrigger
   auto hand_shape = GetHandShape();
   auto local_pos = p.PositionWithin(*this);
   if (hand_shape.contains(local_pos.x, local_pos.y)) {
-    return std::make_unique<DragAndClickAction>(p, btn, Object::FallbackWidget::FindAction(p, btn),
+    return std::make_unique<DragAndClickAction>(p, btn, Object::WidgetBase::FindAction(p, btn),
                                                 std::make_unique<RunOption>(this));
   } else {
     return std::make_unique<DragAndClickAction>(
-        p, btn, Object::FallbackWidget::FindAction(p, btn),
+        p, btn, Object::WidgetBase::FindAction(p, btn),
         std::make_unique<UseObjectOption>(shortcut_button.get()));
   }
 }

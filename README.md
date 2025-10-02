@@ -26,6 +26,8 @@ Automat can be downloaded from the [releases page](https://github.com/mafik/auto
 
 # Contributing
 
+[![Discord](https://dcbadge.limes.pink/api/server/https://discord.gg/MRfuBBvdjV)](https://discord.gg/MRfuBBvdjV)
+
 First read [ARCHITECTURE.md](ARCHITECTURE.md) to get a general idea of how
 things are organized. Once you do that, you may try to clone the Automat
 repository and run it (build script should take care of everything for you - if

@@ -72,7 +72,7 @@ struct AssemblerWidget : Object::WidgetBase, ui::DropTarget {
   DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override;
   void DropLocation(Ptr<Location>&&) override;
-  void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point = nullptr) override;
+  SkMatrix DropSnap(const Rect& bounds, Vec2* fixed_point = nullptr) override;
 };
 
 struct Register : LiveObject {

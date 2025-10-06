@@ -858,7 +858,7 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
 
 void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
                           PaintDrawable& icon) {
-  float dispenser_scale = state.location.GetAnimationState().scale;
+  float dispenser_scale = state.location.object_widget->local_to_parent.rc(0, 0);
 
   SkMatrix connector_matrix = state.ConnectorMatrix();
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "root_widget.hh"
 
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 
 #include <memory>
@@ -441,33 +442,35 @@ SkPath RootWidget::TrashShape() const {
   return trash_area_path;
 }
 
-void RootWidget::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
-  Rect object_bounds = location.WidgetForObject().Shape().getBounds();
+SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2* fixed_point) {
   Rect machine_bounds = root_machine->Shape().getBounds();
 
-  scale = 0.5;
+  SkMatrix matrix;
+  if (fixed_point) {
+    matrix.setScale(0.5, 0.5, fixed_point->x, fixed_point->y);
+  } else {
+    matrix.setScale(0.5, 0.5);
+  }
   {  // Find a snap position outside of the canvas
-    SkMatrix mat = SkMatrix()
-                       .postScale(scale, scale, fixed_point->x, fixed_point->y)
-                       .postTranslate(position.x, position.y);
 
-    Rect scaled_object_bounds = mat.mapRect(object_bounds);
+    Rect scaled_object_bounds = matrix.mapRect(bounds.sk);
     if (machine_bounds.sk.intersects(scaled_object_bounds)) {
       float move_up = fabsf(machine_bounds.top - scaled_object_bounds.bottom);
       float move_down = fabsf(scaled_object_bounds.top - machine_bounds.bottom);
       float move_left = fabsf(machine_bounds.left - scaled_object_bounds.right);
       float move_right = fabsf(scaled_object_bounds.left - machine_bounds.right);
       if (move_up < move_down && move_up < move_left && move_up < move_right) {
-        position.y += move_up;
+        matrix.postTranslate(0, move_up);
       } else if (move_down < move_up && move_down < move_left && move_down < move_right) {
-        position.y -= move_down;
+        matrix.postTranslate(0, -move_down);
       } else if (move_left < move_up && move_left < move_down && move_left < move_right) {
-        position.x -= move_left;
+        matrix.postTranslate(-move_left, 0);
       } else {
-        position.x += move_right;
+        matrix.postTranslate(move_right, 0);
       }
     }
   }
+  return matrix;
 }
 
 void RootWidget::DropLocation(Ptr<Location>&& location) {

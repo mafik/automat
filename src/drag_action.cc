@@ -22,10 +22,6 @@ static Vec2 RoundToMilimeters(Vec2 v) {
   return Vec2(roundf(v.x * 1000) / 1000., roundf(v.y * 1000) / 1000.);
 }
 
-Vec2 SnapPosition(DragLocationAction& d) {
-  return RoundToMilimeters(d.current_position - d.contact_point);
-}
-
 static ui::DropTarget* FindDropTarget(DragLocationAction& a, Widget& widget) {
   for (auto& child : widget.Children()) {
     if (auto drop_target = FindDropTarget(a, *child)) {
@@ -51,53 +47,87 @@ static ui::DropTarget* FindDropTarget(DragLocationAction& a) {
 void DragLocationAction::Update() {
   current_position = pointer.PositionWithinRootMachine();
 
-  Vec2 position = current_position - contact_point;
-  Location& base = *locations.back();
-  float scale = base.GetBaseScale();
-  Vec2 base_pivot = base.ScalePivot();
+  for (auto& location : locations) {
+    location->animation_state.scale_pivot = current_position;
+  }
+  Rect bounds_all;
+  for (int i = 0; i < locations.size(); ++i) {
+    auto& location = locations[i];
+    auto& object_widget = location->WidgetForObject();
+    auto location_bounds = object_widget.CoarseBounds().rect;
+    auto location_scale = location->GetBaseScale();
 
+    auto location_transform = SkMatrix::Scale(location_scale, location_scale)
+                                  .postTranslate(current_position.x, current_position.y)
+                                  .preTranslate(-initial_positions[i].x, -initial_positions[i].y);
+
+    location_transform.mapRect(&location_bounds.sk);
+    if (bounds_all.sk.isEmpty()) {
+      bounds_all = location_bounds;
+    } else {
+      bounds_all.ExpandToInclude(location_bounds);
+    }
+  }
+
+  SkMatrix snap = {};
   if (ui::DropTarget* drop_target = FindDropTarget(*this)) {
-    drop_target->SnapPosition(position, scale, base, &base_pivot);
+    snap = drop_target->DropSnap(bounds_all, &current_position);
   }
 
-  auto old_position = base.position;
-  auto old_scale = base.scale;
+  for (int i = 0; i < locations.size(); ++i) {
+    auto& location = locations[i];
+    auto& object_widget = location->WidgetForObject();
+    auto location_scale = location->GetBaseScale();
 
-  base.position = position;
-  base.scale = scale;
-
-  for (int i = locations.size() - 2; i >= 0; --i) {
-    auto& atop = *locations[i];
-    Vec2 atop_pivot = atop.ScalePivot();
-    Vec2 old_delta = atop.position + atop_pivot - old_position - base_pivot;
-    Vec2 new_delta = old_delta / old_scale * scale;
-    atop.position = position + base_pivot + new_delta - atop_pivot;
-    atop.scale = scale;
+    auto location_transform = SkMatrix::Scale(location_scale, location_scale)
+                                  .postTranslate(current_position.x, current_position.y)
+                                  .preTranslate(-initial_positions[i].x, -initial_positions[i].y);
+    location_transform.postConcat(snap);
+    location->position.x = location_transform.getTranslateX();
+    location->position.y = location_transform.getTranslateY();
+    location->scale = location_transform.getScaleX();
+    location->WakeAnimation();
   }
 
-  if (last_snapped_position != position) {
-    last_snapped_position = position;
-    for (auto& location : locations) {
-      location->animation_state.position.value += current_position - last_position;
-    }
-    for (auto& location : locations) {
-      location->UpdateAutoconnectArgs();
-    }
-    for (auto& location : locations) {
-      location->WakeAnimation();
-      location->InvalidateConnectionWidgets(true, false);
-    }
-  }
+  // LOG << " Snapped position=" << position.ToStrMetric() << " scale=" << scale;
+
+  // auto old_position = base.position;
+  // auto old_scale = base.scale;
+
+  // base.position = position;
+  // base.scale = scale;
+
+  // for (int i = locations.size() - 2; i >= 0; --i) {
+  //   auto& atop = *locations[i];
+  //   Vec2 atop_pivot = atop.ScalePivot();
+  //   Vec2 old_delta = atop.position + atop_pivot - old_position - base_pivot;
+  //   Vec2 new_delta = old_delta / old_scale * scale;
+  //   atop.position = position + base_pivot + new_delta - atop_pivot;
+  //   atop.scale = scale;
+  // }
+
+  // if (last_snapped_position != position) {
+  //   last_snapped_position = position;
+  //   for (auto& location : locations) {
+  //     Vec2 fix = current_position - last_position;
+  //     location->object_widget->local_to_parent.postTranslate(fix.x, fix.y);
+  //   }
+  //   for (auto& location : locations) {
+  //     location->UpdateAutoconnectArgs();
+  //   }
+  //   for (auto& location : locations) {
+  //     location->WakeAnimation();
+  //     location->InvalidateConnectionWidgets(true, false);
+  //   }
+  // }
 
   last_position = current_position;
 }
 
 SkPath DragLocationWidget::Shape() const { return SkPath(); }
 
-DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg,
-                                       Vec2 contact_point)
+DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&& locations_arg)
     : Action(pointer),
-      contact_point(contact_point),
       locations(std::move(locations_arg)),
       widget(new DragLocationWidget(pointer.GetWidget(), *this)) {
   pointer.root_widget.drag_action_count++;
@@ -105,11 +135,23 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     pointer.root_widget.black_hole.WakeAnimation();
   }
   for (auto& location : locations) {
+    auto fix = SkM44(TransformBetween(*location, *widget));
+
+    auto new_position = fix.map(location->position.x, location->position.y, 0, 1);
+    location->position = Vec2(new_position.x, new_position.y);
+
+    auto& object_widget = location->WidgetForObject();
+    object_widget.local_to_parent.postConcat(fix);
+    // clear translation
+    fix.setRC(0, 3, 0);
+    fix.setRC(1, 3, 0);
+    fix.setRC(2, 3, 0);
+    location->animation_state.local_to_parent_velocity.postConcat(fix);
+
     location->parent = widget.get();
-    if (location->object_widget) {
-      location->animation_state.scale_pivot =
-          contact_point + locations.back()->position - location->position;
-    }
+    location->animation_state.scale_pivot = pointer.PositionWithinRootMachine();
+    location->WakeAnimation();
+    initial_positions.push_back(pointer.PositionWithin(object_widget));
   }
   widget->ValidateHierarchy();
   widget->RedrawThisFrame();
@@ -133,12 +175,12 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   ui::root_widget->WakeAnimation();
 
   last_position = current_position = pointer.PositionWithinRootMachine();
+
   Update();
 }
 
-DragLocationAction::DragLocationAction(ui::Pointer& pointer, Ptr<Location>&& location_arg,
-                                       Vec2 contact_point)
-    : DragLocationAction(pointer, MakeVec<Ptr<Location>>(std::move(location_arg)), contact_point) {}
+DragLocationAction::DragLocationAction(ui::Pointer& pointer, Ptr<Location>&& location_arg)
+    : DragLocationAction(pointer, MakeVec<Ptr<Location>>(std::move(location_arg))) {}
 
 DragLocationAction::~DragLocationAction() {
   ui::DropTarget* drop_target = FindDropTarget(*this);
@@ -156,6 +198,7 @@ DragLocationAction::~DragLocationAction() {
   }
   ui::root_widget->WakeAnimation();
 }
+
 void DragLocationWidget::FillChildren(Vec<Widget*>& children) {
   for (auto& location : action.locations) {
     children.push_back(location.get());

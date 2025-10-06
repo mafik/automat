@@ -63,23 +63,22 @@ void BlackHole::Draw(SkCanvas& canvas) const {
 }
 
 bool BlackHole::CanDrop(Location&) const { return true; }
-void BlackHole::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
+
+SkMatrix BlackHole::DropSnap(const Rect& bounds, Vec2* fixed_point) {
   auto& root_widget = ParentRootWidget();
   auto& size = root_widget.size;
 
-  Rect object_bounds = location.WidgetForObject().Shape().getBounds();
-
-  Vec2 window_pos = (position - root_widget.camera_pos) * root_widget.zoom + size / 2;
-  bool is_over_trash = LengthSquared(window_pos - Vec2(size.width, size.height)) < radius * radius;
-  Vec2 box_size = Vec2(object_bounds.Width(), object_bounds.Height());
+  Vec2 box_size = bounds.Size();
   float diagonal = Length(box_size);
   SkMatrix window2canvas = root_widget.WindowToCanvas();
-  scale = window2canvas.mapRadius(radius) / diagonal * 0.9f;
+  float scale = window2canvas.mapRadius(radius) / diagonal * 0.9f;
   scale = std::clamp<float>(scale, 0.1, 0.5);
 
+  // Center of the visible black hole "pie" in canvas coordinates.
   Vec2 target_center = window2canvas.mapPoint(size - box_size / diagonal * radius / 2);
 
-  position = target_center - ((object_bounds.Center() - *fixed_point) * scale + *fixed_point);
+  return SkMatrix::Translate(target_center - bounds.Center())
+      .postScale(scale, scale, target_center.x, target_center.y);
 }
 
 void BlackHole::DropLocation(Ptr<Location>&&) { audio::Play(embedded::assets_SFX_trash_wav); }

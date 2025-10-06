@@ -79,7 +79,8 @@ struct RootWidget final : Widget, DropTarget {
 
   DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override { return true; }
-  void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
+
+  SkMatrix DropSnap(const Rect& bounds, Vec2* fixed_point = nullptr) override;
   void DropLocation(Ptr<Location>&&) override;
 
   // Return the shape of the trash zone in the corner of the window (in Machine coordinates).

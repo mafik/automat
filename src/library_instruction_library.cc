@@ -1096,8 +1096,11 @@ std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
       loc->InsertHere(instruction_helix.front().instruction->Clone());
       audio::Play(embedded::assets_SFX_toolbar_pick_wav);
       contact_point -= kFrontInstructionRect.BottomLeftCorner();
-      loc->position = loc->animation_state.position = p.PositionWithinRootMachine() - contact_point;
-      return std::make_unique<DragLocationAction>(p, std::move(loc), contact_point);
+      loc->position = p.PositionWithinRootMachine() - contact_point;
+      loc->WidgetForObject()
+          .local_to_parent.setTranslate(kFrontInstructionRect.left, kFrontInstructionRect.bottom)
+          .postConcat(SkM44(ui::TransformBetween(*this, *root_machine)));
+      return std::make_unique<DragLocationAction>(p, std::move(loc));
     }
 
     if (Length(contact_point) < kCornerDist) {

@@ -25,14 +25,14 @@ namespace automat {
 struct LongRunning;
 
 struct ObjectAnimationState {
-  animation::SpringV2<float> scale;
-  animation::SpringV2<Vec2> position;
+  SkM44 local_to_parent_velocity;
+
   float transparency = 0;
   float highlight = 0;
   float highlight_target = 0;
   time::T time_seconds = 0;  // used to animate dashed line
   animation::SpringV2<float> elevation;
-  Optional<Vec2> scale_pivot;
+  Optional<Vec2> scale_pivot;  // machine coordinates
 
   ObjectAnimationState();
 
@@ -54,8 +54,7 @@ struct Location : ReferenceCounted, ui::Widget {
   constexpr static float kScaleSpringPeriod = 0.3;
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
 
-  ObjectAnimationState& GetAnimationState() const;
-  void UpdateChildTransform();
+  ObjectAnimationState& GetAnimationState() const;  // TODO: remove
 
   mutable ObjectAnimationState animation_state;
 

@@ -21,16 +21,10 @@ std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::Ac
   if (btn != ui::PointerButton::Left) {
     return nullptr;
   }
-  auto matrix = TransformBetween(*pointer.hover, *root_machine);
-  auto loc = MAKE_PTR(Location, root_machine.get(), root_location->AcquireWeakPtr());
-
+  auto loc = MAKE_PTR(Location, pointer.hover, root_location->AcquireWeakPtr());
   loc->Create(*proto);
   audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-  loc->animation_state.scale = matrix.get(0);
-  auto contact_point = pointer.PositionWithin(*this);
-  loc->position = loc->animation_state.position =
-      pointer.PositionWithinRootMachine() - contact_point;
-  return std::make_unique<DragLocationAction>(pointer, std::move(loc), contact_point);
+  return std::make_unique<DragLocationAction>(pointer, std::move(loc));
 }
 
 // Ptr<Object> Toolbar::Clone() const {

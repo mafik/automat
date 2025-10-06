@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "library_assembler.hh"
 
+#include <include/core/SkMatrix.h>
 #include <include/effects/SkGradientShader.h>
 #include <llvm/MC/MCCodeEmitter.h>
 #include <llvm/MC/MCInstBuilder.h>
@@ -620,24 +621,24 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
     }
   }
 }
-void AssemblerWidget::SnapPosition(Vec2& position, float& scale, Location& location,
-                                   Vec2* fixed_point) {
+SkMatrix AssemblerWidget::DropSnap(const Rect& bounds, Vec2* fixed_point) {
   auto local_to_machine = TransformBetween(*this, *root_machine);
   auto my_rect = kRRect.rect.Outset(-2 * kFlatBorderWidth);
   local_to_machine.mapRect(&my_rect.sk);
-  Rect rect = location.WidgetForObject().Shape().getBounds();
-  if (position.x + rect.left < my_rect.left) {
-    position.x += my_rect.left - (position.x + rect.left);
+  SkMatrix matrix;
+  if (bounds.left < my_rect.left) {
+    matrix.postTranslate(my_rect.left - bounds.left, 0);
   }
-  if (position.x + rect.right > my_rect.right) {
-    position.x += my_rect.right - (position.x + rect.right);
+  if (bounds.right > my_rect.right) {
+    matrix.postTranslate(my_rect.right - bounds.right, 0);
   }
-  if (position.y + rect.bottom < my_rect.bottom) {
-    position.y += my_rect.bottom - (position.y + rect.bottom);
+  if (bounds.bottom < my_rect.bottom) {
+    matrix.postTranslate(0, my_rect.bottom - bounds.bottom);
   }
-  if (position.y + rect.top > my_rect.top) {
-    position.y += my_rect.top - (position.y + rect.top);
+  if (bounds.top > my_rect.top) {
+    matrix.postTranslate(0, my_rect.top - bounds.top);
   }
+  return matrix;
 }
 
 SkPath RegisterWidget::Shape() const { return SkPath::Rect(kBoundingRect.sk); }

@@ -125,20 +125,10 @@ struct MoveOption : TextOption {
     // This branch handles such cases.
     if (location->object != object) {
       if (auto container = location->object->AsContainer()) {
-        Vec2 contact_point{0, 0};
         auto& root_widget = location->FindRootWidget();
-        auto object_widget = root_widget.widgets.Find(*object);
-        float scale = 1;
-        if (object_widget) {
-          contact_point = pointer.PositionWithin(*object_widget);
-          scale = object_widget->local_to_parent.rc(0, 0);
-        }
+        auto* object_widget = root_widget.widgets.Find(*object);
         if (auto extracted = container->Extract(*object)) {
-          extracted->position = pointer.PositionWithinRootMachine() - contact_point;
-          extracted->animation_state.position =
-              pointer.PositionWithinRootMachine() - contact_point * scale;
-          extracted->animation_state.scale = scale;
-          return std::make_unique<DragLocationAction>(pointer, std::move(extracted), contact_point);
+          return std::make_unique<DragLocationAction>(pointer, std::move(extracted));
         } else {
           LOG << "Unable to extract " << object->Name() << " from " << location->object->Name()
               << " (no location)";
@@ -150,10 +140,8 @@ struct MoveOption : TextOption {
     }
     auto* machine = Closest<Machine>(*location);
     if (machine && location->object) {
-      auto contact_point = pointer.PositionWithin(location->WidgetForObject());
       machine->ForEachWidget([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
-      return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location),
-                                                  contact_point);
+      return std::make_unique<DragLocationAction>(pointer, machine->ExtractStack(*location));
     }
     return nullptr;
   }

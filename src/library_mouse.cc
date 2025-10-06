@@ -90,16 +90,10 @@ struct MakeObjectOption : Option {
     return std::make_unique<MakeObjectOption>(proto);
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    auto matrix = TransformBetween(*pointer.hover, *root_machine);
-    auto loc = MAKE_PTR(Location, root_machine.get(), root_location->AcquireWeakPtr());
-
+    auto loc = MAKE_PTR(Location, pointer.hover, root_location->AcquireWeakPtr());
     loc->Create(*proto);
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-    loc->animation_state.scale = matrix.get(0);
-    auto contact_point = pointer.PositionWithin(*pointer.hover);
-    loc->position = loc->animation_state.position =
-        pointer.PositionWithinRootMachine() - contact_point;
-    return std::make_unique<DragLocationAction>(pointer, std::move(loc), contact_point);
+    return std::make_unique<DragLocationAction>(pointer, std::move(loc));
   }
 };
 

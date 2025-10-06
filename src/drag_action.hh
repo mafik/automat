@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
 #pragma once
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
 
 #include <optional>
@@ -19,11 +20,9 @@ namespace ui {
 struct DropTarget {
   virtual bool CanDrop(Location&) const = 0;
 
-  // Snap the location & scale of the given location, which is hovered over this drop target.
-  // Optionally respecting a "fixed point", held by the pointer.
-  // TODO: maybe make this func work in local coords?
-  virtual void SnapPosition(Vec2& position, float& scale, Location&,
-                            Vec2* fixed_point = nullptr) = 0;
+  // Snap the given Rect, which is hovered over this drop target.
+  // Optionally respecting a "fixed point".
+  virtual SkMatrix DropSnap(const Rect& bounds, Vec2* fixed_point = nullptr) = 0;
 
   // When a location is being dragged around, its still owned by its original Machine. Only when
   // this method is called, the location may be re-parented into the new drop target.
@@ -44,16 +43,16 @@ struct DragLocationWidget : ui::Widget {
 };
 
 struct DragLocationAction : Action {
-  Vec2 contact_point;          // in the coordinate space of the dragged Object
   Vec2 last_position;          // root machine coordinates
   Vec2 current_position;       // root machine coordinates
   Vec2 last_snapped_position;  // root machine coordinates
   time::SteadyPoint last_update;
   Vec<Ptr<Location>> locations;
+  Vec<Vec2> initial_positions;
   unique_ptr<DragLocationWidget> widget;
 
-  DragLocationAction(ui::Pointer&, Ptr<Location>&&, Vec2 contact_point);
-  DragLocationAction(ui::Pointer&, Vec<Ptr<Location>>&&, Vec2 contact_point);
+  DragLocationAction(ui::Pointer&, Ptr<Location>&&);
+  DragLocationAction(ui::Pointer&, Vec<Ptr<Location>>&&);
   ~DragLocationAction() override;
 
   void Update() override;

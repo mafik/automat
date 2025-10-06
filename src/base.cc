@@ -308,23 +308,26 @@ void Machine::PreDraw(SkCanvas& canvas) const {
   canvas.drawPath(shape, border_paint);
 }
 
-void Machine::SnapPosition(Vec2& position, float& scale, Location& location, Vec2* fixed_point) {
-  Rect rect = location.WidgetForObject().Shape().getBounds();
-  if (scale != 1) {
-    if (fixed_point) {
-      rect = rect.MoveBy(-*fixed_point);
-    }
-    rect.left *= scale;
-    rect.right *= scale;
-    rect.bottom *= scale;
-    rect.top *= scale;
-    if (fixed_point) {
-      rect = rect.MoveBy(*fixed_point);
-    }
+SkMatrix Machine::DropSnap(const Rect& rect_ref, Vec2* fixed_point) {
+  Rect rect = rect_ref;
+  SkMatrix matrix;
+  Vec2 center = rect.Center();
+  float i;
+  matrix.postTranslate(-modf(center.x * 1000, &i) / 1000., -modf(center.y * 1000, &i) / 1000.);
+  matrix.mapRectScaleTranslate(&rect.sk, rect.sk);
+  if (rect.left < -50_cm) {
+    matrix.postTranslate(-rect.left - 50_cm, 0);
   }
-  position.x = clamp(position.x, -rect.left - 50_cm, -rect.right + 50_cm);
-  position.y = clamp(position.y, -rect.bottom - 50_cm, -rect.top + 50_cm);
-  position = Vec2(roundf(position.x * 1000) / 1000., roundf(position.y * 1000) / 1000.);
+  if (rect.right > 50_cm) {
+    matrix.postTranslate(50_cm - rect.right, 0);
+  }
+  if (rect.bottom < -50_cm) {
+    matrix.postTranslate(0, -rect.bottom - 50_cm);
+  }
+  if (rect.top > 50_cm) {
+    matrix.postTranslate(0, 50_cm - rect.top);
+  }
+  return matrix;
 }
 
 void Machine::DropLocation(Ptr<Location>&& l) {

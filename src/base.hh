@@ -178,7 +178,7 @@ struct Machine : LiveObject, ui::Widget, ui::DropTarget {
   void PreDraw(SkCanvas&) const override;
   ui::DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override { return true; }
-  void SnapPosition(Vec2& position, float& scale, Location&, Vec2* fixed_point) override;
+  SkMatrix DropSnap(const Rect& bounds_local, Vec2* fixed_point = nullptr) override;
   void DropLocation(Ptr<Location>&&) override;
 
   SkPath Shape() const override;

@@ -3,21 +3,17 @@
 #include "log_skia.hh"
 
 #include "format.hh"
+#include "log.hh"
 
 namespace automat {
 
-const Logger& operator<<(const Logger& logger, SkMatrix& m) {
-  std::string out = "";
-  for (int i = 0; i < 3; ++i) {
-    out += "\n";
-    for (int j = 0; j < 3; ++j) {
-      int index = i * 3 + j;
-      out += f("{:.4f}", m.get(index));
-      if (j < 2) {
-        out += ", ";
-      }
-    }
-  }
+const LogEntry& operator<<(const LogEntry& logger, SkMatrix& m) {
+  int prefix_length = logger.buffer.size();
+  std::string out = f("[{:.4f}, {:.4f}, {:.4f}]\n", m.get(0), m.get(1), m.get(2));
+  for (int i = 0; i < prefix_length; ++i) out += ' ';
+  out += f("[{:.4f}, {:.4f}, {:.4f}]\n", m.get(3), m.get(4), m.get(5));
+  for (int i = 0; i < prefix_length; ++i) out += ' ';
+  out += f("[{:.4f}, {:.4f}, {:.4f}]", m.get(6), m.get(7), m.get(8));
   logger << out;
   return logger;
 }

@@ -29,6 +29,7 @@ union Vec2 {
   };
   float elements[2];
   SkPoint sk;
+  SkSize sk_size;
 
   constexpr Vec2() : x(0), y(0) {}
   constexpr Vec2(float xy) : x(xy), y(xy) {}

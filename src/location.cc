@@ -197,26 +197,18 @@ animation::Phase Location::Tick(time::Timer& timer) {
     local_to_parent_velocity.setRC(0, 0, scale_vel.x);
     local_to_parent_velocity.setRC(1, 1, scale_vel.y);
 
-    float current_x = transform_curr.getTranslateX();
-    phase |= animation::ExponentialApproach(target_transform.rc(0, 2), timer.d, 0.1, current_x);
-    transform_curr.setTranslateX(current_x);
-
-    float current_y = transform_curr.getTranslateY();
-    phase |= animation::ExponentialApproach(target_transform.rc(1, 2), timer.d, 0.1, current_y);
-    transform_curr.setTranslateY(current_y);
+    Vec2 position_curr = Vec2(transform_curr.getTranslateX(), transform_curr.getTranslateY());
+    Vec2 position_vel = Vec2(local_to_parent_velocity.rc(0, 2), local_to_parent_velocity.rc(1, 2));
+    phase |= animation::LowLevelSineTowards(target_transform.rc(0, 2), timer.d, kPositionSpringPeriod,
+                                            position_curr.x, position_vel.x);
+    phase |= animation::LowLevelSineTowards(target_transform.rc(1, 2), timer.d, kPositionSpringPeriod,
+                                            position_curr.y, position_vel.y);
+    transform_curr.setTranslateX(position_curr.x);
+    transform_curr.setTranslateY(position_curr.y);
+    local_to_parent_velocity.setRC(0, 2, position_vel.x);
+    local_to_parent_velocity.setRC(1, 2, position_vel.y);
 
     object_widget->local_to_parent = SkM44(transform_curr);
-
-    /* Proper animation functions (for reference, later):
-    phase |= animation::LowLevelSineTowards(target_position.x, timer.d, kPositionSpringPeriod,
-                                            position_curr.x, position_vel.x);
-    phase |= animation::LowLevelSineTowards(target_position.y, timer.d, kPositionSpringPeriod,
-                                            position_curr.y, position_vel.y);
-    phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
-                                              scale_curr.x, scale_vel.x);
-    phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
-                                              scale_curr.y, scale_vel.y);
-    */
     object_widget->RecursiveTransformUpdated();
   }
 

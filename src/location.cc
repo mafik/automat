@@ -676,8 +676,8 @@ Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
 Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(prototype.Clone()); }
 
 Vec2 Location::ScalePivot() const {
-  if (scale_pivot.has_value()) {
-    return scale_pivot.value();
+  if (local_anchor.has_value()) {
+    return local_anchor.value();
   }
   if (object_widget) {
     return object_widget->ScalePivot();

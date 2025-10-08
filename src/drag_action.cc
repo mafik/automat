@@ -131,7 +131,7 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     location->local_to_parent_velocity.postConcat(fix);
 
     location->parent = widget.get();
-    location->scale_pivot = pointer.PositionWithin(object_widget);
+    location->local_anchor = pointer.PositionWithin(object_widget);
     location->WakeAnimation();
     initial_positions.push_back(pointer.PositionWithin(object_widget));
   }
@@ -169,7 +169,7 @@ DragLocationAction::~DragLocationAction() {
   if (drop_target) {
     for (auto& location : std::ranges::reverse_view(locations)) {
       location->WakeAnimation();
-      location->scale_pivot.reset();
+      location->local_anchor.reset();
       drop_target->DropLocation(std::move(location));
     }
   }

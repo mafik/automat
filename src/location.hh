@@ -46,7 +46,7 @@ struct Location : ReferenceCounted, ui::Widget {
   time::T time_seconds = 0;  // used to animate dashed line
   animation::SpringV2<float> elevation;
 
-  Optional<Vec2> scale_pivot;  // local coordinates
+  Optional<Vec2> local_anchor;  // used for animation & DragLocationAction
   SkM44 local_to_parent_velocity;
   WeakPtr<Location> parent_location;
 

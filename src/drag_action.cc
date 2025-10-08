@@ -47,32 +47,41 @@ static ui::DropTarget* FindDropTarget(DragLocationAction& a) {
 void DragLocationAction::Update() {
   current_position = pointer.PositionWithinRootMachine();
 
-  Rect bounds_all;
+  int n = locations.size();
+  Object::WidgetBase* widgets[n];
+  for (int i = 0; i < n; ++i) {
+    widgets[i] = &locations[i]->WidgetForObject();
+  }
+  Rect location_bounds[n];
+  for (int i = 0; i < n; ++i) {
+    location_bounds[i] = widgets[i]->CoarseBounds().rect;
+  }
+  float location_scale[n];
+  for (int i = 0; i < n; ++i) {
+    location_scale[i] = locations[i]->GetBaseScale();
+  }
+  SkMatrix location_transform[n];
+  for (int i = 0; i < n; ++i) {
+    location_transform[i] =
+        SkMatrix::Scale(location_scale[i], location_scale[i])
+            .postTranslate(current_position.x, current_position.y)
+            .preTranslate(-locations[i]->local_anchor->x, -locations[i]->local_anchor->y);
+  }
+
   Vec2 bounds_origin;
-  for (int i = 0; i < locations.size(); ++i) {
-    auto& location = locations[i];
-    auto& object_widget = location->WidgetForObject();
-    auto location_bounds = object_widget.CoarseBounds().rect;
-    auto location_scale = location->GetBaseScale();
+  if (widgets[n - 1]->CenteredAtZero()) {
+    bounds_origin = location_transform[n - 1].mapOrigin();
+  } else {
+    bounds_origin = location_transform[n - 1].mapPoint(location_bounds[n - 1].Center());
+  }
 
-    auto location_transform = SkMatrix::Scale(location_scale, location_scale)
-                                  .postTranslate(current_position.x, current_position.y)
-                                  .preTranslate(-location->local_anchor->x, -location->local_anchor->y);
+  for (int i = 0; i < n; ++i) {
+    location_transform[i].mapRect(&location_bounds[i].sk);
+  }
 
-
-    if (i == locations.size() - 1) {
-      if (!object_widget.CenteredAtZero()) {
-        bounds_origin = location_bounds.Center();
-      }
-      bounds_origin = location_transform.mapPoint(bounds_origin);
-    }
-
-    location_transform.mapRect(&location_bounds.sk);
-    if (bounds_all.sk.isEmpty()) {
-      bounds_all = location_bounds;
-    } else {
-      bounds_all.ExpandToInclude(location_bounds);
-    }
+  Rect bounds_all = location_bounds[0];
+  for (int i = 1; i < n; ++i) {
+    bounds_all.ExpandToInclude(location_bounds[i]);
   }
 
   SkMatrix snap = {};
@@ -80,37 +89,29 @@ void DragLocationAction::Update() {
     snap = drop_target->DropSnap(bounds_all, bounds_origin, &current_position);
   }
 
-  for (int i = 0; i < locations.size(); ++i) {
-    auto& location = locations[i];
-    auto& object_widget = location->WidgetForObject();
-    auto location_scale = location->GetBaseScale();
-
-    auto location_transform = SkMatrix::Scale(location_scale, location_scale)
-                                  .postTranslate(current_position.x, current_position.y)
-                                  .preTranslate(-location->local_anchor->x, -location->local_anchor->y);
-    location_transform.postConcat(snap);
-    location->position.x = location_transform.getTranslateX();
-    location->position.y = location_transform.getTranslateY();
-    location->scale = location_transform.getScaleX();
-    location->WakeAnimation();
+  bool moved = false;
+  for (int i = 0; i < n; ++i) {
+    location_transform[i].postConcat(snap);
+    auto new_position =
+        Vec2(location_transform[i].getTranslateX(), location_transform[i].getTranslateY());
+    if (!NearlyEqual(new_position, locations[i]->position)) {
+      moved = true;
+      Vec2 fix = current_position - last_position;
+      widgets[i]->local_to_parent.postTranslate(fix.x, fix.y);
+    }
+    locations[i]->position = new_position;
+    locations[i]->scale = location_transform[i].getScaleX();
   }
 
-  // If the location target position moves, apply the mouse delta to the location's widget make it
-  // more responsive.
-  // if (last_snapped_position != position) {
-  //   last_snapped_position = position;
-  //   for (auto& location : locations) {
-  //     Vec2 fix = current_position - last_position;
-  //     location->object_widget->local_to_parent.postTranslate(fix.x, fix.y);
-  //   }
-  //   for (auto& location : locations) {
-  //     location->UpdateAutoconnectArgs();
-  //   }
-  //   for (auto& location : locations) {
-  //     location->WakeAnimation();
-  //     location->InvalidateConnectionWidgets(true, false);
-  //   }
-  // }
+  if (moved) {
+    for (auto& location : locations) {
+      location->UpdateAutoconnectArgs();
+    }
+    for (auto& location : locations) {
+      location->WakeAnimation();
+      location->InvalidateConnectionWidgets(true, false);
+    }
+  }
 
   last_position = current_position;
 }

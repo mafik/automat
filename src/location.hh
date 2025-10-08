@@ -24,18 +24,6 @@ namespace automat {
 
 struct LongRunning;
 
-struct ObjectAnimationState {
-  float transparency = 0;
-  float highlight = 0;
-  float highlight_target = 0;
-  time::T time_seconds = 0;  // used to animate dashed line
-  animation::SpringV2<float> elevation;
-
-  ObjectAnimationState();
-
-  animation::Phase Tick(float delta_time, Vec2 target_position, float target_scale);
-};
-
 // Each Container holds its inner objects in Locations.
 //
 // Location specifies location & relations of an object.
@@ -51,9 +39,12 @@ struct Location : ReferenceCounted, ui::Widget {
   constexpr static float kScaleSpringPeriod = 0.3;
   constexpr static float kSpringHalfTime = kScaleSpringPeriod / 4;
 
-  ObjectAnimationState& GetAnimationState() const;  // TODO: remove
-
-  mutable ObjectAnimationState animation_state;
+  // Animation state
+  float transparency = 0;
+  float highlight = 0;
+  float highlight_target = 0;
+  time::T time_seconds = 0;  // used to animate dashed line
+  animation::SpringV2<float> elevation;
 
   Optional<Vec2> scale_pivot;  // local coordinates
   SkM44 local_to_parent_velocity;

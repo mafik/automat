@@ -44,6 +44,7 @@ constexpr float kFrameCornerRadius = 0.001;
 
 Location::Location(Widget* parent_widget, WeakPtr<Location> parent_location)
     : Widget(parent_widget),
+      elevation(0),
       parent_location(std::move(parent_location)),
       local_to_parent_velocity(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) {}
 
@@ -171,8 +172,7 @@ SkPath Outset(const SkPath& path, float distance) {
 animation::Phase Location::Tick(time::Timer& timer) {
   auto phase = animation::Finished;
 
-  auto& state = GetAnimationState();
-  phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.transparency);
+  phase |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);
 
   if (object_widget) {
     SkMatrix target_transform;
@@ -223,14 +223,14 @@ animation::Phase Location::Tick(time::Timer& timer) {
   // Connection widgets rely on position, scale & transparency so make sure they're updated.
   InvalidateConnectionWidgets(true, false);
 
-  phase |= animation::ExponentialApproach(state.highlight_target, timer.d, 0.1, state.highlight);
-  if (state.highlight > 0.01f) {
+  phase |= animation::ExponentialApproach(highlight_target, timer.d, 0.1, highlight);
+  if (highlight > 0.01f) {
     phase = animation::Animating;
-    state.time_seconds = timer.NowSeconds();
+    time_seconds = timer.NowSeconds();
   }
   {
     float target_elevation = IsDragged(*this) ? 1 : 0;
-    phase |= state.elevation.SineTowards(target_elevation, timer.d, 0.2);
+    phase |= elevation.SineTowards(target_elevation, timer.d, 0.2);
   }
   return phase;
 }
@@ -249,10 +249,8 @@ void Location::Draw(SkCanvas& canvas) const {
   SkRect bounds = my_shape.getBounds();
   object_widget.local_to_parent.asM33().mapRect(&bounds);
 
-  auto& state = GetAnimationState();
-
-  if (state.highlight > 0.01f) {  // Draw dashed highlight outline
-    SkPath outset_shape = Outset(my_shape, 2.5_mm * state.highlight);
+  if (highlight > 0.01f) {  // Draw dashed highlight outline
+    SkPath outset_shape = Outset(my_shape, 2.5_mm * highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();
     canvas.concat(object_widget.local_to_parent);
@@ -265,19 +263,19 @@ void Location::Draw(SkCanvas& canvas) const {
       return paint;
     }();
     SkPaint dash_paint(kHighlightPaint);
-    dash_paint.setAlphaf(state.highlight);
+    dash_paint.setAlphaf(highlight);
     float intervals[] = {0.0035, 0.0015};
     float period_seconds = 200;
-    float phase = std::fmod(state.time_seconds, period_seconds) / period_seconds;
+    float phase = std::fmod(time_seconds, period_seconds) / period_seconds;
     dash_paint.setPathEffect(SkDashPathEffect::Make(intervals, phase));
     canvas.drawPath(outset_shape, dash_paint);
     canvas.restore();
   }
 
   bool using_layer = false;
-  if (state.transparency > 0.01) {
+  if (transparency > 0.01) {
     using_layer = true;
-    canvas.saveLayerAlphaf(&bounds, 1.f - state.transparency);
+    canvas.saveLayerAlphaf(&bounds, 1.f - transparency);
   }
 
   if constexpr (false) {  // Gray frame
@@ -374,8 +372,7 @@ void Location::ReportMissing(std::string_view property) {
 
 Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(WidgetForObject(), *parent); }
 
-ObjectAnimationState::ObjectAnimationState() : elevation(0) {}
-ObjectAnimationState& Location::GetAnimationState() const { return animation_state; }
+
 Location::~Location() {
   // Location can only be destroyed by its parent so we don't have to do anything there.
   parent_location = {};
@@ -472,7 +469,7 @@ void PositionAhead(const Location& origin, const Argument& arg, Location& target
 }
 
 void AnimateGrowFrom(Location& source, Location& grown) {
-  grown.animation_state.transparency = 1;
+  grown.transparency = 1;
   grown.WidgetForObject().local_to_parent =
       SkM44(source.WidgetForObject().local_to_parent).preScale(0.5, 0.5);
   grown.WakeAnimation();
@@ -491,11 +488,10 @@ void Location::PreDraw(SkCanvas& canvas) const {
   if (!child_widget.pack_frame_texture_bounds) {
     return;  // no shadow for non-cached widgets
   }
-  auto& anim = GetAnimationState();
   auto& root_widget = FindRootWidget();
   auto window_size_px = root_widget.size * root_widget.display_pixels_per_meter;
-  float elevation = kMinElevation + anim.elevation * kElevationRange;
-  float shadow_sigma = elevation / 2;
+  float elevation_mm = kMinElevation + elevation * kElevationRange;
+  float shadow_sigma_mm = elevation_mm / 2;
 
   SkMatrix local_to_device = canvas.getLocalToDeviceAs3x3();
   SkMatrix device_to_local;
@@ -509,7 +505,7 @@ void Location::PreDraw(SkCanvas& canvas) const {
   // Move them into local coordinates
   device_to_local.mapPoints(SkSpan<SkPoint>(&control_points[0].sk, 2));
   // Keep the top point in place, move the bottom point down to follow the shadow
-  Vec2 dst[2] = {control_points[0], control_points[1] - Vec2{0, elevation}};
+  Vec2 dst[2] = {control_points[0], control_points[1] - Vec2{0, elevation_mm}};
 
   SkMatrix matrix;
   if (!matrix.setPolyToPoly(&control_points[0].sk, &dst[0].sk, 2)) {
@@ -521,13 +517,13 @@ void Location::PreDraw(SkCanvas& canvas) const {
   shadow_paint.setImageFilter(SkImageFilters::Merge(
       SkImageFilters::MatrixTransform(
           matrix, kFastSamplingOptions,
-          SkImageFilters::DropShadowOnly(0, 0, shadow_sigma, shadow_sigma, "#09000c5b"_color,
+          SkImageFilters::DropShadowOnly(0, 0, shadow_sigma_mm, shadow_sigma_mm, "#09000c5b"_color,
                                          nullptr)),
       SkImageFilters::Blur(
-          elevation / 10, elevation / 10,
+          elevation_mm / 10, elevation_mm / 10,
           SkImageFilters::ColorFilter(SkColorFilters::Lighting("#c9ced6"_color, "#000000"_color),
                                       nullptr))));
-  shadow_paint.setAlphaf(1.f - anim.transparency);
+  shadow_paint.setAlphaf(1.f - transparency);
   canvas.saveLayer(nullptr, &shadow_paint);
   canvas.concat(child_widget.local_to_parent);
   canvas.drawDrawable(child_widget.sk_drawable.get());

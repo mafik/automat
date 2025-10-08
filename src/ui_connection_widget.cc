@@ -221,7 +221,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   if (arg.style == Argument::Style::Invisible || arg.style == Argument::Style::Spotlight) {
     return animation::Finished;
   }
-  auto& from_animation_state = from.GetAnimationState();
+
   SkPath from_shape = from.WidgetForObject().Shape();
   if (arg.field) {
     from_shape = from.FieldShape(*arg.field);
@@ -287,7 +287,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
   auto phase = animation::LinearApproach(overlapping ? 1 : 0, timer.d, 5, transparency);
 
-  auto alpha = (1.f - from_animation_state.transparency) * (1.f - transparency);
+  auto alpha = (1.f - from.transparency) * (1.f - transparency);
 
   if (!state.has_value() && arg.style != Argument::Style::Arrow && alpha > 0.01f) {
     auto arcline = RouteCable(pos_dir, to_points, nullptr);
@@ -347,7 +347,6 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   if (arg.style == Argument::Style::Invisible || arg.style == Argument::Style::Spotlight) {
     return;
   }
-  auto& from_animation_state = from.GetAnimationState();
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
   if (arg.field) {
@@ -365,7 +364,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   from_shape.transform(transform_from_to_machine);
 
   bool using_layer = false;
-  auto alpha = (1.f - from_animation_state.transparency) * (1.f - transparency);
+  auto alpha = (1.f - from.transparency) * (1.f - transparency);
 
   if (alpha < 1.0f) {
     using_layer = true;
@@ -442,9 +441,9 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
       if (CanConnect(widget.from, *l, widget.arg)) {
-        l->GetAnimationState().highlight_target = 1;
+        l->highlight_target = 1;
       } else {
-        l->GetAnimationState().highlight_target = 0;
+        l->highlight_target = 0;
       }
       l->WakeAnimation();
     }
@@ -471,7 +470,7 @@ DragConnectionAction::~DragConnectionAction() {
   widget.manual_position.reset();
   if (Machine* m = widget.from.ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      l->animation_state.highlight_target = 0;
+      l->highlight_target = 0;
       l->WakeAnimation();
     }
   }

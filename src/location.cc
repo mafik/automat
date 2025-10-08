@@ -199,10 +199,10 @@ animation::Phase Location::Tick(time::Timer& timer) {
 
     Vec2 position_curr = Vec2(transform_curr.getTranslateX(), transform_curr.getTranslateY());
     Vec2 position_vel = Vec2(local_to_parent_velocity.rc(0, 2), local_to_parent_velocity.rc(1, 2));
-    phase |= animation::LowLevelSineTowards(target_transform.rc(0, 2), timer.d, kPositionSpringPeriod,
-                                            position_curr.x, position_vel.x);
-    phase |= animation::LowLevelSineTowards(target_transform.rc(1, 2), timer.d, kPositionSpringPeriod,
-                                            position_curr.y, position_vel.y);
+    phase |= animation::LowLevelSineTowards(target_transform.rc(0, 2), timer.d,
+                                            kPositionSpringPeriod, position_curr.x, position_vel.x);
+    phase |= animation::LowLevelSineTowards(target_transform.rc(1, 2), timer.d,
+                                            kPositionSpringPeriod, position_curr.y, position_vel.y);
     transform_curr.setTranslateX(position_curr.x);
     transform_curr.setTranslateY(position_curr.y);
     local_to_parent_velocity.setRC(0, 2, position_vel.x);
@@ -363,7 +363,6 @@ void Location::ReportMissing(std::string_view property) {
 }
 
 Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(WidgetForObject(), *parent); }
-
 
 Location::~Location() {
   // Location can only be destroyed by its parent so we don't have to do anything there.
@@ -711,6 +710,19 @@ void Location::Deiconify() {
     scale = GetBaseScale();
     WakeAnimation();
   }
+}
+
+SkMatrix Location::GetTargetMatrix() const {
+  Vec2 anchor = LocalAnchor();
+  return SkMatrix::Translate(position.x, position.y).preScale(scale, scale, anchor.x, anchor.y);
+}
+
+void Location::SetTargetMatrix(const SkMatrix& matrix) {
+  Vec2 anchor = LocalAnchor();
+  scale = matrix.getScaleX();
+  auto matrix_copy = matrix;
+  matrix_copy.preScale(1.f/scale, 1.f/scale, anchor.x, anchor.y);
+  position = Vec2(matrix_copy.getTranslateX(), matrix_copy.getTranslateY());
 }
 
 }  // namespace automat

@@ -57,6 +57,11 @@ struct Location : ReferenceCounted, ui::Widget {
   float scale = 1.f;
   bool iconified = false;
 
+  // Obtain a matrix representation of the target transform of the object's widget.
+  SkMatrix GetTargetMatrix() const;
+  // Set the target transform of the object's widget.
+  void SetTargetMatrix(const SkMatrix& matrix);
+
   void Iconify();
   void Deiconify();
 

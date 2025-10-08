@@ -56,7 +56,7 @@ void DragLocationAction::Update() {
 
     auto location_transform = SkMatrix::Scale(location_scale, location_scale)
                                   .postTranslate(current_position.x, current_position.y)
-                                  .preTranslate(-initial_positions[i].x, -initial_positions[i].y);
+                                  .preTranslate(-location->local_anchor->x, -location->local_anchor->y);
 
     location_transform.mapRect(&location_bounds.sk);
     if (bounds_all.sk.isEmpty()) {
@@ -78,7 +78,7 @@ void DragLocationAction::Update() {
 
     auto location_transform = SkMatrix::Scale(location_scale, location_scale)
                                   .postTranslate(current_position.x, current_position.y)
-                                  .preTranslate(-initial_positions[i].x, -initial_positions[i].y);
+                                  .preTranslate(-location->local_anchor->x, -location->local_anchor->y);
     location_transform.postConcat(snap);
     location->position.x = location_transform.getTranslateX();
     location->position.y = location_transform.getTranslateY();
@@ -133,7 +133,6 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     location->parent = widget.get();
     location->local_anchor = pointer.PositionWithin(object_widget);
     location->WakeAnimation();
-    initial_positions.push_back(pointer.PositionWithin(object_widget));
   }
   widget->ValidateHierarchy();
   widget->RedrawThisFrame();

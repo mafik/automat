@@ -48,7 +48,6 @@ struct DragLocationAction : Action {
   Vec2 last_snapped_position;  // root machine coordinates
   time::SteadyPoint last_update;
   Vec<Ptr<Location>> locations;
-  Vec<Vec2> initial_positions;  // TODO: replace with scale_pivot
   unique_ptr<DragLocationWidget> widget;
 
   DragLocationAction(ui::Pointer&, Ptr<Location>&&);

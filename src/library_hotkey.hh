@@ -35,6 +35,7 @@ struct HotKey : LiveObject, Object::WidgetBase, OnOff, ui::CaretOwner, ui::KeyGr
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
+  bool CenteredAtZero() const override { return true; }
   void Args(std::function<void(Argument&)> cb) override;
 
   bool IsOn() const override;

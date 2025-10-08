@@ -49,6 +49,7 @@ struct FlipFlop : LiveObject, Object::WidgetBase, Runnable {
   void OnRun(Location& here, RunTask&) override;
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
+  bool CenteredAtZero() const override { return true; }
 };
 
 }  // namespace automat::library

@@ -33,6 +33,7 @@ struct Number : Object, Object::WidgetBase {
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void FillChildren(Vec<Widget*>& children) override;
+  bool CenteredAtZero() const override { return true; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

@@ -59,6 +59,7 @@ struct TimerDelay : LiveObject,
   void Updated(Location& here, Location& updated) override;
   void FillChildren(Vec<Widget*>& children) override;
   void OnTimerNotification(Location&, time::SteadyPoint) override;
+  bool CenteredAtZero() const override { return true; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

@@ -35,6 +35,7 @@ struct KeyPresser : Object, Object::WidgetBase, ui::CaretOwner, Runnable, LongRu
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
+  bool CenteredAtZero() const override { return true; }
   void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 

@@ -19,6 +19,7 @@
 #include "drag_action.hh"
 #include "embedded.hh"
 #include "location.hh"
+#include "math.hh"
 #include "root_widget.hh"
 #include "tasks.hh"
 #include "timer_thread.hh"
@@ -308,12 +309,11 @@ void Machine::PreDraw(SkCanvas& canvas) const {
   canvas.drawPath(shape, border_paint);
 }
 
-SkMatrix Machine::DropSnap(const Rect& rect_ref, Vec2* fixed_point) {
+SkMatrix Machine::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed_point) {
   Rect rect = rect_ref;
   SkMatrix matrix;
-  Vec2 center = rect.Center();
-  float i;
-  matrix.postTranslate(-modf(center.x * 1000, &i) / 1000., -modf(center.y * 1000, &i) / 1000.);
+  Vec2 grid_snap = RoundToMilimeters(bounds_origin) - bounds_origin;
+  matrix.postTranslate(grid_snap.x, grid_snap.y);
   matrix.mapRectScaleTranslate(&rect.sk, rect.sk);
   if (rect.left < -50_cm) {
     matrix.postTranslate(-rect.left - 50_cm, 0);

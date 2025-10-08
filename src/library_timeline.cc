@@ -1526,6 +1526,7 @@ struct TimelineWidget : Object::WidgetBase {
     auto r = WoodenCaseRRect(track_widgets.size());
     return SkPath::RRect(r);
   }
+  bool CenteredAtZero() const override { return true; }
   void FillChildren(Vec<Widget*>& children) override {
     children.reserve(3 + track_widgets.size());
     children.push_back(run_button.get());

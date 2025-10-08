@@ -21,8 +21,9 @@ struct DropTarget {
   virtual bool CanDrop(Location&) const = 0;
 
   // Snap the given Rect, which is hovered over this drop target.
+  // bounds_origin is a point that should be used for center-aligned snapping.
   // Optionally respecting a "fixed point".
-  virtual SkMatrix DropSnap(const Rect& bounds, Vec2* fixed_point = nullptr) = 0;
+  virtual SkMatrix DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point = nullptr) = 0;
 
   // When a location is being dragged around, its still owned by its original Machine. Only when
   // this method is called, the location may be re-parented into the new drop target.

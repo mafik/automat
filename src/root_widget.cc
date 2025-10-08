@@ -442,7 +442,7 @@ SkPath RootWidget::TrashShape() const {
   return trash_area_path;
 }
 
-SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2* fixed_point) {
+SkMatrix RootWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
   Rect machine_bounds = root_machine->Shape().getBounds();
 
   SkMatrix matrix;

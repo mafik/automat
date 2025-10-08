@@ -128,6 +128,9 @@ inline Vec2 Normalize(Vec2 v) {
 }
 
 inline Vec2 Round(Vec2 v) { return {roundf(v.x), roundf(v.y)}; }
+inline Vec2 RoundToMilimeters(Vec2 v) {
+  return Vec2(roundf(v.x * 1000) / 1000., roundf(v.y * 1000) / 1000.);
+}
 
 inline Vec2 Rotate90DegreesClockwise(Vec2 v) { return {v.y, -v.x}; }
 inline Vec2 Rotate90DegreesCounterClockwise(Vec2 v) { return {-v.y, v.x}; }

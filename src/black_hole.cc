@@ -64,7 +64,7 @@ void BlackHole::Draw(SkCanvas& canvas) const {
 
 bool BlackHole::CanDrop(Location&) const { return true; }
 
-SkMatrix BlackHole::DropSnap(const Rect& bounds, Vec2* fixed_point) {
+SkMatrix BlackHole::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
   auto& root_widget = ParentRootWidget();
   auto& size = root_widget.size;
 

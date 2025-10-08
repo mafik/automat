@@ -621,7 +621,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
     }
   }
 }
-SkMatrix AssemblerWidget::DropSnap(const Rect& bounds, Vec2* fixed_point) {
+SkMatrix AssemblerWidget::DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point) {
   auto local_to_machine = TransformBetween(*this, *root_machine);
   auto my_rect = kRRect.rect.Outset(-2 * kFlatBorderWidth);
   local_to_machine.mapRect(&my_rect.sk);

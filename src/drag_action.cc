@@ -48,6 +48,7 @@ void DragLocationAction::Update() {
   current_position = pointer.PositionWithinRootMachine();
 
   Rect bounds_all;
+  Vec2 bounds_origin;
   for (int i = 0; i < locations.size(); ++i) {
     auto& location = locations[i];
     auto& object_widget = location->WidgetForObject();
@@ -57,6 +58,14 @@ void DragLocationAction::Update() {
     auto location_transform = SkMatrix::Scale(location_scale, location_scale)
                                   .postTranslate(current_position.x, current_position.y)
                                   .preTranslate(-location->local_anchor->x, -location->local_anchor->y);
+
+
+    if (i == locations.size() - 1) {
+      if (!object_widget.CenteredAtZero()) {
+        bounds_origin = location_bounds.Center();
+      }
+      bounds_origin = location_transform.mapPoint(bounds_origin);
+    }
 
     location_transform.mapRect(&location_bounds.sk);
     if (bounds_all.sk.isEmpty()) {
@@ -68,7 +77,7 @@ void DragLocationAction::Update() {
 
   SkMatrix snap = {};
   if (ui::DropTarget* drop_target = FindDropTarget(*this)) {
-    snap = drop_target->DropSnap(bounds_all, &current_position);
+    snap = drop_target->DropSnap(bounds_all, bounds_origin, &current_position);
   }
 
   for (int i = 0; i < locations.size(); ++i) {

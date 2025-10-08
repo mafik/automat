@@ -47,7 +47,8 @@ struct Location : ReferenceCounted, ui::Widget {
   animation::SpringV2<float> elevation;
 
   Optional<Vec2> local_anchor;  // used for animation & DragLocationAction
-  SkM44 local_to_parent_velocity;
+  Vec2 position_vel = {};
+  float scale_vel = 0;
   WeakPtr<Location> parent_location;
 
   Ptr<Object> object;
@@ -57,10 +58,10 @@ struct Location : ReferenceCounted, ui::Widget {
   float scale = 1.f;
   bool iconified = false;
 
-  // Obtain a matrix representation of the target transform of the object's widget.
-  SkMatrix GetTargetMatrix() const;
-  // Set the target transform of the object's widget.
-  void SetTargetMatrix(const SkMatrix& matrix);
+  // Obtain a matrix representation of the given transform.
+  static SkMatrix ToMatrix(Vec2 position, float scale, Vec2 anchor);
+  // Get the position & scale out of the given matrix & anchor.
+  static void FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_position, float& out_scale);
 
   void Iconify();
   void Deiconify();

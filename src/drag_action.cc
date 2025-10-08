@@ -56,14 +56,11 @@ void DragLocationAction::Update() {
   for (int i = 0; i < n; ++i) {
     location_bounds[i] = widgets[i]->CoarseBounds().rect;
   }
-  float location_scale[n];
-  for (int i = 0; i < n; ++i) {
-    location_scale[i] = locations[i]->GetBaseScale();
-  }
   SkMatrix location_transform[n];
   for (int i = 0; i < n; ++i) {
+    float scale = locations[i]->GetBaseScale();
     location_transform[i] =
-        SkMatrix::Scale(location_scale[i], location_scale[i])
+        SkMatrix::Scale(scale, scale)
             .postTranslate(current_position.x, current_position.y)
             .preTranslate(-locations[i]->local_anchor->x, -locations[i]->local_anchor->y);
   }
@@ -92,15 +89,17 @@ void DragLocationAction::Update() {
   bool moved = false;
   for (int i = 0; i < n; ++i) {
     location_transform[i].postConcat(snap);
-    auto new_position =
-        Vec2(location_transform[i].getTranslateX(), location_transform[i].getTranslateY());
+    Vec2 new_position;
+    float new_scale;
+    Location::FromMatrix(location_transform[i], locations[i]->LocalAnchor(), new_position,
+                         new_scale);
     if (!NearlyEqual(new_position, locations[i]->position)) {
       moved = true;
       Vec2 fix = current_position - last_position;
       widgets[i]->local_to_parent.postTranslate(fix.x, fix.y);
     }
     locations[i]->position = new_position;
-    locations[i]->scale = location_transform[i].getScaleX();
+    locations[i]->scale = new_scale;
   }
 
   if (moved) {
@@ -127,18 +126,18 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     pointer.root_widget.black_hole.WakeAnimation();
   }
   for (auto& location : locations) {
-    auto fix = SkM44(TransformBetween(*location, *widget));
+    auto fix = TransformBetween(*location, *widget);
 
-    auto new_position = fix.map(location->position.x, location->position.y, 0, 1);
-    location->position = Vec2(new_position.x, new_position.y);
+    auto target_matrix =
+        Location::ToMatrix(location->position, location->scale, location->LocalAnchor());
+    target_matrix.postConcat(fix);
 
     auto& object_widget = location->WidgetForObject();
-    object_widget.local_to_parent.postConcat(fix);
-    // clear translation
-    fix.setRC(0, 3, 0);
-    fix.setRC(1, 3, 0);
-    fix.setRC(2, 3, 0);
-    location->local_to_parent_velocity.postConcat(fix);
+    object_widget.local_to_parent.postConcat(SkM44(fix));
+    {  // Transform velocities
+      fix.mapVector(location->position_vel);
+      fix.mapRadius(location->scale_vel);
+    }
 
     location->parent = widget.get();
     location->local_anchor = pointer.PositionWithin(object_widget);

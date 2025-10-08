@@ -45,8 +45,7 @@ constexpr float kFrameCornerRadius = 0.001;
 Location::Location(Widget* parent_widget, WeakPtr<Location> parent_location)
     : Widget(parent_widget),
       elevation(0),
-      parent_location(std::move(parent_location)),
-      local_to_parent_velocity(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) {}
+      parent_location(std::move(parent_location)) {}
 
 bool Location::HasError() {
   if (error != nullptr) return true;
@@ -175,40 +174,19 @@ animation::Phase Location::Tick(time::Timer& timer) {
   phase |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);
 
   if (object_widget) {
-    SkMatrix target_transform;
-    target_transform.setScaleTranslate(scale, scale, position.x, position.y);
-
     Vec2 local_pivot = LocalAnchor();
+    Vec2 position_curr;
+    float scale_curr;
+    FromMatrix(object_widget->local_to_parent.asM33(), local_pivot, position_curr, scale_curr);
 
-    SkMatrix transform_curr = object_widget->local_to_parent.asM33();
-
-    // Animate the matrices
-
-    Vec2 scale_curr = Vec2(transform_curr.getScaleX(), transform_curr.getScaleY());
-
-    Vec2 scale_vel = Vec2(local_to_parent_velocity.rc(0, 0), local_to_parent_velocity.rc(1, 1));
     phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
-                                              scale_curr.x, scale_vel.x);
-    phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
-                                              scale_curr.y, scale_vel.y);
-    transform_curr.preScale(scale_curr.x / transform_curr.getScaleX(),
-                            scale_curr.y / transform_curr.getScaleY(), local_pivot.x,
-                            local_pivot.y);
-    local_to_parent_velocity.setRC(0, 0, scale_vel.x);
-    local_to_parent_velocity.setRC(1, 1, scale_vel.y);
-
-    Vec2 position_curr = Vec2(transform_curr.getTranslateX(), transform_curr.getTranslateY());
-    Vec2 position_vel = Vec2(local_to_parent_velocity.rc(0, 2), local_to_parent_velocity.rc(1, 2));
-    phase |= animation::LowLevelSineTowards(target_transform.rc(0, 2), timer.d,
+                                              scale_curr, scale_vel);
+    phase |= animation::LowLevelSineTowards(position.x, timer.d,
                                             kPositionSpringPeriod, position_curr.x, position_vel.x);
-    phase |= animation::LowLevelSineTowards(target_transform.rc(1, 2), timer.d,
+    phase |= animation::LowLevelSineTowards(position.y, timer.d,
                                             kPositionSpringPeriod, position_curr.y, position_vel.y);
-    transform_curr.setTranslateX(position_curr.x);
-    transform_curr.setTranslateY(position_curr.y);
-    local_to_parent_velocity.setRC(0, 2, position_vel.x);
-    local_to_parent_velocity.setRC(1, 2, position_vel.y);
 
-    object_widget->local_to_parent = SkM44(transform_curr);
+    object_widget->local_to_parent = SkM44(ToMatrix(position_curr, scale_curr, local_pivot));
     object_widget->RecursiveTransformUpdated();
   }
 
@@ -712,17 +690,15 @@ void Location::Deiconify() {
   }
 }
 
-SkMatrix Location::GetTargetMatrix() const {
-  Vec2 anchor = LocalAnchor();
+SkMatrix Location::ToMatrix(Vec2 position, float scale, Vec2 anchor) {
   return SkMatrix::Translate(position.x, position.y).preScale(scale, scale, anchor.x, anchor.y);
 }
 
-void Location::SetTargetMatrix(const SkMatrix& matrix) {
-  Vec2 anchor = LocalAnchor();
-  scale = matrix.getScaleX();
+void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_position, float& out_scale) {
+  out_scale = matrix.getScaleX();
   auto matrix_copy = matrix;
-  matrix_copy.preScale(1.f/scale, 1.f/scale, anchor.x, anchor.y);
-  position = Vec2(matrix_copy.getTranslateX(), matrix_copy.getTranslateY());
+  matrix_copy.preScale(1.f/out_scale, 1.f/out_scale, anchor.x, anchor.y);
+  out_position = Vec2(matrix_copy.getTranslateX(), matrix_copy.getTranslateY());
 }
 
 }  // namespace automat

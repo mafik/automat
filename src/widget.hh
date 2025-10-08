@@ -207,7 +207,9 @@ struct Widget : Trackable, OptionsProvider {
   // their bounds.
   virtual bool CenteredAtZero() const { return false; }
 
-  virtual Vec2 ScalePivot() const {
+  // Anchor, around which various transforms are applied. This should correspond to the center of
+  // the widget's mass.
+  virtual Vec2 LocalAnchor() const {
     if (CenteredAtZero()) {
       return Vec2(0, 0);
     }

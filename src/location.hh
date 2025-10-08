@@ -95,7 +95,7 @@ struct Location : ReferenceCounted, ui::Widget {
     return *object_widget;
   }
 
-  Vec2 ScalePivot() const override;
+  Vec2 LocalAnchor() const override;
 
   Ptr<Object> InsertHere(Ptr<Object>&& object);
 

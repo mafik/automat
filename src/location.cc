@@ -178,7 +178,7 @@ animation::Phase Location::Tick(time::Timer& timer) {
     SkMatrix target_transform;
     target_transform.setScaleTranslate(scale, scale, position.x, position.y);
 
-    Vec2 local_pivot = ScalePivot();
+    Vec2 local_pivot = LocalAnchor();
 
     SkMatrix transform_curr = object_widget->local_to_parent.asM33();
 
@@ -667,12 +667,12 @@ Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
 }
 Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(prototype.Clone()); }
 
-Vec2 Location::ScalePivot() const {
+Vec2 Location::LocalAnchor() const {
   if (local_anchor.has_value()) {
     return local_anchor.value();
   }
   if (object_widget) {
-    return object_widget->ScalePivot();
+    return object_widget->LocalAnchor();
   }
   return Vec2();
 }

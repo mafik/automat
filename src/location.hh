@@ -25,14 +25,11 @@ namespace automat {
 struct LongRunning;
 
 struct ObjectAnimationState {
-  SkM44 local_to_parent_velocity;
-
   float transparency = 0;
   float highlight = 0;
   float highlight_target = 0;
   time::T time_seconds = 0;  // used to animate dashed line
   animation::SpringV2<float> elevation;
-  Optional<Vec2> scale_pivot;  // machine coordinates
 
   ObjectAnimationState();
 
@@ -58,6 +55,8 @@ struct Location : ReferenceCounted, ui::Widget {
 
   mutable ObjectAnimationState animation_state;
 
+  Optional<Vec2> scale_pivot;  // local coordinates
+  SkM44 local_to_parent_velocity;
   WeakPtr<Location> parent_location;
 
   Ptr<Object> object;

@@ -43,7 +43,9 @@ namespace automat {
 constexpr float kFrameCornerRadius = 0.001;
 
 Location::Location(Widget* parent_widget, WeakPtr<Location> parent_location)
-    : Widget(parent_widget), parent_location(std::move(parent_location)) {}
+    : Widget(parent_widget),
+      parent_location(std::move(parent_location)),
+      local_to_parent_velocity(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) {}
 
 bool Location::HasError() {
   if (error != nullptr) return true;
@@ -176,63 +178,36 @@ animation::Phase Location::Tick(time::Timer& timer) {
     SkMatrix target_transform;
     target_transform.setScaleTranslate(scale, scale, position.x, position.y);
 
-    object_widget->local_to_parent = SkM44(target_transform);
+    Vec2 local_pivot = ScalePivot();
 
-    /*
-    Vec2 scale_curr;
     SkMatrix transform_curr = object_widget->local_to_parent.asM33();
-    SkMatrix transform_curr_inv;
-    (void)transform_curr.invert(&transform_curr_inv);
-    LOG << "Initial State:";
-    LOG << " local_to_parent=" << transform_curr;
-    Vec2 target_position = position;
-    LOG << " target_position=" << target_position.ToStrMetric();
-    Vec2 local_pivot = {};
-    */
 
-    /*
-    if (animation_state.scale_pivot) {
-      LOG << "Shifting by scale pivot (" << animation_state.scale_pivot->ToStrMetric() << ")...";
-      local_pivot = transform_curr_inv.mapPoint(*animation_state.scale_pivot);
-      LOG << " local_pivot=" << local_pivot.ToStrMetric();
-      transform_curr.preTranslate(local_pivot.x, local_pivot.y);
+    // Animate the matrices
 
-      LOG << " transform_curr=" << transform_curr;
+    Vec2 scale_curr = Vec2(transform_curr.getScaleX(), transform_curr.getScaleY());
 
-      // transform_curr =
-      // = local_to_parent x Translate(local_pivot) =
-      // = Translate(position_curr)
-      // x Translate(local_pivot)
-      // x Scale(scale)
+    Vec2 scale_vel = Vec2(local_to_parent_velocity.rc(0, 0), local_to_parent_velocity.rc(1, 1));
+    phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
+                                              scale_curr.x, scale_vel.x);
+    phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
+                                              scale_curr.y, scale_vel.y);
+    transform_curr.preScale(scale_curr.x / transform_curr.getScaleX(),
+                            scale_curr.y / transform_curr.getScaleY(), local_pivot.x,
+                            local_pivot.y);
+    local_to_parent_velocity.setRC(0, 0, scale_vel.x);
+    local_to_parent_velocity.setRC(1, 1, scale_vel.y);
 
-      transform_curr.postTranslate(-animation_state.scale_pivot->x,
-                                   -animation_state.scale_pivot->y);
-      target_position -= *animation_state.scale_pivot;
-      LOG << " transform_curr=" << transform_curr;
-      LOG << " target_position=" << target_position.ToStrMetric();
-    }
+    float current_x = transform_curr.getTranslateX();
+    phase |= animation::ExponentialApproach(target_transform.rc(0, 2), timer.d, 0.1, current_x);
+    transform_curr.setTranslateX(current_x);
 
-    LOG << "Decomposing into scale and translation...";
-    transform_curr.decomposeScale(&scale_curr.sk_size, &transform_curr);
+    float current_y = transform_curr.getTranslateY();
+    phase |= animation::ExponentialApproach(target_transform.rc(1, 2), timer.d, 0.1, current_y);
+    transform_curr.setTranslateY(current_y);
 
-    Vec2 position_curr = Vec2(transform_curr.getTranslateX(), transform_curr.getTranslateY());
-    LOG << " scale_curr=" << scale_curr.ToStr();
-    LOG << " transform_curr=" << transform_curr;
+    object_widget->local_to_parent = SkM44(transform_curr);
 
-    auto scale_vel = Vec2(animation_state.local_to_parent_velocity.rc(0, 0),
-                          animation_state.local_to_parent_velocity.rc(1, 1));
-
-    auto position_vel = Vec2(animation_state.local_to_parent_velocity.rc(0, 3),
-                             animation_state.local_to_parent_velocity.rc(1, 3));
-
-    // LOG << "Location animation:";
-    // LOG << "  target position: " << position.ToStrMetric();
-    // LOG << "  curr position: " << position_curr.ToStrMetric();
-    // LOG << "  position velocity: " << position_vel.ToStrMetric();
-    // LOG << "  target scale: " << scale;
-    // LOG << "  curr scale: " << scale_curr.ToStr();
-    // LOG << "  scale velocity: " << scale_vel.ToStr();
-
+    /* Proper animation functions (for reference, later):
     phase |= animation::LowLevelSineTowards(target_position.x, timer.d, kPositionSpringPeriod,
                                             position_curr.x, position_vel.x);
     phase |= animation::LowLevelSineTowards(target_position.y, timer.d, kPositionSpringPeriod,
@@ -241,21 +216,6 @@ animation::Phase Location::Tick(time::Timer& timer) {
                                               scale_curr.x, scale_vel.x);
     phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
                                               scale_curr.y, scale_vel.y);
-    // LOG << "  curr position2: " << position_curr.ToStrMetric();
-    // LOG << "  position velocity2: " << position_vel.ToStrMetric();
-    // LOG << "  curr scale2: " << scale_curr.ToStr();
-    // LOG << "  scale velocity2: " << scale_vel.ToStr();
-
-    transform_curr.setScaleTranslate(scale_curr.x, scale_curr.y, position_curr.x, position_curr.y);
-
-    if (animation_state.scale_pivot) {
-      transform_curr.postTranslate(animation_state.scale_pivot->x, animation_state.scale_pivot->y);
-    }
-    object_widget->local_to_parent = SkM44(transform_curr);
-    animation_state.local_to_parent_velocity.setRC(0, 0, scale_vel.x);
-    animation_state.local_to_parent_velocity.setRC(1, 1, scale_vel.y);
-    animation_state.local_to_parent_velocity.setRC(0, 3, position_vel.x);
-    animation_state.local_to_parent_velocity.setRC(1, 3, position_vel.y);
     */
     object_widget->RecursiveTransformUpdated();
   }
@@ -414,8 +374,7 @@ void Location::ReportMissing(std::string_view property) {
 
 Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(WidgetForObject(), *parent); }
 
-ObjectAnimationState::ObjectAnimationState()
-    : local_to_parent_velocity(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), elevation(0) {}
+ObjectAnimationState::ObjectAnimationState() : elevation(0) {}
 ObjectAnimationState& Location::GetAnimationState() const { return animation_state; }
 Location::~Location() {
   // Location can only be destroyed by its parent so we don't have to do anything there.
@@ -721,8 +680,8 @@ Ptr<Object> Location::InsertHere(Ptr<Object>&& object) {
 Ptr<Object> Location::Create(const Object& prototype) { return InsertHere(prototype.Clone()); }
 
 Vec2 Location::ScalePivot() const {
-  if (animation_state.scale_pivot.has_value()) {
-    return animation_state.scale_pivot.value();
+  if (scale_pivot.has_value()) {
+    return scale_pivot.value();
   }
   if (object_widget) {
     return object_widget->ScalePivot();

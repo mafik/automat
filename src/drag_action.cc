@@ -47,9 +47,6 @@ static ui::DropTarget* FindDropTarget(DragLocationAction& a) {
 void DragLocationAction::Update() {
   current_position = pointer.PositionWithinRootMachine();
 
-  for (auto& location : locations) {
-    location->animation_state.scale_pivot = current_position;
-  }
   Rect bounds_all;
   for (int i = 0; i < locations.size(); ++i) {
     auto& location = locations[i];
@@ -89,23 +86,8 @@ void DragLocationAction::Update() {
     location->WakeAnimation();
   }
 
-  // LOG << " Snapped position=" << position.ToStrMetric() << " scale=" << scale;
-
-  // auto old_position = base.position;
-  // auto old_scale = base.scale;
-
-  // base.position = position;
-  // base.scale = scale;
-
-  // for (int i = locations.size() - 2; i >= 0; --i) {
-  //   auto& atop = *locations[i];
-  //   Vec2 atop_pivot = atop.ScalePivot();
-  //   Vec2 old_delta = atop.position + atop_pivot - old_position - base_pivot;
-  //   Vec2 new_delta = old_delta / old_scale * scale;
-  //   atop.position = position + base_pivot + new_delta - atop_pivot;
-  //   atop.scale = scale;
-  // }
-
+  // If the location target position moves, apply the mouse delta to the location's widget make it
+  // more responsive.
   // if (last_snapped_position != position) {
   //   last_snapped_position = position;
   //   for (auto& location : locations) {
@@ -146,10 +128,10 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
     fix.setRC(0, 3, 0);
     fix.setRC(1, 3, 0);
     fix.setRC(2, 3, 0);
-    location->animation_state.local_to_parent_velocity.postConcat(fix);
+    location->local_to_parent_velocity.postConcat(fix);
 
     location->parent = widget.get();
-    location->animation_state.scale_pivot = pointer.PositionWithinRootMachine();
+    location->scale_pivot = pointer.PositionWithin(object_widget);
     location->WakeAnimation();
     initial_positions.push_back(pointer.PositionWithin(object_widget));
   }
@@ -187,7 +169,7 @@ DragLocationAction::~DragLocationAction() {
   if (drop_target) {
     for (auto& location : std::ranges::reverse_view(locations)) {
       location->WakeAnimation();
-      location->animation_state.scale_pivot.reset();
+      location->scale_pivot.reset();
       drop_target->DropLocation(std::move(location));
     }
   }

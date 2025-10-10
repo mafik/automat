@@ -257,4 +257,11 @@ void Object::WakeWidgetsAnimation() {
   ForEachWidget([](ui::RootWidget&, ui::Widget& widget) { widget.WakeAnimation(); });
 }
 
+float Object::WidgetInterface::GetBaseScale() const {
+  if (IsIconified()) {
+    auto bounds = CoarseBounds().rect;
+    return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
+  }
+  return 1;
+}
 }  // namespace automat

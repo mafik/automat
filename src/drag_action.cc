@@ -59,7 +59,7 @@ void DragLocationAction::Update() {
   }
   SkMatrix location_transform[n];
   for (int i = 0; i < n; ++i) {
-    float scale = locations[i]->GetBaseScale();
+    float scale = locations[i]->object_widget->GetBaseScale();
     location_transform[i] =
         SkMatrix::Scale(scale, scale)
             .postTranslate(current_position.x, current_position.y)

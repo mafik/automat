@@ -90,11 +90,12 @@ struct Object : public ReferenceCounted {
     virtual bool IsIconified() const = 0;
     virtual void SetIconified(bool iconified) = 0;
 
-    // Usually Location will take care of iconification by animating the object's widget scale to
-    // make it fit in 1x1cm square. Sometimes an Object may provide its own animation instead. If
-    // that's the case then it should return true from CustomIconification() and check IsIconified()
-    // within its Tick() function.
-    virtual bool CustomIconification() = 0;
+    // Get the default scale that this object would like to have.
+    // Usually it's 1 but when it's iconified, it may want to shrink itself.
+    //
+    // Default implementation reports 1 but if the object is iconified, it checks the CoarseBounds()
+    // and returns a scale that would fit in a 1x1cm square.
+    virtual float GetBaseScale() const;
   };
 
   // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
@@ -119,7 +120,6 @@ struct Object : public ReferenceCounted {
       return object.Lock().Cast<T>();
     }
 
-    bool CustomIconification() override { return false; }
     bool IsIconified() const override { return iconified; }
     void SetIconified(bool new_iconified) override { this->iconified = new_iconified; }
   };
@@ -156,9 +156,9 @@ struct Object : public ReferenceCounted {
           Widget::Draw(canvas);
         }
 
-        bool CustomIconification() override { return widget.CustomIconification(); }
         bool IsIconified() const override { return widget.IsIconified(); }
         void SetIconified(bool new_iconified) override { widget.SetIconified(new_iconified); }
+        float GetBaseScale() const override { return widget.GetBaseScale(); }
       };
       return std::make_unique<HybridAdapter>(parent, *this, *w);
     }

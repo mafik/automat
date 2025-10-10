@@ -65,10 +65,6 @@ struct Location : ReferenceCounted, ui::Widget {
   void Iconify();
   void Deiconify();
 
-  // Get the default scale that this location would like to have.
-  // Usually it's 1 but when it's iconified, it may want to shrink itself.
-  float GetBaseScale() const;
-
   // Connections of this Location.
   // Connection is owned by both incoming & outgoing locations.
   std::unordered_multiset<Connection*, ConnectionHasher, ConnectionEqual> outgoing;

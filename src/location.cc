@@ -662,33 +662,16 @@ RunTask& Location::GetRunTask() {
   return *run_task;
 }
 
-float Location::GetBaseScale() const {
-  if (object_widget && object_widget->IsIconified() && !object_widget->CustomIconification()) {
-    auto bounds = object_widget->CoarseBounds().rect;
-    return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
-  }
-  return 1;
-}
-
 void Location::Iconify() {
-
   object_widget->SetIconified(true);
-  if (object_widget->CustomIconification()) {
-    object_widget->WakeAnimation();
-  } else {
-    scale = GetBaseScale();
-    WakeAnimation();
-  }
+  scale = object_widget->GetBaseScale();
+  WakeAnimation();
 }
 
 void Location::Deiconify() {
   object_widget->SetIconified(false);
-  if (object_widget->CustomIconification()) {
-    object_widget->WakeAnimation();
-  } else {
-    scale = GetBaseScale();
-    WakeAnimation();
-  }
+  scale = object_widget->GetBaseScale();
+  WakeAnimation();
 }
 
 SkMatrix Location::ToMatrix(Vec2 position, float scale, Vec2 anchor) {

@@ -25,7 +25,7 @@ struct TrackBase : Object {
                             time::SteadyPoint now) = 0;
 
   // Each subtype must returns its own Widget derived from TrackBaseWidget.
-  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override = 0;
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override = 0;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
@@ -36,7 +36,7 @@ struct OnOffTrack : TrackBase, OnOff {
   time::Duration on_at = time::kDurationGuard;
   string_view Name() const override { return "On/Off Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(OnOffTrack, *this); }
-  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -55,7 +55,7 @@ struct Vec2Track : TrackBase {
 
   string_view Name() const override { return "Vec2 Track"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Vec2Track, *this); }
-  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
@@ -102,7 +102,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   Timeline(const Timeline&);
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here, RunTask&) override;
   void OnCancel() override;

@@ -63,7 +63,7 @@ SkRuntimeEffect& GetPixelGridRuntimeEffect() {
 namespace automat::library {
 
 struct ObjectIcon : ui::Widget {
-  std::unique_ptr<Object::WidgetBase> object_widget;
+  std::unique_ptr<Object::WidgetInterface> object_widget;
   ObjectIcon(ui::Widget* parent) : ui::Widget(parent) {}
   SkPath Shape() const override { return SkPath(); }
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
@@ -258,7 +258,7 @@ audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-std::unique_ptr<Object::WidgetBase> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetInterface> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonEventWidget>(parent, AcquireWeakPtr());
 }
 
@@ -426,7 +426,7 @@ struct MouseMoveWidget : Object::WidgetBase {
   }
 };
 
-std::unique_ptr<Object::WidgetBase> MouseMove::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetInterface> MouseMove::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseMoveWidget>(parent, AcquireWeakPtr());
 }
 
@@ -452,7 +452,7 @@ void MouseMove::OnMouseMove(Vec2 vec) {
   });
 }
 
-std::unique_ptr<Object::WidgetBase> Mouse::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetInterface> Mouse::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseWidget>(parent, AcquireWeakPtr());
 }
 
@@ -508,7 +508,7 @@ string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; 
 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
 
-std::unique_ptr<Object::WidgetBase> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetInterface> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());
 }
 

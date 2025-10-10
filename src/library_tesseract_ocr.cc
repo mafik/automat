@@ -1054,7 +1054,7 @@ const SkPath TesseractWidget::kEyeShape = PathFromSVG(
     "2.3929 9.8245 3.2222 7.6101 4.6757 5.3956 5.4623 3.5744 5.8813 1.2659 6.0694-2.5645 "
     "6.001-4.5481 5.7701-7.3867 5.1033-9.3703 4.0431-11.5847 2.4955-13.0382 1.2985-13.3888.9308Z");
 
-std::unique_ptr<Object::WidgetBase> TesseractOCR::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetInterface> TesseractOCR::MakeWidget(ui::Widget* parent) {
   return std::make_unique<TesseractWidget>(parent, AcquireWeakPtr<Object>());
 }
 

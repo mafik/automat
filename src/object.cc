@@ -194,7 +194,7 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
       RunOption run{loc_weak};
       visitor(run);
     }
-    if (loc->iconified) {
+    if (IsIconified()) {
       DeiconifyOption deiconify{loc_weak};
       visitor(deiconify);
     } else {
@@ -241,7 +241,7 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
-Object::WidgetBase& Object::FindWidget(const ui::Widget* parent) {
+Object::WidgetInterface& Object::FindWidget(const ui::Widget* parent) {
   return parent->FindRootWidget().widgets.For(*this, parent);
 }
 
@@ -255,13 +255,6 @@ void Object::ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb)
 
 void Object::WakeWidgetsAnimation() {
   ForEachWidget([](ui::RootWidget&, ui::Widget& widget) { widget.WakeAnimation(); });
-}
-
-bool Object::WidgetBase::IsIconified() const {
-  if (auto loc = ui::Closest<Location>(const_cast<WidgetBase&>(*this))) {
-    return loc->iconified;
-  }
-  return false;
 }
 
 }  // namespace automat

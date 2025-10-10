@@ -663,7 +663,7 @@ RunTask& Location::GetRunTask() {
 }
 
 float Location::GetBaseScale() const {
-  if (iconified && object_widget && !object_widget->CustomIconification()) {
+  if (object_widget && object_widget->IsIconified() && !object_widget->CustomIconification()) {
     auto bounds = object_widget->CoarseBounds().rect;
     return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
   }
@@ -671,8 +671,9 @@ float Location::GetBaseScale() const {
 }
 
 void Location::Iconify() {
-  iconified = true;
-  if (object_widget && object_widget->CustomIconification()) {
+
+  object_widget->SetIconified(true);
+  if (object_widget->CustomIconification()) {
     object_widget->WakeAnimation();
   } else {
     scale = GetBaseScale();
@@ -681,8 +682,8 @@ void Location::Iconify() {
 }
 
 void Location::Deiconify() {
-  iconified = false;
-  if (object_widget && object_widget->CustomIconification()) {
+  object_widget->SetIconified(false);
+  if (object_widget->CustomIconification()) {
     object_widget->WakeAnimation();
   } else {
     scale = GetBaseScale();

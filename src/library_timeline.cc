@@ -1813,7 +1813,7 @@ std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionT
   return Object::WidgetBase::FindAction(ptr, btn);
 }
 
-std::unique_ptr<Object::WidgetBase> Timeline::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetInterface> Timeline::MakeWidget(ui::Widget* parent) {
   return std::make_unique<TimelineWidget>(parent, this);
 }
 
@@ -2267,13 +2267,13 @@ struct Vec2TrackWidget : TrackBaseWidget {
   }
 };
 
-std::unique_ptr<Object::WidgetBase> OnOffTrack::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetInterface> OnOffTrack::MakeWidget(ui::Widget* parent) {
   auto ret = std::make_unique<OnOffTrackWidget>(parent);
   ret->object = AcquireWeakPtr();
   return ret;
 }
 
-std::unique_ptr<Object::WidgetBase> Vec2Track::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<Object::WidgetInterface> Vec2Track::MakeWidget(ui::Widget* parent) {
   auto ret = std::make_unique<Vec2TrackWidget>(parent);
   ret->object = AcquireWeakPtr();
   return ret;

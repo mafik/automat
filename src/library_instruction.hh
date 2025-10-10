@@ -116,7 +116,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
     return NestedWeakPtr<const mc::Inst>(AcquireWeakPtr<ReferenceCounted>(), &mc_inst);
   }
 
-  std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) override {
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override {
     return std::make_unique<Widget>(parent, AcquireWeakPtr<Object>());
   }
 

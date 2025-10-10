@@ -52,11 +52,10 @@ struct Location : ReferenceCounted, ui::Widget {
   WeakPtr<Location> parent_location;
 
   Ptr<Object> object;
-  mutable Object::WidgetBase* object_widget = nullptr;
+  mutable Object::WidgetInterface* object_widget = nullptr;
 
   Vec2 position = {0, 0};
   float scale = 1.f;
-  bool iconified = false;
 
   // Obtain a matrix representation of the given transform.
   static SkMatrix ToMatrix(Vec2 position, float scale, Vec2 anchor);
@@ -92,7 +91,7 @@ struct Location : ReferenceCounted, ui::Widget {
 
   // Find (or create if needed) the Widget for this location's object.
   // Shortcut for Widget::ForObject(location.object, location)
-  Object::WidgetBase& WidgetForObject() const {
+  Object::WidgetInterface& WidgetForObject() const {
     if (!object_widget) {
       if (object) {
         object_widget = &object->FindWidget(this);

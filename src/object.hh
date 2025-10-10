@@ -82,11 +82,29 @@ struct Object : public ReferenceCounted {
     return CleanTypeName(info.name());
   }
 
-  // Green box with a name of the object.
-  struct WidgetBase : ui::Widget {
-    WeakPtr<Object> object;
+  struct WidgetInterface : ui::Widget {
+    using ui::Widget::Widget;
 
-    WidgetBase(Widget* parent) : ui::Widget(parent) {}
+    // Objects in Automat can be fairly large. Iconification is a mechanism that allows players to
+    // shrink them so that they fit in a 1x1cm square.
+    virtual bool IsIconified() const = 0;
+    virtual void SetIconified(bool iconified) = 0;
+
+    // Usually Location will take care of iconification by animating the object's widget scale to
+    // make it fit in 1x1cm square. Sometimes an Object may provide its own animation instead. If
+    // that's the case then it should return true from CustomIconification() and check IsIconified()
+    // within its Tick() function.
+    virtual bool CustomIconification() = 0;
+  };
+
+  // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
+  //
+  // It's rendered as a green box with the name of the object.
+  struct WidgetBase : WidgetInterface {
+    WeakPtr<Object> object;
+    bool iconified;
+
+    WidgetBase(Widget* parent) : WidgetInterface(parent), iconified(false) {}
 
     std::string_view Name() const override;
     virtual float Width() const;
@@ -101,24 +119,16 @@ struct Object : public ReferenceCounted {
       return object.Lock().Cast<T>();
     }
 
-    // Objects in Automat can be fairly large. Iconification is a mechanism that allows players to
-    // shrink them so that they fit in a 1x1cm square.
-    //
-    // Iconification state is being tracked by Location::iconified bool.
-    //
-    // Usually Location will take care of iconification by animating the object's widget scale to
-    // make it fit in 1x1cm square. Sometimes an Object may provide its own animation instead. If
-    // that's the case then it should return true from CustomIconification() and check IsIconified()
-    // within its Tick() function.
-    virtual bool CustomIconification() { return false; }
-    bool IsIconified() const;
+    bool CustomIconification() override { return false; }
+    bool IsIconified() const override { return iconified; }
+    void SetIconified(bool new_iconified) override { this->iconified = new_iconified; }
   };
 
   // Find or create a widget for this object, under the given parent.
-  WidgetBase& FindWidget(const ui::Widget* parent);
+  WidgetInterface& FindWidget(const ui::Widget* parent);
 
-  virtual std::unique_ptr<WidgetBase> MakeWidget(ui::Widget* parent) {
-    if (auto w = dynamic_cast<ui::Widget*>(this)) {
+  virtual std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) {
+    if (auto w = dynamic_cast<WidgetInterface*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto widget_base = dynamic_cast<WidgetBase*>(this)) {
         widget_base->object = AcquireWeakPtr();
@@ -127,8 +137,8 @@ struct Object : public ReferenceCounted {
       // affecting the original object's lifetime).
       struct HybridAdapter : WidgetBase {
         Ptr<Object> ptr;
-        Widget& widget;
-        HybridAdapter(Widget* parent, Object& obj, Widget& widget)
+        WidgetInterface& widget;
+        HybridAdapter(Widget* parent, Object& obj, WidgetInterface& widget)
             : WidgetBase(parent), ptr(obj.AcquirePtr()), widget(widget) {
           widget.parent = this;
           object = ptr;
@@ -145,6 +155,10 @@ struct Object : public ReferenceCounted {
           // We don't want the default green fill for the object.
           Widget::Draw(canvas);
         }
+
+        bool CustomIconification() override { return widget.CustomIconification(); }
+        bool IsIconified() const override { return widget.IsIconified(); }
+        void SetIconified(bool new_iconified) override { widget.SetIconified(new_iconified); }
       };
       return std::make_unique<HybridAdapter>(parent, *this, *w);
     }

@@ -49,7 +49,7 @@ void DragLocationAction::Update() {
   current_position = pointer.PositionWithinRootMachine();
 
   int n = locations.size();
-  Object::WidgetBase* widgets[n];
+  Object::WidgetInterface* widgets[n];
   for (int i = 0; i < n; ++i) {
     widgets[i] = &locations[i]->WidgetForObject();
   }

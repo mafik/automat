@@ -96,6 +96,9 @@ struct Object : public ReferenceCounted {
     // Default implementation reports 1 but if the object is iconified, it checks the CoarseBounds()
     // and returns a scale that would fit in a 1x1cm square.
     virtual float GetBaseScale() const;
+
+    // When iconified, prevent children from receiving pointer events.
+    virtual bool AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
   };
 
   // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.

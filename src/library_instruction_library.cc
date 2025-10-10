@@ -941,7 +941,10 @@ void InstructionLibrary::Widget::PointerMove(ui::Pointer& p, Vec2 position) {
   }
 }
 
-void InstructionLibrary::Widget::PointerOver(ui::Pointer& p) { StartWatching(p); }
+void InstructionLibrary::Widget::PointerOver(ui::Pointer& p) {
+  if (IsIconified()) return;
+  StartWatching(p);
+}
 
 void InstructionLibrary::Widget::PointerLeave(ui::Pointer& p) {
   StopWatching(p);
@@ -1087,7 +1090,7 @@ static void UpdateFilterCounters(InstructionLibrary& library, InstructionLibrary
 
 std::unique_ptr<Action> InstructionLibrary::Widget::FindAction(ui::Pointer& p,
                                                                ui::ActionTrigger btn) {
-  if (btn == ui::PointerButton::Left) {
+  if (!IsIconified() && btn == ui::PointerButton::Left) {
     auto contact_point = p.PositionWithin(*this);
 
     if (kFrontInstructionRect.Contains(contact_point)) {

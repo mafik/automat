@@ -1784,7 +1784,7 @@ void SpliceAction::Update() {
 }
 
 std::unique_ptr<Action> TimelineWidget::FindAction(ui::Pointer& ptr, ui::ActionTrigger btn) {
-  if (btn == ui::PointerButton::Left) {
+  if (!IsIconified() && btn == ui::PointerButton::Left) {
     int n = track_widgets.size();
     auto splicer_shape = SplicerShape(n, current_pos_ratio);
     auto bridge_shape = BridgeShape(n, current_pos_ratio);

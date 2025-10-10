@@ -894,6 +894,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
   }
 
   void PointerOver(ui::Pointer& pointer) override {
+    if (IsIconified()) return;
     Vec2 pos = pointer.PositionWithin(*this);
     hover_mode = GetDragModeAt(pos);
     icon_override.emplace(pointer, GetCursorForMode(hover_mode));
@@ -1027,7 +1028,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
   };
 
   std::unique_ptr<Action> FindAction(ui::Pointer& pointer, ui::ActionTrigger trigger) override {
-    if (trigger == ui::PointerButton::Left) {
+    if (!IsIconified() && trigger == ui::PointerButton::Left) {
       Vec2 pos = pointer.PositionWithin(*this);
       DragMode mode = GetDragModeAt(pos);
       if (mode != DragMode::None) {

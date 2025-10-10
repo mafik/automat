@@ -9,6 +9,7 @@
 
 #include "action.hh"
 #include "animation.hh"
+#include "log_skia.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
@@ -177,7 +178,12 @@ DragLocationAction::~DragLocationAction() {
   if (drop_target) {
     for (auto& location : std::ranges::reverse_view(locations)) {
       location->WakeAnimation();
-      location->local_anchor.reset();
+      {  // Use matrix to keep the object in place while clearing the local anchor
+        auto matrix =
+            Location::ToMatrix(location->position, location->scale, *location->local_anchor);
+        location->local_anchor.reset();
+        Location::FromMatrix(matrix, location->LocalAnchor(), location->position, location->scale);
+      }
       drop_target->DropLocation(std::move(location));
     }
   }

@@ -437,6 +437,8 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
     this->obj = SafeIncrementWeakRefs(ptr);
     SafeDecrementWeakRefs(oldObj);
   }
+
+  T* GetUnsafe() const { return this->obj; }
 };
 
 template <typename T>

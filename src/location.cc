@@ -26,6 +26,7 @@
 #include "font.hh"
 #include "format.hh"
 #include "math.hh"
+#include "object_iconified.hh"
 #include "raycast.hh"
 #include "root_widget.hh"
 #include "textures.hh"
@@ -43,9 +44,7 @@ namespace automat {
 constexpr float kFrameCornerRadius = 0.001;
 
 Location::Location(Widget* parent_widget, WeakPtr<Location> parent_location)
-    : Widget(parent_widget),
-      elevation(0),
-      parent_location(std::move(parent_location)) {}
+    : Widget(parent_widget), elevation(0), parent_location(std::move(parent_location)) {}
 
 bool Location::HasError() {
   if (error != nullptr) return true;
@@ -181,10 +180,10 @@ animation::Phase Location::Tick(time::Timer& timer) {
 
     phase |= animation::LowLevelSpringTowards(scale, timer.d, kScaleSpringPeriod, kSpringHalfTime,
                                               scale_curr, scale_vel);
-    phase |= animation::LowLevelSineTowards(position.x, timer.d,
-                                            kPositionSpringPeriod, position_curr.x, position_vel.x);
-    phase |= animation::LowLevelSineTowards(position.y, timer.d,
-                                            kPositionSpringPeriod, position_curr.y, position_vel.y);
+    phase |= animation::LowLevelSineTowards(position.x, timer.d, kPositionSpringPeriod,
+                                            position_curr.x, position_vel.x);
+    phase |= animation::LowLevelSineTowards(position.y, timer.d, kPositionSpringPeriod,
+                                            position_curr.y, position_vel.y);
 
     object_widget->local_to_parent = SkM44(ToMatrix(position_curr, scale_curr, local_pivot));
     object_widget->RecursiveTransformUpdated();
@@ -663,14 +662,18 @@ RunTask& Location::GetRunTask() {
 }
 
 void Location::Iconify() {
-  object_widget->SetIconified(true);
-  scale = object_widget->GetBaseScale();
+  automat::Iconify(*object);
+  if (object_widget) {
+    scale = object_widget->GetBaseScale();
+  }
   WakeAnimation();
 }
 
 void Location::Deiconify() {
-  object_widget->SetIconified(false);
-  scale = object_widget->GetBaseScale();
+  automat::Deiconify(*object);
+  if (object_widget) {
+    scale = object_widget->GetBaseScale();
+  }
   WakeAnimation();
 }
 
@@ -678,10 +681,11 @@ SkMatrix Location::ToMatrix(Vec2 position, float scale, Vec2 anchor) {
   return SkMatrix::Translate(position.x, position.y).preScale(scale, scale, anchor.x, anchor.y);
 }
 
-void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_position, float& out_scale) {
+void Location::FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_position,
+                          float& out_scale) {
   out_scale = matrix.getScaleX();
   auto matrix_copy = matrix;
-  matrix_copy.preScale(1.f/out_scale, 1.f/out_scale, anchor.x, anchor.y);
+  matrix_copy.preScale(1.f / out_scale, 1.f / out_scale, anchor.x, anchor.y);
   out_position = Vec2(matrix_copy.getTranslateX(), matrix_copy.getTranslateY());
 }
 

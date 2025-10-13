@@ -38,7 +38,6 @@
 #include "time.hh"
 #include "ui_constants.hh"
 
-
 using namespace std;
 
 namespace automat::library {

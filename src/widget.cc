@@ -32,6 +32,21 @@ using namespace std;
 
 namespace automat::ui {
 
+Str ToStr(PointerButton btn) {
+  switch (btn) {
+    case PointerButton::Unknown:
+      return "Unknown";
+    case PointerButton::Left:
+      return "Left";
+    case PointerButton::Right:
+      return "Right";
+    case PointerButton::Middle:
+      return "Middle";
+    case PointerButton::Count:
+      return "Count";
+  }
+}
+
 void Widget::PreDrawChildren(SkCanvas& canvas) const {
   for (auto& widget : ranges::reverse_view(Children())) {
     canvas.save();

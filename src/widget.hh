@@ -51,6 +51,8 @@ struct DropTarget;
 
 enum class PointerButton { Unknown, Left, Middle, Right, Count };
 
+Str ToStr(PointerButton);
+
 struct ActionTrigger {
   int repr;
 

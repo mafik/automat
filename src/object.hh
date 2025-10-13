@@ -40,7 +40,7 @@ struct Object : public ReferenceCounted {
   virtual void ConnectionRemoved(Location& here, Connection&) {}
 
   // Release the memory occupied by this object.
-  virtual ~Object() = default;
+  virtual ~Object();
 
   virtual void SerializeState(Serializer& writer, const char* key = "value") const;
 
@@ -85,20 +85,9 @@ struct Object : public ReferenceCounted {
   struct WidgetInterface : ui::Widget {
     using ui::Widget::Widget;
 
-    // Objects in Automat can be fairly large. Iconification is a mechanism that allows players to
-    // shrink them so that they fit in a 1x1cm square.
-    virtual bool IsIconified() const = 0;
-    virtual void SetIconified(bool iconified) = 0;
-
     // Get the default scale that this object would like to have.
     // Usually it's 1 but when it's iconified, it may want to shrink itself.
-    //
-    // Default implementation reports 1 but if the object is iconified, it checks the CoarseBounds()
-    // and returns a scale that would fit in a 1x1cm square.
-    virtual float GetBaseScale() const;
-
-    // When iconified, prevent children from receiving pointer events.
-    virtual bool AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
+    virtual float GetBaseScale() const = 0;
   };
 
   // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
@@ -106,9 +95,8 @@ struct Object : public ReferenceCounted {
   // It's rendered as a green box with the name of the object.
   struct WidgetBase : WidgetInterface {
     WeakPtr<Object> object;
-    bool iconified;
 
-    WidgetBase(Widget* parent) : WidgetInterface(parent), iconified(false) {}
+    WidgetBase(Widget* parent) : WidgetInterface(parent) {}
 
     std::string_view Name() const override;
     virtual float Width() const;
@@ -118,13 +106,20 @@ struct Object : public ReferenceCounted {
     void VisitOptions(const OptionsVisitor&) const override;
     std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override;
 
+    // Reports 1 but if the object is iconified, it checks the CoarseBounds()
+    // and returns a scale that would fit in a 1x1cm square.
+    float GetBaseScale() const override;
+
+    // When iconified, prevent children from receiving pointer events.
+    bool AllowChildPointerEvents(ui::Widget&) const override;
+
+    // Shortcut for automat::IsIconified(Object*).
+    bool IsIconified() const;
+
     template <typename T>
     Ptr<T> LockObject() const {
       return object.Lock().Cast<T>();
     }
-
-    bool IsIconified() const override { return iconified; }
-    void SetIconified(bool new_iconified) override { this->iconified = new_iconified; }
   };
 
   // Find or create a widget for this object, under the given parent.
@@ -159,8 +154,6 @@ struct Object : public ReferenceCounted {
           Widget::Draw(canvas);
         }
 
-        bool IsIconified() const override { return widget.IsIconified(); }
-        void SetIconified(bool new_iconified) override { widget.SetIconified(new_iconified); }
         float GetBaseScale() const override { return widget.GetBaseScale(); }
       };
       return std::make_unique<HybridAdapter>(parent, *this, *w);

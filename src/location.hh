@@ -55,12 +55,13 @@ struct Location : ReferenceCounted, ui::Widget {
   mutable Object::WidgetInterface* object_widget = nullptr;
 
   Vec2 position = {0, 0};
-  float scale = 1.f;
+  mutable float scale = 1.f;
 
   // Obtain a matrix representation of the given transform.
   static SkMatrix ToMatrix(Vec2 position, float scale, Vec2 anchor);
   // Get the position & scale out of the given matrix & anchor.
-  static void FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_position, float& out_scale);
+  static void FromMatrix(const SkMatrix& matrix, const Vec2& anchor, Vec2& out_position,
+                         float& out_scale);
 
   void Iconify();
   void Deiconify();
@@ -91,6 +92,7 @@ struct Location : ReferenceCounted, ui::Widget {
     if (!object_widget) {
       if (object) {
         object_widget = &object->FindWidget(this);
+        scale = object_widget->GetBaseScale();
       }
     }
     return *object_widget;

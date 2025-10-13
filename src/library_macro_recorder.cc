@@ -296,7 +296,8 @@ void MacroRecorder::OnCancel() {
   }
 }
 
-static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down) {
+static void RecordInputEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, PointerButton ptr_btn,
+                             bool down) {
   auto machine = macro_recorder.here.lock()->ParentAs<Machine>();
   if (machine == nullptr) {
     FATAL << "MacroRecorder must be a child of a Machine";
@@ -307,9 +308,30 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
 
   // Find a track which is attached to the given key
   int track_index = -1;
-  Str key_name = Str(ToStr(key));
+  Str track_name;
+  Fn<Location&()> make_fn;
+  if (kb_key != AnsiKey::Unknown) {
+    track_name = Str(ToStr(kb_key));
+    make_fn = [&]() -> Location& {
+      Location& l = machine->Create<KeyPresser>();
+      auto* kp = l.As<KeyPresser>();
+      kp->SetKey(kb_key);
+      return l;
+    };
+  } else if (ptr_btn != PointerButton::Unknown) {
+    track_name = Str(ToStr(ptr_btn));
+    make_fn = [&]() -> Location& {
+      Location& l = machine->Create<MouseButtonPresser>();
+      auto* mb = l.As<MouseButtonPresser>();
+      mb->button = ptr_btn;
+      return l;
+    };
+  } else {
+    ERROR_ONCE << "No key or pointer button specified";
+    return;
+  }
   for (int i = 0; i < timeline->tracks.size(); i++) {
-    if (timeline->track_args[i]->name == key_name) {
+    if (timeline->track_args[i]->name == track_name) {
       track_index = i;
       break;
     }
@@ -320,22 +342,21 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
       // Timeline is empty and the key is released. Do nothing.
       return;
     }
-    auto& new_track = timeline->AddOnOffTrack(key_name);
+    auto& new_track = timeline->AddOnOffTrack(track_name);
     if (!down) {
       // If the key is released then we should assume that it was pressed before the recording and
       // the pressed section should start at 0.
       new_track.timestamps.push_back(0s);
     }
     track_index = timeline->tracks.size() - 1;
-    Location& key_presser_loc = machine->Create<KeyPresser>();
-    KeyPresser* key_presser = key_presser_loc.As<KeyPresser>();
-    key_presser->SetKey(key);
+    Location& on_off_loc = make_fn();
+    on_off_loc.Iconify();
     Argument& track_arg = *timeline->track_args.back();
     auto timeline_loc = timeline->here.Lock();
 
-    PositionAhead(*timeline_loc, track_arg, key_presser_loc);
-    AnimateGrowFrom(*macro_recorder.here.lock(), key_presser_loc);
-    timeline->here.lock()->ConnectTo(key_presser_loc, track_arg);
+    PositionAhead(*timeline_loc, track_arg, on_off_loc);
+    AnimateGrowFrom(*macro_recorder.here.lock(), on_off_loc);
+    timeline->here.lock()->ConnectTo(on_off_loc, track_arg);
   }
 
   // Append the current timestamp to that track
@@ -468,14 +489,18 @@ static void RecordKeyEvent(MacroRecorder& macro_recorder, AnsiKey key, bool down
   }
 }
 
-void MacroRecorder::KeyloggerKeyDown(ui::Key key) { RecordKeyEvent(*this, key.physical, true); }
-void MacroRecorder::KeyloggerKeyUp(ui::Key key) { RecordKeyEvent(*this, key.physical, false); }
+void MacroRecorder::KeyloggerKeyDown(ui::Key key) {
+  RecordInputEvent(*this, key.physical, PointerButton::Unknown, true);
+}
+void MacroRecorder::KeyloggerKeyUp(ui::Key key) {
+  RecordInputEvent(*this, key.physical, PointerButton::Unknown, false);
+}
 
 void MacroRecorder::PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerButton btn) {
-  LOG << "Button down: " << (int)btn;
+  RecordInputEvent(*this, AnsiKey::Unknown, btn, true);
 }
 void MacroRecorder::PointerLoggerButtonUp(ui::Pointer::Logging&, ui::PointerButton btn) {
-  LOG << "Button up: " << (int)btn;
+  RecordInputEvent(*this, AnsiKey::Unknown, btn, false);
 }
 void MacroRecorder::PointerLoggerWheel(ui::Pointer::Logging&, float delta) {
   LOG << "Wheel: " << delta;

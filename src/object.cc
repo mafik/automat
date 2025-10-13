@@ -11,6 +11,8 @@
 #include "font.hh"
 #include "location.hh"
 #include "menu.hh"
+#include "object_iconified.hh"
+#include "object_lifetime.hh"
 #include "root_widget.hh"
 #include "ui_constants.hh"
 
@@ -257,11 +259,18 @@ void Object::WakeWidgetsAnimation() {
   ForEachWidget([](ui::RootWidget&, ui::Widget& widget) { widget.WakeAnimation(); });
 }
 
-float Object::WidgetInterface::GetBaseScale() const {
-  if (IsIconified()) {
+float Object::WidgetBase::GetBaseScale() const {
+  if (automat::IsIconified(object.GetUnsafe())) {
     auto bounds = CoarseBounds().rect;
     return std::min<float>(1_cm / bounds.Width(), 1_cm / bounds.Height());
   }
   return 1;
 }
+
+Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
+
+bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
+
+bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(object.GetUnsafe()); }
+
 }  // namespace automat

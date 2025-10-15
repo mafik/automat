@@ -43,6 +43,9 @@ PersistentImage base_texture = PersistentImage::MakeFromAsset(
 PersistentImage lmb_mask_texture = PersistentImage::MakeFromAsset(
     embedded::assets_mouse_lmb_mask_webp, PersistentImage::MakeArgs{.scale = kTextureScale});
 
+PersistentImage mmb_mask_texture = PersistentImage::MakeFromAsset(
+    embedded::assets_mouse_mmb_mask_webp, PersistentImage::MakeArgs{.scale = kTextureScale});
+
 PersistentImage rmb_mask_texture = PersistentImage::MakeFromAsset(
     embedded::assets_mouse_rmb_mask_webp, PersistentImage::MakeArgs{.scale = kTextureScale});
 
@@ -149,6 +152,12 @@ struct MouseWidget : Object::WidgetBase {
     static MakeObjectOption lmb_up_option = []() {
       return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Left, false));
     }();
+    static MakeObjectOption mmb_down_option = []() {
+      return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Middle, true));
+    }();
+    static MakeObjectOption mmb_up_option = []() {
+      return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Middle, false));
+    }();
     static MakeObjectOption rmb_down_option = []() {
       return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Right, true));
     }();
@@ -158,14 +167,20 @@ struct MouseWidget : Object::WidgetBase {
     static MakeObjectOption lmb_presser_option = []() {
       return MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::Left));
     }();
+    static MakeObjectOption mmb_presser_option = []() {
+      return MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::Middle));
+    }();
     static MakeObjectOption rmb_presser_option = []() {
       return MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::Right));
     }();
     options_visitor(lmb_down_option);
     options_visitor(lmb_up_option);
+    options_visitor(mmb_down_option);
+    options_visitor(mmb_up_option);
     options_visitor(rmb_down_option);
     options_visitor(rmb_up_option);
     options_visitor(lmb_presser_option);
+    options_visitor(mmb_presser_option);
     options_visitor(rmb_presser_option);
   }
 };
@@ -230,6 +245,9 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
     case ui::PointerButton::Left:
       input.mi.dwFlags |= down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
       break;
+    case ui::PointerButton::Middle:
+      input.mi.dwFlags |= down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP;
+      break;
     case ui::PointerButton::Right:
       input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
       break;
@@ -270,6 +288,9 @@ void MouseButtonEvent::SerializeState(Serializer& writer, const char* key) const
     case ui::PointerButton::Left:
       writer.String("left");
       break;
+    case ui::PointerButton::Middle:
+      writer.String("middle");
+      break;
     case ui::PointerButton::Right:
       writer.String("right");
       break;
@@ -293,6 +314,8 @@ void MouseButtonEvent::DeserializeState(Location& l, Deserializer& d) {
       d.Get(button_name, status);
       if (button_name == "left") {
         button = ui::PointerButton::Left;
+      } else if (button_name == "middle") {
+        button = ui::PointerButton::Middle;
       } else if (button_name == "right") {
         button = ui::PointerButton::Right;
       } else {
@@ -534,6 +557,9 @@ void MouseButtonPresser::SerializeState(Serializer& writer, const char* key) con
     case ui::PointerButton::Left:
       writer.String("left");
       break;
+    case ui::PointerButton::Middle:
+      writer.String("middle");
+      break;
     case ui::PointerButton::Right:
       writer.String("right");
       break;
@@ -552,6 +578,8 @@ void MouseButtonPresser::DeserializeState(Location& l, Deserializer& d) {
       d.Get(button_name, status);
       if (button_name == "left") {
         button = ui::PointerButton::Left;
+      } else if (button_name == "middle") {
+        button = ui::PointerButton::Middle;
       } else if (button_name == "right") {
         button = ui::PointerButton::Right;
       } else {

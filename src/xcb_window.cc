@@ -180,7 +180,7 @@ static void ScanDevices(XCBWindow& window) {
 }
 
 std::unique_ptr<automat::ui::Window> XCBWindow::Make(automat::ui::RootWidget& root,
-                                                      Status& status) {
+                                                     Status& status) {
   xcb::Connect(status);
   if (!OK(status)) {
     return nullptr;
@@ -450,6 +450,7 @@ static automat::ui::PointerButton EventDetailToButton(uint32_t detail) {
     case 3:
       return automat::ui::PointerButton::Right;
     default:
+      ERROR_ONCE << "Unknown pointer button detail: " << detail;
       return automat::ui::PointerButton::Unknown;
   }
 }
@@ -704,7 +705,8 @@ void XCBWindow::MainLoop() {
                 break;
               }
               case XCB_INPUT_RAW_KEY_PRESS: {
-                automat::ui::root_widget->keyboard.KeyDown(*(xcb_input_raw_key_press_event_t*)event);
+                automat::ui::root_widget->keyboard.KeyDown(
+                    *(xcb_input_raw_key_press_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_PRESS: {
@@ -714,7 +716,8 @@ void XCBWindow::MainLoop() {
                 break;
               }
               case XCB_INPUT_RAW_KEY_RELEASE: {
-                automat::ui::root_widget->keyboard.KeyUp(*(xcb_input_raw_key_release_event_t*)event);
+                automat::ui::root_widget->keyboard.KeyUp(
+                    *(xcb_input_raw_key_release_event_t*)event);
                 break;
               }
               case XCB_INPUT_KEY_RELEASE: {

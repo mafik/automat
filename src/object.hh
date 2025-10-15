@@ -88,6 +88,10 @@ struct Object : public ReferenceCounted {
     // Get the default scale that this object would like to have.
     // Usually it's 1 but when it's iconified, it may want to shrink itself.
     virtual float GetBaseScale() const = 0;
+
+    // Places where the connections to this widget may terminate.
+    // Local (metric) coordinates.
+    virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const = 0;
   };
 
   // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
@@ -109,6 +113,9 @@ struct Object : public ReferenceCounted {
     // Reports 1 but if the object is iconified, it checks the CoarseBounds()
     // and returns a scale that would fit in a 1x1cm square.
     float GetBaseScale() const override;
+
+    // Returns connection points on the sides and on top of the object's CoarseBounds().
+    void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
 
     // When iconified, prevent children from receiving pointer events.
     bool AllowChildPointerEvents(ui::Widget&) const override;

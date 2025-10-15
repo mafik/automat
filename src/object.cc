@@ -267,6 +267,24 @@ float Object::WidgetBase::GetBaseScale() const {
   return 1;
 }
 
+void Object::WidgetBase::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
+  // By default just one position on the top of the bounding box.
+  auto shape = Shape();
+  Rect bounds = shape.getBounds();
+  out_positions.push_back(Vec2AndDir{
+      .pos = bounds.TopCenter(),
+      .dir = -90_deg,
+  });
+  out_positions.push_back(Vec2AndDir{
+      .pos = bounds.LeftCenter(),
+      .dir = 0_deg,
+  });
+  out_positions.push_back(Vec2AndDir{
+      .pos = bounds.RightCenter(),
+      .dir = -180_deg,
+  });
+}
+
 Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
 bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }

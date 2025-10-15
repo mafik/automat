@@ -212,16 +212,6 @@ bool Widget::Intersects(const Widget& a, const Widget& b) {
   return result && intersection.countVerbs() > 0;
 }
 
-void Widget::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
-  // By default just one position on the top of the bounding box.
-  auto shape = Shape();
-  Rect bounds = shape.getBounds();
-  out_positions.push_back(Vec2AndDir{
-      .pos = bounds.TopCenter(),
-      .dir = -90_deg,
-  });
-}
-
 Vec2AndDir Widget::ArgStart(const Argument& arg) {
   SkPath shape;
   if (arg.field) {

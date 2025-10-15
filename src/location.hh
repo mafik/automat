@@ -311,7 +311,8 @@ void PositionBelow(Location& origin, Location& below);
 // This uses the arg's position & direction within `origin`.
 //
 // This version just returns the recommended position for the target_widget.
-Vec2 PositionAhead(const Location& origin, const Argument& arg, const ui::Widget& target_widget);
+Vec2 PositionAhead(const Location& origin, const Argument& arg,
+                   const Object::WidgetInterface& target_widget);
 
 // Similar to the above, but also sets the target's position.
 void PositionAhead(const Location& origin, const Argument& arg, Location& target);

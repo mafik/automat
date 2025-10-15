@@ -396,7 +396,8 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-Vec2 PositionAhead(const Location& origin, const Argument& arg, const ui::Widget& target_widget) {
+Vec2 PositionAhead(const Location& origin, const Argument& arg,
+                   const Object::WidgetInterface& target_widget) {
   auto& origin_widget = origin.WidgetForObject();
   auto origin_shape = origin_widget.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_widget.ArgStart(arg);  // origin's local coordinates
@@ -405,15 +406,15 @@ Vec2 PositionAhead(const Location& origin, const Argument& arg, const ui::Widget
   // Construct a matrix that transforms from the origin's local coordinates to the canvas
   // coordinates. Normally this could be done with TransformUp but that would include the animation.
   // We don't want to include the animation when placing objects around.
-  SkMatrix m = SkMatrix::I();
-  m.postScale(origin.scale, origin.scale);
-  m.postTranslate(origin.position.x, origin.position.y);
-  if (auto intersection = Raycast(origin_shape, arg_start)) {
-    // Try to drop the target location so that it overlaps with the origin shape by 1mm.
-    drop_point = m.mapPoint(*intersection - Vec2::Polar(arg_start.dir, 1_mm));
-  } else {
-    // Otherwise put it 3cm ahead of the argument start point.
-    drop_point = m.mapPoint(arg_start.pos + Vec2::Polar(arg_start.dir, 3_cm));
+  {
+    SkMatrix m = Location::ToMatrix(origin.position, origin.scale, origin.LocalAnchor());
+    if (auto intersection = Raycast(origin_shape, arg_start)) {
+      // Try to drop the target location so that it overlaps with the origin shape by 1mm.
+      drop_point = m.mapPoint(*intersection - Vec2::Polar(arg_start.dir, 1_mm));
+    } else {
+      // Otherwise put it 3cm ahead of the argument start point.
+      drop_point = m.mapPoint(arg_start.pos + Vec2::Polar(arg_start.dir, 3_cm));
+    }
   }
 
   // Pick the position that allows the cable to come in most horizontally (left to right).
@@ -427,6 +428,11 @@ Vec2 PositionAhead(const Location& origin, const Argument& arg, const ui::Widget
       best_connector_pos = pos.pos;
       best_angle_diff = angle_diff;
     }
+  }
+  {
+    SkMatrix m =
+        Location::ToMatrix(Vec2{}, target_widget.GetBaseScale(), target_widget.LocalAnchor());
+    best_connector_pos = m.mapPoint(best_connector_pos);
   }
 
   return Round((drop_point - best_connector_pos) * 1000) / 1000;

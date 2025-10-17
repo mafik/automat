@@ -51,6 +51,8 @@ ArcLine ArcLine::MakeFromPath(const SkPath& path) {
         }
         arcline.types.clear();
         arcline.segments.clear();
+        arcline.start = p0;
+        arcline_end = p0;
         break;
       case SkPath::kLine_Verb: {
         if constexpr (kDebugMakeFromPath) {

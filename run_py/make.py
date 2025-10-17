@@ -200,6 +200,7 @@ class Recipe:
 
     def add_step(self, *args, **kwargs):
         self.steps.append(Step(*args, id=len(self.steps), **kwargs))
+        return self.steps[-1]
 
     # prunes the list of steps and only leaves the steps that are required for some target
     def set_target(self, target, *extra_targets):

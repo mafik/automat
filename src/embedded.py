@@ -81,8 +81,10 @@ VFile {slug} = {{
         print('};', file=cc)
         print('\n}  // namespace automat::embedded', file=cc)
 
+main_step = None
 
 def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
+
     paths = list(Path('static').glob('**/*'))
     paths += list(Path('assets').glob('**/*'))
     paths.append(Path('gatekeeper.service'))
@@ -92,7 +94,9 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
 
     fs_utils.generated_dir.mkdir(exist_ok=True)
 
-    recipe.add_step(partial(gen, paths), [hh_path, cc_path],
+    global main_step
+
+    main_step = recipe.add_step(partial(gen, paths), [hh_path, cc_path],
                     paths + [Path(__file__)],
                     desc='Embedding static files',
                     shortcut='embedded')

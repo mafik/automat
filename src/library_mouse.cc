@@ -3,6 +3,8 @@
 
 #include "library_mouse.hh"
 
+#include <include/core/SkBlendMode.h>
+#include <include/core/SkColor.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkShader.h>
 
@@ -20,6 +22,7 @@
 #include <xcb/xtest.h>
 #endif
 
+#include "../build/generated/krita_mouse.hh"
 #include "automat.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
@@ -34,21 +37,6 @@
 #endif
 
 namespace automat::library::mouse {
-
-constexpr float kTextureScale = 0.00005;
-
-PersistentImage base_texture = PersistentImage::MakeFromAsset(
-    embedded::assets_mouse_base_webp, PersistentImage::MakeArgs{.scale = kTextureScale});
-
-PersistentImage lmb_mask_texture = PersistentImage::MakeFromAsset(
-    embedded::assets_mouse_lmb_mask_webp, PersistentImage::MakeArgs{.scale = kTextureScale});
-
-PersistentImage mmb_mask_texture = PersistentImage::MakeFromAsset(
-    embedded::assets_mouse_mmb_mask_webp, PersistentImage::MakeArgs{.scale = kTextureScale});
-
-PersistentImage rmb_mask_texture = PersistentImage::MakeFromAsset(
-    embedded::assets_mouse_rmb_mask_webp, PersistentImage::MakeArgs{.scale = kTextureScale});
-
 SkRuntimeEffect& GetPixelGridRuntimeEffect() {
   static const auto runtime_effect = []() {
     Status status;
@@ -64,6 +52,36 @@ SkRuntimeEffect& GetPixelGridRuntimeEffect() {
 }  // namespace automat::library::mouse
 
 namespace automat::library {
+
+ui::PointerButton ButtonNameToEnum(const std::string& name) {
+  static const std::map<std::string, ui::PointerButton> button_name_to_enum = {
+      {"left", ui::PointerButton::Left},       {"middle", ui::PointerButton::Middle},
+      {"right", ui::PointerButton::Right},     {"back", ui::PointerButton::Back},
+      {"forward", ui::PointerButton::Forward},
+  };
+  auto it = button_name_to_enum.find(name);
+  if (it != button_name_to_enum.end()) {
+    return it->second;
+  }
+  return ui::PointerButton::Unknown;
+}
+
+const char* ButtonEnumToName(ui::PointerButton button) {
+  switch (button) {
+    case ui::PointerButton::Left:
+      return "left";
+    case ui::PointerButton::Middle:
+      return "middle";
+    case ui::PointerButton::Right:
+      return "right";
+    case ui::PointerButton::Back:
+      return "back";
+    case ui::PointerButton::Forward:
+      return "forward";
+    default:
+      return "unknown";
+  }
+}
 
 struct ObjectIcon : ui::Widget {
   std::unique_ptr<Object::WidgetInterface> object_widget;
@@ -107,81 +125,57 @@ struct MouseWidget : Object::WidgetBase {
 
   std::string_view Name() const override { return "Mouse"; }
 
-  static float WidgetScale() {
-    float texture_height = mouse::base_texture.height();
-    float desired_height = 3_cm;
-    return desired_height / texture_height;
-  }
+  RRect CoarseBounds() const override { return RRect::MakeSimple(krita::mouse::base.rect, 0); }
 
-  Optional<Rect> TextureBounds() const override {
-    float scale = WidgetScale();
-    float width = mouse::base_texture.width();
-    float height = mouse::base_texture.height();
-    Rect bounds =
-        Rect(-width / 2 * scale, -height / 2 * scale, width / 2 * scale, height / 2 * scale);
-    return bounds;
-  }
+  Optional<Rect> TextureBounds() const override { return krita::mouse::base.rect; }
 
   SkPath Shape() const override {
-    Rect bounds = *TextureBounds();
-    float width = bounds.Width();
-    SkRRect rrect;
-    SkVector radii[4] = {
-        {width / 2, width / 2},
-        {width / 2, width / 2},
-        {width / 3, width / 3},
-        {width / 3, width / 3},
-    };
-    rrect.setRectRadii(bounds.sk, radii);
-    return SkPath::RRect(rrect);
+    static auto shape = krita::mouse::Shape();
+    return shape;
   }
 
   void Draw(SkCanvas& canvas) const override {
-    auto bounds = *TextureBounds();
-    canvas.translate(bounds.left, bounds.bottom);
-    float scale = WidgetScale();
-    canvas.scale(scale, scale);
-    mouse::base_texture.draw(canvas);
+    krita::mouse::base.draw(canvas);
+    krita::mouse::head.draw(canvas);
   }
 
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
     Object::WidgetBase::VisitOptions(options_visitor);
-    static MakeObjectOption lmb_down_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Left, true));
-    }();
-    static MakeObjectOption lmb_up_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Left, false));
-    }();
-    static MakeObjectOption mmb_down_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Middle, true));
-    }();
-    static MakeObjectOption mmb_up_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Middle, false));
-    }();
-    static MakeObjectOption rmb_down_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Right, true));
-    }();
-    static MakeObjectOption rmb_up_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::Right, false));
-    }();
-    static MakeObjectOption lmb_presser_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::Left));
-    }();
-    static MakeObjectOption mmb_presser_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::Middle));
-    }();
-    static MakeObjectOption rmb_presser_option = []() {
-      return MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::Right));
-    }();
-    options_visitor(lmb_down_option);
-    options_visitor(lmb_up_option);
-    options_visitor(mmb_down_option);
-    options_visitor(mmb_up_option);
-    options_visitor(rmb_down_option);
-    options_visitor(rmb_up_option);
-    options_visitor(lmb_presser_option);
-    options_visitor(mmb_presser_option);
-    options_visitor(rmb_presser_option);
+#define BUTTON(button)                                                                \
+  static MakeObjectOption button##_down_option =                                      \
+      MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::button, true));  \
+  static MakeObjectOption button##_up_option =                                        \
+      MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::button, false)); \
+  static MakeObjectOption button##_presser_option =                                   \
+      MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::button));      \
+  options_visitor(button##_down_option);                                              \
+  options_visitor(button##_up_option);                                                \
+  options_visitor(button##_presser_option);
+    BUTTON(Left);
+    BUTTON(Middle);
+    BUTTON(Right);
+    BUTTON(Back);
+    BUTTON(Forward);
+#undef BUTTON
+    static MakeObjectOption move_option = MakeObjectOption(MAKE_PTR(MouseMove));
+    options_visitor(move_option);
+  }
+
+  static SkPath ButtonShape(ui::PointerButton btn) {
+    switch (btn) {
+      case ui::PointerButton::Left:
+        return krita::mouse::Left();
+      case ui::PointerButton::Middle:
+        return krita::mouse::Middle();
+      case ui::PointerButton::Right:
+        return krita::mouse::Right();
+      case ui::PointerButton::Back:
+        return krita::mouse::Back();
+      case ui::PointerButton::Forward:
+        return krita::mouse::Forward();
+      default:
+        return SkPath();
+    }
   }
 };
 
@@ -196,36 +190,40 @@ struct MouseButtonEventWidget : MouseWidget {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    MouseWidget::Draw(canvas);
+    krita::mouse::base.draw(canvas);
     Ptr<MouseButtonEvent> object = LockObject<MouseButtonEvent>();
     auto button = object->button;
     auto down = object->down;
 
-    auto& mask =
-        button == ui::PointerButton::Left ? mouse::lmb_mask_texture : mouse::rmb_mask_texture;
+    SkPath mask = ButtonShape(button);
     {  // Highlight the button
-      SkPaint layer_paint;
-      layer_paint.setBlendMode(SkBlendMode::kScreen);
-      canvas.saveLayer(nullptr, &layer_paint);
-      mouse::base_texture.draw(canvas);
-      mask.paint.setBlendMode(SkBlendMode::kSrcIn);
-      mask.draw(canvas);
-      canvas.drawColor(down ? SK_ColorRED : SK_ColorCYAN, SkBlendMode::kSrcIn);
-      canvas.restore();
+      SkPaint paint;
+      paint.setBlendMode(SkBlendMode::kOverlay);
+      paint.setColor(down ? "#f07a72"_color : "#1e74fd"_color);
+      canvas.drawPath(mask, paint);
     }
 
     {  // Draw arrow
       SkPath path = PathFromSVG(kArrowShape);
       SkPaint paint;
-      paint.setBlendMode(SkBlendMode::kMultiply);
       paint.setAlphaf(0.9f);
-      canvas.translate(button == ui::PointerButton::Left ? 3.7_mm : 14.3_mm, 24_mm);
+      paint.setImageFilter(
+          SkImageFilters::DropShadow(0, 0, 0.5_mm, 0.5_mm, SK_ColorWHITE, nullptr));
+      auto center = mask.getBounds().center();
+      float scale = 1.3;
+      if (button == ui::PointerButton::Middle) {
+        center = Rect(mask.getBounds()).TopCenter();
+        scale = 1.2;
+      }
+      canvas.translate(center.x(), center.y());
       if (down) {
-        paint.setColor(SkColorSetARGB(255, 255, 128, 128));
+        paint.setColor("#d0413c"_color);
       } else {
-        paint.setColor(SkColorSetARGB(255, 118, 235, 235));
+        paint.setColor("#1e74fd"_color);
         canvas.scale(1, -1);
       }
+      canvas.scale(scale, scale);
+
       canvas.drawPath(path, paint);
     }
   }
@@ -258,7 +256,26 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
 #endif
 #if defined(__linux__)
   U8 type = down ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE;
-  U8 detail = button == ui::PointerButton::Left ? 1 : 3;
+  U8 detail;
+  switch (button) {
+    case ui::PointerButton::Left:
+      detail = 1;
+      break;
+    case ui::PointerButton::Middle:
+      detail = 2;
+      break;
+    case ui::PointerButton::Right:
+      detail = 3;
+      break;
+    case ui::PointerButton::Back:
+      detail = 8;
+      break;
+    case ui::PointerButton::Forward:
+      detail = 9;
+      break;
+    default:
+      return;
+  }
   xcb_test_fake_input(xcb::connection, type, detail, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
   xcb::flush();
 #endif
@@ -284,20 +301,7 @@ void MouseButtonEvent::SerializeState(Serializer& writer, const char* key) const
   writer.Key(key);
   writer.StartObject();
   writer.Key("button");
-  switch (button) {
-    case ui::PointerButton::Left:
-      writer.String("left");
-      break;
-    case ui::PointerButton::Middle:
-      writer.String("middle");
-      break;
-    case ui::PointerButton::Right:
-      writer.String("right");
-      break;
-    default:
-      writer.String("unknown");
-      break;
-  }
+  writer.String(ButtonEnumToName(button));
   writer.Key("event");
   if (down) {
     writer.String("down");
@@ -312,16 +316,7 @@ void MouseButtonEvent::DeserializeState(Location& l, Deserializer& d) {
     if (key == "button") {
       Str button_name;
       d.Get(button_name, status);
-      if (button_name == "left") {
-        button = ui::PointerButton::Left;
-      } else if (button_name == "middle") {
-        button = ui::PointerButton::Middle;
-      } else if (button_name == "right") {
-        button = ui::PointerButton::Right;
-      } else {
-        AppendErrorMessage(status) += "Unknown button name: " + button_name;
-        button = ui::PointerButton::Unknown;
-      }
+      button = ButtonNameToEnum(button_name);
     } else if (key == "event") {
       Str event_name;
       d.Get(event_name, status);
@@ -344,44 +339,29 @@ string_view MouseMove::Name() const { return "Mouse Move"; }
 
 Ptr<Object> MouseMove::Clone() const { return MAKE_PTR(MouseMove); }
 
-PersistentImage dpad_image = PersistentImage::MakeFromAsset(
-    embedded::assets_mouse_dpad_webp, PersistentImage::MakeArgs{.scale = mouse::kTextureScale});
-
 // A turtle with a pixelated cursor on its back
-struct MouseMoveWidget : Object::WidgetBase {
+struct MouseMoveWidget : MouseWidget {
   constexpr static size_t kMaxTrailPoints = 256;
   std::atomic<int> trail_end_idx = 0;
   std::atomic<Vec2> trail[kMaxTrailPoints] = {};
 
-  MouseMoveWidget(ui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move) : WidgetBase(parent) {
-    object = std::move(weak_mouse_move);
+  MouseMoveWidget(ui::Widget* parent, WeakPtr<MouseMove>&& weak_mouse_move)
+      : MouseWidget(parent, std::move(weak_mouse_move)) {}
+
+  void VisitOptions(const OptionsVisitor& options_visitor) const override {
+    // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
+    // other objects from here.
+    WidgetBase::VisitOptions(options_visitor);
   }
-  SkPath Shape() const override {
-    Rect bounds = *TextureBounds();
-    float width = bounds.Width();
-    SkRRect rrect;
-    SkVector radii[4] = {
-        {width / 2, width / 2},
-        {width / 2, width / 2},
-        {width / 3, width / 3},
-        {width / 3, width / 3},
-    };
-    rrect.setRectRadii(bounds.sk, radii);
-    return SkPath::RRect(rrect);
-  }
+
   void Draw(SkCanvas& canvas) const override {
-    auto bounds = *TextureBounds();
-    canvas.save();
-    canvas.translate(bounds.left, bounds.bottom);
-    float scale = WidgetScale();
-    canvas.scale(scale, scale);
-    mouse::base_texture.draw(canvas);
-    dpad_image.draw(canvas);
-    canvas.restore();
-    canvas.save();
+    krita::mouse::base.draw(canvas);
+    krita::mouse::dpad.draw(canvas);
     SkPath path;
     Vec2 cursor = {0, 0};
-    constexpr float kDisplayRadius = 1.6_mm;
+    SkPath dpad_window = krita::mouse::DpadWindow();
+    Rect dpad_window_bounds = dpad_window.getBounds();
+    float kDisplayRadius = dpad_window_bounds.Width() / 2;
     float trail_scale =
         kDisplayRadius / 15;  // initial scale shows at least 15 pixels (0 and 10 pixel axes)
     path.moveTo(cursor.x, cursor.y);
@@ -396,7 +376,8 @@ struct MouseMoveWidget : Object::WidgetBase {
         trail_scale = trail_scale_new;
       }
     }
-    canvas.translate(-0.05_mm, -2.65_mm);  // move the trail end to the center of display
+    canvas.translate(dpad_window_bounds.CenterX(),
+                     dpad_window_bounds.CenterY());  // move the trail end to the center of display
 
     canvas.scale(trail_scale, trail_scale);
 
@@ -421,31 +402,6 @@ struct MouseMoveWidget : Object::WidgetBase {
       trail_paint.setStrokeMiter(2);
     }
     canvas.drawPath(path, trail_paint);
-  }
-
-  // Mouse Move is supposed to be much smaller than regular mouse widget.
-  //
-  // This function returns the proper scaling factor.
-  static float WidgetScale() {
-    float texture_height = mouse::base_texture.height();
-    float desired_height = 1.2_cm;
-    return desired_height / texture_height;
-  }
-
-  Optional<Rect> TextureBounds() const override {
-    float scale = WidgetScale();
-    float width = mouse::base_texture.width();
-    float height = mouse::base_texture.height();
-    Rect bounds =
-        Rect(-width / 2 * scale, -height / 2 * scale, width / 2 * scale, height / 2 * scale);
-    return bounds;
-  }
-
-  void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
-    Rect bounds = *TextureBounds();
-    out_positions.push_back(Vec2AndDir{.pos = bounds.TopCenter(), .dir = -90_deg});
-    out_positions.push_back(Vec2AndDir{.pos = bounds.LeftCenter(), .dir = 0_deg});
-    out_positions.push_back(Vec2AndDir{.pos = bounds.RightCenter(), .dir = 180_deg});
   }
 };
 
@@ -492,7 +448,7 @@ struct MouseButtonPresserWidget : MouseWidget {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    MouseWidget::Draw(canvas);
+    krita::mouse::base.draw(canvas);
     ui::PointerButton button;
     bool pressed;
     {
@@ -501,25 +457,18 @@ struct MouseButtonPresserWidget : MouseWidget {
       pressed = object->IsRunning();
     }
 
-    auto& mask =
-        button == ui::PointerButton::Left ? mouse::lmb_mask_texture : mouse::rmb_mask_texture;
+    auto mask = ButtonShape(button);
     {  // Highlight the button in ivory
-      SkPaint layer_paint;
-      layer_paint.setBlendMode(SkBlendMode::kScreen);
-      canvas.saveLayer(nullptr, &layer_paint);
-      mouse::base_texture.draw(canvas);
-      mask.paint.setBlendMode(SkBlendMode::kSrcIn);
-      mask.draw(canvas);
-      canvas.drawColor("#9f8100"_color, SkBlendMode::kSrcIn);  // Ivory color
-      canvas.restore();
+      SkPaint paint;
+      paint.setBlendMode(SkBlendMode::kOverlay);
+      paint.setColor("#9f8100"_color);
+      canvas.drawPath(mask, paint);
     }
 
+    Rect bounds = mask.getBounds();
+    Vec2 center = bounds.Center();
     auto& img = pressed ? textures::PressingHandColor() : textures::PointingHandColor();
-    if (button == ui::PointerButton::Left) {
-      canvas.translate(0_mm, 16_mm);
-    } else {
-      canvas.translate(10_mm, 16_mm);
-    }
+    canvas.translate(center.x, center.y);
     img.draw(canvas);
   }
 };
@@ -553,20 +502,7 @@ void MouseButtonPresser::SerializeState(Serializer& writer, const char* key) con
   writer.Key(key);
   writer.StartObject();
   writer.Key("button");
-  switch (button) {
-    case ui::PointerButton::Left:
-      writer.String("left");
-      break;
-    case ui::PointerButton::Middle:
-      writer.String("middle");
-      break;
-    case ui::PointerButton::Right:
-      writer.String("right");
-      break;
-    default:
-      writer.String("unknown");
-      break;
-  }
+  writer.String(ButtonEnumToName(button));
   writer.EndObject();
 }
 
@@ -576,16 +512,7 @@ void MouseButtonPresser::DeserializeState(Location& l, Deserializer& d) {
     if (key == "button") {
       Str button_name;
       d.Get(button_name, status);
-      if (button_name == "left") {
-        button = ui::PointerButton::Left;
-      } else if (button_name == "middle") {
-        button = ui::PointerButton::Middle;
-      } else if (button_name == "right") {
-        button = ui::PointerButton::Right;
-      } else {
-        AppendErrorMessage(status) += "Unknown button name: " + button_name;
-        button = ui::PointerButton::Unknown;
-      }
+      button = ButtonNameToEnum(button_name);
     }
   }
   if (!OK(status)) {

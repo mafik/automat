@@ -573,6 +573,7 @@ def hook_srcs(srcs: dict[str, src.File], recipe: make.Recipe):
         hh_file.direct_includes.append(str(fs_utils.src_dir / 'textures.hh'))
         srcs[str(hh_path)] = hh_file
         cc_file = src.File(cc_path)
+        cc_file.direct_includes.append(str(fs_utils.generated_dir / 'embedded.hh'))
         srcs[str(cc_path)] = cc_file
 
         recipe.add_step(partial(extract_kra_layers, kra_path), [hh_path, cc_path],

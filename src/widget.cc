@@ -38,10 +38,14 @@ Str ToStr(PointerButton btn) {
       return "Unknown";
     case PointerButton::Left:
       return "Left";
-    case PointerButton::Right:
-      return "Right";
     case PointerButton::Middle:
       return "Middle";
+    case PointerButton::Right:
+      return "Right";
+    case PointerButton::Back:
+      return "Back";
+    case PointerButton::Forward:
+      return "Forward";
     case PointerButton::Count:
       return "Count";
   }

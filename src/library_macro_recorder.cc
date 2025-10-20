@@ -526,6 +526,7 @@ void MacroRecorder::PointerLoggerMove(ui::Pointer::Logging&, Vec2 relative_px) {
       return;
     }
     Location& mouse_move_loc = machine->Create<MouseMove>();
+    mouse_move_loc.Iconify();
     Argument& track_arg = *timeline->track_args.back();
     auto timeline_loc = timeline->here.Lock();
 

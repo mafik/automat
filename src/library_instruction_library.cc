@@ -714,7 +714,7 @@ void InstructionLibrary::Widget::Draw(SkCanvas& canvas) const {
     canvas.translate(rose_pos.x, rose_pos.y);
     canvas.translate(-rose.width() / 2, rose.height() / 2);
     canvas.rotate(final_rose_dir * 180 / M_PI - 90, rose.width() / 2, -rose.height() / 2);
-    canvas.scale(rose.scale, -rose.scale);
+    canvas.scale(rose.scale(), -rose.scale());
     canvas.translate(5, -65);
     canvas.rotate(category_state.shake, 128, 128 + 64);
     canvas.drawImage(*rose.image, 0, 0);

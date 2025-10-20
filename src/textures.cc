@@ -22,35 +22,48 @@ sk_sp<SkImage> DecodeImage(fs::VFile& asset) {
 }
 
 PersistentImage PersistentImage::MakeFromSkImage(sk_sp<SkImage> image, MakeArgs args) {
-  float scale, width, height;
-  if (args.scale) {
-    scale = args.scale;
-    width = image->width() * scale;
-    height = image->height() * scale;
-  } else if (args.width) {
-    scale = args.width / image->width();
-    width = args.width;
-    height = image->height() * scale;
-  } else if (args.height) {
-    scale = args.height / image->height();
-    width = image->width() * scale;
-    height = args.height;
+  float scale;
+  SkMatrix matrix;
+
+  if (args.matrix.has_value()) {
+    matrix = *args.matrix;
+    scale = matrix.getScaleX();
   } else {
-    scale = 0.0254f /* meters / inch */ / 300.f /* pixels / inch */;
-    width = image->width() * scale;
-    height = image->height() * scale;
+    float width, height;
+    if (args.scale) {
+      scale = args.scale;
+      width = image->width() * scale;
+      height = image->height() * scale;
+    } else if (args.width) {
+      scale = args.width / image->width();
+      width = args.width;
+      height = image->height() * scale;
+    } else if (args.height) {
+      scale = args.height / image->height();
+      width = image->width() * scale;
+      height = args.height;
+    } else {
+      scale = 0.0254f /* meters / inch */ / 300.f /* pixels / inch */;
+      width = image->width() * scale;
+      height = image->height() * scale;
+    }
+    matrix = SkMatrix::Scale(scale, -scale).postTranslate(0, height);
   }
-  auto matrix = SkMatrix::Scale(scale, -scale).postTranslate(0, height);
   auto shader = args.raw_shader
                     ? image->makeRawShader(args.tile_x, args.tile_y, args.sampling_options, matrix)
                     : image->makeShader(args.tile_x, args.tile_y, args.sampling_options, matrix);
   SkPaint paint;
   paint.setShader(shader);
+  // TODO: there is a bug here - the image is loaded lazily, so its width & height are not available
+  // yet.
+  // This should be fixed by going through all the places where PersistentImages are used and making
+  // sure to pass the dimensions.
   return PersistentImage{
       .image = image,
       .shader = shader,
       .paint = paint,
-      .scale = scale,
+      .matrix = matrix,
+      .rect = matrix.mapRect(SkRect::MakeIWH(image->width(), image->height())),
   };
 }
 
@@ -61,16 +74,15 @@ PersistentImage PersistentImage::MakeFromAsset(fs::VFile& asset, MakeArgs args) 
 int PersistentImage::widthPx() { return (*image)->width(); }
 int PersistentImage::heightPx() { return (*image)->height(); }
 
-float PersistentImage::width() { return widthPx() * scale; }
-float PersistentImage::height() { return heightPx() * scale; }
+float PersistentImage::width() { return widthPx() * scale(); }
+float PersistentImage::height() { return heightPx() * scale(); }
 
 void PersistentImage::draw(SkCanvas& canvas) {
   if (!image) {
     ERROR << "Attempt to draw an uninitialized PersistentImage";
     return;
   }
-
-  Rect rect = Rect(0, 0, width(), height());
+  rect = matrix.mapRect(SkRect::MakeIWH((*image)->width(), (*image)->height()));
   canvas.drawRect(rect, paint);
 }
 

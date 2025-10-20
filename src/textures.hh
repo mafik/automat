@@ -6,9 +6,11 @@
 #include <include/core/SkImage.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkSamplingOptions.h>
+#include <include/core/SkShader.h>
 #include <include/core/SkTileMode.h>
 #include <include/gpu/graphite/ImageProvider.h>
 
+#include "math.hh"
 #include "time.hh"
 #include "virtual_fs.hh"
 
@@ -28,7 +30,8 @@ struct PersistentImage {
   std::optional<sk_sp<SkImage>> image;
   std::optional<sk_sp<SkShader>> shader;
   SkPaint paint;
-  float scale;
+  SkMatrix matrix;
+  Rect rect;
 
   int widthPx();
   int heightPx();
@@ -36,16 +39,21 @@ struct PersistentImage {
   float width();
   float height();
 
+  float scale() { return matrix.getScaleX(); }
+
   // Defines how the Image will be mapped to local coordinate space.
   //
   // Automat uses metric coordinates while images use pixels.
   //
-  // Specify at most one of [width, height, scale]. The other values will be calculated
+  // Specify at most one of [width, height, scale, matrix]. The other values will be calculated
   // automatically. When no values are specified, the image will be displayed at 300 DPI.
+  //
+  // If matrix is specified, it takes precedence over width/height/scale.
   struct MakeArgs {
     float width = 0;
     float height = 0;
     float scale = 0;
+    std::optional<SkMatrix> matrix;
     SkTileMode tile_x = SkTileMode::kClamp;
     SkTileMode tile_y = SkTileMode::kClamp;
     bool raw_shader = false;  // raw shaders don't apply gamma correction
@@ -55,6 +63,7 @@ struct PersistentImage {
   constexpr static MakeArgs kDefaultArgs = {.width = 0,
                                             .height = 0,
                                             .scale = 0,
+                                            .matrix = std::nullopt,
                                             .tile_x = SkTileMode::kClamp,
                                             .tile_y = SkTileMode::kClamp,
                                             .raw_shader = false,

@@ -49,7 +49,7 @@ SkMatrix TransformBetween(const Widget& from, const Widget& to);
 
 struct DropTarget;
 
-enum class PointerButton { Unknown, Left, Middle, Right, Count };
+enum class PointerButton { Unknown, Left, Middle, Right, Back, Forward, Count };
 
 Str ToStr(PointerButton);
 

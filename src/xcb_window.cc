@@ -449,6 +449,10 @@ static automat::ui::PointerButton EventDetailToButton(uint32_t detail) {
       return automat::ui::PointerButton::Middle;
     case 3:
       return automat::ui::PointerButton::Right;
+    case 8:
+      return automat::ui::PointerButton::Back;
+    case 9:
+      return automat::ui::PointerButton::Forward;
     default:
       ERROR_ONCE << "Unknown pointer button detail: " << detail;
       return automat::ui::PointerButton::Unknown;

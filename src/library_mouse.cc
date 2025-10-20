@@ -213,13 +213,14 @@ struct MouseButtonEventWidget : MouseWidget {
       paint.setAlphaf(0.9f);
       paint.setImageFilter(
           SkImageFilters::DropShadow(0, 0, 0.5_mm, 0.5_mm, SK_ColorWHITE, nullptr));
-      auto center = mask.getBounds().center();
+      Vec2 center = mask.getBounds().center();
       float scale = 1.3;
-      if (button == ui::PointerButton::Middle) {
-        center = Rect(mask.getBounds()).TopCenter();
+      if (button == ui::PointerButton::Middle || button == ui::PointerButton::Back ||
+          button == ui::PointerButton::Forward) {
         scale = 1.2;
+        center.y += path.getBounds().bottom() * scale;
       }
-      canvas.translate(center.x(), center.y());
+      canvas.translate(center.x, center.y);
       if (down) {
         paint.setColor("#d0413c"_color);
       } else {

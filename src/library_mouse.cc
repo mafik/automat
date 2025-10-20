@@ -6,11 +6,14 @@
 #include <include/core/SkBlendMode.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkMatrix.h>
+#include <include/core/SkPaint.h>
 #include <include/core/SkShader.h>
+#include <include/pathops/SkPathOps.h>
 
 #include <atomic>
 #include <tracy/Tracy.hpp>
 
+#include "animation.hh"
 #include "textures.hh"
 
 #if defined(_WIN32)
@@ -22,6 +25,7 @@
 #include <xcb/xtest.h>
 #endif
 
+#include "../build/generated/krita_hand.hh"
 #include "../build/generated/krita_mouse.hh"
 #include "automat.hh"
 #include "embedded.hh"
@@ -437,9 +441,52 @@ std::unique_ptr<Object::WidgetInterface> Mouse::MakeWidget(ui::Widget* parent) {
 
 Ptr<Object> Mouse::Clone() const { return MAKE_PTR(Mouse); }
 
+struct PresserWidget : ui::Widget {
+  PresserWidget(Object::WidgetBase* parent) : ui::Widget(parent) {}
+
+  SkPath Shape() const override {
+    static SkPath shape = krita::hand::Shape();
+    return shape;
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    bool is_on = false;
+    if (parent) {
+      auto parent_object_widget_base = static_cast<Object::WidgetBase*>(parent.Get());
+      if (auto object_locked = parent_object_widget_base->LockObject<Object>()) {
+        if (auto* long_running = object_locked->AsLongRunning()) {
+          is_on = long_running->IsRunning();
+        }
+      }
+    }
+    (is_on ? krita::hand::pressing : krita::hand::pointing).draw(canvas);
+  }
+};
+
 struct MouseButtonPresserWidget : MouseWidget {
+  PresserWidget presser_widget;
+  SkPath shape;
+
   MouseButtonPresserWidget(ui::Widget* parent, WeakPtr<Object>&& object)
-      : MouseWidget(parent, std::move(object)) {}
+      : MouseWidget(parent, std::move(object)), presser_widget(this) {
+    SkPath mouse_shape = krita::mouse::Shape();
+
+    ui::PointerButton button;
+    {
+      Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
+      button = object->button;
+    }
+
+    auto mask = ButtonShape(button);
+    Rect bounds = mask.getBounds();
+    Vec2 center = bounds.Center();
+    presser_widget.local_to_parent = SkM44::Translate(center.x, center.y);
+
+    auto presser_shape = presser_widget.Shape();
+    presser_shape.transform(presser_widget.local_to_parent.asM33());
+
+    Op(mouse_shape, presser_shape, kUnion_SkPathOp, &shape);
+  }
 
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
     // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
@@ -447,14 +494,18 @@ struct MouseButtonPresserWidget : MouseWidget {
     WidgetBase::VisitOptions(options_visitor);
   }
 
+  RRect CoarseBounds() const override { return RRect::MakeSimple(shape.getBounds(), 0); }
+
+  Optional<Rect> TextureBounds() const override { return shape.getBounds(); }
+
+  SkPath Shape() const override { return shape; }
+
   void Draw(SkCanvas& canvas) const override {
     krita::mouse::base.draw(canvas);
     ui::PointerButton button;
-    bool pressed;
     {
       Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
       button = object->button;
-      pressed = object->IsRunning();
     }
 
     auto mask = ButtonShape(button);
@@ -465,12 +516,10 @@ struct MouseButtonPresserWidget : MouseWidget {
       canvas.drawPath(mask, paint);
     }
 
-    Rect bounds = mask.getBounds();
-    Vec2 center = bounds.Center();
-    auto& img = pressed ? textures::PressingHandColor() : textures::PointingHandColor();
-    canvas.translate(center.x, center.y);
-    img.draw(canvas);
+    DrawChildren(canvas);
   }
+
+  void FillChildren(Vec<Widget*>& children) override { children.push_back(&presser_widget); }
 };
 
 MouseButtonPresser::MouseButtonPresser(ui::PointerButton button) : button(button) {}

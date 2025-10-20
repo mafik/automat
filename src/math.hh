@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPoint.h>
 #include <include/core/SkRRect.h>
 #include <include/core/SkRect.h>
@@ -495,4 +496,15 @@ double constexpr Sqrt(double x) {
   return x >= 0 && x < std::numeric_limits<double>::infinity()
              ? SqrtNewtonRaphson(x, x, 0)
              : std::numeric_limits<double>::quiet_NaN();
+}
+
+// Returns `a` when `t == 0` and `b` when `t == 1`. Linear interpolation in between.
+inline SkMatrix MatrixMix(const SkMatrix& a, const SkMatrix& b, float t) {
+  SkScalar a_arr[9], b_arr[9];
+  a.get9(a_arr);
+  b.get9(b_arr);
+  for (int i = 0; i < 9; ++i) {
+    a_arr[i] = a_arr[i] * (1 - t) + b_arr[i] * t;
+  }
+  return SkMatrix().set9(a_arr);
 }

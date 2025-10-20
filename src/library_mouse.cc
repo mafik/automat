@@ -183,6 +183,13 @@ struct MouseWidget : Object::WidgetBase {
   }
 };
 
+static float FindLoD(SkCanvas& canvas, float local_x, float min_x_px, float max_x_px) {
+  auto ctm = canvas.getLocalToDeviceAs3x3();
+  float device_height_px = ctm.mapRadius(krita::mouse::base.height());
+  float lod = GetRatio(device_height_px, 40, 80);
+  return CosineInterpolate(0, 1, lod);
+}
+
 struct MouseButtonEventWidget : MouseWidget {
   MouseButtonEventWidget(ui::Widget* parent, WeakPtr<Object>&& object)
       : MouseWidget(parent, std::move(object)) {}
@@ -214,21 +221,37 @@ struct MouseButtonEventWidget : MouseWidget {
       paint.setImageFilter(
           SkImageFilters::DropShadow(0, 0, 0.5_mm, 0.5_mm, SK_ColorWHITE, nullptr));
       Vec2 center = mask.getBounds().center();
-      float scale = 1.3;
+
+      SkMatrix transformSmall = SkMatrix::Translate(center.x, center.y);
+
       if (button == ui::PointerButton::Middle || button == ui::PointerButton::Back ||
           button == ui::PointerButton::Forward) {
-        scale = 1.2;
-        center.y += path.getBounds().bottom() * scale;
+        transformSmall.postTranslate(0, path.getBounds().bottom());
+        transformSmall.preScale(1.2, 1.2);
+      } else {
+        transformSmall.preScale(1.3, 1.3);
       }
-      canvas.translate(center.x, center.y);
+      if (!down) {
+        transformSmall.preScale(1, -1);
+      }
+
+      SkMatrix transformLarge =
+          SkMatrix::Translate(Rect(krita::mouse::DpadWindow().getBounds()).TopCenter());
+      transformLarge.preScale(3, 3);
+      if (!down) {
+        transformLarge.preScale(1, -1);
+      }
+
+      auto transform_mix = MatrixMix(transformLarge, transformSmall,
+                                     FindLoD(canvas, krita::mouse::base.height(), 40, 80));
+
       if (down) {
         paint.setColor("#d0413c"_color);
       } else {
         paint.setColor("#1e74fd"_color);
-        canvas.scale(1, -1);
       }
-      canvas.scale(scale, scale);
 
+      canvas.concat(transform_mix);
       canvas.drawPath(path, paint);
     }
   }
@@ -465,8 +488,10 @@ struct PresserWidget : ui::Widget {
 };
 
 struct MouseButtonPresserWidget : MouseWidget {
-  PresserWidget presser_widget;
+  mutable PresserWidget presser_widget;
   SkPath shape;
+  SkMatrix presser_widget_normal;
+  SkMatrix presser_widget_iconified;
 
   MouseButtonPresserWidget(ui::Widget* parent, WeakPtr<Object>&& object)
       : MouseWidget(parent, std::move(object)), presser_widget(this) {
@@ -481,11 +506,14 @@ struct MouseButtonPresserWidget : MouseWidget {
     auto mask = ButtonShape(button);
     Rect bounds = mask.getBounds();
     Vec2 center = bounds.Center();
-    presser_widget.local_to_parent = SkM44::Translate(center.x, center.y);
+
+    presser_widget_normal = SkMatrix::Translate(center);
+    presser_widget_iconified = SkMatrix::Scale(2, 2).postTranslate(-3_mm, 5_mm);
+
+    presser_widget.local_to_parent = SkM44(presser_widget_normal);
 
     auto presser_shape = presser_widget.Shape();
     presser_shape.transform(presser_widget.local_to_parent.asM33());
-
     Op(mouse_shape, presser_shape, kUnion_SkPathOp, &shape);
   }
 
@@ -516,6 +544,10 @@ struct MouseButtonPresserWidget : MouseWidget {
       paint.setColor("#9f8100"_color);
       canvas.drawPath(mask, paint);
     }
+
+    auto transform_mix = MatrixMix(presser_widget_iconified, presser_widget_normal,
+                                   FindLoD(canvas, krita::mouse::base.height(), 40, 80));
+    presser_widget.local_to_parent = SkM44(transform_mix);
 
     DrawChildren(canvas);
   }

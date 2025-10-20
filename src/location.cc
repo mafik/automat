@@ -671,6 +671,7 @@ void Location::Iconify() {
   automat::Iconify(*object);
   if (object_widget) {
     scale = object_widget->GetBaseScale();
+    object_widget->WakeAnimation();
   }
   WakeAnimation();
 }
@@ -679,6 +680,7 @@ void Location::Deiconify() {
   automat::Deiconify(*object);
   if (object_widget) {
     scale = object_widget->GetBaseScale();
+    object_widget->WakeAnimation();
   }
   WakeAnimation();
 }

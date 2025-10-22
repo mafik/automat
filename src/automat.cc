@@ -268,6 +268,7 @@ int Main() {
 #endif
   image_provider.reset(new AutomatImageProvider());
   RendererInit();
+  PersistentImage::PreloadAll();
 
   render_thread = std::jthread(RenderThread, stop_source.get_token());
 

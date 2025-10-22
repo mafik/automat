@@ -33,14 +33,6 @@ struct PersistentImage {
   SkMatrix matrix;
   Rect rect;
 
-  int widthPx();
-  int heightPx();
-
-  float width();
-  float height();
-
-  float scale() { return matrix.getScaleX(); }
-
   // Defines how the Image will be mapped to local coordinate space.
   //
   // Automat uses metric coordinates while images use pixels.
@@ -60,6 +52,19 @@ struct PersistentImage {
     SkSamplingOptions sampling_options = kDefaultSamplingOptions;
   };
 
+  PersistentImage(sk_sp<SkImage> image, MakeArgs args);
+
+  PersistentImage(const PersistentImage&) = delete;
+  const PersistentImage& operator=(const PersistentImage&) = delete;
+
+  int widthPx();
+  int heightPx();
+
+  float width();
+  float height();
+
+  float scale() { return matrix.getScaleX(); }
+
   constexpr static MakeArgs kDefaultArgs = {.width = 0,
                                             .height = 0,
                                             .scale = 0,
@@ -69,11 +74,21 @@ struct PersistentImage {
                                             .raw_shader = false,
                                             .sampling_options = kDefaultSamplingOptions};
 
-  static PersistentImage MakeFromSkImage(sk_sp<SkImage> image, MakeArgs = kDefaultArgs);
-
   static PersistentImage MakeFromAsset(fs::VFile& asset, MakeArgs = kDefaultArgs);
 
   void draw(SkCanvas&);
+
+  // Normally AutomatImageProvider will decode the compressed textures on demand, but there is a bug
+  // if some texture is used twice in the same frame by different recorders. The first recorder to
+  // draw an image will preload it correctly but all the others will not work - at least before the
+  // first one calls submit.
+  //
+  // Preloading is a workaround for that issue. It also makes the texture loading more predictable
+  // by shifting the decoding overhead before the start of the first frame.
+  //
+  // One day, when Automat has thousands of textures and preloading all of them at startup is a
+  // problem, this will have to be revisited.
+  static void PreloadAll();
 };
 
 sk_sp<SkImage> DecodeImage(fs::VFile& asset);
@@ -89,6 +104,7 @@ struct AutomatImageProvider : public skgpu::graphite::ImageProvider {
   };
   std::unordered_map<uint32_t, CacheEntry> cache;
   time::SteadyPoint last_tick = time::kZeroSteady;
+  std::mutex mutex;
 
   sk_sp<SkImage> findOrCreate(skgpu::graphite::Recorder* recorder, const SkImage* image,
                               SkImage::RequiredProperties) override;
@@ -97,7 +113,7 @@ struct AutomatImageProvider : public skgpu::graphite::ImageProvider {
   void TickCache();
 };
 
-extern sk_sp<skgpu::graphite::ImageProvider> image_provider;
+extern sk_sp<AutomatImageProvider> image_provider;
 
 namespace textures {
 

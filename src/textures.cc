@@ -6,12 +6,18 @@
 #include <include/core/SkMatrix.h>
 #include <include/core/SkShader.h>
 #include <include/gpu/graphite/Image.h>
+#include <include/gpu/graphite/Recording.h>
 
+#include <tracy/Tracy.hpp>
+
+#include "concurrentqueue.hh"
 #include "embedded.hh"
 #include "log.hh"
 #include "math.hh"
+#include "thread_name.hh"
 #include "time.hh"
 #include "units.hh"
+#include "vk.hh"
 
 namespace automat {
 
@@ -21,9 +27,13 @@ sk_sp<SkImage> DecodeImage(fs::VFile& asset) {
   return SkImages::DeferredFromEncodedData(data);
 }
 
-PersistentImage PersistentImage::MakeFromSkImage(sk_sp<SkImage> image, MakeArgs args) {
+Vec<PersistentImage*>& GetTextures() {
+  static Vec<PersistentImage*> textures;
+  return textures;
+}
+
+PersistentImage::PersistentImage(sk_sp<SkImage> image, MakeArgs args) : image(image) {
   float scale;
-  SkMatrix matrix;
 
   if (args.matrix.has_value()) {
     matrix = *args.matrix;
@@ -49,26 +59,77 @@ PersistentImage PersistentImage::MakeFromSkImage(sk_sp<SkImage> image, MakeArgs 
     }
     matrix = SkMatrix::Scale(scale, -scale).postTranslate(0, height);
   }
-  auto shader = args.raw_shader
-                    ? image->makeRawShader(args.tile_x, args.tile_y, args.sampling_options, matrix)
-                    : image->makeShader(args.tile_x, args.tile_y, args.sampling_options, matrix);
-  SkPaint paint;
-  paint.setShader(shader);
+  shader = args.raw_shader
+               ? image->makeRawShader(args.tile_x, args.tile_y, args.sampling_options, matrix)
+               : image->makeShader(args.tile_x, args.tile_y, args.sampling_options, matrix);
+  paint.setShader(*shader);
   // TODO: there is a bug here - the image is loaded lazily, so its width & height are not available
   // yet.
   // This should be fixed by going through all the places where PersistentImages are used and making
   // sure to pass the dimensions.
-  return PersistentImage{
-      .image = image,
-      .shader = shader,
-      .paint = paint,
-      .matrix = matrix,
-      .rect = matrix.mapRect(SkRect::MakeIWH(image->width(), image->height())),
+  rect = matrix.mapRect(SkRect::MakeIWH(image->width(), image->height()));
+  GetTextures().push_back(this);
+}
+
+void PersistentImage::PreloadAll() {
+  ZoneScoped;
+  std::vector<std::jthread> workers;
+  struct Task {
+    PersistentImage* persistent_image;
+    AutomatImageProvider::CacheEntry* cache_entry;
   };
+  moodycamel::ConcurrentQueue<Task> tasks;
+  for (auto* texture : GetTextures()) {
+    if (!(*texture->image)->isTextureBacked()) {
+      tasks.enqueue({texture, &image_provider->cache[(*texture->image)->uniqueID()]});
+    }
+  }
+
+  std::vector<std::unique_ptr<skgpu::graphite::Recording>> recordings;
+  recordings.resize(std::thread::hardware_concurrency());
+  for (int i = std::thread::hardware_concurrency() - 1; i >= 0; --i) {
+    auto WorkFunc = [i, &recordings, &tasks, recorder = vk::graphite_context->makeRecorder()]() {
+      if (i) {
+        SetThreadName("PersistentImagePreloader", 1);
+      }
+      Task task;
+      while (tasks.try_dequeue(task)) {
+        ZoneScopedN("TextureFromImage");
+        auto props = SkImage::RequiredProperties{.fMipmapped = true};
+        task.cache_entry->image =
+            SkImages::TextureFromImage(recorder.get(), task.persistent_image->image->get(), props);
+      }
+      recordings[i] = recorder->snap();
+    };
+    // Start some extra threads, but also use the current thread to do some processing
+    if (i) {
+      workers.emplace_back(std::move(WorkFunc));
+    } else {
+      WorkFunc();
+    }
+  }
+  {
+    ZoneScopedN("wait for workers");
+    workers.clear();
+  }
+  {
+    ZoneScopedN("insertRecording");
+    for (int i = 0; i < recordings.size(); ++i) {
+      auto insert_recording = skgpu::graphite::InsertRecordingInfo{
+          .fRecording = recordings[i].get(),
+      };
+      vk::graphite_context->insertRecording(insert_recording);
+    }
+  }
+  {
+    ZoneScopedN("submit");
+    vk::graphite_context->submit();
+    // vk::graphite_context->submit(skgpu::graphite::SyncToCpu::kYes);
+  }
 }
 
 PersistentImage PersistentImage::MakeFromAsset(fs::VFile& asset, MakeArgs args) {
-  return MakeFromSkImage(DecodeImage(asset), args);
+  return PersistentImage(DecodeImage(asset), args);
 }
 
 int PersistentImage::widthPx() { return (*image)->width(); }
@@ -86,13 +147,17 @@ void PersistentImage::draw(SkCanvas& canvas) {
   canvas.drawRect(rect, paint);
 }
 
-sk_sp<skgpu::graphite::ImageProvider> image_provider;
+sk_sp<AutomatImageProvider> image_provider;
 
 sk_sp<SkImage> AutomatImageProvider::findOrCreate(skgpu::graphite::Recorder* recorder,
                                                   const SkImage* image,
                                                   SkImage::RequiredProperties props) {
+  auto guard = std::lock_guard(mutex);
+  ZoneScopedN("AutomatImageProvider::findOrCreate");
   auto it = cache.find(image->uniqueID());
   if (it == cache.end()) {
+    std::string msg = "Creating image " + std::to_string(image->uniqueID());
+    TracyMessage(msg.c_str(), msg.size());
     auto texture = SkImages::TextureFromImage(recorder, image, props);
     auto [it2, _] = cache.emplace(image->uniqueID(), texture);
     it = it2;

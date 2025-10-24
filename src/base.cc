@@ -156,6 +156,7 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
   }
   writer.EndObject();
 }
+
 void Machine::DeserializeState(Location& l, Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
@@ -171,6 +172,14 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
       Vec<ConnectionRecord> connections;
       for (auto& location_name : ObjectView(d, status)) {
         auto& l = CreateEmpty();
+
+        {  // Place the new location below all the others.
+          // Normally new locations are created at the top of all the others (front of the locations
+          // deque). We actually want to recreate the same order as the original save file.
+          locations.emplace_back(std::move(locations.front()));
+          locations.pop_front();
+        }
+
         location_idx.emplace(location_name, &l);
         Ptr<Object> object;
         for (auto& field : ObjectView(d, status)) {

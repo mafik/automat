@@ -1,1498 +1,1858 @@
 <!doctype html>
 <html lang="en">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="description" content="Automat's objective is to be able to semi-autonomously play a variety of games. It's the first step towards a more general environment for interacting with computers." />
-<title>Automat - a game that plays other games</title>
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
-<style>
-  @font-face {
-    font-family: 'Homemade Apple';
-    font-style: normal;
-    font-weight: 400;
-    src: url(HomemadeApple.woff2) format('woff2');
-    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-  }
-
-  @font-face {
-    font-family: 'Caveat';
-    font-style: normal;
-    font-weight: 400;
-    src: url(Caveat.woff2) format('woff2');
-    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-  }
-
-  @font-face {
-    font-family: 'Pixelify Sans';
-    font-style: normal;
-    font-weight: 400 700;
-    font-display: swap;
-    src: url(PixelifySans.woff2) format('woff2');
-    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-  }
-
-  @font-face {
-    font-family: 'Audiowide';
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url(Audiowide.woff2) format('woff2');
-    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-  }
-
-  html {
-    font-size: 21px;
-  }
-
-  #bg {
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: -1;
-    user-select: none;
-  }
-</style>
-<canvas id="bg" width="800" height="600"></canvas>
-<div id="bg_overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: url('arches.png') repeat;"></div>
-<img id="arrow" src="arrow.webp">
-<div id="video_player" class="toy" style="width: 422px; height: 302px"><img srcset="video_player-2x.webp 2x" style="width: 422px; pointer-events: none; user-select: none;">
-  <div class="grab" style="width: 420px; height: 295px; position: absolute; top: 5px; left: 2px; border-radius: 30px;"></div>
-  <div id="video_screen" style="
-  display: inline-block;
-  position: absolute;
-  top: 43px; left: 52px;
-  border-radius: 3px;
-  width: 318px;
-  height:202px;
-	background: linear-gradient(to bottom, #85908c 0%, #323431 100%);
-  font-family: 'Pixelify Sans', monospace;"></div>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta
+    name="description"
+    content="Automat's objective is to be able to semi-autonomously play a variety of games. It's the first step towards a more general environment for interacting with computers."
+  />
+  <title>Automat - a game that plays other games</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
   <style>
-    #video_screen::after {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      content: "";
-      box-shadow: inset 0 0 5px 2px rgba(0, 0, 0, 1);
-      pointer-events: none;
+    @font-face {
+      font-family: "Homemade Apple";
+      font-style: normal;
+      font-weight: 400;
+      src: url(HomemadeApple.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+        U+2212, U+2215, U+FEFF, U+FFFD;
     }
 
-    #video_screen::before {
-      position: absolute;
-      left: 0;
+    @font-face {
+      font-family: "Caveat";
+      font-style: normal;
+      font-weight: 400;
+      src: url(Caveat.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+        U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+
+    @font-face {
+      font-family: "Pixelify Sans";
+      font-style: normal;
+      font-weight: 400 700;
+      font-display: swap;
+      src: url(PixelifySans.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+        U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+
+    @font-face {
+      font-family: "Audiowide";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url(Audiowide.woff2) format("woff2");
+      unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+        U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+        U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+
+    html {
+      font-size: 21px;
+    }
+
+    #bg {
+      position: fixed;
       top: 0;
-      width: 100%;
-      height: 100%;
-      content: "";
-      pointer-events: none;
-      background: linear-gradient(#12101000 50%,
-          #12101020 50%),
-        linear-gradient(90deg,
-          #ff000008,
-          #00ff0010,
-          #0000ff08);
-      z-index: 2;
-      background-size: 100% 2px, 3px 100%;
+      left: 0;
+      z-index: -1;
+      user-select: none;
     }
   </style>
-  <audio preload class="sound_up">
-    <source src="player-up.flac" type="audio/flac">
-  </audio><audio preload class="sound_down">
-    <source src="player-down.flac" type="audio/flac">
-  </audio>
-</div>
-<div id="coffee" class="toy tall grab" style="border-radius: 100px">
-  <div id="coffee-bg"></div>
-  <audio preload id="drinking" style="display: none">
-    <source src="411172__silverillusionist__liquid-drink.mp3" type="audio/mpeg">
-  </audio><a href="https://github.com/mafik/automat"></a>
-  <audio preload class="sound_up">
-    <source src="cup-up.flac" type="audio/flac">
-  </audio><audio preload class="sound_down">
-    <source src="cup-down.flac" type="audio/flac">
-  </audio>
-</div>
-<div id="napkin" class="toy" style="width: 300px; height: 300px">
-  <img src="napkin.webp" style="object-fit: contain; width: 300px; pointer-events: none; user-select: none;">
+  <canvas id="bg" width="800" height="600"></canvas>
+  <div
+    id="bg_overlay"
+    style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100vh;
+      background: url(&quot;arches.png&quot;) repeat;
+    "
+  ></div>
+  <img id="arrow" src="arrow.webp" />
+  <div id="video_player" class="toy" style="width: 422px; height: 302px">
+    <img
+      srcset="video_player-2x.webp 2x"
+      style="width: 422px; pointer-events: none; user-select: none"
+    />
+    <div
+      class="grab"
+      style="
+        width: 420px;
+        height: 295px;
+        position: absolute;
+        top: 5px;
+        left: 2px;
+        border-radius: 30px;
+      "
+    ></div>
+    <div
+      id="video_screen"
+      style="
+        display: inline-block;
+        position: absolute;
+        top: 43px;
+        left: 52px;
+        border-radius: 3px;
+        width: 318px;
+        height: 202px;
+        background: linear-gradient(to bottom, #85908c 0%, #323431 100%);
+        font-family: &quot;Pixelify Sans&quot;, monospace;
+      "
+    ></div>
+    <style>
+      #video_screen::after {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        content: "";
+        box-shadow: inset 0 0 5px 2px rgba(0, 0, 0, 1);
+        pointer-events: none;
+      }
 
-  <div class="grab" style="width: 300px; height: 100%; position: absolute; top: 0; left: 0;"></div>
-  <p style="
-    position: absolute; top: 0; left: 0;
-    transform: translate(-7%, -2%) rotate(-20deg);
-    transform-origin: 50% 50%;
-    font-family: cursive;
-    font-size: 1.5em;
-    text-align: center;
-    font-family: 'Homemade Apple', sans-serif;
-    pointer-events: none;">A tangible interface for virtual things</p>
-  <audio preload class="sound_up">
-    <source src="napkin-up.flac" type="audio/flac">
-  </audio><audio preload class="sound_down">
-    <source src="napkin-down.flac" type="audio/flac">
-  </audio>
-</div>
-<div id="floppy" class="toy" style="width: 200px; height: 228px">
-  <img srcset="floppy-blue-2x.webp 2x" style="width: 200px; pointer-events: none; user-select: none">
-  <p style="
-    width: 80%;
-    position: absolute; top: 0; left: 10%;
-    transform: translate(10px, 95px) rotate(-1.5deg);
-    transform-origin: 50% 50%;
-    font-family: cursive;
-    font-size: 19px;
-    line-height: 0.75em;
-    text-align: left;
-    font-family: 'Caveat', sans-serif;
-    pointer-events: none;">ver. ALPHA !<br><br>-keyboard macros</p>
-  <div class="grab" style="position: absolute; top: 10px; left: 1px; width: 198px; height: 203px; border-radius: 10px;"></div>
-  <style>
-    .terminal a {
-      color: rgb(141, 141, 255);
-      text-shadow: 0 0 5px blue;
-    }
-  </style>
-  <div class="video_contents">
-    <div class="terminal" style="
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    top: 0;
-    filter: blur(1px);
-    display: grid;
-    font-family: 'Audiowide', monospace;
-    box-sizing: border-box;
-    padding: 10px;
-    color: rgb(156, 255, 156);
-    text-shadow: 0 0 5px green;
-    background: linear-gradient(0deg, #0b2500, #000000ff 50%, #062509);
-      ">
-      <span>Automat is released weekly. Here are the latest builds for <a href="https://github.com/mafik/automat/releases/latest/download/automat_linux_64bit">Linux</a> and <a href="https://github.com/mafik/automat/releases/latest/download/automat_windows_64bit.exe">Windows</a>.</span>
-      <a href="https://github.com/mafik/automat/releases/latest/">Release notes</a>
-    </div>
+      #video_screen::before {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        content: "";
+        pointer-events: none;
+        background:
+          linear-gradient(#12101000 50%, #12101020 50%),
+          linear-gradient(90deg, #ff000008, #00ff0010, #0000ff08);
+        z-index: 2;
+        background-size:
+          100% 2px,
+          3px 100%;
+      }
+    </style>
+    <audio preload class="sound_up">
+      <source src="player-up.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_down">
+      <source src="player-down.flac" type="audio/flac" />
+    </audio>
   </div>
-  <audio preload class="sound_up">
-    <source src="floppy-up.flac" type="audio/flac">
-  </audio><audio preload class="sound_down">
-    <source src="floppy-down.flac" type="audio/flac">
-  </audio><audio preload class="sound_insert">
-    <source src="floppy-insert.flac" type="audio/flac">
-  </audio><audio preload class="sound_eject">
-    <source src="eject.flac" type="audio/flac">
-  </audio>
-</div>
-<div id="vhs" class="toy" style="
-  overflow:visible;
-  width: 375px; height: 110px;
-  backdrop-filter: blur(3px);">
-  <img srcset="vhs-1x.webp, vhs-2x.webp 2x, vhs-3x.webp 3x" src="vhs-3x.webp" style="width: 400px; transform: translate(-10px, -60px); pointer-events: none; user-select: none;">
-  <p style="
-    width: 40%;
-    color: rgb(4, 7, 177);
-    position: absolute; top: 9%; left: 30%;
-    font-family: cursive;
-    font-size: 1.4em;
-    text-align: center;
-    font-family: 'Caveat', sans-serif;
-    pointer-events: none;">Live Coding</p>
-  <div class="grab" style="position: absolute; top: -60px; left: -9px; width: 398px; height: 220px; border-radius: 10px;"></div>
-  <div class="video_contents">
-    <div style="
-    /* noisy background */
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      top: 0;
-      background: url('noise.webp');
-      background-size: 96px 96px;
-      filter: blur(1px);
-      display: grid;
-      grid-template-columns: 1fr 8fr 1fr;
-      grid-template-rows: 1fr 8fr 1fr;">
-      <div style="
-        grid-row: 2;
-        grid-column: 2;
-        background: black;
-        color: yellow;
-        outline: 2px solid red;
+  <div id="coffee" class="toy tall grab" style="border-radius: 100px">
+    <div id="coffee-bg"></div>
+    <audio preload id="drinking" style="display: none">
+      <source
+        src="411172__silverillusionist__liquid-drink.mp3"
+        type="audio/mpeg"
+      /></audio
+    ><a href="https://github.com/mafik/automat"></a>
+    <audio preload class="sound_up">
+      <source src="cup-up.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_down">
+      <source src="cup-down.flac" type="audio/flac" />
+    </audio>
+  </div>
+  <div id="napkin" class="toy" style="width: 300px; height: 300px">
+    <img
+      src="napkin.webp"
+      style="
+        object-fit: contain;
+        width: 300px;
+        pointer-events: none;
+        user-select: none;
+      "
+    />
 
-        display: grid;
-        grid-template-rows: 1fr 1em;
-        grid-template-columns: 1fr 1fr 1fr;
+    <div
+      class="grab"
+      style="width: 300px; height: 100%; position: absolute; top: 0; left: 0"
+    ></div>
+    <p
+      style="
+        position: absolute;
+        top: 0;
+        left: 0;
+        transform: translate(-7%, -2%) rotate(-20deg);
+        transform-origin: 50% 50%;
+        font-family: cursive;
+        font-size: 1.5em;
         text-align: center;
-        place-items: center;
-        justify-items: stretch;
-      ">
-        <span style="grid-column: 1 / span 3; font-size: 1.2em">Live streaming<br>Mon, Wed &amp; Fri.</span>
-        <a style="display: inline-block; text-decoration: none; background: red; color: white" href="https://www.youtube.com/channel/UCBPKTkmfqWCVnrEv8CBPrbg?sub_confirmation=1">YouTube</a>
-        <a style="display: inline-block; text-decoration: none; background:darkmagenta; color: white !important" href="https://twitch.tv/maf_pl">Twitch</a>
-        <a style="display: inline-block; text-decoration: none; background:blue; color: white" href="https://tv.algora.io/maf">Algora</a>
+        font-family: &quot;Homemade Apple&quot;, sans-serif;
+        pointer-events: none;
+      "
+    >
+      A tangible interface for virtual things
+    </p>
+    <audio preload class="sound_up">
+      <source src="napkin-up.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_down">
+      <source src="napkin-down.flac" type="audio/flac" />
+    </audio>
+  </div>
+  <div id="floppy" class="toy" style="width: 200px; height: 228px">
+    <img
+      srcset="floppy-blue-2x.webp 2x"
+      style="width: 200px; pointer-events: none; user-select: none"
+    />
+    <p
+      style="
+        width: 80%;
+        position: absolute;
+        top: 0;
+        left: 10%;
+        transform: translate(10px, 95px) rotate(-1.5deg);
+        transform-origin: 50% 50%;
+        font-family: cursive;
+        font-size: 19px;
+        line-height: 0.75em;
+        text-align: left;
+        font-family: &quot;Caveat&quot;, sans-serif;
+        pointer-events: none;
+      "
+    >
+      ver. ALPHA !<br /><br />-keyboard macros
+    </p>
+    <div
+      class="grab"
+      style="
+        position: absolute;
+        top: 10px;
+        left: 1px;
+        width: 198px;
+        height: 203px;
+        border-radius: 10px;
+      "
+    ></div>
+    <style>
+      .terminal a {
+        color: rgb(141, 141, 255);
+        text-shadow: 0 0 5px blue;
+      }
+    </style>
+    <div class="video_contents">
+      <div
+        class="terminal"
+        style="
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          top: 0;
+          filter: blur(1px);
+          display: grid;
+          font-family: &quot;Audiowide&quot;, monospace;
+          box-sizing: border-box;
+          padding: 10px;
+          color: rgb(156, 255, 156);
+          text-shadow: 0 0 5px green;
+          background: linear-gradient(0deg, #0b2500, #000000ff 50%, #062509);
+        "
+      >
+        <span
+          >Automat is released weekly. Here are the latest builds for
+          <a
+            href="https://github.com/mafik/automat/releases/latest/download/automat_linux_64bit"
+            >Linux</a
+          >
+          and
+          <a
+            href="https://github.com/mafik/automat/releases/latest/download/automat_windows_64bit.exe"
+            >Windows</a
+          >.</span
+        >
+        <a href="https://github.com/mafik/automat/releases/latest/"
+          >Release notes</a
+        >
       </div>
     </div>
+    <audio preload class="sound_up">
+      <source src="floppy-up.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_down">
+      <source src="floppy-down.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_insert">
+      <source src="floppy-insert.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_eject">
+      <source src="eject.flac" type="audio/flac" />
+    </audio>
   </div>
-  <audio preload class="sound_up">
-    <source src="vhs-up.flac" type="audio/flac">
-  </audio><audio preload class="sound_down">
-    <source src="vhs-down.flac" type="audio/flac">
-  </audio><audio preload class="sound_insert">
-    <source src="vhs-insert.flac" type="audio/flac">
-  </audio><audio preload class="sound_eject">
-    <source src="eject.flac" type="audio/flac">
-  </audio>
-</div>
-<div id="notebook" class="toy" data-page="0" style="
-  transform-style: preserve-3d;
-  perspective:1400px;
-">
-  <style>
-    #notebook {
-      font-family: 'Caveat', cursive;
-    }
+  <div
+    id="vhs"
+    class="toy"
+    style="
+      overflow: visible;
+      width: 375px;
+      height: 110px;
+      backdrop-filter: blur(3px);
+    "
+  >
+    <img
+      srcset="vhs-1x.webp, vhs-2x.webp 2x, vhs-3x.webp 3x"
+      src="vhs-3x.webp"
+      style="
+        width: 400px;
+        transform: translate(-10px, -60px);
+        pointer-events: none;
+        user-select: none;
+      "
+    />
+    <p
+      style="
+        width: 40%;
+        color: rgb(4, 7, 177);
+        position: absolute;
+        top: 9%;
+        left: 30%;
+        font-family: cursive;
+        font-size: 1.4em;
+        text-align: center;
+        font-family: &quot;Caveat&quot;, sans-serif;
+        pointer-events: none;
+      "
+    >
+      Live Coding
+    </p>
+    <div
+      class="grab"
+      style="
+        position: absolute;
+        top: -60px;
+        left: -9px;
+        width: 398px;
+        height: 220px;
+        border-radius: 10px;
+      "
+    ></div>
+    <div class="video_contents">
+      <div
+        style="
+          /* noisy background */
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          top: 0;
+          background: url(&quot;noise.webp&quot;);
+          background-size: 96px 96px;
+          filter: blur(1px);
+          display: grid;
+          grid-template-columns: 1fr 8fr 1fr;
+          grid-template-rows: 1fr 8fr 1fr;
+        "
+      >
+        <div
+          style="
+            grid-row: 2;
+            grid-column: 2;
+            background: black;
+            color: yellow;
+            outline: 2px solid red;
 
-    #notebook strong {
-      color: rgb(100, 8, 8);
-      font-weight: normal;
-    }
+            display: grid;
+            grid-template-rows: 1fr 1em;
+            grid-template-columns: 1fr 1fr 1fr;
+            text-align: center;
+            place-items: center;
+            justify-items: stretch;
+          "
+        >
+          <span style="grid-column: 1 / span 3; font-size: 1.2em"
+            >Live streaming<br />Mon, Wed &amp; Fri.</span
+          >
+          <a
+            style="
+              display: inline-block;
+              text-decoration: none;
+              background: red;
+              color: white;
+            "
+            href="https://www.youtube.com/channel/UCBPKTkmfqWCVnrEv8CBPrbg?sub_confirmation=1"
+            >YouTube</a
+          >
+          <a
+            style="
+              display: inline-block;
+              text-decoration: none;
+              background: darkmagenta;
+              color: white !important;
+            "
+            href="https://twitch.tv/maf_pl"
+            >Twitch</a
+          >
+          <a
+            style="
+              display: inline-block;
+              text-decoration: none;
+              background: blue;
+              color: white;
+            "
+            href="https://live.automat.org/"
+            >Owncast</a
+          >
+        </div>
+      </div>
+    </div>
+    <audio preload class="sound_up">
+      <source src="vhs-up.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_down">
+      <source src="vhs-down.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_insert">
+      <source src="vhs-insert.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_eject">
+      <source src="eject.flac" type="audio/flac" />
+    </audio>
+  </div>
+  <div
+    id="notebook"
+    class="toy"
+    data-page="0"
+    style="transform-style: preserve-3d; perspective: 1400px"
+  >
+    <style>
+      #notebook {
+        font-family: "Caveat", cursive;
+      }
 
-    #notebook em {
-      background-color: #ffff003b;
-    }
+      #notebook strong {
+        color: rgb(100, 8, 8);
+        font-weight: normal;
+      }
 
-    .cover,
-    .page-left,
-    .page-right {
-      width: 300px;
-      height: 489px;
-      backface-visibility: hidden;
-      transition: transform 0.5s;
-    }
+      #notebook em {
+        background-color: #ffff003b;
+      }
 
-    .cover {
-      width: 310px;
-      position: relative;
-      left: -10px;
-      background-image: image-set(url('notebook-cover-2x.webp') 2x);
-      background-position: 100% 0;
-      transform-origin: left center;
-      z-index: auto;
-      transform: none;
-    }
+      .cover,
+      .page-left,
+      .page-right {
+        width: 300px;
+        height: 489px;
+        backface-visibility: hidden;
+        transition: transform 0.5s;
+      }
 
-    .page1.page-left {
-      background-image: image-set(url('page-1-2x.webp') 2x), image-set(url('notebook-bg-2x.webp') 2x);
-      background-blend-mode: multiply, normal;
-      z-index: 1;
-    }
-
-    .page1.page-right {
-      background-image: image-set(url('page-1-2x.webp') 2x), image-set(url('notebook-bg-2x.webp') 2x);
-      background-blend-mode: multiply, normal;
-      z-index: -1;
-    }
-
-    .page2.page-left {
-      background-image: image-set(url('page-2-2x.webp') 2x), image-set(url('notebook-bg-2x.webp') 2x);
-      background-blend-mode: multiply, normal;
-      z-index: 2;
-    }
-
-    .page2.page-right {
-      background-image: image-set(url('page-2-2x.webp') 2x), image-set(url('notebook-bg-2x.webp') 2x);
-      background-blend-mode: multiply, normal;
-      z-index: -2;
-    }
-
-    .page3.page-left {
-      background-image: image-set(url('page-3-2x.webp') 2x), image-set(url('notebook-bg-2x.webp') 2x);
-      background-blend-mode: multiply, normal;
-      z-index: 3;
-    }
-
-    .page3.page-right {
-      background-image: image-set(url('page-3-2x.webp') 2x), image-set(url('notebook-bg-2x.webp') 2x);
-      background-blend-mode: multiply, normal;
-      z-index: -3;
-    }
-
-    .page4.page-left {
-      background-image: image-set(url('page-4-2x.webp') 2x), image-set(url('notebook-bg-2x.webp') 2x);
-      background-blend-mode: multiply, normal;
-      z-index: 4;
-    }
-
-    .page4.page-right {
-      background-image: image-set(url('page-4-2x.webp') 2x), image-set(url('notebook-bg-2x.webp') 2x);
-      background-blend-mode: multiply, normal;
-      z-index: -4;
-    }
-
-    .page5.page-left {
-      background-image: image-set(url('notebook-bg-2x.webp') 2x);
-      z-index: 5;
-    }
-
-    .page5.page-right {
-      background-image: image-set(url('notebook-bg-2x.webp') 2x);
-      z-index: -5;
-    }
-
-    .page6.page-left {
-      background-image: image-set(url('notebook-bg-2x.webp') 2x);
-      z-index: 6;
-    }
-
-    .page6.page-right {
-      background-image: image-set(url('notebook-bg-2x.webp') 2x);
-      z-index: -6;
-    }
-
-    .page7.page-left {
-      background-image: image-set(url('notebook-bg-2x.webp') 2x);
-      z-index: 7;
-    }
-
-    .page7.page-right {
-      background-image: image-set(url('notebook-bg-2x.webp') 2x);
-      z-index: -7;
-    }
-
-    .page-left,
-    .page-right {
-      position: absolute;
-      top: 0;
-      left: 0;
-      box-sizing: border-box;
-      padding-top: 69px;
-      line-height: 26.5px;
-      text-align: justify;
-    }
-
-    .page-right {
-      transform-origin: left center;
-      background-position: 100% 0;
-      padding-left: 1.5em;
-      padding-right: 2em;
-    }
-
-    .page-left {
-      transform-origin: right center;
-      transform: translate(-300px, 0) rotateY(180deg);
-      padding-left: 2em;
-      padding-right: 1.5em;
-    }
-
-    #notebook[data-page="1"] {
       .cover {
-        transform: rotateY(-180deg);
+        width: 310px;
+        position: relative;
+        left: -10px;
+        background-image: image-set(url("notebook-cover-2x.webp") 2x);
+        background-position: 100% 0;
+        transform-origin: left center;
+        z-index: auto;
+        transform: none;
       }
 
       .page1.page-left {
-        transform: translate(-300px, 0) rotateY(0deg);
+        background-image:
+          image-set(url("page-1-2x.webp") 2x),
+          image-set(url("notebook-bg-2x.webp") 2x);
+        background-blend-mode: multiply, normal;
+        z-index: 1;
       }
-    }
 
-    #notebook[data-page="2"] {
-
-      .cover,
       .page1.page-right {
-        transform: rotateY(-180deg);
+        background-image:
+          image-set(url("page-1-2x.webp") 2x),
+          image-set(url("notebook-bg-2x.webp") 2x);
+        background-blend-mode: multiply, normal;
+        z-index: -1;
       }
 
-      .page1.page-left,
       .page2.page-left {
-        transform: translate(-300px, 0) rotateY(0deg);
+        background-image:
+          image-set(url("page-2-2x.webp") 2x),
+          image-set(url("notebook-bg-2x.webp") 2x);
+        background-blend-mode: multiply, normal;
+        z-index: 2;
       }
-    }
 
-    #notebook[data-page="3"] {
-
-      .cover,
-      .page1.page-right,
       .page2.page-right {
-        transform: rotateY(-180deg);
+        background-image:
+          image-set(url("page-2-2x.webp") 2x),
+          image-set(url("notebook-bg-2x.webp") 2x);
+        background-blend-mode: multiply, normal;
+        z-index: -2;
       }
 
-      .page1.page-left,
-      .page2.page-left,
       .page3.page-left {
-        transform: translate(-300px, 0) rotateY(0deg);
+        background-image:
+          image-set(url("page-3-2x.webp") 2x),
+          image-set(url("notebook-bg-2x.webp") 2x);
+        background-blend-mode: multiply, normal;
+        z-index: 3;
       }
-    }
 
-    #notebook[data-page="4"] {
-
-      .cover,
-      .page1.page-right,
-      .page2.page-right,
       .page3.page-right {
-        transform: rotateY(-180deg);
+        background-image:
+          image-set(url("page-3-2x.webp") 2x),
+          image-set(url("notebook-bg-2x.webp") 2x);
+        background-blend-mode: multiply, normal;
+        z-index: -3;
       }
 
-      .page1.page-left,
-      .page2.page-left,
-      .page3.page-left,
       .page4.page-left {
-        transform: translate(-300px, 0) rotateY(0deg);
+        background-image:
+          image-set(url("page-4-2x.webp") 2x),
+          image-set(url("notebook-bg-2x.webp") 2x);
+        background-blend-mode: multiply, normal;
+        z-index: 4;
       }
-    }
 
-    #notebook[data-page="5"] {
-
-      .cover,
-      .page1.page-right,
-      .page2.page-right,
-      .page3.page-right,
       .page4.page-right {
-        transform: rotateY(-180deg);
+        background-image:
+          image-set(url("page-4-2x.webp") 2x),
+          image-set(url("notebook-bg-2x.webp") 2x);
+        background-blend-mode: multiply, normal;
+        z-index: -4;
       }
 
-      .page1.page-left,
-      .page2.page-left,
-      .page3.page-left,
-      .page4.page-left,
       .page5.page-left {
-        transform: translate(-300px, 0) rotateY(0deg);
+        background-image: image-set(url("notebook-bg-2x.webp") 2x);
+        z-index: 5;
       }
-    }
 
-    #notebook[data-page="6"] {
-
-      .cover,
-      .page1.page-right,
-      .page2.page-right,
-      .page3.page-right,
-      .page4.page-right,
       .page5.page-right {
-        transform: rotateY(-180deg);
+        background-image: image-set(url("notebook-bg-2x.webp") 2x);
+        z-index: -5;
       }
 
-      .page1.page-left,
-      .page2.page-left,
-      .page3.page-left,
-      .page4.page-left,
-      .page5.page-left,
       .page6.page-left {
-        transform: translate(-300px, 0) rotateY(0deg);
+        background-image: image-set(url("notebook-bg-2x.webp") 2x);
+        z-index: 6;
       }
-    }
 
-    #notebook[data-page="7"] {
-
-      .cover,
-      .page1.page-right,
-      .page2.page-right,
-      .page3.page-right,
-      .page4.page-right,
-      .page5.page-right,
       .page6.page-right {
-        transform: rotateY(-180deg);
+        background-image: image-set(url("notebook-bg-2x.webp") 2x);
+        z-index: -6;
       }
 
-      .page1.page-left,
-      .page2.page-left,
-      .page3.page-left,
-      .page4.page-left,
-      .page5.page-left,
-      .page6.page-left,
       .page7.page-left {
-        transform: translate(-300px, 0) rotateY(0deg);
+        background-image: image-set(url("notebook-bg-2x.webp") 2x);
+        z-index: 7;
       }
+
+      .page7.page-right {
+        background-image: image-set(url("notebook-bg-2x.webp") 2x);
+        z-index: -7;
+      }
+
+      .page-left,
+      .page-right {
+        position: absolute;
+        top: 0;
+        left: 0;
+        box-sizing: border-box;
+        padding-top: 69px;
+        line-height: 26.5px;
+        text-align: justify;
+      }
+
+      .page-right {
+        transform-origin: left center;
+        background-position: 100% 0;
+        padding-left: 1.5em;
+        padding-right: 2em;
+      }
+
+      .page-left {
+        transform-origin: right center;
+        transform: translate(-300px, 0) rotateY(180deg);
+        padding-left: 2em;
+        padding-right: 1.5em;
+      }
+
+      #notebook[data-page="1"] {
+        .cover {
+          transform: rotateY(-180deg);
+        }
+
+        .page1.page-left {
+          transform: translate(-300px, 0) rotateY(0deg);
+        }
+      }
+
+      #notebook[data-page="2"] {
+        .cover,
+        .page1.page-right {
+          transform: rotateY(-180deg);
+        }
+
+        .page1.page-left,
+        .page2.page-left {
+          transform: translate(-300px, 0) rotateY(0deg);
+        }
+      }
+
+      #notebook[data-page="3"] {
+        .cover,
+        .page1.page-right,
+        .page2.page-right {
+          transform: rotateY(-180deg);
+        }
+
+        .page1.page-left,
+        .page2.page-left,
+        .page3.page-left {
+          transform: translate(-300px, 0) rotateY(0deg);
+        }
+      }
+
+      #notebook[data-page="4"] {
+        .cover,
+        .page1.page-right,
+        .page2.page-right,
+        .page3.page-right {
+          transform: rotateY(-180deg);
+        }
+
+        .page1.page-left,
+        .page2.page-left,
+        .page3.page-left,
+        .page4.page-left {
+          transform: translate(-300px, 0) rotateY(0deg);
+        }
+      }
+
+      #notebook[data-page="5"] {
+        .cover,
+        .page1.page-right,
+        .page2.page-right,
+        .page3.page-right,
+        .page4.page-right {
+          transform: rotateY(-180deg);
+        }
+
+        .page1.page-left,
+        .page2.page-left,
+        .page3.page-left,
+        .page4.page-left,
+        .page5.page-left {
+          transform: translate(-300px, 0) rotateY(0deg);
+        }
+      }
+
+      #notebook[data-page="6"] {
+        .cover,
+        .page1.page-right,
+        .page2.page-right,
+        .page3.page-right,
+        .page4.page-right,
+        .page5.page-right {
+          transform: rotateY(-180deg);
+        }
+
+        .page1.page-left,
+        .page2.page-left,
+        .page3.page-left,
+        .page4.page-left,
+        .page5.page-left,
+        .page6.page-left {
+          transform: translate(-300px, 0) rotateY(0deg);
+        }
+      }
+
+      #notebook[data-page="7"] {
+        .cover,
+        .page1.page-right,
+        .page2.page-right,
+        .page3.page-right,
+        .page4.page-right,
+        .page5.page-right,
+        .page6.page-right {
+          transform: rotateY(-180deg);
+        }
+
+        .page1.page-left,
+        .page2.page-left,
+        .page3.page-left,
+        .page4.page-left,
+        .page5.page-left,
+        .page6.page-left,
+        .page7.page-left {
+          transform: translate(-300px, 0) rotateY(0deg);
+        }
+      }
+
+      .prev,
+      .next {
+        position: absolute;
+        top: 0;
+        width: 80px;
+        height: 100%;
+        cursor: pointer;
+      }
+
+      .prev {
+        left: 0;
+      }
+
+      .next {
+        right: 0;
+      }
+    </style>
+    <div class="grab cover">
+      <div class="next" onclick="NextPage()"></div>
+    </div>
+    <div class="grab page1 page-left">
+      <div class="prev" onclick="PrevPage()"></div>
+    </div>
+    <div class="grab page1 page-right">
+      <div class="next" onclick="NextPage()"></div>
+    </div>
+    <div class="grab page2 page-left">
+      <div class="prev" onclick="PrevPage()"></div>
+    </div>
+    <div class="grab page2 page-right">
+      <div class="next" onclick="NextPage()"></div>
+    </div>
+    <div class="grab page3 page-left">
+      <div class="prev" onclick="PrevPage()"></div>
+    </div>
+    <div class="grab page3 page-right">
+      <div class="next" onclick="NextPage()"></div>
+    </div>
+    <div class="grab page4 page-left">
+      <div class="prev" onclick="PrevPage()"></div>
+    </div>
+    <div class="grab page4 page-right">
+      <div class="next" onclick="NextPage()"></div>
+    </div>
+    <div class="grab page5 page-left">
+      Visual metaphors & <em class="grab">direct manipulation</em> with minimal
+      latency deliver the most natural & accurate control over software.<br /><br />
+      Animations and sounds should <strong class="grab">never</strong> slow down
+      the UI.
+      <div class="prev" onclick="PrevPage()"></div>
+    </div>
+    <div class="grab page5 page-right">
+      Existing software is not easy to replace. Wrapping, embedding & running
+      alongside other existing technologies is a must.<br />
+      <span
+        class="grab"
+        style="
+          position: absolute;
+          transform: translate(30px, 100px) rotate(-10deg);
+          font-size: 1.2em;
+          text-decoration: underline;
+        "
+        >Interoperability!</span
+      >
+      <div class="next" onclick="NextPage()"></div>
+    </div>
+    <div class="grab page6 page-left">
+      <em class="grab">Future-proofing</em> means to run on any computer,
+      regardless of its form factor. From PC to VR goggles, IoT & wearables.
+      <br /><br />
+      Some devices will require headless operation. They should still be
+      accessible over some web-based interface.
+      <div class="prev" onclick="PrevPage()"></div>
+    </div>
+    <div class="grab page6 page-right">
+      Running on any hardware (let's but the bar at Raspberry PI) means that
+      <em class="grab">every megabyte counts</em>. <br /><br /><br />
+      This elliminates browser-based solutions at the get go.
+      <div class="next" onclick="NextPage()"></div>
+    </div>
+    <div class="grab page7 page-left">
+      Permissive <em class="grab">MIT license</em> makes it fit for commercial
+      use. <br /><br />
+      Support from public & non-profit organizations means no incentive to
+      profit off users.
+      <br /><br />
+      So no entshittification.
+      <div class="prev" onclick="PrevPage()"></div>
+    </div>
+    <div class="grab page7 page-right">
+      <div class="next" onclick="FirstPage()"></div>
+    </div>
+    <audio preload class="sound_up">
+      <source src="notebook-up.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_down">
+      <source src="notebook-down.flac" type="audio/flac" /></audio
+    ><audio preload class="sound_flip">
+      <source src="notebook-flip.flac" type="audio/flac" />
+    </audio>
+    <script>
+      let notebook = document.getElementById("notebook");
+
+      notebook.querySelector(".sound_up").volume = 0.2;
+      notebook.querySelector(".sound_down").volume = 0.2;
+      notebook.querySelector(".sound_flip").volume = 0.2;
+      function PrevPage() {
+        let page = Number(notebook.dataset.page);
+        if (page > 0) {
+          notebook.dataset.page = page - 1;
+          notebook.querySelector(".sound_flip").play();
+        }
+      }
+      function NextPage() {
+        let page = Number(notebook.dataset.page);
+        if (page < 7) {
+          notebook.dataset.page = page + 1;
+          notebook.querySelector(".sound_flip").play();
+        }
+      }
+      function FirstPage() {
+        let page = Number(notebook.dataset.page);
+        if (page !== 0) {
+          notebook.dataset.page = 0;
+          notebook.querySelector(".sound_flip").play();
+        }
+      }
+    </script>
+  </div>
+  <style>
+    .sound_up,
+    .sound_down,
+    .sound_insert,
+    .sound_eject,
+    .sound_flip {
+      display: none;
     }
 
-    .prev,
-    .next {
-      position: absolute;
+    * {
+      /* Disable the double-tap-to-zoom action */
+      /* The interface should really be zoomable but it's very complicated (technically and metaphorically) */
+      touch-action: manipulation;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    html {
+      background-color: #dfddd3;
+    }
+
+    article {
+      display: none;
+    }
+
+    .toy {
+      position: fixed;
+      /* filter: drop-shadow(0px 10px 20px #1f190d); */
+      will-change: transform;
+      transform: translate(0, 0);
       top: 0;
-      width: 80px;
-      height: 100%;
-      cursor: pointer;
-    }
-
-    .prev {
       left: 0;
+      user-select: none;
     }
 
-    .next {
-      right: 0;
+    .toy img {
+      user-select: none;
+    }
+
+    #arrow {
+      opacity: 0;
+      position: absolute;
+      user-select: none;
+      will-change: transform, opacity;
+    }
+
+    .grab {
+      cursor: grab;
+      user-select: none;
+    }
+
+    .toy.tall {
+      z-index: 999 !important;
+    }
+
+    .video_contents {
+      display: none;
+    }
+
+    #coffee-bg {
+      position: absolute;
+      top: -52px;
+      left: -35px;
+      width: 300px;
+      height: 300px;
+      background-size: 1200px;
+      background-image: image-set(
+        url("cups-1x.webp") 1x,
+        url("cups-1.5x.webp") 1.5x,
+        url("cups-2x.webp") 2x
+      );
+      pointer-events: none;
+      background-position-x: 0;
+    }
+
+    #coffee {
+      width: 240px;
+      height: 200px;
+      border-radius: 50%;
+    }
+
+    #coffee.empty #coffee-bg {
+      background-position-y: 100%;
+    }
+
+    #coffee a {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      border-radius: 50px;
+      top: 50px;
+      left: 50px;
+      text-align: center;
+    }
+
+    #coffee:not(.empty) > a {
+      display: none;
+    }
+
+    #coffee.empty > a {
+      display: inline-block;
+    }
+
+    #coffee.tilt1 #coffee-bg {
+      background-position-x: -100%;
+    }
+
+    #coffee.tilt2 #coffee-bg {
+      background-position-x: -200%;
+    }
+
+    #coffee.tilt3 #coffee-bg {
+      background-position-x: -300%;
     }
   </style>
-  <div class="grab cover">
-    <div class="next" onclick="NextPage()"></div>
-  </div>
-  <div class="grab page1 page-left">
-    <div class="prev" onclick="PrevPage()"></div>
-  </div>
-  <div class="grab page1 page-right">
-    <div class="next" onclick="NextPage()"></div>
-  </div>
-  <div class="grab page2 page-left">
-    <div class="prev" onclick="PrevPage()"></div>
-  </div>
-  <div class="grab page2 page-right">
-    <div class="next" onclick="NextPage()"></div>
-  </div>
-  <div class="grab page3 page-left">
-    <div class="prev" onclick="PrevPage()"></div>
-  </div>
-  <div class="grab page3 page-right">
-    <div class="next" onclick="NextPage()"></div>
-  </div>
-  <div class="grab page4 page-left">
-    <div class="prev" onclick="PrevPage()"></div>
-  </div>
-  <div class="grab page4 page-right">
-    <div class="next" onclick="NextPage()"></div>
-  </div>
-  <div class="grab page5 page-left">
-    Visual metaphors & <em class="grab">direct manipulation</em> with minimal latency deliver the most
-    natural & accurate control over software.<br><br>
-    Animations and sounds should <strong class="grab">never</strong> slow down the UI.
-    <div class="prev" onclick="PrevPage()"></div>
-  </div>
-  <div class="grab page5 page-right">
-    Existing software is not easy to replace. Wrapping, embedding & running alongside other existing technologies is a must.<br>
-    <span class="grab" style="position: absolute; transform: translate(30px, 100px) rotate(-10deg); font-size: 1.2em; text-decoration: underline;">Interoperability!</span>
-    <div class="next" onclick="NextPage()"></div>
-  </div>
-  <div class="grab page6 page-left">
-    <em class="grab">Future-proofing</em> means to run on any computer, regardless of
-    its form factor. From PC to VR goggles, IoT & wearables.
-    <br><br>
-    Some devices will require headless operation. They should still be accessible over some web-based interface.
-    <div class="prev" onclick="PrevPage()"></div>
-  </div>
-  <div class="grab page6 page-right">
-    Running on any hardware (let's but the bar at Raspberry PI) means that <em class="grab">every megabyte counts</em>.
-    <br><br><br>
-    This elliminates browser-based solutions at the get go.
-    <div class="next" onclick="NextPage()"></div>
-  </div>
-  <div class="grab page7 page-left">
-    Permissive <em class="grab">MIT license</em> makes it fit for commercial use.
-    <br><br>
-    Support from public & non-profit organizations means no incentive to profit off users.
-    <br><br>
-    So no entshittification.
-    <div class="prev" onclick="PrevPage()"></div>
-  </div>
-  <div class="grab page7 page-right">
-    <div class="next" onclick="FirstPage()"></div>
-  </div>
-  <audio preload class="sound_up">
-    <source src="notebook-up.flac" type="audio/flac">
-  </audio><audio preload class="sound_down">
-    <source src="notebook-down.flac" type="audio/flac">
-  </audio><audio preload class="sound_flip">
-    <source src="notebook-flip.flac" type="audio/flac">
-  </audio>
   <script>
-    let notebook = document.getElementById('notebook');
+    function LERP(a, b, t) {
+      return a + (b - a) * t;
+    }
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+    function ratio(value, min, max) {
+      return clamp((value - min) / (max - min), 0, 1);
+    }
+    function LinearApproach(value, dummy_v, velocity, target, delta_t) {
+      value -= target;
+      value =
+        Math.max(Math.abs(value) - delta_t * velocity, 0) * Math.sign(value);
+      return [value + target, Math.abs(value) <= 1 ? 0 : velocity];
+    }
+    function ExponentialApproach(value, dummy_v, decay, target, delta_t) {
+      value += (value - target) * Math.expm1((-delta_t / decay) * Math.LN2);
+      velocity = Math.LN2 * Math.pow(2, -delta_t / decay) * (target - value);
+      return [value, velocity];
+    }
+    function SineApproach(value, velocity, period, target, delta_t) {
+      // x = t
+      // P1 = 2 * PI / period
+      // y = a * (1 - sin(x * P1))
+      // y' = -a * P1 * cos(x * P1)
 
-    notebook.querySelector('.sound_up').volume = 0.2;
-    notebook.querySelector('.sound_down').volume = 0.2;
-    notebook.querySelector('.sound_flip').volume = 0.2;
-    function PrevPage() {
-      let page = Number(notebook.dataset.page);
-      if (page > 0) {
-        notebook.dataset.page = page - 1;
-        notebook.querySelector('.sound_flip').play();
+      let P1 = (2 * Math.PI) / Number(period);
+      let y = value - target;
+      let v = Number(velocity);
+
+      let a;
+      if (Math.abs(velocity) < 1e-6) {
+        a = y / 2;
+      } else {
+        a = ((v * v) / P1 / P1 + y * y) / y / 2;
       }
-    }
-    function NextPage() {
-      let page = Number(notebook.dataset.page);
-      if (page < 7) {
-        notebook.dataset.page = page + 1;
-        notebook.querySelector('.sound_flip').play();
+
+      if (Math.abs(a) > Math.abs(y)) {
+        a = y;
       }
-    }
-    function FirstPage() {
-      let page = Number(notebook.dataset.page);
-      if (page !== 0) {
-        notebook.dataset.page = 0;
-        notebook.querySelector('.sound_flip').play();
+
+      if (v < -Math.abs(a) * P1) {
+        v = -Math.abs(a) * P1;
+      } else if (v > Math.abs(a) * P1) {
+        v = Math.abs(a) * P1;
       }
-    }
-  </script>
-
-</div>
-<style>
-  .sound_up,
-  .sound_down,
-  .sound_insert,
-  .sound_eject,
-  .sound_flip {
-    display: none;
-  }
-
-  * {
-    /* Disable the double-tap-to-zoom action */
-    /* The interface should really be zoomable but it's very complicated (technically and metaphorically) */
-    touch-action: manipulation;
-  }
-
-  html,
-  body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    touch-action: none;
-  }
-
-  html {
-    background-color: #dfddd3;
-  }
-
-  article {
-    display: none;
-  }
-
-  .toy {
-    position: fixed;
-    /* filter: drop-shadow(0px 10px 20px #1f190d); */
-    will-change: transform;
-    transform: translate(0, 0);
-    top: 0;
-    left: 0;
-    user-select: none;
-  }
-
-  .toy img {
-    user-select: none;
-  }
-
-  #arrow {
-    opacity: 0;
-    position: absolute;
-    user-select: none;
-    will-change: transform, opacity;
-  }
-
-  .grab {
-    cursor: grab;
-    user-select: none;
-  }
-
-  .toy.tall {
-    z-index: 999 !important;
-  }
-
-  .video_contents {
-    display: none;
-  }
-
-  #coffee-bg {
-    position: absolute;
-    top: -52px;
-    left: -35px;
-    width: 300px;
-    height: 300px;
-    background-size: 1200px;
-    background-image: image-set(url('cups-1x.webp') 1x,
-        url('cups-1.5x.webp') 1.5x,
-        url('cups-2x.webp') 2x);
-    pointer-events: none;
-    background-position-x: 0;
-  }
-
-  #coffee {
-    width: 240px;
-    height: 200px;
-    border-radius: 50%;
-  }
-
-  #coffee.empty #coffee-bg {
-    background-position-y: 100%;
-  }
-
-  #coffee a {
-    position: absolute;
-    width: 100px;
-    height: 100px;
-    border-radius: 50px;
-    top: 50px;
-    left: 50px;
-    text-align: center;
-  }
-
-  #coffee:not(.empty)>a {
-    display: none;
-  }
-
-  #coffee.empty>a {
-    display: inline-block;
-  }
-
-  #coffee.tilt1 #coffee-bg {
-    background-position-x: -100%;
-  }
-
-  #coffee.tilt2 #coffee-bg {
-    background-position-x: -200%;
-  }
-
-  #coffee.tilt3 #coffee-bg {
-    background-position-x: -300%;
-  }
-</style>
-<script>
-
-  function LERP(a, b, t) {
-    return a + (b - a) * t;
-  }
-  function clamp(value, min, max) {
-    return Math.min(Math.max(value, min), max);
-  }
-  function ratio(value, min, max) {
-    return clamp((value - min) / (max - min), 0, 1);
-  }
-  function LinearApproach(value, dummy_v, velocity, target, delta_t) {
-    value -= target;
-    value = Math.max(Math.abs(value) - delta_t * velocity, 0) * Math.sign(value);
-    return [value + target, Math.abs(value) <= 1 ? 0 : velocity];
-  }
-  function ExponentialApproach(value, dummy_v, decay, target, delta_t) {
-    value += (value - target) * Math.expm1(-delta_t / decay * Math.LN2);
-    velocity = Math.LN2 * Math.pow(2, -delta_t / decay) * (target - value);
-    return [value, velocity];
-  }
-  function SineApproach(value, velocity, period, target, delta_t) {
-    // x = t
-    // P1 = 2 * PI / period
-    // y = a * (1 - sin(x * P1))
-    // y' = -a * P1 * cos(x * P1)
-
-    let P1 = 2 * Math.PI / Number(period);
-    let y = value - target;
-    let v = Number(velocity);
-
-    let a;
-    if (Math.abs(velocity) < 1e-6) {
-      a = y / 2;
-    } else {
-      a = (v * v / P1 / P1 + y * y) / y / 2;
-    }
-
-    if (Math.abs(a) > Math.abs(y)) {
-      a = y;
-    }
-
-    if (v < -Math.abs(a) * P1) {
-      v = -Math.abs(a) * P1;
-    } else if (v > Math.abs(a) * P1) {
-      v = Math.abs(a) * P1;
-    }
-    let fract = Math.abs((a * P1 + v) / (a * P1 - v));
-    let x;
-    if (isNaN(fract)) {
-      x = 0;
-    } else {
-      x = -2 * Math.atan(Math.sqrt(fract));
-    }
-
-    if (x > Math.PI / 2) x -= Math.PI * 2;
-    x += delta_t * P1;
-    if (x > Math.PI / 2) x = Math.PI / 2;
-
-    return [a * (1 - Math.sin(x)) + target, -a * P1 * Math.cos(x)];
-  }
-  function SpringApproach(value, velocity, period, half_life, target, delta_t) {
-    // P1 = 2 * PI / period
-    // P2 = -log(2) / half_life
-    // value = a * cos(t * P1) * exp(t * P2)
-    // velocity = a * exp(t * P2) * (P2 * cos(t * P1) - P1 * sin(t * P1))
-
-    let P1 = 2 * Math.PI / period;
-    let P2 = -1 / Math.LOG2E / half_life;
-    value -= target;
-
-    let arg = P1 * value / Math.sqrt(P1 * P1 * value * value + P2 * P2 * value * value - 2 * P2 * velocity * value + velocity * velocity);
-    if (isNaN(arg)) {
-      return [target, 0];
-    }
-
-    let ts = [-Math.acos(-arg) / P1, Math.acos(-arg) / P1, Math.acos(arg) / P1, -Math.acos(arg) / P1];
-
-    let best_t, best_a;
-    let best_t_err = Infinity;
-    for (let t of ts) {
-      let a = value / Math.cos(t * P1) / Math.exp(t * P2);
-      let new_v = a * Math.exp(t * P2) * (P2 * Math.cos(P1 * t) - P1 * Math.sin(P1 * t));
-      let err = Math.abs(velocity - new_v);
-      if (err < best_t_err) {
-        best_t = t;
-        best_a = a;
-        best_t_err = err;
+      let fract = Math.abs((a * P1 + v) / (a * P1 - v));
+      let x;
+      if (isNaN(fract)) {
+        x = 0;
+      } else {
+        x = -2 * Math.atan(Math.sqrt(fract));
       }
+
+      if (x > Math.PI / 2) x -= Math.PI * 2;
+      x += delta_t * P1;
+      if (x > Math.PI / 2) x = Math.PI / 2;
+
+      return [a * (1 - Math.sin(x)) + target, -a * P1 * Math.cos(x)];
+    }
+    function SpringApproach(
+      value,
+      velocity,
+      period,
+      half_life,
+      target,
+      delta_t,
+    ) {
+      // P1 = 2 * PI / period
+      // P2 = -log(2) / half_life
+      // value = a * cos(t * P1) * exp(t * P2)
+      // velocity = a * exp(t * P2) * (P2 * cos(t * P1) - P1 * sin(t * P1))
+
+      let P1 = (2 * Math.PI) / period;
+      let P2 = -1 / Math.LOG2E / half_life;
+      value -= target;
+
+      let arg =
+        (P1 * value) /
+        Math.sqrt(
+          P1 * P1 * value * value +
+            P2 * P2 * value * value -
+            2 * P2 * velocity * value +
+            velocity * velocity,
+        );
+      if (isNaN(arg)) {
+        return [target, 0];
+      }
+
+      let ts = [
+        -Math.acos(-arg) / P1,
+        Math.acos(-arg) / P1,
+        Math.acos(arg) / P1,
+        -Math.acos(arg) / P1,
+      ];
+
+      let best_t, best_a;
+      let best_t_err = Infinity;
+      for (let t of ts) {
+        let a = value / Math.cos(t * P1) / Math.exp(t * P2);
+        let new_v =
+          a *
+          Math.exp(t * P2) *
+          (P2 * Math.cos(P1 * t) - P1 * Math.sin(P1 * t));
+        let err = Math.abs(velocity - new_v);
+        if (err < best_t_err) {
+          best_t = t;
+          best_a = a;
+          best_t_err = err;
+        }
+      }
+
+      let t = best_t + delta_t;
+      let a = best_a;
+      return [
+        a * Math.cos(t * P1) * Math.exp(t * P2) + target,
+        a * Math.exp(t * P2) * (P2 * Math.cos(P1 * t) - P1 * Math.sin(P1 * t)),
+      ];
+    }
+    function WarpApproach(
+      value,
+      velocity,
+      warp_time,
+      warp_dist,
+      target,
+      delta_t,
+    ) {
+      let y = (value - target) / warp_dist;
+      let v = (velocity * warp_time) / warp_dist;
+      let angle = Math.atan(v);
+
+      let a_x, a_y, a_sign;
+      if (y <= 0) {
+        a_sign = 1;
+      } else {
+        a_sign = -1;
+      }
+      a_x = Math.cos(angle + (Math.PI / 2) * a_sign);
+      a_y = y + Math.sin(angle + (Math.PI / 2) * a_sign);
+
+      let x = delta_t / warp_time;
+      let b_y = -a_sign;
+      let b_x;
+      if (
+        a_x < 0 &&
+        Math.abs(b_y - y) <= 1 &&
+        Math.abs(y) < Math.abs(a_y + b_y) / 2
+      ) {
+        // B tangent to current position
+        b_x = Math.sqrt(1 - (b_y - y) * (b_y - y));
+      } else if (Math.abs(a_y) < 1) {
+        // B tangent to A
+        b_x = a_x + Math.sqrt(4 - (b_y - a_y) * (b_y - a_y));
+      } else {
+        // B on the right side of A
+        b_x = a_x + 2;
+      }
+
+      let x_mid = (a_x + b_x) / 2;
+
+      let y_result,
+        dir = 0;
+      if (x >= b_x) {
+        return [target, 0];
+      } else if (x < x_mid) {
+        let alpha = Math.acos(x - a_x);
+        dir = ((1 / Math.tan(alpha)) * a_sign * warp_dist) / warp_time;
+        y_result = -a_sign * Math.sin(alpha) + a_y;
+      } else {
+        let alpha = Math.acos(x - b_x);
+        dir = ((-1 / Math.tan(alpha)) * a_sign * warp_dist) / warp_time;
+        y_result = a_sign * Math.sin(alpha) + b_y;
+      }
+
+      return [y_result * warp_dist + target, dir];
     }
 
-    let t = best_t + delta_t;
-    let a = best_a;
-    return [a * Math.cos(t * P1) * Math.exp(t * P2) + target, a * Math.exp(t * P2) * (P2 * Math.cos(P1 * t) - P1 * Math.sin(P1 * t))];
-  }
-  function WarpApproach(value, velocity, warp_time, warp_dist, target, delta_t) {
-    let y = (value - target) / warp_dist;
-    let v = velocity * warp_time / warp_dist;
-    let angle = Math.atan(v);
+    // Check if a point is inside a rectangle.
+    // Return pair of numbers that would move the point out of the rectangle.
+    // Otherwise return [0, 0].
+    function PointVsRRect(
+      pointX,
+      pointY,
+      rectCenterX,
+      rectCenterY,
+      rectWidth,
+      rectHeight,
+      rectRadius,
+    ) {
+      pointX -= rectCenterX;
+      pointY -= rectCenterY;
+      let signX = pointX >= 0 ? 1 : -1;
+      pointX = Math.abs(pointX);
+      let signY = pointY >= 0 ? 1 : -1;
+      pointY = Math.abs(pointY);
 
-    let a_x, a_y, a_sign;
-    if (y <= 0) {
-      a_sign = 1;
-    } else {
-      a_sign = -1;
-    }
-    a_x = Math.cos(angle + Math.PI / 2 * a_sign);
-    a_y = y + Math.sin(angle + Math.PI / 2 * a_sign);
-
-    let x = delta_t / warp_time;
-    let b_y = -a_sign;
-    let b_x;
-    if (a_x < 0 && Math.abs(b_y - y) <= 1 && Math.abs(y) < Math.abs(a_y + b_y) / 2) {
-      // B tangent to current position
-      b_x = Math.sqrt(1 - (b_y - y) * (b_y - y));
-    } else if (Math.abs(a_y) < 1) {
-      // B tangent to A
-      b_x = a_x + Math.sqrt(4 - (b_y - a_y) * (b_y - a_y));
-    } else {
-      // B on the right side of A
-      b_x = a_x + 2;
-    }
-
-
-    let x_mid = (a_x + b_x) / 2;
-
-    let y_result, dir = 0;
-    if (x >= b_x) {
-      return [target, 0];
-    } else if (x < x_mid) {
-      let alpha = Math.acos(x - a_x);
-      dir = 1 / Math.tan(alpha) * a_sign * warp_dist / warp_time;
-      y_result = -a_sign * Math.sin(alpha) + a_y;
-    } else {
-      let alpha = Math.acos(x - b_x);
-      dir = -1 / Math.tan(alpha) * a_sign * warp_dist / warp_time;
-      y_result = a_sign * Math.sin(alpha) + b_y;
-    }
-
-    return [y_result * warp_dist + target, dir];
-  }
-
-  // Check if a point is inside a rectangle.
-  // Return pair of numbers that would move the point out of the rectangle.
-  // Otherwise return [0, 0].
-  function PointVsRRect(pointX, pointY, rectCenterX, rectCenterY, rectWidth, rectHeight, rectRadius) {
-    pointX -= rectCenterX;
-    pointY -= rectCenterY;
-    let signX = pointX >= 0 ? 1 : -1;
-    pointX = Math.abs(pointX);
-    let signY = pointY >= 0 ? 1 : -1;
-    pointY = Math.abs(pointY);
-
-    let halfWidth = rectWidth / 2 - rectRadius;
-    let halfHeight = rectHeight / 2 - rectRadius;
-    if (pointX >= halfWidth + rectRadius || pointY >= halfHeight + rectRadius) {
-      return [0, 0];
-    }
-
-    let overlapX = halfWidth - pointX; // positive inside the rectangle
-    let overlapY = halfHeight - pointY;
-
-    if (pointX >= halfWidth && pointY >= halfHeight) {
-      let l = Math.hypot(overlapX, overlapY);
-      if (l >= rectRadius) {
+      let halfWidth = rectWidth / 2 - rectRadius;
+      let halfHeight = rectHeight / 2 - rectRadius;
+      if (
+        pointX >= halfWidth + rectRadius ||
+        pointY >= halfHeight + rectRadius
+      ) {
         return [0, 0];
       }
-      if (l == 0) {
-        l = 1;
-        overlapX = -1;
-        overlapY = 0;
-      }
-      let newX = halfWidth - overlapX * rectRadius / l;
-      let newY = halfHeight - overlapY * rectRadius / l;
-      return [(newX - pointX) * signX, (newY - pointY) * signY];
-    }
 
-    if (overlapX <= 0) {
-      return [(overlapX + rectRadius) * signX, 0];
-    }
-    if (overlapY <= 0) {
-      return [0, (overlapY + rectRadius) * signY];
-    }
+      let overlapX = halfWidth - pointX; // positive inside the rectangle
+      let overlapY = halfHeight - pointY;
 
-    if (overlapX < overlapY) {
-      return [(overlapX + rectRadius) * signX, 0];
-    } else {
-      return [0, (overlapY + rectRadius) * signY];
-    }
-  }
-
-  // Check if the two rectangles collide and return an vector that moves the rectangle B out of A.
-  function RRectVsRRect(rectA, radiusA, rectB, radiusB) {
-    if (radiusA > rectA.width / 2) {
-      radiusA = rectA.width / 2;
-    }
-    if (radiusA > rectA.height / 2) {
-      radiusA = rectA.height / 2;
-    }
-    if (radiusB > rectB.width / 2) {
-      radiusB = rectB.width / 2;
-    }
-    if (radiusB > rectB.height / 2) {
-      radiusB = rectB.height / 2;
-    }
-    let totalWidth = rectA.width + rectB.width;
-    let totalHeight = rectA.height + rectB.height;
-    let totalRadius = radiusA + radiusB;
-
-    let pointX = rectB.left + rectB.width / 2;
-    let pointY = rectB.top + rectB.height / 2;
-    let rectCenterX = rectA.left + rectA.width / 2;
-    let rectCenterY = rectA.top + rectA.height / 2;
-
-    return PointVsRRect(
-      pointX, pointY, rectCenterX, rectCenterY, totalWidth, totalHeight, totalRadius
-    );
-  }
-
-  function Push(element, x, y) {
-    let [startX, startY, scale, rot] = ParseTransform(element);
-    element.targetX = startX + x;
-    element.targetY = startY + y;
-    SetTransform(element, startX + x, startY + y, scale, rot);
-  }
-
-
-  // Returns current position, scale and rotation of the element
-  function ParseTransform(element) {
-    let transform = element.style.transform;
-    let x = element.defaultX || 0;
-    let y = element.defaultY || 0;
-    let scale = element.defaultScale || 1;
-    let rotation = element.defaultRotation || 0;
-    let match = transform.match(/translate\(([^,]+)px, ([^)]+)px\) scale\(([^)]+)\) rotate\(([^)]+)deg\)/);
-    if (match) {
-      x = parseFloat(match[1]);
-      y = parseFloat(match[2]);
-      scale = parseFloat(match[3]);
-      rotation = parseFloat(match[4]);
-    }
-    return [x, y, scale, rotation];
-  }
-
-  function SetTransform(element, x, y, scale, rotation) {
-    element.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${rotation}deg)`;
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-
-    let zoom = 1;
-
-    function SetZoom() {
-      let vmin = Math.min(window.innerWidth, window.innerHeight);
-      zoom = LERP(0.5, 1, ratio(vmin, 300, 600));
-      document.querySelectorAll('.toy').forEach(toy => {
-        toy.style.zoom = zoom;
-      });
-      document.getElementById('arrow').style.zoom = zoom;
-    }
-    window.addEventListener('resize', SetZoom);
-    SetZoom();
-
-    let video_player = document.getElementById('video_player');
-    let coffee = document.getElementById('coffee');
-    let napkin = document.getElementById('napkin');
-    let floppy = document.getElementById('floppy');
-    let notebook = document.getElementById('notebook');
-    let vhs = document.getElementById('vhs');
-
-    let napkin_p = napkin.querySelector('p');
-
-    if (window.innerWidth >= window.innerHeight) { // horizontal layout
-      video_player.defaultX = Math.round((window.innerWidth / zoom - video_player.clientWidth) / 2);
-      video_player.defaultY = Math.round((window.innerHeight / zoom - video_player.clientHeight) / 2);
-      coffee.defaultX = Math.round((window.innerWidth / zoom - coffee.clientWidth) * 0.9);
-      coffee.defaultY = Math.round((window.innerHeight / zoom - coffee.clientHeight) * 0.8);
-      napkin.defaultX = Math.round((window.innerWidth / zoom - napkin.clientWidth) * 0.1);
-      napkin.defaultY = Math.round((window.innerHeight / zoom - napkin.clientHeight) * -0.1);
-      floppy.defaultX = Math.round((window.innerWidth / zoom - floppy.clientWidth) * 0.1);
-      floppy.defaultY = Math.round((window.innerHeight / zoom - floppy.clientHeight) * 0.9);
-      notebook.defaultX = Math.round((window.innerWidth / zoom - notebook.clientWidth) * 0.5);
-      notebook.defaultY = Math.round((notebook.clientHeight / zoom) * -0.7);
-      SetTransform(vhs, Math.round((window.innerWidth / zoom - vhs.clientWidth) * 1), Math.round((window.innerHeight / zoom - vhs.clientHeight) * 0.1), 1, 15);
-      vhs.targetRotation = 15;
-    } else { // vertical layout
-      video_player.defaultX = Math.round((window.innerWidth / zoom - video_player.clientWidth) / 2);
-      video_player.defaultY = Math.round((window.innerHeight / zoom - video_player.clientHeight) * 0.7);
-      coffee.defaultX = Math.round((window.innerWidth / zoom - coffee.clientWidth) * 0.1);
-      coffee.defaultY = Math.round((window.innerHeight / zoom - coffee.clientHeight) * 0.35);
-      napkin.defaultX = Math.round((window.innerWidth / zoom - napkin.clientWidth) * 0.);
-      napkin.defaultY = Math.round((window.innerHeight / zoom - napkin.clientHeight) * 0);
-      floppy.defaultX = Math.round((window.innerWidth / zoom - floppy.clientWidth) * 0.1);
-      floppy.defaultY = Math.round((window.innerHeight / zoom - floppy.clientHeight) * 1);
-      notebook.defaultX = Math.round((window.innerWidth / zoom - notebook.clientWidth) * 1.2);
-      notebook.defaultY = Math.round((notebook.clientHeight / zoom) * 0.2);
-      notebook.targetRotation = -80;
-      SetTransform(vhs, Math.round((window.innerWidth / zoom - vhs.clientWidth) * 1.4), Math.round((window.innerHeight / zoom - vhs.clientHeight) * 0.05), 1, 15);
-      vhs.targetRotation = 15;
-    }
-
-    napkin.querySelector('.sound_up').volume = 0.2;
-    napkin.querySelector('.sound_down').volume = 0.2;
-    video_player.querySelector('.sound_up').volume = 0.2;
-    video_player.querySelector('.sound_down').volume = 0.2;
-    floppy.querySelector('.sound_up').volume = 0.2;
-    floppy.querySelector('.sound_down').volume = 0.2;
-    vhs.querySelector('.sound_up').volume = 0.5;
-    vhs.querySelector('.sound_down').volume = 0.5;
-    coffee.querySelector('.sound_up').volume = 0.5;
-    coffee.querySelector('.sound_down').volume = 0.5;
-    vhs.querySelector('.sound_insert').volume = 0.5;
-    floppy.querySelector('.sound_insert').volume = 0.5;
-
-    function LoadVideo(html) {
-      let screen = document.getElementById('video_screen');
-      screen.innerHTML = html;
-    }
-
-    const defaultVideo = '<video controls autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit:cover"><source src = "assets/output.webm" type = "video/webm" /></video>';
-    LoadVideo(defaultVideo);
-
-    function Snap(element, x, y, scale, rot) {
-      if (element === vhs || element === floppy) {
-        let grab = element.querySelector('.grab') || element;
-        let [playerX, playerY, playerScale, playerRot] = ParseTransform(video_player);
-        let snapX = playerX + video_player.clientWidth / 2 + grab.clientWidth * 0.05;
-        let snapY = playerY + video_player.clientHeight + grab.clientHeight * 0.6;
-        let centerX = x + element.clientWidth / 2;
-        let centerY = y + element.clientHeight / 2;
-        let dist = Math.hypot(centerX - snapX, centerY - snapY);
-        if (dist < 100) {
-          element.inserting = true;
-          RequestAnimation();
-          return [snapX - element.clientWidth / 2, snapY - element.clientHeight / 2, 0.9, -10];
+      if (pointX >= halfWidth && pointY >= halfHeight) {
+        let l = Math.hypot(overlapX, overlapY);
+        if (l >= rectRadius) {
+          return [0, 0];
         }
-        element.inserting = false;
+        if (l == 0) {
+          l = 1;
+          overlapX = -1;
+          overlapY = 0;
+        }
+        let newX = halfWidth - (overlapX * rectRadius) / l;
+        let newY = halfHeight - (overlapY * rectRadius) / l;
+        return [(newX - pointX) * signX, (newY - pointY) * signY];
       }
-      return [x, y, scale, rot];
+
+      if (overlapX <= 0) {
+        return [(overlapX + rectRadius) * signX, 0];
+      }
+      if (overlapY <= 0) {
+        return [0, (overlapY + rectRadius) * signY];
+      }
+
+      if (overlapX < overlapY) {
+        return [(overlapX + rectRadius) * signX, 0];
+      } else {
+        return [0, (overlapY + rectRadius) * signY];
+      }
     }
 
-    function UpdateToyTargets(toy, e) {
-      let x = e.clientX / zoom - toy.mouseDownX;
-      let y = e.clientY / zoom - toy.mouseDownY;
-      let [snapX, snapY, scaleTarget, rotTarget] = Snap(toy, x, y, 1, 0);
-      if (snapX !== toy.lastSnapX || snapY !== toy.lastSnapY) {
-        toy.lastSnapX = snapX;
-        toy.lastSnapY = snapY;
-        let movementX = e.clientX / zoom - toy.lastClientX;
-        let movementY = e.clientY / zoom - toy.lastClientY;
+    // Check if the two rectangles collide and return an vector that moves the rectangle B out of A.
+    function RRectVsRRect(rectA, radiusA, rectB, radiusB) {
+      if (radiusA > rectA.width / 2) {
+        radiusA = rectA.width / 2;
+      }
+      if (radiusA > rectA.height / 2) {
+        radiusA = rectA.height / 2;
+      }
+      if (radiusB > rectB.width / 2) {
+        radiusB = rectB.width / 2;
+      }
+      if (radiusB > rectB.height / 2) {
+        radiusB = rectB.height / 2;
+      }
+      let totalWidth = rectA.width + rectB.width;
+      let totalHeight = rectA.height + rectB.height;
+      let totalRadius = radiusA + radiusB;
+
+      let pointX = rectB.left + rectB.width / 2;
+      let pointY = rectB.top + rectB.height / 2;
+      let rectCenterX = rectA.left + rectA.width / 2;
+      let rectCenterY = rectA.top + rectA.height / 2;
+
+      return PointVsRRect(
+        pointX,
+        pointY,
+        rectCenterX,
+        rectCenterY,
+        totalWidth,
+        totalHeight,
+        totalRadius,
+      );
+    }
+
+    function Push(element, x, y) {
+      let [startX, startY, scale, rot] = ParseTransform(element);
+      element.targetX = startX + x;
+      element.targetY = startY + y;
+      SetTransform(element, startX + x, startY + y, scale, rot);
+    }
+
+    // Returns current position, scale and rotation of the element
+    function ParseTransform(element) {
+      let transform = element.style.transform;
+      let x = element.defaultX || 0;
+      let y = element.defaultY || 0;
+      let scale = element.defaultScale || 1;
+      let rotation = element.defaultRotation || 0;
+      let match = transform.match(
+        /translate\(([^,]+)px, ([^)]+)px\) scale\(([^)]+)\) rotate\(([^)]+)deg\)/,
+      );
+      if (match) {
+        x = parseFloat(match[1]);
+        y = parseFloat(match[2]);
+        scale = parseFloat(match[3]);
+        rotation = parseFloat(match[4]);
+      }
+      return [x, y, scale, rotation];
+    }
+
+    function SetTransform(element, x, y, scale, rotation) {
+      element.style.transform = `translate(${x}px, ${y}px) scale(${scale}) rotate(${rotation}deg)`;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      let zoom = 1;
+
+      function SetZoom() {
+        let vmin = Math.min(window.innerWidth, window.innerHeight);
+        zoom = LERP(0.5, 1, ratio(vmin, 300, 600));
+        document.querySelectorAll(".toy").forEach((toy) => {
+          toy.style.zoom = zoom;
+        });
+        document.getElementById("arrow").style.zoom = zoom;
+      }
+      window.addEventListener("resize", SetZoom);
+      SetZoom();
+
+      let video_player = document.getElementById("video_player");
+      let coffee = document.getElementById("coffee");
+      let napkin = document.getElementById("napkin");
+      let floppy = document.getElementById("floppy");
+      let notebook = document.getElementById("notebook");
+      let vhs = document.getElementById("vhs");
+
+      let napkin_p = napkin.querySelector("p");
+
+      if (window.innerWidth >= window.innerHeight) {
+        // horizontal layout
+        video_player.defaultX = Math.round(
+          (window.innerWidth / zoom - video_player.clientWidth) / 2,
+        );
+        video_player.defaultY = Math.round(
+          (window.innerHeight / zoom - video_player.clientHeight) / 2,
+        );
+        coffee.defaultX = Math.round(
+          (window.innerWidth / zoom - coffee.clientWidth) * 0.9,
+        );
+        coffee.defaultY = Math.round(
+          (window.innerHeight / zoom - coffee.clientHeight) * 0.8,
+        );
+        napkin.defaultX = Math.round(
+          (window.innerWidth / zoom - napkin.clientWidth) * 0.1,
+        );
+        napkin.defaultY = Math.round(
+          (window.innerHeight / zoom - napkin.clientHeight) * -0.1,
+        );
+        floppy.defaultX = Math.round(
+          (window.innerWidth / zoom - floppy.clientWidth) * 0.1,
+        );
+        floppy.defaultY = Math.round(
+          (window.innerHeight / zoom - floppy.clientHeight) * 0.9,
+        );
+        notebook.defaultX = Math.round(
+          (window.innerWidth / zoom - notebook.clientWidth) * 0.5,
+        );
+        notebook.defaultY = Math.round((notebook.clientHeight / zoom) * -0.7);
+        SetTransform(
+          vhs,
+          Math.round((window.innerWidth / zoom - vhs.clientWidth) * 1),
+          Math.round((window.innerHeight / zoom - vhs.clientHeight) * 0.1),
+          1,
+          15,
+        );
+        vhs.targetRotation = 15;
+      } else {
+        // vertical layout
+        video_player.defaultX = Math.round(
+          (window.innerWidth / zoom - video_player.clientWidth) / 2,
+        );
+        video_player.defaultY = Math.round(
+          (window.innerHeight / zoom - video_player.clientHeight) * 0.7,
+        );
+        coffee.defaultX = Math.round(
+          (window.innerWidth / zoom - coffee.clientWidth) * 0.1,
+        );
+        coffee.defaultY = Math.round(
+          (window.innerHeight / zoom - coffee.clientHeight) * 0.35,
+        );
+        napkin.defaultX = Math.round(
+          (window.innerWidth / zoom - napkin.clientWidth) * 0,
+        );
+        napkin.defaultY = Math.round(
+          (window.innerHeight / zoom - napkin.clientHeight) * 0,
+        );
+        floppy.defaultX = Math.round(
+          (window.innerWidth / zoom - floppy.clientWidth) * 0.1,
+        );
+        floppy.defaultY = Math.round(
+          (window.innerHeight / zoom - floppy.clientHeight) * 1,
+        );
+        notebook.defaultX = Math.round(
+          (window.innerWidth / zoom - notebook.clientWidth) * 1.2,
+        );
+        notebook.defaultY = Math.round((notebook.clientHeight / zoom) * 0.2);
+        notebook.targetRotation = -80;
+        SetTransform(
+          vhs,
+          Math.round((window.innerWidth / zoom - vhs.clientWidth) * 1.4),
+          Math.round((window.innerHeight / zoom - vhs.clientHeight) * 0.05),
+          1,
+          15,
+        );
+        vhs.targetRotation = 15;
+      }
+
+      napkin.querySelector(".sound_up").volume = 0.2;
+      napkin.querySelector(".sound_down").volume = 0.2;
+      video_player.querySelector(".sound_up").volume = 0.2;
+      video_player.querySelector(".sound_down").volume = 0.2;
+      floppy.querySelector(".sound_up").volume = 0.2;
+      floppy.querySelector(".sound_down").volume = 0.2;
+      vhs.querySelector(".sound_up").volume = 0.5;
+      vhs.querySelector(".sound_down").volume = 0.5;
+      coffee.querySelector(".sound_up").volume = 0.5;
+      coffee.querySelector(".sound_down").volume = 0.5;
+      vhs.querySelector(".sound_insert").volume = 0.5;
+      floppy.querySelector(".sound_insert").volume = 0.5;
+
+      function LoadVideo(html) {
+        let screen = document.getElementById("video_screen");
+        screen.innerHTML = html;
+      }
+
+      const defaultVideo =
+        '<video controls autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit:cover"><source src = "assets/output.webm" type = "video/webm" /></video>';
+      LoadVideo(defaultVideo);
+
+      function Snap(element, x, y, scale, rot) {
+        if (element === vhs || element === floppy) {
+          let grab = element.querySelector(".grab") || element;
+          let [playerX, playerY, playerScale, playerRot] =
+            ParseTransform(video_player);
+          let snapX =
+            playerX + video_player.clientWidth / 2 + grab.clientWidth * 0.05;
+          let snapY =
+            playerY + video_player.clientHeight + grab.clientHeight * 0.6;
+          let centerX = x + element.clientWidth / 2;
+          let centerY = y + element.clientHeight / 2;
+          let dist = Math.hypot(centerX - snapX, centerY - snapY);
+          if (dist < 100) {
+            element.inserting = true;
+            RequestAnimation();
+            return [
+              snapX - element.clientWidth / 2,
+              snapY - element.clientHeight / 2,
+              0.9,
+              -10,
+            ];
+          }
+          element.inserting = false;
+        }
+        return [x, y, scale, rot];
+      }
+
+      function UpdateToyTargets(toy, e) {
+        let x = e.clientX / zoom - toy.mouseDownX;
+        let y = e.clientY / zoom - toy.mouseDownY;
+        let [snapX, snapY, scaleTarget, rotTarget] = Snap(toy, x, y, 1, 0);
+        if (snapX !== toy.lastSnapX || snapY !== toy.lastSnapY) {
+          toy.lastSnapX = snapX;
+          toy.lastSnapY = snapY;
+          let movementX = e.clientX / zoom - toy.lastClientX;
+          let movementY = e.clientY / zoom - toy.lastClientY;
+          toy.lastClientX = e.clientX / zoom;
+          toy.lastClientY = e.clientY / zoom;
+          let [oldX, oldY, oldScale, oldRotation] = ParseTransform(toy);
+          SetTransform(
+            toy,
+            oldX + movementX,
+            oldY + movementY,
+            oldScale,
+            oldRotation,
+          );
+        }
+        toy.targetX = Math.round(snapX);
+        toy.targetY = Math.round(snapY);
+        toy.targetScale = scaleTarget;
+        toy.targetRotation = rotTarget;
+      }
+
+      let pointerToToy = {};
+      function MoveListener(e) {
+        let toy = pointerToToy[e.pointerId];
+        if (toy === null) {
+          return true;
+        }
+        UpdateToyTargets(toy, e);
+        RequestAnimation();
+        e.preventDefault();
+        return false;
+      }
+
+      // navigator.vibrate polyfill
+      if (typeof navigator.vibrate === "undefined") {
+        navigator.vibrate = (ignored) => {};
+      }
+
+      function MouseUp(e) {
+        let toy = pointerToToy[e.pointerId];
+        if (typeof toy === "undefined") {
+          return true;
+        }
+        toy.classList.remove("held");
+        delete pointerToToy[e.pointerId];
+        if (Object.keys(pointerToToy).length === 0) {
+          document.body.onpointermove = null;
+          document.body.releasePointerCapture(e.pointerId);
+        }
+        if (toy.inserting) {
+          Eject();
+          let [videoX, videoY, videoScale, videoRot] =
+            ParseTransform(video_player);
+          let grab = toy.querySelector(".grab") || toy;
+          toy.targetX =
+            videoX + video_player.clientWidth / 2 - grab.clientWidth / 2;
+          toy.targetY =
+            videoY + video_player.clientHeight - grab.clientHeight / 2;
+          toy.targetRotation = 0;
+          toy.targetScale = 0.9;
+          toy.inserting = null;
+          video_player.targetRotation = 0;
+          video_player.style.zIndex = ++z;
+          let sound_insert = toy.querySelector(".sound_insert");
+          if (sound_insert) {
+            sound_insert.play();
+          }
+          navigator.vibrate([200, 200, 200, 200, 100]);
+          setTimeout(() => {
+            video_player.vY -= 1000;
+            video_player.targetY -= 10;
+            video_player.inserted = toy;
+            let newVideo = toy.querySelector(".video_contents");
+            if (newVideo) {
+              LoadVideo(newVideo.innerHTML);
+              toy.playing = true;
+            }
+            RequestAnimation();
+          }, 100);
+        } else {
+          navigator.vibrate(50);
+          let sound_down = toy.querySelector(".sound_down");
+          if (sound_down) {
+            sound_down.play();
+          }
+          let releaseTime = performance.now();
+          let delta = releaseTime - toy.mouseDownTime;
+          if (delta < 200) {
+            // When a toy is clicked, it means that the user isn't aware that it's draggable.
+            // Signal the draggability by disturbing the toy a little.
+            let [x, y, scale, rot] = ParseTransform(toy);
+            let randomDir = Math.random() * 2 * Math.PI;
+            toy.targetX = x + Math.cos(randomDir) * 100;
+            toy.targetY = y + Math.sin(randomDir) * 100;
+            toy.targetScale = 1;
+            toy.targetRotation = (Math.random() - 0.5) * 45;
+            toy.animator = ExponentialApproach;
+          }
+        }
+        if (toy === coffee) {
+          coffee.classList.remove("tilt1");
+          coffee.classList.remove("tilt2");
+          coffee.classList.remove("tilt3");
+          coffee.currentFrame = 0;
+        }
+        RequestAnimation();
+        e.preventDefault();
+        return false;
+      }
+
+      function MouseDown(e) {
+        if (!e.target.classList.contains("grab")) return true;
+        let target = e.target;
+        let toy = target.closest(".toy");
+        toy.classList.add("held");
+        navigator.vibrate(50);
+        toy.style.zIndex = ++z;
+        let [startX, startY, startScale, startRot] = ParseTransform(toy);
+        arrowPos = 0;
         toy.lastClientX = e.clientX / zoom;
         toy.lastClientY = e.clientY / zoom;
-        let [oldX, oldY, oldScale, oldRotation] = ParseTransform(toy);
-        SetTransform(toy, oldX + movementX, oldY + movementY, oldScale, oldRotation);
-      }
-      toy.targetX = Math.round(snapX);
-      toy.targetY = Math.round(snapY);
-      toy.targetScale = scaleTarget;
-      toy.targetRotation = rotTarget;
-    }
+        toy.mouseDownX = e.clientX / zoom - startX;
+        toy.mouseDownY = e.clientY / zoom - startY;
+        toy.mouseDownTime = performance.now();
+        toy.animator = SpringApproach;
 
-    let pointerToToy = {};
-    function MoveListener(e) {
-      let toy = pointerToToy[e.pointerId];
-      if (toy === null) {
-        return true;
-      }
-      UpdateToyTargets(toy, e);
-      RequestAnimation();
-      e.preventDefault();
-      return false;
-    }
+        UpdateToyTargets(toy, e);
 
-    // navigator.vibrate polyfill
-    if (typeof navigator.vibrate === 'undefined') {
-      navigator.vibrate = (ignored) => { };
-    }
-
-    function MouseUp(e) {
-      let toy = pointerToToy[e.pointerId];
-      if (typeof toy === 'undefined') {
-        return true;
-      }
-      toy.classList.remove('held');
-      delete pointerToToy[e.pointerId];
-      if (Object.keys(pointerToToy).length === 0) {
-        document.body.onpointermove = null;
-        document.body.releasePointerCapture(e.pointerId);
-      }
-      if (toy.inserting) {
-        Eject();
-        let [videoX, videoY, videoScale, videoRot] = ParseTransform(video_player);
-        let grab = toy.querySelector('.grab') || toy;
-        toy.targetX = videoX + video_player.clientWidth / 2 - grab.clientWidth / 2;
-        toy.targetY = videoY + video_player.clientHeight - grab.clientHeight / 2;
-        toy.targetRotation = 0;
-        toy.targetScale = 0.9;
-        toy.inserting = null;
-        video_player.targetRotation = 0;
-        video_player.style.zIndex = ++z;
-        let sound_insert = toy.querySelector('.sound_insert');
-        if (sound_insert) {
-          sound_insert.play();
+        let sound_up = toy.querySelector(".sound_up");
+        if (sound_up) {
+          sound_up.play();
         }
-        navigator.vibrate([
-          200, 200, 200, 200, 100
-        ]);
-        setTimeout(() => {
-          video_player.vY -= 1000;
-          video_player.targetY -= 10;
-          video_player.inserted = toy;
-          let newVideo = toy.querySelector('.video_contents');
-          if (newVideo) {
-            LoadVideo(newVideo.innerHTML);
-            toy.playing = true;
-          }
-          RequestAnimation();
-        }, 100);
-      } else {
-        navigator.vibrate(50);
-        let sound_down = toy.querySelector('.sound_down');
-        if (sound_down) {
-          sound_down.play();
+
+        if (toy === video_player && video_player.inserted) {
+          LoadVideo(defaultVideo);
+          Eject();
         }
-        let releaseTime = performance.now();
-        let delta = releaseTime - toy.mouseDownTime;
-        if (delta < 200) {
-          // When a toy is clicked, it means that the user isn't aware that it's draggable.
-          // Signal the draggability by disturbing the toy a little.
-          let [x, y, scale, rot] = ParseTransform(toy);
-          let randomDir = Math.random() * 2 * Math.PI;
-          toy.targetX = x + Math.cos(randomDir) * 100;
-          toy.targetY = y + Math.sin(randomDir) * 100;
-          toy.targetScale = 1;
-          toy.targetRotation = (Math.random() - 0.5) * 45;
-          toy.animator = ExponentialApproach;
+
+        if (toy.playing) {
+          delete video_player.inserted;
+          delete toy.playing;
+          LoadVideo(defaultVideo);
         }
-      }
-      if (toy === coffee) {
-        coffee.classList.remove('tilt1');
-        coffee.classList.remove('tilt2');
-        coffee.classList.remove('tilt3');
-        coffee.currentFrame = 0;
-      }
-      RequestAnimation();
-      e.preventDefault();
-      return false;
-    }
 
-
-    function MouseDown(e) {
-      if (!e.target.classList.contains('grab')) return true;
-      let target = e.target;
-      let toy = target.closest('.toy');
-      toy.classList.add('held');
-      navigator.vibrate(50);
-      toy.style.zIndex = ++z;
-      let [startX, startY, startScale, startRot] = ParseTransform(toy);
-      arrowPos = 0;
-      toy.lastClientX = e.clientX / zoom;
-      toy.lastClientY = e.clientY / zoom;
-      toy.mouseDownX = e.clientX / zoom - startX;
-      toy.mouseDownY = e.clientY / zoom - startY;
-      toy.mouseDownTime = performance.now();
-      toy.animator = SpringApproach;
-
-      UpdateToyTargets(toy, e);
-
-      let sound_up = toy.querySelector('.sound_up');
-      if (sound_up) {
-        sound_up.play();
-      }
-
-      if (toy === video_player && video_player.inserted) {
-        LoadVideo(defaultVideo);
-        Eject();
-      }
-
-      if (toy.playing) {
-        delete video_player.inserted;
-        delete toy.playing;
-        LoadVideo(defaultVideo);
-      }
-
-      pointerToToy[e.pointerId] = toy;
-      if (Object.keys(pointerToToy).length === 1) {
-        document.body.onpointermove = MoveListener;
-        document.body.setPointerCapture(e.pointerId);
-      }
-
-      RequestAnimation();
-
-      e.preventDefault();
-      return false;
-    };
-
-    function Eject() {
-      let inserted = video_player.inserted;
-      if (typeof inserted !== 'undefined') {
-        let sound_eject = inserted.querySelector('.sound_eject');
-        if (sound_eject) {
-          sound_eject.play();
+        pointerToToy[e.pointerId] = toy;
+        if (Object.keys(pointerToToy).length === 1) {
+          document.body.onpointermove = MoveListener;
+          document.body.setPointerCapture(e.pointerId);
         }
-        let [x, y, scale, rot] = ParseTransform(inserted);
-        inserted.targetX = x;
-        inserted.targetY = y + 250;
-        inserted.targetScale = 1;
-        inserted.targetRotation = (Math.random() - 0.5) * 180;
-        inserted.inserting = false;
-        inserted.animator = ExponentialApproach;
-        inserted.playing = false;
-        video_player.inserted = undefined;
-        LoadVideo(defaultVideo);
-      }
-    }
 
-    document.body.onpointerup = document.body.onpointercancel = MouseUp;
-
-    const toys = document.querySelectorAll('.toy');
-    var z = 0;
-    for (let toy of toys) {
-      (function () {
-        let [x, y, scale, rot] = ParseTransform(toy);
-        SetTransform(toy, x, y, scale, rot);
-        toy.targetX = x;
-        toy.targetY = y;
-      })();
-
-      toy.vX = 0;
-      toy.vY = 0;
-      toy.vScale = 0;
-      toy.vRotation = 0;
-      toy.targetScale = 1;
-      if (typeof toy.targetRotation === 'undefined') {
-        toy.targetRotation = 0;
-      }
-      toy.lastSnapX = null;
-      toy.lastSnapY = null;
-      toy.animator = SpringApproach;
-      toy.currentH = -1;
-
-      toy.addEventListener('pointerdown', MouseDown);
-    }
-
-    let lastT = performance.now();
-    let animationRequest = null;
-    let arrowPos = 0;
-    function Frame(t) {
-      animationRequest = null;
-      let deltaT = (t - lastT) / 1000;
-      lastT = t;
-
-
-      let arrowVisible = false;
-      for (let draggedToy of Object.values(pointerToToy)) {
-        if (draggedToy !== floppy && draggedToy !== vhs) {
-          continue;
-        }
-        // animate arrow
-        arrowVisible = true;
-
-        let path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        let toyRect = draggedToy.getBoundingClientRect();
-        let startX = toyRect.left + toyRect.width / 2;
-        let startY = toyRect.top + toyRect.height / 2;
-        let playerRect = video_player.getBoundingClientRect();
-        let endX = playerRect.left + playerRect.width / 2;
-        let endY = playerRect.top + playerRect.height - 50;
-        let cp1Y = draggedToy.inserting ? startY - 100 : startY + 300;
-        path.setAttribute("d", `M ${startX} ${startY} C ${startX} ${cp1Y} ${endX} ${endY + 300} ${endX} ${endY}`);
-        let totalLength = path.getTotalLength();
-        arrowPos += 10;
-        if (arrowPos >= totalLength) {
-          arrowPos = 1;
-        }
-        let a = path.getPointAtLength(arrowPos - 1);
-        let b = path.getPointAtLength(arrowPos);
-        arrow.style.transform = `translate(-50px, -50px) translate(${a.x / zoom}px, ${a.y / zoom}px) rotate(${Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI}deg)`;
         RequestAnimation();
-        break;
+
+        e.preventDefault();
+        return false;
       }
-      let arrowOpacityTarget = arrowVisible ? 1 : 0;
-      if (arrow.style.opacity != arrowOpacityTarget) {
-        arrow.style.opacity = LinearApproach(arrow.style.opacity || 0, 0, 8, arrowOpacityTarget, deltaT)[0];
-        if (arrow.style.opacity != arrowOpacityTarget) {
-          RequestAnimation();
+
+      function Eject() {
+        let inserted = video_player.inserted;
+        if (typeof inserted !== "undefined") {
+          let sound_eject = inserted.querySelector(".sound_eject");
+          if (sound_eject) {
+            sound_eject.play();
+          }
+          let [x, y, scale, rot] = ParseTransform(inserted);
+          inserted.targetX = x;
+          inserted.targetY = y + 250;
+          inserted.targetScale = 1;
+          inserted.targetRotation = (Math.random() - 0.5) * 180;
+          inserted.inserting = false;
+          inserted.animator = ExponentialApproach;
+          inserted.playing = false;
+          video_player.inserted = undefined;
+          LoadVideo(defaultVideo);
         }
       }
 
-      // Coffee tilting & drinking
-      if (coffee.classList.contains('held')) {
-        let coffeeRect = coffee.getBoundingClientRect();
-        let coffeeBottom = coffeeRect.top + coffeeRect.height;
-        let targetFrame = LERP(0, 4, ratio(coffeeBottom, window.innerHeight * 3 / 4, window.innerHeight));
-        let [newFrame, ignoredSpeed] = LinearApproach(coffee.currentFrame || 0, 0, 8, targetFrame, deltaT);
-        coffee.currentFrame = newFrame;
-        if (newFrame != targetFrame) {
-          RequestAnimation();
-        }
-        switch (Math.round(newFrame)) {
-          case 0:
-            coffee.classList.remove('tilt1');
-            coffee.classList.remove('tilt2');
-            coffee.classList.remove('tilt3');
-            break;
-          case 1:
-            coffee.classList.add('tilt1');
-            coffee.classList.remove('tilt2');
-            coffee.classList.remove('tilt3');
-            break;
-          case 2:
-            coffee.classList.remove('tilt1');
-            coffee.classList.add('tilt2');
-            coffee.classList.remove('tilt3');
-            break;
-          case 3:
-            coffee.classList.remove('tilt1');
-            coffee.classList.remove('tilt2');
-            coffee.classList.add('tilt3');
-            break;
-          case 4:
-            coffee.classList.remove('tilt1');
-            coffee.classList.remove('tilt2');
-            coffee.classList.add('tilt3');
-            if (!coffee.drunk) {
-              document.getElementById('drinking').play();
-              coffee.drunk = true;
-              setTimeout(() => {
-                coffee.classList.add('empty');
-              }, 1000);
-            }
-            break;
-        }
-      }
+      document.body.onpointerup = document.body.onpointercancel = MouseUp;
 
-      const TOLERANCE = 20 / zoom;
-
-      // Animate toy positions
+      const toys = document.querySelectorAll(".toy");
+      var z = 0;
       for (let toy of toys) {
-        let [x, y, scale, rot] = ParseTransform(toy);
-        let animator = (value, velocity, target) => SpringApproach(value, velocity, 0.4, 0.1, target, deltaT);
-        if (toy.animator == ExponentialApproach) {
-          animator = (value, velocity, target) => ExponentialApproach(value, velocity, 0.05, target, deltaT);
+        (function () {
+          let [x, y, scale, rot] = ParseTransform(toy);
+          SetTransform(toy, x, y, scale, rot);
+          toy.targetX = x;
+          toy.targetY = y;
+        })();
+
+        toy.vX = 0;
+        toy.vY = 0;
+        toy.vScale = 0;
+        toy.vRotation = 0;
+        toy.targetScale = 1;
+        if (typeof toy.targetRotation === "undefined") {
+          toy.targetRotation = 0;
         }
-        let [newX, newVX] = animator(x, toy.vX, toy.targetX);
-        let [newY, newVY] = animator(y, toy.vY, toy.targetY);
-        let [newScale, newVScale] = animator(scale, toy.vScale, toy.targetScale);
-        let [newRot, newVRot] = animator(rot, toy.vRotation, toy.targetRotation);
-        toy.vX = newVX;
-        toy.vY = newVY;
-        toy.vScale = newVScale;
-        toy.vRotation = newVRot;
-        if (Math.abs(newVX) > 0.1 || Math.abs(newVY) > 0.1 || Math.abs(newVScale) > 0.1 || Math.abs(newVRot) > 0.1) {
-          RequestAnimation();
-        } else {
-          newX = toy.targetX;
-          newY = toy.targetY;
-          newScale = toy.targetScale;
-          newRot = toy.targetRotation;
-        }
-        SetTransform(toy, newX, newY, newScale, newRot);
+        toy.lastSnapX = null;
+        toy.lastSnapY = null;
+        toy.animator = SpringApproach;
+        toy.currentH = -1;
+
+        toy.addEventListener("pointerdown", MouseDown);
       }
 
-      // Push toys away
-      for (let ia = 0; ia < toys.length; ia++) {
-        let a = toys[ia];
-        let aHigh = a.classList.contains('held') || a.classList.contains('tall');
-        let aGrab = a.querySelector('.grab') || a;
-        let rectA = aGrab.getBoundingClientRect();
-        rectA.left += TOLERANCE / 4;
-        rectA.top += TOLERANCE / 4;
-        rectA.width -= TOLERANCE / 2;
-        rectA.height -= TOLERANCE / 2;
-        let radiusA = Number.parseFloat(getComputedStyle(aGrab).getPropertyValue('border-radius') || '0');
-        for (let ib = ia + 1; ib < toys.length; ib++) {
-          let b = toys[ib];
-          let bHigh = b.classList.contains('held') || b.classList.contains('tall');
-          if (!aHigh || !bHigh) {
+      let lastT = performance.now();
+      let animationRequest = null;
+      let arrowPos = 0;
+      function Frame(t) {
+        animationRequest = null;
+        let deltaT = (t - lastT) / 1000;
+        lastT = t;
+
+        let arrowVisible = false;
+        for (let draggedToy of Object.values(pointerToToy)) {
+          if (draggedToy !== floppy && draggedToy !== vhs) {
             continue;
           }
-          let bGrab = b.querySelector('.grab') || b;
-          let rectB = bGrab.getBoundingClientRect();
-          rectB.left += TOLERANCE / 4;
-          rectB.top += TOLERANCE / 4;
-          rectB.width -= TOLERANCE / 2;
-          rectB.height -= TOLERANCE / 2;
-          let radiusB = Number.parseFloat(getComputedStyle(bGrab).getPropertyValue('border-radius') || '0');
-          let [pushX, pushY] = RRectVsRRect(rectA, radiusA, rectB, radiusB);
-          if (pushX != 0 || pushY != 0) {
-            if (a.classList.contains('held')) {
-              Push(b, pushX, pushY);
-            } else if (b.classList.contains('held')) {
-              Push(a, -pushX, -pushY);
-            } else {
-              Push(b, pushX / 2, pushY / 2);
-              Push(a, -pushX / 2, -pushY / 2);
+          // animate arrow
+          arrowVisible = true;
+
+          let path = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "path",
+          );
+          let toyRect = draggedToy.getBoundingClientRect();
+          let startX = toyRect.left + toyRect.width / 2;
+          let startY = toyRect.top + toyRect.height / 2;
+          let playerRect = video_player.getBoundingClientRect();
+          let endX = playerRect.left + playerRect.width / 2;
+          let endY = playerRect.top + playerRect.height - 50;
+          let cp1Y = draggedToy.inserting ? startY - 100 : startY + 300;
+          path.setAttribute(
+            "d",
+            `M ${startX} ${startY} C ${startX} ${cp1Y} ${endX} ${endY + 300} ${endX} ${endY}`,
+          );
+          let totalLength = path.getTotalLength();
+          arrowPos += 10;
+          if (arrowPos >= totalLength) {
+            arrowPos = 1;
+          }
+          let a = path.getPointAtLength(arrowPos - 1);
+          let b = path.getPointAtLength(arrowPos);
+          arrow.style.transform = `translate(-50px, -50px) translate(${a.x / zoom}px, ${a.y / zoom}px) rotate(${(Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI}deg)`;
+          RequestAnimation();
+          break;
+        }
+        let arrowOpacityTarget = arrowVisible ? 1 : 0;
+        if (arrow.style.opacity != arrowOpacityTarget) {
+          arrow.style.opacity = LinearApproach(
+            arrow.style.opacity || 0,
+            0,
+            8,
+            arrowOpacityTarget,
+            deltaT,
+          )[0];
+          if (arrow.style.opacity != arrowOpacityTarget) {
+            RequestAnimation();
+          }
+        }
+
+        // Coffee tilting & drinking
+        if (coffee.classList.contains("held")) {
+          let coffeeRect = coffee.getBoundingClientRect();
+          let coffeeBottom = coffeeRect.top + coffeeRect.height;
+          let targetFrame = LERP(
+            0,
+            4,
+            ratio(
+              coffeeBottom,
+              (window.innerHeight * 3) / 4,
+              window.innerHeight,
+            ),
+          );
+          let [newFrame, ignoredSpeed] = LinearApproach(
+            coffee.currentFrame || 0,
+            0,
+            8,
+            targetFrame,
+            deltaT,
+          );
+          coffee.currentFrame = newFrame;
+          if (newFrame != targetFrame) {
+            RequestAnimation();
+          }
+          switch (Math.round(newFrame)) {
+            case 0:
+              coffee.classList.remove("tilt1");
+              coffee.classList.remove("tilt2");
+              coffee.classList.remove("tilt3");
+              break;
+            case 1:
+              coffee.classList.add("tilt1");
+              coffee.classList.remove("tilt2");
+              coffee.classList.remove("tilt3");
+              break;
+            case 2:
+              coffee.classList.remove("tilt1");
+              coffee.classList.add("tilt2");
+              coffee.classList.remove("tilt3");
+              break;
+            case 3:
+              coffee.classList.remove("tilt1");
+              coffee.classList.remove("tilt2");
+              coffee.classList.add("tilt3");
+              break;
+            case 4:
+              coffee.classList.remove("tilt1");
+              coffee.classList.remove("tilt2");
+              coffee.classList.add("tilt3");
+              if (!coffee.drunk) {
+                document.getElementById("drinking").play();
+                coffee.drunk = true;
+                setTimeout(() => {
+                  coffee.classList.add("empty");
+                }, 1000);
+              }
+              break;
+          }
+        }
+
+        const TOLERANCE = 20 / zoom;
+
+        // Animate toy positions
+        for (let toy of toys) {
+          let [x, y, scale, rot] = ParseTransform(toy);
+          let animator = (value, velocity, target) =>
+            SpringApproach(value, velocity, 0.4, 0.1, target, deltaT);
+          if (toy.animator == ExponentialApproach) {
+            animator = (value, velocity, target) =>
+              ExponentialApproach(value, velocity, 0.05, target, deltaT);
+          }
+          let [newX, newVX] = animator(x, toy.vX, toy.targetX);
+          let [newY, newVY] = animator(y, toy.vY, toy.targetY);
+          let [newScale, newVScale] = animator(
+            scale,
+            toy.vScale,
+            toy.targetScale,
+          );
+          let [newRot, newVRot] = animator(
+            rot,
+            toy.vRotation,
+            toy.targetRotation,
+          );
+          toy.vX = newVX;
+          toy.vY = newVY;
+          toy.vScale = newVScale;
+          toy.vRotation = newVRot;
+          if (
+            Math.abs(newVX) > 0.1 ||
+            Math.abs(newVY) > 0.1 ||
+            Math.abs(newVScale) > 0.1 ||
+            Math.abs(newVRot) > 0.1
+          ) {
+            RequestAnimation();
+          } else {
+            newX = toy.targetX;
+            newY = toy.targetY;
+            newScale = toy.targetScale;
+            newRot = toy.targetRotation;
+          }
+          SetTransform(toy, newX, newY, newScale, newRot);
+        }
+
+        // Push toys away
+        for (let ia = 0; ia < toys.length; ia++) {
+          let a = toys[ia];
+          let aHigh =
+            a.classList.contains("held") || a.classList.contains("tall");
+          let aGrab = a.querySelector(".grab") || a;
+          let rectA = aGrab.getBoundingClientRect();
+          rectA.left += TOLERANCE / 4;
+          rectA.top += TOLERANCE / 4;
+          rectA.width -= TOLERANCE / 2;
+          rectA.height -= TOLERANCE / 2;
+          let radiusA = Number.parseFloat(
+            getComputedStyle(aGrab).getPropertyValue("border-radius") || "0",
+          );
+          for (let ib = ia + 1; ib < toys.length; ib++) {
+            let b = toys[ib];
+            let bHigh =
+              b.classList.contains("held") || b.classList.contains("tall");
+            if (!aHigh || !bHigh) {
+              continue;
             }
+            let bGrab = b.querySelector(".grab") || b;
+            let rectB = bGrab.getBoundingClientRect();
+            rectB.left += TOLERANCE / 4;
+            rectB.top += TOLERANCE / 4;
+            rectB.width -= TOLERANCE / 2;
+            rectB.height -= TOLERANCE / 2;
+            let radiusB = Number.parseFloat(
+              getComputedStyle(bGrab).getPropertyValue("border-radius") || "0",
+            );
+            let [pushX, pushY] = RRectVsRRect(rectA, radiusA, rectB, radiusB);
+            if (pushX != 0 || pushY != 0) {
+              if (a.classList.contains("held")) {
+                Push(b, pushX, pushY);
+              } else if (b.classList.contains("held")) {
+                Push(a, -pushX, -pushY);
+              } else {
+                Push(b, pushX / 2, pushY / 2);
+                Push(a, -pushX / 2, -pushY / 2);
+              }
+              RequestAnimation();
+            }
+          }
+        }
+
+        // Keep toys on screen
+        const MINIMUM_SCREEN_PX = 80;
+        for (let toy of toys) {
+          let rect = toy.getBoundingClientRect();
+          if (rect.right - MINIMUM_SCREEN_PX < 0) {
+            Push(toy, -rect.right + MINIMUM_SCREEN_PX, 0);
+            RequestAnimation();
+          }
+          if (rect.left + MINIMUM_SCREEN_PX > window.innerWidth) {
+            Push(toy, window.innerWidth - rect.left - MINIMUM_SCREEN_PX, 0);
+            RequestAnimation();
+          }
+          if (rect.bottom - MINIMUM_SCREEN_PX < 0) {
+            Push(toy, 0, -rect.bottom + MINIMUM_SCREEN_PX);
+            RequestAnimation();
+          }
+          if (rect.top + MINIMUM_SCREEN_PX > window.innerHeight) {
+            Push(toy, 0, window.innerHeight - rect.top - MINIMUM_SCREEN_PX);
             RequestAnimation();
           }
         }
-      }
 
-      // Keep toys on screen
-      const MINIMUM_SCREEN_PX = 80;
-      for (let toy of toys) {
-        let rect = toy.getBoundingClientRect();
-        if (rect.right - MINIMUM_SCREEN_PX < 0) {
-          Push(toy, -rect.right + MINIMUM_SCREEN_PX, 0);
-          RequestAnimation();
-        }
-        if (rect.left + MINIMUM_SCREEN_PX > window.innerWidth) {
-          Push(toy, window.innerWidth - rect.left - MINIMUM_SCREEN_PX, 0);
-          RequestAnimation();
-        }
-        if (rect.bottom - MINIMUM_SCREEN_PX < 0) {
-          Push(toy, 0, -rect.bottom + MINIMUM_SCREEN_PX);
-          RequestAnimation();
-        }
-        if (rect.top + MINIMUM_SCREEN_PX > window.innerHeight) {
-          Push(toy, 0, window.innerHeight - rect.top - MINIMUM_SCREEN_PX);
-          RequestAnimation();
-        }
-      }
-
-      // Animate toys shadow
-      for (let toy of toys) {
-        let targetH = toy.classList.contains('held') ? 30 : 10;
-        let currentH = toy.currentH || targetH;
-        if (currentH != targetH) {
-          let [newH, newV] = LinearApproach(currentH, 0, 200, targetH, deltaT);
-          toy.currentH = newH;
-          toy.style.filter = `drop-shadow(0px ${newH}px ${newH + 10}px #1f190d)`;
-          if (newH != targetH) {
-            RequestAnimation();
+        // Animate toys shadow
+        for (let toy of toys) {
+          let targetH = toy.classList.contains("held") ? 30 : 10;
+          let currentH = toy.currentH || targetH;
+          if (currentH != targetH) {
+            let [newH, newV] = LinearApproach(
+              currentH,
+              0,
+              200,
+              targetH,
+              deltaT,
+            );
+            toy.currentH = newH;
+            toy.style.filter = `drop-shadow(0px ${newH}px ${newH + 10}px #1f190d)`;
+            if (newH != targetH) {
+              RequestAnimation();
+            }
           }
         }
-      }
-      if (animationRequest === null) {
-        lastT = null;
-      }
-    }
-    function RequestAnimation() {
-      if (animationRequest === null) {
-        if (lastT === null) {
-          lastT = performance.now();
+        if (animationRequest === null) {
+          lastT = null;
         }
-        animationRequest = requestAnimationFrame(Frame);
       }
-    }
-    RequestAnimation();
-
-    window.addEventListener('resize', () => {
+      function RequestAnimation() {
+        if (animationRequest === null) {
+          if (lastT === null) {
+            lastT = performance.now();
+          }
+          animationRequest = requestAnimationFrame(Frame);
+        }
+      }
       RequestAnimation();
-    })
-  });
-</script>
 
+      window.addEventListener("resize", () => {
+        RequestAnimation();
+      });
+    });
+  </script>
 
-<script src="bg.js"></script>
-
+  <script src="bg.js"></script>
 </html>

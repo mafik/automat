@@ -292,6 +292,8 @@ union Rect {
   constexpr float Width() const { return right - left; }
   constexpr float Height() const { return top - bottom; }
 
+  constexpr float Area() const { return Width() * Height(); }
+
   static constexpr Vec2 Size(const SkRect& r) { return {Width(r), Height(r)}; }
   constexpr Vec2 Size() const { return {Width(), Height()}; }
 

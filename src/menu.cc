@@ -172,14 +172,28 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
     first_tick = false;
   }
   float s = size.value / kMenuSize;
+
+  // Arrange options within the wheel in a visually pleasing way.
+  // Scales options to match fit within a given area (arbitrary aspect ratio, divided equally).
+  // Ideas:
+  //  - scale options to fit an arc segment (makes it easier to control overlap)
+  //  - force-directed layout (prevents overlap using physics)
+  float bubble_area = kMenuSize * kMenuSize * M_PI;
+  float area_per_option = bubble_area / n_opts / 2;
   for (int i = 0; i < n_opts; ++i) {
     auto& opt = option_widgets[i];
-    Rect bounds = opt->CoarseBounds().rect;  // Shape().getBounds();
+    Rect bounds = opt->CoarseBounds().rect;
+    float required_area = bounds.Area();
+
+    float scale_to_fit =
+        required_area <= area_per_option ? 1 : sqrt(area_per_option / required_area);
+
     auto dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
     float r = kMenuSize * 2 / 3;
     auto center = Vec2::Polar(dir, r) + option_animation[i].offset.value;
 
-    auto desired_size = Rect::MakeCenter(center, 12_mm, 12_mm);
+    auto desired_size =
+        Rect::MakeCenter(center, bounds.Width() * scale_to_fit, bounds.Height() * scale_to_fit);
     opt->local_to_parent = SkM44(
         SkMatrix::RectToRect(bounds, desired_size, SkMatrix::kCenter_ScaleToFit).postScale(s, s));
 

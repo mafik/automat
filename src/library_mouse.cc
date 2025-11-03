@@ -14,6 +14,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "animation.hh"
+#include "optional.hh"
 #include "textures.hh"
 
 #if defined(_WIN32)
@@ -87,29 +88,11 @@ const char* ButtonEnumToName(ui::PointerButton button) {
   }
 }
 
-struct ObjectIcon : ui::Widget {
-  std::unique_ptr<Object::WidgetInterface> object_widget;
-  ObjectIcon(ui::Widget* parent) : ui::Widget(parent) {}
-  SkPath Shape() const override { return SkPath(); }
-  Optional<Rect> TextureBounds() const override { return std::nullopt; }
-
-  static std::unique_ptr<ObjectIcon> Make(ui::Widget* parent, Object& object) {
-    auto object_icon = std::make_unique<ObjectIcon>(parent);
-    object_icon->object_widget = object.MakeWidget(object_icon.get());
-    auto coarse_bounds = object_icon->object_widget->CoarseBounds().rect;
-    auto desired_size = Rect::MakeCenterZero(12_mm, 12_mm);
-    object_icon->object_widget->local_to_parent =
-        SkM44(SkMatrix::RectToRect(coarse_bounds, desired_size, SkMatrix::kCenter_ScaleToFit));
-    return object_icon;
-  }
-  void FillChildren(Vec<Widget*>& children) override { children.push_back(object_widget.get()); }
-};
-
 struct MakeObjectOption : Option {
   Ptr<Object> proto;
   MakeObjectOption(Ptr<Object> proto) : proto(proto) {}
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
-    return ObjectIcon::Make(parent, *proto);
+    return proto->MakeWidget(parent);
   }
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<MakeObjectOption>(proto);
@@ -122,47 +105,118 @@ struct MakeObjectOption : Option {
   }
 };
 
-struct MouseWidget : Object::WidgetBase {
-  MouseWidget(ui::Widget* parent, WeakPtr<Object>&& object) : WidgetBase(parent) {
-    this->object = std::move(object);
-  }
+static float FindLoD(SkCanvas& canvas, float local_x, float min_x_px, float max_x_px) {
+  auto ctm = canvas.getLocalToDeviceAs3x3();
+  float device_height_px = ctm.mapRadius(krita::mouse::base.height());
+  float lod = GetRatio(device_height_px, 40, 80);
+  return CosineInterpolate(0, 1, lod);
+}
 
-  std::string_view Name() const override { return "Mouse"; }
+struct PresserWidget : ui::Widget {
+  bool is_on = false;
 
-  RRect CoarseBounds() const override { return RRect::MakeSimple(krita::mouse::base.rect, 0); }
-
-  Optional<Rect> TextureBounds() const override { return krita::mouse::base.rect; }
+  using ui::Widget::Widget;
 
   SkPath Shape() const override {
-    static auto shape = krita::mouse::Shape();
+    static SkPath shape = krita::hand::Shape();
     return shape;
   }
 
   void Draw(SkCanvas& canvas) const override {
-    krita::mouse::base.draw(canvas);
-    krita::mouse::head.draw(canvas);
+    (is_on ? krita::hand::pressing : krita::hand::pointing).draw(canvas);
+  }
+};
+
+struct MouseWidgetCommon {
+  static RRect CoarseBounds() { return RRect::MakeSimple(krita::mouse::base.rect, 0); }
+
+  static Optional<Rect> TextureBounds() { return krita::mouse::base.rect; }
+
+  static SkPath Shape() {
+    static auto shape = krita::mouse::Shape();
+    return shape;
   }
 
-  void VisitOptions(const OptionsVisitor& options_visitor) const override {
-    Object::WidgetBase::VisitOptions(options_visitor);
-#define BUTTON(button)                                                                \
-  static MakeObjectOption button##_down_option =                                      \
-      MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::button, true));  \
-  static MakeObjectOption button##_up_option =                                        \
-      MakeObjectOption(MAKE_PTR(MouseButtonEvent, ui::PointerButton::button, false)); \
-  static MakeObjectOption button##_presser_option =                                   \
-      MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::button));      \
-  options_visitor(button##_down_option);                                              \
-  options_visitor(button##_up_option);                                                \
-  options_visitor(button##_presser_option);
-    BUTTON(Left);
-    BUTTON(Middle);
-    BUTTON(Right);
-    BUTTON(Back);
-    BUTTON(Forward);
-#undef BUTTON
-    static MakeObjectOption move_option = MakeObjectOption(MAKE_PTR(MouseMove));
-    options_visitor(move_option);
+  // size_ratio at 1 means normal size, 0 means iconified
+  static SkMatrix GetPresserMatrix(Vec2 button_center, float size_ratio) {
+    SkMatrix presser_widget_normal = SkMatrix::Translate(button_center);
+    SkMatrix presser_widget_iconified = SkMatrix::Scale(2, 2).postTranslate(-3_mm, 5_mm);
+    return MatrixMix(presser_widget_iconified, presser_widget_normal, size_ratio);
+  }
+
+  static void Draw(SkCanvas& canvas, ui::PointerButton button, Optional<bool> down_opt,
+                   PresserWidget* presser_widget) {
+    krita::mouse::base.draw(canvas);
+    SkPath mask = ButtonShape(button);
+    float size_ratio = 0;
+
+    if (!mask.isEmpty()) {
+      size_ratio = FindLoD(canvas, krita::mouse::base.height(), 40, 80);
+      {  // Highlight the button
+        SkPaint paint;
+        paint.setBlendMode(SkBlendMode::kOverlay);
+        SkColor overlay_color = "#9f8100"_color;  // ivory by default
+        if (down_opt.has_value()) {
+          overlay_color =
+              *down_opt ? "#f07a72"_color : "#1e74fd"_color;  // red & blue for down & up
+        }
+        paint.setColor(overlay_color);
+        canvas.drawPath(mask, paint);
+      }
+    }
+
+    if (button == ui::PointerButton::Unknown) {
+      krita::mouse::head.draw(canvas);
+    }
+
+    if (down_opt.has_value()) {
+      bool down = *down_opt;
+
+      {  // Draw arrow
+        SkPath path = PathFromSVG(kArrowShape);
+        SkPaint paint;
+        paint.setAlphaf(0.9f);
+        paint.setImageFilter(
+            SkImageFilters::DropShadow(0, 0, 0.5_mm, 0.5_mm, SK_ColorWHITE, nullptr));
+        Vec2 center = mask.getBounds().center();
+
+        SkMatrix transformSmall = SkMatrix::Translate(center.x, center.y);
+
+        if (button == ui::PointerButton::Middle || button == ui::PointerButton::Back ||
+            button == ui::PointerButton::Forward) {
+          transformSmall.postTranslate(0, path.getBounds().bottom());
+          transformSmall.preScale(1.2, 1.2);
+        } else {
+          transformSmall.preScale(1.3, 1.3);
+        }
+        if (!down) {
+          transformSmall.preScale(1, -1);
+        }
+
+        SkMatrix transformLarge =
+            SkMatrix::Translate(Rect(krita::mouse::DpadWindow().getBounds()).TopCenter());
+        transformLarge.preScale(3, 3);
+        if (!down) {
+          transformLarge.preScale(1, -1);
+        }
+
+        auto transform_mix = MatrixMix(transformLarge, transformSmall, size_ratio);
+
+        if (down) {
+          paint.setColor("#d0413c"_color);
+        } else {
+          paint.setColor("#1e74fd"_color);
+        }
+
+        canvas.concat(transform_mix);
+        canvas.drawPath(path, paint);
+      }
+    }
+
+    if (presser_widget) {
+      auto transform_mix = GetPresserMatrix(mask.getBounds().center(), size_ratio);
+      presser_widget->local_to_parent = SkM44(transform_mix);
+    }
   }
 
   static SkPath ButtonShape(ui::PointerButton btn) {
@@ -183,77 +237,134 @@ struct MouseWidget : Object::WidgetBase {
   }
 };
 
-static float FindLoD(SkCanvas& canvas, float local_x, float min_x_px, float max_x_px) {
-  auto ctm = canvas.getLocalToDeviceAs3x3();
-  float device_height_px = ctm.mapRadius(krita::mouse::base.height());
-  float lod = GetRatio(device_height_px, 40, 80);
-  return CosineInterpolate(0, 1, lod);
-}
+struct MouseIcon : ui::Widget {
+  ui::PointerButton button;
+  Optional<bool> down;
+  std::unique_ptr<PresserWidget> presser_widget;
 
-struct MouseButtonEventWidget : MouseWidget {
-  MouseButtonEventWidget(ui::Widget* parent, WeakPtr<Object>&& object)
-      : MouseWidget(parent, std::move(object)) {}
+  MouseIcon(ui::Widget* parent, ui::PointerButton button, Optional<bool> down, bool presser)
+      : ui::Widget(parent), button(button), down(down), presser_widget(nullptr) {
+    if (presser) {
+      presser_widget.reset(new PresserWidget(this));
+    }
+  }
+
+  RRect CoarseBounds() const override { return MouseWidgetCommon::CoarseBounds(); }
+
+  Optional<Rect> TextureBounds() const override { return MouseWidgetCommon::TextureBounds(); }
+
+  SkPath Shape() const override { return MouseWidgetCommon::Shape(); }
+
+  void Draw(SkCanvas& canvas) const override {
+    MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, down, presser_widget.get());
+    DrawChildren(canvas);
+  }
+
+  void FillChildren(Vec<Widget*>& children) override {
+    if (presser_widget) children.push_back(presser_widget.get());
+  }
+};
+
+struct MouseDownMenuOption : Option, OptionsProvider {
+  bool down;
+  mutable std::vector<MakeObjectOption> button_options;
+  MouseDownMenuOption(bool down) : down(down) {
+    auto AddButtonOption = [&](ui::PointerButton btn) {
+      button_options.emplace_back(MAKE_PTR(MouseButtonEvent, btn, down));
+    };
+    using enum ui::PointerButton;
+    AddButtonOption(Left);
+    AddButtonOption(Middle);
+    AddButtonOption(Right);
+    AddButtonOption(Back);
+    AddButtonOption(Forward);
+  }
+
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
+    return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, down, false);
+  }
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<MouseDownMenuOption>(down);
+  }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    for (auto& option : button_options) {
+      visitor(option);
+    }
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
+};
+
+struct MousePresserMenuOption : Option, OptionsProvider {
+  MousePresserMenuOption() {}
+
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
+    return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, std::nullopt, true);
+  }
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<MousePresserMenuOption>();
+  }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+#define BUTTON(button)                                                           \
+  static MakeObjectOption button##_presser_option =                              \
+      MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::button)); \
+  visitor(button##_presser_option);
+    BUTTON(Left);
+    BUTTON(Middle);
+    BUTTON(Right);
+    BUTTON(Back);
+    BUTTON(Forward);
+#undef BUTTON
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
+};
+
+struct MouseWidgetBase : Object::WidgetBase {
+  MouseWidgetBase(ui::Widget* parent, WeakPtr<Object>&& object) : WidgetBase(parent) {
+    this->object = std::move(object);
+  }
+
+  RRect CoarseBounds() const override { return MouseWidgetCommon::CoarseBounds(); }
+
+  Optional<Rect> TextureBounds() const override { return MouseWidgetCommon::TextureBounds(); }
+
+  SkPath Shape() const override { return MouseWidgetCommon::Shape(); }
+};
+
+struct MouseWidget : MouseWidgetBase {
+  using MouseWidgetBase::MouseWidgetBase;
+
+  std::string_view Name() const override { return "Mouse"; }
+
+  void Draw(SkCanvas& canvas) const override {
+    MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, std::nullopt, nullptr);
+  }
 
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
-    // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
-    // other objects from here.
-    WidgetBase::VisitOptions(options_visitor);
+    Object::WidgetBase::VisitOptions(options_visitor);
+    static MousePresserMenuOption presser_option;
+    options_visitor(presser_option);
+    static MouseDownMenuOption down_option(true);
+    options_visitor(down_option);
+    static MouseDownMenuOption up_option(false);
+    options_visitor(up_option);
+    static MakeObjectOption move_option = MakeObjectOption(MAKE_PTR(MouseMove));
+    options_visitor(move_option);
   }
+};
+
+struct MouseButtonEventWidget : MouseWidgetBase {
+  using MouseWidgetBase::MouseWidgetBase;
 
   void Draw(SkCanvas& canvas) const override {
     krita::mouse::base.draw(canvas);
     Ptr<MouseButtonEvent> object = LockObject<MouseButtonEvent>();
     auto button = object->button;
     auto down = object->down;
-
-    SkPath mask = ButtonShape(button);
-    {  // Highlight the button
-      SkPaint paint;
-      paint.setBlendMode(SkBlendMode::kOverlay);
-      paint.setColor(down ? "#f07a72"_color : "#1e74fd"_color);
-      canvas.drawPath(mask, paint);
-    }
-
-    {  // Draw arrow
-      SkPath path = PathFromSVG(kArrowShape);
-      SkPaint paint;
-      paint.setAlphaf(0.9f);
-      paint.setImageFilter(
-          SkImageFilters::DropShadow(0, 0, 0.5_mm, 0.5_mm, SK_ColorWHITE, nullptr));
-      Vec2 center = mask.getBounds().center();
-
-      SkMatrix transformSmall = SkMatrix::Translate(center.x, center.y);
-
-      if (button == ui::PointerButton::Middle || button == ui::PointerButton::Back ||
-          button == ui::PointerButton::Forward) {
-        transformSmall.postTranslate(0, path.getBounds().bottom());
-        transformSmall.preScale(1.2, 1.2);
-      } else {
-        transformSmall.preScale(1.3, 1.3);
-      }
-      if (!down) {
-        transformSmall.preScale(1, -1);
-      }
-
-      SkMatrix transformLarge =
-          SkMatrix::Translate(Rect(krita::mouse::DpadWindow().getBounds()).TopCenter());
-      transformLarge.preScale(3, 3);
-      if (!down) {
-        transformLarge.preScale(1, -1);
-      }
-
-      auto transform_mix = MatrixMix(transformLarge, transformSmall,
-                                     FindLoD(canvas, krita::mouse::base.height(), 40, 80));
-
-      if (down) {
-        paint.setColor("#d0413c"_color);
-      } else {
-        paint.setColor("#1e74fd"_color);
-      }
-
-      canvas.concat(transform_mix);
-      canvas.drawPath(path, paint);
-    }
+    MouseWidgetCommon::Draw(canvas, button, down, nullptr);
   }
 };
 
@@ -465,36 +576,12 @@ std::unique_ptr<Object::WidgetInterface> Mouse::MakeWidget(ui::Widget* parent) {
 
 Ptr<Object> Mouse::Clone() const { return MAKE_PTR(Mouse); }
 
-struct PresserWidget : ui::Widget {
-  PresserWidget(Object::WidgetBase* parent) : ui::Widget(parent) {}
-
-  SkPath Shape() const override {
-    static SkPath shape = krita::hand::Shape();
-    return shape;
-  }
-
-  void Draw(SkCanvas& canvas) const override {
-    bool is_on = false;
-    if (parent) {
-      auto parent_object_widget_base = static_cast<Object::WidgetBase*>(parent.Get());
-      if (auto object_locked = parent_object_widget_base->LockObject<Object>()) {
-        if (auto* long_running = object_locked->AsLongRunning()) {
-          is_on = long_running->IsRunning();
-        }
-      }
-    }
-    (is_on ? krita::hand::pressing : krita::hand::pointing).draw(canvas);
-  }
-};
-
-struct MouseButtonPresserWidget : MouseWidget {
+struct MouseButtonPresserWidget : MouseWidgetBase {
   mutable PresserWidget presser_widget;
   SkPath shape;
-  SkMatrix presser_widget_normal;
-  SkMatrix presser_widget_iconified;
 
   MouseButtonPresserWidget(ui::Widget* parent, WeakPtr<Object>&& object)
-      : MouseWidget(parent, std::move(object)), presser_widget(this) {
+      : MouseWidgetBase(parent, std::move(object)), presser_widget(this) {
     SkPath mouse_shape = krita::mouse::Shape();
 
     ui::PointerButton button;
@@ -503,24 +590,15 @@ struct MouseButtonPresserWidget : MouseWidget {
       button = object->button;
     }
 
-    auto mask = ButtonShape(button);
+    auto mask = MouseWidgetCommon::ButtonShape(button);
     Rect bounds = mask.getBounds();
     Vec2 center = bounds.Center();
 
-    presser_widget_normal = SkMatrix::Translate(center);
-    presser_widget_iconified = SkMatrix::Scale(2, 2).postTranslate(-3_mm, 5_mm);
-
-    presser_widget.local_to_parent = SkM44(presser_widget_normal);
+    presser_widget.local_to_parent = SkM44(MouseWidgetCommon::GetPresserMatrix(center, 1));
 
     auto presser_shape = presser_widget.Shape();
     presser_shape.transform(presser_widget.local_to_parent.asM33());
     Op(mouse_shape, presser_shape, kUnion_SkPathOp, &shape);
-  }
-
-  void VisitOptions(const OptionsVisitor& options_visitor) const override {
-    // Note that we're not calling the MouseWidget's VisitOptions because we don't want to offer
-    // other objects from here.
-    WidgetBase::VisitOptions(options_visitor);
   }
 
   RRect CoarseBounds() const override { return RRect::MakeSimple(shape.getBounds(), 0); }
@@ -535,20 +613,9 @@ struct MouseButtonPresserWidget : MouseWidget {
     {
       Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
       button = object->button;
+      presser_widget.is_on = object->IsRunning();
     }
-
-    auto mask = ButtonShape(button);
-    {  // Highlight the button in ivory
-      SkPaint paint;
-      paint.setBlendMode(SkBlendMode::kOverlay);
-      paint.setColor("#9f8100"_color);
-      canvas.drawPath(mask, paint);
-    }
-
-    auto transform_mix = MatrixMix(presser_widget_iconified, presser_widget_normal,
-                                   FindLoD(canvas, krita::mouse::base.height(), 40, 80));
-    presser_widget.local_to_parent = SkM44(transform_mix);
-
+    MouseWidgetCommon::Draw(canvas, button, std::nullopt, &presser_widget);
     DrawChildren(canvas);
   }
 

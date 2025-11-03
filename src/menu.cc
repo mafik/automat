@@ -174,11 +174,16 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
   float s = size.value / kMenuSize;
   for (int i = 0; i < n_opts; ++i) {
     auto& opt = option_widgets[i];
-    Rect bounds = opt->Shape().getBounds();
+    Rect bounds = opt->CoarseBounds().rect;  // Shape().getBounds();
     auto dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
     float r = kMenuSize * 2 / 3;
     auto center = Vec2::Polar(dir, r) + option_animation[i].offset.value;
-    opt->local_to_parent = SkM44(SkMatrix::Translate(center - bounds.Center()).postScale(s, s));
+
+    auto desired_size = Rect::MakeCenter(center, 12_mm, 12_mm);
+    opt->local_to_parent = SkM44(
+        SkMatrix::RectToRect(bounds, desired_size, SkMatrix::kCenter_ScaleToFit).postScale(s, s));
+
+    // opt->local_to_parent = SkM44(SkMatrix::Translate(center - bounds.Center()).postScale(s, s));
   }
   return animation::Animating;
 }

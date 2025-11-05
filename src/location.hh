@@ -93,6 +93,7 @@ struct Location : ReferenceCounted, ui::Widget {
       if (object) {
         object_widget = &object->FindWidget(this);
         scale = object_widget->GetBaseScale();
+        object_widget->local_to_parent = SkM44(ToMatrix(position, scale, LocalAnchor()));
       }
     }
     return *object_widget;

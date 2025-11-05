@@ -59,6 +59,11 @@ struct MenuWidget : ui::Widget {
   OptionAnimation option_animation[DIR_COUNT] = {};
   std::unique_ptr<ui::Widget> option_widgets[DIR_COUNT] = {};
 
+  // If some menu option wanted to be placed at position X but had to be moved around, we record
+  // that here.
+  Option::Dir moved_to_dir[DIR_COUNT] = {DIR_NONE, DIR_NONE, DIR_NONE, DIR_NONE,
+                                         DIR_NONE, DIR_NONE, DIR_NONE, DIR_NONE};
+
   animation::SpringV2<float> size = 0;
   MenuAction* action;
   bool first_tick = true;
@@ -102,12 +107,17 @@ struct MenuWidget : ui::Widget {
     // place options at their preferred positions
     VLA_STACK(anywhere, int, n_opts);
     VLA_STACK(taken, int, n_opts);
+
+    // how many options prefer a given direction?
+    int prefers_dir_cnt[DIR_COUNT] = {};
+
     for (int i = 0; i < n_opts; ++i) {
       auto preferred_dir = options_vec[i]->PreferredDir();
       if (preferred_dir >= Option::DIR_COUNT) {
         anywhere.Push(i);
         continue;  // can be placed anywhere
       }
+      prefers_dir_cnt[preferred_dir]++;
       if (!kValidSlots[preferred_mode][preferred_dir]) {
         taken.Push(i);
         continue;  // desired dir doesn't exist in the preferred mode - put it nearby
@@ -125,24 +135,27 @@ struct MenuWidget : ui::Widget {
 
     for (int i : taken) {
       auto preferred_dir = options_vec[i]->PreferredDir();
-      bool found_spot = false;
+      Optional<Option::Dir> spot = std::nullopt;
       for (int dist = 1; dist < 5; ++dist) {
-        Option::Dir alternative_dir_a = Option::ShiftDir(preferred_dir, dist);
-        if (kValidSlots[preferred_mode][alternative_dir_a] &&
-            options[alternative_dir_a] == nullptr) {
-          options[alternative_dir_a] = std::move(options_vec[i]);
-          found_spot = true;
+        Option::Dir a = Option::ShiftDir(preferred_dir, dist);
+        if (kValidSlots[preferred_mode][a] && options[a] == nullptr) {
+          spot = a;
           break;
         }
-        Option::Dir alternative_dir_b = Option::ShiftDir(preferred_dir, -dist);
-        if (kValidSlots[preferred_mode][alternative_dir_b] &&
-            options[alternative_dir_b] == nullptr) {
-          options[alternative_dir_b] = std::move(options_vec[i]);
-          found_spot = true;
+        Option::Dir b = Option::ShiftDir(preferred_dir, -dist);
+        if (kValidSlots[preferred_mode][b] && options[b] == nullptr) {
+          spot = b;
           break;
         }
       }
-      if (!found_spot) {
+      if (spot.has_value()) {
+        if (prefers_dir_cnt[preferred_dir] == 1) {
+          // If this is the only option that preferred a given direction, place a "redirect" here.
+          // This makes this whole space redirect its events to the original option
+          moved_to_dir[preferred_dir] = *spot;
+        }
+        options[*spot] = std::move(options_vec[i]);
+      } else {
         unallocated.Push(i);
       }
     }
@@ -187,6 +200,15 @@ struct MenuWidget : ui::Widget {
     }
   }
   Option::Dir SinCosToDir(SinCos sc) {
+    float angle = sc.ToDegreesPositive();
+    float dir8_float = angle / 45.f;
+    int dir8_int = std::round(dir8_float);
+    if (dir8_int >= 8) {
+      dir8_int = 0;
+    }
+    if (options[dir8_int] == nullptr && moved_to_dir[dir8_int] != DIR_NONE) {
+      return moved_to_dir[dir8_int];
+    }
     switch (mode) {
       case MODE_1_DIR:
         return S;
@@ -203,7 +225,6 @@ struct MenuWidget : ui::Widget {
           return S;
         }
       case MODE_6_DIR: {
-        float angle = sc.ToDegreesPositive();
         if (angle < 60) {
           return NE;
         } else if (angle < 120) {
@@ -219,12 +240,7 @@ struct MenuWidget : ui::Widget {
         }
       }
       case MODE_8_DIR: {
-        float pointer_i_approx = sc.ToDegreesPositive() / 45.f;
-        int pointer_i = std::round(pointer_i_approx);
-        if (pointer_i >= 8) {
-          pointer_i = 0;
-        }
-        return (Option::Dir)pointer_i;
+        return (Option::Dir)dir8_int;
       }
     }
   }

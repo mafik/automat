@@ -103,6 +103,7 @@ struct DeleteOption : TextOption {
     }
     return nullptr;
   }
+  Dir PreferredDir() const override { return NW; }
 };
 
 struct MoveOption : TextOption {
@@ -147,6 +148,8 @@ struct MoveOption : TextOption {
     }
     return nullptr;
   }
+
+  Dir PreferredDir() const override { return N; }
 };
 
 struct RunOption : TextOption {
@@ -159,6 +162,7 @@ struct RunOption : TextOption {
     }
     return nullptr;
   }
+  Dir PreferredDir() const override { return S; }
 };
 
 struct IconifyOption : TextOption {
@@ -171,6 +175,7 @@ struct IconifyOption : TextOption {
     }
     return nullptr;
   }
+  Dir PreferredDir() const override { return NE; }
 };
 
 struct DeiconifyOption : TextOption {
@@ -183,6 +188,7 @@ struct DeiconifyOption : TextOption {
     }
     return nullptr;
   }
+  Dir PreferredDir() const override { return NE; }
 };
 
 void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {

@@ -7,18 +7,22 @@
 #include <include/effects/SkImageFilters.h>
 
 #include <memory>
+#include <utility>
 
 #include "animation.hh"
 #include "color.hh"
 #include "embedded.hh"
 #include "font.hh"
 #include "global_resources.hh"
+#include "log.hh"
 #include "math.hh"
 #include "pointer.hh"
 #include "root_widget.hh"
+#include "sincos.hh"
 #include "str.hh"
 #include "textures.hh"
 #include "units.hh"
+#include "vla.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -31,24 +35,232 @@ constexpr float kMenuSize = 2_cm;
 
 struct MenuAction;
 
+// Menus have always 8 slots for options.
+//
+// The plan for menus with more options is to create sub-menus but it's not clear how to approach
+// it.
+// Option 1 - if a clash happens, alert developers and re-position the options to avoid it (current
+// solution)
+// Option 2 - copress the extra options into linked-list of sub-menus
+//  a) singly-linked
+//  b) doubly-linked, where it's possible to go left & right
+//  c) tree-like, to minimize the distance to furthest options
+//
+// It is also possible to track the option usage and figure out which options are more important
+// than others and should have priority in menu allocation.
 struct MenuWidget : ui::Widget {
+  using enum Option::Dir;  // N, S, W, E, NW, NE, SW, SE, DIR_COUNT, DIR_NONE
+
   struct OptionAnimation {
     animation::SpringV2<Vec2> offset;
   };
 
-  Vec<std::unique_ptr<Option>> options;
-  Vec<OptionAnimation> option_animation;
-  Vec<std::unique_ptr<ui::Widget>> option_widgets;
+  std::unique_ptr<Option> options[DIR_COUNT] = {};
+  OptionAnimation option_animation[DIR_COUNT] = {};
+  std::unique_ptr<ui::Widget> option_widgets[DIR_COUNT] = {};
+
   animation::SpringV2<float> size = 0;
   MenuAction* action;
   bool first_tick = true;
 
-  MenuWidget(ui::Widget* parent, Vec<std::unique_ptr<Option>>&& options, MenuAction* action)
-      : ui::Widget(parent), options(std::move(options)), action(action) {
-    option_animation.resize(this->options.size());
-    option_widgets.reserve(this->options.size());
-    for (auto& opt : this->options) {
-      option_widgets.push_back(opt->MakeIcon(this));
+  // Menus with fewer than 8 options may use a compressed display format where only some slots are
+  // shown. The options are moved around to fit the reduced number of slots.
+  enum MiniMenuMode {
+    MODE_8_DIR,  // stardard mode
+    MODE_6_DIR,  // N > NE > SE > S > SW > NW (no W & E)
+    MODE_4_DIR,  // N > E > S > W
+    MODE_2_DIR,  // N > S
+    MODE_1_DIR,  // X
+  } mode = MODE_8_DIR;
+
+  constexpr static bool kValidSlots[5][DIR_COUNT] = {
+      [MODE_8_DIR] = {true, true, true, true, true, true, true, true},
+      [MODE_6_DIR] = {false, true, true, true, false, true, true, true},
+      [MODE_4_DIR] = {true, false, true, false, true, false, true, false},
+      [MODE_2_DIR] = {false, false, true, false, false, false, true, false},
+      [MODE_1_DIR] = {false, false, false, false, false, false, true, false},
+  };
+
+  MenuWidget(ui::Widget* parent, Vec<std::unique_ptr<Option>>&& options_vec, MenuAction* action)
+      : ui::Widget(parent), action(action) {
+    int n_opts = options_vec.size();
+
+    // Preferred mode is used to shift some options around and try to compress the menu a little
+    MiniMenuMode preferred_mode;
+    if (n_opts <= 1) {
+      preferred_mode = MODE_1_DIR;
+    } else if (n_opts <= 2) {
+      preferred_mode = MODE_2_DIR;
+    } else if (n_opts <= 4) {
+      preferred_mode = MODE_4_DIR;
+    } else if (n_opts <= 6) {
+      preferred_mode = MODE_6_DIR;
+    } else {
+      preferred_mode = MODE_8_DIR;
+    }
+
+    // place options at their preferred positions
+    VLA_STACK(anywhere, int, n_opts);
+    VLA_STACK(taken, int, n_opts);
+    for (int i = 0; i < n_opts; ++i) {
+      auto preferred_dir = options_vec[i]->PreferredDir();
+      if (preferred_dir >= Option::DIR_COUNT) {
+        anywhere.Push(i);
+        continue;  // can be placed anywhere
+      }
+      if (!kValidSlots[preferred_mode][preferred_dir]) {
+        taken.Push(i);
+        continue;  // desired dir doesn't exist in the preferred mode - put it nearby
+      }
+      if (options[preferred_dir] != nullptr) {
+        ERROR_ONCE << "Note to maf: found a menu where two options want the same spot!";
+        taken.Push(i);
+        continue;  // desired dir is taken - continue
+      }
+      options[preferred_dir] = std::move(options_vec[i]);
+    }
+
+    // TODO: use this list to create a sub-menu
+    VLA_STACK(unallocated, int, n_opts);
+
+    for (int i : taken) {
+      auto preferred_dir = options_vec[i]->PreferredDir();
+      bool found_spot = false;
+      for (int dist = 1; dist < 5; ++dist) {
+        Option::Dir alternative_dir_a = Option::ShiftDir(preferred_dir, dist);
+        if (kValidSlots[preferred_mode][alternative_dir_a] &&
+            options[alternative_dir_a] == nullptr) {
+          options[alternative_dir_a] = std::move(options_vec[i]);
+          found_spot = true;
+          break;
+        }
+        Option::Dir alternative_dir_b = Option::ShiftDir(preferred_dir, -dist);
+        if (kValidSlots[preferred_mode][alternative_dir_b] &&
+            options[alternative_dir_b] == nullptr) {
+          options[alternative_dir_b] = std::move(options_vec[i]);
+          found_spot = true;
+          break;
+        }
+      }
+      if (!found_spot) {
+        unallocated.Push(i);
+      }
+    }
+
+    for (int i : anywhere) {
+      bool found_spot = false;
+      for (int dir = 0; dir < DIR_COUNT; ++dir) {
+        if (kValidSlots[preferred_mode][dir] && options[dir] == nullptr) {
+          options[dir] = std::move(options_vec[i]);
+          found_spot = true;
+          break;
+        }
+      }
+      if (!found_spot) {
+        unallocated.Push(i);
+      }
+    }
+
+    if (unallocated) {
+      // TODO(maf)
+      ERROR_ONCE << "Attempted to display a menu with too many options. " << unallocated.Size()
+                 << " options have been dropped. Time to implement sub-menus!";
+    }
+
+    if (options[NE] == nullptr && options[E] == nullptr && options[SE] == nullptr &&
+        options[NW] == nullptr && options[W] == nullptr && options[SW] == nullptr &&
+        options[N] == nullptr) {
+      mode = MODE_1_DIR;
+    } else if (options[NE] == nullptr && options[E] == nullptr && options[SE] == nullptr &&
+               options[NW] == nullptr && options[W] == nullptr && options[SW] == nullptr) {
+      mode = MODE_2_DIR;
+    } else if (options[NE] == nullptr && options[SE] == nullptr && options[NW] == nullptr &&
+               options[NE] == nullptr) {
+      mode = MODE_4_DIR;
+    } else if (options[E] == nullptr && options[W] == nullptr) {
+      mode = MODE_6_DIR;
+    }
+
+    for (int i = 0; i < Option::DIR_COUNT; ++i) {
+      if (options[i] == nullptr) continue;
+      option_widgets[i] = options[i]->MakeIcon(this);
+    }
+  }
+  Option::Dir SinCosToDir(SinCos sc) {
+    switch (mode) {
+      case MODE_1_DIR:
+        return S;
+      case MODE_2_DIR:
+        return sc.cos >= 0 ? N : S;
+      case MODE_4_DIR:
+        if (sc.cos > Fixed1(0.7071)) {
+          return E;
+        } else if (sc.cos < Fixed1(-0.7071)) {
+          return W;
+        } else if (sc.sin > 0) {
+          return N;
+        } else {
+          return S;
+        }
+      case MODE_6_DIR: {
+        float angle = sc.ToDegreesPositive();
+        if (angle < 60) {
+          return NE;
+        } else if (angle < 120) {
+          return N;
+        } else if (angle < 180) {
+          return NW;
+        } else if (angle < 240) {
+          return SW;
+        } else if (angle < 300) {
+          return S;
+        } else {
+          return SE;
+        }
+      }
+      case MODE_8_DIR: {
+        float pointer_i_approx = sc.ToDegreesPositive() / 45.f;
+        int pointer_i = std::round(pointer_i_approx);
+        if (pointer_i >= 8) {
+          pointer_i = 0;
+        }
+        return (Option::Dir)pointer_i;
+      }
+    }
+  }
+  SinCos DirToSinCos(Option::Dir dir) {
+    if (mode == MODE_6_DIR) {
+      switch (dir) {
+        case Option::N:
+          return 90_deg;
+        case Option::NE:
+          return 30_deg;
+        case Option::SE:
+          return 330_deg;
+        case Option::S:
+          return 270_deg;
+        case Option::SW:
+          return 210_deg;
+        case Option::NW:
+          return 150_deg;
+        default:
+          return 0_deg;
+      }
+    }
+    return SinCos::FromDegrees((float)dir * 45.f);
+  }
+  int SlotCount() {
+    switch (mode) {
+      case MODE_8_DIR:
+        return 8;
+      case MODE_6_DIR:
+        return 6;
+      case MODE_4_DIR:
+        return 4;
+      case MODE_2_DIR:
+        return 2;
+      case MODE_1_DIR:
+        return 1;
     }
   }
   Optional<Rect> TextureBounds() const override {
@@ -56,8 +268,8 @@ struct MenuWidget : ui::Widget {
   }
   animation::Phase Tick(time::Timer& timer) override;
   void FillChildren(Vec<ui::Widget*>& children) override {
-    children.reserve(children.size() + option_widgets.size());
     for (auto& opt : option_widgets) {
+      if (opt == nullptr) continue;
       children.push_back(opt.get());
     }
   }
@@ -91,6 +303,7 @@ struct MenuWidget : ui::Widget {
     auto saved = canvas.getLocalToDevice();
     canvas.saveLayer(nullptr, &shadow_paint);
     for (auto& opt : option_widgets) {
+      if (opt == nullptr) continue;
       canvas.setMatrix(saved);
       canvas.concat(opt->local_to_parent);
       canvas.drawDrawable(opt->sk_drawable.get());
@@ -103,7 +316,7 @@ struct MenuWidget : ui::Widget {
 
 struct MenuAction : Action {
   unique_ptr<MenuWidget> menu_widget;
-  int last_index = -1;
+  Option::Dir last_dir = Option::DIR_NONE;
   Vec2 last_pos;
   MenuAction(ui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
       : Action(pointer),
@@ -114,25 +327,23 @@ struct MenuAction : Action {
   }
   ~MenuAction() override { menu_widget->action = nullptr; }
   void Update() override {
-    int n_opts = menu_widget->options.size();
     auto pos = pointer.PositionWithin(*menu_widget);
     float length = Length(pos);
-    auto dir = SinCos::FromVec2(pos, length);
-    float index_approx = dir.ToDegreesPositive() / 360.0f * n_opts;
-    int index = std::round(index_approx);
-    if (index >= n_opts) {
-      index = 0;
-    }
-    if (last_index != -1 && n_opts > 0) {
-      if (index == last_index && ((n_opts == 1) || (length > kMenuSize * 2 / 3))) {
+    auto sin_cos = SinCos::FromVec2(pos, length);
+    Option::Dir dir = menu_widget->SinCosToDir(sin_cos);
+    if (last_dir != Option::DIR_NONE) {
+      if (dir == last_dir &&
+          ((menu_widget->mode == MenuWidget::MODE_1_DIR) || (length > kMenuSize * 2 / 3))) {
         auto delta = pos - last_pos;
-        menu_widget->option_animation[index].offset.value += delta;
+        menu_widget->option_animation[dir].offset.value += delta;
       }
     }
-    last_index = index;
+    last_dir = dir;
     last_pos = pos;
     if (length > kMenuSize) {
-      auto new_action = n_opts == 0 ? nullptr : menu_widget->options[index]->Activate(pointer);
+      auto new_action = menu_widget->options[dir] == nullptr
+                            ? nullptr
+                            : menu_widget->options[dir]->Activate(pointer);
       pointer.ReplaceAction(*this, std::move(new_action));
     }
   }
@@ -141,22 +352,18 @@ struct MenuAction : Action {
 
 animation::Phase MenuWidget::Tick(time::Timer& timer) {
   size.SpringTowards(kMenuSize, timer.d, 0.2, 0.05);
-  int n_opts = options.size();
   if (action) {
     Vec2 pos = action->pointer.PositionWithin(*this);
     float length = Length(pos);
     auto pointer_dir = SinCos::FromVec2(pos, length);
-    float pointer_i_approx = pointer_dir.ToDegreesPositive() / 360.0f * n_opts;
-    int pointer_i = std::round(pointer_i_approx);
-    if (pointer_i >= n_opts) {
-      pointer_i = 0;
-    }
-    for (int i = 0; i < n_opts; ++i) {
-      auto option_dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
+    int pointer_i = SinCosToDir(pointer_dir);
+    for (int i = 0; i < DIR_COUNT; ++i) {
+      if (option_widgets[i] == nullptr) continue;
+      auto option_sc = DirToSinCos((Option::Dir)i);
       float r = kMenuSize * 2 / 3;
-      auto center = Vec2::Polar(option_dir, r);
+      auto center = Vec2::Polar(option_sc, r);
       Vec2 target;
-      if (i == pointer_i && (n_opts <= 1 || length > kMenuSize * 2 / 3)) {
+      if (i == pointer_i && ((mode == MenuWidget::MODE_1_DIR) || length > kMenuSize * 2 / 3)) {
         target = pos - center;
       } else {
         target = {0, 0};
@@ -179,18 +386,19 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
   //  - scale options to fit an arc segment (makes it easier to control overlap)
   //  - force-directed layout (prevents overlap using physics)
   float bubble_area = kMenuSize * kMenuSize * M_PI;
-  float area_per_option = bubble_area / n_opts / 2;
-  for (int i = 0; i < n_opts; ++i) {
+  float area_per_option = bubble_area / SlotCount() / 2;
+  for (int i = 0; i < DIR_COUNT; ++i) {
     auto& opt = option_widgets[i];
+    if (opt == nullptr) continue;
     Rect bounds = opt->CoarseBounds().rect;
     float required_area = bounds.Area();
 
     float scale_to_fit =
         required_area <= area_per_option ? 1 : sqrt(area_per_option / required_area);
 
-    auto dir = SinCos::FromRadians(M_PI * 2 * i / n_opts);
+    auto angle = DirToSinCos((Option::Dir)i);
     float r = kMenuSize * 2 / 3;
-    auto center = Vec2::Polar(dir, r) + option_animation[i].offset.value;
+    auto center = Vec2::Polar(angle, r) + option_animation[i].offset.value;
 
     auto desired_size =
         Rect::MakeCenter(center, bounds.Width() * scale_to_fit, bounds.Height() * scale_to_fit);

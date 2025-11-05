@@ -100,6 +100,7 @@ struct EnableContinuousRunOption : TextOption {
     }
     return nullptr;
   }
+  Dir PreferredDir() const override { return SW; }
 };
 
 struct DisableContinuousRunOption : TextOption {

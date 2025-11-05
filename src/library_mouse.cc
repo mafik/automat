@@ -14,6 +14,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "animation.hh"
+#include "menu.hh"
 #include "optional.hh"
 #include "textures.hh"
 
@@ -90,12 +91,13 @@ const char* ButtonEnumToName(ui::PointerButton button) {
 
 struct MakeObjectOption : Option {
   Ptr<Object> proto;
-  MakeObjectOption(Ptr<Object> proto) : proto(proto) {}
+  Dir dir;
+  MakeObjectOption(Ptr<Object> proto, Dir dir = DIR_NONE) : proto(proto), dir(dir) {}
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
     return proto->MakeWidget(parent);
   }
   std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<MakeObjectOption>(proto);
+    return std::make_unique<MakeObjectOption>(proto, dir);
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     auto loc = MAKE_PTR(Location, pointer.hover, root_location->AcquireWeakPtr());
@@ -103,6 +105,7 @@ struct MakeObjectOption : Option {
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
     return std::make_unique<DragLocationAction>(pointer, std::move(loc));
   }
+  Dir PreferredDir() const override { return dir; }
 };
 
 static float FindLoD(SkCanvas& canvas, float local_x, float min_x_px, float max_x_px) {
@@ -269,15 +272,15 @@ struct MouseDownMenuOption : Option, OptionsProvider {
   bool down;
   mutable std::vector<MakeObjectOption> button_options;
   MouseDownMenuOption(bool down) : down(down) {
-    auto AddButtonOption = [&](ui::PointerButton btn) {
-      button_options.emplace_back(MAKE_PTR(MouseButtonEvent, btn, down));
+    auto AddButtonOption = [&](ui::PointerButton btn, Dir dir) {
+      button_options.emplace_back(MAKE_PTR(MouseButtonEvent, btn, down), dir);
     };
     using enum ui::PointerButton;
-    AddButtonOption(Left);
-    AddButtonOption(Middle);
-    AddButtonOption(Right);
-    AddButtonOption(Back);
-    AddButtonOption(Forward);
+    AddButtonOption(Left, SW);
+    AddButtonOption(Middle, S);
+    AddButtonOption(Right, SE);
+    AddButtonOption(Back, NW);
+    AddButtonOption(Forward, NE);
   }
 
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
@@ -294,6 +297,7 @@ struct MouseDownMenuOption : Option, OptionsProvider {
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     return OpenMenu(pointer);
   }
+  Dir PreferredDir() const override { return down ? SW : SE; }
 };
 
 struct MousePresserMenuOption : Option, OptionsProvider {
@@ -306,20 +310,21 @@ struct MousePresserMenuOption : Option, OptionsProvider {
     return std::make_unique<MousePresserMenuOption>();
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
-#define BUTTON(button)                                                           \
-  static MakeObjectOption button##_presser_option =                              \
-      MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::button)); \
+#define BUTTON(button, dir)                                                           \
+  static MakeObjectOption button##_presser_option =                                   \
+      MakeObjectOption(MAKE_PTR(MouseButtonPresser, ui::PointerButton::button), dir); \
   visitor(button##_presser_option);
-    BUTTON(Left);
-    BUTTON(Middle);
-    BUTTON(Right);
-    BUTTON(Back);
-    BUTTON(Forward);
+    BUTTON(Left, SW);
+    BUTTON(Middle, S);
+    BUTTON(Right, SE);
+    BUTTON(Back, NW);
+    BUTTON(Forward, NE);
 #undef BUTTON
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     return OpenMenu(pointer);
   }
+  Dir PreferredDir() const override { return S; }
 };
 
 struct MouseWidgetBase : Object::WidgetBase {
@@ -351,7 +356,7 @@ struct MouseWidget : MouseWidgetBase {
     options_visitor(down_option);
     static MouseDownMenuOption up_option(false);
     options_visitor(up_option);
-    static MakeObjectOption move_option = MakeObjectOption(MAKE_PTR(MouseMove));
+    static MakeObjectOption move_option = MakeObjectOption(MAKE_PTR(MouseMove), Option::W);
     options_visitor(move_option);
   }
 };

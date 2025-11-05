@@ -12,10 +12,15 @@ namespace automat {
 
 // Option represents a potential action. It's the core of the menu system.
 struct Option {
+  enum Dir : uint8_t { E = 0, NE, N, NW, W, SW, S, SE, DIR_COUNT, DIR_NONE = 255 };
+  constexpr static Dir ShiftDir(Dir d, int delta) {
+    return static_cast<Dir>((static_cast<int>(d) + delta + DIR_COUNT) % DIR_COUNT);
+  }
   virtual ~Option() = default;
   virtual std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) = 0;
   virtual std::unique_ptr<Option> Clone() const = 0;
   virtual std::unique_ptr<Action> Activate(ui::Pointer& pointer) const = 0;
+  virtual Dir PreferredDir() const { return DIR_NONE; }
 };
 
 struct TextOption : Option {

@@ -133,6 +133,7 @@ struct RegistersMenuOption : TextOption, OptionsProvider {
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     return OpenMenu(pointer);
   }
+  Dir PreferredDir() const override { return S; }
 };
 
 void AssemblerWidget::VisitOptions(const OptionsVisitor& visitor) const {

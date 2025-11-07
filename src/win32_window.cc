@@ -373,10 +373,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             }
             auto lock = window.Lock();
             if (window.keylogging_enabled) {
-              window.root_widget.keyboard.LogKeyDown(key);
+              window.root.keyboard.LogKeyDown(key);
             }
             if (window.window_active) {
-              window.root_widget.keyboard.KeyDown(key);
+              window.root.keyboard.KeyDown(key);
             }
           }
         } else {
@@ -385,10 +385,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           key.ctrl = IsCtrlDown();
           auto lock = window.Lock();
           if (window.keylogging_enabled) {
-            window.root_widget.keyboard.LogKeyUp(key);
+            window.root.keyboard.LogKeyUp(key);
           }
           if (window.window_active) {
-            window.root_widget.keyboard.KeyUp(key);
+            window.root.keyboard.KeyUp(key);
           }
         }
       } else if (raw_input->header.dwType == RIM_TYPEMOUSE) {

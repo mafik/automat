@@ -5,7 +5,6 @@
 #include <include/core/SkPixmap.h>
 #include <include/core/SkStream.h>
 #include <include/encode/SkWebpEncoder.h>
-#include <unistd.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -13,6 +12,11 @@
 #include <cstring>
 #include <memory>
 #include <vector>
+
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #pragma maf main
 #pragma comment(lib, "skia")
@@ -68,8 +72,8 @@ std::vector<uint8_t> read_stdin() {
   uint8_t temp[4096];
 
   while (true) {
-    ssize_t n = read(STDIN_FILENO, temp, sizeof(temp));
-    if (n <= 0) break;
+    size_t n = fread(temp, 1, sizeof(temp), stdin);
+    if (n == 0) break;
     buffer.insert(buffer.end(), temp, temp + n);
   }
 
@@ -94,6 +98,11 @@ bool parse_line(const uint8_t* data, size_t size, size_t& pos, char* line, size_
 }
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+  _setmode(_fileno(stdout), _O_BINARY);
+  _setmode(_fileno(stdin), _O_BINARY);
+#endif
+
   // Read entire input
   auto input_data = read_stdin();
   if (input_data.empty()) {

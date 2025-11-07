@@ -631,7 +631,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     bool wants_to_draw = false;
     bool surface_reusable = false;  // set to true if existing surface covers the visible area
     SkMatrix window_to_local;
-    SkMatrix local_to_window;     // copied over to Widget, if drawn
     SkIRect surface_bounds_root;  // copied over to Widget, if drawn
     Vec<Vec2> pack_frame_texture_anchors;
     // Bounds (in local coords) which are rendered to the surface.
@@ -729,7 +728,19 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         node.SetVerdict(Verdict::Skip_Rendering);
       }
 
-      // UPDATE
+      {  // Update local_to_window & (maybe) call TransformUpdated()
+        SkMatrix local_to_window = widget->local_to_parent.asM33();
+        if (parent != i) {
+          local_to_window.postConcat(tree[parent].widget->local_to_window);
+        }
+        (void)local_to_window.invert(&node.window_to_local);
+        if (widget->local_to_window != local_to_window) {
+          widget->local_to_window = local_to_window;
+          widget->TransformUpdated();
+        }
+      }
+
+      // TICK
       if (node.verdict == Verdict::Unknown && widget->wake_time != time::SteadyPoint::max()) {
         node.wants_to_draw = true;
         auto true_d = root_widget->timer.d;
@@ -758,12 +769,6 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         node.wants_to_draw = true;
       }
 
-      node.local_to_window = widget->local_to_parent.asM33();
-      if (parent != i) {
-        node.local_to_window.postConcat(tree[parent].local_to_window);
-      }
-      (void)node.local_to_window.invert(&node.window_to_local);
-
       widget->pack_frame_texture_bounds = widget->TextureBounds();
       bool visible = true;
       if (widget->pack_frame_texture_bounds.has_value()) {
@@ -782,7 +787,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
         // Compute the bounds of the widget - in local & root coordinates
         SkRect root_bounds;
-        node.local_to_window.mapRect(&root_bounds, *widget->pack_frame_texture_bounds);
+        widget->local_to_window.mapRect(&root_bounds, *widget->pack_frame_texture_bounds);
 
         // Clip the `root_bounds` to the root widget bounds;
         if (root_bounds.width() * root_bounds.height() < 512 * 512) {
@@ -869,10 +874,10 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     for (int i = 0; i < tree.size(); ++i) {
       auto& node = tree[i];
       auto& widget = *node.widget;
-      node.same_scale = (node.local_to_window.getScaleX() == widget.rendered_matrix.getScaleX() &&
-                         node.local_to_window.getScaleY() == widget.rendered_matrix.getScaleY() &&
-                         node.local_to_window.getSkewX() == widget.rendered_matrix.getSkewX() &&
-                         node.local_to_window.getSkewY() == widget.rendered_matrix.getSkewY());
+      node.same_scale = (widget.local_to_window.getScaleX() == widget.rendered_matrix.getScaleX() &&
+                         widget.local_to_window.getScaleY() == widget.rendered_matrix.getScaleY() &&
+                         widget.local_to_window.getSkewX() == widget.rendered_matrix.getSkewX() &&
+                         widget.local_to_window.getSkewY() == widget.rendered_matrix.getSkewY());
     }
 
     // Propagate `wants_to_draw` of textureless widgets to their parents.
@@ -1042,7 +1047,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
     SkPictureRecorder recorder;
     SkCanvas* rec_canvas = recorder.beginRecording(root_widget_bounds_px);
-    rec_canvas->setMatrix(node.local_to_window);
+    rec_canvas->setMatrix(widget.local_to_window);
     //////////
     // DRAW //
     //////////
@@ -1060,7 +1065,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
 
     widget.rendering = true;
     widget.rendering_to_screen = packed;
-    widget.rendered_matrix = node.local_to_window;
+    widget.rendered_matrix = widget.local_to_window;
     widget.rendered_bounds = node.new_visible_bounds;
     if (packed) {
       pack.frame.push_back(update);
@@ -1081,7 +1086,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
         include |= parent.verdict == Verdict::Overflow;
       }
       if (include) {
-        pack.fresh_matrices[node.widget->ID()] = node.local_to_window;
+        pack.fresh_matrices[node.widget->ID()] = node.widget->local_to_window;
       }
     }
   }

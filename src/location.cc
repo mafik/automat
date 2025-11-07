@@ -186,7 +186,6 @@ animation::Phase Location::Tick(time::Timer& timer) {
                                             position_curr.y, position_vel.y);
 
     object_widget->local_to_parent = SkM44(ToMatrix(position_curr, scale_curr, local_pivot));
-    object_widget->RecursiveTransformUpdated();
   }
 
   // Connection widgets rely on position, scale & transparency so make sure they're updated.

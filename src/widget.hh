@@ -99,6 +99,14 @@ struct Widget : Trackable, OptionsProvider {
   TrackedPtr<Widget> parent;
   SkM44 local_to_parent = SkM44();
 
+  // This is updated by renderer, right before the call to Tick.
+  //
+  // This is same as the CTM in the SkCanvas passed to Draw().
+  //
+  // If this matrix changes, TransformUpdated() will also be called (also before Tick). This allows
+  // widgets to react to changes in their screen position.
+  SkMatrix local_to_window = {};
+
   // The time when the animation should wake up.
   // Initially this is set to 0 (meaning it should wake up immediately).
   // When the widget's animation finishes, set this to max value.
@@ -156,19 +164,6 @@ struct Widget : Trackable, OptionsProvider {
   //
   // This may be used by some widgets to trigger re-rendering.
   virtual void TransformUpdated() {}
-
-  void RecursiveTransformUpdated() {
-    // TODO: implement this in a lazy way - just mark it as "transform updated" & then when renderer
-    // walks over the widget tree, it can call the TransformUpdated for this & child objects, right
-    // before Tick
-    //
-    // Or even better - keep track of the last transform automatically in renderer - and call
-    // TransformUpdated without the need to notify any system.
-    TransformUpdated();
-    for (auto& child : Children()) {
-      child->RecursiveTransformUpdated();
-    }
-  }
 
   virtual void PreDraw(SkCanvas&) const {}
   void DrawCached(SkCanvas&) const;

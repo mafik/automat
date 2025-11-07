@@ -420,7 +420,6 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
         Rect::MakeCenter(center, bounds.Width() * scale_to_fit, bounds.Height() * scale_to_fit);
     opt->local_to_parent = SkM44(
         SkMatrix::RectToRect(bounds, desired_size, SkMatrix::kCenter_ScaleToFit).postScale(s, s));
-    opt->RecursiveTransformUpdated();
   }
   return animation::Animating;
 }

@@ -166,6 +166,7 @@ struct RootWidget final : Widget, DropTarget {
   bool inertia = false;
   std::deque<Vec3> camera_timeline;
   std::deque<time::SteadyPoint> timeline;
+  SkMatrix canvas_to_window_last_frame;
 
   // `timer` should be advanced once per frame on the device that displays the animation. Its `d`
   // field can be used by animated objects to animate their properties.

@@ -28,6 +28,7 @@ unique_ptr<RootWidget> root_widget;
 
 RootWidget::RootWidget() : Widget(nullptr), keyboard(*this), black_hole(this) {
   root_widgets.push_back(this);
+  canvas_to_window_last_frame = CanvasToWindow();
 }
 RootWidget::~RootWidget() {
   auto it = std::find(root_widgets.begin(), root_widgets.end(), this);
@@ -199,19 +200,24 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     }
   }
 
-  auto canvas_to_window = SkM44(CanvasToWindow());
+  auto canvas_to_window = CanvasToWindow();
+  if (canvas_to_window_last_frame != canvas_to_window) {
+    RecursiveTransformUpdated();
+    canvas_to_window_last_frame = canvas_to_window;
+  }
+  auto canvas_to_window44 = SkM44(CanvasToWindow());
 
   if (root_machine) {
-    root_machine->local_to_parent = canvas_to_window;
+    root_machine->local_to_parent = canvas_to_window44;
   }
-  keyboard.local_to_parent = canvas_to_window;
+  keyboard.local_to_parent = canvas_to_window44;
   for (auto& pointer : pointers) {
     if (auto* widget = pointer->GetWidget()) {
-      widget->local_to_parent = canvas_to_window;
+      widget->local_to_parent = canvas_to_window44;
     }
   }
   for (auto& each_connection_widget : connection_widgets) {
-    each_connection_widget->local_to_parent = canvas_to_window;
+    each_connection_widget->local_to_parent = canvas_to_window44;
   }
 
   return phase;

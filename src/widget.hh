@@ -158,6 +158,12 @@ struct Widget : Trackable, OptionsProvider {
   virtual void TransformUpdated() {}
 
   void RecursiveTransformUpdated() {
+    // TODO: implement this in a lazy way - just mark it as "transform updated" & then when renderer
+    // walks over the widget tree, it can call the TransformUpdated for this & child objects, right
+    // before Tick
+    //
+    // Or even better - keep track of the last transform automatically in renderer - and call
+    // TransformUpdated without the need to notify any system.
     TransformUpdated();
     for (auto& child : Children()) {
       child->RecursiveTransformUpdated();

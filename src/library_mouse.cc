@@ -107,8 +107,7 @@ struct MakeObjectOption : Option {
   Dir PreferredDir() const override { return dir; }
 };
 
-static float FindLoD(SkCanvas& canvas, float local_x, float min_x_px, float max_x_px) {
-  auto ctm = canvas.getLocalToDeviceAs3x3();
+static float FindLoD(const SkMatrix& ctm, float local_x, float min_x_px, float max_x_px) {
   float device_height_px = ctm.mapRadius(krita::mouse::base.height());
   float lod = GetRatio(device_height_px, 40, 80);
   return CosineInterpolate(0, 1, lod);
@@ -146,14 +145,33 @@ struct MouseWidgetCommon {
     return MatrixMix(presser_widget_iconified, presser_widget_normal, size_ratio);
   }
 
+  static animation::Phase Tick(time::Timer& timer, ui::Widget& widget, ui::PointerButton button,
+                               Optional<bool> down_opt, PresserWidget* presser_widget) {
+    SkPath mask = ButtonShape(button);
+    float lod = FindLoD(TransformUp(widget), krita::mouse::base.height(), 40, 80);
+
+    if (mask.isEmpty()) {
+      lod = 0;
+    }
+
+    if (presser_widget) {
+      auto transform_mix = GetPresserMatrix(mask.getBounds().center(), lod);
+      presser_widget->local_to_parent = SkM44(transform_mix);
+      presser_widget->WakeAnimation();
+    }
+    return animation::Finished;
+  }
+
   static void Draw(SkCanvas& canvas, ui::PointerButton button, Optional<bool> down_opt,
                    PresserWidget* presser_widget) {
     krita::mouse::base.draw(canvas);
     SkPath mask = ButtonShape(button);
-    float size_ratio = 0;
+    float lod = FindLoD(canvas.getLocalToDeviceAs3x3(), krita::mouse::base.height(), 40, 80);
+    ;
 
-    if (!mask.isEmpty()) {
-      size_ratio = FindLoD(canvas, krita::mouse::base.height(), 40, 80);
+    if (mask.isEmpty()) {
+      lod = 0;
+    } else {
       {  // Highlight the button
         SkPaint paint;
         paint.setBlendMode(SkBlendMode::kOverlay);
@@ -202,7 +220,7 @@ struct MouseWidgetCommon {
           transformLarge.preScale(1, -1);
         }
 
-        auto transform_mix = MatrixMix(transformLarge, transformSmall, size_ratio);
+        auto transform_mix = MatrixMix(transformLarge, transformSmall, lod);
 
         if (down) {
           paint.setColor("#d0413c"_color);
@@ -213,11 +231,6 @@ struct MouseWidgetCommon {
         canvas.concat(transform_mix);
         canvas.drawPath(path, paint);
       }
-    }
-
-    if (presser_widget) {
-      auto transform_mix = GetPresserMatrix(mask.getBounds().center(), size_ratio);
-      presser_widget->local_to_parent = SkM44(transform_mix);
     }
   }
 
@@ -254,6 +267,12 @@ struct MouseIcon : ui::Widget {
   RRect CoarseBounds() const override { return MouseWidgetCommon::CoarseBounds(); }
 
   Optional<Rect> TextureBounds() const override { return MouseWidgetCommon::TextureBounds(); }
+
+  animation::Phase Tick(time::Timer& timer) override {
+    return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, presser_widget.get());
+  }
+
+  void TransformUpdated() override { WakeAnimation(); }
 
   SkPath Shape() const override { return MouseWidgetCommon::Shape(); }
 
@@ -583,15 +602,16 @@ Ptr<Object> Mouse::Clone() const { return MAKE_PTR(Mouse); }
 struct MouseButtonPresserWidget : MouseWidgetBase {
   mutable PresserWidget presser_widget;
   SkPath shape;
+  ui::PointerButton button;
 
   MouseButtonPresserWidget(ui::Widget* parent, WeakPtr<Object>&& object)
       : MouseWidgetBase(parent, std::move(object)), presser_widget(this) {
     SkPath mouse_shape = krita::mouse::Shape();
 
-    ui::PointerButton button;
     {
       Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
       button = object->button;
+      presser_widget.is_on = object->IsRunning();
     }
 
     auto mask = MouseWidgetCommon::ButtonShape(button);
@@ -611,14 +631,19 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
 
   SkPath Shape() const override { return shape; }
 
-  void Draw(SkCanvas& canvas) const override {
-    krita::mouse::base.draw(canvas);
-    ui::PointerButton button;
+  animation::Phase Tick(time::Timer& timer) override {
     {
       Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
       button = object->button;
       presser_widget.is_on = object->IsRunning();
     }
+    return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, &presser_widget);
+  }
+
+  void TransformUpdated() override { WakeAnimation(); }
+
+  void Draw(SkCanvas& canvas) const override {
+    krita::mouse::base.draw(canvas);
     MouseWidgetCommon::Draw(canvas, button, std::nullopt, &presser_widget);
     DrawChildren(canvas);
   }

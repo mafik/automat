@@ -392,6 +392,7 @@ struct MouseButtonEventWidget : MouseWidgetBase {
 };
 
 static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
+  using enum ui::PointerButton;
 #if defined(_WIN32)
   INPUT input;
   input.type = INPUT_MOUSE;
@@ -402,14 +403,19 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
   input.mi.time = 0;
   input.mi.dwExtraInfo = 0;
   switch (button) {
-    case ui::PointerButton::Left:
+    case Left:
       input.mi.dwFlags |= down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
       break;
-    case ui::PointerButton::Middle:
+    case Middle:
       input.mi.dwFlags |= down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP;
       break;
-    case ui::PointerButton::Right:
+    case Right:
       input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
+      break;
+    case Back: // fallthrough intended
+    case Forward:
+      input.mi.dwFlags |= down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP;
+      input.mi.mouseData = button == Back ? XBUTTON1 : XBUTTON2;
       break;
     default:
       return;
@@ -420,19 +426,19 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
   U8 type = down ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE;
   U8 detail;
   switch (button) {
-    case ui::PointerButton::Left:
+    case Left:
       detail = 1;
       break;
-    case ui::PointerButton::Middle:
+    case Middle:
       detail = 2;
       break;
-    case ui::PointerButton::Right:
+    case Right:
       detail = 3;
       break;
-    case ui::PointerButton::Back:
+    case Back:
       detail = 8;
       break;
-    case ui::PointerButton::Forward:
+    case Forward:
       detail = 9;
       break;
     default:

@@ -726,6 +726,8 @@ void Win32Window::OnRegisterInput(bool keylogging, bool pointerlogging) {
         .hwndTarget = hwnd,
     });
   } else {
+    // Clear the last absolute position - to prevent mouse jumps across recordings
+    mouse_logger_last_time = time::kZeroSteady;
     rids.emplace_back(RAWINPUTDEVICE{
         .usUsagePage = hid::UsagePage_GenericDesktop,
         .usUsage = hid::Usage_GenericDesktop_Mouse,

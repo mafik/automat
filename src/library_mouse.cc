@@ -412,7 +412,7 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
     case Right:
       input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
       break;
-    case Back: // fallthrough intended
+    case Back:  // fallthrough intended
     case Forward:
       input.mi.dwFlags |= down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP;
       input.mi.mouseData = button == Back ? XBUTTON1 : XBUTTON2;
@@ -583,7 +583,19 @@ void MouseMove::OnMouseMove(Vec2 vec) {
   mouse_move_accumulator += vec;
   vec = Vec2(truncf(mouse_move_accumulator.x), truncf(mouse_move_accumulator.y));
   mouse_move_accumulator -= vec;
-#if defined(__linux__)
+#if defined(_WIN32)
+  if (vec.x != 0 || vec.y != 0) {
+    INPUT input;
+    input.type = INPUT_MOUSE;
+    input.mi.dx = (LONG)vec.x;
+    input.mi.dy = (LONG)vec.y;
+    input.mi.mouseData = 0;
+    input.mi.dwFlags = MOUSEEVENTF_MOVE;
+    input.mi.time = 0;
+    input.mi.dwExtraInfo = 0;
+    SendInput(1, &input, sizeof(INPUT));
+  }
+#elif defined(__linux__)
   if (vec.x != 0 || vec.y != 0) {
     xcb_test_fake_input(xcb::connection, XCB_MOTION_NOTIFY, true, XCB_CURRENT_TIME, XCB_WINDOW_NONE,
                         vec.x, vec.y, 0);

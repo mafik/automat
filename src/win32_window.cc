@@ -200,6 +200,24 @@ static LRESULT CALLBACK LowLevelMouseProc(int nCode, WPARAM wParam, LPARAM lPara
         }
         break;
       }
+      case WM_XBUTTONDOWN: {
+        int button = GET_XBUTTON_WPARAM(mouse_struct->mouseData);
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.ButtonDown(button == XBUTTON1 ? ui::PointerButton::Back
+                                                      : ui::PointerButton::Forward);
+        }
+        break;
+      }
+      case WM_XBUTTONUP: {
+        int button = GET_XBUTTON_WPARAM(mouse_struct->mouseData);
+        for (int i = active_pointer_grabs.size() - 1; i >= 0; --i) {
+          auto* grab = active_pointer_grabs[i];
+          grab->pointer.ButtonUp(button == XBUTTON1 ? ui::PointerButton::Back
+                                                    : ui::PointerButton::Forward);
+        }
+        break;
+      }
     }
 
     // Prevent the event from reaching other applications
@@ -398,32 +416,29 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         auto lock = window.Lock();
         auto& mouse = window.GetMouse();
         // LOG << "Mouse event: " << dump_struct(ev);
-        auto Btn = [&](bool down, ui::PointerButton button) {
-          for (auto& logging : mouse.loggings) {
-            if (down) {
-              logging->logger.PointerLoggerButtonDown(*logging, button);
-            } else {
-              logging->logger.PointerLoggerButtonUp(*logging, button);
+        using enum ui::PointerButton;
+        using tuple = std::tuple<WORD, bool, PointerButton>;
+        for (auto [flags, down, button] : {
+                 tuple(RI_MOUSE_LEFT_BUTTON_DOWN, true, Left),
+                 tuple(RI_MOUSE_LEFT_BUTTON_UP, false, Left),
+                 tuple(RI_MOUSE_RIGHT_BUTTON_DOWN, true, Right),
+                 tuple(RI_MOUSE_RIGHT_BUTTON_UP, false, Right),
+                 tuple(RI_MOUSE_MIDDLE_BUTTON_DOWN, true, Middle),
+                 tuple(RI_MOUSE_MIDDLE_BUTTON_UP, false, Middle),
+                 tuple(RI_MOUSE_BUTTON_4_DOWN, true, Back),
+                 tuple(RI_MOUSE_BUTTON_4_UP, false, Back),
+                 tuple(RI_MOUSE_BUTTON_5_DOWN, true, Forward),
+                 tuple(RI_MOUSE_BUTTON_5_UP, false, Forward),
+             }) {
+          if (ev.usButtonFlags & flags) {
+            for (auto& logging : mouse.loggings) {
+              if (down) {
+                logging->logger.PointerLoggerButtonDown(*logging, button);
+              } else {
+                logging->logger.PointerLoggerButtonUp(*logging, button);
+              }
             }
           }
-        };
-        if (ev.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) {
-          Btn(true, ui::PointerButton::Left);
-        }
-        if (ev.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) {
-          Btn(false, ui::PointerButton::Left);
-        }
-        if (ev.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) {
-          Btn(true, ui::PointerButton::Right);
-        }
-        if (ev.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) {
-          Btn(false, ui::PointerButton::Right);
-        }
-        if (ev.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_DOWN) {
-          Btn(true, ui::PointerButton::Middle);
-        }
-        if (ev.usButtonFlags & RI_MOUSE_MIDDLE_BUTTON_UP) {
-          Btn(false, ui::PointerButton::Middle);
         }
         if (ev.lLastX != 0 || ev.lLastY != 0) {
           for (auto& logging : mouse.loggings) {

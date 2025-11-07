@@ -16,7 +16,6 @@
 #include "animation.hh"
 #include "menu.hh"
 #include "optional.hh"
-#include "textures.hh"
 
 #if defined(_WIN32)
 #include <windows.h>

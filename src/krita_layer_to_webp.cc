@@ -258,6 +258,15 @@ int main(int argc, char** argv) {
   int width = x_max - x_min + 1;
   int height = y_max - y_min + 1;
 
+  auto MakeMipMapFriendly = [](int& dim) {
+    if (dim & 1) dim += 1;
+    if (dim & 2) dim += 2;
+    if (dim & 4) dim += 4;
+  };
+
+  MakeMipMapFriendly(width);
+  MakeMipMapFriendly(height);
+
   fprintf(stderr, "WIDTH %d\n", width);
   fprintf(stderr, "HEIGHT %d\n", height);
   fprintf(stderr, "TRIMMED_X %d\n", x_min);

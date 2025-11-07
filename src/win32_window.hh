@@ -6,6 +6,7 @@
 #include <windows.h>
 #pragma pop_macro("ERROR")
 
+#include "time.hh"
 #include "window.hh"
 
 struct Win32Window : automat::ui::Window {
@@ -15,6 +16,9 @@ struct Win32Window : automat::ui::Window {
   Vec2 mouse_position;  // mouse position in screen coordinates
   int client_x = 0;
   int client_y = 0;
+
+  Vec2 mouse_logger_last;  // used to convert absolute mouse position to relative movements
+  automat::time::SteadyPoint mouse_logger_last_time = automat::time::kZeroSteady;
 
   ~Win32Window();
 

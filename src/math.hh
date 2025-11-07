@@ -58,6 +58,11 @@ union Vec2 {
     y *= rhs;
     return *this;
   }
+  constexpr Vec2& operator*=(const Vec2& rhs) {
+    x *= rhs.x;
+    y *= rhs.y;
+    return *this;
+  }
   constexpr Vec2 operator-(const Vec2& rhs) const { return Vec2(x - rhs.x, y - rhs.y); }
   constexpr Vec2 operator-() const { return Vec2(-x, -y); }
   constexpr Vec2 operator+(const Vec2& rhs) const { return Vec2(x + rhs.x, y + rhs.y); }

@@ -12,6 +12,7 @@
 #include "optional.hh"
 #include "root_widget.hh"
 #include "status.hh"
+#include "time.hh"
 #include "touchpad.hh"
 #include "widget.hh"
 #include "win32.hh"
@@ -441,8 +442,45 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
           }
         }
         if (ev.lLastX != 0 || ev.lLastY != 0) {
-          for (auto& logging : mouse.loggings) {
-            logging->logger.PointerLoggerMove(*logging, {(float)ev.lLastX, (float)ev.lLastY});
+          Vec2 pos((float)ev.lLastX, (float)ev.lLastY);
+          bool ok = true;
+
+          if (ev.usFlags & MOUSE_MOVE_ABSOLUTE) {
+            Rect rect;
+            if (ev.usFlags & MOUSE_VIRTUAL_DESKTOP) {
+              rect.sk.fLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);
+              rect.sk.fTop = GetSystemMetrics(SM_YVIRTUALSCREEN);
+              rect.sk.fRight = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+              rect.sk.fBottom = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+            } else {
+              rect.sk.fLeft = 0;
+              rect.sk.fTop = 0;
+              rect.sk.fRight = GetSystemMetrics(SM_CXSCREEN);
+              rect.sk.fBottom = GetSystemMetrics(SM_CYSCREEN);
+            }
+            // `pos` is absolute (ratio) here
+            // convert it to screen coords first
+            pos *= rect.Size();
+            pos /= 0xffff;
+            // maybe do rounding here ?
+            pos += rect.BottomLeftCorner();
+            // now `pos` is absolute (px)
+            auto absolute = pos;
+            if (window.mouse_logger_last_time == time::kZeroSteady) {
+              // It's the first absolute event, we can't convert it to relative :(
+              ok = false;
+            } else {
+              pos -= window.mouse_logger_last;
+            }
+            // now `pos` is relative - finally!
+            window.mouse_logger_last = absolute;
+            window.mouse_logger_last_time = time::SteadyNow();
+          }
+          if (ok) {
+            for (auto& logging : mouse.loggings) {
+              // We're logging relative mouse positions
+              logging->logger.PointerLoggerMove(*logging, pos);
+            }
           }
         }
       } else {

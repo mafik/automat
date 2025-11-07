@@ -54,7 +54,11 @@ tmp
 tests/dhclient
 tests/dhclient.pid
 
-source_images
+source_images/*
+!source_images/Hand.kra
+!source_images/Mouse/
+source_images/Mouse/*
+!source_images/Mouse/Mouse.kra
 
 compile_commands.json
 

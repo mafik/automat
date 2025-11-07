@@ -20,7 +20,7 @@ kra_files = [
   fs_utils.project_root / 'source_images' / 'Hand.kra'
 ]
 
-krita_layer_to_webp = build_variant.current.BASE / 'krita_layer_to_webp'
+krita_layer_to_webp = (build_variant.current.BASE / 'krita_layer_to_webp').with_suffix(fs_utils.binary_extension)
 
 def snake_case(name: str) -> str:
     """Convert a string to snake_case."""

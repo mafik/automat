@@ -616,6 +616,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
           reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
           reg_widget.parent = asm_widget->AcquireTrackedPtr();
           asm_widget->reg_widgets.emplace_back(&reg_widget);
+          reg_widget.RedrawThisFrame();
         }
       });
       my_assembler->reg_objects_idx[reg->register_index] = loc->Take().Cast<Register>();

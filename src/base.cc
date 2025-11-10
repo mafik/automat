@@ -340,12 +340,12 @@ SkMatrix Machine::DropSnap(const Rect& rect_ref, Vec2 bounds_origin, Vec2* fixed
 }
 
 void Machine::DropLocation(Ptr<Location>&& l) {
-  ForEachWidget([](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
   l->parent = this;
   l->parent_location = here;
   locations.insert(locations.begin(), std::move(l));
   audio::Play(embedded::assets_SFX_canvas_drop_wav);
-  WakeAnimation();
+  locations.front()->object->ForEachWidget(
+      [](ui::RootWidget&, ui::Widget& w) { w.RedrawThisFrame(); });
 }
 
 Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {

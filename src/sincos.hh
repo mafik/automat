@@ -249,8 +249,63 @@ struct SinCos {
   constexpr auto operator==(const SinCos& other) const {
     return abs((sin - other.sin).value) <= kEpsilon && abs((cos - other.cos).value) <= kEpsilon;
   }
+
+  // Order by angle (without trigonometric functions)
+  constexpr bool operator<(const SinCos& other) const {
+    int q1 = Quadrant();
+    int q2 = other.Quadrant();
+
+    if (q1 != q2) {
+      return q1 < q2;
+    }
+    switch (q1) {
+      case 1:
+        // In Q1, angle increases as sin increases (and cos decreases)
+        return sin < other.sin;
+      case 2:
+        // In Q2, angle increases as cos decreases (sin also decreases)
+        return cos > other.cos;
+      case 3:
+        // In Q3, angle increases as sin decreases
+        return sin > other.sin;
+      case 4:
+        // In Q4, angle increases as cos increases (sin also increases)
+        return cos < other.cos;
+      default:
+        return false;
+    }
+  }
+
   // Convert this angle into a 90 degree turn to either left or right.
   constexpr SinCos RightAngle() const { return SinCos(sin >= 0 ? 1.f : -1.f, 0.f); }
+
+  // Return a number between 1 and 4 (inclusive), indicating the quadrant of this angle.
+  //
+  // An edge between quadrants belongs to a quadrant in the CCW direction:
+  //
+  // |----# |----|
+  // | Q2 # | Q1 |
+  // |----# |####|
+  //
+  // |####| #----|
+  // | Q3 | # Q4 |
+  // |----| #----|
+  constexpr int Quadrant() const {
+    if (sin >= 0 && cos > 0) {
+      return 1;
+    } else if (sin > 0 && cos <= 0) {
+      return 2;
+    } else if (sin <= 0 && cos < 0) {
+      return 3;
+    } else {
+      return 4;
+    }
+  }
+
+  // Returns a number that tells how far this angle is from a cardinal direction (any)
+  constexpr float CardinalDistance() const {
+    return std::min(std::abs((float)sin), std::abs((float)cos));
+  }
 
   Str ToStr() const;
 };

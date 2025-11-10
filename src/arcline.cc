@@ -444,7 +444,89 @@ Rect ArcLine::Bounds() const {
     if (types[i] == Type::Line) {
       p += Vec2::Polar(current_alpha, segments[i].line.length);
     } else {
-      Turn(p, current_alpha, segments[i].arc.sweep_angle, segments[i].arc.radius);
+      auto start_quadrant = current_alpha.Quadrant();
+      auto sweep_angle = segments[i].arc.sweep_angle;
+      auto radius = segments[i].arc.radius;
+      auto start_alpha = current_alpha;
+
+      // Inlined TurnBy
+      Vec2 center = p + Vec2::Polar(current_alpha + 90_deg, radius);
+      p = center + Vec2::Polar(current_alpha - 90_deg + sweep_angle, radius);
+      current_alpha = current_alpha + sweep_angle;
+
+      auto end_quadrant = current_alpha.Quadrant();
+
+      // Check if we're making a large (180+ deg) turn and end up in the same quadrant.
+      // If that's the case then we need to adjust the start / end quadrants.
+      // We try to adjust the quadrant that's closer to a cardinal dir.
+      if (start_quadrant == end_quadrant) {
+        if (radius >= 0 && sweep_angle.sin < 0) {
+          if (start_alpha.CardinalDistance() < current_alpha.CardinalDistance()) {
+            start_quadrant += 1;
+            if (start_quadrant > 4) start_quadrant = 1;
+          } else {
+            end_quadrant -= 1;
+            if (end_quadrant < 1) end_quadrant = 4;
+          }
+        }
+        if (radius < 0 && sweep_angle.sin > 0) {
+          if (start_alpha.CardinalDistance() < current_alpha.CardinalDistance()) {
+            start_quadrant -= 1;
+            if (start_quadrant < 1) start_quadrant = 4;
+          } else {
+            end_quadrant += 1;
+            if (end_quadrant > 4) end_quadrant = 1;
+          }
+        }
+      }
+
+      // Simulate the line movement from the start to end quadrants.
+      // Whenever a quadrant changes, we should expand the bounding box to include the new point.
+      if (start_quadrant != end_quadrant) {
+        if (radius >= 0) {  // CCW
+          while (start_quadrant != end_quadrant) {
+            switch (start_quadrant) {
+              case 1:
+                bounds.ExpandToInclude(center + Vec2(radius, 0));
+                start_quadrant = 2;
+                break;
+              case 2:
+                bounds.ExpandToInclude(center + Vec2(0, radius));
+                start_quadrant = 3;
+                break;
+              case 3:
+                bounds.ExpandToInclude(center + Vec2(-radius, 0));
+                start_quadrant = 4;
+                break;
+              case 4:
+                bounds.ExpandToInclude(center + Vec2(0, -radius));
+                start_quadrant = 1;
+                break;
+            }
+          }
+        } else {  // CW
+          while (start_quadrant != end_quadrant) {
+            switch (start_quadrant) {
+              case 1:
+                bounds.ExpandToInclude(center + Vec2(0, -radius));
+                start_quadrant = 4;
+                break;
+              case 2:
+                bounds.ExpandToInclude(center + Vec2(radius, 0));
+                start_quadrant = 1;
+                break;
+              case 3:
+                bounds.ExpandToInclude(center + Vec2(0, radius));
+                start_quadrant = 2;
+                break;
+              case 4:
+                bounds.ExpandToInclude(center + Vec2(-radius, 0));
+                start_quadrant = 3;
+                break;
+            }
+          }
+        }
+      }
     }
     bounds.ExpandToInclude(p);
   }

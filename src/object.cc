@@ -127,17 +127,18 @@ struct MoveOption : TextOption {
     // Sometimes we may want to pick an object that's stored within another object.
     // This branch handles such cases.
     if (location->object != object) {
-      if (auto container = location->object->AsContainer()) {
+      Object& container_object = *location->object;
+      if (auto container = container_object.AsContainer()) {
         auto& root_widget = location->FindRootWidget();
-        auto* object_widget = root_widget.widgets.Find(*object);
         if (auto extracted = container->Extract(*object)) {
+          extracted->parent = location->object_widget->AcquireTrackedPtr();
           return std::make_unique<DragLocationAction>(pointer, std::move(extracted));
         } else {
-          LOG << "Unable to extract " << object->Name() << " from " << location->object->Name()
+          LOG << "Unable to extract " << object->Name() << " from " << container_object.Name()
               << " (no location)";
         }
       } else {
-        LOG << "Unable to extract " << object->Name() << " from " << location->object->Name()
+        LOG << "Unable to extract " << object->Name() << " from " << container_object.Name()
             << " (not a Container)";
       }
     }

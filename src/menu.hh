@@ -6,9 +6,14 @@
 #include <memory>
 
 #include "action.hh"
+#include "animation.hh"
 #include "vec.hh"
 
 namespace automat {
+
+namespace ui {
+struct Widget;
+}
 
 // Option represents a potential action. It's the core of the menu system.
 struct Option {
@@ -16,7 +21,18 @@ struct Option {
   constexpr static Dir ShiftDir(Dir d, int delta) {
     return static_cast<Dir>((static_cast<int>(d) + delta + DIR_COUNT) % DIR_COUNT);
   }
-  virtual ~Option() = default;
+
+  struct Animation {
+    animation::SpringV2<Vec2> offset;  // used for springy snap of option to mouse pointer
+  };
+
+  Animation animation;
+  std::unique_ptr<ui::Widget> icon;
+
+  Option() = default;
+  Option(Option&&) = default;
+  Option& operator=(Option&&) = default;
+  virtual ~Option();
   virtual std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) = 0;
   virtual std::unique_ptr<Option> Clone() const = 0;
   virtual std::unique_ptr<Action> Activate(ui::Pointer& pointer) const = 0;
@@ -25,7 +41,7 @@ struct Option {
 
 struct TextOption : Option {
   Str text;
-  TextOption(Str text) : text(text) {}
+  TextOption(Str text);
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override;
 };
 

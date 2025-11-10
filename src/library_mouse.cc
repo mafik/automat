@@ -99,10 +99,17 @@ struct MakeObjectOption : Option {
     return std::make_unique<MakeObjectOption>(proto, dir);
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
-    auto loc = MAKE_PTR(Location, pointer.hover, root_location->AcquireWeakPtr());
+    // Idea: reuse the `icon` widget.
+    // The icon is the right widget type for the given proto, so theoretically it could be
+    // reattached to the newly cloned object.
+    // This could be even handled by the "Create" method - it could take existing widget to "adopt".
+    auto loc = MAKE_PTR(Location, icon.get(), root_location->AcquireWeakPtr());
     loc->Create(*proto);
     audio::Play(embedded::assets_SFX_toolbar_pick_wav);
-    return std::make_unique<DragLocationAction>(pointer, std::move(loc));
+    auto action = std::make_unique<DragLocationAction>(pointer, std::move(loc));
+    // Resetting the anchor makes the object dragged by the center point
+    action->locations.front()->local_anchor = Vec2(0, 0);
+    return action;
   }
   Dir PreferredDir() const override { return dir; }
 };

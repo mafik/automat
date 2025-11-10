@@ -27,6 +27,8 @@
 
 namespace automat {
 
+Option::~Option() = default;
+
 std::unique_ptr<ui::Font> kHelsinkiFont = ui::Font::MakeV2(ui::Font::GetHelsinki(), 3_mm);
 
 PersistentImage kSkyBox = PersistentImage::MakeFromAsset(embedded::assets_skybox_webp);
@@ -48,16 +50,10 @@ struct MenuAction;
 //
 // It is also possible to track the option usage and figure out which options are more important
 // than others and should have priority in menu allocation.
-struct MenuWidget : ui::Widget {
+struct Menu : ui::Widget {
   using enum Option::Dir;  // N, S, W, E, NW, NE, SW, SE, DIR_COUNT, DIR_NONE
 
-  struct OptionAnimation {
-    animation::SpringV2<Vec2> offset;
-  };
-
   std::unique_ptr<Option> options[DIR_COUNT] = {};
-  OptionAnimation option_animation[DIR_COUNT] = {};
-  std::unique_ptr<ui::Widget> option_widgets[DIR_COUNT] = {};
 
   // If some menu option wanted to be placed at position X but had to be moved around, we record
   // that here.
@@ -86,7 +82,7 @@ struct MenuWidget : ui::Widget {
       [MODE_1_DIR] = {false, false, false, false, false, false, true, false},
   };
 
-  MenuWidget(ui::Widget* parent, Vec<std::unique_ptr<Option>>&& options_vec, MenuAction* action)
+  Menu(ui::Widget* parent, Vec<std::unique_ptr<Option>>&& options_vec, MenuAction* action)
       : ui::Widget(parent), action(action) {
     int n_opts = options_vec.size();
 
@@ -196,7 +192,7 @@ struct MenuWidget : ui::Widget {
 
     for (int i = 0; i < Option::DIR_COUNT; ++i) {
       if (options[i] == nullptr) continue;
-      option_widgets[i] = options[i]->MakeIcon(this);
+      options[i]->icon = options[i]->MakeIcon(this);
     }
   }
   Option::Dir SinCosToDir(SinCos sc) {
@@ -284,9 +280,9 @@ struct MenuWidget : ui::Widget {
   }
   animation::Phase Tick(time::Timer& timer) override;
   void FillChildren(Vec<ui::Widget*>& children) override {
-    for (auto& opt : option_widgets) {
+    for (auto& opt : options) {
       if (opt == nullptr) continue;
-      children.push_back(opt.get());
+      children.push_back(opt->icon.get());
     }
   }
   void Draw(SkCanvas& canvas) const override {
@@ -318,11 +314,11 @@ struct MenuWidget : ui::Widget {
         SkImageFilters::DropShadowOnly(0, 0, 0.5_mm, 0.5_mm, "#000000"_color, nullptr));
     auto saved = canvas.getLocalToDevice();
     canvas.saveLayer(nullptr, &shadow_paint);
-    for (auto& opt : option_widgets) {
+    for (auto& opt : options) {
       if (opt == nullptr) continue;
       canvas.setMatrix(saved);
-      canvas.concat(opt->local_to_parent);
-      canvas.drawDrawable(opt->sk_drawable.get());
+      canvas.concat(opt->icon->local_to_parent);
+      canvas.drawDrawable(opt->icon->sk_drawable.get());
     }
     canvas.restore();
     DrawChildren(canvas);
@@ -331,12 +327,11 @@ struct MenuWidget : ui::Widget {
 };
 
 struct MenuAction : Action {
-  unique_ptr<MenuWidget> menu_widget;
+  unique_ptr<Menu> menu_widget;
   Option::Dir last_dir = Option::DIR_NONE;
   Vec2 last_pos;
   MenuAction(ui::Pointer& pointer, Vec<std::unique_ptr<Option>>&& options)
-      : Action(pointer),
-        menu_widget(new MenuWidget(pointer.GetWidget(), std::move(options), this)) {
+      : Action(pointer), menu_widget(new Menu(pointer.GetWidget(), std::move(options), this)) {
     auto pos = pointer.PositionWithin(*pointer.GetWidget());
     menu_widget->local_to_parent = SkM44::Translate(pos.x, pos.y);
     menu_widget->WakeAnimation();
@@ -349,9 +344,11 @@ struct MenuAction : Action {
     Option::Dir dir = menu_widget->SinCosToDir(sin_cos);
     if (last_dir != Option::DIR_NONE) {
       if (dir == last_dir &&
-          ((menu_widget->mode == MenuWidget::MODE_1_DIR) || (length > kMenuSize * 2 / 3))) {
+          ((menu_widget->mode == Menu::MODE_1_DIR) || (length > kMenuSize * 2 / 3))) {
         auto delta = pos - last_pos;
-        menu_widget->option_animation[dir].offset.value += delta;
+        if (menu_widget->options[dir] != nullptr) {
+          menu_widget->options[dir]->animation.offset.value += delta;
+        }
       }
     }
     last_dir = dir;
@@ -366,7 +363,7 @@ struct MenuAction : Action {
   ui::Widget* Widget() override { return menu_widget.get(); }
 };
 
-animation::Phase MenuWidget::Tick(time::Timer& timer) {
+animation::Phase Menu::Tick(time::Timer& timer) {
   size.SpringTowards(kMenuSize, timer.d, 0.2, 0.05);
   if (action) {
     Vec2 pos = action->pointer.PositionWithin(*this);
@@ -374,17 +371,17 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
     auto pointer_dir = SinCos::FromVec2(pos, length);
     int pointer_i = SinCosToDir(pointer_dir);
     for (int i = 0; i < DIR_COUNT; ++i) {
-      if (option_widgets[i] == nullptr) continue;
+      if (options[i] == nullptr) continue;
       auto option_sc = DirToSinCos((Option::Dir)i);
       float r = kMenuSize * 2 / 3;
       auto center = Vec2::Polar(option_sc, r);
       Vec2 target;
-      if (i == pointer_i && ((mode == MenuWidget::MODE_1_DIR) || length > kMenuSize * 2 / 3)) {
+      if (i == pointer_i && ((mode == Menu::MODE_1_DIR) || length > kMenuSize * 2 / 3)) {
         target = pos - center;
       } else {
         target = {0, 0};
       }
-      auto& anim = option_animation[i];
+      auto& anim = options[i]->animation;
       if (first_tick) {
         anim.offset.value = target;
         anim.offset.velocity = {0, 0};
@@ -404,8 +401,8 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
   float bubble_area = kMenuSize * kMenuSize * M_PI;
   float area_per_option = bubble_area / SlotCount() / 2;
   for (int i = 0; i < DIR_COUNT; ++i) {
-    auto& opt = option_widgets[i];
-    if (opt == nullptr) continue;
+    if (options[i] == nullptr) continue;
+    auto& opt = options[i]->icon;
     Rect bounds = opt->CoarseBounds().rect;
     float required_area = bounds.Area();
 
@@ -414,7 +411,7 @@ animation::Phase MenuWidget::Tick(time::Timer& timer) {
 
     auto angle = DirToSinCos((Option::Dir)i);
     float r = kMenuSize * 2 / 3;
-    auto center = Vec2::Polar(angle, r) + option_animation[i].offset.value;
+    auto center = Vec2::Polar(angle, r) + options[i]->animation.offset.value;
 
     auto desired_size =
         Rect::MakeCenter(center, bounds.Width() * scale_to_fit, bounds.Height() * scale_to_fit);
@@ -466,6 +463,8 @@ struct TextWidget : ui::Widget {
     kHelsinkiFont->DrawText(canvas, text, paint);
   }
 };
+
+TextOption::TextOption(Str text) : text(text) {}
 
 std::unique_ptr<ui::Widget> TextOption::MakeIcon(ui::Widget* parent) {
   return std::make_unique<TextWidget>(parent, text);

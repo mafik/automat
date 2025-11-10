@@ -142,8 +142,11 @@ inline Vec2 RoundToMilimeters(Vec2 v) {
 inline Vec2 Rotate90DegreesClockwise(Vec2 v) { return {v.y, -v.x}; }
 inline Vec2 Rotate90DegreesCounterClockwise(Vec2 v) { return {-v.y, v.x}; }
 
+constexpr static float kScalarTolerance = 1.F / (1 << 24);
+
 inline bool NearlyEqual(Vec2 a, Vec2 b) {
-  return SkScalarNearlyEqual(a.x, b.x) && SkScalarNearlyEqual(a.y, b.y);
+  return SkScalarNearlyEqual(a.x, b.x, kScalarTolerance) &&
+         SkScalarNearlyEqual(a.y, b.y, kScalarTolerance);
 }
 constexpr float Dot(Vec2 a, Vec2 b) { return a.x * b.x + a.y * b.y; }
 constexpr float Dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }

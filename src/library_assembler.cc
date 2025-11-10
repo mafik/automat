@@ -614,6 +614,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
         if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
           auto* asm_widget = static_cast<AssemblerWidget*>(asm_widget_generic);
           reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
+          reg_widget.parent = asm_widget->AcquireTrackedPtr();
           asm_widget->reg_widgets.emplace_back(&reg_widget);
         }
       });

@@ -303,12 +303,12 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   if (state) {
     if (to) {
       state->steel_insert_hidden.target = 1;
-      phase |= state->connector_scale.SpringTowards(
-          to->scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
+      // phase |= state->connector_scale.SpringTowards(
+      //     to->scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
     } else {
       state->steel_insert_hidden.target = 0;
-      phase |= state->connector_scale.SpringTowards(
-          from.scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
+      // phase |= state->connector_scale.SpringTowards(
+      //     from.scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
     }
     phase |= state->steel_insert_hidden.Tick(timer);
 

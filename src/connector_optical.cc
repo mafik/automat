@@ -854,6 +854,9 @@ void DrawCable(SkCanvas& canvas, SkPath& path, sk_sp<SkColorFilter>& color_filte
       canvas.drawPatch(&cubics[0].sk, nullptr, &tex_coords[0].sk, SkBlendMode::kDstOver, paint);
     }
   } while (SkPath::kDone_Verb != verb);
+  if (length_cache) {
+    *length_cache = length;
+  }
 }
 
 void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
@@ -1092,7 +1095,8 @@ void DrawOpticalConnector(SkCanvas& canvas, const CablePhysicsSimulation& state,
       }
     } while (SkPath::kDone_Verb != verb && length < length_limit);
 
-    Vec2 top_offset = normal * CosineInterpolate(kCasingWidth / 2, 1.5_mm, length / length_limit);
+    Vec2 top_offset = normal * CosineInterpolate(kCasingWidth / 2, 1.5_mm, length / length_limit) *
+                      state.connector_scale;
     Vec2 top_tangent = Rotate90DegreesCounterClockwise(normal);
     Vec2 base_offset =
         Vec2::Polar(connector_dir - 90_deg, kCasingWidth / 2 * state.connector_scale);

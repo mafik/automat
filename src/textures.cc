@@ -17,13 +17,22 @@
 #include "thread_name.hh"
 #include "time.hh"
 #include "units.hh"
+#include "virtual_fs.hh"
 #include "vk.hh"
 
 namespace automat {
 
-sk_sp<SkImage> DecodeImage(fs::VFile& asset) {
-  auto& content = asset.content;
+// Load an image from static (never deallocated) memory
+sk_sp<SkImage> DecodeStaticImage(StrView content) {
   auto data = SkData::MakeWithoutCopy(content.data(), content.size());
+  return SkImages::DeferredFromEncodedData(data);
+}
+
+// Load an image from an ephemeral (may be deallocated) memory
+//
+// It makes a copy of the image content for later decoding
+sk_sp<SkImage> DecodeTemporaryImage(StrView content) {
+  auto data = SkData::MakeWithCopy(content.data(), content.size());
   return SkImages::DeferredFromEncodedData(data);
 }
 
@@ -129,7 +138,13 @@ void PersistentImage::PreloadAll() {
 }
 
 PersistentImage PersistentImage::MakeFromAsset(fs::VFile& asset, MakeArgs args) {
-  return PersistentImage(DecodeImage(asset), args);
+  Status status;
+  sk_sp<SkImage> image;
+  fs::real.Map(asset.path, [&](StrView content) { image = DecodeTemporaryImage(content); }, status);
+  if (!OK(status)) {
+    image = DecodeStaticImage(asset.content);
+  }
+  return PersistentImage(std::move(image), args);
 }
 
 int PersistentImage::widthPx() { return (*image)->width(); }

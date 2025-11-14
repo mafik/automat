@@ -270,12 +270,11 @@ SkPath Machine::Shape() const {
   return rect_minus_trash;
 }
 
-PersistentImage bg =
-    PersistentImage::MakeFromAsset(embedded::assets_bg_webp, PersistentImage::MakeArgs{
-                                                                 .height = 100_cm,
-                                                             });
-
 SkPaint& GetBackgroundPaint(float px_per_m) {
+  static PersistentImage bg =
+      PersistentImage::MakeFromAsset(embedded::assets_bg_webp, PersistentImage::MakeArgs{
+                                                                   .height = 100_cm,
+                                                               });
   Status status;
   static auto shader = resources::CompileShader(embedded::assets_bg_sksl, status);
   if (!OK(status)) {

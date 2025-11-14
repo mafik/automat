@@ -10,12 +10,14 @@ float grid(vec2 coord_m, float dots_per_m, float r_px) {
   return smoothstep(r, r - 1 / px_per_m, length(grid_coord) / dots_per_m) * smoothstep(1. / (3 * r), 1. / (32 * r), dots_per_m);
 }
 
+// Should return a number between 0 and 1.
+// It should return the ratio of the cell area below the given `pos`.
 float vx(float2 pos, float a) {
   float l = 1.0 / sqrt(a * a + (1.0 - a) * (1.0 - a));
   float2 uv = pos * mat2x2(a, a - 1, 1 - a, a);
   uv = fract(uv * l) - 0.5; // -0.5 to 0.5
   // no idea why, but triple sqrt seems to work best
-  return 0.5 - sqrt(sqrt(sqrt(dot(uv, uv) * 2.)));
+  return 1 - sqrt(sqrt(sqrt(dot(uv, uv) * 2.)));
 }
 
 // performs a bright-style halftone dithering
@@ -23,9 +25,9 @@ float vx(float2 pos, float a) {
 // TODO: make it accurate
 vec3 halftone_bright(vec3 rgb, vec2 coord_px) {
   return vec3(
-    (rgb.r + vx(coord_px, 0.12)) >= 0.5 ? 1 : 0.75,
-    (rgb.g + vx(coord_px, 0.34)) >= 0.5 ? 1 : 0.75,
-    (rgb.b + vx(coord_px, 0.69)) >= 0.5 ? 1 : 0.75);
+    (rgb.r + vx(coord_px, 0.12)) >= 1 ? 1 : 0.75,
+    (rgb.g + vx(coord_px, 0.34)) >= 1 ? 1 : 0.75,
+    (rgb.b + vx(coord_px, 0.69)) >= 1 ? 1 : 0.75);
 }
 
 half4 main(vec2 coord_m) {

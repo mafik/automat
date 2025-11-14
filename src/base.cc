@@ -284,6 +284,7 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
   static SkPaint paint;
   SkRuntimeEffectBuilder builder(shader);
   builder.uniform("px_per_m") = px_per_m;
+  builder.uniform("background_px") = (float)bg.heightPx();
   builder.child("background_image") = *bg.shader;
   paint.setShader(builder.makeShader());
   return paint;

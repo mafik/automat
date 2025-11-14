@@ -1,4 +1,5 @@
 uniform float px_per_m;
+uniform float background_px;
 
 uniform shader background_image;
 
@@ -28,9 +29,9 @@ float vx(float2 pos, float a) {
 // performs a bright-style halftone dithering
 vec3 halftone_bright(vec3 rgb, vec2 coord_px) {
   return vec3(
-    (rgb.r + vx(coord_px, 0.12) / 4) >= 1 ? 1 : 0.75,
-    (rgb.g + vx(coord_px, 0.34) / 4) >= 1 ? 1 : 0.75,
-    (rgb.b + vx(coord_px, 0.69) / 4) >= 1 ? 1 : 0.75);
+    (rgb.r + vx(coord_px, 0.12) / 3) >= 1 ? 1 : 0.66,
+    (rgb.g + vx(coord_px, 0.34) / 3) >= 1 ? 1 : 0.66,
+    (rgb.b + vx(coord_px, 0.69) / 3) >= 1 ? 1 : 0.66);
 }
 
 half4 main(vec2 coord_m) {
@@ -42,16 +43,17 @@ half4 main(vec2 coord_m) {
 
   float3 background_val = background_image.eval(coord_m + 0.5).rgb;
 
-  float scale = 1024;
-  if (px_per_m > scale) {
+  // background dimensions are 1x1 m so if thre are more px in a meter than bg dimension, then we need to dither
+  if (px_per_m > background_px) {
     float3 background_halftone = (
-      halftone_bright(background_val.rgb, (coord_m + vec2(0.125, 0.375) / px_per_m) * scale) +
-        halftone_bright(background_val.rgb, (coord_m + vec2(0.375, -0.125) / px_per_m) * scale) +
-        halftone_bright(background_val.rgb, (coord_m + vec2(-0.125, -0.375) / px_per_m) * scale) +
-        halftone_bright(background_val.rgb, (coord_m + vec2(-0.375, 0.125) / px_per_m) * scale)
+      halftone_bright(background_val.rgb, (coord_m + vec2(0.125, 0.375) / px_per_m) * background_px) +
+        halftone_bright(background_val.rgb, (coord_m + vec2(0.375, -0.125) / px_per_m) * background_px) +
+        halftone_bright(background_val.rgb, (coord_m + vec2(-0.125, -0.375) / px_per_m) * background_px) +
+        halftone_bright(background_val.rgb, (coord_m + vec2(-0.375, 0.125) / px_per_m) * background_px)
       ) / 4;
 
-    float halftone_blend = smoothstep(scale, scale * 4, px_per_m);
+    // halftone pattern appears at `background_px` and is in full effect at `background_px * 4`
+    float halftone_blend = smoothstep(background_px, background_px * 4, px_per_m);
 
     background_val = mix(background_val, background_halftone, halftone_blend);
   }

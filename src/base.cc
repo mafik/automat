@@ -18,10 +18,12 @@
 
 #include "drag_action.hh"
 #include "embedded.hh"
+#include "global_resources.hh"
 #include "location.hh"
 #include "math.hh"
 #include "root_widget.hh"
 #include "tasks.hh"
+#include "textures.hh"
 #include "timer_thread.hh"
 #include "ui_connection_widget.hh"
 #include "widget.hh"
@@ -268,41 +270,22 @@ SkPath Machine::Shape() const {
   return rect_minus_trash;
 }
 
+PersistentImage bg =
+    PersistentImage::MakeFromAsset(embedded::assets_bg_webp, PersistentImage::MakeArgs{
+                                                                 .height = 100_cm,
+                                                             });
+
 SkPaint& GetBackgroundPaint(float px_per_m) {
-  static SkRuntimeShaderBuilder builder = []() {
-    const char* sksl = R"(
-        uniform float px_per_m;
-
-        // Dark theme
-        //float4 bg = float4(0.05, 0.05, 0.00, 1);
-        //float4 fg = float4(0.0, 0.32, 0.8, 1);
-
-        float4 bg = float4(0.9, 0.9, 0.9, 1);
-        float4 fg = float4(0.5, 0.5, 0.5, 1);
-
-        float grid(vec2 coord_m, float dots_per_m, float r_px) {
-          float r = r_px / px_per_m;
-          vec2 grid_coord = fract(coord_m * dots_per_m + 0.5) - 0.5;
-          return smoothstep(r, r - 1/px_per_m, length(grid_coord) / dots_per_m) * smoothstep(1./(3*r), 1./(32*r), dots_per_m);
-        }
-
-        half4 main(vec2 fragcoord) {
-          float dm_grid = grid(fragcoord, 10, 2);
-          float cm_grid = grid(fragcoord, 100, 2) * 0.8;
-          float mm_grid = grid(fragcoord, 1000, 1) * 0.8;
-          float d = max(max(mm_grid, cm_grid), dm_grid);
-          return mix(bg, fg, d);
-        }
-      )";
-
-    auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl));
-    if (!err.isEmpty()) {
-      FATAL << err.c_str();
-    }
-    return SkRuntimeShaderBuilder(effect);
-  }();
+  Status status;
+  static auto shader = resources::CompileShader(embedded::assets_bg_sksl, status);
+  if (!OK(status)) {
+    ERROR << status;
+    return bg.paint;
+  }
   static SkPaint paint;
+  SkRuntimeEffectBuilder builder(shader);
   builder.uniform("px_per_m") = px_per_m;
+  builder.child("background_image") = *bg.shader;
   paint.setShader(builder.makeShader());
   return paint;
 }

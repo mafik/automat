@@ -1,0 +1,55 @@
+uniform float px_per_m;
+
+uniform shader background_image;
+
+const float3 kDotsColor = float3(0.5, 0.5, 0.5);
+
+float grid(vec2 coord_m, float dots_per_m, float r_px) {
+  float r = r_px / px_per_m;
+  vec2 grid_coord = fract(coord_m * dots_per_m + 0.5) - 0.5;
+  return smoothstep(r, r - 1 / px_per_m, length(grid_coord) / dots_per_m) * smoothstep(1. / (3 * r), 1. / (32 * r), dots_per_m);
+}
+
+float vx(float2 pos, float a) {
+  float l = 1.0 / sqrt(a * a + (1.0 - a) * (1.0 - a));
+  float2 uv = pos * mat2x2(a, a - 1, 1 - a, a);
+  uv = fract(uv * l) - 0.5; // -0.5 to 0.5
+  // no idea why, but triple sqrt seems to work best
+  return 0.5 - sqrt(sqrt(sqrt(dot(uv, uv) * 2.)));
+}
+
+// performs a bright-style halftone dithering
+//
+// TODO: make it accurate
+vec3 halftone_bright(vec3 rgb, vec2 coord_px) {
+  return vec3(
+    (rgb.r + vx(coord_px, 0.12)) >= 0.5 ? 1 : 0.75,
+    (rgb.g + vx(coord_px, 0.34)) >= 0.5 ? 1 : 0.75,
+    (rgb.b + vx(coord_px, 0.69)) >= 0.5 ? 1 : 0.75);
+}
+
+half4 main(vec2 coord_m) {
+  // coord_m - a number from -0.5 to 0.5 - coordinate on the canvas, in metric space
+  float dm_grid = grid(coord_m, 10, 2);
+  float cm_grid = grid(coord_m, 100, 2) * 0.8;
+  float mm_grid = grid(coord_m, 1000, 1) * 0.8;
+  float d = max(max(mm_grid, cm_grid), dm_grid);
+
+  float3 background_val = background_image.eval(coord_m + 0.5).rgb;
+
+  float scale = 1024;
+  if (px_per_m > scale) {
+    float3 background_halftone = (
+      halftone_bright(background_val.rgb, (coord_m + vec2(0.125, 0.375) / px_per_m) * scale) +
+        halftone_bright(background_val.rgb, (coord_m + vec2(0.375, -0.125) / px_per_m) * scale) +
+        halftone_bright(background_val.rgb, (coord_m + vec2(-0.125, -0.375) / px_per_m) * scale) +
+        halftone_bright(background_val.rgb, (coord_m + vec2(-0.375, 0.125) / px_per_m) * scale)
+      ) / 4;
+
+    float halftone_blend = smoothstep(scale, scale * 4, px_per_m);
+
+    background_val = mix(background_val, background_halftone, halftone_blend);
+  }
+
+  return vec4(mix(background_val, kDotsColor, d), 1);
+}

@@ -42,12 +42,8 @@ sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color) {
   };
 
   constexpr int kTitleGridColumns = 16;
-  constexpr int kTitleGridRows = 8;
-  constexpr int kTitleGridCornerCells = 3;
   constexpr int kTitleGridCornerBeams = 8;
 
-  constexpr float kTitleGridCellSize = kTitleBarHeight / kTitleGridRows;
-  constexpr float kTitleGridCornerRadius = kTitleGridCellSize * kTitleGridCornerCells;
   constexpr float kTitleGridWidth = kTitleGridCellSize * kTitleGridColumns;
 
   constexpr int kTitleCornerVertices = (kTitleGridCornerBeams + 1) * kTitleGridCornerCells + 1;
@@ -186,17 +182,16 @@ sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color) {
     auto angle = SinCos::FromDegrees(180 - 90.f * beam / kTitleGridCornerBeams);
     for (int cell = 0; cell < kTitleGridCornerCells; ++cell) {
       int i = TitleLeftCornerI(beam, cell);
-      float length = kTitleGridCornerRadius * (cell + 1) / kTitleGridCornerCells;
+      float length = kTitleCornerRadius * (cell + 1) / kTitleGridCornerCells;
       Vec2 delta = Vec2::Polar(angle, length);
-      pos[i] = top_left + Vec2(kTitleGridCornerRadius, -kTitleGridCornerRadius) + delta;
-      colors[i] = TitleShader(angle, kTitleGridCornerRadius - length,
-                              kTitleGridCornerRadius + delta.x, kTitleGridCornerRadius - delta.y);
+      pos[i] = top_left + Vec2(kTitleCornerRadius, -kTitleCornerRadius) + delta;
+      colors[i] = TitleShader(angle, kTitleCornerRadius - length, kTitleCornerRadius + delta.x,
+                              kTitleCornerRadius - delta.y);
     }
   }
-  pos[title_left_corner_center_i] =
-      top_left + Vec2(kTitleGridCornerRadius, -kTitleGridCornerRadius);
+  pos[title_left_corner_center_i] = top_left + Vec2(kTitleCornerRadius, -kTitleCornerRadius);
   colors[title_left_corner_center_i] =
-      TitleShader(135_deg, kTitleGridCornerRadius, kTitleGridCornerRadius, kTitleGridCornerRadius);
+      TitleShader(135_deg, kTitleCornerRadius, kTitleCornerRadius, kTitleCornerRadius);
 
   constexpr int kTitleLeftSmallGridBase = kTitleLeftCornerBase + kTitleCornerVertices;
   auto TitleLeftSmallGridI = [&](int row, int col) {
@@ -224,12 +219,12 @@ sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color) {
     for (int col = 0; col <= kTitleLargeGridCols; ++col) {
       int l = TitleLeftLargeGridI(row, col);
       int r = TitleRightLargeGridI(row, col);
-      pos[l] = top_left + Vec2(kTitleGridCornerRadius + kTitleGridCellSize * col,
+      pos[l] = top_left + Vec2(kTitleCornerRadius + kTitleGridCellSize * col,
                                -kTitleBarHeight + kTitleGridCellSize * row);
-      pos[r] = top_right + Vec2(-kTitleGridCornerRadius - kTitleGridCellSize * col,
+      pos[r] = top_right + Vec2(-kTitleCornerRadius - kTitleGridCellSize * col,
                                 -kTitleBarHeight + kTitleGridCellSize * row);
       colors[l] = colors[r] = TitleShader(90_deg, kTitleBarHeight - kTitleGridCellSize * row,
-                                          kTitleGridCornerRadius + kTitleGridCellSize * col,
+                                          kTitleCornerRadius + kTitleGridCellSize * col,
                                           kTitleBarHeight - kTitleGridCellSize * row);
     }
   }
@@ -245,17 +240,16 @@ sk_sp<SkVertices> WindowBorder(Rect outer, SkColor title_color) {
     auto angle = SinCos::FromDegrees(90.f * beam / kTitleGridCornerBeams);
     for (int cell = 0; cell < kTitleGridCornerCells; ++cell) {
       int i = TitleRightCornerI(beam, cell);
-      float length = kTitleGridCornerRadius * (cell + 1) / kTitleGridCornerCells;
+      float length = kTitleCornerRadius * (cell + 1) / kTitleGridCornerCells;
       Vec2 delta = Vec2::Polar(angle, length);
-      pos[i] = top_right + Vec2(-kTitleGridCornerRadius, -kTitleGridCornerRadius) + delta;
-      colors[i] = TitleShader(angle, kTitleGridCornerRadius - length,
-                              kTitleGridCornerRadius - delta.x, kTitleGridCornerRadius - delta.y);
+      pos[i] = top_right + Vec2(-kTitleCornerRadius, -kTitleCornerRadius) + delta;
+      colors[i] = TitleShader(angle, kTitleCornerRadius - length, kTitleCornerRadius - delta.x,
+                              kTitleCornerRadius - delta.y);
     }
   }
-  pos[title_right_corner_center_i] =
-      top_right + Vec2(-kTitleGridCornerRadius, -kTitleGridCornerRadius);
+  pos[title_right_corner_center_i] = top_right + Vec2(-kTitleCornerRadius, -kTitleCornerRadius);
   colors[title_right_corner_center_i] =
-      TitleShader(45_deg, kTitleGridCornerRadius, kTitleGridCornerRadius, kTitleGridCornerRadius);
+      TitleShader(45_deg, kTitleCornerRadius, kTitleCornerRadius, kTitleCornerRadius);
 
   constexpr int kTitleRightSmallGridBase = kTitleRightCornerBase + kTitleCornerVertices;
   auto TitleRightSmallGridI = [&](int row, int col) {

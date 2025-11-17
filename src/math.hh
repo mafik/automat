@@ -420,6 +420,10 @@ union RRect {
         .rect = rect, .radii{radius, radius, radius, radius}, .type = SkRRect::Type::kSimple_Type};
   }
 
+  constexpr static RRect MakeWithRadii(Rect rect, float tl, float tr, float br, float bl) {
+    return {.rect = rect, .radii{bl, br, tr, tl}, .type = SkRRect::Type::kNinePatch_Type};
+  }
+
   [[nodiscard]] constexpr RRect Outset(float amount) const {
     auto AdjustRadius = [amount](Vec2 r) {
       return Vec2(std::max(0.f, r.x + amount), std::max(0.f, r.y + amount));

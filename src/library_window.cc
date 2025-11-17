@@ -272,7 +272,8 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
   }
 
   constexpr static RRect kCoarseBounds =
-      RRect::MakeSimple(Rect::MakeAtZero({kWidth, kHeight}), kCornerRadius);
+      RRect::MakeWithRadii(Rect::MakeAtZero({kWidth, kHeight}), theme::xp::kTitleCornerRadius,
+                           theme::xp::kTitleCornerRadius, 0, 0);
   constexpr static RRect kBorderInner = kCoarseBounds.Outset(-kBorderWidth);
   constexpr static float kRegionStrokeWidth = 1_mm;
 

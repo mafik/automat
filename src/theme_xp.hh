@@ -17,6 +17,12 @@ namespace automat::theme::xp {
 constexpr float kTitleBarHeight = 8_mm;
 constexpr float kBorderWidth = 1_mm;
 
+constexpr int kTitleGridRows = 8;
+constexpr int kTitleGridCornerCells = 3;
+constexpr float kTitleGridCellSize = kTitleBarHeight / kTitleGridRows;
+
+constexpr float kTitleCornerRadius = kTitleGridCellSize * kTitleGridCornerCells;
+
 constexpr Rect WindowBorderInner(Rect outer) {
   return Rect(outer.left + kBorderWidth, outer.bottom + kBorderWidth, outer.right - kBorderWidth,
               outer.top - kTitleBarHeight);

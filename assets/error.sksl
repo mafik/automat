@@ -37,26 +37,24 @@ float fbm(vec2 uv) {
   return f;
 }
 
+uniform shader iMask;
 uniform float iTime;
 uniform float iLeft;
 uniform float iRight;
 uniform float iTop;
 uniform float iBottom;
-uniform float iDetail;
-uniform float iSmokeDetail;
-uniform float iRadius;
 
-vec4 main(in vec2 fragCoord) {
-  vec2 uv = (fragCoord - vec2(iLeft, iBottom)) / vec2(iRight - iLeft, iTop - iBottom);
-  float n = fbm(iDetail * fragCoord - vec2(0, iTime));
-  //return vec4(n, n, n, 1.0);
-  vec2 d = max(vec2(0, 0), vec2(max(iLeft - fragCoord.x, fragCoord.x - iRight), max(iBottom - fragCoord.y, fragCoord.y - iTop))) / iRadius;
-  float l = length(d);
-  //return vec4(l, l, l, 1.0);
-  float c = 4 * (n * max(0.5, uv.y) - l);
-  c = clamp(c, 0, 1);
-  // return vec4(c, c, c, 1.0);
-  float c1 = n * c;
-  // return vec4(c1, c1, c1, 1.0);
-  return vec4(1.5 * c1, 1.5 * c1 * c1 * c1, c1 * c1 * c1 * c1 * c1 * c1, 1) * c;
+vec4 main(in vec2 px) {
+  // return vec4(1, 0, 0, 1) * (1 - 2 * iMask.eval(px).a);
+  vec2 uv = (px - vec2(iLeft, iTop)) / vec2(iRight - iLeft, iBottom - iTop);
+  // return vec4(uv.x, uv.y, 0, 1);
+  float noise = fbm(uv * 4 - vec2(0, iTime));
+  // return vec4(noise, noise, noise, 1);
+  float mask = 4 * (noise * clamp(uv.y, 0.5, 1.1) - 1 + 2 * iMask.eval(px).a);
+  mask = clamp(mask, 0, 1);
+  // return vec4(mask, mask, mask, 1);
+  float f = clamp(noise * 1.2 * mask, 0, 1);
+  // return vec4(f, f, f, 1);
+  float f3 = f * f * f;
+  return vec4(1.5 * f, 1.5 * f3, f3 * f3, 1) * mask;
 }

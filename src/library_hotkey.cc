@@ -11,12 +11,12 @@
 
 #include "arcline.hh"
 #include "color.hh"
-#include "ui_constants.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
 #include "math.hh"
 #include "root_widget.hh"
 #include "text_field.hh"
+#include "ui_constants.hh"
 #include "widget.hh"
 
 #if defined(__linux__)
@@ -65,88 +65,6 @@ static const SkRRect kShapeRRect = [] {
   ret.setRectRadii(kShapeRect.sk, radii);
   return ret;
 }();
-
-static SkPaint& GetFirePaint(const Rect& rect, float radius) {
-  static SkRuntimeShaderBuilder builder = []() {
-    const char* sksl = R"( // Fire shader
-vec2 hash(vec2 p) {
-	p = vec2( dot(p,vec2(127.1,311.7)),
-			 dot(p,vec2(269.5,183.3)) );
-	return -1.0 + 2.0*fract(sin(p)*43758.5453123);
-}
-
-float noise(in vec2 p) {
-	const float K1 = 0.366025404; // (sqrt(3)-1)/2;
-	const float K2 = 0.211324865; // (3-sqrt(3))/6;
-	vec2 i = floor( p + (p.x+p.y)*K1 );
-	vec2 a = p - i + (i.x+i.y)*K2;
-	vec2 o = (a.x>a.y) ? vec2(1.0,0.0) : vec2(0.0,1.0);
-	vec2 b = a - o + K2;
-	vec2 c = a - 1.0 + 2.0*K2;
-	vec3 h = max( 0.5-vec3(dot(a,a), dot(b,b), dot(c,c) ), 0.0 );
-	vec3 n = h*h*h*h*vec3( dot(a,hash(i+0.0)), dot(b,hash(i+o)), dot(c,hash(i+1.0)));
-	return dot( n, vec3(70.0) );
-}
-
-float fbm(vec2 uv) {
-	float f;
-	mat2 m = mat2( 1.6,  1.2, -1.2,  1.6 );
-	f  = 0.5000*noise( uv ); uv = m*uv;
-	f += 0.2500*noise( uv ); uv = m*uv;
-	f += 0.1250*noise( uv ); uv = m*uv;
-	f += 0.0625*noise( uv ); uv = m*uv;
-	f += 0.0625*noise( uv ); uv = m*uv;
-	f = 0.5 + 0.5*f;
-
-	return f;
-}
-
-uniform float iTime;
-uniform float iLeft;
-uniform float iRight;
-uniform float iTop;
-uniform float iBottom;
-uniform float iDetail;
-uniform float iSmokeDetail;
-uniform float iRadius;
-
-vec4 main(in vec2 fragCoord) {
-	vec2 uv = (fragCoord - vec2(iLeft, iBottom)) / vec2(iRight - iLeft, iTop - iBottom);
-	float n = fbm(iDetail * fragCoord - vec2(0,iTime));
-  //return vec4(n, n, n, 1.0);
-  vec2 d = max(vec2(0, 0), vec2(max(iLeft - fragCoord.x, fragCoord.x - iRight), max(iBottom - fragCoord.y, fragCoord.y - iTop))) / iRadius;
-  float l = length(d);
-  //return vec4(l, l, l, 1.0);
-	float c = 4 * (n * max(0.5, uv.y) - l);
-  c = clamp(c, 0, 1);
-  // return vec4(c, c, c, 1.0);
-	float c1 = n * c;
-  // return vec4(c1, c1, c1, 1.0);
-	return vec4(1.5*c1, 1.5*c1*c1*c1, c1*c1*c1*c1*c1*c1, 1) * c;
-})";
-
-    auto [effect, err] = SkRuntimeEffect::MakeForShader(SkString(sksl));
-    if (!err.isEmpty()) {
-      FATAL << err.c_str();
-    }
-    return SkRuntimeShaderBuilder(effect);
-  }();
-
-  static auto start = time::SteadyNow();
-  float delta = time::ToSeconds(time::SteadyNow() - start);
-  builder.uniform("iTime") = delta * 3;
-  builder.uniform("iLeft") = rect.left;
-  builder.uniform("iRight") = rect.right;
-  builder.uniform("iTop") = rect.top;
-  builder.uniform("iBottom") = rect.bottom;
-  builder.uniform("iDetail") = 80.f;
-  builder.uniform("iSmokeDetail") = 100.f;
-  builder.uniform("iRadius") = radius;
-  static SkPaint paint;
-  paint.setShader(builder.makeShader());
-  paint.setBlendMode(SkBlendMode::kHardLight);
-  return paint;
-}
 
 // static void GrabEverything(HotKey& hotkey) {
 //   for (auto keycode : x11::kKeyCodesArray) {
@@ -313,18 +231,6 @@ void HotKey::Draw(SkCanvas& canvas) const {
   inner_paint.setStrokeWidth(0.5_mm);
   canvas.drawPath(inner_contour, inner_paint);
 
-  // Rect inner_rect = Rect{
-  //     -kWidth / 2 + kFrameWidth,
-  //     -kHeight / 2 + kFrameWidth,
-  //     kWidth / 2 - kFrameWidth,
-  //     kHeight / 2 - kFrameWidth,
-  // };
-  // float fire_radius = 10_mm;
-  // auto fire_paint = GetFirePaint(inner_rect, fire_radius);
-  // inner_rect.sk.outset(fire_radius, fire_radius * 1.5);
-
-  // canvas.drawRect(inner_rect.sk, fire_paint);
-
   // Frame shadow
   SkPaint background_shadow_paint;
   background_shadow_paint.setMaskFilter(
@@ -400,15 +306,15 @@ void HotKey::On() {
     hotkey->Release();
   }
   auto& root_widget = FindRootWidget();
-  hotkey =
-      &root_widget.keyboard.RequestKeyGrab(*this, key, ctrl, alt, shift, windows, [&](Status& status) {
-        if (!OK(status)) {
-          if (hotkey) {
-            hotkey->Release();
-          }
-          ERROR << status;
-        }
-      });
+  hotkey = &root_widget.keyboard.RequestKeyGrab(*this, key, ctrl, alt, shift, windows,
+                                                [&](Status& status) {
+                                                  if (!OK(status)) {
+                                                    if (hotkey) {
+                                                      hotkey->Release();
+                                                    }
+                                                    ERROR << status;
+                                                  }
+                                                });
 }
 
 // This is called when the new HotKey is selected by the user

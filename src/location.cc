@@ -23,8 +23,10 @@
 #include "base.hh"
 #include "color.hh"
 #include "drag_action.hh"
+#include "embedded.hh"
 #include "font.hh"
 #include "format.hh"
+#include "global_resources.hh"
 #include "math.hh"
 #include "object_iconified.hh"
 #include "raycast.hh"
@@ -200,6 +202,9 @@ animation::Phase Location::Tick(time::Timer& timer) {
     float target_elevation = IsDragged(*this) ? 1 : 0;
     phase |= elevation.SineTowards(target_elevation, timer.d, 0.2);
   }
+  if (error) {
+    phase |= animation::Animating;
+  }
   return phase;
 }
 
@@ -214,8 +219,8 @@ void Location::Draw(SkCanvas& canvas) const {
   } else {
     my_shape = Shape();
   }
-  SkRect bounds = my_shape.getBounds();
-  object_widget.local_to_parent.asM33().mapRect(&bounds);
+  Rect bounds = Rect(my_shape.getBounds());
+  object_widget.local_to_parent.asM33().mapRect(&bounds.sk);
 
   if (highlight > 0.01f) {  // Draw dashed highlight outline
     SkPath outset_shape = Outset(my_shape, 2.5_mm * highlight);
@@ -243,13 +248,13 @@ void Location::Draw(SkCanvas& canvas) const {
   bool using_layer = false;
   if (transparency > 0.01) {
     using_layer = true;
-    canvas.saveLayerAlphaf(&bounds, 1.f - transparency);
+    canvas.saveLayerAlphaf(&bounds.sk, 1.f - transparency);
   }
 
   if constexpr (false) {  // Gray frame
     SkPaint frame_bg;
     SkColor frame_bg_colors[2] = {0xffcccccc, 0xffaaaaaa};
-    SkPoint gradient_pts[2] = {{0, bounds.bottom()}, {0, bounds.top()}};
+    SkPoint gradient_pts[2] = {{0, bounds.top}, {0, bounds.bottom}};
     sk_sp<SkShader> frame_bg_shader =
         SkGradientShader::MakeLinear(gradient_pts, frame_bg_colors, nullptr, 2, SkTileMode::kClamp);
     frame_bg.setShader(frame_bg_shader);
@@ -266,12 +271,10 @@ void Location::Draw(SkCanvas& canvas) const {
     canvas.drawRoundRect(bounds, kFrameCornerRadius, kFrameCornerRadius, frame_border);
   }
 
-  DrawChildren(canvas);
-
   // Draw debug text log below the Location
   float n_lines = 1;
-  float offset_y = bounds.top();
-  float offset_x = bounds.left();
+  float offset_y = bounds.bottom;
+  float offset_x = bounds.left;
   float line_height = ui::kLetterSize * 1.5;
   auto& font = ui::GetFont();
 
@@ -282,7 +285,6 @@ void Location::Draw(SkCanvas& canvas) const {
     error_paint.setStyle(SkPaint::kStroke_Style);
     error_paint.setStrokeWidth(2 * b);
     error_paint.setAntiAlias(true);
-    canvas.drawPath(my_shape, error_paint);
     offset_x -= b;
     offset_y -= 3 * b;
     error_paint.setStyle(SkPaint::kFill_Style);
@@ -290,7 +292,28 @@ void Location::Draw(SkCanvas& canvas) const {
     font.DrawText(canvas, error->text, error_paint);
     canvas.translate(-offset_x, -offset_y + n_lines * line_height);
     n_lines += 1;
+
+    Status status;
+    static auto shader = resources::CompileShader(embedded::assets_error_sksl, status);
+    if (!OK(status)) {
+      ERROR << error->text;
+    }
+    static SkPaint paint;
+    SkRuntimeEffectBuilder builder(shader);
+    static auto t0 = time::SecondsSinceEpoch();
+    builder.uniform("iTime") = (float)(time::SecondsSinceEpoch() - t0) * 3;
+    builder.uniform("iLeft") = bounds.left;
+    builder.uniform("iRight") = bounds.right;
+    builder.uniform("iTop") = bounds.top;
+    builder.uniform("iBottom") = bounds.bottom;
+    builder.uniform("iDetail") = 80.f;
+    builder.uniform("iSmokeDetail") = 100.f;
+    builder.uniform("iRadius") = 1_cm;
+    paint.setShader(builder.makeShader());
+    canvas.drawRect(bounds.Outset(1_cm), paint);
   }
+
+  DrawChildren(canvas);
 
   if (using_layer) {
     canvas.restore();

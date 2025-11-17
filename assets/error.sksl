@@ -45,7 +45,8 @@ uniform float iTop;
 uniform float iBottom;
 
 vec4 main(in vec2 px) {
-  // return vec4(1, 0, 0, 1) * (1 - 2 * iMask.eval(px).a);
+  // return vec4(1, 0, 0, 1);
+  // return iMask.eval(px);
   vec2 uv = (px - vec2(iLeft, iTop)) / vec2(iRight - iLeft, iBottom - iTop);
   // return vec4(uv.x, uv.y, 0, 1);
   float noise = fbm(uv * 4 - vec2(0, iTime));

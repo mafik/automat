@@ -298,20 +298,18 @@ void Location::Draw(SkCanvas& canvas) const {
     canvas.translate(-offset_x, -offset_y + n_lines * line_height);
     n_lines += 1;
 
-    canvas.save();
     auto ctm = canvas.getLocalToDeviceAs3x3().preConcat(object_widget.local_to_parent.asM33());
-
-    canvas.resetMatrix();
     auto my_shape_px = my_shape.makeTransform(ctm);
     Rect bounds_px = my_shape_px.getBounds();
-
+    float blur_radius = ctm.mapRadius(7_mm);
+    auto clip = bounds.Outset(blur_radius * 3);
+    auto clip_px = bounds_px.Outset(blur_radius * 3);
     Status status;
     static auto shader = resources::CompileShader(embedded::assets_error_sksl, status);
     if (!OK(status)) {
       ERROR << status;
     }
-    SkPaint paint;
-    paint.setAntiAlias(false);
+
     SkRuntimeEffectBuilder builder(shader);
     static auto t0 = time::SecondsSinceEpoch();
     builder.uniform("iTime") = (float)(time::SecondsSinceEpoch() - t0) * 3;
@@ -320,20 +318,33 @@ void Location::Draw(SkCanvas& canvas) const {
     builder.uniform("iTop") = bounds_px.top;
     builder.uniform("iBottom") = bounds_px.bottom;
 
-    float blur_radius = ctm.mapRadius(7_mm);
-    auto clip = bounds_px.Outset(blur_radius * 3);
+    SkPaint fire_paint;
+    fire_paint.setImageFilter(SkImageFilters::RuntimeShader(builder, "iMask", nullptr));
 
-    sk_sp<SkImageFilter> image_filter = nullptr;
-    image_filter = SkImageFilters::RuntimeShader(builder, "iMask", image_filter);
-    paint.setImageFilter(image_filter);
+    // Note that we're saving the canvas state twice.
+    // This is because of https://issues.skia.org/issues/447458443
+    // Otherwise the coordinates passed to the shader will be messed up.
+    canvas.save();
+    canvas.resetMatrix();
+    canvas.clipRect(clip_px.sk);
+    canvas.saveLayer(&clip_px.sk, &fire_paint);
+
+    SkPaint paint;
+    paint.setAntiAlias(false);
+
     paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, blur_radius, false));
-    canvas.clipRect(clip.sk);
     canvas.drawPath(my_shape_px, paint);
 
     paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, blur_radius / 4, false));
     my_shape_px.toggleInverseFillType();
     canvas.drawPath(my_shape_px, paint);
 
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setStrokeWidth(1);
+    paint.setMaskFilter(nullptr);
+    canvas.drawPath(my_shape_px, paint);
+
+    canvas.restore();
     canvas.restore();
   }
 

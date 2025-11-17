@@ -64,6 +64,10 @@ struct CablePhysicsSimulation {
   SkMatrix ConnectorMatrix() const;
 };
 
+// Note: this function is called a little too much from various places in
+// `ui_connection_widget.cc` and `connector_optical.cc`. This shuld be probably
+// reduced to just one call during Tick.
+// TODO: remove all other calls and cache the arcline in `Tick()`
 ArcLine RouteCable(Vec2AndDir start, Span<const Vec2AndDir> ends, SkCanvas* debug_canvas = nullptr);
 
 animation::Phase SimulateCablePhysics(time::Timer&, CablePhysicsSimulation&, Vec2AndDir start,

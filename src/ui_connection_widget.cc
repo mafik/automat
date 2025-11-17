@@ -497,15 +497,6 @@ Optional<Rect> ConnectionWidget::TextureBounds() const {
     return bounds;
   } else {
     auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
-    Vec<Vec2AndDir> to_points;  // machine coords
-    if (auto to = arg.FindLocation(from, {})) {
-      auto& to_widget = to->WidgetForObject();
-      to_widget.ConnectionPositions(to_points);
-      SkMatrix m = TransformBetween(to_widget, *root_machine);
-      for (auto& to_point : to_points) {
-        to_point.pos = m.mapPoint(to_point.pos);
-      }
-    }
     ArcLine arcline = RouteCable(pos_dir, to_points);
     Rect rect = arcline.Bounds();
     return rect.Outset(cable_width / 2);
@@ -520,14 +511,10 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   if (manual_position.has_value()) {
     end_pos = *manual_position;
   } else if (auto to = arg.FindLocation(from, {})) {
-    Vec<Vec2AndDir> to_points;  // machine coords
-    auto& to_widget = to->WidgetForObject();
-    to_widget.ConnectionPositions(to_points);
-    SkMatrix m = TransformBetween(to_widget, *root_machine);
-    for (auto& to_point : to_points) {
-      to_point.pos = m.mapPoint(to_point.pos);
-    }
-    end_pos = to_points.front().pos;
+    ArcLine arcline = RouteCable(pos_dir, to_points);
+    auto it = ArcLine::Iterator(arcline);
+    it.AdvanceToEnd();
+    end_pos = it.Position();  // to_points.front().pos;
   }
   if (end_pos) {
     anchors.push_back(*end_pos);

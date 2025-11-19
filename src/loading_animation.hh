@@ -70,7 +70,7 @@ struct HypnoRect : public LoadingAnimation {
   float base_twist_v = 0;
 
   float base_scale = 1;
-  time::T t = 0;
+  double t = 0;
   int client_width = 100;   // px
   int client_height = 100;  // px
   float client_diag = 144;  // px

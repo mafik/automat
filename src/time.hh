@@ -14,11 +14,10 @@ using std::literals::chrono_literals::operator""h;
 
 namespace automat::time {
 
-using T = int64_t;
-using Duration = std::chrono::duration<T, std::ratio<1, 1000000000>>;
+using Duration = std::chrono::duration<int64_t, std::ratio<1, 1000000000>>;
 
-constexpr Duration kDurationGuard = Duration(std::numeric_limits<T>::min());
-constexpr Duration kDurationInfinity = Duration(std::numeric_limits<T>::max());
+constexpr Duration kDurationGuard = Duration(std::numeric_limits<Duration::rep>::min());
+constexpr Duration kDurationInfinity = Duration(std::numeric_limits<Duration::rep>::max());
 
 using SystemClock = std::chrono::system_clock;
 using SteadyClock = std::chrono::steady_clock;
@@ -47,7 +46,7 @@ inline double SecondsSinceEpoch() { return ToSeconds(SteadyNow().time_since_epoc
 
 // Sawtooth wave [0, 1).
 template <auto Period>
-T SteadySaw() {
+double SteadySaw() {
   return ToSeconds(SteadyNow().time_since_epoch() % FromSeconds(Period));
 }
 

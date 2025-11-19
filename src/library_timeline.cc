@@ -2684,19 +2684,22 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       paused.playback_offset = time::FromSeconds(t);
     } else if (key == "playing") {
       state = kPlaying;
-      time::T value = 0;
+      double value = 0;
       d.Get(value, status);
       time::SteadyPoint now = time::SteadyNow();
-      playing.started_at = now - time::Duration(value);
+      auto duration_double_s = std::chrono::duration<double>(value);
+      playing.started_at = now - std::chrono::duration_cast<time::Duration>(duration_double_s);
       // We're not updating the outputs because they should be deserialized in a proper state
       // TimelineUpdateOutputs(l, *this, playing.started_at, now);
       TimelineScheduleNextAfter(*this, now);
       BeginLongRunning(l, l.GetRunTask());
     } else if (key == "recording") {
       state = kRecording;
-      time::T value = 0;
+      double value = 0;
       d.Get(value, status);
-      recording.started_at = time::SteadyNow() - time::Duration(value);
+      auto duration_double_s = std::chrono::duration<double>(value);
+      recording.started_at =
+          time::SteadyNow() - std::chrono::duration_cast<time::Duration>(duration_double_s);
     }
   }
   if (!OK(status)) {

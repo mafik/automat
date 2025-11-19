@@ -19,7 +19,7 @@ struct Window : public LiveObject, Runnable, ImageProvider {
   // Private implementation to avoid polluting header with platform-specific defines.
   std::unique_ptr<Impl> impl;
 
-  time::T capture_time = 0;
+  double capture_time = 0;
 
   Window();
 

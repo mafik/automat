@@ -168,8 +168,6 @@ Ptr<Object> Window::Clone() const {
   return ret;
 }
 
-const SkMatrix kCenterPickIcon = SkMatrix::Translate(-1.4_mm, -0.2_mm).preScale(0.9, 0.9);
-
 constexpr static float kBorderWidth = theme::xp::kBorderWidth;  // width of the border
 constexpr static float kContentMargin =
     theme::xp::kBorderWidth;  // margin between the border and the content
@@ -181,9 +179,9 @@ struct WindowWidget;
 struct PickButton : theme::xp::TitleButton {
   std::function<void(ui::Pointer&)> on_activate;
   PickButton(ui::Widget* parent) : theme::xp::TitleButton(parent) {
-    child = ui::MakeShapeWidget(this, kPickSVG, "#000000"_color, &kCenterPickIcon);
+    child = ui::MakeShapeWidget(this, kPickSVG, "#000000"_color);
     UpdateChildTransform();
-    child->local_to_parent.preTranslate(-0.2_mm, -0.2_mm);
+    child->local_to_parent.preTranslate(-0.6_mm, 0.6_mm);
   }
   // float Height() const override { return kTitleButtonSize; }
   SkRRect RRect() const override {

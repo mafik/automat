@@ -5,6 +5,7 @@
 #include <include/core/SkData.h>
 #include <include/core/SkFontArguments.h>
 #include <include/core/SkFontMgr.h>
+#include <include/core/SkFontTypes.h>
 #include <include/core/SkStream.h>
 #include <include/core/SkTypeface.h>
 #include <modules/skshaper/include/SkShaper.h>
@@ -19,8 +20,8 @@
 #endif
 
 #include "../build/generated/embedded.hh"
-#include "ui_constants.hh"
 #include "math.hh"
+#include "ui_constants.hh"
 #include "virtual_fs.hh"
 
 #pragma comment(lib, "skshaper")
@@ -118,7 +119,8 @@ std::unique_ptr<Font> Font::MakeV2(sk_sp<SkTypeface> typeface, float letter_size
   sk_font.getMetrics(&metrics);
   sk_font.setBaselineSnap(false);
   sk_font.setSubpixel(true);
-  // The `fCapHeight` is the height of the capital letters.
+  sk_font.setHinting(SkFontHinting::kNone);
+  //  The `fCapHeight` is the height of the capital letters.
   float font_scale = letter_size / metrics.fCapHeight;
   float line_thickness = metrics.fUnderlineThickness * font_scale;
   float ascent = metrics.fAscent * font_scale;

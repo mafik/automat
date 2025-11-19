@@ -4,6 +4,7 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkMatrix.h>
+#include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
 #include <include/core/SkPathEffect.h>
 #include <include/core/SkPathMeasure.h>
@@ -29,7 +30,6 @@
 #include "font.hh"
 #include "format.hh"
 #include "global_resources.hh"
-#include "include/core/SkPaint.h"
 #include "math.hh"
 #include "object_iconified.hh"
 #include "raycast.hh"

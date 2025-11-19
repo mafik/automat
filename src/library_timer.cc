@@ -434,7 +434,7 @@ static void DrawDial(SkCanvas& canvas, TimerDelay::Range range, time::Duration d
   auto range_name_width = font->MeasureText(range_name);
   canvas.save();
   canvas.translate(-range_name_width / 2, text_r * 0.5 - 0.002 / 2);
-  font->DrawText(canvas, RangeName(range), SkPaint());
+  font->DrawText(canvas, range_name, SkPaint());
   canvas.restore();
 }
 

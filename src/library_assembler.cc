@@ -378,7 +378,7 @@ void Assembler::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
     return;
   }
 
@@ -386,7 +386,7 @@ void Assembler::DeserializeState(Location& l, Deserializer& d) {
     mc_controller->ChangeState([&](mc::Controller::State& mc_state) { mc_state = state; }, status);
   }
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
     return;
   }
 }
@@ -786,11 +786,11 @@ void Register::Args(std::function<void(Argument&)> cb) { cb(register_assembler_a
 void Register::SetText(Location& error_context, std::string_view text) {
   auto assembler = assembler_weak.Lock();
   if (assembler == nullptr) {
-    error_context.ReportError("Register is not connected to an assembler");
+    error_context.object->ReportError("Register is not connected to an assembler");
     return;
   }
   if (assembler->mc_controller == nullptr) {
-    error_context.ReportError("Assembler is not connected to a mc_controller");
+    error_context.object->ReportError("Assembler is not connected to a mc_controller");
     return;
   }
   Status status;
@@ -802,7 +802,7 @@ void Register::SetText(Location& error_context, std::string_view text) {
       },
       status);
   if (!OK(status)) {
-    error_context.ReportError(status.ToStr());
+    error_context.object->ReportError(status.ToStr());
     return;
   }
   WakeWidgetsAnimation();
@@ -835,7 +835,7 @@ void Register::DeserializeState(Location& l, Deserializer& d) {
   std::string reg_name;
   d.Get(reg_name, status);
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
     register_index = 0;
     return;
   }
@@ -845,7 +845,7 @@ void Register::DeserializeState(Location& l, Deserializer& d) {
       return;
     }
   }
-  l.ReportError(f("Unknown register name: {}", reg_name));
+  ReportError(f("Unknown register name: {}", reg_name));
   register_index = 0;
 }
 

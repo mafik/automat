@@ -157,9 +157,6 @@ struct Location : ReferenceCounted, ui::Widget {
   // will be executed.
   void ScheduleRun();
 
-  // Execute this object's Errored function using the task queue.
-  void ScheduleErrored(Location& errored);
-
   ////////////////////////////
   // Misc
   ////////////////////////////
@@ -201,11 +198,6 @@ struct Location : ReferenceCounted, ui::Widget {
     observing_updates.erase(&other);
   }
 
-  void ObserveErrors(Location& other) {
-    other.error_observers.insert(this);
-    observing_errors.insert(&other);
-  }
-
   std::string GetText() {
     auto* follow = Follow();
     if (follow == nullptr) {
@@ -214,9 +206,6 @@ struct Location : ReferenceCounted, ui::Widget {
     return follow->GetText();
   }
   double GetNumber() { return std::stod(GetText()); }
-
-  // Immediately execute this object's Errored function.
-  void Errored(Location& errored) { object->Errored(*this, errored); }
 
   template <typename T>
   T* ThisAs() {
@@ -266,41 +255,6 @@ struct Location : ReferenceCounted, ui::Widget {
   Vec2AndDir ArgStart(Argument&);
   void FillChildren(Vec<Widget*>& children) override;
   Optional<Rect> TextureBounds() const override;
-
-  ////////////////////////////
-  // Error reporting
-  ////////////////////////////
-
-  // First error caught by this Location.
-  std::unique_ptr<Error> error;
-
-  // These functions are defined later because they use the Machine class which
-  // needs to be defined first.
-  //
-  // TODO: rethink this API so that Machine-related functions don't pollute the
-  // Location interface.
-  bool HasError();
-  Error* GetError();
-  void ClearError();
-
-  Error* ReportError(std::string_view message,
-                     std::source_location location = std::source_location::current()) {
-    if (error == nullptr) {
-      error.reset(new Error(message, location));
-      error->source = this;
-      for (auto observer : error_observers) {
-        observer->ScheduleErrored(*this);
-      }
-      if (auto p = parent_location.lock()) {
-        p->ScheduleErrored(*this);
-      }
-    }
-    return error.get();
-  }
-
-  // Shorthand function for reporting that a required property couldn't be
-  // found.
-  void ReportMissing(std::string_view property);
 
   std::string ToStr() const;
 };

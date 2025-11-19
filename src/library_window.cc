@@ -484,11 +484,15 @@ void Window::OnRun(Location& here, RunTask&) {
   {
     auto lock = std::lock_guard(mutex);
     if (impl->xcb_window == XCB_WINDOW_NONE) {
-      here.ReportError("No window selected");
+      ReportError("No window selected");
       return;
-    } else if (here.error && here.error->text == "No window selected") {
-      // Ad-hoc error clearing. Maybe there is a better way to do this.
-      here.ClearError();
+      // TODO: if this HasError is used in more places, turn it into a helper function
+    } else if (HasError(*this, [&](Error& err) {
+                 if (err.reporter == this) {
+                   err.Clear();
+                 }
+               })) {
+      return;
     }
 
     // Initialize capture if not already done
@@ -552,12 +556,12 @@ void Window::OnRun(Location& here, RunTask&) {
       hwnd = impl->hwnd;
     }
     if (hwnd == nullptr) {
-      here.ReportError("No window selected");
+      ReportError("No window selected");
       return;
     }
 
     if (!IsWindow(hwnd)) {
-      here.ReportError("Invalid window selected");
+      ReportError("Invalid window selected");
       return;
     }
 
@@ -695,7 +699,7 @@ void Window::DeserializeState(Location& l, Deserializer& d) {
     // Skip deprecated ratio fields for backward compatibility
   }
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
   }
   if (!title.empty()) {
     AttachToTitle();

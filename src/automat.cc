@@ -21,7 +21,6 @@
 #include "automat.hh"
 #include "concurrentqueue.hh"
 #include "global_resources.hh"
-#include "library.hh"  // IWYU pragma: keep
 #include "loading_animation.hh"
 #include "persistence.hh"
 #include "prototypes.hh"

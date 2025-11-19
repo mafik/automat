@@ -153,20 +153,6 @@ void FunctionTask::OnExecute() {
   }
 }
 
-std::string ErroredTask::Format() {
-  std::string errored_str = errored.lock() ? errored.lock()->ToStr() : "Invalid";
-  return f("ErroredTask({}, {})", TargetName(), errored_str);
-}
-
-void ErroredTask::OnExecute() {
-  ZoneScopedN("ErroredTask");
-  if (auto t = target.lock()) {
-    if (auto e = errored.lock()) {
-      t->Errored(*e);
-    }
-  }
-}
-
 NoSchedulingGuard::NoSchedulingGuard(Location& location) : location(location) {
   no_scheduling.insert(&location);
 }

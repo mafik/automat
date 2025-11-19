@@ -62,14 +62,6 @@ struct FunctionTask : Task {
   void OnExecute() override;
 };
 
-struct ErroredTask : Task {
-  WeakPtr<Location> errored;
-  ErroredTask(WeakPtr<Location> target, WeakPtr<Location> errored)
-      : Task(target), errored(errored) {}
-  std::string Format() override;
-  void OnExecute() override;
-};
-
 struct NextGuard {
   std::vector<Task*> successors;
   std::vector<Task*> old_global_successors;

@@ -242,7 +242,7 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
   Str value;
   d.Get(value, status);
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
     return;
   }
   SetText(l, value);
@@ -264,6 +264,10 @@ void Object::ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb)
 
 void Object::WakeWidgetsAnimation() {
   ForEachWidget([](ui::RootWidget&, ui::Widget& widget) { widget.WakeAnimation(); });
+}
+
+void Object::ReportError(std::string_view message, std::source_location location) {
+  automat::ReportError(*this, *this, message, location);
 }
 
 float Object::WidgetBase::GetBaseScale() const {

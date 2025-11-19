@@ -613,7 +613,7 @@ void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (!OK(status)) {
-    l.ReportError("Failed to deserialize MacroRecorder. " + status.ToStr());
+    ReportError("Failed to deserialize MacroRecorder. " + status.ToStr());
   }
 }
 

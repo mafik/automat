@@ -190,7 +190,7 @@ void FlipFlop::DeserializeState(Location& l, Deserializer& d) {
   Status status;
   d.Get(current_state, status);
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
   }
 }
 }  // namespace automat::library

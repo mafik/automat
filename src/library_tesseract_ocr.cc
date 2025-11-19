@@ -1070,19 +1070,19 @@ void TesseractOCR::OnRun(Location& here, RunTask&) {
   auto text_obj = text_arg.FindObject(here, {});
 
   if (!image_obj) {
-    here.ReportError("No image source connected");
+    ReportError("No image source connected");
     return;
   }
 
   auto image_provider = image_obj->AsImageProvider();
   if (!image_provider) {
-    here.ReportError("Connected object doesn't provide images");
+    ReportError("Connected object doesn't provide images");
     return;
   }
 
   auto image = image_provider->GetImage();
   if (!image) {
-    here.ReportError("No image available from source");
+    ReportError("No image available from source");
     return;
   }
 
@@ -1206,7 +1206,7 @@ void TesseractOCR::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
   }
 }
 

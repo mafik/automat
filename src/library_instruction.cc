@@ -3860,7 +3860,7 @@ void Instruction::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
   }
 }
 }  // namespace automat::library

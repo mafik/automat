@@ -1,6 +1,6 @@
 ---
 description: Coding standards, patterns, and best practices for Automat C++/Python development
-globs: 
+globs:
 alwaysApply: true
 ---
 
@@ -55,7 +55,7 @@ struct MyObject : Object {
   // Required overrides
   Ptr<Object> Clone() const override;
   string_view Name() const override;
-  
+
   // Optional overrides
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
@@ -71,7 +71,7 @@ struct MyWidget : gui::Widget {
   // Required overrides
   SkPath Shape() const override;
   void Draw(SkCanvas& canvas) const override;
-  
+
   // Common overrides
   animation::Phase Tick(time::Timer& timer) override;
   void WakeAnimation() const override;
@@ -138,24 +138,6 @@ struct MyLiveArgument : LiveArgument {
 };
 ```
 
-## Error Handling
-
-### Error Reporting
-```cpp
-// Report errors through Location
-location.ReportError("Error message");
-
-// Check for errors
-if (location.HasError()) {
-  // Handle error state
-}
-
-// Error propagation in machines
-void Errored(Location& here, Location& errored) override {
-  // Custom error handling logic
-}
-```
-
 ### Logging
 ```cpp
 #include "log.hh"
@@ -173,10 +155,10 @@ void Draw(SkCanvas& canvas) const override {
   // Set up paint
   SkPaint paint;
   paint.setColor(SK_ColorBLUE);
-  
+
   // Draw shape
   canvas.drawPath(Shape(), paint);
-  
+
   // Draw children if needed
   DrawChildren(canvas);
 }
@@ -333,4 +315,4 @@ struct Win32Window : PlatformWindow {
 - [ ] Objects implement required interface
 - [ ] Widgets handle drawing correctly
 - [ ] Memory management follows patterns
-- [ ] Error propagation implemented 
+- [ ] Error propagation implemented

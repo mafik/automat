@@ -227,6 +227,7 @@ struct [[clang::trivial_abi]] PtrBase {
     return ptr;
   }
 
+  bool operator==(const T* that) const { return this->obj == that; }
   bool operator==(const PtrBase<T>& that) const { return this->obj == that.obj; }
 
  protected:

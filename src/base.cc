@@ -63,7 +63,7 @@ void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> 
 }
 
 static void DoneRunning(Location& here, RunTask& run_task) {
-  if (run_task.schedule_next && !here.HasError()) {
+  if (run_task.schedule_next && !HasError(*here.object)) {
     ScheduleNext(here);
   }
 }
@@ -191,7 +191,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
             if (OK(status)) {
               auto proto = prototypes->Find(type);
               if (proto == nullptr) {
-                l.ReportError(f("Unknown object type: {}", type));
+                ReportError(f("Unknown object type: {}", type));
                 // try to continue parsing
               } else {
                 object = proto->Clone();
@@ -227,7 +227,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
       for (auto& connection_record : connections) {
         auto to_it = location_idx.find(connection_record.to_name);
         if (to_it == location_idx.end()) {
-          l.ReportError(f("Missing connection target: {}", connection_record.to_name));
+          ReportError(f("Missing connection target: {}", connection_record.to_name));
           continue;
         }
         Location* from = connection_record.from;
@@ -242,7 +242,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
   }
   // Objects may have been rendered in their incomplete state - re-render them all.
   for (auto& loc : locations) {
@@ -365,13 +365,6 @@ Vec<Ptr<Location>> Machine::ExtractStack(Location& base) {
         }
       }
     }
-    for (int i = 0; i < children_with_errors.size(); ++i) {
-      for (auto& r : result) {
-        if (children_with_errors[i] == r.get()) {
-          children_with_errors.erase(children_with_errors.begin() + i);
-        }
-      }
-    }
     WakeAnimation();
     audio::Play(embedded::assets_SFX_canvas_pick_wav);
     return result;
@@ -389,12 +382,6 @@ Ptr<Location> Machine::Extract(Location& location) {
     for (int i = 0; i < front.size(); ++i) {
       if (front[i] == result.get()) {
         front.erase(front.begin() + i);
-        break;
-      }
-    }
-    for (int i = 0; i < children_with_errors.size(); ++i) {
-      if (children_with_errors[i] == result.get()) {
-        children_with_errors.erase(children_with_errors.begin() + i);
         break;
       }
     }

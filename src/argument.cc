@@ -35,8 +35,8 @@ Argument::LocationResult Argument::GetLocation(Location& here,
     result.follow_pointers = c->pointer_behavior == Connection::kFollowPointers;
   }
   if (result.location == nullptr && precondition >= kRequiresLocation) {
-    here.ReportError(f("The {} argument of {} is not connected.", name, here.ToStr()),
-                     source_location);
+    here.object->ReportError(f("The {} argument of {} is not connected.", name, here.ToStr()),
+                             source_location);
     result.ok = false;
   }
   return result;
@@ -52,7 +52,8 @@ Argument::ObjectResult Argument::GetObject(Location& here,
       result.object = result.location->object.get();
     }
     if (result.object == nullptr && precondition >= kRequiresObject) {
-      here.ReportError(f("The {} argument of {} is empty.", name, here.ToStr()), source_location);
+      here.object->ReportError(f("The {} argument of {} is empty.", name, here.ToStr()),
+                               source_location);
       result.ok = false;
     }
   }

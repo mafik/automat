@@ -67,7 +67,6 @@ struct Object : public ReferenceCounted {
   virtual Ptr<Object> ArgPrototype(const Argument&) { return nullptr; }
 
   virtual void Updated(Location& here, Location& updated);
-  virtual void Errored(Location& here, Location& errored) {}
 
   virtual audio::Sound& NextSound();
 
@@ -173,6 +172,11 @@ struct Object : public ReferenceCounted {
   void ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb);
 
   void WakeWidgetsAnimation();
+
+  // Used to report errors within this object. If an error was caused by some other
+  // "error reporter", take a look at ReportError in error.hh.
+  void ReportError(std::string_view message,
+                   std::source_location location = std::source_location::current());
 };
 
 }  // namespace automat

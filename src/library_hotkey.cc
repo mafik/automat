@@ -409,7 +409,7 @@ void HotKey::DeserializeState(Location& l, Deserializer& d) {
   windows_button->fg = KeyColor(windows);
 
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
   }
 }
 

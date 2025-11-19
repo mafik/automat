@@ -221,7 +221,7 @@ void Number::DeserializeState(Location& l, Deserializer& d) {
   Status status;
   d.Get(value, status);
   if (!OK(status)) {
-    l.ReportError("Couldn't deserialize Number value: " + status.ToStr());
+    ReportError("Couldn't deserialize Number value: " + status.ToStr());
     return;
   }
   text_field->text = GetText();

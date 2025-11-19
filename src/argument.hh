@@ -136,8 +136,9 @@ struct Argument {
     if (result.object) {
       result.typed = dynamic_cast<T*>(result.object);
       if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
-        here.ReportError(f("The {} argument is not an instance of {}.", name, typeid(T).name()),
-                         source_location);
+        ReportError(*here.object, *here.object,
+                    f("The {} argument is not an instance of {}.", name, typeid(T).name()),
+                    source_location);
         result.ok = false;
       }
     }

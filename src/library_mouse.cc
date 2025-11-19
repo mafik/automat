@@ -506,7 +506,7 @@ void MouseButtonEvent::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (!OK(status)) {
-    l.ReportError("Failed to deserialize MouseButtonEvent. " + status.ToStr());
+    ReportError("Failed to deserialize MouseButtonEvent. " + status.ToStr());
   }
 }
 
@@ -719,7 +719,7 @@ void MouseButtonPresser::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (!OK(status)) {
-    l.ReportError("Failed to deserialize MouseButtonPresser. " + status.ToStr());
+    ReportError("Failed to deserialize MouseButtonPresser. " + status.ToStr());
   }
 }
 

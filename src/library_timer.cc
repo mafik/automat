@@ -808,7 +808,7 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
   }
 
   if (!OK(status)) {
-    l.ReportError("Failed to deserialize TimerDelay: " + status.ToStr());
+    ReportError("Failed to deserialize TimerDelay: " + status.ToStr());
   }
 }
 }  // namespace automat::library

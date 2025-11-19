@@ -22,6 +22,7 @@
 #include "connection.hh"
 #include "deserializer.hh"
 #include "drag_action.hh"
+#include "error.hh"
 #include "format.hh"
 #include "location.hh"
 #include "log.hh"
@@ -132,7 +133,6 @@ struct Machine : LiveObject, ui::Widget, ui::DropTarget {
   string name = "";
   deque<Ptr<Location>> locations;
   vector<Location*> front;
-  vector<Location*> children_with_errors;
 
   Ptr<Location> Extract(Location& location);
   Vec<Ptr<Location>> ExtractStack(Location& base);
@@ -219,43 +219,14 @@ struct Machine : LiveObject, ui::Widget, ui::DropTarget {
   // recurse into submachines.
   void Diagnostics(function<void(Location*, Error&)> error_callback) {
     for (auto& location : locations) {
-      if (location->error) {
-        error_callback(location.get(), *location->error);
-      }
+      ManipulateError(*location->object, [&](Error& err) {
+        if (!err.IsPresent()) {
+          return;
+        }
+        error_callback(location.get(), err);
+      });
       if (auto submachine = dynamic_cast<Machine*>(location->object.get())) {
         submachine->Diagnostics(error_callback);
-      }
-    }
-  }
-
-  void Errored(Location& here, Location& errored) override {
-    // If the error hasn't been cleared by other Errored calls, then propagate
-    // it to the parent.
-    if (errored.HasError()) {
-      children_with_errors.push_back(&errored);
-      for (Location* observer : here.error_observers) {
-        observer->ScheduleErrored(errored);
-      }
-
-      if (auto parent_location = here.parent_location.lock()) {
-        parent_location->ScheduleErrored(here);
-      } else {
-        Error* error = errored.GetError();
-        LogEntry(LogLevel::Error, error->source_location) << error->text;
-      }
-    }
-  }
-
-  void ClearChildError(Location& child) {
-    if (auto it = std::find(children_with_errors.begin(), children_with_errors.end(), &child);
-        it != children_with_errors.end()) {
-      children_with_errors.erase(it);
-      if (auto h = here.lock()) {
-        if (!h->HasError()) {
-          if (auto parent = h->ParentAs<Machine>()) {
-            parent->ClearChildError(*h);
-          }
-        }
       }
     }
   }
@@ -300,7 +271,7 @@ struct Pointer : LiveObject {
     if (auto* obj = Follow(error_context)) {
       obj->SetText(error_context, text);
     } else {
-      error_context.ReportError("Can't set text on null pointer");
+      error_context.object->ReportError("Can't set text on null pointer");
     }
   }
 };

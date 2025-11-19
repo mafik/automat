@@ -2586,7 +2586,7 @@ bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, Str& field_nam
       }
     }
     if (!OK(status)) {
-      l.ReportError(status.ToStr());
+      ReportError(status.ToStr());
     }
     return true;
   }
@@ -2599,7 +2599,7 @@ bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, Str& field_na
     d.Get(t, status);
     on_at = time::FromSeconds(t);
     if (!OK(status)) {
-      l.ReportError(status.ToStr());
+      ReportError(status.ToStr());
     }
     return true;
   }
@@ -2623,7 +2623,7 @@ bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_nam
       }
     }
     if (!OK(status)) {
-      l.ReportError(status.ToStr());
+      ReportError(status.ToStr());
     }
     return true;
   }
@@ -2700,7 +2700,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (!OK(status)) {
-    l.ReportError(status.ToStr());
+    ReportError(status.ToStr());
   }
 }
 

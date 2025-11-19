@@ -51,33 +51,6 @@ constexpr float kFrameCornerRadius = 0.001;
 Location::Location(Widget* parent_widget, WeakPtr<Location> parent_location)
     : Widget(parent_widget), elevation(0), parent_location(std::move(parent_location)) {}
 
-bool Location::HasError() {
-  if (error != nullptr) return true;
-  if (auto machine = ThisAs<Machine>()) {
-    if (!machine->children_with_errors.empty()) return true;
-  }
-  return false;
-}
-
-Error* Location::GetError() {
-  if (error != nullptr) return error.get();
-  if (auto machine = ThisAs<Machine>()) {
-    if (!machine->children_with_errors.empty())
-      return (*machine->children_with_errors.begin())->GetError();
-  }
-  return nullptr;
-}
-
-void Location::ClearError() {
-  if (error == nullptr) {
-    return;
-  }
-  error.reset();
-  if (auto machine = ParentAs<Machine>()) {
-    machine->ClearChildError(*this);
-  }
-}
-
 Object* Location::Follow() {
   if (object == nullptr) {
     return nullptr;
@@ -127,10 +100,6 @@ void Location::ScheduleRun() { GetRunTask().Schedule(); }
 
 void Location::ScheduleLocalUpdate(Location& updated) {
   (new UpdateTask(AcquirePtr<Location>(), updated.AcquirePtr<Location>()))->Schedule();
-}
-
-void Location::ScheduleErrored(Location& errored) {
-  (new ErroredTask(AcquirePtr<Location>(), errored.AcquirePtr<Location>()))->Schedule();
 }
 
 SkPath Location::Shape() const {
@@ -205,7 +174,7 @@ animation::Phase Location::Tick(time::Timer& timer) {
     float target_elevation = IsDragged(*this) ? 1 : 0;
     phase |= elevation.SineTowards(target_elevation, timer.d, 0.2);
   }
-  if (error) {
+  if (HasError(*object)) {
     phase |= animation::Animating;
   }
   return phase;
@@ -283,7 +252,7 @@ void Location::Draw(SkCanvas& canvas) const {
 
   DrawChildren(canvas);
 
-  if (error) {
+  HasError(*object, [&](Error& error) {
     constexpr float b = 0.00025;
     SkPaint error_paint;
     error_paint.setColor(SK_ColorRED);
@@ -294,7 +263,7 @@ void Location::Draw(SkCanvas& canvas) const {
     offset_y -= 3 * b;
     error_paint.setStyle(SkPaint::kFill_Style);
     canvas.translate(offset_x, offset_y - n_lines * line_height);
-    font.DrawText(canvas, error->text, error_paint);
+    font.DrawText(canvas, error.text, error_paint);
     canvas.translate(-offset_x, -offset_y + n_lines * line_height);
     n_lines += 1;
 
@@ -346,7 +315,7 @@ void Location::Draw(SkCanvas& canvas) const {
 
     canvas.restore();
     canvas.restore();
-  }
+  });
 
   if (using_layer) {
     canvas.restore();
@@ -385,14 +354,6 @@ std::unique_ptr<Action> Location::FindAction(ui::Pointer& p, ui::ActionTrigger b
 void Location::SetNumber(double number) { SetText(f("{:g}", number)); }
 
 std::string Location::ToStr() const { return Str(object->Name()); }
-
-void Location::ReportMissing(std::string_view property) {
-  auto error_message =
-      f("Couldn't find \"%*s\". You can create a connection or rename "
-        "one of the nearby objects to fix this.",
-        property.size(), property.data());
-  ReportError(error_message);
-}
 
 Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(WidgetForObject(), *parent); }
 

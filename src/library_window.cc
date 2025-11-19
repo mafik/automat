@@ -125,6 +125,7 @@ std::string_view Window::Name() const { return "Window"; }
 
 struct Window::Impl {
 #ifdef __linux__
+  std::mutex mutex;
   xcb_window_t xcb_window = XCB_WINDOW_NONE;
 
   xcb_shm_seg_t shmseg = -1;
@@ -281,7 +282,12 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
 
   animation::Phase Tick(time::Timer& timer) override {
     auto window = LockWindow();
-    auto lock = std::lock_guard(window->mutex);
+
+    auto lock = std::unique_lock<std::mutex>(window->mutex, std::defer_lock);
+    {
+      ZoneScopedN("Locking Window");
+      lock.lock();
+    }
     if (window_name != window->title) {
       window_name = window->title;
     }
@@ -413,8 +419,14 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
     window_name = xcb::GetPropertyString(found_window, XCB_ATOM_WM_NAME);
     WakeAnimation();
     if (auto window = LockWindow()) {
-      window->impl->xcb_window = found_window;
-      window->title = window_name;
+      {
+        auto impl_lock = std::lock_guard(window->impl->mutex);
+        window->impl->xcb_window = found_window;
+      }
+      {
+        auto window_lock = std::lock_guard(window->mutex);
+        window->title = window_name;
+      }
       window->ClearOwnError();
     }
 #elif defined(_WIN32)
@@ -484,7 +496,7 @@ void Window::OnRun(Location& here, RunTask&) {
   ZoneScopedN("Window");
 #ifdef __linux__
   {
-    auto lock = std::lock_guard(mutex);
+    auto impl_lock = std::lock_guard(impl->mutex);
     ClearOwnError();
     if (impl->xcb_window == XCB_WINDOW_NONE) {
       ReportError("No window selected");
@@ -543,7 +555,10 @@ void Window::OnRun(Location& here, RunTask&) {
     auto image_info = SkImageInfo::Make(width, height, kBGRA_8888_SkColorType,
                                         SkAlphaType::kUnpremul_SkAlphaType);
     auto pixmap = SkPixmap(image_info, impl->data.data(), width * 4);
-    captured_image = SkImages::RasterFromPixmapCopy(pixmap);
+    auto new_image = SkImages::RasterFromPixmapCopy(pixmap);
+
+    auto window_lock = std::lock_guard(mutex);
+    captured_image = std::move(new_image);
     capture_time = time::SecondsSinceEpoch();
   }
 #elif defined(_WIN32)

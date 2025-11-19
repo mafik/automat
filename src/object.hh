@@ -177,6 +177,9 @@ struct Object : public ReferenceCounted {
   // "error reporter", take a look at ReportError in error.hh.
   void ReportError(std::string_view message,
                    std::source_location location = std::source_location::current());
+
+  // Clears the error reported by the object itself
+  void ClearOwnError();
 };
 
 }  // namespace automat

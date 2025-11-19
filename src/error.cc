@@ -9,8 +9,12 @@ namespace automat {
 Error::Error() {}
 Error::~Error() {}
 
-void ClearError(Object& o) {
-  ManipulateError(o, [](Error& err) { err.reporter.Reset(); });
+void ClearError(Object& target, Object& reporter) {
+  ManipulateError(target, [&](Error& err) {
+    if (err.reporter == &reporter) {
+      err.Clear();
+    }
+  });
 }
 
 void ReportError(Object& target, Object& reporter, std::string_view message,

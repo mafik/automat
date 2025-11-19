@@ -415,6 +415,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
     if (auto window = LockWindow()) {
       window->impl->xcb_window = found_window;
       window->title = window_name;
+      window->ClearOwnError();
     }
 #elif defined(_WIN32)
     POINT cursor_pos;
@@ -453,6 +454,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
     if (auto window = LockWindow()) {
       window->impl->hwnd = found_window;
       window->title = window_name;
+      window->ClearOwnError();
     }
 #endif
   }
@@ -483,15 +485,11 @@ void Window::OnRun(Location& here, RunTask&) {
 #ifdef __linux__
   {
     auto lock = std::lock_guard(mutex);
+    ClearOwnError();
     if (impl->xcb_window == XCB_WINDOW_NONE) {
       ReportError("No window selected");
       return;
-      // TODO: if this HasError is used in more places, turn it into a helper function
-    } else if (HasError(*this, [&](Error& err) {
-                 if (err.reporter == this) {
-                   err.Clear();
-                 }
-               })) {
+    } else if (HasError(*this)) {
       return;
     }
 

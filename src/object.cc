@@ -270,6 +270,8 @@ void Object::ReportError(std::string_view message, std::source_location location
   automat::ReportError(*this, *this, message, location);
 }
 
+void Object::ClearOwnError() { automat::ClearError(*this, *this); }
+
 float Object::WidgetBase::GetBaseScale() const {
   if (automat::IsIconified(object.GetUnsafe())) {
     auto bounds = CoarseBounds().rect;

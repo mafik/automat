@@ -80,7 +80,9 @@ inline std::ostream& operator<<(std::ostream& os, const Error& e) { return os <<
 // ErrorWatch& WatchErrors(ErrorWatcher&, Object& target);
 
 bool HasError(Object& target, Fn<void(Error&)> use_error = nullptr);
-void ClearError(Object& target);
+
+// Clear error caused by the given reporter
+void ClearError(Object& target, Object& reporter);
 
 // Mid-level helper for reporting errors. It allows the reported errors to have
 // a `reporter` different from the `target` object.

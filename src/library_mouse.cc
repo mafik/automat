@@ -43,7 +43,7 @@
 
 namespace automat::library::mouse {
 SkRuntimeEffect& GetPixelGridRuntimeEffect() {
-  static const auto runtime_effect = []() {
+  static const auto runtime_effect = [] {
     Status status;
     auto runtime_effect = resources::CompileShader(embedded::assets_pixel_grid_rt_sksl, status);
     if (!OK(status)) {

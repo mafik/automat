@@ -279,7 +279,7 @@ void WidgetDrawable::UpdateState(const Update& update) {
   pack_frame_texture_anchors = update.pack_frame_texture_anchors;
 }
 
-const skgpu::graphite::TextureInfo kTextureInfo = []() {
+const skgpu::graphite::TextureInfo kTextureInfo = [] {
   skgpu::graphite::VulkanTextureInfo vulkan_texture_info{};
   vulkan_texture_info.fFormat = VK_FORMAT_B8G8R8A8_UNORM;
   vulkan_texture_info.fImageUsageFlags |=

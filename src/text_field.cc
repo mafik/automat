@@ -13,8 +13,8 @@
 #include "animation.hh"
 #include "base.hh"
 #include "font.hh"
-#include "ui_connection_widget.hh"
 #include "root_widget.hh"
+#include "ui_connection_widget.hh"
 
 namespace automat::ui {
 
@@ -67,14 +67,14 @@ SkRRect TextField::ShapeRRect() const {
                              kTextCornerRadius);
 }
 
-static SkPaint kDefaultTextPaint = []() {
+static SkPaint kDefaultTextPaint = [] {
   SkPaint paint;
   paint.setColor(SK_ColorBLACK);
   paint.setAntiAlias(true);
   return paint;
 }();
 
-static SkPaint kDefaultBackgroundPaint = []() {
+static SkPaint kDefaultBackgroundPaint = [] {
   SkPaint paint;
   paint.setColor(SK_ColorWHITE);
   paint.setAntiAlias(true);

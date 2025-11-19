@@ -268,7 +268,7 @@ static SkPath HandPath(const TimerDelay& timer) {
   return path;
 }
 
-const static SkPaint kHandPaint = []() {
+const static SkPaint kHandPaint = [] {
   SkPaint paint;
   paint.setColor(0xffd93f2a);
   paint.setAntiAlias(true);
@@ -353,7 +353,7 @@ static void DrawPusher(SkCanvas& canvas, const SkRRect& axle, const SkRRect& pus
   canvas.drawPath(pusher_path, pusher_paint);
 }
 
-SkPaint kDurationPaint = []() {
+SkPaint kDurationPaint = [] {
   SkPaint paint;
   paint.setColor(0xff23a9f2);
   paint.setAntiAlias(true);
@@ -367,7 +367,7 @@ static SkPoint DurationHandlePos(const TimerDelay& timer) {
 }
 
 static SkPath DurationHandlePath(const TimerDelay& timer) {
-  static const SkPath path = []() {
+  static const SkPath path = [] {
     SkPath path;
     path.moveTo(kTickOuterRadius, 0);
     float start_angle = atan2(0.001, r4) / M_PI * 180;
@@ -566,7 +566,7 @@ SkPath TimerDelay::FieldShape(Object& field) const {
 }
 
 SkPath TimerDelay::Shape() const {
-  static SkPath shape = []() {
+  static SkPath shape = [] {
     SkPathBuilder path_builder;
     path_builder.addOval(kOuterOval);
     path_builder.addRect(kStartPusherAxleBox);

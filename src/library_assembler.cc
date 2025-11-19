@@ -772,7 +772,7 @@ Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
 
 Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, register_index); }
 
-Argument register_assembler_arg = []() {
+Argument register_assembler_arg = [] {
   Argument arg("Reg's Assembler", Argument::kRequiresObject);
   arg.RequireInstanceOf<Assembler>();
   arg.autoconnect_radius = INFINITY;

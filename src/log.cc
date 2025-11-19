@@ -13,7 +13,7 @@
 namespace automat {
 
 std::vector<Logger>& GetLoggers() {
-  static std::vector<Logger> loggers = []() {
+  static std::vector<Logger> loggers = [] {
     std::vector<Logger> loggers;
     loggers.emplace_back(DefaultLogger);
     return loggers;

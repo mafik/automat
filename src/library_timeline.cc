@@ -119,7 +119,7 @@ static SkRRect PlasticRRect(int track_count) {
   return SkRRect::MakeRectXY(PlasticRect(track_count), kPlasticCornerRadius, kPlasticCornerRadius);
 }
 
-constexpr RRect kDisplayRRect = []() {
+constexpr RRect kDisplayRRect = [] {
   float r = 1_mm;
 
   return RRect{.rect = Rect(-kDisplayWidth, 0, 0, kDisplayHeight)
@@ -144,7 +144,7 @@ const SkPaint& WoodPaint() {
   return wood_paint;
 }
 
-const SkPaint kPlasticPaint = []() {
+const SkPaint kPlasticPaint = [] {
   SkPaint p;
   // p.setColor("#f0eae5"_color);
   SkPoint pts[2] = {{0, kPlasticTop}, {0, 0}};
@@ -155,31 +155,31 @@ const SkPaint kPlasticPaint = []() {
   return p;
 }();
 
-const SkPaint kDisplayCurrentPaint = []() {
+const SkPaint kDisplayCurrentPaint = [] {
   SkPaint p;
   p.setColor(kOrange);
   return p;
 }();
 
-const SkPaint kDisplayTotalPaint = []() {
+const SkPaint kDisplayTotalPaint = [] {
   SkPaint p;
   p.setColor("#4a4c3a"_color);
   return p;
 }();
 
-const SkPaint kDisplayRemainingPaint = []() {
+const SkPaint kDisplayRemainingPaint = [] {
   SkPaint p;
   p.setColor("#666a4d"_color);
   return p;
 }();
 
-const SkPaint kRulerPaint = []() {
+const SkPaint kRulerPaint = [] {
   SkPaint p;
   p.setColor("#4e4e4e"_color);
   return p;
 }();
 
-const SkPaint kTrackPaint = []() {
+const SkPaint kTrackPaint = [] {
   SkPaint p;
   // SkPoint pts[2] = {{0, 0}, {kTrackWidth, 0}};
   // SkColor colors[3] = {"#787878"_color, "#f3f3f3"_color, "#787878"_color};
@@ -190,20 +190,20 @@ const SkPaint kTrackPaint = []() {
   return p;
 }();
 
-const SkPaint kWindowPaint = []() {
+const SkPaint kWindowPaint = [] {
   SkPaint p;
   p.setColor("#1b1b1b"_color);
   return p;
 }();
 
-const SkPaint kTickPaint = []() {
+const SkPaint kTickPaint = [] {
   SkPaint p;
   p.setColor("#313131"_color);
   p.setStyle(SkPaint::kStroke_Style);
   return p;
 }();
 
-const SkPaint kBridgeHandlePaint = []() {
+const SkPaint kBridgeHandlePaint = [] {
   SkPaint p;
   SkPoint pts[2] = {{0, -kRulerHeight - kMarginAroundTracks}, {0, -kRulerHeight}};
   SkColor colors[2] = {kOrange, "#f17149"_color};
@@ -212,7 +212,7 @@ const SkPaint kBridgeHandlePaint = []() {
   return p;
 }();
 
-const SkPaint kBridgeLinePaint = []() {
+const SkPaint kBridgeLinePaint = [] {
   SkPaint p;
   p.setColor(kOrange);
   p.setStyle(SkPaint::kStroke_Style);
@@ -220,7 +220,7 @@ const SkPaint kBridgeLinePaint = []() {
   return p;
 }();
 
-const SkPaint kSignalPaint = []() {
+const SkPaint kSignalPaint = [] {
   SkPaint p = kBridgeLinePaint;
   p.setStrokeWidth(0.5_mm);
   p.setAlpha(0x80);
@@ -228,7 +228,7 @@ const SkPaint kSignalPaint = []() {
   return p;
 }();
 
-const SkPaint kOnOffPaint = []() {
+const SkPaint kOnOffPaint = [] {
   SkPaint p;
   p.setColor("#57dce4"_color);
   p.setStyle(SkPaint::kStroke_Style);
@@ -239,7 +239,7 @@ const SkPaint kOnOffPaint = []() {
 
 constexpr float kVec2DisplayMargin = 0.5_mm;
 
-const SkPaint kVec2Paint = []() {
+const SkPaint kVec2Paint = [] {
   SkPaint p;
   p.setColor("#131c64"_color);
   p.setStyle(SkPaint::kStroke_Style);
@@ -249,21 +249,21 @@ const SkPaint kVec2Paint = []() {
   return p;
 }();
 
-const SkPaint kZoomPaint = []() {
+const SkPaint kZoomPaint = [] {
   SkPaint p;
   p.setColor("#000000"_color);
   p.setAlphaf(0.5f);
   return p;
 }();
 
-const SkPaint kZoomTextPaint = []() {
+const SkPaint kZoomTextPaint = [] {
   SkPaint p;
   p.setColor("#ffffff"_color);
   p.setAlphaf(0.9f);
   return p;
 }();
 
-const SkPaint kZoomTickPaint = []() {
+const SkPaint kZoomTickPaint = [] {
   SkPaint p;
   p.setColor("#ffffff"_color);
   p.setAlphaf(0.9f);
@@ -274,7 +274,7 @@ const SkPaint kZoomTickPaint = []() {
 const SkMatrix kHorizontalFlip = SkMatrix::Scale(-1, 1);
 
 static SkPath GetPausedPath() {
-  static SkPath path = []() {
+  static SkPath path = [] {
     SkPath path;
     path.addRect(-1.5_mm, -1.5_mm, -0.5_mm, 1.5_mm);
     path.addRect(0.5_mm, -1.5_mm, 1.5_mm, 1.5_mm);
@@ -284,7 +284,7 @@ static SkPath GetPausedPath() {
 }
 
 static SkPath GetRecPath() {
-  static SkPath path = []() {
+  static SkPath path = [] {
     SkPath path;
     path.addCircle(0, 0, 2.5_mm);
     return path;
@@ -424,7 +424,7 @@ static float PosRatioFromBridgeOffsetX(float bridge_offset_x) {
 }
 
 SkPath SplicerShape(int num_tracks, float current_pos_ratio) {
-  static const SkPath splicer_shape = []() {
+  static const SkPath splicer_shape = [] {
     float height = 5_mm;
     float width = 8_mm;
 
@@ -1404,7 +1404,7 @@ struct TimelineWidget : Object::WidgetBase {
     }
     {  // Splicer
       canvas.save();
-      const static SkPaint kSplicerPaint = []() {
+      const static SkPaint kSplicerPaint = [] {
         SkPaint paint = kBridgeHandlePaint;
         // paint.setColor("#5d1e0a"_color);
         paint.setImageFilter(

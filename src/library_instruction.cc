@@ -107,7 +107,7 @@ PaintDrawable& JumpArgument::Icon() { return jump_icon; }
 
 JumpArgument jump_arg;
 
-Argument assembler_arg = []() {
+Argument assembler_arg = [] {
   Argument arg("Assembler", Argument::kRequiresObject);
   arg.RequireInstanceOf<Assembler>();
   arg.autoconnect_radius = INFINITY;
@@ -2276,7 +2276,7 @@ std::span<const Token> PrintInstruction(const mc::Inst& inst) {
 }
 
 void DrawFlag(SkCanvas& canvas, Flag flag) {
-  static const SkPath spike = []() {
+  static const SkPath spike = [] {
     auto base_path = PathFromSVG("M-4 0A40 40 0 000-10 40 40 0 004 0 8 8 0 01-4 0");
     auto bounds = base_path.getBounds();
     float scale = 1.5_mm / bounds.bottom();
@@ -2505,7 +2505,7 @@ struct EnumKnobWidget : ui::Widget {
         color::HSLuv(176, 100, 65),  // 8b
     };
 
-    static const SkPaint neutral_paint = []() {
+    static const SkPaint neutral_paint = [] {
       SkPaint paint;
       paint.setColor(color::HSLuv(283, 100, 57));
       return paint;
@@ -2561,7 +2561,7 @@ struct EnumKnobWidget : ui::Widget {
         break;
       }
     }
-    static const SkPaint white_overlay = []() {
+    static const SkPaint white_overlay = [] {
       SkPaint paint;
       SkColor mask_colors[] = {"#ffffff"_color, "#ffffff00"_color};
       float mask_pos[] = {kRegionStartRadius / kRegionEndRadius, 1};
@@ -2763,7 +2763,7 @@ struct EnumKnobWidget : ui::Widget {
             "0-.06-.01-.07-.02C-1.35-.23-1.39-.6-1.37-1c0-.01.01-.01.02-.02 0-.03 0-.06 "
             "0-.09-.05.02-.08.02-.16.02.14-.11.22-.2.29-.33Z",
             SVGUnit_Millimeters);
-        static const SkPath kTwoFlagsSymbol = []() {
+        static const SkPath kTwoFlagsSymbol = [] {
           SkPath path;
           path.addPath(kFlagSymbol.makeTransform(
               SkMatrix::RotateDeg(-5).preTranslate(0.7_mm, -0.5_mm).preScale(0.6, 0.6)));
@@ -3719,7 +3719,7 @@ void Instruction::SerializeState(Serializer& writer, const char* key) const {
 }
 
 void Instruction::DeserializeState(Location& l, Deserializer& d) {
-  static StringMap<unsigned> opcode_map = []() {
+  static StringMap<unsigned> opcode_map = [] {
     auto& assembler = LLVM_Assembler::Get();
     StringMap<unsigned> map;
     for (int i = 0; i < assembler.mc_instr_info->getNumOpcodes(); ++i) {
@@ -3727,7 +3727,7 @@ void Instruction::DeserializeState(Location& l, Deserializer& d) {
     }
     return map;
   }();
-  static StringMap<unsigned> reg_map = []() {
+  static StringMap<unsigned> reg_map = [] {
     auto& assembler = LLVM_Assembler::Get();
     StringMap<unsigned> map;
     for (int i = 0; i < assembler.mc_reg_info->getNumRegs(); ++i) {

@@ -31,7 +31,7 @@ constexpr static char kHandShapeSVG[] =
     "17.6C18.7 17.7 18.3 18.8 17.8 18.8L13 19.3Z";
 
 static SkPath GetHandShape() {
-  static SkPath path = []() {
+  static SkPath path = [] {
     auto path = PathFromSVG(kHandShapeSVG);
     SkMatrix matrix = SkMatrix::I();
     float s = 1.67;

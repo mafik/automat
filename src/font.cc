@@ -36,7 +36,7 @@ namespace automat::ui {
 constexpr static SkFourByteTag kFontWeightTag = SkSetFourByteTag('w', 'g', 'h', 't');
 
 sk_sp<SkFontMgr> GetFontMgr() {
-  static sk_sp<SkFontMgr> font_mgr = []() {
+  static sk_sp<SkFontMgr> font_mgr = [] {
 #if defined(_WIN32)
     return SkFontMgr_New_DirectWrite();
 #else
@@ -231,7 +231,7 @@ struct MeasureLineRunHandler : public LineRunHandler {
 };
 
 SkShaper& GetShaper() {
-  thread_local std::unique_ptr<SkShaper> shaper = []() {
+  thread_local std::unique_ptr<SkShaper> shaper = [] {
 #if defined(_WIN32)
     Status status;
     fs::Copy(fs::real, "C:\\Windows\\Globalization\\ICU\\icudtl.dat", fs::real,

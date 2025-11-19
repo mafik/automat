@@ -20,7 +20,7 @@ constexpr static char kTripleStr[] = "x86_64-pc-linux-gnu";
 const Triple kTriple = Triple(kTripleStr);
 
 LLVM_Assembler& LLVM_Assembler::Get() {
-  static unique_ptr<LLVM_Assembler> x86_64_assembler = []() {
+  static unique_ptr<LLVM_Assembler> x86_64_assembler = [] {
     LLVMInitializeX86TargetInfo();
     LLVMInitializeX86Target();
     LLVMInitializeX86TargetMC();

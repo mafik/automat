@@ -29,7 +29,7 @@ struct AssemblerWidget;
 
 struct RegisterWidget : public Object::WidgetBase {
   constexpr static Rect kBaseRect = Rect::MakeAtZero<CenterX, CenterY>(3_cm, 3_cm);
-  constexpr static Rect kBoundingRect = []() {
+  constexpr static Rect kBoundingRect = [] {
     auto rect = kBaseRect;
     rect.top += 11_mm;   // space for the register icon
     rect.right += 1_cm;  // space for byte values

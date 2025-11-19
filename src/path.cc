@@ -53,7 +53,7 @@ Path Path::ReadLink(Status& status) const {
 }
 
 Path Path::ExecutablePath() {
-  static Path executable_path = []() {
+  static Path executable_path = [] {
     char path[PATH_MAX];
     SSize len = readlink("/proc/self/exe", path, sizeof(path));
     if (len < 0) {

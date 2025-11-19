@@ -7,8 +7,8 @@
 #include <include/effects/SkGradientShader.h>
 
 #include "font.hh"
-#include "ui_constants.hh"
 #include "text_field.hh"
+#include "ui_constants.hh"
 
 namespace automat::ui {
 
@@ -22,7 +22,7 @@ SkRRect NumberTextField::ShapeRRect() const {
 // First bottom then top
 static constexpr SkColor kNumberBackgroundColors[2] = {"#bec8b7"_color, "#dee3db"_color};
 
-static const SkPaint kNumberTextBackgroundPaint = []() {
+static const SkPaint kNumberTextBackgroundPaint = [] {
   SkPoint pts[2] = {{0, 0}, {0, TextField::kHeight}};
   sk_sp<SkShader> shader =
       SkGradientShader::MakeLinear(pts, kNumberBackgroundColors, nullptr, 2, SkTileMode::kClamp);
@@ -34,7 +34,7 @@ static const SkPaint kNumberTextBackgroundPaint = []() {
 
 const SkPaint& NumberTextField::GetBackgroundPaint() const { return kNumberTextBackgroundPaint; }
 
-static const SkPaint kNumberTextBorderPaint = []() {
+static const SkPaint kNumberTextBorderPaint = [] {
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, TextField::kHeight}};
   SkColor colors[2] = {0xffffffff, 0xff000000};

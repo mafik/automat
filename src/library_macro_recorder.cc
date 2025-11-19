@@ -44,7 +44,7 @@ const Vec2 kRightEyeCenter = {30.2_mm, 30.9_mm};
 constexpr float kHeight = 5_cm;
 
 static SkPath& MacroRecorderShape() {
-  static auto path = []() {
+  static auto path = [] {
     auto path = PathFromSVG(kMacroRecorderShapeSVG, SVGUnit_Millimeters);
     auto bounds = path.getBounds();
     // scale to kHeight
@@ -85,7 +85,7 @@ MacroRecorder::~MacroRecorder() {
 // We will provide a prototype of the Timeline - to be created if no timeline can be found.
 // We will also specify here that it should search for any Timeline objects nearby (with some
 // radius).
-Argument timeline_arg = []() {
+Argument timeline_arg = [] {
   Argument arg("Timeline", Argument::kRequiresObject);
   arg.RequireInstanceOf<Timeline>();
   arg.autoconnect_radius = 10_cm;

@@ -225,7 +225,7 @@ StrView ToStr(AnsiKey k) noexcept {
 }
 
 AnsiKey AnsiKeyFromStr(StrView str) noexcept {
-  static std::map<StrView, AnsiKey> map = []() {
+  static std::map<StrView, AnsiKey> map = [] {
     std::map<StrView, AnsiKey> map;
     for (AnsiKey key = (AnsiKey)0; key < AnsiKey::Count; key = (AnsiKey)((int)key + 1)) {
       map[ToStr(key)] = key;

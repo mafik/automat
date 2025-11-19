@@ -10,8 +10,8 @@
 #include "base.hh"
 #include "color.hh"
 #include "font.hh"
-#include "ui_constants.hh"
 #include "library_number.hh"
+#include "ui_constants.hh"
 
 using namespace automat::ui;
 
@@ -48,7 +48,7 @@ SkColor kBorderTopColor = color::AdjustLightness(kBackgroundTopColor, 5);
 SkColor kBorderBottomColor = color::AdjustLightness(kBackgroundBottomColor, -5);
 
 SkRRect GetShape() {
-  static SkRRect shape = []() -> SkRRect {
+  static SkRRect shape = [] -> SkRRect {
     auto& font = ui::GetFont();
     float text_width = font.MeasureText("x+1");
     float width = text_width + 2 * kMargin;

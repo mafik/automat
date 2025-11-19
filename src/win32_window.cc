@@ -247,7 +247,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
   // TODO: Move this into Win32Window
   static unsigned char key_state[256] = {};
-  auto IsCtrlDown = []() {
+  auto IsCtrlDown = [] {
     return key_state[VK_LCONTROL] || key_state[VK_RCONTROL] || key_state[VK_CONTROL];
   };
   static char utf8_buffer[4] = {};
@@ -586,7 +586,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 }
 
 static WNDCLASSEX& GetWindowClass() {
-  static WNDCLASSEX wcex = []() {
+  static WNDCLASSEX wcex = [] {
     WNDCLASSEX wcex = {.cbSize = sizeof(WNDCLASSEX),
                        .style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC,
                        .lpfnWndProc = WndProc,

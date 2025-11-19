@@ -279,7 +279,7 @@ sk_sp<SkColorFilter> MakeTintFilter(SkColor tint, float depth) {
 }
 
 sk_sp<SkColorFilter> DesaturateFilter() {
-  static sk_sp<SkColorFilter> filter = []() {
+  static sk_sp<SkColorFilter> filter = [] {
     SkColorMatrix matrix = SkColorMatrix();
     matrix.setSaturation(0);
     return SkColorFilters::Matrix(matrix);

@@ -172,7 +172,7 @@ static const SkRRect kNumberRRectInner = [] {
 
 static const SkPath kNumberShape = SkPath::RRect(kNumberRRect);
 
-static const SkPaint kNumberBackgroundPaint = []() {
+static const SkPaint kNumberBackgroundPaint = [] {
   SkPaint paint;
   SkPoint pts[2] = {{0, 0}, {0, kHeight}};
   SkColor colors[2] = {0xff483e37, 0xff6c5d53};
@@ -182,7 +182,7 @@ static const SkPaint kNumberBackgroundPaint = []() {
   return paint;
 }();
 
-static const SkPaint kNumberBorderPaint = []() {
+static const SkPaint kNumberBorderPaint = [] {
   SkPaint paint_border;
   SkPoint pts[2] = {{0, 0}, {0, kHeight}};
   SkColor colors_border[2] = {0xff241f1c, 0xffac9d93};

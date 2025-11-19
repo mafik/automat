@@ -61,7 +61,7 @@ Argument::ObjectResult Argument::GetObject(Location& here,
 }
 
 PaintDrawable& Argument::Icon() {
-  static DrawableSkPath default_icon = []() {
+  static DrawableSkPath default_icon = [] {
     SkPath path = PathFromSVG(kNextShape);
     return DrawableSkPath(path);
   }();

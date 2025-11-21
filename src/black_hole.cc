@@ -5,6 +5,8 @@
 #include <include/core/SkColor.h>
 #include <include/core/SkPaint.h>
 
+#include <cmath>
+
 #include "embedded.hh"
 #include "global_resources.hh"
 #include "root_widget.hh"
@@ -49,7 +51,7 @@ void BlackHole::Draw(SkCanvas& canvas) const {
   }
   auto builder = SkRuntimeEffectBuilder(effect);
   builder.uniform("iCenterPx") = localToPx.mapPoint(root_widget.size);
-  builder.uniform("iTime") = (float)time::SecondsSinceEpoch();
+  builder.uniform("iTime") = (float)time::SteadySaw<M_PI * 2>();
   builder.uniform("iRadiusPx") = localToPx.mapRadius(radius);
   builder.uniform("iMaxRadiusPx") = localToPx.mapRadius(kMaxRadius);
 

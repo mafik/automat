@@ -657,66 +657,36 @@ struct MouseWheelWidget : MouseWidgetBase {
 
     float cy = wheel_bounds.centerY();
     float r = wheel_bounds.height() / 2;
-    auto a = rotation.value;
+    auto alpha = rotation.value;
+
+    float c = 1.5 * r;
+    Vec2 left = wheel_bounds.center() - Vec2(c, 0);
+    Vec2 right = wheel_bounds.center() + Vec2(c, 0);
 
     for (int i = 0; i < 12; ++i) {
-      rect.top = cy + r * (float)(a + 7.5_deg).cos;
-      rect.bottom = cy + r * (float)(a - 7.5_deg).cos;
-      if (rect.top > rect.bottom) {
-        canvas.drawRect(rect, paint);
+      if ((alpha + 7.5_deg).cos > (alpha - 7.5_deg).cos) {
+        // a0 and a1 are the distances along Y axis where the arcs cross the center line
+        float a0 = r * (float)(alpha + 7.5_deg).cos;
+        float a1 = r * (float)(alpha - 7.5_deg).cos;
+        // r0 and r1 are the radii of the circles
+        float r0 = a0 + (c * c - a0 * a0) / 2 / a0;
+        float r1 = a1 + (c * c - a1 * a1) / 2 / a1;
+        // x0 and x1 are the distances along Y axis where the arc control point lies
+        float x0 = 2 * a0 * c * c / (c * c - a0 * a0);
+        float x1 = 2 * a1 * c * c / (c * c - a1 * a1);
+        // s0 and s1 are the arc control points
+        Vec2 s0 = Vec2(wheel_bounds.centerX(), cy + x0);
+        Vec2 s1 = Vec2(wheel_bounds.centerX(), cy + x1);
+        SkPath path;
+        path.moveTo(left);
+        path.arcTo(s0, right, r0);
+        path.arcTo(s1, left, r1);
+        canvas.drawPath(path, paint);
       }
-      a = a + 30_deg;
+      alpha = alpha + 30_deg;
     }
 
     canvas.restore();
-
-    // krita::mouse::Middle();
-    // SkPath path;
-    // Vec2 cursor = {0, 0};
-    // SkPath dpad_window = krita::mouse::DpadWindow();
-    // Rect dpad_window_bounds = dpad_window.getBounds();
-    // float kDisplayRadius = dpad_window_bounds.Width() / 2;
-    // float trail_scale =
-    //     kDisplayRadius / 15;  // initial scale shows at least 15 pixels (0 and 10 pixel axes)
-    // path.moveTo(cursor.x, cursor.y);
-    // int end = trail_end_idx.load(std::memory_order_relaxed);
-    // for (int i = end + kMaxTrailPoints - 1; i != end; --i) {
-    //   Vec2 delta = trail[i % kMaxTrailPoints].load(std::memory_order_relaxed);
-    //   cursor += delta;
-    //   path.lineTo(-cursor.x, cursor.y);
-    //   float cursor_dist = Length(cursor);
-    //   float trail_scale_new = kDisplayRadius / cursor_dist;
-    //   if (trail_scale_new < trail_scale) {
-    //     trail_scale = trail_scale_new;
-    //   }
-    // }
-    // canvas.translate(dpad_window_bounds.CenterX(),
-    //                  dpad_window_bounds.CenterY());  // move the trail end to the center of
-    //                  display
-
-    // canvas.scale(trail_scale, trail_scale);
-
-    // auto matrix = canvas.getLocalToDeviceAs3x3();
-    // SkMatrix inverse;
-    // (void)matrix.invert(&inverse);
-
-    // SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
-    // inverse.mapVectors(dpd);
-    // SkPaint display_paint;
-    // display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
-    //     SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
-
-    // canvas.drawCircle(0, 0, kDisplayRadius / trail_scale, display_paint);
-    // SkPaint trail_paint;
-    // trail_paint.setColor("#CCCCCC"_color);
-    // trail_paint.setStyle(SkPaint::kStroke_Style);
-    // if (dpd[0].x() < 1) {
-    //   trail_paint.setStrokeWidth(1);
-    //   trail_paint.setStrokeCap(SkPaint::kSquare_Cap);
-    //   trail_paint.setStrokeJoin(SkPaint::kMiter_Join);
-    //   trail_paint.setStrokeMiter(2);
-    // }
-    // canvas.drawPath(path, trail_paint);
   }
 };
 

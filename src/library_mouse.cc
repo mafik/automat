@@ -22,6 +22,7 @@
 #endif
 
 #if defined(__linux__)
+#include <xcb/xinput.h>
 #include <xcb/xproto.h>
 #include <xcb/xtest.h>
 #endif
@@ -694,7 +695,19 @@ std::unique_ptr<Object::WidgetInterface> MouseWheel::MakeWidget(ui::Widget* pare
   return std::make_unique<MouseWheelWidget>(parent, AcquireWeakPtr());
 }
 void MouseWheel::OnMouseWheel(double delta) {
-  // TODO: send the event to the OS
+  // TODO: Make it work on Windows!
+#if defined(__linux__)
+  U8 detail;
+  if (delta > 0) {
+    detail = 4;
+  } else {
+    detail = 5;
+  }
+  for (auto type : {XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE}) {
+    xcb_test_fake_input(xcb::connection, type, detail, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
+  }
+  xcb::flush();
+#endif
   rotation = rotation + SinCos::FromDegrees(delta * 15);
   WakeWidgetsAnimation();
 }

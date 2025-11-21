@@ -523,14 +523,14 @@ void MacroRecorder::PointerLoggerWheel(ui::Pointer::Logging&, float delta) {
       FATAL << "MacroRecorder must be a child of a Machine";
       return;
     }
-    // Location& mouse_wheel_loc = machine->Create<MouseWheel>();
-    // mouse_wheel_loc.Iconify();
-    // Argument& track_arg = *timeline->track_args.back();
-    // auto timeline_loc = timeline->here.Lock();
+    Location& mouse_wheel_loc = machine->Create<MouseWheel>();
+    mouse_wheel_loc.Iconify();
+    Argument& track_arg = *timeline->track_args.back();
+    auto timeline_loc = timeline->here.Lock();
 
-    // PositionAhead(*timeline_loc, track_arg, mouse_wheel_loc);
-    // AnimateGrowFrom(*here.lock(), mouse_wheel_loc);
-    // timeline->here.lock()->ConnectTo(mouse_wheel_loc, track_arg);
+    PositionAhead(*timeline_loc, track_arg, mouse_wheel_loc);
+    AnimateGrowFrom(*here.lock(), mouse_wheel_loc);
+    timeline->here.lock()->ConnectTo(mouse_wheel_loc, track_arg);
   }
 
   Float64Track* track = dynamic_cast<Float64Track*>(timeline->tracks[track_index].get());

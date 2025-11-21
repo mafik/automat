@@ -5,6 +5,7 @@
 #include <cmath>
 
 #include "math.hh"
+#include "sincos.hh"
 #include "time.hh"
 
 namespace automat::ui {
@@ -207,6 +208,18 @@ inline Phase SpringV2<Vec2>::SineTowards(Vec2 target, float delta_time, float pe
   auto x = LowLevelSineTowards(target.x, delta_time, period_time, value.x, velocity.x);
   auto y = LowLevelSineTowards(target.y, delta_time, period_time, value.y, velocity.y);
   return x || y;
+}
+
+template <>
+inline Phase SpringV2<SinCos>::SineTowards(SinCos target, float delta_time, float period_time) {
+  auto velocity_radians = velocity.ToRadians();
+  float value_radians = 0;
+  float target_radians = (target - value).ToRadians();
+  auto phase =
+      LowLevelSineTowards(target_radians, delta_time, period_time, value_radians, velocity_radians);
+  value = value + SinCos::FromRadians(value_radians);
+  velocity = SinCos::FromRadians(velocity_radians);
+  return phase;
 }
 
 float SinInterp(float x, float x0, float y0, float x1, float y1);

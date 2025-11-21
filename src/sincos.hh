@@ -166,7 +166,21 @@ struct SinCos {
 
   constexpr static SinCos FromRadians(float radians) {
     float fsin = 0, fcos = 0;
+    sincosf(radians, &fsin, &fcos);
+    return SinCos(fsin, fcos);
+  }
+
+  // x5.2 faster but 0.0007% error
+  constexpr static SinCos FromRadiansBad(float radians) {
+    float fsin = 0, fcos = 0;
     FTA::sincos(radians, &fsin, &fcos);
+    return SinCos(fsin, fcos);
+  }
+
+  // x6.2 faster but 0.06% error
+  constexpr static SinCos FromRadiansUgly(float radians) {
+    float fsin = 0, fcos = 0;
+    FT::sincos(radians, &fsin, &fcos);
     return SinCos(fsin, fcos);
   }
 

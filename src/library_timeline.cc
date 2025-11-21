@@ -6,8 +6,10 @@
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
 #include <include/core/SkMaskFilter.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkPaint.h>
 #include <include/core/SkPath.h>
+#include <include/core/SkPathBuilder.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
@@ -25,8 +27,6 @@
 #include "base.hh"
 #include "color.hh"
 #include "font.hh"
-#include "include/core/SkMatrix.h"
-#include "include/core/SkPathBuilder.h"
 #include "key_button.hh"
 #include "library_mouse.hh"
 #include "math.hh"
@@ -2472,10 +2472,10 @@ void Float64Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (next_update_at != now) {
     return;
   }
-  // auto* mouse_move = target.As<MouseMove>();
-  // if (mouse_move) {
-  //   mouse_move->OnMouseMove(values[next_update_i]);
-  // }
+  auto* mouse_wheel = target.As<MouseWheel>();
+  if (mouse_wheel) {
+    mouse_wheel->OnMouseWheel(values[next_update_i]);
+  }
 }
 
 static void WakeRunButton(Timeline& timeline) {

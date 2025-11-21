@@ -383,6 +383,8 @@ struct MouseWidget : MouseWidgetBase {
     options_visitor(up_option);
     static MakeObjectOption move_option = MakeObjectOption(MAKE_PTR(MouseMove), Option::W);
     options_visitor(move_option);
+    static MakeObjectOption wheel_option = MakeObjectOption(MAKE_PTR(MouseWheel), Option::E);
+    options_visitor(wheel_option);
   }
 };
 
@@ -616,6 +618,115 @@ void MouseMove::OnMouseMove(Vec2 vec) {
     mouse_move_widget.trail[i].store(vec, std::memory_order_relaxed);
     widget.WakeAnimation();
   });
+}
+
+string_view MouseWheel::Name() const { return "Mouse Wheel"; }
+Ptr<Object> MouseWheel::Clone() const { return MAKE_PTR(MouseWheel); }
+
+struct MouseWheelWidget : MouseWidgetBase {
+  MouseWheelWidget(ui::Widget* parent, WeakPtr<MouseWheel>&& weak_mouse_move)
+      : MouseWidgetBase(parent, std::move(weak_mouse_move)) {}
+
+  animation::SpringV2<SinCos> rotation;
+
+  animation::Phase Tick(time::Timer& t) override {
+    auto phase = animation::Finished;
+
+    auto target = this->LockObject<MouseWheel>()->rotation;
+    phase |= rotation.SineTowards(target, t.d, 0.6);
+
+    return phase;
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    krita::mouse::base.draw(canvas);
+    krita::mouse::large_wheel.draw(canvas);
+    auto wheel_shape = krita::mouse::Wheel();
+
+    auto wheel_bounds = wheel_shape.getBounds();
+
+    canvas.save();
+    canvas.clipPath(wheel_shape);
+
+    Rect rect = Rect::MakeCenter(wheel_bounds.center(), wheel_bounds.width() * 2,
+                                 wheel_bounds.height() / 5);
+
+    SkPaint paint;
+    paint.setColor("#ffc900"_color);
+    paint.setBlendMode(SkBlendMode::kColorBurn);
+
+    float cy = wheel_bounds.centerY();
+    float r = wheel_bounds.height() / 2;
+    auto a = rotation.value;
+
+    for (int i = 0; i < 12; ++i) {
+      rect.top = cy + r * (float)(a + 7.5_deg).cos;
+      rect.bottom = cy + r * (float)(a - 7.5_deg).cos;
+      if (rect.top > rect.bottom) {
+        canvas.drawRect(rect, paint);
+      }
+      a = a + 30_deg;
+    }
+
+    canvas.restore();
+
+    // krita::mouse::Middle();
+    // SkPath path;
+    // Vec2 cursor = {0, 0};
+    // SkPath dpad_window = krita::mouse::DpadWindow();
+    // Rect dpad_window_bounds = dpad_window.getBounds();
+    // float kDisplayRadius = dpad_window_bounds.Width() / 2;
+    // float trail_scale =
+    //     kDisplayRadius / 15;  // initial scale shows at least 15 pixels (0 and 10 pixel axes)
+    // path.moveTo(cursor.x, cursor.y);
+    // int end = trail_end_idx.load(std::memory_order_relaxed);
+    // for (int i = end + kMaxTrailPoints - 1; i != end; --i) {
+    //   Vec2 delta = trail[i % kMaxTrailPoints].load(std::memory_order_relaxed);
+    //   cursor += delta;
+    //   path.lineTo(-cursor.x, cursor.y);
+    //   float cursor_dist = Length(cursor);
+    //   float trail_scale_new = kDisplayRadius / cursor_dist;
+    //   if (trail_scale_new < trail_scale) {
+    //     trail_scale = trail_scale_new;
+    //   }
+    // }
+    // canvas.translate(dpad_window_bounds.CenterX(),
+    //                  dpad_window_bounds.CenterY());  // move the trail end to the center of
+    //                  display
+
+    // canvas.scale(trail_scale, trail_scale);
+
+    // auto matrix = canvas.getLocalToDeviceAs3x3();
+    // SkMatrix inverse;
+    // (void)matrix.invert(&inverse);
+
+    // SkVector dpd[2] = {SkVector(1, 0), SkVector(0, 1)};
+    // inverse.mapVectors(dpd);
+    // SkPaint display_paint;
+    // display_paint.setShader(mouse::GetPixelGridRuntimeEffect().makeShader(
+    //     SkData::MakeWithCopy((void*)&dpd, sizeof(dpd)), nullptr, 0));
+
+    // canvas.drawCircle(0, 0, kDisplayRadius / trail_scale, display_paint);
+    // SkPaint trail_paint;
+    // trail_paint.setColor("#CCCCCC"_color);
+    // trail_paint.setStyle(SkPaint::kStroke_Style);
+    // if (dpd[0].x() < 1) {
+    //   trail_paint.setStrokeWidth(1);
+    //   trail_paint.setStrokeCap(SkPaint::kSquare_Cap);
+    //   trail_paint.setStrokeJoin(SkPaint::kMiter_Join);
+    //   trail_paint.setStrokeMiter(2);
+    // }
+    // canvas.drawPath(path, trail_paint);
+  }
+};
+
+std::unique_ptr<Object::WidgetInterface> MouseWheel::MakeWidget(ui::Widget* parent) {
+  return std::make_unique<MouseWheelWidget>(parent, AcquireWeakPtr());
+}
+void MouseWheel::OnMouseWheel(double delta) {
+  // TODO: send the event to the OS
+  rotation = rotation + SinCos::FromDegrees(delta * 15);
+  WakeWidgetsAnimation();
 }
 
 std::unique_ptr<Object::WidgetInterface> Mouse::MakeWidget(ui::Widget* parent) {

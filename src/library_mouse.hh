@@ -46,6 +46,14 @@ struct MouseMove : Object {
   void OnMouseMove(Vec2);
 };
 
+struct MouseWheel : Object {
+  SinCos rotation;
+  string_view Name() const override;
+  Ptr<Object> Clone() const override;
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
+  void OnMouseWheel(double);
+};
+
 struct MouseButtonPresser : Object, Runnable, LongRunning {
   ui::PointerButton button;
 

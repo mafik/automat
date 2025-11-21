@@ -64,6 +64,21 @@ struct Vec2Track : TrackBase {
   bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
 };
 
+// A track that holds a sequence of 64-bit floating point numbers.
+struct Float64Track : TrackBase {
+  Vec<double> values;
+
+  string_view Name() const override { return "Float64 Track"; }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Float64Track, *this); }
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
+  void Splice(time::Duration current_offset, time::Duration splice_to) override;
+  void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
+
+  void SerializeState(Serializer& writer, const char* key) const override;
+  void DeserializeState(Location& l, Deserializer& d) override;
+  bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
+};
+
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
@@ -110,6 +125,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   OnOffTrack& AddOnOffTrack(StrView name);
   Vec2Track& AddVec2Track(StrView name);
+  Float64Track& AddFloat64Track(StrView name);
 
   void AddTrack(Ptr<TrackBase>&& track, StrView name);
 

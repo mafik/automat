@@ -25,6 +25,8 @@
 #include "base.hh"
 #include "color.hh"
 #include "font.hh"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPathBuilder.h"
 #include "key_button.hh"
 #include "library_mouse.hh"
 #include "math.hh"
@@ -321,6 +323,13 @@ OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
 
 Vec2Track& Timeline::AddVec2Track(StrView name) {
   auto track_ptr = MAKE_PTR(Vec2Track);
+  auto& track = *track_ptr;
+  AddTrack(std::move(track_ptr), name);
+  return track;
+}
+
+Float64Track& Timeline::AddFloat64Track(StrView name) {
+  auto track_ptr = MAKE_PTR(Float64Track);
   auto& track = *track_ptr;
   AddTrack(std::move(track_ptr), name);
   return track;
@@ -1960,6 +1969,16 @@ struct OnOffTrackWidget : TrackBaseWidget {
   }
 };
 
+static int LowerBound(TrackBase& track, time::Duration t) {
+  auto& timestamps = track.timestamps;
+  return lower_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
+}
+
+static int UpperBound(TrackBase& track, time::Duration t) {
+  auto& timestamps = track.timestamps;
+  return upper_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
+}
+
 struct Vec2TrackWidget : TrackBaseWidget {
   using TrackBaseWidget::TrackBaseWidget;
   void Draw(SkCanvas& canvas) const override {
@@ -1976,14 +1995,8 @@ struct Vec2TrackWidget : TrackBaseWidget {
     time::FloatDuration s_per_m = timeline_widget->distance_to_seconds;  // s / m
     auto left_t = time::Defloat(rect.left * s_per_m);
     auto right_t = time::Defloat(rect.right * s_per_m);
-    auto LowerBound = [&](time::Duration t) {
-      return lower_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
-    };
-    auto UpperBound = [&](time::Duration t) {
-      return upper_bound(timestamps.begin(), timestamps.end(), t) - timestamps.begin();
-    };
-    auto left_i = LowerBound(left_t);
-    auto right_i = UpperBound(right_t);
+    auto left_i = LowerBound(track, left_t);
+    auto right_i = UpperBound(track, right_t);
 
     float px_per_meter = canvas.getLocalToDeviceAs3x3().mapVector(1, 0).length();  // [px / m]
     float m_per_px = 1.f / px_per_meter;                                           // [m / px]
@@ -2035,7 +2048,7 @@ struct Vec2TrackWidget : TrackBaseWidget {
       constexpr float kDisplayMinWidth = kDisplayHeight;
       auto max_track_length = timeline->MaxTrackLength();
       auto current_t = timeline_widget->current_offset_raw;
-      int current_i = LowerBound(current_t);
+      int current_i = LowerBound(track, current_t);
       auto display_min_t = time::Defloat(kDisplayMinWidth * s_per_m);
       struct Vec2Display {
         time::Duration start_t, end_t;
@@ -2044,8 +2057,8 @@ struct Vec2TrackWidget : TrackBaseWidget {
       Vec2Display root;
       root.start_t = 0s;
       root.end_t = max_track_length;
-      root.start_i = LowerBound(root.start_t);
-      root.end_i = UpperBound(root.end_t);
+      root.start_i = LowerBound(track, root.start_t);
+      root.end_i = UpperBound(track, root.end_t);
       // Snap the analysis window to the actual timestamps that exist in the track.
       root.start_t = timestamps[root.start_i];
       root.end_t = timestamps[root.end_i - 1];
@@ -2097,7 +2110,7 @@ struct Vec2TrackWidget : TrackBaseWidget {
           continue;
         }
         // the lowest index that can be moved into the next display
-        int earliest_split_i = UpperBound(earliest_split_t);
+        int earliest_split_i = UpperBound(track, earliest_split_t);
         auto initial_gap_t =
             std::min(latest_split_t, timestamps[earliest_split_i]) - earliest_split_t;
 
@@ -2105,7 +2118,7 @@ struct Vec2TrackWidget : TrackBaseWidget {
         time::Duration gap_t = time::kDurationGuard;
 
         // the lowest index that must belong to the next display
-        int latest_split_i = LowerBound(latest_split_t) - 1;
+        int latest_split_i = LowerBound(track, latest_split_t) - 1;
         auto final_gap_t = latest_split_t - timestamps[latest_split_i];
         if (earliest_split_i < latest_split_i) {
           gap_i = gap_tree.Query(earliest_split_i, latest_split_i - 1);
@@ -2267,6 +2280,86 @@ struct Vec2TrackWidget : TrackBaseWidget {
   }
 };
 
+struct Float64TrackWidget : TrackBaseWidget {
+  animation::SpringV2<float> y_max;
+  animation::SpringV2<float> y_min;
+  SkPath trail;
+
+  using TrackBaseWidget::TrackBaseWidget;
+
+  animation::Phase Tick(time::Timer& t) override {
+    auto phase = animation::Finished;
+    Context ctx(*this);
+    auto& track = ctx.GetTrack<Float64Track>();
+    auto* timeline_widget = ctx.GetTimelineWidget();
+    auto& timestamps = track.timestamps;
+    auto& values = track.values;
+
+    Vec<double> absolute_values;
+    {  // precompute absolute_values
+      absolute_values.reserve(values.size());
+      double y = 0;
+      for (int i = 0; i < values.size(); ++i) {
+        y += values[i];
+        absolute_values.emplace_back(y);
+      }
+    }
+
+    time::FloatDuration s_per_m = timeline_widget->distance_to_seconds;  // s / m
+    auto shape = Shape(ctx);
+    Rect shape_rect;
+    shape.isRect(&shape_rect.sk);
+    auto left_t = time::Defloat(shape_rect.left * s_per_m);
+    auto right_t = time::Defloat(shape_rect.right * s_per_m);
+    auto left_i = LowerBound(track, left_t);
+    auto right_i = UpperBound(track, right_t);
+
+    SkPathBuilder trail_builder;
+    double last_y = left_i > 0 ? absolute_values[left_i - 1] : 0;
+    double y_min_target = last_y, y_max_target = last_y;
+    trail_builder.moveTo(shape_rect.left, last_y);
+    for (int i = left_i; i < right_i; ++i) {
+      double x = timestamps[i] / s_per_m;
+      trail_builder.lineTo(x, last_y);
+      double y = absolute_values[i];
+      y_min_target = std::min(y_min_target, y);
+      y_max_target = std::max(y_max_target, y);
+      trail_builder.lineTo(x, y);
+      last_y = y;
+    }
+    trail_builder.lineTo(shape_rect.right, last_y);
+
+    phase |= y_min.SineTowards(y_min_target, t.d, 0.5);
+    phase |= y_max.SineTowards(y_max_target, t.d, 0.5);
+
+    double trail_height = y_max - y_min;
+    double trail_middle = (y_max + y_min) / 2;
+
+    SkMatrix m = SkMatrix::Translate(0, -trail_middle);
+    trail_height = std::max(1., trail_height);
+    if (trail_height > 0) {
+      m.postScale(1, (kTrackHeight - 1_mm) / trail_height);
+    }
+    trail_builder.transform(m);
+    trail = trail_builder.detach();
+
+    return phase;
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    Context ctx(*this);
+    TrackBaseWidget::Draw(canvas, ctx);
+
+    SkPaint trail_paint;
+    trail_paint.setColor("#131c64"_color);
+    trail_paint.setStyle(SkPaint::kStroke_Style);
+    SkPaint border_paint;
+    border_paint.setColor("#888888"_color);
+    border_paint.setStyle(SkPaint::kStroke_Style);
+    canvas.drawPath(trail, trail_paint);
+  }
+};
+
 std::unique_ptr<Object::WidgetInterface> OnOffTrack::MakeWidget(ui::Widget* parent) {
   auto ret = std::make_unique<OnOffTrackWidget>(parent);
   ret->object = AcquireWeakPtr();
@@ -2279,7 +2372,44 @@ std::unique_ptr<Object::WidgetInterface> Vec2Track::MakeWidget(ui::Widget* paren
   return ret;
 }
 
+std::unique_ptr<Object::WidgetInterface> Float64Track::MakeWidget(ui::Widget* parent) {
+  auto ret = std::make_unique<Float64TrackWidget>(parent);
+  ret->object = AcquireWeakPtr();
+  return ret;
+}
+
+// TODO: Merge {Vec2,Float64}Track::Splice
 void Vec2Track::Splice(time::Duration current_offset, time::Duration splice_to) {
+  auto delta = splice_to - current_offset;
+  auto [current_offset_ge, current_offset_g] =
+      equal_range(timestamps.begin(), timestamps.end(), current_offset);
+  if (delta < 0s) {
+    auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
+    int begin = splice_to_ge - timestamps.begin();
+    int end = current_offset_g - timestamps.begin();
+    // Fold the motion into a single event.
+    for (int i = begin + 1; i < end; ++i) {
+      values[begin] += values[i];
+    }
+    if (begin < values.size()) {
+      timestamps[begin] = splice_to;
+    }
+    int count = end - begin - 1;
+    if (count > 0) {
+      for (int i = begin + 1; i < timestamps.size() - count; ++i) {
+        timestamps[i] = timestamps[i + count] + delta;
+        values[i] = values[i + count];
+      }
+      timestamps.resize(timestamps.size() - count);
+      values.resize(values.size() - count);
+    }
+  } else if (delta > 0s) {
+    for (auto it = current_offset_ge; it != timestamps.end(); ++it) {
+      *it += delta;
+    }
+  }
+}
+void Float64Track::Splice(time::Duration current_offset, time::Duration splice_to) {
   auto delta = splice_to - current_offset;
   auto [current_offset_ge, current_offset_g] =
       equal_range(timestamps.begin(), timestamps.end(), current_offset);
@@ -2327,6 +2457,25 @@ void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (mouse_move) {
     mouse_move->OnMouseMove(values[next_update_i]);
   }
+}
+void Float64Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
+                                time::SteadyPoint now) {
+  auto cmp = [started_at](time::Duration timestamp, time::SteadyPoint now) {
+    return started_at + timestamp < now;
+  };
+  int next_update_i =
+      std::lower_bound(timestamps.begin(), timestamps.end(), now, cmp) - timestamps.begin();
+  if (next_update_i == timestamps.size()) {
+    return;
+  }
+  auto next_update_at = started_at + time::Duration(timestamps[next_update_i]);
+  if (next_update_at != now) {
+    return;
+  }
+  // auto* mouse_move = target.As<MouseMove>();
+  // if (mouse_move) {
+  //   mouse_move->OnMouseMove(values[next_update_i]);
+  // }
 }
 
 static void WakeRunButton(Timeline& timeline) {
@@ -2537,6 +2686,26 @@ void Vec2Track::SerializeState(Serializer& writer, const char* key) const {
   }
 }
 
+void Float64Track::SerializeState(Serializer& writer, const char* key) const {
+  // Using nullptr as a guard value to reduce JSON nesting
+  if (key != nullptr) {
+    writer.Key(key);
+    writer.StartObject();
+  }
+  writer.Key("type");
+  writer.String("float64");
+  TrackBase::SerializeState(writer, nullptr);
+  writer.Key("values");
+  writer.StartArray();
+  for (const auto& v : values) {
+    writer.Double(v);
+  }
+  writer.EndArray();
+  if (key != nullptr) {
+    writer.EndObject();
+  }
+}
+
 void Timeline::SerializeState(Serializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
@@ -2629,6 +2798,24 @@ bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_nam
   }
   return TrackBase::TryDeserializeField(l, d, field_name);
 }
+bool Float64Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
+  if (field_name == "values") {
+    values.clear();
+    Status status;
+    for (int i : ArrayView(d, status)) {
+      double v;
+      d.Get(v, status);
+      if (OK(status)) {
+        values.push_back(v);
+      }
+    }
+    if (!OK(status)) {
+      ReportError(status.ToStr());
+    }
+    return true;
+  }
+  return TrackBase::TryDeserializeField(l, d, field_name);
+}
 
 void TrackBase::DeserializeState(Location& l, Deserializer& d) {
   ERROR << "TrackBase::DeserializeState() not implemented";
@@ -2639,6 +2826,10 @@ void OnOffTrack::DeserializeState(Location& l, Deserializer& d) {
 }
 
 void Vec2Track::DeserializeState(Location& l, Deserializer& d) {
+  ERROR << "Vec2Track::DeserializeState() not implemented";
+}
+
+void Float64Track::DeserializeState(Location& l, Deserializer& d) {
   ERROR << "Vec2Track::DeserializeState() not implemented";
 }
 
@@ -2661,6 +2852,8 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
                 track = &AddOnOffTrack(track_name);
               } else if (track_type == "vec2") {
                 track = &AddVec2Track(track_name);
+              } else if (track_type == "float64") {
+                track = &AddFloat64Track(track_name);
               } else {
                 AppendErrorMessage(status) += f("Unknown track type: {}", track_type);
               }

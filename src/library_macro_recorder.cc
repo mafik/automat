@@ -502,9 +502,47 @@ void MacroRecorder::PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerBu
 void MacroRecorder::PointerLoggerButtonUp(ui::Pointer::Logging&, ui::PointerButton btn) {
   RecordInputEvent(*this, AnsiKey::Unknown, btn, false);
 }
+// TODO: merge PointerLoggerWheel & PointerLoggerMove
 void MacroRecorder::PointerLoggerWheel(ui::Pointer::Logging&, float delta) {
-  LOG << "Wheel: " << delta;
+  auto timeline = FindOrCreateTimeline(*this);
+
+  int track_index = -1;
+  const Str track_name = "Mouse Wheel";
+  for (int i = 0; i < timeline->tracks.size(); i++) {
+    if (timeline->track_args[i]->name == track_name) {
+      track_index = i;
+      break;
+    }
+  }
+
+  if (track_index == -1) {
+    auto& new_track = timeline->AddFloat64Track(track_name);
+    track_index = timeline->tracks.size() - 1;
+    auto machine = here.lock()->ParentAs<Machine>();
+    if (machine == nullptr) {
+      FATAL << "MacroRecorder must be a child of a Machine";
+      return;
+    }
+    // Location& mouse_wheel_loc = machine->Create<MouseWheel>();
+    // mouse_wheel_loc.Iconify();
+    // Argument& track_arg = *timeline->track_args.back();
+    // auto timeline_loc = timeline->here.Lock();
+
+    // PositionAhead(*timeline_loc, track_arg, mouse_wheel_loc);
+    // AnimateGrowFrom(*here.lock(), mouse_wheel_loc);
+    // timeline->here.lock()->ConnectTo(mouse_wheel_loc, track_arg);
+  }
+
+  Float64Track* track = dynamic_cast<Float64Track*>(timeline->tracks[track_index].get());
+  if (track == nullptr) {
+    ERROR << "Track is not a Float64Track";
+    return;
+  }
+  time::Duration t = time::SteadyNow() - timeline->recording.started_at;
+  track->timestamps.push_back(t);
+  track->values.push_back(delta);
 }
+
 void MacroRecorder::PointerLoggerMove(ui::Pointer::Logging&, Vec2 relative_px) {
   auto timeline = FindOrCreateTimeline(*this);
 

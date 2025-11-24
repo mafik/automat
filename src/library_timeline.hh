@@ -51,6 +51,7 @@ struct OnOffTrack : TrackBase, OnOff {
 
 // A track that holds a sequence of relative values.
 struct Vec2Track : TrackBase {
+  using ValueT = Vec2;
   Vec<Vec2> values;
 
   string_view Name() const override { return "Vec2 Track"; }
@@ -66,6 +67,7 @@ struct Vec2Track : TrackBase {
 
 // A track that holds a sequence of 64-bit floating point numbers.
 struct Float64Track : TrackBase {
+  using ValueT = double;
   Vec<double> values;
 
   string_view Name() const override { return "Float64 Track"; }

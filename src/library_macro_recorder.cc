@@ -296,7 +296,7 @@ void MacroRecorder::OnCancel() {
   }
 }
 
-static void RecordInputEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, PointerButton ptr_btn,
+static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, PointerButton ptr_btn,
                              bool down) {
   auto machine = macro_recorder.here.lock()->ParentAs<Machine>();
   if (machine == nullptr) {
@@ -490,24 +490,24 @@ static void RecordInputEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
 }
 
 void MacroRecorder::KeyloggerKeyDown(ui::Key key) {
-  RecordInputEvent(*this, key.physical, PointerButton::Unknown, true);
+  RecordOnOffEvent(*this, key.physical, PointerButton::Unknown, true);
 }
 void MacroRecorder::KeyloggerKeyUp(ui::Key key) {
-  RecordInputEvent(*this, key.physical, PointerButton::Unknown, false);
+  RecordOnOffEvent(*this, key.physical, PointerButton::Unknown, false);
 }
 
 void MacroRecorder::PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerButton btn) {
-  RecordInputEvent(*this, AnsiKey::Unknown, btn, true);
+  RecordOnOffEvent(*this, AnsiKey::Unknown, btn, true);
 }
 void MacroRecorder::PointerLoggerButtonUp(ui::Pointer::Logging&, ui::PointerButton btn) {
-  RecordInputEvent(*this, AnsiKey::Unknown, btn, false);
+  RecordOnOffEvent(*this, AnsiKey::Unknown, btn, false);
 }
-// TODO: merge PointerLoggerWheel & PointerLoggerMove
-void MacroRecorder::PointerLoggerWheel(ui::Pointer::Logging&, float delta) {
-  auto timeline = FindOrCreateTimeline(*this);
+
+template<typename TrackT, typename ReceiverT>
+static void RecordDelta(MacroRecorder& recorder, const char* track_name, typename TrackT::ValueT delta) {
+  auto timeline = FindOrCreateTimeline(recorder);
 
   int track_index = -1;
-  const Str track_name = "Mouse Wheel";
   for (int i = 0; i < timeline->tracks.size(); i++) {
     if (timeline->track_args[i]->name == track_name) {
       track_index = i;
@@ -516,26 +516,28 @@ void MacroRecorder::PointerLoggerWheel(ui::Pointer::Logging&, float delta) {
   }
 
   if (track_index == -1) {
-    auto& new_track = timeline->AddFloat64Track(track_name);
+    auto track_ptr = MAKE_PTR(TrackT);
+    auto& new_track = *track_ptr;
+    timeline->AddTrack(std::move(track_ptr), track_name);
     track_index = timeline->tracks.size() - 1;
-    auto machine = here.lock()->ParentAs<Machine>();
+    auto machine = recorder.here.lock()->ParentAs<Machine>();
     if (machine == nullptr) {
       FATAL << "MacroRecorder must be a child of a Machine";
       return;
     }
-    Location& mouse_wheel_loc = machine->Create<MouseWheel>();
-    mouse_wheel_loc.Iconify();
+    Location& receiver_loc = machine->Create<ReceiverT>();
+    receiver_loc.Iconify();
     Argument& track_arg = *timeline->track_args.back();
     auto timeline_loc = timeline->here.Lock();
 
-    PositionAhead(*timeline_loc, track_arg, mouse_wheel_loc);
-    AnimateGrowFrom(*here.lock(), mouse_wheel_loc);
-    timeline->here.lock()->ConnectTo(mouse_wheel_loc, track_arg);
+    PositionAhead(*timeline_loc, track_arg, receiver_loc);
+    AnimateGrowFrom(*recorder.here.lock(), receiver_loc);
+    timeline->here.lock()->ConnectTo(receiver_loc, track_arg);
   }
 
-  Float64Track* track = dynamic_cast<Float64Track*>(timeline->tracks[track_index].get());
+  auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index].get());
   if (track == nullptr) {
-    ERROR << "Track is not a Float64Track";
+    ERROR << "Track is not a " << typeid(TrackT).name();
     return;
   }
   time::Duration t = time::SteadyNow() - timeline->recording.started_at;
@@ -543,44 +545,16 @@ void MacroRecorder::PointerLoggerWheel(ui::Pointer::Logging&, float delta) {
   track->values.push_back(delta);
 }
 
+void MacroRecorder::PointerLoggerScrollY(ui::Pointer::Logging&, float delta) {
+  RecordDelta<Float64Track, MouseWheel>(*this, "Scroll Y", delta);
+}
+
+void MacroRecorder::PointerLoggerScrollX(ui::Pointer::Logging&, float delta) {
+  RecordDelta<Float64Track, MouseWheel>(*this, "Scroll X", delta);
+}
+
 void MacroRecorder::PointerLoggerMove(ui::Pointer::Logging&, Vec2 relative_px) {
-  auto timeline = FindOrCreateTimeline(*this);
-
-  int track_index = -1;
-  const Str track_name = "Mouse Position";
-  for (int i = 0; i < timeline->tracks.size(); i++) {
-    if (timeline->track_args[i]->name == track_name) {
-      track_index = i;
-      break;
-    }
-  }
-
-  if (track_index == -1) {
-    auto& new_track = timeline->AddVec2Track(track_name);
-    track_index = timeline->tracks.size() - 1;
-    auto machine = here.lock()->ParentAs<Machine>();
-    if (machine == nullptr) {
-      FATAL << "MacroRecorder must be a child of a Machine";
-      return;
-    }
-    Location& mouse_move_loc = machine->Create<MouseMove>();
-    mouse_move_loc.Iconify();
-    Argument& track_arg = *timeline->track_args.back();
-    auto timeline_loc = timeline->here.Lock();
-
-    PositionAhead(*timeline_loc, track_arg, mouse_move_loc);
-    AnimateGrowFrom(*here.lock(), mouse_move_loc);
-    timeline->here.lock()->ConnectTo(mouse_move_loc, track_arg);
-  }
-
-  Vec2Track* track = dynamic_cast<Vec2Track*>(timeline->tracks[track_index].get());
-  if (track == nullptr) {
-    ERROR << "Track is not a Vec2Track";
-    return;
-  }
-  time::Duration t = time::SteadyNow() - timeline->recording.started_at;
-  track->timestamps.push_back(t);
-  track->values.push_back(relative_px);
+  RecordDelta<Vec2Track, MouseMove>(*this, "Mouse Position", relative_px);
 }
 
 void MacroRecorder::PointerOver(ui::Pointer& p) {

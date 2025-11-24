@@ -142,7 +142,14 @@ struct Pointer {
     virtual ~Logger() = default;
     virtual void PointerLoggerButtonDown(Logging&, PointerButton) {}
     virtual void PointerLoggerButtonUp(Logging&, PointerButton) {}
-    virtual void PointerLoggerWheel(Logging&, float) {}
+
+    // The value is ±1 when scroll wheel moves one notch.
+    // Typical mouse wheel contains 24 notches in one rotation.
+    // OS-es may quantize this value to multiples of 1/120.
+    // Value is positive when the finger moves up.
+    virtual void PointerLoggerScrollY(Logging&, float) {}
+    virtual void PointerLoggerScrollX(Logging&, float) {}
+
     // `relative_px` uses OS coords (so Y axis is increasing downwards).
     virtual void PointerLoggerMove(Logging&, Vec2 relative_px) {}
   };

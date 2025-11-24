@@ -781,7 +781,7 @@ void XCBWindow::MainLoop() {
                 auto valuators = RawButtonValuators(*ev);
                 if (auto delta = valuators.GetVerticalScrollDelta(false)) {
                   for (auto& logging : pointer.loggings) {
-                    logging->logger.PointerLoggerWheel(*logging, *delta);
+                    logging->logger.PointerLoggerScrollY(*logging, *delta);
                   }
                 }
                 if (auto xy = valuators.GetRelativeXY()) {

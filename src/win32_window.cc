@@ -444,9 +444,16 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
         if (ev.usButtonFlags & RI_MOUSE_WHEEL) {
           for (auto& logging : mouse.loggings) {
-            logging->logger.PointerLoggerWheel(*logging, (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
+            logging->logger.PointerLoggerScrollY(*logging, (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
           }
         }
+
+        if (ev.usButtonFlags & RI_MOUSE_HWHEEL) {
+          for (auto& logging : mouse.loggings) {
+            logging->logger.PointerLoggerScrollX(*logging, (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
+          }
+        }
+
         if (ev.lLastX != 0 || ev.lLastY != 0) {
           Vec2 pos((float)ev.lLastX, (float)ev.lLastY);
           bool ok = true;

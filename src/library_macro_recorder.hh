@@ -67,7 +67,8 @@ struct MacroRecorder : LiveObject,
 
   void PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerButton) override;
   void PointerLoggerButtonUp(ui::Pointer::Logging&, ui::PointerButton) override;
-  void PointerLoggerWheel(ui::Pointer::Logging&, float) override;
+  void PointerLoggerScrollY(ui::Pointer::Logging&, float) override;
+  void PointerLoggerScrollX(ui::Pointer::Logging&, float) override;
   void PointerLoggerMove(ui::Pointer::Logging&, Vec2) override;
 
   Vec2AndDir ArgStart(const Argument&) override;

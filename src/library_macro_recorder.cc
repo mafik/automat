@@ -546,11 +546,11 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name, typenam
 }
 
 void MacroRecorder::PointerLoggerScrollY(ui::Pointer::Logging&, float delta) {
-  RecordDelta<Float64Track, MouseWheel>(*this, "Scroll Y", delta);
+  RecordDelta<Float64Track, MouseScrollY>(*this, "Scroll Y", delta);
 }
 
 void MacroRecorder::PointerLoggerScrollX(ui::Pointer::Logging&, float delta) {
-  RecordDelta<Float64Track, MouseWheel>(*this, "Scroll X", delta);
+  RecordDelta<Float64Track, MouseScrollX>(*this, "Scroll X", delta);
 }
 
 void MacroRecorder::PointerLoggerMove(ui::Pointer::Logging&, Vec2 relative_px) {

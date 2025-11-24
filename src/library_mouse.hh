@@ -46,12 +46,25 @@ struct MouseMove : Object {
   void OnMouseMove(Vec2);
 };
 
-struct MouseWheel : Object {
+// Interface for objects that act as sinks for relative float64 values.
+struct SinkRelativeFloat64 {
+  virtual void OnRelativeFloat64(double value) = 0;
+};
+
+struct MouseScrollY : Object, SinkRelativeFloat64 {
   SinCos rotation;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
-  void OnMouseWheel(double);
+  void OnRelativeFloat64(double) override;
+};
+
+struct MouseScrollX : Object, SinkRelativeFloat64 {
+  SinCos rotation;
+  string_view Name() const override;
+  Ptr<Object> Clone() const override;
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
+  void OnRelativeFloat64(double) override;
 };
 
 struct MouseButtonPresser : Object, Runnable, LongRunning {

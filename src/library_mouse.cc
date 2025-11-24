@@ -384,7 +384,7 @@ struct MouseWidget : MouseWidgetBase {
     options_visitor(up_option);
     static MakeObjectOption move_option = MakeObjectOption(MAKE_PTR(MouseMove), Option::W);
     options_visitor(move_option);
-    static MakeObjectOption wheel_option = MakeObjectOption(MAKE_PTR(MouseWheel), Option::E);
+    static MakeObjectOption wheel_option = MakeObjectOption(MAKE_PTR(MouseScrollY), Option::E);
     options_visitor(wheel_option);
   }
 };
@@ -401,36 +401,42 @@ struct MouseButtonEventWidget : MouseWidgetBase {
   }
 };
 
+#if defined(_WIN32)
+static void WIN32_SendMouseInput(int32_t dx, int32_t dy, uint32_t mouseData, uint32_t dwFlags) {
+  INPUT input;
+  input.type = INPUT_MOUSE;
+  input.mi.dx = dx;
+  input.mi.dy = dy;
+  input.mi.mouseData = mouseData;
+  input.mi.dwFlags = dwFlags;
+  input.mi.time = 0;
+  input.mi.dwExtraInfo = 0;
+  SendInput(1, &input, sizeof(INPUT));
+}
+#endif
+
 static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
   using enum ui::PointerButton;
 #if defined(_WIN32)
-  INPUT input;
-  input.type = INPUT_MOUSE;
-  input.mi.dx = 0;
-  input.mi.dy = 0;
-  input.mi.mouseData = 0;
-  input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE;
-  input.mi.time = 0;
-  input.mi.dwExtraInfo = 0;
   switch (button) {
     case Left:
-      input.mi.dwFlags |= down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP;
+      WIN32_SendMouseInput(0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP));
       break;
     case Middle:
-      input.mi.dwFlags |= down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP;
+      WIN32_SendMouseInput(0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP));
       break;
     case Right:
-      input.mi.dwFlags |= down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP;
+      WIN32_SendMouseInput(0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP));
       break;
-    case Back:  // fallthrough intended
+    case Back:
+      WIN32_SendMouseInput(0, 0, XBUTTON1, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP));
+      break;
     case Forward:
-      input.mi.dwFlags |= down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP;
-      input.mi.mouseData = button == Back ? XBUTTON1 : XBUTTON2;
+      WIN32_SendMouseInput(0, 0, XBUTTON2, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP));
       break;
     default:
       return;
   }
-  SendInput(1, &input, sizeof(INPUT));
 #endif
 #if defined(__linux__)
   U8 type = down ? XCB_BUTTON_PRESS : XCB_BUTTON_RELEASE;
@@ -595,15 +601,7 @@ void MouseMove::OnMouseMove(Vec2 vec) {
   mouse_move_accumulator -= vec;
 #if defined(_WIN32)
   if (vec.x != 0 || vec.y != 0) {
-    INPUT input;
-    input.type = INPUT_MOUSE;
-    input.mi.dx = (LONG)vec.x;
-    input.mi.dy = (LONG)vec.y;
-    input.mi.mouseData = 0;
-    input.mi.dwFlags = MOUSEEVENTF_MOVE;
-    input.mi.time = 0;
-    input.mi.dwExtraInfo = 0;
-    SendInput(1, &input, sizeof(INPUT));
+    WIN32_SendMouseInput((LONG)vec.x, (LONG)vec.y, 0, MOUSEEVENTF_MOVE);
   }
 #elif defined(__linux__)
   if (vec.x != 0 || vec.y != 0) {
@@ -621,19 +619,22 @@ void MouseMove::OnMouseMove(Vec2 vec) {
   });
 }
 
-string_view MouseWheel::Name() const { return "Mouse Wheel"; }
-Ptr<Object> MouseWheel::Clone() const { return MAKE_PTR(MouseWheel); }
+string_view MouseScrollY::Name() const { return "Scroll Y"; }
+Ptr<Object> MouseScrollY::Clone() const { return MAKE_PTR(MouseScrollY); }
 
-struct MouseWheelWidget : MouseWidgetBase {
-  MouseWheelWidget(ui::Widget* parent, WeakPtr<MouseWheel>&& weak_mouse_move)
-      : MouseWidgetBase(parent, std::move(weak_mouse_move)) {}
+string_view MouseScrollX::Name() const { return "Scroll X"; }
+Ptr<Object> MouseScrollX::Clone() const { return MAKE_PTR(MouseScrollX); }
+
+struct MouseScrollYWidget : MouseWidgetBase {
+  MouseScrollYWidget(ui::Widget* parent, WeakPtr<MouseScrollY>&& obj_weak)
+      : MouseWidgetBase(parent, std::move(obj_weak)) {}
 
   animation::SpringV2<SinCos> rotation;
 
   animation::Phase Tick(time::Timer& t) override {
     auto phase = animation::Finished;
 
-    auto target = this->LockObject<MouseWheel>()->rotation;
+    auto target = this->LockObject<MouseScrollY>()->rotation;
     phase |= rotation.SineTowards(target, t.d, 0.6);
 
     return phase;
@@ -653,7 +654,7 @@ struct MouseWheelWidget : MouseWidgetBase {
                                  wheel_bounds.height() / 5);
 
     SkPaint paint;
-    paint.setColor("#ffc900"_color);
+    paint.setColor("#0dbf10"_color);
     paint.setBlendMode(SkBlendMode::kColorBurn);
 
     float cy = wheel_bounds.centerY();
@@ -664,6 +665,9 @@ struct MouseWheelWidget : MouseWidgetBase {
     Vec2 left = wheel_bounds.center() - Vec2(c, 0);
     Vec2 right = wheel_bounds.center() + Vec2(c, 0);
 
+
+    // Note: This code is copied in MouseScrollXWidget.
+    // If you're doing any changes, make sure that both copies are in sync.
     for (int i = 0; i < 12; ++i) {
       if ((alpha + 7.5_deg).cos > (alpha - 7.5_deg).cos) {
         // a0 and a1 are the distances along Y axis where the arcs cross the center line
@@ -691,29 +695,98 @@ struct MouseWheelWidget : MouseWidgetBase {
   }
 };
 
-std::unique_ptr<Object::WidgetInterface> MouseWheel::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<MouseWheelWidget>(parent, AcquireWeakPtr());
-}
-void MouseWheel::OnMouseWheel(double delta) {
-#if defined(_WIN32)
-  INPUT input;
-  input.type = INPUT_MOUSE;
-  input.mi.dx = 0;
-  input.mi.dy = 0;
-  input.mi.mouseData = round(delta * WHEEL_DELTA);
-  input.mi.dwFlags = MOUSEEVENTF_WHEEL;
-  input.mi.time = 0;
-  input.mi.dwExtraInfo = 0;
-  SendInput(1, &input, sizeof(INPUT));
-#elif defined(__linux__)
-  U8 detail;
-  if (delta > 0) {
-    detail = 4;
-  } else {
-    detail = 5;
+struct MouseScrollXWidget : MouseWidgetBase {
+  MouseScrollXWidget(ui::Widget* parent, WeakPtr<MouseScrollX>&& obj_weak)
+      : MouseWidgetBase(parent, std::move(obj_weak)) {}
+
+  animation::SpringV2<SinCos> rotation;
+
+  animation::Phase Tick(time::Timer& t) override {
+    auto phase = animation::Finished;
+
+    auto target = this->LockObject<MouseScrollY>()->rotation;
+    phase |= rotation.SineTowards(target, t.d, 0.6);
+
+    return phase;
   }
+
+  void Draw(SkCanvas& canvas) const override {
+    krita::mouse::base.draw(canvas);
+    krita::mouse::large_wheel.draw(canvas);
+    auto wheel_shape = krita::mouse::Wheel();
+
+    auto wheel_bounds = wheel_shape.getBounds();
+
+    canvas.save();
+    canvas.clipPath(wheel_shape);
+
+    Rect rect = Rect::MakeCenter(wheel_bounds.center(), wheel_bounds.width() * 2,
+                                 wheel_bounds.height() / 5);
+
+    SkPaint paint;
+    paint.setColor("#bf220d"_color);
+    paint.setBlendMode(SkBlendMode::kColorBurn);
+
+    float cx = wheel_bounds.centerX();
+    float r = wheel_bounds.height() / 2;
+    auto alpha = rotation.value;
+
+    float c = 2 * r;
+    Vec2 bottom = wheel_bounds.center() - Vec2(0, c);
+    Vec2 top = wheel_bounds.center() + Vec2(0, c);
+
+    for (int i = 0; i < 12; ++i) {
+      if ((alpha + 7.5_deg).cos > (alpha - 7.5_deg).cos) {
+        // The math to draw crescent is taken from MouseScrollYWidget.
+        // `left` & `right` have been swapped to `bottom` & `top`.
+        // If you're doing any changes, make sure that both copies are in sync.
+        float a0 = r * (float)(alpha + 7.5_deg).cos;
+        float a1 = r * (float)(alpha - 7.5_deg).cos;
+        float r0 = a0 + (c * c - a0 * a0) / 2 / a0;
+        float r1 = a1 + (c * c - a1 * a1) / 2 / a1;
+        float x0 = 2 * a0 * c * c / (c * c - a0 * a0);
+        float x1 = 2 * a1 * c * c / (c * c - a1 * a1);
+        Vec2 s0 = Vec2(cx + x0, wheel_bounds.centerY());
+        Vec2 s1 = Vec2(cx + x1, wheel_bounds.centerY());
+        SkPath path;
+        path.moveTo(bottom);
+        path.arcTo(s0, top, r0);
+        path.arcTo(s1, bottom, r1);
+        canvas.drawPath(path, paint);
+      }
+      alpha = alpha + 30_deg;
+    }
+
+    canvas.restore();
+  }
+};
+
+std::unique_ptr<Object::WidgetInterface> MouseScrollY::MakeWidget(ui::Widget* parent) {
+  return std::make_unique<MouseScrollYWidget>(parent, AcquireWeakPtr());
+}
+
+std::unique_ptr<Object::WidgetInterface> MouseScrollX::MakeWidget(ui::Widget* parent) {
+  return std::make_unique<MouseScrollXWidget>(parent, AcquireWeakPtr());
+}
+
+void MouseScrollY::OnRelativeFloat64(double delta) {
+#if defined(_WIN32)
+  WIN32_SendMouseInput(0, 0, round(delta * WHEEL_DELTA), MOUSEEVENTF_WHEEL);
+#elif defined(__linux__)
   for (auto type : {XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE}) {
-    xcb_test_fake_input(xcb::connection, type, detail, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
+    xcb_test_fake_input(xcb::connection, type, delta > 0 ? 4 : 5, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
+  }
+  xcb::flush();
+#endif
+  rotation = rotation + SinCos::FromDegrees(delta * 15);
+  WakeWidgetsAnimation();
+}
+void MouseScrollX::OnRelativeFloat64(double delta) {
+#if defined(_WIN32)
+  WIN32_SendMouseInput(0, 0, round(delta * WHEEL_DELTA), MOUSEEVENTF_HWHEEL);
+#elif defined(__linux__)
+  for (auto type : {XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE}) {
+    xcb_test_fake_input(xcb::connection, type, delta > 0 ? 6 : 7, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
   }
   xcb::flush();
 #endif

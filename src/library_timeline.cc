@@ -2472,9 +2472,9 @@ void Float64Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (next_update_at != now) {
     return;
   }
-  auto* mouse_wheel = target.As<MouseWheel>();
-  if (mouse_wheel) {
-    mouse_wheel->OnMouseWheel(values[next_update_i]);
+  auto* sink = target.As<SinkRelativeFloat64>();
+  if (sink) {
+    sink->OnRelativeFloat64(values[next_update_i]);
   }
 }
 

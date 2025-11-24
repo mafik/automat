@@ -166,7 +166,12 @@ struct SinCos {
 
   constexpr static SinCos FromRadians(float radians) {
     float fsin = 0, fcos = 0;
+#ifdef _GNU_SOURCE
     sincosf(radians, &fsin, &fcos);
+#else
+    fsin = sinf(radians);
+    fcos = cosf(radians);
+#endif
     return SinCos(fsin, fcos);
   }
 

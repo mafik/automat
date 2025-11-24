@@ -209,7 +209,7 @@ struct Menu : ui::Widget {
       case MODE_1_DIR:
         return S;
       case MODE_2_DIR:
-        return sc.cos >= 0 ? N : S;
+        return sc.sin >= 0 ? N : S;
       case MODE_4_DIR:
         if (sc.cos > Fixed1(0.7071)) {
           return E;

@@ -367,10 +367,10 @@ struct MouseScrollMenuOption : Option, OptionsProvider {
     return std::make_unique<MouseScrollMenuOption>();
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
-    static MakeObjectOption y = MakeObjectOption(MAKE_PTR(MouseScrollY), Option::S);
-    visitor(y);
     static MakeObjectOption x = MakeObjectOption(MAKE_PTR(MouseScrollX), Option::N);
     visitor(x);
+    static MakeObjectOption y = MakeObjectOption(MAKE_PTR(MouseScrollY), Option::S);
+    visitor(y);
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     return OpenMenu(pointer);

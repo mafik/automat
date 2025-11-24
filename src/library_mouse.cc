@@ -695,8 +695,17 @@ std::unique_ptr<Object::WidgetInterface> MouseWheel::MakeWidget(ui::Widget* pare
   return std::make_unique<MouseWheelWidget>(parent, AcquireWeakPtr());
 }
 void MouseWheel::OnMouseWheel(double delta) {
-  // TODO: Make it work on Windows!
-#if defined(__linux__)
+#if defined(_WIN32)
+  INPUT input;
+  input.type = INPUT_MOUSE;
+  input.mi.dx = 0;
+  input.mi.dy = 0;
+  input.mi.mouseData = round(delta * WHEEL_DELTA);
+  input.mi.dwFlags = MOUSEEVENTF_WHEEL;
+  input.mi.time = 0;
+  input.mi.dwExtraInfo = 0;
+  SendInput(1, &input, sizeof(INPUT));
+#elif defined(__linux__)
   U8 detail;
   if (delta > 0) {
     detail = 4;

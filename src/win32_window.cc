@@ -416,6 +416,7 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         RAWMOUSE& ev = raw_input->data.mouse;
         auto lock = window.Lock();
         auto& mouse = window.GetMouse();
+        // LOG << f("Mouse usFlags: {:04x}, usButtonData: {:04x}, usButtonFlags: {:04x}", ev.usFlags, ev.usButtonData, ev.usButtonFlags);
         // LOG << "Mouse event: " << dump_struct(ev);
         using enum ui::PointerButton;
         using tuple = std::tuple<WORD, bool, PointerButton>;
@@ -439,6 +440,11 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 logging->logger.PointerLoggerButtonUp(*logging, button);
               }
             }
+          }
+        }
+        if (ev.usButtonFlags & RI_MOUSE_WHEEL) {
+          for (auto& logging : mouse.loggings) {
+            logging->logger.PointerLoggerWheel(*logging, (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
           }
         }
         if (ev.lLastX != 0 || ev.lLastY != 0) {

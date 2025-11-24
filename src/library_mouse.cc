@@ -171,8 +171,11 @@ struct MouseWidgetCommon {
   }
 
   static void Draw(SkCanvas& canvas, ui::PointerButton button, Optional<bool> down_opt,
-                   PresserWidget* presser_widget) {
+                   PresserWidget* presser_widget, bool scroll) {
     krita::mouse::base.draw(canvas);
+    if (scroll) {
+      krita::mouse::large_wheel.draw(canvas);
+    }
     SkPath mask = ButtonShape(button);
     float lod = FindLoD(canvas.getLocalToDeviceAs3x3(), krita::mouse::base.height(), 40, 80);
     ;
@@ -264,9 +267,10 @@ struct MouseIcon : ui::Widget {
   ui::PointerButton button;
   Optional<bool> down;
   std::unique_ptr<PresserWidget> presser_widget;
+  bool scroll;
 
-  MouseIcon(ui::Widget* parent, ui::PointerButton button, Optional<bool> down, bool presser)
-      : ui::Widget(parent), button(button), down(down), presser_widget(nullptr) {
+  MouseIcon(ui::Widget* parent, ui::PointerButton button, Optional<bool> down, bool presser, bool scroll = false)
+      : ui::Widget(parent), button(button), down(down), presser_widget(nullptr), scroll(scroll) {
     if (presser) {
       presser_widget.reset(new PresserWidget(this));
     }
@@ -285,7 +289,7 @@ struct MouseIcon : ui::Widget {
   SkPath Shape() const override { return MouseWidgetCommon::Shape(); }
 
   void Draw(SkCanvas& canvas) const override {
-    MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, down, presser_widget.get());
+    MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, down, presser_widget.get(), scroll);
     DrawChildren(canvas);
   }
 
@@ -353,6 +357,27 @@ struct MousePresserMenuOption : Option, OptionsProvider {
   Dir PreferredDir() const override { return S; }
 };
 
+struct MouseScrollMenuOption : Option, OptionsProvider {
+  MouseScrollMenuOption() {}
+
+  std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
+    return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, std::nullopt, false, true);
+  }
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<MouseScrollMenuOption>();
+  }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    static MakeObjectOption y = MakeObjectOption(MAKE_PTR(MouseScrollY), Option::S);
+    visitor(y);
+    static MakeObjectOption x = MakeObjectOption(MAKE_PTR(MouseScrollX), Option::N);
+    visitor(x);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    return OpenMenu(pointer);
+  }
+  Dir PreferredDir() const override { return E; }
+};
+
 struct MouseWidgetBase : Object::WidgetBase {
   MouseWidgetBase(ui::Widget* parent, WeakPtr<Object>&& object) : WidgetBase(parent) {
     this->object = std::move(object);
@@ -371,7 +396,7 @@ struct MouseWidget : MouseWidgetBase {
   std::string_view Name() const override { return "Mouse"; }
 
   void Draw(SkCanvas& canvas) const override {
-    MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, std::nullopt, nullptr);
+    MouseWidgetCommon::Draw(canvas, ui::PointerButton::Unknown, std::nullopt, nullptr, false);
   }
 
   void VisitOptions(const OptionsVisitor& options_visitor) const override {
@@ -384,8 +409,8 @@ struct MouseWidget : MouseWidgetBase {
     options_visitor(up_option);
     static MakeObjectOption move_option = MakeObjectOption(MAKE_PTR(MouseMove), Option::W);
     options_visitor(move_option);
-    static MakeObjectOption wheel_option = MakeObjectOption(MAKE_PTR(MouseScrollY), Option::E);
-    options_visitor(wheel_option);
+    static MouseScrollMenuOption scroll_option;
+    options_visitor(scroll_option);
   }
 };
 
@@ -397,7 +422,7 @@ struct MouseButtonEventWidget : MouseWidgetBase {
     Ptr<MouseButtonEvent> object = LockObject<MouseButtonEvent>();
     auto button = object->button;
     auto down = object->down;
-    MouseWidgetCommon::Draw(canvas, button, down, nullptr);
+    MouseWidgetCommon::Draw(canvas, button, down, nullptr, false);
   }
 };
 
@@ -647,15 +672,17 @@ struct MouseScrollYWidget : MouseWidgetBase {
 
     auto wheel_bounds = wheel_shape.getBounds();
 
+    SkPaint paint;
+    paint.setColor("#0b9e0e"_color);
+    paint.setBlendMode(SkBlendMode::kColorBurn);
+
+    canvas.drawPath(krita::mouse::ScrollY(), paint);
+
     canvas.save();
     canvas.clipPath(wheel_shape);
 
     Rect rect = Rect::MakeCenter(wheel_bounds.center(), wheel_bounds.width() * 2,
                                  wheel_bounds.height() / 5);
-
-    SkPaint paint;
-    paint.setColor("#0dbf10"_color);
-    paint.setBlendMode(SkBlendMode::kColorBurn);
 
     float cy = wheel_bounds.centerY();
     float r = wheel_bounds.height() / 2;
@@ -717,15 +744,17 @@ struct MouseScrollXWidget : MouseWidgetBase {
 
     auto wheel_bounds = wheel_shape.getBounds();
 
+    SkPaint paint;
+    paint.setColor("#bf220d"_color);
+    paint.setBlendMode(SkBlendMode::kColorBurn);
+
+    canvas.drawPath(krita::mouse::ScrollX(), paint);
+
     canvas.save();
     canvas.clipPath(wheel_shape);
 
     Rect rect = Rect::MakeCenter(wheel_bounds.center(), wheel_bounds.width() * 2,
                                  wheel_bounds.height() / 5);
-
-    SkPaint paint;
-    paint.setColor("#bf220d"_color);
-    paint.setBlendMode(SkBlendMode::kColorBurn);
 
     float cx = wheel_bounds.centerX();
     float r = wheel_bounds.height() / 2;
@@ -845,7 +874,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
 
   void Draw(SkCanvas& canvas) const override {
     krita::mouse::base.draw(canvas);
-    MouseWidgetCommon::Draw(canvas, button, std::nullopt, &presser_widget);
+    MouseWidgetCommon::Draw(canvas, button, std::nullopt, &presser_widget, false);
     DrawChildren(canvas);
   }
 

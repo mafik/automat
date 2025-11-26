@@ -301,16 +301,17 @@ void Location::Draw(SkCanvas& canvas) const {
     SkPaint paint;
     paint.setAntiAlias(false);
 
+    SkPaint stroke_paint;
+    stroke_paint.setAntiAlias(false);
+    stroke_paint.setStyle(SkPaint::kStroke_Style);
+    stroke_paint.setStrokeWidth(1);
+    canvas.drawPath(my_shape_px, stroke_paint);
+
     paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, blur_radius, false));
     canvas.drawPath(my_shape_px, paint);
 
     paint.setMaskFilter(SkMaskFilter::MakeBlur(kOuter_SkBlurStyle, blur_radius / 4, false));
     my_shape_px.toggleInverseFillType();
-    canvas.drawPath(my_shape_px, paint);
-
-    paint.setStyle(SkPaint::kStroke_Style);
-    paint.setStrokeWidth(1);
-    paint.setMaskFilter(nullptr);
     canvas.drawPath(my_shape_px, paint);
 
     canvas.restore();

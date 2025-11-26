@@ -270,7 +270,15 @@ SkPath Machine::Shape() const {
   return rect_minus_trash;
 }
 
+// Turns the background green - to make it easier to isolate elements of Automat in screenshots.
+constexpr bool kGreenScreen = false;
+
 SkPaint& GetBackgroundPaint(float px_per_m) {
+  if constexpr (kGreenScreen) {
+    static SkPaint paint;
+    paint.setColor(SK_ColorGREEN);
+    return paint;
+  }
   static PersistentImage bg =
       PersistentImage::MakeFromAsset(embedded::assets_bg_webp, PersistentImage::MakeArgs{
                                                                    .height = 100_cm,

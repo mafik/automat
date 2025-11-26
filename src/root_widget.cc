@@ -279,14 +279,9 @@ struct DragCameraAction : Action {
   DragCameraAction(Pointer& pointer, RootWidget& root) : Action(pointer), root(root) {
     prev_pos = pointer.pointer_position;
   }
-  SkMatrix PointerToCanvas() {
-    auto px2canvas = TransformDown(root);
-    px2canvas.postConcat(root.WindowToCanvas());
-    return px2canvas;
-  }
   void Update() override {
     Vec2 curr_pos = pointer.pointer_position;
-    auto px2canvas = PointerToCanvas();
+    auto px2canvas = root.PointerToCanvas();
     Vec2 delta = px2canvas.mapPoint(curr_pos) - px2canvas.mapPoint(prev_pos);
     root.camera_target -= delta;
     root.camera_pos -= delta;
@@ -301,7 +296,7 @@ struct DragCameraAction : Action {
                  pointer.button_down_position[static_cast<int>(PointerButton::Middle)];
     float delta_m = Length(delta);
     if ((down_duration < kClickTimeout) && (delta_m < kClickRadius)) {
-      Vec2 canvas_pos = PointerToCanvas().mapPoint(pointer.pointer_position);
+      Vec2 canvas_pos = root.PointerToCanvas().mapPoint(pointer.pointer_position);
       root.camera_target = canvas_pos;
       root.zoom_target = 1;
       root.inertia = false;

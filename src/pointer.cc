@@ -148,15 +148,14 @@ void Pointer::Wheel(float delta) {
 
   float factor = exp(delta / 4);
   root_widget.zoom_target *= factor;
-  auto position_metric = TransformDown(root_widget).mapPoint(pointer_position);
   // For small changes we skip the animation to increase responsiveness.
   if (fabs(delta) < 1.0) {
-    Vec2 mouse_pre = root_widget.WindowToCanvas().mapPoint(pointer_position);
+    Vec2 mouse_pre = root_widget.PointerToCanvas().mapPoint(pointer_position);
     root_widget.zoom *= factor;
-    Vec2 mouse_post = root_widget.WindowToCanvas().mapPoint(pointer_position);
-    Vec2 mouse_delta = mouse_post - mouse_pre;
-    root_widget.camera_target -= mouse_delta;
-    root_widget.camera_pos -= mouse_delta;
+    Vec2 mouse_post = root_widget.PointerToCanvas().mapPoint(pointer_position);
+    Vec2 mouse_delta = mouse_pre - mouse_post;
+    root_widget.camera_target += mouse_delta;
+    root_widget.camera_pos += mouse_delta;
   }
   root_widget.zoom_target = std::max(kMinZoom, root_widget.zoom_target);
   root_widget.WakeAnimation();

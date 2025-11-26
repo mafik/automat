@@ -108,6 +108,12 @@ struct RootWidget final : Widget, DropTarget {
     return m;
   }
 
+  SkMatrix PointerToCanvas() const {
+    auto px2canvas = TransformDown(*this);
+    px2canvas.postConcat(WindowToCanvas());
+    return px2canvas;
+  }
+
   // Used to tell the window that it's OS window has been resized.
   // Should call Window::Resized() if successful.
   void Resized(Vec2 size);

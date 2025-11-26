@@ -2378,67 +2378,47 @@ std::unique_ptr<Object::WidgetInterface> Float64Track::MakeWidget(ui::Widget* pa
   return ret;
 }
 
-// TODO: Merge {Vec2,Float64}Track::Splice
+template <typename T>
+static void TrackSplice(Vec<time::Duration>& timestamps, Vec<T>& values,
+                        time::Duration current_offset, time::Duration splice_to) {
+  auto delta = splice_to - current_offset;
+  auto [current_offset_ge, current_offset_g] =
+      equal_range(timestamps.begin(), timestamps.end(), current_offset);
+  if (delta < 0s) {
+    // splice_to < current_offset
+    auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
+    bool begin_has_event = splice_to_ge != splice_to_g;
+    bool end_has_event = current_offset_ge != current_offset_g;
+    // Boundary events are usually kept except when there are two of them.
+    // If that's the case then they're both deleted.
+    bool delete_boundaries = begin_has_event && end_has_event;
+    auto begin_it = delete_boundaries ? splice_to_ge : splice_to_g;
+    auto end_it = delete_boundaries ? current_offset_g : current_offset_ge;
+    int begin = begin_it - timestamps.begin();
+    int end = end_it - timestamps.begin();
+    if (begin != end) {
+      timestamps.erase(begin_it, end_it);
+      values.erase(values.begin() + begin, values.begin() + end);
+    }
+    for (int i = begin; i < timestamps.size(); ++i) {
+      // `delta` is negative so this actually shifts subsequent events back in time.
+      timestamps[i] += delta;
+    }
+  } else if (delta > 0s) {
+    for (auto it = current_offset_ge; it != timestamps.end(); ++it) {
+      *it += delta;
+    }
+  }
+}
+
 void Vec2Track::Splice(time::Duration current_offset, time::Duration splice_to) {
-  auto delta = splice_to - current_offset;
-  auto [current_offset_ge, current_offset_g] =
-      equal_range(timestamps.begin(), timestamps.end(), current_offset);
-  if (delta < 0s) {
-    auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
-    int begin = splice_to_ge - timestamps.begin();
-    int end = current_offset_g - timestamps.begin();
-    // Fold the motion into a single event.
-    for (int i = begin + 1; i < end; ++i) {
-      values[begin] += values[i];
-    }
-    if (begin < values.size()) {
-      timestamps[begin] = splice_to;
-    }
-    int count = end - begin - 1;
-    if (count > 0) {
-      for (int i = begin + 1; i < timestamps.size() - count; ++i) {
-        timestamps[i] = timestamps[i + count] + delta;
-        values[i] = values[i + count];
-      }
-      timestamps.resize(timestamps.size() - count);
-      values.resize(values.size() - count);
-    }
-  } else if (delta > 0s) {
-    for (auto it = current_offset_ge; it != timestamps.end(); ++it) {
-      *it += delta;
-    }
-  }
+  TrackSplice(timestamps, values, current_offset, splice_to);
 }
+
 void Float64Track::Splice(time::Duration current_offset, time::Duration splice_to) {
-  auto delta = splice_to - current_offset;
-  auto [current_offset_ge, current_offset_g] =
-      equal_range(timestamps.begin(), timestamps.end(), current_offset);
-  if (delta < 0s) {
-    auto [splice_to_ge, splice_to_g] = equal_range(timestamps.begin(), timestamps.end(), splice_to);
-    int begin = splice_to_ge - timestamps.begin();
-    int end = current_offset_g - timestamps.begin();
-    // Fold the motion into a single event.
-    for (int i = begin + 1; i < end; ++i) {
-      values[begin] += values[i];
-    }
-    if (begin < values.size()) {
-      timestamps[begin] = splice_to;
-    }
-    int count = end - begin - 1;
-    if (count > 0) {
-      for (int i = begin + 1; i < timestamps.size() - count; ++i) {
-        timestamps[i] = timestamps[i + count] + delta;
-        values[i] = values[i + count];
-      }
-      timestamps.resize(timestamps.size() - count);
-      values.resize(values.size() - count);
-    }
-  } else if (delta > 0s) {
-    for (auto it = current_offset_ge; it != timestamps.end(); ++it) {
-      *it += delta;
-    }
-  }
+  TrackSplice(timestamps, values, current_offset, splice_to);
 }
+
 void Vec2Track::UpdateOutput(Location& target, time::SteadyPoint started_at,
                              time::SteadyPoint now) {
   auto cmp = [started_at](time::Duration timestamp, time::SteadyPoint now) {

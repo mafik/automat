@@ -225,7 +225,7 @@ std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p, ui::Actio
 
 void Object::Updated(Location& here, Location& updated) {
   if (Runnable* runnable = dynamic_cast<Runnable*>(this)) {
-    runnable->Run(here, here.GetRunTask());
+    here.ScheduleRun();
   }
 }
 

@@ -8,6 +8,7 @@
 #include <tracy/Tracy.hpp>
 
 #include "base.hh"
+#include "status.hh"
 #include "tasks.hh"
 #include "thread_name.hh"
 #include "time.hh"
@@ -46,7 +47,7 @@ static void TimerThread(std::stop_token automat_stop_token) {
     if (stop) {
       break;
     }
-    deque<std::unique_ptr<Task>> ready_tasks;
+    vector<std::unique_ptr<Task>> ready_tasks;
     auto now = SteadyClock::now();
     while (!tasks.empty() && tasks.begin()->first <= now) {
       ready_tasks.emplace_back(std::move(tasks.begin()->second));
@@ -55,11 +56,8 @@ static void TimerThread(std::stop_token automat_stop_token) {
 
     lck.unlock();
 
-    while (!ready_tasks.empty()) {
-      // LOG << "Timer thread executing task " << tasks.begin()->second->Format();
-      auto task = ready_tasks.front().release();
-      task->Schedule();  // TODO: possible leak if NoScheduling is active
-      ready_tasks.pop_front();
+    for (auto& task : ready_tasks) {
+      task.release()->Schedule();
     }
   }
 }
@@ -83,7 +81,7 @@ struct TimerFinishedTask : Task {
   TimerFinishedTask(WeakPtr<Location> target, time::SteadyPoint scheduled_time)
       : Task(target), scheduled_time(scheduled_time) {}
   std::string Format() override { return "TimerFinishedTask"; }
-  void OnExecute() override {
+  void OnExecute(std::unique_ptr<Task>& self) override {
     ZoneScopedN("TimerFinishedTask");
     TimerFinished(*target.lock(), scheduled_time);
   }
@@ -119,22 +117,20 @@ void CancelScheduledAt(Location& here, SteadyPoint time) {
   cv.notify_all();
 }
 
-void RescheduleAt(Location& here, SteadyPoint old_time, SteadyPoint new_time) {
+StatusCode RescheduleAt(Location& here, SteadyPoint old_time, SteadyPoint new_time) {
   std::unique_lock<std::mutex> lck(mtx);
   auto [a, b] = tasks.equal_range(old_time);
   for (auto it = a; it != b; ++it) {
     if (it->second->target.lock().get() == &here) {
+      static_cast<TimerFinishedTask*>(it->second.get())->scheduled_time = new_time;
+      auto tmp = std::move(it->second);
       tasks.erase(it);
-      break;
+      tasks.emplace(new_time, std::move(tmp));
+      cv.notify_all();
+      return STATUS_OK;
     }
   }
-  if (new_time <= SteadyClock::now()) {
-    cv.notify_all();
-    TimerFinished(here, new_time);
-  } else {
-    tasks.emplace(new_time, new TimerFinishedTask(here.AcquirePtr<Location>(), new_time));
-    cv.notify_all();
-  }
+  return STATUS_FAILED;
 }
 
 }  // namespace automat

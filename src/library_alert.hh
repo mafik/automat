@@ -13,7 +13,7 @@ struct Alert : Object, Runnable {
   string_view Name() const override { return "Alert"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Alert); }
   void Args(std::function<void(Argument&)> cb) override { cb(message_arg); }
-  void OnRun(Location& here, RunTask&) override;
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
 };
 
 }  // namespace automat

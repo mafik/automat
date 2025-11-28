@@ -77,7 +77,7 @@ static void AutomatLoop(std::stop_token stop_token) {
         }
       }
     }
-    task->Execute();
+    task->Execute(std::unique_ptr<Task>(task));
   }
   automat_thread_finished = true;
   automat_thread_finished.notify_all();

@@ -31,7 +31,7 @@ struct MouseButtonEvent : Object, Runnable {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void Args(std::function<void(Argument&)> cb) override;
-  void OnRun(Location&, RunTask&) override;
+  void OnRun(Location&, std::unique_ptr<RunTask>&) override;
   audio::Sound& NextSound() override;
   std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
 
@@ -77,7 +77,7 @@ struct MouseButtonPresser : Object, Runnable, LongRunning {
   Ptr<Object> Clone() const override;
   std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
 
-  void OnRun(Location& here, RunTask& run_task) override;
+  void OnRun(Location& here, std::unique_ptr<RunTask>& run_task) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
 

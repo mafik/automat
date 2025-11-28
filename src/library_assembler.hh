@@ -117,7 +117,7 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void UpdateMachineCode();
 
-  void RunMachineCode(library::Instruction* entry_point);
+  void RunMachineCode(library::Instruction* entry_point, std::unique_ptr<RunTask>&&);
 
   void OnCancel() override;
 

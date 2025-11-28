@@ -57,7 +57,10 @@ constexpr static float kTickMinorLength = r4 * 0.025;
 
 static constexpr time::Duration kHandPeriod = 100ms;
 
-void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) { Done(here2); }
+void TimerDelay::OnTimerNotification(Location& here2, time::SteadyPoint) {
+  auto lock = std::lock_guard(mtx);
+  Done(here2);
+}
 
 // How long it takes for the timer dial to rotate once.
 static Duration RangeDuration(TimerDelay::Range range) {
@@ -135,6 +138,7 @@ static void UpdateTextField(TimerDelay& timer) {
 }
 
 static void SetDuration(TimerDelay& timer, Duration new_duration) {
+  auto lock = std::lock_guard(timer.mtx);
   if (timer.IsRunning()) {
     if (auto h = timer.here.lock()) {
       RescheduleAt(*h, timer.start_time + timer.duration.value, timer.start_time + new_duration);
@@ -148,7 +152,6 @@ static void SetDuration(TimerDelay& timer, Duration new_duration) {
 
 static void PropagateDurationOutwards(TimerDelay& timer) {
   if (auto h = timer.here.lock()) {
-    NoSchedulingGuard guard(*h);
     auto duration_obj = timer.duration_arg.GetLocation(*h);
     if (duration_obj.ok && duration_obj.location) {
       duration_obj.location->SetNumber(timer.duration.value * TickCount(timer.range) /
@@ -707,12 +710,13 @@ void TimerDelay::Args(std::function<void(Argument&)> cb) {
   cb(next_arg);
 }
 
-void TimerDelay::OnRun(Location& here, RunTask& run_task) {
+void TimerDelay::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
+  auto lock = std::lock_guard(mtx);
   ZoneScopedN("TimerDelay");
   start_time = time::SteadyClock::now();
   ScheduleAt(here, start_time + duration.value);
   WakeAnimation();
-  BeginLongRunning(here, run_task);
+  BeginLongRunning(std::move(run_task));
 }
 
 void TimerDelay::OnCancel() {
@@ -786,7 +790,7 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
     if (key == "running") {
       double value = 0;
       d.Get(value, status);
-      BeginLongRunning(l, l.GetRunTask());
+      BeginLongRunning(make_unique<RunTask>(l.AcquireWeakPtr()));
       start_time = time::SteadyNow() - time::FromSeconds(value);
     } else if (key == "duration_seconds") {
       double value;

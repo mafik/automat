@@ -269,7 +269,8 @@ struct MouseIcon : ui::Widget {
   std::unique_ptr<PresserWidget> presser_widget;
   bool scroll;
 
-  MouseIcon(ui::Widget* parent, ui::PointerButton button, Optional<bool> down, bool presser, bool scroll = false)
+  MouseIcon(ui::Widget* parent, ui::PointerButton button, Optional<bool> down, bool presser,
+            bool scroll = false)
       : ui::Widget(parent), button(button), down(down), presser_widget(nullptr), scroll(scroll) {
     if (presser) {
       presser_widget.reset(new PresserWidget(this));
@@ -361,7 +362,8 @@ struct MouseScrollMenuOption : Option, OptionsProvider {
   MouseScrollMenuOption() {}
 
   std::unique_ptr<ui::Widget> MakeIcon(ui::Widget* parent) override {
-    return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, std::nullopt, false, true);
+    return std::make_unique<MouseIcon>(parent, ui::PointerButton::Unknown, std::nullopt, false,
+                                       true);
   }
   std::unique_ptr<Option> Clone() const override {
     return std::make_unique<MouseScrollMenuOption>();
@@ -445,19 +447,24 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
 #if defined(_WIN32)
   switch (button) {
     case Left:
-      WIN32_SendMouseInput(0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP));
+      WIN32_SendMouseInput(
+          0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP));
       break;
     case Middle:
-      WIN32_SendMouseInput(0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP));
+      WIN32_SendMouseInput(
+          0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_MIDDLEDOWN : MOUSEEVENTF_MIDDLEUP));
       break;
     case Right:
-      WIN32_SendMouseInput(0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP));
+      WIN32_SendMouseInput(
+          0, 0, 0, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP));
       break;
     case Back:
-      WIN32_SendMouseInput(0, 0, XBUTTON1, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP));
+      WIN32_SendMouseInput(0, 0, XBUTTON1,
+                           MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP));
       break;
     case Forward:
-      WIN32_SendMouseInput(0, 0, XBUTTON2, MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP));
+      WIN32_SendMouseInput(0, 0, XBUTTON2,
+                           MOUSEEVENTF_ABSOLUTE | (down ? MOUSEEVENTF_XDOWN : MOUSEEVENTF_XUP));
       break;
     default:
       return;
@@ -494,7 +501,7 @@ string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
 Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
 void MouseButtonEvent::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
-void MouseButtonEvent::OnRun(Location&, RunTask&) {
+void MouseButtonEvent::OnRun(Location&, std::unique_ptr<RunTask>&) {
   ZoneScopedN("MouseClick");
   SendMouseButtonEvent(button, down);
 }
@@ -692,7 +699,6 @@ struct MouseScrollYWidget : MouseWidgetBase {
     Vec2 left = wheel_bounds.center() - Vec2(c, 0);
     Vec2 right = wheel_bounds.center() + Vec2(c, 0);
 
-
     // Note: This code is copied in MouseScrollXWidget.
     // If you're doing any changes, make sure that both copies are in sync.
     for (int i = 0; i < 12; ++i) {
@@ -803,7 +809,8 @@ void MouseScrollY::OnRelativeFloat64(double delta) {
   WIN32_SendMouseInput(0, 0, round(delta * WHEEL_DELTA), MOUSEEVENTF_WHEEL);
 #elif defined(__linux__)
   for (auto type : {XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE}) {
-    xcb_test_fake_input(xcb::connection, type, delta > 0 ? 4 : 5, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
+    xcb_test_fake_input(xcb::connection, type, delta > 0 ? 4 : 5, XCB_CURRENT_TIME, XCB_WINDOW_NONE,
+                        0, 0, 0);
   }
   xcb::flush();
 #endif
@@ -815,7 +822,8 @@ void MouseScrollX::OnRelativeFloat64(double delta) {
   WIN32_SendMouseInput(0, 0, round(delta * WHEEL_DELTA), MOUSEEVENTF_HWHEEL);
 #elif defined(__linux__)
   for (auto type : {XCB_BUTTON_PRESS, XCB_BUTTON_RELEASE}) {
-    xcb_test_fake_input(xcb::connection, type, delta > 0 ? 6 : 7, XCB_CURRENT_TIME, XCB_WINDOW_NONE, 0, 0, 0);
+    xcb_test_fake_input(xcb::connection, type, delta > 0 ? 6 : 7, XCB_CURRENT_TIME, XCB_WINDOW_NONE,
+                        0, 0, 0);
   }
   xcb::flush();
 #endif
@@ -892,11 +900,11 @@ std::unique_ptr<Object::WidgetInterface> MouseButtonPresser::MakeWidget(ui::Widg
   return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());
 }
 
-void MouseButtonPresser::OnRun(Location& here, RunTask& run_task) {
+void MouseButtonPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("MouseButtonPresser");
   audio::Play(embedded::assets_SFX_mouse_down_wav);
   SendMouseButtonEvent(button, true);
-  BeginLongRunning(here, run_task);
+  BeginLongRunning(std::move(run_task));
   WakeWidgetsAnimation();
 }
 

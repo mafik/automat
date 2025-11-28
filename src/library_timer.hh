@@ -19,6 +19,8 @@ struct TimerDelay : LiveObject,
                     Runnable,
                     LongRunning,
                     TimerNotificationReceiver {
+  // Guards access to duration & LongRunning members
+  std::mutex mtx;
   struct MyDuration : public Object {
     time::Duration value = 10s;
     Ptr<Object> Clone() const override { return MAKE_PTR(MyDuration, *this); }
@@ -53,7 +55,7 @@ struct TimerDelay : LiveObject,
   SkPath FieldShape(Object&) const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   void Args(std::function<void(Argument&)> cb) override;
-  void OnRun(Location& here, RunTask&) override;
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
   void Updated(Location& here, Location& updated) override;

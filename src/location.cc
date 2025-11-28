@@ -96,10 +96,10 @@ Connection* Location::ConnectTo(Location& other, Argument& arg,
   return c;
 }
 
-void Location::ScheduleRun() { GetRunTask().Schedule(); }
+void Location::ScheduleRun() { (new RunTask(AcquireWeakPtr()))->Schedule(); }
 
 void Location::ScheduleLocalUpdate(Location& updated) {
-  (new UpdateTask(AcquirePtr<Location>(), updated.AcquirePtr<Location>()))->Schedule();
+  (new UpdateTask(AcquireWeakPtr(), updated.AcquireWeakPtr()))->Schedule();
 }
 
 SkPath Location::Shape() const {
@@ -674,14 +674,6 @@ Vec2 Location::LocalAnchor() const {
     return object_widget->LocalAnchor();
   }
   return Vec2();
-}
-
-RunTask& Location::GetRunTask() {
-  if (run_task == nullptr) {
-    run_task = make_unique<RunTask>(AcquirePtr<Location>());
-    run_task->keep_alive = true;
-  }
-  return *run_task;
 }
 
 void Location::Iconify() {

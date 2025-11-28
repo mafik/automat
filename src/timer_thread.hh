@@ -4,6 +4,7 @@
 
 #include <stop_token>
 
+#include "status.hh"
 #include "time.hh"
 
 namespace automat {
@@ -21,6 +22,6 @@ struct TimerNotificationReceiver {
 void ScheduleAt(Location&, time::SteadyPoint);
 void CancelScheduledAt(Location&);
 void CancelScheduledAt(Location&, time::SteadyPoint);
-void RescheduleAt(Location& here, time::SteadyPoint old_time, time::SteadyPoint new_time);
+StatusCode RescheduleAt(Location& here, time::SteadyPoint old_time, time::SteadyPoint new_time);
 
 }  // namespace automat

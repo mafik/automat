@@ -18,7 +18,7 @@ namespace automat {
 
 Argument Alert::message_arg("message", Argument::kRequiresObject);
 
-void Alert::OnRun(Location& here, RunTask&) {
+void Alert::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   ZoneScopedN("Alert");
   auto message = message_arg.GetObject(here);
   if (message.ok) {

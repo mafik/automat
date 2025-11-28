@@ -77,12 +77,6 @@ struct Location : ReferenceCounted, ui::Widget {
   std::unordered_set<Location*> error_observers;
   std::unordered_set<Location*> observing_errors;
 
-  // Retained to make it possible to check if the task is scheduled & cancel it.
-  // Initialized lazily (may be nullptr).
-  std::unique_ptr<RunTask> run_task;
-
-  RunTask& GetRunTask();
-
   Location(Widget* parent_widget, WeakPtr<Location> parent_location = {});
   ~Location();
 

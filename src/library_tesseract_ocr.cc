@@ -1064,7 +1064,7 @@ void TesseractOCR::Args(std::function<void(Argument&)> cb) {
   cb(next_arg);
 }
 
-void TesseractOCR::OnRun(Location& here, RunTask&) {
+void TesseractOCR::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   ZoneScopedN("TesseractOCR");
   auto image_obj = image_arg.FindObject(here, {});
   auto text_obj = text_arg.FindObject(here, {});

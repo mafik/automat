@@ -9,6 +9,11 @@
 
 namespace automat {
 
+enum StatusCode {
+  STATUS_OK = 0,
+  STATUS_FAILED = 1,
+};
+
 struct Status {
   struct Entry {
     std::unique_ptr<Entry> next;

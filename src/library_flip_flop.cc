@@ -145,7 +145,7 @@ void FlipFlop::Draw(SkCanvas& canvas) const {
 
 void FlipFlop::FillChildren(Vec<Widget*>& children) { children.push_back(button.get()); }
 
-void FlipFlop::OnRun(Location& here, RunTask&) {
+void FlipFlop::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   ZoneScopedN("FlipFlop");
   current_state = !current_state;
   WakeAnimation();

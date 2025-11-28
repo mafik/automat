@@ -47,7 +47,7 @@ struct KeyPresser : Object, Object::WidgetBase, ui::CaretOwner, Runnable, LongRu
   void FillChildren(Vec<Widget*>& children) override;
   bool AllowChildPointerEvents(Widget& child) const override { return false; }
 
-  void OnRun(Location& here, RunTask& run_task) override;
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
 

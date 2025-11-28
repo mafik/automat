@@ -202,12 +202,12 @@ std::unique_ptr<Action> KeyPresser::FindAction(ui::Pointer& p, ui::ActionTrigger
   }
 }
 
-void KeyPresser::OnRun(Location& here, RunTask& run_task) {
+void KeyPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("KeyPresser");
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
   WakeAnimation();
-  BeginLongRunning(here, run_task);
+  BeginLongRunning(std::move(run_task));
 }
 
 void KeyPresser::OnCancel() {

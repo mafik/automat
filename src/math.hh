@@ -421,7 +421,7 @@ union RRect {
   }
 
   constexpr static RRect MakeWithRadii(Rect rect, float tl, float tr, float br, float bl) {
-    return {.rect = rect, .radii{bl, br, tr, tl}, .type = SkRRect::Type::kNinePatch_Type};
+    return {.rect = rect, .radii{bl, br, tr, tl}, .type = SkRRect::Type::kComplex_Type};
   }
 
   [[nodiscard]] constexpr RRect Outset(float amount) const {

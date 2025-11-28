@@ -28,12 +28,6 @@ NextGuard::~NextGuard() {
   }
 }
 
-std::unordered_set<Location*> no_scheduling;
-
-static bool NoScheduling(Location* location) {
-  return no_scheduling.find(location) != no_scheduling.end();
-}
-
 Task::Task(WeakPtr<Location> target)
     : target(target), predecessors(), successors(global_successors) {
   for (Task* successor : successors) {
@@ -43,9 +37,6 @@ Task::Task(WeakPtr<Location> target)
 
 void Task::Schedule() {
   ZoneScopedN("Schedule");
-  if (NoScheduling(target.lock().get())) {
-    return;
-  }
   if (scheduled) {
     ERROR << "Task for " << *target.lock() << " already scheduled!";
     return;
@@ -54,13 +45,16 @@ void Task::Schedule() {
   EnqueueTask(this);
 }
 
-void Task::Execute() {
+void Task::Execute(std::unique_ptr<Task> self) {
   ZoneScopedN("Execute");
   scheduled = false;
   if (!successors.empty()) {
     global_successors = successors;
   }
-  OnExecute();
+  OnExecute(self);  // may steal self (lol)
+  if (self == nullptr) {
+    return;
+  }
   if (!global_successors.empty()) {
     assert(global_successors == successors);
     global_successors.clear();
@@ -73,9 +67,6 @@ void Task::Execute() {
         successor->Schedule();
       }
     }
-  }
-  if (!keep_alive) {
-    delete this;
   }
 }
 
@@ -109,19 +100,36 @@ void ScheduleArgumentTargets(Location& source, Argument& arg) {
   });
 }
 
-void RunTask::OnExecute() {
+void RunTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("RunTask");
-  schedule_next = true;
   if (auto s = target.lock()) {
     if (Runnable* runnable = s->As<Runnable>()) {
-      runnable->Run(*s, *this);
+      LongRunning* long_running = s->object->AsLongRunning();
+      if (long_running && long_running->IsRunning()) {
+        return;
+      }
+      // Cast the `self` to RunTask for the OnRun invocation
+      std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
+      runnable->OnRun(*s, self_as_run_task);
+      // If OnRun didn't "steal" the ownership then we have to return it back.
+      self.reset(self_as_run_task.release());
+
+      if (self) {
+        DoneRunning(*s);
+      }
     }
+  }
+}
+
+void RunTask::DoneRunning(Location& here) {
+  if (!HasError(*here.object)) {
+    ScheduleNext(here);
   }
 }
 
 std::string CancelTask::Format() { return f("CancelTask({})", TargetName()); }
 
-void CancelTask::OnExecute() {
+void CancelTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("CancelTask");
   if (auto s = target.lock()) {
     if (LongRunning* long_running = s->object->AsLongRunning()) {
@@ -135,7 +143,7 @@ std::string UpdateTask::Format() {
   return f("UpdateTask({}, {})", TargetName(), updated_str);
 }
 
-void UpdateTask::OnExecute() {
+void UpdateTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("UpdateTask");
   if (auto t = target.lock()) {
     if (auto u = updated.lock()) {
@@ -146,15 +154,10 @@ void UpdateTask::OnExecute() {
 
 std::string FunctionTask::Format() { return f("FunctionTask({})", TargetName()); }
 
-void FunctionTask::OnExecute() {
+void FunctionTask::OnExecute(std::unique_ptr<Task>& self) {
   ZoneScopedN("FunctionTask");
   if (auto t = target.lock()) {
     function(*t);
   }
 }
-
-NoSchedulingGuard::NoSchedulingGuard(Location& location) : location(location) {
-  no_scheduling.insert(&location);
-}
-NoSchedulingGuard::~NoSchedulingGuard() { no_scheduling.erase(&location); }
 }  // namespace automat

@@ -43,7 +43,7 @@ struct TesseractOCR : public LiveObject, Runnable {
 
   void Args(std::function<void(Argument&)> cb) override;
   void Updated(Location& here, Location& updated) override;
-  void OnRun(Location& here, RunTask&) override;
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

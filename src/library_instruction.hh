@@ -54,7 +54,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
 
   LongRunning* AsLongRunning() override;
 
-  void OnRun(Location& here, RunTask&) override;
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
 
   Buffer::Type imm_type = Buffer::Type::Unsigned;
 

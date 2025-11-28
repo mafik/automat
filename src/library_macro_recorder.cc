@@ -271,7 +271,7 @@ void MacroRecorder::ConnectionRemoved(Location& here, Connection& c) {
     }
   }
 }
-void MacroRecorder::OnRun(Location& here, RunTask& run_task) {
+void MacroRecorder::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("MacroRecorder");
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);
@@ -279,7 +279,7 @@ void MacroRecorder::OnRun(Location& here, RunTask& run_task) {
     audio::Play(embedded::assets_SFX_macro_start_wav);
     FindRootWidget().window->BeginLogging(this, &keylogging, this, &pointer_logging);
   }
-  BeginLongRunning(here, run_task);
+  BeginLongRunning(std::move(run_task));
 }
 void MacroRecorder::OnCancel() {
   if (auto timeline = FindTimeline(*this)) {
@@ -503,8 +503,9 @@ void MacroRecorder::PointerLoggerButtonUp(ui::Pointer::Logging&, ui::PointerButt
   RecordOnOffEvent(*this, AnsiKey::Unknown, btn, false);
 }
 
-template<typename TrackT, typename ReceiverT>
-static void RecordDelta(MacroRecorder& recorder, const char* track_name, typename TrackT::ValueT delta) {
+template <typename TrackT, typename ReceiverT>
+static void RecordDelta(MacroRecorder& recorder, const char* track_name,
+                        typename TrackT::ValueT delta) {
   auto timeline = FindOrCreateTimeline(recorder);
 
   int track_index = -1;
@@ -619,7 +620,7 @@ void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
         if (value) {
           l.ScheduleRun();
         } else {
-          (new CancelTask(&l))->Schedule();  // TODO: memory leak if NoScheduling is active
+          (new CancelTask(&l))->Schedule();
         }
       }
     }

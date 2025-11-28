@@ -287,10 +287,10 @@ void Assembler::UpdateMachineCode() {
   }
 }
 
-void Assembler::RunMachineCode(library::Instruction* entry_point) {
+void Assembler::RunMachineCode(library::Instruction* entry_point,
+                               std::unique_ptr<RunTask>&& run_task) {
   auto here_ptr = here.lock();
-  BeginLongRunning(*here_ptr, here_ptr->GetRunTask());
-  long_running_task->schedule_next = false;
+  BeginLongRunning(std::move(run_task));
 
   Status status;
   auto inst = entry_point->ToMC();

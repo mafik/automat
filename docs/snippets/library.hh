@@ -46,7 +46,7 @@ struct Delete : Object, Runnable {
   static Argument target_arg;
   string_view Name() const override { return "Delete"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Delete); }
-  void OnRun(Location& here, RunTask&) override {
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override {
     auto target = target_arg.GetLocation(here);
     if (!target.ok) {
       return;
@@ -60,7 +60,7 @@ struct Set : Object, Runnable {
   static Argument target_arg;
   string_view Name() const override { return "Set"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Set); }
-  void OnRun(Location& here, RunTask&) override {
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override {
     auto value = value_arg.GetObject(here);
     auto target = target_arg.GetLocation(here);
     if (!value.ok || !target.ok) {
@@ -151,7 +151,7 @@ struct Timer : Object, Runnable {
     time::Duration elapsed = now - start;
     return f("{}", time::ToSeconds(elapsed));
   }
-  void OnRun(Location& here, RunTask&) override {
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override {
     time::SteadyPoint now = GetNow();
     if (now - last_tick >= 1ms) {
       last_tick = now;
@@ -178,7 +178,7 @@ struct TimerReset : Object, Runnable {
   static Argument timer_arg;
   string_view Name() const override { return "TimerReset"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(TimerReset); }
-  void OnRun(Location& here, RunTask&) override {
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override {
     auto timer = timer_arg.GetTyped<Timer>(here);
     if (!timer.ok) {
       return;
@@ -458,7 +458,7 @@ struct Append : Object, Runnable {
   static Argument what_arg;
   string_view Name() const override { return "Append"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Append); }
-  void OnRun(Location& here, RunTask&) override {
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override {
     auto to = to_arg.GetTyped<AbstractList>(here);
     if (!to.ok) {
       return;
@@ -559,7 +559,7 @@ struct Filter : LiveObject, Iterator, AbstractList, Runnable {
     cb(element_arg);
     cb(test_arg);
   }
-  void OnRun(Location& here, RunTask&) override {
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override {
     if (phase == Phase::kSequential) {
       // Check the value of test, possibly copying element from list to output.
       // Then increment index and schedule another iteration.
@@ -1133,7 +1133,6 @@ struct BlackboardUpdater : LiveObject {
   void Updated(Location& here, Location& updated) override {
     // LOG << "MathEngine::Updated(" << here.HumanReadableName() << ", " <<
     // updated.HumanReadableName() << ")";
-    NoSchedulingGuard guard(here);
 
     // FIXME: Find the name that the user assigned to the updated object!
     Str updated_name = updated.ToStr();  // placeholder just to make it compile

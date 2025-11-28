@@ -56,7 +56,7 @@ struct Machine;
 // running job is cancelled. This must be done by the derived class because ~LongRunning shouldn't
 // invoke abstract virtual functions (because derived class data has already been destroyed).
 struct LongRunning : OnOff {
-  RunTask* long_running_task = nullptr;
+  std::unique_ptr<RunTask> long_running_task;
 
   virtual ~LongRunning() {
     if (IsRunning()) {
@@ -81,7 +81,7 @@ struct LongRunning : OnOff {
       FATAL << "LongRunning::Cancel called without a long_running_task";
     }
     OnCancel();
-    long_running_task = nullptr;
+    long_running_task.reset();
   }
 
   bool IsRunning() const { return long_running_task != nullptr; }
@@ -92,7 +92,7 @@ struct LongRunning : OnOff {
   // because its not going to be used again.
   void Done(Location& here);
 
-  void BeginLongRunning(Location& here, RunTask& run_task);
+  void BeginLongRunning(std::unique_ptr<RunTask>&& task) { long_running_task = std::move(task); }
 
   bool IsOn() const override { return IsRunning(); }
   void On() override;
@@ -105,10 +105,10 @@ struct Runnable {
   // If an object must use the CPU for some computation it can stay busy as long as it needs to.
   // However if it's doing something in the background (like waiting for external resource) then it
   // should call BeginLongRunning with the run_task. Once it's done it should call Done.
-  virtual void OnRun(Location& here, RunTask& run_task) = 0;
-
-  // Kicks off the execution of the object.
-  void Run(Location& here, RunTask& run_task);
+  //
+  // The RunTask is being passed here to make it possible to "steal" the task from the scheduler and
+  // pass it to BeginLongRunning.
+  virtual void OnRun(Location& here, std::unique_ptr<RunTask>& run_task) = 0;
 };
 
 struct LiveObject : Object {

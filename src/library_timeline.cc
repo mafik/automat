@@ -2478,7 +2478,7 @@ void Timeline::OnCancel() {
   }
 }
 
-void Timeline::OnRun(Location& here, RunTask& run_task) {
+void Timeline::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("Timeline");
   if (state != kPaused) {
     return;
@@ -2493,7 +2493,7 @@ void Timeline::OnRun(Location& here, RunTask& run_task) {
   TimelineScheduleNextAfter(*this, now);
   WakeRunButton(*this);
   WakeWidgetsAnimation();
-  BeginLongRunning(here, run_task);
+  BeginLongRunning(std::move(run_task));
 }
 
 void Timeline::BeginRecording() {
@@ -2865,7 +2865,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       // We're not updating the outputs because they should be deserialized in a proper state
       // TimelineUpdateOutputs(l, *this, playing.started_at, now);
       TimelineScheduleNextAfter(*this, now);
-      BeginLongRunning(l, l.GetRunTask());
+      BeginLongRunning(std::make_unique<RunTask>(l.AcquireWeakPtr()));
     } else if (key == "recording") {
       state = kRecording;
       double value = 0;

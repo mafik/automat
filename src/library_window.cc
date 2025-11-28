@@ -492,7 +492,7 @@ std::unique_ptr<Object::WidgetInterface> Window::MakeWidget(ui::Widget* parent) 
 
 void Window::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
-void Window::OnRun(Location& here, RunTask&) {
+void Window::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   ZoneScopedN("Window");
 #ifdef __linux__
   {

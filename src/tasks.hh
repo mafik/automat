@@ -21,29 +21,29 @@ struct Task {
   WeakPtr<Location> target;
   std::vector<Task*> predecessors;
   std::vector<Task*> successors;
-  bool scheduled = false;
-  bool keep_alive = false;
+  bool scheduled = false;  // only used for error detection
   Task(WeakPtr<Location> target);
   virtual ~Task() {}
   // Add this task to the task queue.
   void Schedule();
   virtual std::string Format();
-  virtual void OnExecute() = 0;
-  void Execute();
+  virtual void OnExecute(std::unique_ptr<Task>& self) = 0;
+  void Execute(std::unique_ptr<Task> self);
   std::string TargetName();
 };
 
 struct RunTask : Task {
-  bool schedule_next;
   RunTask(WeakPtr<Location> target) : Task(target) {}
   std::string Format() override;
-  void OnExecute() override;
+  void OnExecute(std::unique_ptr<Task>& self) override;
+
+  void DoneRunning(Location& here);
 };
 
 struct CancelTask : Task {
   CancelTask(WeakPtr<Location> target) : Task(target) {}
   std::string Format() override;
-  void OnExecute() override;
+  void OnExecute(std::unique_ptr<Task>& self) override;
 };
 
 struct UpdateTask : Task {
@@ -51,7 +51,7 @@ struct UpdateTask : Task {
   UpdateTask(WeakPtr<Location> target, WeakPtr<Location> updated)
       : Task(target), updated(updated) {}
   std::string Format() override;
-  void OnExecute() override;
+  void OnExecute(std::unique_ptr<Task>& self) override;
 };
 
 struct FunctionTask : Task {
@@ -59,7 +59,7 @@ struct FunctionTask : Task {
   FunctionTask(WeakPtr<Location> target, std::function<void(Location&)> function)
       : Task(target), function(function) {}
   std::string Format() override;
-  void OnExecute() override;
+  void OnExecute(std::unique_ptr<Task>& self) override;
 };
 
 struct NextGuard {
@@ -67,15 +67,6 @@ struct NextGuard {
   std::vector<Task*> old_global_successors;
   NextGuard(std::vector<Task*>&& successors);
   ~NextGuard();
-};
-
-// Sometimes objects are updated automatically (for example by their LiveArguments). This class
-// allows such objects to block auto-scheduling and enable them to alter the values of their
-// arguments without triggering re-runs.
-struct NoSchedulingGuard {
-  Location& location;
-  NoSchedulingGuard(Location& location);
-  ~NoSchedulingGuard();
 };
 
 }  // namespace automat

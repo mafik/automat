@@ -59,7 +59,7 @@ struct MacroRecorder : LiveObject,
   void ConnectionAdded(Location& here, Connection&) override;
   void ConnectionRemoved(Location& here, Connection&) override;
 
-  void OnRun(Location& here, RunTask&) override;
+  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
   void KeyloggerKeyDown(ui::Key) override;

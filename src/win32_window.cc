@@ -416,8 +416,9 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         RAWMOUSE& ev = raw_input->data.mouse;
         auto lock = window.Lock();
         auto& mouse = window.GetMouse();
-        // LOG << f("Mouse usFlags: {:04x}, usButtonData: {:04x}, usButtonFlags: {:04x}", ev.usFlags, ev.usButtonData, ev.usButtonFlags);
-        // LOG << "Mouse event: " << dump_struct(ev);
+        // LOG << f("Mouse usFlags: {:04x}, usButtonData: {:04x}, usButtonFlags: {:04x}",
+        // ev.usFlags, ev.usButtonData, ev.usButtonFlags); LOG << "Mouse event: " <<
+        // dump_struct(ev);
         using enum ui::PointerButton;
         using tuple = std::tuple<WORD, bool, PointerButton>;
         for (auto [flags, down, button] : {
@@ -444,13 +445,15 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
         if (ev.usButtonFlags & RI_MOUSE_WHEEL) {
           for (auto& logging : mouse.loggings) {
-            logging->logger.PointerLoggerScrollY(*logging, (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
+            logging->logger.PointerLoggerScrollY(*logging,
+                                                 (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
           }
         }
 
         if (ev.usButtonFlags & RI_MOUSE_HWHEEL) {
           for (auto& logging : mouse.loggings) {
-            logging->logger.PointerLoggerScrollX(*logging, (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
+            logging->logger.PointerLoggerScrollX(*logging,
+                                                 (float)(int16_t)ev.usButtonData / WHEEL_DELTA);
           }
         }
 
@@ -668,7 +671,7 @@ unique_ptr<Window> Win32Window::Make(RootWidget& root, Status& status) {
   return window;
 }
 
-void Win32Window::MainLoop() {
+void Win32Window::MainLoop(std::stop_token) {
   ShowWindow(hwnd, (root.maximized_horizontally || root.maximized_vertically) ? SW_SHOWMAXIMIZED
                                                                               : SW_SHOW);
   UpdateWindow(hwnd);

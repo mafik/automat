@@ -2,16 +2,72 @@
 // SPDX-License-Identifier: MIT
 #include "tasks.hh"
 
+#include <shared_mutex>
+#include <stop_token>
 #include <tracy/Tracy.hpp>
 
 #include "argument.hh"
 #include "automat.hh"
 #include "base.hh"
+#include "blockingconcurrentqueue.hh"
+#include "thread_name.hh"
 #include "ui_connection_widget.hh"
 
 namespace automat {
 
 std::vector<Task*> global_successors;
+moodycamel::BlockingConcurrentQueue<Task*> queue;
+
+struct NoopTask : Task {
+  NoopTask() : Task(nullptr) {}
+  void OnExecute(std::unique_ptr<Task>& self) override {}
+};
+
+static void AutomatLoop(std::stop_token stop_token) {
+  SetThreadName("Automat Loop");
+  auto stop_callback = std::stop_callback(stop_token, [&]() {
+    // noop - wakes up the queue::wait_dequeue
+    (new NoopTask())->Schedule();
+  });
+  while (!stop_token.stop_requested()) {
+    Task* task;
+    {
+      ZoneScopedN("Dequeue");
+      queue.wait_dequeue(task);
+    }
+    task->Execute(std::unique_ptr<Task>(task));
+  }
+}
+
+std::vector<std::jthread> worker_threads;
+std::shared_mutex worker_threads_mtx;
+
+void StartWorkerThreads(std::stop_token stop_token) {
+  auto lock = std::unique_lock(worker_threads_mtx);
+  for (int i = 0; i < 1; ++i) {
+    worker_threads.emplace_back(AutomatLoop, stop_token);
+  }
+}
+
+void JoinWorkerThreads() {
+  auto lock = std::unique_lock(worker_threads_mtx);
+  // Explicit join included for readability only - jthread::~jthread will join the threads
+  // automatically anyway.
+  for (auto& thread : worker_threads) {
+    thread.join();
+  }
+  worker_threads.clear();
+}
+
+static bool IsWorkerThread() {
+  auto lock = std::shared_lock(worker_threads_mtx);
+  for (auto& thread : worker_threads) {
+    if (std::this_thread::get_id() == thread.get_id()) {
+      return true;
+    }
+  }
+  return false;
+}
 
 NextGuard::NextGuard(std::vector<Task*>&& successors) : successors(std::move(successors)) {
   old_global_successors = global_successors;
@@ -42,7 +98,8 @@ void Task::Schedule() {
     return;
   }
   scheduled = true;
-  EnqueueTask(this);
+  // TODO: moodycamel::concurrentqueue should run faster with explicit producer tokens
+  queue.enqueue(this);
 }
 
 void Task::Execute(std::unique_ptr<Task> self) {

@@ -582,13 +582,13 @@ static Valuators<xcb_input_button_press_event_t> ButtonValuators(
                                                    xcb_input_button_press_axisvalues);
 }
 
-void XCBWindow::MainLoop() {
+void XCBWindow::MainLoop(std::stop_token stop_token) {
   std::atomic_bool running = true;
   // TODO: maybe use unique_ptr here
   xcb_generic_event_t *event, *peeked_event = nullptr;
   bool keys_down[256] = {0};
 
-  std::stop_callback on_automat_stop(automat::stop_source.get_token(), [&] { running = false; });
+  std::stop_callback on_automat_stop(stop_token, [&] { running = false; });
 
   while (running) {
     if (peeked_event) {

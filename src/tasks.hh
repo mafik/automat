@@ -3,15 +3,27 @@
 #pragma once
 
 #include <functional>
+#include <stop_token>
 #include <string>
 #include <vector>
 
 #include "ptr.hh"
+#include "status.hh"
 
 namespace automat {
 
 struct Location;
 struct Argument;
+struct Task;
+
+void StartWorkerThreads(std::stop_token);
+
+// If you already requested a stop, this function can be used to wait for all the worker threads to
+// stop.
+//
+// Note that it doesn't request stop - you have to do that using the stop_token passed to
+// StartWorkerThreads.
+void JoinWorkerThreads();
 
 // Schedules all of the Locations pointed by the "next" argument from the "source" Location.
 void ScheduleNext(Location& source);
@@ -25,6 +37,8 @@ struct Task {
   Task(WeakPtr<Location> target);
   virtual ~Task() {}
   // Add this task to the task queue.
+  //
+  // Steals ownership of this object.
   void Schedule();
   virtual std::string Format();
   virtual void OnExecute(std::unique_ptr<Task>& self) = 0;

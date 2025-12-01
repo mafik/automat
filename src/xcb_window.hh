@@ -6,6 +6,8 @@
 #include <xcb/xcb_cursor.h>
 #include <xcb/xinput.h>
 
+#include <stop_token>
+
 #include "window.hh"
 
 namespace xcb {
@@ -29,7 +31,7 @@ struct XCBWindow : automat::ui::Window {
 
   ~XCBWindow();
 
-  void MainLoop() override;
+  void MainLoop(std::stop_token) override;
   automat::ui::Pointer& GetMouse() override;
   Vec2 ScreenToWindowPx(Vec2 screen) override;
   Vec2 WindowPxToScreen(Vec2 window) override;

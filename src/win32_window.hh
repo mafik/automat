@@ -24,7 +24,7 @@ struct Win32Window : automat::ui::Window {
 
   static std::unique_ptr<automat::ui::Window> Make(automat::ui::RootWidget&, automat::Status&);
 
-  void MainLoop() override;
+  void MainLoop(std::stop_token) override;
   automat::ui::Pointer& GetMouse() override;
   Vec2 ScreenToWindowPx(Vec2 screen) override;
   Vec2 WindowPxToScreen(Vec2 window) override;

@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright 2024 Automat Authors
 // SPDX-License-Identifier: MIT
+#include "tasks.hh"
 #pragma maf main
 
 #pragma comment(lib, "skia")
@@ -41,12 +42,6 @@ namespace automat {
 std::stop_source stop_source;
 Ptr<Location> root_location;
 Ptr<Machine> root_machine;
-std::jthread automat_thread;
-std::atomic_bool automat_thread_finished = false;
-
-moodycamel::ConcurrentQueue<Task*> queue;
-std::mutex automat_threads_mutex;
-std::condition_variable automat_threads_cv;
 
 std::thread::id main_thread_id;
 
@@ -56,37 +51,6 @@ constexpr bool kPowersave = true;
 
 static int argc;
 static char** argv;
-
-// TODO: consider using `queue` to stop worker thread(s)
-static void AutomatLoop(std::stop_token stop_token) {
-  SetThreadName("Automat Loop");
-  while (true) {
-    Task* task;
-    {
-      ZoneScopedN("Dequeue");
-    woken:
-      if (stop_token.stop_requested()) {
-        break;
-      }
-      if (!queue.try_dequeue(task)) {
-        std::unique_lock lk(automat_threads_mutex);
-        if (!queue.try_dequeue(task)) {
-          ZoneScopedN("Wait");
-          automat_threads_cv.wait(lk);
-          goto woken;
-        }
-      }
-    }
-    task->Execute(std::unique_ptr<Task>(task));
-  }
-  automat_thread_finished = true;
-  automat_thread_finished.notify_all();
-}
-
-void RunLoop() {
-  std::stop_token stop_token;
-  AutomatLoop(stop_token);
-}
 
 void VulkanPaint() {
   ZoneScoped;
@@ -155,59 +119,6 @@ void RenderThread(std::stop_token stop_token) {
   }
 }
 
-void EnqueueTask(Task* task) {
-  queue.enqueue(task);
-  std::unique_lock lk(automat_threads_mutex);
-  automat_threads_cv.notify_one();
-}
-
-void AssertAutomatThread() {
-  if (automat_thread.get_stop_source().stop_requested()) {
-    assert(automat_thread_finished);
-  } else {
-    assert(std::this_thread::get_id() == automat_thread.get_id());
-  }
-}
-
-void RunOnAutomatThread(std::function<void()> f) {
-  if (std::this_thread::get_id() == automat_thread.get_id()) {
-    f();
-    return;
-  }
-  if (automat_thread.get_stop_source().stop_requested()) {
-    if (!automat_thread_finished) {
-      automat_thread_finished.wait(false);
-    }
-    f();
-    return;
-  }
-  auto task = new FunctionTask(root_location.get(), [f](Location& l) { f(); });
-  task->Schedule();
-}
-
-void RunOnAutomatThreadSynchronous(std::function<void()> f) {
-  if (std::this_thread::get_id() == automat_thread.get_id()) {
-    f();
-    return;
-  }
-  std::atomic_bool done = false;
-  RunOnAutomatThread([&]() {
-    f();
-    // wake the UI thread
-    done = true;
-    done.notify_all();
-  });
-  done.wait(false);
-}
-
-void StopAutomat(Status&) {
-  {
-    std::unique_lock lk(automat_threads_mutex);
-    stop_source.request_stop();
-  }
-  automat_threads_cv.notify_all();
-}
-
 int Main() {
   // Process setup
   // Thread name of the main thread is also used as a process name so instead of "Main" (which would
@@ -241,11 +152,7 @@ int Main() {
   root_machine->name = "Root machine";
   StartTimeThread(stop_source.get_token());
 
-  automat_thread = std::jthread(AutomatLoop, stop_source.get_token());
-  RunOnAutomatThread([&] {
-    // nothing to do here - just make sure that memory allocated in main thread is synchronized to
-    // automat thread
-  });
+  StartWorkerThreads(stop_source.get_token());
 
   Status status;
 #ifdef __linux__
@@ -279,13 +186,15 @@ int Main() {
 
   root_widget->loading_animation->LoadingCompleted();
 
-  root_widget->window->MainLoop();
+  //////////////////
+  // Main Loop - processes OS events
+  //////////////////
+  root_widget->window->MainLoop(stop_source.get_token());
 
   // Shutdown
-  StopAutomat(status);
-  if (automat_thread.joinable()) {
-    automat_thread.join();
-  }
+  stop_source.request_stop();
+
+  JoinWorkerThreads();
   if (render_thread.joinable()) {
     render_thread.join();
   }

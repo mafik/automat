@@ -375,21 +375,21 @@ void Keyboard::KeyDown(xcb_key_press_event_t& ev) {
 
 void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
   ui::Key key = {.ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
-                  .alt = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_1),
-                  .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
-                  .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
-                  .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+                 .alt = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_1),
+                 .shift = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_SHIFT),
+                 .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
+                 .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
+                 .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   KeyUp(key);
 }
 void Keyboard::KeyUp(xcb_input_raw_key_release_event_t& ev) {
   ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+                 .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   LogKeyUp(key);
 }
 void Keyboard::KeyUp(xcb_key_press_event_t& ev) {
   ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
-                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+                 .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   KeyUp(key);
 }
 #endif  // __linux__
@@ -418,11 +418,7 @@ void DeleteSafeForEach(std::set<std::unique_ptr<Caret>>& carets, const T& cb) {
 void Keyboard::KeyDown(Key key) {
   // Quit on Ctrl + Q
   if (key.ctrl && key.physical == AnsiKey::Q) {
-    Status status;
-    automat::StopAutomat(status);
-    if (!OK(status)) {
-      ERROR << "Error while stopping Automat: " << status;
-    }
+    stop_source.request_stop();
     return;
   }
   if (key.physical > AnsiKey::Unknown && key.physical < AnsiKey::Count) {
@@ -481,7 +477,6 @@ void Keyboard::LogKeyUp(Key key) {
     keylogging->keylogger.KeyloggerKeyUp(key);
   }
 }
-
 
 void SendKeyEvent(AnsiKey physical, bool down) {
 #if defined(_WIN32)

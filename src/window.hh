@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <mutex>
+#include <stop_token>
 
 #include "keyboard.hh"
 #include "math.hh"
@@ -23,7 +24,7 @@ struct Window {
 
   virtual ~Window() = default;
 
-  virtual void MainLoop() = 0;
+  virtual void MainLoop(std::stop_token) = 0;
 
   virtual Pointer& GetMouse() = 0;
 

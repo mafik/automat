@@ -15,11 +15,13 @@ void Window::BeginLogging(Keylogger* keylogger, Keylogging** keylogging,
   assert((pointer_logger != nullptr) == (pointer_logging != nullptr));
   assert(keylogger != nullptr || pointer_logger != nullptr);
   if (keylogging != nullptr) {
-    *keylogging = root.keyboard.keyloggings.emplace_back(new Keylogging(root.keyboard, *keylogger)).get();
+    *keylogging =
+        root.keyboard.keyloggings.emplace_back(new Keylogging(root.keyboard, *keylogger)).get();
   }
   if (pointer_logging != nullptr) {
+    auto& mouse_ref = GetMouse();
     *pointer_logging =
-        mouse->loggings.emplace_back(new Pointer::Logging(*mouse, *pointer_logger)).get();
+        mouse_ref.loggings.emplace_back(new Pointer::Logging(mouse_ref, *pointer_logger)).get();
   }
   RegisterInput();
 }

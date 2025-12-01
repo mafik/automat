@@ -152,8 +152,6 @@ int Main() {
   root_machine->name = "Root machine";
   StartTimeThread(stop_source.get_token());
 
-  StartWorkerThreads(stop_source.get_token());
-
   Status status;
 #ifdef __linux__
   root_widget->window = xcb::XCBWindow::Make(*root_widget, status);
@@ -183,6 +181,8 @@ int Main() {
     ERROR << "Couldn't load saved state: " << status;
   }
   status.Reset();
+
+  StartWorkerThreads(stop_source.get_token());
 
   root_widget->loading_animation->LoadingCompleted();
 

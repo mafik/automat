@@ -2815,6 +2815,7 @@ void Float64Track::DeserializeState(Location& l, Deserializer& d) {
 
 void Timeline::DeserializeState(Location& l, Deserializer& d) {
   Status status;
+  here = l.AcquireWeakPtr();
   for (auto& key : ObjectView(d, status)) {
     if (key == "tracks") {
       for (auto elem : ArrayView(d, status)) {
@@ -2860,8 +2861,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       double value = 0;
       d.Get(value, status);
       time::SteadyPoint now = time::SteadyNow();
-      auto duration_double_s = std::chrono::duration<double>(value);
-      playing.started_at = now - std::chrono::duration_cast<time::Duration>(duration_double_s);
+      playing.started_at = now - time::FromSeconds(value);
       // We're not updating the outputs because they should be deserialized in a proper state
       // TimelineUpdateOutputs(l, *this, playing.started_at, now);
       TimelineScheduleNextAfter(*this, now);

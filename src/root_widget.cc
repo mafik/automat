@@ -34,6 +34,9 @@ RootWidget::~RootWidget() {
   if (it != root_widgets.end()) {
     root_widgets.erase(it);
   }
+  while (!keyboard.keyloggings.empty()) {
+    keyboard.keyloggings.back()->Release();
+  }
 }
 
 void RootWidget::InitToolbar() {

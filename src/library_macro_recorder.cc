@@ -266,7 +266,7 @@ void MacroRecorder::ConnectionAdded(Location& here, Connection& c) {
 }
 void MacroRecorder::ConnectionRemoved(Location& here, Connection& c) {
   if (&c.argument == &timeline_arg && IsOn()) {
-    if (auto timeline = FindTimeline(*this)) {
+    if (auto timeline = c.to.As<Timeline>()) {
       timeline->StopRecording();
     }
   }
@@ -494,6 +494,9 @@ void MacroRecorder::KeyloggerKeyDown(ui::Key key) {
 }
 void MacroRecorder::KeyloggerKeyUp(ui::Key key) {
   RecordOnOffEvent(*this, key.physical, PointerButton::Unknown, false);
+}
+void MacroRecorder::KeyloggerOnRelease(const ui::Keylogging& keylogging) {
+  this->keylogging = nullptr;
 }
 
 void MacroRecorder::PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerButton btn) {

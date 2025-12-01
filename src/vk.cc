@@ -15,6 +15,7 @@
 #include <include/gpu/graphite/BackendTexture.h>
 #include <include/gpu/graphite/Context.h>
 #include <include/gpu/graphite/ContextOptions.h>
+#include <include/gpu/graphite/GraphiteTypes.h>
 #include <include/gpu/graphite/Recorder.h>
 #include <include/gpu/graphite/Surface.h>
 #include <include/gpu/graphite/vk/VulkanGraphiteTypes.h>
@@ -232,6 +233,12 @@ struct Swapchain {
       // that swapchain image.
       std::vector<VkCommandBuffer> vk_command_buffers = {};
       Semaphore sem_copied = {};
+
+      ~Backbuffer() {
+        if (texture.isValid()) {
+          graphite_recorder->deleteBackendTexture(texture);
+        }
+      }
     };
     std::array<Backbuffer, 2> backbuffers;
     int current = 0;
@@ -1094,6 +1101,8 @@ void Swapchain::WaitAndDestroy() {
     vkQueueWaitIdle(device.present_queue);
     vkDeviceWaitIdle(device);
     DestroyBuffers();
+    sem_acquired.Destroy();
+
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     swapchain = VK_NULL_HANDLE;
   }
@@ -1143,6 +1152,7 @@ void Init(Status& status) {
     return;
   }
 }
+
 void Destroy() {
   if (VK_NULL_HANDLE != device) {
     swapchain.WaitAndDestroy();
@@ -1152,6 +1162,7 @@ void Destroy() {
 
   graphite_recorder.reset();
   graphite_context.reset();
+  background_context.reset();
 
   device.Destroy();
   physical_device.Destroy();

@@ -614,6 +614,7 @@ void Keylogging::Release() {
   auto& window = *keyboard.root_widget.window;
   keyboard.keyloggings.erase(it);  // After this line `this` is deleted!
   window.RegisterInput();
+  keylogger.KeyloggerOnRelease(*this);
 }
 
 }  // namespace automat::ui

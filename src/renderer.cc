@@ -131,6 +131,12 @@ struct WidgetDrawable : SkDrawableRTTI {
     SkImageInfo image_info;
     time::Duration cpu_time;
     time::SteadyPoint gpu_start;
+
+    ~Rendered() {
+      if (texture.isValid()) {
+        surface->recorder()->deleteBackendTexture(texture);
+      }
+    }
   } frame_a, frame_b;
 
   // These values should be set before the image is sent to VkRecorderThread.
@@ -346,17 +352,26 @@ void RendererInit() {
   global_background_recorder = vk::background_context->makeRecorder(options);
 }
 
+int foreground_rendering_jobs = 0;
+int background_rendering_jobs = 0;
+
 void RendererShutdown() {
-  cached_widget_drawables.clear();
-  global_foreground_recorder.reset();
-  global_background_recorder.reset();
   for (int i = 0; i < kNumVkRecorderThreads; ++i) {
     recording_queue.enqueue(nullptr);
   }
+  for (int i = 0; i < kNumVkRecorderThreads; ++i) {
+    vk_recorder_threads[i].join();
+  }
+  cached_widget_drawables.clear();
+  global_foreground_recorder.reset();
+  global_background_recorder.reset();
+  while (foreground_rendering_jobs) {
+    vk::graphite_context->checkAsyncWorkCompletion();
+  }
+  while (background_rendering_jobs) {
+    vk::background_context->checkAsyncWorkCompletion();
+  }
 }
-
-int foreground_rendering_jobs = 0;
-int background_rendering_jobs = 0;
 
 void WidgetDrawable::InsertRecording() {
   auto& frame = in_progress();

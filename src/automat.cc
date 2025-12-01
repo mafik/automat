@@ -214,6 +214,7 @@ int Main() {
 
   resources::Release();
   image_provider.reset();
+  PersistentImage::ReleaseAll();
   RendererShutdown();
 
   Widget::CheckAllWidgetsReleased();

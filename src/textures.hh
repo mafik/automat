@@ -89,6 +89,9 @@ struct PersistentImage {
   // One day, when Automat has thousands of textures and preloading all of them at startup is a
   // problem, this will have to be revisited.
   static void PreloadAll();
+
+  // Release all of the preloaded images.
+  static void ReleaseAll();
 };
 
 sk_sp<SkImage> DecodeImage(fs::VFile& asset);

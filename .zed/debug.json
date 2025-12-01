@@ -1,0 +1,17 @@
+// Project-local debug tasks
+//
+// For more documentation on how to configure debug tasks,
+// see: https://zed.dev/docs/debugger
+[
+  {
+    "label": "Automat Debug",
+    "build": {
+      "command": "./run.py",
+      "args": ["'link automat'", "--variant=debug"],
+      "cwd": "$ZED_WORKTREE_ROOT"
+    },
+    "program": "$ZED_WORKTREE_ROOT/build/debug/automat",
+    "request": "launch",
+    "adapter": "CodeLLDB"
+  }
+]

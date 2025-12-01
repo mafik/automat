@@ -30,6 +30,7 @@ struct Keyboard;
 struct RootWidget;
 struct Widget;
 struct Pointer;
+struct Keylogging;
 
 void SendKeyEvent(AnsiKey physical, bool down);
 
@@ -75,10 +76,16 @@ struct KeyboardGrabber {
   virtual void KeyboardGrabberKeyUp(KeyboardGrab&, Key) {}
 };
 
+// Interface for objects that want to receive system-wide keyboard input.
 struct Keylogger {
   virtual ~Keylogger() = default;
   virtual void KeyloggerKeyDown(Key) {}
   virtual void KeyloggerKeyUp(Key) {}
+
+  // Called when somebody calls Keylogging.Release.
+  //
+  // Keylogger should release resources related to this keylogging.
+  virtual void KeyloggerOnRelease(const Keylogging&) = 0;
 };
 
 #if defined(_WIN32)
@@ -229,6 +236,5 @@ struct Keyboard final : Widget {
 
   void LogKeyUp(Key);
 };
-
 
 }  // namespace automat::ui

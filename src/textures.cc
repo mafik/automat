@@ -36,9 +36,21 @@ sk_sp<SkImage> DecodeTemporaryImage(StrView content) {
   return SkImages::DeferredFromEncodedData(data);
 }
 
-Vec<PersistentImage*>& GetTextures() {
-  static Vec<PersistentImage*> textures;
-  return textures;
+static Vec<PersistentImage*>& AllPersistentImages() {
+  static Vec<PersistentImage*> persistent_images;
+  return persistent_images;
+}
+
+static void RegisterPersistentImage(PersistentImage& img) {
+  AllPersistentImages().emplace_back(&img);
+}
+
+void PersistentImage::ReleaseAll() {
+  for (auto* img : AllPersistentImages()) {
+    img->shader.reset();
+    img->image.reset();
+    img->paint.reset();
+  }
 }
 
 PersistentImage::PersistentImage(sk_sp<SkImage> image, MakeArgs args) : image(image) {
@@ -77,7 +89,7 @@ PersistentImage::PersistentImage(sk_sp<SkImage> image, MakeArgs args) : image(im
   // This should be fixed by going through all the places where PersistentImages are used and making
   // sure to pass the dimensions.
   rect = matrix.mapRect(SkRect::MakeIWH(image->width(), image->height()));
-  GetTextures().push_back(this);
+  AllPersistentImages().push_back(this);
 }
 
 void PersistentImage::PreloadAll() {
@@ -88,7 +100,7 @@ void PersistentImage::PreloadAll() {
     AutomatImageProvider::CacheEntry* cache_entry;
   };
   moodycamel::ConcurrentQueue<Task> tasks;
-  for (auto* texture : GetTextures()) {
+  for (auto* texture : AllPersistentImages()) {
     if (!(*texture->image)->isTextureBacked()) {
       tasks.enqueue({texture, &image_provider->cache[(*texture->image)->uniqueID()]});
     }

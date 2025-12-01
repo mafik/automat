@@ -64,6 +64,7 @@ struct MacroRecorder : LiveObject,
   LongRunning* AsLongRunning() override { return this; }
   void KeyloggerKeyDown(ui::Key) override;
   void KeyloggerKeyUp(ui::Key) override;
+  void KeyloggerOnRelease(const ui::Keylogging&) override;
 
   void PointerLoggerButtonDown(ui::Pointer::Logging&, ui::PointerButton) override;
   void PointerLoggerButtonUp(ui::Pointer::Logging&, ui::PointerButton) override;

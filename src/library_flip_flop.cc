@@ -159,7 +159,8 @@ void FlipFlop::OnRun(Location& here, std::unique_ptr<RunTask>&) {
     });
   } else {
     flip_arg.LoopLocations<bool>(here, [](Location& other) {
-      if (auto long_running = other.object->AsLongRunning(); long_running->IsRunning()) {
+      if (auto long_running = other.object->AsLongRunning();
+          long_running && long_running->IsRunning()) {
         long_running->Cancel();
       }
       return false;

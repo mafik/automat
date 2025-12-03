@@ -345,6 +345,7 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
       }
       auto builder = SkRuntimeEffectBuilder(effect);
       builder.uniform("iQuantumRealm") = quantum_realm;
+      builder.uniform("iScaleLog10") = scale_log;
 
       auto runtime_shader_filter = SkImageFilters::RuntimeShader(builder, "iBackground", nullptr);
 

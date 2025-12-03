@@ -1,7 +1,8 @@
 // kind=shader
 
 uniform shader iBackground;
-uniform float iQuantumRealm;
+uniform float iQuantumRealm; // 0 to 1 - should fade from iBackground (at 0) to quantum realm (at 1)
+uniform float iScaleLog10; // 5+ - a number that indicates how "deep" we are
 
 vec4 main(vec2 px) {
   vec4 quantumPattern = vec4(0, 0, 0, 1);

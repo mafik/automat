@@ -74,7 +74,6 @@ MacroRecorder::MacroRecorder(ui::Widget* parent)
 MacroRecorder::~MacroRecorder() {
   if (keylogging) {
     keylogging->Release();
-    keylogging = nullptr;
   }
   if (pointer_logging) {
     pointer_logging->Release();
@@ -288,7 +287,6 @@ void MacroRecorder::OnCancel() {
   audio::Play(embedded::assets_SFX_macro_stop_wav);
   if (keylogging) {
     keylogging->Release();
-    keylogging = nullptr;
   }
   if (pointer_logging) {
     pointer_logging->Release();

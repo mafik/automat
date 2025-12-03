@@ -612,9 +612,9 @@ void Keylogging::Release() {
     return;
   }
   auto& window = *keyboard.root_widget.window;
+  keylogger.KeyloggerOnRelease(*this);
   keyboard.keyloggings.erase(it);  // After this line `this` is deleted!
   window.RegisterInput();
-  keylogger.KeyloggerOnRelease(*this);
 }
 
 }  // namespace automat::ui

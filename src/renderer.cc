@@ -30,7 +30,9 @@
 #include "drawable_rtti.hh"
 #include "font.hh"
 #include "global_resources.hh"
+#include "include/core/SkSamplingOptions.h"
 #include "log.hh"
+#include "log_skia.hh"
 #include "root_widget.hh"
 #include "textures.hh"
 #include "thread_name.hh"
@@ -316,9 +318,45 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
     auto graphite_canvas = recorder->makeDeferredCanvas(frame.image_info, kTextureInfo);
     graphite_canvas->clear(SK_ColorTRANSPARENT);
     graphite_canvas->translate(-frame.surface_bounds_root.left(), -frame.surface_bounds_root.top());
-    // Remove all Drawables by converting the commands into SkPicture
-    // This line calls the onDraw methods of all the CHILD widgets.
-    w->recording->makePictureSnapshot()->playback(graphite_canvas);
+    graphite_canvas->clipIRect(frame.surface_bounds_root);
+
+    float scale = frame.matrix.mapRadius(1);
+    float scale_log = log10f(scale);
+
+    // Goal: zooming beyond some limit makes the objects break into:
+    // - pixels
+    // - atoms
+    // - some noise texture
+    // - raytraced shrodinger's orbitals
+    float quantum_realm = GetRatio(scale_log, 5, 6);
+
+    if (quantum_realm < 1) {
+      // Remove all Drawables by converting the commands into SkPicture
+      // This line calls the onDraw methods of all the CHILD widgets.
+      w->recording->makePictureSnapshot()->playback(graphite_canvas);
+    }
+
+    if (quantum_realm > 0) {
+      LOG << "Quantum realm: " << quantum_realm;
+      Status status;
+      static auto effect = resources::CompileShader(embedded::assets_quantum_realm_sksl, status);
+      if (!OK(status)) {
+        FATAL << status;
+      }
+      auto builder = SkRuntimeEffectBuilder(effect);
+      builder.uniform("iQuantumRealm") = quantum_realm;
+
+      auto runtime_shader_filter = SkImageFilters::RuntimeShader(builder, "iBackground", nullptr);
+
+      SkPaint quantum_realm_paint;
+      quantum_realm_paint.setImageFilter(runtime_shader_filter);
+
+      auto save_layer_rec = SkCanvas::SaveLayerRec(nullptr, &quantum_realm_paint,
+                                                   SkCanvas::kInitWithPrevious_SaveLayerFlag);
+      graphite_canvas->saveLayer(save_layer_rec);
+      graphite_canvas->restore();
+    }
+
     w->graphite_recording = recorder->snap();
     frame.cpu_time = (time::SteadyNow() - cpu_started);
 

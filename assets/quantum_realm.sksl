@@ -1,0 +1,9 @@
+// kind=shader
+
+uniform shader iBackground;
+uniform float iQuantumRealm;
+
+vec4 main(vec2 px) {
+  vec4 quantumPattern = vec4(0, 0, 0, 1);
+  return (1 - iQuantumRealm) * iBackground.eval(px) + iQuantumRealm * quantumPattern;
+}

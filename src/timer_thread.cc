@@ -83,7 +83,9 @@ struct TimerFinishedTask : Task {
   std::string Format() override { return "TimerFinishedTask"; }
   void OnExecute(std::unique_ptr<Task>& self) override {
     ZoneScopedN("TimerFinishedTask");
-    TimerFinished(*target.lock(), scheduled_time);
+    auto loc = target.lock();
+    if (loc == nullptr) return;
+    TimerFinished(*loc, scheduled_time);
   }
 };
 

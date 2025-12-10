@@ -69,6 +69,7 @@ struct ConnectionWidget : Widget {
   void PreDraw(SkCanvas&) const override;
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
+  Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   Optional<Rect> TextureBounds() const override;
   Vec<Vec2> TextureAnchors() const override;

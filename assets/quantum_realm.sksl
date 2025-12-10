@@ -1,10 +1,383 @@
 // kind=shader
+// Quantum Realm - An infinitely zoomable journey into the subatomic world
 
-uniform shader iBackground;
-uniform float iQuantumRealm; // 0 to 1 - should fade from iBackground (at 0) to quantum realm (at 1)
-uniform float iScaleLog10; // 5+ - a number that indicates how "deep" we are
+uniform shader iSurface;
+uniform float iQuantumRealm; // 0 to 1 - fades from iSurface to quantum realm
+uniform float iScaleLog10; // 5+ - indicates zoom depth
+uniform float2 iResolution;
+uniform float iTime;
+uniform mat3 iLocalToPx;
+uniform mat3 iLocalToSurface;
 
-vec4 main(vec2 px) {
-  vec4 quantumPattern = vec4(0, 0, 0, 1);
-  return (1 - iQuantumRealm) * iBackground.eval(px) + iQuantumRealm * quantumPattern;
+const float PI = 3.14159265359;
+const float TAU = 6.28318530718;
+
+// Complex number operations
+vec2 cmul(vec2 a, vec2 b) {
+  return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+vec2 cdiv(vec2 a, vec2 b) {
+  float d = dot(b, b);
+  return vec2(dot(a, b), a.y * b.x - a.x * b.y) / d;
+}
+
+float cmod(vec2 z) {
+  return length(z);
+}
+
+// Hash functions for procedural noise
+float hash(float n) {
+  return fract(sin(n) * 43758.5453123);
+}
+
+float hash2(vec2 p) {
+  return fract(sin(dot(p.xy,
+        vec2(12.9898, 78.233))) *
+      43758.5453123);
+}
+
+vec3 hash3(vec2 p) {
+  vec3 q = vec3(dot(p, vec2(127.1, 311.7)),
+      dot(p, vec2(269.5, 183.3)),
+      dot(p, vec2(419.2, 371.9)));
+  return fract(sin(q) * 43758.5453);
+}
+
+// Smooth noise
+float noise(vec2 p) {
+  ivec2 i = ivec2(floor(p));
+  vec2 f = fract(p);
+  f = f * f * (3 - 2 * f);
+  float a = hash2(vec2(i));
+  float b = hash2(vec2(i + ivec2(1, 0)));
+  float c = hash2(vec2(i + ivec2(0, 1)));
+  float d = hash2(vec2(i + ivec2(1, 1)));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(in vec2 st) {
+  float value = 0.0;
+  float amplitude = .5;
+  float frequency = 0.;
+  for (int i = 0; i < 6; i++) {
+    value += amplitude * noise(st);
+    st *= 2.;
+    amplitude *= .5;
+  }
+  return value;
+}
+
+vec3 voronoi(vec2 p) {
+  vec2 n = floor(p);
+  vec2 f = fract(p);
+
+  float md = 99999.0;
+  vec2 cell = vec2(0.0);
+
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      vec2 g = vec2(float(i), float(j));
+      vec2 o = hash3(n + g).xy;
+      vec2 r = g + o - f;
+      float d = dot(r, r) * 0.6 + fbm(n + g + r) * 0.4;
+
+      if (d < md) {
+        md = d;
+        cell = n + g;
+      }
+    }
+  }
+  return vec3(cell.xy, sqrt(md));
+}
+
+// Quantum wave function visualization (probability density)
+float waveFunction(vec2 p, float n, float l, float scale) {
+  float r = length(p) * scale;
+  float theta = atan(p.y, p.x);
+
+  // Simplified hydrogen-like orbital
+  float radial = exp(-r / (n * 0.5)) * pow(r, float(l));
+  float angular = cos(float(l) * theta);
+
+  return radial * angular * angular; // Probability density |ψ|²
+}
+
+// Quantum tunneling barrier visualization
+float tunnelBarrier(vec2 p, float barrierPos, float barrierWidth) {
+  float dist = abs(p.x - barrierPos);
+  return smoothstep(barrierWidth, 0.0, dist);
+}
+
+// Particle probability cloud
+float probabilityCloud(vec2 p, vec2 center, float spread, float phase) {
+  vec2 d = p - center;
+  float r = length(d);
+  float angle = atan(d.y, d.x);
+
+  // Gaussian envelope with phase oscillation
+  float gaussian = exp(-r * r / (2.0 * spread * spread));
+  float wave = 0.5 + 0.5 * cos(r * 10.0 - phase + angle * 2.0);
+
+  return gaussian * wave;
+}
+
+// Entanglement visualization - correlated patterns
+float entanglement(vec2 p1, vec2 p2, float time) {
+  float phase1 = length(p1) * 5.0 - time;
+  float phase2 = length(p2) * 5.0 - time;
+
+  // Correlated oscillations
+  float wave1 = sin(phase1);
+  float wave2 = sin(phase2 + PI); // Anti-correlated
+
+  return 0.5 + 0.25 * (wave1 + wave2);
+}
+
+// String theory inspired extra dimension visualization
+float stringVibration(vec2 p, float scale, float time) {
+  float x = p.x * scale;
+  float mode = 0.0;
+
+  // Multiple vibration modes
+  for (int n = 1; n <= 5; n++) {
+    float freq = float(n) * PI;
+    float amplitude = 1.0 / float(n);
+    mode += amplitude * sin(freq * x) * cos(float(n) * time * 0.5);
+  }
+
+  float dist = abs(p.y - mode * 0.1);
+  return smoothstep(0.02, 0.0, dist);
+}
+
+// Quantum foam - spacetime fluctuations at Planck scale
+vec3 quantumFoam(vec2 p) {
+  vec3 v = voronoi(p * 100);
+  float foam = smoothstep(0.4, 0.8, 1 - v.z);
+  // return vec3(foam);
+  float bubbleColor = hash2(v.xy);
+  // Colorize based on virtual particle pairs
+  vec3 color = mix(
+      vec3(0.1, 0.3, 0.8), // Virtual electron (blue)
+      vec3(0.8, 0.2, 0.3), // Virtual positron (red)
+      bubbleColor
+    );
+  return color * foam;
+}
+
+// Infinite zoom fractal structure
+vec3 infiniteZoom(vec2 p, float scaleLog) {
+  vec3 color = vec3(0.0);
+
+  // Use scale to create infinite zoom layers
+  float baseScale = pow(10.0, mod(scaleLog, 4.0) + 1);
+
+  // Multiple layers at different scales
+  for (int i = 0; i < 4; i++) {
+    float layerScale = baseScale * pow(10.0, float(i - 2));
+    float layerAlpha = 1.0 - abs(float(i) - mod(scaleLog, 3.0)) / 2.0;
+    layerAlpha = max(0.0, layerAlpha);
+
+    vec2 sp = p * layerScale;
+
+    // Quantum orbital patterns
+    float orbital = 0.0;
+
+    for (int l = 0; l < 1; l++) {
+      float wave = waveFunction(sp + vec2(1, float(l)) * 0.5, 1, float(l), 0.5);
+      orbital += wave * 0.3;
+    }
+    for (int l = 0; l < 2; l++) {
+      float wave = waveFunction(sp + vec2(2, float(l)) * 0.5, 2, float(l), 0.5);
+      orbital += wave * 0.3;
+    }
+    for (int l = 0; l < 3; l++) {
+      float wave = waveFunction(sp + vec2(3, float(l)) * 0.5, 3, float(l), 0.5);
+      orbital += wave * 0.3;
+    }
+
+    // Interference pattern
+    float interference = 0.0;
+    for (int j = 0; j < 3; j++) {
+      vec2 source = vec2(cos(float(j) * TAU / 3.0), sin(float(j) * TAU / 3.0)) * 0.5;
+      interference += sin(length(sp - source) * 20.0 - iTime * 2.0);
+    }
+    interference = 0.5 + 0.5 * interference / 3.0;
+
+    // Combine effects
+    vec3 layerColor = vec3(0.0);
+    layerColor += vec3(0.2, 0.5, 1.0) * orbital;
+    layerColor += vec3(0.8, 0.3, 0.6) * interference * 0.3;
+
+    color += layerColor * layerAlpha;
+  }
+
+  return color;
+}
+
+// Energy field visualization
+vec3 energyField(vec2 p) {
+  vec3 color = vec3(0.0);
+
+  // Multiple energy sources
+  for (int i = 0; i < 5; i++) {
+    float angle = float(i) * TAU / 5.0 + iTime * 0.2;
+    vec2 center = vec2(cos(angle), sin(angle)) * 0.3;
+
+    float dist = length(p * 30 - center);
+    float energy = exp(-dist * 3.0);
+
+    // Pulsing effect
+    energy *= 0.5 + 0.5 * sin(dist * 30.0 - iTime * 3.0 + float(i));
+
+    // Color based on "charge"
+    vec3 chargeColor = ((i - 2 * (i / 2)) == 0) ?
+      vec3(0.3, 0.6, 1.0) : // Negative (blue)
+      vec3(1.0, 0.4, 0.3); // Positive (red)
+
+    color += chargeColor * energy;
+  }
+
+  return color * smoothstep(iScaleLog10, 5.5, 6.0) * (1 - smoothstep(iScaleLog10, 6, 7));
+}
+
+// Main quantum realm rendering
+vec4 quantumRealm(vec2 px) {
+  // Normalized coordinates
+  vec2 uv = (px - 0.5 * iResolution) / min(iResolution.x, iResolution.y);
+
+  // Scale factor for infinite zoom
+  float scale = pow(10.0, 5 - iScaleLog10);
+  vec2 p = uv * scale;
+
+  // Base quantum realm color
+  vec3 quantumColor = vec3(0.02, 0.02, 0.05);
+
+  // Layer 1: Quantum foam (always present at small scales)
+  vec3 foam = quantumFoam(p);
+  quantumColor += foam * 0.4;
+
+  // Layer 2: Infinite zoom fractal patterns
+  // TODO: fix sudden jump when wrapping around modulo
+  //vec3 fractal = infiniteZoom(uv, -iScaleLog10 * 2);
+  //quantumColor += fractal * 0.5;
+
+  // Layer 3: Energy fields
+  vec3 energy = energyField(p);
+  quantumColor += energy * 0.3;
+
+  // Layer 4: Wave function probability clouds
+  float prob = 0.0;
+  for (int i = 0; i < 4; i++) {
+    float seed = float(i) * 1.618;
+    vec2 center = vec2(
+        cos(seed * TAU + iTime * 0.3) * 0.4,
+        sin(seed * TAU * 0.7 + iTime * 0.2) * 0.4
+      );
+    prob += probabilityCloud(uv, center, 0.15, iTime * 2.0 + seed);
+  }
+  quantumColor += vec3(0.4, 0.8, 1.0) * prob * 0.3;
+
+  // Layer 5: String vibrations (at very small scales)
+  if (iScaleLog10 > 7.0) {
+    float stringAlpha = smoothstep(7.0, 9.0, iScaleLog10);
+    float strings = 0.0;
+    for (int i = 0; i < 5; i++) {
+      vec2 offset = vec2(0.0, float(i - 2) * 0.15);
+      strings += stringVibration(uv + offset, 10.0, iTime + float(i));
+    }
+    quantumColor += vec3(0.9, 0.6, 1.0) * strings * stringAlpha * 0.6;
+  }
+
+  // Layer 6: Concentric circular waves
+  if (iScaleLog10 > 6.3 && iScaleLog10 < 7.5) {
+    float r = length(uv);
+    float prob = exp(-r * r * 4);
+    float momentum = sin(dot(p, p) * 400000 - exp(iScaleLog10) * 0.05 - iTime * 2);
+    quantumColor += vec3(0.3, 1.0, 0.5) * (0.5 + 0.5 * momentum) * prob * smoothstep(6.3, 7.3, iScaleLog10) * (1 - smoothstep(7.1, 7.4, iScaleLog10));
+  }
+
+  // Layer 7: Virtual particle pair creation/annihilation
+  float pairCreation = 0.0;
+  for (int i = 0; i < 6; i++) {
+    float seed = float(i) * 3.7;
+    float birthTime = mod(iTime + seed, 3.0);
+    float life = sin(birthTime * PI / 3.0);
+
+    vec2 birthPos = vec2(
+        hash(seed) * 2.0 - 1.0,
+        hash(seed + 50.0) * 2.0 - 1.0
+      ) * 0.5;
+
+    vec2 dir = normalize(vec2(hash(seed + 100.0) - 0.5, hash(seed + 150.0) - 0.5));
+
+    vec2 pos1 = birthPos + dir * birthTime * 0.1;
+    vec2 pos2 = birthPos - dir * birthTime * 0.1;
+
+    float d1 = length(uv - pos1);
+    float d2 = length(uv - pos2);
+
+    pairCreation += exp(-d1 * 20.0) * life;
+    pairCreation += exp(-d2 * 20.0) * life;
+  }
+  quantumColor += vec3(1.0, 1.0, 1.0) * pairCreation * 0.4;
+
+  // Sparkling noise
+  quantumColor += vec3(pow(hash2(p + iTime), 20)) * (1 - smoothstep(5.5, 6.5, iScaleLog10));
+
+  // Add subtle overall glow
+  float centerGlow = exp(-length(uv) * 2.0);
+  quantumColor += vec3(0.1, 0.15, 0.3) * centerGlow;
+
+  // Vignette
+  float vignette = 1.0 - length(uv) * 0.5;
+  quantumColor *= vignette;
+
+  return vec4(quantumColor, 1);
+}
+
+vec4 macroRealm(vec2 localCoord) {
+  return iSurface.eval((iLocalToSurface * vec3(localCoord, 1)).xy);
+}
+
+vec4 enterQuantum(vec2 localCoord, float zoom) {
+  vec2 fragCoord = (iLocalToPx * vec3(localCoord, 1)).xy;
+  vec2 uv_square = (fragCoord - iResolution.xy * 0.5) / min(iResolution.x, iResolution.y);
+
+  float scale = 15. * zoom;
+
+  vec3 grid = voronoi(uv_square * scale + 0.5);
+  grid.z *= sqrt(zoom);
+
+  if (grid.z < zoom) {
+    fragCoord = (fragCoord - iResolution.xy * 0.5) * zoom + iResolution.xy * 0.5;
+    return macroRealm(localCoord);
+  } else {
+    float zoom2 = zoom * 1.05;
+    float scale2 = 15. * zoom2;
+    vec3 grid2 = voronoi(uv_square * scale2 + 0.5);
+    grid2.z *= sqrt(zoom2);
+
+    vec4 color;
+    if (grid2.z < zoom) {
+      fragCoord = (fragCoord - iResolution.xy * 0.5) / 15. * scale2 + iResolution.xy * 0.5;
+      return macroRealm(localCoord) * 0.5;
+    } else {
+      color = quantumRealm(fragCoord);
+      float alpha = clamp((grid.z - zoom) * 10. / zoom, 0., 1.);
+      float alpha2 = clamp((grid2.z - zoom) * 10. / zoom, 0., 1.);
+
+      return mix(vec4(0, 0, 0, 1), color, min(alpha, alpha2));
+    }
+
+    return color;
+  }
+}
+
+vec4 main(vec2 localCoord) {
+  if (iQuantumRealm >= 1) {
+    vec2 fragCoord = (iLocalToPx * vec3(localCoord, 1)).xy;
+    return quantumRealm(fragCoord);
+  }
+  return enterQuantum(localCoord, 1 - iQuantumRealm);
 }

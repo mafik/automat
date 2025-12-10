@@ -177,6 +177,27 @@ struct Widget : Trackable, OptionsProvider {
 
   virtual void Draw(SkCanvas& canvas) const { return DrawChildren(canvas); }
 
+  // Compositor decides how the widget's texture is going to be copied onto the parent texture.
+  // If GPU is overloaded, the texture may not be ready in time. Compositor's job is then to take
+  // the (possibly) old texture and deform it using anchor points to reduce latency.
+  //
+  // Compositors are a client-side feature and are implemented in WidgetDrawable::onDraw
+  // (renderer.cc).
+  enum class Compositor {
+    // Copy this surface to the parent canvas. This ignores any anchor points & widget's
+    // local_to_parent transform.
+    COPY_RAW,
+    // Fill in the missing part of the widget using CRT-like glitch effect.
+    GLITCH,
+    // Deform the image based on returned anchor points.
+    ANCHOR_WARP,
+    // Limit scale using fancy zoom in effect.
+    QUANTUM_REALM,
+    // TODO: Add a value that will prevent rendering to separate texture.
+  };
+
+  virtual Compositor GetCompositor() const { return Compositor::GLITCH; }
+
   // Each Widget has a shape that defines its region of reactivity.
   // The Shape of a widget is used to constrain the search process.
   // If children extend beyond the shape of their parent, they are not traversed.

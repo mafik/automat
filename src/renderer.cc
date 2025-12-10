@@ -7,6 +7,7 @@
 #include <include/core/SkPaint.h>
 #include <include/core/SkPathTypes.h>
 #include <include/core/SkPictureRecorder.h>
+#include <include/core/SkSamplingOptions.h>
 #include <include/core/SkStream.h>
 #include <include/effects/SkGradientShader.h>
 #include <include/effects/SkRuntimeEffect.h>
@@ -30,12 +31,12 @@
 #include "drawable_rtti.hh"
 #include "font.hh"
 #include "global_resources.hh"
-#include "include/core/SkSamplingOptions.h"
 #include "log.hh"
 #include "log_skia.hh"
 #include "root_widget.hh"
 #include "textures.hh"
 #include "thread_name.hh"
+#include "time.hh"
 #include "vk.hh"
 #include "widget.hh"
 
@@ -116,6 +117,8 @@ struct WidgetDrawable : SkDrawableRTTI {
   Vec<Vec2> fresh_texture_anchors;
   time::SteadyPoint last_tick_time;
 
+  Widget::Compositor compositor;
+
   // RenderToSurface results
   struct Rendered {
     skgpu::graphite::BackendTexture texture;
@@ -195,6 +198,8 @@ struct WidgetDrawable : SkDrawableRTTI {
 
     Optional<SkRect> pack_frame_texture_bounds;
     Vec<Vec2> pack_frame_texture_anchors;
+
+    Widget::Compositor compositor;
   };
 
   void UpdateState(const Update&);
@@ -285,6 +290,7 @@ void WidgetDrawable::UpdateState(const Update& update) {
   update_matrix = fresh_matrix;
   pack_frame_texture_bounds = update.pack_frame_texture_bounds;
   pack_frame_texture_anchors = update.pack_frame_texture_anchors;
+  compositor = update.compositor;
 }
 
 const skgpu::graphite::TextureInfo kTextureInfo = [] {
@@ -320,42 +326,17 @@ void VkRecorderThread(int thread_id, std::unique_ptr<skgpu::graphite::Recorder> 
     graphite_canvas->translate(-frame.surface_bounds_root.left(), -frame.surface_bounds_root.top());
     graphite_canvas->clipIRect(frame.surface_bounds_root);
 
-    float scale = frame.matrix.mapRadius(1);
-    float scale_log = log10f(scale);
-
-    // Goal: zooming beyond some limit makes the objects break into:
-    // - pixels
-    // - atoms
-    // - some noise texture
-    // - raytraced shrodinger's orbitals
-    float quantum_realm = GetRatio(scale_log, 5, 6);
-
-    if (quantum_realm < 1) {
+    float scale = frame.matrix.getMaxScale();
+    // Bug workaround: when RRect with a blur is renderid in skia at a very high scale, it may
+    // allocate a gigantic texture on the GPU. This check tries to prevent it - but it leaves the
+    // widget's texture as transparent black.
+    // This is hidden by a "quantum realm" compositor effect on RootWidget.
+    // One example of this bug is the Timeline widget. If it works OK without this check then it's
+    // probably fine to remove it.
+    if (scale < 1000000) {
       // Remove all Drawables by converting the commands into SkPicture
       // This line calls the onDraw methods of all the CHILD widgets.
       w->recording->makePictureSnapshot()->playback(graphite_canvas);
-    }
-
-    if (quantum_realm > 0) {
-      LOG << "Quantum realm: " << quantum_realm;
-      Status status;
-      static auto effect = resources::CompileShader(embedded::assets_quantum_realm_sksl, status);
-      if (!OK(status)) {
-        FATAL << status;
-      }
-      auto builder = SkRuntimeEffectBuilder(effect);
-      builder.uniform("iQuantumRealm") = quantum_realm;
-      builder.uniform("iScaleLog10") = scale_log;
-
-      auto runtime_shader_filter = SkImageFilters::RuntimeShader(builder, "iBackground", nullptr);
-
-      SkPaint quantum_realm_paint;
-      quantum_realm_paint.setImageFilter(runtime_shader_filter);
-
-      auto save_layer_rec = SkCanvas::SaveLayerRec(nullptr, &quantum_realm_paint,
-                                                   SkCanvas::kInitWithPrevious_SaveLayerFlag);
-      graphite_canvas->saveLayer(save_layer_rec);
-      graphite_canvas->restore();
     }
 
     w->graphite_recording = recorder->snap();
@@ -495,10 +476,14 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
   }
 
   SkRect surface_size = SkRect::MakeWH(frame.surface->width(), frame.surface->height());
-
   auto anchor_count = min<int>(frame.texture_anchors.size(), fresh_texture_anchors.size());
 
-  if (anchor_count == 2) {
+  if (compositor == Widget::Compositor::COPY_RAW) {
+    canvas->resetMatrix();
+    // It feels like SkSurface::draw should work, but for unknown reason it doesn't:
+    // frame.surface->draw(canvas, 0, 0);
+    canvas->drawImage(SkSurfaces::AsImage(frame.surface), 0, 0);
+  } else if (compositor == Widget::Compositor::ANCHOR_WARP) {
     SkSamplingOptions sampling;
     Status status;
     static auto effect = resources::CompileShader(embedded::assets_anchor_warp_rt_sksl, status);
@@ -530,7 +515,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       new_anchor_bounds.ExpandToInclude(offset_bounds);
     }
     canvas->drawRect(new_anchor_bounds.sk, paint);
-  } else {
+  } else if (compositor == Widget::Compositor::GLITCH) {
     canvas->save();
 
     // TODO: use `fresh_matrix` to draw the object at its most recent position.
@@ -613,6 +598,50 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
       canvas->drawRect(surface_size.makeInset(1, 1), surface_bounds_paint);
     }
     canvas->restore();
+  } else if (compositor == Widget::Compositor::QUANTUM_REALM) {
+    SkMatrix surface_transform = frame.matrix;
+    surface_transform.postConcat(
+        SkMatrix::RectToRect(SkRect::Make(frame.surface_bounds_root),
+                             SkRect::MakeWH(frame.surface->width(), frame.surface->height())));
+
+    float scale = frame.matrix.mapRadius(1);
+    float scale_log = log10f(scale);
+    float quantum_realm = GetRatio(scale_log, 5, 6);
+
+    if (quantum_realm == 0) {
+      SkMatrix inverse;
+      (void)surface_transform.invert(&inverse);
+      canvas->concat(inverse);
+      canvas->drawImage(SkSurfaces::AsImage(frame.surface), 0, 0);
+    } else {
+      Status status;
+      static auto effect = resources::CompileShader(embedded::assets_quantum_realm_sksl, status);
+      if (!OK(status)) {
+        FATAL << status;
+      }
+
+      SkRuntimeEffectBuilder builder(effect);
+      builder.uniform("iQuantumRealm") = quantum_realm;
+      builder.uniform("iScaleLog10") = scale_log;
+      builder.uniform("iLocalToPx") = fresh_matrix;
+      builder.uniform("iLocalToSurface") = surface_transform;
+      builder.uniform("iResolution") = Vec2(frame.surface_bounds_root.width() - 64 * 2,
+                                            frame.surface_bounds_root.height() - 64 * 2);
+      float time = time::SteadySaw<M_PI * 2>();
+      builder.uniform("iTime") = time;
+      SkSamplingOptions sampling;
+      builder.child("iSurface") =
+          SkSurfaces::AsImage(frame.surface)
+              ->makeShader(SkTileMode::kClamp, SkTileMode::kClamp, kFastSamplingOptions);
+      auto shader = builder.makeShader();
+      SkPaint paint;
+      paint.setShader(shader);
+      canvas->drawRect(frame.surface_bounds_local.sk, paint);
+
+      SkPaint green;
+      green.setColor(SK_ColorGREEN);
+      canvas->drawCircle(50, 50, 20, green);
+    }
   }
 
   if constexpr (kDebugRendering) {
@@ -1106,6 +1135,7 @@ void PackFrame(const PackFrameRequest& request, PackedFrame& pack) {
     // DRAW //
     //////////
     widget.Draw(*rec_canvas);  // This is where we actually draw stuff!
+    update.compositor = widget.GetCompositor();
 
     constexpr bool kSerializeRecording = false;
     if constexpr (kSerializeRecording) {
@@ -1207,7 +1237,7 @@ void RenderFrame(SkCanvas& canvas) {
   PackedFrame pack;
   PackFrameRequest request;
   vector<WidgetDrawable*> frame;
-  {
+  {  // Pack Frame
     lock_guard lock(root_widget->mutex);
     request = std::move(next_frame_request);
     if constexpr (kDebugRendering && kDebugRenderEvents) {

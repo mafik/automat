@@ -93,6 +93,11 @@ sk_sp<SkTypeface> Font::GetHelsinki() {
   return helsinki;
 }
 
+sk_sp<SkTypeface> Font::GetPbio() {
+  static sk_sp<SkTypeface> pbio = LoadTypeface(embedded::assets_pbio_bold_ttf);
+  return pbio;
+}
+
 sk_sp<SkTypeface> Font::MakeWeightVariation(sk_sp<SkTypeface> base, float weight) {
   SkFontArguments::VariationPosition::Coordinate coordinates[1];
   coordinates[0].axis = kFontWeightTag;

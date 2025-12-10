@@ -68,6 +68,19 @@ struct RootWidget final : Widget, DropTarget {
 
   std::unique_ptr<Window> window;
   std::unique_ptr<LoadingAnimation> loading_animation;
+
+  struct ZoomWarning : Widget {
+    float zoom_limit_alpha = 0;
+    float zoom_limit_scroll = 0;
+    RootWidget* root_widget;
+
+    ZoomWarning(RootWidget* root_widget) : Widget(root_widget), root_widget(root_widget) {}
+    SkPath Shape() const override { return SkPath(); }
+    Optional<Rect> TextureBounds() const override { return std::nullopt; }
+    animation::Phase Tick(time::Timer&) override;
+    void Draw(SkCanvas&) const override;
+  } zoom_warning;
+
   BlackHole black_hole;
 
   void InitToolbar();
@@ -132,6 +145,7 @@ struct RootWidget final : Widget, DropTarget {
 
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
+  Compositor GetCompositor() const override { return Compositor::COPY_RAW; }
 
   Vec2 move_velocity = Vec2(0, 0);
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;

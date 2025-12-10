@@ -30,10 +30,10 @@ inline Duration Defloat(FloatDuration d) {
   return Duration((Duration::rep)(d.count() * Duration::period::den)) / Duration::period::num;
 }
 
-inline double ToSeconds(FloatDuration d) { return d.count(); }
-inline double ToSeconds(Duration d) { return ToSeconds(FloatDuration(d)); }
-inline Duration FromSeconds(int64_t s) { return Duration(s); }
-inline Duration FromSeconds(double s) { return Defloat(FloatDuration(s)); }
+constexpr double ToSeconds(FloatDuration d) { return d.count(); }
+constexpr double ToSeconds(Duration d) { return ToSeconds(FloatDuration(d)); }
+constexpr Duration FromSeconds(int64_t s) { return Duration(s); }
+constexpr Duration FromSeconds(double s) { return Defloat(FloatDuration(s)); }
 
 constexpr SystemPoint kZero = {};
 constexpr SteadyPoint kZeroSteady = {};
@@ -47,7 +47,9 @@ inline double SecondsSinceEpoch() { return ToSeconds(SteadyNow().time_since_epoc
 // Sawtooth wave [0, 1).
 template <auto Period>
 double SteadySaw() {
-  return ToSeconds(SteadyNow().time_since_epoch() % FromSeconds(Period));
+  uint64_t period_ticks = FromSeconds(Period).count();
+  uint64_t now_ticks = SteadyNow().time_since_epoch().count();
+  return (double)(now_ticks % period_ticks) / (double)(period_ticks);
 }
 
 SystemPoint SystemFromSteady(SteadyPoint steady);

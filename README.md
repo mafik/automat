@@ -80,6 +80,7 @@ Do your own due dilligence and check the licenses of the dependencies you use!
 - Noto Sans font -- [Google Fonts](https://fonts.google.com/noto)
 - Silkscreen font -- [Jason Kottke](https://kottke.org/plus/type/silkscreen/)
 - Heavy Data font -- [Vic Fieger](https://www.vicfieger.com/) (website seems to be offline)
+- Pbio font -- [Gregor Adams](http://pixelass.com)
 
 ## Sounds
 
@@ -88,7 +89,7 @@ Do your own due dilligence and check the licenses of the dependencies you use!
 - Lifting Up Intercom Phone.wav by F.M.Audio -- https://freesound.org/s/555140/ -- License: Attribution 4.0
 - Clipping on Beard Trimmer Extension.wav by F.M.Audio -- https://freesound.org/s/547578/ -- License: Attribution 4.0
 - RecogerObjetoSuelo.wav by Trancox -- https://freesound.org/s/391924/ -- License: Creative Commons 0
-- paper  sliding and falling gently by pauliperez1999 -- https://freesound.org/s/428798/ -- License: Attribution 3.0
+- paper sliding and falling gently by pauliperez1999 -- https://freesound.org/s/428798/ -- License: Attribution 3.0
 - crumple-06.ogg by drooler -- https://freesound.org/s/508597/ -- License: Creative Commons 0
 - Kaka (New Zealand parrot) by Mings -- https://freesound.org/s/160381/ -- License: Attribution 4.0
 - cable noise unplug plug back in.wav by lyd4tuna -- https://freesound.org/s/453262/ -- License: Creative Commons 0

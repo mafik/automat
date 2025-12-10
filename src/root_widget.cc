@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: MIT
 #include "root_widget.hh"
 
+#include <include/core/SkColor.h>
+#include <include/core/SkImage.h>
 #include <include/core/SkMatrix.h>
 #include <include/core/SkPath.h>
+#include <include/core/SkPictureRecorder.h>
 
 #include <memory>
 
@@ -16,6 +19,7 @@
 #include "math.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
+#include "time.hh"
 #include "touchpad.hh"
 #include "ui_connection_widget.hh"
 
@@ -26,7 +30,7 @@ namespace automat::ui {
 std::vector<RootWidget*> root_widgets;
 unique_ptr<RootWidget> root_widget;
 
-RootWidget::RootWidget() : Widget(nullptr), keyboard(*this), black_hole(this) {
+RootWidget::RootWidget() : Widget(nullptr), keyboard(*this), zoom_warning(this), black_hole(this) {
   root_widgets.push_back(this);
 }
 RootWidget::~RootWidget() {
@@ -43,6 +47,56 @@ void RootWidget::InitToolbar() {
   toolbar = make_unique<Toolbar>(this);
   for (auto& proto : prototypes->default_toolbar) {
     toolbar->AddObjectPrototype(proto);
+  }
+}
+
+animation::Phase RootWidget::ZoomWarning::Tick(time::Timer& timer) {
+  animation::Phase phase = animation::Finished;
+  if (root_widget->zoom > 1e7) {
+    root_widget->zoom = 1e7;
+  }
+  phase |= animation::LinearApproach(root_widget->zoom >= 1e7, timer.d, 1, zoom_limit_alpha);
+  if (zoom_limit_alpha > 0.f) {
+    zoom_limit_scroll += timer.d / zoom_limit_alpha / zoom_limit_alpha * 0.1;
+    float ignore;
+    zoom_limit_scroll = modf(zoom_limit_scroll, &ignore);
+    phase = animation::Animating;
+  }
+  return phase;
+}
+
+void RootWidget::ZoomWarning::Draw(SkCanvas& canvas) const {
+  if (zoom_limit_alpha > 0) {
+    auto typeface = Font::GetPbio();
+    auto font = Font::MakeV2(typeface, 0.5_cm);
+    auto text = " TOO MUCH ZOOM ";
+    float text_width = font->MeasureText(text);
+    float text_height = font->letter_height;
+    auto matrix = canvas.getLocalToDeviceAs3x3();
+    auto text_rect = SkRect::MakeWH(text_width, text_height);
+
+    SkPaint text_paint;
+    text_paint.setColor(SK_ColorWHITE);
+    text_paint.setAlphaf(zoom_limit_alpha);
+
+    SkPictureRecorder recorder;
+    SkCanvas* text_canvas = recorder.beginRecording(text_width, text_height);
+    font->DrawText(*text_canvas, text, text_paint);
+    auto text_picture = recorder.finishRecordingAsPictureWithCull(text_rect);
+    SkMatrix rot = SkMatrix::RotateDeg(45);
+    Rect tile_rect = text_rect;
+    tile_rect.top *= 4;
+    auto text_shader = text_picture->makeShader(SkTileMode::kRepeat, SkTileMode::kRepeat,
+                                                SkFilterMode::kLinear, &rot, &tile_rect.sk);
+
+    float scroll = zoom_limit_scroll * text_width / M_SQRT2f;
+    SkPaint scroll_right;
+    scroll_right.setShader(text_shader->makeWithLocalMatrix(SkMatrix::Translate(scroll, scroll)));
+    canvas.drawPaint(scroll_right);
+    SkPaint scroll_left;
+    scroll_left.setShader(text_shader->makeWithLocalMatrix(
+        SkMatrix::Translate(-scroll + text_height * M_SQRT2, -scroll - text_height * M_SQRT2)));
+    canvas.drawPaint(scroll_left);
   }
 }
 
@@ -143,6 +197,9 @@ animation::Phase RootWidget::Tick(time::Timer& timer) {
     Vec2 focus_delta = focus_post - focus_pre;
     camera_pos -= focus_delta;
   }
+
+  zoom_warning.WakeAnimation();
+  zoom_warning.last_tick_time = last_tick_time;
 
   phase |= animation::ExponentialApproach(camera_target.x, timer.d, 0.1, camera_pos.x);
   phase |= animation::ExponentialApproach(camera_target.y, timer.d, 0.1, camera_pos.y);
@@ -537,6 +594,7 @@ void RootWidget::FillChildren(Vec<Widget*>& out_children) {
   if (toolbar) {
     out_children.push_back(toolbar.get());
   }
+  out_children.push_back(&zoom_warning);
   for (auto w : connection_widgets_below) {
     out_children.push_back(w);
   }

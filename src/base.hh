@@ -177,6 +177,7 @@ struct Machine : LiveObject, ui::Widget, ui::DropTarget {
 
   void Draw(SkCanvas& canvas) const override { Widget::Draw(canvas); }
   void PreDraw(SkCanvas&) const override;
+  Compositor GetCompositor() const override { return Compositor::QUANTUM_REALM; }
   ui::DropTarget* AsDropTarget() override { return this; }
   bool CanDrop(Location&) const override { return true; }
   SkMatrix DropSnap(const Rect& bounds_local, Vec2 bounds_origin,

@@ -82,6 +82,12 @@ Do your own due dilligence and check the licenses of the dependencies you use!
 - Heavy Data font -- [Vic Fieger](https://www.vicfieger.com/) (website seems to be offline)
 - Pbio font -- [Gregor Adams](http://pixelass.com)
 
+## Default Background
+
+- Stork 1 -- [Manfred Heyde](https://pl.wikipedia.org/wiki/Plik:White_Stork_Glider.jpg) -- License: Creative Commons Attribution-Share Alike 4.0
+- Stork 2 -- [Ken Billington](<https://commons.wikimedia.org/wiki/File:White_Stork_(Ciconia_ciconia)_(6).jpg>) -- Creative Commons Attribution-Share Alike 3.0 Unported
+- Stork 3 -- [yhoebeke](https://flickr.com/photos/60322572@N04/28568974271) -- Creative Commons Attribution-Share Alike 2.0 Generic
+
 ## Sounds
 
 - enter key by uEffects -- https://freesound.org/s/180966/ -- License: Creative Commons 0

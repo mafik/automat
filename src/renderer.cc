@@ -497,8 +497,12 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     builder.uniform("surfaceOrigin") = local_surface_bounds.BottomLeftCorner();
     builder.uniform("surfaceSize") = local_surface_bounds.Size();
     builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
-    builder.uniform("anchorsLast").set(&frame.texture_anchors[0], anchor_count);
-    builder.uniform("anchorsCurr").set(&fresh_texture_anchors[0], anchor_count);
+    Vec2 anchors[2] = {
+        frame.texture_anchors[0],
+        frame.texture_anchors[anchor_count > 1 ? 1 : 0],
+    };
+    builder.uniform("anchorsLast").set(anchors, 2);
+    builder.uniform("anchorsCurr").set(anchors, 2);
     builder.child("surface") = SkSurfaces::AsImage(frame.surface)->makeShader(sampling);
 
     auto shader = builder.makeShader();
@@ -670,7 +674,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     auto text = f("{:.1f}", average_draw_millis);
     font.DrawText(*canvas, text, text_paint);
   }
-}
+}  // namespace automat
 
 WidgetDrawable::WidgetDrawable(uint32_t id) : id(id) {}
 

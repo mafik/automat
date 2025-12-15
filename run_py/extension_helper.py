@@ -108,6 +108,7 @@ class ExtensionHelper:
     self.skip_configure = False
     self.configure_inputs = []
     self.ninja_target = 'install'
+    self.meson_install_tags = ''
 
   def _hook_recipe(self, recipe):
     if self.old_hook_recipe:
@@ -207,7 +208,7 @@ class ExtensionHelper:
         inputs=[],
         desc=f'Creating build directory for {self.name}',
         shortcut=f'mkdir {self.name}')
-      
+
       configure_args = [
         (self.src_dir / 'configure').absolute(),
         f'--prefix={build.PREFIX}',
@@ -258,7 +259,7 @@ class ExtensionHelper:
     elif makefile.name == 'meson-info.json':
       import meson
       recipe.add_step(
-        partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--tags', 'devel,runtime']),
+        partial(Popen, meson.ARGS + ['install', '-C', build_dir, '--tags', self.meson_install_tags]),
         outputs=self.outputs,
         inputs=configure_inputs + [makefile, ninja.BIN],
         desc=f'Installing {self.name}',
@@ -281,6 +282,7 @@ class ExtensionHelper:
       self.old_hook_srcs(srcs, recipe)
     if not self.include_regex:
       return
+
     for src in srcs.values():
       if any(self.include_regex.match(inc) for inc in src.system_includes):
         self.install_srcs.add(src)
@@ -345,10 +347,11 @@ class ExtensionHelper:
     self.configure = 'cmake'
     as_path_list(outputs, self.outputs)
 
-  def ConfigureWithMeson(self, *outputs):
+  def ConfigureWithMeson(self, *outputs, install_tags='devel,runtime'):
     if self.configure:
       raise ValueError(f'{self.name} was already configured')
     self.configure = 'meson'
+    self.meson_install_tags = install_tags
     as_path_list(outputs, self.outputs)
 
   def ConfigureWithAutotools(self, *outputs):

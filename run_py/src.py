@@ -87,20 +87,20 @@ class File:
                 continue
 
             # Actual scanning starts here
-            match = re.match(r'^#include <([a-zA-Z0-9_/\.-]+)>', line)
+            match = re.match(r'^#include <([a-zA-Z0-9_/\.\-+]+)>', line)
             if match:
                 # system include
                 self.system_includes.append(match.group(1))
                 continue
 
-            match = re.match(r'^#pragma comment\(lib, "([a-zA-Z0-9_/\.-]+)"\)', line)
+            match = re.match(r'^#pragma comment\(lib, "([a-zA-Z0-9_/\.\-+]+)"\)', line)
             if match:
                 # extra library
                 self.comment_libs.append(match.group(1))
                 continue
 
 
-            match = re.match(r'^#include \"([a-zA-Z0-9_/\.-]+\.hh?)\"', line)
+            match = re.match(r'^#include \"([a-zA-Z0-9_/\.\-+]+\.hh?)\"', line)
             if match:
                 dep = self.path.parent / match.group(1)
                 dep = dep.resolve()

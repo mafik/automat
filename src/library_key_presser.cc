@@ -44,86 +44,6 @@ static SkPath GetHandShape() {
   return path;
 }
 
-float KeyPresserButton::PressRatio() const {
-  if (key_presser->key_selector || key_presser->IsRunning()) {
-    return 1;
-  }
-  return 0;
-}
-
-KeyPresser::KeyPresser(ui::Widget* parent, ui::AnsiKey key)
-    : WidgetBase(parent),
-      key(key),
-      shortcut_button(
-          new KeyPresserButton(this, this, ToStr(key), KeyColor(false), kBaseKeyWidth)) {
-  shortcut_button->activate = [this](ui::Pointer& pointer) {
-    if (key_selector) {
-      key_selector->Release();
-    } else if (pointer.keyboard) {
-      Vec2 caret_position = shortcut_button->child->TextureBounds()->TopLeftCorner();
-      key_selector =
-          &pointer.keyboard->RequestCaret(*this, shortcut_button->child.get(), caret_position);
-    }
-    WakeAnimation();
-    shortcut_button->WakeAnimation();
-  };
-}
-KeyPresser::KeyPresser(ui::Widget* parent) : KeyPresser(parent, ui::AnsiKey::F) {}
-string_view KeyPresser::Name() const { return "Key Presser"; }
-Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, parent, key); }
-animation::Phase KeyPresser::Tick(time::Timer&) {
-  shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
-  return animation::Finished;
-}
-void KeyPresser::Draw(SkCanvas& canvas) const {
-  DrawChildren(canvas);
-
-  auto& img = IsRunning() ? textures::PressingHandColor() : textures::PointingHandColor();
-  canvas.save();
-  canvas.translate(4.5_mm, -6.8_mm);
-  canvas.rotate(15);
-  img.draw(canvas);
-  canvas.restore();
-}
-SkPath KeyPresser::Shape() const {
-  static SkPath shape = [this]() {
-    auto button_shape = shortcut_button->Shape();
-    auto hand_shape = GetHandShape();
-    SkPath joined_shape;
-    Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
-    return joined_shape;
-  }();
-  return shape;
-}
-void KeyPresser::ConnectionPositions(Vec<Vec2AndDir>& out_positions) const {
-  auto button_shape = shortcut_button->Shape();
-  SkRRect rrect;
-  if (button_shape.isRRect(&rrect)) {
-    out_positions.push_back(Vec2AndDir{.pos = Rect::TopCenter(rrect.rect()), .dir = -90_deg});
-    out_positions.push_back(Vec2AndDir{.pos = Rect::LeftCenter(rrect.rect()), .dir = 0_deg});
-    out_positions.push_back(Vec2AndDir{.pos = Rect::RightCenter(rrect.rect()), .dir = 180_deg});
-  }
-}
-
-void KeyPresser::SetKey(ui::AnsiKey k) {
-  key = k;
-  shortcut_button->SetLabel(ToStr(k));
-}
-
-void KeyPresser::ReleaseCaret(ui::Caret&) {
-  key_selector = nullptr;
-  WakeAnimation();
-  shortcut_button->WakeAnimation();
-}
-void KeyPresser::KeyDown(ui::Caret&, ui::Key k) {
-  key_selector->Release();
-  SetKey(k.physical);
-  WakeAnimation();
-  shortcut_button->WakeAnimation();
-}
-
-void KeyPresser::FillChildren(Vec<Widget*>& children) { children.push_back(shortcut_button.get()); }
-
 struct DragAndClickAction : Action {
   ui::PointerButton btn;
   std::unique_ptr<Action> drag_action;
@@ -188,32 +108,156 @@ struct UseObjectOption : TextOption {
   }
 };
 
-std::unique_ptr<Action> KeyPresser::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
-  if (btn != ui::PointerButton::Left) return nullptr;
-  auto hand_shape = GetHandShape();
-  auto local_pos = p.PositionWithin(*this);
-  if (hand_shape.contains(local_pos.x, local_pos.y)) {
-    return std::make_unique<DragAndClickAction>(p, btn, Object::WidgetBase::FindAction(p, btn),
-                                                std::make_unique<RunOption>(this));
-  } else {
-    return std::make_unique<DragAndClickAction>(
-        p, btn, Object::WidgetBase::FindAction(p, btn),
-        std::make_unique<UseObjectOption>(shortcut_button.get()));
+struct KeyPresserButton : KeyButton {
+  KeyPresserButton(Widget* parent, StrView label, SkColor color, float width)
+      : KeyButton(parent, label, color, width) {}
+  using KeyButton::KeyButton;
+  float PressRatio() const override;
+};
+
+struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
+  mutable std::unique_ptr<KeyPresserButton> shortcut_button;
+
+  // This is used to select the pressed key
+  ui::Caret* key_selector = nullptr;
+
+  KeyPresserWidget(Widget* parent)
+      : WidgetBase(parent),
+        shortcut_button(new KeyPresserButton(this, "?", KeyColor(false), kBaseKeyWidth)) {
+    shortcut_button->activate = [this](ui::Pointer& pointer) {
+      if (key_selector) {
+        key_selector->Release();
+      } else if (pointer.keyboard) {
+        Vec2 caret_position = shortcut_button->child->TextureBounds()->TopLeftCorner();
+        key_selector =
+            &pointer.keyboard->RequestCaret(*this, shortcut_button->child.get(), caret_position);
+      }
+      WakeAnimation();
+      shortcut_button->WakeAnimation();
+    };
+  }
+
+  animation::Phase Tick(time::Timer&) override {
+    shortcut_button->fg = key_selector ? kKeyGrabbingColor : KeyColor(false);
+    return animation::Finished;
+  }
+
+  void Draw(SkCanvas& canvas) const override {
+    bool is_running = false;
+    {
+      auto key_presser = LockObject<KeyPresser>();
+      is_running = key_presser->IsRunning();
+    }
+
+    DrawChildren(canvas);
+    auto& img = is_running ? textures::PressingHandColor() : textures::PointingHandColor();
+    canvas.save();
+    canvas.translate(4.5_mm, -6.8_mm);
+    canvas.rotate(15);
+    img.draw(canvas);
+    canvas.restore();
+  }
+
+  SkPath Shape() const override {
+    static SkPath shape = [this]() {
+      auto button_shape = shortcut_button->Shape();
+      auto hand_shape = GetHandShape();
+      SkPath joined_shape;
+      Op(button_shape, hand_shape, kUnion_SkPathOp, &joined_shape);
+      return joined_shape;
+    }();
+    return shape;
+  }
+
+  bool CenteredAtZero() const override { return true; }
+
+  void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override {
+    auto button_shape = shortcut_button->Shape();
+    SkRRect rrect;
+    if (button_shape.isRRect(&rrect)) {
+      out_positions.push_back(Vec2AndDir{.pos = Rect::TopCenter(rrect.rect()), .dir = -90_deg});
+      out_positions.push_back(Vec2AndDir{.pos = Rect::LeftCenter(rrect.rect()), .dir = 0_deg});
+      out_positions.push_back(Vec2AndDir{.pos = Rect::RightCenter(rrect.rect()), .dir = 180_deg});
+    }
+  }
+
+  std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
+    if (btn != ui::PointerButton::Left) return nullptr;
+    auto hand_shape = GetHandShape();
+    auto local_pos = p.PositionWithin(*this);
+    if (hand_shape.contains(local_pos.x, local_pos.y)) {
+      return std::make_unique<DragAndClickAction>(p, btn, Object::WidgetBase::FindAction(p, btn),
+                                                  std::make_unique<RunOption>(this));
+    } else {
+      return std::make_unique<DragAndClickAction>(
+          p, btn, Object::WidgetBase::FindAction(p, btn),
+          std::make_unique<UseObjectOption>(shortcut_button.get()));
+    }
+  }
+
+  void KeyDown(ui::Caret&, ui::Key k) override {
+    key_selector->Release();
+    LockObject<KeyPresser>()->SetKey(k.physical);
+    WakeAnimation();
+    shortcut_button->WakeAnimation();
+  }
+
+  void ReleaseCaret(ui::Caret&) override {
+    key_selector = nullptr;
+    WakeAnimation();
+    shortcut_button->WakeAnimation();
+  }
+
+  void FillChildren(Vec<Widget*>& children) override { children.push_back(shortcut_button.get()); }
+
+  bool AllowChildPointerEvents(Widget& child) const override { return false; }
+};
+
+float KeyPresserButton::PressRatio() const {
+  auto key_presser_widget = static_cast<KeyPresserWidget*>(this->parent.Get());
+  auto key_presser = key_presser_widget->LockObject<KeyPresser>();
+  if (key_presser_widget->key_selector || key_presser->IsRunning()) {
+    return 1;
+  }
+  return 0;
+}
+
+KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {
+  if (ui::root_widget && ui::root_widget->window) {
+    ui::root_widget->window->BeginLogging(this, &keylogging, nullptr, nullptr);
   }
 }
+string_view KeyPresser::Name() const { return "Key Presser"; }
+Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, key); }
+
+std::unique_ptr<Object::WidgetInterface> KeyPresser::MakeWidget(ui::Widget* parent) {
+  auto w = std::make_unique<KeyPresserWidget>(parent);
+  w->object = AcquireWeakPtr();
+  w->shortcut_button->SetLabel(ToStr(key));
+  return std::move(w);
+}
+
+void KeyPresser::SetKey(ui::AnsiKey k) {
+  key = k;
+  ForEachWidget([k](ui::RootWidget&, ui::Widget& widget) {
+    static_cast<KeyPresserWidget&>(widget).shortcut_button->SetLabel(ToStr(k));
+  });
+}
+
+void KeyPresser::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
 
 void KeyPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("KeyPresser");
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
-  WakeAnimation();
+  WakeWidgetsAnimation();
   BeginLongRunning(std::move(run_task));
 }
 
 void KeyPresser::OnCancel() {
   audio::Play(embedded::assets_SFX_key_up_wav);
   SendKeyEvent(key, false);
-  WakeAnimation();
+  WakeWidgetsAnimation();
 }
 
 void KeyPresser::SerializeState(Serializer& writer, const char* key) const {
@@ -240,5 +284,21 @@ void KeyPresser::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
-KeyPresser::~KeyPresser() { OnLongRunningDestruct(); }
+KeyPresser::~KeyPresser() {
+  if (keylogging) {
+    keylogging->Release();
+  }
+  OnLongRunningDestruct();
+}
+
+void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
+  if (this->key != key_down.physical) return;
+  if (auto h = here.lock()) {
+    ScheduleNext(*h);
+  }
+}
+void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
+  if (this->key != key_up.physical) return;
+}
+void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) { keylogging = nullptr; }
 }  // namespace automat::library

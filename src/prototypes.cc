@@ -51,7 +51,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<MacroRecorder>(null_parent);
   index.Register<TimerDelay>(null_parent);
   index.Register<HotKey>(null_parent);
-  index.Register<KeyPresser>(null_parent);
+  index.Register<KeyPresser>();
   index.Register<Mouse>();
   index.Register<MouseMove, HideInToolbar>();
   index.Register<MouseScrollY, HideInToolbar>();

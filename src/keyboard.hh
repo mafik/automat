@@ -14,6 +14,7 @@
 #include "action.hh"
 #include "animation.hh"
 #include "fn.hh"
+#include "key.hh"
 #include "math.hh"
 #include "status.hh"
 #include "time.hh"
@@ -197,6 +198,7 @@ struct Keyboard final : Widget {
   std::unique_ptr<Action> actions[static_cast<size_t>(AnsiKey::Count)];
 
   Keyboard(RootWidget&);
+  ~Keyboard();
 
   // Called by a CaretOwner that wants to start receiving keyboard input.
   Caret& RequestCaret(CaretOwner&, Widget* widget, Vec2 position);
@@ -217,6 +219,9 @@ struct Keyboard final : Widget {
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
 
 #if defined(__linux__)
+  struct LinuxKeyboardState;
+
+  std::unique_ptr<LinuxKeyboardState> linux_state;
   // TODO: refactor this
   void KeyDown(xcb_input_key_press_event_t&);
   void KeyDown(xcb_input_raw_key_press_event_t&);

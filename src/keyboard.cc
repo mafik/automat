@@ -6,6 +6,7 @@
 
 #include <map>
 #include <set>
+#include <utility>
 
 #include "animation.hh"
 #include "automat.hh"
@@ -334,6 +335,50 @@ SkPath Keyboard::Shape() const {
 
 #ifdef __linux__
 
+struct Keyboard::LinuxKeyboardState {
+  struct DeleteWith_xkb_context_unref {
+    void operator()(xkb_context* ctx) { xkb_context_unref(ctx); }
+  };
+
+  std::unique_ptr<xkb_context, DeleteWith_xkb_context_unref> ctx;
+
+  struct Device {
+    struct DeleteWith_xkb_keymap_unref {
+      void operator()(xkb_keymap* keymap) { xkb_keymap_unref(keymap); }
+    };
+
+    std::unique_ptr<xkb_keymap, DeleteWith_xkb_keymap_unref> keymap;
+
+    struct DeleteWith_xkb_state_unref {
+      void operator()(xkb_state* state) { xkb_state_unref(state); }
+    };
+
+    std::unique_ptr<xkb_state, DeleteWith_xkb_state_unref> state;
+
+    Device() {}
+
+    Device(xkb_context* ctx, xcb_input_device_id_t device_id) {
+      keymap.reset(xkb_x11_keymap_new_from_device(ctx, xcb::connection, device_id,
+                                                  XKB_KEYMAP_COMPILE_NO_FLAGS));
+      state.reset(xkb_x11_state_new_from_device(keymap.get(), xcb::connection, device_id));
+    }
+  };
+
+  std::map<xcb_input_device_id_t, Device> devices;
+
+  LinuxKeyboardState() { ctx.reset(xkb_context_new(XKB_CONTEXT_NO_FLAGS)); }
+
+  Device& GetDevice(xcb_input_device_id_t device_id) {
+    auto it = devices.find(device_id);
+    if (it == devices.end()) {
+      auto ret = devices.emplace(std::piecewise_construct, std::forward_as_tuple(device_id),
+                                 std::forward_as_tuple(ctx.get(), device_id));
+      it = ret.first;
+    }
+    return it->second;
+  }
+};
+
 void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
   ui::Key key = {
       .ctrl = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_CONTROL),
@@ -343,19 +388,15 @@ void Keyboard::KeyDown(xcb_input_key_press_event_t& ev) {
       .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
       .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
   };
-  xkb_context* ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-  int32_t device_id = ev.deviceid;
-  xkb_keymap* keymap =
-      xkb_x11_keymap_new_from_device(ctx, xcb::connection, device_id, XKB_KEYMAP_COMPILE_NO_FLAGS);
-  xkb_state* state = xkb_x11_state_new_from_device(keymap, xcb::connection, device_id);
 
+  auto& device = linux_state->GetDevice(ev.deviceid);
+  xkb_state_update_key(device.state.get(), ev.detail, XKB_KEY_DOWN);
+
+  xkb_keycode_t keycode;
   char buffer[32];
-  int size = xkb_state_key_get_utf8(state, ev.detail, buffer, sizeof(buffer));
+  int size = xkb_state_key_get_utf8(device.state.get(), ev.detail, buffer, sizeof(buffer));
   key.text.assign(buffer, size);
 
-  xkb_keymap_unref(keymap);
-  xkb_state_unref(state);
-  xkb_context_unref(ctx);
   KeyDown(key);
 }
 void Keyboard::KeyDown(xcb_input_raw_key_press_event_t& ev) {
@@ -380,6 +421,10 @@ void Keyboard::KeyUp(xcb_input_key_release_event_t& ev) {
                  .windows = static_cast<bool>(ev.mods.base & XCB_MOD_MASK_4),
                  .physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
+
+  auto& device = linux_state->GetDevice(ev.deviceid);
+  xkb_state_update_key(device.state.get(), ev.detail, XKB_KEY_UP);
+
   KeyUp(key);
 }
 void Keyboard::KeyUp(xcb_input_raw_key_release_event_t& ev) {
@@ -387,7 +432,7 @@ void Keyboard::KeyUp(xcb_input_raw_key_release_event_t& ev) {
                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   LogKeyUp(key);
 }
-void Keyboard::KeyUp(xcb_key_press_event_t& ev) {
+void Keyboard::KeyUp(xcb_key_release_event_t& ev) {
   ui::Key key = {.physical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail),
                  .logical = x11::X11KeyCodeToKey((x11::KeyCode)ev.detail)};
   KeyUp(key);
@@ -533,7 +578,13 @@ Caret& Keyboard::RequestCaret(CaretOwner& caret_owner, Widget* widget, Vec2 posi
 void CaretOwner::KeyDown(Caret& caret, Key) {}
 void CaretOwner::KeyUp(Caret& caret, Key) {}
 
-Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(root_widget) {}
+Keyboard::Keyboard(RootWidget& root_widget) : Widget(&root_widget), root_widget(root_widget) {
+#if defined(__linux__)
+  linux_state.reset(new LinuxKeyboardState());
+#endif
+}
+
+Keyboard::~Keyboard() = default;
 
 #if defined(_WIN32)
 

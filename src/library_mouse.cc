@@ -849,7 +849,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     {
       Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
       button = object->button;
-      presser_widget.is_on = object->IsRunning();
+      presser_widget.is_on = object->IsOn();
     }
 
     auto mask = MouseWidgetCommon::ButtonShape(button);
@@ -873,7 +873,7 @@ struct MouseButtonPresserWidget : MouseWidgetBase {
     {
       Ptr<MouseButtonPresser> object = LockObject<MouseButtonPresser>();
       button = object->button;
-      presser_widget.is_on = object->IsRunning();
+      presser_widget.is_on = object->IsOn();
     }
     return MouseWidgetCommon::Tick(timer, *this, button, std::nullopt, &presser_widget);
   }
@@ -896,6 +896,8 @@ string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; 
 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
 
+void MouseButtonPresser::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
+
 std::unique_ptr<Object::WidgetInterface> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());
 }
@@ -904,11 +906,15 @@ void MouseButtonPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_tas
   ZoneScopedN("MouseButtonPresser");
   audio::Play(embedded::assets_SFX_mouse_down_wav);
   SendMouseButtonEvent(button, true);
-  BeginLongRunning(std::move(run_task));
-  WakeWidgetsAnimation();
+  SendMouseButtonEvent(button, false);
 }
 
-void MouseButtonPresser::OnCancel() {
+void MouseButtonPresser::On() {
+  audio::Play(embedded::assets_SFX_mouse_down_wav);
+  SendMouseButtonEvent(button, true);
+  WakeWidgetsAnimation();
+}
+void MouseButtonPresser::Off() {
   audio::Play(embedded::assets_SFX_mouse_up_wav);
   SendMouseButtonEvent(button, false);
   WakeWidgetsAnimation();
@@ -936,6 +942,10 @@ void MouseButtonPresser::DeserializeState(Location& l, Deserializer& d) {
   }
 }
 
-MouseButtonPresser::~MouseButtonPresser() { OnLongRunningDestruct(); }
+MouseButtonPresser::~MouseButtonPresser() {
+  if (IsOn()) {
+    Off();
+  }
+}
 
 }  // namespace automat::library

@@ -67,19 +67,25 @@ struct MouseScrollX : Object, SinkRelativeFloat64 {
   void OnRelativeFloat64(double) override;
 };
 
-struct MouseButtonPresser : Object, Runnable, LongRunning {
+struct MouseButtonPresser : Object, Runnable, OnOff {
   ui::PointerButton button;
+  bool down = false;
 
   MouseButtonPresser(ui::PointerButton button);
   MouseButtonPresser();
   ~MouseButtonPresser() override;
   string_view Name() const override;
   Ptr<Object> Clone() const override;
+  void Args(std::function<void(Argument&)> cb) override;
   std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
 
   void OnRun(Location& here, std::unique_ptr<RunTask>& run_task) override;
-  void OnCancel() override;
-  LongRunning* AsLongRunning() override { return this; }
+
+  bool IsOn() const override { return down; }
+  void On() override;
+  void Off() override;
+
+  OnOff* AsOnOff() override { return this; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

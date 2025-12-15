@@ -2563,7 +2563,13 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (timeline->state != Timeline::kPlaying) {
     on = false;
   }
-  if (auto runnable = dynamic_cast<Runnable*>(target.object.get())) {
+  if (auto on_off = target.object->AsOnOff()) {
+    if (on) {
+      on_off->On();
+    } else {
+      on_off->Off();
+    }
+  } else if (auto runnable = dynamic_cast<Runnable*>(target.object.get())) {
     if (on) {
       target.ScheduleRun();
     } else {

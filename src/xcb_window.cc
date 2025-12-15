@@ -896,9 +896,9 @@ void XCBWindow::MainLoop(std::stop_token stop_token) {
           }
           if (!handled) {
             if (opcode == XCB_KEY_PRESS) {
-              automat::ui::root_widget->keyboard.KeyDown(*(xcb_input_key_press_event_t*)event);
+              automat::ui::root_widget->keyboard.KeyDown(*ev);
             } else {
-              automat::ui::root_widget->keyboard.KeyUp(*(xcb_input_key_release_event_t*)event);
+              automat::ui::root_widget->keyboard.KeyUp(*ev);
             }
           }
           break;

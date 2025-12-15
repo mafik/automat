@@ -182,7 +182,7 @@ struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
   }
 
   std::unique_ptr<Action> FindAction(ui::Pointer& p, ui::ActionTrigger btn) override {
-    if (btn != ui::PointerButton::Left) return nullptr;
+    if (btn != ui::PointerButton::Left) return WidgetBase::FindAction(p, btn);
     auto hand_shape = GetHandShape();
     auto local_pos = p.PositionWithin(*this);
     if (hand_shape.contains(local_pos.x, local_pos.y)) {
@@ -192,6 +192,52 @@ struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
       return std::make_unique<DragAndClickAction>(
           p, btn, Object::WidgetBase::FindAction(p, btn),
           std::make_unique<UseObjectOption>(shortcut_button.get()));
+    }
+  }
+
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    WidgetBase::VisitOptions(visitor);
+    if (auto key_presser = LockObject<KeyPresser>()) {
+      if (key_presser->keylogging) {
+        struct StopMonitoring : TextOption {
+          WeakPtr<KeyPresser> weak;
+
+          StopMonitoring(WeakPtr<KeyPresser> weak) : TextOption("Stop Monitoring"), weak(weak) {}
+
+          std::unique_ptr<Option> Clone() const override {
+            return std::make_unique<StopMonitoring>(weak);
+          }
+
+          std::unique_ptr<Action> Activate(ui::Pointer&) const override {
+            if (auto key_presser = weak.lock()) {
+              if (key_presser->keylogging) {
+                key_presser->keylogging->Release();
+              }
+            }
+            return nullptr;
+          }
+        } stop{key_presser};
+        visitor(stop);
+      } else {
+        struct StartMonitoring : TextOption {
+          WeakPtr<KeyPresser> weak;
+
+          StartMonitoring(WeakPtr<KeyPresser> weak) : TextOption("Start Monitoring"), weak(weak) {}
+
+          std::unique_ptr<Option> Clone() const override {
+            return std::make_unique<StartMonitoring>(weak);
+          }
+
+          std::unique_ptr<Action> Activate(ui::Pointer&) const override {
+            if (auto key_presser = weak.lock()) {
+              ui::root_widget->window->BeginLogging(key_presser.Get(), &key_presser->keylogging,
+                                                    nullptr, nullptr);
+            }
+            return nullptr;
+          }
+        } start{key_presser};
+        visitor(start);
+      }
     }
   }
 
@@ -222,11 +268,7 @@ float KeyPresserButton::PressRatio() const {
   return 0;
 }
 
-KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {
-  if (ui::root_widget && ui::root_widget->window) {
-    ui::root_widget->window->BeginLogging(this, &keylogging, nullptr, nullptr);
-  }
-}
+KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, key); }
 
@@ -244,7 +286,11 @@ void KeyPresser::SetKey(ui::AnsiKey k) {
   });
 }
 
-void KeyPresser::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
+void KeyPresser::Args(std::function<void(Argument&)> cb) {
+  if (keylogging) {
+    cb(next_arg);
+  }
+}
 
 void KeyPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("KeyPresser");

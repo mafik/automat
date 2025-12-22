@@ -296,23 +296,17 @@ static SkPath GetRecPath() {
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
+TrackArgument::TrackArgument(StrView name)
+    : Argument(name, Argument::kOptional), icon(name, kKeyLetterSize, KeyFont()) {
+  tint = "#17aeb7"_color;
+  light = "#17aeb7"_color;
+  field = this;
+}
+
+PaintDrawable& TrackArgument::Icon() { return icon; }
+
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}
-
-struct TrackArgument : Argument {
-  TextDrawable icon;
-  TrackArgument(StrView name)
-      : Argument(name, Argument::kOptional), icon(name, kKeyLetterSize, KeyFont()) {}
-  PaintDrawable& Icon() override { return icon; }
-};
-
-static void AddTrackArg(Timeline& t, int track_number, StrView track_name) {
-  auto arg = make_unique<TrackArgument>(track_name);
-  arg->field = t.tracks[track_number].get();
-  arg->tint = "#17aeb7"_color;
-  arg->light = "#17aeb7"_color;
-  t.track_args.emplace_back(std::move(arg));
-}
 
 OnOffTrack& Timeline::AddOnOffTrack(StrView name) {
   auto track_ptr = MAKE_PTR(OnOffTrack);
@@ -337,8 +331,9 @@ Float64Track& Timeline::AddFloat64Track(StrView name) {
 
 void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   track->timeline = this;
-  tracks.emplace_back(std::move(track));
-  AddTrackArg(*this, tracks.size() - 1, name);
+  auto arg = make_unique<TrackArgument>(name);
+  arg->ptr = std::move(track);
+  tracks.emplace_back(std::move(arg));
   if (auto h = here.lock()) {
     h->InvalidateConnectionWidgets(true, true);
   }
@@ -348,11 +343,7 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
 Timeline::Timeline(const Timeline& other) : Timeline() {
   tracks.reserve(other.tracks.size());
   for (const auto& track : other.tracks) {
-    tracks.emplace_back(track->Clone().Cast<TrackBase>());
-  }
-  track_args.reserve(other.track_args.size());
-  for (int i = 0; i < other.track_args.size(); ++i) {
-    AddTrackArg(*this, i, other.track_args[i]->name);
+    AddTrack(track->ptr->Clone().Cast<TrackBase>(), track->name);
   }
   WakeWidgetsAnimation();
 }
@@ -374,10 +365,11 @@ time::Duration Timeline::MaxTrackLength() const {
     max_track_length = max(max_track_length, time::SteadyNow() - recording.started_at);
   }
   for (const auto& track : tracks) {
-    if (track->timestamps.empty()) {
+    auto* track_base = track->ptr.Get();
+    if (track_base->timestamps.empty()) {
       continue;
     }
-    max_track_length = max(max_track_length, track->timestamps.back());
+    max_track_length = max(max_track_length, track_base->timestamps.back());
   }
   return max_track_length;
 }
@@ -399,12 +391,13 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
     return started_at + timestamp > now;
   };
   for (const auto& track : t.tracks) {
+    auto* track_base = track->ptr.Get();
     int next_update_i =
-        std::upper_bound(track->timestamps.begin(), track->timestamps.end(), now, cmp) -
-        track->timestamps.begin();
-    if (next_update_i < track->timestamps.size()) {
+        std::upper_bound(track_base->timestamps.begin(), track_base->timestamps.end(), now, cmp) -
+        track_base->timestamps.begin();
+    if (next_update_i < track_base->timestamps.size()) {
       auto next_update_point =
-          t.playing.started_at + time::Duration(track->timestamps[next_update_i]);
+          t.playing.started_at + time::Duration(track_base->timestamps[next_update_i]);
       next_update = min(next_update, next_update_point);
     }
   }
@@ -415,12 +408,12 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
 
 static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint started_at,
                                   time::SteadyPoint now) {
-  for (int i = 0; i < t.tracks.size(); ++i) {
-    auto obj_result = t.track_args[i]->GetObject(here);
+  for (auto& track : t.tracks) {
+    auto obj_result = track->GetObject(here);
     if (obj_result.location != nullptr && obj_result.object != nullptr) {
-      t.tracks[i]->UpdateOutput(*obj_result.location, started_at, now);
+      track->ptr->UpdateOutput(*obj_result.location, started_at, now);
     }
-    t.track_args[i]->InvalidateConnectionWidgets(here);
+    track->InvalidateConnectionWidgets(here);
   }
 }
 
@@ -797,7 +790,7 @@ struct TimelineWidget : Object::WidgetBase {
     auto track_index = TrackIndexFromY(pos.y);
     if (track_index >= 0 && track_index < timeline_locked.tracks.size()) {
       auto& track = timeline_locked.tracks[track_index];
-      auto& timestamps = track->timestamps;
+      auto& timestamps = track->ptr->timestamps;
       if (time_at_x == time::kDurationGuard) {
         time_at_x = TimeAtX(pos.x);
       }
@@ -916,7 +909,7 @@ struct TimelineWidget : Object::WidgetBase {
   void AddMissingTrackWidgets(Timeline& timeline_locked) {
     auto& tracks = timeline_locked.tracks;
     for (size_t i = track_widgets.size(); i < tracks.size(); ++i) {
-      track_widgets.push_back(tracks[i]->MakeWidget(this));
+      track_widgets.push_back(tracks[i]->ptr->MakeWidget(this));
     }
   }
 
@@ -1552,7 +1545,7 @@ struct TimelineWidget : Object::WidgetBase {
     if (timeline) {
       auto lock = std::lock_guard(timeline->mutex);
       for (int i = 0; i < timeline->tracks.size(); ++i) {
-        if (timeline->track_args[i].get() == &arg) {
+        if (timeline->tracks[i].get() == &arg) {
           return {
               .pos = {kPlasticWidth / 2, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
                                              i * (kTrackMargin + kTrackHeight)},
@@ -1743,7 +1736,7 @@ SpliceAction::~SpliceAction() {
       int num_tracks = timeline->tracks.size();
       for (int i = 0; i < num_tracks; ++i) {
         auto& track = timeline->tracks[i];
-        track->Splice(current_offset, splice_to);
+        track->ptr->Splice(current_offset, splice_to);
       }
       timeline->timeline_length += splice_to - current_offset;
       timeline_widget->AdjustOffset(*timeline, splice_to - current_offset, now);
@@ -1827,7 +1820,7 @@ std::unique_ptr<Object::WidgetInterface> Timeline::MakeWidget(ui::Widget* parent
 }
 
 void Timeline::Args(function<void(Argument&)> cb) {
-  for (auto& track_arg : track_args) {
+  for (auto& track_arg : tracks) {
     cb(*track_arg);
   }
   cb(next_arg);
@@ -2565,9 +2558,9 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
   }
   if (auto on_off = target.object->AsOnOff()) {
     if (on) {
-      on_off->On();
+      on_off->TurnOn();
     } else {
-      on_off->Off();
+      on_off->TurnOff();
     }
   } else if (auto runnable = dynamic_cast<Runnable*>(target.object.get())) {
     if (on) {
@@ -2701,8 +2694,8 @@ void Timeline::SerializeState(Serializer& writer, const char* key) const {
   for (int i = 0; i < tracks.size(); ++i) {
     writer.StartObject();
     writer.Key("name");
-    writer.String(track_args[i]->name.c_str());
-    tracks[i]->SerializeState(writer, nullptr);
+    writer.String(tracks[i]->name.c_str());
+    tracks[i]->ptr->SerializeState(writer, nullptr);
     writer.EndObject();
   }
   writer.EndArray();

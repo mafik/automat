@@ -5,8 +5,8 @@
 #include "animation.hh"
 #include "base.hh"
 #include "color.hh"
+#include "interfaces.hh"
 #include "keyboard.hh"
-#include "on_off.hh"
 #include "run_button.hh"
 
 namespace automat::library {

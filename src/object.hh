@@ -7,6 +7,7 @@
 
 #include "audio.hh"
 #include "deserializer.hh"
+#include "interfaces.hh"
 #include "ptr.hh"
 #include "widget.hh"
 
@@ -20,12 +21,13 @@ struct Argument;
 struct ImageProvider;
 struct OnOff;
 struct LongRunning;
+struct Field;
 
 // Objects are interactive pieces of data & behavior.
 //
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
-struct Object : public ReferenceCounted {
+struct Object : public ReferenceCounted, InterfaceProvider {
   Object() {}
 
   // Create a copy of this object.
@@ -61,9 +63,7 @@ struct Object : public ReferenceCounted {
 
   virtual LongRunning* AsLongRunning() { return nullptr; }
 
-  virtual OnOff* AsOnOff() { return nullptr; }
-
-  virtual void Fields(std::function<void(Object&)> cb) {}
+  virtual Span<Field*> Fields() { return {}; }
 
   virtual void Args(std::function<void(Argument&)> cb) {}
 
@@ -75,13 +75,6 @@ struct Object : public ReferenceCounted {
 
   virtual std::partial_ordering operator<=>(const Object& other) const noexcept {
     return GetText() <=> other.GetText();
-  }
-
-  // The name for objects of this type. English proper noun, UTF-8, capitalized.
-  // For example: "Text Editor".
-  virtual std::string_view Name() const {
-    const std::type_info& info = typeid(*this);
-    return CleanTypeName(info.name());
   }
 
   struct WidgetInterface : ui::Widget {

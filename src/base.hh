@@ -24,9 +24,9 @@
 #include "drag_action.hh"
 #include "error.hh"
 #include "format.hh"
+#include "interfaces.hh"
 #include "location.hh"
 #include "log.hh"
-#include "on_off.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
 #include "ptr.hh"
@@ -95,8 +95,10 @@ struct LongRunning : OnOff {
   void BeginLongRunning(std::unique_ptr<RunTask>&& task) { long_running_task = std::move(task); }
 
   bool IsOn() const override { return IsRunning(); }
-  void On() override;
-  void Off() override { Cancel(); }
+
+ protected:
+  void OnTurnOn() override;
+  void OnTurnOff() override { Cancel(); }
 };
 
 struct Runnable {

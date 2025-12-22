@@ -147,25 +147,29 @@ void FlipFlop::FillChildren(Vec<Widget*>& children) { children.push_back(button.
 
 void FlipFlop::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   ZoneScopedN("FlipFlop");
-  current_state = !current_state;
+  Toggle();
   WakeAnimation();
   button->WakeAnimation();
   flip_arg.InvalidateConnectionWidgets(here);
+}
 
-  if (current_state) {
-    flip_arg.LoopLocations<bool>(here, [](Location& other) {
-      other.ScheduleRun();
-      return false;
-    });
-  } else {
-    flip_arg.LoopLocations<bool>(here, [](Location& other) {
-      if (auto long_running = other.object->AsLongRunning();
-          long_running && long_running->IsRunning()) {
-        long_running->Cancel();
-      }
-      return false;
-    });
-  }
+void FlipFlop::OnTurnOn() {
+  current_state = true;
+  flip_arg.LoopLocations<bool>(*here.Lock(), [](Location& other) {
+    other.ScheduleRun();
+    return false;
+  });
+}
+
+void FlipFlop::OnTurnOff() {
+  current_state = false;
+  flip_arg.LoopLocations<bool>(*here.Lock(), [](Location& other) {
+    if (auto long_running = other.object->AsLongRunning();
+        long_running && long_running->IsRunning()) {
+      long_running->Cancel();
+    }
+    return false;
+  });
 }
 
 void YingYangIcon::Draw(SkCanvas& canvas) const {

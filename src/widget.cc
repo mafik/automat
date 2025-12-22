@@ -219,7 +219,7 @@ bool Widget::Intersects(const Widget& a, const Widget& b) {
 Vec2AndDir Widget::ArgStart(const Argument& arg) {
   SkPath shape;
   if (arg.field) {
-    shape = FieldShape(*arg.field);
+    shape = FieldShape(arg.field);
   }
   if (shape.isEmpty()) {
     shape = Shape();

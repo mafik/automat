@@ -909,12 +909,12 @@ void MouseButtonPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_tas
   SendMouseButtonEvent(button, false);
 }
 
-void MouseButtonPresser::On() {
+void MouseButtonPresser::OnTurnOn() {
   audio::Play(embedded::assets_SFX_mouse_down_wav);
   SendMouseButtonEvent(button, true);
   WakeWidgetsAnimation();
 }
-void MouseButtonPresser::Off() {
+void MouseButtonPresser::OnTurnOff() {
   audio::Play(embedded::assets_SFX_mouse_up_wav);
   SendMouseButtonEvent(button, false);
   WakeWidgetsAnimation();
@@ -944,7 +944,7 @@ void MouseButtonPresser::DeserializeState(Location& l, Deserializer& d) {
 
 MouseButtonPresser::~MouseButtonPresser() {
   if (IsOn()) {
-    Off();
+    OnTurnOff();
   }
 }
 

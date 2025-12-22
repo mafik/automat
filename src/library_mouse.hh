@@ -82,8 +82,8 @@ struct MouseButtonPresser : Object, Runnable, OnOff {
   void OnRun(Location& here, std::unique_ptr<RunTask>& run_task) override;
 
   bool IsOn() const override { return down; }
-  void On() override;
-  void Off() override;
+  void OnTurnOn() override;
+  void OnTurnOff() override;
 
   OnOff* AsOnOff() override { return this; }
 

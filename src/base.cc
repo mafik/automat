@@ -70,7 +70,7 @@ void LongRunning::Done(Location& here) {
   long_running_task.reset();
 }
 
-void LongRunning::On() {
+void LongRunning::OnTurnOn() {
   auto live_object = dynamic_cast<LiveObject*>(this);
   if (live_object == nullptr) {
     ERROR << "LongRunning::On called on a non-LiveObject";

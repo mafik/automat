@@ -3,6 +3,7 @@
 #pragma once
 
 #include "base.hh"
+#include "field.hh"
 #include "keyboard.hh"
 
 namespace automat::library {
@@ -13,6 +14,22 @@ struct KeyPresser : LiveObject, Runnable, LongRunning, ui::Keylogger {
   ui::Keylogging* keylogging = nullptr;
   bool key_pressed = false;
 
+  struct Monitoring : Field, OnOff {
+    StrView Name() const override { return "Monitoring"sv; }
+    bool IsOn() const override;
+    void OnTurnOn() override;
+    void OnTurnOff() override;
+    OnOff* AsOnOff() override { return this; }
+    KeyPresser& GetKeyPresser() const {
+      return *reinterpret_cast<KeyPresser*>(reinterpret_cast<intptr_t>(this) -
+                                            offsetof(KeyPresser, monitoring));
+    }
+  };
+
+  Monitoring monitoring;
+
+  Field* fields[1] = {&monitoring};
+
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);
   ~KeyPresser() override;
   string_view Name() const override;
@@ -22,7 +39,8 @@ struct KeyPresser : LiveObject, Runnable, LongRunning, ui::Keylogger {
 
   void SetKey(ui::AnsiKey);
 
-  void Args(std::function<void(Argument&)> cb);
+  Span<Field*> Fields() override { return fields; }
+  void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }

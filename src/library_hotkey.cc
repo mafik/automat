@@ -121,44 +121,44 @@ HotKey::HotKey(ui::Widget* parent)
   ctrl_button->activate = [this](ui::Pointer&) {
     bool on = IsOn();
     if (on) {
-      Off();  // temporarily switch off to ungrab the old key combo
+      OnTurnOff();  // temporarily switch off to ungrab the old key combo
     }
     ctrl = !ctrl;
     if (on) {
-      On();
+      OnTurnOn();
     }
     ctrl_button->fg = KeyColor(ctrl);
   };
   alt_button->activate = [this](ui::Pointer&) {
     bool on = IsOn();
     if (on) {
-      Off();  // temporarily switch off to ungrab the old key combo
+      OnTurnOff();  // temporarily switch off to ungrab the old key combo
     }
     alt = !alt;
     if (on) {
-      On();
+      OnTurnOn();
     }
     alt_button->fg = KeyColor(alt);
   };
   shift_button->activate = [this](ui::Pointer&) {
     bool on = IsOn();
     if (on) {
-      Off();  // temporarily switch off to ungrab the old key combo
+      OnTurnOff();  // temporarily switch off to ungrab the old key combo
     }
     shift = !shift;
     if (on) {
-      On();
+      OnTurnOn();
     }
     shift_button->fg = KeyColor(shift);
   };
   windows_button->activate = [this](ui::Pointer&) {
     bool on = IsOn();
     if (on) {
-      Off();  // temporarily switch off to ungrab the old key combo
+      OnTurnOff();  // temporarily switch off to ungrab the old key combo
     }
     windows = !windows;
     if (on) {
-      On();
+      OnTurnOn();
     }
     windows_button->fg = KeyColor(windows);
   };
@@ -301,7 +301,7 @@ void HotKey::FillChildren(Vec<Widget*>& children) {
 
 bool HotKey::IsOn() const { return hotkey != nullptr; }
 
-void HotKey::On() {
+void HotKey::OnTurnOn() {
   if (hotkey) {  // just a sanity check, we should never get On multiple times in a row
     hotkey->Release();
   }
@@ -321,14 +321,14 @@ void HotKey::On() {
 void HotKey::KeyDown(ui::Caret&, ui::Key key) {
   bool on = IsOn();
   if (on) {
-    Off();  // temporarily switch off to ungrab the old key combo
+    OnTurnOff();  // temporarily switch off to ungrab the old key combo
   }
   hotkey_selector->Release();
   // Maybe also set the modifiers from the key event?
   this->key = key.physical;
   shortcut_button->SetLabel(ToStr(key.physical));
   if (on) {
-    On();
+    OnTurnOn();
   }
 }
 
@@ -339,7 +339,7 @@ void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) {
 }
 void HotKey::KeyGrabberKeyUp(ui::KeyGrab&) {}
 
-void HotKey::Off() {
+void HotKey::OnTurnOff() {
   // TODO: think about what happens if the recording starts or stops while the hotkey is active &
   // vice versa
   if (hotkey) {
@@ -377,7 +377,7 @@ void HotKey::DeserializeState(Location& l, Deserializer& d) {
   Status status;
   bool on = IsOn();
   if (on) {
-    Off();  // temporarily switch off to ungrab the old key combo
+    OnTurnOff();  // temporarily switch off to ungrab the old key combo
   }
   for (auto& key : ObjectView(d, status)) {
     if (key == "key") {
@@ -399,7 +399,7 @@ void HotKey::DeserializeState(Location& l, Deserializer& d) {
     }
   }
   if (on) {
-    On();
+    OnTurnOn();
   }
 
   shortcut_button->SetLabel(ToStr(this->key));

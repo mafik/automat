@@ -6,7 +6,7 @@
 #include <memory>
 
 #include "base.hh"
-#include "on_off.hh"
+#include "interfaces.hh"
 #include "pointer.hh"
 #include "run_button.hh"
 #include "time.hh"
@@ -16,6 +16,7 @@
 namespace automat::library {
 
 struct Timeline;
+struct TrackArgument;
 
 struct TrackBase : Object {
   Timeline* timeline = nullptr;
@@ -41,8 +42,8 @@ struct OnOffTrack : TrackBase, OnOff {
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   bool IsOn() const override;
-  void On() override {}
-  void Off() override {}
+  void OnTurnOn() override {}
+  void OnTurnOff() override {}
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
@@ -81,14 +82,23 @@ struct Float64Track : TrackBase {
   bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
 };
 
+struct TrackArgument : Argument, Field {
+  TextDrawable icon;
+  Ptr<TrackBase> ptr;
+
+  TrackArgument(StrView name);
+
+  PaintDrawable& Icon() override;
+};
+
 // Currently Timeline pauses at end which is consistent with standard media player behavour.
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
 // (or stops).
 struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   std::mutex mutex;
-  Vec<Ptr<TrackBase>> tracks;
-  Vec<std::unique_ptr<Argument>> track_args;
+
+  Vec<std::unique_ptr<TrackArgument>> tracks;
 
   float zoom;  // stores the time in seconds
 

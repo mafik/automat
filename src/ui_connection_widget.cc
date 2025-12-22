@@ -222,9 +222,10 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
 
-  SkPath from_shape = from.WidgetForObject().Shape();
+  auto& from_widget = from.WidgetForObject();
+  SkPath from_shape = from_widget.Shape();
   if (arg.field) {
-    from_shape = from.FieldShape(*arg.field);
+    from_shape = from_widget.FieldShape(arg.field);
   }
   SkPath to_shape;  // machine coords
   to_points.clear();
@@ -233,7 +234,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   // For example when a location is being dragged around, or when there are nested machines.
   Widget* parent_machine = root_machine.get();
 
-  auto pos_dir = arg.Start(from.WidgetForObject(), *parent_machine);
+  auto pos_dir = arg.Start(from_widget, *parent_machine);
 
   if ((to = arg.FindLocation(from, {}))) {
     auto& to_widget = to->WidgetForObject();
@@ -266,7 +267,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
   }
 
-  auto transform_from_to_machine = TransformBetween(from.WidgetForObject(), *parent_machine);
+  auto transform_from_to_machine = TransformBetween(from_widget, *parent_machine);
   from_shape.transform(transform_from_to_machine);
 
   // If one of the to_points is over from_shape, don't draw the cable
@@ -350,7 +351,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
   if (arg.field) {
-    from_shape = from.FieldShape(*arg.field);
+    from_shape = from.FieldShape(arg.field);
   }
   SkPath to_shape;  // machine coords
 

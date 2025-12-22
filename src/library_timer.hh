@@ -21,9 +21,8 @@ struct TimerDelay : LiveObject,
                     TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
-  struct MyDuration : public Object {
+  struct MyDuration : Field {
     time::Duration value = 10s;
-    Ptr<Object> Clone() const override { return MAKE_PTR(MyDuration, *this); }
   } duration;
   DurationArgument duration_arg;
   time::SteadyPoint start_time;
@@ -51,8 +50,8 @@ struct TimerDelay : LiveObject,
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  void Fields(std::function<void(Object&)> cb) override;
-  SkPath FieldShape(Object&) const override;
+  Span<Field*> Fields() override;
+  SkPath FieldShape(Field*) const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here, std::unique_ptr<RunTask>&) override;

@@ -3,9 +3,9 @@
 #pragma once
 
 #include "base.hh"
+#include "interfaces.hh"
 #include "key_button.hh"
 #include "keyboard.hh"
-#include "on_off.hh"
 
 namespace automat::library {
 
@@ -39,8 +39,8 @@ struct HotKey : LiveObject, Object::WidgetBase, OnOff, ui::CaretOwner, ui::KeyGr
   void Args(std::function<void(Argument&)> cb) override;
 
   bool IsOn() const override;
-  void On() override;
-  void Off() override;
+  void OnTurnOn() override;
+  void OnTurnOff() override;
 
   void ReleaseCaret(ui::Caret&) override;
   void ReleaseKeyGrab(ui::KeyGrab&) override;

@@ -5,15 +5,21 @@
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
 
+#include <cstddef>
+
 #include "../build/generated/embedded.hh"
+#include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
+#include "field.hh"
 #include "font.hh"
 #include "location.hh"
 #include "menu.hh"
 #include "object_iconified.hh"
 #include "object_lifetime.hh"
+#include "pointer.hh"
 #include "root_widget.hh"
+#include "time.hh"
 #include "ui_constants.hh"
 
 namespace automat {
@@ -192,6 +198,125 @@ struct DeiconifyOption : TextOption {
   Dir PreferredDir() const override { return NE; }
 };
 
+static const char* GetFieldName(NestedWeakPtr<Field>& weak) {
+  if (auto ptr = weak.Lock()) {
+    return ptr->Name().data();
+  }
+  return "Field of a deleted object";
+}
+
+struct TurnOnOption : TextOption {
+  NestedWeakPtr<OnOff> weak;
+  TurnOnOption(NestedWeakPtr<OnOff> weak) : TextOption("Turn on"), weak(weak) {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<TurnOnOption>(weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    if (auto ptr = weak.Lock()) {
+      ptr->TurnOn();
+    }
+    return nullptr;
+  }
+};
+
+struct TurnOffOption : TextOption {
+  NestedWeakPtr<OnOff> weak;
+  TurnOffOption(NestedWeakPtr<OnOff> weak) : TextOption("Turn off"), weak(weak) {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<TurnOffOption>(weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    if (auto ptr = weak.Lock()) {
+      ptr->TurnOff();
+    }
+    return nullptr;
+  }
+};
+
+struct SyncWidget : ui::Widget {
+  Vec2 start, end;
+  SyncWidget(ui::Widget* parent) : Widget(parent) {}
+  SkPath Shape() const override { return SkPath(); }
+  Optional<Rect> TextureBounds() const override { return std::nullopt; }
+  animation::Phase Tick(time::Timer&) override { return animation::Finished; }
+  void Draw(SkCanvas& canvas) const override { canvas.drawCircle(end.x, end.y, 1_cm, SkPaint()); }
+};
+
+struct SyncAction : Action {
+  WeakPtr<Object> weak;
+  Field* field;
+  OnOff* on_off;
+  TrackedPtr<Object::WidgetInterface> object_widget;
+  std::unique_ptr<SyncWidget> sync_widget;
+  SyncAction(ui::Pointer& pointer, WeakPtr<Object> weak, Field* field, OnOff* on_off,
+             Object::WidgetInterface* widget)
+      : Action(pointer),
+        weak(weak),
+        field(field),
+        on_off(on_off),
+        object_widget(widget->AcquireTrackedPtr()),
+        sync_widget(std::make_unique<SyncWidget>(pointer.GetWidget())) {
+    // TODO: invite objects to show their fields that satisfy the syncable interface
+    Update();
+  }
+  ~SyncAction() {
+    // TODO: tell objects to hide their fields
+    // Check if the pointer is over a compatible interface
+    //
+  }
+  void Update() {
+    if (auto obj = weak.Lock()) {
+      auto* widget = pointer.root_widget.widgets.Find(*obj);
+      auto start_local = widget->FieldShape(field).getBounds().center();
+      auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
+      sync_widget->start = start;
+      sync_widget->end = pointer.PositionWithinRootMachine();
+      sync_widget->WakeAnimation();
+    }
+  }
+  ui::Widget* Widget() { return sync_widget.get(); }
+};
+
+struct SyncOption : TextOption {
+  WeakPtr<Object> weak;
+  Field* field;
+  OnOff* on_off;
+  SyncOption(WeakPtr<Object> weak, Field* field, OnOff* on_off)
+      : TextOption("Sync"), weak(weak), field(field), on_off(on_off) {}
+  std::unique_ptr<Option> Clone() const override {
+    return std::make_unique<SyncOption>(weak, field, on_off);
+  }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    auto ptr = weak.Lock();
+    if (!ptr) return nullptr;
+    auto widget = pointer.root_widget.widgets.Find(*ptr);
+    return std::make_unique<SyncAction>(pointer, weak, field, on_off, widget);
+  }
+};
+
+struct FieldOption : TextOption, OptionsProvider {
+  NestedWeakPtr<Field> weak;
+  FieldOption(NestedWeakPtr<Field> field) : TextOption(GetFieldName(field)), weak(field) {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<FieldOption>(weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    if (auto ptr = weak.Lock()) {
+      return OpenMenu(pointer);
+    }
+    return nullptr;
+  }
+  void VisitOptions(const OptionsVisitor& visitor) const override {
+    if (auto field = weak.Lock()) {
+      if (auto* on_off = field->AsOnOff()) {
+        if (on_off->IsOn()) {
+          TurnOffOption turn_off(NestedWeakPtr<OnOff>(weak.GetOwnerWeak(), on_off));
+          visitor(turn_off);
+        } else {
+          TurnOnOption turn_on(NestedWeakPtr<OnOff>(weak.GetOwnerWeak(), on_off));
+          visitor(turn_on);
+        }
+        SyncOption sync(weak.GetOwnerWeak().Cast<Object>(), field.Get(), on_off);
+        visitor(sync);
+      }
+    }
+  }
+};
+
 void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
   if (auto loc = ui::Closest<Location>(const_cast<WidgetBase&>(*this))) {
     auto loc_weak = loc->AcquireWeakPtr();
@@ -209,6 +334,12 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
     } else {
       IconifyOption iconify{loc_weak};
       visitor(iconify);
+    }
+    if (auto obj = object.Lock()) {
+      for (auto field_ptr : obj->Fields()) {
+        FieldOption field_option{NestedWeakPtr<Field>(WeakPtr<Object>(object), field_ptr)};
+        visitor(field_option);
+      }
     }
   }
 }

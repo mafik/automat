@@ -235,7 +235,6 @@ struct Location : ReferenceCounted, ui::Widget {
   void InvalidateConnectionWidgets(bool moved, bool value_changed) const;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   SkPath Shape() const override;
-  SkPath FieldShape(Object&) const override;
 
   // Call this when the position of this location changes to update the autoconnect arguments.
   //

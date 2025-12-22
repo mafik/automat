@@ -560,8 +560,8 @@ void TimerDelay::Draw(SkCanvas& canvas) const {
 
 void TimerDelay::FillChildren(Vec<Widget*>& children) { children.push_back(text_field.get()); }
 
-SkPath TimerDelay::FieldShape(Object& field) const {
-  if (&field == &duration) {
+SkPath TimerDelay::FieldShape(Field* field) const {
+  if (field == &duration) {
     auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
     return text_field->Shape().makeTransform(transform);
   }
@@ -703,7 +703,10 @@ std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionT
   return WidgetBase::FindAction(pointer, btn);
 }
 
-void TimerDelay::Fields(std::function<void(Object&)> cb) { cb(duration); }
+Span<Field*> TimerDelay::Fields() {
+  // TODO: add the delay value
+  return {};
+}
 
 void TimerDelay::Args(std::function<void(Argument&)> cb) {
   cb(duration_arg);

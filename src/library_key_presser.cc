@@ -195,52 +195,6 @@ struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
     }
   }
 
-  void VisitOptions(const OptionsVisitor& visitor) const override {
-    WidgetBase::VisitOptions(visitor);
-    if (auto key_presser = LockObject<KeyPresser>()) {
-      if (key_presser->keylogging) {
-        struct StopMonitoring : TextOption {
-          WeakPtr<KeyPresser> weak;
-
-          StopMonitoring(WeakPtr<KeyPresser> weak) : TextOption("Stop Monitoring"), weak(weak) {}
-
-          std::unique_ptr<Option> Clone() const override {
-            return std::make_unique<StopMonitoring>(weak);
-          }
-
-          std::unique_ptr<Action> Activate(ui::Pointer&) const override {
-            if (auto key_presser = weak.lock()) {
-              if (key_presser->keylogging) {
-                key_presser->keylogging->Release();
-              }
-            }
-            return nullptr;
-          }
-        } stop{key_presser};
-        visitor(stop);
-      } else {
-        struct StartMonitoring : TextOption {
-          WeakPtr<KeyPresser> weak;
-
-          StartMonitoring(WeakPtr<KeyPresser> weak) : TextOption("Start Monitoring"), weak(weak) {}
-
-          std::unique_ptr<Option> Clone() const override {
-            return std::make_unique<StartMonitoring>(weak);
-          }
-
-          std::unique_ptr<Action> Activate(ui::Pointer&) const override {
-            if (auto key_presser = weak.lock()) {
-              ui::root_widget->window->BeginLogging(key_presser.Get(), &key_presser->keylogging,
-                                                    nullptr, nullptr);
-            }
-            return nullptr;
-          }
-        } start{key_presser};
-        visitor(start);
-      }
-    }
-  }
-
   void KeyDown(ui::Caret&, ui::Key k) override {
     key_selector->Release();
     LockObject<KeyPresser>()->SetKey(k.physical);
@@ -343,8 +297,27 @@ void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
     ScheduleNext(*h);
   }
 }
+
 void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
   if (this->key != key_up.physical) return;
 }
+
 void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) { keylogging = nullptr; }
+
+bool KeyPresser::Monitoring::IsOn() const { return GetKeyPresser().keylogging != nullptr; };
+
+void KeyPresser::Monitoring::OnTurnOn() {
+  auto& key_presser = GetKeyPresser();
+  if (key_presser.keylogging == nullptr) {
+    ui::root_widget->window->BeginLogging(&key_presser, &key_presser.keylogging, nullptr, nullptr);
+  }
+}
+
+void KeyPresser::Monitoring::OnTurnOff() {
+  auto& key_presser = GetKeyPresser();
+  if (key_presser.keylogging) {
+    key_presser.keylogging->Release();
+  }
+}
+
 }  // namespace automat::library

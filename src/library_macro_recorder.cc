@@ -329,7 +329,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     return;
   }
   for (int i = 0; i < timeline->tracks.size(); i++) {
-    if (timeline->track_args[i]->name == track_name) {
+    if (timeline->tracks[i]->name == track_name) {
       track_index = i;
       break;
     }
@@ -349,7 +349,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     track_index = timeline->tracks.size() - 1;
     Location& on_off_loc = make_fn();
     on_off_loc.Iconify();
-    Argument& track_arg = *timeline->track_args.back();
+    Argument& track_arg = *timeline->tracks.back();
     auto timeline_loc = timeline->here.Lock();
 
     PositionAhead(*timeline_loc, track_arg, on_off_loc);
@@ -358,7 +358,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
   }
 
   // Append the current timestamp to that track
-  OnOffTrack* track = dynamic_cast<OnOffTrack*>(timeline->tracks[track_index].get());
+  OnOffTrack* track = dynamic_cast<OnOffTrack*>(timeline->tracks[track_index]->ptr.Get());
   if (track == nullptr) {
     ERROR << "Track is not an OnOffTrack";
     return;
@@ -511,7 +511,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
 
   int track_index = -1;
   for (int i = 0; i < timeline->tracks.size(); i++) {
-    if (timeline->track_args[i]->name == track_name) {
+    if (timeline->tracks[i]->name == track_name) {
       track_index = i;
       break;
     }
@@ -529,7 +529,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     }
     Location& receiver_loc = machine->Create<ReceiverT>();
     receiver_loc.Iconify();
-    Argument& track_arg = *timeline->track_args.back();
+    Argument& track_arg = *timeline->tracks.back();
     auto timeline_loc = timeline->here.Lock();
 
     PositionAhead(*timeline_loc, track_arg, receiver_loc);
@@ -537,7 +537,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     timeline->here.lock()->ConnectTo(receiver_loc, track_arg);
   }
 
-  auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index].get());
+  auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index]->ptr.Get());
   if (track == nullptr) {
     ERROR << "Track is not a " << typeid(TrackT).name();
     return;

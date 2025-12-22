@@ -25,7 +25,7 @@ struct FlipFlopButton : ui::ToggleButton {
   bool Filled() const override;
 };
 
-struct FlipFlop : LiveObject, Object::WidgetBase, Runnable {
+struct FlipFlop : LiveObject, Object::WidgetBase, Runnable, OnOff {
   std::unique_ptr<FlipFlopButton> button;
 
   bool current_state = false;
@@ -41,6 +41,7 @@ struct FlipFlop : LiveObject, Object::WidgetBase, Runnable {
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
+  OnOff* AsOnOff() override { return this; }
 
   void SetKey(ui::AnsiKey);
 
@@ -50,6 +51,10 @@ struct FlipFlop : LiveObject, Object::WidgetBase, Runnable {
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;
   bool CenteredAtZero() const override { return true; }
+
+  bool IsOn() const override { return current_state; }
+  void OnTurnOn() override;
+  void OnTurnOff() override;
 };
 
 }  // namespace automat::library

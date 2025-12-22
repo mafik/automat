@@ -107,18 +107,6 @@ SkPath Location::Shape() const {
   return empty_path;
 }
 
-SkPath Location::FieldShape(Object& field) const {
-  if (object) {
-    auto object_field_shape = WidgetForObject().FieldShape(field);
-    if (!object_field_shape.isEmpty()) {
-      return object_field_shape;
-    } else {
-      return WidgetForObject().Shape();
-    }
-  }
-  return SkPath();
-}
-
 void Location::FillChildren(Vec<Widget*>& children) {
   if (object) {
     children.push_back(&WidgetForObject());

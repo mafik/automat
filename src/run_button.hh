@@ -3,8 +3,8 @@
 #pragma once
 
 #include "color.hh"
+#include "interfaces.hh"
 #include "ui_button.hh"
-#include "on_off.hh"
 
 namespace automat {
 

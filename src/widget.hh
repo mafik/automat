@@ -14,6 +14,7 @@
 
 #include "action.hh"
 #include "animation.hh"
+#include "field.hh"
 #include "key.hh"
 #include "menu.hh"
 #include "optional.hh"
@@ -300,7 +301,7 @@ struct Widget : Trackable, OptionsProvider {
 
   // Describes the area of the widget where the given field is located.
   // Local (metric) coordinates.
-  virtual SkPath FieldShape(Object&) const { return SkPath(); }
+  virtual SkPath FieldShape(Field*) const { return SkPath(); }
 
   // Returns the start position of the given argument.
   // Local (metric) coordinates.

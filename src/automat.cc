@@ -27,6 +27,7 @@
 #include "prototypes.hh"
 #include "renderer.hh"
 #include "root_widget.hh"
+#include "system_tray.hh"
 #include "textures.hh"
 #include "thread_name.hh"
 #include "time.hh"
@@ -151,6 +152,8 @@ int Main() {
   root_machine->parent = root_widget.get();
   root_machine->name = "Root machine";
   StartTimeThread(stop_source.get_token());
+
+  InitSystemTray();
 
   Status status;
 #ifdef __linux__

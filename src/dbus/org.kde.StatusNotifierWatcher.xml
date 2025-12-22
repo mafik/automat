@@ -1,0 +1,27 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+    "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+    <interface name="org.kde.StatusNotifierWatcher">
+        <!-- Properties -->
+        <property name="RegisteredStatusNotifierItems" type="as" access="read"/>
+        <property name="IsStatusNotifierHostRegistered" type="b" access="read"/>
+        <property name="ProtocolVersion" type="i" access="read"/>
+
+        <!-- Methods -->
+        <method name="RegisterStatusNotifierItem">
+            <arg name="service" type="s" direction="in"/>
+        </method>
+        <method name="RegisterStatusNotifierHost">
+            <arg name="service" type="s" direction="in"/>
+        </method>
+
+        <!-- Signals -->
+        <signal name="StatusNotifierItemRegistered">
+            <arg name="service" type="s"/>
+        </signal>
+        <signal name="StatusNotifierItemUnregistered">
+            <arg name="service" type="s"/>
+        </signal>
+        <signal name="StatusNotifierHostRegistered"/>
+    </interface>
+</node>

@@ -263,12 +263,13 @@ struct SyncAction : Action {
   ~SyncAction() {
     // TODO: tell objects to hide their fields
     // Check if the pointer is over a compatible interface
-
+    auto obj = weak.Lock();
+    if (obj == nullptr) return;
     auto end_location = root_machine->LocationAtPoint(sync_widget->end);
     if (end_location == nullptr || end_location->object == nullptr) return;
     auto* target_on_off = (OnOff*)(*end_location->object);
     if (target_on_off == nullptr) return;
-    Sync<OnOff>(*weak.Lock(), *field, *end_location->object, *end_location->object);
+    Sync<OnOff>(*obj, *field, *end_location->object, *end_location->object);
   }
   void Update() {
     if (auto obj = weak.Lock()) {
@@ -278,6 +279,8 @@ struct SyncAction : Action {
       sync_widget->start = start;
       sync_widget->end = pointer.PositionWithinRootMachine();
       sync_widget->WakeAnimation();
+    } else {
+      pointer.ReplaceAction(*this, nullptr);
     }
   }
   ui::Widget* Widget() { return sync_widget.get(); }

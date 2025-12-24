@@ -168,7 +168,7 @@ TimerDelay::TimerDelay(ui::Widget* parent)
 
   hand_degrees.value = 90;
   text_field->argument = &duration_arg;
-  duration_arg.field = &duration;
+  duration_arg.interface = &duration;
   SetDuration(*this, 10s);
 }
 
@@ -560,8 +560,8 @@ void TimerDelay::Draw(SkCanvas& canvas) const {
 
 void TimerDelay::FillChildren(Vec<Widget*>& children) { children.push_back(text_field.get()); }
 
-SkPath TimerDelay::FieldShape(Field* field) const {
-  if (field == &duration) {
+SkPath TimerDelay::InterfaceShape(Interface* interface) const {
+  if (interface == &duration) {
     auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
     return text_field->Shape().makeTransform(transform);
   }
@@ -703,7 +703,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionT
   return WidgetBase::FindAction(pointer, btn);
 }
 
-Span<Field*> TimerDelay::Fields() {
+Span<Interface*> TimerDelay::Interfaces() {
   // TODO: add the delay value
   return {};
 }

@@ -7,6 +7,8 @@
 #include <compare>
 #include <memory>  // IWYU pragma: keep
 
+#include "nomen.hh"
+
 namespace automat {
 
 template <typename T>
@@ -19,7 +21,7 @@ struct TrackedPtr;
 
 // Base class for objects that want synchronous single-threaded reference tracking through
 // TrackedPtr<T>.
-struct Trackable {
+struct Trackable : virtual Nomen {
   TrackedPtrBase* ref_list = nullptr;
 
   virtual ~Trackable();
@@ -119,7 +121,7 @@ struct WeakPtr;
 template <typename T>
 struct Ptr;
 
-struct ReferenceCounted {
+struct ReferenceCounted : virtual Nomen {
   using AtomicCounter = std::atomic<uint32_t>;
 
   mutable AtomicCounter owning_refs = 1;

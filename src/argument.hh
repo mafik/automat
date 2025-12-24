@@ -62,7 +62,7 @@ struct Argument {
 
   // TODO: get rid of this property, the parent should instead provide the "field" object based on
   // Argument.
-  Field* field = nullptr;
+  Interface* interface = nullptr;
 
   Argument(std::string_view name, Precondition precondition = kOptional,
            Quantity quantity = kSingle)

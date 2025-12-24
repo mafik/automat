@@ -20,28 +20,13 @@ struct Argument;
 struct ImageProvider;
 struct OnOff;
 struct LongRunning;
-struct Field;
-struct SyncBlock;
-struct InterfaceProvider;
-
-// TODO: figure out a better name for this
-struct InterfaceProvider {
-  // The name for objects of this type. English proper noun, UTF-8, capitalized.
-  // For example: "Text Editor".
-  virtual StrView Name() const {
-    const std::type_info& info = typeid(*this);
-    return CleanTypeName(info.name());
-  }
-  virtual operator OnOff*() { return nullptr; }
-};
-
-struct Field : InterfaceProvider {};
+struct Interface;
 
 // Objects are interactive pieces of data & behavior.
 //
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
-struct Object : public ReferenceCounted, InterfaceProvider {
+struct Object : public ReferenceCounted {
   Object() {}
 
   // Create a copy of this object.
@@ -77,7 +62,9 @@ struct Object : public ReferenceCounted, InterfaceProvider {
 
   virtual LongRunning* AsLongRunning() { return nullptr; }
 
-  virtual Span<Field*> Fields() { return {}; }
+  virtual operator OnOff*() { return nullptr; }
+
+  virtual Span<Interface*> Interfaces() { return {}; }
 
   virtual void Args(std::function<void(Argument&)> cb) {}
 

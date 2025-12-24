@@ -300,7 +300,7 @@ TrackArgument::TrackArgument(StrView name)
     : Argument(name, Argument::kOptional), icon(name, kKeyLetterSize, KeyFont()) {
   tint = "#17aeb7"_color;
   light = "#17aeb7"_color;
-  field = this;
+  // interface = this;
 }
 
 PaintDrawable& TrackArgument::Icon() { return icon; }

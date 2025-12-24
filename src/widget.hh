@@ -27,7 +27,7 @@ namespace automat {
 struct Object;
 struct Argument;
 struct Location;
-struct Field;
+struct Interface;
 }  // namespace automat
 
 namespace automat::ui {
@@ -144,13 +144,6 @@ struct Widget : Trackable, OptionsProvider {
   SkMatrix rendered_matrix;
   bool rendering = false;  // Whether the widget is currently being rendered by the client.
   bool rendering_to_screen = false;  // Whether the current render job is going to be presented.
-
-  // The name for objects of this type. English proper noun, UTF-8, capitalized.
-  // For example: "Text Editor".
-  virtual StrView Name() const {
-    const std::type_info& info = typeid(*this);
-    return CleanTypeName(info.name());
-  }
 
   RootWidget& FindRootWidget() const;
 
@@ -302,7 +295,7 @@ struct Widget : Trackable, OptionsProvider {
 
   // Describes the area of the widget where the given field is located.
   // Local (metric) coordinates.
-  virtual SkPath FieldShape(Field*) const { return SkPath(); }
+  virtual SkPath InterfaceShape(Interface*) const { return SkPath(); }
 
   // Returns the start position of the given argument.
   // Local (metric) coordinates.

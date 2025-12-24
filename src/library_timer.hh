@@ -4,6 +4,7 @@
 
 #include "animation.hh"
 #include "base.hh"
+#include "interfaces.hh"
 #include "number_text_field.hh"
 #include "time.hh"
 #include "timer_thread.hh"
@@ -21,7 +22,7 @@ struct TimerDelay : LiveObject,
                     TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
-  struct MyDuration : Field {
+  struct MyDuration : Interface {
     time::Duration value = 10s;
   } duration;
   DurationArgument duration_arg;
@@ -50,8 +51,8 @@ struct TimerDelay : LiveObject,
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  Span<Field*> Fields() override;
-  SkPath FieldShape(Field*) const override;
+  Span<Interface*> Interfaces() override;
+  SkPath InterfaceShape(Interface*) const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here, std::unique_ptr<RunTask>&) override;

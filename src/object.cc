@@ -197,7 +197,7 @@ struct DeiconifyOption : TextOption {
   Dir PreferredDir() const override { return NE; }
 };
 
-static const char* GetFieldName(NestedWeakPtr<Field>& weak) {
+static const char* InterfaceName(NestedWeakPtr<Interface>& weak) {
   if (auto ptr = weak.Lock()) {
     return ptr->Name().data();
   }
@@ -245,15 +245,13 @@ struct SyncWidget : ui::Widget {
 
 struct SyncAction : Action {
   WeakPtr<Object> weak;
-  Field* field;
   OnOff* on_off;
   TrackedPtr<Object::WidgetInterface> object_widget;
   std::unique_ptr<SyncWidget> sync_widget;
-  SyncAction(ui::Pointer& pointer, WeakPtr<Object> weak, Field* field, OnOff* on_off,
+  SyncAction(ui::Pointer& pointer, WeakPtr<Object> weak, OnOff* on_off,
              Object::WidgetInterface* widget)
       : Action(pointer),
         weak(weak),
-        field(field),
         on_off(on_off),
         object_widget(widget->AcquireTrackedPtr()),
         sync_widget(std::make_unique<SyncWidget>(pointer.GetWidget())) {
@@ -269,12 +267,12 @@ struct SyncAction : Action {
     if (end_location == nullptr || end_location->object == nullptr) return;
     auto* target_on_off = (OnOff*)(*end_location->object);
     if (target_on_off == nullptr) return;
-    Sync<OnOff>(*obj, *field, *end_location->object, *end_location->object);
+    Sync<OnOff>(*obj, *on_off, *end_location->object, *target_on_off);
   }
   void Update() {
     if (auto obj = weak.Lock()) {
       auto* widget = pointer.root_widget.widgets.Find(*obj);
-      auto start_local = widget->FieldShape(field).getBounds().center();
+      auto start_local = widget->InterfaceShape(on_off).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
       sync_widget->start = start;
       sync_widget->end = pointer.PositionWithinRootMachine();
@@ -288,24 +286,24 @@ struct SyncAction : Action {
 
 struct SyncOption : TextOption {
   WeakPtr<Object> weak;
-  Field* field;
   OnOff* on_off;
-  SyncOption(WeakPtr<Object> weak, Field* field, OnOff* on_off)
-      : TextOption("Sync"), weak(weak), field(field), on_off(on_off) {}
+  SyncOption(WeakPtr<Object> weak, OnOff* on_off)
+      : TextOption("Sync"), weak(weak), on_off(on_off) {}
   std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<SyncOption>(weak, field, on_off);
+    return std::make_unique<SyncOption>(weak, on_off);
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     auto ptr = weak.Lock();
     if (!ptr) return nullptr;
     auto widget = pointer.root_widget.widgets.Find(*ptr);
-    return std::make_unique<SyncAction>(pointer, weak, field, on_off, widget);
+    return std::make_unique<SyncAction>(pointer, weak, on_off, widget);
   }
 };
 
 struct FieldOption : TextOption, OptionsProvider {
-  NestedWeakPtr<Field> weak;
-  FieldOption(NestedWeakPtr<Field> field) : TextOption(GetFieldName(field)), weak(field) {}
+  NestedWeakPtr<Interface> weak;
+  FieldOption(NestedWeakPtr<Interface> weak)
+      : TextOption(InterfaceName(weak)), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<FieldOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto ptr = weak.Lock()) {
@@ -314,8 +312,8 @@ struct FieldOption : TextOption, OptionsProvider {
     return nullptr;
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
-    if (auto field = weak.Lock()) {
-      if (auto* on_off = (OnOff*)(*field)) {
+    if (auto syncable_interface = weak.Lock()) {
+      if (auto* on_off = dynamic_cast<OnOff*>(syncable_interface.Get())) {
         if (on_off->IsOn()) {
           TurnOffOption turn_off(NestedWeakPtr<OnOff>(weak.GetOwnerWeak(), on_off));
           visitor(turn_off);
@@ -323,7 +321,7 @@ struct FieldOption : TextOption, OptionsProvider {
           TurnOnOption turn_on(NestedWeakPtr<OnOff>(weak.GetOwnerWeak(), on_off));
           visitor(turn_on);
         }
-        SyncOption sync(weak.GetOwnerWeak().Cast<Object>(), field.Get(), on_off);
+        SyncOption sync(weak.GetOwnerWeak().Cast<Object>(), on_off);
         visitor(sync);
       }
     }
@@ -349,8 +347,9 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
       visitor(iconify);
     }
     if (auto obj = object.Lock()) {
-      for (auto field_ptr : obj->Fields()) {
-        FieldOption field_option{NestedWeakPtr<Field>(WeakPtr<Object>(object), field_ptr)};
+      for (auto field_ptr : obj->Interfaces()) {
+        FieldOption field_option{
+            NestedWeakPtr<Interface>(WeakPtr<Object>(object), field_ptr)};
         visitor(field_option);
       }
     }

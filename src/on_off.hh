@@ -6,7 +6,7 @@
 
 namespace automat {
 
-struct OnOff : SyncableInterface {
+struct OnOff : Interface {
   virtual ~OnOff() { Unsync(); }
 
   virtual bool IsOn() const = 0;

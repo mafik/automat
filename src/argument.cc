@@ -68,8 +68,8 @@ PaintDrawable& Argument::Icon() {
   return default_icon;
 }
 bool Argument::IsOn(Location& here) const {
-  if (field) {
-    if (auto on_off = dynamic_cast<OnOff*>(field)) {
+  if (interface) {
+    if (auto on_off = dynamic_cast<OnOff*>(interface)) {
       return on_off->IsOn();
     }
   }

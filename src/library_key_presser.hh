@@ -13,12 +13,12 @@ struct KeyPresser : LiveObject, Runnable, LongRunning, ui::Keylogger {
   ui::Keylogging* keylogging = nullptr;
   bool key_pressed = false;
 
-  struct Monitoring : Field, OnOff {
+  struct Monitoring : OnOff {
     StrView Name() const override { return "Monitoring"sv; }
     bool IsOn() const override;
     void OnTurnOn() override;
     void OnTurnOff() override;
-    operator OnOff*() override { return this; }
+    // operator OnOff*() override { return this; }
     KeyPresser& GetKeyPresser() const {
       return *reinterpret_cast<KeyPresser*>(reinterpret_cast<intptr_t>(this) -
                                             offsetof(KeyPresser, monitoring));
@@ -27,7 +27,7 @@ struct KeyPresser : LiveObject, Runnable, LongRunning, ui::Keylogger {
 
   Monitoring monitoring;
 
-  Field* fields[1] = {&monitoring};
+  Interface* interfaces[1] = {&monitoring};
 
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);
   ~KeyPresser() override;
@@ -38,7 +38,7 @@ struct KeyPresser : LiveObject, Runnable, LongRunning, ui::Keylogger {
 
   void SetKey(ui::AnsiKey);
 
-  Span<Field*> Fields() override { return fields; }
+  Span<Interface*> Interfaces() override { return interfaces; }
   void Args(std::function<void(Argument&)> cb) override;
   void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
   void OnCancel() override;

@@ -224,8 +224,8 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
-  if (arg.field) {
-    from_shape = from_widget.FieldShape(arg.field);
+  if (arg.interface) {
+    from_shape = from_widget.InterfaceShape(arg.interface);
   }
   SkPath to_shape;  // machine coords
   to_points.clear();
@@ -350,8 +350,8 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   }
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
-  if (arg.field) {
-    from_shape = from.FieldShape(arg.field);
+  if (arg.interface) {
+    from_shape = from.InterfaceShape(arg.interface);
   }
   SkPath to_shape;  // machine coords
 

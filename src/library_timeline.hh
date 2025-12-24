@@ -82,7 +82,7 @@ struct Float64Track : TrackBase {
   bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
 };
 
-struct TrackArgument : Argument, Field {
+struct TrackArgument : Argument {
   TextDrawable icon;
   Ptr<TrackBase> ptr;
 

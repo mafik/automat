@@ -14,7 +14,6 @@
 
 #include "action.hh"
 #include "animation.hh"
-#include "field.hh"
 #include "key.hh"
 #include "menu.hh"
 #include "optional.hh"
@@ -28,6 +27,7 @@ namespace automat {
 struct Object;
 struct Argument;
 struct Location;
+struct Field;
 }  // namespace automat
 
 namespace automat::ui {

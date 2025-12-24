@@ -41,7 +41,7 @@ struct FlipFlop : LiveObject, Object::WidgetBase, Runnable, OnOff {
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void Args(std::function<void(Argument&)> cb) override;
-  OnOff* AsOnOff() override { return this; }
+  operator OnOff*() override { return this; }
 
   void SetKey(ui::AnsiKey);
 

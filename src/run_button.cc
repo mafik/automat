@@ -4,6 +4,7 @@
 
 #include <include/core/SkColor.h>
 
+#include "on_off.hh"
 #include "pointer.hh"
 #include "svg.hh"
 #include "ui_button.hh"

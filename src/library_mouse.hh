@@ -85,7 +85,7 @@ struct MouseButtonPresser : Object, Runnable, OnOff {
   void OnTurnOn() override;
   void OnTurnOff() override;
 
-  OnOff* AsOnOff() override { return this; }
+  operator OnOff*() override { return this; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

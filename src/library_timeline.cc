@@ -2556,7 +2556,7 @@ void OnOffTrack::UpdateOutput(Location& target, time::SteadyPoint started_at,
   if (timeline->state != Timeline::kPlaying) {
     on = false;
   }
-  if (auto on_off = target.object->AsOnOff()) {
+  if (auto on_off = (OnOff*)(*target.object)) {
     if (on) {
       on_off->TurnOn();
     } else {

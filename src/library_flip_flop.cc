@@ -148,9 +148,6 @@ void FlipFlop::FillChildren(Vec<Widget*>& children) { children.push_back(button.
 void FlipFlop::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   ZoneScopedN("FlipFlop");
   Toggle();
-  WakeAnimation();
-  button->WakeAnimation();
-  flip_arg.InvalidateConnectionWidgets(here);
 }
 
 void FlipFlop::OnTurnOn() {
@@ -159,6 +156,9 @@ void FlipFlop::OnTurnOn() {
     other.ScheduleRun();
     return false;
   });
+  WakeAnimation();
+  button->WakeAnimation();
+  flip_arg.InvalidateConnectionWidgets(*here.Lock());
 }
 
 void FlipFlop::OnTurnOff() {
@@ -170,6 +170,9 @@ void FlipFlop::OnTurnOff() {
     }
     return false;
   });
+  WakeAnimation();
+  button->WakeAnimation();
+  flip_arg.InvalidateConnectionWidgets(*here.Lock());
 }
 
 void YingYangIcon::Draw(SkCanvas& canvas) const {

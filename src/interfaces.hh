@@ -3,9 +3,8 @@
 #pragma once
 
 #include <shared_mutex>
-#include <vector>
 
-#include "format.hh"
+#include "object.hh"
 #include "ptr.hh"
 
 namespace automat {
@@ -13,8 +12,8 @@ namespace automat {
 // Some objects within Automat may provide interfaces that can be "synced". A synced interface
 // allows several objects that follow some interface to act as one.
 //
-// FusableInterface should be subclassed as a specific abstract interface (SAI) before it's used by
-// Objects within Automat.
+// SyncableInterface should be subclassed as a specific abstract interface (like OnOff) before it's
+// used by Objects within Automat.
 //
 // For each command-like method a specific abstract interface should provide a protected virtual
 // entry point, whose name starts with "On". It's intended to be overridden by a concrete
@@ -35,20 +34,14 @@ namespace automat {
 // through the "ForwardDo" & "ForwardNotify" wrappers). Whenever the "On" entry point us used
 // directly, it's not going to be propagated to the other synced implementations.
 struct SyncableInterface {
-  // TODO: it's ReferenceCounted & mutex-protected already - so maybe turn this into an Object?
-  struct SyncBlock : ReferenceCounted {
-    std::shared_mutex mutex;
-    std::vector<SyncableInterface*> members;
-  };
-
   Ptr<SyncBlock> sync_block = nullptr;
 
   template <class Self>
   void ForwardDo(this Self& self, auto&& lambda) {
     if (self.sync_block) {
       auto lock = std::shared_lock(self.sync_block->mutex);
-      for (auto* other : self.sync_block->members) {
-        lambda(*static_cast<Self*>(other));
+      for (auto& other : self.sync_block->members) {
+        lambda(*static_cast<Self*>(*other.GetValueUnsafe()));
       }
     } else {
       lambda(self);
@@ -59,8 +52,8 @@ struct SyncableInterface {
   void ForwardNotify(this Self& self, auto&& lambda) {
     if (self.sync_block) {
       auto lock = std::shared_lock(self.sync_block->mutex);
-      for (auto* other : self.sync_block->members) {
-        if (auto other_cast = static_cast<Self*>(other); other_cast != &self) {
+      for (auto& other : self.sync_block->members) {
+        if (auto other_cast = static_cast<Self*>(*other.GetValueUnsafe()); other_cast != &self) {
           lambda(*other_cast);
         }
       }
@@ -68,49 +61,39 @@ struct SyncableInterface {
   }
 };
 
-struct OnOff : SyncableInterface {
-  virtual ~OnOff() = default;
+struct SyncBlock : Object {
+  std::shared_mutex mutex;
+  std::vector<NestedWeakPtr<InterfaceProvider>> members;
 
-  virtual bool IsOn() const = 0;
-
-  void TurnOn() {
-    ForwardDo([](OnOff& self) { self.OnTurnOn(); });
-  }
-
-  void NotifyTurnedOn() {
-    ForwardNotify([](OnOff& self) { self.OnTurnOn(); });
-  }
-
-  void TurnOff() {
-    ForwardDo([](OnOff& self) { self.OnTurnOff(); });
-  }
-
-  void NotifyTurnedOff() {
-    ForwardNotify([](OnOff& self) { self.OnTurnOff(); });
-  }
-
-  void Toggle() {
-    if (IsOn())
-      TurnOff();
-    else
-      TurnOn();
-  }
-
- protected:
-  virtual void OnTurnOn() = 0;
-  virtual void OnTurnOff() = 0;
+  Ptr<Object> Clone() const { return MAKE_PTR(SyncBlock); }
 };
 
-// TODO: figure out a better name for this
-struct InterfaceProvider {
-  // The name for objects of this type. English proper noun, UTF-8, capitalized.
-  // For example: "Text Editor".
-  virtual StrView Name() const {
-    const std::type_info& info = typeid(*this);
-    return CleanTypeName(info.name());
-  }
+template <typename I>
+void Sync(Object& self_object, InterfaceProvider& self_provider, Object& other_object,
+          InterfaceProvider& other_provider) {
+  auto* self = (I*)self_provider;
+  auto* other = (I*)other_provider;
+  if (self->sync_block == nullptr && other->sync_block == nullptr) {
+    auto block = MAKE_PTR(SyncBlock);
+    auto lock = std::unique_lock(block->mutex);
+    block->members.emplace_back(self_object.AcquireWeakPtr(), &self_provider);
+    block->members.emplace_back(other_object.AcquireWeakPtr(), &other_provider);
+    self->sync_block = block;
+    other->sync_block = std::move(block);
+  } else if (self->sync_block != nullptr && other->sync_block != nullptr) {
+    auto lock = std::scoped_lock(self->sync_block->mutex, other->sync_block->mutex);
 
-  virtual OnOff* AsOnOff() { return nullptr; }
-};
+    // Move the members from the 'other' block to 'self' block.
+    auto& self_block = self->sync_block;
+    auto& other_block = other->sync_block;
+    auto& self_members = self->sync_block->members;
+    auto& other_members = other->sync_block->members;
+    while (!other_members.empty()) {
+      self_members.emplace_back(std::move(other_members.back()));
+      other_members.pop_back();
+      ((I*)(*self_members.back().GetValueUnsafe()))->sync_block = self_block;
+    }
+  }
+}
 
 }  // namespace automat

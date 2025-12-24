@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: MIT
 #include "object.hh"
 
+#include <include/core/SkColor.h>
+#include <include/core/SkPaint.h>
 #include <include/core/SkRRect.h>
 #include <include/effects/SkGradientShader.h>
-
-#include <cstddef>
 
 #include "../build/generated/embedded.hh"
 #include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
-#include "field.hh"
 #include "font.hh"
 #include "location.hh"
 #include "menu.hh"
@@ -235,7 +234,13 @@ struct SyncWidget : ui::Widget {
   SkPath Shape() const override { return SkPath(); }
   Optional<Rect> TextureBounds() const override { return std::nullopt; }
   animation::Phase Tick(time::Timer&) override { return animation::Finished; }
-  void Draw(SkCanvas& canvas) const override { canvas.drawCircle(end.x, end.y, 1_cm, SkPaint()); }
+  void Draw(SkCanvas& canvas) const override {
+    SkPaint paint;
+    paint.setStyle(SkPaint::kStroke_Style);
+    paint.setStrokeWidth(1_mm);
+    paint.setColor(SK_ColorRED);
+    canvas.drawLine(start.x, start.y, end.x, end.y, paint);
+  }
 };
 
 struct SyncAction : Action {
@@ -258,7 +263,12 @@ struct SyncAction : Action {
   ~SyncAction() {
     // TODO: tell objects to hide their fields
     // Check if the pointer is over a compatible interface
-    //
+
+    auto end_location = root_machine->LocationAtPoint(sync_widget->end);
+    if (end_location == nullptr || end_location->object == nullptr) return;
+    auto* target_on_off = (OnOff*)(*end_location->object);
+    if (target_on_off == nullptr) return;
+    Sync<OnOff>(*weak.Lock(), *field, *end_location->object, *end_location->object);
   }
   void Update() {
     if (auto obj = weak.Lock()) {
@@ -302,7 +312,7 @@ struct FieldOption : TextOption, OptionsProvider {
   }
   void VisitOptions(const OptionsVisitor& visitor) const override {
     if (auto field = weak.Lock()) {
-      if (auto* on_off = field->AsOnOff()) {
+      if (auto* on_off = (OnOff*)(*field)) {
         if (on_off->IsOn()) {
           TurnOffOption turn_off(NestedWeakPtr<OnOff>(weak.GetOwnerWeak(), on_off));
           visitor(turn_off);

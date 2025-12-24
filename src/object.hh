@@ -7,7 +7,6 @@
 
 #include "audio.hh"
 #include "deserializer.hh"
-#include "interfaces.hh"
 #include "ptr.hh"
 #include "widget.hh"
 
@@ -22,6 +21,21 @@ struct ImageProvider;
 struct OnOff;
 struct LongRunning;
 struct Field;
+struct SyncBlock;
+struct InterfaceProvider;
+
+// TODO: figure out a better name for this
+struct InterfaceProvider {
+  // The name for objects of this type. English proper noun, UTF-8, capitalized.
+  // For example: "Text Editor".
+  virtual StrView Name() const {
+    const std::type_info& info = typeid(*this);
+    return CleanTypeName(info.name());
+  }
+  virtual operator OnOff*() { return nullptr; }
+};
+
+struct Field : InterfaceProvider {};
 
 // Objects are interactive pieces of data & behavior.
 //

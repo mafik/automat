@@ -3,7 +3,6 @@
 #pragma once
 
 #include "base.hh"
-#include "field.hh"
 #include "keyboard.hh"
 
 namespace automat::library {
@@ -19,7 +18,7 @@ struct KeyPresser : LiveObject, Runnable, LongRunning, ui::Keylogger {
     bool IsOn() const override;
     void OnTurnOn() override;
     void OnTurnOff() override;
-    OnOff* AsOnOff() override { return this; }
+    operator OnOff*() override { return this; }
     KeyPresser& GetKeyPresser() const {
       return *reinterpret_cast<KeyPresser*>(reinterpret_cast<intptr_t>(this) -
                                             offsetof(KeyPresser, monitoring));

@@ -27,6 +27,7 @@
 #include "interfaces.hh"
 #include "location.hh"
 #include "log.hh"
+#include "on_off.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
 #include "ptr.hh"

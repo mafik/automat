@@ -496,6 +496,7 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
     return NestedPtr<T>();
   }
   WeakPtr<ReferenceCounted> GetOwnerWeak() const { return weak_ptr; }
+  T* GetValueUnsafe() const { return obj; }
 
  private:
   WeakPtr<ReferenceCounted> weak_ptr;

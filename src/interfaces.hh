@@ -123,6 +123,16 @@ void Sync(Object& self_object, InterfaceProvider& self_provider, Object& other_o
       other_members.pop_back();
       ((I*)(*self_members.back().GetValueUnsafe()))->sync_block = self_block;
     }
+  } else {
+    if (self->sync_block) {
+      auto lock = std::unique_lock(self->sync_block->mutex);
+      self->sync_block->members.emplace_back(other_object.AcquireWeakPtr(), &other_provider);
+      other->sync_block = self->sync_block;
+    } else {
+      auto lock = std::unique_lock(other->sync_block->mutex);
+      other->sync_block->members.emplace_back(self_object.AcquireWeakPtr(), &self_provider);
+      self->sync_block = other->sync_block;
+    }
   }
 }
 

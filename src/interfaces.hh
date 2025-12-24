@@ -1,7 +1,8 @@
-// SPDX-FileCopyrightText: Copyright 2024 Automat Authors
+// SPDX-FileCopyrightText: Copyright 2025 Automat Authors
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <mutex>
 #include <shared_mutex>
 
 #include "object.hh"
@@ -35,6 +36,35 @@ namespace automat {
 // directly, it's not going to be propagated to the other synced implementations.
 struct SyncableInterface {
   Ptr<SyncBlock> sync_block = nullptr;
+
+  // Note that GetValueUnsafe used throughout the methods here is actually safe, because
+  // ~SyncableInterface will remove itself from SyncBlock. SyncBlock never contains dead pointers.
+  ~SyncableInterface() {
+    if (sync_block) {
+      ERROR << "Some Specific Abstract Interface forgot to call Unsync in its destructor";
+    }
+  }
+
+  template <class Self>
+  void Unsync(this Self& self) {
+    if (self.sync_block == nullptr) return;
+    auto sync_block = std::move(self.sync_block);  // keep mutex alive
+    auto lock = std::unique_lock(sync_block->mutex);
+    auto& members = sync_block->members;
+    if (members.size() == 2) {
+      static_cast<Self*>(*members[0].GetValueUnsafe())->sync_block.Reset();
+      static_cast<Self*>(*members[1].GetValueUnsafe())->sync_block.Reset();
+    } else {
+      for (int i = 0; i < members.size(); ++i) {
+        auto* member = static_cast<Self*>(*members[i].GetValueUnsafe());
+        if (member == &self) {
+          members.erase(members.begin() + i);
+          return;
+        }
+      }
+      __builtin_unreachable();
+    }
+  }
 
   template <class Self>
   void ForwardDo(this Self& self, auto&& lambda) {

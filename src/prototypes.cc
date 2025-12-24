@@ -47,7 +47,7 @@ PrototypeLibrary::PrototypeLibrary() {
   // TODO: Remove this once Objects are split from Widgets.
   ui::Widget* null_parent = nullptr;
 
-  index.Register<FlipFlop>(null_parent);
+  index.Register<FlipFlop>();
   index.Register<MacroRecorder>(null_parent);
   index.Register<TimerDelay>(null_parent);
   index.Register<HotKey>(null_parent);

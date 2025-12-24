@@ -168,7 +168,8 @@ struct Widget : Trackable, OptionsProvider {
 
   virtual void PreDraw(SkCanvas&) const {}
   void DrawCached(SkCanvas&) const;
-  virtual void WakeAnimation() const;
+  void WakeAnimation() const;
+  void WakeAnimationAt(time::SteadyPoint) const;
 
   // Called for visible widgets while they're being animated.
   // Use this function to update the widget's animation state.

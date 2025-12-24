@@ -70,6 +70,10 @@ void Widget::DrawCached(SkCanvas& canvas) const {
 
 void Widget::WakeAnimation() const {
   auto now = time::SteadyNow();
+  WakeAnimationAt(now);
+}
+
+void Widget::WakeAnimationAt(time::SteadyPoint now) const {
   if (wake_time == time::SteadyPoint::max()) {
     // When a widget is woken up after a long sleep, we assume that it was just rendered. This
     // prevents the animation from thinking that the initial frame took a very long time.

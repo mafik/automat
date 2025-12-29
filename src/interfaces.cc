@@ -3,6 +3,8 @@
 
 #include "interfaces.hh"
 
+#include <mutex>
+
 namespace automat {
 
 void Sync(NestedPtr<Interface>& self, NestedPtr<Interface>& other) {
@@ -42,4 +44,23 @@ void Sync(NestedPtr<Interface>& self, NestedPtr<Interface>& other) {
   }
 }
 
+void Interface::Unsync() {
+  if (sync_block == nullptr) return;
+  auto old_block = std::move(sync_block);  // keep mutex alive
+  auto lock = std::unique_lock(old_block->mutex);
+  auto& members = old_block->members;
+  if (members.size() == 2) {
+    members[0].GetValueUnsafe()->sync_block.Reset();
+    members[1].GetValueUnsafe()->sync_block.Reset();
+  } else {
+    for (int i = 0; i < members.size(); ++i) {
+      auto* member = members[i].GetValueUnsafe();
+      if (member == this) {
+        members.erase(members.begin() + i);
+        return;
+      }
+    }
+    __builtin_unreachable();
+  }
+}
 }  // namespace automat

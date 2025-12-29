@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <mutex>
 #include <shared_mutex>
 
 #include "object.hh"
@@ -10,7 +9,14 @@
 
 namespace automat {
 
-struct SyncBlock;
+struct Interface;
+
+struct SyncBlock : Object {
+  std::shared_mutex mutex;
+  std::vector<NestedWeakPtr<Interface>> members;
+
+  Ptr<Object> Clone() const { return MAKE_PTR(SyncBlock); }
+};
 
 // Some objects within Automat may provide interfaces that can be "synced". A synced interface
 // allows several objects that follow some interface to act as one.
@@ -47,26 +53,7 @@ struct Interface : virtual Nomen {
     }
   }
 
-  template <class Self>
-  void Unsync(this Self& self) {
-    if (self.sync_block == nullptr) return;
-    auto sync_block = std::move(self.sync_block);  // keep mutex alive
-    auto lock = std::unique_lock(sync_block->mutex);
-    auto& members = sync_block->members;
-    if (members.size() == 2) {
-      static_cast<Self*>(members[0].GetValueUnsafe())->sync_block.Reset();
-      static_cast<Self*>(members[1].GetValueUnsafe())->sync_block.Reset();
-    } else {
-      for (int i = 0; i < members.size(); ++i) {
-        auto* member = static_cast<Self*>(members[i].GetValueUnsafe());
-        if (member == &self) {
-          members.erase(members.begin() + i);
-          return;
-        }
-      }
-      __builtin_unreachable();
-    }
-  }
+  void Unsync();
 
   template <class Self>
   void ForwardDo(this Self& self, auto&& lambda) {
@@ -91,13 +78,6 @@ struct Interface : virtual Nomen {
       }
     }
   }
-};
-
-struct SyncBlock : Object {
-  std::shared_mutex mutex;
-  std::vector<NestedWeakPtr<Interface>> members;
-
-  Ptr<Object> Clone() const { return MAKE_PTR(SyncBlock); }
 };
 
 void Sync(NestedPtr<Interface>& self, NestedPtr<Interface>& other);

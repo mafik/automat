@@ -297,6 +297,18 @@ struct SyncOption : TextOption {
   }
 };
 
+struct UnsyncOption : TextOption {
+  NestedWeakPtr<Interface> weak;
+  UnsyncOption(NestedWeakPtr<Interface> weak) : TextOption("Unsync"), weak(weak) {}
+  std::unique_ptr<Option> Clone() const override { return std::make_unique<UnsyncOption>(weak); }
+  std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
+    if (auto interface = weak.Lock()) {
+      interface->Unsync();
+    }
+    return nullptr;
+  }
+};
+
 struct FieldOption : TextOption, OptionsProvider {
   NestedWeakPtr<Interface> interface_weak;
   FieldOption(NestedWeakPtr<Interface> weak)
@@ -323,9 +335,10 @@ struct FieldOption : TextOption, OptionsProvider {
       }
       SyncOption sync(interface);
       visitor(sync);
-      // if (interface->sync_block) {
-      //   UnsyncOption unsync()
-      // }
+      if (interface->sync_block) {
+        UnsyncOption unsync(interface);
+        visitor(unsync);
+      }
     }
   }
 };

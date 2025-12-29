@@ -100,6 +100,6 @@ struct SyncBlock : Object {
   Ptr<Object> Clone() const { return MAKE_PTR(SyncBlock); }
 };
 
-void Sync(Object& self_object, Interface& self, Object& other_object, Interface& other);
+void Sync(NestedPtr<Interface>& self, NestedPtr<Interface>& other);
 
 }  // namespace automat

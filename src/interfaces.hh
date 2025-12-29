@@ -110,6 +110,9 @@ void Sync(Object& self_object, I& self, Object& other_object, I& other) {
     self.sync_block = block;
     other.sync_block = std::move(block);
   } else if (self.sync_block != nullptr && other.sync_block != nullptr) {
+    if (self.sync_block == other.sync_block) {
+      return;
+    }
     auto lock = std::scoped_lock(self.sync_block->mutex, other.sync_block->mutex);
 
     // Move the members from the 'other' block to 'self' block.

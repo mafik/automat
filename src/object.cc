@@ -245,14 +245,14 @@ struct SyncWidget : ui::Widget {
 
 struct SyncAction : Action {
   WeakPtr<Object> weak;
-  OnOff* on_off;
+  Interface& interface;
   TrackedPtr<Object::WidgetInterface> object_widget;
   std::unique_ptr<SyncWidget> sync_widget;
-  SyncAction(ui::Pointer& pointer, WeakPtr<Object> weak, OnOff* on_off,
+  SyncAction(ui::Pointer& pointer, WeakPtr<Object> weak, Interface& interface,
              Object::WidgetInterface* widget)
       : Action(pointer),
         weak(weak),
-        on_off(on_off),
+        interface(interface),
         object_widget(widget->AcquireTrackedPtr()),
         sync_widget(std::make_unique<SyncWidget>(pointer.GetWidget())) {
     // TODO: invite objects to show their fields that satisfy the syncable interface
@@ -265,14 +265,16 @@ struct SyncAction : Action {
     if (obj == nullptr) return;
     auto end_location = root_machine->LocationAtPoint(sync_widget->end);
     if (end_location == nullptr || end_location->object == nullptr) return;
-    auto* target_on_off = (OnOff*)(*end_location->object);
-    if (target_on_off == nullptr) return;
-    Sync<OnOff>(*obj, *on_off, *end_location->object, *target_on_off);
+    // TODO: make this work with fields
+    // TODO: make this work with other (non-on/off) interfaces
+    auto* target_interface = (OnOff*)(*end_location->object);
+    if (target_interface == nullptr) return;
+    Sync(*obj, interface, *end_location->object, *target_interface);
   }
   void Update() {
     if (auto obj = weak.Lock()) {
       auto* widget = pointer.root_widget.widgets.Find(*obj);
-      auto start_local = widget->InterfaceShape(on_off).getBounds().center();
+      auto start_local = widget->InterfaceShape(&interface).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
       sync_widget->start = start;
       sync_widget->end = pointer.PositionWithinRootMachine();
@@ -286,24 +288,23 @@ struct SyncAction : Action {
 
 struct SyncOption : TextOption {
   WeakPtr<Object> weak;
-  OnOff* on_off;
-  SyncOption(WeakPtr<Object> weak, OnOff* on_off)
-      : TextOption("Sync"), weak(weak), on_off(on_off) {}
+  Interface& interface;
+  SyncOption(WeakPtr<Object> weak, Interface& interface)
+      : TextOption("Sync"), weak(weak), interface(interface) {}
   std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<SyncOption>(weak, on_off);
+    return std::make_unique<SyncOption>(weak, interface);
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     auto ptr = weak.Lock();
     if (!ptr) return nullptr;
     auto widget = pointer.root_widget.widgets.Find(*ptr);
-    return std::make_unique<SyncAction>(pointer, weak, on_off, widget);
+    return std::make_unique<SyncAction>(pointer, weak, interface, widget);
   }
 };
 
 struct FieldOption : TextOption, OptionsProvider {
   NestedWeakPtr<Interface> weak;
-  FieldOption(NestedWeakPtr<Interface> weak)
-      : TextOption(InterfaceName(weak)), weak(weak) {}
+  FieldOption(NestedWeakPtr<Interface> weak) : TextOption(InterfaceName(weak)), weak(weak) {}
   std::unique_ptr<Option> Clone() const override { return std::make_unique<FieldOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto ptr = weak.Lock()) {
@@ -321,9 +322,9 @@ struct FieldOption : TextOption, OptionsProvider {
           TurnOnOption turn_on(NestedWeakPtr<OnOff>(weak.GetOwnerWeak(), on_off));
           visitor(turn_on);
         }
-        SyncOption sync(weak.GetOwnerWeak().Cast<Object>(), on_off);
-        visitor(sync);
       }
+      SyncOption sync(weak.GetOwnerWeak().Cast<Object>(), *syncable_interface);
+      visitor(sync);
     }
   }
 };
@@ -348,9 +349,17 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
     }
     if (auto obj = object.Lock()) {
       for (auto field_ptr : obj->Interfaces()) {
-        FieldOption field_option{
-            NestedWeakPtr<Interface>(WeakPtr<Object>(object), field_ptr)};
+        FieldOption field_option{NestedWeakPtr<Interface>(WeakPtr<Object>(object), field_ptr)};
         visitor(field_option);
+      }
+      // Sometimes it's convenient for an object to expose an interface more directly (without
+      // fields).
+      //
+      // Note: this may cause issues if some object implements multiple interfaces - the sync option
+      // will appear multiple times, for each interface. TODO: figure this out
+      if (auto* on_off = static_cast<OnOff*>(*obj)) {
+        FieldOption field_option{NestedWeakPtr<Interface>(WeakPtr<Object>(object), on_off)};
+        field_option.VisitOptions(visitor);
       }
     }
   }

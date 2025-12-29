@@ -143,14 +143,14 @@ struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
   }
 
   void Draw(SkCanvas& canvas) const override {
-    bool is_running = false;
+    bool is_pressed = false;
     {
       auto key_presser = LockObject<KeyPresser>();
-      is_running = key_presser->IsRunning();
+      is_pressed = key_presser->key_pressed;
     }
 
     DrawChildren(canvas);
-    auto& img = is_running ? textures::PressingHandColor() : textures::PointingHandColor();
+    auto& img = is_pressed ? textures::PressingHandColor() : textures::PointingHandColor();
     canvas.save();
     canvas.translate(4.5_mm, -6.8_mm);
     canvas.rotate(15);
@@ -216,7 +216,7 @@ struct KeyPresserWidget : Object::WidgetBase, ui::CaretOwner {
 float KeyPresserButton::PressRatio() const {
   auto key_presser_widget = static_cast<KeyPresserWidget*>(this->parent.Get());
   auto key_presser = key_presser_widget->LockObject<KeyPresser>();
-  if (key_presser_widget->key_selector || key_presser->IsRunning()) {
+  if (key_presser_widget->key_selector || key_presser->key_pressed) {
     return 1;
   }
   return 0;
@@ -246,19 +246,33 @@ void KeyPresser::Args(std::function<void(Argument&)> cb) {
   }
 }
 
-void KeyPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
-  ZoneScopedN("KeyPresser");
+void KeyPresser::OnTurnOn() {
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
+  key_pressed = true;
   WakeWidgetsAnimation();
-  BeginLongRunning(std::move(run_task));
 }
 
-void KeyPresser::OnCancel() {
+void KeyPresser::OnTurnOff() {
   audio::Play(embedded::assets_SFX_key_up_wav);
   SendKeyEvent(key, false);
+  key_pressed = false;
   WakeWidgetsAnimation();
 }
+
+// void KeyPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
+//   ZoneScopedN("KeyPresser");
+//   audio::Play(embedded::assets_SFX_key_down_wav);
+//   SendKeyEvent(key, true);
+//   WakeWidgetsAnimation();
+//   BeginLongRunning(std::move(run_task));
+// }
+
+// void KeyPresser::OnCancel() {
+//   audio::Play(embedded::assets_SFX_key_up_wav);
+//   SendKeyEvent(key, false);
+//   WakeWidgetsAnimation();
+// }
 
 void KeyPresser::SerializeState(Serializer& writer, const char* key) const {
   writer.Key(key);
@@ -288,11 +302,12 @@ KeyPresser::~KeyPresser() {
   if (keylogging) {
     keylogging->Release();
   }
-  OnLongRunningDestruct();
+  // OnLongRunningDestruct();
 }
 
 void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
   if (this->key != key_down.physical) return;
+  NotifyTurnedOn();
   if (auto h = here.lock()) {
     ScheduleNext(*h);
   }
@@ -300,6 +315,7 @@ void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
 
 void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
   if (this->key != key_up.physical) return;
+  NotifyTurnedOff();
 }
 
 void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) { keylogging = nullptr; }

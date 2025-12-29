@@ -7,7 +7,7 @@
 
 namespace automat::library {
 
-struct KeyPresser : LiveObject, Runnable, LongRunning, ui::Keylogger {
+struct KeyPresser : LiveObject, OnOff, ui::Keylogger {
   ui::AnsiKey key = ui::AnsiKey::F;
 
   ui::Keylogging* keylogging = nullptr;
@@ -40,9 +40,15 @@ struct KeyPresser : LiveObject, Runnable, LongRunning, ui::Keylogger {
 
   Span<Interface*> Interfaces() override { return interfaces; }
   void Args(std::function<void(Argument&)> cb) override;
-  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
-  void OnCancel() override;
-  LongRunning* AsLongRunning() override { return this; }
+
+  operator OnOff*() override { return this; }
+  bool IsOn() const override { return key_pressed; }
+  void OnTurnOn() override;
+  void OnTurnOff() override;
+
+  // void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
+  // void OnCancel() override;
+  // LongRunning* AsLongRunning() override { return this; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

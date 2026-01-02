@@ -111,14 +111,14 @@ struct DeleteOption : TextOption {
   Dir PreferredDir() const override { return NW; }
 };
 
-struct MoveOption : TextOption {
+struct MoveLocationOption : TextOption {
   WeakPtr<Location> location_weak;
   WeakPtr<Object> object_weak;
 
-  MoveOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
+  MoveLocationOption(WeakPtr<Location> location_weak, WeakPtr<Object> object_weak)
       : TextOption("Move"), location_weak(location_weak), object_weak(object_weak) {}
   std::unique_ptr<Option> Clone() const override {
-    return std::make_unique<MoveOption>(location_weak, object_weak);
+    return std::make_unique<MoveLocationOption>(location_weak, object_weak);
   }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     auto location = location_weak.lock();
@@ -259,6 +259,8 @@ struct SyncAction : Action {
     // TODO: tell objects to hide their fields
     // Check if the pointer is over a compatible interface
     if (auto interface = weak.Lock()) {
+      auto& sync_block = interface->Sync();
+      sync_block.FullSync(interface);
       auto target_location = root_machine->LocationAtPoint(sync_widget->end);
       if (target_location == nullptr || target_location->object == nullptr) return;
       // TODO: make this work with fields
@@ -266,7 +268,7 @@ struct SyncAction : Action {
       auto* target_interface = (OnOff*)(*target_location->object);
       if (target_interface == nullptr) return;
       NestedPtr<Interface> target{target_location->object, target_interface};
-      Sync(interface, target);
+      sync_block.FullSync(target);
     }
   }
   void Update() {
@@ -348,7 +350,7 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
     auto loc_weak = loc->AcquireWeakPtr();
     DeleteOption del{loc_weak};
     visitor(del);
-    MoveOption move{loc_weak, object};
+    MoveLocationOption move{loc_weak, object};
     visitor(move);
     if (auto runnable = loc->As<Runnable>()) {
       RunOption run{loc_weak};
@@ -381,8 +383,12 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
 
 std::unique_ptr<Action> Object::WidgetBase::FindAction(ui::Pointer& p, ui::ActionTrigger btn) {
   if (btn == ui::PointerButton::Left) {
-    MoveOption move{Closest<Location>(*p.hover)->AcquireWeakPtr(), object};
-    return move.Activate(p);
+    if (auto* location = Closest<Location>(*p.hover)) {
+      MoveLocationOption move{location->AcquireWeakPtr(), object};
+      return move.Activate(p);
+    } else {
+      LOG << "No parent location";
+    }
   } else if (btn == ui::PointerButton::Right) {
     return OpenMenu(p);
   }

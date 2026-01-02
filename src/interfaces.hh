@@ -16,6 +16,23 @@ struct SyncBlock : Object {
   std::vector<NestedWeakPtr<Interface>> members;
 
   Ptr<Object> Clone() const { return MAKE_PTR(SyncBlock); }
+
+  // Make sure that this member will receive sync notifications from the Sources in this SyncGroup.
+  //
+  // Under the hood it adds the given member to the `members` list.
+  void AddSink(NestedPtr<Interface>& member);
+
+  // Make sure that the sync notifications from this interface will be propagated to Sinks in this
+  // SyncGroup.
+  //
+  // This will set Interface.sync_block to this SyncBlock. Any existing SyncBlock will be merged as
+  // well.
+  void AddSource(Interface&);
+
+  // AddSink & AddSource together.
+  void FullSync(NestedPtr<Interface>& member);
+
+  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
 };
 
 // Some objects within Automat may provide interfaces that can be "synced". A synced interface
@@ -42,7 +59,7 @@ struct SyncBlock : Object {
 // IMPORTANT: To actually make this work, the "On" entry points should not be used directly (only
 // through the "ForwardDo" & "ForwardNotify" wrappers). Whenever the "On" entry point us used
 // directly, it's not going to be propagated to the other synced implementations.
-struct Interface : virtual Nomen {
+struct Interface : virtual Named {
   Ptr<SyncBlock> sync_block = nullptr;
 
   // Note tGetValueUnsafe used throughout the methods here is actually safe, because
@@ -52,6 +69,8 @@ struct Interface : virtual Nomen {
       ERROR << "Some Specific Abstract Interface forgot to call Unsync in its destructor";
     }
   }
+
+  bool IsSynced() const { return sync_block != nullptr; }
 
   void Unsync();
 
@@ -78,8 +97,17 @@ struct Interface : virtual Nomen {
       }
     }
   }
-};
 
-void Sync(NestedPtr<Interface>& self, NestedPtr<Interface>& other);
+  // Returns a reference to the existing or a new SyncBlock. This interface is going to be
+  // initialized as a Source (a SyncBlock needs at least one Source to keep its reference count).
+  SyncBlock& Sync();
+
+ protected:
+  // Interface should start monitoring its updates and call the Notify methods.
+  virtual void OnSync() {}
+
+  // Interface may stop monitoring its underlying state. No need to call Notify methods any more.
+  virtual void OnUnsync() {}
+};
 
 }  // namespace automat

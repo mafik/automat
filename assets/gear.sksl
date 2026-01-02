@@ -1,0 +1,27 @@
+// kind=shader
+// Metal gear shape
+
+uniform float iTime;
+
+float notch(float x, float left, float center, float right) {
+  if (x > right || x < left) return 1;
+  if (x < center)
+    return smoothstep(center, left, x);
+  return smoothstep(center, right, x);
+}
+
+vec4 main(vec2 localCoord) {
+  float angle = atan(localCoord.y, localCoord.x) + iTime;
+  float dist = length(localCoord) / 0.01; // scale from 1cm to 1
+  float r = 0.9 + 0.1 * sin(angle * 12);
+
+  float h = 0.5 + 0.5 * sqrt(1 - pow(dist, 2)); // rounded surface
+  h = min(h, (r - dist) * 15); // outer teeth
+
+  if (dist < 0.15) { // center hole
+    h = min(h, sqrt(max(0, (1 - pow((dist - 0.15) / 0.05, 2)))));
+  }
+  h = min(h, 0.5 + 0.5 * notch(dist, 0.3, 0.4, 0.7)); // middle groove
+  float alpha = h > 0 ? 1 : 0;
+  return vec4(h, h, h, 1) * alpha;
+}

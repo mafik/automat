@@ -233,6 +233,24 @@ void Machine::FillChildren(Vec<Widget*>& children) {
   int i = 0;
   Size n = locations.size();
   children.reserve(n);
+  auto& widget_store = FindRootWidget().widgets;
+  auto AddSyncBlock = [&](Interface* interface) {
+    if (interface->sync_block) {
+      auto& sync_widget = widget_store.For(*interface->sync_block, this);
+      if (!children.Contains(&sync_widget)) {
+        children.Append(&sync_widget);
+      }
+    }
+  };
+  for (auto& l : locations) {
+    auto& o = *l->object;
+    for (auto* interface : o.Interfaces()) {
+      AddSyncBlock(interface);
+    }
+    if (auto* interface = dynamic_cast<Interface*>(&o)) {
+      AddSyncBlock(interface);
+    }
+  }
   for (auto& l : locations) {
     children.push_back(l.get());
   }

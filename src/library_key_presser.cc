@@ -240,12 +240,6 @@ void KeyPresser::SetKey(ui::AnsiKey k) {
   });
 }
 
-void KeyPresser::Args(std::function<void(Argument&)> cb) {
-  if (keylogging) {
-    cb(next_arg);
-  }
-}
-
 void KeyPresser::OnTurnOn() {
   audio::Play(embedded::assets_SFX_key_down_wav);
   SendKeyEvent(key, true);
@@ -260,19 +254,9 @@ void KeyPresser::OnTurnOff() {
   WakeWidgetsAnimation();
 }
 
-// void KeyPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
-//   ZoneScopedN("KeyPresser");
-//   audio::Play(embedded::assets_SFX_key_down_wav);
-//   SendKeyEvent(key, true);
-//   WakeWidgetsAnimation();
-//   BeginLongRunning(std::move(run_task));
-// }
+void KeyPresser::OnSync() { monitoring.TurnOn(); }
 
-// void KeyPresser::OnCancel() {
-//   audio::Play(embedded::assets_SFX_key_up_wav);
-//   SendKeyEvent(key, false);
-//   WakeWidgetsAnimation();
-// }
+void KeyPresser::OnUnsync() { monitoring.TurnOff(); }
 
 void KeyPresser::SerializeState(Serializer& writer, const char* key) const {
   writer.Key(key);
@@ -302,20 +286,20 @@ KeyPresser::~KeyPresser() {
   if (keylogging) {
     keylogging->Release();
   }
-  // OnLongRunningDestruct();
 }
 
 void KeyPresser::KeyloggerKeyDown(ui::Key key_down) {
   if (this->key != key_down.physical) return;
+  key_pressed = true;
   NotifyTurnedOn();
-  if (auto h = here.lock()) {
-    ScheduleNext(*h);
-  }
+  WakeWidgetsAnimation();
 }
 
 void KeyPresser::KeyloggerKeyUp(ui::Key key_up) {
   if (this->key != key_up.physical) return;
+  key_pressed = false;
   NotifyTurnedOff();
+  WakeWidgetsAnimation();
 }
 
 void KeyPresser::KeyloggerOnRelease(const ui::Keylogging&) { keylogging = nullptr; }

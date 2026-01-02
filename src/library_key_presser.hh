@@ -18,7 +18,6 @@ struct KeyPresser : LiveObject, OnOff, ui::Keylogger {
     bool IsOn() const override;
     void OnTurnOn() override;
     void OnTurnOff() override;
-    // operator OnOff*() override { return this; }
     KeyPresser& GetKeyPresser() const {
       return *reinterpret_cast<KeyPresser*>(reinterpret_cast<intptr_t>(this) -
                                             offsetof(KeyPresser, monitoring));
@@ -39,16 +38,14 @@ struct KeyPresser : LiveObject, OnOff, ui::Keylogger {
   void SetKey(ui::AnsiKey);
 
   Span<Interface*> Interfaces() override { return interfaces; }
-  void Args(std::function<void(Argument&)> cb) override;
 
   operator OnOff*() override { return this; }
   bool IsOn() const override { return key_pressed; }
   void OnTurnOn() override;
   void OnTurnOff() override;
 
-  // void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
-  // void OnCancel() override;
-  // LongRunning* AsLongRunning() override { return this; }
+  void OnSync() override;
+  void OnUnsync() override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Location& l, Deserializer& d) override;

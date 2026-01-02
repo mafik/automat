@@ -33,9 +33,22 @@ void Release() {
   sk_ref_cnt_objects.clear();
 }
 
+struct OptionsHack {
+  bool forceUnoptimized = false;
+  std::string_view fName;
+  bool allowPrivateAccess = false;
+  uint32_t fStableKey = 0;
+  SkSL::Version maxVersionAllowed = SkSL::Version::k300;
+  operator const SkRuntimeEffect::Options&() const {
+    return *reinterpret_cast<const SkRuntimeEffect::Options*>(this);
+  }
+};
+
+static_assert(sizeof(OptionsHack) == sizeof(SkRuntimeEffect::Options));
+
 sk_sp<SkRuntimeEffect> CompileShader(fs::VFile sksl_file, Status& status) {
   auto fs = SkString(sksl_file.content);
-  SkRuntimeEffect::Options options;
+  OptionsHack options;
   auto name = Path(sksl_file.path).Stem();
   options.fName = name;
   auto result = SkRuntimeEffect::MakeForShader(fs, options);

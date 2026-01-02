@@ -19,13 +19,17 @@ float getHeight(vec2 uv) {
   float dist = length(uv);
   float r = 0.9 + 0.1 * sin(angle * 12);
 
-  float h = 0.5 + 0.5 * sqrt(1 - pow(dist, 2)); // rounded surface
-  h = min(h, (r - dist) * 15); // outer teeth
+  float h = 0.8 + 0.2 * sqrt(1 - pow(dist, 2)); // rounded surface
+
+  float margin = 0.1;
+  if (dist > r - margin) {
+    h *= sqrt(1 - pow((r - margin - dist) / margin, 2));
+  }
 
   if (dist < 0.15) { // center hole
-    h = min(h, sqrt(max(0, (1 - pow((dist - 0.15) / 0.05, 2)))));
+    h *= sqrt(max(0, (1 - pow((dist - 0.15) / 0.05, 2))));
   }
-  h = min(h, 0.5 + 0.5 * notch(dist, 0.3, 0.4, 0.7)); // middle groove
+  h *= 0.3 + 0.7 * notch(dist, 0.25, 0.35, 0.85); // middle groove
   return max(h, 0.0);
 }
 
@@ -35,10 +39,56 @@ vec4 main(vec2 localCoord) {
   float alpha = h > 0 ? 1 : 0;
 
   vec2 d_uv = vec2(dFdx(uv.x), dFdy(uv.y));
-  vec2 d_h = vec2(dFdx(h), dFdy(h)) / d_uv / 100;
+  vec2 d_h_frag = vec2(dFdx(h), dFdy(h));
+  vec2 d_h = d_h_frag / d_uv / 100;
 
   vec3 normal = vec3(-d_h, 1 - length(d_h));
 
-  // Visualize normal as color (for debugging)
-  return vec4(normal * 0.5 + 0.5, 1) * alpha;
+  // return vec4(normal * 0.5 + 0.5, 1) * alpha;
+
+  // Metal gear shading
+
+  vec3 lightDir = normalize(vec3(0, 0.6, 0.8));
+  vec3 viewDir = vec3(0, 0, 1);
+  vec3 halfDir = normalize(lightDir + viewDir);
+
+  // Base metal colors (warm gray/brown tones from reference)
+  vec3 metalDark = vec3(0.25, 0.23, 0.22); // Dark recesses
+  vec3 metalMid = vec3(0.45, 0.42, 0.40); // Mid tones
+  vec3 metalLight = vec3(0.65, 0.62, 0.58); // Highlights
+  vec3 metalBright = vec3(0.85, 0.82, 0.78); // Bright specular
+
+  // Normalize the normal
+  vec3 N = normalize(normal);
+
+  // Diffuse lighting (Lambert)
+  float NdotL = max(dot(N, lightDir), 0.0);
+  float diffuse = NdotL * 0.6 + 0.4; // Some ambient fill
+
+  // Specular (Blinn-Phong)
+  float NdotH = max(dot(N, halfDir), 0.0);
+  float specular = pow(NdotH, 32.0) * 0.5;
+
+  // Fresnel-like rim lighting - disabled because of weird normals
+  // float NdotV = max(dot(N, viewDir), 0.0);
+  // float rim = pow(1.0 - NdotV, 2.0) * 3;
+
+  // Height-based ambient occlusion
+  float ao = smoothstep(-1, 1.0, h);
+
+  // Combine base color based on height and lighting
+  vec3 baseColor = mix(metalDark, metalMid, smoothstep(0.0, 0.4, h));
+  baseColor = mix(baseColor, metalLight, smoothstep(0.4, 0.8, h));
+
+  // Apply lighting
+  vec3 color = baseColor * diffuse * ao;
+  color += metalBright * specular;
+  // color += metalLight * rim;
+
+  // TODO: implement proper antialiasing
+  //       - find SDF
+  //       - get pixel size & use it for alpha-blending
+  alpha = min(alpha, h / 0.3);
+
+  return vec4(color, 1.0) * alpha;
 }

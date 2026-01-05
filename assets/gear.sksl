@@ -6,6 +6,7 @@
 // Metal gear shape
 
 uniform float iTime;
+uniform float iPixelRadius;
 
 const float M_PI = 3.14159265358979323846;
 
@@ -35,8 +36,8 @@ vec4 main(vec2 localCoord) {
 
   // Compute h
   float angle = atan(uv.y, uv.x);
+  float angleRot = (angle + iTime) * 12.;
   float x = length(uv);
-  float r = 0.9 + 0.1 * sin((angle + iTime) * 12);
 
   float h = 0.8 + 0.2 * sqrt(1 - pow(x, 2)); // rounded surface
 
@@ -45,10 +46,18 @@ vec4 main(vec2 localCoord) {
   float dx = 0.2 * sin(x * M_PI / 2); // Normal along the radius
   float dy = 0; // Normal perpendicular to the radius
 
+  float r = 0.9 + 0.1 * sin(angleRot);
+  float sdf = min(r - x, x - 0.10); // approx, it's only used for AA so accuracy doesn't matter
+  if (sdf <= 0) return vec4(0, 0, 0, 0);
+
+  float alpha = clamp(sdf / iPixelRadius / 100, 0, 1);
+
+  // gear teeth
   float margin = 0.1;
-  if (x > r - margin) {
-    float mul = sqrt(1 - pow((r - margin - x) / margin, 2));
-    dx = dx * mul - h * sin((r - margin - x) / margin * M_PI / 2);
+  float edge_dist = r - margin - x;
+  if (edge_dist < 0) {
+    float mul = sqrt(1 - pow((edge_dist) / margin, 2));
+    dx = dx * mul - h * sin((edge_dist) / margin * M_PI / 2);
     dy = h * -cos((angle + iTime) * 12) * (1 - mul); // certainly wrong but looks acceptable
     h *= mul;
   }
@@ -66,8 +75,6 @@ vec4 main(vec2 localCoord) {
   }
 
   h = max(h, 0.0);
-
-  float alpha = h > 0 ? 1 : 0;
 
   vec3 normal = vec3(
       cos(angle) * dx - sin(angle) * dy,
@@ -115,11 +122,6 @@ vec4 main(vec2 localCoord) {
   vec3 color = baseColor * diffuse * ao;
   color += metalBright * specular;
   color += metalLight * rim;
-
-  // TODO: implement proper antialiasing
-  //       - find SDF
-  //       - get pixel size & use it for alpha-blending
-  alpha = min(alpha, h / 0.3);
 
   return vec4(color, 1.0) * alpha;
 }

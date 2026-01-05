@@ -94,6 +94,9 @@ struct SyncBlockWidget : Object::WidgetBase {
     }
     SkRuntimeEffectBuilder builder(effect);
     builder.uniform("iTime") = (float)time::SteadySaw<M_PI * 2>();
+    SkMatrix px_to_local;
+    (void)canvas.getLocalToDeviceAs3x3().invert(&px_to_local);
+    builder.uniform("iPixelRadius") = (float)px_to_local.mapRadius(1);
     SkPaint paint;
     paint.setShader(builder.makeShader());
     canvas.drawCircle(0, 0, 1_cm, paint);

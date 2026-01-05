@@ -289,6 +289,13 @@ SkPaint& GetBackgroundPaint(float px_per_m) {
   builder.uniform("px_per_m") = px_per_m;
   builder.uniform("background_px") = (float)bg.heightPx();
   builder.child("background_image") = *bg.shader;
+  const int kThumbSize = 64;
+  auto thumb_info = (*bg.image)->imageInfo().makeWH(kThumbSize, kThumbSize);
+  static auto thumb_image = (*bg.image)->makeScaled(thumb_info, kDefaultSamplingOptions);
+  static auto thumb_shader = thumb_image->makeShader(
+      kDefaultSamplingOptions,
+      SkMatrix::Scale(1. / kThumbSize, -1. / kThumbSize).postTranslate(0, 1));
+  builder.child("background_thumb") = thumb_shader;
   paint.setShader(builder.makeShader());
   return paint;
 }

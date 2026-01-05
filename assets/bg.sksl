@@ -2,6 +2,7 @@ uniform float px_per_m;
 uniform float background_px;
 
 uniform shader background_image;
+uniform shader background_thumb;
 
 const float3 kDotsColor = float3(0.5, 0.5, 0.5);
 const float kPi = 3.1415926535897932384626433832795;
@@ -26,12 +27,25 @@ float vx(float2 pos, float a) {
   }
 }
 
-// performs a bright-style halftone dithering
-vec3 halftone_bright(vec3 rgb, vec2 coord_px) {
-  return vec3(
-    (rgb.r + vx(coord_px, 0.12) / 3) >= 1 ? 1 : 0.66,
-    (rgb.g + vx(coord_px, 0.34) / 3) >= 1 ? 1 : 0.66,
-    (rgb.b + vx(coord_px, 0.69) / 3) >= 1 ? 1 : 0.66);
+// performs halftone dithering
+vec3 halftone(vec3 bg, vec3 fg, vec2 coord_px) {
+  vec3 bias = vec3(vx(coord_px, 0.12), vx(coord_px, 0.34), vx(coord_px, 0.69));
+  vec3 delta = (fg - bg) * 2;
+  vec3 mag = abs(delta);
+
+  const float k = 0.03;
+  // If mag < k: mag is set 0
+  // If mag > 2k: mag is unchanged
+  // In between: mag ramps up linearly
+  mag = min(mag, max(vec3(0.0), (mag - k) * 2.0));
+
+  vec3 ink = step(0, delta);
+  vec3 use_bg = step(mag, bias);
+
+  vec3 biasD = vec3(length(vec2(dFdx(coord_px.x), dFdy(coord_px.y))) * sqrt(mag) * 2);
+
+  vec3 use_ink = smoothstep(bias - biasD, bias + biasD, mag);
+  return mix(bg, ink, use_ink);
 }
 
 half4 main(vec2 coord_m) {
@@ -45,12 +59,9 @@ half4 main(vec2 coord_m) {
 
   // background dimensions are 1x1 m so if thre are more px in a meter than bg dimension, then we need to dither
   if (px_per_m > background_px) {
-    float3 background_halftone = (
-      halftone_bright(background_val.rgb, (coord_m + vec2(0.125, 0.375) / px_per_m) * background_px) +
-        halftone_bright(background_val.rgb, (coord_m + vec2(0.375, -0.125) / px_per_m) * background_px) +
-        halftone_bright(background_val.rgb, (coord_m + vec2(-0.125, -0.375) / px_per_m) * background_px) +
-        halftone_bright(background_val.rgb, (coord_m + vec2(-0.375, 0.125) / px_per_m) * background_px)
-      ) / 4;
+    float3 background_blur = background_thumb.eval(coord_m + 0.5).rgb;
+
+    float3 background_halftone = halftone(background_blur, background_val, coord_m * background_px);
 
     // halftone pattern appears at `background_px` and is in full effect at `background_px * 4`
     float halftone_blend = smoothstep(background_px, background_px * 4, px_per_m);

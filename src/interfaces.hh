@@ -15,7 +15,7 @@ struct SyncBlock : Object {
   std::shared_mutex mutex;
   std::vector<NestedWeakPtr<Interface>> members;
 
-  Ptr<Object> Clone() const { return MAKE_PTR(SyncBlock); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(SyncBlock); }
 
   // Make sure that this member will receive sync notifications from the Sources in this SyncGroup.
   //

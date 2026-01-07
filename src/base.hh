@@ -149,6 +149,19 @@ struct Machine : LiveObject, ui::Widget, ui::DropTarget {
     return h;
   }
 
+  // Adds the given object to the Machine. Returns a pointer to the Location that stores the object.
+  // Existing Location is returned, if the object was already part of the Machine.
+  Location& Insert(Ptr<Object>&& obj) {
+    for (auto& loc : locations) {
+      if (loc->object == obj) {
+        return *loc;
+      }
+    }
+    auto& h = CreateEmpty();
+    h.InsertHere(std::move(obj));
+    return h;
+  }
+
   // Create an instance of T and return its location.
   //
   // The new instance is created from a prototype instance found in `prototypes`.

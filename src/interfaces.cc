@@ -29,12 +29,12 @@ void Interface::Unsync() {
   OnUnsync();
 }
 
-SyncBlock& Interface::Sync() {
+Ptr<SyncBlock> Interface::Sync() {
   if (sync_block == nullptr) {
     sync_block = MAKE_PTR(SyncBlock);
     OnSync();
   }
-  return *sync_block;
+  return sync_block;
 }
 
 // Tells that this interface will receive notifications (receive-only sync)

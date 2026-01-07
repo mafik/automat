@@ -11,6 +11,7 @@ namespace automat {
 
 struct Interface;
 
+// Gear-shaped object that can make multiple interfaces act as one.
 struct SyncBlock : Object {
   std::shared_mutex mutex;
   std::vector<NestedWeakPtr<Interface>> members;
@@ -62,15 +63,13 @@ struct SyncBlock : Object {
 struct Interface : virtual Named {
   Ptr<SyncBlock> sync_block = nullptr;
 
-  // Note tGetValueUnsafe used throughout the methods here is actually safe, because
+  // Note GetValueUnsafe used throughout the methods here is actually safe, because
   // ~Interface will remove itself from SyncBlock. SyncBlock never contains dead pointers.
   ~Interface() {
     if (sync_block) {
       ERROR << "Some Specific Abstract Interface forgot to call Unsync in its destructor";
     }
   }
-
-  bool IsSynced() const { return sync_block != nullptr; }
 
   void Unsync();
 
@@ -98,9 +97,8 @@ struct Interface : virtual Named {
     }
   }
 
-  // Returns a reference to the existing or a new SyncBlock. This interface is going to be
-  // initialized as a Source (a SyncBlock needs at least one Source to keep its reference count).
-  SyncBlock& Sync();
+  // Returns a reference to the existing or a new SyncBlock.
+  Ptr<SyncBlock> Sync();
 
  protected:
   // Interface should start monitoring its updates and call the Notify methods.

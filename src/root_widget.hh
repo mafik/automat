@@ -51,12 +51,20 @@ struct WidgetStore {
     return it->second.get();
   }
 
-  Object::WidgetInterface& For(Object& object, const Widget* parent) {
+  Object::WidgetInterface& For(Object& object, Widget* parent) {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
-      auto widget = object.MakeWidget(const_cast<Widget*>(parent));
+      auto widget = object.MakeWidget(parent);
       it = container.emplace(std::move(weak), std::move(widget)).first;
+    } else {
+      if (it->second->parent == nullptr) {
+        it->second->parent = parent->AcquireTrackedPtr();
+      } else {
+        LOG << parent->Name() << " is asking for a widget for " << object.Name()
+            << " but it's already owned by " << it->second->parent->Name()
+            << ". TODO: figure out what to do in this situation";
+      }
     }
     return *it->second;
   }

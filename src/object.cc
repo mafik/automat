@@ -246,12 +246,12 @@ struct SyncWidget : ui::Widget {
 struct SyncAction : Action {
   NestedWeakPtr<Interface> weak;
   TrackedPtr<Object::WidgetInterface> object_widget;
-  std::unique_ptr<SyncWidget> sync_widget;
+  SyncWidget sync_widget;
   SyncAction(ui::Pointer& pointer, NestedWeakPtr<Interface> weak, Object::WidgetInterface* widget)
       : Action(pointer),
         weak(weak),
         object_widget(widget->AcquireTrackedPtr()),
-        sync_widget(std::make_unique<SyncWidget>(pointer.GetWidget())) {
+        sync_widget(pointer.GetWidget()) {
     // TODO: invite objects to show their fields that satisfy the syncable interface
     Update();
   }
@@ -259,16 +259,19 @@ struct SyncAction : Action {
     // TODO: tell objects to hide their fields
     // Check if the pointer is over a compatible interface
     if (auto interface = weak.Lock()) {
-      auto& sync_block = interface->Sync();
-      sync_block.FullSync(interface);
-      auto target_location = root_machine->LocationAtPoint(sync_widget->end);
+      auto target_location = root_machine->LocationAtPoint(sync_widget.end);
       if (target_location == nullptr || target_location->object == nullptr) return;
       // TODO: make this work with fields
       // TODO: make this work with other (non-on/off) interfaces
-      auto* target_interface = (OnOff*)(*target_location->object);
+      auto* target_interface = (OnOff*)(*target_location->object);  // operator cast
       if (target_interface == nullptr) return;
+      auto sync_block = interface->Sync();
+      sync_block->FullSync(interface);
       NestedPtr<Interface> target{target_location->object, target_interface};
-      sync_block.FullSync(target);
+      sync_block->FullSync(target);
+      auto& loc = root_machine->Insert(sync_block);
+      loc.position = target_location->position;
+      loc.position_vel = Vec2(0, 1);
     }
   }
   void Update() {
@@ -276,14 +279,14 @@ struct SyncAction : Action {
       auto* widget = pointer.root_widget.widgets.Find(*interface.GetOwner<Object>());
       auto start_local = widget->InterfaceShape(interface.Get()).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
-      sync_widget->start = start;
-      sync_widget->end = pointer.PositionWithinRootMachine();
-      sync_widget->WakeAnimation();
+      sync_widget.start = start;
+      sync_widget.end = pointer.PositionWithinRootMachine();
+      sync_widget.WakeAnimation();
     } else {
       pointer.ReplaceAction(*this, nullptr);
     }
   }
-  ui::Widget* Widget() { return sync_widget.get(); }
+  ui::Widget* Widget() { return &sync_widget; }
 };
 
 struct SyncOption : TextOption {
@@ -422,7 +425,7 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
-Object::WidgetInterface& Object::FindWidget(const ui::Widget* parent) {
+Object::WidgetInterface& Object::FindWidget(ui::Widget* parent) {
   return parent->FindRootWidget().widgets.For(*this, parent);
 }
 

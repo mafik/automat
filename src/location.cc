@@ -134,6 +134,8 @@ animation::Phase Location::Tick(time::Timer& timer) {
 
   phase |= animation::ExponentialApproach(0, timer.d, 0.1, transparency);
 
+  WidgetForObject();  // fills object_widget
+
   if (object_widget) {
     Vec2 local_pivot = LocalAnchor();
     Vec2 position_curr;
@@ -169,24 +171,18 @@ animation::Phase Location::Tick(time::Timer& timer) {
 }
 
 void Location::Draw(SkCanvas& canvas) const {
-  if (object == nullptr) {
+  if (object_widget == nullptr) {
     return;  // TODO: Draw a placeholder, we should support empty locations
   }
-  SkPath my_shape;
-  auto& object_widget = WidgetForObject();
-  if (object) {
-    my_shape = object_widget.Shape();
-  } else {
-    my_shape = Shape();
-  }
+  SkPath my_shape = object_widget->Shape();
   Rect bounds = Rect(my_shape.getBounds());
-  object_widget.local_to_parent.asM33().mapRect(&bounds.sk);
+  object_widget->local_to_parent.asM33().mapRect(&bounds.sk);
 
   if (highlight > 0.01f) {  // Draw dashed highlight outline
     SkPath outset_shape = Outset(my_shape, 2.5_mm * highlight);
     outset_shape.setIsVolatile(true);
     canvas.save();
-    canvas.concat(object_widget.local_to_parent);
+    canvas.concat(object_widget->local_to_parent);
     static const SkPaint kHighlightPaint = [] {
       SkPaint paint;
       paint.setAntiAlias(true);
@@ -255,7 +251,7 @@ void Location::Draw(SkCanvas& canvas) const {
     canvas.translate(-offset_x, -offset_y + n_lines * line_height);
     n_lines += 1;
 
-    auto ctm = canvas.getLocalToDeviceAs3x3().preConcat(object_widget.local_to_parent.asM33());
+    auto ctm = canvas.getLocalToDeviceAs3x3().preConcat(object_widget->local_to_parent.asM33());
     auto my_shape_px = my_shape.makeTransform(ctm);
     Rect bounds_px = my_shape_px.getBounds();
     float blur_radius = ctm.mapRadius(7_mm);
@@ -401,7 +397,7 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-Vec2 PositionAhead(const Location& origin, const Argument& arg,
+Vec2 PositionAhead(Location& origin, const Argument& arg,
                    const Object::WidgetInterface& target_widget) {
   auto& origin_widget = origin.WidgetForObject();
   auto origin_shape = origin_widget.Shape();           // origin's local coordinates
@@ -443,7 +439,7 @@ Vec2 PositionAhead(const Location& origin, const Argument& arg,
   return Round((drop_point - best_connector_pos) * 1000) / 1000;
 }
 
-void PositionAhead(const Location& origin, const Argument& arg, Location& target) {
+void PositionAhead(Location& origin, const Argument& arg, Location& target) {
   target.position = PositionAhead(origin, arg, target.WidgetForObject());
 }
 
@@ -462,9 +458,7 @@ void Location::PreDraw(SkCanvas& canvas) const {
   constexpr float kMinElevation = 1_mm;
   constexpr float kElevationRange = 8_mm;
 
-  auto& child_widget = WidgetForObject();
-
-  if (!child_widget.pack_frame_texture_bounds) {
+  if (!object_widget->pack_frame_texture_bounds) {
     return;  // no shadow for non-cached widgets
   }
   auto& root_widget = FindRootWidget();
@@ -504,8 +498,8 @@ void Location::PreDraw(SkCanvas& canvas) const {
                                       nullptr))));
   shadow_paint.setAlphaf(1.f - transparency);
   canvas.saveLayer(nullptr, &shadow_paint);
-  canvas.concat(child_widget.local_to_parent);
-  canvas.drawDrawable(child_widget.sk_drawable.get());
+  canvas.concat(object_widget->local_to_parent);
+  canvas.drawDrawable(object_widget->sk_drawable.get());
   canvas.restore();
 }
 

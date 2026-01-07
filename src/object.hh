@@ -126,7 +126,7 @@ struct Object : public ReferenceCounted {
   };
 
   // Find or create a widget for this object, under the given parent.
-  WidgetInterface& FindWidget(const ui::Widget* parent);
+  WidgetInterface& FindWidget(ui::Widget* parent);
 
   virtual std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) {
     if (auto w = dynamic_cast<WidgetInterface*>(this)) {

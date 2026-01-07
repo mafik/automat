@@ -265,9 +265,9 @@ struct SyncAction : Action {
       // TODO: make this work with other (non-on/off) interfaces
       auto* target_interface = (OnOff*)(*target_location->object);  // operator cast
       if (target_interface == nullptr) return;
-      auto sync_block = interface->Sync();
-      sync_block->FullSync(interface);
+      auto sync_block = Sync(interface);
       NestedPtr<Interface> target{target_location->object, target_interface};
+      sync_block->FullSync(interface);
       sync_block->FullSync(target);
       auto& loc = root_machine->Insert(sync_block);
       loc.position = target_location->position;
@@ -340,7 +340,7 @@ struct FieldOption : TextOption, OptionsProvider {
       }
       SyncOption sync(interface);
       visitor(sync);
-      if (interface->sync_block) {
+      if (!interface->sync_block_weak.IsExpired()) {
         UnsyncOption unsync(interface);
         visitor(unsync);
       }

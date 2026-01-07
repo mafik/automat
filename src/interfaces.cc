@@ -15,64 +15,78 @@
 namespace automat {
 
 void Interface::Unsync() {
+  auto sync_block = sync_block_weak.Lock();
   if (sync_block == nullptr) return;
-  auto old_block = std::move(sync_block);  // keep mutex alive
-  auto lock = std::unique_lock(old_block->mutex);
-  auto& members = old_block->members;
-  for (int i = 0; i < members.size(); ++i) {
-    auto* member = members[i].GetValueUnsafe();
-    if (member == this) {
-      members.erase(members.begin() + i);
+  auto lock = std::unique_lock(sync_block->mutex);
+
+  auto& sources = sync_block->sources;
+  for (int i = 0; i < sources.size(); ++i) {
+    auto* source = sources[i].GetValueUnsafe();
+    if (source == this) {
+      sources.erase(sources.begin() + i);
       break;
     }
   }
+
+  auto& sinks = sync_block->sinks;
+  for (int i = 0; i < sinks.size(); ++i) {
+    auto* sink = sinks[i].GetValueUnsafe();
+    if (sink == this) {
+      sinks.erase(sinks.begin() + i);
+      break;
+    }
+  }
+
+  sync_block_weak = nullptr;
   OnUnsync();
 }
 
-Ptr<SyncBlock> Interface::Sync() {
+Ptr<SyncBlock> Sync(NestedPtr<Interface>& source) {
+  auto sync_block = source->sync_block_weak.Lock();
   if (sync_block == nullptr) {
     sync_block = MAKE_PTR(SyncBlock);
-    OnSync();
+    sync_block->AddSource(source);
   }
   return sync_block;
 }
 
+SyncBlock::~SyncBlock() {
+  auto lock = std::unique_lock(mutex);
+  while (!sources.empty()) {
+    if (auto source = sources.back().Lock()) {
+      source->OnUnsync();
+    }
+    sources.pop_back();
+  }
+}
+
 // Tells that this interface will receive notifications (receive-only sync)
-void SyncBlock::AddSink(NestedPtr<Interface>& member) {
+void SyncBlock::AddSink(NestedPtr<Interface>& sink) {
   auto guard = std::unique_lock(mutex);
-  for (int i = 0; i < members.size(); ++i) {
-    if (members[i] == member) {
+  for (int i = 0; i < sinks.size(); ++i) {
+    if (sinks[i] == sink) {
       return;
     }
   }
-  members.push_back(member);
+  sinks.push_back(sink);
 }
 
 // Tells that this interface is the source of activity / notifications (notify-only sync)
-void SyncBlock::AddSource(Interface& interface) {
-  if (interface.sync_block == nullptr) {
-    interface.sync_block = AcquirePtr();
-  } else if (interface.sync_block == this) {
+void SyncBlock::AddSource(NestedPtr<Interface>& source) {
+  auto old_sync_block = source->sync_block_weak.Lock();
+  if (old_sync_block == this) {
     return;
-  } else {
-    // It's possible that the old_block is referenced by some unknown Send-Only syncables. We
-    // skip them here.
-    auto old_block = std::move(interface.sync_block);
-    auto guard = std::scoped_lock(old_block->mutex, mutex);
-    auto& old_members = old_block->members;
-    while (!old_members.empty()) {
-      members.emplace_back(std::move(old_members.back()));
-      old_members.pop_back();
-      if (members.back().GetValueUnsafe()->sync_block == old_block) {
-        members.back().GetValueUnsafe()->sync_block = AcquirePtr();
-      }
-    }
+  }
+  source->sync_block_weak = AcquireWeakPtr();
+  sources.push_back(source);
+  if (old_sync_block == nullptr) {
+    source->OnSync();
   }
 }
 
-void SyncBlock::FullSync(NestedPtr<Interface>& member) {
-  AddSink(member);
-  AddSource(*member);
+void SyncBlock::FullSync(NestedPtr<Interface>& interface) {
+  AddSink(interface);
+  AddSource(interface);
 }
 
 struct SyncBlockWidget : Object::WidgetBase {
@@ -106,5 +120,4 @@ struct SyncBlockWidget : Object::WidgetBase {
 std::unique_ptr<Object::WidgetInterface> SyncBlock::MakeWidget(ui::Widget* parent) {
   return std::make_unique<SyncBlockWidget>(*this, parent);
 }
-
 }  // namespace automat

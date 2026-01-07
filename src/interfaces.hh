@@ -14,24 +14,27 @@ struct Interface;
 // Gear-shaped object that can make multiple interfaces act as one.
 struct SyncBlock : Object {
   std::shared_mutex mutex;
-  std::vector<NestedWeakPtr<Interface>> members;
+  std::vector<NestedWeakPtr<Interface>> sinks;
+  std::vector<NestedWeakPtr<Interface>> sources;
+
+  ~SyncBlock();
 
   Ptr<Object> Clone() const override { return MAKE_PTR(SyncBlock); }
 
   // Make sure that this member will receive sync notifications from the Sources in this SyncGroup.
   //
   // Under the hood it adds the given member to the `members` list.
-  void AddSink(NestedPtr<Interface>& member);
+  void AddSink(NestedPtr<Interface>&);
 
   // Make sure that the sync notifications from this interface will be propagated to Sinks in this
   // SyncGroup.
   //
   // This will set Interface.sync_block to this SyncBlock. Any existing SyncBlock will be merged as
   // well.
-  void AddSource(Interface&);
+  void AddSource(NestedPtr<Interface>&);
 
   // AddSink & AddSource together.
-  void FullSync(NestedPtr<Interface>& member);
+  void FullSync(NestedPtr<Interface>&);
 
   std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
 };
@@ -61,12 +64,12 @@ struct SyncBlock : Object {
 // through the "ForwardDo" & "ForwardNotify" wrappers). Whenever the "On" entry point us used
 // directly, it's not going to be propagated to the other synced implementations.
 struct Interface : virtual Named {
-  Ptr<SyncBlock> sync_block = nullptr;
+  WeakPtr<SyncBlock> sync_block_weak = nullptr;
 
   // Note GetValueUnsafe used throughout the methods here is actually safe, because
   // ~Interface will remove itself from SyncBlock. SyncBlock never contains dead pointers.
   ~Interface() {
-    if (sync_block) {
+    if (sync_block_weak) {
       ERROR << "Some Specific Abstract Interface forgot to call Unsync in its destructor";
     }
   }
@@ -75,9 +78,9 @@ struct Interface : virtual Named {
 
   template <class Self>
   void ForwardDo(this Self& self, auto&& lambda) {
-    if (self.sync_block) {
-      auto lock = std::shared_lock(self.sync_block->mutex);
-      for (auto& other : self.sync_block->members) {
+    if (auto sync_block = self.sync_block_weak.Lock()) {
+      auto lock = std::shared_lock(sync_block->mutex);
+      for (auto& other : sync_block->sinks) {
         lambda(*static_cast<Self*>(other.GetValueUnsafe()));
       }
     } else {
@@ -87,9 +90,9 @@ struct Interface : virtual Named {
 
   template <class Self>
   void ForwardNotify(this Self& self, auto&& lambda) {
-    if (self.sync_block) {
-      auto lock = std::shared_lock(self.sync_block->mutex);
-      for (auto& other : self.sync_block->members) {
+    if (auto sync_block = self.sync_block_weak.Lock()) {
+      auto lock = std::shared_lock(sync_block->mutex);
+      for (auto& other : sync_block->sinks) {
         if (auto other_cast = static_cast<Self*>(other.GetValueUnsafe()); other_cast != &self) {
           lambda(*other_cast);
         }
@@ -97,15 +100,20 @@ struct Interface : virtual Named {
     }
   }
 
-  // Returns a reference to the existing or a new SyncBlock.
-  Ptr<SyncBlock> Sync();
-
  protected:
-  // Interface should start monitoring its updates and call the Notify methods.
+  // Called when Interface becomes a source - it should start monitoring its updates and call the
+  // Notify methods.
   virtual void OnSync() {}
 
-  // Interface may stop monitoring its underlying state. No need to call Notify methods any more.
+  // Called when Interface stops being a source - it may stop monitoring its underlying state. No
+  // need to call Notify methods any more.
   virtual void OnUnsync() {}
+
+  friend class SyncBlock;
 };
+
+// Returns a reference to the existing or a new SyncBlock. This interface is initialized as a sync
+// source.
+Ptr<SyncBlock> Sync(NestedPtr<Interface>& source);
 
 }  // namespace automat

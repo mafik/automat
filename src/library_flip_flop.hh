@@ -15,7 +15,6 @@ struct FlipFlop : LiveObject, Runnable, OnOff {
   FlipFlop();
   string_view Name() const override;
   Ptr<Object> Clone() const override;
-  void Args(std::function<void(Argument&)> cb) override;
   operator OnOff*() override { return this; }
 
   void SetKey(ui::AnsiKey);

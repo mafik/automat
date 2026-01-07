@@ -152,11 +152,11 @@ static void SetDuration(TimerDelay& timer, Duration new_duration) {
 
 static void PropagateDurationOutwards(TimerDelay& timer) {
   if (auto h = timer.here.lock()) {
-    auto duration_obj = timer.duration_arg.GetLocation(*h);
-    if (duration_obj.ok && duration_obj.location) {
-      duration_obj.location->SetNumber(timer.duration.value * TickCount(timer.range) /
-                                       time::FloatDuration(RangeDuration(timer.range)));
-    }
+    // auto duration_obj = timer.duration_arg.GetLocation(*h);
+    // if (duration_obj.ok && duration_obj.location) {
+    //   duration_obj.location->SetNumber(timer.duration.value * TickCount(timer.range) /
+    //                                    time::FloatDuration(RangeDuration(timer.range)));
+    // }
   }
 }
 
@@ -623,11 +623,11 @@ struct DragDurationHandleAction : Action {
 };
 
 void TimerDelay::Updated(Location& here, Location& updated) {
-  auto result = duration_arg.GetObject(here);
-  if (!result.ok) {
+  auto* object = duration_arg.FindObject(here, Argument::FindConfig());
+  if (object == nullptr) {
     return;
   }
-  std::string duration_str = result.object->GetText();
+  std::string duration_str = object->GetText();
   double n = std::stod(duration_str);
   Duration d = time::Defloat(RangeDuration(range) * n / TickCount(range));
   SetDuration(*this, d);

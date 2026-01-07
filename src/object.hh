@@ -38,9 +38,6 @@ struct Object : public ReferenceCounted {
 
   virtual void Relocate(Location* new_here) {}
 
-  virtual void ConnectionAdded(Location& here, Connection&) {}
-  virtual void ConnectionRemoved(Location& here, Connection&) {}
-
   // Release the memory occupied by this object.
   virtual ~Object();
 
@@ -66,8 +63,9 @@ struct Object : public ReferenceCounted {
 
   virtual Span<Interface*> Interfaces() { return {}; }
 
-  virtual void Args(std::function<void(Argument&)> cb) {}
+  virtual void Args(std::function<void(Argument&)> cb);
 
+  // TODO: move this to Argument
   virtual Ptr<Object> ArgPrototype(const Argument&) { return nullptr; }
 
   virtual void Updated(Location& here, Location& updated);
@@ -177,6 +175,9 @@ struct Object : public ReferenceCounted {
 
   // Clears the error reported by the object itself
   void ClearOwnError();
+
+  // If this object is owned by a Machine, return the Location that's used to store it.
+  Location* MyLocation();
 };
 
 }  // namespace automat

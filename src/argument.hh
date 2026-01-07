@@ -4,13 +4,12 @@
 
 #include <functional>
 #include <string>
-#include <vector>
 
 #include "color.hh"
 #include "drawable.hh"
-#include "format.hh"
 #include "location.hh"
 #include "optional.hh"
+#include "status.hh"
 
 namespace automat {
 
@@ -20,7 +19,6 @@ enum class CableTexture {
 };
 
 // Arguments are responsible for finding dependencies (input & output) of objects.
-// - the know how to follow pointers (objects that point to other objects)
 // - they know about the requirements of the target object
 // - they can connect fields of source objects (rather than whole objects)
 // - they may automatically create target objects using given prototype
@@ -29,44 +27,16 @@ enum class CableTexture {
 // IMPORTANT: Arguments are identified by their ADDRESS in memory (not name!). Don't move them
 // around!
 //
-// Note: the API for Arguments is in the process of being re-designed - see the bottom of this file
-//
-// TODO: finish re-design
 // TODO: think about pointer following
 // TODO: think about requirement checking
 // TODO: think about multiple arguments
-struct Argument {
-  enum Precondition {
-    kOptional,
-    kRequiresLocation,
-    kRequiresObject,
-    kRequiresConcreteType,
-  };
-  // Used for annotating arguments so that (future) UI can show them
-  // differently.
-  enum Quantity {
-    kSingle,
-    kMultiple,
-  };
-
-  std::string name;
-  Precondition precondition;
-  Quantity quantity;
-  std::vector<std::function<void(Location* location, Object* object, std::string& error)>>
-      requirements;
+struct Argument : Named {
+  // TODO: convert these to virtual functions
   SkColor tint = "#404040"_color;
   SkColor light = "#ef9f37"_color;
   float autoconnect_radius = 0_cm;
 
   enum class Style { Arrow, Cable, Spotlight, Invisible } style = Style::Arrow;
-
-  // TODO: get rid of this property, the parent should instead provide the "field" object based on
-  // Argument.
-  Interface* interface = nullptr;
-
-  Argument(std::string_view name, Precondition precondition = kOptional,
-           Quantity quantity = kSingle)
-      : name(name), precondition(precondition), quantity(quantity) {}
 
   // Uncomment to find potential bugs related to arguments being moved around.
   // Argument(const Argument&) = delete;
@@ -75,121 +45,18 @@ struct Argument {
 
   virtual ~Argument() = default;
 
-  virtual PaintDrawable& Icon();
-  virtual bool IsOn(Location& here) const;
-
-  template <typename T>
-  Argument& RequireInstanceOf() {
-    requirements.emplace_back(
-        [name = name](Location* location, Object* object, std::string& error) {
-          if (dynamic_cast<T*>(object) == nullptr) {
-            error = f("The {} argument must be an instance of {}.", name, typeid(T).name());
-          }
-        });
-    return *this;
+  virtual void CanConnect(Interface& start, Interface& end, Status& status) {
+    AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
-  void CheckRequirements(Location& here, Location* location, Object* object, std::string& error) {
-    for (auto& requirement : requirements) {
-      requirement(location, object, error);
-      if (!error.empty()) {
-        return;
-      }
-    }
-  }
+  // This function should register a connection from `start` to the `end` so that subsequent calls
+  // to `Find` will return `end`.
+  virtual void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) = 0;
 
-  struct LocationResult {
-    bool ok = true;
-    bool follow_pointers = true;
-    Location* location = nullptr;
-  };
+  virtual NestedPtr<Interface> Find(Interface& start);
 
-  LocationResult GetLocation(
-      Location& here, std::source_location source_location = std::source_location::current()) const;
-
-  struct ObjectResult : LocationResult {
-    Object* object = nullptr;
-    ObjectResult(LocationResult location_result) : LocationResult(location_result) {}
-  };
-
-  ObjectResult GetObject(
-      Location& here, std::source_location source_location = std::source_location::current()) const;
-
-  struct FinalLocationResult : ObjectResult {
-    Location* final_location = nullptr;
-    FinalLocationResult(ObjectResult object_result) : ObjectResult(object_result) {}
-  };
-
-  FinalLocationResult GetFinalLocation(
-      Location& here, std::source_location source_location = std::source_location::current()) const;
-
-  template <typename T>
-  struct TypedResult : ObjectResult {
-    T* typed = nullptr;
-    TypedResult(ObjectResult object_result) : ObjectResult(object_result) {}
-  };
-
-  template <typename T>
-  TypedResult<T> GetTyped(Location& here,
-                          std::source_location source_location = std::source_location::current()) {
-    TypedResult<T> result(GetObject(here, source_location));
-    if (result.object) {
-      result.typed = dynamic_cast<T*>(result.object);
-      if (result.typed == nullptr && precondition >= kRequiresConcreteType) {
-        ReportError(*here.object, *here.object,
-                    f("The {} argument is not an instance of {}.", name, typeid(T).name()),
-                    source_location);
-        result.ok = false;
-      }
-    }
-    return result;
-  }
-
-  // The Loop ends when `callback` returns a value that is convertible to
-  // `true`.
-  template <typename T>
-  T LoopLocations(Location& here, std::function<T(Location&)> callback) {
-    auto [begin, end] = here.outgoing.equal_range(this);
-    for (auto it = begin; it != end; ++it) {
-      auto conn = *it;
-      if (auto ret = callback(conn->to)) {
-        return ret;
-      }
-    }
-    return T();
-  }
-
-  // The Loop ends when `callback` returns a value that is convertible to
-  // `true`.
-  template <typename T>
-  T LoopObjects(Location& here, std::function<T(Object&)> callback) {
-    return LoopLocations<T>(here, [&](Location& h) {
-      if (Object* o = h.Follow()) {
-        return callback(*o);
-      } else {
-        return T();
-      }
-    });
-  }
-
-  std::string DebugString() const {
-    std::string ret = name;
-    if (precondition == kOptional) {
-      ret += " (optional)";
-    } else if (precondition == kRequiresLocation) {
-      ret += " (requires location)";
-    } else if (precondition == kRequiresObject) {
-      ret += " (requires object)";
-    } else if (precondition == kRequiresConcreteType) {
-      ret += " (requires concrete type)";
-    }
-    return ret;
-  }
-
-#pragma region New API
-  ////////////////////////////////////////////////////////////////////
-  // New, simple API - completely separate from the *Result APIs.
-  ////////////////////////////////////////////////////////////////////
+  virtual PaintDrawable& Icon();            // TODO: weird - clean this up
+  virtual bool IsOn(Location& here) const;  // TODO: weird - clean this up
 
   enum class IfMissing { ReturnNull, CreateFromPrototype };
 
@@ -223,39 +90,12 @@ struct Argument {
   void InvalidateConnectionWidgets(Location& here) const;
 };
 
-extern Argument next_arg;
-
-struct LiveArgument : Argument {
-  LiveArgument(std::string_view name, Precondition precondition) : Argument(name, precondition) {}
-
-  template <typename T>
-  LiveArgument& RequireInstanceOf() {
-    Argument::RequireInstanceOf<T>();
-    return *this;
-  }
-  void Detach(Location& here);
-  void Attach(Location& here);
-  void Relocate(Location* old_here, Location* new_here) {
-    if (old_here) {
-      Detach(*old_here);
-    }
-    if (new_here) {
-      Attach(*new_here);
-    }
-  }
-  virtual void ConnectionAdded(Location& here, Connection& connection) {
-    here.ObserveUpdates(connection.to);
-    here.ScheduleLocalUpdate(connection.to);
-  }
-  virtual void ConnectionRemoved(Location& here, Connection& connection) {
-    here.StopObservingUpdates(connection.to);
-    here.ScheduleLocalUpdate(connection.to);
-  }
-  void Rename(Location& here, std::string_view new_name) {
-    Detach(here);
-    name = new_name;
-    Attach(here);
-  }
+struct NextArg : Argument {
+  StrView Name() const override { return "next"sv; }
+  void CanConnect(Interface& start, Interface& end, Status&) override;
+  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
 };
+
+extern NextArg next_arg;
 
 }  // namespace automat

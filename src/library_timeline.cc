@@ -409,11 +409,12 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
 static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint started_at,
                                   time::SteadyPoint now) {
   for (auto& track : t.tracks) {
-    auto obj_result = track->GetObject(here);
-    if (obj_result.location != nullptr && obj_result.object != nullptr) {
-      track->ptr->UpdateOutput(*obj_result.location, started_at, now);
-    }
     track->InvalidateConnectionWidgets(here);
+    auto* object = track->FindObject(here, Argument::FindConfig());
+    if (object == nullptr) continue;
+    auto* location = object->MyLocation();
+    if (location == nullptr) continue;
+    track->ptr->UpdateOutput(*location, started_at, now);
   }
 }
 

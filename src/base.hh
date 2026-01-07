@@ -19,7 +19,6 @@
 #include <vector>
 
 #include "argument.hh"
-#include "connection.hh"
 #include "deserializer.hh"
 #include "drag_action.hh"
 #include "error.hh"
@@ -102,7 +101,11 @@ struct LongRunning : OnOff {
   void OnTurnOff() override { Cancel(); }
 };
 
-struct Runnable {
+struct Runnable : Interface {
+  NestedWeakPtr<Runnable> next;
+
+  // TODO: ForwardDo & ForwardNotify wrappers for Run
+
   // Derived classes should override this method to implement their behavior.
   //
   // If an object must use the CPU for some computation it can stay busy as long as it needs to.

@@ -4,6 +4,7 @@
 
 #include <shared_mutex>
 
+#include "argument.hh"
 #include "object.hh"
 #include "ptr.hh"
 
@@ -39,6 +40,12 @@ struct SyncBlock : Object {
   std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
 };
 
+struct SyncArg : Argument {
+  StrView Name() const override { return "sync"sv; }
+  void CanConnect(Interface& start, Interface& end, Status&) override;
+  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
+};
+
 // Some objects within Automat may provide interfaces that can be "synced". A synced interface
 // allows several objects that follow some interface to act as one.
 //
@@ -65,6 +72,8 @@ struct SyncBlock : Object {
 // directly, it's not going to be propagated to the other synced implementations.
 struct Interface : virtual Named {
   WeakPtr<SyncBlock> sync_block_weak = nullptr;
+
+  SyncArg sync_arg;
 
   // Note GetValueUnsafe used throughout the methods here is actually safe, because
   // ~Interface will remove itself from SyncBlock. SyncBlock never contains dead pointers.

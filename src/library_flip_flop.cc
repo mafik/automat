@@ -49,8 +49,6 @@ struct FlipFlopTarget : Argument {
   }
 };
 
-FlipFlopTarget flip_arg("flip", Argument::kOptional);
-
 static PersistentImage& FlipFlopColor() {
   static auto flip_flop_color = PersistentImage::MakeFromAsset(
       embedded::assets_flip_flop_color_webp, {.width = kFlipFlopWidth});
@@ -63,6 +61,7 @@ Rect FlipFlopRect() {
 
 FlipFlop::FlipFlop() {}
 string_view FlipFlop::Name() const { return "Flip-Flop"; }
+
 Ptr<Object> FlipFlop::Clone() const {
   auto ret = MAKE_PTR(FlipFlop);
   ret->current_state = current_state;
@@ -76,28 +75,13 @@ void FlipFlop::OnRun(Location& here, std::unique_ptr<RunTask>&) {
 
 void FlipFlop::OnTurnOn() {
   current_state = true;
-  flip_arg.LoopLocations<bool>(*here.Lock(), [](Location& other) {
-    other.ScheduleRun();
-    return false;
-  });
   WakeWidgetsAnimation();
-  flip_arg.InvalidateConnectionWidgets(*here.Lock());
 }
 
 void FlipFlop::OnTurnOff() {
   current_state = false;
-  flip_arg.LoopLocations<bool>(*here.Lock(), [](Location& other) {
-    if (auto long_running = other.object->AsLongRunning();
-        long_running && long_running->IsRunning()) {
-      long_running->Cancel();
-    }
-    return false;
-  });
   WakeWidgetsAnimation();
-  flip_arg.InvalidateConnectionWidgets(*here.Lock());
 }
-
-void FlipFlop::Args(std::function<void(Argument&)> cb) { cb(flip_arg); }
 
 void FlipFlop::SerializeState(Serializer& writer, const char* key) const {
   writer.Key(key);

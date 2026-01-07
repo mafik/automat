@@ -14,16 +14,7 @@
 
 namespace automat {
 
-Argument next_arg("next", Argument::kOptional);
-
-Argument::FinalLocationResult Argument::GetFinalLocation(
-    Location& here, std::source_location source_location) const {
-  FinalLocationResult result(GetObject(here, source_location));
-  if (auto live_object = dynamic_cast<LiveObject*>(result.object)) {
-    result.final_location = live_object->here.lock().get();
-  }
-  return result;
-}
+NextArg next_arg;
 
 Argument::LocationResult Argument::GetLocation(Location& here,
                                                std::source_location source_location) const {
@@ -165,27 +156,23 @@ Object* Argument::FindObject(Location& here, const FindConfig& cfg) const {
   return nullptr;
 }
 
-void LiveArgument::Detach(Location& here) {
-  auto connections = here.outgoing.equal_range(this);
-  for (auto it = connections.first; it != connections.second; ++it) {
-    auto& connection = *it;
-    here.StopObservingUpdates(connection->to);
-  }
-}
-
-void LiveArgument::Attach(Location& here) {
-  auto connections = here.outgoing.equal_range(this);
-  for (auto it = connections.first; it != connections.second; ++it) {
-    auto* connection = *it;
-    here.ObserveUpdates(connection->to);
-  }
-}
-
 void Argument::InvalidateConnectionWidgets(Location& here) const {
   for (auto& w : ui::ConnectionWidgetRange(here, *this)) {
     w.WakeAnimation();
     if (w.state) {
       w.state->stabilized = false;
+    }
+  }
+}
+
+void NextArg::CanConnect(Interface& start, Interface& end, Status& status) {
+  return dynamic_cast<Runnable*>(start.Get()) && dynamic_cast<Runnable*>(end.Get());
+}
+
+void NextArg::Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) {
+  if (Runnable* start_runnable = dynamic_cast<Runnable*>(start.Get())) {
+    if (Runnable* end_runnable = dynamic_cast<Runnable*>(end.Get())) {
+      start_runnable->next = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), end_runnable);
     }
   }
 }

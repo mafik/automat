@@ -151,10 +151,9 @@ void ScheduleArgumentTargets(Location& source, Argument& arg) {
     w.WakeAnimation();
   }
 
-  arg.LoopLocations<bool>(source, [](Location& next) {
-    next.ScheduleRun();
-    return false;
-  });
+  if (auto next = arg.FindLocation(source, Argument::FindConfig())) {
+    next->ScheduleRun();
+  }
 }
 
 void RunTask::OnExecute(std::unique_ptr<Task>& self) {

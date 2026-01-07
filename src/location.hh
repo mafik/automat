@@ -7,7 +7,6 @@
 #include <unordered_set>
 
 #include "animation.hh"
-#include "connection.hh"
 #include "error.hh"
 #include "object.hh"
 #include "run_button.hh"
@@ -65,11 +64,6 @@ struct Location : ReferenceCounted, ui::Widget {
 
   void Iconify();
   void Deiconify();
-
-  // Connections of this Location.
-  // Connection is owned by both incoming & outgoing locations.
-  std::unordered_multiset<Connection*, ConnectionHasher, ConnectionEqual> outgoing;
-  std::unordered_multiset<Connection*, ConnectionHasher, ConnectionEqual> incoming;
 
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;
@@ -154,18 +148,6 @@ struct Location : ReferenceCounted, ui::Widget {
   ////////////////////////////
   // Misc
   ////////////////////////////
-
-  // This function should register a connection from this location to the
-  // `other` so that subsequent calls to `Find` will return `other`.
-  //
-  // The function tries to be clever and marks the connection as `to_direct` if
-  // the current object defines an argument with the same type as the `other`
-  // object.
-  //
-  // This function should also notify the object with the `ConnectionAdded`
-  // call.
-  Connection* ConnectTo(Location& other, Argument&,
-                        Connection::PointerBehavior pointer_behavior = Connection::kFollowPointers);
 
   // Immediately execute this object's Updated function.
   void Updated(Location& updated) { object->Updated(*this, updated); }

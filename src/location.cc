@@ -80,22 +80,6 @@ Ptr<Object> Location::Take() {
   return std::move(object);
 }
 
-Connection* Location::ConnectTo(Location& other, Argument& arg,
-                                Connection::PointerBehavior pointer_behavior) {
-  if (arg.precondition >= Argument::kRequiresConcreteType) {
-    std::string error;
-    arg.CheckRequirements(*this, &other, other.object.get(), error);
-    if (error.empty()) {
-      pointer_behavior = Connection::kTerminateHere;
-    }
-  }
-  Connection* c = new Connection(arg, *this, other, pointer_behavior);
-  outgoing.emplace(c);
-  other.incoming.emplace(c);
-  object->ConnectionAdded(*this, *c);
-  return c;
-}
-
 void Location::ScheduleRun() { (new RunTask(AcquireWeakPtr()))->Schedule(); }
 
 void Location::ScheduleLocalUpdate(Location& updated) {

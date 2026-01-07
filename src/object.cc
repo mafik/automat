@@ -479,4 +479,19 @@ bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !Is
 
 bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(object.GetUnsafe()); }
 
+void Object::Args(std::function<void(Argument&)> cb) {
+  for (auto* interface : Interfaces()) {
+    cb(interface->sync_arg);
+  }
+}
+
+Location* Object::MyLocation() {
+  for (auto& loc : root_machine->locations) {
+    if (loc->object == this) {
+      return loc.Get();
+    }
+  }
+  return nullptr;
+}
+
 }  // namespace automat

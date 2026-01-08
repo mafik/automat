@@ -5,6 +5,7 @@
 #include "animation.hh"
 #include "audio.hh"
 #include "connector_optical.hh"
+#include "object.hh"
 #include "root_widget.hh"
 #include "widget.hh"
 
@@ -35,7 +36,7 @@ struct DragConnectionAction : Action {
 //
 // TODO: separate the state of these three modes better
 struct ConnectionWidget : Widget {
-  Location& from;
+  MemberWeakPtr start_weak;
   Argument& arg;
 
   struct AnimationState {
@@ -62,7 +63,10 @@ struct ConnectionWidget : Widget {
   float length = 0;
   mutable std::unique_ptr<Object::WidgetInterface> prototype_widget;
 
-  ConnectionWidget(Widget* parent, Location&, Argument&);
+  ConnectionWidget(Widget* parent, MemberWeakPtr& start_weak, Argument&);
+
+  // Helper to get the Location from start_weak
+  Location* StartLocation() const;
 
   StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;
@@ -100,8 +104,12 @@ struct ConnectionWidgetRange {
       auto size = widgets.size();
       while (i < size) {
         ConnectionWidget& w = *widgets[i];
-        if (&w.from == &here && &w.arg == &arg) {
-          return;
+        if (&w.arg == &arg) {
+          if (Location* from = w.StartLocation()) {
+            if (from == &here) {
+              return;
+            }
+          }
         }
         ++i;
       }

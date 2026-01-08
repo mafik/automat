@@ -141,7 +141,7 @@ void NextArg::CanConnect(Named& start, Named& end, Status& status) {
   }
 }
 
-void NextArg::Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) {
+void NextArg::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
   Runnable* start_runnable = dynamic_cast<Runnable*>(start.Get());
   if (start_runnable == nullptr) return;
   start_runnable->next = end.DynamicCast<Runnable>();

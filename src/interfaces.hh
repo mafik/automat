@@ -43,7 +43,7 @@ struct SyncBlock : Object {
 struct SyncArg : Argument {
   StrView Name() const override { return "sync"sv; }
   void CanConnect(Named& start, Named& end, Status&) override;
-  void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) override;
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
   NestedPtr<Named> Find(Named& start) const override;
 };
 

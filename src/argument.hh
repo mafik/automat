@@ -49,12 +49,20 @@ struct Argument : Named {
     AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
+  bool CanConnect(Named& start, Named& end) {
+    Status status;
+    CanConnect(start, end, status);
+    return OK(status);
+  }
+
   // This function should register a connection from `start` to the `end` so that subsequent calls
   // to `Find` will return `end`.
   //
   // When `end` is nullptr, this disconnects the existing connection. The implementation can check
   // the current connection value before clearing it (e.g., to call cleanup methods).
-  virtual void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) = 0;
+  virtual void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) = 0;
+
+  void Disconnect(const NestedPtr<Named>& start) { Connect(start, {}); }
 
   virtual NestedPtr<Named> Find(Named& start) const = 0;
 
@@ -97,7 +105,7 @@ struct Argument : Named {
 struct NextArg : Argument {
   StrView Name() const override { return "next"sv; }
   void CanConnect(Named& start, Named& end, Status&) override;
-  void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) override;
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
   NestedPtr<Named> Find(Named& start) const override;
 };
 

@@ -387,9 +387,15 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
   WeakPtr() : PtrBase<T>(nullptr) {}
   WeakPtr(const Ptr<T>& ptr) : PtrBase<T>(SafeIncrementWeakRefs(ptr.Get())) {}
   WeakPtr(T* obj) : PtrBase<T>(SafeIncrementWeakRefs(obj)) {}
-  WeakPtr(const WeakPtr<T>& that) : PtrBase<T>(SafeIncrementWeakRefs(that.obj)) {}
-  WeakPtr(WeakPtr<T>&& that) : PtrBase<T>(that.Release()) {}
 
+  // Copy constructors
+  WeakPtr(const WeakPtr<T>& that) : PtrBase<T>(SafeIncrementWeakRefs(that.obj)) {}
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  WeakPtr(const WeakPtr<U>& that) : PtrBase<T>(SafeIncrementWeakRefs(that.obj)) {}
+
+  // Move constructors
+  WeakPtr(WeakPtr<T>&& that) : PtrBase<T>(that.Release()) {}
   template <typename U>
     requires std::convertible_to<U*, T*>
   WeakPtr(WeakPtr<U>&& that) : PtrBase<T>(that.Release()) {}
@@ -442,6 +448,9 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
   }
 
   T* GetUnsafe() const { return this->obj; }
+
+  template <class U>
+  friend class WeakPtr;
 };
 
 template <typename T>
@@ -498,6 +507,11 @@ template <typename T>
 struct [[clang::trivial_abi]] NestedWeakPtr {
   NestedWeakPtr() : weak_ptr{}, obj(nullptr) {}
   NestedWeakPtr(const NestedPtr<T>& ptr) : weak_ptr(ptr.ptr), obj(ptr.obj) {}
+
+  template <typename U>
+    requires std::convertible_to<U*, ReferenceCounted*>
+  NestedWeakPtr(const WeakPtr<U>& ptr, T* obj) : weak_ptr(ptr), obj(obj) {}
+
   NestedWeakPtr(WeakPtr<ReferenceCounted>&& ptr, T* obj) : weak_ptr(std::move(ptr)), obj(obj) {}
 
   std::strong_ordering operator<=>(const NestedWeakPtr<T>& that) const {

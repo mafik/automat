@@ -35,17 +35,33 @@ struct DummyRunnable : Object, Runnable {
   Ptr<Object> Clone() const override { return MAKE_PTR(DummyRunnable); }
 } kDummyRunnable;
 
-static bool IsArgumentOptical(Location& from, Argument& arg) {
+static bool IsArgumentOptical(Object& obj, Argument& arg) {
   Status status;
-  arg.CanConnect(*from.object, kDummyRunnable, status);
+  arg.CanConnect(obj, kDummyRunnable, status);
   return OK(status);
 }
 
-ConnectionWidget::ConnectionWidget(Widget* parent, Location& from, Argument& arg)
-    : Widget(parent), from(from), arg(arg) {
-  if (IsArgumentOptical(from, arg)) {
-    auto pos_dir = from.ArgStart(arg);
-    state.emplace(from, arg, pos_dir);
+// Helper to get the Location from start_weak
+Location* ConnectionWidget::StartLocation() const {
+  if (auto locked = start_weak.Lock()) {
+    if (auto* obj = locked.GetObject()) {
+      return obj->MyLocation();
+    }
+  }
+  return nullptr;
+}
+
+ConnectionWidget::ConnectionWidget(Widget* parent, MemberWeakPtr& start, Argument& arg)
+    : Widget(parent), start_weak(start), arg(arg) {
+  if (auto locked = start_weak.Lock()) {
+    if (auto* obj = locked.GetObject()) {
+      if (IsArgumentOptical(*obj, arg)) {
+        if (auto* loc = obj->MyLocation()) {
+          auto pos_dir = loc->ArgStart(arg);
+          state.emplace(*loc, arg, pos_dir);
+        }
+      }
+    }
   }
 }
 
@@ -58,6 +74,10 @@ SkPath ConnectionWidget::Shape() const {
 }
 
 void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
+  Location* from_ptr = StartLocation();
+  if (!from_ptr) return;
+  Location& from = *from_ptr;
+
   if (arg.style == Argument::Style::Spotlight) {
     auto target_bounds = from.WidgetForObject().CoarseBounds();
     Vec2 target = from.position;  //  + target_bounds.Center();
@@ -205,6 +225,10 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
 }
 
 void ConnectionWidget::FromMoved() {
+  Location* from_ptr = StartLocation();
+  if (!from_ptr) return;
+  Location& from = *from_ptr;
+
   if (state) {
     if (state->stabilized && !state->stabilized_end.has_value()) {
       auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
@@ -223,10 +247,14 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
 
+  Location* from_ptr = StartLocation();
+  if (!from_ptr) return animation::Finished;
+  Location& from = *from_ptr;
+
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
-  if (arg.interface) {
-    from_shape = from_widget.InterfaceShape(arg.interface);
+  if (auto* iface = start_weak.AsUnsafe<Interface>()) {
+    from_shape = from_widget.InterfaceShape(iface);
   }
   SkPath to_shape;  // machine coords
   to_points.clear();
@@ -273,7 +301,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
   // If one of the to_points is over from_shape, don't draw the cable
   bool overlapping = false;
-  if (to != &from && to != nullptr) {
+  if (to != from_ptr && to != nullptr) {
     overlapping = to_shape.contains(pos_dir.pos.x, pos_dir.pos.y);
     if (!overlapping && !from_shape.isEmpty()) {
       for (auto& to_point : to_points) {
@@ -349,10 +377,15 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   if (arg.style == Argument::Style::Invisible || arg.style == Argument::Style::Spotlight) {
     return;
   }
+
+  Location* from_ptr = StartLocation();
+  if (!from_ptr) return;
+  Location& from = *from_ptr;
+
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
-  if (arg.interface) {
-    from_shape = from.InterfaceShape(arg.interface);
+  if (auto* iface = start_weak.AsUnsafe<Interface>()) {
+    from_shape = from_widget.InterfaceShape(iface);
   }
   SkPath to_shape;  // machine coords
 
@@ -412,26 +445,24 @@ std::unique_ptr<Action> ConnectionWidget::FindAction(Pointer& pointer, ActionTri
   return nullptr;
 }
 
-bool CanConnect(Location& from, Location& to, Argument& arg) {
-  std::string error;
-  arg.CheckRequirements(from, &to, to.object.get(), error);
-  return error.empty();
-}
-
 DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& widget)
     : Action(pointer),
       widget(widget),
       effect(audio::MakeBeginLoopEndEffect(embedded::assets_SFX_cable_start_wav,
                                            embedded::assets_SFX_cable_loop_wav,
                                            embedded::assets_SFX_cable_end_wav)) {
-  if (auto it = widget.from.outgoing.find(&widget.arg); it != widget.from.outgoing.end()) {
-    delete *it;
-  }
+  auto start = widget.start_weak.Lock();
+  if (!start) return;
+  Location* from = start.GetObject()->MyLocation();
+  if (!from) return;
+
+  // Disconnect existing connection
+  widget.arg.Disconnect(start);
 
   grab_offset = Vec2(0, 0);
   if (widget.state) {
     // Position within parent machine
-    auto pointer_pos = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
+    auto pointer_pos = pointer.PositionWithin(*from->ParentAs<Machine>());
     auto mat = widget.state->ConnectorMatrix();
     SkMatrix mat_inv;
     if (mat.invert(&mat_inv)) {
@@ -440,9 +471,9 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
     widget.manual_position = pointer_pos - grab_offset * widget.state->connector_scale;
   }
 
-  if (Machine* m = widget.from.ParentAs<Machine>()) {
+  if (Machine* m = from->ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      if (CanConnect(widget.from, *l, widget.arg)) {
+      if (widget.arg.CanConnect(*start, *l->object)) {
         l->highlight_target = 1;
       } else {
         l->highlight_target = 0;
@@ -454,7 +485,14 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
 }
 
 DragConnectionAction::~DragConnectionAction() {
-  Machine* m = widget.from.ParentAs<Machine>();
+  auto start = widget.start_weak.Lock();
+  if (!start) return;
+  Location* from = start.GetObject()->MyLocation();
+  if (!from) return;
+
+  Machine* m = from->ParentAs<Machine>();
+  if (!m) return;
+
   Vec2 pos;
   if (widget.state) {
     pos = widget.state->ConnectorMatrix().mapPoint({});
@@ -464,22 +502,25 @@ DragConnectionAction::~DragConnectionAction() {
     return;
   }
   Location* to = m->LocationAtPoint(pos);
-  if (to != nullptr && CanConnect(widget.from, *to, widget.arg)) {
-    widget.from.ConnectTo(*to, widget.arg);
+  if (to != nullptr && widget.arg.CanConnect(*start, *to->object)) {
+    widget.arg.Connect(start, NestedPtr<Named>(to->object, to->object.Get()));
   }
   widget.WakeAnimation();
 
   widget.manual_position.reset();
-  if (Machine* m = widget.from.ParentAs<Machine>()) {
-    for (auto& l : m->locations) {
-      l->highlight_target = 0;
-      l->WakeAnimation();
-    }
+  for (auto& l : m->locations) {
+    l->highlight_target = 0;
+    l->WakeAnimation();
   }
 }
 
 void DragConnectionAction::Update() {
-  Vec2 new_position = pointer.PositionWithin(*widget.from.ParentAs<Machine>());
+  auto start = widget.start_weak.Lock();
+  if (!start) return;
+  Location* from = start.GetObject()->MyLocation();
+  if (!from) return;
+
+  Vec2 new_position = pointer.PositionWithin(*from->ParentAs<Machine>());
   widget.manual_position = new_position - grab_offset * widget.state->connector_scale;
   widget.WakeAnimation();
 }
@@ -498,6 +539,10 @@ Optional<Rect> ConnectionWidget::TextureBounds() const {
     }
     return bounds;
   } else {
+    Location* from_ptr = StartLocation();
+    if (!from_ptr) return std::nullopt;
+    Location& from = *from_ptr;
+
     auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
     ArcLine arcline = RouteCable(pos_dir, to_points);
     Rect rect = arcline.Bounds();
@@ -507,6 +552,10 @@ Optional<Rect> ConnectionWidget::TextureBounds() const {
 
 Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   Vec<Vec2> anchors;
+  Location* from_ptr = StartLocation();
+  if (!from_ptr) return anchors;
+  Location& from = *from_ptr;
+
   auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
   anchors.push_back(pos_dir.pos);
   Optional<Vec2> end_pos;
@@ -526,10 +575,11 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
 
 ConnectionWidget* ConnectionWidget::Find(Location& here, Argument& arg) {
   for (auto& connection_widget : root_widget->connection_widgets) {
-    if (&connection_widget->from != &here) {
+    if (&connection_widget->arg != &arg) {
       continue;
     }
-    if (&connection_widget->arg != &arg) {
+    Location* from = connection_widget->StartLocation();
+    if (from != &here) {
       continue;
     }
     return connection_widget.get();

@@ -17,6 +17,7 @@
 #include "embedded.hh"
 #include "loading_animation.hh"
 #include "math.hh"
+#include "object.hh"
 #include "pointer.hh"
 #include "prototypes.hh"
 #include "time.hh"
@@ -543,20 +544,21 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
         // Check if this argument already has a widget.
         bool has_widget = false;
         for (auto& widget : root_widget.connection_widgets) {
-          if (&widget->from != loc.get()) {
+          if (widget->StartLocation() != loc.get()) {
             continue;
           }
           if (&widget->arg != &arg) {
             continue;
           }
           has_widget = true;
+          break;
         }
         if (has_widget) {
           return;
         }
         // Create a new widget.
         root_widget.connection_widgets.emplace_back(
-            new ui::ConnectionWidget(&root_widget, *loc, arg));
+            new ui::ConnectionWidget(&root_widget, MemberWeakPtr(loc->object, *loc->object), arg));
       });
     }
   }
@@ -579,7 +581,7 @@ void RootWidget::FillChildren(Vec<Widget*>& out_children) {
   Vec<Widget*> connection_widgets_below;
   connection_widgets_below.reserve(connection_widgets.size());
   for (auto& it : connection_widgets) {
-    if (it->manual_position.has_value() || IsDragged(it->from)) {
+    if (it->manual_position.has_value() || IsDragged(it->StartLocation())) {
       out_children.push_back(it.get());
     } else {
       connection_widgets_below.push_back(it.get());

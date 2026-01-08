@@ -51,7 +51,7 @@ Location* ConnectionWidget::StartLocation() const {
   return nullptr;
 }
 
-ConnectionWidget::ConnectionWidget(Widget* parent, MemberWeakPtr& start, Argument& arg)
+ConnectionWidget::ConnectionWidget(Widget* parent, const MemberWeakPtr& start, Argument& arg)
     : Widget(parent), start_weak(start), arg(arg) {
   if (auto locked = start_weak.Lock()) {
     if (auto* obj = locked.GetObject()) {

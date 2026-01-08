@@ -259,18 +259,13 @@ void UpdateCode(automat::mc::Controller& controller,
 std::vector<Ptr<Instruction>> FindInstructions(Location& assembler_loc) {
   std::vector<Ptr<Instruction>> instructions;
   // Find all Instructions that are connected to this Assembler via assembler_arg
-  // We need to search the parent machine for Instructions
-  if (auto* machine = assembler_loc.ParentAs<Machine>()) {
-    machine->ForEachLocation([&](Location& loc) {
-      if (auto* inst = loc.As<Instruction>()) {
-        // Check if this instruction is connected to our assembler
-        if (auto target = assembler_arg.Find(*inst)) {
-          if (target.Get() == assembler_loc.object.get()) {
-            instructions.push_back(inst->AcquirePtr());
-          }
-        }
-      }
-    });
+  // We take advantage of instructions_weak, which is the reverse pointer of assembler_arg
+  auto* assembler = assembler_loc.As<Assembler>();
+  for (auto& inst_weak : assembler->instructions_weak) {
+    auto inst = inst_weak.Lock();
+    if (inst) {
+      instructions.emplace_back(std::move(inst));
+    }
   }
   return instructions;
 }
@@ -780,13 +775,13 @@ Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, 
 struct RegisterAssemblerArgument : Argument {
   StrView Name() const override { return "Reg's Assembler"sv; }
 
-  void CanConnect(Interface& start, Interface& end, Status& status) override {
+  void CanConnect(Named& start, Named& end, Status& status) override {
     if (!dynamic_cast<Assembler*>(&end)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
   }
 
-  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override {
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override {
     if (auto* reg = dynamic_cast<Register*>(start.Get())) {
       if (end) {
         if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {
@@ -796,6 +791,11 @@ struct RegisterAssemblerArgument : Argument {
         reg->assembler_weak = {};
       }
     }
+  }
+
+  NestedPtr<Named> Find(Named& start) const override {
+    auto* reg = dynamic_cast<Register*>(&start);
+    return reg->assembler_weak.Lock();
   }
 };
 

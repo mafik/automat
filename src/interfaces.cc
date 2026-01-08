@@ -128,7 +128,7 @@ void SyncArg::CanConnect(Named& start, Named& end, Status& status) {
   }
 }
 
-void SyncArg::Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) {
+void SyncArg::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
   auto* start_interface = dynamic_cast<Interface*>(start.Get());
   if (start_interface == nullptr) return;
   auto* sync_block = dynamic_cast<SyncBlock*>(end.Get());

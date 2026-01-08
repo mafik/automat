@@ -295,7 +295,7 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
   // We don't have backlinks to connection widgets so we have to iterate over all connection widgets
   // in root_widget and check if they're connected to this location.
   for (auto& w : ui::root_widget->connection_widgets) {
-    if (&w->from == this) {  // updates all outgoing connection widgets
+    if (w->StartLocation() == this) {  // updates all outgoing connection widgets
       if (moved && !value_changed) {
         w->FromMoved();
       } else {
@@ -304,14 +304,8 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
           w->state->stabilized = false;
         }
       }
-    } else {
-      auto [begin, end] = incoming.equal_range(&w->arg);
-      for (auto it = begin; it != end; ++it) {
-        auto* connection = *it;
-        if (&w->from == &connection->from) {
-          w->WakeAnimation();
-        }
-      }
+    } else if (w->EndLocation() == this) {
+      w->WakeAnimation();
     }
   }
 }
@@ -329,12 +323,6 @@ Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(WidgetForObject(
 Location::~Location() {
   // Location can only be destroyed by its parent so we don't have to do anything there.
   parent_location = {};
-  while (not incoming.empty()) {
-    delete *incoming.begin();
-  }
-  while (not outgoing.empty()) {
-    delete *outgoing.begin();
-  }
   for (auto other : update_observers) {
     other->observing_updates.erase(this);
   }
@@ -350,7 +338,7 @@ Location::~Location() {
   CancelScheduledAt(*this);
   if (root_widget) {
     for (int i = 0; i < root_widget->connection_widgets.size(); ++i) {
-      if (&root_widget->connection_widgets[i]->from == this) {
+      if (root_widget->connection_widgets[i]->StartLocation() == this) {
         root_widget->connection_widgets.erase(root_widget->connection_widgets.begin() + i);
         --i;
       }
@@ -503,17 +491,17 @@ void Location::UpdateAutoconnectArgs() {
     // Find the current distance & target of this connection
     float old_dist2 = HUGE_VALF;
     Location* old_target = nullptr;
-    if (auto it = outgoing.find(&arg); it != outgoing.end()) {
+    if (auto end = arg.Find(*object)) {
       Vec<Vec2AndDir> to_positions;
-      auto conn = *it;
-      auto& to_object_widget = conn->to.WidgetForObject();
+      auto* end_loc = end.GetOwner<Object>()->MyLocation();
+      auto& to_object_widget = end_loc->WidgetForObject();
       to_object_widget.ConnectionPositions(to_positions);
       auto other_up = TransformBetween(to_object_widget, *parent_machine);
       for (auto& to : to_positions) {
         Vec2 to_pos = other_up.mapPoint(to.pos);
         float dist2 = LengthSquared(start.pos - to_pos);
         if (dist2 <= old_dist2) {
-          old_target = &conn->to;
+          old_target = end_loc;
           old_dist2 = dist2;
         }
       }
@@ -538,12 +526,8 @@ void Location::UpdateAutoconnectArgs() {
     if (new_target == old_target) {
       return;
     }
-    if (old_target) {
-      auto old_conn = *outgoing.find(&arg);
-      delete old_conn;
-    }
     if (new_target) {
-      ConnectTo(*new_target, arg);
+      arg.Connect(object, new_target->object);
     }
   });
 

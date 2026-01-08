@@ -5,8 +5,8 @@
 #include "animation.hh"
 #include "base.hh"
 #include "color.hh"
-#include "interfaces.hh"
 #include "keyboard.hh"
+#include "library_timeline.hh"
 #include "run_button.hh"
 
 namespace automat::library {
@@ -39,7 +39,7 @@ struct MacroRecorder : LiveObject,
   ui::Keylogging* keylogging = nullptr;
   ui::Pointer::Logging* pointer_logging = nullptr;
   std::unique_ptr<ui::Widget> record_button;
-  NestedWeakPtr<Interface> timeline_connection;  // Connection target for TimelineArgument
+  NestedWeakPtr<Timeline> timeline_connection;
 
   MacroRecorder(ui::Widget* parent);
   ~MacroRecorder();

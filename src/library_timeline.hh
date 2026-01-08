@@ -6,7 +6,6 @@
 #include <memory>
 
 #include "base.hh"
-#include "interfaces.hh"
 #include "pointer.hh"
 #include "run_button.hh"
 #include "time.hh"
@@ -85,10 +84,16 @@ struct Float64Track : TrackBase {
 struct TrackArgument : Argument {
   TextDrawable icon;
   Ptr<TrackBase> ptr;
+  NestedPtr<Named> target;
+  Str name;
 
   TrackArgument(StrView name);
 
   PaintDrawable& Icon() override;
+
+  void CanConnect(Named& start, Named& end, Status& status) override;
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
+  NestedPtr<Named> Find(Named& start) const override;
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.

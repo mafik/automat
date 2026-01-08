@@ -63,7 +63,7 @@ struct ImageArgument : Argument {
     }
   }
 
-  void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) override {
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(start.Get());
     if (tesseract == nullptr) return;
     auto* end_obj = dynamic_cast<Object*>(end.Get());
@@ -91,7 +91,7 @@ struct TextArgument : Argument {
     // Any object can receive text
   }
 
-  void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) override {
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(start.Get());
     if (tesseract == nullptr) return;
     auto* end_obj = dynamic_cast<Object*>(end.Get());

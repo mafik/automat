@@ -296,14 +296,19 @@ static SkPath GetRecPath() {
 
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
-TrackArgument::TrackArgument(StrView name)
-    : Argument(name, Argument::kOptional), icon(name, kKeyLetterSize, KeyFont()) {
+TrackArgument::TrackArgument(StrView name) : icon(name, kKeyLetterSize, KeyFont()), name(name) {
   tint = "#17aeb7"_color;
   light = "#17aeb7"_color;
   // interface = this;
 }
 
 PaintDrawable& TrackArgument::Icon() { return icon; }
+
+void TrackArgument::CanConnect(Named& start, Named& end, Status& status) {}
+void TrackArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
+  target = end;
+}
+NestedPtr<Named> TrackArgument::Find(Named& start) const { return target; }
 
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}

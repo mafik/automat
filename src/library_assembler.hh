@@ -111,6 +111,7 @@ struct Assembler : LiveObject, LongRunning, Container {
   time::SteadyPoint last_state_refresh = {};
   mc::Controller::State state;
   std::array<SharedOrWeakPtr<Register>, kGeneralPurposeRegisterCount> reg_objects_idx;
+  std::vector<WeakPtr<Instruction>> instructions_weak;
 
   void UpdateMachineCode();
 

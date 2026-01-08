@@ -63,10 +63,11 @@ struct ConnectionWidget : Widget {
   float length = 0;
   mutable std::unique_ptr<Object::WidgetInterface> prototype_widget;
 
-  ConnectionWidget(Widget* parent, MemberWeakPtr& start_weak, Argument&);
+  ConnectionWidget(Widget* parent, const MemberWeakPtr& start_weak, Argument&);
 
   // Helper to get the Location from start_weak
   Location* StartLocation() const;
+  Location* EndLocation() const;
 
   StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;

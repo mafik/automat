@@ -121,20 +121,25 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
       writer.Double(round(location->position.y * 1000000.) / 1000000.);
 
       {
-        writer.Key("connections");
-        writer.StartObject();
+        bool serializing_connections = false;  // used to lazily call StartObject
         location->object->Args([&](Argument& arg) {
+          auto end = arg.Find(*location->object);
+          if (end.Get() == nullptr) return;
           auto name = arg.Name();
+          auto* end_location = end.GetOwner<Object>()->MyLocation();
+          auto& to_name = location_ids.at(end_location);
+          if (!serializing_connections) {
+            serializing_connections = true;
+            writer.Key("connections");
+            writer.StartObject();
+          }
           writer.Key(name.data(), name.size());
-          auto& to_name = location_ids.at(&conn->to);
           writer.String(to_name.data(), to_name.size());
         });
-        for (auto* conn : location->outgoing) {
-          writer.Key(conn->argument.name.data(), conn->argument.name.size());
-          auto& to_name = location_ids.at(&conn->to);
-          writer.String(to_name.data(), to_name.size());
+        if (serializing_connections) {
+          serializing_connections = false;
+          writer.EndObject();
         }
-        writer.EndObject();
       }
 
       writer.EndObject();
@@ -218,10 +223,10 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
         Location* from = connection_record.from;
         Location* to = to_it->second;
         from->object->Args([&](Argument& arg) {
-          if (arg.name != connection_record.label) {
+          if (arg.Name() != connection_record.label) {
             return;
           }
-          from->ConnectTo(*to, arg);
+          arg.Connect(from->object, to->object);
         });
       }
     }

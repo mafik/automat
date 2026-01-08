@@ -33,8 +33,9 @@ enum class Flag {
 
 struct AssemblerArgument : Argument {
   StrView Name() const override { return "assembler"sv; }
-  void CanConnect(Interface& start, Interface& end, Status& status) override;
-  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
+  void CanConnect(Named& start, Named& end, Status& status) override;
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
+  NestedPtr<Named> Find(Named& start) const override;
 };
 
 struct JumpArgument : Argument {
@@ -42,14 +43,14 @@ struct JumpArgument : Argument {
 
   StrView Name() const override { return "jump"sv; }
   PaintDrawable& Icon() override;
-  void CanConnect(Interface& start, Interface& end, Status& status) override;
-  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
-  NestedPtr<Interface> Find(Interface& start) override;
+  void CanConnect(Named& start, Named& end, Status& status) override;
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
+  NestedPtr<Named> Find(Named& start) const override;
 };
 
 // Same as NextArg - but calls UpdateMachineCode when it's reconnected
 struct NextInstructionArg : NextArg {
-  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
 };
 
 extern AssemblerArgument assembler_arg;
@@ -59,6 +60,7 @@ extern NextInstructionArg next_instruction_arg;
 struct Instruction : LiveObject, Runnable, Buffer {
   mc::Inst mc_inst;
   NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
+  NestedWeakPtr<Object> assembler_weak;
 
   void Args(std::function<void(Argument&)> cb) override;
   Ptr<Object> ArgPrototype(const Argument&) override;

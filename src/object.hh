@@ -200,7 +200,7 @@ struct MemberPtr : NestedPtr<Named> {
   // Allow conversion from NestedPtr<T> where T derives from Named
   template <typename T>
     requires std::convertible_to<T*, Named*>
-  MemberPtr(NestedPtr<T>&& other) : Base(std::move(other).template DynamicCast<Named>()) {}
+  MemberPtr(NestedPtr<T>&& other) : Base(std::move(other)) {}
 
   template <typename T>
     requires std::convertible_to<T*, Named*>

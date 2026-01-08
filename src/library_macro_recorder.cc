@@ -87,13 +87,13 @@ MacroRecorder::~MacroRecorder() {
 struct TimelineArgument : Argument {
   StrView Name() const override { return "Timeline"sv; }
 
-  void CanConnect(Interface& start, Interface& end, Status& status) override {
+  void CanConnect(Named& start, Named& end, Status& status) override {
     if (!dynamic_cast<Timeline*>(&end)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
     }
   }
 
-  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override {
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override {
     if (auto* recorder = dynamic_cast<MacroRecorder*>(start.Get())) {
       // Handle disconnect - check old connection before clearing
       if (!end) {
@@ -110,7 +110,7 @@ struct TimelineArgument : Argument {
 
       // Handle connect
       if (auto* timeline = dynamic_cast<Timeline*>(end.Get())) {
-        recorder->timeline_connection = NestedWeakPtr<Interface>(end.GetOwnerWeak(), end.Get());
+        recorder->timeline_connection = end.DynamicCast<Timeline>();
         if (recorder->IsOn()) {
           timeline->BeginRecording();
         }
@@ -118,7 +118,7 @@ struct TimelineArgument : Argument {
     }
   }
 
-  NestedPtr<Interface> Find(Interface& start) override {
+  NestedPtr<Named> Find(Named& start) const override {
     if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
       return recorder->timeline_connection.Lock();
     }
@@ -381,7 +381,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
 
     PositionAhead(*timeline_loc, track_arg, on_off_loc);
     AnimateGrowFrom(*macro_recorder.here.lock(), on_off_loc);
-    timeline->here.lock()->ConnectTo(on_off_loc, track_arg);
+    track_arg.Connect(timeline_loc->object, on_off_loc.object);
   }
 
   // Append the current timestamp to that track
@@ -561,7 +561,8 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
 
     PositionAhead(*timeline_loc, track_arg, receiver_loc);
     AnimateGrowFrom(*recorder.here.lock(), receiver_loc);
-    timeline->here.lock()->ConnectTo(receiver_loc, track_arg);
+    track_arg.Connect(timeline_loc->object, receiver_loc.object);
+    // timeline->here.lock()->ConnectTo(receiver_loc, track_arg);
   }
 
   auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index]->ptr.Get());

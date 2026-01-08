@@ -297,10 +297,6 @@ struct Widget : Trackable, OptionsProvider {
   // Local (metric) coordinates.
   virtual SkPath InterfaceShape(Interface*) const { return SkPath(); }
 
-  // Returns the start position of the given argument.
-  // Local (metric) coordinates.
-  virtual Vec2AndDir ArgStart(const Argument&);
-
   // Find the shape of this widget. If it's shape is empty, combine its children's shapes.
   SkPath GetShapeRecursive() const;
 

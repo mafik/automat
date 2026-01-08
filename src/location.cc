@@ -528,6 +528,8 @@ void Location::UpdateAutoconnectArgs() {
     }
     if (new_target) {
       arg.Connect(object, new_target->object);
+    } else {
+      arg.Disconnect(object);
     }
   });
 
@@ -550,9 +552,7 @@ void Location::UpdateAutoconnectArgs() {
       if (arg.autoconnect_radius <= 0) {
         return;
       }
-      Str error;
-      arg.CheckRequirements(*other, this, object.get(), error);
-      if (!error.empty()) {
+      if (!arg.CanConnect(*other->object, *object)) {
         return;  // `this` location can't be connected to `other`s `arg`
       }
 
@@ -567,17 +567,17 @@ void Location::UpdateAutoconnectArgs() {
       // Find the current distance & target of this connection
       float old_dist2 = HUGE_VALF;
       Location* old_target = nullptr;
-      if (auto it = other->outgoing.find(&arg); it != other->outgoing.end()) {
+      if (auto end = arg.Find(*other->object)) {
         Vec<Vec2AndDir> to_positions;
-        auto conn = *it;
-        auto& to_object_widget = conn->to.WidgetForObject();
+        auto* end_loc = end.GetOwner<Object>()->MyLocation();
+        auto& to_object_widget = end_loc->WidgetForObject();
         to_object_widget.ConnectionPositions(to_positions);
         auto to_up = TransformBetween(to_object_widget, *parent_machine);
         for (auto& to : to_positions) {
           Vec2 to_pos = to_up.mapPoint(to.pos);
           float dist2 = LengthSquared(start.pos - to_pos);
           if (dist2 <= old_dist2) {
-            old_target = &conn->to;
+            old_target = end_loc;
             old_dist2 = dist2;
           }
         }
@@ -597,12 +597,10 @@ void Location::UpdateAutoconnectArgs() {
       if (new_target == old_target) {
         return;
       }
-      if (old_target) {
-        auto old_conn = *other->outgoing.find(&arg);
-        delete old_conn;
-      }
       if (new_target) {
-        other->ConnectTo(*new_target, arg);
+        arg.Connect(other->object, new_target->object);
+      } else {
+        arg.Disconnect(other->object);
       }
     });
   }

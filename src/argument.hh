@@ -44,11 +44,11 @@ struct Argument : Named {
 
   virtual ~Argument() = default;
 
-  virtual void CanConnect(Named& start, Named& end, Status& status) {
+  virtual void CanConnect(Named& start, Named& end, Status& status) const {
     AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
-  bool CanConnect(Named& start, Named& end) {
+  bool CanConnect(Named& start, Named& end) const {
     Status status;
     CanConnect(start, end, status);
     return OK(status);
@@ -64,6 +64,10 @@ struct Argument : Named {
   void Disconnect(const NestedPtr<Named>& start) { Connect(start, {}); }
 
   virtual NestedPtr<Named> Find(Named& start) const = 0;
+
+  // Returns the Interface pointer for this argument on the given start object.
+  // Returns nullptr if this argument doesn't represent an interface.
+  virtual Interface* StartInterface(Named& start) const { return nullptr; }
 
   virtual PaintDrawable& Icon();            // TODO: weird - clean this up
   virtual bool IsOn(Location& here) const;  // TODO: weird - clean this up
@@ -103,7 +107,7 @@ struct Argument : Named {
 
 struct NextArg : Argument {
   StrView Name() const override { return "next"sv; }
-  void CanConnect(Named& start, Named& end, Status&) override;
+  void CanConnect(Named& start, Named& end, Status&) const override;
   void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
   NestedPtr<Named> Find(Named& start) const override;
 };

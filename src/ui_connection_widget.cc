@@ -51,6 +51,17 @@ Location* ConnectionWidget::StartLocation() const {
   return nullptr;
 }
 
+Location* ConnectionWidget::EndLocation() const {
+  if (auto locked = start_weak.Lock()) {
+    if (auto found = arg.Find(*locked)) {
+      if (auto* obj = found.GetOwner<Object>()) {
+        return obj->MyLocation();
+      }
+    }
+  }
+  return nullptr;
+}
+
 ConnectionWidget::ConnectionWidget(Widget* parent, const MemberWeakPtr& start, Argument& arg)
     : Widget(parent), start_weak(start), arg(arg) {
   if (auto locked = start_weak.Lock()) {

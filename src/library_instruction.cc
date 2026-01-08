@@ -107,7 +107,7 @@ JumpArgument::JumpArgument() {
 
 PaintDrawable& JumpArgument::Icon() { return jump_icon; }
 
-void JumpArgument::CanConnect(Named& start, Named& end, Status& status) {
+void JumpArgument::CanConnect(Named& start, Named& end, Status& status) const {
   if (!dynamic_cast<Runnable*>(&end)) {
     AppendErrorMessage(status) += "Jump target must be a Runnable";
   }
@@ -156,7 +156,7 @@ void NextInstructionArg::Connect(const NestedPtr<Named>& start, const NestedPtr<
 
 NextInstructionArg next_instruction_arg;
 
-void AssemblerArgument::CanConnect(Named& start, Named& end, Status& status) {
+void AssemblerArgument::CanConnect(Named& start, Named& end, Status& status) const {
   if (!dynamic_cast<Assembler*>(&end)) {
     AppendErrorMessage(status) += "Must connect to an Assembler";
   }
@@ -3705,7 +3705,7 @@ Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
   if (&arg == &jump_arg) {
     return Vec2AndDir{.pos = kRect.RightCenter(), .dir = 0_deg};
   }
-  return ui::Widget::ArgStart(arg);
+  return Object::WidgetBase::ArgStart(arg);
 }
 
 void Instruction::Widget::FillChildren(Vec<ui::Widget*>& children) {

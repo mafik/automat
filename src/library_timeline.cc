@@ -304,7 +304,7 @@ TrackArgument::TrackArgument(StrView name) : icon(name, kKeyLetterSize, KeyFont(
 
 PaintDrawable& TrackArgument::Icon() { return icon; }
 
-void TrackArgument::CanConnect(Named& start, Named& end, Status& status) {}
+void TrackArgument::CanConnect(Named& start, Named& end, Status& status) const {}
 void TrackArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
   target = end;
 }

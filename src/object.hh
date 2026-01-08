@@ -86,6 +86,10 @@ struct Object : public ReferenceCounted {
     // Places where the connections to this widget may terminate.
     // Local (metric) coordinates.
     virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const = 0;
+
+    // Returns the start position of the given argument.
+    // Local (metric) coordinates.
+    virtual Vec2AndDir ArgStart(const Argument&) = 0;
   };
 
   // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
@@ -110,6 +114,9 @@ struct Object : public ReferenceCounted {
 
     // Returns connection points on the sides and on top of the object's CoarseBounds().
     void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const override;
+
+    // Returns the start position of the given argument.
+    Vec2AndDir ArgStart(const Argument&) override;
 
     // When iconified, prevent children from receiving pointer events.
     bool AllowChildPointerEvents(ui::Widget&) const override;

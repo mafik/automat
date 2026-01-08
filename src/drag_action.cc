@@ -149,15 +149,17 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   // Go over every ConnectionWidget and see if any of its arguments can be connected to this
   // object. Set their "radar" to 1
   for (auto& connection_widget : ui::root_widget->connection_widgets) {
+    Location* from = connection_widget->StartLocation();
+    if (!from) continue;
+    auto start = connection_widget->start_weak.Lock();
+    if (!start) continue;
+
     // Do this for every dragged location
     for (auto& location : locations) {
-      if (&connection_widget->from == location.get()) {
+      if (from == location.get()) {
         connection_widget->animation_state.radar_alpha_target = 1;
       } else {
-        string error;
-        connection_widget->arg.CheckRequirements(connection_widget->from, location.get(),
-                                                 location->object.get(), error);
-        if (error.empty()) {
+        if (connection_widget->arg.CanConnect(*start, *location->object)) {
           connection_widget->animation_state.radar_alpha_target = 1;
         }
       }

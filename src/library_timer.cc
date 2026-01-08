@@ -168,7 +168,6 @@ TimerDelay::TimerDelay(ui::Widget* parent)
 
   hand_degrees.value = 90;
   text_field->argument = &duration_arg;
-  duration_arg.interface = &duration;
   SetDuration(*this, 10s);
 }
 
@@ -731,32 +730,42 @@ void TimerDelay::OnCancel() {
 
 DurationArgument::DurationArgument() { tint = "#6e4521"_color; }
 
-void DurationArgument::CanConnect(Interface& start, Interface& end, Status& status) {
+void DurationArgument::CanConnect(Named& start, Named& end, Status& status) const {
   if (auto* obj = dynamic_cast<Object*>(&end)) {
     Str text = obj->GetText();
     char* endptr = nullptr;
     double val = strtod(text.c_str(), &endptr);
+    (void)val;  // suppress unused warning
     if (endptr == text.c_str() || endptr == nullptr) {
       AppendErrorMessage(status) += "Duration argument must be a number.";
     }
   }
 }
 
-void DurationArgument::Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) {
+void DurationArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
   if (auto* timer = dynamic_cast<TimerDelay*>(start.Get())) {
     if (end) {
-      timer->duration_source = NestedWeakPtr<Interface>(end.GetOwnerWeak(), end.Get());
+      if (auto* iface = dynamic_cast<Interface*>(end.Get())) {
+        timer->duration_source = NestedWeakPtr<Interface>(end.GetOwnerWeak(), iface);
+      }
     } else {
       timer->duration_source = {};
     }
   }
 }
 
-NestedPtr<Interface> DurationArgument::Find(Interface& start) {
+NestedPtr<Named> DurationArgument::Find(Named& start) const {
   if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
-    return timer->duration_source.Lock();
+    return timer->duration_source.Lock().DynamicCast<Named>();
   }
   return {};
+}
+
+Interface* DurationArgument::StartInterface(Named& start) const {
+  if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
+    return &timer->duration;
+  }
+  return nullptr;
 }
 
 StrView ToStr(TimerDelay::Range r) {

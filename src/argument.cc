@@ -24,8 +24,8 @@ PaintDrawable& Argument::Icon() {
 }
 
 bool Argument::IsOn(Location& here) const {
-  if (interface) {
-    if (auto on_off = dynamic_cast<OnOff*>(interface)) {
+  if (auto* iface = StartInterface(*here.object)) {
+    if (auto on_off = dynamic_cast<OnOff*>(iface)) {
       return on_off->IsOn();
     }
   }
@@ -35,7 +35,11 @@ bool Argument::IsOn(Location& here) const {
 #pragma region New API
 
 Vec2AndDir Argument::Start(ui::Widget& object_widget, ui::Widget& widget) const {
-  auto pos_dir = object_widget.ArgStart(*this);
+  auto* obj_widget_iface = dynamic_cast<Object::WidgetInterface*>(&object_widget);
+  if (!obj_widget_iface) {
+    return Vec2AndDir{};
+  }
+  auto pos_dir = obj_widget_iface->ArgStart(*this);
   auto m = TransformBetween(object_widget, widget);
   pos_dir.pos = m.mapPoint(pos_dir.pos);
   return pos_dir;
@@ -52,14 +56,7 @@ void Argument::NearbyCandidates(
         if (location.get() == &here) {
           continue;
         }
-        std::string error;
-        for (auto& req : requirements) {
-          req(location.get(), location->object.get(), error);
-          if (!error.empty()) {
-            break;
-          }
-        }
-        if (!error.empty()) {
+        if (!CanConnect(*here.object, *location->object)) {
           continue;
         }
         Vec<Vec2AndDir> to_points;
@@ -75,12 +72,8 @@ void Argument::NearbyCandidates(
     if (&other == &here) {
       return nullptr;
     }
-    for (auto& req : requirements) {
-      std::string error;
-      req(&other, other.object.get(), error);
-      if (!error.empty()) {
-        return nullptr;
-      }
+    if (!CanConnect(*here.object, *other.object)) {
+      return nullptr;
     }
     Vec<Vec2AndDir> to_points;
     other.WidgetForObject().ConnectionPositions(to_points);
@@ -90,13 +83,11 @@ void Argument::NearbyCandidates(
 }
 
 Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
-  if (auto explicit = Find()) {
-  }
-  auto conn_it = here.outgoing.find(this);
   Location* result = nullptr;
-  if (conn_it != here.outgoing.end()) {  // explicit connection
-    auto* c = *conn_it;
-    result = &c->to;
+  if (auto found = Find(*here.object)) {
+    if (auto* obj = found.GetOwner<Object>()) {
+      result = obj->MyLocation();
+    }
   }
   if (result == nullptr && cfg.if_missing == IfMissing::CreateFromPrototype) {
     // Ask the current location for the prototype for this object.
@@ -132,7 +123,7 @@ void Argument::InvalidateConnectionWidgets(Location& here) const {
   }
 }
 
-void NextArg::CanConnect(Named& start, Named& end, Status& status) {
+void NextArg::CanConnect(Named& start, Named& end, Status& status) const {
   if (!dynamic_cast<Runnable*>(&start)) {
     AppendErrorMessage(status) += "Next source must be a Runnable";
   }

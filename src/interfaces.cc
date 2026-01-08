@@ -122,7 +122,7 @@ std::unique_ptr<Object::WidgetInterface> SyncBlock::MakeWidget(ui::Widget* paren
   return std::make_unique<SyncBlockWidget>(*this, parent);
 }
 
-void SyncArg::CanConnect(Named& start, Named& end, Status& status) {
+void SyncArg::CanConnect(Named& start, Named& end, Status& status) const {
   if (dynamic_cast<SyncBlock*>(&end) != nullptr) {
     AppendErrorMessage(status) += "Can only connect to SyncBlock";
   }

@@ -473,6 +473,23 @@ void Object::WidgetBase::ConnectionPositions(Vec<Vec2AndDir>& out_positions) con
   });
 }
 
+Vec2AndDir Object::WidgetBase::ArgStart(const Argument& arg) {
+  SkPath shape;
+  if (auto obj = object.Lock()) {
+    if (auto* iface = arg.StartInterface(*obj)) {
+      shape = InterfaceShape(iface);
+    }
+  }
+  if (shape.isEmpty()) {
+    shape = Shape();
+  }
+  Rect bounds = shape.getBounds();
+  return Vec2AndDir{
+      .pos = bounds.BottomCenter(),
+      .dir = -90_deg,
+  };
+}
+
 Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
 bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }

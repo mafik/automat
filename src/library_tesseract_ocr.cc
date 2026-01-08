@@ -55,7 +55,7 @@ struct ImageArgument : Argument {
   StrView Name() const override { return "image"sv; }
   PaintDrawable& Icon() override { return icon; }
 
-  void CanConnect(Named& start, Named& end, Status& status) override {
+  void CanConnect(Named& start, Named& end, Status& status) const override {
     if (auto* obj = dynamic_cast<Object*>(&end)) {
       if (!obj->AsImageProvider()) {
         AppendErrorMessage(status) += "Object must provide images";
@@ -87,7 +87,7 @@ struct TextArgument : Argument {
   StrView Name() const override { return "text"sv; }
   PaintDrawable& Icon() override { return icon; }
 
-  void CanConnect(Named& start, Named& end, Status& status) override {
+  void CanConnect(Named& start, Named& end, Status& status) const override {
     // Any object can receive text
   }
 

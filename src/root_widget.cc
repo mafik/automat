@@ -557,6 +557,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
           return;
         }
         // Create a new widget.
+        LOG << "Creating new connection widget";
         root_widget.connection_widgets.emplace_back(
             new ui::ConnectionWidget(&root_widget, MemberWeakPtr(loc->object, *loc->object), arg));
       });

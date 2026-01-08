@@ -220,21 +220,6 @@ bool Widget::Intersects(const Widget& a, const Widget& b) {
   return result && intersection.countVerbs() > 0;
 }
 
-Vec2AndDir Widget::ArgStart(const Argument& arg) {
-  SkPath shape;
-  if (arg.interface) {
-    shape = InterfaceShape(arg.interface);
-  }
-  if (shape.isEmpty()) {
-    shape = Shape();
-  }
-  Rect bounds = shape.getBounds();
-  return Vec2AndDir{
-      .pos = bounds.BottomCenter(),
-      .dir = -90_deg,
-  };
-}
-
 RootWidget& Widget::FindRootWidget() const {
   Widget* w = const_cast<Widget*>(this);
   while (w->parent) {

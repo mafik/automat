@@ -15,9 +15,10 @@ struct DurationArgument : Argument {
   DurationArgument();
 
   StrView Name() const override { return "duration"sv; }
-  void CanConnect(Interface& start, Interface& end, Status& status) override;
-  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
-  NestedPtr<Interface> Find(Interface& start) override;
+  void CanConnect(Named& start, Named& end, Status& status) const override;
+  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
+  NestedPtr<Named> Find(Named& start) const override;
+  Interface* StartInterface(Named& start) const override;
 };
 
 struct TimerDelay : LiveObject,

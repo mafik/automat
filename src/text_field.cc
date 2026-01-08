@@ -142,7 +142,7 @@ struct TextSelectAction : Action {
 
       for (auto& connection_widget : root_widget->connection_widgets) {
         if (&connection_widget->arg == text_field.argument &&
-            &connection_widget->from == location) {
+            connection_widget->StartLocation() == location) {
           drag.emplace(pointer, *connection_widget);
           break;
         }

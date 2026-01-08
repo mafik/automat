@@ -87,7 +87,7 @@ MacroRecorder::~MacroRecorder() {
 struct TimelineArgument : Argument {
   StrView Name() const override { return "Timeline"sv; }
 
-  void CanConnect(Named& start, Named& end, Status& status) override {
+  void CanConnect(Named& start, Named& end, Status& status) const override {
     if (!dynamic_cast<Timeline*>(&end)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
     }
@@ -629,7 +629,7 @@ Vec2AndDir MacroRecorder::ArgStart(const Argument& arg) {
         .dir = -90_deg,
     };
   }
-  return Widget::ArgStart(arg);
+  return Object::WidgetBase::ArgStart(arg);
 }
 
 void MacroRecorder::SerializeState(Serializer& writer, const char* key) const {

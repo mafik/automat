@@ -775,7 +775,7 @@ Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, 
 struct RegisterAssemblerArgument : Argument {
   StrView Name() const override { return "Reg's Assembler"sv; }
 
-  void CanConnect(Named& start, Named& end, Status& status) override {
+  void CanConnect(Named& start, Named& end, Status& status) const override {
     if (!dynamic_cast<Assembler*>(&end)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }

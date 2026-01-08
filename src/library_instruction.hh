@@ -33,7 +33,7 @@ enum class Flag {
 
 struct AssemblerArgument : Argument {
   StrView Name() const override { return "assembler"sv; }
-  void CanConnect(Named& start, Named& end, Status& status) override;
+  void CanConnect(Named& start, Named& end, Status& status) const override;
   void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
   NestedPtr<Named> Find(Named& start) const override;
 };
@@ -43,7 +43,7 @@ struct JumpArgument : Argument {
 
   StrView Name() const override { return "jump"sv; }
   PaintDrawable& Icon() override;
-  void CanConnect(Named& start, Named& end, Status& status) override;
+  void CanConnect(Named& start, Named& end, Status& status) const override;
   void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
   NestedPtr<Named> Find(Named& start) const override;
 };

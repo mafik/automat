@@ -9,6 +9,7 @@
 #include "animation.hh"
 #include "embedded.hh"
 #include "global_resources.hh"
+#include "status.hh"
 #include "time.hh"
 #include "units.hh"
 
@@ -120,4 +121,23 @@ struct SyncBlockWidget : Object::WidgetBase {
 std::unique_ptr<Object::WidgetInterface> SyncBlock::MakeWidget(ui::Widget* parent) {
   return std::make_unique<SyncBlockWidget>(*this, parent);
 }
+
+void SyncArg::CanConnect(Named& start, Named& end, Status& status) {
+  if (dynamic_cast<SyncBlock*>(&end) != nullptr) {
+    AppendErrorMessage(status) += "Can only connect to SyncBlock";
+  }
+}
+
+void SyncArg::Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) {
+  auto* start_interface = dynamic_cast<Interface*>(start.Get());
+  if (start_interface == nullptr) return;
+  auto* sync_block = dynamic_cast<SyncBlock*>(end.Get());
+  if (sync_block == nullptr) return;
+  start_interface->sync_block_weak = sync_block->AcquireWeakPtr();
+}
+
+NestedPtr<Named> SyncArg::Find(Named& start) const {
+  return dynamic_cast<Interface&>(start).sync_block_weak.Lock();
+}
+
 }  // namespace automat

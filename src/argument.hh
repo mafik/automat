@@ -45,15 +45,18 @@ struct Argument : Named {
 
   virtual ~Argument() = default;
 
-  virtual void CanConnect(Interface& start, Interface& end, Status& status) {
+  virtual void CanConnect(Named& start, Named& end, Status& status) {
     AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
   // This function should register a connection from `start` to the `end` so that subsequent calls
   // to `Find` will return `end`.
-  virtual void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) = 0;
+  //
+  // When `end` is nullptr, this disconnects the existing connection. The implementation can check
+  // the current connection value before clearing it (e.g., to call cleanup methods).
+  virtual void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) = 0;
 
-  virtual NestedPtr<Interface> Find(Interface& start);
+  virtual NestedPtr<Named> Find(Named& start) const = 0;
 
   virtual PaintDrawable& Icon();            // TODO: weird - clean this up
   virtual bool IsOn(Location& here) const;  // TODO: weird - clean this up
@@ -78,6 +81,7 @@ struct Argument : Named {
   void NearbyCandidates(Location& here, float radius,
                         std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const;
 
+  // TODO: remove this
   Location* FindLocation(Location& here, const FindConfig&) const;
 
   Object* FindObject(Location& here, const FindConfig&) const;
@@ -92,8 +96,9 @@ struct Argument : Named {
 
 struct NextArg : Argument {
   StrView Name() const override { return "next"sv; }
-  void CanConnect(Interface& start, Interface& end, Status&) override;
-  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
+  void CanConnect(Named& start, Named& end, Status&) override;
+  void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) override;
+  NestedPtr<Named> Find(Named& start) const override;
 };
 
 extern NextArg next_arg;

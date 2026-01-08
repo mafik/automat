@@ -4,10 +4,12 @@
 
 #include <include/core/SkImage.h>
 
+#include "named.hh"
+
 namespace automat {
 
 // Interface for objects that can provide image data
-struct ImageProvider {
+struct ImageProvider : Named {
   virtual ~ImageProvider() = default;
   virtual sk_sp<SkImage> GetImage() = 0;
 };

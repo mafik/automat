@@ -84,9 +84,50 @@ MacroRecorder::~MacroRecorder() {
 // We will provide a prototype of the Timeline - to be created if no timeline can be found.
 // We will also specify here that it should search for any Timeline objects nearby (with some
 // radius).
-Argument timeline_arg = [] {
-  Argument arg("Timeline", Argument::kRequiresObject);
-  arg.RequireInstanceOf<Timeline>();
+struct TimelineArgument : Argument {
+  StrView Name() const override { return "Timeline"sv; }
+
+  void CanConnect(Interface& start, Interface& end, Status& status) override {
+    if (!dynamic_cast<Timeline*>(&end)) {
+      AppendErrorMessage(status) += "Must connect to a Timeline";
+    }
+  }
+
+  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override {
+    if (auto* recorder = dynamic_cast<MacroRecorder*>(start.Get())) {
+      // Handle disconnect - check old connection before clearing
+      if (!end) {
+        if (auto old_timeline_ptr = recorder->timeline_connection.Lock()) {
+          if (auto* old_timeline = dynamic_cast<Timeline*>(old_timeline_ptr.Get())) {
+            if (old_timeline->state == Timeline::State::kRecording) {
+              old_timeline->StopRecording();
+            }
+          }
+        }
+        recorder->timeline_connection = {};
+        return;
+      }
+
+      // Handle connect
+      if (auto* timeline = dynamic_cast<Timeline*>(end.Get())) {
+        recorder->timeline_connection = NestedWeakPtr<Interface>(end.GetOwnerWeak(), end.Get());
+        if (recorder->IsOn()) {
+          timeline->BeginRecording();
+        }
+      }
+    }
+  }
+
+  NestedPtr<Interface> Find(Interface& start) override {
+    if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
+      return recorder->timeline_connection.Lock();
+    }
+    return {};
+  }
+};
+
+static TimelineArgument timeline_arg = [] {
+  TimelineArgument arg;
   arg.autoconnect_radius = 10_cm;
   arg.tint = color::kParrotRed;
   arg.style = Argument::Style::Cable;
@@ -256,20 +297,6 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
 
 SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
 
-void MacroRecorder::ConnectionAdded(Location& here, Connection& c) {
-  if (&c.argument == &timeline_arg && IsOn()) {
-    if (auto timeline = FindTimeline(*this)) {
-      timeline->BeginRecording();
-    }
-  }
-}
-void MacroRecorder::ConnectionRemoved(Location& here, Connection& c) {
-  if (&c.argument == &timeline_arg && IsOn()) {
-    if (auto timeline = c.to.As<Timeline>()) {
-      timeline->StopRecording();
-    }
-  }
-}
 void MacroRecorder::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("MacroRecorder");
   if (keylogging == nullptr) {

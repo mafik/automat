@@ -101,15 +101,75 @@ struct JumpDrawable : PaintDrawable {
 
 static JumpDrawable jump_icon;
 
-JumpArgument::JumpArgument() : Argument("Jump") {}
+JumpArgument::JumpArgument() {
+  // Jump argument configuration
+}
 
 PaintDrawable& JumpArgument::Icon() { return jump_icon; }
 
+void JumpArgument::CanConnect(Interface& start, Interface& end, Status& status) {
+  if (!dynamic_cast<Runnable*>(&end)) {
+    AppendErrorMessage(status) += "Jump target must be a Runnable";
+  }
+}
+
+void JumpArgument::Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) {
+  if (auto* inst = dynamic_cast<Instruction*>(start.Get())) {
+    if (end) {
+      if (auto* runnable = dynamic_cast<Runnable*>(end.Get())) {
+        inst->jump_target = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), runnable);
+      }
+    } else {
+      inst->jump_target = {};
+    }
+    // Notify assembler of change
+    if (auto* loc = inst->MyLocation()) {
+      if (auto* assembler = assembler_arg.FindObject<Assembler>(*loc, {})) {
+        assembler->UpdateMachineCode();
+      }
+    }
+  }
+}
+
+NestedPtr<Interface> JumpArgument::Find(Interface& start) {
+  if (auto* inst = dynamic_cast<Instruction*>(&start)) {
+    if (auto locked = inst->jump_target.Lock()) {
+      return NestedPtr<Interface>(locked.GetOwnerWeak().Lock(), locked.Get());
+    }
+  }
+  return {};
+}
+
 JumpArgument jump_arg;
 
-Argument assembler_arg = [] {
-  Argument arg("Assembler", Argument::kRequiresObject);
-  arg.RequireInstanceOf<Assembler>();
+void NextInstructionArg::Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) {
+  NextArg::Connect(start, end);
+  if (auto* inst = dynamic_cast<Instruction*>(start.Get())) {
+    // Notify assembler of change
+    if (auto* loc = inst->MyLocation()) {
+      if (auto* assembler = assembler_arg.FindObject<Assembler>(*loc, {})) {
+        assembler->UpdateMachineCode();
+      }
+    }
+  }
+}
+
+NextInstructionArg next_instruction_arg;
+
+void AssemblerArgument::CanConnect(Interface& start, Interface& end, Status& status) {
+  if (!dynamic_cast<Assembler*>(&end)) {
+    AppendErrorMessage(status) += "Must connect to an Assembler";
+  }
+}
+
+void AssemblerArgument::Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) {
+  if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {
+    assembler->UpdateMachineCode();
+  }
+}
+
+AssemblerArgument assembler_arg = [] {
+  AssemblerArgument arg;
   arg.autoconnect_radius = INFINITY;
   arg.tint = "#ff0000"_color;
   arg.style = Argument::Style::Invisible;
@@ -131,7 +191,7 @@ static Assembler* FindOrCreateAssembler(Location& here) {
 void Instruction::Args(std::function<void(Argument&)> cb) {
   auto opcode = mc_inst.getOpcode();
   if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {
-    cb(next_arg);
+    cb(next_instruction_arg);
   }
   cb(assembler_arg);
   auto& assembler = LLVM_Assembler::Get();
@@ -146,30 +206,6 @@ Ptr<Object> Instruction::ArgPrototype(const Argument& arg) {
     return MAKE_PTR(Assembler);
   }
   return nullptr;
-}
-
-void Instruction::ConnectionAdded(Location& here, Connection& connection) {
-  if (&connection.argument == &assembler_arg) {
-    if (auto assembler = connection.to.As<Assembler>()) {
-      assembler->UpdateMachineCode();
-    }
-  } else if (&connection.argument == &jump_arg || &connection.argument == &next_arg) {
-    if (auto assembler = FindAssembler(here)) {
-      assembler->UpdateMachineCode();
-    }
-  }
-}
-
-void Instruction::ConnectionRemoved(Location& here, Connection& connection) {
-  if (&connection.argument == &assembler_arg) {
-    if (auto assembler = connection.to.As<Assembler>()) {
-      assembler->UpdateMachineCode();
-    }
-  } else if (&connection.argument == &jump_arg || &connection.argument == &next_arg) {
-    if (auto assembler = FindAssembler(here)) {
-      assembler->UpdateMachineCode();
-    }
-  }
 }
 
 string_view Instruction::Name() const { return "Instruction"; }

@@ -35,6 +35,9 @@ struct TesseractOCR : public LiveObject, Runnable {
   float y_min_ratio = 0.25f;
   float y_max_ratio = 0.75f;
 
+  NestedWeakPtr<ImageProvider> image_provider_weak;
+  NestedWeakPtr<Object> text_weak;
+
   TesseractOCR();
 
   std::string_view Name() const override;

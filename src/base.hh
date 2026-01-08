@@ -121,16 +121,6 @@ struct LiveObject : Object {
   WeakPtr<Location> here;
 
   void Relocate(Location* new_here) override;
-  void ConnectionAdded(Location& here, Connection& connection) override {
-    if (auto live_arg = dynamic_cast<LiveArgument*>(&connection.argument)) {
-      live_arg->ConnectionAdded(here, connection);
-    }
-  }
-  void ConnectionRemoved(Location& here, Connection& connection) override {
-    if (auto live_arg = dynamic_cast<LiveArgument*>(&connection.argument)) {
-      live_arg->ConnectionRemoved(here, connection);
-    }
-  }
 };
 
 // 2D Canvas holding objects & a spaghetti of connections.

@@ -44,31 +44,66 @@ namespace automat::library {
 
 constexpr bool kDebugEyeShape = false;
 
-struct ImageArgument : LiveArgument {
+struct ImageArgument : Argument {
   TextDrawable icon;
-  ImageArgument()
-      : LiveArgument("image", kRequiresObject), icon("IMG", ui::kLetterSize, ui::GetFont()) {
-    requirements.push_back([](Location* location, Object* object, std::string& error) {
-      if (!object->AsImageProvider()) {
-        error = "Object must provide images";
-        return false;
-      }
-      return true;
-    });
+
+  ImageArgument() : icon("IMG", ui::kLetterSize, ui::GetFont()) {
     autoconnect_radius = 20_cm;
     style = Style::Invisible;
   }
+
+  StrView Name() const override { return "image"sv; }
   PaintDrawable& Icon() override { return icon; }
+
+  void CanConnect(Named& start, Named& end, Status& status) override {
+    if (auto* obj = dynamic_cast<Object*>(&end)) {
+      if (!obj->AsImageProvider()) {
+        AppendErrorMessage(status) += "Object must provide images";
+      }
+    }
+  }
+
+  void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) override {
+    auto* tesseract = dynamic_cast<TesseractOCR*>(start.Get());
+    if (tesseract == nullptr) return;
+    auto* end_obj = dynamic_cast<Object*>(end.Get());
+    if (end_obj == nullptr) return;
+    tesseract->image_provider_weak =
+        NestedWeakPtr<ImageProvider>(end.GetOwnerWeak(), end_obj->AsImageProvider());
+  }
+
+  NestedPtr<Named> Find(Named& start) const override {
+    auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
+    if (tesseract == nullptr) return {};
+    return tesseract->image_provider_weak.Lock();
+  }
 };
 
 struct TextArgument : Argument {
   TextDrawable icon;
-  TextArgument() : Argument("text", kRequiresObject), icon("T", ui::kLetterSize, ui::GetFont()) {
-    requirements.push_back([](Location* location, Object* object, std::string& error) {
-      return true;  // Any object can receive text
-    });
-  }
+
+  TextArgument() : icon("T", ui::kLetterSize, ui::GetFont()) {}
+
+  StrView Name() const override { return "text"sv; }
   PaintDrawable& Icon() override { return icon; }
+
+  void CanConnect(Named& start, Named& end, Status& status) override {
+    // Any object can receive text
+  }
+
+  void Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) override {
+    auto* tesseract = dynamic_cast<TesseractOCR*>(start.Get());
+    if (tesseract == nullptr) return;
+    auto* end_obj = dynamic_cast<Object*>(end.Get());
+    if (end_obj == nullptr) return;
+    tesseract->text_weak = NestedWeakPtr<Object>(end.GetOwnerWeak(), end_obj);
+  }
+
+  NestedPtr<Named> Find(Named& start) const override {
+    auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
+    if (tesseract == nullptr) return {};
+    return tesseract->text_weak.Lock();
+  }
 };
 
 static ImageArgument image_arg;

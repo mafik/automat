@@ -452,6 +452,18 @@ struct [[clang::trivial_abi]] NestedPtr {
   NestedPtr() : ptr{}, obj(nullptr) {}
   NestedPtr(Ptr<ReferenceCounted>&& ptr, T* obj) : ptr(std::move(ptr)), obj(obj) {}
 
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  NestedPtr(const Ptr<U>& that) : ptr(that), obj(that.Get()) {}
+
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  NestedPtr(const NestedPtr<U>& that) : ptr(that.ptr), obj(that.obj) {}
+
+  template <typename U>
+    requires std::convertible_to<U*, T*>
+  NestedPtr(NestedPtr<U>&& that) : ptr(std::move(that.ptr)), obj(that.obj) {}
+
   std::strong_ordering operator<=>(const NestedPtr<T>& that) const {
     return this->ptr <=> that.ptr;
   }
@@ -469,8 +481,15 @@ struct [[clang::trivial_abi]] NestedPtr {
     obj = nullptr;
   }
 
+  template <typename U>
+  [[nodiscard]] NestedPtr<U> DynamicCast(this auto&& self) {
+    return NestedPtr<U>(Ptr<ReferenceCounted>(self.ptr), dynamic_cast<U*>(self.obj));
+  }
+
  private:
   friend class NestedWeakPtr<T>;
+  template <class U>
+  friend class NestedPtr;
   Ptr<ReferenceCounted> ptr;
   T* obj;
 };

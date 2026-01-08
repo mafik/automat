@@ -7,7 +7,6 @@
 #include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
-#include "root_widget.hh"
 #include "svg.hh"
 #include "ui_connection_widget.hh"
 #include "widget.hh"
@@ -16,41 +15,6 @@ namespace automat {
 
 NextArg next_arg;
 
-Argument::LocationResult Argument::GetLocation(Location& here,
-                                               std::source_location source_location) const {
-  LocationResult result;
-  auto conn_it = here.outgoing.find(this);
-  if (conn_it != here.outgoing.end()) {  // explicit connection
-    auto* c = *conn_it;
-    result.location = &c->to;
-    result.follow_pointers = c->pointer_behavior == Connection::kFollowPointers;
-  }
-  if (result.location == nullptr && precondition >= kRequiresLocation) {
-    here.object->ReportError(f("The {} argument of {} is not connected.", name, here.ToStr()),
-                             source_location);
-    result.ok = false;
-  }
-  return result;
-}
-
-Argument::ObjectResult Argument::GetObject(Location& here,
-                                           std::source_location source_location) const {
-  ObjectResult result(GetLocation(here, source_location));
-  if (result.location) {
-    if (result.follow_pointers) {
-      result.object = result.location->Follow();
-    } else {
-      result.object = result.location->object.get();
-    }
-    if (result.object == nullptr && precondition >= kRequiresObject) {
-      here.object->ReportError(f("The {} argument of {} is empty.", name, here.ToStr()),
-                               source_location);
-      result.ok = false;
-    }
-  }
-  return result;
-}
-
 PaintDrawable& Argument::Icon() {
   static DrawableSkPath default_icon = [] {
     SkPath path = PathFromSVG(kNextShape);
@@ -58,6 +22,7 @@ PaintDrawable& Argument::Icon() {
   }();
   return default_icon;
 }
+
 bool Argument::IsOn(Location& here) const {
   if (interface) {
     if (auto on_off = dynamic_cast<OnOff*>(interface)) {
@@ -125,6 +90,8 @@ void Argument::NearbyCandidates(
 }
 
 Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
+  if (auto explicit = Find()) {
+  }
   auto conn_it = here.outgoing.find(this);
   Location* result = nullptr;
   if (conn_it != here.outgoing.end()) {  // explicit connection
@@ -165,16 +132,33 @@ void Argument::InvalidateConnectionWidgets(Location& here) const {
   }
 }
 
-void NextArg::CanConnect(Interface& start, Interface& end, Status& status) {
-  return dynamic_cast<Runnable*>(start.Get()) && dynamic_cast<Runnable*>(end.Get());
+void NextArg::CanConnect(Named& start, Named& end, Status& status) {
+  if (!dynamic_cast<Runnable*>(&start)) {
+    AppendErrorMessage(status) += "Next source must be a Runnable";
+  }
+  if (!dynamic_cast<Runnable*>(&end)) {
+    AppendErrorMessage(status) += "Next target must be a Runnable";
+  }
 }
 
-void NextArg::Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) {
-  if (Runnable* start_runnable = dynamic_cast<Runnable*>(start.Get())) {
+void NextArg::Connect(NestedPtr<Named>& start, NestedPtr<Named>& end) {
+  Runnable* start_runnable = dynamic_cast<Runnable*>(start.Get());
+  if (start_runnable == nullptr) return;
+  start_runnable->next = end.DynamicCast<Runnable>();
+  if (end) {
     if (Runnable* end_runnable = dynamic_cast<Runnable*>(end.Get())) {
       start_runnable->next = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), end_runnable);
     }
+  } else {
+    start_runnable->next = {};
   }
+}
+
+NestedPtr<Named> NextArg::Find(Named& start) const {
+  if (auto* runnable = dynamic_cast<Runnable*>(&start)) {
+    return runnable->next.Lock();
+  }
+  return {};
 }
 
 }  // namespace automat

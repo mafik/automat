@@ -226,13 +226,14 @@ void UpdateCode(automat::mc::Controller& controller,
     int next = -1;
     int jump = -1;
     if (loc) {
-      auto FindInstruction = [loc, &instructions, n](const automat::Argument& arg) -> int {
-        if (auto it = loc->outgoing.find(&arg); it != loc->outgoing.end()) {
-          automat::Location* to_loc = &(*it)->to;
-          if (auto to_inst = to_loc->As<automat::library::Instruction>()) {
-            auto it = std::lower_bound(instructions.begin(), instructions.end(), to_loc->object);
-            if (it != instructions.end()) {
-              return std::distance(instructions.begin(), it);
+      auto FindInstruction = [obj_raw, &instructions, n](const automat::Argument& arg) -> int {
+        if (auto target = arg.Find(*obj_raw)) {
+          if (auto* to_inst = dynamic_cast<automat::library::Instruction*>(target.Get())) {
+            // Find the instruction in our sorted list
+            for (int j = 0; j < n; ++j) {
+              if (instructions[j].get() == to_inst) {
+                return j;
+              }
             }
           }
         }
@@ -256,16 +257,20 @@ void UpdateCode(automat::mc::Controller& controller,
 
 // Returning arrays of Ptrs is really bad but it seems to be necessary here.
 std::vector<Ptr<Instruction>> FindInstructions(Location& assembler_loc) {
-  auto [begin, end] = assembler_loc.incoming.equal_range(&assembler_arg);
   std::vector<Ptr<Instruction>> instructions;
-  for (auto it = begin; it != end; ++it) {
-    auto& conn = *it;
-    auto& inst_loc = conn->from;
-    auto inst = inst_loc.As<Instruction>();
-    if (!inst) {
-      continue;
-    }
-    instructions.push_back(inst->AcquirePtr());
+  // Find all Instructions that are connected to this Assembler via assembler_arg
+  // We need to search the parent machine for Instructions
+  if (auto* machine = assembler_loc.ParentAs<Machine>()) {
+    machine->ForEachLocation([&](Location& loc) {
+      if (auto* inst = loc.As<Instruction>()) {
+        // Check if this instruction is connected to our assembler
+        if (auto target = assembler_arg.Find(*inst)) {
+          if (target.Get() == assembler_loc.object.get()) {
+            instructions.push_back(inst->AcquirePtr());
+          }
+        }
+      }
+    });
   }
   return instructions;
 }
@@ -772,9 +777,30 @@ Register::Register(WeakPtr<Assembler> assembler_weak, int register_index)
 
 Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, register_index); }
 
-Argument register_assembler_arg = [] {
-  Argument arg("Reg's Assembler", Argument::kRequiresObject);
-  arg.RequireInstanceOf<Assembler>();
+struct RegisterAssemblerArgument : Argument {
+  StrView Name() const override { return "Reg's Assembler"sv; }
+
+  void CanConnect(Interface& start, Interface& end, Status& status) override {
+    if (!dynamic_cast<Assembler*>(&end)) {
+      AppendErrorMessage(status) += "Must connect to an Assembler";
+    }
+  }
+
+  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override {
+    if (auto* reg = dynamic_cast<Register*>(start.Get())) {
+      if (end) {
+        if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {
+          reg->assembler_weak = assembler->AcquireWeakPtr();
+        }
+      } else {
+        reg->assembler_weak = {};
+      }
+    }
+  }
+};
+
+static RegisterAssemblerArgument register_assembler_arg = [] {
+  RegisterAssemblerArgument arg;
   arg.autoconnect_radius = INFINITY;
   arg.tint = "#ff0000"_color;
   arg.style = Argument::Style::Spotlight;
@@ -806,22 +832,6 @@ void Register::SetText(Location& error_context, std::string_view text) {
     return;
   }
   WakeWidgetsAnimation();
-}
-
-void Register::ConnectionAdded(Location& here, Connection& connection) {
-  if (&connection.argument == &register_assembler_arg) {
-    if (auto assembler = connection.to.As<Assembler>()) {
-      assembler_weak = assembler;
-    }
-  }
-  LiveObject::ConnectionAdded(here, connection);
-}
-
-void Register::ConnectionRemoved(Location& here, Connection& connection) {
-  if (&connection.argument == &register_assembler_arg) {
-    assembler_weak = {};
-  }
-  LiveObject::ConnectionRemoved(here, connection);
 }
 
 void Register::SerializeState(Serializer& writer, const char* key) const {

@@ -39,6 +39,7 @@ struct MacroRecorder : LiveObject,
   ui::Keylogging* keylogging = nullptr;
   ui::Pointer::Logging* pointer_logging = nullptr;
   std::unique_ptr<ui::Widget> record_button;
+  NestedWeakPtr<Interface> timeline_connection;  // Connection target for TimelineArgument
 
   MacroRecorder(ui::Widget* parent);
   ~MacroRecorder();
@@ -55,9 +56,6 @@ struct MacroRecorder : LiveObject,
   void PointerOver(ui::Pointer&) override;
   void PointerLeave(ui::Pointer&) override;
   void PointerMove(ui::Pointer&, Vec2 position) override;
-
-  void ConnectionAdded(Location& here, Connection&) override;
-  void ConnectionRemoved(Location& here, Connection&) override;
 
   void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
   void OnCancel() override;

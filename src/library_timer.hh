@@ -11,8 +11,13 @@
 
 namespace automat::library {
 
-struct DurationArgument : LiveArgument {
+struct DurationArgument : Argument {
   DurationArgument();
+
+  StrView Name() const override { return "duration"sv; }
+  void CanConnect(Interface& start, Interface& end, Status& status) override;
+  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
+  NestedPtr<Interface> Find(Interface& start) override;
 };
 
 struct TimerDelay : LiveObject,
@@ -25,6 +30,7 @@ struct TimerDelay : LiveObject,
   struct MyDuration : Interface {
     time::Duration value = 10s;
   } duration;
+  NestedWeakPtr<Interface> duration_source;  // Connection target for duration_arg
   DurationArgument duration_arg;
   time::SteadyPoint start_time;
   float start_pusher_depression = 0;

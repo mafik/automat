@@ -36,9 +36,9 @@ struct DummyRunnable : Object, Runnable {
 } kDummyRunnable;
 
 static bool IsArgumentOptical(Location& from, Argument& arg) {
-  Str error;
-  arg.CheckRequirements(from, nullptr, &kDummyRunnable, error);
-  return error.empty();
+  Status status;
+  arg.CanConnect(*from.object, kDummyRunnable, status);
+  return OK(status);
 }
 
 ConnectionWidget::ConnectionWidget(Widget* parent, Location& from, Argument& arg)
@@ -141,22 +141,23 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
                    kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
 
     auto& font = GetFont();
-    SkRSXform transforms[arg.name.size()];
-    for (size_t i = 0; i < arg.name.size(); ++i) {
-      float i_fract = (i + 1.f) / (arg.name.size() + 1.f);
+    auto name = arg.Name();
+    SkRSXform transforms[name.size()];
+    for (size_t i = 0; i < name.size(); ++i) {
+      float i_fract = (i + 1.f) / (name.size() + 1.f);
       // float i_fract = i / (float)arg.name.size();
       float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_alpha_sin * kPi +
                        quadrant_offset / 180 * kPi;
 
       float x = sin(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
       float y = cos(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
-      float w = font.sk_font.measureText(arg.name.data() + i, 1, SkTextEncoding::kUTF8, nullptr);
+      float w = font.sk_font.measureText(name.data() + i, 1, SkTextEncoding::kUTF8, nullptr);
 
       transforms[i] = SkRSXform::MakeFromRadians(font.font_scale, -letter_a, x, y, w / 2, 0);
     }
-    auto transforms_span = SkSpan<SkRSXform>(transforms, arg.name.size());
-    auto text_blob = SkTextBlob::MakeFromRSXform(arg.name.data(), arg.name.size(), transforms_span,
-                                                 font.sk_font);
+    auto transforms_span = SkSpan<SkRSXform>(transforms, name.size());
+    auto text_blob =
+        SkTextBlob::MakeFromRSXform(name.data(), name.size(), transforms_span, font.sk_font);
     SkPaint text_paint;
     float text_alpha = animation::SinInterp(anim->radar_alpha, 0.5f, 0.0f, 1.f, 1.f);
     text_paint.setColor(SkColorSetA(arg.tint, (int)(text_alpha * 255)));

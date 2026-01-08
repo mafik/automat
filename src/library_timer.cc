@@ -729,19 +729,34 @@ void TimerDelay::OnCancel() {
   WakeAnimation();
 }
 
-DurationArgument::DurationArgument() : LiveArgument("duration", Argument::kOptional) {
-  requirements.push_back([](Location* location, Object* object, std::string& error) {
-    if (object == nullptr) {
-      error = "Duration argument must be set.";
-    }
-    Str text = object->GetText();
+DurationArgument::DurationArgument() { tint = "#6e4521"_color; }
+
+void DurationArgument::CanConnect(Interface& start, Interface& end, Status& status) {
+  if (auto* obj = dynamic_cast<Object*>(&end)) {
+    Str text = obj->GetText();
     char* endptr = nullptr;
     double val = strtod(text.c_str(), &endptr);
     if (endptr == text.c_str() || endptr == nullptr) {
-      error = "Duration argument must be a number.";
+      AppendErrorMessage(status) += "Duration argument must be a number.";
     }
-  });
-  tint = "#6e4521"_color;
+  }
+}
+
+void DurationArgument::Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) {
+  if (auto* timer = dynamic_cast<TimerDelay*>(start.Get())) {
+    if (end) {
+      timer->duration_source = NestedWeakPtr<Interface>(end.GetOwnerWeak(), end.Get());
+    } else {
+      timer->duration_source = {};
+    }
+  }
+}
+
+NestedPtr<Interface> DurationArgument::Find(Interface& start) {
+  if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
+    return timer->duration_source.Lock();
+  }
+  return {};
 }
 
 StrView ToStr(TimerDelay::Range r) {

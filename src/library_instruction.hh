@@ -31,23 +31,37 @@ enum class Flag {
   SF,
 };
 
+struct AssemblerArgument : Argument {
+  StrView Name() const override { return "assembler"sv; }
+  void CanConnect(Interface& start, Interface& end, Status& status) override;
+  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
+};
+
 struct JumpArgument : Argument {
   JumpArgument();
 
+  StrView Name() const override { return "jump"sv; }
   PaintDrawable& Icon() override;
+  void CanConnect(Interface& start, Interface& end, Status& status) override;
+  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
+  NestedPtr<Interface> Find(Interface& start) override;
 };
 
-extern Argument assembler_arg;
+// Same as NextArg - but calls UpdateMachineCode when it's reconnected
+struct NextInstructionArg : NextArg {
+  void Connect(NestedPtr<Interface>& start, NestedPtr<Interface>& end) override;
+};
+
+extern AssemblerArgument assembler_arg;
 extern JumpArgument jump_arg;
+extern NextInstructionArg next_instruction_arg;
 
 struct Instruction : LiveObject, Runnable, Buffer {
   mc::Inst mc_inst;
+  NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
 
   void Args(std::function<void(Argument&)> cb) override;
   Ptr<Object> ArgPrototype(const Argument&) override;
-
-  void ConnectionAdded(Location& here, Connection&) override;
-  void ConnectionRemoved(Location& here, Connection&) override;
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;

@@ -119,9 +119,16 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
                     1000000.);  // round to 6 decimal places
       writer.Key("y");
       writer.Double(round(location->position.y * 1000000.) / 1000000.);
-      if (!location->outgoing.empty()) {
+
+      {
         writer.Key("connections");
         writer.StartObject();
+        location->object->Args([&](Argument& arg) {
+          auto name = arg.Name();
+          writer.Key(name.data(), name.size());
+          auto& to_name = location_ids.at(&conn->to);
+          writer.String(to_name.data(), to_name.size());
+        });
         for (auto* conn : location->outgoing) {
           writer.Key(conn->argument.name.data(), conn->argument.name.size());
           auto& to_name = location_ids.at(&conn->to);
@@ -129,6 +136,7 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
         }
         writer.EndObject();
       }
+
       writer.EndObject();
     }
     writer.EndObject();
@@ -385,14 +393,7 @@ Ptr<Location> Machine::Extract(Location& location) {
   }
 }
 
-void LiveObject::Relocate(Location* new_here) {
-  Args([old_here = here, new_here](Argument& arg) {
-    if (auto live_arg = dynamic_cast<LiveArgument*>(&arg)) {
-      live_arg->Relocate(old_here.lock().get(), new_here);
-    }
-  });
-  here = new_here;
-}
+void LiveObject::Relocate(Location* new_here) { here = new_here; }
 
 Location& Machine::CreateEmpty() {
   auto& it = locations.emplace_front(new Location(this, here));

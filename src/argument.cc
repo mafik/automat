@@ -90,8 +90,8 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
     }
   }
   if (result == nullptr && cfg.if_missing == IfMissing::CreateFromPrototype) {
-    // Ask the current location for the prototype for this object.
-    if (auto prototype = here.object->ArgPrototype(*this)) {
+    // Ask the argument for the prototype for this object.
+    if (auto prototype = Prototype()) {
       if (auto machine = here.ParentAs<Machine>()) {
         Location& l = machine->Create(*prototype);
         result = &l;

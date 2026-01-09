@@ -91,6 +91,10 @@ struct TimelineArgument : Argument {
   SkColor Tint() const override { return color::kParrotRed; }
   Style GetStyle() const override { return Style::Cable; }
 
+  Ptr<Object> Prototype() const override {
+    return prototypes->Find<Timeline>()->AcquirePtr<Object>();
+  }
+
   void CanConnect(Part& start, Part& end, Status& status) const override {
     if (!dynamic_cast<Timeline*>(&end)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
@@ -133,12 +137,6 @@ struct TimelineArgument : Argument {
 static TimelineArgument timeline_arg;
 
 void MacroRecorder::Parts(const std::function<void(Part&)>& cb) { cb(timeline_arg); }
-Ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {
-  if (&arg == &timeline_arg) {
-    return prototypes->Find<Timeline>()->AcquirePtr<Object>();
-  }
-  return nullptr;
-}
 
 string_view MacroRecorder::Name() const { return "Macro Recorder"sv; }
 Ptr<Object> MacroRecorder::Clone() const {

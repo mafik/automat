@@ -69,6 +69,10 @@ struct Argument : virtual Part {
   // Returns nullptr if this argument doesn't represent an interface.
   virtual Interface* StartInterface(Part& start) const { return nullptr; }
 
+  // Returns the prototype object for this argument, or nullptr if there is no prototype.
+  // This is used when creating new objects from arguments.
+  virtual Ptr<Object> Prototype() const { return nullptr; }
+
   virtual PaintDrawable& Icon();            // TODO: weird - clean this up
   virtual bool IsOn(Location& here) const;  // TODO: weird - clean this up
 

@@ -36,6 +36,7 @@ struct AssemblerArgument : Argument {
   float AutoconnectRadius() const override { return INFINITY; }
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Invisible; }
+  Ptr<Object> Prototype() const override;
   void CanConnect(Part& start, Part& end, Status& status) const override;
   void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
   NestedPtr<Part> Find(Part& start) const override;
@@ -66,7 +67,6 @@ struct Instruction : LiveObject, Runnable, Buffer {
   NestedWeakPtr<Object> assembler_weak;
 
   void Parts(const std::function<void(Part&)>& cb) override;
-  Ptr<Object> ArgPrototype(const Argument&) override;
 
   std::string_view Name() const override;
   Ptr<Object> Clone() const override;

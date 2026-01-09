@@ -65,9 +65,6 @@ struct Object : public ReferenceCounted {
 
   void Args(const std::function<void(Argument&)>&);
 
-  // TODO: move this to Argument
-  virtual Ptr<Object> ArgPrototype(const Argument&) { return nullptr; }
-
   virtual void Updated(Location& here, Location& updated);
 
   virtual audio::Sound& NextSound();

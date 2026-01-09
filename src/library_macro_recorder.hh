@@ -51,7 +51,6 @@ struct MacroRecorder : LiveObject,
   void FillChildren(Vec<Widget*>& children) override { children.push_back(record_button.get()); }
 
   void Parts(const std::function<void(Part&)>& cb) override;
-  Ptr<Object> ArgPrototype(const Argument&) override;
 
   void PointerOver(ui::Pointer&) override;
   void PointerLeave(ui::Pointer&) override;

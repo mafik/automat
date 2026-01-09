@@ -195,6 +195,8 @@ NestedPtr<Part> AssemblerArgument::Find(Part& start) const {
   return NestedPtr<Part>();
 }
 
+Ptr<Object> AssemblerArgument::Prototype() const { return MAKE_PTR(Assembler); }
+
 AssemblerArgument assembler_arg;
 
 static Assembler* FindAssembler(Location& here) {
@@ -220,13 +222,6 @@ void Instruction::Parts(const std::function<void(Part&)>& cb) {
   if (info.isBranch()) {
     cb(jump_arg);
   }
-}
-
-Ptr<Object> Instruction::ArgPrototype(const Argument& arg) {
-  if (&arg == &assembler_arg) {
-    return MAKE_PTR(Assembler);
-  }
-  return nullptr;
 }
 
 string_view Instruction::Name() const { return "Instruction"; }

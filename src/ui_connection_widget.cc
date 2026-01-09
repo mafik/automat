@@ -377,8 +377,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     phase |= animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
     if (anim.prototype_alpha > 0) {
       if (!prototype_widget) {
-        prototype_widget =
-            from.object->ArgPrototype(arg)->MakeWidget(const_cast<ConnectionWidget*>(this));
+        prototype_widget = arg.Prototype()->MakeWidget(const_cast<ConnectionWidget*>(this));
       }
       phase |= prototype_widget->Tick(timer);
     }

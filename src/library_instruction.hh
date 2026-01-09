@@ -38,8 +38,8 @@ struct AssemblerArgument : Argument {
   Style GetStyle() const override { return Style::Invisible; }
   Ptr<Object> Prototype() const override;
   void CanConnect(Part& start, Part& end, Status& status) const override;
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Part& start) const override;
+  void Connect(Object& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Object& start) const override;
 };
 
 struct JumpArgument : Argument {
@@ -48,13 +48,13 @@ struct JumpArgument : Argument {
   StrView Name() const override { return "jump"sv; }
   PaintDrawable& Icon() override;
   void CanConnect(Part& start, Part& end, Status& status) const override;
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Part& start) const override;
+  void Connect(Object& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Object& start) const override;
 };
 
 // Same as NextArg - but calls UpdateMachineCode when it's reconnected
 struct NextInstructionArg : NextArg {
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
+  void Connect(Object& start, const NestedPtr<Part>& end) override;
 };
 
 extern AssemblerArgument assembler_arg;

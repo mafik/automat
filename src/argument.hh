@@ -59,11 +59,11 @@ struct Argument : virtual Part {
   //
   // When `end` is nullptr, this disconnects the existing connection. The implementation can check
   // the current connection value before clearing it (e.g., to call cleanup methods).
-  virtual void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) = 0;
+  virtual void Connect(Object& start, const NestedPtr<Part>& end) = 0;
 
-  void Disconnect(const NestedPtr<Part>& start) { Connect(start, {}); }
+  void Disconnect(Object& start) { Connect(start, {}); }
 
-  virtual NestedPtr<Part> Find(Part& start) const = 0;
+  virtual NestedPtr<Part> Find(Object& start) const = 0;
 
   // Returns the Interface pointer for this argument on the given start object.
   // Returns nullptr if this argument doesn't represent an interface.
@@ -109,8 +109,8 @@ struct Argument : virtual Part {
 struct NextArg : Argument {
   StrView Name() const override { return "next"sv; }
   void CanConnect(Part& start, Part& end, Status&) const override;
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Part& start) const override;
+  void Connect(Object& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Object& start) const override;
 };
 
 extern NextArg next_arg;

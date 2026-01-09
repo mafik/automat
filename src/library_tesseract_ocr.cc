@@ -62,8 +62,8 @@ struct ImageArgument : Argument {
     }
   }
 
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override {
-    auto* tesseract = dynamic_cast<TesseractOCR*>(start.Get());
+  void Connect(Object& start, const NestedPtr<Part>& end) override {
+    auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
     auto* end_obj = dynamic_cast<Object*>(end.Get());
     if (end_obj == nullptr) return;
@@ -71,7 +71,7 @@ struct ImageArgument : Argument {
         NestedWeakPtr<ImageProvider>(end.GetOwnerWeak(), end_obj->AsImageProvider());
   }
 
-  NestedPtr<Part> Find(Part& start) const override {
+  NestedPtr<Part> Find(Object& start) const override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return tesseract->image_provider_weak.Lock();
@@ -90,15 +90,15 @@ struct TextArgument : Argument {
     // Any object can receive text
   }
 
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override {
-    auto* tesseract = dynamic_cast<TesseractOCR*>(start.Get());
+  void Connect(Object& start, const NestedPtr<Part>& end) override {
+    auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return;
     auto* end_obj = dynamic_cast<Object*>(end.Get());
     if (end_obj == nullptr) return;
     tesseract->text_weak = NestedWeakPtr<Object>(end.GetOwnerWeak(), end_obj);
   }
 
-  NestedPtr<Part> Find(Part& start) const override {
+  NestedPtr<Part> Find(Object& start) const override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return tesseract->text_weak.Lock();

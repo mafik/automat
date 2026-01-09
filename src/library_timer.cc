@@ -738,8 +738,8 @@ void DurationArgument::CanConnect(Part& start, Part& end, Status& status) const 
   }
 }
 
-void DurationArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
-  if (auto* timer = dynamic_cast<TimerDelay*>(start.Get())) {
+void DurationArgument::Connect(Object& start, const NestedPtr<Part>& end) {
+  if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
     if (end) {
       if (auto* iface = dynamic_cast<Interface*>(end.Get())) {
         timer->duration_source = NestedWeakPtr<Interface>(end.GetOwnerWeak(), iface);
@@ -750,7 +750,7 @@ void DurationArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Par
   }
 }
 
-NestedPtr<Part> DurationArgument::Find(Part& start) const {
+NestedPtr<Part> DurationArgument::Find(Object& start) const {
   if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
     return timer->duration_source.Lock().DynamicCast<Part>();
   }

@@ -94,8 +94,8 @@ struct TrackArgument : Argument {
   PaintDrawable& Icon() override;
 
   void CanConnect(Part& start, Part& end, Status& status) const override;
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Part& start) const override;
+  void Connect(Object& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Object& start) const override;
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.

@@ -101,8 +101,8 @@ struct TimelineArgument : Argument {
     }
   }
 
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override {
-    if (auto* recorder = dynamic_cast<MacroRecorder*>(start.Get())) {
+  void Connect(Object& start, const NestedPtr<Part>& end) override {
+    if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
       // Handle disconnect - check old connection before clearing
       if (!end) {
         if (auto old_timeline_ptr = recorder->timeline_connection.Lock()) {
@@ -126,7 +126,7 @@ struct TimelineArgument : Argument {
     }
   }
 
-  NestedPtr<Part> Find(Part& start) const override {
+  NestedPtr<Part> Find(Object& start) const override {
     if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
       return recorder->timeline_connection.Lock();
     }
@@ -377,7 +377,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
 
     PositionAhead(*timeline_loc, track_arg, on_off_loc);
     AnimateGrowFrom(*macro_recorder.here.lock(), on_off_loc);
-    track_arg.Connect(timeline_loc->object, on_off_loc.object);
+    track_arg.Connect(*timeline_loc->object, on_off_loc.object);
   }
 
   // Append the current timestamp to that track
@@ -557,7 +557,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
 
     PositionAhead(*timeline_loc, track_arg, receiver_loc);
     AnimateGrowFrom(*recorder.here.lock(), receiver_loc);
-    track_arg.Connect(timeline_loc->object, receiver_loc.object);
+    track_arg.Connect(*timeline_loc->object, receiver_loc.object);
     // timeline->here.lock()->ConnectTo(receiver_loc, track_arg);
   }
 

@@ -785,8 +785,8 @@ struct RegisterAssemblerArgument : Argument {
     }
   }
 
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override {
-    if (auto* reg = dynamic_cast<Register*>(start.Get())) {
+  void Connect(Object& start, const NestedPtr<Part>& end) override {
+    if (auto* reg = dynamic_cast<Register*>(&start)) {
       if (end) {
         if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {
           reg->assembler_weak = assembler->AcquireWeakPtr();
@@ -797,8 +797,9 @@ struct RegisterAssemblerArgument : Argument {
     }
   }
 
-  NestedPtr<Part> Find(Part& start) const override {
+  NestedPtr<Part> Find(Object& start) const override {
     auto* reg = dynamic_cast<Register*>(&start);
+    if (reg == nullptr) return {};
     return reg->assembler_weak.Lock();
   }
 };

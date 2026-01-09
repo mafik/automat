@@ -128,16 +128,19 @@ void SyncArg::CanConnect(Part& start, Part& end, Status& status) const {
   }
 }
 
-void SyncArg::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
-  auto* start_interface = dynamic_cast<Interface*>(start.Get());
+void SyncArg::Connect(Object& start, const NestedPtr<Part>& end) {
+  auto* start_interface = dynamic_cast<Interface*>(&start);
   if (start_interface == nullptr) return;
   auto* sync_block = dynamic_cast<SyncBlock*>(end.Get());
   if (sync_block == nullptr) return;
   start_interface->sync_block_weak = sync_block->AcquireWeakPtr();
 }
 
-NestedPtr<Part> SyncArg::Find(Part& start) const {
-  return dynamic_cast<Interface&>(start).sync_block_weak.Lock();
+NestedPtr<Part> SyncArg::Find(Object& start) const {
+  if (auto* iface = dynamic_cast<Interface*>(&start)) {
+    return iface->sync_block_weak.Lock();
+  }
+  return {};
 }
 
 }  // namespace automat

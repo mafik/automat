@@ -113,8 +113,8 @@ void JumpArgument::CanConnect(Part& start, Part& end, Status& status) const {
   }
 }
 
-void JumpArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
-  if (auto* inst = dynamic_cast<Instruction*>(start.Get())) {
+void JumpArgument::Connect(Object& start, const NestedPtr<Part>& end) {
+  if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     if (end) {
       if (auto* runnable = dynamic_cast<Runnable*>(end.Get())) {
         inst->jump_target = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), runnable);
@@ -131,7 +131,7 @@ void JumpArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& 
   }
 }
 
-NestedPtr<Part> JumpArgument::Find(Part& start) const {
+NestedPtr<Part> JumpArgument::Find(Object& start) const {
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     if (auto locked = inst->jump_target.Lock()) {
       return NestedPtr<Interface>(locked.GetOwnerWeak().Lock(), locked.Get());
@@ -142,9 +142,9 @@ NestedPtr<Part> JumpArgument::Find(Part& start) const {
 
 JumpArgument jump_arg;
 
-void NextInstructionArg::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
+void NextInstructionArg::Connect(Object& start, const NestedPtr<Part>& end) {
   NextArg::Connect(start, end);
-  if (auto* inst = dynamic_cast<Instruction*>(start.Get())) {
+  if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     // Notify assembler of change
     if (auto* loc = inst->MyLocation()) {
       if (auto* assembler = assembler_arg.FindObject<Assembler>(*loc, {})) {
@@ -162,8 +162,8 @@ void AssemblerArgument::CanConnect(Part& start, Part& end, Status& status) const
   }
 }
 
-void AssemblerArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
-  auto* instruction = dynamic_cast<Instruction*>(start.Get());
+void AssemblerArgument::Connect(Object& start, const NestedPtr<Part>& end) {
+  auto* instruction = dynamic_cast<Instruction*>(&start);
   if (instruction == nullptr) return;
 
   if (auto old_assembler_obj = instruction->assembler_weak.Lock()) {
@@ -188,7 +188,7 @@ void AssemblerArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Pa
   }
 }
 
-NestedPtr<Part> AssemblerArgument::Find(Part& start) const {
+NestedPtr<Part> AssemblerArgument::Find(Object& start) const {
   if (auto* instruction = dynamic_cast<Instruction*>(&start)) {
     return instruction->assembler_weak.Lock();
   }

@@ -229,7 +229,7 @@ void Machine::DeserializeState(Deserializer& d) {
           if (arg.Name() != connection_record.label) {
             return;
           }
-          arg.Connect(from->object, to->object);
+          arg.Connect(*from->object, to->object);
         });
       }
     }

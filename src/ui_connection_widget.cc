@@ -54,9 +54,11 @@ Location* ConnectionWidget::StartLocation() const {
 Location* ConnectionWidget::EndLocation() const {
   if (auto locked = start_weak.Lock()) {
     if (auto* arg = locked.Get()) {
-      if (auto found = arg->Find(*locked)) {
-        if (auto* obj = found.Owner<Object>()) {
-          return obj->MyLocation();
+      if (auto* start_obj = locked.Owner<Object>()) {
+        if (auto found = arg->Find(*start_obj)) {
+          if (auto* obj = found.Owner<Object>()) {
+            return obj->MyLocation();
+          }
         }
       }
     }
@@ -461,7 +463,7 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
   auto* start = arg.Owner<Object>();
 
   // Disconnect existing connection
-  arg->Disconnect(start->AcquirePtr());
+  arg->Disconnect(*start);
 
   grab_offset = Vec2(0, 0);
   if (widget.state) {
@@ -501,7 +503,7 @@ DragConnectionAction::~DragConnectionAction() {
   }
   Location* to = root_machine->LocationAtPoint(pos);
   if (to != nullptr && arg->CanConnect(*start, *to->object)) {
-    arg->Connect(start, NestedPtr<Part>(to->object, to->object.Get()));
+    arg->Connect(*start, NestedPtr<Part>(to->object, to->object.Get()));
   }
   widget.WakeAnimation();
 

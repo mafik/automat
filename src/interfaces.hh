@@ -43,8 +43,8 @@ struct SyncBlock : Object {
 struct SyncArg : Argument {
   StrView Name() const override { return "sync"sv; }
   void CanConnect(Part& start, Part& end, Status&) const override;
-  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Part& start) const override;
+  void Connect(Object& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Object& start) const override;
 };
 
 // Some objects within Automat may provide interfaces that can be "synced". A synced interface

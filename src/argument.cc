@@ -121,10 +121,9 @@ void NextArg::CanConnect(Part& start, Part& end, Status& status) const {
   }
 }
 
-void NextArg::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
-  Runnable* start_runnable = dynamic_cast<Runnable*>(start.Get());
+void NextArg::Connect(Object& start, const NestedPtr<Part>& end) {
+  Runnable* start_runnable = dynamic_cast<Runnable*>(&start);
   if (start_runnable == nullptr) return;
-  start_runnable->next = end.DynamicCast<Runnable>();
   if (end) {
     if (Runnable* end_runnable = dynamic_cast<Runnable*>(end.Get())) {
       start_runnable->next = NestedWeakPtr<Runnable>(end.GetOwnerWeak(), end_runnable);
@@ -134,7 +133,7 @@ void NextArg::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) 
   }
 }
 
-NestedPtr<Part> NextArg::Find(Part& start) const {
+NestedPtr<Part> NextArg::Find(Object& start) const {
   if (auto* runnable = dynamic_cast<Runnable*>(&start)) {
     return runnable->next.Lock();
   }

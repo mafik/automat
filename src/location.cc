@@ -510,9 +510,9 @@ void Location::UpdateAutoconnectArgs() {
       return;
     }
     if (new_target) {
-      arg.Connect(object, new_target->object);
+      arg.Connect(*object, new_target->object);
     } else {
-      arg.Disconnect(object);
+      arg.Disconnect(*object);
     }
   });
 
@@ -582,9 +582,9 @@ void Location::UpdateAutoconnectArgs() {
         return;
       }
       if (new_target) {
-        arg.Connect(other->object, new_target->object);
+        arg.Connect(*other->object, new_target->object);
       } else {
-        arg.Disconnect(other->object);
+        arg.Disconnect(*other->object);
       }
     });
   }

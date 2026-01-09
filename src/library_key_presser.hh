@@ -42,6 +42,14 @@ struct KeyPresser : LiveObject, OnOff, ui::Keylogger {
     cb(this->sync_arg);
   }
 
+  void PartName(Part& part, Str& out_name) override {
+    if (&part == this) {
+      out_name = "";
+      return;
+    }
+    return Object::PartName(part, out_name);
+  }
+
   operator OnOff*() override { return this; }
   bool IsOn() const override { return key_pressed; }
   void OnTurnOn() override;

@@ -40,7 +40,7 @@ struct ObjectWidget : ui::Widget {
 
   // Describes the area of the widget where the given part is located.
   // Local (metric) coordinates.
-  virtual SkPath PartShape(Part*) const { return SkPath(); }
+  virtual SkPath PartShape(Part*) const { return Shape(); }
 };
 
 // Objects are interactive pieces of data & behavior.
@@ -61,6 +61,11 @@ struct Object : public ReferenceCounted {
 
   // Release the memory occupied by this object.
   virtual ~Object();
+
+  // # Parts & Serialization
+  //
+  // Objects serialize themselves to the "value" property within the location objects
+  // - Each part my want to emit multiple properties
 
   virtual void SerializeState(Serializer& writer, const char* key = "value") const;
 
@@ -84,6 +89,9 @@ struct Object : public ReferenceCounted {
 
   virtual void Parts(const std::function<void(Part&)>&);
 
+  virtual void PartName(Part&, Str& out_name);
+
+  // Wrapper around Parts() that only reports Arguments
   void Args(const std::function<void(Argument&)>&);
 
   virtual void Updated(Location& here, Location& updated);

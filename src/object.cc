@@ -370,18 +370,17 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
       obj->Parts([&](Part& part) {
         if (auto* interface = dynamic_cast<Interface*>(&part)) {
           FieldOption field_option{NestedWeakPtr<Interface>(WeakPtr<Object>(object), interface)};
-          visitor(field_option);
+          Str part_name;
+          obj->PartName(*interface, part_name);
+          // Sometimes it's convenient for an object to expose some options more directly (without
+          // nested menus). We do this when the object uses some part without giving it a name.
+          if (part_name.empty()) {
+            field_option.VisitOptions(visitor);
+          } else {
+            visitor(field_option);
+          }
         }
       });
-      // Sometimes it's convenient for an object to expose an interface more directly (without
-      // fields).
-      //
-      // Note: this may cause issues if some object implements multiple interfaces - the sync option
-      // will appear multiple times, for each interface. TODO: figure this out
-      if (auto* on_off = static_cast<OnOff*>(*obj)) {
-        FieldOption field_option{NestedWeakPtr<Interface>(WeakPtr<Object>(object), on_off)};
-        field_option.VisitOptions(visitor);
-      }
     }
   }
 }
@@ -499,6 +498,8 @@ bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !Is
 bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(object.GetUnsafe()); }
 
 void Object::Parts(const std::function<void(Part&)>& cb) {}
+
+void Object::PartName(Part& part, Str& out_name) { out_name = part.Name(); }
 
 void Object::Args(const std::function<void(Argument&)>& cb) {
   Parts([&](Part& part) {

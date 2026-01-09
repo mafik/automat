@@ -80,7 +80,6 @@ struct Argument : virtual Part {
 
   struct FindConfig {
     IfMissing if_missing = IfMissing::ReturnNull;
-    Optional<float> search_radius = std::nullopt;  // overrides autoconnect_radius
   };
 
   // Return the position and direction of this argument in the given Widget's coordinate

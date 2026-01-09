@@ -42,9 +42,9 @@ struct SyncBlock : Object {
 
 struct SyncArg : Argument {
   StrView Name() const override { return "sync"sv; }
-  void CanConnect(Named& start, Named& end, Status&) const override;
-  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
-  NestedPtr<Named> Find(Named& start) const override;
+  void CanConnect(Part& start, Part& end, Status&) const override;
+  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Part& start) const override;
 };
 
 // Some objects within Automat may provide interfaces that can be "synced". A synced interface
@@ -71,7 +71,7 @@ struct SyncArg : Argument {
 // IMPORTANT: To actually make this work, the "On" entry points should not be used directly (only
 // through the "ForwardDo" & "ForwardNotify" wrappers). Whenever the "On" entry point us used
 // directly, it's not going to be propagated to the other synced implementations.
-struct Interface : virtual Named {
+struct Interface : virtual Part {
   WeakPtr<SyncBlock> sync_block_weak = nullptr;
 
   SyncArg sync_arg;

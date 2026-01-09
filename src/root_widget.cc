@@ -559,7 +559,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
         // Create a new widget.
         root_widget.connection_widgets.emplace_back(new ui::ConnectionWidget(
             &root_widget,
-            NestedWeakPtr<Named>(loc->object->AcquireWeakPtr(), (Named*)loc->object.Get()), arg));
+            NestedWeakPtr<Part>(loc->object->AcquireWeakPtr(), (Part*)loc->object.Get()), arg));
       });
     }
   }

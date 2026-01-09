@@ -730,7 +730,7 @@ void TimerDelay::OnCancel() {
 
 DurationArgument::DurationArgument() {}
 
-void DurationArgument::CanConnect(Named& start, Named& end, Status& status) const {
+void DurationArgument::CanConnect(Part& start, Part& end, Status& status) const {
   if (auto* obj = dynamic_cast<Object*>(&end)) {
     Str text = obj->GetText();
     char* endptr = nullptr;
@@ -742,7 +742,7 @@ void DurationArgument::CanConnect(Named& start, Named& end, Status& status) cons
   }
 }
 
-void DurationArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
+void DurationArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
   if (auto* timer = dynamic_cast<TimerDelay*>(start.Get())) {
     if (end) {
       if (auto* iface = dynamic_cast<Interface*>(end.Get())) {
@@ -754,14 +754,14 @@ void DurationArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Na
   }
 }
 
-NestedPtr<Named> DurationArgument::Find(Named& start) const {
+NestedPtr<Part> DurationArgument::Find(Part& start) const {
   if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
-    return timer->duration_source.Lock().DynamicCast<Named>();
+    return timer->duration_source.Lock().DynamicCast<Part>();
   }
   return {};
 }
 
-Interface* DurationArgument::StartInterface(Named& start) const {
+Interface* DurationArgument::StartInterface(Part& start) const {
   if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
     return &timer->duration;
   }

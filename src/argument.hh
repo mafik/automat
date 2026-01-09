@@ -29,7 +29,7 @@ enum class CableTexture {
 // TODO: think about pointer following
 // TODO: think about requirement checking
 // TODO: think about multiple arguments
-struct Argument : virtual Named {
+struct Argument : virtual Part {
   enum class Style { Arrow, Cable, Spotlight, Invisible };
 
   virtual SkColor Tint() const { return "#404040"_color; }
@@ -44,11 +44,11 @@ struct Argument : virtual Named {
 
   virtual ~Argument() = default;
 
-  virtual void CanConnect(Named& start, Named& end, Status& status) const {
+  virtual void CanConnect(Part& start, Part& end, Status& status) const {
     AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
-  bool CanConnect(Named& start, Named& end) const {
+  bool CanConnect(Part& start, Part& end) const {
     Status status;
     CanConnect(start, end, status);
     return OK(status);
@@ -59,15 +59,15 @@ struct Argument : virtual Named {
   //
   // When `end` is nullptr, this disconnects the existing connection. The implementation can check
   // the current connection value before clearing it (e.g., to call cleanup methods).
-  virtual void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) = 0;
+  virtual void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) = 0;
 
-  void Disconnect(const NestedPtr<Named>& start) { Connect(start, {}); }
+  void Disconnect(const NestedPtr<Part>& start) { Connect(start, {}); }
 
-  virtual NestedPtr<Named> Find(Named& start) const = 0;
+  virtual NestedPtr<Part> Find(Part& start) const = 0;
 
   // Returns the Interface pointer for this argument on the given start object.
   // Returns nullptr if this argument doesn't represent an interface.
-  virtual Interface* StartInterface(Named& start) const { return nullptr; }
+  virtual Interface* StartInterface(Part& start) const { return nullptr; }
 
   virtual PaintDrawable& Icon();            // TODO: weird - clean this up
   virtual bool IsOn(Location& here) const;  // TODO: weird - clean this up
@@ -107,9 +107,9 @@ struct Argument : virtual Named {
 
 struct NextArg : Argument {
   StrView Name() const override { return "next"sv; }
-  void CanConnect(Named& start, Named& end, Status&) const override;
-  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
-  NestedPtr<Named> Find(Named& start) const override;
+  void CanConnect(Part& start, Part& end, Status&) const override;
+  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Part& start) const override;
 };
 
 extern NextArg next_arg;

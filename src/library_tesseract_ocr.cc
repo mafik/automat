@@ -54,7 +54,7 @@ struct ImageArgument : Argument {
   Style GetStyle() const override { return Style::Invisible; }
   PaintDrawable& Icon() override { return icon; }
 
-  void CanConnect(Named& start, Named& end, Status& status) const override {
+  void CanConnect(Part& start, Part& end, Status& status) const override {
     if (auto* obj = dynamic_cast<Object*>(&end)) {
       if (!obj->AsImageProvider()) {
         AppendErrorMessage(status) += "Object must provide images";
@@ -62,7 +62,7 @@ struct ImageArgument : Argument {
     }
   }
 
-  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override {
+  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(start.Get());
     if (tesseract == nullptr) return;
     auto* end_obj = dynamic_cast<Object*>(end.Get());
@@ -71,7 +71,7 @@ struct ImageArgument : Argument {
         NestedWeakPtr<ImageProvider>(end.GetOwnerWeak(), end_obj->AsImageProvider());
   }
 
-  NestedPtr<Named> Find(Named& start) const override {
+  NestedPtr<Part> Find(Part& start) const override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return tesseract->image_provider_weak.Lock();
@@ -86,11 +86,11 @@ struct TextArgument : Argument {
   StrView Name() const override { return "text"sv; }
   PaintDrawable& Icon() override { return icon; }
 
-  void CanConnect(Named& start, Named& end, Status& status) const override {
+  void CanConnect(Part& start, Part& end, Status& status) const override {
     // Any object can receive text
   }
 
-  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override {
+  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(start.Get());
     if (tesseract == nullptr) return;
     auto* end_obj = dynamic_cast<Object*>(end.Get());
@@ -98,7 +98,7 @@ struct TextArgument : Argument {
     tesseract->text_weak = NestedWeakPtr<Object>(end.GetOwnerWeak(), end_obj);
   }
 
-  NestedPtr<Named> Find(Named& start) const override {
+  NestedPtr<Part> Find(Part& start) const override {
     auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return tesseract->text_weak.Lock();

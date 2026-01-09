@@ -16,10 +16,10 @@ struct DurationArgument : Argument {
 
   StrView Name() const override { return "duration"sv; }
   SkColor Tint() const override { return "#6e4521"_color; }
-  void CanConnect(Named& start, Named& end, Status& status) const override;
-  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
-  NestedPtr<Named> Find(Named& start) const override;
-  Interface* StartInterface(Named& start) const override;
+  void CanConnect(Part& start, Part& end, Status& status) const override;
+  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Part& start) const override;
+  Interface* StartInterface(Part& start) const override;
 };
 
 struct TimerDelay : LiveObject,

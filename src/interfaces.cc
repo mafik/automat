@@ -122,13 +122,13 @@ std::unique_ptr<Object::WidgetInterface> SyncBlock::MakeWidget(ui::Widget* paren
   return std::make_unique<SyncBlockWidget>(*this, parent);
 }
 
-void SyncArg::CanConnect(Named& start, Named& end, Status& status) const {
+void SyncArg::CanConnect(Part& start, Part& end, Status& status) const {
   if (dynamic_cast<SyncBlock*>(&end) != nullptr) {
     AppendErrorMessage(status) += "Can only connect to SyncBlock";
   }
 }
 
-void SyncArg::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
+void SyncArg::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
   auto* start_interface = dynamic_cast<Interface*>(start.Get());
   if (start_interface == nullptr) return;
   auto* sync_block = dynamic_cast<SyncBlock*>(end.Get());
@@ -136,7 +136,7 @@ void SyncArg::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end
   start_interface->sync_block_weak = sync_block->AcquireWeakPtr();
 }
 
-NestedPtr<Named> SyncArg::Find(Named& start) const {
+NestedPtr<Part> SyncArg::Find(Part& start) const {
   return dynamic_cast<Interface&>(start).sync_block_weak.Lock();
 }
 

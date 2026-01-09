@@ -779,13 +779,13 @@ struct RegisterAssemblerArgument : Argument {
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Spotlight; }
 
-  void CanConnect(Named& start, Named& end, Status& status) const override {
+  void CanConnect(Part& start, Part& end, Status& status) const override {
     if (!dynamic_cast<Assembler*>(&end)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }
   }
 
-  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override {
+  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override {
     if (auto* reg = dynamic_cast<Register*>(start.Get())) {
       if (end) {
         if (auto* assembler = dynamic_cast<Assembler*>(end.Get())) {
@@ -797,7 +797,7 @@ struct RegisterAssemblerArgument : Argument {
     }
   }
 
-  NestedPtr<Named> Find(Named& start) const override {
+  NestedPtr<Part> Find(Part& start) const override {
     auto* reg = dynamic_cast<Register*>(&start);
     return reg->assembler_weak.Lock();
   }

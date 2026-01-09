@@ -754,7 +754,7 @@ void ParseReportDescriptor(const uint8_t* report_descriptor, size_t report_descr
               break;
             case 0x03:  // "Report";
               break;
-            case 0x04:  // "Named Array";
+            case 0x04:  // "Part Array";
               break;
             case 0x05:  // "Usage Switch";
               break;

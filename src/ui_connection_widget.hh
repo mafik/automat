@@ -36,7 +36,7 @@ struct DragConnectionAction : Action {
 //
 // TODO: separate the state of these three modes better
 struct ConnectionWidget : Widget {
-  NestedWeakPtr<Named> start_weak;
+  NestedWeakPtr<Part> start_weak;
   Argument& arg;
 
   struct AnimationState {
@@ -63,7 +63,7 @@ struct ConnectionWidget : Widget {
   float length = 0;
   mutable std::unique_ptr<Object::WidgetInterface> prototype_widget;
 
-  ConnectionWidget(Widget* parent, const NestedWeakPtr<Named>& start_weak, Argument&);
+  ConnectionWidget(Widget* parent, const NestedWeakPtr<Part>& start_weak, Argument&);
 
   // Helper to get the Location from start_weak
   Location* StartLocation() const;

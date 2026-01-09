@@ -62,7 +62,7 @@ Location* ConnectionWidget::EndLocation() const {
   return nullptr;
 }
 
-ConnectionWidget::ConnectionWidget(Widget* parent, const NestedWeakPtr<Named>& start, Argument& arg)
+ConnectionWidget::ConnectionWidget(Widget* parent, const NestedWeakPtr<Part>& start, Argument& arg)
     : Widget(parent), start_weak(start), arg(arg) {
   if (auto locked = start_weak.Lock()) {
     if (auto* obj = locked.Owner<Object>()) {
@@ -518,7 +518,7 @@ DragConnectionAction::~DragConnectionAction() {
   }
   Location* to = m->LocationAtPoint(pos);
   if (to != nullptr && widget.arg.CanConnect(*start, *to->object)) {
-    widget.arg.Connect(start, NestedPtr<Named>(to->object, to->object.Get()));
+    widget.arg.Connect(start, NestedPtr<Part>(to->object, to->object.Get()));
   }
   widget.WakeAnimation();
 

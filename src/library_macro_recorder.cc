@@ -91,13 +91,13 @@ struct TimelineArgument : Argument {
   SkColor Tint() const override { return color::kParrotRed; }
   Style GetStyle() const override { return Style::Cable; }
 
-  void CanConnect(Named& start, Named& end, Status& status) const override {
+  void CanConnect(Part& start, Part& end, Status& status) const override {
     if (!dynamic_cast<Timeline*>(&end)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
     }
   }
 
-  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override {
+  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override {
     if (auto* recorder = dynamic_cast<MacroRecorder*>(start.Get())) {
       // Handle disconnect - check old connection before clearing
       if (!end) {
@@ -122,7 +122,7 @@ struct TimelineArgument : Argument {
     }
   }
 
-  NestedPtr<Named> Find(Named& start) const override {
+  NestedPtr<Part> Find(Part& start) const override {
     if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
       return recorder->timeline_connection.Lock();
     }

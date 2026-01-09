@@ -302,11 +302,11 @@ TrackArgument::TrackArgument(StrView name) : icon(name, kKeyLetterSize, KeyFont(
 
 PaintDrawable& TrackArgument::Icon() { return icon; }
 
-void TrackArgument::CanConnect(Named& start, Named& end, Status& status) const {}
-void TrackArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
+void TrackArgument::CanConnect(Part& start, Part& end, Status& status) const {}
+void TrackArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
   target = end;
 }
-NestedPtr<Named> TrackArgument::Find(Named& start) const { return target; }
+NestedPtr<Part> TrackArgument::Find(Part& start) const { return target; }
 
 Timeline::Timeline()
     : state(kPaused), timeline_length(0), paused{.playback_offset = 0s}, zoom(10) {}

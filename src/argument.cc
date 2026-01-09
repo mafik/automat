@@ -123,7 +123,7 @@ void Argument::InvalidateConnectionWidgets(Location& here) const {
   }
 }
 
-void NextArg::CanConnect(Named& start, Named& end, Status& status) const {
+void NextArg::CanConnect(Part& start, Part& end, Status& status) const {
   if (!dynamic_cast<Runnable*>(&start)) {
     AppendErrorMessage(status) += "Next source must be a Runnable";
   }
@@ -132,7 +132,7 @@ void NextArg::CanConnect(Named& start, Named& end, Status& status) const {
   }
 }
 
-void NextArg::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
+void NextArg::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
   Runnable* start_runnable = dynamic_cast<Runnable*>(start.Get());
   if (start_runnable == nullptr) return;
   start_runnable->next = end.DynamicCast<Runnable>();
@@ -145,7 +145,7 @@ void NextArg::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end
   }
 }
 
-NestedPtr<Named> NextArg::Find(Named& start) const {
+NestedPtr<Part> NextArg::Find(Part& start) const {
   if (auto* runnable = dynamic_cast<Runnable*>(&start)) {
     return runnable->next.Lock();
   }

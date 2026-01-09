@@ -84,7 +84,7 @@ struct Float64Track : TrackBase {
 struct TrackArgument : Argument {
   TextDrawable icon;
   Ptr<TrackBase> ptr;
-  NestedPtr<Named> target;
+  NestedPtr<Part> target;
   Str name;
 
   TrackArgument(StrView name);
@@ -93,9 +93,9 @@ struct TrackArgument : Argument {
   SkColor Light() const override { return "#17aeb7"_color; }
   PaintDrawable& Icon() override;
 
-  void CanConnect(Named& start, Named& end, Status& status) const override;
-  void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
-  NestedPtr<Named> Find(Named& start) const override;
+  void CanConnect(Part& start, Part& end, Status& status) const override;
+  void Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) override;
+  NestedPtr<Part> Find(Part& start) const override;
 };
 
 // Currently Timeline pauses at end which is consistent with standard media player behavour.

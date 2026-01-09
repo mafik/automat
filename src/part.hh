@@ -13,8 +13,8 @@ namespace automat {
 //
 // Due to possibilty of this class present multiple times in the inheritance (diamond inheritance),
 // this should probably be inherited virtually.
-struct Named {
-  virtual ~Named() = default;
+struct Part {
+  virtual ~Part() = default;
 
   virtual StrView Name() const {
     const std::type_info& info = typeid(*this);

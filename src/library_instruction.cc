@@ -107,13 +107,13 @@ JumpArgument::JumpArgument() {
 
 PaintDrawable& JumpArgument::Icon() { return jump_icon; }
 
-void JumpArgument::CanConnect(Named& start, Named& end, Status& status) const {
+void JumpArgument::CanConnect(Part& start, Part& end, Status& status) const {
   if (!dynamic_cast<Runnable*>(&end)) {
     AppendErrorMessage(status) += "Jump target must be a Runnable";
   }
 }
 
-void JumpArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
+void JumpArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
   if (auto* inst = dynamic_cast<Instruction*>(start.Get())) {
     if (end) {
       if (auto* runnable = dynamic_cast<Runnable*>(end.Get())) {
@@ -131,7 +131,7 @@ void JumpArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>
   }
 }
 
-NestedPtr<Named> JumpArgument::Find(Named& start) const {
+NestedPtr<Part> JumpArgument::Find(Part& start) const {
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     if (auto locked = inst->jump_target.Lock()) {
       return NestedPtr<Interface>(locked.GetOwnerWeak().Lock(), locked.Get());
@@ -142,7 +142,7 @@ NestedPtr<Named> JumpArgument::Find(Named& start) const {
 
 JumpArgument jump_arg;
 
-void NextInstructionArg::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
+void NextInstructionArg::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
   NextArg::Connect(start, end);
   if (auto* inst = dynamic_cast<Instruction*>(start.Get())) {
     // Notify assembler of change
@@ -156,13 +156,13 @@ void NextInstructionArg::Connect(const NestedPtr<Named>& start, const NestedPtr<
 
 NextInstructionArg next_instruction_arg;
 
-void AssemblerArgument::CanConnect(Named& start, Named& end, Status& status) const {
+void AssemblerArgument::CanConnect(Part& start, Part& end, Status& status) const {
   if (!dynamic_cast<Assembler*>(&end)) {
     AppendErrorMessage(status) += "Must connect to an Assembler";
   }
 }
 
-void AssemblerArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) {
+void AssemblerArgument::Connect(const NestedPtr<Part>& start, const NestedPtr<Part>& end) {
   auto* instruction = dynamic_cast<Instruction*>(start.Get());
   if (instruction == nullptr) return;
 
@@ -188,11 +188,11 @@ void AssemblerArgument::Connect(const NestedPtr<Named>& start, const NestedPtr<N
   }
 }
 
-NestedPtr<Named> AssemblerArgument::Find(Named& start) const {
+NestedPtr<Part> AssemblerArgument::Find(Part& start) const {
   if (auto* instruction = dynamic_cast<Instruction*>(&start)) {
     return instruction->assembler_weak.Lock();
   }
-  return NestedPtr<Named>();
+  return NestedPtr<Part>();
 }
 
 AssemblerArgument assembler_arg;

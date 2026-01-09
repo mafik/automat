@@ -277,7 +277,7 @@ struct SyncAction : Action {
   }
   void Update() {
     if (auto interface = weak.Lock()) {
-      auto* widget = pointer.root_widget.widgets.Find(*interface.Owner<Object>());
+      auto* widget = pointer.root_widget.widgets.FindOrNull(*interface.Owner<Object>());
       auto start_local = widget->PartShape(interface.Get()).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
       sync_widget.start = start;
@@ -296,7 +296,7 @@ struct SyncOption : TextOption {
   std::unique_ptr<Option> Clone() const override { return std::make_unique<SyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto interface = weak.Lock()) {
-      auto widget = pointer.root_widget.widgets.Find(*interface.Owner<Object>());
+      auto widget = pointer.root_widget.widgets.FindOrNull(*interface.Owner<Object>());
       return std::make_unique<SyncAction>(pointer, interface, widget);
     }
     return nullptr;
@@ -427,13 +427,9 @@ void Object::DeserializeState(Deserializer& d) {
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
-ObjectWidget& Object::FindWidget(ui::Widget* parent) {
-  return parent->FindRootWidget().widgets.For(*this, parent);
-}
-
 void Object::ForEachWidget(std::function<void(ui::RootWidget&, ui::Widget&)> cb) {
   for (auto* root_widget : ui::root_widgets) {
-    if (auto widget = root_widget->widgets.Find(*this)) {
+    if (auto widget = root_widget->widgets.FindOrNull(*this)) {
       cb(*root_widget, *widget);
     }
   }

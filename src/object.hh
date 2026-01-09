@@ -137,9 +137,6 @@ struct Object : public ReferenceCounted {
     }
   };
 
-  // Find or create a widget for this object, under the given parent.
-  ObjectWidget& FindWidget(ui::Widget* parent);
-
   virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) {
     if (auto w = dynamic_cast<ObjectWidget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.

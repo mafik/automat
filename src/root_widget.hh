@@ -42,7 +42,7 @@ extern unique_ptr<RootWidget> root_widget;
 struct WidgetStore {
   std::map<WeakPtr<Object>, std::unique_ptr<ObjectWidget>> container;
 
-  ObjectWidget* Find(Object& object) {
+  ObjectWidget* FindOrNull(Object& object) const {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
@@ -51,7 +51,7 @@ struct WidgetStore {
     return it->second.get();
   }
 
-  ObjectWidget& For(Object& object, Widget* parent) {
+  ObjectWidget& FindOrMake(Object& object, Widget* parent) {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {

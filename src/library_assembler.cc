@@ -316,7 +316,7 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
     if (reg != &descendant) continue;
     auto loc = MAKE_PTR(Location, root_machine.get(), root_location);
     loc->InsertHere(reg_objects_idx[i].borrow());
-    auto* reg_widget_untyped = loc->FindRootWidget().widgets.Find(descendant);
+    auto* reg_widget_untyped = loc->WidgetStore().FindOrNull(descendant);
     if (reg_widget_untyped) {
       auto* reg_widget = static_cast<RegisterWidget*>(reg_widget_untyped);
       if (auto* assembler_widget = dynamic_cast<AssemblerWidget*>(reg_widget->parent.get())) {
@@ -446,9 +446,9 @@ animation::Phase AssemblerWidget::Tick(time::Timer& timer) {
     // Now create a widget if needed.
     if (assembler_reg) {
       if (reg_widgets_idx[i] != nullptr) continue;
-      auto* register_widget = FindRootWidget().widgets.Find(*assembler_reg);
+      auto* register_widget = WidgetStore().FindOrNull(*assembler_reg);
       if (register_widget == nullptr) {
-        register_widget = &FindRootWidget().widgets.For(*assembler_reg, this);
+        register_widget = &WidgetStore().FindOrMake(*assembler_reg, this);
         register_widget->local_to_parent = SkM44::Translate(0, 10_cm);
       }
       register_widget->ValidateHierarchy();
@@ -611,7 +611,7 @@ void AssemblerWidget::DropLocation(Ptr<Location>&& loc) {
     if (auto my_assembler = this->assembler_weak.lock()) {
       loc->object->ForEachWidget([&](ui::RootWidget& root_widget, ui::Widget& reg_widget_generic) {
         RegisterWidget& reg_widget = static_cast<RegisterWidget&>(reg_widget_generic);
-        if (auto asm_widget_generic = root_widget.widgets.Find(*my_assembler)) {
+        if (auto asm_widget_generic = root_widget.widgets.FindOrNull(*my_assembler)) {
           auto* asm_widget = static_cast<AssemblerWidget*>(asm_widget_generic);
           reg_widget.local_to_parent = SkM44(TransformBetween(reg_widget, *asm_widget));
           reg_widget.parent = asm_widget->AcquireTrackedPtr();

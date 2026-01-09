@@ -20,13 +20,7 @@ struct PrototypeButton : Widget {
 
   PrototypeButton(Widget* parent, Ptr<Object>& proto) : ui::Widget(parent), proto(proto) {}
 
-  void Init() {
-    proto_widget = &proto->FindWidget(this);
-    auto rect = proto_widget->CoarseBounds().rect;
-    natural_width =
-        std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());
-    width.value = natural_width;
-  }
+  void Init();
 
   SkPath Shape() const override { return proto_widget->Shape(); }
 

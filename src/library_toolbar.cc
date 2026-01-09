@@ -17,6 +17,15 @@
 using namespace std::literals;
 
 namespace automat::ui {
+
+void PrototypeButton::Init() {
+  proto_widget = &WidgetStore().FindOrMake(*proto, this);
+  auto rect = proto_widget->CoarseBounds().rect;
+  natural_width =
+      std::min<float>(kToolbarIconSize, rect.Width() * kToolbarIconSize / rect.Height());
+  width.value = natural_width;
+}
+
 std::unique_ptr<Action> PrototypeButton::FindAction(ui::Pointer& pointer, ui::ActionTrigger btn) {
   if (btn != ui::PointerButton::Left) {
     return nullptr;

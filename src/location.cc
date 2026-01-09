@@ -309,6 +309,17 @@ std::string Location::ToStr() const { return Str(object->Name()); }
 
 Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(WidgetForObject(), *parent); }
 
+ObjectWidget& Location::WidgetForObject() {
+  if (!object_widget) {
+    if (object) {
+      object_widget = &WidgetStore().FindOrMake(*object, this);
+      scale = object_widget->GetBaseScale();
+      object_widget->local_to_parent = SkM44(ToMatrix(position, scale, LocalAnchor()));
+    }
+  }
+  return *object_widget;
+}
+
 Location::~Location() {
   // Location can only be destroyed by its parent so we don't have to do anything there.
   parent_location = {};

@@ -72,16 +72,7 @@ struct Location : ReferenceCounted, ui::Widget {
 
   // Find (or create if needed) the Widget for this location's object.
   // Shortcut for Widget::ForObject(location.object, location)
-  ObjectWidget& WidgetForObject() {
-    if (!object_widget) {
-      if (object) {
-        object_widget = &object->FindWidget(this);
-        scale = object_widget->GetBaseScale();
-        object_widget->local_to_parent = SkM44(ToMatrix(position, scale, LocalAnchor()));
-      }
-    }
-    return *object_widget;
-  }
+  ObjectWidget& WidgetForObject();
 
   Vec2 LocalAnchor() const override;
 

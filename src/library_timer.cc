@@ -559,8 +559,8 @@ void TimerDelay::Draw(SkCanvas& canvas) const {
 
 void TimerDelay::FillChildren(Vec<Widget*>& children) { children.push_back(text_field.get()); }
 
-SkPath TimerDelay::InterfaceShape(Interface* interface) const {
-  if (interface == &duration) {
+SkPath TimerDelay::PartShape(Part* part) const {
+  if (part == &duration) {
     auto transform = SkMatrix::Translate(-kTextWidth / 2, -ui::NumberTextField::kHeight);
     return text_field->Shape().makeTransform(transform);
   }

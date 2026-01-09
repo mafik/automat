@@ -293,10 +293,6 @@ struct Widget : Trackable, OptionsProvider {
   // Methods related to Widgets that represent Objects.
   // TODO: Move them to a separate class (ObjectWidget)
 
-  // Describes the area of the widget where the given field is located.
-  // Local (metric) coordinates.
-  virtual SkPath InterfaceShape(Interface*) const { return SkPath(); }
-
   // Find the shape of this widget. If it's shape is empty, combine its children's shapes.
   SkPath GetShapeRecursive() const;
 

@@ -277,7 +277,7 @@ struct SyncAction : Action {
   void Update() {
     if (auto interface = weak.Lock()) {
       auto* widget = pointer.root_widget.widgets.Find(*interface.Owner<Object>());
-      auto start_local = widget->InterfaceShape(interface.Get()).getBounds().center();
+      auto start_local = widget->PartShape(interface.Get()).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
       sync_widget.start = start;
       sync_widget.end = pointer.PositionWithinRootMachine();
@@ -479,7 +479,7 @@ Vec2AndDir Object::WidgetBase::ArgStart(const Argument& arg) {
   SkPath shape;
   if (auto obj = object.Lock()) {
     if (auto* iface = arg.StartInterface(*obj)) {
-      shape = InterfaceShape(iface);
+      shape = PartShape(iface);
     }
   }
   if (shape.isEmpty()) {

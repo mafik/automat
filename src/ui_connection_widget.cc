@@ -267,7 +267,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
   if (auto* iface = dynamic_cast<Interface*>(start.Get())) {
-    from_shape = from_widget.InterfaceShape(iface);
+    from_shape = from_widget.PartShape(iface);
   }
   SkPath to_shape;  // machine coords
   to_points.clear();
@@ -399,7 +399,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
   if (auto* iface = dynamic_cast<Interface*>(start.Get())) {
-    from_shape = from_widget.InterfaceShape(iface);
+    from_shape = from_widget.PartShape(iface);
   }
   SkPath to_shape;  // machine coords
 

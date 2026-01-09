@@ -37,6 +37,10 @@ struct ObjectWidget : ui::Widget {
   // Returns the start position of the given argument.
   // Local (metric) coordinates.
   virtual Vec2AndDir ArgStart(const Argument&) = 0;
+
+  // Describes the area of the widget where the given part is located.
+  // Local (metric) coordinates.
+  virtual SkPath PartShape(Part*) const { return SkPath(); }
 };
 
 // Objects are interactive pieces of data & behavior.

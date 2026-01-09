@@ -44,7 +44,7 @@ struct TesseractOCR : public LiveObject, Runnable {
   Ptr<Object> Clone() const override;
   std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
 
-  void Args(std::function<void(Argument&)> cb) override;
+  void Parts(const std::function<void(Part&)>&) override;
   void Updated(Location& here, Location& updated) override;
   void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
 

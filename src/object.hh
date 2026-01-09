@@ -63,7 +63,9 @@ struct Object : public ReferenceCounted {
 
   virtual Span<Interface*> Interfaces() { return {}; }
 
-  virtual void Args(std::function<void(Argument&)> cb);
+  virtual void Parts(const std::function<void(Part&)>&);
+
+  void Args(const std::function<void(Argument&)>&);
 
   // TODO: move this to Argument
   virtual Ptr<Object> ArgPrototype(const Argument&) { return nullptr; }

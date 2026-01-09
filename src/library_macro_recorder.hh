@@ -50,7 +50,7 @@ struct MacroRecorder : LiveObject,
   SkPath Shape() const override;
   void FillChildren(Vec<Widget*>& children) override { children.push_back(record_button.get()); }
 
-  void Args(std::function<void(Argument&)> cb) override;
+  void Parts(const std::function<void(Part&)>& cb) override;
   Ptr<Object> ArgPrototype(const Argument&) override;
 
   void PointerOver(ui::Pointer&) override;

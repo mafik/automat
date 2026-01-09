@@ -707,7 +707,7 @@ Span<Interface*> TimerDelay::Interfaces() {
   return {};
 }
 
-void TimerDelay::Args(std::function<void(Argument&)> cb) {
+void TimerDelay::Parts(const std::function<void(Part&)>& cb) {
   cb(duration_arg);
   cb(next_arg);
 }

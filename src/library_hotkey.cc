@@ -288,7 +288,7 @@ void HotKey::Draw(SkCanvas& canvas) const {
 }
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
-void HotKey::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
+void HotKey::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
 
 void HotKey::FillChildren(Vec<Widget*>& children) {
   children.push_back(power_button.get());

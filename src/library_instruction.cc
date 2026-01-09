@@ -209,7 +209,7 @@ static Assembler* FindOrCreateAssembler(Location& here) {
   return assembler;
 }
 
-void Instruction::Args(std::function<void(Argument&)> cb) {
+void Instruction::Parts(const std::function<void(Part&)>& cb) {
   auto opcode = mc_inst.getOpcode();
   if (opcode != X86::JMP_1 && opcode != X86::JMP_4) {
     cb(next_instruction_arg);

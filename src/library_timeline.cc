@@ -1823,7 +1823,7 @@ std::unique_ptr<Object::WidgetInterface> Timeline::MakeWidget(ui::Widget* parent
   return std::make_unique<TimelineWidget>(parent, this);
 }
 
-void Timeline::Args(function<void(Argument&)> cb) {
+void Timeline::Parts(const function<void(Part&)>& cb) {
   for (auto& track_arg : tracks) {
     cb(*track_arg);
   }

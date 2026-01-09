@@ -65,7 +65,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
   NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
   NestedWeakPtr<Object> assembler_weak;
 
-  void Args(std::function<void(Argument&)> cb) override;
+  void Parts(const std::function<void(Part&)>& cb) override;
   Ptr<Object> ArgPrototype(const Argument&) override;
 
   std::string_view Name() const override;

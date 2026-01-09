@@ -87,7 +87,7 @@ struct Register : LiveObject {
     return make_unique<RegisterWidget>(parent, AcquireWeakPtr<Object>());
   }
 
-  void Args(std::function<void(Argument&)> cb) override;
+  void Parts(const std::function<void(Part&)>& cb) override;
   void SetText(Location& error_context, std::string_view text) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;

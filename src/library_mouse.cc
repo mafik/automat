@@ -500,7 +500,7 @@ static void SendMouseButtonEvent(ui::PointerButton button, bool down) {
 string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
 Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
-void MouseButtonEvent::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
+void MouseButtonEvent::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
 void MouseButtonEvent::OnRun(Location&, std::unique_ptr<RunTask>&) {
   ZoneScopedN("MouseClick");
   SendMouseButtonEvent(button, down);
@@ -896,7 +896,7 @@ string_view MouseButtonPresser::Name() const { return "Mouse Button Presser"sv; 
 
 Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPresser, button); }
 
-void MouseButtonPresser::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
+void MouseButtonPresser::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
 
 std::unique_ptr<Object::WidgetInterface> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());

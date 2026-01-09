@@ -1092,7 +1092,7 @@ std::unique_ptr<Object::WidgetInterface> TesseractOCR::MakeWidget(ui::Widget* pa
   return std::make_unique<TesseractWidget>(parent, AcquireWeakPtr<Object>());
 }
 
-void TesseractOCR::Args(std::function<void(Argument&)> cb) {
+void TesseractOCR::Parts(const std::function<void(Part&)>& cb) {
   cb(image_arg);
   cb(text_arg);
   cb(next_arg);

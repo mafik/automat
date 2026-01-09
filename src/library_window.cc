@@ -490,7 +490,7 @@ std::unique_ptr<Object::WidgetInterface> Window::MakeWidget(ui::Widget* parent) 
   return std::make_unique<WindowWidget>(parent, AcquireWeakPtr<Object>());
 }
 
-void Window::Args(std::function<void(Argument&)> cb) { cb(next_arg); }
+void Window::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
 
 void Window::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   ZoneScopedN("Window");

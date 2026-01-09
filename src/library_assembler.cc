@@ -805,7 +805,7 @@ struct RegisterAssemblerArgument : Argument {
 
 static RegisterAssemblerArgument register_assembler_arg;
 
-void Register::Args(std::function<void(Argument&)> cb) { cb(register_assembler_arg); }
+void Register::Parts(const std::function<void(Part&)>& cb) { cb(register_assembler_arg); }
 
 void Register::SetText(Location& error_context, std::string_view text) {
   auto assembler = assembler_weak.Lock();

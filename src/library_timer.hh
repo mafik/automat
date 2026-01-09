@@ -62,7 +62,7 @@ struct TimerDelay : LiveObject,
   Span<Interface*> Interfaces() override;
   SkPath InterfaceShape(Interface*) const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
-  void Args(std::function<void(Argument&)> cb) override;
+  void Parts(const std::function<void(Part&)>& cb) override;
   void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }

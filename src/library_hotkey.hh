@@ -36,7 +36,7 @@ struct HotKey : LiveObject, Object::WidgetBase, OnOff, ui::CaretOwner, ui::KeyGr
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   bool CenteredAtZero() const override { return true; }
-  void Args(std::function<void(Argument&)> cb) override;
+  void Parts(const std::function<void(Part&)>& cb) override;
 
   bool IsOn() const override;
   void OnTurnOn() override;

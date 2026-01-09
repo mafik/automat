@@ -496,10 +496,18 @@ bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !Is
 
 bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(object.GetUnsafe()); }
 
-void Object::Args(std::function<void(Argument&)> cb) {
+void Object::Parts(const std::function<void(Part&)>& cb) {
   for (auto* interface : Interfaces()) {
     cb(interface->sync_arg);
   }
+}
+
+void Object::Args(const std::function<void(Argument&)>& cb) {
+  Parts([&](Part& part) {
+    if (Argument* arg = dynamic_cast<Argument*>(&part)) {
+      cb(*arg);
+    }
+  });
 }
 
 Location* Object::MyLocation() {

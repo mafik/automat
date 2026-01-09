@@ -22,7 +22,7 @@ void Interface::Unsync() {
 
   auto& sources = sync_block->sources;
   for (int i = 0; i < sources.size(); ++i) {
-    auto* source = sources[i].GetValueUnsafe();
+    auto* source = sources[i].GetUnsafe();
     if (source == this) {
       sources.erase(sources.begin() + i);
       break;
@@ -31,7 +31,7 @@ void Interface::Unsync() {
 
   auto& sinks = sync_block->sinks;
   for (int i = 0; i < sinks.size(); ++i) {
-    auto* sink = sinks[i].GetValueUnsafe();
+    auto* sink = sinks[i].GetUnsafe();
     if (sink == this) {
       sinks.erase(sinks.begin() + i);
       break;

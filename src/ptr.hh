@@ -307,12 +307,13 @@ struct [[clang::trivial_abi]] Ptr : PtrBase<T> {
   }
 
   T* get() const { return Get(); }
-  T* Get() const { return this->obj; }
-  T* operator->() const { return this->obj; }
-  template <typename U>
-  U* GetCast() const {
-    return static_cast<U*>(this->Get());
+
+  template <typename U = T>
+  U* Get() const {
+    return static_cast<U*>(this->obj);
   }
+
+  T* operator->() const { return this->obj; }
 
   std::strong_ordering operator<=>(const Ptr<T>& that) const { return this->obj <=> that.obj; }
 
@@ -479,11 +480,14 @@ struct [[clang::trivial_abi]] NestedPtr {
   T& operator*() const { return *obj; }
   T* operator->() const { return obj; }
   explicit operator bool() const { return obj != nullptr; }
+
   template <typename U>
-  U* GetOwner() {
-    return this->ptr.template GetCast<U>();
+  U* Owner() {
+    return this->ptr.template Get<U>();
   }
+
   WeakPtr<ReferenceCounted> GetOwnerWeak() const { return ptr->AcquireWeakPtr(); }
+
   T* Get() const { return obj; }
   void Reset() {
     ptr.Reset();
@@ -532,7 +536,11 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
     return NestedPtr<T>();
   }
   WeakPtr<ReferenceCounted> GetOwnerWeak() const { return weak_ptr; }
-  T* GetValueUnsafe() const { return obj; }
+
+  template <typename U = T>
+  U* GetUnsafe() const {
+    return static_cast<U*>(obj);
+  }
 
  private:
   WeakPtr<ReferenceCounted> weak_ptr;

@@ -126,7 +126,7 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
           auto end = arg.Find(*location->object);
           if (end.Get() == nullptr) return;
           auto name = arg.Name();
-          auto* end_location = end.GetOwner<Object>()->MyLocation();
+          auto* end_location = end.Owner<Object>()->MyLocation();
           auto& to_name = location_ids.at(end_location);
           if (!serializing_connections) {
             serializing_connections = true;

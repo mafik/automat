@@ -276,7 +276,7 @@ struct SyncAction : Action {
   }
   void Update() {
     if (auto interface = weak.Lock()) {
-      auto* widget = pointer.root_widget.widgets.Find(*interface.GetOwner<Object>());
+      auto* widget = pointer.root_widget.widgets.Find(*interface.Owner<Object>());
       auto start_local = widget->InterfaceShape(interface.Get()).getBounds().center();
       auto start = TransformBetween(*widget, *root_machine).mapPoint(start_local);
       sync_widget.start = start;
@@ -295,7 +295,7 @@ struct SyncOption : TextOption {
   std::unique_ptr<Option> Clone() const override { return std::make_unique<SyncOption>(weak); }
   std::unique_ptr<Action> Activate(ui::Pointer& pointer) const override {
     if (auto interface = weak.Lock()) {
-      auto widget = pointer.root_widget.widgets.Find(*interface.GetOwner<Object>());
+      auto widget = pointer.root_widget.widgets.Find(*interface.Owner<Object>());
       return std::make_unique<SyncAction>(pointer, interface, widget);
     }
     return nullptr;

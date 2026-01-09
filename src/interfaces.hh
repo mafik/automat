@@ -91,7 +91,7 @@ struct Interface : virtual Named {
     if (auto sync_block = self.sync_block_weak.Lock()) {
       auto lock = std::shared_lock(sync_block->mutex);
       for (auto& other : sync_block->sinks) {
-        lambda(*static_cast<Self*>(other.GetValueUnsafe()));
+        lambda(*other.template GetUnsafe<Self>());
       }
     } else {
       lambda(self);
@@ -103,7 +103,7 @@ struct Interface : virtual Named {
     if (auto sync_block = self.sync_block_weak.Lock()) {
       auto lock = std::shared_lock(sync_block->mutex);
       for (auto& other : sync_block->sinks) {
-        if (auto other_cast = static_cast<Self*>(other.GetValueUnsafe()); other_cast != &self) {
+        if (auto* other_cast = other.template GetUnsafe<Self>(); other_cast != &self) {
           lambda(*other_cast);
         }
       }

@@ -24,6 +24,16 @@ std::string IndentString(std::string in, int spaces = 2);
 
 std::string Slugify(std::string in);
 
+template <typename T>
+Str AddrToStr(T* t) {
+  return f("{}", (void*)(t));
+}
+
+template <typename T>
+Str AddrToStr(T& t) {
+  return f("{}", (void*)(&t));
+}
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wformat-security"
 constexpr void constexpr_sprintf(std::string& out, const char* format, auto... args) {

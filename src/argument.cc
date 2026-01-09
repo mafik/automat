@@ -85,7 +85,7 @@ void Argument::NearbyCandidates(
 Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
   Location* result = nullptr;
   if (auto found = Find(*here.object)) {
-    if (auto* obj = found.GetOwner<Object>()) {
+    if (auto* obj = found.Owner<Object>()) {
       result = obj->MyLocation();
     }
   }

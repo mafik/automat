@@ -493,7 +493,7 @@ void Location::UpdateAutoconnectArgs() {
     Location* old_target = nullptr;
     if (auto end = arg.Find(*object)) {
       Vec<Vec2AndDir> to_positions;
-      auto* end_loc = end.GetOwner<Object>()->MyLocation();
+      auto* end_loc = end.Owner<Object>()->MyLocation();
       auto& to_object_widget = end_loc->WidgetForObject();
       to_object_widget.ConnectionPositions(to_positions);
       auto other_up = TransformBetween(to_object_widget, *parent_machine);
@@ -569,7 +569,7 @@ void Location::UpdateAutoconnectArgs() {
       Location* old_target = nullptr;
       if (auto end = arg.Find(*other->object)) {
         Vec<Vec2AndDir> to_positions;
-        auto* end_loc = end.GetOwner<Object>()->MyLocation();
+        auto* end_loc = end.Owner<Object>()->MyLocation();
         auto& to_object_widget = end_loc->WidgetForObject();
         to_object_widget.ConnectionPositions(to_positions);
         auto to_up = TransformBetween(to_object_widget, *parent_machine);

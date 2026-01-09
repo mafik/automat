@@ -44,7 +44,7 @@ static bool IsArgumentOptical(Object& obj, Argument& arg) {
 // Helper to get the Location from start_weak
 Location* ConnectionWidget::StartLocation() const {
   if (auto locked = start_weak.Lock()) {
-    if (auto* obj = locked.GetObject()) {
+    if (auto* obj = locked.Owner<Object>()) {
       return obj->MyLocation();
     }
   }
@@ -54,7 +54,7 @@ Location* ConnectionWidget::StartLocation() const {
 Location* ConnectionWidget::EndLocation() const {
   if (auto locked = start_weak.Lock()) {
     if (auto found = arg.Find(*locked)) {
-      if (auto* obj = found.GetOwner<Object>()) {
+      if (auto* obj = found.Owner<Object>()) {
         return obj->MyLocation();
       }
     }
@@ -62,10 +62,10 @@ Location* ConnectionWidget::EndLocation() const {
   return nullptr;
 }
 
-ConnectionWidget::ConnectionWidget(Widget* parent, const MemberWeakPtr& start, Argument& arg)
+ConnectionWidget::ConnectionWidget(Widget* parent, const NestedWeakPtr<Named>& start, Argument& arg)
     : Widget(parent), start_weak(start), arg(arg) {
   if (auto locked = start_weak.Lock()) {
-    if (auto* obj = locked.GetObject()) {
+    if (auto* obj = locked.Owner<Object>()) {
       if (IsArgumentOptical(*obj, arg)) {
         if (auto* loc = obj->MyLocation()) {
           auto pos_dir = loc->ArgStart(arg);
@@ -258,13 +258,14 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     return animation::Finished;
   }
 
+  auto start = start_weak.Lock();
   Location* from_ptr = StartLocation();
   if (!from_ptr) return animation::Finished;
   Location& from = *from_ptr;
 
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
-  if (auto* iface = start_weak.AsUnsafe<Interface>()) {
+  if (auto* iface = dynamic_cast<Interface*>(start.Get())) {
     from_shape = from_widget.InterfaceShape(iface);
   }
   SkPath to_shape;  // machine coords
@@ -389,13 +390,14 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
     return;
   }
 
+  auto start = start_weak.Lock();
   Location* from_ptr = StartLocation();
   if (!from_ptr) return;
   Location& from = *from_ptr;
 
   auto& from_widget = from.WidgetForObject();
   SkPath from_shape = from_widget.Shape();
-  if (auto* iface = start_weak.AsUnsafe<Interface>()) {
+  if (auto* iface = dynamic_cast<Interface*>(start.Get())) {
     from_shape = from_widget.InterfaceShape(iface);
   }
   SkPath to_shape;  // machine coords
@@ -464,7 +466,7 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
                                            embedded::assets_SFX_cable_end_wav)) {
   auto start = widget.start_weak.Lock();
   if (!start) return;
-  Location* from = start.GetObject()->MyLocation();
+  Location* from = start.Owner<Object>()->MyLocation();
   if (!from) return;
 
   // Disconnect existing connection
@@ -498,7 +500,7 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
 DragConnectionAction::~DragConnectionAction() {
   auto start = widget.start_weak.Lock();
   if (!start) return;
-  Location* from = start.GetObject()->MyLocation();
+  Location* from = start.Owner<Object>()->MyLocation();
   if (!from) return;
 
   Machine* m = from->ParentAs<Machine>();
@@ -528,7 +530,7 @@ DragConnectionAction::~DragConnectionAction() {
 void DragConnectionAction::Update() {
   auto start = widget.start_weak.Lock();
   if (!start) return;
-  Location* from = start.GetObject()->MyLocation();
+  Location* from = start.Owner<Object>()->MyLocation();
   if (!from) return;
 
   Vec2 new_position = pointer.PositionWithin(*from->ParentAs<Machine>());

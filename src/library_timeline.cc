@@ -412,8 +412,8 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
 static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint started_at,
                                   time::SteadyPoint now) {
   for (auto& track : t.tracks) {
-    track->InvalidateConnectionWidgets(here);
-    auto* object = track->FindObject(here, Argument::FindConfig());
+    t.InvalidateConnectionWidgets(track.get());
+    auto* object = track->FindObject(here, {});
     if (object == nullptr) continue;
     auto* location = object->MyLocation();
     if (location == nullptr) continue;

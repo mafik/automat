@@ -182,6 +182,8 @@ struct Object : public ReferenceCounted {
 
   void WakeWidgetsAnimation();
 
+  void InvalidateConnectionWidgets(const Argument* arg = nullptr) const;
+
   // Used to report errors within this object. If an error was caused by some other
   // "error reporter", take a look at ReportError in error.hh.
   void ReportError(std::string_view message,

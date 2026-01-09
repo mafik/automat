@@ -448,7 +448,10 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
     SafeDecrementWeakRefs(oldObj);
   }
 
-  T* GetUnsafe() const { return this->obj; }
+  template <typename U = T>
+  U* GetUnsafe() const {
+    return static_cast<U*>(this->obj);
+  }
 
   template <class U>
   friend class WeakPtr;
@@ -540,6 +543,11 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
   template <typename U = T>
   U* GetUnsafe() const {
     return static_cast<U*>(obj);
+  }
+
+  template <typename U>
+  U* OwnerUnsafe() const {
+    return this->weak_ptr.template GetUnsafe<U>();
   }
 
  private:

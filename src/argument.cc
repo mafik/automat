@@ -32,8 +32,6 @@ bool Argument::IsOn(Location& here) const {
   return false;
 }
 
-#pragma region New API
-
 Vec2AndDir Argument::Start(ui::Widget& object_widget, ui::Widget& widget) const {
   auto* obj_widget_iface = dynamic_cast<ObjectWidget*>(&object_widget);
   if (!obj_widget_iface) {
@@ -112,15 +110,6 @@ Object* Argument::FindObject(Location& here, const FindConfig& cfg) const {
     return loc->object.get();
   }
   return nullptr;
-}
-
-void Argument::InvalidateConnectionWidgets(Location& here) const {
-  for (auto& w : ui::ConnectionWidgetRange(here, *this)) {
-    w.WakeAnimation();
-    if (w.state) {
-      w.state->stabilized = false;
-    }
-  }
 }
 
 void NextArg::CanConnect(Part& start, Part& end, Status& status) const {

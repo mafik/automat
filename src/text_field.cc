@@ -141,7 +141,7 @@ struct TextSelectAction : Action {
       Location* location = Closest<Location>(*pointer.hover);
 
       for (auto& connection_widget : root_widget->connection_widgets) {
-        if (&connection_widget->arg == text_field.argument &&
+        if (connection_widget->StartArgument() == text_field.argument &&
             connection_widget->StartLocation() == location) {
           drag.emplace(pointer, *connection_widget);
           break;

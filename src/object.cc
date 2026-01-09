@@ -19,6 +19,7 @@
 #include "pointer.hh"
 #include "root_widget.hh"
 #include "time.hh"
+#include "ui_connection_widget.hh"
 #include "ui_constants.hh"
 
 namespace automat {
@@ -516,6 +517,15 @@ Location* Object::MyLocation() {
     }
   }
   return nullptr;
+}
+
+void Object::InvalidateConnectionWidgets(const Argument* arg) const {
+  for (auto& w : ui::ConnectionWidgetRange(this, arg)) {
+    w.WakeAnimation();
+    if (w.state) {
+      w.state->stabilized = false;
+    }
+  }
 }
 
 }  // namespace automat

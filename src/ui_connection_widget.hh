@@ -36,8 +36,7 @@ struct DragConnectionAction : Action {
 //
 // TODO: separate the state of these three modes better
 struct ConnectionWidget : Widget {
-  NestedWeakPtr<Part> start_weak;
-  Argument& arg;
+  NestedWeakPtr<Argument> start_weak;
 
   struct AnimationState {
     float radar_alpha = 0;
@@ -63,11 +62,12 @@ struct ConnectionWidget : Widget {
   float length = 0;
   mutable std::unique_ptr<ObjectWidget> prototype_widget;
 
-  ConnectionWidget(Widget* parent, const NestedWeakPtr<Part>& start_weak, Argument&);
+  ConnectionWidget(Widget* parent, const NestedWeakPtr<Argument>& arg_weak);
 
-  // Helper to get the Location from start_weak
+  // Helper to get the Location and Argument from start_weak
   Location* StartLocation() const;
   Location* EndLocation() const;
+  Argument* StartArgument() const { return start_weak.GetUnsafe(); }
 
   StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;
@@ -84,17 +84,17 @@ struct ConnectionWidget : Widget {
 void DrawArrow(SkCanvas& canvas, const SkPath& from_shape, const SkPath& to_shape);
 
 struct ConnectionWidgetRange {
-  const Location& here;
-  const Argument& arg;
+  const Object* obj;
+  const Argument* arg;
 
   struct end_iterator {};
 
   struct iterator {
-    const Location& here;
-    const Argument& arg;
+    const Object* obj;
+    const Argument* arg;
     int i;
 
-    iterator(const Location& here, const Argument& arg, int i) : here(here), arg(arg), i(i) {
+    iterator(const Object* obj, const Argument* arg, int i) : obj(obj), arg(arg), i(i) {
       Advance();
     }
 
@@ -105,12 +105,9 @@ struct ConnectionWidgetRange {
       auto size = widgets.size();
       while (i < size) {
         ConnectionWidget& w = *widgets[i];
-        if (&w.arg == &arg) {
-          if (Location* from = w.StartLocation()) {
-            if (from == &here) {
-              return;
-            }
-          }
+        if (w.start_weak.OwnerUnsafe<Object>() == obj &&
+            (arg == nullptr || w.start_weak.GetUnsafe() == arg)) {
+          return;
         }
         ++i;
       }
@@ -129,9 +126,9 @@ struct ConnectionWidgetRange {
     ConnectionWidget& operator*() const { return *ui::root_widget->connection_widgets[i]; }
   };
 
-  ConnectionWidgetRange(const Location& here, const Argument& arg) : here(here), arg(arg) {}
+  ConnectionWidgetRange(const Object* obj, const Argument* arg) : obj(obj), arg(arg) {}
 
-  iterator begin() const { return iterator{here, arg, 0}; }
+  iterator begin() const { return iterator{obj, arg, 0}; }
 
   end_iterator end() const { return end_iterator{}; }
 };

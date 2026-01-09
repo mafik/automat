@@ -547,7 +547,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
           if (widget->StartLocation() != loc.get()) {
             continue;
           }
-          if (&widget->arg != &arg) {
+          if (widget->StartArgument() != &arg) {
             continue;
           }
           has_widget = true;
@@ -558,8 +558,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
         }
         // Create a new widget.
         root_widget.connection_widgets.emplace_back(new ui::ConnectionWidget(
-            &root_widget,
-            NestedWeakPtr<Part>(loc->object->AcquireWeakPtr(), (Part*)loc->object.Get()), arg));
+            &root_widget, NestedWeakPtr<Argument>(loc->object->AcquireWeakPtr(), &arg)));
       });
     }
   }

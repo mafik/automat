@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "object.hh"
 #include "ptr.hh"
 #include "status.hh"
 
@@ -26,11 +27,11 @@ void StartWorkerThreads(std::stop_token);
 void JoinWorkerThreads();
 
 // Schedules all of the Locations pointed by the "next" argument from the "source" Location.
-void ScheduleNext(Location& source);
-void ScheduleArgumentTargets(Location& source, Argument&);
+void ScheduleNext(Object& source);
+void ScheduleArgumentTargets(Object& source, Argument&);
 
 struct Task {
-  WeakPtr<Location> target;
+  WeakPtr<Location> target;  // TODO: replace with WeakPtr<Object>
   std::vector<Task*> predecessors;
   std::vector<Task*> successors;
   bool scheduled = false;  // only used for error detection
@@ -51,7 +52,7 @@ struct RunTask : Task {
   std::string Format() override;
   void OnExecute(std::unique_ptr<Task>& self) override;
 
-  void DoneRunning(Location& here);
+  void DoneRunning(Object& here);
 };
 
 struct CancelTask : Task {

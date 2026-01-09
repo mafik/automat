@@ -159,7 +159,8 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
       if (from == location.get()) {
         connection_widget->animation_state.radar_alpha_target = 1;
       } else {
-        if (connection_widget->arg.CanConnect(*start, *location->object)) {
+        if (auto* arg = connection_widget->StartArgument();
+            arg && arg->CanConnect(*start, *location->object)) {
           connection_widget->animation_state.radar_alpha_target = 1;
         }
       }

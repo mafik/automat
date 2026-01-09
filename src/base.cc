@@ -66,7 +66,7 @@ void LongRunning::Done(Location& here) {
   if (long_running_task == nullptr) {
     FATAL << "LongRunning::Done called while long_running_task == null.";
   }
-  long_running_task->DoneRunning(here);
+  long_running_task->DoneRunning(*here.object);
   long_running_task.reset();
 }
 

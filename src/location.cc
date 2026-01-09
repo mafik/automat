@@ -283,7 +283,8 @@ void Location::InvalidateConnectionWidgets(bool moved, bool value_changed) const
   // We don't have backlinks to connection widgets so we have to iterate over all connection widgets
   // in root_widget and check if they're connected to this location.
   for (auto& w : ui::root_widget->connection_widgets) {
-    if (w->StartLocation() == this) {  // updates all outgoing connection widgets
+    if (w->start_weak.OwnerUnsafe<Object>() ==
+        object.Get()) {  // updates all outgoing connection widgets
       if (moved && !value_changed) {
         w->FromMoved();
       } else {

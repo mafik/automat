@@ -332,11 +332,7 @@ void HotKey::KeyDown(ui::Caret&, ui::Key key) {
   }
 }
 
-void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) {
-  if (auto h = here.lock()) {
-    ScheduleNext(*h);
-  }
-}
+void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) { ScheduleNext(*this); }
 void HotKey::KeyGrabberKeyUp(ui::KeyGrab&) {}
 
 void HotKey::OnTurnOff() {

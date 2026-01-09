@@ -53,23 +53,27 @@ Location* ConnectionWidget::StartLocation() const {
 
 Location* ConnectionWidget::EndLocation() const {
   if (auto locked = start_weak.Lock()) {
-    if (auto found = arg.Find(*locked)) {
-      if (auto* obj = found.Owner<Object>()) {
-        return obj->MyLocation();
+    if (auto* arg = locked.Get()) {
+      if (auto found = arg->Find(*locked)) {
+        if (auto* obj = found.Owner<Object>()) {
+          return obj->MyLocation();
+        }
       }
     }
   }
   return nullptr;
 }
 
-ConnectionWidget::ConnectionWidget(Widget* parent, const NestedWeakPtr<Part>& start, Argument& arg)
-    : Widget(parent), start_weak(start), arg(arg) {
+ConnectionWidget::ConnectionWidget(Widget* parent, const NestedWeakPtr<Argument>& arg_weak)
+    : Widget(parent), start_weak(arg_weak) {
   if (auto locked = start_weak.Lock()) {
-    if (auto* obj = locked.Owner<Object>()) {
-      if (IsArgumentOptical(*obj, arg)) {
-        if (auto* loc = obj->MyLocation()) {
-          auto pos_dir = loc->ArgStart(arg);
-          state.emplace(*loc, arg, pos_dir);
+    if (auto* arg = locked.Get()) {
+      if (auto* obj = locked.Owner<Object>()) {
+        if (IsArgumentOptical(*obj, *arg)) {
+          if (auto* loc = obj->MyLocation()) {
+            auto pos_dir = loc->ArgStart(*arg);
+            state.emplace(*loc, *arg, pos_dir);
+          }
         }
       }
     }
@@ -88,8 +92,10 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   Location* from_ptr = StartLocation();
   if (!from_ptr) return;
   Location& from = *from_ptr;
+  Argument* arg = StartArgument();
+  if (!arg) return;
 
-  if (arg.GetStyle() == Argument::Style::Spotlight) {
+  if (arg->GetStyle() == Argument::Style::Spotlight) {
     auto target_bounds = from.WidgetForObject().CoarseBounds();
     Vec2 target = from.position;  //  + target_bounds.Center();
     float radius = target_bounds.rect.Hypotenuse() / 2;
@@ -107,7 +113,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     }
 
     {  // Ray from the source to the target
-      auto source_location = arg.FindLocation(
+      auto source_location = arg->FindLocation(
           from, Argument::FindConfig{.if_missing = Argument::IfMissing::ReturnNull});
       if (source_location) {
         Vec2 source = source_location->position;
@@ -132,9 +138,9 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   }
   auto anim = &animation_state;
   if (anim->radar_alpha >= 0.01f) {
-    auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
+    auto pos_dir = arg->Start(from.WidgetForObject(), *root_machine);
     SkPaint radius_paint;
-    SkColor tint = arg.Tint();
+    SkColor tint = arg->Tint();
     SkColor colors[] = {SkColorSetA(tint, 0), SkColorSetA(tint, (int)(anim->radar_alpha * 96)),
                         SK_ColorTRANSPARENT};
     float pos[] = {0, 1, 1};
@@ -145,7 +151,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
                                                        60, 0, &local_matrix));
     // TODO: switch to drawArc instead
-    float autoconnect_radius = arg.AutoconnectRadius();
+    float autoconnect_radius = arg->AutoconnectRadius();
     SkRect oval = Rect::MakeCenter(pos_dir.pos, autoconnect_radius * 2, autoconnect_radius * 2);
 
     float crt_width =
@@ -173,7 +179,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
                    kQuadrantSweep * radar_alpha_sin, false, stroke_paint);
 
     auto& font = GetFont();
-    auto name = arg.Name();
+    auto name = arg->Name();
     SkRSXform transforms[name.size()];
     for (size_t i = 0; i < name.size(); ++i) {
       float i_fract = (i + 1.f) / (name.size() + 1.f);
@@ -206,7 +212,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     canvas.drawTextBlob(text_blob, 0, 0, text_paint);
     canvas.restore();
 
-    arg.NearbyCandidates(
+    arg->NearbyCandidates(
         from, autoconnect_radius * 2 + 10_cm, [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
           auto m = TransformBetween(candidate.WidgetForObject(), *root_machine);
           for (auto& to : to_points) {
@@ -226,7 +232,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     auto proto_shape = prototype_widget->Shape();
     Rect proto_bounds = proto_shape.getBounds();
     canvas.save();
-    Vec2 prototype_position = PositionAhead(from, arg, *prototype_widget);
+    Vec2 prototype_position = PositionAhead(from, *arg, *prototype_widget);
     canvas.translate(prototype_position.x, prototype_position.y);
     canvas.saveLayerAlphaf(&proto_bounds.sk, anim->prototype_alpha * 0.4f);
     prototype_widget->Draw(canvas);
@@ -239,10 +245,12 @@ void ConnectionWidget::FromMoved() {
   Location* from_ptr = StartLocation();
   if (!from_ptr) return;
   Location& from = *from_ptr;
+  Argument* arg = StartArgument();
+  if (!arg) return;
 
   if (state) {
     if (state->stabilized && !state->stabilized_end.has_value()) {
-      auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
+      auto pos_dir = arg->Start(from.WidgetForObject(), *root_machine);
       state->stabilized_start = pos_dir.pos;
       state->sections.front().pos = pos_dir.pos;
       state->sections.back().pos = pos_dir.pos;
@@ -254,13 +262,15 @@ void ConnectionWidget::FromMoved() {
 }
 
 animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
-  auto style = arg.GetStyle();
+  Argument* arg = StartArgument();
+  if (!arg) return animation::Finished;
+  auto style = arg->GetStyle();
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return animation::Finished;
   }
 
-  auto start = start_weak.Lock();
-  Location* from_ptr = StartLocation();
+  // auto start = start_weak.Lock();
+  // Location* from_ptr = StartLocation();
   if (!from_ptr) return animation::Finished;
   Location& from = *from_ptr;
 
@@ -276,9 +286,9 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   // For example when a location is being dragged around, or when there are nested machines.
   Widget* parent_machine = root_machine.get();
 
-  auto pos_dir = arg.Start(from_widget, *parent_machine);
+  auto pos_dir = arg->Start(from_widget, *parent_machine);
 
-  if ((to = arg.FindLocation(from, {}))) {
+  if ((to = arg->FindLocation(from, {}))) {
     auto& to_widget = to->WidgetForObject();
     to_shape = to_widget.Shape();
     to_widget.ConnectionPositions(to_points);
@@ -297,7 +307,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
   }
 
-  if (&arg == &next_arg) {
+  if (arg == &next_arg) {
     while (to_points.size() > 1) {
       // from the last two, pick the one which is closer to pointing down (-pi/2)
       float delta_1 = fabs((to_points[to_points.size() - 1].dir + 90_deg).ToRadians());
@@ -362,7 +372,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     phase |= cable_width.Tick(timer);
   }
 
-  if (arg.AutoconnectRadius() > 0) {
+  if (arg->AutoconnectRadius() > 0) {
     auto& anim = animation_state;
     phase |= animation::LinearApproach(anim.radar_alpha_target, timer.d, 2.f, anim.radar_alpha);
     if (anim.radar_alpha >= 0.01f) {
@@ -371,13 +381,13 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
 
     float prototype_alpha_target = anim.prototype_alpha_target;
-    if (arg.FindLocation(from, {})) {
+    if (arg->FindLocation(from, {})) {
       prototype_alpha_target = 0;
     }
     phase |= animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
     if (anim.prototype_alpha > 0) {
       if (!prototype_widget) {
-        prototype_widget = arg.Prototype()->MakeWidget(const_cast<ConnectionWidget*>(this));
+        prototype_widget = arg->Prototype()->MakeWidget(const_cast<ConnectionWidget*>(this));
       }
       phase |= prototype_widget->Tick(timer);
     }
@@ -386,7 +396,9 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 }
 
 void ConnectionWidget::Draw(SkCanvas& canvas) const {
-  auto style = arg.GetStyle();
+  Argument* arg = StartArgument();
+  if (!arg) return;
+  auto style = arg->GetStyle();
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return;
   }
@@ -407,7 +419,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
   // For example when a location is being dragged around, or when there are nested machines.
   Widget* parent_machine = root_machine.get();
 
-  auto pos_dir = arg.Start(from_widget, *parent_machine);
+  auto pos_dir = arg->Start(from_widget, *parent_machine);
 
   auto transform_from_to_machine = TransformBetween(from_widget, *parent_machine);
   from_shape.transform(transform_from_to_machine);
@@ -422,7 +434,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
 
   if (state) {
     if (alpha > 0.01f) {
-      DrawOpticalConnector(canvas, *state, arg.Icon());
+      DrawOpticalConnector(canvas, *state, arg->Icon());
     }
   } else {
     if (style == Argument::Style::Arrow) {
@@ -439,7 +451,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
       if (cable_width > 0.01_mm && to) {
         if (alpha > 0.01f) {
           auto arcline = RouteCable(pos_dir, to_points, &canvas);
-          auto color = SkColorSetA(arg.Tint(), 255 * cable_width.value / 2_mm);
+          auto color = SkColorSetA(arg->Tint(), 255 * cable_width.value / 2_mm);
           auto color_filter = color::MakeTintFilter(color, 30);
           auto path = arcline.ToPath(false);
           DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);
@@ -467,11 +479,13 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
                                            embedded::assets_SFX_cable_end_wav)) {
   auto start = widget.start_weak.Lock();
   if (!start) return;
+  Argument* arg = widget.StartArgument();
+  if (!arg) return;
   Location* from = start.Owner<Object>()->MyLocation();
   if (!from) return;
 
   // Disconnect existing connection
-  widget.arg.Disconnect(start);
+  arg->Disconnect(start);
 
   grab_offset = Vec2(0, 0);
   if (widget.state) {
@@ -487,7 +501,7 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
 
   if (Machine* m = from->ParentAs<Machine>()) {
     for (auto& l : m->locations) {
-      if (widget.arg.CanConnect(*start, *l->object)) {
+      if (arg->CanConnect(*start, *l->object)) {
         l->highlight_target = 1;
       } else {
         l->highlight_target = 0;
@@ -501,6 +515,8 @@ DragConnectionAction::DragConnectionAction(Pointer& pointer, ConnectionWidget& w
 DragConnectionAction::~DragConnectionAction() {
   auto start = widget.start_weak.Lock();
   if (!start) return;
+  Argument* arg = widget.StartArgument();
+  if (!arg) return;
   Location* from = start.Owner<Object>()->MyLocation();
   if (!from) return;
 
@@ -516,8 +532,8 @@ DragConnectionAction::~DragConnectionAction() {
     return;
   }
   Location* to = m->LocationAtPoint(pos);
-  if (to != nullptr && widget.arg.CanConnect(*start, *to->object)) {
-    widget.arg.Connect(start, NestedPtr<Part>(to->object, to->object.Get()));
+  if (to != nullptr && arg->CanConnect(*start, *to->object)) {
+    arg->Connect(start, NestedPtr<Part>(to->object, to->object.Get()));
   }
   widget.WakeAnimation();
 
@@ -556,8 +572,10 @@ Optional<Rect> ConnectionWidget::TextureBounds() const {
     Location* from_ptr = StartLocation();
     if (!from_ptr) return std::nullopt;
     Location& from = *from_ptr;
+    Argument* arg = StartArgument();
+    if (!arg) return std::nullopt;
 
-    auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
+    auto pos_dir = arg->Start(from.WidgetForObject(), *root_machine);
     ArcLine arcline = RouteCable(pos_dir, to_points);
     Rect rect = arcline.Bounds();
     return rect.Outset(cable_width / 2);
@@ -569,13 +587,15 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   Location* from_ptr = StartLocation();
   if (!from_ptr) return anchors;
   Location& from = *from_ptr;
+  Argument* arg = StartArgument();
+  if (!arg) return anchors;
 
-  auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
+  auto pos_dir = arg->Start(from.WidgetForObject(), *root_machine);
   anchors.push_back(pos_dir.pos);
   Optional<Vec2> end_pos;
   if (manual_position.has_value()) {
     end_pos = *manual_position;
-  } else if (auto to = arg.FindLocation(from, {})) {
+  } else if (auto to = arg->FindLocation(from, {})) {
     ArcLine arcline = RouteCable(pos_dir, to_points);
     auto it = ArcLine::Iterator(arcline);
     it.AdvanceToEnd();
@@ -589,7 +609,7 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
 
 ConnectionWidget* ConnectionWidget::Find(Location& here, Argument& arg) {
   for (auto& connection_widget : root_widget->connection_widgets) {
-    if (&connection_widget->arg != &arg) {
+    if (connection_widget->StartArgument() != &arg) {
       continue;
     }
     Location* from = connection_widget->StartLocation();

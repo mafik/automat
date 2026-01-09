@@ -139,11 +139,11 @@ std::string Task::Format() { return "Task()"; }
 
 std::string RunTask::Format() { return f("RunTask({})", TargetName()); }
 
-void ScheduleNext(Location& source) { ScheduleArgumentTargets(source, next_arg); }
+void ScheduleNext(Object& source) { ScheduleArgumentTargets(source, next_arg); }
 
-void ScheduleArgumentTargets(Location& source, Argument& arg) {
+void ScheduleArgumentTargets(Object& source, Argument& arg) {
   // audio::Play(source.object->NextSound());
-  for (auto& w : ui::ConnectionWidgetRange(source, arg)) {
+  for (auto& w : ui::ConnectionWidgetRange(&source, &arg)) {
     if (w.state) {
       w.state->stabilized = false;
       w.state->lightness_pct = 100;
@@ -151,8 +151,8 @@ void ScheduleArgumentTargets(Location& source, Argument& arg) {
     w.WakeAnimation();
   }
 
-  if (auto next = arg.FindLocation(source, Argument::FindConfig())) {
-    next->ScheduleRun();
+  if (auto next = arg.FindObject(*source.MyLocation(), {})) {
+    next->MyLocation()->ScheduleRun();
   }
 }
 
@@ -171,15 +171,15 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
       self.reset(self_as_run_task.release());
 
       if (self) {
-        DoneRunning(*s);
+        DoneRunning(*s->object);
       }
     }
   }
 }
 
-void RunTask::DoneRunning(Location& here) {
-  if (!HasError(*here.object)) {
-    ScheduleNext(here);
+void RunTask::DoneRunning(Object& object) {
+  if (!HasError(object)) {
+    ScheduleNext(object);
   }
 }
 

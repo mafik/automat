@@ -104,8 +104,6 @@ struct Argument : virtual Part {
   T* FindObject(Location& here, const FindConfig& cfg) const {
     return dynamic_cast<T*>(FindObject(here, cfg));
   }
-
-  void InvalidateConnectionWidgets(Location& here) const;
 };
 
 struct NextArg : Argument {

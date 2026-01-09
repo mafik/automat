@@ -367,10 +367,12 @@ void Object::WidgetBase::VisitOptions(const OptionsVisitor& visitor) const {
       visitor(iconify);
     }
     if (auto obj = object.Lock()) {
-      for (auto field_ptr : obj->Interfaces()) {
-        FieldOption field_option{NestedWeakPtr<Interface>(WeakPtr<Object>(object), field_ptr)};
-        visitor(field_option);
-      }
+      obj->Parts([&](Part& part) {
+        if (auto* interface = dynamic_cast<Interface*>(&part)) {
+          FieldOption field_option{NestedWeakPtr<Interface>(WeakPtr<Object>(object), interface)};
+          visitor(field_option);
+        }
+      });
       // Sometimes it's convenient for an object to expose an interface more directly (without
       // fields).
       //
@@ -496,11 +498,7 @@ bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !Is
 
 bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(object.GetUnsafe()); }
 
-void Object::Parts(const std::function<void(Part&)>& cb) {
-  for (auto* interface : Interfaces()) {
-    cb(interface->sync_arg);
-  }
-}
+void Object::Parts(const std::function<void(Part&)>& cb) {}
 
 void Object::Args(const std::function<void(Argument&)>& cb) {
   Parts([&](Part& part) {

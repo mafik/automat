@@ -59,7 +59,6 @@ struct TimerDelay : LiveObject,
   animation::Phase Tick(time::Timer&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
-  Span<Interface*> Interfaces() override;
   SkPath InterfaceShape(Interface*) const override;
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
   void Parts(const std::function<void(Part&)>& cb) override;

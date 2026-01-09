@@ -61,8 +61,6 @@ struct Object : public ReferenceCounted {
 
   virtual operator OnOff*() { return nullptr; }
 
-  virtual Span<Interface*> Interfaces() { return {}; }
-
   virtual void Parts(const std::function<void(Part&)>&);
 
   void Args(const std::function<void(Argument&)>&);

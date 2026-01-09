@@ -702,12 +702,8 @@ std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionT
   return WidgetBase::FindAction(pointer, btn);
 }
 
-Span<Interface*> TimerDelay::Interfaces() {
-  // TODO: add the delay value
-  return {};
-}
-
 void TimerDelay::Parts(const std::function<void(Part&)>& cb) {
+  // TODO: add the delay value
   cb(duration_arg);
   cb(next_arg);
 }

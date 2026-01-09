@@ -26,8 +26,6 @@ struct KeyPresser : LiveObject, OnOff, ui::Keylogger {
 
   Monitoring monitoring;
 
-  Interface* interfaces[1] = {&monitoring};
-
   KeyPresser(ui::AnsiKey = ui::AnsiKey::F);
   ~KeyPresser() override;
   string_view Name() const override;
@@ -37,7 +35,12 @@ struct KeyPresser : LiveObject, OnOff, ui::Keylogger {
 
   void SetKey(ui::AnsiKey);
 
-  Span<Interface*> Interfaces() override { return interfaces; }
+  void Parts(const std::function<void(Part&)>& cb) override {
+    cb(monitoring);
+    cb(monitoring.sync_arg);
+    cb(*this);
+    cb(this->sync_arg);
+  }
 
   operator OnOff*() override { return this; }
   bool IsOn() const override { return key_pressed; }

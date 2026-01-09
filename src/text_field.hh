@@ -29,7 +29,7 @@ using TextVisitor = std::function<bool(std::string&)>;
 
 struct TextFieldBase : Widget, CaretOwner {
   std::unordered_map<Caret*, CaretPosition> caret_positions;
-  Argument* argument;
+  NestedWeakPtr<Argument> argument;
   Optional<Pointer::IconOverride> ibeam_icon;
 
   TextFieldBase(ui::Widget* parent) : Widget(parent) {}

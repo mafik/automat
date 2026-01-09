@@ -167,7 +167,7 @@ TimerDelay::TimerDelay(ui::Widget* parent)
   range_dial.value = 1;
 
   hand_degrees.value = 90;
-  text_field->argument = &duration_arg;
+  text_field->argument = NestedWeakPtr<Argument>(AcquireWeakPtr(), &duration_arg);
   SetDuration(*this, 10s);
 }
 

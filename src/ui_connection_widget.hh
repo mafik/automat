@@ -72,8 +72,8 @@ struct ConnectionWidget : Widget {
   ConnectionWidget(Widget* parent, const NestedWeakPtr<Argument>& arg_weak);
 
   // Helper to get the Location and Argument from start_weak
-  Location* StartLocation() const;
-  Location* EndLocation() const;
+  Location* StartLocation() const;  // TODO: remove
+  Location* EndLocation() const;    // TODO: remove
 
   StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;

@@ -329,12 +329,6 @@ Location::~Location() {
   for (auto other : observing_updates) {
     other->update_observers.erase(this);
   }
-  for (auto other : error_observers) {
-    other->observing_errors.erase(this);
-  }
-  for (auto other : observing_errors) {
-    other->error_observers.erase(this);
-  }
   CancelScheduledAt(*this);
   if (root_widget) {
     for (int i = 0; i < root_widget->connection_widgets.size(); ++i) {
@@ -369,8 +363,7 @@ void PositionBelow(Location& origin, Location& below) {
   }
 }
 
-Vec2 PositionAhead(Location& origin, const Argument& arg,
-                   const ObjectWidget& target_widget) {
+Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectWidget& target_widget) {
   auto& origin_widget = origin.WidgetForObject();
   auto origin_shape = origin_widget.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_widget.ArgStart(arg);  // origin's local coordinates

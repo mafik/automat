@@ -7,7 +7,6 @@
 #include <unordered_set>
 
 #include "animation.hh"
-#include "error.hh"
 #include "object.hh"
 #include "run_button.hh"
 #include "tasks.hh"
@@ -67,9 +66,6 @@ struct Location : ReferenceCounted, ui::Widget {
 
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;
-
-  std::unordered_set<Location*> error_observers;
-  std::unordered_set<Location*> observing_errors;
 
   Location(Widget* parent_widget, WeakPtr<Location> parent_location = {});
   ~Location();
@@ -241,8 +237,7 @@ void PositionBelow(Location& origin, Location& below);
 // This uses the arg's position & direction within `origin`.
 //
 // This version just returns the recommended position for the target_widget.
-Vec2 PositionAhead(Location& origin, const Argument& arg,
-                   const ObjectWidget& target_widget);
+Vec2 PositionAhead(Location& origin, const Argument& arg, const ObjectWidget& target_widget);
 
 // Similar to the above, but also sets the target's position.
 void PositionAhead(Location& origin, const Argument& arg, Location& target);

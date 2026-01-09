@@ -40,11 +40,6 @@ issue.
 TODO: Visualize reporters
 
 TODO: Visualize error messages
-
-When an error is added to an object it causes a notification to be sent to all
-`error_observers` of the object. The observers may fix the error or notify the
-user somehow. The parent Machine is an implicit error observer and propagates
-the error upwards. Top-level Machines print their errors to the console.
 */
 struct Error {
   WeakPtr<Object> target = nullptr;    // target is the object that "burns"

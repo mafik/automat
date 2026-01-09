@@ -22,6 +22,23 @@ struct OnOff;
 struct LongRunning;
 struct Interface;
 
+// Widget interface for objects - defines the contract for widgets that represent objects.
+struct ObjectWidget : ui::Widget {
+  using ui::Widget::Widget;
+
+  // Get the default scale that this object would like to have.
+  // Usually it's 1 but when it's iconified, it may want to shrink itself.
+  virtual float GetBaseScale() const = 0;
+
+  // Places where the connections to this widget may terminate.
+  // Local (metric) coordinates.
+  virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const = 0;
+
+  // Returns the start position of the given argument.
+  // Local (metric) coordinates.
+  virtual Vec2AndDir ArgStart(const Argument&) = 0;
+};
+
 // Objects are interactive pieces of data & behavior.
 //
 // Instances of this class provide their logic.
@@ -73,29 +90,13 @@ struct Object : public ReferenceCounted {
     return GetText() <=> other.GetText();
   }
 
-  struct WidgetInterface : ui::Widget {
-    using ui::Widget::Widget;
-
-    // Get the default scale that this object would like to have.
-    // Usually it's 1 but when it's iconified, it may want to shrink itself.
-    virtual float GetBaseScale() const = 0;
-
-    // Places where the connections to this widget may terminate.
-    // Local (metric) coordinates.
-    virtual void ConnectionPositions(Vec<Vec2AndDir>& out_positions) const = 0;
-
-    // Returns the start position of the given argument.
-    // Local (metric) coordinates.
-    virtual Vec2AndDir ArgStart(const Argument&) = 0;
-  };
-
   // Provides sensible defaults for most object widgets. Designed to be inherited and tweaked.
   //
   // It's rendered as a green box with the name of the object.
-  struct WidgetBase : WidgetInterface {
+  struct WidgetBase : ObjectWidget {
     WeakPtr<Object> object;
 
-    WidgetBase(Widget* parent) : WidgetInterface(parent) {}
+    WidgetBase(Widget* parent) : ObjectWidget(parent) {}
 
     std::string_view Name() const override;
     virtual float Width() const;
@@ -128,10 +129,10 @@ struct Object : public ReferenceCounted {
   };
 
   // Find or create a widget for this object, under the given parent.
-  WidgetInterface& FindWidget(ui::Widget* parent);
+  ObjectWidget& FindWidget(ui::Widget* parent);
 
-  virtual std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) {
-    if (auto w = dynamic_cast<WidgetInterface*>(this)) {
+  virtual std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) {
+    if (auto w = dynamic_cast<ObjectWidget*>(this)) {
       // Many legacy objects (Object/Widget hybrids) don't properly set their `object` field.
       if (auto widget_base = dynamic_cast<WidgetBase*>(this)) {
         widget_base->object = AcquireWeakPtr();
@@ -140,8 +141,8 @@ struct Object : public ReferenceCounted {
       // affecting the original object's lifetime).
       struct HybridAdapter : WidgetBase {
         Ptr<Object> ptr;
-        WidgetInterface& widget;
-        HybridAdapter(Widget* parent, Object& obj, WidgetInterface& widget)
+        ObjectWidget& widget;
+        HybridAdapter(Widget* parent, Object& obj, ObjectWidget& widget)
             : WidgetBase(parent), ptr(obj.AcquirePtr()), widget(widget) {
           widget.parent = this;
           object = ptr;

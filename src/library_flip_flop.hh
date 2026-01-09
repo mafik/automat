@@ -27,7 +27,7 @@ struct FlipFlop : LiveObject, Runnable, OnOff {
   void OnTurnOn() override;
   void OnTurnOff() override;
 
-  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 };
 
 }  // namespace automat::library

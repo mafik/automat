@@ -486,7 +486,7 @@ struct WindowWidget : Object::WidgetBase, ui::PointerGrabber, ui::KeyGrabber {
   }
 };
 
-std::unique_ptr<Object::WidgetInterface> Window::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> Window::MakeWidget(ui::Widget* parent) {
   return std::make_unique<WindowWidget>(parent, AcquireWeakPtr<Object>());
 }
 

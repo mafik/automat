@@ -118,7 +118,7 @@ struct SyncBlockWidget : Object::WidgetBase {
   }
 };
 
-std::unique_ptr<Object::WidgetInterface> SyncBlock::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> SyncBlock::MakeWidget(ui::Widget* parent) {
   return std::make_unique<SyncBlockWidget>(*this, parent);
 }
 

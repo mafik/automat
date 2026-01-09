@@ -370,7 +370,7 @@ void PositionBelow(Location& origin, Location& below) {
 }
 
 Vec2 PositionAhead(Location& origin, const Argument& arg,
-                   const Object::WidgetInterface& target_widget) {
+                   const ObjectWidget& target_widget) {
   auto& origin_widget = origin.WidgetForObject();
   auto origin_shape = origin_widget.Shape();           // origin's local coordinates
   Vec2AndDir arg_start = origin_widget.ArgStart(arg);  // origin's local coordinates

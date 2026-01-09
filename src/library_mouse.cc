@@ -509,7 +509,7 @@ audio::Sound& MouseButtonEvent::NextSound() {
   return down ? embedded::assets_SFX_mouse_down_wav : embedded::assets_SFX_mouse_up_wav;
 }
 
-std::unique_ptr<Object::WidgetInterface> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonEventWidget>(parent, AcquireWeakPtr());
 }
 
@@ -621,7 +621,7 @@ struct MouseMoveWidget : MouseWidget {
   }
 };
 
-std::unique_ptr<Object::WidgetInterface> MouseMove::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> MouseMove::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseMoveWidget>(parent, AcquireWeakPtr());
 }
 
@@ -796,11 +796,11 @@ struct MouseScrollXWidget : MouseWidgetBase {
   }
 };
 
-std::unique_ptr<Object::WidgetInterface> MouseScrollY::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> MouseScrollY::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseScrollYWidget>(parent, AcquireWeakPtr());
 }
 
-std::unique_ptr<Object::WidgetInterface> MouseScrollX::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> MouseScrollX::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseScrollXWidget>(parent, AcquireWeakPtr());
 }
 
@@ -831,7 +831,7 @@ void MouseScrollX::OnRelativeFloat64(double delta) {
   WakeWidgetsAnimation();
 }
 
-std::unique_ptr<Object::WidgetInterface> Mouse::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> Mouse::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseWidget>(parent, AcquireWeakPtr());
 }
 
@@ -898,7 +898,7 @@ Ptr<Object> MouseButtonPresser::Clone() const { return MAKE_PTR(MouseButtonPress
 
 void MouseButtonPresser::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
 
-std::unique_ptr<Object::WidgetInterface> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> MouseButtonPresser::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());
 }
 

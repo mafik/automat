@@ -83,7 +83,7 @@ struct Register : LiveObject {
 
   Ptr<Object> Clone() const override;
 
-  unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override {
+  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override {
     return make_unique<RegisterWidget>(parent, AcquireWeakPtr<Object>());
   }
 
@@ -119,7 +119,7 @@ struct Assembler : LiveObject, LongRunning, Container {
 
   void OnCancel() override;
 
-  unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override {
+  unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override {
     return make_unique<AssemblerWidget>(parent, AcquireWeakPtr());
   }
 

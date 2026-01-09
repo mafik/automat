@@ -40,9 +40,9 @@ extern unique_ptr<RootWidget> root_widget;
 // TODO: introduce `WidgetMaker` interface, so that widgets can be created for non-Objects
 // TODO: delete widgets after some time
 struct WidgetStore {
-  std::map<WeakPtr<Object>, std::unique_ptr<Object::WidgetInterface>> container;
+  std::map<WeakPtr<Object>, std::unique_ptr<ObjectWidget>> container;
 
-  Object::WidgetInterface* Find(Object& object) {
+  ObjectWidget* Find(Object& object) {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {
@@ -51,7 +51,7 @@ struct WidgetStore {
     return it->second.get();
   }
 
-  Object::WidgetInterface& For(Object& object, Widget* parent) {
+  ObjectWidget& For(Object& object, Widget* parent) {
     auto weak = object.AcquireWeakPtr();
     auto it = container.find(weak);
     if (it == container.end()) {

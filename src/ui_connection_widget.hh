@@ -61,7 +61,7 @@ struct ConnectionWidget : Widget {
   Location* to = nullptr;
   float transparency = 1;
   float length = 0;
-  mutable std::unique_ptr<Object::WidgetInterface> prototype_widget;
+  mutable std::unique_ptr<ObjectWidget> prototype_widget;
 
   ConnectionWidget(Widget* parent, const NestedWeakPtr<Part>& start_weak, Argument&);
 

@@ -51,7 +51,7 @@ struct Location : ReferenceCounted, ui::Widget {
   WeakPtr<Location> parent_location;
 
   Ptr<Object> object;
-  Object::WidgetInterface* object_widget = nullptr;
+  ObjectWidget* object_widget = nullptr;
 
   Vec2 position = {0, 0};
   mutable float scale = 1.f;
@@ -76,7 +76,7 @@ struct Location : ReferenceCounted, ui::Widget {
 
   // Find (or create if needed) the Widget for this location's object.
   // Shortcut for Widget::ForObject(location.object, location)
-  Object::WidgetInterface& WidgetForObject() {
+  ObjectWidget& WidgetForObject() {
     if (!object_widget) {
       if (object) {
         object_widget = &object->FindWidget(this);
@@ -242,7 +242,7 @@ void PositionBelow(Location& origin, Location& below);
 //
 // This version just returns the recommended position for the target_widget.
 Vec2 PositionAhead(Location& origin, const Argument& arg,
-                   const Object::WidgetInterface& target_widget);
+                   const ObjectWidget& target_widget);
 
 // Similar to the above, but also sets the target's position.
 void PositionAhead(Location& origin, const Argument& arg, Location& target);

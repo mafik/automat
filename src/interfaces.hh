@@ -37,7 +37,7 @@ struct SyncBlock : Object {
   // AddSink & AddSource together.
   void FullSync(NestedPtr<Interface>&);
 
-  std::unique_ptr<WidgetInterface> MakeWidget(ui::Widget* parent) override;
+  std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 };
 
 struct SyncArg : Argument {

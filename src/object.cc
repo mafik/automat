@@ -245,9 +245,9 @@ struct SyncWidget : ui::Widget {
 
 struct SyncAction : Action {
   NestedWeakPtr<Interface> weak;
-  TrackedPtr<Object::WidgetInterface> object_widget;
+  TrackedPtr<ObjectWidget> object_widget;
   SyncWidget sync_widget;
-  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Interface> weak, Object::WidgetInterface* widget)
+  SyncAction(ui::Pointer& pointer, NestedWeakPtr<Interface> weak, ObjectWidget* widget)
       : Action(pointer),
         weak(weak),
         object_widget(widget->AcquireTrackedPtr()),
@@ -427,7 +427,7 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
 
-Object::WidgetInterface& Object::FindWidget(ui::Widget* parent) {
+ObjectWidget& Object::FindWidget(ui::Widget* parent) {
   return parent->FindRootWidget().widgets.For(*this, parent);
 }
 

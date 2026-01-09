@@ -35,7 +35,7 @@ bool Argument::IsOn(Location& here) const {
 #pragma region New API
 
 Vec2AndDir Argument::Start(ui::Widget& object_widget, ui::Widget& widget) const {
-  auto* obj_widget_iface = dynamic_cast<Object::WidgetInterface*>(&object_widget);
+  auto* obj_widget_iface = dynamic_cast<ObjectWidget*>(&object_widget);
   if (!obj_widget_iface) {
     return Vec2AndDir{};
   }

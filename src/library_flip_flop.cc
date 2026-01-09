@@ -212,7 +212,7 @@ struct FlipFlopWidget : Object::WidgetBase {
   void FillChildren(Vec<ui::Widget*>& children) override { children.push_back(button.get()); }
 };
 
-std::unique_ptr<Object::WidgetInterface> FlipFlop::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> FlipFlop::MakeWidget(ui::Widget* parent) {
   return std::make_unique<FlipFlopWidget>(parent, AcquireWeakPtr());
 }
 }  // namespace automat::library

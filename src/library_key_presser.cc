@@ -226,7 +226,7 @@ KeyPresser::KeyPresser(ui::AnsiKey key) : key(key) {}
 string_view KeyPresser::Name() const { return "Key Presser"; }
 Ptr<Object> KeyPresser::Clone() const { return MAKE_PTR(KeyPresser, key); }
 
-std::unique_ptr<Object::WidgetInterface> KeyPresser::MakeWidget(ui::Widget* parent) {
+std::unique_ptr<ObjectWidget> KeyPresser::MakeWidget(ui::Widget* parent) {
   auto w = std::make_unique<KeyPresserWidget>(parent);
   w->object = AcquireWeakPtr();
   w->shortcut_button->SetLabel(ToStr(key));

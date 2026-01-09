@@ -230,6 +230,8 @@ RootWidget& Widget::FindRootWidget() const {
   return *root;
 }
 
+WidgetStore& Widget::WidgetStore() const { return FindRootWidget().widgets; }
+
 std::unique_ptr<Action> Widget::FindAction(Pointer& pointer, ActionTrigger btn) {
   if (btn == PointerButton::Right) {
     LOG << "Right click on " << Name();

@@ -146,21 +146,19 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
   }
   widget->ValidateHierarchy();
   widget->RedrawThisFrame();
-  // Go over every ConnectionWidget and see if any of its arguments can be connected to this
-  // object. Set their "radar" to 1
+  // Go over every ConnectionWidget and set their "radar" to 1, if needed.
   for (auto& connection_widget : ui::root_widget->connection_widgets) {
-    Location* from = connection_widget->StartLocation();
-    if (!from) continue;
-    auto start = connection_widget->start_weak.Lock();
-    if (!start) continue;
+    auto arg = connection_widget->start_weak.Lock();
+    if (!arg) continue;
+    auto& start = *arg.Owner<Object>();
 
-    // Do this for every dragged location
     for (auto& location : locations) {
-      if (from == location.get()) {
+      if (&start == location->object.Get()) {
+        // We grabbed the start object of this connection widget
         connection_widget->animation_state.radar_alpha_target = 1;
       } else {
-        if (auto* arg = connection_widget->StartArgument();
-            arg && arg->CanConnect(*start, *location->object)) {
+        // This connection widget can be connected to one of dragged locations
+        if (arg->CanConnect(*start, *location->object)) {
           connection_widget->animation_state.radar_alpha_target = 1;
         }
       }

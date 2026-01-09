@@ -137,15 +137,12 @@ struct TextSelectAction : Action {
 
   TextSelectAction(Pointer& pointer, TextFieldBase& text_field)
       : Action(pointer), text_field(text_field) {
-    if (text_field.argument.has_value()) {
+    if (text_field.argument) {
       Location* location = Closest<Location>(*pointer.hover);
 
-      for (auto& connection_widget : root_widget->connection_widgets) {
-        if (connection_widget->StartArgument() == text_field.argument &&
-            connection_widget->StartLocation() == location) {
-          drag.emplace(pointer, *connection_widget);
-          break;
-        }
+      if (auto* connection_widget =
+              ConnectionWidget::Find(*location->object, *text_field.argument)) {
+        drag.emplace(pointer, *connection_widget);
       }
     }
 

@@ -34,6 +34,7 @@ namespace automat::ui {
 
 struct Widget;
 struct RootWidget;
+struct WidgetStore;
 
 Str ToStr(Ptr<Widget> widget);
 
@@ -146,6 +147,7 @@ struct Widget : Trackable, OptionsProvider {
   bool rendering_to_screen = false;  // Whether the current render job is going to be presented.
 
   RootWidget& FindRootWidget() const;
+  WidgetStore& WidgetStore() const;
 
   // Validates that the parent/children hierarchy is correctly maintained (in non-release builds).
   void ValidateHierarchy();

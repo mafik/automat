@@ -46,7 +46,10 @@ struct ConnectionWidget : Widget {
     double time_seconds = 0;
   };
 
-  static ConnectionWidget* Find(Location& here, Argument& arg);
+  static ConnectionWidget* Find(Object&, Argument&);
+  static ConnectionWidget* Find(const NestedWeakPtr<Argument>& ptr) {
+    return Find(*ptr.OwnerUnsafe<Object>(), *ptr.GetUnsafe());
+  }
 
   mutable AnimationState animation_state;
 
@@ -54,11 +57,15 @@ struct ConnectionWidget : Widget {
       state;  // if the state is non-empty then the cable is physically simulated
   Optional<Vec2> manual_position;  // position of the plug (bottom center)
 
-  // Updated in `Update()`
+  // Updated in `Tick()`
+  Argument::Style style;
+  Vec2AndDir pos_dir;  // position of connection start
+  SkPath from_shape;   // machine coords
+  SkPath to_shape;     // machine coords
   mutable animation::Approach<> cable_width;
   Vec<Vec2AndDir> to_points;
-  Location* to = nullptr;
   float transparency = 1;
+  float alpha = 0;
   float length = 0;
   mutable std::unique_ptr<ObjectWidget> prototype_widget;
 
@@ -67,7 +74,6 @@ struct ConnectionWidget : Widget {
   // Helper to get the Location and Argument from start_weak
   Location* StartLocation() const;
   Location* EndLocation() const;
-  Argument* StartArgument() const { return start_weak.GetUnsafe(); }
 
   StrView Name() const override { return "ConnectionWidget"; }
   SkPath Shape() const override;

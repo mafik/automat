@@ -599,22 +599,18 @@ void MacroRecorder::PointerMove(ui::Pointer&, Vec2 position) { WakeAnimation(); 
 void GlassRunButton::PointerOver(ui::Pointer& p) {
   ToggleButton::PointerOver(p);
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
-  if (auto h = macro_recorder->here.lock()) {
-    if (auto connection_widget = ConnectionWidget::Find(*h, timeline_arg)) {
-      connection_widget->animation_state.prototype_alpha_target = 1;
-      connection_widget->WakeAnimation();
-    }
+  if (auto connection_widget = ConnectionWidget::Find(*macro_recorder, timeline_arg)) {
+    connection_widget->animation_state.prototype_alpha_target = 1;
+    connection_widget->WakeAnimation();
   }
 }
 
 void GlassRunButton::PointerLeave(ui::Pointer& p) {
   ToggleButton::PointerLeave(p);
   auto macro_recorder = dynamic_cast<MacroRecorder*>(target);
-  if (auto h = macro_recorder->here.lock()) {
-    if (auto connection_widget = ConnectionWidget::Find(*h, timeline_arg)) {
-      connection_widget->animation_state.prototype_alpha_target = 0;
-      connection_widget->WakeAnimation();
-    }
+  if (auto connection_widget = ConnectionWidget::Find(*macro_recorder, timeline_arg)) {
+    connection_widget->animation_state.prototype_alpha_target = 0;
+    connection_widget->WakeAnimation();
   }
 }
 

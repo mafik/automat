@@ -542,18 +542,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
     if (loc->object) {
       loc->object->Args([&](Argument& arg) {
         // Check if this argument already has a widget.
-        bool has_widget = false;
-        for (auto& widget : root_widget.connection_widgets) {
-          if (widget->StartLocation() != loc.get()) {
-            continue;
-          }
-          if (widget->StartArgument() != &arg) {
-            continue;
-          }
-          has_widget = true;
-          break;
-        }
-        if (has_widget) {
+        if (ConnectionWidget::Find(*loc->object, arg)) {
           return;
         }
         // Create a new widget.

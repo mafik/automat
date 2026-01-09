@@ -373,7 +373,7 @@ void HotKey::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void HotKey::DeserializeState(Location& l, Deserializer& d) {
+void HotKey::DeserializeState(Deserializer& d) {
   Status status;
   bool on = IsOn();
   if (on) {

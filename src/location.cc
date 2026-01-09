@@ -55,9 +55,6 @@ Object* Location::Follow() {
   if (object == nullptr) {
     return nullptr;
   }
-  if (Pointer* ptr = object->AsPointer()) {
-    return ptr->Follow(*this);
-  }
   return object.get();
 }
 
@@ -66,19 +63,10 @@ void Location::Put(Ptr<Object> obj) {
     object = std::move(obj);
     return;
   }
-  if (Pointer* ptr = object->AsPointer()) {
-    ptr->Put(*this, std::move(obj));
-  } else {
-    object = std::move(obj);
-  }
+  object = std::move(obj);
 }
 
-Ptr<Object> Location::Take() {
-  if (Pointer* ptr = object->AsPointer()) {
-    return ptr->Take(*this);
-  }
-  return std::move(object);
-}
+Ptr<Object> Location::Take() { return std::move(object); }
 
 void Location::ScheduleRun() { (new RunTask(AcquireWeakPtr()))->Schedule(); }
 

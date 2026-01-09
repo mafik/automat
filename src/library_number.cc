@@ -155,7 +155,7 @@ string Number::GetText() const {
   return buffer;
 }
 
-void Number::SetText(Location& error_context, string_view text) {
+void Number::SetText(string_view text) {
   value = std::stod(string(text));
   text_field->text = text;
 }
@@ -217,7 +217,7 @@ void Number::SerializeState(Serializer& writer, const char* key) const {
   writer.Key(key);
   writer.RawValue(text_field->text.data(), text_field->text.size(), rapidjson::kNumberType);
 }
-void Number::DeserializeState(Location& l, Deserializer& d) {
+void Number::DeserializeState(Deserializer& d) {
   Status status;
   d.Get(value, status);
   if (!OK(status)) {

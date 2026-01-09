@@ -413,7 +413,7 @@ void Object::SerializeState(Serializer& writer, const char* key) const {
   }
 }
 
-void Object::DeserializeState(Location& l, Deserializer& d) {
+void Object::DeserializeState(Deserializer& d) {
   Status status;
   Str value;
   d.Get(value, status);
@@ -421,7 +421,7 @@ void Object::DeserializeState(Location& l, Deserializer& d) {
     ReportError(status.ToStr());
     return;
   }
-  SetText(l, value);
+  SetText(value);
 }
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }

@@ -36,7 +36,7 @@ struct MouseButtonEvent : Object, Runnable {
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 
   void SerializeState(Serializer& writer, const char* key = "value") const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 };
 
 struct MouseMove : Object {
@@ -88,7 +88,7 @@ struct MouseButtonPresser : Object, Runnable, OnOff {
   operator OnOff*() override { return this; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 };
 
 }  // namespace automat::library

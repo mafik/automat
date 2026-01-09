@@ -70,13 +70,10 @@ struct Object : public ReferenceCounted {
   virtual void SerializeState(Serializer& writer, const char* key = "value") const;
 
   // Restores state when Automat is restarted.
-  virtual void DeserializeState(Location& l, Deserializer& d);
+  virtual void DeserializeState(Deserializer& d);
 
   virtual std::string GetText() const { return ""; }
-  virtual void SetText(Location& error_context, std::string_view text) {}
-
-  // Pointer-like objects can be followed.
-  virtual Pointer* AsPointer() { return nullptr; }
+  virtual void SetText(std::string_view text) {}
 
   virtual Container* AsContainer() { return nullptr; }
 

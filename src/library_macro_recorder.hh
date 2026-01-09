@@ -72,7 +72,7 @@ struct MacroRecorder : LiveObject,
   Vec2AndDir ArgStart(const Argument&) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 };
 
 }  // namespace automat::library

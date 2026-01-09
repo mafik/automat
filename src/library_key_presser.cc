@@ -266,7 +266,7 @@ void KeyPresser::SerializeState(Serializer& writer, const char* key) const {
   writer.String(key_name.data(), key_name.size());
   writer.EndObject();
 }
-void KeyPresser::DeserializeState(Location& l, Deserializer& d) {
+void KeyPresser::DeserializeState(Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "key") {

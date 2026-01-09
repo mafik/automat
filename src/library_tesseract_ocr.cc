@@ -1200,7 +1200,7 @@ void TesseractOCR::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   }
 
   if (text_obj) {
-    text_obj->SetText(here, utf8_text);
+    text_obj->SetText(utf8_text);
   }
 
   WakeWidgetsAnimation();
@@ -1224,7 +1224,7 @@ void TesseractOCR::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void TesseractOCR::DeserializeState(Location& l, Deserializer& d) {
+void TesseractOCR::DeserializeState(Deserializer& d) {
   Status status;
   for (auto key : ObjectView(d, status)) {
     if (key == "ocr_text") {
@@ -1249,7 +1249,7 @@ std::string TesseractOCR::GetText() const {
   return ocr_text;
 }
 
-void TesseractOCR::SetText(Location& error_context, std::string_view text) {
+void TesseractOCR::SetText(std::string_view text) {
   auto lock = std::lock_guard(mutex);
   ocr_text = text;
   WakeWidgetsAnimation();

@@ -56,7 +56,7 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
     } else if (key == "window") {
       root_widget.DeserializeState(d, status);
     } else if (key == "root") {
-      root_machine->DeserializeState(*root_location, d);
+      root_machine->DeserializeState(d);
     }
   }
 

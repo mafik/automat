@@ -165,7 +165,7 @@ struct Machine : LiveObject, ui::Widget, ui::DropTarget {
 
   void SerializeState(Serializer& writer, const char* key) const override;
 
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 
   Location* LocationAtPoint(Vec2);
 
@@ -238,50 +238,6 @@ struct Machine : LiveObject, ui::Widget, ui::DropTarget {
       if (auto submachine = dynamic_cast<Machine*>(location->object.get())) {
         submachine->Diagnostics(error_callback);
       }
-    }
-  }
-};
-
-struct Pointer : LiveObject {
-  virtual Object* Next(Location& error_context) const = 0;
-  virtual void PutNext(Location& error_context, Ptr<Object> obj) = 0;
-  virtual Ptr<Object> TakeNext(Location& error_context) = 0;
-
-  std::pair<Pointer&, Object*> FollowPointers(Location& error_context) const {
-    const Pointer* ptr = this;
-    Object* next = Next(error_context);
-    while (next != nullptr) {
-      if (Pointer* next_ptr = next->AsPointer()) {
-        ptr = next_ptr;
-        next = next_ptr->Next(error_context);
-      } else {
-        break;
-      }
-    }
-    return {*const_cast<Pointer*>(ptr), next};
-  }
-  Object* Follow(Location& error_context) const { return FollowPointers(error_context).second; }
-  void Put(Location& error_context, Ptr<Object> obj) {
-    FollowPointers(error_context).first.PutNext(error_context, std::move(obj));
-  }
-  Ptr<Object> Take(Location& error_context) {
-    return FollowPointers(error_context).first.TakeNext(error_context);
-  }
-
-  Pointer* AsPointer() override { return this; }
-  string GetText() const override {
-    if (auto h = here.lock()) {
-      if (auto* obj = Follow(*h)) {
-        return obj->GetText();
-      }
-    }
-    return "null";
-  }
-  void SetText(Location& error_context, string_view text) override {
-    if (auto* obj = Follow(error_context)) {
-      obj->SetText(error_context, text);
-    } else {
-      error_context.object->ReportError("Can't set text on null pointer");
     }
   }
 };

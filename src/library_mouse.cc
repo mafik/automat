@@ -526,7 +526,7 @@ void MouseButtonEvent::SerializeState(Serializer& writer, const char* key) const
   }
   writer.EndObject();
 }
-void MouseButtonEvent::DeserializeState(Location& l, Deserializer& d) {
+void MouseButtonEvent::DeserializeState(Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "button") {
@@ -928,7 +928,7 @@ void MouseButtonPresser::SerializeState(Serializer& writer, const char* key) con
   writer.EndObject();
 }
 
-void MouseButtonPresser::DeserializeState(Location& l, Deserializer& d) {
+void MouseButtonPresser::DeserializeState(Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "button") {

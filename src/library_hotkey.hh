@@ -53,7 +53,7 @@ struct HotKey : LiveObject, Object::WidgetBase, OnOff, ui::CaretOwner, ui::KeyGr
   void FillChildren(Vec<Widget*>& children) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 };
 
 }  // namespace automat::library

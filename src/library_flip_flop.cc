@@ -88,7 +88,7 @@ void FlipFlop::SerializeState(Serializer& writer, const char* key) const {
   writer.Bool(current_state);
 }
 
-void FlipFlop::DeserializeState(Location& l, Deserializer& d) {
+void FlipFlop::DeserializeState(Deserializer& d) {
   Status status;
   d.Get(current_state, status);
   if (!OK(status)) {

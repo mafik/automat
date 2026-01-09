@@ -635,7 +635,7 @@ void MacroRecorder::SerializeState(Serializer& writer, const char* key) const {
   writer.Bool(keylogging != nullptr);
   writer.EndObject();
 }
-void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
+void MacroRecorder::DeserializeState(Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "recording") {
@@ -643,9 +643,9 @@ void MacroRecorder::DeserializeState(Location& l, Deserializer& d) {
       d.Get(value, status);
       if (OK(status) && IsOn() != value) {
         if (value) {
-          l.ScheduleRun();
+          MyLocation()->ScheduleRun();
         } else {
-          (new CancelTask(&l))->Schedule();
+          (new CancelTask(MyLocation()))->Schedule();
         }
       }
     }

@@ -202,7 +202,7 @@ struct Location : ReferenceCounted, ui::Widget {
     if (current_text == text) {
       return;
     }
-    Follow()->SetText(*this, text);
+    Follow()->SetText(text);
     ScheduleUpdate();
   }
   void SetNumber(double number);

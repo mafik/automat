@@ -71,7 +71,7 @@ struct TimerDelay : LiveObject,
   bool CenteredAtZero() const override { return true; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 };
 
 StrView ToStr(TimerDelay::Range);

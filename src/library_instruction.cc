@@ -3769,7 +3769,7 @@ void Instruction::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void Instruction::DeserializeState(Location& l, Deserializer& d) {
+void Instruction::DeserializeState(Deserializer& d) {
   static StringMap<unsigned> opcode_map = [] {
     auto& assembler = LLVM_Assembler::Get();
     StringMap<unsigned> map;

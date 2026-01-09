@@ -699,7 +699,7 @@ void Window::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void Window::DeserializeState(Location& l, Deserializer& d) {
+void Window::DeserializeState(Deserializer& d) {
   Status status;
   for (auto key : ObjectView(d, status)) {
     if (key == "title") {

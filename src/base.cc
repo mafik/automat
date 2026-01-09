@@ -121,23 +121,26 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
       writer.Double(round(location->position.y * 1000000.) / 1000000.);
 
       {
-        bool serializing_connections = false;  // used to lazily call StartObject
-        location->object->Args([&](Argument& arg) {
+        bool parts_opened = false;  // used to lazily call StartObject
+        location->object->Parts([&](Part& part) {
+          auto* arg_ptr = dynamic_cast<Argument*>(&part);
+          if (arg_ptr == nullptr) return;
+          auto& arg = *arg_ptr;
           auto end = arg.Find(*location->object);
           if (end.Get() == nullptr) return;
           auto name = arg.Name();
           auto* end_location = end.Owner<Object>()->MyLocation();
           auto& to_name = location_ids.at(end_location);
-          if (!serializing_connections) {
-            serializing_connections = true;
+          if (!parts_opened) {
+            parts_opened = true;
             writer.Key("connections");
             writer.StartObject();
           }
           writer.Key(name.data(), name.size());
           writer.String(to_name.data(), to_name.size());
         });
-        if (serializing_connections) {
-          serializing_connections = false;
+        if (parts_opened) {
+          parts_opened = false;
           writer.EndObject();
         }
       }
@@ -149,7 +152,7 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void Machine::DeserializeState(Location& l, Deserializer& d) {
+void Machine::DeserializeState(Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "name") {
@@ -192,7 +195,7 @@ void Machine::DeserializeState(Location& l, Deserializer& d) {
             }
           } else if (field == "value") {
             if (object) {
-              object->DeserializeState(l, d);
+              object->DeserializeState(d);
             }
           } else if (field == "x") {
             d.Get(l.position.x, status);

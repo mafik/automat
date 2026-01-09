@@ -2726,7 +2726,7 @@ void Timeline::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
+bool TrackBase::TryDeserializeField(Deserializer& d, Str& field_name) {
   if (field_name == "timestamps") {
     timestamps.clear();
     Status status;
@@ -2744,7 +2744,7 @@ bool TrackBase::TryDeserializeField(Location& l, Deserializer& d, Str& field_nam
   }
   return false;
 }
-bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
+bool OnOffTrack::TryDeserializeField(Deserializer& d, Str& field_name) {
   if (field_name == "on_at") {
     Status status;
     double t;
@@ -2755,9 +2755,9 @@ bool OnOffTrack::TryDeserializeField(Location& l, Deserializer& d, Str& field_na
     }
     return true;
   }
-  return TrackBase::TryDeserializeField(l, d, field_name);
+  return TrackBase::TryDeserializeField(d, field_name);
 }
-bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
+bool Vec2Track::TryDeserializeField(Deserializer& d, Str& field_name) {
   if (field_name == "values") {
     values.clear();
     Status status;
@@ -2779,9 +2779,9 @@ bool Vec2Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_nam
     }
     return true;
   }
-  return TrackBase::TryDeserializeField(l, d, field_name);
+  return TrackBase::TryDeserializeField(d, field_name);
 }
-bool Float64Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_name) {
+bool Float64Track::TryDeserializeField(Deserializer& d, Str& field_name) {
   if (field_name == "values") {
     values.clear();
     Status status;
@@ -2797,28 +2797,28 @@ bool Float64Track::TryDeserializeField(Location& l, Deserializer& d, Str& field_
     }
     return true;
   }
-  return TrackBase::TryDeserializeField(l, d, field_name);
+  return TrackBase::TryDeserializeField(d, field_name);
 }
 
-void TrackBase::DeserializeState(Location& l, Deserializer& d) {
+void TrackBase::DeserializeState(Deserializer& d) {
   ERROR << "TrackBase::DeserializeState() not implemented";
 }
 
-void OnOffTrack::DeserializeState(Location& l, Deserializer& d) {
+void OnOffTrack::DeserializeState(Deserializer& d) {
   ERROR << "OnOffTrack::DeserializeState() not implemented";
 }
 
-void Vec2Track::DeserializeState(Location& l, Deserializer& d) {
+void Vec2Track::DeserializeState(Deserializer& d) {
   ERROR << "Vec2Track::DeserializeState() not implemented";
 }
 
-void Float64Track::DeserializeState(Location& l, Deserializer& d) {
+void Float64Track::DeserializeState(Deserializer& d) {
   ERROR << "Vec2Track::DeserializeState() not implemented";
 }
 
-void Timeline::DeserializeState(Location& l, Deserializer& d) {
+void Timeline::DeserializeState(Deserializer& d) {
   Status status;
-  here = l.AcquireWeakPtr();
+  here = MyLocation()->AcquireWeakPtr();
   for (auto& key : ObjectView(d, status)) {
     if (key == "tracks") {
       for (auto elem : ArrayView(d, status)) {
@@ -2843,7 +2843,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
               }
             }
             if (track) {
-              track->TryDeserializeField(l, d, track_key);
+              track->TryDeserializeField(d, track_key);
             }
           }
         }
@@ -2868,7 +2868,7 @@ void Timeline::DeserializeState(Location& l, Deserializer& d) {
       // We're not updating the outputs because they should be deserialized in a proper state
       // TimelineUpdateOutputs(l, *this, playing.started_at, now);
       TimelineScheduleNextAfter(*this, now);
-      BeginLongRunning(std::make_unique<RunTask>(l.AcquireWeakPtr()));
+      BeginLongRunning(std::make_unique<RunTask>(here));
     } else if (key == "recording") {
       state = kRecording;
       double value = 0;

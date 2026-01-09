@@ -140,7 +140,7 @@ struct Instruction : LiveObject, Runnable, Buffer {
   }
 
   void SerializeState(Serializer& writer, const char* key = "value") const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 };
 
 }  // namespace automat::library

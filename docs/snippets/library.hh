@@ -39,7 +39,7 @@ struct Integer : Object {
   string_view Name() const override { return "Integer"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Integer, i); }
   string GetText() const override { return std::to_string(i); }
-  void SetText(Location& error_context, string_view text) override { i = std::stoi(string(text)); }
+  void SetText(string_view text) override { i = std::stoi(string(text)); }
 };
 
 struct Delete : Object, Runnable {
@@ -79,7 +79,7 @@ struct Date : Object {
   string_view Name() const override { return "Date"; }
   Ptr<Object> Clone() const override { return MAKE_PTR(Date, year, month, day); }
   string GetText() const override { return f("{:04d}-{:02d}-{:02d}", year, month, day); }
-  void SetText(Location& error_context, string_view text) override {
+  void SetText(string_view text) override {
     std::regex re(R"((\d{4})-(\d{2})-(\d{2}))");
     std::match_results<string_view::const_iterator> match;
     if (std::regex_match(text.begin(), text.end(), match, re)) {
@@ -849,7 +849,7 @@ struct Text : LiveObject {
     }
     return buffer;
   }
-  void SetText(Location& error_context, string_view new_text) override {
+  void SetText(string_view new_text) override {
     string old_text = GetText();
     if (old_text == new_text) return;
     chunks.clear();
@@ -880,7 +880,7 @@ struct Button : Object, Runnable {
     return other;
   }
   string GetText() const override { return label; }
-  void SetText(Location& error_context, string_view new_label) override { label = new_label; }
+  void SetText(string_view new_label) override { label = new_label; }
   void OnRun(Location& h, RunTask&) override {
     auto enabled = enabled_arg.GetObject(h);
     if (enabled.object && enabled.object->GetText() == "false") {
@@ -898,7 +898,7 @@ struct ComboBox : LiveObject {
   void Args(std::function<void(Argument&)> cb) override { cb(options_arg); }
   void Relocate(Location* here) override { this->here = here; }
   string GetText() const override { return selected->GetText(); }
-  void SetText(Location& error_context, string_view new_text) override {
+  void SetText(string_view new_text) override {
     selected = options_arg.LoopLocations<Location*>(*here, [&](Location& option) -> Location* {
       if (option.GetText() == new_text) {
         return &option;
@@ -946,7 +946,7 @@ struct Slider : LiveObject {
     }
   }
   string GetText() const override { return std::to_string(value); }
-  void SetText(Location& error_context, string_view new_text) override {
+  void SetText(string_view new_text) override {
     double new_value = std::stod(string(new_text));
     auto min = min_arg.GetLocation(*here.lock());
     if (min.location) {
@@ -1074,9 +1074,7 @@ struct Blackboard : Object {
     }
     return statement->GetText();
   }
-  void SetText(Location& error_context, string_view text) override {
-    statement = algebra::ParseStatement(text);
-  }
+  void SetText(string_view text) override { statement = algebra::ParseStatement(text); }
 };
 
 struct BlackboardUpdater : LiveObject {

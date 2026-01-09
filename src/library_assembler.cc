@@ -355,7 +355,7 @@ void Assembler::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void Assembler::DeserializeState(Location& l, Deserializer& d) {
+void Assembler::DeserializeState(Deserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     bool found = false;
@@ -807,14 +807,14 @@ static RegisterAssemblerArgument register_assembler_arg;
 
 void Register::Parts(const std::function<void(Part&)>& cb) { cb(register_assembler_arg); }
 
-void Register::SetText(Location& error_context, std::string_view text) {
+void Register::SetText(std::string_view text) {
   auto assembler = assembler_weak.Lock();
   if (assembler == nullptr) {
-    error_context.object->ReportError("Register is not connected to an assembler");
+    ReportError("Register is not connected to an assembler");
     return;
   }
   if (assembler->mc_controller == nullptr) {
-    error_context.object->ReportError("Assembler is not connected to a mc_controller");
+    ReportError("Assembler is not connected to a mc_controller");
     return;
   }
   Status status;
@@ -826,7 +826,7 @@ void Register::SetText(Location& error_context, std::string_view text) {
       },
       status);
   if (!OK(status)) {
-    error_context.object->ReportError(status.ToStr());
+    ReportError(status.ToStr());
     return;
   }
   WakeWidgetsAnimation();
@@ -838,7 +838,7 @@ void Register::SerializeState(Serializer& writer, const char* key) const {
   writer.String(reg.name.data(), reg.name.size());
 }
 
-void Register::DeserializeState(Location& l, Deserializer& d) {
+void Register::DeserializeState(Deserializer& d) {
   Status status;
   std::string reg_name;
   d.Get(reg_name, status);

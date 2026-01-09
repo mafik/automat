@@ -28,8 +28,8 @@ struct TrackBase : Object {
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override = 0;
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
-  virtual bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name);
+  void DeserializeState(Deserializer& d) override;
+  virtual bool TryDeserializeField(Deserializer& d, Str& field_name);
 };
 
 struct OnOffTrack : TrackBase, OnOff {
@@ -45,8 +45,8 @@ struct OnOffTrack : TrackBase, OnOff {
   void OnTurnOff() override {}
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
-  bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
+  void DeserializeState(Deserializer& d) override;
+  bool TryDeserializeField(Deserializer& d, Str& field_name) override;
 };
 
 // A track that holds a sequence of relative values.
@@ -61,8 +61,8 @@ struct Vec2Track : TrackBase {
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
-  bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
+  void DeserializeState(Deserializer& d) override;
+  bool TryDeserializeField(Deserializer& d, Str& field_name) override;
 };
 
 // A track that holds a sequence of 64-bit floating point numbers.
@@ -77,8 +77,8 @@ struct Float64Track : TrackBase {
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
-  bool TryDeserializeField(Location& l, Deserializer& d, Str& field_name) override;
+  void DeserializeState(Deserializer& d) override;
+  bool TryDeserializeField(Deserializer& d, Str& field_name) override;
 };
 
 struct TrackArgument : Argument {
@@ -155,7 +155,7 @@ struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
   time::Duration MaxTrackLength() const;
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 };
 
 }  // namespace automat::library

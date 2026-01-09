@@ -49,10 +49,10 @@ struct TesseractOCR : public LiveObject, Runnable {
   void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 
   std::string GetText() const override;
-  void SetText(Location& error_context, std::string_view text) override;
+  void SetText(std::string_view text) override;
 };
 
 }  // namespace automat::library

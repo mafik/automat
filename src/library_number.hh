@@ -3,8 +3,8 @@
 #pragma once
 
 #include "base.hh"
-#include "ui_button.hh"
 #include "number_text_field.hh"
+#include "ui_button.hh"
 
 namespace automat::library {
 
@@ -29,14 +29,14 @@ struct Number : Object, Object::WidgetBase {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   string GetText() const override;
-  void SetText(Location& error_context, string_view text) override;
+  void SetText(string_view text) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
   void FillChildren(Vec<Widget*>& children) override;
   bool CenteredAtZero() const override { return true; }
 
   void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Location& l, Deserializer& d) override;
+  void DeserializeState(Deserializer& d) override;
 };
 
 }  // namespace automat::library

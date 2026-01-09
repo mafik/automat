@@ -806,14 +806,14 @@ void TimerDelay::SerializeState(Serializer& writer, const char* key) const {
   }
   writer.EndObject();
 }
-void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
+void TimerDelay::DeserializeState(Deserializer& d) {
   Status status;
   // TODO: handle deserialization into a running timer
   for (auto& key : ObjectView(d, status)) {
     if (key == "running") {
       double value = 0;
       d.Get(value, status);
-      BeginLongRunning(make_unique<RunTask>(l.AcquireWeakPtr()));
+      BeginLongRunning(make_unique<RunTask>(here));
       start_time = time::SteadyNow() - time::FromSeconds(value);
     } else if (key == "duration_seconds") {
       double value;
@@ -831,7 +831,7 @@ void TimerDelay::DeserializeState(Location& l, Deserializer& d) {
   }
   UpdateTextField(*this);
   if (this->IsRunning()) {
-    ScheduleAt(l, start_time + duration.value);
+    ScheduleAt(*here.Lock(), start_time + duration.value);
   }
 
   if (!OK(status)) {

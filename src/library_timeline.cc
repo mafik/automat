@@ -297,8 +297,6 @@ static SkPath GetRecPath() {
 static constexpr SkColor kTimelineButtonBackground = "#fdfcfb"_color;
 
 TrackArgument::TrackArgument(StrView name) : icon(name, kKeyLetterSize, KeyFont()), name(name) {
-  tint = "#17aeb7"_color;
-  light = "#17aeb7"_color;
   // interface = this;
 }
 

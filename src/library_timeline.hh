@@ -89,6 +89,8 @@ struct TrackArgument : Argument {
 
   TrackArgument(StrView name);
 
+  SkColor Tint() const override { return "#17aeb7"_color; }
+  SkColor Light() const override { return "#17aeb7"_color; }
   PaintDrawable& Icon() override;
 
   void CanConnect(Named& start, Named& end, Status& status) const override;

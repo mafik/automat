@@ -29,13 +29,13 @@ enum class CableTexture {
 // TODO: think about pointer following
 // TODO: think about requirement checking
 // TODO: think about multiple arguments
-struct Argument : Named {
-  // TODO: convert these to virtual functions
-  SkColor tint = "#404040"_color;
-  SkColor light = "#ef9f37"_color;
-  float autoconnect_radius = 0_cm;
+struct Argument : virtual Named {
+  enum class Style { Arrow, Cable, Spotlight, Invisible };
 
-  enum class Style { Arrow, Cable, Spotlight, Invisible } style = Style::Arrow;
+  virtual SkColor Tint() const { return "#404040"_color; }
+  virtual SkColor Light() const { return "#ef9f37"_color; }
+  virtual float AutoconnectRadius() const { return 0_cm; }
+  virtual Style GetStyle() const { return Style::Arrow; }
 
   // Uncomment to find potential bugs related to arguments being moved around.
   // Argument(const Argument&) = delete;

@@ -47,12 +47,11 @@ constexpr bool kDebugEyeShape = false;
 struct ImageArgument : Argument {
   TextDrawable icon;
 
-  ImageArgument() : icon("IMG", ui::kLetterSize, ui::GetFont()) {
-    autoconnect_radius = 20_cm;
-    style = Style::Invisible;
-  }
+  ImageArgument() : icon("IMG", ui::kLetterSize, ui::GetFont()) {}
 
   StrView Name() const override { return "image"sv; }
+  float AutoconnectRadius() const override { return 20_cm; }
+  Style GetStyle() const override { return Style::Invisible; }
   PaintDrawable& Icon() override { return icon; }
 
   void CanConnect(Named& start, Named& end, Status& status) const override {

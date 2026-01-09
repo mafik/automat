@@ -87,6 +87,10 @@ MacroRecorder::~MacroRecorder() {
 struct TimelineArgument : Argument {
   StrView Name() const override { return "Timeline"sv; }
 
+  float AutoconnectRadius() const override { return 10_cm; }
+  SkColor Tint() const override { return color::kParrotRed; }
+  Style GetStyle() const override { return Style::Cable; }
+
   void CanConnect(Named& start, Named& end, Status& status) const override {
     if (!dynamic_cast<Timeline*>(&end)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
@@ -126,13 +130,7 @@ struct TimelineArgument : Argument {
   }
 };
 
-static TimelineArgument timeline_arg = [] {
-  TimelineArgument arg;
-  arg.autoconnect_radius = 10_cm;
-  arg.tint = color::kParrotRed;
-  arg.style = Argument::Style::Cable;
-  return arg;
-}();
+static TimelineArgument timeline_arg;
 
 void MacroRecorder::Args(std::function<void(Argument&)> cb) { cb(timeline_arg); }
 Ptr<Object> MacroRecorder::ArgPrototype(const Argument& arg) {

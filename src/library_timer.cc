@@ -728,7 +728,7 @@ void TimerDelay::OnCancel() {
   WakeAnimation();
 }
 
-DurationArgument::DurationArgument() { tint = "#6e4521"_color; }
+DurationArgument::DurationArgument() {}
 
 void DurationArgument::CanConnect(Named& start, Named& end, Status& status) const {
   if (auto* obj = dynamic_cast<Object*>(&end)) {

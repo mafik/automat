@@ -33,6 +33,9 @@ enum class Flag {
 
 struct AssemblerArgument : Argument {
   StrView Name() const override { return "assembler"sv; }
+  float AutoconnectRadius() const override { return INFINITY; }
+  SkColor Tint() const override { return "#ff0000"_color; }
+  Style GetStyle() const override { return Style::Invisible; }
   void CanConnect(Named& start, Named& end, Status& status) const override;
   void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
   NestedPtr<Named> Find(Named& start) const override;

@@ -89,7 +89,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   if (!from_ptr) return;
   Location& from = *from_ptr;
 
-  if (arg.style == Argument::Style::Spotlight) {
+  if (arg.GetStyle() == Argument::Style::Spotlight) {
     auto target_bounds = from.WidgetForObject().CoarseBounds();
     Vec2 target = from.position;  //  + target_bounds.Center();
     float radius = target_bounds.rect.Hypotenuse() / 2;
@@ -134,8 +134,9 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
   if (anim->radar_alpha >= 0.01f) {
     auto pos_dir = arg.Start(from.WidgetForObject(), *root_machine);
     SkPaint radius_paint;
-    SkColor colors[] = {SkColorSetA(arg.tint, 0),
-                        SkColorSetA(arg.tint, (int)(anim->radar_alpha * 96)), SK_ColorTRANSPARENT};
+    SkColor tint = arg.Tint();
+    SkColor colors[] = {SkColorSetA(tint, 0), SkColorSetA(tint, (int)(anim->radar_alpha * 96)),
+                        SK_ColorTRANSPARENT};
     float pos[] = {0, 1, 1};
     constexpr float kPeriod = 2.f;
     double t = anim->time_seconds;
@@ -144,18 +145,18 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     radius_paint.setShader(SkGradientShader::MakeSweep(0, 0, colors, pos, 3, SkTileMode::kClamp, 0,
                                                        60, 0, &local_matrix));
     // TODO: switch to drawArc instead
-    SkRect oval =
-        Rect::MakeCenter(pos_dir.pos, arg.autoconnect_radius * 2, arg.autoconnect_radius * 2);
+    float autoconnect_radius = arg.AutoconnectRadius();
+    SkRect oval = Rect::MakeCenter(pos_dir.pos, autoconnect_radius * 2, autoconnect_radius * 2);
 
     float crt_width =
-        animation::SinInterp(anim->radar_alpha, 0.2f, 0.1f, 0.5f, 1.f) * arg.autoconnect_radius * 2;
+        animation::SinInterp(anim->radar_alpha, 0.2f, 0.1f, 0.5f, 1.f) * autoconnect_radius * 2;
     float crt_height =
-        animation::SinInterp(anim->radar_alpha, 0.4f, 0.1f, 0.8f, 1.f) * arg.autoconnect_radius * 2;
+        animation::SinInterp(anim->radar_alpha, 0.4f, 0.1f, 0.8f, 1.f) * autoconnect_radius * 2;
     SkRect crt_oval = Rect::MakeCenter(pos_dir.pos, crt_width, crt_height);
     canvas.drawArc(crt_oval, 0, 360, true, radius_paint);
 
     SkPaint stroke_paint;
-    stroke_paint.setColor(SkColorSetA(arg.tint, (int)(anim->radar_alpha * 128)));
+    stroke_paint.setColor(SkColorSetA(tint, (int)(anim->radar_alpha * 128)));
     stroke_paint.setStyle(SkPaint::kStroke_Style);
 
     float radar_alpha_sin = sin((anim->radar_alpha - 0.5f) * M_PI) * 0.5f + 0.5f;
@@ -180,8 +181,8 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
       float letter_a = (i_fract - 0.5f) * kQuadrantSweep / 180 / 2 * radar_alpha_sin * kPi +
                        quadrant_offset / 180 * kPi;
 
-      float x = sin(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
-      float y = cos(letter_a) * arg.autoconnect_radius * radar_alpha_sin;
+      float x = sin(letter_a) * autoconnect_radius * radar_alpha_sin;
+      float y = cos(letter_a) * autoconnect_radius * radar_alpha_sin;
       float w = font.sk_font.measureText(name.data() + i, 1, SkTextEncoding::kUTF8, nullptr);
 
       transforms[i] = SkRSXform::MakeFromRadians(font.font_scale, -letter_a, x, y, w / 2, 0);
@@ -191,7 +192,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
         SkTextBlob::MakeFromRSXform(name.data(), name.size(), transforms_span, font.sk_font);
     SkPaint text_paint;
     float text_alpha = animation::SinInterp(anim->radar_alpha, 0.5f, 0.0f, 1.f, 1.f);
-    text_paint.setColor(SkColorSetA(arg.tint, (int)(text_alpha * 255)));
+    text_paint.setColor(SkColorSetA(tint, (int)(text_alpha * 255)));
 
     canvas.save();
     canvas.translate(pos_dir.pos.x, pos_dir.pos.y);
@@ -206,8 +207,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     canvas.restore();
 
     arg.NearbyCandidates(
-        from, arg.autoconnect_radius * 2 + 10_cm,
-        [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
+        from, autoconnect_radius * 2 + 10_cm, [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
           auto m = TransformBetween(candidate.WidgetForObject(), *root_machine);
           for (auto& to : to_points) {
             to.pos = m.mapPoint(to.pos);
@@ -216,7 +216,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
           auto it = ArcLine::Iterator(arcline);
           float total_length = it.AdvanceToEnd() * anim->radar_alpha;
           Vec2 end_point = it.Position();
-          float relative_dist = Length(pos_dir.pos - to_points[0].pos) / arg.autoconnect_radius;
+          float relative_dist = Length(pos_dir.pos - to_points[0].pos) / autoconnect_radius;
           auto path = arcline.ToPath(false, std::lerp(total_length, 0, relative_dist - 1));
           canvas.drawPath(path, stroke_paint);
           canvas.drawCircle(end_point, 1_mm, stroke_paint);
@@ -254,7 +254,8 @@ void ConnectionWidget::FromMoved() {
 }
 
 animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
-  if (arg.style == Argument::Style::Invisible || arg.style == Argument::Style::Spotlight) {
+  auto style = arg.GetStyle();
+  if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return animation::Finished;
   }
 
@@ -331,7 +332,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
   auto alpha = (1.f - from.transparency) * (1.f - transparency);
 
-  if (!state.has_value() && arg.style != Argument::Style::Arrow && alpha > 0.01f) {
+  if (!state.has_value() && style != Argument::Style::Arrow && alpha > 0.01f) {
     auto arcline = RouteCable(pos_dir, to_points, nullptr);
     auto new_length = ArcLine::Iterator(arcline).AdvanceToEnd();
     if (new_length > length + 2_cm) {
@@ -355,13 +356,13 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     phase |= state->steel_insert_hidden.Tick(timer);
 
     phase |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
-  } else if (arg.style != Argument::Style::Arrow) {
+  } else if (style != Argument::Style::Arrow) {
     cable_width.target = to != nullptr ? 2_mm : 0;
     cable_width.speed = 5;
     phase |= cable_width.Tick(timer);
   }
 
-  if (arg.autoconnect_radius > 0) {
+  if (arg.AutoconnectRadius() > 0) {
     auto& anim = animation_state;
     phase |= animation::LinearApproach(anim.radar_alpha_target, timer.d, 2.f, anim.radar_alpha);
     if (anim.radar_alpha >= 0.01f) {
@@ -386,7 +387,8 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 }
 
 void ConnectionWidget::Draw(SkCanvas& canvas) const {
-  if (arg.style == Argument::Style::Invisible || arg.style == Argument::Style::Spotlight) {
+  auto style = arg.GetStyle();
+  if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return;
   }
 
@@ -424,7 +426,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
       DrawOpticalConnector(canvas, *state, arg.Icon());
     }
   } else {
-    if (arg.style == Argument::Style::Arrow) {
+    if (style == Argument::Style::Arrow) {
       if (to_shape.isEmpty()) {
         if (!to_points.empty()) {
           to_shape.moveTo(to_points[0].pos);
@@ -438,7 +440,7 @@ void ConnectionWidget::Draw(SkCanvas& canvas) const {
       if (cable_width > 0.01_mm && to) {
         if (alpha > 0.01f) {
           auto arcline = RouteCable(pos_dir, to_points, &canvas);
-          auto color = SkColorSetA(arg.tint, 255 * cable_width.value / 2_mm);
+          auto color = SkColorSetA(arg.Tint(), 255 * cable_width.value / 2_mm);
           auto color_filter = color::MakeTintFilter(color, 30);
           auto path = arcline.ToPath(false);
           DrawCable(canvas, path, color_filter, CableTexture::Smooth, cable_width, cable_width);

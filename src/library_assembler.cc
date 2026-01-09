@@ -775,6 +775,10 @@ Ptr<Object> Register::Clone() const { return MAKE_PTR(Register, assembler_weak, 
 struct RegisterAssemblerArgument : Argument {
   StrView Name() const override { return "Reg's Assembler"sv; }
 
+  float AutoconnectRadius() const override { return INFINITY; }
+  SkColor Tint() const override { return "#ff0000"_color; }
+  Style GetStyle() const override { return Style::Spotlight; }
+
   void CanConnect(Named& start, Named& end, Status& status) const override {
     if (!dynamic_cast<Assembler*>(&end)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
@@ -799,13 +803,7 @@ struct RegisterAssemblerArgument : Argument {
   }
 };
 
-static RegisterAssemblerArgument register_assembler_arg = [] {
-  RegisterAssemblerArgument arg;
-  arg.autoconnect_radius = INFINITY;
-  arg.tint = "#ff0000"_color;
-  arg.style = Argument::Style::Spotlight;
-  return arg;
-}();
+static RegisterAssemblerArgument register_assembler_arg;
 
 void Register::Args(std::function<void(Argument&)> cb) { cb(register_assembler_arg); }
 

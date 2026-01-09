@@ -195,13 +195,7 @@ NestedPtr<Named> AssemblerArgument::Find(Named& start) const {
   return NestedPtr<Named>();
 }
 
-AssemblerArgument assembler_arg = [] {
-  AssemblerArgument arg;
-  arg.autoconnect_radius = INFINITY;
-  arg.tint = "#ff0000"_color;
-  arg.style = Argument::Style::Invisible;
-  return arg;
-}();
+AssemblerArgument assembler_arg;
 
 static Assembler* FindAssembler(Location& here) {
   Assembler* assembler =

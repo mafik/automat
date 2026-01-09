@@ -482,7 +482,8 @@ void Location::UpdateAutoconnectArgs() {
   auto& object_widget = WidgetForObject();
   auto parent_machine = root_machine.get();
   object->Args([&](Argument& arg) {
-    if (arg.autoconnect_radius <= 0) {
+    float autoconnect_radius = arg.AutoconnectRadius();
+    if (autoconnect_radius <= 0) {
       return;
     }
 
@@ -508,10 +509,10 @@ void Location::UpdateAutoconnectArgs() {
     }
 
     // Find the new distance & target
-    float new_dist2 = arg.autoconnect_radius * arg.autoconnect_radius;
+    float new_dist2 = autoconnect_radius * autoconnect_radius;
     Location* new_target = nullptr;
     arg.NearbyCandidates(
-        *this, arg.autoconnect_radius, [&](Location& other, Vec<Vec2AndDir>& to_points) {
+        *this, autoconnect_radius, [&](Location& other, Vec<Vec2AndDir>& to_points) {
           auto other_up = TransformBetween(other.WidgetForObject(), *parent_machine);
           for (auto& to : to_points) {
             Vec2 to_pos = other_up.mapPoint(to.pos);
@@ -549,7 +550,8 @@ void Location::UpdateAutoconnectArgs() {
     auto& other_widget = other->WidgetForObject();
     auto other_up = TransformBetween(other_widget, *parent_machine);
     other->object->Args([&](Argument& arg) {
-      if (arg.autoconnect_radius <= 0) {
+      float autoconnect_radius = arg.AutoconnectRadius();
+      if (autoconnect_radius <= 0) {
         return;
       }
       if (!arg.CanConnect(*other->object, *object)) {
@@ -584,7 +586,7 @@ void Location::UpdateAutoconnectArgs() {
       }
 
       // Find the new distance & target
-      float new_dist2 = std::min(arg.autoconnect_radius * arg.autoconnect_radius, old_dist2);
+      float new_dist2 = std::min(autoconnect_radius * autoconnect_radius, old_dist2);
       Location* new_target = old_target;
       for (auto& to : to_points) {
         float dist2 = LengthSquared(start.pos - to.pos);

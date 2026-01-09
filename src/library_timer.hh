@@ -15,6 +15,7 @@ struct DurationArgument : Argument {
   DurationArgument();
 
   StrView Name() const override { return "duration"sv; }
+  SkColor Tint() const override { return "#6e4521"_color; }
   void CanConnect(Named& start, Named& end, Status& status) const override;
   void Connect(const NestedPtr<Named>& start, const NestedPtr<Named>& end) override;
   NestedPtr<Named> Find(Named& start) const override;

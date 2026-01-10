@@ -213,8 +213,9 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     canvas.drawTextBlob(text_blob, 0, 0, text_paint);
     canvas.restore();
 
-    arg->NearbyCandidates(
-        from, autoconnect_radius * 2 + 10_cm, [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
+    root_machine->NearbyCandidates(
+        from, *arg, autoconnect_radius * 2 + 10_cm,
+        [&](Location& candidate, Vec<Vec2AndDir>& to_points) {
           auto m = TransformBetween(candidate.WidgetForObject(), *root_machine);
           for (auto& to : to_points) {
             to.pos = m.mapPoint(to.pos);

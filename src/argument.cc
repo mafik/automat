@@ -23,43 +23,6 @@ PaintDrawable& Argument::Icon() {
   return default_icon;
 }
 
-void Argument::NearbyCandidates(
-    Location& here, float radius,
-    std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const {
-  // Check the currently dragged object
-  auto& root_widget = here.FindRootWidget();
-  for (auto* action : root_widget.active_actions) {
-    if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action)) {
-      for (auto& location : drag_location_action->locations) {
-        if (location.get() == &here) {
-          continue;
-        }
-        if (!CanConnect(*here.object, *location->object)) {
-          continue;
-        }
-        Vec<Vec2AndDir> to_points;
-        location->WidgetForObject().ConnectionPositions(to_points);
-        callback(*location, to_points);
-      }
-    }
-  }
-  // Query nearby objects in the parent machine
-
-  Vec2 center = here.WidgetForObject().ArgStart(*this, root_machine.get()).pos;
-  root_machine->Nearby(center, radius, [&](Location& other) -> void* {
-    if (&other == &here) {
-      return nullptr;
-    }
-    if (!CanConnect(*here.object, *other.object)) {
-      return nullptr;
-    }
-    Vec<Vec2AndDir> to_points;
-    other.WidgetForObject().ConnectionPositions(to_points);
-    callback(other, to_points);
-    return nullptr;
-  });
-}
-
 Object* Argument::ObjectOrNull(Object& start) const {
   if (auto found = Find(start)) {
     if (auto* obj = found.Owner<Object>()) {

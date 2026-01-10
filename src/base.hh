@@ -168,6 +168,11 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
   // Return non-null to stop iteration and return from Nearby.
   void* Nearby(Vec2 center, float radius, std::function<void*(Location&)> callback);
 
+  // Find nearby candidates for autoconnect. Checks both currently dragged objects
+  // and objects within the machine.
+  void NearbyCandidates(Location& here, const Argument& arg, float radius,
+                        std::function<void(Location&, Vec<Vec2AndDir>&)> callback);
+
   string_view Name() const override { return name; }
   Ptr<Object> Clone() const override {
     auto m = MAKE_PTR(Machine, this->parent);

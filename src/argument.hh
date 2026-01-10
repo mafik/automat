@@ -90,10 +90,6 @@ struct Argument : virtual Part {
 
   virtual PaintDrawable& Icon();  // TODO: weird - clean this up
 
-  // The returned "to_points" use the target object's local coordinate space.
-  void NearbyCandidates(Location& here, float radius,
-                        std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const;
-
   // Use this method if you don't actually care about specific part that the argument points to -
   // just the target object (that owns that part).
   Object* ObjectOrNull(Object& start) const;

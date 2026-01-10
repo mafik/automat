@@ -504,8 +504,8 @@ void Location::UpdateAutoconnectArgs() {
     // Find the new distance & target
     float new_dist2 = autoconnect_radius * autoconnect_radius;
     Location* new_target = nullptr;
-    arg.NearbyCandidates(
-        *this, autoconnect_radius, [&](Location& other, Vec<Vec2AndDir>& to_points) {
+    parent_machine->NearbyCandidates(
+        *this, arg, autoconnect_radius, [&](Location& other, Vec<Vec2AndDir>& to_points) {
           auto other_up = TransformBetween(other.WidgetForObject(), *parent_machine);
           for (auto& to : to_points) {
             Vec2 to_pos = other_up.mapPoint(to.pos);

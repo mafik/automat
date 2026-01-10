@@ -62,6 +62,41 @@ void* Machine::Nearby(Vec2 start, float radius, std::function<void*(Location&)> 
   return nullptr;
 }
 
+void Machine::NearbyCandidates(Location& here, const Argument& arg, float radius,
+                               std::function<void(Location&, Vec<Vec2AndDir>&)> callback) {
+  // Check the currently dragged object
+  auto& root_widget = here.FindRootWidget();
+  for (auto* action : root_widget.active_actions) {
+    if (auto* drag_location_action = dynamic_cast<DragLocationAction*>(action)) {
+      for (auto& location : drag_location_action->locations) {
+        if (location.get() == &here) {
+          continue;
+        }
+        if (!arg.CanConnect(*here.object, *location->object)) {
+          continue;
+        }
+        Vec<Vec2AndDir> to_points;
+        location->WidgetForObject().ConnectionPositions(to_points);
+        callback(*location, to_points);
+      }
+    }
+  }
+  // Query nearby objects in the machine
+  Vec2 center = here.WidgetForObject().ArgStart(arg, this).pos;
+  Nearby(center, radius, [&](Location& other) -> void* {
+    if (&other == &here) {
+      return nullptr;
+    }
+    if (!arg.CanConnect(*here.object, *other.object)) {
+      return nullptr;
+    }
+    Vec<Vec2AndDir> to_points;
+    other.WidgetForObject().ConnectionPositions(to_points);
+    callback(other, to_points);
+    return nullptr;
+  });
+}
+
 void LongRunning::Done(Location& here) {
   if (long_running_task == nullptr) {
     FATAL << "LongRunning::Done called while long_running_task == null.";

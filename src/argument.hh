@@ -44,11 +44,11 @@ struct Argument : virtual Part {
 
   virtual ~Argument() = default;
 
-  virtual void CanConnect(Part& start, Part& end, Status& status) const {
+  virtual void CanConnect(Object& start, Part& end, Status& status) const {
     AppendErrorMessage(status) += "Argument::CanConnect should be overridden";
   }
 
-  bool CanConnect(Part& start, Part& end) const {
+  bool CanConnect(Object& start, Part& end) const {
     Status status;
     CanConnect(start, end, status);
     return OK(status);
@@ -108,7 +108,7 @@ struct Argument : virtual Part {
 
 struct NextArg : Argument {
   StrView Name() const override { return "next"sv; }
-  void CanConnect(Part& start, Part& end, Status&) const override;
+  void CanConnect(Object& start, Part& end, Status&) const override;
   void Connect(Object& start, const NestedPtr<Part>& end) override;
   NestedPtr<Part> Find(Object& start) const override;
 };

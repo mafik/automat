@@ -107,7 +107,7 @@ JumpArgument::JumpArgument() {
 
 PaintDrawable& JumpArgument::Icon() { return jump_icon; }
 
-void JumpArgument::CanConnect(Part& start, Part& end, Status& status) const {
+void JumpArgument::CanConnect(Object& start, Part& end, Status& status) const {
   if (!dynamic_cast<Runnable*>(&end)) {
     AppendErrorMessage(status) += "Jump target must be a Runnable";
   }
@@ -156,7 +156,7 @@ void NextInstructionArg::Connect(Object& start, const NestedPtr<Part>& end) {
 
 NextInstructionArg next_instruction_arg;
 
-void AssemblerArgument::CanConnect(Part& start, Part& end, Status& status) const {
+void AssemblerArgument::CanConnect(Object& start, Part& end, Status& status) const {
   if (!dynamic_cast<Assembler*>(&end)) {
     AppendErrorMessage(status) += "Must connect to an Assembler";
   }

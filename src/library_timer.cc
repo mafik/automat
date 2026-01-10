@@ -726,7 +726,7 @@ void TimerDelay::OnCancel() {
 
 DurationArgument::DurationArgument() {}
 
-void DurationArgument::CanConnect(Part& start, Part& end, Status& status) const {
+void DurationArgument::CanConnect(Object& start, Part& end, Status& status) const {
   if (auto* obj = dynamic_cast<Object*>(&end)) {
     Str text = obj->GetText();
     char* endptr = nullptr;

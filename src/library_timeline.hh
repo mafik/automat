@@ -93,7 +93,7 @@ struct TrackArgument : Argument {
   SkColor Light() const override { return "#17aeb7"_color; }
   PaintDrawable& Icon() override;
 
-  void CanConnect(Part& start, Part& end, Status& status) const override;
+  void CanConnect(Object& start, Part& end, Status& status) const override;
   void Connect(Object& start, const NestedPtr<Part>& end) override;
   NestedPtr<Part> Find(Object& start) const override;
 };

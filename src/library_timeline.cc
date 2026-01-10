@@ -302,7 +302,7 @@ TrackArgument::TrackArgument(StrView name) : icon(name, kKeyLetterSize, KeyFont(
 
 PaintDrawable& TrackArgument::Icon() { return icon; }
 
-void TrackArgument::CanConnect(Part& start, Part& end, Status& status) const {}
+void TrackArgument::CanConnect(Object& start, Part& end, Status& status) const {}
 void TrackArgument::Connect(Object& start, const NestedPtr<Part>& end) { target = end; }
 NestedPtr<Part> TrackArgument::Find(Object& start) const { return target; }
 

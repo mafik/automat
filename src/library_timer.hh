@@ -16,7 +16,7 @@ struct DurationArgument : Argument {
 
   StrView Name() const override { return "duration"sv; }
   SkColor Tint() const override { return "#6e4521"_color; }
-  void CanConnect(Part& start, Part& end, Status& status) const override;
+  void CanConnect(Object& start, Part& end, Status& status) const override;
   void Connect(Object& start, const NestedPtr<Part>& end) override;
   NestedPtr<Part> Find(Object& start) const override;
   Interface* StartInterface(Part& start) const override;

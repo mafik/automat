@@ -95,7 +95,7 @@ struct TimelineArgument : Argument {
     return prototypes->Find<Timeline>()->AcquirePtr<Object>();
   }
 
-  void CanConnect(Part& start, Part& end, Status& status) const override {
+  void CanConnect(Object& start, Part& end, Status& status) const override {
     if (!dynamic_cast<Timeline*>(&end)) {
       AppendErrorMessage(status) += "Must connect to a Timeline";
     }

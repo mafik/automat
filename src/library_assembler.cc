@@ -776,7 +776,7 @@ struct RegisterAssemblerArgument : Argument {
   SkColor Tint() const override { return "#ff0000"_color; }
   Style GetStyle() const override { return Style::Spotlight; }
 
-  void CanConnect(Part& start, Part& end, Status& status) const override {
+  void CanConnect(Object& start, Part& end, Status& status) const override {
     if (!dynamic_cast<Assembler*>(&end)) {
       AppendErrorMessage(status) += "Must connect to an Assembler";
     }

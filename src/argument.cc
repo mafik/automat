@@ -112,7 +112,7 @@ Object* Argument::FindObject(Location& here, const FindConfig& cfg) const {
   return nullptr;
 }
 
-void NextArg::CanConnect(Part& start, Part& end, Status& status) const {
+void NextArg::CanConnect(Object& start, Part& end, Status& status) const {
   if (!dynamic_cast<Runnable*>(&start)) {
     AppendErrorMessage(status) += "Next source must be a Runnable";
   }

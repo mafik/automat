@@ -46,9 +46,9 @@ struct ConnectionWidget : Widget {
     double time_seconds = 0;
   };
 
-  static ConnectionWidget* Find(Object&, Argument&);
-  static ConnectionWidget* Find(const NestedWeakPtr<Argument>& ptr) {
-    return Find(*ptr.OwnerUnsafe<Object>(), *ptr.GetUnsafe());
+  static ConnectionWidget* FindOrNull(Object&, Argument&);
+  static ConnectionWidget* FindOrNull(const NestedWeakPtr<Argument>& ptr) {
+    return FindOrNull(*ptr.OwnerUnsafe<Object>(), *ptr.GetUnsafe());
   }
 
   mutable AnimationState animation_state;

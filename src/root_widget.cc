@@ -15,6 +15,7 @@
 #include "black_hole.hh"
 #include "drag_action.hh"
 #include "embedded.hh"
+#include "format.hh"
 #include "loading_animation.hh"
 #include "math.hh"
 #include "object.hh"
@@ -542,7 +543,7 @@ static void UpdateConnectionWidgets(RootWidget& root_widget) {
     if (loc->object) {
       loc->object->Args([&](Argument& arg) {
         // Check if this argument already has a widget.
-        if (ConnectionWidget::Find(*loc->object, arg)) {
+        if (ConnectionWidget::FindOrNull(*loc->object, arg)) {
           return;
         }
         // Create a new widget.
@@ -570,7 +571,7 @@ void RootWidget::FillChildren(Vec<Widget*>& out_children) {
   Vec<Widget*> connection_widgets_below;
   connection_widgets_below.reserve(connection_widgets.size());
   for (auto& it : connection_widgets) {
-    if (it->manual_position.has_value() || IsDragged(it->StartLocation())) {
+    if (it->manual_position.has_value() || IsDragged(*it->StartLocation())) {
       out_children.push_back(it.get());
     } else {
       connection_widgets_below.push_back(it.get());

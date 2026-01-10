@@ -91,6 +91,10 @@ deque<WidgetDrawable*> overflow_queue;
 struct WidgetDrawableHolder {
   sk_sp<SkDrawable> sk_drawable;
   WidgetDrawable* widget_drawable;
+
+  // May create a new WidgetDrawable - if none exists for the given id. Otherwise returns a
+  // reference to the existing WidgetDrawable.
+  static WidgetDrawableHolder& FindOrMake(uint32_t id);
 };
 
 // Map used by the client to keep track of resources needed to render widgets.
@@ -210,7 +214,7 @@ struct WidgetDrawable : SkDrawableRTTI {
   void flatten(SkWriteBuffer& buffer) const override;
   static sk_sp<SkFlattenable> CreateProc(SkReadBuffer& buffer);
 
-  static WidgetDrawable* Find(uint32_t id) {
+  static WidgetDrawable* FindOrNull(uint32_t id) {
     if (auto it = cached_widget_drawables.find(id); it != cached_widget_drawables.end()) {
       return it->second.widget_drawable;
     }
@@ -219,14 +223,10 @@ struct WidgetDrawable : SkDrawableRTTI {
     // WidgetDrawable to compose.
     return nullptr;
   }
-
-  // May create a new WidgetDrawable - if none exists for the given id. Otherwise returns a
-  // reference to the existing WidgetDrawable.
-  static WidgetDrawableHolder& Make(uint32_t id);
 };
 
 sk_sp<SkDrawable> MakeWidgetDrawable(Widget& widget) {
-  auto& drawable_holder = WidgetDrawable::Make(widget.ID());
+  auto& drawable_holder = WidgetDrawableHolder::FindOrMake(widget.ID());
   return drawable_holder.sk_drawable;
 }
 // In order for remote rendering to work, the bandwidth of rendering commands must fit the
@@ -253,7 +253,7 @@ void WidgetDrawable::flatten(SkWriteBuffer& buffer) const {
   // Normally this shouldn't be called. There is no point serializing the render state.
   buffer.writeInt(id);
 }
-WidgetDrawableHolder& WidgetDrawable::Make(uint32_t id) {
+WidgetDrawableHolder& WidgetDrawableHolder::FindOrMake(uint32_t id) {
   auto it = cached_widget_drawables.find(id);
   if (it == cached_widget_drawables.end()) {
     WidgetDrawable* typed_ptr = nullptr;
@@ -264,7 +264,7 @@ WidgetDrawableHolder& WidgetDrawable::Make(uint32_t id) {
 }
 sk_sp<SkFlattenable> WidgetDrawable::CreateProc(SkReadBuffer& buffer) {
   int id = buffer.readInt();
-  auto& ref = Make(id);
+  auto& ref = WidgetDrawableHolder::FindOrMake(id);
   return ref.sk_drawable;
 }
 
@@ -1262,23 +1262,23 @@ void RenderFrame(SkCanvas& canvas) {
 
   // Update all WidgetRenderStates
   for (auto& [id, fresh_texture_anchors] : pack.fresh_texture_anchors) {
-    if (auto* cached_widget_drawable = WidgetDrawable::Find(id)) {
+    if (auto* cached_widget_drawable = WidgetDrawable::FindOrNull(id)) {
       cached_widget_drawable->fresh_texture_anchors = fresh_texture_anchors;
     }
   }
   for (auto& [id, matrix] : pack.fresh_matrices) {
-    if (auto* cached_widget_drawable = WidgetDrawable::Find(id)) {
+    if (auto* cached_widget_drawable = WidgetDrawable::FindOrNull(id)) {
       cached_widget_drawable->fresh_matrix = matrix;
     }
   }
 
   for (auto& update : pack.frame) {
-    auto widget_drawable = WidgetDrawable::Find(update.id);
+    auto widget_drawable = WidgetDrawable::FindOrNull(update.id);
     widget_drawable->render_in_background = false;
     frame.push_back(widget_drawable);
 
     if (update.parent_id) {
-      auto* parent = WidgetDrawable::Find(update.parent_id);
+      auto* parent = WidgetDrawable::FindOrNull(update.parent_id);
       // Make sure the widget has a semaphore.
       if (!widget_drawable->sk_semaphore.isValid()) {
         Status _;
@@ -1296,7 +1296,7 @@ void RenderFrame(SkCanvas& canvas) {
     }
   }
   for (auto& update : pack.overflow) {
-    auto widget_drawable = WidgetDrawable::Find(update.id);
+    auto widget_drawable = WidgetDrawable::FindOrNull(update.id);
     widget_drawable->render_in_background = true;
     overflow_queue.push_back(widget_drawable);
   }
@@ -1304,7 +1304,7 @@ void RenderFrame(SkCanvas& canvas) {
   auto props = canvas.getBaseProps();
 
   for (auto& update : Concat(pack.frame, pack.overflow)) {
-    WidgetDrawableHolder& ref = WidgetDrawable::Make(update.id);
+    WidgetDrawableHolder& ref = WidgetDrawableHolder::FindOrMake(update.id);
     auto* w = ref.widget_drawable;
     w->UpdateState(update);
 
@@ -1330,7 +1330,7 @@ void RenderFrame(SkCanvas& canvas) {
 
   int pending_recordings = 0;
   for (auto& update : pack.frame) {
-    auto w = WidgetDrawable::Find(update.id);
+    auto w = WidgetDrawable::FindOrNull(update.id);
     recording_queue.enqueue(w);
     ++pending_recordings;
   }

@@ -138,7 +138,7 @@ struct TextSelectAction : Action {
   TextSelectAction(Pointer& pointer, TextFieldBase& text_field)
       : Action(pointer), text_field(text_field) {
     if (text_field.argument) {
-      if (auto* connection_widget = ConnectionWidget::Find(text_field.argument)) {
+      if (auto* connection_widget = ConnectionWidget::FindOrNull(text_field.argument)) {
         drag.emplace(pointer, *connection_widget);
       }
     }

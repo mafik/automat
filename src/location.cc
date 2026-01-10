@@ -552,7 +552,7 @@ void Location::UpdateAutoconnectArgs() {
       }
 
       // Wake the animation loop of the ConnectionWidget
-      if (auto connection_widget = ConnectionWidget::Find(*other->object, arg)) {
+      if (auto connection_widget = ConnectionWidget::FindOrNull(*other->object, arg)) {
         connection_widget->WakeAnimation();
       }
 

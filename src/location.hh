@@ -67,7 +67,7 @@ struct Location : ReferenceCounted, ui::Widget {
   std::unordered_set<Location*> update_observers;
   std::unordered_set<Location*> observing_updates;
 
-  Location(Widget* parent_widget, WeakPtr<Location> parent_location = {});
+  explicit Location(Widget* parent_widget, WeakPtr<Location> parent_location = {});
   ~Location();
 
   // Find (or create if needed) the Widget for this location's object.

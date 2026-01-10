@@ -563,7 +563,7 @@ Vec<Vec2> ConnectionWidget::TextureAnchors() const {
   return anchors;
 }
 
-ConnectionWidget* ConnectionWidget::Find(Object& obj, Argument& arg) {
+ConnectionWidget* ConnectionWidget::FindOrNull(Object& obj, Argument& arg) {
   for (auto& connection_widget : root_widget->connection_widgets) {
     if (connection_widget->start_weak.GetUnsafe() != &arg) {
       continue;

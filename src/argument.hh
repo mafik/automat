@@ -100,11 +100,11 @@ struct Argument : virtual Part {
   void NearbyCandidates(Location& here, float radius,
                         std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const;
 
-  Object* FindObject(Location& here, const FindConfig&) const;
+  Object* FindObject(Object& start, const FindConfig&) const;
 
   template <typename T>
-  T* FindObject(Location& here, const FindConfig& cfg) const {
-    return dynamic_cast<T*>(FindObject(here, cfg));
+  T* FindObject(Object& start, const FindConfig& cfg) const {
+    return dynamic_cast<T*>(FindObject(start, cfg));
   }
 };
 

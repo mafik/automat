@@ -405,11 +405,11 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
   }
 }
 
-static void TimelineUpdateOutputs(Location& here, Timeline& t, time::SteadyPoint started_at,
+static void TimelineUpdateOutputs(Timeline& t, time::SteadyPoint started_at,
                                   time::SteadyPoint now) {
   for (auto& track : t.tracks) {
     t.InvalidateConnectionWidgets(track.get());
-    auto* object = track->FindObject(here, {});
+    auto* object = track->FindObject(t, {});
     if (object == nullptr) continue;
     auto* location = object->MyLocation();
     if (location == nullptr) continue;
@@ -865,9 +865,7 @@ struct TimelineWidget : Object::WidgetBase {
     if (timeline_locked.state == Timeline::kPlaying) {
       TimelineCancelScheduled(timeline_locked);
       timeline_locked.playing.started_at = now - time::Defloat(pos_ratio * max_track_length);
-      if (auto h = timeline_locked.here) {
-        TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
-      }
+      TimelineUpdateOutputs(timeline_locked, timeline_locked.playing.started_at, now);
       TimelineScheduleNextAfter(timeline_locked, now);
     } else if (timeline_locked.state == Timeline::kPaused) {
       timeline_locked.paused.playback_offset = time::Defloat(pos_ratio * max_track_length);
@@ -880,9 +878,7 @@ struct TimelineWidget : Object::WidgetBase {
     if (timeline_locked.state == Timeline::kPlaying) {
       TimelineCancelScheduled(timeline_locked);
       timeline_locked.playing.started_at = now - time::Duration(offset);
-      if (auto h = timeline_locked.here) {
-        TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
-      }
+      TimelineUpdateOutputs(timeline_locked, timeline_locked.playing.started_at, now);
       TimelineScheduleNextAfter(timeline_locked, now);
     } else if (timeline_locked.state == Timeline::kPaused) {
       timeline_locked.paused.playback_offset = offset;
@@ -895,9 +891,7 @@ struct TimelineWidget : Object::WidgetBase {
       TimelineCancelScheduled(timeline_locked);
       timeline_locked.playing.started_at -= time::Duration(offset);
       timeline_locked.playing.started_at = min(timeline_locked.playing.started_at, now);
-      if (auto h = timeline_locked.here) {
-        TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
-      }
+      TimelineUpdateOutputs(timeline_locked, timeline_locked.playing.started_at, now);
       TimelineScheduleNextAfter(timeline_locked, now);
     } else if (timeline_locked.state == Timeline::kPaused) {
       timeline_locked.paused.playback_offset = clamp<time::Duration>(
@@ -2468,10 +2462,8 @@ void Timeline::OnCancel() {
     TimelineCancelScheduled(*this);
     state = kPaused;
     paused = {.playback_offset = time::SteadyNow() - playing.started_at};
-    if (auto h = here) {
-      TimelineUpdateOutputs(*h, *this, time::SteadyPoint{},
-                            time::SteadyPoint{} + time::Duration(paused.playback_offset));
-    }
+    TimelineUpdateOutputs(*this, time::SteadyPoint{},
+                          time::SteadyPoint{} + time::Duration(paused.playback_offset));
     WakeRunButton(*this);
   }
 }
@@ -2487,7 +2479,7 @@ void Timeline::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   state = kPlaying;
   time::SteadyPoint now = time::SteadyNow();
   playing = {.started_at = now - time::Duration(paused.playback_offset)};
-  TimelineUpdateOutputs(here, *this, playing.started_at, now);
+  TimelineUpdateOutputs(*this, playing.started_at, now);
   TimelineScheduleNextAfter(*this, now);
   WakeRunButton(*this);
   WakeWidgetsAnimation();
@@ -2588,7 +2580,7 @@ void Timeline::OnTimerNotification(Location& here, time::SteadyPoint now) {
     Done(here);
     WakeRunButton(*this);
   }
-  TimelineUpdateOutputs(here, *this, playing.started_at, now);
+  TimelineUpdateOutputs(*this, playing.started_at, now);
   if (now < end_at) {
     TimelineScheduleNextAfter(*this, now);
   }

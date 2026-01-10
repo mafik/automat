@@ -271,15 +271,15 @@ void MacroRecorder::Draw(SkCanvas& canvas) const {
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
-  Timeline* timeline = timeline_arg.FindObject<Timeline>(*macro_recorder.here, {});
+  Timeline* timeline = timeline_arg.FindObject<Timeline>(macro_recorder, {});
   return timeline;
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
   Timeline* timeline = timeline_arg.FindObject<Timeline>(
-      *macro_recorder.here, {
-                                .if_missing = Argument::IfMissing::CreateFromPrototype,
-                            });
+      macro_recorder, {
+                          .if_missing = Argument::IfMissing::CreateFromPrototype,
+                      });
   assert(timeline);
   if (macro_recorder.keylogging && timeline->state != Timeline::State::kRecording) {
     timeline->BeginRecording();

@@ -123,10 +123,8 @@ void JumpArgument::Connect(Object& start, const NestedPtr<Part>& end) {
       inst->jump_target = {};
     }
     // Notify assembler of change
-    if (auto* loc = inst->MyLocation()) {
-      if (auto* assembler = assembler_arg.FindObject<Assembler>(*loc, {})) {
-        assembler->UpdateMachineCode();
-      }
+    if (auto* assembler = assembler_arg.FindObject<Assembler>(*inst, {})) {
+      assembler->UpdateMachineCode();
     }
   }
 }
@@ -146,10 +144,8 @@ void NextInstructionArg::Connect(Object& start, const NestedPtr<Part>& end) {
   NextArg::Connect(start, end);
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     // Notify assembler of change
-    if (auto* loc = inst->MyLocation()) {
-      if (auto* assembler = assembler_arg.FindObject<Assembler>(*loc, {})) {
-        assembler->UpdateMachineCode();
-      }
+    if (auto* assembler = assembler_arg.FindObject<Assembler>(*inst, {})) {
+      assembler->UpdateMachineCode();
     }
   }
 }
@@ -199,15 +195,15 @@ Ptr<Object> AssemblerArgument::Prototype() const { return MAKE_PTR(Assembler); }
 
 AssemblerArgument assembler_arg;
 
-static Assembler* FindAssembler(Location& here) {
+static Assembler* FindAssembler(Object& start) {
   Assembler* assembler =
-      assembler_arg.FindObject<Assembler>(here, {.if_missing = Argument::IfMissing::ReturnNull});
+      assembler_arg.FindObject<Assembler>(start, {.if_missing = Argument::IfMissing::ReturnNull});
   return assembler;
 }
 
-static Assembler* FindOrCreateAssembler(Location& here) {
+static Assembler* FindOrCreateAssembler(Object& start) {
   Assembler* assembler = assembler_arg.FindObject<Assembler>(
-      here, {.if_missing = Argument::IfMissing::CreateFromPrototype});
+      start, {.if_missing = Argument::IfMissing::CreateFromPrototype});
   return assembler;
 }
 
@@ -238,10 +234,8 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
       bool changed = visitor(span);
       if (changed) {
         operand.setImm(imm);
-        if (auto h = here) {
-          if (auto assembler = FindAssembler(*h)) {
-            assembler->UpdateMachineCode();
-          }
+        if (auto assembler = FindAssembler(*this)) {
+          assembler->UpdateMachineCode();
         }
       }
       return;
@@ -252,11 +246,11 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
 
 void Instruction::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("Instruction");
-  auto assembler = FindOrCreateAssembler(here);
+  auto assembler = FindOrCreateAssembler(*this);
   assembler->RunMachineCode(this, std::move(run_task));
 }
 
-LongRunning* Instruction::AsLongRunning() { return FindAssembler(*here); }
+LongRunning* Instruction::AsLongRunning() { return FindAssembler(*this); }
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {
   // Nicely formatted assembly:
@@ -3064,7 +3058,7 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   void KnobSet(int new_value) override {
     auto instruction = instruction_weak.Lock().Cast<Instruction>();
     instruction->mc_inst.getOperand(token_i).setImm(new_value);
-    if (auto assembler = FindAssembler(*instruction->here)) {
+    if (auto assembler = FindAssembler(*instruction)) {
       assembler->UpdateMachineCode();
     }
   }
@@ -3287,7 +3281,7 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
     } else {
       LOG << "Can't set condition code for loop instruction";
     }
-    if (auto assembler = FindAssembler(*instruction->here)) {
+    if (auto assembler = FindAssembler(*instruction)) {
       assembler->UpdateMachineCode();
     }
   }

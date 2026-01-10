@@ -403,19 +403,17 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
       iris_target.reset();
       {  // Update `source_image`
         sk_sp<SkImage> new_image = nullptr;
-        if (auto here = tesseract->here) {
-          auto image_obj = image_arg.FindObject(*here, {});
-          if (image_obj) {
-            auto image_provider = image_obj->AsImageProvider();
-            if (image_provider) {
-              new_image = image_provider->GetImage();
-              iris_target = image_obj->MyLocation()->position;
-            }
+        auto image_obj = image_arg.FindObject(*tesseract, {});
+        if (image_obj) {
+          auto image_provider = image_obj->AsImageProvider();
+          if (image_provider) {
+            new_image = image_provider->GetImage();
+            iris_target = image_obj->MyLocation()->position;
           }
+        }
 
-          if (status_progress_ratio.has_value()) {
-            iris_target = here->position;
-          }
+        if (status_progress_ratio.has_value()) {
+          iris_target = tesseract->here->position;
         }
         source_image = std::move(new_image);
       }
@@ -1105,8 +1103,8 @@ void TesseractOCR::Parts(const std::function<void(Part&)>& cb) {
 
 void TesseractOCR::OnRun(Location& here, std::unique_ptr<RunTask>&) {
   ZoneScopedN("TesseractOCR");
-  auto image_obj = image_arg.FindObject(here, {});
-  auto text_obj = text_arg.FindObject(here, {});
+  auto image_obj = image_arg.FindObject(*this, {});
+  auto text_obj = text_arg.FindObject(*this, {});
 
   if (!image_obj) {
     ReportError("No image source connected");

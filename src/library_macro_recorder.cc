@@ -81,9 +81,6 @@ MacroRecorder::~MacroRecorder() {
   }
 }
 
-// We will provide a prototype of the Timeline - to be created if no timeline can be found.
-// We will also specify here that it should search for any Timeline objects nearby (with some
-// radius).
 struct TimelineArgument : Argument {
   StrView Name() const override { return "Timeline"sv; }
 
@@ -379,7 +376,7 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
   }
 
   // Append the current timestamp to that track
-  OnOffTrack* track = dynamic_cast<OnOffTrack*>(timeline->tracks[track_index]->ptr.Get());
+  OnOffTrack* track = dynamic_cast<OnOffTrack*>(timeline->tracks[track_index]->track.Get());
   if (track == nullptr) {
     ERROR << "Track is not an OnOffTrack";
     return;
@@ -558,7 +555,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     // timeline->here.lock()->ConnectTo(receiver_loc, track_arg);
   }
 
-  auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index]->ptr.Get());
+  auto* track = dynamic_cast<TrackT*>(timeline->tracks[track_index]->track.Get());
   if (track == nullptr) {
     ERROR << "Track is not a " << typeid(TrackT).name();
     return;

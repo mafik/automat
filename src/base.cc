@@ -112,38 +112,47 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
         auto type = location->object->Name();
         writer.String(type.data(), type.size());
         location->object->SerializeState(writer, "value");
+
+        {  // Serialize object parts
+          // ATM we only serialize Args
+          bool parts_opened = false;  // used to lazily call StartObject
+          location->object->Args([&](Argument& arg) {
+            auto end = arg.Find(*location->object);
+            if (!end) return;
+            Str name;
+            location->object->PartName(arg, name);
+            auto* end_object = end.Owner<Object>();
+            auto* end_location = end_object->MyLocation();
+            auto* end_part_object = dynamic_cast<Object*>(end.Get());
+            Str to_name = location_ids.at(end_location);
+            if (end_part_object == end_object) {
+              // cool, the argument points directly at some object
+            } else {
+              // but it's also possible that it points at a PART of some object
+              Str part_name;
+              end_object->PartName(*end, part_name);
+              to_name += "." + part_name;
+            }
+
+            if (!parts_opened) {
+              parts_opened = true;
+              writer.Key("parts");
+              writer.StartObject();
+            }
+            writer.Key(name.data(), name.size());
+            writer.String(to_name.data(), to_name.size());
+          });
+          if (parts_opened) {
+            parts_opened = false;
+            writer.EndObject();
+          }
+        }
       }
       writer.Key("x");
       writer.Double(round(location->position.x * 1000000.) /
                     1000000.);  // round to 6 decimal places
       writer.Key("y");
       writer.Double(round(location->position.y * 1000000.) / 1000000.);
-
-      {
-        bool parts_opened = false;  // used to lazily call StartObject
-        location->object->Parts([&](Part& part) {
-          auto* arg_ptr = dynamic_cast<Argument*>(&part);
-          if (arg_ptr == nullptr) return;
-          auto& arg = *arg_ptr;
-          auto end = arg.Find(*location->object);
-          if (end.Get() == nullptr) return;
-          auto name = arg.Name();
-          auto* end_location = end.Owner<Object>()->MyLocation();
-          auto& to_name = location_ids.at(end_location);
-          if (!parts_opened) {
-            parts_opened = true;
-            writer.Key("connections");
-            writer.StartObject();
-          }
-          writer.Key(name.data(), name.size());
-          writer.String(to_name.data(), to_name.size());
-        });
-        if (parts_opened) {
-          parts_opened = false;
-          writer.EndObject();
-        }
-      }
-
       writer.EndObject();
     }
     writer.EndObject();
@@ -159,9 +168,10 @@ void Machine::DeserializeState(Deserializer& d) {
     } else if (key == "locations") {
       std::unordered_map<Str, Location*> location_idx;
       struct ConnectionRecord {
-        Str label;
+        Str arg_name;
         Location* from;
         Str to_name;
+        Str to_part;
       };
       Vec<ConnectionRecord> connections;
       for (auto& location_name : ObjectView(d, status)) {
@@ -200,36 +210,56 @@ void Machine::DeserializeState(Deserializer& d) {
             d.Get(l.position.x, status);
           } else if (field == "y") {
             d.Get(l.position.y, status);
-          } else if (field == "connections") {
-            for (auto& connection_label : ObjectView(d, status)) {
+          } else if (field == "parts") {
+            for (auto& part_name : ObjectView(d, status)) {
               Str to_name;
               d.Get(to_name, status);
               if (OK(status)) {
-                connections.push_back({connection_label, &l, to_name});
+                Str to_part;
+                auto dot_pos = to_name.find('.');
+                if (dot_pos != Str::npos) {
+                  to_part = to_name.substr(dot_pos + 1);
+                  to_name = to_name.substr(0, dot_pos);
+                }
+                connections.push_back({part_name, &l, to_name, to_part});
               }
             }
           }
         }
-        // Objects are inserted into the location only after their state has been deserialized -
-        // this allows
+        // Objects are inserted into the location only after their state has been deserialized.
         if (object) {
           l.InsertHere(std::move(object));
         }
       }
       for (auto& connection_record : connections) {
-        auto to_it = location_idx.find(connection_record.to_name);
-        if (to_it == location_idx.end()) {
-          ReportError(f("Missing connection target: {}", connection_record.to_name));
+        Location* from = connection_record.from;
+        if (!from->object) {
+          ReportError(f("Connection source has no object"));
           continue;
         }
-        Location* from = connection_record.from;
+        Argument* from_arg =
+            dynamic_cast<Argument*>(from->object->PartFromName(connection_record.arg_name));
+        if (from_arg == nullptr) {
+          ReportError(f("Argument not found: {}", connection_record.arg_name));
+          continue;
+        }
+        auto& to_name = connection_record.to_name;
+        auto to_it = location_idx.find(to_name);
+        if (to_it == location_idx.end()) {
+          ReportError(f("Missing connection target: {}", to_name));
+          continue;
+        }
         Location* to = to_it->second;
-        from->object->Args([&](Argument& arg) {
-          if (arg.Name() != connection_record.label) {
-            return;
-          }
-          arg.Connect(*from->object, to->object);
-        });
+        if (!to->object) {
+          ReportError(f("Connection target {} has no object", to_name));
+          continue;
+        }
+        auto* to_part = to->object->PartFromName(connection_record.to_part);
+        if (to_part == nullptr) {
+          ReportError(f("Part not found in {}: {}", to_name, connection_record.to_part));
+          continue;
+        }
+        from_arg->Connect(*from->object, NestedPtr<Part>(to->object, to_part));
       }
     }
   }

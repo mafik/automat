@@ -523,4 +523,16 @@ void Object::InvalidateConnectionWidgets(const Argument* arg) const {
   }
 }
 
+Part* Object::PartFromName(StrView needle) {
+  Part* result = nullptr;
+  Parts([&](Part& part) {
+    Str part_name;
+    PartName(part, part_name);
+    if (part_name == needle) {
+      result = &part;
+    }
+  });
+  return result;
+}
+
 }  // namespace automat

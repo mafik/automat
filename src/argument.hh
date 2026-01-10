@@ -101,7 +101,7 @@ struct InlineArgument : Argument {
 };
 
 struct NextArg : Argument {
-  StrView Name() const override { return "next"sv; }
+  StrView Name() const override { return "Next"sv; }
   void CanConnect(Object& start, Part& end, Status&) const override;
   void Connect(Object& start, const NestedPtr<Part>& end) override;
   NestedPtr<Part> Find(Object& start) const override;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "prototypes.hh"
 
+#include "interfaces.hh"
 #include "library_assembler.hh"
 #include "library_flip_flop.hh"
 #include "library_hotkey.hh"
@@ -66,6 +67,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Assembler>();
   index.Register<Window>();
   index.Register<TesseractOCR>();
+  index.Register<SyncBlock, HideInToolbar>();
 }
 
 Object* PrototypeLibrary::Find(const std::type_info& type) {

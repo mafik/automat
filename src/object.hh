@@ -91,6 +91,8 @@ struct Object : public ReferenceCounted {
 
   virtual void PartName(Part&, Str& out_name);
 
+  virtual Part* PartFromName(StrView name);
+
   // Wrapper around Parts() that only reports Arguments
   void Args(const std::function<void(Argument&)>&);
 

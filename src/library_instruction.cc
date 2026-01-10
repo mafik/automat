@@ -123,7 +123,7 @@ void JumpArgument::Connect(Object& start, const NestedPtr<Part>& end) {
       inst->jump_target = {};
     }
     // Notify assembler of change
-    if (auto* assembler = assembler_arg.FindObject<Assembler>(*inst, {})) {
+    if (auto* assembler = dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(*inst))) {
       assembler->UpdateMachineCode();
     }
   }
@@ -144,7 +144,7 @@ void NextInstructionArg::Connect(Object& start, const NestedPtr<Part>& end) {
   NextArg::Connect(start, end);
   if (auto* inst = dynamic_cast<Instruction*>(&start)) {
     // Notify assembler of change
-    if (auto* assembler = assembler_arg.FindObject<Assembler>(*inst, {})) {
+    if (auto* assembler = dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(*inst))) {
       assembler->UpdateMachineCode();
     }
   }
@@ -196,15 +196,11 @@ Ptr<Object> AssemblerArgument::Prototype() const { return MAKE_PTR(Assembler); }
 AssemblerArgument assembler_arg;
 
 static Assembler* FindAssembler(Object& start) {
-  Assembler* assembler =
-      assembler_arg.FindObject<Assembler>(start, {.if_missing = Argument::IfMissing::ReturnNull});
-  return assembler;
+  return dynamic_cast<Assembler*>(assembler_arg.ObjectOrNull(start));
 }
 
 static Assembler* FindOrCreateAssembler(Object& start) {
-  Assembler* assembler = assembler_arg.FindObject<Assembler>(
-      start, {.if_missing = Argument::IfMissing::CreateFromPrototype});
-  return assembler;
+  return dynamic_cast<Assembler*>(&assembler_arg.ObjectOrMake(start));
 }
 
 void Instruction::Parts(const std::function<void(Part&)>& cb) {

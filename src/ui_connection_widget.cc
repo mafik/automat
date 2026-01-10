@@ -116,8 +116,7 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     }
 
     {  // Ray from the source to the target
-      auto source_object = arg->FindObject(
-          object, Argument::FindConfig{.if_missing = Argument::IfMissing::ReturnNull});
+      auto source_object = arg->ObjectOrNull(object);
       if (source_object) {
         Vec2 source = source_object->MyLocation()->position;
         Vec2 diff = target - source;

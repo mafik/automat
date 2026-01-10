@@ -409,7 +409,7 @@ static void TimelineUpdateOutputs(Timeline& t, time::SteadyPoint started_at,
                                   time::SteadyPoint now) {
   for (auto& track : t.tracks) {
     t.InvalidateConnectionWidgets(track.get());
-    auto* object = track->FindObject(t, {});
+    auto* object = track->ObjectOrNull(t);
     if (object == nullptr) continue;
     auto* location = object->MyLocation();
     if (location == nullptr) continue;

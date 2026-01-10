@@ -60,30 +60,31 @@ void Argument::NearbyCandidates(
   });
 }
 
-Object* Argument::FindObject(Object& start, const FindConfig& cfg) const {
-  Object* result = nullptr;
+Object* Argument::ObjectOrNull(Object& start) const {
   if (auto found = Find(start)) {
     if (auto* obj = found.Owner<Object>()) {
-      result = obj;
+      return obj;
     }
   }
-  if (result == nullptr && cfg.if_missing == IfMissing::CreateFromPrototype) {
-    // Ask the argument for the prototype for this object.
-    if (auto prototype = Prototype()) {
-      Location* here = start.MyLocation();
-      if (auto machine = here->ParentAs<Machine>()) {
-        Location& l = machine->Create(*prototype);
-        result = l.object.get();
-        PositionAhead(*here, *this, l);
-        PositionBelow(l, *here);
-        AnimateGrowFrom(*here,
-                        l);  // this must go before UpdateAutoconnectArgs because of animation_state
-        l.UpdateAutoconnectArgs();
-        l.WakeAnimation();
-      }
-    }
+  return nullptr;
+}
+
+Object& Argument::ObjectOrMake(Object& start) const {
+  if (auto* obj = ObjectOrNull(start)) {
+    return *obj;
   }
-  return result;
+  // Ask the argument for the prototype for this object.
+  auto prototype = Prototype();
+  Location* here = start.MyLocation();
+  auto machine = here->ParentAs<Machine>();
+  Location& l = machine->Create(*prototype);
+  PositionAhead(*here, *this, l);
+  PositionBelow(l, *here);
+  AnimateGrowFrom(*here,
+                  l);  // this must go before UpdateAutoconnectArgs because of animation_state
+  l.UpdateAutoconnectArgs();
+  l.WakeAnimation();
+  return *l.object;
 }
 
 void NextArg::CanConnect(Object& start, Part& end, Status& status) const {

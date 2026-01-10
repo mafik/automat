@@ -151,7 +151,7 @@ void ScheduleArgumentTargets(Object& source, Argument& arg) {
     w.WakeAnimation();
   }
 
-  if (auto next = arg.FindObject(source, {})) {
+  if (auto next = arg.ObjectOrNull(source)) {
     next->MyLocation()->ScheduleRun();
   }
 }

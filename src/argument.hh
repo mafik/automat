@@ -90,22 +90,12 @@ struct Argument : virtual Part {
 
   virtual PaintDrawable& Icon();  // TODO: weird - clean this up
 
-  enum class IfMissing { ReturnNull, CreateFromPrototype };
-
-  struct FindConfig {
-    IfMissing if_missing = IfMissing::ReturnNull;
-  };
-
   // The returned "to_points" use the target object's local coordinate space.
   void NearbyCandidates(Location& here, float radius,
                         std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const;
 
-  Object* FindObject(Object& start, const FindConfig&) const;
-
-  template <typename T>
-  T* FindObject(Object& start, const FindConfig& cfg) const {
-    return dynamic_cast<T*>(FindObject(start, cfg));
-  }
+  Object* ObjectOrNull(Object& start) const;
+  Object& ObjectOrMake(Object& start) const;
 };
 
 struct InlineArgument : Argument {

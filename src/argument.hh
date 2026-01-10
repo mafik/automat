@@ -18,17 +18,37 @@ enum class CableTexture {
 };
 
 // Arguments are responsible for finding dependencies (input & output) of objects.
-// - they know about the requirements of the target object
-// - they can connect fields of source objects (rather than whole objects)
-// - they may automatically create target objects using given prototype
-// - they may search for nearby valid objects in a given search radius
+// - they know about the requirements of the target object (CanConnect)
+// - they may automatically create target objects using some prototype (Prototype)
+// - they control how the connection is stored (Connect / Disconnect / Find)
+// - finally - they control how a connection appears on screen - although this role
+//   may be moved into ObjectWidget in the future...
+//
+// In order to use an Argument, object needs to return it as one of its `Parts()`.
+// This however does NOT mean that the Argument must be a member of the object.
+// It's possible for Argument to exist outside, and be shared among many objects.
+// It just needs to know how to store the connection information. See NextArg as an
+// example. (This is a memory micro-optimization - since the goal is to minimize the
+// memory footprint of Objects and each polymorphic member adds 8-byte overhead.)
+//
+// For convenience, Arguments that live within Objects can derive from InlineArgument.
+// It provides storage for the connection and default implementations for Connect & Find.
+//
+// Arguments - like other parts may function as either members of Objects - or as their base class.
+// The latter is a good fit if the Object's main purpose overlaps with some relation between
+// objects.
+//
+// Lastly, Arguments provide some helper utilities for lookup of related objects.
+// One interesting example is a search for nearby valid objects in a given search radius.
 //
 // IMPORTANT: Arguments are identified by their ADDRESS in memory (not name!). Don't move them
 // around!
 //
+// Arguments are automatically serialized at the Machine level. It's important that they
+// use good `Name()`s. They should be short, human-readable & capitalized.
+//
 // TODO: think about pointer following
-// TODO: think about requirement checking
-// TODO: think about multiple arguments
+// TODO: think about multiple targets
 struct Argument : virtual Part {
   enum class Style { Arrow, Cable, Spotlight, Invisible };
 

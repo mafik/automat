@@ -158,7 +158,7 @@ DragLocationAction::DragLocationAction(ui::Pointer& pointer, Vec<Ptr<Location>>&
         connection_widget->animation_state.radar_alpha_target = 1;
       } else {
         // This connection widget can be connected to one of dragged locations
-        if (arg->CanConnect(*start, *location->object)) {
+        if (arg->CanConnect(start, *location->object)) {
           connection_widget->animation_state.radar_alpha_target = 1;
         }
       }

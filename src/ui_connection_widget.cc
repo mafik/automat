@@ -251,7 +251,7 @@ void ConnectionWidget::FromMoved() {
     if (state->stabilized && !state->stabilized_end.has_value()) {
       auto& object = *arg.Owner<Object>();
       auto& object_widget = *WidgetStore().FindOrNull(object);
-      auto pos_dir = arg->Start(object_widget, *root_machine);
+      auto pos_dir = object_widget.ArgStart(*arg, root_machine.get());
       state->stabilized_start = pos_dir.pos;
       state->sections.front().pos = pos_dir.pos;
       state->sections.back().pos = pos_dir.pos;
@@ -287,7 +287,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
   to_points.clear();
 
-  pos_dir = arg->Start(from_widget, *parent_machine);
+  pos_dir = from_widget.ArgStart(*arg, parent_machine);
 
   auto to = arg->Find(object);
   Object* to_object = nullptr;

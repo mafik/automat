@@ -1542,21 +1542,26 @@ struct TimelineWidget : Object::WidgetBase {
     }
   }
   std::unique_ptr<Action> FindAction(ui::Pointer&, ui::ActionTrigger) override;
-  Vec2AndDir ArgStart(const Argument& arg) override {
+  Vec2AndDir ArgStart(const Argument& arg, ui::Widget* coordinate_space = nullptr) override {
     auto timeline = LockObject<Timeline>();
     if (timeline) {
       auto lock = std::lock_guard(timeline->mutex);
       for (int i = 0; i < timeline->tracks.size(); ++i) {
         if (timeline->tracks[i].get() == &arg) {
-          return {
+          Vec2AndDir pos_dir = {
               .pos = {kPlasticWidth / 2, -kRulerHeight - kMarginAroundTracks - kTrackHeight / 2 -
                                              i * (kTrackMargin + kTrackHeight)},
               .dir = 0_deg,
           };
+          if (coordinate_space) {
+            auto m = TransformBetween(*this, *coordinate_space);
+            pos_dir.pos = m.mapPoint(pos_dir.pos);
+          }
+          return pos_dir;
         }
       }
     }
-    return WidgetBase::ArgStart(arg);
+    return WidgetBase::ArgStart(arg, coordinate_space);
   }
 };
 

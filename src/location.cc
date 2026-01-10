@@ -307,7 +307,7 @@ void Location::SetNumber(double number) { SetText(f("{:g}", number)); }
 
 std::string Location::ToStr() const { return Str(object->Name()); }
 
-Vec2AndDir Location::ArgStart(Argument& arg) { return arg.Start(WidgetForObject(), *parent); }
+Vec2AndDir Location::ArgStart(Argument& arg) { return WidgetForObject().ArgStart(arg, parent); }
 
 ObjectWidget& Location::WidgetForObject() {
   if (!object_widget) {
@@ -480,7 +480,7 @@ void Location::UpdateAutoconnectArgs() {
       return;
     }
 
-    auto start = arg.Start(object_widget, *parent_machine);
+    auto start = object_widget.ArgStart(arg, parent_machine);
 
     // Find the current distance & target of this connection
     float old_dist2 = HUGE_VALF;

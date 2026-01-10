@@ -125,7 +125,7 @@ struct Instruction : Object, Runnable, Buffer {
     SkPath Shape() const override;
     animation::Phase Tick(time::Timer&) override;
     void Draw(SkCanvas&) const override;
-    Vec2AndDir ArgStart(const Argument&) override;
+    Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr) override;
     void FillChildren(Vec<ui::Widget*>& children) override;
   };
 

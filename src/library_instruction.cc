@@ -3685,11 +3685,16 @@ void Instruction::Widget::Draw(SkCanvas& canvas) const {
   DrawChildren(canvas);
 }
 
-Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg) {
+Vec2AndDir Instruction::Widget::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
   if (&arg == &jump_arg) {
-    return Vec2AndDir{.pos = kRect.RightCenter(), .dir = 0_deg};
+    Vec2AndDir pos_dir{.pos = kRect.RightCenter(), .dir = 0_deg};
+    if (coordinate_space) {
+      auto m = TransformBetween(*this, *coordinate_space);
+      pos_dir.pos = m.mapPoint(pos_dir.pos);
+    }
+    return pos_dir;
   }
-  return Object::WidgetBase::ArgStart(arg);
+  return Object::WidgetBase::ArgStart(arg, coordinate_space);
 }
 
 void Instruction::Widget::FillChildren(Vec<ui::Widget*>& children) {

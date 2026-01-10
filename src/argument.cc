@@ -23,17 +23,6 @@ PaintDrawable& Argument::Icon() {
   return default_icon;
 }
 
-Vec2AndDir Argument::Start(ui::Widget& object_widget, ui::Widget& widget) const {
-  auto* obj_widget_iface = dynamic_cast<ObjectWidget*>(&object_widget);
-  if (!obj_widget_iface) {
-    return Vec2AndDir{};
-  }
-  auto pos_dir = obj_widget_iface->ArgStart(*this);
-  auto m = TransformBetween(object_widget, widget);
-  pos_dir.pos = m.mapPoint(pos_dir.pos);
-  return pos_dir;
-}
-
 void Argument::NearbyCandidates(
     Location& here, float radius,
     std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const {
@@ -56,7 +45,7 @@ void Argument::NearbyCandidates(
   }
   // Query nearby objects in the parent machine
 
-  Vec2 center = this->Start(here.WidgetForObject(), *root_machine).pos;
+  Vec2 center = here.WidgetForObject().ArgStart(*this, root_machine.get()).pos;
   root_machine->Nearby(center, radius, [&](Location& other) -> void* {
     if (&other == &here) {
       return nullptr;

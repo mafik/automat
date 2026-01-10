@@ -211,9 +211,9 @@ struct Location : ReferenceCounted, ui::Widget {
   // of the object. Pay attention to the parent location's animation_state!
   void UpdateAutoconnectArgs();
 
-  // DEPRECATED. Returns the position in parent machine's coordinates where the connections for this
+  // DEPRECATED. Returns the position in parent's coordinates where the connections for this
   // argument should start.
-  // TODO: replace with Argument::Start
+  // TODO: replace with ObjectWidget::ArgStart
   Vec2AndDir ArgStart(Argument&);
   void FillChildren(Vec<Widget*>& children) override;
   Optional<Rect> TextureBounds() const override;

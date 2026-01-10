@@ -471,19 +471,18 @@ void Object::WidgetBase::ConnectionPositions(Vec<Vec2AndDir>& out_positions) con
   });
 }
 
-Vec2AndDir Object::WidgetBase::ArgStart(const Argument& arg) {
-  SkPath shape;
-  if (auto obj = object.Lock()) {
-    shape = PartShape(&const_cast<Argument&>(arg));
-  }
-  if (shape.isEmpty()) {
-    shape = Shape();
-  }
+Vec2AndDir ObjectWidget::ArgStart(const Argument& arg, ui::Widget* coordinate_space) {
+  SkPath shape = PartShape(&const_cast<Argument&>(arg));
   Rect bounds = shape.getBounds();
-  return Vec2AndDir{
+  Vec2AndDir pos_dir{
       .pos = bounds.BottomCenter(),
       .dir = -90_deg,
   };
+  if (coordinate_space) {
+    auto m = TransformBetween(*this, *coordinate_space);
+    pos_dir.pos = m.mapPoint(pos_dir.pos);
+  }
+  return pos_dir;
 }
 
 void Object::Relocate(Location* new_here) { here = new_here; }

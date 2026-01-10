@@ -77,15 +77,6 @@ struct Argument : virtual Part {
     IfMissing if_missing = IfMissing::ReturnNull;
   };
 
-  // Return the position and direction of this argument in the given Widget's coordinate
-  // space.
-  //
-  // If the passed widget is the RootWidget, then the returned position will use the root coordinate
-  // space (pixels), but it's not the only option. The widget could also be located at some
-  // intermediate level so the returned position will be located within some parent object (for
-  // example, a Machine).
-  Vec2AndDir Start(ui::Widget& object_widget, ui::Widget& coordinate_space) const;
-
   // The returned "to_points" use the target object's local coordinate space.
   void NearbyCandidates(Location& here, float radius,
                         std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const;

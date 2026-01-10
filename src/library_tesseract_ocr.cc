@@ -1071,14 +1071,20 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
     return WidgetBase::FindAction(pointer, trigger);
   }
 
-  Vec2AndDir ArgStart(const Argument& arg) override {
+  Vec2AndDir ArgStart(const Argument& arg, ui::Widget* coordinate_space = nullptr) override {
+    Vec2AndDir pos_dir;
     if (&arg == &image_arg) {
-      return Vec2AndDir{layout.eye_center, 90_deg};
+      pos_dir = Vec2AndDir{layout.eye_center, 90_deg};
+    } else if (&arg == &text_arg) {
+      pos_dir = Vec2AndDir{layout.border_outer.LeftCenter(), 180_deg};
+    } else {
+      return WidgetBase::ArgStart(arg, coordinate_space);
     }
-    if (&arg == &text_arg) {
-      return Vec2AndDir{layout.border_outer.LeftCenter(), 180_deg};
+    if (coordinate_space) {
+      auto m = TransformBetween(*this, *coordinate_space);
+      pos_dir.pos = m.mapPoint(pos_dir.pos);
     }
-    return WidgetBase::ArgStart(arg);
+    return pos_dir;
   }
 };
 

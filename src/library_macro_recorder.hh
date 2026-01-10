@@ -69,7 +69,7 @@ struct MacroRecorder : Object,
   void PointerLoggerScrollX(ui::Pointer::Logging&, float) override;
   void PointerLoggerMove(ui::Pointer::Logging&, Vec2) override;
 
-  Vec2AndDir ArgStart(const Argument&) override;
+  Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr) override;
 
   void SerializeState(Serializer& writer, const char* key) const override;
   void DeserializeState(Deserializer& d) override;

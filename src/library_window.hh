@@ -9,7 +9,7 @@
 
 namespace automat::library {
 
-struct Window : public LiveObject, Runnable, ImageProvider {
+struct Window : public Object, Runnable, ImageProvider {
   std::mutex mutex;
   Str title = "";
   bool run_continuously = true;

@@ -126,7 +126,7 @@ class MachineCodeControllerTest : public ::testing::Test {
   }
 
   Connection* Next(Ptr<library::Instruction>& a, Ptr<library::Instruction>& b) {
-    return a->here.lock()->ConnectTo(*b->here.lock(), next_arg);
+    return a->here->ConnectTo(*b->here, next_arg);
   }
 
   void TestUpdateCode(std::span<library::Instruction*> instructions) {

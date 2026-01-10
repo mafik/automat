@@ -75,7 +75,7 @@ struct AssemblerWidget : Object::WidgetBase, ui::DropTarget {
   SkMatrix DropSnap(const Rect& bounds, Vec2 bounds_origin, Vec2* fixed_point = nullptr) override;
 };
 
-struct Register : LiveObject {
+struct Register : Object {
   WeakPtr<Assembler> assembler_weak;
   int register_index;
 
@@ -97,7 +97,7 @@ struct Register : LiveObject {
 // Combines functions of Assembler and Thread.
 // Assembler part takes care of emitting machine code to an executable memory region.
 // Thread part maintains register state across executions.
-struct Assembler : LiveObject, LongRunning, Container {
+struct Assembler : Object, LongRunning, Container {
   using PrologueFn = uintptr_t (*)(void*);
 
   Ptr<Object> Clone() const override;

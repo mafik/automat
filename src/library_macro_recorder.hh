@@ -19,7 +19,7 @@ struct GlassRunButton : ui::PowerButton {
   StrView Name() const override { return "GlassRunButton"; }
 };
 
-struct MacroRecorder : LiveObject,
+struct MacroRecorder : Object,
                        Object::WidgetBase,
                        Runnable,
                        LongRunning,

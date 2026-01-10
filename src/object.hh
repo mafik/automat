@@ -48,7 +48,9 @@ struct ObjectWidget : ui::Widget {
 // Instances of this class provide their logic.
 // Appearance is delegated to Widgets.
 struct Object : public ReferenceCounted {
-  Object() {}
+  Location* here = nullptr;
+
+  Object() = default;
 
   // Create a copy of this object.
   //
@@ -57,7 +59,7 @@ struct Object : public ReferenceCounted {
   // created. See the `Machine::Create` function for details.
   virtual Ptr<Object> Clone() const = 0;
 
-  virtual void Relocate(Location* new_here) {}
+  virtual void Relocate(Location* new_here);
 
   // Release the memory occupied by this object.
   virtual ~Object();

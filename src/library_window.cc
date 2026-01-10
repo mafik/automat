@@ -94,7 +94,7 @@ struct EnableContinuousRunOption : TextOption {
       auto lock = std::lock_guard(window->mutex);
       window->run_continuously = true;
       // Start continuous execution
-      if (auto here_ptr = window->here.lock()) {
+      if (auto here_ptr = window->here) {
         here_ptr->ScheduleRun();
       }
     }
@@ -654,7 +654,7 @@ void Window::OnRun(Location& here, std::unique_ptr<RunTask>&) {
 }
 
 void Window::Relocate(Location* new_here) {
-  LiveObject::Relocate(new_here);
+  Object::Relocate(new_here);
   if (run_continuously && new_here) {
     new_here->ScheduleRun();
   }

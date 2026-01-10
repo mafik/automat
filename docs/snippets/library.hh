@@ -187,7 +187,7 @@ struct TimerReset : Object, Runnable {
   }
 };
 
-struct EqualityTest : LiveObject {
+struct EqualityTest : Object {
   static LiveArgument target_arg;
   bool state = true;
   EqualityTest() {}
@@ -216,7 +216,7 @@ struct EqualityTest : LiveObject {
   }
 };
 
-struct LessThanTest : LiveObject {
+struct LessThanTest : Object {
   static LiveArgument less_arg;
   static LiveArgument than_arg;
   bool state = true;
@@ -242,7 +242,7 @@ struct LessThanTest : LiveObject {
   }
 };
 
-struct StartsWithTest : LiveObject {
+struct StartsWithTest : Object {
   static LiveArgument starts_arg;
   static LiveArgument with_arg;
   bool state = true;
@@ -274,7 +274,7 @@ struct StartsWithTest : LiveObject {
   }
 };
 
-struct AllTest : LiveObject {
+struct AllTest : Object {
   static LiveArgument test_arg;
   bool state = true;
   AllTest() {}
@@ -297,7 +297,7 @@ struct AllTest : LiveObject {
   }
 };
 
-struct Switch : LiveObject {
+struct Switch : Object {
   static LiveArgument target_arg;
   LiveArgument case_arg = LiveArgument("case", Argument::kRequiresObject);
   string_view Name() const override { return "Switch"; }
@@ -335,7 +335,7 @@ struct Switch : LiveObject {
   }
 };
 
-struct ErrorReporter : LiveObject {
+struct ErrorReporter : Object {
   static LiveArgument test_arg;
   static LiveArgument message_arg;
   string_view Name() const override { return "Error Reporter"; }
@@ -537,7 +537,7 @@ struct Iterator {
 };
 
 struct CurrentElement;
-struct Filter : LiveObject, Iterator, AbstractList, Runnable {
+struct Filter : Object, Iterator, AbstractList, Runnable {
   enum class Phase { kSequential, kDone };
 
   static LiveArgument list_arg;
@@ -789,7 +789,7 @@ struct overloaded : Ts... {
 template <class... Ts>
 overloaded(Ts...) -> overloaded<Ts...>;
 
-struct Text : LiveObject {
+struct Text : Object {
   struct RefChunk {
     LiveArgument arg;
   };
@@ -889,7 +889,7 @@ struct Button : Object, Runnable {
   }
 };
 
-struct ComboBox : LiveObject {
+struct ComboBox : Object {
   static LiveArgument options_arg;
   Location* here = nullptr;
   Location* selected = nullptr;
@@ -911,7 +911,7 @@ struct ComboBox : LiveObject {
     }
   }
   void ConnectionAdded(Location& here, Connection& connection) override {
-    LiveObject::ConnectionAdded(here, connection);
+    Object::ConnectionAdded(here, connection);
     if (selected == nullptr && &connection.argument == &options_arg) {
       auto option = options_arg.GetLocation(here);
       selected = option.location;
@@ -919,7 +919,7 @@ struct ComboBox : LiveObject {
   }
 };
 
-struct Slider : LiveObject {
+struct Slider : Object {
   static LiveArgument min_arg;
   static LiveArgument max_arg;
   double value = 0;
@@ -1077,7 +1077,7 @@ struct Blackboard : Object {
   void SetText(string_view text) override { statement = algebra::ParseStatement(text); }
 };
 
-struct BlackboardUpdater : LiveObject {
+struct BlackboardUpdater : Object {
   std::unordered_map<string, std::unique_ptr<algebra::Expression>> formulas;
   std::map<string, LiveArgument> independent_variable_args;
   static Argument const_arg;
@@ -1125,7 +1125,7 @@ struct BlackboardUpdater : LiveObject {
         return nullptr;
       });
     }
-    LiveObject::Relocate(here);
+    Object::Relocate(here);
   }
   string_view Name() const override { return "Blackboard Updater"; }
   void Updated(Location& here, Location& updated) override {

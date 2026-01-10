@@ -10,7 +10,7 @@
 
 namespace automat::library {
 
-struct TesseractOCR : public LiveObject, Runnable {
+struct TesseractOCR : public Object, Runnable {
   mutable std::mutex mutex;
   Str ocr_text = "";
 

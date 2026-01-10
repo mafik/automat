@@ -179,8 +179,7 @@ static animation::Phase RefreshState(Assembler& assembler, time::SteadyPoint now
 }
 
 void Assembler::ExitCallback(mc::CodePoint code_point) {
-  auto here_ptr = here.Lock();
-  Done(*here_ptr);
+  Done(*here);
   RefreshState(*this, time::SteadyNow());
   Instruction* exit_inst = nullptr;
   if (code_point.instruction) {
@@ -222,7 +221,7 @@ void UpdateCode(automat::mc::Controller& controller,
   for (int i = 0; i < n; ++i) {
     automat::library::Instruction* obj_raw = instructions[i].get();
     const automat::mc::Inst* inst_raw = &obj_raw->mc_inst;
-    auto* loc = obj_raw->here.lock().get();
+    auto* loc = obj_raw->here;
     int next = -1;
     int jump = -1;
     if (loc) {
@@ -271,11 +270,10 @@ std::vector<Ptr<Instruction>> FindInstructions(Location& assembler_loc) {
 }
 
 void Assembler::UpdateMachineCode() {
-  auto here_ptr = here.lock();
-  if (!here_ptr) {
+  if (!here) {
     return;
   }
-  auto instructions = FindInstructions(*here_ptr);
+  auto instructions = FindInstructions(*here);
   Status status;
   if (mc_controller == nullptr) {
     ERROR_ONCE << "Unable to update Assembler: no mc_controller";
@@ -289,7 +287,6 @@ void Assembler::UpdateMachineCode() {
 
 void Assembler::RunMachineCode(library::Instruction* entry_point,
                                std::unique_ptr<RunTask>&& run_task) {
-  auto here_ptr = here.lock();
   BeginLongRunning(std::move(run_task));
 
   Status status;

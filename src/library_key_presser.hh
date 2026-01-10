@@ -7,7 +7,7 @@
 
 namespace automat::library {
 
-struct KeyPresser : LiveObject, OnOff, ui::Keylogger {
+struct KeyPresser : Object, OnOff, ui::Keylogger {
   ui::AnsiKey key = ui::AnsiKey::F;
 
   ui::Keylogging* keylogging = nullptr;

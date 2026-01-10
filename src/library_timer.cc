@@ -140,7 +140,7 @@ static void UpdateTextField(TimerDelay& timer) {
 static void SetDuration(TimerDelay& timer, Duration new_duration) {
   auto lock = std::lock_guard(timer.mtx);
   if (timer.IsRunning()) {
-    if (auto h = timer.here.lock()) {
+    if (auto h = timer.here) {
       RescheduleAt(*h, timer.start_time + timer.duration.value, timer.start_time + new_duration);
     }
   }
@@ -151,7 +151,7 @@ static void SetDuration(TimerDelay& timer, Duration new_duration) {
 }
 
 static void PropagateDurationOutwards(TimerDelay& timer) {
-  if (auto h = timer.here.lock()) {
+  if (auto h = timer.here) {
     // auto duration_obj = timer.duration_arg.GetLocation(*h);
     // if (duration_obj.ok && duration_obj.location) {
     //   duration_obj.location->SetNumber(timer.duration.value * TickCount(timer.range) /
@@ -664,7 +664,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionT
     if (kStartPusherBox.contains(pos.x, pos.y)) {
       start_pusher_depression = 1;
       WakeAnimation();
-      if (auto h = here.lock()) {
+      if (auto h = here) {
         if (IsRunning()) {
           Cancel();
         } else {
@@ -718,7 +718,7 @@ void TimerDelay::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
 }
 
 void TimerDelay::OnCancel() {
-  if (auto h = here.lock()) {
+  if (auto h = here) {
     CancelScheduledAt(*h, start_time + duration.value);
   }
   WakeAnimation();
@@ -831,7 +831,7 @@ void TimerDelay::DeserializeState(Deserializer& d) {
   }
   UpdateTextField(*this);
   if (this->IsRunning()) {
-    ScheduleAt(*here.Lock(), start_time + duration.value);
+    ScheduleAt(*here, start_time + duration.value);
   }
 
   if (!OK(status)) {

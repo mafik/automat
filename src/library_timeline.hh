@@ -102,7 +102,7 @@ struct TrackArgument : Argument {
 // This is fine for MVP but in the future, timeline should keep playing (stuck at the end).
 // The user should be able to connect the "next" connection to the "jump to start" so that it loops
 // (or stops).
-struct Timeline : LiveObject, Runnable, LongRunning, TimerNotificationReceiver {
+struct Timeline : Object, Runnable, LongRunning, TimerNotificationReceiver {
   std::mutex mutex;
 
   Vec<std::unique_ptr<TrackArgument>> tracks;

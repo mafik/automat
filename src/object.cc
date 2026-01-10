@@ -488,6 +488,8 @@ Vec2AndDir Object::WidgetBase::ArgStart(const Argument& arg) {
   };
 }
 
+void Object::Relocate(Location* new_here) { here = new_here; }
+
 Object::~Object() { LifetimeObserver::CheckDestroyNotified(*this); }
 
 bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !IsIconified(); }
@@ -512,7 +514,7 @@ Location* Object::MyLocation() {
       return loc.Get();
     }
   }
-  return nullptr;
+  return here;
 }
 
 void Object::InvalidateConnectionWidgets(const Argument* arg) const {

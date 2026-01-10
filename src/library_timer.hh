@@ -22,11 +22,7 @@ struct DurationArgument : Argument {
   Interface* StartInterface(Part& start) const override;
 };
 
-struct TimerDelay : LiveObject,
-                    Object::WidgetBase,
-                    Runnable,
-                    LongRunning,
-                    TimerNotificationReceiver {
+struct TimerDelay : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
   struct MyDuration : Interface {

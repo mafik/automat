@@ -403,8 +403,8 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
       iris_target.reset();
       {  // Update `source_image`
         sk_sp<SkImage> new_image = nullptr;
-        if (auto here_ptr = tesseract->here.lock()) {
-          auto image_loc = image_arg.FindLocation(*here_ptr, {});
+        if (auto here = tesseract->here) {
+          auto image_loc = image_arg.FindLocation(*here, {});
           auto image_obj = image_loc ? image_loc->object.get() : nullptr;
           if (image_obj) {
             auto image_provider = image_obj->AsImageProvider();
@@ -415,7 +415,7 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
           }
 
           if (status_progress_ratio.has_value()) {
-            iris_target = here_ptr->position;
+            iris_target = here->position;
           }
         }
         source_image = std::move(new_image);

@@ -61,7 +61,7 @@ extern AssemblerArgument assembler_arg;
 extern JumpArgument jump_arg;
 extern NextInstructionArg next_instruction_arg;
 
-struct Instruction : LiveObject, Runnable, Buffer {
+struct Instruction : Object, Runnable, Buffer {
   mc::Inst mc_inst;
   NestedWeakPtr<Runnable> jump_target;  // Connection target for jump_arg
   NestedWeakPtr<Object> assembler_weak;

@@ -238,8 +238,8 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
       bool changed = visitor(span);
       if (changed) {
         operand.setImm(imm);
-        if (auto here_ptr = here.Lock()) {
-          if (auto assembler = FindAssembler(*here_ptr)) {
+        if (auto h = here) {
+          if (auto assembler = FindAssembler(*h)) {
             assembler->UpdateMachineCode();
           }
         }
@@ -256,10 +256,7 @@ void Instruction::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
   assembler->RunMachineCode(this, std::move(run_task));
 }
 
-LongRunning* Instruction::AsLongRunning() {
-  auto here_ptr = here.Lock();
-  return FindAssembler(*here_ptr);
-}
+LongRunning* Instruction::AsLongRunning() { return FindAssembler(*here); }
 
 static std::string AssemblyText(const mc::Inst& mc_inst) {
   // Nicely formatted assembly:
@@ -3067,8 +3064,7 @@ struct ConditionCodeWidget : public EnumKnobWidget {
   void KnobSet(int new_value) override {
     auto instruction = instruction_weak.Lock().Cast<Instruction>();
     instruction->mc_inst.getOperand(token_i).setImm(new_value);
-    auto instruction_location = instruction->here.Lock();
-    if (auto assembler = FindAssembler(*instruction_location)) {
+    if (auto assembler = FindAssembler(*instruction->here)) {
       assembler->UpdateMachineCode();
     }
   }
@@ -3291,8 +3287,7 @@ struct LoopConditionCodeWidget : public EnumKnobWidget {
     } else {
       LOG << "Can't set condition code for loop instruction";
     }
-    auto instruction_location = instruction->here.Lock();
-    if (auto assembler = FindAssembler(*instruction_location)) {
+    if (auto assembler = FindAssembler(*instruction->here)) {
       assembler->UpdateMachineCode();
     }
   }

@@ -71,13 +71,12 @@ void LongRunning::Done(Location& here) {
 }
 
 void LongRunning::OnTurnOn() {
-  auto live_object = dynamic_cast<LiveObject*>(this);
-  if (live_object == nullptr) {
-    ERROR << "LongRunning::On called on a non-LiveObject";
+  auto object = dynamic_cast<Object*>(this);
+  if (object == nullptr) {
+    ERROR << "LongRunning::On called on a non-Object";
     return;
   }
-  auto location = live_object->here.Lock();
-  location->ScheduleRun();
+  object->here->ScheduleRun();
 }
 
 void Machine::SerializeState(Serializer& writer, const char* key) const {
@@ -401,15 +400,13 @@ Ptr<Location> Machine::Extract(Location& location) {
   }
 }
 
-void LiveObject::Relocate(Location* new_here) { here = new_here; }
-
 Location& Machine::CreateEmpty() {
   auto& it = locations.emplace_front(new Location(this, here));
   Location* h = it.get();
   return *h;
 }
 void Machine::Relocate(Location* parent) {
-  LiveObject::Relocate(parent);
+  Object::Relocate(parent);
   for (auto& it : locations) {
     it->parent_location = here;
     it->parent = this;

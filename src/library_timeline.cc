@@ -335,7 +335,7 @@ void Timeline::AddTrack(Ptr<TrackBase>&& track, StrView name) {
   auto arg = make_unique<TrackArgument>(name);
   arg->ptr = std::move(track);
   tracks.emplace_back(std::move(arg));
-  if (auto h = here.lock()) {
+  if (auto h = here) {
     h->InvalidateConnectionWidgets(true, true);
   }
   WakeWidgetsAnimation();
@@ -376,7 +376,7 @@ time::Duration Timeline::MaxTrackLength() const {
 }
 
 void TimelineCancelScheduled(Timeline& t) {
-  if (auto h = t.here.lock()) {
+  if (auto h = t.here) {
     CancelScheduledAt(*h);
   }
 }
@@ -402,7 +402,7 @@ void TimelineScheduleNextAfter(Timeline& t, time::SteadyPoint now) {
       next_update = min(next_update, next_update_point);
     }
   }
-  if (auto h = t.here.lock()) {
+  if (auto h = t.here) {
     ScheduleAt(*h, next_update);
   }
 }
@@ -708,7 +708,7 @@ struct TimelineRunButton : ui::ToggleButton {
         timeline->Cancel();
         break;
       case Timeline::kPaused:
-        if (auto h = timeline->here.lock()) {
+        if (auto h = timeline->here) {
           h->ScheduleRun();
         }
         break;
@@ -867,7 +867,7 @@ struct TimelineWidget : Object::WidgetBase {
     if (timeline_locked.state == Timeline::kPlaying) {
       TimelineCancelScheduled(timeline_locked);
       timeline_locked.playing.started_at = now - time::Defloat(pos_ratio * max_track_length);
-      if (auto h = timeline_locked.here.lock()) {
+      if (auto h = timeline_locked.here) {
         TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
       }
       TimelineScheduleNextAfter(timeline_locked, now);
@@ -882,7 +882,7 @@ struct TimelineWidget : Object::WidgetBase {
     if (timeline_locked.state == Timeline::kPlaying) {
       TimelineCancelScheduled(timeline_locked);
       timeline_locked.playing.started_at = now - time::Duration(offset);
-      if (auto h = timeline_locked.here.lock()) {
+      if (auto h = timeline_locked.here) {
         TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
       }
       TimelineScheduleNextAfter(timeline_locked, now);
@@ -897,7 +897,7 @@ struct TimelineWidget : Object::WidgetBase {
       TimelineCancelScheduled(timeline_locked);
       timeline_locked.playing.started_at -= time::Duration(offset);
       timeline_locked.playing.started_at = min(timeline_locked.playing.started_at, now);
-      if (auto h = timeline_locked.here.lock()) {
+      if (auto h = timeline_locked.here) {
         TimelineUpdateOutputs(*h, timeline_locked, timeline_locked.playing.started_at, now);
       }
       TimelineScheduleNextAfter(timeline_locked, now);
@@ -2465,7 +2465,7 @@ void Timeline::OnCancel() {
     TimelineCancelScheduled(*this);
     state = kPaused;
     paused = {.playback_offset = time::SteadyNow() - playing.started_at};
-    if (auto h = here.lock()) {
+    if (auto h = here) {
       TimelineUpdateOutputs(*h, *this, time::SteadyPoint{},
                             time::SteadyPoint{} + time::Duration(paused.playback_offset));
     }
@@ -2816,7 +2816,7 @@ void Float64Track::DeserializeState(Deserializer& d) {
 
 void Timeline::DeserializeState(Deserializer& d) {
   Status status;
-  here = MyLocation()->AcquireWeakPtr();
+  here = MyLocation();
   for (auto& key : ObjectView(d, status)) {
     if (key == "tracks") {
       for (auto elem : ArrayView(d, status)) {

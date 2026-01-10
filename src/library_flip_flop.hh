@@ -9,7 +9,7 @@
 
 namespace automat::library {
 
-struct FlipFlop : LiveObject, Runnable, OnOff {
+struct FlipFlop : Object, Runnable, OnOff {
   bool current_state = false;
 
   FlipFlop();

@@ -117,14 +117,8 @@ struct Runnable : Interface {
   virtual void OnRun(Location& here, std::unique_ptr<RunTask>& run_task) = 0;
 };
 
-struct LiveObject : Object {
-  WeakPtr<Location> here;
-
-  void Relocate(Location* new_here) override;
-};
-
 // 2D Canvas holding objects & a spaghetti of connections.
-struct Machine : LiveObject, ui::Widget, ui::DropTarget {
+struct Machine : Object, ui::Widget, ui::DropTarget {
   Machine(ui::Widget* parent);
   string name = "";
   deque<Ptr<Location>> locations;

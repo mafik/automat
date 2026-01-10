@@ -274,16 +274,15 @@ void MacroRecorder::Draw(SkCanvas& canvas) const {
 }
 
 static Timeline* FindTimeline(MacroRecorder& macro_recorder) {
-  Timeline* timeline = timeline_arg.FindObject<Timeline>(*macro_recorder.here.lock(), {});
+  Timeline* timeline = timeline_arg.FindObject<Timeline>(*macro_recorder.here, {});
   return timeline;
 }
 
 static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
-  auto here = macro_recorder.here.lock();
   Timeline* timeline = timeline_arg.FindObject<Timeline>(
-      *here, {
-                 .if_missing = Argument::IfMissing::CreateFromPrototype,
-             });
+      *macro_recorder.here, {
+                                .if_missing = Argument::IfMissing::CreateFromPrototype,
+                            });
   assert(timeline);
   if (macro_recorder.keylogging && timeline->state != Timeline::State::kRecording) {
     timeline->BeginRecording();
@@ -319,7 +318,7 @@ void MacroRecorder::OnCancel() {
 
 static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, PointerButton ptr_btn,
                              bool down) {
-  auto machine = macro_recorder.here.lock()->ParentAs<Machine>();
+  auto machine = macro_recorder.here->ParentAs<Machine>();
   if (machine == nullptr) {
     FATAL << "MacroRecorder must be a child of a Machine";
     return;
@@ -373,11 +372,10 @@ static void RecordOnOffEvent(MacroRecorder& macro_recorder, AnsiKey kb_key, Poin
     Location& on_off_loc = make_fn();
     on_off_loc.Iconify();
     Argument& track_arg = *timeline->tracks.back();
-    auto timeline_loc = timeline->here.Lock();
 
-    PositionAhead(*timeline_loc, track_arg, on_off_loc);
-    AnimateGrowFrom(*macro_recorder.here.lock(), on_off_loc);
-    track_arg.Connect(*timeline_loc->object, on_off_loc.object);
+    PositionAhead(*timeline->here, track_arg, on_off_loc);
+    AnimateGrowFrom(*macro_recorder.here, on_off_loc);
+    track_arg.Connect(*timeline, on_off_loc.object);
   }
 
   // Append the current timestamp to that track
@@ -545,7 +543,7 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     auto& new_track = *track_ptr;
     timeline->AddTrack(std::move(track_ptr), track_name);
     track_index = timeline->tracks.size() - 1;
-    auto machine = recorder.here.lock()->ParentAs<Machine>();
+    auto machine = recorder.here->ParentAs<Machine>();
     if (machine == nullptr) {
       FATAL << "MacroRecorder must be a child of a Machine";
       return;
@@ -553,11 +551,10 @@ static void RecordDelta(MacroRecorder& recorder, const char* track_name,
     Location& receiver_loc = machine->Create<ReceiverT>();
     receiver_loc.Iconify();
     Argument& track_arg = *timeline->tracks.back();
-    auto timeline_loc = timeline->here.Lock();
 
-    PositionAhead(*timeline_loc, track_arg, receiver_loc);
-    AnimateGrowFrom(*recorder.here.lock(), receiver_loc);
-    track_arg.Connect(*timeline_loc->object, receiver_loc.object);
+    PositionAhead(*timeline->here, track_arg, receiver_loc);
+    AnimateGrowFrom(*recorder.here, receiver_loc);
+    track_arg.Connect(*timeline, receiver_loc.object);
     // timeline->here.lock()->ConnectTo(receiver_loc, track_arg);
   }
 

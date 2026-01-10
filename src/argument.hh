@@ -85,7 +85,7 @@ struct Argument : virtual Part {
   virtual NestedPtr<Part> Find(Object& start) const = 0;
 
   // Returns the prototype object for this argument, or nullptr if there is no prototype.
-  // This is used when creating new objects from arguments.
+  // This is used by various *OnMake methods to create new object - and for object preview.
   virtual Ptr<Object> Prototype() const { return nullptr; }
 
   virtual PaintDrawable& Icon();  // TODO: weird - clean this up
@@ -94,7 +94,14 @@ struct Argument : virtual Part {
   void NearbyCandidates(Location& here, float radius,
                         std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const;
 
+  // Use this method if you don't actually care about specific part that the argument points to -
+  // just the target object (that owns that part).
   Object* ObjectOrNull(Object& start) const;
+
+  // Use this method if you don't actually care about specific part that the argument points to -
+  // just the target object (that owns that part).
+  //
+  // This is the main way of creating new objects through this Argument's Prototype.
   Object& ObjectOrMake(Object& start) const;
 };
 

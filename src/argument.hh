@@ -65,16 +65,11 @@ struct Argument : virtual Part {
 
   virtual NestedPtr<Part> Find(Object& start) const = 0;
 
-  // Returns the Interface pointer for this argument on the given start object.
-  // Returns nullptr if this argument doesn't represent an interface.
-  virtual Interface* StartInterface(Part& start) const { return nullptr; }
-
   // Returns the prototype object for this argument, or nullptr if there is no prototype.
   // This is used when creating new objects from arguments.
   virtual Ptr<Object> Prototype() const { return nullptr; }
 
-  virtual PaintDrawable& Icon();            // TODO: weird - clean this up
-  virtual bool IsOn(Location& here) const;  // TODO: weird - clean this up
+  virtual PaintDrawable& Icon();  // TODO: weird - clean this up
 
   enum class IfMissing { ReturnNull, CreateFromPrototype };
 
@@ -104,6 +99,14 @@ struct Argument : virtual Part {
   T* FindObject(Location& here, const FindConfig& cfg) const {
     return dynamic_cast<T*>(FindObject(here, cfg));
   }
+};
+
+struct InlineArgument : Argument {
+  NestedWeakPtr<Part> end;
+
+  void Connect(Object&, const NestedPtr<Part>& end) override { this->end = end; }
+
+  NestedPtr<Part> Find(Object&) const override { return end.Lock(); };
 };
 
 struct NextArg : Argument {

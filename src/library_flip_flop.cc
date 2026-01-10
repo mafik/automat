@@ -16,7 +16,6 @@
 #include "../build/generated/embedded.hh"
 #include "animation.hh"
 #include "arcline.hh"
-#include "argument.hh"
 #include "color.hh"
 #include "sincos.hh"
 #include "textures.hh"
@@ -31,23 +30,6 @@ constexpr float kYingYangRadius = 1.2_cm / 2 - 1_mm;
 constexpr float kYingYangRadiusSmall = kYingYangRadius / 2;
 constexpr float kYingYangButtonRadius = kYingYangRadius + 0.5_mm;
 constexpr float kFlipFlopWidth = 1.8_cm;
-
-struct FlipFlopIcon : PaintDrawable {
-  void onDraw(SkCanvas* canvas) override { canvas->drawCircle(0, 0, 1_mm, paint); }
-};
-
-struct FlipFlopTarget : Argument {
-  using Argument::Argument;
-  FlipFlopIcon icon;
-
-  PaintDrawable& Icon() override { return icon; }
-  bool IsOn(Location& here) const override {
-    if (auto flip_flop = here.As<FlipFlop>()) {
-      return flip_flop->current_state;
-    }
-    return false;
-  }
-};
 
 static PersistentImage& FlipFlopColor() {
   static auto flip_flop_color = PersistentImage::MakeFromAsset(

@@ -6,7 +6,14 @@
 
 namespace automat {
 
+struct FlipFlopIcon : PaintDrawable {
+  void onDraw(SkCanvas* canvas) override;
+};
+
 struct OnOff : Interface {
+  FlipFlopIcon icon;
+  PaintDrawable& Icon() override;
+
   virtual ~OnOff() { Unsync(); }
 
   virtual bool IsOn() const = 0;

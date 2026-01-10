@@ -23,15 +23,6 @@ PaintDrawable& Argument::Icon() {
   return default_icon;
 }
 
-bool Argument::IsOn(Location& here) const {
-  if (auto* iface = StartInterface(*here.object)) {
-    if (auto on_off = dynamic_cast<OnOff*>(iface)) {
-      return on_off->IsOn();
-    }
-  }
-  return false;
-}
-
 Vec2AndDir Argument::Start(ui::Widget& object_widget, ui::Widget& widget) const {
   auto* obj_widget_iface = dynamic_cast<ObjectWidget*>(&object_widget);
   if (!obj_widget_iface) {

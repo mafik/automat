@@ -11,25 +11,15 @@
 
 namespace automat::library {
 
-struct DurationArgument : Argument {
-  DurationArgument();
-
-  StrView Name() const override { return "duration"sv; }
-  SkColor Tint() const override { return "#6e4521"_color; }
-  void CanConnect(Object& start, Part& end, Status& status) const override;
-  void Connect(Object& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Object& start) const override;
-  Interface* StartInterface(Part& start) const override;
-};
-
 struct TimerDelay : Object, Object::WidgetBase, Runnable, LongRunning, TimerNotificationReceiver {
   // Guards access to duration & LongRunning members
   std::mutex mtx;
   struct MyDuration : Interface {
     time::Duration value = 10s;
+    StrView Name() const override { return "duration"sv; }
+    SkColor Tint() const override { return "#6e4521"_color; }
+    void CanConnect(Object& start, Part& end, Status& status) const override;
   } duration;
-  NestedWeakPtr<Interface> duration_source;  // Connection target for duration_arg
-  DurationArgument duration_arg;
   time::SteadyPoint start_time;
   float start_pusher_depression = 0;
   float left_pusher_depression = 0;

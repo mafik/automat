@@ -40,13 +40,6 @@ struct SyncBlock : Object {
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 };
 
-struct SyncArg : Argument {
-  StrView Name() const override { return "sync"sv; }
-  void CanConnect(Object& start, Part& end, Status&) const override;
-  void Connect(Object& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Object& start) const override;
-};
-
 // Some objects within Automat may provide interfaces that can be "synced". A synced interface
 // allows several objects that follow some interface to act as one.
 //
@@ -71,24 +64,22 @@ struct SyncArg : Argument {
 // IMPORTANT: To actually make this work, the "On" entry points should not be used directly (only
 // through the "ForwardDo" & "ForwardNotify" wrappers). Whenever the "On" entry point us used
 // directly, it's not going to be propagated to the other synced implementations.
-struct Interface : virtual Part {
-  WeakPtr<SyncBlock> sync_block_weak = nullptr;
-
-  SyncArg sync_arg;
-
+struct Interface : InlineArgument {
   // Note GetValueUnsafe used throughout the methods here is actually safe, because
   // ~Interface will remove itself from SyncBlock. SyncBlock never contains dead pointers.
   ~Interface() {
-    if (sync_block_weak) {
+    if (end) {
       ERROR << "Some Specific Abstract Interface forgot to call Unsync in its destructor";
     }
   }
+
+  void CanConnect(Object& start, Part& end, Status&) const override;
 
   void Unsync();
 
   template <class Self>
   void ForwardDo(this Self& self, auto&& lambda) {
-    if (auto sync_block = self.sync_block_weak.Lock()) {
+    if (auto sync_block = self.end.template LockAs<SyncBlock>()) {
       auto lock = std::shared_lock(sync_block->mutex);
       for (auto& other : sync_block->sinks) {
         lambda(*other.template GetUnsafe<Self>());
@@ -100,7 +91,7 @@ struct Interface : virtual Part {
 
   template <class Self>
   void ForwardNotify(this Self& self, auto&& lambda) {
-    if (auto sync_block = self.sync_block_weak.Lock()) {
+    if (auto sync_block = self.end.template LockAs<SyncBlock>()) {
       auto lock = std::shared_lock(sync_block->mutex);
       for (auto& other : sync_block->sinks) {
         if (auto* other_cast = other.template GetUnsafe<Self>(); other_cast != &self) {

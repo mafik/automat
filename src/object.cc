@@ -341,7 +341,7 @@ struct FieldOption : TextOption, OptionsProvider {
       }
       SyncOption sync(interface);
       visitor(sync);
-      if (!interface->sync_block_weak.IsExpired()) {
+      if (!interface->end.IsExpired()) {
         UnsyncOption unsync(interface);
         visitor(unsync);
       }
@@ -474,9 +474,7 @@ void Object::WidgetBase::ConnectionPositions(Vec<Vec2AndDir>& out_positions) con
 Vec2AndDir Object::WidgetBase::ArgStart(const Argument& arg) {
   SkPath shape;
   if (auto obj = object.Lock()) {
-    if (auto* iface = arg.StartInterface(*obj)) {
-      shape = PartShape(iface);
-    }
+    shape = PartShape(&const_cast<Argument&>(arg));
   }
   if (shape.isEmpty()) {
     shape = Shape();

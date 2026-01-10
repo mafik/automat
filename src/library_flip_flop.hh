@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include "animation.hh"
 #include "base.hh"
-#include "ui_button.hh"
 #include "widget.hh"
 
 namespace automat::library {

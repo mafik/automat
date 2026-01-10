@@ -4,7 +4,6 @@
 #include "interfaces.hh"
 
 #include <mutex>
-#include <utility>
 
 #include "animation.hh"
 #include "embedded.hh"
@@ -16,8 +15,8 @@
 namespace automat {
 
 void Interface::Unsync() {
-  auto sync_block = sync_block_weak.Lock();
-  if (sync_block == nullptr) return;
+  auto sync_block = end.LockAs<SyncBlock>();
+  if (!sync_block) return;
   auto lock = std::unique_lock(sync_block->mutex);
 
   auto& sources = sync_block->sources;
@@ -38,13 +37,13 @@ void Interface::Unsync() {
     }
   }
 
-  sync_block_weak = nullptr;
+  end.Reset();
   OnUnsync();
 }
 
 Ptr<SyncBlock> Sync(NestedPtr<Interface>& source) {
-  auto sync_block = source->sync_block_weak.Lock();
-  if (sync_block == nullptr) {
+  auto sync_block = source->end.OwnerLockAs<SyncBlock>();
+  if (!sync_block) {
     sync_block = MAKE_PTR(SyncBlock);
     sync_block->AddSource(source);
   }
@@ -74,13 +73,13 @@ void SyncBlock::AddSink(NestedPtr<Interface>& sink) {
 
 // Tells that this interface is the source of activity / notifications (notify-only sync)
 void SyncBlock::AddSource(NestedPtr<Interface>& source) {
-  auto old_sync_block = source->sync_block_weak.Lock();
-  if (old_sync_block == this) {
+  auto old_sync_block = source->end.LockAs<SyncBlock>();
+  if (old_sync_block.Get() == this) {
     return;
   }
-  source->sync_block_weak = AcquireWeakPtr();
+  source->Connect(*source.Owner<Object>(), AcquirePtr());
   sources.push_back(source);
-  if (old_sync_block == nullptr) {
+  if (!old_sync_block) {
     source->OnSync();
   }
 }
@@ -122,25 +121,10 @@ std::unique_ptr<ObjectWidget> SyncBlock::MakeWidget(ui::Widget* parent) {
   return std::make_unique<SyncBlockWidget>(*this, parent);
 }
 
-void SyncArg::CanConnect(Object& start, Part& end, Status& status) const {
+void Interface::CanConnect(Object& start, Part& end, Status& status) const {
   if (dynamic_cast<SyncBlock*>(&end) != nullptr) {
     AppendErrorMessage(status) += "Can only connect to SyncBlock";
   }
-}
-
-void SyncArg::Connect(Object& start, const NestedPtr<Part>& end) {
-  auto* start_interface = dynamic_cast<Interface*>(&start);
-  if (start_interface == nullptr) return;
-  auto* sync_block = dynamic_cast<SyncBlock*>(end.Get());
-  if (sync_block == nullptr) return;
-  start_interface->sync_block_weak = sync_block->AcquireWeakPtr();
-}
-
-NestedPtr<Part> SyncArg::Find(Object& start) const {
-  if (auto* iface = dynamic_cast<Interface*>(&start)) {
-    return iface->sync_block_weak.Lock();
-  }
-  return {};
 }
 
 }  // namespace automat

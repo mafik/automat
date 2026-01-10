@@ -37,9 +37,7 @@ struct KeyPresser : Object, OnOff, ui::Keylogger {
 
   void Parts(const std::function<void(Part&)>& cb) override {
     cb(monitoring);
-    cb(monitoring.sync_arg);
     cb(*this);
-    cb(this->sync_arg);
   }
 
   void PartName(Part& part, Str& out_name) override {

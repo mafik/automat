@@ -418,6 +418,16 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
   }
   Ptr<T> lock() const { return Lock(); }  // alias for better compatibility with std::weak_ptr
 
+  template <typename U = T>
+  Ptr<U> LockAs() const {
+    auto t_ptr = Lock();
+    if (auto* u = dynamic_cast<U*>(t_ptr.Get())) {
+      t_ptr.Release();
+      return Ptr<U>(u);
+    }
+    return Ptr<U>();
+  }
+
   WeakPtr<T>& operator=(const WeakPtr<T>& that) {
     if (this != &that) {
       T* oldObj = this->obj;
@@ -532,12 +542,25 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
     weak_ptr.Reset();
     obj = nullptr;
   }
-  NestedPtr<T> Lock() const {
+
+  bool IsExpired() const { return weak_ptr.IsExpired(); }
+
+  template <typename U = T>
+  NestedPtr<U> Lock() const {
     if (auto new_ptr = weak_ptr.Lock()) {
-      return NestedPtr<T>{std::move(new_ptr), obj};
+      return NestedPtr<U>{std::move(new_ptr), static_cast<U*>(obj)};
     }
-    return NestedPtr<T>();
+    return NestedPtr<U>();
   }
+
+  template <typename U = T>
+  NestedPtr<U> LockAs() const {
+    if (auto new_ptr = weak_ptr.Lock()) {
+      return NestedPtr<U>{std::move(new_ptr), dynamic_cast<U*>(obj)};
+    }
+    return NestedPtr<U>();
+  }
+
   WeakPtr<ReferenceCounted> GetOwnerWeak() const { return weak_ptr; }
 
   template <typename U = T>
@@ -548,6 +571,11 @@ struct [[clang::trivial_abi]] NestedWeakPtr {
   template <typename U>
   U* OwnerUnsafe() const {
     return this->weak_ptr.template GetUnsafe<U>();
+  }
+
+  template <typename U>
+  Ptr<U> OwnerLockAs() const {
+    return weak_ptr.LockAs<U>();
   }
 
  private:

@@ -167,7 +167,7 @@ TimerDelay::TimerDelay(ui::Widget* parent)
   range_dial.value = 1;
 
   hand_degrees.value = 90;
-  text_field->argument = NestedWeakPtr<Argument>(AcquireWeakPtr(), &duration_arg);
+  text_field->argument = NestedWeakPtr<Argument>(AcquireWeakPtr(), &duration);
   SetDuration(*this, 10s);
 }
 
@@ -622,11 +622,7 @@ struct DragDurationHandleAction : Action {
 };
 
 void TimerDelay::Updated(Location& here, Location& updated) {
-  auto* object = duration_arg.FindObject(here, Argument::FindConfig());
-  if (object == nullptr) {
-    return;
-  }
-  std::string duration_str = object->GetText();
+  std::string duration_str = updated.object->GetText();
   double n = std::stod(duration_str);
   Duration d = time::Defloat(RangeDuration(range) * n / TickCount(range));
   SetDuration(*this, d);
@@ -703,8 +699,7 @@ std::unique_ptr<Action> TimerDelay::FindAction(ui::Pointer& pointer, ui::ActionT
 }
 
 void TimerDelay::Parts(const std::function<void(Part&)>& cb) {
-  // TODO: add the delay value
-  cb(duration_arg);
+  cb(duration);
   cb(next_arg);
 }
 
@@ -724,9 +719,7 @@ void TimerDelay::OnCancel() {
   WakeAnimation();
 }
 
-DurationArgument::DurationArgument() {}
-
-void DurationArgument::CanConnect(Object& start, Part& end, Status& status) const {
+void TimerDelay::MyDuration::CanConnect(Object& start, Part& end, Status& status) const {
   if (auto* obj = dynamic_cast<Object*>(&end)) {
     Str text = obj->GetText();
     char* endptr = nullptr;
@@ -736,32 +729,6 @@ void DurationArgument::CanConnect(Object& start, Part& end, Status& status) cons
       AppendErrorMessage(status) += "Duration argument must be a number.";
     }
   }
-}
-
-void DurationArgument::Connect(Object& start, const NestedPtr<Part>& end) {
-  if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
-    if (end) {
-      if (auto* iface = dynamic_cast<Interface*>(end.Get())) {
-        timer->duration_source = NestedWeakPtr<Interface>(end.GetOwnerWeak(), iface);
-      }
-    } else {
-      timer->duration_source = {};
-    }
-  }
-}
-
-NestedPtr<Part> DurationArgument::Find(Object& start) const {
-  if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
-    return timer->duration_source.Lock().DynamicCast<Part>();
-  }
-  return {};
-}
-
-Interface* DurationArgument::StartInterface(Part& start) const {
-  if (auto* timer = dynamic_cast<TimerDelay*>(&start)) {
-    return &timer->duration;
-  }
-  return nullptr;
 }
 
 StrView ToStr(TimerDelay::Range r) {

@@ -28,6 +28,7 @@
 #include "font.hh"
 #include "log.hh"
 #include "math.hh"
+#include "on_off.hh"
 #include "sincos.hh"
 #include "svg.hh"
 #include "textures.hh"
@@ -358,7 +359,8 @@ animation::Phase SimulateCablePhysics(time::Timer& timer, CablePhysicsSimulation
 
   animation::Phase phase = animation::Finished;
   float dt = timer.d;
-  if (state.arg.IsOn(state.location)) {
+  OnOff* arg_on_off = dynamic_cast<OnOff*>(&state.arg);
+  if (arg_on_off && arg_on_off->IsOn()) {
     state.lightness_pct = 100;
   } else {
     phase |= animation::ExponentialApproach(0, timer.d, 0.1, state.lightness_pct);

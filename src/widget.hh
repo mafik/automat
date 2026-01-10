@@ -288,6 +288,8 @@ struct Widget : Trackable, OptionsProvider {
 
     iterator begin() { return iterator(start); }
     end_iterator end() { return end_iterator(); }
+
+    Str ToStr() const;
   };
 
   ParentsView Parents() const { return ParentsView{const_cast<Widget*>(this)}; }

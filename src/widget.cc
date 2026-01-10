@@ -267,4 +267,35 @@ void DebugCheckParents(Widget& widget) {
   }
 }
 
+Str Widget::ParentsView::ToStr() const {
+  constexpr auto kSep = " → "sv;
+  auto start_name = start->Name();
+
+  // Go over parents and find `n` - how many chars we need to store the result
+  int n = start_name.size();
+  auto* parent = start->parent.Get();
+  while (parent) {
+    n += kSep.size() + parent->Name().size();
+    parent = parent->parent.Get();
+  }
+
+  // Go over parents again and fill the result string
+  Str result;
+  result.resize(n);
+  int pos = n;
+  auto ReplaceBack = [&](StrView sv) {
+    auto size = sv.size();
+    pos -= size;
+    result.replace(pos, size, sv);
+  };
+  ReplaceBack(start_name);
+  parent = start->parent.Get();
+  while (parent) {
+    ReplaceBack(kSep);
+    ReplaceBack(parent->Name());
+    parent = parent->parent.Get();
+  }
+  return result;
+}
+
 }  // namespace automat::ui

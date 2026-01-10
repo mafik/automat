@@ -404,13 +404,12 @@ struct TesseractWidget : Object::WidgetBase, ui::PointerMoveCallback {
       {  // Update `source_image`
         sk_sp<SkImage> new_image = nullptr;
         if (auto here = tesseract->here) {
-          auto image_loc = image_arg.FindLocation(*here, {});
-          auto image_obj = image_loc ? image_loc->object.get() : nullptr;
+          auto image_obj = image_arg.FindObject(*here, {});
           if (image_obj) {
             auto image_provider = image_obj->AsImageProvider();
             if (image_provider) {
               new_image = image_provider->GetImage();
-              iris_target = image_loc->position;
+              iris_target = image_obj->MyLocation()->position;
             }
           }
 

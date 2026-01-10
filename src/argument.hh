@@ -7,7 +7,6 @@
 #include "color.hh"
 #include "drawable.hh"
 #include "location.hh"
-#include "optional.hh"
 #include "status.hh"
 
 namespace automat {
@@ -100,9 +99,6 @@ struct Argument : virtual Part {
   // The returned "to_points" use the target object's local coordinate space.
   void NearbyCandidates(Location& here, float radius,
                         std::function<void(Location&, Vec<Vec2AndDir>& to_points)> callback) const;
-
-  // TODO: remove this
-  Location* FindLocation(Location& here, const FindConfig&) const;
 
   Object* FindObject(Location& here, const FindConfig&) const;
 

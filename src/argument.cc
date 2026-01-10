@@ -60,11 +60,11 @@ void Argument::NearbyCandidates(
   });
 }
 
-Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
-  Location* result = nullptr;
+Object* Argument::FindObject(Location& here, const FindConfig& cfg) const {
+  Object* result = nullptr;
   if (auto found = Find(*here.object)) {
     if (auto* obj = found.Owner<Object>()) {
-      result = obj->MyLocation();
+      result = obj;
     }
   }
   if (result == nullptr && cfg.if_missing == IfMissing::CreateFromPrototype) {
@@ -72,7 +72,7 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
     if (auto prototype = Prototype()) {
       if (auto machine = here.ParentAs<Machine>()) {
         Location& l = machine->Create(*prototype);
-        result = &l;
+        result = l.object.get();
         PositionAhead(here, *this, l);
         PositionBelow(l, here);
         AnimateGrowFrom(here,
@@ -83,13 +83,6 @@ Location* Argument::FindLocation(Location& here, const FindConfig& cfg) const {
     }
   }
   return result;
-}
-
-Object* Argument::FindObject(Location& here, const FindConfig& cfg) const {
-  if (auto loc = FindLocation(here, cfg)) {
-    return loc->object.get();
-  }
-  return nullptr;
 }
 
 void NextArg::CanConnect(Object& start, Part& end, Status& status) const {

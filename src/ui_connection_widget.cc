@@ -116,10 +116,10 @@ void ConnectionWidget::PreDraw(SkCanvas& canvas) const {
     }
 
     {  // Ray from the source to the target
-      auto source_location = arg->FindLocation(
+      auto source_object = arg->FindObject(
           from, Argument::FindConfig{.if_missing = Argument::IfMissing::ReturnNull});
-      if (source_location) {
-        Vec2 source = source_location->position;
+      if (source_object) {
+        Vec2 source = source_object->MyLocation()->position;
         Vec2 diff = target - source;
         float dist = Length(diff);
         auto angle = SinCos::FromVec2(diff, dist);

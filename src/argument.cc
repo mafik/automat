@@ -4,7 +4,6 @@
 
 #include <cmath>
 
-#include "automat.hh"
 #include "base.hh"
 #include "drag_action.hh"
 #include "svg.hh"

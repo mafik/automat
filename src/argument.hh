@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
-#include <functional>
-
 #include "color.hh"
 #include "drawable.hh"
-#include "location.hh"
+#include "object.hh"
 #include "status.hh"
+#include "units.hh"
 
 namespace automat {
 

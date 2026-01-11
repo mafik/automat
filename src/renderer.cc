@@ -497,12 +497,16 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     builder.uniform("surfaceOrigin") = local_surface_bounds.BottomLeftCorner();
     builder.uniform("surfaceSize") = local_surface_bounds.Size();
     builder.uniform("surfaceResolution") = Vec2(frame.surface->width(), frame.surface->height());
-    Vec2 anchors[2] = {
+    Vec2 anchors_last[2] = {
         frame.texture_anchors[0],
         frame.texture_anchors[anchor_count > 1 ? 1 : 0],
     };
-    builder.uniform("anchorsLast").set(anchors, 2);
-    builder.uniform("anchorsCurr").set(anchors, 2);
+    Vec2 anchors_curr[2] = {
+        fresh_texture_anchors[0],
+        fresh_texture_anchors[anchor_count > 1 ? 1 : 0],
+    };
+    builder.uniform("anchorsLast").set(anchors_last, 2);
+    builder.uniform("anchorsCurr").set(anchors_curr, 2);
     builder.child("surface") = SkSurfaces::AsImage(frame.surface)->makeShader(sampling);
 
     auto shader = builder.makeShader();

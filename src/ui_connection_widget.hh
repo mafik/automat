@@ -83,7 +83,7 @@ struct ConnectionWidget : Widget {
   Compositor GetCompositor() const override { return Compositor::ANCHOR_WARP; }
   std::unique_ptr<Action> FindAction(Pointer&, ActionTrigger) override;
   Optional<Rect> TextureBounds() const override;
-  Vec<Vec2> TextureAnchors() const override;
+  Vec<Vec2> TextureAnchors() override;
   void FromMoved();
 };
 

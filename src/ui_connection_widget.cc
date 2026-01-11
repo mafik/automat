@@ -262,6 +262,60 @@ void ConnectionWidget::FromMoved() {
   WakeAnimation();
 }
 
+// This function copies a lot of the code from Tick - this is done because it's needed by
+// TextureAnchors. Fresh positions of start & end points allows the ANCHOR_WARP compositor to deform
+// the rendered texture and make it responsive to mouse movement. Unfortunately the same logic is
+// needed for the regular animation Tick.
+//
+// TODO: figure out a clean way to share this logic
+static void UpdateEndpoints(ConnectionWidget& w) {
+  auto arg = w.start_weak.Lock();
+  auto& widget_store = w.WidgetStore();
+  auto& object = *arg.Owner<Object>();
+  auto& from_widget = *widget_store.FindOrNull(object);
+
+  Widget* parent_machine = root_machine.get();
+
+  w.pos_dir = from_widget.ArgStart(*arg, parent_machine);
+  w.to_points.clear();
+
+  auto to = arg->Find(object);
+  Object* to_object = nullptr;
+
+  if (to) {
+    to_object = to.Owner<Object>();
+    auto& to_widget = *widget_store.FindOrNull(*to_object);
+    w.to_shape = to_widget.PartShape(to.Get());
+    to_widget.ConnectionPositions(w.to_points);
+    Path target_path;
+    SkMatrix m = TransformBetween(to_widget, *parent_machine);
+    for (auto& vec_and_dir : w.to_points) {
+      vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
+    }
+    w.to_shape.transform(m);
+  } else {
+    w.to_shape.reset();
+    if (w.manual_position) {
+      w.to_points.emplace_back(Vec2AndDir{
+          .pos = *w.manual_position,
+          .dir = -90_deg,
+      });
+    }
+  }
+
+  if (arg.Get() == &next_arg) {
+    while (w.to_points.size() > 1) {
+      // from the last two, pick the one which is closer to pointing down (-pi/2)
+      float delta_1 = fabs((w.to_points[w.to_points.size() - 1].dir + 90_deg).ToRadians());
+      float delta_2 = fabs((w.to_points[w.to_points.size() - 2].dir + 90_deg).ToRadians());
+      if (delta_1 < delta_2) {
+        std::swap(w.to_points[w.to_points.size() - 1], w.to_points[w.to_points.size() - 2]);
+      }
+      w.to_points.pop_back();
+    }
+  }
+}
+
 animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   auto arg = start_weak.Lock();
   if (!arg) {
@@ -545,7 +599,8 @@ Optional<Rect> ConnectionWidget::TextureBounds() const {
   }
 }
 
-Vec<Vec2> ConnectionWidget::TextureAnchors() const {
+Vec<Vec2> ConnectionWidget::TextureAnchors() {
+  UpdateEndpoints(*this);
   Vec<Vec2> anchors;
   anchors.push_back(pos_dir.pos);
   Optional<Vec2> end_pos;

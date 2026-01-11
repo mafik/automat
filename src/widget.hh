@@ -247,7 +247,7 @@ struct Widget : Trackable, OptionsProvider {
 
   // If the object should be cached into a texture, return its bounds in local coordinates.
   virtual Optional<Rect> TextureBounds() const { return Shape().getBounds(); }
-  virtual Vec<Vec2> TextureAnchors() const { return {}; }
+  virtual Vec<Vec2> TextureAnchors() { return {}; }
 
   virtual void DrawChildCachced(SkCanvas&, const Widget& child) const;
 

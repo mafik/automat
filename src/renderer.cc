@@ -484,7 +484,6 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     // frame.surface->draw(canvas, 0, 0);
     canvas->drawImage(SkSurfaces::AsImage(frame.surface), 0, 0);
   } else if (compositor == Widget::Compositor::ANCHOR_WARP) {
-    SkSamplingOptions sampling;
     Status status;
     static auto effect = resources::CompileShader(embedded::assets_anchor_warp_rt_sksl, status);
     assert(effect);
@@ -507,7 +506,7 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
     };
     builder.uniform("anchorsLast").set(anchors_last, 2);
     builder.uniform("anchorsCurr").set(anchors_curr, 2);
-    builder.child("surface") = SkSurfaces::AsImage(frame.surface)->makeShader(sampling);
+    builder.child("surface") = SkSurfaces::AsImage(frame.surface)->makeShader({});
 
     auto shader = builder.makeShader();
     SkPaint paint;
@@ -655,13 +654,13 @@ void WidgetDrawable::onDraw(SkCanvas* canvas) {
   if constexpr (kDebugRendering) {
     SkPaint old_anchor_paint;
     old_anchor_paint.setStyle(SkPaint::kStroke_Style);
-    old_anchor_paint.setColor(SkColorSetARGB(128, 128, 0, 0));
+    old_anchor_paint.setColor(SkColorSetARGB(255, 255, 0, 0));
     SkPaint new_anchor_paint;
     new_anchor_paint.setStyle(SkPaint::kStroke_Style);
-    new_anchor_paint.setColor(SkColorSetARGB(128, 0, 0, 128));
+    new_anchor_paint.setColor(SkColorSetARGB(255, 0, 0, 255));
     SkPaint bounds_paint;
     bounds_paint.setStyle(SkPaint::kStroke_Style);
-    bounds_paint.setColor(SkColorSetARGB(128, 0, 128, 0));
+    bounds_paint.setColor(SkColorSetARGB(128, 0, 255, 0));
 
     for (int i = 0; i < anchor_count; ++i) {
       canvas->drawCircle(frame.texture_anchors[i].sk, 1_mm, old_anchor_paint);
@@ -1435,7 +1434,7 @@ void RenderFrame(SkCanvas& canvas) {
     lock_guard lock(root_widget->mutex);
     if (root_widget->pointers.size() > 0) {
       auto p = root_widget->pointers[0]->pointer_position;
-      auto window_transform = canvas.getTotalMatrix();
+      auto window_transform = ui::TransformUp(*root_widget);
       canvas.resetMatrix();
       SkPaint red;
       red.setColor(SK_ColorRED);
@@ -1456,7 +1455,6 @@ void RenderFrame(SkCanvas& canvas) {
       stroke.setStyle(SkPaint::kStroke_Style);
       canvas.drawLine(p.x, p.y - 5 * mm, p.x, p.y + 5 * mm, stroke);
       canvas.drawLine(p.x - 5 * mm, p.y, p.x + 5 * mm, p.y, stroke);
-      canvas.setMatrix(window_transform);
     }
   }
 

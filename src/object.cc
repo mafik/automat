@@ -495,7 +495,13 @@ bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(objec
 
 void Object::Parts(const std::function<void(Part&)>& cb) { cb(*this); }
 
-void Object::PartName(Part& part, Str& out_name) { out_name = part.Name(); }
+void Object::PartName(Part& part, Str& out_name) {
+  if (&part == this) {
+    out_name = "";
+  } else {
+    out_name = part.Name();
+  }
+}
 
 void Object::Args(const std::function<void(Argument&)>& cb) {
   Parts([&](Part& part) {

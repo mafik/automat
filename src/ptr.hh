@@ -422,7 +422,7 @@ struct [[clang::trivial_abi]] WeakPtr : PtrBase<T> {
   Ptr<U> LockAs() const {
     auto t_ptr = Lock();
     if (auto* u = dynamic_cast<U*>(t_ptr.Get())) {
-      t_ptr.Release();
+      auto* discard = t_ptr.Release();
       return Ptr<U>(u);
     }
     return Ptr<U>();

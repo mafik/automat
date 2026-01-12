@@ -513,7 +513,7 @@ std::unique_ptr<ObjectWidget> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonEventWidget>(parent, AcquireWeakPtr());
 }
 
-void MouseButtonEvent::SerializeState(Serializer& writer, const char* key) const {
+void MouseButtonEvent::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
   writer.Key("button");
@@ -526,7 +526,7 @@ void MouseButtonEvent::SerializeState(Serializer& writer, const char* key) const
   }
   writer.EndObject();
 }
-void MouseButtonEvent::DeserializeState(Deserializer& d) {
+void MouseButtonEvent::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "button") {
@@ -920,7 +920,7 @@ void MouseButtonPresser::OnTurnOff() {
   WakeWidgetsAnimation();
 }
 
-void MouseButtonPresser::SerializeState(Serializer& writer, const char* key) const {
+void MouseButtonPresser::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
   writer.Key("button");
@@ -928,7 +928,7 @@ void MouseButtonPresser::SerializeState(Serializer& writer, const char* key) con
   writer.EndObject();
 }
 
-void MouseButtonPresser::DeserializeState(Deserializer& d) {
+void MouseButtonPresser::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "button") {

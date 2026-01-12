@@ -360,7 +360,7 @@ void HotKey::ReleaseCaret(ui::Caret&) {
 }
 void HotKey::ReleaseKeyGrab(ui::KeyGrab&) { hotkey = nullptr; }
 
-void HotKey::SerializeState(Serializer& writer, const char* key) const {
+void HotKey::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
   writer.Key("key");
@@ -379,7 +379,7 @@ void HotKey::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void HotKey::DeserializeState(Deserializer& d) {
+void HotKey::DeserializeState(ObjectDeserializer& d) {
   Status status;
   bool on = IsOn();
   if (on) {

@@ -258,7 +258,7 @@ void KeyPresser::OnSync() { monitoring.TurnOn(); }
 
 void KeyPresser::OnUnsync() { monitoring.TurnOff(); }
 
-void KeyPresser::SerializeState(Serializer& writer, const char* key) const {
+void KeyPresser::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
   writer.Key("key");
@@ -266,7 +266,7 @@ void KeyPresser::SerializeState(Serializer& writer, const char* key) const {
   writer.String(key_name.data(), key_name.size());
   writer.EndObject();
 }
-void KeyPresser::DeserializeState(Deserializer& d) {
+void KeyPresser::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "key") {

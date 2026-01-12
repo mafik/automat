@@ -759,7 +759,7 @@ TimerDelay::Range TimerRangeFromStr(StrView str, Status& status) {
   return Seconds;
 }
 
-void TimerDelay::SerializeState(Serializer& writer, const char* key) const {
+void TimerDelay::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
   writer.Key("range");
@@ -773,7 +773,7 @@ void TimerDelay::SerializeState(Serializer& writer, const char* key) const {
   }
   writer.EndObject();
 }
-void TimerDelay::DeserializeState(Deserializer& d) {
+void TimerDelay::DeserializeState(ObjectDeserializer& d) {
   Status status;
   // TODO: handle deserialization into a running timer
   for (auto& key : ObjectView(d, status)) {

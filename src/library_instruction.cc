@@ -3696,7 +3696,7 @@ void Instruction::Widget::FillChildren(Vec<ui::Widget*>& children) {
   }
 }
 
-void Instruction::SerializeState(Serializer& writer, const char* key) const {
+void Instruction::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
   auto& assembler = LLVM_Assembler::Get();
@@ -3759,7 +3759,7 @@ void Instruction::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void Instruction::DeserializeState(Deserializer& d) {
+void Instruction::DeserializeState(ObjectDeserializer& d) {
   static StringMap<unsigned> opcode_map = [] {
     auto& assembler = LLVM_Assembler::Get();
     StringMap<unsigned> map;

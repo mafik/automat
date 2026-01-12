@@ -2,28 +2,17 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/reader.h>
-
-#include <unordered_map>
-#include <unordered_set>
 
 #include "status.hh"
 
 namespace automat {
 
-struct Object;
-struct Part;
+using Serializer = rapidjson::PrettyWriter<rapidjson::StringBuffer>;
 
-struct Serializer : rapidjson::PrettyWriter<rapidjson::StringBuffer> {
-  using rapidjson::PrettyWriter<rapidjson::StringBuffer>::PrettyWriter;
-
-  std::unordered_set<Str> assigned_names;
-  std::unordered_map<Object*, Str> location_ids;
-
-  Str& ResolveName(Object&);
-  Str ResolveName(Object&, Part*);
-};
+using JsonValue = rapidjson::GenericValue<rapidjson::UTF8<>>;
 
 struct JsonToken {
   enum TokenType {
@@ -64,7 +53,7 @@ Str ToStr(JsonToken::TokenType);
 Str ToStr(const JsonToken&);
 
 struct Deserializer {
-  Deserializer(rapidjson::InsituStringStream&);
+  Deserializer(rapidjson::StringStream);
   void Get(Str&, Status&);
   void Get(double&, Status&);
   void Get(float&, Status&);
@@ -76,7 +65,7 @@ struct Deserializer {
 
   Str ErrorContext();
 
-  rapidjson::InsituStringStream& stream;
+  rapidjson::StringStream stream;
   rapidjson::Reader reader;
   JsonToken token;
 

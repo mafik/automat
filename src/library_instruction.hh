@@ -139,8 +139,8 @@ struct Instruction : Object, Runnable, Buffer {
     return std::make_unique<Widget>(parent, AcquireWeakPtr<Object>());
   }
 
-  void SerializeState(Serializer& writer, const char* key = "value") const override;
-  void DeserializeState(Deserializer& d) override;
+  void SerializeState(ObjectSerializer& writer, const char* key = "value") const override;
+  void DeserializeState(ObjectDeserializer& d) override;
 };
 
 }  // namespace automat::library

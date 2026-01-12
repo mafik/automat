@@ -685,7 +685,7 @@ void Window::AttachToTitle() {
 #endif
 }
 
-void Window::SerializeState(Serializer& writer, const char* key) const {
+void Window::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
 
@@ -699,7 +699,7 @@ void Window::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void Window::DeserializeState(Deserializer& d) {
+void Window::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto key : ObjectView(d, status)) {
     if (key == "title") {

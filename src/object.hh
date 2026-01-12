@@ -4,10 +4,13 @@
 
 #include <string>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "audio.hh"
 #include "deserializer.hh"
 #include "ptr.hh"
+#include "string_multimap.hh"
 #include "widget.hh"
 
 namespace automat {
@@ -21,6 +24,8 @@ struct ImageProvider;
 struct OnOff;
 struct LongRunning;
 struct Interface;
+struct ObjectSerializer;
+struct ObjectDeserializer;
 
 // Widget interface for objects - defines the contract for widgets that represent objects.
 struct ObjectWidget : ui::Widget {
@@ -70,10 +75,10 @@ struct Object : public ReferenceCounted {
   // Objects serialize themselves to the "value" property within the location objects
   // - Each part my want to emit multiple properties
 
-  virtual void SerializeState(Serializer& writer, const char* key = "value") const;
+  virtual void SerializeState(ObjectSerializer& writer, const char* key = "value") const;
 
   // Restores state when Automat is restarted.
-  virtual void DeserializeState(Deserializer& d);
+  virtual void DeserializeState(ObjectDeserializer& d);
 
   virtual std::string GetText() const { return ""; }
   virtual void SetText(std::string_view text) {}
@@ -193,6 +198,29 @@ struct Object : public ReferenceCounted {
 
   // If this object is owned by a Machine, return the Location that's used to store it.
   Location* MyLocation();
+};
+
+struct ObjectSerializer : Serializer {
+  using Serializer::Serializer;
+
+  std::unordered_set<Str> assigned_names;
+  std::unordered_map<Object*, Str> object_to_name;
+  std::vector<Object*> serialization_queue;
+
+  Str& ResolveName(Object&);
+  Str ResolveName(Object&, Part*);
+  void Serialize(Object&);
+};
+
+struct ObjectDeserializer : Deserializer {
+  string_map<Ptr<Object>> objects;
+
+  using Deserializer::Deserializer;
+
+  void RegisterObject(StrView name, Object& object);
+
+  Object* LookupObject(StrView name);
+  NestedPtr<Part> LookupPart(StrView name);
 };
 
 }  // namespace automat

@@ -213,11 +213,11 @@ void Number::FillChildren(Vec<Widget*>& children) {
   children.push_back(text_field.get());
 }
 
-void Number::SerializeState(Serializer& writer, const char* key) const {
+void Number::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.RawValue(text_field->text.data(), text_field->text.size(), rapidjson::kNumberType);
 }
-void Number::DeserializeState(Deserializer& d) {
+void Number::DeserializeState(ObjectDeserializer& d) {
   Status status;
   d.Get(value, status);
   if (!OK(status)) {

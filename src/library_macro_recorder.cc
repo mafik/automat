@@ -619,14 +619,14 @@ Vec2AndDir MacroRecorder::ArgStart(const Argument& arg, ui::Widget* coordinate_s
   return Object::WidgetBase::ArgStart(arg, coordinate_space);
 }
 
-void MacroRecorder::SerializeState(Serializer& writer, const char* key) const {
+void MacroRecorder::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
   writer.Key("recording");
   writer.Bool(keylogging != nullptr);
   writer.EndObject();
 }
-void MacroRecorder::DeserializeState(Deserializer& d) {
+void MacroRecorder::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     if (key == "recording") {

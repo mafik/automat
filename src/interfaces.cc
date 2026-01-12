@@ -127,4 +127,36 @@ void Interface::CanConnect(Object& start, Part& end, Status& status) const {
   }
 }
 
+void Gear::SerializeState(ObjectSerializer& writer, const char* key) const {
+  writer.Key(key);
+  writer.StartObject();
+  writer.Key("sinks");
+  writer.StartArray();
+  for (auto& sink_weak : sinks) {
+    auto sink = sink_weak.Lock();
+    if (!sink) continue;
+    writer.String(writer.ResolveName(*sink.Owner<Object>(), sink.Get()));
+  }
+  writer.EndArray();
+  writer.EndObject();
+}
+
+void Gear::DeserializeState(ObjectDeserializer& d) {
+  Status status;
+  for (auto& prop : ObjectView(d, status)) {
+    if (prop == "sinks") {
+      for (int i : ArrayView(d, status)) {
+        Str sink_name;
+        d.Get(sink_name, status);
+        NestedPtr<Part> target = d.LookupPart(sink_name);
+        if (auto interface = target.DynamicCast<Interface>()) {
+          AddSink(interface);
+        }
+      }
+    } else {
+      AppendErrorMessage(status) += "Gear couldn't deserialize unknown property: " + prop;
+    }
+  }
+}
+
 }  // namespace automat

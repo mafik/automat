@@ -2604,7 +2604,7 @@ bool OnOffTrack::IsOn() const {
   return on;
 }
 
-void TrackBase::SerializeState(Serializer& writer, const char* key) const {
+void TrackBase::SerializeState(ObjectSerializer& writer, const char* key) const {
   // Using nullptr as a guard value to reduce JSON nesting
   if (key != nullptr) {
     writer.Key(key);
@@ -2621,7 +2621,7 @@ void TrackBase::SerializeState(Serializer& writer, const char* key) const {
   }
 }
 
-void OnOffTrack::SerializeState(Serializer& writer, const char* key) const {
+void OnOffTrack::SerializeState(ObjectSerializer& writer, const char* key) const {
   // Using nullptr as a guard value to reduce JSON nesting
   if (key != nullptr) {
     writer.Key(key);
@@ -2639,7 +2639,7 @@ void OnOffTrack::SerializeState(Serializer& writer, const char* key) const {
   }
 }
 
-void Vec2Track::SerializeState(Serializer& writer, const char* key) const {
+void Vec2Track::SerializeState(ObjectSerializer& writer, const char* key) const {
   // Using nullptr as a guard value to reduce JSON nesting
   if (key != nullptr) {
     writer.Key(key);
@@ -2662,7 +2662,7 @@ void Vec2Track::SerializeState(Serializer& writer, const char* key) const {
   }
 }
 
-void Float64Track::SerializeState(Serializer& writer, const char* key) const {
+void Float64Track::SerializeState(ObjectSerializer& writer, const char* key) const {
   // Using nullptr as a guard value to reduce JSON nesting
   if (key != nullptr) {
     writer.Key(key);
@@ -2682,7 +2682,7 @@ void Float64Track::SerializeState(Serializer& writer, const char* key) const {
   }
 }
 
-void Timeline::SerializeState(Serializer& writer, const char* key) const {
+void Timeline::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
 
@@ -2793,23 +2793,23 @@ bool Float64Track::TryDeserializeField(Deserializer& d, Str& field_name) {
   return TrackBase::TryDeserializeField(d, field_name);
 }
 
-void TrackBase::DeserializeState(Deserializer& d) {
+void TrackBase::DeserializeState(ObjectDeserializer& d) {
   ERROR << "TrackBase::DeserializeState() not implemented";
 }
 
-void OnOffTrack::DeserializeState(Deserializer& d) {
+void OnOffTrack::DeserializeState(ObjectDeserializer& d) {
   ERROR << "OnOffTrack::DeserializeState() not implemented";
 }
 
-void Vec2Track::DeserializeState(Deserializer& d) {
+void Vec2Track::DeserializeState(ObjectDeserializer& d) {
   ERROR << "Vec2Track::DeserializeState() not implemented";
 }
 
-void Float64Track::DeserializeState(Deserializer& d) {
+void Float64Track::DeserializeState(ObjectDeserializer& d) {
   ERROR << "Vec2Track::DeserializeState() not implemented";
 }
 
-void Timeline::DeserializeState(Deserializer& d) {
+void Timeline::DeserializeState(ObjectDeserializer& d) {
   Status status;
   here = MyLocation();
   for (auto& key : ObjectView(d, status)) {

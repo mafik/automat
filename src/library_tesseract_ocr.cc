@@ -1209,7 +1209,7 @@ void TesseractOCR::OnRun(std::unique_ptr<RunTask>&) {
   WakeWidgetsAnimation();
 }
 
-void TesseractOCR::SerializeState(Serializer& writer, const char* key) const {
+void TesseractOCR::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.StartObject();
 
@@ -1227,7 +1227,7 @@ void TesseractOCR::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void TesseractOCR::DeserializeState(Deserializer& d) {
+void TesseractOCR::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto key : ObjectView(d, status)) {
     if (key == "ocr_text") {

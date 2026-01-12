@@ -65,12 +65,12 @@ void FlipFlop::OnTurnOff() {
   WakeWidgetsAnimation();
 }
 
-void FlipFlop::SerializeState(Serializer& writer, const char* key) const {
+void FlipFlop::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   writer.Bool(current_state);
 }
 
-void FlipFlop::DeserializeState(Deserializer& d) {
+void FlipFlop::DeserializeState(ObjectDeserializer& d) {
   Status status;
   d.Get(current_state, status);
   if (!OK(status)) {

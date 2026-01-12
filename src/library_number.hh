@@ -35,8 +35,8 @@ struct Number : Object, Object::WidgetBase {
   void FillChildren(Vec<Widget*>& children) override;
   bool CenteredAtZero() const override { return true; }
 
-  void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Deserializer& d) override;
+  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void DeserializeState(ObjectDeserializer& d) override;
 };
 
 }  // namespace automat::library

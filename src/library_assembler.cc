@@ -332,7 +332,7 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
   return nullptr;
 }
 
-void Assembler::SerializeState(Serializer& writer, const char* key) const {
+void Assembler::SerializeState(ObjectSerializer& writer, const char* key) const {
   mc::Controller::State mc_state = {};
   {
     auto mut_this = const_cast<Assembler*>(this);
@@ -352,7 +352,7 @@ void Assembler::SerializeState(Serializer& writer, const char* key) const {
   writer.EndObject();
 }
 
-void Assembler::DeserializeState(Deserializer& d) {
+void Assembler::DeserializeState(ObjectDeserializer& d) {
   Status status;
   for (auto& key : ObjectView(d, status)) {
     bool found = false;
@@ -830,13 +830,13 @@ void Register::SetText(std::string_view text) {
   WakeWidgetsAnimation();
 }
 
-void Register::SerializeState(Serializer& writer, const char* key) const {
+void Register::SerializeState(ObjectSerializer& writer, const char* key) const {
   writer.Key(key);
   auto& reg = kRegisters[register_index];
   writer.String(reg.name.data(), reg.name.size());
 }
 
-void Register::DeserializeState(Deserializer& d) {
+void Register::DeserializeState(ObjectDeserializer& d) {
   Status status;
   std::string reg_name;
   d.Get(reg_name, status);

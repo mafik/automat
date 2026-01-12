@@ -190,9 +190,7 @@ static void RecoverParser(Deserializer& d) {
   }
 }
 
-Deserializer::Deserializer(InsituStringStream& stream) : stream(stream) {
-  reader.IterativeParseInit();
-}
+Deserializer::Deserializer(StringStream stream) : stream(stream) { reader.IterativeParseInit(); }
 
 void Deserializer::Get(Str& result, Status& status) {
   FillToken(*this);
@@ -411,33 +409,6 @@ Str Deserializer::ErrorContext() {
   auto last_newline = prefix.rfind('\n');
   int col = last_newline == Str::npos ? 0 : pos - last_newline;
   return f("line {}, column {}", n_lines, col);
-}
-
-Str& Serializer::ResolveName(Object& object) {
-  auto it = location_ids.find(&object);
-  if (it == location_ids.end()) {
-    auto base_name = Str(object.Name());
-    auto name = base_name;
-    int i = 2;
-    while (assigned_names.count(name)) {
-      name = f("{} #{}", base_name, i++);
-    }
-    it = location_ids.emplace(&object, name).first;
-    assigned_names.insert(name);
-  }
-  return it->second;
-}
-
-Str Serializer::ResolveName(Object& object, Part* part) {
-  Str ret = ResolveName(object);
-  if (part) {
-    Str part_name;
-    object.PartName(*part, part_name);
-    if (!part_name.empty()) {
-      ret += "." + part_name;
-    }
-  }
-  return ret;
 }
 
 }  // namespace automat

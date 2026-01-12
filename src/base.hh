@@ -165,9 +165,9 @@ struct Machine : Object, ui::Widget, ui::DropTarget {
     return Create(*prototypes->Find<T>());
   }
 
-  void SerializeState(Serializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer, const char* key) const override;
 
-  void DeserializeState(Deserializer& d) override;
+  void DeserializeState(ObjectDeserializer& d) override;
 
   Location* LocationAtPoint(Vec2);
 

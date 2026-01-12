@@ -406,7 +406,7 @@ void Object::Updated(Location& here, Location& updated) {
   }
 }
 
-void Object::SerializeState(Serializer& writer, const char* key) const {
+void Object::SerializeState(ObjectSerializer& writer, const char* key) const {
   auto value = GetText();
   if (!value.empty()) {
     writer.Key(key);
@@ -414,7 +414,7 @@ void Object::SerializeState(Serializer& writer, const char* key) const {
   }
 }
 
-void Object::DeserializeState(Deserializer& d) {
+void Object::DeserializeState(ObjectDeserializer& d) {
   Status status;
   Str value;
   d.Get(value, status);
@@ -539,6 +539,78 @@ Part* Object::PartFromName(StrView needle) {
     }
   });
   return result;
+}
+
+Str& ObjectSerializer::ResolveName(Object& object) {
+  auto it = object_to_name.find(&object);
+  if (it == object_to_name.end()) {
+    auto base_name = Str(object.Name());
+    auto name = base_name;
+    int i = 2;
+    while (assigned_names.count(name)) {
+      name = f("{} #{}", base_name, i++);
+    }
+    it = object_to_name.emplace(&object, name).first;
+    assigned_names.insert(name);
+    serialization_queue.push_back(&object);
+  }
+  return it->second;
+}
+
+Str ObjectSerializer::ResolveName(Object& object, Part* part) {
+  Str ret = ResolveName(object);
+  if (part) {
+    Str part_name;
+    object.PartName(*part, part_name);
+    if (!part_name.empty()) {
+      ret += "." + part_name;
+    }
+  }
+  return ret;
+}
+
+void ObjectSerializer::Serialize(Object& start) {
+  ResolveName(start);
+  while (!serialization_queue.empty()) {
+    auto* o = serialization_queue.back();
+    serialization_queue.pop_back();
+    auto name = ResolveName(*o);
+    o->SerializeState(*this, name.c_str());
+  }
+}
+
+void ObjectDeserializer::RegisterObject(StrView name, Object& object) {
+  objects.emplace(name, object.AcquirePtr());
+}
+
+Object* ObjectDeserializer::LookupObject(StrView name) {
+  auto to_it = objects.find(name);
+  if (to_it == objects.end()) {
+    return nullptr;
+  }
+  return to_it->second.Get();
+}
+
+NestedPtr<Part> ObjectDeserializer::LookupPart(StrView name) {
+  auto dot_pos = name.find('.');
+  Str to_name, to_part;
+  if (dot_pos != Str::npos) {
+    to_name = name.substr(0, dot_pos);
+    to_part = name.substr(dot_pos + 1);
+  } else {
+    to_name = name;
+    to_part = "";
+  }
+  auto* to = LookupObject(to_name);
+  if (to == nullptr) {
+    return {};
+  }
+  if (to_part.empty()) {
+    return NestedPtr<Part>(to->AcquirePtr(), to);
+  } else {
+    auto* part = to->PartFromName(to_part);
+    return NestedPtr<Part>(to->AcquirePtr(), part);
+  }
 }
 
 }  // namespace automat

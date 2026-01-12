@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT
 #include "persistence.hh"
 
+#include <rapidjson/document.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/rapidjson.h>
 
@@ -18,13 +19,18 @@ void SaveState(ui::RootWidget& root_widget, Status& status) {
   // Write window_state to a temp file
   auto state_path = StatePath();
   rapidjson::StringBuffer sb;
-  Serializer writer(sb);
+  ObjectSerializer writer(sb);
   writer.SetMaxDecimalPlaces(6);
   writer.StartObject();
   writer.Key("version");
   writer.Uint(2);
   writer.Key("window");
   root_widget.SerializeState(writer);
+
+  // writer.assigned_names.emplace("version");
+  // writer.assigned_names.emplace("window");
+  // writer.Serialize(*root_machine);
+
   root_machine->SerializeState(writer, "root");
 
   writer.EndObject();
@@ -43,8 +49,8 @@ void LoadState(ui::RootWidget& root_widget, Status& status) {
       return;
     }
   }
-  rapidjson::InsituStringStream stream(const_cast<char*>(contents.c_str()));
-  Deserializer d(stream);
+  rapidjson::StringStream stream(contents.data());
+  ObjectDeserializer d(stream);
 
   for (auto& key : ObjectView(d, status)) {
     if (key == "version") {

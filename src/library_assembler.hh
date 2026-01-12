@@ -90,8 +90,8 @@ struct Register : Object {
   void Parts(const std::function<void(Part&)>& cb) override;
   void SetText(std::string_view text) override;
 
-  void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Deserializer& d) override;
+  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void DeserializeState(ObjectDeserializer& d) override;
 };
 
 // Combines functions of Assembler and Thread.
@@ -127,8 +127,8 @@ struct Assembler : Object, LongRunning, Container {
 
   Ptr<Location> Extract(Object& descendant) override;
 
-  void SerializeState(Serializer& writer, const char* key) const override;
-  void DeserializeState(Deserializer& d) override;
+  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void DeserializeState(ObjectDeserializer& d) override;
 };
 
 // Convenience function for updating the code with a vector of automat::library::Instruction.

@@ -495,7 +495,7 @@ struct [[clang::trivial_abi]] NestedPtr {
   explicit operator bool() const { return obj != nullptr; }
 
   template <typename U>
-  U* Owner() {
+  U* Owner() const {
     return this->ptr.template Get<U>();
   }
 

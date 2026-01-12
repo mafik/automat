@@ -4,6 +4,7 @@
 
 #include <include/core/SkBlurTypes.h>
 #include <include/core/SkColor.h>
+#include <include/core/SkMatrix.h>
 #include <include/core/SkRRect.h>
 #include <include/core/SkRSXform.h>
 #include <include/core/SkTextBlob.h>
@@ -262,39 +263,45 @@ void ConnectionWidget::FromMoved() {
   WakeAnimation();
 }
 
-// This function copies a lot of the code from Tick - this is done because it's needed by
-// TextureAnchors. Fresh positions of start & end points allows the ANCHOR_WARP compositor to deform
-// the rendered texture and make it responsive to mouse movement. Unfortunately the same logic is
-// needed for the regular animation Tick.
-//
-// TODO: figure out a clean way to share this logic
-static void UpdateEndpoints(ConnectionWidget& w) {
-  auto arg = w.start_weak.Lock();
-  auto& widget_store = w.WidgetStore();
-  auto& object = *arg.Owner<Object>();
-  auto& from_widget = *widget_store.FindOrNull(object);
+// Helper for methods of ConnectionWidget that need to access the start/end of the connection. It
+// performs the locking of weak pointers and locates the widgets of connected objects.
+struct ConnectionWidgetLocker {
+  WidgetStore& widget_store;
 
-  Widget* parent_machine = root_machine.get();
+  NestedPtr<Argument> start_arg;
+  ObjectWidget* start_widget;
 
-  w.pos_dir = from_widget.ArgStart(*arg, parent_machine);
+  NestedPtr<Part> end_part;
+  ObjectWidget* end_widget;
+  SkMatrix end_transform;
+
+  // Computing everything in initializer avoids zero-initialization
+  ConnectionWidgetLocker(ConnectionWidget& w)
+      : widget_store(w.WidgetStore()),
+        start_arg(w.start_weak.Lock()),
+        start_widget(StartObj() ? widget_store.FindOrNull(*StartObj()) : nullptr),
+        end_part(StartObj() ? start_arg->Find(*StartObj()) : NestedPtr<Part>()),
+        end_widget(EndObj() ? widget_store.FindOrNull(*EndObj()) : nullptr),
+        end_transform(end_widget ? TransformBetween(*end_widget, *root_machine) : SkMatrix()) {}
+
+  Object* StartObj() const { return start_arg ? start_arg.Owner<Object>() : nullptr; }
+  Object* EndObj() const { return end_part ? end_part.Owner<Object>() : nullptr; }
+};
+
+// Updates ConnectionWidget.pos_dir & ConnectionWidget.to_points. This is shared among Tick &
+// TextureAnchors. Tick uses it for connection animation and TextureAnchors uses it to stretch the
+// texture into most up-to-date position.
+static void UpdateEndpoints(ConnectionWidget& w, ConnectionWidgetLocker& a) {
+  w.pos_dir = a.start_widget->ArgStart(*a.start_arg, root_machine.Get());
+
   w.to_points.clear();
 
-  auto to = arg->Find(object);
-  Object* to_object = nullptr;
-
-  if (to) {
-    to_object = to.Owner<Object>();
-    auto& to_widget = *widget_store.FindOrNull(*to_object);
-    w.to_shape = to_widget.PartShape(to.Get());
-    to_widget.ConnectionPositions(w.to_points);
-    Path target_path;
-    SkMatrix m = TransformBetween(to_widget, *parent_machine);
+  if (a.end_part) {
+    a.end_widget->ConnectionPositions(w.to_points);
     for (auto& vec_and_dir : w.to_points) {
-      vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
+      vec_and_dir.pos = a.end_transform.mapPoint(vec_and_dir.pos);
     }
-    w.to_shape.transform(m);
   } else {
-    w.to_shape.reset();
     if (w.manual_position) {
       w.to_points.emplace_back(Vec2AndDir{
           .pos = *w.manual_position,
@@ -303,7 +310,7 @@ static void UpdateEndpoints(ConnectionWidget& w) {
     }
   }
 
-  if (arg.Get() == &next_arg) {
+  if (a.start_arg.Get() == &next_arg) {
     while (w.to_points.size() > 1) {
       // from the last two, pick the one which is closer to pointing down (-pi/2)
       float delta_1 = fabs((w.to_points[w.to_points.size() - 1].dir + 90_deg).ToRadians());
@@ -317,71 +324,32 @@ static void UpdateEndpoints(ConnectionWidget& w) {
 }
 
 animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
-  auto arg = start_weak.Lock();
-  if (!arg) {
+  ConnectionWidgetLocker a(*this);
+
+  if (!a.start_arg) {
     return animation::Finished;
   }
-  style = arg->GetStyle();
+  style = a.start_arg->GetStyle();
   if (style == Argument::Style::Invisible || style == Argument::Style::Spotlight) {
     return animation::Finished;
   }
 
-  auto& widget_store = WidgetStore();
-  auto& object = *arg.Owner<Object>();
-  auto& from_widget = *widget_store.FindOrNull(object);
-  auto* from_loc = object.MyLocation();
-
-  // TODO: parent_machine is not necessarily correct.
-  // For example when a location is being dragged around, or when there are nested machines.
-  Widget* parent_machine = root_machine.get();
-
-  from_shape = from_widget.PartShape(arg.Get());
-  auto transform_from_to_machine = TransformBetween(from_widget, *parent_machine);
+  from_shape = a.start_widget->PartShape(a.start_arg.Get());
+  auto transform_from_to_machine = TransformBetween(*a.start_widget, *root_machine);
   from_shape.transform(transform_from_to_machine);
 
-  to_points.clear();
+  UpdateEndpoints(*this, a);
 
-  pos_dir = from_widget.ArgStart(*arg, parent_machine);
-
-  auto to = arg->Find(object);
-  Object* to_object = nullptr;
-
-  if (to) {
-    to_object = to.Owner<Object>();
-    auto& to_widget = *widget_store.FindOrNull(*to_object);
-    to_shape = to_widget.PartShape(to.Get());
-    to_widget.ConnectionPositions(to_points);
-    Path target_path;
-    SkMatrix m = TransformBetween(to_widget, *parent_machine);
-    for (auto& vec_and_dir : to_points) {
-      vec_and_dir.pos = m.mapPoint(vec_and_dir.pos);
-    }
-    to_shape.transform(m);
+  if (a.end_part) {
+    to_shape = a.end_widget->PartShape(a.end_part.Get());
+    to_shape.transform(a.end_transform);
   } else {
     to_shape.reset();
-    if (manual_position) {
-      to_points.emplace_back(Vec2AndDir{
-          .pos = *manual_position,
-          .dir = -90_deg,
-      });
-    }
-  }
-
-  if (arg.Get() == &next_arg) {
-    while (to_points.size() > 1) {
-      // from the last two, pick the one which is closer to pointing down (-pi/2)
-      float delta_1 = fabs((to_points[to_points.size() - 1].dir + 90_deg).ToRadians());
-      float delta_2 = fabs((to_points[to_points.size() - 2].dir + 90_deg).ToRadians());
-      if (delta_1 < delta_2) {
-        std::swap(to_points[to_points.size() - 1], to_points[to_points.size() - 2]);
-      }
-      to_points.pop_back();
-    }
   }
 
   // Don't draw the cable if one of the to_points is over from_shape
   bool overlapping = false;
-  if (to_object != &object) {
+  if (a.EndObj() != a.StartObj()) {
     overlapping = to_shape.contains(pos_dir.pos.x, pos_dir.pos.y);
     if (!overlapping && !from_shape.isEmpty()) {
       for (auto& to_point : to_points) {
@@ -398,7 +366,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
   auto phase = animation::LinearApproach(overlapping ? 1 : 0, timer.d, 5, transparency);
 
-  alpha = (1.f - from_loc->transparency) * (1.f - transparency);
+  alpha = (1.f - a.StartObj()->here->transparency) * (1.f - transparency);
 
   if (!state.has_value() && style != Argument::Style::Arrow && alpha > 0.01f) {
     auto arcline = RouteCable(pos_dir, to_points, nullptr);
@@ -412,7 +380,7 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
   }
 
   if (state) {
-    if (to) {
+    if (a.end_part) {
       state->steel_insert_hidden.target = 1;
       // phase |= state->connector_scale.SpringTowards(
       //     to->scale, timer.d, Location::kScaleSpringPeriod, Location::kSpringHalfTime);
@@ -425,12 +393,12 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
 
     phase |= SimulateCablePhysics(timer, *state, pos_dir, to_points);
   } else if (style != Argument::Style::Arrow) {
-    cable_width.target = to ? 2_mm : 0;
+    cable_width.target = a.end_part ? 2_mm : 0;
     cable_width.speed = 5;
     phase |= cable_width.Tick(timer);
   }
 
-  if (arg->AutoconnectRadius() > 0) {
+  if (a.start_arg->AutoconnectRadius() > 0) {
     auto& anim = animation_state;
     phase |= animation::LinearApproach(anim.radar_alpha_target, timer.d, 2.f, anim.radar_alpha);
     if (anim.radar_alpha >= 0.01f) {
@@ -439,13 +407,13 @@ animation::Phase ConnectionWidget::Tick(time::Timer& timer) {
     }
 
     float prototype_alpha_target = anim.prototype_alpha_target;
-    if (to) {
+    if (a.end_part) {
       prototype_alpha_target = 0;
     }
     phase |= animation::LinearApproach(prototype_alpha_target, timer.d, 2.f, anim.prototype_alpha);
     if (anim.prototype_alpha > 0) {
       if (!prototype_widget) {
-        prototype_widget = arg->Prototype()->MakeWidget(this);
+        prototype_widget = a.start_arg->Prototype()->MakeWidget(this);
       }
       phase |= prototype_widget->Tick(timer);
     }
@@ -600,7 +568,8 @@ Optional<Rect> ConnectionWidget::TextureBounds() const {
 }
 
 Vec<Vec2> ConnectionWidget::TextureAnchors() {
-  UpdateEndpoints(*this);
+  ConnectionWidgetLocker a(*this);
+  UpdateEndpoints(*this, a);
   Vec<Vec2> anchors;
   anchors.push_back(pos_dir.pos);
   Optional<Vec2> end_pos;

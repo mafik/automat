@@ -32,7 +32,7 @@ using namespace automat;
 namespace automat::ui {
 
 struct DummyRunnable : Object, Runnable {
-  void OnRun(Location& here, std::unique_ptr<RunTask>&) override { return; }
+  void OnRun(std::unique_ptr<RunTask>&) override { return; }
   Ptr<Object> Clone() const override { return MAKE_PTR(DummyRunnable); }
 } kDummyRunnable;
 

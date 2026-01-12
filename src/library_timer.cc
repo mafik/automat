@@ -703,11 +703,11 @@ void TimerDelay::Parts(const std::function<void(Part&)>& cb) {
   cb(next_arg);
 }
 
-void TimerDelay::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
+void TimerDelay::OnRun(std::unique_ptr<RunTask>& run_task) {
   auto lock = std::lock_guard(mtx);
   ZoneScopedN("TimerDelay");
   start_time = time::SteadyClock::now();
-  ScheduleAt(here, start_time + duration.value);
+  ScheduleAt(*here, start_time + duration.value);
   WakeAnimation();
   BeginLongRunning(std::move(run_task));
 }

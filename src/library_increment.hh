@@ -12,7 +12,7 @@ struct Increment : Object, ui::Widget, Runnable {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void Parts(const std::function<void(Part&)>& cb) override { cb(target_arg); }
-  void OnRun(Location& h, RunTask&) override;
+  void OnRun(std::unique_ptr<RunTask>&) override;
   void Draw(SkCanvas&) const override;
   SkPath Shape() const override;
 };

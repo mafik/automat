@@ -114,7 +114,15 @@ struct Runnable : Interface {
   //
   // The RunTask is being passed here to make it possible to "steal" the task from the scheduler and
   // pass it to BeginLongRunning.
-  virtual void OnRun(Location& here, std::unique_ptr<RunTask>& run_task) = 0;
+  virtual void OnRun(std::unique_ptr<RunTask>& run_task) = 0;
+
+  void Run(std::unique_ptr<RunTask>& run_task) {
+    ForwardDo([&](Runnable& r) { r.OnRun(run_task); });
+  }
+
+  void NotifyRun(std::unique_ptr<RunTask>& run_task) {
+    ForwardNotify([&](Runnable& r) { r.OnRun(run_task); });
+  }
 };
 
 // 2D Canvas holding objects & a spaghetti of connections.

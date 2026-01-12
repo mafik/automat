@@ -240,7 +240,7 @@ void Instruction::BufferVisit(const BufferVisitor& visitor) {
   visitor(span<char>{});
 }
 
-void Instruction::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
+void Instruction::OnRun(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("Instruction");
   auto assembler = FindOrCreateAssembler(*this);
   assembler->RunMachineCode(this, std::move(run_task));

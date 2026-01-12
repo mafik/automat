@@ -6,6 +6,7 @@
 
 #include "base.hh"
 #include "drag_action.hh"
+#include "log.hh"
 #include "svg.hh"
 #include "ui_connection_widget.hh"
 #include "widget.hh"
@@ -73,6 +74,8 @@ void NextArg::Connect(Object& start, const NestedPtr<Part>& end) {
 NestedPtr<Part> NextArg::Find(Object& start) const {
   if (auto* runnable = dynamic_cast<Runnable*>(&start)) {
     return runnable->next.Lock();
+  } else {
+    ERROR_ONCE << start.Name() << " is not a Runnable - and can't be used as a source for NextArg";
   }
   return {};
 }

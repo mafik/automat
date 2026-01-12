@@ -56,7 +56,7 @@ struct MacroRecorder : Object,
   void PointerLeave(ui::Pointer&) override;
   void PointerMove(ui::Pointer&, Vec2 position) override;
 
-  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
+  void OnRun(std::unique_ptr<RunTask>&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
   void KeyloggerKeyDown(ui::Key) override;

@@ -73,7 +73,7 @@ struct Instruction : Object, Runnable, Buffer {
 
   LongRunning* AsLongRunning() override;
 
-  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
+  void OnRun(std::unique_ptr<RunTask>&) override;
 
   Buffer::Type imm_type = Buffer::Type::Unsigned;
 

@@ -2468,7 +2468,7 @@ void Timeline::OnCancel() {
   }
 }
 
-void Timeline::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
+void Timeline::OnRun(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("Timeline");
   if (state != kPaused) {
     return;

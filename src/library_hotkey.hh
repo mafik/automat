@@ -28,6 +28,9 @@ struct HotKey : Object, Object::WidgetBase, OnOff, ui::CaretOwner, ui::KeyGrabbe
 
   // This is used to get hotkey events
   ui::KeyGrab* hotkey = nullptr;
+  struct HotKeyRunnable : Runnable {
+    void OnRun(std::unique_ptr<RunTask>& run_task) override;
+  } runnable;
 
   HotKey(ui::Widget* parent);
   string_view Name() const override;

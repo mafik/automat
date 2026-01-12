@@ -28,7 +28,7 @@ struct Window : public Object, Runnable, ImageProvider {
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 
   void Parts(const std::function<void(Part&)>& cb) override;
-  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
+  void OnRun(std::unique_ptr<RunTask>&) override;
 
   // Called after deserialization. Makes the window object attach its native handle to the window
   // with the current title.

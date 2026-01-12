@@ -492,7 +492,7 @@ std::unique_ptr<ObjectWidget> Window::MakeWidget(ui::Widget* parent) {
 
 void Window::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
 
-void Window::OnRun(Location& here, std::unique_ptr<RunTask>&) {
+void Window::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("Window");
 #ifdef __linux__
   {
@@ -646,10 +646,10 @@ void Window::OnRun(Location& here, std::unique_ptr<RunTask>&) {
 #endif
   WakeWidgetsAnimation();
 
-  here.ScheduleUpdate();
+  here->ScheduleUpdate();
   // Re-schedule execution if continuous run is enabled
   if (run_continuously) {
-    here.ScheduleRun();
+    here->ScheduleRun();
   }
 }
 

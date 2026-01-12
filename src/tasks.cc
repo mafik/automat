@@ -166,7 +166,7 @@ void RunTask::OnExecute(std::unique_ptr<Task>& self) {
       }
       // Cast the `self` to RunTask for the OnRun invocation
       std::unique_ptr<RunTask> self_as_run_task((RunTask*)self.release());
-      runnable->OnRun(*s, self_as_run_task);
+      runnable->OnRun(self_as_run_task);
       // If OnRun didn't "steal" the ownership then we have to return it back.
       self.reset(self_as_run_task.release());
 

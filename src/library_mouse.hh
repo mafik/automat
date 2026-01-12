@@ -31,7 +31,7 @@ struct MouseButtonEvent : Object, Runnable {
   string_view Name() const override;
   Ptr<Object> Clone() const override;
   void Parts(const std::function<void(Part&)>& cb) override;
-  void OnRun(Location&, std::unique_ptr<RunTask>&) override;
+  void OnRun(std::unique_ptr<RunTask>&) override;
   audio::Sound& NextSound() override;
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 
@@ -79,7 +79,7 @@ struct MouseButtonPresser : Object, Runnable, OnOff {
   void Parts(const std::function<void(Part&)>& cb) override;
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 
-  void OnRun(Location& here, std::unique_ptr<RunTask>& run_task) override;
+  void OnRun(std::unique_ptr<RunTask>& run_task) override;
 
   bool IsOn() const override { return down; }
   void OnTurnOn() override;

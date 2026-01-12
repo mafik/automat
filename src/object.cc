@@ -493,7 +493,7 @@ bool Object::WidgetBase::AllowChildPointerEvents(ui::Widget&) const { return !Is
 
 bool Object::WidgetBase::IsIconified() const { return automat::IsIconified(object.GetUnsafe()); }
 
-void Object::Parts(const std::function<void(Part&)>& cb) {}
+void Object::Parts(const std::function<void(Part&)>& cb) { cb(*this); }
 
 void Object::PartName(Part& part, Str& out_name) { out_name = part.Name(); }
 

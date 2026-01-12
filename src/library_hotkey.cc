@@ -288,7 +288,10 @@ void HotKey::Draw(SkCanvas& canvas) const {
 }
 
 SkPath HotKey::Shape() const { return SkPath::RRect(kShapeRRect); }
-void HotKey::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
+void HotKey::Parts(const std::function<void(Part&)>& cb) {
+  Object::Parts(cb);
+  cb(runnable);
+}
 
 void HotKey::FillChildren(Vec<Widget*>& children) {
   children.push_back(power_button.get());
@@ -315,6 +318,8 @@ void HotKey::OnTurnOn() {
                                                     ERROR << status;
                                                   }
                                                 });
+  WakeWidgetsAnimation();
+  power_button->WakeAnimation();
 }
 
 // This is called when the new HotKey is selected by the user
@@ -332,7 +337,10 @@ void HotKey::KeyDown(ui::Caret&, ui::Key key) {
   }
 }
 
-void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) { ScheduleNext(*this); }
+void HotKey::KeyGrabberKeyDown(ui::KeyGrab&) {
+  ScheduleArgumentTargets(*this, runnable);
+  ScheduleNext(*this);
+}
 void HotKey::KeyGrabberKeyUp(ui::KeyGrab&) {}
 
 void HotKey::OnTurnOff() {
@@ -340,6 +348,8 @@ void HotKey::OnTurnOff() {
   // vice versa
   if (hotkey) {
     hotkey->Release();
+    WakeWidgetsAnimation();
+    power_button->WakeAnimation();
   }
 }
 
@@ -409,4 +419,5 @@ void HotKey::DeserializeState(Deserializer& d) {
   }
 }
 
+void HotKey::HotKeyRunnable::OnRun(std::unique_ptr<RunTask>& run_task) {}
 }  // namespace automat::library

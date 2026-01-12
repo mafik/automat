@@ -285,7 +285,7 @@ static Timeline* FindOrCreateTimeline(MacroRecorder& macro_recorder) {
 
 SkPath MacroRecorder::Shape() const { return MacroRecorderShape(); }
 
-void MacroRecorder::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
+void MacroRecorder::OnRun(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("MacroRecorder");
   if (keylogging == nullptr) {
     auto timeline = FindOrCreateTimeline(*this);

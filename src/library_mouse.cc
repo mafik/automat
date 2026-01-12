@@ -501,7 +501,7 @@ string_view MouseButtonEvent::Name() const { return "Mouse Button Event"sv; }
 
 Ptr<Object> MouseButtonEvent::Clone() const { return MAKE_PTR(MouseButtonEvent, button, down); }
 void MouseButtonEvent::Parts(const std::function<void(Part&)>& cb) { cb(next_arg); }
-void MouseButtonEvent::OnRun(Location&, std::unique_ptr<RunTask>&) {
+void MouseButtonEvent::OnRun(std::unique_ptr<RunTask>&) {
   ZoneScopedN("MouseClick");
   SendMouseButtonEvent(button, down);
 }
@@ -902,7 +902,7 @@ std::unique_ptr<ObjectWidget> MouseButtonPresser::MakeWidget(ui::Widget* parent)
   return std::make_unique<MouseButtonPresserWidget>(parent, AcquireWeakPtr());
 }
 
-void MouseButtonPresser::OnRun(Location& here, std::unique_ptr<RunTask>& run_task) {
+void MouseButtonPresser::OnRun(std::unique_ptr<RunTask>& run_task) {
   ZoneScopedN("MouseButtonPresser");
   audio::Play(embedded::assets_SFX_mouse_down_wav);
   SendMouseButtonEvent(button, true);

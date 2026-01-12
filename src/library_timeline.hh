@@ -136,7 +136,7 @@ struct Timeline : Object, Runnable, LongRunning, TimerNotificationReceiver {
   Ptr<Object> Clone() const override;
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
   void Parts(const std::function<void(Part&)>& cb) override;
-  void OnRun(Location& here, std::unique_ptr<RunTask>&) override;
+  void OnRun(std::unique_ptr<RunTask>&) override;
   void OnCancel() override;
   LongRunning* AsLongRunning() override { return this; }
   void OnTimerNotification(Location&, time::SteadyPoint) override;

@@ -18,7 +18,7 @@ void SaveState(ui::RootWidget& root_widget, Status& status) {
   // Write window_state to a temp file
   auto state_path = StatePath();
   rapidjson::StringBuffer sb;
-  rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(sb);
+  Serializer writer(sb);
   writer.SetMaxDecimalPlaces(6);
   writer.StartObject();
   writer.Key("version");

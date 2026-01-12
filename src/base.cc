@@ -18,6 +18,7 @@
 
 #include "drag_action.hh"
 #include "embedded.hh"
+#include "format.hh"
 #include "global_resources.hh"
 #include "location.hh"
 #include "math.hh"
@@ -123,23 +124,9 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
     writer.Key("locations");
     writer.StartObject();
 
-    // Pick unique names for locations.
-    std::unordered_set<Str> assigned_names;
-    std::unordered_map<Location*, Str> location_ids;
-    for (auto& location : locations) {
-      auto base_name = Str(location->object->Name());
-      auto name = base_name;
-      int i = 2;
-      while (assigned_names.count(name)) {
-        name = f("{} #{}", base_name, i++);
-      }
-      location_ids.emplace(location.get(), name);
-      assigned_names.insert(name);
-    }
-
     // Serialize the locations.
     for (auto& location : locations) {
-      auto& name = location_ids.at(location.get());
+      auto& name = writer.ResolveName(*location->object);
       writer.Key(name.data(), name.size());
       writer.StartObject();
       if (location->object) {
@@ -154,27 +141,13 @@ void Machine::SerializeState(Serializer& writer, const char* key) const {
           location->object->Args([&](Argument& arg) {
             auto end = arg.Find(*location->object);
             if (!end) return;
-            Str name;
-            location->object->PartName(arg, name);
-            auto* end_object = end.Owner<Object>();
-            auto* end_location = end_object->MyLocation();
-            auto* end_part_object = dynamic_cast<Object*>(end.Get());
-            Str to_name = location_ids.at(end_location);
-            if (end_part_object == end_object) {
-              // cool, the argument points directly at some object
-            } else {
-              // but it's also possible that it points at a PART of some object
-              Str part_name;
-              end_object->PartName(*end, part_name);
-              to_name += "." + part_name;
-            }
-
             if (!parts_opened) {
               parts_opened = true;
               writer.Key("parts");
               writer.StartObject();
             }
             writer.Key(name.data(), name.size());
+            auto to_name = writer.ResolveName(*end.Owner<Object>(), end.Get());
             writer.String(to_name.data(), to_name.size());
           });
           if (parts_opened) {

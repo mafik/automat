@@ -5,11 +5,25 @@
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/reader.h>
 
+#include <unordered_map>
+#include <unordered_set>
+
 #include "status.hh"
 
 namespace automat {
 
-using Serializer = rapidjson::PrettyWriter<rapidjson::StringBuffer>;
+struct Object;
+struct Part;
+
+struct Serializer : rapidjson::PrettyWriter<rapidjson::StringBuffer> {
+  using rapidjson::PrettyWriter<rapidjson::StringBuffer>::PrettyWriter;
+
+  std::unordered_set<Str> assigned_names;
+  std::unordered_map<Object*, Str> location_ids;
+
+  Str& ResolveName(Object&);
+  Str ResolveName(Object&, Part*);
+};
 
 struct JsonToken {
   enum TokenType {

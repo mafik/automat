@@ -67,7 +67,7 @@ PrototypeLibrary::PrototypeLibrary() {
   index.Register<Assembler>();
   index.Register<Window>();
   index.Register<TesseractOCR>();
-  index.Register<SyncBlock, HideInToolbar>();
+  index.Register<Gear, HideInToolbar>();
 }
 
 Object* PrototypeLibrary::Find(const std::type_info& type) {

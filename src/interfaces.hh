@@ -13,24 +13,24 @@ namespace automat {
 struct Interface;
 
 // Gear-shaped object that can make multiple interfaces act as one.
-struct SyncBlock : Object {
+struct Gear : Object {
   std::shared_mutex mutex;
   std::vector<NestedWeakPtr<Interface>> sinks;
   std::vector<NestedWeakPtr<Interface>> sources;
 
-  ~SyncBlock();
+  ~Gear();
 
-  Ptr<Object> Clone() const override { return MAKE_PTR(SyncBlock); }
+  Ptr<Object> Clone() const override { return MAKE_PTR(Gear); }
 
   // Make sure that this member will receive sync notifications from the Sources in this SyncGroup.
   //
   // Under the hood it adds the given member to the `members` list.
   void AddSink(NestedPtr<Interface>&);
 
-  // Make sure that the sync notifications from this interface will be propagated to Sinks in this
-  // SyncGroup.
+  // Make sure that the sync notifications from this interface will be propagated to Sinks of this
+  // Gear.
   //
-  // This will set Interface.sync_block to this SyncBlock. Any existing SyncBlock will be merged as
+  // This will set Interface.sync_block to this Gear. Any existing Gear will be merged as
   // well.
   void AddSource(NestedPtr<Interface>&);
 
@@ -66,7 +66,7 @@ struct SyncBlock : Object {
 // directly, it's not going to be propagated to the other synced implementations.
 struct Interface : InlineArgument {
   // Note GetValueUnsafe used throughout the methods here is actually safe, because
-  // ~Interface will remove itself from SyncBlock. SyncBlock never contains dead pointers.
+  // ~Interface will remove itself from Gear. Gear never contains dead pointers.
   ~Interface() {
     if (end) {
       ERROR << "Some Specific Abstract Interface forgot to call Unsync in its destructor";
@@ -79,7 +79,7 @@ struct Interface : InlineArgument {
 
   template <class Self>
   void ForwardDo(this Self& self, auto&& lambda) {
-    if (auto sync_block = self.end.template LockAs<SyncBlock>()) {
+    if (auto sync_block = self.end.template LockAs<Gear>()) {
       auto lock = std::shared_lock(sync_block->mutex);
       for (auto& other : sync_block->sinks) {
         lambda(*other.template GetUnsafe<Self>());
@@ -91,7 +91,7 @@ struct Interface : InlineArgument {
 
   template <class Self>
   void ForwardNotify(this Self& self, auto&& lambda) {
-    if (auto sync_block = self.end.template LockAs<SyncBlock>()) {
+    if (auto sync_block = self.end.template LockAs<Gear>()) {
       auto lock = std::shared_lock(sync_block->mutex);
       for (auto& other : sync_block->sinks) {
         if (auto* other_cast = other.template GetUnsafe<Self>(); other_cast != &self) {
@@ -110,11 +110,11 @@ struct Interface : InlineArgument {
   // need to call Notify methods any more.
   virtual void OnUnsync() {}
 
-  friend class SyncBlock;
+  friend class Gear;
 };
 
-// Returns a reference to the existing or a new SyncBlock. This interface is initialized as a sync
+// Returns a reference to the existing or a new Gear. This interface is initialized as a sync
 // source.
-Ptr<SyncBlock> Sync(NestedPtr<Interface>& source);
+Ptr<Gear> Sync(NestedPtr<Interface>& source);
 
 }  // namespace automat

@@ -15,7 +15,7 @@
 namespace automat {
 
 void Interface::Unsync() {
-  auto sync_block = end.LockAs<SyncBlock>();
+  auto sync_block = end.LockAs<Gear>();
   if (!sync_block) return;
   auto lock = std::unique_lock(sync_block->mutex);
 
@@ -41,16 +41,16 @@ void Interface::Unsync() {
   OnUnsync();
 }
 
-Ptr<SyncBlock> Sync(NestedPtr<Interface>& source) {
-  auto sync_block = source->end.OwnerLockAs<SyncBlock>();
+Ptr<Gear> Sync(NestedPtr<Interface>& source) {
+  auto sync_block = source->end.OwnerLockAs<Gear>();
   if (!sync_block) {
-    sync_block = MAKE_PTR(SyncBlock);
+    sync_block = MAKE_PTR(Gear);
     sync_block->AddSource(source);
   }
   return sync_block;
 }
 
-SyncBlock::~SyncBlock() {
+Gear::~Gear() {
   auto lock = std::unique_lock(mutex);
   while (!sources.empty()) {
     if (auto source = sources.back().Lock()) {
@@ -61,7 +61,7 @@ SyncBlock::~SyncBlock() {
 }
 
 // Tells that this interface will receive notifications (receive-only sync)
-void SyncBlock::AddSink(NestedPtr<Interface>& sink) {
+void Gear::AddSink(NestedPtr<Interface>& sink) {
   auto guard = std::unique_lock(mutex);
   for (int i = 0; i < sinks.size(); ++i) {
     if (sinks[i] == sink) {
@@ -72,8 +72,8 @@ void SyncBlock::AddSink(NestedPtr<Interface>& sink) {
 }
 
 // Tells that this interface is the source of activity / notifications (notify-only sync)
-void SyncBlock::AddSource(NestedPtr<Interface>& source) {
-  auto old_sync_block = source->end.LockAs<SyncBlock>();
+void Gear::AddSource(NestedPtr<Interface>& source) {
+  auto old_sync_block = source->end.LockAs<Gear>();
   if (old_sync_block.Get() == this) {
     return;
   }
@@ -84,13 +84,13 @@ void SyncBlock::AddSource(NestedPtr<Interface>& source) {
   }
 }
 
-void SyncBlock::FullSync(NestedPtr<Interface>& interface) {
+void Gear::FullSync(NestedPtr<Interface>& interface) {
   AddSink(interface);
   AddSource(interface);
 }
 
-struct SyncBlockWidget : Object::WidgetBase {
-  SyncBlockWidget(SyncBlock& sync_block, Widget* parent) : WidgetBase(parent) {
+struct GearWidget : Object::WidgetBase {
+  GearWidget(Gear& sync_block, Widget* parent) : WidgetBase(parent) {
     object = sync_block.AcquireWeakPtr();
   }
 
@@ -117,13 +117,13 @@ struct SyncBlockWidget : Object::WidgetBase {
   }
 };
 
-std::unique_ptr<ObjectWidget> SyncBlock::MakeWidget(ui::Widget* parent) {
-  return std::make_unique<SyncBlockWidget>(*this, parent);
+std::unique_ptr<ObjectWidget> Gear::MakeWidget(ui::Widget* parent) {
+  return std::make_unique<GearWidget>(*this, parent);
 }
 
 void Interface::CanConnect(Object& start, Part& end, Status& status) const {
-  if (dynamic_cast<SyncBlock*>(&end) != nullptr) {
-    AppendErrorMessage(status) += "Can only connect to SyncBlock";
+  if (dynamic_cast<Gear*>(&end) != nullptr) {
+    AppendErrorMessage(status) += "Can only connect to Gear";
   }
 }
 

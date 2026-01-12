@@ -48,7 +48,7 @@ enum class CableTexture {
 // TODO: think about pointer following
 // TODO: think about multiple targets
 struct Argument : virtual Part {
-  enum class Style { Arrow, Cable, Spotlight, Invisible };
+  enum class Style { Arrow, Cable, Spotlight, Belt, Invisible };
 
   virtual SkColor Tint() const { return "#404040"_color; }
   virtual SkColor Light() const { return "#ef9f37"_color; }

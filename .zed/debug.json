@@ -7,22 +7,22 @@
     "label": "Automat",
     "build": {
       "command": "./run.py",
-      "args": ["'link automat'"],
-      "cwd": "$ZED_WORKTREE_ROOT"
+      "args": ["link automat"],
+      "cwd": "$ZED_WORKTREE_ROOT",
     },
     "program": "$ZED_WORKTREE_ROOT/build/fast/automat",
     "request": "launch",
-    "adapter": "CodeLLDB"
+    "adapter": "CodeLLDB",
   },
   {
     "label": "Automat Debug",
     "build": {
       "command": "./run.py",
-      "args": ["'link automat'", "--variant=debug"],
-      "cwd": "$ZED_WORKTREE_ROOT"
+      "args": ["link automat", "--variant=debug"],
+      "cwd": "$ZED_WORKTREE_ROOT",
     },
     "program": "$ZED_WORKTREE_ROOT/build/debug/automat",
     "request": "launch",
-    "adapter": "CodeLLDB"
-  }
+    "adapter": "CodeLLDB",
+  },
 ]

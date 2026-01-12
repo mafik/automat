@@ -380,6 +380,11 @@ ArrayView::ArrayView(Deserializer& deserializer, Status& status)
 void ArrayView::Next() {
   ClearError(status, first_issue);
   ++i;
+  // Callers of ArrayView should normally consume the token before calling it++ - but if they didn't
+  // then this check will make sure that the parsing logic will skip any unparsed array entries.
+  if (deserializer.token.type != kNoTokenType) {
+    RecoverParser(deserializer);
+  }
   FillToken(deserializer);
   deserializer.debug_path_size = debug_json_path_size;
   if (deserializer.token.type == JsonToken::kEndArrayTokenType) {

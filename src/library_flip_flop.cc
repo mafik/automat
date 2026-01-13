@@ -65,16 +65,22 @@ void FlipFlop::OnTurnOff() {
   WakeWidgetsAnimation();
 }
 
-void FlipFlop::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
+void FlipFlop::SerializeState(ObjectSerializer& writer) const {
+  writer.Key("on");
   writer.Bool(current_state);
 }
 
 void FlipFlop::DeserializeState(ObjectDeserializer& d) {
   Status status;
-  d.Get(current_state, status);
-  if (!OK(status)) {
-    ReportError(status.ToStr());
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "on") {
+      d.Get(current_state, status);
+      if (!OK(status)) {
+        ReportError(status.ToStr());
+      }
+    } else {
+      d.Skip();
+    }
   }
 }
 

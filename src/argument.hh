@@ -81,7 +81,7 @@ struct Argument : virtual Part {
 
   void Disconnect(Object& start) { Connect(start, {}); }
 
-  virtual NestedPtr<Part> Find(Object& start) const = 0;
+  virtual NestedPtr<Part> Find(const Object& start) const = 0;
 
   // Returns the prototype object for this argument, or nullptr if there is no prototype.
   // This is used by various *OnMake methods to create new object - and for object preview.
@@ -105,14 +105,14 @@ struct InlineArgument : Argument {
 
   void Connect(Object&, const NestedPtr<Part>& end) override { this->end = end; }
 
-  NestedPtr<Part> Find(Object&) const override { return end.Lock(); };
+  NestedPtr<Part> Find(const Object&) const override { return end.Lock(); };
 };
 
 struct NextArg : Argument {
   StrView Name() const override { return "Next"sv; }
   void CanConnect(Object& start, Part& end, Status&) const override;
   void Connect(Object& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Object& start) const override;
+  NestedPtr<Part> Find(const Object& start) const override;
 };
 
 extern NextArg next_arg;

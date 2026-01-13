@@ -55,7 +55,7 @@ struct HotKey : Object, Object::WidgetBase, OnOff, ui::CaretOwner, ui::KeyGrabbe
 
   void FillChildren(Vec<Widget*>& children) override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 };
 

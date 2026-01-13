@@ -36,7 +36,7 @@ struct Window : public Object, Runnable, ImageProvider {
 
   void Relocate(Location* new_here) override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 
   // ImageProvider interface

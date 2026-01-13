@@ -127,9 +127,7 @@ void Interface::CanConnect(Object& start, Part& end, Status& status) const {
   }
 }
 
-void Gear::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
+void Gear::SerializeState(ObjectSerializer& writer) const {
   writer.Key("sinks");
   writer.StartArray();
   for (auto& sink_weak : sinks) {
@@ -138,7 +136,6 @@ void Gear::SerializeState(ObjectSerializer& writer, const char* key) const {
     writer.String(writer.ResolveName(*sink.Owner<Object>(), sink.Get()));
   }
   writer.EndArray();
-  writer.EndObject();
 }
 
 void Gear::DeserializeState(ObjectDeserializer& d) {

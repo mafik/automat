@@ -35,7 +35,7 @@ struct Number : Object, Object::WidgetBase {
   void FillChildren(Vec<Widget*>& children) override;
   bool CenteredAtZero() const override { return true; }
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 };
 

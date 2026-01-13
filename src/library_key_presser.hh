@@ -56,7 +56,7 @@ struct KeyPresser : Object, OnOff, ui::Keylogger {
   void OnSync() override;
   void OnUnsync() override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 
   void KeyloggerKeyDown(ui::Key) override;

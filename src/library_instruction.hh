@@ -39,7 +39,7 @@ struct AssemblerArgument : Argument {
   Ptr<Object> Prototype() const override;
   void CanConnect(Object& start, Part& end, Status& status) const override;
   void Connect(Object& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Object& start) const override;
+  NestedPtr<Part> Find(const Object& start) const override;
 };
 
 struct JumpArgument : Argument {
@@ -49,7 +49,7 @@ struct JumpArgument : Argument {
   PaintDrawable& Icon() override;
   void CanConnect(Object& start, Part& end, Status& status) const override;
   void Connect(Object& start, const NestedPtr<Part>& end) override;
-  NestedPtr<Part> Find(Object& start) const override;
+  NestedPtr<Part> Find(const Object& start) const override;
 };
 
 // Same as NextArg - but calls UpdateMachineCode when it's reconnected
@@ -139,7 +139,7 @@ struct Instruction : Object, Runnable, Buffer {
     return std::make_unique<Widget>(parent, AcquireWeakPtr<Object>());
   }
 
-  void SerializeState(ObjectSerializer& writer, const char* key = "value") const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 };
 

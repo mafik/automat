@@ -71,8 +71,8 @@ void NextArg::Connect(Object& start, const NestedPtr<Part>& end) {
   }
 }
 
-NestedPtr<Part> NextArg::Find(Object& start) const {
-  if (auto* runnable = dynamic_cast<Runnable*>(&start)) {
+NestedPtr<Part> NextArg::Find(const Object& start) const {
+  if (auto* runnable = dynamic_cast<const Runnable*>(&start)) {
     return runnable->next.Lock();
   } else {
     ERROR_ONCE << start.Name() << " is not a Runnable - and can't be used as a source for NextArg";

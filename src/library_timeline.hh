@@ -27,7 +27,7 @@ struct TrackBase : Object {
   // Each subtype must returns its own Widget derived from TrackBaseWidget.
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override = 0;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
   virtual bool TryDeserializeField(Deserializer& d, Str& field_name);
 };
@@ -44,7 +44,7 @@ struct OnOffTrack : TrackBase, OnOff {
   void OnTurnOn() override {}
   void OnTurnOff() override {}
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
   bool TryDeserializeField(Deserializer& d, Str& field_name) override;
 };
@@ -60,7 +60,7 @@ struct Vec2Track : TrackBase {
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
   bool TryDeserializeField(Deserializer& d, Str& field_name) override;
 };
@@ -76,7 +76,7 @@ struct Float64Track : TrackBase {
   void Splice(time::Duration current_offset, time::Duration splice_to) override;
   void UpdateOutput(Location& target, time::SteadyPoint started_at, time::SteadyPoint now) override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
   bool TryDeserializeField(Deserializer& d, Str& field_name) override;
 };
@@ -152,7 +152,7 @@ struct Timeline : Object, Runnable, LongRunning, TimerNotificationReceiver {
   time::Duration CurrentOffset(time::SteadyPoint now) const;
   time::Duration MaxTrackLength() const;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 };
 

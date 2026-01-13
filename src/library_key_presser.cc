@@ -258,13 +258,10 @@ void KeyPresser::OnSync() { monitoring.TurnOn(); }
 
 void KeyPresser::OnUnsync() { monitoring.TurnOff(); }
 
-void KeyPresser::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
+void KeyPresser::SerializeState(ObjectSerializer& writer) const {
   writer.Key("key");
   auto key_name = ToStr(this->key);
   writer.String(key_name.data(), key_name.size());
-  writer.EndObject();
 }
 void KeyPresser::DeserializeState(ObjectDeserializer& d) {
   Status status;

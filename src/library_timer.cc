@@ -759,9 +759,7 @@ TimerDelay::Range TimerRangeFromStr(StrView str, Status& status) {
   return Seconds;
 }
 
-void TimerDelay::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
+void TimerDelay::SerializeState(ObjectSerializer& writer) const {
   writer.Key("range");
   auto range_str = ToStr(range);
   writer.String(range_str.data(), range_str.size());
@@ -771,7 +769,6 @@ void TimerDelay::SerializeState(ObjectSerializer& writer, const char* key) const
     writer.Key("running");
     writer.Double(time::ToSeconds(time::SteadyNow() - start_time));
   }
-  writer.EndObject();
 }
 void TimerDelay::DeserializeState(ObjectDeserializer& d) {
   Status status;

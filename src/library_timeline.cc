@@ -2604,50 +2604,25 @@ bool OnOffTrack::IsOn() const {
   return on;
 }
 
-void TrackBase::SerializeState(ObjectSerializer& writer, const char* key) const {
-  // Using nullptr as a guard value to reduce JSON nesting
-  if (key != nullptr) {
-    writer.Key(key);
-    writer.StartObject();
-  }
+void TrackBase::SerializeState(ObjectSerializer& writer) const {
   writer.Key("timestamps");
   writer.StartArray();
   for (auto t : timestamps) {
     writer.Double(time::ToSeconds(t));
   }
   writer.EndArray();
-  if (key != nullptr) {
-    writer.EndObject();
-  }
 }
 
-void OnOffTrack::SerializeState(ObjectSerializer& writer, const char* key) const {
-  // Using nullptr as a guard value to reduce JSON nesting
-  if (key != nullptr) {
-    writer.Key(key);
-    writer.StartObject();
-  }
-  writer.Key("type");
-  writer.String("on/off");
-  TrackBase::SerializeState(writer, nullptr);
+void OnOffTrack::SerializeState(ObjectSerializer& writer) const {
+  TrackBase::SerializeState(writer);
   if (on_at != time::kDurationGuard) {
     writer.Key("on_at");
     writer.Double(time::ToSeconds(on_at));
   }
-  if (key != nullptr) {
-    writer.EndObject();
-  }
 }
 
-void Vec2Track::SerializeState(ObjectSerializer& writer, const char* key) const {
-  // Using nullptr as a guard value to reduce JSON nesting
-  if (key != nullptr) {
-    writer.Key(key);
-    writer.StartObject();
-  }
-  writer.Key("type");
-  writer.String("vec2");
-  TrackBase::SerializeState(writer, nullptr);
+void Vec2Track::SerializeState(ObjectSerializer& writer) const {
+  TrackBase::SerializeState(writer);
   writer.Key("values");
   writer.StartArray();
   for (const auto& v : values) {
@@ -2657,45 +2632,31 @@ void Vec2Track::SerializeState(ObjectSerializer& writer, const char* key) const 
     writer.EndArray();
   }
   writer.EndArray();
-  if (key != nullptr) {
-    writer.EndObject();
-  }
 }
 
-void Float64Track::SerializeState(ObjectSerializer& writer, const char* key) const {
-  // Using nullptr as a guard value to reduce JSON nesting
-  if (key != nullptr) {
-    writer.Key(key);
-    writer.StartObject();
-  }
-  writer.Key("type");
-  writer.String("float64");
-  TrackBase::SerializeState(writer, nullptr);
+void Float64Track::SerializeState(ObjectSerializer& writer) const {
+  TrackBase::SerializeState(writer);
   writer.Key("values");
   writer.StartArray();
   for (const auto& v : values) {
     writer.Double(v);
   }
   writer.EndArray();
-  if (key != nullptr) {
-    writer.EndObject();
-  }
 }
 
-void Timeline::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
-
+void Timeline::SerializeState(ObjectSerializer& writer) const {
   writer.Key("tracks");
-  writer.StartArray();
+  writer.StartObject();
   for (int i = 0; i < tracks.size(); ++i) {
+    writer.Key(tracks[i]->name.c_str());
     writer.StartObject();
-    writer.Key("name");
-    writer.String(tracks[i]->name.c_str());
-    tracks[i]->track->SerializeState(writer, nullptr);
+    writer.Key("type");
+    auto type = tracks[i]->track->Name();
+    writer.String(type.data(), type.size());
+    tracks[i]->track->SerializeState(writer);
     writer.EndObject();
   }
-  writer.EndArray();
+  writer.EndObject();
   writer.Key("zoom");
   writer.Double(zoom);
   writer.Key("length");
@@ -2715,8 +2676,6 @@ void Timeline::SerializeState(ObjectSerializer& writer, const char* key) const {
       writer.Double(time::ToSeconds(time::SteadyNow() - recording.started_at));
       break;
   }
-
-  writer.EndObject();
 }
 
 bool TrackBase::TryDeserializeField(Deserializer& d, Str& field_name) {

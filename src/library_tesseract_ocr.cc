@@ -71,8 +71,8 @@ struct ImageArgument : Argument {
         NestedWeakPtr<ImageProvider>(end.GetOwnerWeak(), end_obj->AsImageProvider());
   }
 
-  NestedPtr<Part> Find(Object& start) const override {
-    auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
+  NestedPtr<Part> Find(const Object& start) const override {
+    auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return tesseract->image_provider_weak.Lock();
   }
@@ -98,8 +98,8 @@ struct TextArgument : Argument {
     tesseract->text_weak = NestedWeakPtr<Object>(end.GetOwnerWeak(), end_obj);
   }
 
-  NestedPtr<Part> Find(Object& start) const override {
-    auto* tesseract = dynamic_cast<TesseractOCR*>(&start);
+  NestedPtr<Part> Find(const Object& start) const override {
+    auto* tesseract = dynamic_cast<const TesseractOCR*>(&start);
     if (tesseract == nullptr) return {};
     return tesseract->text_weak.Lock();
   }
@@ -1209,10 +1209,7 @@ void TesseractOCR::OnRun(std::unique_ptr<RunTask>&) {
   WakeWidgetsAnimation();
 }
 
-void TesseractOCR::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
-
+void TesseractOCR::SerializeState(ObjectSerializer& writer) const {
   writer.Key("ocr_text");
   writer.String(ocr_text.data(), ocr_text.size());
   writer.Key("x_min_ratio");
@@ -1223,8 +1220,6 @@ void TesseractOCR::SerializeState(ObjectSerializer& writer, const char* key) con
   writer.Double(y_min_ratio);
   writer.Key("y_max_ratio");
   writer.Double(y_max_ratio);
-
-  writer.EndObject();
 }
 
 void TesseractOCR::DeserializeState(ObjectDeserializer& d) {

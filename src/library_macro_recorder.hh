@@ -71,7 +71,7 @@ struct MacroRecorder : Object,
 
   Vec2AndDir ArgStart(const Argument&, ui::Widget* coordinate_space = nullptr) override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 };
 

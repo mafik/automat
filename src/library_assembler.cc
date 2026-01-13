@@ -332,15 +332,13 @@ Ptr<Location> Assembler::Extract(Object& descendant) {
   return nullptr;
 }
 
-void Assembler::SerializeState(ObjectSerializer& writer, const char* key) const {
+void Assembler::SerializeState(ObjectSerializer& writer) const {
   mc::Controller::State mc_state = {};
   {
     auto mut_this = const_cast<Assembler*>(this);
     Status ignore;
     mc_controller->GetState(mc_state, ignore);
   }
-  writer.Key(key);
-  writer.StartObject();
   for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
     auto& reg = kRegisters[i];
     if (mc_state.regs[i] == 0) continue;
@@ -349,7 +347,6 @@ void Assembler::SerializeState(ObjectSerializer& writer, const char* key) const 
     writer.String(hex_value.data(), hex_value.size());
   }
   // TODO: store currently executing instruction
-  writer.EndObject();
 }
 
 void Assembler::DeserializeState(ObjectDeserializer& d) {
@@ -794,8 +791,8 @@ struct RegisterAssemblerArgument : Argument {
     }
   }
 
-  NestedPtr<Part> Find(Object& start) const override {
-    auto* reg = dynamic_cast<Register*>(&start);
+  NestedPtr<Part> Find(const Object& start) const override {
+    auto* reg = dynamic_cast<const Register*>(&start);
     if (reg == nullptr) return {};
     return reg->assembler_weak.Lock();
   }
@@ -830,29 +827,35 @@ void Register::SetText(std::string_view text) {
   WakeWidgetsAnimation();
 }
 
-void Register::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
+void Register::SerializeState(ObjectSerializer& writer) const {
+  writer.Key("reg");
   auto& reg = kRegisters[register_index];
   writer.String(reg.name.data(), reg.name.size());
 }
 
 void Register::DeserializeState(ObjectDeserializer& d) {
   Status status;
-  std::string reg_name;
-  d.Get(reg_name, status);
-  if (!OK(status)) {
-    ReportError(status.ToStr());
-    register_index = 0;
-    return;
-  }
-  for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
-    if (kRegisters[i].name == reg_name) {
-      register_index = i;
-      return;
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "reg") {
+      std::string reg_name;
+      d.Get(reg_name, status);
+      if (!OK(status)) {
+        ReportError(status.ToStr());
+        register_index = 0;
+        break;
+      }
+      for (int i = 0; i < kGeneralPurposeRegisterCount; ++i) {
+        if (kRegisters[i].name == reg_name) {
+          register_index = i;
+          break;
+        }
+      }
+      ReportError(f("Unknown register name: {}", reg_name));
+      register_index = 0;
+    } else {
+      d.Skip();
     }
   }
-  ReportError(f("Unknown register name: {}", reg_name));
-  register_index = 0;
 }
 
 }  // namespace automat::library

@@ -213,18 +213,22 @@ void Number::FillChildren(Vec<Widget*>& children) {
   children.push_back(text_field.get());
 }
 
-void Number::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
+void Number::SerializeState(ObjectSerializer& writer) const {
+  writer.Key("value");
   writer.RawValue(text_field->text.data(), text_field->text.size(), rapidjson::kNumberType);
 }
 void Number::DeserializeState(ObjectDeserializer& d) {
   Status status;
-  d.Get(value, status);
-  if (!OK(status)) {
-    ReportError("Couldn't deserialize Number value: " + status.ToStr());
-    return;
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "value") {
+      d.Get(value, status);
+      if (!OK(status)) {
+        ReportError("Couldn't deserialize Number value: " + status.ToStr());
+        return;
+      }
+      text_field->text = GetText();
+    }
   }
-  text_field->text = GetText();
 }
 
 }  // namespace automat::library

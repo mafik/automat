@@ -685,18 +685,13 @@ void Window::AttachToTitle() {
 #endif
 }
 
-void Window::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
-
+void Window::SerializeState(ObjectSerializer& writer) const {
   writer.Key("title");
   writer.String(title.data(), title.size());
   writer.Key("run_continuously");
   writer.Bool(run_continuously);
   writer.Key("capture_time");
   writer.Double(capture_time);
-
-  writer.EndObject();
 }
 
 void Window::DeserializeState(ObjectDeserializer& d) {

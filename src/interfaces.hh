@@ -17,7 +17,7 @@ struct Interface;
 // There are actually a couple potential Gear designs:
 // - a type-agnostic Gear, where different interface types can connect, and at run-time, they
 // dynamic_cast to check if the sinks are compatible
-// - a generic Gear but strongly typed gear that adopts the type of the first connected
+// - a generic but strongly typed Gear that adopts the type of the first connected
 // interface then it makes sure to only interop with those type of interfaces
 // - a different Gear specialization for each interface type
 // TODO: figure out which would work best
@@ -48,7 +48,7 @@ struct Gear : Object {
 
   std::unique_ptr<ObjectWidget> MakeWidget(ui::Widget* parent) override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key = "value") const override;
+  void SerializeState(ObjectSerializer& writer) const override;
 
   void DeserializeState(ObjectDeserializer& d) override;
 };

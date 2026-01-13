@@ -90,7 +90,7 @@ struct Register : Object {
   void Parts(const std::function<void(Part&)>& cb) override;
   void SetText(std::string_view text) override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 };
 
@@ -127,7 +127,7 @@ struct Assembler : Object, LongRunning, Container {
 
   Ptr<Location> Extract(Object& descendant) override;
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 };
 

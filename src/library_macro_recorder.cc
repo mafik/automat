@@ -123,8 +123,8 @@ struct TimelineArgument : Argument {
     }
   }
 
-  NestedPtr<Part> Find(Object& start) const override {
-    if (auto* recorder = dynamic_cast<MacroRecorder*>(&start)) {
+  NestedPtr<Part> Find(const Object& start) const override {
+    if (auto* recorder = dynamic_cast<const MacroRecorder*>(&start)) {
       return recorder->timeline_connection.Lock();
     }
     return {};
@@ -619,12 +619,9 @@ Vec2AndDir MacroRecorder::ArgStart(const Argument& arg, ui::Widget* coordinate_s
   return Object::WidgetBase::ArgStart(arg, coordinate_space);
 }
 
-void MacroRecorder::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
+void MacroRecorder::SerializeState(ObjectSerializer& writer) const {
   writer.Key("recording");
   writer.Bool(keylogging != nullptr);
-  writer.EndObject();
 }
 void MacroRecorder::DeserializeState(ObjectDeserializer& d) {
   Status status;

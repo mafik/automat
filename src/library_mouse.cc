@@ -513,9 +513,7 @@ std::unique_ptr<ObjectWidget> MouseButtonEvent::MakeWidget(ui::Widget* parent) {
   return std::make_unique<MouseButtonEventWidget>(parent, AcquireWeakPtr());
 }
 
-void MouseButtonEvent::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
+void MouseButtonEvent::SerializeState(ObjectSerializer& writer) const {
   writer.Key("button");
   writer.String(ButtonEnumToName(button));
   writer.Key("event");
@@ -524,7 +522,6 @@ void MouseButtonEvent::SerializeState(ObjectSerializer& writer, const char* key)
   } else {
     writer.String("up");
   }
-  writer.EndObject();
 }
 void MouseButtonEvent::DeserializeState(ObjectDeserializer& d) {
   Status status;
@@ -920,12 +917,9 @@ void MouseButtonPresser::OnTurnOff() {
   WakeWidgetsAnimation();
 }
 
-void MouseButtonPresser::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
+void MouseButtonPresser::SerializeState(ObjectSerializer& writer) const {
   writer.Key("button");
   writer.String(ButtonEnumToName(button));
-  writer.EndObject();
 }
 
 void MouseButtonPresser::DeserializeState(ObjectDeserializer& d) {

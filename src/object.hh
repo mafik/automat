@@ -75,7 +75,7 @@ struct Object : public ReferenceCounted {
   // Objects serialize themselves to the "value" property within the location objects
   // - Each part my want to emit multiple properties
 
-  virtual void SerializeState(ObjectSerializer& writer, const char* key = "value") const;
+  virtual void SerializeState(ObjectSerializer& writer) const;
 
   // Restores state when Automat is restarted.
   virtual void DeserializeState(ObjectDeserializer& d);
@@ -207,8 +207,8 @@ struct ObjectSerializer : Serializer {
   std::unordered_map<Object*, Str> object_to_name;
   std::vector<Object*> serialization_queue;
 
-  Str& ResolveName(Object&);
-  Str ResolveName(Object&, Part*);
+  Str& ResolveName(Object&, StrView hint = ""sv);
+  Str ResolveName(Object&, Part*, StrView hint = ""sv);
   void Serialize(Object&);
 };
 

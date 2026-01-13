@@ -129,8 +129,8 @@ void JumpArgument::Connect(Object& start, const NestedPtr<Part>& end) {
   }
 }
 
-NestedPtr<Part> JumpArgument::Find(Object& start) const {
-  if (auto* inst = dynamic_cast<Instruction*>(&start)) {
+NestedPtr<Part> JumpArgument::Find(const Object& start) const {
+  if (auto* inst = dynamic_cast<const Instruction*>(&start)) {
     if (auto locked = inst->jump_target.Lock()) {
       return NestedPtr<Interface>(locked.GetOwnerWeak().Lock(), locked.Get());
     }
@@ -184,8 +184,8 @@ void AssemblerArgument::Connect(Object& start, const NestedPtr<Part>& end) {
   }
 }
 
-NestedPtr<Part> AssemblerArgument::Find(Object& start) const {
-  if (auto* instruction = dynamic_cast<Instruction*>(&start)) {
+NestedPtr<Part> AssemblerArgument::Find(const Object& start) const {
+  if (auto* instruction = dynamic_cast<const Instruction*>(&start)) {
     return instruction->assembler_weak.Lock();
   }
   return NestedPtr<Part>();
@@ -3696,9 +3696,7 @@ void Instruction::Widget::FillChildren(Vec<ui::Widget*>& children) {
   }
 }
 
-void Instruction::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
+void Instruction::SerializeState(ObjectSerializer& writer) const {
   auto& assembler = LLVM_Assembler::Get();
   writer.Key("opcode");
   auto opcode_name = assembler.mc_instr_info->getName(mc_inst.getOpcode());
@@ -3756,7 +3754,6 @@ void Instruction::SerializeState(ObjectSerializer& writer, const char* key) cons
     }
     writer.EndArray();
   }
-  writer.EndObject();
 }
 
 void Instruction::DeserializeState(ObjectDeserializer& d) {

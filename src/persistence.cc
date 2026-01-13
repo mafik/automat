@@ -27,11 +27,9 @@ void SaveState(ui::RootWidget& root_widget, Status& status) {
   writer.Key("window");
   root_widget.SerializeState(writer);
 
-  // writer.assigned_names.emplace("version");
-  // writer.assigned_names.emplace("window");
-  // writer.Serialize(*root_machine);
-
-  root_machine->SerializeState(writer, "root");
+  writer.assigned_names.emplace("version");
+  writer.assigned_names.emplace("window");
+  writer.Serialize(*root_machine);
 
   writer.EndObject();
   writer.Flush();

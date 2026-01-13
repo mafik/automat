@@ -21,7 +21,7 @@
 #include "format.hh"
 #include "global_resources.hh"
 #include "location.hh"
-#include "log.hh"
+// #include "log.hh"
 #include "math.hh"
 #include "root_widget.hh"
 #include "tasks.hh"
@@ -116,9 +116,7 @@ void LongRunning::OnTurnOn() {
   object->here->ScheduleRun();
 }
 
-void Machine::SerializeState(ObjectSerializer& writer, const char* key) const {
-  writer.Key(key);
-  writer.StartObject();
+void Machine::SerializeState(ObjectSerializer& writer) const {
   writer.Key("name");
   writer.String(name);
   if (!locations.empty()) {
@@ -129,46 +127,14 @@ void Machine::SerializeState(ObjectSerializer& writer, const char* key) const {
     for (auto& location : locations) {
       auto& name = writer.ResolveName(*location->object);
       writer.Key(name);
-      writer.StartObject();
-      if (location->object) {
-        writer.Key("type");
-        auto type = location->object->Name();
-        writer.String(type.data(), type.size());
-        location->object->SerializeState(writer, "value");
-
-        {  // Serialize object parts
-          // ATM we only serialize Args
-          bool parts_opened = false;  // used to lazily call StartObject
-          location->object->Args([&](Argument& arg) {
-            auto end = arg.Find(*location->object);
-            if (!end) return;
-            if (!parts_opened) {
-              parts_opened = true;
-              writer.Key("parts");
-              writer.StartObject();
-            }
-            Str arg_name;
-            location->object->PartName(arg, arg_name);
-            writer.Key(arg_name);
-            auto to_name = writer.ResolveName(*end.Owner<Object>(), end.Get());
-            writer.String(to_name);
-          });
-          if (parts_opened) {
-            parts_opened = false;
-            writer.EndObject();
-          }
-        }
-      }
-      writer.Key("x");
+      writer.StartArray();
       writer.Double(round(location->position.x * 1000000.) /
                     1000000.);  // round to 6 decimal places
-      writer.Key("y");
       writer.Double(round(location->position.y * 1000000.) / 1000000.);
-      writer.EndObject();
+      writer.EndArray();
     }
     writer.EndObject();
   }
-  writer.EndObject();
 }
 
 void Machine::DeserializeState(ObjectDeserializer& d) {
@@ -183,10 +149,7 @@ void Machine::DeserializeState(ObjectDeserializer& d) {
       rapidjson::StringStream stream(d.stream.src_ + 1);
       Deserializer lookahead(stream);
 
-      LOG << "Phase 1";
-      LOG_Indent();
       for (auto& location_name : ObjectView(lookahead, status)) {
-        LOG << location_name;
         auto& l = CreateEmpty();
         {  // Place the new location below all the others.
           // Normally new locations are created at the top of all the others (front of the locations
@@ -226,21 +189,13 @@ void Machine::DeserializeState(ObjectDeserializer& d) {
           }
         }
       }
-      LOG_Unindent();
-
-      LOG << "Phase 2";
-      LOG_Indent();
 
       // Second deserialization pass - deserialize objects & their arguments
       for (auto& location_name : ObjectView(d, status)) {
-        LOG << location_name;
         auto lookup = d.LookupPart(location_name);
         auto lookup_obj = lookup.Owner<Object>();
-        LOG << "lookup=" << AddrToStr(lookup_obj);
         Ptr<Object> object = lookup_obj->AcquirePtr();
-        LOG << "ptr=" << AddrToStr(object.Get());
         if (!object) {
-          LOG << "No object !?";
           continue;
         }
         auto& l = *object->here;
@@ -256,17 +211,12 @@ void Machine::DeserializeState(ObjectDeserializer& d) {
             // ignore - already handled
             d.Skip();
           } else if (field == "value") {
-            LOG << "value";
             if (object) {
               object->DeserializeState(d);
             }
           } else if (field == "parts") {
-            LOG << "parts";
-            LOG_IndentGuard log_indent;
             for (auto& part_name : ObjectView(d, status)) {
-              LOG << "arg name=" << part_name;
               Argument* from_arg = dynamic_cast<Argument*>(object->PartFromName(part_name));
-              LOG << "arg ptr=" << AddrToStr(from_arg);
               if (from_arg == nullptr) {
                 d.Skip();
                 continue;
@@ -284,8 +234,6 @@ void Machine::DeserializeState(ObjectDeserializer& d) {
         // Objects are inserted into the location only after their state has been deserialized.
         l.InsertHere(std::move(object));
       }
-      LOG_Unindent();
-      LOG << "Done";
     }
   }
   if (!OK(status)) {

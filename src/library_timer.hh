@@ -56,7 +56,7 @@ struct TimerDelay : Object, Object::WidgetBase, Runnable, LongRunning, TimerNoti
   void OnTimerNotification(Location&, time::SteadyPoint) override;
   bool CenteredAtZero() const override { return true; }
 
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 };
 

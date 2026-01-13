@@ -406,23 +406,27 @@ void Object::Updated(Location& here, Location& updated) {
   }
 }
 
-void Object::SerializeState(ObjectSerializer& writer, const char* key) const {
+void Object::SerializeState(ObjectSerializer& writer) const {
   auto value = GetText();
   if (!value.empty()) {
-    writer.Key(key);
+    writer.Key("value");
     writer.String(value.data(), value.size());
   }
 }
 
 void Object::DeserializeState(ObjectDeserializer& d) {
   Status status;
-  Str value;
-  d.Get(value, status);
-  if (!OK(status)) {
-    ReportError(status.ToStr());
-    return;
+  for (auto& key : ObjectView(d, status)) {
+    if (key == "value") {
+      Str value;
+      d.Get(value, status);
+      if (!OK(status)) {
+        ReportError(status.ToStr());
+        return;
+      }
+      SetText(value);
+    }
   }
-  SetText(value);
 }
 
 audio::Sound& Object::NextSound() { return embedded::assets_SFX_next_wav; }
@@ -541,10 +545,13 @@ Part* Object::PartFromName(StrView needle) {
   return result;
 }
 
-Str& ObjectSerializer::ResolveName(Object& object) {
+Str& ObjectSerializer::ResolveName(Object& object, StrView hint) {
   auto it = object_to_name.find(&object);
   if (it == object_to_name.end()) {
     auto base_name = Str(object.Name());
+    if (!hint.empty()) {
+      base_name = f("{} {}", hint, base_name);
+    }
     auto name = base_name;
     int i = 2;
     while (assigned_names.count(name)) {
@@ -557,8 +564,8 @@ Str& ObjectSerializer::ResolveName(Object& object) {
   return it->second;
 }
 
-Str ObjectSerializer::ResolveName(Object& object, Part* part) {
-  Str ret = ResolveName(object);
+Str ObjectSerializer::ResolveName(Object& object, Part* part, StrView hint) {
+  Str ret = ResolveName(object, hint);
   if (part) {
     Str part_name;
     object.PartName(*part, part_name);
@@ -575,7 +582,36 @@ void ObjectSerializer::Serialize(Object& start) {
     auto* o = serialization_queue.back();
     serialization_queue.pop_back();
     auto name = ResolveName(*o);
-    o->SerializeState(*this, name.c_str());
+    auto type_name = o->Name();
+    Key(name);
+    StartObject();
+    Key("type");
+    String(type_name.data(), type_name.length());
+    o->SerializeState(*this);
+
+    {  // Serialize object parts
+      // ATM we only serialize Args
+      bool args_opened = false;  // used to lazily call StartObject
+      o->Args([&](Argument& arg) {
+        auto end = arg.Find(*o);
+        if (!end) return;
+        if (!args_opened) {
+          args_opened = true;
+          Key("args");
+          StartObject();
+        }
+        Str arg_name;
+        o->PartName(arg, arg_name);
+        Key(arg_name);
+        auto to_name = ResolveName(*end.Owner<Object>(), end.Get());
+        String(to_name);
+      });
+      if (args_opened) {
+        args_opened = false;
+        EndObject();
+      }
+    }
+    EndObject();
   }
 }
 

@@ -18,7 +18,7 @@ struct FlipFlop : Object, Runnable, OnOff {
   void SetKey(ui::AnsiKey);
 
   void OnRun(std::unique_ptr<RunTask>&) override;
-  void SerializeState(ObjectSerializer& writer, const char* key) const override;
+  void SerializeState(ObjectSerializer& writer) const override;
   void DeserializeState(ObjectDeserializer& d) override;
 
   bool IsOn() const override { return current_state; }

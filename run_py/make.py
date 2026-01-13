@@ -305,11 +305,6 @@ class Recipe:
         while ready_steps or self.pid_to_step:
             if len(ready_steps) == 0 or len(
                     self.pid_to_step) >= desired_parallelism:
-                running_names = ', '.join(
-                    [r.shortcut for r in self.pid_to_step.values()])
-                print(
-                    f'Waiting for one of {len(self.pid_to_step)} running steps ({running_names})...'
-                )
                 while True:
                     pid, status = wait_for_pid()
                     if watcher and pid == watcher.pid:
